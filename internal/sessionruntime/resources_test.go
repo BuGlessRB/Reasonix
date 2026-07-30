@@ -78,6 +78,50 @@ func TestResourcesRetainFailsAfterClose(t *testing.T) {
 	}
 }
 
+func TestResourcesReleaseKeepsTeardownGraceBounded(t *testing.T) {
+	t.Parallel()
+	jm := jobs.NewManager(event.Discard, jobs.WithTeardownGrace(20*time.Millisecond))
+	started := make(chan struct{})
+	releaseJob := make(chan struct{})
+	jm.Start("task", "non-cooperative", func(context.Context, io.Writer) (string, error) {
+		close(started)
+		<-releaseJob
+		return "done", nil
+	})
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("job did not start")
+	}
+
+	res := WrapJobs(jm)
+	released := make(chan struct{})
+	go func() {
+		res.Release()
+		close(released)
+	}()
+	select {
+	case <-released:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Release exceeded the manager teardown grace")
+	}
+	select {
+	case <-res.Done():
+		t.Fatal("resources finalized before the non-cooperative job exited")
+	default:
+	}
+	if res.Retain() {
+		t.Fatal("closing resources must reject Retain")
+	}
+
+	close(releaseJob)
+	select {
+	case <-res.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("resources did not finalize after the job exited")
+	}
+}
+
 func TestResourcesCompatibleWith(t *testing.T) {
 	t.Parallel()
 	res := New(Config{WorkspaceKey: "/ws", RuntimeKey: "delivery"})

@@ -171,11 +171,25 @@ func (r *Resources) CompatibleWith(workspaceKey, runtimeKey string) bool {
 func (r *Resources) finalize() {
 	// Order is intentional: background jobs (and their subagents) may still
 	// call into LSP until they exit. Jobs close first and Done waits until
-	// every job goroutine and temp-root cleanup has finished.
+	// every job goroutine and temp-root cleanup has finished. Close itself is
+	// grace-bounded; if a non-cooperative job is still unwinding, finish the
+	// dependent cleanup asynchronously so Controller.Close keeps that bound.
 	if r.Jobs != nil {
 		r.Jobs.Close()
-		<-r.Jobs.Done()
+		select {
+		case <-r.Jobs.Done():
+		default:
+			go func() {
+				<-r.Jobs.Done()
+				r.completeFinalize()
+			}()
+			return
+		}
 	}
+	r.completeFinalize()
+}
+
+func (r *Resources) completeFinalize() {
 	if r.LSP != nil {
 		r.LSP.Close()
 	}

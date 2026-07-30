@@ -280,6 +280,7 @@ func TestIsQuotaExceededBody(t *testing.T) {
 		{name: "json message", body: `{"error":{"message":"You exceeded your current quota, please check your plan and billing details. Quota will reset at 2026-08-01."}}`, want: true},
 		{name: "plain usage quota", body: "usage quota exceeded; resets in 3h", want: true},
 		{name: "rate_limit_exceeded code", body: `{"error":{"code":"rate_limit_exceeded","message":"Rate limit reached for requests"}}`, want: false},
+		{name: "rate_limit_exceeded wins over quota message", body: `{"error":{"code":"rate_limit_exceeded","message":"Usage quota exceeded; reset in 1 minute"}}`, want: false},
 		{name: "bare quota mention", body: `{"error":{"message":"check your quota plan for details"}}`, want: false},
 		{name: "tpm rate limit", body: "rate limit: TPM exceeded", want: false},
 		{name: "empty", body: "", want: false},
@@ -337,7 +338,7 @@ func TestSendWithRetryOrdinaryRateLimitStillRetries(t *testing.T) {
 		if calls == 1 {
 			return &http.Response{
 				StatusCode: http.StatusTooManyRequests,
-				Body:       io.NopCloser(strings.NewReader(`{"error":{"code":"rate_limit_exceeded","message":"Rate limit reached for requests"}}`)),
+				Body:       io.NopCloser(strings.NewReader(`{"error":{"code":"rate_limit_exceeded","message":"Usage quota exceeded; reset in 1 minute"}}`)),
 				Header:     http.Header{},
 			}, nil
 		}

@@ -124,10 +124,10 @@ func (e *QuotaExceededError) Unwrap() error {
 // rate_limit_exceeded is deliberately excluded: that is TPM/RPM throttling and
 // must keep the existing backoff path.
 var quotaExceededCodes = map[string]struct{}{
-	"insufficient_quota":    {},
-	"quota_exceeded":        {},
-	"usage_quota_exceeded":  {},
-	"usage_limit_reached":   {},
+	"insufficient_quota":   {},
+	"quota_exceeded":       {},
+	"usage_quota_exceeded": {},
+	"usage_limit_reached":  {},
 }
 
 // IsQuotaExceededBody reports whether a non-OK provider response body describes
@@ -150,21 +150,25 @@ func IsQuotaExceededBody(body string) bool {
 		Message string `json:"message"`
 	}
 	if json.Unmarshal([]byte(body), &parsed) == nil {
-		for _, token := range []string{
+		tokens := []string{
 			parsed.Error.Code, parsed.Error.Type, parsed.Code, parsed.Type,
-		} {
+		}
+		// An explicit structured rate-limit classification wins over free-text
+		// quota wording. Some gateways describe a short TPM/RPM window as a
+		// "quota" that was exceeded and will reset; those responses must retain
+		// the ordinary retry path.
+		for _, token := range tokens {
+			if looksLikeRateLimitCode(token) {
+				return false
+			}
+		}
+		for _, token := range tokens {
 			if _, ok := quotaExceededCodes[strings.ToLower(strings.TrimSpace(token))]; ok {
 				return true
 			}
 		}
 		if messageImpliesQuotaExceeded(parsed.Error.Message) || messageImpliesQuotaExceeded(parsed.Message) {
 			return true
-		}
-		// Structured rate_limit_exceeded (and similar) must stay on the
-		// retryable TPM/RPM path even when the free-text also mentions quota.
-		if looksLikeRateLimitCode(parsed.Error.Code) || looksLikeRateLimitCode(parsed.Error.Type) ||
-			looksLikeRateLimitCode(parsed.Code) || looksLikeRateLimitCode(parsed.Type) {
-			return false
 		}
 	}
 	return messageImpliesQuotaExceeded(body)
