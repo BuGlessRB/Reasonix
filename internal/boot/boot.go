@@ -46,6 +46,7 @@ import (
 	"reasonix/internal/recovery"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/secrets"
+	"reasonix/internal/sessionruntime"
 	"reasonix/internal/skill"
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
@@ -161,6 +162,12 @@ type Options struct {
 	// catalog. Remote Workbench injects a Broker resolver so no credential or
 	// provider endpoint has to exist on the Host. Nil preserves local behavior.
 	ProviderResolver provider.Resolver
+	// SessionResources, when set, reuses the session-scoped jobs manager,
+	// subagent scheduler, Delivery workspace lease, and LSP manager across a
+	// controller rebuild (desktop model switch). Build retains one reference
+	// for the new controller and releases it if assembly fails. Nil keeps the
+	// historical exclusive-ownership path.
+	SessionResources *sessionruntime.Resources
 }
 
 func recoveryHeadlessMode(opts Options) bool {
@@ -171,7 +178,7 @@ func recoveryHeadlessMode(opts Options) bool {
 // single Agent, or a two-model Coordinator when agent.planner_model is set. The
 // returned controller owns plugin subprocesses; call Close (via Controller.Close)
 // to release them.
-func Build(ctx context.Context, opts Options) (*control.Controller, error) {
+func Build(ctx context.Context, opts Options) (ctrl *control.Controller, err error) {
 	stderr := opts.Stderr
 	if stderr == nil {
 		stderr = os.Stderr
@@ -316,27 +323,63 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	if !opts.RequireKey && entry.RequiresAPIKey() && entry.APIKey() == "" {
 		sink.Emit(event.Event{Kind: event.Notice, Text: "Selected model is missing its API key.", Detail: fmt.Sprintf("model %q is selected but its API key %s is not set — requests will fail until you set it", modelName, entry.APIKeyEnv)})
 	}
-	var workspaceLease *workspacelease.Owner
-	jobOptions := []jobs.Option{
-		jobs.WithStalledWarningAfter(time.Duration(cfg.BackgroundJobStalledWarningSeconds()) * time.Second),
-		jobs.WithSessionOwnershipProbe(agent.SessionLeaseHeldByCurrentRuntime),
-	}
-	if tokenDelivery {
-		workspaceLease, err = workspacelease.New(root, config.WorkspaceLeaseDir(), func() {
-			sink.Emit(event.Event{
-				Kind:   event.Notice,
-				Level:  event.LevelInfo,
-				Code:   event.NoticeCodeWorkspaceLease,
-				Text:   "Another Delivery session is writing to this workspace; this session will continue automatically when it is safe.",
-				Detail: "workspace write lease is busy; read-only work remains concurrent",
-			})
-		})
-		if err != nil {
-			return nil, fmt.Errorf("initialize Delivery workspace lease: %w", err)
+	// Session resources may be reused across desktop model switches so
+	// background jobs, Delivery leases, and LSP survive the rebuild. When the
+	// caller supplies a bag, retain it for this controller; release on any
+	// later assembly failure so the old controller's bag is untouched.
+	sessionResources := opts.SessionResources
+	reusedSessionResources := sessionResources != nil
+	if sessionResources != nil {
+		if !sessionResources.Retain() {
+			return nil, errors.New("session resources are closed")
 		}
-		jobOptions = append(jobOptions, jobs.WithJobStartObserver(workspaceLease.RetainUntil))
 	}
-	jm := jobs.NewManager(sink, jobOptions...)
+	// Drop the retain from a failed rebuild so the previous controller's bag
+	// (and its background jobs) stay alive. Exclusive bags created later in
+	// this function start with refs=1 and transfer ownership to the controller
+	// on success, so they are not released here.
+	defer func() {
+		if err != nil && reusedSessionResources && sessionResources != nil {
+			sessionResources.Release()
+		}
+	}()
+	var workspaceLease *workspacelease.Owner
+	var jm *jobs.Manager
+	var lspMgr *lsp.Manager
+	var subagentScheduler *agent.SubagentScheduler
+	if sessionResources != nil {
+		jm = sessionResources.Jobs
+		workspaceLease = sessionResources.WorkspaceLease
+		lspMgr = sessionResources.LSP
+		subagentScheduler = sessionResources.Scheduler
+		if jm == nil {
+			// A bag without a job manager is incomplete; creating a second one
+			// would split ownership. Fail closed so the old controller keeps
+			// its exclusive bag.
+			return nil, errors.New("session resources missing job manager")
+		}
+	} else {
+		jobOptions := []jobs.Option{
+			jobs.WithStalledWarningAfter(time.Duration(cfg.BackgroundJobStalledWarningSeconds()) * time.Second),
+			jobs.WithSessionOwnershipProbe(agent.SessionLeaseHeldByCurrentRuntime),
+		}
+		if tokenDelivery {
+			workspaceLease, err = workspacelease.New(root, config.WorkspaceLeaseDir(), func() {
+				sink.Emit(event.Event{
+					Kind:   event.Notice,
+					Level:  event.LevelInfo,
+					Code:   event.NoticeCodeWorkspaceLease,
+					Text:   "Another Delivery session is writing to this workspace; this session will continue automatically when it is safe.",
+					Detail: "workspace write lease is busy; read-only work remains concurrent",
+				})
+			})
+			if err != nil {
+				return nil, fmt.Errorf("initialize Delivery workspace lease: %w", err)
+			}
+			jobOptions = append(jobOptions, jobs.WithJobStartObserver(workspaceLease.RetainUntil))
+		}
+		jm = jobs.NewManager(sink, jobOptions...)
+	}
 	sessionDir := opts.SessionDir
 	if sessionDir == "" {
 		sessionDir = config.SessionDir()
@@ -699,9 +742,9 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 
 	// LSP tools resolve their servers on PATH and spawn lazily on first query, so
 	// registering them is cheap even when no server is installed (a query then
-	// returns an install hint). The manager is session-scoped; chain its shutdown
-	// into the controller's cleanup so servers stop with the session, not the turn.
-	var lspMgr *lsp.Manager
+	// returns an install hint). The manager is session-scoped and lives in
+	// SessionResources so a model-switch rebuild does not kill servers still
+	// used by background jobs. Exclusive boots still close LSP via the bag.
 	lspToolsAdded := false
 	addLSPTools := func() []string {
 		if lspMgr == nil || lspToolsAdded {
@@ -711,12 +754,12 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		return addTools(reg, lsp.Tools(lspMgr))
 	}
 	if cfg.LSP.Enabled {
-		lspMgr = lsp.NewManager(root, LSPSpecs(cfg.LSP))
+		if lspMgr == nil {
+			lspMgr = lsp.NewManager(root, LSPSpecs(cfg.LSP))
+		}
 		if !tokenEconomy {
 			addLSPTools()
 		}
-		prev := cleanup
-		cleanup = func() { prev(); lspMgr.Close() }
 	}
 
 	maxSteps := 0
@@ -813,7 +856,9 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	maxSubagentConcurrency, maxParallelWriters := agent.NormalizeConcurrencyLimits(
 		cfg.Agent.MaxSubagentConcurrency, cfg.Agent.MaxParallelWriters,
 	)
-	subagentScheduler := agent.NewSubagentScheduler(maxSubagentConcurrency, maxParallelWriters)
+	if subagentScheduler == nil {
+		subagentScheduler = agent.NewSubagentScheduler(maxSubagentConcurrency, maxParallelWriters)
+	}
 	profileLookup := func(name string) (agent.ProfileDefinition, bool) {
 		sk, ok := skillStore.Read(name)
 		if !ok || sk.RunAs != skill.RunSubagent {
@@ -1700,6 +1745,22 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		SessionRecoveryMeta: opts.SessionRecoveryMeta,
 		OnSessionRecovered:  opts.OnSessionRecovered,
 	}
+	if sessionResources == nil {
+		workspaceKey := ""
+		if canonical, canErr := workspacelease.CanonicalWorkspace(root); canErr == nil {
+			workspaceKey = canonical
+		}
+		sessionResources = sessionruntime.New(sessionruntime.Config{
+			Jobs:           jm,
+			Scheduler:      subagentScheduler,
+			WorkspaceLease: workspaceLease,
+			LSP:            lspMgr,
+			WorkspaceKey:   workspaceKey,
+			RuntimeKey:     strings.TrimSpace(opts.TokenMode),
+		})
+	}
+	ctrlOpts.SessionResources = sessionResources
+	ctrlOpts.Jobs = jm
 	// Guardian: when guardian_model is configured, spawn an LLM safety reviewer
 	// that can auto-allow safe Ask decisions and annotate risky ones before
 	// escalating to the human approval prompt.
@@ -1744,7 +1805,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		// that capability: bots have a bounded timeout and can still answer cards.
 		ctrlOpts.RecoveryHeadless = recoveryHeadlessMode(opts)
 	}
-	ctrl := control.New(ctrlOpts)
+	ctrl = control.New(ctrlOpts)
 	// Share the recovery checkpoint with task/fleet sub-agents so background
 	// writers observe the same failure state as the root agent.
 	if taskTool != nil {

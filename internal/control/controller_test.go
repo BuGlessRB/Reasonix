@@ -331,6 +331,10 @@ func TestTurnOutcomeClassifiesFinalReadiness(t *testing.T) {
 	if got := turnOutcome(err); got != event.TurnOutcomeFinalReadiness {
 		t.Fatalf("turnOutcome() = %q, want %q", got, event.TurnOutcomeFinalReadiness)
 	}
+	quota := explainError(&provider.QuotaExceededError{API: &provider.APIError{Provider: "p", Status: 429, Body: `{"error":{"code":"insufficient_quota"}}`}})
+	if got := turnOutcome(quota); got != event.TurnOutcomeQuotaExhausted {
+		t.Fatalf("turnOutcome(quota) = %q, want %q", got, event.TurnOutcomeQuotaExhausted)
+	}
 	if got := turnOutcome(errors.New("provider failed")); got != "" {
 		t.Fatalf("ordinary turn outcome = %q, want empty", got)
 	}
