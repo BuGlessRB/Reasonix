@@ -1576,6 +1576,19 @@ node --test "$repo_root/npm/publish.test.mjs"
 node --test "$repo_root/scripts/finalize-npm-official-release.test.mjs"
 bash "$repo_root/scripts/release-stable.test.sh"
 bash "$repo_root/scripts/check-docs-impact.test.sh"
+bash "$repo_root/scripts/ci-windows-go-test.test.sh"
+
+# Windows full-suite hangs that survive Actions soft step cancel pin main-v2
+# push CI (v1.21.2 notes window: 40-52m zombies). Require the hard ceiling.
+ci_workflow="$repo_root/.github/workflows/ci.yml"
+grep -Fq 'scripts/ci-windows-go-test.ps1' "$ci_workflow"
+grep -Fq 'timeout-minutes: 25' "$ci_workflow"
+grep -Fq 'TimeoutSeconds 720' "$ci_workflow"
+# Dead env left after the native Windows sandbox retirement must not return.
+if grep -v '^\s*#' "$ci_workflow" | grep -Fq 'WINDOWS_SANDBOX_WAIT_MS'; then
+	echo "ci.yml still injects retired WINDOWS_SANDBOX_WAIT_MS" >&2
+	exit 1
+fi
 
 # Every current publisher must gate on the same compiled docs identity, and
 # each build path must stamp that identity into its shipped binary.
