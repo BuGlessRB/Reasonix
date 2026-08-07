@@ -1,0 +1,23 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "模型设置-接入页重做": {
+      "versions": [
+        {
+          "path": "模型设置-接入页 效果图.html",
+          "createdAt": "2026-08-07T09:55:06.219Z",
+          "status": "needs-review"
+        },
+        {
+          "path": "模型设置-接入页 效果图 v2.html",
+          "createdAt": "2026-08-07T10:18:30.809Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-08-07T09:55:06.220Z",
+  "updatedAt": "2026-08-07T10:18:30.810Z"
+}

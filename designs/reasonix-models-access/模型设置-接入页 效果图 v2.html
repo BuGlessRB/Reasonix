@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reasonix 模型设置 · 接入页重做 效果图 v2</title>
+<style>
+  /* ===== Reasonix 暖色亮色主题（对齐 desktop 实机截图） ===== */
+  :root {
+    --bg: #f4f3ef;
+    --bg-soft: #ebe9e2;
+    --bg-elev: #ffffff;
+    --bg-elev-2: #f6f5f1;
+    --border: #ddd9ce;
+    --border-soft: #e7e4da;
+    --fg: #16181d;
+    --fg-dim: #4b5563;
+    --fg-faint: #9a958a;
+    --accent: #d97757;
+    --accent-fg: #fff8f4;
+    --accent-soft: rgba(217, 119, 87, 0.12);
+    --accent-strong: #c96647;
+    --ok: #1f9d57;
+    --ok-soft: rgba(31, 157, 87, 0.1);
+    --err: #d83a2a;
+    --radius: 9px;
+    --font: -apple-system, "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font);
+    background: #d9d6cd;
+    color: var(--fg);
+    font-size: 13px;
+    line-height: 1.55;
+    padding: 48px 40px 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .board-label {
+    width: 1220px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: -44px;
+    color: #6b6759;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+  .board-label strong { color: #3d3a30; font-size: 13px; font-weight: 600; }
+
+  .window {
+    width: 1220px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(60, 55, 40, 0.28);
+  }
+  .titlebar {
+    height: 38px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 8px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .tl { width: 12px; height: 12px; border-radius: 50%; }
+  .tl-r { background: #ff5f57; } .tl-y { background: #febc2e; } .tl-g { background: #28c840; }
+  .titlebar span { margin-left: 10px; color: var(--fg-faint); font-size: 12.5px; }
+  .settings-head {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 14px;
+    font-weight: 650;
+  }
+  .settings-head .close { color: var(--fg-faint); }
+
+  .app { display: flex; height: 700px; }
+
+  /* ===== 左侧导航（沿用现状：label + meta） ===== */
+  .nav {
+    width: 230px;
+    flex-shrink: 0;
+    background: var(--bg-elev);
+    border-right: 1px solid var(--border-soft);
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    color: var(--fg);
+    font-weight: 550;
+  }
+  .nav-item .meta { font-size: 11px; color: var(--fg-faint); font-weight: 400; }
+  .nav-item.active { background: var(--accent-soft); }
+  .nav-item.active .meta { color: var(--accent); }
+
+  /* ===== 内容区 ===== */
+  .content { flex: 1; padding: 20px 24px; overflow: hidden; background: var(--bg); }
+  .page-title { font-size: 18px; font-weight: 650; }
+  .page-sub { color: var(--fg-dim); font-size: 12.5px; margin-top: 3px; }
+  .page-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+  .icon-btn {
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 7px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--fg-faint);
+  }
+  .icon-btn:hover { background: var(--bg-elev-2); color: var(--fg-dim); }
+
+  .subtabs {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border-soft);
+    border-radius: 9px;
+    padding: 3px;
+    margin-bottom: 16px;
+  }
+  .subtab { padding: 5px 14px; border-radius: 6px; color: var(--fg-dim); font-size: 12.5px; }
+  .subtab.active { background: var(--bg-elev); color: var(--fg); box-shadow: 0 1px 3px rgba(80, 70, 50, 0.18); }
+
+  .seg {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border-soft);
+    border-radius: 9px;
+    padding: 3px;
+    margin: 10px 0 14px;
+  }
+  .seg-item { padding: 5px 14px; border-radius: 6px; color: var(--fg-dim); font-size: 12.5px; }
+  .seg-item.active { background: var(--bg-elev); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(80, 70, 50, 0.18); }
+
+  .section-label { color: var(--fg-faint); font-size: 12px; margin: 4px 0 8px; letter-spacing: 0.03em; }
+
+  /* ===== 已接入供应商：行卡 + 内联展开详情 ===== */
+  .prov-list { display: flex; flex-direction: column; gap: 8px; }
+  .prov-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .prov-card.expanded { border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); box-shadow: 0 2px 10px rgba(217, 119, 87, 0.08); }
+  .prov-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .prov-logo {
+    width: 26px; height: 26px;
+    border-radius: 7px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .prov-id { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .prov-name { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 7px; }
+  .prov-endpoint { font-family: var(--mono); font-size: 11px; color: var(--fg-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip {
+    font-size: 11px;
+    color: var(--fg-dim);
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-soft);
+    white-space: nowrap;
+  }
+  .chip.mono { font-family: var(--mono); }
+  .prov-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .status { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; }
+  .status .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .status.on { color: var(--ok); } .status.on .dot { background: var(--ok); }
+  .status.off { color: var(--fg-faint); } .status.off .dot { background: var(--fg-faint); opacity: 0.6; }
+  .grip { color: var(--fg-faint); opacity: 0.55; flex-shrink: 0; cursor: grab; }
+  .chev-open { color: var(--fg-faint); }
+
+  .prov-detail { border-top: 1px solid var(--border-soft); padding: 14px 16px 14px; background: var(--bg-elev-2); }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  .field { min-width: 0; }
+  .field.full { grid-column: 1 / -1; }
+  .field label { display: block; color: var(--fg-faint); font-size: 11.5px; margin-bottom: 4px; }
+  .input, .select {
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--bg-elev);
+    color: var(--fg);
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+  }
+  .input.mono, .select { font-family: var(--mono); font-size: 12px; }
+  .input .placeholder { color: var(--fg-faint); font-family: var(--font); }
+  .select { justify-content: space-between; }
+  .select .chev { color: var(--fg-faint); }
+  .key-wrap { position: relative; }
+  .key-wrap .eye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--fg-faint); }
+  .advanced {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--fg-faint); font-size: 12px;
+    margin-top: 10px;
+  }
+
+  .models-head { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 7px; }
+  .models-label { color: var(--fg-faint); font-size: 11.5px; }
+  .model-rows { display: flex; flex-direction: column; gap: 6px; }
+  .model-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border-soft);
+  }
+  .model-id { font-family: var(--mono); font-size: 12px; flex: 1; }
+  .row-actions { display: flex; align-items: center; gap: 2px; }
+  .row-actions .icon-btn { width: 25px; height: 25px; }
+  .row-actions .icon-btn:hover { color: var(--accent); }
+  .row-actions .icon-btn.danger:hover { color: var(--err); }
+  .test-ok {
+    display: inline-flex; align-items: center; gap: 5px;
+    margin: -2px 0 2px 10px;
+    padding: 2px 9px;
+    border-radius: 6px;
+    background: var(--ok-soft);
+    color: var(--ok);
+    font-size: 11px;
+    align-self: flex-start;
+  }
+  .model-add {
+    margin-top: 8px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--bg-elev);
+    color: var(--fg-dim);
+    font-size: 12px;
+  }
+  .detail-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 13px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--bg-elev);
+    color: var(--fg-dim);
+    font-size: 12.5px;
+  }
+  .btn-danger { color: var(--err); }
+  .add-prov {
+    margin-top: 10px;
+    width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px;
+    border-radius: var(--radius);
+    border: 1px dashed var(--border);
+    color: var(--fg-dim);
+    font-size: 12.5px;
+    background: transparent;
+  }
+
+  /* ===== 预设目录网格（保留 Reasonix 特色） ===== */
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .preset-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 74px;
+  }
+  .preset-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+  .preset-card.added { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 5%, var(--bg-elev)); }
+  .preset-name { font-weight: 650; font-size: 13px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .added-badge {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    padding: 1px 7px;
+    border-radius: 999px;
+  }
+  .preset-desc {
+    color: var(--fg-dim);
+    font-size: 11.5px;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .back-link { display: inline-flex; align-items: center; gap: 5px; color: var(--fg-dim); font-size: 12.5px; margin-bottom: 4px; }
+
+  /* ===== 弹窗 ===== */
+  .rel { position: relative; }
+  .overlay {
+    position: absolute;
+    inset: 38px 0 0 0;
+    background: rgba(40, 36, 28, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal {
+    width: 420px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 24px 64px rgba(60, 55, 40, 0.35);
+    padding: 16px 18px 14px;
+  }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .modal-title { font-size: 14px; font-weight: 650; }
+  .modal .field { margin-bottom: 10px; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ================= 画板 01：已接入供应商（管理主页） ================= -->
+<div class="board-label"><strong>01 · 接入页主页 — 已接入供应商</strong><span>行卡 + 内联展开详情 / 模型行内管理 / 拖拽排序</span></div>
+<div class="window" data-screen-label="01-configured">
+  <div class="titlebar"><div class="tl tl-r"></div><div class="tl tl-y"></div><div class="tl tl-g"></div><span>Reasonix</span></div>
+  <div class="settings-head"><span>设置</span><span class="close">✕</span></div>
+  <div class="app">
+    <div class="nav">
+      <div class="nav-item">通用<span class="meta">经典 · 保持后台运行</span></div>
+      <div class="nav-item active">模型<span class="meta">DeepSeek 官方 · deepseek-v4-flash</span></div>
+      <div class="nav-item">机器人<span class="meta">未连接</span></div>
+      <div class="nav-item">MCP 与工具<span class="meta">MCP 服务器</span></div>
+      <div class="nav-item">远程 SSH<span class="meta">SSH 主机与远程工作区</span></div>
+      <div class="nav-item">技能<span class="meta">Agent 技能</span></div>
+      <div class="nav-item">子智能体<span class="meta">内置 + 你自己的 agent 档案</span></div>
+      <div class="nav-item">插件<span class="meta">包与诊断</span></div>
+      <div class="nav-item">记忆<span class="meta">项目与全局</span></div>
+      <div class="nav-item">Hooks<span class="meta">Shell 自动化</span></div>
+      <div class="nav-item">诊断<span class="meta">能力健康检查</span></div>
+      <div class="nav-item">快捷键<span class="meta">按键与帮助</span></div>
+    </div>
+    <div class="content">
+      <div class="page-head">
+        <div>
+          <div class="page-title">模型接入</div>
+          <div class="page-sub">管理已接入的供应商，或从推荐预设快速添加。</div>
+        </div>
+        <button class="icon-btn" title="刷新"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
+      </div>
+      <div class="subtabs">
+        <div class="subtab">用量</div>
+        <div class="subtab active">接入</div>
+        <div class="subtab">统计</div>
+      </div>
+      <div class="section-label">已接入供应商 · 3</div>
+      <div class="prov-list">
+        <div class="prov-card expanded">
+          <div class="prov-summary">
+            <svg class="grip" width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="3" r="1.3"/><circle cx="7" cy="3" r="1.3"/><circle cx="3" cy="7" r="1.3"/><circle cx="7" cy="7" r="1.3"/><circle cx="3" cy="11" r="1.3"/><circle cx="7" cy="11" r="1.3"/></svg>
+            <span class="prov-logo" style="background:#4d6bfe14;color:#4d6bfe;border:1px solid #4d6bfe30;">D</span>
+            <div class="prov-id">
+              <span class="prov-name">DeepSeek 官方 <span class="chip">预设</span></span>
+              <span class="prov-endpoint">https://api.deepseek.com/anthropic</span>
+            </div>
+            <div class="prov-right">
+              <span class="chip mono">Anthropic</span>
+              <span class="chip">2 个模型</span>
+              <span class="status on"><span class="dot"></span>已启用</span>
+              <svg class="chev-open" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+          <div class="prov-detail">
+            <div class="detail-grid">
+              <div class="field">
+                <label>Base URL</label>
+                <div class="input mono">https://api.deepseek.com/anthropic</div>
+              </div>
+              <div class="field">
+                <label>API 格式</label>
+                <div class="select"><span>Anthropic Messages (/v1/messages)</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+              </div>
+              <div class="field full">
+                <label>API Key</label>
+                <div class="input mono key-wrap">••••••••••••••••••••••••••
+                  <svg class="eye" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="advanced">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              高级配置（headers、extraBody、reasoning 协议、服务端搜索…）
+            </div>
+            <div class="models-head">
+              <span class="models-label">模型列表</span>
+            </div>
+            <div class="model-rows">
+              <div class="model-row">
+                <span class="model-id">deepseek-v4-flash</span>
+                <span class="chip mono">128K</span>
+                <div class="row-actions">
+                  <button class="icon-btn" title="测试模型"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5Z"/></svg></button>
+                  <button class="icon-btn" title="编辑模型配置"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+                  <button class="icon-btn danger" title="删除"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+              </div>
+              <div>
+                <div class="model-row">
+                  <span class="model-id">deepseek-v4-pro</span>
+                  <span class="chip mono">128K</span>
+                  <div class="row-actions">
+                    <button class="icon-btn" title="测试模型"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5Z"/></svg></button>
+                    <button class="icon-btn" title="编辑模型配置"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+                    <button class="icon-btn danger" title="删除"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                  </div>
+                </div>
+                <span class="test-ok"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>连接成功</span>
+              </div>
+            </div>
+            <button class="model-add"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>添加模型</button>
+            <div class="detail-foot">
+              <button class="btn btn-danger">删除供应商</button>
+              <button class="btn">禁用</button>
+            </div>
+          </div>
+        </div>
+        <div class="prov-card">
+          <div class="prov-summary">
+            <svg class="grip" width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="3" r="1.3"/><circle cx="7" cy="3" r="1.3"/><circle cx="3" cy="7" r="1.3"/><circle cx="7" cy="7" r="1.3"/><circle cx="3" cy="11" r="1.3"/><circle cx="7" cy="11" r="1.3"/></svg>
+            <span class="prov-logo" style="background:#7c5cfc12;color:#7c5cfc;border:1px solid #7c5cfc30;">智</span>
+            <div class="prov-id">
+              <span class="prov-name">GLM Coding Plan CN <span class="chip">预设</span></span>
+              <span class="prov-endpoint">https://open.bigmodel.cn/api/anthropic</span>
+            </div>
+            <div class="prov-right">
+              <span class="chip mono">Anthropic</span>
+              <span class="chip">2 个模型</span>
+              <span class="status on"><span class="dot"></span>已启用</span>
+              <svg class="chev-open" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="prov-card">
+          <div class="prov-summary">
+            <svg class="grip" width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="3" r="1.3"/><circle cx="7" cy="3" r="1.3"/><circle cx="3" cy="7" r="1.3"/><circle cx="7" cy="7" r="1.3"/><circle cx="3" cy="11" r="1.3"/><circle cx="7" cy="11" r="1.3"/></svg>
+            <span class="prov-logo" style="background:#1f9d5712;color:#1f9d57;border:1px solid #1f9d5730;">O</span>
+            <div class="prov-id">
+              <span class="prov-name">OpenRouter <span class="chip">自定义</span></span>
+              <span class="prov-endpoint">https://openrouter.ai/api/v1</span>
+            </div>
+            <div class="prov-right">
+              <span class="chip mono">Chat Completions</span>
+              <span class="chip">1 个模型</span>
+              <span class="status off"><span class="dot"></span>已禁用</span>
+              <svg class="chev-open" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button class="add-prov"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>添加供应商（推荐预设 / 自定义）</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 画板 02：添加供应商 · 预设目录（保留现状特色） ================= -->
+<div class="board-label"><strong>02 · 添加供应商 — 推荐预设目录</strong><span>保留 Reasonix 特色：预设网格 + 描述 + 已添加标记</span></div>
+<div class="window" data-screen-label="02-preset-catalog">
+  <div class="titlebar"><div class="tl tl-r"></div><div class="tl tl-y"></div><div class="tl tl-g"></div><span>Reasonix</span></div>
+  <div class="settings-head"><span>设置</span><span class="close">✕</span></div>
+  <div class="app">
+    <div class="nav">
+      <div class="nav-item">通用<span class="meta">经典 · 保持后台运行</span></div>
+      <div class="nav-item active">模型<span class="meta">DeepSeek 官方 · deepseek-v4-flash</span></div>
+      <div class="nav-item">机器人<span class="meta">未连接</span></div>
+      <div class="nav-item">MCP 与工具<span class="meta">MCP 服务器</span></div>
+      <div class="nav-item">远程 SSH<span class="meta">SSH 主机与远程工作区</span></div>
+      <div class="nav-item">技能<span class="meta">Agent 技能</span></div>
+      <div class="nav-item">子智能体<span class="meta">内置 + 你自己的 agent 档案</span></div>
+      <div class="nav-item">插件<span class="meta">包与诊断</span></div>
+      <div class="nav-item">记忆<span class="meta">项目与全局</span></div>
+      <div class="nav-item">Hooks<span class="meta">Shell 自动化</span></div>
+      <div class="nav-item">诊断<span class="meta">能力健康检查</span></div>
+      <div class="nav-item">快捷键<span class="meta">按键与帮助</span></div>
+    </div>
+    <div class="content">
+      <span class="back-link"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>返回已接入</span>
+      <div class="page-head" style="margin-bottom:0;">
+        <div>
+          <div class="page-title">添加供应商</div>
+          <div class="page-sub">选择推荐预设，或手动添加一个自定义供应商。</div>
+        </div>
+      </div>
+      <div class="seg">
+        <div class="seg-item active">推荐预设</div>
+        <div class="seg-item">自定义供应商</div>
+      </div>
+      <div class="preset-grid">
+        <div class="preset-card added">
+          <span class="preset-name">DeepSeek 官方 <span class="added-badge">已添加</span></span>
+          <span class="preset-desc">官方 API Key 接入，可用 DeepSeek V4 Flash / Pro。</span>
+        </div>
+        <div class="preset-card added">
+          <span class="preset-name">DeepSeek Responses API <span class="added-badge">已添加</span></span>
+          <span class="preset-desc">DeepSeek 官方无状态 Responses API，适用于 Flash；预置服务端网页搜索。</span>
+        </div>
+        <div class="preset-card">
+          <span class="preset-name">DeepSeek Anthropic</span>
+          <span class="preset-desc">DeepSeek 官方 Anthropic 兼容端点，支持 Flash、Pro；预置服务端网页搜索。</span>
+        </div>
+        <div class="preset-card">
+          <span class="preset-name">GLM CN API</span>
+          <span class="preset-desc">智谱 GLM 国内 API，预置 GLM thinking 控制。</span>
+        </div>
+        <div class="preset-card">
+          <span class="preset-name">Z.AI Global API</span>
+          <span class="preset-desc">Z.AI 国际 GLM API。</span>
+        </div>
+        <div class="preset-card added">
+          <span class="preset-name">GLM Coding Plan CN <span class="added-badge">已添加</span></span>
+          <span class="preset-desc">智谱 GLM 国内 coding plan 端点，默认 GLM-5.2。</span>
+        </div>
+        <div class="preset-card">
+          <span class="preset-name">GLM Coding Plan CN Anthropic</span>
+          <span class="preset-desc">智谱 GLM 国内 Anthropic-compatible coding plan 端点，默认 GLM-5.2。</span>
+        </div>
+        <div class="preset-card">
+          <span class="preset-name">Z.AI Coding Plan Global</span>
+          <span class="preset-desc">Z.AI 国际 coding plan 端点，默认 GLM-5.2。</span>
+        </div>
+        <div class="preset-card">
+          <span class="preset-name">Kimi CN API</span>
+          <span class="preset-desc">Kimi 国内 API，走 Moonshot CN 端点，预置 K2 视觉模型。</span>
+        </div>
+        <div class="preset-card">
+          <span class="preset-name">Kimi Coding Plan</span>
+          <span class="preset-desc">Kimi Coding Plan，走独立 Anthropic-compatible 端点，不归属 CN/Global。</span>
+        </div>
+        <div class="preset-card">
+          <span class="preset-name">MiniMax CN API</span>
+          <span class="preset-desc">MiniMax 国内 OpenAI-compatible M 系列 API 端点。</span>
+        </div>
+        <div class="preset-card">
+          <span class="preset-name">LongCat OpenAI</span>
+          <span class="preset-desc">LongCat 开放平台 OpenAI-compatible 端点，默认 LongCat-2.0。</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 画板 03：添加模型弹窗 ================= -->
+<div class="board-label"><strong>03 · 添加模型弹窗</strong><span>添加 / 编辑共用，「高级」折叠最大输出 Token</span></div>
+<div class="window rel" data-screen-label="03-add-model-modal">
+  <div class="titlebar"><div class="tl tl-r"></div><div class="tl tl-y"></div><div class="tl tl-g"></div><span>Reasonix</span></div>
+  <div class="settings-head"><span>设置</span><span class="close">✕</span></div>
+  <div class="app">
+    <div class="nav">
+      <div class="nav-item">通用<span class="meta">经典 · 保持后台运行</span></div>
+      <div class="nav-item active">模型<span class="meta">DeepSeek 官方 · deepseek-v4-flash</span></div>
+      <div class="nav-item">机器人<span class="meta">未连接</span></div>
+      <div class="nav-item">MCP 与工具<span class="meta">MCP 服务器</span></div>
+      <div class="nav-item">远程 SSH<span class="meta">SSH 主机与远程工作区</span></div>
+      <div class="nav-item">技能<span class="meta">Agent 技能</span></div>
+      <div class="nav-item">子智能体<span class="meta">内置 + 你自己的 agent 档案</span></div>
+      <div class="nav-item">插件<span class="meta">包与诊断</span></div>
+      <div class="nav-item">记忆<span class="meta">项目与全局</span></div>
+      <div class="nav-item">Hooks<span class="meta">Shell 自动化</span></div>
+      <div class="nav-item">诊断<span class="meta">能力健康检查</span></div>
+      <div class="nav-item">快捷键<span class="meta">按键与帮助</span></div>
+    </div>
+    <div class="content">
+      <div class="page-head">
+        <div>
+          <div class="page-title">模型接入</div>
+          <div class="page-sub">管理已接入的供应商，或从推荐预设快速添加。</div>
+        </div>
+      </div>
+      <div class="subtabs">
+        <div class="subtab">用量</div>
+        <div class="subtab active">接入</div>
+        <div class="subtab">统计</div>
+      </div>
+      <div class="section-label">已接入供应商 · 3</div>
+      <div class="prov-list">
+        <div class="prov-card expanded">
+          <div class="prov-summary">
+            <svg class="grip" width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="3" r="1.3"/><circle cx="7" cy="3" r="1.3"/><circle cx="3" cy="7" r="1.3"/><circle cx="7" cy="7" r="1.3"/><circle cx="3" cy="11" r="1.3"/><circle cx="7" cy="11" r="1.3"/></svg>
+            <span class="prov-logo" style="background:#4d6bfe14;color:#4d6bfe;border:1px solid #4d6bfe30;">D</span>
+            <div class="prov-id">
+              <span class="prov-name">DeepSeek 官方 <span class="chip">预设</span></span>
+              <span class="prov-endpoint">https://api.deepseek.com/anthropic</span>
+            </div>
+            <div class="prov-right">
+              <span class="chip mono">Anthropic</span>
+              <span class="chip">2 个模型</span>
+              <span class="status on"><span class="dot"></span>已启用</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="overlay">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title">添加模型</div>
+        <button class="icon-btn" title="关闭"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="field">
+        <label>模型 ID</label>
+        <div class="input"><span class="placeholder">例如 deepseek-v4-flash</span></div>
+      </div>
+      <div class="field">
+        <label>上下文窗口</label>
+        <div class="input mono">200000</div>
+      </div>
+      <div class="advanced">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        高级（最大输出 Token）
+      </div>
+      <div class="modal-foot">
+        <button class="btn">取消</button>
+        <button class="btn btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
