@@ -714,6 +714,7 @@ func appendSessionEvent(sessionPath string, rec sessionEventRecord, sync bool) e
 	if path == "" {
 		return fmt.Errorf("empty session event log path")
 	}
+	fileutil.Crash("wal-append", path)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -733,10 +734,9 @@ func appendSessionEvent(sessionPath string, rec sessionEventRecord, sync bool) e
 	if err != nil {
 		return fmt.Errorf("open session event log: %w", err)
 	}
-	// The event log carries the complete transcript. Chmod after opening so
-	// upgrading a pre-v0.53-boundary 0644 sidecar tightens the existing inode
-	// before any unredacted message is appended; OpenFile's perm only applies
-	// when the file is newly created.
+	// The log carries the full transcript. Chmod after opening so upgrading a
+	// pre-v0.53-boundary 0644 sidecar tightens the existing inode before any
+	// unredacted message lands; OpenFile's perm only applies on creation.
 	if err := f.Chmod(0o600); err != nil {
 		_ = f.Close()
 		return fmt.Errorf("protect session event log: %w", err)
@@ -755,8 +755,8 @@ func appendSessionEvent(sessionPath string, rec sessionEventRecord, sync bool) e
 }
 
 func appendSessionReplaceEvent(sessionPath string, msgs []provider.Message, digest [sha256.Size]byte, baseRevision int64, reason string) error {
-	// Replace events carry the whole transcript and mark intentional history
-	// rewrites; they are rare and fsynced so a power cut cannot lose one.
+	// Replace events carry the full transcript for intentional rewrites;
+	// rare, and fsynced so a power cut cannot lose one.
 	return appendSessionEvent(sessionPath, sessionEventRecord{
 		Type:          sessionEventTypeReplace,
 		Revision:      baseRevision + 1,
