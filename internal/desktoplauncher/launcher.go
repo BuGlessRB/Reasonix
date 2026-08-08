@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"reasonix/internal/installlayout"
+	"reasonix/internal/winappid"
 )
 
 // Run resolves the active desktop, performs the one-time legacy handoff when
@@ -42,6 +43,15 @@ func Run(args []string, buildVersion string) int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return 1
+	}
+
+	// The pinned launcher and the versioned desktop exe live at different
+	// paths, so Windows would give them different default AppUserModelIDs and
+	// render two taskbar buttons. Stamp the pinned shortcut with the same
+	// explicit ID the desktop process sets before spawning it; this must run
+	// before the desktop registers its window. Best effort only.
+	if err := winappid.EnsureShortcutIDs(); err != nil {
+		fmt.Fprintln(os.Stderr, "warning: taskbar identity repair:", err)
 	}
 
 	cmd := exec.Command(desktopPath, StripLegacyLaunchArgs(args)...)

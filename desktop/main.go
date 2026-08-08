@@ -102,6 +102,11 @@ func main() {
 	capturePreviousFatalCrash()
 	installFatalCrashOutput()
 
+	// Fix Windows taskbar grouping before the first window registers: the
+	// launcher and the versioned desktop exe must share one AppUserModelID or
+	// Explorer shows two buttons. No-op off Windows.
+	applyWindowsTaskbarIdentity()
+
 	launch := parseDesktopLaunchArgs(os.Args[1:])
 
 	app := NewApp()
