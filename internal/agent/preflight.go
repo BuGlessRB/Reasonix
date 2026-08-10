@@ -41,7 +41,7 @@ func (a *Agent) contextPreflight(ctx context.Context, trigger string) error {
 	}
 
 	// Prefer a free prune/snip projection before a paid summarize call.
-	pruned, pst := a.applyToolResultMaintenanceView(msgs, toolResultPrune)
+	pruned, pst := a.applyToolResultMaintenanceView(a.maintenanceBase(msgs, version), toolResultPrune)
 	if pst.Results > 0 {
 		if err := a.installPruneProjection(pruned, pst); err == nil {
 			projEst := estimateMessagesTokens(provider.ModelMessages(pruned))

@@ -670,17 +670,35 @@ func (a *Agent) runCompactionSummary(ctx context.Context, fold []provider.Messag
 }
 
 // snipToProjection builds a projection that only snips stale tool results.
+// maintenanceBase is the view tool-result maintenance must rewrite: the active
+// projection when one is valid, never the canonical transcript. Rebuilding from
+// canonical would silently discard an existing summary and undo the compaction
+// that produced it.
+func (a *Agent) maintenanceBase(msgs []provider.Message, version uint64) []provider.Message {
+	st := a.compactionState
+	if !projectionValid(st, msgs, version, a.currentPromptCacheKey()) {
+		return msgs
+	}
+	if visible := modelVisibleFromProjection(st.Projection, msgs); len(visible) > 0 {
+		return visible
+	}
+	return msgs
+}
+
 func (a *Agent) snipToProjection(ctx context.Context) error {
 	_ = ctx
-	msgs, _ := a.session.snapshotMessagesVersion()
-	snipped, st := a.applyToolResultMaintenanceView(msgs, toolResultSnip)
+	msgs, version := a.session.snapshotMessagesVersion()
+	// Snipping the projection rather than canonical also makes the count honest:
+	// already-snipped results carry the marker and no longer qualify, so this
+	// reports what this pass actually reclaimed instead of the running total.
+	snipped, st := a.applyToolResultMaintenanceView(a.maintenanceBase(msgs, version), toolResultSnip)
 	if st.Results == 0 {
 		return nil
 	}
 	ratio := a.tokPerChar()
 	saved := int(float64(st.SavedChars) * ratio)
 	a.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf(
-		"snipped %d stale tool results (~%d tokens est.) before compaction", st.Results, saved)})
+		"snipped %d stale tool results (~%d tokens est.)", st.Results, saved)})
 	return a.installPruneProjection(snipped, st)
 }
 
