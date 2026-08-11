@@ -71,7 +71,6 @@ type OutcomeProgress struct {
 	Objective        int  `json:"objective,omitempty"`
 	Regression       int  `json:"regression,omitempty"`
 	Churn            int  `json:"churn,omitempty"`
-	LegacyGain       int  `json:"legacy_gain,omitempty"`
 	Discriminating   int  `json:"discriminating,omitempty"`
 	DebtAge          int  `json:"debt_age,omitempty"`
 	BlindMutations   int  `json:"blind_mutations,omitempty"`
@@ -80,6 +79,10 @@ type OutcomeProgress struct {
 	LocalExecSeen    bool `json:"local_exec_seen,omitempty"`
 	GovernorEligible bool `json:"governor_eligible,omitempty"`
 	GovernorEngaged  bool `json:"governor_engaged,omitempty"`
+	Runway           int  `json:"runway,omitempty"`
+	RunwayDry        int  `json:"runway_dry,omitempty"`
+	RunwayIdle       int  `json:"runway_idle,omitempty"`
+	RunwaySpent      bool `json:"runway_spent,omitempty"`
 }
 
 // ContractShadowAudit mirrors event.ContractShadowAudit with stable keys.
@@ -251,7 +254,6 @@ func (r *Recorder) RecordOutcomeProgress(sample evidence.OutcomeSample) {
 		Objective:        sample.Objective,
 		Regression:       sample.Regression,
 		Churn:            sample.Churn,
-		LegacyGain:       sample.LegacyGain,
 		Discriminating:   sample.Discriminating,
 		DebtAge:          sample.DebtAge,
 		BlindMutations:   sample.BlindMutations,
@@ -260,6 +262,10 @@ func (r *Recorder) RecordOutcomeProgress(sample evidence.OutcomeSample) {
 		LocalExecSeen:    sample.LocalExecSeen,
 		GovernorEligible: sample.GovernorEligible,
 		GovernorEngaged:  sample.GovernorEngaged,
+		Runway:           sample.Runway,
+		RunwayDry:        sample.RunwayDry,
+		RunwayIdle:       sample.RunwayIdle,
+		RunwaySpent:      sample.RunwaySpent,
 	}})
 	event.RecordOutcomeProgress(r.inner, sample)
 }

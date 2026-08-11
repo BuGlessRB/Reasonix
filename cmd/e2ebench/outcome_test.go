@@ -19,12 +19,12 @@ func writeTrajectory(t *testing.T, name string, lines []string) string {
 func TestSummarizeOutcomeFromRecordedShadowSamples(t *testing.T) {
 	path := writeTrajectory(t, "shadow.trajectory.jsonl", []string{
 		`{"seq":1,"ts":500,"event":{"kind":"turn_started"}}`,
-		`{"seq":2,"ts":1000,"outcome_progress":{"round":1,"exploration":1,"legacy_gain":1}}`,
-		`{"seq":3,"ts":2000,"outcome_progress":{"round":2,"verification":1,"legacy_gain":2}}`,
-		`{"seq":4,"ts":3000,"outcome_progress":{"round":3,"churn":1,"legacy_gain":3}}`,
-		`{"seq":5,"ts":4000,"outcome_progress":{"round":4,"verification":1,"objective":1,"legacy_gain":2}}`,
-		`{"seq":6,"ts":5000,"outcome_progress":{"round":5,"churn":1,"legacy_gain":3}}`,
-		`{"seq":7,"ts":6000,"outcome_progress":{"round":6,"verification":1,"regression":1}}`,
+		`{"seq":2,"ts":1000,"outcome_progress":{"round":1,"exploration":1}}`,
+		`{"seq":3,"ts":2000,"outcome_progress":{"round":2,"verification":1,"discriminating":1}}`,
+		`{"seq":4,"ts":3000,"outcome_progress":{"round":3,"churn":1}}`,
+		`{"seq":5,"ts":4000,"outcome_progress":{"round":4,"verification":1,"objective":1,"discriminating":1}}`,
+		`{"seq":6,"ts":5000,"outcome_progress":{"round":5,"churn":1}}`,
+		`{"seq":7,"ts":6000,"outcome_progress":{"round":6,"verification":1,"regression":1,"discriminating":1}}`,
 		`{"seq":8,"ts":7000,"event":{"kind":"turn_done"}}`,
 	})
 	s, err := summarizeTrajectory(path)
@@ -35,13 +35,16 @@ func TestSummarizeOutcomeFromRecordedShadowSamples(t *testing.T) {
 	if o == nil || o.Backfilled {
 		t.Fatalf("outcome = %+v, want recorded (not backfilled)", o)
 	}
-	if o.Rounds != 6 || o.ProgressRounds != 5 {
-		t.Errorf("rounds=%d progress=%d, want 6/5", o.Rounds, o.ProgressRounds)
+	// Every round here bought something nameable; whether the claim was worth
+	// anything is what FalseProgressRounds prices.
+	if o.Rounds != 6 || o.ProgressRounds != 6 {
+		t.Errorf("rounds=%d progress=%d, want 6/6", o.Rounds, o.ProgressRounds)
 	}
-	// Round 5 claimed legacy progress (a mutation) with no objective transition
-	// inside the redemption window — the false-progress case.
-	if o.FalseProgressRounds != 1 {
-		t.Errorf("false progress = %d, want 1", o.FalseProgressRounds)
+	// Rounds 5 and 6 claimed progress (a mutation, then a check that broke) with
+	// no objective transition inside the redemption window — the false-progress
+	// case. Round 6 is the last round, so nothing can redeem it.
+	if o.FalseProgressRounds != 2 {
+		t.Errorf("false progress = %d, want 2", o.FalseProgressRounds)
 	}
 	if o.SolutionStallMax != 2 {
 		t.Errorf("solution stall max = %d, want 2", o.SolutionStallMax)
@@ -101,9 +104,9 @@ func TestSummarizeOutcomeBackfillsFromVerificationReceipts(t *testing.T) {
 func TestSummarizeOutcomeTracksDebtAndTTFDC(t *testing.T) {
 	path := writeTrajectory(t, "debt.trajectory.jsonl", []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
-		`{"seq":2,"ts":2000,"outcome_progress":{"round":1,"churn":1,"legacy_gain":3,"debt_age":1}}`,
-		`{"seq":3,"ts":3000,"outcome_progress":{"round":2,"exploration":1,"legacy_gain":1,"debt_age":2}}`,
-		`{"seq":4,"ts":4000,"outcome_progress":{"round":3,"churn":1,"legacy_gain":3,"debt_age":3}}`,
+		`{"seq":2,"ts":2000,"outcome_progress":{"round":1,"churn":1,"debt_age":1}}`,
+		`{"seq":3,"ts":3000,"outcome_progress":{"round":2,"exploration":1,"debt_age":2}}`,
+		`{"seq":4,"ts":4000,"outcome_progress":{"round":3,"churn":1,"debt_age":3}}`,
 		`{"seq":5,"ts":9000,"outcome_progress":{"round":4,"discriminating":1,"verification":1}}`,
 		`{"seq":6,"ts":10000,"event":{"kind":"turn_done"}}`,
 	})

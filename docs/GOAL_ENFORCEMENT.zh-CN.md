@@ -10,7 +10,7 @@ Reasonix 的 Goal 模式（`/goal`）将目标推进（Goal）、验收（Delive
 | 完成校验 | 默认 | `complete` 声明必须通过 Delivery readiness（todos、验证、review、签收、能力门禁）才会真正完成；不满足时用缺失项开启下一轮 |
 | 完成自述与对账 | `update_goal` 的 `completion` | `complete` 可附带自述：`verified` 命令逐条与本会话真实 receipt 对账，没跑过 / 跑失败 / 早于最后一次改动都记为 unbacked claim；`unverified` 与 `risks` 是宿主推断不出的声明，只增不减，永远不阻塞完成 |
 | 独立评审 | 无报告时 | 模型未调用 `update_goal` 时，宿主调用一次独立 bounded evaluator 判定；评审不可用/出错/不确定时安全暂停，绝不默认继续 |
-| 执行预算 | 默认 | **默认不设任何上限**：没有轮数预算，也没有单次 Run 的轮次上限。需要为无人值守循环设护栏时，配置 `[agent].goal_token_budget`（整个 Goal 累计 token），越线产出一次总结并进入可恢复的 `budget_spend` 暂停。结构化卡死检测保留：相同宿主失败 3 次或成功轮连续 6 次没有新证据时暂停。跨 turn 无进展仍只做观测 |
+| 执行预算 | 默认 | **默认不设任何上限**：没有轮数预算，也没有单次 Run 的轮次上限。需要为无人值守循环设护栏时，配置 `[agent].goal_token_budget`（整个 Goal 累计 token），越线产出一次总结并进入可恢复的 `budget_spend` 暂停。结构化卡死检测保留：相同宿主失败 3 次，或每 turn 的调查额度账户耗尽（证据补充额度，空转扣得最快）时暂停。跨 turn 无进展仍只做观测 |
 | 暂停/恢复 | `/goal pause` / `/goal resume` | 暂停保留 Goal、todo、Delivery checkpoint 与运行历史；轮次型暂停恢复时追加一档同类别**轮数**（`budget_extensions` 统计轮次追加次数） |
 | 立即阻塞 | `blocked` 报告 | 单个 blocked 报告立即结束目标，不再重复三轮确认 |
 | 并行调度 | `parallel_tasks` 工具 | 并发派发多个子 agent，各自独立显示结果 |
@@ -167,7 +167,7 @@ advanceGoalAfterTurn → 读取 update_goal 报告 + readiness + 预算
   ├─ 无报告 → evaluator 判定一次（失败则安全暂停）
   ├─ 外层轮次耗尽 → 安全暂停（blocked + budget_turns）
   ├─ 单 Run 16 轮耗尽 → 总结后安全暂停（blocked + goal_run_budget）
-  └─ 3 次相同失败 / 6 次零证据成功轮 → 总结后安全暂停（blocked + goal_stuck）
+  └─ 3 次相同失败 / 调查额度耗尽 → 总结后安全暂停（blocked + goal_stuck）
 ```
 
 ### 并行调度架构

@@ -517,8 +517,16 @@ func (p Policy) Decide(toolName string, readOnly bool, args json.RawMessage) Dec
   Outside goal mode, ordinary prompts never change collaboration mode; the user
   must choose Goal or use `/goal` explicitly.
   Cross-turn no-progress streaks are observational. Within one Run, three
-  repeated host failures or six successful zero-evidence rounds trigger a
-  resumable structural-stuck pause. Token and provider-request totals remain
+  repeated host failures trigger a resumable structural-stuck pause, as does a
+  spent investigation runway: each turn opens an account worth 24 look-only
+  rounds, every round costs the same, an observation that could have refuted
+  the plan earns several rounds back, a landed change covers its own round, and
+  a round that found something new costs a quarter of one that found nothing.
+  A turn that keeps proving things or keeps changing things never runs out; one
+  that keeps repeating itself is gone in six rounds. Banking is capped at
+  20 rounds. While the balance is low the host states what it measured — dry
+  rounds, rounds without acting, balance left — and never instructs; when it
+  reaches zero the host stops requiring further receipts for the turn. Token and provider-request totals remain
   observational and are not request-admission limits.
   `/goal clear` removes the active goal. Switching into plan/normal mode clears
   the active goal in the desktop UI so the collaboration mode remains one of

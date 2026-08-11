@@ -9,20 +9,14 @@ import (
 	"reasonix/internal/provider"
 )
 
-// The no-progress ladder is adaptive, not a fixed round count: rounds are
-// judged by evidence gain (new reads, new results, mutations) and only
-// consecutive zero-gain rounds escalate — nudge, then pivot, then stop.
-const (
-	progressNudgeStreak = 2
-	progressPivotStreak = 4
-	progressStopStreak  = 6
-)
-
-// progressGuard tracks consecutive tool rounds whose receipts produced no new
-// evidence. State lives per user turn, alongside the ledger it observes.
+// progressGuard watches one turn's investigation runway. It replaced a ladder
+// of fixed round counts: those fired at a particular round however well the
+// turn had been going, and a single incidental new read reset them, so they
+// both cut off honest investigation and missed real loops. The account has
+// neither edge — it drains at the rate the turn is failing to produce.
 type progressGuard struct {
-	tracker *evidence.ProgressTracker
-	streak  int
+	runway evidence.Runway
+	spoken bool // the spent transition is stated once per drain
 }
 
 type goalStuckSignal struct {
@@ -32,40 +26,27 @@ type goalStuckSignal struct {
 }
 
 func (g *progressGuard) reset() {
-	g.tracker = evidence.NewProgressTracker()
-	g.streak = 0
-}
-
-// observe folds one round's receipts and returns the current zero-gain streak.
-func (g *progressGuard) observe(receipts []Receipt) int {
-	if g.tracker == nil {
-		g.reset()
-	}
-	if len(receipts) == 0 {
-		return g.streak
-	}
-	if g.tracker.ScoreRound(receipts) > 0 {
-		g.streak = 0
-	} else {
-		g.streak++
-	}
-	return g.streak
+	g.runway.Reset()
+	g.spoken = false
 }
 
 // Receipt aliases the evidence receipt for the guard's signature.
 type Receipt = evidence.Receipt
 
 // applyBatchGuards collects this round's signals — storm breaker (failure
-// fixation), progress guard (zero-gain repetition), evidence nudge — and lets
-// the arbiter deliver them as one tail. The shadow trackers observe the same
-// receipts without influencing any verdict.
+// fixation), the investigation runway, evidence nudge — and lets the arbiter
+// deliver them as one tail. One scoring pass serves them all: the runway, the
+// EBM trigger, the reasoning governor and the trajectory record read the same
+// sample.
 func (a *Agent) applyBatchGuards(ctx context.Context, cancelled bool, calls []provider.ToolCall, outcomes []toolOutcome, results []string, receiptMark int) goalStuckSignal {
 	if cancelled {
 		return goalStuckSignal{}
 	}
 	storm := a.applyStormBreaker(calls, outcomes, receiptMark)
-	progress := a.applyProgressGuard(outcomes, receiptMark)
-	shadow := a.observeOutcomeShadow(receiptMark, outcomes)
+	receipts := a.evidence.ReceiptsSince(receiptMark)
+	sample := a.scoreRound(receipts)
+	progress := a.applyProgressGuard(&sample, receipts, outcomes, receiptMark)
+	shadow := a.observeRound(&sample, outcomes)
 	a.applyInterventions(results, outcomes, storm, progress, shadow)
 	a.observeDelegationAdmission(calls)
 	if _, scoped := DeliveryExecutionScopeFromContext(ctx); !scoped {
@@ -75,14 +56,25 @@ func (a *Agent) applyBatchGuards(ctx context.Context, cancelled bool, calls []pr
 		return goalStuckSignal{limit: stormBreakThreshold, key: "goal repeated host outcome", reason: storm.stuckReason}
 	}
 	if progress.stuckReason != "" {
-		return goalStuckSignal{limit: progressStopStreak, key: "goal zero-evidence rounds", reason: progress.stuckReason}
+		return goalStuckSignal{limit: evidence.RunwayStart, key: "goal investigation runway spent", reason: progress.stuckReason}
 	}
 	return goalStuckSignal{}
 }
 
-// resetTurnEvidence clears the ledger and both progress scorers together. The
-// task budget resets with them: a fresh ledger is what "a new task" means here,
-// and a continuation keeps both.
+// scoreRound folds the batch's receipts into the turn's single round scorer.
+func (a *Agent) scoreRound(receipts []Receipt) evidence.OutcomeSample {
+	if a.evidence == nil {
+		return evidence.OutcomeSample{}
+	}
+	if a.outcome == nil {
+		a.outcome = evidence.NewOutcomeTracker()
+	}
+	return a.outcome.ScoreRound(receipts)
+}
+
+// resetTurnEvidence clears the ledger and the round scorer together. The task
+// budget resets with them: a fresh ledger is what "a new task" means here, and
+// a continuation keeps both.
 func (a *Agent) resetTurnEvidence() {
 	a.evidence.Reset()
 	a.progress.reset()
@@ -93,37 +85,31 @@ func (a *Agent) resetTurnEvidence() {
 	a.taskBudget = runBudget{limit: a.taskBudget.limit}
 }
 
-// observeOutcomeShadow scores the round's receipts through the shadow outcome
-// tracker, lets the EBM policy stamp (and under its arm, act on) the sample,
-// then records it. Unlike the guards it observes every round.
-func (a *Agent) observeOutcomeShadow(receiptMark int, outcomes []toolOutcome) intervention {
+// observeRound folds the round's sample into the policies that only watch it:
+// the EBM nudge (which can act), the reasoning governor, and the recorders.
+func (a *Agent) observeRound(sample *evidence.OutcomeSample, outcomes []toolOutcome) intervention {
 	if a.evidence == nil {
 		return intervention{}
 	}
-	if a.outcome == nil {
-		a.outcome = evidence.NewOutcomeTracker()
-	}
-	sample := a.outcome.ScoreRound(a.evidence.ReceiptsSince(receiptMark))
-	iv := a.applyEBM(&sample, outcomes)
-	a.applyGovernor(&sample)
-	a.armGovernorCapture(sample)
-	event.RecordOutcomeProgress(a.sink, sample)
+	iv := a.applyEBM(sample, outcomes)
+	a.applyGovernor(sample)
+	a.armGovernorCapture(*sample)
+	event.RecordOutcomeProgress(a.sink, *sample)
 	a.observeContractRound()
 	return iv
 }
 
-// applyProgressGuard escalates when consecutive rounds stop producing new
-// evidence. At the stop tier it also arms the loop-guard pass so final
-// readiness stands down and the model can deliver its answer instead of being
-// sent back for more receipts.
-func (a *Agent) applyProgressGuard(outcomes []toolOutcome, receiptMark int) intervention {
+// applyProgressGuard settles the round against the turn's runway and states what
+// the host sees. It never instructs: while the balance drains it reports the
+// balance, and on the round that empties it, it reports that readiness has stood
+// down — the model decides what to do with either.
+func (a *Agent) applyProgressGuard(sample *evidence.OutcomeSample, receipts []Receipt, outcomes []toolOutcome, receiptMark int) intervention {
 	if a.evidence == nil || len(outcomes) == 0 {
 		return intervention{}
 	}
-	receipts := a.evidence.ReceiptsSince(receiptMark)
 	// Rounds where nothing succeeded are the storm breaker's jurisdiction
-	// (same-failure fixation); this guard owns the storm-blind case — rounds
-	// that keep SUCCEEDING without producing anything new.
+	// (same-failure fixation); the runway owns the storm-blind case — rounds
+	// that keep SUCCEEDING without getting anywhere.
 	anySuccess := false
 	for _, r := range receipts {
 		if r.Success {
@@ -134,52 +120,69 @@ func (a *Agent) applyProgressGuard(outcomes []toolOutcome, receiptMark int) inte
 	if !anySuccess {
 		return intervention{}
 	}
-	streak := a.progress.observe(receipts)
-	var guard, detail string
-	tier := verdictAdvise
-	warn := false
-	// Fire only when a threshold is crossed: repeating the injected guidance
-	// every round would inflate prompts (and can even tip compaction).
-	switch streak {
-	case progressStopStreak:
-		guard = fmt.Sprintf(
-			"[progress guard] %d tool rounds in a row produced no new evidence (no new files, results, or changes). Stop exploring: produce your final answer now, stating what was established and what remains unknown.",
-			streak)
-		detail = fmt.Sprintf("progress guard: %d zero-gain rounds — demanding a final answer", streak)
-		tier = verdictLand
-		warn = true
-		a.armLoopGuardPass(receiptMark)
-	case progressPivotStreak:
-		guard = fmt.Sprintf(
-			"[progress guard] still no new evidence after %d rounds. Change strategy now: take a different angle or tool, delegate a focused sub-task, or reduce the scope of what you are verifying.",
-			streak)
-		detail = fmt.Sprintf("progress guard: %d zero-gain rounds — forcing a strategy change", streak)
-		tier = verdictRedirect
-	case progressNudgeStreak:
-		guard = fmt.Sprintf(
-			"[progress guard] the last %d tool rounds repeated earlier reads or commands without new results. Narrow the investigation or adjust the plan before continuing.",
-			streak)
-		detail = fmt.Sprintf("progress guard: %d zero-gain rounds — nudging to narrow", streak)
-	default:
+	state := a.progress.runway.Settle(*sample)
+	sample.Runway, sample.RunwayDry, sample.RunwayIdle, sample.RunwaySpent =
+		state.Balance, state.Dry, state.Idle, state.Spent
+	if !state.Low && !state.Spent {
+		// Earning the account back out of the low band closes the episode: a
+		// later drain is a new one and gets its own statement and stand-down.
+		a.progress.spoken = false
 		return intervention{}
 	}
-	level := event.LevelInfo
-	if warn {
-		level = event.LevelWarn
+	// Within one drain the host says its piece once. Narrating every further
+	// round would be the nagging this account replaced.
+	if a.progress.spoken {
+		return intervention{}
+	}
+	level, tier := event.LevelInfo, verdictAdvise
+	if state.Spent {
+		level, tier = event.LevelWarn, verdictLand
 	}
 	iv := intervention{
 		verdict:  tier,
-		guidance: guard,
-		notice:   noticeFor(event.NoticeCodeProgressGuard, level, progressGuardNoticeText(), detail),
+		guidance: runwayObservation(state),
+		notice:   noticeFor(event.NoticeCodeProgressGuard, level, runwayNoticeText(state), runwayDetail(state)),
 	}
-	if streak >= progressStopStreak {
-		iv.stuckReason = fmt.Sprintf("%d consecutive successful tool rounds produced no new host evidence", streak)
+	if state.Spent {
+		a.progress.spoken = true
+		a.armLoopGuardPass(receiptMark)
+		// Shown to the user as the pause's explanation, so it reads as a
+		// sentence; runwayDetail carries the numbers on the notice instead.
+		iv.stuckReason = fmt.Sprintf(
+			"the turn's investigation budget ran out: %d rounds in a row ran, changed, or verified nothing", state.Idle)
 	}
 	return iv
 }
 
-func progressGuardNoticeText() string {
-	return "The assistant keeps repeating work without new evidence; asking it to change approach."
+// runwayObservation is what the model reads: the host's own measurements, and
+// at the end the host's own change of behavior. No imperative — a turn told
+// what is true decides better than one told what to do.
+func runwayObservation(state evidence.RunwayState) string {
+	if state.Spent {
+		return fmt.Sprintf(
+			"[host] This turn's investigation runway is spent: %d rounds in a row ran, changed, or verified nothing, %d of them producing nothing new at all. The host has stopped requiring further receipts for this turn — an answer stating what was established and what remains unverified is now accepted.",
+			state.Idle, state.Dry)
+	}
+	if state.Dry > 0 {
+		return fmt.Sprintf(
+			"[host] %d rounds in a row produced nothing new — nothing read, run, or changed that the host had not already seen. At this rate the turn's investigation budget covers about %d more rounds.",
+			state.Dry, state.Rounds)
+	}
+	return fmt.Sprintf(
+		"[host] %d rounds in a row ran, changed, or verified nothing. At this rate the turn's investigation budget covers about %d more rounds.",
+		state.Idle, state.Rounds)
+}
+
+func runwayNoticeText(state evidence.RunwayState) string {
+	if state.Spent {
+		return "The assistant's investigation budget is spent; the host stopped asking it for more evidence."
+	}
+	return "The assistant is running low on investigation budget without landing new evidence."
+}
+
+func runwayDetail(state evidence.RunwayState) string {
+	return fmt.Sprintf("runway %d (~%d rounds), %d dry rounds, %d rounds without acting",
+		state.Balance, state.Rounds, state.Dry, state.Idle)
 }
 
 // armLoopGuardPass records that a loop guard fired this user turn.

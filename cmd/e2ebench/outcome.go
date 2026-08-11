@@ -54,9 +54,17 @@ type outcomeSummary struct {
 type outcomePoint struct {
 	ts                                                      int64
 	exploration, verification, objective, regression, churn int
-	legacyGain, discriminating, debtAge, blindMutations     int
+	discriminating, debtAge, blindMutations                 int
 	ebmEligible, ebmFired                                   bool
 	governorEligible, governorEngaged                       bool
+}
+
+// claimedProgress reports a round that bought something the host could name.
+// It replaced the retired novelty scorer's verdict as the predicate the
+// false-progress analysis prices against objective transitions; bookkeeping
+// rounds, which that scorer credited, correctly no longer claim anything.
+func (p outcomePoint) claimedProgress() bool {
+	return p.exploration > 0 || p.churn > 0 || p.discriminating > 0
 }
 
 // verifyPoint is one backfilled verification-transition observation.
@@ -65,8 +73,8 @@ type verifyPoint struct {
 	objective, regression int
 }
 
-// falseProgressWindow bounds how many later rounds may redeem a legacy
-// progress claim with an objective transition before the round counts false.
+// falseProgressWindow bounds how many later rounds may redeem a round's
+// progress claim with an objective transition before it counts false.
 const falseProgressWindow = 3
 
 // observeVerification folds one verification-classified shell result into the
@@ -118,7 +126,7 @@ func summarizeOutcomePoints(points []outcomePoint, firstTS, lastTS int64) *outco
 		o.DebtAgeMax = max(o.DebtAgeMax, p.debtAge)
 		o.Objective += p.objective
 		o.Regression += p.regression
-		if p.legacyGain > 0 {
+		if p.claimedProgress() {
 			o.ProgressRounds++
 		}
 		// The solution stall clock only starts once the run enters its solution
@@ -142,7 +150,7 @@ func summarizeOutcomePoints(points []outcomePoint, firstTS, lastTS int64) *outco
 	}
 	if verifying {
 		for i, p := range points {
-			if p.legacyGain <= 0 {
+			if !p.claimedProgress() {
 				continue
 			}
 			redeemed := false

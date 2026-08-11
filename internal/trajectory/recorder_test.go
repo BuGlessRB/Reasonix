@@ -113,7 +113,7 @@ func TestRecorderRecordsAndForwardsOptionalCapabilities(t *testing.T) {
 	r.RecordReadinessAudit(evidence.ReadinessAudit{Result: evidence.ReadinessBlocked, MissingVerification: 2})
 	r.RecordProtocolRecovery(event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningDetected})
 	r.RecordTurnCompletion()
-	r.RecordOutcomeProgress(evidence.OutcomeSample{Round: 3, Exploration: 2, Objective: 1, LegacyGain: 4})
+	r.RecordOutcomeProgress(evidence.OutcomeSample{Round: 3, Exploration: 2, Objective: 1, Discriminating: 4})
 	r.RecordDelegationAdmission(event.DelegationAdmissionAudit{Tool: "research", Verdict: "deny", Reason: "local_fix_no_external_need", Intent: "mutation"})
 	r.RecordCompletionReport(event.CompletionReportAudit{
 		Verdict: "partial", Changes: 2, ChangesUnreviewed: 1, Gaps: 1, GapKinds: []string{"unreviewed_change"},
@@ -135,7 +135,7 @@ func TestRecorderRecordsAndForwardsOptionalCapabilities(t *testing.T) {
 	if !recs[2].TurnCompletion {
 		t.Errorf("turn completion record = %+v", recs[2])
 	}
-	if recs[3].OutcomeProgress == nil || recs[3].OutcomeProgress.Round != 3 || recs[3].OutcomeProgress.Objective != 1 || recs[3].OutcomeProgress.LegacyGain != 4 {
+	if recs[3].OutcomeProgress == nil || recs[3].OutcomeProgress.Round != 3 || recs[3].OutcomeProgress.Objective != 1 || recs[3].OutcomeProgress.Discriminating != 4 {
 		t.Errorf("outcome progress record = %+v", recs[3].OutcomeProgress)
 	}
 	if recs[4].DelegationAdmission == nil || recs[4].DelegationAdmission.Verdict != "deny" || recs[4].DelegationAdmission.Tool != "research" {

@@ -1166,8 +1166,11 @@ resumes with its budget granted again; structural stuck pauses start a fresh
 Run), or `/goal pause` to pause a running goal manually. `/goal status` shows
 the full runtime summary (turns used, tokens used/limit, requests,
 observational no-progress streak, extensions).
-Within one Run, three repeated identical host failures or six successful
-zero-evidence rounds produce a resumable `goal_stuck` pause. At the end of every goal turn
+Within one Run, three repeated identical host failures produce a resumable
+`goal_stuck` pause, as does a spent investigation runway — the per-turn account
+that every round draws on and that evidence pays back, so a turn that keeps
+verifying its work is never cut off while one that keeps repeating itself is
+stopped in six rounds. At the end of every goal turn
 the model reports its disposition through the structured `update_goal` tool
 (continue/complete/blocked); when no report arrives, an independent bounded
 evaluator judges the turn once, and any evaluator failure pauses the goal

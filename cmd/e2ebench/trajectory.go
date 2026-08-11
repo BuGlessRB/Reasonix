@@ -164,7 +164,6 @@ type trajectoryRecord struct {
 		Objective        int  `json:"objective"`
 		Regression       int  `json:"regression"`
 		Churn            int  `json:"churn"`
-		LegacyGain       int  `json:"legacy_gain"`
 		Discriminating   int  `json:"discriminating"`
 		DebtAge          int  `json:"debt_age"`
 		BlindMutations   int  `json:"blind_mutations"`
@@ -382,7 +381,7 @@ func (t *trajScan) record(rec trajectoryRecord) {
 		t.outcomePoints = append(t.outcomePoints, outcomePoint{
 			ts: rec.TS, exploration: op.Exploration, verification: op.Verification,
 			objective: op.Objective, regression: op.Regression, churn: op.Churn,
-			legacyGain: op.LegacyGain, discriminating: op.Discriminating, debtAge: op.DebtAge,
+			discriminating: op.Discriminating, debtAge: op.DebtAge,
 			blindMutations: op.BlindMutations, ebmEligible: op.EBMEligible, ebmFired: op.EBMFired,
 			governorEligible: op.GovernorEligible, governorEngaged: op.GovernorEngaged,
 		})

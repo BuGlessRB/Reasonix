@@ -17,8 +17,8 @@ type phaseTrace struct {
 	Recovery phaseModel `json:"recovery"`
 
 	CompactionMs int64 `json:"compaction_ms,omitempty"`
-	// NoProgressSignals counts progress-guard escalations (each threshold
-	// fires once), not raw zero-evidence-gain rounds.
+	// NoProgressSignals counts host runway observations — the low-balance
+	// updates plus the one spent transition — not rounds without progress.
 	NoProgressSignals int `json:"no_progress_signals,omitempty"`
 	// Rounds is the outcome ledger: total classified rounds, how many bought
 	// progress, the wasted gap total, and the per-outcome composition.

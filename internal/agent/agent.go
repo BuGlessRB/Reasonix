@@ -581,12 +581,12 @@ type Agent struct {
 	stormSig   string
 	stormCount int
 
-	// progress escalates adaptively on consecutive zero-evidence-gain rounds
-	// (see progress_guard.go); reset with the evidence ledger each turn.
+	// progress holds the turn's investigation runway — the account every round
+	// draws on and evidence pays back; reset with the evidence ledger each turn.
 	progress progressGuard
 
-	// outcome shadows progress with an outcome-decomposed scorer whose samples
-	// only feed trajectory recording; it never influences guard behavior.
+	// outcome is the turn's only round scorer; its sample feeds the runway, the
+	// EBM trigger, the reasoning governor and trajectory recording.
 	outcome *evidence.OutcomeTracker
 
 	// taskBudget accumulates spend across every Run continuing one task and

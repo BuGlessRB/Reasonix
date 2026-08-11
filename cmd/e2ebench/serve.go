@@ -40,7 +40,6 @@ type serveRound struct {
 	Objective    int   `json:"o,omitempty"`
 	Regression   int   `json:"r,omitempty"`
 	Churn        int   `json:"c,omitempty"`
-	Legacy       int   `json:"g,omitempty"`
 }
 
 func runServeMode(dir, suite, addr string) error {
@@ -106,7 +105,7 @@ func collectServeState(dir string) (*serveState, error) {
 				TS:          p.ts,
 				Exploration: p.exploration, Verification: p.verification,
 				Objective: p.objective, Regression: p.regression,
-				Churn: p.churn, Legacy: p.legacyGain,
+				Churn: p.churn,
 			})
 		}
 		state.Tasks = append(state.Tasks, t)

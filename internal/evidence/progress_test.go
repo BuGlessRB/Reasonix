@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -14,36 +15,53 @@ func bashReceipt(command string, success bool) Receipt {
 	return ReceiptFromToolCall("bash", args, success, false)
 }
 
-func TestProgressTrackerScoresNewVsRepeatedEvidence(t *testing.T) {
-	tr := NewProgressTracker()
+func withOutput(r Receipt) Receipt {
+	r.OutputBytes = 64
+	return r
+}
 
-	first := readReceipt("a.go")
-	first.OutputBytes = 10
-	if got := tr.ScoreRound([]Receipt{first}); got != gainNewRead {
-		t.Fatalf("new read gain = %d, want %d", got, gainNewRead)
+// A path already read can still answer a question never asked. Keying read
+// novelty on the path alone made the standard investigation moves — grepping
+// one package for a second symbol, paging through a long file — score as
+// repeats, and a turn doing exactly that was told it had produced no new
+// evidence.
+func TestReadNoveltyFollowsTheQuestionNotJustThePath(t *testing.T) {
+	tr := NewOutcomeTracker()
+
+	grep := func(pattern string) Receipt {
+		args := json.RawMessage(fmt.Sprintf(`{"pattern":%q,"path":"internal/agent"}`, pattern))
+		return withOutput(ReceiptFromToolCall("grep", args, true, true))
 	}
-	repeat := readReceipt("a.go")
-	repeat.OutputBytes = 10
-	if got := tr.ScoreRound([]Receipt{repeat}); got != 0 {
-		t.Fatalf("repeated read gain = %d, want 0", got)
+	if s := tr.ScoreRound([]Receipt{grep("Compose")}); s.Exploration != 1 {
+		t.Fatalf("first grep = %+v, want exploration 1", s)
+	}
+	if s := tr.ScoreRound([]Receipt{grep("Receipt")}); s.Exploration != 1 {
+		t.Fatalf("new pattern over a read path = %+v, want exploration 1", s)
+	}
+	if s := tr.ScoreRound([]Receipt{grep("Receipt")}); s.Exploration != 0 {
+		t.Fatalf("identical grep = %+v, want exploration 0", s)
 	}
 
-	if got := tr.ScoreRound([]Receipt{bashReceipt("go test ./x", false)}); got != gainNewFailure {
-		t.Fatalf("first failure gain = %d, want %d (a new error localizes)", got, gainNewFailure)
+	window := func(offset int) Receipt {
+		args := json.RawMessage(fmt.Sprintf(`{"path":"internal/agent/agent.go","offset":%d,"limit":300}`, offset))
+		return withOutput(ReceiptFromToolCall("read_file", args, true, true))
 	}
-	if got := tr.ScoreRound([]Receipt{bashReceipt("go test ./x", false)}); got != gainRepeatFailure {
-		t.Fatalf("same failure gain = %d, want %d", got, gainRepeatFailure)
+	if s := tr.ScoreRound([]Receipt{window(0)}); s.Exploration != 1 {
+		t.Fatalf("first window = %+v, want exploration 1", s)
 	}
-	if got := tr.ScoreRound([]Receipt{bashReceipt("go test ./x", true)}); got != gainStateChange {
-		t.Fatalf("failure→pass gain = %d, want %d", got, gainStateChange)
+	if s := tr.ScoreRound([]Receipt{window(300)}); s.Exploration != 1 {
+		t.Fatalf("next window of the same file = %+v, want exploration 1", s)
 	}
-	if got := tr.ScoreRound([]Receipt{bashReceipt("go test ./x", true)}); got != 0 {
-		t.Fatalf("repeated passing command gain = %d, want 0", got)
+	if s := tr.ScoreRound([]Receipt{window(300)}); s.Exploration != 0 {
+		t.Fatalf("identical window = %+v, want exploration 0", s)
 	}
 
-	write := ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"b.go","content":"x"}`), true, false)
-	if got := tr.ScoreRound([]Receipt{write}); got != gainMutation {
-		t.Fatalf("mutation gain = %d, want %d", got, gainMutation)
+	// A first read of a path still counts once, not twice.
+	if s := tr.ScoreRound([]Receipt{withOutput(readReceipt("a.go"))}); s.Exploration != 1 {
+		t.Fatalf("new path = %+v, want exploration 1", s)
+	}
+	if s := tr.ScoreRound([]Receipt{withOutput(readReceipt("a.go"))}); s.Exploration != 0 {
+		t.Fatalf("identical read = %+v, want exploration 0", s)
 	}
 }
 

@@ -2,11 +2,13 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 
 	"reasonix/internal/agent/testutil"
 	"reasonix/internal/event"
+	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
@@ -74,13 +76,16 @@ func TestGoalSameFailurePausesAfterStructuralThreshold(t *testing.T) {
 	}
 }
 
-func TestGoalZeroEvidencePausesAfterSixRepeatedSuccesses(t *testing.T) {
+// A Goal whose rounds keep succeeding without buying anything spends its
+// runway at the fastest rate and pauses resumably once it is gone.
+func TestGoalPausesWhenTheInvestigationRunwayIsSpent(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	turns := make([]testutil.Turn, 0, progressStopStreak+2)
-	for i := range progressStopStreak + 1 {
+	rounds := evidence.RunwayStart
+	turns := make([]testutil.Turn, 0, rounds+1)
+	for i := range rounds {
 		turns = append(turns, testutil.Turn{ToolCalls: []provider.ToolCall{{
-			ID: "same-" + string(rune('a'+i)), Name: "read_file", Arguments: `{"path":"same"}`,
+			ID: fmt.Sprintf("same-%d", i), Name: "read_file", Arguments: `{"path":"same"}`,
 		}}})
 	}
 	turns = append(turns, testutil.Turn{Text: "The repeated read produced no new evidence."})
@@ -89,7 +94,7 @@ func TestGoalZeroEvidencePausesAfterSixRepeatedSuccesses(t *testing.T) {
 	ctx := WithDeliveryExecutionScope(context.Background(), DeliveryExecutionScope{ID: "goal-1", TaskText: "research"})
 	err := a.Run(ctx, "work")
 	info, ok := InspectRunPause(err)
-	if !ok || info.Kind != "goal_stuck" || info.Limit != progressStopStreak || info.Key != "goal zero-evidence rounds" {
+	if !ok || info.Kind != "goal_stuck" || info.Limit != evidence.RunwayStart || info.Key != "goal investigation runway spent" {
 		t.Fatalf("pause = %+v ok=%v err=%v", info, ok, err)
 	}
 }

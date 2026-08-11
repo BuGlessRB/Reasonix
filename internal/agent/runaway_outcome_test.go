@@ -108,34 +108,22 @@ func TestOutcomeVersusLegacyOnTheRunawayShape(t *testing.T) {
 	}{{"wandering (the incident)", wandering}, {"real work", realWork}} {
 		samples := outcomeSeries(t, scenario.calls)
 		t.Logf("\n=== %s ===", scenario.name)
-		t.Logf("%-6s %-6s %-6s %-6s %-6s %-6s %-6s %-6s", "round", "legacy", "explor", "verify", "object", "churn", "discrim", "debt")
+		t.Logf("%-6s %-6s %-6s %-6s %-6s %-6s %-6s", "round", "explor", "verify", "object", "churn", "discrim", "debt")
 		for _, s := range samples {
-			t.Logf("%-6d %-6d %-6d %-6d %-6d %-6d %-6d %-6d",
-				s.Round, s.LegacyGain, s.Exploration, s.Verification, s.Objective, s.Churn, s.Discriminating, s.DebtAge)
+			t.Logf("%-6d %-6d %-6d %-6d %-6d %-6d %-6d",
+				s.Round, s.Exploration, s.Verification, s.Objective, s.Churn, s.Discriminating, s.DebtAge)
 		}
 	}
 
-	// Exploration counts while it might still lead somewhere and then stops, so
-	// the ladder can finally climb. Both halves matter: never decaying is the
-	// runaway, decaying at once would nudge ordinary investigation.
-	scored, decayed := 0, 0
+	// The wandering shape reads as exploration that never lands, every round.
+	// The guard climbs on the length of that run, so the scorer must keep
+	// reporting it honestly instead of pretending the reads stopped being new.
 	for i, s := range outcomeSeries(t, wandering) {
 		if s.Exploration == 0 || s.Discriminating != 0 || s.Churn != 0 || s.Objective != 0 {
 			t.Fatalf("wandering round %d = %+v; the shape under test is exploration and nothing else", i+1, s)
 		}
-		if s.LegacyGain > 0 {
-			scored++
-			continue
-		}
-		decayed++
 	}
-	if scored == 0 {
-		t.Fatal("exploration stopped counting immediately; ordinary investigation would be nudged on arrival")
-	}
-	if decayed == 0 {
-		t.Fatal("a look-only run never stopped counting as progress; the ladder can never climb")
-	}
-	// The decomposition can: real work reaches a discriminating observation,
+	// The contrast: real work reaches a discriminating observation,
 	// and never spends more than two rounds on exploration alone.
 	discriminating, exploreRun, longestExploreRun := 0, 0, 0
 	for _, s := range outcomeSeries(t, realWork) {

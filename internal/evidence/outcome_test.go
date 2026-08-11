@@ -21,14 +21,11 @@ func TestOutcomeTrackerSeparatesExplorationFromObjective(t *testing.T) {
 		t.Fatalf("first failing verify = %+v, want verification 1 exploration 1", s)
 	}
 
-	// A mutation is churn, not objective progress — the legacy scorer disagrees.
+	// A mutation is churn, not objective progress.
 	write := ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"b.go","content":"x"}`), true, false)
 	s = tr.ScoreRound([]Receipt{write})
 	if s.Churn != 1 || s.Objective != 0 || s.Exploration != 0 {
 		t.Fatalf("mutation = %+v, want churn 1 only", s)
-	}
-	if s.LegacyGain != gainMutation {
-		t.Fatalf("mutation legacy gain = %d, want %d", s.LegacyGain, gainMutation)
 	}
 
 	// The failing verification turning green is the objective transition.

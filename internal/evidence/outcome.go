@@ -19,9 +19,6 @@ type OutcomeSample struct {
 	Objective    int
 	Regression   int
 	Churn        int
-	// LegacyGain is the live novelty scorer's verdict on the same receipts, so
-	// offline analysis can compare the two policies without replaying.
-	LegacyGain int
 	// Discriminating counts observations able to falsify the working
 	// hypothesis: verification commands, or commands exercising a mutated
 	// file — deliberately broader than delivery verification (repro scripts).
@@ -46,13 +43,20 @@ type OutcomeSample struct {
 	// eligibility is stamped on every arm so baselines carry the shadow.
 	GovernorEligible bool
 	GovernorEngaged  bool
+	// The investigation account after this round, stamped by the host: without
+	// it a pause cannot be explained from the trajectory, and the account's
+	// prices stay guesswork.
+	Runway      int
+	RunwayDry   int
+	RunwayIdle  int
+	RunwaySpent bool
 }
 
-// OutcomeTracker is the shadow counterpart of ProgressTracker: same per-round
-// receipts, scored by outcome instead of novelty. It never influences guard
-// behavior — samples exist only for trajectory recording and offline analysis.
+// OutcomeTracker scores a tool round's receipts by outcome: what the round
+// learned, what it changed, and what it could falsify. It is the turn's only
+// round scorer — the no-progress guard, the EBM trigger, the reasoning
+// governor and trajectory recording all read the same sample.
 type OutcomeTracker struct {
-	legacy       *ProgressTracker
 	round        int
 	readPaths    map[string]bool
 	commands     map[string]bool
@@ -104,7 +108,6 @@ func RestoreOutcomeTracker(seed OutcomeSeed) *OutcomeTracker {
 
 func NewOutcomeTracker() *OutcomeTracker {
 	return &OutcomeTracker{
-		legacy:       NewProgressTracker(),
 		readPaths:    map[string]bool{},
 		commands:     map[string]bool{},
 		failures:     map[string]bool{},
@@ -126,7 +129,6 @@ func (t *OutcomeTracker) ScoreRound(receipts []Receipt) OutcomeSample {
 	for _, r := range receipts {
 		t.scoreReceipt(r, &s)
 	}
-	s.LegacyGain = t.legacy.ScoreRound(receipts)
 	// Verification debt: a discriminating observation settles it; otherwise a
 	// mutation opens it and every silent round ages it, mutation round included.
 	if s.Discriminating > 0 {
@@ -184,6 +186,19 @@ func (t *OutcomeTracker) commandExercisesMutation(command string) bool {
 	return false
 }
 
+// noteQuestion records the exact call this receipt came from and reports
+// whether the turn had not asked it before. It is the novelty key for anything
+// whose value lies in its arguments rather than its target: a grep pattern, a
+// read window, an MCP call.
+func (t *OutcomeTracker) noteQuestion(r Receipt) bool {
+	sig := r.ToolName + "\x00" + string(r.Args)
+	if t.actions[sig] {
+		return false
+	}
+	t.actions[sig] = true
+	return true
+}
+
 func (t *OutcomeTracker) scoreReceipt(r Receipt, s *OutcomeSample) {
 	if command := strings.TrimSpace(r.Command); command != "" {
 		t.scoreCommand(command, r, s)
@@ -202,17 +217,23 @@ func (t *OutcomeTracker) scoreReceipt(r Receipt, s *OutcomeSample) {
 	case r.Success && (r.StepProof || r.TodoStep != nil || len(r.Todos) > 0):
 		// Bookkeeping moves no outcome dimension.
 	case r.Success && r.Read && r.OutputBytes > 0 && len(r.Paths) > 0:
+		fresh := 0
 		for _, path := range r.Paths {
 			if path == "" || t.readPaths[path] {
 				continue
 			}
 			t.readPaths[path] = true
-			s.Exploration++
+			fresh++
 		}
+		// A path already read can still answer a question never asked: a new
+		// grep pattern over the same package, the next window of a long file.
+		// Only an identical call is a repeat.
+		if newQuestion := t.noteQuestion(r); fresh == 0 && newQuestion {
+			fresh = 1
+		}
+		s.Exploration += fresh
 	case r.Success:
-		sig := r.ToolName + "\x00" + string(r.Args)
-		if !t.actions[sig] {
-			t.actions[sig] = true
+		if t.noteQuestion(r) {
 			s.Exploration++
 		}
 	}
