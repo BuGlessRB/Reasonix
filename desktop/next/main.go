@@ -43,7 +43,25 @@ var apiPaths = map[string]bool{
 	"/tool-approval-mode": true, "/auto-approve-tools": true, "/bypass": true,
 	"/provider-setup": true, "/delete-session": true, "/inbox/items": true,
 	"/trajectory": true, "/slash": true, "/workspace": true, "/workspaces": true,
-	"/mcp": true,
+	"/mcp": true, "/skills": true,
+}
+
+// A sub-path belongs to the resource it hangs off: /mcp/reconnect is the same
+// surface as /mcp. Listing families rather than every leaf is what keeps a new
+// endpoint from silently answering with index.html instead of JSON.
+var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/"}
+
+func isAPIPath(p string) bool {
+	p = strings.TrimSuffix(p, "/")
+	if apiPaths[p] {
+		return true
+	}
+	for _, prefix := range apiPrefixes {
+		if strings.HasPrefix(p+"/", prefix) && p+"/" != prefix {
+			return true
+		}
+	}
+	return false
 }
 
 func main() {
@@ -113,7 +131,7 @@ func run() error {
 						w.WriteHeader(http.StatusNoContent)
 						return
 					}
-					if apiPaths[strings.TrimSuffix(r.URL.Path, "/")] {
+					if isAPIPath(r.URL.Path) {
 						api.ServeHTTP(w, r)
 						return
 					}

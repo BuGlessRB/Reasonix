@@ -5,11 +5,14 @@ interface ProxyEvents {
   on(event: "proxyReq", cb: (req: { setHeader(k: string, v: string): void }) => void): void;
 }
 
+// Prefixes: vite matches a proxy key against the head of the path, so "/mcp"
+// also carries /mcp/reconnect. A route missing here answers with the SPA shell
+// instead of JSON, which is indistinguishable from a broken endpoint.
 const ROUTES = [
   "/events", "/history", "/status", "/submit", "/cancel", "/approve", "/answer",
   "/plan", "/goal", "/resume", "/models", "/tool-approval-mode", "/preset",
   "/model", "/effort", "/new", "/sessions", "/delete-session", "/provider-setup",
-  "/inbox", "/trajectory",
+  "/inbox", "/trajectory", "/mcp", "/skills", "/slash", "/workspace",
 ];
 
 // REASONIX_SERVE points at a running `reasonix serve`; without it the app boots
