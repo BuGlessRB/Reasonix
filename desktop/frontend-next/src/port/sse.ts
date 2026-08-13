@@ -1,4 +1,4 @@
-import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
+import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 
 // Must match wailsEventName / replayPath in desktop/next.
@@ -97,6 +97,14 @@ export class SsePort implements AgentPort {
     const body = (await res.json().catch(() => ({}))) as HookDryRun & { error?: string };
     if (!res.ok) throw new Error(body.error || `/hooks/dry-run: ${res.status}`);
     return body;
+  }
+
+  memories() {
+    return this.get<MemoryCatalog>("/memory");
+  }
+
+  forgetMemory(name: string) {
+    return this.post("/memory/forget", { name });
   }
 
   network() {

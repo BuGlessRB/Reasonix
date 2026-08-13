@@ -1339,6 +1339,48 @@
   /* 建议只挂在失败那一行，并且缩进到和详情对齐：它是这一行的下一步 */
   .probe .adv { flex-basis: 100%; margin-left: 91px; margin-top: 4px; font: 400 11px/1.6 var(--ui); color: var(--muted) }
 
+  /* 记忆：分组说的是「什么时候会被想起」，不是它属于哪一类 —— 后者是写入方
+     的分类，对读的人没意义。左边那个点是这一页唯一真正重要的像素：它把一条
+     记忆和用户刚看到的行为连起来。 */
+  .mem .recall { margin: 0 0 14px; font: 400 11.5px/1.6 var(--ui); color: var(--muted) }
+  .memgrp { margin-bottom: 22px }
+  .memgrp:last-of-type { margin-bottom: 0 }
+  .memgrp .hd { display: flex; align-items: baseline; gap: 9px }
+  .memgrp .hd .lb { font: 500 12.5px var(--ui); color: var(--text) }
+  .memgrp .hd .c { font: 400 10.5px var(--mono); color: var(--ghost) }
+  .memgrp > .ds { margin: 3px 0 8px; font: 400 11px/1.6 var(--ui); color: var(--faint) }
+
+  .memrow { border-top: 1px solid var(--hair) }
+  .memrow:last-of-type { border-bottom: 1px solid var(--hair) }
+  .memrow .line { display: flex; align-items: baseline; gap: 9px; padding: 8px 12px }
+  .memrow .dot {
+    flex: none; width: 5px; height: 5px; align-self: center; border-radius: 50%;
+    background: transparent; box-shadow: inset 0 0 0 1px var(--hair);
+  }
+  .memrow[data-used] .dot { background: var(--net); box-shadow: none }
+  .memrow .nm {
+    flex: none; min-width: 168px; padding: 0; border: 0; background: none; text-align: left;
+    font: 400 12px var(--ui); color: var(--text); cursor: pointer;
+  }
+  .memrow .nm:hover { text-decoration: underline }
+  .memrow .nm:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs) }
+  .memrow .line > .ds { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 400 11.5px var(--ui); color: var(--muted) }
+  .memrow .stale {
+    flex: none; padding: 1px 5px; border-radius: var(--r-pill); font: 500 9.5px var(--ui); font-style: normal;
+    color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent);
+  }
+  .memrow .sc { flex: none; min-width: 30px; font: 400 10.5px var(--mono); color: var(--faint) }
+  .memrow .at { flex: none; font: 400 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
+  .memrow .why-used { margin: -2px 0 8px 26px; font: 400 11px/1.6 var(--ui); color: var(--net) }
+  .memrow .peek { margin: 0 12px 10px 26px }
+  .memrow .peek pre {
+    margin: 0; padding: 9px 11px; border-radius: var(--r-sm); background: var(--overlay);
+    font: 400 11px/1.7 var(--mono); color: var(--muted); white-space: pre-wrap; word-break: break-word;
+  }
+  .memrow .peek .path { display: block; margin-top: 5px; font: 400 10px var(--mono); color: var(--ghost); word-break: break-all }
+  .mem > .why { margin-top: 10px; font: 400 11.5px var(--ui); color: var(--err) }
+
   /* 名字 + 说明 + 归属的三列行。能打的那串是机器字面量，说明是给人读的，
      两种字体是有意的对比；定宽名字列让说明在整张表里对齐。 */
   .lrow { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--hair) }

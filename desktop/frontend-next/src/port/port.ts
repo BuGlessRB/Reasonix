@@ -198,6 +198,9 @@ export interface AgentPort {
   // silently drops somebody else's rule.
   saveHooks(scope: "user" | "project", hooks: HookEntry[]): Promise<void>;
   dryRunHook(h: HookEntry): Promise<HookDryRun>;
+  memories(): Promise<MemoryCatalog>;
+  // Archives rather than deletes: a fact dropped by mistake stays recoverable.
+  forgetMemory(name: string): Promise<void>;
   network(): Promise<NetworkSettings>;
   // password empty keeps whatever is stored; clearPassword removes it.
   saveNetwork(s: NetworkSettings, password: string, clearPassword: boolean): Promise<NetworkSettings>;
@@ -325,4 +328,31 @@ export interface NetworkProbe {
   detail: string;
   durationMs: number;
   advice?: string;
+}
+
+// One saved fact. activation is the field a reader needs most and the type does
+// not imply it: pinned facts sit in every prompt, relevant ones only surface
+// when the turn looks related. usedLastTurn ties a stored fact to the behaviour
+// the user just watched — the question they actually have.
+export interface MemoryEntry {
+  name: string;
+  title?: string;
+  description?: string;
+  body?: string;
+  type?: string;
+  scope?: string;
+  activation: string;
+  path?: string;
+  revision?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  expired?: boolean;
+  usedLastTurn?: boolean;
+  why?: string;
+}
+
+export interface MemoryCatalog {
+  memories: MemoryEntry[];
+  recallQuery: string;
+  indexPath?: string;
 }

@@ -4,6 +4,7 @@ import { arrowTabs } from "./tablist";
 import { AddServer } from "./AddServer";
 import { Hooks } from "./Hooks";
 import { Network } from "./Network";
+import { Memory } from "./Memory";
 
 const PRESETS: [Preset, string, string][] = [
   ["light", "轻量", "简单就直接做，只做针对性验证，高风险才叫独立复核"],
@@ -26,7 +27,7 @@ const THEMES: [string, string][] = [
   ["dark", "深色"],
 ];
 
-type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "appearance" | "advanced";
+type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "memory" | "appearance" | "advanced";
 
 const NAV: [Section, string][] = [
   ["session", "会话"],
@@ -35,6 +36,7 @@ const NAV: [Section, string][] = [
   ["hooks", "自动化"],
   ["ext", "扩展"],
   ["network", "网络"],
+  ["memory", "记忆"],
   ["appearance", "外观"],
   ["advanced", "高级"],
 ];
@@ -43,7 +45,7 @@ const SCOPE: Record<string, string> = { project: "项目", custom: "自定义", 
 
 // What still lives in the old desktop app. Bots and theme packs are not on the
 // roadmap, so they are not promises to keep here either.
-const ELSEWHERE = ["记忆", "账号与更新"];
+const ELSEWHERE = ["账号与更新"];
 
 // The user's question is "is it there and does it work", so the state is the
 // label. A failed server keeps its error on the row that names it.
@@ -76,12 +78,14 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
   const [adding, setAdding] = useState(false);
   const [hookCount, setHookCount] = useState(0);
   const [netMode, setNetMode] = useState("");
+  const [memCount, setMemCount] = useState(0);
   const root = useRef<HTMLDivElement>(null);
 
   const reloadExt = useCallback(() => {
     port.mcp().then(setMcp).catch(() => setMcp([]));
     port.hooks().then((c) => setHookCount(c.hooks.length)).catch(() => setHookCount(0));
     port.network().then((n) => setNetMode(NET_MODE[n.mode] ?? n.mode)).catch(() => setNetMode(""));
+    port.memories().then((c) => setMemCount(c.memories.length)).catch(() => setMemCount(0));
     port
       .skills()
       .then((c) => {
@@ -130,6 +134,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
     hooks: hookCount ? `${hookCount} 条` : "关",
     ext: broken ? `${broken} 个异常` : `${mcp.length + skillsOn}`,
     network: netMode,
+    memory: memCount ? `${memCount} 条` : "",
     appearance: THEMES.find(([id]) => id === theme)?.[1] ?? "",
     advanced: "",
   };
@@ -277,6 +282,15 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
               hint="模型请求、MCP 的远程服务、网页抓取都走这里。配错了通常表现为聊天时莫名其妙卡住 —— 所以先测一下，它会告诉你断在哪一段。"
             >
               <Network port={port} />
+            </Group>
+          )}
+
+          {at === "memory" && (
+            <Group
+              title="记忆"
+              hint="它自己记下来的东西 —— 你没配置过，但它会照着做。所以这里按「什么时候会被想起」分，并且标出上一轮真正用上了哪几条。"
+            >
+              <Memory port={port} />
             </Group>
           )}
 
