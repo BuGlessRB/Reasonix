@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { AgentPort, SessionEntry, SessionStatus } from "../port/port";
 
 interface Props {
   port: AgentPort;
   status: SessionStatus | null;
+  // Owned by App: the header needs the current session's title too, and one
+  // fetch has to serve both.
+  list: SessionEntry[];
+  reload: () => void;
   run: string;
   cost: string;
   onError: (e: unknown) => void;
@@ -14,16 +18,10 @@ interface Props {
 const RUN_ST: Record<string, string> = { running: "运行中", halt: "等你", done: "已完成", idle: "空闲" };
 const WS_STATE: Record<string, string> = { running: "running", halt: "awaiting", done: "done" };
 
-export function Sessions({ port, status, run, cost, onError, onFold, onSwitched }: Props) {
-  const [list, setList] = useState<SessionEntry[]>([]);
+export function Sessions({ port, status, list, reload, run, cost, onError, onFold, onSwitched }: Props) {
   const [busy, setBusy] = useState("");
   const [confirm, setConfirm] = useState("");
   const [gone, setGone] = useState("");
-
-  const load = () => port.sessions().then(setList).catch(() => setList([]));
-  useEffect(() => {
-    load();
-  }, [port]);
 
   const current = status?.sessionPath || list.find((e) => e.current)?.path;
   const shown = current && !list.some((e) => e.path === current)
@@ -35,7 +33,7 @@ export function Sessions({ port, status, run, cost, onError, onFold, onSwitched 
     setBusy(e.path);
     try {
       await port.resume(e.path);
-      await load();
+      reload();
       onSwitched();
     } finally {
       setBusy("");
@@ -72,7 +70,7 @@ export function Sessions({ port, status, run, cost, onError, onFold, onSwitched 
     }
     setTimeout(() => {
       setGone("");
-      load();
+      reload();
     }, 220);
   };
 
@@ -80,9 +78,9 @@ export function Sessions({ port, status, run, cost, onError, onFold, onSwitched 
     <>
       <div className="rail-hd">
         <div className="lbl">
-          会话<span className="c">{shown.length || 1}</span>
+          会话<span className="c">{shown.length}</span>
         </div>
-        <button className="mkbtn" title="新会话" onClick={() => port.newSession().then(load).then(onSwitched)}>
+        <button className="mkbtn" title="新会话" onClick={() => port.newSession().then(reload).then(onSwitched)}>
           ＋
         </button>
         <button className="collapse" onClick={onFold} title="收起会话栏　⌘\" aria-label="收起会话栏">

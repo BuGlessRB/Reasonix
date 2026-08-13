@@ -1,4 +1,4 @@
-import type { Ask, Approval, Compaction, Guardian, Tool, WireEvent } from "../port/wire";
+import type { Ask, Approval, Compaction, CompletionSummary, Guardian, Tool, WireEvent } from "../port/wire";
 import type { HistoryMessage } from "../port/port";
 
 export type Item =
@@ -9,6 +9,7 @@ export type Item =
   | { t: "approval"; id: string; a: Approval; verdict?: string }
   | { t: "ask"; id: string; ask: Ask; answered?: string[][] }
   | { t: "compaction"; id: string; c: Compaction; done: boolean }
+  | { t: "completion"; id: string; c: CompletionSummary }
   | { t: "notice"; id: string; level: string; text: string };
 
 export interface Metrics {
@@ -86,6 +87,22 @@ function foldTool(items: Item[], tool: Tool, running: boolean): Item[] {
   return [...items, { t: "tool", id: nextId(), tool, running, children: [] }];
 }
 
+// Settles the message still being written. turn_done settles every open one:
+// a tool call between two answers leaves the earlier card unsealed forever, and
+// an unsealed card keeps a caret blinking and its reveal clock running on text
+// nothing will add to. Returning the same array keeps every card's memo intact.
+function sealSay(items: Item[], all = false): Item[] {
+  let next: Item[] | null = null;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (it.t !== "say" || it.done) continue;
+    next ??= items.slice();
+    next[i] = { ...it, done: true };
+    if (!all) break;
+  }
+  return next ?? items;
+}
+
 function appendText(items: Item[], text: string, field: "text" | "reasoning"): Item[] {
   const last = items[items.length - 1];
   if (last && last.t === "say" && !last.done) {
@@ -151,16 +168,8 @@ export function reduce(
     case "text":
       return { ...s, doing: "正在回答", waiting: {}, items: appendText(s.items, ev.text ?? "", "text") };
 
-    case "message": {
-      const items = s.items.slice();
-      for (let i = items.length - 1; i >= 0; i--) {
-        if (items[i].t === "say") {
-          items[i] = { ...(items[i] as Extract<Item, { t: "say" }>), done: true };
-          break;
-        }
-      }
-      return { ...s, items };
-    }
+    case "message":
+      return { ...s, items: sealSay(s.items) };
 
     case "tool_dispatch":
       return ev.tool
@@ -223,6 +232,13 @@ export function reduce(
       return { ...s, items };
     }
 
+    // The kernel already suppresses the boring case: a summary only reaches the
+    // wire when the turn mutated state or ended anything but cleanly.
+    case "completion_summary":
+      return ev.completion
+        ? { ...s, items: [...s.items, { t: "completion", id: nextId(), c: ev.completion }] }
+        : s;
+
     case "retrying":
       return {
         ...s,
@@ -247,7 +263,9 @@ export function reduce(
       // A readiness complaint ends the turn without the work having failed, and
       // the reason is the only part worth reading. Anything but a clean finish
       // keeps the run amber rather than claiming the tick.
-      return { ...s, running: false, doing: ev.err ? ev.err : "已完成", waiting: {} };
+      // Sealing here too: a turn that ends without a closing message otherwise
+      // leaves the caret blinking on a message nothing will be appended to.
+      return { ...s, running: false, doing: ev.err ? ev.err : "已完成", waiting: {}, items: sealSay(s.items, true) };
 
     default:
       return s;

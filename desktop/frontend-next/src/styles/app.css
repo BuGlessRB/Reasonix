@@ -348,7 +348,11 @@
   .jump:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
   .jump[hidden] { display: none }
 
-  .tabs { display: flex; gap: 2px; padding: 9px 16px 0; flex: none; border-bottom: 1px solid var(--hair) }
+  /* 分隔线要通栏，标签要跟文档列左对齐 —— 所以缩进走 padding，元素本身不收窄 */
+  .tabs {
+    display: flex; gap: 2px; flex: none; border-bottom: 1px solid var(--hair);
+    padding: 9px 0 0; padding-inline: max(16px, calc((100% - var(--doc)) / 2 + 18px));
+  }
   .tab {
     padding: 6px 11px 8px; border: 0; background: none; cursor: pointer;
     font: 500 12px var(--ui); color: var(--faint); border-bottom: 2px solid transparent;
@@ -374,7 +378,7 @@
   .hero .s { margin-top: 7px; max-width: 44ch; font-size: 12px; line-height: 1.7; color: var(--faint) }
   .hero .qs { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-top: 17px }
   #flowScroll[hidden], #trajScroll[hidden] { display: none }
-  .flow { margin-top: auto; padding: 8px 18px 14px }
+  .flow { margin-top: auto; margin-inline: auto; width: 100%; max-width: var(--doc); padding: 8px 18px 14px }
 
   /* ── 轨迹：机器记录，不是给人读的叙事 ───────────────────────────── */
   .traj { width: 100%; border-collapse: collapse; font: 400 11.5px/1.55 var(--mono) }
@@ -513,8 +517,10 @@
   .out .txt { font-size: 13.5px; line-height: 1.72; color: var(--muted); max-width: 68ch }
   .call[data-k="me"] .out .txt { color: var(--text) }
   .out .txt code { font: 400 11.5px var(--mono); color: var(--deleg) }
-  .caret { display: inline-block; width: 6px; height: 13px; background: var(--net); vertical-align: -2px; animation: blink .9s steps(1) infinite }
-  @keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
+  /* 硬切的方波闪烁跟匀速流出的文字对不上拍，看着更抖 */
+  .caret { display: inline-block; width: 6px; height: 13px; background: var(--net); vertical-align: -2px; animation: blink 1.1s var(--ease) infinite }
+  @keyframes blink { 0%, 100% { opacity: 1 } 55% { opacity: .15 } }
+  .tk .caret { width: 5px; height: 11px; background: var(--faint); margin-left: 2px }
 
   /* review findings：严重度用左侧 2px 色条编码，不新增文字标签 */
   .finds { margin-top: 7px; display: flex; flex-direction: column; gap: 5px }
@@ -689,37 +695,38 @@
   .ask-hint { font: 400 11px var(--mono); color: var(--ghost); margin-bottom: 10px }
 
   .opts { display: flex; flex-direction: column; gap: 6px }
-  .opt {
+  /* ask 卡的选项行和设置里的 .prow 是同一个控件，共用这一份定义 */
+  .opt, .prow {
     display: flex; gap: 10px; padding: 9px 11px; text-align: left; width: 100%;
     border: 1px solid var(--border); border-radius: var(--r-sm); background: transparent;
     cursor: pointer; font: inherit; color: inherit;
-    transition: border-color .14s, background .14s;
+    transition: border-color .14s, background .14s, box-shadow .14s;
   }
-  .opt:hover { border-color: var(--faint) }
-  .opt:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
-  .opt[data-on] { border-color: var(--accent); background: var(--accent-wash) }
+  .opt:hover, .prow:hover { border-color: var(--faint) }
+  .opt:focus-visible, .prow:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .opt[data-on], .prow[data-on] { border-color: var(--accent); background: var(--accent-wash) }
 
-  .opt .mark {
+  .opt .mark, .prow .mark {
     width: 14px; height: 14px; flex: none; margin-top: 2px;
     border: 1.5px solid var(--ghost); border-radius: 50%;
     display: grid; place-items: center; transition: border-color .14s, background .14s;
   }
   .opt[data-multi] .mark { border-radius: var(--r-xs) }
-  .opt[data-on] .mark { border-color: var(--accent); background: var(--accent) }
-  .opt .mark::after {
+  .opt[data-on] .mark, .prow[data-on] .mark { border-color: var(--accent); background: var(--accent) }
+  .opt .mark::after, .prow .mark::after {
     content: ""; width: 5px; height: 5px; border-radius: inherit;
     background: var(--accent-fg); opacity: 0; transition: opacity .14s;
   }
   .opt[data-multi] .mark::after { width: 7px; height: 4px; border-radius: 0; background: none;
     border-left: 1.5px solid var(--accent-fg); border-bottom: 1.5px solid var(--accent-fg);
     transform: rotate(-45deg) translate(1px, -1px) }
-  .opt[data-on] .mark::after { opacity: 1 }
+  .opt[data-on] .mark::after, .prow[data-on] .mark::after { opacity: 1 }
 
-  .opt .txt { min-width: 0 }
-  .opt .lb { display: flex; align-items: baseline; gap: 8px; font: 500 12.5px var(--ui); color: var(--text) }
+  .opt .txt, .prow .tx { min-width: 0 }
+  .opt .lb, .prow .lb { display: flex; align-items: baseline; gap: 8px; font: 500 12.5px var(--ui); color: var(--text) }
   .opt .rec { font: 500 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); flex: none }
-  .opt .ds { margin-top: 3px; font-size: 11.5px; line-height: 1.55; color: var(--muted) }
-  .opt .ds code { font: 400 11px var(--mono); color: var(--deleg) }
+  .opt .ds, .prow .ds { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.55; color: var(--muted) }
+  .opt .ds code, .prow .ds code { font: 400 11px var(--mono); color: var(--deleg) }
 
   .opt-other .lb { color: var(--muted) }
   .opt-other[data-on] .lb { color: var(--text) }
@@ -760,8 +767,10 @@
   }
   .ask-done b { color: var(--text); font-weight: 500 }
 
+  /* 减去 .flow 的内边距，输入框的可见边缘才跟卡片的左右边缘落在同一条线上 */
   .compose {
-    position: relative; flex: none; margin: 0 18px 16px;
+    position: relative; flex: none; margin: 0 auto 16px;
+    width: min(100% - 36px, calc(var(--doc) - 36px));
     border-radius: var(--r-md); padding: 12px 14px 10px;
     background: linear-gradient(180deg,
       color-mix(in srgb, var(--raised) 94%, var(--text) 6%), var(--raised));
@@ -969,7 +978,7 @@
   /* 右栏是这套东西的卖点，窄屏别整块丢掉 —— 落到流下方，仍可滚 */
   @media (max-width: 840px) {
     .cols { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto }
-    .flow { padding-inline: 14px } .compose { margin-inline: 14px }
+    .flow { padding-inline: 14px } .compose { width: calc(100% - 28px) }
     .chrome .goal, .chrome .crumb .sep:last-of-type { display: none }
     .side { border-left: 0; border-top: 1px solid var(--border); max-height: 40vh }
     .side .scroll { padding: 12px 14px 16px; gap: 16px }
@@ -1068,33 +1077,32 @@
   .grp-items { margin-top: 13px; display: flex; flex-direction: column; gap: 6px }
   .grp .note { margin: 9px 0 0; font: 400 11px/1.7 var(--ui); color: var(--ghost); max-width: 58ch }
 
-  .prow {
-    display: flex; gap: 11px; padding: 10px 12px; text-align: left; width: 100%;
-    border: 1px solid var(--border); border-radius: var(--r-sm); background: transparent;
-    color: inherit; font: inherit; cursor: pointer;
-    transition: background .14s, border-color .14s;
-  }
-  .prow:hover { border-color: var(--faint) }
-  .prow:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  /* 一行一个选项，settings 和 ask 卡是同一个控件 —— 分成两套只会各自漂。
+     .prow 的差别只剩它自己的失效态和危险态。 */
   .prow[disabled] { opacity: .5; cursor: default }
-  .prow[data-on] { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-wash) }
-  .prow .mark {
-    width: 14px; height: 14px; flex: none; margin-top: 2px; border-radius: 50%;
-    border: 1.5px solid var(--ghost); display: grid; place-items: center;
-    transition: border-color .14s, background .14s;
+  /* 风险要在你点之前就在，不是选中之后才红：跟 .guard / .find 同一套左色条语法 */
+  .prow[data-danger] { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--err) 55%, transparent) }
+  .prow[data-danger][data-on] {
+    border-color: color-mix(in srgb, var(--err) 45%, var(--border));
+    background: color-mix(in srgb, var(--err) 7%, transparent);
+    box-shadow: inset 2px 0 0 var(--err);
   }
-  .prow[data-on] .mark { border-color: var(--accent); background: var(--accent) }
-  .prow[data-on] .mark::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent-fg) }
-  .prow .lb { display: block; font: 500 12.5px var(--ui); color: var(--text) }
-  .prow .ds { display: block; margin-top: 3px; font: 400 11.5px/1.6 var(--ui); color: var(--muted) }
-  .prow[data-danger][data-on] { border-color: color-mix(in srgb, var(--err) 45%, var(--border)) }
   .prow[data-danger][data-on] .mark { border-color: var(--err); background: var(--err) }
 
   .kv { display: flex; gap: 12px; align-items: baseline; padding: 9px 12px; border: 1px solid var(--hair); border-radius: var(--r-sm) }
   .kv .k { flex: none; font: 400 11px var(--mono); color: var(--faint) }
   .kv .v { font: 400 11.5px var(--mono); color: var(--text); word-break: break-all }
 
+  /* 打开设置第一眼就该知道现在是什么状态，而不是逐个分类点过去 */
+  .prefs-now {
+    flex: none; display: flex; flex-wrap: wrap; gap: 4px 20px;
+    padding: 9px 16px; border-bottom: 1px solid var(--hair); background: var(--surface);
+  }
+  .prefs-now .kv { padding: 0; border: 0; gap: 7px }
+
   .seg { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; background: var(--overlay); border-radius: var(--r-sm) }
+  /* 中文标签在 mono 栈里会掉到回退字体，跟旁边的界面字对不齐 */
+  .seg[data-text] button { font: 400 12px var(--ui) }
   .seg button {
     flex: 1; min-width: 60px; padding: 6px 10px; border: 0; border-radius: var(--r-xs);
     background: transparent; color: var(--faint); font: 400 11.5px var(--mono); cursor: pointer;

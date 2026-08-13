@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from "react";
+import { memo, useEffect, useState, type RefObject } from "react";
 import type { Item, Waiting } from "../state/session";
 import type { ApprovalVerdict } from "../port/port";
 import { RMark } from "./RMark";
@@ -7,6 +7,8 @@ import { GuardianCard } from "./cards/GuardianCard";
 import { ApprovalCard } from "./cards/ApprovalCard";
 import { AskCard } from "./cards/AskCard";
 import { SayCard } from "./cards/SayCard";
+import { CompactionCard } from "./cards/CompactionCard";
+import { CompletionCard } from "./cards/CompletionCard";
 
 interface Props {
   items: Item[];
@@ -47,83 +49,85 @@ export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove
     >
       <div className="flow">
         {items.length === 0 && <Hero onPick={onSuggest} />}
-        {items.map((it) => {
-          switch (it.t) {
-            case "user":
-              return (
-                <div className="call" data-k="me" key={it.id} data-pending={it.pending ? "" : undefined}>
-                  <div className="g">
-                    <span className="sym">你</span>
-                    <span className="line" />
-                  </div>
-                  <div className="c">
-                    <div className="hl">
-                      <span className="nm">我</span>
-                      {it.pending && <span className="pend">排队中 · 下一个工具边界送达</span>}
-                    </div>
-                    <div className="out">
-                      <div className="txt">{it.text}</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            case "say":
-              // A turn that only produced reasoning is the preamble to the tool
-              // call right after it, not a message of its own.
-              return it.text.trim() ? <SayCard key={it.id} item={it} /> : null;
-            case "tool":
-              // The ask tool also raises ask_request, which carries the id
-              // /answer needs. Drawing the tool call too put two copies of the
-              // same question on screen, each answerable.
-              return it.tool.name === "ask" ? null : (
-                <ToolCard key={it.id} tool={it.tool} running={it.running} children={it.children} />
-              );
-            case "guardian":
-              return <GuardianCard key={it.id} g={it.g} />;
-            case "approval":
-              return <ApprovalCard key={it.id} item={it} onApprove={onApprove} />;
-            case "ask":
-              return <AskCard key={it.id} item={it} onAnswer={onAnswer} />;
-            case "compaction":
-              return (
-                <div className="call" key={it.id}>
-                  <div className="g">
-                    <span className="sym">⊘</span>
-                    <span className="line" />
-                  </div>
-                  <div className="c">
-                    <div className="hl">
-                      <span className="nm">{it.done ? "压缩完成" : "正在压缩…"}</span>
-                    </div>
-                    {it.c.summary && (
-                      <div className="out">
-                        <div className="txt">{it.c.summary}</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            case "notice":
-              return (
-                <div className="call" key={it.id}>
-                  <div className="g">
-                    <span className="sym">·</span>
-                    <span className="line" />
-                  </div>
-                  <div className="c">
-                    <div className="out">
-                      <div className="txt">{it.text}</div>
-                    </div>
-                  </div>
-                </div>
-              );
-          }
-        })}
+        {items.map((it) => (
+          <Row key={it.id} it={it} onApprove={onApprove} onAnswer={onAnswer} />
+        ))}
         {waiting.ttftSince && <Await retry={waiting.retry} />}
       </div>
     </div>
   );
 }
+
+// A streamed token replaces one item and leaves the rest identical, so the rest
+// must not re-render: at a working session's length that walk cost more per
+// chunk than parsing the message did.
+const Row = memo(function Row({
+  it,
+  onApprove,
+  onAnswer,
+}: {
+  it: Item;
+  onApprove: Props["onApprove"];
+  onAnswer: Props["onAnswer"];
+}) {
+  switch (it.t) {
+    case "user":
+      return (
+        <div className="call" data-k="me" data-pending={it.pending ? "" : undefined}>
+          <div className="g">
+            <span className="sym">你</span>
+            <span className="line" />
+          </div>
+          <div className="c">
+            <div className="hl">
+              <span className="nm">我</span>
+              {it.pending && <span className="pend">排队中 · 下一个工具边界送达</span>}
+            </div>
+            <div className="out">
+              <div className="txt">{it.text}</div>
+            </div>
+          </div>
+        </div>
+      );
+    case "say":
+      // Reasoning arrives long before the first answer token on a thinking
+      // model. Gating the card on text meant all of it stayed invisible and
+      // then landed at once. An empty card is still not a message, so a turn
+      // that produced neither draws nothing.
+      return it.text.trim() || it.reasoning?.trim() ? <SayCard item={it} /> : null;
+    case "tool":
+      // The ask tool also raises ask_request, which carries the id /answer
+      // needs. Drawing the tool call too put two copies of the same question on
+      // screen, each answerable.
+      return it.tool.name === "ask" ? null : (
+        <ToolCard tool={it.tool} running={it.running} children={it.children} />
+      );
+    case "guardian":
+      return <GuardianCard g={it.g} />;
+    case "approval":
+      return <ApprovalCard item={it} onApprove={onApprove} />;
+    case "ask":
+      return <AskCard item={it} onAnswer={onAnswer} />;
+    case "compaction":
+      return <CompactionCard c={it.c} done={it.done} />;
+    case "completion":
+      return <CompletionCard c={it.c} />;
+    case "notice":
+      return (
+        <div className="call">
+          <div className="g">
+            <span className="sym">·</span>
+            <span className="line" />
+          </div>
+          <div className="c">
+            <div className="out">
+              <div className="txt">{it.text}</div>
+            </div>
+          </div>
+        </div>
+      );
+  }
+});
 
 function Await({ retry }: { retry?: { attempt: number; max: number } }) {
   const [secs, setSecs] = useState(0);

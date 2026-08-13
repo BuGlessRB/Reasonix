@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import "./styles/tokens.css";
 import "./styles/app.css";
 import { App } from "./ui/App";
-import { MockPort } from "./port/mock";
 import { SsePort } from "./port/sse";
 import type { AgentPort } from "./port/port";
 
@@ -18,13 +17,29 @@ async function pick(): Promise<AgentPort> {
   } catch {
     // no serve reachable
   }
+  // A shipped build is served by the kernel it talks to. Falling back to the
+  // fixture there would put a scripted session on screen as if it had happened,
+  // so only a dev build is allowed to; the import stays dynamic to keep the
+  // fixture out of the production bundle.
+  if (!import.meta.env.DEV) throw new Error("连不上内核：/status 没有回应。");
+  const { MockPort } = await import("./port/mock");
   return new MockPort();
 }
 
-pick().then((port) => {
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <App port={port} />
-    </StrictMode>,
-  );
-});
+const root = createRoot(document.getElementById("root")!);
+pick().then(
+  (port) =>
+    root.render(
+      <StrictMode>
+        <App port={port} />
+      </StrictMode>,
+    ),
+  (e: unknown) =>
+    root.render(
+      <div className="app" data-run="idle">
+        <div className="errbar" role="alert">
+          <span>{e instanceof Error ? e.message : String(e)}</span>
+        </div>
+      </div>
+    ),
+);

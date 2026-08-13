@@ -11,11 +11,16 @@ const THEMES = ["auto", "light", "dark"];
 const THEME_LB: Record<string, string> = { auto: "跟随系统", light: "浅色", dark: "深色" };
 
 const base = (p: string) => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || p;
-const sessionName = (p?: string) => (p ? base(p).replace(/\.jsonl$/, "") : "新会话");
+// The filename is a timestamp and a model ref — true, and useless to read. The
+// title from /sessions is always present once the turn is on disk: a generated
+// one when it is ready, the first message truncated until then.
+const sessionName = (title?: string, p?: string) =>
+  title?.trim() || (p ? base(p).replace(/\.jsonl$/, "") : "新会话");
 
 interface Props {
   port: AgentPort;
   status: SessionStatus | null;
+  title?: string;
   steer: number;
   theme: string;
   onTheme: (t: string) => void;
@@ -23,7 +28,7 @@ interface Props {
   onChanged: () => void;
 }
 
-export function Chrome({ port, status, steer, theme, onTheme, onSettings, onChanged }: Props) {
+export function Chrome({ port, status, title, steer, theme, onTheme, onSettings, onChanged }: Props) {
   const root = status?.workspaceRoot || status?.cwd || "";
   const project = root ? base(root) : "—";
 
@@ -51,7 +56,7 @@ export function Chrome({ port, status, steer, theme, onTheme, onSettings, onChan
           }
         />
         <span className="sep">/</span>
-        <b>{sessionName(status?.sessionPath)}</b>
+        <b title={status?.sessionPath}>{sessionName(title, status?.sessionPath)}</b>
         <span className="sep">·</span>
         <span className="goal">{status?.goal || "交待一个任务"}</span>
       </div>

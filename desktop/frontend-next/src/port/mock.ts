@@ -85,12 +85,38 @@ const SCRIPT: Beat[] = [
       tool: tool("bash", {
         readOnly: false,
         args: "curl A/B · 200 次并发 · 同一个 key",
-        output: "A 组（无退避）  401 × 7  200 × 193\nB 组（200ms 退避后重试）  401 × 0  200 × 200",
+        output: [
+          "$ for i in $(seq 200); do curl -s -o /dev/null -w '%{http_code}\\n' \"$EP\"; done | sort | uniq -c",
+          "",
+          "A 组（无退避）",
+          "    7 401",
+          "  193 200",
+          "",
+          "B 组（200ms 退避后重试）",
+          "    0 401",
+          "  200 200",
+          "",
+          "同一个 key，同一分钟。401 只落在 A 组。",
+        ].join("\n"),
         durationMs: 64000,
+        execution: { kind: "shell", shell: "git-bash", platform: "windows", state: "completed", exitCode: 0 },
       }),
     },
   },
   { wait: 100, ev: usage(6100, 400, 180, "subagent") },
+  { wait: 400, ev: { kind: "compaction_started", compaction: { trigger: "auto" } } },
+  {
+    wait: 900,
+    ev: {
+      kind: "compaction_done",
+      compaction: {
+        trigger: "auto",
+        messages: 34,
+        summary: "401 已证实是网关瞬时态（curl A/B，A 组 7 次 B 组 0 次）。处置是退避重试，不删 key。",
+        archive: "~/.reasonix/projects/F--Reasonix/archive/2026-08-13.jsonl",
+      },
+    },
+  },
   {
     wait: 600,
     ev: {
@@ -142,6 +168,23 @@ const SCRIPT: Beat[] = [
     ev: { kind: "text", text: "两处都改了，测试全绿。没动 key 存储的任何一行 —— 那条纪律保住了。" },
   },
   { wait: 100, ev: usage(700, 90, 240) },
+  {
+    wait: 400,
+    ev: {
+      kind: "completion_summary",
+      completion: {
+        preset: "delivery",
+        verdict: "complete",
+        mutations: 2,
+        checks_passed: 3,
+        checks_failed: 0,
+        checks_suppressed: 1,
+        review: "passed",
+        gap_kinds: ["suppressed"],
+        constraint_degraded: false,
+      },
+    },
+  },
   { wait: 300, ev: { kind: "turn_done" } },
 ];
 
@@ -174,6 +217,7 @@ export class MockPort implements AgentPort {
   };
 
   private setupDone = false;
+  private session: SessionEntry | null = null;
 
   async providerSetup(): Promise<ProviderSetup | null> {
     return this.setupDone ? null : { required: true, provider: "deepseek", model: "deepseek-v4-pro", keyEnv: "DEEPSEEK_API_KEY" };
@@ -190,14 +234,20 @@ export class MockPort implements AgentPort {
     ];
   }
 
+  // Matches the kernel: the shell mints no session file at launch, so the list
+  // is empty until a turn creates one. A static entry here is why a rail that
+  // never refetched looked fine in dev and was blank in the real app.
   async sessions(): Promise<SessionEntry[]> {
-    return [{ name: "default", path: "/sessions/default.jsonl", current: true }];
+    if (!this.session) return [];
+    return [{ ...this.session, current: true }];
   }
 
   async newSession() {
     this.log = [];
     this.at = 0;
     this.state.goal = "";
+    this.session = null;
+    this.state.sessionPath = undefined;
   }
 
   async deleteSession(_name: string) {}
@@ -262,7 +312,18 @@ export class MockPort implements AgentPort {
       this.emit({ kind: "steer", text });
       return;
     }
-    this.state.goal = text;
+    // The first turn is what puts the session on disk. serve answers with a
+    // truncated first message straight away and swaps in the generated title
+    // once the background job lands, so the rail is never left blank.
+    if (!this.session) {
+      const name = "20260813-004512.881204300-deepseek-v4-pro";
+      this.session = { name, path: `/sessions/${name}.jsonl`, title: text.slice(0, 47), turns: 0 };
+      this.state.sessionPath = this.session.path;
+      setTimeout(() => this.session && (this.session.title = "定位仓库里失败的测试"), 2500);
+    }
+    this.session.turns = (this.session.turns ?? 0) + 1;
+    // Not the goal: the kernel only sets that from /goal or plan mode. Echoing
+    // the prompt into it made the header read the same text twice.
     this.state.running = true;
     this.at = 0;
     this.emit({ kind: "message", text, itemId: "user" });

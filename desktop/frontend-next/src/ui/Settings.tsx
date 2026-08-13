@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentPort, ApprovalMode, ModelEntry, Preset, SessionStatus } from "../port/port";
+import { arrowTabs } from "./tablist";
 
 const PRESETS: [Preset, string, string][] = [
   ["light", "轻量", "简单就直接做，只做针对性验证，高风险才叫独立复核"],
@@ -15,6 +16,12 @@ const APPROVALS: [ApprovalMode, string, string][] = [
 ];
 
 const EFFORTS = ["auto", "low", "medium", "high", "xhigh", "max"];
+
+const THEMES: [string, string][] = [
+  ["auto", "跟随系统"],
+  ["light", "浅色"],
+  ["dark", "深色"],
+];
 
 type Section = "session" | "model" | "tools" | "appearance" | "advanced";
 
@@ -73,16 +80,24 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
         <span className="esc">esc</span>
       </div>
 
+      <div className="prefs-now">
+        <Now k="模型" v={status?.modelRef ?? "—"} />
+        <Now k="执行档" v={PRESETS.find(([id]) => id === status?.preset)?.[1] ?? "—"} />
+        <Now k="推理" v={status?.effort || "auto"} />
+        <Now k="批准" v={APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[1] ?? "—"} />
+        <Now k="计划模式" v={status?.plan ? "开" : "关"} />
+      </div>
+
       <div className="prefs-body">
-        <nav className="prefs-nav" role="tablist" aria-label="设置分类">
+        <nav className="prefs-nav" role="tablist" aria-label="设置分类" onKeyDown={arrowTabs}>
           {NAV.map(([id, name]) => (
-            <button key={id} role="tab" aria-selected={at === id} onClick={() => setAt(id)}>
+            <button key={id} id={`prefs-${id}`} role="tab" aria-selected={at === id} onClick={() => setAt(id)}>
               {name}
             </button>
           ))}
         </nav>
 
-        <div className="prefs-main">
+        <div className="prefs-main" role="tabpanel" aria-labelledby={`prefs-${at}`}>
           {at === "session" && (
             <>
               <Group title="执行设定" hint="管的是规划深度、验证广度、独立复核频率 —— 不是省钱档位。切档立刻生效，不重建运行时。">
@@ -119,7 +134,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
                 {models.length === 0 && <p className="note">读不到模型列表。</p>}
               </Group>
               <Group title="推理强度" hint="可选档位随 provider 能力变化，auto 表示交给 provider 默认。">
-                <div className="seg">
+                <div className="seg" role="group" aria-label="推理强度">
                   {EFFORTS.map((e) => (
                     <button key={e} aria-pressed={(status?.effort || "auto") === e}
                       onClick={() => run(e, () => port.setEffort(e))}>
@@ -142,9 +157,14 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
 
           {at === "appearance" && (
             <Group title="主题" hint="跟随系统时，系统切换会立刻反映；手动选过就固定住。">
-              {[["auto", "跟随系统"], ["light", "浅色"], ["dark", "深色"]].map(([id, name]) => (
-                <Row key={id} on={theme === id} label={name} onClick={() => onTheme(id)} />
-              ))}
+              {/* 三个没有说明文字的枚举值，跟推理强度是同一种选择，就该长成同一个控件 */}
+              <div className="seg" data-text role="group" aria-label="主题">
+                {THEMES.map(([id, name]) => (
+                  <button key={id} aria-pressed={theme === id} onClick={() => onTheme(id)}>
+                    {name}
+                  </button>
+                ))}
+              </div>
             </Group>
           )}
 
@@ -161,6 +181,15 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
         </div>
       </div>
     </div>
+  );
+}
+
+function Now({ k, v }: { k: string; v: string }) {
+  return (
+    <span className="kv">
+      <span className="k">{k}</span>
+      <span className="v">{v}</span>
+    </span>
   );
 }
 

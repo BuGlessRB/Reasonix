@@ -80,7 +80,7 @@ function NestedCall({ tool }: { tool: Tool }) {
         </div>
         {tool.output && (
           <div className="out">
-            <pre className="term">{tool.output.slice(0, 400)}</pre>
+            <Term text={tool.output.slice(0, 400)} />
           </div>
         )}
       </div>
@@ -95,14 +95,43 @@ const NUMBERED = /^\s*\d+→/;
 
 function Output({ name, text }: { name: string; text: string }) {
   const numbered = text.split("\n").filter((l) => NUMBERED.test(l)).length;
-  if (name !== "read_file" || numbered <= 12) return <pre className="term">{text}</pre>;
+  if (name !== "read_file" || numbered <= 12) return <Term text={text} />;
   return (
     <details>
       <summary>
         <span className="fold">读了 {numbered} 行</span>
       </summary>
-      <pre className="term">{text}</pre>
+      <Term text={text} />
     </details>
+  );
+}
+
+// The terminal fills in line by line: the first few land on the beat, the rest
+// tighten up so a long block still finishes inside SETTLED.
+const HEAD = 5;
+const BEAT = 34;
+const TIGHT = 8;
+const SETTLED = 700;
+// Past this, splitting into one node per line costs more than the entrance is
+// worth, so the block arrives whole.
+const SPLIT_MAX = 300;
+
+function Term({ text }: { text: string }) {
+  const lines = text.split("\n");
+  if (lines.length > SPLIT_MAX) return <pre className="term">{text}</pre>;
+  return (
+    <pre className="term">
+      {lines.map((l, i) => (
+        <span
+          className="term-l"
+          key={i}
+          style={{ animationDelay: `${Math.min(i < HEAD ? i * BEAT : HEAD * BEAT + (i - HEAD) * TIGHT, SETTLED)}ms` }}
+        >
+          {l}
+          {i < lines.length - 1 ? "\n" : ""}
+        </span>
+      ))}
+    </pre>
   );
 }
 

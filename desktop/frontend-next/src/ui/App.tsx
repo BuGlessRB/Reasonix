@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { AgentPort, ProviderSetup, SessionStatus } from "../port/port";
+import type { AgentPort, ApprovalVerdict, ProviderSetup, SessionEntry, SessionStatus } from "../port/port";
 import { fromHistory, initialState, quoteAmount, reduce } from "../state/session";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { Chrome } from "./Chrome";
@@ -11,6 +11,7 @@ import { Metrics } from "./Metrics";
 import { Sessions } from "./Sessions";
 import { Settings } from "./Settings";
 import { Onboarding } from "./Onboarding";
+import { arrowTabs } from "./tablist";
 
 export function App({ port }: { port: AgentPort }) {
   const [s, dispatch] = useReducer(reduce, initialState);
@@ -23,6 +24,7 @@ export function App({ port }: { port: AgentPort }) {
   const [settings, setSettings] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("rx-theme") ?? "auto");
   const [setup, setSetup] = useState<ProviderSetup | null | undefined>(undefined);
+  const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const flow = useRef<HTMLDivElement>(null);
   const startedAt = useRef(0);
@@ -72,6 +74,17 @@ export function App({ port }: { port: AgentPort }) {
   const fail = useCallback((e: unknown) => {
     dispatch({ kind: "__error", text: e instanceof Error ? e.message : String(e) } as never);
   }, []);
+
+  const reloadSessions = useCallback(() => {
+    void port.sessions().then(setSessions).catch(() => setSessions([]));
+  }, [port]);
+
+  // The shell deliberately mints no session file at launch, so the list starts
+  // empty and the first turn is what creates one — and its title only exists
+  // once that turn is on disk. Re-read when the session changes or a run ends.
+  useEffect(() => {
+    reloadSessions();
+  }, [reloadSessions, status?.sessionPath, s.running]);
 
   // /status is the only source for background jobs and for settings the run does
   // not echo, so a live turn has to re-read it rather than infer from events.
@@ -130,6 +143,24 @@ export function App({ port }: { port: AgentPort }) {
     [port, s.running, refreshStatus, fail],
   );
 
+  // Transcript rows are memoised on their item; a callback rebuilt every render
+  // would defeat that on the two cards that take one.
+  const onApprove = useCallback(
+    (itemId: string, id: string, v: ApprovalVerdict) => {
+      dispatch({ kind: "__decided", id: itemId, verdict: v } as never);
+      port.approve(id, v).then(refreshStatus).catch(fail);
+    },
+    [port, refreshStatus, fail],
+  );
+
+  const onAnswer = useCallback(
+    (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => {
+      dispatch({ kind: "__decided", id: itemId, answers: answers.map((a) => a.selected) } as never);
+      void port.answer(id, answers).catch(fail);
+    },
+    [port, fail],
+  );
+
   const toLatest = () => {
     const el = flow.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -162,6 +193,7 @@ export function App({ port }: { port: AgentPort }) {
       <Chrome
         port={port}
         status={status}
+        title={sessions.find((e) => e.path === status?.sessionPath)?.title}
         steer={pendingSteer}
         theme={theme}
         onTheme={setTheme}
@@ -174,12 +206,15 @@ export function App({ port }: { port: AgentPort }) {
           <Sessions
             port={port}
             status={status}
+            list={sessions}
+            reload={reloadSessions}
             run={run}
             cost={`${s.metrics.currency}${s.metrics.cost.toFixed(2)}`}
             onError={fail}
             onFold={() => setRail(false)}
             onSwitched={() => {
               refreshStatus();
+              reloadSessions();
               trajDispatch({ kind: "__clear" });
               port.trajectory().then((evs) => evs.forEach((e) => trajDispatch(e))).catch(() => {});
               port.history().then((msgs) => {
@@ -218,14 +253,8 @@ export function App({ port }: { port: AgentPort }) {
             hidden={pane !== "flow"}
             onPinned={setPinned}
             onSuggest={submit}
-            onApprove={(itemId, id, v) => {
-              dispatch({ kind: "__decided", id: itemId, verdict: v } as never);
-              port.approve(id, v).then(refreshStatus).catch(fail);
-            }}
-            onAnswer={(itemId, id, answers) => {
-              dispatch({ kind: "__decided", id: itemId, answers: answers.map((a) => a.selected) } as never);
-              void port.answer(id, answers).catch(fail);
-            }}
+            onApprove={onApprove}
+            onAnswer={onAnswer}
           />
 
           <div className="scroll" id="trajScroll" data-pane="traj" hidden={pane !== "traj"}>
@@ -284,13 +313,3 @@ export function App({ port }: { port: AgentPort }) {
   );
 }
 
-function arrowTabs(e: React.KeyboardEvent<HTMLDivElement>) {
-  const tabs = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')];
-  const i = tabs.indexOf(document.activeElement as HTMLElement);
-  if (i < 0) return;
-  const to = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : -1;
-  if (to < 0 || to >= tabs.length) return;
-  e.preventDefault();
-  tabs[to].focus();
-  tabs[to].click();
-}
