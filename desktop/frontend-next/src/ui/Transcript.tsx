@@ -7,7 +7,6 @@ import { GuardianCard } from "./cards/GuardianCard";
 import { ApprovalCard } from "./cards/ApprovalCard";
 import { AskCard } from "./cards/AskCard";
 import { SayCard } from "./cards/SayCard";
-import { AskFromTool } from "./cards/AskFromTool";
 
 interface Props {
   items: Item[];
@@ -73,9 +72,10 @@ export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove
               // call right after it, not a message of its own.
               return it.text.trim() ? <SayCard key={it.id} item={it} /> : null;
             case "tool":
-              return it.tool.name === "ask" ? (
-                <AskFromTool key={it.id} tool={it.tool} onAnswer={onAnswer} />
-              ) : (
+              // The ask tool also raises ask_request, which carries the id
+              // /answer needs. Drawing the tool call too put two copies of the
+              // same question on screen, each answerable.
+              return it.tool.name === "ask" ? null : (
                 <ToolCard key={it.id} tool={it.tool} running={it.running} children={it.children} />
               );
             case "guardian":

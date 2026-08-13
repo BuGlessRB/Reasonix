@@ -43,9 +43,9 @@ export function Trajectory({ rows }: { rows: TrajRow[] }) {
           ))}
         </tbody>
       </table>
-      <div className="traj-note">
-        事件流实录 · 与 <code>internal/trajectory</code> 落盘同源
-      </div>
+      {/* serve builds no trajectory.Recorder — only the CLI does — so there is
+          nothing on disk to reload. Say so rather than imply otherwise. */}
+      <div className="traj-note">实时事件流 · 仅本次连接，切换或重进会话后重建</div>
     </>
   );
 }
