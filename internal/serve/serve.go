@@ -62,16 +62,19 @@ type Server struct {
 	// extension reload. Tests inject it to exercise publication and failure
 	// paths without starting real providers or sidecars.
 	rebuildController func(ctx context.Context, old *control.Controller, ref string) (*control.Controller, error)
-	titleProv         provider.Provider // lightweight flash provider for session titles
-	titlePrice        *provider.Pricing
-	titleModelRef     string
-	titleUsageSink    event.Sink
-	titles            *titleCache
-	fill              *titleFiller
-	wire              *wireLog
-	auth              *authGate // nil when auth is disabled
-	providerSetupMu   sync.RWMutex
-	providerSetup     providerSetupState
+	// buildController's counterpart for the switch that changes the root.
+	buildWorkspaceController func(ctx context.Context, dir, ref string) (*control.Controller, error)
+	allowWorkspaceSwitch     bool              // host grant; see AllowWorkspaceSwitch
+	titleProv                provider.Provider // lightweight flash provider for session titles
+	titlePrice               *provider.Pricing
+	titleModelRef            string
+	titleUsageSink           event.Sink
+	titles                   *titleCache
+	fill                     *titleFiller
+	wire                     *wireLog
+	auth                     *authGate // nil when auth is disabled
+	providerSetupMu          sync.RWMutex
+	providerSetup            providerSetupState
 	// leases guards the active session file against other runtimes (a desktop
 	// window, another CLI). Wired by the serve CLI command with the keeper that
 	// already holds the startup session's lease; nil (tests, embedded use)
@@ -100,6 +103,11 @@ func New(ctrl control.SessionAPI, bc *Broadcaster, serveCfg config.ServeConfig) 
 	s.attachWireLog()
 	return s
 }
+
+// Controller returns the controller currently driving the session. A host that
+// embeds the server must read it through here rather than keeping the one it
+// passed to New: a model, extension, or workspace switch replaces it.
+func (s *Server) Controller() control.SessionAPI { return s.ctl() }
 
 // ctl returns the current controller. Handlers must read it through here, never
 // the field directly, because switchModel replaces it under the write lock.
@@ -522,6 +530,10 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /sessions", s.sessions)
 	mux.HandleFunc("GET /trajectory", s.trajectory)
 	mux.HandleFunc("GET /skills", s.skills)
+	mux.HandleFunc("GET /slash", s.slash)
+	mux.HandleFunc("GET /mcp", s.mcp)
+	mux.HandleFunc("GET /workspaces", s.workspaces)
+	mux.HandleFunc("POST /workspace", s.workspace)
 	mux.HandleFunc("GET /todos", s.todos)
 	mux.HandleFunc("POST /delete-session", s.deleteSession)
 	return logMiddleware(s.auth.middleware(csrfGuard(mux)))
@@ -761,6 +773,12 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		s.bindMu.Unlock()
 		http.Error(w, "session is busy; use POST /inbox/items for durable follow-up", http.StatusConflict)
 		return
+	}
+	// A shell that pins no auto-save path at launch — so an opened window leaves
+	// no empty transcript — left the whole conversation unsaved. Pinning on the
+	// first submit keeps both halves. POST /inbox/items already did this.
+	if ensurer, ok := any(ctrl).(interface{ EnsureSessionPath() }); ok {
+		ensurer.EnsureSessionPath()
 	}
 	ctrl.SubmitHTTPFormat(body.Input, body.Format)
 	// After synchronous admission, a successful start sets Running. A silent

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Sym } from "../Sym";
 import type { Item } from "../../state/session";
 
 interface Props {
@@ -57,7 +58,7 @@ export function AskCard({ item, onAnswer }: Props) {
   return (
     <div className="call" data-k="ask">
       <div className="g">
-        <span className="sym">?</span>
+        <Sym glyph="?" />
         <span className="line" />
       </div>
       <div className="c">

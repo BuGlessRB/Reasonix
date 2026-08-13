@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import type { AgentPort, ApprovalMode, ModelEntry, SessionStatus } from "../port/port";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { AgentPort, ApprovalMode, ModelEntry, SessionStatus, SlashEntry } from "../port/port";
 import { Picker } from "./Menu";
+import { SlashMenu, slashMatches, slashQuery } from "./SlashMenu";
 
 const APPROVALS: [ApprovalMode, string, string][] = [
   ["ask", "询问", "每次动手前问你。"],
@@ -23,11 +24,31 @@ interface Props {
 export function Composer({ port, status, running, onSubmit, onChanged, onError }: Props) {
   const [text, setText] = useState("");
   const [models, setModels] = useState<ModelEntry[]>([]);
+  const [slash, setSlash] = useState<SlashEntry[]>([]);
+  const [active, setActive] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     port.models().then(setModels).catch(() => setModels([]));
+    // Skills and commands are discovered at build time and only change when the
+    // runtime is rebuilt, so one fetch per mount is the whole story.
+    port.slash().then(setSlash).catch(() => setSlash([]));
   }, [port]);
+
+  const query = slashQuery(text);
+  const hits = useMemo(
+    () => (query === null ? [] : slashMatches(slash, query)),
+    [slash, query],
+  );
+  const open = !dismissed && hits.length > 0;
+  const at = Math.min(active, hits.length - 1);
+
+  const take = (e: SlashEntry) => {
+    setText("/" + e.name + " ");
+    setActive(0);
+    box.current?.focus();
+  };
 
   // max-height caps it at 96px; the element still has to be told to grow.
   useEffect(() => {
@@ -50,13 +71,42 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
 
   return (
     <>
+      {open && <SlashMenu items={hits} active={at} onPick={take} onHover={setActive} />}
       <textarea
         ref={box}
         rows={1}
         value={text}
-        placeholder="交待一个任务，回车发送…"
-        onChange={(e) => setText(e.target.value)}
+        placeholder="交待一个任务，回车发送…　输入 / 调用技能"
+        role="combobox"
+        aria-expanded={open}
+        aria-controls="slashmenu"
+        aria-autocomplete="list"
+        aria-activedescendant={open ? `slash-${at}` : undefined}
+        onChange={(e) => {
+          setText(e.target.value);
+          setActive(0);
+          setDismissed(false);
+        }}
         onKeyDown={(e) => {
+          if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+            e.preventDefault();
+            const step = e.key === "ArrowDown" ? 1 : hits.length - 1;
+            setActive((i) => (Math.min(i, hits.length - 1) + step) % hits.length);
+            return;
+          }
+          if (open && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey) {
+            e.preventDefault();
+            take(hits[at]);
+            return;
+          }
+          // Esc closes the menu and stops there: reaching the app would cancel
+          // the running turn, which is not what dismissing a menu means.
+          if (open && e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            setDismissed(true);
+            return;
+          }
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             send();

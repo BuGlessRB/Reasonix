@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Sym } from "../Sym";
 import type { Item } from "../../state/session";
 import { Markdown } from "../Markdown";
 import { Boundary } from "../Boundary";
@@ -13,7 +14,7 @@ export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {
   return (
     <div className="call" data-k="say">
       <div className="g">
-        <span className="sym">◦</span>
+        <Sym glyph="◦" />
         <span className="line" />
       </div>
       <div className="c">

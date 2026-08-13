@@ -1,10 +1,11 @@
 import type { Guardian } from "../../port/wire";
+import { Sym } from "../Sym";
 
 export function GuardianCard({ g }: { g: Guardian }) {
   return (
     <div className="call">
       <div className="g">
-        <span className="sym">⊛</span>
+        <Sym glyph="⊛" />
         <span className="line" />
       </div>
       <div className="c">

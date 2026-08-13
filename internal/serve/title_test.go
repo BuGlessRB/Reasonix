@@ -44,7 +44,7 @@ func (p *recordingTitleProvider) at(i int) provider.Request {
 // waitTitle blocks until the scheduled generation has reached the cache.
 func waitTitle(t *testing.T, s *Server, name, source string, mod int64) string {
 	t.Helper()
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		if got, ok := s.titles.get(name, source, mod); ok {
 			return got
 		}

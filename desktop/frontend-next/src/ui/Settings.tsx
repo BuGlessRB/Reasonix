@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { AgentPort, ApprovalMode, ModelEntry, Preset, SessionStatus } from "../port/port";
+import type { AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, SessionStatus, SlashEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 
 const PRESETS: [Preset, string, string][] = [
@@ -23,19 +23,31 @@ const THEMES: [string, string][] = [
   ["dark", "深色"],
 ];
 
-type Section = "session" | "model" | "tools" | "appearance" | "advanced";
+type Section = "session" | "model" | "tools" | "ext" | "appearance" | "advanced";
 
 const NAV: [Section, string][] = [
   ["session", "会话"],
   ["model", "模型"],
   ["tools", "工具与权限"],
+  ["ext", "扩展"],
   ["appearance", "外观"],
   ["advanced", "高级"],
 ];
 
+const SCOPE: Record<string, string> = { project: "项目", custom: "自定义", global: "我的", builtin: "内置" };
+
 // Not in this build yet: every one of these needs its own surface, and shipping
 // a half version would be worse than saying where it currently lives.
-const ELSEWHERE = ["MCP 服务器", "插件与技能", "Hooks", "记忆", "主题包", "机器人接入", "网络与代理", "账号与更新"];
+const ELSEWHERE = ["Hooks", "记忆", "主题包", "机器人接入", "网络与代理", "账号与更新"];
+
+// The user's question is "is it there and does it work", so the state is the
+// label. A failed server keeps its error on the row that names it.
+const MCP_STATE: Record<string, string> = {
+  ready: "已连接",
+  connecting: "连接中",
+  failed: "连不上",
+  idle: "未连接",
+};
 
 interface Props {
   port: AgentPort;
@@ -49,11 +61,15 @@ interface Props {
 export function Settings({ port, status, theme, onTheme, onClose, onChanged }: Props) {
   const [at, setAt] = useState<Section>("session");
   const [models, setModels] = useState<ModelEntry[]>([]);
+  const [mcp, setMcp] = useState<McpEntry[]>([]);
+  const [slash, setSlash] = useState<SlashEntry[]>([]);
   const [busy, setBusy] = useState("");
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     port.models().then(setModels).catch(() => setModels([]));
+    port.mcp().then(setMcp).catch(() => setMcp([]));
+    port.slash().then(setSlash).catch(() => setSlash([]));
     root.current?.focus();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     addEventListener("keydown", onKey);
@@ -70,6 +86,22 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
     }
   };
 
+  const preset = PRESETS.find(([id]) => id === status?.preset)?.[1] ?? "—";
+  const approval = APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[1] ?? "—";
+  const broken = mcp.filter((m) => m.state === "failed").length;
+  // The table of contents is also the status board: the value that matters for
+  // each section rides on its own row, so the risky one is legible from here.
+  const nav: Record<Section, string> = {
+    session: status?.plan ? "计划模式" : preset,
+    model: status?.modelRef?.split("/").pop() ?? "—",
+    tools: approval,
+    ext: broken ? `${broken} 个异常` : `${mcp.length + slash.length}`,
+    appearance: THEMES.find(([id]) => id === theme)?.[1] ?? "",
+    advanced: "",
+  };
+  const danger = (id: Section) =>
+    (id === "tools" && status?.toolApprovalMode === "yolo") || (id === "ext" && broken > 0);
+
   return (
     <div className="prefs" ref={root} tabIndex={-1}>
       <div className="prefs-hd">
@@ -80,24 +112,20 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
         <span className="esc">esc</span>
       </div>
 
-      <div className="prefs-now">
-        <Now k="模型" v={status?.modelRef ?? "—"} />
-        <Now k="执行档" v={PRESETS.find(([id]) => id === status?.preset)?.[1] ?? "—"} />
-        <Now k="推理" v={status?.effort || "auto"} />
-        <Now k="批准" v={APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[1] ?? "—"} />
-        <Now k="计划模式" v={status?.plan ? "开" : "关"} />
-      </div>
-
       <div className="prefs-body">
         <nav className="prefs-nav" role="tablist" aria-label="设置分类" onKeyDown={arrowTabs}>
           {NAV.map(([id, name]) => (
             <button key={id} id={`prefs-${id}`} role="tab" aria-selected={at === id} onClick={() => setAt(id)}>
               {name}
+              <span className="nv" data-danger={danger(id) ? "" : undefined}>
+                {nav[id]}
+              </span>
             </button>
           ))}
         </nav>
 
         <div className="prefs-main" role="tabpanel" aria-labelledby={`prefs-${at}`}>
+          <div className="prefs-col">
           {at === "session" && (
             <>
               <Group title="执行设定" hint="管的是规划深度、验证广度、独立复核频率 —— 不是省钱档位。切档立刻生效，不重建运行时。">
@@ -118,7 +146,8 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
                   <span className="v">{status?.cwd ?? "—"}</span>
                 </div>
                 <p className="note">
-                  路径是会话的身份，核心只在构造时写一次，之后没有 setter。换目录请开新会话。
+                  在顶栏点项目名换目录。换目录会整个重建运行时，当前对话留在原来那个
+                  项目里，不跟过去。
                 </p>
               </Group>
             </>
@@ -126,12 +155,12 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
 
           {at === "model" && (
             <>
-              <Group title="模型" hint="切换会带着对话重建运行时；有活儿在跑的时候切不了。">
+              <Group title="模型" now={nav.model} hint="切换会带着对话重建运行时；有活儿在跑的时候切不了。">
                 {models.map((m) => (
                   <Row key={m.ref} on={m.ref === status?.modelRef} busy={busy === m.ref}
                     label={m.model} desc={m.provider} onClick={() => run(m.ref, () => port.setModel(m.ref))} />
                 ))}
-                {models.length === 0 && <p className="note">读不到模型列表。</p>}
+                {models.length === 0 && <div className="empty">读不到模型列表。</div>}
               </Group>
               <Group title="推理强度" hint="可选档位随 provider 能力变化，auto 表示交给 provider 默认。">
                 <div className="seg" role="group" aria-label="推理强度">
@@ -155,6 +184,36 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
             </Group>
           )}
 
+          {at === "ext" && (
+            <>
+              <Group
+                title="外部工具"
+                now={mcp.length ? `${mcp.length} 个服务` : undefined}
+                hint="通过 MCP 接进来的服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。增删服务器还在旧版桌面端。"
+              >
+                {mcp.map((m) => (
+                  <Server key={m.name} m={m} />
+                ))}
+                {mcp.length === 0 && <div className="empty">没有接入任何外部服务。</div>}
+              </Group>
+              <Group
+                title="技能与命令"
+                now={slash.length ? `${slash.length} 条` : undefined}
+                hint="在输入框打 / 就能调用。项目里的那些跟着工作目录走，换目录会换一套。"
+              >
+                {slash.map((e) => (
+                  <div className="lrow" key={e.kind + e.name}>
+                    <span className="nm">/{e.name}</span>
+                    <span className="ds">{e.description || (e.kind === "command" ? "自定义命令" : "技能")}</span>
+                    {e.subagent && <i className="sa">子代理</i>}
+                    <span className="sc">{e.plugin || SCOPE[e.scope ?? ""] || (e.kind === "command" ? "命令" : "")}</span>
+                  </div>
+                ))}
+                {slash.length === 0 && <div className="empty">这个工作目录下没有技能或自定义命令。</div>}
+              </Group>
+            </>
+          )}
+
           {at === "appearance" && (
             <Group title="主题" hint="跟随系统时，系统切换会立刻反映；手动选过就固定住。">
               {/* 三个没有说明文字的枚举值，跟推理强度是同一种选择，就该长成同一个控件 */}
@@ -170,33 +229,67 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
 
           {at === "advanced" && (
             <Group title="还不在这一版里" hint="每一项都需要自己的界面，做半个不如先说清楚它现在在哪。">
-              <div className="chips">
-                {ELSEWHERE.map((x) => (
-                  <span className="chip" key={x}>{x}</span>
-                ))}
-              </div>
-              <p className="note">这些暂时留在旧版桌面端。主干站稳之后一块一块搬过来。</p>
+              {ELSEWHERE.map((x) => (
+                <div className="lrow" key={x}>
+                  <span className="ds">{x}</span>
+                  <span className="sc">旧版桌面端</span>
+                </div>
+              ))}
             </Group>
           )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function Now({ k, v }: { k: string; v: string }) {
+// The tool list is the long half and the least urgent, so it folds behind its
+// own count — the same idiom a long file read uses in the transcript.
+function Server({ m }: { m: McpEntry }) {
+  const meta = [MCP_STATE[m.state] ?? m.state, m.transport, m.source].filter(Boolean).join(" · ");
+  const head = (
+    <>
+      <i className="pip" />
+      <span className="nm">{m.name}</span>
+      {m.toolNames?.length ? <span className="fold">{m.tools} 个工具</span> : null}
+      <span className="meta">{meta}</span>
+    </>
+  );
+  if (!m.toolNames?.length) {
+    return (
+      <div className="srv" data-st={m.state}>
+        <div className="srv-hd">{head}</div>
+        {m.error && <div className="why">{m.error}</div>}
+      </div>
+    );
+  }
   return (
-    <span className="kv">
-      <span className="k">{k}</span>
-      <span className="v">{v}</span>
-    </span>
+    <details className="srv" data-st={m.state}>
+      <summary>{head}</summary>
+      <div className="peek">
+        {m.toolNames.map((t) => (
+          <div className="row" key={t}>
+            <span className="d">·</span>
+            <span>{t}</span>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 
-function Group({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Group({
+  title, hint, now, children,
+}: {
+  title: string; hint?: string; now?: string; children: React.ReactNode;
+}) {
   return (
     <section className="grp">
-      <h2>{title}</h2>
+      <div className="grp-hd">
+        <h2>{title}</h2>
+        {now && <span className="now">{now}</span>}
+      </div>
       {hint && <p className="hint">{hint}</p>}
       <div className="grp-items">{children}</div>
     </section>

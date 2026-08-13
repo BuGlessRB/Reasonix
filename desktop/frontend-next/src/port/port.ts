@@ -71,6 +71,47 @@ export interface SessionEntry {
   current?: boolean;
 }
 
+// GET /mcp. One external tool provider. state is ready | connecting | failed
+// | idle, where idle means configured but not connected yet.
+export interface McpEntry {
+  name: string;
+  state: string;
+  transport?: string;
+  source?: string;
+  tools: number;
+  prompts?: number;
+  resources?: number;
+  toolNames?: string[];
+  error?: string;
+}
+
+export interface WorkspaceEntry {
+  path: string;
+  name: string;
+}
+
+// GET /workspaces. canSwitch is the server's answer, not the client's guess:
+// a server reachable over the network refuses to be repointed at all.
+export interface WorkspaceInfo {
+  current: string;
+  canSwitch: boolean;
+  canIsolate: boolean;
+  recents: WorkspaceEntry[];
+  isolated?: boolean;
+}
+
+// One entry of GET /slash: everything Submit resolves after a "/". The kernel
+// already dedupes and orders these, so the menu must not re-sort them.
+export interface SlashEntry {
+  name: string;
+  kind: "skill" | "command";
+  description?: string;
+  argHint?: string;
+  scope?: string;
+  plugin?: string;
+  subagent?: boolean;
+}
+
 export interface ModelEntry {
   ref: string;
   provider: string;
@@ -83,6 +124,16 @@ export interface AgentPort {
   providerSetup(): Promise<ProviderSetup | null>;
   saveProviderKey(apiKey: string): Promise<void>;
   models(): Promise<ModelEntry[]>;
+  slash(): Promise<SlashEntry[]>;
+  mcp(): Promise<McpEntry[]>;
+  workspaces(): Promise<WorkspaceInfo>;
+  // Rebuilds the whole runtime against another folder. The conversation does
+  // not come along, so the caller has to reload the transcript afterwards.
+  setWorkspace(path: string): Promise<void>;
+  isolateWorkspace(): Promise<void>;
+  // The native folder picker, or "" where there is none (a browser tab) or
+  // when the user cancelled. Only the shell can open one.
+  pickFolder(): Promise<string>;
   sessions(): Promise<SessionEntry[]>;
   resume(path: string): Promise<void>;
   newSession(): Promise<void>;

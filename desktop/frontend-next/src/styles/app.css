@@ -86,6 +86,19 @@
   .mi.plain .lb { font-weight: 400; color: var(--muted) }
   .mi.plain .dot { background: transparent }   /* 它不是一个可选中的项目 */
 
+  /* 斜杠补全补的是正在打的那一行，所以它贴着输入框上沿，宽度也跟着输入框 */
+  .slashmenu {
+    left: 0; right: 0; bottom: calc(100% + 9px); min-width: 0; z-index: 31;
+    max-height: 272px; overflow-y: auto; transform-origin: bottom center;
+  }
+  .slashmenu .lb { font-family: var(--mono) }
+  .slashmenu .ah { margin-left: 6px; font: 400 11px var(--mono); font-style: normal; color: var(--ghost) }
+  .sa {
+    margin-left: 7px; padding: 1px 5px; border-radius: var(--r-pill);
+    font: 500 9.5px var(--ui); font-style: normal; vertical-align: 1px;
+    color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent);
+  }
+
   /* 模式是这一轮的能力，不是偏好开关 —— 所以它长在输入框上，不在设置里 */
   .mode {
     display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px;
@@ -418,11 +431,9 @@
     border-radius: var(--r-xs); font: 500 10px/1 var(--mono); color: var(--faint);
     background: var(--overlay); flex: none;
   }
-  /* stroke-width is read against lucide's 24 grid, not the 16 the mock drew on:
-     1.5 there renders visibly lighter than the rest of the chrome. */
   .call > .g .sym svg {
     width: 12px; height: 12px; display: block; fill: none; stroke: currentColor;
-    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
   }
   .nest-bd .call > .g .sym svg { width: 10.5px; height: 10.5px }
   .call > .g .line { flex: 1; width: 1px; background: var(--hair); min-height: 6px }
@@ -465,6 +476,11 @@
   .call[data-k="say"] .hl .nm, .call[data-k="me"] .hl .nm { font-size: 11px; font-family: var(--mono); font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--faint) }
   .hl .arg { font: 400 11.5px var(--mono); color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .hl .tag { font: 500 9.5px var(--mono); letter-spacing: .11em; text-transform: uppercase; padding: 1.5px 5px; border-radius: var(--r-xs); color: var(--faint); background: var(--overlay) }
+  /* 来源比工具名重要：这一步是外部服务干的，颜色跟 mcp 卡的色相一致 */
+  .hl .src {
+    font: 500 9.5px var(--mono); letter-spacing: .09em; padding: 1.5px 6px;
+    border-radius: var(--r-pill); color: var(--net); background: var(--net-wash);
+  }
 
   .cost { margin-left: auto; display: inline-flex; align-items: baseline; gap: 7px; font: 400 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none }
   .cost .hit { color: var(--ok) }
@@ -547,6 +563,10 @@
   .peek .row { display: flex; gap: 9px; font: 400 11.5px var(--mono); color: var(--faint) }
   .peek .row .d { color: var(--ghost) }
   .peek .row .n { margin-left: auto; color: var(--ghost); font-variant-numeric: tabular-nums }
+  /* 合并后的读清单要能翻回正文，否则收起卡片等于把内容藏没了 */
+  .peek button.row { width: 100%; padding: 0; border: 0; background: none; cursor: pointer; text-align: left }
+  .peek button.row:hover, .peek button.row[data-on] { color: var(--text) }
+  .peek button.row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs) }
 
   .hits { margin-top: 7px; display: flex; flex-direction: column; gap: 1px }
   .hit-row { display: grid; grid-template-columns: 16px 1fr; gap: 9px; padding: 6px 8px; border-radius: var(--r-xs) }
@@ -694,17 +714,20 @@
   .ask-q { font: 500 13px/1.5 var(--ui); color: var(--text); margin-bottom: 3px }
   .ask-hint { font: 400 11px var(--mono); color: var(--ghost); margin-bottom: 10px }
 
-  .opts { display: flex; flex-direction: column; gap: 6px }
-  /* ask 卡的选项行和设置里的 .prow 是同一个控件，共用这一份定义 */
+  .opts { display: flex; flex-direction: column }
+  /* ask 卡的选项行和设置里的 .prow 是同一个控件，共用这一份定义。
+     一组选项是一个对象，不是 N 个盒子：发丝线分隔、选中靠左色条 ——
+     跟 .find / .guard 同一套语法，方框只会把选择题画成表单。 */
   .opt, .prow {
-    display: flex; gap: 10px; padding: 9px 11px; text-align: left; width: 100%;
-    border: 1px solid var(--border); border-radius: var(--r-sm); background: transparent;
+    display: flex; gap: 10px; padding: 10px 12px; text-align: left; width: 100%;
+    border: 0; border-top: 1px solid var(--hair); background: transparent;
     cursor: pointer; font: inherit; color: inherit;
-    transition: border-color .14s, background .14s, box-shadow .14s;
+    transition: background .14s, box-shadow .14s;
   }
-  .opt:hover, .prow:hover { border-color: var(--faint) }
-  .opt:focus-visible, .prow:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
-  .opt[data-on], .prow[data-on] { border-color: var(--accent); background: var(--accent-wash) }
+  .opt:last-of-type, .prow:last-of-type { border-bottom: 1px solid var(--hair) }
+  .opt:hover, .prow:hover { background: var(--overlay) }
+  .opt:focus-visible, .prow:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  .opt[data-on], .prow[data-on] { background: var(--accent-wash); box-shadow: inset 2px 0 var(--accent) }
 
   .opt .mark, .prow .mark {
     width: 14px; height: 14px; flex: none; margin-top: 2px;
@@ -1055,50 +1078,87 @@
   .back:hover { color: var(--text); background: var(--overlay) }
   .back:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
-  .prefs-body { flex: 1; display: grid; grid-template-columns: 186px minmax(0, 1fr); min-height: 0 }
+  .prefs-body { flex: 1; display: grid; grid-template-columns: 208px minmax(0, 1fr); min-height: 0 }
   .prefs-nav {
-    display: flex; flex-direction: column; gap: 1px; padding: 14px 10px;
+    display: flex; flex-direction: column; gap: 1px; padding: 18px 10px;
     border-right: 1px solid var(--hair); overflow: auto;
   }
+  /* 目录顺便报数：右边挂当前值，打开设置第一眼就知道现在跑在什么设定下，
+     不用逐个分类点过去 —— 这也是原来那条独立状态条存在的唯一理由。 */
   .prefs-nav button {
-    text-align: left; padding: 7px 11px; border: 0; border-radius: var(--r-sm); cursor: pointer;
+    display: flex; align-items: baseline; gap: 10px;
+    text-align: left; padding: 8px 11px; border: 0; border-radius: var(--r-sm); cursor: pointer;
     background: transparent; color: var(--muted); font: 400 12.5px var(--ui);
     transition: background .14s, color .14s;
   }
   .prefs-nav button:hover { background: var(--overlay); color: var(--text) }
   .prefs-nav button[aria-selected="true"] { background: var(--overlay); color: var(--text); font-weight: 500 }
   .prefs-nav button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  /* 这一列是真信息不是装饰：ghost 在 10.5px 上对比度只有 2:1，读不出来 */
+  .prefs-nav .nv {
+    margin-left: auto; flex: none; max-width: 88px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; font: 400 10.5px var(--mono); color: var(--faint);
+  }
+  .prefs-nav button[aria-selected="true"] .nv { color: var(--muted) }
+  .prefs-nav .nv[data-danger] { color: var(--err) }
 
-  .prefs-main { overflow: auto; padding: 26px 30px 40px; max-width: 720px }
-  .grp { margin-bottom: 34px; animation: card var(--t-card) var(--ease-out) both }
+  .prefs-main { overflow: auto; padding: 34px 44px 64px }
+  /* 贴着目录往下读，不居中：只有左边一条栏时，居中会把内容悬成一座孤岛 */
+  .prefs-col { max-width: 660px }
+  .grp { margin-bottom: 40px; animation: card var(--t-card) var(--ease-out) both }
   .grp:last-child { margin-bottom: 0 }
-  .grp h2 { margin: 0; font: 500 14px var(--ui); color: var(--text) }
-  .grp .hint { margin: 5px 0 0; font: 400 11.5px/1.7 var(--ui); color: var(--faint); max-width: 60ch }
-  .grp-items { margin-top: 13px; display: flex; flex-direction: column; gap: 6px }
-  .grp .note { margin: 9px 0 0; font: 400 11px/1.7 var(--ui); color: var(--ghost); max-width: 58ch }
+  .grp-hd { display: flex; align-items: baseline; gap: 12px }
+  .grp h2 { margin: 0; font: 600 14.5px var(--ui); color: var(--text) }
+  .grp .now { margin-left: auto; flex: none; font: 400 11px var(--mono); color: var(--faint) }
+  .grp .hint { margin: 6px 0 0; font: 400 11.5px/1.7 var(--ui); color: var(--faint); max-width: 64ch }
+  .grp-items { margin-top: 14px; display: flex; flex-direction: column }
+  .grp .note { margin: 11px 0 0; font: 400 11px/1.7 var(--ui); color: var(--faint); max-width: 60ch }
+  .grp .empty { padding: 14px 12px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair);
+    font: 400 11.5px var(--ui); color: var(--faint) }
 
   /* 一行一个选项，settings 和 ask 卡是同一个控件 —— 分成两套只会各自漂。
      .prow 的差别只剩它自己的失效态和危险态。 */
   .prow[disabled] { opacity: .5; cursor: default }
-  /* 风险要在你点之前就在，不是选中之后才红：跟 .guard / .find 同一套左色条语法 */
-  .prow[data-danger] { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--err) 55%, transparent) }
+  /* 风险要在你点之前就在，不是选中之后才红 */
+  .prow[data-danger] { box-shadow: inset 2px 0 color-mix(in srgb, var(--err) 55%, transparent) }
   .prow[data-danger][data-on] {
-    border-color: color-mix(in srgb, var(--err) 45%, var(--border));
     background: color-mix(in srgb, var(--err) 7%, transparent);
-    box-shadow: inset 2px 0 0 var(--err);
+    box-shadow: inset 2px 0 var(--err);
   }
   .prow[data-danger][data-on] .mark { border-color: var(--err); background: var(--err) }
 
-  .kv { display: flex; gap: 12px; align-items: baseline; padding: 9px 12px; border: 1px solid var(--hair); border-radius: var(--r-sm) }
+  .kv { display: flex; gap: 12px; align-items: baseline; padding: 10px 12px; border-top: 1px solid var(--hair) }
+  .kv:last-of-type { border-bottom: 1px solid var(--hair) }
   .kv .k { flex: none; font: 400 11px var(--mono); color: var(--faint) }
   .kv .v { font: 400 11.5px var(--mono); color: var(--text); word-break: break-all }
 
-  /* 打开设置第一眼就该知道现在是什么状态，而不是逐个分类点过去 */
-  .prefs-now {
-    flex: none; display: flex; flex-wrap: wrap; gap: 4px 20px;
-    padding: 9px 16px; border-bottom: 1px solid var(--hair); background: var(--surface);
-  }
-  .prefs-now .kv { padding: 0; border: 0; gap: 7px }
+  /* 外部服务：名字是名字（界面字），其余是机器事实（等宽）。连不上是这一行
+     唯一需要动作的状态，用左色条说 —— 全绿时整块不该有任何视觉重量。 */
+  .srv { border-top: 1px solid var(--hair); padding: 10px 12px }
+  .srv:last-of-type { border-bottom: 1px solid var(--hair) }
+  .srv[data-st="failed"] { box-shadow: inset 2px 0 var(--err) }
+  .srv > summary { display: flex; align-items: baseline; gap: 9px; cursor: pointer; list-style: none }
+  .srv > summary::-webkit-details-marker { display: none }
+  .srv-hd { display: flex; align-items: baseline; gap: 9px }
+  .srv .pip { align-self: center }
+  .srv[data-st="ready"] .pip { background: var(--ok) }
+  .srv[data-st="connecting"] .pip { background: var(--net); animation: tick 1.6s ease-in-out infinite }
+  .srv[data-st="failed"] .pip { background: var(--err) }
+  .srv .nm { font: 500 12.5px var(--ui); color: var(--text); min-width: 0 }
+  .srv .meta { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--faint) }
+  .srv .why { margin: 4px 0 0 15px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
+  .srv .peek { margin: 7px 0 1px 15px }
+
+  /* 名字 + 说明 + 归属的三列行。能打的那串是机器字面量，说明是给人读的，
+     两种字体是有意的对比；定宽名字列让说明在整张表里对齐。 */
+  .lrow { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--hair) }
+  .lrow:last-of-type { border-bottom: 1px solid var(--hair) }
+  .lrow .nm { flex: none; min-width: 152px; font: 400 11.5px var(--mono); color: var(--text) }
+  .lrow .ds { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 400 11.5px var(--ui); color: var(--muted) }
+  .lrow .sa { margin-left: auto; flex: none }
+  .lrow .sa + .sc { margin-left: 8px }
+  .lrow .sc { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--faint) }
 
   .seg { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; background: var(--overlay); border-radius: var(--r-sm) }
   /* 中文标签在 mono 栈里会掉到回退字体，跟旁边的界面字对不齐 */
@@ -1112,8 +1172,6 @@
   .seg button[aria-pressed="true"] { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, .12) }
   .seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
-  .chips { display: flex; flex-wrap: wrap; gap: 6px }
-  .chip { padding: 4px 10px; border-radius: var(--r-pill); background: var(--overlay); color: var(--faint); font: 400 11.5px var(--ui) }
 
   @media (prefers-reduced-motion: reduce) {
     .onb-card, .onb-field, .onb-go, .onb-note, .onb-r path, .prefs, .grp { animation: none !important }

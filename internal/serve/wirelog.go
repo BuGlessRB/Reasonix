@@ -89,7 +89,7 @@ func (s *Server) trajectory(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	out := []json.RawMessage{}
-	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(string(data), "\n"), "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}

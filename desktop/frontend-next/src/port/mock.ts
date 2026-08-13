@@ -1,4 +1,4 @@
-import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus } from "./port";
+import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpEntry, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 
 interface Beat {
@@ -61,9 +61,67 @@ const SCRIPT: Beat[] = [
       }),
     },
   },
-  { wait: 500, ev: { kind: "tool_dispatch", tool: tool("read_file", { args: "internal/provider/retry.go" }) } },
-  { wait: 700, ev: { kind: "tool_result", tool: tool("read_file", { output: "203 行", durationMs: 940 }) } },
+  // Three reads in a row: the spec collapses a run into one manifest, so the
+  // fixture has to produce a run. Outputs carry read_file's real line numbering.
+  ...[
+    ["internal/provider/retry.go", 203],
+    ["internal/config/credentials.go", 88],
+    ["internal/agent/agent.go", 412],
+  ].flatMap(([path, n], i): Beat[] => [
+    {
+      wait: 400,
+      ev: { kind: "tool_dispatch", tool: tool("read_file", { id: `rd${i}`, args: JSON.stringify({ path }) }) },
+    },
+    {
+      wait: 500,
+      ev: {
+        kind: "tool_result",
+        tool: tool("read_file", {
+          id: `rd${i}`,
+          args: JSON.stringify({ path }),
+          output: Array.from({ length: Number(n) }, (_, k) => `${String(k + 1).padStart(3)}→// ${path}:${k + 1}`).join("\n"),
+          durationMs: 210 + i * 40,
+        }),
+      },
+    },
+  ]),
   { wait: 100, ev: usage(12400, 0, 120) },
+  // ls: a directory is "name/" with no size, a file is "name<TAB>bytes".
+  {
+    wait: 500,
+    ev: {
+      kind: "tool_result",
+      tool: tool("ls", {
+        id: "ls1",
+        args: JSON.stringify({ path: "internal/provider" }),
+        output: ["openai/", "anthropic/", "retry.go\t8420", "retry_test.go\t11304", "provider.go\t5177"].join("\n"),
+        durationMs: 60,
+      }),
+    },
+  },
+  // grep: "path:line:text" exactly as internal/tool/builtin/grep.go formats it,
+  // trailing truncation note included.
+  {
+    wait: 500,
+    ev: {
+      kind: "tool_result",
+      tool: tool("grep", {
+        id: "gr1",
+        args: JSON.stringify({ pattern: "forget\\(provider\\)" }),
+        output: [
+          "internal/config/credentials.go:205:\ts.forget(provider)",
+          "internal/provider/retry.go:88:\t\t\tstore.forget(provider)",
+          "internal/agent/agent.go:1841:\t// 瞬时 401 不该走 forget(provider)",
+          "... (truncated at 3 matches)",
+        ].join("\n"),
+        durationMs: 140,
+      }),
+    },
+  },
+  {
+    wait: 400,
+    ev: { kind: "notice", level: "warn", text: "工作树里有未提交的改动，退避补丁会叠在上面。" },
+  },
   {
     wait: 600,
     ev: {
@@ -231,6 +289,56 @@ export class MockPort implements AgentPort {
     return [
       { ref: "deepseek/deepseek-v4-pro", provider: "deepseek", model: "deepseek-v4-pro", active: true },
       { ref: "deepseek/deepseek-v4-flash", provider: "deepseek", model: "deepseek-v4-flash" },
+    ];
+  }
+
+  async mcp(): Promise<McpEntry[]> {
+    return [
+      {
+        name: "time",
+        state: "ready",
+        transport: "stdio",
+        source: "built-in",
+        tools: 2,
+        toolNames: ["get_current_time", "convert_time"],
+      },
+      { name: "context7", state: "idle", tools: 0 },
+      { name: "figma", state: "failed", transport: "http", tools: 0, error: "401 unauthorized" },
+    ];
+  }
+
+  async workspaces(): Promise<WorkspaceInfo> {
+    return {
+      current: this.state.workspaceRoot ?? "",
+      canSwitch: true,
+      canIsolate: true,
+      recents: [
+        { path: "~/projects/reasonix-site", name: "reasonix-site" },
+        { path: "~/work/notes", name: "notes" },
+      ],
+    };
+  }
+
+  async setWorkspace(path: string) {
+    this.state.workspaceRoot = path;
+    this.state.cwd = path;
+    await this.newSession();
+  }
+
+  async isolateWorkspace() {
+    await this.setWorkspace((this.state.workspaceRoot ?? "") + " (隔离副本)");
+  }
+
+  async pickFolder() {
+    return "";
+  }
+
+  async slash(): Promise<SlashEntry[]> {
+    return [
+      { name: "commit", kind: "command", description: "把当前改动整理成一条提交", argHint: "[范围]" },
+      { name: "review", kind: "skill", description: "复核这一轮改动，给出严重度分级", scope: "project", subagent: true },
+      { name: "init", kind: "skill", description: "为这个仓库生成一份项目说明", scope: "builtin" },
+      { name: "security-review", kind: "skill", description: "只读地过一遍安全面", scope: "builtin", subagent: true },
     ];
   }
 

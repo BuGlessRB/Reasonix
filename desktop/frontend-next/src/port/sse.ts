@@ -1,4 +1,4 @@
-import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus } from "./port";
+import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpEntry, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 
 // Must match wailsEventName / replayPath in desktop/next.
@@ -7,6 +7,12 @@ const WAILS_REPLAY = "/rx-replay";
 
 interface WailsBus {
   EventsOn(name: string, cb: (data: string) => void): () => void;
+}
+
+// Wails publishes bound methods at window.go.<package>.<Struct>.<Method>; the
+// shell's package is main and the struct is App. Absent in a browser tab.
+interface WailsBind {
+  go?: { main?: { App?: { PickWorkspace?: () => Promise<string> } } };
 }
 
 export class SsePort implements AgentPort {
@@ -46,6 +52,31 @@ export class SsePort implements AgentPort {
   async models() {
     const r = await this.get<{ models?: ModelEntry[] }>("/models");
     return r.models ?? [];
+  }
+
+  slash() {
+    return this.get<SlashEntry[]>("/slash");
+  }
+
+  mcp() {
+    return this.get<McpEntry[]>("/mcp");
+  }
+
+  workspaces() {
+    return this.get<WorkspaceInfo>("/workspaces");
+  }
+
+  setWorkspace(path: string) {
+    return this.post("/workspace", { path });
+  }
+
+  isolateWorkspace() {
+    return this.post("/workspace", { isolate: true });
+  }
+
+  async pickFolder() {
+    const bind = (window as unknown as WailsBind).go?.main?.App?.PickWorkspace;
+    return bind ? ((await bind()) ?? "") : "";
   }
 
   sessions() {

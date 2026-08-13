@@ -1,22 +1,24 @@
-import type { JobEntry } from "../port/port";
+import type { JobEntry, McpEntry } from "../port/port";
 import type { Item, Metrics as M, PlanStep } from "../state/session";
 import { Plan } from "./Plan";
 import { Cache } from "./panels/Cache";
 import { Agents } from "./panels/Agents";
 import { Jobs } from "./panels/Jobs";
 import { Files } from "./panels/Files";
+import { Mcp } from "./panels/Mcp";
 
 interface Props {
   metrics: M;
   plan: PlanStep[];
   items: Item[];
   jobs: JobEntry[];
+  mcp: McpEntry[];
   rate: number;
   yolo: boolean;
   onFold: () => void;
 }
 
-export function Metrics({ metrics, plan, items, jobs, rate, yolo, onFold }: Props) {
+export function Metrics({ metrics, plan, items, jobs, mcp, rate, yolo, onFold }: Props) {
   return (
     <>
       <div className="side-hd">
@@ -29,6 +31,7 @@ export function Metrics({ metrics, plan, items, jobs, rate, yolo, onFold }: Prop
         <Cache metrics={metrics} rate={rate} />
         <Agents items={items} />
         <Jobs jobs={jobs} />
+        <Mcp servers={mcp} />
         <Plan steps={plan} />
         <Files items={items} yolo={yolo} />
       </div>

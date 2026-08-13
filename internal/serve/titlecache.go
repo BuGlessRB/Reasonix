@@ -33,6 +33,20 @@ func newTitleCache(dir string) *titleCache {
 	return &titleCache{dir: dir, entries: map[string]titleEntry{}}
 }
 
+// setDir repoints the cache at another session directory and drops what was
+// loaded from the previous one: entries are keyed by file name, which is unique
+// within a project and not across them.
+func (c *titleCache) setDir(dir string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.dir == dir {
+		return
+	}
+	c.dir = dir
+	c.loaded = false
+	c.entries = map[string]titleEntry{}
+}
+
 func (c *titleCache) load() {
 	if c.loaded {
 		return

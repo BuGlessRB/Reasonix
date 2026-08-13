@@ -1,4 +1,5 @@
 import type { CompletionSummary } from "../../port/wire";
+import { Sym } from "../Sym";
 
 type Lvl = "ok" | "warn" | "err" | "";
 type Row = { k: string; t: string; why?: string; lvl: Lvl };
@@ -43,11 +44,10 @@ function rowsOf(c: CompletionSummary): Row[] {
 
 export function CompletionCard({ c }: { c: CompletionSummary }) {
   const rows = rowsOf(c);
-  const worst = rows.some((r) => r.lvl === "err") ? "!" : rows.some((r) => r.lvl === "warn") ? "·" : "✓";
   return (
     <div className="call">
       <div className="g">
-        <span className="sym">{worst}</span>
+        <Sym glyph="✓" />
         <span className="line" />
       </div>
       <div className="c">

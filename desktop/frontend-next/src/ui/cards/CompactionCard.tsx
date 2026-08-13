@@ -1,4 +1,5 @@
 import type { Compaction } from "../../port/wire";
+import { Sym } from "../Sym";
 
 const TRIGGER: Record<string, string> = {
   auto: "上下文到阈值，自动触发",
@@ -12,7 +13,7 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
   return (
     <div className="call">
       <div className="g">
-        <span className="sym">⊘</span>
+        <Sym glyph="⊘" />
         <span className="line" />
       </div>
       <div className="c">

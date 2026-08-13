@@ -1,13 +1,42 @@
+import { useEffect, useRef, useState } from "react";
 import type { Tool } from "../../port/wire";
-import { categoryOf, iconFor, labelFor, runLabelFor } from "../icons";
+import { categoryOf, labelFor, mcpOrigin, runLabelFor } from "../icons";
+import { Sym, glyphFor } from "../Sym";
 import { shortArgs } from "../args";
 import { DiffView } from "./DiffView";
+import { Term, ToolOutput } from "./ToolOutput";
+
+// The spec pops a symbol as it settles — colour arriving is the finish signal.
+// Only the transition may fire it: a restored transcript is all settled cards,
+// and marking them done would pop the whole page on load.
+// The head crossfades before it swaps: "「正在读取…」→「读了 7 个文件」是这一步
+// 唯一的状态跃迁，别用 0ms 换掉它". 90ms out, then the settled text.
+const SWAP = 90;
+
+function useSettling(running: boolean): { pop: boolean; swap: boolean } {
+  const [pop, setPop] = useState(false);
+  const [swap, setSwap] = useState(false);
+  const was = useRef(running);
+  useEffect(() => {
+    const fell = was.current && !running;
+    was.current = running;
+    if (!fell) return;
+    setPop(true);
+    setSwap(true);
+    const a = setTimeout(() => setSwap(false), SWAP);
+    const b = setTimeout(() => setPop(false), 340);
+    return () => {
+      clearTimeout(a);
+      clearTimeout(b);
+    };
+  }, [running]);
+  return { pop, swap };
+}
 
 export function ToolCard({ tool, running, children = [] }: { tool: Tool; running: boolean; children?: Tool[] }) {
   // use_capability is the proxy the model reaches a capability through, not the
   // thing it did: name the resolved tool and keep the proxy in the tag.
   const shown = tool.resolvedName || tool.name;
-  const Sym = iconFor(shown);
   const cost = tool.durationMs ? `${(tool.durationMs / 1000).toFixed(1)}s` : "";
   // Running and settled are two different lines: the category says what it is
   // doing now, the label says what it was once it is done.
@@ -20,18 +49,22 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
   // The number is the actionable half; the state only says that something went
   // wrong, which the colour already says.
   const badLabel = !ex ? "" : (ex.exitCode ?? 0) !== 0 ? `exit ${ex.exitCode}` : (ex.state ?? "");
+  // Which server answered belongs on the card, not in a panel: this is the
+  // moment the user can judge whether an external service should have run.
+  const from = mcpOrigin(shown);
+  const invoked = mcpOrigin(tool.name);
+  const settling = useSettling(running);
   return (
     <div className="call" data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined} data-running={running ? "" : undefined}>
       <div className="g">
-        <span className="sym">
-          <Sym aria-hidden="true" />
-        </span>
+        <Sym glyph={glyphFor(shown)} done={settling.pop} />
         <span className="line" />
       </div>
       <div className="c">
-        <div className="hl">
+        <div className="hl" data-swap={settling.swap ? "" : undefined}>
           <span className={running ? "nm shim" : "nm"}>{head}</span>
-          <span className="tag">{tool.name}</span>
+          {from && <span className="src" title={`外部服务 ${from.server} 提供的工具`}>{from.server}</span>}
+          <span className="tag">{invoked ? invoked.tool : tool.name}</span>
           {arg && <span className="arg">{arg}</span>}
           {bad && <span className="fail">{badLabel}</span>}
           {cost && <span className="cost">{cost}</span>}
@@ -40,7 +73,7 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
           {tool.diff && <DiffView diff={tool.diff} path={tool.args} />}
           {!tool.diff && tool.name === "todo_write" && <span className="fold">计划已进右栏</span>}
           {!tool.diff && tool.name !== "todo_write" && tool.output && (
-            <Output name={shown} text={tool.output} />
+            <ToolOutput name={shown} text={tool.output} />
           )}
           {tool.err && <div className="txt">{tool.err}</div>}
           {children.length > 0 && (
@@ -64,13 +97,10 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
 }
 
 function NestedCall({ tool }: { tool: Tool }) {
-  const Sym = iconFor(tool.name);
   return (
     <div className="call">
       <div className="g">
-        <span className="sym">
-          <Sym aria-hidden="true" />
-        </span>
+        <Sym glyph={glyphFor(tool.name)} />
         <span className="line" />
       </div>
       <div className="c">
@@ -85,53 +115,6 @@ function NestedCall({ tool }: { tool: Tool }) {
         )}
       </div>
     </div>
-  );
-}
-
-// read_file numbers every line it returns ("  1→…"), so the count is already
-// in the output. A whole file inline buries the rest of the turn, so anything
-// long folds behind what it is.
-const NUMBERED = /^\s*\d+→/;
-
-function Output({ name, text }: { name: string; text: string }) {
-  const numbered = text.split("\n").filter((l) => NUMBERED.test(l)).length;
-  if (name !== "read_file" || numbered <= 12) return <Term text={text} />;
-  return (
-    <details>
-      <summary>
-        <span className="fold">读了 {numbered} 行</span>
-      </summary>
-      <Term text={text} />
-    </details>
-  );
-}
-
-// The terminal fills in line by line: the first few land on the beat, the rest
-// tighten up so a long block still finishes inside SETTLED.
-const HEAD = 5;
-const BEAT = 34;
-const TIGHT = 8;
-const SETTLED = 700;
-// Past this, splitting into one node per line costs more than the entrance is
-// worth, so the block arrives whole.
-const SPLIT_MAX = 300;
-
-function Term({ text }: { text: string }) {
-  const lines = text.split("\n");
-  if (lines.length > SPLIT_MAX) return <pre className="term">{text}</pre>;
-  return (
-    <pre className="term">
-      {lines.map((l, i) => (
-        <span
-          className="term-l"
-          key={i}
-          style={{ animationDelay: `${Math.min(i < HEAD ? i * BEAT : HEAD * BEAT + (i - HEAD) * TIGHT, SETTLED)}ms` }}
-        >
-          {l}
-          {i < lines.length - 1 ? "\n" : ""}
-        </span>
-      ))}
-    </pre>
   );
 }
 

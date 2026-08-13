@@ -138,15 +138,6 @@ export function Sessions({ port, status, list, reload, run, cost, onError, onFol
           {shown.length === 0 && <div className="ws-empty">还没有会话</div>}
         </div>
       </div>
-
-      <div className="railfoot">
-        <button className="lnk" disabled title="需要内核提供隔离工作区接口">
-          ⑂ 拉隔离副本
-        </button>
-        <button className="lnk" disabled title="需要内核提供目录授权接口">
-          ＋ 授权目录
-        </button>
-      </div>
     </>
   );
 }

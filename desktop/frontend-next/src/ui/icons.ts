@@ -1,57 +1,3 @@
-import {
-  Bookmark,
-  Check,
-  CircleHelp,
-  FilePen,
-  FileText,
-  Folder,
-  FolderSearch,
-  GitBranch,
-  Globe,
-  Hash,
-  ListChecks,
-  Plug,
-  ScanSearch,
-  Search,
-  ShieldCheck,
-  Shrink,
-  SquareCheck,
-  SquareTerminal,
-  Target,
-  type LucideIcon,
-} from "lucide-react";
-
-const BY_TOOL: Record<string, LucideIcon> = {
-  web_search: Globe,
-  web_fetch: Globe,
-  task: GitBranch,
-  edit_file: FilePen,
-  write_file: FilePen,
-  multi_edit: FilePen,
-  use_capability: Plug,
-  remember: Bookmark,
-  bash: SquareTerminal,
-  bash_output: SquareTerminal,
-  kill_shell: SquareTerminal,
-  wait: SquareTerminal,
-  read_file: FileText,
-  grep: Search,
-  glob: FolderSearch,
-  ls: Folder,
-  todo_write: ListChecks,
-  code_index: Hash,
-  complete_step: SquareCheck,
-  compress: Shrink,
-  update_goal: Target,
-  review_report: ScanSearch,
-  guardian_assessment: ShieldCheck,
-  ask: CircleHelp,
-};
-
-export const iconFor = (tool: string): LucideIcon => BY_TOOL[tool] ?? FileText;
-
-export const DONE = Check;
-
 // The spec names a call by what it is — Search, Update, Read — and derives the
 // running line from its category, so a new tool needs no new copy. The raw id
 // is still on the row, in the tag beside the name.
@@ -63,6 +9,12 @@ const LABEL: Record<string, string> = {
   todo_write: "Plan", remember: "Remember", use_capability: "MCP",
   code_index: "Index", complete_step: "Step", review_report: "Review",
   update_goal: "Goal", guardian_assessment: "Guardian", compress: "Compress",
+  // Checked against the kernel's registered names, not guessed: these all ship
+  // and were rendering as their raw id under a default icon.
+  delete_range: "Delete", delete_symbol: "Delete", move_file: "Move",
+  notebook_edit: "Notebook", submit_plan: "Plan", ask: "Ask",
+  fleet: "Fleet", read_only_task: "Task", read_subagent_result: "Result",
+  complete_subtask: "Subtask", lsp_diagnostics: "Diagnostics",
 };
 
 const RUNNING: Record<string, string> = {
@@ -76,14 +28,31 @@ export function runLabelFor(tool: string) {
   return RUNNING[categoryOf(tool)] ?? "正在处理…";
 }
 
+// A tool that changes the tree has to read as one. delete_range, delete_symbol,
+// move_file and notebook_edit all mutate and were falling through to the neutral
+// "sys" bucket — the colour is the only warning the row carries.
+const WRITE = new Set(["delete_range", "delete_symbol", "move_file", "notebook_edit"]);
+const DELEG = new Set(["task", "fleet", "read_only_task", "read_subagent_result", "complete_subtask"]);
+const READ = new Set(["read_file", "grep", "glob", "ls", "code_index", "lsp_diagnostics"]);
+
+// MCP tools are registered as mcp__<server>__<tool>. Which server answered is
+// the one thing a raw id hides and the user needs: it is the difference between
+// the agent reading your disk and an external service doing it.
+export function mcpOrigin(tool: string): { server: string; tool: string } | null {
+  if (!tool.startsWith("mcp__")) return null;
+  const at = tool.indexOf("__", 5);
+  if (at < 0) return null;
+  return { server: tool.slice(5, at), tool: tool.slice(at + 2) };
+}
+
 export function categoryOf(tool: string): string {
   if (tool === "web_search" || tool === "web_fetch") return "net";
-  if (tool === "task") return "deleg";
-  if (tool.startsWith("edit") || tool.startsWith("write") || tool.startsWith("multi")) return "write";
-  if (tool === "use_capability") return "mcp";
+  if (DELEG.has(tool)) return "deleg";
+  if (WRITE.has(tool) || tool.startsWith("edit") || tool.startsWith("write") || tool.startsWith("multi")) return "write";
+  if (tool === "use_capability" || tool.startsWith("mcp__")) return "mcp";
   if (tool === "remember") return "mem";
-  if (tool === "todo_write") return "plan";
+  if (tool === "todo_write" || tool === "submit_plan") return "plan";
   if (tool === "bash" || tool.startsWith("bash_") || tool === "kill_shell") return "bash";
-  if (tool === "read_file" || tool === "grep" || tool === "glob" || tool === "ls") return "read";
+  if (READ.has(tool)) return "read";
   return "sys";
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { AgentPort, ApprovalVerdict, ProviderSetup, SessionEntry, SessionStatus } from "../port/port";
+import type { AgentPort, ApprovalVerdict, McpEntry, ProviderSetup, SessionEntry, SessionStatus } from "../port/port";
 import { fromHistory, initialState, quoteAmount, reduce } from "../state/session";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { Chrome } from "./Chrome";
@@ -25,6 +25,7 @@ export function App({ port }: { port: AgentPort }) {
   const [theme, setTheme] = useState(() => localStorage.getItem("rx-theme") ?? "auto");
   const [setup, setSetup] = useState<ProviderSetup | null | undefined>(undefined);
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
+  const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const flow = useRef<HTMLDivElement>(null);
   const startedAt = useRef(0);
@@ -79,12 +80,29 @@ export function App({ port }: { port: AgentPort }) {
     void port.sessions().then(setSessions).catch(() => setSessions([]));
   }, [port]);
 
+  // Everything on screen belongs to one session; when the kernel moves to
+  // another one — a switch, a new session, a whole new workspace — all of it
+  // has to be re-read rather than patched.
+  const reloadSession = useCallback(() => {
+    refreshStatus();
+    reloadSessions();
+    trajDispatch({ kind: "__clear" } as never);
+    port.trajectory().then((evs) => evs.forEach((e) => trajDispatch(e))).catch(() => {});
+    port.history().then((msgs) => {
+      const r = fromHistory(msgs);
+      dispatch({ kind: "__restore", items: r.items, plan: r.plan, hit: 0, miss: 0 } as never);
+    });
+  }, [port, refreshStatus, reloadSessions]);
+
   // The shell deliberately mints no session file at launch, so the list starts
   // empty and the first turn is what creates one — and its title only exists
   // once that turn is on disk. Re-read when the session changes or a run ends.
+  // An MCP server connects lazily and fails at first use, so a turn boundary is
+  // also when its status can have changed — no timer of its own needed.
   useEffect(() => {
     reloadSessions();
-  }, [reloadSessions, status?.sessionPath, s.running]);
+    void port.mcp().then(setMcp).catch(() => setMcp([]));
+  }, [port, reloadSessions, status?.sessionPath, s.running]);
 
   // /status is the only source for background jobs and for settings the run does
   // not echo, so a live turn has to re-read it rather than infer from events.
@@ -199,6 +217,8 @@ export function App({ port }: { port: AgentPort }) {
         onTheme={setTheme}
         onSettings={() => setSettings(true)}
         onChanged={refreshStatus}
+        onWorkspace={reloadSession}
+        onError={fail}
       />
 
       <div className="cols">
@@ -212,16 +232,7 @@ export function App({ port }: { port: AgentPort }) {
             cost={`${s.metrics.currency}${s.metrics.cost.toFixed(2)}`}
             onError={fail}
             onFold={() => setRail(false)}
-            onSwitched={() => {
-              refreshStatus();
-              reloadSessions();
-              trajDispatch({ kind: "__clear" });
-              port.trajectory().then((evs) => evs.forEach((e) => trajDispatch(e))).catch(() => {});
-              port.history().then((msgs) => {
-                const r = fromHistory(msgs);
-                dispatch({ kind: "__restore", items: r.items, plan: r.plan, hit: 0, miss: 0 } as never);
-              });
-            }}
+            onSwitched={reloadSession}
           />
         </div>
 
@@ -292,6 +303,7 @@ export function App({ port }: { port: AgentPort }) {
             plan={s.plan}
             items={s.items}
             jobs={status?.jobs ?? []}
+            mcp={mcp}
             rate={elapsed >= 1 ? s.metrics.out / elapsed : 0}
             yolo={yolo}
             onFold={() => setSide(false)}

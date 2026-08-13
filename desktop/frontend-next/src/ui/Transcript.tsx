@@ -9,6 +9,9 @@ import { AskCard } from "./cards/AskCard";
 import { SayCard } from "./cards/SayCard";
 import { CompactionCard } from "./cards/CompactionCard";
 import { CompletionCard } from "./cards/CompletionCard";
+import { ReadsCard } from "./cards/ReadsCard";
+import { UserCard } from "./cards/UserCard";
+import { NoticeCard } from "./cards/NoticeCard";
 
 interface Props {
   items: Item[];
@@ -72,23 +75,7 @@ const Row = memo(function Row({
 }) {
   switch (it.t) {
     case "user":
-      return (
-        <div className="call" data-k="me" data-pending={it.pending ? "" : undefined}>
-          <div className="g">
-            <span className="sym">你</span>
-            <span className="line" />
-          </div>
-          <div className="c">
-            <div className="hl">
-              <span className="nm">我</span>
-              {it.pending && <span className="pend">排队中 · 下一个工具边界送达</span>}
-            </div>
-            <div className="out">
-              <div className="txt">{it.text}</div>
-            </div>
-          </div>
-        </div>
-      );
+      return <UserCard item={it} />;
     case "say":
       // Reasoning arrives long before the first answer token on a thinking
       // model. Gating the card on text meant all of it stayed invisible and
@@ -102,6 +89,8 @@ const Row = memo(function Row({
       return it.tool.name === "ask" ? null : (
         <ToolCard tool={it.tool} running={it.running} children={it.children} />
       );
+    case "reads":
+      return <ReadsCard tools={it.tools} />;
     case "guardian":
       return <GuardianCard g={it.g} />;
     case "approval":
@@ -113,19 +102,7 @@ const Row = memo(function Row({
     case "completion":
       return <CompletionCard c={it.c} />;
     case "notice":
-      return (
-        <div className="call">
-          <div className="g">
-            <span className="sym">·</span>
-            <span className="line" />
-          </div>
-          <div className="c">
-            <div className="out">
-              <div className="txt">{it.text}</div>
-            </div>
-          </div>
-        </div>
-      );
+      return <NoticeCard item={it} />;
   }
 });
 

@@ -1,4 +1,5 @@
 import type { Item } from "../../state/session";
+import { Sym } from "../Sym";
 import type { ApprovalVerdict } from "../../port/port";
 
 interface Props {
@@ -13,7 +14,7 @@ export function ApprovalCard({ item, onApprove }: Props) {
   return (
     <div className="call" data-k="ask">
       <div className="g">
-        <span className="sym">?</span>
+        <Sym glyph="?" />
         <span className="line" />
       </div>
       <div className="c">
