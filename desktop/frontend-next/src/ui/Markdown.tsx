@@ -61,7 +61,9 @@ function useKatex(needed: boolean): Plugin | null {
     let alive = true;
     loading ??= Promise.all([import("rehype-katex"), import("katex/dist/katex.min.css")]).then(
       ([mod]) => {
-        katex = mod.default;
+        // Red source text beats an exception: the message stays readable and
+        // the render cannot take the window down with it.
+        katex = [mod.default, { throwOnError: false }];
       },
     );
     // A failed chunk leaves the math as source text, which still reads.

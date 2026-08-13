@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Item } from "../../state/session";
 import { Markdown } from "../Markdown";
+import { Boundary } from "../Boundary";
 
 export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {
   const [open, setOpen] = useState(true);
@@ -27,7 +28,9 @@ export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {
           )}
           {item.text && (
             <div className="txt">
-              <Markdown text={item.text} streaming={!item.done} />
+              <Boundary fallback={<div className="md">{item.text}</div>}>
+                <Markdown text={item.text} streaming={!item.done} />
+              </Boundary>
             </div>
           )}
         </div>
