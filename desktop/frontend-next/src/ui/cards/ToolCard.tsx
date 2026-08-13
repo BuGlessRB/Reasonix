@@ -1,5 +1,5 @@
 import type { Tool } from "../../port/wire";
-import { iconFor } from "../icons";
+import { categoryOf, iconFor, labelFor, runLabelFor } from "../icons";
 import { shortArgs } from "../args";
 import { DiffView } from "./DiffView";
 
@@ -9,9 +9,12 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
   const shown = tool.resolvedName || tool.name;
   const Sym = iconFor(shown);
   const cost = tool.durationMs ? `${(tool.durationMs / 1000).toFixed(1)}s` : "";
+  // Running and settled are two different lines: the category says what it is
+  // doing now, the label says what it was once it is done.
+  const head = running ? runLabelFor(shown) : labelFor(shown);
   const arg = tool.name === "todo_write" ? "" : shortArgs(tool.args ?? "");
   return (
-    <div className="call" data-k={kindOf(tool.name)} data-running={running ? "" : undefined}>
+    <div className="call" data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined} data-running={running ? "" : undefined}>
       <div className="g">
         <span className="sym">
           <Sym aria-hidden="true" />
@@ -20,7 +23,7 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
       </div>
       <div className="c">
         <div className="hl">
-          <span className={running ? "nm shim" : "nm"}>{running ? "正在执行…" : shown}</span>
+          <span className={running ? "nm shim" : "nm"}>{head}</span>
           <span className="tag">{tool.name}</span>
           {arg && <span className="arg">{arg}</span>}
           {cost && <span className="cost">{cost}</span>}
@@ -75,11 +78,5 @@ function NestedCall({ tool }: { tool: Tool }) {
   );
 }
 
-function kindOf(name: string) {
-  if (name === "web_search" || name === "web_fetch") return "net";
-  if (name === "task") return "deleg";
-  if (name.startsWith("edit") || name.startsWith("write") || name.startsWith("multi")) return "write";
-  if (name === "use_capability") return "mcp";
-  if (name === "remember") return "mem";
-  return "";
-}
+// Only the categories the spec gives a colour to; the rest stay neutral.
+const KINDED = new Set(["net", "deleg", "write", "mcp", "mem"]);
