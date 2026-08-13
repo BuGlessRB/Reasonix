@@ -28,6 +28,7 @@ type Entry struct {
 	Event         Event
 	Match         string
 	Command       string
+	Cwd           string
 	ContextFile   string
 	Description   string
 	Timeout       int
@@ -147,6 +148,7 @@ func appendInspectEntries(out *Inspection, s *Settings, scope Scope, source stri
 					Event:         event,
 					Match:         cfg.Match,
 					Command:       cfg.Command,
+					Cwd:           cfg.Cwd,
 					ContextFile:   cfg.ContextFile,
 					Description:   cfg.Description,
 					Timeout:       cfg.Timeout,
@@ -214,6 +216,7 @@ func appendPluginInspect(out *Inspection, reasonixHomeDir, projectRoot string) {
 					Event:         event,
 					Match:         h.Match,
 					Command:       execution.Command,
+					Cwd:           execution.Cwd,
 					ContextFile:   contextFile,
 					Description:   h.Description,
 					Timeout:       h.Timeout,

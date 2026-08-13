@@ -176,6 +176,10 @@ type Capabilities interface {
 	UpdateSkill(name string, scope skill.Scope, content string) error
 	DeleteSkill(name string, scope skill.Scope) error
 	HookRunner() *hook.Runner
+	InspectHooks() hook.Inspection
+	SaveHooks(scope hook.Scope, settings hook.Settings) error
+	DryRunHook(ctx context.Context, cfg hook.HookConfig, event hook.Event) (hook.DryRunResult, error)
+	HookSettingsPath(scope hook.Scope) string
 	CustomCommand(input string) (sent string, found bool)
 	MCPPrompt(ctx context.Context, input string) (sent string, found bool, err error)
 	RunSkill(input string) (sent string, found bool)

@@ -48,15 +48,42 @@ func NewRunner(hooks []ResolvedHook, cwd string, spawner Spawner, notify func(st
 }
 
 // Hooks returns the resolved hooks (for `/hooks` listing).
-func (r *Runner) Hooks() []ResolvedHook {
+func (r *Runner) Hooks() []ResolvedHook { return r.snapshot() }
+
+// Replace swaps the hook set a live session fires. Editing hooks has to reach
+// the open session: a rule the user just fixed that only applies after a restart
+// is indistinguishable from one that does not work.
+func (r *Runner) Replace(hooks []ResolvedHook) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.hooks = hooks
+	r.mu.Unlock()
+}
+
+// Spawner is the interpreter binding this session's hooks already run under, so
+// a dry run resolves the same bash the real invocation would.
+func (r *Runner) Spawner() Spawner {
 	if r == nil {
 		return nil
 	}
+	return r.spawner
+}
+
+// snapshot reads the hook set under the lock, since Replace may run while a turn
+// is firing hooks.
+func (r *Runner) snapshot() []ResolvedHook {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.hooks
 }
 
 // Enabled reports whether any hooks are configured.
-func (r *Runner) Enabled() bool { return r != nil && len(r.hooks) > 0 }
+func (r *Runner) Enabled() bool { return len(r.snapshot()) > 0 }
 
 // Has reports whether any configured hook listens for the given event. Callers
 // use it to skip work that only matters when a specific hook exists (e.g. the
@@ -65,7 +92,7 @@ func (r *Runner) Has(event Event) bool {
 	if r == nil {
 		return false
 	}
-	for _, h := range r.hooks {
+	for _, h := range r.snapshot() {
 		if h.Event == event {
 			return true
 		}
@@ -92,7 +119,7 @@ func (r *Runner) PreToolUse(ctx context.Context, name string, args json.RawMessa
 	}
 	p := r.payload(PreToolUse)
 	p.ToolName, p.ToolArgs = name, args
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, r.snapshot(), r.spawner)
 	return r.handle(rep)
 }
 
@@ -104,7 +131,7 @@ func (r *Runner) PostToolUse(ctx context.Context, name string, args json.RawMess
 	}
 	p := r.payload(PostToolUse)
 	p.ToolName, p.ToolArgs, p.ToolResult = name, args, result
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, r.snapshot(), r.spawner)
 	r.handle(rep)
 }
 
@@ -119,7 +146,7 @@ func (r *Runner) PostToolUseFailure(ctx context.Context, name string, args json.
 		p.Error = err.Error()
 		p.IsInterrupt = errors.Is(err, context.Canceled)
 	}
-	r.handle(Run(ctx, p, r.hooks, r.spawner))
+	r.handle(Run(ctx, p, r.snapshot(), r.spawner))
 	// Native Reasonix PostToolUse historically observed both success and
 	// failure. Preserve that contract while Claude hooks use the distinct event.
 	legacy := r.nativeHooks(PostToolUse)
@@ -142,7 +169,7 @@ func (r *Runner) PermissionRequest(ctx context.Context, name, subject string, ar
 	}
 	p := r.payload(PermissionRequest)
 	p.ToolName, p.ToolArgs, p.Subject = name, args, subject
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, r.snapshot(), r.spawner)
 	block, msg := r.handle(rep)
 	switch {
 	case block:
@@ -164,7 +191,7 @@ func (r *Runner) PromptSubmit(ctx context.Context, prompt string, turn int) (blo
 	}
 	p := r.payload(UserPromptSubmit)
 	p.Prompt, p.Turn = prompt, turn
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, r.snapshot(), r.spawner)
 	return r.handle(rep)
 }
 
@@ -175,7 +202,7 @@ func (r *Runner) Stop(ctx context.Context, lastAssistant string, turn int) {
 	}
 	p := r.payload(Stop)
 	p.LastAssistant, p.Turn = lastAssistant, turn
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, r.snapshot(), r.spawner)
 	r.handle(rep)
 }
 
@@ -191,7 +218,7 @@ func (r *Runner) StopResult(ctx context.Context, lastAssistant string, turn int,
 	p := r.payload(StopFailure)
 	p.LastAssistant, p.Turn, p.Error = lastAssistant, turn, err.Error()
 	p.IsInterrupt = errors.Is(err, context.Canceled)
-	r.handle(Run(ctx, p, r.hooks, r.spawner))
+	r.handle(Run(ctx, p, r.snapshot(), r.spawner))
 	legacy := r.nativeHooks(Stop)
 	if len(legacy) > 0 {
 		p.Event = Stop
@@ -201,7 +228,7 @@ func (r *Runner) StopResult(ctx context.Context, lastAssistant string, turn int,
 
 func (r *Runner) nativeHooks(event Event) []ResolvedHook {
 	var out []ResolvedHook
-	for _, h := range r.hooks {
+	for _, h := range r.snapshot() {
 		if h.Event == event && h.PayloadFormat != "claude" {
 			out = append(out, h)
 		}
@@ -220,7 +247,7 @@ func (r *Runner) SessionStart(ctx context.Context, source ...string) []string {
 	if len(source) > 0 && strings.TrimSpace(source[0]) != "" {
 		p.Source = strings.TrimSpace(source[0])
 	}
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, r.snapshot(), r.spawner)
 	r.handle(rep)
 	return r.additionalContexts(rep)
 }
@@ -235,7 +262,7 @@ func (r *Runner) SessionEnd(ctx context.Context, reason ...string) {
 	if len(reason) > 0 && strings.TrimSpace(reason[0]) != "" {
 		p.Reason = strings.TrimSpace(reason[0])
 	}
-	r.handle(Run(ctx, p, r.hooks, r.spawner))
+	r.handle(Run(ctx, p, r.snapshot(), r.spawner))
 }
 
 // SubagentStop fires when a `task` sub-agent finishes. It can't block; last is
@@ -246,7 +273,7 @@ func (r *Runner) SubagentStop(ctx context.Context, last string) {
 	}
 	p := r.payload(SubagentStop)
 	p.LastAssistant = last
-	r.handle(Run(ctx, p, r.hooks, r.spawner))
+	r.handle(Run(ctx, p, r.snapshot(), r.spawner))
 }
 
 // Notification fires when the agent needs the user's attention (e.g. a pending
@@ -260,7 +287,7 @@ func (r *Runner) Notification(ctx context.Context, message string, notificationT
 	if len(notificationType) > 0 {
 		p.NotificationType = strings.TrimSpace(notificationType[0])
 	}
-	r.handle(Run(ctx, p, r.hooks, r.spawner))
+	r.handle(Run(ctx, p, r.snapshot(), r.spawner))
 }
 
 // PostLLMCall fires after every model turn completes but before the
@@ -274,7 +301,7 @@ func (r *Runner) PostLLMCall(ctx context.Context, reasoning string, turn int) st
 	}
 	p := r.payload(PostLLMCall)
 	p.Reasoning, p.Turn = reasoning, turn
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, r.snapshot(), r.spawner)
 	r.handle(rep)
 	for _, o := range rep.Outcomes {
 		if o.Decision == DecisionPass {
@@ -295,7 +322,7 @@ func (r *Runner) PreCompact(ctx context.Context, trigger string) string {
 	}
 	p := r.payload(PreCompact)
 	p.Trigger = trigger
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, r.snapshot(), r.spawner)
 	r.handle(rep)
 	var b strings.Builder
 	for _, o := range rep.Outcomes {

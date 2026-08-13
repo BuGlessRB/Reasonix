@@ -1,4 +1,4 @@
-import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
+import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 
 // Must match wailsEventName / replayPath in desktop/next.
@@ -64,6 +64,28 @@ export class SsePort implements AgentPort {
 
   setSkillEnabled(name: string, enabled: boolean) {
     return this.post("/skills/enabled", { name, enabled });
+  }
+
+  hooks() {
+    return this.get<HookCatalog>("/hooks");
+  }
+
+  saveHooks(scope: "user" | "project", hooks: HookEntry[]) {
+    return this.post("/hooks", { scope, hooks });
+  }
+
+  // The failure message is the answer here — "command not found" is exactly
+  // what the user is trying to learn — so it is read out of the body.
+  async dryRunHook(h: HookEntry): Promise<HookDryRun> {
+    const res = await fetch(this.base + "/hooks/dry-run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ event: h.event, match: h.match, command: h.command, timeout: h.timeout, cwd: h.cwd }),
+    });
+    const body = (await res.json().catch(() => ({}))) as HookDryRun & { error?: string };
+    if (!res.ok) throw new Error(body.error || `/hooks/dry-run: ${res.status}`);
+    return body;
   }
 
   mcp() {

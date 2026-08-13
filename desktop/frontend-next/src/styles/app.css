@@ -1243,6 +1243,67 @@
   .outcome .nm { font: 500 12.5px var(--ui); color: var(--text) }
   .outcome .dt { font: 400 11.5px var(--ui); color: var(--muted) }
 
+  /* 自动化：成品配方在前，事件表在后。多数人只需要前者，而后者是能挡住
+     agent 的东西 —— 所以它藏在一次点击之后，并且阻断型规则自带警戒线。 */
+  .hooks .scope { max-width: 460px; margin-top: 0 }
+  .hooks .path { margin: 8px 0 0; font: 400 10.5px var(--mono); color: var(--ghost); word-break: break-all }
+  .hooks > .why { margin-top: 9px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
+  .recipes { margin-top: 14px; display: flex; flex-direction: column }
+  .recipe { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--hair) }
+  .recipe:last-of-type { border-bottom: 1px solid var(--hair) }
+  .recipe .tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0 }
+  .recipe .lb { font: 400 12.5px var(--ui); color: var(--text) }
+  .recipe .ds { font: 400 11px/1.55 var(--ui); color: var(--faint) }
+
+  .more {
+    margin-top: 14px; display: flex; align-items: baseline; gap: 10px; padding: 0;
+    border: 0; background: none; color: var(--muted); font: 400 12px var(--ui); cursor: pointer;
+  }
+  .more:hover { color: var(--text) }
+  .more .c { font: 400 10.5px var(--mono); color: var(--ghost) }
+  .more:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--r-xs) }
+
+  .expert { margin-top: 12px; display: flex; flex-direction: column; gap: 10px }
+  .rule { padding: 10px 12px; border: 1px solid var(--hair); border-radius: var(--r-sm) }
+  /* 能挡住 agent 的规则配错了，表现是「这软件卡住了」，用户想不到是自己两周
+     前加的这一条 —— 所以它在编辑当场就要有颜色。 */
+  .rule[data-blocking] { box-shadow: inset 2px 0 var(--warn) }
+  .rule .line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+  .rule .line + .line { margin-top: 8px }
+  .rule select, .rule input {
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--raised); color: var(--text); font: 400 11.5px var(--mono);
+  }
+  .rule select:focus, .rule input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  .rule .match { flex: 1; min-width: 140px }
+  .rule .cmd { display: block; width: 100%; margin-top: 8px }
+  .rule .warn {
+    padding: 1px 6px; border-radius: var(--r-pill); font: 500 10px var(--ui); font-style: normal;
+    color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent);
+  }
+  .rule .note { font: 400 10.5px var(--ui); color: var(--ghost) }
+  .rule .why { margin-top: 6px; font: 400 11px/1.5 var(--ui); color: var(--err) }
+  .rule .act[data-primary] { border-color: var(--accent); background: var(--accent); color: var(--accent-fg) }
+
+  /* 试跑结果说的是后果，不是退出码 —— 退出码只是它右边的旁证 */
+  .dryrun { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-top: 8px }
+  .dryrun b { font: 500 11.5px var(--ui); color: var(--ok) }
+  .dryrun[data-blocks] b { color: var(--err) }
+  .dryrun .meta { font: 400 10.5px var(--mono); color: var(--ghost) }
+  .dryrun .out {
+    flex-basis: 100%; margin-top: 4px; padding: 6px 8px; border-radius: var(--r-xs);
+    background: var(--overlay); font: 400 10.5px/1.6 var(--mono); color: var(--muted);
+    white-space: pre-wrap; word-break: break-all;
+  }
+
+  .fromplugin { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--hair) }
+  .fromplugin .lb { font: 400 11px var(--ui); color: var(--faint) }
+  .prow { display: flex; align-items: baseline; gap: 10px; margin-top: 6px }
+  .prow .ev { flex: none; min-width: 128px; font: 400 11px var(--mono); color: var(--muted) }
+  .prow .cm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 400 11px var(--mono); color: var(--faint) }
+  .prow .sc { flex: none; font: 400 10.5px var(--mono); color: var(--ghost) }
+
   /* 名字 + 说明 + 归属的三列行。能打的那串是机器字面量，说明是给人读的，
      两种字体是有意的对比；定宽名字列让说明在整张表里对齐。 */
   .lrow { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--hair) }

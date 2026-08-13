@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 import { AddServer } from "./AddServer";
+import { Hooks } from "./Hooks";
 
 const PRESETS: [Preset, string, string][] = [
   ["light", "轻量", "简单就直接做，只做针对性验证，高风险才叫独立复核"],
@@ -24,12 +25,13 @@ const THEMES: [string, string][] = [
   ["dark", "深色"],
 ];
 
-type Section = "session" | "model" | "tools" | "ext" | "appearance" | "advanced";
+type Section = "session" | "model" | "tools" | "hooks" | "ext" | "appearance" | "advanced";
 
 const NAV: [Section, string][] = [
   ["session", "会话"],
   ["model", "模型"],
   ["tools", "工具与权限"],
+  ["hooks", "自动化"],
   ["ext", "扩展"],
   ["appearance", "外观"],
   ["advanced", "高级"],
@@ -39,7 +41,7 @@ const SCOPE: Record<string, string> = { project: "项目", custom: "自定义", 
 
 // What still lives in the old desktop app. Bots and theme packs are not on the
 // roadmap, so they are not promises to keep here either.
-const ELSEWHERE = ["Hooks", "记忆", "网络与代理", "账号与更新"];
+const ELSEWHERE = ["记忆", "网络与代理", "账号与更新"];
 
 // The user's question is "is it there and does it work", so the state is the
 // label. A failed server keeps its error on the row that names it.
@@ -68,10 +70,12 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
   const [implicit, setImplicit] = useState(true);
   const [busy, setBusy] = useState("");
   const [adding, setAdding] = useState(false);
+  const [hookCount, setHookCount] = useState(0);
   const root = useRef<HTMLDivElement>(null);
 
   const reloadExt = useCallback(() => {
     port.mcp().then(setMcp).catch(() => setMcp([]));
+    port.hooks().then((c) => setHookCount(c.hooks.length)).catch(() => setHookCount(0));
     port
       .skills()
       .then((c) => {
@@ -117,6 +121,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
     session: status?.plan ? "计划模式" : preset,
     model: status?.modelRef?.split("/").pop() ?? "—",
     tools: approval,
+    hooks: hookCount ? `${hookCount} 条` : "关",
     ext: broken ? `${broken} 个异常` : `${mcp.length + skillsOn}`,
     appearance: THEMES.find(([id]) => id === theme)?.[1] ?? "",
     advanced: "",
@@ -203,6 +208,15 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
                 <Row key={id} on={status?.toolApprovalMode === id} busy={busy === id} danger={id === "yolo"}
                   label={name} desc={desc} onClick={() => run(id, () => port.setApprovalMode(id))} />
               ))}
+            </Group>
+          )}
+
+          {at === "hooks" && (
+            <Group
+              title="自动化"
+              hint="在 agent 干活的前后插进你自己的命令。它们跑在你的机器上，用你的权限 —— 挡得住 agent 的那两个事件在下面会标出来。"
+            >
+              <Hooks port={port} onChanged={afterExtChange} />
             </Group>
           )}
 
