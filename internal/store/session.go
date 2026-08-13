@@ -25,7 +25,8 @@ func IsSessionTranscriptName(name string) bool {
 	return strings.HasSuffix(name, ".jsonl") &&
 		!strings.HasSuffix(name, ".events.jsonl") &&
 		!strings.HasSuffix(name, ".conflicts.jsonl") &&
-		!strings.HasSuffix(name, ".guardian.jsonl")
+		!strings.HasSuffix(name, ".guardian.jsonl") &&
+		!strings.HasSuffix(name, ".wire.jsonl")
 }
 
 // SessionRecoveryState is the persisted Auto-mode recovery checkpoint state
@@ -80,6 +81,17 @@ func SessionEventLog(sessionPath string) string {
 		return ""
 	}
 	return sessionStem(sessionPath) + ".events.jsonl"
+}
+
+// SessionWireLog is the frontend event-frame log (<id>.wire.jsonl) that lets a
+// reopened session rebuild its trajectory pane. Like the other .jsonl sidecars
+// it must stay excluded from IsSessionTranscriptName, or a directory scan
+// resurrects it as a phantom session.
+func SessionWireLog(sessionPath string) string {
+	if sessionPath == "" {
+		return ""
+	}
+	return sessionStem(sessionPath) + ".wire.jsonl"
 }
 
 // SessionEventLogDamaged is the salvage sidecar for event-log bytes that tail
@@ -202,6 +214,7 @@ func SessionSidecarFiles(sessionPath string) []string {
 		SessionMeta(sessionPath),
 		SessionGoalState(sessionPath),
 		SessionEventLog(sessionPath),
+		SessionWireLog(sessionPath),
 		SessionEventLogDamaged(sessionPath),
 		SessionEventIndex(sessionPath),
 		SessionDisplayIndex(sessionPath),

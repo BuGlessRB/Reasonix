@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
+
+	"reasonix/internal/store"
 )
 
 // The trajectory pane is built from wire frames, so the frames are what gets
@@ -31,13 +32,6 @@ type wireLog struct {
 	mu sync.Mutex
 }
 
-func wireLogPath(sessionPath string) string {
-	if strings.TrimSpace(sessionPath) == "" {
-		return ""
-	}
-	return strings.TrimSuffix(sessionPath, filepath.Ext(sessionPath)) + ".wire.jsonl"
-}
-
 // attachWireLog mirrors qualifying broadcast frames to the current session's
 // log. Subscribing is how the SSE handler reads the same stream, so the log
 // sees exactly what a connected client would have.
@@ -48,7 +42,7 @@ func (s *Server) attachWireLog() {
 		for frame := range ch {
 			// Path is read per frame, not cached: /resume and /new swap it
 			// underneath and the next row belongs to the new session.
-			s.wire.write(wireLogPath(s.ctl().SessionPath()), frame)
+			s.wire.write(store.SessionWireLog(s.ctl().SessionPath()), frame)
 		}
 	}()
 }
@@ -82,7 +76,7 @@ func (w *wireLog) write(path string, frame []byte) {
 }
 
 func (s *Server) trajectory(w http.ResponseWriter, _ *http.Request) {
-	path := wireLogPath(s.ctl().SessionPath())
+	path := store.SessionWireLog(s.ctl().SessionPath())
 	if path == "" {
 		writeJSON(w, []any{})
 		return
