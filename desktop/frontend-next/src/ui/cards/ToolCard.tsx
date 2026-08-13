@@ -39,7 +39,9 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
         <div className="out">
           {tool.diff && <DiffView diff={tool.diff} path={tool.args} />}
           {!tool.diff && tool.name === "todo_write" && <span className="fold">计划已进右栏</span>}
-          {!tool.diff && tool.name !== "todo_write" && tool.output && <pre className="term">{tool.output}</pre>}
+          {!tool.diff && tool.name !== "todo_write" && tool.output && (
+            <Output name={shown} text={tool.output} />
+          )}
           {tool.err && <div className="txt">{tool.err}</div>}
           {children.length > 0 && (
             <div className="nest">
@@ -83,6 +85,24 @@ function NestedCall({ tool }: { tool: Tool }) {
         )}
       </div>
     </div>
+  );
+}
+
+// read_file numbers every line it returns ("  1→…"), so the count is already
+// in the output. A whole file inline buries the rest of the turn, so anything
+// long folds behind what it is.
+const NUMBERED = /^\s*\d+→/;
+
+function Output({ name, text }: { name: string; text: string }) {
+  const numbered = text.split("\n").filter((l) => NUMBERED.test(l)).length;
+  if (name !== "read_file" || numbered <= 12) return <pre className="term">{text}</pre>;
+  return (
+    <details>
+      <summary>
+        <span className="fold">读了 {numbered} 行</span>
+      </summary>
+      <pre className="term">{text}</pre>
+    </details>
   );
 }
 
