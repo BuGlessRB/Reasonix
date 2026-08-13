@@ -89,6 +89,9 @@ export interface AgentPort {
   deleteSession(name: string): Promise<void>;
   status(): Promise<SessionStatus>;
   history(): Promise<HistoryMessage[]>;
+  // Replaying the persisted wire frames rebuilds the trajectory pane row for
+  // row; the live stream only ever covers the current connection.
+  trajectory(): Promise<WireEvent[]>;
   subscribe(onEvent: (ev: WireEvent) => void): () => void;
 
   submit(text: string): Promise<void>;

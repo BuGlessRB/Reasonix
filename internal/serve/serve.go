@@ -68,6 +68,7 @@ type Server struct {
 	titleUsageSink    event.Sink
 	titles            *titleCache
 	fill              *titleFiller
+	wire              *wireLog
 	auth              *authGate // nil when auth is disabled
 	providerSetupMu   sync.RWMutex
 	providerSetup     providerSetupState
@@ -88,6 +89,7 @@ func New(ctrl control.SessionAPI, bc *Broadcaster, serveCfg config.ServeConfig) 
 		ctrl:   ctrl,
 		bc:     bc,
 		titles: newTitleCache(ctrl.SessionDir()),
+		wire:   &wireLog{},
 		fill:   newTitleFiller(),
 		auth:   newAuthGate(serveCfg),
 	}
@@ -95,6 +97,7 @@ func New(ctrl control.SessionAPI, bc *Broadcaster, serveCfg config.ServeConfig) 
 		bc.SetDisplayCurrency(cfg.ExplicitDisplayCurrency())
 	}
 	s.initTitleProvider()
+	s.attachWireLog()
 	return s
 }
 
@@ -517,6 +520,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /extensions/reload", s.reloadExtensionsHTTP)
 	mux.HandleFunc("GET /status", s.status)
 	mux.HandleFunc("GET /sessions", s.sessions)
+	mux.HandleFunc("GET /trajectory", s.trajectory)
 	mux.HandleFunc("GET /skills", s.skills)
 	mux.HandleFunc("GET /todos", s.todos)
 	mux.HandleFunc("POST /delete-session", s.deleteSession)

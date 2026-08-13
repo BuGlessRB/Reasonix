@@ -66,6 +66,10 @@ export class SsePort implements AgentPort {
     return this.post("/delete-session", { name });
   }
 
+  trajectory() {
+    return this.get<WireEvent[]>("/trajectory");
+  }
+
   history() {
     return this.get<HistoryMessage[]>("/history");
   }

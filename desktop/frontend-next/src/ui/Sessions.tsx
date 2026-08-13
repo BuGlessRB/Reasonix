@@ -6,6 +6,7 @@ interface Props {
   status: SessionStatus | null;
   run: string;
   cost: string;
+  onError: (e: unknown) => void;
   onFold: () => void;
   onSwitched: () => void;
 }
@@ -13,7 +14,7 @@ interface Props {
 const RUN_ST: Record<string, string> = { running: "运行中", halt: "等你", done: "已完成", idle: "空闲" };
 const WS_STATE: Record<string, string> = { running: "running", halt: "awaiting", done: "done" };
 
-export function Sessions({ port, status, run, cost, onFold, onSwitched }: Props) {
+export function Sessions({ port, status, run, cost, onError, onFold, onSwitched }: Props) {
   const [list, setList] = useState<SessionEntry[]>([]);
   const [busy, setBusy] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -56,12 +57,18 @@ export function Sessions({ port, status, run, cost, onFold, onSwitched }: Props)
     setGone(e.path);
     try {
       await port.deleteSession(e.name);
-    } finally {
-      setTimeout(() => {
-        setGone("");
-        load();
-      }, 220);
+    } catch (err) {
+      // The kernel refuses to delete the session it is driving. Put the row
+      // back rather than let the collapse imply it worked.
+      if (row) row.style.height = "";
+      setGone("");
+      onError(err);
+      return;
     }
+    setTimeout(() => {
+      setGone("");
+      load();
+    }, 220);
   };
 
   return (

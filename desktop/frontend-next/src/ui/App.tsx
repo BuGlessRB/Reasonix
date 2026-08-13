@@ -46,6 +46,7 @@ export function App({ port }: { port: AgentPort }) {
 
   useEffect(() => {
     let alive = true;
+    port.trajectory().then((evs) => alive && evs.forEach((e) => trajDispatch(e))).catch(() => {});
     Promise.all([port.history(), port.status()]).then(([msgs, st]) => {
       if (!alive) return;
       setStatus(st);
@@ -175,10 +176,12 @@ export function App({ port }: { port: AgentPort }) {
             status={status}
             run={run}
             cost={`${s.metrics.currency}${s.metrics.cost.toFixed(2)}`}
+            onError={fail}
             onFold={() => setRail(false)}
             onSwitched={() => {
               refreshStatus();
               trajDispatch({ kind: "__clear" });
+              port.trajectory().then((evs) => evs.forEach((e) => trajDispatch(e))).catch(() => {});
               port.history().then((msgs) => {
                 const r = fromHistory(msgs);
                 dispatch({ kind: "__restore", items: r.items, plan: r.plan, hit: 0, miss: 0 } as never);

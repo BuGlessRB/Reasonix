@@ -206,6 +206,10 @@ export class MockPort implements AgentPort {
     return { ...this.state };
   }
 
+  async trajectory(): Promise<WireEvent[]> {
+    return [];
+  }
+
   async history(): Promise<HistoryMessage[]> {
     return [];
   }
