@@ -13,6 +13,13 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
   // doing now, the label says what it was once it is done.
   const head = running ? runLabelFor(shown) : labelFor(shown);
   const arg = tool.name === "todo_write" ? "" : shortArgs(tool.args ?? "");
+  // A shell result carries its exit status separately from stdout, and stdout
+  // alone cannot say whether the command worked.
+  const ex = tool.execution;
+  const bad = ex && ((ex.state && ex.state !== "completed") || (ex.exitCode ?? 0) !== 0);
+  // The number is the actionable half; the state only says that something went
+  // wrong, which the colour already says.
+  const badLabel = !ex ? "" : (ex.exitCode ?? 0) !== 0 ? `exit ${ex.exitCode}` : (ex.state ?? "");
   return (
     <div className="call" data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined} data-running={running ? "" : undefined}>
       <div className="g">
@@ -26,6 +33,7 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
           <span className={running ? "nm shim" : "nm"}>{head}</span>
           <span className="tag">{tool.name}</span>
           {arg && <span className="arg">{arg}</span>}
+          {bad && <span className="fail">{badLabel}</span>}
           {cost && <span className="cost">{cost}</span>}
         </div>
         <div className="out">

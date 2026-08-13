@@ -1180,3 +1180,11 @@
   /* The caret trails the last line instead of dropping to one of its own. */
   .md > :last-child::after { content: "" }
   .md .caret { margin-left: 2px; vertical-align: -2px }
+
+  /* Same shape as .tag — a small mono pill — in the colour that means broken,
+     so a failed command reads as failed without a second layout. */
+  .hl .fail {
+    font: 500 9.5px var(--mono); letter-spacing: .11em; text-transform: uppercase;
+    padding: 1.5px 5px; border-radius: var(--r-xs); flex: none;
+    color: var(--err); background: color-mix(in srgb, var(--err) 13%, transparent);
+  }

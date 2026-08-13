@@ -34,6 +34,21 @@ export interface Profile {
   description?: string;
 }
 
+// Present on shell tools. A non-zero exit was invisible before: the card only
+// ever rendered stdout, so a command that failed looked like one that ran.
+export interface Execution {
+  kind?: string;
+  shell?: string;
+  platform?: string;
+  state?: string;
+  failurePhase?: string;
+  exitCode?: number;
+  outputTail?: string;
+  mutationRisk?: string;
+  verification?: string;
+  durationMs?: number;
+}
+
 export interface Tool {
   id?: string;
   name: string;
@@ -54,6 +69,7 @@ export interface Tool {
   added?: number;
   removed?: number;
   profile?: Profile;
+  execution?: Execution;
 }
 
 export interface CacheDiagnostics {
