@@ -1,0 +1,43 @@
+export const ICON: Record<string, string> = {
+  net: "M5 11 11 5M6.6 5H11v4.4",
+  deleg: "M8 3v3.4M8 6.4 4.6 9.9v3.1M8 6.4l3.4 3.5v3.1",
+  write: "M3.4 5.2h4M5.4 3.2v4M8.6 11h4",
+  ask: "M5.9 5.7a2.2 2.2 0 1 1 2.9 2.1c-.5.2-.8.6-.8 1.1v.6M8 12.3h.01",
+  mcp: "M8 2.8 13.2 8 8 13.2 2.8 8Z",
+  mem: "M4.6 3h6.8v10L8 10.5 4.6 13Z",
+  bash: "M4.2 5.2 7.1 8l-2.9 2.8M8.6 11.4h3.6",
+  read: "M4.6 2.9h4.1l2.7 2.8v7.4h-6.8ZM8.5 2.9v2.9h2.9",
+  plan: "M2.9 5.1 4.2 6.4l2.2-2.4M8 5.1h5.2M2.9 10.6l1.3 1.3 2.2-2.4M8 10.6h5.2",
+  index: "M5.6 3v10M10.4 3v10M3 5.6h10M3 10.4h10",
+  step: "M3.1 4.3a1.2 1.2 0 0 1 1.2-1.2h7.4a1.2 1.2 0 0 1 1.2 1.2v7.4a1.2 1.2 0 0 1-1.2 1.2H4.3a1.2 1.2 0 0 1-1.2-1.2ZM5.7 8.1l1.6 1.6 3.1-3.4",
+  review: "M7.2 3.1a4.1 4.1 0 1 0 0 8.2 4.1 4.1 0 0 0 0-8.2M10.3 10.3 13 13",
+  compress: "M3 8h4.1M7.1 8 5.3 6.2M7.1 8l-1.8 1.8M13 8H8.9M8.9 8l1.8-1.8M8.9 8l1.8 1.8",
+  done: "M3.6 8.3 6.7 11.4 12.4 5",
+  goal: "M8 3.1a4.9 4.9 0 1 0 0 9.8 4.9 4.9 0 0 0 0-9.8M8 6.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6",
+  guard: "M8 2.6 12.5 4.3v4c0 2.6-1.9 4.3-4.5 5-2.6-.7-4.5-2.4-4.5-5v-4ZM6.2 8.1l1.4 1.4 2.4-2.7",
+};
+
+const BY_TOOL: Record<string, string> = {
+  web_search: "net",
+  web_fetch: "net",
+  task: "deleg",
+  edit_file: "write",
+  write_file: "write",
+  multi_edit: "write",
+  use_capability: "mcp",
+  remember: "mem",
+  bash: "bash",
+  bash_output: "bash",
+  kill_shell: "bash",
+  read_file: "read",
+  grep: "read",
+  glob: "read",
+  ls: "read",
+  todo_write: "plan",
+  code_index: "index",
+  complete_step: "step",
+  compress: "compress",
+  update_goal: "goal",
+};
+
+export const symFor = (tool: string) => BY_TOOL[tool] ?? "read";

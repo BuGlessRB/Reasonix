@@ -1,0 +1,53 @@
+:root {
+    --page: #F3F5F8; --surface: #FAFBFD; --raised: #FFFFFF; --overlay: #EDF0F4;
+    --border: #DBE0E7; --hair: #E8ECF1;
+    --text: #14171C; --muted: #59616D; --faint: #858D9A; --ghost: #AEB6C2;
+    --accent: #A96A0C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
+    --net: #3555C4; --net-wash: #EBEFFC;
+    --deleg: #0E7382; --deleg-wash: #E4F2F4;
+    --ok: #2C7A4B; --warn: #A96A0C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", Arial, sans-serif;
+    /* 每个色只担一件事：
+       accent=需要你介入 · net=系统在自主跑 · deleg=委派出去的 · ok=成
+       warn=有风险但放行 · err=坏了或会毁东西 · ghost=中性事实（比如未命中）
+       focus 单独立一个 token：焦点环不该跟「运行中」共用一个颜色的语义。 */
+    --focus: var(--net);
+    --ease: cubic-bezier(.22, .68, .26, 1);
+    --ease-out: cubic-bezier(.16, 1, .3, 1);
+    --ease-in: cubic-bezier(.55, 0, 1, .45);
+
+    /* 三档时长对应三档份量：一行 / 一张卡 / 一整块面板 */
+    --t-line: .14s; --t-card: .22s; --t-panel: .34s;
+    --r-xs: 3px; --r-sm: 5px; --r-md: 8px; --r-pill: 999px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+    --page: #090B0F; --surface: #0C0E13; --raised: #151920; --overlay: #1D222B;
+    --border: #292F39; --hair: #1A1F27;
+    --text: #E5E9F0; --muted: #8892A0; --faint: #5A6270; --ghost: #3C4451;
+    --accent: #DDA144; --accent-fg: #171104; --accent-wash: #201907;
+    --net: #7391FF; --net-wash: #111629;
+    --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
+    --ok: #52B87C; --warn: #DDA144; --err: #E4675D; --add: #52B87C; --del: #E4675D;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page: #090B0F; --surface: #0C0E13; --raised: #151920; --overlay: #1D222B;
+    --border: #292F39; --hair: #1A1F27;
+    --text: #E5E9F0; --muted: #8892A0; --faint: #5A6270; --ghost: #3C4451;
+    --accent: #DDA144; --accent-fg: #171104; --accent-wash: #201907;
+    --net: #7391FF; --net-wash: #111629;
+    --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
+    --ok: #52B87C; --warn: #DDA144; --err: #E4675D; --add: #52B87C; --del: #E4675D;
+  }
+  :root[data-theme="light"] {
+    --page: #F3F5F8; --surface: #FAFBFD; --raised: #FFFFFF; --overlay: #EDF0F4;
+    --border: #DBE0E7; --hair: #E8ECF1;
+    --text: #14171C; --muted: #59616D; --faint: #858D9A; --ghost: #AEB6C2;
+    --accent: #A96A0C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
+    --net: #3555C4; --net-wash: #EBEFFC;
+    --deleg: #0E7382; --deleg-wash: #E4F2F4;
+    --ok: #2C7A4B; --warn: #A96A0C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
+  }
