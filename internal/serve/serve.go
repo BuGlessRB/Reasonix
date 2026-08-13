@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"reasonix/internal/agent"
-	"reasonix/internal/agentpreset"
 	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
@@ -68,6 +67,7 @@ type Server struct {
 	titleModelRef     string
 	titleUsageSink    event.Sink
 	titles            *titleCache
+	fill              *titleFiller
 	auth              *authGate // nil when auth is disabled
 	providerSetupMu   sync.RWMutex
 	providerSetup     providerSetupState
@@ -88,6 +88,7 @@ func New(ctrl control.SessionAPI, bc *Broadcaster, serveCfg config.ServeConfig) 
 		ctrl:   ctrl,
 		bc:     bc,
 		titles: newTitleCache(ctrl.SessionDir()),
+		fill:   newTitleFiller(),
 		auth:   newAuthGate(serveCfg),
 	}
 	if cfg, err := config.Load(); err == nil {
@@ -803,52 +804,6 @@ func (s *Server) plan(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) preset(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Preset string `json:"preset"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
-		return
-	}
-	if !agentpreset.IsValid(body.Preset) {
-		http.Error(w, "unknown preset", http.StatusBadRequest)
-		return
-	}
-	s.ctl().SetAgentPreset(body.Preset)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) model(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Ref string `json:"ref"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Ref) == "" {
-		http.Error(w, "missing ref", http.StatusBadRequest)
-		return
-	}
-	if err := s.switchModel(r.Context(), strings.TrimSpace(body.Ref)); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) effort(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Effort string `json:"effort"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Effort) == "" {
-		http.Error(w, "missing effort", http.StatusBadRequest)
-		return
-	}
-	if err := s.switchEffort(r.Context(), strings.TrimSpace(body.Effort)); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func (s *Server) compact(w http.ResponseWriter, r *http.Request) {
 	if err := s.ctl().Compact(r.Context(), ""); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1411,57 +1366,6 @@ func currentModelRef(c control.SessionAPI) string {
 	return strings.TrimSpace(c.Label())
 }
 
-// status returns a combined status snapshot.
-func (s *Server) status(w http.ResponseWriter, r *http.Request) {
-	used, window := s.ctl().ContextSnapshot()
-	hit, miss := s.ctl().SessionCache()
-	sess := map[string]any{
-		"label":            s.ctl().Label(),
-		"running":          s.ctl().Running(),
-		"plan":             s.ctl().PlanMode(),
-		"autoApproveTools": s.ctl().AutoApproveTools(),
-		"bypass":           s.ctl().AutoApproveTools(),
-		"toolApprovalMode": s.ctl().ToolApprovalMode(),
-		"preset":           s.ctl().AgentPreset(),
-		"goal":             s.ctl().Goal(),
-		"goalStatus":       s.ctl().GoalStatus(),
-		"cwd":              s.ctl().SessionDir(),
-		"sessionPath":      s.ctl().SessionPath(),
-		"used":             used,
-		"window":           window,
-		"cacheHit":         hit,
-		"cacheMiss":        miss,
-	}
-	if u := s.ctl().LastUsage(); u != nil {
-		sess["lastUsage"] = u
-	}
-	if b, err := s.ctl().Balance(r.Context()); err == nil && b != nil {
-		if cfg, loadErr := config.Load(); loadErr == nil && cfg.DisplayCurrencyPref() == "" {
-			// Runtime-only hint: a single wallet currency may select an existing
-			// valuation, but is never persisted as configuration or history.
-			s.bc.SetDisplayCurrency(b.PrimaryCurrency())
-		}
-		sess["balance"] = map[string]any{
-			"display":   b.Display(),
-			"available": b.Available,
-			"infos":     b.Infos,
-		}
-	} else if err != nil {
-		slog.Warn("serve: balance fetch failed", "err", err)
-	}
-	if cfg, err := config.Load(); err == nil {
-		if entry, ok := cfg.ResolveModel(currentModelRef(s.ctl())); ok {
-			sess["effort"] = entry.Effort
-			sess["modelRef"] = entry.Name + "/" + entry.Model
-		}
-	}
-	sess["sessionCostQuote"] = s.bc.SessionCostQuote()
-	if j := s.ctl().Jobs(); len(j) > 0 {
-		sess["jobs"] = j
-	}
-	writeJSON(w, sess)
-}
-
 const titlePrompt = `Generate a very short title (3-7 words max) for this conversation based on the user's message. Use the same language as the user's message. The title should be clear enough that the user recognizes the session in a list. Reply with ONLY the title, no quotes, no punctuation at the end.
 
 Good examples:
@@ -1562,7 +1466,7 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		// turn counts and titles at the last checkpoint write.
 		if first, turns := agent.SessionPreview(path); turns > 0 {
 			entry.Turns = turns
-			entry.Title = s.sessionTitle(r.Context(), e.Name(), first, agent.SessionContentModTime(path).UnixNano())
+			entry.Title = s.sessionTitle(e.Name(), first, agent.SessionContentModTime(path).UnixNano())
 		}
 		out = append(out, entry)
 	}
@@ -1686,15 +1590,12 @@ func removeSessionFiles(absDir, abs string) error {
 // when its first user message is unchanged, otherwise a freshly generated one
 // (cached for next time), falling back to a truncated preview when generation
 // is off.
-func (s *Server) sessionTitle(ctx context.Context, name, first string, mod int64) string {
+func (s *Server) sessionTitle(name, first string, mod int64) string {
 	source := titleSource(first)
 	if cached, ok := s.titles.get(name, source, mod); ok {
 		return cached
 	}
-	if title := s.generateTitle(ctx, source); title != "" {
-		s.titles.put(name, title, source, mod)
-		return title
-	}
+	s.scheduleTitle(name, source, mod)
 	return previewTitle(source)
 }
 
