@@ -273,6 +273,11 @@
   .ws[aria-selected="true"] { background: var(--overlay); border-left-color: var(--net) }
   .ws[aria-selected="true"][data-s="awaiting"] { border-left-color: var(--accent) }
   .ws .goal { display: flex; align-items: baseline; gap: 7px; font: 500 12.5px/1.45 var(--ui); color: var(--muted) }
+  /* The delete control is positioned over the row, so the title has to stop
+     short of it — otherwise a long one runs underneath. Reserved even when the
+     button is hidden, so revealing it on hover does not reflow the text. */
+  .ws .goal { padding-right: 22px }
+  .ws[data-confirm] .goal { padding-right: 82px }
   .ws .goal > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .ws[aria-selected="true"] .goal { color: var(--text) }
   .ws .pip { margin-top: 6px }
@@ -1146,18 +1151,20 @@
     margin: 0 0 .7em; padding: 2px 0 2px 11px;
     border-left: 2px solid var(--border); color: var(--faint);
   }
-  .md :not(pre) > code {
-    font: 400 11.5px var(--mono); color: var(--deleg);
-    background: var(--overlay); padding: 1px 4px; border-radius: var(--r-xs);
+  /* Inline code is already specced by .out .txt code; only the block needs
+     saying, and that is .term — the same box every tool result renders in. */
+  .md pre.term { margin: 0 0 .7em }
+  .md pre.term code { font: inherit; color: inherit; white-space: pre }
+  .md mark { background: var(--accent-wash); color: var(--text); padding: 0 2px; border-radius: var(--r-xs) }
+  .md sub, .md sup { font-size: .75em; line-height: 0 }
+  .md kbd {
+    font: 400 10.5px var(--mono); color: var(--muted); padding: 1px 5px;
+    border: 1px solid var(--border); border-bottom-width: 2px; border-radius: var(--r-xs);
   }
-  .md pre {
-    margin: 0 0 .7em; padding: 9px 11px; overflow-x: auto;
-    background: var(--overlay); border-radius: var(--r-sm);
-  }
-  .md pre code {
-    font: 400 11.5px/19px var(--mono); color: var(--muted);
-    background: none; padding: 0; white-space: pre;
-  }
+  /* KaTeX inherits the surface, and a long display equation scrolls in its own
+     box rather than widening the transcript. */
+  .md .katex { font-size: 1.02em }
+  .md .katex-display { margin: .6em 0; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px }
   /* A wide table scrolls inside its own box; the transcript never scrolls
      sideways. */
   .md-tw { margin: 0 0 .7em; overflow-x: auto }
