@@ -107,3 +107,53 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, sess)
 }
+
+type modelEntry struct {
+	Ref      string `json:"ref"`
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Kind     string `json:"kind,omitempty"`
+	Active   bool   `json:"active,omitempty"`
+	Default  bool   `json:"default,omitempty"`
+}
+
+type modelRoute struct {
+	key  string
+	solo bool
+}
+
+// collapseModelRoutes drops entries naming the same model at the same endpoint.
+// A multi-model provider block and a single-model block pinning one of them (to
+// attach its own price) are two config rows, not two models. The survivor is the
+// active one, so the current selection stays selectable, then the default, then
+// the single-model block, whose price table is the exact one.
+func collapseModelRoutes(entries []modelEntry, routes []modelRoute) []modelEntry {
+	if len(routes) == 0 {
+		return entries
+	}
+	best := make(map[string]int, len(routes))
+	for i := range routes {
+		j, seen := best[routes[i].key]
+		if !seen || betterModelRoute(entries[i], routes[i], entries[j], routes[j]) {
+			best[routes[i].key] = i
+		}
+	}
+	kept := entries[:0:0]
+	for i := range entries {
+		if i < len(routes) && best[routes[i].key] != i {
+			continue
+		}
+		kept = append(kept, entries[i])
+	}
+	return kept
+}
+
+func betterModelRoute(a modelEntry, ar modelRoute, b modelEntry, br modelRoute) bool {
+	if a.Active != b.Active {
+		return a.Active
+	}
+	if a.Default != b.Default {
+		return a.Default
+	}
+	return ar.solo && !br.solo
+}

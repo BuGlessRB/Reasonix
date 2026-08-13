@@ -1264,14 +1264,6 @@ func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	type modelEntry struct {
-		Ref      string `json:"ref"`
-		Provider string `json:"provider"`
-		Model    string `json:"model"`
-		Kind     string `json:"kind,omitempty"`
-		Active   bool   `json:"active,omitempty"`
-		Default  bool   `json:"default,omitempty"`
-	}
 	ctrl := s.ctl()
 	current := currentModelRef(ctrl)
 	label := ctrl.Label()
@@ -1290,6 +1282,9 @@ func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	var out []modelEntry
+	// Route identity, for collapsing entries that are the same model reached
+	// the same way. Parallel to out; the catalog tail below appends no keys.
+	var routes []modelRoute
 	seen := make(map[string]struct{})
 	for i := range cfg.Providers {
 		p := &cfg.Providers[i]
@@ -1303,6 +1298,10 @@ func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
 		for _, model := range models {
 			ref := p.Name + "/" + model
 			seen[ref] = struct{}{}
+			routes = append(routes, modelRoute{
+				key:  strings.ToLower(strings.TrimRight(p.BaseURL, "/")) + "\x00" + model,
+				solo: len(models) == 1,
+			})
 			active := ref == current || p.Name == current
 			if !active && current == label && model == label {
 				if modelCounts[model] == 1 {
@@ -1352,6 +1351,7 @@ func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
 			Active:   ref == current,
 		})
 	}
+	out = collapseModelRoutes(out, routes)
 	if out == nil {
 		out = []modelEntry{}
 	}
