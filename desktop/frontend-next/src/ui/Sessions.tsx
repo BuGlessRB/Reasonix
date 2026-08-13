@@ -56,10 +56,15 @@ export function Sessions({ port, status, run, cost, onError, onFold, onSwitched 
     }
     setGone(e.path);
     try {
+      // The kernel refuses to delete the session it is driving, so step off it
+      // first. A fresh session becomes current and the transcript clears with
+      // it, which is what deleting the open conversation has to mean.
+      if (e.path === current) {
+        await port.newSession();
+        onSwitched();
+      }
       await port.deleteSession(e.name);
     } catch (err) {
-      // The kernel refuses to delete the session it is driving. Put the row
-      // back rather than let the collapse imply it worked.
       if (row) row.style.height = "";
       setGone("");
       onError(err);
@@ -126,7 +131,7 @@ export function Sessions({ port, status, run, cost, onError, onFold, onSwitched 
                       void drop(e, ev.currentTarget.closest<HTMLElement>(".ws"));
                     }}
                   >
-                    {confirm === e.path ? "删除" : "×"}
+                    {confirm === e.path ? (on ? "关闭并删除" : "删除") : "×"}
                   </button>
                 )}
               </div>
