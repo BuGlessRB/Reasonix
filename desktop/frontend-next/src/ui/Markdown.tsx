@@ -32,6 +32,24 @@ const BASE_REHYPE = [rehypeRaw, [rehypeSanitize, schema]];
 // — older WebKit treats it as a syntax error and takes the whole page down.
 const MATH = /\$\$[\s\S]+?\$\$|\$[^\n$]+\$/;
 
+// Models reach for LaTeX's own delimiters as readily as for dollars, and
+// remark-math reads only dollars. Rewriting them keeps one parser instead of
+// two. Code is split out first: a \[ inside a fence is text, not an equation.
+const CODE = /(```[\s\S]*?```|`[^`\n]*`)/g;
+
+function normalizeMath(md: string) {
+  return md
+    .split(CODE)
+    .map((part, i) =>
+      i % 2 === 1
+        ? part
+        : part
+            .replace(/\\\[([\s\S]+?)\\\]/g, (_, m) => `\n\n$$${m}$$\n\n`)
+            .replace(/\\\(([\s\S]+?)\\\)/g, (_, m) => `$${m}$`),
+    )
+    .join("");
+}
+
 type Plugin = unknown;
 let katex: Plugin | null = null;
 let loading: Promise<void> | null = null;
@@ -64,7 +82,8 @@ function balanceFences(md: string) {
 }
 
 export function Markdown({ text, streaming }: { text: string; streaming?: boolean }) {
-  const math = useKatex(MATH.test(text));
+  const src = normalizeMath(balanceFences(text));
+  const math = useKatex(MATH.test(src));
   return (
     <div className="md">
       <ReactMarkdown
@@ -86,7 +105,7 @@ export function Markdown({ text, streaming }: { text: string; streaming?: boolea
           ),
         }}
       >
-        {balanceFences(text)}
+        {src}
       </ReactMarkdown>
       {streaming && <span className="caret" />}
     </div>
