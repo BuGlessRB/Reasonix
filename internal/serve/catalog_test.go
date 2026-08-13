@@ -190,6 +190,84 @@ func TestMcpAdminRejectsUnknownServer(t *testing.T) {
 	}
 }
 
+// Parsing is a separate step from installing so the user can be shown what a
+// stranger's config would run before agreeing to it. It must never connect or
+// persist anything on its own.
+func TestMcpParsePreviewsWithoutInstalling(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	defer ctrl.Close()
+	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/mcp/parse", "application/json",
+		strings.NewReader(`{"input":"{\"mcpServers\":{\"gh\":{\"command\":\"npx\",\"args\":[\"-y\",\"x\"],\"env\":{\"GITHUB_TOKEN\":\"ghp_literal\"}}}}"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST /mcp/parse = %d (%s)", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var got struct {
+		Servers []draftServer `json:"servers"`
+		Risks   []draftRisk   `json:"risks"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Servers) != 1 || got.Servers[0].Name != "gh" {
+		t.Fatalf("parse returned %+v, want one server named gh", got.Servers)
+	}
+	if got.Servers[0].Transport != "stdio" {
+		t.Errorf("transport = %q, want stdio spelled out", got.Servers[0].Transport)
+	}
+	var secret bool
+	for _, k := range got.Risks {
+		if k.Kind == "secret" {
+			secret = true
+		}
+	}
+	if !secret {
+		t.Error("a literal token reached the confirmation card unflagged")
+	}
+	// Nothing may exist yet: the user has not agreed to anything.
+	if names := ctrl.ConfiguredMCPNames(); len(names) != 0 {
+		t.Errorf("parse persisted %v", names)
+	}
+}
+
+// A name collision is a client-side mistake with a precise remedy, so it comes
+// back as a structured result rather than a 500 the UI can only print.
+func TestMcpInstallRejectsDuplicateName(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	defer ctrl.Close()
+	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	// A command that cannot connect still exercises the pre-flight checks, and
+	// leaves nothing behind — which is the contract being asserted.
+	post := func(body string) map[string]any {
+		resp, err := http.Post(srv.URL+"/mcp/install", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var out map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	got := post(`{"server":{"name":"","command":"true"},"scope":"user"}`)
+	if got["state"] != "issue" {
+		t.Errorf("a nameless server installed as %v, want issue", got["state"])
+	}
+	if names := ctrl.ConfiguredMCPNames(); len(names) != 0 {
+		t.Errorf("a failed install left %v behind", names)
+	}
+}
+
 // A hidden command is invocable but deliberately absent from listings.
 func TestSlashOmitsHiddenCommands(t *testing.T) {
 	ctrl := control.New(control.Options{

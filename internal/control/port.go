@@ -183,6 +183,7 @@ type Capabilities interface {
 	ConnectMCPServer(e config.PluginEntry) (int, error)
 	RegisterMCPServerOnDemand(e config.PluginEntry) (int, error)
 	ConnectConfiguredMCPServer(name string) (int, error)
+	InstallMCPServer(e config.PluginEntry, scope MCPScope) (plugin.MCPInstallResult, error)
 	ReconnectMCPServer(name string) (int, error)
 	MCPServerEnabled(name string) (bool, error)
 	SetMCPServerEnabled(name string, enabled bool) error

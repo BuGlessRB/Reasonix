@@ -88,6 +88,42 @@ export interface McpEntry {
   error?: string;
 }
 
+// One server a paste resolved to, before anything has been installed.
+export interface McpDraftServer {
+  name: string;
+  transport: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+  headers?: Record<string, string>;
+}
+
+// What the confirmation card must show: shell is the command that will run,
+// unknown-host the endpoint it will talk to, secret a credential written out in
+// full. None of them block the install — they are what the user is agreeing to.
+export interface McpRisk {
+  server: string;
+  kind: "secret" | "shell" | "unknown-host";
+  field: string;
+  detail: string;
+}
+
+export interface McpDraft {
+  servers: McpDraftServer[];
+  risks: McpRisk[];
+}
+
+// state is ready | action_required | issue. action_required means the config was
+// kept because finishing OAuth is impossible once the entry is gone.
+export interface McpInstallResult {
+  name: string;
+  state: string;
+  toolCount: number;
+  action: string;
+  message: string;
+}
+
 // One entry of GET /skills — every skill that may run, which is a larger set
 // than /slash: a skill with no slash name still fires on model discovery.
 export interface SkillEntry {
@@ -162,6 +198,11 @@ export interface AgentPort {
   // the caller never has to race a follow-up GET against the connect.
   reconnectMcp(name: string): Promise<{ state: string; tools?: number; error?: string }>;
   setMcpEnabled(name: string, enabled: boolean): Promise<void>;
+  // Resolves a pasted block without touching anything. Separate from install so
+  // the user sees what would run before agreeing to it.
+  parseMcp(input: string): Promise<McpDraft>;
+  installMcp(server: McpDraftServer, scope: "user" | "project"): Promise<McpInstallResult>;
+  removeMcp(name: string): Promise<{ disconnected: boolean; stillConfigured: boolean }>;
   workspaces(): Promise<WorkspaceInfo>;
   // Rebuilds the whole runtime against another folder. The conversation does
   // not come along, so the caller has to reload the transcript afterwards.

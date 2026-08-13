@@ -61,6 +61,43 @@ func loadMCPJSON(path string) ([]PluginEntry, error) {
 	return specsToEntries(doc.MCPServers, nil), nil
 }
 
+// ParseMCPServersJSON reads a Claude-compatible mcpServers document — what every
+// MCP server's install docs hand the user — and returns its entries. A bare
+// server map (no "mcpServers" wrapper) is accepted too, because that is what a
+// user copying one server out of a larger document ends up with.
+// Source is left unset: the caller owns where the entry will live.
+func ParseMCPServersJSON(body []byte) ([]PluginEntry, error) {
+	var doc struct {
+		MCPServers map[string]mcpServerSpec `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return nil, err
+	}
+	specs := doc.MCPServers
+	if len(specs) == 0 {
+		bare := map[string]mcpServerSpec{}
+		if err := json.Unmarshal(body, &bare); err != nil {
+			return nil, err
+		}
+		// A bare map only counts when its values actually describe servers; an
+		// arbitrary JSON object decodes into empty specs without erroring.
+		for name, spec := range bare {
+			if spec.Command == "" && spec.URL == "" {
+				delete(bare, name)
+			}
+		}
+		specs = bare
+	}
+	if len(specs) == 0 {
+		return nil, fmt.Errorf("no MCP server found in this JSON")
+	}
+	entries := specsToEntries(specs, nil)
+	for i := range entries {
+		entries[i].Source = ""
+	}
+	return entries, nil
+}
+
 // LoadMCPJSONPlugin returns one server entry from a Claude-compatible .mcp.json.
 func LoadMCPJSONPlugin(path, name string) (PluginEntry, bool, error) {
 	entries, err := loadMCPJSON(path)

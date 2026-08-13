@@ -1,4 +1,4 @@
-import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpEntry, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
+import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 
 // Must match wailsEventName / replayPath in desktop/next.
@@ -86,6 +86,48 @@ export class SsePort implements AgentPort {
 
   setMcpEnabled(name: string, enabled: boolean) {
     return this.post("/mcp/enabled", { name, enabled });
+  }
+
+  // A parse failure is the normal case while typing, and its message is the
+  // whole feedback — so it is thrown as text, not as a status code.
+  async parseMcp(input: string): Promise<McpDraft> {
+    const res = await fetch(this.base + "/mcp/parse", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ input }),
+    });
+    const body = (await res.json().catch(() => ({}))) as McpDraft & { error?: string };
+    if (!res.ok) throw new Error(body.error || `/mcp/parse: ${res.status}`);
+    return { servers: body.servers ?? [], risks: body.risks ?? [] };
+  }
+
+  async installMcp(server: McpDraftServer, scope: "user" | "project"): Promise<McpInstallResult> {
+    const res = await fetch(this.base + "/mcp/install", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ server, scope }),
+    });
+    const body = (await res.json().catch(() => ({}))) as McpInstallResult & { error?: string };
+    if (!res.ok) throw new Error(body.error || `/mcp/install: ${res.status}`);
+    return body;
+  }
+
+  async removeMcp(name: string) {
+    const res = await fetch(this.base + "/mcp/remove", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ name }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      disconnected?: boolean;
+      stillConfigured?: boolean;
+      error?: string;
+    };
+    if (!res.ok) throw new Error(body.error || `/mcp/remove: ${res.status}`);
+    return { disconnected: !!body.disconnected, stillConfigured: !!body.stillConfigured };
   }
 
   workspaces() {

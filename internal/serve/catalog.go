@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	"reasonix/internal/config"
+	"reasonix/internal/control"
+	"reasonix/internal/mcpsetup"
 	"reasonix/internal/skill"
 )
 
@@ -243,6 +246,126 @@ func (s *Server) mcpEnabled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"name": name, "enabled": body.Enabled})
+}
+
+// draftServer is one server a paste resolved to, in the shape the confirmation
+// card reads: what will run, what it will read, and what is risky about it.
+type draftServer struct {
+	Name      string            `json:"name"`
+	Transport string            `json:"transport"`
+	Command   string            `json:"command,omitempty"`
+	Args      []string          `json:"args,omitempty"`
+	URL       string            `json:"url,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	Headers   map[string]string `json:"headers,omitempty"`
+}
+
+type draftRisk struct {
+	Server string `json:"server"`
+	Kind   string `json:"kind"`
+	Field  string `json:"field"`
+	Detail string `json:"detail"`
+}
+
+// mcpParse resolves a pasted block without installing anything. Parsing is
+// separate from installing because the user has to see what a stranger's config
+// would run on their machine before agreeing to it.
+func (s *Server) mcpParse(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Input string `json:"input"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad body", http.StatusBadRequest)
+		return
+	}
+	draft, err := mcpsetup.Parse(body.Input)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	servers := make([]draftServer, 0, len(draft.Entries))
+	for _, e := range draft.Entries {
+		servers = append(servers, draftServer{
+			Name: e.Name, Transport: transportOf(e), Command: e.Command, Args: e.Args,
+			URL: e.URL, Env: e.Env, Headers: e.Headers,
+		})
+	}
+	risks := make([]draftRisk, 0, len(draft.Risks))
+	for _, k := range draft.Risks {
+		risks = append(risks, draftRisk{Server: k.Server, Kind: k.Kind, Field: k.Field, Detail: k.Detail})
+	}
+	writeJSON(w, map[string]any{"servers": servers, "risks": risks})
+}
+
+// transportOf names the wire an entry uses; an empty Type with a command is the
+// stdio default, which the confirmation card should still say out loud.
+func transportOf(e config.PluginEntry) string {
+	if t := strings.TrimSpace(e.Type); t != "" {
+		return t
+	}
+	if strings.TrimSpace(e.URL) != "" {
+		return "http"
+	}
+	return "stdio"
+}
+
+// mcpInstall connects the candidate and persists it only if that works. The
+// response is the install result, not a bare 204: "saved" and "actually usable"
+// are different outcomes and the user is waiting to hear which one happened.
+func (s *Server) mcpInstall(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Server draftServer `json:"server"`
+		Scope  string      `json:"scope"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad body", http.StatusBadRequest)
+		return
+	}
+	entry := config.PluginEntry{
+		Name:    strings.TrimSpace(body.Server.Name),
+		Type:    strings.TrimSpace(body.Server.Transport),
+		Command: strings.TrimSpace(body.Server.Command),
+		Args:    body.Server.Args,
+		URL:     strings.TrimSpace(body.Server.URL),
+		Env:     body.Server.Env,
+		Headers: body.Server.Headers,
+	}
+	if entry.Type == "stdio" {
+		entry.Type = ""
+	}
+	scope := control.MCPScopeUser
+	if strings.EqualFold(strings.TrimSpace(body.Scope), string(control.MCPScopeProject)) {
+		scope = control.MCPScopeProject
+	}
+	result, err := s.ctl().InstallMCPServer(entry, scope)
+	if err != nil {
+		writeJSONStatus(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, result)
+}
+
+// mcpRemove drops a server from config and disconnects it. A same-named
+// declaration at a lower precedence may become effective again, so the reply
+// reports what is live afterwards rather than implying the name is gone.
+func (s *Server) mcpRemove(w http.ResponseWriter, r *http.Request) {
+	name, ok := decodeMCPName(w, r)
+	if !ok {
+		return
+	}
+	disconnected, err := s.ctl().RemoveMCPServer(name)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	remaining := false
+	for _, st := range s.ctl().ConfiguredMCPServers() {
+		if st.Entry.Name == name {
+			remaining = true
+			break
+		}
+	}
+	writeJSON(w, map[string]any{"name": name, "disconnected": disconnected, "stillConfigured": remaining})
 }
 
 func decodeMCPName(w http.ResponseWriter, r *http.Request) (string, bool) {

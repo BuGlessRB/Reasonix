@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
+import { AddServer } from "./AddServer";
 
 const PRESETS: [Preset, string, string][] = [
   ["light", "轻量", "简单就直接做，只做针对性验证，高风险才叫独立复核"],
@@ -36,9 +37,9 @@ const NAV: [Section, string][] = [
 
 const SCOPE: Record<string, string> = { project: "项目", custom: "自定义", global: "我的", builtin: "内置" };
 
-// Adding and removing servers rewrites config files and needs its own surface;
-// everything else about a server is actionable from here.
-const ELSEWHERE = ["新增 / 删除 MCP 服务器", "Hooks", "记忆", "主题包", "机器人接入", "网络与代理", "账号与更新"];
+// What still lives in the old desktop app. Bots and theme packs are not on the
+// roadmap, so they are not promises to keep here either.
+const ELSEWHERE = ["Hooks", "记忆", "网络与代理", "账号与更新"];
 
 // The user's question is "is it there and does it work", so the state is the
 // label. A failed server keeps its error on the row that names it.
@@ -66,6 +67,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
   const [skills, setSkills] = useState<SkillEntry[]>([]);
   const [implicit, setImplicit] = useState(true);
   const [busy, setBusy] = useState("");
+  const [adding, setAdding] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
   const reloadExt = useCallback(() => {
@@ -210,11 +212,26 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
                 title="外部工具"
                 now={mcp.length ? `${mcp.length} 个服务` : undefined}
                 hint="通过 MCP 接进来的服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。关掉一个会立刻从这一轮的工具表里消失，并且重启后依然是关的。"
+                action={
+                  adding ? undefined : (
+                    <button className="act" onClick={() => setAdding(true)}>
+                      接入服务
+                    </button>
+                  )
+                }
               >
+                {adding && (
+                  <AddServer
+                    port={port}
+                    canProject={!!status?.workspaceRoot}
+                    onClose={() => setAdding(false)}
+                    onInstalled={afterExtChange}
+                  />
+                )}
                 {mcp.map((m) => (
                   <Server key={m.name} m={m} port={port} onDone={afterExtChange} />
                 ))}
-                {mcp.length === 0 && <div className="empty">没有接入任何外部服务。</div>}
+                {mcp.length === 0 && !adding && <div className="empty">没有接入任何外部服务。</div>}
               </Group>
               <Group
                 title="技能"
@@ -268,6 +285,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
 function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () => void }) {
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
+  const [confirming, setConfirming] = useState(false);
   // 401/403 is not a broken server, it is a server that stopped trusting this
   // machine — retrying without saying so sends the user around the same loop.
   const auth = /\b(401|403|unauthorized|forbidden|auth)/i.test(m.error ?? failed);
@@ -294,6 +312,11 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
           {busy === "retry" ? "连接中…" : auth ? "重新授权" : "重连"}
         </button>
       )}
+      {/* Removal is the one action here that cannot be undone by clicking again,
+          so it asks — and the question names the file it is about to edit. */}
+      <button className="act ghost" aria-label={`移除 ${m.name}`} disabled={!!busy} onClick={() => setConfirming(true)}>
+        移除
+      </button>
       <Switch
         on={m.enabled}
         busy={busy === "toggle"}
@@ -301,6 +324,32 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
         onClick={() => void run("toggle", () => port.setMcpEnabled(m.name, !m.enabled))}
       />
     </span>
+  );
+
+  const confirm = confirming && (
+    <div className="confirm">
+      <span className="q">
+        把 {m.name} 从{m.source ? ` ${m.source} ` : "配置"}里删掉？只是想暂时不用的话，关掉开关就够了。
+      </span>
+      <button className="act" onClick={() => setConfirming(false)}>
+        算了
+      </button>
+      <button
+        className="act danger"
+        disabled={busy === "remove"}
+        onClick={() =>
+          void run("remove", async () => {
+            const r = await port.removeMcp(m.name);
+            setConfirming(false);
+            // A lower-precedence declaration with the same name may have taken
+            // over; saying so beats a list that looks like the delete failed.
+            if (r.stillConfigured) setFailed("同名的另一处声明现在生效了，这一行不会消失。");
+          })
+        }
+      >
+        {busy === "remove" ? "移除中…" : "移除"}
+      </button>
+    </div>
   );
 
   const head = (
@@ -318,12 +367,16 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
       <div className="srv" data-st={m.state}>
         <div className="srv-hd">{head}</div>
         {why && <div className="why">{why}</div>}
+        {confirm}
       </div>
     );
   }
   return (
-    <details className="srv" data-st={m.state}>
+    // Asking to remove has to open the row: the confirmation lives inside the
+    // fold, and what the server contributes is worth seeing before dropping it.
+    <details className="srv" data-st={m.state} open={confirming || undefined}>
       <summary>{head}</summary>
+      {confirm}
       <div className="peek">
         {m.toolNames.map((t) => (
           <div className="row" key={t}>
@@ -395,15 +448,16 @@ function Switch({
 }
 
 function Group({
-  title, hint, now, children,
+  title, hint, now, action, children,
 }: {
-  title: string; hint?: string; now?: string; children: React.ReactNode;
+  title: string; hint?: string; now?: string; action?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
     <section className="grp">
       <div className="grp-hd">
         <h2>{title}</h2>
         {now && <span className="now">{now}</span>}
+        {action}
       </div>
       {hint && <p className="hint">{hint}</p>}
       <div className="grp-items">{children}</div>

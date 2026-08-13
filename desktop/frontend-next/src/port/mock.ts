@@ -1,4 +1,4 @@
-import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpEntry, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo } from "./port";
+import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, McpRisk, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 
 interface Beat {
@@ -399,6 +399,61 @@ export class MockPort implements AgentPort {
     s.state = enabled ? (s.error ? "failed" : "idle") : "disabled";
   }
 
+  // A rough stand-in for internal/mcpsetup: enough shape for the confirmation
+  // card to be developed against, not a second implementation of the grammar.
+  async parseMcp(input: string): Promise<McpDraft> {
+    const text = input.trim();
+    if (!text) throw new Error("粘贴一段 JSON、一行命令，或者一个 https 地址");
+    if (text.startsWith("{")) {
+      const doc = JSON.parse(text) as { mcpServers?: Record<string, Record<string, unknown>> };
+      const servers = doc.mcpServers ?? (doc as Record<string, Record<string, unknown>>);
+      const out: McpDraftServer[] = Object.entries(servers).map(([name, spec]) => ({
+        name,
+        transport: typeof spec.url === "string" ? "http" : "stdio",
+        command: spec.command as string | undefined,
+        args: spec.args as string[] | undefined,
+        url: spec.url as string | undefined,
+        env: spec.env as Record<string, string> | undefined,
+      }));
+      if (out.length === 0) throw new Error("这段 JSON 里没有 MCP 服务");
+      return { servers: out, risks: risksOf(out) };
+    }
+    if (/^https?:\/\//.test(text)) {
+      const host = new URL(text).hostname.replace(/^www\./, "").split(".")[0];
+      const server: McpDraftServer = { name: host, transport: "http", url: text };
+      return { servers: [server], risks: risksOf([server]) };
+    }
+    const argv = text.replace(/^[$>%]\s+/, "").split(/\s+/);
+    const pkg = argv.slice(1).find((a) => !a.startsWith("-")) ?? argv[0];
+    const server: McpDraftServer = {
+      name: pkg.split("/").pop()!.split("@")[0] || "mcp-server",
+      transport: "stdio",
+      command: argv[0],
+      args: argv.slice(1),
+    };
+    return { servers: [server], risks: risksOf([server]) };
+  }
+
+  async installMcp(server: McpDraftServer, _scope: "user" | "project"): Promise<McpInstallResult> {
+    if (this.servers.some((s) => s.name === server.name)) {
+      return { name: server.name, state: "issue", toolCount: 0, action: "retry", message: `已经有一个叫 ${server.name} 的服务了` };
+    }
+    // A name with "auth" in it stands in for the OAuth path, so the
+    // action_required branch is reachable in dev.
+    if (/auth|figma/i.test(server.name)) {
+      this.servers.push({ ...toEntry(server), state: "failed", error: "401 unauthorized" });
+      return { name: server.name, state: "action_required", toolCount: 0, action: "authenticate", message: "需要先授权" };
+    }
+    this.servers.push({ ...toEntry(server), state: "ready", tools: 3, toolNames: ["one", "two", "three"] });
+    return { name: server.name, state: "ready", toolCount: 3, action: "none", message: "" };
+  }
+
+  async removeMcp(name: string) {
+    const before = this.servers.length;
+    this.servers = this.servers.filter((s) => s.name !== name);
+    return { disconnected: before !== this.servers.length, stillConfigured: false };
+  }
+
   async skills(): Promise<SkillCatalog> {
     return { implicit: true, skills: this.skillList.map((s) => ({ ...s })) };
   }
@@ -582,4 +637,34 @@ export class MockPort implements AgentPort {
   async setGoal(text: string) {
     this.state.goal = text;
   }
+}
+
+function toEntry(s: McpDraftServer): McpEntry {
+  return {
+    name: s.name,
+    state: "idle",
+    enabled: true,
+    transport: s.transport,
+    source: "user config",
+    tools: 0,
+  };
+}
+
+const SECRETY = /auth|token|secret|credential|api[-_]?key|cookie/i;
+
+function risksOf(servers: McpDraftServer[]): McpRisk[] {
+  const out: McpRisk[] = [];
+  for (const s of servers) {
+    if (s.command) {
+      out.push({ server: s.name, kind: "shell", field: "command", detail: [s.command, ...(s.args ?? [])].join(" ") });
+    }
+    if (s.url) out.push({ server: s.name, kind: "unknown-host", field: "url", detail: s.url });
+    for (const [k, v] of Object.entries(s.env ?? {})) {
+      if (SECRETY.test(k) && !v.startsWith("$")) {
+        out.push({ server: s.name, kind: "secret", field: "env." + k,
+          detail: `明文写进配置文件；改成 \${${k.toUpperCase()}} 可以只留在环境变量里` });
+      }
+    }
+  }
+  return out;
 }
