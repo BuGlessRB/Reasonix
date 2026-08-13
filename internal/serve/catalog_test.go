@@ -92,6 +92,104 @@ func TestMcpWithoutHostReturnsEmptyList(t *testing.T) {
 	}
 }
 
+// The slash list only holds what the user can type. A management surface has to
+// see the skills that only the model can reach, or it cannot switch them off.
+func TestSkillsListsWhatSlashCannotShow(t *testing.T) {
+	ctrl := control.New(control.Options{
+		Skills: []skill.Skill{
+			{Name: "audit", Description: "read-only sweep", Scope: skill.ScopeBuiltin, RunAs: skill.RunSubagent, ReadOnly: true},
+			{Name: "hinted", Description: "manual only", Scope: skill.ScopeProject, Invocation: "manual"},
+		},
+	})
+	defer ctrl.Close()
+	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	var got struct {
+		Implicit bool         `json:"implicit"`
+		Skills   []skillEntry `json:"skills"`
+	}
+	resp, err := http.Get(srv.URL + "/skills")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]skillEntry{}
+	for _, e := range got.Skills {
+		by[e.Name] = e
+	}
+	if len(by) != 2 {
+		t.Fatalf("skills = %d entries, want 2: %+v", len(by), got.Skills)
+	}
+	if !by["audit"].ReadOnly || !by["audit"].Subagent {
+		t.Errorf("audit lost its capability face: %+v", by["audit"])
+	}
+	if !by["audit"].Enabled {
+		t.Error("audit reads as disabled; nothing disabled it")
+	}
+	if !by["hinted"].Manual {
+		t.Error("a manual skill must not read as model-discoverable")
+	}
+	if by["audit"].Manual {
+		t.Error("an auto skill must not read as manual")
+	}
+}
+
+// The switch has to survive the request that set it, or the UI is reporting a
+// state the next reload will contradict.
+func TestSkillEnabledPersists(t *testing.T) {
+	ctrl := control.New(control.Options{
+		Skills: []skill.Skill{{Name: "audit", Scope: skill.ScopeBuiltin}},
+	})
+	defer ctrl.Close()
+	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/skills/enabled", "application/json",
+		strings.NewReader(`{"name":"audit","enabled":false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST /skills/enabled = %d (%s), want 200", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	if ctrl.SkillEnabled("audit") {
+		t.Fatal("the skill is still enabled after the switch said off")
+	}
+}
+
+// An unknown name is a client mistake, not a server failure: a 5xx would send
+// the frontend into a retry loop over a name that will never resolve.
+func TestMcpAdminRejectsUnknownServer(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	defer ctrl.Close()
+	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	for _, tc := range []struct {
+		path, body string
+		want       int
+	}{
+		{"/mcp/enabled", `{"name":"nope","enabled":true}`, http.StatusBadRequest},
+		{"/mcp/enabled", `{"enabled":true}`, http.StatusBadRequest},
+		{"/mcp/reconnect", `{"name":"nope"}`, http.StatusBadGateway},
+	} {
+		resp, err := http.Post(srv.URL+tc.path, "application/json", strings.NewReader(tc.body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Errorf("POST %s %s = %d, want %d", tc.path, tc.body, resp.StatusCode, tc.want)
+		}
+	}
+}
+
 // A hidden command is invocable but deliberately absent from listings.
 func TestSlashOmitsHiddenCommands(t *testing.T) {
 	ctrl := control.New(control.Options{

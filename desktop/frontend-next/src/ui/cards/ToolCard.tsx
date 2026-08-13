@@ -53,6 +53,9 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
   // moment the user can judge whether an external service should have run.
   const from = mcpOrigin(shown);
   const invoked = mcpOrigin(tool.name);
+  // A delegated step is only auditable if it names the profile that ran: "a
+  // subagent" is not a thing you can go read, "skill:security-review" is.
+  const who = tool.profile?.name?.trim();
   const settling = useSettling(running);
   return (
     <div className="call" data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined} data-running={running ? "" : undefined}>
@@ -63,6 +66,7 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
       <div className="c">
         <div className="hl" data-swap={settling.swap ? "" : undefined}>
           <span className={running ? "nm shim" : "nm"}>{head}</span>
+          {who && <span className="who" title={`按 ${who} 这份技能的设定跑的子代理`}>{who}</span>}
           {from && <span className="src" title={`外部服务 ${from.server} 提供的工具`}>{from.server}</span>}
           <span className="tag">{invoked ? invoked.tool : tool.name}</span>
           {arg && <span className="arg">{arg}</span>}
@@ -80,8 +84,8 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
             <div className="nest">
               <div className="nest-hd">
                 <i className="pip" />
-                <span className="who">{children.length} 个子代理</span>
-                <span className="prof">具名 skill · 独立轨迹</span>
+                <span className="who">{who ? `${who} 做了 ${children.length} 步` : `${children.length} 个子代理`}</span>
+                <span className="prof">独立上下文 · 不进主轨迹</span>
               </div>
               <div className="nest-bd">
                 {children.map((c) => (

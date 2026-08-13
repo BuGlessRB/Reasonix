@@ -22,7 +22,9 @@ const RUNNING: Record<string, string> = {
   bash: "正在执行…", write: "正在改写…", mem: "正在写入记忆…", mcp: "正在调 MCP…",
 };
 
-export const labelFor = (tool: string) => LABEL[tool] ?? tool;
+// An MCP tool's raw id repeats its server twice over — the card already carries
+// that in its own badge, so the name is just what the tool is called.
+export const labelFor = (tool: string) => LABEL[tool] ?? mcpOrigin(tool)?.tool ?? tool;
 
 export function runLabelFor(tool: string) {
   return RUNNING[categoryOf(tool)] ?? "正在处理…";

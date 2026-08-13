@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import type { AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, SessionStatus, SlashEntry } from "../port/port";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 
 const PRESETS: [Preset, string, string][] = [
@@ -36,9 +36,9 @@ const NAV: [Section, string][] = [
 
 const SCOPE: Record<string, string> = { project: "项目", custom: "自定义", global: "我的", builtin: "内置" };
 
-// Not in this build yet: every one of these needs its own surface, and shipping
-// a half version would be worse than saying where it currently lives.
-const ELSEWHERE = ["Hooks", "记忆", "主题包", "机器人接入", "网络与代理", "账号与更新"];
+// Adding and removing servers rewrites config files and needs its own surface;
+// everything else about a server is actionable from here.
+const ELSEWHERE = ["新增 / 删除 MCP 服务器", "Hooks", "记忆", "主题包", "机器人接入", "网络与代理", "账号与更新"];
 
 // The user's question is "is it there and does it work", so the state is the
 // label. A failed server keeps its error on the row that names it.
@@ -46,6 +46,7 @@ const MCP_STATE: Record<string, string> = {
   ready: "已连接",
   connecting: "连接中",
   failed: "连不上",
+  disabled: "已关闭",
   idle: "未连接",
 };
 
@@ -62,19 +63,37 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
   const [at, setAt] = useState<Section>("session");
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [mcp, setMcp] = useState<McpEntry[]>([]);
-  const [slash, setSlash] = useState<SlashEntry[]>([]);
+  const [skills, setSkills] = useState<SkillEntry[]>([]);
+  const [implicit, setImplicit] = useState(true);
   const [busy, setBusy] = useState("");
   const root = useRef<HTMLDivElement>(null);
 
+  const reloadExt = useCallback(() => {
+    port.mcp().then(setMcp).catch(() => setMcp([]));
+    port
+      .skills()
+      .then((c) => {
+        setSkills(c.skills);
+        setImplicit(c.implicit);
+      })
+      .catch(() => setSkills([]));
+  }, [port]);
+
+  // An extension switch moves the metrics rail too, so the change has to leave
+  // this pane as well as refresh it.
+  const afterExtChange = useCallback(() => {
+    reloadExt();
+    onChanged();
+  }, [reloadExt, onChanged]);
+
   useEffect(() => {
     port.models().then(setModels).catch(() => setModels([]));
-    port.mcp().then(setMcp).catch(() => setMcp([]));
-    port.slash().then(setSlash).catch(() => setSlash([]));
+    reloadExt();
     root.current?.focus();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [port, onClose]);
+  }, [port, onClose, reloadExt]);
 
   const run = async (what: string, fn: () => Promise<void>) => {
     setBusy(what);
@@ -89,13 +108,14 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
   const preset = PRESETS.find(([id]) => id === status?.preset)?.[1] ?? "—";
   const approval = APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[1] ?? "—";
   const broken = mcp.filter((m) => m.state === "failed").length;
+  const skillsOn = skills.filter((s) => s.enabled).length;
   // The table of contents is also the status board: the value that matters for
   // each section rides on its own row, so the risky one is legible from here.
   const nav: Record<Section, string> = {
     session: status?.plan ? "计划模式" : preset,
     model: status?.modelRef?.split("/").pop() ?? "—",
     tools: approval,
-    ext: broken ? `${broken} 个异常` : `${mcp.length + slash.length}`,
+    ext: broken ? `${broken} 个异常` : `${mcp.length + skillsOn}`,
     appearance: THEMES.find(([id]) => id === theme)?.[1] ?? "",
     advanced: "",
   };
@@ -124,7 +144,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
           ))}
         </nav>
 
-        <div className="prefs-main" role="tabpanel" aria-labelledby={`prefs-${at}`}>
+        <div className="prefs-main" role="tabpanel" aria-labelledby={`prefs-${at}`} data-sec={at}>
           <div className="prefs-col">
           {at === "session" && (
             <>
@@ -189,27 +209,26 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
               <Group
                 title="外部工具"
                 now={mcp.length ? `${mcp.length} 个服务` : undefined}
-                hint="通过 MCP 接进来的服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。增删服务器还在旧版桌面端。"
+                hint="通过 MCP 接进来的服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。关掉一个会立刻从这一轮的工具表里消失，并且重启后依然是关的。"
               >
                 {mcp.map((m) => (
-                  <Server key={m.name} m={m} />
+                  <Server key={m.name} m={m} port={port} onDone={afterExtChange} />
                 ))}
                 {mcp.length === 0 && <div className="empty">没有接入任何外部服务。</div>}
               </Group>
               <Group
-                title="技能与命令"
-                now={slash.length ? `${slash.length} 条` : undefined}
-                hint="在输入框打 / 就能调用。项目里的那些跟着工作目录走，换目录会换一套。"
+                title="技能"
+                now={skills.length ? `${skillsOn}/${skills.length} 开着` : undefined}
+                hint={
+                  implicit
+                    ? "带 / 的可以自己点名调用；其余的由模型按任务自行判断要不要用。关掉的那些两条路都走不通。改动在下一次新建会话时进入模型的索引。"
+                    : "模型自动发现已关闭：现在只有你点名的技能会跑。改动在下一次新建会话时生效。"
+                }
               >
-                {slash.map((e) => (
-                  <div className="lrow" key={e.kind + e.name}>
-                    <span className="nm">/{e.name}</span>
-                    <span className="ds">{e.description || (e.kind === "command" ? "自定义命令" : "技能")}</span>
-                    {e.subagent && <i className="sa">子代理</i>}
-                    <span className="sc">{e.plugin || SCOPE[e.scope ?? ""] || (e.kind === "command" ? "命令" : "")}</span>
-                  </div>
+                {skills.map((sk) => (
+                  <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} />
                 ))}
-                {slash.length === 0 && <div className="empty">这个工作目录下没有技能或自定义命令。</div>}
+                {skills.length === 0 && <div className="empty">这个工作目录下没有技能。</div>}
               </Group>
             </>
           )}
@@ -246,21 +265,59 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
 
 // The tool list is the long half and the least urgent, so it folds behind its
 // own count — the same idiom a long file read uses in the transcript.
-function Server({ m }: { m: McpEntry }) {
+function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () => void }) {
+  const [busy, setBusy] = useState("");
+  const [failed, setFailed] = useState("");
+  // 401/403 is not a broken server, it is a server that stopped trusting this
+  // machine — retrying without saying so sends the user around the same loop.
+  const auth = /\b(401|403|unauthorized|forbidden|auth)/i.test(m.error ?? failed);
   const meta = [MCP_STATE[m.state] ?? m.state, m.transport, m.source].filter(Boolean).join(" · ");
+
+  const run = async (what: string, fn: () => Promise<unknown>) => {
+    setBusy(what);
+    setFailed("");
+    try {
+      const r = (await fn()) as { error?: string } | void;
+      if (r && typeof r === "object" && r.error) setFailed(r.error);
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+      onDone();
+    }
+  };
+
+  const actions = (
+    <span className="acts">
+      {m.enabled && m.state !== "ready" && (
+        <button className="act" disabled={!!busy} onClick={() => void run("retry", () => port.reconnectMcp(m.name))}>
+          {busy === "retry" ? "连接中…" : auth ? "重新授权" : "重连"}
+        </button>
+      )}
+      <Switch
+        on={m.enabled}
+        busy={busy === "toggle"}
+        label={`${m.enabled ? "关闭" : "启用"} ${m.name}`}
+        onClick={() => void run("toggle", () => port.setMcpEnabled(m.name, !m.enabled))}
+      />
+    </span>
+  );
+
   const head = (
     <>
       <i className="pip" />
       <span className="nm">{m.name}</span>
       {m.toolNames?.length ? <span className="fold">{m.tools} 个工具</span> : null}
       <span className="meta">{meta}</span>
+      {actions}
     </>
   );
+  const why = m.error || failed;
   if (!m.toolNames?.length) {
     return (
       <div className="srv" data-st={m.state}>
         <div className="srv-hd">{head}</div>
-        {m.error && <div className="why">{m.error}</div>}
+        {why && <div className="why">{why}</div>}
       </div>
     );
   }
@@ -276,6 +333,64 @@ function Server({ m }: { m: McpEntry }) {
         ))}
       </div>
     </details>
+  );
+}
+
+// How a skill can start is the thing the slash list cannot say: a slash name
+// means you can call it, "auto" means the model may start it on its own, and
+// those are separate permissions. Both is the norm, so only the row that is
+// missing one says anything — a badge on every row is a badge on none.
+function triggerNote(sk: SkillEntry, implicit: boolean): string {
+  if (!sk.enabled) return "";
+  const auto = !sk.manual && implicit;
+  if (sk.slashName && auto) return "";
+  if (sk.slashName) return "只能点名";
+  if (auto) return "只能模型自选";
+  return "调不到";
+}
+
+function SkillRow({
+  sk, implicit, port, onDone,
+}: {
+  sk: SkillEntry; implicit: boolean; port: AgentPort; onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const note = triggerNote(sk, implicit);
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      await port.setSkillEnabled(sk.name, !sk.enabled);
+    } finally {
+      setBusy(false);
+      onDone();
+    }
+  };
+  return (
+    <div className="skrow" data-off={sk.enabled ? undefined : ""}>
+      <span className="nm">{sk.slashName ? "/" + sk.slashName : sk.name}</span>
+      <span className="ds">{sk.description || "没有写说明"}</span>
+      <span className="how">{note && <i className={note === "调不到" ? "w none" : "w"}>{note}</i>}</span>
+      <span className="face">
+        {sk.subagent && <i className="sa">子代理</i>}
+        {sk.readOnly && <i className="ro">只读</i>}
+      </span>
+      <span className="sc" title={sk.path}>
+        {sk.plugin || SCOPE[sk.scope ?? ""] || sk.scope}
+      </span>
+      <Switch on={sk.enabled} busy={busy} label={`${sk.enabled ? "关闭" : "启用"} ${sk.name}`} onClick={toggle} />
+    </div>
+  );
+}
+
+function Switch({
+  on, busy, label, onClick,
+}: {
+  on: boolean; busy?: boolean; label: string; onClick: () => void;
+}) {
+  return (
+    <button className="sw" role="switch" aria-checked={on} aria-label={label} disabled={busy} onClick={onClick}>
+      <i />
+    </button>
   );
 }
 

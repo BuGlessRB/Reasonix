@@ -1,4 +1,4 @@
-import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpEntry, SlashEntry, WorkspaceInfo } from "./port";
+import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpEntry, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 
 interface Beat {
@@ -115,6 +115,48 @@ const SCRIPT: Beat[] = [
           "... (truncated at 3 matches)",
         ].join("\n"),
         durationMs: 140,
+      }),
+    },
+  },
+  // An external service answering, and a named skill running as a subagent. Both
+  // render differently from a built-in call — the server badge and the nested
+  // trace — and neither had a fixture, so neither was ever seen in dev.
+  {
+    wait: 450,
+    ev: {
+      kind: "tool_result",
+      tool: tool("use_capability", {
+        id: "mcp1",
+        resolvedName: "mcp__time__get_current_time",
+        args: JSON.stringify({ timezone: "Asia/Shanghai" }),
+        output: "2026-08-13T14:22:07+08:00",
+        durationMs: 120,
+      }),
+    },
+  },
+  { wait: 400, ev: { kind: "tool_dispatch", tool: tool("task", { id: "tk1", profile: { name: "security-review" } }) } },
+  {
+    wait: 500,
+    ev: {
+      kind: "tool_result",
+      tool: tool("grep", {
+        id: "tk1-a", parentId: "tk1",
+        args: JSON.stringify({ pattern: "api_key" }),
+        output: "internal/config/credentials.go:41:\tKey string `toml:\"api_key\"`",
+        durationMs: 90,
+      }),
+    },
+  },
+  {
+    wait: 600,
+    ev: {
+      kind: "tool_result",
+      tool: tool("task", {
+        id: "tk1",
+        profile: { name: "security-review" },
+        args: JSON.stringify({ description: "只读地过一遍安全面" }),
+        output: "没有新增的密钥读写路径；退避补丁不触碰凭据存储。",
+        durationMs: 8400,
       }),
     },
   },
@@ -292,19 +334,78 @@ export class MockPort implements AgentPort {
     ];
   }
 
+  // Mutable: the admin switches are the whole point of the extensions page, and
+  // a fixture that answers the same list either way cannot show them working.
+  private servers: McpEntry[] = [
+    {
+      name: "time",
+      state: "ready",
+      enabled: true,
+      transport: "stdio",
+      source: "built-in",
+      tools: 2,
+      toolNames: ["get_current_time", "convert_time"],
+    },
+    { name: "context7", state: "idle", enabled: true, tools: 0, transport: "http" },
+    { name: "figma", state: "failed", enabled: true, transport: "http", tools: 0, error: "401 unauthorized" },
+  ];
+
+  private skillList: SkillEntry[] = [
+    {
+      name: "review", slashName: "review", description: "复核这一轮改动，给出严重度分级",
+      scope: "project", path: ".reasonix/skills/review/SKILL.md", subagent: true, enabled: true,
+    },
+    { name: "init", slashName: "init", description: "为这个仓库生成一份项目说明", scope: "builtin", enabled: true },
+    {
+      name: "security-review", slashName: "security-review", description: "只读地过一遍安全面",
+      scope: "builtin", subagent: true, readOnly: true, effort: "high", enabled: true,
+    },
+    // No slash name of its own: only model discovery reaches it. This is the
+    // row the old list could not show at all.
+    {
+      name: "release-notes", description: "从提交历史起草发布说明",
+      scope: "global", path: "~/.reasonix/skills/release-notes/SKILL.md", enabled: false,
+    },
+    {
+      name: "deploy-runbook", slashName: "deploy-runbook", description: "只在你点名时跑的部署清单",
+      scope: "project", path: ".reasonix/skills/deploy-runbook/SKILL.md", manual: true, enabled: true,
+    },
+  ];
+
   async mcp(): Promise<McpEntry[]> {
-    return [
-      {
-        name: "time",
-        state: "ready",
-        transport: "stdio",
-        source: "built-in",
-        tools: 2,
-        toolNames: ["get_current_time", "convert_time"],
-      },
-      { name: "context7", state: "idle", tools: 0 },
-      { name: "figma", state: "failed", transport: "http", tools: 0, error: "401 unauthorized" },
-    ];
+    return this.servers.map((s) => ({ ...s }));
+  }
+
+  async reconnectMcp(name: string) {
+    const s = this.servers.find((x) => x.name === name);
+    if (!s) return { state: "failed", error: "no configured MCP server named " + name };
+    // figma keeps failing: a retry that always works would hide the state the
+    // button exists for.
+    if (name === "figma") {
+      s.state = "failed";
+      s.error = "401 unauthorized";
+      return { state: "failed", error: s.error };
+    }
+    s.state = "ready";
+    s.error = undefined;
+    s.tools = s.tools || 1;
+    return { state: "ready", tools: s.tools };
+  }
+
+  async setMcpEnabled(name: string, enabled: boolean) {
+    const s = this.servers.find((x) => x.name === name);
+    if (!s) return;
+    s.enabled = enabled;
+    s.state = enabled ? (s.error ? "failed" : "idle") : "disabled";
+  }
+
+  async skills(): Promise<SkillCatalog> {
+    return { implicit: true, skills: this.skillList.map((s) => ({ ...s })) };
+  }
+
+  async setSkillEnabled(name: string, enabled: boolean) {
+    const sk = this.skillList.find((x) => x.name === name);
+    if (sk) sk.enabled = enabled;
   }
 
   async workspaces(): Promise<WorkspaceInfo> {

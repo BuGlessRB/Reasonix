@@ -71,11 +71,14 @@ export interface SessionEntry {
   current?: boolean;
 }
 
-// GET /mcp. One external tool provider. state is ready | connecting | failed
-// | idle, where idle means configured but not connected yet.
+// GET /mcp. One external tool provider. state is ready | connecting | failed |
+// disabled | idle: disabled is switched off and stays off across restarts, idle
+// is configured and simply not needed yet. They look identical to the live host
+// and mean opposite things, so the server resolves which one it is.
 export interface McpEntry {
   name: string;
   state: string;
+  enabled: boolean;
   transport?: string;
   source?: string;
   tools: number;
@@ -83,6 +86,31 @@ export interface McpEntry {
   resources?: number;
   toolNames?: string[];
   error?: string;
+}
+
+// One entry of GET /skills — every skill that may run, which is a larger set
+// than /slash: a skill with no slash name still fires on model discovery.
+export interface SkillEntry {
+  name: string;
+  slashName?: string;
+  description?: string;
+  scope?: string;
+  plugin?: string;
+  path?: string;
+  subagent?: boolean;
+  readOnly?: boolean;
+  model?: string;
+  effort?: string;
+  allowedTools?: string[];
+  manual?: boolean;
+  enabled: boolean;
+}
+
+// implicit is the session-wide switch for model-initiated discovery. With it
+// off every "auto" skill is manual in practice, so the rows have to say so.
+export interface SkillCatalog {
+  implicit: boolean;
+  skills: SkillEntry[];
 }
 
 export interface WorkspaceEntry {
@@ -125,7 +153,15 @@ export interface AgentPort {
   saveProviderKey(apiKey: string): Promise<void>;
   models(): Promise<ModelEntry[]>;
   slash(): Promise<SlashEntry[]>;
+  skills(): Promise<SkillCatalog>;
+  // Persisted, but the running session keeps the prompt index it was built
+  // with: the switch reaches the model on the next rebuild, not this turn.
+  setSkillEnabled(name: string, enabled: boolean): Promise<void>;
   mcp(): Promise<McpEntry[]>;
+  // Retries a failed or disconnected server and answers with its new state, so
+  // the caller never has to race a follow-up GET against the connect.
+  reconnectMcp(name: string): Promise<{ state: string; tools?: number; error?: string }>;
+  setMcpEnabled(name: string, enabled: boolean): Promise<void>;
   workspaces(): Promise<WorkspaceInfo>;
   // Rebuilds the whole runtime against another folder. The conversation does
   // not come along, so the caller has to reload the transcript afterwards.

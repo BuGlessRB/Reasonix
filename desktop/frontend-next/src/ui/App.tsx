@@ -30,13 +30,21 @@ export function App({ port }: { port: AgentPort }) {
   const flow = useRef<HTMLDivElement>(null);
   const startedAt = useRef(0);
 
+  const reloadMcp = useCallback(() => {
+    void port.mcp().then(setMcp).catch(() => setMcp([]));
+  }, [port]);
+
   useEffect(
     () =>
       port.subscribe((ev) => {
         dispatch(ev);
         trajDispatch(ev);
+        // A server finishing its handshake changes what /mcp answers, and this
+        // is the only precise signal for it — the turn boundary below is the
+        // fallback for changes that arrive without an event.
+        if (ev.kind === "mcp_surface_ready" || ev.kind === "extension_status") reloadMcp();
       }),
-    [port],
+    [port, reloadMcp],
   );
 
   useEffect(() => {
@@ -72,6 +80,12 @@ export function App({ port }: { port: AgentPort }) {
     port.status().then(setStatus).catch(() => {});
   }, [port]);
 
+  // Stable so the settings pane's own reload effect does not re-run every render.
+  const onSettingsChanged = useCallback(() => {
+    refreshStatus();
+    reloadMcp();
+  }, [refreshStatus, reloadMcp]);
+
   const fail = useCallback((e: unknown) => {
     dispatch({ kind: "__error", text: e instanceof Error ? e.message : String(e) } as never);
   }, []);
@@ -101,8 +115,8 @@ export function App({ port }: { port: AgentPort }) {
   // also when its status can have changed — no timer of its own needed.
   useEffect(() => {
     reloadSessions();
-    void port.mcp().then(setMcp).catch(() => setMcp([]));
-  }, [port, reloadSessions, status?.sessionPath, s.running]);
+    reloadMcp();
+  }, [reloadSessions, reloadMcp, status?.sessionPath, s.running]);
 
   // /status is the only source for background jobs and for settings the run does
   // not echo, so a live turn has to re-read it rather than infer from events.
@@ -307,6 +321,7 @@ export function App({ port }: { port: AgentPort }) {
             rate={elapsed >= 1 ? s.metrics.out / elapsed : 0}
             yolo={yolo}
             onFold={() => setSide(false)}
+            onSettings={() => setSettings(true)}
           />
         </div>
       </div>
@@ -318,7 +333,7 @@ export function App({ port }: { port: AgentPort }) {
           theme={theme}
           onTheme={setTheme}
           onClose={() => setSettings(false)}
-          onChanged={refreshStatus}
+          onChanged={onSettingsChanged}
         />
       )}
     </div>

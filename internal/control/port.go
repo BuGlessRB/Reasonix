@@ -171,6 +171,7 @@ type Capabilities interface {
 	DisabledSkills() []skill.Skill
 	SkillEnabled(name string) bool
 	SetSkillEnabled(name string, enabled bool) error
+	ImplicitSkillInvocationEnabled() bool
 	CreateSkill(name string, scope skill.Scope, content string) (string, error)
 	UpdateSkill(name string, scope skill.Scope, content string) error
 	DeleteSkill(name string, scope skill.Scope) error
@@ -182,9 +183,13 @@ type Capabilities interface {
 	ConnectMCPServer(e config.PluginEntry) (int, error)
 	RegisterMCPServerOnDemand(e config.PluginEntry) (int, error)
 	ConnectConfiguredMCPServer(name string) (int, error)
+	ReconnectMCPServer(name string) (int, error)
+	MCPServerEnabled(name string) (bool, error)
+	SetMCPServerEnabled(name string, enabled bool) error
 	DisconnectMCPServer(name string) bool
 	RemoveMCPServer(name string) (disconnected bool, err error)
 	ConfiguredMCPNames() []string
+	ConfiguredMCPServers() []MCPServerState
 	DisconnectedMCPNames() []string
 	UnregisterMCPServerTools(name string) bool
 	ImportMCPEntries(entries []config.PluginEntry) (total, added, updated, connected, failed, skipped int, err error)

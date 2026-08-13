@@ -16,9 +16,10 @@ interface Props {
   rate: number;
   yolo: boolean;
   onFold: () => void;
+  onSettings: () => void;
 }
 
-export function Metrics({ metrics, plan, items, jobs, mcp, rate, yolo, onFold }: Props) {
+export function Metrics({ metrics, plan, items, jobs, mcp, rate, yolo, onFold, onSettings }: Props) {
   return (
     <>
       <div className="side-hd">
@@ -31,7 +32,7 @@ export function Metrics({ metrics, plan, items, jobs, mcp, rate, yolo, onFold }:
         <Cache metrics={metrics} rate={rate} />
         <Agents items={items} />
         <Jobs jobs={jobs} />
-        <Mcp servers={mcp} />
+        <Mcp servers={mcp} onOpen={onSettings} />
         <Plan steps={plan} />
         <Files items={items} yolo={yolo} />
       </div>

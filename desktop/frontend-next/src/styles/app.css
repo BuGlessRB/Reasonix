@@ -481,6 +481,12 @@
     font: 500 9.5px var(--mono); letter-spacing: .09em; padding: 1.5px 6px;
     border-radius: var(--r-pill); color: var(--net); background: var(--net-wash);
   }
+  /* 派活用委派色，外部服务用联网色 —— 两者都是"这一步不是核心自己干的",
+     但一个跑在你机器上，一个跑在别人家。 */
+  .hl .who {
+    font: 500 9.5px var(--mono); letter-spacing: .09em; padding: 1.5px 6px;
+    border-radius: var(--r-pill); color: var(--deleg); background: var(--deleg-wash);
+  }
 
   .cost { margin-left: auto; display: inline-flex; align-items: baseline; gap: 7px; font: 400 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none }
   .cost .hit { color: var(--ok) }
@@ -1105,6 +1111,9 @@
   .prefs-main { overflow: auto; padding: 34px 44px 64px }
   /* 贴着目录往下读，不居中：只有左边一条栏时，居中会把内容悬成一座孤岛 */
   .prefs-col { max-width: 660px }
+  /* 660 是给读的段落定的行宽。扩展页是表：名字、说明、触发方式、归属、开关
+     五列挤在同一个上限里会把说明截掉，所以只有这一页放宽。 */
+  .prefs-main[data-sec="ext"] .prefs-col { max-width: 980px }
   .grp { margin-bottom: 40px; animation: card var(--t-card) var(--ease-out) both }
   .grp:last-child { margin-bottom: 0 }
   .grp-hd { display: flex; align-items: baseline; gap: 12px }
@@ -1144,10 +1153,37 @@
   .srv[data-st="ready"] .pip { background: var(--ok) }
   .srv[data-st="connecting"] .pip { background: var(--net); animation: tick 1.6s ease-in-out infinite }
   .srv[data-st="failed"] .pip { background: var(--err) }
+  .srv[data-st="disabled"] .pip { background: var(--ghost) }
+  .srv[data-st="disabled"] .nm, .srv[data-st="disabled"] .meta { color: var(--faint) }
   .srv .nm { font: 500 12.5px var(--ui); color: var(--text); min-width: 0 }
   .srv .meta { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--faint) }
   .srv .why { margin: 4px 0 0 15px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
   .srv .peek { margin: 7px 0 1px 15px }
+  /* 动作贴在行尾，跟状态元数据之间留出一道空隙：读状态和动手是两件事 */
+  .acts { display: flex; align-items: center; gap: 8px; margin-left: 14px; flex: none }
+  .act {
+    padding: 3px 9px; border: 1px solid var(--border); border-radius: var(--r-pill);
+    background: transparent; color: var(--text); font: 400 11px var(--ui); cursor: pointer;
+    transition: background .14s, border-color .14s;
+  }
+  .act:hover:not(:disabled) { background: var(--overlay); border-color: var(--muted) }
+  .act:disabled { color: var(--ghost); cursor: default }
+  .act:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
+
+  /* 开关只有两个状态，所以它自己就是全部标签 —— 旁边不再挂"已启用"三个字 */
+  .sw {
+    flex: none; width: 30px; height: 17px; padding: 0; border: 0; border-radius: var(--r-pill);
+    background: var(--overlay); box-shadow: inset 0 0 0 1px var(--hair); cursor: pointer;
+    transition: background .16s;
+  }
+  .sw i { display: block; width: 13px; height: 13px; margin-left: 2px; border-radius: 50%;
+    background: var(--faint); transition: transform .16s var(--ease-out), background .16s }
+  /* 开着是常态，不该在页面上有重量：填充用中性色，只有位置在说状态。
+     强调色留给真正需要你动手的东西（重连按钮、连不上的左色条）。 */
+  .sw[aria-checked="true"] { background: var(--muted); box-shadow: none }
+  .sw[aria-checked="true"] i { transform: translateX(13px); background: var(--raised) }
+  .sw:disabled { cursor: default; opacity: .55 }
+  .sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
 
   /* 名字 + 说明 + 归属的三列行。能打的那串是机器字面量，说明是给人读的，
      两种字体是有意的对比；定宽名字列让说明在整张表里对齐。 */
@@ -1159,6 +1195,28 @@
   .lrow .sa { margin-left: auto; flex: none }
   .lrow .sa + .sc { margin-left: 8px }
   .lrow .sc { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--faint) }
+
+  /* 技能行比服务表多一列：怎么才能跑起来。这一列不是装饰 —— 它是这张表跟
+     斜杠菜单的区别所在，所以它排在能力标签前面，靠说明文字右边。 */
+  .skrow { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--hair) }
+  .skrow:last-of-type { border-bottom: 1px solid var(--hair) }
+  .skrow[data-off] .nm, .skrow[data-off] .ds { color: var(--ghost) }
+  .skrow[data-off] .how, .skrow[data-off] .face { opacity: .45 }
+  .skrow .nm { flex: none; min-width: 152px; font: 400 11.5px var(--mono); color: var(--text) }
+  .skrow .ds { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 400 11.5px var(--ui); color: var(--muted) }
+  .skrow .how, .skrow .face { flex: none; display: flex; gap: 5px }
+  .skrow .w {
+    padding: 1px 6px; border-radius: var(--r-pill); font: 400 10px var(--ui); font-style: normal;
+    color: var(--faint); background: var(--overlay);
+  }
+  .skrow .w.none { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent) }
+  .skrow .ro {
+    padding: 1px 5px; border-radius: var(--r-pill); font: 500 9.5px var(--ui); font-style: normal;
+    color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent);
+  }
+  .skrow .sc { flex: none; min-width: 44px; text-align: right; font: 400 10.5px var(--mono); color: var(--faint) }
+  .skrow .sw { margin-left: 4px; align-self: center }
 
   .seg { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; background: var(--overlay); border-radius: var(--r-sm) }
   /* 中文标签在 mono 栈里会掉到回退字体，跟旁边的界面字对不齐 */

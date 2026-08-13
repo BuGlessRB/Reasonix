@@ -1,4 +1,4 @@
-import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpEntry, SlashEntry, WorkspaceInfo } from "./port";
+import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpEntry, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 
 // Must match wailsEventName / replayPath in desktop/next.
@@ -58,8 +58,34 @@ export class SsePort implements AgentPort {
     return this.get<SlashEntry[]>("/slash");
   }
 
+  skills() {
+    return this.get<SkillCatalog>("/skills");
+  }
+
+  setSkillEnabled(name: string, enabled: boolean) {
+    return this.post("/skills/enabled", { name, enabled });
+  }
+
   mcp() {
     return this.get<McpEntry[]>("/mcp");
+  }
+
+  // 502 carries the diagnosis in the body — the reason the retry failed is the
+  // whole point of the button, so it is read rather than thrown away.
+  async reconnectMcp(name: string) {
+    const res = await fetch(this.base + "/mcp/reconnect", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ name }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { state?: string; tools?: number; error?: string };
+    if (!res.ok && !body.error) throw new Error(`/mcp/reconnect: ${res.status}`);
+    return { state: body.state ?? (res.ok ? "ready" : "failed"), tools: body.tools, error: body.error };
+  }
+
+  setMcpEnabled(name: string, enabled: boolean) {
+    return this.post("/mcp/enabled", { name, enabled });
   }
 
   workspaces() {

@@ -530,8 +530,11 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /sessions", s.sessions)
 	mux.HandleFunc("GET /trajectory", s.trajectory)
 	mux.HandleFunc("GET /skills", s.skills)
+	mux.HandleFunc("POST /skills/enabled", s.skillEnabled)
 	mux.HandleFunc("GET /slash", s.slash)
 	mux.HandleFunc("GET /mcp", s.mcp)
+	mux.HandleFunc("POST /mcp/reconnect", s.mcpReconnect)
+	mux.HandleFunc("POST /mcp/enabled", s.mcpEnabled)
 	mux.HandleFunc("GET /workspaces", s.workspaces)
 	mux.HandleFunc("POST /workspace", s.workspace)
 	mux.HandleFunc("GET /todos", s.todos)
@@ -919,6 +922,16 @@ func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		slog.Warn("serve: writeJSON encode failed", "err", err)
+	}
+}
+
+// writeJSONStatus is writeJSON for a failure the client has to act on: the body
+// carries the diagnosis, so a bare http.Error would throw it away.
+func writeJSONStatus(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Warn("serve: writeJSONStatus encode failed", "err", err)
 	}
 }
 
@@ -1627,22 +1640,6 @@ func previewTitle(first string) string {
 		return string(r[:47]) + "..."
 	}
 	return first
-}
-
-// skills lists discoverable skills.
-func (s *Server) skills(w http.ResponseWriter, _ *http.Request) {
-	type skillEntry struct {
-		Name        string `json:"name"`
-		Scope       string `json:"scope"`
-		Subagent    bool   `json:"subagent"`
-		Description string `json:"description"`
-	}
-	raw := s.ctl().Skills()
-	out := make([]skillEntry, len(raw))
-	for i, sk := range raw {
-		out[i] = skillEntry{Name: sk.Name, Scope: string(sk.Scope), Subagent: sk.RunAs == "subagent", Description: sk.Description}
-	}
-	writeJSON(w, out)
 }
 
 // todos returns the canonical task list (latest todo_write state merged with
