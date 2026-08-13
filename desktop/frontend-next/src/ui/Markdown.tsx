@@ -1,11 +1,10 @@
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import remarkGemoji from "remark-gemoji";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
-import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css";
 
 // Model output is untrusted markup, so raw HTML is parsed and then cut back to
 // an allowlist. These four tags carry meaning no markdown syntax expresses;
@@ -26,7 +25,35 @@ const schema = {
 const REMARK = [remarkGfm, remarkMath, remarkGemoji];
 // Order is load-bearing: raw parses HTML into nodes, sanitize prunes them, and
 // katex renders afterwards so its generated markup is not pruned in turn.
-const REHYPE = [rehypeRaw, [rehypeSanitize, schema], rehypeKatex];
+const BASE_REHYPE = [rehypeRaw, [rehypeSanitize, schema]];
+
+// KaTeX and its fonts are about half the bundle, and most coding sessions never
+// produce a formula, so it is fetched the first time one appears. No lookbehind
+// — older WebKit treats it as a syntax error and takes the whole page down.
+const MATH = /\$\$[\s\S]+?\$\$|\$[^\n$]+\$/;
+
+type Plugin = unknown;
+let katex: Plugin | null = null;
+let loading: Promise<void> | null = null;
+
+function useKatex(needed: boolean): Plugin | null {
+  const [plugin, setPlugin] = useState<Plugin | null>(katex);
+  useEffect(() => {
+    if (!needed || katex) return;
+    let alive = true;
+    loading ??= Promise.all([import("rehype-katex"), import("katex/dist/katex.min.css")]).then(
+      ([mod]) => {
+        katex = mod.default;
+      },
+    );
+    // A failed chunk leaves the math as source text, which still reads.
+    void loading.then(() => alive && setPlugin(() => katex)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [needed]);
+  return plugin;
+}
 
 // Streaming text arrives mid-token, so an unterminated fence would flip the
 // whole tail into a code block for as long as it stays open. Close it for the
@@ -37,11 +64,12 @@ function balanceFences(md: string) {
 }
 
 export function Markdown({ text, streaming }: { text: string; streaming?: boolean }) {
+  const math = useKatex(MATH.test(text));
   return (
     <div className="md">
       <ReactMarkdown
         remarkPlugins={REMARK}
-        rehypePlugins={REHYPE as never}
+        rehypePlugins={(math ? [...BASE_REHYPE, math] : BASE_REHYPE) as never}
         components={{
           // Every link here comes from model output; a webview navigating away
           // would replace the app with the page.
