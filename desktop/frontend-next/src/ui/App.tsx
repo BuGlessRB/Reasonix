@@ -105,6 +105,10 @@ export function App({ port }: { port: AgentPort }) {
         if (e.shiftKey) setSide((v) => !v);
         else setRail((v) => !v);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+        e.preventDefault();
+        setSettings(true);
+      }
       if (e.key === "Escape" && s.running) port.cancel();
     };
     addEventListener("keydown", onKey);

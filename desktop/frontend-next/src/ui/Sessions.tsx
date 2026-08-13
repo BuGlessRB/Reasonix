@@ -41,12 +41,18 @@ export function Sessions({ port, status, run, cost, onFold, onSwitched }: Props)
     }
   };
 
-  const drop = async (e: SessionEntry) => {
+  const drop = async (e: SessionEntry, row: HTMLElement | null) => {
     if (confirm !== e.path) {
       setConfirm(e.path);
       return;
     }
     setConfirm("");
+    // height:auto has nothing to transition from, so the row vanished instead
+    // of collapsing. Pin the measured height and force a paint at it first.
+    if (row) {
+      row.style.height = `${row.offsetHeight}px`;
+      void row.offsetHeight;
+    }
     setGone(e.path);
     try {
       await port.deleteSession(e.name);
@@ -88,6 +94,7 @@ export function Sessions({ port, status, run, cost, onFold, onSwitched }: Props)
                 data-confirm={confirm === e.path ? "" : undefined}
                 data-gone={gone === e.path ? "" : undefined}
                 onClick={() => pick(e)}
+                onMouseLeave={() => confirm === e.path && setConfirm("")}
               >
                 <span className="goal">
                   <i className="pip" />
@@ -109,7 +116,7 @@ export function Sessions({ port, status, run, cost, onFold, onSwitched }: Props)
                     aria-label="删除这个会话"
                     onClick={(ev) => {
                       ev.stopPropagation();
-                      void drop(e);
+                      void drop(e, ev.currentTarget.closest<HTMLElement>(".ws"));
                     }}
                   >
                     {confirm === e.path ? "删除" : "×"}
