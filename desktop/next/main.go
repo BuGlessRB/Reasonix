@@ -43,6 +43,7 @@ var apiPaths = map[string]bool{
 	"/rewind": true, "/fork": true, "/summarize": true, "/forget": true,
 	"/tool-approval-mode": true, "/auto-approve-tools": true, "/bypass": true,
 	"/provider-setup": true, "/delete-session": true, "/inbox/items": true,
+	"/trajectory": true,
 }
 
 func main() {

@@ -14,8 +14,8 @@ interface Props {
   scroll: RefObject<HTMLDivElement | null>;
   hidden: boolean;
   onPinned: (v: boolean) => void;
-  onApprove: (id: string, v: ApprovalVerdict) => void;
-  onAnswer: (id: string, answers: { questionId: string; selected: string[] }[]) => void;
+  onApprove: (itemId: string, id: string, v: ApprovalVerdict) => void;
+  onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => void;
   onSuggest: (text: string) => void;
 }
 

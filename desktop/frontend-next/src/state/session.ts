@@ -102,7 +102,8 @@ export function reduce(
     | WireEvent
     | { kind: "__restore"; items: Item[]; plan: PlanStep[]; hit: number; miss: number; cost?: number }
     | { kind: "__error"; text: string }
-    | { kind: "__user"; text: string; pending: boolean },
+    | { kind: "__user"; text: string; pending: boolean }
+    | { kind: "__decided"; id: string; verdict?: string; answers?: string[][] },
 ): SessionState {
   if (ev.kind === "__error") return { ...s, error: ev.text };
   // Both event.Message emitters carry assistant text, so nothing on the wire
@@ -114,6 +115,22 @@ export function reduce(
       ...s,
       steerQueue: ev.pending ? [...s.steerQueue, ev.text] : s.steerQueue,
       items: [...s.items, { t: "user", id: nextId(), text: ev.text, pending: ev.pending }],
+    };
+  }
+  // The card reads its sealed state off the item, so the decision has to be
+  // recorded here — otherwise an answered question stays answerable forever.
+  if (ev.kind === "__decided") {
+    return {
+      ...s,
+      items: s.items.map((i) =>
+        i.id !== ev.id
+          ? i
+          : i.t === "approval"
+            ? { ...i, verdict: ev.verdict ?? "once" }
+            : i.t === "ask"
+              ? { ...i, answered: ev.answers ?? [] }
+              : i,
+      ),
     };
   }
   if (ev.kind === "__restore") {
@@ -227,7 +244,10 @@ export function reduce(
       };
 
     case "turn_done":
-      return { ...s, running: false, doing: ev.err ? "失败" : "已完成", waiting: {} };
+      // A readiness complaint ends the turn without the work having failed, and
+      // the reason is the only part worth reading. Anything but a clean finish
+      // keeps the run amber rather than claiming the tick.
+      return { ...s, running: false, doing: ev.err ? ev.err : "已完成", waiting: {} };
 
     default:
       return s;

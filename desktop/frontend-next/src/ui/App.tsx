@@ -218,8 +218,14 @@ export function App({ port }: { port: AgentPort }) {
             hidden={pane !== "flow"}
             onPinned={setPinned}
             onSuggest={submit}
-            onApprove={(id, v) => port.approve(id, v).then(refreshStatus).catch(fail)}
-            onAnswer={(id, answers) => void port.answer(id, answers).catch(fail)}
+            onApprove={(itemId, id, v) => {
+              dispatch({ kind: "__decided", id: itemId, verdict: v } as never);
+              port.approve(id, v).then(refreshStatus).catch(fail);
+            }}
+            onAnswer={(itemId, id, answers) => {
+              dispatch({ kind: "__decided", id: itemId, answers: answers.map((a) => a.selected) } as never);
+              void port.answer(id, answers).catch(fail);
+            }}
           />
 
           <div className="scroll" id="trajScroll" data-pane="traj" hidden={pane !== "traj"}>

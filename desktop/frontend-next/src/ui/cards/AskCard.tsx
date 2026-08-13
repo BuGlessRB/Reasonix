@@ -3,7 +3,7 @@ import type { Item } from "../../state/session";
 
 interface Props {
   item: Extract<Item, { t: "ask" }>;
-  onAnswer: (id: string, answers: { questionId: string; selected: string[] }[]) => void;
+  onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => void;
 }
 
 export function AskCard({ item, onAnswer }: Props) {
@@ -12,6 +12,11 @@ export function AskCard({ item, onAnswer }: Props) {
   const [picks, setPicks] = useState<string[][]>(() => qs.map(() => []));
   const answered = (i: number) => picks[i].length > 0;
   const left = qs.reduce((n, _, i) => n + (answered(i) ? 0 : 1), 0);
+  // Answered is read-only but still readable: the tabs keep working so you can
+  // see what was chosen for each question, and the options stay on screen with
+  // the unchosen ones dimmed by the sealed styling.
+  const sealed = item.answered !== undefined;
+  const chosen = item.answered ?? picks;
 
   const toggle = (qi: number, label: string) => {
     setPicks((prev) => {
@@ -36,7 +41,7 @@ export function AskCard({ item, onAnswer }: Props) {
           <span className="arg">{qs.length} 个问题</span>
         </div>
         <div className="out">
-          <div className="ask">
+          <div className="ask" data-sealed={sealed ? "" : undefined}>
             {qs.length > 1 && (
               <div className="ask-tabs" role="tablist">
                 {qs.map((q, i) => (
@@ -80,16 +85,29 @@ export function AskCard({ item, onAnswer }: Props) {
                 </div>
               </div>
             ))}
+            {sealed && (
+              <div className="ask-done">
+                {qs.map((q, i) => (
+                  <span key={q.id}>
+                    {i > 0 && "　·　"}
+                    <b>{q.header || `问题 ${i + 1}`}：</b>
+                    {chosen[i]?.length ? chosen[i].join("、") : "未答"}
+                  </span>
+                ))}
+              </div>
+            )}
+            {!sealed && (
             <div className="ask-foot">
               <button
                 className="btn"
                 data-primary
                 disabled={left > 0}
-                onClick={() => onAnswer(item.ask.id, qs.map((q, i) => ({ questionId: q.id, selected: picks[i] })))}
+                onClick={() => onAnswer(item.id, item.ask.id, qs.map((q, i) => ({ questionId: q.id, selected: picks[i] })))}
               >
                 {left ? `确认（还有 ${left} 个没答）` : "确认"}
               </button>
             </div>
+            )}
           </div>
         </div>
       </div>

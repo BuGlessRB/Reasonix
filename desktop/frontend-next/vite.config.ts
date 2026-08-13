@@ -9,7 +9,7 @@ const ROUTES = [
   "/events", "/history", "/status", "/submit", "/cancel", "/approve", "/answer",
   "/plan", "/goal", "/resume", "/models", "/tool-approval-mode", "/preset",
   "/model", "/effort", "/new", "/sessions", "/delete-session", "/provider-setup",
-  "/inbox",
+  "/inbox", "/trajectory",
 ];
 
 // REASONIX_SERVE points at a running `reasonix serve`; without it the app boots
