@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import type { Item, Waiting } from "../state/session";
 import type { ApprovalVerdict } from "../port/port";
 import { RMark } from "./RMark";
@@ -12,12 +12,15 @@ import { AskFromTool } from "./cards/AskFromTool";
 interface Props {
   items: Item[];
   waiting: Waiting;
+  scroll: RefObject<HTMLDivElement | null>;
+  hidden: boolean;
+  onPinned: (v: boolean) => void;
   onApprove: (id: string, v: ApprovalVerdict) => void;
   onAnswer: (id: string, answers: { questionId: string; selected: string[] }[]) => void;
+  onSuggest: (text: string) => void;
 }
 
-export function Transcript({ items, waiting, onApprove, onAnswer }: Props) {
-  const scroll = useRef<HTMLDivElement>(null);
+export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove, onAnswer, onSuggest }: Props) {
   // Stick to the bottom only while the reader is already there; scrolling up
   // must not be yanked back by incoming frames.
   const [pinned, setPinned] = useState(true);
@@ -26,19 +29,25 @@ export function Transcript({ items, waiting, onApprove, onAnswer }: Props) {
     if (!pinned) return;
     const el = scroll.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [items, pinned]);
+  }, [items, pinned, scroll]);
 
   return (
     <div
       className="scroll"
+      id="flowScroll"
+      data-pane="flow"
       ref={scroll}
+      hidden={hidden}
       onScroll={(e) => {
         const el = e.currentTarget;
-        setPinned(el.scrollHeight - el.scrollTop - el.clientHeight < 48);
+        const at = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+        if (at === pinned) return;
+        setPinned(at);
+        onPinned(at);
       }}
     >
       <div className="flow">
-        {items.length === 0 && <Hero />}
+        {items.length === 0 && <Hero onPick={onSuggest} />}
         {items.map((it) => {
           switch (it.t) {
             case "user":
@@ -136,13 +145,26 @@ function Await({ retry }: { retry?: { attempt: number; max: number } }) {
   );
 }
 
-function Hero() {
+const SUGGESTIONS = [
+  "把这个仓库跑一遍测试，把失败的那几个定位到具体文件",
+  "读一遍最近三次提交，告诉我哪里的改动风险最高",
+  "查一下这个项目的缓存命中率为什么会掉",
+];
+
+function Hero({ onPick }: { onPick: (t: string) => void }) {
   return (
     <div className="hero">
       <RMark />
       <div className="t">交待一件事，它自己往下做</div>
       <div className="s">
         读代码、联网查证、派子代理、改文件 —— 每一步都同时落进「轨迹」，那是机器记录，不是给人读的叙事。
+      </div>
+      <div className="qs">
+        {SUGGESTIONS.map((t) => (
+          <button className="sug" key={t} onClick={() => onPick(t)}>
+            {t}
+          </button>
+        ))}
       </div>
     </div>
   );

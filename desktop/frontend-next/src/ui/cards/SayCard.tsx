@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Item } from "../../state/session";
+import { Markdown } from "../Markdown";
 
 export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {
   const [open, setOpen] = useState(true);
@@ -24,7 +25,11 @@ export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {
               <div className="tk">{item.reasoning}</div>
             </details>
           )}
-          {item.text && <div className="txt">{item.text}</div>}
+          {item.text && (
+            <div className="txt">
+              <Markdown text={item.text} streaming={!item.done} />
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -30,6 +30,7 @@ export interface SessionStatus {
   goal: string;
   goalStatus: string;
   cwd: string;
+  workspaceRoot?: string;
   sessionPath?: string;
   used: number;
   window: number;
@@ -37,6 +38,15 @@ export interface SessionStatus {
   cacheMiss: number;
   balance?: { display: string; available: boolean };
   sessionCostQuote?: import("./wire").CostQuote;
+  jobs?: JobEntry[];
+}
+
+export interface JobEntry {
+  id: string;
+  kind: string;
+  label: string;
+  status: string;
+  startedAt: number;
 }
 
 // The UI depends on this and nothing else. SsePort talks to internal/serve;
@@ -76,11 +86,15 @@ export interface AgentPort {
   sessions(): Promise<SessionEntry[]>;
   resume(path: string): Promise<void>;
   newSession(): Promise<void>;
+  deleteSession(name: string): Promise<void>;
   status(): Promise<SessionStatus>;
   history(): Promise<HistoryMessage[]>;
   subscribe(onEvent: (ev: WireEvent) => void): () => void;
 
   submit(text: string): Promise<void>;
+  // /submit 409s once a turn holds the session. Mid-turn input is durable and
+  // goes through the inbox, which delivers it at the next tool boundary.
+  steer(text: string): Promise<void>;
   cancel(): Promise<void>;
   approve(id: string, verdict: ApprovalVerdict): Promise<void>;
   answer(id: string, answers: { questionId: string; selected: string[] }[]): Promise<void>;

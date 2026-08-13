@@ -1,6 +1,14 @@
 import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus } from "./port";
 import type { WireEvent } from "./wire";
 
+// Must match wailsEventName / replayPath in desktop/next.
+const WAILS_EVENT = "rx:event";
+const WAILS_REPLAY = "/rx-replay";
+
+interface WailsBus {
+  EventsOn(name: string, cb: (data: string) => void): () => void;
+}
+
 export class SsePort implements AgentPort {
   constructor(private readonly base = "") {}
 
@@ -35,8 +43,9 @@ export class SsePort implements AgentPort {
     return this.post("/provider-setup", { apiKey });
   }
 
-  models() {
-    return this.get<ModelEntry[]>("/models");
+  async models() {
+    const r = await this.get<{ models?: ModelEntry[] }>("/models");
+    return r.models ?? [];
   }
 
   sessions() {
@@ -53,24 +62,44 @@ export class SsePort implements AgentPort {
     return this.post("/new");
   }
 
+  deleteSession(name: string) {
+    return this.post("/delete-session", { name });
+  }
+
   history() {
     return this.get<HistoryMessage[]>("/history");
   }
 
   subscribe(onEvent: (ev: WireEvent) => void) {
-    const es = new EventSource(this.base + "/events", { withCredentials: true });
-    es.onmessage = (m) => {
+    const feed = (raw: string) => {
       try {
-        onEvent(JSON.parse(m.data) as WireEvent);
+        onEvent(JSON.parse(raw) as WireEvent);
       } catch {
         // A malformed frame must not tear down the stream.
       }
     };
+    // Wails' asset server buffers a response until its handler returns, so the
+    // SSE stream never reaches the page inside the shell. There it pushes the
+    // same frames over its own bus; the payload is identical.
+    const bus = (window as unknown as { runtime?: WailsBus }).runtime;
+    if (bus?.EventsOn) {
+      const off = bus.EventsOn(WAILS_EVENT, feed);
+      // Subscribing to the bus is not the handshake /events is: ask the shell
+      // to replay whatever prompt is already waiting for an answer.
+      void fetch(this.base + WAILS_REPLAY, { method: "POST" }).catch(() => {});
+      return off;
+    }
+
+    const es = new EventSource(this.base + "/events", { withCredentials: true });
+    es.onmessage = (m) => feed(m.data);
     return () => es.close();
   }
 
   submit(text: string) {
     return this.post("/submit", { input: text });
+  }
+  steer(text: string) {
+    return this.post("/inbox/items", { input: text, intent: "steer" });
   }
   cancel() {
     return this.post("/cancel");

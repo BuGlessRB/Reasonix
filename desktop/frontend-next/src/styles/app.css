@@ -16,8 +16,13 @@
     display: flex; align-items: center; gap: 12px; height: 39px; padding: 0 12px;
     flex: none; background: var(--raised); border-bottom: 1px solid var(--hair);
   }
-  .lights { display: flex; gap: 6px; }
-  .lights i { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+  /* Masked, not <img>: the wordmark ships one hard-coded blue that reads as a
+     status colour here and goes muddy on the dark surface. */
+  .brand {
+    width: 66px; height: 15px; flex: none; margin-right: 4px; background: var(--muted);
+    -webkit-mask: url("../assets/logo-wordmark.svg") no-repeat center / contain;
+            mask: url("../assets/logo-wordmark.svg") no-repeat center / contain;
+  }
   /* flex:1 + min-width:0 是承重的：没有它，长目标会把整条顶栏顶爆而不是省略 */
   .crumb { display: flex; align-items: center; gap: 6px; font: 400 12px var(--mono); color: var(--muted); flex: 1; min-width: 0; }
   .crumb .sep { color: var(--ghost); }
@@ -318,6 +323,7 @@
     color: var(--muted); font: 400 11px var(--ui); text-align: left; transition: color .14s;
   }
   .lnk:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px }
+  .lnk[disabled] { opacity: .4; cursor: default; pointer-events: none }
   .lnk:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px }
   .endbar { display: flex; gap: 14px; padding: 8px 0 4px 31px; animation: card var(--t-card) var(--ease-out) both }
 
@@ -403,9 +409,11 @@
     border-radius: var(--r-xs); font: 500 10px/1 var(--mono); color: var(--faint);
     background: var(--overlay); flex: none;
   }
+  /* stroke-width is read against lucide's 24 grid, not the 16 the mock drew on:
+     1.5 there renders visibly lighter than the rest of the chrome. */
   .call > .g .sym svg {
     width: 12px; height: 12px; display: block; fill: none; stroke: currentColor;
-    stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
   }
   .nest-bd .call > .g .sym svg { width: 10.5px; height: 10.5px }
   .call > .g .line { flex: 1; width: 1px; background: var(--hair); min-height: 6px }
@@ -1094,19 +1102,9 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px }
   .chip { padding: 4px 10px; border-radius: var(--r-pill); background: var(--overlay); color: var(--faint); font: 400 11.5px var(--ui) }
 
-  .gear {
-    display: grid; place-items: center; width: 25px; height: 25px; flex: none;
-    border: 0; border-radius: var(--r-xs); background: transparent; color: var(--ghost);
-    cursor: pointer; transition: background .14s, color .14s, transform .3s var(--ease-out);
-  }
-  .gear:hover { background: var(--overlay); color: var(--text); transform: rotate(40deg) }
-  .gear:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
-  .gear svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
-
   @media (prefers-reduced-motion: reduce) {
     .onb-card, .onb-field, .onb-go, .onb-note, .onb-r path, .prefs, .grp { animation: none !important }
     .app[data-prefs] > .chrome, .app[data-prefs] > .cols { transform: none }
-    .gear:hover { transform: none }
   }
 
   .ws[data-busy] { opacity: .5; pointer-events: none }
@@ -1125,3 +1123,53 @@
     flex: none; border: 0; background: transparent; cursor: pointer;
     color: var(--err); font: 500 11px var(--ui); text-decoration: underline; text-underline-offset: 3px;
   }
+
+  /* ── markdown ─────────────────────────────────────────────────────── */
+  /* The stream lands mid-sentence, so vertical rhythm is set by margins that
+     collapse: first/last child must not push the bubble open before text. */
+  .md > :first-child { margin-top: 0 }
+  .md > :last-child { margin-bottom: 0 }
+  .md p { margin: 0 0 .7em }
+  .md h1, .md h2, .md h3, .md h4 {
+    margin: 1.1em 0 .5em; font-weight: 600; line-height: 1.35; color: var(--text);
+  }
+  .md h1 { font-size: 15px } .md h2 { font-size: 14px } .md h3 { font-size: 13.5px }
+  .md h4 { font-size: 13px; color: var(--muted) }
+  .md ul, .md ol { margin: 0 0 .7em; padding-left: 1.4em }
+  .md li { margin: .18em 0 }
+  .md li::marker { color: var(--ghost) }
+  .md strong { font-weight: 600; color: var(--text) }
+  .md em { font-style: italic }
+  .md del { color: var(--faint) }
+  .md hr { height: 1px; margin: 1em 0; border: 0; background: var(--hair) }
+  .md blockquote {
+    margin: 0 0 .7em; padding: 2px 0 2px 11px;
+    border-left: 2px solid var(--border); color: var(--faint);
+  }
+  .md :not(pre) > code {
+    font: 400 11.5px var(--mono); color: var(--deleg);
+    background: var(--overlay); padding: 1px 4px; border-radius: var(--r-xs);
+  }
+  .md pre {
+    margin: 0 0 .7em; padding: 9px 11px; overflow-x: auto;
+    background: var(--overlay); border-radius: var(--r-sm);
+  }
+  .md pre code {
+    font: 400 11.5px/19px var(--mono); color: var(--muted);
+    background: none; padding: 0; white-space: pre;
+  }
+  /* A wide table scrolls inside its own box; the transcript never scrolls
+     sideways. */
+  .md-tw { margin: 0 0 .7em; overflow-x: auto }
+  .md table { border-collapse: collapse; font-size: 12px }
+  .md th, .md td {
+    padding: 5px 10px; text-align: left; border: 1px solid var(--hair); white-space: nowrap;
+  }
+  .md th { color: var(--faint); font: 500 11px var(--mono); background: var(--overlay) }
+  .md td { color: var(--muted) }
+  .md a { color: var(--net); text-decoration: underline; text-underline-offset: 2px }
+  .md a:hover { color: var(--text) }
+  .md img { max-width: 100%; border-radius: var(--r-sm) }
+  /* The caret trails the last line instead of dropping to one of its own. */
+  .md > :last-child::after { content: "" }
+  .md .caret { margin-left: 2px; vertical-align: -2px }

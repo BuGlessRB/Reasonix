@@ -101,9 +101,21 @@ export function reduce(
   ev:
     | WireEvent
     | { kind: "__restore"; items: Item[]; plan: PlanStep[]; hit: number; miss: number; cost?: number }
-    | { kind: "__error"; text: string },
+    | { kind: "__error"; text: string }
+    | { kind: "__user"; text: string; pending: boolean },
 ): SessionState {
   if (ev.kind === "__error") return { ...s, error: ev.text };
+  // Both event.Message emitters carry assistant text, so nothing on the wire
+  // echoes what you typed — only /history has it, and only after a reload. The
+  // client owns its own turn. Mid-turn input stays pending until the steer
+  // event says the run consumed it at a tool boundary.
+  if (ev.kind === "__user") {
+    return {
+      ...s,
+      steerQueue: ev.pending ? [...s.steerQueue, ev.text] : s.steerQueue,
+      items: [...s.items, { t: "user", id: nextId(), text: ev.text, pending: ev.pending }],
+    };
+  }
   if (ev.kind === "__restore") {
     return {
       ...s,
@@ -123,9 +135,6 @@ export function reduce(
       return { ...s, doing: "正在回答", waiting: {}, items: appendText(s.items, ev.text ?? "", "text") };
 
     case "message": {
-      if (ev.itemId === "user") {
-        return { ...s, items: [...s.items, { t: "user", id: nextId(), text: ev.text ?? "" }] };
-      }
       const items = s.items.slice();
       for (let i = items.length - 1; i >= 0; i--) {
         if (items[i].t === "say") {

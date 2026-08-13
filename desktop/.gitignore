@@ -46,3 +46,5 @@
 /desktop
 # Wails dependency-change cache
 /frontend/package.json.md5
+/next-app.exe
+/next-app.exe~

@@ -37,7 +37,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
     <div className="onb">
       <div className="onb-card">
         <RMark className="rmark onb-r" />
-        <h1 className="onb-t">Reasonix</h1>
+        <h1 className="onb-t">Reasonix Studio</h1>
         <p className="onb-s">
           交待一件事，它自己往下做 —— 读代码、联网查证、派子代理、改文件，每一步都留痕。
         </p>

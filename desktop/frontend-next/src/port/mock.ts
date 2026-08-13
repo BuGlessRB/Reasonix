@@ -165,7 +165,8 @@ export class MockPort implements AgentPort {
     bypass: false,
     goal: "",
     goalStatus: "stopped",
-    cwd: "~/projects/DeepSeek-Reasonix",
+    cwd: "~/projects/DeepSeek-Reasonix/.reasonix/sessions",
+    workspaceRoot: "~/projects/DeepSeek-Reasonix",
     used: 0,
     window: 128000,
     cacheHit: 0,
@@ -198,6 +199,8 @@ export class MockPort implements AgentPort {
     this.at = 0;
     this.state.goal = "";
   }
+
+  async deleteSession(_name: string) {}
 
   async status() {
     return { ...this.state };
@@ -244,6 +247,10 @@ export class MockPort implements AgentPort {
     this.state.running = true;
     const next = SCRIPT[this.at];
     if (next) this.timer = window.setTimeout(this.step, next.wait);
+  }
+
+  async steer(text: string) {
+    this.emit({ kind: "steer", text });
   }
 
   async submit(text: string) {
