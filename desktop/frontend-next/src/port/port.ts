@@ -198,6 +198,10 @@ export interface AgentPort {
   // silently drops somebody else's rule.
   saveHooks(scope: "user" | "project", hooks: HookEntry[]): Promise<void>;
   dryRunHook(h: HookEntry): Promise<HookDryRun>;
+  network(): Promise<NetworkSettings>;
+  // password empty keeps whatever is stored; clearPassword removes it.
+  saveNetwork(s: NetworkSettings, password: string, clearPassword: boolean): Promise<NetworkSettings>;
+  diagnoseNetwork(): Promise<NetworkProbe[]>;
   mcp(): Promise<McpEntry[]>;
   // Retries a failed or disconnected server and answers with its new state, so
   // the caller never has to race a follow-up GET against the connect.
@@ -295,4 +299,30 @@ export interface HookDryRun {
   timedOut?: boolean;
   durationMs: number;
   blocks: boolean;
+}
+
+// Proxy settings as the editor needs them. The stored password never comes back
+// out — hasPassword only says one exists, so the form can keep or clear it.
+export interface NetworkSettings {
+  mode: string;
+  url?: string;
+  noProxy?: string;
+  type?: string;
+  server?: string;
+  port?: number;
+  username?: string;
+  hasPassword?: boolean;
+  effective: string;
+  direct?: string[];
+  endpoint?: string;
+}
+
+// One diagnosed step. advice is the next thing to try, present only when the
+// cause is knowable from the failure.
+export interface NetworkProbe {
+  step: string;
+  ok: boolean;
+  detail: string;
+  durationMs: number;
+  advice?: string;
 }

@@ -1,4 +1,4 @@
-import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
+import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 
 // Must match wailsEventName / replayPath in desktop/next.
@@ -26,6 +26,17 @@ export class SsePort implements AgentPort {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
+  }
+
+  // A POST whose answer is the payload, not a status code.
+  private async post0<T>(path: string): Promise<T> {
+    const res = await fetch(this.base + path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+    });
+    if (!res.ok) throw new Error(`${path}: ${res.status}`);
+    return (await res.json()) as T;
   }
 
   private async get<T>(path: string): Promise<T> {
@@ -86,6 +97,27 @@ export class SsePort implements AgentPort {
     const body = (await res.json().catch(() => ({}))) as HookDryRun & { error?: string };
     if (!res.ok) throw new Error(body.error || `/hooks/dry-run: ${res.status}`);
     return body;
+  }
+
+  network() {
+    return this.get<NetworkSettings>("/network");
+  }
+
+  async saveNetwork(settings: NetworkSettings, password: string, clearPassword: boolean) {
+    const res = await fetch(this.base + "/network", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ ...settings, password, clearPassword }),
+    });
+    const body = (await res.json().catch(() => ({}))) as NetworkSettings & { error?: string };
+    if (!res.ok) throw new Error(body.error || `/network: ${res.status}`);
+    return body;
+  }
+
+  async diagnoseNetwork() {
+    const r = await this.post0<{ probes?: NetworkProbe[] }>("/network/diagnose");
+    return r.probes ?? [];
   }
 
   mcp() {

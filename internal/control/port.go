@@ -180,6 +180,9 @@ type Capabilities interface {
 	SaveHooks(scope hook.Scope, settings hook.Settings) error
 	DryRunHook(ctx context.Context, cfg hook.HookConfig, event hook.Event) (hook.DryRunResult, error)
 	HookSettingsPath(scope hook.Scope) string
+	NetworkSettings() NetworkSettings
+	SaveNetworkSettings(in NetworkSettings, password string, clearPassword bool) error
+	DiagnoseNetwork(ctx context.Context) []NetworkProbe
 	CustomCommand(input string) (sent string, found bool)
 	MCPPrompt(ctx context.Context, input string) (sent string, found bool, err error)
 	RunSkill(input string) (sent string, found bool)

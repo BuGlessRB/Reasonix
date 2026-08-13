@@ -3,6 +3,7 @@ import type { AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, SessionStat
 import { arrowTabs } from "./tablist";
 import { AddServer } from "./AddServer";
 import { Hooks } from "./Hooks";
+import { Network } from "./Network";
 
 const PRESETS: [Preset, string, string][] = [
   ["light", "轻量", "简单就直接做，只做针对性验证，高风险才叫独立复核"],
@@ -25,7 +26,7 @@ const THEMES: [string, string][] = [
   ["dark", "深色"],
 ];
 
-type Section = "session" | "model" | "tools" | "hooks" | "ext" | "appearance" | "advanced";
+type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "appearance" | "advanced";
 
 const NAV: [Section, string][] = [
   ["session", "会话"],
@@ -33,6 +34,7 @@ const NAV: [Section, string][] = [
   ["tools", "工具与权限"],
   ["hooks", "自动化"],
   ["ext", "扩展"],
+  ["network", "网络"],
   ["appearance", "外观"],
   ["advanced", "高级"],
 ];
@@ -41,10 +43,12 @@ const SCOPE: Record<string, string> = { project: "项目", custom: "自定义", 
 
 // What still lives in the old desktop app. Bots and theme packs are not on the
 // roadmap, so they are not promises to keep here either.
-const ELSEWHERE = ["记忆", "网络与代理", "账号与更新"];
+const ELSEWHERE = ["记忆", "账号与更新"];
 
 // The user's question is "is it there and does it work", so the state is the
 // label. A failed server keeps its error on the row that names it.
+const NET_MODE: Record<string, string> = { auto: "跟随系统", env: "环境变量", custom: "手动", off: "直连" };
+
 const MCP_STATE: Record<string, string> = {
   ready: "已连接",
   connecting: "连接中",
@@ -71,11 +75,13 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
   const [busy, setBusy] = useState("");
   const [adding, setAdding] = useState(false);
   const [hookCount, setHookCount] = useState(0);
+  const [netMode, setNetMode] = useState("");
   const root = useRef<HTMLDivElement>(null);
 
   const reloadExt = useCallback(() => {
     port.mcp().then(setMcp).catch(() => setMcp([]));
     port.hooks().then((c) => setHookCount(c.hooks.length)).catch(() => setHookCount(0));
+    port.network().then((n) => setNetMode(NET_MODE[n.mode] ?? n.mode)).catch(() => setNetMode(""));
     port
       .skills()
       .then((c) => {
@@ -123,6 +129,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
     tools: approval,
     hooks: hookCount ? `${hookCount} 条` : "关",
     ext: broken ? `${broken} 个异常` : `${mcp.length + skillsOn}`,
+    network: netMode,
     appearance: THEMES.find(([id]) => id === theme)?.[1] ?? "",
     advanced: "",
   };
@@ -262,6 +269,15 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
                 {skills.length === 0 && <div className="empty">这个工作目录下没有技能。</div>}
               </Group>
             </>
+          )}
+
+          {at === "network" && (
+            <Group
+              title="网络"
+              hint="模型请求、MCP 的远程服务、网页抓取都走这里。配错了通常表现为聊天时莫名其妙卡住 —— 所以先测一下，它会告诉你断在哪一段。"
+            >
+              <Network port={port} />
+            </Group>
           )}
 
           {at === "appearance" && (
