@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
 
 	"reasonix/desktop/internal/update"
 )
@@ -14,9 +13,6 @@ const (
 	installModePortable = "portable"
 	installModeDeb      = "deb"
 	installModeManual   = "manual"
-
-	artifactKindTarball = "tarball"
-	artifactKindDeb     = "deb"
 
 	linuxUpdateHelperPath = "/usr/lib/reasonix/reasonix-update-helper"
 	linuxPkexecPath       = "/usr/bin/pkexec"
@@ -29,7 +25,7 @@ type installProfile struct {
 	CanSelfUpdate bool
 	RequiresElev  bool
 	ManualReason  string
-	ArtifactKind  string // artifactKindTarball | artifactKindDeb | ""
+	ArtifactKind  string // update.KindTarball | update.KindDeb | ""
 }
 
 // detectInstallProfile classifies how this binary was installed and which update
@@ -43,14 +39,14 @@ func detectInstallProfile() installProfile {
 		return installProfile{
 			Mode:          installModePortable,
 			CanSelfUpdate: true,
-			ArtifactKind:  artifactKindTarball,
+			ArtifactKind:  update.KindTarball,
 		}
 	case "darwin":
 		if canSelfUpdate() {
 			return installProfile{
 				Mode:          installModePortable,
 				CanSelfUpdate: true,
-				ArtifactKind:  artifactKindTarball,
+				ArtifactKind:  update.KindTarball,
 			}
 		}
 		return installProfile{
@@ -91,7 +87,7 @@ func profileForManifest(base installProfile, m *update.Manifest) installProfile 
 			base.ManualReason = "system update helper is unavailable; install with: sudo apt install ./Reasonix-linux-amd64.deb"
 			return base
 		}
-		base.ArtifactKind = artifactKindDeb
+		base.ArtifactKind = update.KindDeb
 		base.CanSelfUpdate = true
 		base.RequiresElev = true
 		return base
@@ -103,7 +99,7 @@ func profileForManifest(base installProfile, m *update.Manifest) installProfile 
 			base.ManualReason = "no update artifact is published for this platform"
 			return base
 		}
-		base.ArtifactKind = artifactKindTarball
+		base.ArtifactKind = update.KindTarball
 		return base
 	default:
 		return base
@@ -115,11 +111,11 @@ func selectUpdateAsset(m *update.Manifest, profile installProfile) (update.Asset
 	switch profile.Mode {
 	case installModeDeb:
 		if a, ok := m.NativePackage(); ok {
-			return a, artifactKindDeb, true
+			return a, update.KindDeb, true
 		}
 	case installModePortable:
 		if a, ok := m.Asset(); ok {
-			return a, artifactKindTarball, true
+			return a, update.KindTarball, true
 		}
 	}
 	return update.Asset{}, "", false
@@ -140,16 +136,4 @@ func linuxDebHelperReady() bool {
 
 func manualDebInstallHint() string {
 	return "Install manually with: sudo apt install ./Reasonix-linux-amd64.deb"
-}
-
-func artifactKindFromMeta(kind string) string {
-	switch strings.ToLower(strings.TrimSpace(kind)) {
-	case artifactKindDeb:
-		return artifactKindDeb
-	case artifactKindTarball, "":
-		// Empty means legacy portable cache written before artifactKind existed.
-		return artifactKindTarball
-	default:
-		return kind
-	}
 }

@@ -1,8 +1,9 @@
 //go:build darwin
 
-package main
+package update
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -52,7 +53,7 @@ var (
 		return unix.RenameatxNp(unix.AT_FDCWD, oldPath, unix.AT_FDCWD, newPath, unix.RENAME_EXCL)
 	}
 	macHandoffLogPath = func() string {
-		cacheDir, err := updateCacheDir()
+		cacheDir, err := CacheDir()
 		if err != nil {
 			return ""
 		}
@@ -60,11 +61,18 @@ var (
 	}
 )
 
-func applyMac(zipPath, targetVersion string) error {
-	if !macSelfUpdateAllowed() {
+// apply swaps the whole app bundle. macOS has no versioned directory layout —
+// the bundle is the unit — so the equivalent of a pointer swap is a detached
+// child that holds the repair lock across the rename while this process exits.
+func (v VersionedInstaller) apply(_ context.Context, c Cached) error {
+	return applyMac(c.Path, c.Version, v.Current)
+}
+
+func applyMac(zipPath, targetVersion, current string) error {
+	if !MacSelfUpdate {
 		return fmt.Errorf("macOS automatic update is not enabled for this build")
 	}
-	currentApp, err := currentMacAppBundle()
+	currentApp, err := CurrentMacAppBundle()
 	if err != nil {
 		return err
 	}
@@ -98,7 +106,7 @@ func applyMac(zipPath, targetVersion string) error {
 		return err
 	}
 	tx, err := repair.PrepareAppBundleUpdateHandoff(
-		version,
+		current,
 		targetVersion,
 		currentApp,
 		backupApp,
@@ -235,7 +243,10 @@ func reportMacHandoffStartupFailure(cfg macUpdateHandoffConfig, phase string, er
 
 // maybeRunMacUpdateHandoff handles the detached self-update child before Wails
 // or single-instance setup runs.
-func maybeRunMacUpdateHandoff(args []string) (handled bool, exitCode int) {
+// MaybeRunMacHandoff runs the detached bundle swap when this process was
+// re-executed as the handoff child, and reports that it handled the run. Every
+// host's main must call it before startup, or the child would boot a second UI.
+func MaybeRunMacHandoff(args []string) (handled bool, exitCode int) {
 	if len(args) == 0 || args[0] != macUpdateHandoffArg {
 		return false, 0
 	}
@@ -705,7 +716,10 @@ func macProcessAlive(pid int) bool {
 	return err == nil
 }
 
-func currentMacAppBundle() (string, error) {
+// CurrentMacAppBundle resolves the .app this executable runs from. It is
+// exported because icon repair needs the same answer, and two ways of finding
+// the bundle is two ways of being wrong about which one is being replaced.
+func CurrentMacAppBundle() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err

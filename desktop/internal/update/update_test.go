@@ -52,6 +52,22 @@ func TestVerifyWith(t *testing.T) {
 	}
 }
 
+func TestCheckSHA256(t *testing.T) {
+	data := []byte("hello world")
+	// echo -n "hello world" | shasum -a 256
+	const sum = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+	if err := CheckSHA256(data, sum); err != nil {
+		t.Errorf("matching digest should pass: %v", err)
+	}
+	if err := CheckSHA256(data, "deadbeef"); err == nil {
+		t.Error("mismatched digest should fail")
+	}
+	// Case-insensitive hex.
+	if err := CheckSHA256(data, "B94D27B9934D3E08A52E52D7DA7DABFAC484EFE37A5380EE9088F7ACE2EFCDE9"); err != nil {
+		t.Errorf("uppercase digest should pass: %v", err)
+	}
+}
+
 // TestPlatformKey pins the key format the manifest generator and the updater both
 // rely on; if these drift, lookups silently miss.
 func TestPlatformKey(t *testing.T) {

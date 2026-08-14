@@ -990,6 +990,31 @@ jobs:
             exit 0
           fi
 
+          # The rollback index records which versions were ever public and where
+          # each one's immutable manifest lives, so going back verifies through
+          # the same path a forward update does. It is written here rather than
+          # beside the pointer advance on purpose: a rerun whose pointer decision
+          # is "skip" (the candidate is already current) must still be able to
+          # repair a missing index entry. Preview/canary keep their immutable
+          # record but never enter it — rolling back means the stable line.
+          if [ "$CHANNEL" != "preview" ]; then
+            index_current=/tmp/reasonix-versions-current.json
+            index_next=/tmp/reasonix-versions-next.json
+            index_source=-
+            if download_optional "versions.json" "$index_current"; then
+              index_source="$index_current"
+            else
+              status=$?
+              if [ "$status" -ne 3 ]; then
+                exit "$status"
+              fi
+            fi
+            bash release-control/scripts/update-versions-index.sh               "$index_source" "$VERSION" "$TAG" "$CHANNEL"               "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$index_next"
+            jq -e --arg v "$VERSION"               '.versions | map(select(.version == $v)) | length == 1' "$index_next" >/dev/null
+            aws s3 cp "$index_next" "s3://${R2_BUCKET}/versions.json"               --endpoint-url "$ENDPOINT"               --content-type "application/json; charset=utf-8"               --cache-control "public, max-age=300, stale-if-error=86400"
+            echo "rollback index -> $VERSION"
+          fi
+
           validate_current_pointer() {
             local current_channel="$1"
             local current_version="$2"

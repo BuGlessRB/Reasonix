@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package update
 
 import (
 	"crypto/sha256"
@@ -168,12 +168,12 @@ func TestPreparedWindowsUpdateHelperSHA256BindsReleaseUnitMember(t *testing.T) {
 			SHA256:     expected,
 		}},
 	}
-	got, err := preparedWindowsUpdateHelperSHA256(prepared, installDir)
+	got, err := preparedWindowsUpdateHelperSHA256(prepared)
 	if err != nil || got != expected {
 		t.Fatalf("prepared helper SHA-256 = %q, %v", got, err)
 	}
 	prepared.Files[0].MissingBefore = true
-	if _, err := preparedWindowsUpdateHelperSHA256(prepared, installDir); err == nil {
+	if _, err := preparedWindowsUpdateHelperSHA256(prepared); err == nil {
 		t.Fatal("prepared transaction with a missing helper authorized execution")
 	}
 }
@@ -188,7 +188,7 @@ func TestPrepareWindowsUpdateHelperRejectsPreparedHashDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 	prepared := sha256.Sum256([]byte("prepared-helper"))
-	_, _, err := prepareWindowsUpdateHelper(installDir, fmt.Sprintf("%x", prepared))
+	_, _, err := prepareWindowsUpdateHelper(installDir, t.TempDir(), fmt.Sprintf("%x", prepared))
 	if err == nil || !strings.Contains(err.Error(), "changed after transaction prepare") {
 		t.Fatalf("changed packaged helper = %v", err)
 	}

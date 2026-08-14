@@ -1620,4 +1620,27 @@ grep -Fq 'reasonix/internal/productdocs.linkedVersion=${binaryVersion}' "$repo_r
 grep -Fq 'product_docs_ldflags="-X reasonix/internal/productdocs.linkedVersion=$VERSION' \
 	"$repo_root/scripts/desktop-build.sh"
 
+# The rollback index is what lets a user leave a bad version. It must be written
+# from the protected control plane, must survive a rerun without rewriting
+# history, and must never let a corrupt object reset the list to empty.
+grep -Fq 'release-control/scripts/update-versions-index.sh' 	"$repo_root/.github/workflows/release-desktop.yml"
+index_script="$repo_root/scripts/update-versions-index.sh"
+first="$test_root/versions-first.json"
+bash "$index_script" - 1.25.1 desktop-v1.25.1 stable 2026-08-12T10:00:00Z >"$first"
+[ "$(jq -r '.versions[0].manifest' "$first")" = "https://dl.reasonix.io/desktop-v1.25.1/latest.json" ]
+# A rerun (or a recovery publication) must not rewrite the published entry.
+rerun="$test_root/versions-rerun.json"
+bash "$index_script" "$first" 1.25.1 desktop-v1.25.1-RECOVERY stable 2026-09-09T00:00:00Z >"$rerun"
+[ "$(jq -r '.versions[0].tag' "$rerun")" = "desktop-v1.25.1" ]
+# Newest first, across a major bump.
+ordered="$test_root/versions-ordered.json"
+bash "$index_script" "$first" 2.0.0 studio-v2.0.0 stable 2026-09-01T00:00:00Z >"$ordered"
+[ "$(jq -r '[.versions[].version] | join(",")' "$ordered")" = "2.0.0,1.25.1" ]
+# A damaged index fails the release instead of silently starting over.
+printf '%s' '{"broken":true}' >"$test_root/versions-bad.json"
+if bash "$index_script" "$test_root/versions-bad.json" 1.0.0 t stable 2026-01-01T00:00:00Z >/dev/null 2>&1; then
+	echo "a corrupt versions index must not be accepted" >&2
+	exit 1
+fi
+
 echo "release workflow contract tests: PASS"

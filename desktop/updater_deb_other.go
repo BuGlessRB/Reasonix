@@ -2,7 +2,11 @@
 
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"reasonix/desktop/internal/update"
+)
 
 var (
 	errUpdateAuthFailed    = fmt.Errorf("update: authorization failed")
@@ -17,7 +21,7 @@ func isAuthCancelled(err error) bool {
 	return false
 }
 
-func ensureDebCacheMatchesProfile(meta *cachedUpdate, profile installProfile) error {
+func ensureDebCacheMatchesProfile(meta update.Cached, profile installProfile) error {
 	if profile.Mode == installModeDeb {
 		return fmt.Errorf("update: deb install is only supported on Linux")
 	}

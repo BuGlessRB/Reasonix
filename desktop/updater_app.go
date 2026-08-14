@@ -13,7 +13,6 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"reasonix/desktop/internal/update"
-	"reasonix/internal/installlayout"
 	"reasonix/internal/repair"
 )
 
@@ -175,24 +174,21 @@ func (a *App) downloadUpdateRequest(selectedChannel, expectedVersion, requestID 
 	if !profile.CanSelfUpdate {
 		return nil, a.requireManualUpdate(requestID, selectedChannel, expectedVersion, profile)
 	}
-	asset, kind, ok := selectUpdateAsset(m, profile)
-	if !ok {
-		return nil, a.failUpdate(requestID, selectedChannel, expectedVersion, fmt.Errorf("no update artifact for %s", update.CurrentPlatform()))
-	}
-
-	data, sig, err := a.downloadVerify(requestID, selectedChannel, expectedVersion, asset)
+	u, err := updaterFor(profile)
 	if err != nil {
 		return nil, a.failUpdate(requestID, selectedChannel, expectedVersion, err)
 	}
-	meta, err := saveCachedUpdateForChannel(selectedChannel, m.Version, asset, data, kind, sig)
+	// The rolling pointer found the manifest; from here a forward update and a
+	// rollback are the same download, the same two checks, and the same cache.
+	meta, err := u.DownloadManifest(a.reqCtx(), m, a.updateReport(requestID, selectedChannel, expectedVersion))
 	if err != nil {
 		return nil, a.failUpdate(requestID, selectedChannel, expectedVersion, err)
 	}
-	a.emitProgress(requestID, selectedChannel, meta.Version, "downloaded", meta.Size, meta.Size, "")
+	a.emitProgress(requestID, selectedChannel, meta.Version, update.PhaseCached, meta.Size, meta.Size, "")
 	return &UpdateDownloadResult{
 		RequestID: requestID,
 		Version:   meta.Version,
-		Channel:   meta.Channel,
+		Channel:   normalizeUpdateChannel(selectedChannel),
 		Path:      meta.Path,
 		Size:      meta.Size,
 		SHA256:    meta.SHA256,
@@ -210,16 +206,13 @@ func (a *App) installUpdateRequest(selectedChannel, expectedVersion, requestID s
 	if !profile.CanSelfUpdate || !canSelfUpdate() {
 		return a.requireManualUpdate(requestID, selectedChannel, expectedVersion, profile)
 	}
-	meta, data, err := readVerifiedCachedUpdateForChannel(selectedChannel)
+	cache, err := updateCache()
 	if err != nil {
 		return a.failUpdate(requestID, selectedChannel, expectedVersion, err)
 	}
-	if meta.Version != expectedVersion {
-		return a.failUpdate(requestID, selectedChannel, expectedVersion, fmt.Errorf(
-			"update: cached version %s does not match checked version %s",
-			meta.Version,
-			expectedVersion,
-		))
+	meta, data, err := cache.Verified(expectedVersion)
+	if err != nil {
+		return a.failUpdate(requestID, selectedChannel, expectedVersion, err)
 	}
 	// Re-detect install type at install time so a path change between download
 	// and install cannot apply the wrong artifact kind.
@@ -245,20 +238,20 @@ func (a *App) installUpdateRequest(selectedChannel, expectedVersion, requestID s
 	// artifact kinds disagree with the active mode.
 	wantKind := profile.ArtifactKind
 	if wantKind == "" {
-		wantKind = artifactKindTarball
+		wantKind = update.KindTarball
 	}
-	if artifactKindFromMeta(meta.ArtifactKind) != artifactKindFromMeta(wantKind) {
+	if meta.Kind != update.NormalizeKind(wantKind) {
 		return a.failUpdate(requestID, selectedChannel, expectedVersion, errUpdateCacheMismatch)
 	}
-	if err := a.reconcilePendingUpdateForRequest(requestID, meta); err != nil {
+	if err := a.reconcilePendingUpdateForRequest(requestID, selectedChannel, meta.Version, meta.Size); err != nil {
 		return err
 	}
 
 	switch profile.Mode {
 	case installModeDeb:
-		return a.installDebUpdate(requestID, meta)
+		return a.installDebUpdate(requestID, selectedChannel, meta)
 	default:
-		return a.installPortableUpdate(requestID, meta, data)
+		return a.installPortableUpdate(requestID, selectedChannel, meta, data)
 	}
 }
 
@@ -266,9 +259,9 @@ func (a *App) installUpdateRequest(selectedChannel, expectedVersion, requestID s
 // install-mode dispatch. The early pass avoids paying download and verification
 // costs for a blocked update; the second pass prevents a profile change or a
 // concurrent process from bypassing an unfinished release-unit transaction.
-func (a *App) reconcilePendingUpdateForRequest(requestID string, meta *cachedUpdate) error {
+func (a *App) reconcilePendingUpdateForRequest(requestID, selectedChannel, target string, size int64) error {
 	if pendingUpdateExistsForInstall() {
-		a.emitProgress(requestID, meta.Channel, meta.Version, "recovering", meta.Size, meta.Size, "")
+		a.emitProgress(requestID, selectedChannel, target, "recovering", size, size, "")
 		// A user-initiated update proves the desktop reached a usable UI. Retire
 		// an eligible superseded app-bundle or flat-layout transaction here as
 		// well as in the delayed post-DOM health task, so an immediate click never
@@ -314,7 +307,7 @@ func (a *App) reconcilePendingUpdateForRequest(requestID string, meta *cachedUpd
 		} else {
 			err = fmt.Errorf("update recovery: could not safely finish the previous update: %w", err)
 		}
-		return a.failUpdate(requestID, meta.Channel, meta.Version, err)
+		return a.failUpdate(requestID, selectedChannel, target, err)
 	}
 	return nil
 }
@@ -342,43 +335,44 @@ func (a *App) AbandonPendingUpdate() error {
 	return nil
 }
 
-func (a *App) installDebUpdate(requestID string, meta *cachedUpdate) error {
+func (a *App) installDebUpdate(requestID, selectedChannel string, meta update.Cached) error {
 	// authorizing = Polkit password dialog. The helper streams
 	// REASONIX_UPDATE_PHASE=installing on stderr after validation and before
 	// apt-get, so the UI can leave authorizing while the package manager runs.
-	a.emitProgress(requestID, meta.Channel, meta.Version, "authorizing", meta.Size, meta.Size, "")
+	a.emitProgress(requestID, selectedChannel, meta.Version, "authorizing", meta.Size, meta.Size, "")
 	err := applyDebLinux(meta.Path, meta.SignaturePath, func(phase string) {
 		if phase == "installing" {
-			a.emitProgress(requestID, meta.Channel, meta.Version, "installing", meta.Size, meta.Size, "")
+			a.emitProgress(requestID, selectedChannel, meta.Version, "installing", meta.Size, meta.Size, "")
 		}
 	})
 	if isAuthCancelled(err) {
 		// User dismissed the Polkit dialog: keep the verified cache and return to
 		// the downloaded state so they can retry. Do not count as an update error.
 		a.recordUpdateEvent("authorization_cancelled")
-		a.emitProgress(requestID, meta.Channel, meta.Version, "downloaded", meta.Size, meta.Size, "")
+		a.emitProgress(requestID, selectedChannel, meta.Version, "downloaded", meta.Size, meta.Size, "")
 		return nil
 	}
 	if err != nil {
 		if errors.Is(err, errUpdateAuthFailed) {
 			// Surface a manual-install hint without writing /usr/bin ourselves.
-			return a.failUpdate(requestID, meta.Channel, meta.Version, fmt.Errorf("%w. %s", err, manualDebInstallHint()))
+			return a.failUpdate(requestID, selectedChannel, meta.Version, fmt.Errorf("%w. %s", err, manualDebInstallHint()))
 		}
-		return a.failUpdate(requestID, meta.Channel, meta.Version, err)
+		return a.failUpdate(requestID, selectedChannel, meta.Version, err)
 	}
 	// Ensure installing was shown even if a phase line was missed (older helper).
-	a.emitProgress(requestID, meta.Channel, meta.Version, "installing", meta.Size, meta.Size, "")
-	a.emitProgress(requestID, meta.Channel, meta.Version, "done", meta.Size, meta.Size, "")
+	a.emitProgress(requestID, selectedChannel, meta.Version, "installing", meta.Size, meta.Size, "")
+	a.emitProgress(requestID, selectedChannel, meta.Version, "done", meta.Size, meta.Size, "")
 	a.shutdown(a.ctx)
 	_ = relaunchThroughLauncher()
 	os.Exit(0)
 	return nil
 }
 
-func (a *App) installPortableUpdate(requestID string, meta *cachedUpdate, data []byte) error {
-	a.emitProgress(requestID, meta.Channel, meta.Version, "installing", meta.Size, meta.Size, "")
+func (a *App) installPortableUpdate(requestID, selectedChannel string, meta update.Cached, data []byte) error {
+	a.emitProgress(requestID, selectedChannel, meta.Version, "installing", meta.Size, meta.Size, "")
 	var preparedUpdate *repair.UpdateTransaction
-	versionedPortable := (runtime.GOOS == "windows" || runtime.GOOS == "linux") && installlayout.HasCurrent(currentInstallDir())
+	layout := update.Here()
+	versionedPortable := (runtime.GOOS == "windows" || runtime.GOOS == "linux") && layout.Versioned()
 	if (runtime.GOOS == "windows" || runtime.GOOS == "linux") && !versionedPortable {
 		// Back up the complete legacy release unit (main binary plus launcher
 		// and migration siblings) so rollback never leaves a mixed-version
@@ -387,21 +381,19 @@ func (a *App) installPortableUpdate(requestID string, meta *cachedUpdate, data [
 		var err error
 		preparedUpdate, err = repair.PrepareFileUpdate(version, meta.Version, currentExecutablePath(), updateSiblingArtifacts()...)
 		if err != nil {
-			return a.failUpdate(requestID, meta.Channel, meta.Version, err)
+			return a.failUpdate(requestID, selectedChannel, meta.Version, err)
 		}
 	}
 	var err error
-	switch runtime.GOOS {
-	case "windows":
+	switch {
+	// Everything but a legacy flat install goes through the shared installer,
+	// the same one Studio uses. Only 1.x keeps the transactional fallback.
+	case versionedPortable, runtime.GOOS == "darwin":
+		err = a.versionedInstaller(layout).Install(a.reqCtx(), meta)
+	case runtime.GOOS == "windows":
 		err = applyWindowsFile(meta.Path, meta.SHA256, meta.Version, preparedUpdate)
-	case "darwin":
-		err = applyMac(meta.Path, meta.Version)
-	case "linux":
-		if versionedPortable {
-			err = applyLinuxVersioned(data, meta.Version)
-		} else {
-			err = applyLinux(data, preparedUpdate)
-		}
+	case runtime.GOOS == "linux":
+		err = applyLinux(data, preparedUpdate)
 	default:
 		err = fmt.Errorf("self-update unsupported on %s", runtime.GOOS)
 	}
@@ -433,10 +425,10 @@ func (a *App) installPortableUpdate(requestID string, meta *cachedUpdate, data [
 				}
 			}
 		}
-		return a.failUpdate(requestID, meta.Channel, meta.Version, err)
+		return a.failUpdate(requestID, selectedChannel, meta.Version, err)
 	}
 
-	a.emitProgress(requestID, meta.Channel, meta.Version, "done", meta.Size, meta.Size, "")
+	a.emitProgress(requestID, selectedChannel, meta.Version, "done", meta.Size, meta.Size, "")
 
 	// Persist the conversation and stop subprocesses before handing off (same as
 	// shutdown). On Linux the binary is now replaced, so relaunch it; on Windows and
@@ -466,10 +458,7 @@ func (a *App) ApplyUpdateRequest(selectedChannel, expectedVersion, requestID str
 	// sequence, so another request cannot slip into the former phase gap.
 	defer finish()
 
-	if err := a.reconcilePendingUpdateForRequest(requestID, &cachedUpdate{
-		Channel: selectedChannel,
-		Version: expectedVersion,
-	}); err != nil {
+	if err := a.reconcilePendingUpdateForRequest(requestID, selectedChannel, expectedVersion, 0); err != nil {
 		return err
 	}
 	if _, err := a.downloadUpdateRequest(selectedChannel, expectedVersion, requestID); err != nil {
@@ -483,40 +472,31 @@ func (a *App) ApplyUpdateRequest(selectedChannel, expectedVersion, requestID str
 	return nil
 }
 
-// downloadVerify downloads the asset (streaming progress), verifies its minisign
-// signature against the embedded public key, then its sha256. It returns the
-// verified bytes and the raw signature (needed for deb helper re-verification).
-func (a *App) downloadVerify(requestID, selectedChannel, expectedVersion string, asset update.Asset) (data, sig []byte, err error) {
-	c, err := httpClient()
-	if err != nil {
-		return nil, nil, err
+// versionedInstaller is the shared v1.20+ install path bound to this build's
+// cache directory. A staging directory that cannot be resolved leaves it empty,
+// which the Windows handoff refuses rather than staging the helper anywhere.
+func (a *App) versionedInstaller(layout update.Layout) update.VersionedInstaller {
+	staging, _ := updateCacheDir()
+	return update.VersionedInstaller{Layout: layout, Staging: staging, Current: version}
+}
+
+// updateReport forwards the updater's narration to the frontend. The
+// denominator is carried from the last byte report so verifying shows a full
+// bar; PhaseCached is left to the caller, which knows the cached size a cache
+// hit never reported a byte of.
+func (a *App) updateReport(requestID, selectedChannel, expectedVersion string) update.Report {
+	var total int64
+	return update.Report{
+		Bytes: func(received, size int64) {
+			total = size
+			a.emitProgress(requestID, selectedChannel, expectedVersion, update.PhaseDownloading, received, size, "")
+		},
+		Phase: func(phase string) {
+			if phase == update.PhaseVerifying {
+				a.emitProgress(requestID, selectedChannel, expectedVersion, phase, total, total, "")
+			}
+		},
 	}
-	v4, _ := httpClientIPv4() // best-effort IPv4 fallback; nil just means retries reuse c
-	data, err = downloadForChannel(a.reqCtx(), c, v4, selectedChannel, asset.URL, asset.Size, func(rcv, total int64) {
-		a.emitProgress(requestID, selectedChannel, expectedVersion, "downloading", rcv, total, "")
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	a.emitProgress(requestID, selectedChannel, expectedVersion, "verifying", asset.Size, asset.Size, "")
-	sig, err = fetchBytesFallbackForChannelSized(
-		a.reqCtx(),
-		c,
-		v4,
-		selectedChannel,
-		asset.Sig,
-		maxDesktopSignatureSize,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := update.Verify(data, sig); err != nil {
-		return nil, nil, err
-	}
-	if err := checkSHA256(data, asset.SHA256); err != nil {
-		return nil, nil, err
-	}
-	return data, sig, nil
 }
 
 // reqCtx is the context for updater HTTP calls — the Wails context once startup has

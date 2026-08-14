@@ -24,10 +24,12 @@ import (
 	"path/filepath"
 	"strings"
 	"unsafe"
+
+	"reasonix/desktop/internal/update"
 )
 
 func repairDesktopIconIntegration() error {
-	currentApp, err := currentMacAppBundle()
+	currentApp, err := update.CurrentMacAppBundle()
 	if err != nil {
 		// Developer binaries and tests are not installed app bundles.
 		return nil

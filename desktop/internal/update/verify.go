@@ -1,8 +1,13 @@
 package update
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"strings"
 
 	"aead.dev/minisign"
 )
@@ -21,9 +26,40 @@ RWSw66n0RsoSr6Zhh6qt5YO95YkpCayTOCMFVDNUQSjJYwxoYngNVBSq`
 // touching disk — never apply an update whose signature has not checked out.
 func Verify(data, sig []byte) error { return verifyWith(publicKey, data, sig) }
 
+// verifyArtifact is the gate Download gets its artifacts through, indirected
+// only so package tests can sign with a throwaway key: the embedded key's
+// private half exists solely in CI secrets, so nothing else can produce a
+// signature this would accept.
+var verifyArtifact = Verify
+
 // PublicKey returns the embedded public key in its canonical two-line text form,
 // so docs/UI can surface it for manual `minisign -Vm <file>` verification.
 func PublicKey() string { return publicKey }
+
+// CheckSHA256 is the second integrity check, after the signature: the manifest
+// digest must also match, so a signed-but-swapped asset entry cannot be applied.
+func CheckSHA256(data []byte, want string) error {
+	sum := sha256.Sum256(data)
+	if got := hex.EncodeToString(sum[:]); !strings.EqualFold(got, want) {
+		return fmt.Errorf("update: sha256 mismatch: got %s want %s", got, want)
+	}
+	return nil
+}
+
+// fileSHA256Matches re-hashes a cached artifact in place, so a file edited or
+// truncated after it was written is not offered as already downloaded.
+func fileSHA256Matches(path, want string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return false
+	}
+	return strings.EqualFold(hex.EncodeToString(h.Sum(nil)), want)
+}
 
 // verifyWith is the testable core: it parses an arbitrary public-key text and
 // verifies the signature, letting tests use a throwaway key pair without the

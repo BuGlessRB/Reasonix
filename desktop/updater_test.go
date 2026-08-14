@@ -12,18 +12,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"reasonix/desktop/internal/update"
-	"reasonix/internal/installlayout"
 	"reasonix/internal/repair"
 )
 
@@ -164,8 +161,7 @@ func TestUpdaterReconcilesPendingUpdateBeforeInstallModeDispatch(t *testing.T) {
 		}
 		return repair.PendingUpdateReconcileResult{Pending: true, Cleared: true}, nil
 	}
-	meta := &cachedUpdate{Channel: "preview", Version: "v1.18.0-preview.65", Size: 42}
-	if err := (&App{}).reconcilePendingUpdateForRequest("install-1", meta); err != nil {
+	if err := (&App{}).reconcilePendingUpdateForRequest("install-1", "stable", "v1.18.0-preview.65", 42); err != nil {
 		t.Fatal(err)
 	}
 	if !called {
@@ -195,8 +191,7 @@ func TestUpdaterArchivesSupersededUpdateBeforeReconciliation(t *testing.T) {
 		}
 		return repair.PendingUpdateReconcileResult{}, nil
 	}
-	meta := &cachedUpdate{Channel: "stable", Version: "v1.20.0", Size: 42}
-	if err := (&App{}).reconcilePendingUpdateForRequest("install-1", meta); err != nil {
+	if err := (&App{}).reconcilePendingUpdateForRequest("install-1", "stable", "v1.20.0", 42); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -239,8 +234,7 @@ func TestUpdaterBlocksInstallWhilePreviousReleaseAwaitsHealth(t *testing.T) {
 	reconcilePendingUpdateForInstall = func(string) (repair.PendingUpdateReconcileResult, error) {
 		return repair.PendingUpdateReconcileResult{Pending: true, AwaitingHealth: true}, repair.ErrPendingUpdateAwaitingHealth
 	}
-	meta := &cachedUpdate{Channel: "preview", Version: "v1.18.0-preview.65", Size: 42}
-	err := (&App{}).reconcilePendingUpdateForRequest("install-1", meta)
+	err := (&App{}).reconcilePendingUpdateForRequest("install-1", "stable", "v1.18.0-preview.65", 42)
 	if err == nil || !strings.Contains(err.Error(), "startup health check") {
 		t.Fatalf("health-check recovery error = %v", err)
 	}
@@ -284,7 +278,7 @@ func TestEvaluate(t *testing.T) {
 	portable := installProfile{
 		Mode:          installModePortable,
 		CanSelfUpdate: runtime.GOOS != "darwin",
-		ArtifactKind:  artifactKindTarball,
+		ArtifactKind:  update.KindTarball,
 	}
 	if runtime.GOOS == "darwin" {
 		portable.Mode = installModeManual
@@ -341,7 +335,7 @@ func TestEvaluateDebSelectsNativePackage(t *testing.T) {
 		Mode:          installModeDeb,
 		CanSelfUpdate: true,
 		RequiresElev:  true,
-		ArtifactKind:  artifactKindDeb,
+		ArtifactKind:  update.KindDeb,
 	}
 	got := evaluateWithProfile("v1.0.0", m, deb)
 	if !got.Available || got.AssetSize != 200 {
@@ -805,9 +799,9 @@ func TestValidateUpdateRedirect(t *testing.T) {
 func withUpdateCacheDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	restore := updateCacheBaseDir
-	updateCacheBaseDir = func() (string, error) { return dir, nil }
-	t.Cleanup(func() { updateCacheBaseDir = restore })
+	restore := update.CacheDirFn
+	update.CacheDirFn = func() (string, error) { return dir, nil }
+	t.Cleanup(func() { update.CacheDirFn = restore })
 	return dir
 }
 
@@ -816,6 +810,8 @@ func sha256Hex(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// The cache lives in the update package; what the shell owns is pointing it at
+// the user's cache directory and reporting the hit as UpdateInfo.Downloaded.
 func TestSaveCachedUpdateMarksEvaluateDownloaded(t *testing.T) {
 	withUpdateCacheDir(t)
 	oldChannel := channel
@@ -824,7 +820,7 @@ func TestSaveCachedUpdateMarksEvaluateDownloaded(t *testing.T) {
 
 	data := []byte("verified artifact")
 	asset := update.Asset{
-		URL:    "https://dl.reasonix.io/desktop-v9.9.9/Reasonix-linux-amd64.tar.gz",
+		URL:    "https://dl.reasonix.io/studio-v9.9.9/Reasonix-linux-amd64.tar.gz",
 		Size:   int64(len(data)),
 		SHA256: sha256Hex(data),
 	}
@@ -832,63 +828,19 @@ func TestSaveCachedUpdateMarksEvaluateDownloaded(t *testing.T) {
 		Version:   "v9.9.9",
 		Platforms: map[string]update.Asset{update.CurrentPlatform(): asset},
 	}
-	portable := installProfile{Mode: installModePortable, CanSelfUpdate: true, ArtifactKind: artifactKindTarball}
+	portable := installProfile{Mode: installModePortable, CanSelfUpdate: true, ArtifactKind: update.KindTarball}
 	if got := evaluateWithProfile("v1.0.0", manifest, portable); got.Downloaded {
 		t.Fatal("fresh cache should not report a downloaded update")
 	}
-	meta, err := saveCachedUpdate("v9.9.9", asset, data, artifactKindTarball, nil)
+	cache, err := updateCache()
 	if err != nil {
-		t.Fatalf("saveCachedUpdate: %v", err)
+		t.Fatal(err)
 	}
-	if meta.Version != "v9.9.9" || meta.Channel != "stable" || meta.Platform != update.CurrentPlatform() {
-		t.Fatalf("cached metadata mismatch: %+v", meta)
+	if _, err := cache.Save("v9.9.9", asset, data, update.KindTarball, nil); err != nil {
+		t.Fatalf("Save: %v", err)
 	}
 	if got := evaluateWithProfile("v1.0.0", manifest, portable); !got.Downloaded {
 		t.Fatalf("evaluate did not detect cached update: %+v", got)
-	}
-}
-
-func TestCachedUpdateRejectsTamperedArtifact(t *testing.T) {
-	withUpdateCacheDir(t)
-	oldChannel := channel
-	channel = "stable"
-	t.Cleanup(func() { channel = oldChannel })
-
-	data := []byte("verified artifact")
-	asset := update.Asset{
-		URL:    "https://dl.reasonix.io/desktop-v9.9.9/Reasonix-linux-amd64.tar.gz",
-		Size:   int64(len(data)),
-		SHA256: sha256Hex(data),
-	}
-	meta, err := saveCachedUpdate("v9.9.9", asset, data, artifactKindTarball, nil)
-	if err != nil {
-		t.Fatalf("saveCachedUpdate: %v", err)
-	}
-	if err := os.WriteFile(meta.Path, []byte("tampered"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if cachedUpdateMatches("v9.9.9", asset, artifactKindTarball) {
-		t.Fatal("tampered cached artifact should not match")
-	}
-	if _, _, err := readVerifiedCachedUpdate(); err == nil {
-		t.Fatal("readVerifiedCachedUpdate should reject a tampered artifact")
-	}
-}
-
-func TestCachedUpdateAcceptsLegacyChannelAlias(t *testing.T) {
-	withUpdateCacheDir(t)
-
-	data := []byte("verified artifact")
-	asset := update.Asset{
-		URL:    "https://dl.reasonix.io/desktop-v9.9.9/Reasonix-linux-amd64.tar.gz",
-		Size:   int64(len(data)),
-		SHA256: sha256Hex(data),
-	}
-	if _, err := saveCachedUpdateForChannel("stable", "v9.9.9", asset, data, artifactKindTarball, nil); err != nil {
-		t.Fatalf("saveCachedUpdateForChannel: %v", err)
-	}
-	if _, _, err := readVerifiedCachedUpdateForChannel("preview"); err != nil {
-		t.Fatalf("legacy Preview alias did not read official cache: %v", err)
 	}
 }
 
@@ -917,94 +869,14 @@ func TestLegacyChannelAliasDoesNotPermitDowngrade(t *testing.T) {
 	}
 }
 
-func TestDebCacheRequiresSignatureAndRejectsTarballReuse(t *testing.T) {
-	withUpdateCacheDir(t)
-	oldChannel := channel
-	channel = "stable"
-	t.Cleanup(func() { channel = oldChannel })
-
-	data := []byte("deb-bytes")
-	asset := update.Asset{
-		URL:    "https://dl.reasonix.io/desktop-v9.9.9/Reasonix-linux-amd64.deb",
-		Size:   int64(len(data)),
-		SHA256: sha256Hex(data),
-	}
-	if _, err := saveCachedUpdate("v9.9.9", asset, data, artifactKindDeb, nil); err == nil {
-		t.Fatal("deb cache without signature must fail")
-	}
-	sig := []byte("minisig-bytes")
-	meta, err := saveCachedUpdate("v9.9.9", asset, data, artifactKindDeb, sig)
-	if err != nil {
-		t.Fatalf("saveCachedUpdate deb: %v", err)
-	}
-	if meta.SignaturePath == "" {
-		t.Fatal("deb cache must record signature path")
-	}
-	if !cachedUpdateMatches("v9.9.9", asset, artifactKindDeb) {
-		t.Fatal("deb cache with matching signature should match")
-	}
-	// A tarball install must not reuse a deb cache.
-	if cachedUpdateMatches("v9.9.9", asset, artifactKindTarball) {
-		t.Fatal("deb cache must not match tarball requests")
-	}
-	// Signature removal invalidates the download marker.
-	if err := os.Remove(meta.SignaturePath); err != nil {
-		t.Fatal(err)
-	}
-	if cachedUpdateMatches("v9.9.9", asset, artifactKindDeb) {
-		t.Fatal("deb cache without signature file must not match")
-	}
-
-	// Portable legacy cache (no artifactKind) remains valid for tarball.
-	tarball := []byte("tarball-bytes")
-	tAsset := update.Asset{
-		URL:    "https://dl.reasonix.io/desktop-v9.9.9/Reasonix-linux-amd64.tar.gz",
-		Size:   int64(len(tarball)),
-		SHA256: sha256Hex(tarball),
-	}
-	meta, err = saveCachedUpdate("v9.9.9", tAsset, tarball, artifactKindTarball, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Simulate pre-artifactKind metadata.
-	meta.ArtifactKind = ""
-	raw, _ := json.MarshalIndent(meta, "", "  ")
-	path, _ := updateMetadataPath()
-	if err := os.WriteFile(path, append(raw, '\n'), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if !cachedUpdateMatches("v9.9.9", tAsset, artifactKindTarball) {
-		t.Fatal("legacy portable cache should still match tarball")
-	}
-	if cachedUpdateMatches("v9.9.9", tAsset, artifactKindDeb) {
-		t.Fatal("legacy portable cache must not match deb")
-	}
-}
-
 func TestProfileForManifestDebWithoutHelperBecomesManual(t *testing.T) {
 	// profileForManifest checks linuxDebHelperReady(); on non-linux it is always
 	// false, so a synthetic deb profile without native assets becomes manual.
-	base := installProfile{Mode: installModeDeb, CanSelfUpdate: true, RequiresElev: true, ArtifactKind: artifactKindDeb}
+	base := installProfile{Mode: installModeDeb, CanSelfUpdate: true, RequiresElev: true, ArtifactKind: update.KindDeb}
 	m := &update.Manifest{Version: "v1.0.0"}
 	got := profileForManifest(base, m)
 	if got.Mode != installModeManual || got.CanSelfUpdate {
 		t.Fatalf("expected manual without native package: %+v", got)
-	}
-}
-
-func TestCheckSHA256(t *testing.T) {
-	data := []byte("hello world")
-	// echo -n "hello world" | shasum -a 256
-	const sum = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
-	if err := checkSHA256(data, sum); err != nil {
-		t.Errorf("matching digest should pass: %v", err)
-	}
-	if err := checkSHA256(data, "deadbeef"); err == nil {
-		t.Error("mismatched digest should fail")
-	}
-	// Case-insensitive hex.
-	if err := checkSHA256(data, "B94D27B9934D3E08A52E52D7DA7DABFAC484EFE37A5380EE9088F7ACE2EFCDE9"); err != nil {
-		t.Errorf("uppercase digest should pass: %v", err)
 	}
 }
 
@@ -1034,129 +906,6 @@ func TestExtractBinary(t *testing.T) {
 	}
 	if _, err := extractBinary(buf.Bytes(), "missing"); err == nil {
 		t.Error("missing entry should error")
-	}
-}
-
-func TestExtractLinuxReleaseUnitRejectsAmbiguousMembers(t *testing.T) {
-	makeArchive := func(t *testing.T, headers []tar.Header, bodies [][]byte) []byte {
-		t.Helper()
-		var buf bytes.Buffer
-		gz := gzip.NewWriter(&buf)
-		tw := tar.NewWriter(gz)
-		for i, header := range headers {
-			if err := tw.WriteHeader(&header); err != nil {
-				t.Fatal(err)
-			}
-			if i < len(bodies) {
-				if _, err := tw.Write(bodies[i]); err != nil {
-					t.Fatal(err)
-				}
-			}
-		}
-		if err := tw.Close(); err != nil {
-			t.Fatal(err)
-		}
-		if err := gz.Close(); err != nil {
-			t.Fatal(err)
-		}
-		return buf.Bytes()
-	}
-	base := func(name string, body []byte) tar.Header {
-		return tar.Header{Name: name, Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg}
-	}
-	headers := []tar.Header{
-		base("reasonix-desktop", []byte("desktop")),
-		base("reasonix-guard", []byte("guard")),
-		base("reasonix", []byte("cli")),
-	}
-	bodies := [][]byte{[]byte("desktop"), []byte("guard"), []byte("cli")}
-	if got, err := extractLinuxReleaseUnit(makeArchive(t, headers, bodies)); err != nil ||
-		string(got["reasonix-desktop"]) != "desktop" {
-		t.Fatalf("complete release extraction = %v, %q", err, got["reasonix-desktop"])
-	}
-
-	duplicateHeaders := append(append([]tar.Header(nil), headers...), base("nested/reasonix", []byte("duplicate")))
-	duplicateBodies := append(append([][]byte(nil), bodies...), []byte("duplicate"))
-	if _, err := extractLinuxReleaseUnit(makeArchive(t, duplicateHeaders, duplicateBodies)); err == nil ||
-		!strings.Contains(err.Error(), "appears more than once") {
-		t.Fatalf("duplicate release member error = %v", err)
-	}
-
-	nonRegular := append([]tar.Header(nil), headers...)
-	nonRegular[1] = tar.Header{Name: "reasonix-guard", Typeflag: tar.TypeSymlink, Linkname: "outside"}
-	nonRegularBodies := [][]byte{bodies[0], nil, bodies[2]}
-	if _, err := extractLinuxReleaseUnit(makeArchive(t, nonRegular, nonRegularBodies)); err == nil ||
-		!strings.Contains(err.Error(), "not a regular file") {
-		t.Fatalf("non-regular release member error = %v", err)
-	}
-}
-
-func TestApplyLinuxVersionedActivatesWithoutPersistingGuard(t *testing.T) {
-	root := robustTempDir(t)
-	source := robustTempDir(t)
-	for _, name := range []string{installlayout.DesktopBinaryName(), installlayout.CLIBinaryName()} {
-		if err := os.WriteFile(filepath.Join(source, name), []byte("old-"+name), 0o700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := installlayout.ActivateVersion(installlayout.ActivationRequest{
-		InstallRoot: root,
-		Version:     "v1.20.0",
-		RequestID:   "seed-linux",
-		Members: []installlayout.Member{
-			{Name: installlayout.DesktopBinaryName(), Path: filepath.Join(source, installlayout.DesktopBinaryName())},
-			{Name: installlayout.CLIBinaryName(), Path: filepath.Join(source, installlayout.CLIBinaryName())},
-		},
-		RequiredNames: []string{installlayout.DesktopBinaryName(), installlayout.CLIBinaryName()},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	originalRoot := currentInstallDirForLinuxUpdate
-	currentInstallDirForLinuxUpdate = func() string { return root }
-	t.Cleanup(func() { currentInstallDirForLinuxUpdate = originalRoot })
-
-	var archive bytes.Buffer
-	gz := gzip.NewWriter(&archive)
-	tw := tar.NewWriter(gz)
-	for _, name := range []string{"reasonix-desktop", "reasonix-guard", "reasonix"} {
-		body := []byte("new-" + name)
-		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := tw.Write(body); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := tw.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := gz.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := applyLinuxVersioned(archive.Bytes(), "1.20.1"); err != nil {
-		t.Fatal(err)
-	}
-	ptr, err := installlayout.ReadCurrent(root)
-	if err != nil || ptr.ActiveVersion != "v1.20.1" {
-		t.Fatalf("pointer=%+v err=%v", ptr, err)
-	}
-	activeDesktop, err := installlayout.ActiveDesktopPath(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(activeDesktop)
-	if err != nil || string(data) != "new-reasonix-desktop" {
-		t.Fatalf("active desktop=%q err=%v", data, err)
-	}
-	for _, guardPath := range []string{
-		filepath.Join(root, "reasonix-guard"),
-		filepath.Join(root, "versions", "v1.20.1", "reasonix-guard"),
-	} {
-		if _, err := os.Lstat(guardPath); !os.IsNotExist(err) {
-			t.Fatalf("Guard persisted at %s: %v", guardPath, err)
-		}
 	}
 }
 
@@ -1243,324 +992,6 @@ func TestApplyLinuxHoldsReleaseUnitLockDuringReplace(t *testing.T) {
 	}
 	if _, ok := repair.ReadUpdateApplyFailure(); ok {
 		t.Fatal("successful Linux release-unit publish left an interruption marker")
-	}
-}
-
-func fastRetry(t *testing.T) {
-	t.Helper()
-	restore := retryBackoff
-	retryBackoff = func(int) time.Duration { return time.Millisecond }
-	t.Cleanup(func() { retryBackoff = restore })
-}
-
-func TestDownloadRecoversFromMidStreamReset(t *testing.T) {
-	fastRetry(t)
-	const body = "complete-installer-bytes"
-	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if calls.Add(1) < int32(downloadAttempts) {
-			// Mid-stream reset: promise 100 bytes, send a few, drop the socket —
-			// the client's body read fails with unexpected EOF, exactly the CN-IPv6
-			// "forcibly closed" case the retry exists for.
-			conn, bw, err := w.(http.Hijacker).Hijack()
-			if err != nil {
-				t.Errorf("hijack: %v", err)
-				return
-			}
-			bw.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\npartial")
-			bw.Flush()
-			conn.Close()
-			return
-		}
-		_, _ = w.Write([]byte(body))
-	}))
-	defer srv.Close()
-
-	data, err := download(context.Background(), srv.Client(), nil, srv.URL, 0, nil)
-	if err != nil {
-		t.Fatalf("download should recover after %d resets: %v", downloadAttempts-1, err)
-	}
-	if string(data) != body {
-		t.Fatalf("got %q, want %q", data, body)
-	}
-	if n := calls.Load(); n != int32(downloadAttempts) {
-		t.Fatalf("made %d attempts, want %d", n, downloadAttempts)
-	}
-}
-
-func TestDownloadGivesUpAfterCap(t *testing.T) {
-	fastRetry(t)
-	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
-		conn, _, err := w.(http.Hijacker).Hijack()
-		if err != nil {
-			t.Errorf("hijack: %v", err)
-			return
-		}
-		conn.Close()
-	}))
-	defer srv.Close()
-
-	if _, err := download(context.Background(), srv.Client(), nil, srv.URL, 0, nil); err == nil {
-		t.Fatal("download should fail after exhausting retries")
-	}
-	if n := calls.Load(); n != int32(downloadAttempts) {
-		t.Fatalf("made %d attempts, want %d", n, downloadAttempts)
-	}
-}
-
-func TestRetryTransientStopsWhenCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	calls := 0
-	if err := retryTransient(ctx, func(int) error {
-		calls++
-		return errors.New("boom")
-	}); err == nil {
-		t.Fatal("cancelled retry should return the error")
-	}
-	if calls != 1 {
-		t.Fatalf("cancelled retry made %d calls, want 1", calls)
-	}
-}
-
-func TestDownloadResumesWithRange(t *testing.T) {
-	fastRetry(t)
-	full := bytes.Repeat([]byte("0123456789"), 50) // 500 bytes
-	const cut = 200
-	var calls atomic.Int32
-	rangeCh := make(chan string, 4)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if calls.Add(1) == 1 {
-			// First attempt: promise the whole file, send a prefix, drop the socket.
-			conn, bw, err := w.(http.Hijacker).Hijack()
-			if err != nil {
-				t.Errorf("hijack: %v", err)
-				return
-			}
-			fmt.Fprintf(bw, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n", len(full))
-			bw.Write(full[:cut])
-			bw.Flush()
-			conn.Close()
-			return
-		}
-		// Resume attempt: honor the Range header with a 206 + Content-Range.
-		rng := r.Header.Get("Range")
-		rangeCh <- rng
-		start := 0
-		fmt.Sscanf(rng, "bytes=%d-", &start)
-		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, len(full)-1, len(full)))
-		w.WriteHeader(http.StatusPartialContent)
-		w.Write(full[start:])
-	}))
-	defer srv.Close()
-
-	data, err := download(context.Background(), srv.Client(), nil, srv.URL, 0, nil)
-	if err != nil {
-		t.Fatalf("download: %v", err)
-	}
-	if !bytes.Equal(data, full) {
-		t.Fatalf("assembled %d bytes, want %d (equal=%v)", len(data), len(full), bytes.Equal(data, full))
-	}
-	select {
-	case rng := <-rangeCh:
-		if rng != fmt.Sprintf("bytes=%d-", cut) {
-			t.Fatalf("resume Range = %q, want bytes=%d-", rng, cut)
-		}
-	default:
-		t.Fatal("resume attempt sent no Range header")
-	}
-}
-
-func TestDownloadFallsBackToSecondClient(t *testing.T) {
-	fastRetry(t)
-	const body = "served-over-ipv4"
-	primary := &http.Client{Transport: rtFunc(func(*http.Request) (*http.Response, error) {
-		return nil, errors.New("connection reset (ipv6)")
-	})}
-	var fbCalls atomic.Int32
-	fallback := &http.Client{Transport: rtFunc(func(*http.Request) (*http.Response, error) {
-		fbCalls.Add(1)
-		return &http.Response{
-			StatusCode:    http.StatusOK,
-			Body:          io.NopCloser(strings.NewReader(body)),
-			ContentLength: int64(len(body)),
-			Header:        make(http.Header),
-		}, nil
-	})}
-
-	data, err := download(context.Background(), primary, fallback, "http://example.invalid/x", 0, nil)
-	if err != nil {
-		t.Fatalf("download: %v", err)
-	}
-	if string(data) != body {
-		t.Fatalf("got %q, want %q", data, body)
-	}
-	if fbCalls.Load() == 0 {
-		t.Fatal("fallback client was never used after the primary failed")
-	}
-}
-
-func TestDownloadRejectsBodyShorterThanManifestSize(t *testing.T) {
-	fastRetry(t)
-	body := []byte("short")
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write(body)
-	}))
-	defer srv.Close()
-
-	if _, err := download(context.Background(), srv.Client(), nil, srv.URL, int64(len(body)+1), nil); err == nil {
-		t.Fatal("download accepted fewer bytes than the manifest declared")
-	}
-}
-
-func TestDownloadRejectsBodyLongerThanManifestSize(t *testing.T) {
-	fastRetry(t)
-	body := bytes.Repeat([]byte("x"), 64)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write(body)
-	}))
-	defer srv.Close()
-
-	if _, err := download(context.Background(), srv.Client(), nil, srv.URL, 8, nil); err == nil {
-		t.Fatal("download accepted more bytes than the manifest declared")
-	}
-}
-
-func TestFetchBytesFallsBackToSecondClient(t *testing.T) {
-	fastRetry(t)
-	primary := &http.Client{Transport: rtFunc(func(*http.Request) (*http.Response, error) {
-		return nil, errors.New("read tcp [ipv6]: connection reset")
-	})}
-	fallback := &http.Client{Transport: rtFunc(func(*http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Status:     "200 OK",
-			Body:       io.NopCloser(strings.NewReader("manifest")),
-			Header:     make(http.Header),
-		}, nil
-	})}
-
-	data, err := fetchBytesFallback(context.Background(), primary, fallback, "https://example.invalid/latest.json")
-	if err != nil {
-		t.Fatalf("fetchBytesFallback: %v", err)
-	}
-	if string(data) != "manifest" {
-		t.Fatalf("got %q, want manifest", data)
-	}
-}
-
-func TestFetchBytesFallbackEscapesStalledPrimary(t *testing.T) {
-	fastRetry(t)
-	originalTimeout := fetchAttemptTimeout
-	fetchAttemptTimeout = 10 * time.Millisecond
-	t.Cleanup(func() { fetchAttemptTimeout = originalTimeout })
-	primary := &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
-		<-r.Context().Done()
-		return nil, r.Context().Err()
-	})}
-	fallback := &http.Client{Transport: rtFunc(func(*http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Status:     "200 OK",
-			Body:       io.NopCloser(strings.NewReader("ipv4")),
-			Header:     make(http.Header),
-		}, nil
-	})}
-
-	data, err := fetchBytesFallback(context.Background(), primary, fallback, "https://example.invalid/latest.json")
-	if err != nil {
-		t.Fatalf("fetchBytesFallback: %v", err)
-	}
-	if string(data) != "ipv4" {
-		t.Fatalf("got %q, want ipv4", data)
-	}
-}
-
-func TestFetchBytesDoesNotRetryPermanentHTTPStatus(t *testing.T) {
-	fastRetry(t)
-	var calls atomic.Int32
-	client := &http.Client{Transport: rtFunc(func(*http.Request) (*http.Response, error) {
-		calls.Add(1)
-		return &http.Response{
-			StatusCode: http.StatusForbidden,
-			Status:     "403 Forbidden",
-			Body:       io.NopCloser(strings.NewReader("forbidden")),
-			Header:     make(http.Header),
-		}, nil
-	})}
-
-	if _, err := fetchBytes(context.Background(), client, "https://example.invalid/latest.json"); err == nil {
-		t.Fatal("fetchBytes should return a permanent HTTP error")
-	}
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("permanent HTTP error made %d requests, want 1", got)
-	}
-}
-
-func TestFetchBytesRejectsOversizeResponsesWithoutRetry(t *testing.T) {
-	fastRetry(t)
-	t.Run("declared content length", func(t *testing.T) {
-		var calls atomic.Int32
-		client := &http.Client{Transport: rtFunc(func(*http.Request) (*http.Response, error) {
-			calls.Add(1)
-			return &http.Response{
-				StatusCode:    http.StatusOK,
-				Status:        "200 OK",
-				ContentLength: 9,
-				Body:          io.NopCloser(strings.NewReader("ignored")),
-				Header:        make(http.Header),
-			}, nil
-		})}
-		if _, err := fetchBytesFallbackForChannelSized(
-			context.Background(),
-			client,
-			nil,
-			"stable",
-			"https://example.invalid/latest.json",
-			8,
-		); !errors.Is(err, errUpdateResponseTooLarge) {
-			t.Fatalf("declared oversize error = %v, want errUpdateResponseTooLarge", err)
-		}
-		if got := calls.Load(); got != 1 {
-			t.Fatalf("declared oversize response made %d requests, want 1", got)
-		}
-	})
-
-	t.Run("chunked body", func(t *testing.T) {
-		client := &http.Client{Transport: rtFunc(func(*http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode:    http.StatusOK,
-				Status:        "200 OK",
-				ContentLength: -1,
-				Body:          io.NopCloser(strings.NewReader("123456789")),
-				Header:        make(http.Header),
-			}, nil
-		})}
-		if _, err := fetchBytesFallbackForChannelSized(
-			context.Background(),
-			client,
-			nil,
-			"stable",
-			"https://example.invalid/latest.json",
-			8,
-		); !errors.Is(err, errUpdateResponseTooLarge) {
-			t.Fatalf("chunked oversize error = %v, want errUpdateResponseTooLarge", err)
-		}
-	})
-}
-
-func TestDownloadRejectsAssetSizeAboveMaximum(t *testing.T) {
-	if _, err := download(
-		context.Background(),
-		&http.Client{},
-		nil,
-		"https://dl.reasonix.io/file",
-		maxDesktopReleaseAssetSize+1,
-		nil,
-	); err == nil {
-		t.Fatal("download accepted an asset size above the release maximum")
 	}
 }
 

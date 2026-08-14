@@ -196,18 +196,17 @@ func isAuthCancelled(err error) bool {
 
 // ensureDebCacheMatchesProfile re-detects install mode at install time so a
 // download made as portable cannot be applied after the install path changes.
-func ensureDebCacheMatchesProfile(meta *cachedUpdate, profile installProfile) error {
-	kind := artifactKindFromMeta(meta.ArtifactKind)
+func ensureDebCacheMatchesProfile(meta update.Cached, profile installProfile) error {
 	switch profile.Mode {
 	case installModeDeb:
-		if kind != artifactKindDeb {
+		if meta.Kind != update.KindDeb {
 			return errUpdateCacheMismatch
 		}
 		if meta.SignaturePath == "" {
 			return errUpdateCacheMismatch
 		}
 	case installModePortable:
-		if kind != artifactKindTarball {
+		if meta.Kind != update.KindTarball {
 			return errUpdateCacheMismatch
 		}
 	default:

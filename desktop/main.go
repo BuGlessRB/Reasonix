@@ -23,6 +23,8 @@ import (
 
 	// Blank imports wire compile-time built-ins into their registries, exactly as
 	// cmd/reasonix does — boot.Build resolves providers/tools from these registries.
+	"reasonix/desktop/internal/update"
+
 	_ "reasonix/internal/provider/anthropic"
 	_ "reasonix/internal/provider/openai"
 	_ "reasonix/internal/provider/responses"
@@ -67,6 +69,10 @@ func macSelfUpdateAllowed() bool {
 	}
 }
 
+// The updater cannot read this build's flags, so the flag is handed to it once,
+// before anything can ask whether a macOS update may be applied.
+func init() { update.MacSelfUpdate = macSelfUpdateAllowed() }
+
 func windowsWebview2GPUDisabled() bool {
 	for _, key := range []string{disableWebview2GPUEnv, legacyDisableWebview2GPUEnv} {
 		if raw, ok := os.LookupEnv(key); ok {
@@ -98,7 +104,7 @@ func linuxWebviewGpuPolicy(pattern string) linux.WebviewGpuPolicy {
 func main() {
 	// Detached macOS self-update child: wait for the old PID, hold the shared
 	// repair mutation lock, then swap the .app bundle. Must run before Wails.
-	if handled, exitCode := maybeRunMacUpdateHandoff(os.Args[1:]); handled {
+	if handled, exitCode := update.MaybeRunMacHandoff(os.Args[1:]); handled {
 		os.Exit(exitCode)
 	}
 	capturePreviousFatalCrash()
