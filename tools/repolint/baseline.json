@@ -2,15 +2,15 @@
   "limits": {
     "banner": 15,
     "commented-code": 0,
-    "complexity": 2069,
-    "essay": 3983,
-    "file-size": 108119,
-    "function-size": 8846,
+    "complexity": 2058,
+    "essay": 3975,
+    "file-size": 107141,
+    "function-size": 8813,
     "layering": 1,
     "marker": 0,
     "narrative": 64,
     "struct-state": 115,
-    "test-file-size": 69236
+    "test-file-size": 68683
   },
   "files": {
     "cmd/e2ebench/main.go": {
@@ -201,6 +201,17 @@
     "desktop/history_test.go": {
       "test-file-size": 1114
     },
+    "desktop/internal/update/apply_darwin.go": {
+      "complexity": 42,
+      "essay": 1,
+      "function-size": 180
+    },
+    "desktop/internal/update/apply_darwin_test.go": {
+      "test-file-size": 553
+    },
+    "desktop/internal/update/install_windows.go": {
+      "essay": 1
+    },
     "desktop/internal/update/manifest.go": {
       "essay": 1
     },
@@ -213,6 +224,9 @@
     },
     "desktop/main_test.go": {
       "essay": 2
+    },
+    "desktop/manifest_policy.go": {
+      "essay": 1
     },
     "desktop/memory_suggestions.go": {
       "essay": 9
@@ -366,8 +380,7 @@
       "essay": 1
     },
     "desktop/updater.go": {
-      "essay": 5,
-      "file-size": 649
+      "essay": 4
     },
     "desktop/updater_app.go": {
       "essay": 4
@@ -375,19 +388,8 @@
     "desktop/updater_install_linux.go": {
       "essay": 2
     },
-    "desktop/updater_mac.go": {
-      "complexity": 42,
-      "essay": 1,
-      "function-size": 180
-    },
-    "desktop/updater_mac_test.go": {
-      "test-file-size": 553
-    },
     "desktop/updater_test.go": {
-      "test-file-size": 769
-    },
-    "desktop/updater_windows.go": {
-      "essay": 2
+      "test-file-size": 216
     },
     "desktop/webkit_compat_linux.go": {
       "essay": 8
@@ -535,8 +537,8 @@
     },
     "internal/agent/migrate.go": {
       "complexity": 32,
-      "essay": 24,
-      "file-size": 198,
+      "essay": 23,
+      "file-size": 195,
       "function-size": 73
     },
     "internal/agent/migrate_test.go": {
@@ -686,10 +688,10 @@
       "essay": 1
     },
     "internal/boot/boot.go": {
-      "complexity": 250,
+      "complexity": 247,
       "essay": 104,
-      "file-size": 2093,
-      "function-size": 1712,
+      "file-size": 1863,
+      "function-size": 1700,
       "narrative": 3
     },
     "internal/boot/boot_test.go": {
@@ -840,8 +842,8 @@
     "internal/cli/cli.go": {
       "complexity": 75,
       "essay": 60,
-      "file-size": 1950,
-      "function-size": 516
+      "file-size": 1949,
+      "function-size": 515
     },
     "internal/cli/cli_test.go": {
       "essay": 9,
@@ -876,10 +878,7 @@
       "essay": 1
     },
     "internal/cli/mcp.go": {
-      "complexity": 8,
-      "essay": 5,
-      "file-size": 66,
-      "function-size": 7
+      "essay": 1
     },
     "internal/cli/mcp_manager.go": {
       "complexity": 15,
@@ -945,7 +944,7 @@
       "file-size": 126
     },
     "internal/cli/shell_completion.go": {
-      "function-size": 113
+      "function-size": 100
     },
     "internal/cli/skill_hooks.go": {
       "essay": 1
@@ -993,7 +992,7 @@
     },
     "internal/config/config.go": {
       "essay": 54,
-      "file-size": 1520,
+      "file-size": 1519,
       "narrative": 2
     },
     "internal/config/credentials.go": {
@@ -1087,8 +1086,8 @@
     },
     "internal/control/controller.go": {
       "complexity": 10,
-      "essay": 161,
-      "file-size": 5489,
+      "essay": 159,
+      "file-size": 5485,
       "function-size": 75,
       "narrative": 4,
       "struct-state": 17
@@ -1741,7 +1740,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 27,
-      "file-size": 882
+      "file-size": 858
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3

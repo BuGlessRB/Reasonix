@@ -7,7 +7,7 @@ interface Props {
   // Owned by App: the header needs the current session's title too, and one
   // fetch has to serve both.
   list: SessionEntry[];
-  reload: () => void;
+  reload: () => Promise<void>;
   run: string;
   cost: string;
   onError: (e: unknown) => void;
@@ -23,7 +23,11 @@ export function Sessions({ port, status, list, reload, run, cost, onError, onFol
   const [confirm, setConfirm] = useState("");
   const [gone, setGone] = useState("");
 
-  const current = status?.sessionPath || list.find((e) => e.current)?.path;
+  // The kernel decides which row is current — it compares canonical paths, and
+  // the same file reaches us spelled two ways (Windows folds the slug's case, a
+  // resume resolves it back). Only fall back to /status when no row claims it,
+  // which is the session whose file the first turn has yet to create.
+  const current = list.find((e) => e.current)?.path || status?.sessionPath;
   const shown = current && !list.some((e) => e.path === current)
     ? [{ name: "", path: current, title: status?.goal, current: true }, ...list]
     : list;
@@ -68,10 +72,9 @@ export function Sessions({ port, status, list, reload, run, cost, onError, onFol
       onError(err);
       return;
     }
-    setTimeout(() => {
-      setGone("");
-      reload();
-    }, 220);
+    // Keep the row collapsed until the refreshed list has dropped it. Clearing
+    // on the timer alone re-expands it for as long as the fetch takes.
+    setTimeout(() => void reload().finally(() => setGone("")), 220);
   };
 
   return (
@@ -111,7 +114,7 @@ export function Sessions({ port, status, list, reload, run, cost, onError, onFol
                   <span>{e.title || e.name || "新会话"}</span>
                 </span>
                 <span className="meta">
-                  <span className="st">{on ? RUN_ST[run] : e.turns ? `${e.turns} 轮` : "已归档"}</span>
+                  <span className="st">{on ? RUN_ST[run] : e.turns ? `${e.turns} 轮` : "空会话"}</span>
                   {on && <span className="cost">{cost}</span>}
                 </span>
                 <span className="where">

@@ -861,6 +861,9 @@
   .compose textarea::placeholder { color: var(--ghost) }
   .compose .row { display: flex; align-items: center; gap: 11px; margin-top: 10px }
   .compose .row .go { margin-left: auto }
+  /* A model/effort switch rebuilds the runtime; keep the row live-looking but
+     uninteractive rather than letting a second click queue another rebuild. */
+  .compose .row[data-busy] { opacity: .55; pointer-events: none; transition: opacity .12s }
   /* 两个图标叠在同一格里交叉旋入，按钮不跳宽 */
   .btn.send { display: inline-flex; align-items: center; gap: 6px }
   .btn.send .ic { display: grid; width: 13px; height: 13px; flex: none }
@@ -1212,6 +1215,32 @@
   .addsrv .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
   .addsrv > .why { margin-top: 9px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
 
+  /* 添加模型来源：先两个输入框，探测答完才长出下半截。字段沿用网络面板那套，
+     两个地方的表单看起来就该是一个人做的。 */
+  .addp { border-top: 1px solid var(--hair); padding: 12px 0 2px }
+  .addp .fields { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px }
+  .addp .fields label { display: flex; flex-direction: column; gap: 4px }
+  .addp .fields label.grow { flex: 1; min-width: 150px }
+  .addp .fields label.full { flex-basis: 100% }
+  .addp .fields span { font: 400 10.5px var(--ui); color: var(--faint) }
+  .addp .fields input, .addp .fields select {
+    padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--raised); color: var(--text); font: 400 11.5px var(--mono);
+  }
+  .addp .fields input:focus, .addp .fields select:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  .addp .acts { display: flex; gap: 8px; margin-top: 12px }
+  .addp .act[data-primary] { border-color: var(--accent); background: var(--accent); color: var(--accent-fg) }
+  .addp .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
+  .addp .mlb { flex-basis: 100%; font: 400 10.5px var(--ui); color: var(--faint) }
+  /* 模型多到几十个是常态，所以给一个上限再滚动，别把按钮顶到屏幕外。 */
+  .mpick { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; max-height: 168px; overflow-y: auto }
+  .chip {
+    padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px;
+    background: transparent; color: var(--muted); cursor: pointer;
+    font: 400 11px var(--mono); white-space: nowrap;
+  }
+  .chip[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: var(--raised) }
+
   .cand { padding: 10px 0; border-bottom: 1px solid var(--hair) }
   .cand-hd { display: flex; align-items: baseline; gap: 9px }
   .cand-hd .nm { font: 500 12.5px var(--ui); color: var(--text) }
@@ -1449,6 +1478,10 @@
   @media (prefers-reduced-motion: reduce) {
     .onb-card, .onb-field, .onb-go, .onb-note, .onb-r path, .prefs, .grp { animation: none !important }
     .app[data-prefs] > .chrome, .app[data-prefs] > .cols { transform: none }
+    /* The entry stagger is decoration; the hover reveal and the accent rule are
+       not. A delayed row that never animates would stay invisible, so the delay
+       goes with the animation. */
+    .vrow, .vnow .lb { animation: none !important; animation-delay: 0s !important }
   }
 
   .ws[data-busy] { opacity: .5; pointer-events: none }
@@ -1519,6 +1552,72 @@
   /* The caret trails the last line instead of dropping to one of its own. */
   .md > :last-child::after { content: "" }
   .md .caret { margin-left: 2px; vertical-align: -2px }
+
+  /* Signed out this is an outline at the icon cluster's weight; signed in it
+     carries the initial, so the bar states a fact instead of asking for one. */
+  .acct-btn .ini {
+    display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%;
+    background: var(--accent); color: var(--bg); font: 600 9.5px var(--ui); letter-spacing: 0;
+  }
+  .acct-btn[data-on] { color: var(--text) }
+
+  .acct { display: flex; flex-direction: column; gap: 11px }
+  .acct-who { display: flex; align-items: baseline; gap: 9px }
+  .acct-who .nm { font: 500 13px var(--ui); color: var(--text) }
+  .acct-who .em { font: 400 11.5px var(--mono); color: var(--muted) }
+  .acct-note { font: 400 11.5px/1.6 var(--ui); color: var(--muted); margin: 0 }
+  .acct-note[data-err] { color: var(--err) }
+  .acct-act { display: flex; align-items: center; gap: 11px; flex-wrap: wrap }
+  .acct-code { display: flex; flex-direction: column; gap: 9px; align-items: flex-start }
+  /* The code is the one thing the user must copy by eye: give it the room a
+     one-shot secret needs rather than making them squint at body text. */
+  .acct-code .cd {
+    font: 600 22px/1 var(--mono); letter-spacing: .16em; color: var(--text);
+    padding: 11px 14px; border: 1px solid var(--hair); border-radius: 8px; background: var(--overlay);
+  }
+
+  .vers { display: flex; flex-direction: column; gap: 11px }
+  .vnow { display: flex; align-items: baseline; gap: 9px }
+  .vnow .cur { font: 600 21px/1 var(--mono); letter-spacing: .01em; color: var(--text) }
+  /* The label rides one beat behind the number it explains: the version is the
+     answer, the words are the footnote. */
+  .vnow .lb { font: 400 11.5px var(--ui); color: var(--muted); animation: card var(--t-card) var(--ease-out) .07s both }
+  .vnow .pin {
+    font: 500 10px var(--mono); letter-spacing: .08em; color: var(--ok);
+    padding: 2px 6px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--ok);
+  }
+
+  .vlist { display: flex; flex-direction: column; margin-top: 3px }
+  /* Rows take the settings list's shape — hairline separated, mono for the
+     machine literal, prose for what it means. What marks one as yours is the
+     inset accent rule every other "this one" in the app uses; a border would
+     shift the row by a pixel each time the current version changes. */
+  .vrow {
+    display: flex; align-items: baseline; gap: 10px; padding: 9px 12px;
+    border-top: 1px solid var(--hair);
+    animation: card var(--t-card) var(--ease-out) both;
+  }
+  .vrow:last-of-type { border-bottom: 1px solid var(--hair) }
+  .vrow[data-on] { box-shadow: inset 2px 0 0 var(--accent); background: var(--accent-wash) }
+  .vrow .nm { flex: none; min-width: 104px; font: 400 12px var(--mono); color: var(--muted) }
+  /* Where you are reads at full weight; what you left behind recedes. Position
+     in the list is carried by type, not by an ornament beside it. */
+  .vrow[data-on] .nm { font-weight: 500; color: var(--text) }
+  .vrow[data-side="ahead"] .nm { color: var(--text) }
+  .vrow[data-side="past"] .nm, .vrow[data-side="past"] .ds { color: var(--faint) }
+  .vrow .ds { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 400 11.5px var(--ui); color: var(--muted) }
+  .vrow .sc { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--faint) }
+  /* The action stays out of the way until the row is under the pointer — the
+     list is for reading first, acting second. Keyboard users get it on focus. */
+  .vrow .sa { margin-left: 10px; flex: none; opacity: 0; transition: opacity var(--t-line) var(--ease-out) }
+  .vrow:hover .sa, .vrow .sa:focus-visible { opacity: 1 }
+  @media (hover: none) { .vrow .sa { opacity: 1 } }
+
+  /* .lnk already exists with its own hover/disabled/focus states; these only
+     place it in the two contexts this panel puts it in. */
+  .find .lnk { margin-left: 6px }
+  .vrow .sa.lnk { text-decoration: none }
 
   /* Same shape as .tag — a small mono pill — in the colour that means broken,
      so a failed command reads as failed without a second layout. */

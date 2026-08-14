@@ -1,4 +1,4 @@
-import type { AgentPort, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, DeviceGrant, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 import { SCRIPT } from "./fixture";
 
@@ -315,6 +315,46 @@ export class MockPort implements AgentPort {
     const sk = this.skillList.find((x) => x.name === name);
     if (sk) sk.enabled = enabled;
   }
+
+  async versions(): Promise<VersionHub> {
+    return { current: "dev", pinned: "", stalePin: false, latest: "", newer: false, versions: [] };
+  }
+
+  async providers(): Promise<ProviderEntry[]> {
+    return [];
+  }
+
+  async probeProvider(): Promise<ProviderProbe> {
+    throw new Error("演示模式不会真的去连端点");
+  }
+
+  async saveProvider(): Promise<void> {}
+
+  async removeProvider(): Promise<void> {}
+
+  async pinVersion(): Promise<void> {}
+
+  async goToVersion(): Promise<void> {
+    throw new Error("演示模式不会真的安装版本");
+  }
+
+  onUpdateProgress(): () => void {
+    return () => {};
+  }
+
+  async account(): Promise<AccountState> {
+    return { signedIn: false };
+  }
+
+  async accountLogin(): Promise<DeviceGrant> {
+    throw new Error("没有内核，无法登录");
+  }
+
+  async accountPoll(): Promise<{ status: "pending" | "complete" }> {
+    return { status: "pending" };
+  }
+
+  async accountLogout(): Promise<void> {}
 
   async workspaces(): Promise<WorkspaceInfo> {
     return {

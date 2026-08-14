@@ -27,6 +27,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
   const [slash, setSlash] = useState<SlashEntry[]>([]);
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -67,7 +68,12 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
 
   const apv = status?.toolApprovalMode ?? "ask";
   const modelLb = status?.modelRef?.split("/").pop() ?? status?.label ?? "—";
-  const change = (p: Promise<void>) => void p.then(onChanged).catch(onError);
+  // Every one of these rebuilds the runtime kernel-side (~0.4s on a real
+  // session). Without a pending state the click reads as a dead control.
+  const change = (p: Promise<void>) => {
+    setSwitching(true);
+    void p.then(onChanged).catch(onError).finally(() => setSwitching(false));
+  };
 
   return (
     <>
@@ -117,7 +123,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           }
         }}
       />
-      <div className="row">
+      <div className="row" data-busy={switching ? "" : undefined}>
         <Picker
           className="mode"
           place="bottom"

@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, SessionStatus, SkillEntry } from "../port/port";
+import type { AccountState, AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 import { AddServer } from "./AddServer";
 import { Hooks } from "./Hooks";
 import { Network } from "./Network";
+import { Account } from "./Account";
+import { Providers } from "./Providers";
+import { Boundary } from "./Boundary";
+import { Versions } from "./Versions";
 import { Memory } from "./Memory";
 
 const PRESETS: [Preset, string, string][] = [
@@ -27,7 +31,16 @@ const THEMES: [string, string][] = [
   ["dark", "深色"],
 ];
 
-type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "memory" | "appearance" | "advanced";
+type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "memory" | "account" | "versions" | "appearance" | "advanced";
+
+// What still lives in the old desktop app. Bots and theme packs are not on the
+// roadmap, so they are not promises to keep here either. Signing in and reading
+// versions landed here; downloading and applying an update did not, and naming
+// only that half keeps this list a fact rather than a promise.
+// Everything that used to live here has a home now, so the 「高级」 tab filters
+// itself out below. Keep the list rather than the tab: the next thing that is
+// real but not built yet belongs in one line here, not in a half-made panel.
+const ELSEWHERE: string[] = [];
 
 const NAV: [Section, string][] = [
   ["session", "会话"],
@@ -37,15 +50,13 @@ const NAV: [Section, string][] = [
   ["ext", "扩展"],
   ["network", "网络"],
   ["memory", "记忆"],
+  ["account", "账号"],
+  ["versions", "版本"],
   ["appearance", "外观"],
   ["advanced", "高级"],
-];
+].filter(([id]) => id !== "advanced" || ELSEWHERE.length > 0) as [Section, string][];
 
 const SCOPE: Record<string, string> = { project: "项目", custom: "自定义", global: "我的", builtin: "内置" };
-
-// What still lives in the old desktop app. Bots and theme packs are not on the
-// roadmap, so they are not promises to keep here either.
-const ELSEWHERE = ["账号与更新"];
 
 // The user's question is "is it there and does it work", so the state is the
 // label. A failed server keeps its error on the row that names it.
@@ -66,10 +77,13 @@ interface Props {
   onTheme: (t: string) => void;
   onClose: () => void;
   onChanged: () => void;
+  at?: string;
+  account: AccountState | null;
+  reloadAccount: () => void;
 }
 
-export function Settings({ port, status, theme, onTheme, onClose, onChanged }: Props) {
-  const [at, setAt] = useState<Section>("session");
+export function Settings({ port, status, theme, onTheme, onClose, onChanged, at: opened, account: acct, reloadAccount }: Props) {
+  const [at, setAt] = useState<Section>((opened as Section) || "session");
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [skills, setSkills] = useState<SkillEntry[]>([]);
@@ -102,14 +116,20 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
     onChanged();
   }, [reloadExt, onChanged]);
 
-  useEffect(() => {
+  // Adding or removing a source changes what the picker above can offer, so
+  // the list is reloadable rather than read once at mount.
+  const loadModels = useCallback(() => {
     port.models().then(setModels).catch(() => setModels([]));
+  }, [port]);
+
+  useEffect(() => {
+    loadModels();
     reloadExt();
     root.current?.focus();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [port, onClose, reloadExt]);
+  }, [port, onClose, reloadExt, loadModels]);
 
   const run = async (what: string, fn: () => Promise<void>) => {
     setBusy(what);
@@ -135,8 +155,10 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
     ext: broken ? `${broken} 个异常` : `${mcp.length + skillsOn}`,
     network: netMode,
     memory: memCount ? `${memCount} 条` : "",
+    account: acct === null ? "" : acct.signedIn ? (acct.user?.label ?? "已登录") : "未登录",
+    versions: "",
     appearance: THEMES.find(([id]) => id === theme)?.[1] ?? "",
-    advanced: "",
+    advanced: ELSEWHERE.length ? `${ELSEWHERE.length}` : "",
   };
   const danger = (id: Section) =>
     (id === "tools" && status?.toolApprovalMode === "yolo") || (id === "ext" && broken > 0);
@@ -164,6 +186,14 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
         </nav>
 
         <div className="prefs-main" role="tabpanel" aria-labelledby={`prefs-${at}`} data-sec={at}>
+          <Boundary
+            fallback={
+              <div className="find" data-lvl="err" role="alert">
+                <span className="t">这个设置分区出错了</span>
+                <span className="why">其它分区和你的会话不受影响；关掉设置再打开可重试。</span>
+              </div>
+            }
+          >
           <div className="prefs-col">
           {at === "session" && (
             <>
@@ -210,6 +240,12 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
                     </button>
                   ))}
                 </div>
+              </Group>
+              <Group
+                title="模型来源"
+                hint="模型从哪里来。添加只问地址和 key —— 协议、模型列表、能不能看图，都去问端点，问不出来的才让你填。"
+              >
+                <Providers port={port} onChanged={loadModels} />
               </Group>
             </>
           )}
@@ -285,6 +321,24 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
             </Group>
           )}
 
+          {at === "account" && (
+            <Group
+              title="账号"
+              hint="Reasonix 本身不需要账号。它只用在天生要联网的地方：社区发帖、崩溃问题跟进，以后还有技能发布。"
+            >
+              <Account port={port} state={acct} reload={reloadAccount} />
+            </Group>
+          )}
+
+          {at === "versions" && (
+            <Group
+              title="版本"
+              hint="装的是哪一版、有没有更新，以及出问题时怎么退回去。回退会固定在你选的版本，不会被自动更新拽回来。"
+            >
+              <Versions port={port} />
+            </Group>
+          )}
+
           {at === "memory" && (
             <Group
               title="记忆"
@@ -318,6 +372,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged }: P
             </Group>
           )}
           </div>
+        </Boundary>
         </div>
       </div>
     </div>

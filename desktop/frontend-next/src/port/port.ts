@@ -184,6 +184,108 @@ export interface ModelEntry {
   default?: boolean;
 }
 
+export interface AccountUser {
+  handle: string;
+  email: string;
+  label: string;
+}
+
+// signedIn with an error means the token is still here but the identity service
+// could not be reached — never the same thing as being signed out.
+export interface AccountState {
+  signedIn: boolean;
+  user?: AccountUser;
+  expired?: boolean;
+  error?: string;
+}
+
+export interface DeviceGrant {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete: string;
+  interval: number;
+  expiresIn: number;
+}
+
+export interface VersionEntry {
+  version: string;
+  tag: string;
+  publishedAt: string;
+  current: boolean;
+  older: boolean;
+}
+
+// err rides alongside the data: an unreachable catalog must not hide which
+// version is running.
+export interface VersionHub {
+  current: string;
+  pinned: string;
+  stalePin: boolean;
+  latest: string;
+  newer: boolean;
+  versions: VersionEntry[];
+  err?: string;
+}
+
+// A configured provider as the settings panel lists it.
+export interface ProviderEntry {
+  name: string;
+  kind: string;
+  baseUrl: string;
+  models: string[];
+  default: string;
+  hasKey: boolean;
+  // Removing the one in use would leave the session on a model that no longer
+  // resolves, so the row offers no delete.
+  inUse: boolean;
+  preset: boolean;
+}
+
+// What an endpoint turned out to be. Every field is a guess the user confirms
+// before anything is written — a model list cannot prove which protocol a
+// gateway speaks, only which ones it answers.
+export interface ProviderProbe {
+  kind: string;
+  authHeader: boolean;
+  models: string[];
+  default: string;
+  efforts: string[];
+  effort: string;
+  vision: string[];
+  // ambiguous: more than one protocol answered, so the kind is a preference
+  // rather than a finding.
+  ambiguous: boolean;
+  // noProxy: it answered only with the proxy bypassed (a China-only endpoint
+  // behind a foreign exit resets the handshake).
+  noProxy: boolean;
+}
+
+// What the panel sends back after the user has looked at the probe.
+export interface ProviderDraft {
+  name: string;
+  kind: string;
+  baseUrl: string;
+  apiKey: string;
+  models: string[];
+  default: string;
+  authHeader: boolean;
+  noProxy: boolean;
+  effort: string;
+  vision: string[];
+}
+
+// One report from an install in flight. received/total are meaningful only
+// while downloading; verifying is the pause after the last byte, which is long
+// enough on a large artifact that not naming it reads as a hang.
+export interface UpdateProgress {
+  version: string;
+  phase: "downloading" | "verifying" | "downloaded" | "relaunching" | "error";
+  received: number;
+  total: number;
+  err?: string;
+}
+
 export interface AgentPort {
   providerSetup(): Promise<ProviderSetup | null>;
   saveProviderKey(apiKey: string): Promise<void>;
@@ -215,6 +317,31 @@ export interface AgentPort {
   parseMcp(input: string): Promise<McpDraft>;
   installMcp(server: McpDraftServer, scope: "user" | "project"): Promise<McpInstallResult>;
   removeMcp(name: string): Promise<{ disconnected: boolean; stillConfigured: boolean }>;
+  // An account is only for the networked surfaces (forum, crash follow-ups);
+  // nothing in the agent loop calls these.
+  // Updating the app is the shell's job, not the kernel's: only the shell knows
+  // its install layout. A browser tab has no shell and gets an empty hub.
+  providers(): Promise<ProviderEntry[]>;
+  // Asks an endpoint what it is. Writes nothing — the answer is shown for
+  // confirmation, because only the person holding the key knows what they
+  // bought.
+  probeProvider(baseUrl: string, apiKey: string): Promise<ProviderProbe>;
+  saveProvider(draft: ProviderDraft): Promise<void>;
+  removeProvider(name: string): Promise<void>;
+  versions(): Promise<VersionHub>;
+  pinVersion(version: string): Promise<void>;
+  // Installs a published version, forward or back — the same call either way,
+  // because a rollback that took a second code path would be the less-tested
+  // one. Resolves only on failure: a success ends with the process handing over
+  // to the build it just installed.
+  goToVersion(version: string): Promise<void>;
+  // Returns an unsubscribe. A browser tab has no shell to report progress, so
+  // it never fires there.
+  onUpdateProgress(cb: (p: UpdateProgress) => void): () => void;
+  account(): Promise<AccountState>;
+  accountLogin(): Promise<DeviceGrant>;
+  accountPoll(deviceCode: string): Promise<{ status: "pending" | "complete"; slowDown?: boolean }>;
+  accountLogout(): Promise<void>;
   workspaces(): Promise<WorkspaceInfo>;
   // Rebuilds the whole runtime against another folder. The conversation does
   // not come along, so the caller has to reload the transcript afterwards.

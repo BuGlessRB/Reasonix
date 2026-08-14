@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { AgentPort, ApprovalVerdict, McpEntry, ProviderSetup, SessionEntry, SessionStatus } from "../port/port";
+import type { AccountState, AgentPort, ApprovalVerdict, McpEntry, ProviderSetup, SessionEntry, SessionStatus } from "../port/port";
 import { fromHistory, initialState, quoteAmount, reduce } from "../state/session";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { Chrome } from "./Chrome";
@@ -21,10 +21,12 @@ export function App({ port }: { port: AgentPort }) {
   const [side, setSide] = useState(true);
   const [pane, setPane] = useState<"flow" | "traj">("flow");
   const [pinned, setPinned] = useState(true);
-  const [settings, setSettings] = useState(false);
+  // false = closed, true = open at its last section, a string = open there.
+  const [settings, setSettings] = useState<string | boolean>(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("rx-theme") ?? "auto");
   const [setup, setSetup] = useState<ProviderSetup | null | undefined>(undefined);
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
+  const [account, setAccount] = useState<AccountState | null>(null);
   const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const flow = useRef<HTMLDivElement>(null);
@@ -81,18 +83,26 @@ export function App({ port }: { port: AgentPort }) {
   }, [port]);
 
   // Stable so the settings pane's own reload effect does not re-run every render.
+  const reloadAccount = useCallback(() => {
+    port.account().then(setAccount).catch(() => setAccount(null));
+  }, [port]);
+
   const onSettingsChanged = useCallback(() => {
     refreshStatus();
     reloadMcp();
-  }, [refreshStatus, reloadMcp]);
+    reloadAccount();
+  }, [refreshStatus, reloadMcp, reloadAccount]);
 
   const fail = useCallback((e: unknown) => {
     dispatch({ kind: "__error", text: e instanceof Error ? e.message : String(e) } as never);
   }, []);
 
-  const reloadSessions = useCallback(() => {
-    void port.sessions().then(setSessions).catch(() => setSessions([]));
-  }, [port]);
+  // Resolves once the new list is in: the delete animation has to hold the
+  // collapsed row until then, or it springs back open for a round trip.
+  const reloadSessions = useCallback(
+    () => port.sessions().then(setSessions).catch(() => setSessions([])),
+    [port],
+  );
 
   // Everything on screen belongs to one session; when the kernel moves to
   // another one — a switch, a new session, a whole new workspace — all of it
@@ -117,6 +127,8 @@ export function App({ port }: { port: AgentPort }) {
     reloadSessions();
     reloadMcp();
   }, [reloadSessions, reloadMcp, status?.sessionPath, s.running]);
+
+  useEffect(reloadAccount, [reloadAccount]);
 
   // /status is the only source for background jobs and for settings the run does
   // not echo, so a live turn has to re-read it rather than infer from events.
@@ -237,12 +249,13 @@ export function App({ port }: { port: AgentPort }) {
       <Chrome
         port={port}
         status={status}
-        title={sessions.find((e) => e.path === status?.sessionPath)?.title}
+        title={sessions.find((e) => e.current || e.path === status?.sessionPath)?.title}
         steer={pendingSteer}
         theme={theme}
         onTheme={setTheme}
-        onSettings={() => setSettings(true)}
+        onSettings={(sec) => setSettings(sec ?? true)}
         onChanged={refreshStatus}
+        account={account}
         onWorkspace={reloadSession}
         onError={fail}
       />
@@ -347,6 +360,9 @@ export function App({ port }: { port: AgentPort }) {
           onTheme={setTheme}
           onClose={() => setSettings(false)}
           onChanged={onSettingsChanged}
+          at={typeof settings === "string" ? settings : undefined}
+          account={account}
+          reloadAccount={reloadAccount}
         />
       )}
     </div>
