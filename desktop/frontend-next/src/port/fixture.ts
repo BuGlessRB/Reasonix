@@ -162,6 +162,28 @@ export const SCRIPT: Beat[] = [
       }),
     },
   },
+  // The agent teaching itself something, which no other tool call does — and the
+  // card for it had no fixture, so it was never seen in dev.
+  {
+    wait: 500,
+    ev: {
+      kind: "tool_result",
+      tool: tool("remember", {
+        id: "rm1",
+        readOnly: false,
+        args: JSON.stringify({
+          name: "gateway-401-transient",
+          title: "网关的 401 是瞬时态",
+          description: "退避重试即可，不要删 key",
+          scope: "project",
+          activation: "relevant",
+          body: "curl A/B 证实：同一个 key 同一分钟，401 只落在无退避的一组。",
+        }),
+        output: "Saved memory id=mem_01 revision=1 (project background) as gateway-401-transient",
+        durationMs: 40,
+      }),
+    },
+  },
   {
     wait: 400,
     ev: { kind: "notice", level: "warn", text: "工作树里有未提交的改动，退避补丁会叠在上面。" },

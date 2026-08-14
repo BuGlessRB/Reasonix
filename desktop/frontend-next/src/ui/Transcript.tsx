@@ -12,6 +12,7 @@ import { CompletionCard } from "./cards/CompletionCard";
 import { ReadsCard } from "./cards/ReadsCard";
 import { UserCard } from "./cards/UserCard";
 import { NoticeCard } from "./cards/NoticeCard";
+import { RememberCard } from "./cards/RememberCard";
 
 interface Props {
   items: Item[];
@@ -22,9 +23,10 @@ interface Props {
   onApprove: (itemId: string, id: string, v: ApprovalVerdict) => void;
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => void;
   onSuggest: (text: string) => void;
+  onForget: (itemId: string, name: string) => void;
 }
 
-export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove, onAnswer, onSuggest }: Props) {
+export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove, onAnswer, onSuggest, onForget }: Props) {
   // Stick to the bottom only while the reader is already there; scrolling up
   // must not be yanked back by incoming frames.
   const [pinned, setPinned] = useState(true);
@@ -53,7 +55,7 @@ export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove
       <div className="flow">
         {items.length === 0 && <Hero onPick={onSuggest} />}
         {items.map((it) => (
-          <Row key={it.id} it={it} onApprove={onApprove} onAnswer={onAnswer} />
+          <Row key={it.id} it={it} onApprove={onApprove} onAnswer={onAnswer} onForget={onForget} />
         ))}
         {waiting.ttftSince && <Await retry={waiting.retry} />}
       </div>
@@ -67,10 +69,12 @@ export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove
 const Row = memo(function Row({
   it,
   onApprove,
+  onForget,
   onAnswer,
 }: {
   it: Item;
   onApprove: Props["onApprove"];
+  onForget: Props["onForget"];
   onAnswer: Props["onAnswer"];
 }) {
   switch (it.t) {
@@ -99,6 +103,9 @@ const Row = memo(function Row({
       return <AskCard item={it} onAnswer={onAnswer} />;
     case "compaction":
       return <CompactionCard c={it.c} done={it.done} />;
+
+    case "remember":
+      return <RememberCard m={it.m} forgotten={it.forgotten} onForget={(name) => onForget(it.id, name)} />;
     case "completion":
       return <CompletionCard c={it.c} />;
     case "notice":

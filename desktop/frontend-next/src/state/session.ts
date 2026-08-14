@@ -10,8 +10,21 @@ export type Item =
   | { t: "approval"; id: string; a: Approval; verdict?: string }
   | { t: "ask"; id: string; ask: Ask; answered?: string[][] }
   | { t: "compaction"; id: string; c: Compaction; done: boolean }
+  | { t: "remember"; id: string; m: RememberedFact; forgotten?: boolean }
   | { t: "completion"; id: string; c: CompletionSummary }
   | { t: "notice"; id: string; level: string; text: string };
+
+// What a remember call wrote, read off its own arguments. Saving a fact changes
+// what the agent will do in later sessions, which no other tool call does — so it
+// gets a card of its own rather than scrolling past as one more step.
+export interface RememberedFact {
+  name: string;
+  title: string;
+  description: string;
+  scope: string;
+  activation: string;
+  body: string;
+}
 
 export interface Metrics {
   hit: number;
@@ -88,6 +101,34 @@ function foldTool(items: Item[], tool: Tool, running: boolean): Item[] {
   return [...items, { t: "tool", id: nextId(), tool, running, children: [] }];
 }
 
+// dropTool removes the dispatch row a specialised card replaces, so the same
+// call is not shown twice once its result arrives.
+function dropTool(items: Item[], id?: string): Item[] {
+  if (!id) return items;
+  return items.filter((i) => !(i.t === "tool" && i.tool.id === id));
+}
+
+// The card reads the call's own arguments: they carry what was saved and how it
+// will be recalled, which the tool's textual receipt does not.
+function parseRemembered(tool: Tool): RememberedFact | null {
+  try {
+    const a = JSON.parse(tool.args ?? "{}") as Record<string, string>;
+    const name = (a.name || "").trim();
+    const description = (a.description || "").trim();
+    if (!name && !description) return null;
+    return {
+      name,
+      title: (a.title || "").trim() || name,
+      description,
+      scope: (a.scope || "project").trim(),
+      activation: (a.activation || "relevant").trim(),
+      body: (a.body || "").trim(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Settles the message still being written. turn_done settles every open one:
 // a tool call between two answers leaves the earlier card unsealed forever, and
 // an unsealed card keeps a caret blinking and its reveal clock running on text
@@ -147,7 +188,8 @@ export function reduce(
     | { kind: "__restore"; items: Item[]; plan: PlanStep[]; hit: number; miss: number; cost?: number }
     | { kind: "__error"; text: string }
     | { kind: "__user"; text: string; pending: boolean }
-    | { kind: "__decided"; id: string; verdict?: string; answers?: string[][] },
+    | { kind: "__decided"; id: string; verdict?: string; answers?: string[][] }
+    | { kind: "__forgot"; id: string },
 ): SessionState {
   if (ev.kind === "__error") return { ...s, error: ev.text };
   // Both event.Message emitters carry assistant text, so nothing on the wire
@@ -161,6 +203,15 @@ export function reduce(
       items: [...s.items, { t: "user", id: nextId(), text: ev.text, pending: ev.pending }],
     };
   }
+  // The card stays after the fact is dropped, marked: the transcript is the
+  // record of what happened, and erasing the row would erase that too.
+  if (ev.kind === "__forgot") {
+    return {
+      ...s,
+      items: s.items.map((i) => (i.t === "remember" && i.id === ev.id ? { ...i, forgotten: true } : i)),
+    };
+  }
+
   // The card reads its sealed state off the item, so the decision has to be
   // recorded here — otherwise an answered question stays answerable forever.
   if (ev.kind === "__decided") {
@@ -208,6 +259,12 @@ export function reduce(
 
     case "tool_result": {
       if (!ev.tool) return s;
+      // A failed remember is an ordinary failed tool call; only a save that
+      // actually landed is worth its own card.
+      const fact = ev.tool.name === "remember" && !ev.tool.err ? parseRemembered(ev.tool) : null;
+      if (fact) {
+        return { ...s, items: [...dropTool(s.items, ev.tool.id), { t: "remember", id: nextId(), m: fact }] };
+      }
       const plan = (ev.tool.name === "todo_write" && parsePlan(ev.tool)) || s.plan;
       return { ...s, plan, items: mergeReads(foldTool(s.items, ev.tool, false)) };
     }

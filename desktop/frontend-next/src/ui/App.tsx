@@ -185,6 +185,18 @@ export function App({ port }: { port: AgentPort }) {
     [port, refreshStatus, fail],
   );
 
+  // Taking it back is only cheap while the conversation that caused it is still
+  // on screen; the card stays, marked, so the record of what happened survives.
+  const onForget = useCallback(
+    (itemId: string, name: string) => {
+      port
+        .forgetMemory(name)
+        .then(() => dispatch({ kind: "__forgot", id: itemId } as never))
+        .catch(fail);
+    },
+    [port, fail],
+  );
+
   const onAnswer = useCallback(
     (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => {
       dispatch({ kind: "__decided", id: itemId, answers: answers.map((a) => a.selected) } as never);
@@ -280,6 +292,7 @@ export function App({ port }: { port: AgentPort }) {
             onSuggest={submit}
             onApprove={onApprove}
             onAnswer={onAnswer}
+            onForget={onForget}
           />
 
           <div className="scroll" id="trajScroll" data-pane="traj" hidden={pane !== "traj"}>
