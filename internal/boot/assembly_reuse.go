@@ -1,9 +1,14 @@
 package boot
 
 import (
+	"strings"
+
 	"reasonix/internal/command"
+	"reasonix/internal/control"
 	"reasonix/internal/extension"
 	"reasonix/internal/hook"
+	"reasonix/internal/instruction"
+	"reasonix/internal/memory"
 	"reasonix/internal/skill"
 	"reasonix/internal/tool"
 )
@@ -18,6 +23,8 @@ type ReusedAssembly struct {
 	Hooks                   []hook.ResolvedHook
 	Registry                *tool.Registry
 	ImplicitSkillInvocation bool
+	Memory                  *memory.Set
+	ProjectChecks           []instruction.VerifyCheck
 }
 
 // shouldReuseDiscovery reports whether rediscovery of skills/commands/hooks
@@ -37,6 +44,23 @@ func shouldReuseDiscovery(plan *extension.RuntimePlan) bool {
 	default:
 		return false
 	}
+}
+
+// continuesGeneration reports a build replacing a live runtime rather than
+// starting one, so it can skip upgrades its predecessor already ran. Only
+// PreviousSnapshot answers this — build() adopts an owner for every build, so
+// an Owner check would read a first launch as a continuation and skip the
+// import that launch exists to run.
+func continuesGeneration(opts Options) bool {
+	return opts.PreviousSnapshot != nil
+}
+
+// changesModel reports a build targeting a different model than the live
+// controller — which a patched subgraph keeps, so the fast path would report a
+// successful switch with the old model still serving.
+func changesModel(opts Options, old *control.Controller) bool {
+	ref := strings.TrimSpace(opts.Model)
+	return old != nil && ref != "" && ref != strings.TrimSpace(old.ModelRef())
 }
 
 // shouldReuseSnapshot reports whether the previous RuntimeSnapshot body can be

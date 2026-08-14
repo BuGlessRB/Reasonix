@@ -73,6 +73,10 @@ type BuildResult struct {
 	// controller pointer (no control.New / BuildRuntime). Callers must not
 	// Close the "old" controller when it is the same pointer as Controller.
 	ReusedController bool
+	// Phases is how long each stretch of this assembly took, in run order. A
+	// model or effort switch rebuilds everything, so this is the account of
+	// what the user waited for.
+	Phases []Phase
 }
 
 // runtimeGeneration is the process-wide build generation counter. The first

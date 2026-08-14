@@ -1,0 +1,51 @@
+package boot
+
+import (
+	"io"
+	"strings"
+
+	"reasonix/internal/capability"
+	"reasonix/internal/config"
+	"reasonix/internal/skill"
+)
+
+// skillAssembly is the discovered skill surface for one build: the policy-gated
+// store the model sees, and the unfiltered one management commands list from.
+type skillAssembly struct {
+	store     *skill.Store
+	all       *skill.Store
+	skills    []skill.Skill
+	allSkills []skill.Skill
+	sysPrompt string
+}
+
+// buildSkillAssembly discovers skills and folds their index into the prompt.
+// Rediscovery is skipped on no-op/interceptor/UI rebuilds, where the previous
+// build's assembly is retained and its prompt already carries the index.
+func buildSkillAssembly(opts Options, cfg *config.Config, root string, profile capability.Profile, implicit bool, sysPrompt string) skillAssembly {
+	a := skillAssembly{sysPrompt: sysPrompt}
+	if opts.ReuseAssembly != nil && shouldReuseDiscovery(opts.PreviousPlan) &&
+		opts.ReuseAssembly.ImplicitSkillInvocation == implicit {
+		a.skills = opts.ReuseAssembly.Skills
+		a.allSkills = a.skills
+		a.store = skill.New(skill.Options{ProjectRoot: root, Stderr: io.Discard})
+		a.all = a.store
+		if s := strings.TrimSpace(opts.ReuseAssembly.SystemPrompt); s != "" {
+			a.sysPrompt = s
+		}
+		return a
+	}
+	a.store = skill.New(skill.Options{
+		ProjectRoot: root, CustomPaths: cfg.SkillCustomPaths(), PluginPaths: cfg.PluginPackageSkillOwners(),
+		PluginAgentPaths: cfg.PluginPackageAgentOwners(), ExcludedPaths: cfg.SkillExcludedPaths(),
+		DisabledNames: cfg.DisabledSkillNames(), MaxDepth: cfg.SkillMaxDepth(), Stderr: opts.Stderr,
+	})
+	a.store.ConfigureInvocationPolicy(string(profile), nil)
+	a.skills = a.store.List()
+	a.all = skill.New(skill.Options{ProjectRoot: root, CustomPaths: cfg.SkillCustomPaths(), PluginPaths: cfg.PluginPackageSkillOwners(), PluginAgentPaths: cfg.PluginPackageAgentOwners(), ExcludedPaths: cfg.SkillExcludedPaths(), MaxDepth: cfg.SkillMaxDepth(), Stderr: io.Discard})
+	a.allSkills = a.all.List()
+	if implicit {
+		a.sysPrompt = skill.ApplyIndex(a.sysPrompt, a.skills)
+	}
+	return a
+}

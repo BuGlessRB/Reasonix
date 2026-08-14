@@ -19,6 +19,14 @@ func (c *Controller) EnsureSessionPath() {
 	c.SetFreshSessionPath(agent.NewSessionPath(c.SessionDir(), c.Label()))
 }
 
+// Resume seeds the session from a loaded transcript and pins auto-save to its
+// path. Arriving from a different non-empty path rotates the private temporary
+// generation so the loaded conversation cannot see the previous session's
+// files; a same-path resume (rebuild migration) keeps it.
+func (c *Controller) Resume(s *agent.Session, path string) {
+	c.resume(s, path, true)
+}
+
 // AdoptHistory makes a freshly built controller continue an existing
 // conversation in path: it resumes the carried messages there when there are
 // any, otherwise just points auto-save at path. An empty path with no messages
@@ -33,19 +41,19 @@ func (c *Controller) AdoptHistory(msgs []provider.Message, path string) {
 		if path != "" {
 			if loaded, err := agent.LoadSession(path); err == nil && loaded != nil {
 				if resumed, ok := loaded.CloneWithMessagesIfCompatible(msgs); ok {
-					c.Resume(resumed, path)
+					c.resume(resumed, path, false)
 					return
 				}
 			}
 		}
-		c.Resume(agent.NewSession("").CloneWithMessages(msgs), path)
+		c.resume(agent.NewSession("").CloneWithMessages(msgs), path, false)
 	} else if path != "" {
 		// Even an empty transcript can carry session-scoped sidecars such as a
 		// running or blocked Goal. Resume a persisted empty session so controller
 		// rebuilds preserve that state; fall back to a plain binding for a fresh
 		// path that has not been saved yet.
 		if loaded, err := agent.LoadSession(path); err == nil && loaded != nil {
-			c.Resume(loaded, path)
+			c.resume(loaded, path, false)
 			return
 		}
 		c.SetSessionPath(path)

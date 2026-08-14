@@ -3596,14 +3596,10 @@ func (c *Controller) summarizeAt(ctx context.Context, turn int, from bool) error
 	return nil
 }
 
-// Resume seeds the session from a loaded transcript and pins the active file to
-// its path so auto-save keeps appending there.
-//
-// When the controller already has a different non-empty session path, Resume
-// rotates the private temporary generation so the loaded conversation cannot
-// see the previous session's temporary files. Same-path Resume (hot rebuild
-// migration via AdoptHistory) keeps the generation.
-func (c *Controller) Resume(s *agent.Session, path string) {
+// resume is Resume with the cold-cache notice made optional: a rebuild
+// migration re-binds a session the user never left, so it records the cache
+// state without announcing an idle gap nobody just sat through.
+func (c *Controller) resume(s *agent.Session, path string, announceColdResume bool) {
 	// See snapshotMu: the swap must not interleave with an in-flight save.
 	// recoverInterruptedTurn and maybeColdResumePrune snapshot on their own,
 	// so they stay outside the locked section (snapshotMu is not reentrant).
@@ -3637,7 +3633,7 @@ func (c *Controller) Resume(s *agent.Session, path string) {
 	c.rebindInbox()
 	c.recoverCheckpointTransactions()
 	c.recoverInterruptedTurn(path)
-	c.maybeColdResumePrune(path)
+	c.maybeColdResumePrune(path, announceColdResume)
 	// session.load: Resume has no failure channel, so the session_policy
 	// strategy is advisory this stage — a required-class failure is surfaced
 	// as a warning and the load stands. The event still carries the final

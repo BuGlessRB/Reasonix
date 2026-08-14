@@ -85,17 +85,7 @@ func rebuildWithPrevious(ctx context.Context, old *control.Controller, previous 
 	if opts.Owner == nil {
 		opts.Owner = old.RuntimeOwner()
 	}
-	// Capture migratable state before building: every accessor returns a
-	// copy, so a slow build cannot observe a half-appended turn.
-	m := runtimeMigration{
-		prevPath:         old.SessionPath(),
-		carried:          old.History(),
-		authorizations:   old.SessionAuthorizations(),
-		toolApprovalMode: old.ToolApprovalMode(),
-		planMode:         old.PlanMode(),
-		goal:             old.Goal(),
-		goalRunning:      old.GoalStatus() == control.GoalStatusRunning,
-	}
+	m := CaptureRuntimeMigration(old)
 	// Reuse the previous Controller's session-private temporary directory so
 	// model/settings hot rebuilds do not wipe temporary files mid-session.
 	if opts.SessionTemp == nil {
@@ -114,7 +104,7 @@ func rebuildWithPrevious(ctx context.Context, old *control.Controller, previous 
 	opts.Graph = fromGraph
 
 	// Prefer subgraph-classified rebuild when previous assembly is available.
-	if previous != nil && !opts.ForceFullRebuild {
+	if previous != nil && !opts.ForceFullRebuild && !changesModel(opts, old) {
 		if res, handled, err := tryRebuildSubgraph(ctx, old, previous, opts, m); handled {
 			return res, err
 		}
@@ -138,7 +128,7 @@ func rebuildWithPrevious(ctx context.Context, old *control.Controller, previous 
 	}
 	attachPlanAndStatus(res, fromGraph, toGraph, opts.Generation, previousSnapshot)
 
-	if err := migrateRuntimeState(res.Controller, old, m); err != nil {
+	if err := ApplyRuntimeMigration(res.Controller, old, m); err != nil {
 		// Fail-atomic: release the replacement; old keeps serving.
 		// Activation never reached Active publish.
 		if res.Snapshot != nil {
@@ -167,9 +157,9 @@ func rebuildWithPrevious(ctx context.Context, old *control.Controller, previous 
 	return res, nil
 }
 
-// runtimeMigration carries the captured old-controller state into
-// migrateRuntimeState.
-type runtimeMigration struct {
+// RuntimeMigration is the live state a rebuilt runtime carries over: the
+// conversation, and the session axes a switch must not silently reset.
+type RuntimeMigration struct {
 	prevPath         string
 	carried          []provider.Message
 	authorizations   control.SessionAuthorizations
@@ -179,10 +169,30 @@ type runtimeMigration struct {
 	goalRunning      bool
 }
 
-// migrateRuntimeState applies the captured state to the freshly built
-// controller. Every step today is an infallible public control call; the
-// error return is the fail-atomic seam for steps that gain failure modes.
-func migrateRuntimeState(ctrl, old *control.Controller, m runtimeMigration) error {
+// CaptureRuntimeMigration reads the outgoing runtime's state. Capture it
+// before building the replacement: every accessor returns a copy, so a slow
+// build cannot observe a half-appended turn.
+func CaptureRuntimeMigration(old control.SessionAPI) RuntimeMigration {
+	m := RuntimeMigration{
+		prevPath:         old.SessionPath(),
+		carried:          old.History(),
+		toolApprovalMode: old.ToolApprovalMode(),
+		planMode:         old.PlanMode(),
+		goal:             old.Goal(),
+		goalRunning:      old.GoalStatus() == control.GoalStatusRunning,
+	}
+	if ctrl, ok := old.(*control.Controller); ok {
+		m.authorizations = ctrl.SessionAuthorizations()
+	}
+	return m
+}
+
+// ApplyRuntimeMigration is the single definition of what survives a rebuild,
+// so a frontend assembling its own replacement carries exactly what boot does.
+// old may be nil (outgoing runtime is not a live Controller); the two steps
+// reading it are skipped. Steps are infallible public control calls today —
+// the error return is the fail-atomic seam for ones that gain failure modes.
+func ApplyRuntimeMigration(ctrl, old *control.Controller, m RuntimeMigration) error {
 	carried := spliceFreshSystemPrompt(m.carried, ctrl.History())
 	path := agent.ContinueSessionPath(m.prevPath, ctrl.SessionDir(), ctrl.Label())
 	ctrl.AdoptHistory(carried, path)
@@ -193,12 +203,13 @@ func migrateRuntimeState(ctrl, old *control.Controller, m runtimeMigration) erro
 	if m.goalRunning && strings.TrimSpace(m.goal) != "" && strings.TrimSpace(ctrl.Goal()) == "" {
 		ctrl.SetGoal(m.goal)
 	}
-	if m.prevPath == "" {
-		// No persisted recovery sidecar; carry the live checkpoint.
-		ctrl.CarryRecoveryFrom(old)
+	if old != nil {
+		if m.prevPath == "" {
+			// No persisted recovery sidecar; carry the live checkpoint.
+			ctrl.CarryRecoveryFrom(old)
+		}
+		ctrl.InheritLifecycleFrom(old)
 	}
-
-	ctrl.InheritLifecycleFrom(old)
 	ctrl.RestoreSessionAuthorizations(m.authorizations)
 	return nil
 }

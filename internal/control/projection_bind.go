@@ -19,8 +19,10 @@ func (c *Controller) bindExecutorProjection(path string, loadSidecar bool) {
 	c.executor.BindSessionPath(path, loadSidecar)
 }
 
-// maybeColdResumePrune records warm/cold/unknown only; it never rewrites history.
-func (c *Controller) maybeColdResumePrune(path string) {
+// maybeColdResumePrune records warm/cold/unknown only; it never rewrites
+// history. announce=false keeps the state and drops the notice, for a rebuild
+// that re-binds the session in place.
+func (c *Controller) maybeColdResumePrune(path string, announce bool) {
 	if c.executor == nil || path == "" {
 		return
 	}
@@ -38,7 +40,7 @@ func (c *Controller) maybeColdResumePrune(path string) {
 	}
 	c.executor.SetCacheState(state)
 	slog.Info("controller: resume cache state", "path", path, "cache_state", state, "idle", time.Since(last).Round(time.Minute).String())
-	if c.disableColdResumePrune || state != agent.CacheStateCold {
+	if !announce || c.disableColdResumePrune || state != agent.CacheStateCold {
 		return
 	}
 	c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf(
