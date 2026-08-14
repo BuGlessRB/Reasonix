@@ -23,7 +23,7 @@ const workspaceRecentMax = 12
 // it, and no config file can turn it on: a server reachable over the network
 // would otherwise let any client repoint the agent at any directory it can
 // read. The desktop shell asks because its only client is its own window.
-func (s *Server) AllowWorkspaceSwitch() { s.allowWorkspaceSwitch = true }
+func (s *Server) AllowWorkspaceSwitch() { s.grants.workspaceSwitch = true }
 
 // workspacesPath is where this frontend remembers the folders it has driven.
 // Deliberately not the desktop app's list: that file doubles as its startup
@@ -121,8 +121,8 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 		Isolated bool            `json:"isolated,omitempty"`
 	}{
 		Current:  current,
-		Switch:   s.allowWorkspaceSwitch,
-		Isolate:  s.allowWorkspaceSwitch && worktree.Inspect(r.Context(), current).Available,
+		Switch:   s.grants.workspaceSwitch,
+		Isolate:  s.grants.workspaceSwitch && worktree.Inspect(r.Context(), current).Available,
 		Recents:  recents,
 		Isolated: worktree.IsManagedPath(current, config.DeliveryWorktreeDir()),
 	})
@@ -132,7 +132,7 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 // deliberately not carried: the transcript, the memory index, and the skill set
 // all belong to the project that produced them.
 func (s *Server) workspace(w http.ResponseWriter, r *http.Request) {
-	if !s.allowWorkspaceSwitch {
+	if !s.grants.workspaceSwitch {
 		http.Error(w, "this server may not change its workspace", http.StatusForbidden)
 		return
 	}
@@ -235,6 +235,62 @@ func (s *Server) switchWorkspaceLocked(ctx context.Context, dir string) error {
 
 	cur.Close()
 	return nil
+}
+
+// rebuildOptions carries the live controller's workspace into a model, effort
+// or extension rebuild. Left to boot's defaults the root re-resolves from the
+// process working directory and sessions fall back to the global dir, so the
+// switch would quietly serve another project's conversations.
+func (s *Server) rebuildOptions(cur control.SessionAPI, ref string) boot.Options {
+	opts := boot.Options{Model: ref, Sink: s.bc, Stderr: os.Stderr, StatsSource: "serve"}
+	if cur == nil {
+		return opts
+	}
+	opts.WorkspaceRoot, opts.SessionDir = cur.WorkspaceRoot(), cur.SessionDir()
+	// Keep the logical session's private temporary directory across the rebuild.
+	if ctrl, ok := cur.(*control.Controller); ok && ctrl != nil {
+		opts.SessionTemp = ctrl.SessionTemp()
+	}
+	opts.RuntimeReload = s.reuseFromLastBuild()
+	return opts
+}
+
+// AdoptRuntime records the generation a host assembled before handing the
+// controller over, so the first model or effort switch reuses it instead of
+// paying for a cold assembly. Hosts that build with boot.Build have no
+// generation to hand over and simply skip this.
+func (s *Server) AdoptRuntime(res *boot.BuildResult) {
+	s.bindMu.Lock()
+	defer s.bindMu.Unlock()
+	s.lastBuild = res
+}
+
+// reuseFromLastBuild carries the serving generation into its replacement:
+// extension sidecars keep running, the dependency graph is not re-walked, and
+// discovery (skills, commands, hooks) is reused when the plan says the
+// extension surface did not move. ForceFullRebuild because a switch must end
+// up on a new controller — the patched-subgraph path keeps the live one.
+func (s *Server) reuseFromLastBuild() boot.RuntimeReload {
+	prev := s.lastBuild
+	if prev == nil {
+		return boot.RuntimeReload{}
+	}
+	reload := boot.RuntimeReload{
+		ForceFullRebuild:   true,
+		Extensions:         prev.Extensions,
+		Owner:              prev.Owner,
+		PreviousSnapshot:   prev.Snapshot,
+		PreviousDispatcher: prev.Dispatcher,
+		PreviousPlan:       prev.Plan,
+		ReuseAssembly:      prev.Assembly,
+	}
+	if prev.Plan != nil {
+		reload.Graph = prev.Plan.Graph
+	}
+	if prev.Snapshot != nil {
+		reload.Generation = prev.Snapshot.Generation()
+	}
+	return reload
 }
 
 func (s *Server) buildForWorkspace(ctx context.Context, dir, ref string) (*control.Controller, error) {

@@ -18,6 +18,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"reasonix/desktop/internal/update"
 	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/event"
@@ -43,13 +44,16 @@ var apiPaths = map[string]bool{
 	"/tool-approval-mode": true, "/auto-approve-tools": true, "/bypass": true,
 	"/provider-setup": true, "/delete-session": true, "/inbox/items": true,
 	"/trajectory": true, "/slash": true, "/workspace": true, "/workspaces": true,
-	"/mcp": true, "/skills": true,
+	"/mcp": true, "/skills": true, "/account": true, "/hooks": true,
+	"/memory": true, "/network": true, "/todos": true, "/providers": true,
 }
 
 // A sub-path belongs to the resource it hangs off: /mcp/reconnect is the same
 // surface as /mcp. Listing families rather than every leaf is what keeps a new
-// endpoint from silently answering with index.html instead of JSON.
-var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/"}
+// endpoint from silently answering with index.html instead of JSON — and
+// TestEveryPathTheFrontendCallsIsRouted is what keeps this list honest, because
+// the comment alone did not.
+var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/"}
 
 func isAPIPath(p string) bool {
 	p = strings.TrimSuffix(p, "/")
@@ -65,6 +69,12 @@ func isAPIPath(p string) bool {
 }
 
 func main() {
+	// A macOS install re-executes this binary to swap the bundle after the old
+	// process exits. That child must never reach run(), or the swap would race a
+	// second Studio booting on top of the directory it is replacing.
+	if handled, code := update.MaybeRunMacHandoff(os.Args[1:]); handled {
+		os.Exit(code)
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "reasonix-next:", err)
 		os.Exit(1)
@@ -77,7 +87,7 @@ func run() error {
 	bc := serve.NewBroadcaster()
 	// A window opens where it was left, not where its shortcut happened to point.
 	root := boot.ResolveWorkspaceRoot(lastWorkspace())
-	ctrl, err := boot.Build(ctx, boot.Options{
+	built, err := boot.BuildRuntime(ctx, boot.Options{
 		WorkspaceRoot: root,
 		SessionDir:    serve.SessionDirFor(root),
 		Sink:          bc,
@@ -86,6 +96,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	ctrl := built.Controller
 	// No EnsureSessionPath here: minting the file at launch left one empty
 	// transcript behind every time the window opened. The first turn creates
 	// it, and the inbox ensures its own path when it enqueues.
@@ -95,9 +106,15 @@ func run() error {
 		return err
 	}
 	srv := serve.New(ctrl, bc, cfg.Serve)
+	srv.AdoptRuntime(built)
 	// The only client is the window in front of the user, so the folder switch
 	// this grants is a local file dialog rather than a remote capability.
 	srv.AllowWorkspaceSwitch()
+	// Same reasoning as the folder switch: the only client is this window, and
+	// the token lands in this machine's own credential store.
+	srv.AllowAccountAuth()
+	// And the same again for provider keys, which land in the same store.
+	srv.AllowProviderEdit()
 	api := srv.Handler()
 	// Read the controller through the server from here on: a model, extension,
 	// or workspace switch replaces it, and the one built above is then dead.

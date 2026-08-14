@@ -64,7 +64,8 @@ type Server struct {
 	rebuildController func(ctx context.Context, old *control.Controller, ref string) (*control.Controller, error)
 	// buildController's counterpart for the switch that changes the root.
 	buildWorkspaceController func(ctx context.Context, dir, ref string) (*control.Controller, error)
-	allowWorkspaceSwitch     bool              // host grant; see AllowWorkspaceSwitch
+	lastBuild                *boot.BuildResult // serving generation, guarded by bindMu; see reuseFromLastBuild
+	grants                   hostGrants        // what the embedding host has opened up
 	titleProv                provider.Provider // lightweight flash provider for session titles
 	titlePrice               *provider.Pricing
 	titleModelRef            string
@@ -217,7 +218,7 @@ func (s *Server) switchModelLocked(ctx context.Context, ref string) error {
 	// transcript), and a pre-snapshot capture would bind the rebuilt controller
 	// back to the original file, re-conflicting on every later save.
 	prevPath := cur.SessionPath()
-	carried := cur.History()
+	migration := boot.CaptureRuntimeMigration(cur)
 
 	newCtrl, err := s.build(ctx, ref)
 	if err != nil {
@@ -226,28 +227,16 @@ func (s *Server) switchModelLocked(ctx context.Context, ref string) error {
 	// Run/RunGraceful only wire the initial controller. Every replacement must
 	// receive the same frontend hooks or the ask tool falls back to headless mode.
 	newCtrl.EnableInteractiveApproval()
-	// Keep the carried conversation in its existing file so the switch doesn't
-	// orphan a duplicate (#2807).
-	newPath := agent.ContinueSessionPath(prevPath, newCtrl.SessionDir(), newCtrl.Label())
-	// The freshly built controller's own leading system message carries the
-	// target profile's contract; AdoptHistory below replaces the whole
-	// history with carried, so splice that message in first or the model
-	// keeps seeing the outgoing profile's contract after every switch.
-	if fresh := newCtrl.History(); len(fresh) > 0 && fresh[0].Role == provider.RoleSystem {
-		if len(carried) > 0 && carried[0].Role == provider.RoleSystem {
-			carried[0] = fresh[0]
-		} else {
-			carried = append([]provider.Message{fresh[0]}, carried...)
-		}
+	// One definition of what survives a rebuild, shared with boot.Rebuild: the
+	// conversation on its existing file (#2807), the fresh system contract
+	// spliced over the carried one, session authorizations, and the axes a
+	// switch must not silently reset — approval mode, plan mode, a running goal.
+	prevCtrl, _ := cur.(*control.Controller)
+	if err := boot.ApplyRuntimeMigration(newCtrl, prevCtrl, migration); err != nil {
+		return fmt.Errorf("switch model: %w", err)
 	}
-	newCtrl.AdoptHistory(carried, newPath)
+	newPath := newCtrl.SessionPath()
 	newCtrl.SetOnSessionRecovered(sessionLeaseRecoveryHandler(s.leases))
-	// A rebuild must not force the user to re-approve tools already granted
-	// this session, or re-trust Plan-mode read-only commands already trusted
-	// this session.
-	if prev, ok := cur.(*control.Controller); ok {
-		newCtrl.RestoreSessionAuthorizations(prev.SessionAuthorizations())
-	}
 	// Persist before publishing the replacement. A failed write leaves cur and
 	// the on-disk transcript coherent and lets the caller retry; publishing first
 	// would report a successful switch whose refreshed system contract disappears
@@ -310,17 +299,12 @@ func (s *Server) build(ctx context.Context, ref string) (*control.Controller, er
 	if s.buildController != nil {
 		return s.buildController(ctx, ref)
 	}
-	opts := boot.Options{
-		Model:       ref,
-		Sink:        s.bc,
-		Stderr:      os.Stderr,
-		StatsSource: "serve",
+	res, err := boot.BuildRuntime(ctx, s.rebuildOptions(s.ctl(), ref))
+	if err != nil {
+		return nil, err
 	}
-	// Keep the logical-session private temporary directory across model switches.
-	if cur, ok := s.ctl().(*control.Controller); ok && cur != nil {
-		opts.SessionTemp = cur.SessionTemp()
-	}
-	return boot.Build(ctx, opts)
+	s.lastBuild = res
+	return res.Controller, nil
 }
 
 // reloadExtensions fail-atomically rebuilds the active controller generation
@@ -395,12 +379,7 @@ func (s *Server) rebuild(ctx context.Context, old *control.Controller, ref strin
 	if s.rebuildController != nil {
 		return s.rebuildController(ctx, old, ref)
 	}
-	res, err := boot.Rebuild(ctx, old, boot.Options{
-		Model:       ref,
-		Sink:        s.bc,
-		Stderr:      os.Stderr,
-		StatsSource: "serve",
-	})
+	res, err := boot.Rebuild(ctx, old, s.rebuildOptions(old, ref))
 	if err != nil {
 		return nil, err
 	}
@@ -504,6 +483,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /context", s.context)
 	mux.HandleFunc("POST /submit", s.submit)
 	s.registerInboxRoutes(mux)
+	s.registerProviderRoutes(mux)
 	mux.HandleFunc("POST /cancel", s.cancel)
 	mux.HandleFunc("POST /approve", s.approve)
 	mux.HandleFunc("POST /plan", s.plan)
@@ -546,6 +526,10 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /mcp/parse", s.mcpParse)
 	mux.HandleFunc("POST /mcp/install", s.mcpInstall)
 	mux.HandleFunc("POST /mcp/remove", s.mcpRemove)
+	mux.HandleFunc("GET /account", s.account)
+	mux.HandleFunc("POST /account/login", s.accountLogin)
+	mux.HandleFunc("POST /account/poll", s.accountPoll)
+	mux.HandleFunc("POST /account/logout", s.accountLogout)
 	mux.HandleFunc("GET /workspaces", s.workspaces)
 	mux.HandleFunc("POST /workspace", s.workspace)
 	mux.HandleFunc("GET /todos", s.todos)
@@ -1496,7 +1480,7 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, []any{})
 		return
 	}
-	current := filepath.Clean(s.ctl().SessionPath())
+	current := agent.CanonicalSessionPath(s.ctl().SessionPath())
 	var out []sessionEntry
 	for _, e := range entries {
 		if e.IsDir() || !store.IsSessionTranscriptName(e.Name()) {
@@ -1510,7 +1494,7 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		name := strings.TrimSuffix(e.Name(), ".jsonl")
-		entry := sessionEntry{Name: name, Path: path, Current: filepath.Clean(path) == current}
+		entry := sessionEntry{Name: name, Path: path, Current: agent.CanonicalSessionPath(path) == current}
 		// Event-log aware: reading the .jsonl checkpoint directly would freeze
 		// turn counts and titles at the last checkpoint write.
 		if first, turns := agent.SessionPreview(path); turns > 0 {
