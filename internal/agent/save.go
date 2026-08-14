@@ -1680,11 +1680,11 @@ func ListCleanupPending(dir string) ([]CleanupPendingInfo, error) {
 }
 
 // ReconcileCleanupPending retries physical cleanup for leftover delayed-cleanup
-// markers and stale lock/lease sidecars. It keeps going after individual
-// cleanup errors and returns them joined.
+// markers and stale sidecars, and reclaims transcripts holding no user message.
+// It keeps going after individual cleanup errors and returns them joined.
 func ReconcileCleanupPending(dir string, cleanup func(CleanupPendingInfo) error) error {
 	var errs []error
-	if err := ReconcileSessionSidecars(dir); err != nil {
+	if err := reconcileSessionDir(dir, cleanup); err != nil {
 		errs = append(errs, err)
 	}
 	if err := reconcileRecoveryTrashStages(dir); err != nil {
