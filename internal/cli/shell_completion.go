@@ -46,6 +46,26 @@ func completionSpecWithAliases(name string, aliases []string, flags []cliComplet
 	return cliCompletionSpec{name: name, aliases: aliases, flags: flags, subcommands: subcommands}
 }
 
+func mcpCompletionSpec(help cliCompletionFlag) cliCompletionSpec {
+	return completionSpec("mcp", []cliCompletionFlag{help},
+		completionSpecWithAliases("list", []string{"ls"}, []cliCompletionFlag{help}),
+		completionSpec("get", []cliCompletionFlag{help}),
+		completionSpec("add", []cliCompletionFlag{
+			completionFlag("--http --streamable-http --sse --env --header", cliCompletionStaticValue), help,
+		}),
+		completionSpec("enable", []cliCompletionFlag{help}),
+		completionSpec("disable", []cliCompletionFlag{help}),
+		completionSpecWithAliases("retry", []string{"connect"}, []cliCompletionFlag{help}),
+		completionSpec("update", []cliCompletionFlag{help}),
+		completionSpec("import", []cliCompletionFlag{help}),
+		completionSpecWithAliases("browse", []string{"search"}, []cliCompletionFlag{
+			completionFlag("--limit", cliCompletionStaticValue), completionFlag("--json", cliCompletionNoValue), help,
+		}),
+		completionSpec("install", []cliCompletionFlag{completionFlag("--as", cliCompletionStaticValue), help}),
+		completionSpecWithAliases("remove", []string{"rm"}, []cliCompletionFlag{help}),
+	)
+}
+
 func catalogCompletionSpec(help cliCompletionFlag) cliCompletionSpec {
 	reindex := make([]cliCompletionSpec, 0, len(catalogCommands))
 	for _, command := range catalogCommands {
@@ -132,6 +152,9 @@ func cliCompletionRootSpec() cliCompletionSpec {
 			completionSpec("telemetry", []cliCompletionFlag{help}),
 		),
 		completionSpec("init", []cliCompletionFlag{help}),
+		completionSpec("login", []cliCompletionFlag{help}),
+		completionSpec("whoami", []cliCompletionFlag{help}),
+		completionSpec("logout", []cliCompletionFlag{help}),
 		completionSpec("acp", []cliCompletionFlag{
 			model, profile,
 			completionFlag("--planner", cliCompletionStaticValue, "auto", "off"),
@@ -139,23 +162,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 			completionFlag("--sandbox-bash", cliCompletionStaticValue, "auto", "enforce"),
 			completionFlag("--workspace-only", cliCompletionNoValue), help,
 		}),
-		completionSpec("mcp", []cliCompletionFlag{help},
-			completionSpecWithAliases("list", []string{"ls"}, []cliCompletionFlag{help}),
-			completionSpec("get", []cliCompletionFlag{help}),
-			completionSpec("add", []cliCompletionFlag{
-				completionFlag("--http --streamable-http --sse --env --header", cliCompletionStaticValue), help,
-			}),
-			completionSpec("enable", []cliCompletionFlag{help}),
-			completionSpec("disable", []cliCompletionFlag{help}),
-			completionSpecWithAliases("retry", []string{"connect"}, []cliCompletionFlag{help}),
-			completionSpec("update", []cliCompletionFlag{help}),
-			completionSpec("import", []cliCompletionFlag{help}),
-			completionSpecWithAliases("browse", []string{"search"}, []cliCompletionFlag{
-				completionFlag("--limit", cliCompletionStaticValue), completionFlag("--json", cliCompletionNoValue), help,
-			}),
-			completionSpec("install", []cliCompletionFlag{completionFlag("--as", cliCompletionStaticValue), help}),
-			completionSpecWithAliases("remove", []string{"rm"}, []cliCompletionFlag{help}),
-		),
+		mcpCompletionSpec(help),
 		completionSpec("remote", []cliCompletionFlag{help},
 			completionSpec("add", []cliCompletionFlag{
 				completionFlag("--identity --jump --workspace --serve-install --passphrase-env --password-env", cliCompletionStaticValue),

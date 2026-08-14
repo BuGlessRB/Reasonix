@@ -103,10 +103,10 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 		}
 	}
 
-	if len(args) == 0 && cliIsInteractive() {
-		return runInteractiveSession(nil, version)
-	}
 	if len(args) == 0 {
+		if cliIsInteractive() {
+			return runInteractiveSession(nil, version)
+		}
 		configureCLIThemeFromConfigForTTYOutput()
 		usage()
 		return 0
@@ -132,9 +132,6 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 		configureCLIThemeFromConfig()
 		return configCommand(rest)
 	case "init":
-		// Project memory (AGENTS.md) is model-generated in-session — `/init` runs
-		// the codebase analysis. This CLI entry just points there (and to `setup`
-		// for config), so `reasonix init` isn't a dead end.
 		configureCLIThemeFromConfig()
 		return initHint()
 	case "acp":
@@ -143,6 +140,8 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 	case "mcp":
 		configureCLIThemeFromConfig()
 		return mcpCommand(rest)
+	case "login", "whoami", "logout":
+		return accountCommand(cmd, rest, version)
 	case "remote":
 		configureCLIThemeFromConfig()
 		return remoteCommand(rest, version)
@@ -214,7 +213,7 @@ func isDefaultInteractiveFlag(arg string) bool {
 
 func shouldMigrateLegacyConfigForCLI(cmd string) bool {
 	switch cmd {
-	case "", "run", "chat", "code", "serve", "web", "setup", "config", "init", "acp", "mcp", "remote", "plugin", "subagent", "doctor", "bot", "upgrade", "update":
+	case "", "run", "chat", "code", "serve", "web", "setup", "config", "init", "acp", "mcp", "remote", "plugin", "subagent", "doctor", "bot", "upgrade", "update", "login", "whoami", "logout":
 		return true
 	default:
 		return false
