@@ -226,7 +226,7 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	normalizeLegacyKimiK3Catalog(cfg)
 	normalizeLegacyOpenCodeGoKimiK3Catalog(cfg)
 	normalizeLegacyMimoCustomProviders(cfg)
-	normalizeLegacyProviderModels(cfg)
+	normalizeLegacyProviderFields(cfg)
 	normalizeDesktopOfficialProviderAccess(cfg)
 	normalizeOfficialDeepSeekModels(cfg)
 	migrateBillingDisplayCurrency(cfg)
@@ -809,7 +809,7 @@ func normalizeConfigForEdit(cfg *Config) bool {
 	changed = normalizeLegacyKimiK3Catalog(cfg) || changed
 	changed = normalizeLegacyOpenCodeGoKimiK3Catalog(cfg) || changed
 	changed = normalizeLegacyMimoCustomProviders(cfg) || changed
-	normalizeLegacyProviderModels(cfg)
+	normalizeLegacyProviderFields(cfg)
 	normalizeDesktopOfficialProviderAccess(cfg)
 	normalizeOfficialDeepSeekModels(cfg)
 	migrateBillingDisplayCurrency(cfg)

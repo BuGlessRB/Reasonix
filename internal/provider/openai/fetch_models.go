@@ -33,6 +33,10 @@ const (
 type FetchModelsOptions struct {
 	Headers  map[string]string
 	AuthMode ModelFetchAuthMode
+	// Client reaches the endpoint the way a real request will. Nil honours only
+	// the HTTP_PROXY environment, so a user whose proxy lives in Reasonix's own
+	// settings would list nothing while chatting fine.
+	Client *http.Client
 }
 
 func (e modelFetchStatusError) Error() string {
@@ -58,7 +62,10 @@ func FetchModels(ctx context.Context, baseURL, apiKey string, headers map[string
 // FetchModelsWithOptions calls the OpenAI-compatible GET /models endpoint and
 // returns the available model IDs.
 func FetchModelsWithOptions(ctx context.Context, baseURL, apiKey string, opts FetchModelsOptions) ([]string, error) {
-	cli := &http.Client{Timeout: 10 * time.Second}
+	cli := opts.Client
+	if cli == nil {
+		cli = &http.Client{Timeout: 10 * time.Second}
+	}
 	url := strings.TrimRight(baseURL, "/")
 	if !strings.HasSuffix(url, "/models") {
 		url += "/models"

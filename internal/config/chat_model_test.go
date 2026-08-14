@@ -46,7 +46,10 @@ func TestIsLikelyChatModel_FiltersNonChatKeywords(t *testing.T) {
 		"whisper-1",
 		"text-embedding-3-small", "text-embedding-ada-002",
 		"text-moderation-stable",
-		"rerank-v1",
+		// Each family spells itself more than one way, and the token match is
+		// exact — bge-reranker-v2 slipped into the model picker on that.
+		"rerank-v1", "bge-reranker-v2", "jina-reranker-v3",
+		"text-embeddings-inference", "nomic-embed-text",
 		"dall-e-3",
 		"text-to-speech-v1", "speech-to-text-v2",
 	} {

@@ -4,6 +4,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -25,6 +26,14 @@ var knownModelFetchCompatSuffixes = []string{
 // FetchModels queries the provider's OpenAI-compatible GET /models endpoint and
 // returns the available model IDs, sorted alphabetically.
 func (e *ProviderEntry) FetchModels(ctx context.Context) ([]string, error) {
+	return e.FetchModelsVia(ctx, nil)
+}
+
+// FetchModelsVia is FetchModels over a caller-supplied client. A caller that
+// holds the user's proxy settings must use it: listing models over a plain
+// client while chatting over a proxied one reports an empty catalog for an
+// endpoint that works.
+func (e *ProviderEntry) FetchModelsVia(ctx context.Context, client *http.Client) ([]string, error) {
 	if e.BaseURL == "" {
 		return nil, fmt.Errorf("fetch models: provider %q has no base_url", e.Name)
 	}
@@ -43,6 +52,7 @@ func (e *ProviderEntry) FetchModels(ctx context.Context) ([]string, error) {
 		models, err := openai.FetchModelsWithOptions(ctx, u, key, openai.FetchModelsOptions{
 			Headers:  e.Headers,
 			AuthMode: authMode,
+			Client:   client,
 		})
 		if err == nil {
 			return models, nil
