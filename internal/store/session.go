@@ -14,7 +14,10 @@
 // ~/.reasonix tree) and the desktop root unification land in later slices.
 package store
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // IsSessionTranscriptName reports whether name is a primary session transcript
 // file. Append-only event logs and guardian sidecars also end in .jsonl, so
@@ -27,6 +30,15 @@ func IsSessionTranscriptName(name string) bool {
 		!strings.HasSuffix(name, ".conflicts.jsonl") &&
 		!strings.HasSuffix(name, ".guardian.jsonl") &&
 		!strings.HasSuffix(name, ".wire.jsonl")
+}
+
+// IsSubagentTranscriptName reports a flat legacy subagent transcript, which the
+// current layout keeps under a subagents/ tree instead. They are only meaningful
+// through the parent session that spawned them, so a listing of the user's own
+// conversations excludes them — while on-disk work (redaction, GC, migration)
+// still has to see them.
+func IsSubagentTranscriptName(name string) bool {
+	return strings.HasPrefix(strings.TrimSpace(filepath.Base(name)), "subagent-")
 }
 
 // SessionRecoveryState is the persisted Auto-mode recovery checkpoint state

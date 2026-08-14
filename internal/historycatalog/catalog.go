@@ -363,7 +363,8 @@ func (c *Catalog) reconcileRoot(ctx context.Context, root Root) error {
 	}
 	paths := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || !store.IsSessionTranscriptName(entry.Name()) {
+		if entry.IsDir() || !store.IsSessionTranscriptName(entry.Name()) ||
+			store.IsSubagentTranscriptName(entry.Name()) {
 			continue
 		}
 		path := filepath.Join(root.Path, entry.Name())

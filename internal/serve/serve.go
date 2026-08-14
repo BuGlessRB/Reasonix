@@ -1503,7 +1503,10 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		path := filepath.Join(dir, e.Name())
-		if agent.IsCleanupPending(path) {
+		// A subagent transcript only means anything through the session that
+		// spawned it. Not folded into IsVisibleSession: GC and redaction still
+		// have to see them.
+		if store.IsSubagentTranscriptName(e.Name()) || agent.IsCleanupPending(path) {
 			continue
 		}
 		name := strings.TrimSuffix(e.Name(), ".jsonl")

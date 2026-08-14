@@ -13,6 +13,7 @@ import (
 
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/provider"
+	"reasonix/internal/store"
 )
 
 // legacyEvent is the subset of the v0.x typed event stream (<name>.events.jsonl)
@@ -315,12 +316,8 @@ func importJsonlSessions(entries []os.DirEntry, srcDir, globalDest string, hasEv
 		if hasEvents[base] {
 			continue // handled (or skipped) in the events pass
 		}
-		// Legacy subagent transcripts live under the subagents/ tree in the
-		// current version and are only meaningful when accessed through their
-		// parent session. Importing them as standalone sessions clutters the
-		// history panel with partial, out-of-context conversations.
-		if strings.HasPrefix(base, "subagent-") {
-			continue
+		if store.IsSubagentTranscriptName(base) {
+			continue // surfaced only through their parent session
 		}
 		jsonlPath := filepath.Join(srcDir, name)
 		if !isMessageFormat(jsonlPath) {
@@ -774,7 +771,7 @@ func rehomeStrandedSessions(srcDir, globalDest, marker string, projectDir func(s
 			continue
 		}
 		base := strings.TrimSuffix(name, ".jsonl")
-		if strings.HasPrefix(base, "subagent-") {
+		if store.IsSubagentTranscriptName(base) {
 			continue // surfaced only through their parent session
 		}
 		info, ierr := e.Info()
