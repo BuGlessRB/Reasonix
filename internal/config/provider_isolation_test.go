@@ -217,14 +217,16 @@ func TestOfficialDeepSeekProviderStillGetsItsDefaults(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			p, ok := cfg.Provider(name)
+			// Either spelling loads as the one canonical entry; see
+			// canonicalizeOfficialDeepSeekSource.
+			p, ok := cfg.Provider("deepseek")
 			if !ok {
 				t.Fatalf("official %q provider missing after runtime load", name)
 			}
 			assertOfficialDeepSeekDefaults(t, "LoadForRoot/"+name, p)
 
 			edit := LoadForEditWithoutCredentials(path)
-			ep, ok := edit.Provider(name)
+			ep, ok := edit.Provider("deepseek")
 			if !ok {
 				t.Fatalf("official %q provider missing after edit load", name)
 			}
@@ -268,7 +270,8 @@ api_key_env = "DEEPSEEK_API_KEY"
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, ok := cfg.Provider("deepseek-flash")
+	// The fold renames it; the protocol it declared must survive that.
+	p, ok := cfg.Provider("deepseek")
 	if !ok {
 		t.Fatal("explicit DeepSeek provider missing after load")
 	}
@@ -303,9 +306,12 @@ context_window = 65536
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, ok := cfg.Provider("deepseek-flash")
+	// The fold carries a declared per-model value into the canonical entry's
+	// overrides, so the question is what resolution hands the agent — the
+	// provider-wide field is no longer where that answer lives.
+	p, ok := cfg.ResolveModel("deepseek-flash/deepseek-v4-flash")
 	if !ok {
-		t.Fatal("official deepseek-flash provider missing after load")
+		t.Fatal("official DeepSeek provider missing after load")
 	}
 	if p.ContextWindow != 65536 {
 		t.Errorf("declared context_window was overwritten: got %d, want 65536", p.ContextWindow)

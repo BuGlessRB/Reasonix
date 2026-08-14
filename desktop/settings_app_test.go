@@ -2064,7 +2064,7 @@ func TestSetDesktopCurrencyPersistsDisplayWithoutRewritingOfficialPricing(t *tes
 	if got := cfg.DisplayCurrencyPref(); got != "CNY" {
 		t.Fatalf("display pref = %q, want CNY", got)
 	}
-	flash, ok := cfg.Provider("deepseek-flash")
+	flash, ok := cfg.ResolveModel("deepseek-flash/deepseek-v4-flash")
 	// Display currency must not rewrite frozen list prices (default USD table).
 	if !ok || flash.Price == nil || flash.Price.Output != 0.28 || flash.Price.Currency != "$" {
 		t.Fatalf("saved DeepSeek flash price = %+v, want frozen USD official price", flash)

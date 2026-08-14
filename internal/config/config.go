@@ -1879,6 +1879,7 @@ func (c *Config) ResolveModel(ref string) (*ProviderEntry, bool) {
 		}
 		ref = retargetDesktopOfficialRef(ref, access)
 	}
+	ref = c.refForFoldedDeepSeek(ref)
 	// "provider/model"
 	if prov, model, ok := strings.Cut(ref, "/"); ok {
 		if e, found := c.Provider(prov); found && e.HasModel(model) {

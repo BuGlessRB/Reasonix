@@ -123,7 +123,9 @@ func TestEnsureBlankTabUsesGlobalSessionDefaultsForModelAndToolApproval(t *testi
 	if created == nil {
 		t.Fatalf("new tab %q missing from app.tabs", meta.ID)
 	}
-	if created.model != "deepseek-pro/deepseek-v4-pro" {
+	// The official source loads as one folded entry, so the provider half of the
+	// ref is the canonical name; the model asked for is what must carry over.
+	if created.model != "deepseek/deepseek-v4-pro" {
 		t.Fatalf("new tab model = %q, want global default model", created.model)
 	}
 	if created.toolApprovalMode != control.ToolApprovalAuto {
@@ -460,8 +462,8 @@ func TestDesktopNewSessionDefaultsKeepsConfiguredDefaultModel(t *testing.T) {
 	}
 
 	model, _ := desktopNewSessionDefaults("global", "")
-	if model != "deepseek-pro/deepseek-v4-pro" {
-		t.Fatalf("new session model = %q, want configured default verbatim", model)
+	if model != "deepseek/deepseek-v4-pro" {
+		t.Fatalf("new session model = %q, want the configured default's model", model)
 	}
 }
 
@@ -477,11 +479,12 @@ func TestDesktopNewSessionDefaultsKeepsKeylessDefaultWhenNothingConfigured(t *te
 		t.Fatalf("save user config: %v", err)
 	}
 
-	// With no configured provider at all, the raw default must survive so the
-	// boot-time missing-key notice still tells the user what to fix.
+	// With no configured provider at all, the default must survive rather than
+	// falling back, so the boot-time missing-key notice still names the model
+	// the user has to supply a key for.
 	model, _ := desktopNewSessionDefaults("global", "")
-	if model != "deepseek-pro/deepseek-v4-pro" {
-		t.Fatalf("new session model = %q, want raw keyless default preserved", model)
+	if model != "deepseek/deepseek-v4-pro" {
+		t.Fatalf("new session model = %q, want keyless default preserved", model)
 	}
 }
 

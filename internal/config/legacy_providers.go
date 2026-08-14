@@ -9,6 +9,7 @@ import "strings"
 func normalizeLegacyProviderFields(c *Config) {
 	normalizeLegacyProviderModels(c)
 	normalizeLegacyResponsesMode(c)
+	canonicalizeOfficialDeepSeekSource(c)
 }
 
 // normalizeLegacyResponsesMode folds responses_stateful into responses_mode, the

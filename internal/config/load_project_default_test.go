@@ -34,7 +34,9 @@ api_key_env = "DEEPSEEK_API_KEY"
 `)
 
 	project := t.TempDir()
-	writeProjectDefaultTestConfig(t, project, "reasonix.toml", `default_model = "deepseek-flash"
+	// A name no provider defines and no migration answers for: the point is a
+	// ref that cannot resolve, not which vendor it names.
+	writeProjectDefaultTestConfig(t, project, "reasonix.toml", `default_model = "retired-vendor"
 
 [permissions]
 allow = ["Bash(go test*)"]
@@ -47,8 +49,8 @@ allow = ["Bash(go test*)"]
 	if cfg.DefaultModel != "deepseek-pro" {
 		t.Fatalf("DefaultModel = %q, want fallback to user default %q", cfg.DefaultModel, "deepseek-pro")
 	}
-	if got := cfg.IgnoredProjectDefaultModel(); got != "deepseek-flash" {
-		t.Fatalf("IgnoredProjectDefaultModel() = %q, want %q", got, "deepseek-flash")
+	if got := cfg.IgnoredProjectDefaultModel(); got != "retired-vendor" {
+		t.Fatalf("IgnoredProjectDefaultModel() = %q, want %q", got, "retired-vendor")
 	}
 	if _, ok := cfg.ResolveModel(cfg.DefaultModel); !ok {
 		t.Fatalf("ResolveModel(%q) failed after fallback", cfg.DefaultModel)

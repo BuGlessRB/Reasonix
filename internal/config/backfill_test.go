@@ -1257,9 +1257,9 @@ price = { cache_hit = 0.0028, input = 0.14, output = 0.28, currency = "$" }
 	}
 
 	c := LoadForEdit(path)
-	flash, ok := c.Provider("deepseek-flash")
+	flash, ok := c.ResolveModel("deepseek-flash/deepseek-v4-flash")
 	if !ok {
-		t.Fatal("deepseek-flash provider missing")
+		t.Fatal("official flash model missing")
 	}
 	if flash.Price == nil || flash.Price.Output != 0.28 || flash.Price.Currency != "$" {
 		t.Fatalf("flash price = %+v, want persisted USD preset", flash.Price)
@@ -1269,8 +1269,8 @@ price = { cache_hit = 0.0028, input = 0.14, output = 0.28, currency = "$" }
 		t.Fatalf("SetDesktopCurrency CNY: %v", err)
 	}
 	// Display currency switch must freeze list prices (USD official table stays).
-	if flash.Price == nil || flash.Price.Output != 0.28 || flash.Price.Currency != "$" {
-		t.Fatalf("flash price = %+v, want frozen USD official table", flash.Price)
+	if after, _ := c.ResolveModel("deepseek-flash/deepseek-v4-flash"); after.Price == nil || after.Price.Output != 0.28 || after.Price.Currency != "$" {
+		t.Fatalf("flash price = %+v, want frozen USD official table", after.Price)
 	}
 	if got := c.DisplayCurrencyPref(); got != "CNY" {
 		t.Fatalf("display pref = %q, want CNY", got)
@@ -1298,9 +1298,9 @@ price = { cache_hit = 0.0028, input = 0.14, output = 0.28, currency = "$" }
 	if err != nil {
 		t.Fatalf("LoadForRoot: %v", err)
 	}
-	flash, ok := c.Provider("deepseek-flash")
+	flash, ok := c.ResolveModel("deepseek-flash/deepseek-v4-flash")
 	if !ok {
-		t.Fatal("deepseek-flash provider missing")
+		t.Fatal("official flash model missing")
 	}
 	if flash.Price == nil || flash.Price.Output != 0.28 || flash.Price.Currency != "$" {
 		t.Fatalf("flash price = %+v, want persisted USD preset", flash.Price)
@@ -1321,9 +1321,9 @@ price = { cache_hit = 0.0028, input = 0.14, output = 0.28, currency = "$" }
 	}
 
 	c := LoadForEdit(path)
-	flash, ok := c.Provider("deepseek-flash")
+	flash, ok := c.ResolveModel("deepseek-flash/deepseek-v4-flash")
 	if !ok {
-		t.Fatal("deepseek-flash provider missing")
+		t.Fatal("official flash model missing")
 	}
 	if flash.Price == nil || flash.Price.Output != 0.28 || flash.Price.Currency != "$" {
 		t.Fatalf("flash price = %+v, want persisted USD preset", flash.Price)

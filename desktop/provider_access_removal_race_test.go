@@ -54,7 +54,12 @@ func TestRemoveProviderAccessRejectsCustomProviderThatBecameOfficialDuringSnapsh
 		t.Fatal("RemoveProviderAccess deleted a custom provider that became official during snapshot")
 	}
 	got := config.LoadForEdit(config.UserConfigPath())
-	provider, ok = got.Provider("deepseek-flash")
+	// Having become official, it now loads folded under the canonical name —
+	// what matters here is that it survived, not which name it survived as.
+	provider, ok = got.Provider("deepseek")
+	if !ok {
+		provider, ok = got.Provider("deepseek-flash")
+	}
 	if !ok || officialProviderKindFromEntry(*provider) != "deepseek" {
 		t.Fatalf("updated official provider was not preserved: %+v/%v", provider, ok)
 	}

@@ -83,15 +83,17 @@ future_provider_field = "untouched"
 	if err != nil {
 		t.Fatalf("load migrated config: %v", err)
 	}
-	for _, name := range []string{"deepseek-flash", "deepseek-pro"} {
-		entry, ok := cfg.Provider(name)
+	// Both models now live under the one folded entry, and per-model efforts
+	// ride its overrides — so this asks what each model actually resolves to.
+	for _, model := range []string{"deepseek-v4-flash", "deepseek-v4-pro"} {
+		entry, ok := cfg.ResolveModel("deepseek/" + model)
 		if !ok {
-			t.Fatalf("migrated provider %q missing", name)
+			t.Fatalf("migrated model %q missing", model)
 		}
 		if entry.Kind != "anthropic" || entry.BaseURL != deepSeekAnthropicBaseURL ||
 			entry.Thinking != "enabled" || !EffectiveWebSearch(entry) ||
 			len(entry.SupportedEfforts) == 0 || entry.DefaultEffort != "high" {
-			t.Errorf("migrated provider %q capabilities = %+v", name, entry)
+			t.Errorf("migrated model %q capabilities = %+v", model, entry)
 		}
 	}
 

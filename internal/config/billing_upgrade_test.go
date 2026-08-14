@@ -47,7 +47,7 @@ price = { cache_hit = 0.0028, input = 0.14, output = 0.28, currency = "$" }
 	if got := cfg.DisplayCurrencyPref(); got != "CNY" {
 		t.Fatalf("display pref = %q", got)
 	}
-	flash, ok := cfg.Provider("deepseek-flash")
+	flash, ok := cfg.ResolveModel("deepseek-flash/deepseek-v4-flash")
 	if !ok {
 		t.Fatal("missing flash")
 	}

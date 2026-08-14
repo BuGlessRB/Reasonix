@@ -222,9 +222,13 @@ func TestNewChatTUIKeepsExplicitKeylessControllerModel(t *testing.T) {
 	}
 	defer ctrl.Close()
 
+	// The official source loads as one folded entry, so the ref resolves under
+	// the canonical name. The model asked for is what has to survive here — the
+	// global default must not have won.
+	const resolved = "deepseek/deepseek-v4-flash"
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
-	if got := m.modelRef; got != explicit {
-		t.Fatalf("TUI modelRef = %q, want explicit controller model %q", got, explicit)
+	if got := m.modelRef; got != resolved {
+		t.Fatalf("TUI modelRef = %q, want explicit controller model %q (from %q)", got, resolved, explicit)
 	}
 }
 
