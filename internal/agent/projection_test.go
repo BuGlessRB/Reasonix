@@ -167,10 +167,10 @@ func TestCompactToProjectionLeavesCanonicalIntact(t *testing.T) {
 		t.Fatal("expected projection messages")
 	}
 	// Projection must be shorter than canonical.
-	if estimateMessagesTokens(a.sess.compactionState.Projection.Messages) >= estimateMessagesTokens(before) {
+	if a.estimatedPromptTokens(a.sess.compactionState.Projection.Messages) >= a.estimatedPromptTokens(before) {
 		t.Fatalf("projection did not shrink: proj=%d src=%d",
-			estimateMessagesTokens(a.sess.compactionState.Projection.Messages),
-			estimateMessagesTokens(before))
+			a.estimatedPromptTokens(a.sess.compactionState.Projection.Messages),
+			a.estimatedPromptTokens(before))
 	}
 	// Sidecar must exist and reload with an applied summary receipt (v3 does not
 	// persist the legacy last_mode field).

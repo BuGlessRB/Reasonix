@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"reasonix/internal/ablation"
 	"reasonix/internal/event"
@@ -161,48 +160,9 @@ func (a *Agent) exceptionalMinimumSavings() int {
 // tokens to justify the summarization API call. It returns false when the
 // region is too small for the savings to outweigh the extra round-trip cost
 // and latency of calling the summarizer.
-func foldEconomics(region []provider.Message) bool {
-	const minFoldTokens = 400
-	return estimateMessagesTokens(region) >= minFoldTokens
-}
-
-func estimateMessagesTokens(msgs []provider.Message) int {
-	total := 0
-	for _, m := range msgs {
-		if m.LocalOnly {
-			continue
-		}
-		total += 4 // chat-message framing overhead
-		total += estimateTextTokens(m.Content)
-		total += estimateTextTokens(m.ReasoningContent)
-		total += estimateTextTokens(m.Name)
-		total += estimateTextTokens(m.ToolCallID)
-		for _, tc := range m.ToolCalls {
-			total += 8
-			total += estimateTextTokens(tc.ID)
-			total += estimateTextTokens(tc.Name)
-			total += estimateTextTokens(tc.Arguments)
-		}
-		for _, item := range m.ResponsesItems {
-			total += estimateTextTokens(string(item))
-		}
-	}
-	return total
-}
-
-func estimateTextTokens(s string) int {
-	if s == "" {
-		return 0
-	}
-	// A conservative cross-language approximation: English-ish text trends near
-	// four bytes per token, while CJK-heavy text is closer to one rune per token.
-	bytes := len(s)
-	runes := utf8.RuneCountInString(s)
-	byBytes := (bytes + 3) / 4
-	if runes > byBytes {
-		return runes
-	}
-	return byBytes
+func (a *Agent) foldEconomics(region []provider.Message) bool {
+	const minFoldTokens = 100
+	return a.estimatedPromptTokens(region) >= minFoldTokens
 }
 
 // SummarizeFrom keeps the compatibility index contract while installing a
@@ -448,7 +408,7 @@ func (a *Agent) planCompaction(msgs []provider.Message, min int, force bool) (he
 	if a.contextWindow > 0 {
 		budget := a.recentTailBudget()
 		if force {
-			if half := estimateMessagesTokens(provider.ModelMessages(msgs)) / 2; half > 0 && half < budget {
+			if half := a.estimatedPromptTokens(provider.ModelMessages(msgs)) / 2; half > 0 && half < budget {
 				budget = half
 			}
 		}
@@ -457,7 +417,7 @@ func (a *Agent) planCompaction(msgs []provider.Message, min int, force bool) (he
 		// keeps a cheap tokPerChar overestimate of the tail under force.
 		floor := max(head, len(msgs)-a.tailFloor())
 		remeasure := force || !a.strictAlternatingRoles
-		for remeasure && start < floor && estimateMessagesTokens(provider.ModelMessages(msgs[start:])) > budget {
+		for remeasure && start < floor && a.estimatedPromptTokens(provider.ModelMessages(msgs[start:])) > budget {
 			start++
 			for start < floor && start < len(msgs) && msgs[start].Role == provider.RoleTool {
 				start++

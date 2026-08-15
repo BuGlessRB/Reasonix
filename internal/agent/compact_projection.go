@@ -205,7 +205,7 @@ func (a *Agent) compressVisibleRange(
 	}
 
 	projection := buildVisibleCompressionProjection(snap.visible, plan, summary)
-	projectionTokens := estimateMessagesTokens(a.providerProjectionMessages(projection))
+	projectionTokens := a.estimatedPromptTokens(a.providerProjectionMessages(projection))
 	tele.ProjectionTokens = projectionTokens
 	result.Messages = len(plan.fold)
 	result.ProjectionTokens = projectionTokens
@@ -255,7 +255,7 @@ func (a *Agent) explicitCompressionSnapshotCurrent(snap explicitCompressionSnaps
 }
 
 func (a *Agent) planVisibleCompression(snap explicitCompressionSnapshot, direction string, anchorIndex int, preview string) (visibleCompressionPlan, bool) {
-	sourceTokens := estimateMessagesTokens(snap.visible)
+	sourceTokens := a.estimatedPromptTokens(snap.visible)
 	plan := visibleCompressionPlan{result: tool.CompressResult{
 		Status:           "noop",
 		Direction:        direction,
@@ -405,13 +405,13 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		return CompactionNoop, nil
 	}
 	kept, fold, retention, policyKeep := a.partitionFoldForProjection(msgs[head:start])
-	if len(fold) == 0 || (!force && !foldEconomics(fold)) {
+	if len(fold) == 0 || (!force && !a.foldEconomics(fold)) {
 		return CompactionNoop, nil
 	}
 	fold, priorIndex := stripFoldIndexFromDigests(fold)
 	foldIndex := buildFoldIndex(msgs[head:start], policyKeep, a.toolIsReadOnly,
 		a.canonicalOriginFor(stateSnapshot, canonical, msgs, head))
-	fixedPrefixTokens := estimateMessagesTokens(a.providerProjectionMessages(msgs[:head]))
+	fixedPrefixTokens := a.estimatedPromptTokens(a.providerProjectionMessages(msgs[:head]))
 	if a.contextWindow > 0 && fixedPrefixTokens >= a.compactTrigger() {
 		return CompactionNoop, fmt.Errorf("%w: fixed prefix (%d tokens) already exceeds trigger (%d)", errCheckpointRejected, fixedPrefixTokens, a.compactTrigger())
 	}

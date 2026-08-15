@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
-
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 )
@@ -101,29 +99,16 @@ func sawSpeculativeSamplingOutput(result streamedTurn) bool {
 // accounting telemetry, not request admission: the estimate never changes the
 // frozen provider request or imposes a token ceiling.
 func estimateSamplingRequestInputTokens(req provider.Request) int {
-	total := 3
+	// Uncalibrated on purpose: this runs where no usage record exists, and the
+	// billing line it fills is the one the provider never sent.
+	shape := requestCalibrationShapeOf(req)
+	images := int64(0)
 	for _, msg := range provider.ModelMessages(req.Messages) {
-		total += 4
-		total += estimateTextTokens(msg.Content)
-		total += estimateTextTokens(msg.ReasoningContent)
-		total += estimateTextTokens(msg.ReasoningSignature)
-		total += estimateTextTokens(msg.Name)
-		total += estimateTextTokens(msg.ToolCallID)
 		for _, image := range msg.Images {
-			total += estimateTextTokens(image)
-		}
-		for _, call := range msg.ToolCalls {
-			total += 8 + estimateTextTokens(call.ID) + estimateTextTokens(call.Name) + estimateTextTokens(call.Arguments)
-		}
-		for _, item := range msg.ResponsesItems {
-			total += estimateTextTokens(string(item))
+			images += int64(len(image))
 		}
 	}
-	for _, schema := range req.Tools {
-		encoded, _ := json.Marshal(schema)
-		total += 8 + estimateTextTokens(string(encoded))
-	}
-	return max(total, 1)
+	return max(int(float64(shape.requestChars+images)*fallbackTokPerChar), 1)
 }
 
 // mergeSamplingUsage accumulates billable counters across body attempts.

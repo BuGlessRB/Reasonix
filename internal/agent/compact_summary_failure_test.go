@@ -87,7 +87,7 @@ func latestDigest(msgs []provider.Message) string {
 // projectionTokens reports what the model would actually see.
 func projectionTokens(a *Agent) int {
 	msgs, _ := a.sess.conversation.snapshotMessagesVersion()
-	return estimateMessagesTokens(provider.ModelMessages(modelVisibleFromProjection(a.sess.compactionState.Projection, msgs)))
+	return a.estimatedPromptTokens(provider.ModelMessages(modelVisibleFromProjection(a.sess.compactionState.Projection, msgs)))
 }
 
 // The 90s summary bound is deliberately not retried, so a summarizer that never
@@ -96,7 +96,7 @@ func projectionTokens(a *Agent) int {
 func TestSummarizerTimeoutWhereFoldIsTheOnlyWayOutDegrades(t *testing.T) {
 	sess := foldableSessionOverForce(6)
 	a := agentOverForce(t, &fakeProvider{hang: true}, sess)
-	before := estimateMessagesTokens(provider.ModelMessages(sess.Messages))
+	before := a.estimatedPromptTokens(provider.ModelMessages(sess.Messages))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -121,7 +121,7 @@ func TestSummarizerTimeoutWhereFoldIsTheOnlyWayOutDegrades(t *testing.T) {
 func TestOverflowSummarizerFailureDegradesInsteadOfBlockingTheTurn(t *testing.T) {
 	sess := foldableSessionOverForce(6)
 	a := agentOverForce(t, &fakeProvider{streamErr: errors.New("provider down")}, sess)
-	before := estimateMessagesTokens(provider.ModelMessages(sess.Messages))
+	before := a.estimatedPromptTokens(provider.ModelMessages(sess.Messages))
 
 	if err := prepareContext(context.Background(), a, CompactionTriggerOverflow); err != nil {
 		t.Fatalf("prepare = %v, want a degraded fold instead of ErrCompactionRequired", err)
