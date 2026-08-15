@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -77,5 +78,45 @@ func TestRewindConcurrentWithHistoryReads(t *testing.T) {
 	// must still serve a consistent snapshot afterwards.
 	if got, want := ag.Session().Len(), 3; got != want { // sys + first prompt/answer
 		t.Fatalf("messages after rewind = %d, want %d", got, want)
+	}
+}
+
+// TestResumeRefusedWhileRunning is the guard the session switcher was missing.
+// Every other session swap claims the rotation gate; Resume did not, so binding
+// another transcript mid-turn left the run loop writing into it — which is how
+// one conversation's output appeared in the one the user had switched to.
+func TestResumeRefusedWhileRunning(t *testing.T) {
+	live := agent.NewSession("sys")
+	live.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
+	exec := agent.New(nil, nil, live, agent.Options{}, event.Discard)
+	c := New(Options{
+		Executor:   exec,
+		SessionDir: t.TempDir(),
+		Label:      "test",
+		Sink:       event.Discard,
+	})
+	c.SetSessionPath("/tmp/a.jsonl")
+
+	c.mu.Lock()
+	c.running = true
+	c.mu.Unlock()
+
+	other := agent.NewSession("sys")
+	if err := c.Resume(other, "/tmp/b.jsonl"); !errors.Is(err, errTurnRunningRotation) {
+		t.Fatalf("Resume while running = %v, want errTurnRunningRotation", err)
+	}
+	// The refusal has to leave the live turn's binding untouched, not half-swap.
+	if got := c.SessionPath(); got != "/tmp/a.jsonl" {
+		t.Fatalf("SessionPath after refused resume = %q, want the running turn's own path", got)
+	}
+
+	c.mu.Lock()
+	c.running = false
+	c.mu.Unlock()
+	if err := c.Resume(other, "/tmp/b.jsonl"); err != nil {
+		t.Fatalf("Resume once idle = %v, want nil", err)
+	}
+	if got := c.SessionPath(); got != "/tmp/b.jsonl" {
+		t.Fatalf("SessionPath after resume = %q, want the resumed path", got)
 	}
 }

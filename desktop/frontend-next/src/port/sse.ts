@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
 import { HttpError, type Attachment, type WorkspaceChanges } from "./port";
 import type { WireEvent } from "./wire";
 
@@ -44,15 +44,16 @@ export class SsePort implements AgentPort {
       credentials: "same-origin",
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
+    if (!res.ok) throw new HttpError(res.status, `${path}: ${res.status} ${await res.text()}`);
   }
 
   // A POST whose answer is the payload, not a status code.
-  private async post0<T>(path: string): Promise<T> {
+  private async post0<T>(path: string, body?: unknown): Promise<T> {
     const res = await fetch(this.base + path, {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`${path}: ${res.status}`);
     return (await res.json()) as T;
@@ -84,8 +85,9 @@ export class SsePort implements AgentPort {
     return r.models ?? [];
   }
 
-  slash() {
-    return this.get<SlashEntry[]>("/slash");
+  complete(line: string, cursor: number) {
+    const q = new URLSearchParams({ line, cursor: String(cursor) });
+    return this.get<Completion>("/complete?" + q);
   }
 
   skills() {
@@ -349,12 +351,48 @@ export class SsePort implements AgentPort {
     return this.post("/delete-session", { name });
   }
 
+  // JSON, not raw bytes: csrfGuard admits nothing else, and that guard is what
+  // stops a cross-site form posting here at all.
+  async attach(blob: Blob) {
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    const res = await fetch(this.base + "/attachments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ mime: blob.type, data: btoa(bin) }),
+    });
+    if (!res.ok) throw new HttpError(res.status, `/attachments: ${res.status} ${await res.text()}`);
+    return (await res.json()) as Attachment;
+  }
+
+  changes() {
+    return this.get<WorkspaceChanges>("/changes");
+  }
+
   trajectory() {
     return this.get<WireEvent[]>("/trajectory");
   }
 
   history() {
     return this.get<HistoryMessage[]>("/history");
+  }
+
+  checkpoints() {
+    return this.get<Checkpoint[]>("/checkpoints");
+  }
+
+  prepareRewind(turn: number, scope: RewindScope) {
+    return this.post0<RewindPlan>("/rewind/prepare", { turn, scope });
+  }
+
+  commitRewind(planId: string) {
+    return this.post0<RewindResult>("/rewind/commit", { planId });
+  }
+
+  undoRewind(transactionId: string) {
+    return this.post("/rewind/undo", { transactionId });
   }
 
   subscribe(onEvent: (ev: WireEvent) => void) {
@@ -406,6 +444,21 @@ export class SsePort implements AgentPort {
       id,
       answers: answers.map((a) => ({ QuestionID: a.questionId, Selected: a.selected })),
     });
+  }
+  themes() {
+    return this.get<ThemePack[]>("/themes");
+  }
+  activateTheme(id: string) {
+    return this.post("/themes", { id });
+  }
+  // The extension's own message is the result, so this reads the body rather
+  // than a status code. A refused action answers 422 with its reason.
+  async invokeExtensionAction(name: string) {
+    const out = await this.post0<{ message?: string }>("/extensions/action", { name });
+    return out.message ?? "";
+  }
+  submitExtensionForm(pluginId: string, surfaceId: string, values: Record<string, unknown>) {
+    return this.post("/extensions/submit", { pluginId, surfaceId, values });
   }
   setPlanMode(on: boolean) {
     return this.post("/plan", { on });

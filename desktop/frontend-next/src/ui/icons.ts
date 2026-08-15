@@ -22,9 +22,22 @@ const RUNNING: Record<string, string> = {
   bash: "正在执行…", write: "正在改写…", mem: "正在写入记忆…", mcp: "正在调 MCP…",
 };
 
-// An MCP tool's raw id repeats its server twice over — the card already carries
-// that in its own badge, so the name is just what the tool is called.
-export const labelFor = (tool: string) => LABEL[tool] ?? mcpOrigin(tool)?.tool ?? tool;
+// The name slot is a word a person reads, never an identifier: the spec renders
+// it at 12.5px/500 in the UI face, where raw snake_case reads as the wrong font
+// rather than as a name. A capability call is named for what it is — the id it
+// resolved to belongs in the mono tag beside it — and anything else with no
+// entry here is title-cased rather than passed through.
+export const labelFor = (tool: string) =>
+  LABEL[tool] ?? (isCapability(tool) ? "MCP" : titleCase(tool));
+
+export const isCapability = (tool: string) => tool === "use_capability" || tool.startsWith("mcp__");
+
+const titleCase = (id: string) =>
+  id
+    .split(/[_\-.]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ") || id;
 
 export function runLabelFor(tool: string) {
   return RUNNING[categoryOf(tool)] ?? "正在处理…";

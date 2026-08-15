@@ -11,11 +11,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"reasonix/desktop/internal/update"
@@ -50,10 +54,11 @@ var apiPaths = map[string]bool{
 	"/rewind": true, "/fork": true, "/summarize": true, "/forget": true,
 	"/tool-approval-mode": true, "/auto-approve-tools": true, "/bypass": true,
 	"/provider-setup": true, "/delete-session": true, "/inbox/items": true,
-	"/trajectory": true, "/slash": true, "/workspace": true, "/workspaces": true,
+	"/trajectory": true, "/slash": true, "/complete": true,
+	"/workspace": true, "/workspaces": true,
 	"/mcp": true, "/skills": true, "/account": true, "/hooks": true,
 	"/memory": true, "/network": true, "/todos": true, "/providers": true,
-	"/roles": true,
+	"/changes": true, "/attachments": true, "/roles": true,
 }
 
 // A sub-path belongs to the resource it hangs off: /mcp/reconnect is the same
@@ -61,7 +66,7 @@ var apiPaths = map[string]bool{
 // endpoint from silently answering with index.html instead of JSON — and
 // TestEveryPathTheFrontendCallsIsRouted is what keeps this list honest, because
 // the comment alone did not.
-var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/"}
+var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/"}
 
 func isAPIPath(p string) bool {
 	p = strings.TrimSuffix(p, "/")
@@ -113,6 +118,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Ask/Auto/YOLO is a posture the user set on the composer, not a per-launch
+	// default — the old shell has read this since it had a picker.
+	ctrl.SetToolApprovalMode(cfg.DesktopDefaultToolApprovalMode())
 	srv := serve.New(ctrl, bc, cfg.Serve)
 	srv.AdoptRuntime(built)
 	// The only client is the window in front of the user, so the folder switch
@@ -138,7 +146,19 @@ func run() error {
 		Title:  "Reasonix Studio",
 		Width:  1440,
 		Height: 900,
-		Bind:   []any{shell},
+		// The top row is the title bar — project, goal, preset — so a native one
+		// above it costs a whole row to say the app's own name. Same treatment
+		// the existing shell uses; Linux keeps its frame, WebKitGTK has no inset.
+		Frameless: goruntime.GOOS == "windows",
+		Mac:       &mac.Options{TitleBar: mac.TitleBarHiddenInset(), Appearance: mac.DefaultAppearance},
+		Windows:   &windows.Options{Theme: windows.SystemDefault},
+		MinWidth:  760,
+		MinHeight: 480,
+		Menu:      appMenu(),
+		// Production builds ship without one, so the window had no copy, paste,
+		// or select-all on right-click — in a text editor that reads as broken.
+		EnableDefaultContextMenu: true,
+		Bind:                     []any{shell},
 		OnStartup: func(ctx context.Context) {
 			shell.ctx = ctx
 			go pumpEvents(ctx, srv, bc)
@@ -166,6 +186,21 @@ func run() error {
 		},
 		OnShutdown: func(context.Context) { srv.Controller().Close() },
 	})
+}
+
+// appMenu is what makes ⌘C work: a WKWebView takes its editing shortcuts from
+// the application's Edit menu, and a window without one has no copy, paste, or
+// undo at all. macOS only — elsewhere the same bar renders as a stray
+// in-window strip, and those platforms bind the shortcuts themselves.
+func appMenu() *menu.Menu {
+	if goruntime.GOOS != "darwin" {
+		return nil
+	}
+	m := menu.NewMenu()
+	m.Append(menu.AppMenu())
+	m.Append(menu.EditMenu())
+	m.Append(menu.WindowMenu())
+	return m
 }
 
 // App is the one thing the SPA cannot do over HTTP: open the platform's folder

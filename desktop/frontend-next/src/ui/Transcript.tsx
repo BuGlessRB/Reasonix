@@ -1,6 +1,6 @@
 import { memo, useEffect, useState, type RefObject } from "react";
 import type { Item, Waiting } from "../state/session";
-import type { ApprovalVerdict } from "../port/port";
+import type { ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope } from "../port/port";
 import { RMark } from "./RMark";
 import { ToolCard } from "./cards/ToolCard";
 import { GuardianCard } from "./cards/GuardianCard";
@@ -13,6 +13,7 @@ import { ReadsCard } from "./cards/ReadsCard";
 import { UserCard } from "./cards/UserCard";
 import { NoticeCard } from "./cards/NoticeCard";
 import { RememberCard } from "./cards/RememberCard";
+import { ExtensionCard } from "./cards/ExtensionCard";
 
 interface Props {
   items: Item[];
@@ -24,9 +25,17 @@ interface Props {
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => void;
   onSuggest: (text: string) => void;
   onForget: (itemId: string, name: string) => void;
+  onExtInvoke: (name: string) => void;
+  onExtSubmit: (pluginId: string, surfaceId: string, values: Record<string, unknown>) => void;
+  // The checkpoint each user card can return to, keyed by item id. Absent for a
+  // card whose turn could not be matched — see state/checkpoints.
+  checkpoints: Map<string, Checkpoint>;
+  onPrepareRewind: (turn: number, scope: RewindScope) => Promise<RewindPlan>;
+  onCommitRewind: (planId: string) => Promise<RewindResult>;
+  onUndoRewind: (transactionId: string) => Promise<void>;
 }
 
-export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove, onAnswer, onSuggest, onForget }: Props) {
+export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove, onAnswer, onSuggest, onForget, onExtInvoke, onExtSubmit, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind }: Props) {
   // Stick to the bottom only while the reader is already there; scrolling up
   // must not be yanked back by incoming frames.
   const [pinned, setPinned] = useState(true);
@@ -55,7 +64,19 @@ export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove
       <div className="flow">
         {items.length === 0 && <Hero onPick={onSuggest} />}
         {items.map((it) => (
-          <Row key={it.id} it={it} onApprove={onApprove} onAnswer={onAnswer} onForget={onForget} />
+          <Row
+            key={it.id}
+            it={it}
+            onApprove={onApprove}
+            onAnswer={onAnswer}
+            onForget={onForget}
+            onExtInvoke={onExtInvoke}
+            onExtSubmit={onExtSubmit}
+            cp={checkpoints.get(it.id)}
+            onPrepareRewind={onPrepareRewind}
+            onCommitRewind={onCommitRewind}
+            onUndoRewind={onUndoRewind}
+          />
         ))}
         {waiting.ttftSince && <Await retry={waiting.retry} />}
       </div>
@@ -71,15 +92,27 @@ const Row = memo(function Row({
   onApprove,
   onForget,
   onAnswer,
+  onExtInvoke,
+  onExtSubmit,
+  cp,
+  onPrepareRewind,
+  onCommitRewind,
+  onUndoRewind,
 }: {
   it: Item;
   onApprove: Props["onApprove"];
   onForget: Props["onForget"];
   onAnswer: Props["onAnswer"];
+  onExtInvoke: Props["onExtInvoke"];
+  onExtSubmit: Props["onExtSubmit"];
+  cp?: Checkpoint;
+  onPrepareRewind: Props["onPrepareRewind"];
+  onCommitRewind: Props["onCommitRewind"];
+  onUndoRewind: Props["onUndoRewind"];
 }) {
   switch (it.t) {
     case "user":
-      return <UserCard item={it} />;
+      return <UserCard item={it} cp={cp} onPrepareRewind={onPrepareRewind} onCommitRewind={onCommitRewind} onUndoRewind={onUndoRewind} />;
     case "say":
       // Reasoning arrives long before the first answer token on a thinking
       // model. Gating the card on text meant all of it stayed invisible and
@@ -108,6 +141,8 @@ const Row = memo(function Row({
       return <RememberCard m={it.m} forgotten={it.forgotten} onForget={(name) => onForget(it.id, name)} />;
     case "completion":
       return <CompletionCard c={it.c} />;
+    case "extension":
+      return <ExtensionCard ext={it.ext} onInvoke={onExtInvoke} onSubmit={onExtSubmit} />;
     case "notice":
       return <NoticeCard item={it} />;
   }

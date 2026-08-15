@@ -109,7 +109,7 @@ func TestActiveAtTokenFullSpanAndMidCursor(t *testing.T) {
 	val := "see @foo and more"
 	// Cursor mid-token after "@fo" → query is caret-limited "fo", span is full "@foo".
 	cursor := strings.Index(val, "@fo") + len("@fo")
-	at, end, tok, ok := activeAtToken(val, cursor)
+	at, end, tok, ok := control.ActiveRefToken(val, cursor)
 	if !ok || at != strings.Index(val, "@") || tok != "fo" {
 		t.Fatalf("activeAtToken mid-token = (%d,%d,%q,%v), want query fo", at, end, tok, ok)
 	}

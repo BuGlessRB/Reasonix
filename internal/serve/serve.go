@@ -491,6 +491,9 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /compact", s.compact)
 	mux.HandleFunc("POST /new", s.newSession)
 	mux.HandleFunc("POST /rewind", s.rewind)
+	mux.HandleFunc("POST /rewind/prepare", s.rewindPrepare)
+	mux.HandleFunc("POST /rewind/commit", s.rewindCommit)
+	mux.HandleFunc("POST /rewind/undo", s.rewindUndo)
 	mux.HandleFunc("POST /fork", s.fork)
 	mux.HandleFunc("POST /summarize", s.summarize)
 	mux.HandleFunc("POST /tool-approval-mode", s.toolApprovalMode)
@@ -518,6 +521,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /skills", s.skills)
 	mux.HandleFunc("POST /skills/enabled", s.skillEnabled)
 	mux.HandleFunc("GET /slash", s.slash)
+	mux.HandleFunc("GET /complete", s.complete)
 	mux.HandleFunc("GET /mcp", s.mcp)
 	mux.HandleFunc("POST /mcp/reconnect", s.mcpReconnect)
 	mux.HandleFunc("POST /mcp/enabled", s.mcpEnabled)
@@ -531,6 +535,8 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /workspaces", s.workspaces)
 	mux.HandleFunc("POST /workspace", s.workspace)
 	mux.HandleFunc("GET /todos", s.todos)
+	mux.HandleFunc("GET /changes", s.changes)
+	mux.HandleFunc("POST /attachments", s.attachments)
 	mux.HandleFunc("POST /delete-session", s.deleteSession)
 	return logMiddleware(s.auth.middleware(csrfGuard(mux)))
 }
@@ -781,7 +787,10 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	// drop (rotating/closed) leaves Running false — return 409 instead of 202.
 	// Finishing-window park also leaves Running false briefly; prefer 202 only
 	// when Running or a pending prompt is observed, else durable-queue guidance.
-	if !ctrl.Running() && !ctrl.RuntimeStatus().PendingPrompt {
+
+	// A management verb starts no turn, so Running cannot judge it: /compact
+	// answered 409 while doing exactly what was asked.
+	if !control.IsNonTurnInput(body.Input) && !ctrl.Running() && !ctrl.RuntimeStatus().PendingPrompt {
 		s.bindMu.Unlock()
 		http.Error(w, "input was not admitted; session is rotating, closed, or finishing — use POST /inbox/items", http.StatusConflict)
 		return
@@ -824,6 +833,12 @@ func (s *Server) plan(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) compact(w http.ResponseWriter, r *http.Request) {
 	if err := s.ctl().Compact(r.Context(), ""); err != nil {
+		// A declined fold is a verdict, not a fault: the candidate was no smaller
+		// than what it would replace. 500 made every frontend show it as a failure.
+		if agent.IsCompactionDeclined(err) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -878,6 +893,11 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 			}
 		}
 		hm := historyMessage{Role: string(m.Role), Content: m.Content}
+		if m.Role == provider.RoleUser {
+			// Content is what the model saw, and one @-reference expands into a
+			// whole file. A reopened session has to show what was typed.
+			hm.Content = agent.UserMessageText(m)
+		}
 		if m.Role == provider.RoleAssistant {
 			hm.Reasoning = m.ReasoningContent
 			if len(m.ToolCalls) > 0 {
@@ -994,14 +1014,7 @@ func (s *Server) rewind(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing turn", http.StatusBadRequest)
 		return
 	}
-	scope := control.RewindBoth
-	switch body.Scope {
-	case "code":
-		scope = control.RewindCode
-	case "conversation":
-		scope = control.RewindConversation
-	}
-	if err := s.ctl().Rewind(body.Turn, scope); err != nil {
+	if err := s.ctl().Rewind(body.Turn, rewindScope(body.Scope)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1089,7 +1102,7 @@ func (s *Server) toolApprovalMode(w http.ResponseWriter, r *http.Request) {
 	}
 	switch strings.ToLower(strings.TrimSpace(body.Mode)) {
 	case control.ToolApprovalAsk, control.ToolApprovalAuto, control.ToolApprovalYolo:
-		s.ctl().SetToolApprovalMode(body.Mode)
+		s.applyApprovalMode(body.Mode)
 	default:
 		http.Error(w, "mode must be ask, auto, or yolo", http.StatusBadRequest)
 		return
@@ -1135,91 +1148,6 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.ctl().AnswerQuestion(body.ID, body.Answers)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// resume loads a previous session from a JSONL file.
-func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Path string `json:"path"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Path == "" {
-		http.Error(w, "missing path", http.StatusBadRequest)
-		return
-	}
-	dir := s.ctl().SessionDir()
-	if dir == "" {
-		http.Error(w, "sessions disabled", http.StatusBadRequest)
-		return
-	}
-	absDir, err := filepath.Abs(dir)
-	if err != nil {
-		http.Error(w, "invalid session dir", http.StatusBadRequest)
-		return
-	}
-	realDir, err := filepath.EvalSymlinks(absDir)
-	if err != nil {
-		http.Error(w, "invalid session dir", http.StatusBadRequest)
-		return
-	}
-	absPath, err := filepath.Abs(strings.TrimSpace(body.Path))
-	if err != nil || !store.IsSessionTranscriptName(filepath.Base(absPath)) {
-		http.Error(w, "invalid session path", http.StatusBadRequest)
-		return
-	}
-	realPath, err := filepath.EvalSymlinks(absPath)
-	if err != nil {
-		http.Error(w, "invalid session path", http.StatusBadRequest)
-		return
-	}
-	if realPath == realDir || !strings.HasPrefix(realPath, realDir+string(os.PathSeparator)) {
-		http.Error(w, "path outside session dir", http.StatusForbidden)
-		return
-	}
-	if agent.IsCleanupPending(realPath) {
-		http.Error(w, "session is pending cleanup", http.StatusBadRequest)
-		return
-	}
-	// Serialize with /new, /fork, and switchModel so the controller and lease
-	// cannot land on different sessions. Validate first to avoid slow holders.
-	s.bindMu.Lock()
-	defer s.bindMu.Unlock()
-	// Snapshot the current session before switching away — while this process
-	// still holds its lease.
-	if err := s.ctl().Snapshot(); err != nil {
-		slog.Warn("serve: snapshot before resume", "err", err)
-	}
-	// Refuse to bind a session another runtime is writing (a desktop window,
-	// another CLI); on success the lease now guards the resume target.
-	if s.leases != nil {
-		if err := s.leases.Rebind(realPath); err != nil {
-			if errors.Is(err, agent.ErrSessionLeaseHeld) {
-				http.Error(w, sessionInUseError(err), http.StatusConflict)
-			} else {
-				http.Error(w, "session lease: "+err.Error(), http.StatusInternalServerError)
-			}
-			return
-		}
-	}
-	loaded, err := agent.LoadSession(realPath)
-	if err != nil {
-		// The lease already moved to the target; re-point it at the session the
-		// controller still owns (best-effort).
-		_ = s.rebindSessionLease(s.ctl().SessionPath())
-		http.Error(w, "load session: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if hook := resumeBindHookForTest; hook != nil {
-		hook()
-	}
-	s.ctl().Resume(loaded, realPath)
-	if ctrl, ok := s.ctl().(*control.Controller); ok && s.leases != nil {
-		if err := s.leases.BindControllerAuthority(ctrl); err != nil {
-			http.Error(w, "session authority: unable to bind resumed session", http.StatusInternalServerError)
-			return
-		}
-	}
-	s.bc.ResetSession()
 	w.WriteHeader(http.StatusNoContent)
 }
 

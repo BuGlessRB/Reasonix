@@ -429,7 +429,7 @@ type chatTUI struct {
 	completion completion
 	// fileSearchCache memoizes fileref.Search by query so the bounded walk runs
 	// once per @token fragment, not on every keystroke that re-renders the menu.
-	fileSearchCache map[string][]string
+	fileSearchCache map[string][]compItem
 }
 
 type tuiState int

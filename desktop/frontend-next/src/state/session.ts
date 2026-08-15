@@ -1,9 +1,10 @@
-import type { Ask, Approval, Compaction, CompletionSummary, Guardian, Tool, WireEvent } from "../port/wire";
+import type { Ask, Approval, Compaction, CompletionSummary, ExtensionSurface, Guardian, Tool, WireEvent } from "../port/wire";
+import { estimateTokens, sample, type Sample } from "../port/tokens";
 import type { HistoryMessage } from "../port/port";
 
 export type Item =
   | { t: "user"; id: string; text: string; pending?: boolean }
-  | { t: "say"; id: string; text: string; reasoning?: string; done: boolean }
+  | { t: "say"; id: string; text: string; reasoning?: string; done: boolean; thoughtMs?: number }
   | { t: "tool"; id: string; tool: Tool; running: boolean; children: Tool[] }
   | { t: "reads"; id: string; tools: Tool[] }
   | { t: "guardian"; id: string; g: Guardian }
@@ -12,6 +13,7 @@ export type Item =
   | { t: "compaction"; id: string; c: Compaction; done: boolean }
   | { t: "remember"; id: string; m: RememberedFact; forgotten?: boolean }
   | { t: "completion"; id: string; c: CompletionSummary }
+  | { t: "extension"; id: string; ext: ExtensionSurface }
   | { t: "notice"; id: string; level: string; text: string };
 
 // What a remember call wrote, read off its own arguments. Saving a fact changes
@@ -49,22 +51,32 @@ export interface SessionState {
   error: string;
   items: Item[];
   plan: PlanStep[];
+  // Recent streamed-output samples. The down-rate has to come from what arrived
+  // in the last few seconds; usage totals only land at round boundaries, and
+  // nothing at all arrives while a tool runs.
+  outWindow: Sample[];
   metrics: Metrics;
   waiting: Waiting;
   running: boolean;
   doing: string;
   steerQueue: string[];
+  // Standing extension surfaces, keyed by plugin and surface id. They describe
+  // a state that is still true, so they hold a place in the side rail instead
+  // of scrolling away in the transcript.
+  panels: ExtensionSurface[];
 }
 
 export const initialState: SessionState = {
   error: "",
   items: [],
   plan: [],
+  outWindow: [],
   metrics: { hit: 0, miss: 0, out: 0, bySource: {}, cost: 0, currency: "¥" },
   waiting: {},
   running: false,
   doing: "空闲",
   steerQueue: [],
+  panels: [],
 };
 
 let seq = 0;
@@ -139,7 +151,9 @@ function sealSay(items: Item[], all = false): Item[] {
     const it = items[i];
     if (it.t !== "say" || it.done) continue;
     next ??= items.slice();
-    next[i] = { ...it, done: true };
+    const ran = it.thoughtMs ?? (it.reasoning ? Date.now() - (thoughtSince.get(it.id) ?? Date.now()) : undefined);
+    thoughtSince.delete(it.id);
+    next[i] = { ...it, done: true, thoughtMs: ran };
     if (!all) break;
   }
   return next ?? items;
@@ -149,23 +163,31 @@ function sealSay(items: Item[], all = false): Item[] {
 // of recent sessions, against 47 for bash. One card each is the noise the spec
 // collapses into a single manifest. Merging happens here rather than at render
 // time so each card keeps a stable identity and stays memoised.
-const plainRead = (i: Item | undefined) =>
-  i?.t === "tool" && !i.running && i.tool.name === "read_file" && i.children.length === 0;
+// The spec's manifest is one step for a whole run of lookups, not for reads
+// alone: its own fixture folds grep and glob rows in beside the files. A group
+// still has to be anchored by a read — a lone grep is better served by its own
+// excerpt list than by a row that says only how many times it matched.
+const LOOKUP = new Set(["read_file", "grep", "glob", "ls"]);
+
+const lookup = (i: Item | undefined) =>
+  i?.t === "tool" && !i.running && LOOKUP.has(i.tool.name) && i.children.length === 0;
+
+const toolOf = (i: Item) => (i as Extract<Item, { t: "tool" }>).tool;
 
 function mergeReads(items: Item[]): Item[] {
   const n = items.length;
   const last = items[n - 1];
-  if (!plainRead(last)) return items;
-  const tool = (last as Extract<Item, { t: "tool" }>).tool;
+  if (!lookup(last)) return items;
+  const tool = toolOf(last);
   const prev = items[n - 2];
   if (prev?.t === "reads") {
     const next = items.slice(0, n - 1);
     next[n - 2] = { ...prev, tools: [...prev.tools, tool] };
     return next;
   }
-  if (plainRead(prev)) {
+  if (lookup(prev) && (tool.name === "read_file" || toolOf(prev).name === "read_file")) {
     const next = items.slice(0, n - 1);
-    next[n - 2] = { t: "reads", id: prev.id, tools: [(prev as Extract<Item, { t: "tool" }>).tool, tool] };
+    next[n - 2] = { t: "reads", id: prev.id, tools: [toolOf(prev), tool] };
     return next;
   }
   return items;
@@ -175,11 +197,24 @@ function appendText(items: Item[], text: string, field: "text" | "reasoning"): I
   const last = items[items.length - 1];
   if (last && last.t === "say" && !last.done) {
     const next = items.slice();
-    next[next.length - 1] = { ...last, [field]: (last[field] ?? "") + text };
+    // Thinking runs until the first answer token, so the clock is the gap
+    // between the two streams, not the length of either.
+    const stop = field === "text" && last.thoughtMs === undefined && last.reasoning;
+    next[next.length - 1] = {
+      ...last,
+      [field]: (last[field] ?? "") + text,
+      ...(stop ? { thoughtMs: Date.now() - (thoughtSince.get(last.id) ?? Date.now()) } : null),
+    };
     return next;
   }
-  return [...items, { t: "say", id: nextId(), text: "", done: false, [field]: text }];
+  const id = nextId();
+  if (field === "reasoning") thoughtSince.set(id, Date.now());
+  return [...items, { t: "say", id, text: "", done: false, [field]: text }];
 }
+
+// Keyed by item id rather than carried on the item: a start time is not part of
+// what the card renders, and putting it there would make every append rewrite it.
+const thoughtSince = new Map<string, number>();
 
 export function reduce(
   s: SessionState,
@@ -215,8 +250,15 @@ export function reduce(
   // The card reads its sealed state off the item, so the decision has to be
   // recorded here — otherwise an answered question stays answerable forever.
   if (ev.kind === "__decided") {
+    // Answering hands the turn back to the tool, which may then run for a
+    // minute. Leaving the label on 等你批准 says the opposite of what is
+    // happening, and it is the one line the user watches to know anything is.
+    const decided = s.items.find((i) => i.id === ev.id);
+    const resumed =
+      decided?.t === "approval" && ev.verdict !== "deny" ? decided.a.tool || "运行中" : s.doing;
     return {
       ...s,
+      doing: decided?.t === "ask" ? "运行中" : resumed,
       items: s.items.map((i) =>
         i.id !== ev.id
           ? i
@@ -277,7 +319,12 @@ export function reduce(
       if (fact) {
         return { ...s, items: [...dropTool(s.items, ev.tool.id), { t: "remember", id: nextId(), m: fact }] };
       }
-      const plan = (ev.tool.name === "todo_write" && parsePlan(ev.tool)) || s.plan;
+      // A delegate keeps its own todo list, and it is not the plan the user is
+      // watching. Without the parentId guard the rail flips to the subagent's
+      // steps mid-turn: the user's own completed items lose their strike and
+      // line one turns into somebody else's first step.
+      const own = ev.tool.name === "todo_write" && !ev.tool.parentId;
+      const plan = (own && parsePlan(ev.tool)) || s.plan;
       return { ...s, plan, items: mergeReads(foldTool(s.items, ev.tool, false)) };
     }
 
@@ -303,6 +350,29 @@ export function reduce(
       return ev.guardian
         ? { ...s, items: [...s.items, { t: "guardian", id: nextId(), g: ev.guardian }] }
         : s;
+
+    // A surface is addressed by id, so a re-publish is an update: a status the
+    // extension refreshes while it works would otherwise pile up one card per
+    // tick instead of moving in place.
+    case "extension_surface":
+    case "extension_status": {
+      const ext = ev.extension;
+      if (!ext) return s;
+      if (ext.kind === "panel") {
+        const at = s.panels.findIndex((p) => p.pluginId === ext.pluginId && p.surfaceId === ext.surfaceId);
+        if (at < 0) return { ...s, panels: [...s.panels, ext] };
+        const panels = s.panels.slice();
+        panels[at] = ext;
+        return { ...s, panels };
+      }
+      const at = s.items.findIndex(
+        (it) => it.t === "extension" && it.ext.pluginId === ext.pluginId && it.ext.surfaceId === ext.surfaceId,
+      );
+      if (at < 0) return { ...s, items: [...s.items, { t: "extension", id: nextId(), ext }] };
+      const items = s.items.slice();
+      items[at] = { t: "extension", id: items[at].id, ext };
+      return { ...s, items };
+    }
 
     case "approval_request":
       return ev.approval
@@ -377,7 +447,18 @@ export function reduce(
       // keeps the run amber rather than claiming the tick.
       // Sealing here too: a turn that ends without a closing message otherwise
       // leaves the caret blinking on a message nothing will be appended to.
-      return { ...s, running: false, doing: ev.err ? ev.err : "已完成", waiting: {}, items: sealSay(s.items, true) };
+      // A plan that ran to the end is spent: it says nothing the completion card
+      // does not, and leaving it struck through in the rail reads as if the next
+      // turn already has a plan. One that still has open steps stays — that is
+      // the half the user needs.
+      return {
+        ...s,
+        running: false,
+        doing: ev.err ? ev.err : "已完成",
+        waiting: {},
+        plan: s.plan.length > 0 && s.plan.every((p) => p.done) ? [] : s.plan,
+        items: sealSay(s.items, true),
+      };
 
     default:
       return s;
@@ -403,7 +484,7 @@ export function quoteAmount(q?: { selected?: { amount: string }; original: { amo
 // as one more line that scrolls away.
 // The todos live in args; output is only a receipt ("Todos updated: 3 total").
 // Returning null keeps the existing plan instead of overwriting it with junk.
-function parsePlan(tool: Tool): PlanStep[] | null {
+export function parsePlan(tool: Tool): PlanStep[] | null {
   try {
     const v = JSON.parse(tool.args ?? "");
     const list = Array.isArray(v?.todos) ? v.todos : Array.isArray(v) ? v : null;
@@ -415,6 +496,46 @@ function parsePlan(tool: Tool): PlanStep[] | null {
   } catch {
     return null;
   }
+}
+
+// The listing the kernel writes for the model: "- **title**" and, indented under
+// it, "<url>". Only a run of exactly that gets lifted out of the prose — reading
+// a paragraph as a result list is worse than leaving the list in place.
+const SEARCH_TITLE = /^-\s+\*\*.+\*\*\s*$/;
+const SEARCH_URL = /^\s+<\S+>\s*$/;
+
+function splitProviderSearch(content: string): { text: string; search?: boolean }[] {
+  const lines = content.split("\n");
+  const blocks: [number, number][] = [];
+  for (let i = 0; i < lines.length; ) {
+    if (!SEARCH_TITLE.test(lines[i])) {
+      i++;
+      continue;
+    }
+    let end = i;
+    let urls = 0;
+    while (end < lines.length && (SEARCH_TITLE.test(lines[end]) || SEARCH_URL.test(lines[end]))) {
+      if (SEARCH_URL.test(lines[end])) urls++;
+      end++;
+    }
+    // A run with no source is the model's own bolded list — an answer written as
+    // "- **厄瓜多尔总统将访华**" reads exactly like a result title.
+    if (urls > 0) blocks.push([i, end]);
+    i = end > i ? end : i + 1;
+  }
+  const parts: { text: string; search?: boolean }[] = [];
+  const push = (from: number, to: number, search: boolean) => {
+    const text = lines.slice(from, to).join("\n").trim();
+    if (text) parts.push(search ? { text, search: true } : { text });
+  };
+  let at = 0;
+  for (const [from, to] of blocks) {
+    push(at, from, false);
+    push(from, to, true);
+    at = to;
+  }
+  push(at, lines.length, false);
+  return parts;
 }
 
 // A reload has no event stream to replay, so the transcript is rebuilt from the
@@ -432,7 +553,33 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
     }
     if (m.role === "assistant") {
       if (m.content || m.reasoning) {
-        out.push({ t: "say", id: nextId(), text: m.content, reasoning: m.reasoning, done: true });
+        // A provider-run search leaves its listing inside the assistant text —
+        // that copy is the only one the next turn has — while the live stream
+        // shows it as a card. Cut it back out here, or reopening the same turn
+        // replaces the card with forty lines of prose.
+        let reasoning = m.reasoning;
+        const parts = splitProviderSearch(m.content);
+        // Thinking came before the search that follows it, so it cannot ride the
+        // next text part when the turn opened with a search.
+        if (reasoning && (parts.length === 0 || parts[0].search)) {
+          out.push({ t: "say", id: nextId(), text: "", reasoning, done: true });
+          reasoning = undefined;
+        }
+        for (const part of parts) {
+          if (part.search) {
+            out.push({
+              t: "tool",
+              id: nextId(),
+              tool: { id: nextId(), name: "web_search", output: part.text, readOnly: true },
+              running: false,
+              children: [],
+            });
+            continue;
+          }
+          if (!part.text && !reasoning) continue;
+          out.push({ t: "say", id: nextId(), text: part.text, reasoning, done: true });
+          reasoning = undefined;
+        }
       }
       for (const c of m.toolCalls ?? []) {
         if (c.name === "todo_write") {

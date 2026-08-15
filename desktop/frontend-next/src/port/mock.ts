@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, DeviceGrant, ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo, WorkspaceChanges, Attachment } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, WorkspaceInfo, WorkspaceChanges, Attachment, ThemePack } from "./port";
 import type { WireEvent } from "./wire";
 import { SCRIPT } from "./fixture";
 
@@ -6,6 +6,9 @@ import { SCRIPT } from "./fixture";
 export class MockPort implements AgentPort {
   private listeners = new Set<(ev: WireEvent) => void>();
   private log: WireEvent[] = [];
+  // What the user has sent, so checkpoints() can mirror one per turn.
+  private prompts: string[] = [];
+  private undone: string[] | null = null;
   private at = 0;
   private timer: number | undefined;
   // The script pauses on approval_request/ask_request the same way the real
@@ -58,7 +61,7 @@ export class MockPort implements AgentPort {
   // "改用…" repair exists for.
   async checkProvider(name: string): Promise<ProviderCheck> {
     if (name === "mimo") return { ok: false, error: "401 unauthorized: key 过期了" };
-    return { ok: true, kind: "openai", models: 2, ambiguous: true };
+    return { ok: true, kind: "openai", models: ["gpt-4o", "claude-sonnet-4"], ambiguous: true };
   }
 
 
@@ -107,6 +110,8 @@ export class MockPort implements AgentPort {
 
   // Mutable: the admin switches are the whole point of the extensions page, and
   // a fixture that answers the same list either way cannot show them working.
+  private activeTheme = "";
+
   private servers: McpEntry[] = [
     {
       name: "time",
@@ -476,13 +481,68 @@ export class MockPort implements AgentPort {
     return "";
   }
 
-  async slash(): Promise<SlashEntry[]> {
-    return [
-      { name: "commit", kind: "command", description: "把当前改动整理成一条提交", argHint: "[范围]" },
-      { name: "review", kind: "skill", description: "复核这一轮改动，给出严重度分级", scope: "project", subagent: true },
-      { name: "init", kind: "skill", description: "为这个仓库生成一份项目说明", scope: "builtin" },
-      { name: "security-review", kind: "skill", description: "只读地过一遍安全面", scope: "builtin", subagent: true },
-    ];
+  // A demo shell has no workspace to read and no kernel to ask, so the fixture
+  // answers from a tree of its own. Deliberately the short version of the
+  // grammar: enough to drive the menu, never the place to look up what "@" or
+  // "/" mean — that answer lives in control.Complete.
+  private tree = [
+    "REASONIX.md",
+    "go.mod",
+    "internal/control/complete.go",
+    "internal/control/controller.go",
+    "internal/serve/serve.go",
+    "desktop/frontend-next/src/ui/Composer.tsx",
+    "desktop/frontend-next/src/ui/Completion.tsx",
+  ];
+
+  private builtins: CompletionItem[] = [
+    { label: "/compact", insert: "/compact ", hint: "压缩上下文，保留结论", kind: "builtin" },
+    { label: "/context", insert: "/context", hint: "看这一会话的上下文占用", kind: "builtin" },
+    { label: "/clear", insert: "/clear", hint: "清空上下文，留在同一会话", kind: "builtin" },
+    { label: "/rewind", insert: "/rewind", hint: "回到某一轮之前", kind: "builtin" },
+    { label: "/model", insert: "/model ", hint: "换模型", descend: true, kind: "builtin" },
+    { label: "/memory", insert: "/memory ", hint: "看和管这个项目记住的事", descend: true, kind: "builtin" },
+  ];
+
+  private commands: CompletionItem[] = [
+    { label: "/commit", insert: "/commit ", hint: "把当前改动整理成一条提交", kind: "command" },
+    { label: "/review", insert: "/review ", hint: "复核这一轮改动，给出严重度分级", kind: "subagent" },
+    { label: "/init", insert: "/init ", hint: "为这个仓库生成一份项目说明", kind: "skill" },
+    { label: "/security-review", insert: "/security-review ", hint: "只读地过一遍安全面", kind: "subagent" },
+  ];
+
+  async complete(line: string, cursor: number): Promise<Completion> {
+    const before = line.slice(0, cursor);
+    const at = before.lastIndexOf("@");
+    if (at >= 0 && !/\s/.test(before.slice(at + 1)) && (at === 0 || /\s/.test(line[at - 1]))) {
+      const rest = line.slice(at + 1).search(/\s/);
+      const to = rest < 0 ? line.length : at + 1 + rest;
+      const frag = before.slice(at + 1);
+      const dir = frag.includes("/") ? frag.slice(0, frag.lastIndexOf("/") + 1) : "";
+      const names = new Set<string>();
+      for (const path of this.tree) {
+        if (!path.startsWith(dir)) continue;
+        const rel = path.slice(dir.length);
+        const cut = rel.indexOf("/");
+        names.add(cut < 0 ? rel : rel.slice(0, cut + 1));
+      }
+      const items = [...names]
+        .filter((n) => n.startsWith(frag.slice(dir.length)))
+        .sort((a, b) => Number(b.endsWith("/")) - Number(a.endsWith("/")))
+        .map((n) => ({
+          label: n,
+          insert: "@" + dir + n,
+          descend: n.endsWith("/"),
+          kind: n.endsWith("/") ? "dir" : "file",
+        }));
+      return { kind: "ref", from: at, to, query: frag.slice(dir.length), items };
+    }
+    if (line.startsWith("/") && !/\s/.test(line)) {
+      const q = line.toLowerCase();
+      const items = [...this.builtins, ...this.commands].filter((it) => it.label.toLowerCase().startsWith(q));
+      return { kind: "slash", from: 0, to: line.length, query: line, items };
+    }
+    return { kind: "", from: 0, to: 0, items: [] };
   }
 
   // Matches the kernel: the shell mints no session file at launch, so the list
@@ -524,6 +584,42 @@ export class MockPort implements AgentPort {
 
   async history(): Promise<HistoryMessage[]> {
     return [];
+  }
+
+  // Mock mode has to be able to show the rewind entry, so every prompt it has
+  // seen becomes a checkpoint the way the kernel opens one per user turn.
+  async checkpoints(): Promise<Checkpoint[]> {
+    return this.prompts.map((prompt, i) => ({ turn: i, prompt, files: i === 0 ? 0 : 3 }));
+  }
+
+  // The second prompt onwards is scripted to have run bash, so mock mode can
+  // show the consent stage the real kernel demands on partial coverage.
+  async prepareRewind(turn: number, scope: RewindScope): Promise<RewindPlan> {
+    const partial = turn > 0;
+    return {
+      planId: `mock-plan-${turn}-${scope}`,
+      turn,
+      coverage: partial ? "partial" : "full",
+      coverageGaps: partial
+        ? [{ reason: "bash_side_effect", detail: "bash side effects are not path-tracked", tool: "bash" }]
+        : undefined,
+      canFiles: true,
+      canConversation: true,
+      files: ["note.txt"],
+      fileCount: turn > 0 ? 3 : 0,
+      requiresConfirmation: partial,
+    };
+  }
+
+  async commitRewind(planId: string): Promise<RewindResult> {
+    const turn = Number(planId.split("-")[2] ?? 0);
+    this.undone = this.prompts.slice();
+    this.prompts = this.prompts.slice(0, turn);
+    return { ok: true, transactionId: `mock-tx-${turn}`, undoAvailable: true, deleted: ["note.txt"] };
+  }
+
+  async undoRewind(_transactionId: string): Promise<void> {
+    if (this.undone) this.prompts = this.undone;
   }
 
   subscribe(onEvent: (ev: WireEvent) => void) {
@@ -574,6 +670,7 @@ export class MockPort implements AgentPort {
       this.emit({ kind: "steer", text });
       return;
     }
+    this.prompts.push(text);
     // The first turn is what puts the session on disk. serve answers with a
     // truncated first message straight away and swaps in the generated title
     // once the background job lands, so the rail is never left blank.
@@ -615,6 +712,37 @@ export class MockPort implements AgentPort {
   async answer(_id: string, _answers: { questionId: string; selected: string[] }[]) {
     this.ungate();
   }
+
+  // Two packs so the picker has something to switch between; the fixture is
+  // where the mapping gets exercised without a Go process.
+  async themes(): Promise<ThemePack[]> {
+    return [
+      {
+        id: "dusk", name: "Dusk", author: "fixture", active: this.activeTheme === "dusk",
+        tokens: {
+          light: { bg: "#F6F3EE", bgSoft: "#FBF9F5", panel: "#FFFFFF", border: "#DDD5C8", fg: "#1B1814", fgDim: "#5F564A", accent: "#8A5A2B" },
+          dark: { bg: "#0F0D0B", bgSoft: "#141110", panel: "#1B1715", border: "#332C26", fg: "#EFE9E1", fgDim: "#9A8F82", accent: "#D89B5A" },
+        },
+      },
+      {
+        id: "tide", name: "Tide", author: "fixture", active: this.activeTheme === "tide",
+        tokens: {
+          light: { bg: "#F2F6F8", bgSoft: "#F9FCFD", panel: "#FFFFFF", border: "#CBD9E0", fg: "#12191C", fgDim: "#4E5D65", accent: "#0E6E82" },
+          dark: { bg: "#080D10", bgSoft: "#0C1316", panel: "#131C21", border: "#23333A", fg: "#E4EEF2", fgDim: "#8298A2", accent: "#4FB6CE" },
+        },
+      },
+    ];
+  }
+  async activateTheme(id: string) {
+    this.activeTheme = id;
+  }
+
+  // No sidecar runs behind the fixture, so an invocation answers the way a
+  // connected extension would rather than pretending to have done work.
+  async invokeExtensionAction(name: string) {
+    return `${name} 在 mock 里没有真实扩展可执行`;
+  }
+  async submitExtensionForm(_pluginId: string, _surfaceId: string, _values: Record<string, unknown>) {}
 
   async setPlanMode(on: boolean) {
     this.state.plan = on;

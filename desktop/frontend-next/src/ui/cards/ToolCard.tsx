@@ -3,6 +3,8 @@ import type { Tool } from "../../port/wire";
 import { categoryOf, labelFor, mcpOrigin, runLabelFor } from "../icons";
 import { Sym, glyphFor } from "../Sym";
 import { shortArgs } from "../args";
+import { Cost, secondsLabel, tokenLabel } from "../Cost";
+import { parsePlan } from "../../state/session";
 import { DiffView } from "./DiffView";
 import { Term, ToolOutput } from "./ToolOutput";
 
@@ -34,14 +36,20 @@ function useSettling(running: boolean): { pop: boolean; swap: boolean } {
 }
 
 export function ToolCard({ tool, running, children = [] }: { tool: Tool; running: boolean; children?: Tool[] }) {
-  // use_capability is the proxy the model reaches a capability through, not the
-  // thing it did: name the resolved tool and keep the proxy in the tag.
+  // use_capability is the proxy most tools are reached through — the provider
+  // sees thirteen names and everything else routes via it — so it says nothing
+  // about who answered. Name the resolved tool; only a target that really is an
+  // MCP tool reads MCP, which labelFor decides from the mcp__ prefix.
   const shown = tool.resolvedName || tool.name;
-  const cost = tool.durationMs ? `${(tool.durationMs / 1000).toFixed(1)}s` : "";
   // Running and settled are two different lines: the category says what it is
   // doing now, the label says what it was once it is done.
   const head = running ? runLabelFor(shown) : labelFor(shown);
-  const arg = tool.name === "todo_write" ? "" : shortArgs(tool.args ?? "");
+  // A write's payload streams as arguments, and the provider only reports how
+  // many characters have landed — the JSON is unparseable until the last one.
+  // Showing that count is the difference between a card that is visibly filling
+  // and one that sits blank until the whole file arrives at once.
+  const streaming = running && !tool.args && (tool.argChars ?? 0) > 0;
+  const arg = tool.name === "todo_write" ? "" : streaming ? `${chars(tool.argChars!)} 字符` : shortArgs(tool.args ?? "");
   // A shell result carries its exit status separately from stdout, and stdout
   // alone cannot say whether the command worked.
   const ex = tool.execution;
@@ -52,7 +60,6 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
   // Which server answered belongs on the card, not in a panel: this is the
   // moment the user can judge whether an external service should have run.
   const from = mcpOrigin(shown);
-  const invoked = mcpOrigin(tool.name);
   // A delegated step is only auditable if it names the profile that ran: "a
   // subagent" is not a thing you can go read, "skill:security-review" is.
   const who = tool.profile?.name?.trim();
@@ -68,15 +75,15 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
           <span className={running ? "nm shim" : "nm"}>{head}</span>
           {who && <span className="who" title={`按 ${who} 这份技能的设定跑的子代理`}>{who}</span>}
           {from && <span className="src" title={`外部服务 ${from.server} 提供的工具`}>{from.server}</span>}
-          <span className="tag">{invoked ? invoked.tool : tool.name}</span>
-          {arg && <span className="arg">{arg}</span>}
+          <span className="tag">{tagFor(tool)}</span>
+          {arg && <span className={streaming ? "arg shim" : "arg"}>{arg}</span>}
           {bad && <span className="fail">{badLabel}</span>}
-          {cost && <span className="cost">{cost}</span>}
+          <Cost tools={[tool]} />
         </div>
         <div className="out">
           {tool.diff && <DiffView diff={tool.diff} path={tool.args} />}
-          {!tool.diff && tool.name === "todo_write" && <span className="fold">计划已进右栏</span>}
-          {!tool.diff && tool.name !== "todo_write" && tool.output && (
+          {!tool.diff && tool.name === "todo_write" && <Steps tool={tool} />}
+          {!tool.diff && tool.name !== "todo_write" && tool.output && children.length === 0 && (
             <ToolOutput name={shown} text={tool.output} />
           )}
           {tool.err && <div className="txt">{tool.err}</div>}
@@ -86,12 +93,24 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
                 <i className="pip" />
                 <span className="who">{who ? `${who} 做了 ${children.length} 步` : `${children.length} 个子代理`}</span>
                 <span className="prof">独立上下文 · 不进主轨迹</span>
+                {/* 委派出去那部分的账：耗时是父调用的，token 是子步骤各自留下的 */}
+                <span className="rt">
+                  {[
+                    tool.durationMs ? secondsLabel(tool.durationMs) : "",
+                    childTokens(children) ? tokenLabel(childTokens(children)) : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
               </div>
               <div className="nest-bd">
                 {children.map((c) => (
                   <NestedCall key={c.id} tool={c} />
                 ))}
               </div>
+              {/* What the delegate handed back closes its own panel: outside it,
+                  the sentence reads as the main run's conclusion. */}
+              {tool.output && <div className="nest-ret">{tool.output}</div>}
             </div>
           )}
         </div>
@@ -101,16 +120,19 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
 }
 
 function NestedCall({ tool }: { tool: Tool }) {
+  const shown = tool.resolvedName || tool.name;
   return (
-    <div className="call">
+    <div className="call" data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined}>
       <div className="g">
-        <Sym glyph={glyphFor(tool.name)} />
+        <Sym glyph={glyphFor(shown)} />
         <span className="line" />
       </div>
       <div className="c">
         <div className="hl">
-          <span className="nm">{tool.name}</span>
+          <span className="nm">{labelFor(shown)}</span>
+          <span className="tag">{tagFor(tool)}</span>
           {tool.args && <span className="arg">{shortArgs(tool.args)}</span>}
+          <Cost tools={[tool]} />
         </div>
         {tool.output && (
           <div className="out">
@@ -121,6 +143,34 @@ function NestedCall({ tool }: { tool: Tool }) {
     </div>
   );
 }
+
+// The plan is the one payload the flow shows twice on purpose: the rail tracks
+// it for the rest of the turn, the card records what it was when it was written.
+function Steps({ tool }: { tool: Tool }) {
+  const steps = parsePlan(tool);
+  if (!steps?.length) return <span className="fold">计划已进右栏</span>;
+  const now = steps.findIndex((s) => !s.done);
+  return (
+    <div className="steps">
+      {steps.map((st, i) => (
+        <div className="s" key={i} data-done={st.done ? "" : undefined} data-now={i === now ? "" : undefined}>
+          <span className="b">{st.done ? "✓" : i + 1}</span>
+          <span className="t">
+            <span className="ln">{st.text}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const childTokens = (kids: Tool[]) => kids.reduce((n, k) => n + (k.contextTokens ?? 0), 0);
+
+const chars = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+
+// An identifier reads correctly in the mono tag and nowhere else, so this is the
+// one place a raw tool id is allowed to surface.
+const tagFor = (tool: Tool) => mcpOrigin(tool.resolvedName || tool.name)?.tool ?? (tool.resolvedName || tool.name);
 
 // Only the categories the spec gives a colour to; the rest stay neutral.
 const KINDED = new Set(["net", "deleg", "write", "mcp", "mem"]);

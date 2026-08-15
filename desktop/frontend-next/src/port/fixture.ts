@@ -8,12 +8,21 @@ export interface Beat {
   ev: WireEvent;
 }
 
-const tool = (name: string, over: Partial<WireEvent["tool"] & object> = {}): WireEvent["tool"] => ({
-  id: name + "-" + Math.floor(performance.now()),
-  name,
-  readOnly: true,
-  ...over,
-});
+// contextTokens is derived, not written into each beat: the kernel computes it
+// from the same two strings, so hand-authored numbers here would drift the
+// moment a fixture's output is edited.
+const tool = (name: string, over: Partial<WireEvent["tool"] & object> = {}): WireEvent["tool"] => {
+  const t = { id: name + "-" + Math.floor(performance.now()), name, readOnly: true, ...over };
+  return { ...t, contextTokens: t.contextTokens ?? estimateTokens(t.args) + estimateTokens(t.output) };
+};
+
+// Mirrors internal/tokencount.Text: Latin near four bytes per token, CJK near one.
+function estimateTokens(s?: string): number {
+  let narrow = 0;
+  let wide = 0;
+  for (const ch of s ?? "") (ch.codePointAt(0)! < 128 ? narrow++ : wide++);
+  return Math.ceil(narrow / 4) + wide;
+}
 
 const usage = (hit: number, miss: number, out: number, source = "executor"): WireEvent => ({
   kind: "usage",
@@ -46,20 +55,32 @@ export const SCRIPT: Beat[] = [
       text: "先翻历史 —— #3146 和 #4106 都记着这是网关瞬时态，我们从不删 key。",
     },
   },
+  // The kernel seals a finished assistant message with its own event. Without
+  // it the card never leaves "思考中…", which is a state the real stream never
+  // holds once the answer has arrived.
+  { wait: 100, ev: { kind: "message" } },
   { wait: 100, ev: usage(2100, 180, 40) },
-  { wait: 500, ev: { kind: "tool_dispatch", tool: tool("todo_write") } },
+  { wait: 500, ev: { kind: "tool_dispatch", tool: tool("todo_write", { id: "td1" }) } },
   {
     wait: 600,
     ev: {
       kind: "tool_result",
+      // Todos ride the arguments; the output is a receipt. Putting them in the
+      // output left both the card and the rail with no plan to draw.
       tool: tool("todo_write", {
-        output: JSON.stringify([
-          "翻 #3146 / #4106 的历史结论",
-          "定位 provider 侧重试路径",
-          "用真实 curl 做 A/B 复现",
-          "确认是否网关瞬时态",
-          "给修法，不动 key 存储",
-        ]),
+        id: "td1",
+        args: JSON.stringify({
+          todos: [
+            // Long enough to wrap in the 296px rail: a one-line step never shows
+            // whether the strike-through covers every line it should.
+            { content: "翻 #3146 / #4106 的历史结论，确认当年是按网关瞬时态结的案", status: "completed" },
+            { content: "定位 provider 侧重试路径", status: "completed" },
+            { content: "用真实 curl 做 A/B 复现", status: "in_progress" },
+            { content: "确认是否网关瞬时态", status: "pending" },
+            { content: "给修法，不动 key 存储", status: "pending" },
+          ],
+        }),
+        output: "Todos updated: 5 total",
       }),
     },
   },
@@ -136,7 +157,54 @@ export const SCRIPT: Beat[] = [
       }),
     },
   },
-  { wait: 400, ev: { kind: "tool_dispatch", tool: tool("task", { id: "tk1", profile: { name: "security-review" } }) } },
+  // A search the provider ran itself. Its result arrives as the listing the
+  // kernel hands the model, and that listing used to land in the answer text —
+  // forty lines of links that pushed the actual answer off the screen.
+  {
+    wait: 500,
+    ev: {
+      kind: "tool_result",
+      tool: tool("web_search", {
+        id: "ws1",
+        args: JSON.stringify({ query: "mimo gateway intermittent 401 invalid api key" }),
+        output: [
+          "",
+          "- **Gateway returns 401 sporadically under burst — token bucket race**",
+          "  <https://github.com/xiaomimimo/MiMo/issues/218>",
+          "- **MiMo API — 错误码与重试建议**",
+          "  <https://platform.xiaomi.com/docs/mimo/errors>",
+          "- **为什么不该在收到 401 时清除用户 key**",
+          "  <https://reasonix.io/blog/never-delete-keys>",
+          "",
+        ].join("\n"),
+        durationMs: 1200,
+      }),
+    },
+  },
+  // Only thirteen tools are provider-visible; everything else — web_fetch, task,
+  // grep — is reached through use_capability. A card that reads the proxy as
+  // "MCP" therefore mislabels most of the toolset, and the fixture had no
+  // builtin-through-the-proxy beat to catch it.
+  {
+    wait: 450,
+    ev: {
+      kind: "tool_result",
+      tool: tool("use_capability", {
+        id: "wf1",
+        resolvedName: "web_fetch",
+        args: JSON.stringify({ url: "platform.xiaomi.com/docs/mimo/errors" }),
+        output: "401 在网关层可能为瞬时态。建议对 401 做一次退避重试后再判定为凭据失效。",
+        durationMs: 640,
+      }),
+    },
+  },
+  {
+    wait: 400,
+    ev: {
+      kind: "tool_dispatch",
+      tool: tool("use_capability", { id: "tk1", resolvedName: "task", profile: { name: "security-review" } }),
+    },
+  },
   {
     wait: 500,
     ev: {
@@ -149,12 +217,32 @@ export const SCRIPT: Beat[] = [
       }),
     },
   },
+  // A delegate writing its own todo list. It must not reach the rail: this beat
+  // is the regression guard for the plan flipping to a subagent's steps mid-run.
+  {
+    wait: 300,
+    ev: {
+      kind: "tool_result",
+      tool: tool("todo_write", {
+        id: "tk1-b",
+        parentId: "tk1",
+        args: JSON.stringify({
+          todos: [
+            { content: "列出所有读 key 的位置", status: "completed" },
+            { content: "确认没有新增写路径", status: "in_progress" },
+          ],
+        }),
+        output: "Todos updated: 2 total",
+      }),
+    },
+  },
   {
     wait: 600,
     ev: {
       kind: "tool_result",
-      tool: tool("task", {
+      tool: tool("use_capability", {
         id: "tk1",
+        resolvedName: "task",
         profile: { name: "security-review" },
         args: JSON.stringify({ description: "只读地过一遍安全面" }),
         output: "没有新增的密钥读写路径；退避补丁不触碰凭据存储。",
@@ -247,6 +335,16 @@ export const SCRIPT: Beat[] = [
       },
     },
   },
+  // A write's payload streams in as arguments before any of it can be parsed.
+  // Without these beats the card jumps from blank to a finished diff, which is
+  // exactly the "did it hang?" the counter exists to answer.
+  ...[420, 1180, 2360, 3910].map((argChars) => ({
+    wait: 260,
+    ev: {
+      kind: "tool_dispatch" as const,
+      tool: tool("edit_file", { id: "ed1", readOnly: false, partial: true, argChars }),
+    },
+  })),
   {
     wait: 600,
     ev: {
@@ -260,16 +358,48 @@ export const SCRIPT: Beat[] = [
       },
     },
   },
+  // A second edit to the same file, and one under a deep path: the block used to
+  // draw a row per call and let an end-ellipsis eat the filename, so neither was
+  // ever seen with one shallow single-edit fixture.
+  {
+    wait: 300,
+    ev: {
+      kind: "tool_result",
+      tool: tool("edit_file", {
+        id: "ed0",
+        readOnly: false,
+        args: JSON.stringify({ path: "internal/provider/openai/streaming/chunk_decoder.go" }),
+        added: 12,
+        removed: 3,
+        diff: "@@ -18,3 +18,4 @@\n+\t// retry once on a transient 401",
+      }),
+    },
+  },
   {
     wait: 700,
     ev: {
       kind: "tool_result",
       tool: tool("edit_file", {
+        id: "ed1",
         readOnly: false,
-        args: "internal/config/credentials.go",
+        args: JSON.stringify({ path: "internal/config/credentials.go" }),
         added: 6,
         removed: 4,
         diff: "@@ -205,6 +205,8 @@\n-\ts.forget(provider)\n+\treturn s.retryAfter(200 * time.Millisecond)",
+      }),
+    },
+  },
+  {
+    wait: 400,
+    ev: {
+      kind: "tool_result",
+      tool: tool("edit_file", {
+        id: "ed2",
+        readOnly: false,
+        args: JSON.stringify({ path: "internal/config/credentials.go" }),
+        added: 2,
+        removed: 1,
+        diff: "@@ -212,2 +212,3 @@\n+\t// #3146: 401 是瞬时态",
       }),
     },
   },
@@ -297,6 +427,7 @@ export const SCRIPT: Beat[] = [
     wait: 800,
     ev: { kind: "text", text: "两处都改了，测试全绿。没动 key 存储的任何一行 —— 那条纪律保住了。" },
   },
+  { wait: 100, ev: { kind: "message" } },
   { wait: 100, ev: usage(700, 90, 240) },
   {
     wait: 400,

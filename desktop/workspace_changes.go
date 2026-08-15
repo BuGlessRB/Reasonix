@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/diff"
 	"reasonix/internal/gitcmd"
+	"reasonix/internal/gitstatus"
 )
 
 type gitStatusEntry struct {
@@ -415,40 +416,16 @@ func workspaceGitStatus(base string) ([]gitStatusEntry, error) {
 }
 
 func parseGitStatusPorcelainZ(raw []byte) []gitStatusEntry {
-	parts := bytes.Split(raw, []byte{0})
-	out := make([]gitStatusEntry, 0, len(parts))
-	for i := 0; i < len(parts); i++ {
-		part := parts[i]
-		if len(part) < 4 {
-			continue
-		}
-		status := string(part[:2])
-		path := string(part[3:])
-		entry := gitStatusEntry{Path: path, Status: strings.TrimSpace(status)}
-		if strings.ContainsAny(status, "RC") && i+1 < len(parts) {
-			i++
-			entry.OldPath = string(parts[i])
-		}
-		out = append(out, entry)
+	changes := gitstatus.ParsePorcelainZ(raw)
+	out := make([]gitStatusEntry, 0, len(changes))
+	for _, c := range changes {
+		out = append(out, gitStatusEntry{Path: c.Path, OldPath: c.OldPath, Status: c.Status})
 	}
 	return out
 }
 
 func normalizeWorkspaceRelPath(base, path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return ""
-	}
-	if filepath.IsAbs(path) {
-		if rel, err := filepath.Rel(base, path); err == nil {
-			path = rel
-		}
-	}
-	path = filepath.Clean(path)
-	if path == "." || path == ".." || strings.HasPrefix(path, ".."+string(filepath.Separator)) {
-		return ""
-	}
-	return filepath.ToSlash(path)
+	return gitstatus.RelPath(base, path)
 }
 
 func workspaceRelPathFromGitPrefix(base, prefix, path string) string {

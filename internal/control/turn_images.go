@@ -2,10 +2,12 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
+	"reasonix/internal/i18n"
 )
 
 // resolveTurnImages resolves each user attachment once. Text-only parents keep
@@ -78,4 +80,52 @@ func (c *Controller) runTurnLoopWithFrozenImagesRawDisplay(ctx context.Context, 
 
 func (c *Controller) runEditedGoalLoopWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display, original string) error {
 	return newTurnOrchestrator(c).runEditedGoalLoopWithImageRefsRawDisplay(ctx, input, raw, imageRefs, display, original)
+}
+
+// A turn can carry images the current model cannot read. The data is already
+// resolved and handed down as subagent candidates, so a delegated read is the
+// one way to look at it — but the model has to be told the images are there, or
+// it answers as though nothing was attached. This rides the turn tail, never the
+// cache-stable prefix, the same way memory and job notes do.
+const imageRoutingTag = "attached-images"
+
+func imageRoutingNote(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"<%s>\nThe user attached %d image(s). This model cannot read images, so they are not in your context.\n"+
+			"Delegate with read_only_task to inspect them: the attachments are handed to the sub-agent automatically.\n"+
+			"Never answer as if no image was attached, and never guess what it shows.\n</%s>\n\n",
+		imageRoutingTag, n, imageRoutingTag,
+	)
+}
+
+// bindOrchestratedTurnImages resolves the turn's attachments, binds them both
+// for the model and for any delegate, and reports how many the model itself
+// cannot read.
+func (c *Controller) bindOrchestratedTurnImages(ctx context.Context, turn orchestratedTurn) (context.Context, []string, int) {
+	userImages, candidates := c.imagesForOrchestratedTurn(ctx, turn)
+	ctx = agent.WithUserImages(ctx, userImages)
+	ctx = agent.WithSubagentImageCandidates(ctx, candidates)
+	return ctx, userImages, unreadableImages(userImages, candidates)
+}
+
+// unreadableImages counts what the user attached and this model cannot see.
+func unreadableImages(userImages, candidates []string) int {
+	if len(userImages) > 0 {
+		return 0
+	}
+	return len(candidates)
+}
+
+// imageRoutingPrefix also tells the user where their attachment went. Silence is
+// the failure that matters: a pasted screenshot that reaches nothing reads as
+// the product ignoring it.
+func (c *Controller) imageRoutingPrefix(unreadable int) string {
+	if unreadable <= 0 {
+		return ""
+	}
+	c.notice(fmt.Sprintf(i18n.M.ImagesNotReadable, unreadable))
+	return imageRoutingNote(unreadable)
 }

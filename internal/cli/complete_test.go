@@ -226,18 +226,18 @@ func TestActiveAtToken(t *testing.T) {
 		{`see @my\ dir/`, `my\ dir/`, true, 4},
 	}
 	for _, c := range cases {
-		at, end, tok, ok := activeAtToken(c.val, len(c.val))
+		at, end, tok, ok := control.ActiveRefToken(c.val, len(c.val))
 		if ok != c.wantOK || (ok && (tok != c.wantTok || at != c.wantAt)) {
-			t.Errorf("activeAtToken(%q) = (%d,%d,%q,%v), want (%d,_,%q,%v)", c.val, at, end, tok, ok, c.wantAt, c.wantTok, c.wantOK)
+			t.Errorf("control.ActiveRefToken(%q) = (%d,%d,%q,%v), want (%d,_,%q,%v)", c.val, at, end, tok, ok, c.wantAt, c.wantTok, c.wantOK)
 		}
 		if ok {
 			if end < at || end > len(c.val) || !strings.HasPrefix(c.val[at:end], "@") {
-				t.Errorf("activeAtToken(%q) span [%d,%d) invalid", c.val, at, end)
+				t.Errorf("control.ActiveRefToken(%q) span [%d,%d) invalid", c.val, at, end)
 			}
 			// At EOF, caret-limited query equals the full token after '@'.
 			fullTok := c.val[at+1 : end]
 			if !strings.HasPrefix(fullTok, tok) {
-				t.Errorf("activeAtToken(%q) query %q is not a prefix of full token %q", c.val, tok, fullTok)
+				t.Errorf("control.ActiveRefToken(%q) query %q is not a prefix of full token %q", c.val, tok, fullTok)
 			}
 		}
 	}
@@ -278,8 +278,8 @@ func TestSplitPathToken(t *testing.T) {
 		{"internal/", "internal/", ""},
 	}
 	for _, c := range cases {
-		if d, f := splitPathToken(c.in); d != c.dir || f != c.frag {
-			t.Errorf("splitPathToken(%q) = (%q,%q), want (%q,%q)", c.in, d, f, c.dir, c.frag)
+		if d, f := control.SplitPathToken(c.in); d != c.dir || f != c.frag {
+			t.Errorf("control.SplitPathToken(%q) = (%q,%q), want (%q,%q)", c.in, d, f, c.dir, c.frag)
 		}
 	}
 }
@@ -807,8 +807,8 @@ func TestSubsequenceMatchUnit(t *testing.T) {
 		{"/memory", "memr", true},      // m-e-m-r in order (skip o)
 	}
 	for _, c := range cases {
-		if got := subsequenceMatch(strings.ToLower(c.target), strings.ToLower(c.query)); got != c.want {
-			t.Errorf("subsequenceMatch(%q, %q) = %v, want %v", c.target, c.query, got, c.want)
+		if got := control.SubsequenceMatch(strings.ToLower(c.target), strings.ToLower(c.query)); got != c.want {
+			t.Errorf("control.SubsequenceMatch(%q, %q) = %v, want %v", c.target, c.query, got, c.want)
 		}
 	}
 }

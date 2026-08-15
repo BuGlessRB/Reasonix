@@ -13,6 +13,26 @@ import (
 // and compaction could not produce a usable projection. Callers may retry.
 var ErrCompactionRequired = errors.New("context exceeds provider limit and compaction failed")
 
+// IsCompactionDeclined reports a fold the kernel judged not worth installing —
+// the candidate was no smaller, or nothing foldable remained. It is a verdict,
+// not a failure, and a caller should say so rather than report an error.
+func IsCompactionDeclined(err error) bool {
+	return errors.Is(err, errCheckpointRejected)
+}
+
+// CompactionDeclineReason is the verdict without the sentinel's own prefix, so
+// a frontend can say why in its own sentence instead of quoting an error.
+func CompactionDeclineReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	_, reason, found := strings.Cut(err.Error(), errCheckpointRejected.Error()+": ")
+	if !found {
+		return err.Error()
+	}
+	return reason
+}
+
 // modelVisibleMessages returns the provider-bound message list: a valid
 // projection plus any post-projection appends, otherwise the full canonical
 // transcript. LocalOnly stripping still happens in prepareSamplingRequest.

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { AgentPort, ApprovalMode, ModelEntry, SessionStatus, SlashEntry } from "../port/port";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { AgentPort, ApprovalMode, ModelEntry, SessionStatus, Attachment } from "../port/port";
 import { Picker } from "./Menu";
 import { modelMenu } from "./modelmenu";
-import { SlashMenu, slashMatches, slashQuery } from "./SlashMenu";
+import { CompletionMenu, useCompletion } from "./Completion";
+import { useIme } from "./ime";
 
 const APPROVALS: [ApprovalMode, string, string][] = [
   ["ask", "询问", "每次动手前问你。"],
@@ -24,47 +25,63 @@ interface Props {
 
 export function Composer({ port, status, running, onSubmit, onChanged, onError }: Props) {
   const [text, setText] = useState("");
+  // The caret decides which token is being completed, so it is state here
+  // rather than something read off the element when a menu happens to open.
+  const [caret, setCaret] = useState(0);
+  const [shots, setShots] = useState<Attachment[]>([]);
+  const [over, setOver] = useState(false);
   const [models, setModels] = useState<ModelEntry[]>([]);
-  const [slash, setSlash] = useState<SlashEntry[]>([]);
-  const [active, setActive] = useState(0);
-  const [dismissed, setDismissed] = useState(false);
   const [switching, setSwitching] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
+  // Set only when a completion moved the caret: the browser puts it at the end
+  // of a programmatic value, which is wrong for anything accepted mid-line.
+  const pending = useRef<number | null>(null);
 
   useEffect(() => {
     port.models().then(setModels).catch(() => setModels([]));
-    // Skills and commands are discovered at build time and only change when the
-    // runtime is rebuilt, so one fetch per mount is the whole story.
-    port.slash().then(setSlash).catch(() => setSlash([]));
   }, [port]);
 
-  const query = slashQuery(text);
-  const hits = useMemo(
-    () => (query === null ? [] : slashMatches(slash, query)),
-    [slash, query],
-  );
-  const open = !dismissed && hits.length > 0;
-  const at = Math.min(active, hits.length - 1);
-
-  const take = (e: SlashEntry) => {
-    setText("/" + e.name + " ");
-    setActive(0);
-    box.current?.focus();
+  const type = (next: string, at: number) => {
+    setText(next);
+    setCaret(at);
   };
 
-  // max-height caps it at 96px; the element still has to be told to grow.
-  useEffect(() => {
+  const menu = useCompletion(port, text, caret, (next, at) => {
+    pending.current = at;
+    type(next, at);
+    box.current?.focus();
+  });
+  const ime = useIme();
+
+  useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
+    if (pending.current !== null) {
+      el.setSelectionRange(pending.current, pending.current);
+      pending.current = null;
+    }
+    // max-height caps it at 96px; the element still has to be told to grow.
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
   }, [text]);
 
+  // Attachments ride into the turn as path references, exactly as they do from
+  // the CLI — the host saved the bytes, the turn parser resolves the token.
   const send = () => {
     const v = text.trim();
-    if (!v) return;
-    setText("");
-    onSubmit(v);
+    if (!v && shots.length === 0) return;
+    const line = [...shots.map((a) => a.ref), v].filter(Boolean).join(" ");
+    type("", 0);
+    setShots([]);
+    onSubmit(line);
+  };
+
+  const grab = (files: Blob[]) => {
+    const images = files.filter((f) => f.type.startsWith("image/"));
+    if (images.length === 0) return;
+    Promise.all(images.map((f) => port.attach(f)))
+      .then((added) => setShots((prev) => [...prev, ...added]))
+      .catch(onError);
   };
 
   const apv = status?.toolApprovalMode ?? "ask";
@@ -78,40 +95,94 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
 
   return (
     <>
-      {open && <SlashMenu items={hits} active={at} onPick={take} onHover={setActive} />}
+      {menu.open && (
+        <CompletionMenu
+          items={menu.completion.items}
+          active={menu.active}
+          kind={menu.completion.kind}
+          query={menu.completion.query ?? ""}
+          onPick={menu.accept}
+          onHover={menu.hover}
+        />
+      )}
+      {shots.length > 0 && (
+        <div className="shots">
+          {shots.map((a) => (
+            <span className="shot" key={a.ref} title={a.path}>
+              <span className="nm">{a.path.split("/").pop()}</span>
+              <button aria-label="移除这张图" onClick={() => setShots((p) => p.filter((x) => x !== a))}>
+                ×
+              </button>
+            </span>
+          ))}
+          {/* The kernel keeps the image either way, but a text-only model never
+              sees it — say so here rather than letting the paste vanish. */}
+          {status?.vision === false && <span className="warn">当前模型不读图 · 将交给能读图的子代理</span>}
+        </div>
+      )}
       <textarea
         ref={box}
         rows={1}
+        data-over={over ? "" : undefined}
         value={text}
-        placeholder="交待一个任务，回车发送…　输入 / 调用技能"
+        placeholder="交待一个任务，回车发送…　/ 调用命令与技能，@ 引用文件"
         role="combobox"
-        aria-expanded={open}
+        aria-expanded={menu.open}
         aria-controls="slashmenu"
         aria-autocomplete="list"
-        aria-activedescendant={open ? `slash-${at}` : undefined}
-        onChange={(e) => {
-          setText(e.target.value);
-          setActive(0);
-          setDismissed(false);
-        }}
-        onKeyDown={(e) => {
-          if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+        aria-activedescendant={menu.open ? `slash-${menu.active}` : undefined}
+        onChange={(e) => type(e.target.value, e.target.selectionStart)}
+        // Arrow keys and clicks move the caret without changing the text, and
+        // the caret is what decides which token the menu is completing.
+        onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+        onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+        onPaste={(e) => {
+          const files = [...e.clipboardData.files];
+          if (files.some((f) => f.type.startsWith("image/"))) {
             e.preventDefault();
-            const step = e.key === "ArrowDown" ? 1 : hits.length - 1;
-            setActive((i) => (Math.min(i, hits.length - 1) + step) % hits.length);
+            grab(files);
+          }
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setOver(false);
+          grab([...e.dataTransfer.files]);
+        }}
+        {...ime.handlers}
+        onKeyDown={(e) => {
+          // Picking a word from an input method is not typing in this box: its
+          // Enter confirms a candidate, and acting on it would send a
+          // half-written message or accept a completion nobody asked for.
+          if (ime.isIme(e.nativeEvent)) {
+            // Esc dismisses the candidate window; letting it through would
+            // cancel the running turn as a side effect of closing an IME.
+            if (e.key === "Escape") e.stopPropagation();
             return;
           }
-          if (open && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey) {
+          if (menu.open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
             e.preventDefault();
-            take(hits[at]);
+            menu.move(e.key === "ArrowDown" ? 1 : -1);
+            return;
+          }
+          // Tab completes, always. Enter belongs to the menu only where the
+          // line is not yet a message — a half-typed command — or where the
+          // user went looking through the list themselves.
+          if (menu.open && (e.key === "Tab" || (e.key === "Enter" && menu.ownsEnter)) && !e.shiftKey) {
+            e.preventDefault();
+            menu.accept();
             return;
           }
           // Esc closes the menu and stops there: reaching the app would cancel
           // the running turn, which is not what dismissing a menu means.
-          if (open && e.key === "Escape") {
+          if (menu.open && e.key === "Escape") {
             e.preventDefault();
             e.stopPropagation();
-            setDismissed(true);
+            menu.dismiss();
             return;
           }
           if (e.key === "Enter" && !e.shiftKey) {

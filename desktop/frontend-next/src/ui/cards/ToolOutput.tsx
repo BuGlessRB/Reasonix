@@ -133,39 +133,56 @@ export function Peek({
   );
 }
 
-export function Hits({ hits, note }: { hits: Hit[]; note?: string }) {
-  const shown = hits.slice(0, ROWS);
+// One result row: what it is, where it came from, what it said. A grep hit and a
+// web search result are the same shape — a claim with a source — so the spec
+// draws them with one set of elements rather than two lookalike lists.
+export interface Row3 {
+  t: string;
+  u: string;
+  q: string[];
+}
+
+export const hitRows = (hits: Hit[]): Row3[] =>
+  hits.map((h) => {
+    const [dir, name] = splitPath(h.path);
+    return { t: name, u: `${dir}${name}:${h.line}`, q: [h.text, ...h.more] };
+  });
+
+export function Hits({ rows, note, unit = "条" }: { rows: Row3[]; note?: string; unit?: string }) {
+  const shown = rows.slice(0, ROWS);
   return (
     <div className="hits">
-      {shown.map((h, i) => {
-        const [dir, name] = splitPath(h.path);
-        return (
-          <div className="hit-row" key={i}>
-            <div className="i">{i + 1}</div>
-            {/* .t/.u/.q carry margin-top and ellipsis but no display in the
-                spec's CSS, so they were block elements in the prototype. */}
-            <div>
-              <div className="t">{name}</div>
-              <div className="u" title={h.path}>
-                {dir}
-                {name}:{h.line}
+      {shown.map((r, i) => (
+        <div className="hit-row" key={i}>
+          <div className="i">{i + 1}</div>
+          {/* .t/.u/.q carry margin-top and ellipsis but no display in the
+              spec's CSS, so they were block elements in the prototype. */}
+          <div>
+            <div className="t">{r.t}</div>
+            {r.u && (
+              <div className="u" title={r.u}>
+                {r.u}
               </div>
+            )}
+            {/* A provider that encrypts result bodies leaves nothing to quote,
+                and an empty .q still draws the spec's quote rule. */}
+            {r.q.some(Boolean) && (
               <div className="q">
-                {h.text}
-                {h.more.map((m, k) => (
+                {r.q[0]}
+                {r.q.slice(1).map((m, k) => (
                   <div key={k}>{m}</div>
                 ))}
               </div>
-            </div>
+            )}
           </div>
-        );
-      })}
-      {(hits.length > shown.length || note) && (
+        </div>
+      ))}
+      {(rows.length > shown.length || note) && (
         <div className="hit-row">
           <div className="i" />
           <div className="u">
-            {hits.length > shown.length && `还有 ${hits.length - shown.length} 处匹配`}
-            {hits.length > shown.length && note && " · "}
+            {rows.length > shown.length && `还有 ${rows.length - shown.length} ${unit}`}
+            {rows.length > shown.length && note && " · "}
             {note}
           </div>
         </div>
@@ -203,13 +220,41 @@ export function Term({ text }: { text: string }) {
   );
 }
 
+// A provider-run search returns the listing the kernel formats for the model:
+// "- **title**" and, indented under it, "<url>". A result can arrive with no URL
+// at all, so the title alone still counts as a row.
+const SEARCH_TITLE = /^-\s+\*\*(.+?)\*\*\s*$/;
+const SEARCH_URL = /^\s+<(\S+)>\s*$/;
+
+export function parseSearchResults(out: string): Row3[] | null {
+  const lines = out.split("\n").filter((l) => l.trim());
+  if (lines.length === 0) return null;
+  const rows: Row3[] = [];
+  let loose = 0;
+  for (const line of lines) {
+    const title = SEARCH_TITLE.exec(line);
+    if (title) {
+      rows.push({ t: title[1], u: "", q: [] });
+      continue;
+    }
+    const url = SEARCH_URL.exec(line);
+    const cur = rows[rows.length - 1];
+    if (url && cur && !cur.u) {
+      cur.u = url[1];
+      continue;
+    }
+    loose++;
+  }
+  return rows.length && loose / lines.length <= 1 - CONFIDENT ? rows : null;
+}
+
 // read_file numbers every line it returns ("  1→…"), so the count is already in
 // the output. A whole file inline buries the rest of the turn, so anything long
 // folds behind what it is.
 const NUMBERED = /^\s*\d+→/;
 // glob returns one path per line. Requiring a separator keeps a one-line error
 // message from being dressed up as a manifest of one file.
-const PATH = /^\s*([^\s]*[/\\][^\s]*)\s*$/;
+export const PATH = /^\s*([^\s]*[/\\][^\s]*)\s*$/;
 const TRAILER = /^\.\.\. \(/;
 
 export function ToolOutput({ name, text }: { name: string; text: string }) {
@@ -237,7 +282,11 @@ export function ToolOutput({ name, text }: { name: string; text: string }) {
   }
   if (name === "grep") {
     const found = parseHits(text);
-    if (found) return <Hits hits={found.hits} note={found.note} />;
+    if (found) return <Hits rows={hitRows(found.hits)} note={found.note} unit="处匹配" />;
+  }
+  if (name === "web_search") {
+    const rows = parseSearchResults(text);
+    if (rows) return <Hits rows={rows} />;
   }
   return <Term text={text} />;
 }

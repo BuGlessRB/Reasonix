@@ -27,9 +27,10 @@ func (c *promptResumeCtrl) History() []provider.Message {
 	return append([]provider.Message(nil), c.history...)
 }
 
-func (c *promptResumeCtrl) Resume(s *agent.Session, path string) {
+func (c *promptResumeCtrl) Resume(s *agent.Session, path string) error {
 	c.resumed = s
 	c.path = path
+	return nil
 }
 
 func (c *promptResumeCtrl) SetSessionPath(path string) {

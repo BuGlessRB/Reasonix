@@ -717,7 +717,7 @@ func runAgent(args []string, version string) int {
 	// precedence over --continue.
 	// --continue: resume the most recent saved session.
 	if resumePath != "" {
-		ctrl.Resume(resumeSession, resumePath)
+		_ = ctrl.Resume(resumeSession, resumePath) // startup: nothing can be running
 	}
 	if ctrl.SessionPath() == "" && ctrl.SessionDir() != "" {
 		ctrl.SetFreshSessionPath(agent.NewSessionPath(ctrl.SessionDir(), ctrl.Label()))
@@ -950,7 +950,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 
 	// Auto-save target: reuse the resumed file, else a fresh one — same as chat.
 	if *resume != "" {
-		ctrl.Resume(resumeSession, *resume)
+		_ = ctrl.Resume(resumeSession, *resume)
 	} else if *sessionID != "" {
 		freshPath, err := freshWebSessionPath(ctrl.SessionDir(), *sessionID)
 		if err != nil {
@@ -1168,7 +1168,7 @@ func chatREPL(args []string, version string) int {
 			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 			return 1
 		}
-		ctrl.Resume(loaded, resumePath)
+		_ = ctrl.Resume(loaded, resumePath)
 	}
 	ctrl.EnsureSessionPath()
 	// Fresh sessions take the lease too (defensive: the path is brand new); a

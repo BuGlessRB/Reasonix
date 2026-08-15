@@ -38,6 +38,45 @@ export interface HistoryMessage {
   toolName?: string;
 }
 
+// GET /checkpoints as internal/serve writes it: the snapshot the kernel took
+// before each turn's first write. prompt is the user's own text, with the
+// compose prefixes already stripped kernel-side.
+export interface Checkpoint {
+  turn: number;
+  prompt: string;
+  files: number;
+}
+
+// Only edit-tool writes are snapshotted, so "code" restores those files and
+// nothing else — a shell command's side effects are not recoverable.
+export type RewindScope = "code" | "conversation" | "both";
+
+// What POST /rewind/prepare answers: the plan the kernel would apply, plus what
+// it cannot reach. requiresConfirmation is true when coverage is partial — the
+// turn also changed things outside the snapshot, typically via bash.
+// What POST /rewind/commit answers. transactionId is what undo needs, and
+// undoAvailable says whether the kernel can still reverse it.
+export interface RewindResult {
+  ok?: boolean;
+  transactionId?: string;
+  undoAvailable?: boolean;
+  deleted?: string[];
+  written?: string[];
+}
+
+export interface RewindPlan {
+  planId: string;
+  turn: number;
+  coverage: string;
+  coverageGaps?: { reason: string; detail: string; tool?: string }[];
+  canFiles: boolean;
+  canConversation: boolean;
+  disabledReason?: string;
+  files?: string[];
+  fileCount: number;
+  requiresConfirmation: boolean;
+}
+
 export type ApprovalMode = "ask" | "auto" | "dontAsk" | "yolo";
 // "light" was retired into balanced: its only enforced differences were two
 // sub-agent switches, and a setting that costs a choice without changing what
@@ -107,6 +146,17 @@ export interface SessionEntry {
 // disabled | idle: disabled is switched off and stays off across restarts, idle
 // is configured and simply not needed yet. They look identical to the live host
 // and mean opposite things, so the server resolves which one it is.
+// A theme pack is data: named colours for a light and a dark scheme. Nothing
+// in it is code, so installing one cannot run anything.
+export interface ThemePack {
+  id: string;
+  name: string;
+  author?: string;
+  description?: string;
+  active?: boolean;
+  tokens: { light?: Record<string, string>; dark?: Record<string, string> };
+}
+
 export interface McpEntry {
   name: string;
   state: string;
@@ -196,16 +246,33 @@ export interface WorkspaceInfo {
   isolated?: boolean;
 }
 
-// One entry of GET /slash: everything Submit resolves after a "/". The kernel
-// already dedupes and orders these, so the menu must not re-sort them.
-export interface SlashEntry {
-  name: string;
-  kind: "skill" | "command";
-  description?: string;
-  argHint?: string;
-  scope?: string;
-  plugin?: string;
-  subagent?: boolean;
+// One row of the composer's completion menu. insert is applied verbatim over
+// the span the Completion names — the kernel decides what a "/" or "@" means,
+// including the escaping a path with spaces needs, so the client never parses
+// the line itself.
+export interface CompletionItem {
+  label: string;
+  insert: string;
+  hint?: string;
+  // A directory, or a command with its own argument menu: accepting re-opens
+  // the menu one level deeper instead of closing it.
+  descend?: boolean;
+  // builtin | command | skill | subagent | prompt | file | dir | resource.
+  // Empty on argument values, which are not things.
+  kind?: string;
+}
+
+// What GET /complete answers: the menu, and the half-open span of the token an
+// accepted item replaces. Offsets are UTF-16 code units — the units a string
+// index uses here, converted from the kernel's bytes at the boundary.
+export interface Completion {
+  kind: "" | "slash" | "slash-arg" | "ref";
+  from: number;
+  to: number;
+  // What the kernel filtered on, so a row can point at the letters that put it
+  // here instead of leaving a fuzzy hit unexplained.
+  query?: string;
+  items: CompletionItem[];
 }
 
 export interface ModelPrice {
@@ -386,7 +453,10 @@ export interface AgentPort {
   providerSetup(): Promise<ProviderSetup | null>;
   saveProviderKey(apiKey: string): Promise<void>;
   models(): Promise<ModelEntry[]>;
-  slash(): Promise<SlashEntry[]>;
+  // What the line being typed can still become, asked once per keystroke. The
+  // answer depends on the caret, so it cannot be cached into a static list the
+  // way slash() is.
+  complete(line: string, cursor: number): Promise<Completion>;
   skills(): Promise<SkillCatalog>;
   // Persisted, but the running session keeps the prompt index it was built
   // with: the switch reaches the model on the next rebuild, not this turn.
@@ -465,6 +535,17 @@ export interface AgentPort {
   deleteSession(name: string): Promise<void>;
   status(): Promise<SessionStatus>;
   history(): Promise<HistoryMessage[]>;
+  // One entry per user turn, oldest first. files is how many the writer tools
+  // touched that turn — zero is normal and means there is nothing to restore.
+  checkpoints(): Promise<Checkpoint[]>;
+  // Two calls, because a partial-coverage plan needs consent before it runs:
+  // prepare reports what will and will not be restored, commit applies the plan
+  // the user agreed to.
+  prepareRewind(turn: number, scope: RewindScope): Promise<RewindPlan>;
+  commitRewind(planId: string): Promise<RewindResult>;
+  // Reverses a committed rewind. Only reachable while the caller still holds the
+  // transaction id the commit returned.
+  undoRewind(transactionId: string): Promise<void>;
   // Replaying the persisted wire frames rebuilds the trajectory pane row for
   // row; the live stream only ever covers the current connection.
   trajectory(): Promise<WireEvent[]>;
@@ -484,6 +565,14 @@ export interface AgentPort {
   cancel(): Promise<void>;
   approve(id: string, verdict: ApprovalVerdict): Promise<void>;
   answer(id: string, answers: { questionId: string; selected: string[] }[]): Promise<void>;
+  // Installed theme packs and which one is active. The list carries every
+  // pack's tokens so a picker can preview without a second request.
+  themes(): Promise<ThemePack[]>;
+  activateTheme(id: string): Promise<void>;
+  // Extension surfaces arrive on the event stream; these carry the user's half
+  // back — an action the card offered, or a published form's values.
+  invokeExtensionAction(name: string): Promise<string>;
+  submitExtensionForm(pluginId: string, surfaceId: string, values: Record<string, unknown>): Promise<void>;
 
   setPlanMode(on: boolean): Promise<void>;
   setApprovalMode(mode: ApprovalMode): Promise<void>;

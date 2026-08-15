@@ -34,7 +34,7 @@ import (
 type Lifecycle interface {
 	NewSession() error
 	ClearSession() error
-	Resume(s *agent.Session, path string)
+	Resume(s *agent.Session, path string) error
 	SetSessionPath(p string)
 	SessionPath() string
 	SessionDir() string
@@ -242,12 +242,14 @@ type SessionPersistence interface {
 }
 
 // Input covers composing a turn's text (plan/goal/memory injection) and
-// resolving @-references before submission.
+// resolving @-references before submission — including what the composer can
+// still offer to complete while the line is being typed.
 type Input interface {
 	Compose(text string) string
 	ComposeSynthetic(text string) string
 	ResolveRefs(ctx context.Context, line string) (block string, errs []string)
 	HasRefs(line string) bool
+	CompletionData() CompletionData
 	ImageInputEnabled() bool
 	RegisterExternalFolderRef(path string) (token, displayPath string, err error)
 }

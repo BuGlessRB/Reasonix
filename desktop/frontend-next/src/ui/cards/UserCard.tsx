@@ -1,6 +1,20 @@
+import type { Checkpoint, RewindPlan, RewindResult, RewindScope } from "../../port/port";
 import type { Item } from "../../state/session";
+import { RewindControl } from "./RewindControl";
 
-export function UserCard({ item }: { item: Extract<Item, { t: "user" }> }) {
+export function UserCard({
+  item,
+  cp,
+  onPrepareRewind,
+  onCommitRewind,
+  onUndoRewind,
+}: {
+  item: Extract<Item, { t: "user" }>;
+  cp?: Checkpoint;
+  onPrepareRewind?: (turn: number, scope: RewindScope) => Promise<RewindPlan>;
+  onCommitRewind?: (planId: string) => Promise<RewindResult>;
+  onUndoRewind?: (transactionId: string) => Promise<void>;
+}) {
   return (
     <div className="call" data-k="me" data-pending={item.pending ? "" : undefined}>
       <div className="g">
@@ -11,6 +25,11 @@ export function UserCard({ item }: { item: Extract<Item, { t: "user" }> }) {
         <div className="hl">
           <span className="nm">我</span>
           {item.pending && <span className="pend">排队中 · 下一个工具边界送达</span>}
+          {/* The entry point lives on the turn it returns to, so there is no
+              list to read and no turn number to match up by eye. */}
+          {cp && onPrepareRewind && onCommitRewind && onUndoRewind && (
+            <RewindControl cp={cp} onPrepare={onPrepareRewind} onCommit={onCommitRewind} onUndo={onUndoRewind} />
+          )}
         </div>
         <div className="out">
           <div className="txt">{item.text}</div>

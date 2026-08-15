@@ -33,7 +33,10 @@ func bindACPWriteAuthorityOrClose(ctrl acpController, lease *agent.SessionLease)
 }
 
 func resumeACPControllerForWrite(ctrl acpController, loaded *agent.Session, path string, lease *agent.SessionLease) error {
-	ctrl.Resume(loaded, path)
+	// Refused while a turn is in flight: that turn owns the session it writes to.
+	if err := ctrl.Resume(loaded, path); err != nil {
+		return err
+	}
 	return bindACPWriteAuthorityOrClose(ctrl, lease)
 }
 

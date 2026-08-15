@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/tokencount"
 )
 
 // PrefixShape hashes the portions of the request prefix that influence
@@ -44,7 +45,7 @@ func CaptureShape(systemPrompt string, schemas []provider.ToolSchema, rewriteVer
 			"tools":  string(toolsJSON),
 		}),
 		LogRewriteVersion: rewriteVersion,
-		ToolSchemaTokens:  estimateTokens(string(toolsJSON)),
+		ToolSchemaTokens:  tokencount.Text(string(toolsJSON)),
 	}
 }
 
@@ -98,23 +99,12 @@ func CompareShape(prev, cur PrefixShape, usage *provider.Usage, contentReasons [
 	}
 }
 
-// estimateTokens gives a rough token count from byte length.
-// A proper tokenizer would be more accurate, but for diagnostic
-// purposes a byte-based estimate is sufficient and zero-alloc.
-func estimateTokens(s string) int {
-	// ~4 chars per token is a workable heuristic for code-heavy JSON.
-	if len(s) == 0 {
-		return 0
-	}
-	return len(s) / 4
-}
-
 // SchemaTokenCosts returns per-tool token cost estimates for display.
 func SchemaTokenCosts(schemas []provider.ToolSchema) []ToolSchemaCost {
 	out := make([]ToolSchemaCost, 0, len(schemas))
 	for _, s := range schemas {
 		b, _ := json.Marshal(s)
-		out = append(out, ToolSchemaCost{Name: s.Name, Tokens: estimateTokens(string(b))})
+		out = append(out, ToolSchemaCost{Name: s.Name, Tokens: tokencount.Text(string(b))})
 	}
 	return out
 }

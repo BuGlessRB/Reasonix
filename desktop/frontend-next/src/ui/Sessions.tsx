@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AgentPort, SessionEntry, SessionStatus } from "../port/port";
+import { HttpError, type AgentPort, type SessionEntry, type SessionStatus } from "../port/port";
 
 interface Props {
   port: AgentPort;
@@ -15,6 +15,17 @@ interface Props {
   onSwitched: () => void;
 }
 
+// Cancel is a request, not a stop: the run loop finishes the tool it is inside
+// before the gate opens. Poll the kernel rather than guess a delay, and give up
+// rather than hang — a refusal the user can read beats a dead row.
+async function settle(port: AgentPort) {
+  for (let i = 0; i < 40; i++) {
+    const st = await port.status().catch(() => null);
+    if (st && !st.running) return;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+}
+
 const RUN_ST: Record<string, string> = { running: "运行中", halt: "等你", done: "已完成", idle: "空闲" };
 const WS_STATE: Record<string, string> = { running: "running", halt: "awaiting", done: "done" };
 
@@ -22,6 +33,7 @@ export function Sessions({ port, status, list, reload, run, cost, onError, onFol
   const [busy, setBusy] = useState("");
   const [confirm, setConfirm] = useState("");
   const [gone, setGone] = useState("");
+  const [stop, setStop] = useState("");
 
   // The kernel decides which row is current — it compares canonical paths, and
   // the same file reaches us spelled two ways (Windows folds the slug's case, a
@@ -32,13 +44,30 @@ export function Sessions({ port, status, list, reload, run, cost, onError, onFol
     ? [{ name: "", path: current, title: status?.goal, current: true }, ...list]
     : list;
 
+  // Only the kernel knows whether a turn owns the session — the rail's own state
+  // is a display posture ("halt" also means "finished, waiting for you"), and
+  // reading it as "still running" claimed a busy session that was idle. So try
+  // the switch, and let a 409 be what asks the user to stop the turn first.
   const pick = async (e: SessionEntry) => {
     if (e.path === current || busy) return;
+    const forcing = stop === e.path;
+    setStop("");
     setBusy(e.path);
     try {
+      if (forcing) {
+        await port.cancel();
+        await settle(port);
+      }
       await port.resume(e.path);
       reload();
       onSwitched();
+    } catch (err) {
+      if (!forcing && err instanceof HttpError && err.status === 409) {
+        setStop(e.path);
+        setConfirm("");
+        return;
+      }
+      onError(err);
     } finally {
       setBusy("");
     }
@@ -106,15 +135,27 @@ export function Sessions({ port, status, list, reload, run, cost, onError, onFol
                 data-busy={busy === e.path ? "" : undefined}
                 data-confirm={confirm === e.path ? "" : undefined}
                 data-gone={gone === e.path ? "" : undefined}
+                data-stop={stop === e.path ? "" : undefined}
                 onClick={() => pick(e)}
-                onMouseLeave={() => confirm === e.path && setConfirm("")}
+                onMouseLeave={() => {
+                  if (confirm === e.path) setConfirm("");
+                  if (stop === e.path) setStop("");
+                }}
               >
                 <span className="goal">
                   <i className="pip" />
                   <span>{e.title || e.name || "新会话"}</span>
                 </span>
                 <span className="meta">
-                  <span className="st">{on ? RUN_ST[run] : e.turns ? `${e.turns} 轮` : "空会话"}</span>
+                  <span className="st">
+                    {stop === e.path
+                      ? "那边还在跑 · 再点一次停下并切过来"
+                      : on
+                        ? RUN_ST[run]
+                        : e.turns
+                          ? `${e.turns} 轮`
+                          : "空会话"}
+                  </span>
                   {on && <span className="cost">{cost}</span>}
                 </span>
                 <span className="where">

@@ -1,0 +1,49 @@
+import type { ThemePack } from "../port/port";
+
+// A pack names colours in its own vocabulary; this is where they become ours.
+// The mapping lives on this side because only the frontend knows what each
+// surface in its layout is called — a pack should not have to learn our
+// variable names to be worth installing.
+const SURFACE: Record<string, string[]> = {
+  bg: ["--page"],
+  bgSoft: ["--surface"],
+  panel: ["--raised"],
+  bgElev: ["--overlay"],
+  border: ["--border"],
+  borderSoft: ["--hair"],
+  fg: ["--text"],
+  fgDim: ["--muted"],
+  fgFaint: ["--faint", "--ghost"],
+  accent: ["--accent"],
+  accentFg: ["--accent-fg"],
+};
+
+// What a pack may not touch. ok/warn/err/net/deleg encode what is happening —
+// "this broke", "this is running", "this went out to a sub-agent" — and a
+// theme that could recolour them would let a failure render as success. The
+// palette is the theme's; the meanings are the app's.
+const RESERVED = ["--ok", "--warn", "--err", "--net", "--deleg", "--add", "--del", "--focus"];
+
+/** apply paints a pack onto the document, or clears back to the stylesheet. */
+export function apply(pack: ThemePack | null, scheme: "light" | "dark") {
+  const root = document.documentElement;
+  for (const vars of Object.values(SURFACE)) {
+    for (const v of vars) root.style.removeProperty(v);
+  }
+  root.style.removeProperty("--accent-wash");
+  if (!pack) return;
+
+  const tokens = pack.tokens[scheme];
+  if (!tokens) return;
+  for (const [name, value] of Object.entries(tokens)) {
+    for (const v of SURFACE[name] ?? []) root.style.setProperty(v, value);
+  }
+  // The washes are tints of the accent, so a pack that moves the accent has to
+  // move them too or the tinted backgrounds keep pointing at the old hue.
+  if (tokens.accent) {
+    root.style.setProperty("--accent-wash", `color-mix(in srgb, ${tokens.accent} 12%, ${tokens.bg ?? "transparent"})`);
+  }
+}
+
+/** reserved is exported for the test that pins the meanings a pack cannot take. */
+export const reserved = RESERVED;

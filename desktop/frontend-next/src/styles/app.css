@@ -16,6 +16,36 @@
     display: flex; align-items: center; gap: 12px; height: 39px; padding: 0 12px;
     flex: none; background: var(--raised); border-bottom: 1px solid var(--hair);
   }
+  /* Inside the shell this row *is* the title bar, so it has to be the drag
+     handle. Every control on it opts back out, or the menus stop opening. */
+  [data-shell="wails"] .chrome { --wails-draggable: drag }
+  [data-shell="wails"] .chrome button,
+  [data-shell="wails"] .chrome .picker,
+  [data-shell="wails"] .chrome .themer { --wails-draggable: no-drag }
+  /* macOS floats its lights over the corner at a y AppKit owns — measured centre
+     25.5px, which is the platform's own unified-toolbar metric. The row matches
+     that height rather than the spec's 39px, or the lights sit 6px below the
+     wordmark they are meant to line up with. 78px clears the lights themselves. */
+  [data-shell="wails"][data-platform="darwin"] .chrome { height: 51px; padding-left: 78px; position: relative }
+  /* Absolute inside that reserved 78px, so the swap is opacity alone and the
+     breadcrumb after it never moves. */
+  [data-shell="wails"][data-platform="darwin"] .brand {
+    position: absolute; left: 12px; top: 50%; margin: -7px 0 0;
+    opacity: 0; transition: opacity .22s var(--ease-out);
+  }
+  [data-shell="wails"][data-platform="darwin"][data-focused="no"] .brand { opacity: 1 }
+  /* Windows puts its controls on the other end, hard against the corner, and
+     they are the only ones here that are not the app's own affordances. */
+  .winctl { display: flex; margin-left: 6px; margin-right: -12px; align-self: stretch }
+  .prefs-hd .winctl { margin-right: -16px }
+  .winctl .wc {
+    display: grid; place-items: center; width: 44px; border: 0; background: transparent;
+    color: var(--faint); cursor: pointer; transition: background .14s, color .14s;
+  }
+  .winctl .wc svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.1 }
+  .winctl .wc:hover { background: var(--overlay); color: var(--text) }
+  .winctl .wc.close:hover { background: var(--err); color: #fff }
+  .winctl .wc:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   /* Masked, not <img>: the wordmark ships one hard-coded blue that reads as a
      status colour here and goes muddy on the dark surface. */
   .brand {
@@ -89,12 +119,29 @@
   .mi.plain .dot { background: transparent }   /* 它不是一个可选中的项目 */
 
   /* 斜杠补全补的是正在打的那一行，所以它贴着输入框上沿，宽度也跟着输入框 */
+  /* 宽屏上铺满输入框会把类别标签甩到几百像素外，眼睛得横跨整行才能看完一条 */
   .slashmenu {
-    left: 0; right: 0; bottom: calc(100% + 9px); min-width: 0; z-index: 31;
-    max-height: 272px; overflow-y: auto; transform-origin: bottom center;
+    left: 0; right: auto; bottom: calc(100% + 9px); min-width: 0; z-index: 31;
+    width: 100%; max-width: 680px;
+    max-height: 272px; overflow: hidden; transform-origin: bottom left;
+    display: flex; flex-direction: column;
   }
+  /* 只有列表滚动：键位提示留在滚动区外，否则它会盖住最后一行，
+     而 scrollIntoView 仍把那一行算作"可见"，往下走第一格就不滚 */
+  .slashmenu .mlist { overflow-y: auto; min-height: 0 }
   .slashmenu .lb { font-family: var(--mono) }
   .slashmenu .ah { margin-left: 6px; font: 400 11px var(--mono); font-style: normal; color: var(--ghost) }
+  /* 目录能继续往下走，文件到此为止 —— 这个区别值一个颜色 */
+  .slashmenu .mi[data-on] .ah { color: var(--accent) }
+  /* 指出这一行是因为哪几个字母被选中的，模糊匹配才不像是在乱给 */
+  .slashmenu .hit { color: var(--accent); font-weight: 600 }
+
+  /* Tab 补全、Tab 进目录：不写出来没人会去试 */
+  .mkeys {
+    flex: none; margin-top: 3px; padding: 6px 9px 2px;
+    border-top: 1px solid var(--hair);
+    font: 400 10.5px var(--ui); color: var(--faint);
+  }
   .sa {
     margin-left: 7px; padding: 1px 5px; border-radius: var(--r-pill);
     font: 500 9.5px var(--ui); font-style: normal; vertical-align: 1px;
@@ -313,6 +360,9 @@
   .ws:hover .wsdel, .wsdel:focus-visible { opacity: 1 }
   .wsdel:hover { background: var(--border); color: var(--err) }
   .ws[data-confirm] .wsdel { opacity: 1; width: auto; padding: 0 6px; font: 500 10px var(--mono); color: var(--err); background: color-mix(in srgb, var(--err) 15%, transparent) }
+  /* 切走要先停下那一轮 —— 用和删除同一套「再点一次」的确认语言 */
+  .ws[data-stop] { background: var(--accent-wash) }
+  .ws[data-stop] .meta .st { color: var(--accent) }
   .ws[data-gone] {
     height: 0 !important; opacity: 0; padding-block: 0; overflow: hidden;
     transition: height .22s var(--ease-in), opacity .15s, padding .22s var(--ease-in);
@@ -518,6 +568,12 @@
   .stepctl button:hover { background: var(--border); color: var(--text) }
   .stepctl button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
+  /* 回滚入口：坐在它要回到的那条消息上，靠右，hover 才浮现（同 .stepctl）。
+     菜单右对齐按钮，否则在流的右缘会向外溢出。开着的时候得留在原地。 */
+  .rewind { margin-left: auto }
+  .rewind .menu { left: auto; right: 0; min-width: 208px }
+  .call > .c:has(.rewind .menu:not([hidden])) .stepctl { opacity: 1 }
+
   /* 首字节之前那段空白是真实存在的，别装作一问就有回应 */
   .await { display: flex; align-items: center; gap: 5px; padding: 4px 0; font: 400 11px var(--mono); color: var(--ghost) }
   .await i { width: 4px; height: 4px; border-radius: 50%; background: var(--ghost); animation: bob 1.15s ease-in-out infinite }
@@ -533,12 +589,14 @@
   .think > summary { display: inline-flex }
   .think .tk {
     margin-top: 5px; padding-left: 10px; border-left: 2px solid var(--hair);
-    font: 400 12px/1.68 var(--ui); color: var(--faint); max-width: 64ch; white-space: pre-wrap;
+    font: 400 12px/1.68 var(--ui); color: var(--faint); white-space: pre-wrap;
   }
   .think[open] > summary .fold { color: var(--faint) }
 
   .out { margin-top: 6px }
-  .out .txt { font-size: 13.5px; line-height: 1.72; color: var(--muted); max-width: 68ch }
+  /* 设计稿把正文封在 68ch 是排版上的道理，但一屏里只有它收着、终端块和卡片都
+     铺满，读起来就是右边豁了一块。要么全收要么全铺，这里选全铺。 */
+  .out .txt { font-size: 13.5px; line-height: 1.72; color: var(--muted) }
   .call[data-k="me"] .out .txt { color: var(--text) }
   .out .txt code { font: 400 11.5px var(--mono); color: var(--deleg) }
   /* 硬切的方波闪烁跟匀速流出的文字对不上拍，看着更抖 */
@@ -649,7 +707,7 @@
   .guard[data-risk="low"] .gauge i:nth-child(1) { background: var(--ok) }
   .guard[data-risk="medium"] .gauge i:nth-child(-n+2) { background: var(--accent) }
   .guard[data-risk="high"] .gauge i { background: var(--err) }
-  .guard-why { margin-top: 3px; font-size: 11.5px; line-height: 1.62; color: var(--muted); max-width: 62ch }
+  .guard-why { margin-top: 3px; font-size: 11.5px; line-height: 1.62; color: var(--muted) }
 
   /* 压缩：核心是 Started/Done 一对，值得一张能展开的卡 */
   .comp { margin-top: 7px }
@@ -799,6 +857,15 @@
   .ask-done b { color: var(--text); font-weight: 500 }
 
   /* 减去 .flow 的内边距，输入框的可见边缘才跟卡片的左右边缘落在同一条线上 */
+  /* 附件是「这一轮要带上的东西」，所以它贴在输入框上沿，不在别处 */
+  .compose textarea[data-over] { outline: 2px dashed var(--accent); outline-offset: -3px }
+  .shots { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 2px 7px }
+  .shot { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 9px; border: 1px solid var(--border); border-radius: var(--r-pill); font: 400 11px var(--mono); color: var(--muted) }
+  .shot .nm { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .shot button { border: 0; background: none; color: var(--ghost); cursor: pointer; font: 400 12px/1 var(--mono); padding: 0 3px }
+  .shot button:hover { color: var(--err) }
+  .shots .warn { font: 400 11px var(--ui); color: var(--accent) }
+
   .compose {
     position: relative; flex: none; margin: 0 auto 16px;
     width: min(100% - 36px, calc(var(--doc) - 36px));
@@ -927,7 +994,9 @@
 
   /* 上下行是两笔独立的账：上行按命中/未命中分档计价，下行只有一个价 */
   .rate { display: flex; align-items: baseline; gap: 7px; font: 400 11px var(--mono); color: var(--faint) }
-  .rate .v { color: var(--text); font-variant-numeric: tabular-nums }
+  .rate .v { color: var(--ghost); font-variant-numeric: tabular-nums; transition: color .3s }
+  /* 只有真的在收字的时候这个数才是活的；工具在跑时它就该是 "—" */
+  .rate[data-live] .v { color: var(--text) }
   .rate .u { color: var(--ghost); font-size: 10px }
   .srcs { display: flex; flex-direction: column; gap: 4px; padding-top: 9px; border-top: 1px solid var(--hair) }
   .srcs .r { display: flex; align-items: baseline; gap: 8px; font: 400 11px var(--mono); color: var(--faint) }
@@ -941,17 +1010,23 @@
     transition: transform .36s var(--ease-out), height .36s var(--ease-out);
   }
   .planwrap .cursor[hidden] { display: none }
-  .plan .s { display: flex; align-items: baseline; gap: 9px; padding: 6px 0 6px 10px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--hair); transition: color .25s }
+  .plan .s { display: flex; align-items: baseline; gap: 9px; padding: 6px 0 6px 10px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--hair); transition: color .25s, opacity .25s, background .16s; border-radius: var(--r-xs) }
+  .plan .s:hover { background: var(--overlay) }
+  .plan .s[data-done] { opacity: .72 }
   .plan .s:last-child { border-bottom: 0 }
   .plan .s .b { font: 400 10px var(--mono); width: 10px; flex: none; color: var(--ghost); font-variant-numeric: tabular-nums; transition: color .2s }
   .plan .s[data-done] { color: var(--faint) }
   .plan .s[data-done] .b { color: var(--ok) }
-  /* 划线是画出来的，不是凭空出现的 —— 这是「刚刚完成」和「本来就完成」的区别 */
-  .plan .s .t, .steps .s > span:not(.b) {
+  /* 划线是画出来的，不是凭空出现的 —— 这是「刚刚完成」和「本来就完成」的区别。
+     画在 inline 的 .ln 上而不是 flex 子项上：box-decoration-break 让它每个换行
+     片段各画一条，否则一条两行的步骤只有一行被划掉。 */
+  .plan .s .t .ln, .steps .s .t .ln {
     background: linear-gradient(var(--ghost), var(--ghost)) no-repeat 0 62% / 0 1px;
+    -webkit-box-decoration-break: clone;
+            box-decoration-break: clone;
     transition: background-size .34s var(--ease-out);
   }
-  .plan .s[data-done] .t, .steps .s[data-done] > span:not(.b) { background-size: 100% 1px }
+  .plan .s[data-done] .t .ln, .steps .s[data-done] .t .ln { background-size: 100% 1px }
   .plan .s[data-done] .b, .steps .s[data-done] .b { animation: pop .3s var(--ease-out) }
   @keyframes pop { 0% { transform: scale(.4); opacity: .2 } 60% { transform: scale(1.14) } 100% { transform: scale(1) } }
   .plan .s[data-now] { color: var(--text) }
@@ -980,10 +1055,13 @@
 
   .files { display: flex; flex-direction: column; min-height: 18px }
   .file { display: flex; gap: 9px; padding: 6px 0; font: 400 11.5px var(--mono); color: var(--muted); animation: card var(--t-card) var(--ease-out) both }
-  .file .p { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .file .p .d { color: var(--ghost) }
+  /* 目录可以被裁，文件名不行 —— 之前整条 .p 一起省略号，先没的恰好是文件名 */
+  .file .p { min-width: 0; display: flex; white-space: nowrap }
+  .file .p .d { color: var(--ghost); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto }
+  .file .p .f { flex: none; color: var(--muted) }
   .file .n { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: -.03em; flex: none }
   .file .n .a { color: var(--add) } .file .n .r { color: var(--del) }
+  .file .n .mk { margin-right: 6px; color: var(--faint); font-size: 10px }
   /* 中栏刚落一处改动，右栏这一行就闪一下 —— 否则两处同时动，看的人不知道该看哪 */
   .file[data-fresh] { animation: card var(--t-card) var(--ease-out) both, flash 1s var(--ease-out) .12s }
   @keyframes flash {
@@ -1080,8 +1158,13 @@
     display: flex; align-items: center; gap: 12px; flex: none; height: 46px; padding: 0 16px;
     border-bottom: 1px solid var(--hair); background: var(--raised);
   }
+  /* 设置是整屏的下一层，顶到窗口边，所以它自己的头也得让开红绿灯、也得能拖动 ——
+     和主页顶栏用同一组数字，两个界面才对得上。 */
+  [data-shell="wails"] .prefs-hd { --wails-draggable: drag }
+  [data-shell="wails"] .prefs-hd button { --wails-draggable: no-drag }
+  [data-shell="wails"][data-platform="darwin"] .prefs-hd { height: 51px; padding-left: 78px }
   .prefs-hd .ttl { font: 500 12.5px var(--ui); color: var(--text) }
-  .prefs-hd .esc { margin-left: auto; font: 400 10px var(--mono); color: var(--ghost); border: 1px solid var(--border); border-radius: var(--r-xs); padding: 1px 5px }
+  .prefs-hd .esc { margin-left: auto; margin-right: 4px; font: 400 10px var(--mono); color: var(--ghost); border: 1px solid var(--border); border-radius: var(--r-xs); padding: 1px 5px }
   .back {
     border: 0; background: transparent; cursor: pointer; padding: 4px 8px 4px 4px; border-radius: var(--r-xs);
     color: var(--muted); font: 400 12px var(--ui); transition: color .14s, background .14s;
@@ -1833,3 +1916,39 @@
     padding: 1.5px 5px; border-radius: var(--r-xs); flex: none;
     color: var(--err); background: color-mix(in srgb, var(--err) 13%, transparent);
   }
+
+  /* An extension's own surface. It reuses .find / .opt / .btn so a plugin card
+     reads as part of the transcript, not as an embedded foreign app; only the
+     shapes those classes have no word for are defined here. */
+  .extcard, .extform { margin-top: 7px; display: flex; flex-direction: column; gap: 8px }
+  .exttext { font-size: 12.5px; line-height: 1.6; color: var(--text); white-space: pre-wrap }
+  .extbar {
+    display: block; margin-top: 5px; height: 3px; border-radius: var(--r-pill);
+    background: var(--overlay); overflow: hidden;
+  }
+  .extbar > i { display: block; height: 100%; background: var(--deleg); transition: width var(--t-card) var(--ease) }
+  .extkv { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 12px }
+  .extkv > div { display: contents }
+  .extkv dt { color: var(--muted); font-family: var(--mono); font-size: 11.5px }
+  .extkv dd { margin: 0; color: var(--text); overflow-wrap: anywhere }
+  .extacts, .extfoot { display: flex; flex-wrap: wrap; gap: 6px }
+  .extfield { display: flex; flex-direction: column; gap: 4px }
+  .extlabel { font: 500 12px var(--ui); color: var(--text) }
+  .extlabel .req, .extfield .req { color: var(--err); font-style: normal; margin-left: 3px }
+  .extfield input {
+    font: 12.5px var(--ui); color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--r-sm); padding: 5px 8px;
+  }
+  .extfield input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .extform[data-sealed] { opacity: .72 }
+
+  /* A standing panel sits in the side rail, so it is denser than the same
+     content would be in the transcript and borrows the rail's own row rhythm. */
+  .extpanel { display: flex; flex-direction: column; gap: 4px; padding: 6px 0 }
+  .extpanel + .extpanel { border-top: 1px solid var(--hair) }
+  .extpanel-hd { display: flex; align-items: baseline; gap: 6px }
+  .extpanel-hd .nm { font: 500 12px var(--ui); color: var(--text) }
+  .extpanel-hd .src { font: 10.5px var(--mono); color: var(--faint) }
+  .extpanel-tx { font-size: 11.5px; line-height: 1.5; color: var(--muted) }
+  .extpanel .extkv { font-size: 11.5px }
+  .extpanel .btn { padding: 2px 7px; font-size: 11px }

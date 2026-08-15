@@ -12,10 +12,10 @@ const ROUTES = [
   "/events", "/history", "/status", "/submit", "/cancel", "/approve", "/answer",
   "/plan", "/goal", "/resume", "/models", "/tool-approval-mode", "/preset",
   "/model", "/effort", "/new", "/sessions", "/delete-session", "/provider-setup",
-  "/inbox", "/trajectory", "/mcp", "/skills", "/slash", "/workspace",
+  "/inbox", "/trajectory", "/mcp", "/skills", "/complete", "/workspace",
   "/providers", "/roles", "/account", "/hooks", "/memory", "/network", "/todos",
   "/changes", "/attachments", "/checkpoints", "/branches", "/compact", "/rewind",
-  "/extensions",
+  "/extensions", "/themes",
   "/fork", "/summarize", "/forget", "/bypass", "/auto-approve-tools",
 ];
 

@@ -2,17 +2,13 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	rw "github.com/mattn/go-runewidth"
 
 	"reasonix/internal/control"
-	"reasonix/internal/fileref"
 	"reasonix/internal/i18n"
 	"reasonix/internal/plugin"
 	"reasonix/internal/skill"
@@ -172,7 +168,7 @@ func (m *chatTUI) updateCompletion() {
 
 	// An @-reference token under the cursor wins — it can appear mid-line, even
 	// inside a slash command's arguments (e.g. "/review @file").
-	if at, end, token, ok := activeAtToken(val, cursor); ok {
+	if at, end, token, ok := control.ActiveRefToken(val, cursor); ok {
 		if items := m.atItems(token); len(items) > 0 {
 			m.setCompletion(compAt, items, at, end)
 			return
@@ -184,7 +180,7 @@ func (m *chatTUI) updateCompletion() {
 	// mid-token cursor still filters the catalog without rewriting the line.
 	if strings.HasPrefix(val, "/") {
 		if items, from, ok := m.explicitSubcommandItems(val); ok && len(items) > 0 {
-			m.setCompletion(compSlashArg, items, from, tokenEnd(val, from))
+			m.setCompletion(compSlashArg, items, from, control.RefTokenEnd(val, from))
 			return
 		}
 		if !strings.ContainsAny(val, " \t\n") {
@@ -198,7 +194,7 @@ func (m *chatTUI) updateCompletion() {
 			return
 		} else if items, from, ok := m.slashArgItems(val); ok && len(items) > 0 {
 			// Past the command word — complete its structured arguments.
-			m.setCompletion(compSlashArg, items, from, tokenEnd(val, from))
+			m.setCompletion(compSlashArg, items, from, control.RefTokenEnd(val, from))
 			return
 		}
 	}
@@ -437,7 +433,7 @@ func fuzzyFilterSlash(items []compItem, query string) []compItem {
 		switch {
 		case strings.HasPrefix(l, lq):
 			prefix = append(prefix, it)
-		case subsequenceMatch(l, lq):
+		case control.SubsequenceMatch(l, lq):
 			rest = append(rest, it)
 		}
 	}
@@ -450,207 +446,75 @@ func fuzzyFilterSlash(items []compItem, query string) []compItem {
 	return out
 }
 
-// subsequenceMatch reports whether query appears in target as a case-folded
-// subsequence (each rune of query in order, not necessarily contiguous). It is
-// the matcher behind the slash-menu fuzzy filter: typing "/modl" matches
-// "/model", "/memory", or any other label where m-o-d-l appear in that order.
-// Callers must pass already case-folded strings; an empty query matches
-// every target, so callers that want a "no match" signal on the empty input
-// should check that first.
-func subsequenceMatch(target, query string) bool {
-	if query == "" {
-		return true
-	}
-	qr := []rune(query)
-	ti := 0
-	for _, r := range target {
-		if r == qr[ti] {
-			ti++
-			if ti == len(qr) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// activeAtToken finds the @-reference token under the cursor. cursor is a byte
-// offset into val; when out of range the scan uses the end of the string.
-// The '@' must start the line or follow whitespace, so emails like "a@b" don't
-// trigger it. A backslash-escaped space or tab is part of the token.
-//
-// Returns (at, end, query, ok):
-//   - [at, end) is the full token span to replace on accept (including '@'),
-//     extending past the caret to the next unescaped whitespace so mid-token
-//     accept never leaves a dangling suffix ("@foo|bar" → "@file.md ", not
-//     "@file.mdbar").
-//   - query is only the text after '@' up to the caret, used for menu filtering
-//     ("@fo|o" filters as "fo", not "foo").
-func activeAtToken(val string, cursor int) (at, end int, query string, ok bool) {
-	if cursor < 0 || cursor > len(val) {
-		cursor = len(val)
-	}
-	for i := cursor - 1; i >= 0; i-- {
-		switch val[i] {
-		case ' ', '\t':
-			if i > 0 && val[i-1] == '\\' {
-				i-- // escaped whitespace stays inside the token
-				continue
-			}
-			return 0, 0, "", false
-		case '\n':
-			return 0, 0, "", false
-		case '@':
-			if i == 0 || val[i-1] == ' ' || val[i-1] == '\t' || val[i-1] == '\n' {
-				end = tokenEnd(val, i+1)
-				queryEnd := min(max(cursor, i+1), end)
-				return i, end, val[i+1 : queryEnd], true
-			}
-			return 0, 0, "", false
-		}
-	}
-	return 0, 0, "", false
-}
-
-// tokenEnd returns the exclusive byte end of a path/ref token starting at from
-// (just after '@'). Stops at unescaped whitespace or newline.
-func tokenEnd(val string, from int) int {
-	for i := from; i < len(val); i++ {
-		switch val[i] {
-		case ' ', '\t':
-			if i > 0 && val[i-1] == '\\' {
-				continue
-			}
-			return i
-		case '\n':
-			return i
-		}
-	}
-	return len(val)
-}
-
 // atItems builds the @-reference menu for a token. A "server:uri" token whose
 // server is connected lists that server's MCP resources; otherwise the token is
 // a path and we list one directory level (never a recursive walk), plus — at the
 // top level — any matching MCP resources.
 func (m *chatTUI) atItems(token string) []compItem {
 	if i := strings.Index(token, ":"); i > 0 && m.isMCPServer(token[:i]) {
-		return m.resourceItems(token[:i], token[i+1:])
+		return slashItemsToComps(control.RefResourceItems(m.resources(), token[:i], token[i+1:]))
 	}
 	return m.fileItems(token)
 }
 
-// fileItems lists one directory level for a path token. dir is the part up to
-// the last '/', frag the part after; entries of dir starting with frag are
-// offered (directories descend, files complete). Hidden entries are skipped
-// unless frag starts with '.'. Top-level tokens also surface MCP resources.
+// fileItems lists one directory level for a path token, then — while the token
+// is still naming its first segment — the workspace-wide basename search and
+// the MCP resources sharing the '@' namespace. The terminal completes from
+// anywhere on disk, which is what separates it from a windowed frontend
+// reaching the same engine over HTTP.
 func (m *chatTUI) fileItems(token string) []compItem {
-	dir, frag := splitPathToken(token)
-	// The typed token may carry backslash-escaped spaces (the form completion
-	// itself inserts); filesystem lookups need the real path while inserts keep
-	// the escaped grammar.
-	fsFrag := control.UnescapeRefPath(frag)
-	workspaceRoot := ""
-	if m.ctrl != nil {
-		workspaceRoot = m.ctrl.WorkspaceRoot()
+	items := slashItemsToComps(control.RefDirItems(m.workspaceRoot(), token, false))
+	if strings.Contains(token, "/") {
+		return items
 	}
-	readDir := control.UnescapeRefPath(dir)
-	if workspaceRoot != "" {
-		if readDir == "" {
-			readDir = workspaceRoot
-		} else if !filepath.IsAbs(readDir) {
-			readDir = filepath.Join(workspaceRoot, filepath.FromSlash(readDir))
-		}
-	} else if readDir == "" {
-		readDir = "."
+	seen := make(map[string]bool, len(items))
+	for _, it := range items {
+		seen[it.insert] = true
 	}
-	entries, err := os.ReadDir(readDir)
-	if err != nil {
-		entries = nil
+	results := m.searchFileRefs(control.UnescapeRefPath(token))
+	if remaining := min(maxCompItems-len(items), maxFileSearchItems); len(results) > remaining {
+		results = results[:max(remaining, 0)]
 	}
-	// Directories first, then files; ReadDir is already name-sorted.
-	sort.SliceStable(entries, func(i, j int) bool {
-		return entries[i].IsDir() && !entries[j].IsDir()
-	})
-
-	showHidden := strings.HasPrefix(fsFrag, ".")
-	var items []compItem
-	for _, e := range entries {
-		name := e.Name()
-		if !strings.HasPrefix(name, fsFrag) {
+	for _, it := range results {
+		if seen[it.insert] {
 			continue
 		}
-		if !showHidden && strings.HasPrefix(name, ".") {
-			continue
-		}
-		if e.IsDir() {
-			items = append(items, compItem{label: name + "/", insert: "@" + dir + control.EscapeRefPath(name) + "/", hint: "dir", descend: true})
-		} else {
-			items = append(items, compItem{label: name, insert: "@" + dir + control.EscapeRefPath(name)})
-		}
+		items = append(items, it)
 		if len(items) >= maxCompItems {
 			break
 		}
 	}
-
-	// At the top level (still naming the first segment) MCP resources share the
-	// '@' namespace, so offer the matching ones too.
-	if !strings.Contains(token, "/") {
-		seen := map[string]bool{}
-		for _, it := range items {
-			seen[strings.TrimPrefix(it.insert, "@")] = true
-		}
-		remaining := min(maxCompItems-len(items), maxFileSearchItems)
-		results := m.searchFileRefs(fsFrag)
-		if len(results) > remaining {
-			results = results[:remaining]
-		}
-		for _, path := range results {
-			escaped := control.EscapeRefPath(path)
-			if seen[escaped] {
-				continue
-			}
-			items = append(items, compItem{label: path, insert: "@" + escaped, hint: "file"})
-			if len(items) >= maxCompItems {
-				break
-			}
-		}
-		items = append(items, m.resourceItems("", token)...)
-	}
-	return items
+	return append(items, slashItemsToComps(control.RefResourceItems(m.resources(), "", token))...)
 }
 
 // searchFileRefs memoizes the bounded basename walk so re-rendering the menu
 // for an unchanged @token fragment doesn't re-walk the workspace each keystroke.
-func (m *chatTUI) searchFileRefs(frag string) []string {
+func (m *chatTUI) searchFileRefs(frag string) []compItem {
 	if m.fileSearchCache == nil {
-		m.fileSearchCache = map[string][]string{}
+		m.fileSearchCache = map[string][]compItem{}
 	}
 	if r, ok := m.fileSearchCache[frag]; ok {
 		return r
 	}
-	searchRoot := "."
-	if m.ctrl != nil {
-		if wr := m.ctrl.WorkspaceRoot(); wr != "" {
-			searchRoot = wr
-		}
-	}
-	results := fileref.Search(searchRoot, frag, maxFileSearchItems)
-	paths := make([]string, 0, len(results))
-	for _, r := range results {
-		paths = append(paths, r.Path)
-	}
-	m.fileSearchCache[frag] = paths
-	return paths
+	hits := slashItemsToComps(control.RefSearchItems(m.workspaceRoot(), frag, maxFileSearchItems))
+	m.fileSearchCache[frag] = hits
+	return hits
 }
 
-// splitPathToken splits a path token into (dir, frag): dir keeps its trailing
-// slash ("internal/" ), frag is the segment being typed.
-func splitPathToken(token string) (dir, frag string) {
-	if i := strings.LastIndex(token, "/"); i >= 0 {
-		return token[:i+1], token[i+1:]
+// workspaceRoot is the folder completion answers about, or "" before a
+// controller exists — where the shared lister falls back to the process cwd.
+func (m *chatTUI) workspaceRoot() string {
+	if m.ctrl == nil {
+		return ""
 	}
-	return "", token
+	return m.ctrl.WorkspaceRoot()
+}
+
+func (m *chatTUI) resources() []plugin.Resource {
+	if m.host == nil {
+		return nil
+	}
+	return m.host.Resources()
 }
 
 // isMCPServer reports whether name is a connected MCP server.
@@ -659,37 +523,6 @@ func (m *chatTUI) isMCPServer(name string) bool {
 		return false
 	}
 	return slices.Contains(m.host.ServerNames(), name)
-}
-
-// resourceItems lists MCP resources as @server:uri completions. When server is
-// "" (top level) it matches by the whole "server:uri" prefix; otherwise it lists
-// the named server's resources filtered by the uri prefix.
-func (m *chatTUI) resourceItems(server, frag string) []compItem {
-	if m.host == nil {
-		return nil
-	}
-	var items []compItem
-	for _, r := range m.host.Resources() {
-		ref := r.Server + ":" + r.URI
-		switch {
-		case server == "":
-			if !strings.HasPrefix(ref, frag) {
-				continue
-			}
-		case r.Server == server:
-			if !strings.HasPrefix(r.URI, frag) {
-				continue
-			}
-		default:
-			continue
-		}
-		label := r.Name
-		if label == "" {
-			label = "resource"
-		}
-		items = append(items, compItem{label: "@" + ref, insert: "@" + ref, hint: label})
-	}
-	return items
 }
 
 // moveCompletion advances the selection by delta, wrapping around.

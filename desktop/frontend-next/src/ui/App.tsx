@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { AccountState, AgentPort, ApprovalVerdict, McpEntry, ProviderSetup, SessionEntry, SessionStatus } from "../port/port";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import type { AccountState, AgentPort, ApprovalVerdict, Checkpoint, McpEntry, ProviderSetup, RewindScope, SessionEntry, SessionStatus, WorkspaceChanges, ThemePack } from "../port/port";
 import { fromHistory, initialState, quoteAmount, reduce } from "../state/session";
+import { pairCheckpoints } from "../state/checkpoints";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { Chrome } from "./Chrome";
 import { Transcript } from "./Transcript";
 import { Trajectory } from "./Trajectory";
 import { Composer } from "./Composer";
 import { RunStrip } from "./RunStrip";
+import { apply as applyThemePack } from "./theme";
 import { Metrics } from "./Metrics";
 import { Sessions } from "./Sessions";
 import { Settings } from "./Settings";
 import { Onboarding } from "./Onboarding";
 import { arrowTabs } from "./tablist";
+import { tokensPerSecond } from "../port/tokens";
 
 export function App({ port }: { port: AgentPort }) {
   const [s, dispatch] = useReducer(reduce, initialState);
@@ -28,9 +31,17 @@ export function App({ port }: { port: AgentPort }) {
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [account, setAccount] = useState<AccountState | null>(null);
   const [mcp, setMcp] = useState<McpEntry[]>([]);
+  const [pack, setPack] = useState<ThemePack | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [tps, setTps] = useState(0);
+  const [tree, setTree] = useState<WorkspaceChanges | null>(null);
+  const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const flow = useRef<HTMLDivElement>(null);
   const startedAt = useRef(0);
+  // Read by the 250ms tick without making it a dependency, so a delta arriving
+  // between ticks does not restart the interval.
+  const win = useRef(s.outWindow);
+  win.current = s.outWindow;
 
   const reloadMcp = useCallback(() => {
     void port.mcp().then(setMcp).catch(() => setMcp([]));
@@ -60,6 +71,7 @@ export function App({ port }: { port: AgentPort }) {
   useEffect(() => {
     let alive = true;
     port.trajectory().then((evs) => alive && evs.forEach((e) => trajDispatch(e))).catch(() => {});
+    port.checkpoints().then((cps) => alive && setCheckpoints(cps)).catch(() => {});
     Promise.all([port.history(), port.status()]).then(([msgs, st]) => {
       if (!alive) return;
       setStatus(st);
@@ -112,11 +124,36 @@ export function App({ port }: { port: AgentPort }) {
     reloadSessions();
     trajDispatch({ kind: "__clear" } as never);
     port.trajectory().then((evs) => evs.forEach((e) => trajDispatch(e))).catch(() => {});
+    port.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([]));
     port.history().then((msgs) => {
       const r = fromHistory(msgs);
       dispatch({ kind: "__restore", items: r.items, plan: r.plan, hit: 0, miss: 0 } as never);
     });
   }, [port, refreshStatus, reloadSessions]);
+
+  // A rewind rewrites the transcript and the files under it, so the whole
+  // session is re-read rather than patched — the same treatment a session
+  // switch gets, for the same reason.
+  const onPrepareRewind = useCallback(
+    (turn: number, scope: RewindScope) => port.prepareRewind(turn, scope),
+    [port],
+  );
+  const onCommitRewind = useCallback(
+    async (planId: string) => {
+      const result = await port.commitRewind(planId);
+      reloadSession();
+      return result;
+    },
+    [port, reloadSession],
+  );
+  const onUndoRewind = useCallback(
+    (transactionId: string) => port.undoRewind(transactionId).then(reloadSession),
+    [port, reloadSession],
+  );
+
+  // Keyed by item id, so a streamed frame does not change any row's own value
+  // and the transcript's memo still holds.
+  const paired = useMemo(() => pairCheckpoints(s.items, checkpoints), [s.items, checkpoints]);
 
   // The shell deliberately mints no session file at launch, so the list starts
   // empty and the first turn is what creates one — and its title only exists
@@ -126,7 +163,10 @@ export function App({ port }: { port: AgentPort }) {
   useEffect(() => {
     reloadSessions();
     reloadMcp();
-  }, [reloadSessions, reloadMcp, status?.sessionPath, s.running]);
+    // A finished turn is exactly when the kernel has one more checkpoint.
+    port.checkpoints().then(setCheckpoints).catch(() => {});
+    port.changes().then(setTree).catch(() => setTree(null));
+  }, [reloadSessions, reloadMcp, port, status?.sessionPath, s.running]);
 
   useEffect(reloadAccount, [reloadAccount]);
 
@@ -135,26 +175,40 @@ export function App({ port }: { port: AgentPort }) {
   useEffect(() => {
     if (!s.running) {
       startedAt.current = 0;
+      setTps(0);
       return;
     }
     if (!startedAt.current) startedAt.current = Date.now();
     const t = setInterval(() => {
       setElapsed((Date.now() - startedAt.current) / 1000);
+      setTps(tokensPerSecond(win.current, Date.now()));
       refreshStatus();
-    }, 1000);
+    }, 250);
     return () => clearInterval(t);
   }, [s.running, refreshStatus]);
 
+  // A pack carries a light and a dark set, so it is repainted with the scheme
+  // rather than once at load: switching the OS to dark has to move both.
   useEffect(() => {
     const mq = matchMedia("(prefers-color-scheme: dark)");
     const paint = () => {
-      document.documentElement.dataset.theme = theme === "auto" ? (mq.matches ? "dark" : "light") : theme;
+      const scheme = theme === "auto" ? (mq.matches ? "dark" : "light") : theme;
+      document.documentElement.dataset.theme = scheme;
+      applyThemePack(pack, scheme as "light" | "dark");
     };
     paint();
     mq.addEventListener("change", paint);
     localStorage.setItem("rx-theme", theme);
     return () => mq.removeEventListener("change", paint);
-  }, [theme]);
+  }, [theme, pack]);
+
+  const reloadThemes = useCallback(() => {
+    port
+      .themes()
+      .then((list) => setPack(list.find((p) => p.active) ?? null))
+      .catch(() => setPack(null));
+  }, [port]);
+  useEffect(reloadThemes, [reloadThemes]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -205,6 +259,28 @@ export function App({ port }: { port: AgentPort }) {
         .forgetMemory(name)
         .then(() => dispatch({ kind: "__forgot", id: itemId } as never))
         .catch(fail);
+    },
+    [port, fail],
+  );
+
+  // An extension action reports back in its own words. Surfacing the result as
+  // a notice keeps it in the transcript where the card that offered it sits,
+  // and a refusal lands on the same path as any other failure.
+  const onExtInvoke = useCallback(
+    (name: string) => {
+      port
+        .invokeExtensionAction(name)
+        .then((message) => {
+          if (message.trim()) dispatch({ kind: "notice", level: "info", text: message });
+        })
+        .catch(fail);
+    },
+    [port, fail],
+  );
+
+  const onExtSubmit = useCallback(
+    (pluginId: string, surfaceId: string, values: Record<string, unknown>) => {
+      port.submitExtensionForm(pluginId, surfaceId, values).catch(fail);
     },
     [port, fail],
   );
@@ -306,6 +382,12 @@ export function App({ port }: { port: AgentPort }) {
             onApprove={onApprove}
             onAnswer={onAnswer}
             onForget={onForget}
+            onExtInvoke={onExtInvoke}
+            onExtSubmit={onExtSubmit}
+            checkpoints={paired}
+            onPrepareRewind={onPrepareRewind}
+            onCommitRewind={onCommitRewind}
+            onUndoRewind={onUndoRewind}
           />
 
           <div className="scroll" id="trajScroll" data-pane="traj" hidden={pane !== "traj"}>
@@ -344,10 +426,14 @@ export function App({ port }: { port: AgentPort }) {
             items={s.items}
             jobs={status?.jobs ?? []}
             mcp={mcp}
-            rate={elapsed >= 1 ? s.metrics.out / elapsed : 0}
+            rate={tps}
+            done={!s.running}
+            tree={tree}
             yolo={yolo}
             onFold={() => setSide(false)}
             onSettings={() => setSettings(true)}
+            panels={s.panels}
+            onExtInvoke={onExtInvoke}
           />
         </div>
       </div>
@@ -360,6 +446,7 @@ export function App({ port }: { port: AgentPort }) {
           onTheme={setTheme}
           onClose={() => setSettings(false)}
           onChanged={onSettingsChanged}
+          reloadThemes={reloadThemes}
           at={typeof settings === "string" ? settings : undefined}
           account={account}
           reloadAccount={reloadAccount}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AccountState, AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
+import type { AccountState, AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, RoleAssignments, SessionStatus, SkillEntry, ThemePack } from "../port/port";
 import { arrowTabs } from "./tablist";
 import { WindowControls } from "./WindowControls";
 import { AddServer } from "./AddServer";
@@ -33,8 +33,8 @@ const THEMES: [string, string][] = [
 
 type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "memory" | "account" | "versions" | "appearance" | "advanced";
 
-// What still lives in the old desktop app. Bots and theme packs are not on the
-// roadmap, so they are not promises to keep here either. Signing in and reading
+// What still lives in the old desktop app. Bots are not on the roadmap, so
+// they are not a promise to keep here either. Signing in and reading
 // versions landed here; downloading and applying an update did not, and naming
 // only that half keeps this list a fact rather than a promise.
 // Everything that used to live here has a home now, so the 「高级」 tab filters
@@ -74,6 +74,7 @@ interface Props {
   port: AgentPort;
   status: SessionStatus | null;
   theme: string;
+  reloadThemes: () => void;
   onTheme: (t: string) => void;
   onClose: () => void;
   onChanged: () => void;
@@ -82,13 +83,14 @@ interface Props {
   reloadAccount: () => void;
 }
 
-export function Settings({ port, status, theme, onTheme, onClose, onChanged, at: opened, account: acct, reloadAccount }: Props) {
+export function Settings({ port, status, theme, onTheme, onClose, onChanged, reloadThemes, at: opened, account: acct, reloadAccount }: Props) {
   const [at, setAt] = useState<Section>((opened as Section) || "session");
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [roles, setRoles] = useState<RoleAssignments | null>(null);
   const [protocol, setProtocol] = useState<Record<string, string>>({});
   const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [skills, setSkills] = useState<SkillEntry[]>([]);
+  const [packs, setPacks] = useState<ThemePack[]>([]);
   const [implicit, setImplicit] = useState(true);
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
@@ -118,6 +120,28 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
     reloadExt();
     onChanged();
   }, [reloadExt, onChanged]);
+
+  const loadPacks = useCallback(() => {
+    port.themes().then(setPacks).catch(() => setPacks([]));
+  }, [port]);
+  useEffect(loadPacks, [loadPacks]);
+
+  // Activating repaints through App's own theme effect, so this only has to
+  // refresh the list — onChanged is what tells App to re-read it.
+  // Activating repaints through App's theme effect, so this refreshes the list
+  // here and asks App to re-read which pack is active.
+  const pickPack = useCallback(
+    (id: string) => {
+      port
+        .activateTheme(id)
+        .then(() => {
+          loadPacks();
+          reloadThemes();
+        })
+        .catch(() => {});
+    },
+    [port, loadPacks, reloadThemes],
+  );
 
   // Adding or removing a source changes what the picker above can offer, so
   // the list is reloadable rather than read once at mount.
@@ -424,6 +448,29 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
                   </button>
                 ))}
               </div>
+            </Group>
+          )}
+
+          {at === "appearance" && (
+            <Group title="配色" hint="装在记忆目录的 themes/ 下，一个目录一个 theme.json。表面与强调色跟着走，状态色（成功/警告/失败）不跟，那是含义不是装饰。">
+              <div className="lrow">
+                <span className="ds">默认</span>
+                <button className="btn" data-primary={!packs.some((p) => p.active) ? "" : undefined} onClick={() => pickPack("")}>
+                  {packs.some((p) => p.active) ? "还原" : "使用中"}
+                </button>
+              </div>
+              {packs.length === 0 && <div className="lrow"><span className="ds">还没装配色</span></div>}
+              {packs.map((p) => (
+                <div className="lrow" key={p.id}>
+                  <span className="ds">
+                    {p.name}
+                    {p.author && <span className="sc">{p.author}</span>}
+                  </span>
+                  <button className="btn" data-primary={p.active ? "" : undefined} onClick={() => pickPack(p.id)}>
+                    {p.active ? "使用中" : "换上"}
+                  </button>
+                </div>
+              ))}
             </Group>
           )}
 

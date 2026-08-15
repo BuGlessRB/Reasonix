@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/tokencount"
 )
 
 func TestToWireRetryingJSON(t *testing.T) {
@@ -468,5 +469,36 @@ func TestToWireInteractionAndLifecyclePayloads(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestToWireToolCarriesItsOwnContextCost(t *testing.T) {
+	args := `{"path":"internal/provider/retry.go"}`
+	output := "  1→package provider\n  2→\n  3→import \"time\"\n"
+	w := ToWire(event.Event{Kind: event.ToolResult, Tool: event.Tool{
+		ID: "c1", Name: "read_file", Args: args, Output: output,
+	}})
+	want := tokencount.Text(args) + tokencount.Text(output)
+	if w.Tool.ContextTokens != want {
+		t.Fatalf("ContextTokens = %d, want %d (args + result)", w.Tool.ContextTokens, want)
+	}
+}
+
+// A partial dispatch is announced before its arguments finish streaming, so any
+// figure it carried would be a fraction of the real one that only shrinks the
+// card's number as the call gets bigger.
+func TestToWirePartialDispatchClaimsNoContextCost(t *testing.T) {
+	w := ToWire(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{
+		ID: "c1", Name: "write_file", Args: `{"path":"a.go","content":"pack`, Partial: true,
+	}})
+	if w.Tool.ContextTokens != 0 {
+		t.Fatalf("ContextTokens = %d on a partial dispatch, want 0", w.Tool.ContextTokens)
+	}
+	b, err := json.Marshal(w)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(b), "contextTokens") {
+		t.Fatalf("zero cost should be omitted from the wire: %s", b)
 	}
 }

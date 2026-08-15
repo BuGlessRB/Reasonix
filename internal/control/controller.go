@@ -1188,6 +1188,12 @@ func (c *Controller) SubmitHTTPFormat(input, format string) {
 	c.submitHTTPWithFormat(input, "", f)
 }
 
+// IsNonTurnInput reports input that has no turn to start: a management verb, a
+// memory note, a shell shortcut. A frontend that judges a submission by whether
+// a turn began has to ask this first — /compact does its work and emits a
+// notice without ever running one.
+func IsNonTurnInput(input string) bool { return isNonTurnHTTPInput(input) }
+
 // isNonTurnHTTPInput reports inputs that never reach the agent turn loop, so a
 // structured-output request attached to them would otherwise leak into the
 // next real turn (the format slot is consumed only by runTurnLoopWithRawDisplay).
@@ -1384,6 +1390,24 @@ func (c *Controller) submitHTTPWithFormat(input, display, format string) {
 	c.submitCommandOrTurn(trimmed, input, display, true, "", format)
 }
 
+// compactAndReport folds the context and says what happened. A fold the kernel
+// declined is an answer about this transcript — nothing left worth folding —
+// and reporting it as a failure sent people looking for a broken kernel.
+func (c *Controller) compactAndReport(focus string) {
+	err := c.Compact(context.Background(), focus)
+	switch {
+	case err == nil:
+		c.notice("compacted")
+		if err := c.SnapshotRewrite(); err != nil {
+			slog.Warn("controller: snapshot after compact", "err", err)
+		}
+	case agent.IsCompactionDeclined(err):
+		c.notice("nothing to compact — " + agent.CompactionDeclineReason(err))
+	default:
+		c.notice("compaction failed: " + err.Error())
+	}
+}
+
 func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, scopedRefsOnly bool, editedOriginal, format string) {
 	runRefTurn := func(input, display string) {
 		c.runRefTurnWithFormat(input, display, format)
@@ -1415,17 +1439,7 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 	}
 	switch {
 	case trimmed == "/compact" || strings.HasPrefix(trimmed, "/compact "):
-		focus := strings.TrimSpace(strings.TrimPrefix(trimmed, "/compact"))
-		go func() {
-			if err := c.Compact(context.Background(), focus); err != nil {
-				c.notice("compaction failed: " + err.Error())
-			} else {
-				c.notice("compacted")
-				if err := c.SnapshotRewrite(); err != nil {
-					slog.Warn("controller: snapshot after compact", "err", err)
-				}
-			}
-		}()
+		go c.compactAndReport(strings.TrimSpace(strings.TrimPrefix(trimmed, "/compact")))
 	case trimmed == "/context":
 		c.noticeDetail(c.ContextReport())
 	case trimmed == "/new":

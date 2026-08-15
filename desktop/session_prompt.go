@@ -70,7 +70,7 @@ func sessionWithFreshSystemPrompt(session *agent.Session, system string) *agent.
 
 func resumeWithFreshSystemPrompt(ctrl interface {
 	History() []provider.Message
-	Resume(*agent.Session, string)
+	Resume(*agent.Session, string) error
 	SetSessionPath(string)
 }, messages []provider.Message, path string) {
 	if ctrl == nil {
@@ -83,12 +83,12 @@ func resumeWithFreshSystemPrompt(ctrl interface {
 		if path != "" {
 			if loaded, err := agent.LoadSession(path); err == nil && loaded != nil {
 				if resumed, ok := loaded.CloneWithMessagesIfCompatible(next); ok {
-					ctrl.Resume(resumed, path)
+					_ = ctrl.Resume(resumed, path) // rebuilt controller: nothing running
 					return
 				}
 			}
 		}
-		ctrl.Resume(agent.NewSession("").CloneWithMessages(next), path)
+		_ = ctrl.Resume(agent.NewSession("").CloneWithMessages(next), path)
 		return
 	}
 	if path != "" {
@@ -115,7 +115,7 @@ func resumeLoadedSessionAndGoal(ctrl control.SessionAPI, session *agent.Session,
 		return
 	}
 	_, sidecarErr := os.Stat(store.SessionGoalState(path))
-	ctrl.Resume(sessionWithFreshSystemPrompt(session, systemPromptFrom(ctrl.History())), path)
+	_ = ctrl.Resume(sessionWithFreshSystemPrompt(session, systemPromptFrom(ctrl.History())), path)
 	if os.IsNotExist(sidecarErr) && strings.TrimSpace(legacyGoal) != "" {
 		ctrl.SetGoal(strings.TrimSpace(legacyGoal))
 	}

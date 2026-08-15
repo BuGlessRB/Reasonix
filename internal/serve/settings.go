@@ -69,6 +69,35 @@ func persistDefaultModel(ref string) {
 	}
 }
 
+// applyApprovalMode switches the live posture and records it. The two belong
+// together: a switch that only lands at runtime reads, one launch later, as a
+// choice that was never made.
+func (s *Server) applyApprovalMode(mode string) {
+	s.ctl().SetToolApprovalMode(mode)
+	persistDesktopApprovalMode(mode)
+}
+
+// persistDesktopApprovalMode records the posture chosen on the composer. Same
+// reasoning as the model above: without it the next launch reads as the choice
+// never having been made. The refusal path is a log, not a failed request — the
+// live switch already took effect.
+func persistDesktopApprovalMode(mode string) {
+	path := config.UserConfigPath()
+	if path == "" {
+		return
+	}
+	unlock := config.LockUserConfigEdits()
+	defer unlock()
+	edit := config.LoadForEdit(path)
+	if err := edit.SetDesktopDefaultToolApprovalMode(mode); err != nil {
+		slog.Warn("serve: persist approval mode", "mode", mode, "err", err)
+		return
+	}
+	if err := edit.SaveTo(path); err != nil {
+		slog.Warn("serve: save approval mode", "mode", mode, "path", path, "err", err)
+	}
+}
+
 func (s *Server) effort(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Effort string `json:"effort"`
@@ -127,6 +156,10 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		if entry, ok := cfg.ResolveModel(currentModelRef(s.ctl())); ok {
 			sess["effort"] = entry.Effort
 			sess["modelRef"] = entry.Name + "/" + entry.Model
+			// Whether this model reads images at all. A composer that cannot ask
+			// lets the user paste a screenshot into a text-only model and watch
+			// nothing happen.
+			sess["vision"] = config.EffectiveVision(entry)
 		}
 	}
 	sess["sessionCostQuote"] = s.bc.SessionCostQuote()

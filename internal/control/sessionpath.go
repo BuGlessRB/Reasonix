@@ -19,12 +19,18 @@ func (c *Controller) EnsureSessionPath() {
 	c.SetFreshSessionPath(agent.NewSessionPath(c.SessionDir(), c.Label()))
 }
 
-// Resume seeds the session from a loaded transcript and pins auto-save to its
-// path. Arriving from a different non-empty path rotates the private temporary
-// generation so the loaded conversation cannot see the previous session's
-// files; a same-path resume (rebuild migration) keeps it.
-func (c *Controller) Resume(s *agent.Session, path string) {
+// Resume seeds the session from a loaded transcript and pins auto-save to it.
+// Arriving from a different path rotates the private temporary generation; a
+// same-path resume (rebuild migration) keeps it. It claims the rotation gate
+// NewSession and Fork claim: a live turn owns the session it writes to, and
+// Resume was the one swap that bound another one under it.
+func (c *Controller) Resume(s *agent.Session, path string) error {
+	if err := c.beginRotation(); err != nil {
+		return err
+	}
+	defer c.endRotation()
 	c.resume(s, path, true)
+	return nil
 }
 
 // AdoptHistory makes a freshly built controller continue an existing

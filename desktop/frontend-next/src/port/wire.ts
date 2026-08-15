@@ -48,6 +48,7 @@ export interface Execution {
   mutationRisk?: string;
   verification?: string;
   durationMs?: number;
+  contextTokens?: number;
 }
 
 export interface Tool {
@@ -61,9 +62,14 @@ export interface Tool {
   readOnly: boolean;
   truncated?: boolean;
   durationMs?: number;
+  contextTokens?: number;
   startedAt?: number;
   endedAt?: number;
   partial?: boolean;
+  // Cumulative argument characters received so far on a partial dispatch — the
+  // only liveness a streaming payload has before its JSON parses.
+  argChars?: number;
+  refreshed?: boolean;
   parentId?: string;
   attemptId?: string;
   diff?: string;
@@ -156,6 +162,79 @@ export interface Guardian {
   duration_ms?: number;
 }
 
+// Extension UI surfaces. A sidecar publishes data, never markup — the host
+// decides how to draw it, which is why the same extension shows up as a card
+// here, as text in the CLI, and as a client-rendered block over ACP.
+export interface ExtensionStatus {
+  label: string;
+  detail?: string;
+  severity?: string;
+  progress?: number;
+}
+
+export interface ExtensionKeyValue {
+  key: string;
+  value: string;
+}
+
+export interface ExtensionActionRef {
+  actionId: string;
+  label: string;
+}
+
+export interface ExtensionCard {
+  title?: string;
+  markdown?: string;
+  text?: string;
+  fields?: ExtensionKeyValue[];
+  progress?: number;
+  actions?: ExtensionActionRef[];
+}
+
+export interface ExtensionFormField {
+  key: string;
+  label?: string;
+  kind?: "confirm" | "input" | "select" | "multiselect";
+  options?: string[];
+  default?: unknown;
+  required?: boolean;
+}
+
+export interface ExtensionForm {
+  title?: string;
+  message?: string;
+  fields: ExtensionFormField[];
+}
+
+// A panel has no markdown on purpose — see the protocol DTO: the side rail is
+// a narrow column, and a rendered document there costs more than it tells.
+export interface ExtensionPanel {
+  title?: string;
+  text?: string;
+  fields?: ExtensionKeyValue[];
+  progress?: number;
+  actions?: ExtensionActionRef[];
+}
+
+export interface ExtensionNotification {
+  title: string;
+  body?: string;
+  severity?: string;
+}
+
+export interface ExtensionSurface {
+  pluginId: string;
+  surfaceId: string;
+  sessionId?: string;
+  generation?: number;
+  kind: "status" | "card" | "form" | "notification" | "panel";
+  status?: ExtensionStatus;
+  card?: ExtensionCard;
+  form?: ExtensionForm;
+  notification?: ExtensionNotification;
+  panel?: ExtensionPanel;
+}
+
 export interface Compaction {
   trigger?: string;
   messages?: number;
@@ -202,6 +281,7 @@ export interface WireEvent {
   approval?: Approval;
   ask?: Ask;
   guardian?: Guardian;
+  extension?: ExtensionSurface;
   compaction?: Compaction;
   streamAttempt?: StreamAttempt;
   completion?: CompletionSummary;

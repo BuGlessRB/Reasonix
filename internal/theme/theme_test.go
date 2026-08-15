@@ -3,6 +3,7 @@ package theme
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -71,15 +72,32 @@ func TestListSkipsUnreadablePacksWithoutHidingTheRest(t *testing.T) {
 	writePack(t, Dir(), "empty-dark", `{"schemaVersion":1,"name":"Half","tokens":{"light":{"bg":"#fff"}}}`)
 
 	packs := List()
-	if len(packs) != 1 || packs[0].ID != "good" {
-		t.Fatalf("List = %+v, want only the readable pack", packs)
+	installed := map[string]bool{}
+	for _, p := range packs {
+		installed[p.ID] = true
+	}
+	if !installed["good"] {
+		t.Fatal("the readable pack was hidden by the broken ones")
+	}
+	for _, id := range []string{"future", "broken", "empty-dark"} {
+		if installed[id] {
+			t.Fatalf("unreadable pack %q was listed", id)
+		}
 	}
 }
 
-func TestListWithNothingInstalledIsEmptyNotAnError(t *testing.T) {
+// With nothing installed the list is the shipped set, not an error and not
+// empty: a fresh install has palettes to choose from.
+func TestListWithNothingInstalledIsTheShippedSet(t *testing.T) {
 	t.Setenv("REASONIX_HOME", t.TempDir())
-	if packs := List(); len(packs) != 0 {
-		t.Fatalf("List = %+v, want empty", packs)
+	packs := List()
+	if len(packs) == 0 {
+		t.Fatal("List = empty, want the shipped packs")
+	}
+	for _, p := range packs {
+		if !strings.HasPrefix(p.ID, "official-") {
+			t.Fatalf("unexpected pack %q with nothing installed", p.ID)
+		}
 	}
 }
 
@@ -89,5 +107,56 @@ func TestLoadRejectsAPathInsteadOfAnID(t *testing.T) {
 		if _, err := Load(id); err == nil {
 			t.Fatalf("Load(%q) succeeded, want a rejection", id)
 		}
+	}
+}
+
+// The shipped packs are the starting point a fresh install has and the sample
+// an agent copies when it authors one, so they have to decode with the same
+// reader everything else goes through.
+func TestShippedPacksAreReadable(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	packs := List()
+	if len(packs) < 8 {
+		t.Fatalf("List = %d packs, want the shipped set", len(packs))
+	}
+	for _, p := range packs {
+		if p.Name == "" || len(p.Tokens["light"]) == 0 || len(p.Tokens["dark"]) == 0 {
+			t.Fatalf("shipped pack %q is incomplete: %+v", p.ID, p)
+		}
+		// The frontend maps these two onto its page and text variables; a pack
+		// without them would activate into an unreadable window.
+		for _, key := range []string{"bg", "fg"} {
+			if _, ok := p.Tokens["dark"][key]; !ok {
+				t.Fatalf("shipped pack %q has no dark %q", p.ID, key)
+			}
+		}
+	}
+	if _, err := Load(packs[0].ID); err != nil {
+		t.Fatalf("Load(%q): %v", packs[0].ID, err)
+	}
+}
+
+// A user's own copy of a palette is the one they meant, so it shadows the
+// shipped pack of the same id rather than appearing twice.
+func TestInstalledPackShadowsTheShippedOne(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	shipped := List()
+	if len(shipped) == 0 {
+		t.Fatal("no shipped packs")
+	}
+	id := shipped[0].ID
+	writePack(t, Dir(), id, `{"schemaVersion":1,"name":"Mine","tokens":{"light":{"bg":"#FFFFFF"},"dark":{"bg":"#000000"}}}`)
+
+	after := List()
+	if len(after) != len(shipped) {
+		t.Fatalf("shadowing changed the count: %d -> %d", len(shipped), len(after))
+	}
+	for _, p := range after {
+		if p.ID == id && p.Name != "Mine" {
+			t.Fatalf("pack %q = %q, want the installed copy to win", id, p.Name)
+		}
+	}
+	if pack, err := Load(id); err != nil || pack.Name != "Mine" {
+		t.Fatalf("Load(%q) = %+v, %v", id, pack, err)
 	}
 }

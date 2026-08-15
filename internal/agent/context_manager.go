@@ -130,6 +130,12 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 	mustFree := policy.Trigger != CompactionTriggerManual && (policy.Trigger == CompactionTriggerOverflow || est >= hard)
 	outcome, err := a.compactToProjection(ctx, policy.Trigger, policy.Instructions, forceFold, mustFree)
 	if err != nil {
+		// Cancellation is the caller's decision, not a summary that failed:
+		// recording it as one would blame the summarizer for this generation,
+		// and degrading around it would fold a view nobody is waiting for.
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return PreparedContext{}, err
+		}
 		if errors.Is(err, errCompressStaleContext) && policy.Trigger != CompactionTriggerManual {
 			// Transcript changed during the summary call: discard the candidate
 			// and block this generation so we do not pay for a second summary.
@@ -166,7 +172,16 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 			return prepared, nil
 		}
 		reason := "context is above the maintenance threshold but no foldable region remains"
+		if policy.Trigger == CompactionTriggerManual {
+			reason = "no foldable region remains"
+		}
 		a.recordContextMaintenanceBlocked(inputHash, policy.Trigger, "summary", reason)
+		// Manual carries Force, so without this a hand-typed compact answered
+		// with the overflow error — a sentence about a provider limit nowhere
+		// near being hit. Nothing to fold is a verdict, not a failure.
+		if policy.Trigger == CompactionTriggerManual && est < hard {
+			return PreparedContext{}, fmt.Errorf("%w: %s", errCheckpointRejected, reason)
+		}
 		if policy.Trigger == CompactionTriggerOverflow || policy.Force || est >= hard {
 			return PreparedContext{}, fmt.Errorf("%w: %s", ErrCompactionRequired, reason)
 		}

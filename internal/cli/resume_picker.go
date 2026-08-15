@@ -129,7 +129,11 @@ func (m chatTUI) applyResumePick() (tea.Model, tea.Cmd) {
 		m.notice("resume: " + sessionLeaseHeldNotice(err))
 		return m, nil
 	}
-	m.ctrl.Resume(loaded, target.Path)
+	if err := m.ctrl.Resume(loaded, target.Path); err != nil {
+		_ = m.rebindSessionLease(m.ctrl.SessionPath())
+		m.notice("resume: " + err.Error())
+		return m, nil
+	}
 	m.replayActiveBranch(i18n.M.ResumedTitle)
 	return m, nil
 }

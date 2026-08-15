@@ -2354,8 +2354,8 @@ func (gw *BotGateway) getOrCreateSession(ctx context.Context, key string, msg In
 				}
 				return nil
 			}
-		} else {
-			ctrl.Resume(loaded, profile.sessionPath)
+		} else if err := ctrl.Resume(loaded, profile.sessionPath); err != nil {
+			gw.logger.Error("attached session resume refused", "session_path", profile.sessionPath, "err", err)
 		}
 	}
 	ctrl.EnableInteractiveApproval()

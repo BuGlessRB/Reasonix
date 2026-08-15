@@ -22,6 +22,9 @@ type SlashItem struct {
 	Insert  string `json:"insert"`
 	Hint    string `json:"hint"`
 	Descend bool   `json:"descend"`
+	// builtin|command|skill|subagent|prompt|file|dir|resource; empty on an
+	// argument value, which is not a thing a frontend draws differently.
+	Kind string `json:"kind,omitempty"`
 }
 
 // ArgData supplies the dynamic data SlashArgItems needs, so the completion logic
