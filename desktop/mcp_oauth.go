@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/mcplaunch"
 	"reasonix/internal/netclient"
 	"reasonix/internal/plugin"
+	"reasonix/internal/pluginspec"
 )
 
 func (a *App) mcpLaunchSpec(root, name string) (plugin.Spec, error) {
@@ -41,7 +42,7 @@ func (a *App) mcpLaunchSpecForEntryWithConfig(root string, entry config.PluginEn
 	if err != nil {
 		return plugin.Spec{}, err
 	}
-	specs := boot.PluginSpecsForRootWithOptions([]config.PluginEntry{entry}, root, boot.PluginSpecOptions{
+	specs := pluginspec.ForRootWithOptions([]config.PluginEntry{entry}, root, pluginspec.Options{
 		DefaultCallTimeout: time.Duration(cfg.MCPCallTimeoutSeconds()) * time.Second,
 		LaunchManager:      mcplaunch.ForWorkspace(config.ReasonixHomeDir(), root),
 		ConfigSource:       "workspace_config", StateHome: config.ReasonixHomeDir(),
@@ -124,7 +125,7 @@ func (a *App) ClearMCPServerAuthentication(name string) error {
 	if !found {
 		return fmt.Errorf("no configured MCP server named %q", name)
 	}
-	specs := boot.PluginSpecsForRootWithOptions([]config.PluginEntry{entry}, root, boot.PluginSpecOptions{
+	specs := pluginspec.ForRootWithOptions([]config.PluginEntry{entry}, root, pluginspec.Options{
 		DefaultCallTimeout: 30 * time.Second, ConfigSource: string(entry.Source),
 		StateHome: config.ReasonixHomeDir(), Network: true,
 	})

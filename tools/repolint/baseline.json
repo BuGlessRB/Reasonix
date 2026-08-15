@@ -6,7 +6,7 @@
     "essay": 3951,
     "file-size": 106678,
     "function-size": 8733,
-    "layering": 1,
+    "layering": 0,
     "marker": 0,
     "narrative": 64,
     "struct-state": 115,
@@ -781,9 +781,6 @@
     "internal/capdiag/collect.go": {
       "essay": 1,
       "file-size": 20
-    },
-    "internal/capdiag/live.go": {
-      "layering": 1
     },
     "internal/checkpoint/barrier.go": {
       "essay": 1

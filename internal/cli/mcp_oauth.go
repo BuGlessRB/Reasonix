@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/mcpdiag"
 	"reasonix/internal/netclient"
 	"reasonix/internal/plugin"
+	"reasonix/internal/pluginspec"
 )
 
 var mcpAuthorizeForCLI = plugin.AuthorizeHTTPMCP
@@ -48,7 +48,7 @@ func mcpAuthCLI(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	specs := boot.PluginSpecsForRootWithOptions([]config.PluginEntry{entry}, workspace, boot.PluginSpecOptions{
+	specs := pluginspec.ForRootWithOptions([]config.PluginEntry{entry}, workspace, pluginspec.Options{
 		DefaultCallTimeout: 30 * time.Second, ConfigSource: string(entry.Source),
 		StateHome: config.ReasonixHomeDir(), Network: true, OAuthHTTPClient: client,
 	})
@@ -90,7 +90,7 @@ func probeMCPReadiness(entry config.PluginEntry) (plugin.MCPInstallResult, error
 	if err != nil {
 		return plugin.InstallResultForError(entry.Name, err), err
 	}
-	specs := boot.PluginSpecsForRootWithOptions([]config.PluginEntry{entry}, workspace, boot.PluginSpecOptions{
+	specs := pluginspec.ForRootWithOptions([]config.PluginEntry{entry}, workspace, pluginspec.Options{
 		DefaultCallTimeout: 30 * time.Second, ConfigSource: string(config.MCPSourceUserConfig),
 		StateHome: config.ReasonixHomeDir(), Network: true, OAuthHTTPClient: client,
 	})

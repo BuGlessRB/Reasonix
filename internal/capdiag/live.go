@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/plugin"
+	"reasonix/internal/pluginspec"
 )
 
 func lookPath(cmd string) (string, error) {
@@ -52,7 +52,7 @@ func probeLiveMCP(rep *MCPReport, cfg *config.Config, root, home, reasonixHome s
 		return issues
 	}
 
-	specs := boot.PluginSpecsForRoot(auto, root)
+	specs := pluginspec.ForRoot(auto, root)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout*time.Duration(len(specs))+timeout)
 	defer cancel()
 

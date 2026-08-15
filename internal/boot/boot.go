@@ -52,6 +52,7 @@ import (
 	"reasonix/internal/outputstyle"
 	"reasonix/internal/permission"
 	"reasonix/internal/plugin"
+	"reasonix/internal/pluginspec"
 	"reasonix/internal/productdocs"
 	"reasonix/internal/provider"
 	"reasonix/internal/recovery"
@@ -721,7 +722,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// register placeholders without starting processes; cache-miss servers get
 	// a single background catalog discovery. First real tool call uses
 	// EnsureConnected so parent/child/tab runtimes share one process.
-	pluginSpecOptions := PluginSpecOptions{
+	pluginSpecOptions := pluginspec.Options{
 		DefaultStartupTimeout: time.Duration(cfg.MCPStartupTimeoutSeconds()) * time.Second,
 		DefaultCallTimeout:    time.Duration(cfg.MCPCallTimeoutSeconds()) * time.Second,
 		LaunchManager:         mcplaunch.ForWorkspace(config.ReasonixHomeDir(), root),
@@ -730,7 +731,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		WriterRoots:           writeRoots,
 		ForbidReadRoots:       forbidReadRoots,
 		Network:               networkEnabled,
-		PackageOwners:         pluginPackageOwners(cfg),
+		PackageOwners:         pluginspec.PackageOwners(cfg),
 		OAuthHTTPClient:       balanceClient,
 	}
 	autoStartEntries := cfg.EnabledPlugins(root, config.DefaultMCPActivationStore())
@@ -744,9 +745,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// but no longer change process start timing. Keep the partition only so
 	// demotion notices remain meaningful for chronically slow eager configs.
 	eagerEntries, bgEntries := partitionByTier(autoStartEntries)
-	extraSpecs := applyDefaultMCPStartupTimeout(
-		applyDefaultMCPCallTimeout(
-			applyKnownPluginOverrides(opts.ExtraPlugins, root),
+	extraSpecs := pluginspec.ApplyDefaultStartupTimeout(
+		pluginspec.ApplyDefaultCallTimeout(
+			pluginspec.ApplyKnownOverrides(opts.ExtraPlugins, root),
 			pluginSpecOptions.DefaultCallTimeout,
 		),
 		pluginSpecOptions.DefaultStartupTimeout,
@@ -767,7 +768,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			// authorization without another per-tool or per-session prompt.
 			extraSpecs[i].Authorized = true
 		}
-		applyMCPIsolation(&extraSpecs[i], root, pluginSpecOptions)
+		pluginspec.ApplyIsolation(&extraSpecs[i], root, pluginSpecOptions)
 	}
 	// Auto-demote: any eager plugin that has been chronically slow (recent
 	// samples repeatedly hit the blocking startup budget) drops to background
@@ -787,8 +788,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	}
 	eagerEntries = kept
 
-	eagerSpecs := PluginSpecsForRootWithOptions(eagerEntries, root, pluginSpecOptions)
-	bgSpecs := PluginSpecsForRootWithOptions(bgEntries, root, pluginSpecOptions)
+	eagerSpecs := pluginspec.ForRootWithOptions(eagerEntries, root, pluginSpecOptions)
+	bgSpecs := pluginspec.ForRootWithOptions(bgEntries, root, pluginSpecOptions)
 
 	eagerSpecs = append(eagerSpecs, extraSpecs...)
 
@@ -1464,7 +1465,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			ProjectRoot: root,
 			HTTPClient:  balanceClient,
 			ConnectMCP: func(e config.PluginEntry) (installsource.MCPConnectResult, error) {
-				spec := pluginSpecFromEntryWithOptions(e, root, pluginSpecOptions)
+				spec := pluginspec.FromEntry(e, root, pluginSpecOptions)
 				if opts.Stderr != nil {
 					spec.Stderr = opts.Stderr
 				}
@@ -1563,7 +1564,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// without inheriting dynamic mcp__* schemas.
 	var capLedger *capability.Ledger
 	var capAudit *capability.Audit
-	capSpecs := PluginSpecsForRootWithOptions(cfg.Plugins, root, pluginSpecOptions)
+	capSpecs := pluginspec.ForRootWithOptions(cfg.Plugins, root, pluginSpecOptions)
 	cachedTools, cacheKeyOK := capability.LoadCachedToolsForSpecs(capSpecs)
 	skillStore.ConfigureToolBindings(func(sk skill.Skill) []tool.MCPBinding {
 		return skillMCPBindings(sk, reg, capSpecs, cachedTools, cacheKeyOK)
@@ -1780,7 +1781,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			if spec.DefaultStartupTimeout <= 0 {
 				spec.DefaultStartupTimeout = pluginSpecOptions.DefaultStartupTimeout
 			}
-			applyMCPIsolation(spec, root, pluginSpecOptions)
+			pluginspec.ApplyIsolation(spec, root, pluginSpecOptions)
 		},
 		CapabilityRuntime:      capRuntime,
 		WorkspaceRoot:          root,

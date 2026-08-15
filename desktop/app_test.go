@@ -37,6 +37,7 @@ import (
 	"reasonix/internal/memory"
 	"reasonix/internal/plugin"
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/pluginspec"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/skill"
@@ -8156,7 +8157,7 @@ network = true
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtimeSpecs := boot.PluginSpecsForRootWithOptions([]config.PluginEntry{entry}, dir, boot.PluginSpecOptions{
+	runtimeSpecs := pluginspec.ForRootWithOptions([]config.PluginEntry{entry}, dir, pluginspec.Options{
 		DefaultCallTimeout: time.Duration(cfg.MCPCallTimeoutSeconds()) * time.Second,
 		LaunchManager:      mcplaunch.ForWorkspace(config.ReasonixHomeDir(), dir),
 		ConfigSource:       "workspace_config",
