@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"runtime"
 	"slices"
+	"time"
 
 	"reasonix/internal/proc"
 	"reasonix/internal/secrets"
@@ -106,6 +107,22 @@ func CommandWithConfig(ctx context.Context, dir string, extraConfig []string, ar
 	cmd.Env = Env()
 	proc.HideWindow(cmd)
 	return cmd
+}
+
+// availableProbeTimeout bounds the one probe below. A shim that resolves but
+// cannot answer is the case being detected, and on macOS that shim may try to
+// put up an installer dialog rather than exit.
+const availableProbeTimeout = 3 * time.Second
+
+// Available reports whether git can actually run, not whether something named
+// git sits on PATH: on macOS /usr/bin/git is an Xcode stub that resolves with no
+// command line tools installed and fails only when executed. Uncached on purpose
+// — every caller is a low-frequency decision, and caching the "no" would make
+// installing git afterwards require a restart to take effect.
+func Available() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), availableProbeTimeout)
+	defer cancel()
+	return Command(ctx, "", "--version").Run() == nil
 }
 
 // Env is the environment a git subprocess runs with. GIT_EXTERNAL_DIFF and

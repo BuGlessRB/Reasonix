@@ -2,6 +2,7 @@
 package doctor
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -10,12 +11,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/gitcmd"
 	"reasonix/internal/netclient"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/skill"
@@ -40,6 +43,7 @@ type Report struct {
 	Sandbox    SandboxReport    `json:"sandbox"`
 	Network    NetworkReport    `json:"network"`
 	Permission PermissionReport `json:"permission"`
+	Git        GitReport        `json:"git"`
 	Warnings   []string         `json:"warnings,omitempty"`
 }
 
@@ -66,6 +70,15 @@ type PluginReport struct {
 	Transport string `json:"transport"`
 	AutoStart bool   `json:"auto_start"`
 	Target    string `json:"target,omitempty"`
+}
+
+// GitReport answers the question a user with no git actually has: what stops
+// working. Unavailable is a plain fact here, never an error — most of Reasonix
+// does not need git, and Degraded names the parts that do.
+type GitReport struct {
+	Available bool     `json:"available"`
+	Version   string   `json:"version,omitempty"`
+	Degraded  []string `json:"degraded,omitempty"`
 }
 
 type LSPReport struct {
@@ -183,6 +196,7 @@ func Collect(opts Options) Report {
 			Proxy:     netclient.Summary(cfg.NetworkProxySpec()),
 			NoProxy:   strings.TrimSpace(cfg.Network.NoProxy) != "",
 		},
+		Git: collectGit(),
 		Permission: PermissionReport{
 			Mode:       cfg.Permissions.Mode,
 			AllowRules: len(cfg.Permissions.Allow),
@@ -300,10 +314,36 @@ func RenderText(r Report) string {
 	fmt.Fprintf(&b, "  proxy        %s\n", r.Network.Proxy)
 	fmt.Fprintf(&b, "  no_proxy     %v\n", r.Network.NoProxy)
 
+	fmt.Fprintf(&b, "\ngit\n")
+	if r.Git.Available {
+		fmt.Fprintf(&b, "  version      %s\n", r.Git.Version)
+	} else {
+		// Say what still works, or the absence reads as a broken install.
+		fmt.Fprintf(&b, "  version      not installed (rewind, checkpoints and every tool still work)\n")
+		for _, item := range r.Git.Degraded {
+			fmt.Fprintf(&b, "  degraded     %s\n", item)
+		}
+	}
+
 	fmt.Fprintf(&b, "\npermissions\n")
 	fmt.Fprintf(&b, "  mode         %s\n", valueOr(r.Permission.Mode, "ask"))
 	fmt.Fprintf(&b, "  rules        allow:%d ask:%d deny:%d\n", r.Permission.AllowRules, r.Permission.AskRules, r.Permission.DenyRules)
 	return b.String()
+}
+
+// collectGit runs git rather than looking it up, because on macOS /usr/bin/git
+// is an Xcode stub that resolves with no command line tools installed.
+func collectGit() GitReport {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := gitcmd.Command(ctx, "", "--version").Output()
+	if err != nil {
+		return GitReport{Degraded: []string{
+			"workspace changes list (shows nothing instead of your edits)",
+			"Delivery worktree isolation (writes serialize in the folder instead)",
+		}}
+	}
+	return GitReport{Available: true, Version: strings.TrimPrefix(strings.TrimSpace(string(out)), "git version ")}
 }
 
 func collectSessions(dir string) SessionsReport {

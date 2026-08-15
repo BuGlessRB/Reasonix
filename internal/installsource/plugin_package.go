@@ -512,6 +512,21 @@ func (t *installSourceTool) preparePluginSource(ctx context.Context, source, mod
 		if err != nil {
 			return "", "", func() {}, err
 		}
+		// Without git the same tree still arrives as a tarball, so a machine with
+		// no git installed can still install a plugin.
+		if !gitcmd.Available() {
+			commit, err := t.fetchGitHubTarball(ctx, src, tmp)
+			if err != nil {
+				_ = os.RemoveAll(tmp)
+				return "", "", func() {}, err
+			}
+			root, err := pluginRootFromClone(tmp, src.Path)
+			if err != nil {
+				_ = os.RemoveAll(tmp)
+				return "", "", func() {}, err
+			}
+			return root, commit, func() { _ = os.RemoveAll(tmp) }, nil
+		}
 		cloneURL := fmt.Sprintf("https://github.com/%s/%s.git", src.Owner, src.Repo)
 		args := []string{"clone", "--depth=1"}
 		if src.Branch != "" {

@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -167,7 +166,7 @@ func inspect(ctx context.Context, workspaceRoot string) (inspection, error) {
 	if !st.IsDir() {
 		return inspection{}, errors.New("project path is not a folder")
 	}
-	if _, err := exec.LookPath("git"); err != nil {
+	if !gitcmd.Available() {
 		return inspection{}, errors.New("Git is not installed; Delivery remains safe and will serialize writes in this folder")
 	}
 

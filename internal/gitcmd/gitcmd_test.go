@@ -167,3 +167,36 @@ func TestRepositoryConfigCannotRunCommandsDuringInspection(t *testing.T) {
 		t.Fatalf("stat marker: %v", err)
 	}
 }
+
+// A git that resolves on PATH but cannot run is the case LookPath gets wrong:
+// macOS ships /usr/bin/git as an Xcode stub that exists on a machine with no
+// command line tools and fails only when executed.
+func TestAvailableRunsGitRatherThanFindingIt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub is POSIX; the Windows stub would need its own launcher")
+	}
+	dir := t.TempDir()
+	stub := filepath.Join(dir, "git")
+	body := "#!/bin/sh\necho 'xcrun: error: invalid active developer path' >&2\nexit 1\n"
+	if err := os.WriteFile(stub, []byte(body), 0o755); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+	t.Setenv("PATH", dir)
+
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Fatalf("stub must be discoverable, else the test proves nothing: %v", err)
+	}
+	if Available() {
+		t.Fatal("a git that exits non-zero reads as installed; the probe only looked it up")
+	}
+}
+
+// The positive half, so the probe cannot pass by always answering no.
+func TestAvailableAcceptsAWorkingGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git on this machine")
+	}
+	if !Available() {
+		t.Fatal("a working git must report available")
+	}
+}
