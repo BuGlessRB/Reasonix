@@ -241,10 +241,22 @@ export function reduce(
       return { ...s, running: true, doing: "运行中", waiting: { ttftSince: Date.now() } };
 
     case "reasoning":
-      return { ...s, doing: "思考中", waiting: {}, items: appendText(s.items, ev.text ?? "", "reasoning") };
+      return {
+        ...s,
+        doing: "思考中",
+        waiting: {},
+        outWindow: sample(s.outWindow, estimateTokens(ev.text ?? ""), Date.now()),
+        items: appendText(s.items, ev.text ?? "", "reasoning"),
+      };
 
     case "text":
-      return { ...s, doing: "正在回答", waiting: {}, items: appendText(s.items, ev.text ?? "", "text") };
+      return {
+        ...s,
+        doing: "正在回答",
+        waiting: {},
+        outWindow: sample(s.outWindow, estimateTokens(ev.text ?? ""), Date.now()),
+        items: appendText(s.items, ev.text ?? "", "text"),
+      };
 
     case "message":
       return { ...s, items: sealSay(s.items) };

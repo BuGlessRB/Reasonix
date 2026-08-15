@@ -301,7 +301,7 @@ export interface ProviderProbe {
 export interface ProviderCheck {
   ok: boolean;
   kind?: string;
-  models?: number;
+  models?: string[];
   ambiguous?: boolean;
   noProxy?: boolean;
   error?: string;

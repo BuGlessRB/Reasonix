@@ -209,7 +209,7 @@ function Conn({
         <div className="find" data-lvl={found.ok ? "ok" : "warn"} role="status">
           <span className="t">
             {found.ok
-              ? `连上了 · ${KIND_LABEL[found.kind ?? ""] || found.kind} · ${found.models} 个模型`
+              ? `连上了 · ${KIND_LABEL[found.kind ?? ""] || found.kind} · ${found.models?.length ?? 0} 个模型`
               : "连不上"}
           </span>
           <span className="why">
@@ -246,12 +246,18 @@ function EditConn({
 
   // Re-asking the endpoint is how a source that gained models catches up; the
   // ticks the user already made survive it.
+  // A blank key field means "keep the stored one", so re-probing has to go
+  // through the saved source. Sending the empty field instead probes as a
+  // provider with no credential at all, which fails before it reaches the host.
   const refetch = async () => {
     setBusy(`edit:${entry.name}`);
     setErr("");
     try {
-      const got = await port.probeProvider(baseUrl.trim(), apiKey.trim());
-      setModels([...new Set([...got.models, ...picked])]);
+      const found = apiKey.trim()
+        ? (await port.probeProvider(baseUrl.trim(), apiKey.trim())).models
+        : (await port.checkProvider(entry.name)).models ?? [];
+      if (found.length === 0) throw new Error("这个端点没报出任何聊天模型");
+      setModels([...new Set([...found, ...picked])]);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -439,7 +445,7 @@ function AddProvider({
               <input value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} />
             </label>
             <label className="grow">
-              <span>协议</span>
+              <span>接入方式</span>
               <select value={kind} onChange={(e) => setKind(e.target.value)}>
                 <option value="openai">OpenAI 兼容</option>
                 <option value="anthropic">Anthropic 兼容</option>
@@ -448,7 +454,7 @@ function AddProvider({
           </div>
           {probe.ambiguous && (
             <p className="acct-note">
-              这个端点两种协议都答得上来，光看模型列表分不出来。选错了聊天会报错，那时候回来换另一个。
+              两种接入方式的模型列表它都答得上来，光看列表分不出来 —— 聊天入口通常不在同一个路径下，选错了聊天会报错。要两条都用就再添加一次、选另一个。
             </p>
           )}
           {probe.noProxy && (

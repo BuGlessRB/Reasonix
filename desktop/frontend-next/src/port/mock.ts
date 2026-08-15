@@ -502,6 +502,17 @@ export class MockPort implements AgentPort {
     return { ...this.state };
   }
 
+  // The fixture has no working tree behind it, so the panel falls back to what
+  // the transcript says rather than claiming git reported nothing changed.
+  // No host behind the fixture, so a paste resolves to a token nothing reads.
+  async attach(): Promise<Attachment> {
+    return { path: ".reasonix/attachments/mock.png", ref: "@.reasonix/attachments/mock.png" };
+  }
+
+  async changes(): Promise<WorkspaceChanges> {
+    return { repo: false, changes: [] };
+  }
+
   async trajectory(): Promise<WireEvent[]> {
     return [];
   }

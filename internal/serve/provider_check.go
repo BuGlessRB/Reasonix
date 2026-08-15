@@ -14,11 +14,11 @@ import (
 // the endpoint answered to, which is not always the one the entry claims: a
 // gateway that changed hands, or a guess made when both protocols replied.
 type providerCheck struct {
-	OK        bool   `json:"ok"`
-	Kind      string `json:"kind,omitempty"`
-	Models    int    `json:"models,omitempty"`
-	Ambiguous bool   `json:"ambiguous,omitempty"`
-	NoProxy   bool   `json:"noProxy,omitempty"`
+	OK        bool     `json:"ok"`
+	Kind      string   `json:"kind,omitempty"`
+	Models    []string `json:"models,omitempty"`
+	Ambiguous bool     `json:"ambiguous,omitempty"`
+	NoProxy   bool     `json:"noProxy,omitempty"`
 	// Error carries the endpoint's own words. "401" and "no chat models" send
 	// the user to different fixes, so the message is the answer here.
 	Error string `json:"error,omitempty"`
@@ -75,7 +75,7 @@ func (s *Server) checkProvider(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, providerCheck{
 		OK:        true,
 		Kind:      got.Kind,
-		Models:    len(got.Models),
+		Models:    nonNilStrings(got.Models),
 		Ambiguous: got.Ambiguous,
 		NoProxy:   got.NoProxy,
 	})

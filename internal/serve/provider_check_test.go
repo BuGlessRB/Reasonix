@@ -32,6 +32,9 @@ func TestCheckProviderReportsWhatTheEndpointSaid(t *testing.T) {
 	if got.Error == "" {
 		t.Fatal("a failed probe must carry the endpoint's own words")
 	}
+	if len(got.Models) != 0 {
+		t.Fatalf("a failed probe reported models: %v", got.Models)
+	}
 }
 
 func TestCheckProviderRefusesAnUnknownName(t *testing.T) {
