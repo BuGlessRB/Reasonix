@@ -274,6 +274,10 @@ export interface ProviderEntry {
   // False where the kernel refuses image input for this endpoint regardless of
   // config, so an editor can say so instead of offering a dead switch.
   canSetVision?: boolean;
+  // The endpoint-executed search tool. canWebSearch says this door offers one
+  // at all; webSearch whether it is on. They differ between an account's doors.
+  canWebSearch?: boolean;
+  webSearch?: boolean;
   // Removing the one in use would leave the session on a model that no longer
   // resolves, so the row offers no delete.
   inUse: boolean;
@@ -399,6 +403,7 @@ export interface AgentPort {
   // Changes only the fields the form owns. Saving a whole entry instead would
   // drop the per-model prices and effort lists it cannot show.
   editProvider(edit: ProviderEdit): Promise<void>;
+  setProviderWebSearch(name: string, on: boolean): Promise<void>;
   removeProvider(name: string): Promise<void>;
   versions(): Promise<VersionHub>;
   pinVersion(version: string): Promise<void>;

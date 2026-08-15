@@ -238,6 +238,10 @@ export class SsePort implements AgentPort {
     return this.post("/providers/edit", edit);
   }
 
+  setProviderWebSearch(name: string, on: boolean) {
+    return this.post("/providers/websearch", { name, on });
+  }
+
   roles() {
     return this.get<RoleAssignments>("/roles");
   }

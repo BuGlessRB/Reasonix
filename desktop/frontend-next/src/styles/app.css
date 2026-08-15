@@ -1370,6 +1370,9 @@
   .vway .seg button { flex: none; min-width: 0; padding: 4px 12px; white-space: nowrap;
     font: 400 11px var(--ui) }
   .vway .why { font: 400 10.5px var(--ui); color: var(--ghost); min-width: 0 }
+  /* 一扇门比另一扇多出来的能力，写在门上 —— 换过去才发现少了东西太晚了。 */
+  .vway .seg button .perk { margin-left: 6px; padding: 0 5px; border-radius: var(--r-pill);
+    background: var(--net-wash); color: var(--net); font: 400 9.5px var(--ui) }
 
   /* 编辑一个来源：模型一行一个，选用 / 读图 / 默认三件事各自是独立的开关。
      「读图」必须能手动改 —— 名字猜不出来的中转站，探测也给不出答案。 */

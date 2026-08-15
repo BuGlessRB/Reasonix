@@ -19,6 +19,7 @@ type Port = {
   removeProvider(name: string): Promise<void>;
   checkProvider(name: string): Promise<ProviderCheck>;
   editProvider(edit: ProviderEdit): Promise<void>;
+  setProviderWebSearch(name: string, on: boolean): Promise<void>;
 };
 
 // A name for the config table, derived from the host so the user does not have
@@ -144,6 +145,16 @@ function Conn({
   const checking = busy === `check:${entry.name}`;
   const inUse = a.kinds.some((k) => a.byKind[k].inUse);
 
+  const setSearch = async (on: boolean) => {
+    setBusy(`search:${entry.name}`);
+    try {
+      await port.setProviderWebSearch(entry.name, on);
+      onEdited();
+    } finally {
+      setBusy("");
+    }
+  };
+
   const check = async () => {
     setBusy(`check:${entry.name}`);
     setFound(null);
@@ -188,10 +199,31 @@ function Conn({
             {a.kinds.map((k) => (
               <button key={k} aria-pressed={k === kind} disabled={busy !== ""} onClick={() => onProtocol(k)}>
                 {KIND_LABEL[k] || k}
+                {/* A door that carries a capability the other lacks has to say
+                    so on itself: switching is otherwise a silent downgrade. */}
+                {a.byKind[k].canWebSearch && <i className="perk">联网搜索</i>}
               </button>
             ))}
           </div>
-          <span className="why">同一个账号的两扇门。换一扇，下面的模型跟着换。</span>
+          <span className="why">
+            {a.kinds.some((k) => a.byKind[k].canWebSearch) && !entry.canWebSearch
+              ? "同一个账号的两扇门。这一扇没有联网搜索 —— 那是协议的差别，不是设置。"
+              : "同一个账号的两扇门。换一扇，下面的模型跟着换。"}
+          </span>
+        </div>
+      )}
+      {entry.canWebSearch && (
+        <div className="vway">
+          <span className="lb">联网搜索</span>
+          <div className="seg" role="group" aria-label={`${a.label} 的联网搜索`}>
+            {[true, false].map((on) => (
+              <button key={String(on)} aria-pressed={entry.webSearch === on} disabled={busy !== ""}
+                onClick={() => setSearch(on)}>
+                {on ? "开" : "关"}
+              </button>
+            ))}
+          </div>
+          <span className="why">端点自己执行的搜索，不占本地工具。</span>
         </div>
       )}
       {editing && (

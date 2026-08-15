@@ -170,3 +170,52 @@ func TestEditProviderRefusesWhatItCannotApply(t *testing.T) {
 		resp.Body.Close()
 	}
 }
+
+// The OpenAI chat wire has no format for a provider-executed search, so the
+// same account answers differently through each of its doors. Recording that
+// against a door that cannot run one would be a setting with no effect.
+func TestWebSearchIsPerDoorNotPerAccount(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	if _, err := config.SetCredential("DEEPSEEK_API_KEY", "sk-ds"); err != nil {
+		t.Fatal(err)
+	}
+	path := config.UserConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `default_model = "ds/deepseek-v4-pro"
+
+[[providers]]
+name = "ds"
+kind = "openai"
+base_url = "https://api.deepseek.com"
+models = ["deepseek-v4-pro"]
+api_key_env = "DEEPSEEK_API_KEY"
+
+[[providers]]
+name = "ds-anthropic"
+kind = "anthropic"
+base_url = "https://api.deepseek.com/anthropic"
+models = ["deepseek-v4-pro"]
+api_key_env = "DEEPSEEK_API_KEY"
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	openaiDoor, _ := cfg.Provider("ds")
+	anthropicDoor, _ := cfg.Provider("ds-anthropic")
+	if config.HasServerWebSearchCapability(openaiDoor) {
+		t.Fatal("the OpenAI chat wire has no web search to offer")
+	}
+	if !config.HasServerWebSearchCapability(anthropicDoor) {
+		t.Fatal("the official DeepSeek Anthropic endpoint does offer web search")
+	}
+	if !config.EffectiveWebSearch(anthropicDoor) {
+		t.Fatal("an official DeepSeek Anthropic endpoint defaults its search on")
+	}
+}

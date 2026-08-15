@@ -107,3 +107,37 @@ func visionModelsOf(cfg *config.Config, p *config.ProviderEntry) []string {
 	}
 	return out
 }
+
+// setProviderWebSearch records the tri-state for the endpoint-executed search
+// tool. It is a real per-entry choice, unlike the protocol: the wire format is
+// what makes it available, and this only says whether to use it.
+func (s *Server) setProviderWebSearch(w http.ResponseWriter, r *http.Request) {
+	if !s.grants.providerEdit {
+		http.Error(w, "provider editing is not enabled on this server", http.StatusForbidden)
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+		On   bool   `json:"on"`
+	}
+	if !decodeProviderBody(w, r, &body) {
+		return
+	}
+	edit := config.LoadForEdit(config.UserConfigPath())
+	entry, ok := edit.Provider(strings.TrimSpace(body.Name))
+	if !ok {
+		http.Error(w, fmt.Sprintf("no provider named %q", body.Name), http.StatusNotFound)
+		return
+	}
+	if !config.SupportsServerWebSearch(entry) {
+		http.Error(w, "this protocol has no wire format for a provider-executed web search", http.StatusBadRequest)
+		return
+	}
+	on := body.On
+	entry.WebSearch = &on
+	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

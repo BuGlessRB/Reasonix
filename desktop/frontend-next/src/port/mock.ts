@@ -389,6 +389,7 @@ export class MockPort implements AgentPort {
       name: "deepseek-anthropic", kind: "anthropic", baseUrl: "https://api.deepseek.com/anthropic",
       models: ["deepseek-v4-pro"], default: "deepseek-v4-pro",
       hasKey: true, inUse: false, preset: false, keyEnv: "DEEPSEEK_API_KEY",
+      canSetVision: false, canWebSearch: true, webSearch: true,
     },
     {
       name: "myrelay", kind: "openai", baseUrl: "https://relay.example.com/v1",
@@ -412,6 +413,10 @@ export class MockPort implements AgentPort {
   }
 
   async saveProvider(): Promise<void> {}
+
+  async setProviderWebSearch(name: string, on: boolean): Promise<void> {
+    this.sources = this.sources.map((p) => (p.name === name ? { ...p, webSearch: on } : p));
+  }
 
   async editProvider(edit: ProviderEdit): Promise<void> {
     this.sources = this.sources.map((p) =>

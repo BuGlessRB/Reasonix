@@ -37,6 +37,7 @@ func (s *Server) registerProviderRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /providers/probe", s.probeProvider)
 	mux.HandleFunc("POST /providers/remove", s.removeProvider)
 	mux.HandleFunc("POST /providers/edit", s.editProvider)
+	mux.HandleFunc("POST /providers/websearch", s.setProviderWebSearch)
 	s.registerProviderCheckRoutes(mux)
 }
 
@@ -58,7 +59,12 @@ type providerView struct {
 	// CanSetVision is false where the kernel refuses image input for the
 	// endpoint whatever the config says — an editor offering the toggle there
 	// is offering a switch that does nothing.
-	CanSetVision bool   `json:"canSetVision"`
+	CanSetVision bool `json:"canSetVision"`
+	// WebSearch is the endpoint-executed search tool: CanWebSearch says this
+	// door offers one at all, WebSearch whether it is on. The OpenAI chat wire
+	// has no format for it, so the answer differs per protocol on one account.
+	CanWebSearch bool   `json:"canWebSearch"`
+	WebSearch    bool   `json:"webSearch"`
 	Default      string `json:"default"`
 	HasKey       bool   `json:"hasKey"`
 	// KeyEnv names the credential slot. Two entries at one host holding
@@ -89,6 +95,8 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 			Models:       nonNilStrings(p.ChatModelList()),
 			VisionModels: nonNilStrings(visionModelsOf(cfg, p)),
 			CanSetVision: config.CanConfigureVision(p),
+			CanWebSearch: config.HasServerWebSearchCapability(p),
+			WebSearch:    config.EffectiveWebSearch(p),
 			Default:      p.DefaultModel(),
 			HasKey:       p.APIKey() != "",
 			KeyEnv:       p.APIKeyEnv,
