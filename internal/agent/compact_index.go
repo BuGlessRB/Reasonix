@@ -220,15 +220,17 @@ func quotedOpening(content string) string {
 	return strconv.Quote(flat)
 }
 
-// foldIndexBudget is the index's share of a checkpoint. Index lines are the
-// cheapest thing a fold can keep, so the share is small and still holds
-// hundreds of entries; the tail budget it borrows from is far larger.
+// foldIndexBudget is the index's share of a checkpoint. A line costs about a
+// dozen tokens, so one percent of the window addresses roughly a hundred items
+// — shared by every generation, since the index is cumulative. It is still the
+// cheapest thing a fold keeps: prose needs hundreds of tokens to say what a
+// line says, and only a line can be recalled.
 func (a *Agent) foldIndexBudget() int {
 	const floor = 256
 	if a.contextWindow <= 0 {
 		return floor
 	}
-	return max(floor, a.contextWindow/200)
+	return max(floor, a.contextWindow/100)
 }
 
 // stripFoldIndexFromDigests pulls the host-written index out of any prior
