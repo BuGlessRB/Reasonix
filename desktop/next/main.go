@@ -46,6 +46,7 @@ var apiPaths = map[string]bool{
 	"/trajectory": true, "/slash": true, "/workspace": true, "/workspaces": true,
 	"/mcp": true, "/skills": true, "/account": true, "/hooks": true,
 	"/memory": true, "/network": true, "/todos": true, "/providers": true,
+	"/roles": true,
 }
 
 // A sub-path belongs to the resource it hangs off: /mcp/reconnect is the same
