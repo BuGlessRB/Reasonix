@@ -8,6 +8,8 @@ import { Transcript } from "./Transcript";
 import { Trajectory } from "./Trajectory";
 import { Composer } from "./Composer";
 import { RunStrip } from "./RunStrip";
+import { SlottedView } from "./SlottedView";
+import { key as slotKey, placement } from "./slots";
 import { apply as applyThemePack } from "./theme";
 import { Metrics } from "./Metrics";
 import { Sessions } from "./Sessions";
@@ -212,6 +214,45 @@ export function App({ port }: { port: AgentPort }) {
   }, [port]);
   useEffect(reloadThemes, [reloadThemes]);
 
+  // Where the user put each extension surface. Loaded once and updated in
+  // place: a move is the user's own action, so waiting for a round trip to see
+  // it land would read as the control ignoring the click.
+  const [slots, setSlots] = useState<Record<string, string>>({});
+  useEffect(() => {
+    void port.surfaceSlots().then(setSlots).catch(() => setSlots({}));
+  }, [port]);
+  const moveSurface = useCallback(
+    async (ext: { pluginId: string; surfaceId: string }, slot: string) => {
+      const id = `${ext.pluginId}:${ext.surfaceId}`;
+      setSlots((prev) => {
+        const next = { ...prev };
+        if (slot) next[id] = slot;
+        else delete next[id];
+        return next;
+      });
+      await port.assignSurface(id, slot).catch(fail);
+    },
+    [port, fail],
+  );
+  const atComposer = s.views.filter((v) => placement(v, slots) === "composer-trailing");
+  const inRail = s.views.filter((v) => placement(v, slots) !== "composer-trailing");
+
+  // A webview has nowhere to put a new tab, so target="_blank" opens nothing at
+  // all, and letting the link navigate in place would replace the session with
+  // the page. Every link leaves through the host instead.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      const link = (e.target as Element | null)?.closest?.("a[href]");
+      const href = link?.getAttribute("href") ?? "";
+      if (!/^https?:\/\//i.test(href)) return;
+      e.preventDefault();
+      void port.openExternal(href).catch(fail);
+    };
+    addEventListener("click", onClick);
+    return () => removeEventListener("click", onClick);
+  }, [port, fail]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
@@ -404,6 +445,22 @@ export function App({ port }: { port: AgentPort }) {
               <i />
             </span>
             <RunStrip doing={s.doing} metrics={s.metrics} steps={steps} elapsed={elapsed} />
+            {/* Views the user (or the extension) put next to the composer.
+                They sit above it rather than inside it: the input box is the
+                one thing an extension must never be able to crowd out. */}
+            {atComposer.length > 0 && (
+              <div className="slotrail">
+                {atComposer.map((ext) => (
+                  <SlottedView
+                    key={slotKey(ext)}
+                    ext={ext}
+                    assigned={slots}
+                    onAction={(id) => void port.invokeExtensionAction(id).catch(fail)}
+                    onMove={(slot) => void moveSurface(ext, slot)}
+                  />
+                ))}
+              </div>
+            )}
             <Composer
               port={port}
               status={status}
@@ -435,6 +492,8 @@ export function App({ port }: { port: AgentPort }) {
             onFold={() => setSide(false)}
             onSettings={() => setSettings(true)}
             panels={s.panels}
+            views={inRail}
+            onMoveSurface={moveSurface}
             onExtInvoke={onExtInvoke}
           />
         </div>

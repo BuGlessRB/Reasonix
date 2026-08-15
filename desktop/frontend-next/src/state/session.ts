@@ -64,6 +64,11 @@ export interface SessionState {
   // a state that is still true, so they hold a place in the side rail instead
   // of scrolling away in the transcript.
   panels: ExtensionSurface[];
+  // Composed views. A view is a standing surface by definition — it describes
+  // something that is still true — so it never joins the transcript, and where
+  // it is drawn is decided at render time rather than here. That is what lets
+  // the user move one without any of this having to be re-sorted.
+  views: ExtensionSurface[];
 }
 
 export const initialState: SessionState = {
@@ -77,6 +82,7 @@ export const initialState: SessionState = {
   doing: "空闲",
   steerQueue: [],
   panels: [],
+  views: [],
 };
 
 let seq = 0;
@@ -364,6 +370,13 @@ export function reduce(
         const panels = s.panels.slice();
         panels[at] = ext;
         return { ...s, panels };
+      }
+      if (ext.kind === "view") {
+        const at = s.views.findIndex((v) => v.pluginId === ext.pluginId && v.surfaceId === ext.surfaceId);
+        if (at < 0) return { ...s, views: [...s.views, ext] };
+        const views = s.views.slice();
+        views[at] = ext;
+        return { ...s, views };
       }
       const at = s.items.findIndex(
         (it) => it.t === "extension" && it.ext.pluginId === ext.pluginId && it.ext.surfaceId === ext.surfaceId,

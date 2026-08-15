@@ -29,6 +29,9 @@ func renderDesktopSection(b *strings.Builder, c *Config) {
 	} else {
 		b.WriteString("# theme_style = \"graphite\"   # graphite|aurora|slate|carbon|nocturne|amber and legacy aliases\n")
 	}
+	if len(c.Desktop.SurfaceSlots) > 0 {
+		fmt.Fprintf(b, "surface_slots = %s   # where the user put each extension surface; overrides what the extension asked for\n", renderStringMap(c.Desktop.SurfaceSlots))
+	}
 	if pack := strings.TrimSpace(c.Desktop.ThemePack); pack != "" {
 		fmt.Fprintf(b, "theme_pack = %q   # installed theme pack id; empty is the default appearance\n", pack)
 	} else {

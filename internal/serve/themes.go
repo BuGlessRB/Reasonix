@@ -25,6 +25,9 @@ type themeView struct {
 	Tokens      map[string]map[string]string `json:"tokens"`
 	Background  *theme.Background            `json:"background,omitempty"`
 	HasPreview  bool                         `json:"hasPreview,omitempty"`
+	// What the pack asked for and did not get. It rides on the listing so the
+	// author sees it in the picker rather than only in a log they never read.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // The list carries every pack's full token set, not just the active one's. A
@@ -42,6 +45,7 @@ func (s *Server) themes(w http.ResponseWriter, r *http.Request) {
 			ID: p.ID, Name: p.Name, Author: p.Author, Description: p.Description,
 			Active: p.ID == active, Tokens: p.Tokens,
 			Background: p.Background, HasPreview: p.HasPreview,
+			Warnings: p.Warnings,
 		})
 	}
 	writeJSONCached(w, r, out)

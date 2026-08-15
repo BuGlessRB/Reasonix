@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ExtensionView } from "./ExtensionView";
 import type { ExtensionSurface, ExtensionFormField } from "../../port/wire";
 import { Markdown } from "../Markdown";
 import { Sym } from "../Sym";
@@ -60,6 +61,11 @@ export function ExtensionCard({ ext, onInvoke, onSubmit }: Props) {
           {ext.form?.title && <span className="arg">{ext.form.title}</span>}
         </div>
         <div className="out">
+          {/* A composed surface draws itself from primitives. It comes first
+              because an extension that sent one meant it as the surface, not
+              as a decoration on the fixed fields. */}
+          {ext.view && <ExtensionView body={ext.view.body} onAction={onInvoke} />}
+
           {ext.status && (
             <div className="finds">
               <div className="find" data-lvl={lvl(ext.status.severity)}>

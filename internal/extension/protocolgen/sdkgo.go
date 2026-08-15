@@ -28,6 +28,8 @@ var sdkEnumPrefixes = map[string]string{
 	"UISurfaceKind":     "UISurface",
 	"UIRequestKind":     "UIRequest",
 	"UIFieldKind":       "UIField",
+	"UINodeKind":        "UINode",
+	"UITone":            "UITone",
 	"UISeverity":        "UISeverity",
 	"ProviderRole":      "ProviderRole",
 	"ProviderChunkType": "Chunk",
@@ -82,6 +84,7 @@ func walkSDKTypes() (*sdkTypeWalk, error) {
 		reflect.TypeFor[protocol.UIFormPayload](),
 		reflect.TypeFor[protocol.UINotificationPayload](),
 		reflect.TypeFor[protocol.UIPanelPayload](),
+		reflect.TypeFor[protocol.UIViewPayload](),
 		reflect.TypeFor[protocol.ProtocolErrorData](),
 	)
 	for _, root := range roots {

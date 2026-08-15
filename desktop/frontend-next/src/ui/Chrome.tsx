@@ -86,8 +86,21 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
     if (v === "__isolate") return void run(() => port.isolateWorkspace());
     if (v === "__open") {
       return void run(async () => {
-        const dir = (await port.pickFolder()) || prompt("工作目录的完整路径") || "";
-        if (dir) await port.setWorkspace(dir);
+        const dir = await port.pickFolder();
+        // "" is the user closing the panel — an answer, not a reason to ask
+        // again through a second dialog.
+        if (dir !== null) {
+          if (dir) await port.setWorkspace(dir);
+          return;
+        }
+        // No native picker. A browser tab types the path instead; the shell is
+        // supposed to have one, and WKWebView answers prompt() with nothing at
+        // all, so there it is a broken build rather than a fallback.
+        if (document.documentElement.dataset.shell === "wails") {
+          throw new Error("这个窗口打不开目录选择器（缺少绑定），请从设置里切换工作区");
+        }
+        const typed = prompt("工作目录的完整路径") || "";
+        if (typed) await port.setWorkspace(typed);
       });
     }
     if (v && v !== root) void run(() => port.setWorkspace(v));

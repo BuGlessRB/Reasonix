@@ -74,7 +74,7 @@ Operate as an installer, not as a shell-script guesser:
    - low → safe to apply without asking.
    - medium → safe to apply, but mention what was written.
    - high → ask the user to confirm in one short question before apply=true. High actions include MCP installs that send auth headers, eager-tier servers, link targets that are absolute paths outside the project/home root, and any replace=true on an existing entry.
-6. If the plan is acceptable and any needed user confirmation has happened, call install_source again with apply=true and echo back the same planId you got from the planning call. The tool refuses to apply when the planId does not match, so always re-fetch by running apply=false again if the user changed their mind about the source. Host permissions may still deny the apply call.
+6. If the plan is acceptable and any needed user confirmation has happened, call install_source again with apply=true and echo back the same planId you got from the planning call. An apply without that planId installs nothing and hands the plan back, and one whose planId does not match is refused, so always re-plan with apply=false if the user changed their mind about the source. The planId begins with the plan's own risk grade; a high one is put to the user by the permission layer no matter how permissive the session is.
 7. After apply=true, report what was installed, where it was persisted, and whether it is usable in the current session. For skills, prefer actions[].canonicalPath, actions[].installRoot, actions[].discoverable, and actions[].indexed over guessing from the source path. The plan's kinds field tells you how many skills vs MCP servers were touched.
 
 Defaults:

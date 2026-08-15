@@ -61,7 +61,7 @@ var apiPaths = map[string]bool{
 	"/mcp": true, "/skills": true, "/account": true, "/hooks": true,
 	"/memory": true, "/network": true, "/todos": true, "/providers": true,
 	"/changes": true, "/attachments": true, "/roles": true,
-	"/themes": true, "/extensions": true, "/plugins": true,
+	"/themes": true, "/extensions": true, "/plugins": true, "/surfaces": true,
 }
 
 // A sub-path belongs to the resource it hangs off: /mcp/reconnect is the same
@@ -162,6 +162,7 @@ func run() error {
 		// or select-all on right-click — in a text editor that reads as broken.
 		EnableDefaultContextMenu: true,
 		Bind:                     []any{shell},
+		DragAndDrop:              dragAndDrop(),
 		OnStartup: func(ctx context.Context) {
 			shell.ctx = ctx
 			applyDockIcon()

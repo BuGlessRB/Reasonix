@@ -111,6 +111,10 @@ const (
 	// side rail instead of scrolling past in the transcript, so re-publishing
 	// the same surface id updates what is already on screen.
 	UISurfacePanel UISurfaceKind = "panel"
+	// UISurfaceView is composed rather than filled in: its payload is a tree of
+	// host primitives, so an extension that needs a shape the fixed kinds do
+	// not have builds one without the protocol growing a kind for it.
+	UISurfaceView UISurfaceKind = "view"
 )
 
 // UIRequestKind is the kind of blocking UI prompt the host shows on an

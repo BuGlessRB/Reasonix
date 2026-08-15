@@ -26,6 +26,9 @@ export class HttpError extends Error {
 }
 
 import type { WireEvent } from "./wire";
+import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
+
+export type * from "./plugin";
 
 // GET /history returns the provider conversation, not the event stream: the
 // stream is live-only, so a reload rebuilds the transcript from these.
@@ -169,6 +172,9 @@ export interface ThemePack {
   tokens: { light?: Record<string, string>; dark?: Record<string, string> };
   background?: ThemeBackground;
   hasPreview?: boolean;
+  // Tokens the kernel dropped and why: an unknown name, or a value that could
+  // not be let into a stylesheet. The pack still loads without them.
+  warnings?: string[];
 }
 
 export interface McpEntry {
@@ -391,6 +397,11 @@ export interface ProviderEntry {
   // at all; webSearch whether it is on. They differ between an account's doors.
   canWebSearch?: boolean;
   webSearch?: boolean;
+  // Whether thinking/reasoning_effort may go on the wire. canSetThinking is
+  // false where the protocol never carries them, so the switch appears only
+  // where a relay can actually reject the request over it.
+  canSetThinking?: boolean;
+  sendsThinking?: boolean;
   // Removing the one in use would leave the session on a model that no longer
   // resolves, so the row offers no delete.
   inUse: boolean;
@@ -475,6 +486,25 @@ export interface AgentPort {
   // Persisted, but the running session keeps the prompt index it was built
   // with: the switch reaches the model on the next rebuild, not this turn.
   setSkillEnabled(name: string, enabled: boolean): Promise<void>;
+  plugins(): Promise<PluginPackage[]>;
+  // Two calls, because what a package brings has to be looked at before it is
+  // let in: plan writes nothing, and install echoes the plan's id back so a
+  // source cannot describe one install and perform another. An update is the
+  // same pair with replace set — a new version can bring a hook the old one
+  // did not have, and that is exactly what the second look is for.
+  planPlugin(req: PluginInstallRequest): Promise<PluginPlan>;
+  installPlugin(req: PluginInstallRequest): Promise<PluginPlan>;
+  setPluginEnabled(name: string, enabled: boolean): Promise<void>;
+  removePlugin(name: string): Promise<PluginPlan>;
+  // Hands the packed package to the user and reports what was stripped out of
+  // it on the way. Installing is the same door: a folder, a link, or this
+  // archive unpacked — there is no separate import.
+  exportPlugin(name: string): Promise<PluginExport>;
+  // Absolute paths of files dropped on an element that opted in with
+  // `--wails-drop-target: drop`. A browser tab only ever sees a File object,
+  // never a path, so this returns an unsubscribe that fires nowhere there —
+  // the same shape onUpdateProgress uses for a shell-only signal.
+  onFileDrop(cb: (paths: string[]) => void): () => void;
   hooks(): Promise<HookCatalog>;
   // Replaces one scope wholesale: a client that merges partial edits wrong
   // silently drops somebody else's rule.
@@ -520,6 +550,7 @@ export interface AgentPort {
   // drop the per-model prices and effort lists it cannot show.
   editProvider(edit: ProviderEdit): Promise<void>;
   setProviderWebSearch(name: string, on: boolean): Promise<void>;
+  setProviderThinking(name: string, on: boolean): Promise<void>;
   removeProvider(name: string): Promise<void>;
   versions(): Promise<VersionHub>;
   pinVersion(version: string): Promise<void>;
@@ -546,6 +577,10 @@ export interface AgentPort {
   // null where the host has none at all. Cancelling and having no picker are
   // different answers, and a caller that conflates them asks twice.
   pickFolder(): Promise<string | null>;
+  // Hands a link to the platform browser. A webview has nowhere to put a new
+  // tab — a target="_blank" click there does nothing at all — and navigating in
+  // place would replace the session with the page.
+  openExternal(url: string): Promise<void>;
   sessions(): Promise<SessionEntry[]>;
   resume(path: string): Promise<void>;
   newSession(): Promise<void>;
@@ -585,6 +620,11 @@ export interface AgentPort {
   // Installed theme packs and which one is active. The list carries every
   // pack's tokens so a picker can preview without a second request.
   themes(): Promise<ThemePack[]>;
+  // Where the user put each extension surface, keyed "<pluginId>:<surfaceId>".
+  // It outranks what the extension asked for; an empty slot hands the decision
+  // back rather than hiding the surface.
+  surfaceSlots(): Promise<Record<string, string>>;
+  assignSurface(surface: string, slot: string): Promise<void>;
   activateTheme(id: string): Promise<void>;
   // Extension surfaces arrive on the event stream; these carry the user's half
   // back — an action the card offered, or a published form's values.

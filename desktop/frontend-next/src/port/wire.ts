@@ -222,17 +222,41 @@ export interface ExtensionNotification {
   severity?: string;
 }
 
+// A view is composed rather than filled in: the extension sends a tree of
+// primitives and this side renders them with its own components. Tone says
+// what a node means, never what colour it is — the palette stays ours.
+export type ExtensionViewTone = "dim" | "strong" | "ok" | "warn" | "err" | "accent";
+
+export interface ExtensionViewNode {
+  kind: "text" | "markdown" | "row" | "stack" | "kv" | "meter" | "pip" | "button" | "divider";
+  value?: string;
+  key?: string;
+  label?: string;
+  tone?: ExtensionViewTone;
+  progress?: number;
+  actionId?: string;
+  children?: ExtensionViewNode[];
+}
+
+export interface ExtensionView {
+  // Where the extension would like to stand. A name we do not know renders
+  // where we put views we have no place for, rather than not at all.
+  slot?: string;
+  body: ExtensionViewNode[];
+}
+
 export interface ExtensionSurface {
   pluginId: string;
   surfaceId: string;
   sessionId?: string;
   generation?: number;
-  kind: "status" | "card" | "form" | "notification" | "panel";
+  kind: "status" | "card" | "form" | "notification" | "panel" | "view";
   status?: ExtensionStatus;
   card?: ExtensionCard;
   form?: ExtensionForm;
   notification?: ExtensionNotification;
   panel?: ExtensionPanel;
+  view?: ExtensionView;
 }
 
 export interface Compaction {

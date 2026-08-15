@@ -547,6 +547,8 @@ func decodePublishEvent(pluginID string, p protocol.UIPublishParams) (*event.Ext
 			})
 		}
 		out.Panel = panel
+	case protocol.UIViewPayload:
+		out.View = &event.ExtensionViewSurface{Slot: payload.Slot, Body: redactViewNodes(payload.Body)}
 	}
 	return out, nil
 }
@@ -729,6 +731,29 @@ func askOptions(options []string) []event.AskOption {
 	out := make([]event.AskOption, len(options))
 	for i, option := range options {
 		out[i] = event.AskOption{Label: option}
+	}
+	return out
+}
+
+// redactViewNodes walks a published tree, redacting every string a frontend
+// will show. The walk is bounded by the protocol's own depth and node limits,
+// which the strict decoder has already enforced by the time a payload arrives.
+func redactViewNodes(in []protocol.UINode) []event.ExtensionViewNode {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]event.ExtensionViewNode, 0, len(in))
+	for _, node := range in {
+		out = append(out, event.ExtensionViewNode{
+			Kind:     string(node.Kind),
+			Value:    secrets.RedactCredentials(node.Value),
+			Key:      secrets.RedactCredentials(node.Key),
+			Label:    secrets.RedactCredentials(node.Label),
+			Tone:     string(node.Tone),
+			Progress: node.Progress,
+			ActionID: node.ActionID,
+			Children: redactViewNodes(node.Children),
+		})
 	}
 	return out
 }

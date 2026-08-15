@@ -14,6 +14,7 @@ const (
 	ExtensionSurfaceForm         = "form"
 	ExtensionSurfaceNotification = "notification"
 	ExtensionSurfaceRequest      = "request"
+	ExtensionSurfaceView         = "view"
 )
 
 // ExtensionSurfacePayload carries one sidecar's UI contribution for the
@@ -24,12 +25,35 @@ type ExtensionSurfacePayload struct {
 	SurfaceID    string
 	SessionID    string
 	Generation   uint64
-	Kind         string // status | card | form | notification | panel
+	Kind         string // status | card | form | notification | panel | view
 	Status       *ExtensionStatusView
 	Card         *ExtensionCardView
 	Form         *ExtensionFormView
 	Notification *ExtensionNotificationView
 	Panel        *ExtensionPanelView
+	View         *ExtensionViewSurface
+}
+
+// ExtensionViewSurface is a surface composed from host primitives rather than
+// filled into a fixed shape (mirrors UIViewPayload). Slot is a name the
+// frontend may not know; an unrecognised one renders wherever that frontend
+// puts views it has no place for.
+type ExtensionViewSurface struct {
+	Slot string
+	Body []ExtensionViewNode
+}
+
+// ExtensionViewNode mirrors protocol.UINode. Tone says what a node means, not
+// what colour it is: the palette stays the frontend's.
+type ExtensionViewNode struct {
+	Kind     string
+	Value    string
+	Key      string
+	Label    string
+	Tone     string
+	Progress *float64
+	ActionID string
+	Children []ExtensionViewNode
 }
 
 // ExtensionPanelView is a standing surface for the frontend's side rail

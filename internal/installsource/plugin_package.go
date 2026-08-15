@@ -551,8 +551,8 @@ func (t *installSourceTool) preparePluginSource(ctx context.Context, source, mod
 		return root, commit, func() { _ = os.RemoveAll(tmp) }, nil
 	}
 	path := t.resolvePath(source)
-	if mode == "link" {
-		return path, "", func() {}, nil
+	if looksLikeZip(path) {
+		return t.preparePluginZip(path, mode)
 	}
 	return path, "", func() {}, nil
 }

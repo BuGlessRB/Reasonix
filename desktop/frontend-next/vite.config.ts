@@ -15,7 +15,7 @@ const ROUTES = [
   "/inbox", "/trajectory", "/mcp", "/skills", "/complete", "/workspace",
   "/providers", "/roles", "/account", "/hooks", "/memory", "/network", "/todos",
   "/changes", "/attachments", "/checkpoints", "/branches", "/compact", "/rewind",
-  "/extensions", "/themes",
+  "/extensions", "/themes", "/plugins", "/surfaces",
   "/fork", "/summarize", "/forget", "/bypass", "/auto-approve-tools",
 ];
 

@@ -110,8 +110,13 @@
   .isolab[hidden] { display: none }
   .crumb-btn[aria-expanded="true"] .cv { transform: rotate(180deg) }
 
+  /* A picker is as long as the user's config: [[providers]] has no ceiling, so
+     one gateway account can list a hundred models. Without a cap the tail of
+     the list renders past the window edge with no way to reach it — the model
+     menu opens upward, so it is the head that goes. */
   .menu {
     position: absolute; z-index: 30; min-width: 244px; padding: 5px;
+    max-height: min(58vh, 460px); overflow-y: auto; overscroll-behavior: contain;
     border: 1px solid var(--border); border-radius: var(--r-md); background: var(--raised);
     box-shadow: 0 14px 34px -12px rgba(0, 0, 0, .5);
     animation: panel var(--t-panel) var(--ease-out) both;
@@ -138,6 +143,21 @@
   .mi[data-on] .rt { color: var(--accent) }
   .menu .div { height: 1px; margin: 5px 4px; background: var(--hair) }
   .mi.plain .lb { font-weight: 400; color: var(--muted) }
+
+  /* Sticky because the rows are the scrolling part: a field that scrolls away
+     takes the query out of sight while its result is still on screen. */
+  .mfind {
+    position: sticky; top: -5px; z-index: 1; width: calc(100% + 10px);
+    margin: -5px -5px 5px; padding: 9px 11px;
+    border: 0; border-bottom: 1px solid var(--hair); border-radius: var(--r-md) var(--r-md) 0 0;
+    background: var(--raised); color: var(--text); font: 400 12.5px var(--ui);
+  }
+  .mfind:focus { outline: none }
+  .mfind::placeholder { color: var(--ghost) }
+  /* What Enter takes while the field still holds focus. Deliberately the same
+     weight as hover: it is a standing offer, not a selection. */
+  .mi[data-lead] { background: var(--overlay) }
+  .mnone { padding: 9px 10px; font: 400 11.5px var(--ui); color: var(--faint) }
   .mi.plain .dot { background: transparent }   /* 它不是一个可选中的项目 */
 
   /* 斜杠补全补的是正在打的那一行，所以它贴着输入框上沿，宽度也跟着输入框 */
@@ -1308,18 +1328,46 @@
   }
   .confirm .q { flex: 1; font: 400 11.5px/1.55 var(--ui); color: var(--text) }
 
-  /* 接入流程：先粘，再确认，最后说结果。三步共用一块地方，靠 data-stage 换内容 */
-  .addsrv { border-top: 1px solid var(--hair); padding: 12px }
-  .addsrv .paste {
+  /* 接入流程：先粘，再确认，最后说结果。三步共用一块地方，靠 data-stage 换内容。
+     插件包走的是同一条路（来源 → 计划 → 结果），所以它们是同一个版式。 */
+  .addsrv, .addpkg { border-top: 1px solid var(--hair); padding: 12px }
+  .addsrv .paste, .addpkg .paste {
     width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--r-sm);
     background: var(--raised); color: var(--text); font: 400 11.5px/1.7 var(--mono); resize: vertical;
   }
-  .addsrv .paste::placeholder { color: var(--ghost); white-space: pre-line }
-  .addsrv .paste:focus { outline: 2px solid var(--focus); outline-offset: 1px }
-  .addsrv .acts { display: flex; align-items: center; gap: 8px; margin-top: 10px }
-  .addsrv .acts .note { flex: 1; font: 400 10.5px var(--ui); color: var(--ghost) }
-  .addsrv .act[data-primary] { border-color: var(--accent); background: var(--accent); color: var(--accent-fg) }
-  .addsrv .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
+  .addsrv .paste::placeholder, .addpkg .paste::placeholder { color: var(--ghost); white-space: pre-line }
+  .addsrv .paste:focus, .addpkg .paste:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  .addsrv .acts, .addpkg .acts { display: flex; align-items: center; gap: 8px; margin-top: 10px }
+  .addsrv .acts .note, .addpkg .acts .note { flex: 1; font: 400 10.5px var(--ui); color: var(--ghost) }
+  .addsrv .act[data-primary], .addpkg .act[data-primary] { border-color: var(--accent); background: var(--accent); color: var(--accent-fg) }
+  .addsrv .act[data-primary]:disabled, .addpkg .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
+  .addpkg > .why { margin-top: 9px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
+  /* 只有这块声明自己收文件：Wails 把路径只交给带这个属性的元素，所以拖图片给
+     输入框的那条既有路径不受影响。属性会继承，落在里面的 textarea 上也算。
+     wails-drop-target-active 是运行时在悬停时挂上的类。 */
+  .addpkg[data-stage="paste"] { --wails-drop-target: drop }
+  .addpkg.wails-drop-target-active .paste { border-color: var(--accent); background: var(--overlay) }
+
+  /* 计划按风险分组：会跑东西的那一组自带警戒线，剩下的只是文件。
+     等级是核心判的，这里只负责让它一眼可见。 */
+  .rgrp { margin-top: 10px }
+  .rgrp:first-child { margin-top: 0 }
+  .rgrp h3 { margin: 0; font: 500 11px var(--ui); color: var(--faint) }
+  .rgrp[data-lvl="high"] { padding-left: 9px; box-shadow: inset 2px 0 var(--err) }
+  .rgrp[data-lvl="high"] h3 { color: var(--err) }
+  /* 核心的判定是写给读 JSON 的模型的，所以它在一次点击之后 —— 但它必须在，
+     否则这里不认识的新理由就会静悄悄消失。 */
+  .reasons { margin-top: 7px }
+  .reasons > summary { font: 400 10.5px var(--ui); color: var(--ghost); cursor: pointer; list-style: none }
+  .reasons > summary::-webkit-details-marker { display: none }
+  .reasons p { margin: 4px 0 0; font: 400 10.5px/1.6 var(--mono); color: var(--muted) }
+
+  /* 一个包带进来的东西分两类：能被叫到的（技能、命令），和会自己跑的
+     （常驻进程、钩子、外部服务）。后者不该和前者读起来一样。 */
+  .peek .row[data-run] { color: var(--text) }
+  .peek .row[data-run] .d { color: var(--warn, var(--accent)) }
+  .peek .row .sc { margin-left: auto; padding-left: 12px; color: var(--ghost); font: 400 10.5px var(--ui);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .addsrv > .why { margin-top: 9px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
 
   /* 分工带：主模型在上，四个位置挂在它下面的那根轨上。这里不用卡片 ——
@@ -1964,12 +2012,42 @@
   .extfield input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .extform[data-sealed] { opacity: .72 }
 
-  /* A palette's own thumbnail in the picker. Fixed box so a row's height does
-     not depend on whether that pack ships a picture. */
-  .packshot {
-    width: 44px; height: 28px; object-fit: cover; flex: none;
-    border-radius: var(--r-xs); border: 1px solid var(--hair);
+  /* A palette is chosen by looking at it, so each card is that palette drawing
+     the window it is about to paint. The pack's own picture is a cover over
+     that, not the card itself: a pack without one, or one whose file fails to
+     load, still shows its colours instead of a broken image. */
+  .palettes { display: grid; grid-template-columns: repeat(auto-fill, minmax(164px, 1fr)); gap: 14px 12px }
+  .pal { display: flex; flex-direction: column; gap: 7px; padding: 0; border: 0; background: none; text-align: left; cursor: pointer }
+  .pal-art {
+    position: relative; display: flex; aspect-ratio: 16 / 10; overflow: hidden;
+    border: 1px solid var(--border); border-radius: var(--r-sm);
+    background: var(--pal-page, var(--page));
+    transition: border-color .16s var(--ease-out), box-shadow .16s var(--ease-out);
   }
+  .pal:hover .pal-art { border-color: color-mix(in srgb, var(--pal-accent, var(--accent)) 55%, var(--border)) }
+  .pal[data-on] .pal-art { border-color: var(--pal-accent, var(--accent)); box-shadow: 0 0 0 1px var(--pal-accent, var(--accent)) }
+  /* The dot reads over a photo the way a border alone does not. */
+  .pal[data-on] .pal-art::after {
+    content: ""; position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--pal-accent, var(--accent)); box-shadow: 0 0 0 2px var(--pal-page, var(--page));
+  }
+  .pal-rail { flex: none; width: 26px; background: var(--pal-surface, var(--surface)); border-right: 1px solid var(--pal-border, var(--hair)) }
+  .pal-body {
+    flex: 1; display: flex; flex-direction: column; gap: 5px; margin: 10px; padding: 9px 8px;
+    border: 1px solid var(--pal-border, var(--hair)); border-radius: var(--r-xs);
+    background: var(--pal-panel, var(--raised));
+  }
+  .pal-line { height: 4px; border-radius: 2px; background: var(--pal-text, var(--text)); opacity: .78 }
+  .pal-line[data-short] { width: 58%; background: var(--pal-dim, var(--muted)); opacity: .72 }
+  .pal-mark { margin-top: auto; width: 34%; height: 5px; border-radius: 2px; background: var(--pal-accent, var(--accent)) }
+  .pal-shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover }
+  /* Name over source, each on one line: side by side they both wrapped, and a
+     grid of two-line-by-two-column labels reads as noise between the cards. */
+  .pal-nm { display: block; min-width: 0; font: 400 11.5px var(--ui); color: var(--muted) }
+  .pal-nm b, .pal-nm em { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .pal-nm b { font-weight: 400 }
+  .pal[data-on] .pal-nm b { color: var(--text) }
+  .pal-nm em { margin-top: 2px; font: 400 10.5px var(--mono); font-style: normal; color: var(--ghost) }
 
   /* A standing panel sits in the side rail, so it is denser than the same
      content would be in the transcript and borrows the rail's own row rhythm. */
@@ -1981,3 +2059,60 @@
   .extpanel-tx { font-size: 11.5px; line-height: 1.5; color: var(--muted) }
   .extpanel .extkv { font-size: 11.5px }
   .extpanel .btn { padding: 2px 7px; font-size: 11px }
+
+  /* 组合视图：扩展递过来的是一棵原语树，这里用本来就在用的那套外观画它。
+     语气（tone）只说"这是什么"，颜色仍然是应用的 —— 扩展说得出"这一项失败了"，
+     说不出"失败是绿色的"。 */
+  .xview { display: flex; flex-direction: column; gap: 7px; min-width: 0 }
+  .xv-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0 }
+  .xv-stack { display: flex; flex-direction: column; gap: 6px; min-width: 0 }
+  .xv-t { font: 400 12px var(--ui); color: var(--text); min-width: 0; overflow-wrap: anywhere }
+  .xv-t[data-tone="dim"] { color: var(--faint) }
+  .xv-t[data-tone="strong"] { font-weight: 500 }
+  .xv-t[data-tone="ok"] { color: var(--ok) }
+  .xv-t[data-tone="warn"] { color: var(--warn) }
+  .xv-t[data-tone="err"] { color: var(--err) }
+  .xv-t[data-tone="accent"] { color: var(--accent) }
+  /* 扩展递来的 markdown 按纯文本画：抄本的渲染器假定内容可信，视图不是。 */
+  .xv-md { margin: 0; font: 400 12px/1.6 var(--ui); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere }
+  .xv-kv { display: flex; align-items: baseline; gap: 9px; font: 400 11.5px var(--ui) }
+  .xv-kv .k { flex: none; min-width: 84px; color: var(--faint) }
+  .xv-kv .v { color: var(--text); font-family: var(--mono); overflow-wrap: anywhere }
+  .xv-meter { position: relative; height: 4px; border-radius: var(--r-pill); background: var(--overlay); overflow: hidden }
+  .xv-meter > i { display: block; height: 100%; background: var(--deleg); transition: width var(--t-card) var(--ease) }
+  .xv-meter .lb { position: absolute; right: 0; top: 6px; font: 400 10.5px var(--ui); color: var(--ghost) }
+  .xv-hr { margin: 2px 0; border: 0; border-top: 1px solid var(--hair) }
+  .xview .pip[data-tone="ok"] { background: var(--ok) }
+  .xview .pip[data-tone="warn"] { background: var(--warn) }
+  .xview .pip[data-tone="err"] { background: var(--err) }
+  .xview .pip[data-tone="accent"] { background: var(--accent) }
+  /* 槽位轨：贴着输入框上沿的一条窄带。它不参与滚动，也不吃输入框的高度 —— 
+     插件可以站在这里，不能把这里占满。 */
+  .slotrail {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 4px 2px 6px; max-height: 84px; overflow-y: auto;
+  }
+  .slotrail .xview { flex-direction: row; align-items: center; gap: 8px }
+  /* 移动手柄：宿主给每个视图加的唯一一个控件。它平时不显形 —— 常见动作是读它，
+     不是挪它。菜单里的"交还给插件"和选一个位置是两件事：前者把决定权还回去。 */
+  .slotted { position: relative; display: flex; align-items: center; gap: 6px }
+  .movegrip {
+    flex: none; padding: 0 4px; border: 0; background: none; cursor: pointer;
+    color: transparent; font: 400 12px var(--ui); line-height: 1; transition: color .14s;
+  }
+  .slotted:hover .movegrip, .movegrip:focus-visible { color: var(--ghost) }
+  .movegrip:hover { color: var(--muted) }
+  .movemenu {
+    position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 30;
+    display: flex; flex-direction: column; min-width: 132px; padding: 4px;
+    border: 1px solid var(--border); border-radius: var(--r-sm);
+    background: var(--raised); box-shadow: 0 8px 24px rgb(0 0 0 / .18);
+  }
+  .movemenu .who { padding: 3px 8px 5px; font: 400 10.5px var(--mono); color: var(--ghost) }
+  .movemenu button {
+    padding: 5px 8px; border: 0; border-radius: var(--r-xs); background: none;
+    color: var(--muted); font: 400 12px var(--ui); text-align: left; cursor: pointer;
+  }
+  .movemenu button:hover { background: var(--overlay); color: var(--text) }
+  .movemenu button[aria-checked="true"] { color: var(--text) }
+  .movemenu button[aria-checked="true"]::after { content: " ·" }

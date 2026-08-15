@@ -57,16 +57,21 @@ type Options struct {
 	ConnectMCP   MCPConnector
 	OnDisconnect OnDisconnectFunc
 	Approval     ApprovalFunc
+	// RequireApprovedPlan refuses an apply that does not present back the planId
+	// a preview handed out. On for the model, whose apply would otherwise be the
+	// first moment anyone could learn what the source holds; off for hosts.
+	RequireApprovedPlan bool
 }
 
 type installSourceTool struct {
-	root         string
-	home         string
-	reasonixHome string
-	httpClient   *http.Client
-	connectMCP   MCPConnector
-	onDisconnect OnDisconnectFunc
-	approval     ApprovalFunc
+	root                string
+	home                string
+	reasonixHome        string
+	httpClient          *http.Client
+	connectMCP          MCPConnector
+	onDisconnect        OnDisconnectFunc
+	approval            ApprovalFunc
+	requireApprovedPlan bool
 	// preparePlugin overrides plugin source preparation in tests. nil uses
 	// preparePluginSource. Plan and apply both resolve the source through the
 	// same function, and git sources additionally report the resolved commit,
@@ -111,13 +116,14 @@ func NewTool(opts Options) tool.Tool {
 	// prompt-injected source can't reach cloud metadata / internal services.
 	client = ssrfGuardClient(client)
 	return &installSourceTool{
-		root:         root,
-		home:         home,
-		reasonixHome: reasonixHome,
-		httpClient:   client,
-		connectMCP:   opts.ConnectMCP,
-		onDisconnect: opts.OnDisconnect,
-		approval:     opts.Approval,
+		root:                root,
+		home:                home,
+		reasonixHome:        reasonixHome,
+		httpClient:          client,
+		connectMCP:          opts.ConnectMCP,
+		onDisconnect:        opts.OnDisconnect,
+		approval:            opts.Approval,
+		requireApprovedPlan: opts.RequireApprovedPlan,
 	}
 }
 
@@ -125,7 +131,7 @@ func (*installSourceTool) Name() string   { return "install_source" }
 func (*installSourceTool) ReadOnly() bool { return false }
 
 func (*installSourceTool) Description() string {
-	return "Plan, install, or uninstall a Reasonix skill, MCP server, or plugin package from a URL, local file/folder, .mcp.json, executable, or package name. Two-phase: with apply=false (default) returns a deterministic plan with per-action risk level; with apply=true copies/registers skills, connects/persists MCP servers, or installs plugin packages after validation. op='uninstall' removes a previously installed skill, MCP server, or plugin package by name."
+	return "Plan, install, or uninstall a Reasonix skill, MCP server, or plugin package from a URL, local file/folder, .mcp.json, executable, or package name. Two-phase: with apply=false (default) returns a deterministic plan with per-action risk level and a planId; with apply=true, passing back that planId, it copies/registers skills, connects/persists MCP servers, or installs plugin packages. An apply without the planId of a plan you have read installs nothing and returns the plan instead. op='uninstall' removes a previously installed skill, MCP server, or plugin package by name."
 }
 
 func (*installSourceTool) Schema() json.RawMessage {
@@ -147,7 +153,7 @@ func (*installSourceTool) Schema() json.RawMessage {
   "tier":{"type":"string","enum":["background","eager"],"description":"Persisted MCP startup tier. Defaults to background."},
   "replace":{"type":"boolean","description":"Allow replacing an existing MCP config entry with the same name. Skills still refuse to overwrite existing files."},
   "strict":{"type":"boolean","description":"Skill install strictness. true (default) requires name+description frontmatter; false copies the file as-is (use only for files you trust)."},
-  "planId":{"type":"string","description":"Optional. Echoed from a previous planned response to confirm the host is approving the same plan."}
+  "planId":{"type":"string","description":"The planId from the plan being applied. Required with apply=true: it proves the plan was read, and its leading risk level (low/medium/high) is what the permission layer decides on."}
 },
 "required":[]
 }`)
@@ -220,7 +226,11 @@ func (t *installSourceTool) Execute(ctx context.Context, raw json.RawMessage) (s
 		return marshalJSON(out), nil
 	}
 
-	if !req.Apply {
+	// An apply with no ticket is answered with the plan instead of an error: the
+	// caller wanted to install, and what it is missing is exactly what this
+	// returns. Nothing was written, so "planned" is the honest status.
+	unticketed := req.Apply && t.requireApprovedPlan && strings.TrimSpace(req.PlanID) == ""
+	if !req.Apply || unticketed {
 		for i := range actions {
 			actions[i].Status = "planned"
 		}
@@ -238,7 +248,7 @@ func (t *installSourceTool) Execute(ctx context.Context, raw json.RawMessage) (s
 			PlanID:   planID,
 			Actions:  publicActions(actions),
 			Warnings: warnings,
-			Next:     "Review the plan (especially each action's riskLevel). Call install_source again with apply=true and the same planId to install.",
+			Next:     planNext(unticketed),
 		}
 		return marshalJSON(out), nil
 	}
@@ -675,7 +685,41 @@ func computePlanID(req request, actions []action) string {
 	body, _ := json.Marshal(payload)
 	h := sha256.New()
 	h.Write(body)
-	return "sha256:" + hex.EncodeToString(h.Sum(nil)[:16])
+	// The grade leads the hash because the plan ID is what the permission layer
+	// matches on: a rule can name install_source(low:*) without that layer
+	// learning what a plan contains.
+	return string(planRisk(actions)) + ":sha256:" + hex.EncodeToString(h.Sum(nil)[:16])
+}
+
+func planNext(unticketed bool) string {
+	if unticketed {
+		return "Nothing was installed: apply=true must carry the planId of a plan that has been reviewed. Read this plan (especially each action's riskLevel), then call install_source again with apply=true and this planId."
+	}
+	return "Review the plan (especially each action's riskLevel). Call install_source again with apply=true and the same planId to install."
+}
+
+// planRisk is the whole plan's grade: the worst of its actions. A plan is
+// approved or refused as one, so a low-risk skill copy riding alongside a
+// package that starts a process must not soften what the ticket says.
+func planRisk(actions []action) RiskLevel {
+	worst := RiskLow
+	for _, a := range actions {
+		if riskRank(a.RiskLevel) > riskRank(worst) {
+			worst = a.RiskLevel
+		}
+	}
+	return worst
+}
+
+func riskRank(level RiskLevel) int {
+	switch level {
+	case RiskHigh:
+		return 2
+	case RiskMedium:
+		return 1
+	default:
+		return 0
+	}
 }
 
 // kindCounts tallies the per-kind action count for the response. Skill

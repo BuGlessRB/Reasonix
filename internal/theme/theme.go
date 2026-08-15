@@ -42,6 +42,9 @@ type Pack struct {
 	Tokens      map[string]map[string]string `json:"tokens"`
 	Background  *Background                  `json:"background,omitempty"`
 	HasPreview  bool                         `json:"hasPreview,omitempty"`
+	// Warnings names the tokens that were dropped and why. The pack still
+	// loads: one bad value must not cost the author every good one.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // Background is how a pack's image wants to be placed, not just that it has
@@ -182,22 +185,31 @@ func decode(raw []byte, dirID string) (Pack, error) {
 		name = id
 	}
 	tokens := map[string]map[string]string{}
+	var warnings []string
 	for _, scheme := range []string{"light", "dark"} {
 		if len(m.Tokens[scheme]) == 0 {
 			return Pack{}, fmt.Errorf("theme %s: no %s tokens", id, scheme)
 		}
 		copied := make(map[string]string, len(m.Tokens[scheme]))
 		for k, v := range m.Tokens[scheme] {
-			if isColour(v) {
+			if validToken(k, v) {
 				copied[k] = v
+				continue
 			}
+			// A dropped token is reported rather than silently ignored: the
+			// author is the only one who can fix it, and a pack that half
+			// applies looks like the app is broken rather than the pack.
+			warnings = append(warnings, dropReason(scheme, k, v))
 		}
 		if len(copied) == 0 {
-			return Pack{}, fmt.Errorf("theme %s: no usable %s colours", id, scheme)
+			return Pack{}, fmt.Errorf("theme %s: no usable %s tokens", id, scheme)
 		}
 		tokens[scheme] = copied
 	}
-	pack := Pack{ID: id, Name: name, Author: strings.TrimSpace(m.Author), Description: strings.TrimSpace(m.Description), Tokens: tokens}
+	// Map iteration order would otherwise make the same pack report its
+	// problems in a different order on every read.
+	sort.Strings(warnings)
+	pack := Pack{ID: id, Name: name, Author: strings.TrimSpace(m.Author), Description: strings.TrimSpace(m.Description), Tokens: tokens, Warnings: warnings}
 	pack.Background = backgroundOf(m.Background, hasAsset(id, assetBackground))
 	pack.HasPreview = hasAsset(id, assetPreview)
 	return pack, nil

@@ -350,6 +350,12 @@ func joinURLPath(parts ...string) string {
 func (t *installSourceTool) planLocal(req request, path string, info os.FileInfo) ([]action, []string, error) {
 	var actions []action
 	var warnings []string
+	// An exported package arrives as an archive rather than a folder, and it can
+	// be nothing else — no skill file or .mcp.json is a zip — so this is the
+	// whole answer for one rather than a first guess to fall through from.
+	if !info.IsDir() && looksLikeZip(path) {
+		return t.planZipPlugin(req, path)
+	}
 	if info.IsDir() && (req.Kind == "auto" || req.Kind == "plugin") {
 		pluginAction, pluginWarnings, err := t.localPluginPackageAction(req, path)
 		if err == nil {

@@ -1,9 +1,10 @@
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, WorkspaceInfo, WorkspaceChanges, Attachment, ThemePack } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, WorkspaceInfo, WorkspaceChanges, Attachment, ThemePack } from "./port";
 import type { WireEvent } from "./wire";
+import { MockExtensions } from "./mock_ext";
 import { SCRIPT } from "./fixture";
 
 
-export class MockPort implements AgentPort {
+export class MockPort extends MockExtensions implements AgentPort {
   private listeners = new Set<(ev: WireEvent) => void>();
   private log: WireEvent[] = [];
   // What the user has sent, so checkpoints() can mirror one per turn.
@@ -124,28 +125,6 @@ export class MockPort implements AgentPort {
     },
     { name: "context7", state: "idle", enabled: true, tools: 0, transport: "http" },
     { name: "figma", state: "failed", enabled: true, transport: "http", tools: 0, error: "401 unauthorized" },
-  ];
-
-  private skillList: SkillEntry[] = [
-    {
-      name: "review", slashName: "review", description: "复核这一轮改动，给出严重度分级",
-      scope: "project", path: ".reasonix/skills/review/SKILL.md", subagent: true, enabled: true,
-    },
-    { name: "init", slashName: "init", description: "为这个仓库生成一份项目说明", scope: "builtin", enabled: true },
-    {
-      name: "security-review", slashName: "security-review", description: "只读地过一遍安全面",
-      scope: "builtin", subagent: true, readOnly: true, effort: "high", enabled: true,
-    },
-    // No slash name of its own: only model discovery reaches it. This is the
-    // row the old list could not show at all.
-    {
-      name: "release-notes", description: "从提交历史起草发布说明",
-      scope: "global", path: "~/.reasonix/skills/release-notes/SKILL.md", enabled: false,
-    },
-    {
-      name: "deploy-runbook", slashName: "deploy-runbook", description: "只在你点名时跑的部署清单",
-      scope: "project", path: ".reasonix/skills/deploy-runbook/SKILL.md", manual: true, enabled: true,
-    },
   ];
 
   async mcp(): Promise<McpEntry[]> {
@@ -368,15 +347,6 @@ export class MockPort implements AgentPort {
     return out;
   }
 
-  async skills(): Promise<SkillCatalog> {
-    return { implicit: true, skills: this.skillList.map((s) => ({ ...s })) };
-  }
-
-  async setSkillEnabled(name: string, enabled: boolean) {
-    const sk = this.skillList.find((x) => x.name === name);
-    if (sk) sk.enabled = enabled;
-  }
-
   async versions(): Promise<VersionHub> {
     return { current: "dev", pinned: "", stalePin: false, latest: "", newer: false, versions: [] };
   }
@@ -395,6 +365,7 @@ export class MockPort implements AgentPort {
       models: ["deepseek-v4-pro"], default: "deepseek-v4-pro",
       hasKey: true, inUse: false, preset: false, keyEnv: "DEEPSEEK_API_KEY",
       canSetVision: false, canWebSearch: true, webSearch: true,
+      canSetThinking: true, sendsThinking: true,
     },
     {
       name: "myrelay", kind: "openai", baseUrl: "https://relay.example.com/v1",
@@ -423,6 +394,10 @@ export class MockPort implements AgentPort {
     this.sources = this.sources.map((p) => (p.name === name ? { ...p, webSearch: on } : p));
   }
 
+  async setProviderThinking(name: string, on: boolean): Promise<void> {
+    this.sources = this.sources.map((p) => (p.name === name ? { ...p, sendsThinking: on } : p));
+  }
+
   async editProvider(edit: ProviderEdit): Promise<void> {
     this.sources = this.sources.map((p) =>
       p.name === edit.name ? { ...p, models: edit.models, default: edit.default, visionModels: edit.vision } : p,
@@ -438,6 +413,11 @@ export class MockPort implements AgentPort {
   }
 
   onUpdateProgress(): () => void {
+    return () => {};
+  }
+
+  // Both of these are the shell reporting on itself; the fixture has no shell.
+  onFileDrop(): () => void {
     return () => {};
   }
 
@@ -477,8 +457,13 @@ export class MockPort implements AgentPort {
     await this.setWorkspace((this.state.workspaceRoot ?? "") + " (隔离副本)");
   }
 
-  async pickFolder() {
-    return "";
+  async openExternal(url: string) {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  // A fixture has no native picker at all, which is what null says.
+  async pickFolder(): Promise<string | null> {
+    return null;
   }
 
   // A demo shell has no workspace to read and no kernel to ask, so the fixture
@@ -733,6 +718,17 @@ export class MockPort implements AgentPort {
       },
     ];
   }
+  private slots: Record<string, string> = {};
+
+  async surfaceSlots() {
+    return { ...this.slots };
+  }
+
+  async assignSurface(surface: string, slot: string) {
+    if (slot) this.slots[surface] = slot;
+    else delete this.slots[surface];
+  }
+
   async activateTheme(id: string) {
     this.activeTheme = id;
   }

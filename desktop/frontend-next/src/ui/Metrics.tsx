@@ -22,10 +22,14 @@ interface Props {
   onFold: () => void;
   onSettings: () => void;
   panels: ExtensionSurface[];
+  // Composed views that resolved to the rail — the default place for a standing
+  // surface nobody assigned elsewhere.
+  views?: ExtensionSurface[];
   onExtInvoke: (name: string) => void;
+  onMoveSurface?: (ext: ExtensionSurface, slot: string) => void;
 }
 
-export function Metrics({ metrics, plan, items, jobs, mcp, rate, done, tree, yolo, onFold, onSettings, panels, onExtInvoke }: Props) {
+export function Metrics({ metrics, plan, items, jobs, mcp, rate, done, tree, yolo, onFold, onSettings, panels, views, onExtInvoke, onMoveSurface }: Props) {
   return (
     <>
       <div className="side-hd">
@@ -39,7 +43,7 @@ export function Metrics({ metrics, plan, items, jobs, mcp, rate, done, tree, yol
         <Agents items={items} />
         <Jobs jobs={jobs} />
         <Mcp servers={mcp} onOpen={onSettings} />
-        <Extensions panels={panels} onInvoke={onExtInvoke} />
+        <Extensions panels={panels} views={views} onInvoke={onExtInvoke} onMove={onMoveSurface} />
         <Plan steps={plan} />
         <Files items={items} yolo={yolo} tree={tree} />
       </div>

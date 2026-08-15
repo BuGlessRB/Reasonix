@@ -101,3 +101,40 @@ func TestToWireExtensionNilPayload(t *testing.T) {
 		t.Fatalf("nil payload JSON = %s, must omit the extension field", b)
 	}
 }
+
+// The JSON a view serializes to is what the frontend's ExtensionViewNode type
+// is written against, and nothing checks the two against each other at build
+// time. Pinning the wire shape here is what makes a renamed field a failing
+// test rather than a node that silently stops rendering.
+func TestToWireExtensionViewShape(t *testing.T) {
+	progress := 0.62
+	ev := event.Event{Kind: event.ExtensionSurface, Extension: &event.ExtensionSurfacePayload{
+		PluginID: "alpha", SurfaceID: "usage", Kind: event.ExtensionSurfaceView,
+		View: &event.ExtensionViewSurface{
+			Slot: "composer-trailing",
+			Body: []event.ExtensionViewNode{
+				{Kind: "row", Children: []event.ExtensionViewNode{
+					{Kind: "pip", Tone: "ok"},
+					{Kind: "text", Value: "quota 62%", Tone: "strong"},
+				}},
+				{Kind: "meter", Progress: &progress},
+				{Kind: "button", ActionID: "open-billing", Label: "manage"},
+			},
+		},
+	}}
+	raw, err := json.Marshal(ToWire(ev))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`"kind":"view"`,
+		`"view":{"slot":"composer-trailing"`,
+		`{"kind":"row","children":[{"kind":"pip","tone":"ok"},{"kind":"text","value":"quota 62%","tone":"strong"}]}`,
+		`{"kind":"meter","progress":0.62}`,
+		`{"kind":"button","label":"manage","actionId":"open-billing"}`,
+	} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("wire JSON missing %s\ngot: %s", want, raw)
+		}
+	}
+}

@@ -1,9 +1,11 @@
 import type { ThemePack } from "../port/port";
 
-// A pack names colours in its own vocabulary; this is where they become ours.
+// A pack names things in its own vocabulary; this is where they become ours.
 // The mapping lives on this side because only the frontend knows what each
 // surface in its layout is called — a pack should not have to learn our
-// variable names to be worth installing.
+// variable names to be worth installing. The vocabulary itself is the kernel's
+// (internal/theme.Tokens), and TestThemeTokenVocabularyMatchesTheFrontend holds
+// the two halves together.
 const SURFACE: Record<string, string[]> = {
   bg: ["--page"],
   bgSoft: ["--surface"],
@@ -16,6 +18,13 @@ const SURFACE: Record<string, string[]> = {
   fgFaint: ["--faint", "--ghost"],
   accent: ["--accent"],
   accentFg: ["--accent-fg"],
+  // Shape and type. --r-pill is absent because a pill is a shape rather than a
+  // size: a pack that could set it would round a button into something else.
+  radiusXs: ["--r-xs"],
+  radiusSm: ["--r-sm"],
+  radiusMd: ["--r-md"],
+  fontUi: ["--ui"],
+  fontMono: ["--mono"],
 };
 
 // What a pack may not touch. ok/warn/err/net/deleg encode what is happening —

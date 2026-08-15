@@ -21,6 +21,26 @@ type ExtensionSurface struct {
 	Form         *ExtensionForm         `json:"form,omitempty"`
 	Notification *ExtensionNotification `json:"notification,omitempty"`
 	Panel        *ExtensionPanel        `json:"panel,omitempty"`
+	View         *ExtensionView         `json:"view,omitempty"`
+}
+
+// ExtensionView is the JSON form of an event.ExtensionViewSurface: a tree the
+// frontend renders with its own components.
+type ExtensionView struct {
+	Slot string              `json:"slot,omitempty"`
+	Body []ExtensionViewNode `json:"body"`
+}
+
+// ExtensionViewNode is one primitive of a view.
+type ExtensionViewNode struct {
+	Kind     string              `json:"kind"`
+	Value    string              `json:"value,omitempty" externalizable:"true"`
+	Key      string              `json:"key,omitempty"`
+	Label    string              `json:"label,omitempty"`
+	Tone     string              `json:"tone,omitempty"`
+	Progress *float64            `json:"progress,omitempty"`
+	ActionID string              `json:"actionId,omitempty"`
+	Children []ExtensionViewNode `json:"children,omitempty"`
 }
 
 // ExtensionPanel is the JSON form of an event.ExtensionPanelView.
@@ -155,6 +175,24 @@ func ToWireExtensionSurface(p *event.ExtensionSurfacePayload) *ExtensionSurface 
 			panel.Actions = append(panel.Actions, ExtensionActionRef{ActionID: a.ActionID, Label: a.Label})
 		}
 		out.Panel = panel
+	}
+	if v := p.View; v != nil {
+		out.View = &ExtensionView{Slot: v.Slot, Body: viewNodes(v.Body)}
+	}
+	return out
+}
+
+func viewNodes(in []event.ExtensionViewNode) []ExtensionViewNode {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]ExtensionViewNode, 0, len(in))
+	for _, n := range in {
+		out = append(out, ExtensionViewNode{
+			Kind: n.Kind, Value: n.Value, Key: n.Key, Label: n.Label,
+			Tone: n.Tone, Progress: n.Progress, ActionID: n.ActionID,
+			Children: viewNodes(n.Children),
+		})
 	}
 	return out
 }

@@ -505,6 +505,7 @@ const (
 	UISurfaceForm         UISurfaceKind = "form"
 	UISurfaceNotification UISurfaceKind = "notification"
 	UISurfacePanel        UISurfaceKind = "panel"
+	UISurfaceView         UISurfaceKind = "view"
 )
 
 // UIPublishResult is a generated Extension Protocol v2 wire DTO.
@@ -618,6 +619,51 @@ type UIPanelPayload struct {
 	Progress *float64      `json:"progress,omitempty"`
 	Actions  []UIActionRef `json:"actions,omitempty"`
 }
+
+// UIViewPayload is a generated Extension Protocol v2 wire DTO.
+type UIViewPayload struct {
+	Slot string   `json:"slot,omitempty"`
+	Body []UINode `json:"body"`
+}
+
+// UINode is a generated Extension Protocol v2 wire DTO.
+type UINode struct {
+	Kind     UINodeKind `json:"kind"`
+	Value    string     `json:"value,omitempty"`
+	Key      string     `json:"key,omitempty"`
+	Label    string     `json:"label,omitempty"`
+	Tone     UITone     `json:"tone,omitempty"`
+	Progress *float64   `json:"progress,omitempty"`
+	ActionID string     `json:"actionId,omitempty"`
+	Children []UINode   `json:"children,omitempty"`
+}
+
+// UINodeKind is a generated Extension Protocol v2 string enum.
+type UINodeKind string
+
+const (
+	UINodeText     UINodeKind = "text"
+	UINodeMarkdown UINodeKind = "markdown"
+	UINodeRow      UINodeKind = "row"
+	UINodeStack    UINodeKind = "stack"
+	UINodeKv       UINodeKind = "kv"
+	UINodeMeter    UINodeKind = "meter"
+	UINodePip      UINodeKind = "pip"
+	UINodeButton   UINodeKind = "button"
+	UINodeDivider  UINodeKind = "divider"
+)
+
+// UITone is a generated Extension Protocol v2 string enum.
+type UITone string
+
+const (
+	UIToneDim    UITone = "dim"
+	UIToneStrong UITone = "strong"
+	UIToneOk     UITone = "ok"
+	UIToneWarn   UITone = "warn"
+	UIToneErr    UITone = "err"
+	UIToneAccent UITone = "accent"
+)
 
 // ProtocolErrorData is a generated Extension Protocol v2 wire DTO.
 type ProtocolErrorData struct {

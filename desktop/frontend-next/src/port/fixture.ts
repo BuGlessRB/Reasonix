@@ -446,5 +446,28 @@ export const SCRIPT: Beat[] = [
       },
     },
   },
+  // A composed view standing next to the composer. It is in the script for the
+  // same reason every other card is: a rendering path nobody sees while
+  // developing is a rendering path that rots.
+  {
+    wait: 200,
+    ev: {
+      kind: "extension_surface",
+      extension: {
+        pluginId: "opengo", surfaceId: "quota", kind: "view",
+        view: {
+          slot: "composer-trailing",
+          body: [
+            { kind: "row", children: [
+              { kind: "pip", tone: "ok" },
+              { kind: "text", value: "套餐 62%", tone: "strong" },
+              { kind: "text", value: "620/1000 · 7 天后重置", tone: "dim" },
+            ] },
+            { kind: "meter", progress: 0.62 },
+          ],
+        },
+      },
+    },
+  },
   { wait: 300, ev: { kind: "turn_done" } },
 ];

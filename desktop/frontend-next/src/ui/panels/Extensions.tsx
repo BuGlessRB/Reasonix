@@ -1,21 +1,38 @@
 import type { ExtensionSurface } from "../../port/wire";
+import { SlottedView } from "../SlottedView";
 
 // Standing surfaces an extension published. They live here rather than in the
 // transcript because they describe a state that is still true — a watcher, a
 // sync, a connection — which scrolling away would hide.
 export function Extensions({
   panels,
+  views = [],
   onInvoke,
+  onMove,
 }: {
   panels: ExtensionSurface[];
+  // Composed views that landed here: either the user put them here, or nobody
+  // named a place they could be put. The rail is where a standing surface goes
+  // when no one said otherwise.
+  views?: ExtensionSurface[];
   onInvoke: (name: string) => void;
+  onMove?: (ext: ExtensionSurface, slot: string) => void;
 }) {
-  if (panels.length === 0) return null;
+  if (panels.length === 0 && views.length === 0) return null;
   return (
     <div className="block" data-b="extpanels">
       <div className="lbl">
-        扩展<span className="c">{panels.length}</span>
+        扩展<span className="c">{panels.length + views.length}</span>
       </div>
+      {views.map((v) => (
+        <div className="extpanel" key={`${v.pluginId}:${v.surfaceId}`}>
+          <SlottedView
+            ext={v}
+            onAction={onInvoke}
+            onMove={(slot) => onMove?.(v, slot)}
+          />
+        </div>
+      ))}
       {panels.map((p) => {
         const panel = p.panel;
         if (!panel) return null;

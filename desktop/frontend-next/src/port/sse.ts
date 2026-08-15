@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
+import type { AccountState, AgentPort, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
 import { HttpError, type Attachment, type WorkspaceChanges } from "./port";
 import type { WireEvent } from "./wire";
 
@@ -19,6 +19,12 @@ interface WailsUpdateBus {
   EventsOn(name: string, cb: (data: UpdateProgress) => void): () => void;
 }
 
+// Wails' own drop API, which is the only subscriber that honours
+// --wails-drop-target. Absent in a browser tab, where a page never learns a path.
+interface WailsFileDropBus {
+  OnFileDrop(cb: (x: number, y: number, paths: string[]) => void, useDropTarget: boolean): void;
+}
+
 // Wails publishes bound methods at window.go.<package>.<Struct>.<Method>; the
 // shell's package is main and the struct is App. Absent in a browser tab.
 interface WailsBind {
@@ -26,9 +32,11 @@ interface WailsBind {
     main?: {
       App?: {
         PickWorkspace?: () => Promise<string>;
+        OpenExternal?: (url: string) => Promise<void>;
         Versions?: () => Promise<VersionHub>;
         PinVersion?: (version: string) => Promise<void>;
         GoToVersion?: (version: string) => Promise<void>;
+        SavePluginExport?: (name: string) => Promise<{ path: string; required: string[] }>;
       };
     };
   };
@@ -36,6 +44,9 @@ interface WailsBind {
 
 export class SsePort implements AgentPort {
   constructor(private readonly base = "") {}
+
+  private readonly dropSubs = new Set<(paths: string[]) => void>();
+  private dropWired = false;
 
   private async post(path: string, body?: unknown): Promise<void> {
     const res = await fetch(this.base + path, {
@@ -96,6 +107,56 @@ export class SsePort implements AgentPort {
 
   setSkillEnabled(name: string, enabled: boolean) {
     return this.post("/skills/enabled", { name, enabled });
+  }
+
+  plugins() {
+    return this.get<PluginPackage[]>("/plugins");
+  }
+
+  planPlugin(req: PluginInstallRequest) {
+    return this.post0<PluginPlan>("/plugins/plan", req);
+  }
+
+  installPlugin(req: PluginInstallRequest) {
+    return this.post0<PluginPlan>("/plugins/install", req);
+  }
+
+  async setPluginEnabled(name: string, enabled: boolean) {
+    await this.post0<{ reloadError?: string }>("/plugins/enabled", { name, enabled });
+  }
+
+  async removePlugin(name: string): Promise<PluginPlan> {
+    const res = await fetch(this.base + "/plugins/" + encodeURIComponent(name), {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    const body = (await res.json().catch(() => ({}))) as PluginPlan & { error?: string };
+    if (!res.ok) throw new Error(body.error || `/plugins/${name}: ${res.status}`);
+    return body;
+  }
+
+  // A webview starts no downloads of its own, so the shell writes the file
+  // through its own save dialog when there is one. In a browser tab the archive
+  // is an ordinary download, and the header is read first because the body is
+  // bytes and has nowhere to say what was stripped out of it.
+  async exportPlugin(name: string): Promise<PluginExport> {
+    const save = (window as WailsBind).go?.main?.App?.SavePluginExport;
+    if (save) {
+      const out = await save(name);
+      return { required: out.required ?? [], savedTo: out.path || undefined };
+    }
+    const res = await fetch(this.base + "/plugins/" + encodeURIComponent(name) + "/export", {
+      credentials: "same-origin",
+    });
+    if (!res.ok) throw new Error(`/plugins/${name}/export: ${res.status}`);
+    const required = (res.headers.get("X-Reasonix-Required-Env") ?? "").split(",").filter(Boolean);
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${name}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+    return { required };
   }
 
   hooks() {
@@ -244,6 +305,10 @@ export class SsePort implements AgentPort {
     return this.post("/providers/websearch", { name, on });
   }
 
+  setProviderThinking(name: string, on: boolean) {
+    return this.post("/providers/thinking", { name, on });
+  }
+
   roles() {
     return this.get<RoleAssignments>("/roles");
   }
@@ -293,6 +358,23 @@ export class SsePort implements AgentPort {
     return bus.EventsOn(WAILS_UPDATE_EVENT, cb);
   }
 
+  // Wails registers its drop listeners once and ignores a second call, so the
+  // one subscription is fanned out here. useDropTarget=true is what keeps this
+  // to elements that opted in: without it every drop in the window arrives,
+  // including an image the composer is about to attach.
+  onFileDrop(cb: (paths: string[]) => void): () => void {
+    const rt = (window as unknown as { runtime?: WailsFileDropBus }).runtime;
+    if (!rt?.OnFileDrop) return () => {};
+    if (!this.dropWired) {
+      this.dropWired = true;
+      rt.OnFileDrop((_x, _y, paths) => this.dropSubs.forEach((f) => f(paths ?? [])), true);
+    }
+    this.dropSubs.add(cb);
+    return () => {
+      this.dropSubs.delete(cb);
+    };
+  }
+
   account() {
     return this.get<AccountState>("/account");
   }
@@ -328,9 +410,19 @@ export class SsePort implements AgentPort {
     return this.post("/workspace", { isolate: true });
   }
 
-  async pickFolder() {
+  async openExternal(url: string) {
+    const bind = (window as unknown as WailsBind).go?.main?.App?.OpenExternal;
+    if (bind) {
+      await bind(url);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async pickFolder(): Promise<string | null> {
     const bind = (window as unknown as WailsBind).go?.main?.App?.PickWorkspace;
-    return bind ? ((await bind()) ?? "") : "";
+    if (!bind) return null;
+    return (await bind()) ?? "";
   }
 
   sessions() {
@@ -448,6 +540,15 @@ export class SsePort implements AgentPort {
   themes() {
     return this.get<ThemePack[]>("/themes");
   }
+  async surfaceSlots() {
+    const r = await this.get<{ slots?: Record<string, string> }>("/surfaces");
+    return r.slots ?? {};
+  }
+
+  assignSurface(surface: string, slot: string) {
+    return this.post("/surfaces", { surface, slot });
+  }
+
   activateTheme(id: string) {
     return this.post("/themes", { id });
   }

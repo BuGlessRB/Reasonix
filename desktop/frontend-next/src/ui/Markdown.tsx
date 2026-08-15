@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import remarkGemoji from "remark-gemoji";
+import { remarkTrimAutolink } from "./autolink";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { useRevealed } from "./reveal";
@@ -23,7 +24,7 @@ const schema = {
   },
 };
 
-const REMARK = [remarkGfm, remarkMath, remarkGemoji];
+const REMARK = [remarkGfm, remarkMath, remarkGemoji, remarkTrimAutolink];
 // Order is load-bearing: raw parses HTML into nodes, sanitize prunes them, and
 // katex renders afterwards so its generated markup is not pruned in turn.
 const BASE_REHYPE = [rehypeRaw, [rehypeSanitize, schema]];

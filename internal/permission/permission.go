@@ -264,6 +264,8 @@ func (p Policy) DecideSubject(toolName string, readOnly bool, subject string) De
 		return Allow
 	case readOnly:
 		return Allow
+	case subjectRequiresHuman(toolName, subject):
+		return Ask
 	default:
 		return p.Mode
 	}
@@ -572,92 +574,6 @@ func bashRulePrefixBaseMatches(existing, candidate Rule) bool {
 	return ok && existingBase == candidateBase
 }
 
-// subjectKeys are the JSON argument keys, in priority order, that carry a tool
-// call's "subject" — the thing a Subject glob matches against. Generic so tools
-// need not implement a permission-specific method: bash exposes command, the
-// file tools expose path / file_path, grep & glob expose pattern.
-var subjectKeys = []string{"command", "file_path", "path", "source_path", "destination_path", "pattern"}
-
-// Subject extracts the primary matchable subject string from a call's raw JSON
-// args, returning "" when none of the known keys is present (such a call only
-// matches bare "ToolName" rules). Use Subjects for permission decisions that
-// must account for every touched endpoint.
-func Subject(args json.RawMessage) string {
-	subjects := Subjects(args)
-	if len(subjects) > 0 {
-		return subjects[0]
-	}
-	return ""
-}
-
-// Subjects extracts every matchable subject from a call's raw JSON args. Most
-// tools expose one subject; move_file exposes both source_path and
-// destination_path so path-scoped permission rules can protect either endpoint.
-func Subjects(args json.RawMessage) []string {
-	if len(args) == 0 {
-		return nil
-	}
-	var m map[string]any
-	if err := json.Unmarshal(args, &m); err != nil {
-		return nil
-	}
-	src := stringArg(m, "source_path")
-	dst := stringArg(m, "destination_path")
-	if src != "" && dst != "" {
-		out := []string{src}
-		if dst != src {
-			out = append(out, dst)
-		}
-		return out
-	}
-	for _, k := range subjectKeys {
-		if s := stringArg(m, k); s != "" {
-			return []string{s}
-		}
-	}
-	return nil
-}
-
-func stringArg(m map[string]any, key string) string {
-	if v, ok := m[key]; ok {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-	return ""
-}
-
-// matchGlob reports whether name matches pattern, where '*' matches any run of
-// characters (including separators) and '?' matches exactly one. Unlike
-// path.Match, '*' is not stopped by '/', which is what command-line and path
-// prefixes ("rm -rf*", "/etc/*") intuitively expect. Linear time with
-// backtracking, byte-oriented.
-func matchGlob(pattern, name string) bool {
-	var px, nx, starPx, starNx int
-	starPx = -1
-	for nx < len(name) {
-		switch {
-		case px < len(pattern) && pattern[px] == '*':
-			starPx = px
-			starNx = nx
-			px++
-		case px < len(pattern) && (pattern[px] == '?' || pattern[px] == name[nx]):
-			px++
-			nx++
-		case starPx != -1:
-			px = starPx + 1
-			starNx++
-			nx = starNx
-		default:
-			return false
-		}
-	}
-	for px < len(pattern) && pattern[px] == '*' {
-		px++
-	}
-	return px == len(pattern)
-}
-
 // Approver resolves an Ask decision interactively. Implementations live in the
 // front-end (the chat TUI); a non-interactive run passes a nil Approver, which
 // the Gate treats as "allow" to preserve autonomous behaviour.
@@ -703,6 +619,12 @@ func (g *Gate) Check(ctx context.Context, toolName string, args json.RawMessage,
 		if BashCommandIsReadOnly(args) {
 			readOnly = true
 		}
+	}
+	// Producing an install plan reads the source and writes nothing. Treating
+	// the preview as the write it precedes would train the user to approve the
+	// question that carries no information, ahead of the one that does.
+	if toolName == "install_source" && !readOnly && InstallSourceIsPlanOnly(args) {
+		readOnly = true
 	}
 	decision := g.Policy.Decide(toolName, readOnly, args)
 	ruleReason := ""

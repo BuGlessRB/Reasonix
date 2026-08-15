@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export interface MenuItem {
   value: string;
@@ -13,6 +13,11 @@ export interface MenuItem {
   header?: boolean;
 }
 
+// Where a list stops fitting the menu's own height cap. Past it a scrollbar
+// alone still means hunting — one gateway account can publish a hundred
+// models — and below it the field would be one more thing to look past.
+const FILTER_FROM = 10;
+
 interface Props {
   label: ReactNode;
   items: MenuItem[];
@@ -25,13 +30,26 @@ interface Props {
 
 export function Picker({ label, items, current, onPick, place, className, title }: Props) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const wrap = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
+  const find = useRef<HTMLInputElement>(null);
+
+  const choosable = items.filter((it) => !it.header && !it.plain).length;
+  const filtering = choosable > FILTER_FROM;
+  const shown = useMemo(() => (filtering ? matching(items, query) : items), [filtering, items, query]);
+  // What Enter takes while the field still has focus. Only shown once the
+  // query narrows something, or every menu would open pre-selected.
+  const lead = query ? shown.find((it) => !it.header)?.value : undefined;
 
   useEffect(() => {
-    if (!open) return;
-    menu.current?.querySelector<HTMLElement>(".mi")?.focus();
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    if (filtering) find.current?.focus();
+    else menu.current?.querySelector<HTMLElement>("button.mi")?.focus();
     const onDown = (e: MouseEvent) => {
       if (!wrap.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -49,15 +67,31 @@ export function Picker({ label, items, current, onPick, place, className, title 
       removeEventListener("mousedown", onDown);
       removeEventListener("keydown", onKey, true);
     };
-  }, [open]);
+  }, [open, filtering]);
 
+  // Headings are divs and never take focus, so walking the buttons is what
+  // keeps one arrow press from landing on nothing.
   const arrows = (e: React.KeyboardEvent) => {
-    const all = [...(menu.current?.querySelectorAll<HTMLElement>(".mi") ?? [])];
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const all = [...(menu.current?.querySelectorAll<HTMLElement>("button.mi") ?? [])];
+    if (!all.length) return;
     const i = all.indexOf(document.activeElement as HTMLElement);
-    const to = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 : -1;
-    if (i < 0 || to < 0 || to >= all.length) return;
+    // From the field, Down enters the list at the row Enter would have taken.
+    if (i < 0) {
+      if (e.key !== "ArrowDown") return;
+      e.preventDefault();
+      all[0].focus();
+      return;
+    }
+    const to = e.key === "ArrowDown" ? i + 1 : i - 1;
+    if (to < 0 || to >= all.length) return;
     e.preventDefault();
     all[to].focus();
+  };
+
+  const take = (value: string) => {
+    setOpen(false);
+    onPick(value);
   };
 
   return (
@@ -79,35 +113,85 @@ export function Picker({ label, items, current, onPick, place, className, title 
         hidden={!open}
         onKeyDown={arrows}
       >
-        {items.map((it) => (
+        {filtering && (
+          <input
+            ref={find}
+            className="mfind"
+            value={query}
+            placeholder={`筛选 ${choosable} 项`}
+            aria-label="筛选"
+            spellCheck={false}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || !lead) return;
+              e.preventDefault();
+              take(lead);
+            }}
+          />
+        )}
+        {shown.map((it, i) => (
           <Fragment key={it.value}>
-            {it.divide && <div className="div" />}
+            {it.divide && i > 0 && <div className="div" />}
             {it.header ? (
               <div className="mi head">
                 <span className="lb">{it.label}</span>
                 {it.right && <span className="rt">{it.right}</span>}
               </div>
             ) : (
-            <button
-              className={it.plain ? "mi plain" : "mi"}
-              role="menuitem"
-              data-on={it.value === current ? "" : undefined}
-              onClick={() => {
-                setOpen(false);
-                onPick(it.value);
-              }}
-            >
-              <span className="dot" />
-              <span className="tx">
-                <span className="lb">{it.label}</span>
-                {it.desc && <span className="ds">{it.desc}</span>}
-              </span>
-              {it.right && <span className="rt">{it.right}</span>}
-            </button>
+              <button
+                className={it.plain ? "mi plain" : "mi"}
+                role="menuitem"
+                data-on={it.value === current ? "" : undefined}
+                data-lead={it.value === lead ? "" : undefined}
+                onClick={() => take(it.value)}
+              >
+                <span className="dot" />
+                <span className="tx">
+                  <span className="lb">{it.label}</span>
+                  {it.desc && <span className="ds">{it.desc}</span>}
+                </span>
+                {it.right && <span className="rt">{it.right}</span>}
+              </button>
             )}
           </Fragment>
         ))}
+        {filtering && shown.length === 0 && <div className="mnone">没有匹配的项</div>}
       </div>
     </div>
   );
+}
+
+// Group order is kept rather than ranked by relevance: a list that reorders
+// itself as you type moves the row out from under the cursor.
+function matching(items: MenuItem[], query: string): MenuItem[] {
+  const words = query.split(/\s+/).map(normalize).filter(Boolean);
+  if (!words.length) return items;
+  // A row is searchable by the heading above it too, so the account's name
+  // finds models whose own names never mention it.
+  let head = "";
+  const hit = items.map((it) => {
+    if (it.header) {
+      head = normalize(`${it.label} ${it.right ?? ""}`);
+      return false;
+    }
+    // Actions are not data — filtering them out would take "打开其他目录…"
+    // away exactly when the query found nothing and the user needs it.
+    if (it.plain) return false;
+    const hay = `${head}|${normalize(`${it.label} ${it.right ?? ""} ${it.desc ?? ""}`)}`;
+    return words.every((w) => hay.includes(w));
+  });
+  return items.filter((it, i) => {
+    if (it.plain) return true;
+    if (!it.header) return hit[i];
+    for (let j = i + 1; j < items.length && !items[j].header; j++) {
+      if (hit[j]) return true;
+    }
+    return false;
+  });
+}
+
+// Providers punctuate names inconsistently, so "gpt4" has to find "gpt-4o":
+// the separators carry nothing worth matching on.
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[\s\-_/.]+/g, "");
 }

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AccountState, AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, RoleAssignments, SessionStatus, SkillEntry, ThemePack } from "../port/port";
+import type { AccountState, AgentPort, ApprovalMode, McpEntry, ModelEntry, PluginPackage, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 import { WindowControls } from "./WindowControls";
 import { AddServer } from "./AddServer";
+import { AddPlugin } from "./AddPlugin";
+import { Packages } from "./Packages";
+import { Switch } from "./Switch";
 import { Hooks } from "./Hooks";
 import { Network } from "./Network";
 import { Account } from "./Account";
@@ -12,6 +15,7 @@ import { Roles } from "./Roles";
 import { Boundary } from "./Boundary";
 import { Versions } from "./Versions";
 import { Memory } from "./Memory";
+import { Appearance, SCHEMES } from "./Appearance";
 
 const PRESETS: [Preset, string, string][] = [
   ["balanced", "均衡", "做到模型认为做完为止。日常用这档"],
@@ -23,12 +27,6 @@ const APPROVALS: [ApprovalMode, string, string][] = [
   ["auto", "自动", "低风险自己过，写操作仍然问"],
   ["dontAsk", "不再问", "这一类记住，本会话内不再问"],
   ["yolo", "全放行", "不问了。只在你完全信任这个工作区时用"],
-];
-
-const THEMES: [string, string][] = [
-  ["auto", "跟随系统"],
-  ["light", "浅色"],
-  ["dark", "深色"],
 ];
 
 type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "memory" | "account" | "versions" | "appearance" | "advanced";
@@ -90,11 +88,13 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
   const [protocol, setProtocol] = useState<Record<string, string>>({});
   const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [skills, setSkills] = useState<SkillEntry[]>([]);
-  const [packs, setPacks] = useState<ThemePack[]>([]);
   const [implicit, setImplicit] = useState(true);
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
   const [adding, setAdding] = useState(false);
+  const [packages, setPackages] = useState<PluginPackage[]>([]);
+  const [addingPkg, setAddingPkg] = useState(false);
+  const [updatingPkg, setUpdatingPkg] = useState("");
   const [hookCount, setHookCount] = useState(0);
   const [netMode, setNetMode] = useState("");
   const [memCount, setMemCount] = useState(0);
@@ -102,6 +102,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
 
   const reloadExt = useCallback(() => {
     port.mcp().then(setMcp).catch(() => setMcp([]));
+    port.plugins().then(setPackages).catch(() => setPackages([]));
     port.hooks().then((c) => setHookCount(c.hooks.length)).catch(() => setHookCount(0));
     port.network().then((n) => setNetMode(NET_MODE[n.mode] ?? n.mode)).catch(() => setNetMode(""));
     port.memories().then((c) => setMemCount(c.memories.length)).catch(() => setMemCount(0));
@@ -120,28 +121,6 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
     reloadExt();
     onChanged();
   }, [reloadExt, onChanged]);
-
-  const loadPacks = useCallback(() => {
-    port.themes().then(setPacks).catch(() => setPacks([]));
-  }, [port]);
-  useEffect(loadPacks, [loadPacks]);
-
-  // Activating repaints through App's own theme effect, so this only has to
-  // refresh the list — onChanged is what tells App to re-read it.
-  // Activating repaints through App's theme effect, so this refreshes the list
-  // here and asks App to re-read which pack is active.
-  const pickPack = useCallback(
-    (id: string) => {
-      port
-        .activateTheme(id)
-        .then(() => {
-          loadPacks();
-          reloadThemes();
-        })
-        .catch(() => {});
-    },
-    [port, loadPacks, reloadThemes],
-  );
 
   // Adding or removing a source changes what the picker above can offer, so
   // the list is reloadable rather than read once at mount.
@@ -214,7 +193,15 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
   const preset = PRESETS.find(([id]) => id === status?.preset)?.[1] ?? "—";
   const approval = APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[1] ?? "—";
   const broken = mcp.filter((m) => m.state === "failed").length;
-  const skillsOn = skills.filter((s) => s.enabled).length;
+  // A package owns what it brought, and its own row already lists it. What is
+  // left is what the user added by hand, which is the only thing these two
+  // lists can act on without contradicting the package above them. Ownership
+  // is read off the packages themselves: a live server reports the config
+  // layer it was merged from, which is not the same question.
+  const owned = new Set(packages.flatMap((p) => p.mcpServers?.map((s) => s.name) ?? []));
+  const looseMcp = mcp.filter((m) => !owned.has(m.name));
+  const looseSkills = skills.filter((s) => !s.plugin);
+  const looseOn = looseSkills.filter((s) => s.enabled).length;
   // The table of contents is also the status board: the value that matters for
   // each section rides on its own row, so the risky one is legible from here.
   const nav: Record<Section, string> = {
@@ -222,12 +209,12 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
     model: status?.modelRef?.split("/").pop() ?? "—",
     tools: approval,
     hooks: hookCount ? `${hookCount} 条` : "关",
-    ext: broken ? `${broken} 个异常` : `${mcp.length + skillsOn}`,
+    ext: broken ? `${broken} 个异常` : packages.length ? `${packages.length} 个包` : `${looseMcp.length + looseOn}`,
     network: netMode,
     memory: memCount ? `${memCount} 条` : "",
     account: acct === null ? "" : acct.signedIn ? (acct.user?.label ?? "已登录") : "未登录",
     versions: "",
-    appearance: THEMES.find(([id]) => id === theme)?.[1] ?? "",
+    appearance: SCHEMES.find(([id]) => id === theme)?.[1] ?? "",
     advanced: ELSEWHERE.length ? `${ELSEWHERE.length}` : "",
   };
   const danger = (id: Section) =>
@@ -361,9 +348,44 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
           {at === "ext" && (
             <>
               <Group
+                title="插件包"
+                now={packages.length ? `${packages.length} 个` : undefined}
+                hint="一个包能一次带来技能、命令、自动化钩子和外部服务。装和导入是同一件事：给它一个仓库地址，或者机器上的一个文件夹。"
+                action={
+                  addingPkg ? undefined : (
+                    <button className="act" onClick={() => setAddingPkg(true)}>
+                      添加
+                    </button>
+                  )
+                }
+              >
+                {addingPkg && (
+                  <AddPlugin port={port} onClose={() => setAddingPkg(false)} onInstalled={afterExtChange} />
+                )}
+                {updatingPkg && (
+                  <AddPlugin
+                    port={port}
+                    updating={packages.find((p) => p.name === updatingPkg)}
+                    onClose={() => setUpdatingPkg("")}
+                    onInstalled={afterExtChange}
+                  />
+                )}
+                <Packages
+                  port={port}
+                  packages={packages}
+                  onChanged={afterExtChange}
+                  updating={updatingPkg}
+                  onUpdate={setUpdatingPkg}
+                />
+                {packages.length === 0 && !addingPkg && <div className="empty">还没装插件包。</div>}
+              </Group>
+              {/* Below the packages: what was added by hand. A server the user
+                  typed in themselves is not part of anyone's package, and
+                  filing it under one would misname where it came from. */}
+              <Group
                 title="外部工具"
-                now={mcp.length ? `${mcp.length} 个服务` : undefined}
-                hint="通过 MCP 接进来的服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。关掉一个会立刻从这一轮的工具表里消失，并且重启后依然是关的。"
+                now={looseMcp.length ? `${looseMcp.length} 个服务` : undefined}
+                hint="你自己接进来的 MCP 服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。关掉一个会立刻从这一轮的工具表里消失，并且重启后依然是关的。"
                 action={
                   adding ? undefined : (
                     <button className="act" onClick={() => setAdding(true)}>
@@ -380,24 +402,24 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
                     onInstalled={afterExtChange}
                   />
                 )}
-                {mcp.map((m) => (
+                {looseMcp.map((m) => (
                   <Server key={m.name} m={m} port={port} onDone={afterExtChange} />
                 ))}
-                {mcp.length === 0 && !adding && <div className="empty">没有接入任何外部服务。</div>}
+                {looseMcp.length === 0 && !adding && <div className="empty">没有自己接入的外部服务。</div>}
               </Group>
               <Group
                 title="技能"
-                now={skills.length ? `${skillsOn}/${skills.length} 开着` : undefined}
+                now={looseSkills.length ? `${looseOn}/${looseSkills.length} 开着` : undefined}
                 hint={
                   implicit
-                    ? "带 / 的可以自己点名调用；其余的由模型按任务自行判断要不要用。关掉的那些两条路都走不通。改动在下一次新建会话时进入模型的索引。"
+                    ? "工作目录与「我的」里的技能。带 / 的可以自己点名调用；其余的由模型按任务自行判断要不要用。关掉的那些两条路都走不通。改动在下一次新建会话时进入模型的索引。"
                     : "模型自动发现已关闭：现在只有你点名的技能会跑。改动在下一次新建会话时生效。"
                 }
               >
-                {skills.map((sk) => (
+                {looseSkills.map((sk) => (
                   <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} />
                 ))}
-                {skills.length === 0 && <div className="empty">这个工作目录下没有技能。</div>}
+                {looseSkills.length === 0 && <div className="empty">这个工作目录下没有技能。</div>}
               </Group>
             </>
           )}
@@ -438,46 +460,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
             </Group>
           )}
 
-          {at === "appearance" && (
-            <Group title="主题" hint="跟随系统时，系统切换会立刻反映；手动选过就固定住。">
-              {/* 三个没有说明文字的枚举值，跟推理强度是同一种选择，就该长成同一个控件 */}
-              <div className="seg" data-text role="group" aria-label="主题">
-                {THEMES.map(([id, name]) => (
-                  <button key={id} aria-pressed={theme === id} onClick={() => onTheme(id)}>
-                    {name}
-                  </button>
-                ))}
-              </div>
-            </Group>
-          )}
-
-          {at === "appearance" && (
-            <Group title="配色" hint="装在记忆目录的 themes/ 下，一个目录一个 theme.json。表面与强调色跟着走，状态色（成功/警告/失败）不跟，那是含义不是装饰。">
-              <div className="lrow">
-                <span className="ds">默认</span>
-                <button className="btn" data-primary={!packs.some((p) => p.active) ? "" : undefined} onClick={() => pickPack("")}>
-                  {packs.some((p) => p.active) ? "还原" : "使用中"}
-                </button>
-              </div>
-              {packs.length === 0 && <div className="lrow"><span className="ds">还没装配色</span></div>}
-              {packs.map((p) => (
-                <div className="lrow" key={p.id}>
-                  {/* The thumbnail is the pack's own picture, so a palette with
-                      a photo behind it does not read the same as one without. */}
-                  {p.hasPreview && (
-                    <img className="packshot" src={`/themes/${encodeURIComponent(p.id)}/preview`} alt="" loading="lazy" />
-                  )}
-                  <span className="ds">
-                    {p.name}
-                    {p.author && <span className="sc">{p.author}</span>}
-                  </span>
-                  <button className="btn" data-primary={p.active ? "" : undefined} onClick={() => pickPack(p.id)}>
-                    {p.active ? "使用中" : "换上"}
-                  </button>
-                </div>
-              ))}
-            </Group>
-          )}
+          {at === "appearance" && <Appearance port={port} theme={theme} onTheme={onTheme} reloadThemes={reloadThemes} />}
 
           {at === "advanced" && (
             <Group title="还不在这一版里" hint="每一项都需要自己的界面，做半个不如先说清楚它现在在哪。">
@@ -649,18 +632,6 @@ function SkillRow({
       </span>
       <Switch on={sk.enabled} busy={busy} label={`${sk.enabled ? "关闭" : "启用"} ${sk.name}`} onClick={toggle} />
     </div>
-  );
-}
-
-function Switch({
-  on, busy, label, onClick,
-}: {
-  on: boolean; busy?: boolean; label: string; onClick: () => void;
-}) {
-  return (
-    <button className="sw" role="switch" aria-checked={on} aria-label={label} disabled={busy} onClick={onClick}>
-      <i />
-    </button>
   );
 }
 
