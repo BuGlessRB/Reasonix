@@ -45,6 +45,14 @@ function Coverage({ c }: { c: Compaction }) {
   );
 }
 
+// The tail of what has been written, kept to one line: a digest is thousands
+// of tokens of headings and lists, and growing the card by all of them would
+// move everything below it for the length of the fold.
+function lastLine(text: string): string {
+  const line = text.trimEnd().split("\n").at(-1)?.trim() ?? "";
+  return line.length > 96 ? "…" + line.slice(-96) : line;
+}
+
 export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
   const before = c.sourceTokens ?? 0;
   const after = c.projectionTokens ?? 0;
@@ -61,6 +69,16 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
           <span className="tag">compaction</span>
           {c.trigger && <span className="arg">{TRIGGER[c.trigger] ?? c.trigger}</span>}
         </div>
+        {/* While it runs, the digest's own last line is the progress bar: a
+            fold can take a minute, and a placeholder that says nothing for a
+            minute cannot be told apart from one that has hung. */}
+        {!done && c.summary && (
+          <div className="out">
+            <div className="comp">
+              <div className="comp-n">{lastLine(c.summary)}</div>
+            </div>
+          </div>
+        )}
         {done && (
           <div className="out">
             <div className="comp">

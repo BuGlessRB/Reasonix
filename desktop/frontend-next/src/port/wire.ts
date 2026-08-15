@@ -17,6 +17,7 @@ export type Kind =
   | "ask_request"
   | "turn_done"
   | "compaction_started"
+  | "compaction_progress"
   | "compaction_done"
   | "mcp_surface_ready"
   | "retrying"
