@@ -758,57 +758,6 @@ func TestResumeKeepsTranscriptTodosForRunningGoalSidecar(t *testing.T) {
 	}
 }
 
-func TestResumeRestoresRunningAutoResearchGoalFromSidecar(t *testing.T) {
-	root := t.TempDir()
-	if resolved, err := filepath.EvalSymlinks(root); err == nil {
-		root = resolved
-	}
-	path := filepath.Join(root, "session.jsonl")
-	taskID := "investigate-runtime-resume"
-	if err := os.MkdirAll(filepath.Join(root, ".reasonix", "autoresearch", taskID, "state"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(root, ".reasonix", "autoresearch", taskID, "logs"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".reasonix", "autoresearch", taskID, "state", "task_spec.json"), []byte(`{"task_id":"investigate-runtime-resume","goal":"investigate runtime resume","allowed_operations":{"write":true},"success_criteria":[{"id":"criterion-1","description":"resume keeps Goal active","required":true}]}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".reasonix", "autoresearch", taskID, "state", "progress.json"), []byte(`{"task_id":"investigate-runtime-resume","iteration":2,"current_direction":"verify resume","stale_count":1,"pivot_count":0,"updated_at":"2026-06-30T00:00:00Z"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".reasonix", "autoresearch", taskID, "state", "directions_tried.json"), []byte(`{"task_id":"investigate-runtime-resume","directions":[]}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".reasonix", "autoresearch", taskID, "state", "findings.jsonl"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".reasonix", "autoresearch", taskID, "logs", "heartbeat.jsonl"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(goalStatePath(path), []byte(`{"goal":"investigate runtime resume","status":"running","researchMode":1,"autoResearchTaskID":"investigate-runtime-resume"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	loaded := agent.NewSession("sys")
-	exec := agent.New(nil, nil, loaded, agent.Options{}, event.Discard)
-	c := New(Options{Executor: exec, WorkspaceRoot: root, SessionDir: root, Label: "test"})
-	c.Resume(loaded, path)
-
-	if got := c.Goal(); got != "investigate runtime resume" {
-		t.Fatalf("Goal() after resume = %q, want running goal from sidecar", got)
-	}
-	composed := c.Compose("continue")
-	if strings.Contains(strings.ToLower(composed), "autoresearch") {
-		t.Fatalf("Compose after resume exposed removed AutoResearch protocol:\n%s", composed)
-	}
-	// The class-derived turn quota is retired: a migrated legacy Goal is
-	// bounded by what the user configures, not by a number derived from its text.
-	if got := c.GoalRuntime().TurnsLimit; got != 0 {
-		t.Fatalf("resumed legacy Goal turn budget = %d, want it retired", got)
-	}
-}
-
 func TestRunTurnRecordsDisplayForPersistedUserMessage(t *testing.T) {
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)

@@ -21,16 +21,3 @@ func TestGoalLegacyBudgetFlagNoticesExactlyOnce(t *testing.T) {
 		t.Fatalf("deprecated budget notices = %d, want 1:\n%s", got, joined)
 	}
 }
-
-func TestMissingLegacyGoalCommandDoesNotStartTUITurn(t *testing.T) {
-	m := newTestChatTUI()
-	m.ctrl = control.New(control.Options{WorkspaceRoot: t.TempDir()})
-	t.Cleanup(m.ctrl.Close)
-
-	if cmd := m.runGoalSubcommand("/goal resume .reasonix/autoresearch/missing-task/"); cmd != nil {
-		t.Fatal("missing legacy archive returned a provider turn command")
-	}
-	if got := m.ctrl.GoalStatus(); got != control.GoalStatusBlocked {
-		t.Fatalf("GoalStatus() = %q, want blocked", got)
-	}
-}

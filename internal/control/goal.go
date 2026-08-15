@@ -48,7 +48,6 @@ const (
 	stopCauseGoalRunBudget = "goal_run_budget" // legacy; the per-Run round ceiling is gone
 	stopCauseGoalStuck     = "goal_stuck"
 	stopCauseEvaluator     = "evaluator_unavailable"
-	stopCauseLegacyArchive = "legacy_archive"
 	stopCauseManual        = "manual"
 )
 
@@ -99,12 +98,6 @@ type goalMachine struct {
 	// stateExtra preserves fields written by a newer peer during read/modify/
 	// write cycles. Known current fields always win on serialization.
 	stateExtra map[string]json.RawMessage
-	// legacyTaskID is retained only while a historical AutoResearch archive is
-	// awaiting migration. It is serialized on fail-closed blocked sidecars so a
-	// restart can retry the migration without treating the raw archive path as a
-	// new Goal.
-	legacyTaskID string
-
 	// statePath is the persisted goal-state sidecar; empty disables persistence.
 	statePath string
 	// writeMu serializes goal-state disk writes so concurrent saves don't
@@ -116,9 +109,11 @@ type goalMachine struct {
 // safe-to-omit JSON: old readers ignore them, and restoreFromState re-derives
 // defaults when they are missing.
 type goalState struct {
-	Goal               string                      `json:"goal,omitempty"`
-	Status             string                      `json:"status,omitempty"`
-	ResearchMode       GoalResearchMode            `json:"researchMode,omitempty"`
+	Goal         string           `json:"goal,omitempty"`
+	Status       string           `json:"status,omitempty"`
+	ResearchMode GoalResearchMode `json:"researchMode,omitempty"`
+	// AutoResearchTaskID is read-only migration detection: a sidecar naming the
+	// retired research archive is rewritten as ordinary Goal state. Never written.
 	AutoResearchTaskID string                      `json:"autoResearchTaskID,omitempty"`
 	ScopeID            string                      `json:"scopeID,omitempty"`
 	DeliveryCheckpoint evidence.DeliveryCheckpoint `json:"deliveryCheckpoint,omitempty"`
@@ -285,28 +280,6 @@ func (g *goalMachine) set(goal, preferredBudgetClass string, todos []evidence.To
 	return g.buildStateLocked(todos)
 }
 
-// setLegacyArchiveBlocked atomically installs and blocks an explicit legacy
-// archive goal. A concurrent Goal replacement cannot be blocked between two
-// separate FSM mutations.
-func (g *goalMachine) setLegacyArchiveBlocked(goal, preferredBudgetClass, reason string, todos []evidence.TodoItem) (string, []byte, bool) {
-	return g.setLegacyArchiveBlockedWithTaskID(goal, preferredBudgetClass, reason, "", todos)
-}
-
-func (g *goalMachine) setLegacyArchiveBlockedWithTaskID(goal, preferredBudgetClass, reason, taskID string, todos []evidence.TodoItem) (string, []byte, bool) {
-	goal = strings.TrimSpace(goal)
-	taskID = strings.TrimSpace(taskID)
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.installGoalLocked(goal, preferredBudgetClass)
-	if goal != "" {
-		g.status = GoalStatusBlocked
-	}
-	g.stopCause = stopCauseLegacyArchive
-	g.block = clipGoalReason(reason)
-	g.legacyTaskID = taskID
-	return g.buildStateLocked(todos)
-}
-
 func (g *goalMachine) installGoalLocked(goal, preferredBudgetClass string) {
 	g.continuationEpoch++
 	g.turnsUsed, g.tokensUsed, g.requestsUsed, g.noProgressTurns = 0, 0, 0, 0
@@ -332,8 +305,6 @@ func (g *goalMachine) installGoalLocked(goal, preferredBudgetClass string) {
 		g.tokensLimit = g.tokenBudget
 		g.noProgressLimit = 0
 	}
-	// Installing a normal Goal always abandons any pending legacy migration.
-	g.legacyTaskID = ""
 }
 
 func (g *goalMachine) setStrict(strict bool, todos []evidence.TodoItem) (string, []byte, bool) {
@@ -379,11 +350,6 @@ func (g *goalMachine) pauseFor(stopCause, reason string, todos []evidence.TodoIt
 func (g *goalMachine) resume(todos []evidence.TodoItem) (path string, data []byte, persist, resumed bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.stopCause == stopCauseLegacyArchive {
-		// A legacy archive block is recoverable only through the read-only
-		// archive boundary; never reinterpret it as an ordinary Goal resume.
-		return "", nil, false, false
-	}
 	if strings.TrimSpace(g.goal) == "" || g.status == GoalStatusComplete {
 		return "", nil, false, false
 	}
@@ -652,15 +618,7 @@ func (g *goalMachine) buildStateLocked(todos []evidence.TodoItem) (path string, 
 		BudgetExtensions:       g.budgetExtensions,
 		ProgressEvidence:       append([]string(nil), g.progressEvidence...),
 	}
-	// GoalResearchOff is a downgrade fence for ordinary Goal sidecars. A
-	// fail-closed legacy migration keeps its task identity and compatibility mode
-	// until the archive has been validated and the Goal-only state is committed.
-	if g.legacyTaskID != "" && g.status == GoalStatusBlocked && g.stopCause == stopCauseLegacyArchive {
-		state.AutoResearchTaskID = g.legacyTaskID
-		state.ResearchMode = GoalResearchOn
-	} else {
-		state.ResearchMode = GoalResearchOff
-	}
+	state.ResearchMode = GoalResearchOff
 	b, err := marshalGoalState(state, g.stateExtra)
 	if err != nil {
 		slog.Warn("controller: marshal goal state", "err", err)
@@ -724,11 +682,9 @@ func (g *goalMachine) terminalTodosFromState(sessionPath string) ([]evidence.Tod
 // restoreFromState reloads Goal state from the sidecar. The sidecar is
 // authoritative; active Goals are normalized to continuous-runtime sentinels.
 // migrated means path/data were atomically rewritten (without a provider call).
-// legacyTaskID is returned only
-// so Controller can fill missing goal text from a historical archive.
-func (g *goalMachine) restoreFromState(sessionPath string) (path string, data []byte, migrated bool, legacy legacyGoalRestore) {
+func (g *goalMachine) restoreFromState(sessionPath string) (path string, data []byte, migrated bool, todos []evidence.TodoItem) {
 	if strings.TrimSpace(sessionPath) == "" {
-		return "", nil, false, legacyGoalRestore{}
+		return "", nil, false, nil
 	}
 	// Ensure write path is bound even when the controller rebuilds.
 	if g.statePath == "" {
@@ -739,12 +695,12 @@ func (g *goalMachine) restoreFromState(sessionPath string) (path string, data []
 		if !os.IsNotExist(err) {
 			slog.Warn("controller: read goal state", "err", err)
 		}
-		return "", nil, false, legacyGoalRestore{}
+		return "", nil, false, nil
 	}
 	var state goalState
 	if err := json.Unmarshal(raw, &state); err != nil {
 		slog.Warn("controller: parse goal state", "err", err)
-		return "", nil, false, legacyGoalRestore{}
+		return "", nil, false, nil
 	}
 	g.mu.Lock()
 	g.stateExtra = goalStateUnknownFields(raw)
@@ -753,24 +709,10 @@ func (g *goalMachine) restoreFromState(sessionPath string) (path string, data []
 	if g.status == "" {
 		g.status = GoalStatusStopped
 	}
-	// Legacy task identity is migration-only compatibility data. It is returned to
-	// the Controller's archive boundary and retained in the machine only while a
-	// fail-closed migration remains pending.
-	legacy = legacyGoalRestore{
-		taskID: strings.TrimSpace(state.AutoResearchTaskID),
-		todos:  append([]evidence.TodoItem(nil), state.Todos...),
-	}
-	// A task id is pending only when the sidecar has no Goal text. A legacy
-	// sidecar that already contains an objective can be migrated directly and
-	// must serialize as ordinary Goal state on the first write.
-	if g.goal == "" {
-		g.legacyTaskID = legacy.taskID
-	} else {
-		g.legacyTaskID = ""
-	}
-	if legacy.taskID != "" && g.goal != "" {
-		// Sidecars that already carry the Goal objective do not depend on the
-		// historical archive. Complete the migration immediately.
+	todos = append([]evidence.TodoItem(nil), state.Todos...)
+	// A sidecar that still names a retired research archive is rewritten as
+	// ordinary Goal state on the first write; the archive it named is gone.
+	if strings.TrimSpace(state.AutoResearchTaskID) != "" {
 		migrated = true
 	}
 	g.scopeID = strings.TrimSpace(state.ScopeID)
@@ -815,13 +757,11 @@ func (g *goalMachine) restoreFromState(sessionPath string) (path string, data []
 	if goalStateNeedsMigration(state, g.budgetClass) {
 		migrated = true
 	}
-	if g.normalizeContinuousState(state.ResearchMode, legacy.taskID) {
+	if g.normalizeContinuousState(state.ResearchMode) {
 		migrated = true
 	}
 	g.continuationEpoch++
-	legacy.epoch = g.continuationEpoch
-	pendingLegacyGoal := legacy.taskID != "" && g.goal == ""
-	if migrated && !pendingLegacyGoal {
+	if migrated {
 		// Migration rewrites only the removed budget state. Preserve the todo
 		// snapshot carried by the authoritative sidecar instead of clearing it.
 		path, data, ok := g.buildStateLocked(state.Todos)
@@ -830,13 +770,13 @@ func (g *goalMachine) restoreFromState(sessionPath string) (path string, data []
 			if err := g.writeStateErr(path, data); err != nil {
 				slog.Warn("controller: persist normalized goal state", "err", err)
 				g.restore(rollback)
-				return "", nil, false, legacy
+				return "", nil, false, todos
 			}
-			return path, data, true, legacy
+			return path, data, true, todos
 		}
 	}
 	g.mu.Unlock()
-	return "", nil, false, legacy
+	return "", nil, false, todos
 }
 
 // formatIncompleteTodos renders the reminder shown when a complete claim

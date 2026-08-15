@@ -256,7 +256,6 @@ func TestLegacyGoalSidecarMigratesToContinuousRuntimeWithoutTaskID(t *testing.T)
 	if err := os.MkdirAll(filepath.Dir(sessionPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeLegacyGoalArchive(t, root, "old-task", "archive fallback should not replace sidecar goal")
 	if err := os.WriteFile(goalStatePath(sessionPath), []byte(`{"goal":"investigate runtime","status":"running","researchMode":1,"autoResearchTaskID":"old-task"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -287,27 +286,6 @@ func TestLegacyGoalSidecarMigratesToContinuousRuntimeWithoutTaskID(t *testing.T)
 	}
 }
 
-func TestMissingExplicitLegacyTaskBlocksWithoutCreatingArchive(t *testing.T) {
-	root := t.TempDir()
-	c := New(Options{WorkspaceRoot: root})
-	defer c.Close()
-	c.SetGoalWithResearchMode("resume .reasonix/autoresearch/missing-task/", GoalResearchOn)
-	if got := c.GoalStatus(); got != GoalStatusBlocked {
-		t.Fatalf("GoalStatus = %q, want blocked", got)
-	}
-	if _, err := os.Stat(filepath.Join(root, ".reasonix", "autoresearch")); !os.IsNotExist(err) {
-		t.Fatalf("missing legacy task created archive: %v", err)
-	}
-
-	c.SetGoal("resume .reasonix/autoresearch/missing-task/../../escape")
-	if got := c.GoalStatus(); got != GoalStatusBlocked {
-		t.Fatalf("unsafe legacy path status = %q, want blocked", got)
-	}
-	if got := c.Goal(); got != "resume .reasonix/autoresearch/missing-task/../../escape" {
-		t.Fatalf("unsafe legacy path silently resumed a truncated task: %q", got)
-	}
-}
-
 func TestAssistantEvidenceBlockIsIgnoredByUnifiedGoal(t *testing.T) {
 	root := t.TempDir()
 	sessionPath := filepath.Join(root, "sessions", "s.jsonl")
@@ -328,113 +306,6 @@ func TestAssistantEvidenceBlockIsIgnoredByUnifiedGoal(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, ".reasonix", "autoresearch")); !os.IsNotExist(err) {
 		t.Fatalf("assistant evidence created archive: %v", err)
-	}
-}
-
-func TestExplicitLegacyTaskPathRestoresOriginalGoal(t *testing.T) {
-	root := t.TempDir()
-	if resolved, err := filepath.EvalSymlinks(root); err == nil {
-		root = resolved
-	}
-	taskID := "20260630-original-goal"
-	taskRoot := filepath.Join(root, ".reasonix", "autoresearch", taskID)
-	if err := os.MkdirAll(filepath.Join(taskRoot, "state"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(taskRoot, "logs"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	spec := `{"task_id":"` + taskID + `","goal":"find the original root cause","allowed_operations":{"write":true},"success_criteria":[]}`
-	progress := `{"status":"running","iteration":2,"updated_at":"2026-06-30T10:00:00Z"}`
-	for name, body := range map[string]string{
-		"state/task_spec.json":        spec,
-		"state/progress.json":         progress,
-		"state/directions_tried.json": "[]\n",
-		"state/findings.jsonl":        "",
-		"state/iteration_log.jsonl":   "",
-		"logs/heartbeat.jsonl":        "",
-	} {
-		if err := os.WriteFile(filepath.Join(taskRoot, name), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	before, err := os.ReadFile(filepath.Join(taskRoot, "state", "task_spec.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	c := New(Options{WorkspaceRoot: root})
-	defer c.Close()
-	c.SetGoalWithResearchMode("resume .reasonix/autoresearch/"+taskID+"/", GoalResearchAuto)
-	if got := c.Goal(); got != "find the original root cause" {
-		t.Fatalf("Goal() = %q, want original archive goal", got)
-	}
-	if got := c.GoalRuntime().TurnsLimit; got != 0 {
-		t.Fatalf("turns limit = %d, want unlimited", got)
-	}
-	if got := c.goals.budgetClass; got != budgetClassResearch {
-		t.Fatalf("budget class = %q, want %q", got, budgetClassResearch)
-	}
-	if got := c.GoalStatus(); got != GoalStatusRunning {
-		t.Fatalf("status = %q", got)
-	}
-	after, err := os.ReadFile(filepath.Join(taskRoot, "state", "task_spec.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(before) != string(after) {
-		t.Fatal("archive task_spec mutated during resume")
-	}
-}
-
-func TestLegacySidecarEmptyGoalFilledFromArchive(t *testing.T) {
-	root := t.TempDir()
-	if resolved, err := filepath.EvalSymlinks(root); err == nil {
-		root = resolved
-	}
-	sessionPath := filepath.Join(root, "sessions", "s.jsonl")
-	if err := os.MkdirAll(filepath.Dir(sessionPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	taskID := "fill-from-archive"
-	taskRoot := filepath.Join(root, ".reasonix", "autoresearch", taskID)
-	if err := os.MkdirAll(filepath.Join(taskRoot, "state"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(taskRoot, "logs"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for name, body := range map[string]string{
-		"state/task_spec.json":        `{"task_id":"` + taskID + `","goal":"recover me from archive","allowed_operations":{"write":true},"success_criteria":[]}`,
-		"state/progress.json":         `{"status":"running","updated_at":"2026-06-30T10:00:00Z"}`,
-		"state/directions_tried.json": "[]\n",
-		"state/findings.jsonl":        "",
-		"state/iteration_log.jsonl":   "",
-		"logs/heartbeat.jsonl":        "",
-	} {
-		if err := os.WriteFile(filepath.Join(taskRoot, name), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(goalStatePath(sessionPath), []byte(`{"status":"running","researchMode":1,"autoResearchTaskID":"`+taskID+`","turnsUsed":3,"turnsLimit":40}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	sess := agent.NewSession("sys")
-	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
-	c := New(Options{WorkspaceRoot: root, SessionDir: root, Executor: exec})
-	c.Resume(sess, sessionPath)
-	defer c.Close()
-	if got := c.Goal(); got != "recover me from archive" {
-		t.Fatalf("Goal() = %q", got)
-	}
-	if got := c.GoalRuntime().TurnsUsed; got != 3 {
-		t.Fatalf("turns used = %d, want preserved 3", got)
-	}
-	raw, err := os.ReadFile(goalStatePath(sessionPath))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(raw), "autoResearchTaskID") {
-		t.Fatalf("sidecar retained task id: %s", raw)
 	}
 }
 

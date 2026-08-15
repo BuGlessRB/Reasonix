@@ -79,16 +79,13 @@ func (g *goalMachine) migrateRemovedGoalPause() bool {
 }
 
 // normalizeContinuousState runs under g.mu while loading an active sidecar.
-func (g *goalMachine) normalizeContinuousState(legacyMode GoalResearchMode, legacyTaskID string) bool {
+func (g *goalMachine) normalizeContinuousState(legacyMode GoalResearchMode) bool {
 	if g.goal == "" {
 		return false
 	}
 	migrated := false
 	if g.budgetClass == "" {
 		g.budgetClass = budgetClassForLegacyMode(g.goal, legacyMode)
-	}
-	if legacyTaskID != "" {
-		g.budgetClass = budgetClassResearch
 	}
 	if g.turnsLimit != unlimitedGoalTurns {
 		g.turnsLimit, migrated = unlimitedGoalTurns, true
