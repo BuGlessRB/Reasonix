@@ -421,8 +421,6 @@ func (f *acpFactory) SessionConfigState(_ context.Context, p acp.SessionConfigSt
 func acpRuntimeProfile(value string) string {
 	// Dual-write: return legacy economy|balanced|delivery for RuntimeProfile.
 	switch boot.NormalizeAgentPreset(value) {
-	case boot.AgentPresetLight:
-		return "economy"
 	case boot.AgentPresetDelivery:
 		return "delivery"
 	default:

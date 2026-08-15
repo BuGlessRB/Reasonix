@@ -12,29 +12,19 @@ import (
 func TestRoleSettingMatrix(t *testing.T) {
 	type want struct {
 		semanticRouter bool
-		atomic         bool
 		verify         agentpreset.VerificationLevel
 		mediumReview   agentpreset.ReviewLevel
 		explore        bool
 	}
 	cases := map[agentpreset.AgentPreset]want{
-		agentpreset.Light: {
-			semanticRouter: false,
-			atomic:         false,
-			verify:         agentpreset.VerifyTargeted,
-			mediumReview:   agentpreset.ReviewNone,
-			explore:        false,
-		},
 		agentpreset.Balanced: {
 			semanticRouter: true,
-			atomic:         false,
 			verify:         agentpreset.VerifyTargeted,
 			mediumReview:   agentpreset.ReviewConditional,
 			explore:        true,
 		},
 		agentpreset.Delivery: {
 			semanticRouter: true,
-			atomic:         true,
 			verify:         agentpreset.VerifyFull,
 			mediumReview:   agentpreset.ReviewForced,
 			explore:        true,
@@ -45,9 +35,6 @@ func TestRoleSettingMatrix(t *testing.T) {
 			p := agentpreset.PolicyOf(preset)
 			if p.CapabilityPolicy.SemanticRouterAllowed != w.semanticRouter {
 				t.Fatalf("semantic router = %v, want %v", p.CapabilityPolicy.SemanticRouterAllowed, w.semanticRouter)
-			}
-			if p.PlannerPolicy.RequireAtomicContract != w.atomic {
-				t.Fatalf("atomic contract = %v, want %v", p.PlannerPolicy.RequireAtomicContract, w.atomic)
 			}
 			if p.VerificationPolicy.Level != w.verify {
 				t.Fatalf("verify = %v, want %v", p.VerificationPolicy.Level, w.verify)
@@ -79,10 +66,10 @@ func TestLegacyTokenModeDualWriteRoundTrip(t *testing.T) {
 		legacy string
 		preset agentpreset.AgentPreset
 	}{
-		{"economy", agentpreset.Light},
+		{"economy", agentpreset.Balanced},
 		{"full", agentpreset.Balanced},
 		{"delivery", agentpreset.Delivery},
-		{"light", agentpreset.Light},
+		{"light", agentpreset.Balanced},
 		{"balanced", agentpreset.Balanced},
 	}
 	for _, p := range pairs {

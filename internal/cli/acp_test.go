@@ -151,8 +151,9 @@ func TestEffectiveACPPlannerModeMatchesSelectedRuntime(t *testing.T) {
 	if got := effectiveACPPlannerMode(cfg, false, "executor/executor-model", "balanced"); got != "on" {
 		t.Fatalf("balanced split-model planner mode = %q, want on", got)
 	}
-	if got := effectiveACPPlannerMode(cfg, false, "executor/executor-model", "economy"); got != "off" {
-		t.Fatalf("economy planner mode = %q, want off", got)
+	// "economy" resolves to balanced now, so it plans like one.
+	if got := effectiveACPPlannerMode(cfg, false, "executor/executor-model", "economy"); got != "on" {
+		t.Fatalf("economy planner mode = %q, want on", got)
 	}
 	if got := effectiveACPPlannerMode(cfg, false, "planner/planner-model", "balanced"); got != "off" {
 		t.Fatalf("same-model planner mode = %q, want off", got)

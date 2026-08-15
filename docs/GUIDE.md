@@ -661,7 +661,7 @@ Mode and display shortcuts:
 | `Shift+Tab` | Cycles Ask → Auto → Plan → Ask | YOLO remains outside this composer-mode cycle; the footer shows the active mode. |
 | `Ctrl+Y` | Toggles YOLO on/off | Turning YOLO off restores the previous Ask/Auto base when known. Terminals that forward Command/Super may also send `Cmd+Y`, but `Ctrl+Y` is the reliable terminal shortcut. |
 | `--yolo`, `--dangerously-skip-permissions` | Starts chat in YOLO | Same runtime mode as `Ctrl+Y`. |
-| `/preset [light|balanced|delivery]` | Shows or switches the current session's execution setting (执行设定) | `/work-mode` and `/profile` are compatibility aliases (`economy` → `light`). Switching updates the execution setting in place without rebuilding the controller; blocked while a turn, approval, or background job is active. |
+| `/preset [balanced|delivery]` | Shows or switches the current session's execution setting (执行设定) | `/work-mode` and `/profile` are compatibility aliases (`economy` → `light`). Switching updates the execution setting in place without rebuilding the controller; blocked while a turn, approval, or background job is active. |
 | `/theme [auto|light|dark|style]` | Shows or switches the CLI theme | Bare `/theme` lists background modes and named accent palettes. The choice is saved to the user config; `REASONIX_THEME` and `REASONIX_THEME_STYLE` can override it for one run. |
 | `Ctrl+O` | Toggles verbose reasoning display | Also available through `/verbose`. |
 | `Ctrl+B` | Expands or collapses long shell output | Long shell-output hint lines can also be clicked in the transcript; text selection is handled in-app while the full-screen TUI has mouse reporting enabled. |
@@ -1384,7 +1384,7 @@ non-destructive MCP, while a strict child requires an explicit reader hint and
 never exposes writers at all.
 
 Choose the startup execution setting with
-`--preset light|balanced|delivery` (for example, `reasonix run --preset
+`--preset balanced|delivery` (for example, `reasonix run --preset
 delivery "fix and verify this bug"`). Legacy `--profile economy|balanced|delivery`
 still works (`economy` maps to `light`). All three execution settings share the same
 provider-visible core tool surface: direct read/bash/edit/write, background-shell
@@ -1412,7 +1412,7 @@ by themselves — only real child writes are. Read-only analysis remains availab
 without forcing a write.
 
 Inside an interactive TUI session, use `/preset` to inspect the current choice or
-`/preset light|balanced|delivery` to switch it. `/work-mode` and `/profile` are
+`/preset balanced|delivery` to switch it. `/work-mode` and `/profile` are
 compatibility aliases. The switch updates the execution setting in place without
 rebuilding the controller, preserves history, the session path, leases, and the
 Ask/Auto/YOLO posture, and is rejected while a turn, approval/question, background

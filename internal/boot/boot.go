@@ -419,10 +419,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	tokenMode := TokenModeFromAgentPreset(agentPreset)
 	tokenDelivery := agentPreset == AgentPresetDelivery
 	runtimeProfile := capability.ProfileBalanced
-	switch agentPreset {
-	case AgentPresetLight:
-		runtimeProfile = capability.ProfileEconomy
-	case AgentPresetDelivery:
+	if agentPreset == AgentPresetDelivery {
 		runtimeProfile = capability.ProfileDelivery
 	}
 	keepPolicy := agentKeepPolicy(cfg.Agent.Keep)

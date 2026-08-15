@@ -4093,7 +4093,6 @@ export function Composer({
         >
           <div className="composer-access-menu__label">{t("composer.runtimeProfileTitle")}</div>
           {([
-            ["economy", Gauge, "composer.runtimeProfileEconomy", "composer.runtimeProfileEconomyDesc"], // light wire dual-write
             ["full", Equal, "composer.runtimeProfileBalanced", "composer.runtimeProfileBalancedDesc"], // balanced wire dual-write
             ["delivery", Flag, "composer.runtimeProfileDelivery", "composer.runtimeProfileDeliveryDesc"],
           ] as const).map(([profile, Icon, titleKey, descKey]) => (

@@ -1132,8 +1132,8 @@ func (a *Agent) SetAgentPreset(preset string) {
 	switch p {
 	case agentpreset.Delivery:
 		a.deliveryProfile = true
-	case agentpreset.Light, agentpreset.Balanced:
-		// Light may still elevate per-turn; baseline stays non-delivery.
+	case agentpreset.Balanced:
+		// A turn may still elevate; the baseline stays non-delivery.
 		a.deliveryProfile = false
 	}
 }

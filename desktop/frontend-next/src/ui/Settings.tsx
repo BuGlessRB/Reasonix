@@ -14,7 +14,6 @@ import { Versions } from "./Versions";
 import { Memory } from "./Memory";
 
 const PRESETS: [Preset, string, string][] = [
-  ["light", "轻量", "简单就直接做，只做针对性验证，高风险才叫独立复核"],
   ["balanced", "均衡", "按复杂度自适应。这是默认档"],
   ["delivery", "交付", "完整验收证据，中高风险改动强制独立复核"],
 ];
@@ -218,6 +217,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
         </button>
         <span className="ttl">设置</span>
         <span className="esc">esc</span>
+        <WindowControls />
       </div>
 
       <div className="prefs-body">

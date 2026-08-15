@@ -153,7 +153,7 @@ func Derive(in Input) TaskPolicy {
 		// Host still records the gap as Partial; verification commands stay blocked.
 		constraints.Notes = append(constraints.Notes, "forbid_tests")
 	}
-	if preset == agentpreset.Light && risk >= RiskHigh {
+	if preset == agentpreset.Balanced && risk >= RiskHigh {
 		verification = VerifyFull
 	}
 	if preset == agentpreset.Delivery && risk >= RiskMedium {
@@ -190,7 +190,7 @@ func (p *TaskPolicy) RaiseRisk(r Risk) {
 		// Re-evaluate review/verification floors after elevation.
 		policy := agentpreset.PolicyOf(p.Preset)
 		p.Review = policy.ReviewForRisk(int(p.Risk), p.SecurityClass)
-		if p.Preset == agentpreset.Light && p.Risk >= RiskHigh {
+		if p.Preset == agentpreset.Balanced && p.Risk >= RiskHigh {
 			p.Verification = VerifyFull
 			p.Route = RouteFullPlan
 		}

@@ -49,34 +49,19 @@ type PlannerPolicy struct {
 	FullPlanOnHighRisk bool
 	// FullPlanOnMediumRisk forces a full plan for medium-risk work.
 	FullPlanOnMediumRisk bool
-	// RequireAtomicContract creates an Atomic TaskContract even on direct runs.
-	RequireAtomicContract bool
-	// SemanticRouterOnAmbiguity allows the semantic capability router only when
-	// deterministic routing cannot place a mid/high-risk request.
-	SemanticRouterOnAmbiguity bool
 	// AllowExploreSubagent permits proactive explore/research sub-agents.
 	AllowExploreSubagent bool
 }
 
 // CapabilityPolicy is how optional capabilities are routed.
 type CapabilityPolicy struct {
-	// DeterministicFirst prefers catalog trigger matching over semantic routing.
-	DeterministicFirst bool
 	// SemanticRouterAllowed enables the LLM capability router when needed.
 	SemanticRouterAllowed bool
-	// PreferProxy forces optional tools through use_capability rather than
-	// top-level registration (always true under the unified contract).
-	PreferProxy bool
 }
 
 // VerificationPolicy is post-mutation verification intensity.
 type VerificationPolicy struct {
 	Level VerificationLevel
-	// DiffReview requires changed-file / diff inspection after mutations.
-	DiffReview bool
-	// AllowPartialWithoutChecks lets a turn end Partial/Unverified when checks
-	// are user-forbidden or unavailable.
-	AllowPartialWithoutChecks bool
 }
 
 // ReviewPolicy is independent reviewer intensity.
@@ -88,9 +73,6 @@ type ReviewPolicy struct {
 	// HighRisk is the review level for high-risk mutations. High-risk work always
 	// elevates at least to ReviewForcedSecurity for safety classes.
 	HighRisk ReviewLevel
-	// ElevateLightHighRisk makes Light adopt delivery-level review/security on
-	// high-risk safety/permission/auth/release tasks.
-	ElevateLightHighRisk bool
 }
 
 // PresetPolicy is the compiled, immutable strategy for one AgentPreset.
@@ -105,91 +87,48 @@ type PresetPolicy struct {
 // PolicyOf returns the compiled strategy for preset. Unknown values use Balanced.
 func PolicyOf(preset AgentPreset) PresetPolicy {
 	switch Normalize(string(preset)) {
-	case Light:
-		return PresetPolicy{
-			Preset: Light,
-			PlannerPolicy: PlannerPolicy{
-				DirectOK:                  true,
-				PreferLightPlan:           true,
-				FullPlanOnHighRisk:        true,
-				FullPlanOnMediumRisk:      false,
-				RequireAtomicContract:     false,
-				SemanticRouterOnAmbiguity: false,
-				AllowExploreSubagent:      false,
-			},
-			CapabilityPolicy: CapabilityPolicy{
-				DeterministicFirst:    true,
-				SemanticRouterAllowed: false,
-				PreferProxy:           true,
-			},
-			VerificationPolicy: VerificationPolicy{
-				Level:                     VerifyTargeted,
-				DiffReview:                true,
-				AllowPartialWithoutChecks: true,
-			},
-			ReviewPolicy: ReviewPolicy{
-				LowRisk:              ReviewNone,
-				MediumRisk:           ReviewNone,
-				HighRisk:             ReviewForcedSecurity,
-				ElevateLightHighRisk: true,
-			},
-		}
 	case Delivery:
 		return PresetPolicy{
 			Preset: Delivery,
 			PlannerPolicy: PlannerPolicy{
-				DirectOK:                  true, // low-risk atomic only
-				PreferLightPlan:           false,
-				FullPlanOnHighRisk:        true,
-				FullPlanOnMediumRisk:      true,
-				RequireAtomicContract:     true,
-				SemanticRouterOnAmbiguity: true,
-				AllowExploreSubagent:      true,
+				DirectOK:             true, // low-risk atomic only
+				PreferLightPlan:      false,
+				FullPlanOnHighRisk:   true,
+				FullPlanOnMediumRisk: true,
+				AllowExploreSubagent: true,
 			},
 			CapabilityPolicy: CapabilityPolicy{
-				DeterministicFirst:    true,
 				SemanticRouterAllowed: true,
-				PreferProxy:           true,
 			},
 			VerificationPolicy: VerificationPolicy{
-				Level:                     VerifyFull,
-				DiffReview:                true,
-				AllowPartialWithoutChecks: false,
+				Level: VerifyFull,
 			},
 			ReviewPolicy: ReviewPolicy{
-				LowRisk:              ReviewNone,
-				MediumRisk:           ReviewForced,
-				HighRisk:             ReviewForcedSecurity,
-				ElevateLightHighRisk: false,
+				LowRisk:    ReviewNone,
+				MediumRisk: ReviewForced,
+				HighRisk:   ReviewForcedSecurity,
 			},
 		}
 	default:
 		return PresetPolicy{
 			Preset: Balanced,
 			PlannerPolicy: PlannerPolicy{
-				DirectOK:                  true,
-				PreferLightPlan:           true,
-				FullPlanOnHighRisk:        true,
-				FullPlanOnMediumRisk:      false,
-				RequireAtomicContract:     false,
-				SemanticRouterOnAmbiguity: true,
-				AllowExploreSubagent:      true,
+				DirectOK:             true,
+				PreferLightPlan:      true,
+				FullPlanOnHighRisk:   true,
+				FullPlanOnMediumRisk: false,
+				AllowExploreSubagent: true,
 			},
 			CapabilityPolicy: CapabilityPolicy{
-				DeterministicFirst:    true,
 				SemanticRouterAllowed: true,
-				PreferProxy:           true,
 			},
 			VerificationPolicy: VerificationPolicy{
-				Level:                     VerifyTargeted,
-				DiffReview:                true,
-				AllowPartialWithoutChecks: true,
+				Level: VerifyTargeted,
 			},
 			ReviewPolicy: ReviewPolicy{
-				LowRisk:              ReviewNone,
-				MediumRisk:           ReviewConditional,
-				HighRisk:             ReviewForcedSecurity,
-				ElevateLightHighRisk: false,
+				LowRisk:    ReviewNone,
+				MediumRisk: ReviewConditional,
+				HighRisk:   ReviewForcedSecurity,
 			},
 		}
 	}
@@ -208,9 +147,6 @@ func (p PresetPolicy) ReviewForRisk(risk int, securityClass bool) ReviewLevel {
 		level = p.ReviewPolicy.LowRisk
 	}
 	if securityClass && level < ReviewForcedSecurity {
-		level = ReviewForcedSecurity
-	}
-	if p.Preset == Light && p.ReviewPolicy.ElevateLightHighRisk && risk >= 2 {
 		level = ReviewForcedSecurity
 	}
 	return level

@@ -24,7 +24,7 @@ reasonix --dir /path/to/project
 | 参数 | 用途 |
 | --- | --- |
 | `--model NAME` | 选择已配置的 provider 或 `provider/model` 引用。 |
-| `--preset light\|balanced\|delivery` | 选择 Agent 执行设定。默认 `balanced`。 |
+| `--preset balanced\|delivery` | 选择 Agent 执行设定。默认 `balanced`。 |
 | `--profile economy\|balanced\|delivery` | 已弃用，等同 `--preset`（`economy` → `light`）。 |
 | `--effort LEVEL` | 覆盖当前会话的 reasoning effort。 |
 | `--max-steps N` | 为本次运行设置工具调用轮数上限；`0` 使用自动执行。 |
@@ -380,7 +380,7 @@ SSH 下远端进程无法读取本机剪贴板，请使用终端粘贴快捷键�
 | `/provider` | 选择 provider，再选择该 provider 下的模型。 |
 | `/resume` | 搜索最近会话并切换。 |
 | `/status` | 显示模型、effort、cache、Git、后台任务，以及执行设定或余额信息。 |
-| `/preset [light\|balanced\|delivery]` | 查看或切换 Agent 执行设定（不重建 Controller）；`/work-mode` 与 `/profile` 为兼容别名（`economy` → `light`）。 |
+| `/preset [balanced\|delivery]` | 查看或切换 Agent 执行设定（不重建 Controller）；`/work-mode` 与 `/profile` 为兼容别名，`economy`、`light` 都解析为 `balanced`。 |
 | `/theme [auto\|light\|dark\|style]` | 查看或切换 CLI 背景模式和强调色。 |
 | `/currency [auto\|CNY\|USD]` | 查看或切换用户全局费用展示币种，并刷新当前运行时。 |
 | `/paste-image` | 读取剪贴板图片并插入可编辑的附件标记。 |

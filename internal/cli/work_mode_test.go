@@ -18,9 +18,9 @@ func TestRuntimeProfileDisplayLocalizesLabels(t *testing.T) {
 		lang                        string
 		economy, balanced, delivery string
 	}{
-		{lang: "en", economy: "light", balanced: "balanced", delivery: "delivery"},
-		{lang: "zh", economy: "轻量", balanced: "均衡", delivery: "交付"},
-		{lang: "zh-TW", economy: "輕量", balanced: "均衡", delivery: "交付"},
+		{lang: "en", economy: "balanced", balanced: "balanced", delivery: "delivery"},
+		{lang: "zh", economy: "均衡", balanced: "均衡", delivery: "交付"},
+		{lang: "zh-TW", economy: "均衡", balanced: "均衡", delivery: "交付"},
 	} {
 		t.Run(tt.lang, func(t *testing.T) {
 			i18n.DetectLanguage(tt.lang)
@@ -41,7 +41,7 @@ func TestRuntimeProfileDisplayLocalizesLabels(t *testing.T) {
 
 func TestRenderWorkModesShowsAllOptionsAndCurrent(t *testing.T) {
 	out := renderWorkModes(100, boot.TokenModeFull)
-	for _, want := range []string{"light", "balanced", "delivery", "current"} {
+	for _, want := range []string{"balanced", "delivery", "current"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("renderWorkModes missing %q:\n%s", want, out)
 		}
@@ -50,8 +50,9 @@ func TestRenderWorkModesShowsAllOptionsAndCurrent(t *testing.T) {
 
 func TestParseWorkModeKeepsBalancedAsFullInternally(t *testing.T) {
 	for input, want := range map[string]string{
-		"economy":  boot.TokenModeEconomy,
-		"light":    boot.TokenModeEconomy,
+		// The retired names still parse; they answer the default.
+		"economy":  boot.TokenModeFull,
+		"light":    boot.TokenModeFull,
 		"balanced": boot.TokenModeFull,
 		"full":     boot.TokenModeFull,
 		"delivery": boot.TokenModeDelivery,
@@ -77,7 +78,7 @@ func TestWorkModeCompletionPublishesPrimaryCommandAndAliasArguments(t *testing.T
 		if !ok {
 			t.Fatalf("%q did not activate preset argument completion", input)
 		}
-		for _, want := range []string{"light", "balanced", "delivery"} {
+		for _, want := range []string{"balanced", "delivery"} {
 			if !hasLabel(items, want) {
 				t.Errorf("%q completion missing %q: %v", input, want, labels(items))
 			}

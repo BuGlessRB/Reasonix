@@ -1,4 +1,4 @@
-// Package agentpreset defines the three Agent role settings (角色设定) that
+// Package agentpreset defines the two Agent role settings (角色设定) that
 // control planning depth, verification breadth, and independent review
 // frequency without changing tool schemas or security boundaries.
 package agentpreset
@@ -10,9 +10,6 @@ import "strings"
 type AgentPreset string
 
 const (
-	// Light is 轻量 · 快速可靠: direct when simple, targeted verification,
-	// independent review only for high risk.
-	Light AgentPreset = "light"
 	// Balanced is 均衡 · 智能适配: complexity-adaptive planning and review.
 	// It is the zero-configuration default for every new entry point.
 	Balanced AgentPreset = "balanced"
@@ -26,16 +23,13 @@ const (
 const PolicyVersion = 1
 
 // Normalize maps free-form and legacy values onto a canonical AgentPreset.
-// Empty and unknown values fall back to Balanced. One compatibility version
-// of old token/work-mode names is accepted.
+// Empty, unknown, and the retired "light"/"economy" names answer Balanced:
+// light's only enforced differences were two sub-agent switches, so it cost
+// every user a choice without changing what its name promised.
 func Normalize(raw string) AgentPreset {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case string(Light), "economy", "eco", "save", "saving", "low", "lite", "minimal":
-		return Light
 	case string(Delivery), "deliver", "quality", "performance":
 		return Delivery
-	case string(Balanced), "full", "":
-		return Balanced
 	default:
 		return Balanced
 	}
@@ -44,29 +38,25 @@ func Normalize(raw string) AgentPreset {
 // IsValid reports whether raw is an exact canonical preset name.
 func IsValid(raw string) bool {
 	switch AgentPreset(strings.ToLower(strings.TrimSpace(raw))) {
-	case Light, Balanced, Delivery:
+	case Balanced, Delivery:
 		return true
 	default:
 		return false
 	}
 }
 
-// All returns the three canonical presets in stable menu order.
+// All returns the canonical presets in stable menu order.
 func All() []AgentPreset {
-	return []AgentPreset{Light, Balanced, Delivery}
+	return []AgentPreset{Balanced, Delivery}
 }
 
 // LegacyTokenMode returns the one-version dual-write tokenMode value for
 // older clients. Unknown/empty presets map to "full" (historical balanced).
 func LegacyTokenMode(p AgentPreset) string {
-	switch Normalize(string(p)) {
-	case Light:
-		return "economy"
-	case Delivery:
+	if Normalize(string(p)) == Delivery {
 		return "delivery"
-	default:
-		return "full"
 	}
+	return "full"
 }
 
 // FromLegacyTokenMode maps a persisted or CLI tokenMode onto AgentPreset.

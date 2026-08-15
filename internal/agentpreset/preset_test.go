@@ -8,10 +8,10 @@ func TestNormalizeLegacyAndUnknown(t *testing.T) {
 		"full":       Balanced,
 		"balanced":   Balanced,
 		"BALANCED":   Balanced,
-		"economy":    Light,
-		"eco":        Light,
-		"light":      Light,
-		"lite":       Light,
+		"economy":    Balanced,
+		"eco":        Balanced,
+		"light":      Balanced,
+		"lite":       Balanced,
 		"delivery":   Delivery,
 		"quality":    Delivery,
 		"unexpected": Balanced,
@@ -30,23 +30,14 @@ func TestLegacyTokenModeRoundTrip(t *testing.T) {
 			t.Errorf("FromLegacyTokenMode(%q) = %q, want %q", legacy, got, p)
 		}
 	}
-	if got := FromLegacyTokenMode("economy"); got != Light {
-		t.Fatalf("economy -> %q, want light", got)
+	// The retired setting resolves rather than failing: an old config that
+	// still says economy gets the default, not an error.
+	if got := FromLegacyTokenMode("economy"); got != Balanced {
+		t.Fatalf("economy -> %q, want balanced", got)
 	}
 }
 
 func TestPolicyOfIsStablePerPreset(t *testing.T) {
-	light := PolicyOf(Light)
-	if light.CapabilityPolicy.SemanticRouterAllowed {
-		t.Fatal("light must not enable semantic capability router")
-	}
-	if light.ReviewPolicy.MediumRisk != ReviewNone {
-		t.Fatal("light medium risk must not force independent review")
-	}
-	if light.ReviewForRisk(2, true) != ReviewForcedSecurity {
-		t.Fatal("light high-risk security must elevate to forced security review")
-	}
-
 	balanced := PolicyOf(Balanced)
 	if balanced.ReviewPolicy.MediumRisk != ReviewConditional {
 		t.Fatal("balanced medium risk should be conditional review")
@@ -56,9 +47,6 @@ func TestPolicyOfIsStablePerPreset(t *testing.T) {
 	}
 
 	delivery := PolicyOf(Delivery)
-	if !delivery.PlannerPolicy.RequireAtomicContract {
-		t.Fatal("delivery must require atomic contracts on direct runs")
-	}
 	if delivery.ReviewPolicy.MediumRisk != ReviewForced {
 		t.Fatal("delivery medium risk must force independent review")
 	}
@@ -71,10 +59,12 @@ func TestPolicyOfIsStablePerPreset(t *testing.T) {
 }
 
 func TestIsValid(t *testing.T) {
-	if !IsValid("light") || !IsValid("balanced") || !IsValid("delivery") {
+	if !IsValid("balanced") || !IsValid("delivery") {
 		t.Fatal("canonical names must be valid")
 	}
-	if IsValid("economy") || IsValid("full") || IsValid("") {
+	// "light" joins the aliases: Normalize still answers it, but it is no
+	// longer a name anything should write back out.
+	if IsValid("light") || IsValid("economy") || IsValid("full") || IsValid("") {
 		t.Fatal("legacy aliases must not pass IsValid")
 	}
 }

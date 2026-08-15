@@ -25,8 +25,8 @@ Running `reasonix` without a subcommand starts the interactive terminal UI. Use
 | Flag | Purpose |
 | --- | --- |
 | `--model NAME` | Select a configured provider or `provider/model` reference. |
-| `--preset light\|balanced\|delivery` | Select the agent execution setting (执行设定). Default: `balanced`. |
-| `--profile economy\|balanced\|delivery` | Deprecated alias for `--preset` (`economy` → `light`). |
+| `--preset balanced\|delivery` | Select the agent execution setting (执行设定). Default: `balanced`. |
+| `--profile economy\|balanced\|delivery` | Deprecated alias for `--preset`. `economy` and `light` resolve to `balanced`. |
 | `--effort LEVEL` | Override reasoning effort for this session. |
 | `--max-steps N` | Set a one-off maximum tool-call round budget; `0` uses automatic execution. |
 | `--dir PATH` | Change the workspace root before loading config and tools. |
@@ -436,7 +436,7 @@ the displayed list matches the commands the TUI accepts.
 | `/provider` | Choose a provider, then choose one of its configured models. |
 | `/resume` | Search recent sessions and switch to one. |
 | `/status` | Show model, effort, cache, Git, background jobs, and execution setting or balance details. |
-| `/preset [light\|balanced\|delivery]` | View or change the agent execution setting without rebuilding the controller. `/work-mode` and `/profile` remain compatibility aliases (`economy` → `light`). |
+| `/preset [balanced\|delivery]` | View or change the agent execution setting without rebuilding the controller. `/work-mode` and `/profile` remain compatibility aliases; `economy` and `light` resolve to `balanced`. |
 | `/theme [auto\|light\|dark\|style]` | View or change the CLI background mode and accent palette. |
 | `/currency [auto\|CNY\|USD]` | View or change the user-global fee display currency and refresh the runtime. |
 | `/paste-image` | Read a clipboard image and insert an editable attachment token. |

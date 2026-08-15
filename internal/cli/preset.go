@@ -16,32 +16,22 @@ type presetOption struct {
 }
 
 func agentPresetName(preset string) string {
-	switch boot.NormalizeAgentPreset(preset) {
-	case boot.AgentPresetLight:
-		return "light"
-	case boot.AgentPresetDelivery:
+	if boot.NormalizeAgentPreset(preset) == boot.AgentPresetDelivery {
 		return "delivery"
-	default:
-		return "balanced"
 	}
+	return "balanced"
 }
 
 func agentPresetDisplay(preset string) string {
-	switch boot.NormalizeAgentPreset(preset) {
-	case boot.AgentPresetLight:
-		return i18n.M.WorkModeEconomyLabel
-	case boot.AgentPresetDelivery:
+	if boot.NormalizeAgentPreset(preset) == boot.AgentPresetDelivery {
 		return i18n.M.WorkModeDeliveryLabel
-	default:
-		return i18n.M.WorkModeBalancedLabel
 	}
+	return i18n.M.WorkModeBalancedLabel
 }
 
 func parseAgentPreset(value string) (string, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "light", "economy", "eco", "lite":
-		return boot.AgentPresetLight, true
-	case "balanced", "full":
+	case "balanced", "full", "light", "economy", "eco", "lite":
 		return boot.AgentPresetBalanced, true
 	case "delivery":
 		return boot.AgentPresetDelivery, true
@@ -52,7 +42,6 @@ func parseAgentPreset(value string) (string, bool) {
 
 func agentPresetOptions() []presetOption {
 	return []presetOption{
-		{name: "light", desc: i18n.M.WorkModeEconomyDesc},
 		{name: "balanced", desc: i18n.M.WorkModeBalancedDesc},
 		{name: "delivery", desc: i18n.M.WorkModeDeliveryDesc},
 	}

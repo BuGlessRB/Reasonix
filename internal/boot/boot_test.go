@@ -2004,9 +2004,9 @@ func TestNormalizeTokenModeSupportsRuntimeProfilesAndLegacyAliases(t *testing.T)
 		"":           TokenModeFull,
 		"full":       TokenModeFull,
 		"balanced":   TokenModeFull,
-		"economy":    TokenModeEconomy,
-		"eco":        TokenModeEconomy,
-		"light":      TokenModeEconomy,
+		"economy":    TokenModeFull,
+		"eco":        TokenModeFull,
+		"light":      TokenModeFull,
 		"delivery":   TokenModeDelivery,
 		"quality":    TokenModeDelivery,
 		"unexpected": TokenModeFull,
@@ -2019,8 +2019,8 @@ func TestNormalizeTokenModeSupportsRuntimeProfilesAndLegacyAliases(t *testing.T)
 		"":         AgentPresetBalanced,
 		"full":     AgentPresetBalanced,
 		"balanced": AgentPresetBalanced,
-		"economy":  AgentPresetLight,
-		"light":    AgentPresetLight,
+		"economy":  AgentPresetBalanced,
+		"light":    AgentPresetBalanced,
 		"delivery": AgentPresetDelivery,
 	} {
 		if got := NormalizeAgentPreset(input); got != want {

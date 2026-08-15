@@ -7,7 +7,6 @@ import (
 // Canonical Agent role-setting identifiers re-exported for frontends that
 // already import boot. Prefer agentpreset directly in new code.
 const (
-	AgentPresetLight    = string(agentpreset.Light)
 	AgentPresetBalanced = string(agentpreset.Balanced)
 	AgentPresetDelivery = string(agentpreset.Delivery)
 )

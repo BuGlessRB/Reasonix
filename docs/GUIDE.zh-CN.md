@@ -501,7 +501,7 @@ CLI/TUI 文本输入可通过 `[ui].cursor_shape` 设置光标形状，支持 `u
 压缩余量、后台任务和余额。“就绪”只表示输入框空闲，并不是模型健康检查；选择器、审批、
 图片粘贴、shell 模式等活动会替换这个状态。窄终端会按完整信息组移动、换行或压缩。
 标签和展示用的执行设定值跟随 `/language`，但 `/preset`（及兼容的 `/work-mode`）命令
-参数继续使用稳定的英文标识 `light|balanced|delivery`。
+参数继续使用稳定的英文标识 `balanced|delivery`。
 
 聊天与 transcript：
 

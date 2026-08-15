@@ -348,10 +348,8 @@ type Messages struct {
 	WorkModeStatusFmt            string
 	WorkModeListHeaderFmt        string
 	WorkModeListHint             string
-	WorkModeEconomyLabel         string
 	WorkModeBalancedLabel        string
 	WorkModeDeliveryLabel        string
-	WorkModeEconomyDesc          string
 	WorkModeBalancedDesc         string
 	WorkModeDeliveryDesc         string
 	WorkModeUsage                string

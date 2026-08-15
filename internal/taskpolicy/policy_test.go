@@ -7,10 +7,10 @@ import (
 	"reasonix/internal/agentpreset"
 )
 
-func TestDeriveLightSimpleIsDirect(t *testing.T) {
+func TestDeriveSimpleIsDirect(t *testing.T) {
 	p := Derive(Input{
 		Raw:    "what is a mutex?",
-		Preset: agentpreset.Light,
+		Preset: agentpreset.Balanced,
 	})
 	if p.Route != RouteDirect {
 		t.Fatalf("route = %v, want direct", p.Route)
@@ -20,10 +20,10 @@ func TestDeriveLightSimpleIsDirect(t *testing.T) {
 	}
 }
 
-func TestDeriveLightHighRiskElevates(t *testing.T) {
+func TestDeriveHighRiskElevates(t *testing.T) {
 	p := Derive(Input{
 		Raw:           "fix the authentication bypass in production login",
-		Preset:        agentpreset.Light,
+		Preset:        agentpreset.Balanced,
 		HighRiskHints: true,
 	})
 	if p.Risk < RiskHigh && !p.SecurityClass {

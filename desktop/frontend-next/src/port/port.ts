@@ -1,3 +1,30 @@
+// The status is the part callers branch on: a 409 from /resume means a turn owns
+// that session, which is a question to put to the user rather than a failure.
+export interface Attachment {
+  path: string;
+  ref: string;
+}
+
+export interface WorkspaceChange {
+  path: string;
+  oldPath?: string;
+  // git porcelain XY, trimmed: "M", "A", "D", "R", "??".
+  status: string;
+}
+
+export interface WorkspaceChanges {
+  // False when the workspace is not a git repository — the caller falls back
+  // rather than showing an empty list as if nothing had changed.
+  repo: boolean;
+  changes: WorkspaceChange[];
+}
+
+export class HttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
+
 import type { WireEvent } from "./wire";
 
 // GET /history returns the provider conversation, not the event stream: the
@@ -12,12 +39,17 @@ export interface HistoryMessage {
 }
 
 export type ApprovalMode = "ask" | "auto" | "dontAsk" | "yolo";
+// "light" was retired into balanced: its only enforced differences were two
+// sub-agent switches, and a setting that costs a choice without changing what
+// it names is a question not worth asking. Old sessions still send it.
 export type Preset = "light" | "balanced" | "delivery";
 export type ApprovalVerdict = "once" | "always" | "deny";
 
 // Shape of GET /status as internal/serve writes it. Anything the UI wants that
 // is not here has to be added on the Go side, not invented in the client.
 export interface SessionStatus {
+  // Whether the current model reads images at all.
+  vision?: boolean;
   label: string;
   running: boolean;
   plan: boolean;
