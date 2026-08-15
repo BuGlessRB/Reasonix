@@ -661,10 +661,11 @@ func TestGoalDeliveryWorkflowCompletesAfterVerifiedSignoff(t *testing.T) {
 	}
 }
 
-// TestPlainDeliveryReadinessFailureSurfacesRecoveryCardWithoutRetries covers
-// the plain (non-Goal) Delivery combination: readiness failure ends the run on
-// the first final answer, surfaces the recovery card, and never auto-continues.
-func TestPlainDeliveryReadinessFailureSurfacesRecoveryCardWithoutRetries(t *testing.T) {
+// TestPlainDeliveryReadinessFailureStillSurfacesRecoveryCard covers the plain
+// (non-Goal) Delivery combination. The host now finishes what the turn owes
+// instead of stopping at the first premature final — but the continuations are
+// bounded, and a gap that outlives them still reaches the user as the card.
+func TestPlainDeliveryReadinessFailureStillSurfacesRecoveryCard(t *testing.T) {
 	todoWrite, _ := tool.LookupBuiltin("todo_write")
 	reg := tool.NewRegistry()
 	reg.Add(todoWrite)
@@ -692,8 +693,11 @@ func TestPlainDeliveryReadinessFailureSurfacesRecoveryCardWithoutRetries(t *test
 	if ev.Readiness == nil || len(ev.Readiness.Missing) == 0 {
 		t.Fatalf("TurnDone.Readiness = %+v, want missing requirements for the recovery card", ev.Readiness)
 	}
-	if prov.call != 3 {
-		t.Fatalf("provider calls = %d, want 3 (work turn + final answer, no readiness retries)", prov.call)
+	if prov.call < 4 {
+		t.Fatalf("provider calls = %d, want the host to continue past the premature final", prov.call)
+	}
+	if prov.call > 8 {
+		t.Fatalf("provider calls = %d, want the stall guard to bound the continuations", prov.call)
 	}
 	if got := c.GoalStatus(); got != GoalStatusStopped {
 		t.Fatalf("GoalStatus() = %q, want stopped (no goal involved)", got)

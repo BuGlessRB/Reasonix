@@ -170,6 +170,8 @@ var English = Messages{
 	CompactionChangesKept: "changes kept",
 	CompactionRepaired:    "repaired",
 
+	ReadinessContinuing: "finishing what this turn still owes",
+
 	ExtFormFieldsHint:         "fields are collected through the usual prompts",
 	ExtRunActionFmt:           "run %s",
 	SlashCompactFailed:        "compaction failed",

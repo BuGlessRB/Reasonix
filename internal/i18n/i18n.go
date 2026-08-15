@@ -193,6 +193,9 @@ type Messages struct {
 	CompactionChangesKept string
 	CompactionRepaired    string
 
+	// shown when a turn ends owing requirements and the host runs them itself
+	ReadinessContinuing string
+
 	// extension structured-UI surfaces (ExtensionSurface / ExtensionStatus events).
 	ExtFormFieldsHint string // form card: field values are collected through the usual prompts
 	ExtRunActionFmt   string // card action hint, one %s = the /<plugin>:<action> slash name

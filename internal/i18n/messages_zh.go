@@ -171,6 +171,8 @@ var Chinese = Messages{
 	CompactionChangesKept: "处改动已保留",
 	CompactionRepaired:    "已补救",
 
+	ReadinessContinuing: "这一轮还欠东西，继续把它做完",
+
 	ExtFormFieldsHint:         "字段将通过逐项提问收集",
 	ExtRunActionFmt:           "运行 %s",
 	SlashCompactFailed:        "压缩失败",

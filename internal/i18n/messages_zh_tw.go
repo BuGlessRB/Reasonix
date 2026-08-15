@@ -165,6 +165,8 @@ var ChineseTraditional = Messages{
 	CompactionChangesKept: "處變更已保留",
 	CompactionRepaired:    "已補救",
 
+	ReadinessContinuing: "這一輪還欠東西，繼續把它做完",
+
 	ExtFormFieldsHint:         "欄位將透過逐項提問收集",
 	ExtRunActionFmt:           "執行 %s",
 	SlashCompactFailed:        "壓縮失敗",

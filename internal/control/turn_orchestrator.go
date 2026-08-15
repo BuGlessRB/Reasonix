@@ -434,13 +434,16 @@ func (o *turnOrchestrator) runTurnLoopWithPreparedTurn(ctx context.Context, turn
 			o.c.stopGoal(GoalStatusStopped)
 			return err
 		}
-		if !goalTurnErrorAbsorbable(err) || !o.c.goals.active() {
-			// Terminal provider/host error (or a plain non-Goal Delivery
-			// readiness failure): stop auto-continue. With no active Goal the
-			// error surfaces the recovery card; with a Goal it stays running so
-			// the next ordinary user message keeps the same scope.
+		if !goalTurnErrorAbsorbable(err) {
+			// Terminal provider/host error: stop auto-continue.
 			o.c.goalUsageTee.setActiveRecorder(nil)
 			return err
+		}
+		if !o.c.goals.active() {
+			// No Goal, but the host knows what the turn still owes. Finish it
+			// rather than handing the user a card that only says "continue".
+			o.c.goalUsageTee.setActiveRecorder(nil)
+			return o.continueUntilReady(ctx, err)
 		}
 		// FinalReadinessError is absorbed below: the Goal FSM continues with
 		// the missing requirements as the next turn's prompt.

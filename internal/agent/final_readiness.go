@@ -239,3 +239,20 @@ func finalReadinessIncompleteTodos(items []evidence.TodoStepMatch) string {
 	}
 	return "latest successful todo_write still has incomplete items: " + strings.Join(parts, ", ")
 }
+
+// PrepareReadinessContinuation is the same authorization for a continuation the
+// host runs itself rather than one the user asked for. Without it the next run
+// starts from an empty ledger, where a turn that owed verification owes
+// nothing: the gap would read as closed because the record of it was dropped.
+func (a *Agent) PrepareReadinessContinuation() bool {
+	return a.prepareEvidenceContinuation()
+}
+
+func (a *Agent) prepareEvidenceContinuation() bool {
+	if !a.pending.deliveryRecovery {
+		return false
+	}
+	a.pending.preserveEvidence = true
+	a.pending.deliveryRecovery = false
+	return true
+}
