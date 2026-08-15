@@ -60,7 +60,6 @@ type ContextMaintenanceReceiptInfo struct {
 	SavedTokens         int    `json:"savedTokens,omitempty"`
 	AffectedToolResults int    `json:"affectedToolResults,omitempty"`
 	SummaryHash         string `json:"summaryHash,omitempty"`
-	Archive             string `json:"archive,omitempty"`
 	CacheBreak          bool   `json:"cacheBreak,omitempty"`
 	Reason              string `json:"reason,omitempty"`
 	BlockedInputHash    string `json:"blockedInputHash,omitempty"`
@@ -93,7 +92,7 @@ func contextMaintenanceReceiptInfo(source *agent.ContextMaintenanceReceipt) *Con
 		CoveredCount: source.CoveredCount, CoveredPrefixHash: source.CoveredPrefixHash,
 		InputHash: source.InputHash, OutputHash: source.OutputHash,
 		InputTokens: source.InputTokens, ResultTokens: source.ResultTokens, SavedTokens: source.SavedTokens,
-		AffectedToolResults: source.AffectedToolResults, SummaryHash: source.SummaryHash, Archive: source.Archive,
+		AffectedToolResults: source.AffectedToolResults, SummaryHash: source.SummaryHash,
 		CacheBreak: source.CacheBreak, Reason: source.Reason, BlockedInputHash: source.BlockedInputHash,
 	}
 	if !source.CreatedAt.IsZero() {
