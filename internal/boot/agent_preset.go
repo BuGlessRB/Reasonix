@@ -55,6 +55,7 @@ func CoreProviderToolNames() []string {
 		"edit_file",
 		"write_file",
 		"compress",
+		"recall",
 		"use_capability",
 	}
 }

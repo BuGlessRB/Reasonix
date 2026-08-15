@@ -68,6 +68,7 @@ var acceptsDefaultSnip = map[string]bool{
 	"move_file":     true,
 	"multi_edit":    true,
 	"notebook_edit": true,
+	"recall":        true, // recalled transcript: head and tail are both real content, like any read
 	"todo_write":    true,
 	"update_goal":   true,
 	"wait":          true,

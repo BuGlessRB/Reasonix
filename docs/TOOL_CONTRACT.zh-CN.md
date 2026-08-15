@@ -22,6 +22,7 @@
 | `multi_edit` | false | 对单个文件原子应用多个编辑。 |
 | `notebook_edit` | false | 编辑 Jupyter notebook 的单个 cell。 |
 | `read_file` | true | 按可分页的行号格式读取文本文件。 |
+| `recall` | true | 按压缩摘要「折叠工作索引」里的 #n 地址取回被折叠的对话片段；文件与代码应重新读取，recall 用于无法重建的内容（用户原话、不该重跑的命令输出）。每次压缩重置取回预算，超额整体拒绝而非截断。 |
 | `todo_write` | true | 记录并替换当前工作的结构化任务列表。 |
 | `wait` | true | 等待后台 job 完成并返回最终输出。 |
 | `web_fetch` | true | 通过 HTTP/HTTPS 获取 URL 文本内容。 |
@@ -100,7 +101,7 @@ registry 中供调度，但不会展开到 top-level provider schema；模型通
 以及稳定的能力代理：
 
 `bash`, `bash_output`, `edit_file`, `kill_shell`, `read_file`, `wait`,
-`write_file`, `compress`（若注册），以及 `use_capability`。
+`write_file`, `compress` 与 `recall`（若注册），以及 `use_capability`。
 
 可选工具（`glob`、`grep`、`ls`、`web_fetch`、MCP、skills、subagents、docs、会话历史、
 记忆写入、workflow 等）仍在 host registry 中可调度；模型通过 `use_capability` 列举、

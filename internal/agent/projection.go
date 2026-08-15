@@ -107,6 +107,14 @@ const (
 	CompactionNoop
 )
 
+// RecallLedger is what one projection generation has already pulled back out
+// of the fold. Carrying the generation it belongs to is what resets the budget:
+// a stale generation reads as an unspent one, with no reset call to forget.
+type RecallLedger struct {
+	Generation  uint64 `json:"generation,omitempty"`
+	SpentTokens int    `json:"spent_tokens,omitempty"`
+}
+
 // CompactionState is the session context sidecar payload.
 type CompactionState struct {
 	SchemaVersion      int                        `json:"schema_version"`
@@ -120,6 +128,7 @@ type CompactionState struct {
 	LastResultTokens   int                        `json:"last_result_tokens,omitempty"`
 	LastCompactionCost float64                    `json:"last_compaction_cost,omitempty"`
 	Generation         uint64                     `json:"generation,omitempty"`
+	Recall             RecallLedger               `json:"recall,omitempty"`
 	LastReceipt        *ContextMaintenanceReceipt `json:"last_receipt,omitempty"`
 	BlockedInputHash   string                     `json:"blocked_input_hash,omitempty"`
 	BlockedReason      string                     `json:"blocked_reason,omitempty"`

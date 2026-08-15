@@ -1388,7 +1388,7 @@ Choose the startup execution setting with
 delivery "fix and verify this bug"`). Legacy `--profile economy|balanced|delivery`
 still works (`economy` maps to `light`). All three execution settings share the same
 provider-visible core tool surface: direct read/bash/edit/write, background-shell
-lifecycle tools, `ask`/`compress` when registered, and the stable
+lifecycle tools, `ask`/`compress`/`recall` when registered, and the stable
 `use_capability` proxy for optional tools (search, MCP, skills, subagents, docs,
 web_fetch, and so on). Calling `use_capability` never expands the top-level
 provider schema, so the prompt-cache tool prefix stays stable across execution

@@ -293,6 +293,30 @@
     }
   },
   {
+    "Name": "recall",
+    "Description": "Bring a folded part of this conversation back, addressed by the #n positions listed under \"Folded work index\" in a compaction summary. Re-run a read or a search instead when the file or the code is what you want — a current copy beats a folded one. Recall is for what you cannot re-derive: what the user said in their own words, and the output of work you should not repeat. Each compaction grants a fresh budget; a request past it is refused whole, not truncated.",
+    "ReadOnly": true,
+    "Schema": {
+      "additionalProperties": false,
+      "properties": {
+        "positions": {
+          "description": "The #n addresses from a folded-work index line, without the '#'.",
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "positions"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "Name": "todo_write",
     "Description": "Record and update a structured task list for the current work. Send the COMPLETE list every call — it replaces the previous one. Use it to plan multi-step work and show progress: keep exactly one item in_progress at a time, and flip an item to completed the moment it's done (don't batch completions). Skip it for trivial single-step tasks. The list is two-level: a `level` 0 item is a PHASE (a milestone) and the `level` 1 items after it are its concrete sub-steps; omit `level` (0) for a flat list. Each item has `content` (imperative, e.g. \"Add the parser\"), `status` (pending|in_progress|completed), `activeForm` (present-continuous shown while in progress, e.g. \"Adding the parser\"), optional `level` (0 phase | 1 sub-step), and `step_id` — an item's stable identity. COPY `step_id` VERBATIM for every item that already has one: it is how a completion stays attached to its step when you retitle it, insert a step above it, or reorder the list. Give a new item a fresh unique id (e.g. \"plan_step_07\"); never reuse or renumber an existing one.",
     "ReadOnly": true,

@@ -9,6 +9,27 @@ import (
 	"reasonix/internal/provider"
 )
 
+// unifiedBootToolNames is the provider-visible surface shared by every Agent
+// role setting under identical configuration (core tools + host-control tools).
+func unifiedBootToolNames() []string {
+	return []string{
+		"ask",
+		"bash",
+		"bash_output",
+		"complete_step",
+		"compress",
+		"edit_file",
+		"kill_shell",
+		"read_file",
+		"recall",
+		"todo_write",
+		"update_goal",
+		"use_capability",
+		"wait",
+		"write_file",
+	}
+}
+
 func TestBootToolContractMatchesProviderVisibleSurface(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
