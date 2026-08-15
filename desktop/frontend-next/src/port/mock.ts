@@ -383,7 +383,7 @@ export class MockPort implements AgentPort {
     {
       name: "deepseek", kind: "openai", baseUrl: "https://api.deepseek.com",
       models: ["deepseek-v4-pro", "deepseek-v4-flash"], default: "deepseek-v4-pro",
-      hasKey: true, inUse: true, preset: false, keyEnv: "DEEPSEEK_API_KEY",
+      hasKey: true, inUse: true, preset: false, keyEnv: "DEEPSEEK_API_KEY", canSetVision: false,
     },
     {
       name: "deepseek-anthropic", kind: "anthropic", baseUrl: "https://api.deepseek.com/anthropic",
@@ -394,7 +394,7 @@ export class MockPort implements AgentPort {
       name: "myrelay", kind: "openai", baseUrl: "https://relay.example.com/v1",
       models: ["gpt-4o", "claude-sonnet-4"], default: "gpt-4o",
       hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_API_KEY",
-      visionModels: ["gpt-4o"],
+      visionModels: ["gpt-4o"], canSetVision: true,
     },
     {
       name: "myrelay-work", kind: "openai", baseUrl: "https://relay.example.com/v1",

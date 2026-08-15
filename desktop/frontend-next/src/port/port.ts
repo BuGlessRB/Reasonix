@@ -271,6 +271,9 @@ export interface ProviderEntry {
   // Which of them read images, so an editor shows the current answer rather
   // than asking the user to remember it.
   visionModels?: string[];
+  // False where the kernel refuses image input for this endpoint regardless of
+  // config, so an editor can say so instead of offering a dead switch.
+  canSetVision?: boolean;
   // Removing the one in use would leave the session on a model that no longer
   // resolves, so the row offers no delete.
   inUse: boolean;

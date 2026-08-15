@@ -301,7 +301,12 @@ function EditConn({
       </div>
 
       <div className="mlist">
-        <span className="mlb">模型（{picked.length}/{models.length}）· 勾「读图」的才会收到图片</span>
+        <span className="mlb">
+          模型（{picked.length}/{models.length}）·{" "}
+          {entry.canSetVision === false
+            ? "这个端点不接受图片输入，勾了也不会生效"
+            : "勾「读图」的才会收到图片"}
+        </span>
         {models.map((m) => (
           <div className="mline" key={m} data-off={picked.includes(m) ? undefined : ""}>
             <button className="tick" role="checkbox" aria-checked={picked.includes(m)}
@@ -309,7 +314,9 @@ function EditConn({
               <i />
             </button>
             <span className="nm">{m}</span>
-            <button className="vtag" aria-pressed={vision.includes(m)} disabled={!picked.includes(m)}
+            <button className="vtag" aria-pressed={vision.includes(m)}
+              disabled={!picked.includes(m) || entry.canSetVision === false}
+              title={entry.canSetVision === false ? "内核不给这个端点发图片，改这里不会有效果" : undefined}
               onClick={() => toggle(vision, setVision, m)}>
               读图
             </button>
@@ -332,7 +339,10 @@ function EditConn({
         <button className="act" data-primary onClick={save} disabled={busy !== "" || picked.length === 0}>
           {saving ? "保存中…" : "保存"}
         </button>
-        <button className="act" onClick={refetch} disabled={busy !== ""}>重新探测模型</button>
+        <button className="act" onClick={refetch} disabled={busy !== ""}
+          title="重新问这个端点要一次模型列表 —— 它上新或下架模型之后用">
+          重新问一次有哪些模型
+        </button>
         <button className="act" onClick={onDone} disabled={busy !== ""}>取消</button>
       </div>
     </div>

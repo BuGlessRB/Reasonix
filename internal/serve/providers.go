@@ -55,8 +55,12 @@ type providerView struct {
 	// VisionModels is which of them read images, so the form shows the current
 	// answer instead of asking the user to remember it.
 	VisionModels []string `json:"visionModels"`
-	Default      string   `json:"default"`
-	HasKey       bool     `json:"hasKey"`
+	// CanSetVision is false where the kernel refuses image input for the
+	// endpoint whatever the config says — an editor offering the toggle there
+	// is offering a switch that does nothing.
+	CanSetVision bool   `json:"canSetVision"`
+	Default      string `json:"default"`
+	HasKey       bool   `json:"hasKey"`
 	// KeyEnv names the credential slot. Two entries at one host holding
 	// different keys are two accounts and must not be shown as one.
 	KeyEnv string `json:"keyEnv,omitempty"`
@@ -84,6 +88,7 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 			BaseURL:      p.BaseURL,
 			Models:       nonNilStrings(p.ChatModelList()),
 			VisionModels: nonNilStrings(visionModelsOf(cfg, p)),
+			CanSetVision: config.CanConfigureVision(p),
 			Default:      p.DefaultModel(),
 			HasKey:       p.APIKey() != "",
 			KeyEnv:       p.APIKeyEnv,
