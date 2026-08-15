@@ -115,6 +115,16 @@ type modelEntry struct {
 	Kind     string `json:"kind,omitempty"`
 	Active   bool   `json:"active,omitempty"`
 	Default  bool   `json:"default,omitempty"`
+	// Vendor is the endpoint host. Entries sharing it are one service reached
+	// under different protocols, which is what lets a picker fold the routes.
+	Vendor string `json:"vendor,omitempty"`
+	// The capability face; see describeModel. Omitted fields mean "nothing
+	// declares this", never "no".
+	Vision        bool        `json:"vision,omitempty"`
+	Efforts       []string    `json:"efforts,omitempty"`
+	Effort        string      `json:"effort,omitempty"`
+	ContextWindow int         `json:"contextWindow,omitempty"`
+	Price         *modelPrice `json:"price,omitempty"`
 }
 
 type modelRoute struct {

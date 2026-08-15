@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AccountState, AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, SessionStatus, SkillEntry } from "../port/port";
+import type { AccountState, AgentPort, ApprovalMode, McpEntry, ModelEntry, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
+import { WindowControls } from "./WindowControls";
 import { AddServer } from "./AddServer";
 import { Hooks } from "./Hooks";
 import { Network } from "./Network";
 import { Account } from "./Account";
 import { Providers } from "./Providers";
+import { Models } from "./Models";
+import { Roles } from "./Roles";
 import { Boundary } from "./Boundary";
 import { Versions } from "./Versions";
 import { Memory } from "./Memory";
@@ -22,8 +25,6 @@ const APPROVALS: [ApprovalMode, string, string][] = [
   ["dontAsk", "不再问", "这一类记住，本会话内不再问"],
   ["yolo", "全放行", "不问了。只在你完全信任这个工作区时用"],
 ];
-
-const EFFORTS = ["auto", "low", "medium", "high", "xhigh", "max"];
 
 const THEMES: [string, string][] = [
   ["auto", "跟随系统"],
@@ -85,6 +86,7 @@ interface Props {
 export function Settings({ port, status, theme, onTheme, onClose, onChanged, at: opened, account: acct, reloadAccount }: Props) {
   const [at, setAt] = useState<Section>((opened as Section) || "session");
   const [models, setModels] = useState<ModelEntry[]>([]);
+  const [roles, setRoles] = useState<RoleAssignments | null>(null);
   const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [skills, setSkills] = useState<SkillEntry[]>([]);
   const [implicit, setImplicit] = useState(true);
@@ -122,14 +124,29 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
     port.models().then(setModels).catch(() => setModels([]));
   }, [port]);
 
+  const loadRoles = useCallback(() => {
+    port.roles().then(setRoles).catch(() => setRoles(null));
+  }, [port]);
+
+  // Focus lands once, when the pane opens. onClose is a fresh arrow on every
+  // parent render, so re-running this with it would pull focus back out of
+  // whatever the user is holding — a native select closes its dropdown the
+  // instant it is blurred, which reads as the menu refusing to open at all.
   useEffect(() => {
-    loadModels();
-    reloadExt();
     root.current?.focus();
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [port, onClose, reloadExt, loadModels]);
+  }, [onClose]);
+
+  useEffect(() => {
+    loadModels();
+    loadRoles();
+    reloadExt();
+  }, [loadModels, loadRoles, reloadExt]);
 
   const run = async (what: string, fn: () => Promise<void>) => {
     setBusy(what);
@@ -141,6 +158,11 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
     }
   };
 
+  // The levels the selected model's endpoint actually accepts. A fixed list
+  // here offered every model six of them and let the user set depths the
+  // provider then ignored or rejected.
+  const efforts = models.find((m) => m.ref === status?.modelRef)?.efforts ?? [];
+  const assigned = roles ? Object.values(roles).filter(Boolean).length : 0;
   const preset = PRESETS.find(([id]) => id === status?.preset)?.[1] ?? "—";
   const approval = APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[1] ?? "—";
   const broken = mcp.filter((m) => m.state === "failed").length;
@@ -224,25 +246,34 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
 
           {at === "model" && (
             <>
-              <Group title="模型" now={nav.model} hint="切换会带着对话重建运行时；有活儿在跑的时候切不了。">
-                {models.map((m) => (
-                  <Row key={m.ref} on={m.ref === status?.modelRef} busy={busy === m.ref}
-                    label={m.model} desc={m.provider} onClick={() => run(m.ref, () => port.setModel(m.ref))} />
-                ))}
-                {models.length === 0 && <div className="empty">读不到模型列表。</div>}
+              <Group title="分工" now={roles ? `${assigned} 个已指派` : undefined}
+                hint="每个位置默认跟着主模型走，只有你明确指派过的才会分出去。换指派跟换主模型一样要重建运行时，有活儿在跑的时候换不了。">
+                <Roles models={models} roles={roles} main={status?.modelRef} busy={busy}
+                  onSet={(role, ref) => run(`role:${role}`, async () => {
+                    await port.setRole(role, ref);
+                    loadRoles();
+                  })} />
               </Group>
-              <Group title="推理强度" hint="可选档位随 provider 能力变化，auto 表示交给 provider 默认。">
-                <div className="seg" role="group" aria-label="推理强度">
-                  {EFFORTS.map((e) => (
-                    <button key={e} aria-pressed={(status?.effort || "auto") === e}
-                      onClick={() => run(e, () => port.setEffort(e))}>
-                      {e}
-                    </button>
-                  ))}
-                </div>
+              <Group title="模型" now={nav.model} hint="切换会带着对话重建运行时；有活儿在跑的时候切不了。标签只写探得到的能力 —— 空着就是没人声明过，不是「不支持」。">
+                <Models models={models} current={status?.modelRef} busy={busy}
+                  onPick={(ref) => run(ref, () => port.setModel(ref))} />
               </Group>
+              {efforts.length > 0 ? (
+                <Group title="推理强度" hint="这几档是当前模型的端点真正认的，auto 表示交给它自己的默认。">
+                  <div className="seg" role="group" aria-label="推理强度">
+                    {efforts.map((e) => (
+                      <button key={e} aria-pressed={(status?.effort || "auto") === e}
+                        onClick={() => run(e, () => port.setEffort(e))}>
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                </Group>
+              ) : (
+                <Group title="推理强度" hint="当前模型没有暴露可调的推理档位，调它不会有任何效果，所以这里不给开关。" />
+              )}
               <Group
-                title="模型来源"
+                title="连接"
                 hint="模型从哪里来。添加只问地址和 key —— 协议、模型列表、能不能看图，都去问端点，问不出来的才让你填。"
               >
                 <Providers port={port} onChanged={loadModels} />
@@ -549,7 +580,7 @@ function Switch({
 function Group({
   title, hint, now, action, children,
 }: {
-  title: string; hint?: string; now?: string; action?: React.ReactNode; children: React.ReactNode;
+  title: string; hint?: string; now?: string; action?: React.ReactNode; children?: React.ReactNode;
 }) {
   return (
     <section className="grp">
@@ -559,7 +590,7 @@ function Group({
         {action}
       </div>
       {hint && <p className="hint">{hint}</p>}
-      <div className="grp-items">{children}</div>
+      {children && <div className="grp-items">{children}</div>}
     </section>
   );
 }

@@ -258,7 +258,6 @@ func providerEntryFrom(name, kind, baseURL, def, effort string, models, vision [
 		NoProxy:      noProxy,
 		Effort:       strings.TrimSpace(effort),
 		VisionModels: vision,
-		Vision:       len(vision) > 0,
 	}, nil
 }
 

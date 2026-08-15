@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, DeviceGrant, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, DeviceGrant, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 import { SCRIPT } from "./fixture";
 
@@ -42,10 +42,45 @@ export class MockPort implements AgentPort {
     this.setupDone = true;
   }
 
+  // The subagent runs somewhere cheaper; everything else rides the main model.
+  private assigned: RoleAssignments = {
+    planner: "",
+    subagent: "deepseek/deepseek-v4-flash",
+    guardian: "",
+  };
+
+  async roles(): Promise<RoleAssignments> {
+    return this.assigned;
+  }
+
+  async setRole(role: string, ref: string) {
+    this.assigned = { ...this.assigned, [role]: ref };
+  }
+
+  // Two protocols onto one host, plus a second vendor carrying the only model
+  // that reads images: the two shapes the picker has to render correctly.
   async models(): Promise<ModelEntry[]> {
+    const efforts = ["auto", "low", "high", "max"];
     return [
-      { ref: "deepseek/deepseek-v4-pro", provider: "deepseek", model: "deepseek-v4-pro", active: true },
-      { ref: "deepseek/deepseek-v4-flash", provider: "deepseek", model: "deepseek-v4-flash" },
+      {
+        ref: "deepseek/deepseek-v4-pro", provider: "deepseek", model: "deepseek-v4-pro",
+        kind: "openai", vendor: "api.deepseek.com", active: true, efforts, effort: "high",
+        contextWindow: 131072, price: { input: 2, output: 8, currency: "CNY" },
+      },
+      {
+        ref: "deepseek-anthropic/deepseek-v4-pro", provider: "deepseek-anthropic",
+        model: "deepseek-v4-pro", kind: "anthropic", vendor: "api.deepseek.com",
+        efforts, effort: "high", contextWindow: 131072,
+      },
+      {
+        ref: "deepseek/deepseek-v4-flash", provider: "deepseek", model: "deepseek-v4-flash",
+        kind: "openai", vendor: "api.deepseek.com", efforts, effort: "high",
+        contextWindow: 131072, price: { input: 0.5, output: 2, currency: "CNY" },
+      },
+      {
+        ref: "kimi/kimi-k2-vision", provider: "kimi", model: "kimi-k2-vision",
+        kind: "openai", vendor: "api.moonshot.cn", vision: true, contextWindow: 262144,
+      },
     ];
   }
 

@@ -484,6 +484,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /submit", s.submit)
 	s.registerInboxRoutes(mux)
 	s.registerProviderRoutes(mux)
+	s.registerRoleRoutes(mux)
 	mux.HandleFunc("POST /cancel", s.cancel)
 	mux.HandleFunc("POST /approve", s.approve)
 	mux.HandleFunc("POST /plan", s.plan)
@@ -1340,14 +1341,16 @@ func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
 					active = ref == cfg.DefaultModel
 				}
 			}
-			out = append(out, modelEntry{
+			entry := modelEntry{
 				Ref:      ref,
 				Provider: p.Name,
 				Model:    model,
 				Kind:     p.Kind,
 				Active:   active,
 				Default:  ref == cfg.DefaultModel || p.Name == cfg.DefaultModel,
-			})
+			}
+			capabilitiesFor(cfg, p, model, &entry)
+			out = append(out, entry)
 		}
 	}
 	// ProviderCatalog is the controller-generation's authoritative merged view.

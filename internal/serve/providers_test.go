@@ -131,6 +131,48 @@ func TestSaveProviderWritesConfigAndKeepsTheKeyOutOfIt(t *testing.T) {
 	}
 }
 
+// A whitelist that also raises the provider-wide flag defeats itself: the flag
+// answers for every model the list omits, so the text-only half of a mixed
+// provider claims image input and the next attached screenshot reaches an
+// endpoint that rejects it.
+func TestSaveProviderNarrowsVisionToTheListedModels(t *testing.T) {
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	resp := postProvider(t, srv.URL, "/providers", `{
+		"name":"mixed","kind":"openai","baseUrl":"https://gateway.invalid/v1",
+		"apiKey":"sk-x","models":["text-only","vision-pro"],
+		"default":"text-only","authHeader":false,"noProxy":false,
+		"effort":"","vision":["vision-pro"]
+	}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := readAllString(resp)
+		t.Fatalf("POST /providers = %d: %s", resp.StatusCode, b)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	textOnly, ok := cfg.ResolveModel("mixed/text-only")
+	if !ok {
+		t.Fatal("ResolveModel did not find mixed/text-only")
+	}
+	if config.EffectiveVision(textOnly) {
+		t.Fatal("a model outside the saved vision list must stay text-only")
+	}
+	vision, ok := cfg.ResolveModel("mixed/vision-pro")
+	if !ok {
+		t.Fatal("ResolveModel did not find mixed/vision-pro")
+	}
+	if !config.EffectiveVision(vision) {
+		t.Fatal("a model in the saved vision list must accept images")
+	}
+}
+
 func TestSaveProviderRejectsWhatItCannotStore(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()

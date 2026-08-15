@@ -1215,6 +1215,151 @@
   .addsrv .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
   .addsrv > .why { margin-top: 9px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
 
+  /* 分工带：主模型在上，四个位置挂在它下面的那根轨上。这里不用卡片 ——
+     卡片会把四个位置画成四件平等的东西，而它们的真实关系是「都跟着上面那个，
+     除非你把某一条拽出来」。所以状态由轨上的节点担：空心=跟随，实心=已指派，
+     只有环=借来的。行本身沿用设置列表的发丝分隔，跟 .vrow/.skrow 是一家。 */
+  .band { margin-top: 14px }
+  .anchor { display: block; padding-bottom: 13px }
+  .anchor .cap { font: 500 9.5px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--accent) }
+  .anchor .nm { display: block; margin-top: 5px; font: 500 15px var(--mono); color: var(--text);
+    overflow-wrap: anywhere }
+  .anchor .meta { display: block; margin-top: 3px; font: 400 11px var(--ui); color: var(--faint) }
+
+  /* 轨从锚底下直接落下来，停在最后一个节点上 —— 它连的是「这个模型」和
+     「这些活」，所以两头都不该悬空。 */
+  .fan { position: relative }
+  .fan::before {
+    content: ""; position: absolute; left: 8.5px; top: 0; bottom: 19px; width: 1px;
+    background: var(--border); transform-origin: top;
+    animation: rail var(--t-panel) var(--ease-out) both;
+  }
+  @keyframes rail { from { transform: scaleY(0) } to { transform: scaleY(1) } }
+
+  .slotbox { position: relative }
+  .slot {
+    display: grid; grid-template-columns: 18px 52px minmax(0, 1fr) auto; gap: 12px;
+    align-items: center; width: 100%; padding: 9px 2px 9px 0; text-align: left;
+    background: none; border: 0; border-top: 1px solid var(--hair); cursor: pointer;
+    animation: card var(--t-card) var(--ease-out) both;
+  }
+  .fan > .slotbox:last-child .slot { border-bottom: 1px solid var(--hair) }
+  .fan > .slotbox:nth-child(2) .slot { animation-delay: .04s }
+  .fan > .slotbox:nth-child(3) .slot { animation-delay: .08s }
+  .fan > .slotbox:nth-child(4) .slot { animation-delay: .12s }
+  .slot:hover { background: var(--overlay) }
+  .slot:disabled { cursor: default }
+  .slot:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  .slot .role { font: 500 11.5px var(--ui); color: var(--muted) }
+  .slot .val { min-width: 0; font: 400 11.5px var(--mono); color: var(--ghost); overflow-wrap: anywhere;
+    animation: bumpup var(--t-line) var(--ease-out) both }
+  .slot .tag { font: 400 10px var(--ui); color: var(--ghost); white-space: nowrap }
+
+  /* 节点压在轨上，所以要有不透明底色把轨挡住。实心那一下是分叉真正接上的瞬间，
+     值得一个 transition —— 委派用 deleg，token 表里这个色本来就是这个意思。 */
+  .slot .node {
+    justify-self: center; position: relative; z-index: 1; width: 9px; height: 9px;
+    border: 1.5px solid var(--ghost); border-radius: 50%; background: var(--page);
+    transition: border-color var(--t-line) var(--ease-out);
+  }
+  .slot .node::after {
+    content: ""; position: absolute; inset: 1px; border-radius: 50%; background: var(--deleg);
+    transform: scale(0); transition: transform var(--t-line) var(--ease-out);
+  }
+  .slot[data-set] .node { border-color: var(--deleg) }
+  .slot[data-set] .node::after { transform: scale(1) }
+  .slot[data-set] .role { color: var(--deleg); font-weight: 600 }
+  .slot[data-set] .val { color: var(--text) }
+  .slot[data-set] .tag { color: var(--deleg) }
+  /* 借来的：它真的在干活，但开关不在这一行，所以给环不给实心。 */
+  .slot[data-borrowed] { cursor: default }
+  .slot[data-borrowed] .node { border-color: color-mix(in srgb, var(--deleg) 55%, transparent) }
+  .slot[data-borrowed] .tag { color: var(--faint) }
+
+  .rpick {
+    position: absolute; z-index: 30; top: calc(100% + 5px); left: 0; min-width: 260px;
+    max-height: 288px; overflow: auto; padding: 4px; background: var(--raised);
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .35);
+    transform-origin: top; animation: panel var(--t-card) var(--ease-out) both;
+  }
+  .rpick button {
+    display: flex; width: 100%; gap: 9px; align-items: baseline; padding: 6px 9px;
+    background: none; border: 0; border-radius: var(--r-sm); text-align: left; cursor: pointer;
+    font: 400 11.5px var(--mono); color: var(--text);
+  }
+  .rpick button:hover { background: var(--overlay) }
+  .rpick button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  .rpick button[data-cur] { background: var(--deleg-wash); color: var(--deleg) }
+  .rpick button .sub { margin-left: auto; font: 400 10px var(--ui); color: var(--ghost) }
+  .rpick .sep { height: 1px; margin: 4px 0; background: var(--hair) }
+
+  /* 模型库：按端点分组，一行一个模型。同一台主机被两种协议接进来是一个服务的
+     两条路由，所以折成一行，协议退到行尾的下拉里 —— 平铺会让同名模型出现两次，
+     而两行之间没有任何可判断的差别。 */
+  .mfind { display: flex; align-items: center; gap: 10px; margin-bottom: 12px }
+  .mfind input {
+    flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: var(--r-sm); background: var(--raised); color: var(--text); font: 400 12px var(--ui);
+  }
+  .mfind input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  .mfind .cnt { flex: none; font: 400 11px var(--mono); color: var(--faint) }
+
+  .mgrp { margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden;
+    animation: card var(--t-card) var(--ease-out) both }
+  .mgrp:nth-child(3) { animation-delay: .05s }
+  .mgrp:nth-child(4) { animation-delay: .1s }
+  .mgrp:last-child { margin-bottom: 0 }
+  .mgrp-hd {
+    display: flex; align-items: center; gap: 9px; padding: 8px 12px;
+    background: var(--surface); border-bottom: 1px solid var(--hair);
+  }
+  .mgrp-hd .nm { font: 500 12px var(--ui); color: var(--text) }
+  .mgrp-hd .url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 400 10.5px var(--mono); color: var(--faint) }
+  .mgrp-hd .n { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--ghost) }
+
+  .mrow { display: flex; align-items: center; background: var(--raised); border-bottom: 1px solid var(--hair) }
+  .mrow:last-child { border-bottom: 0 }
+  .mrow:hover { background: var(--overlay) }
+  .mrow[data-on] { background: var(--accent-wash); box-shadow: inset 2px 0 var(--accent) }
+  .mrow .pick {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px;
+    padding: 9px 12px; background: none; border: 0; text-align: left; cursor: pointer;
+  }
+  .mrow .pick:disabled { opacity: .5; cursor: default }
+  .mrow .pick:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  /* 选中标记跟 .prow 同一个语义，所以长得一样，只是圆的。 */
+  .mrow .mark { flex: none; width: 13px; height: 13px; border: 1.5px solid var(--ghost);
+    border-radius: 50%; position: relative;
+    transition: border-color var(--t-line) var(--ease-out), background var(--t-line) var(--ease-out) }
+  .mrow[data-on] .mark { border-color: var(--accent); background: var(--accent) }
+  /* 环是从满到空缩出来的，所以「选中」这件事有一个可见的落点。 */
+  .mrow .mark::after { content: ""; position: absolute; inset: 3.5px; border-radius: 50%;
+    background: var(--raised); transform: scale(0);
+    transition: transform var(--t-line) var(--ease-out) }
+  .mrow[data-on] .mark::after { transform: scale(1) }
+  .mrow .nm { min-width: 0; font: 400 12.5px var(--mono); color: var(--text); overflow-wrap: anywhere }
+  .mrow .caps { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px }
+  .mrow .cap {
+    padding: 1.5px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
+    background: var(--surface); color: var(--faint); font: 400 10px var(--ui); white-space: nowrap;
+  }
+  .mrow .cap[data-k="vis"] { color: var(--deleg); background: var(--deleg-wash);
+    border-color: color-mix(in srgb, var(--deleg) 30%, transparent) }
+  .mrow .cap[data-k="think"] { color: var(--net); background: var(--net-wash);
+    border-color: color-mix(in srgb, var(--net) 26%, transparent) }
+  .viabox { position: relative; flex: none; margin-right: 10px }
+  .mrow .via {
+    padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--raised); color: var(--muted); font: 400 10.5px var(--mono); cursor: pointer;
+    transition: border-color var(--t-line) var(--ease-out), color var(--t-line) var(--ease-out);
+  }
+  .mrow .via:hover, .mrow .via[aria-expanded="true"] { border-color: var(--ghost); color: var(--text) }
+  .mrow .via:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  /* 路由菜单挂在按钮右缘，免得贴着面板右边被切掉。 */
+  .viabox .rpick { left: auto; right: 0; min-width: 172px }
+
   /* 添加模型来源：先两个输入框，探测答完才长出下半截。字段沿用网络面板那套，
      两个地方的表单看起来就该是一个人做的。 */
   .addp { border-top: 1px solid var(--hair); padding: 12px 0 2px }
@@ -1482,6 +1627,10 @@
        not. A delayed row that never animates would stay invisible, so the delay
        goes with the animation. */
     .vrow, .vnow .lb { animation: none !important; animation-delay: 0s !important }
+    /* 轨、行、值、弹窗都只是入场装饰。节点填不填是状态本身，留着。 */
+    .fan::before, .slot, .slot .val, .rpick, .mgrp {
+      animation: none !important; animation-delay: 0s !important;
+    }
   }
 
   .ws[data-busy] { opacity: .5; pointer-events: none }

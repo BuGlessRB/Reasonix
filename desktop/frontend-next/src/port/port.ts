@@ -176,12 +176,31 @@ export interface SlashEntry {
   subagent?: boolean;
 }
 
+export interface ModelPrice {
+  input: number;
+  output: number;
+  cacheHit?: number;
+  currency?: string;
+}
+
 export interface ModelEntry {
   ref: string;
   provider: string;
   model: string;
+  kind?: string;
   active?: boolean;
   default?: boolean;
+  // The endpoint host. Rows sharing it are one service reached under more than
+  // one protocol, which is what lets the list fold them into a single choice.
+  vendor?: string;
+  // What the kernel will actually do with this model. An absent field means
+  // nothing declares it — never "no". Rendering a guess here sends the user to
+  // a rejected request they cannot explain.
+  vision?: boolean;
+  efforts?: string[];
+  effort?: string;
+  contextWindow?: number;
+  price?: ModelPrice;
 }
 
 export interface AccountUser {
@@ -229,6 +248,15 @@ export interface VersionHub {
 }
 
 // A configured provider as the settings panel lists it.
+// Which model takes which job. Only the roles with a field behind them in the
+// kernel appear here; image routing joins once it can name its own model
+// instead of borrowing whatever the subagent runs.
+export interface RoleAssignments {
+  planner: string;
+  subagent: string;
+  guardian: string;
+}
+
 export interface ProviderEntry {
   name: string;
   kind: string;
@@ -321,6 +349,12 @@ export interface AgentPort {
   // nothing in the agent loop calls these.
   // Updating the app is the shell's job, not the kernel's: only the shell knows
   // its install layout. A browser tab has no shell and gets an empty hub.
+  // Empty means the job rides the main model — the default for every role, and
+  // a real answer rather than a missing one.
+  roles(): Promise<RoleAssignments>;
+  // Persisted, then the runtime is rebuilt: boot reads every role model while
+  // assembling, so an assignment cannot reach a runtime that is already up.
+  setRole(role: string, ref: string): Promise<void>;
   providers(): Promise<ProviderEntry[]>;
   // Asks an endpoint what it is. Writes nothing — the answer is shown for
   // confirmation, because only the person holding the key knows what they
@@ -359,6 +393,13 @@ export interface AgentPort {
   // Replaying the persisted wire frames rebuilds the trajectory pane row for
   // row; the live stream only ever covers the current connection.
   trajectory(): Promise<WireEvent[]>;
+  // What the working tree actually differs by. Tool events cannot answer it: a
+  // file created and then removed by a shell command leaves both events behind
+  // and nothing on disk.
+  changes(): Promise<WorkspaceChanges>;
+  // Saves pasted or dropped image bytes into the workspace's attachment
+  // directory and returns the "@path" token a turn references it by.
+  attach(blob: Blob): Promise<Attachment>;
   subscribe(onEvent: (ev: WireEvent) => void): () => void;
 
   submit(text: string): Promise<void>;
