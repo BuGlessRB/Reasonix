@@ -14,8 +14,8 @@ import { Versions } from "./Versions";
 import { Memory } from "./Memory";
 
 const PRESETS: [Preset, string, string][] = [
-  ["balanced", "均衡", "按复杂度自适应。这是默认档"],
-  ["delivery", "交付", "完整验收证据，中高风险改动强制独立复核"],
+  ["balanced", "均衡", "做到模型认为做完为止。日常用这档"],
+  ["delivery", "交付", "改了东西就得验证、复核、签收，少一样都不算做完"],
 ];
 
 const APPROVALS: [ApprovalMode, string, string][] = [
@@ -244,7 +244,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
           <div className="prefs-col">
           {at === "session" && (
             <>
-              <Group title="执行设定" hint="管的是规划深度、验证广度、独立复核频率 —— 不是省钱档位。切档立刻生效，不重建运行时。">
+              <Group title="执行设定" hint="管的是「做完了」谁说了算。切档立刻生效，不重建运行时。">
                 {PRESETS.map(([id, name, desc]) => (
                   <Row key={id} on={status?.preset === id} busy={busy === id} label={name} desc={desc}
                     onClick={() => run(id, () => port.setPreset(id))} />
