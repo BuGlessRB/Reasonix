@@ -154,3 +154,58 @@ func TestModelsCarryPriceAndWindowWhereDeclared(t *testing.T) {
 		t.Fatalf("an undeclared price surfaced as %+v", e.Price)
 	}
 }
+
+// The switch rebuilds the running controller; nothing about that reaches disk.
+// Without persistence the next launch boots from default_model and lands back
+// on the previous choice, which reads as the picker not having worked.
+func TestSwitchingModelSurvivesARestart(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	if _, err := config.SetCredential("MIXED_API_KEY", "sk-test"); err != nil {
+		t.Fatal(err)
+	}
+	path := config.UserConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(mixedVendorConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	persistDefaultModel("mixed-anthropic/text-only")
+
+	// A fresh load is what a restart sees.
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DefaultModel != "mixed-anthropic/text-only" {
+		t.Fatalf("default_model = %q after switching, want the model that was chosen", cfg.DefaultModel)
+	}
+}
+
+// A ref nothing resolves must not overwrite a working default.
+func TestPersistingAnUnknownModelLeavesTheDefaultAlone(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	if _, err := config.SetCredential("MIXED_API_KEY", "sk-test"); err != nil {
+		t.Fatal(err)
+	}
+	path := config.UserConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(mixedVendorConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	persistDefaultModel("nobody/nothing")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DefaultModel != "mixed/text-only" {
+		t.Fatalf("default_model = %q, want the original left intact", cfg.DefaultModel)
+	}
+}

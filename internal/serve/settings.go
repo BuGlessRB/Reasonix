@@ -34,11 +34,39 @@ func (s *Server) model(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing ref", http.StatusBadRequest)
 		return
 	}
-	if err := s.switchModel(r.Context(), strings.TrimSpace(body.Ref)); err != nil {
+	ref := strings.TrimSpace(body.Ref)
+	if err := s.switchModel(r.Context(), ref); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// The switch only rebuilt the running controller. Without this the next
+	// launch boots from default_model and lands back on whatever was there
+	// before, which reads as the choice not having been saved at all — the CLI
+	// and the old desktop have both persisted it since they had a picker.
+	persistDefaultModel(ref)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// persistDefaultModel records the choice in the user config. A refusal is worth
+// a log and nothing more: the live switch already succeeded, and failing the
+// request would say the model did not change when it did.
+func persistDefaultModel(ref string) {
+	path := config.UserConfigPath()
+	if path == "" {
+		return
+	}
+	// Serialize against other in-process editors so concurrent writers do not
+	// drop each other's fields.
+	unlock := config.LockUserConfigEdits()
+	defer unlock()
+	edit := config.LoadForEdit(path)
+	if err := edit.SetDefaultModel(ref); err != nil {
+		slog.Warn("serve: persist default model", "ref", ref, "err", err)
+		return
+	}
+	if err := edit.SaveTo(path); err != nil {
+		slog.Warn("serve: save default model", "ref", ref, "path", path, "err", err)
+	}
 }
 
 func (s *Server) effort(w http.ResponseWriter, r *http.Request) {
