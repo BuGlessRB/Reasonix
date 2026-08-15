@@ -1453,40 +1453,31 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		Turns   int    `json:"turns,omitempty"`
 		Current bool   `json:"current,omitempty"`
 	}
-	entries, err := os.ReadDir(dir)
+	// ListSessions answers from the sidecars and never decodes a transcript.
+	// Counting turns per file here made this endpoint O(sessions x transcript
+	// size) on every refresh — the sidebar load the sidecars exist to avoid.
+	listed, err := agent.ListSessions(dir)
 	if err != nil {
 		writeJSON(w, []any{})
 		return
 	}
 	current := agent.CanonicalSessionPath(s.ctl().SessionPath())
-	var out []sessionEntry
-	for _, e := range entries {
-		if e.IsDir() || !store.IsSessionTranscriptName(e.Name()) {
-			continue
-		}
-		path := filepath.Join(dir, e.Name())
+	out := make([]sessionEntry, 0, len(listed))
+	for _, si := range listed {
+		base := filepath.Base(si.Path)
 		// A subagent transcript only means anything through the session that
-		// spawned it. Not folded into IsVisibleSession: GC and redaction still
-		// have to see them.
-		if store.IsSubagentTranscriptName(e.Name()) || agent.IsCleanupPending(path) {
+		// spawned it, and IsVisibleSession deliberately keeps them visible so
+		// GC and redaction still see them. Only flat legacy names reach here.
+		if store.IsSubagentTranscriptName(base) {
 			continue
 		}
-		name := strings.TrimSuffix(e.Name(), ".jsonl")
-		entry := sessionEntry{Name: name, Path: path, Current: agent.CanonicalSessionPath(path) == current}
-		// Event-log aware: reading the .jsonl checkpoint directly would freeze
-		// turn counts and titles at the last checkpoint write.
-		if first, turns := agent.SessionPreview(path); turns > 0 {
-			entry.Turns = turns
-			entry.Title = s.sessionTitle(e.Name(), first, agent.SessionContentModTime(path).UnixNano())
-		}
-		out = append(out, entry)
-	}
-	// reverse so newest first
-	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-		out[i], out[j] = out[j], out[i]
-	}
-	if out == nil {
-		out = []sessionEntry{}
+		out = append(out, sessionEntry{
+			Name:    strings.TrimSuffix(base, ".jsonl"),
+			Path:    si.Path,
+			Turns:   si.Turns,
+			Title:   s.sessionTitle(base, si.Preview, agent.SessionContentModTime(si.Path).UnixNano()),
+			Current: agent.CanonicalSessionPath(si.Path) == current,
+		})
 	}
 	writeJSON(w, out)
 }
