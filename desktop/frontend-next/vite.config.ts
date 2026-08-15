@@ -13,6 +13,9 @@ const ROUTES = [
   "/plan", "/goal", "/resume", "/models", "/tool-approval-mode", "/preset",
   "/model", "/effort", "/new", "/sessions", "/delete-session", "/provider-setup",
   "/inbox", "/trajectory", "/mcp", "/skills", "/slash", "/workspace",
+  "/providers", "/roles", "/account", "/hooks", "/memory", "/network", "/todos",
+  "/changes", "/attachments", "/checkpoints", "/branches", "/compact", "/rewind",
+  "/fork", "/summarize", "/forget", "/bypass", "/auto-approve-tools",
 ];
 
 // REASONIX_SERVE points at a running `reasonix serve`; without it the app boots

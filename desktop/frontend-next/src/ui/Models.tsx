@@ -1,68 +1,51 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ModelEntry } from "../port/port";
-import { useDismiss } from "./dismiss";
+import { vendorLabel } from "./vendors";
 
-// The picker used to be one flat list of provider×model, which is three
-// independent axes multiplied out: which service, which protocol reaches it,
-// which model. Here the service groups the rows, the protocol folds into a
-// route selector, and only the model is a choice you make by clicking.
-
-const KIND_LABEL: Record<string, string> = {
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-  responses: "Responses",
-  extension: "扩展",
-};
+// Models only. Which protocol reaches them is the connection's business, chosen
+// once above — an earlier version put a route selector on every row, so picking
+// a model silently moved the session to another endpoint.
 
 const CURRENCY: Record<string, string> = { CNY: "¥", USD: "$", EUR: "€" };
 
-// A folded row: one model, and every route that reaches it at this endpoint.
-interface Folded {
-  key: string;
-  model: string;
-  routes: ModelEntry[];
-}
-
-interface Group {
+export interface Vendor {
   key: string;
   label: string;
   host: string;
-  rows: Folded[];
+  // Models this account offers under each protocol it answers on.
+  byKind: Record<string, ModelEntry[]>;
+  kinds: string[];
 }
 
-function vendorKey(m: ModelEntry): string {
-  return (m.vendor || m.provider || "").toLowerCase();
-}
-
-export function groupModels(models: ModelEntry[]): Group[] {
-  const groups = new Map<string, Group>();
-  const rows = new Map<string, Folded>();
+export function groupVendors(models: ModelEntry[]): Vendor[] {
+  const out = new Map<string, Vendor>();
   for (const m of models) {
-    const vk = vendorKey(m);
-    let g = groups.get(vk);
-    if (!g) {
-      g = { key: vk, label: "", host: m.vendor ?? "", rows: [] };
-      groups.set(vk, g);
+    const host = m.vendor || m.provider || "";
+    let v = out.get(host);
+    if (!v) {
+      v = { key: host, label: vendorLabel(host), host, byKind: {}, kinds: [] };
+      out.set(host, v);
     }
-    const rk = vk + "\u0000" + m.model;
-    let row = rows.get(rk);
-    if (!row) {
-      row = { key: rk, model: m.model, routes: [] };
-      rows.set(rk, row);
-      g.rows.push(row);
+    const kind = m.kind || "openai";
+    if (!v.byKind[kind]) {
+      v.byKind[kind] = [];
+      v.kinds.push(kind);
     }
-    row.routes.push(m);
+    v.byKind[kind].push(m);
   }
-  for (const g of groups.values()) {
-    const names: string[] = [];
-    for (const row of g.rows) {
-      for (const r of row.routes) {
-        if (!names.includes(r.provider)) names.push(r.provider);
-      }
-    }
-    g.label = names.join(" · ");
+  return [...out.values()];
+}
+
+// Which protocol this account is on right now: the one holding the running
+// model, else the one holding its default, else the first that answered.
+export function activeKind(v: Vendor, current?: string): string {
+  for (const kind of v.kinds) {
+    if (v.byKind[kind].some((m) => m.ref === current)) return kind;
   }
-  return [...groups.values()];
+  for (const kind of v.kinds) {
+    if (v.byKind[kind].some((m) => m.default)) return kind;
+  }
+  return v.kinds[0];
 }
 
 function contextLabel(tokens?: number): string {
@@ -82,9 +65,9 @@ function priceLabel(m: ModelEntry): string {
   return `${sign}${n(p.input)} / ${sign}${n(p.output)}`;
 }
 
-// Every tag needs something in the config or the probe behind it. An inferred
-// "reads images" badge is worse than a blank row: it sends the user to a
-// request the endpoint rejects, with nothing on screen explaining why.
+// Every tag needs something in the config or the catalog behind it. An inferred
+// "reads images" badge is worse than a blank row: it sends the user to a request
+// the endpoint rejects, with nothing on screen explaining why.
 function tagsFor(m: ModelEntry): [string, string][] {
   const out: [string, string][] = [];
   if (m.vision) out.push(["vis", "读图"]);
@@ -98,34 +81,35 @@ function tagsFor(m: ModelEntry): [string, string][] {
 
 const VISION_QUERY = ["图", "读图", "看图", "vision", "vl"];
 
-function matches(row: Folded, q: string): boolean {
+function matches(m: ModelEntry, q: string): boolean {
   if (!q) return true;
-  if (VISION_QUERY.some((v) => v === q)) return row.routes.some((r) => r.vision);
-  if (row.model.toLowerCase().includes(q)) return true;
-  return row.routes.some(
-    (r) => r.provider.toLowerCase().includes(q) || (r.vendor ?? "").toLowerCase().includes(q),
-  );
+  if (VISION_QUERY.some((v) => v === q)) return m.vision === true;
+  return m.model.toLowerCase().includes(q) || m.provider.toLowerCase().includes(q);
 }
 
 interface Props {
   models: ModelEntry[];
   current?: string;
   busy: string;
+  // Which protocol each account is showing, as chosen in the connection list.
+  protocol: Record<string, string>;
   onPick: (ref: string) => void;
 }
 
-export function Models({ models, current, busy, onPick }: Props) {
+export function Models({ models, current, busy, protocol, onPick }: Props) {
   const [q, setQ] = useState("");
-  const groups = useMemo(() => groupModels(models), [models]);
+  const vendors = useMemo(() => groupVendors(models), [models]);
   const query = q.trim().toLowerCase();
 
-  const shown = groups
-    .map((g) => ({ ...g, rows: g.rows.filter((r) => matches(r, query)) }))
-    .filter((g) => g.rows.length > 0);
-  const total = groups.reduce((n, g) => n + g.rows.length, 0);
-  const hits = shown.reduce((n, g) => n + g.rows.length, 0);
-
   if (models.length === 0) return <div className="empty">读不到模型列表。</div>;
+
+  const shown = vendors.map((v) => {
+    const kind = protocol[v.key] ?? activeKind(v, current);
+    return { v, rows: (v.byKind[kind] ?? []).filter((m) => matches(m, query)) };
+  });
+  const total = vendors.reduce((n, v) => n + (v.byKind[protocol[v.key] ?? activeKind(v, current)]?.length ?? 0), 0);
+  const hits = shown.reduce((n, s) => n + s.rows.length, 0);
+  const live = shown.filter((s) => s.rows.length > 0);
 
   return (
     <>
@@ -135,7 +119,7 @@ export function Models({ models, current, busy, onPick }: Props) {
             type="search"
             value={q}
             spellCheck={false}
-            placeholder="搜模型名、来源，或输入「图」只看能读图的…"
+            placeholder="搜模型名，或输入「图」只看能读图的…"
             aria-label="搜索模型"
             onChange={(e) => setQ(e.target.value)}
           />
@@ -146,91 +130,39 @@ export function Models({ models, current, busy, onPick }: Props) {
           )}
         </div>
       )}
-      {shown.map((g) => (
-        <div className="mgrp" key={g.key}>
-          <div className="mgrp-hd">
-            <span className="nm">{g.label}</span>
-            {g.host && <span className="url">{g.host}</span>}
-            <span className="n">{g.rows.length} 个模型</span>
-          </div>
-          {g.rows.map((row) => (
-            <Row key={row.key} row={row} current={current} busy={busy} onPick={onPick} />
+      {live.map(({ v, rows }) => (
+        <div className="mgrp" key={v.key}>
+          {/* The header only earns its place when more than one account is
+              configured; with one, the models are simply the list. */}
+          {vendors.length > 1 && (
+            <div className="mgrp-hd">
+              <span className="nm">{v.label}</span>
+              <span className="url">{v.host}</span>
+              <span className="n">{rows.length} 个模型</span>
+            </div>
+          )}
+          {rows.map((m) => (
+            <button
+              key={m.ref}
+              className="mrow"
+              data-on={m.ref === current ? "" : undefined}
+              disabled={busy !== ""}
+              onClick={() => onPick(m.ref)}
+            >
+              <span className="mark" />
+              <span className="nm">{m.model}</span>
+              <span className="caps">
+                {tagsFor(m).map(([k, t]) => (
+                  <i className="cap" data-k={k} key={k}>
+                    {t}
+                  </i>
+                ))}
+              </span>
+            </button>
           ))}
         </div>
       ))}
-      {shown.length === 0 && <div className="empty">没有匹配的模型。</div>}
+      {live.length === 0 && <div className="empty">没有匹配的模型。</div>}
     </>
-  );
-}
-
-function routeLabel(m: ModelEntry): string {
-  return KIND_LABEL[m.kind ?? ""] ?? m.kind ?? m.provider;
-}
-
-function Row({
-  row, current, busy, onPick,
-}: {
-  row: Folded; current?: string; busy: string; onPick: (ref: string) => void;
-}) {
-  // The route carrying the current selection is the one to show; otherwise the
-  // first, so an unselected row still names what clicking it would use.
-  const active = row.routes.find((r) => r.ref === current);
-  const shown = active ?? row.routes[0];
-  const tags = tagsFor(shown);
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  useDismiss(open, box, close);
-
-  return (
-    <div className="mrow" data-on={active ? "" : undefined}>
-      <button className="pick" disabled={busy !== ""} onClick={() => onPick(shown.ref)}>
-        <span className="mark" />
-        <span className="nm">{row.model}</span>
-        <span className="caps">
-          {tags.map(([k, t]) => (
-            <i className="cap" data-k={k} key={k}>
-              {t}
-            </i>
-          ))}
-        </span>
-      </button>
-      {/* A native select loses its dropdown to any focus change, and this pane
-          re-renders behind it. The role band's popover does not, so the two
-          pickers in this pane are the same control. */}
-      {row.routes.length > 1 && (
-        <div className="viabox" ref={box}>
-          <button
-            className="via"
-            aria-expanded={open}
-            aria-haspopup="listbox"
-            aria-label={`${row.model} 经由哪个协议`}
-            disabled={busy !== ""}
-            onClick={() => setOpen((v) => !v)}
-          >
-            经由 {routeLabel(shown)}
-          </button>
-          {open && (
-            <div className="rpick" role="listbox" aria-label={`${row.model} 的协议路由`}>
-              {row.routes.map((r) => (
-                <button
-                  key={r.ref}
-                  role="option"
-                  aria-selected={r.ref === shown.ref}
-                  data-cur={r.ref === shown.ref ? "" : undefined}
-                  onClick={() => {
-                    setOpen(false);
-                    onPick(r.ref);
-                  }}
-                >
-                  {routeLabel(r)}
-                  <span className="sub">{r.provider}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   );
 }

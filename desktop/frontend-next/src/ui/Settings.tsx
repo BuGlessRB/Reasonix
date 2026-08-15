@@ -7,7 +7,7 @@ import { Hooks } from "./Hooks";
 import { Network } from "./Network";
 import { Account } from "./Account";
 import { Providers } from "./Providers";
-import { Models } from "./Models";
+import { Models, activeKind, groupVendors } from "./Models";
 import { Roles } from "./Roles";
 import { Boundary } from "./Boundary";
 import { Versions } from "./Versions";
@@ -87,6 +87,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
   const [at, setAt] = useState<Section>((opened as Section) || "session");
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [roles, setRoles] = useState<RoleAssignments | null>(null);
+  const [protocol, setProtocol] = useState<Record<string, string>>({});
   const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [skills, setSkills] = useState<SkillEntry[]>([]);
   const [implicit, setImplicit] = useState(true);
@@ -161,6 +162,23 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
   // The levels the selected model's endpoint actually accepts. A fixed list
   // here offered every model six of them and let the user set depths the
   // provider then ignored or rejected.
+  const vendors = groupVendors(models);
+  const kindFor = (key: string) => {
+    const v = vendors.find((x) => x.key === key);
+    return v ? activeKind(v, status?.modelRef) : "";
+  };
+  // Switching the door an account is reached through is a real switch when that
+  // account is the one running: the same model on the other protocol is a
+  // different endpoint, so it has to go through setModel like any other change.
+  const switchProtocol = (key: string, kind: string) => {
+    setProtocol((p) => ({ ...p, [key]: kind }));
+    const v = vendors.find((x) => x.key === key);
+    const running = v && Object.values(v.byKind).flat().some((m) => m.ref === status?.modelRef);
+    if (!v || !running) return;
+    const here = models.find((m) => m.ref === status?.modelRef);
+    const same = (v.byKind[kind] ?? []).find((m) => m.model === here?.model);
+    if (same && same.ref !== status?.modelRef) run(same.ref, () => port.setModel(same.ref));
+  };
   const efforts = models.find((m) => m.ref === status?.modelRef)?.efforts ?? [];
   const assigned = roles ? Object.values(roles).filter(Boolean).length : 0;
   const preset = PRESETS.find(([id]) => id === status?.preset)?.[1] ?? "—";
@@ -255,7 +273,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
                   })} />
               </Group>
               <Group title="模型" now={nav.model} hint="切换会带着对话重建运行时；有活儿在跑的时候切不了。标签只写探得到的能力 —— 空着就是没人声明过，不是「不支持」。">
-                <Models models={models} current={status?.modelRef} busy={busy}
+                <Models models={models} current={status?.modelRef} busy={busy} protocol={protocol}
                   onPick={(ref) => run(ref, () => port.setModel(ref))} />
               </Group>
               {efforts.length > 0 ? (
@@ -276,7 +294,9 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
                 title="连接"
                 hint="模型从哪里来。添加只问地址和 key —— 协议、模型列表、能不能看图，都去问端点，问不出来的才让你填。"
               >
-                <Providers port={port} onChanged={loadModels} />
+                <Providers port={port} onChanged={loadModels} protocol={protocol}
+                  activeKindFor={(a) => kindFor(a.key)}
+                  onProtocol={(a, kind) => switchProtocol(a.key, kind)} />
               </Group>
             </>
           )}

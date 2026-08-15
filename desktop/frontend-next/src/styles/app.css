@@ -1325,7 +1325,11 @@
     font: 400 10.5px var(--mono); color: var(--faint) }
   .mgrp-hd .n { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--ghost) }
 
-  .mrow { display: flex; align-items: center; background: var(--raised); border-bottom: 1px solid var(--hair) }
+  .mrow { display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 12px;
+    background: var(--raised); border: 0; border-bottom: 1px solid var(--hair);
+    text-align: left; cursor: pointer }
+  .mrow:disabled { opacity: .5; cursor: default }
+  .mrow:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .mrow:last-child { border-bottom: 0 }
   .mrow:hover { background: var(--overlay) }
   .mrow[data-on] { background: var(--accent-wash); box-shadow: inset 2px 0 var(--accent) }
@@ -1355,6 +1359,18 @@
     border-color: color-mix(in srgb, var(--deleg) 30%, transparent) }
   .mrow .cap[data-k="think"] { color: var(--net); background: var(--net-wash);
     border-color: color-mix(in srgb, var(--net) 26%, transparent) }
+  /* 接入方式：同一个账号的两扇门。它挂在连接行下面而不是模型行里 ——
+     协议是这个来源的属性，切模型不该顺带换掉它。 */
+  .vway { display: flex; align-items: center; gap: 10px; padding: 2px 12px 10px;
+    border-bottom: 1px solid var(--hair) }
+  .vway .lb { font: 400 10.5px var(--ui); color: var(--faint); flex: none }
+  /* 这里的分段控件是按内容排的，不是铺满一行 —— 基础 .seg 的 flex:1 会把两个
+     不等长的中文标签拉成两种宽度，长的那个还会折行。 */
+  .vway .seg { flex: none; width: auto; flex-wrap: nowrap }
+  .vway .seg button { flex: none; min-width: 0; padding: 4px 12px; white-space: nowrap;
+    font: 400 11px var(--ui) }
+  .vway .why { font: 400 10.5px var(--ui); color: var(--ghost); min-width: 0 }
+
   .viabox { position: relative; flex: none; margin-right: 10px }
   .mrow .via {
     padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--r-xs);

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ProviderCheck, ProviderEntry, ProviderProbe } from "../port/port";
+import { KIND_LABEL, hostOf, vendorLabel } from "./vendors";
 
-// Adding a model is two questions — where and with what key — because the rest
-// is knowable by asking the endpoint. Everything the probe reports is shown as
-// a guess with a way to change it: a model list proves which protocols an
-// endpoint answers, never which one it actually speaks.
+// A connection is an account, not a config row. One endpoint answering two
+// protocols is two rows in the file and one service to the person paying for it,
+// so the rows group by host and the protocol becomes a switch on the account.
+//
+// Adding one is still two questions — where and with what key — because the rest
+// is knowable by asking the endpoint.
 
 type Port = {
   providers(): Promise<ProviderEntry[]>;
@@ -17,8 +20,6 @@ type Port = {
   checkProvider(name: string): Promise<ProviderCheck>;
 };
 
-const KIND_LABEL: Record<string, string> = { openai: "OpenAI 兼容", anthropic: "Anthropic 兼容", responses: "Responses" };
-
 // A name for the config table, derived from the host so the user does not have
 // to invent one. "api.moonshot.cn/v1" becomes "moonshot".
 function nameFrom(baseUrl: string): string {
@@ -30,7 +31,44 @@ function nameFrom(baseUrl: string): string {
   }
 }
 
-export function Providers({ port, onChanged }: { port: Port; onChanged: () => void }) {
+// One account: every configured entry that answers on the same host.
+interface Account {
+  key: string;
+  label: string;
+  host: string;
+  byKind: Record<string, ProviderEntry>;
+  kinds: string[];
+}
+
+function groupAccounts(list: ProviderEntry[]): Account[] {
+  const out = new Map<string, Account>();
+  for (const p of list) {
+    const host = hostOf(p.baseUrl);
+    let a = out.get(host);
+    if (!a) {
+      a = { key: host, label: vendorLabel(host), host, byKind: {}, kinds: [] };
+      out.set(host, a);
+    }
+    const kind = p.kind || "openai";
+    if (!a.byKind[kind]) {
+      a.byKind[kind] = p;
+      a.kinds.push(kind);
+    }
+  }
+  return [...out.values()];
+}
+
+interface ProvidersProps {
+  port: Port;
+  onChanged: () => void;
+  // Which protocol each account is showing, and how to change it. The model
+  // list reads the same map, so switching here re-lists the models below.
+  protocol: Record<string, string>;
+  onProtocol: (account: Account, kind: string) => void;
+  activeKindFor: (account: Account) => string;
+}
+
+export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor }: ProvidersProps) {
   const [list, setList] = useState<ProviderEntry[] | null>(null);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState("");
@@ -56,9 +94,11 @@ export function Providers({ port, onChanged }: { port: Port; onChanged: () => vo
   return (
     <>
       <div className="vlist">
-        {list.map((p) => (
-          <Conn key={p.name} p={p} port={port} busy={busy} setBusy={setBusy}
-            onRemove={() => remove(p.name)} />
+        {groupAccounts(list).map((a) => (
+          <Conn key={a.key} a={a} port={port} busy={busy} setBusy={setBusy}
+            kind={protocol[a.key] ?? activeKindFor(a)}
+            onProtocol={(k) => onProtocol(a, k)}
+            onRemove={remove} />
         ))}
         {list.length === 0 && <div className="empty">还没有配置任何模型来源。</div>}
       </div>
@@ -82,22 +122,25 @@ export function Providers({ port, onChanged }: { port: Port; onChanged: () => vo
   );
 }
 
-// One connection. Protocol is shown as a recorded conclusion, not a question —
-// and "测一下" is what turns it back into a finding when the endpoint disagrees.
+// One account. The protocol is a switch on it rather than a fact on a row,
+// because both entries are the same key at the same host; 测一下 is what turns
+// "which protocol did we record" back into a finding when the endpoint moved.
 function Conn({
-  p, port, busy, setBusy, onRemove,
+  a, port, busy, setBusy, kind, onProtocol, onRemove,
 }: {
-  p: ProviderEntry; port: Port; busy: string; setBusy: (b: string) => void;
-  onRemove: () => void;
+  a: Account; port: Port; busy: string; setBusy: (b: string) => void;
+  kind: string; onProtocol: (kind: string) => void; onRemove: (name: string) => void;
 }) {
   const [found, setFound] = useState<ProviderCheck | null>(null);
-  const checking = busy === `check:${p.name}`;
+  const entry = a.byKind[kind] ?? a.byKind[a.kinds[0]];
+  const checking = busy === `check:${entry.name}`;
+  const inUse = a.kinds.some((k) => a.byKind[k].inUse);
 
   const check = async () => {
-    setBusy(`check:${p.name}`);
+    setBusy(`check:${entry.name}`);
     setFound(null);
     try {
-      setFound(await port.checkProvider(p.name));
+      setFound(await port.checkProvider(entry.name));
     } catch (e) {
       setFound({ ok: false, error: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -105,35 +148,43 @@ function Conn({
     }
   };
 
-  // The endpoint answered a protocol we did not record. Worth saying, but not
-  // worth a one-click fix: the probe only lists models, and it tries both auth
-  // shapes against the same listing URLs, so this says nothing about where the
-  // other protocol's chat endpoint lives. Switching would need the address too.
-  const disagrees = found?.ok && found.kind && found.kind !== p.kind;
-
+  const models = entry.models.length;
   return (
     <>
-      <div className="vrow" data-on={p.inUse ? "" : undefined}>
-        <span className="nm">{p.name}</span>
+      <div className="vrow" data-on={inUse ? "" : undefined}>
+        <span className="nm">{a.label}</span>
         <span className="ds">
-          {KIND_LABEL[p.kind] || p.kind}
-          {p.models.length > 1 ? ` · ${p.models.length} 个模型` : ""}
-          {p.hasKey ? "" : " · 缺 key"}
+          {a.host}
+          {models > 0 ? ` · ${models} 个模型` : ""}
+          {entry.hasKey ? "" : " · 缺 key"}
         </span>
-        <span className="sc">{p.inUse ? "正在用" : p.preset ? "内置" : ""}</span>
+        <span className="sc">{inUse ? "正在用" : ""}</span>
         {/* Hover-reveal is right for 删除; a diagnostic nobody can find is not
             a diagnostic, so this one stays on the row. */}
         <button className="sa lnk" data-keep onClick={check} disabled={busy !== ""}>
           {checking ? "测试中…" : "测一下"}
         </button>
-        {!p.inUse && (
-          <button className="sa lnk" onClick={onRemove} disabled={busy !== ""}>
+        {!entry.inUse && (
+          <button className="sa lnk" onClick={() => onRemove(entry.name)} disabled={busy !== ""}>
             删除
           </button>
         )}
       </div>
+      {a.kinds.length > 1 && (
+        <div className="vway">
+          <span className="lb">接入方式</span>
+          <div className="seg" role="group" aria-label={`${a.label} 的接入方式`}>
+            {a.kinds.map((k) => (
+              <button key={k} aria-pressed={k === kind} disabled={busy !== ""} onClick={() => onProtocol(k)}>
+                {KIND_LABEL[k] || k}
+              </button>
+            ))}
+          </div>
+          <span className="why">同一个账号的两扇门。换一扇，下面的模型跟着换。</span>
+        </div>
+      )}
       {found && (
-        <div className="find" data-lvl={found.ok ? (disagrees ? "warn" : "ok") : "warn"} role="status">
+        <div className="find" data-lvl={found.ok ? "ok" : "warn"} role="status">
           <span className="t">
             {found.ok
               ? `连上了 · ${KIND_LABEL[found.kind ?? ""] || found.kind} · ${found.models} 个模型`
@@ -141,11 +192,9 @@ function Conn({
           </span>
           <span className="why">
             {!found.ok && found.error}
-            {found.ok && disagrees &&
-              `模型列表记的是 ${KIND_LABEL[p.kind] || p.kind}，但它答的是 ${KIND_LABEL[found.kind ?? ""] || found.kind}。聊天报错的话，多半要连地址一起换 —— 两种协议的聊天入口通常不在同一个路径下。`}
-            {found.ok && !disagrees && found.ambiguous &&
-              "两种协议的模型列表它都答得上来，光看列表分不出来。现在这条能聊就是对的。"}
-            {found.ok && !disagrees && !found.ambiguous && "key 有效，协议也对得上。"}
+            {found.ok && found.kind !== entry.kind &&
+              `记的是 ${KIND_LABEL[entry.kind] || entry.kind}，但它答的是 ${KIND_LABEL[found.kind ?? ""] || found.kind}。`}
+            {found.ok && found.kind === entry.kind && "key 有效，协议也对得上。"}
             {found.ok && found.noProxy && " 走代理连不上、直连可以。"}
           </span>
         </div>
