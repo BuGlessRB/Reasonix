@@ -7,6 +7,10 @@ export interface MenuItem {
   right?: string;
   plain?: boolean;
   divide?: boolean;
+  // A group caption. It labels the rows under it and cannot be chosen, so it
+  // is not a button — a menu whose headings take focus is a menu you arrow
+  // through twice.
+  header?: boolean;
 }
 
 interface Props {
@@ -78,6 +82,12 @@ export function Picker({ label, items, current, onPick, place, className, title 
         {items.map((it) => (
           <Fragment key={it.value}>
             {it.divide && <div className="div" />}
+            {it.header ? (
+              <div className="mi head">
+                <span className="lb">{it.label}</span>
+                {it.right && <span className="rt">{it.right}</span>}
+              </div>
+            ) : (
             <button
               className={it.plain ? "mi plain" : "mi"}
               role="menuitem"
@@ -94,6 +104,7 @@ export function Picker({ label, items, current, onPick, place, className, title 
               </span>
               {it.right && <span className="rt">{it.right}</span>}
             </button>
+            )}
           </Fragment>
         ))}
       </div>

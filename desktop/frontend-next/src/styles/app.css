@@ -66,7 +66,9 @@
   }
   .menu[hidden] { display: none }
   .projmenu { top: calc(100% + 7px); left: 0; transform-origin: top left }
-  .modemenu { bottom: calc(100% + 9px); left: 0; transform-origin: bottom left }
+  .modemenu { bottom: calc(100% + 9px); left: 0; transform-origin: bottom left; width: max-content; max-width: 420px }
+  .modemenu .mi .lb, .modemenu .mi.head .lb { white-space: nowrap }
+  .modemenu .mi .rt { margin-left: auto; padding-left: 14px; white-space: nowrap }
 
   .mi {
     display: flex; gap: 9px; width: 100%; padding: 7px 9px; text-align: left;
@@ -1371,6 +1373,12 @@
     font: 400 11px var(--ui) }
   .vway .why { font: 400 10.5px var(--ui); color: var(--ghost); min-width: 0 }
   /* 一扇门比另一扇多出来的能力，写在门上 —— 换过去才发现少了东西太晚了。 */
+  .menu .mi.head {
+    display: flex; align-items: baseline; gap: 8px; padding: 7px 10px 4px; cursor: default;
+  }
+  .menu .mi.head .lb { font: 500 10.5px var(--ui); letter-spacing: .06em; color: var(--faint) }
+  .menu .mi.head .rt { margin-left: auto; font: 400 10px var(--mono); color: var(--ghost) }
+
   .vway .seg button .perk { margin-left: 6px; padding: 0 5px; border-radius: var(--r-pill);
     background: var(--net-wash); color: var(--net); font: 400 9.5px var(--ui) }
 

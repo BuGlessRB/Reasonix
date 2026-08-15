@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentPort, ApprovalMode, ModelEntry, SessionStatus, SlashEntry } from "../port/port";
 import { Picker } from "./Menu";
+import { modelMenu } from "./modelmenu";
 import { SlashMenu, slashMatches, slashQuery } from "./SlashMenu";
 
 const APPROVALS: [ApprovalMode, string, string][] = [
@@ -128,7 +129,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           className="mode"
           place="bottom"
           current={status?.modelRef}
-          items={models.map((m) => ({ value: m.ref, label: m.model, desc: m.provider }))}
+          items={modelMenu(models)}
           onPick={(ref) => change(port.setModel(ref))}
           label={
             <>
