@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ProviderCheck, ProviderEntry, ProviderProbe } from "../port/port";
-import { KIND_LABEL, hostOf, vendorLabel } from "./vendors";
+import { KIND_LABEL, accountKey, disambiguate, hostOf, vendorLabel } from "./vendors";
 
 // A connection is an account, not a config row. One endpoint answering two
 // protocols is two rows in the file and one service to the person paying for it,
@@ -36,6 +36,8 @@ interface Account {
   key: string;
   label: string;
   host: string;
+  // The config entry's own name, shown only when one host holds two accounts.
+  hint: string;
   byKind: Record<string, ProviderEntry>;
   kinds: string[];
 }
@@ -44,10 +46,11 @@ function groupAccounts(list: ProviderEntry[]): Account[] {
   const out = new Map<string, Account>();
   for (const p of list) {
     const host = hostOf(p.baseUrl);
-    let a = out.get(host);
+    const key = accountKey(host, p.keyEnv);
+    let a = out.get(key);
     if (!a) {
-      a = { key: host, label: vendorLabel(host), host, byKind: {}, kinds: [] };
-      out.set(host, a);
+      a = { key, label: vendorLabel(host), host, hint: p.name, byKind: {}, kinds: [] };
+      out.set(key, a);
     }
     const kind = p.kind || "openai";
     if (!a.byKind[kind]) {
@@ -55,7 +58,7 @@ function groupAccounts(list: ProviderEntry[]): Account[] {
       a.kinds.push(kind);
     }
   }
-  return [...out.values()];
+  return disambiguate([...out.values()]);
 }
 
 interface ProvidersProps {

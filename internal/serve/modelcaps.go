@@ -25,6 +25,7 @@ func describeModel(e *config.ProviderEntry, into *modelEntry) {
 		return
 	}
 	into.Vendor = vendorOf(e.BaseURL)
+	into.KeyEnv = e.APIKeyEnv
 	into.Vision = config.EffectiveVision(e)
 	if capability := config.EffortCapabilityForEntry(e); capability.Supported {
 		into.Efforts = capability.Levels
@@ -58,6 +59,7 @@ func capabilitiesFor(cfg *config.Config, p *config.ProviderEntry, model string, 
 	resolved, ok := cfg.ResolveModel(p.Name + "/" + model)
 	if !ok || resolved.Name != p.Name || resolved.Model != model {
 		into.Vendor = vendorOf(p.BaseURL)
+		into.KeyEnv = p.APIKeyEnv
 		return
 	}
 	describeModel(resolved, into)

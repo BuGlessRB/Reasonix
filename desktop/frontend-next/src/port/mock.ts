@@ -73,22 +73,34 @@ export class MockPort implements AgentPort {
     return [
       {
         ref: "deepseek/deepseek-v4-pro", provider: "deepseek", model: "deepseek-v4-pro",
-        kind: "openai", vendor: "api.deepseek.com", active: true, efforts, effort: "high",
+        kind: "openai", vendor: "api.deepseek.com", keyEnv: "DEEPSEEK_API_KEY", active: true, efforts, effort: "high",
         contextWindow: 131072, price: { input: 2, output: 8, currency: "CNY" },
       },
       {
         ref: "deepseek-anthropic/deepseek-v4-pro", provider: "deepseek-anthropic",
-        model: "deepseek-v4-pro", kind: "anthropic", vendor: "api.deepseek.com",
+        model: "deepseek-v4-pro", kind: "anthropic", vendor: "api.deepseek.com", keyEnv: "DEEPSEEK_API_KEY",
         efforts, effort: "high", contextWindow: 131072,
       },
       {
         ref: "deepseek/deepseek-v4-flash", provider: "deepseek", model: "deepseek-v4-flash",
-        kind: "openai", vendor: "api.deepseek.com", efforts, effort: "high",
+        kind: "openai", vendor: "api.deepseek.com", keyEnv: "DEEPSEEK_API_KEY", efforts, effort: "high",
         contextWindow: 131072, price: { input: 0.5, output: 2, currency: "CNY" },
       },
       {
         ref: "kimi/kimi-k2-vision", provider: "kimi", model: "kimi-k2-vision",
-        kind: "openai", vendor: "api.moonshot.cn", vision: true, contextWindow: 262144,
+        kind: "openai", vendor: "api.moonshot.cn", keyEnv: "KIMI_API_KEY", vision: true, contextWindow: 262144,
+      },
+      {
+        ref: "myrelay/gpt-4o", provider: "myrelay", model: "gpt-4o", kind: "openai",
+        vendor: "relay.example.com", keyEnv: "MYRELAY_API_KEY", vision: true, contextWindow: 131072,
+      },
+      {
+        ref: "myrelay/claude-sonnet-4", provider: "myrelay", model: "claude-sonnet-4", kind: "openai",
+        vendor: "relay.example.com", keyEnv: "MYRELAY_API_KEY", contextWindow: 200000,
+      },
+      {
+        ref: "myrelay-work/gpt-4o", provider: "myrelay-work", model: "gpt-4o", kind: "openai",
+        vendor: "relay.example.com", keyEnv: "MYRELAY_WORK_API_KEY", contextWindow: 131072,
       },
     ];
   }
@@ -364,23 +376,29 @@ export class MockPort implements AgentPort {
     return { current: "dev", pinned: "", stalePin: false, latest: "", newer: false, versions: [] };
   }
 
-  // One vendor reached under two protocols plus a source whose key expired —
-  // the two states the connection rows exist to tell apart.
+  // Three shapes the account grouping has to keep apart: one vendor reached
+  // under two protocols, a custom relay serving other vendors' models, and two
+  // tenants of that same relay holding different keys.
   private sources: ProviderEntry[] = [
     {
       name: "deepseek", kind: "openai", baseUrl: "https://api.deepseek.com",
       models: ["deepseek-v4-pro", "deepseek-v4-flash"], default: "deepseek-v4-pro",
-      hasKey: true, inUse: true, preset: false,
+      hasKey: true, inUse: true, preset: false, keyEnv: "DEEPSEEK_API_KEY",
     },
     {
       name: "deepseek-anthropic", kind: "anthropic", baseUrl: "https://api.deepseek.com/anthropic",
       models: ["deepseek-v4-pro"], default: "deepseek-v4-pro",
-      hasKey: true, inUse: false, preset: false,
+      hasKey: true, inUse: false, preset: false, keyEnv: "DEEPSEEK_API_KEY",
     },
     {
-      name: "mimo", kind: "openai", baseUrl: "https://api.xiaomimimo.com/v1",
-      models: ["mimo-v2.5"], default: "mimo-v2.5",
-      hasKey: true, inUse: false, preset: false,
+      name: "myrelay", kind: "openai", baseUrl: "https://relay.example.com/v1",
+      models: ["gpt-4o", "claude-sonnet-4"], default: "gpt-4o",
+      hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_API_KEY",
+    },
+    {
+      name: "myrelay-work", kind: "openai", baseUrl: "https://relay.example.com/v1",
+      models: ["gpt-4o"], default: "gpt-4o",
+      hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_WORK_API_KEY",
     },
   ];
 

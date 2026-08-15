@@ -53,6 +53,9 @@ type providerView struct {
 	Models  []string `json:"models"`
 	Default string   `json:"default"`
 	HasKey  bool     `json:"hasKey"`
+	// KeyEnv names the credential slot. Two entries at one host holding
+	// different keys are two accounts and must not be shown as one.
+	KeyEnv string `json:"keyEnv,omitempty"`
 	// InUse marks the provider the running conversation is on. Removing it
 	// would leave the session pointing at a model that no longer exists.
 	InUse bool `json:"inUse"`
@@ -78,6 +81,7 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 			Models:  nonNilStrings(p.ChatModelList()),
 			Default: p.DefaultModel(),
 			HasKey:  p.APIKey() != "",
+			KeyEnv:  p.APIKeyEnv,
 			InUse:   p.Name == current,
 			Preset:  strings.TrimSpace(p.PresetID) != "",
 		})

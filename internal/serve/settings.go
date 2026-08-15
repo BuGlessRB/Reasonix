@@ -118,6 +118,9 @@ type modelEntry struct {
 	// Vendor is the endpoint host. Entries sharing it are one service reached
 	// under different protocols, which is what lets a picker fold the routes.
 	Vendor string `json:"vendor,omitempty"`
+	// KeyEnv is the credential this route spends. It pairs with Vendor to
+	// identify the account: one host can hold more than one.
+	KeyEnv string `json:"keyEnv,omitempty"`
 	// The capability face; see describeModel. Omitted fields mean "nothing
 	// declares this", never "no".
 	Vision        bool        `json:"vision,omitempty"`

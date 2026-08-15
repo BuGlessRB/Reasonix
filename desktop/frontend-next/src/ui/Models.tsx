@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ModelEntry } from "../port/port";
-import { vendorLabel } from "./vendors";
+import { accountKey, disambiguate, vendorLabel } from "./vendors";
 
 // Models only. Which protocol reaches them is the connection's business, chosen
 // once above — an earlier version put a route selector on every row, so picking
@@ -12,6 +12,8 @@ export interface Vendor {
   key: string;
   label: string;
   host: string;
+  // The config entry's own name, shown only when one host holds two accounts.
+  hint: string;
   // Models this account offers under each protocol it answers on.
   byKind: Record<string, ModelEntry[]>;
   kinds: string[];
@@ -21,10 +23,11 @@ export function groupVendors(models: ModelEntry[]): Vendor[] {
   const out = new Map<string, Vendor>();
   for (const m of models) {
     const host = m.vendor || m.provider || "";
-    let v = out.get(host);
+    const key = accountKey(host, m.keyEnv);
+    let v = out.get(key);
     if (!v) {
-      v = { key: host, label: vendorLabel(host), host, byKind: {}, kinds: [] };
-      out.set(host, v);
+      v = { key, label: vendorLabel(host), host, hint: m.provider, byKind: {}, kinds: [] };
+      out.set(key, v);
     }
     const kind = m.kind || "openai";
     if (!v.byKind[kind]) {
@@ -33,7 +36,7 @@ export function groupVendors(models: ModelEntry[]): Vendor[] {
     }
     v.byKind[kind].push(m);
   }
-  return [...out.values()];
+  return disambiguate([...out.values()]);
 }
 
 // Which protocol this account is on right now: the one holding the running

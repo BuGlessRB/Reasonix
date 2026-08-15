@@ -11,6 +11,14 @@ export const KIND_LABEL: Record<string, string> = {
   extension: "扩展",
 };
 
+// The account a route belongs to. Host alone is not enough: a relay reached
+// with two different keys is two accounts — personal beside work, or two
+// tenants of the same gateway — and merging them would show one balance and one
+// key state for both.
+export function accountKey(host: string, keyEnv?: string): string {
+  return `${host}\u0000${(keyEnv ?? "").trim()}`;
+}
+
 export function hostOf(baseUrl: string): string {
   try {
     return new URL(baseUrl).hostname.toLowerCase();
@@ -26,4 +34,15 @@ export function vendorLabel(host: string): string {
   const bare = host.replace(/^(www|api|open|gateway)\./, "");
   const first = bare.split(".")[0];
   return first || host;
+}
+
+// Two accounts on one host are both called by that host's name, which tells the
+// user nothing about which is which. Only then does the config entry's own name
+// earn a place on screen.
+export function disambiguate<T extends { host: string; label: string; hint: string }>(items: T[]): T[] {
+  const seen = new Map<string, number>();
+  for (const it of items) seen.set(it.host, (seen.get(it.host) ?? 0) + 1);
+  return items.map((it) =>
+    (seen.get(it.host) ?? 0) > 1 && it.hint ? { ...it, label: `${it.label} · ${it.hint}` } : it,
+  );
 }

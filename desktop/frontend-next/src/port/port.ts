@@ -201,6 +201,8 @@ export interface ModelEntry {
   effort?: string;
   contextWindow?: number;
   price?: ModelPrice;
+  // The credential this route spends; pairs with vendor to name the account.
+  keyEnv?: string;
 }
 
 export interface AccountUser {
@@ -265,6 +267,7 @@ export interface ProviderEntry {
   models: string[];
   default: string;
   hasKey: boolean;
+  keyEnv?: string;
   // Removing the one in use would leave the session on a model that no longer
   // resolves, so the row offers no delete.
   inUse: boolean;

@@ -92,6 +92,7 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
   const [skills, setSkills] = useState<SkillEntry[]>([]);
   const [implicit, setImplicit] = useState(true);
   const [busy, setBusy] = useState("");
+  const [failed, setFailed] = useState("");
   const [adding, setAdding] = useState(false);
   const [hookCount, setHookCount] = useState(0);
   const [netMode, setNetMode] = useState("");
@@ -149,11 +150,17 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
     reloadExt();
   }, [loadModels, loadRoles, reloadExt]);
 
+  // A refused switch has to say so. The kernel turns one down while a turn or a
+  // background job is running, and swallowing that leaves the click looking like
+  // the row simply does not work.
   const run = async (what: string, fn: () => Promise<void>) => {
     setBusy(what);
+    setFailed("");
     try {
       await fn();
       onChanged();
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy("");
     }
@@ -264,6 +271,14 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, at:
 
           {at === "model" && (
             <>
+              {/* Every switch on this page goes through run(), so one place to
+                  say why one was refused covers all of them. */}
+              {failed && (
+                <div className="find" data-lvl="warn" role="alert">
+                  <span className="t">这一步没做成</span>
+                  <span className="why">{failed}</span>
+                </div>
+              )}
               <Group title="分工" now={roles ? `${assigned} 个已指派` : undefined}
                 hint="每个位置默认跟着主模型走，只有你明确指派过的才会分出去。换指派跟换主模型一样要重建运行时，有活儿在跑的时候换不了。">
                 <Roles models={models} roles={roles} main={status?.modelRef} busy={busy}
