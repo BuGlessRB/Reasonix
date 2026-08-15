@@ -23,6 +23,13 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/event"
 	"reasonix/internal/serve"
+
+	// Kinds register from init, so a binary builds only what it links. Without
+	// these the shell answers every Anthropic model with "unknown kind" at
+	// switch time; openai alone arrived, pulled in transitively by config.
+	_ "reasonix/internal/provider/anthropic"
+	_ "reasonix/internal/provider/openai"
+	_ "reasonix/internal/provider/responses"
 )
 
 // Everything the SPA is allowed to route to the kernel. Anything else falls
