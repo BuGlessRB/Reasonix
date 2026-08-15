@@ -622,8 +622,9 @@ type UIPanelPayload struct {
 
 // UIViewPayload is a generated Extension Protocol v2 wire DTO.
 type UIViewPayload struct {
-	Slot string   `json:"slot,omitempty"`
-	Body []UINode `json:"body"`
+	Slot   string   `json:"slot,omitempty"`
+	Anchor string   `json:"anchor,omitempty"`
+	Body   []UINode `json:"body"`
 }
 
 // UINode is a generated Extension Protocol v2 wire DTO.

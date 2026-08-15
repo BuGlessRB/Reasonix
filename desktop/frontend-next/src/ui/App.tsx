@@ -349,21 +349,37 @@ export function App({ port }: { port: AgentPort }) {
   };
 
   if (setup === undefined || welcomed === undefined) return <div className="app" data-run="idle" />;
-  // The sequence plays before anything else, and runs short when there is no
-  // key to ask for — an introduction with nothing after it should not linger.
-  if (!welcomed) {
+  // The sequence and the first connection are one scene, not two screens: the
+  // card rises inside it after the collapse, with the introduction still above.
+  // A machine that has seen the sequence but still owes a key gets the card
+  // over a still scene rather than a replay.
+  if (!welcomed || setup?.required) {
+    const card = setup?.required ? (
+      <Onboarding
+        port={port}
+        setup={setup}
+        onDone={() => {
+          setSetup(null);
+          if (!welcomed) {
+            setWelcomed(true);
+            void port.markWelcomed().catch(() => {});
+          }
+          refreshStatus();
+        }}
+      />
+    ) : undefined;
     return (
       <Welcome
         variant={setup?.required ? "full" : "short"}
+        replay={!welcomed}
         onDone={() => {
           setWelcomed(true);
           void port.markWelcomed().catch(() => {});
         }}
-      />
+      >
+        {card}
+      </Welcome>
     );
-  }
-  if (setup?.required) {
-    return <Onboarding port={port} setup={setup} onDone={() => { setSetup(null); refreshStatus(); }} />;
   }
 
   // A turn blocked on you is not a turn in motion: the glow says "it is moving"

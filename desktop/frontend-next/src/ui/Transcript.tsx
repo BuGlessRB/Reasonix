@@ -1,5 +1,6 @@
 import { memo, useEffect, useState, type RefObject } from "react";
 import type { Item, Waiting } from "../state/session";
+import type { ExtensionSurface } from "../port/wire";
 import type { ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope } from "../port/port";
 import { RMark } from "./RMark";
 import { ToolCard } from "./cards/ToolCard";
@@ -26,6 +27,10 @@ interface Props {
   onSuggest: (text: string) => void;
   onForget: (itemId: string, name: string) => void;
   onExtInvoke: (name: string) => void;
+  // Views published against a tool call, keyed by anchor. A card looks itself
+  // up here rather than being handed one, so an arriving takeover repaints the
+  // one card it names and nothing else.
+  takeovers?: Record<string, ExtensionSurface>;
   onExtSubmit: (pluginId: string, surfaceId: string, values: Record<string, unknown>) => void;
   // The checkpoint each user card can return to, keyed by item id. Absent for a
   // card whose turn could not be matched — see state/checkpoints.
@@ -35,7 +40,7 @@ interface Props {
   onUndoRewind: (transactionId: string) => Promise<void>;
 }
 
-export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove, onAnswer, onSuggest, onForget, onExtInvoke, onExtSubmit, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind }: Props) {
+export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove, onAnswer, onSuggest, onForget, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind }: Props) {
   // Stick to the bottom only while the reader is already there; scrolling up
   // must not be yanked back by incoming frames.
   const [pinned, setPinned] = useState(true);
@@ -71,6 +76,7 @@ export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove
             onAnswer={onAnswer}
             onForget={onForget}
             onExtInvoke={onExtInvoke}
+            takeovers={takeovers}
             onExtSubmit={onExtSubmit}
             cp={checkpoints.get(it.id)}
             onPrepareRewind={onPrepareRewind}
@@ -93,6 +99,7 @@ const Row = memo(function Row({
   onForget,
   onAnswer,
   onExtInvoke,
+  takeovers,
   onExtSubmit,
   cp,
   onPrepareRewind,
@@ -104,6 +111,7 @@ const Row = memo(function Row({
   onForget: Props["onForget"];
   onAnswer: Props["onAnswer"];
   onExtInvoke: Props["onExtInvoke"];
+  takeovers: Record<string, ExtensionSurface>;
   onExtSubmit: Props["onExtSubmit"];
   cp?: Checkpoint;
   onPrepareRewind: Props["onPrepareRewind"];
@@ -124,7 +132,13 @@ const Row = memo(function Row({
       // needs. Drawing the tool call too put two copies of the same question on
       // screen, each answerable.
       return it.tool.name === "ask" ? null : (
-        <ToolCard tool={it.tool} running={it.running} children={it.children} />
+        <ToolCard
+            tool={it.tool}
+            running={it.running}
+            children={it.children}
+            takeover={it.tool.id ? takeovers[`tool:${it.tool.id}`] : undefined}
+            onExtInvoke={onExtInvoke}
+          />
       );
     case "reads":
       return <ReadsCard tools={it.tools} />;

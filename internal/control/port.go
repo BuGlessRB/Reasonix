@@ -183,6 +183,8 @@ type Capabilities interface {
 	NetworkSettings() NetworkSettings
 	SaveNetworkSettings(in NetworkSettings, password string, clearPassword bool) error
 	DiagnoseNetwork(ctx context.Context) []NetworkProbe
+	ShellSettings() ShellSettings
+	SaveShellSettings(prefer, path string) error
 	CustomCommand(input string) (sent string, found bool)
 	MCPPrompt(ctx context.Context, input string) (sent string, found bool, err error)
 	RunSkill(input string) (sent string, found bool)

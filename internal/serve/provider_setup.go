@@ -31,6 +31,20 @@ type providerSetupState struct {
 	Error              string `json:"error,omitempty"`
 }
 
+// EnableProviderSetup enables the setup surface for a host that serves this API
+// in-process to its own window. There is no listener to vet — no address exists
+// for another machine to reach — so the loopback rule below has nothing to
+// check. A host that does listen must use EnableProviderSetupForListener.
+func (s *Server) EnableProviderSetup() {
+	if s == nil {
+		return
+	}
+	s.providerSetupMu.Lock()
+	s.providerSetup.Enabled = true
+	s.providerSetupMu.Unlock()
+	s.refreshProviderSetup(currentModelRef(s.ctl()))
+}
+
 // EnableProviderSetupForListener enables the credential-writing setup surface
 // only for loopback listeners. Remote Desktop reaches it through an SSH tunnel;
 // a directly exposed HTTP listener must never accept provider secrets.

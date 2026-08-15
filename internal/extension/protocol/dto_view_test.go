@@ -110,3 +110,27 @@ func TestViewBoundsAreEnforced(t *testing.T) {
 		t.Error("a text node past the length limit was accepted")
 	}
 }
+
+// The anchor allow-list is the whole safety property of takeover: only a tool
+// call can be pointed at, so an approval prompt, a permission decision or an
+// error state is not addressable no matter what an extension sends.
+func TestOnlyToolCallsCanBeAnchored(t *testing.T) {
+	if _, err := decodeView(t, `{"anchor":"tool:call_42","body":[{"kind":"divider"}]}`); err != nil {
+		t.Fatalf("a tool anchor was rejected: %v", err)
+	}
+	for _, anchor := range []string{"approval:1", "permission:bash", "message:7", "tool:", "call_42"} {
+		body := `{"anchor":"` + anchor + `","body":[{"kind":"divider"}]}`
+		if _, err := decodeView(t, body); err == nil {
+			t.Errorf("anchor %q was accepted; only tool calls may be replaced", anchor)
+		}
+	}
+}
+
+// Standing somewhere and standing in for something are different jobs. A view
+// that claimed both would have no single answer to "where does this go".
+func TestAViewIsEitherPlacedOrAnchored(t *testing.T) {
+	body := `{"slot":"composer-trailing","anchor":"tool:call_42","body":[{"kind":"divider"}]}`
+	if _, err := decodeView(t, body); err == nil {
+		t.Fatal("a view claimed both a slot and an anchor")
+	}
+}

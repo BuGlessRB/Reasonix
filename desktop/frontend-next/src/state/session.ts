@@ -69,6 +69,10 @@ export interface SessionState {
   // it is drawn is decided at render time rather than here. That is what lets
   // the user move one without any of this having to be re-sorted.
   views: ExtensionSurface[];
+  // Views that replace a card the host would have drawn, keyed by anchor. They
+  // are kept apart from `views` because they have no place of their own: they
+  // appear only where the thing they stand in for appears.
+  takeovers: Record<string, ExtensionSurface>;
 }
 
 export const initialState: SessionState = {
@@ -83,6 +87,7 @@ export const initialState: SessionState = {
   steerQueue: [],
   panels: [],
   views: [],
+  takeovers: {},
 };
 
 let seq = 0;
@@ -370,6 +375,9 @@ export function reduce(
         const panels = s.panels.slice();
         panels[at] = ext;
         return { ...s, panels };
+      }
+      if (ext.kind === "view" && ext.view?.anchor) {
+        return { ...s, takeovers: { ...s.takeovers, [ext.view.anchor]: ext } };
       }
       if (ext.kind === "view") {
         const at = s.views.findIndex((v) => v.pluginId === ext.pluginId && v.surfaceId === ext.surfaceId);

@@ -1,0 +1,108 @@
+package control
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"reasonix/internal/config"
+)
+
+const shellSeedConfig = `config_version = 6
+default_model = "deepseek-flash/deepseek-v4-flash"
+
+[[providers]]
+name        = "deepseek-flash"
+kind        = "anthropic"
+base_url    = "https://api.deepseek.com/anthropic"
+models      = ["deepseek-v4-flash"]
+default     = "deepseek-v4-flash"
+api_key_env = "DEEPSEEK_API_KEY"
+`
+
+func seedShellConfig(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	path := filepath.Join(home, "config.toml")
+	if err := os.WriteFile(path, []byte(shellSeedConfig), 0o600); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+	return path
+}
+
+// The interpreter has to survive a relaunch — boot reads it out of the config
+// file, so a choice that only reached the running process is a setting that
+// silently reverts. The write rewrites the whole file, hence the provider check.
+func TestSaveShellSettingsPersists(t *testing.T) {
+	path := seedShellConfig(t)
+	if err := (&Controller{}).SaveShellSettings("powershell", ""); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	saved := config.LoadForEdit(path)
+	if saved.Tools.Shell.Prefer != "powershell" {
+		t.Fatalf("prefer = %q, want powershell", saved.Tools.Shell.Prefer)
+	}
+	if _, ok := saved.Provider("deepseek-flash"); !ok {
+		written, _ := os.ReadFile(path)
+		t.Fatalf("provider block lost by the shell write; file now:\n%s", written)
+	}
+	if saved.DefaultModel != "deepseek-flash/deepseek-v4-flash" {
+		t.Fatalf("default_model = %q, want it preserved", saved.DefaultModel)
+	}
+}
+
+// A path that cannot run is refused where it was typed. Writing it would move
+// the failure to every later command, with nothing on screen connecting the two.
+func TestSaveShellSettingsRefusesUnusablePath(t *testing.T) {
+	path := seedShellConfig(t)
+	missing := filepath.Join(t.TempDir(), "no-such-bash")
+	if err := (&Controller{}).SaveShellSettings("bash", missing); err == nil {
+		t.Fatal("saving a missing executable succeeded")
+	}
+	if saved := config.LoadForEdit(path); saved.Tools.Shell.Path != "" {
+		t.Fatalf("refused path was written anyway: %q", saved.Tools.Shell.Path)
+	}
+}
+
+// Auto is a real answer, not an empty one: it clears a pinned path so the next
+// launch goes back to detection instead of holding a shell the user unpicked.
+func TestSaveShellSettingsAutoClearsPinnedPath(t *testing.T) {
+	path := seedShellConfig(t)
+	c := &Controller{}
+	if err := c.SaveShellSettings("bash", "/bin/sh"); err != nil {
+		t.Fatalf("pin: %v", err)
+	}
+	if err := c.SaveShellSettings("auto", ""); err != nil {
+		t.Fatalf("auto: %v", err)
+	}
+	saved := config.LoadForEdit(path)
+	if saved.Tools.Shell.Prefer != "auto" || saved.Tools.Shell.Path != "" {
+		t.Fatalf("shell = %+v, want auto with no path", saved.Tools.Shell)
+	}
+}
+
+// What the pane offers has to be what the machine has: every option carries the
+// path it was probed at, and the effective row has to be one of them rather than
+// a fourth answer nobody can select.
+func TestShellSettingsOffersOnlyInstalledInterpreters(t *testing.T) {
+	seedShellConfig(t)
+	s := (&Controller{}).ShellSettings()
+	if len(s.Options) == 0 {
+		t.Skip("no interpreter detected on this host")
+	}
+	for _, o := range s.Options {
+		if o.Path == "" || o.Name == "" {
+			t.Fatalf("option without identity: %+v", o)
+		}
+	}
+	if s.Auto.Path != s.Options[0].Path {
+		t.Fatalf("auto = %q, want the first offered %q", s.Auto.Path, s.Options[0].Path)
+	}
+	if s.Prefer != "auto" {
+		t.Fatalf("prefer = %q, want auto from a config that sets no shell", s.Prefer)
+	}
+	if s.Effective.Path != s.Auto.Path {
+		t.Fatalf("effective = %q, want auto's %q", s.Effective.Path, s.Auto.Path)
+	}
+}

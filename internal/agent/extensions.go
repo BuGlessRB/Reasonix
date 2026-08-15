@@ -245,7 +245,7 @@ func (a *Agent) interceptToolBefore(ctx context.Context, plan *toolCallPlan) (to
 	if d == nil {
 		return toolOutcome{}, false
 	}
-	payload := dispatch.ToolBeforePayload{Name: plan.call.Name, Arguments: plan.call.Arguments}
+	payload := dispatch.ToolBeforePayload{Name: plan.call.Name, Arguments: plan.call.Arguments, CallID: plan.call.ID}
 	result, err := d.Intercept(ctx, extension.PointToolBefore, &payload)
 	if err != nil {
 		msg := fmt.Sprintf("error: %v", err)
@@ -368,6 +368,7 @@ func (a *Agent) interceptToolAfter(ctx context.Context, call provider.ToolCall, 
 		Arguments: call.Arguments,
 		Result:    result,
 		IsError:   err != nil,
+		CallID:    call.ID,
 	}
 	res, ierr := d.Intercept(ctx, extension.PointToolAfter, &payload)
 	if ierr != nil {

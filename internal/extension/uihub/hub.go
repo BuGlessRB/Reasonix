@@ -548,7 +548,7 @@ func decodePublishEvent(pluginID string, p protocol.UIPublishParams) (*event.Ext
 		}
 		out.Panel = panel
 	case protocol.UIViewPayload:
-		out.View = &event.ExtensionViewSurface{Slot: payload.Slot, Body: redactViewNodes(payload.Body)}
+		out.View = &event.ExtensionViewSurface{Slot: payload.Slot, Anchor: payload.Anchor, Body: redactViewNodes(payload.Body)}
 	}
 	return out, nil
 }

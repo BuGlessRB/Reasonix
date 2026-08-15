@@ -4,6 +4,13 @@ interface Props {
   // full plays the whole sequence; short stops after the introduction, for a
   // machine that already has a key and nothing to ask for.
   variant: "full" | "short";
+  // The connection card, when there is one. It rises inside this scene after
+  // the collapse rather than replacing it: the introduction has to still be on
+  // screen when the first question is asked, or the two read as unrelated.
+  children?: React.ReactNode;
+  // Whether the sequence has already played on this machine. A second visit
+  // with a key still to enter shows the card immediately, over a still scene.
+  replay: boolean;
   onDone: () => void;
 }
 
@@ -20,18 +27,23 @@ const SHORT_MS = 6200;
 // The ground is dark whatever the app theme is. This is a ceremony rather than
 // a screen of the app, the way an OS out-of-box sequence does not follow the
 // user's colour scheme.
-export function Welcome({ variant, onDone }: Props) {
+export function Welcome({ variant, children, replay, onDone }: Props) {
   const [leaving, setLeaving] = useState(false);
   const done = useRef(false);
+  const holds = children != null;
 
   // One exit for every route out: the timer, a key, a click, or reduced motion.
   useEffect(() => {
+    // With a card to show, the sequence ending is not the end of anything: the
+    // scene stays and the card takes over. Only a sequence with nothing behind
+    // it dismisses itself.
     const finish = () => {
-      if (done.current) return;
+      if (done.current || holds) return;
       done.current = true;
       setLeaving(true);
-      window.setTimeout(onDone, variant === "full" ? 0 : 380);
+      window.setTimeout(onDone, 380);
     };
+    if (!replay) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const at = reduced ? 0 : variant === "full" ? COLLAPSE_MS : SHORT_MS;
     const timer = window.setTimeout(finish, at);
@@ -43,10 +55,15 @@ export function Welcome({ variant, onDone }: Props) {
       window.removeEventListener("keydown", skip);
       window.removeEventListener("pointerdown", skip);
     };
-  }, [variant, onDone]);
+  }, [variant, onDone, holds, replay]);
 
   return (
-    <div className="oobe" data-play={leaving ? undefined : ""} data-leaving={leaving ? "" : undefined}>
+    <div
+      className="oobe"
+      data-play={replay && !leaving ? "" : undefined}
+      data-held={holds ? "" : undefined}
+      data-leaving={leaving ? "" : undefined}
+    >
       <div className="oobe-glow g1" />
       <div className="oobe-glow g2" />
       <div className="oobe-glow g3" />
@@ -77,8 +94,14 @@ export function Welcome({ variant, onDone }: Props) {
         </div>
       </div>
 
-      <div className="oobe-prog"><i /></div>
-      <span className="oobe-skip">按任意键跳过</span>
+      {children}
+
+      {replay && !holds && (
+        <>
+          <div className="oobe-prog"><i /></div>
+          <span className="oobe-skip">按任意键跳过</span>
+        </>
+      )}
     </div>
   );
 }

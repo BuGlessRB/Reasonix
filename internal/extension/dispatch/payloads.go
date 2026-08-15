@@ -137,6 +137,10 @@ func (p *ProviderResponsePayload) Validate() error {
 type ToolBeforePayload struct {
 	Name      string `json:"name,omitempty"`
 	Arguments string `json:"arguments,omitempty"`
+	// CallID is this invocation's identity, the same one the transcript event
+	// carries: without it an extension cannot pair before with after, nor name
+	// the card it wants to redraw.
+	CallID string `json:"callId,omitempty"`
 }
 
 // Point returns the intercept point this payload serves.
@@ -157,6 +161,7 @@ type ToolAfterPayload struct {
 	Arguments string `json:"arguments,omitempty"`
 	Result    string `json:"result,omitempty"`
 	IsError   bool   `json:"isError,omitempty"`
+	CallID    string `json:"callId,omitempty"`
 }
 
 // Point returns the intercept point this payload serves.

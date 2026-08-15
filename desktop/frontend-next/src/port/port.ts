@@ -517,6 +517,12 @@ export interface AgentPort {
   // password empty keeps whatever is stored; clearPassword removes it.
   saveNetwork(s: NetworkSettings, password: string, clearPassword: boolean): Promise<NetworkSettings>;
   diagnoseNetwork(): Promise<NetworkProbe[]>;
+  shell(): Promise<ShellSettings>;
+  // Persisted, then the runtime is rebuilt: boot resolves the interpreter while
+  // assembling and hands it to the shell tool, so a choice cannot reach a
+  // runtime that is already up. Refused mid-turn, like every other rebuild.
+  // An empty path leaves the executable to detection.
+  saveShell(prefer: string, path: string): Promise<ShellSettings>;
   mcp(): Promise<McpEntry[]>;
   // Retries a failed or disconnected server and answers with its new state, so
   // the caller never has to race a follow-up GET against the connect.
@@ -712,6 +718,29 @@ export interface NetworkSettings {
   effective: string;
   direct?: string[];
   endpoint?: string;
+}
+
+// One interpreter this machine really has. path is where it was probed, so a
+// host carrying two bashes offers two rows instead of one ambiguous name.
+export interface ShellOption {
+  name: string;
+  path: string;
+  version?: string;
+  supportsAndAnd: boolean;
+  // What saveShell takes to select this one.
+  prefer: string;
+}
+
+// The shell tool's interpreter as the editor needs it. options is what was
+// found on this machine — never a fixed list, because offering a shell that is
+// not installed is a switch that breaks every command it accepts.
+export interface ShellSettings {
+  prefer: string;
+  path?: string;
+  effective: ShellOption;
+  auto: ShellOption;
+  options?: ShellOption[];
+  platform: string;
 }
 
 // One diagnosed step. advice is the next thing to try, present only when the

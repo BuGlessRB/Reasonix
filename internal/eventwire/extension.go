@@ -27,8 +27,9 @@ type ExtensionSurface struct {
 // ExtensionView is the JSON form of an event.ExtensionViewSurface: a tree the
 // frontend renders with its own components.
 type ExtensionView struct {
-	Slot string              `json:"slot,omitempty"`
-	Body []ExtensionViewNode `json:"body"`
+	Slot   string              `json:"slot,omitempty"`
+	Anchor string              `json:"anchor,omitempty"`
+	Body   []ExtensionViewNode `json:"body"`
 }
 
 // ExtensionViewNode is one primitive of a view.
@@ -177,7 +178,7 @@ func ToWireExtensionSurface(p *event.ExtensionSurfacePayload) *ExtensionSurface 
 		out.Panel = panel
 	}
 	if v := p.View; v != nil {
-		out.View = &ExtensionView{Slot: v.Slot, Body: viewNodes(v.Body)}
+		out.View = &ExtensionView{Slot: v.Slot, Anchor: v.Anchor, Body: viewNodes(v.Body)}
 	}
 	return out
 }

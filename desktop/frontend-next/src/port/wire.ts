@@ -242,6 +242,11 @@ export interface ExtensionView {
   // Where the extension would like to stand. A name we do not know renders
   // where we put views we have no place for, rather than not at all.
   slot?: string;
+  // "tool:<callId>" when this view replaces a card's body instead of standing
+  // on its own. Only tool calls can be anchored — an approval prompt or an
+  // error state is not addressable, which is what keeps a takeover from being
+  // able to redraw a decision.
+  anchor?: string;
   body: ExtensionViewNode[];
 }
 

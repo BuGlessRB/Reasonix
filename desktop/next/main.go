@@ -135,6 +135,10 @@ func run() error {
 	srv.AllowAccountAuth()
 	// And the same again for provider keys, which land in the same store.
 	srv.AllowProviderEdit()
+	// Without this the first-run connection step never appears: /provider-setup
+	// answers 404 while it is off, the window reads that as "nothing to set up",
+	// and a machine with no key lands in the composer where every turn fails.
+	srv.EnableProviderSetup()
 	api := srv.Handler()
 	// Read the controller through the server from here on: a model, extension,
 	// or workspace switch replaces it, and the one built above is then dead.

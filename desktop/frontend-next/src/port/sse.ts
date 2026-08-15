@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
+import type { AccountState, AgentPort, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
 import { HttpError, type Attachment, type WorkspaceChanges } from "./port";
 import type { WireEvent } from "./wire";
 
@@ -208,6 +208,22 @@ export class SsePort implements AgentPort {
   async diagnoseNetwork() {
     const r = await this.post0<{ probes?: NetworkProbe[] }>("/network/diagnose");
     return r.probes ?? [];
+  }
+
+  shell() {
+    return this.get<ShellSettings>("/shell");
+  }
+
+  async saveShell(prefer: string, path: string) {
+    const res = await fetch(this.base + "/shell", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ prefer, path }),
+    });
+    const body = (await res.json().catch(() => ({}))) as ShellSettings & { error?: string };
+    if (!res.ok) throw new Error(body.error || `/shell: ${res.status}`);
+    return body;
   }
 
   mcp() {

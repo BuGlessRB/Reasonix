@@ -1139,48 +1139,49 @@
   }
 
   /* ── 首次引导：一屏，一件事 ──────────────────────────────────────── */
+  /* 连接卡片长在开场场景里，不另起一屏：介绍语收在上方仍然在场。所以这里
+     的配色跟着场景（深底）走，而不是跟着应用主题。 */
   .onb {
-    position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
-    background: var(--surface); padding: 24px;
+    position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%);
+    z-index: 3; width: min(452px, calc(100% - 56px));
   }
-  .onb-card {
-    width: 100%; max-width: 400px; display: flex; flex-direction: column; align-items: center;
-    text-align: center; animation: onbrise .5s var(--ease-out) both;
-  }
+  .oobe[data-play][data-held] .onb { opacity: 0; animation: onbrise .8s var(--ease-out) 9.9s forwards }
+  .onb-card { width: 100%; display: grid; gap: 11px; text-align: left }
   @keyframes onbrise { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
   .onb-r { width: 34px; height: 34px; color: var(--muted) }
   .onb-r path { stroke-width: 1.4; animation: drawin .9s var(--ease-out) both }
   .onb-r path:nth-child(2) { animation-delay: .16s }
   .onb-r path:nth-child(3) { animation-delay: .32s }
-  .onb-t { margin: 16px 0 0; font: 500 20px var(--ui); letter-spacing: -.01em; color: var(--text) }
-  .onb-s { margin: 8px 0 0; max-width: 34ch; font: 400 12.5px/1.75 var(--ui); color: var(--faint) }
+  .onb-t { margin: 0; font: 400 12.5px var(--ui); color: rgb(255 255 255 / .62) }
+  .onb-s { margin: -4px 0 2px; font: 400 11.5px/1.6 var(--ui); color: rgb(255 255 255 / .38) }
 
-  /* 每一段比上一段晚一点浮现：读的顺序就是出现的顺序 */
-  .onb-field, .onb-go, .onb-note { animation: onbrise .5s var(--ease-out) both }
-  .onb-field { animation-delay: .1s } .onb-go { animation-delay: .16s } .onb-note { animation-delay: .22s }
-
-  .onb-field { width: 100%; margin-top: 26px; text-align: left }
+  .onb-field { width: 100%; display: grid; gap: 5px; text-align: left }
   /* 不 uppercase：字距会把中英混排里的「的」也拉开 */
-  .onb-field label {
-    display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px;
-    font: 500 11.5px var(--ui); color: var(--muted);
+  .onb-field > label {
+    display: flex; align-items: center; gap: 6px;
+    font: 400 10.5px var(--mono); color: rgb(255 255 255 / .36); letter-spacing: .06em;
   }
-  .onb-field label code { font: 400 10.5px var(--mono); color: var(--ghost) }
-  .onb-field input {
-    width: 100%; padding: 11px 13px; border-radius: var(--r-sm);
-    border: 1px solid var(--border); background: var(--raised); color: var(--text);
+  .onb-field > label code {
+    font: 400 10px var(--mono); color: rgb(255 255 255 / .3);
+    padding: 1px 5px; border-radius: var(--r-xs); background: rgb(255 255 255 / .06);
+  }
+  .onb-field > input {
+    width: 100%; padding: 9px 11px; border-radius: var(--r-sm);
+    border: 1px solid rgb(255 255 255 / .14); background: rgb(255 255 255 / .05); color: #fff;
     font: 400 13px var(--mono); outline: none;
-    transition: border-color .16s, box-shadow .16s;
   }
-  .onb-field input::placeholder { color: var(--ghost) }
-  .onb-field input:focus {
-    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+  .onb-field > input::placeholder { color: rgb(255 255 255 / .26) }
+  .onb-field > input:focus-visible, .onb-chip:focus-visible,
+  .onb-go:focus-visible, .onb-pick > .picker > button:focus-visible {
+    outline: 2px solid #7391FF; outline-offset: 1px;
   }
-  .onb-err { margin-top: 7px; font: 400 11.5px/1.5 var(--err) }
-  .onb-go { width: 100%; margin-top: 14px; padding: 9px; justify-content: center }
-  .onb-go[disabled] { opacity: 1; background: transparent; border-color: var(--border); color: var(--ghost) }
-  .onb-note { margin-top: 18px; max-width: 38ch; font: 400 11px/1.7 var(--ui); color: var(--ghost) }
+  .onb-err { font: 400 11.5px/1.6 var(--ui); color: #E4675D; overflow-wrap: anywhere }
+  .onb-go {
+    justify-self: start; padding: 9px 20px; font: 500 13px var(--ui);
+    background: #DDA144; color: #171104; border: 1px solid #DDA144; border-radius: var(--r-sm);
+  }
+  .onb-go[disabled] { opacity: .45 }
+  .onb-note { font: 400 11px/1.6 var(--ui); color: rgb(255 255 255 / .34) }
 
   /* ── 设置：一个专门的界面。它承载的东西只会越来越多，塞不进侧栏。 ── */
   .prefs {
@@ -2212,6 +2213,16 @@
 
   /* 进度线只说「开场还剩多久」。序列一结束它就没有指涉对象，留着会被读成
      「还在加载」，所以和「跳过」提示一起退场。 */
+  /* 收拢：介绍整组缩小上移，成为卡片的头。不淡出也不切屏——品牌名留在场上。
+     位移用 vh，窗口多高都收在同一比例的位置。只有后面接着卡片时才有这一拍。 */
+  .oobe[data-play][data-held] .oobe-scene { animation: oobecollapse .85s var(--ease-out) 9.6s forwards }
+  .oobe[data-play][data-held] .oobe-lines { animation: oobeshrink .85s var(--ease-out) 9.6s forwards }
+  @keyframes oobecollapse { to { transform: translateY(-14vh) scale(.62); opacity: .96 } }
+  @keyframes oobeshrink { to { height: 0; opacity: 0 } }
+  /* 已看过开场、却还欠一个 key：直接给收拢后的样子，不重播。 */
+  .oobe:not([data-play])[data-held] .oobe-scene { transform: translateY(-14vh) scale(.62) }
+  .oobe:not([data-play])[data-held] .oobe-lines { height: 0; opacity: 0 }
+
   .oobe-prog {
     position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 2;
     width: 148px; height: 2px; border-radius: 2px; background: rgb(255 255 255 / .1); overflow: hidden;
@@ -2230,6 +2241,9 @@
     .oobe[data-play] * { animation: none !important }
     .oobe[data-play] .oobe-brand,
     .oobe[data-play] .oobe-sub { opacity: 1 }
+    .oobe[data-play][data-held] .oobe-scene { transform: translateY(-14vh) scale(.62) }
+    .oobe[data-play][data-held] .oobe-lines { height: 0; opacity: 0 }
+    .oobe[data-play][data-held] .onb { opacity: 1 }
     .oobe[data-play] .oobe-brand { background-position: -40% 0 }
   }
   @media (max-width: 640px) {
@@ -2238,30 +2252,45 @@
   }
 
   /* 引导页的服务选择：快捷键只填地址，不代表支持范围。 */
-  .onb-chips { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-top: 22px }
+  .onb-chips { display: flex; flex-wrap: wrap; gap: 6px; width: 100% }
   .onb-chip {
-    font: 400 12px var(--ui); color: var(--muted); cursor: pointer;
-    padding: 5px 11px; border-radius: var(--r-pill);
-    background: var(--raised); border: 1px solid var(--border);
+    font: 400 12px var(--ui); color: rgb(255 255 255 / .62); cursor: pointer;
+    padding: 5px 12px; border-radius: var(--r-pill);
+    background: rgb(255 255 255 / .05); border: 1px solid rgb(255 255 255 / .12);
     transition: color var(--t-line) var(--ease), border-color var(--t-line) var(--ease);
   }
-  .onb-chip:hover { color: var(--text) }
+  .onb-chip:hover { color: #fff; border-color: rgb(255 255 255 / .26) }
   .onb-chip[aria-pressed="true"] {
-    color: var(--accent); background: var(--accent-wash);
-    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    color: #FFE0A0; background: rgb(221 161 68 / .13); border-color: rgb(221 161 68 / .55);
   }
   .onb-chip[data-custom] { border-style: dashed }
-  .onb-field select {
-    width: 100%; font: 400 13px var(--mono); color: var(--text);
-    padding: 8px 10px; border-radius: var(--r-sm);
-    background: var(--raised); border: 1px solid var(--border);
+  /* 模型选择用应用自己的 Picker。它的按钮要跟这张卡片上的输入框对齐，
+     所以在这里覆写成同一套场景配色；弹出的菜单沿用应用主题，浮层本来
+     就该从场景里浮起来。 */
+  .onb-field .lb { font: 400 10.5px var(--mono); color: rgb(255 255 255 / .36); letter-spacing: .06em }
+  .onb-pick .picker { display: block }
+  /* 只有触发按钮。菜单项也是 button，一个不限定层级的选择器会把它们一起
+     刷成白字半透明底 —— 落在应用主题的浅色菜单上就是白字白底。 */
+  .onb-pick > .picker > button {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 11px; border-radius: var(--r-sm); cursor: pointer;
+    font: 400 13px var(--mono); color: #fff; text-align: left;
+    background: rgb(255 255 255 / .05); border: 1px solid rgb(255 255 255 / .14);
   }
+  .onb-pick > .picker > button::after {
+    content: ""; flex: none; width: 7px; height: 7px; margin-right: 1px;
+    border-right: 1.4px solid rgb(255 255 255 / .4); border-bottom: 1.4px solid rgb(255 255 255 / .4);
+    transform: translateY(-2px) rotate(45deg);
+  }
+  .onb-pick > .picker > button:hover { border-color: rgb(255 255 255 / .26) }
+  .onb-pick > .picker > button[aria-expanded="true"] { border-color: rgb(221 161 68 / .55) }
+  .onb-pick[data-busy] { opacity: .45; pointer-events: none }
   .onb-found {
-    width: 100%; margin-top: 18px; padding: 12px 13px; text-align: left;
-    border-radius: var(--r-sm); background: var(--raised); border: 1px solid var(--border);
+    width: 100%; display: grid; gap: 7px; padding: 11px 13px; text-align: left;
+    border-radius: var(--r-sm); background: rgb(255 255 255 / .05);
+    border: 1px solid rgb(255 255 255 / .14);
   }
-  .onb-found-hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px }
-  .onb-found-hd .tick { color: var(--ok); font-weight: 600 }
-  .onb-found-hd .k { font: 400 11px var(--mono); color: var(--faint) }
-  .onb-why { margin: 8px 0 0; font: 400 11.5px/1.65 var(--ui); color: var(--faint) }
-  .onb-found .onb-field { margin-top: 12px }
+  .onb-found-hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgb(255 255 255 / .86) }
+  .onb-found-hd .tick { color: #52B87C; font-weight: 600 }
+  .onb-found-hd .k { font: 400 11px var(--mono); color: rgb(255 255 255 / .36) }
+  .onb-why { margin: 0; font: 400 11.5px/1.65 var(--ui); color: rgb(255 255 255 / .5) }

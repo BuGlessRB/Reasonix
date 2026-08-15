@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentPort, ProviderProbe, ProviderSetup } from "../port/port";
 import { KIND_LABEL } from "./vendors";
+import { Picker } from "./Menu";
 import { nameFrom } from "./Providers";
 
 interface Props {
@@ -159,11 +160,21 @@ export function Onboarding({ port, setup, onDone }: Props) {
               </p>
             )}
             <div className="onb-field">
-              <label htmlFor="onb-model">先用哪个</label>
-              <select id="onb-model" value={model} disabled={busy}
-                onChange={(e) => setModel(e.target.value)}>
-                {found.models.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
+              <span className="lb">先用哪个</span>
+              {/* The app's own picker rather than a <select>: a gateway can
+                  publish a hundred models, and this one grows a filter past
+                  ten. A native dropdown would also paint its list in the
+                  system's colours on top of this scene. */}
+              <div className="onb-pick" data-busy={busy ? "" : undefined}>
+                <Picker
+                  label={model || "选一个"}
+                  items={found.models.map((m) => ({ value: m, label: m }))}
+                  current={model}
+                  onPick={setModel}
+                  place="bottom"
+                  title="选择默认模型"
+                />
+              </div>
             </div>
           </div>
         )}

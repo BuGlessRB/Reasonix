@@ -13,7 +13,7 @@ const ROUTES = [
   "/plan", "/goal", "/resume", "/models", "/tool-approval-mode", "/preset",
   "/model", "/effort", "/new", "/sessions", "/delete-session", "/provider-setup",
   "/inbox", "/trajectory", "/mcp", "/skills", "/complete", "/workspace",
-  "/providers", "/roles", "/account", "/hooks", "/memory", "/network", "/todos",
+  "/providers", "/roles", "/account", "/hooks", "/memory", "/network", "/shell", "/todos",
   "/changes", "/attachments", "/checkpoints", "/branches", "/compact", "/rewind",
   "/extensions", "/themes", "/plugins", "/surfaces",
   "/fork", "/summarize", "/forget", "/bypass", "/auto-approve-tools",

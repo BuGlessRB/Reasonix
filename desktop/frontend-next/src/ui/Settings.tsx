@@ -8,6 +8,7 @@ import { Packages } from "./Packages";
 import { Switch } from "./Switch";
 import { Hooks } from "./Hooks";
 import { Network } from "./Network";
+import { Shell as ShellPicker } from "./Shell";
 import { Account } from "./Account";
 import { Providers } from "./Providers";
 import { Models, activeKind, groupVendors } from "./Models";
@@ -328,12 +329,20 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
           )}
 
           {at === "tools" && (
-            <Group title="工具批准" hint="这是唯一挡在 agent 和你的文件之间的闸。它拦下来的时候，没有第二个入口能绕过去。">
-              {APPROVALS.map(([id, name, desc]) => (
-                <Row key={id} on={status?.toolApprovalMode === id} busy={busy === id} danger={id === "yolo"}
-                  label={name} desc={desc} onClick={() => run(id, () => port.setApprovalMode(id))} />
-              ))}
-            </Group>
+            <>
+              <Group title="工具批准" hint="这是唯一挡在 agent 和你的文件之间的闸。它拦下来的时候，没有第二个入口能绕过去。">
+                {APPROVALS.map(([id, name, desc]) => (
+                  <Row key={id} on={status?.toolApprovalMode === id} busy={busy === id} danger={id === "yolo"}
+                    label={name} desc={desc} onClick={() => run(id, () => port.setApprovalMode(id))} />
+                ))}
+              </Group>
+              <Group
+                title="命令交给谁执行"
+                hint="agent 的每条命令都由这个程序来跑，所以它也决定命令该写成哪一种语法 —— 选错了不是慢，是每条都报错。下面列的是这台机器上真有的，装什么才能选什么。换一个要重建运行时，有活儿在跑的时候换不了。"
+              >
+                <ShellPicker port={port} onChanged={onChanged} />
+              </Group>
+            </>
           )}
 
           {at === "hooks" && (

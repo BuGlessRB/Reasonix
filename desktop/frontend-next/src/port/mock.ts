@@ -1,10 +1,10 @@
 import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, WorkspaceInfo, WorkspaceChanges, Attachment, ThemePack } from "./port";
 import type { WireEvent } from "./wire";
-import { MockExtensions } from "./mock_ext";
+import { MockShell } from "./mock_shell";
 import { SCRIPT } from "./fixture";
 
 
-export class MockPort extends MockExtensions implements AgentPort {
+export class MockPort extends MockShell implements AgentPort {
   private listeners = new Set<(ev: WireEvent) => void>();
   private log: WireEvent[] = [];
   // What the user has sent, so checkpoints() can mirror one per turn.

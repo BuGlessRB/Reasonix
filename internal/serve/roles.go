@@ -83,17 +83,18 @@ func (s *Server) setRole(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := s.rebuildForRoles(r.Context()); err != nil {
+	if err := s.rebuildInPlace(r.Context()); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// rebuildForRoles reassembles the runtime on the model it is already using, so
-// the new role assignment reaches boot. Rebuilding refuses mid-turn for the
-// same reason a model switch does: the running loop would be swapped underneath.
-func (s *Server) rebuildForRoles(ctx context.Context) error {
+// rebuildInPlace reassembles the runtime on the model it is already using, so a
+// setting boot only reads while assembling reaches it. Rebuilding refuses
+// mid-turn for the same reason a model switch does: the running loop would be
+// swapped underneath.
+func (s *Server) rebuildInPlace(ctx context.Context) error {
 	ref := currentModelRef(s.ctl())
 	if ref == "" {
 		return fmt.Errorf("no current model to rebuild on")

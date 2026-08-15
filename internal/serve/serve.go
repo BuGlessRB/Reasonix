@@ -515,6 +515,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /trajectory", s.trajectory)
 	mux.HandleFunc("GET /memory", s.memories)
 	mux.HandleFunc("POST /memory/forget", s.forgetMemory)
+	s.registerShellRoutes(mux)
 	mux.HandleFunc("GET /network", s.network)
 	mux.HandleFunc("POST /network", s.saveNetwork)
 	mux.HandleFunc("POST /network/diagnose", s.diagnoseNetwork)

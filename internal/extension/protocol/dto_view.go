@@ -1,6 +1,9 @@
 package protocol
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // UINodeKind is one primitive a view is composed of. The set is deliberately
 // small: a host renders these with its own components, so every addition is a
@@ -73,9 +76,22 @@ type UIViewPayload struct {
 	// Slot is where the view would like to stand: a name, not a position. An
 	// unrecognised one degrades to the host's default place, which is what
 	// lets one extension reach three frontends without knowing which.
-	Slot string   `json:"slot,omitempty"`
-	Body []UINode `json:"body"`
+	Slot string `json:"slot,omitempty"`
+	// Anchor is "tool:<callId>": the card whose body this view replaces. Only
+	// tool calls are addressable, which is what keeps an approval prompt or an
+	// error state from ever being the thing redrawn (see AnchorTool).
+	Anchor string   `json:"anchor,omitempty"`
+	Body   []UINode `json:"body"`
 }
+
+// AnchorTool is the one anchor prefix there is, and the closed list is the
+// safety property rather than an omission: nothing else in the transcript can
+// be named, so nothing else can be redrawn. The host also keeps every card's
+// frame and attribution, so a replaced body stays visibly the extension's.
+const AnchorTool = "tool:"
+
+// MaxAnchorLen bounds the identity a view may point at.
+const MaxAnchorLen = 128
 
 // Validate walks the tree once, checking the bounds and the fields each kind
 // is allowed to carry. It runs from the strict decoder, so an extension is
@@ -83,6 +99,17 @@ type UIViewPayload struct {
 func (p UIViewPayload) Validate() error {
 	if len(p.Slot) > MaxViewSlotID {
 		return fmt.Errorf("view slot is longer than %d characters", MaxViewSlotID)
+	}
+	if p.Anchor != "" {
+		if len(p.Anchor) > MaxAnchorLen {
+			return fmt.Errorf("view anchor is longer than %d characters", MaxAnchorLen)
+		}
+		if !strings.HasPrefix(p.Anchor, AnchorTool) || p.Anchor == AnchorTool {
+			return fmt.Errorf("view anchor must name a tool call as %q", AnchorTool+"<callId>")
+		}
+		if p.Slot != "" {
+			return fmt.Errorf("a view cannot both stand in a slot and replace a card")
+		}
 	}
 	if len(p.Body) == 0 {
 		return fmt.Errorf("view body is empty")

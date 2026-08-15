@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Tool } from "../../port/wire";
+import type { ExtensionSurface, Tool } from "../../port/wire";
 import { categoryOf, labelFor, mcpOrigin, runLabelFor } from "../icons";
 import { Sym, glyphFor } from "../Sym";
 import { shortArgs } from "../args";
@@ -7,6 +7,7 @@ import { Cost, secondsLabel, tokenLabel } from "../Cost";
 import { parsePlan } from "../../state/session";
 import { DiffView } from "./DiffView";
 import { Term, ToolOutput } from "./ToolOutput";
+import { ExtensionView } from "./ExtensionView";
 
 // The spec pops a symbol as it settles — colour arriving is the finish signal.
 // Only the transition may fire it: a restored transcript is all settled cards,
@@ -35,7 +36,16 @@ function useSettling(running: boolean): { pop: boolean; swap: boolean } {
   return { pop, swap };
 }
 
-export function ToolCard({ tool, running, children = [] }: { tool: Tool; running: boolean; children?: Tool[] }) {
+export function ToolCard({
+  tool, running, children = [], takeover, onExtInvoke,
+}: {
+  tool: Tool;
+  running: boolean;
+  children?: Tool[];
+  // A view an extension published against this call. It replaces the body only.
+  takeover?: ExtensionSurface;
+  onExtInvoke?: (actionId: string) => void;
+}) {
   // use_capability is the proxy most tools are reached through — the provider
   // sees thirteen names and everything else routes via it — so it says nothing
   // about who answered. Name the resolved tool; only a target that really is an
@@ -75,17 +85,32 @@ export function ToolCard({ tool, running, children = [] }: { tool: Tool; running
           <span className={running ? "nm shim" : "nm"}>{head}</span>
           {who && <span className="who" title={`按 ${who} 这份技能的设定跑的子代理`}>{who}</span>}
           {from && <span className="src" title={`外部服务 ${from.server} 提供的工具`}>{from.server}</span>}
-          <span className="tag">{tagFor(tool)}</span>
+          <span className="tag" title={tagHint(tool)}>{tagFor(tool)}</span>
           {arg && <span className={streaming ? "arg shim" : "arg"}>{arg}</span>}
           {bad && <span className="fail">{badLabel}</span>}
           <Cost tools={[tool]} />
         </div>
         <div className="out">
+          {/* A takeover replaces what the body shows, never the frame around
+              it: the tool's name, its status and the attribution below stay
+              the host's, so a redrawn card is still recognisably this call and
+              still visibly the extension's work. */}
+          {takeover ? (
+            <>
+              <ExtensionView body={takeover.view?.body ?? []} onAction={(id) => onExtInvoke?.(id)} />
+              <div className="drawnby">由 {takeover.pluginId} 渲染</div>
+            </>
+          ) : (
+            <>
           {tool.diff && <DiffView diff={tool.diff} path={tool.args} />}
           {!tool.diff && tool.name === "todo_write" && <Steps tool={tool} />}
           {!tool.diff && tool.name !== "todo_write" && tool.output && children.length === 0 && (
             <ToolOutput name={shown} text={tool.output} />
           )}
+            </>
+          )}
+          {/* The error stays outside the takeover: an extension may redraw what
+              a call produced, never whether it failed. */}
           {tool.err && <div className="txt">{tool.err}</div>}
           {children.length > 0 && (
             <div className="nest">
@@ -130,7 +155,7 @@ function NestedCall({ tool }: { tool: Tool }) {
       <div className="c">
         <div className="hl">
           <span className="nm">{labelFor(shown)}</span>
-          <span className="tag">{tagFor(tool)}</span>
+          <span className="tag" title={tagHint(tool)}>{tagFor(tool)}</span>
           {tool.args && <span className="arg">{shortArgs(tool.args)}</span>}
           <Cost tools={[tool]} />
         </div>
@@ -169,8 +194,27 @@ const childTokens = (kids: Tool[]) => kids.reduce((n, k) => n + (k.contextTokens
 const chars = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 // An identifier reads correctly in the mono tag and nowhere else, so this is the
-// one place a raw tool id is allowed to surface.
-const tagFor = (tool: Tool) => mcpOrigin(tool.resolvedName || tool.name)?.tool ?? (tool.resolvedName || tool.name);
+// one place a raw tool id is allowed to surface. A shell call spends it on the
+// interpreter instead: the name above already says "Bash", and on a host without
+// one the command was actually handed to PowerShell — which is the difference
+// between a command that works and the same text failing on '&&'.
+const tagFor = (tool: Tool) => {
+  const ex = tool.execution;
+  if (ex?.kind === "shell" && ex.shell) return ex.shell;
+  return mcpOrigin(tool.resolvedName || tool.name)?.tool ?? (tool.resolvedName || tool.name);
+};
+
+const SHELL_HINT: Record<string, string> = {
+  bash: "命令交给 bash 执行",
+  "git-bash": "命令交给 Git Bash 执行",
+  pwsh: "命令交给 PowerShell 7 执行 —— 语法是 PowerShell，不是 bash",
+  powershell: "这台机器上没有 bash，命令交给 Windows PowerShell 执行 —— 它不认 && 和 ||",
+};
+
+const tagHint = (tool: Tool) => {
+  const ex = tool.execution;
+  return ex?.kind === "shell" && ex.shell ? SHELL_HINT[ex.shell] : undefined;
+};
 
 // Only the categories the spec gives a colour to; the rest stay neutral.
 const KINDED = new Set(["net", "deleg", "write", "mcp", "mem"]);

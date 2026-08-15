@@ -40,7 +40,10 @@ type ExtensionSurfacePayload struct {
 // puts views it has no place for.
 type ExtensionViewSurface struct {
 	Slot string
-	Body []ExtensionViewNode
+	// Anchor is "tool:<callId>" when this view replaces the body of a tool
+	// card rather than standing on its own. Only tool calls can be anchored.
+	Anchor string
+	Body   []ExtensionViewNode
 }
 
 // ExtensionViewNode mirrors protocol.UINode. Tone says what a node means, not

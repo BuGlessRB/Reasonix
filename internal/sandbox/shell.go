@@ -59,63 +59,142 @@ func ResolveShell(prefer, path string, warn io.Writer) Shell {
 	return resolveShell(prefer, path, warn, runtime.GOOS, exec.LookPath, fileExists, windowsBashCandidates(), windowsPowerShellCandidates(), probeBash, isWindowsWSLBash)
 }
 
+// shellHost holds the lookups shell discovery needs. Resolution and enumeration
+// share one, so only a single place knows where an interpreter can hide on an
+// OS — and the tests can inject a whole fake host.
+type shellHost struct {
+	goos     string
+	lookPath func(string) (string, error)
+	exists   func(string) bool
+	winBash  []string
+	winPS    []string
+	probe    func(string) bool
+	isWSL    func(string) bool
+}
+
+func currentHost() shellHost {
+	return shellHost{runtime.GOOS, exec.LookPath, fileExists, windowsBashCandidates(), windowsPowerShellCandidates(), probeBash, isWindowsWSLBash}
+}
+
+func (h shellHost) bash() (Shell, bool) {
+	if p, err := h.lookPath("bash"); err == nil && !h.isWSL(p) && h.probe(p) {
+		return Shell{Kind: ShellBash, Path: p}, true
+	}
+	for _, p := range h.winBash {
+		if h.exists(p) && h.probe(p) {
+			return Shell{Kind: ShellBash, Path: p}, true
+		}
+	}
+	return Shell{}, false
+}
+
+func (h shellHost) powerShell(order []string) (Shell, bool) {
+	for _, name := range order {
+		for _, p := range h.winPS {
+			base := strings.ToLower(pathBase(p))
+			if base != strings.ToLower(name) && strings.TrimSuffix(base, ".exe") != strings.ToLower(name) {
+				continue
+			}
+			if h.exists(p) {
+				return Shell{Kind: ShellPowerShell, Path: p}, true
+			}
+		}
+		if p, err := h.lookPath(name); err == nil {
+			return Shell{Kind: ShellPowerShell, Path: p}, true
+		}
+	}
+	return Shell{}, false
+}
+
+func (h shellHost) auto() Shell {
+	if sh, ok := h.bash(); ok {
+		return sh
+	}
+	if h.goos == "windows" {
+		if sh, ok := h.powerShell([]string{"pwsh", "powershell"}); ok {
+			return sh
+		}
+	}
+	return Shell{Kind: ShellBash, Path: "bash"}
+}
+
+// available lists the interpreters this host really has, in the order auto
+// detection would take them. Every entry has been probed, so a settings surface
+// can offer exactly what will work and put the rest in a "not installed" note
+// rather than in a button that fails on the first command.
+func (h shellHost) available() []Shell {
+	var out []Shell
+	seen := map[string]bool{}
+	add := func(sh Shell) {
+		key := strings.ToLower(sh.Path)
+		if key == "" || seen[key] {
+			return
+		}
+		seen[key] = true
+		out = append(out, sh)
+	}
+	if sh, ok := h.bash(); ok {
+		add(sh)
+	}
+	for _, p := range h.winBash {
+		if h.exists(p) && h.probe(p) {
+			add(Shell{Kind: ShellBash, Path: p})
+		}
+	}
+	for _, name := range []string{"pwsh", "powershell"} {
+		if sh, ok := h.powerShell([]string{name}); ok {
+			add(sh)
+		}
+	}
+	return out
+}
+
+// DetectShells lists every interpreter installed on this machine, best first.
+func DetectShells() []Shell { return currentHost().available() }
+
+// VerifyShell reports why a chosen interpreter cannot be used. A settings
+// surface calls it before persisting, so a typo is refused where it was typed
+// instead of failing every later command far from the screen that caused it.
+func VerifyShell(prefer, path string) error {
+	kind := ShellBash
+	switch strings.ToLower(strings.TrimSpace(prefer)) {
+	case "", "auto", "bash":
+	case "powershell", "pwsh":
+		kind = ShellPowerShell
+	default:
+		return fmt.Errorf("shell %q: must be auto, bash, powershell or pwsh", prefer)
+	}
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	if !fileExists(path) {
+		return fmt.Errorf("%s: no such executable", path)
+	}
+	if kind == ShellBash && !probeBash(path) {
+		return fmt.Errorf("%s: did not run a command", path)
+	}
+	return nil
+}
+
 // resolveShell is ResolveShell with its environment lookups injected — including
 // the Git-for-Windows bash candidates, which derive from %ProgramFiles% and so
 // are empty off Windows — so the decision table is deterministically testable on
 // any host.
 func resolveShell(prefer, path string, warn io.Writer, goos string, lookPath func(string) (string, error), exists func(string) bool, winBashCandidates []string, winPowerShellCandidates []string, probe func(string) bool, isWSL func(string) bool) Shell {
-	findBash := func() (Shell, bool) {
-		if p, err := lookPath("bash"); err == nil && !isWSL(p) && probe(p) {
-			return Shell{Kind: ShellBash, Path: p}, true
-		}
-		for _, p := range winBashCandidates {
-			if exists(p) && probe(p) {
-				return Shell{Kind: ShellBash, Path: p}, true
-			}
-		}
-		return Shell{}, false
-	}
-	findPowerShell := func(order []string) (Shell, bool) {
-		for _, name := range order {
-			for _, p := range winPowerShellCandidates {
-				base := strings.ToLower(pathBase(p))
-				if base != strings.ToLower(name) && strings.TrimSuffix(base, ".exe") != strings.ToLower(name) {
-					continue
-				}
-				if exists(p) {
-					return Shell{Kind: ShellPowerShell, Path: p}, true
-				}
-			}
-			if p, err := lookPath(name); err == nil {
-				return Shell{Kind: ShellPowerShell, Path: p}, true
-			}
-		}
-		return Shell{}, false
-	}
-	auto := func() Shell {
-		if sh, ok := findBash(); ok {
-			return sh
-		}
-		if goos == "windows" {
-			if sh, ok := findPowerShell([]string{"pwsh", "powershell"}); ok {
-				return sh
-			}
-		}
-		return Shell{Kind: ShellBash, Path: "bash"}
-	}
-
+	h := shellHost{goos, lookPath, exists, winBashCandidates, winPowerShellCandidates, probe, isWSL}
 	switch strings.ToLower(strings.TrimSpace(prefer)) {
 	case "", "auto":
-		return auto()
+		return h.auto()
 	case "bash":
 		if path != "" && exists(path) && probe(path) {
 			return Shell{Kind: ShellBash, Path: path}
 		}
-		if sh, ok := findBash(); ok {
+		if sh, ok := h.bash(); ok {
 			return sh
 		}
 		warnMissingShell(warn, prefer)
-		return auto()
+		return h.auto()
 	case "powershell", "pwsh":
 		if path != "" && exists(path) {
 			return Shell{Kind: ShellPowerShell, Path: path}
@@ -124,16 +203,16 @@ func resolveShell(prefer, path string, warn io.Writer, goos string, lookPath fun
 		if strings.EqualFold(strings.TrimSpace(prefer), "powershell") {
 			order = []string{"powershell", "pwsh"}
 		}
-		if sh, ok := findPowerShell(order); ok {
+		if sh, ok := h.powerShell(order); ok {
 			return sh
 		}
 		warnMissingShell(warn, prefer)
-		return auto()
+		return h.auto()
 	default:
 		if warn != nil {
 			fmt.Fprintf(warn, "warning: [tools.shell] prefer=%q is not recognised (use auto/bash/powershell); using auto-detection\n", prefer)
 		}
-		return auto()
+		return h.auto()
 	}
 }
 

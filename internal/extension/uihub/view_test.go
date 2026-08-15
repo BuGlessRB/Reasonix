@@ -58,3 +58,28 @@ func TestPublishViewRedactsEveryLeaf(t *testing.T) {
 		t.Fatalf("meter = %+v", view.Body[1])
 	}
 }
+
+// A takeover has to survive the trip with its anchor intact, because the anchor
+// is the only thing that says which card it replaces — and it is redacted like
+// any other view, since a replaced card shows the same kind of text.
+func TestPublishAnchoredViewKeepsItsAnchor(t *testing.T) {
+	rec := &eventRecorder{}
+	h := newTestHub(rec)
+	result := publishRaw(t, h, "alpha", protocol.UIPublishParams{
+		SurfaceID: "call-view", SessionID: "sess-1", Generation: 7, Kind: protocol.UISurfaceView,
+		Payload: mustRaw(t, protocol.UIViewPayload{
+			Anchor: "tool:call_42",
+			Body:   []protocol.UINode{{Kind: protocol.UINodeText, Value: "read " + testCredential}},
+		}),
+	})
+	if !result.Accepted {
+		t.Fatal("anchored view not accepted")
+	}
+	view := rec.all()[0].Extension.View
+	if view == nil || view.Anchor != "tool:call_42" {
+		t.Fatalf("view = %+v, want the anchor carried through", view)
+	}
+	if strings.Contains(view.Body[0].Value, "sk-abcdef") {
+		t.Fatalf("takeover text not redacted: %q", view.Body[0].Value)
+	}
+}
