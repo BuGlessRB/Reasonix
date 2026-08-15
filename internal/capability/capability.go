@@ -51,7 +51,6 @@ type Entry struct {
 	AutoUse          AutoUse
 	Triggers         []string
 	NegativeTriggers []string
-	NeedsFreshData   bool
 	ToolName         string
 	ConnectSource    string
 	ConnectName      string
@@ -111,7 +110,6 @@ func SkillEntries(skills []skill.Skill, tools []tool.ContractEntry) []Entry {
 			AutoUse:          auto,
 			Triggers:         cleanList(sk.Triggers),
 			NegativeTriggers: cleanList(sk.NegativeTriggers),
-			NeedsFreshData:   sk.NeedsFreshData,
 			ToolName:         "run_skill",
 			ConnectSource:    connectSource,
 			Requires:         cleanList(sk.Requires),
@@ -163,7 +161,7 @@ func routeCandidates(input string, entries []Entry) []RouteCandidate {
 	}
 	var candidates []RouteCandidate
 	for _, e := range entries {
-		if e.Status == StatusDisabled || e.Status == StatusFailed || negativeMatch(text, e.NegativeTriggers) {
+		if e.Status == StatusDisabled || e.Status == StatusFailed || triggerMatch(text, e.NegativeTriggers) {
 			continue
 		}
 		if policy, reason, ok := routeEntry(text, e); ok {
@@ -281,6 +279,10 @@ func RenderTransientBlock(d RouteDecision) string {
 	return b.String()
 }
 
+// routeEntry answers only what the request states outright: a capability the
+// user named, or a trigger its own author declared. A capability nobody named
+// and no trigger matched is left to the model, which reads the whole request
+// rather than a word list.
 func routeEntry(text string, e Entry) (AutoUse, string, bool) {
 	if e.Kind == KindSkill {
 		if explicitSkill(text, e.Name) {
@@ -292,17 +294,9 @@ func routeEntry(text string, e Entry) (AutoUse, string, bool) {
 		if triggerMatch(text, e.Triggers) {
 			return e.AutoUse, "the skill trigger matches the user request", true
 		}
-		if e.Name == "review" && looksLikeReview(text) {
-			return AutoUsePrefer, "the user is asking for review or issue inspection", true
-		}
 	}
-	if e.Kind == KindMCPTool {
-		if explicitMCP(text, e.Source) || (looksLikeGitHub(text) && strings.Contains(e.Source, "github")) {
-			return AutoUsePrefer, "the task asks for external GitHub/MCP data", true
-		}
-		if looksFreshData(text) && (strings.Contains(e.Name, "search") || strings.Contains(e.Name, "fetch") || strings.Contains(e.Name, "read")) {
-			return AutoUsePrefer, "the task appears to need fresh external data", true
-		}
+	if e.Kind == KindMCPTool && explicitMCP(text, e.Source) {
+		return AutoUsePrefer, "the user named this MCP server", true
 	}
 	return "", "", false
 }
@@ -323,37 +317,10 @@ func explicitMCP(text, server string) bool {
 	return strings.Contains(text, s+" mcp") || strings.Contains(text, "mcp "+s) || strings.Contains(text, "使用 "+s+" mcp") || strings.Contains(text, "用 "+s+" mcp")
 }
 
-func looksLikeReview(text string) bool {
-	return containsAny(text, []string{
-		"review", "code review", "security review", "帮我看看", "有没有问题", "审查", "评审", "检查这段代码", "看看这段代码",
-	})
-}
-
-func looksLikeGitHub(text string) bool {
-	return containsAny(text, []string{"github", "issue", "issues", "pull request", " pr ", "讨论区", "仓库 issue", "github 上"})
-}
-
-func looksFreshData(text string) bool {
-	return containsAny(text, []string{"latest", "recent", "today", "现在", "最新", "最近", "查一下", "搜索", "github"})
-}
-
 func triggerMatch(text string, triggers []string) bool {
 	for _, trig := range triggers {
 		t := normalize(trig)
 		if t != "" && strings.Contains(text, t) {
-			return true
-		}
-	}
-	return false
-}
-
-func negativeMatch(text string, triggers []string) bool {
-	return triggerMatch(text, triggers)
-}
-
-func containsAny(s string, terms []string) bool {
-	for _, term := range terms {
-		if strings.Contains(s, normalize(term)) {
 			return true
 		}
 	}

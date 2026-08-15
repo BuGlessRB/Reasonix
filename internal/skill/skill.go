@@ -100,7 +100,6 @@ type Skill struct {
 	Triggers         []string
 	NegativeTriggers []string
 	AutoUse          string // off | suggest | prefer | require
-	NeedsFreshData   bool
 	Cost             string // low | medium | high (advisory)
 	// Requires lists capability IDs this skill depends on (e.g. mcp-server:github).
 	// Optional; empty keeps full backward compatibility with older skills.
@@ -842,12 +841,11 @@ func (s *Store) parseSkill(path, stem string, scope Scope, requireSkillMarker bo
 		NegativeTriggers: parseCSVFrontmatter(
 			fm[skillFrontmatterNegativeTriggers],
 		),
-		AutoUse:        parseAutoUse(fm[skillFrontmatterAutoUse]),
-		NeedsFreshData: parseBoolFrontmatter(fm[skillFrontmatterNeedsFreshData]),
-		Cost:           parseCost(fm[skillFrontmatterCost]),
-		Color:          strings.TrimSpace(fm[skillFrontmatterColor]),
-		Invocation:     parseInvocation(fm[skillFrontmatterInvocation]),
-		Requires:       parseCSVFrontmatter(fm[skillFrontmatterRequires]),
+		AutoUse:    parseAutoUse(fm[skillFrontmatterAutoUse]),
+		Cost:       parseCost(fm[skillFrontmatterCost]),
+		Color:      strings.TrimSpace(fm[skillFrontmatterColor]),
+		Invocation: parseInvocation(fm[skillFrontmatterInvocation]),
+		Requires:   parseCSVFrontmatter(fm[skillFrontmatterRequires]),
 	}
 	sk.Profiles, sk.InvalidProfiles = parseProfilesFrontmatter(fm[skillFrontmatterProfiles])
 	return sk, true
@@ -905,7 +903,6 @@ const (
 	skillFrontmatterTriggers         = "triggers"
 	skillFrontmatterNegativeTriggers = "negative-triggers"
 	skillFrontmatterAutoUse          = "auto-use"
-	skillFrontmatterNeedsFreshData   = "needs-fresh-data"
 	skillFrontmatterCost             = "cost"
 	skillFrontmatterColor            = "color"
 	skillFrontmatterInvocation       = "invocation"
@@ -926,7 +923,6 @@ var skillMarkerFrontmatterKeys = []string{
 	skillFrontmatterTriggers,
 	skillFrontmatterNegativeTriggers,
 	skillFrontmatterAutoUse,
-	skillFrontmatterNeedsFreshData,
 	skillFrontmatterCost,
 	skillFrontmatterColor,
 	skillFrontmatterInvocation,

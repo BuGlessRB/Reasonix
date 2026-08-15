@@ -95,7 +95,7 @@ func semanticPool(text string, entries []Entry) []Entry {
 		if e.AutoUse == AutoUseOff {
 			continue
 		}
-		if negativeMatch(text, e.NegativeTriggers) {
+		if triggerMatch(text, e.NegativeTriggers) {
 			continue
 		}
 		blob := normalize(e.Name + " " + e.Description + " " + strings.Join(e.Triggers, " "))

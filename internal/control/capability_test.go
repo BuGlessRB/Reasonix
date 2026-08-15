@@ -71,6 +71,7 @@ func TestRunInjectsCapabilityRouteForRelevantSkill(t *testing.T) {
 			Name:        "review",
 			Description: "review code",
 			Scope:       skill.ScopeBuiltin,
+			Triggers:    []string{"有没有问题"},
 		}},
 		Registry: reg,
 	})

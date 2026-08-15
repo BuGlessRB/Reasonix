@@ -9,19 +9,30 @@ import (
 	"reasonix/internal/tool"
 )
 
-func TestRoutePrefersReviewSkillForReviewRequest(t *testing.T) {
-	entries := SkillEntries([]skill.Skill{{
+// A skill is routed by the triggers its author declared, never by the host
+// recognizing a topic. "帮我看看这段代码有没有问题" reads like a review request
+// and still buys nothing until some skill says that phrase is its trigger.
+func TestRouteMatchesAuthoredTriggersNotTopicWords(t *testing.T) {
+	untriggered := SkillEntries([]skill.Skill{{
 		Name:        "review",
 		Description: "review code for bugs",
 		Scope:       skill.ScopeBuiltin,
 	}}, []tool.ContractEntry{{Name: "run_skill"}})
-
-	decision := Route("帮我看看这段代码有没有问题", entries)
-	if len(decision.Candidates) == 0 {
-		t.Fatal("Route returned no candidates")
+	if decision := Route("帮我看看这段代码有没有问题", untriggered); len(decision.Candidates) != 0 {
+		t.Fatalf("topic words routed a skill nobody triggered: %+v", decision.Candidates)
 	}
-	got := decision.Candidates[0]
-	if got.Entry.ID != "skill:review" || got.Policy != AutoUsePrefer {
+
+	triggered := SkillEntries([]skill.Skill{{
+		Name:        "review",
+		Description: "review code for bugs",
+		Scope:       skill.ScopeBuiltin,
+		Triggers:    []string{"有没有问题"},
+	}}, []tool.ContractEntry{{Name: "run_skill"}})
+	decision := Route("帮我看看这段代码有没有问题", triggered)
+	if len(decision.Candidates) == 0 {
+		t.Fatal("authored trigger did not match")
+	}
+	if got := decision.Candidates[0]; got.Entry.ID != "skill:review" || got.Policy != AutoUsePrefer {
 		t.Fatalf("candidate = %+v, want review/prefer", got)
 	}
 }
@@ -107,16 +118,23 @@ func TestRouteDeliveryPromotesMatchedBuiltinSkills(t *testing.T) {
 	}
 }
 
-func TestRoutePrefersGitHubMCPForIssueLookup(t *testing.T) {
+// An MCP tool is routed when the user names its server. Mentioning the vendor
+// in passing is not naming it: "查一下 GitHub issue" used to buy a prefer for
+// every github tool, which spent the strong slots on a guess.
+func TestRouteMatchesNamedMCPServerNotVendorMentions(t *testing.T) {
 	entries := ToolEntries([]tool.ContractEntry{{
 		Name:        "mcp__github__search_issues",
 		Description: "search GitHub issues",
 		ReadOnly:    true,
 	}})
 
-	decision := Route("查一下 GitHub issue 里有没有相关反馈", entries)
+	if decision := Route("查一下 GitHub issue 里有没有相关反馈", entries); len(decision.Candidates) != 0 {
+		t.Fatalf("a vendor mention routed an MCP tool: %+v", decision.Candidates)
+	}
+
+	decision := Route("用 github mcp 查一下相关反馈", entries)
 	if len(decision.Candidates) == 0 {
-		t.Fatal("Route returned no candidates")
+		t.Fatal("named MCP server did not route")
 	}
 	got := decision.Candidates[0]
 	if got.Entry.ID != "mcp-tool:github/search_issues" || got.Policy != AutoUsePrefer {
@@ -135,7 +153,7 @@ func TestRouteDoesNotPreferFailedCachedMCPTool(t *testing.T) {
 		ConnectName:   "github",
 	}}
 
-	decision := Route("查一下 GitHub issue 里有没有相关反馈", entries)
+	decision := Route("用 github mcp 查一下相关反馈", entries)
 	if len(decision.Candidates) != 0 {
 		t.Fatalf("failed cached MCP tool was still routed: %+v", decision.Candidates)
 	}

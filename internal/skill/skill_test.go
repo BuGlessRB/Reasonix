@@ -958,8 +958,8 @@ func TestSkillRoutingMetadataParsesButStaysOutOfIndex(t *testing.T) {
 	if got := strings.Join(sk.NegativeTriggers, ","); got != "explain only" {
 		t.Fatalf("NegativeTriggers = %q", got)
 	}
-	if sk.AutoUse != "prefer" || !sk.NeedsFreshData || sk.Cost != "low" {
-		t.Fatalf("routing metadata = auto:%q fresh:%v cost:%q", sk.AutoUse, sk.NeedsFreshData, sk.Cost)
+	if sk.AutoUse != "prefer" || sk.Cost != "low" {
+		t.Fatalf("routing metadata = auto:%q cost:%q", sk.AutoUse, sk.Cost)
 	}
 	if got := strings.Join(sk.Requires, ","); got != "mcp-server:github,mcp-tool:github/search_issues" {
 		t.Fatalf("Requires = %q", got)
