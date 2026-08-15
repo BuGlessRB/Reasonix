@@ -111,6 +111,7 @@ export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor
         <AddProvider
           port={port}
           taken={list.map((p) => p.name)}
+          known={list}
           onDone={() => {
             setAdding(false);
             reload();
@@ -339,9 +340,9 @@ function EditConn({
 }
 
 function AddProvider({
-  port, taken, onDone, onCancel,
+  port, taken, known, onDone, onCancel,
 }: {
-  port: Port; taken: string[]; onDone: () => void; onCancel: () => void;
+  port: Port; taken: string[]; known: ProviderEntry[]; onDone: () => void; onCancel: () => void;
 }) {
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -354,6 +355,10 @@ function AddProvider({
   const [name, setName] = useState("");
   const [kind, setKind] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
+
+  // A source already at this host changes what a blank key means: another door
+  // onto that account rather than an account with no credential.
+  const sibling = known.find((p) => hostOf(p.baseUrl) === hostOf(baseUrl) && baseUrl.trim() !== "");
 
   const connect = async () => {
     setBusy(true);
@@ -413,9 +418,17 @@ function AddProvider({
           />
         </label>
         <label className="grow full">
-          <span>API Key</span>
-          <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} spellCheck={false} />
+          <span>API Key{sibling ? "（留空就用现有那个来源的 key）" : ""}</span>
+          <input type="password" value={apiKey} placeholder={sibling ? "········" : ""}
+            onChange={(e) => setApiKey(e.target.value)} spellCheck={false} />
         </label>
+        {sibling && (
+          <p className="acct-note">
+            这个地址上已经有「{vendorLabel(hostOf(sibling.baseUrl))}」了。留空 key
+            就是给它再开一扇门，两条会并成同一个来源、由「接入方式」切换；填了 key
+            就是这台机器上的另一个账号，各算各的。
+          </p>
+        )}
       </div>
 
       <div className="acts">
