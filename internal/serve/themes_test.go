@@ -2,6 +2,7 @@ package serve
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -34,10 +35,12 @@ func themeServer(t *testing.T) *httptest.Server {
 }
 
 type themeRow struct {
-	ID     string                       `json:"id"`
-	Name   string                       `json:"name"`
-	Active bool                         `json:"active"`
-	Tokens map[string]map[string]string `json:"tokens"`
+	ID         string                       `json:"id"`
+	Name       string                       `json:"name"`
+	Active     bool                         `json:"active"`
+	Tokens     map[string]map[string]string `json:"tokens"`
+	Background *theme.Background            `json:"background"`
+	HasPreview bool                         `json:"hasPreview"`
 }
 
 func listThemes(t *testing.T, base string) []themeRow {
@@ -131,4 +134,66 @@ func find(t *testing.T, packs []themeRow, id string) themeRow {
 	}
 	t.Fatalf("pack %q not in the listing (%d packs)", id, len(packs))
 	panic("unreachable")
+}
+
+// The window draws the background straight from this URL, so it has to answer
+// with the image bytes and its own type — not JSON, and not the SPA shell.
+func TestThemeAssetServesTheShippedImage(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	srv := themeServer(t)
+
+	resp, err := http.Get(srv.URL + "/themes/official-noir-gold/background")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET background = %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "image/webp" {
+		t.Fatalf("content type = %q", ct)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if len(body) < 1000 {
+		t.Fatalf("background is %d bytes", len(body))
+	}
+}
+
+// A pack id is a path segment here, so the traversal has to die at the router
+// or in the reader — never as a file read outside the pack directory.
+func TestThemeAssetRefusesTraversalAndUnknownKinds(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	srv := themeServer(t)
+
+	for _, path := range []string{
+		"/themes/..%2F..%2Fetc/background",
+		"/themes/official-noir-gold/manifest",
+		"/themes/official-noir-gold/theme.json",
+		"/themes/nope/background",
+	} {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			t.Fatalf("%s answered 200", path)
+		}
+	}
+}
+
+// The listing says whether a pack has a picture and how it wants it placed, so
+// a picker can show the two opacities before anything is activated.
+func TestThemesListCarriesBackgroundPlacement(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	got := find(t, listThemes(t, themeServer(t).URL), "official-noir-gold")
+	if got.Background == nil || !got.Background.Image {
+		t.Fatalf("background = %+v, want the shipped image", got.Background)
+	}
+	if got.Background.TaskOpacity >= got.Background.HomeOpacity {
+		t.Fatalf("opacities = %+v, want the image to recede while working", got.Background)
+	}
+	if !got.HasPreview {
+		t.Fatal("shipped pack reports no preview")
+	}
 }

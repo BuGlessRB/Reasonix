@@ -17,11 +17,9 @@ import (
 	"reasonix/internal/config"
 )
 
-// The packs that ship. Only their manifests travel — a pack is colours, and
-// the previews and backgrounds the old shell also carried are megabytes that
-// no reader here looks at.
+// The packs that ship: manifest, background, and preview for each.
 //
-//go:embed builtin/*.json
+//go:embed builtin
 var builtin embed.FS
 
 const (
@@ -42,6 +40,28 @@ type Pack struct {
 	Author      string                       `json:"author,omitempty"`
 	Description string                       `json:"description,omitempty"`
 	Tokens      map[string]map[string]string `json:"tokens"`
+	Background  *Background                  `json:"background,omitempty"`
+	HasPreview  bool                         `json:"hasPreview,omitempty"`
+}
+
+// Background is how a pack's image wants to be placed, not just that it has
+// one. Focus is the point that survives cropping — a portrait centred at 50%
+// loses its subject on a wide window. The two opacities are the same image at
+// rest and at work: a picture that is right behind an idle home screen is in
+// the way of a transcript being read.
+type Background struct {
+	// Image is set when the pack ships one; the bytes come from Asset.
+	Image bool `json:"image"`
+	// FocusX/FocusY are 0..1 within the image.
+	FocusX float64 `json:"focusX"`
+	FocusY float64 `json:"focusY"`
+	// SafeArea names the side the content sits on, so the image's own subject
+	// can be kept away from it: left | center | right.
+	SafeArea string `json:"safeArea,omitempty"`
+	// HomeOpacity applies when nothing is running, TaskOpacity while a turn is.
+	HomeOpacity     float64 `json:"homeOpacity"`
+	TaskOpacity     float64 `json:"taskOpacity"`
+	OverlayStrength float64 `json:"overlayStrength"`
 }
 
 type manifest struct {
@@ -51,6 +71,17 @@ type manifest struct {
 	Author        string                       `json:"author"`
 	Description   string                       `json:"description"`
 	Tokens        map[string]map[string]string `json:"tokens"`
+	Background    *manifestBackground          `json:"background"`
+}
+
+type manifestBackground struct {
+	Image           string   `json:"image"`
+	FocusX          *float64 `json:"focusX"`
+	FocusY          *float64 `json:"focusY"`
+	SafeArea        string   `json:"safeArea"`
+	HomeOpacity     *float64 `json:"homeOpacity"`
+	TaskOpacity     *float64 `json:"taskOpacity"`
+	OverlayStrength *float64 `json:"overlayStrength"`
 }
 
 // Dir is where user-installed packs live: one directory per pack, each with a
@@ -114,11 +145,8 @@ func listBuiltin() []Pack {
 // Load returns one pack by id.
 func Load(id string) (Pack, error) {
 	id = strings.TrimSpace(id)
-	if id == "" {
-		return Pack{}, fmt.Errorf("theme: empty id")
-	}
-	if id != filepath.Base(id) || strings.Contains(id, string(filepath.Separator)) {
-		return Pack{}, fmt.Errorf("theme: %q is not a pack id", id)
+	if err := validID(id); err != nil {
+		return Pack{}, err
 	}
 	if pack, err := load(filepath.Join(Dir(), id, manifestName), id); err == nil {
 		return pack, nil
@@ -139,6 +167,7 @@ func load(path, dirID string) (Pack, error) {
 }
 
 func decode(raw []byte, dirID string) (Pack, error) {
+	id := dirID
 	var m manifest
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return Pack{}, fmt.Errorf("theme %s: %w", dirID, err)
@@ -148,7 +177,6 @@ func decode(raw []byte, dirID string) (Pack, error) {
 	}
 	// The directory name is the address the user activates by, so it wins over
 	// whatever the manifest claims its id is.
-	id := dirID
 	name := strings.TrimSpace(m.Name)
 	if name == "" {
 		name = id
@@ -169,7 +197,54 @@ func decode(raw []byte, dirID string) (Pack, error) {
 		}
 		tokens[scheme] = copied
 	}
-	return Pack{ID: id, Name: name, Author: strings.TrimSpace(m.Author), Description: strings.TrimSpace(m.Description), Tokens: tokens}, nil
+	pack := Pack{ID: id, Name: name, Author: strings.TrimSpace(m.Author), Description: strings.TrimSpace(m.Description), Tokens: tokens}
+	pack.Background = backgroundOf(m.Background, hasAsset(id, assetBackground))
+	pack.HasPreview = hasAsset(id, assetPreview)
+	return pack, nil
+}
+
+// backgroundOf keeps the placement even when the image is missing: a pack that
+// declares a focus and two opacities has said how it wants to be shown, and a
+// user dropping their own background.webp next to the manifest should get that
+// placement rather than a centred default.
+func backgroundOf(m *manifestBackground, image bool) *Background {
+	if m == nil && !image {
+		return nil
+	}
+	out := &Background{Image: image, FocusX: 0.5, FocusY: 0.5, HomeOpacity: 1, TaskOpacity: 0.2, OverlayStrength: 0.65}
+	if m == nil {
+		return out
+	}
+	if m.FocusX != nil {
+		out.FocusX = clamp01(*m.FocusX)
+	}
+	if m.FocusY != nil {
+		out.FocusY = clamp01(*m.FocusY)
+	}
+	switch m.SafeArea {
+	case "left", "center", "right":
+		out.SafeArea = m.SafeArea
+	}
+	if m.HomeOpacity != nil {
+		out.HomeOpacity = clamp01(*m.HomeOpacity)
+	}
+	if m.TaskOpacity != nil {
+		out.TaskOpacity = clamp01(*m.TaskOpacity)
+	}
+	if m.OverlayStrength != nil {
+		out.OverlayStrength = clamp01(*m.OverlayStrength)
+	}
+	return out
+}
+
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 // isColour keeps a token only when it is a plain hex colour. The value is

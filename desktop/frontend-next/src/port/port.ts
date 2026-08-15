@@ -148,6 +148,18 @@ export interface SessionEntry {
 // and mean opposite things, so the server resolves which one it is.
 // A theme pack is data: named colours for a light and a dark scheme. Nothing
 // in it is code, so installing one cannot run anything.
+export interface ThemeBackground {
+  image: boolean;
+  focusX: number;
+  focusY: number;
+  safeArea?: "left" | "center" | "right";
+  // The same picture at rest and at work — a photo behind a transcript being
+  // read is in the way, so a pack says how far it should recede.
+  homeOpacity: number;
+  taskOpacity: number;
+  overlayStrength: number;
+}
+
 export interface ThemePack {
   id: string;
   name: string;
@@ -155,6 +167,8 @@ export interface ThemePack {
   description?: string;
   active?: boolean;
   tokens: { light?: Record<string, string>; dark?: Record<string, string> };
+  background?: ThemeBackground;
+  hasPreview?: boolean;
 }
 
 export interface McpEntry {
@@ -528,7 +542,10 @@ export interface AgentPort {
   isolateWorkspace(): Promise<void>;
   // The native folder picker, or "" where there is none (a browser tab) or
   // when the user cancelled. Only the shell can open one.
-  pickFolder(): Promise<string>;
+  // The native folder picker: the chosen path, "" when the user cancelled, and
+  // null where the host has none at all. Cancelling and having no picker are
+  // different answers, and a caller that conflates them asks twice.
+  pickFolder(): Promise<string | null>;
   sessions(): Promise<SessionEntry[]>;
   resume(path: string): Promise<void>;
   newSession(): Promise<void>;

@@ -188,19 +188,21 @@ export function App({ port }: { port: AgentPort }) {
   }, [s.running, refreshStatus]);
 
   // A pack carries a light and a dark set, so it is repainted with the scheme
-  // rather than once at load: switching the OS to dark has to move both.
+  // rather than once at load: switching the OS to dark has to move both. The
+  // running flag rides along because a pack's picture recedes while a turn is
+  // in flight — the transition is in CSS, this only moves the target.
   useEffect(() => {
     const mq = matchMedia("(prefers-color-scheme: dark)");
     const paint = () => {
       const scheme = theme === "auto" ? (mq.matches ? "dark" : "light") : theme;
       document.documentElement.dataset.theme = scheme;
-      applyThemePack(pack, scheme as "light" | "dark");
+      applyThemePack(pack, scheme as "light" | "dark", s.running);
     };
     paint();
     mq.addEventListener("change", paint);
     localStorage.setItem("rx-theme", theme);
     return () => mq.removeEventListener("change", paint);
-  }, [theme, pack]);
+  }, [theme, pack, s.running]);
 
   const reloadThemes = useCallback(() => {
     port

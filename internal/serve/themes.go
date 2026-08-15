@@ -13,6 +13,7 @@ import (
 func (s *Server) registerThemeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /themes", s.themes)
 	mux.HandleFunc("POST /themes", s.activateTheme)
+	mux.HandleFunc("GET /themes/{id}/{asset}", s.themeAsset)
 }
 
 type themeView struct {
@@ -22,6 +23,8 @@ type themeView struct {
 	Description string                       `json:"description,omitempty"`
 	Active      bool                         `json:"active,omitempty"`
 	Tokens      map[string]map[string]string `json:"tokens"`
+	Background  *theme.Background            `json:"background,omitempty"`
+	HasPreview  bool                         `json:"hasPreview,omitempty"`
 }
 
 // The list carries every pack's full token set, not just the active one's. A
@@ -38,6 +41,7 @@ func (s *Server) themes(w http.ResponseWriter, r *http.Request) {
 		out = append(out, themeView{
 			ID: p.ID, Name: p.Name, Author: p.Author, Description: p.Description,
 			Active: p.ID == active, Tokens: p.Tokens,
+			Background: p.Background, HasPreview: p.HasPreview,
 		})
 	}
 	writeJSONCached(w, r, out)
@@ -69,4 +73,23 @@ func (s *Server) activateTheme(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// themeAsset serves a pack's background or preview. The bytes are immutable
+// for a given pack id — a user replacing their own image changes the file, not
+// the address — so this is cached hard and the frontend never has to bust it.
+func (s *Server) themeAsset(w http.ResponseWriter, r *http.Request) {
+	kind, ok := theme.KindOf(r.PathValue("asset"))
+	if !ok {
+		http.Error(w, "unknown asset", http.StatusNotFound)
+		return
+	}
+	raw, contentType, err := theme.Asset(r.PathValue("id"), kind)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_, _ = w.Write(raw)
 }

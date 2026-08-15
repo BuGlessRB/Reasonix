@@ -6,6 +6,28 @@
     height: 100vh; overflow: hidden;
   }
 
+  /* A theme's picture, when it has one. It sits behind everything and under a
+     scrim of the page colour, so text keeps its contrast whatever the photo is
+     doing; --bg-alpha is what recedes while a turn runs. The whole block is
+     inert until a pack sets --bg-image, so the default build pays nothing. */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+    background-image: var(--bg-image, none);
+    background-size: cover;
+    background-position: var(--bg-x, 50%) var(--bg-y, 50%);
+    opacity: var(--bg-alpha, 0);
+    transition: opacity var(--t-panel) var(--ease);
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: var(--surface);
+    opacity: calc(var(--bg-overlay, 0) * min(var(--bg-alpha, 0) * 4, 1));
+    transition: opacity var(--t-panel) var(--ease);
+  }
+  /* Only the empty page lets it through. Cards, panels, and the composer stay
+     opaque: a background is worth a window's margins, not its content. */
+  :root[data-bg] .app { background: transparent }
+
   /* ── app：占满视口，没有别的东西 ─────────────────────────────────── */
   .app {
     background: var(--surface); border: 0; border-radius: 0; box-shadow: none;
@@ -1941,6 +1963,13 @@
   }
   .extfield input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .extform[data-sealed] { opacity: .72 }
+
+  /* A palette's own thumbnail in the picker. Fixed box so a row's height does
+     not depend on whether that pack ships a picture. */
+  .packshot {
+    width: 44px; height: 28px; object-fit: cover; flex: none;
+    border-radius: var(--r-xs); border: 1px solid var(--hair);
+  }
 
   /* A standing panel sits in the side rail, so it is denser than the same
      content would be in the transcript and borrows the rail's own row rhythm. */

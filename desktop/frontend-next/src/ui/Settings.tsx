@@ -462,6 +462,11 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
               {packs.length === 0 && <div className="lrow"><span className="ds">还没装配色</span></div>}
               {packs.map((p) => (
                 <div className="lrow" key={p.id}>
+                  {/* The thumbnail is the pack's own picture, so a palette with
+                      a photo behind it does not read the same as one without. */}
+                  {p.hasPreview && (
+                    <img className="packshot" src={`/themes/${encodeURIComponent(p.id)}/preview`} alt="" loading="lazy" />
+                  )}
                   <span className="ds">
                     {p.name}
                     {p.author && <span className="sc">{p.author}</span>}
