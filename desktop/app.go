@@ -6713,7 +6713,7 @@ type Meta struct {
 	CollaborationMode string             `json:"collaborationMode"`
 	ToolApprovalMode  string             `json:"toolApprovalMode"`
 	TokenMode         string             `json:"tokenMode"`
-	// AgentPreset is the canonical role setting (light|balanced|delivery).
+	// AgentPreset is the canonical role setting (balanced|delivery).
 	// TokenMode remains the dual-write legacy wire value for one version.
 	AgentPreset string           `json:"agentPreset,omitempty"`
 	Goal        string           `json:"goal,omitempty"`

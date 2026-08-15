@@ -44,15 +44,13 @@ func buildTransientUserBlockRE(tags []string) *regexp.Regexp {
 	return regexp.MustCompile(`(?s)^\s*<(?:` + alt + `)(?:\s+[^>]*)?>.*?</(?:` + alt + `)>\s*\n?`)
 }
 
-// stripTrailingDeliveryRuntime removes the exact delivery-runtime marker the
-// agent appends to user turns in delivery mode (agent.go DeliveryRuntimeMarker).
-// Unlike the prefix blocks it trails the user text, so preview/title derivation
-// needs a suffix cut — leaving it produced session titles like
+// stripTrailingDeliveryRuntime removes the retired delivery-runtime marker
+// (agent.go DeliveryRuntimeMarker) from sessions recorded while it was still
+// appended. Unlike the prefix blocks it trails the user text, so preview/title
+// derivation needs a suffix cut — leaving it produced session titles like
 // "你是谁？ <delivery-run…". The cut is byte-exact rather than a regex: a lazy
 // pattern anchored at $ would swallow user prose between a literal
 // "<delivery-runtime>" mention in the text and the real marker at the end.
-// (The agent never appends the marker when the input already mentions the tag,
-// so user messages discussing it carry no host suffix at all.)
 func stripTrailingDeliveryRuntime(s string) string {
 	trimmed := strings.TrimRight(s, " \t\r\n")
 	if cut, ok := strings.CutSuffix(trimmed, DeliveryRuntimeMarker); ok {

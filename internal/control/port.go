@@ -111,7 +111,7 @@ type Goals interface {
 	ResetPlannerSession()
 	PlanMode() bool
 	SetPlanMode(v bool)
-	// AgentPreset is the session role setting (light|balanced|delivery).
+	// AgentPreset is the session role setting (balanced|delivery).
 	AgentPreset() string
 	// SetAgentPreset updates the role setting for subsequent turns without
 	// rebuilding the controller.

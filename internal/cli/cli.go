@@ -395,7 +395,7 @@ func setupQuietProfile(ctx context.Context, modelName string, maxStepsOverride i
 }
 
 func parseRuntimeProfile(value string) (string, error) {
-	// Accept both --preset light|balanced|delivery and legacy --profile
+	// Accept both --preset balanced|delivery and legacy --profile
 	// economy|full|delivery. Returns dual-write TokenMode values.
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "", "balanced", boot.TokenModeFull:

@@ -194,10 +194,8 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 		})
 	}
 	a.turn.policySet = true
-	// The full readiness contract is the Delivery role's contract. Light and
-	// Balanced keep their own gates (post-mutation review still applies via
-	// deliveryReviewGateFailure when the policy forces a review); they no
-	// longer inherit Delivery's ceremony because a sentence read as a mutation.
+	// The full readiness contract is the Delivery role's contract. Balanced
+	// keeps its own gates and does not inherit Delivery's ceremony.
 	a.deliveryProfile = a.AgentPreset() == string(agentpreset.Delivery)
 	// A cancelled/error turn leaves a provider-excluded recovery record at the
 	// transcript tail. Fold its bounded facts into this new user turn exactly

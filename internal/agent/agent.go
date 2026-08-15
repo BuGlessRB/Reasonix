@@ -52,11 +52,9 @@ const finishReasonClientReasoningLimit = "client_reasoning_limit"
 
 var errReasoningByteLimitExceeded = errors.New("reasoning output exceeded client byte limit")
 
-// DeliveryRuntimeMarker is the delivery-mode contract block appended to user
-// turns (withTurnPreferences). Exported as the single source of truth for the
-// byte-exact suffix strip in preview derivation and for cross-package tests;
-// its text is cache-frozen — changing it breaks steer replay matching and the
-// prefix stability of every live delivery session.
+// DeliveryRuntimeMarker is the retired delivery contract block. Nothing
+// appends it any more; it survives byte-exact so a session recorded before
+// the retirement still strips it out of previews and steer replay.
 const DeliveryRuntimeMarker = `<delivery-runtime>
 This session is in delivery-first mode. Before any state-changing tool call,
 establish concrete, verifiable acceptance criteria with todo_write. After the
@@ -942,7 +940,7 @@ type Options struct {
 	// AgentPreset is empty for one compatibility version of direct constructors.
 	DeliveryProfile bool
 
-	// AgentPreset is the session role setting (light|balanced|delivery). Empty
+	// AgentPreset is the session role setting (balanced|delivery). Empty
 	// falls back to balanced unless DeliveryProfile is true (then delivery).
 	// Switching the preset mid-session does not rebuild the agent; the value is
 	// frozen at turn admission into TaskPolicy.

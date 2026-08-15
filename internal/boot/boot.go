@@ -132,10 +132,9 @@ type Options struct {
 	// (for example ACP session/new). They are connected eagerly for this
 	// controller but are not persisted to reasonix.toml.
 	ExtraPlugins []plugin.Spec
-	// AgentPreset selects the session role setting (light|balanced|delivery).
-	// Empty falls back to balanced. It controls planning depth, verification
-	// breadth, and independent review frequency without changing the
-	// provider-visible tool schema or base system prompt.
+	// AgentPreset selects the session role setting (balanced|delivery). Empty
+	// falls back to balanced. It controls verification breadth without changing
+	// the provider-visible tool schema or base system prompt.
 	AgentPreset string
 	// TokenMode is the deprecated one-version fallback for AgentPreset.
 	// When AgentPreset is empty, TokenMode is normalized through the legacy
@@ -1603,7 +1602,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		return capability.BuildCatalog(catOpts)
 	}
 	// Always build the capability runtime and provider-visible use_capability
-	// proxy so all three role settings share one tool schema.
+	// proxy so both role settings share one tool schema.
 	capRuntime = agent.NewMCPCapabilityRuntime(ctx, pluginHost, capSpecs, reg, catalogFn)
 	capRuntime.ConfigureServers(cfg.Plugins, capSpecs, enabledMCPNames)
 	capLedger = capability.NewLedger()
