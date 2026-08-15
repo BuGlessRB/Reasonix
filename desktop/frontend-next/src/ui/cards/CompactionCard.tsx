@@ -1,15 +1,54 @@
 import type { Compaction } from "../../port/wire";
 import { Sym } from "../Sym";
+import { tokenLabel } from "../Cost";
 
 const TRIGGER: Record<string, string> = {
   auto: "上下文到阈值，自动触发",
   manual: "你手动触发",
 };
 
-// CompactionStarted carries only the trigger; everything else arrives on Done,
-// and an aborted pass leaves the summary empty. There is no before/after count
-// on the wire, so nothing here draws a ratio.
+// A digest reads as complete whatever it dropped, so the count of the fold's
+// changes it actually carried is the one thing this card can say that the
+// summary text cannot. It is stated whether or not anything is missing: a
+// number that only appears on failure is a number nobody learns to read.
+function Coverage({ c }: { c: Compaction }) {
+  const required = c.coverageRequired ?? 0;
+  if (required === 0) return null;
+  const missing = c.coverageMissing ?? 0;
+  const kept = required - missing;
+  return (
+    <div className="comp-l">
+      <div className="row">
+        <span className="k">✓</span>
+        <span>
+          {missing === 0 ? (
+            <>
+              这段做过的 <b>{required}</b> 处改动，简报都写到了
+            </>
+          ) : (
+            <>
+              <b>{kept}</b>/{required} 处改动写进了简报
+            </>
+          )}
+          {c.coverageRepaired && "（补写过一次）"}
+        </span>
+      </div>
+      {missing > 0 && (
+        <div className="row">
+          <span className="x">✗</span>
+          <span>
+            还有 <b>{missing}</b> 处只剩下索引地址，要用原文得 recall 取回
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
+  const before = c.sourceTokens ?? 0;
+  const after = c.projectionTokens ?? 0;
+  const shrank = before > 0 && after > 0 && after < before;
   return (
     <div className="call">
       <div className="g">
@@ -25,6 +64,14 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
         {done && (
           <div className="out">
             <div className="comp">
+              {/* The filled part is what the fold gave back, not what it kept:
+                  the bar's fill is the ok colour, and more of it has to mean
+                  more room. */}
+              {shrank && (
+                <div className="comp-bar" title={`${before} → ${after} tokens`}>
+                  <i style={{ width: `${Math.max(2, Math.round((1 - after / before) * 100))}%` }} />
+                </div>
+              )}
               <div className="comp-n">
                 {c.messages ? (
                   <>
@@ -33,8 +80,15 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
                 ) : (
                   "这一趟没折叠掉什么"
                 )}
+                {shrank && (
+                  <>
+                    {" · "}
+                    <b>{tokenLabel(before)}</b> → <b>{tokenLabel(after)}</b>
+                  </>
+                )}
                 {c.archive && <>，原件留在 {c.archive}</>}
               </div>
+              <Coverage c={c} />
               {c.summary && (
                 <details>
                   <summary>

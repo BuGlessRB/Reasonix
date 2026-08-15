@@ -160,6 +160,14 @@ export interface Compaction {
   messages?: number;
   summary?: string;
   archive?: string;
+  // What the fold cost, and what the digest kept of it. coverageRequired counts
+  // the changes and failures the folded work produced; coverageMissing is how
+  // many the digest did not carry.
+  sourceTokens?: number;
+  projectionTokens?: number;
+  coverageRequired?: number;
+  coverageMissing?: number;
+  coverageRepaired?: boolean;
 }
 
 export interface StreamAttempt {

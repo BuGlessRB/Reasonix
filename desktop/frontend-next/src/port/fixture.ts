@@ -238,6 +238,13 @@ export const SCRIPT: Beat[] = [
         messages: 34,
         summary: "401 已证实是网关瞬时态（curl A/B，A 组 7 次 B 组 0 次）。处置是退避重试，不删 key。",
         archive: "~/.reasonix/projects/F--Reasonix/archive/2026-08-13.jsonl",
+        // A fold that dropped one of its own changes: the case the card exists
+        // for, since the summary above reads just as finished either way.
+        sourceTokens: 128_400,
+        projectionTokens: 31_200,
+        coverageRequired: 12,
+        coverageMissing: 2,
+        coverageRepaired: true,
       },
     },
   },
