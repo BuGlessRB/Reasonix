@@ -328,7 +328,7 @@ func providerVisibleFingerprint(msgs []provider.Message) string {
 // projectionValid reports whether st can be reused for the current transcript
 // and provider/model lineage. Fail closed: missing CoveredPrefixHash or a blank
 // sidecar PromptCacheKey when the current lineage key is known forces rebuild.
-func projectionValid(st CompactionState, msgs []provider.Message, transcriptVersion uint64, cacheKey string) bool {
+func projectionValid(st CompactionState, msgs []provider.Message, transcriptVersion uint64, cacheKey string, fingerprint func([]provider.Message, int) string) bool {
 	if len(st.Projection.Messages) == 0 {
 		return false
 	}
@@ -338,13 +338,16 @@ func projectionValid(st CompactionState, msgs []provider.Message, transcriptVers
 			return false
 		}
 	}
-	return projectionContentValid(st, msgs, transcriptVersion)
+	return projectionContentValid(st, msgs, transcriptVersion, fingerprint)
 }
 
 // projectionContentValid reports whether st's projection body still matches the
 // canonical transcript, independent of provider/model lineage. LoadProjectionSidecar
 // uses it to rebind across upgrade/model/workspace key changes.
-func projectionContentValid(st CompactionState, msgs []provider.Message, transcriptVersion uint64) bool {
+func projectionContentValid(st CompactionState, msgs []provider.Message, transcriptVersion uint64, fingerprint func([]provider.Message, int) string) bool {
+	if fingerprint == nil {
+		fingerprint = coveredPrefixHash
+	}
 	if len(st.Projection.Messages) == 0 {
 		return false
 	}
@@ -356,7 +359,7 @@ func projectionContentValid(st CompactionState, msgs []provider.Message, transcr
 	if st.Projection.CoveredPrefixHash == "" {
 		return false
 	}
-	if coveredPrefixHash(msgs, n) != st.Projection.CoveredPrefixHash {
+	if fingerprint(msgs, n) != st.Projection.CoveredPrefixHash {
 		return false
 	}
 	if st.TranscriptVersion == transcriptVersion || st.Projection.TranscriptVersion == transcriptVersion {

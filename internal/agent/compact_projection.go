@@ -69,13 +69,14 @@ type explicitCompressionSnapshot struct {
 }
 
 func (a *Agent) snapshotExplicitCompression() explicitCompressionSnapshot {
-	canonical, version := a.sess.conversation.snapshotMessagesVersion()
+	snap := a.snapshotForProjection()
+	canonical, version := snap.msgs, snap.version
 	cacheKey := a.currentPromptCacheKey()
 	a.sess.compactionMu.Lock()
 	state := a.sess.compactionState
 	a.sess.compactionMu.Unlock()
 	visible := canonical
-	if projectionValid(state, canonical, version, cacheKey) {
+	if projectionValid(state, canonical, version, cacheKey, snap.fingerprint) {
 		if projected := modelVisibleFromProjection(state.Projection, canonical); len(projected) > 0 {
 			visible = projected
 		}
@@ -488,7 +489,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 
 // visibleInputForFold prefers the prior projection + new history over full canonical.
 func (a *Agent) visibleInputForFold(state CompactionState, canonical []provider.Message, transcriptVersion uint64) []provider.Message {
-	if projectionValid(state, canonical, transcriptVersion, a.currentPromptCacheKey()) {
+	if projectionValid(state, canonical, transcriptVersion, a.currentPromptCacheKey(), a.prefixHasher(a.sess.conversation.RewriteVersion())) {
 		if projected := modelVisibleFromProjection(state.Projection, canonical); len(projected) > 0 {
 			return projected
 		}

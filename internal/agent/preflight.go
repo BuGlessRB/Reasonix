@@ -20,11 +20,12 @@ func (a *Agent) modelVisibleMessages() []provider.Message {
 	if a == nil || a.sess.conversation == nil {
 		return nil
 	}
-	msgs, version := a.sess.conversation.snapshotMessagesVersion()
+	snap := a.snapshotForProjection()
+	msgs := snap.msgs
 	a.sess.compactionMu.Lock()
 	st := a.sess.compactionState
 	a.sess.compactionMu.Unlock()
-	if projectionValid(st, msgs, version, a.currentPromptCacheKey()) {
+	if projectionValid(st, msgs, snap.version, a.currentPromptCacheKey(), snap.fingerprint) {
 		if visible := modelVisibleFromProjection(st.Projection, msgs); len(visible) > 0 {
 			return visible
 		}
@@ -116,10 +117,13 @@ func (a *Agent) LoadProjectionSidecar(sessionPath string) {
 		// the projection body still matches the canonical covered prefix.
 		var msgs []provider.Message
 		var version uint64
+		var fingerprint func([]provider.Message, int) string
 		if a.sess.conversation != nil {
-			msgs, version = a.sess.conversation.snapshotMessagesVersion()
+			var rewriteVersion int
+			msgs, version, rewriteVersion = a.sess.conversation.snapshotWithVersion()
+			fingerprint = a.prefixHasher(rewriteVersion)
 		}
-		if projectionContentValid(st, msgs, version) {
+		if projectionContentValid(st, msgs, version, fingerprint) {
 			normalized, keyOK = key, true
 		}
 	}
@@ -138,10 +142,13 @@ func (a *Agent) LoadProjectionSidecar(sessionPath string) {
 	// Only mark restored when the projection still matches the transcript.
 	var msgs []provider.Message
 	var version uint64
+	var fingerprint func([]provider.Message, int) string
 	if a.sess.conversation != nil {
-		msgs, version = a.sess.conversation.snapshotMessagesVersion()
+		var rewriteVersion int
+		msgs, version, rewriteVersion = a.sess.conversation.snapshotWithVersion()
+		fingerprint = a.prefixHasher(rewriteVersion)
 	}
-	valid := len(st.Projection.Messages) > 0 && projectionValid(st, msgs, version, key)
+	valid := len(st.Projection.Messages) > 0 && projectionValid(st, msgs, version, key, fingerprint)
 	if !valid && len(st.Projection.Messages) > 0 {
 		// Keep blocked receipts / telemetry; drop unusable projection body.
 		st.Projection = ContextProjection{}

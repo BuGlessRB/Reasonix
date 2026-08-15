@@ -25,6 +25,10 @@ type sessionRuntime struct {
 
 	missingReasoning missingReasoningWatch
 
+	// coveredHash remembers the folded prefix's fingerprint under the rewrite
+	// counter that makes it valid; gauges read it off the run loop.
+	coveredHash atomic.Pointer[coveredHashMemo]
+
 	// compactionMu guards projection snapshots/install and the in-memory sidecar
 	// generation. Network summarization never runs while this lock is held.
 	compactionMu sync.Mutex
@@ -65,6 +69,9 @@ func (r *sessionRuntime) reset(s *Session) {
 	r.cacheMiss.Store(0)
 	r.output.reset()
 	r.missingReasoning = missingReasoningWatch{}
+	// Keyed on a rewrite counter that restarts with the new transcript, so a
+	// carried-over entry could answer for history this session never had.
+	r.coveredHash.Store(nil)
 	r.compactionMu.Lock()
 	r.compactionState = CompactionState{} // lineage change; disk reloaded on Resume
 	r.cacheState = CacheStateUnknown
