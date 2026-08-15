@@ -4,7 +4,6 @@ import (
 	"io"
 	"strings"
 
-	"reasonix/internal/capability"
 	"reasonix/internal/config"
 	"reasonix/internal/skill"
 )
@@ -22,7 +21,7 @@ type skillAssembly struct {
 // buildSkillAssembly discovers skills and folds their index into the prompt.
 // Rediscovery is skipped on no-op/interceptor/UI rebuilds, where the previous
 // build's assembly is retained and its prompt already carries the index.
-func buildSkillAssembly(opts Options, cfg *config.Config, root string, profile capability.Profile, implicit bool, sysPrompt string) skillAssembly {
+func buildSkillAssembly(opts Options, cfg *config.Config, root string, implicit bool, sysPrompt string) skillAssembly {
 	a := skillAssembly{sysPrompt: sysPrompt}
 	if opts.ReuseAssembly != nil && shouldReuseDiscovery(opts.PreviousPlan) &&
 		opts.ReuseAssembly.ImplicitSkillInvocation == implicit {
@@ -40,7 +39,7 @@ func buildSkillAssembly(opts Options, cfg *config.Config, root string, profile c
 		PluginAgentPaths: cfg.PluginPackageAgentOwners(), ExcludedPaths: cfg.SkillExcludedPaths(),
 		DisabledNames: cfg.DisabledSkillNames(), MaxDepth: cfg.SkillMaxDepth(), Stderr: opts.Stderr,
 	})
-	a.store.ConfigureInvocationPolicy(string(profile), nil)
+	a.store.ConfigureInvocationPolicy(nil)
 	a.skills = a.store.List()
 	a.all = skill.New(skill.Options{ProjectRoot: root, CustomPaths: cfg.SkillCustomPaths(), PluginPaths: cfg.PluginPackageSkillOwners(), PluginAgentPaths: cfg.PluginPackageAgentOwners(), ExcludedPaths: cfg.SkillExcludedPaths(), MaxDepth: cfg.SkillMaxDepth(), Stderr: io.Discard})
 	a.allSkills = a.all.List()

@@ -653,7 +653,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 
 	timer.mark("memory")
 	implicitSkillInvocation := cfg.ImplicitSkillInvocationEnabled()
-	skillSet := buildSkillAssembly(opts, cfg, root, runtimeProfile, implicitSkillInvocation, sysPrompt)
+	skillSet := buildSkillAssembly(opts, cfg, root, implicitSkillInvocation, sysPrompt)
 	skillStore, allSkillStore := skillSet.store, skillSet.all
 	skills, allSkills := skillSet.skills, skillSet.allSkills
 	sysPrompt = skillSet.sysPrompt
@@ -1610,7 +1610,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	capAudit = &capability.Audit{}
 	capProxy = capRuntime.NewFrontend(capLedger, capAudit)
 	reg.Add(capProxy)
-	skillStore.ConfigureInvocationPolicy(string(runtimeProfile), func(requires []string) []string {
+	skillStore.ConfigureInvocationPolicy(func(requires []string) []string {
 		connected := map[string]bool{}
 		failedNow := map[string]string{}
 		if pluginHost != nil {

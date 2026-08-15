@@ -13,7 +13,8 @@ import (
 	"reasonix/internal/tool"
 )
 
-// Profile filters which skills are eligible in a given runtime profile.
+// Profile labels a runtime for diagnostics. It selects nothing: the
+// capability directory is the same under every role setting.
 type Profile string
 
 const (
@@ -31,9 +32,10 @@ type Catalog struct {
 // CatalogOptions builds a catalog from live tools, skills, configured MCP
 // servers (including auto_start=false), schema cache, and host failure state.
 type CatalogOptions struct {
-	Tools       []tool.ContractEntry
-	Skills      []skill.Skill
-	Plugins     []config.PluginEntry
+	Tools   []tool.ContractEntry
+	Skills  []skill.Skill
+	Plugins []config.PluginEntry
+	// Profile is carried for diagnostics only; BuildCatalog reads nothing off it.
 	Profile     Profile
 	Connected   map[string]bool // server name → connected
 	Failed      map[string]string
@@ -72,10 +74,6 @@ func LoadCachedToolsForSpecs(specs []plugin.Spec) (map[string][]plugin.CachedToo
 
 // BuildCatalog assembles the unified capability directory.
 func BuildCatalog(opts CatalogOptions) Catalog {
-	profile := opts.Profile
-	if profile == "" {
-		profile = ProfileBalanced
-	}
 	var entries []Entry
 	toolEntries := ToolEntries(opts.Tools)
 	for i := range toolEntries {
@@ -92,7 +90,7 @@ func BuildCatalog(opts CatalogOptions) Catalog {
 		}
 	}
 	entries = append(entries, toolEntries...)
-	entries = append(entries, SkillEntriesFiltered(opts.Skills, opts.Tools, profile)...)
+	entries = append(entries, skillCatalogEntries(opts.Skills, opts.Tools)...)
 	entries = append(entries, MCPServerEntries(opts)...)
 
 	// Deduplicate by ID, preferring ready over configured.
@@ -121,12 +119,10 @@ func BuildCatalog(opts CatalogOptions) Catalog {
 	return Catalog{Entries: out, Fingerprint: catalogFingerprint(out)}
 }
 
-// SkillEntriesFiltered keeps every skill in the catalog. Legacy frontmatter
-// profiles: economy|balanced|delivery values are retained for diagnostics but
-// no longer filter availability (shared capability directory for all role
-// settings). profile is accepted for call-site compatibility.
-func SkillEntriesFiltered(skills []skill.Skill, tools []tool.ContractEntry, profile Profile) []Entry {
-	_ = profile
+// skillCatalogEntries is SkillEntries plus the frontmatter a catalog reader
+// sees. A skill's declared profiles ride along for diagnostics and never hide
+// it: role settings are host settings, not a visibility rule.
+func skillCatalogEntries(skills []skill.Skill, tools []tool.ContractEntry) []Entry {
 	out := SkillEntries(skills, tools)
 	for i := range out {
 		if i < len(skills) {

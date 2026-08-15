@@ -167,7 +167,6 @@ type Store struct {
 	disableBuiltins  bool
 	disableDiscovery bool
 	stderr           io.Writer
-	runtimeProfile   string
 	requiresReady    func([]string) []string
 	toolBindings     func(Skill) []tool.MCPBinding
 }
@@ -231,11 +230,10 @@ func New(opts Options) *Store {
 // ConfigureInvocationPolicy installs session-local runtime constraints for
 // skill calls. It does not alter discovery or the provider-visible tool schema;
 // callers validate the selected skill immediately before execution.
-func (s *Store) ConfigureInvocationPolicy(profile string, requiresReady func([]string) []string) {
+func (s *Store) ConfigureInvocationPolicy(requiresReady func([]string) []string) {
 	if s == nil {
 		return
 	}
-	s.runtimeProfile = normalizeRuntimeProfile(profile)
 	s.requiresReady = requiresReady
 }
 
@@ -370,52 +368,6 @@ func (s *Store) ValidateInvocation(sk Skill) error {
 		}
 	}
 	return nil
-}
-
-// AllowedInProfile reports whether a skill lists profile among its frontmatter
-// profiles. Empty profiles mean "all". Role settings no longer filter the
-// model-visible skill index or block run_skill; this helper remains for doctor
-// diagnostics and capability inventory reports.
-func AllowedInProfile(sk Skill, profile string) bool {
-	if len(sk.Profiles) == 0 {
-		return true
-	}
-	want := normalizeRuntimeProfile(profile)
-	if want == "" {
-		return true
-	}
-	for _, candidate := range sk.Profiles {
-		if normalizeRuntimeProfile(candidate) == want {
-			return true
-		}
-	}
-	return false
-}
-
-// FilterForProfile returns skills that declare eligibility for profile.
-// Host boot no longer uses this to hide skills from the model; doctor and
-// inventory tooling may still call it for recommended-profile diagnostics.
-func FilterForProfile(skills []Skill, profile string) []Skill {
-	out := make([]Skill, 0, len(skills))
-	for _, sk := range skills {
-		if AllowedInProfile(sk, profile) {
-			out = append(out, sk)
-		}
-	}
-	return out
-}
-
-func normalizeRuntimeProfile(profile string) string {
-	switch strings.ToLower(strings.TrimSpace(profile)) {
-	case "economy":
-		return "economy"
-	case "delivery":
-		return "delivery"
-	case "balanced", "full":
-		return "balanced"
-	default:
-		return ""
-	}
 }
 
 // HasProjectScope reports whether the store was configured with a project root.

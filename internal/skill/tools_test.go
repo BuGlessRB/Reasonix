@@ -111,7 +111,7 @@ func TestRunSkillDoesNotBlockOnDiagnosticProfiles(t *testing.T) {
 	home := t.TempDir()
 	writeSkill(t, home, ".reasonix/skills/delivery-only.md", "---\ndescription: ship it\nprofiles: delivery\n---\nDeliver it.")
 	store := New(Options{HomeDir: home, DisableBuiltins: true})
-	store.ConfigureInvocationPolicy("economy", nil)
+	store.ConfigureInvocationPolicy(nil)
 	tl := NewRunSkillTool(store, nil)
 
 	out, err := tl.Execute(context.Background(), json.RawMessage(`{"name":"delivery-only"}`))
@@ -121,16 +121,13 @@ func TestRunSkillDoesNotBlockOnDiagnosticProfiles(t *testing.T) {
 	if !strings.Contains(out, "Deliver it.") {
 		t.Fatalf("skill body missing:\n%s", out)
 	}
-	// AllowedInProfile remains accurate for doctor diagnostics.
+	// The frontmatter survives as data a reader can see; nothing acts on it.
 	sk, ok := store.Read("delivery-only")
 	if !ok {
 		t.Fatal("skill missing from store")
 	}
-	if AllowedInProfile(sk, "economy") {
-		t.Fatal("diagnostic AllowedInProfile(economy) should be false for delivery-only skill")
-	}
-	if !AllowedInProfile(sk, "delivery") {
-		t.Fatal("diagnostic AllowedInProfile(delivery) should be true")
+	if len(sk.Profiles) != 1 || sk.Profiles[0] != "delivery" {
+		t.Fatalf("declared profiles = %v, want them parsed and kept", sk.Profiles)
 	}
 }
 
@@ -138,7 +135,7 @@ func TestRunSkillEnforcesRequiredCapabilities(t *testing.T) {
 	home := t.TempDir()
 	writeSkill(t, home, ".reasonix/skills/github-review.md", "---\ndescription: review github\nrequires: mcp-server:github, mcp-tool:github/search_issues\n---\nReview it.")
 	store := New(Options{HomeDir: home, DisableBuiltins: true})
-	store.ConfigureInvocationPolicy("delivery", func(requires []string) []string {
+	store.ConfigureInvocationPolicy(func(requires []string) []string {
 		return []string{"mcp-tool:github/search_issues"}
 	})
 	tl := NewRunSkillTool(store, nil)
