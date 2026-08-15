@@ -67,10 +67,6 @@ func TestCompressContextBeforePreservesCanonicalAndTail(t *testing.T) {
 		state.LastReceipt.Trigger != CompactionTriggerTool {
 		t.Fatalf("range compression receipt = %+v", state.LastReceipt)
 	}
-	// New summary checkpoints do not create archives; full originals stay in canonical.
-	if state.LastReceipt.Archive != "" {
-		t.Fatalf("summary checkpoint should not create archive, got %q", state.LastReceipt.Archive)
-	}
 }
 
 func TestCompressContextAfterExcludesActiveTurnAndAppendsToolResult(t *testing.T) {

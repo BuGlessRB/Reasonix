@@ -30,9 +30,6 @@ func compactionCardLines(c event.Compaction) []string {
 	for ln := range strings.SplitSeq(strings.TrimRight(c.Summary, "\n"), "\n") {
 		lines = append(lines, dim("  │ "+ln))
 	}
-	if c.Archive != "" {
-		lines = append(lines, dim("  │ archived "+c.Archive))
-	}
 	return lines
 }
 

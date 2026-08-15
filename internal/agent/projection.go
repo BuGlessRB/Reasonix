@@ -90,7 +90,6 @@ type ContextMaintenanceReceipt struct {
 	SavedTokens         int       `json:"saved_tokens,omitempty"`
 	AffectedToolResults int       `json:"affected_tool_results,omitempty"`
 	SummaryHash         string    `json:"summary_hash,omitempty"`
-	Archive             string    `json:"archive,omitempty"`
 	CacheBreak          bool      `json:"cache_break,omitempty"`
 	Reason              string    `json:"reason,omitempty"`
 	BlockedInputHash    string    `json:"blocked_input_hash,omitempty"`

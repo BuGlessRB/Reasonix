@@ -45,7 +45,6 @@ export interface WireCompaction {
   trigger?: string; // "auto" | "manual"
   messages?: number; // done: how many messages were folded into the summary
   summary?: string; // done: the briefing (empty on an aborted pass)
-  archive?: string; // done: archive path, if any
 }
 export interface WireProfile {
   model?: string;
@@ -645,7 +644,6 @@ export interface HistoryMessage {
   trigger?: string;
   messages?: number;
   summary?: string;
-  archive?: string;
   decisionReceipt?: WireDecisionReceipt;
 }
 

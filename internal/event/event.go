@@ -66,7 +66,7 @@ const (
 	// summarizer runs; CompactionDone replaces it. Mirrors ToolDispatch/ToolResult.
 	CompactionStarted
 	// CompactionDone reports a finished compaction pass (Compaction payload:
-	// Trigger/Messages/Summary/Archive). An aborted pass emits this with an empty
+	// Trigger/Messages/Summary). An aborted pass emits this with an empty
 	// Summary so the placeholder still resolves. Replaces the older plain Notice
 	// so a sink can render a distinct, expandable card.
 	CompactionDone
@@ -449,14 +449,13 @@ type ExtensionNotificationView struct {
 
 // Compaction carries a context-compaction pass for the CompactionStarted /
 // CompactionDone events. On CompactionStarted only Trigger is set. On
-// CompactionDone, Messages/Summary/Archive are filled in (an aborted pass leaves
+// CompactionDone, Messages/Summary are filled in (an aborted pass leaves
 // Summary empty). Trigger is "auto" (the prompt reached the window threshold) or
 // "manual" (the user ran /compact).
 type Compaction struct {
 	Trigger  string // "auto" | "manual"
 	Messages int    // Done: how many messages were folded into the summary
 	Summary  string // Done: the briefing the agent keeps relying on
-	Archive  string // Done: path the dropped originals were archived to ("" if none)
 	// Done: what the fold cost, and what the digest kept of it. A lossy fold is
 	// otherwise indistinguishable from a clean one without reading the digest.
 	SourceTokens     int

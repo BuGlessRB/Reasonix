@@ -14,7 +14,6 @@ func TestCompactionCardLines(t *testing.T) {
 		Trigger:  "auto",
 		Messages: 12,
 		Summary:  "## Goal\n- do X\n## Files & code\n- a.go edited",
-		Archive:  "/tmp/arch/20260531.jsonl",
 	})
 
 	joined := strings.Join(lines, "\n")
@@ -27,7 +26,7 @@ func TestCompactionCardLines(t *testing.T) {
 		}
 	}
 	// Every summary line (and the archive line) sits under the "│" gutter.
-	for _, want := range []string{"│ ## Goal", "│ - do X", "│ - a.go edited", "│ archived /tmp/arch/20260531.jsonl"} {
+	for _, want := range []string{"│ ## Goal", "│ - do X", "│ - a.go edited"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("card missing gutter line %q in:\n%s", want, joined)
 		}
@@ -62,12 +61,8 @@ func TestCompactionCardOmitsQualityWithoutCoverage(t *testing.T) {
 	}
 }
 
-// TestCompactionCardLinesNoArchive omits the archive line when none was written.
-func TestCompactionCardLinesNoArchive(t *testing.T) {
+func TestCompactionCardLinesManualTrigger(t *testing.T) {
 	lines := compactionCardLines(event.Compaction{Trigger: "manual", Messages: 3, Summary: "- brief"})
-	if strings.Contains(strings.Join(lines, "\n"), "archived") {
-		t.Errorf("no archive path should mean no archive line: %v", lines)
-	}
 	if !strings.Contains(lines[0], "manual") {
 		t.Errorf("header should reflect the manual trigger: %q", lines[0])
 	}

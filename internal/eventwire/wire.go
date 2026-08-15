@@ -329,7 +329,6 @@ type Compaction struct {
 	Trigger  string `json:"trigger,omitempty"`
 	Messages int    `json:"messages,omitempty"`
 	Summary  string `json:"summary,omitempty" externalizable:"true"`
-	Archive  string `json:"archive,omitempty" externalizable:"true"`
 	// What the fold cost, and what the digest kept of it.
 	SourceTokens     int  `json:"sourceTokens,omitempty"`
 	ProjectionTokens int  `json:"projectionTokens,omitempty"`
@@ -341,7 +340,7 @@ type Compaction struct {
 func toWireCompaction(c event.Compaction) *Compaction {
 	return &Compaction{
 		Trigger: c.Trigger, Messages: c.Messages,
-		Summary: c.Summary, Archive: c.Archive,
+		Summary:      c.Summary,
 		SourceTokens: c.SourceTokens, ProjectionTokens: c.ProjectionTokens,
 		CoverageRequired: c.CoverageRequired, CoverageMissing: c.CoverageMissing,
 		CoverageRepaired: c.CoverageRepaired,

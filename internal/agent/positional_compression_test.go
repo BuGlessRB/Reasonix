@@ -132,7 +132,4 @@ func assertLocalOnlyAbsentFromSummary(t *testing.T, prov *fakeProvider, a *Agent
 			t.Fatalf("local-only output entered projection: %+v", m)
 		}
 	}
-	if a.sess.compactionState.LastReceipt != nil && a.sess.compactionState.LastReceipt.Archive != "" {
-		t.Fatalf("checkpoint must not create archives, got %q", a.sess.compactionState.LastReceipt.Archive)
-	}
 }

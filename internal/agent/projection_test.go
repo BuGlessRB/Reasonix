@@ -346,9 +346,6 @@ func TestArchiveDirIgnoredOnCheckpointInstall(t *testing.T) {
 	if len(a.sess.compactionState.Projection.Messages) == 0 {
 		t.Fatal("expected projection despite unusable ArchiveDir")
 	}
-	if a.sess.compactionState.LastReceipt != nil && a.sess.compactionState.LastReceipt.Archive != "" {
-		t.Fatalf("checkpoint must not create archives, got %q", a.sess.compactionState.LastReceipt.Archive)
-	}
 }
 
 func writeFile(path string, b []byte) error {

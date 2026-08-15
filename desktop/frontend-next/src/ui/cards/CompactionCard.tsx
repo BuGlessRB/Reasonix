@@ -104,7 +104,6 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
                     <b>{tokenLabel(before)}</b> → <b>{tokenLabel(after)}</b>
                   </>
                 )}
-                {c.archive && <>，原件留在 {c.archive}</>}
               </div>
               <Coverage c={c} />
               {c.summary && (

@@ -220,7 +220,7 @@ func (a *Agent) compressVisibleRange(
 
 	inputHash := providerVisibleFingerprint(provider.ModelMessages(snap.visible))
 	outputHash := providerVisibleFingerprint(projection)
-	state, err := a.commitSummaryProjection(summaryProjectionCommit{
+	_, err = a.commitSummaryProjection(summaryProjectionCommit{
 		canonical: snap.canonical, fold: prepared.fold, projected: projection, result: res,
 		transcriptVersion: snap.transcriptVersion, projectionVersion: snap.projectionVersion, generation: snap.generation,
 		activeTurn: a.activeTurnCreatedAt.Load(), trigger: trigger, summary: summary,
@@ -236,7 +236,7 @@ func (a *Agent) compressVisibleRange(
 	}
 	a.emitCompactionTelemetry(tele)
 	a.svc.sink.Emit(event.Event{Kind: event.CompactionDone, Compaction: event.Compaction{
-		Trigger: trigger, Messages: len(plan.fold), Summary: summary, Archive: state.LastReceipt.Archive,
+		Trigger: trigger, Messages: len(plan.fold), Summary: summary,
 	}})
 	result.Status = "ok"
 	result.Reason = ""
