@@ -27,12 +27,31 @@ func indexRegion() []provider.Message {
 
 func identityOrigin(i int) int { return i }
 
+// Index budgets are token budgets, so the lines are costed the way the window
+// is: an uncalibrated agent carries the ~4 chars per token fallback.
+func indexAgent() *Agent { return &Agent{agentConfig: agentConfig{contextWindow: 128_000}} }
+
+// The budget is a token share of the window. Costing its lines in characters
+// spent it four times over, leaving the address list a quarter of the size it
+// was budgeted for — and the fold's only addresses along with it.
+func TestFoldIndexBudgetIsSpentInTokens(t *testing.T) {
+	a := indexAgent()
+	entries := make([]foldIndexEntry, 40)
+	for i := range entries {
+		entries[i] = foldIndexEntry{Canonical: i, Kind: "read_file", Subject: "internal/agent/compact_index.go", rank: rankRead}
+	}
+	digest := a.attachFoldIndex("## Goal\nship it", "", entries)
+	if kept := strings.Count(digest, "read_file"); kept < len(entries) {
+		t.Fatalf("index kept %d of %d entries under a %d-token budget", kept, len(entries), a.foldIndexBudget())
+	}
+}
+
 // The index carries what the digest does not: reads, searches, and user turns
 // the retention budget could not hold. Changes are the digest's contract, so
 // indexing them again would pay for the same fact twice.
 func TestFoldIndexCoversWhatTheDigestDoesNot(t *testing.T) {
 	entries := buildFoldIndex(indexRegion(), make([]bool, 7), coverageTools, identityOrigin)
-	rendered := renderFoldIndex(entries, 4000)
+	rendered := indexAgent().renderFoldIndex(entries, 4000)
 	for _, want := range []string{"read_file", "grep", "go build", "#0"} {
 		if !strings.Contains(rendered, want) {
 			t.Errorf("index missing %q:\n%s", want, rendered)
@@ -56,7 +75,7 @@ func TestFoldIndexCoversWhatTheDigestDoesNot(t *testing.T) {
 func TestFoldIndexSkipsUserTurnsHeldVerbatim(t *testing.T) {
 	kept := make([]bool, 7)
 	kept[0] = true
-	rendered := renderFoldIndex(buildFoldIndex(indexRegion(), kept, coverageTools, identityOrigin), 4000)
+	rendered := indexAgent().renderFoldIndex(buildFoldIndex(indexRegion(), kept, coverageTools, identityOrigin), 4000)
 	if strings.Contains(rendered, "不能停机") {
 		t.Errorf("a verbatim-kept turn was indexed anyway:\n%s", rendered)
 	}
@@ -66,7 +85,7 @@ func TestFoldIndexSkipsUserTurnsHeldVerbatim(t *testing.T) {
 // whose file is still on disk.
 func TestFoldIndexBudgetKeepsTheIrreplaceableFirst(t *testing.T) {
 	entries := buildFoldIndex(indexRegion(), make([]bool, 7), coverageTools, identityOrigin)
-	rendered := renderFoldIndex(entries, 100)
+	rendered := indexAgent().renderFoldIndex(entries, 40)
 	if rendered == "" {
 		t.Fatal("a small budget should still hold the top-ranked entry")
 	}
@@ -81,7 +100,7 @@ func TestFoldIndexBudgetKeepsTheIrreplaceableFirst(t *testing.T) {
 // The index round-trips out of a digest and back, so a later fold can
 // re-summarize the prose without asking a model to rewrite host-written lines.
 func TestFoldIndexSplitsAndMergesAcrossFolds(t *testing.T) {
-	first := renderFoldIndex(buildFoldIndex(indexRegion(), make([]bool, 7), coverageTools, identityOrigin), 4000)
+	first := indexAgent().renderFoldIndex(buildFoldIndex(indexRegion(), make([]bool, 7), coverageTools, identityOrigin), 4000)
 	digest := "## Goal\nship the parser\n\n" + first
 
 	prose, index := splitFoldIndex(digest)
@@ -92,10 +111,10 @@ func TestFoldIndexSplitsAndMergesAcrossFolds(t *testing.T) {
 		t.Fatalf("index did not round-trip:\n%s", index)
 	}
 
-	fresh := renderFoldIndex([]foldIndexEntry{
+	fresh := indexAgent().renderFoldIndex([]foldIndexEntry{
 		{Canonical: 40, Kind: "read_file", Subject: "internal/other.go", rank: rankRead},
 	}, 4000)
-	merged := mergeFoldIndex(index, fresh, 4000)
+	merged := indexAgent().mergeFoldIndex(index, fresh, 4000)
 	if !strings.Contains(merged, "internal/other.go") || !strings.Contains(merged, "不能停机") {
 		t.Fatalf("merge lost one side:\n%s", merged)
 	}
@@ -111,12 +130,12 @@ func TestFoldIndexMergeTrimsOldestAndSaysSo(t *testing.T) {
 	for i := range 40 {
 		old = append(old, foldIndexEntry{Canonical: i, Kind: "read_file", Subject: "internal/pkg/file.go", rank: rankRead})
 	}
-	previous := renderFoldIndex(old, 8000)
-	fresh := renderFoldIndex([]foldIndexEntry{
+	previous := indexAgent().renderFoldIndex(old, 8000)
+	fresh := indexAgent().renderFoldIndex([]foldIndexEntry{
 		{Canonical: 99, Kind: "read_file", Subject: "internal/newest.go", rank: rankRead},
 	}, 8000)
 
-	merged := mergeFoldIndex(previous, fresh, 200)
+	merged := indexAgent().mergeFoldIndex(previous, fresh, 200)
 	if !strings.Contains(merged, "internal/newest.go") {
 		t.Fatalf("trimming dropped the newest entry:\n%s", merged)
 	}

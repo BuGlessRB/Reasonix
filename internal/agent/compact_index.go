@@ -106,7 +106,7 @@ func buildFoldIndex(region []provider.Message, kept []bool, readOnly func(string
 
 // renderFoldIndex writes the section, dropping the lowest-ranked entries when
 // the budget binds. Ties keep transcript order so the section reads forward.
-func renderFoldIndex(entries []foldIndexEntry, budgetTokens int) string {
+func (a *Agent) renderFoldIndex(entries []foldIndexEntry, budgetTokens int) string {
 	if len(entries) == 0 || budgetTokens <= 0 {
 		return ""
 	}
@@ -117,13 +117,13 @@ func renderFoldIndex(entries []foldIndexEntry, budgetTokens int) string {
 	// Stable by rank: sort.SliceStable would do, but the slice is small and the
 	// selection has to stay in transcript order for rendering anyway.
 	var chosen []int
-	spent := estimateTextTokens(indexSectionHeading)
+	spent := a.textTokens(indexSectionHeading)
 	for rank := rankDroppedUserTurn; rank <= rankRead; rank++ {
 		for _, i := range order {
 			if entries[i].rank != rank {
 				continue
 			}
-			cost := estimateTextTokens(entries[i].line())
+			cost := a.textTokens(entries[i].line())
 			if spent+cost > budgetTokens {
 				continue
 			}
@@ -162,7 +162,7 @@ func splitFoldIndex(digest string) (prose, index string) {
 // mergeFoldIndex carries the previous index forward ahead of the new lines and
 // trims from the oldest when the budget binds — an entry that has survived more
 // folds is the one whose original is furthest out of reach.
-func mergeFoldIndex(previous, fresh string, budgetTokens int) string {
+func (a *Agent) mergeFoldIndex(previous, fresh string, budgetTokens int) string {
 	previous, fresh = strings.TrimSpace(previous), strings.TrimSpace(fresh)
 	if previous == "" {
 		return fresh
@@ -171,10 +171,10 @@ func mergeFoldIndex(previous, fresh string, budgetTokens int) string {
 	if len(lines) == 0 {
 		return ""
 	}
-	spent := estimateTextTokens(indexSectionHeading)
+	spent := a.textTokens(indexSectionHeading)
 	first := 0
 	for i, line := range slices.Backward(lines) {
-		cost := estimateTextTokens(line)
+		cost := a.textTokens(line)
 		if spent+cost > budgetTokens {
 			first = i + 1
 			break
@@ -256,7 +256,7 @@ func stripFoldIndexFromDigests(fold []provider.Message) ([]provider.Message, str
 // attachFoldIndex appends the merged index to a digest.
 func (a *Agent) attachFoldIndex(digest, priorIndex string, entries []foldIndexEntry) string {
 	budget := a.foldIndexBudget()
-	merged := mergeFoldIndex(priorIndex, renderFoldIndex(entries, budget), budget)
+	merged := a.mergeFoldIndex(priorIndex, a.renderFoldIndex(entries, budget), budget)
 	if merged == "" {
 		return digest
 	}

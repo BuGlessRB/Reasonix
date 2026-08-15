@@ -523,6 +523,13 @@ func (a *Agent) tokPerChar() float64 {
 	return fallbackTokPerChar
 }
 
+// textTokens sizes a bare string in real tokens. estimatedPromptTokens is for
+// whole messages; budgeting text one line at a time, its per-message framing
+// would outweigh the line.
+func (a *Agent) textTokens(s string) int {
+	return int(float64(len(s)) * a.tokPerChar())
+}
+
 // msgChars counts the characters that ride to the provider for one message —
 // content plus tool-call names and arguments, but not reasoning (stripped on
 // send).
