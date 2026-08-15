@@ -5,15 +5,41 @@ import (
 	"testing"
 
 	"reasonix/internal/evidence"
-	"reasonix/internal/taskintent"
 )
 
-func TestNewClassifiesWithExistingHeuristics(t *testing.T) {
-	if c := New("fix the bug in utils.py"); c.Intent != taskintent.Mutation {
-		t.Fatalf("intent = %v, want Mutation", c.Intent)
+// atomicFixture is the one-requirement, one-check shape the delivery gates
+// exercise: the ask is auto-satisfied by mutation evidence, and the single
+// check is "the workspace changed".
+func atomicFixture(input string) *Contract {
+	c := New(input)
+	c.Requirements = append(c.Requirements, Requirement{
+		ID: "r1", Text: input, Required: true, Auto: true, AutoKind: EvidenceMutation,
+	})
+	c.Checks = append(c.Checks, Check{Kind: CheckMutation})
+	return c
+}
+
+// Kind is read off receipts, never off the task text: the same words produce
+// a different label depending on what the turn actually did.
+func TestKindFollowsTheReceiptsNotTheText(t *testing.T) {
+	if c := New("fix the bug in utils.py"); c.Kind != KindConversation {
+		t.Fatalf("kind = %v, want conversation before any receipt", c.Kind)
 	}
-	if c := New("what does this function do?"); c.Intent == taskintent.Mutation {
-		t.Fatalf("advisory question misclassified as mutation")
+	c := New("fix the bug in utils.py")
+	c.Observe(evidence.Receipt{ToolName: "read_file", Read: true, Success: true, Paths: []string{"utils.py"}})
+	if c.Kind != KindObservableRead {
+		t.Fatalf("kind = %v, want observable_read after a successful read", c.Kind)
+	}
+	c.Observe(evidence.Receipt{ToolName: "edit_file", Mutation: true, Write: true, Success: true, Paths: []string{"utils.py"}})
+	if c.Kind != KindMutation {
+		t.Fatalf("kind = %v, want mutation after a successful write", c.Kind)
+	}
+
+	// A failed write proves nothing changed, so the label must not ratchet.
+	quiet := New("fix the bug in utils.py")
+	quiet.Observe(evidence.Receipt{ToolName: "edit_file", Mutation: true, Write: true, Success: false})
+	if quiet.Kind != KindConversation {
+		t.Fatalf("kind = %v, want conversation when every receipt failed", quiet.Kind)
 	}
 }
 
@@ -91,10 +117,7 @@ func TestOutstandingListsBlockersOnly(t *testing.T) {
 }
 
 func TestAtomicContractCompletesFromOneMutation(t *testing.T) {
-	c := Atomic("fix typo in README.md")
-	if c.Intent != taskintent.Mutation {
-		t.Fatalf("intent = %v, want Mutation", c.Intent)
-	}
+	c := atomicFixture("fix typo in README.md")
 	if !c.Trivial() {
 		t.Fatal("atomic contract must route trivial (executor-only, no arbiters)")
 	}
@@ -115,7 +138,7 @@ func TestAtomicContractCompletesFromOneMutation(t *testing.T) {
 }
 
 func TestMutationCheckHonorsScopePaths(t *testing.T) {
-	c := Atomic("fix typo in README.md")
+	c := atomicFixture("fix typo in README.md")
 	c.MergeSignals(Signals{Anchored: true, Paths: []string{"README.md"}})
 	c.Observe(evidence.Receipt{ToolName: "write_file", Mutation: true, Success: true, Paths: []string{"other.txt"}})
 	if c.Checks[0].Status == Satisfied {
@@ -128,7 +151,7 @@ func TestMutationCheckHonorsScopePaths(t *testing.T) {
 }
 
 func TestTrivialRejectsComplexContracts(t *testing.T) {
-	c := Atomic("fix typo")
+	c := atomicFixture("fix typo")
 	c.MergeSignals(Signals{HighRisk: true})
 	if c.Trivial() {
 		t.Fatal("high risk is never trivial")
@@ -181,7 +204,7 @@ func TestExecutionViewIsAViewNotAParallelDescription(t *testing.T) {
 			t.Fatalf("todo %d should render completed after satisfaction: %+v", i, todo)
 		}
 	}
-	atomicView := Atomic("fix typo").ExecutionView()
+	atomicView := atomicFixture("fix typo").ExecutionView()
 	if len(atomicView) != 2 || atomicView[1].Content != "apply the change" {
 		t.Fatalf("atomic view = %+v", atomicView)
 	}
@@ -229,7 +252,7 @@ func TestMutationStalesVerificationEvidence(t *testing.T) {
 }
 
 func TestMutationEvidenceNeverStales(t *testing.T) {
-	c := Atomic("fix typo in README.md")
+	c := atomicFixture("fix typo in README.md")
 	c.Observe(evidence.Receipt{ToolName: "edit_file", Mutation: true, Success: true, Paths: []string{"README.md"}})
 	if !c.Complete() {
 		t.Fatal("atomic contract should complete on the mutation")

@@ -847,9 +847,6 @@ func TestGoalAutoResearchTriggersForLongHorizonGoals(t *testing.T) {
 	if !strings.Contains(got, "<active-goal>") || strings.Contains(strings.ToLower(got), "autoresearch") {
 		t.Fatalf("unified research Goal prompt = %q", got)
 	}
-	if got := c.goals.budgetClass; got != budgetClassResearch {
-		t.Fatalf("research budget class = %q, want %q", got, budgetClassResearch)
-	}
 	if c.GoalRuntime().TurnsLimit != 0 {
 		t.Fatalf("research Goal should have no turn quota: %+v", c.GoalRuntime())
 	}

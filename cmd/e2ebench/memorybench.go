@@ -58,19 +58,11 @@ func seedTaskMemory(taskDir, work string) ([]string, error) {
 }
 
 // taskExperimentEnv assembles one run's experiment environment: the policy
-// arm, fork capture, and the seeded memory state root. The note reports a
-// seeding failure without aborting the run.
+// arm and the seeded memory state root. The note reports a seeding failure
+// without aborting the run.
 func taskExperimentEnv(cfg suiteConfig, t task, work string) (env []string, note string) {
-	switch cfg.policy {
-	case "ebm":
-		env = append(env, "REASONIX_EXPERIMENT_EBM=1")
-	case "governor":
-		env = append(env, "REASONIX_EXPERIMENT_GOVERNOR=1")
-	case "memory-off":
+	if cfg.policy == "memory-off" {
 		env = append(env, "REASONIX_EXPERIMENT_NO_MEMORY=1")
-	}
-	if cfg.forkCapture != "" {
-		env = append(env, "REASONIX_EXPERIMENT_FORK_CAPTURE_DIR="+filepath.Join(cfg.forkCapture, t.ID))
 	}
 	seedEnv, err := seedTaskMemory(t.dir, work)
 	if err != nil {

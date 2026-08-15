@@ -49,7 +49,7 @@ func TestUnknownPersistedBudgetClassFallsBackToGoalClassification(t *testing.T) 
 	g := &goalMachine{}
 	g.setStatePath(goalStatePath(path))
 	_, _, migrated, _ := g.restoreFromState(path)
-	if !migrated || g.budgetClass != budgetClassWrite || g.turnsLimit != unlimitedGoalTurns {
+	if !migrated || g.budgetClass != "" || g.turnsLimit != unlimitedGoalTurns {
 		t.Fatalf("unknown budget restore = migrated:%v class:%q turns:%d", migrated, g.budgetClass, g.turnsLimit)
 	}
 }

@@ -1,9 +1,8 @@
 // Package taskcontract is the convergence point for the host's task state:
 // one Contract assembled purely from signals the runtime already produced —
-// the taskintent classification, planner-gate features, plan acceptance
-// criteria, and the evidence ledger's receipts. Building or updating a
-// contract never makes a model call; every termination arbiter reads the
-// same record instead of keeping its own.
+// planner-gate features, plan acceptance criteria, and the evidence ledger's
+// receipts. Building or updating a contract never makes a model call; every
+// termination arbiter reads the same record instead of keeping its own.
 package taskcontract
 
 import (
@@ -12,7 +11,6 @@ import (
 	"strings"
 
 	"reasonix/internal/evidence"
-	"reasonix/internal/taskintent"
 )
 
 // Risk is the highest risk any upstream signal assigned to the task.
@@ -125,9 +123,34 @@ type Signals struct {
 	Paths        []string
 }
 
+// Kind labels a contract by what its receipts turned out to be, for the
+// trajectory record. It is observed after the fact, never predicted from the
+// task text.
+type Kind uint8
+
+const (
+	// KindConversation is a turn that produced no host-observable receipt.
+	KindConversation Kind = iota
+	// KindObservableRead is a turn whose receipts are reads and commands only.
+	KindObservableRead
+	// KindMutation is a turn that successfully changed state.
+	KindMutation
+)
+
+func (k Kind) String() string {
+	switch k {
+	case KindObservableRead:
+		return "observable_read"
+	case KindMutation:
+		return "mutation"
+	default:
+		return "conversation"
+	}
+}
+
 // Contract is the unified task record.
 type Contract struct {
-	Intent       taskintent.Intent
+	Kind         Kind
 	Risk         Risk
 	Scope        Scope
 	Requirements []Requirement
@@ -136,16 +159,17 @@ type Contract struct {
 	epoch uint64
 }
 
-// New classifies input with the existing taskintent heuristics and returns
-// an otherwise empty contract; no model call is made.
-func New(input string) *Contract {
-	return &Contract{Intent: taskintent.Classify(input)}
+// New returns an empty contract for one task; requirements arrive from a plan
+// or a todo list, and Kind fills in from the receipts Observe folds.
+func New(_ string) *Contract {
+	return &Contract{}
 }
 
-// Atomic is the zero-overhead contract for a simple ask: the ask itself is
-// the one requirement (auto-satisfied by mutation evidence) and the one
-// check is "the workspace changed". No planner, no evaluator, no extra
-// round — the host synthesizes it and the ledger completes it.
+// Atomic is the zero-overhead contract for a simple ask: the ask itself is the
+// one requirement (auto-satisfied by mutation evidence) and the one check is
+// "the workspace changed". Whether a turn gets this shape is the caller's call
+// and belongs on evidence — a turn that changed something has a change to
+// account for, whatever its wording was.
 func Atomic(input string) *Contract {
 	c := New(input)
 	c.Requirements = append(c.Requirements, Requirement{
@@ -288,6 +312,14 @@ func (c *Contract) AddCheck(command string) {
 // current code. Mutation-kind evidence never stales: the change happened;
 // whether the fix still holds is verification's job.
 func (c *Contract) Observe(r evidence.Receipt) {
+	if r.Success {
+		switch {
+		case r.Mutation || r.Write:
+			c.Kind = KindMutation
+		case c.Kind < KindObservableRead:
+			c.Kind = KindObservableRead
+		}
+	}
 	if r.Mutation || r.Write {
 		c.epoch++
 		c.staleOutdated()

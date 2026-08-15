@@ -13,7 +13,6 @@ import (
 	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
 	"reasonix/internal/provider"
-	"reasonix/internal/taskintent"
 	"reasonix/internal/taskpolicy"
 	"reasonix/internal/tool"
 )
@@ -172,24 +171,16 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	a.turn.deliveryCriteriaEstablished = a.hasIncompleteCanonicalCriteria() ||
 		(a.task.ledger != nil && a.task.ledger.HasSuccessfulTodoWrite()) ||
 		(scoped && a.task.checkpoint.CriteriaEstablished)
-	// Classify delivery expectations from the task text. Sub-agent spawners
-	// pass the pristine task through Options.ClassifierTaskText (a trusted
-	// host channel) because their Run input carries host framing whose
-	// incidental verbs — "file tools resolve relative paths" — once classified
-	// every workspace-wrapped subagent prompt as a mutation request and
-	// deadlocked read-only subagents. Without the override the raw input is
-	// classified verbatim: stripping user-controllable markup here would let
-	// input dressed up as host framing disarm the delivery gates.
+	// The turn's task text. Sub-agent spawners pass the pristine task through
+	// Options.ClassifierTaskText (a trusted host channel) so the recovery
+	// summary and the shadow contract describe the child's own task rather
+	// than the workspace framing wrapped around it.
 	a.turn.turnInput = a.classifierTaskText
 	if scoped && strings.TrimSpace(scope.TaskText) != "" {
 		a.turn.turnInput = scope.TaskText
 	} else if strings.TrimSpace(a.turn.turnInput) == "" {
 		a.turn.turnInput = rawInput
 	}
-	intent := taskintent.Classify(a.turn.turnInput)
-	a.turn.deliveryTaskExpected = intent.NeedsEvidence()
-	a.turn.deliveryMutationExpected = intent == taskintent.Mutation && registryHasWriterTools(a.svc.tools)
-	a.turn.deliveryPersistentExpected = taskintent.NeedsPersistentAction(a.turn.turnInput)
 	a.turn.recoveryTaskSummary = boundedRecoveryTaskSummary(a.turn.turnInput)
 	// Freeze TaskPolicy for this turn from the session role setting. Subsequent
 	// SetAgentPreset calls must not change this turn's route/review floor.
@@ -204,18 +195,11 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 		})
 	}
 	a.turn.policySet = true
-	// Align legacy delivery gates with the frozen role setting. Delivery always
-	// enables the full readiness contract. Light/Balanced only elevate when the
-	// turn is a mutation that requires forced review or is high-risk.
-	switch {
-	case a.AgentPreset() == string(agentpreset.Delivery):
-		a.deliveryProfile = true
-	case a.turn.policy.Intent == taskintent.Mutation &&
-		(a.turn.policy.RequiresIndependentReview() || a.turn.policy.Risk >= taskpolicy.RiskHigh):
-		a.deliveryProfile = true
-	default:
-		a.deliveryProfile = false
-	}
+	// The full readiness contract is the Delivery role's contract. Light and
+	// Balanced keep their own gates (post-mutation review still applies via
+	// deliveryReviewGateFailure when the policy forces a review); they no
+	// longer inherit Delivery's ceremony because a sentence read as a mutation.
+	a.deliveryProfile = a.AgentPreset() == string(agentpreset.Delivery)
 	// A cancelled/error turn leaves a provider-excluded recovery record at the
 	// transcript tail. Fold its bounded facts into this new user turn exactly
 	// once; the user's raw text remains the classifier source above.

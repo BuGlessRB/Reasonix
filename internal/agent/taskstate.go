@@ -13,8 +13,6 @@ type taskRuntime struct {
 	ledger     *evidence.Ledger
 	outcome    *evidence.OutcomeTracker
 	budget     runBudget
-	ebm        ebmState
-	governor   governorState
 	// repeatFailures outlives a Run: re-reading a file and resending the same
 	// stale anchor is still zero progress, so prepareScope — not the ledger
 	// restart — decides what survives a scope-stable continuation.

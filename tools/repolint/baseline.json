@@ -1807,12 +1807,6 @@
     "internal/taskcontract/taskcontract.go": {
       "essay": 1
     },
-    "internal/taskintent/goal_budget.go": {
-      "essay": 1
-    },
-    "internal/taskintent/heuristic.go": {
-      "essay": 1
-    },
     "internal/taskmonitor/control.go": {
       "complexity": 21,
       "essay": 1,

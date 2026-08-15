@@ -94,14 +94,6 @@ func (s *syncSink) RecordMemoryRecall(a MemoryRecallAudit) {
 	}
 }
 
-func (s *syncSink) RecordDelegationAdmission(a DelegationAdmissionAudit) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if da, ok := s.inner.(DelegationAdmissionSink); ok {
-		da.RecordDelegationAdmission(a)
-	}
-}
-
 func (s *syncSink) RecordWorkspaceMutation(m WorkspaceMutation) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

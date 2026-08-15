@@ -122,19 +122,9 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 		} else if checkpointApplies && checkpoint.MutationObserved {
 			deliveryMutation = true
 		}
-		workObserved := a.task.ledger.HasSuccessfulWorkReceipt() || (checkpointApplies && checkpoint.WorkObserved)
-		if a.turn.deliveryTaskExpected && !a.turn.deliveryPersistentExpected && !workObserved {
-			out.missingActionEvidence++
-			missing = append(missing, "perform host-observable work for this technical task before answering")
-		}
-		if a.turn.deliveryPersistentExpected && !a.task.ledger.HasSuccessfulToolReceipt("remember") {
-			out.missingMutation++
-			missing = append(missing, "save the requested durable memory with the remember tool before answering")
-		}
-		if a.turn.deliveryMutationExpected && !deliveryMutation {
-			out.missingMutation++
-			missing = append(missing, "the request requires a state change, but no successful mutation was observed")
-		}
+		// What a turn owes is read off the ledger, never off the task text: one
+		// that changed nothing owes nothing, one that did owes the verification,
+		// review, and sign-off below.
 		if !hasWriter && a.task.ledger.HasSuccessfulVerificationCommand() {
 			writer, hasWriter = -1, true
 			deliveryVerificationOnly = true
@@ -147,10 +137,10 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 			out.missingCapabilities++
 			missing = append(missing, msg)
 		}
-		if a.turn.deliveryPersistentExpected && !a.turn.deliveryMutationExpected && !a.task.ledger.HasSuccessfulMutationOtherThan("remember") {
-			// A durable-memory-only request has its own concrete receipt contract.
-			// It must not inherit code-delivery todo/test/diff/review ceremonies;
-			// any unrelated mutation falls through to the full contract below.
+		if a.task.ledger.HasSuccessfulToolReceipt("remember") && !a.task.ledger.HasSuccessfulMutationOtherThan("remember") {
+			// A turn whose only mutation was a memory write has nothing a test or
+			// a diff could add. Any unrelated mutation falls through to the full
+			// contract below.
 			out.applies = true
 			if len(missing) > 0 {
 				out.reason = strings.Join(missing, "; ")

@@ -15,7 +15,6 @@ import (
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/goaleval"
 	"reasonix/internal/store"
-	"reasonix/internal/taskintent"
 	"reasonix/internal/tool"
 )
 
@@ -30,11 +29,13 @@ const (
 	maxGoalProgressEvidence = 512
 )
 
-// Budget class aliases remain as sidecar/CLI compatibility metadata only.
+// Budget class names survive only as sidecar/CLI compatibility metadata. The
+// turn quota they once selected is gone, so nothing in the runtime reads the
+// class back — it is normalized on load and written out unchanged.
 const (
-	budgetClassSimple   = taskintent.BudgetClassSimple
-	budgetClassWrite    = taskintent.BudgetClassWrite
-	budgetClassResearch = taskintent.BudgetClassResearch
+	budgetClassSimple   = "simple"
+	budgetClassWrite    = "write"
+	budgetClassResearch = "research"
 )
 
 // Stop causes distinguish a safe pause from a genuine block. Removed numeric
@@ -51,20 +52,14 @@ const (
 	stopCauseManual        = "manual"
 )
 
-// budgetClassForLegacyMode translates old sidecars and deprecated CLI flags at
-// the compatibility boundary. The active Goal runtime stores only budgetClass.
-func budgetClassForLegacyMode(goal string, researchMode GoalResearchMode) string {
-	switch researchMode {
-	case GoalResearchOn:
+// budgetClassForLegacyMode translates the deprecated research flag at the
+// compatibility boundary. Without one there is no class to assign: guessing it
+// from the goal text bought nothing once the class-derived quota was removed.
+func budgetClassForLegacyMode(_ string, researchMode GoalResearchMode) string {
+	if researchMode == GoalResearchOn {
 		return budgetClassResearch
-	case GoalResearchOff:
-		if taskintent.GoalNeedsWriteBudget(goal) {
-			return budgetClassWrite
-		}
-		return budgetClassSimple
-	default:
-		return taskintent.ClassifyGoalBudget(goal)
 	}
+	return ""
 }
 
 // goalMachine owns the active goal FSM and its persistence. It is a strict
@@ -281,9 +276,6 @@ func (g *goalMachine) statusForDisplay() string {
 // configured.
 func (g *goalMachine) set(goal, preferredBudgetClass string, todos []evidence.TodoItem) (string, []byte, bool) {
 	goal = strings.TrimSpace(goal)
-	if goal != "" && preferredBudgetClass == "" {
-		preferredBudgetClass = taskintent.ClassifyGoalBudget(goal)
-	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if goal != "" && g.goal == goal && g.status == GoalStatusRunning && g.budgetClass == preferredBudgetClass {
@@ -303,9 +295,6 @@ func (g *goalMachine) setLegacyArchiveBlocked(goal, preferredBudgetClass, reason
 func (g *goalMachine) setLegacyArchiveBlockedWithTaskID(goal, preferredBudgetClass, reason, taskID string, todos []evidence.TodoItem) (string, []byte, bool) {
 	goal = strings.TrimSpace(goal)
 	taskID = strings.TrimSpace(taskID)
-	if goal != "" && preferredBudgetClass == "" {
-		preferredBudgetClass = taskintent.ClassifyGoalBudget(goal)
-	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.installGoalLocked(goal, preferredBudgetClass)

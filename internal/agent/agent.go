@@ -1129,8 +1129,6 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 	a.SetAgentPreset(preset)
 	a.SetResponseLanguage(opts.ResponseLanguage)
 	a.SetReasoningLanguage(opts.ReasoningLanguage)
-	a.maybeArmForkFromEnv()
-	a.maybeWrapForkCaptureProvider()
 	return a
 }
 
@@ -1276,9 +1274,6 @@ func (a *Agent) Run(ctx context.Context, input string) (runErr error) {
 	}
 
 	_, state := a.beginRunTurn(ctx, input)
-	if a.pending.forkRestore != nil {
-		a.pending.forkRestore(state)
-	}
 	state.runMaxSteps = runMaxSteps
 	state.runMaxStepsKey = runMaxStepsKey
 	state.runLimitHostOwned = runLimitHostOwned
@@ -1364,8 +1359,8 @@ func (a *Agent) updateDeliveryCheckpoint(runErr error) {
 	}
 	cp.CriteriaEstablished = cp.CriteriaEstablished || a.turn.deliveryCriteriaEstablished || a.task.ledger.HasSuccessfulTodoWrite()
 	cp.WorkObserved = cp.WorkObserved || a.task.ledger.HasSuccessfulWorkReceipt()
-	persistentOnlyReady := a.turn.deliveryPersistentExpected && !a.turn.deliveryMutationExpected &&
-		a.task.ledger.HasSuccessfulToolReceipt("remember") && !a.task.ledger.HasSuccessfulMutationOtherThan("remember")
+	persistentOnlyReady := a.task.ledger.HasSuccessfulToolReceipt("remember") &&
+		!a.task.ledger.HasSuccessfulMutationOtherThan("remember")
 	if _, ok := a.task.ledger.LatestSuccessfulMutationIndex(); ok && !persistentOnlyReady {
 		cp.MutationObserved = true
 		cp.PendingMutation = true
@@ -1426,26 +1421,6 @@ func (a *Agent) canonicalTodoProgress() (int, bool) {
 	return completed, incomplete
 }
 
-// registryHasWriterTools reports whether any registered tool can mutate state.
-// A strictly read-only registry (read_only_task / read_only_skill subagents)
-// can never satisfy a "state change required" delivery expectation, so that
-// expectation must not be armed for it.
-func registryHasWriterTools(reg *tool.Registry) bool {
-	if reg == nil {
-		return false
-	}
-	for _, name := range reg.Names() {
-		if t, ok := reg.Get(name); ok && !t.ReadOnly() {
-			return true
-		}
-	}
-	return false
-}
-
-// advanceCanonicalTodo flips the canonical todo matching a signed-off step to
-// completed (promoting the next pending item to in_progress) and emits a
-// synthetic todo_write so the task panel reflects it without the model
-// re-sending the whole list. No-op when nothing matches or it is already done.
 func (a *Agent) advanceCanonicalTodo(step string) {
 	a.sess.todoMu.Lock()
 	if len(a.sess.todoState) == 0 {
@@ -1949,7 +1924,7 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 				responsesItems = append(responsesItems, append(json.RawMessage(nil), chunk.ResponsesItem...))
 			}
 		case provider.ChunkUsage:
-			usage, a.turn.lastReasoning = chunk.Usage, chunk.Usage.ReasoningTokens
+			usage = chunk.Usage
 			a.storeLatestRequestUsage(chunk.Usage)
 			a.sess.cacheHit.Add(int64(chunk.Usage.CacheHitTokens))
 			a.sess.cacheMiss.Add(int64(chunk.Usage.CacheMissTokens))

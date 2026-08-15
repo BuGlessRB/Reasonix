@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"reasonix/internal/agentpreset"
-	"reasonix/internal/taskintent"
 )
 
 func TestDeriveLightSimpleIsDirect(t *testing.T) {
@@ -13,9 +12,6 @@ func TestDeriveLightSimpleIsDirect(t *testing.T) {
 		Raw:    "what is a mutex?",
 		Preset: agentpreset.Light,
 	})
-	if p.Intent != taskintent.Conversation && p.Intent != taskintent.Advisory {
-		t.Fatalf("intent = %v", p.Intent)
-	}
 	if p.Route != RouteDirect {
 		t.Fatalf("route = %v, want direct", p.Route)
 	}
@@ -26,8 +22,9 @@ func TestDeriveLightSimpleIsDirect(t *testing.T) {
 
 func TestDeriveLightHighRiskElevates(t *testing.T) {
 	p := Derive(Input{
-		Raw:    "fix the authentication bypass in production login",
-		Preset: agentpreset.Light,
+		Raw:           "fix the authentication bypass in production login",
+		Preset:        agentpreset.Light,
+		HighRiskHints: true,
 	})
 	if p.Risk < RiskHigh && !p.SecurityClass {
 		t.Fatalf("expected high risk or security class, got risk=%v security=%v", p.Risk, p.SecurityClass)
@@ -56,8 +53,21 @@ func TestDeriveDeliveryLowRiskNoReviewer(t *testing.T) {
 	if p.Risk == RiskLow && p.RequiresIndependentReview() {
 		t.Fatal("delivery low-risk must not force independent reviewer")
 	}
-	if !p.RequireAtomicContract {
-		t.Fatal("delivery mutation should require atomic contract")
+}
+
+// Risk arrives as a host signal. Topic words used to promote it on their own,
+// so "migrate the schema" bought a full plan and a forced review from a
+// sentence; the same text with no host signal must now stay low.
+func TestDeriveIgnoresTopicWordsWithoutHostSignals(t *testing.T) {
+	for _, raw := range []string{
+		"migrate the schema to the new column layout",
+		"explain how the oauth credential rotation works",
+		"迁移这段配置到新格式",
+	} {
+		p := Derive(Input{Raw: raw, Preset: agentpreset.Balanced})
+		if p.Risk != RiskLow || p.SecurityClass {
+			t.Errorf("%q derived risk=%v security=%v from words alone", raw, p.Risk, p.SecurityClass)
+		}
 	}
 }
 

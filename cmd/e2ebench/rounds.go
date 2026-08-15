@@ -91,7 +91,6 @@ type trajScan struct {
 
 	gapReason, gapCompl, gapPrompt int64
 
-	denyDelegations  map[string]bool
 	delegationToolMs map[string]int64
 }
 

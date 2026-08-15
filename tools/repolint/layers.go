@@ -43,8 +43,8 @@ var leaves = []string{
 	"internal/shellparse",
 	"internal/store",
 	"internal/sysproxy",
-	"internal/taskintent",
 	"internal/textutil",
+	"internal/tokencount",
 	"internal/workspacelease",
 }
 

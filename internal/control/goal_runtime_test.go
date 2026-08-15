@@ -372,30 +372,6 @@ func TestMaxRunWorkDurationTakesOnlyNewAssistantMaximum(t *testing.T) {
 		t.Fatalf("max Run work duration = %d, want 24000", got)
 	}
 }
-
-func TestBudgetClassForBareFaultIsWrite(t *testing.T) {
-	// User-reported Chinese bare fault keeps its legacy compatibility class.
-	class := budgetClassForLegacyMode("数据模型管理器又出现历史 BUG 了……", GoalResearchAuto)
-	if class != budgetClassWrite {
-		t.Fatalf("budget class = %q, want write", class)
-	}
-	// Consultative / diagnostic fault statements stay simple.
-	for _, goal := range []string{
-		"为什么会出现这个 BUG？",
-		"只分析原因，不要修改代码。",
-		"诊断数据库连接失败原因。",
-		"复现并定位问题，但不要修复。",
-	} {
-		if got := budgetClassForLegacyMode(goal, GoalResearchAuto); got != budgetClassSimple {
-			t.Errorf("budgetClassFor(%q) = %q, want simple", goal, got)
-		}
-	}
-	// Explicit mutation verbs remain write.
-	if got := budgetClassForLegacyMode("fix the crash in settings", GoalResearchAuto); got != budgetClassWrite {
-		t.Fatalf("explicit fix class = %q, want write", got)
-	}
-}
-
 func TestGoalLegacyBudgetTokensSidecarAutoResumes(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "session.jsonl")
@@ -694,8 +670,8 @@ func TestPlainDeliveryReadinessFailureSurfacesRecoveryCardWithoutRetries(t *test
 	reg.Add(todoWrite)
 	reg.Add(minimalFakeTool{name: "write_file"})
 	prov := &scriptedTurns{turns: [][]provider.Chunk{
-		{toolCallChunk("w1", "write_file", `{"path":"main.go"}`), {Type: provider.ChunkDone}},
 		{toolCallChunk("t0", "todo_write", `{"todos":[{"content":"Ship main","status":"in_progress"}]}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("w1", "write_file", `{"path":"main.go"}`), {Type: provider.ChunkDone}},
 		textTurn("premature final"),
 		textTurn("extra turn that must never run"),
 	}}

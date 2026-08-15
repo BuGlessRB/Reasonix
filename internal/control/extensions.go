@@ -219,10 +219,6 @@ func (s *frontendEventSink) RecordOutcomeProgress(sample evidence.OutcomeSample)
 	event.RecordOutcomeProgress(s.inner, sample)
 }
 
-func (s *frontendEventSink) RecordDelegationAdmission(a event.DelegationAdmissionAudit) {
-	event.RecordDelegationAdmission(s.inner, a)
-}
-
 func (s *frontendEventSink) RecordMemoryRecall(a event.MemoryRecallAudit) {
 	event.RecordMemoryRecall(s.inner, a)
 }

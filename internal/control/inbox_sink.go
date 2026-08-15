@@ -81,17 +81,6 @@ func (s *inboxEventSink) RecordOutcomeProgress(sample evidence.OutcomeSample) {
 	}
 }
 
-func (s *inboxEventSink) RecordDelegationAdmission(a event.DelegationAdmissionAudit) {
-	if s == nil {
-		return
-	}
-	if rs, ok := s.inner.(interface {
-		RecordDelegationAdmission(event.DelegationAdmissionAudit)
-	}); ok {
-		rs.RecordDelegationAdmission(a)
-	}
-}
-
 func (s *inboxEventSink) RecordMemoryRecall(a event.MemoryRecallAudit) {
 	if s == nil {
 		return

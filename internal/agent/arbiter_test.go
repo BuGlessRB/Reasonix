@@ -7,6 +7,13 @@ import (
 	"reasonix/internal/event"
 )
 
+// noticeSink collects what the arbiter delivered to the frontend.
+type noticeSink struct {
+	notices []event.Event
+}
+
+func (s *noticeSink) Emit(e event.Event) { s.notices = append(s.notices, e) }
+
 func arbiterRound() ([]string, []toolOutcome) {
 	return []string{"tool output"}, []toolOutcome{{output: "tool output"}}
 }
@@ -14,7 +21,7 @@ func arbiterRound() ([]string, []toolOutcome) {
 // Every signal used to write results[0] from outcomes[0].output, so a round
 // that fired two of them delivered only the last one's guidance.
 func TestApplyInterventionsKeepsEveryFiredGuidance(t *testing.T) {
-	sink := &ebmSink{}
+	sink := &noticeSink{}
 	a := &Agent{svc: agentServices{sink: sink}}
 	results, outcomes := arbiterRound()
 
@@ -39,7 +46,7 @@ func TestApplyInterventionsKeepsEveryFiredGuidance(t *testing.T) {
 }
 
 func TestApplyInterventionsLeavesQuietRoundsUntouched(t *testing.T) {
-	sink := &ebmSink{}
+	sink := &noticeSink{}
 	a := &Agent{svc: agentServices{sink: sink}}
 	results, outcomes := arbiterRound()
 
@@ -53,7 +60,7 @@ func TestApplyInterventionsLeavesQuietRoundsUntouched(t *testing.T) {
 
 // A land must survive being raised beside a lower tier in the same round.
 func TestApplyInterventionsTakesTheStrongestVerdict(t *testing.T) {
-	a := &Agent{svc: agentServices{sink: &ebmSink{}}}
+	a := &Agent{svc: agentServices{sink: &noticeSink{}}}
 	results, outcomes := arbiterRound()
 
 	got := a.applyInterventions(results, outcomes,

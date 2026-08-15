@@ -195,13 +195,6 @@ func (c *coalescer) RecordMemoryRecall(a MemoryRecallAudit) {
 	RecordMemoryRecall(c.inner, a)
 }
 
-func (c *coalescer) RecordDelegationAdmission(a DelegationAdmissionAudit) {
-	c.mu.Lock()
-	c.enqueueFlushLocked()
-	c.drainAndUnlock()
-	RecordDelegationAdmission(c.inner, a)
-}
-
 func (c *coalescer) RecordWorkspaceMutation(m WorkspaceMutation) {
 	c.mu.Lock()
 	c.enqueueFlushLocked()

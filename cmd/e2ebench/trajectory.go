@@ -125,12 +125,6 @@ type trajectorySummary struct {
 	SlowRoundGapMs           int64         `json:"slow_round_gap_ms,omitempty"`
 	SlowRoundReasoningTokens int64         `json:"slow_round_reasoning_tokens,omitempty"`
 	Rounds                   []roundDigest `json:"rounds,omitempty"`
-
-	// Delegation admission shadow: verdicts recorded by the runtime, and the
-	// subagent time spent by tools the shadow would have denied.
-	DelegationCalls    int   `json:"delegation_calls,omitempty"`
-	DelegationDenies   int   `json:"delegation_denies,omitempty"`
-	DeniedDelegationMs int64 `json:"denied_delegation_ms,omitempty"`
 }
 
 // toolWall is the best available tool wall-clock: interval union when the
@@ -159,26 +153,16 @@ type trajectoryRecord struct {
 		ClaimsUnbacked int      `json:"claims_unbacked"`
 	} `json:"completion_report"`
 	OutcomeProgress *struct {
-		Exploration      int  `json:"exploration"`
-		Verification     int  `json:"verification"`
-		Objective        int  `json:"objective"`
-		Regression       int  `json:"regression"`
-		Churn            int  `json:"churn"`
-		LegacyGain       int  `json:"legacy_gain"`
-		Discriminating   int  `json:"discriminating"`
-		DebtAge          int  `json:"debt_age"`
-		BlindMutations   int  `json:"blind_mutations"`
-		EBMEligible      bool `json:"ebm_eligible"`
-		EBMFired         bool `json:"ebm_fired"`
-		LocalExecSeen    bool `json:"local_exec_seen"`
-		GovernorEligible bool `json:"governor_eligible"`
-		GovernorEngaged  bool `json:"governor_engaged"`
+		Exploration    int `json:"exploration"`
+		Verification   int `json:"verification"`
+		Objective      int `json:"objective"`
+		Regression     int `json:"regression"`
+		Churn          int `json:"churn"`
+		LegacyGain     int `json:"legacy_gain"`
+		Discriminating int `json:"discriminating"`
+		DebtAge        int `json:"debt_age"`
+		BlindMutations int `json:"blind_mutations"`
 	} `json:"outcome_progress"`
-	DelegationAdmission *struct {
-		Tool    string `json:"tool"`
-		Verdict string `json:"verdict"`
-		Reason  string `json:"reason"`
-	} `json:"delegation_admission"`
 	Event *struct {
 		Kind          string `json:"kind"`
 		Code          string `json:"code"`
@@ -336,7 +320,6 @@ func scanTrajectoryFile(path string) (*trajScan, error) {
 		attemptBegin:     map[string]int64{},
 		lastAttempt:      -1,
 		seen:             map[string]bool{},
-		denyDelegations:  map[string]bool{},
 		delegationToolMs: map[string]int64{},
 	}
 	sc := bufio.NewScanner(f)
@@ -383,16 +366,8 @@ func (t *trajScan) record(rec trajectoryRecord) {
 			ts: rec.TS, exploration: op.Exploration, verification: op.Verification,
 			objective: op.Objective, regression: op.Regression, churn: op.Churn,
 			legacyGain: op.LegacyGain, discriminating: op.Discriminating, debtAge: op.DebtAge,
-			blindMutations: op.BlindMutations, ebmEligible: op.EBMEligible, ebmFired: op.EBMFired,
-			governorEligible: op.GovernorEligible, governorEngaged: op.GovernorEngaged,
+			blindMutations: op.BlindMutations,
 		})
-	}
-	if da := rec.DelegationAdmission; da != nil {
-		t.s.DelegationCalls++
-		if da.Verdict == "deny" {
-			t.s.DelegationDenies++
-			t.denyDelegations[da.Tool] = true
-		}
 	}
 	if rec.Event == nil {
 		return
@@ -699,11 +674,6 @@ func (t *trajScan) finish() *trajectorySummary {
 		s.ModelMs = 0
 	}
 	s.Outcome = t.summarizeOutcome()
-	// The admission verdict lands after the tool's result in the stream, so
-	// denied time joins by tool name once the whole file is folded.
-	for name := range t.denyDelegations {
-		s.DeniedDelegationMs += t.delegationToolMs[name]
-	}
 	t.decompose()
 	return s
 }

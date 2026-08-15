@@ -10,7 +10,6 @@ import (
 	"reasonix/internal/evidence"
 	"reasonix/internal/plancontract"
 	"reasonix/internal/taskcontract"
-	"reasonix/internal/taskintent"
 )
 
 // buildShadowContract replays a finished turn's receipts into a task
@@ -23,8 +22,10 @@ func buildShadowContract(input string, receipts []evidence.Receipt, plan *planco
 	switch {
 	case plan != nil:
 		c = taskcontract.FromPlan(input, planFacts(*plan))
-	case taskintent.Classify(input) == taskintent.Mutation,
-		taskintent.Classify(input) == taskintent.PersistentAction:
+	case receiptsCarryMutation(receipts):
+		// No plan stated the terms, but the turn changed something, so the ask
+		// itself is the requirement and the change is what answers for it. The
+		// trigger is the receipt: a turn that changed nothing owes no such claim.
 		c = taskcontract.Atomic(input)
 	default:
 		c = taskcontract.New(input)
@@ -52,6 +53,16 @@ func buildShadowContract(input string, receipts []evidence.Receipt, plan *planco
 		}
 	}
 	return c
+}
+
+// receiptsCarryMutation reports whether the turn actually changed something.
+func receiptsCarryMutation(receipts []evidence.Receipt) bool {
+	for _, r := range receipts {
+		if r.Success && (r.Mutation || r.Write) {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveCitedCriteria satisfies the criteria a successful complete_step named.
@@ -115,7 +126,7 @@ func contractShadowAudit(c *taskcontract.Contract) event.ContractShadowAudit {
 		}
 	}
 	return event.ContractShadowAudit{
-		Intent:                intentName(c.Intent),
+		Intent:                c.Kind.String(),
 		Requirements:          len(c.Requirements),
 		RequirementsSatisfied: reqDone,
 		Checks:                len(c.Checks),
@@ -124,21 +135,6 @@ func contractShadowAudit(c *taskcontract.Contract) event.ContractShadowAudit {
 		Verdict:               c.GoalVerdict().String(),
 		Complete:              c.Complete(),
 		ReadyToFinalize:       c.ReadyToFinalize(),
-	}
-}
-
-func intentName(i taskintent.Intent) string {
-	switch i {
-	case taskintent.Advisory:
-		return "advisory"
-	case taskintent.ObservableRead:
-		return "observable_read"
-	case taskintent.Mutation:
-		return "mutation"
-	case taskintent.PersistentAction:
-		return "persistent_action"
-	default:
-		return "conversation"
 	}
 }
 
@@ -151,17 +147,6 @@ func (a *Agent) LiveContract() *taskcontract.Contract {
 		return nil
 	}
 	return buildShadowContract(a.turn.turnInput, a.task.ledger.Receipts(), a.planContractSnapshot())
-}
-
-// observeContractRound records the contract after one tool round, so a
-// trajectory carries how the evidence graph filled in rather than only where it
-// landed. It observes; it decides nothing.
-func (a *Agent) observeContractRound() {
-	c := a.LiveContract()
-	if c == nil || (len(c.Requirements) == 0 && len(c.Checks) == 0) {
-		return
-	}
-	event.RecordContractShadow(a.svc.sink, contractShadowAudit(c))
 }
 
 // emitTurnShadows records the end-of-turn shadow observations: the contract's

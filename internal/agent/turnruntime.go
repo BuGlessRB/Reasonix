@@ -43,13 +43,9 @@ type turnRuntime struct {
 	// completion is the report built as the turn ends; the host reads it while
 	// emitting TurnDone, before the next turn resets this state.
 	completion *completion.Report
-	// Delivery expectations classified from the task text (see taskintent).
-	// deliveryCriteriaEstablished may inherit an unfinished canonical task
-	// list on continuation, but the flag itself is recomputed every turn.
+	// deliveryCriteriaEstablished may inherit an unfinished canonical task list
+	// on continuation, but the flag itself is recomputed every turn.
 	deliveryCriteriaEstablished bool
-	deliveryTaskExpected        bool
-	deliveryMutationExpected    bool
-	deliveryPersistentExpected  bool
 	deliveryScopeActive         bool
 	// readinessRecovered marks a run that started with evidence preserved from
 	// (or a pending recovery of) a prior readiness failure, so the final
@@ -93,10 +89,6 @@ type turnRuntime struct {
 	// progress escalates adaptively on consecutive zero-evidence-gain rounds;
 	// see progress_guard.go.
 	progress progressGuard
-
-	// lastReasoning is the previous executor round's reasoning-token spend,
-	// read by the governor trigger (live policy and fork capture alike).
-	lastReasoning int
 }
 
 // pendingTurn is what someone outside the Run arms for the next one: a
@@ -113,7 +105,4 @@ type pendingTurn struct {
 	// An explicit host recovery action can consume it to preserve the failed
 	// turn's receipts once; an ordinary user turn still resets evidence.
 	deliveryRecovery bool
-	// forkRestore, when armed, swaps the frozen fork-bundle conversation in
-	// right after beginRunTurn — the counterfactual-continuation seam.
-	forkRestore func(*turnRuntime)
 }

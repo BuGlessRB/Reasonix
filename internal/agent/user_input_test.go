@@ -71,19 +71,17 @@ func TestRunPersistsRawUserInputSeparatelyFromProviderContext(t *testing.T) {
 		t.Fatalf("previous-release reader sees %q, want provider-visible composed prefix plus execution-policy", legacy.Content)
 	}
 
-	receipt := a.CompletionReceipt()
-	if receipt == nil {
-		t.Fatal("completion receipt is nil")
-	}
-	if len(receipt.Gaps) != 2 {
-		t.Fatalf("completion gaps = %+v, want the atomic requirement and mutation check", receipt.Gaps)
-	}
-	if got := receipt.Gaps[0].Detail; got != "r1: "+raw {
-		t.Fatalf("atomic criterion = %q, want raw user input %q", got, raw)
-	}
-	if strings.Contains(receipt.Gaps[0].Detail, "capability-route") {
-		t.Fatalf("completion receipt leaked transient provider context: %+v", receipt.Gaps)
-	}
+}
+
+// mutatingTurn is a provider that writes once and then answers, so the turn
+// earns the atomic contract from a receipt rather than from its wording.
+func mutatingTurn() (*scriptedProvider, *tool.Registry) {
+	reg := tool.NewRegistry()
+	reg.Add(stubWrite{})
+	return &scriptedProvider{name: "p", turns: [][]provider.Chunk{
+		{toolCallChunk("write", "write_file", `{"path":"parser.go"}`), {Type: provider.ChunkDone}},
+		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
+	}}, reg
 }
 
 func TestTransientCapabilityRouteCannotTurnConversationIntoDeliveryReceipt(t *testing.T) {
@@ -120,8 +118,8 @@ Policy: prefer means use the skill for the required change
 }
 
 func TestCompletionContractUsesGoalScopeTaskText(t *testing.T) {
-	prov := &userInputCaptureProvider{}
-	a := New(prov, tool.NewRegistry(), NewSession("system"), Options{}, event.Discard)
+	prov, reg := mutatingTurn()
+	a := New(prov, reg, NewSession("system"), Options{}, event.Discard)
 	ctx := WithRawUserInput(context.Background(), "Continue working.")
 	ctx = WithDeliveryExecutionScope(ctx, DeliveryExecutionScope{ID: "goal-1", TaskText: "fix the parser"})
 
@@ -132,8 +130,8 @@ func TestCompletionContractUsesGoalScopeTaskText(t *testing.T) {
 }
 
 func TestCompletionContractUsesPristineSubagentTaskText(t *testing.T) {
-	prov := &userInputCaptureProvider{}
-	a := New(prov, tool.NewRegistry(), NewSession("system"), Options{
+	prov, reg := mutatingTurn()
+	a := New(prov, reg, NewSession("system"), Options{
 		ClassifierTaskText: "fix the parser",
 	}, event.Discard)
 	const wrapped = "<workspace-context>private host framing</workspace-context>\n\nfix the parser"
@@ -144,13 +142,18 @@ func TestCompletionContractUsesPristineSubagentTaskText(t *testing.T) {
 	assertAtomicCriterion(t, a, "fix the parser")
 }
 
+// assertAtomicCriterion checks which text the turn's contract was written
+// against — the trusted task text, never the host framing wrapped around it.
 func assertAtomicCriterion(t *testing.T, a *Agent, want string) {
 	t.Helper()
-	receipt := a.CompletionReceipt()
-	if receipt == nil || len(receipt.Gaps) == 0 {
-		t.Fatalf("completion receipt = %+v, want atomic criterion %q", receipt, want)
+	if a.CompletionReceipt() == nil {
+		t.Fatal("completion receipt is nil; the turn earned a contract and should carry one")
 	}
-	if got := receipt.Gaps[0].Detail; got != "r1: "+want {
+	c := a.LiveContract()
+	if c == nil || len(c.Requirements) == 0 {
+		t.Fatalf("contract = %+v, want the atomic requirement", c)
+	}
+	if got := c.Requirements[0].Text; got != want {
 		t.Fatalf("atomic criterion = %q, want %q", got, want)
 	}
 }

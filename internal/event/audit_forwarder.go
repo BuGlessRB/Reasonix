@@ -29,10 +29,6 @@ func (f AuditForwarder) RecordMemoryRecall(a MemoryRecallAudit) {
 	RecordMemoryRecall(f.Inner, a)
 }
 
-func (f AuditForwarder) RecordDelegationAdmission(a DelegationAdmissionAudit) {
-	RecordDelegationAdmission(f.Inner, a)
-}
-
 func (f AuditForwarder) RecordOutcomeProgress(s evidence.OutcomeSample) {
 	RecordOutcomeProgress(f.Inner, s)
 }

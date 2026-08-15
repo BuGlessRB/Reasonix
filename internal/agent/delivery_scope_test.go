@@ -44,28 +44,6 @@ func TestDeliveryExecutionScopeDoesNotChangeProviderRequestBytes(t *testing.T) {
 func deliveryGoalContext(id, task string) context.Context {
 	return WithDeliveryExecutionScope(context.Background(), DeliveryExecutionScope{ID: id, TaskText: task})
 }
-
-func TestDeliveryGoalFinalAnswerAlwaysGatesMutationExpectation(t *testing.T) {
-	reg := tool.NewRegistry()
-	reg.Add(fakeReadFileTool{})
-	reg.Add(fakeWriterTool{})
-	prov := &scriptedProvider{name: "delivery", turns: [][]provider.Chunk{
-		{toolCallChunk("read", "read_file", `{"path":"main.go"}`), {Type: provider.ChunkDone}},
-		{{Type: provider.ChunkText, Text: "Investigation complete."}, {Type: provider.ChunkDone}},
-		{{Type: provider.ChunkText, Text: "Implemented."}, {Type: provider.ChunkDone}},
-	}}
-	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
-	ctx := deliveryGoalContext("goal-1", "fix the crash in main.go")
-	// A read-only final answer is gated on the mutation expectation immediately:
-	// the host no longer defers readiness for marker-carrying turns, the Goal
-	// FSM absorbs the failure and continues with the missing requirements.
-	err := a.Run(ctx, "investigate the crash")
-	var readiness *FinalReadinessError
-	if !errors.As(err, &readiness) || !strings.Contains(readiness.Reason, "state change") {
-		t.Fatalf("read-only final answer err = %v, want mutation readiness failure", err)
-	}
-}
-
 func TestDeliveryGoalScopeCarriesSignedOffMutationAcrossTurns(t *testing.T) {
 	reg := evidenceRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})

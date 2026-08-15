@@ -92,8 +92,10 @@ func TestOrdinaryChatTurnStopsOnItsTimeBudget(t *testing.T) {
 	c.Submit("collect the real state, then rewrite HANDOVER.md")
 	waitForDone(t, done)
 
-	// An unbounded provider: without the spend gate this never returns.
-	if got := prov.calls.Load(); got > 20 {
+	// An unbounded provider: without the spend gate this never returns. The
+	// ceiling is loose on purpose — how many in-memory rounds fit in 1ms tracks
+	// per-round host cost, not the budget behavior under test.
+	if got := prov.calls.Load(); got > 60 {
 		t.Fatalf("provider rounds = %d, want the wall-clock budget to land it promptly", got)
 	}
 }

@@ -1,6 +1,11 @@
 // Package taskpolicy builds the host-side TaskPolicy that freezes planning,
 // verification, review, and natural-language constraints for one turn before
 // the first model request. It never calls a classification model.
+//
+// Two things bind a turn: the frozen role setting, and constraints the user
+// stated outright ("don't modify", "only run go test"). Risk arrives as
+// host-computed signals from the caller — guessing it from topic words would
+// impose ceremony on a sentence rather than on the work.
 package taskpolicy
 
 import (
@@ -10,14 +15,10 @@ import (
 
 	"reasonix/internal/agentpreset"
 	"reasonix/internal/shellparse"
-	"reasonix/internal/taskintent"
 )
 
 // PolicyVersion is the diagnostic version stamped on every TaskPolicy.
 const PolicyVersion = agentpreset.PolicyVersion
-
-// Intent is the host's coarse task intent for the turn.
-type Intent = taskintent.Intent
 
 // Risk is the turn risk level; it may only ratchet upward within a turn.
 type Risk uint8
@@ -78,8 +79,8 @@ type Constraints struct {
 // fenced regions must already be stripped by StripQuotedConstraints or left
 // intact so Derive ignores them.
 type Input struct {
-	// Raw is the original user text (including quotes/fences). Used only for
-	// intent classification when RawForIntent is empty.
+	// Raw is the original user text (including quotes/fences); the fallback
+	// source when Instruction is empty.
 	Raw string
 	// Instruction is user text with quoted/fenced content removed so constraint
 	// phrases inside citations cannot bind the host.
@@ -89,6 +90,8 @@ type Input struct {
 	// PlanMode is the collaboration plan-mode flag.
 	PlanMode bool
 	// HighRiskHints are host signals (permission/auth/release/security class).
+	// The host computes them from what the turn touches; this package never
+	// re-derives risk from the text itself.
 	HighRiskHints bool
 	// MediumRiskHints are host signals (cross-module / migration).
 	MediumRiskHints bool
@@ -104,7 +107,6 @@ type Input struct {
 // TaskPolicy is the authoritative host policy for one turn.
 type TaskPolicy struct {
 	Preset       agentpreset.AgentPreset
-	Intent       Intent
 	Risk         Risk
 	Route        Route
 	Constraints  Constraints
@@ -115,8 +117,6 @@ type TaskPolicy struct {
 	SecurityClass bool
 	// PolicyVersion is diagnostic only.
 	PolicyVersion int
-	// RequireAtomicContract forces an Atomic TaskContract on direct runs.
-	RequireAtomicContract bool
 	// AllowExploreSubagent mirrors the preset capability for explore workers.
 	AllowExploreSubagent bool
 	// SemanticRouterAllowed mirrors the preset capability for LLM routing.
@@ -132,11 +132,6 @@ func Derive(in Input) TaskPolicy {
 	if instruction == "" {
 		instruction = StripQuotedConstraints(in.Raw)
 	}
-	rawIntent := strings.TrimSpace(in.Raw)
-	if rawIntent == "" {
-		rawIntent = instruction
-	}
-	intent := taskintent.Classify(rawIntent)
 
 	constraints := parseConstraints(instruction)
 	if in.PlanMode {
@@ -145,19 +140,15 @@ func Derive(in Input) TaskPolicy {
 		constraints.Notes = append(constraints.Notes, "plan_mode_read_only")
 	}
 
-	securityClass := in.HighRiskHints || isSecurityClass(instruction)
+	securityClass := in.HighRiskHints
 	risk := RiskLow
 	if in.MediumRiskHints || in.MultiFile || in.CrossSurface || in.Structured {
 		risk = RiskMedium
 	}
-	if in.HighRiskHints || securityClass || isHighRisk(instruction) {
+	if in.HighRiskHints {
 		risk = RiskHigh
 	}
-	// Intent-driven floor: mutations start at least low; external/persist medium.
-	if intent == taskintent.PersistentAction && risk < RiskMedium {
-		risk = RiskMedium
-	}
-	route := chooseRoute(policy, intent, risk, in)
+	route := chooseRoute(policy, risk, in)
 	verification := policy.VerificationPolicy.Level
 	if constraints.RequireFullVerification || !constraints.ForbidTests && risk >= RiskHigh {
 		if policy.VerificationPolicy.Level < VerifyFull && (constraints.RequireFullVerification || risk >= RiskHigh) {
@@ -176,11 +167,6 @@ func Derive(in Input) TaskPolicy {
 	if preset == agentpreset.Delivery && risk >= RiskMedium {
 		verification = VerifyFull
 	}
-	if intent == taskintent.Conversation || intent == taskintent.Advisory {
-		if !in.MultiFile && risk == RiskLow {
-			verification = VerifyNone
-		}
-	}
 
 	review := policy.ReviewForRisk(int(risk), securityClass)
 	if constraints.ForbidMutation {
@@ -190,7 +176,6 @@ func Derive(in Input) TaskPolicy {
 
 	return TaskPolicy{
 		Preset:                preset,
-		Intent:                intent,
 		Risk:                  risk,
 		Route:                 route,
 		Constraints:           constraints,
@@ -198,7 +183,6 @@ func Derive(in Input) TaskPolicy {
 		Review:                review,
 		SecurityClass:         securityClass,
 		PolicyVersion:         PolicyVersion,
-		RequireAtomicContract: policy.PlannerPolicy.RequireAtomicContract || (preset == agentpreset.Delivery && intent == taskintent.Mutation),
 		AllowExploreSubagent:  policy.PlannerPolicy.AllowExploreSubagent && risk > RiskLow,
 		SemanticRouterAllowed: policy.CapabilityPolicy.SemanticRouterAllowed && (risk >= RiskMedium || securityClass),
 	}
@@ -297,11 +281,9 @@ func (p TaskPolicy) RequiresSecurityReview() bool {
 	return p.Review == ReviewForcedSecurity
 }
 
-func chooseRoute(policy agentpreset.PresetPolicy, intent Intent, risk Risk, in Input) Route {
-	if intent == taskintent.Conversation || intent == taskintent.Advisory {
-		if !in.MultiFile && !in.Structured && risk == RiskLow {
-			return RouteDirect
-		}
+func chooseRoute(policy agentpreset.PresetPolicy, risk Risk, in Input) Route {
+	if risk == RiskLow && !in.MultiFile && !in.Structured && !in.CrossSurface {
+		return RouteDirect
 	}
 	if risk >= RiskHigh && policy.PlannerPolicy.FullPlanOnHighRisk {
 		return RouteFullPlan
@@ -314,7 +296,7 @@ func chooseRoute(policy agentpreset.PresetPolicy, intent Intent, risk Risk, in I
 			return RouteFullPlan
 		}
 	}
-	if in.MultiFile || in.Structured || (!in.Anchored && intent == taskintent.Mutation) {
+	if in.MultiFile || in.Structured {
 		if policy.PlannerPolicy.PreferLightPlan {
 			return RouteLightPlan
 		}
@@ -408,26 +390,6 @@ func matchesAny(lower string, needles []string) bool {
 		}
 	}
 	return false
-}
-
-func isSecurityClass(instruction string) bool {
-	lower := strings.ToLower(instruction)
-	return matchesAny(lower, []string{
-		"security", "authentication", "authorization", "permission model",
-		"credential", "secret", "oauth", "jwt", "cve", "xss", "sqli",
-		"privilege escalation", "release to production", "publish package",
-		"deploy to production", "production deploy",
-		"安全漏洞", "权限提升", "认证绕过", "鉴权", "凭证泄露", "密钥泄露", "上线发布", "生产环境",
-	})
-}
-
-func isHighRisk(instruction string) bool {
-	lower := strings.ToLower(instruction)
-	return matchesAny(lower, []string{
-		"migrate", "migration", "drop table", "rm -rf", "force push",
-		"destructive", "irreversible", "production data",
-		"迁移", "删库", "不可逆", "生产数据",
-	}) || isSecurityClass(instruction)
 }
 
 // StripQuotedConstraints removes fenced code blocks and quoted spans so

@@ -50,9 +50,9 @@ func (g *progressGuard) observe(receipts []Receipt) int {
 type Receipt = evidence.Receipt
 
 // applyBatchGuards collects this round's signals — storm breaker (failure
-// fixation), progress guard (zero-gain repetition), evidence nudge — and lets
-// the arbiter deliver them as one tail. The shadow trackers observe the same
-// receipts without influencing any verdict.
+// fixation), progress guard (zero-gain repetition) — and lets the arbiter
+// deliver them as one tail. The outcome tracker observes the same receipts
+// without influencing any verdict.
 func (a *Agent) applyBatchGuards(ctx context.Context, cancelled bool, calls []provider.ToolCall, outcomes []toolOutcome, results []string, receiptMark int) {
 	if cancelled {
 		return
@@ -60,9 +60,8 @@ func (a *Agent) applyBatchGuards(ctx context.Context, cancelled bool, calls []pr
 	storm := a.applyStormBreaker(calls, outcomes, receiptMark)
 	_, goalScoped := DeliveryExecutionScopeFromContext(ctx)
 	progress := a.applyProgressGuard(outcomes, receiptMark, goalScoped)
-	shadow := a.observeOutcomeShadow(receiptMark, outcomes)
-	a.applyInterventions(results, outcomes, storm, progress, shadow)
-	a.observeDelegationAdmission(calls)
+	a.observeOutcomeShadow(receiptMark)
+	a.applyInterventions(results, outcomes, storm, progress)
 }
 
 // resetTurnEvidence clears the ledger and both progress scorers together. The
@@ -74,23 +73,18 @@ func (a *Agent) resetTurnEvidence() {
 	a.turn.stormSig, a.turn.stormCount, a.turn.blockedTurnStreak = "", 0, 0
 }
 
-// observeOutcomeShadow scores the round's receipts through the shadow outcome
-// tracker, lets the EBM policy stamp (and under its arm, act on) the sample,
-// then records it. Unlike the guards it observes every round.
-func (a *Agent) observeOutcomeShadow(receiptMark int, outcomes []toolOutcome) intervention {
+// observeOutcomeShadow scores the round's receipts by outcome and records the
+// sample. It observes; it decides nothing. The scoring itself is incremental
+// state the tracker must keep unbroken, so it runs even when no sink collects
+// the samples — only the delivery is opt-in.
+func (a *Agent) observeOutcomeShadow(receiptMark int) {
 	if a.task.ledger == nil {
-		return intervention{}
+		return
 	}
 	if a.task.outcome == nil {
 		a.task.outcome = evidence.NewOutcomeTracker()
 	}
-	sample := a.task.outcome.ScoreRound(a.task.ledger.ReceiptsSince(receiptMark))
-	iv := a.applyEBM(&sample, outcomes)
-	a.applyGovernor(&sample)
-	a.armGovernorCapture(sample)
-	event.RecordOutcomeProgress(a.svc.sink, sample)
-	a.observeContractRound()
-	return iv
+	event.RecordOutcomeProgress(a.svc.sink, a.task.outcome.ScoreRound(a.task.ledger.ReceiptsSince(receiptMark)))
 }
 
 // applyProgressGuard escalates when consecutive rounds stop producing new
