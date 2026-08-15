@@ -404,10 +404,13 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	if !ok {
 		return CompactionNoop, nil
 	}
-	kept, fold, retention := a.partitionFoldForProjection(msgs[head:start])
+	kept, fold, retention, policyKeep := a.partitionFoldForProjection(msgs[head:start])
 	if len(fold) == 0 || (!force && !foldEconomics(fold)) {
 		return CompactionNoop, nil
 	}
+	fold, priorIndex := stripFoldIndexFromDigests(fold)
+	foldIndex := buildFoldIndex(msgs[head:start], policyKeep, a.toolIsReadOnly,
+		a.canonicalOriginFor(stateSnapshot, canonical, msgs, head))
 	fixedPrefixTokens := estimateMessagesTokens(a.providerProjectionMessages(msgs[:head]))
 	if a.contextWindow > 0 && fixedPrefixTokens >= a.compactTrigger() {
 		return CompactionNoop, fmt.Errorf("%w: fixed prefix (%d tokens) already exceeds trigger (%d)", errCheckpointRejected, fixedPrefixTokens, a.compactTrigger())
@@ -440,6 +443,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		a.emitCompactionAborted(trigger)
 		return CompactionNoop, err
 	}
+	res.Text = a.attachFoldIndex(res.Text, priorIndex, foldIndex)
 	summary, err := a.interceptCompactionComplete(ctx, res.Text)
 	if err != nil {
 		tele.Error = err.Error()
@@ -558,8 +562,8 @@ func (a *Agent) planFoldRegion(msgs []provider.Message, force bool) (head, start
 	return head, start, start > head
 }
 
-func (a *Agent) partitionFoldForProjection(region []provider.Message) (kept, fold []provider.Message, retention userTurnRetention) {
-	policyKeep, retention := a.keepIndexes(region)
+func (a *Agent) partitionFoldForProjection(region []provider.Message) (kept, fold []provider.Message, retention userTurnRetention, policyKeep []bool) {
+	policyKeep, retention = a.keepIndexes(region)
 	for i, m := range region {
 		switch {
 		case m.LocalOnly: // display-only output never reaches a provider
@@ -572,7 +576,7 @@ func (a *Agent) partitionFoldForProjection(region []provider.Message) (kept, fol
 			fold = append(fold, m)
 		}
 	}
-	return kept, fold, retention
+	return kept, fold, retention, policyKeep
 }
 
 // runCompactionSummary uses the single local summarizer path for every provider.

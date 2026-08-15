@@ -515,7 +515,7 @@ func TestInterruptedDisplayStaysOutOfCompactionPromptAndProjection(t *testing.T)
 		InterruptedTurn: &provider.InterruptedTurnRecovery{Pending: true},
 	}
 	a := &Agent{}
-	kept, fold, retention := a.partitionFoldForProjection([]provider.Message{local})
+	kept, fold, retention, _ := a.partitionFoldForProjection([]provider.Message{local})
 	if len(kept) != 0 || len(fold) != 0 {
 		t.Fatalf("compaction partition kept=%+v fold=%+v, want display-only output in neither", kept, fold)
 	}

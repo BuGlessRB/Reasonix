@@ -73,7 +73,7 @@ func foldFacts(region []provider.Message, readOnly func(string) bool) foldCovera
 		}
 		failed := isErrorMessage(m)
 		rec := evidence.ReceiptFromToolCall(call.Name, json.RawMessage(call.Arguments), !failed, readOnly(call.Name))
-		if !failed && rec.Mutation {
+		if !failed && rec.Mutation && len(rec.Paths) > 0 {
 			for _, p := range rec.Paths {
 				if p = strings.TrimSpace(p); p != "" && !seenMut[p] {
 					seenMut[p] = true
@@ -163,4 +163,13 @@ func (a *Agent) toolIsReadOnly(name string) bool {
 		return true
 	}
 	return t.ReadOnly()
+}
+
+// coverageDemands reports whether a call is one the digest must carry, so the
+// index can take everything else and nothing falls between the two.
+func coverageDemands(rec evidence.Receipt, failed bool) bool {
+	if failed {
+		return commandSignature(rec.Command) != ""
+	}
+	return rec.Mutation && len(rec.Paths) > 0
 }

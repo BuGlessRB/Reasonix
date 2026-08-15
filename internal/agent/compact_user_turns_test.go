@@ -106,7 +106,7 @@ func TestSubagentInheritsUserTurnRetention(t *testing.T) {
 	if got, want := child.keptUserTurnsBudget(), int(32_000*keptUserTurnsWindowFrac); got != want {
 		t.Fatalf("child retention budget = %d, want %d scaled to its own window", got, want)
 	}
-	kept, _, retention := child.partitionFoldForProjection([]provider.Message{
+	kept, _, retention, _ := child.partitionFoldForProjection([]provider.Message{
 		{Role: provider.RoleUser, Content: "parent instruction: do not touch the public API"},
 		{Role: provider.RoleAssistant, Content: "child work"},
 	})

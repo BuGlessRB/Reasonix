@@ -12,7 +12,7 @@ import (
 // every provider-visible message in the region lands in exactly one group.
 func partitionCoversRegion(t *testing.T, a *Agent, region []provider.Message) (kept, fold []provider.Message) {
 	t.Helper()
-	kept, fold, retention := a.partitionFoldForProjection(region)
+	kept, fold, retention, _ := a.partitionFoldForProjection(region)
 	userTurns := 0
 	for _, m := range region {
 		if m.Role == provider.RoleUser && !m.LocalOnly && !isCompactionSummary(m) {
