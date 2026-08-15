@@ -113,6 +113,18 @@ type UICardPayload struct {
 	Actions  []UIActionRef `json:"actions,omitempty"`
 }
 
+// UIPanelPayload is a card that stands rather than scrolls. It carries no
+// Markdown on purpose: the side rail is a narrow column, and a rendered
+// document there costs the layout more than it tells the reader — an
+// extension with a long story to tell publishes a card into the transcript.
+type UIPanelPayload struct {
+	Title    string        `json:"title,omitempty"`
+	Text     string        `json:"text,omitempty"`
+	Fields   []UIKeyValue  `json:"fields,omitempty"`
+	Progress *float64      `json:"progress,omitempty"`
+	Actions  []UIActionRef `json:"actions,omitempty"`
+}
+
 // UIFormField is one input row of a form surface.
 type UIFormField struct {
 	Key      string      `json:"key" validate:"nonempty"`
@@ -154,6 +166,8 @@ func DecodeUIPublishPayload(kind UISurfaceKind, raw json.RawMessage) (any, error
 		typ = reflect.TypeFor[UIFormPayload]()
 	case UISurfaceNotification:
 		typ = reflect.TypeFor[UINotificationPayload]()
+	case UISurfacePanel:
+		typ = reflect.TypeFor[UIPanelPayload]()
 	default:
 		return nil, fmt.Errorf("protocol: unknown UI surface kind %q", kind)
 	}

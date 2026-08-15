@@ -81,6 +81,7 @@ func walkSDKTypes() (*sdkTypeWalk, error) {
 		reflect.TypeFor[protocol.UICardPayload](),
 		reflect.TypeFor[protocol.UIFormPayload](),
 		reflect.TypeFor[protocol.UINotificationPayload](),
+		reflect.TypeFor[protocol.UIPanelPayload](),
 		reflect.TypeFor[protocol.ProtocolErrorData](),
 	)
 	for _, root := range roots {

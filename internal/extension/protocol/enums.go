@@ -107,6 +107,10 @@ const (
 	UISurfaceCard         UISurfaceKind = "card"
 	UISurfaceForm         UISurfaceKind = "form"
 	UISurfaceNotification UISurfaceKind = "notification"
+	// UISurfacePanel is a standing surface: it holds a place in the frontend's
+	// side rail instead of scrolling past in the transcript, so re-publishing
+	// the same surface id updates what is already on screen.
+	UISurfacePanel UISurfaceKind = "panel"
 )
 
 // UIRequestKind is the kind of blocking UI prompt the host shows on an

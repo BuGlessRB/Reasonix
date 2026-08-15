@@ -528,6 +528,25 @@ func decodePublishEvent(pluginID string, p protocol.UIPublishParams) (*event.Ext
 			Body:     secrets.RedactCredentials(payload.Body),
 			Severity: string(payload.Severity),
 		}
+	case protocol.UIPanelPayload:
+		panel := &event.ExtensionPanelView{
+			Title:    secrets.RedactCredentials(payload.Title),
+			Text:     secrets.RedactCredentials(payload.Text),
+			Progress: payload.Progress,
+		}
+		for _, field := range payload.Fields {
+			panel.Fields = append(panel.Fields, event.ExtensionKeyValue{
+				Key:   secrets.RedactCredentials(field.Key),
+				Value: secrets.RedactCredentials(field.Value),
+			})
+		}
+		for _, action := range payload.Actions {
+			panel.Actions = append(panel.Actions, event.ExtensionActionRef{
+				ActionID: action.ActionID,
+				Label:    secrets.RedactCredentials(action.Label),
+			})
+		}
+		out.Panel = panel
 	}
 	return out, nil
 }

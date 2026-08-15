@@ -504,6 +504,7 @@ const (
 	UISurfaceCard         UISurfaceKind = "card"
 	UISurfaceForm         UISurfaceKind = "form"
 	UISurfaceNotification UISurfaceKind = "notification"
+	UISurfacePanel        UISurfaceKind = "panel"
 )
 
 // UIPublishResult is a generated Extension Protocol v2 wire DTO.
@@ -607,6 +608,15 @@ type UINotificationPayload struct {
 	Title    string     `json:"title" validate:"nonempty"`
 	Body     string     `json:"body,omitempty"`
 	Severity UISeverity `json:"severity,omitempty"`
+}
+
+// UIPanelPayload is a generated Extension Protocol v2 wire DTO.
+type UIPanelPayload struct {
+	Title    string        `json:"title,omitempty"`
+	Text     string        `json:"text,omitempty"`
+	Fields   []UIKeyValue  `json:"fields,omitempty"`
+	Progress *float64      `json:"progress,omitempty"`
+	Actions  []UIActionRef `json:"actions,omitempty"`
 }
 
 // ProtocolErrorData is a generated Extension Protocol v2 wire DTO.

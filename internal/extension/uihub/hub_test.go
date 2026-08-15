@@ -747,3 +747,52 @@ func TestHubConcurrentUse(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// A panel is the standing surface: it must survive the strict decoder (the
+// enum table is what admits a kind at all), reach the frontend as an
+// ExtensionSurface event, and arrive redacted like every other surface.
+func TestPublishPanelEmitsRedactedStandingSurface(t *testing.T) {
+	rec := &eventRecorder{}
+	h := newTestHub(rec)
+	handler := h.HandlerFor("alpha")
+
+	progress := 0.4
+	panel := protocol.UIPanelPayload{
+		Title:    "Sync " + testCredential,
+		Text:     "watching " + testCredential,
+		Fields:   []protocol.UIKeyValue{{Key: "branch", Value: "main " + testCredential}},
+		Progress: &progress,
+		Actions:  []protocol.UIActionRef{{ActionID: "stop", Label: "停止 " + testCredential}},
+	}
+	result, err := handler.Publish(context.Background(), protocol.UIPublishParams{
+		SurfaceID: "p1", SessionID: "sess-1", Generation: 7, Kind: protocol.UISurfacePanel,
+		Payload: mustRaw(t, panel),
+	})
+	if err != nil || !result.Accepted {
+		t.Fatalf("panel publish = %+v, %v", result, err)
+	}
+
+	var got *event.ExtensionSurfacePayload
+	for _, ev := range rec.all() {
+		if ev.Kind == event.ExtensionSurface && ev.Extension != nil && ev.Extension.SurfaceID == "p1" {
+			got = ev.Extension
+		}
+	}
+	if got == nil {
+		t.Fatal("panel publish emitted no ExtensionSurface event")
+	}
+	if got.Kind != string(protocol.UISurfacePanel) || got.Panel == nil {
+		t.Fatalf("event kind=%q panel=%+v, want a panel payload", got.Kind, got.Panel)
+	}
+	if got.Panel.Progress == nil || *got.Panel.Progress != 0.4 {
+		t.Fatalf("progress = %+v, want 0.4", got.Panel.Progress)
+	}
+	if len(got.Panel.Fields) != 1 || len(got.Panel.Actions) != 1 {
+		t.Fatalf("panel dropped rows: %+v", got.Panel)
+	}
+	for _, text := range []string{got.Panel.Title, got.Panel.Text, got.Panel.Fields[0].Value, got.Panel.Actions[0].Label} {
+		if strings.Contains(text, testCredential) {
+			t.Fatalf("panel text reached the frontend unredacted: %q", text)
+		}
+	}
+}
