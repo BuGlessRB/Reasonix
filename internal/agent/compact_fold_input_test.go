@@ -147,3 +147,27 @@ func (p *failOnceProvider) Stream(_ context.Context, _ provider.Request) (<-chan
 	close(ch)
 	return ch, nil
 }
+
+// A fold can take a minute. The digest is already streaming from the provider,
+// so forwarding it is what separates a slow fold from a hung one at every
+// frontend; without this the summary appears only once it is entirely written.
+func TestSummarizerStreamsTheDigestAsItIsWritten(t *testing.T) {
+	var deltas []string
+	sink := event.FuncSink(func(e event.Event) {
+		if e.Kind == event.CompactionProgress {
+			deltas = append(deltas, e.Text)
+		}
+	})
+	prov := &countingProvider{reply: "digest"}
+	a := New(prov, nil, &Session{}, Options{ContextWindow: 200000}, sink)
+
+	if _, err := a.foldToSummary(context.Background(), foldOfToolResults(3, 40), ""); err != nil {
+		t.Fatalf("foldToSummary: %v", err)
+	}
+	if len(deltas) == 0 {
+		t.Fatal("the digest was written with no progress reaching the sink")
+	}
+	if got := strings.Join(deltas, ""); !strings.Contains(got, "digest") {
+		t.Fatalf("streamed text = %q, want the digest the provider wrote", got)
+	}
+}

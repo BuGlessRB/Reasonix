@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"reasonix/internal/event"
 	"reasonix/internal/i18n"
 )
@@ -32,6 +34,61 @@ func compactionCardLines(c event.Compaction) []string {
 		lines = append(lines, dim("  │ archived "+c.Archive))
 	}
 	return lines
+}
+
+// handleCompaction owns the whole fold as one thing: a live line while the
+// digest is written, replaced by the card once it is.
+func (m *chatTUI) handleCompaction(e event.Event) {
+	switch e.Kind {
+	case event.CompactionStarted:
+		m.finalizeStreamed()
+		m.compactionLineIdx = len(m.transcript)
+		m.compactionTail = ""
+		m.commitLine(dim("  ⋯ " + i18n.M.CompactionWorking))
+	case event.CompactionProgress:
+		m.streamCompaction(e.Text)
+	case event.CompactionDone:
+		m.compactionLineIdx = -1
+		// An aborted pass carries no summary; the accompanying Notice (auto) or
+		// compactDoneMsg error (manual) explains why, so don't draw an empty card.
+		if e.Compaction.Summary == "" {
+			return
+		}
+		m.finalizeStreamed()
+		for _, ln := range compactionCardLines(e.Compaction) {
+			m.commitLine(ln)
+		}
+	}
+}
+
+// streamCompaction shows the digest being written on the "compacting…" line
+// itself. A fold can take a minute, and a placeholder that says nothing for a
+// minute cannot be told apart from one that has hung. Only the tail is shown:
+// a digest is thousands of tokens, and printing it would bury the transcript
+// under a summary the finished card is about to render anyway.
+func (m *chatTUI) streamCompaction(chunk string) {
+	if m.compactionLineIdx < 0 || chunk == "" {
+		return
+	}
+	m.compactionTail = lastCompactionLine(m.compactionTail + chunk)
+	line := "  ⋯ " + i18n.M.CompactionWorking
+	if m.compactionTail != "" {
+		line += " · " + m.compactionTail
+	}
+	m.setTranscriptBlock(m.compactionLineIdx, dim(ansi.Truncate(line, max(m.width-2, 24), "…")), transcriptSource{kind: transcriptSourceFixed})
+}
+
+// lastCompactionLine keeps the newest line of the digest so far, bounded, so
+// the retained tail cannot grow with the summary.
+func lastCompactionLine(text string) string {
+	if i := strings.LastIndexByte(strings.TrimRight(text, "\n"), '\n'); i >= 0 {
+		text = text[i+1:]
+	}
+	text = strings.TrimSpace(text)
+	if r := []rune(text); len(r) > 120 {
+		text = string(r[len(r)-120:])
+	}
+	return text
 }
 
 // compactionQualityLine says what the fold cost and what the digest kept of it.

@@ -581,6 +581,10 @@ func (a *Agent) summarize(ctx context.Context, region []provider.Message, instru
 			switch chunk.Type {
 			case provider.ChunkText:
 				b.WriteString(chunk.Text)
+				// The digest is already streaming; forwarding it is what lets a
+				// frontend show a fold working rather than a spinner that cannot
+				// tell slow from stuck. Coalesced downstream like any delta.
+				a.svc.sink.Emit(event.Event{Kind: event.CompactionProgress, Text: chunk.Text})
 			case provider.ChunkUsage:
 				usage = chunk.Usage
 			case provider.ChunkError:

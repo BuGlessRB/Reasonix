@@ -120,6 +120,11 @@ const (
 	// CompletionSummary reports a content-free end-of-turn quality summary for
 	// role-setting strategies (preset, verdict, check counts, review status).
 	CompletionSummary
+	// CompactionProgress streams the digest as the summarizer writes it (Text =
+	// the new chunk), between CompactionStarted and CompactionDone. A fold can
+	// take a minute, and a placeholder that says nothing for a minute is
+	// indistinguishable from one that has hung.
+	CompactionProgress
 	// KindCount is a sentinel one past the last real Kind. New event kinds must
 	// be inserted above it so completeness tests cover them automatically.
 	KindCount

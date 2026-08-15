@@ -164,6 +164,12 @@ type chatTUI struct {
 	// the block closes. -1 when no block is open. transcriptDirty forces a
 	// viewport re-feed after that in-place rewrite (length is unchanged).
 	reasoningLineIdx int
+	// compactionLineIdx is the transcript index of the live "⋯ compacting…"
+	// line, so the digest streaming in can be shown on it. -1 when idle.
+	compactionLineIdx int
+	// compactionTail is the newest line of the digest streaming in, bounded so
+	// what is retained does not grow with the summary.
+	compactionTail string
 	// reasoningTextIdx is the transcript index of the live reasoning text block
 	// (the block right after the marker), streamed in as the model thinks and
 	// removed when the block collapses (kept only in verbose mode). -1 when none.
@@ -651,6 +657,7 @@ func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Even
 		nextPasteID:          nextPasteID,
 		usedPasteIDs:         usedPasteIDs,
 		reasoningLineIdx:     -1,
+		compactionLineIdx:    -1,
 		reasoningTextIdx:     -1,
 		answerIdx:            -1,
 		toolStreamIdx:        -1,
@@ -4624,20 +4631,8 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 			m.commitLine(ln)
 		}
 
-	case event.CompactionStarted:
-		m.finalizeStreamed()
-		m.commitLine(dim("  ⋯ " + i18n.M.CompactionWorking))
-
-	case event.CompactionDone:
-		// An aborted pass carries no summary; the accompanying Notice (auto) or
-		// compactDoneMsg error (manual) explains why, so don't draw an empty card.
-		if e.Compaction.Summary == "" {
-			break
-		}
-		m.finalizeStreamed()
-		for _, ln := range compactionCardLines(e.Compaction) {
-			m.commitLine(ln)
-		}
+	case event.CompactionStarted, event.CompactionProgress, event.CompactionDone:
+		m.handleCompaction(e)
 
 	case event.Phase:
 		m.finalizeStreamed()

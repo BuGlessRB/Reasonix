@@ -72,3 +72,18 @@ func TestCompactionCardLinesNoArchive(t *testing.T) {
 		t.Errorf("header should reflect the manual trigger: %q", lines[0])
 	}
 }
+
+// The live line shows the newest line of the digest, not all of it: a digest is
+// thousands of tokens, and a status line that grows with it stops being one.
+func TestCompactionProgressLineKeepsOnlyTheNewestLine(t *testing.T) {
+	if got := lastCompactionLine("## Goal\n- ship the parser\n## Files"); got != "## Files" {
+		t.Fatalf("tail = %q, want the newest line", got)
+	}
+	if got := lastCompactionLine("## Goal\n- ship the parser\n"); got != "- ship the parser" {
+		t.Fatalf("a trailing newline must not blank the line: %q", got)
+	}
+	long := strings.Repeat("每一处改动都要写进简报", 40)
+	if got := []rune(lastCompactionLine(long)); len(got) > 120 {
+		t.Fatalf("tail is %d runes, want it bounded", len(got))
+	}
+}

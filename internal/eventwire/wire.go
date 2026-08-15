@@ -115,8 +115,8 @@ func ToWire(e event.Event) Event {
 			ResolvedName: e.Tool.ResolvedName, CapabilityID: e.Tool.CapabilityID,
 			Output: e.Tool.Output, Err: e.Tool.Err,
 			ReadOnly: e.Tool.ReadOnly, Truncated: e.Tool.Truncated,
-			DurationMs: e.Tool.DurationMs, Partial: e.Tool.Partial,
-			StartedAt: e.Tool.StartedAt, EndedAt: e.Tool.EndedAt,
+			DurationMs: e.Tool.DurationMs, ContextTokens: e.Tool.ContextTokens(),
+			Partial: e.Tool.Partial, StartedAt: e.Tool.StartedAt, EndedAt: e.Tool.EndedAt,
 			ArgChars: e.Tool.ArgChars, Refreshed: e.Tool.Refreshed,
 			ParentID: e.Tool.ParentID, AttemptID: e.Tool.AttemptID,
 			Diff: e.Tool.Diff, Added: e.Tool.Added, Removed: e.Tool.Removed,
@@ -377,28 +377,31 @@ type Profile struct {
 
 // Tool is the JSON form of an event.Tool.
 type Tool struct {
-	ID           string          `json:"id,omitempty"`
-	Name         string          `json:"name"`
-	Args         string          `json:"args,omitempty" externalizable:"true"`
-	ResolvedName string          `json:"resolvedName,omitempty"`
-	CapabilityID string          `json:"capabilityId,omitempty"`
-	Output       string          `json:"output,omitempty" externalizable:"true"`
-	Err          string          `json:"err,omitempty" externalizable:"true"`
-	ReadOnly     bool            `json:"readOnly"`
-	Truncated    bool            `json:"truncated,omitempty"`
-	DurationMs   int64           `json:"durationMs,omitempty"`
-	StartedAt    int64           `json:"startedAt,omitempty"` // unix ms; zero when the call never ran
-	EndedAt      int64           `json:"endedAt,omitempty"`
-	Partial      bool            `json:"partial,omitempty"`
-	ArgChars     int             `json:"argChars,omitempty"`
-	Refreshed    bool            `json:"refreshed,omitempty"`
-	ParentID     string          `json:"parentId,omitempty"`
-	AttemptID    string          `json:"attemptId,omitempty"` // host-local stream_attempt id for speculative partials
-	Diff         string          `json:"diff,omitempty" externalizable:"true"`
-	Added        int             `json:"added,omitempty"`
-	Removed      int             `json:"removed,omitempty"`
-	Profile      *Profile        `json:"profile,omitempty"`
-	Execution    *ShellExecution `json:"execution,omitempty"`
+	ID           string `json:"id,omitempty"`
+	Name         string `json:"name"`
+	Args         string `json:"args,omitempty" externalizable:"true"`
+	ResolvedName string `json:"resolvedName,omitempty"`
+	CapabilityID string `json:"capabilityId,omitempty"`
+	Output       string `json:"output,omitempty" externalizable:"true"`
+	Err          string `json:"err,omitempty" externalizable:"true"`
+	ReadOnly     bool   `json:"readOnly"`
+	Truncated    bool   `json:"truncated,omitempty"`
+	DurationMs   int64  `json:"durationMs,omitempty"`
+	// ContextTokens is what this call left in the prompt (args + result), so a
+	// card can say which step is eating the window. Estimated, never billed.
+	ContextTokens int             `json:"contextTokens,omitempty"`
+	StartedAt     int64           `json:"startedAt,omitempty"` // unix ms; zero when the call never ran
+	EndedAt       int64           `json:"endedAt,omitempty"`
+	Partial       bool            `json:"partial,omitempty"`
+	ArgChars      int             `json:"argChars,omitempty"`
+	Refreshed     bool            `json:"refreshed,omitempty"`
+	ParentID      string          `json:"parentId,omitempty"`
+	AttemptID     string          `json:"attemptId,omitempty"` // host-local stream_attempt id for speculative partials
+	Diff          string          `json:"diff,omitempty" externalizable:"true"`
+	Added         int             `json:"added,omitempty"`
+	Removed       int             `json:"removed,omitempty"`
+	Profile       *Profile        `json:"profile,omitempty"`
+	Execution     *ShellExecution `json:"execution,omitempty"`
 }
 
 // ShellExecution is the JSON form of event.ShellExecution (local UI metadata).
@@ -622,6 +625,7 @@ var kindNames = map[event.Kind]string{
 	event.AskRequest:              "ask_request",
 	event.TurnDone:                "turn_done",
 	event.CompactionStarted:       "compaction_started",
+	event.CompactionProgress:      "compaction_progress",
 	event.CompactionDone:          "compaction_done",
 	event.ToolProgress:            "tool_progress",
 	event.MCPSurfaceReady:         "mcp_surface_ready",

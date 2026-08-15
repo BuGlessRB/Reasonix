@@ -233,3 +233,27 @@ func TestCoalesceDisabledOrNil(t *testing.T) {
 		t.Fatalf("nil inner must not be wrapped")
 	}
 }
+
+// A digest arrives in provider-sized chunks; forwarding each one would spend a
+// frame per token on text the card only shows the tail of. It merges like any
+// other stream delta, and the barrier before CompactionDone still lands after
+// everything written before it.
+func TestCoalesceMergesCompactionProgress(t *testing.T) {
+	inner := &coalesceRecordSink{}
+	c := Coalesce(inner, time.Hour)
+	c.Emit(Event{Kind: CompactionProgress, Text: "## "}) // leading edge
+	c.Emit(Event{Kind: CompactionProgress, Text: "Goal\n"})
+	c.Emit(Event{Kind: CompactionProgress, Text: "- ship it"})
+	c.Emit(Event{Kind: CompactionDone, Compaction: Compaction{Trigger: "auto"}})
+
+	got := inner.snapshot()
+	if len(got) != 3 {
+		t.Fatalf("got %d events, want 3 (leading delta, merged burst, barrier): %+v", len(got), got)
+	}
+	if got[1].Kind != CompactionProgress || got[1].Text != "Goal\n- ship it" {
+		t.Fatalf("digest burst not merged: %+v", got[1])
+	}
+	if got[2].Kind != CompactionDone {
+		t.Fatalf("the finished fold must arrive after its own text: %+v", got[2])
+	}
+}

@@ -56,7 +56,7 @@ type coalescer struct {
 // safe when no other field carries meaning. The zero-probe comparison keeps
 // this true by construction as Event grows fields.
 func isStreamDelta(e Event) bool {
-	if (e.Kind != Text && e.Kind != Reasoning) || e.Text == "" {
+	if (e.Kind != Text && e.Kind != Reasoning && e.Kind != CompactionProgress) || e.Text == "" {
 		return false
 	}
 	probe := e
