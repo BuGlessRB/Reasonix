@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AccountState, AgentPort, Preset, SessionStatus, WorkspaceInfo } from "../port/port";
 import { Picker, type MenuItem } from "./Menu";
+import { WindowControls, zoomOnTitleBar } from "./WindowControls";
 
 const PRESETS: [Preset, string][] = [
-  ["light", "轻量"],
   ["balanced", "均衡"],
   ["delivery", "交付"],
 ];
@@ -94,7 +94,7 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
   };
 
   return (
-    <div className="chrome">
+    <div className="chrome" onDoubleClick={zoomOnTitleBar}>
       <span className="brand" role="img" aria-label="Reasonix" />
 
       <div className="crumb">
@@ -185,6 +185,7 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
             <path className="t-dark" d="M13 9.6A5.6 5.6 0 0 1 6.4 3a5.6 5.6 0 1 0 6.6 6.6Z" />
           </svg>
         </button>
+        <WindowControls />
       </div>
     </div>
   );
