@@ -7,7 +7,6 @@ import (
 	"io"
 
 	"reasonix/internal/agent"
-	"reasonix/internal/event"
 	"reasonix/internal/i18n"
 )
 
@@ -47,15 +46,6 @@ type runCompletion struct {
 func classifyRunCompletion(err error) runCompletion {
 	if err == nil {
 		return runCompletion{subtype: "success", class: "success"}
-	}
-	var pauseErr *agent.RecoveryPauseError
-	if errors.As(err, &pauseErr) {
-		return runCompletion{
-			outcome:  event.TurnOutcomeRecoveryPaused,
-			subtype:  event.TurnOutcomeRecoveryPaused,
-			class:    event.TurnOutcomeRecoveryPaused,
-			exitCode: 0,
-		}
 	}
 	return runCompletion{
 		subtype:  "error_during_execution",

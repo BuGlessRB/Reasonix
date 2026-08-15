@@ -7,36 +7,14 @@ import (
 	"unicode/utf8"
 )
 
-// episodeBudget is the host-owned hard-stop budget shared by every TaskID
-// (root and all sub-agents) inside one Recovery Episode. Exact-operation
-// counters remain on taskRuntime; totals and global stop live here so spawning
-// a new sub-agent cannot reset the Episode ceiling.
-type episodeBudget struct {
-	totalFailures        uint8
-	reviewRejects        uint8
-	stoppedOpRetries     uint8
-	stopped              bool
-	stopReason           StopReason
-	finalizationOffered  bool
-	finalizationConsumed bool
-}
-
-func (ep *episodeBudget) clear() {
-	if ep == nil {
-		return
-	}
-	*ep = episodeBudget{}
-}
-
 // taskRuntime holds task-local recovery evidence and exact-operation counters.
-// Episode-level totals, reviewer rejects, and hard stop live on Gate.episode.
 type taskRuntime struct {
 	episodeID string
 
-	// operationFailures counts qualifying failures per exact fingerprint.
+	// operationFailures counts qualifying failures per exact fingerprint. It is
+	// evidence the reviewer and the approval card read ("this exact call has
+	// failed N times"), never a ceiling the host enforces.
 	operationFailures map[string]uint8
-	// stoppedOps records fingerprints that already hit the per-operation limit.
-	stoppedOps map[string]struct{}
 
 	// lastFailure is reviewer/diagnostic evidence for the most recent failure
 	// on this task. It does not itself act as a task-wide lock.
@@ -70,7 +48,7 @@ func (st *taskRuntime) empty() bool {
 	if st.lastFailure != nil || st.guidanceSent {
 		return false
 	}
-	if len(st.operationFailures) > 0 || len(st.stoppedOps) > 0 {
+	if len(st.operationFailures) > 0 {
 		return false
 	}
 	return true
@@ -109,13 +87,11 @@ func (st *taskRuntime) hasTaskGrants() bool {
 }
 
 // clearTaskRecoveryState drops task-local operation counters and evidence.
-// Episode-level totals are cleared separately on the Gate.
 func (st *taskRuntime) clearTaskRecoveryState() {
 	if st == nil {
 		return
 	}
 	st.operationFailures = nil
-	st.stoppedOps = nil
 	st.lastFailure = nil
 	st.guidanceSent = false
 }
@@ -127,9 +103,6 @@ func (st *taskRuntime) ensureMaps() {
 	if st.operationFailures == nil {
 		st.operationFailures = map[string]uint8{}
 	}
-	if st.stoppedOps == nil {
-		st.stoppedOps = map[string]struct{}{}
-	}
 }
 
 func (st *taskRuntime) operationFailureCount(fp string) uint8 {
@@ -137,26 +110,6 @@ func (st *taskRuntime) operationFailureCount(fp string) uint8 {
 		return 0
 	}
 	return st.operationFailures[fp]
-}
-
-func (st *taskRuntime) isOperationStopped(fp string) bool {
-	if st == nil || fp == "" {
-		return false
-	}
-	if st.stoppedOps != nil {
-		if _, ok := st.stoppedOps[fp]; ok {
-			return true
-		}
-	}
-	return st.operationFailureCount(fp) >= MaxOperationFailures
-}
-
-func (st *taskRuntime) markOperationStopped(fp string) {
-	if st == nil || fp == "" {
-		return
-	}
-	st.ensureMaps()
-	st.stoppedOps[fp] = struct{}{}
 }
 
 func (st *taskRuntime) failureCount() uint8 {

@@ -130,9 +130,6 @@ type TaskState struct {
 	TailInjected     bool             `json:"tail_injected,omitempty"`
 	// EpisodeID is runtime/debug only and never written by persistence projection.
 	EpisodeID string `json:"episode_id,omitempty"`
-	// EpisodeStopped / StopReason are live debug views only.
-	EpisodeStopped bool   `json:"episode_stopped,omitempty"`
-	StopReason     string `json:"stop_reason,omitempty"`
 }
 
 // Snapshot is the form of all task recovery state.
@@ -159,10 +156,6 @@ type Metrics struct {
 	RepeatPrompts      int64
 
 	// Episode / generation counters (content-free).
-	OperationStops           int64
-	EpisodeFailureStops      int64
-	ReviewStops              int64
-	StoppedOpRetryStops      int64
 	ModeResets               int64
 	EpisodeRotations         int64
 	StaleObservationsIgnored int64

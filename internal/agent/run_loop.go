@@ -496,20 +496,6 @@ func sleepStreamRetryBackoff(ctx context.Context, attempt int) bool {
 // final compaction. cont=true continues the tool loop; cont=false returns err
 // from Run (err may be nil for a clean final answer).
 func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, text, reasoning string, usage *provider.Usage) (cont bool, err error) {
-	// Recovery finalization produced a summary. Keep it in the session,
-	// but still pause so Goal auto-continue cannot open another Run with
-	// a fresh finalization round. turn_done reports recovery_paused.
-	if state.recoveryGraceRound {
-		a.contextManager().ObserveUsage(usage)
-		reason := ""
-		if ctrl := a.recoveryEpisodeControl(); ctrl != nil {
-			_, _ = ctrl.ConsumeFinalization(a.recovery.taskID)
-		}
-		return false, &RecoveryPauseError{
-			Message:    "Automatic retries paused. Reasonix stopped repeated attempts and kept completed work. Send \"continue\" to start a fresh attempt, or add instructions to change direction.",
-			StopReason: reason,
-		}
-	}
 	readiness := a.finalReadinessCheckFor()
 	if state.graceRound && (readiness.reason != "" || !hasVisibleFinalAnswer(text)) {
 		a.contextManager().ObserveUsage(usage)
@@ -639,19 +625,6 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 	// The prompt only grows from here; compact before the next turn so it
 	// stays within the model's window.
 	a.contextManager().ObserveUsage(usage)
-
-	// When Auto recovery exhausts its Episode budget, offer exactly one
-	// summarize-only finalization round. Successful summary ends cleanly;
-	// further tool calls surface RecoveryPauseError.
-	if batch.recoveryStopTurn && !state.recoveryGraceRound {
-		state.recoveryGraceRound = true
-		if ctrl := a.recoveryEpisodeControl(); ctrl != nil {
-			ctrl.MarkFinalizationOffered(a.recovery.taskID)
-		}
-		nudge := "Auto recovery has reached its limit for this turn. Do not call any more tools. Summarize what was completed, what failed, and what the user should do next. The user can continue in the next message."
-		a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(nudge)})
-		return true, nil
-	}
 
 	// Spend is checked before rounds: it is the axis a runaway is actually
 	// reported in, so on the turns both would catch it should be the one named.

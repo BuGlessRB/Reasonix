@@ -37,13 +37,6 @@ func (a *Agent) stopUnexecutedBoundaryCalls(state *turnRuntime, calls []provider
 	case state.graceRound:
 		a.pairUnexecutedGraceCalls(calls, "blocked: the tool-call round budget is exhausted; no more tools will run in this turn")
 		return a.gracePause(state), true
-	case state.recoveryGraceRound:
-		if ctrl := a.recoveryEpisodeControl(); ctrl != nil {
-			_, _ = ctrl.ConsumeFinalization(a.recovery.taskID)
-		}
-		a.pairUnexecutedGraceCalls(calls, "blocked: Auto recovery already paused this turn. Do not call tools; the user will continue in the next message.")
-		a.contextManager().ObserveUsage(usage)
-		return &RecoveryPauseError{Message: "Automatic retries paused. Reasonix stopped repeated attempts and kept completed work. Send \"continue\" to start a fresh attempt, or add instructions to change direction."}, true
 	default:
 		return nil, false
 	}

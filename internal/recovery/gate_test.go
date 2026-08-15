@@ -452,7 +452,10 @@ func TestSafeVerificationRetryOnce(t *testing.T) {
 	}
 }
 
-func TestRepeatedFailureStopsOnlyTheSameOperation(t *testing.T) {
+// Repeating a failing operation is an execution-reliability signal, not a
+// signal that the user is done. Every retry goes back to the reviewer, which
+// judges the proposal in front of it; the host never counts to a stop.
+func TestRepeatedFailureKeepsConsultingTheReviewer(t *testing.T) {
 	g := NewGate(Options{Reviewer: staticReviewer{ReviewVerdict{
 		Outcome: ReviewContinue, ChangeKind: ChangeSameStrategy,
 	}}})
@@ -477,8 +480,8 @@ func TestRepeatedFailureStopsOnlyTheSameOperation(t *testing.T) {
 	}
 
 	same, err := g.BeforeMutation(context.Background(), retry)
-	if err != nil || same.Allow || !same.Blocked || !strings.Contains(same.Message, "mvn test") {
-		t.Fatalf("same operation = %+v, %v; want a scoped stop", same, err)
+	if err != nil || !same.Allow || same.Blocked {
+		t.Fatalf("same operation = %+v, %v; want the reviewer verdict, not a host stop", same, err)
 	}
 
 	alternative, err := g.BeforeMutation(context.Background(), Proposal{
@@ -595,63 +598,6 @@ func TestReviseClosesFailureEpisodeBeforeAlternative(t *testing.T) {
 	})
 	if err != nil || !alternative.Allow || alternative.Blocked {
 		t.Fatalf("alternative after revise = %+v, %v", alternative, err)
-	}
-}
-
-func TestReviewerRejectBudgetIsEpisodeCumulative(t *testing.T) {
-	g := NewGate(Options{Reviewer: staticReviewer{ReviewVerdict{
-		Outcome: ReviewConfirm, ChangeKind: ChangeUncertain, Rationale: "not proven",
-	}}})
-	argsA := json.RawMessage(`{"path":"a.go"}`)
-	g.ObserveResult(context.Background(), Observation{
-		TaskScopeID: "turn:1", Tool: "write_file", Subject: "a.go", Mutates: true,
-		Args: argsA, ErrSummary: "fail",
-	})
-	proposalA := Proposal{TaskScopeID: "turn:1", Tool: "write_file", Subject: "a.go", Mutates: true, Args: argsA}
-	for i := range 3 {
-		dec, err := g.BeforeMutation(context.Background(), proposalA)
-		if err != nil || dec.Allow || !dec.Blocked {
-			t.Fatalf("proposal A attempt %d = %+v, %v", i+1, dec, err)
-		}
-	}
-	// Different candidates share the Episode reviewer budget — no fresh allowance.
-	proposalB := Proposal{TaskScopeID: "turn:1", Tool: "write_file", Subject: "b.go", Mutates: true, Args: json.RawMessage(`{"path":"b.go"}`)}
-	dec, err := g.BeforeMutation(context.Background(), proposalB)
-	if err != nil || dec.Allow || !dec.Blocked || !dec.StopTurn {
-		t.Fatalf("proposal B = %+v, %v; want Episode stop after cumulative rejects", dec, err)
-	}
-	// A new user turn (Episode) restores the budget.
-	g.BeginEpisode()
-	dec, err = g.BeforeMutation(context.Background(), proposalA)
-	if err != nil || !dec.Allow || dec.Blocked {
-		// After BeginEpisode and no active failure, mutation without failure allows.
-		// With no lastFailure after clear, HasActiveFailure is false → Allow.
-		if err != nil || !dec.Allow {
-			t.Fatalf("proposal A in a new episode = %+v, %v; want fresh Episode", dec, err)
-		}
-	}
-}
-
-func TestReviewerRejectBudgetResetsAcrossPlanTurns(t *testing.T) {
-	g := NewGate(Options{Reviewer: staticReviewer{ReviewVerdict{
-		Outcome: ReviewConfirm, ChangeKind: ChangeUncertain, Rationale: "plan relationship not proven",
-	}}})
-	proposal := Proposal{
-		TaskScopeID: "turn:1", Tool: "todo_write", ReadOnly: true, PlanTransition: true,
-		PlanBefore: "1. Existing [in_progress]", PlanAfter: "1. Replacement [in_progress]",
-	}
-	for attempt := 1; attempt <= 2; attempt++ {
-		dec, err := g.BeforeMutation(context.Background(), proposal)
-		if err != nil || dec.Allow || !dec.Blocked || !strings.Contains(dec.Message, fmt.Sprintf("attempt %d/3", attempt)) {
-			t.Fatalf("turn 1 attempt %d = %+v, %v", attempt, dec, err)
-		}
-	}
-	// Plan start-execution rotates Episode before the approved run.
-	g.BeginEpisode()
-	proposal.TaskScopeID = "turn:2"
-	dec, err := g.BeforeMutation(context.Background(), proposal)
-	if err != nil || dec.Allow || !dec.Blocked || !strings.Contains(dec.Message, "attempt 1/3") {
-		t.Fatalf("turn 2 decision = %+v, %v; want a fresh reviewer budget", dec, err)
 	}
 }
 
@@ -798,7 +744,9 @@ func TestReviewerContinueSkipsPrompt(t *testing.T) {
 	}
 }
 
-func TestReviewerBlockReturnsReasonThenStops(t *testing.T) {
+// A reviewer that keeps rejecting keeps returning its reason. The host adds no
+// ceiling of its own on top of that verdict.
+func TestReviewerBlockKeepsReturningItsReason(t *testing.T) {
 	g := NewGate(Options{
 		Reviewer: staticReviewer{ReviewVerdict{
 			Outcome: ReviewConfirm, ChangeKind: ChangeUncertain,
@@ -823,15 +771,17 @@ func TestReviewerBlockReturnsReasonThenStops(t *testing.T) {
 		Tool: "write_file", Subject: "foo/a.go", Mutates: true,
 		Args: args,
 	}
-	for attempt := 1; attempt < 3; attempt++ {
+	for attempt := 1; attempt <= 4; attempt++ {
 		dec, err := g.BeforeMutation(context.Background(), proposal)
-		if err != nil || dec.Allow || !dec.Blocked || !strings.Contains(dec.Message, "attempt "+fmt.Sprint(attempt)+"/3") {
+		if err != nil || dec.Allow || !dec.Blocked {
 			t.Fatalf("attempt %d decision = %+v, %v", attempt, dec, err)
 		}
+		if !strings.Contains(dec.Message, "inspect the failing package first") {
+			t.Fatalf("attempt %d lost the reviewer rationale: %q", attempt, dec.Message)
+		}
 	}
-	dec, err := g.BeforeMutation(context.Background(), proposal)
-	if err != nil || dec.Allow || !dec.Blocked || !dec.StopTurn || prompts != 0 || !strings.Contains(dec.Message, "paused this turn") {
-		t.Fatalf("stopped decision = %+v, %v; prompts=%d", dec, err, prompts)
+	if prompts != 0 {
+		t.Fatalf("reviewer rejections escalated to %d human prompts", prompts)
 	}
 }
 
@@ -1190,136 +1140,7 @@ func TestFailureClassificationKeepsTransientDetectionNarrow(t *testing.T) {
 	}
 }
 
-func TestEpisodeTotalFailuresHardStopAcrossFingerprints(t *testing.T) {
-	g := NewGate(Options{Reviewer: staticReviewer{ReviewVerdict{
-		Outcome: ReviewContinue, ChangeKind: ChangeSameStrategy,
-	}}})
-	for i := range MaxEpisodeFailures {
-		cmd := fmt.Sprintf("go test ./pkg%d", i)
-		g.ObserveResult(context.Background(), Observation{
-			Tool: "bash", Subject: cmd, Verification: true,
-			Args: json.RawMessage(fmt.Sprintf(`{"command":%q}`, cmd)), ErrSummary: "fail",
-		})
-	}
-	dec, err := g.BeforeMutation(context.Background(), Proposal{
-		Tool: "write_file", Subject: "fresh.go", Mutates: true,
-		Args: json.RawMessage(`{"path":"fresh.go","content":"x"}`),
-	})
-	if err != nil || dec.Allow || !dec.Blocked || !dec.StopTurn {
-		t.Fatalf("episode hard stop = %+v, %v", dec, err)
-	}
-	// A hard stop quarantines further execution but keeps diagnosis available,
-	// so Auto can explain the failure without asking the user to restart or
-	// switch permission modes.
-	ro, err := g.BeforeMutation(context.Background(), Proposal{
-		Tool: "read_file", Subject: "fresh.go", ReadOnly: true,
-	})
-	if err != nil || !ro.Allow || ro.Blocked || ro.StopTurn {
-		t.Fatalf("read-only diagnosis after stop = %+v, %v", ro, err)
-	}
-}
-
-func TestEpisodeBudgetIsSharedAcrossSubagentTaskIDs(t *testing.T) {
-	g := NewGate(Options{Reviewer: staticReviewer{ReviewVerdict{
-		Outcome: ReviewContinue, ChangeKind: ChangeSameStrategy,
-	}}})
-	// Split the Episode failure budget across root and two sub-agents.
-	for i := range 2 {
-		g.ObserveResult(context.Background(), Observation{
-			TaskID: "root", Tool: "bash", Subject: fmt.Sprintf("root-%d", i), Verification: true,
-			Args: json.RawMessage(fmt.Sprintf(`{"command":"root %d"}`, i)), ErrSummary: "fail",
-		})
-	}
-	for i := range 2 {
-		g.ObserveResult(context.Background(), Observation{
-			TaskID: "subagent:a", Tool: "bash", Subject: fmt.Sprintf("a-%d", i), Verification: true,
-			Args: json.RawMessage(fmt.Sprintf(`{"command":"a %d"}`, i)), ErrSummary: "fail",
-		})
-	}
-	for i := range 2 {
-		g.ObserveResult(context.Background(), Observation{
-			TaskID: "subagent:b", Tool: "bash", Subject: fmt.Sprintf("b-%d", i), Verification: true,
-			Args: json.RawMessage(fmt.Sprintf(`{"command":"b %d"}`, i)), ErrSummary: "fail",
-		})
-	}
-	// Sixth failure exhausted the shared Episode budget. A brand-new sub-agent
-	// must not receive a fresh ceiling.
-	dec, err := g.BeforeMutation(context.Background(), Proposal{
-		TaskID: "subagent:fresh", Tool: "write_file", Subject: "x.go", Mutates: true,
-		Args: json.RawMessage(`{"path":"x.go","content":"x"}`),
-	})
-	if err != nil || dec.Allow || !dec.Blocked || !dec.StopTurn {
-		t.Fatalf("fresh subagent after shared budget = %+v, %v; want Episode stop", dec, err)
-	}
-	if !g.EpisodeStopped("subagent:fresh") || !g.EpisodeStopped("root") {
-		t.Fatal("EpisodeStopped must be true for every TaskID once exhausted")
-	}
-}
-
-func TestReviewerContinueDoesNotResetCumulativeRejects(t *testing.T) {
-	// reject → reject → continue → reject must still count as attempt 3/3 and stop.
-	var reviews atomic.Int32
-	g := NewGate(Options{
-		Reviewer: reviewerFunc(func(_ context.Context, _ *FailureEvent, _ []string, _ Proposal, _ string) (ReviewVerdict, error) {
-			n := reviews.Add(1)
-			if n == 3 {
-				return ReviewVerdict{Outcome: ReviewContinue, ChangeKind: ChangeSameStrategy}, nil
-			}
-			return ReviewVerdict{Outcome: ReviewConfirm, ChangeKind: ChangeUncertain, Rationale: "not proven"}, nil
-		}),
-	})
-	args := json.RawMessage(`{"path":"a.go"}`)
-	g.ObserveResult(context.Background(), Observation{
-		Tool: "write_file", Subject: "a.go", Mutates: true, Args: args, ErrSummary: "fail",
-	})
-	prop := Proposal{Tool: "write_file", Subject: "a.go", Mutates: true, Args: args}
-	// Two rejects.
-	for i := 1; i <= 2; i++ {
-		dec, err := g.BeforeMutation(context.Background(), prop)
-		if err != nil || dec.Allow || !dec.Blocked || !strings.Contains(dec.Message, fmt.Sprintf("attempt %d/3", i)) {
-			t.Fatalf("reject %d = %+v, %v", i, dec, err)
-		}
-	}
-	// Reviewer continue (allow once) must not wipe the cumulative count.
-	dec, err := g.BeforeMutation(context.Background(), prop)
-	if err != nil || !dec.Allow || dec.Blocked {
-		t.Fatalf("continue = %+v, %v; want allow without clearing reject budget", dec, err)
-	}
-	// Next reject is attempt 3 and hard-stops the Episode.
-	dec, err = g.BeforeMutation(context.Background(), prop)
-	if err != nil || dec.Allow || !dec.Blocked || !dec.StopTurn {
-		t.Fatalf("third cumulative reject = %+v, %v; want Episode stop", dec, err)
-	}
-	if reviews.Load() < 4 {
-		t.Fatalf("reviews = %d, want at least 4 (2 reject + continue + reject)", reviews.Load())
-	}
-}
-
-func TestStoppedOperationRetriesEscalateToEpisodeStop(t *testing.T) {
-	g := NewGate(Options{Reviewer: staticReviewer{ReviewVerdict{
-		Outcome: ReviewContinue, ChangeKind: ChangeSameStrategy,
-	}}})
-	args := json.RawMessage(`{"command":"mvn test"}`)
-	for range MaxOperationFailures {
-		g.ObserveResult(context.Background(), Observation{
-			Tool: "bash", Subject: "mvn test", Verification: true, Args: args, ErrSummary: "fail",
-		})
-	}
-	retry := Proposal{Tool: "bash", Subject: "mvn test", Verification: true, Args: args}
-	// Re-proposing an already-stopped op burns the stopped-op retry budget.
-	for i := 1; i < MaxStoppedOperationRetries; i++ {
-		dec, err := g.BeforeMutation(context.Background(), retry)
-		if err != nil || dec.Allow || !dec.Blocked || dec.StopTurn {
-			t.Fatalf("stopped retry %d = %+v, %v; want op-only block", i, dec, err)
-		}
-	}
-	dec, err := g.BeforeMutation(context.Background(), retry)
-	if err != nil || dec.Allow || !dec.Blocked || !dec.StopTurn {
-		t.Fatalf("escalated stop = %+v, %v; want Episode stop", dec, err)
-	}
-}
-
-func TestSuccessfulMutationResetsEpisodeBudgets(t *testing.T) {
+func TestSuccessfulMutationClearsFailureState(t *testing.T) {
 	g := NewGate(Options{Reviewer: staticReviewer{ReviewVerdict{
 		Outcome: ReviewContinue, ChangeKind: ChangeSameStrategy,
 	}}})
@@ -1345,7 +1166,7 @@ func TestSuccessfulMutationResetsEpisodeBudgets(t *testing.T) {
 	}
 }
 
-func TestDiagnosticReadDoesNotResetBudgets(t *testing.T) {
+func TestDiagnosticReadDoesNotClearFailureState(t *testing.T) {
 	g := NewGate(Options{})
 	args := json.RawMessage(`{"command":"go test"}`)
 	g.ObserveResult(context.Background(), Observation{

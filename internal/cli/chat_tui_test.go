@@ -1486,7 +1486,7 @@ func TestRecoveryPauseTurnDoneIsInformational(t *testing.T) {
 			m.width = 240
 			m.ingestEvent(event.Event{
 				Kind:    event.TurnDone,
-				Err:     &agent.RecoveryPauseError{Message: backendFallback},
+				Err:     errors.New(backendFallback),
 				Outcome: event.TurnOutcomeRecoveryPaused,
 			})
 

@@ -38,17 +38,12 @@ type RecoveryGate interface {
 }
 
 // RecoveryEpisodeControl is an optional Gate capability for host-owned Episode
-// rotation, generation stamping, and turn-stop finalization. Controllers and
-// the live recovery.Gate implement it; simple test doubles may omit it.
+// rotation and generation stamping. Controllers and the live recovery.Gate
+// implement it; simple test doubles may omit it.
 type RecoveryEpisodeControl interface {
 	EpisodeID() string
 	Generation() uint64
 	BeginEpisode()
-	EpisodeStopped(taskID string) bool
-	MarkFinalizationOffered(taskID string)
-	// ConsumeFinalization marks the one-shot finalization round as used when it
-	// was already offered. Returns (offered, alreadyConsumed).
-	ConsumeFinalization(taskID string) (offered, alreadyConsumed bool)
 	// OnModeChange rotates Episode/generation on a real mode change and returns
 	// dismissed recovery approval ids. Same-value replays are no-ops.
 	OnModeChange(mode string) []string
@@ -168,13 +163,6 @@ type RecoveryDecision struct {
 	// Generation is the gate generation that authorized or blocked this call.
 	// Tool results must carry the same generation for ObserveResult.
 	Generation uint64
-	// StopTurn means the Recovery Episode execution budget is exhausted; the
-	// current batch stops and the agent gets one summarize-only finalization.
-	// Host-proven read-only diagnosis may be admitted before that final stop.
-	StopTurn bool
-	// StopReason is an internal classifier (episode_failures, review_rejects, …).
-	// User-facing surfaces must not expose it.
-	StopReason string
 }
 
 // RecoveryAction is the user decision for a recovery confirmation card.

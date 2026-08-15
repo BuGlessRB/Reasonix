@@ -185,9 +185,9 @@ type StreamAttemptInfo struct {
 
 const TurnOutcomeFinalReadiness = "final_readiness"
 
-// TurnOutcomeRecoveryPaused marks an Auto recovery Episode budget stop. New
-// clients show an informational status (not send-failed); older clients still
-// read Err text and ignore the unknown outcome.
+// TurnOutcomeRecoveryPaused marked an Auto recovery retry-budget stop. Nothing
+// emits it any more; sessions recorded before the budgets were removed still
+// carry it, so readers keep rendering it as an informational status.
 const TurnOutcomeRecoveryPaused = "recovery_paused"
 
 // Level classifies a Notice so sinks can style or filter it.

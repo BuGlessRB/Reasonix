@@ -36,19 +36,14 @@ type toolOutcome struct {
 	// recoveryGeneration is the gate generation captured before execution so
 	// ObserveResult can ignore stale results after a mode switch.
 	recoveryGeneration uint64
-	// recoveryStopTurn is set when Auto Episode budgets are exhausted.
-	recoveryStopTurn   bool
-	recoveryStopReason string
 }
 
 // batchExecution is the result of one provider tool-call batch.
 type batchExecution struct {
-	results            []string
-	outcomes           []toolOutcome
-	images             [][]string
-	executions         []*tool.ShellExecution
-	recoveryStopTurn   bool
-	recoveryStopReason string
+	results    []string
+	outcomes   []toolOutcome
+	images     [][]string
+	executions []*tool.ShellExecution
 }
 
 // executeBatch dispatches one model turn's tool calls. ToolDispatch events are
@@ -141,31 +136,6 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 		cancelled = true
 	}
 
-	// recoveryBatchStop blocks remaining tools after Episode budgets are
-	// exhausted so tool-call / result pairs stay complete for the provider.
-	recoveryBatchStop := false
-	recoveryStopReason := ""
-	markRecoveryStopped := func(start int, reason string) {
-		msg := "blocked: Auto recovery paused this turn; do not call more tools. Summarize completed work for the user."
-		for j := start; j < len(calls); j++ {
-			if results[j] != "" {
-				continue
-			}
-			results[j] = msg
-			outcomes[j] = toolOutcome{
-				output:             msg,
-				blocked:            true,
-				errMsg:             firstLine(msg),
-				recoveryStopTurn:   true,
-				recoveryStopReason: reason,
-			}
-		}
-		recoveryBatchStop = true
-		if reason != "" {
-			recoveryStopReason = reason
-		}
-	}
-
 	// Deterministic dependency barrier: after a mutating call fails or is
 	// blocked, later mutations/verifications in the batch are skipped; read-only
 	// diagnosis still runs. executeOne re-checks after proxy resolution.
@@ -226,10 +196,6 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			markCancelled(batch.start)
 			break
 		}
-		if recoveryBatchStop {
-			markRecoveryStopped(batch.start, recoveryStopReason)
-			break
-		}
 		if batch.parallel && batch.end-batch.start > 1 {
 			// Parallel segments are read-only by construction; no mutation barrier.
 			ranUntil := runParallel(ctx, batch.start, batch.end, run)
@@ -243,17 +209,6 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 				markCancelled(ranUntil)
 				break
 			}
-			for i := batch.start; i < batch.end; i++ {
-				if outcomes[i].recoveryStopTurn {
-					recoveryBatchStop = true
-					recoveryStopReason = outcomes[i].recoveryStopReason
-					markRecoveryStopped(batch.end, recoveryStopReason)
-					break
-				}
-			}
-			if recoveryBatchStop {
-				break
-			}
 			continue
 		}
 		for i := batch.start; i < batch.end; i++ {
@@ -262,10 +217,6 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			// triggered cancellation.
 			if ctx.Err() != nil {
 				markCancelled(i)
-				break
-			}
-			if recoveryBatchStop {
-				markRecoveryStopped(i, recoveryStopReason)
 				break
 			}
 			if mutationBatchStop {
@@ -297,12 +248,6 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			}
 			run(i)
 			finalize(i)
-			if outcomes[i].recoveryStopTurn {
-				recoveryBatchStop = true
-				recoveryStopReason = outcomes[i].recoveryStopReason
-				markRecoveryStopped(i+1, recoveryStopReason)
-				break
-			}
 			// Mutation/verification failure barrier for the rest of this batch.
 			if batchCallIsMutatingFailure(a, calls[i], outcomes[i]) {
 				mutationBatchStop = true
@@ -316,7 +261,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 				break
 			}
 		}
-		if cancelled || recoveryBatchStop {
+		if cancelled {
 			break
 		}
 	}
@@ -362,20 +307,12 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 	for i := range outcomes {
 		images[i] = outcomes[i].images
 		executions[i] = outcomes[i].execution
-		if outcomes[i].recoveryStopTurn {
-			recoveryBatchStop = true
-			if outcomes[i].recoveryStopReason != "" {
-				recoveryStopReason = outcomes[i].recoveryStopReason
-			}
-		}
 	}
 	return batchExecution{
-		results:            results,
-		outcomes:           outcomes,
-		images:             images,
-		executions:         executions,
-		recoveryStopTurn:   recoveryBatchStop,
-		recoveryStopReason: recoveryStopReason,
+		results:    results,
+		outcomes:   outcomes,
+		images:     images,
+		executions: executions,
 	}
 }
 

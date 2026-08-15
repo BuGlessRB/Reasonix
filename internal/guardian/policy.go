@@ -146,9 +146,3 @@ func DenyReason(a Assessment) string {
 	return fmt.Sprintf("guardian denied: risk=%s, authorization=%s. %s",
 		a.RiskLevel, a.UserAuthorization, a.Rationale)
 }
-
-// CircuitBreakerReason builds the message injected when the circuit breaker trips.
-func CircuitBreakerReason(consecutive, recent int) string {
-	return fmt.Sprintf("Guardian auto-review has denied too many requests this turn (%d consecutive, %d in recent window). Stop the current approach, report the situation to the user, and request explicit instructions before continuing.",
-		consecutive, recent)
-}

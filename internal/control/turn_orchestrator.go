@@ -140,9 +140,6 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	// the user's own text — never the composed provider input with its
 	// transient <response-language>/<reasoning-language>/memory/hook blocks.
 	c.beginCheckpoint(ctx, firstNonEmpty(raw, task))
-	if c.guardianSess != nil {
-		c.guardianSess.ResetTurn()
-	}
 	if c.hooks.Enabled() {
 		c.mu.Lock()
 		c.turn++
@@ -248,9 +245,6 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	// surface in the rewind picker or be prefilled into the composer.
 	if !turn.synthetic {
 		c.beginCheckpoint(ctx, firstNonEmpty(turn.raw, turn.input))
-	}
-	if c.guardianSess != nil {
-		c.guardianSess.ResetTurn()
 	}
 	// UserPromptSubmit / Stop hooks bracket the whole turn (incl. the plan
 	// research + approved-execution sub-turns below): a gating UserPromptSubmit

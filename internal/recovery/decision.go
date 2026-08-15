@@ -10,12 +10,6 @@ const (
 	RouteAllow
 	// RouteReview hands an ambiguous recovery mutation to the isolated reviewer.
 	RouteReview
-	// RouteStop blocks one exact operation after repeated technical failure.
-	// Other operations in the same Episode may still proceed.
-	RouteStop
-	// RouteStopTurn blocks further execution after an Episode-level hard limit.
-	// Host-proven read-only diagnosis remains available.
-	RouteStopTurn
 )
 
 // String returns a stable route name for tests and diagnostics.
@@ -27,10 +21,6 @@ func (r Route) String() string {
 		return "allow"
 	case RouteReview:
 		return "review"
-	case RouteStop:
-		return "stop"
-	case RouteStopTurn:
-		return "stop_turn"
 	default:
 		return "unknown"
 	}
@@ -56,21 +46,6 @@ type Facts struct {
 	ExpandedScope       bool
 	StrategyChanged     bool
 	SafeRetryAvailable  bool
-	// FailureCount is the exact-operation failure count (1 = first failure).
-	FailureCount uint8
-	// EpisodeFailureCount is the Task's total qualifying failures since last
-	// real progress inside the current Episode.
-	EpisodeFailureCount uint8
-	// ReviewRejects is the cumulative reviewer rejection count for the Episode.
-	ReviewRejects uint8
-	// OperationAlreadyStopped is true when this exact operation already hit its
-	// per-operation limit earlier in the Episode.
-	OperationAlreadyStopped bool
-	// EpisodeStopped is true when a previous decision already exhausted the
-	// Episode for this Task.
-	EpisodeStopped bool
-	// StopReason is the reason the Episode was stopped (when EpisodeStopped).
-	StopReason StopReason
 }
 
 // DecisionResult is the pure routing result.
@@ -79,40 +54,25 @@ type DecisionResult struct {
 	// ConsumeSafeRetry is set when RouteAllow was chosen because this is the
 	// first safe verification retry; the coordinator must spend the budget.
 	ConsumeSafeRetry bool
-	// StopReason is set for RouteStop / RouteStopTurn.
-	StopReason StopReason
 }
 
 // Decide is the pure Auto Guard decision engine.
 //
 // Order is fixed by product policy:
 //  1. non-Auto → bypass ordinary approval
-//  2. Episode already stopped → allow read-only diagnosis, stop execution
-//  3. structured plan transition → reviewer
-//  4. read-only diagnosis → allow
-//  5. no active failure → allow ordinary mutations
+//  2. structured plan transition → reviewer
+//  3. read-only diagnosis → allow
+//  4. no active failure → allow ordinary mutations
+//  5. first safe verification retry → allow (+ consume budget)
 //  6. operations other than the exact failed operation → allow
-//  7. first safe verification retry → allow (+ consume budget)
-//  8. already-stopped operation re-proposal is handled by the gate (retries)
-//  9. three consecutive failures of the same operation → stop that operation
-//  10. remaining exact-operation retries → reviewer
+//  7. retrying the exact failed operation → reviewer
 //
-// Episode-level totals (6 failures / 3 review rejects / 3 stopped-op retries)
-// are enforced by the gate before or after Decide; Decide focuses on pure
-// routing of one proposal given Facts.
+// Nothing here counts attempts. A repeated failure keeps routing to the
+// reviewer, which judges the proposal in front of it; the host does not decide
+// that some number of tries is the point where the user stops wanting the work.
 func Decide(f Facts) DecisionResult {
 	if !f.AutoMode {
 		return DecisionResult{Route: RouteBypass}
-	}
-	if f.EpisodeStopped {
-		if f.ReadOnly && !f.Mutates && !f.Verification && !f.PlanTransition {
-			return DecisionResult{Route: RouteAllow}
-		}
-		reason := f.StopReason
-		if reason == StopReasonNone {
-			reason = StopReasonEpisodeFailures
-		}
-		return DecisionResult{Route: RouteStopTurn, StopReason: reason}
 	}
 	if f.PlanTransition {
 		return DecisionResult{Route: RouteReview}
@@ -132,20 +92,10 @@ func Decide(f Facts) DecisionResult {
 		return DecisionResult{Route: RouteAllow, ConsumeSafeRetry: true}
 	}
 	// A failure is an execution-reliability signal, not a task-wide safety
-	// boundary. Keep unrelated work on the zero-confirmation path; permission,
-	// sandbox, and the Episode ceiling still apply independently.
+	// boundary. Keep unrelated work on the zero-confirmation path; permission
+	// and sandbox still apply independently.
 	if !f.SameFailedOperation {
 		return DecisionResult{Route: RouteAllow}
-	}
-	// Already-stopped exact operation: gate escalates retries; Decide stops the
-	// operation so the agent cannot re-run it.
-	if f.OperationAlreadyStopped && f.SameFailedOperation {
-		return DecisionResult{Route: RouteStop, StopReason: StopReasonOperationFailures}
-	}
-	// Repeated technical failure of the same exact operation is not a
-	// user-owned product decision. Stop only that operation.
-	if f.FailureCount >= MaxOperationFailures && f.SameFailedOperation {
-		return DecisionResult{Route: RouteStop, StopReason: StopReasonOperationFailures}
 	}
 	return DecisionResult{Route: RouteReview}
 }

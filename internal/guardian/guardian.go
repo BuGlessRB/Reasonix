@@ -27,13 +27,9 @@ func PolicyPrompt() string {
 	return string(EmbeddedPolicy)
 }
 
-// Circuit breaker limits.
 const (
-	maxConsecutiveDenials = 3
-	maxRecentDenials      = 10
-	recentWindow          = 50
-	reviewTimeout         = 30 * time.Second
-	compactEvery          = 50 // compact guardian session after this many reviews
+	reviewTimeout = 30 * time.Second
+	compactEvery  = 50 // compact guardian session after this many reviews
 )
 
 // Session is a long-lived guardian sub-agent that reviews tool-call approval
@@ -52,11 +48,6 @@ type Session struct {
 
 	mu     sync.Mutex
 	cursor TranscriptCursor
-
-	// circuit breaker
-	consecutiveDenials int
-	recentDenials      []bool // rolling window of recent outcomes (true=deny)
-	interruptTriggered bool
 
 	// reviewCount tracks how many reviews the guardian session has processed.
 	// After a threshold the session is compacted to bound memory growth.
@@ -230,14 +221,7 @@ func (gs *Session) review(ctx context.Context, toolName string, args json.RawMes
 	gs.normalizeAlternation()
 
 	if assessment.Outcome == "deny" {
-		action := gs.recordDenial()
-		if action == cbInterrupt {
-			reason = CircuitBreakerReason(gs.consecutiveDenials, gs.countRecentDenials())
-		} else {
-			reason = DenyReason(assessment)
-		}
-	} else {
-		gs.recordAllow()
+		reason = DenyReason(assessment)
 	}
 	gs.mu.Unlock()
 
@@ -434,63 +418,11 @@ func (gs *Session) Reset() {
 	gs.sess = sess
 	gs.cursor = TranscriptCursor{}
 	gs.reviewCount = 0
-	gs.consecutiveDenials = 0
-	gs.recentDenials = nil
-	gs.interruptTriggered = false
 }
 
 // Close shuts down the guardian session (no-op for now; the provider is owned
 // externally and shared with the executor).
 func (gs *Session) Close() {}
-
-// ResetTurn clears the per-turn circuit breaker state at the start of each turn.
-func (gs *Session) ResetTurn() {
-	gs.mu.Lock()
-	defer gs.mu.Unlock()
-	gs.consecutiveDenials = 0
-	gs.recentDenials = nil
-	gs.interruptTriggered = false
-}
-
-type cbAction int
-
-const (
-	cbContinue cbAction = iota
-	cbInterrupt
-)
-
-func (gs *Session) recordDenial() cbAction {
-	gs.consecutiveDenials++
-	gs.recentDenials = append(gs.recentDenials, true)
-	if len(gs.recentDenials) > recentWindow {
-		gs.recentDenials = gs.recentDenials[len(gs.recentDenials)-recentWindow:]
-	}
-	if gs.consecutiveDenials >= maxConsecutiveDenials || gs.countRecentDenials() >= maxRecentDenials {
-		if !gs.interruptTriggered {
-			gs.interruptTriggered = true
-			return cbInterrupt
-		}
-	}
-	return cbContinue
-}
-
-func (gs *Session) recordAllow() {
-	gs.consecutiveDenials = 0
-	gs.recentDenials = append(gs.recentDenials, false)
-	if len(gs.recentDenials) > recentWindow {
-		gs.recentDenials = gs.recentDenials[len(gs.recentDenials)-recentWindow:]
-	}
-}
-
-func (gs *Session) countRecentDenials() int {
-	n := 0
-	for _, d := range gs.recentDenials {
-		if d {
-			n++
-		}
-	}
-	return n
-}
 
 // emitTo sends a GuardianAssessment event (with per-review token cost) to the
 // captured sink. Must be called outside the Session mutex to avoid blocking.

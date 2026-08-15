@@ -464,17 +464,13 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 	// Auto Guard: after resolution/mutation classification, before
 	// permission approval and workspace write-lock acquisition, so a waiting
 	// recovery card never holds a write lease. Consult on mutations,
-	// verification, plan transitions, and again for every tool once an Episode
-	// is exhausted so host-proven read-only diagnosis can remain available while
-	// further execution is quarantined. Ask/Yolo still bypass inside the gate.
+	// verification, and plan transitions. Ask/Yolo still bypass inside the gate.
 	plan.verification = plan.evidenceName == "bash" && evidence.IsDeliveryVerificationCommand(bashCommandFromArgs(plan.evidenceArgs))
 	plan.planTransition, plan.planBefore, plan.planAfter, plan.planDiff = a.recoveryPlanTransition(plan.evidenceName, plan.evidenceArgs)
-	episodeStopped := false
 	if ctrl := a.recoveryEpisodeControl(); ctrl != nil {
 		plan.recoveryGen = ctrl.Generation()
-		episodeStopped = ctrl.EpisodeStopped(a.recovery.taskID)
 	}
-	if a.svc.recoveryGate != nil && (plan.mutates || plan.verification || plan.planTransition || episodeStopped) {
+	if a.svc.recoveryGate != nil && (plan.mutates || plan.verification || plan.planTransition) {
 		subject := recoverySubject(plan.evidenceName, plan.evidenceArgs)
 		if plan.planTransition {
 			subject = "Update the active execution plan"
@@ -517,8 +513,6 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 				// failed tool card instead of exposing only an internal guard name.
 				errMsg:             firstLine(msg),
 				recoveryGeneration: plan.recoveryGen,
-				recoveryStopTurn:   dec.StopTurn,
-				recoveryStopReason: dec.StopReason,
 			}, true
 		}
 		plan.planReplacementAuthorized = plan.planTransition && dec.AuthorizePlanReplacement

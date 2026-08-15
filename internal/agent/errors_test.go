@@ -21,7 +21,6 @@ func TestPauseClassNamesEachGuard(t *testing.T) {
 	}{
 		{&maxStepsPause{steps: 40, key: "max_steps"}, "max_steps"},
 		{&FinalReadinessError{Attempts: 3}, "final_readiness"},
-		{&RecoveryPauseError{Message: "paused"}, "recovery_paused"},
 		{fmt.Errorf("wrapped: %w", &maxStepsPause{steps: 5}), "max_steps"},
 		{errors.New("provider 500"), ""},
 		{nil, ""},

@@ -16,7 +16,6 @@ func TestClassifyRunCompletionNamesTheFailureClass(t *testing.T) {
 	}{
 		{nil, "success"},
 		{&agent.FinalReadinessError{Attempts: 3, Reason: "incomplete todos"}, "final_readiness"},
-		{&agent.RecoveryPauseError{Message: "paused"}, "recovery_paused"},
 		{fmt.Errorf("run: %w", context.DeadlineExceeded), "timeout"},
 		{context.Canceled, "cancelled"},
 		{errors.New("provider 500"), "error_during_execution"},

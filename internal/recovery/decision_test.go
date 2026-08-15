@@ -53,7 +53,7 @@ func TestDecisionMatrix(t *testing.T) {
 			name: "same failed operation still uses bounded recovery review",
 			f: Facts{
 				AutoMode: true, Mutates: true, HighRisk: true,
-				HasActiveFailure: true, SameFailedOperation: true, FailureCount: 1,
+				HasActiveFailure: true, SameFailedOperation: true,
 			},
 			want: DecisionResult{Route: RouteReview},
 		},
@@ -66,7 +66,7 @@ func TestDecisionMatrix(t *testing.T) {
 			name: "first safe verification retry allows and consumes budget",
 			f: Facts{
 				AutoMode: true, Verification: true,
-				HasActiveFailure: true, FailureCount: 1, SafeRetryAvailable: true,
+				HasActiveFailure: true, SafeRetryAvailable: true,
 			},
 			want: DecisionResult{Route: RouteAllow, ConsumeSafeRetry: true},
 		},
@@ -74,7 +74,7 @@ func TestDecisionMatrix(t *testing.T) {
 			name: "different scoped operation after failure stays automatic",
 			f: Facts{
 				AutoMode: true, Mutates: true,
-				HasActiveFailure: true, FailureCount: 1, ExpandedScope: true,
+				HasActiveFailure: true, ExpandedScope: true,
 			},
 			want: DecisionResult{Route: RouteAllow},
 		},
@@ -82,7 +82,7 @@ func TestDecisionMatrix(t *testing.T) {
 			name: "different strategy operation after failure stays automatic",
 			f: Facts{
 				AutoMode: true, Mutates: true,
-				HasActiveFailure: true, FailureCount: 1, StrategyChanged: true,
+				HasActiveFailure: true, StrategyChanged: true,
 			},
 			want: DecisionResult{Route: RouteAllow},
 		},
@@ -90,23 +90,23 @@ func TestDecisionMatrix(t *testing.T) {
 			name: "second attempt of failed operation uses bounded recovery review",
 			f: Facts{
 				AutoMode: true, Mutates: true,
-				HasActiveFailure: true, SameFailedOperation: true, FailureCount: 2,
+				HasActiveFailure: true, SameFailedOperation: true,
 			},
 			want: DecisionResult{Route: RouteReview},
 		},
 		{
-			name: "third repeat of the same operation stops",
+			name: "repeating the same failed operation keeps going to the reviewer",
 			f: Facts{
 				AutoMode: true, Mutates: true,
-				HasActiveFailure: true, FailureCount: 3, SameFailedOperation: true,
+				HasActiveFailure: true, SameFailedOperation: true,
 			},
-			want: DecisionResult{Route: RouteStop, StopReason: StopReasonOperationFailures},
+			want: DecisionResult{Route: RouteReview},
 		},
 		{
-			name: "different operation after three failures stays recoverable",
+			name: "different operation after failures stays automatic",
 			f: Facts{
 				AutoMode: true, Mutates: true,
-				HasActiveFailure: true, FailureCount: 3,
+				HasActiveFailure: true,
 			},
 			want: DecisionResult{Route: RouteAllow},
 		},
@@ -114,23 +114,15 @@ func TestDecisionMatrix(t *testing.T) {
 			name: "ambiguous retry of the failed operation goes to reviewer",
 			f: Facts{
 				AutoMode: true, Mutates: true,
-				HasActiveFailure: true, SameFailedOperation: true, FailureCount: 1,
+				HasActiveFailure: true, SameFailedOperation: true,
 			},
 			want: DecisionResult{Route: RouteReview},
-		},
-		{
-			name: "episode stop preserves read only diagnosis",
-			f: Facts{
-				AutoMode: true, ReadOnly: true, EpisodeStopped: true,
-				StopReason: StopReasonEpisodeFailures,
-			},
-			want: DecisionResult{Route: RouteAllow},
 		},
 		{
 			name: "safe retry budget does not apply when scope expands",
 			f: Facts{
 				AutoMode: true, Mutates: true, Verification: true,
-				HasActiveFailure: true, FailureCount: 1,
+				HasActiveFailure:   true,
 				SafeRetryAvailable: true, ExpandedScope: true,
 			},
 			// Safe retry is evaluated before the bounded-failure/reviewer path.
@@ -164,13 +156,6 @@ func TestToEventApprovalCarriesPlanTransitionForDecisionSurfaces(t *testing.T) {
 	}
 	if approval.Recovery.PlanBefore != "1. Keep API [in_progress]" || approval.Recovery.PlanAfter != "1. Replace API [in_progress]" {
 		t.Fatalf("plan transition payload = %+v", approval.Recovery)
-	}
-}
-
-func TestRepeatedFailureStopMessageDoesNotAskForRiskApproval(t *testing.T) {
-	got := repeatedFailureStopMessage(3, Proposal{Tool: "bash", Subject: "go test ./..."})
-	if !strings.Contains(got, "after 3") || !strings.Contains(got, "go test ./...") || !strings.Contains(got, "other operations remain available") {
-		t.Fatalf("stop message = %q", got)
 	}
 }
 
@@ -312,7 +297,7 @@ func TestBehaviorMatrixGolden(t *testing.T) {
 			t.Fatalf("got %+v", got)
 		}
 	})
-	t.Run("third repeated operation stops without prompting", func(t *testing.T) {
+	t.Run("third repeated operation still consults the reviewer", func(t *testing.T) {
 		got := run(t, func(g *Gate) {
 			for range 3 {
 				g.ObserveResult(context.Background(), Observation{
@@ -324,7 +309,7 @@ func TestBehaviorMatrixGolden(t *testing.T) {
 			Tool: "write_file", Mutates: true, Subject: "a.go",
 			Args: json.RawMessage(`{"path":"a.go","content":"x"}`),
 		}, nil)
-		if got.allow || got.prompted || got.reviews != 0 || !got.blocked {
+		if !got.allow || got.prompted || got.reviews != 1 || got.blocked {
 			t.Fatalf("got %+v", got)
 		}
 	})
@@ -418,7 +403,7 @@ func TestBehaviorMatrixGolden(t *testing.T) {
 			t.Fatalf("got %+v", got)
 		}
 	})
-	t.Run("reviewer third reject stops without prompt", func(t *testing.T) {
+	t.Run("repeated reviewer rejects never escalate to a prompt", func(t *testing.T) {
 		var reviews atomic.Int32
 		var prompts int
 		g := NewGate(Options{
@@ -445,8 +430,8 @@ func TestBehaviorMatrixGolden(t *testing.T) {
 			}
 		}
 		dec, err := g.BeforeMutation(context.Background(), prop)
-		if err != nil || dec.Allow || !dec.Blocked || !dec.StopTurn || prompts != 0 || reviews.Load() != 3 || !strings.Contains(dec.Message, "paused this turn") {
-			t.Fatalf("stop = %+v %v prompts=%d reviews=%d", dec, err, prompts, reviews.Load())
+		if err != nil || dec.Allow || !dec.Blocked || prompts != 0 || reviews.Load() != 3 {
+			t.Fatalf("third reject = %+v %v prompts=%d reviews=%d", dec, err, prompts, reviews.Load())
 		}
 	})
 	t.Run("reviewer error keeps low risk work automatic", func(t *testing.T) {
@@ -474,13 +459,13 @@ func TestBehaviorMatrixGolden(t *testing.T) {
 		if err != nil || !dec.Allow || prompted.Load() || reviews.Load() != 1 {
 			t.Fatalf("got allow=%v prompted=%v reviews=%d err=%v", dec.Allow, prompted.Load(), reviews.Load(), err)
 		}
-		// A subsequent reject must still start at attempt 1 (error did not burn budget).
+		// A subsequent reject blocks with the reviewer's own reason.
 		g.opts.Reviewer = staticReviewer{ReviewVerdict{Outcome: ReviewConfirm, ChangeKind: ChangeUncertain, Rationale: "no"}}
 		g.opts.EmitPrompt = nil
 		dec, err = g.BeforeMutation(context.Background(), Proposal{
 			Tool: "write_file", Mutates: true, Subject: "a.go", Args: args,
 		})
-		if err != nil || dec.Allow || !dec.Blocked || !strings.Contains(dec.Message, "attempt 1/3") {
+		if err != nil || dec.Allow || !dec.Blocked || !strings.Contains(dec.Message, "no") {
 			t.Fatalf("post-error reject = %+v %v", dec, err)
 		}
 	})

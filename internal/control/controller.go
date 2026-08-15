@@ -1016,10 +1016,6 @@ func turnOutcome(err error) string {
 	if errors.As(err, &readinessErr) {
 		return event.TurnOutcomeFinalReadiness
 	}
-	var pauseErr *agent.RecoveryPauseError
-	if errors.As(err, &pauseErr) {
-		return event.TurnOutcomeRecoveryPaused
-	}
 	return ""
 }
 
@@ -1969,9 +1965,6 @@ func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 	var marker agent.InFlightTurnMeta
 	defer func() { c.finishInFlightTurn(startMessages, marker) }()
 	c.beginCheckpoint(ctx, input)
-	if c.guardianSess != nil {
-		c.guardianSess.ResetTurn()
-	}
 	if c.hooks.Enabled() {
 		c.mu.Lock()
 		c.turn++
