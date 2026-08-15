@@ -108,6 +108,39 @@ func visionModelsOf(cfg *config.Config, p *config.ProviderEntry) []string {
 	return out
 }
 
+// setProviderThinking pins or releases the plain-chat request shape. Relays
+// that reject an unknown thinking/reasoning_effort field fail every request
+// until this is off, and the endpoint's own error rarely names the field.
+func (s *Server) setProviderThinking(w http.ResponseWriter, r *http.Request) {
+	if !s.grants.providerEdit {
+		http.Error(w, "provider editing is not enabled on this server", http.StatusForbidden)
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+		On   bool   `json:"on"`
+	}
+	if !decodeProviderBody(w, r, &body) {
+		return
+	}
+	edit := config.LoadForEdit(config.UserConfigPath())
+	entry, ok := edit.Provider(strings.TrimSpace(body.Name))
+	if !ok {
+		http.Error(w, fmt.Sprintf("no provider named %q", body.Name), http.StatusNotFound)
+		return
+	}
+	if !config.CanConfigureThinkingParams(entry) {
+		http.Error(w, "this protocol never sends thinking parameters", http.StatusBadRequest)
+		return
+	}
+	config.SetThinkingParams(entry, body.On)
+	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // setProviderWebSearch records the tri-state for the endpoint-executed search
 // tool. It is a real per-entry choice, unlike the protocol: the wire format is
 // what makes it available, and this only says whether to use it.

@@ -20,6 +20,7 @@ type Port = {
   checkProvider(name: string): Promise<ProviderCheck>;
   editProvider(edit: ProviderEdit): Promise<void>;
   setProviderWebSearch(name: string, on: boolean): Promise<void>;
+  setProviderThinking(name: string, on: boolean): Promise<void>;
 };
 
 // A name for the config table, derived from the host so the user does not have
@@ -155,6 +156,16 @@ function Conn({
     }
   };
 
+  const setThinking = async (on: boolean) => {
+    setBusy(`thinking:${entry.name}`);
+    try {
+      await port.setProviderThinking(entry.name, on);
+      onEdited();
+    } finally {
+      setBusy("");
+    }
+  };
+
   const check = async () => {
     setBusy(`check:${entry.name}`);
     setFound(null);
@@ -224,6 +235,24 @@ function Conn({
             ))}
           </div>
           <span className="why">端点自己执行的搜索，不占本地工具。</span>
+        </div>
+      )}
+      {entry.canSetThinking && (
+        <div className="vway">
+          <span className="lb">思考参数</span>
+          <div className="seg" role="group" aria-label={`${a.label} 的思考参数`}>
+            {[true, false].map((on) => (
+              <button key={String(on)} aria-pressed={(entry.sendsThinking ?? true) === on} disabled={busy !== ""}
+                onClick={() => setThinking(on)}>
+                {on ? "自动" : "不发送"}
+              </button>
+            ))}
+          </div>
+          <span className="why">
+            {entry.sendsThinking === false
+              ? "只发普通聊天参数。模型自己该怎么想还怎么想，只是这边不再指定深度。"
+              : "有的中转站不认 thinking 字段，会整个请求拒掉。真遇上了就切「不发送」。"}
+          </span>
         </div>
       )}
       {editing && (

@@ -38,6 +38,7 @@ func (s *Server) registerProviderRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /providers/remove", s.removeProvider)
 	mux.HandleFunc("POST /providers/edit", s.editProvider)
 	mux.HandleFunc("POST /providers/websearch", s.setProviderWebSearch)
+	mux.HandleFunc("POST /providers/thinking", s.setProviderThinking)
 	s.registerProviderCheckRoutes(mux)
 }
 
@@ -63,10 +64,15 @@ type providerView struct {
 	// WebSearch is the endpoint-executed search tool: CanWebSearch says this
 	// door offers one at all, WebSearch whether it is on. The OpenAI chat wire
 	// has no format for it, so the answer differs per protocol on one account.
-	CanWebSearch bool   `json:"canWebSearch"`
-	WebSearch    bool   `json:"webSearch"`
-	Default      string `json:"default"`
-	HasKey       bool   `json:"hasKey"`
+	CanWebSearch bool `json:"canWebSearch"`
+	WebSearch    bool `json:"webSearch"`
+	// SendsThinking is whether thinking/reasoning_effort may go on the wire.
+	// CanSetThinking is false where the protocol never carries them, so the UI
+	// offers the switch only where a gateway can actually reject the request.
+	CanSetThinking bool   `json:"canSetThinking"`
+	SendsThinking  bool   `json:"sendsThinking"`
+	Default        string `json:"default"`
+	HasKey         bool   `json:"hasKey"`
 	// KeyEnv names the credential slot. Two entries at one host holding
 	// different keys are two accounts and must not be shown as one.
 	KeyEnv string `json:"keyEnv,omitempty"`
@@ -89,19 +95,21 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 	for i := range cfg.Providers {
 		p := &cfg.Providers[i]
 		out = append(out, providerView{
-			Name:         p.Name,
-			Kind:         strings.ToLower(strings.TrimSpace(p.Kind)),
-			BaseURL:      p.BaseURL,
-			Models:       nonNilStrings(p.ChatModelList()),
-			VisionModels: nonNilStrings(visionModelsOf(cfg, p)),
-			CanSetVision: config.CanConfigureVision(p),
-			CanWebSearch: config.HasServerWebSearchCapability(p),
-			WebSearch:    config.EffectiveWebSearch(p),
-			Default:      p.DefaultModel(),
-			HasKey:       p.APIKey() != "",
-			KeyEnv:       p.APIKeyEnv,
-			InUse:        p.Name == current,
-			Preset:       strings.TrimSpace(p.PresetID) != "",
+			Name:           p.Name,
+			Kind:           strings.ToLower(strings.TrimSpace(p.Kind)),
+			BaseURL:        p.BaseURL,
+			Models:         nonNilStrings(p.ChatModelList()),
+			VisionModels:   nonNilStrings(visionModelsOf(cfg, p)),
+			CanSetVision:   config.CanConfigureVision(p),
+			CanWebSearch:   config.HasServerWebSearchCapability(p),
+			WebSearch:      config.EffectiveWebSearch(p),
+			CanSetThinking: config.CanConfigureThinkingParams(p),
+			SendsThinking:  config.SendsThinkingParams(p),
+			Default:        p.DefaultModel(),
+			HasKey:         p.APIKey() != "",
+			KeyEnv:         p.APIKeyEnv,
+			InUse:          p.Name == current,
+			Preset:         strings.TrimSpace(p.PresetID) != "",
 		})
 	}
 	writeJSON(w, out)
