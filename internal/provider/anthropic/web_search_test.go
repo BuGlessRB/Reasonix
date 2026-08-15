@@ -95,14 +95,21 @@ func TestFormatWebSearchResults(t *testing.T) {
 }
 
 // TestStreamSurfacesWebSearchResults drives a full SSE round-trip: a
-// web_search_tool_result block must surface as readable text chunks, and the
-// server_tool_use block (the model initiating the search) must not be mistaken
-// for a client tool call.
+// web_search_tool_result block must surface as one finished provider-run call
+// carrying the query that produced it, the answer text must stay free of the
+// result listing, and the server_tool_use block (the model initiating the
+// search) must not be mistaken for a client tool call.
 func TestStreamSurfacesWebSearchResults(t *testing.T) {
 	sse := strings.Join([]string{
 		`data: {"type":"message_start","message":{"usage":{"input_tokens":10}}}`,
 		``,
 		`data: {"type":"content_block_start","index":0,"content_block":{"type":"server_tool_use","id":"s1","name":"web_search"}}`,
+		``,
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"query\":\"deepseek"}}`,
+		``,
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":" changelog\"}"}}`,
+		``,
+		`data: {"type":"content_block_stop","index":0}`,
 		``,
 		`data: {"type":"content_block_start","index":1,"content_block":{"type":"web_search_tool_result","tool_use_id":"s1","content":[{"title":"Change Log","url":"https://api-docs.deepseek.com/updates/"}]}}`,
 		``,
@@ -133,21 +140,77 @@ func TestStreamSurfacesWebSearchResults(t *testing.T) {
 	}
 
 	var text strings.Builder
+	var calls []provider.Chunk
 	for chunk := range ch {
 		switch chunk.Type {
 		case provider.ChunkText:
 			text.WriteString(chunk.Text)
+		case provider.ChunkProviderTool:
+			calls = append(calls, chunk)
 		case provider.ChunkToolCallStart, provider.ChunkToolCall:
 			t.Fatalf("server-side search must not surface as a client tool call, got %+v", chunk)
 		case provider.ChunkError:
 			t.Fatalf("stream error: %v", chunk.Err)
 		}
 	}
-	got := text.String()
-	if !strings.Contains(got, "**Change Log**") || !strings.Contains(got, "<https://api-docs.deepseek.com/updates/>") {
-		t.Fatalf("stream text missing formatted search results: %q", got)
+	if len(calls) != 1 {
+		t.Fatalf("want 1 provider-run call, got %d: %+v", len(calls), calls)
 	}
-	if !strings.Contains(got, "answer") {
-		t.Fatalf("stream text missing model answer: %q", got)
+	call := calls[0]
+	// The block index rides the ID so repeat searches never share a card.
+	if call.ToolCall == nil || call.ToolCall.ID != "s1#1" || call.ToolCall.Name != "web_search" {
+		t.Fatalf("provider call = %+v, want id s1#1 named web_search", call.ToolCall)
+	}
+	if call.ToolCall.Arguments != `{"query":"deepseek changelog"}` {
+		t.Fatalf("provider call args = %q, want the accumulated query", call.ToolCall.Arguments)
+	}
+	if !strings.Contains(call.Text, "**Change Log**") || !strings.Contains(call.Text, "<https://api-docs.deepseek.com/updates/>") {
+		t.Fatalf("provider call result missing formatted search results: %q", call.Text)
+	}
+	if got := text.String(); got != "answer" {
+		t.Fatalf("answer text = %q, want the model's answer alone", got)
+	}
+}
+
+// TestStreamWebSearchWithoutToolUseID covers gateways that omit tool_use_id: two
+// searches in one turn must still land on distinct IDs, or a frontend merging
+// cards by ID would fold both into one.
+func TestStreamWebSearchWithoutToolUseID(t *testing.T) {
+	sse := strings.Join([]string{
+		`data: {"type":"message_start","message":{"usage":{"input_tokens":10}}}`,
+		``,
+		`data: {"type":"content_block_start","index":0,"content_block":{"type":"web_search_tool_result","content":[{"title":"First","url":"https://example.com/1"}]}}`,
+		``,
+		`data: {"type":"content_block_start","index":1,"content_block":{"type":"web_search_tool_result","content":[{"title":"Second","url":"https://example.com/2"}]}}`,
+		``,
+		`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}`,
+		``,
+		`data: {"type":"message_stop"}`,
+		``,
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(sse))
+	}))
+	defer srv.Close()
+
+	p, err := New(provider.Config{Name: "deepseek", BaseURL: srv.URL, Model: "deepseek-v4-flash", APIKey: "k", Extra: map[string]any{"web_search": true}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ch, err := p.Stream(context.Background(), provider.Request{
+		Messages: []provider.Message{{Role: provider.RoleUser, Content: "search twice"}},
+	})
+	if err != nil {
+		t.Fatalf("Stream: %v", err)
+	}
+	var ids []string
+	for chunk := range ch {
+		if chunk.Type == provider.ChunkProviderTool && chunk.ToolCall != nil {
+			ids = append(ids, chunk.ToolCall.ID)
+		}
+	}
+	if len(ids) != 2 || ids[0] == ids[1] || ids[0] == "" || ids[1] == "" {
+		t.Fatalf("provider call ids = %v, want two distinct non-empty ids", ids)
 	}
 }

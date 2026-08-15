@@ -1327,7 +1327,22 @@ func (a *Agent) RestoreDeliveryCheckpoint(checkpoint evidence.DeliveryCheckpoint
 // one explicit continuation. It returns false when there is no matching
 // readiness failure, so normal follow-up turns cannot inherit stale mutations.
 func (a *Agent) PrepareDeliveryRecovery() bool {
-	if !a.deliveryProfile || !a.pending.deliveryRecovery {
+	if !a.deliveryProfile {
+		return false
+	}
+	return a.prepareEvidenceContinuation()
+}
+
+// PrepareReadinessContinuation is the same authorization for a continuation the
+// host runs itself rather than one the user asked for. Without it the next run
+// starts from an empty ledger, where a turn that owed verification owes
+// nothing: the gap would read as closed because the record of it was dropped.
+func (a *Agent) PrepareReadinessContinuation() bool {
+	return a.prepareEvidenceContinuation()
+}
+
+func (a *Agent) prepareEvidenceContinuation() bool {
+	if !a.pending.deliveryRecovery {
 		return false
 	}
 	a.pending.preserveEvidence = true
@@ -1890,9 +1905,9 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 				}
 			}
 		case provider.ChunkResponsesItem:
-			if len(chunk.ResponsesItem) > 0 {
-				responsesItems = append(responsesItems, append(json.RawMessage(nil), chunk.ResponsesItem...))
-			}
+			responsesItems = appendProviderItem(responsesItems, chunk.ResponsesItem)
+		case provider.ChunkProviderTool:
+			absorbProviderRunCall(&text, sink, chunk, attemptID)
 		case provider.ChunkUsage:
 			usage = chunk.Usage
 			a.storeLatestRequestUsage(chunk.Usage)

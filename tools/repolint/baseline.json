@@ -2,7 +2,7 @@
   "limits": {
     "banner": 15,
     "commented-code": 0,
-    "complexity": 1994,
+    "complexity": 1996,
     "essay": 3951,
     "file-size": 106678,
     "function-size": 8733,
@@ -1539,7 +1539,7 @@
       "file-size": 5
     },
     "internal/provider/anthropic/anthropic.go": {
-      "complexity": 45,
+      "complexity": 47,
       "essay": 36,
       "file-size": 125,
       "function-size": 154,

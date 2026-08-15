@@ -670,21 +670,6 @@ func idDistinct(calls []ToolCall) bool {
 	return true
 }
 
-// ChunkType identifies the kind of a streamed increment.
-type ChunkType int
-
-const (
-	ChunkText              ChunkType = iota // text delta
-	ChunkReasoning                          // thinking-mode reasoning delta (before the visible answer)
-	ChunkToolCallStart                      // a tool call has begun (ToolCall: ID+Name; args still streaming)
-	ChunkToolCallArgsDelta                  // progress while a call's arguments stream (ToolCall: ID+Name; ArgChars: cumulative)
-	ChunkToolCall                           // one complete tool call
-	ChunkUsage                              // token usage for the completion
-	ChunkDone                               // completion finished normally
-	ChunkError                              // an error occurred
-	ChunkResponsesItem                      // a complete provider-issued Responses API output item for stateless replay
-)
-
 // Usage reports token accounting for a completion. Cache hit/miss come from
 // either DeepSeek's top-level prompt_cache_{hit,miss}_tokens or the OpenAI/MiMo
 // standard prompt_tokens_details.cached_tokens — the openai provider normalises
@@ -836,25 +821,6 @@ func isThreeLetterCurrencyCode(value string) bool {
 		}
 	}
 	return true
-}
-
-// Chunk is a single streamed event. Read the field matching Type.
-type Chunk struct {
-	Type      ChunkType
-	Text      string // ChunkText, ChunkReasoning
-	Signature string // ChunkReasoning: opaque proof for the reasoning (Anthropic thinking signature), when issued
-	// ReasoningID/ReasoningStatus ride the final ChunkReasoning of a turn
-	// (empty Text): the provider-issued reasoning item id/status captured
-	// from the SSE stream, so the Agent can persist them into the session
-	// and the next turn's input reasoning item round-trips them (review
-	// #7234 — OpenAI Responses schema marks Reasoning.id required).
-	ReasoningID     string          // ChunkReasoning: provider-issued reasoning item id
-	ReasoningStatus string          // ChunkReasoning: final reasoning item status ("completed")
-	ToolCall        *ToolCall       // ChunkToolCallStart (ID+Name only), ChunkToolCallArgsDelta (ID+Name), ChunkToolCall (complete)
-	ArgChars        int             // ChunkToolCallArgsDelta: cumulative argument characters received for this call
-	ResponsesItem   json.RawMessage // ChunkResponsesItem: opaque validated Responses API output item
-	Usage           *Usage          // ChunkUsage
-	Err             error           // ChunkError
 }
 
 // Fixed stream-interrupt reasons for observability. Values are a closed enum

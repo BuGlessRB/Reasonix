@@ -546,6 +546,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 
 	tools := map[int]*provider.ToolCall{} // tool_use blocks, keyed by content index
 	argBuckets := map[int]int{}           // last emitted 2KB progress bucket per block
+	server := serverBlock{index: -1}      // the provider-run call a result block answers
 	var inTok, outTok, cacheCreate, cacheRead int
 	var stopReason string
 	haveUsage := false
@@ -604,18 +605,11 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 					if !send(provider.Chunk{Type: provider.ChunkToolCallStart, ToolCall: &provider.ToolCall{ID: tc.ID, Name: tc.Name}}) {
 						return
 					}
+				case "server_tool_use":
+					server = serverBlock{call: provider.ToolCall{ID: ev.ContentBlock.ID, Name: ev.ContentBlock.Name}, index: ev.Index}
 				case "web_search_tool_result":
-					// Search results are delivered inline in content_block.content as a
-					// JSON array of result objects (title, url, encrypted_content).
-					// Only the model sees the plain text; we surface titles and URLs.
-					// server_tool_use blocks (the model initiating the search) are
-					// intentionally skipped — the API executes them server-side and
-					// the results appear here.
-					formatted := formatWebSearchResults(ev.ContentBlock.Content)
-					if formatted != "" {
-						if !send(provider.Chunk{Type: provider.ChunkText, Text: formatted}) {
-							return
-						}
+					if chunk, ok := webSearchChunk(server.call, ev.ContentBlock.ToolUseID, ev.Index, ev.ContentBlock.Content); ok && !send(chunk) {
+						return
 					}
 				}
 			}
@@ -643,6 +637,10 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 					}
 				}
 			case "input_json_delta":
+				if ev.Index == server.index { // no progress ticks: nothing is waiting on us
+					server.call.Arguments += ev.Delta.PartialJSON
+					continue
+				}
 				if tc := tools[ev.Index]; tc != nil {
 					tc.Arguments += ev.Delta.PartialJSON
 					// Progress ticks for large streaming argument payloads, one
@@ -759,42 +757,6 @@ func mapStopReason(s string) string {
 	default:
 		return s // "refusal", "pause_turn", "" — pass through
 	}
-}
-
-// webSearchResult is a single result from a web_search_tool_result block.
-type webSearchResult struct {
-	URL      string `json:"url"`
-	Title    string `json:"title"`
-	Text     string `json:"text"`
-	SiteName string `json:"site_name"`
-}
-
-// formatWebSearchResults parses a web_search_tool_result content array
-// and formats titles and URLs as human-readable text. DeepSeek returns
-// encrypted_content rather than plain text at the transport layer; the
-// model still sees the original content.
-func formatWebSearchResults(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var results []webSearchResult
-	if err := json.Unmarshal(raw, &results); err != nil {
-		return ""
-	}
-	var b strings.Builder
-	for _, r := range results {
-		if r.Title == "" && r.URL == "" {
-			continue
-		}
-		fmt.Fprintf(&b, "\n- **%s**", r.Title)
-		if r.URL != "" {
-			fmt.Fprintf(&b, "\n  <%s>", r.URL)
-		}
-	}
-	if b.Len() == 0 {
-		return ""
-	}
-	return "\n" + b.String() + "\n"
 }
 
 // Messages API wire protocol
