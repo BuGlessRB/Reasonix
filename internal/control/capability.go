@@ -8,7 +8,6 @@ import (
 	"reasonix/internal/capability"
 	"reasonix/internal/config"
 	"reasonix/internal/plugin"
-	"reasonix/internal/taskpolicy"
 )
 
 func (c *Controller) withCapabilityRoute(ctx context.Context, composed, routeInput string) string {
@@ -49,17 +48,10 @@ func (c *Controller) routeCapabilities(ctx context.Context, routeInput string) c
 	}
 	tools := c.ToolContractEntries()
 	profile := capability.ProfileBalanced
-	switch c.AgentPreset() {
-	case "light":
-		profile = capability.ProfileEconomy
-	case "delivery":
+	if c.AgentPreset() == "delivery" {
 		profile = capability.ProfileDelivery
 	}
 	delivery := profile == capability.ProfileDelivery
-	semanticAllowed := delivery
-	if policy, ok := taskpolicy.FromContext(ctx); ok {
-		semanticAllowed = policy.SemanticRouterAllowed
-	}
 	var proxyTools map[string][]plugin.CachedTool
 	if c.proxyToolsFn != nil {
 		proxyTools = c.proxyToolsFn()
@@ -112,9 +104,9 @@ func (c *Controller) routeCapabilities(ctx context.Context, routeInput string) c
 		decision.CapabilityProxy = true
 	}
 
-	// The frozen TaskPolicy decides whether ambiguity warrants the semantic
-	// router; deterministic routing remains first for every role setting.
-	if semanticAllowed && c.semanticRouter != nil {
+	// Deterministic routing comes first under every role setting; only Delivery
+	// pays a model round-trip when it produced no strong candidate.
+	if delivery && c.semanticRouter != nil {
 		before := len(decision.Candidates)
 		strong := false
 		for _, cand := range decision.Candidates {

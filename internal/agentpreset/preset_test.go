@@ -38,23 +38,15 @@ func TestLegacyTokenModeRoundTrip(t *testing.T) {
 }
 
 func TestPolicyOfIsStablePerPreset(t *testing.T) {
-	balanced := PolicyOf(Balanced)
-	if balanced.ReviewPolicy.MediumRisk != ReviewConditional {
-		t.Fatal("balanced medium risk should be conditional review")
+	if got := PolicyOf(Balanced).VerificationPolicy.Level; got != VerifyTargeted {
+		t.Fatalf("balanced verification = %v, want targeted", got)
 	}
-	if !balanced.CapabilityPolicy.SemanticRouterAllowed {
-		t.Fatal("balanced should allow semantic router when needed")
-	}
-
-	delivery := PolicyOf(Delivery)
-	if delivery.ReviewPolicy.MediumRisk != ReviewForced {
-		t.Fatal("delivery medium risk must force independent review")
-	}
-	if delivery.ReviewPolicy.LowRisk != ReviewNone {
-		t.Fatal("delivery low risk must not spawn independent reviewer")
-	}
-	if delivery.VerificationPolicy.Level != VerifyFull {
+	if got := PolicyOf(Delivery).VerificationPolicy.Level; got != VerifyFull {
 		t.Fatal("delivery must require full verification")
+	}
+	// A legacy alias resolves to the default's policy, never to its own.
+	if PolicyOf("light") != PolicyOf(Balanced) {
+		t.Fatal("retired alias must answer the balanced policy")
 	}
 }
 

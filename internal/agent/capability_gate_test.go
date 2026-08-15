@@ -5,9 +5,31 @@ import (
 	"strings"
 	"testing"
 
+	"reasonix/internal/agentpreset"
 	"reasonix/internal/evidence"
+	"reasonix/internal/taskpolicy"
 	"reasonix/internal/tool"
 )
+
+// Every production turn freezes a TaskPolicy before the first request, so the
+// gate must hold with one installed — not only against the zero value the
+// other cases in this file construct.
+func TestDeliveryReviewGateHoldsUnderFrozenTaskPolicy(t *testing.T) {
+	ledger := evidence.NewLedger()
+	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, false))
+
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "review", readOnly: true})
+	reg.Add(fakeTool{name: "security_review", readOnly: true})
+
+	a := &Agent{deliveryProfile: true, task: taskRuntime{ledger: ledger}, svc: agentServices{tools: reg}}
+	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{Raw: "harden the permission gate", Preset: agentpreset.Delivery})
+	a.turn.policySet = true
+
+	if got := a.deliveryReviewGateFailure(); !strings.Contains(got, "high-risk") {
+		t.Fatalf("gate under a frozen policy = %q, want high-risk review demand", got)
+	}
+}
 
 func TestDeliveryReviewGateExplainsOpaqueMutationRecovery(t *testing.T) {
 	ledger := evidence.NewLedger()

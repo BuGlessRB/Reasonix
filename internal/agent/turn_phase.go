@@ -2,8 +2,8 @@ package agent
 
 import (
 	"reasonix/internal/event"
+	"reasonix/internal/evidence"
 	"reasonix/internal/taskcontract"
-	"reasonix/internal/taskpolicy"
 )
 
 // emitTurnPhase publishes a content-free host phase for the active turn.
@@ -48,19 +48,13 @@ func (a *Agent) emitCompletionSummary(c *taskcontract.Contract) {
 		}
 	}
 	review := "none"
-	if a.turn.policySet {
-		switch a.turn.policy.Review {
-		case taskpolicy.ReviewNone:
-			review = "none"
-		default:
-			if a.task.ledger != nil {
-				if mut, ok := a.task.ledger.LatestSuccessfulMutationIndex(); ok {
-					if a.task.ledger.HasSuccessfulReviewAfter(mut) {
-						review = "passed"
-					} else if a.turn.policy.RequiresIndependentReview() {
-						review = "unavailable"
-					}
-				}
+	if a.task.ledger != nil {
+		if mut, ok := a.task.ledger.LatestSuccessfulMutationIndex(); ok {
+			switch {
+			case a.task.ledger.HasSuccessfulReviewAfter(mut):
+				review = "passed"
+			case a.deliveryProfile && a.task.ledger.MutationRiskAfter(mut) >= evidence.RiskMedium:
+				review = "unavailable"
 			}
 		}
 	}

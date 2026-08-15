@@ -30,16 +30,18 @@ func TestTaskPolicyEnforcesVerificationAllowlist(t *testing.T) {
 	}
 }
 
-func TestTaskPolicyBlocksDisallowedExploreSubagent(t *testing.T) {
+// A registered explore worker is the model's to call. The turn policy carries
+// user constraints, not a quota on how the model gathers context.
+func TestTaskPolicyLeavesExploreSubagentAlone(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "explore", readOnly: true})
 	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{}, event.Discard)
-	a.turn.policy = taskpolicy.TaskPolicy{AllowExploreSubagent: false}
+	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{Raw: "find where the parser is wired"})
 	a.turn.policySet = true
 
 	got := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "explore", Arguments: `{}`})
-	if !got.blocked || !strings.Contains(got.errMsg, "exploration sub-agent") {
-		t.Fatalf("explore outcome = %+v, want task-policy block", got)
+	if got.blocked {
+		t.Fatalf("explore outcome = %+v, want no policy block", got)
 	}
 }
 

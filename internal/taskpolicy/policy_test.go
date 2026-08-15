@@ -7,79 +7,34 @@ import (
 	"reasonix/internal/agentpreset"
 )
 
-func TestDeriveSimpleIsDirect(t *testing.T) {
-	p := Derive(Input{
-		Raw:    "what is a mutex?",
-		Preset: agentpreset.Balanced,
-	})
-	if p.Route != RouteDirect {
-		t.Fatalf("route = %v, want direct", p.Route)
+func TestDeriveVerificationFollowsPreset(t *testing.T) {
+	if p := Derive(Input{Raw: "fix it", Preset: agentpreset.Balanced}); p.Verification != VerifyTargeted {
+		t.Fatalf("balanced verification = %v, want targeted", p.Verification)
 	}
-	if p.Review != ReviewNone {
-		t.Fatalf("review = %v, want none", p.Review)
+	if p := Derive(Input{Raw: "fix it", Preset: agentpreset.Delivery}); p.Verification != VerifyFull {
+		t.Fatalf("delivery verification = %v, want full", p.Verification)
 	}
 }
 
-func TestDeriveHighRiskElevates(t *testing.T) {
-	p := Derive(Input{
-		Raw:           "fix the authentication bypass in production login",
-		Preset:        agentpreset.Balanced,
-		HighRiskHints: true,
-	})
-	if p.Risk < RiskHigh && !p.SecurityClass {
-		t.Fatalf("expected high risk or security class, got risk=%v security=%v", p.Risk, p.SecurityClass)
-	}
-	if p.Review != ReviewForcedSecurity {
-		t.Fatalf("review = %v, want forced-security", p.Review)
-	}
-	if p.Verification != VerifyFull {
-		t.Fatalf("verification = %v, want full", p.Verification)
-	}
-	if p.Route != RouteFullPlan {
-		t.Fatalf("route = %v, want full plan", p.Route)
-	}
-}
-
-func TestDeriveDeliveryLowRiskNoReviewer(t *testing.T) {
-	p := Derive(Input{
-		Raw:    "fix the typo in README.md",
-		Preset: agentpreset.Delivery,
-	})
-	if p.Risk != RiskLow {
-		t.Fatalf("risk = %v, want low without a host signal", p.Risk)
-	}
-	if p.RequiresIndependentReview() {
-		t.Fatal("delivery low-risk must not force independent reviewer")
-	}
-}
-
-// Risk arrives as a host signal. Topic words used to promote it on their own,
-// so "migrate the schema" bought a full plan and a forced review from a
-// sentence; the same text with no host signal must now stay low.
-func TestDeriveIgnoresTopicWordsWithoutHostSignals(t *testing.T) {
+// The turn's obligations come from the role setting and from what the user
+// said outright. Nothing about the topic or shape of the message may add one:
+// a sentence that merely mentions auth or lists three steps is still one turn
+// under the same preset.
+func TestDeriveReadsNothingOffTheTopic(t *testing.T) {
+	base := Derive(Input{Raw: "hi", Preset: agentpreset.Balanced})
 	for _, raw := range []string{
-		"migrate the schema to the new column layout",
-		"explain how the oauth credential rotation works",
-		"迁移这段配置到新格式",
+		"fix the authentication bypass in production login",
+		"migrate the schema and deploy it to prod",
+		"1. read the config\n2. rewrite the loader\n3. run the tests",
+		"迁移这段配置到新格式并发布",
 	} {
-		p := Derive(Input{Raw: raw, Preset: agentpreset.Balanced})
-		if p.Risk != RiskLow || p.SecurityClass {
-			t.Errorf("%q derived risk=%v security=%v from words alone", raw, p.Risk, p.SecurityClass)
+		got := Derive(Input{Raw: raw, Preset: agentpreset.Balanced})
+		if got.Verification != base.Verification {
+			t.Errorf("%q derived verification=%v from words alone", raw, got.Verification)
 		}
-	}
-}
-
-func TestDeriveDeliveryMediumForcesReview(t *testing.T) {
-	p := Derive(Input{
-		Raw:             "refactor the payment module and update its callers",
-		Preset:          agentpreset.Delivery,
-		MediumRiskHints: true,
-	})
-	if p.Risk < RiskMedium {
-		t.Fatalf("risk = %v, want at least medium", p.Risk)
-	}
-	if !p.RequiresIndependentReview() {
-		t.Fatal("delivery medium/high must force independent reviewer")
+		if ExecutionPolicyBlock(got) != ExecutionPolicyBlock(base) {
+			t.Errorf("%q produced a different policy block from words alone", raw)
+		}
 	}
 }
 
@@ -144,21 +99,6 @@ func TestQuotedConstraintsIgnored(t *testing.T) {
 	}
 }
 
-func TestRiskOnlyRatchetsUp(t *testing.T) {
-	p := Derive(Input{Raw: "explain this", Preset: agentpreset.Balanced})
-	if p.Risk != RiskLow {
-		t.Fatalf("start risk = %v", p.Risk)
-	}
-	p.RaiseRisk(RiskMedium)
-	if p.Risk != RiskMedium {
-		t.Fatalf("raised = %v", p.Risk)
-	}
-	p.RaiseRisk(RiskLow)
-	if p.Risk != RiskMedium {
-		t.Fatal("risk must not decrease")
-	}
-}
-
 func TestPlanModeForbidsMutation(t *testing.T) {
 	p := Derive(Input{
 		Raw:      "implement the feature",
@@ -176,40 +116,10 @@ func TestExecutionPolicyBlockStable(t *testing.T) {
 	if !strings.Contains(block, `preset="balanced"`) {
 		t.Fatalf("block missing preset: %s", block)
 	}
-	if !strings.Contains(block, `version="1"`) {
+	if !strings.Contains(block, `version="2"`) {
 		t.Fatalf("block missing version: %s", block)
 	}
 	if !strings.HasPrefix(block, "<execution-policy") || !strings.HasSuffix(block, "</execution-policy>") {
 		t.Fatalf("bad block shape: %s", block)
-	}
-}
-
-func TestMatrixPlanningRoutes(t *testing.T) {
-	// A host medium-risk signal still routes Balanced into a plan.
-	p := Derive(Input{
-		Raw:             "update the API and its tests",
-		Preset:          agentpreset.Balanced,
-		MediumRiskHints: true,
-	})
-	if p.Route != RouteLightPlan && p.Route != RouteFullPlan {
-		t.Fatalf("balanced medium-risk route = %v", p.Route)
-	}
-	// Delivery escalates the same signal to a full plan.
-	d := Derive(Input{
-		Raw:             "update the API and its tests across packages",
-		Preset:          agentpreset.Delivery,
-		MediumRiskHints: true,
-	})
-	if d.Route != RouteFullPlan {
-		t.Fatalf("delivery medium-risk route = %v, want full", d.Route)
-	}
-	// Without a host signal nothing about the message buys a plan.
-	for _, raw := range []string{
-		"update the API and its tests across packages",
-		"1. read the config\n2. rewrite the loader\n3. run the tests",
-	} {
-		if got := Derive(Input{Raw: raw, Preset: agentpreset.Delivery}); got.Route != RouteDirect {
-			t.Errorf("%q routed to %v from its own shape", raw, got.Route)
-		}
 	}
 }

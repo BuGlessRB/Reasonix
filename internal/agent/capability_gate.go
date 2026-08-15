@@ -3,14 +3,12 @@ package agent
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 
 	"reasonix/internal/capability"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/skill"
-	"reasonix/internal/taskpolicy"
 	"reasonix/internal/tool"
 )
 
@@ -198,14 +196,10 @@ func (a *Agent) capabilityGateFailure() string {
 }
 
 // deliveryReviewGateFailure enforces risk-adaptive structured review after the
-// latest mutation. When TaskPolicy is set, its Review level is authoritative;
-// otherwise Delivery-profile medium/high risk keeps the legacy matrix.
+// latest mutation. The risk is the one the mutation receipts carry — what was
+// touched, not what was asked for.
 func (a *Agent) deliveryReviewGateFailure() string {
-	if a == nil || a.task.ledger == nil {
-		return ""
-	}
-	// Without Delivery elevation or a forced TaskPolicy review, skip.
-	if !a.deliveryProfile && !(a.turn.policySet && a.turn.policy.RequiresIndependentReview()) {
+	if a == nil || a.task.ledger == nil || !a.deliveryProfile {
 		return ""
 	}
 	if a.subagentDepth > 0 {
@@ -224,19 +218,6 @@ func (a *Agent) deliveryReviewGateFailure() string {
 	}
 	a.emitTurnPhase(event.TurnPhaseReviewing)
 	risk := a.task.ledger.MutationRiskAfter(mutation)
-	// TaskPolicy may force higher review than mutation-risk alone.
-	if a.turn.policySet {
-		switch a.turn.policy.Review {
-		case taskpolicy.ReviewForcedSecurity:
-			risk = evidence.RiskHigh
-		case taskpolicy.ReviewForced:
-			if risk < evidence.RiskMedium {
-				risk = evidence.RiskMedium
-			}
-		case taskpolicy.ReviewNone:
-			return ""
-		}
-	}
 	paths := productionPaths(a.task.ledger.PathsSince(mutation))
 	hasReviewTool := a.svc.tools != nil && (toolPresent(a.svc.tools, "review") || toolPresent(a.svc.tools, "run_skill") || toolPresent(a.svc.tools, "use_capability"))
 	hasSecurityTool := a.svc.tools != nil && (toolPresent(a.svc.tools, "security_review") || toolPresent(a.svc.tools, "run_skill") || toolPresent(a.svc.tools, "use_capability"))
@@ -349,6 +330,3 @@ func FormatReviewWarningsForSummary(warnings []string) string {
 	}
 	return "Review warnings:\n- " + strings.Join(warnings, "\n- ")
 }
-
-// ensure string used
-var _ = fmt.Sprintf

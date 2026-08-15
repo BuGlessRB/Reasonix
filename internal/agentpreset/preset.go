@@ -1,6 +1,6 @@
 // Package agentpreset defines the two Agent role settings (角色设定) that
-// control planning depth, verification breadth, and independent review
-// frequency without changing tool schemas or security boundaries.
+// control verification breadth without changing tool schemas or security
+// boundaries.
 package agentpreset
 
 import "strings"
@@ -13,14 +13,14 @@ const (
 	// Balanced is 均衡 · 智能适配: complexity-adaptive planning and review.
 	// It is the zero-configuration default for every new entry point.
 	Balanced AgentPreset = "balanced"
-	// Delivery is 交付 · 证据闭环: full acceptance evidence and forced
-	// independent review on medium/high-risk mutations.
+	// Delivery is 交付 · 证据闭环: full acceptance evidence, plus the review
+	// the turn's own mutation receipts turn out to owe.
 	Delivery AgentPreset = "delivery"
 )
 
 // PolicyVersion is the host-visible policy schema version embedded in the
 // transient execution-policy block. Bump when the block shape changes.
-const PolicyVersion = 1
+const PolicyVersion = 2
 
 // Normalize maps free-form and legacy values onto a canonical AgentPreset.
 // Empty, unknown, and the retired "light"/"economy" names answer Balanced:

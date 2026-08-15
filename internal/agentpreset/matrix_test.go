@@ -7,55 +7,25 @@ import (
 	"reasonix/internal/taskpolicy"
 )
 
-// TestRoleSettingMatrix locks the product contract for the three role settings:
-// shared tool surface is owned by boot; this package owns planner/review floors.
+// TestRoleSettingMatrix locks the product contract for the two role settings:
+// the shared tool surface is owned by boot, verification breadth by this
+// package, and how much review a change owes by the receipts it produced.
 func TestRoleSettingMatrix(t *testing.T) {
-	type want struct {
-		semanticRouter bool
-		verify         agentpreset.VerificationLevel
-		mediumReview   agentpreset.ReviewLevel
-		explore        bool
+	cases := map[agentpreset.AgentPreset]agentpreset.VerificationLevel{
+		agentpreset.Balanced: agentpreset.VerifyTargeted,
+		agentpreset.Delivery: agentpreset.VerifyFull,
 	}
-	cases := map[agentpreset.AgentPreset]want{
-		agentpreset.Balanced: {
-			semanticRouter: true,
-			verify:         agentpreset.VerifyTargeted,
-			mediumReview:   agentpreset.ReviewConditional,
-			explore:        true,
-		},
-		agentpreset.Delivery: {
-			semanticRouter: true,
-			verify:         agentpreset.VerifyFull,
-			mediumReview:   agentpreset.ReviewForced,
-			explore:        true,
-		},
-	}
-	for preset, w := range cases {
+	for preset, verify := range cases {
 		t.Run(string(preset), func(t *testing.T) {
-			p := agentpreset.PolicyOf(preset)
-			if p.CapabilityPolicy.SemanticRouterAllowed != w.semanticRouter {
-				t.Fatalf("semantic router = %v, want %v", p.CapabilityPolicy.SemanticRouterAllowed, w.semanticRouter)
+			if got := agentpreset.PolicyOf(preset).VerificationPolicy.Level; got != verify {
+				t.Fatalf("verify = %v, want %v", got, verify)
 			}
-			if p.VerificationPolicy.Level != w.verify {
-				t.Fatalf("verify = %v, want %v", p.VerificationPolicy.Level, w.verify)
-			}
-			if p.ReviewPolicy.MediumRisk != w.mediumReview {
-				t.Fatalf("medium review = %v, want %v", p.ReviewPolicy.MediumRisk, w.mediumReview)
-			}
-			if p.PlannerPolicy.AllowExploreSubagent != w.explore {
-				t.Fatalf("explore = %v, want %v", p.PlannerPolicy.AllowExploreSubagent, w.explore)
-			}
-			// Derive a low-risk conversational turn: never forces full plan/review.
-			tp := taskpolicy.Derive(taskpolicy.Input{
-				Raw:    "hello",
-				Preset: preset,
-			})
+			tp := taskpolicy.Derive(taskpolicy.Input{Raw: "hello", Preset: preset})
 			if tp.Preset != preset {
 				t.Fatalf("derived preset = %v", tp.Preset)
 			}
-			if tp.Route != taskpolicy.RouteDirect && preset != agentpreset.Delivery {
-				// light/balanced greetings stay direct
-				t.Fatalf("conversation route = %v, want direct for %s", tp.Route, preset)
+			if tp.Verification != verify {
+				t.Fatalf("derived verify = %v, want %v", tp.Verification, verify)
 			}
 		})
 	}
