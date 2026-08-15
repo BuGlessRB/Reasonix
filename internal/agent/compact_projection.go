@@ -471,6 +471,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		Trigger: trigger, Messages: len(fold), Summary: summary,
 	}})
 	// Only once the checkpoint is committed: a rejected candidate folded nothing.
+	a.sess.compaction.lastUserTurns = retention
 	a.noticeDroppedUserTurns(retention)
 	return CompactionInstalled, nil
 }

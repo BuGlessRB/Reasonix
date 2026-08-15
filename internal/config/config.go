@@ -1343,6 +1343,16 @@ type AgentConfig struct {
 	// of keeping error tool results.
 	Keep       []string `toml:"keep"`
 	RecentKeep int      `toml:"recent_keep"`
+	// UserTurnKeepTokens bounds the user's own turns carried verbatim through
+	// one fold. 0 selects 5% of the context window (floor 1024). Turns past the
+	// budget survive only through the digest, unless marked [[keep]].
+	UserTurnKeepTokens int `toml:"user_turn_keep_tokens"`
+	// FirstTurnPinTokens bounds pinning the first user turn verbatim into the
+	// fixed prefix, where it is paid for on every request. 0 selects 1500.
+	FirstTurnPinTokens int `toml:"first_turn_pin_tokens"`
+	// CheckpointCeilingRatio is how small an automatic fold's result must be,
+	// as a fraction of the window, before it is accepted. 0 selects 0.50.
+	CheckpointCeilingRatio float64 `toml:"checkpoint_ceiling_ratio"`
 	// ColdResumePrune elides stale tool results when a session reopens past the
 	// provider cache window. nil = default enabled.
 	ColdResumePrune *bool `toml:"cold_resume_prune"`

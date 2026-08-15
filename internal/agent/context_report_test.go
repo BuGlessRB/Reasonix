@@ -40,10 +40,6 @@ func TestContextReportThresholdsMatchTheDecision(t *testing.T) {
 	if rep.FoldThreshold != fold {
 		t.Errorf("report FoldThreshold %d differs from compactTrigger %d", rep.FoldThreshold, fold)
 	}
-	if rep.SoftThreshold != 0 || rep.SnipThreshold != 0 || rep.ForceThreshold != 0 {
-		t.Errorf("legacy multi-threshold fields should stay zero: soft=%d snip=%d force=%d",
-			rep.SoftThreshold, rep.SnipThreshold, rep.ForceThreshold)
-	}
 }
 
 // A zero window disables maintenance; the thresholds then mean nothing and must
@@ -54,7 +50,7 @@ func TestContextReportLeavesThresholdsZeroWhenDisabled(t *testing.T) {
 	}, event.Discard)
 
 	rep := a.ContextReport()
-	if rep.Window != 0 || rep.FoldThreshold != 0 || rep.ForceThreshold != 0 {
+	if rep.Window != 0 || rep.FoldThreshold != 0 {
 		t.Errorf("disabled maintenance reported thresholds: %+v", rep)
 	}
 }

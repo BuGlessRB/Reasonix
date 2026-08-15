@@ -236,11 +236,26 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# reasoning_language = \"zh\"   # visible reasoning language: auto|zh|en\n")
 	}
-	fmt.Fprintf(&b, "compact_ratio       = %s   # sole auto trigger; presets 0.70/0.80/0.85 (default 0.85)\n", formatFloat(c.Agent.CompactRatio))
+	fmt.Fprintf(&b, "compact_ratio       = %s   # sole auto trigger, any fraction of the window; presets 0.70/0.80/0.85 (default 0.85)\n", formatFloat(c.Agent.CompactRatio))
 	if c.Agent.Keep != nil {
 		fmt.Fprintf(&b, "keep                = %s   # compaction keep policy: errors, user_marked\n", renderStringArray(c.Agent.Keep))
 	} else {
 		b.WriteString("# keep                = [\"errors\"]   # compaction keep policy: errors, user_marked\n")
+	}
+	if c.Agent.UserTurnKeepTokens > 0 {
+		fmt.Fprintf(&b, "user_turn_keep_tokens = %d   # your own turns kept verbatim through a fold\n", c.Agent.UserTurnKeepTokens)
+	} else {
+		b.WriteString("# user_turn_keep_tokens = 8192   # your own turns kept verbatim through a fold; unset = 5% of the window\n")
+	}
+	if c.Agent.FirstTurnPinTokens > 0 {
+		fmt.Fprintf(&b, "first_turn_pin_tokens = %d   # first turn pinned verbatim into the cached prefix\n", c.Agent.FirstTurnPinTokens)
+	} else {
+		b.WriteString("# first_turn_pin_tokens = 1500   # first turn pinned verbatim into the cached prefix; it is paid for every request\n")
+	}
+	if c.Agent.CheckpointCeilingRatio > 0 {
+		fmt.Fprintf(&b, "checkpoint_ceiling_ratio = %s   # how small a fold's result must be to be accepted\n", formatFloat(c.Agent.CheckpointCeilingRatio))
+	} else {
+		b.WriteString("# checkpoint_ceiling_ratio = 0.50   # how small a fold's result must be to be accepted\n")
 	}
 	if c.Agent.RecentKeep > 0 {
 		fmt.Fprintf(&b, "recent_keep         = %d   # minimum recent messages kept verbatim\n", c.Agent.RecentKeep)

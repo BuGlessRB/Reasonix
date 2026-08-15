@@ -54,9 +54,6 @@ func TestIssue7935Maintains206ToolResultsOnceAndOnlyProcessesNewTail(t *testing.
 	if firstVersion != 1 {
 		t.Fatalf("first maintenance version = %d, want 1", firstVersion)
 	}
-	if got := countToolResultsWithPrefix(a.modelVisibleMessages(), prunedMarker); got != 0 {
-		t.Fatalf("automatic prune markers installed = %d, want 0", got)
-	}
 	status := a.ContextMaintenanceSnapshot()
 	if status.LastReceipt == nil || status.LastReceipt.Action != "summary" || status.LastReceipt.Status != "applied" {
 		t.Fatalf("maintenance snapshot receipt = %+v", status.LastReceipt)
@@ -86,14 +83,4 @@ func TestIssue7935Maintains206ToolResultsOnceAndOnlyProcessesNewTail(t *testing.
 	if applied != 1 {
 		t.Fatalf("summary applied events = %d, want exactly 1", applied)
 	}
-}
-
-func countToolResultsWithPrefix(messages []provider.Message, prefix string) int {
-	var count int
-	for _, msg := range messages {
-		if msg.Role == provider.RoleTool && strings.HasPrefix(msg.Content, prefix) {
-			count++
-		}
-	}
-	return count
 }

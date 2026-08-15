@@ -53,8 +53,8 @@ func renderContextReport(rep agent.ContextReport) (summary, detail string) {
 		visible += "  (projected)"
 	}
 	line("model-visible", visible)
-	line("thresholds", fmt.Sprintf("snip %s · fold %s · force %s",
-		thousands(rep.SnipThreshold), thousands(rep.FoldThreshold), thousands(rep.ForceThreshold)))
+	line("thresholds", fmt.Sprintf("fold %s · hard ceiling %s",
+		thousands(rep.FoldThreshold), thousands(rep.HardCeiling)))
 	if rep.LastMode != "" {
 		last := rep.LastMode
 		if rep.LastTrigger != "" {
@@ -66,6 +66,14 @@ func renderContextReport(rep agent.ContextReport) (summary, detail string) {
 		line("last maintenance", last)
 	} else {
 		line("last maintenance", "none this session")
+	}
+	if rep.UserTurnKeepBudget > 0 {
+		yours := fmt.Sprintf("budget %s per fold", thousands(rep.UserTurnKeepBudget))
+		if rep.UserTurnsKept > 0 || rep.UserTurnsDropped > 0 {
+			yours = fmt.Sprintf("%d kept · %d dropped (~%s tokens) · %s",
+				rep.UserTurnsKept, rep.UserTurnsDropped, thousands(rep.UserTurnsDroppedToks), yours)
+		}
+		line("your turns", yours)
 	}
 	if rep.CacheState != "" {
 		line("cache", rep.CacheState)
@@ -81,12 +89,10 @@ func renderContextReport(rep agent.ContextReport) (summary, detail string) {
 func contextSummaryLine(rep agent.ContextReport) string {
 	next := "fold at " + percentOf(rep.FoldThreshold, rep.Window)
 	switch {
-	case rep.LatestPrompt >= rep.ForceThreshold:
-		next = "at the force threshold"
-	case rep.LatestPrompt >= rep.FoldThreshold:
+	case rep.HardCeiling > 0 && rep.LatestPrompt >= rep.HardCeiling:
+		next = "at the hard ceiling"
+	case rep.FoldThreshold > 0 && rep.LatestPrompt >= rep.FoldThreshold:
 		next = "folding"
-	case rep.LatestPrompt >= rep.SnipThreshold:
-		next = "snipping stale tool results"
 	}
 	s := fmt.Sprintf("context %s / %s (%s) · next: %s",
 		thousands(rep.LatestPrompt), thousands(rep.Window),

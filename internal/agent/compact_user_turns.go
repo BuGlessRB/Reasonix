@@ -37,8 +37,11 @@ func (a *Agent) keepUserTurns(region []provider.Message, keep []bool) userTurnRe
 			ret.Kept++
 			continue
 		}
+		// The remaining budget is the only gate. A separate per-turn ceiling
+		// used to drop a long turn even when the budget could hold it, and
+		// [[keep]] is the documented way to insist on a specific one.
 		cost := fixedTokenEstimate(m)
-		if cost > maxKeptUserTurnTokens || cost > budget {
+		if cost > budget {
 			ret.Dropped++
 			ret.DroppedTokens += cost
 			continue
@@ -50,14 +53,22 @@ func (a *Agent) keepUserTurns(region []provider.Message, keep []bool) userTurnRe
 	return ret
 }
 
-// keptUserTurnsBudget caps what user turns may spend of the checkpoint. Hoisting
-// them unbounded is what made an earlier revision pad candidates past the
-// acceptance ceiling, which fails compaction outright rather than degrading it.
+// keptUserTurnsBudget caps what user turns may spend of the checkpoint.
+// Hoisting them unbounded is what made an earlier revision pad candidates past
+// the acceptance ceiling, which fails compaction outright rather than degrading
+// it — so a bound stays, but it scales with the window instead of stopping at a
+// fixed token count, and the user can name their own.
 func (a *Agent) keptUserTurnsBudget() int {
-	if a.contextWindow <= 0 {
-		return keptUserTurnsBudgetTokens
+	if a.budgets.UserTurnKeepTokens > 0 {
+		return a.budgets.UserTurnKeepTokens
 	}
-	return min(keptUserTurnsBudgetTokens, int(float64(a.contextWindow)*keptUserTurnsWindowFrac))
+	if a.contextWindow <= 0 {
+		return keptUserTurnsFloorTokens
+	}
+	// A fraction and nothing else: an absolute floor on top of it would let a
+	// small window spend a large share of itself on retention, which pads the
+	// candidate past the acceptance ceiling and fails the fold outright.
+	return max(1, int(float64(a.contextWindow)*keptUserTurnsWindowFrac))
 }
 
 // noticeDroppedUserTurns reports the turns the budget could not hold. Without

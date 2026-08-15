@@ -11,15 +11,18 @@ import (
 )
 
 // compactionProgress is how compaction is faring in this session: whether a
-// fold stopped reducing, how many ran back to back, and the turn the last one
-// committed under. All three are cleared together whenever the lineage resets,
-// which is why they travel as one value rather than three fields.
+// fold stopped reducing, and the turn the last one committed under. Both are
+// cleared together whenever the lineage resets, which is why they travel as
+// one value rather than two fields.
 type compactionProgress struct {
-	stuck       bool // a fold landed above the trigger, so pressure retries are pointless
-	consecutive int  // back-to-back folds since one last helped
+	stuck bool // a fold landed above the trigger, so pressure retries are pointless
 	// lastTurn stops the post-turn observer and the pre-send preflight from
 	// paying for two summaries during one active tool loop.
 	lastTurn atomic.Int64
+	// lastUserTurns is what the most recent fold could and could not hold of
+	// the user's own words. The notice fires once, at the moment of the fold;
+	// this is what /context can still answer with afterwards.
+	lastUserTurns userTurnRetention
 }
 
 // ContextManager is the sole owner of provider-visible context maintenance.
@@ -105,7 +108,6 @@ func (m ContextManager) prepareOnce(ctx context.Context, policy ContextPreparePo
 		return prepared, nil
 	}
 	if est < fold {
-		a.sess.compaction.consecutive = 0
 		a.sess.compaction.stuck = false
 	}
 	if a.sess.compaction.stuck && policy.Trigger == CompactionTriggerPressure {
@@ -172,7 +174,6 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 		reason := fmt.Sprintf("summary result remains above fold trigger (%d >= %d)", result.InputTokens, fold)
 		a.recordContextMaintenanceBlocked(a.contextMaintenanceInputHash(result.Messages), policy.Trigger, "summary", reason)
 		a.sess.compaction.stuck = true
-		a.sess.compaction.consecutive++
 		if policy.Trigger == CompactionTriggerOverflow || result.InputTokens >= hard {
 			return PreparedContext{}, fmt.Errorf("%w: %s", ErrCompactionRequired, reason)
 		}

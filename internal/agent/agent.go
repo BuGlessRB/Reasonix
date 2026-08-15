@@ -889,13 +889,11 @@ type Options struct {
 
 	// Context management. ContextWindow <= 0 disables compaction. Ratios and
 	// RecentKeep fall back to defaults when unset.
-	ContextWindow int
-	CompactRatio  float64
+	ContextWindow     int
+	CompactRatio      float64
+	CompactionBudgets CompactionBudgets
 	// Deprecated compatibility inputs. New agents ignore these fields; automatic
 	// maintenance is controlled only by CompactRatio.
-	SoftCompactRatio       float64
-	ToolResultSnipRatio    float64
-	CompactForceRatio      float64
 	RecentKeep             int
 	ArchiveDir             string
 	KeepPolicy             KeepPolicy
@@ -1079,6 +1077,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 			contextWindow:      opts.ContextWindow,
 			compactRatio:       opts.CompactRatio,
 			recentKeep:         opts.RecentKeep,
+			budgets:            opts.CompactionBudgets,
 			archiveDir:         opts.ArchiveDir,
 		},
 		sess: sessionRuntime{

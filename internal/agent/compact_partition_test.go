@@ -67,11 +67,11 @@ func TestPartitionKeepsSmallUserTurnsVerbatim(t *testing.T) {
 
 func TestPartitionFoldsUserTurnsPastBudget(t *testing.T) {
 	// Unbounded hoisting is what padded an earlier revision's candidates past
-	// the acceptance ceiling, so oversize and over-budget turns still fold.
+	// the acceptance ceiling, so a turn larger than the budget still folds.
 	a := &Agent{}
 	oversize := provider.Message{
 		Role:    provider.RoleUser,
-		Content: strings.Repeat("y", maxKeptUserTurnTokens*8),
+		Content: strings.Repeat("y", keptUserTurnsFloorTokens*40),
 	}
 	region := []provider.Message{
 		{Role: provider.RoleUser, Content: "small and kept"},
@@ -88,9 +88,8 @@ func TestPartitionFoldsUserTurnsPastBudget(t *testing.T) {
 
 func TestPartitionUserTurnBudgetIsBoundedInTotal(t *testing.T) {
 	a := &Agent{}
-	// Each turn is a quarter of the per-turn ceiling, so the total budget —
-	// not the per-turn one — is what must stop retention.
-	each := strings.Repeat("z", maxKeptUserTurnTokens)
+	// The budget is now the only gate, so enough turns must exhaust it.
+	each := strings.Repeat("z", keptUserTurnsFloorTokens)
 	region := make([]provider.Message, 0, 32)
 	for i := range 32 {
 		// Distinct content: partitionCoversRegion keys its coverage check on it.
@@ -100,7 +99,7 @@ func TestPartitionUserTurnBudgetIsBoundedInTotal(t *testing.T) {
 	if len(fold) == 0 {
 		t.Fatal("total budget never engaged: every turn was kept")
 	}
-	budget := keptUserTurnsBudgetTokens
+	budget := a.keptUserTurnsBudget()
 	spent := 0
 	for _, m := range kept {
 		spent += fixedTokenEstimate(m)

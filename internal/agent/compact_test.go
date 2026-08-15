@@ -606,9 +606,8 @@ func TestSummarizeToolArgs(t *testing.T) {
 // contract that any turn under the compact trigger is "breathing room" that
 // clears the stuck latch. The snip band ([snip, high)) is the regression: it
 // returned before the reset ran, so a compaction that healthily settled the
-// prompt at, say, 70% of the window left a stale consecutive-run count behind
-// and the next compaction latched the session as "window too small" — silently
-// disabling auto-compaction for the rest of the run.
+// prompt at, say, 70% of the window left the session latched as "window too
+// small" — silently disabling auto-compaction for the rest of the run.
 func TestMaybeCompactClearsStuckLatchAnywhereBelowTrigger(t *testing.T) {
 	// contextWindow 20000 => soft 10000, snip 12000, high (trigger) 16000.
 	for _, tc := range []struct {
@@ -623,14 +622,12 @@ func TestMaybeCompactClearsStuckLatchAnywhereBelowTrigger(t *testing.T) {
 			sess := NewSession("sys")
 			sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 			a := New(&fakeProvider{reply: "- summary"}, tool.NewRegistry(), sess, Options{ContextWindow: 20000}, event.Discard)
-			a.sess.compaction.consecutive = 1
 			a.sess.compaction.stuck = true
 
 			prepareForObservedUsage(a, context.Background(), &provider.Usage{PromptTokens: tc.prompt})
 
-			if a.sess.compaction.consecutive != 0 || a.sess.compaction.stuck {
-				t.Fatalf("prompt %d sits under the trigger; want the latch cleared, got consecutiveCompacts=%d compactStuck=%v",
-					tc.prompt, a.sess.compaction.consecutive, a.sess.compaction.stuck)
+			if a.sess.compaction.stuck {
+				t.Fatalf("prompt %d sits under the trigger; want the latch cleared", tc.prompt)
 			}
 		})
 	}
@@ -645,7 +642,7 @@ func TestMaybeCompactDefersWhenOnlyActiveTurnRemains(t *testing.T) {
 
 	prepareForObservedUsage(a, context.Background(), &provider.Usage{PromptTokens: 17000})
 	if a.sess.compaction.stuck {
-		t.Fatalf("active turn should be deferred, not durably blocked: consecutiveCompacts=%d", a.sess.compaction.consecutive)
+		t.Fatal("active turn should be deferred, not durably blocked")
 	}
 	version := a.currentProjectionVersion()
 	prepareForObservedUsage(a, context.Background(), &provider.Usage{PromptTokens: 17000})

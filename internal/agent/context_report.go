@@ -17,10 +17,9 @@ type ContextReport struct {
 	ProjectionTokens int
 	Projected        bool
 
-	SoftThreshold  int
-	SnipThreshold  int
-	FoldThreshold  int
-	ForceThreshold int
+	// FoldThreshold is the one automatic trigger. The retired multi-threshold
+	// scheme's soft/snip/force levels are gone, not zero-valued.
+	FoldThreshold int
 
 	LastTrigger   string
 	LastMode      string
@@ -28,6 +27,14 @@ type ContextReport struct {
 	LastResult    int
 	CacheState    string
 	BlockedReason string
+
+	// What the last fold did to the user's own turns. A dropped turn is the
+	// loss compaction cannot undo, and the budget that decided it is the
+	// user's to set, so both the outcome and the budget are reportable.
+	UserTurnsKept        int
+	UserTurnsDropped     int
+	UserTurnsDroppedToks int
+	UserTurnKeepBudget   int
 }
 
 // ContextReport samples the current context state. Compaction is disabled when
@@ -37,11 +44,15 @@ func (a *Agent) ContextReport() ContextReport {
 		return ContextReport{}
 	}
 	rep := ContextReport{
-		Window:       a.contextWindow,
-		HardCeiling:  a.hardInputCeiling(),
-		OutputBudget: a.maxOutputTokens,
-		CacheState:   a.CacheState(),
+		Window:             a.contextWindow,
+		HardCeiling:        a.hardInputCeiling(),
+		OutputBudget:       a.maxOutputTokens,
+		CacheState:         a.CacheState(),
+		UserTurnKeepBudget: a.keptUserTurnsBudget(),
 	}
+	retention := a.sess.compaction.lastUserTurns
+	rep.UserTurnsKept, rep.UserTurnsDropped = retention.Kept, retention.Dropped
+	rep.UserTurnsDroppedToks = retention.DroppedTokens
 	if u := a.sess.output.lastUsage.Load(); u != nil {
 		rep.LatestPrompt = u.LatestPromptTokens()
 	}

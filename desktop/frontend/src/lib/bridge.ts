@@ -4887,7 +4887,7 @@ function makeMockApp(): AppBindings {
       settings.agent = { ...settings.agent, temperature, maxSteps, plannerMaxSteps, systemPrompt };
     },
     async SetCompactRatio(ratio: number) {
-      if (!Number.isFinite(ratio) || ratio < 0.65 || ratio > 0.85) throw new Error("compact ratio must be between 0.65 and 0.85");
+      if (!Number.isFinite(ratio) || ratio <= 0 || ratio >= 1) throw new Error("compact ratio must be a fraction of the window, above 0 and below 1");
       settings.agent = { ...settings.agent, compactRatio: ratio };
     },
     async SetReasoningLanguage(lang: string) {

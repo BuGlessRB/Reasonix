@@ -72,7 +72,7 @@ func TestTaskToolInjectsWorkspaceContextIntoSubagentPrompt(t *testing.T) {
 		{Type: provider.ChunkDone},
 	}}
 	workspace := t.TempDir()
-	task := NewTaskTool(sub, nil, tool.NewRegistry(), 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
+	task := NewTaskTool(sub, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(NewSubagentStore(t.TempDir()), workspace, "base-model", "base-effort")
 
 	if _, err := task.Execute(testTaskContext(), []byte(`{"prompt":"inspect project"}`)); err != nil {
@@ -117,7 +117,7 @@ func TestTaskToolCancelDuringStuckProviderReturnsPromptly(t *testing.T) {
 }
 
 func TestTaskToolSchemaExposesOnlyContinueFromForPersistence(t *testing.T) {
-	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil)
+	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil)
 	schema := string(task.Schema())
 	if !strings.Contains(schema, `"continue_from"`) {
 		t.Fatalf("task schema = %s, want continue_from", schema)
@@ -128,7 +128,7 @@ func TestTaskToolSchemaExposesOnlyContinueFromForPersistence(t *testing.T) {
 }
 
 func TestParallelTasksSchemaDoesNotExposePersistentContinuation(t *testing.T) {
-	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil)
+	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil)
 	parallel := NewParallelTasksTool(task, tool.NewRegistry())
 	schema := string(parallel.Schema())
 	if strings.Contains(schema, "continue_from") || strings.Contains(schema, "fork_from") {
@@ -357,7 +357,7 @@ func TestTaskToolRequiresTranscriptStore(t *testing.T) {
 		{Type: provider.ChunkText, Text: "answer"},
 		{Type: provider.ChunkDone},
 	}}
-	task := NewTaskTool(sub, nil, tool.NewRegistry(), 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil)
+	task := NewTaskTool(sub, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil)
 
 	_, err := task.Execute(testTaskContext(), []byte(`{"prompt":"x"}`))
 	if err == nil || !strings.Contains(err.Error(), "transcript store is required") {
@@ -523,7 +523,7 @@ func TestTaskToolContinueFromAncestorReturnsCopiedReferenceGuidance(t *testing.T
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
+	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
 
 	rootCtx := WithParentSession(context.Background(), "root")
@@ -575,7 +575,7 @@ func TestTaskToolLegacyForkFromAncestorConvertsToCopiedReference(t *testing.T) {
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
+	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
 
 	rootCtx := WithParentSession(context.Background(), "root")
@@ -648,7 +648,7 @@ func TestTaskToolFailedForegroundContinuationPersistsAndRejectsReuse(t *testing.
 	store := NewSubagentStore(t.TempDir())
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
+	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
 
 	first, err := task.Execute(testTaskContext(), []byte(`{"prompt":"first task"}`))
@@ -686,7 +686,7 @@ func TestTaskToolBackgroundPanicPersistsFailedMetadata(t *testing.T) {
 	store := NewSubagentStore(t.TempDir())
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
+	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
 
 	jm := jobs.NewManager(event.Discard)
@@ -730,7 +730,7 @@ func TestTaskToolBackgroundResultIncludesReferenceGuidance(t *testing.T) {
 	store := NewSubagentStore(t.TempDir())
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
+	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
 
 	jm := jobs.NewManager(event.Discard)
@@ -776,7 +776,7 @@ func TestTaskToolBackgroundAncestorContinuationIncludesForkGuidance(t *testing.T
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
+	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
 
 	rootCtx := WithParentSession(context.Background(), "root")
@@ -834,7 +834,7 @@ func TestTaskToolBackgroundCapRefusesFanOut(t *testing.T) {
 	store := NewSubagentStore(t.TempDir())
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
+	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
 
 	jm := jobs.NewManager(event.Discard)
@@ -893,7 +893,7 @@ func TestTaskToolBackgroundSalvagePublishesEvidenceForCollection(t *testing.T) {
 		finalText,
 		finalText,
 	}}
-	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
+	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(NewSubagentStore(t.TempDir()), t.TempDir(), "base-model", "base-effort").
 		WithDeliveryProfile(true)
 
@@ -1170,7 +1170,7 @@ func TestSubSinkForwardsUsageToParent(t *testing.T) {
 }
 
 func TestTaskToolCarriesRecentKeepIntoSubsessions(t *testing.T) {
-	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 7, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil)
+	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 7, 0, 0.0, "", "sys", nil, 0, "", "", nil)
 	if task.recentKeep != 7 {
 		t.Fatalf("recentKeep = %d, want 7", task.recentKeep)
 	}

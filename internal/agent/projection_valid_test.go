@@ -224,10 +224,9 @@ func TestForceThresholdNoopReturnsCompactionRequired(t *testing.T) {
 		{Role: provider.RoleTool, ToolCallID: "1", Name: "read", Content: huge},
 	}}
 	a := New(&fakeProvider{reply: "unused"}, tool.NewRegistry(), sess, Options{
-		ContextWindow:     200,
-		CompactRatio:      0.5,
-		CompactForceRatio: 0.6,
-		RecentKeep:        2,
+		ContextWindow: 200,
+		CompactRatio:  0.5,
+		RecentKeep:    2,
 	}, event.Discard)
 
 	_, err := a.contextManager().Prepare(context.Background(), ContextPreparePolicy{Trigger: CompactionTriggerPressure})

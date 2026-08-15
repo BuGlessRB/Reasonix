@@ -10,16 +10,18 @@ import (
 // "70% full" does not tell the user whether that is close to anything, so the
 // summary names the next action for the pressure it reports.
 func TestContextSummaryNamesTheNextAction(t *testing.T) {
-	base := agent.ContextReport{Window: 1000, SnipThreshold: 600, FoldThreshold: 800, ForceThreshold: 900}
+	base := agent.ContextReport{Window: 1000, FoldThreshold: 800, HardCeiling: 900}
 	for _, tc := range []struct {
 		name   string
 		prompt int
 		want   string
 	}{
-		{"below every threshold", 100, "fold at 80%"},
-		{"in the snip band", 650, "snipping stale tool results"},
-		{"at the fold threshold", 800, "folding"},
-		{"at the force threshold", 950, "at the force threshold"},
+		// An empty session used to report the force threshold: the retired
+		// levels were never populated, so "prompt >= 0" matched first.
+		{"empty session", 0, "fold at 80%"},
+		{"below the fold trigger", 100, "fold at 80%"},
+		{"at the fold trigger", 800, "folding"},
+		{"at the hard ceiling", 950, "at the hard ceiling"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rep := base
@@ -35,7 +37,7 @@ func TestContextSummaryNamesTheNextAction(t *testing.T) {
 // to reach the one-line summary rather than only the detail block.
 func TestContextSummaryFlagsBlockedMaintenance(t *testing.T) {
 	rep := agent.ContextReport{
-		Window: 1000, SnipThreshold: 600, FoldThreshold: 800, ForceThreshold: 900,
+		Window: 1000, FoldThreshold: 800, HardCeiling: 900,
 		LatestPrompt: 700, BlockedReason: "context summary failed: deadline exceeded",
 	}
 	if got := contextSummaryLine(rep); !strings.Contains(got, "blocked") {

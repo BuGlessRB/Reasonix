@@ -8,40 +8,13 @@ import (
 	"reasonix/internal/tool"
 )
 
-// Tool-result helpers serve first-visible bounding and summary fold input.
-// Automatic prune/snip projections are gone; the public APIs are no-ops.
+// Tool-result bounding, used for a call's first-visible output and for the
+// temporary transcript fed to the summarizer. The model-visible projection is
+// never rewritten by these helpers.
 const (
 	snippedMarker = "[snipped tool result — "
-	prunedMarker  = "[elided tool result — "
 	minPruneBytes = 1024
 )
-
-type toolResultMaintenanceMode int
-
-const (
-	toolResultSnip toolResultMaintenanceMode = iota
-	toolResultPrune
-)
-
-// PruneStats reports one maintenance pass.
-type PruneStats struct {
-	Results    int
-	SavedChars int
-	Archive    string
-	Mode       toolResultMaintenanceMode
-	InputHash  string
-	Force      bool
-}
-
-// SnipStaleToolResults is a no-op: automatic prune/snip projections are gone.
-func (a *Agent) SnipStaleToolResults() (PruneStats, error) {
-	return PruneStats{Mode: toolResultSnip}, nil
-}
-
-// PruneStaleToolResults is a no-op: automatic prune/snip projections are gone.
-func (a *Agent) PruneStaleToolResults() (PruneStats, error) {
-	return PruneStats{Mode: toolResultPrune}, nil
-}
 
 func snipToolResult(m provider.Message, archive string, strategy snipStrategy) string {
 	if archive == "" {

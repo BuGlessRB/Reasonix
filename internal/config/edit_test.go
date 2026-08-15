@@ -616,7 +616,7 @@ func TestSetReasoningLanguage(t *testing.T) {
 
 func TestSetCompactRatio(t *testing.T) {
 	c := Default()
-	for _, ratio := range []float64{0.65, 0.7, 0.8, 0.85} {
+	for _, ratio := range []float64{0.05, 0.5, 0.7, 0.85, 0.95, 0.999} { // early and late are both preferences
 		if err := c.SetCompactRatio(ratio); err != nil {
 			t.Fatalf("SetCompactRatio(%v): %v", ratio, err)
 		}
@@ -626,7 +626,7 @@ func TestSetCompactRatio(t *testing.T) {
 	}
 
 	previous := c.Agent.CompactRatio
-	for _, ratio := range []float64{0.64, 0.86, math.NaN(), math.Inf(1), math.Inf(-1)} {
+	for _, ratio := range []float64{0, 1, -0.5, 1.5, math.NaN(), math.Inf(1), math.Inf(-1)} {
 		if err := c.SetCompactRatio(ratio); err == nil {
 			t.Fatalf("SetCompactRatio(%v) should fail", ratio)
 		}

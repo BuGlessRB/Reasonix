@@ -250,6 +250,7 @@ type TaskTool struct {
 	contextWindow                 int
 	compactRatio                  float64
 	recentKeep                    int
+	budgets                       CompactionBudgets
 	temperature                   float64
 	archiveDir                    string
 	keepPolicy                    KeepPolicy
@@ -300,10 +301,8 @@ type TaskToolOptions struct {
 	MaxSteps                              int
 	ContextWindow                         int
 	RecentKeep                            int
-	SoftCompactRatio                      float64
-	ToolResultSnipRatio                   float64
+	CompactionBudgets                     CompactionBudgets
 	CompactRatio                          float64
-	CompactForceRatio                     float64
 	Temperature                           float64
 	ContextEditing, ArchiveDir, SysPrompt string
 	Gate                                  Gate
@@ -329,6 +328,7 @@ func NewTaskToolWithOptions(opts TaskToolOptions) *TaskTool {
 		maxSteps:         opts.MaxSteps,
 		contextWindow:    opts.ContextWindow,
 		recentKeep:       opts.RecentKeep,
+		budgets:          opts.CompactionBudgets,
 		compactRatio:     opts.CompactRatio,
 		temperature:      opts.Temperature,
 		archiveDir:       opts.ArchiveDir,
@@ -352,27 +352,24 @@ func NewTaskToolWithOptions(opts TaskToolOptions) *TaskTool {
 // Compatibility wrapper: new call sites should prefer NewTaskToolWithOptions.
 // The positional form is kept for at least one full iteration cycle.
 func NewTaskTool(prov provider.Provider, pricing *provider.Pricing, parentReg *tool.Registry,
-	maxSteps, contextWindow, recentKeep int, softCompactRatio, toolResultSnipRatio, compactRatio, compactForceRatio, temperature float64, archiveDir, sysPrompt string, gate Gate,
+	maxSteps, contextWindow, recentKeep int, compactRatio, temperature float64, archiveDir, sysPrompt string, gate Gate,
 	keepPolicy KeepPolicy, subagentModel, subagentEffort string, resolveProvider func(string, string) (provider.Provider, *provider.Pricing, int, error)) *TaskTool {
 	return NewTaskToolWithOptions(TaskToolOptions{
-		Provider:            prov,
-		Pricing:             pricing,
-		ParentRegistry:      parentReg,
-		MaxSteps:            maxSteps,
-		ContextWindow:       contextWindow,
-		RecentKeep:          recentKeep,
-		SoftCompactRatio:    softCompactRatio,
-		ToolResultSnipRatio: toolResultSnipRatio,
-		CompactRatio:        compactRatio,
-		CompactForceRatio:   compactForceRatio,
-		Temperature:         temperature,
-		ArchiveDir:          archiveDir,
-		SysPrompt:           sysPrompt,
-		Gate:                gate,
-		KeepPolicy:          keepPolicy,
-		SubagentModel:       subagentModel,
-		SubagentEffort:      subagentEffort,
-		ResolveProvider:     resolveProvider,
+		Provider:        prov,
+		Pricing:         pricing,
+		ParentRegistry:  parentReg,
+		MaxSteps:        maxSteps,
+		ContextWindow:   contextWindow,
+		RecentKeep:      recentKeep,
+		CompactRatio:    compactRatio,
+		Temperature:     temperature,
+		ArchiveDir:      archiveDir,
+		SysPrompt:       sysPrompt,
+		Gate:            gate,
+		KeepPolicy:      keepPolicy,
+		SubagentModel:   subagentModel,
+		SubagentEffort:  subagentEffort,
+		ResolveProvider: resolveProvider,
 	})
 }
 
@@ -1619,6 +1616,7 @@ func (t *TaskTool) subagentOptions(ctx context.Context, maxSteps int, pricing *p
 		Gate:              t.gate,
 		ContextWindow:     ctxWin,
 		RecentKeep:        t.recentKeep,
+		CompactionBudgets: t.budgets,
 		CompactRatio:      t.compactRatio,
 		ArchiveDir:        t.archiveDir,
 		KeepPolicy:        t.keepPolicy,

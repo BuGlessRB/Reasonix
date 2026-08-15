@@ -66,7 +66,6 @@ func (a *Agent) InvalidateProjection() {
 	a.sess.compactionState = CompactionState{}
 	a.sess.compactionMu.Unlock()
 	a.sess.compaction.stuck = false
-	a.sess.compaction.consecutive = 0
 	a.sess.compaction.lastTurn.Store(0)
 	if path != "" {
 		if err := RemoveCompactionState(path); err != nil {
@@ -211,7 +210,6 @@ func (a *Agent) BindSessionPath(path string, loadSidecar bool) {
 	a.sess.cacheState = CacheStateUnknown
 	a.sess.compactionMu.Unlock()
 	a.sess.compaction.stuck = false
-	a.sess.compaction.consecutive = 0
 	a.sess.compaction.lastTurn.Store(0)
 }
 

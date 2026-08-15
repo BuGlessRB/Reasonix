@@ -32,4 +32,14 @@ type agentConfig struct {
 	compactRatio  float64
 	recentKeep    int
 	archiveDir    string
+	budgets       CompactionBudgets
+}
+
+// CompactionBudgets are the fold's user-owned bounds: what it may hold
+// verbatim, and how small its result must be. A zero field selects the
+// built-in default, so an unconfigured agent behaves exactly as before.
+type CompactionBudgets struct {
+	UserTurnKeepTokens     int
+	FirstTurnPinTokens     int
+	CheckpointCeilingRatio float64
 }
