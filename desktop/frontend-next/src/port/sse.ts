@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, DeviceGrant, ProviderDraft, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 
 // Must match wailsEventName / replayPath in desktop/next.
@@ -239,6 +239,20 @@ export class SsePort implements AgentPort {
 
   setRole(role: string, ref: string) {
     return this.post("/roles", { role, ref });
+  }
+
+  // Like the add-a-source probe, the interesting answer is in the body: a
+  // refused key and a moved endpoint are different fixes.
+  async checkProvider(name: string): Promise<ProviderCheck> {
+    const res = await fetch(this.base + "/providers/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ name }),
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(text.trim() || `/providers/check: ${res.status}`);
+    return JSON.parse(text) as ProviderCheck;
   }
 
   removeProvider(name: string) {

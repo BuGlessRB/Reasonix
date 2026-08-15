@@ -1766,7 +1766,7 @@
   /* The action stays out of the way until the row is under the pointer — the
      list is for reading first, acting second. Keyboard users get it on focus. */
   .vrow .sa { margin-left: 10px; flex: none; opacity: 0; transition: opacity var(--t-line) var(--ease-out) }
-  .vrow:hover .sa, .vrow .sa:focus-visible { opacity: 1 }
+  .vrow:hover .sa, .vrow .sa:focus-visible, .vrow .sa[data-keep] { opacity: 1 }
   @media (hover: none) { .vrow .sa { opacity: 1 } }
 
   /* .lnk already exists with its own hover/disabled/focus states; these only

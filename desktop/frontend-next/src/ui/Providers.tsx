@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ProviderEntry, ProviderProbe } from "../port/port";
+import type { ProviderCheck, ProviderEntry, ProviderProbe } from "../port/port";
 
 // Adding a model is two questions — where and with what key — because the rest
 // is knowable by asking the endpoint. Everything the probe reports is shown as
@@ -14,6 +14,7 @@ type Port = {
     default: string; authHeader: boolean; noProxy: boolean; effort: string; vision: string[];
   }): Promise<void>;
   removeProvider(name: string): Promise<void>;
+  checkProvider(name: string): Promise<ProviderCheck>;
 };
 
 const KIND_LABEL: Record<string, string> = { openai: "OpenAI 兼容", anthropic: "Anthropic 兼容", responses: "Responses" };
@@ -56,20 +57,8 @@ export function Providers({ port, onChanged }: { port: Port; onChanged: () => vo
     <>
       <div className="vlist">
         {list.map((p) => (
-          <div key={p.name} className="vrow" data-on={p.inUse ? "" : undefined}>
-            <span className="nm">{p.name}</span>
-            <span className="ds">
-              {KIND_LABEL[p.kind] || p.kind}
-              {p.models.length > 1 ? ` · ${p.models.length} 个模型` : ""}
-              {p.hasKey ? "" : " · 缺 key"}
-            </span>
-            <span className="sc">{p.inUse ? "正在用" : p.preset ? "内置" : ""}</span>
-            {!p.inUse && (
-              <button className="sa lnk" onClick={() => remove(p.name)} disabled={busy !== ""}>
-                删除
-              </button>
-            )}
-          </div>
+          <Conn key={p.name} p={p} port={port} busy={busy} setBusy={setBusy}
+            onRemove={() => remove(p.name)} />
         ))}
         {list.length === 0 && <div className="empty">还没有配置任何模型来源。</div>}
       </div>
@@ -88,6 +77,78 @@ export function Providers({ port, onChanged }: { port: Port; onChanged: () => vo
         <button className="lnk" onClick={() => setAdding(true)}>
           添加模型来源
         </button>
+      )}
+    </>
+  );
+}
+
+// One connection. Protocol is shown as a recorded conclusion, not a question —
+// and "测一下" is what turns it back into a finding when the endpoint disagrees.
+function Conn({
+  p, port, busy, setBusy, onRemove,
+}: {
+  p: ProviderEntry; port: Port; busy: string; setBusy: (b: string) => void;
+  onRemove: () => void;
+}) {
+  const [found, setFound] = useState<ProviderCheck | null>(null);
+  const checking = busy === `check:${p.name}`;
+
+  const check = async () => {
+    setBusy(`check:${p.name}`);
+    setFound(null);
+    try {
+      setFound(await port.checkProvider(p.name));
+    } catch (e) {
+      setFound({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  // The endpoint answered a protocol we did not record. Worth saying, but not
+  // worth a one-click fix: the probe only lists models, and it tries both auth
+  // shapes against the same listing URLs, so this says nothing about where the
+  // other protocol's chat endpoint lives. Switching would need the address too.
+  const disagrees = found?.ok && found.kind && found.kind !== p.kind;
+
+  return (
+    <>
+      <div className="vrow" data-on={p.inUse ? "" : undefined}>
+        <span className="nm">{p.name}</span>
+        <span className="ds">
+          {KIND_LABEL[p.kind] || p.kind}
+          {p.models.length > 1 ? ` · ${p.models.length} 个模型` : ""}
+          {p.hasKey ? "" : " · 缺 key"}
+        </span>
+        <span className="sc">{p.inUse ? "正在用" : p.preset ? "内置" : ""}</span>
+        {/* Hover-reveal is right for 删除; a diagnostic nobody can find is not
+            a diagnostic, so this one stays on the row. */}
+        <button className="sa lnk" data-keep onClick={check} disabled={busy !== ""}>
+          {checking ? "测试中…" : "测一下"}
+        </button>
+        {!p.inUse && (
+          <button className="sa lnk" onClick={onRemove} disabled={busy !== ""}>
+            删除
+          </button>
+        )}
+      </div>
+      {found && (
+        <div className="find" data-lvl={found.ok ? (disagrees ? "warn" : "ok") : "warn"} role="status">
+          <span className="t">
+            {found.ok
+              ? `连上了 · ${KIND_LABEL[found.kind ?? ""] || found.kind} · ${found.models} 个模型`
+              : "连不上"}
+          </span>
+          <span className="why">
+            {!found.ok && found.error}
+            {found.ok && disagrees &&
+              `模型列表记的是 ${KIND_LABEL[p.kind] || p.kind}，但它答的是 ${KIND_LABEL[found.kind ?? ""] || found.kind}。聊天报错的话，多半要连地址一起换 —— 两种协议的聊天入口通常不在同一个路径下。`}
+            {found.ok && !disagrees && found.ambiguous &&
+              "两种协议的模型列表它都答得上来，光看列表分不出来。现在这条能聊就是对的。"}
+            {found.ok && !disagrees && !found.ambiguous && "key 有效，协议也对得上。"}
+            {found.ok && found.noProxy && " 走代理连不上、直连可以。"}
+          </span>
+        </div>
       )}
     </>
   );

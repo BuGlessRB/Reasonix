@@ -290,6 +290,17 @@ export interface ProviderProbe {
   noProxy: boolean;
 }
 
+// What re-probing a saved provider found. `error` carries the endpoint's own
+// words, because "401" and "no chat models" send the user to different fixes.
+export interface ProviderCheck {
+  ok: boolean;
+  kind?: string;
+  models?: number;
+  ambiguous?: boolean;
+  noProxy?: boolean;
+  error?: string;
+}
+
 // What the panel sends back after the user has looked at the probe.
 export interface ProviderDraft {
   name: string;
@@ -361,6 +372,9 @@ export interface AgentPort {
   // confirmation, because only the person holding the key knows what they
   // bought.
   probeProvider(baseUrl: string, apiKey: string): Promise<ProviderProbe>;
+  // Re-probes what is already saved, so "is the key still good, and is this
+  // still the protocol we recorded" is one button rather than a re-add.
+  checkProvider(name: string): Promise<ProviderCheck>;
   saveProvider(draft: ProviderDraft): Promise<void>;
   removeProvider(name: string): Promise<void>;
   versions(): Promise<VersionHub>;

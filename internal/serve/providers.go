@@ -36,6 +36,7 @@ func (s *Server) registerProviderRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /providers", s.saveProvider)
 	mux.HandleFunc("POST /providers/probe", s.probeProvider)
 	mux.HandleFunc("POST /providers/remove", s.removeProvider)
+	s.registerProviderCheckRoutes(mux)
 }
 
 const providerProbeTimeout = 20 * time.Second

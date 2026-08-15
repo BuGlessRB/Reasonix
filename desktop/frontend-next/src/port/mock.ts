@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, DeviceGrant, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, DeviceGrant, ProviderCheck, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo } from "./port";
 import type { WireEvent } from "./wire";
 import { SCRIPT } from "./fixture";
 
@@ -53,6 +53,14 @@ export class MockPort implements AgentPort {
   async roles(): Promise<RoleAssignments> {
     return this.assigned;
   }
+
+  // The fixture's endpoints answer both protocols, which is the case the row's
+  // "改用…" repair exists for.
+  async checkProvider(name: string): Promise<ProviderCheck> {
+    if (name === "mimo") return { ok: false, error: "401 unauthorized: key 过期了" };
+    return { ok: true, kind: "openai", models: 2, ambiguous: true };
+  }
+
 
   async setRole(role: string, ref: string) {
     this.assigned = { ...this.assigned, [role]: ref };
@@ -356,8 +364,28 @@ export class MockPort implements AgentPort {
     return { current: "dev", pinned: "", stalePin: false, latest: "", newer: false, versions: [] };
   }
 
+  // One vendor reached under two protocols plus a source whose key expired —
+  // the two states the connection rows exist to tell apart.
+  private sources: ProviderEntry[] = [
+    {
+      name: "deepseek", kind: "openai", baseUrl: "https://api.deepseek.com",
+      models: ["deepseek-v4-pro", "deepseek-v4-flash"], default: "deepseek-v4-pro",
+      hasKey: true, inUse: true, preset: false,
+    },
+    {
+      name: "deepseek-anthropic", kind: "anthropic", baseUrl: "https://api.deepseek.com/anthropic",
+      models: ["deepseek-v4-pro"], default: "deepseek-v4-pro",
+      hasKey: true, inUse: false, preset: false,
+    },
+    {
+      name: "mimo", kind: "openai", baseUrl: "https://api.xiaomimimo.com/v1",
+      models: ["mimo-v2.5"], default: "mimo-v2.5",
+      hasKey: true, inUse: false, preset: false,
+    },
+  ];
+
   async providers(): Promise<ProviderEntry[]> {
-    return [];
+    return this.sources;
   }
 
   async probeProvider(): Promise<ProviderProbe> {
