@@ -350,7 +350,10 @@ func compactionTelemetryFromSummary(trigger, cacheState string, sourceTokens int
 		SourceTokens:      sourceTokens,
 		ProviderRequestID: res.RequestID,
 		FoldTokens:        res.FoldTokens,
-		Spans:             1, // one application-layer summary request per transaction
+		Spans:             max(1, res.Spans), // one summary request, plus a coverage repair when one ran
+		CoverageRequired:  res.Coverage.Required(),
+		CoverageMissing:   res.Coverage.Missing(),
+		CoverageRepaired:  res.CoverageRepaired,
 	}
 	usage := res.Usage
 	if usage == nil {

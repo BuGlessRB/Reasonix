@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
@@ -32,6 +33,10 @@ type foldSummary struct {
 	Usage      *provider.Usage
 	FoldTokens int
 	Spans      int
+	// Coverage is what this digest kept of the facts its fold produced, and
+	// CoverageRepaired marks a digest that needed a second call to get there.
+	Coverage         foldCoverage
+	CoverageRepaired bool
 }
 
 // summaryInputTokens estimates what messages cost as summarizer input. The
@@ -116,10 +121,12 @@ func (a *Agent) singleCallSummary(ctx context.Context, res foldSummary, fold []p
 // always reports the original failure, even when the fold recovered from it.
 func (a *Agent) foldOrDegrade(ctx context.Context, trigger string, mustFree bool, fold []provider.Message, instructions string, sourceTokens int) (foldSummary, CompactionTelemetry, error) {
 	res, err := a.foldToSummary(ctx, fold, instructions)
-	tele := compactionTelemetryFromSummary(trigger, a.CacheState(), sourceTokens, res)
 	if err == nil {
-		return res, tele, nil
+		res, err = a.repairFoldCoverage(ctx, mustFree, fold, instructions, res)
+		tele := compactionTelemetryFromSummary(trigger, a.CacheState(), sourceTokens, res)
+		return res, tele, err
 	}
+	tele := compactionTelemetryFromSummary(trigger, a.CacheState(), sourceTokens, res)
 	cause := err.Error()
 	if res, err = a.degradeFoldSummary(res, mustFree, fold, err); err != nil {
 		tele.Error = cause
@@ -268,4 +275,30 @@ func (a *Agent) omitLowValueForSummary(fold []provider.Message, budget int) []pr
 	out = append(out, head...)
 	out = append(out, marker)
 	return append(out, tail...)
+}
+
+// repairFoldCoverage spends one more summarizer call when a digest forgot a
+// change. Repair, not rejection: refusing a partial digest leaves the prompt
+// uncompacted, so the next fold is larger and the pressure only ends at the
+// hard ceiling, where whatever it produces is forced through. Only a digest
+// carrying none of the fold's changes is refused.
+func (a *Agent) repairFoldCoverage(ctx context.Context, mustFree bool, fold []provider.Message, instructions string, res foldSummary) (foldSummary, error) {
+	cov := measureFoldCoverage(fold, a.toolIsReadOnly, res.Text)
+	res.Coverage = cov
+	if !cov.LostAChange() || mustFree {
+		return res, nil
+	}
+	retryInstructions := strings.TrimSpace(instructions + "\n" + coverageRetryInstruction(cov))
+	retry, err := a.foldToSummary(ctx, fold, retryInstructions)
+	if err == nil {
+		if retryCov := measureFoldCoverage(fold, a.toolIsReadOnly, retry.Text); len(retryCov.MissingMut) < len(cov.MissingMut) {
+			retry.Coverage, retry.CoverageRepaired = retryCov, true
+			retry.Spans = res.Spans + retry.Spans
+			res, cov = retry, retryCov
+		}
+	}
+	if cov.LostEveryChange() {
+		return res, fmt.Errorf("%w: the digest carried none of the fold's changes (%s)", errCheckpointRejected, cov.Reason())
+	}
+	return res, nil
 }

@@ -134,16 +134,22 @@ type CompactionState struct {
 // CompactionTelemetry is the structured observability record for one
 // compaction attempt. Sensitive transcript content is intentionally omitted.
 type CompactionTelemetry struct {
-	Trigger           string `json:"trigger"`
-	CacheState        string `json:"cache_state"`
-	Mode              string `json:"mode"`
-	Native            bool   `json:"native"`
-	SourceTokens      int    `json:"source_tokens"`
-	FoldTokens        int    `json:"fold_tokens"` // summarizer input after any shortening
-	Spans             int    `json:"spans"`       // summarizer calls the fold needed; 1 unless it was split
-	ProjectionTokens  int    `json:"projection_tokens"`
-	UserTurnsKept     int    `json:"user_turns_kept"`
-	UserTurnsDropped  int    `json:"user_turns_dropped"` // past the retention budget, now summary-only
+	Trigger          string `json:"trigger"`
+	CacheState       string `json:"cache_state"`
+	Mode             string `json:"mode"`
+	Native           bool   `json:"native"`
+	SourceTokens     int    `json:"source_tokens"`
+	FoldTokens       int    `json:"fold_tokens"` // summarizer input after any shortening
+	Spans            int    `json:"spans"`       // summarizer calls the fold needed; 1 unless it was split
+	ProjectionTokens int    `json:"projection_tokens"`
+	UserTurnsKept    int    `json:"user_turns_kept"`
+	UserTurnsDropped int    `json:"user_turns_dropped"` // past the retention budget, now summary-only
+	// Fold coverage: the changes and failures the region produced, and how many
+	// the digest did not carry. Repaired marks a digest that needed a second
+	// summarizer call to reach this.
+	CoverageRequired  int    `json:"coverage_required,omitempty"`
+	CoverageMissing   int    `json:"coverage_missing,omitempty"`
+	CoverageRepaired  bool   `json:"coverage_repaired,omitempty"`
 	InputTokens       int    `json:"input_tokens"`
 	OutputTokens      int    `json:"output_tokens"`
 	CacheHitTokens    int    `json:"cache_hit_tokens"`
