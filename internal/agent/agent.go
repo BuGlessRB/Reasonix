@@ -1888,7 +1888,7 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 		case provider.ChunkResponsesItem:
 			responsesItems = appendProviderItem(responsesItems, chunk.ResponsesItem)
 		case provider.ChunkProviderTool:
-			absorbProviderRunCall(&text, sink, chunk, attemptID)
+			a.absorbProviderRunCall(&text, sink, chunk, attemptID)
 		case provider.ChunkUsage:
 			usage = chunk.Usage
 			a.storeLatestRequestUsage(chunk.Usage)
@@ -2495,13 +2495,16 @@ func firstLine(s string) string {
 // RawContent by the session writer. The bounded form is stable for the message
 // lifetime and is never re-truncated by later maintenance.
 func truncateToolOutput(s string) (string, string) {
-	return truncateToolOutputFor(s, "", "")
+	return truncateToolOutputFor(s, "", "", maxToolOutputBytes)
 }
 
 // truncateToolOutputFor is the tool-aware first-visible limiter. toolName and
 // toolCallID populate the truncation marker so the model can re-fetch.
-func truncateToolOutputFor(s, toolName, toolCallID string) (string, string) {
-	if len(s) <= maxToolOutputBytes {
+func truncateToolOutputFor(s, toolName, toolCallID string, cap int) (string, string) {
+	if cap <= 0 {
+		cap = maxToolOutputBytes
+	}
+	if len(s) <= cap {
 		return s, ""
 	}
 	strategy := snipStrategy{head: 40, tail: 40, headChars: 8000, tailChars: 8000}
@@ -2515,20 +2518,20 @@ func truncateToolOutputFor(s, toolName, toolCallID string) (string, string) {
 	}
 	headKeep := strategy.headChars
 	tailKeep := strategy.tailChars
-	if headKeep+tailKeep > maxToolOutputBytes-512 {
-		headKeep = maxToolOutputBytes * 2 / 3
-		tailKeep = maxToolOutputBytes - headKeep - 512
+	if headKeep+tailKeep > cap-512 {
+		headKeep = cap * 2 / 3
+		tailKeep = cap - headKeep - 512
 	}
 	if headKeep < 1024 {
-		headKeep = maxToolOutputBytes / 2
-		tailKeep = maxToolOutputBytes / 2
+		headKeep = cap / 2
+		tailKeep = cap / 2
 	}
 	// Prefer more tail when the body looks like a failure.
 	lower := strings.ToLower(s)
 	if strings.Contains(lower, "error:") || strings.Contains(lower, "panic:") || strings.Contains(lower, "fatal:") {
-		tailKeep = max(tailKeep, maxToolOutputBytes/3)
-		if headKeep+tailKeep > maxToolOutputBytes-512 {
-			headKeep = maxToolOutputBytes - 512 - tailKeep
+		tailKeep = max(tailKeep, cap/3)
+		if headKeep+tailKeep > cap-512 {
+			headKeep = cap - 512 - tailKeep
 		}
 	}
 	head := snapToRuneBoundary(s, 0, headKeep)
@@ -2548,8 +2551,8 @@ func truncateToolOutputFor(s, toolName, toolCallID string) (string, string) {
 		namePart, idPart, len(s), len(head)+len(tail),
 	)
 	body := head + marker + tail
-	if len(body) > maxToolOutputBytes {
-		overflow := len(body) - maxToolOutputBytes
+	if len(body) > cap {
+		overflow := len(body) - cap
 		trimHead := overflow / 2
 		trimTail := overflow - trimHead
 		if trimHead < len(head) {

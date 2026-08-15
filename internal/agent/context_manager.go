@@ -86,6 +86,7 @@ func (m ContextManager) prepareOnce(ctx context.Context, policy ContextPreparePo
 	// request so side-effecting plugins are not double-invoked; if they expand
 	// the prompt past the hard ceiling, overflow recovery still fires.
 	est := a.estimatedVisibleRequestTokens(visible)
+	ownEst := est // before an observation that may count provider-injected content
 	prepared := PreparedContext{
 		Messages:          append([]provider.Message(nil), visible...),
 		InputTokens:       est,
@@ -119,10 +120,10 @@ func (m ContextManager) prepareOnce(ctx context.Context, policy ContextPreparePo
 		return prepared, nil
 	}
 
-	return m.foldContext(ctx, prepared, policy, inputHash, est, fold, hard, forceFold)
+	return m.foldContext(ctx, prepared, policy, inputHash, est, ownEst, fold, hard, forceFold)
 }
 
-func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContext, policy ContextPreparePolicy, inputHash string, est, fold, hard int, forceFold bool) (PreparedContext, error) {
+func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContext, policy ContextPreparePolicy, inputHash string, est, ownEst, fold, hard int, forceFold bool) (PreparedContext, error) {
 	a := m.agent
 	// Where this function would answer ErrCompactionRequired, the fold is the
 	// only way out and a failed summary must degrade rather than strand the turn.
@@ -149,6 +150,12 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 			return PreparedContext{}, err
 		}
 		if policy.Trigger == CompactionTriggerOverflow || est >= hard {
+			// The overflow may not be ours to fold: refusing sends no request, so
+			// the observation never updates and every later turn decides the same.
+			// When our own transcript fits, let the provider rule instead.
+			if ownEst < hard {
+				return prepared, nil
+			}
 			return PreparedContext{}, fmt.Errorf("%w: %w", ErrCompactionRequired, err)
 		}
 		return prepared, nil

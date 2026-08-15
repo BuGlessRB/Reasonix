@@ -73,10 +73,11 @@ func (a *Agent) setPromptTokenCalibrationFromActive(promptTokens int) {
 	}
 }
 
-// setPromptTokenCalibrationFromUsage trusts provider telemetry only;
-// reconstructed usage remains available for accounting but not admission.
+// setPromptTokenCalibrationFromUsage trusts provider telemetry only, and only
+// about our own request: a turn whose provider ran its own tools bills pages we
+// never sent, and a ratio learned from it inflates every later estimate.
 func (a *Agent) setPromptTokenCalibrationFromUsage(usage *provider.Usage) {
-	if a == nil || usage == nil || usage.Estimated {
+	if a == nil || usage == nil || usage.Estimated || usage.ServerToolRequests > 0 {
 		return
 	}
 	a.setPromptTokenCalibrationFromActive(usage.LatestPromptTokens())

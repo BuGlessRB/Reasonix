@@ -694,6 +694,11 @@ type Usage struct {
 	// aggregate. Zero means one request for backward compatibility. Recovery
 	// paths that merge multiple attempts set the exact count.
 	RequestCount int
+	// ServerToolRequests is how many tools the provider executed itself this
+	// completion (Anthropic usage.server_tool_use.web_search_requests). Their
+	// results enter the model's context without ever passing through us, so
+	// PromptTokens on such a turn measures content we never held.
+	ServerToolRequests int
 	// Context* fields describe the latest single-request shape for context
 	// gauges and rebind telemetry. When zero, consumers fall back to the
 	// billable Prompt/Completion/… fields. Multi-attempt sampling recovery

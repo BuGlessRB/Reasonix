@@ -182,6 +182,17 @@ func SessionCheckpointDir(sessionPath string) string {
 	return sessionStem(sessionPath) + ".ckpt"
 }
 
+// SessionOutputsDir holds tool output too large to sit in the model's context
+// (<id>.outputs/). One file per tool call; the context keeps a pointer and the
+// model reads what it needs with read_file.
+func SessionOutputsDir(sessionPath string) string {
+	sessionPath = strings.TrimSpace(sessionPath)
+	if sessionPath == "" {
+		return ""
+	}
+	return sessionStem(sessionPath) + ".outputs"
+}
+
 // SessionJobsDir is the background-job artifact directory (<id>.jobs).
 func SessionJobsDir(sessionPath string) string {
 	sessionPath = strings.TrimSpace(sessionPath)

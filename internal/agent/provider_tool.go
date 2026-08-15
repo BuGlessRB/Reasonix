@@ -23,8 +23,11 @@ func appendProviderItem(items []json.RawMessage, item json.RawMessage) []json.Ra
 // provider keeps the plain content encrypted. Result and no dispatch: there is no
 // pending moment to show, and a dispatch is the one event deferredStreamSink
 // holds back, so it would land after its own result and never settle the card.
-func absorbProviderRunCall(text *strings.Builder, sink event.Sink, chunk provider.Chunk, attemptID string) {
-	text.WriteString(chunk.Text)
+func (a *Agent) absorbProviderRunCall(text *strings.Builder, sink event.Sink, chunk provider.Chunk, attemptID string) {
+	// The listing joins the turn text, so it passes the same gate a tool result
+	// does. The card still shows every result — an event is not context.
+	bounded, _ := a.boundToolOutput(chunk.Text, providerToolName(chunk), providerToolCallID(chunk))
+	text.WriteString(bounded)
 	tc := chunk.ToolCall
 	if tc == nil {
 		return
@@ -33,4 +36,18 @@ func absorbProviderRunCall(text *strings.Builder, sink event.Sink, chunk provide
 		ID: tc.ID, Name: tc.Name, Args: tc.Arguments,
 		Output: chunk.Text, ReadOnly: true, AttemptID: attemptID,
 	}})
+}
+
+func providerToolName(chunk provider.Chunk) string {
+	if chunk.ToolCall == nil {
+		return ""
+	}
+	return chunk.ToolCall.Name
+}
+
+func providerToolCallID(chunk provider.Chunk) string {
+	if chunk.ToolCall == nil {
+		return ""
+	}
+	return chunk.ToolCall.ID
 }

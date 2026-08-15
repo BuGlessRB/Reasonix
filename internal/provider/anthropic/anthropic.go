@@ -547,7 +547,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	tools := map[int]*provider.ToolCall{} // tool_use blocks, keyed by content index
 	argBuckets := map[int]int{}           // last emitted 2KB progress bucket per block
 	server := serverBlock{index: -1}      // the provider-run call a result block answers
-	var inTok, outTok, cacheCreate, cacheRead int
+	var inTok, outTok, cacheCreate, cacheRead, serverTools int
 	var stopReason string
 	haveUsage := false
 	mergeUsage := func(usage *wireUsage) {
@@ -563,6 +563,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		outTok = max(outTok, usage.OutputTokens)
 		cacheCreate = max(cacheCreate, usage.CacheCreationInputTokens)
 		cacheRead = max(cacheRead, usage.CacheReadInputTokens)
+		serverTools = max(serverTools, usage.ServerToolUse.WebSearchRequests)
 		haveUsage = true
 	}
 
@@ -721,6 +722,7 @@ finalize:
 			CacheWriteTokens:       cacheCreate,
 			CacheWriteBilledTokens: cacheWriteBilledTokens,
 			FinishReason:           mapStopReason(stopReason),
+			ServerToolRequests:     serverTools,
 		}
 		provider.ApplyRequestAttemptCount(ctx, usage)
 		if !send(provider.Chunk{Type: provider.ChunkUsage, Usage: usage}) {
@@ -884,4 +886,10 @@ type wireUsage struct {
 	OutputTokens             int `json:"output_tokens"`
 	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	// Set when the endpoint ran its own tools. Their fetched pages are billed as
+	// input without ever passing through our request, so input_tokens on such a
+	// turn is not a measure of what we sent.
+	ServerToolUse struct {
+		WebSearchRequests int `json:"web_search_requests"`
+	} `json:"server_tool_use"`
 }

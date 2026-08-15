@@ -634,6 +634,7 @@ func recoveryTrashSidecars(path string) []string {
 		store.SessionCheckpointDir(path),
 		store.SessionJobsDir(path),
 		store.SessionInboxDir(path),
+		store.SessionOutputsDir(path),
 	)
 	return artifacts
 }
