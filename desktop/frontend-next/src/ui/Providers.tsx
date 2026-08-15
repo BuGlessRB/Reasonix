@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ProviderCheck, ProviderEntry, ProviderProbe } from "../port/port";
+import type { ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe } from "../port/port";
 import { KIND_LABEL, accountKey, disambiguate, hostOf, vendorLabel } from "./vendors";
 
 // A connection is an account, not a config row. One endpoint answering two
@@ -18,6 +18,7 @@ type Port = {
   }): Promise<void>;
   removeProvider(name: string): Promise<void>;
   checkProvider(name: string): Promise<ProviderCheck>;
+  editProvider(edit: ProviderEdit): Promise<void>;
 };
 
 // A name for the config table, derived from the host so the user does not have
@@ -101,7 +102,8 @@ export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor
           <Conn key={a.key} a={a} port={port} busy={busy} setBusy={setBusy}
             kind={protocol[a.key] ?? activeKindFor(a)}
             onProtocol={(k) => onProtocol(a, k)}
-            onRemove={remove} />
+            onRemove={remove}
+            onEdited={() => { reload(); onChanged(); }} />
         ))}
         {list.length === 0 && <div className="empty">还没有配置任何模型来源。</div>}
       </div>
@@ -129,12 +131,14 @@ export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor
 // because both entries are the same key at the same host; 测一下 is what turns
 // "which protocol did we record" back into a finding when the endpoint moved.
 function Conn({
-  a, port, busy, setBusy, kind, onProtocol, onRemove,
+  a, port, busy, setBusy, kind, onProtocol, onRemove, onEdited,
 }: {
   a: Account; port: Port; busy: string; setBusy: (b: string) => void;
   kind: string; onProtocol: (kind: string) => void; onRemove: (name: string) => void;
+  onEdited: () => void;
 }) {
   const [found, setFound] = useState<ProviderCheck | null>(null);
+  const [editing, setEditing] = useState(false);
   const entry = a.byKind[kind] ?? a.byKind[a.kinds[0]];
   const checking = busy === `check:${entry.name}`;
   const inUse = a.kinds.some((k) => a.byKind[k].inUse);
@@ -164,6 +168,9 @@ function Conn({
         <span className="sc">{inUse ? "正在用" : ""}</span>
         {/* Hover-reveal is right for 删除; a diagnostic nobody can find is not
             a diagnostic, so this one stays on the row. */}
+        <button className="sa lnk" data-keep onClick={() => setEditing((v) => !v)} disabled={busy !== ""}>
+          {editing ? "收起" : "编辑"}
+        </button>
         <button className="sa lnk" data-keep onClick={check} disabled={busy !== ""}>
           {checking ? "测试中…" : "测一下"}
         </button>
@@ -186,6 +193,18 @@ function Conn({
           <span className="why">同一个账号的两扇门。换一扇，下面的模型跟着换。</span>
         </div>
       )}
+      {editing && (
+        <EditConn
+          entry={entry}
+          port={port}
+          busy={busy}
+          setBusy={setBusy}
+          onDone={() => {
+            setEditing(false);
+            onEdited();
+          }}
+        />
+      )}
       {found && (
         <div className="find" data-lvl={found.ok ? "ok" : "warn"} role="status">
           <span className="t">
@@ -203,6 +222,113 @@ function Conn({
         </div>
       )}
     </>
+  );
+}
+
+// Editing a saved source. Only what this form owns is sent: the entry keeps its
+// prices, effort vocabularies and everything else the panel cannot show.
+function EditConn({
+  entry, port, busy, setBusy, onDone,
+}: {
+  entry: ProviderEntry; port: Port; busy: string; setBusy: (b: string) => void; onDone: () => void;
+}) {
+  const [baseUrl, setBaseUrl] = useState(entry.baseUrl);
+  const [apiKey, setApiKey] = useState("");
+  const [models, setModels] = useState<string[]>(entry.models);
+  const [picked, setPicked] = useState<string[]>(entry.models);
+  const [vision, setVision] = useState<string[]>(entry.visionModels ?? []);
+  const [def, setDef] = useState(entry.default || entry.models[0] || "");
+  const [err, setErr] = useState("");
+  const saving = busy === `edit:${entry.name}`;
+
+  const toggle = (list: string[], set: (v: string[]) => void, m: string) =>
+    set(list.includes(m) ? list.filter((x) => x !== m) : [...list, m]);
+
+  // Re-asking the endpoint is how a source that gained models catches up; the
+  // ticks the user already made survive it.
+  const refetch = async () => {
+    setBusy(`edit:${entry.name}`);
+    setErr("");
+    try {
+      const got = await port.probeProvider(baseUrl.trim(), apiKey.trim());
+      setModels([...new Set([...got.models, ...picked])]);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const save = async () => {
+    setBusy(`edit:${entry.name}`);
+    setErr("");
+    try {
+      await port.editProvider({
+        name: entry.name,
+        baseUrl: baseUrl.trim(),
+        apiKey: apiKey.trim(),
+        models: picked,
+        default: picked.includes(def) ? def : picked[0] ?? "",
+        vision: vision.filter((m) => picked.includes(m)),
+      });
+      onDone();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  return (
+    <div className="addp" data-edit>
+      <div className="fields">
+        <label className="grow full">
+          <span>接口地址</span>
+          <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} spellCheck={false} />
+        </label>
+        <label className="grow full">
+          <span>API Key（留空就不动它）</span>
+          <input type="password" value={apiKey} placeholder="········"
+            onChange={(e) => setApiKey(e.target.value)} spellCheck={false} />
+        </label>
+      </div>
+
+      <div className="mlist">
+        <span className="mlb">模型（{picked.length}/{models.length}）· 勾「读图」的才会收到图片</span>
+        {models.map((m) => (
+          <div className="mline" key={m} data-off={picked.includes(m) ? undefined : ""}>
+            <button className="tick" role="checkbox" aria-checked={picked.includes(m)}
+              aria-label={`选用 ${m}`} onClick={() => toggle(picked, setPicked, m)}>
+              <i />
+            </button>
+            <span className="nm">{m}</span>
+            <button className="vtag" aria-pressed={vision.includes(m)} disabled={!picked.includes(m)}
+              onClick={() => toggle(vision, setVision, m)}>
+              读图
+            </button>
+            <button className="dtag" aria-pressed={def === m} disabled={!picked.includes(m)}
+              onClick={() => setDef(m)}>
+              默认
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {err && (
+        <div className="find" data-lvl="warn">
+          <span className="t">没保存成功</span>
+          <span className="why">{err}</span>
+        </div>
+      )}
+
+      <div className="acts">
+        <button className="act" data-primary onClick={save} disabled={busy !== "" || picked.length === 0}>
+          {saving ? "保存中…" : "保存"}
+        </button>
+        <button className="act" onClick={refetch} disabled={busy !== ""}>重新探测模型</button>
+        <button className="act" onClick={onDone} disabled={busy !== ""}>取消</button>
+      </div>
+    </div>
   );
 }
 

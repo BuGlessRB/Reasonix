@@ -1371,6 +1371,31 @@
     font: 400 11px var(--ui) }
   .vway .why { font: 400 10.5px var(--ui); color: var(--ghost); min-width: 0 }
 
+  /* 编辑一个来源：模型一行一个，选用 / 读图 / 默认三件事各自是独立的开关。
+     「读图」必须能手动改 —— 名字猜不出来的中转站，探测也给不出答案。 */
+  .addp[data-edit] { border-top: 0; border-left: 2px solid var(--border); padding-left: 12px; margin: 4px 0 10px }
+  .mlist { margin-top: 12px; display: flex; flex-direction: column }
+  .mlist .mlb { margin-bottom: 6px; font: 400 10.5px var(--ui); color: var(--faint) }
+  .mline { display: flex; align-items: center; gap: 10px; padding: 6px 2px; border-top: 1px solid var(--hair) }
+  .mline:last-child { border-bottom: 1px solid var(--hair) }
+  .mline[data-off] .nm { color: var(--ghost) }
+  .mline .nm { flex: 1; min-width: 0; font: 400 12px var(--mono); color: var(--text); overflow-wrap: anywhere }
+  .mline .tick { flex: none; width: 14px; height: 14px; padding: 0; display: grid; place-items: center;
+    border: 1.5px solid var(--ghost); border-radius: var(--r-xs); background: transparent; cursor: pointer }
+  .mline .tick[aria-checked="true"] { border-color: var(--accent); background: var(--accent) }
+  .mline .tick i { width: 7px; height: 7px; border-radius: 1px; background: var(--accent-fg);
+    opacity: 0; transition: opacity var(--t-line) var(--ease-out) }
+  .mline .tick[aria-checked="true"] i { opacity: 1 }
+  .mline .vtag, .mline .dtag {
+    flex: none; padding: 2px 8px; border: 1px solid var(--hair); border-radius: var(--r-pill);
+    background: var(--surface); color: var(--ghost); font: 400 10px var(--ui); cursor: pointer;
+  }
+  .mline .vtag[aria-pressed="true"] { color: var(--deleg); background: var(--deleg-wash);
+    border-color: color-mix(in srgb, var(--deleg) 32%, transparent) }
+  .mline .dtag[aria-pressed="true"] { color: var(--accent); background: var(--accent-wash);
+    border-color: color-mix(in srgb, var(--accent) 32%, transparent) }
+  .mline .vtag:disabled, .mline .dtag:disabled { opacity: .35; cursor: default }
+
   .viabox { position: relative; flex: none; margin-right: 10px }
   .mrow .via {
     padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--r-xs);

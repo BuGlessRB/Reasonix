@@ -1,4 +1,5 @@
-import type { AccountState, AgentPort, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, SkillCatalog, SlashEntry, WorkspaceInfo } from "./port";
+import { HttpError, type Attachment, type WorkspaceChanges } from "./port";
 import type { WireEvent } from "./wire";
 
 // Must match wailsEventName / replayPath in desktop/next.
@@ -231,6 +232,10 @@ export class SsePort implements AgentPort {
 
   saveProvider(draft: ProviderDraft) {
     return this.post("/providers", draft);
+  }
+
+  editProvider(edit: ProviderEdit) {
+    return this.post("/providers/edit", edit);
   }
 
   roles() {

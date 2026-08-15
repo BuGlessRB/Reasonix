@@ -36,6 +36,7 @@ func (s *Server) registerProviderRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /providers", s.saveProvider)
 	mux.HandleFunc("POST /providers/probe", s.probeProvider)
 	mux.HandleFunc("POST /providers/remove", s.removeProvider)
+	mux.HandleFunc("POST /providers/edit", s.editProvider)
 	s.registerProviderCheckRoutes(mux)
 }
 
@@ -51,8 +52,11 @@ type providerView struct {
 	Kind    string   `json:"kind"`
 	BaseURL string   `json:"baseUrl"`
 	Models  []string `json:"models"`
-	Default string   `json:"default"`
-	HasKey  bool     `json:"hasKey"`
+	// VisionModels is which of them read images, so the form shows the current
+	// answer instead of asking the user to remember it.
+	VisionModels []string `json:"visionModels"`
+	Default      string   `json:"default"`
+	HasKey       bool     `json:"hasKey"`
 	// KeyEnv names the credential slot. Two entries at one host holding
 	// different keys are two accounts and must not be shown as one.
 	KeyEnv string `json:"keyEnv,omitempty"`
@@ -75,15 +79,16 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 	for i := range cfg.Providers {
 		p := &cfg.Providers[i]
 		out = append(out, providerView{
-			Name:    p.Name,
-			Kind:    strings.ToLower(strings.TrimSpace(p.Kind)),
-			BaseURL: p.BaseURL,
-			Models:  nonNilStrings(p.ChatModelList()),
-			Default: p.DefaultModel(),
-			HasKey:  p.APIKey() != "",
-			KeyEnv:  p.APIKeyEnv,
-			InUse:   p.Name == current,
-			Preset:  strings.TrimSpace(p.PresetID) != "",
+			Name:         p.Name,
+			Kind:         strings.ToLower(strings.TrimSpace(p.Kind)),
+			BaseURL:      p.BaseURL,
+			Models:       nonNilStrings(p.ChatModelList()),
+			VisionModels: nonNilStrings(visionModelsOf(cfg, p)),
+			Default:      p.DefaultModel(),
+			HasKey:       p.APIKey() != "",
+			KeyEnv:       p.APIKeyEnv,
+			InUse:        p.Name == current,
+			Preset:       strings.TrimSpace(p.PresetID) != "",
 		})
 	}
 	writeJSON(w, out)

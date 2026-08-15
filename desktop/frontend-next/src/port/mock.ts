@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, DeviceGrant, ProviderCheck, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, DeviceGrant, ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, SkillCatalog, SkillEntry, SlashEntry, WorkspaceInfo, WorkspaceChanges, Attachment } from "./port";
 import type { WireEvent } from "./wire";
 import { SCRIPT } from "./fixture";
 
@@ -394,6 +394,7 @@ export class MockPort implements AgentPort {
       name: "myrelay", kind: "openai", baseUrl: "https://relay.example.com/v1",
       models: ["gpt-4o", "claude-sonnet-4"], default: "gpt-4o",
       hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_API_KEY",
+      visionModels: ["gpt-4o"],
     },
     {
       name: "myrelay-work", kind: "openai", baseUrl: "https://relay.example.com/v1",
@@ -411,6 +412,12 @@ export class MockPort implements AgentPort {
   }
 
   async saveProvider(): Promise<void> {}
+
+  async editProvider(edit: ProviderEdit): Promise<void> {
+    this.sources = this.sources.map((p) =>
+      p.name === edit.name ? { ...p, models: edit.models, default: edit.default, visionModels: edit.vision } : p,
+    );
+  }
 
   async removeProvider(): Promise<void> {}
 

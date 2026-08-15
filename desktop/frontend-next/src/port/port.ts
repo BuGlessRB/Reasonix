@@ -268,6 +268,9 @@ export interface ProviderEntry {
   default: string;
   hasKey: boolean;
   keyEnv?: string;
+  // Which of them read images, so an editor shows the current answer rather
+  // than asking the user to remember it.
+  visionModels?: string[];
   // Removing the one in use would leave the session on a model that no longer
   // resolves, so the row offers no delete.
   inUse: boolean;
@@ -302,6 +305,17 @@ export interface ProviderCheck {
   ambiguous?: boolean;
   noProxy?: boolean;
   error?: string;
+}
+
+// Changing a source that already exists: everything else on the entry stays.
+export interface ProviderEdit {
+  name: string;
+  baseUrl?: string;
+  // Empty keeps the stored key.
+  apiKey?: string;
+  models: string[];
+  default: string;
+  vision: string[];
 }
 
 // What the panel sends back after the user has looked at the probe.
@@ -379,6 +393,9 @@ export interface AgentPort {
   // still the protocol we recorded" is one button rather than a re-add.
   checkProvider(name: string): Promise<ProviderCheck>;
   saveProvider(draft: ProviderDraft): Promise<void>;
+  // Changes only the fields the form owns. Saving a whole entry instead would
+  // drop the per-model prices and effort lists it cannot show.
+  editProvider(edit: ProviderEdit): Promise<void>;
   removeProvider(name: string): Promise<void>;
   versions(): Promise<VersionHub>;
   pinVersion(version: string): Promise<void>;
