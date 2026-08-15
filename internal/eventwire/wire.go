@@ -169,10 +169,7 @@ func ToWire(e event.Event) Event {
 	case event.AskRequest:
 		w.Ask = ToWireAsk(e.Ask)
 	case event.CompactionStarted, event.CompactionDone:
-		w.Compaction = &Compaction{
-			Trigger: e.Compaction.Trigger, Messages: e.Compaction.Messages,
-			Summary: e.Compaction.Summary, Archive: e.Compaction.Archive,
-		}
+		w.Compaction = toWireCompaction(e.Compaction)
 	case event.ContextMaintenanceEvent:
 		if m := e.Maintenance; m != nil {
 			w.Maintenance = &ContextMaintenance{
@@ -333,6 +330,22 @@ type Compaction struct {
 	Messages int    `json:"messages,omitempty"`
 	Summary  string `json:"summary,omitempty" externalizable:"true"`
 	Archive  string `json:"archive,omitempty" externalizable:"true"`
+	// What the fold cost, and what the digest kept of it.
+	SourceTokens     int  `json:"sourceTokens,omitempty"`
+	ProjectionTokens int  `json:"projectionTokens,omitempty"`
+	CoverageRequired int  `json:"coverageRequired,omitempty"`
+	CoverageMissing  int  `json:"coverageMissing,omitempty"`
+	CoverageRepaired bool `json:"coverageRepaired,omitempty"`
+}
+
+func toWireCompaction(c event.Compaction) *Compaction {
+	return &Compaction{
+		Trigger: c.Trigger, Messages: c.Messages,
+		Summary: c.Summary, Archive: c.Archive,
+		SourceTokens: c.SourceTokens, ProjectionTokens: c.ProjectionTokens,
+		CoverageRequired: c.CoverageRequired, CoverageMissing: c.CoverageMissing,
+		CoverageRepaired: c.CoverageRepaired,
+	}
 }
 
 // AskOption is one JSON-formatted choice in a structured ask request.

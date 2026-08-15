@@ -476,6 +476,9 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	}
 	a.svc.sink.Emit(event.Event{Kind: event.CompactionDone, Compaction: event.Compaction{
 		Trigger: trigger, Messages: len(fold), Summary: summary,
+		SourceTokens: sourceTokens, ProjectionTokens: projTokens,
+		CoverageRequired: tele.CoverageRequired, CoverageMissing: tele.CoverageMissing,
+		CoverageRepaired: tele.CoverageRepaired,
 	}})
 	// Only once the checkpoint is committed: a rejected candidate folded nothing.
 	a.sess.compaction.lastUserTurns = retention

@@ -452,6 +452,13 @@ type Compaction struct {
 	Messages int    // Done: how many messages were folded into the summary
 	Summary  string // Done: the briefing the agent keeps relying on
 	Archive  string // Done: path the dropped originals were archived to ("" if none)
+	// Done: what the fold cost, and what the digest kept of it. A lossy fold is
+	// otherwise indistinguishable from a clean one without reading the digest.
+	SourceTokens     int
+	ProjectionTokens int
+	CoverageRequired int  // changes and failures the folded region produced
+	CoverageMissing  int  // ...of those, how many the digest did not carry
+	CoverageRepaired bool // a second summarizer call was needed to get there
 }
 
 // ContextMaintenance is the typed wire-safe receipt for snip/prune/noop/

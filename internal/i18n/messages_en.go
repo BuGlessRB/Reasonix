@@ -167,6 +167,9 @@ var English = Messages{
 	CompactionAuto:    "auto",
 	CompactionManual:  "manual",
 
+	CompactionChangesKept: "changes kept",
+	CompactionRepaired:    "repaired",
+
 	ExtFormFieldsHint:         "fields are collected through the usual prompts",
 	ExtRunActionFmt:           "run %s",
 	SlashCompactFailed:        "compaction failed",
@@ -335,6 +338,7 @@ var English = Messages{
 	GoalNotRunning:               "no running goal to pause",
 	GoalNotPaused:                "no paused or blocked goal to resume",
 	GoalPaused:                   "goal paused — /goal resume continues it",
+	ImagesNotReadable:            "this model cannot read images — %d attached, handed to a delegated read instead",
 	GoalPausedReason:             "paused by the user",
 	GoalPausedFmt:                "goal is paused (%s) — use /goal resume to continue",
 	GoalRuntimeFmt:               "runtime: turns %d · requests %d · tokens %d · work time %s",

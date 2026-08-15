@@ -168,6 +168,9 @@ var Chinese = Messages{
 	CompactionAuto:    "自动",
 	CompactionManual:  "手动",
 
+	CompactionChangesKept: "处改动已保留",
+	CompactionRepaired:    "已补救",
+
 	ExtFormFieldsHint:         "字段将通过逐项提问收集",
 	ExtRunActionFmt:           "运行 %s",
 	SlashCompactFailed:        "压缩失败",
@@ -336,6 +339,7 @@ var Chinese = Messages{
 	GoalNotRunning:               "没有运行中的目标可暂停",
 	GoalNotPaused:                "没有已暂停或被阻塞的目标可恢复",
 	GoalPaused:                   "目标已暂停 — /goal resume 可继续",
+	ImagesNotReadable:            "当前模型不读图 — 已附 %d 张，改由委派的子代理去看",
 	GoalPausedReason:             "用户手动暂停",
 	GoalPausedFmt:                "目标已暂停（%s）— 使用 /goal resume 继续",
 	GoalRuntimeFmt:               "运行状态：轮次 %d · 请求 %d · token %d · 工作时间 %s",

@@ -188,6 +188,10 @@ type Messages struct {
 	CompactionUnit    string // the noun counted, e.g. "messages"
 	CompactionAuto    string // trigger label: reached the window threshold
 	CompactionManual  string // trigger label: user ran /compact
+	// quality line: how many of the fold's changes the digest carried, and
+	// whether it took a second summarizer call to get there.
+	CompactionChangesKept string
+	CompactionRepaired    string
 
 	// extension structured-UI surfaces (ExtensionSurface / ExtensionStatus events).
 	ExtFormFieldsHint string // form card: field values are collected through the usual prompts
@@ -323,6 +327,7 @@ type Messages struct {
 	GoalNotRunning               string
 	GoalNotPaused                string
 	GoalPaused                   string
+	ImagesNotReadable            string
 	GoalPausedReason             string
 	GoalPausedFmt                string // %s = stop cause
 	GoalRuntimeFmt               string // turns, requests, tokens, work duration

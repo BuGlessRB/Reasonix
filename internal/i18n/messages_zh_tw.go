@@ -162,6 +162,9 @@ var ChineseTraditional = Messages{
 	CompactionAuto:    "自動",
 	CompactionManual:  "手動",
 
+	CompactionChangesKept: "處變更已保留",
+	CompactionRepaired:    "已補救",
+
 	ExtFormFieldsHint:         "欄位將透過逐項提問收集",
 	ExtRunActionFmt:           "執行 %s",
 	SlashCompactFailed:        "壓縮失敗",
@@ -567,6 +570,7 @@ var ChineseTraditional = Messages{
 	GoalNotRunning:             "沒有執行中的目標可暫停",
 	GoalNotPaused:              "沒有已暫停或被阻擋的目標可恢復",
 	GoalPaused:                 "目標已暫停 — /goal resume 可繼續",
+	ImagesNotReadable:          "當前模型不讀圖 — 已附 %d 張，改由委派的子代理去看",
 	GoalPausedReason:           "使用者手動暫停",
 	GoalPausedFmt:              "目標已暫停（%s）— 使用 /goal resume 繼續",
 	GoalRuntimeFmt:             "執行狀態：輪次 %d · 請求 %d · token %d · 工作時間 %s",

@@ -3630,29 +3630,6 @@ func clampCursorToTerminal(cur *tea.Cursor, width, height int) *tea.Cursor {
 	return cur
 }
 
-// compactionCardLines renders a finished compaction as a titled card: a header
-// with the message count and trigger, then the structured summary under a dim
-// gutter so it reads as one block in scrollback. The summary is also the new
-// context base, so this card is the user's window into exactly what was kept.
-func compactionCardLines(c event.Compaction) []string {
-	trigger := c.Trigger
-	switch c.Trigger {
-	case "auto":
-		trigger = i18n.M.CompactionAuto
-	case "manual":
-		trigger = i18n.M.CompactionManual
-	}
-	header := fmt.Sprintf("%s · %d %s · %s", i18n.M.CompactionTitle, c.Messages, i18n.M.CompactionUnit, trigger)
-	lines := []string{accent("◆ " + header)}
-	for ln := range strings.SplitSeq(strings.TrimRight(c.Summary, "\n"), "\n") {
-		lines = append(lines, dim("  │ "+ln))
-	}
-	if c.Archive != "" {
-		lines = append(lines, dim("  │ archived "+c.Archive))
-	}
-	return lines
-}
-
 // contextTag renders the prompt-vs-context-window gauge for the status line,
 // framed around the auto-compaction threshold: it shows how much headroom is
 // left until the next compaction, and colours by proximity to that point rather

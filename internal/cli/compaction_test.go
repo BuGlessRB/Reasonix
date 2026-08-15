@@ -34,6 +34,34 @@ func TestCompactionCardLines(t *testing.T) {
 	}
 }
 
+// A digest reads as complete whatever it dropped, so the count of the fold's
+// changes it actually carried is the one thing the card can say that the
+// summary text cannot.
+func TestCompactionCardShowsWhatTheDigestKept(t *testing.T) {
+	joined := strings.Join(compactionCardLines(event.Compaction{
+		Trigger: "auto", Messages: 12, Summary: "- brief",
+		SourceTokens: 128_000, ProjectionTokens: 31_200,
+		CoverageRequired: 12, CoverageMissing: 2, CoverageRepaired: true,
+	}), "\n")
+
+	for _, want := range []string{"128.0K", "31.2K", "10/12", "repaired"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("quality line missing %q in:\n%s", want, joined)
+		}
+	}
+}
+
+// A fold that produced no changes has no coverage to report, and a card that
+// prints "0/0 changes kept" reads as a loss where there was nothing to lose.
+func TestCompactionCardOmitsQualityWithoutCoverage(t *testing.T) {
+	joined := strings.Join(compactionCardLines(event.Compaction{
+		Trigger: "manual", Messages: 3, Summary: "- brief",
+	}), "\n")
+	if strings.Contains(joined, "changes kept") || strings.Contains(joined, "→") {
+		t.Errorf("card invented a quality line with nothing to report:\n%s", joined)
+	}
+}
+
 // TestCompactionCardLinesNoArchive omits the archive line when none was written.
 func TestCompactionCardLinesNoArchive(t *testing.T) {
 	lines := compactionCardLines(event.Compaction{Trigger: "manual", Messages: 3, Summary: "- brief"})

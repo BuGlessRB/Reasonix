@@ -1,10 +1,14 @@
 package agent
 
 import (
+	"context"
+	"slices"
 	"strings"
 	"testing"
 
+	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/tool"
 )
 
 // coverageTools answers the way the real registry does for these tools.
@@ -109,5 +113,46 @@ func TestCoverageRetryInstructionNamesTheGap(t *testing.T) {
 	}
 	if strings.Contains(instruction, "reader.go") {
 		t.Errorf("retry instruction re-asked for what the digest already carried:\n%s", instruction)
+	}
+}
+
+// The card that shows a fold's quality can only be as honest as the event
+// behind it. Coverage is measured during the fold and would read as a clean
+// zero at every frontend if it were not carried out with the result.
+func TestCompactionDoneCarriesWhatTheDigestKept(t *testing.T) {
+	sess := foldableSessionOverForce(40)
+	// Early enough to land in the fold rather than the verbatim tail.
+	sess.Messages = slices.Insert(sess.Messages, 2,
+		provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "w1", Name: "write_file", Arguments: `{"path":"internal/parser/lexer.go"}`},
+		}},
+		provider.Message{Role: provider.RoleTool, ToolCallID: "w1", Name: "write_file", Content: "wrote"})
+
+	var done []event.Compaction
+	sink := event.FuncSink(func(e event.Event) {
+		if e.Kind == event.CompactionDone {
+			done = append(done, e.Compaction)
+		}
+	})
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "write_file"})
+	a := New(&fakeProvider{reply: "## Files & code\n- internal/parser/lexer.go rewritten"}, reg, sess,
+		Options{ContextWindow: 60_000, CompactRatio: 0.5, RecentKeep: 2, ArchiveDir: t.TempDir()}, sink)
+
+	if _, err := a.compactToProjection(context.Background(), CompactionTriggerManual, "", true, false); err != nil {
+		t.Fatalf("compactToProjection: %v", err)
+	}
+	if len(done) != 1 {
+		t.Fatalf("CompactionDone events = %d, want 1", len(done))
+	}
+	got := done[0]
+	if got.CoverageRequired == 0 {
+		t.Fatalf("the fold rewrote a file but the event reports no coverage: %+v", got)
+	}
+	if got.CoverageMissing != 0 {
+		t.Fatalf("the digest named the file it rewrote; missing = %d", got.CoverageMissing)
+	}
+	if got.SourceTokens <= got.ProjectionTokens || got.ProjectionTokens == 0 {
+		t.Fatalf("sizes = %d → %d, want a real shrink", got.SourceTokens, got.ProjectionTokens)
 	}
 }
