@@ -18,7 +18,7 @@ type memoryAssembly struct {
 // buildMemoryAssembly loads memory and composes it into the prompt. A rebuild
 // that reuses discovery skips the read: it also reuses the composed prompt, so
 // re-reading the docs would only produce a block nothing goes on to use.
-func buildMemoryAssembly(opts Options, root, sysPrompt string) memoryAssembly {
+func buildMemoryAssembly(opts Options, cfg *config.Config, root, sysPrompt string) memoryAssembly {
 	if opts.ReuseAssembly != nil && shouldReuseDiscovery(opts.PreviousPlan) && opts.ReuseAssembly.Memory != nil {
 		return memoryAssembly{
 			set:       opts.ReuseAssembly.Memory,
@@ -26,7 +26,12 @@ func buildMemoryAssembly(opts Options, root, sysPrompt string) memoryAssembly {
 			sysPrompt: sysPrompt,
 		}
 	}
-	set := memory.Load(memory.Options{CWD: root, UserDir: config.MemoryUserDir()})
+	set := memory.Load(memory.Options{
+		CWD: root, UserDir: config.MemoryUserDir(),
+		PinnedBudgetChars: cfg.Memory.PinnedBudgetChars,
+		RecallLimit:       cfg.Memory.RecallLimit,
+		RecallMaxChars:    cfg.Memory.RecallMaxChars,
+	})
 	return memoryAssembly{
 		set:       set,
 		checks:    instruction.ExtractHostChecks(set.Docs),

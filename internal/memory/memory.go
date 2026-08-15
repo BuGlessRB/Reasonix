@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"reasonix/internal/instruction"
 )
@@ -26,6 +27,9 @@ type Set struct {
 	// recall is the snapshot's prebuilt retrieval index (nil when memory is
 	// hidden or empty); Set.AutoRecall serves each turn from it without disk.
 	recall *RecallIndex
+	// opts is what this set was loaded with, so a mid-session reload keeps the
+	// user's budgets instead of silently reverting them to the defaults.
+	opts Options
 }
 
 // Options configures discovery. CWD defaults to "." and UserDir is the user
@@ -34,6 +38,11 @@ type Set struct {
 type Options struct {
 	CWD     string
 	UserDir string
+	// Budgets are the user's; zero means unbounded for the pinned ceiling and
+	// the built-in default for the two recall axes.
+	PinnedBudgetChars int
+	RecallLimit       int
+	RecallMaxChars    int
 }
 
 // Load discovers all memory for a session: the hierarchical docs and the
@@ -50,9 +59,10 @@ func Load(opts Options) *Set {
 	// Instruction docs stay — standing instructions are not under test.
 	if os.Getenv("REASONIX_EXPERIMENT_NO_MEMORY") == "1" {
 		return &Set{Docs: resolved.Documents, CWD: cwd, UserDir: opts.UserDir,
-			InstructionDiagnostics: resolved.Diagnostics}
+			InstructionDiagnostics: resolved.Diagnostics, opts: opts}
 	}
 	store := StoreFor(opts.UserDir, cwd)
+	store.PinnedBudgetChars = opts.PinnedBudgetChars
 	return &Set{
 		Docs:                   resolved.Documents,
 		PinnedGuidance:         store.pinnedGuidanceForProject(),
@@ -62,6 +72,7 @@ func Load(opts Options) *Set {
 		UserDir:                opts.UserDir,
 		InstructionDiagnostics: resolved.Diagnostics,
 		recall:                 BuildRecallIndex(store),
+		opts:                   opts,
 	}
 }
 
@@ -198,4 +209,49 @@ func Compose(base string, s *Set) string {
 		return block
 	}
 	return strings.TrimRight(base, "\n") + "\n\n" + block
+}
+
+// LoadOptions returns what this set was discovered with, so a mid-session
+// reload rediscovers under the same roots and the same budgets.
+func (s *Set) LoadOptions() Options {
+	if s == nil {
+		return Options{}
+	}
+	opts := s.opts
+	opts.CWD, opts.UserDir = s.CWD, s.UserDir
+	return opts
+}
+
+// PrefixCost is what this memory set costs in the cached system-prompt prefix:
+// characters paid once per session, every session. It exists because the
+// budgets that bound it are the user's to set, and a number nobody can see is
+// not a decision anyone can make.
+type PrefixCost struct {
+	IndexChars  int // the fact index every session carries
+	PinnedChars int // pinned bodies folded in verbatim
+	Facts       int // index lines
+	Pinned      int // pinned facts
+	Budget      int // configured pinned ceiling, 0 when unset
+}
+
+// Total is the whole memory block's prefix footprint.
+func (c PrefixCost) Total() int { return c.IndexChars + c.PinnedChars }
+
+// PrefixCost measures the snapshot the session is actually running on.
+func (s *Set) PrefixCost() PrefixCost {
+	if s == nil {
+		return PrefixCost{}
+	}
+	cost := PrefixCost{
+		IndexChars: utf8.RuneCountInString(s.Index),
+		Pinned:     len(s.PinnedGuidance),
+		Budget:     s.opts.PinnedBudgetChars,
+	}
+	if trimmed := strings.TrimSpace(s.Index); trimmed != "" {
+		cost.Facts = strings.Count(trimmed, "\n") + 1
+	}
+	for _, m := range s.PinnedGuidance {
+		cost.PinnedChars += utf8.RuneCountInString(strings.TrimSpace(m.Body))
+	}
+	return cost
 }

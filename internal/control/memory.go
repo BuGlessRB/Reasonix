@@ -149,7 +149,7 @@ func (m *memoryManager) drainPending() []string {
 // the start of the writeMu-serialized write and supplies the discovery roots.
 // Callers hold writeMu.
 func (m *memoryManager) applyWrite(mem *memory.Set, note string) {
-	reloaded := memory.Load(memory.Options{CWD: mem.CWD, UserDir: mem.UserDir})
+	reloaded := memory.Load(mem.LoadOptions())
 	m.mu.Lock()
 	if note != "" {
 		m.pending = append(m.pending, note)

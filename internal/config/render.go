@@ -441,32 +441,9 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 
 	renderLSPConfig(&b, c.LSP)
 
-	b.WriteString("[skills]\n")
-	if len(c.Skills.Paths) > 0 {
-		fmt.Fprintf(&b, "paths = %s   # extra custom skill roots\n", renderStringArray(c.Skills.Paths))
-	} else {
-		b.WriteString("# paths = [\"~/my-skills\", \"../shared/skills\"]   # extra custom skill roots\n")
-	}
-	if len(c.Skills.ExcludedPaths) > 0 {
-		fmt.Fprintf(&b, "excluded_paths = %s   # skill roots hidden from discovery\n", renderStringArray(c.Skills.ExcludedPaths))
-	} else {
-		b.WriteString("# excluded_paths = [\"~/.agents/skills\"]   # hide convention roots without deleting folders\n")
-	}
-	if c.Skills.DisableImplicitInvocation {
-		b.WriteString("disable_implicit_invocation = true   # keep /skill explicit; hide skill discovery and tools from the model\n")
-	} else {
-		b.WriteString("# disable_implicit_invocation = false   # keep skills available for automatic model invocation\n")
-	}
-	if c.Skills.MaxDepth != 0 {
-		fmt.Fprintf(&b, "max_depth = %d   # nested scan depth; default 3, set 1 for legacy root-only discovery\n", c.SkillMaxDepth())
-	} else {
-		b.WriteString("# max_depth = 3   # nested scan depth; set 1 for legacy root-only discovery\n")
-	}
-	if disabled := c.DisabledSkillNames(); len(disabled) > 0 {
-		fmt.Fprintf(&b, "disabled_skills = %s   # hidden from the prompt, slash invocation, and skill tools\n\n", renderStringArray(disabled))
-	} else {
-		b.WriteString("# disabled_skills = [\"review\"]   # hide noisy or unwanted skills\n\n")
-	}
+	renderSkillsConfig(&b, c)
+
+	renderMemoryConfig(&b, c.Memory)
 
 	b.WriteString("[permissions]\n")
 	b.WriteString("# Per-call gating. mode = writer fallback when no rule matches: ask|allow|deny.\n")

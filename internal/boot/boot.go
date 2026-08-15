@@ -651,7 +651,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Memory metadata migration did not complete.", Detail: err.Error()})
 		}
 	}
-	memSet := buildMemoryAssembly(opts, root, sysPrompt)
+	memSet := buildMemoryAssembly(opts, cfg, root, sysPrompt)
 	mem, projectChecks, sysPrompt := memSet.set, memSet.checks, memSet.sysPrompt
 
 	timer.mark("memory")

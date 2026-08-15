@@ -27,8 +27,9 @@ import (
 // current project or every project, while Type only classifies its contents.
 // List() and Index() merge both directories so every session sees the full set.
 type Store struct {
-	Dir       string // ...reasonix/projects/<slug>/memory
-	GlobalDir string // ...reasonix/memory/global (shared across projects)
+	Dir               string // ...reasonix/projects/<slug>/memory
+	GlobalDir         string // ...reasonix/memory/global (shared across projects)
+	PinnedBudgetChars int    // user ceiling on pinned-body runes; 0 = none
 }
 
 // Type classifies a memory, mirroring the auto-memory taxonomy.
@@ -551,12 +552,11 @@ func (s Store) ListAll() []Memory {
 	return out
 }
 
-// PinnedGuidanceBudgetChars caps the total pinned-body runes the stable prefix
-// carries. Guidance that must always hold belongs in REASONIX.md/AGENTS.md
-// instructions; pinned memory is the bounded middle tier between instructions
-// and retrieval-only facts, and the cap is enforced at write time so the
-// prefix always equals exactly what the user curated.
-const PinnedGuidanceBudgetChars = 1500
+// PinnedBudgetOff is the unset pinned budget. Pinned bodies do cost prefix
+// tokens every session, but how many are worth paying is the user's judgment:
+// `/memory` reports the cost, and memory.pinned_budget_chars sets a ceiling
+// for anyone who wants one.
+const PinnedBudgetOff = 0
 
 // pinnedGuidance snapshots explicitly pinned facts (plus legacy global
 // user/feedback, which ResolveActivation keeps pinned for compatibility) for

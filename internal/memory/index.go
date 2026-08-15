@@ -6,15 +6,26 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
-// Index returns the provider-visible index that loads into the cached
-// prefix: every active fact from both scopes with a scope-qualified
-// reference, shadowed global facts annotated rather than hidden — the index
-// agrees with the project-over-global rule recall enforces (#7995). The
-// per-directory MEMORY.md files keep their unqualified format.
+// Index returns the provider-visible index for the cached prefix: every live
+// fact, scope-qualified, shadowed globals annotated rather than hidden
+// (#7995). A fact past its expires_at is left out — automatic recall already
+// refuses to serve one, and a line the model can never act on is prefix rent.
 func (s Store) Index() string {
+	return s.indexAt(time.Now().UTC())
+}
+
+func (s Store) indexAt(now time.Time) string {
 	memories := s.ListAll()
+	live := memories[:0:0]
+	for _, m := range memories {
+		if FreshnessFor(m, now) != FreshnessExpired {
+			live = append(live, m)
+		}
+	}
+	memories = live
 	if len(memories) == 0 {
 		return ""
 	}

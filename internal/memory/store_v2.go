@@ -133,11 +133,10 @@ func (s Store) validateSave(m Memory) error {
 }
 
 // validatePinnedBudget rejects a save that would push the total pinned-body
-// runes over PinnedGuidanceBudgetChars. Legacy virtually-pinned guidance
-// counts — it occupies the same prefix — so an over-budget store forces
-// curation before anything new can be pinned.
+// runes over the user's configured ceiling. Legacy virtually-pinned guidance
+// counts — it occupies the same prefix. Unset (the default) means no ceiling.
 func (s Store) validatePinnedBudget(m Memory) error {
-	if ResolveActivation(m) != ActivationPinned {
+	if s.PinnedBudgetChars <= PinnedBudgetOff || ResolveActivation(m) != ActivationPinned {
 		return nil
 	}
 	total := utf8.RuneCountInString(strings.TrimSpace(m.Body))
@@ -147,10 +146,10 @@ func (s Store) validatePinnedBudget(m Memory) error {
 		}
 		total += utf8.RuneCountInString(strings.TrimSpace(pinned.Body))
 	}
-	if total <= PinnedGuidanceBudgetChars {
+	if total <= s.PinnedBudgetChars {
 		return nil
 	}
-	return fmt.Errorf("pinning this fact would put pinned guidance at %d chars, over the %d budget: rules that must always hold belong in REASONIX.md/AGENTS.md instructions; unpin or consolidate existing pinned facts first", total, PinnedGuidanceBudgetChars)
+	return fmt.Errorf("pinning this fact would put pinned guidance at %d chars, over the %d budget you configured (memory.pinned_budget_chars): unpin or consolidate existing pinned facts, raise the budget, or move rules that must always hold into REASONIX.md/AGENTS.md instructions", total, s.PinnedBudgetChars)
 }
 
 func (s Store) SaveWithOptions(m Memory, opts SaveOptions) (SaveResult, error) {

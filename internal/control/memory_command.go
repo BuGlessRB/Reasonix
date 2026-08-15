@@ -292,6 +292,9 @@ func RenderMemorySummary(set *memory.Set, now time.Time) string {
 			fmt.Fprintf(&b, "  stored under %s\n", dir)
 		}
 	}
+	if cost := set.PrefixCost(); cost.Total() > 0 {
+		b.WriteString("\n" + renderMemoryPrefixCost(cost) + "\n")
+	}
 	b.WriteString("\n")
 	b.WriteString(strings.TrimSpace(i18n.M.MemoryEditHint))
 	b.WriteString("\n")
@@ -434,4 +437,24 @@ func memoryDisplayTitle(title, name string) string {
 
 func memoryOneLine(value string) string {
 	return strings.Join(strings.Fields(value), " ")
+}
+
+// renderMemoryPrefixCost reports what memory costs in the cached prefix. The
+// budgets that bound it ship off, so this is how a user sees what their store
+// is charging them before deciding whether to set one.
+func renderMemoryPrefixCost(cost memory.PrefixCost) string {
+	var b strings.Builder
+	b.WriteString("prefix cost (paid once per session)\n")
+	fmt.Fprintf(&b, "  index=%d chars across %d facts\n", cost.IndexChars, cost.Facts)
+	if cost.Pinned > 0 || cost.Budget > 0 {
+		fmt.Fprintf(&b, "  pinned=%d chars across %d facts", cost.PinnedChars, cost.Pinned)
+		if cost.Budget > 0 {
+			fmt.Fprintf(&b, " (budget %d)", cost.Budget)
+		} else {
+			b.WriteString(" (no budget set: memory.pinned_budget_chars)")
+		}
+		b.WriteByte('\n')
+	}
+	fmt.Fprintf(&b, "  total=%d chars", cost.Total())
+	return b.String()
 }

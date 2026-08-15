@@ -62,8 +62,10 @@ func TestPinnedProjectFactRidesPrefixWithoutSelfShadowing(t *testing.T) {
 }
 
 func TestPinnedBudgetRejectsOverflowAndAllowsUpdates(t *testing.T) {
+	const budget = 1500
 	store := recallTestStore(t)
-	big := strings.Repeat("规", PinnedGuidanceBudgetChars-100)
+	store.PinnedBudgetChars = budget
+	big := strings.Repeat("规", budget-100)
 	saved, err := store.SaveWithOptions(Memory{
 		Name: "big-pin", Description: "large pinned fact",
 		Activation: ActivationPinned, Body: big,
@@ -75,8 +77,8 @@ func TestPinnedBudgetRejectsOverflowAndAllowsUpdates(t *testing.T) {
 	if _, err := store.SaveWithOptions(Memory{
 		Name: "second-pin", Description: "overflowing pinned fact",
 		Activation: ActivationPinned, Body: strings.Repeat("x", 200),
-	}, SaveOptions{}); err == nil || !strings.Contains(err.Error(), "REASONIX.md") {
-		t.Fatalf("overflow must be rejected with the instructions hint, got %v", err)
+	}, SaveOptions{}); err == nil || !strings.Contains(err.Error(), "memory.pinned_budget_chars") {
+		t.Fatalf("overflow must be rejected and name the setting that raises it, got %v", err)
 	}
 
 	// Updating the existing pinned fact must not double-count itself.
@@ -132,5 +134,19 @@ func TestIndexMarksPinnedFacts(t *testing.T) {
 	}
 	if strings.Contains(index, "plain-fact.md) — [project/project pinned]") {
 		t.Fatalf("relevant facts must not carry the pinned marker:\n%s", index)
+	}
+}
+
+// Unset is the default, and the default is no ceiling: pinning is the user's
+// call, and a fixed one only told users with more to pin that they were wrong.
+func TestPinnedBudgetUnsetAcceptsAnySize(t *testing.T) {
+	store := recallTestStore(t)
+	for _, name := range []string{"first-pin", "second-pin"} {
+		if _, err := store.SaveWithOptions(Memory{
+			Name: name, Description: "large pinned fact",
+			Activation: ActivationPinned, Body: strings.Repeat("规", 4000),
+		}, SaveOptions{}); err != nil {
+			t.Fatalf("unset budget rejected %s: %v", name, err)
+		}
 	}
 }

@@ -47,6 +47,7 @@ func BuildRecallIndex(store Store) *RecallIndex {
 // AutoRecall runs automatic recall against this snapshot's prebuilt index —
 // the per-turn path. Semantics are identical to the package-level AutoRecall.
 func (s *Set) AutoRecall(query string, opts RecallOptions) RecallResult {
+	opts = s.withConfiguredBudgets(opts)
 	result := RecallResult{Query: strings.TrimSpace(query), CharBudget: recallCharBudget(opts.MaxChars)}
 	if genericRecallQuery(result.Query) {
 		result.Suppressed = "generic user turn"
@@ -63,4 +64,20 @@ func (s *Set) AutoRecall(query string, opts RecallOptions) RecallResult {
 		index = BuildRecallIndex(s.Store)
 	}
 	return autoRecallIndexed(index, result, opts)
+}
+
+// withConfiguredBudgets fills unset recall axes from what the user configured,
+// so a caller passing RecallOptions{} gets their settings rather than the
+// package defaults.
+func (s *Set) withConfiguredBudgets(opts RecallOptions) RecallOptions {
+	if s == nil {
+		return opts
+	}
+	if opts.Limit <= 0 {
+		opts.Limit = s.opts.RecallLimit
+	}
+	if opts.MaxChars <= 0 {
+		opts.MaxChars = s.opts.RecallMaxChars
+	}
+	return opts
 }
