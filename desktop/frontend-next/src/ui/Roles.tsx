@@ -11,6 +11,7 @@ type RoleKey = keyof RoleAssignments;
 const ROLES: [RoleKey, string, string][] = [
   ["planner", "计划", "只读地出计划"],
   ["subagent", "子代理", "派出去的活"],
+  ["vision", "看图", "读主模型看不了的图"],
   ["guardian", "复核", "独立审这一轮"],
 ];
 
@@ -25,11 +26,12 @@ interface Props {
 export function Roles({ models, roles, main, busy, onSet }: Props) {
   const [open, setOpen] = useState<RoleKey | null>(null);
   const anchor = models.find((m) => m.ref === main);
-  // A vision-capable subagent is what makes an attached image reach a model at
-  // all when the main one is text-only. Saying so is honest; drawing a switch
-  // for a model the kernel cannot yet name would not be.
-  const visionRef = roles?.subagent || main;
+  // Whichever model an attachment actually reaches: the vision role if one is
+  // assigned, otherwise the sub-agent it would be handed to, otherwise the main
+  // model. The note below reports whether that model reads images at all.
+  const visionRef = roles?.vision || roles?.subagent || main;
   const visionModel = models.find((m) => m.ref === visionRef);
+  const readable = visionModel?.vision === true;
 
   if (!roles) return <div className="empty">读不到分工。</div>;
 
@@ -64,20 +66,12 @@ export function Roles({ models, roles, main, busy, onSet }: Props) {
               }}
             />
           ))}
-          <div className="slotbox">
-            <div className="slot" data-borrowed="">
-              <i className="node" />
-              <span className="role">看图</span>
-              <span className="val" key={visionRef}>{visionModel?.model ?? "—"}</span>
-              <span className="tag">{visionModel?.vision ? "借用子代理" : "读不了图"}</span>
-            </div>
-          </div>
         </div>
       </div>
       <p className="note">
-        {visionModel?.vision
-          ? "图会走子代理，而这个子代理模型正好读图，所以附件真的会被看到。"
-          : "「看图」还没有自己的开关：图交给子代理，用的是子代理模型。现在这个模型不读图，所以附上的图会在发出去之前被丢掉 —— 把子代理换成一个带「读图」的模型就能接上。"}
+        {readable
+          ? `主模型看不了的图会交给 ${visionModel?.model}，它读图，所以附件真的会被看到。`
+          : "主模型看不了的图现在没人读得了 —— 会在发出去之前被丢掉。给「看图」指一个带「读图」标签的模型就能接上。"}
       </p>
     </>
   );

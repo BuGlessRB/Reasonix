@@ -88,7 +88,7 @@ func (o *turnOrchestrator) runSubagentSkillGoalLoop(ctx context.Context, sk skil
 func (o *turnOrchestrator) runSubagentSkillTurnsGoalLoop(ctx context.Context, skills []skill.Skill, task, raw, display string, runner skill.SubagentRunner, planMode bool) error {
 	expectedContinuationEpoch := o.c.goals.continuationToken()
 	userImages, imageCandidates := o.c.resolveTurnImages(raw)
-	ctx = agent.WithSubagentImageCandidates(ctx, imageCandidates)
+	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, imageCandidates))
 	// The skill turn's model requests count against the active goal's token
 	// budget, so bind a recorder for the span even though the sub-agent cannot
 	// call update_goal itself.
@@ -126,7 +126,7 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	ctx = agent.WithParentSession(ctx, parentSession)
 	ctx = jobs.WithSession(ctx, parentSession)
 	ctx = agent.WithUserImages(ctx, images)
-	ctx = agent.WithSubagentImageCandidates(ctx, imageCandidates)
+	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, imageCandidates))
 	ctx = agent.WithResponseLanguagePreference(ctx, c.responseLanguage)
 	ctx = agent.WithReasoningLanguagePreference(ctx, c.reasoningLanguage)
 
@@ -423,7 +423,7 @@ func (o *turnOrchestrator) runGoalLoopWithFrozenImagesRawDisplay(ctx context.Con
 
 func (o *turnOrchestrator) runGoalLoopWithPreparedTurn(ctx context.Context, turn orchestratedTurn) error {
 	expectedContinuationEpoch := o.c.goals.continuationToken()
-	ctx = agent.WithSubagentImageCandidates(ctx, turn.imageCandidates)
+	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, turn.imageCandidates))
 	err := o.runOrchestratedTurn(ctx, turn)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -454,7 +454,7 @@ func (o *turnOrchestrator) runEditedGoalLoopWithImageRefsRawDisplay(ctx context.
 	turn := o.c.prepareOrchestratedTurnImages(orchestratedTurn{
 		input: input, raw: raw, imageRefs: imageRefs, display: display, editedOriginal: original,
 	})
-	ctx = agent.WithSubagentImageCandidates(ctx, turn.imageCandidates)
+	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, turn.imageCandidates))
 	err := o.runOrchestratedTurn(ctx, turn)
 	if err != nil {
 		if ctx.Err() != nil {

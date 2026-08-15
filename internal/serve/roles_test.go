@@ -34,7 +34,7 @@ func TestRolesDefaultToTheMainModel(t *testing.T) {
 	defer srv.Close()
 
 	roles := readRoles(t, srv.URL)
-	for _, name := range []string{"planner", "subagent", "guardian"} {
+	for _, name := range []string{"planner", "subagent", "guardian", "vision"} {
 		if got, ok := roles[name]; !ok || got != "" {
 			t.Fatalf("role %q = %q (present %v), want an empty default", name, got, ok)
 		}
@@ -86,7 +86,7 @@ func TestSetRoleRejectsWhatItCannotResolve(t *testing.T) {
 
 	for name, body := range map[string]string{
 		"a model no provider lists": `{"role":"planner","ref":"nobody/nothing"}`,
-		"a role with no field":      `{"role":"vision","ref":"existing/model-a"}`,
+		"a role with no field":      `{"role":"reviewer","ref":"existing/model-a"}`,
 	} {
 		resp := postProvider(t, srv.URL, "/roles", body)
 		if resp.StatusCode != http.StatusBadRequest {

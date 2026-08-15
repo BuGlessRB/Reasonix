@@ -796,7 +796,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 		}
 	}
 
-	modelRef, effortRef := spec.Worker.Model, spec.Worker.Effort
+	modelRef, effortRef := visionRefFor(ctx, spec.Worker.Model), spec.Worker.Effort
 	usageModelRef := t.usageModelRef(modelRef, effortRef)
 	parentID, _, _, _ := CallContext(ctx)
 	run, err := t.prepareTranscriptRunWithPrompt(ctx, subReg, modelRef, effortRef, spec.Context.parentSession(ctx), parentID, spec.Context.ContinueFrom, spec.Context.ForkFrom, spec.Worker.SystemPrompt, spec.Worker.Kind, spec.Worker.Name)

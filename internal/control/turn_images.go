@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/config"
 )
 
 // resolveTurnImages resolves each user attachment once. Text-only parents keep
@@ -40,7 +41,24 @@ func (c *Controller) imagesForOrchestratedTurn(ctx context.Context, turn orchest
 func (c *Controller) withTurnImages(ctx context.Context, line string) context.Context {
 	userImages, imageCandidates := c.resolveTurnImages(line)
 	ctx = agent.WithUserImages(ctx, userImages)
-	return agent.WithSubagentImageCandidates(ctx, imageCandidates)
+	return c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, imageCandidates))
+}
+
+// withVisionRouting names the model that reads an attachment this turn's own
+// model cannot. Without it the candidates reach whichever sub-agent runs next,
+// whose model was chosen for cost or speed and usually drops them on the wire.
+func (c *Controller) withVisionRouting(ctx context.Context) context.Context {
+	cfg, err := config.LoadForRoot(c.workspaceRoot)
+	if err != nil || cfg == nil || strings.TrimSpace(cfg.Agent.VisionModel) == "" {
+		return ctx
+	}
+	return agent.WithVisionRouting(ctx, cfg.Agent.VisionModel, func(child string) bool {
+		if strings.TrimSpace(child) == "" {
+			child = c.modelRef
+		}
+		entry, ok := cfg.ResolveModel(child)
+		return ok && config.EffectiveVision(entry)
+	})
 }
 
 func (turn orchestratedTurn) imageReferenceInput() string {

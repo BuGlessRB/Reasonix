@@ -1292,9 +1292,14 @@ type AgentConfig struct {
 	RecoveryTemperature float64           `toml:"recovery_temperature"`
 	SubagentModel       string            `toml:"subagent_model"`
 	SubagentModels      map[string]string `toml:"subagent_models"`
-	SubagentEffort      string            `toml:"subagent_effort"`
-	SubagentEfforts     map[string]string `toml:"subagent_efforts"`
-	MaxSubagentDepth    int               `toml:"max_subagent_depth"`
+	// VisionModel reads the images a text-only main model cannot. Empty leaves
+	// them with whatever model the receiving sub-agent already runs, which is
+	// chosen for other reasons — a cheap worker is usually text-only, and the
+	// attachment is then dropped during serialization with nothing to show why.
+	VisionModel      string            `toml:"vision_model"`
+	SubagentEffort   string            `toml:"subagent_effort"`
+	SubagentEfforts  map[string]string `toml:"subagent_efforts"`
+	MaxSubagentDepth int               `toml:"max_subagent_depth"`
 	// TaskCostBudget lands a task on one summary once it spends this much.
 	TaskCostBudget float64 `toml:"task_cost_budget"`
 	// TaskTimeBudgetMinutes is the same gate on wall clock. Both ship off.

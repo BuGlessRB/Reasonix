@@ -1784,12 +1784,7 @@ func legacyMimoConfigRefs(c *Config) []string {
 	if c == nil {
 		return nil
 	}
-	refs := []string{
-		c.DefaultModel,
-		c.Agent.PlannerModel,
-		c.Agent.SubagentModel,
-		c.Bot.Model,
-	}
+	refs := append([]string{c.DefaultModel, c.Bot.Model}, c.roleModelRefs()...)
 	for _, ref := range c.Agent.SubagentModels {
 		refs = append(refs, ref)
 	}
@@ -1946,8 +1941,9 @@ func NormalizeLegacyDesktopProviderAccess(c *Config) {
 		}
 	}
 	addRef(c.DefaultModel)
-	addRef(c.Agent.PlannerModel)
-	addRef(c.Agent.SubagentModel)
+	for _, ref := range c.roleModelRefs() {
+		addRef(ref)
+	}
 	for _, ref := range c.Agent.SubagentModels {
 		addRef(ref)
 	}

@@ -255,6 +255,7 @@ export interface RoleAssignments {
   planner: string;
   subagent: string;
   guardian: string;
+  vision: string;
 }
 
 export interface ProviderEntry {

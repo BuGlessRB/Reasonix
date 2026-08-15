@@ -13,12 +13,12 @@ import (
 
 // roleFields maps a wire name onto the AgentConfig field that already decides
 // the behaviour. A role with no field behind it would be a switch that changes
-// nothing, so only these three are offered; image routing joins them once the
-// kernel can name a model for it rather than borrowing the subagent's.
+// nothing, so a name only appears here once the kernel reads it.
 var roleFields = map[string]func(*config.Config) *string{
 	"planner":  func(c *config.Config) *string { return &c.Agent.PlannerModel },
 	"subagent": func(c *config.Config) *string { return &c.Agent.SubagentModel },
 	"guardian": func(c *config.Config) *string { return &c.Agent.GuardianModel },
+	"vision":   func(c *config.Config) *string { return &c.Agent.VisionModel },
 }
 
 func (s *Server) registerRoleRoutes(mux *http.ServeMux) {

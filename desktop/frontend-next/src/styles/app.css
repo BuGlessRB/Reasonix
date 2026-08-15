@@ -1236,6 +1236,12 @@
   }
   @keyframes rail { from { transform: scaleY(0) } to { transform: scaleY(1) } }
 
+  /* .grp 自带 transform 入场动画 → 它是个层叠上下文，于是后一个分组会盖在前一个
+     分组里的浮层上；.mgrp 的 overflow 又会把最后一行的菜单裁掉。两处都只在真的
+     开着菜单时让路，平时该裁还是裁。 */
+  .grp:has(.rpick) { position: relative; z-index: 5 }
+  .mgrp:has(.rpick) { overflow: visible }
+
   .slotbox { position: relative }
   .slot {
     display: grid; grid-template-columns: 18px 52px minmax(0, 1fr) auto; gap: 12px;

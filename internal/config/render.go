@@ -267,6 +267,11 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# subagent_models = { review = \"deepseek-pro\", security_review = \"deepseek-pro\" }   # per-skill overrides\n")
 	}
+	if c.Agent.VisionModel != "" {
+		fmt.Fprintf(&b, "vision_model = %q   # reads images a text-only main model cannot\n", c.Agent.VisionModel)
+	} else {
+		b.WriteString("# vision_model = \"kimi/kimi-k2-vision\"   # optional: reads images a text-only main model cannot\n")
+	}
 	if c.Agent.SubagentEffort != "" {
 		fmt.Fprintf(&b, "subagent_effort = %q   # default effort for subagent entry points\n", c.Agent.SubagentEffort)
 	} else {

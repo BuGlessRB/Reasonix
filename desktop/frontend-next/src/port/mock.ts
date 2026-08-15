@@ -47,6 +47,7 @@ export class MockPort implements AgentPort {
     planner: "",
     subagent: "deepseek/deepseek-v4-flash",
     guardian: "",
+    vision: "",
   };
 
   async roles(): Promise<RoleAssignments> {
