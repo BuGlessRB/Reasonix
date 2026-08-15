@@ -89,19 +89,11 @@ type Input struct {
 	Preset agentpreset.AgentPreset
 	// PlanMode is the collaboration plan-mode flag.
 	PlanMode bool
-	// HighRiskHints are host signals (permission/auth/release/security class).
-	// The host computes them from what the turn touches; this package never
-	// re-derives risk from the text itself.
-	HighRiskHints bool
-	// MediumRiskHints are host signals (cross-module / migration).
+	// HighRiskHints and MediumRiskHints are host signals about what the turn
+	// touches. Nothing derives them from the message's wording or shape, which
+	// described the sentence rather than the work.
+	HighRiskHints   bool
 	MediumRiskHints bool
-	// MultiFile / CrossSurface come from planner-gate style features.
-	MultiFile    bool
-	CrossSurface bool
-	// Anchored means the user named concrete files or targets.
-	Anchored bool
-	// Structured is true for multi-step structured requests.
-	Structured bool
 }
 
 // TaskPolicy is the authoritative host policy for one turn.
@@ -142,13 +134,13 @@ func Derive(in Input) TaskPolicy {
 
 	securityClass := in.HighRiskHints
 	risk := RiskLow
-	if in.MediumRiskHints || in.MultiFile || in.CrossSurface || in.Structured {
+	if in.MediumRiskHints {
 		risk = RiskMedium
 	}
 	if in.HighRiskHints {
 		risk = RiskHigh
 	}
-	route := chooseRoute(policy, risk, in)
+	route := chooseRoute(policy, risk)
 	verification := policy.VerificationPolicy.Level
 	if constraints.RequireFullVerification || !constraints.ForbidTests && risk >= RiskHigh {
 		if policy.VerificationPolicy.Level < VerifyFull && (constraints.RequireFullVerification || risk >= RiskHigh) {
@@ -281,28 +273,18 @@ func (p TaskPolicy) RequiresSecurityReview() bool {
 	return p.Review == ReviewForcedSecurity
 }
 
-func chooseRoute(policy agentpreset.PresetPolicy, risk Risk, in Input) Route {
-	if risk == RiskLow && !in.MultiFile && !in.Structured && !in.CrossSurface {
+func chooseRoute(policy agentpreset.PresetPolicy, risk Risk) Route {
+	if risk == RiskLow {
 		return RouteDirect
 	}
 	if risk >= RiskHigh && policy.PlannerPolicy.FullPlanOnHighRisk {
 		return RouteFullPlan
 	}
-	if risk >= RiskMedium && policy.PlannerPolicy.FullPlanOnMediumRisk {
+	if policy.PlannerPolicy.FullPlanOnMediumRisk {
 		return RouteFullPlan
 	}
-	if in.CrossSurface || (in.Structured && risk >= RiskMedium) {
-		if policy.PlannerPolicy.FullPlanOnMediumRisk || risk >= RiskHigh {
-			return RouteFullPlan
-		}
-	}
-	if in.MultiFile || in.Structured {
-		if policy.PlannerPolicy.PreferLightPlan {
-			return RouteLightPlan
-		}
-		if policy.PlannerPolicy.FullPlanOnMediumRisk {
-			return RouteFullPlan
-		}
+	if policy.PlannerPolicy.PreferLightPlan {
+		return RouteLightPlan
 	}
 	if policy.PlannerPolicy.DirectOK {
 		return RouteDirect

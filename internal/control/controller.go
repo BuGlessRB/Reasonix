@@ -1990,7 +1990,7 @@ func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 		defer func() { c.hooks.StopResult(context.Background(), lastAssistantText(c.History()), turn, err) }()
 	}
 	marker = c.markInFlightTurn(startMessages, true)
-	ctx = c.withPlannerTurnMetadata(ctx, rawInput, false, startMessages)
+	ctx = c.withPlannerTurnMetadata(ctx, rawInput, false)
 	err = c.runner.Run(ctx, c.withCapabilityRoute(ctx, input, rawInput))
 	return err
 }

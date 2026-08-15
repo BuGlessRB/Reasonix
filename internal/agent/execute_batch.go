@@ -70,13 +70,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 	durations := make([]int64, len(calls))
 	startedAt := make([]int64, len(calls))
 	completedStepInBatch := false
-	// Snapshot the receipt count before the batch runs: if a loop guard fires
-	// for this batch, successes recorded during it (a mixed batch where only one
-	// call was guard-blocked) must already count as progress against the pass.
-	receiptMark := 0
-	if a.task.ledger != nil {
-		receiptMark = a.task.ledger.Len()
-	}
+	receiptMark := a.ledgerMark()
 	// Full dispatches used the batch's initial file state. After a writer runs
 	// (even a failed one — disk may have mutated), refresh dependent writer
 	// previews. The first writer stays on the single-preview fast path.
@@ -362,7 +356,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: o.truncMsg})
 		}
 	}
-	a.applyBatchGuards(ctx, cancelled, calls, outcomes, results, receiptMark)
+	a.observeOutcomeShadow(cancelled, receiptMark)
 	images := make([][]string, len(calls))
 	executions := make([]*tool.ShellExecution, len(calls))
 	for i := range outcomes {

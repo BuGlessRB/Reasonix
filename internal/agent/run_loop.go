@@ -115,7 +115,6 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	// values are computed below. Cross-turn state (checkpoint, scope, failure
 	// budgets) lives in taskRuntime and is reconciled there.
 	a.turn = turnRuntime{}
-	a.resetStructuralRunGuards()
 	scope, scoped := DeliveryExecutionScopeFromContext(ctx)
 	preserveEvidence := a.pending.preserveEvidence
 	// A run that starts with a pending readiness recovery (or an explicit
@@ -204,7 +203,6 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	// transcript tail. Fold its bounded facts into this new user turn exactly
 	// once; the user's raw text remains the classifier source above.
 	providerInput = withInterruptedRecovery(providerInput, a.pendingInterruptedRecovery())
-	a.task.prepareScope(scoped, scope.ID)
 	a.svc.sink.Emit(event.Event{Kind: event.TurnStarted})
 	a.emitTurnPhase(event.TurnPhaseWorking)
 	input = a.withTurnPreferences(providerInput)
@@ -229,16 +227,9 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	// opening a second object: one turn, one turnRuntime. The zero values the
 	// old literal spelled out are already there from the reset at the top.
 	state = &a.turn
-	state.seenTodoProgress = make(map[string]struct{})
 	state.executorHandoff = a.executorHandoffGuard && strings.Contains(input, executorHandoffMarker)
 	state.input = input
 	state.budget = runBudget{started: time.Now()}
-	state.todoProgress, state.trackingTodoProgress = a.canonicalTodoProgress()
-	if a.task.ledger != nil {
-		for _, sig := range a.task.ledger.SuccessfulProgressSignaturesSince(0) {
-			state.seenTodoProgress[sig] = struct{}{}
-		}
-	}
 	return rawInput, state
 }
 
@@ -610,10 +601,6 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 		return false, boundaryErr
 	}
 
-	receiptMark := 0
-	if a.task.ledger != nil {
-		receiptMark = a.task.ledger.Len()
-	}
 	batch := a.executeBatch(ctx, state, calls)
 	results, images := batch.results, batch.images
 	for i, call := range calls {
@@ -650,7 +637,6 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 		nudge := fmt.Sprintf("The following tools are unavailable in the current workflow phase: %s. Do not call them again. Respond to the user's request with visible answer text now; call a different tool only if it is still needed to complete the request.", strings.Join(unavailableContextTools, ", "))
 		a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(nudge)})
 	}
-	a.trackTodoProgress(ctx, state, receiptMark)
 
 	// The prompt only grows from here; compact before the next turn so it
 	// stays within the model's window.

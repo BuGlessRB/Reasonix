@@ -150,9 +150,6 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	}
 	if !hasWriter {
 		if len(missing) > 0 {
-			if a.loopGuardAllowsFinal() {
-				return out
-			}
 			out.reason = strings.Join(missing, "; ")
 		}
 		return out
@@ -210,15 +207,10 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 		}
 	}
 
-	// Before the loop-guard escape on purpose: a criterion the model cannot
-	// prove must still be able to stop asking.
 	outstanding := a.outstandingPlanCriteria()
 	out.missingAcceptanceCriteria += len(outstanding)
 	missing = append(missing, outstanding...)
 	if len(missing) == 0 {
-		return out
-	}
-	if a.loopGuardAllowsFinal() {
 		return out
 	}
 	out.reason = strings.Join(missing, "; ")

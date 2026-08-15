@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -11,6 +12,26 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
+
+// okTool always succeeds; failTool always fails the same way. Together they
+// stand in for a hook's happy and error paths without a real tool.
+type okTool struct{ name string }
+
+func (o okTool) Name() string                                             { return o.name }
+func (o okTool) Description() string                                      { return "always succeeds" }
+func (o okTool) Schema() json.RawMessage                                  { return json.RawMessage(`{"type":"object"}`) }
+func (o okTool) ReadOnly() bool                                           { return true }
+func (o okTool) Execute(context.Context, json.RawMessage) (string, error) { return "ok", nil }
+
+type failTool struct{ name string }
+
+func (f failTool) Name() string            { return f.name }
+func (f failTool) Description() string     { return "always fails" }
+func (f failTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (f failTool) ReadOnly() bool          { return true }
+func (f failTool) Execute(context.Context, json.RawMessage) (string, error) {
+	return "", errors.New("unexpected end of JSON input")
+}
 
 func TestToolHooksMayMutateWorkspaceUsesRunnerCapabilities(t *testing.T) {
 	if toolHooksMayMutateWorkspace(hook.NewRunner(nil, "/tmp", nil, nil)) {

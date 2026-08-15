@@ -74,7 +74,7 @@ func (o *turnOrchestrator) runGoalContinuationTurnWithRawDisplay(
 func (o *turnOrchestrator) runComposedSyntheticTurn(ctx context.Context, text string) error {
 	c := o.c
 	ctx = agent.WithRawUserInput(ctx, text)
-	ctx = c.withPlannerTurnMetadata(ctx, text, true, c.messageCount())
+	ctx = c.withPlannerTurnMetadata(ctx, text, true)
 	return c.runner.Run(ctx, c.ComposeSynthetic(text))
 }
 
@@ -130,7 +130,7 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	ctx = agent.WithResponseLanguagePreference(ctx, c.responseLanguage)
 	ctx = agent.WithReasoningLanguagePreference(ctx, c.reasoningLanguage)
 
-	input := c.compose(task, raw, true)
+	input := c.imageRoutingPrefix(unreadableImages(images, imageCandidates)) + c.compose(task, raw, true)
 	startMessages := c.messageCount()
 	var marker agent.InFlightTurnMeta
 	defer func() { c.finishInFlightTurn(startMessages, marker) }()
@@ -202,9 +202,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	parentSession := c.parentSessionID()
 	ctx = agent.WithParentSession(ctx, parentSession)
 	ctx = jobs.WithSession(ctx, parentSession)
-	userImages, imageCandidates := c.imagesForOrchestratedTurn(ctx, turn)
-	ctx = agent.WithUserImages(ctx, userImages)
-	ctx = agent.WithSubagentImageCandidates(ctx, imageCandidates)
+	ctx, userImages, unreadable := c.bindOrchestratedTurnImages(ctx, turn)
 	ctx = agent.WithRawUserInput(ctx, turn.raw)
 	continuation := turn.goalContinuation
 	var input string
@@ -219,6 +217,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	} else {
 		input = c.compose(turn.input, turn.raw, !turn.synthetic)
 	}
+	input = c.imageRoutingPrefix(unreadable) + input
 	// input.receive: the composed text crosses the extension chain before it
 	// enters the session (checkpoint, hooks, and the model all see the final
 	// text). A block ruling aborts the turn with the redacted reason surfaced,
@@ -281,7 +280,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	if !turn.synthetic {
 		modelInput = c.withCapabilityRoute(ctx, input, turn.raw)
 	}
-	ctx = c.withPlannerTurnMetadata(ctx, turn.raw, turn.synthetic, startMessages)
+	ctx = c.withPlannerTurnMetadata(ctx, turn.raw, turn.synthetic)
 	// Real user turns open a fresh Recovery Episode. Goal auto-continues and
 	// other synthetic turns inherit the current Episode so budgets accumulate
 	// only within one host-owned execution round.

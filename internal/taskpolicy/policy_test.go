@@ -42,15 +42,13 @@ func TestDeriveLightHighRiskElevates(t *testing.T) {
 
 func TestDeriveDeliveryLowRiskNoReviewer(t *testing.T) {
 	p := Derive(Input{
-		Raw:      "fix the typo in README.md",
-		Preset:   agentpreset.Delivery,
-		Anchored: true,
+		Raw:    "fix the typo in README.md",
+		Preset: agentpreset.Delivery,
 	})
 	if p.Risk != RiskLow {
-		// typo fix is low risk
-		t.Logf("risk = %v (may be medium if multi-file heuristics fire)", p.Risk)
+		t.Fatalf("risk = %v, want low without a host signal", p.Risk)
 	}
-	if p.Risk == RiskLow && p.RequiresIndependentReview() {
+	if p.RequiresIndependentReview() {
 		t.Fatal("delivery low-risk must not force independent reviewer")
 	}
 }
@@ -73,10 +71,9 @@ func TestDeriveIgnoresTopicWordsWithoutHostSignals(t *testing.T) {
 
 func TestDeriveDeliveryMediumForcesReview(t *testing.T) {
 	p := Derive(Input{
-		Raw:          "refactor the payment module and update its callers",
-		Preset:       agentpreset.Delivery,
-		MultiFile:    true,
-		CrossSurface: true,
+		Raw:             "refactor the payment module and update its callers",
+		Preset:          agentpreset.Delivery,
+		MediumRiskHints: true,
 	})
 	if p.Risk < RiskMedium {
 		t.Fatalf("risk = %v, want at least medium", p.Risk)
@@ -188,23 +185,31 @@ func TestExecutionPolicyBlockStable(t *testing.T) {
 }
 
 func TestMatrixPlanningRoutes(t *testing.T) {
-	// Balanced multi-file → light plan
+	// A host medium-risk signal still routes Balanced into a plan.
 	p := Derive(Input{
-		Raw:       "update the API and its tests",
-		Preset:    agentpreset.Balanced,
-		MultiFile: true,
+		Raw:             "update the API and its tests",
+		Preset:          agentpreset.Balanced,
+		MediumRiskHints: true,
 	})
 	if p.Route != RouteLightPlan && p.Route != RouteFullPlan {
-		t.Fatalf("balanced multi-file route = %v", p.Route)
+		t.Fatalf("balanced medium-risk route = %v", p.Route)
 	}
-	// Delivery multi-file medium → full plan
+	// Delivery escalates the same signal to a full plan.
 	d := Derive(Input{
-		Raw:        "update the API and its tests across packages",
-		Preset:     agentpreset.Delivery,
-		MultiFile:  true,
-		Structured: true,
+		Raw:             "update the API and its tests across packages",
+		Preset:          agentpreset.Delivery,
+		MediumRiskHints: true,
 	})
 	if d.Route != RouteFullPlan {
-		t.Fatalf("delivery structured multi-file route = %v, want full", d.Route)
+		t.Fatalf("delivery medium-risk route = %v, want full", d.Route)
+	}
+	// Without a host signal nothing about the message buys a plan.
+	for _, raw := range []string{
+		"update the API and its tests across packages",
+		"1. read the config\n2. rewrite the loader\n3. run the tests",
+	} {
+		if got := Derive(Input{Raw: raw, Preset: agentpreset.Delivery}); got.Route != RouteDirect {
+			t.Errorf("%q routed to %v from its own shape", raw, got.Route)
+		}
 	}
 }

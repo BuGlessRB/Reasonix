@@ -21,11 +21,6 @@ type turnRuntime struct {
 	graceRound         bool
 	recoveryGraceRound bool
 
-	todoProgress         int
-	trackingTodoProgress bool
-	todoStallRounds      int
-	seenTodoProgress     map[string]struct{}
-
 	executorHandoff bool
 	input           string
 	workDurationMs  func() int64
@@ -57,21 +52,6 @@ type turnRuntime struct {
 	// task, rather than the root controller transcript.
 	recoveryTaskSummary string
 
-	// blockedTurnStreak counts consecutive rounds the host blocked outright.
-	// stormSig catches fixation on one call shape; this catches rotation
-	// between blocked shapes, which is zero progress all the same.
-	blockedTurnStreak int
-
-	// loopGuardArmed stands final readiness down after a loop guard fired:
-	// demanding receipts the blocker prevents would restart the loop. The mark
-	// is the pre-batch ledger count, so later progress revokes the pass.
-	loopGuardArmed       bool
-	loopGuardReceiptMark int
-
-	// repeatSuccessCounts catches the shape stormSig cannot see: the same write
-	// succeeding over and over leaves no error for a failure-only breaker.
-	repeatSuccessCounts map[string]int
-
 	// policy is frozen at the start of the Run and never observes a mid-turn
 	// SetAgentPreset change. policySet marks that beginRunTurn derived it.
 	policy    taskpolicy.TaskPolicy
@@ -79,16 +59,6 @@ type turnRuntime struct {
 
 	// reviewWarnings are warn-level findings to surface in the final summary.
 	reviewWarnings []string
-
-	// stormSig keys on (tool, error/blocker), NOT (tool, args): a stuck model
-	// reworks arguments cosmetically while the host returns the same refusal,
-	// so keying on args misses the loop entirely. See applyStormBreaker.
-	stormSig   string
-	stormCount int
-
-	// progress escalates adaptively on consecutive zero-evidence-gain rounds;
-	// see progress_guard.go.
-	progress progressGuard
 }
 
 // pendingTurn is what someone outside the Run arms for the next one: a

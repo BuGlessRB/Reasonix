@@ -476,3 +476,12 @@ func TestCallContextMirrorsPlanModeOntoLeafKey(t *testing.T) {
 		t.Fatal("host-initiated wrapper lost the leaf plan-mode flag")
 	}
 }
+
+func mustBuiltinTool(t *testing.T, name string) tool.Tool {
+	t.Helper()
+	builtin, ok := tool.LookupBuiltin(name)
+	if !ok {
+		t.Fatalf("builtin %q is not registered", name)
+	}
+	return builtin
+}

@@ -127,20 +127,6 @@ func (a *Agent) parseToolCall(ctx context.Context, plan *toolCallPlan) (toolOutc
 			errMsg: fmt.Sprintf("unknown tool %q", plan.call.Name),
 		}, true
 	}
-	if out, blocked := a.repeatedSuccessBlock(plan.call, t); blocked {
-		return toolOutcome{
-			output:  out,
-			blocked: true,
-			errMsg:  loopGuardBlockErrMsg,
-		}, true
-	}
-	if out, blocked := a.repeatedFailureBlock(ctx, plan.call, t); blocked {
-		return toolOutcome{
-			output:  out,
-			blocked: true,
-			errMsg:  loopGuardBlockErrMsg,
-		}, true
-	}
 	if out, blocked := a.staleAnchorEditBlock(plan.call); blocked {
 		return toolOutcome{
 			output:  out,
@@ -828,7 +814,6 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		if !json.Valid([]byte(call.Arguments)) {
 			detail = strings.TrimRight(detail, "\n") + "\nThe arguments were not valid JSON. Re-emit them exactly per this schema:\n" + string(t.Schema())
 		}
-		a.recordRepeatFailure(call, t, err)
 		rawErr := fmt.Sprintf("error: %v\n%s", err, detail)
 		body, truncMsg := truncateToolOutputFor(rawErr, call.Name, call.ID)
 		out := toolOutcome{
@@ -840,10 +825,6 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		}
 		return out
 	}
-	if mutates {
-		a.clearRepeatFailuresAfterMutation(evidenceName, evidenceArgs, readOnly)
-	}
-	a.recordRepeatSuccess(call, t)
 	// A foreground `task` sub-agent just finished — its result is the final answer.
 	// (A backgrounded one returns a "Started…" string and stops later in a job, so
 	// it doesn't fire here.) SubagentStop lets a hook react to delegated work.

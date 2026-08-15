@@ -72,11 +72,8 @@ func TestTurnOrchestratorAttachesTrustedPlannerMetadata(t *testing.T) {
 	if runner.meta.UserText != raw {
 		t.Fatalf("planner metadata user text = %q, want pristine %q", runner.meta.UserText, raw)
 	}
-	if runner.meta.ExplicitPlanMode || !runner.meta.GoalActive || !runner.meta.DeliveryProfile {
+	if runner.meta.ExplicitPlanMode || !runner.meta.PolicySet {
 		t.Fatalf("planner metadata missing trusted host state: %+v", runner.meta)
-	}
-	if !runner.meta.HasConversationContext {
-		t.Fatalf("planner metadata lost executor conversation ownership: %+v", runner.meta)
 	}
 	if !strings.Contains(runner.input, expanded) {
 		t.Fatalf("model input lost expanded context: %q", runner.input)

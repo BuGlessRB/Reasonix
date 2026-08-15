@@ -14,32 +14,25 @@ import (
 // "one ledger, one task, one bill" a property of the type rather than of the
 // call sites that used to clear these fields one by one.
 var taskCarryOver = map[string]bool{
-	"scopeID":        true,
-	"checkpoint":     true,
-	"repeatFailures": true,
-	"repeatScope":    true,
-	"ledger":         true, // identity, not contents: executeOne hands the pointer to every tool context
+	"scopeID":    true,
+	"checkpoint": true,
+	"ledger":     true, // identity, not contents: executeOne hands the pointer to every tool context
 }
 
 func TestTaskRuntimeRestartCarriesScopeAndResetsAccounting(t *testing.T) {
 	ledger := evidence.NewLedger()
 	before := &taskRuntime{
-		scopeID:        "scope-1",
-		checkpoint:     evidence.DeliveryCheckpoint{ScopeID: "scope-1"},
-		ledger:         ledger,
-		outcome:        evidence.NewOutcomeTracker(),
-		budget:         runBudget{rounds: 4, requests: 9, cost: 1.5, limit: TaskBudget{}},
-		repeatFailures: map[string]repeatFailureRecord{"sig": {count: 2}},
-		repeatScope:    "scope-1",
+		scopeID:    "scope-1",
+		checkpoint: evidence.DeliveryCheckpoint{ScopeID: "scope-1"},
+		ledger:     ledger,
+		outcome:    evidence.NewOutcomeTracker(),
+		budget:     runBudget{rounds: 4, requests: 9, cost: 1.5, limit: TaskBudget{}},
 	}
 	after := *before
 	after.restartLedger()
 
 	if after.scopeID != "scope-1" || after.checkpoint.ScopeID != "scope-1" {
 		t.Errorf("scope = %q/%q, want it carried: beginRunTurn owns the scope transition", after.scopeID, after.checkpoint.ScopeID)
-	}
-	if after.repeatScope != "scope-1" || len(after.repeatFailures) != 1 {
-		t.Errorf("repeat failures = %q/%d, want them carried: prepareScope decides what survives", after.repeatScope, len(after.repeatFailures))
 	}
 	if after.ledger != ledger {
 		t.Error("ledger pointer replaced; tool contexts hold it for the length of a call")
@@ -104,44 +97,5 @@ func TestTaskRuntimeLifetimeListsCoverTheStruct(t *testing.T) {
 		case !taskCarryOver[name] && !taskRestarted[name]:
 			t.Errorf("taskRuntime.%s is on neither list; decide whether a new task keeps it and assert that above", name)
 		}
-	}
-}
-
-func TestTaskRuntimePrepareScopeKeepsOnlyRecheckableFailures(t *testing.T) {
-	records := func() map[string]repeatFailureRecord {
-		return map[string]repeatFailureRecord{
-			"stale":  {count: 2, stateRecheck: true},
-			"solved": {count: 1},
-		}
-	}
-	cases := []struct {
-		name    string
-		scoped  bool
-		scopeID string
-		want    []string
-	}{
-		{"same scope keeps the anchors still worth re-checking", true, "scope-1", []string{"stale"}},
-		{"a new scope is a new task", true, "scope-2", nil},
-		{"an unscoped run keeps nothing", false, "", nil},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			task := taskRuntime{repeatFailures: records(), repeatScope: "scope-1"}
-			task.prepareScope(tc.scoped, tc.scopeID)
-			if len(task.repeatFailures) != len(tc.want) {
-				t.Fatalf("repeatFailures = %v, want %v", task.repeatFailures, tc.want)
-			}
-			for _, sig := range tc.want {
-				if _, ok := task.repeatFailures[sig]; !ok {
-					t.Errorf("repeatFailures lost %q", sig)
-				}
-			}
-			if tc.scoped && task.repeatScope != tc.scopeID {
-				t.Errorf("repeatScope = %q, want %q", task.repeatScope, tc.scopeID)
-			}
-			if !tc.scoped && task.repeatScope != "" {
-				t.Errorf("repeatScope = %q, want it cleared", task.repeatScope)
-			}
-		})
 	}
 }
