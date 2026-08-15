@@ -59,7 +59,7 @@ var apiPaths = map[string]bool{
 	"/trajectory": true, "/slash": true, "/complete": true,
 	"/workspace": true, "/workspaces": true,
 	"/mcp": true, "/skills": true, "/account": true, "/hooks": true,
-	"/memory": true, "/network": true, "/todos": true, "/providers": true,
+	"/memory": true, "/network": true, "/shell": true, "/todos": true, "/providers": true,
 	"/changes": true, "/attachments": true, "/roles": true,
 	"/themes": true, "/extensions": true, "/plugins": true, "/surfaces": true,
 	"/welcome": true,
