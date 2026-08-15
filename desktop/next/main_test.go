@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -39,13 +40,18 @@ func TestEveryPathTheFrontendCallsIsRouted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Paths reach fetch as plain literals: this.get("/x"), this.post("/x", …),
-	// and this.base + "/x". A template literal would slip past, so keep writing
-	// them as literals.
-	literal := regexp.MustCompile(`"(/[a-z0-9][a-z0-9/-]*)"`)
+	// Anchoring on the call is what keeps a concatenated segment out:
+	// this.base + "/plugins/" + name + "/export" would otherwise read as a
+	// request for "/export", which no one ever makes.
+	literal := regexp.MustCompile(`this\.(?:\w+\(|base \+ )\s*"(/[a-z0-9][a-z0-9/-]*)"`)
 	seen := map[string]bool{}
 	for _, m := range literal.FindAllStringSubmatch(string(src), -1) {
+		// A trailing slash means an id follows, so probe the family rather
+		// than the bare prefix, which isAPIPath deliberately rejects.
 		path := m[1]
+		if strings.HasSuffix(path, "/") {
+			path += "x"
+		}
 		// The replay endpoint is the shell's own; it is answered by the
 		// middleware before the API ever sees it.
 		if seen[path] || path == replayPath {

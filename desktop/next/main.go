@@ -8,7 +8,9 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
@@ -53,13 +55,13 @@ var apiPaths = map[string]bool{
 	"/goal": true, "/resume": true, "/compact": true, "/new": true,
 	"/rewind": true, "/fork": true, "/summarize": true, "/forget": true,
 	"/tool-approval-mode": true, "/auto-approve-tools": true, "/bypass": true,
-	"/provider-setup": true, "/delete-session": true, "/inbox/items": true,
+	"/provider-setup": true, "/delete-session": true, "/inbox": true, "/inbox/items": true,
 	"/trajectory": true, "/slash": true, "/complete": true,
 	"/workspace": true, "/workspaces": true,
 	"/mcp": true, "/skills": true, "/account": true, "/hooks": true,
 	"/memory": true, "/network": true, "/todos": true, "/providers": true,
 	"/changes": true, "/attachments": true, "/roles": true,
-	"/themes": true, "/extensions": true,
+	"/themes": true, "/extensions": true, "/plugins": true,
 }
 
 // A sub-path belongs to the resource it hangs off: /mcp/reconnect is the same
@@ -67,7 +69,7 @@ var apiPaths = map[string]bool{
 // endpoint from silently answering with index.html instead of JSON — and
 // TestEveryPathTheFrontendCallsIsRouted is what keeps this list honest, because
 // the comment alone did not.
-var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/"}
+var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/"}
 
 func isAPIPath(p string) bool {
 	p = strings.TrimSuffix(p, "/")
@@ -162,6 +164,7 @@ func run() error {
 		Bind:                     []any{shell},
 		OnStartup: func(ctx context.Context) {
 			shell.ctx = ctx
+			applyDockIcon()
 			go pumpEvents(ctx, srv, bc)
 		},
 		AssetServer: &assetserver.Options{
@@ -218,11 +221,38 @@ func (a *App) PickWorkspace() (string, error) {
 	if a.ctx == nil {
 		return "", nil
 	}
-	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title:                "打开工作目录",
-		DefaultDirectory:     a.srv.Controller().WorkspaceRoot(),
-		CanCreateDirectories: true,
-	})
+	opts := runtime.OpenDialogOptions{Title: "打开工作目录", CanCreateDirectories: true}
+	// Wails refuses to open the panel at all when this points at nothing, and
+	// answers with an error instead — a workspace that has since been moved
+	// would take the picker down with it.
+	if root := a.srv.Controller().WorkspaceRoot(); root != "" {
+		if st, err := os.Stat(root); err == nil && st.IsDir() {
+			opts.DefaultDirectory = root
+		}
+	}
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, opts)
+	if err != nil {
+		slog.Warn("studio: folder picker", "err", err)
+		return "", err
+	}
+	return dir, nil
+}
+
+// OpenExternal hands a link to the platform browser. A WKWebView answers a
+// target="_blank" click with nothing at all — Wails binds no delegate for it —
+// so every link in the window is dead until something routes it out. http(s)
+// only: these come from model output, which may not reach the OS opener with a
+// scheme of its choosing.
+func (a *App) OpenExternal(rawURL string) {
+	if a.ctx == nil {
+		return
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		slog.Warn("studio: refused to open a link", "url", rawURL)
+		return
+	}
+	runtime.BrowserOpenURL(a.ctx, u.String())
 }
 
 // lastWorkspace is the folder this shell was driving when it last closed, or ""
