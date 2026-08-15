@@ -126,7 +126,7 @@ func TestRuntimeRebuildsEmitRuntimeRebuiltForTab(t *testing.T) {
 	}
 	waitCount(2, "effort switch")
 
-	if err := app.SetTokenModeForTab(tab.ID, "economy"); err != nil {
+	if err := app.SetTokenModeForTab(tab.ID, "delivery"); err != nil {
 		t.Fatalf("SetTokenModeForTab: %v", err)
 	}
 	waitCount(3, "token-mode switch")

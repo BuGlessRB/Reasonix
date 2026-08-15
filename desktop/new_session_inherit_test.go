@@ -32,7 +32,7 @@ func TestEnsureBlankTabInheritsActiveTabLocalSettings(t *testing.T) {
 		SessionPath:      filepath.Join(workspace, "src.jsonl"), // non-empty so src isn't reused as the blank tab
 		model:            "inherit/model",
 		effort:           &effort,
-		tokenMode:        "economy",
+		tokenMode:        "delivery",
 		mode:             "plan",
 		toolApprovalMode: control.ToolApprovalYolo,
 		disabledMCP:      map[string]ServerView{"srv-x": {}},
@@ -58,8 +58,8 @@ func TestEnsureBlankTabInheritsActiveTabLocalSettings(t *testing.T) {
 	if created.effort == nil || *created.effort != "max" {
 		t.Fatalf("effort = %v, want inherited \"max\"", created.effort)
 	}
-	if created.tokenMode != "economy" {
-		t.Fatalf("tokenMode = %q, want inherited \"economy\"", created.tokenMode)
+	if created.tokenMode != "delivery" {
+		t.Fatalf("tokenMode = %q, want inherited \"delivery\"", created.tokenMode)
 	}
 	if created.toolApprovalMode != control.ToolApprovalAuto {
 		t.Fatalf("toolApprovalMode = %q, want global default auto", created.toolApprovalMode)

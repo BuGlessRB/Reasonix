@@ -5378,7 +5378,7 @@ func TestSetTokenModeRebuildsController(t *testing.T) {
 		}
 	}()
 
-	if err := app.SetTokenMode("economy"); err != nil {
+	if err := app.SetTokenMode("delivery"); err != nil {
 		t.Fatalf("SetTokenMode(economy): %v", err)
 	}
 	if c := app.activeCtrl(); c == nil {
@@ -5387,28 +5387,28 @@ func TestSetTokenModeRebuildsController(t *testing.T) {
 	if c := app.activeCtrl(); c != old {
 		t.Fatal("SetTokenMode/role setting must switch in place without rebuilding the controller")
 	}
-	if got := old.AgentPreset(); got != boot.AgentPresetLight {
-		t.Fatalf("controller AgentPreset = %q, want light", got)
+	if got := old.AgentPreset(); got != boot.AgentPresetDelivery {
+		t.Fatalf("controller AgentPreset = %q, want delivery", got)
 	}
 	tab := app.activeTab()
 	if tab == nil {
 		t.Fatal("active tab missing")
 	}
-	if got := currentTabTokenMode(tab); got != "economy" {
-		t.Fatalf("token mode = %q, want economy", got)
+	if got := currentTabTokenMode(tab); got != "delivery" {
+		t.Fatalf("token mode = %q, want delivery", got)
 	}
-	if got := app.Meta().TokenMode; got != "economy" {
-		t.Fatalf("Meta token mode = %q, want economy", got)
+	if got := app.Meta().TokenMode; got != "delivery" {
+		t.Fatalf("Meta token mode = %q, want delivery", got)
 	}
-	if got := app.Meta().AgentPreset; got != boot.AgentPresetLight {
-		t.Fatalf("Meta agentPreset = %q, want light", got)
+	if got := app.Meta().AgentPreset; got != boot.AgentPresetDelivery {
+		t.Fatalf("Meta agentPreset = %q, want delivery", got)
 	}
 	saved := loadTabsFile()
-	if len(saved.Tabs) != 1 || saved.Tabs[0].TokenMode != "economy" {
-		t.Fatalf("saved tabs = %+v, want economy token mode", saved.Tabs)
+	if len(saved.Tabs) != 1 || saved.Tabs[0].TokenMode != "delivery" {
+		t.Fatalf("saved tabs = %+v, want delivery token mode", saved.Tabs)
 	}
-	if saved.Tabs[0].AgentPreset != boot.AgentPresetLight {
-		t.Fatalf("saved agentPreset = %q, want light", saved.Tabs[0].AgentPreset)
+	if saved.Tabs[0].AgentPreset != boot.AgentPresetDelivery {
+		t.Fatalf("saved agentPreset = %q, want delivery", saved.Tabs[0].AgentPreset)
 	}
 }
 
@@ -5522,18 +5522,18 @@ func TestSetTokenModeReusesCurrentSessionLease(t *testing.T) {
 	if err := tab.ensureSessionLease(path); err != nil {
 		t.Fatalf("ensureSessionLease: %v", err)
 	}
-	if err := app.SetTokenModeForTab(tab.ID, "economy"); err != nil {
+	if err := app.SetTokenModeForTab(tab.ID, "delivery"); err != nil {
 		t.Fatalf("SetTokenModeForTab: %v", err)
 	}
 	// Role setting switches in place: same controller, same lease, same history.
 	if tab.Ctrl == nil || tab.Ctrl != oldCtrl {
 		t.Fatalf("tab controller should be reused in place, got %p want %p", tab.Ctrl, oldCtrl)
 	}
-	if got := oldCtrl.AgentPreset(); got != boot.AgentPresetLight {
-		t.Fatalf("controller AgentPreset = %q, want light", got)
+	if got := oldCtrl.AgentPreset(); got != boot.AgentPresetDelivery {
+		t.Fatalf("controller AgentPreset = %q, want delivery", got)
 	}
-	if got := currentTabTokenMode(tab); got != "economy" {
-		t.Fatalf("token mode = %q, want economy", got)
+	if got := currentTabTokenMode(tab); got != "delivery" {
+		t.Fatalf("token mode = %q, want delivery", got)
 	}
 	if tab.sessionLease == nil || sessionRuntimeKey(tab.sessionLease.Path()) != sessionRuntimeKey(path) {
 		t.Fatalf("session lease path = %q, want %q", tab.currentSessionPath(), path)
@@ -5595,17 +5595,17 @@ func TestSetTokenModeLeaseHeldKeepsCurrentController(t *testing.T) {
 
 	// Role setting switches in place and does not re-acquire the session lease,
 	// so an externally held lease does not block the switch.
-	if err := app.SetTokenModeForTab(tab.ID, "economy"); err != nil {
+	if err := app.SetTokenModeForTab(tab.ID, "delivery"); err != nil {
 		t.Fatalf("SetTokenModeForTab: %v", err)
 	}
 	if tab.Ctrl != oldCtrl {
 		t.Fatalf("tab controller changed after in-place role switch")
 	}
-	if got := currentTabTokenMode(tab); got != "economy" {
-		t.Fatalf("token mode = %q, want economy", got)
+	if got := currentTabTokenMode(tab); got != "delivery" {
+		t.Fatalf("token mode = %q, want delivery", got)
 	}
-	if got := oldCtrl.AgentPreset(); got != boot.AgentPresetLight {
-		t.Fatalf("controller AgentPreset = %q, want light", got)
+	if got := oldCtrl.AgentPreset(); got != boot.AgentPresetDelivery {
+		t.Fatalf("controller AgentPreset = %q, want delivery", got)
 	}
 	meta := app.MetaForTab(tab.ID)
 	if !meta.Ready || meta.Runtime.Phase != sessionRuntimeReady {
@@ -5642,7 +5642,7 @@ func TestSetTokenModeMigratesStaleOfficialDeepSeekTabModel(t *testing.T) {
 		}
 	}()
 
-	if err := app.SetTokenMode("economy"); err != nil {
+	if err := app.SetTokenMode("delivery"); err != nil {
 		t.Fatalf("SetTokenMode(economy): %v", err)
 	}
 	tab := app.activeTab()
@@ -5654,8 +5654,8 @@ func TestSetTokenModeMigratesStaleOfficialDeepSeekTabModel(t *testing.T) {
 	if tab.model != "deepseek-flash/deepseek-v4-flash" {
 		t.Fatalf("tab model = %q, want unchanged stale ref without rebuild", tab.model)
 	}
-	if got := currentTabTokenMode(tab); got != "economy" {
-		t.Fatalf("token mode = %q, want economy", got)
+	if got := currentTabTokenMode(tab); got != "delivery" {
+		t.Fatalf("token mode = %q, want delivery", got)
 	}
 	if c := app.activeCtrl(); c != old {
 		t.Fatal("role setting must keep the same controller")
@@ -5768,7 +5768,7 @@ func TestSetTokenModeKeepsControllerWhenRebuildFails(t *testing.T) {
 		}
 	}()
 
-	if err := app.SetTokenMode("economy"); err != nil {
+	if err := app.SetTokenMode("delivery"); err != nil {
 		t.Fatalf("SetTokenMode(economy) in-place switch: %v", err)
 	}
 	if c := app.activeCtrl(); c != old {
@@ -5778,11 +5778,11 @@ func TestSetTokenModeKeepsControllerWhenRebuildFails(t *testing.T) {
 	if tab == nil {
 		t.Fatal("active tab missing")
 	}
-	if got := currentTabTokenMode(tab); got != "economy" {
-		t.Fatalf("token mode after in-place switch = %q, want economy", got)
+	if got := currentTabTokenMode(tab); got != "delivery" {
+		t.Fatalf("token mode after in-place switch = %q, want delivery", got)
 	}
-	if got := app.Meta().TokenMode; got != "economy" {
-		t.Fatalf("Meta token mode after in-place switch = %q, want economy", got)
+	if got := app.Meta().TokenMode; got != "delivery" {
+		t.Fatalf("Meta token mode after in-place switch = %q, want delivery", got)
 	}
 }
 
@@ -5813,7 +5813,7 @@ func TestSetTokenModeRejectsRunningTurn(t *testing.T) {
 	app.activeCtrl().Submit("work")
 	<-runner.started
 
-	err := app.SetTokenMode("economy")
+	err := app.SetTokenMode("delivery")
 	if err == nil || !strings.Contains(err.Error(), "finish or cancel") {
 		t.Fatalf("SetTokenMode while running error = %v, want finish/cancel guard", err)
 	}
@@ -5863,7 +5863,7 @@ func TestSetTokenModeRejectsBackgroundJobs(t *testing.T) {
 	})
 	t.Cleanup(func() { close(release) })
 
-	err := app.SetTokenMode("economy")
+	err := app.SetTokenMode("delivery")
 	if err == nil || !strings.Contains(err.Error(), "background_jobs=1") {
 		t.Fatalf("SetTokenMode with background job error = %v, want exact background-job guard", err)
 	}
@@ -5874,7 +5874,7 @@ func TestSetTokenModeRejectsBackgroundJobs(t *testing.T) {
 	if result := jm.WaitForSession(context.Background(), agent.BranchID(path), []string{job.ID}, 5); len(result) != 1 || result[0].Status != jobs.Killed {
 		t.Fatalf("stopped background job = %+v, want one killed result", result)
 	}
-	if err := app.SetTokenMode("economy"); err != nil {
+	if err := app.SetTokenMode("delivery"); err != nil {
 		t.Fatalf("SetTokenMode after stopping background job: %v", err)
 	}
 }

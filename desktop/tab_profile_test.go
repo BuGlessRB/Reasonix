@@ -205,7 +205,7 @@ func TestSaveTabsPersistsNonBalancedTokenModes(t *testing.T) {
 
 	app := NewApp()
 	tab := testTab("a", t.TempDir())
-	tab.tokenMode = "economy"
+	tab.tokenMode = "delivery"
 	app.tabs = map[string]*WorkspaceTab{tab.ID: tab}
 	app.tabOrder = []string{tab.ID}
 	app.activeTabID = tab.ID
@@ -218,8 +218,8 @@ func TestSaveTabsPersistsNonBalancedTokenModes(t *testing.T) {
 	if len(got.Tabs) != 1 {
 		t.Fatalf("tabs len = %d, want 1", len(got.Tabs))
 	}
-	if got.Tabs[0].TokenMode != "economy" {
-		t.Fatalf("saved token mode = %q, want economy", got.Tabs[0].TokenMode)
+	if got.Tabs[0].TokenMode != "delivery" {
+		t.Fatalf("saved token mode = %q, want delivery", got.Tabs[0].TokenMode)
 	}
 
 	tab.tokenMode = "delivery"
@@ -483,10 +483,10 @@ func TestMetaReportsGoalStatus(t *testing.T) {
 	}
 
 	app.SetCollaborationModeForTab(tab.ID, "plan")
-	tab.tokenMode = boot.TokenModeEconomy
+	tab.tokenMode = boot.TokenModeDelivery
 	meta = app.MetaForTab(tab.ID)
-	if meta.CollaborationMode != "plan" || meta.TokenMode != boot.TokenModeEconomy {
-		t.Fatalf("profile meta = %+v, want plan + economy", meta)
+	if meta.CollaborationMode != "plan" || meta.TokenMode != boot.TokenModeDelivery {
+		t.Fatalf("profile meta = %+v, want plan + delivery", meta)
 	}
 }
 

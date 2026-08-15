@@ -409,7 +409,7 @@ func TestPlanYoloDeliveryOrderConverges(t *testing.T) {
 
 func TestEveryCollaborationAndTokenModeCombinationConvergesInBothOrders(t *testing.T) {
 	collaborationModes := []string{"normal", "plan", "goal"}
-	tokenModes := []string{boot.TokenModeEconomy, boot.TokenModeFull, boot.TokenModeDelivery}
+	tokenModes := []string{boot.TokenModeFull, boot.TokenModeDelivery}
 	orders := []string{"collaboration-first", "token-first"}
 
 	for _, collaborationMode := range collaborationModes {
