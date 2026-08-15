@@ -396,10 +396,13 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 
 		// Clean terminal. Optionally repair missing reasoning with one extra
 		// exact replay of the same frozen request (no synthetic prompt).
-		missing, shouldRetry := a.observeMissingToolCallReasoning(result.calls, result.reasoning)
-		if missing {
+		observed := a.observeMissingToolCallReasoning(result.calls, result.reasoning, usageReasoningTokens(result.usage))
+		if observed == reasoningModelSilent {
+			event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningModelSilent})
+		}
+		if observed.missing() {
 			event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningDetected})
-			if shouldRetry && strings.TrimSpace(result.text) == "" {
+			if observed == reasoningLostReplay && strings.TrimSpace(result.text) == "" {
 				event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningRetryAttempted})
 				retrySink := newDeferredStreamSink(a.svc.sink)
 				retry := runAttempt(attemptID, retrySink)
@@ -424,9 +427,9 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 				streamSink.Discard()
 				retrySink.Flush()
 				a.storeLatestRequestUsage(retry.usage)
+				retryObserved := a.classifyTurnReasoning(retry)
 				retry.usage = finalizeSamplingUsage(billable, retry.usage)
-				retryMissing, _ := a.observeMissingToolCallReasoning(retry.calls, retry.reasoning)
-				if retryMissing {
+				if retryObserved.missing() {
 					event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningDetected})
 					event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningFallback})
 				} else if len(retry.calls) == 0 {
@@ -437,7 +440,7 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 				a.emitStreamAttempt(attemptID, event.StreamAttemptCommit, attempt, "", nil)
 				return retry
 			}
-			if !shouldRetry || strings.TrimSpace(result.text) != "" {
+			if observed != reasoningLostReplay || strings.TrimSpace(result.text) != "" {
 				event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningRetrySuppressed})
 				event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningFallback})
 			} else {

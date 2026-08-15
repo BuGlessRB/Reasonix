@@ -90,6 +90,7 @@ func (c *QuoteContext) billingMode(modelRef string) string {
 // CostQuoteSink fills CostQuote on Usage events before forwarding. Frontends
 // must consume e.CostQuote and must not call Pricing.Cost for aggregation.
 type CostQuoteSink struct {
+	AuditForwarder
 	Inner Sink
 	Ctx   *QuoteContext
 }
@@ -100,7 +101,7 @@ func NewCostQuoteSink(inner Sink, ctx *QuoteContext) *CostQuoteSink {
 	if ctx == nil {
 		ctx = &QuoteContext{}
 	}
-	return &CostQuoteSink{Inner: inner, Ctx: ctx}
+	return &CostQuoteSink{AuditForwarder: AuditForwarder{Inner: inner}, Inner: inner, Ctx: ctx}
 }
 
 func (s *CostQuoteSink) Emit(e Event) {

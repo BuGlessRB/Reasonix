@@ -45,6 +45,10 @@ func (f AuditForwarder) RecordWorkspaceMutation(m WorkspaceMutation) {
 	RecordWorkspaceMutation(f.Inner, m)
 }
 
+func (f AuditForwarder) RecordRunBudget(s RunBudgetSample) {
+	RecordRunBudget(f.Inner, s)
+}
+
 // DelegationAuditSink receives one receipt per completed sub-agent run.
 type DelegationAuditSink interface {
 	RecordDelegationAudit(a evidence.DelegationAudit)

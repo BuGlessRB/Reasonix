@@ -140,6 +140,7 @@ type RunMetrics struct {
 // Usage events into a RunMetrics. Cache totals are summed per call (not read from
 // the cumulative SessionHit/Miss) so they match PromptTokens exactly.
 type metricsSink struct {
+	event.AuditForwarder
 	inner event.Sink
 
 	// mu guards m. Emit alone is serialized by the session's event.Sync wrapper,
@@ -420,6 +421,7 @@ func (s *metricsSink) RecordDelegationAudit(a evidence.DelegationAudit) {
 	if s == nil {
 		return
 	}
+	defer event.RecordDelegationAudit(s.inner, a)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.m.SubagentRuns++
@@ -458,6 +460,7 @@ func (s *metricsSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
 	if s == nil {
 		return
 	}
+	defer event.RecordReadinessAudit(s.inner, a)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.m.ReadinessChecks++

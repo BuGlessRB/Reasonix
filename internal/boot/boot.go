@@ -167,6 +167,8 @@ type Options struct {
 	// different mode than they passed here should also pass it here, or
 	// sub-agent gates will not match the parent executor's mode.
 	HeadlessApprovalMode string
+
+	GoalTurnsUnreachable bool // this assembly never arms a Goal turn; see GoalOnlyToolNames
 	// SessionRecoveryMeta and OnSessionRecovered let richer frontends attach
 	// local UI metadata to automatic transcript recovery branches.
 	SessionRecoveryMeta func(control.SessionRecoveryRequest) agent.BranchMeta
@@ -1464,6 +1466,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		reg.Add(installsource.NewTool(installsource.Options{
 			ProjectRoot: root,
 			HTTPClient:  balanceClient,
+			// The model's apply must present back a plan someone could read.
+			// Hosts skip this: the click that reached them already was the user.
+			RequireApprovedPlan: true,
 			ConnectMCP: func(e config.PluginEntry) (installsource.MCPConnectResult, error) {
 				spec := pluginspec.FromEntry(e, root, pluginSpecOptions)
 				if opts.Stderr != nil {
@@ -1926,7 +1931,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 
 	// Provider-visible tool surface is identical for every role setting before
 	// the extension snapshot freezes registry schemas for cache diagnostics.
-	applyUnifiedProviderToolSurface(reg)
+	applyUnifiedProviderToolSurface(reg, opts.GoalTurnsUnreachable)
 
 	// Freeze the extension kernel's snapshot of exactly what this build wired.
 	// The snapshot is assembled from the in-hand objects above — discovery
@@ -2021,28 +2026,6 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		ProjectChecks:           projectChecks,
 	}
 	return finalizeBuildResult(&BuildResult{Controller: ctrl, Snapshot: snap, Runtime: runtimeSet, Owner: owner, Extensions: extensionMgr, Dispatcher: extensionDispatcher, ExtensionUI: extUIHub, ProviderResolver: providerResolver, BaseProviderResolver: baseResolver, Assembly: assembly, Phases: timer.done("assemble")}, !opts.deferPublish), nil
-}
-
-// applyUnifiedProviderToolSurface restricts Schemas/ContractEntries to the
-// shared core + host-control tools. use_capability can still Get every
-// registered tool, including those hidden from the provider schema.
-func applyUnifiedProviderToolSurface(reg *tool.Registry) {
-	if reg == nil {
-		return
-	}
-	allow := make([]string, 0, 16)
-	for _, name := range UnifiedProviderToolNames() {
-		if _, ok := reg.Get(name); ok {
-			allow = append(allow, name)
-		}
-	}
-	// Always keep use_capability if somehow only that remains.
-	if len(allow) == 0 {
-		if _, ok := reg.Get("use_capability"); ok {
-			allow = []string{"use_capability"}
-		}
-	}
-	reg.SetProviderVisibleTools(allow)
 }
 
 // effectivePlannerModel centralizes planner precedence. Every role setting

@@ -201,3 +201,10 @@ func (c *coalescer) RecordWorkspaceMutation(m WorkspaceMutation) {
 	c.drainAndUnlock()
 	RecordWorkspaceMutation(c.inner, m)
 }
+
+func (c *coalescer) RecordRunBudget(sample RunBudgetSample) {
+	c.mu.Lock()
+	c.enqueueFlushLocked()
+	c.drainAndUnlock()
+	RecordRunBudget(c.inner, sample)
+}

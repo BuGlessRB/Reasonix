@@ -46,9 +46,10 @@ func buildRunSink(format runOutputFormat, printOnly, showThinking bool, metricsP
 	}
 	if metricsPath != "" {
 		chain.metrics = &metricsSink{
-			inner:         chain.sink,
-			partialPath:   partialMetricsPath(metricsPath),
-			snapshotEvery: 2 * time.Second,
+			AuditForwarder: event.AuditForwarder{Inner: chain.sink},
+			inner:          chain.sink,
+			partialPath:    partialMetricsPath(metricsPath),
+			snapshotEvery:  2 * time.Second,
 		}
 		chain.sink = chain.metrics
 	}

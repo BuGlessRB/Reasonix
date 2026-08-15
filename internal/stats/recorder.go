@@ -8,7 +8,6 @@ import (
 
 	"reasonix/internal/billing"
 	"reasonix/internal/event"
-	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
 )
 
@@ -19,6 +18,7 @@ import (
 // Wire it around the frontend sink at the boot layer so every entry point
 // (desktop, CLI, serve) records consistently; Source distinguishes them.
 type Recorder struct {
+	event.AuditForwarder
 	inner      event.Sink
 	writer     *Writer
 	dispatcher *recordDispatcher
@@ -118,7 +118,8 @@ func NewRecorder(inner event.Sink, dir, source string) *Recorder {
 	writer := NewWriter(dir)
 	writer.usage = managerForUsage(writer.dir)
 	return &Recorder{
-		inner: inner, writer: writer, dispatcher: dispatcherFor(writer), source: strings.TrimSpace(source),
+		AuditForwarder: event.AuditForwarder{Inner: inner},
+		inner:          inner, writer: writer, dispatcher: dispatcherFor(writer), source: strings.TrimSpace(source),
 	}
 }
 
@@ -180,40 +181,6 @@ func Flush(ctx context.Context, dir string) error {
 		}
 	}
 	return nil
-}
-
-// RecordReadinessAudit forwards audit receipts to the wrapped sink.
-func (r *Recorder) RecordReadinessAudit(a evidence.ReadinessAudit) {
-	event.RecordReadinessAudit(r.inner, a)
-}
-
-// RecordProtocolRecovery preserves the wrapped sink's audit capability.
-func (r *Recorder) RecordProtocolRecovery(a event.ProtocolRecoveryAudit) {
-	event.RecordProtocolRecovery(r.inner, a)
-}
-
-// RecordContractShadow preserves the wrapped sink's audit capability.
-func (r *Recorder) RecordContractShadow(a event.ContractShadowAudit) {
-	event.RecordContractShadow(r.inner, a)
-}
-
-// RecordCompletionReport preserves the wrapped sink's audit capability.
-func (r *Recorder) RecordDelegationAudit(a evidence.DelegationAudit) {
-	event.RecordDelegationAudit(r.inner, a)
-}
-
-func (r *Recorder) RecordCompletionReport(a event.CompletionReportAudit) {
-	event.RecordCompletionReport(r.inner, a)
-}
-
-// RecordOutcomeProgress preserves the wrapped sink's audit capability.
-func (r *Recorder) RecordOutcomeProgress(sample evidence.OutcomeSample) {
-	event.RecordOutcomeProgress(r.inner, sample)
-}
-
-// RecordMemoryRecall preserves the wrapped sink's audit capability.
-func (r *Recorder) RecordMemoryRecall(a event.MemoryRecallAudit) {
-	event.RecordMemoryRecall(r.inner, a)
 }
 
 func (r *Recorder) recordUsage(e event.Event) {

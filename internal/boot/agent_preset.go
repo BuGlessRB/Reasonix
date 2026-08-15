@@ -2,6 +2,7 @@ package boot
 
 import (
 	"reasonix/internal/agentpreset"
+	"reasonix/internal/tool"
 )
 
 // Canonical Agent role-setting identifiers re-exported for frontends that
@@ -70,6 +71,13 @@ func HostControlToolNames() []string {
 	}
 }
 
+// GoalOnlyToolNames are host-control tools whose contract exists only inside a
+// Goal turn. An assembly that can never arm one drops them from the schema
+// rather than shipping a definition the model can only fail to call.
+func GoalOnlyToolNames() []string {
+	return []string{"update_goal"}
+}
+
 // UnifiedProviderToolNames returns the provider-visible allowlist for a boot
 // with host-control tools enabled.
 func UnifiedProviderToolNames() []string {
@@ -79,4 +87,35 @@ func UnifiedProviderToolNames() []string {
 	out = append(out, core...)
 	out = append(out, host...)
 	return out
+}
+
+// applyUnifiedProviderToolSurface restricts Schemas/ContractEntries to the
+// shared core + host-control tools. use_capability can still Get every
+// registered tool, including those hidden from the provider schema.
+func applyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bool) {
+	if reg == nil {
+		return
+	}
+	unreachable := map[string]bool{}
+	if goalTurnsUnreachable {
+		for _, name := range GoalOnlyToolNames() {
+			unreachable[name] = true
+		}
+	}
+	allow := make([]string, 0, 16)
+	for _, name := range UnifiedProviderToolNames() {
+		if unreachable[name] {
+			continue
+		}
+		if _, ok := reg.Get(name); ok {
+			allow = append(allow, name)
+		}
+	}
+	// Always keep use_capability if somehow only that remains.
+	if len(allow) == 0 {
+		if _, ok := reg.Get("use_capability"); ok {
+			allow = []string{"use_capability"}
+		}
+	}
+	reg.SetProviderVisibleTools(allow)
 }

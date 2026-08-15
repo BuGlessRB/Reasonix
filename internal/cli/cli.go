@@ -39,7 +39,6 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/provider/openai"
 	"reasonix/internal/serve"
-	"reasonix/internal/sessiontemp"
 	"reasonix/internal/telemetry"
 
 	tea "charm.land/bubbletea/v2"
@@ -267,60 +266,6 @@ func configureCLIThemeFromConfigForTTYOutput() {
 // to git-root detection.
 func setupProfile(ctx context.Context, modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, profile string, workspaceRoot string) (*control.Controller, error) {
 	return setupProfileWithOverrides(ctx, modelName, maxStepsOverride, requireKey, sink, profile, cliBuildOverrides{WorkspaceRoot: workspaceRoot})
-}
-
-type cliBuildOverrides struct {
-	Effort               *string
-	PermissionAllow      []string
-	AdditionalDirs       []string
-	WorkspaceRoot        string
-	HeadlessApprovalMode string
-	Stderr               io.Writer
-	OnSessionRecovered   func(control.SessionRecoveryInfo) error
-	Ablation             ablation.Set
-	// SessionTemp carries the previous Controller's private temporary directory
-	// manager across model/profile rebuilds so temporary files survive.
-	SessionTemp *sessiontemp.Manager
-}
-
-// sessionTempFromCLIController returns the logical-session private temporary
-// directory manager for a same-session CLI controller rebuild. Nil keeps fresh
-// builds on control.New's normal new-manager path.
-func sessionTempFromCLIController(ctrl control.SessionAPI) *sessiontemp.Manager {
-	prev, ok := ctrl.(*control.Controller)
-	if !ok || prev == nil {
-		return nil
-	}
-	return prev.SessionTemp()
-}
-
-func setupProfileWithOverrides(ctx context.Context, modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, profile string, overrides cliBuildOverrides) (*control.Controller, error) {
-	migrateMCPConfigForCLIWorkspace()
-	return boot.Build(ctx, cliProfileBuildOptions(modelName, maxStepsOverride, requireKey, sink, profile, overrides))
-}
-
-func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, profile string, overrides cliBuildOverrides) boot.Options {
-	// profile is dual-write TokenMode; also set AgentPreset for the new path.
-	return boot.Options{
-		Model:                modelName,
-		MaxSteps:             maxStepsOverride,
-		MaxStepsKey:          "--max-steps",
-		RequireKey:           requireKey,
-		Sink:                 sink,
-		AgentPreset:          boot.NormalizeAgentPreset(profile),
-		TokenMode:            boot.NormalizeTokenMode(profile),
-		SessionDir:           resolveCLISessionDir(),
-		WorkspaceRoot:        overrides.WorkspaceRoot,
-		EffortOverride:       overrides.Effort,
-		PermissionAllow:      overrides.PermissionAllow,
-		AdditionalDirs:       overrides.AdditionalDirs,
-		HeadlessApprovalMode: overrides.HeadlessApprovalMode,
-		StatsSource:          "cli",
-		Stderr:               overrides.Stderr,
-		OnSessionRecovered:   overrides.OnSessionRecovered,
-		Ablation:             overrides.Ablation,
-		SessionTemp:          overrides.SessionTemp,
-	}
 }
 
 type cliPermissionMode struct {
@@ -688,15 +633,8 @@ func runAgent(args []string, version string) int {
 	// executor, not just the top-level one. Default/ask fails closed because no
 	// UI can answer; unattended writes require explicit --auto/-y,
 	// --permission-mode auto, or yolo.
-	overrides := cliBuildOverrides{
-		Effort:               effortOverride,
-		PermissionAllow:      allowedTools,
-		AdditionalDirs:       additionalDirs,
-		WorkspaceRoot:        workspaceRoot,
-		HeadlessApprovalMode: permissions.approval,
-		OnSessionRecovered:   cliSessionRecoveredHandler(leases),
-		Ablation:             ablated,
-	}
+	overrides := runBuildOverrides(effortOverride, allowedTools, additionalDirs, workspaceRoot,
+		permissions.approval, cliSessionRecoveredHandler(leases), ablated)
 	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, true, sink, profile, overrides)
 	if err != nil {
 		if resultOutput != nil && format != runOutputText {

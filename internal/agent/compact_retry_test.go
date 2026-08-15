@@ -69,7 +69,7 @@ func TestMissingReasoningRetryAggregateDoesNotTriggerEarlyCompaction(t *testing.
 	mp := testutil.NewMock("deepseek-proxy",
 		testutil.Turn{
 			ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}},
-			Usage:     &provider.Usage{PromptTokens: 4000, CompletionTokens: 2, TotalTokens: 4002, CacheMissTokens: 4000, FinishReason: "tool_calls"},
+			Usage:     &provider.Usage{PromptTokens: 4000, CompletionTokens: 2, TotalTokens: 4002, CacheMissTokens: 4000, ReasoningTokens: billedThinkingTokens, FinishReason: "tool_calls"},
 		},
 		testutil.Turn{
 			Reasoning: "retry reasoning",

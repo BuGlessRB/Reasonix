@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"reasonix/internal/event"
 	"reasonix/internal/provider"
 )
 
@@ -24,14 +25,66 @@ type unwrittenResolve struct {
 	at time.Time
 }
 
+// reasoningObservation classifies one thinking-mode tool-call turn. The states
+// are exclusive so no caller can act on an impossible pair such as "not missing
+// but replay it".
+type reasoningObservation int
+
+const (
+	// reasoningIntact carried thinking content, or the provider never promises it.
+	reasoningIntact reasoningObservation = iota
+	// reasoningModelSilent was billed no thinking tokens: the model chose not to
+	// think this round, which is ordinary between tool calls and not a defect.
+	reasoningModelSilent
+	// reasoningLostNoReplay was billed thinking tokens whose text never arrived,
+	// with this incident's single replay already spent.
+	reasoningLostNoReplay
+	// reasoningLostReplay is reasoningLostNoReplay with the replay still available.
+	reasoningLostReplay
+)
+
+// missing reports whether provider-issued thinking content went absent.
+func (o reasoningObservation) missing() bool {
+	return o == reasoningLostNoReplay || o == reasoningLostReplay
+}
+
+func (o reasoningObservation) String() string {
+	switch o {
+	case reasoningIntact:
+		return "intact"
+	case reasoningModelSilent:
+		return "model-silent"
+	case reasoningLostNoReplay:
+		return "lost-no-replay"
+	case reasoningLostReplay:
+		return "lost-replay"
+	}
+	return "unknown"
+}
+
+// classifyTurnReasoning classifies one completed attempt and records the audit
+// for a silent model, which is observed but never acted on. Call it before
+// finalizeSamplingUsage: the classifier needs the single attempt's billing, not
+// the multi-attempt aggregate.
+func (a *Agent) classifyTurnReasoning(t streamedTurn) reasoningObservation {
+	observed := a.observeMissingToolCallReasoning(t.calls, t.reasoning, usageReasoningTokens(t.usage))
+	if observed == reasoningModelSilent {
+		event.RecordProtocolRecovery(a.svc.sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningModelSilent})
+	}
+	return observed
+}
+
 // observeMissingToolCallReasoning classifies a thinking-mode tool-call turn and
-// claims the one silent retry its active incident allows. DeepSeek requires
-// provider-issued thinking content to be replayed, so a missing value is retried
-// once before tools execute; three consecutive healthy rounds then resolve the
-// incident and re-arm a future isolated regression (#6259, #7059).
-func (a *Agent) observeMissingToolCallReasoning(calls []provider.ToolCall, reasoning string) (missing, shouldRetry bool) {
+// claims the one silent replay its active incident allows. Billed thinking
+// tokens with no text mean the value was lost in transit and a replay can
+// recover it; zero billed tokens mean the model stayed silent, where replaying
+// an identical request costs a full prompt to buy nothing (#6259, #7059).
+func (a *Agent) observeMissingToolCallReasoning(calls []provider.ToolCall, reasoning string, reasoningTokens int) reasoningObservation {
 	if len(calls) == 0 || !provider.WarnOnMissingToolCallReasoning(a.svc.prov) {
-		return false, false
+		return reasoningIntact
+	}
+	if strings.TrimSpace(reasoning) == "" && reasoningTokens <= 0 {
+		return reasoningModelSilent
 	}
 	fingerprint := provider.MissingToolCallReasoningWarningFingerprint(a.svc.prov)
 	observedAt := time.Now()
@@ -44,7 +97,7 @@ func (a *Agent) observeMissingToolCallReasoning(calls []provider.ToolCall, reaso
 					a.sess.missingReasoning.healthyStreak = 0
 				}
 			}
-			return false, false
+			return reasoningIntact
 		}
 		shouldResolve := !a.sess.missingReasoning.stateRecorded || a.sess.missingReasoning.active
 		if shouldResolve {
@@ -72,7 +125,7 @@ func (a *Agent) observeMissingToolCallReasoning(calls []provider.ToolCall, reaso
 				a.sess.missingReasoning.stateRecorded = false
 			}
 		}
-		return false, false
+		return reasoningIntact
 	}
 	a.sess.missingReasoning.healthyStreak = 0
 	if s := a.svc.warnState; s != nil {
@@ -95,17 +148,17 @@ func (a *Agent) observeMissingToolCallReasoning(calls []provider.ToolCall, reaso
 			// incident, so keep the empty-key fallback without doubling requests.
 			a.sess.missingReasoning.active = true
 			a.sess.missingReasoning.stateRecorded = true
-			return true, false
+			return reasoningLostNoReplay
 		}
 		if !stateReady {
 			a.sess.missingReasoning.stateRecorded = false
 		}
 	} else if a.sess.missingReasoning.active {
-		return true, false
+		return reasoningLostNoReplay
 	}
 	a.sess.missingReasoning.active = true
 	if a.unwrittenResolve.at.IsZero() {
 		a.sess.missingReasoning.stateRecorded = true
 	}
-	return true, true
+	return reasoningLostReplay
 }

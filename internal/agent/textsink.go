@@ -271,8 +271,15 @@ func FormatUsageLine(u *provider.Usage, p *provider.Pricing, d *event.CacheDiagn
 		}
 		churn = fmt.Sprintf(" · cache prefix changed: %s", reasons)
 	}
-	return fmt.Sprintf("  · %d tok · in %d%s · out %d%s%s%s",
-		u.TotalTokens, u.PromptTokens, cacheCol, u.CompletionTokens, reasoning, cost, churn)
+	// A turn that took more than one request bills the sum while the context is
+	// only ever the last request's. Without this the input column reads as a
+	// context that doubled, and the extra request stays invisible.
+	replay := ""
+	if u.RequestCount > 1 && u.ContextPromptTokens > 0 && u.ContextPromptTokens != u.PromptTokens {
+		replay = fmt.Sprintf(" · %d requests, context %d", u.RequestCount, u.ContextPromptTokens)
+	}
+	return fmt.Sprintf("  · %d tok · in %d%s · out %d%s%s%s%s",
+		u.TotalTokens, u.PromptTokens, cacheCol, u.CompletionTokens, reasoning, cost, churn, replay)
 }
 
 // dimText wraps s in the ANSI dim SGR sequence so reasoning streams visually

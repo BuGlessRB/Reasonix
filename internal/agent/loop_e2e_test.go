@@ -58,7 +58,7 @@ func (p *cancelMissingReasoningRetryProvider) Stream(ctx context.Context, _ prov
 			if !send(provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &toolCall}) {
 				return
 			}
-			if !send(provider.Chunk{Type: provider.ChunkUsage, Usage: &provider.Usage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12}}) {
+			if !send(provider.Chunk{Type: provider.ChunkUsage, Usage: &provider.Usage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12, ReasoningTokens: billedThinkingTokens}}) {
 				return
 			}
 			send(provider.Chunk{Type: provider.ChunkDone})
@@ -619,7 +619,7 @@ func TestRunRecoveryKeepsCompletedToolPairAndSummarizesChangedFile(t *testing.T)
 // cleanly (the repair is a no-op on well-formed histories).
 func TestRunWellFormedToolLoopRoundTrips(t *testing.T) {
 	mp := testutil.NewMock("m",
-		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
 		testutil.Turn{Text: "all set"},
 	)
 	a := New(mp, echoRegistry(), NewSession(""), Options{}, event.Discard)
@@ -642,7 +642,7 @@ func TestRunWellFormedToolLoopRoundTrips(t *testing.T) {
 // ordinary two-call tool loop even when its tool-call turn has no reasoning.
 func TestRunNonDeepSeekMissingToolCallReasoningDoesNotRetry(t *testing.T) {
 	mp := testutil.NewMock("openai",
-		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
 		testutil.Turn{Text: "all set"},
 	)
 	sink := &recordSink{}
@@ -672,7 +672,7 @@ func TestRunSilentlyRecoversMissingToolCallReasoning(t *testing.T) {
 	mp := testutil.NewMock("deepseek-proxy",
 		testutil.Turn{
 			ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}},
-			Usage:     &provider.Usage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12, CacheMissTokens: 10, FinishReason: "tool_calls"},
+			Usage:     &provider.Usage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12, CacheMissTokens: 10, ReasoningTokens: billedThinkingTokens, FinishReason: "tool_calls"},
 		},
 		testutil.Turn{
 			Reasoning: "retry reasoning",
@@ -730,7 +730,7 @@ func TestMissingReasoningRecoveryAdoptsRetryWithoutToolCall(t *testing.T) {
 	mp := testutil.NewMock("deepseek-proxy",
 		testutil.Turn{
 			ToolCalls: []provider.ToolCall{{ID: "discarded", Name: "echo", Arguments: `{"text":"must not run"}`}},
-			Usage:     &provider.Usage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12, FinishReason: "tool_calls"},
+			Usage:     &provider.Usage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12, ReasoningTokens: billedThinkingTokens, FinishReason: "tool_calls"},
 		},
 		testutil.Turn{
 			Text:  "completed without a tool",
@@ -781,7 +781,7 @@ func TestMissingReasoningRecoveryFailureFallsBackBeforeToolExecution(t *testing.
 	mp := testutil.NewMock("deepseek-proxy",
 		testutil.Turn{
 			ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}},
-			Usage:     &provider.Usage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12, FinishReason: "tool_calls"},
+			Usage:     &provider.Usage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12, ReasoningTokens: billedThinkingTokens, FinishReason: "tool_calls"},
 		},
 		testutil.Turn{
 			Usage:      &provider.Usage{PromptTokens: 10, CompletionTokens: 1, TotalTokens: 11},
@@ -845,11 +845,11 @@ func TestMissingReasoningRecoveryCancellationAccountsBothAttempts(t *testing.T) 
 
 func TestSetSessionRearmsInMemoryMissingReasoningRecovery(t *testing.T) {
 	mp := testutil.NewMock("deepseek-proxy",
-		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}},
-		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1r", Name: "echo", Arguments: `{"text":"hi"}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1r", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
 		testutil.Turn{Text: "done"},
-		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c2", Name: "echo", Arguments: `{"text":"hi"}`}}},
-		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c2r", Name: "echo", Arguments: `{"text":"hi"}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c2", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c2r", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
 		testutil.Turn{Text: "done again"},
 	)
 	sink := &recordSink{}
@@ -873,8 +873,8 @@ func TestSetSessionRearmsInMemoryMissingReasoningRecovery(t *testing.T) {
 func TestMissingReasoningRecoveryRateLimitsAcrossProcesses(t *testing.T) {
 	stateDir := t.TempDir()
 	mp := testutil.NewMock("deepseek-proxy",
-		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}},
-		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1r", Name: "echo", Arguments: `{"text":"hi"}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1r", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
 		testutil.Turn{Text: "done"},
 	)
 	sink1 := &recordSink{}
@@ -887,7 +887,7 @@ func TestMissingReasoningRecoveryRateLimitsAcrossProcesses(t *testing.T) {
 	}
 
 	mp2 := testutil.NewMock("deepseek-proxy",
-		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c2", Name: "echo", Arguments: `{"text":"hi"}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c2", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
 		testutil.Turn{Text: "done again"},
 	)
 	sink2 := &recordSink{}
@@ -907,8 +907,8 @@ func TestMissingReasoningRecoverySeparatesProviderConfigurations(t *testing.T) {
 	stateDir := t.TempDir()
 	retryCount := func(identity string) int {
 		mp := testutil.NewMock("deepseek-proxy",
-			testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}},
-			testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1r", Name: "echo", Arguments: `{"text":"hi"}`}}},
+			testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
+			testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1r", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
 			testutil.Turn{Text: "done"},
 		)
 		sink := &recordSink{}
@@ -943,7 +943,7 @@ func TestThreeHealthyToolCallReasoningTurnsRearmFutureRegression(t *testing.T) {
 		}
 		return sink.recoveryCount(event.ProtocolRecoveryMissingReasoningRetryAttempted)
 	}
-	missing := testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}}
+	missing := testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}}
 	healthy := testutil.Turn{Reasoning: "call echo", ToolCalls: []provider.ToolCall{{ID: "c2", Name: "echo", Arguments: `{"text":"hi"}`}}}
 	if got := run(missing, missing, testutil.Turn{Text: "done"}); got != 1 {
 		t.Fatalf("first incident retries = %d, want 1", got)
@@ -964,20 +964,20 @@ func TestHealthyToolCallReasoningStreakWorksWithinOneAgentAndResetsOnMissing(t *
 	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, event.Discard)
 	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}
 
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || !retry {
-		t.Fatalf("initial observation = missing:%v retry:%v, want true/true", missing, retry)
+	if got := a.observeMissingToolCallReasoning(calls, "", billedThinkingTokens); got != reasoningLostReplay {
+		t.Fatalf("initial observation = %v, want %v", got, reasoningLostReplay)
 	}
 	for healthy := 1; healthy < missingReasoningHealthyResolveStreak; healthy++ {
-		a.observeMissingToolCallReasoning(calls, "healthy reasoning")
+		a.observeMissingToolCallReasoning(calls, "healthy reasoning", billedThinkingTokens)
 	}
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || retry {
-		t.Fatalf("missing reset = missing:%v retry:%v, want true/false", missing, retry)
+	if got := a.observeMissingToolCallReasoning(calls, "", billedThinkingTokens); got != reasoningLostNoReplay {
+		t.Fatalf("missing reset = %v, want %v", got, reasoningLostNoReplay)
 	}
 	for healthy := 1; healthy <= missingReasoningHealthyResolveStreak; healthy++ {
-		a.observeMissingToolCallReasoning(calls, "healthy reasoning")
+		a.observeMissingToolCallReasoning(calls, "healthy reasoning", billedThinkingTokens)
 	}
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || !retry {
-		t.Fatalf("post-recovery observation = missing:%v retry:%v, want true/true", missing, retry)
+	if got := a.observeMissingToolCallReasoning(calls, "", billedThinkingTokens); got != reasoningLostReplay {
+		t.Fatalf("post-recovery observation = %v, want %v", got, reasoningLostReplay)
 	}
 }
 
@@ -990,11 +990,11 @@ func TestMissingReasoningRecoveryIOFailureStillSuppressesLocally(t *testing.T) {
 	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: statePath}, event.Discard)
 	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}
 
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || !retry {
-		t.Fatalf("initial observation = missing:%v retry:%v, want true/true", missing, retry)
+	if got := a.observeMissingToolCallReasoning(calls, "", billedThinkingTokens); got != reasoningLostReplay {
+		t.Fatalf("initial observation = %v, want %v", got, reasoningLostReplay)
 	}
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || retry {
-		t.Fatalf("repeated observation = missing:%v retry:%v, want true/false", missing, retry)
+	if got := a.observeMissingToolCallReasoning(calls, "", billedThinkingTokens); got != reasoningLostNoReplay {
+		t.Fatalf("repeated observation = %v, want %v", got, reasoningLostNoReplay)
 	}
 }
 
@@ -1007,8 +1007,8 @@ func TestHealthyToolCallReasoningRetriesTransientStateWriteFailure(t *testing.T)
 	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, event.Discard)
 	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}
 
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || !retry {
-		t.Fatalf("initial observation = missing:%v retry:%v, want true/true", missing, retry)
+	if got := a.observeMissingToolCallReasoning(calls, "", billedThinkingTokens); got != reasoningLostReplay {
+		t.Fatalf("initial observation = %v, want %v", got, reasoningLostReplay)
 	}
 	if err := os.Chmod(stateDir, 0o500); err != nil {
 		t.Fatal(err)
@@ -1019,21 +1019,21 @@ func TestHealthyToolCallReasoningRetriesTransientStateWriteFailure(t *testing.T)
 			_ = os.Chmod(stateDir, 0o700)
 		}
 	}()
-	if missing, retry := a.observeMissingToolCallReasoning(calls, "healthy reasoning"); missing || retry {
-		t.Fatalf("healthy observation = missing:%v retry:%v, want false/false", missing, retry)
+	if got := a.observeMissingToolCallReasoning(calls, "healthy reasoning", billedThinkingTokens); got != reasoningIntact {
+		t.Fatalf("healthy observation = %v, want %v", got, reasoningIntact)
 	}
 	if err := os.Chmod(stateDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	permissionsRestored = true
 	for healthy := range missingReasoningHealthyResolveStreak - 1 {
-		if missing, retry := a.observeMissingToolCallReasoning(calls, "healthy reasoning"); missing || retry {
-			t.Fatalf("healthy recovery observation %d = missing:%v retry:%v, want false/false", healthy+1, missing, retry)
+		if got := a.observeMissingToolCallReasoning(calls, "healthy reasoning", billedThinkingTokens); got != reasoningIntact {
+			t.Fatalf("healthy recovery observation %d = %v, want %v", healthy+1, got, reasoningIntact)
 		}
 	}
 
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || !retry {
-		t.Fatalf("post-recovery observation = missing:%v retry:%v, want true/true", missing, retry)
+	if got := a.observeMissingToolCallReasoning(calls, "", billedThinkingTokens); got != reasoningLostReplay {
+		t.Fatalf("post-recovery observation = %v, want %v", got, reasoningLostReplay)
 	}
 }
 

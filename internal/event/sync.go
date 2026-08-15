@@ -99,3 +99,9 @@ func (s *syncSink) RecordWorkspaceMutation(m WorkspaceMutation) {
 	defer s.mu.Unlock()
 	RecordWorkspaceMutation(s.inner, m)
 }
+
+func (s *syncSink) RecordRunBudget(sample RunBudgetSample) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	RecordRunBudget(s.inner, sample)
+}
