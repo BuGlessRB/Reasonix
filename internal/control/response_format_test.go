@@ -141,7 +141,7 @@ func TestWithTurnFormatInjectsFormatIntoContext(t *testing.T) {
 }
 
 // TestRefTurnFormatBound：@reference turn 同样绑定 format（统一架构——
-// format 是每个被接纳 turn 的属性，非 runGoalLoop 特例）。
+// format 是每个被接纳 turn 的属性，非 runTurnLoop 特例）。
 func TestRefTurnFormatBound(t *testing.T) {
 	c := New(Options{})
 	ctx := context.Background()

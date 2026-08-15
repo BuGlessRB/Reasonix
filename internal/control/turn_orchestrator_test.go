@@ -106,7 +106,7 @@ func TestNonGoalTurnDoesNotInvokeGoalEvaluator(t *testing.T) {
 		{
 			name: "ordinary",
 			run: func(o *turnOrchestrator) error {
-				return o.runGoalLoopWithRawDisplay(context.Background(), "answer", "answer", "")
+				return o.runTurnLoopWithRawDisplay(context.Background(), "answer", "answer", "")
 			},
 		},
 		{
@@ -169,7 +169,7 @@ func TestGoalTurnOutputCannotAdvanceReplacementGoal(t *testing.T) {
 	runner.c = c
 	c.SetGoal("old goal")
 
-	if err := newTurnOrchestrator(c).runGoalLoopWithRawDisplay(
+	if err := newTurnOrchestrator(c).runTurnLoopWithRawDisplay(
 		context.Background(),
 		"work on the old goal",
 		"work on the old goal",
@@ -357,7 +357,7 @@ func TestGoalReadinessFailureContinuesUntilExternalStop(t *testing.T) {
 	c := New(Options{Runner: runner, Executor: executor})
 	c.SetGoal("ship the integration")
 
-	err := newTurnOrchestrator(c).runGoalLoopWithRawDisplay(context.Background(), "start", "start", "")
+	err := newTurnOrchestrator(c).runTurnLoopWithRawDisplay(context.Background(), "start", "start", "")
 	if err == nil || err.Error() != "external provider stop" {
 		t.Fatalf("run err = %v, want external provider stop after continuations", err)
 	}
@@ -402,7 +402,7 @@ func TestRecoveryPauseKeepsGoalRunningAndDeliveryScope(t *testing.T) {
 	}
 	scopeID, _, _ := c.goals.deliveryScope()
 
-	err := newTurnOrchestrator(c).runGoalLoopWithRawDisplay(context.Background(), "start", "start", "")
+	err := newTurnOrchestrator(c).runTurnLoopWithRawDisplay(context.Background(), "start", "start", "")
 	var pause *agent.RecoveryPauseError
 	if !errors.As(err, &pause) {
 		t.Fatalf("run err = %v, want RecoveryPauseError", err)
@@ -420,7 +420,7 @@ func TestRecoveryPauseKeepsGoalRunningAndDeliveryScope(t *testing.T) {
 	}
 
 	// A follow-up ordinary Goal turn reuses the same delivery scope without ResumeGoal.
-	err = newTurnOrchestrator(c).runGoalLoopWithRawDisplay(context.Background(), "continue", "continue", "")
+	err = newTurnOrchestrator(c).runTurnLoopWithRawDisplay(context.Background(), "continue", "continue", "")
 	if !errors.As(err, &pause) {
 		t.Fatalf("follow-up err = %v, want RecoveryPauseError again", err)
 	}
@@ -467,7 +467,7 @@ func TestTurnOrchestratorGoalContinuationRunsStopPerUnit(t *testing.T) {
 	c.SetGoal("ship the refactor")
 
 	o := newTurnOrchestrator(c)
-	if err := o.runGoalLoopWithRawDisplay(context.Background(), "Start pursuing the active goal now.", "ship the refactor", ""); err != nil {
+	if err := o.runTurnLoopWithRawDisplay(context.Background(), "Start pursuing the active goal now.", "ship the refactor", ""); err != nil {
 		t.Fatal(err)
 	}
 

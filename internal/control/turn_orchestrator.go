@@ -398,16 +398,16 @@ func maxRunWorkDuration(messages []provider.Message, start int) int64 {
 	return maxDuration
 }
 
-func (o *turnOrchestrator) runGoalLoopWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	return o.runGoalLoopWithImageRefsRawDisplay(ctx, input, raw, "", display)
+func (o *turnOrchestrator) runTurnLoopWithRawDisplay(ctx context.Context, input, raw, display string) error {
+	return o.runTurnLoopWithImageRefsRawDisplay(ctx, input, raw, "", display)
 }
 
-func (o *turnOrchestrator) runGoalLoopWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display string) error {
+func (o *turnOrchestrator) runTurnLoopWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display string) error {
 	turn := o.c.prepareOrchestratedTurnImages(orchestratedTurn{input: input, raw: raw, imageRefs: imageRefs, display: display})
-	return o.runGoalLoopWithPreparedTurn(ctx, turn)
+	return o.runTurnLoopWithPreparedTurn(ctx, turn)
 }
 
-func (o *turnOrchestrator) runGoalLoopWithFrozenImagesRawDisplay(ctx context.Context, input, raw, display string, images []string) error {
+func (o *turnOrchestrator) runTurnLoopWithFrozenImagesRawDisplay(ctx context.Context, input, raw, display string, images []string) error {
 	turn := orchestratedTurn{
 		input:           input,
 		raw:             raw,
@@ -418,10 +418,13 @@ func (o *turnOrchestrator) runGoalLoopWithFrozenImagesRawDisplay(ctx context.Con
 	if o.c.imageInputEnabled() {
 		turn.userImages = append([]string(nil), images...)
 	}
-	return o.runGoalLoopWithPreparedTurn(ctx, turn)
+	return o.runTurnLoopWithPreparedTurn(ctx, turn)
 }
 
-func (o *turnOrchestrator) runGoalLoopWithPreparedTurn(ctx context.Context, turn orchestratedTurn) error {
+// runTurnLoopWithPreparedTurn runs the turn, then hands the outcome to the Goal
+// FSM. Without an active goal advanceGoalAfterTurn returns immediately and this
+// is one turn; with one it is the loop that keeps pursuing it.
+func (o *turnOrchestrator) runTurnLoopWithPreparedTurn(ctx context.Context, turn orchestratedTurn) error {
 	expectedContinuationEpoch := o.c.goals.continuationToken()
 	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, turn.imageCandidates))
 	err := o.runOrchestratedTurn(ctx, turn)

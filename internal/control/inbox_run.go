@@ -57,7 +57,7 @@ func (c *Controller) prepareInboxRun(env sessioninbox.PromptEnvelope) (func(cont
 	requests := controlInvocationsFromInbox(env)
 	if len(requests) == 0 {
 		return func(ctx context.Context) error {
-			return c.runGoalLoopWithFrozenImagesRawDisplay(c.withTurnFormat(ctx, strings.TrimSpace(env.Format)), submit, raw, display, frozenImages)
+			return c.runTurnLoopWithFrozenImagesRawDisplay(c.withTurnFormat(ctx, strings.TrimSpace(env.Format)), submit, raw, display, frozenImages)
 		}, "", nil
 	}
 	prepared, err := c.prepareInvocationTurn(submit, requests)

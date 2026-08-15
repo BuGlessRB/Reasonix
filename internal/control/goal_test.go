@@ -297,7 +297,7 @@ func TestAssistantEvidenceBlockIsIgnoredByUnifiedGoal(t *testing.T) {
 	c := New(Options{WorkspaceRoot: root, SessionPath: sessionPath, Runner: ag, Executor: ag})
 	defer c.Close()
 	c.SetGoalWithResearchMode("verify the fix", GoalResearchOn)
-	_ = newTurnOrchestrator(c).runGoalLoopWithRawDisplay(context.Background(), "start", "start", "start")
+	_ = newTurnOrchestrator(c).runTurnLoopWithRawDisplay(context.Background(), "start", "start", "start")
 	if got := c.GoalStatus(); got != GoalStatusComplete {
 		t.Fatalf("GoalStatus = %q, want complete", got)
 	}

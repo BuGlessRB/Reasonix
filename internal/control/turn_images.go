@@ -68,12 +68,12 @@ func (turn orchestratedTurn) imageReferenceInput() string {
 	return turn.raw
 }
 
-func (c *Controller) runGoalLoopWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display string) error {
-	return newTurnOrchestrator(c).runGoalLoopWithImageRefsRawDisplay(ctx, input, raw, imageRefs, display)
+func (c *Controller) runTurnLoopWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display string) error {
+	return newTurnOrchestrator(c).runTurnLoopWithImageRefsRawDisplay(ctx, input, raw, imageRefs, display)
 }
 
-func (c *Controller) runGoalLoopWithFrozenImagesRawDisplay(ctx context.Context, input, raw, display string, images []string) error {
-	return newTurnOrchestrator(c).runGoalLoopWithFrozenImagesRawDisplay(ctx, input, raw, display, images)
+func (c *Controller) runTurnLoopWithFrozenImagesRawDisplay(ctx context.Context, input, raw, display string, images []string) error {
+	return newTurnOrchestrator(c).runTurnLoopWithFrozenImagesRawDisplay(ctx, input, raw, display, images)
 }
 
 func (c *Controller) runEditedGoalLoopWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display, original string) error {

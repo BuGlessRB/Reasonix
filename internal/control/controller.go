@@ -1031,7 +1031,7 @@ func (c *Controller) Send(input string) {
 
 // SendWithRaw starts a turn with separate model input and raw prompt text.
 func (c *Controller) SendWithRaw(input, raw string) {
-	c.runGuarded(func(ctx context.Context) error { return c.runGoalLoopWithRaw(ctx, input, raw) })
+	c.runGuarded(func(ctx context.Context) error { return c.runTurnLoopWithRaw(ctx, input, raw) })
 }
 
 // planApprovalTool is the Tool name on the ApprovalRequest the controller emits
@@ -1076,7 +1076,7 @@ const planApprovedMessage = "Plan approved — plan mode is off. Implement the p
 // next turn can revise. Plan mode is only ever set interactively, so the headless
 // `Run` path (which doesn't call this) never blocks on a prompt.
 func (c *Controller) runTurn(ctx context.Context, input string) error {
-	return c.runGoalLoopWithRaw(ctx, input, input)
+	return c.runTurnLoopWithRaw(ctx, input, input)
 }
 
 // RunTurn executes one foreground turn synchronously through the same lifecycle
@@ -1093,12 +1093,15 @@ func (c *Controller) runTurnWithRaw(ctx context.Context, input, raw string) erro
 	return c.runTurnWithRawDisplay(ctx, input, raw, "")
 }
 
-func (c *Controller) runGoalLoopWithRaw(ctx context.Context, input, raw string) error {
-	return c.runGoalLoopWithRawDisplay(ctx, input, raw, "")
+// runTurnLoopWithRaw is the path every ordinary message takes. It runs one
+// turn and then asks the Goal FSM whether to run another: with no active goal
+// the answer is always no, so the loop is what a single turn looks like.
+func (c *Controller) runTurnLoopWithRaw(ctx context.Context, input, raw string) error {
+	return c.runTurnLoopWithRawDisplay(ctx, input, raw, "")
 }
 
 // withTurnFormat binds a structured-output format to the turn context
-// (empty is a no-op). Extracted from the runGoalLoop closure so tests can
+// (empty is a no-op). Extracted from the runTurnLoop closure so tests can
 // assert the format actually reaches the agent request path.
 func (c *Controller) withTurnFormat(ctx context.Context, format string) context.Context {
 	if format == "" {
@@ -1107,11 +1110,11 @@ func (c *Controller) withTurnFormat(ctx context.Context, format string) context.
 	return agent.WithResponseFormat(ctx, format)
 }
 
-func (c *Controller) runGoalLoopWithRawDisplay(ctx context.Context, input, raw, display string) error {
+func (c *Controller) runTurnLoopWithRawDisplay(ctx context.Context, input, raw, display string) error {
 	// Structured-output format is bound to the submitted turn (passed via
-	// submitHTTPWithFormat → submitCommandOrTurn → runGoalLoop closure);
+	// submitHTTPWithFormat → submitCommandOrTurn → runTurnLoop closure);
 	// no global one-shot slot to race across concurrent requests.
-	return newTurnOrchestrator(c).runGoalLoopWithRawDisplay(ctx, input, raw, display)
+	return newTurnOrchestrator(c).runTurnLoopWithRawDisplay(ctx, input, raw, display)
 }
 
 func (c *Controller) runEditedGoalLoopWithRawDisplay(ctx context.Context, input, raw, display, original string) error {
@@ -1191,7 +1194,7 @@ func (c *Controller) SubmitHTTPFormat(input, format string) {
 
 // isNonTurnHTTPInput reports inputs that never reach the agent turn loop, so a
 // structured-output request attached to them would otherwise leak into the
-// next real turn (the format slot is consumed only by runGoalLoopWithRawDisplay).
+// next real turn (the format slot is consumed only by runTurnLoopWithRawDisplay).
 func isNonTurnHTTPInput(input string) bool {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
@@ -1232,7 +1235,7 @@ func (c *Controller) SubmitDeliveryRecovery(display, input string) {
 		if c.executor != nil {
 			c.executor.PrepareDeliveryRecovery()
 		}
-		return c.runGoalLoopWithRawDisplay(ctx, input, input, display)
+		return c.runTurnLoopWithRawDisplay(ctx, input, input, display)
 	})
 }
 
@@ -1310,7 +1313,7 @@ func (c *Controller) runPreparedInvocationTurn(
 	frozenImages []string,
 ) error {
 	if len(prepared.subagents) == 0 {
-		return c.runGoalLoopWithFrozenImagesRawDisplay(ctx, prepared.composed, raw, display, frozenImages)
+		return c.runTurnLoopWithFrozenImagesRawDisplay(ctx, prepared.composed, raw, display, frozenImages)
 	}
 	runner := c.skillRunner
 	if runner == nil {
@@ -1392,8 +1395,8 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 	runRefTurnWithRefs := func(input, refLine, display string) {
 		c.runRefTurnWithRefsFormat(input, refLine, display, format)
 	}
-	runGoalLoop := func(ctx context.Context, input, raw, display string) error {
-		return c.runGoalLoopWithRawDisplay(c.withTurnFormat(ctx, format), input, raw, display)
+	runTurnLoop := func(ctx context.Context, input, raw, display string) error {
+		return c.runTurnLoopWithRawDisplay(c.withTurnFormat(ctx, format), input, raw, display)
 	}
 	if scopedRefsOnly {
 		runRefTurn = func(input, display string) {
@@ -1410,7 +1413,7 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 		runRefTurnWithRefs = func(input, refLine, display string) {
 			c.runEditedRefTurnWithRefsFormat(input, refLine, display, editedOriginal, format)
 		}
-		runGoalLoop = func(ctx context.Context, input, raw, display string) error {
+		runTurnLoop = func(ctx context.Context, input, raw, display string) error {
 			return c.runEditedGoalLoopWithRawDisplay(ctx, input, raw, display, editedOriginal)
 		}
 	}
@@ -1443,7 +1446,7 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 				c.notice("unknown command: " + trimmed)
 				return nil
 			}
-			return runGoalLoop(ctx, sent, sent, display)
+			return runTurnLoop(ctx, sent, sent, display)
 		})
 	case SlashCodeCommentLine(trimmed):
 		// Slash-prefixed code comments are prompt text, not slash commands.
@@ -1526,7 +1529,7 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 				if err != nil {
 					return fmt.Errorf("docs: %w", err)
 				}
-				return runGoalLoop(ctx, sent, sent, display)
+				return runTurnLoop(ctx, sent, sent, display)
 			})
 			return
 		}
@@ -1534,7 +1537,7 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 		// turn. Built-ins and their explicit Reasonix namespace are handled above.
 		if sent, ok := c.CustomCommand(trimmed); ok {
 			c.runGuarded(func(ctx context.Context) error {
-				return runGoalLoop(ctx, sent, sent, display)
+				return runTurnLoop(ctx, sent, sent, display)
 			})
 			return
 		}
@@ -1549,7 +1552,7 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 			}
 			sent := c.skills.render(sk, task)
 			c.runGuarded(func(ctx context.Context) error {
-				return runGoalLoop(ctx, sent, sent, display)
+				return runTurnLoop(ctx, sent, sent, display)
 			})
 			return
 		}
@@ -1692,7 +1695,7 @@ func (c *Controller) applyPlanExec(input, display string) {
 	c.notice(fmt.Sprintf("plan-exec: dispatching %d plan steps (strict=%v)", total, strict))
 	if c.runner != nil {
 		c.runGuarded(func(ctx context.Context) error {
-			return c.runGoalLoopWithRawDisplay(ctx, prompt, prompt, display)
+			return c.runTurnLoopWithRawDisplay(ctx, prompt, prompt, display)
 		})
 	}
 }
@@ -1720,7 +1723,7 @@ func (c *Controller) applyPrometheus(input, display string) {
 	c.notice("prometheus: starting planning interview")
 	if c.runner != nil {
 		c.runGuarded(func(ctx context.Context) error {
-			return c.runGoalLoopWithRawDisplay(ctx, prompt, prompt, display)
+			return c.runTurnLoopWithRawDisplay(ctx, prompt, prompt, display)
 		})
 	}
 }
@@ -1858,7 +1861,7 @@ func (c *Controller) runRefTurn(input, display string) {
 }
 
 // runRefTurnWithFormat runs a reference turn with a structured-output
-// format bound to its context (symmetric with runGoalLoop's withTurnFormat
+// format bound to its context (symmetric with runTurnLoop's withTurnFormat
 // injection — format is a property of every accepted turn, not just the
 // plain-goal path; review #7234 binds format to the accepted turn).
 func (c *Controller) runRefTurnWithFormat(input, display, format string) {
@@ -1922,7 +1925,7 @@ func (c *Controller) runRefTurnWithResolverSync(ctx context.Context, input, refL
 	if strings.TrimSpace(original) != "" {
 		return c.runEditedGoalLoopWithImageRefsRawDisplay(ctx, sent, input, refLine, display, original)
 	}
-	return c.runGoalLoopWithImageRefsRawDisplay(ctx, sent, input, refLine, display)
+	return c.runTurnLoopWithImageRefsRawDisplay(ctx, sent, input, refLine, display)
 }
 
 // notice emits an informational Notice event.
