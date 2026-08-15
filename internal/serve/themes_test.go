@@ -33,12 +33,14 @@ func themeServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
-func listThemes(t *testing.T, base string) []struct {
+type themeRow struct {
 	ID     string                       `json:"id"`
 	Name   string                       `json:"name"`
 	Active bool                         `json:"active"`
 	Tokens map[string]map[string]string `json:"tokens"`
-} {
+}
+
+func listThemes(t *testing.T, base string) []themeRow {
 	t.Helper()
 	resp, err := http.Get(base + "/themes")
 	if err != nil {
@@ -48,12 +50,7 @@ func listThemes(t *testing.T, base string) []struct {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /themes = %d", resp.StatusCode)
 	}
-	var out []struct {
-		ID     string                       `json:"id"`
-		Name   string                       `json:"name"`
-		Active bool                         `json:"active"`
-		Tokens map[string]map[string]string `json:"tokens"`
-	}
+	var out []themeRow
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatal(err)
 	}
@@ -66,14 +63,14 @@ func TestThemesListCarriesTokensForPreview(t *testing.T) {
 	t.Setenv("REASONIX_HOME", t.TempDir())
 	installPack(t, "dusk", "Dusk")
 
-	got := listThemes(t, themeServer(t).URL)
-	if len(got) != 1 || got[0].ID != "dusk" || got[0].Name != "Dusk" {
-		t.Fatalf("themes = %+v", got)
+	got := find(t, listThemes(t, themeServer(t).URL), "dusk")
+	if got.Name != "Dusk" {
+		t.Fatalf("theme = %+v", got)
 	}
-	if got[0].Tokens["dark"]["accent"] != "#DDA144" {
-		t.Fatalf("tokens missing from the listing: %+v", got[0].Tokens)
+	if got.Tokens["dark"]["accent"] != "#DDA144" {
+		t.Fatalf("tokens missing from the listing: %+v", got.Tokens)
 	}
-	if got[0].Active {
+	if got.Active {
 		t.Fatal("a pack is active before anything activated it")
 	}
 }
@@ -87,9 +84,8 @@ func TestActivateThemeMarksItActiveAndPersists(t *testing.T) {
 	if resp := postJSON(t, srv.URL+"/themes", map[string]string{"id": "dusk"}); resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("activate = %d, want 204", resp.StatusCode)
 	}
-	got := listThemes(t, srv.URL)
-	if len(got) != 1 || !got[0].Active {
-		t.Fatalf("themes after activate = %+v", got)
+	if !find(t, listThemes(t, srv.URL), "dusk").Active {
+		t.Fatal("the activated pack is not marked active")
 	}
 	// The choice has to survive a restart, so it lands in the config file
 	// rather than in the server's memory.
@@ -108,8 +104,8 @@ func TestActivateEmptyIDRestoresTheDefaultAppearance(t *testing.T) {
 	if resp := postJSON(t, srv.URL+"/themes", map[string]string{"id": ""}); resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("deactivate = %d, want 204", resp.StatusCode)
 	}
-	if got := listThemes(t, srv.URL); len(got) != 1 || got[0].Active {
-		t.Fatalf("themes after deactivate = %+v", got)
+	if find(t, listThemes(t, srv.URL), "dusk").Active {
+		t.Fatal("the pack is still active after being turned off")
 	}
 }
 
@@ -123,4 +119,16 @@ func TestActivateUnknownThemeIsRejectedAndChangesNothing(t *testing.T) {
 	if cfg, err := config.Load(); err == nil && cfg.Desktop.ThemePack != "" {
 		t.Fatalf("a rejected activation still wrote %q", cfg.Desktop.ThemePack)
 	}
+}
+
+// find picks one pack out of the listing, which also carries the shipped set.
+func find(t *testing.T, packs []themeRow, id string) themeRow {
+	t.Helper()
+	for _, p := range packs {
+		if p.ID == id {
+			return p
+		}
+	}
+	t.Fatalf("pack %q not in the listing (%d packs)", id, len(packs))
+	panic("unreachable")
 }

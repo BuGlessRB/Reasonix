@@ -59,6 +59,7 @@ var apiPaths = map[string]bool{
 	"/mcp": true, "/skills": true, "/account": true, "/hooks": true,
 	"/memory": true, "/network": true, "/todos": true, "/providers": true,
 	"/changes": true, "/attachments": true, "/roles": true,
+	"/themes": true, "/extensions": true,
 }
 
 // A sub-path belongs to the resource it hangs off: /mcp/reconnect is the same
@@ -66,7 +67,7 @@ var apiPaths = map[string]bool{
 // endpoint from silently answering with index.html instead of JSON — and
 // TestEveryPathTheFrontendCallsIsRouted is what keeps this list honest, because
 // the comment alone did not.
-var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/"}
+var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/"}
 
 func isAPIPath(p string) bool {
 	p = strings.TrimSuffix(p, "/")
