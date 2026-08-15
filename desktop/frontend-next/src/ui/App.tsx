@@ -15,6 +15,7 @@ import { Metrics } from "./Metrics";
 import { Sessions } from "./Sessions";
 import { Settings } from "./Settings";
 import { Onboarding } from "./Onboarding";
+import { Welcome } from "./Welcome";
 import { arrowTabs } from "./tablist";
 import { tokensPerSecond } from "../port/tokens";
 
@@ -30,6 +31,8 @@ export function App({ port }: { port: AgentPort }) {
   const [settings, setSettings] = useState<string | boolean>(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("rx-theme") ?? "auto");
   const [setup, setSetup] = useState<ProviderSetup | null | undefined>(undefined);
+  // undefined until asked; false means the opening sequence is still owed.
+  const [welcomed, setWelcomed] = useState<boolean | undefined>(undefined);
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [account, setAccount] = useState<AccountState | null>(null);
   const [mcp, setMcp] = useState<McpEntry[]>([]);
@@ -65,6 +68,9 @@ export function App({ port }: { port: AgentPort }) {
   useEffect(() => {
     let alive = true;
     port.providerSetup().then((v) => alive && setSetup(v)).catch(() => alive && setSetup(null));
+    // A machine that cannot answer has met the app before as far as we care:
+    // the sequence must never be what stands between someone and their session.
+    port.welcomeSeen().then((v) => alive && setWelcomed(v)).catch(() => alive && setWelcomed(true));
     return () => {
       alive = false;
     };
@@ -342,7 +348,20 @@ export function App({ port }: { port: AgentPort }) {
     setPinned(true);
   };
 
-  if (setup === undefined) return <div className="app" data-run="idle" />;
+  if (setup === undefined || welcomed === undefined) return <div className="app" data-run="idle" />;
+  // The sequence plays before anything else, and runs short when there is no
+  // key to ask for — an introduction with nothing after it should not linger.
+  if (!welcomed) {
+    return (
+      <Welcome
+        variant={setup?.required ? "full" : "short"}
+        onDone={() => {
+          setWelcomed(true);
+          void port.markWelcomed().catch(() => {});
+        }}
+      />
+    );
+  }
   if (setup?.required) {
     return <Onboarding port={port} setup={setup} onDone={() => { setSetup(null); refreshStatus(); }} />;
   }
@@ -417,6 +436,7 @@ export function App({ port }: { port: AgentPort }) {
 
           <Transcript
             items={s.items}
+            takeovers={s.takeovers}
             waiting={s.waiting}
             scroll={flow}
             hidden={pane !== "flow"}

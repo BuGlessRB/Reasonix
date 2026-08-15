@@ -309,6 +309,15 @@ export class SsePort implements AgentPort {
     return this.post("/providers/thinking", { name, on });
   }
 
+  async welcomeSeen(): Promise<boolean> {
+    const res = await this.get<{ seen: boolean }>("/welcome");
+    return !!res.seen;
+  }
+
+  markWelcomed() {
+    return this.post("/welcome", {});
+  }
+
   roles() {
     return this.get<RoleAssignments>("/roles");
   }

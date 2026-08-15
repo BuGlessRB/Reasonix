@@ -2116,3 +2116,152 @@
   .movemenu button:hover { background: var(--overlay); color: var(--text) }
   .movemenu button[aria-checked="true"] { color: var(--text) }
   .movemenu button[aria-checked="true"]::after { content: " ·" }
+  /* 接管的归属：卡片的框、名字和状态仍然是宿主的，body 换成了插件画的 —— 
+     所以这一行必须在，读的人要知道眼前这块是谁画的。 */
+  .drawnby { margin-top: 6px; font: 400 10.5px var(--ui); color: var(--ghost) }
+
+  /* ══ 开场序列 ══════════════════════════════════════════════════════
+     固定深色，不跟应用主题走：它是一场仪式，不是界面的一部分。一辈子
+     只播一次，任意键跳过，所有动画只动 transform/opacity。 */
+  .oobe {
+    position: fixed; inset: 0; z-index: 90; overflow: hidden;
+    background: #05060A; color: #fff; isolation: isolate;
+    display: grid; place-items: center;
+  }
+  .oobe[data-leaving] { animation: oobeout .4s var(--ease-out) forwards }
+  @keyframes oobeout { to { opacity: 0; visibility: hidden } }
+
+  .oobe-glow {
+    position: absolute; border-radius: 50%; pointer-events: none; z-index: 0;
+    filter: blur(80px); will-change: transform;
+  }
+  .oobe-glow.g1 { width: 46%; aspect-ratio: 1; left: 4%; top: -12%;
+    background: radial-gradient(circle, rgba(221,161,68,.62), transparent 68%) }
+  .oobe-glow.g2 { width: 52%; aspect-ratio: 1; right: -6%; top: 18%;
+    background: radial-gradient(circle, rgba(66,102,214,.55), transparent 68%) }
+  .oobe-glow.g3 { width: 40%; aspect-ratio: 1; left: 22%; bottom: -18%;
+    background: radial-gradient(circle, rgba(62,169,186,.42), transparent 70%) }
+  .oobe[data-play] .g1 { animation: drift1 24s ease-in-out infinite }
+  .oobe[data-play] .g2 { animation: drift2 30s ease-in-out infinite }
+  .oobe[data-play] .g3 { animation: drift3 27s ease-in-out infinite }
+  @keyframes drift1 { 0%,100% { transform: translate(0,0) scale(1) }   50% { transform: translate(14%,16%) scale(1.22) } }
+  @keyframes drift2 { 0%,100% { transform: translate(0,0) scale(1.1) } 50% { transform: translate(-16%,-12%) scale(.92) } }
+  @keyframes drift3 { 0%,100% { transform: translate(0,0) scale(.95) } 50% { transform: translate(10%,-18%) scale(1.18) } }
+
+  .oobe-vig {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 45%, transparent 30%, rgba(3,4,7,.72) 100%);
+  }
+  .oobe-scene {
+    position: relative; z-index: 2; display: grid; place-items: center;
+    text-align: center; padding: 0 40px; width: 100%;
+  }
+
+  .oobe-mark { width: 54px; height: 54px; display: block; margin: 0 auto }
+  .oobe-mark path { fill: none; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round }
+  .oobe-mark .base { stroke: rgba(255,255,255,.92) }
+  .oobe-mark .lume { stroke: #FFE9B8; filter: drop-shadow(0 0 4px rgba(255,215,130,.9)); opacity: 0 }
+  .oobe[data-play] .oobe-mark .base {
+    stroke-dasharray: 100; stroke-dashoffset: 100;
+    animation: oobedraw 1s var(--ease-out) .25s forwards;
+  }
+  .oobe[data-play] .oobe-mark .base:nth-of-type(2) { animation-delay: .45s }
+  .oobe[data-play] .oobe-mark .base:nth-of-type(3) { animation-delay: .65s }
+  .oobe[data-play] .oobe-mark .lume {
+    stroke-dasharray: 14 86; stroke-dashoffset: 100;
+    animation: oobetrace 1.5s ease-in-out 1.25s forwards;
+  }
+  @keyframes oobedraw { to { stroke-dashoffset: 0 } }
+  @keyframes oobetrace { 0% { opacity: 0; stroke-dashoffset: 100 } 15%,85% { opacity: 1 }
+                         100% { opacity: 0; stroke-dashoffset: -20 } }
+
+  /* 高光沿字面扫过一趟。渐变本身就是字的填充，所以 color 必须透明。 */
+  .oobe-brand {
+    margin: 26px 0 0; font: 200 44px/1.15 var(--ui); letter-spacing: .012em; white-space: nowrap;
+    background: linear-gradient(100deg,
+      #7C766A 0%, #7C766A 34%, #FFEFCB 45%, #FFFFFF 50%, #FFEFCB 55%, #7C766A 66%, #7C766A 100%);
+    background-size: 260% 100%; background-position: 130% 0;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .oobe-sub {
+    margin: 12px 0 0; font: 300 14px var(--ui); letter-spacing: .34em;
+    text-transform: uppercase; color: rgb(255 255 255 / .34);
+  }
+  .oobe[data-play] .oobe-brand {
+    opacity: 0;
+    animation: oobebrand .9s var(--ease-out) 1.5s forwards,
+               oobesweep 2.2s cubic-bezier(.4,0,.2,1) 2s forwards;
+  }
+  .oobe[data-play] .oobe-sub { opacity: 0; animation: ooberise .8s var(--ease-out) 2.1s forwards }
+  @keyframes oobebrand { from { opacity: 0; transform: translateY(10px); filter: blur(6px) }
+                         to { opacity: 1; transform: none; filter: none } }
+  @keyframes oobesweep { from { background-position: 130% 0 } to { background-position: -40% 0 } }
+  @keyframes ooberise  { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+
+  .oobe-lines { position: relative; height: 96px; width: 100%; margin-top: 4px }
+  .oobe-line { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0 }
+  .oobe-line b { display: block; font: 300 30px/1.35 var(--ui); color: #fff }
+  .oobe-line span { display: block; margin-top: 12px; max-width: 40ch;
+                    font: 300 14px/1.7 var(--ui); color: rgb(255 255 255 / .5) }
+  .oobe[data-play] .l1 { animation: oobesay 2.6s var(--ease-out) 4s forwards }
+  .oobe[data-play] .l2 { animation: oobesay 2.6s var(--ease-out) 6s forwards }
+  .oobe[data-play] .l3 { animation: oobesay 2.4s var(--ease-out) 8s forwards }
+  @keyframes oobesay { 0% { opacity: 0; transform: translateY(12px); filter: blur(4px) }
+                       18%,72% { opacity: 1; transform: none; filter: none }
+                       100% { opacity: 0; transform: translateY(-10px); filter: blur(3px) } }
+
+  /* 进度线只说「开场还剩多久」。序列一结束它就没有指涉对象，留着会被读成
+     「还在加载」，所以和「跳过」提示一起退场。 */
+  .oobe-prog {
+    position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 2;
+    width: 148px; height: 2px; border-radius: 2px; background: rgb(255 255 255 / .1); overflow: hidden;
+  }
+  .oobe-prog i { display: block; height: 100%; width: 0; border-radius: 2px;
+                 background: linear-gradient(90deg, rgba(221,161,68,.35), #FFE0A0) }
+  .oobe[data-play] .oobe-prog i { animation: oobefill 9.4s linear forwards }
+  .oobe[data-play] .oobe-prog,
+  .oobe[data-play] .oobe-skip { animation: oobegone .45s var(--ease-out) 9.5s forwards }
+  @keyframes oobefill { to { width: 100% } }
+  @keyframes oobegone { to { opacity: 0; visibility: hidden } }
+  .oobe-skip { position: absolute; right: 18px; bottom: 16px; z-index: 3;
+               font: 400 11px var(--mono); color: rgb(255 255 255 / .28) }
+
+  @media (prefers-reduced-motion: reduce) {
+    .oobe[data-play] * { animation: none !important }
+    .oobe[data-play] .oobe-brand,
+    .oobe[data-play] .oobe-sub { opacity: 1 }
+    .oobe[data-play] .oobe-brand { background-position: -40% 0 }
+  }
+  @media (max-width: 640px) {
+    .oobe-brand { font-size: 32px }
+    .oobe-line b { font-size: 22px }
+  }
+
+  /* 引导页的服务选择：快捷键只填地址，不代表支持范围。 */
+  .onb-chips { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-top: 22px }
+  .onb-chip {
+    font: 400 12px var(--ui); color: var(--muted); cursor: pointer;
+    padding: 5px 11px; border-radius: var(--r-pill);
+    background: var(--raised); border: 1px solid var(--border);
+    transition: color var(--t-line) var(--ease), border-color var(--t-line) var(--ease);
+  }
+  .onb-chip:hover { color: var(--text) }
+  .onb-chip[aria-pressed="true"] {
+    color: var(--accent); background: var(--accent-wash);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  }
+  .onb-chip[data-custom] { border-style: dashed }
+  .onb-field select {
+    width: 100%; font: 400 13px var(--mono); color: var(--text);
+    padding: 8px 10px; border-radius: var(--r-sm);
+    background: var(--raised); border: 1px solid var(--border);
+  }
+  .onb-found {
+    width: 100%; margin-top: 18px; padding: 12px 13px; text-align: left;
+    border-radius: var(--r-sm); background: var(--raised); border: 1px solid var(--border);
+  }
+  .onb-found-hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px }
+  .onb-found-hd .tick { color: var(--ok); font-weight: 600 }
+  .onb-found-hd .k { font: 400 11px var(--mono); color: var(--faint) }
+  .onb-why { margin: 8px 0 0; font: 400 11.5px/1.65 var(--ui); color: var(--faint) }
+  .onb-found .onb-field { margin-top: 12px }

@@ -11,6 +11,10 @@ type DesktopConfig struct {
 	Theme       string `toml:"theme"`        // auto|dark|light; empty resolves to auto
 	ThemeStyle  string `toml:"theme_style"`  // graphite|aurora|slate|carbon|nocturne|amber and legacy aliases
 	ThemePack   string `toml:"theme_pack"`   // installed pack id; empty is the default appearance
+	// Welcomed records that the opening sequence has played. It lives in the
+	// config rather than browser storage because clearing a cache is not the
+	// same as meeting the app for the first time.
+	Welcomed bool `toml:"welcomed"`
 	// SurfaceSlots is where the user put an extension's surface, keyed
 	// "<pluginId>:<surfaceId>". It outranks the extension's own suggestion.
 	SurfaceSlots            map[string]string `toml:"surface_slots"`

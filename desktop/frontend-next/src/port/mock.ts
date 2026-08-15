@@ -398,6 +398,10 @@ export class MockPort extends MockExtensions implements AgentPort {
     this.sources = this.sources.map((p) => (p.name === name ? { ...p, sendsThinking: on } : p));
   }
 
+  private welcomed = true;
+  async welcomeSeen(): Promise<boolean> { return this.welcomed; }
+  async markWelcomed(): Promise<void> { this.welcomed = true; }
+
   async editProvider(edit: ProviderEdit): Promise<void> {
     this.sources = this.sources.map((p) =>
       p.name === edit.name ? { ...p, models: edit.models, default: edit.default, visionModels: edit.vision } : p,

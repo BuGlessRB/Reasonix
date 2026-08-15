@@ -37,6 +37,12 @@ func renderDesktopSection(b *strings.Builder, c *Config) {
 	} else {
 		b.WriteString("# theme_pack = \"my-theme\"   # a pack under <memory root>/themes; empty is the default appearance\n")
 	}
+	// Only written once true: an absent key and "not yet welcomed" are the same
+	// state, and a fresh config should not carry a line about a sequence that
+	// has not happened.
+	if c.Desktop.Welcomed {
+		b.WriteString("welcomed = true   # the opening sequence has played on this machine\n")
+	}
 	if opener := c.DesktopExternalOpener(); opener != "" {
 		fmt.Fprintf(b, "external_opener = %q   # desktop Open control: installed application id\n", opener)
 	} else {

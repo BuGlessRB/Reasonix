@@ -484,6 +484,7 @@ func (s *Server) handler() http.Handler {
 	s.registerInboxRoutes(mux)
 	s.registerProviderRoutes(mux)
 	s.registerRoleRoutes(mux)
+	s.registerWelcomeRoutes(mux)
 	mux.HandleFunc("POST /cancel", s.cancel)
 	mux.HandleFunc("POST /approve", s.approve)
 	mux.HandleFunc("POST /plan", s.plan)

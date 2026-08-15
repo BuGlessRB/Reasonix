@@ -25,7 +25,7 @@ type Port = {
 
 // A name for the config table, derived from the host so the user does not have
 // to invent one. "api.moonshot.cn/v1" becomes "moonshot".
-function nameFrom(baseUrl: string): string {
+export function nameFrom(baseUrl: string): string {
   try {
     const host = new URL(baseUrl).hostname.replace(/^(www|api|open)\./, "");
     return host.split(".")[0].replace(/[^a-zA-Z0-9._-]/g, "-") || "custom";
