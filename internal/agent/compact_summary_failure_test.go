@@ -140,7 +140,7 @@ func TestOverflowSummarizerFailureDegradesInsteadOfBlockingTheTurn(t *testing.T)
 func TestSummarizerFailureOnOversizedFoldDegrades(t *testing.T) {
 	sess := foldableSessionOverForce(120)
 	a := agentOverForceWindow(t, &fakeProvider{streamErr: errors.New("provider exploded")}, sess, 60000)
-	if tokens, budget := a.guardedSummaryInputTokens(foldRegionOf(a)), a.summaryInputBudget(""); budget <= 0 || tokens <= budget {
+	if tokens, budget := a.summaryInputTokens(foldRegionOf(a)), a.summaryInputBudget(""); budget <= 0 || tokens <= budget {
 		t.Fatalf("fixture fold is %d tokens against a %d budget; the shortening path is not exercised", tokens, budget)
 	}
 

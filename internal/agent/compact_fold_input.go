@@ -39,20 +39,14 @@ type foldSummary struct {
 	CoverageRepaired bool
 }
 
-// summaryInputTokens estimates what messages cost as summarizer input. The
-// rendered transcript is what actually rides in the request, so its per-message
-// framing is measured rather than assumed away.
-func summaryInputTokens(msgs []provider.Message) int {
-	return estimateTextTokens(renderTranscript(msgs))
-}
-
-// guardedSummaryInputTokens uses the same calibrated/conservative estimator as
-// shared-window output clipping. Other providers retain the rendered-transcript
-// estimate.
-func (a *Agent) guardedSummaryInputTokens(msgs []provider.Message) int {
-	raw := summaryInputTokens(msgs)
-	if !sharesContextWindow(a.svc.prov) || a.configuredOutputBudget(a.maxOutputTokens) <= 0 || len(msgs) == 0 {
-		return raw
+// summaryInputTokens sizes messages as summarizer input in the real tokens
+// summaryInputBudget is expressed in; estimateTextTokens counts characters and
+// would read this fold as four times its cost. The rendered transcript is what
+// actually rides in the request, so its per-message framing is measured rather
+// than assumed away.
+func (a *Agent) summaryInputTokens(msgs []provider.Message) int {
+	if len(msgs) == 0 {
+		return 0
 	}
 	return a.estimatedPromptTokens([]provider.Message{{
 		Role: provider.RoleUser, Content: renderTranscript(msgs),
@@ -69,7 +63,11 @@ func (a *Agent) summaryInputBudget(instructions string) int {
 	if sharesContextWindow(a.svc.prov) && a.configuredOutputBudget(a.maxOutputTokens) > 0 {
 		reserve += outputBudgetReserve
 	}
-	budget := a.contextWindow - reserve - estimateTextTokens(summarySystemPrompt) - estimateTextTokens(instructions) - 256
+	framing := a.estimatedPromptTokens([]provider.Message{
+		{Role: provider.RoleSystem, Content: summarySystemPrompt},
+		{Role: provider.RoleUser, Content: instructions},
+	})
+	budget := a.contextWindow - reserve - framing - protocolReserveTokens
 	if budget < minSummarySpanTokens {
 		return 0
 	}
@@ -80,7 +78,7 @@ func (a *Agent) summaryInputBudget(instructions string) int {
 // request. Oversized input is shortened deterministically for the summarizer
 // only; multi-span merge and application-layer retries are gone.
 func (a *Agent) foldToSummary(ctx context.Context, fold []provider.Message, instructions string) (foldSummary, error) {
-	res := foldSummary{Mode: CompactionModeSummarized, Spans: 1, FoldTokens: summaryInputTokens(fold)}
+	res := foldSummary{Mode: CompactionModeSummarized, Spans: 1, FoldTokens: a.summaryInputTokens(fold)}
 	budget := a.summaryInputBudget(instructions)
 	if budget <= 0 {
 		// No declared window (or unusable window): send one unbounded call.
@@ -88,24 +86,20 @@ func (a *Agent) foldToSummary(ctx context.Context, fold []provider.Message, inst
 		return a.singleCallSummary(ctx, res, fold, instructions)
 	}
 	input := fold
-	guardedTokens := a.guardedSummaryInputTokens(input)
-	if guardedTokens > budget {
+	if res.FoldTokens > budget {
 		input = a.shortenFoldForSummary(fold)
-		res.FoldTokens = summaryInputTokens(input)
-		guardedTokens = a.guardedSummaryInputTokens(input)
+		res.FoldTokens = a.summaryInputTokens(input)
 	}
-	if guardedTokens > budget {
+	if res.FoldTokens > budget {
 		input = a.compressFoldArgsForSummary(input)
-		res.FoldTokens = summaryInputTokens(input)
-		guardedTokens = a.guardedSummaryInputTokens(input)
+		res.FoldTokens = a.summaryInputTokens(input)
 	}
-	if guardedTokens > budget {
+	if res.FoldTokens > budget {
 		input = a.omitLowValueForSummary(input, budget)
-		res.FoldTokens = summaryInputTokens(input)
-		guardedTokens = a.guardedSummaryInputTokens(input)
+		res.FoldTokens = a.summaryInputTokens(input)
 	}
-	if guardedTokens > budget {
-		return res, fmt.Errorf("summary input still exceeds single-request budget after shortening (%d > %d)", guardedTokens, budget)
+	if res.FoldTokens > budget {
+		return res, fmt.Errorf("summary input still exceeds single-request budget after shortening (%d > %d)", res.FoldTokens, budget)
 	}
 	return a.singleCallSummary(ctx, res, input, instructions)
 }
@@ -227,11 +221,11 @@ func (a *Agent) compressFoldArgsForSummary(fold []provider.Message) []provider.M
 // omitLowValueForSummary drops low-value middle tool results while keeping
 // protected errors, existing digests, and the ends of the fold.
 func (a *Agent) omitLowValueForSummary(fold []provider.Message, budget int) []provider.Message {
-	if summaryInputTokens(fold) <= budget {
+	if a.summaryInputTokens(fold) <= budget {
 		return fold
 	}
 	marker := provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf(summaryOmittedMessage, 0)}
-	avail := budget - summaryInputTokens([]provider.Message{marker})
+	avail := budget - a.summaryInputTokens([]provider.Message{marker})
 	if avail < minSummarySpanTokens/2 {
 		return fold
 	}
@@ -245,7 +239,7 @@ func (a *Agent) omitLowValueForSummary(fold []provider.Message, budget int) []pr
 		}
 		// Prefer keeping digests and error tool results.
 		m := fold[idx]
-		cost := summaryInputTokens(fold[idx : idx+1])
+		cost := a.summaryInputTokens(fold[idx : idx+1])
 		if acc+cost > avail && !(isCompactionSummary(m) || isErrorMessage(m)) {
 			if fromHead {
 				i++

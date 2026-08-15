@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -112,6 +113,29 @@ func TestSharedWindowFoldUsesGuardedInputBudget(t *testing.T) {
 	}
 	if got := prov.last.MaxTokens; got < summaryOutputReserve {
 		t.Fatalf("summarizer MaxTokens = %d, below summaryOutputReserve %d", got, summaryOutputReserve)
+	}
+}
+
+// The omit stage measures the fold against a budget expressed in real tokens,
+// so what the summarizer can read is what it receives. Sizing it in characters
+// instead cut an English fold to roughly a quarter of what fit.
+func TestFoldOmitKeepsWhatTheBudgetCanHold(t *testing.T) {
+	prov := &sharedWindowTestProvider{budget: 128 * 1024, shared: true}
+	a := &Agent{agentConfig: agentConfig{contextWindow: 100_000}, svc: agentServices{prov: prov, sink: event.Discard}, sess: sessionRuntime{output: outputBudgetState{outputBudget: prov.budget}}}
+	fold := make([]provider.Message, 32)
+	for i := range fold {
+		fold[i] = provider.Message{Role: provider.RoleUser,
+			Content: fmt.Sprintf("turn %02d: ", i) + strings.Repeat("a plain english sentence about the work. ", 256)}
+	}
+	// ~320K characters is ~80K tokens: over the budget, but only just.
+	if _, err := a.foldToSummary(context.Background(), fold, ""); err != nil {
+		t.Fatalf("foldToSummary: %v", err)
+	}
+	if prov.calls == 0 || len(prov.last.Messages) < 2 {
+		t.Fatalf("fold produced no summarizer request: calls=%d", prov.calls)
+	}
+	if kept := strings.Count(prov.last.Messages[1].Content, "turn "); kept < 28 {
+		t.Fatalf("summarizer saw %d of %d turns; the budget could hold nearly all of them", kept, len(fold))
 	}
 }
 

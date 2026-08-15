@@ -65,7 +65,7 @@ func TestOversizedFoldShortensToolResultsInOneCall(t *testing.T) {
 	// Shortening is for the summarizer input only; never multi-span, never prune.
 	prov := &countingProvider{reply: "digest"}
 	a := newFoldAgent(t, 24000, prov)
-	fold := foldOfToolResults(6, 300)
+	fold := foldOfToolResults(6, 900) // ~80K characters, several times the budget in real tokens
 
 	res, err := a.foldToSummary(context.Background(), fold, "")
 	if err != nil {
