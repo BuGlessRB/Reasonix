@@ -1,0 +1,60 @@
+package evidence
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+func bashArgs(command string) json.RawMessage {
+	raw, err := json.Marshal(map[string]string{"command": command})
+	if err != nil {
+		panic(err)
+	}
+	return raw
+}
+
+// A block that does not say which segment tripped it makes the model rewrite
+// the part it guesses is at fault, which is how one block becomes three.
+func TestMixedBlockNamesTheSegment(t *testing.T) {
+	got := ShellContractMixedMessage(bashArgs("gofmt -l internal/; go vet ./... && go test ./..."))
+	if !strings.Contains(got, "gofmt -l internal/") {
+		t.Fatalf("message = %q, want the unproven segment named", got)
+	}
+	// "cannot prove" rather than "changes state": an unrecognized command is
+	// outside what the host can classify, and saying otherwise sends the model
+	// looking for a write that may not exist.
+	if !strings.Contains(got, "cannot prove") {
+		t.Fatalf("message = %q, want the host's uncertainty stated honestly", got)
+	}
+	if strings.Contains(got, "state-changing segment") {
+		t.Fatalf("message = %q, want no claim that the segment changes state", got)
+	}
+}
+
+// Nothing to name is still a usable block: the generic text stands in.
+func TestMixedBlockFallsBackWithoutASegment(t *testing.T) {
+	got := ShellContractMixedMessage(json.RawMessage(`{"command":""}`))
+	if !strings.HasPrefix(got, "blocked:") {
+		t.Fatalf("message = %q, want the generic mixed block", got)
+	}
+}
+
+// A long segment is clipped: a whole command echoed back is noise, and the head
+// of it is what the model needs to recognize.
+func TestMixedBlockClipsALongSegment(t *testing.T) {
+	long := "go generate " + strings.Repeat("./pkg/very-long-path-segment ", 20)
+	got := ShellContractMixedMessage(bashArgs(long + "; go test ./..."))
+	if len(got) > 800 {
+		t.Fatalf("message length = %d, want the segment clipped", len(got))
+	}
+	if !strings.Contains(got, "…") {
+		t.Fatalf("message = %q, want the clip marked", got)
+	}
+}
+
+func TestUnprovenSegmentAcceptsAProvableChain(t *testing.T) {
+	if _, unproven := bashUnprovenSegment("ls -la && go test ./..."); unproven {
+		t.Fatal("a read-only listing beside a verification was reported as unprovable")
+	}
+}

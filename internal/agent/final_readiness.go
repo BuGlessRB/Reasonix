@@ -147,7 +147,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	checkpoint := a.task.checkpoint
 	checkpointApplies := a.turn.deliveryScopeActive && checkpoint.ScopeID == a.task.scopeID
 	if a.deliveryProfile {
-		if mutation, ok := a.task.ledger.LatestSuccessfulMutationIndex(); ok {
+		if mutation, ok := a.task.ledger.LatestProvenMutationIndex(); ok {
 			writer, hasWriter = mutation, true
 			deliveryMutation = true
 		} else if checkpointApplies && checkpoint.PendingMutation {

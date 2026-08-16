@@ -1,0 +1,45 @@
+package evidence
+
+import (
+	"encoding/json"
+	"strings"
+)
+
+// unprovenSegmentLimit bounds the segment a block quotes back. A whole command
+// echoed into the transcript is noise; the offending head of it is the fix.
+const unprovenSegmentLimit = 120
+
+// bashUnprovenSegment returns the first segment the host cannot prove leaves the
+// workspace alone. Not proving it is not the same as knowing it writes: an
+// unrecognized command is simply outside what the host can classify, and the
+// caller must stay conservative either way.
+func bashUnprovenSegment(command string) (string, bool) {
+	class, segment := bashScanMutation(command)
+	return segment, class != MutationNone
+}
+
+func bashMayMutate(command string) bool {
+	return bashMutationClass(command) != MutationNone
+}
+
+// ShellContractMixedMessage is the "mixed" block, naming the segment that
+// triggered it. Without the name the model rewrites the command it guesses is
+// at fault, which is how one block becomes three.
+func ShellContractMixedMessage(args json.RawMessage) string {
+	segment := ""
+	if command, ok := bashCommandFromArgs(args); ok {
+		if found, unproven := bashUnprovenSegment(command); unproven {
+			segment = strings.TrimSpace(found)
+		}
+	}
+	if segment == "" {
+		return ShellContractPreflightMessage("mixed")
+	}
+	if len(segment) > unprovenSegmentLimit {
+		segment = segment[:unprovenSegmentLimit] + "…"
+	}
+	return "blocked: this command runs a verification check after `" + segment +
+		"`, which the host cannot prove leaves the workspace alone, and the check's exit status " +
+		"would hide a failure in it. Chain them with '&&' so a failed step stops the command and " +
+		"stays the result, or run that segment and the verification as separate calls."
+}

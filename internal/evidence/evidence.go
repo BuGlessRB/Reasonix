@@ -1248,6 +1248,34 @@ func (l *Ledger) LatestSuccessfulMutationIndex() (int, bool) {
 	return latest, latest >= 0
 }
 
+// LatestProvenMutationIndex is the baseline for what a change owes: the latest
+// write the host could prove, or — when it proved none — the latest it could
+// not classify. A check that merely resists classification must not become the
+// change set, or every post-verification `gofmt -l` moves the goalposts past
+// the verification that just ran.
+func (l *Ledger) LatestProvenMutationIndex() (int, bool) {
+	if l == nil {
+		return 0, false
+	}
+	proven, unproven := -1, -1
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i, r := range l.receipts {
+		if !r.Success || !r.Mutation {
+			continue
+		}
+		if r.MutationEvidence == MutationProven {
+			proven = i
+			continue
+		}
+		unproven = i
+	}
+	if proven >= 0 {
+		return proven, true
+	}
+	return unproven, unproven >= 0
+}
+
 func (l *Ledger) MatchLatestTodoStep(step string) (TodoStepMatch, bool) {
 	step = strings.TrimSpace(step)
 	if l == nil || step == "" {
@@ -1513,11 +1541,15 @@ func failedSessionCallIDs(msgs []provider.Message) map[string]bool {
 }
 
 func ReceiptFromToolCall(toolName string, args json.RawMessage, success bool, readOnly bool) Receipt {
+	class := ToolCallMutationClass(toolName, args, readOnly)
 	r := Receipt{
 		ToolName: toolName,
 		Args:     args,
 		Success:  success,
-		Mutation: ToolCallMutates(toolName, args, readOnly),
+		Mutation: class != MutationNone,
+	}
+	if r.Mutation {
+		r.MutationEvidence = class
 	}
 
 	var fields map[string]json.RawMessage
@@ -1578,24 +1610,7 @@ func ToolCallPaths(args json.RawMessage) []string {
 // except for bash commands that the host can prove are inspection or
 // verification commands.
 func ToolCallMutates(toolName string, args json.RawMessage, readOnly bool) bool {
-	if readOnly {
-		return false
-	}
-	if IsNonMutationMetaTool(toolName) {
-		return false
-	}
-	switch toolName {
-	case "ask", "todo_write", "complete_step", "bash_output", "wait":
-		return false
-	case "bash":
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(args, &fields); err != nil {
-			return true
-		}
-		return bashMayMutate(stringField(fields, "command"))
-	default:
-		return true
-	}
+	return ToolCallMutationClass(toolName, args, readOnly) != MutationNone
 }
 
 // ToolCallRequiresDeliveryCriteria reports whether a call begins execution
@@ -1816,34 +1831,6 @@ func bashContainsVerificationSegment(command string) bool {
 		normalized, _ := shellsafe.NormalizeBashSafeRedirectsForMatch(segment)
 		fields, malformed := shellparse.StaticFields(normalized)
 		if malformed == "" && bashSegmentIsVerification(fields) {
-			return true
-		}
-	}
-	return false
-}
-
-func bashMayMutate(command string) bool {
-	command = strings.TrimSpace(command)
-	if command == "" {
-		return true
-	}
-	segments, _, ok := shellparse.SplitTopLevel(command)
-	if !ok || len(segments) == 0 {
-		return true
-	}
-	for _, segment := range segments {
-		normalized, safeRedirects := shellsafe.NormalizeBashSafeRedirectsForMatch(segment)
-		if !safeRedirects {
-			return true
-		}
-		if staticFields, malformed := shellparse.StaticFields(normalized); malformed == "" && len(staticFields) > 0 && bashSegmentIsVerification(staticFields) {
-			continue
-		}
-		base, sub, fields, workspaceNonMutating := shellsafe.ClassifyWorkspaceNonMutatingCommand(normalized)
-		if !workspaceNonMutating {
-			return true
-		}
-		if bashReadOnlyCommandWrites(base, sub, fields) {
 			return true
 		}
 	}

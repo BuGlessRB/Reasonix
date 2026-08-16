@@ -212,7 +212,7 @@ func (a *Agent) deliveryReviewGateFailure() string {
 		// file or run git diff/status) still applies via finalReadinessCheck.
 		return ""
 	}
-	mutation, ok := a.task.ledger.LatestSuccessfulMutationIndex()
+	mutation, ok := a.task.ledger.LatestProvenMutationIndex()
 	if !ok {
 		return ""
 	}

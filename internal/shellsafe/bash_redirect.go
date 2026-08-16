@@ -46,6 +46,55 @@ func NormalizeBashSafeRedirectsForMatch(subject string) (string, bool) {
 	return strings.TrimSpace(out.String()), true
 }
 
+// BashRedirectsToNamedFile reports whether subject sends output to a real file,
+// and whether the parse settled the question at all. A command the parser
+// cannot decompose leaves decided false: "no proof it writes" is not "proof it
+// does not".
+func BashRedirectsToNamedFile(subject string) (writes, decided bool) {
+	file, err := shellparse.ParseBash(subject)
+	if err != nil {
+		return false, false
+	}
+	for _, stmt := range file.Stmts {
+		if named, ok := stmtRedirectsToNamedFile(subject, stmt); !ok {
+			return false, false
+		} else if named {
+			return true, true
+		}
+	}
+	return false, true
+}
+
+func stmtRedirectsToNamedFile(source string, stmt *syntax.Stmt) (named, decided bool) {
+	if stmt == nil {
+		return false, true
+	}
+	for _, redir := range stmt.Redirs {
+		if redir == nil {
+			return false, false
+		}
+		switch redir.Op {
+		case syntax.RdrOut, syntax.AppOut, syntax.RdrClob, syntax.AppClob,
+			syntax.RdrAll, syntax.AppAll, syntax.RdrAllClob, syntax.AppAllClob:
+			if !isNullRedirectWord(source, redir.Word) {
+				return true, true
+			}
+		}
+	}
+	if binary, ok := stmt.Cmd.(*syntax.BinaryCmd); ok {
+		for _, side := range []*syntax.Stmt{binary.X, binary.Y} {
+			sideNamed, ok := stmtRedirectsToNamedFile(source, side)
+			if !ok {
+				return false, false
+			}
+			if sideNamed {
+				return true, true
+			}
+		}
+	}
+	return false, true
+}
+
 type redirectSpan struct {
 	start int
 	end   int

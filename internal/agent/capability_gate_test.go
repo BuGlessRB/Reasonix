@@ -34,10 +34,11 @@ func TestDeliveryReviewGateHoldsUnderFrozenTaskPolicy(t *testing.T) {
 func TestDeliveryReviewGateExplainsOpaqueMutationRecovery(t *testing.T) {
 	ledger := evidence.NewLedger()
 	ledger.Record(evidence.Receipt{
-		ToolName: "bash",
-		Success:  true,
-		Mutation: true,
-		Command:  "opaque-writer",
+		ToolName:         "bash",
+		Success:          true,
+		Mutation:         true,
+		MutationEvidence: evidence.MutationProven,
+		Command:          "printf hi > out.log",
 	})
 
 	reg := tool.NewRegistry()

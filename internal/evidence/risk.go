@@ -32,9 +32,10 @@ var highRiskToolHints = []string{
 }
 
 // ClassifyMutationRisk scores the change set after the latest mutation.
-// Low: docs/tests/i18n/pure presentation only, with no opaque writes.
-// Medium: ordinary production code or limited multi-file edits.
-// High: security-sensitive surfaces, opaque mutations, or 10+ paths.
+// Low: docs/tests/i18n only. Medium: ordinary production code. High:
+// security-sensitive surfaces, 10+ paths, or an opaque write — one the host
+// proved happened but cannot name a path for. A command it merely failed to
+// prove read-only names no change set at all, so it scores nothing.
 func ClassifyMutationRisk(receipts []Receipt, after int) RiskLevel {
 	start := max(after+1, 0)
 	var paths []string
@@ -43,40 +44,34 @@ func ClassifyMutationRisk(receipts []Receipt, after int) RiskLevel {
 	hasProd := false
 	onlyLow := true
 
-	// Include the mutation receipt itself.
-	if after >= 0 && after < len(receipts) {
-		r := receipts[after]
-		if r.Success && r.Mutation {
-			if len(r.Paths) == 0 {
-				opaque = true
-			}
-			for _, p := range r.Paths {
-				if !seen[p] {
-					seen[p] = true
-					paths = append(paths, p)
-				}
-			}
-			if toolLooksHighRisk(r.ToolName) {
-				return RiskHigh
-			}
-		}
-	}
-	for i := start; i < len(receipts); i++ {
-		r := receipts[i]
+	collect := func(r Receipt) bool {
 		if !r.Success || !r.Mutation {
-			continue
+			return false
 		}
-		if len(r.Paths) == 0 {
+		if len(r.Paths) == 0 && r.MutationEvidence == MutationProven {
 			opaque = true
 		}
 		if toolLooksHighRisk(r.ToolName) {
-			return RiskHigh
+			return true
 		}
 		for _, p := range r.Paths {
 			if !seen[p] {
 				seen[p] = true
 				paths = append(paths, p)
 			}
+		}
+		return false
+	}
+
+	// Include the mutation receipt itself.
+	if after >= 0 && after < len(receipts) {
+		if collect(receipts[after]) {
+			return RiskHigh
+		}
+	}
+	for i := start; i < len(receipts); i++ {
+		if collect(receipts[i]) {
+			return RiskHigh
 		}
 	}
 	if opaque {

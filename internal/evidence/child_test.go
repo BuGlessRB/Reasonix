@@ -65,12 +65,21 @@ func TestClassifyMutationRisk(t *testing.T) {
 		t.Fatalf("auth risk = %s, want high", got)
 	}
 
-	// A path-less bash write cannot be scored by path, so it remains high risk.
+	// A proven path-less write cannot be scored by path, so it remains high risk.
 	opaque := []Receipt{
-		{ToolName: "bash", Success: true, Mutation: true, Command: "some-unknown-writer"},
+		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"printf hi > out.log"}`), true, false),
 	}
 	if got := ClassifyMutationRisk(opaque, 0); got != RiskHigh {
 		t.Fatalf("opaque risk = %s, want high", got)
+	}
+
+	// A command the host merely failed to prove read-only names no change set,
+	// so it scores nothing rather than summoning a reviewer with no files.
+	unproven := []Receipt{
+		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"gofmt -l ."}`), true, false),
+	}
+	if got := ClassifyMutationRisk(unproven, 0); got != RiskLow {
+		t.Fatalf("unproven risk = %s, want low", got)
 	}
 
 	// Privileged/opaque tools keep escalating to High even without paths.

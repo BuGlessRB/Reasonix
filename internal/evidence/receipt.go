@@ -38,6 +38,10 @@ type Receipt struct {
 	// Verification is the host's classification of a shell call: one of the
 	// Verification* values. Empty means the host never classified this receipt.
 	Verification string `json:"verification,omitempty"`
+	// MutationEvidence grades Mutation: one of the Mutation* values. Empty means
+	// the host never graded it, which reads as unknown — a receipt from an older
+	// session cannot retroactively prove what it wrote.
+	MutationEvidence string `json:"mutation_evidence,omitempty"`
 }
 
 // ObserveOutput records the trimmed output size and a compact digest without
