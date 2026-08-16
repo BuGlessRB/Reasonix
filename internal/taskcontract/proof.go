@@ -10,7 +10,7 @@ func refFor(epoch uint64, r evidence.Receipt) EvidenceRef {
 	switch {
 	case r.ToolName == "review_report":
 		kind = EvidenceReview
-	case r.Command != "" && evidence.CommandRunsVerification(r.Command):
+	case r.Command != "" && evidence.ReceiptRunsVerification(r):
 		kind = EvidenceVerification
 	case r.Mutation || r.Write:
 		kind = EvidenceMutation

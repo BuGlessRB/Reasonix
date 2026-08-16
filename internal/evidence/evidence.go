@@ -1142,7 +1142,7 @@ func (l *Ledger) HasSuccessfulVerificationCommandAfter(after int) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, r := range l.receipts[max(after+1, 0):] {
-		if r.ToolName == "bash" && bashContainsVerificationSegment(r.Command) && verificationPassed(r) {
+		if ReceiptRunsVerification(r) && verificationPassed(r) {
 			return true
 		}
 	}

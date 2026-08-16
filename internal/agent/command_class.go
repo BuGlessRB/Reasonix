@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"time"
@@ -85,7 +86,7 @@ func (a *Agent) segmentIsReadOnly(ctx context.Context, segment string) bool {
 	if verdict, ok := sharedCommandClass.get(segment); ok {
 		return verdict
 	}
-	verdict := a.askCommandClass(ctx, segment)
+	verdict := a.askClass(ctx, commandClassSystemPrompt, segment, "READONLY")
 	sharedCommandClass.put(segment, verdict)
 	return verdict
 }
@@ -103,7 +104,28 @@ func (a *Agent) mixedShapeClearedByEscalation(ctx context.Context, plan *toolCal
 	if !unproven {
 		return false
 	}
+	if a.ruleAlreadyAllows(plan) {
+		return true
+	}
 	return a.segmentIsReadOnly(ctx, segment)
+}
+
+// RuleAllowsGate reports whether a saved allow rule already covers a call. It is
+// the user's own answer, written down: a decision that came from the fallback
+// mode does not count, only a rule that matched.
+type RuleAllowsGate interface {
+	RuleAllows(toolName string, args json.RawMessage, readOnly bool) bool
+}
+
+// ruleAlreadyAllows short-circuits the escalation for a command the user already
+// approved. Asking a model about something a person decided is both slower and
+// less authoritative than the decision already on file.
+func (a *Agent) ruleAlreadyAllows(plan *toolCallPlan) bool {
+	gate, ok := a.svc.gate.(RuleAllowsGate)
+	if !ok {
+		return false
+	}
+	return gate.RuleAllows(plan.evidenceName, plan.evidenceArgs, plan.readOnly)
 }
 
 // triageProvider is the model configured for host classifications, and nothing
@@ -118,7 +140,10 @@ func (a *Agent) triageProvider() provider.Provider {
 	return a.svc.triage
 }
 
-func (a *Agent) askCommandClass(ctx context.Context, segment string) bool {
+// askClass runs one classification and reports whether the reply is exactly the
+// affirmative word. Both host questions share it: the shape is the same, only
+// the criterion and the word differ.
+func (a *Agent) askClass(ctx context.Context, systemPrompt, segment, affirmative string) bool {
 	ctx, cancel := context.WithTimeout(ctx, commandClassTimeout)
 	defer cancel()
 
@@ -132,7 +157,7 @@ func (a *Agent) askCommandClass(ctx context.Context, segment string) bool {
 
 	ch, err := a.triageProvider().Stream(ctx, provider.Request{
 		Messages: []provider.Message{
-			{Role: provider.RoleSystem, Content: commandClassSystemPrompt},
+			{Role: provider.RoleSystem, Content: systemPrompt},
 			{Role: provider.RoleUser, Content: segment},
 		},
 		MaxTokens:      commandClassMaxOutTokens,
@@ -153,12 +178,12 @@ func (a *Agent) askCommandClass(ctx context.Context, segment string) bool {
 			return false
 		}
 	}
-	return parseCommandClass(reply.String())
+	return parseClassVerdict(reply.String(), affirmative)
 }
 
-// parseCommandClass reads the verdict defensively: only a bare READONLY counts,
-// so a hedged, chatty, or truncated reply lands on the safe side.
-func parseCommandClass(reply string) bool {
+// parseClassVerdict reads the verdict defensively: only the bare affirmative
+// counts, so a hedged, chatty, or truncated reply lands on the safe side.
+func parseClassVerdict(reply, affirmative string) bool {
 	fields := strings.Fields(strings.ToUpper(reply))
-	return len(fields) == 1 && fields[0] == "READONLY"
+	return len(fields) == 1 && fields[0] == strings.ToUpper(affirmative)
 }

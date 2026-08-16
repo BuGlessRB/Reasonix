@@ -7,8 +7,8 @@ import "testing"
 func TestCommandClassOnlyAcceptsABareReadonly(t *testing.T) {
 	accepted := []string{"READONLY", "readonly", "  ReadOnly \n"}
 	for _, reply := range accepted {
-		if !parseCommandClass(reply) {
-			t.Errorf("parseCommandClass(%q) = false, want true", reply)
+		if !parseClassVerdict(reply, "READONLY") {
+			t.Errorf("parseClassVerdict(%q) = false, want true", reply)
 		}
 	}
 	refused := []string{
@@ -21,8 +21,8 @@ func TestCommandClassOnlyAcceptsABareReadonly(t *testing.T) {
 		"READ", // truncated at the token cap
 	}
 	for _, reply := range refused {
-		if parseCommandClass(reply) {
-			t.Errorf("parseCommandClass(%q) = true, want false: only a bare verdict counts", reply)
+		if parseClassVerdict(reply, "READONLY") {
+			t.Errorf("parseClassVerdict(%q) = true, want false: only a bare verdict counts", reply)
 		}
 	}
 }

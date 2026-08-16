@@ -153,6 +153,19 @@ func (g *SharedHeadlessGate) Update(mode string) {
 	g.mu.Unlock()
 }
 
+// RuleAllows reports whether a configured allow rule already covers this call.
+// The fallback mode deliberately does not count: "auto approves writers" is a
+// posture, while a matched rule is the user's own answer written down, and only
+// the second one may stand in for asking again.
+func (g *SharedHeadlessGate) RuleAllows(toolName string, args json.RawMessage, readOnly bool) bool {
+	// Neutralizing the writer fallback is what separates the two: with Mode set
+	// to Ask, an Allow can only have come from a rule that matched. Reading the
+	// rule list directly would have to re-implement bash's segment matching.
+	probe := g.policy
+	probe.Mode = permission.Ask
+	return probe.Decide(toolName, readOnly, args) == permission.Allow
+}
+
 func (g *SharedHeadlessGate) Check(ctx context.Context, toolName string, args json.RawMessage, readOnly bool) (bool, string, error) {
 	g.mu.RLock()
 	gate := g.gate
