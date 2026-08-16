@@ -79,6 +79,11 @@
         "run_in_background": {
           "description": "Run detached: returns a job id immediately and keeps running across turns (no foreground timeout). Read new output with bash_output, wait with wait, stop it with kill_shell. Use for long-running commands like servers, watchers, or builds you don't need to block on.",
           "type": "boolean"
+        },
+        "timeout_seconds": {
+          "description": "Deadline for this foreground call. Only tightens the host cap — a larger value is clamped to it. Output collected before the deadline is still returned, so set it low when a command's cost is unpredictable (a broad filesystem walk, a network fetch) instead of paying the full cap to find out. For work that legitimately runs long, use run_in_background.",
+          "minimum": 1,
+          "type": "integer"
         }
       },
       "required": [

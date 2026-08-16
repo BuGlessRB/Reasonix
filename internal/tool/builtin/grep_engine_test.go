@@ -24,8 +24,8 @@ func TestGrepTimeoutClamp(t *testing.T) {
 		{99999, grepMaxTimeout},
 	}
 	for _, c := range cases {
-		if got := grepTimeout(c.sec); got != c.want {
-			t.Errorf("grepTimeout(%d) = %v, want %v", c.sec, got, c.want)
+		if got := toolTimeout(c.sec, grepDefaultTimeout, grepMaxTimeout); got != c.want {
+			t.Errorf("grep toolTimeout(%d) = %v, want %v", c.sec, got, c.want)
 		}
 	}
 }

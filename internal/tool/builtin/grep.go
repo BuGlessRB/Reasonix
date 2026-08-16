@@ -32,19 +32,6 @@ const (
 	grepMaxTimeout     = 300 * time.Second
 )
 
-// grepTimeout clamps a caller-supplied second count to a sane bound; 0 (omitted)
-// falls back to the default so a pathological walk can't hang for minutes.
-func grepTimeout(sec int) time.Duration {
-	switch {
-	case sec <= 0:
-		return grepDefaultTimeout
-	case time.Duration(sec)*time.Second > grepMaxTimeout:
-		return grepMaxTimeout
-	default:
-		return time.Duration(sec) * time.Second
-	}
-}
-
 func formatGrep(ctx context.Context, out []string, truncated bool, to time.Duration) string {
 	timedOut := ctx.Err() == context.DeadlineExceeded
 	if len(out) == 0 {
@@ -125,7 +112,7 @@ func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	rp := resolveReadablePath(g.workDir, p.Path, g.paths)
 	p.Path = rp.Path
 
-	to := grepTimeout(p.TimeoutSeconds)
+	to := toolTimeout(p.TimeoutSeconds, grepDefaultTimeout, grepMaxTimeout)
 	ctx, cancel := context.WithTimeout(ctx, to)
 	defer cancel()
 

@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"context"
+	"fmt"
 
 	"reasonix/internal/sandbox"
 	"reasonix/internal/shellrun"
@@ -21,7 +22,7 @@ func (b bash) runForegroundDetailed(ctx context.Context, p bashParams, sh sandbo
 		Argv:              argv,
 		Dir:               b.workDir,
 		Env:               cmdEnv,
-		Timeout:           b.foregroundTimeout(),
+		Timeout:           b.foregroundTimeout(p.TimeoutSeconds),
 		WaitDelay:         bashWaitDelay,
 		CommandPreview:    commandPreview(p.Command),
 		ShellKind:         sh.Kind.String(),
@@ -63,5 +64,9 @@ func (b bash) runForegroundDetailed(ctx context.Context, p bashParams, sh sandbo
 	default:
 		ex.MutationRisk = tool.ShellMutationUnknown
 	}
-	return probe.harvest(res.Combined, ex), ex, res.Err
+	runErr := res.Err
+	if res.State == tool.ShellStateTimedOut {
+		runErr = fmt.Errorf("%w; %s", runErr, bashTimeoutExit(p.TimeoutSeconds))
+	}
+	return probe.harvest(res.Combined, ex), ex, runErr
 }

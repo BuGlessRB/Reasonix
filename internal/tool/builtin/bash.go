@@ -97,6 +97,7 @@ type bashParams struct {
 	Command                     string `json:"command"`
 	RunInBackground             bool   `json:"run_in_background"`
 	PreserveBackgroundProcesses bool   `json:"preserve_background_processes"`
+	TimeoutSeconds              int    `json:"timeout_seconds"`
 }
 
 func (bash) Name() string { return "bash" }
@@ -140,7 +141,7 @@ func (b bash) resolved() sandbox.Shell {
 }
 
 func (bash) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"command":{"type":"string","description":"Shell command to execute"},"run_in_background":{"type":"boolean","description":"Run detached: returns a job id immediately and keeps running across turns (no foreground timeout). Read new output with bash_output, wait with wait, stop it with kill_shell. Use for long-running commands like servers, watchers, or builds you don't need to block on."},"preserve_background_processes":{"type":"boolean","description":"After the shell command exits normally, keep any process-group members it intentionally left behind. Use only for deliberate daemonization, browser/GUI/session launchers such as playwright-cli open, or nohup/disown/setsid; cancellation and timeouts still kill the process group."}},"required":["command"]}`)
+	return json.RawMessage(`{"type":"object","properties":{"command":{"type":"string","description":"Shell command to execute"},"run_in_background":{"type":"boolean","description":"Run detached: returns a job id immediately and keeps running across turns (no foreground timeout). Read new output with bash_output, wait with wait, stop it with kill_shell. Use for long-running commands like servers, watchers, or builds you don't need to block on."},"preserve_background_processes":{"type":"boolean","description":"After the shell command exits normally, keep any process-group members it intentionally left behind. Use only for deliberate daemonization, browser/GUI/session launchers such as playwright-cli open, or nohup/disown/setsid; cancellation and timeouts still kill the process group."},"timeout_seconds":{"type":"integer","description":"Deadline for this foreground call. Only tightens the host cap — a larger value is clamped to it. Output collected before the deadline is still returned, so set it low when a command's cost is unpredictable (a broad filesystem walk, a network fetch) instead of paying the full cap to find out. For work that legitimately runs long, use run_in_background.","minimum":1}},"required":["command"]}`)
 }
 
 // ReadOnly is false: bash's effect cannot be inferred from args (rm, curl,
@@ -236,7 +237,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	// background jobs. ok=false falls back to local execution unchanged.
 	if b.terminal != nil && !p.RunInBackground && !b.sb.Enforce() && !secrets.FilterSubprocessEnv() {
 		envMap := sandbox.SessionTempEnvMap(prepared.SessionTemp, prepared.LinuxSandboxed)
-		if out, ok, termErr := b.terminal.RunCommand(ctx, p.Command, b.workDir, b.timeout, envMap); ok {
+		if out, ok, termErr := b.terminal.RunCommand(ctx, p.Command, b.workDir, b.foregroundTimeout(p.TimeoutSeconds), envMap); ok {
 			out = appendSessionDataHint(out, b.guard.CommandHint(b.workDir, p.Command))
 			applyTerminalResult(ex, termErr)
 			ex.DurationMs = time.Since(start).Milliseconds()
@@ -535,11 +536,22 @@ func hasExplicitBackgroundKeepalive(command string) bool {
 	return hasBackground && hasKeepaliveCommand
 }
 
-func (b bash) foregroundTimeout() time.Duration {
-	if b.timeout <= 0 {
-		return 0
+// foregroundTimeout resolves this call's timeout_seconds against the host cap
+// (config bash_timeout_seconds). A call may tighten the cap but never raise it;
+// with the cap disabled the per-call value becomes the only deadline.
+func (b bash) foregroundTimeout(sec int) time.Duration {
+	host := max(b.timeout, 0)
+	return toolTimeout(sec, host, host)
+}
+
+// bashTimeoutExit names the way out of a deadline, which differs by whose it
+// was: a call that set none has a parameter it never reached for, while one
+// that chose its own number already knows it can revise it.
+func bashTimeoutExit(sec int) string {
+	if sec > 0 {
+		return "raise timeout_seconds, narrow the command, or use run_in_background"
 	}
-	return b.timeout
+	return "that was the host cap; set timeout_seconds to fail fast next time, narrow the command, or use run_in_background"
 }
 
 func shouldTrackShellProcess(wrapped bool, sh sandbox.Shell, command string, preserveBackgroundProcesses bool) bool {

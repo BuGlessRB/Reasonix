@@ -143,6 +143,48 @@ func TestRunForegroundTimeout(t *testing.T) {
 	if res.State != tool.ShellStateTimedOut || res.FailurePhase != tool.ShellPhaseTimeout {
 		t.Fatalf("state/phase = %s/%s err=%v", res.State, res.FailurePhase, res.Err)
 	}
+	if !strings.Contains(res.Err.Error(), "no output") {
+		t.Fatalf("a silent timeout should say so, got %v", res.Err)
+	}
+}
+
+// A run that printed before the deadline is a different situation from one that
+// printed nothing, and the output alone cannot distinguish them.
+func TestRunForegroundTimeoutKeepsQuietWhenOutputExists(t *testing.T) {
+	cmd := "printf started; sleep 5"
+	sh := sandbox.ResolveShell("auto", "", nil)
+	if sh.Kind == sandbox.ShellPowerShell {
+		cmd = "Write-Output started; Start-Sleep -Seconds 5"
+	}
+	argv, _ := shellArgv(t, cmd)
+	res := RunForeground(context.Background(), Request{
+		Argv:      argv,
+		Timeout:   500 * time.Millisecond,
+		ShellKind: sh.Kind.String(),
+		ShellPath: sh.Path,
+		Track:     true,
+	})
+	if res.State != tool.ShellStateTimedOut {
+		t.Fatalf("state = %s err=%v", res.State, res.Err)
+	}
+	if !strings.Contains(res.Combined, "started") {
+		t.Fatalf("combined output lost the pre-deadline write: %q", res.Combined)
+	}
+	if strings.Contains(res.Err.Error(), "no output") {
+		t.Fatalf("output exists, so the silence note must not fire: %v", res.Err)
+	}
+}
+
+func TestTimeoutSilenceNote(t *testing.T) {
+	if timeoutSilenceNote("") == "" {
+		t.Error("an empty run should be reported as silent")
+	}
+	if timeoutSilenceNote(" \n\t ") == "" {
+		t.Error("whitespace-only output is still silence")
+	}
+	if note := timeoutSilenceNote("partial"); note != "" {
+		t.Errorf("real output speaks for itself, got %q", note)
+	}
 }
 
 func TestRunForegroundLaunchFailure(t *testing.T) {

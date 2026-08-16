@@ -66,13 +66,13 @@ func TestGlobDeadlineReportsIncomplete(t *testing.T) {
 }
 
 func TestGlobTimeoutClamp(t *testing.T) {
-	if got := globTimeout(0); got != globDefaultTimeout {
-		t.Errorf("globTimeout(0) = %s, want %s", got, globDefaultTimeout)
+	if got := toolTimeout(0, globDefaultTimeout, globMaxTimeout); got != globDefaultTimeout {
+		t.Errorf("glob toolTimeout(0) = %s, want %s", got, globDefaultTimeout)
 	}
-	if got := globTimeout(5); got != 5*time.Second {
-		t.Errorf("globTimeout(5) = %s, want 5s", got)
+	if got := toolTimeout(5, globDefaultTimeout, globMaxTimeout); got != 5*time.Second {
+		t.Errorf("glob toolTimeout(5) = %s, want 5s", got)
 	}
-	if got := globTimeout(100000); got != globMaxTimeout {
-		t.Errorf("globTimeout(100000) = %s, want %s", got, globMaxTimeout)
+	if got := toolTimeout(100000, globDefaultTimeout, globMaxTimeout); got != globMaxTimeout {
+		t.Errorf("glob toolTimeout(100000) = %s, want %s", got, globMaxTimeout)
 	}
 }

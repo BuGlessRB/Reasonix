@@ -54,19 +54,6 @@ const (
 	globMaxTimeout     = 300 * time.Second
 )
 
-// globTimeout clamps a caller-supplied second count to a sane bound; 0 (omitted)
-// falls back to the default so a deep tree can't hold a turn open for minutes.
-func globTimeout(sec int) time.Duration {
-	switch {
-	case sec <= 0:
-		return globDefaultTimeout
-	case time.Duration(sec)*time.Second > globMaxTimeout:
-		return globMaxTimeout
-	default:
-		return time.Duration(sec) * time.Second
-	}
-}
-
 func (g globTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Pattern        string `json:"pattern"`
@@ -78,7 +65,7 @@ func (g globTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	if p.Pattern == "" {
 		return "", fmt.Errorf("pattern is required")
 	}
-	to := globTimeout(p.TimeoutSeconds)
+	to := toolTimeout(p.TimeoutSeconds, globDefaultTimeout, globMaxTimeout)
 	ctx, cancel := context.WithTimeout(ctx, to)
 	defer cancel()
 	// Save the original pattern before resolveIn prepends workDir, so the

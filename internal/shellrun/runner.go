@@ -159,7 +159,7 @@ func RunForeground(ctx context.Context, req Request) Result {
 		out.State = tool.ShellStateTimedOut
 		out.FailurePhase = tool.ShellPhaseTimeout
 		out.ExitCode = exitCodeFromErr(err)
-		out.Err = fmt.Errorf("command timed out (> %s)", req.Timeout)
+		out.Err = fmt.Errorf("command timed out (> %s)%s", req.Timeout, timeoutSilenceNote(out.Combined))
 		return out
 	}
 	// Parent cancellation (user stop / session cancel).
@@ -228,6 +228,16 @@ func exitCodeFromErr(err error) *int {
 func isCanceledWait(err error) bool {
 	var c proc.CanceledWaitError
 	return errors.As(err, &c)
+}
+
+// timeoutSilenceNote reports that a run reached its deadline having printed
+// nothing. A caller cannot read that from the output: no output and output that
+// never arrived look identical, yet they call for opposite next moves.
+func timeoutSilenceNote(combined string) string {
+	if strings.TrimSpace(combined) != "" {
+		return ""
+	}
+	return "; it produced no output before the deadline"
 }
 
 // outputCollector owns the combined buffer and a bounded tail ring. Writes stay
