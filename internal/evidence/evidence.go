@@ -1716,22 +1716,10 @@ func bashCommandUsesOpaqueInlineInterpreter(command string) bool {
 func bashSegmentUsesOpaqueInlineInterpreter(segment string) bool {
 	normalized, _ := shellsafe.NormalizeBashSafeRedirectsForMatch(segment)
 	argv, malformed := shellparse.StaticFields(normalized)
-	if malformed != "" || len(argv) == 0 {
+	if malformed != "" {
 		return false
 	}
-	base := strings.ToLower(filepath.Base(argv[0]))
-	args := argv[1:]
-	switch base {
-	case "node", "bun":
-		return hasCommandArg(args, "-e", "--eval", "-p", "--print")
-	case "python", "python3", "ruby", "perl":
-		return hasCommandArg(args, "-c", "-e")
-	case "php":
-		return hasCommandArg(args, "-r")
-	case "deno":
-		return len(args) > 0 && strings.EqualFold(args[0], "eval")
-	}
-	return false
+	return shellsafe.ArgvCarriesInlineCode(argv)
 }
 
 // ShellContractPreflightMessage is the model-facing recovery text when a

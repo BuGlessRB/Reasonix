@@ -114,7 +114,7 @@ func segmentApprovalBlocker(subject string) BashApprovalBlocker {
 // than a fixed operation. Kept beside indirectExecutionBlocker, which already
 // enumerates the same programs for their inline-code flags.
 func isInterpreter(program string) bool {
-	switch executableBase(program) {
+	switch shellsafe.ExecutableBase(program) {
 	case "python", "python3", "py", "pypy", "pypy3",
 		"node", "bun", "deno",
 		"perl", "ruby", "lua", "luajit", "r", "rscript", "osascript", "php",
@@ -183,7 +183,7 @@ func indirectExecutionBlocker(fields []string) BashApprovalBlocker {
 	if len(fields) == 0 {
 		return BashApprovalBlockerIndirectExecution
 	}
-	base := executableBase(fields[0])
+	base := shellsafe.ExecutableBase(fields[0])
 	args := fields[1:]
 
 	inline := func(ok bool) BashApprovalBlocker {
@@ -209,34 +209,18 @@ func indirectExecutionBlocker(fields []string) BashApprovalBlocker {
 			return BashApprovalBlockerIndirectExecution
 		}
 		return indirectExecutionBlocker(args)
-	case "bash", "dash", "fish", "ksh", "sh", "zsh":
-		return inline(hasShellCommandFlag(args))
-	case "powershell", "pwsh":
-		return inline(hasAnyFoldedArg(args, "-c", "-command", "-e", "-enc", "-encodedcommand"))
-	case "cmd":
-		return inline(hasAnyFoldedArg(args, "/c", "/k"))
-	case "node", "bun":
-		return inline(hasAnyFoldedArg(args, "-e", "--eval", "-p", "--print"))
-	case "deno":
-		return inline(hasAnyFoldedArg(args, "eval"))
-	case "python", "python3", "py", "pypy", "pypy3":
-		return inline(hasAnyFoldedArg(args, "-c"))
-	case "perl", "ruby", "lua", "luajit", "r", "rscript", "osascript":
-		return inline(hasAnyFoldedArg(args, "-e"))
-	case "php":
-		return inline(hasAnyFoldedArg(args, "-r"))
 	case "find":
 		if hasAnyFoldedArg(args, "-exec", "-execdir", "-ok", "-okdir") {
 			return BashApprovalBlockerIndirectExecution
 		}
 		return BashApprovalBlockerNone
 	default:
-		return BashApprovalBlockerNone
+		return inline(shellsafe.ArgvCarriesInlineCode(fields))
 	}
 }
 
 func hasEnvWrapperAssignment(fields []string) bool {
-	if len(fields) < 2 || executableBase(fields[0]) != "env" {
+	if len(fields) < 2 || shellsafe.ExecutableBase(fields[0]) != "env" {
 		return false
 	}
 	for _, arg := range fields[1:] {
@@ -245,30 +229,6 @@ func hasEnvWrapperAssignment(fields []string) bool {
 		}
 		if !strings.HasPrefix(arg, "-") {
 			return false
-		}
-	}
-	return false
-}
-
-func executableBase(command string) string {
-	if i := strings.LastIndexAny(command, `/\\`); i >= 0 {
-		command = command[i+1:]
-	}
-	command = strings.ToLower(command)
-	return strings.TrimSuffix(command, ".exe")
-}
-
-func hasShellCommandFlag(args []string) bool {
-	for _, arg := range args {
-		lower := strings.ToLower(arg)
-		if lower == "--" {
-			return false
-		}
-		if lower == "--command" {
-			return true
-		}
-		if strings.HasPrefix(lower, "-") && !strings.HasPrefix(lower, "--") && strings.Contains(lower[1:], "c") {
-			return true
 		}
 	}
 	return false
