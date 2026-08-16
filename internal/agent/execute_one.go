@@ -555,9 +555,10 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 		allow, reason, err := a.svc.gate.Check(ctx, plan.permName, plan.permArgs, plan.readOnly)
 		if err != nil {
 			return toolOutcome{
-				output:  fmt.Sprintf("blocked: %s (%v)", reason, err),
-				blocked: true,
-				errMsg:  fmt.Sprintf("blocked: %v", err),
+				output:    fmt.Sprintf("blocked: %s (%v)", reason, err),
+				blocked:   true,
+				errMsg:    fmt.Sprintf("blocked: %v", err),
+				execution: shellRefusal(plan.execTool, plan.execArgs, tool.ShellPhaseAuthorization),
 			}, true
 		}
 		// permission.decision: the host verdict is computed first; the
@@ -568,9 +569,10 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 		}
 		if !allow {
 			return toolOutcome{
-				output:  "blocked: " + reason,
-				blocked: true,
-				errMsg:  "blocked by permission policy",
+				output:    "blocked: " + reason,
+				blocked:   true,
+				errMsg:    "blocked by permission policy",
+				execution: shellRefusal(plan.execTool, plan.execArgs, tool.ShellPhaseAuthorization),
 			}, true
 		}
 	}

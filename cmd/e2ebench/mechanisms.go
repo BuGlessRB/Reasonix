@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -83,6 +84,44 @@ func renderToolSurface(results []result) string {
 	}
 	line += fmt.Sprintf(" · **connect_tool_source** ×%d · **prefix resets** %d\n\n", connects, resets)
 	return line
+}
+
+// renderRefusals reports calls the host stopped before they ran, grouped by the
+// gate that stopped them. One phase dominating usually means a gate misfires
+// rather than an agent misbehaving, and each refusal costs a whole model round
+// to work around — a cost that is otherwise invisible in the round count.
+func renderRefusals(results []result) string {
+	byPhase := map[string]int{}
+	runs, total := 0, 0
+	for _, r := range results {
+		if r.Trajectory == nil || len(r.Trajectory.RefusedCalls) == 0 {
+			continue
+		}
+		runs++
+		for phase, n := range r.Trajectory.RefusedCalls {
+			byPhase[phase] += n
+			total += n
+		}
+	}
+	if total == 0 {
+		return ""
+	}
+	phases := make([]string, 0, len(byPhase))
+	for phase := range byPhase {
+		phases = append(phases, phase)
+	}
+	sort.Slice(phases, func(i, j int) bool {
+		if byPhase[phases[i]] != byPhase[phases[j]] {
+			return byPhase[phases[i]] > byPhase[phases[j]]
+		}
+		return phases[i] < phases[j]
+	})
+	parts := make([]string, 0, len(phases))
+	for _, phase := range phases {
+		parts = append(parts, fmt.Sprintf("**%s** %d", phase, byPhase[phase]))
+	}
+	return fmt.Sprintf("**Refused before launch** (%d call(s) in %d/%d runs): %s\n\n",
+		total, runs, len(results), strings.Join(parts, " · "))
 }
 
 // renderMechanismLedger is the measure-before-cutting table: per mechanism,

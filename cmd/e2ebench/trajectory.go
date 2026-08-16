@@ -39,6 +39,11 @@ type trajectorySummary struct {
 	SingleReadStreak int   `json:"single_read_streak,omitempty"` // longest consecutive run
 	StartDelayP95Ms  int64 `json:"start_delay_p95_ms,omitempty"` // dispatch→start, in-batch queue
 
+	// RefusedCalls counts calls stopped before they ran, keyed by the gate that
+	// stopped them. A misfiring gate repeats one phase across runs, which the
+	// round count alone never shows.
+	RefusedCalls map[string]int `json:"refused_calls,omitempty"`
+
 	// Recovery decomposition: a round whose gap contained a provider retry,
 	// missing-reasoning replay, or empty-final retry is a recovery round; clean
 	// p95 excludes them so adapter flakiness reads as adapter cost, not agent.
@@ -196,6 +201,8 @@ type trajectoryRecord struct {
 			EndedAt    int64  `json:"endedAt"`
 			Execution  *struct {
 				Verification string `json:"verification"`
+				State        string `json:"state"`
+				FailurePhase string `json:"failurePhase"`
 			} `json:"execution"`
 		} `json:"tool"`
 	} `json:"event"`
@@ -583,6 +590,12 @@ func (t *trajScan) recordResult(rec trajectoryRecord) {
 	}
 	if ex := tl.Execution; ex != nil && (ex.Verification == "passed" || ex.Verification == "failed") {
 		t.observeVerification(tl.Name+"\x00"+tl.Args, ex.Verification == "passed", rec.TS)
+	}
+	if ex := tl.Execution; ex != nil && ex.State == "not_run" && ex.FailurePhase != "" {
+		if t.s.RefusedCalls == nil {
+			t.s.RefusedCalls = map[string]int{}
+		}
+		t.s.RefusedCalls[ex.FailurePhase]++
 	}
 	if delegationTools[tl.Name] {
 		t.delegationToolMs[tl.Name] += tl.DurationMs

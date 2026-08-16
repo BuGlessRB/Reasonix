@@ -38,6 +38,32 @@ type toolOutcome struct {
 	recoveryGeneration uint64
 }
 
+// refusedShellExecution describes a shell call the host stopped before launch,
+// so a refusal carries the metadata a failure would and stays visible to tool
+// cards and trajectory digests. phase names the gate that stopped it.
+func refusedShellExecution(t tool.Tool, args json.RawMessage, phase string) *tool.ShellExecution {
+	ex := &tool.ShellExecution{Kind: "shell"}
+	if bt, ok := t.(tool.DetailedExecutor); ok {
+		if desc := bt.ExecutionDescriptor(args); desc != nil {
+			ex = desc
+		}
+	}
+	ex.State = tool.ShellStateNotRun
+	ex.FailurePhase = phase
+	ex.MutationRisk = tool.ShellMutationNotStarted
+	ex.Verification = tool.ShellVerificationNotVerification
+	return ex
+}
+
+// shellRefusal is refusedShellExecution for gates that run before the call is
+// known to be a shell: only a tool that can describe an execution is one.
+func shellRefusal(t tool.Tool, args json.RawMessage, phase string) *tool.ShellExecution {
+	if _, ok := t.(tool.DetailedExecutor); !ok {
+		return nil
+	}
+	return refusedShellExecution(t, args, phase)
+}
+
 // batchExecution is the result of one provider tool-call batch.
 type batchExecution struct {
 	results    []string
@@ -158,25 +184,10 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 				"Fix or re-run the failed change first; verification was not executed."
 			var ex *tool.ShellExecution
 			if calls[j].Name == "bash" {
-				ex = &tool.ShellExecution{
-					Kind:         "shell",
-					State:        tool.ShellStateNotRun,
-					FailurePhase: tool.ShellPhaseDependency,
-					MutationRisk: tool.ShellMutationNotStarted,
-					Verification: tool.ShellVerificationNotVerification,
-				}
+				resolved, _, _ := a.svc.tools.ResolveCall(calls[j].Name)
+				ex = refusedShellExecution(resolved, json.RawMessage(calls[j].Arguments), tool.ShellPhaseDependency)
 				if isVerification {
 					ex.Verification = tool.ShellVerificationNotRun
-				}
-				if t, _, amb := a.svc.tools.ResolveCall(calls[j].Name); t != nil && len(amb) == 0 {
-					if bt, ok := t.(tool.DetailedExecutor); ok {
-						if desc := bt.ExecutionDescriptor(json.RawMessage(calls[j].Arguments)); desc != nil {
-							ex.Shell = desc.Shell
-							ex.ShellVersion = desc.ShellVersion
-							ex.Platform = desc.Platform
-							ex.SupportsAndAnd = desc.SupportsAndAnd
-						}
-					}
 				}
 			}
 			results[j] = msg
