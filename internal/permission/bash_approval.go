@@ -328,13 +328,7 @@ func compoundIsReadOnly(subject string) bool {
 		if !classified {
 			return false
 		}
-		if sub == "" {
-			if hasUnsafeReadOnlyArgs(base, fields[1:]) {
-				return false
-			}
-			continue
-		}
-		if hasUnsafePrefixArgs(base, sub, fields[2:]) {
+		if shellsafe.ArgsMakeReadOnlyCommandWrite(base, sub, fields) {
 			return false
 		}
 	}

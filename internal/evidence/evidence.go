@@ -2130,34 +2130,6 @@ func nodeTestFlagWritesFile(arg string) bool {
 	}
 }
 
-func bashReadOnlyCommandWrites(base, sub string, fields []string) bool {
-	args := fields[1:]
-	if sub != "" && len(args) > 0 {
-		args = args[1:]
-	}
-	switch base {
-	case "find":
-		return hasCommandArg(args, "-exec", "-execdir", "-delete", "-ok", "-okdir", "-fls", "-fprint", "-fprint0", "-fprintf")
-	case "sort":
-		for _, arg := range args {
-			if arg == "-o" || arg == "--output" || strings.HasPrefix(arg, "--output=") || strings.HasPrefix(arg, "-o") {
-				return true
-			}
-		}
-	case "git":
-		if sub == "diff" || sub == "show" || sub == "log" {
-			for _, arg := range args {
-				if arg == "--output" || strings.HasPrefix(arg, "--output=") {
-					return true
-				}
-			}
-		}
-	case "go":
-		return sub == "env" && hasCommandArg(args, "-w", "-u")
-	}
-	return false
-}
-
 func hasCommandArg(args []string, candidates ...string) bool {
 	for _, arg := range args {
 		for _, candidate := range candidates {

@@ -13,9 +13,10 @@ import (
 )
 
 // ReadOnlyCommands holds single-word commands whose base name alone implies a
-// read-only operation. The first word of a command (lowercased) is looked up
-// here. Commands that are read-only only for certain subcommands (e.g. git) are
-// in ReadOnlyPrefixes.
+// read-only operation. Ones read-only only for certain subcommands are in
+// ReadOnlyPrefixes; ones a flag can turn into writers stay here and are
+// rejected by ArgsMakeReadOnlyCommandWrite. `sed`/`awk` are absent on purpose:
+// they write through their own script language, which nothing here parses.
 var ReadOnlyCommands = map[string]bool{
 	"cat": true, "head": true, "tail": true, "less": true, "more": true,
 	"ls": true, "find": true, "locate": true, "which": true, "whereis": true, "type": true,
@@ -274,25 +275,7 @@ func readOnlyFields(fields []string) (base, sub string, ok bool) {
 }
 
 func nestedReadOnlyArgsSafe(base, sub string, fields []string) bool {
-	args := fields[1:]
-	if sub != "" && len(args) > 0 {
-		args = args[1:]
-	}
-	for _, arg := range args {
-		switch {
-		case base == "find" && (arg == "-exec" || arg == "-execdir" || arg == "-delete" || arg == "-ok" || arg == "-okdir" || arg == "-fls" || arg == "-fprint" || arg == "-fprint0" || arg == "-fprintf"):
-			return false
-		case base == "sed" && (strings.HasPrefix(arg, "-i") || strings.HasPrefix(arg, "--in-place")):
-			return false
-		case base == "sort" && (strings.HasPrefix(arg, "-o") || arg == "--output" || strings.HasPrefix(arg, "--output=")):
-			return false
-		case base == "git" && (sub == "diff" || sub == "show" || sub == "log") && (arg == "--output" || strings.HasPrefix(arg, "--output=")):
-			return false
-		case base == "go" && sub == "env" && (arg == "-w" || arg == "-u"):
-			return false
-		}
-	}
-	return base != "git" || sub != "tag" || len(args) == 0 || args[0] == "-l" || args[0] == "--list"
+	return !ArgsMakeReadOnlyCommandWrite(base, sub, fields)
 }
 
 // CommandIsWorkspaceNonMutating reports commands that Delivery can execute

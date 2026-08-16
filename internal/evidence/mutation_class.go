@@ -91,7 +91,7 @@ func bashSegmentMutationClass(segment string) string {
 	if !workspaceNonMutating {
 		return MutationUnknown
 	}
-	if bashReadOnlyCommandWrites(base, sub, fields) {
+	if shellsafe.ArgsMakeReadOnlyCommandWrite(base, sub, fields) {
 		return MutationProven
 	}
 	return MutationNone
