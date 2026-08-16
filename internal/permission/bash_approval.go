@@ -204,11 +204,13 @@ func indirectExecutionBlocker(fields []string) BashApprovalBlocker {
 			return BashApprovalBlockerIndirectExecution
 		}
 		return indirectExecutionBlocker(args)
-	case "builtin", "command", "exec", "nohup", "sudo":
+	case "builtin", "exec", "nohup", "sudo":
 		if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 			return BashApprovalBlockerIndirectExecution
 		}
 		return indirectExecutionBlocker(args)
+	case "command":
+		return commandBuiltinBlocker(args)
 	case "find":
 		if hasAnyFoldedArg(args, "-exec", "-execdir", "-ok", "-okdir") {
 			return BashApprovalBlockerIndirectExecution
@@ -217,6 +219,26 @@ func indirectExecutionBlocker(fields []string) BashApprovalBlocker {
 	default:
 		return inline(shellsafe.ArgvCarriesInlineCode(fields))
 	}
+}
+
+// `command -v`/`-V` report how a name would resolve and run nothing, which
+// makes them readers like `which`. Every other form hands the call to the
+// program it names.
+func commandBuiltinBlocker(args []string) BashApprovalBlocker {
+	for len(args) > 0 && strings.HasPrefix(args[0], "-") {
+		flag := args[0]
+		args = args[1:]
+		if flag == "--" {
+			break
+		}
+		if strings.ContainsAny(flag, "vV") {
+			return BashApprovalBlockerNone
+		}
+	}
+	if len(args) == 0 {
+		return BashApprovalBlockerIndirectExecution
+	}
+	return indirectExecutionBlocker(args)
 }
 
 func hasEnvWrapperAssignment(fields []string) bool {
