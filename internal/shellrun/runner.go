@@ -55,6 +55,10 @@ type Request struct {
 	PreserveWaitDelay bool
 	// Progress receives live combined output chunks (optional).
 	Progress func(chunk string)
+	// SuppressLine hides lines carrying this text from Progress. Set it when the
+	// host appended something to the command for its own use; the finished
+	// output is the caller's to clean.
+	SuppressLine string
 	// Run is optional; tests inject a process runner. When nil, proc.RunCommand.
 	Run func(ctx context.Context, cmd *exec.Cmd, opts proc.RunOptions) (*proc.TrackedCommand, error)
 }
@@ -107,7 +111,9 @@ func RunForeground(ctx context.Context, req Request) Result {
 	var writers []io.Writer
 	writers = append(writers, collector.combined, collector.tail)
 	if req.Progress != nil {
-		writers = append(writers, newProgressWriter(req.Progress, progressOutputMaxBytes, progressOutputTruncated))
+		pw := newProgressWriter(req.Progress, progressOutputMaxBytes, progressOutputTruncated)
+		pw.suppress = req.SuppressLine
+		writers = append(writers, pw)
 	}
 	// Stdout and Stderr must stay the *same* writer value: os/exec then hands the
 	// child a single pipe, so the two streams interleave in the order the child
@@ -339,6 +345,11 @@ type progressWriter struct {
 	forwarded int
 	marker    string
 	truncated bool
+	// suppress is a line the host appended to the command for its own use. The
+	// live stream is the one place it would still be visible, so it is dropped
+	// here rather than only from the finished output.
+	suppress string
+	held     []byte
 }
 
 func newProgressWriter(emit func(string), limit int, marker string) *progressWriter {
@@ -354,6 +365,13 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 	if w.emit == nil || w.truncated {
 		return len(p), nil
 	}
+	written := len(p)
+	if w.suppress != "" {
+		p = w.withoutSuppressed(p)
+		if len(p) == 0 {
+			return written, nil
+		}
+	}
 	remaining := max(0, w.limit-w.forwarded)
 	forward := min(len(p), remaining)
 	if forward > 0 {
@@ -366,5 +384,42 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 			w.emit(w.marker)
 		}
 	}
-	return len(p), nil
+	return written, nil
+}
+
+// withoutSuppressed drops whole lines carrying the suppressed text and holds
+// back a tail that could be its beginning, so a report split across two writes
+// is still caught. What stays held when the process ends is at most the report
+// itself, which is exactly what must not be shown.
+func (w *progressWriter) withoutSuppressed(p []byte) []byte {
+	buf := append(w.held, p...)
+	w.held = nil
+	if cut := partialSuffixStart(buf, w.suppress); cut >= 0 {
+		w.held = append([]byte(nil), buf[cut:]...)
+		buf = buf[:cut]
+	}
+	if !bytes.Contains(buf, []byte(w.suppress)) {
+		return buf
+	}
+	lines := bytes.SplitAfter(buf, []byte("\n"))
+	kept := buf[:0]
+	for _, line := range lines {
+		if bytes.Contains(line, []byte(w.suppress)) {
+			continue
+		}
+		kept = append(kept, line...)
+	}
+	return kept
+}
+
+// partialSuffixStart returns where buf ends with a proper prefix of marker, or
+// -1 when it does not. A whole marker already inside buf is not "partial".
+func partialSuffixStart(buf []byte, marker string) int {
+	limit := min(len(buf), len(marker)-1)
+	for n := limit; n > 0; n-- {
+		if bytes.HasSuffix(buf, []byte(marker[:n])) {
+			return len(buf) - n
+		}
+	}
+	return -1
 }

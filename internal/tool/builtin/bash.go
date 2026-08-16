@@ -208,7 +208,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	// Pin the session-private temporary generation before any launch path so
 	// foreground, background, and host-terminal runs share one directory, and
 	// so a failed start still releases the lease.
-	prepared, lease, err := b.prepareLaunch(ctx, sh, p.Command, args)
+	prepared, probe, lease, err := b.prepareLaunch(ctx, sh, p, args)
 	if err != nil {
 		ex.State = tool.ShellStateNotRun
 		ex.FailurePhase = tool.ShellPhaseAuthorization
@@ -291,7 +291,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 		}, nil
 	}
 
-	out, runEx, err := b.runForegroundDetailed(ctx, p, sh, argv, wrapped, cmdEnv)
+	out, runEx, err := b.runForegroundDetailed(ctx, p, sh, argv, wrapped, cmdEnv, probe)
 	mergeRunInto(ex, runEx)
 	ex.DurationMs = time.Since(start).Milliseconds()
 	return tool.DetailedResult{
@@ -346,6 +346,7 @@ func mergeRunInto(dst *tool.ShellExecution, src *tool.ShellExecution) {
 	dst.FailurePhase = src.FailurePhase
 	dst.ExitCode = src.ExitCode
 	dst.OutputTail = src.OutputTail
+	dst.PipeStatus = src.PipeStatus
 	if src.MutationRisk != "" {
 		dst.MutationRisk = src.MutationRisk
 	}
@@ -354,13 +355,18 @@ func mergeRunInto(dst *tool.ShellExecution, src *tool.ShellExecution) {
 // prepareLaunch acquires a session-temp lease (when a Manager is available),
 // builds the sandboxed argv, and applies sandbox-escape approval. The caller
 // owns the returned lease and must Release it after the process exits.
-func (b bash) prepareLaunch(ctx context.Context, sh sandbox.Shell, command string, rawArgs json.RawMessage) (sandbox.Prepared, *sessiontemp.Lease, error) {
+func (b bash) prepareLaunch(ctx context.Context, sh sandbox.Shell, p bashParams, rawArgs json.RawMessage) (sandbox.Prepared, pipeStatusProbe, *sessiontemp.Lease, error) {
+	// command is what the user and every approval prompt see; launch is what the
+	// shell actually runs, which the host may have appended a report to.
+	command := p.Command
+	probe := newPipeStatusProbe(sh, command, p.RunInBackground)
+	launch := probe.wrap(command)
 	var lease *sessiontemp.Lease
 	sessionDir := ""
 	if m := b.sessionTempManager(ctx); m != nil {
 		l, err := m.Acquire()
 		if err != nil {
-			return sandbox.Prepared{}, nil, fmt.Errorf("session temporary directory: %w", err)
+			return sandbox.Prepared{}, probe, nil, fmt.Errorf("session temporary directory: %w", err)
 		}
 		lease = l
 		sessionDir = l.Dir()
@@ -370,7 +376,7 @@ func (b bash) prepareLaunch(ctx context.Context, sh sandbox.Shell, command strin
 	// sandbox.Command. Attach SessionTemp so Linux bwrap binds the private dir.
 	spec := b.sb
 	spec.SessionTemp = sessionDir
-	argv, wrapped := bashSandboxCommand(spec, sh, command)
+	argv, wrapped := bashSandboxCommand(spec, sh, launch)
 	linuxSB := wrapped && sessionDir != "" && runtime.GOOS == "linux"
 	prepared := sandbox.Prepared{
 		Argv:           argv,
@@ -381,7 +387,7 @@ func (b bash) prepareLaunch(ctx context.Context, sh sandbox.Shell, command strin
 	}
 
 	if b.sb.Enforce() && bashSandboxEscapeSessionAllowed(ctx, command, rawArgs) {
-		prepared.Argv = unconfinedShellArgv(sh, command)
+		prepared.Argv = unconfinedShellArgv(sh, launch)
 		prepared.Wrapped = false
 		// Escaped commands still inherit private temp env vars pointing at the
 		// host private directory (no virtual /tmp mapping).
@@ -393,23 +399,23 @@ func (b bash) prepareLaunch(ctx context.Context, sh sandbox.Shell, command strin
 			if lease != nil {
 				lease.Release()
 			}
-			return sandbox.Prepared{}, nil, err
+			return sandbox.Prepared{}, probe, nil, err
 		}
 		if !allow {
 			if lease != nil {
 				lease.Release()
 			}
 			if reason != "" {
-				return sandbox.Prepared{}, nil, fmt.Errorf("%s", reason)
+				return sandbox.Prepared{}, probe, nil, fmt.Errorf("%s", reason)
 			}
-			return sandbox.Prepared{}, nil, fmt.Errorf("%s", sandbox.UnavailableMessage())
+			return sandbox.Prepared{}, probe, nil, fmt.Errorf("%s", sandbox.UnavailableMessage())
 		}
-		prepared.Argv = unconfinedShellArgv(sh, command)
+		prepared.Argv = unconfinedShellArgv(sh, launch)
 		prepared.Wrapped = false
 		prepared.LinuxSandboxed = false
 		prepared.EnvOverrides = sandbox.SessionTempEnv(sessionDir, false)
 	}
-	return prepared, lease, nil
+	return prepared, probe, lease, nil
 }
 
 func (b bash) sessionTempManager(ctx context.Context) *sessiontemp.Manager {
@@ -479,66 +485,6 @@ func bashSandboxEscapeSessionAllowed(ctx context.Context, command string, args j
 		Args:    append(json.RawMessage(nil), args...),
 		Reason:  i18n.M.SandboxEscapeRuntimeReason,
 	})
-}
-
-// runForegroundDetailed uses the shared shellrun collector so model bash and
-// user !command share exit-code / phase / output-tail classification.
-func (b bash) runForegroundDetailed(ctx context.Context, p bashParams, sh sandbox.Shell, argv []string, wrapped bool, cmdEnv []string) (string, *tool.ShellExecution, error) {
-	ex := shellrun.DescriptorFromShell(sh)
-	var progress func(string)
-	if emit, ok := tool.ProgressFrom(ctx); ok {
-		progress = emit
-	}
-	track := shouldTrackShellProcess(wrapped, sh, p.Command, p.PreserveBackgroundProcesses)
-	res := shellrun.RunForeground(ctx, shellrun.Request{
-		Argv:              argv,
-		Dir:               b.workDir,
-		Env:               cmdEnv,
-		Timeout:           b.foregroundTimeout(),
-		WaitDelay:         bashWaitDelay,
-		CommandPreview:    commandPreview(p.Command),
-		ShellKind:         sh.Kind.String(),
-		ShellPath:         sh.Path,
-		Source:            "bash_tool",
-		Track:             track,
-		PreserveWaitDelay: p.PreserveBackgroundProcesses,
-		Progress:          progress,
-	})
-	// A foreground command that spawned a lingering child (e.g. `bazel run`'s
-	// server) leaves it in the process group; Wait only reaped the shell leader.
-	// Kill the group so those don't accumulate into an OOM (#3702). On cancel/
-	// timeout the command's Cancel path already did this; this covers normal exit.
-	// shellrun owns the tool-local timeout context, so treat timed_out/cancelled
-	// as ctx.Err()!=nil for the reap decision.
-	reapCtx := ctx
-	if res.State == tool.ShellStateTimedOut || res.State == tool.ShellStateCancelled || ctx.Err() != nil {
-		// Force reap on forced stops even when preserve_background_processes is set.
-		reapShellProcess(res.Cmd, res.Tracked)
-	} else if shouldReapAfterRun(reapCtx, sh, p.Command, p.PreserveBackgroundProcesses) {
-		reapShellProcess(res.Cmd, res.Tracked)
-	}
-
-	ex.State = res.State
-	ex.FailurePhase = res.FailurePhase
-	ex.ExitCode = res.ExitCode
-	ex.OutputTail = res.OutputTail
-	switch res.State {
-	case tool.ShellStateCompleted:
-		ex.MutationRisk = tool.ShellMutationMayHaveCompleted
-	case tool.ShellStateNotRun:
-		ex.MutationRisk = tool.ShellMutationNotStarted
-	case tool.ShellStateFailed:
-		if res.FailurePhase == tool.ShellPhaseLaunch || res.FailurePhase == tool.ShellPhasePreflight {
-			ex.MutationRisk = tool.ShellMutationNotStarted
-		} else {
-			ex.MutationRisk = tool.ShellMutationMayBePartial
-		}
-	case tool.ShellStateTimedOut, tool.ShellStateCancelled:
-		ex.MutationRisk = tool.ShellMutationMayBePartial
-	default:
-		ex.MutationRisk = tool.ShellMutationUnknown
-	}
-	return res.Combined, ex, res.Err
 }
 
 func normalizeBashRunError(ctx context.Context, err error, preserveBackgroundProcesses bool) error {

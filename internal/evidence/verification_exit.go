@@ -29,6 +29,49 @@ func VerificationExitConclusive(command string) bool {
 	return false
 }
 
+// VerificationOutcomeFromPipeStatus reads the verdict off per-stage statuses
+// the host captured, so a check whose exit status a later stage swallowed is
+// still answered rather than shrugged at. It returns "" when the statuses do
+// not line up with the pipeline, or when no stage of it is a verification.
+func VerificationOutcomeFromPipeStatus(command string, status []int) string {
+	if len(status) == 0 {
+		return ""
+	}
+	stages, ok := shellparse.SinglePipelineStages(command)
+	if !ok || len(stages) != len(status) {
+		return ""
+	}
+	verdict := ""
+	for i, stage := range stages {
+		if !bashContainsVerificationSegment(stage) {
+			continue
+		}
+		if status[i] != 0 {
+			return VerificationFailed
+		}
+		verdict = VerificationPassed
+	}
+	return verdict
+}
+
+// LatestUnreadableVerificationAfter returns the most recent check that ran
+// after the boundary and whose outcome the host could not read. Telling a model
+// to "run a verification" when it just ran one it cannot see the result of
+// sends it round the same loop; naming the command is what breaks it.
+func (l *Ledger) LatestUnreadableVerificationAfter(after int) (Receipt, bool) {
+	if l == nil {
+		return Receipt{}, false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i := len(l.receipts) - 1; i > after && i >= 0; i-- {
+		if r := l.receipts[i]; r.Success && r.Verification == VerificationInconclusive {
+			return r, true
+		}
+	}
+	return Receipt{}, false
+}
+
 // CommandRunsVerification reports whether command runs a verification at all,
 // whatever else it also runs. IsDeliveryVerificationCommand asks the stricter
 // question — whether the command runs *only* verification and read-only work —

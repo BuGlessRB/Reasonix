@@ -31,7 +31,11 @@ type ShellExecution struct {
 	OutputTail   string `json:"outputTail,omitempty"`
 	MutationRisk string `json:"mutationRisk,omitempty"` // none | not_started | may_have_completed | may_be_partial | unknown
 	Verification string `json:"verification,omitempty"` // not_verification | not_run | passed | failed
-	DurationMs   int64  `json:"durationMs,omitempty"`
+	// PipeStatus is each stage's exit status for a run the host asked bash to
+	// report, left to right. Empty when it did not ask, or when the report did
+	// not survive the run — a pipeline's own ExitCode is only its last stage.
+	PipeStatus []int `json:"pipeStatus,omitempty"`
+	DurationMs int64 `json:"durationMs,omitempty"`
 }
 
 // Shell execution state values.
@@ -126,6 +130,7 @@ func CloneShellExecution(in *ShellExecution) *ShellExecution {
 		code := *in.ExitCode
 		out.ExitCode = &code
 	}
+	out.PipeStatus = append([]int(nil), in.PipeStatus...)
 	return &out
 }
 

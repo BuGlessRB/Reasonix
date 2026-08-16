@@ -1,0 +1,98 @@
+package builtin
+
+import (
+	"errors"
+	"os/exec"
+	"strings"
+	"testing"
+
+	"reasonix/internal/sandbox"
+)
+
+func testProbe(t *testing.T, command string) pipeStatusProbe {
+	t.Helper()
+	return newPipeStatusProbe(sandbox.Shell{Kind: sandbox.ShellBash}, command, false)
+}
+
+func TestPipeStatusProbeAppliesOnlyToMaskedVerification(t *testing.T) {
+	if !testProbe(t, "go test ./... 2>&1 | tail -5").active() {
+		t.Fatal("a check whose status a later stage swallows must be probed")
+	}
+	for _, command := range []string{
+		"go test ./...",              // status already answers for the check
+		"cat notes.md | tail -5",     // nothing to decide
+		"tail -5 log | go test ./..", // the check already decides the status
+		"go vet ./... && go test ./... | tail",
+	} {
+		if testProbe(t, command).active() {
+			t.Errorf("%q was probed, want left alone", command)
+		}
+	}
+	if newPipeStatusProbe(sandbox.Shell{Kind: sandbox.ShellPowerShell}, "go test ./... | tail -5", false).active() {
+		t.Error("PowerShell has no PIPESTATUS to ask for")
+	}
+	if newPipeStatusProbe(sandbox.Shell{Kind: sandbox.ShellBash}, "go test ./... | tail -5", true).active() {
+		t.Error("a background job reports its status elsewhere")
+	}
+}
+
+// The wrapper must keep the command's own exit status and report the stage
+// statuses bash saw, or it would trade one wrong answer for another.
+func TestPipeStatusProbePreservesExitStatusAndReports(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash unavailable")
+	}
+	probe := testProbe(t, "go test ./... | tail -5")
+	if !probe.active() {
+		t.Fatal("probe inactive")
+	}
+
+	for _, tc := range []struct {
+		name     string
+		command  string
+		wantCode int
+		want     []int
+	}{
+		{"masked failure", "sh -c 'echo boom; exit 3' | tail -1", 0, []int{3, 0}},
+		{"clean pass", "echo ok | tail -1", 0, []int{0, 0}},
+		{"failing tail", "echo ok | sh -c 'exit 4'", 4, []int{0, 4}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := exec.Command("bash", "-c", probe.wrap(tc.command)).CombinedOutput()
+			code := 0
+			var exitErr *exec.ExitError
+			switch {
+			case errors.As(err, &exitErr):
+				code = exitErr.ExitCode()
+			case err != nil:
+				t.Fatalf("run: %v", err)
+			}
+			if code != tc.wantCode {
+				t.Fatalf("exit = %d, want %d", code, tc.wantCode)
+			}
+			clean, status := probe.read(string(out))
+			if len(status) != len(tc.want) {
+				t.Fatalf("status = %v, want %v", status, tc.want)
+			}
+			for i := range status {
+				if status[i] != tc.want[i] {
+					t.Fatalf("status = %v, want %v", status, tc.want)
+				}
+			}
+			if strings.Contains(clean, probe.marker()) {
+				t.Fatalf("report leaked into model-visible output: %q", clean)
+			}
+		})
+	}
+}
+
+func TestPipeStatusProbeReadWithoutReport(t *testing.T) {
+	probe := testProbe(t, "go test ./... | tail -5")
+	out, status := probe.read("ok  \tlogstat\t0.4s\n")
+	if status != nil {
+		t.Fatalf("status = %v, want none", status)
+	}
+	if out != "ok  \tlogstat\t0.4s\n" {
+		t.Fatalf("output altered: %q", out)
+	}
+}

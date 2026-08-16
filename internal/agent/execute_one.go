@@ -408,7 +408,7 @@ func (a *Agent) applyDeliveryPolicyGates(turn *turnRuntime, plan *toolCallPlan) 
 			mixed = evidence.BashToolCallMixesMutationAndVerification
 		}
 		if mixed(plan.evidenceArgs) {
-			msg := evidence.ShellContractPreflightMessage("mixed")
+			msg := evidence.ShellContractMixedMessage(plan.evidenceArgs)
 			if a.deliveryProfile {
 				msg = "blocked: this command mixes a verification check with a segment that may write state. Run the state-changing preparation separately while a todo is in_progress, then run a read-only verification command. For generated input, prefer a host-recognized read-only pipeline into the verifier (for example: tail ... | head ... | node --check -) instead of writing a temporary file."
 			}
@@ -750,14 +750,8 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		// verifier. The exit status answers for the whole command, so it is a
 		// verdict about the verifier only when no later stage can decide it.
 		if execution != nil && plan.verification {
-			switch {
-			case !evidence.VerificationExitConclusive(bashCommandFromArgs(plan.evidenceArgs)):
-				execution.Verification = tool.ShellVerificationInconclusive
-			case err != nil:
-				execution.Verification = tool.ShellVerificationFailed
-			default:
-				execution.Verification = tool.ShellVerificationPassed
-			}
+			execution.Verification = shellVerificationVerdict(bashCommandFromArgs(plan.evidenceArgs), execution.PipeStatus, err)
+			result = shellVerificationNotice(result, execution)
 		} else if execution != nil && execution.Verification == "" {
 			execution.Verification = tool.ShellVerificationNotVerification
 		}

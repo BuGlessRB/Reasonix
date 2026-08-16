@@ -197,7 +197,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 		!a.declaredChecksRanAfter(writer) {
 		out.applies = true
 		out.missingVerification++
-		missing = append(missing, "run a relevant verification command after the latest write for the current role setting")
+		missing = append(missing, a.verificationGap(writer))
 	}
 	hasProjectChecks := len(a.projectChecks) > 0
 	hasTodoReceipt := a.task.ledger.HasSuccessfulTodoWrite()
@@ -245,6 +245,20 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	}
 	out.reason = strings.Join(missing, "; ")
 	return out
+}
+
+// verificationGap says what is actually missing. A check whose exit status
+// belonged to a later stage of the same command did run, so asking for "a
+// verification command" reads as false to the model that just ran one; what it
+// needs is the command named and a shape whose status answers for the check.
+func (a *Agent) verificationGap(writer int) string {
+	const ask = "run a relevant verification command after the latest write for the current role setting"
+	unreadable, ok := a.task.ledger.LatestUnreadableVerificationAfter(writer)
+	if !ok || strings.TrimSpace(unreadable.Command) == "" {
+		return ask
+	}
+	return fmt.Sprintf("%s — %q ran, but its exit status is the last stage's, not the check's, "+
+		"so it proves nothing either way; re-run the check on its own", ask, strings.TrimSpace(unreadable.Command))
 }
 
 func finalReadinessCheckSource(check instruction.VerifyCheck) string {

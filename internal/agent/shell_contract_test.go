@@ -33,8 +33,13 @@ func TestOrdinaryModeBlocksMixedMutationAndVerification(t *testing.T) {
 	if strings.Contains(got, "bash done") {
 		t.Fatal("mixed command was executed")
 	}
-	if !strings.Contains(got, "state-changing segment") {
+	if !strings.Contains(got, "cannot prove leaves the workspace alone") {
 		t.Fatalf("result = %q, want ordinary-mode mixed block", got)
+	}
+	// The block names the segment it tripped on; without it the model rewrites
+	// whichever part it guesses is at fault.
+	if !strings.Contains(got, "go generate ./...") {
+		t.Fatalf("result = %q, want the offending segment named", got)
 	}
 	for _, msg := range a.sess.conversation.Snapshot() {
 		if msg.ToolCallID != "m1" {
