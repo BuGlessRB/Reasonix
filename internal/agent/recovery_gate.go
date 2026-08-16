@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"reasonix/internal/evidence"
+	"reasonix/internal/tool"
 )
 
 // recoveryIdentity is who this agent is to the shared gate: the labels a
@@ -291,17 +292,11 @@ func recoveryEmptySearch(toolName, output string) bool {
 	default:
 		return false
 	}
+	// The sentinel is the host's own, so this reads what the tool wrote rather
+	// than guessing at wording: the list that stood here also carried four
+	// phrases no tool has ever printed.
 	out := strings.TrimSpace(output)
-	if out == "" {
-		return true
-	}
-	lower := strings.ToLower(out)
-	for _, marker := range []string{"no matches", "no files found", "0 matches", "not found", "no results"} {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
+	return out == "" || strings.HasPrefix(out, tool.NoMatches)
 }
 
 func boundedRecoveryTaskSummary(task string) string {

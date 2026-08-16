@@ -49,9 +49,9 @@ func formatGrep(ctx context.Context, out []string, truncated bool, to time.Durat
 	timedOut := ctx.Err() == context.DeadlineExceeded
 	if len(out) == 0 {
 		if timedOut {
-			return fmt.Sprintf("(no matches; timed out after %s — narrow the path/pattern or raise timeout_seconds)", to)
+			return fmt.Sprintf("%s; timed out after %s — narrow the path/pattern or raise timeout_seconds", tool.NoMatches, to)
 		}
-		return "(no matches)"
+		return tool.NoMatches
 	}
 	res := strings.Join(out, "\n")
 	switch {

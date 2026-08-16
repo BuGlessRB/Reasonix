@@ -115,7 +115,7 @@ func (g globTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 		return g.globRecursive(ctx, fallback, fallback, ResolvedPath{}, to)
 	}
 	if len(matches) == 0 {
-		return "(no matches)", nil
+		return tool.NoMatches, nil
 	}
 	matches = displayGlobMatches(matches, rp)
 	if len(matches) > globMaxResults {
@@ -156,7 +156,7 @@ func (g globTool) globRecursive(ctx context.Context, pattern, displayPattern str
 		}
 		return "", fmt.Errorf("glob %q: %w", displayPattern, err)
 	} else if !info.IsDir() {
-		return "(no matches)", nil
+		return tool.NoMatches, nil
 	}
 
 	var matches []string
@@ -201,9 +201,9 @@ func (g globTool) globRecursive(ctx context.Context, pattern, displayPattern str
 
 	if len(matches) == 0 {
 		if timedOut {
-			return fmt.Sprintf("(no matches; timed out after %s — narrow the pattern or raise timeout_seconds)", to), nil
+			return fmt.Sprintf("%s; timed out after %s — narrow the pattern or raise timeout_seconds", tool.NoMatches, to), nil
 		}
-		return "(no matches)", nil
+		return tool.NoMatches, nil
 	}
 	sort.Strings(matches)
 	matches = displayGlobMatches(matches, rp)

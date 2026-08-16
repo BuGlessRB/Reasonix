@@ -136,3 +136,8 @@ func CloneShellExecution(in *ShellExecution) *ShellExecution {
 
 // IntPtr returns a pointer to v for ShellExecution.ExitCode.
 func IntPtr(v int) *int { return &v }
+
+// NoMatches is what a search built-in prints when it found nothing. It is one
+// constant because two sides need it: the tool writes it for the model, and the
+// host reads it to tell a search that came back empty from one that broke.
+const NoMatches = "(no matches)"
