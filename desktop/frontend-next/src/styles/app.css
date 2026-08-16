@@ -665,6 +665,9 @@
   }
   .traj .sub b { color: var(--muted); font-weight: 400 }
   .traj .num { color: var(--text); font-variant-numeric: tabular-nums }
+  /* 表在这条栏下面开始：导出是对这张表整体的操作，不是某一行的 */
+  .traj-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px 0 }
+  .traj-saved { font: 400 10.5px var(--mono); color: var(--ok); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .traj-note { padding: 12px; font: 400 10.5px var(--mono); color: var(--ghost) }
   .traj-note code { color: var(--faint) }
 

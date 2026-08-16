@@ -1,3 +1,4 @@
+import { download } from "./download";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, SkillEntry } from "./port";
 import { MockLook } from "./mock_look";
 
@@ -134,5 +135,13 @@ export class MockExtensions extends MockLook {
   async exportPlugin(name: string): Promise<PluginExport> {
     const p = this.packages.find((x) => x.name === name);
     return { required: p?.mcpServers?.length ? [`${p.name.toUpperCase()}_TOKEN`] : [] };
+  }
+
+  // No shell here, so this is the browser path — the same one a served tab
+  // takes. Returning a made-up path instead would hide that the file never
+  // arrives anywhere.
+  async saveText(name: string, content: string): Promise<string | null> {
+    download(name, content);
+    return null;
   }
 }

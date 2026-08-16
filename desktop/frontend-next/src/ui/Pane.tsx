@@ -51,11 +51,15 @@ interface Props {
   // position are exactly what a tab switch must not throw away.
   visible: boolean;
   onSessionChanged: () => void;
+  // Bumped when something outside this pane changed a setting that belongs to
+  // its session. /status is polled only while a turn runs, so without this the
+  // pane keeps reporting the posture it had when it opened.
+  pulse: number;
   onFoldSide: () => void;
   onSettings: () => void;
 }
 
-function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, onFoldSide, onSettings }: Props) {
+function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, onFoldSide, onSettings }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
   const [status, setStatus] = useState<SessionStatus | null>(null);
@@ -126,6 +130,10 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const refreshStatus = useCallback(() => {
     port.status().then(applyStatus).catch(() => {});
   }, [port, applyStatus]);
+
+  useEffect(() => {
+    if (pulse) refreshStatus();
+  }, [pulse, refreshStatus]);
 
   const fail = useCallback((e: unknown) => {
     // A refusal carries a code; say() turns it into this window's language.
@@ -385,7 +393,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           attribute left every row of it being rebuilt on each streamed
           delta — a second transcript's worth of work, drawn for nobody. */}
       <div className="scroll" data-pane="traj" hidden={tab !== "traj"}>
-        {tab === "traj" && <Trajectory rows={traj.rows} />}
+        {tab === "traj" && <Trajectory rows={traj.rows} onSave={(n, c) => port.saveText(n, c)} />}
       </div>
 
       <div className="compose">

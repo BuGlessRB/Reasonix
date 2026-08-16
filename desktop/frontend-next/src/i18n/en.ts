@@ -45,6 +45,8 @@ export const EN: Record<string, string> = {
   "活动": "Activity",
   "轨迹": "Trajectory",
   "时间轴": "Timeline",
+  "存到 {path}": "Saved to {path}",
+  "已下载 {name}": "Downloaded {name}",
   "度量": "Metrics",
   "工作区": "Workspaces",
   "收起工作区栏": "Collapse the workspace rail",

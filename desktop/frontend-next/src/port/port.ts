@@ -422,6 +422,9 @@ export interface AgentPort {
   // it on the way. Installing is the same door: a folder, a link, or this
   // archive unpacked — there is no separate import.
   exportPlugin(name: string): Promise<PluginExport>;
+  // Text the window assembled, put on disk. Returns where it went, or null when
+  // the host handled it without a path to report (a browser download).
+  saveText(name: string, content: string): Promise<string | null>;
   // Absolute paths of files dropped on an element that opted in with
   // `--wails-drop-target: drop`. A browser tab only ever sees a File object,
   // never a path, so this returns an unsubscribe that fires nowhere there —

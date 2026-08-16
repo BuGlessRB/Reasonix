@@ -1,3 +1,4 @@
+import { download } from "./download";
 import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, PermissionLists, PermissionRules, SandboxSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
 import { HttpError, type Attachment, type WorkspaceChanges } from "./port";
 import type { WireEvent } from "./wire";
@@ -37,6 +38,7 @@ interface WailsBind {
         PinVersion?: (version: string) => Promise<void>;
         GoToVersion?: (version: string) => Promise<void>;
         SavePluginExport?: (name: string) => Promise<{ path: string; required: string[] }>;
+        SaveText?: (name: string, content: string) => Promise<string>;
       };
     };
   };
@@ -170,6 +172,13 @@ export class SsePort implements AgentPort {
     a.click();
     URL.revokeObjectURL(url);
     return { required };
+  }
+
+  async saveText(name: string, content: string): Promise<string | null> {
+    const save = (window as WailsBind).go?.main?.App?.SaveText;
+    if (save) return (await save(name, content)) || null;
+    download(name, content);
+    return null;
   }
 
   hooks() {

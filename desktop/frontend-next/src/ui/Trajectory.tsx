@@ -1,7 +1,34 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { t } from "../i18n";
 import { categoryOf } from "./icons";
 import type { Span, TrajRow } from "../state/trajectory";
+
+// The table renders spans; a file wants the text they carry. Both halves of a
+// span are values, so this reads them rather than knowing which kinds exist.
+const flat = (spans: Span[]) => spans.map((x) => ("b" in x ? x.b : "n" in x ? x.n : x.t)).join("");
+
+// What a row is, without the drawing: when it started, how long it ran, what
+// ran. Anything reading this back — a script, a spreadsheet, an issue — wants
+// those four, and the rendered payload as the human-readable line.
+function serialise(rows: TrajRow[]) {
+  return JSON.stringify(
+    {
+      exported: new Date().toISOString(),
+      span: rows.length ? Number(Math.max(...rows.map((r) => r.at + (r.dur ?? 0))).toFixed(3)) : 0,
+      rows: rows.map((r) => ({
+        seq: r.seq,
+        at: Number(r.at.toFixed(3)),
+        dur: r.dur === undefined ? undefined : Number(r.dur.toFixed(3)),
+        kind: r.kind,
+        tool: r.tool,
+        text: flat(r.payload),
+        detail: r.subs.map(flat),
+      })),
+    },
+    null,
+    2,
+  );
+}
 
 function Spans({ of }: { of: Span[] }) {
   return (
@@ -35,12 +62,31 @@ function Track({ row, span }: { row: TrajRow; span: number }) {
   );
 }
 
-export function Trajectory({ rows }: { rows: TrajRow[] }) {
+export function Trajectory({ rows, onSave }: { rows: TrajRow[]; onSave: (name: string, content: string) => Promise<string | null> }) {
+  // 壳能给出落盘路径，浏览器只能说它交给了下载 —— 两句话不一样，别混着说。
+  const [saved, setSaved] = useState<{ to: string; path: boolean } | null>(null);
   // 轴的跨度是最后一段活动结束的时刻 —— 不是最后一行开始的时刻，一行现在
   // 代表一段有长度的活动，最长的那条未必是最后开的。
   const span = Math.max(1, ...rows.map((r) => r.at + (r.dur ?? 0)));
   return (
     <>
+      <div className="traj-bar">
+        <button
+          className="btn sm"
+          disabled={rows.length === 0}
+          onClick={() => {
+            const name = `trajectory-${new Date().toISOString().slice(0, 19).replace("T", "-").replace(/:/g, "")}.json`;
+            void onSave(name, serialise(rows)).then((to) => setSaved({ to: to ?? name, path: to !== null }));
+          }}
+        >
+          {t("导出")}
+        </button>
+        {saved && (
+          <span className="traj-saved">
+            {saved.path ? t("存到 {path}", { path: saved.to }) : t("已下载 {name}", { name: saved.to })}
+          </span>
+        )}
+      </div>
       <table className="traj">
         <thead>
           <tr>
