@@ -26,10 +26,10 @@ func TestFittedKeepsTheWindowOnScreen(t *testing.T) {
 			if w != tc.wantW || h != tc.wantH {
 				t.Errorf("fitted(%d,%d on %dx%d) = %d,%d; want %d,%d", tc.w, tc.h, tc.sw, tc.sh, w, h, tc.wantW, tc.wantH)
 			}
-			if tc.sw > screenMargin && w > tc.sw {
+			if tc.sw > 0 && w > tc.sw {
 				t.Errorf("still wider than the screen: %d > %d", w, tc.sw)
 			}
-			if tc.sh > screenMargin && h > tc.sh {
+			if tc.sh > 0 && h > tc.sh {
 				t.Errorf("still taller than the screen: %d > %d", h, tc.sh)
 			}
 		})
