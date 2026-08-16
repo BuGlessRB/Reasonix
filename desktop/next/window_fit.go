@@ -9,24 +9,25 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// Room left around the window when a screen cannot hold the default size. Not
-// cosmetic: on Windows the title bar is drawn by the app (the frame is off), so
-// a window taller than the screen puts its own title bar — and the drag region
-// with it — above the top edge, where it cannot be grabbed to move the window
-// back down.
-const screenMargin = 64
+// How much of the screen a fresh window may take. Proportional rather than a
+// fixed margin: 64px of air is cramped on a 4K panel and generous on a laptop,
+// while "most of it, not all of it" reads the same at every size.
+const screenShare = 90
 
-// fitted returns the size to open at on a screen of the given logical size. A
-// screen reporting nothing (some drivers do, on first paint) leaves the request
-// untouched rather than collapsing the window to a margin.
-func fitted(w, h, screenW, screenH int) (int, int) {
-	if screenW > screenMargin && w > screenW-screenMargin {
-		w = screenW - screenMargin
+// fitted returns the size to open at: the preferred size treated as a ceiling,
+// not a constant. The window is whatever is smaller — what we would like, or
+// what this screen can comfortably show.
+//
+// A screen reporting nothing (some drivers do before the first paint) leaves
+// the preference alone rather than collapsing the window to a share of zero.
+func fitted(maxW, maxH, screenW, screenH int) (int, int) {
+	if screenW > 0 {
+		maxW = min(maxW, screenW*screenShare/100)
 	}
-	if screenH > screenMargin && h > screenH-screenMargin {
-		h = screenH - screenMargin
+	if screenH > 0 {
+		maxH = min(maxH, screenH*screenShare/100)
 	}
-	return w, h
+	return maxW, maxH
 }
 
 // fitWindow puts the window where it fits, on the screen it opened on.
@@ -40,7 +41,14 @@ func fitted(w, h, screenW, screenH int) (int, int) {
 //
 // Centring happens regardless: Wails does not promise a centred window on
 // Windows, and a window that merely fits can still open partly off-screen.
+//
+// The window starts hidden and is shown from here, so none of this is visible
+// as a resize — it opens already the right size, in the right place.
 func fitWindow(ctx context.Context) {
+	// Whatever happens below, the window becomes visible. A measurement that
+	// fails must cost a badly sized window, never an invisible one.
+	defer runtime.WindowShow(ctx)
+
 	screens, err := runtime.ScreenGetAll(ctx)
 	if err != nil || len(screens) == 0 {
 		slog.Debug("studio: no screen geometry, keeping default window size", "err", err)

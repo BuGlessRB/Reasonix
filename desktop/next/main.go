@@ -189,11 +189,14 @@ func run() error {
 		// above it costs a whole row to say the app's own name. Same treatment
 		// the existing shell uses; Linux keeps its frame, WebKitGTK has no inset.
 		Frameless: goruntime.GOOS == "windows",
-		Mac:       &mac.Options{TitleBar: mac.TitleBarHiddenInset(), Appearance: mac.DefaultAppearance},
-		Windows:   &windows.Options{Theme: windows.SystemDefault},
-		MinWidth:  760,
-		MinHeight: 480,
-		Menu:      appMenu(),
+		// Shown by fitWindow once it has been measured against the screen it
+		// landed on. Sizing a visible window makes the correction a flicker.
+		StartHidden: true,
+		Mac:         &mac.Options{TitleBar: mac.TitleBarHiddenInset(), Appearance: mac.DefaultAppearance},
+		Windows:     &windows.Options{Theme: windows.SystemDefault},
+		MinWidth:    760,
+		MinHeight:   480,
+		Menu:        appMenu(),
 		// Production builds ship without one, so the window had no copy, paste,
 		// or select-all on right-click — in a text editor that reads as broken.
 		EnableDefaultContextMenu: true,
