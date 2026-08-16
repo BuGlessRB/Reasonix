@@ -204,6 +204,9 @@ func run() error {
 			shell.ctx = ctx
 			shell.mu.Unlock()
 			applyDockIcon()
+			// Before anything is drawn: a window that does not fit takes its own
+			// title bar off-screen on Windows, and with it the way to move it.
+			fitWindow(ctx)
 			// Panes opened before the window came up have no pump yet; from here
 			// on the hub's OnOpen starts one as each is published.
 			for _, rt := range hub.Runtimes() {
