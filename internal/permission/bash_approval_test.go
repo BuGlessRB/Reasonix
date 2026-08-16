@@ -241,6 +241,13 @@ func TestHereDocFedInterpreterIsInlineCode(t *testing.T) {
 		{"for f in *; do python3 - <<'EOF'\nx\nEOF\ndone", BashApprovalBlockerInlineCode},
 		{"sort <<'EOF'\nb\na\nEOF", BashApprovalBlockerNone},
 		{"python3 script.py", BashApprovalBlockerNone},
+
+		// A here-document writing a file is neither inline code nor unreadable:
+		// the parser reports it, and the caller needs to hear "write_file",
+		// which is advice the unparsable message cannot give.
+		{"cd /w && cat > pkg/x.go <<'EOF'\npackage pkg\nEOF", BashApprovalBlockerHereDocBody},
+		{"mkdir -p pkg && cat > pkg/x.go <<'EOF'\npackage pkg\nEOF", BashApprovalBlockerHereDocBody},
+		{"for f in *.go; do rm $f; done", BashApprovalBlockerUnparsable},
 	} {
 		if got := BashSubjectApprovalBlocker(tc.command); got != tc.want {
 			t.Errorf("%q blocker = %v, want %v", firstLineOfCommand(tc.command), got, tc.want)

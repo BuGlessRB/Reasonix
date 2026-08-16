@@ -51,6 +51,8 @@ func readOnlyBashBlockReason(command string) string {
 		return lead + "The program this one runs comes from a variable, so the host cannot tell what would execute." + remedy
 	case permission.BashApprovalBlockerIndirectExecution:
 		return lead + "This one runs through a wrapper (eval, source, xargs, find -exec) that executes something it does not name." + remedy
+	case permission.BashApprovalBlockerHereDocBody:
+		return lead + "This one feeds a here-document, whose body is file content rather than arguments the host can read." + remedy
 	case permission.BashApprovalBlockerUnparsable:
 		return lead + "Static analysis could not read this one — shell operators, loops, and redirections put it out of reach." + remedy
 	default:

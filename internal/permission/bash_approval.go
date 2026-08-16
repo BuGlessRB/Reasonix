@@ -36,6 +36,9 @@ const (
 	// BashApprovalBlockerIndirectExecution is a wrapper that runs some other
 	// command the argv does not name: eval, source, xargs, find -exec.
 	BashApprovalBlockerIndirectExecution
+	// BashApprovalBlockerHereDocBody is a here-document the parser reads but an
+	// approval cannot: its body is file content, not arguments.
+	BashApprovalBlockerHereDocBody
 )
 
 // BashSubjectRequiresExplicitApproval reports whether subject can execute a
@@ -81,6 +84,9 @@ func segmentApprovalBlocker(subject string) BashApprovalBlocker {
 		// every command it runs; all-read-only leaves leave nothing to rule on.
 		if compoundIsReadOnly(subject) {
 			return BashApprovalBlockerNone
+		}
+		if hasHereDoc(subject) {
+			return BashApprovalBlockerHereDocBody
 		}
 		return BashApprovalBlockerUnparsable
 	}
@@ -339,4 +345,12 @@ func compoundIsReadOnly(subject string) bool {
 // its source from a here-document.
 func hasHereDocFedInterpreter(subject string) bool {
 	return slices.ContainsFunc(shellparse.StdinHereDocPrograms(subject), isInterpreter)
+}
+
+// hasHereDoc reports whether the statement carries a here-document at all. The
+// parser reads one fine; an approval cannot, because the body is content rather
+// than arguments — which is a different gap from a statement nothing can read.
+func hasHereDoc(subject string) bool {
+	file, err := shellparse.ParseBash(subject)
+	return err == nil && shellparse.HasHereDoc(file)
 }
