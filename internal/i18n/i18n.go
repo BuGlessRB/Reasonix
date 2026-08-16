@@ -31,6 +31,9 @@ type Messages struct {
 	// `reasonix init` — points to the in-session /init skill + setup
 	InitHint string
 
+	// desktop shell — native panels it opens on its own, outside the webview
+	PickWorkspaceTitle string // folder panel title; says a folder may be made here
+
 	// chat REPL
 	ChatTip             string // tip line under the chat banner
 	TurnCancelled       string // shown when Ctrl-C aborts the in-flight turn but the chat keeps running
@@ -627,6 +630,22 @@ var (
 	M               = English
 	currentLanguage = "en"
 )
+
+// Catalog returns the messages for a tag without installing them. The desktop
+// shell needs exactly this: its interface language is a setting of its own,
+// separate from the kernel's, and one process holds both — so it must read a
+// catalogue rather than replace the active one.
+func Catalog(tag string) Messages {
+	switch normalize(tag) {
+	case "zh":
+		return Chinese
+	case "zh-TW":
+		return ChineseTraditional
+	case "en":
+		return English
+	}
+	return M
+}
 
 // CurrentLanguage returns the language tag installed by the latest
 // DetectLanguage call. It lets frontends reuse the resolved locale without

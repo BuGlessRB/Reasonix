@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reasonix/internal/i18n"
 	goruntime "runtime"
 	"strings"
 	"sync"
@@ -152,7 +153,11 @@ func run() error {
 	// Ask/Auto/YOLO is a posture the user set on the composer, not a per-launch
 	// default — the old shell has read this since it had a picker.
 	ctrl.SetToolApprovalMode(cfg.DesktopDefaultToolApprovalMode())
-	shell := &App{pumps: map[string]context.CancelFunc{}}
+	// Native panels the shell opens itself are outside the webview, so the
+	// frontend's own catalogue cannot reach them. They follow the desktop
+	// interface language, which is a separate setting from the kernel's — hence
+	// a catalogue read rather than the active one.
+	shell := &App{pumps: map[string]context.CancelFunc{}, say: i18n.Catalog(cfg.DesktopLanguage())}
 	// One hub, several panes: each session gets its own runtime, so a second
 	// conversation runs beside the first instead of rebuilding it.
 	hub := serve.NewHub(serve.HubOptions{
@@ -254,6 +259,10 @@ func appMenu() *menu.Menu {
 type App struct {
 	hub *serve.Hub
 	ctx context.Context
+	// Text for the native panels this shell opens. Read once at launch from the
+	// desktop interface language; the kernel's own catalogue is a different
+	// setting and must not be swapped out for this.
+	say i18n.Messages
 
 	mu    sync.Mutex
 	pumps map[string]context.CancelFunc
@@ -321,9 +330,9 @@ func (a *App) PickWorkspace() (string, error) {
 		return "", nil
 	}
 	// The panel can make a folder — that is what CanCreateDirectories is for —
-	// but nothing said so, and "打开" reads as "pick one that exists". Users
-	// concluded the app could only open projects, never start one.
-	opts := runtime.OpenDialogOptions{Title: "选择工作目录 · 也可以在这里新建一个", CanCreateDirectories: true}
+	// but nothing said so, and a title reading "open" describes picking one that
+	// exists. Users concluded the app could only open projects, never start one.
+	opts := runtime.OpenDialogOptions{Title: a.say.PickWorkspaceTitle, CanCreateDirectories: true}
 	// Wails refuses to open the panel at all when this points at nothing, and
 	// answers with an error instead — a workspace that has since been moved
 	// would take the picker down with it.

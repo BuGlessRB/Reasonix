@@ -7,7 +7,8 @@ var Chinese = Messages{
 	WelcomeTitleFmt: "欢迎使用 %s",
 	NoConfigYet:     "还没有配置 — 现在来设置一下吧。",
 
-	InitHint: "项目记忆（AGENTS.md）在会话内由模型生成：运行 `reasonix`，然后 `/init` —— 模型会分析代码库并写入。配置请用 `reasonix setup`。",
+	PickWorkspaceTitle: "选择工作目录 · 也可以在这里新建一个",
+	InitHint:           "项目记忆（AGENTS.md）在会话内由模型生成：运行 `reasonix`，然后 `/init` —— 模型会分析代码库并写入。配置请用 `reasonix setup`。",
 
 	ChatTip:             "对话上下文将跨轮保留。输入 'exit' 或按 Ctrl-D 退出。",
 	TurnCancelled:       "已取消 — 回到提示符",

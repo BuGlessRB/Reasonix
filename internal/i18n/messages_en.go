@@ -6,7 +6,8 @@ var English = Messages{
 	WelcomeTitleFmt: "Welcome to %s",
 	NoConfigYet:     "No configuration found yet — let's set it up.",
 
-	InitHint: "Project memory (AGENTS.md) is generated in-session: run `reasonix`, then `/init` — the model analyzes the codebase and writes it. For configuration, use `reasonix setup`.",
+	PickWorkspaceTitle: "Choose a working folder — or make a new one here",
+	InitHint:           "Project memory (AGENTS.md) is generated in-session: run `reasonix`, then `/init` — the model analyzes the codebase and writes it. For configuration, use `reasonix setup`.",
 
 	ChatTip:             "Context is kept across turns. Type 'exit' or Ctrl-D to quit.",
 	TurnCancelled:       "cancelled — back to prompt",
