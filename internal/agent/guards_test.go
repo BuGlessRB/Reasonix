@@ -201,6 +201,78 @@ func TestPartitionToolCallsAllReadOnly(t *testing.T) {
 	}
 }
 
+// concurrencyProbe stands in for a writer-capable tool whose read-only-ness is
+// decided per call, and records how many of its calls were ever in flight at
+// once.
+type concurrencyProbe struct {
+	name     string
+	hold     time.Duration
+	inFlight atomic.Int32
+	peak     atomic.Int32
+}
+
+func (p *concurrencyProbe) Name() string            { return p.name }
+func (p *concurrencyProbe) Description() string     { return "" }
+func (p *concurrencyProbe) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (p *concurrencyProbe) ReadOnly() bool          { return false }
+func (p *concurrencyProbe) Execute(context.Context, json.RawMessage) (string, error) {
+	n := p.inFlight.Add(1)
+	for {
+		seen := p.peak.Load()
+		if n <= seen || p.peak.CompareAndSwap(seen, n) {
+			break
+		}
+	}
+	time.Sleep(p.hold)
+	p.inFlight.Add(-1)
+	return "ok", nil
+}
+
+// TestExecuteBatchOverlapsReadOnlyBash is the effect test for the read-only
+// bash partition: grouping the calls into one batch is not the point, running
+// them at the same time is.
+func TestExecuteBatchOverlapsReadOnlyBash(t *testing.T) {
+	probe := &concurrencyProbe{name: "bash", hold: 60 * time.Millisecond}
+	reg := tool.NewRegistry()
+	reg.Add(probe)
+	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
+		{
+			toolCallChunk("a", "bash", `{"command":"grep -rn needle ."}`),
+			toolCallChunk("b", "bash", `{"command":"ls internal/"}`),
+			{Type: provider.ChunkDone},
+		},
+		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
+	}}
+	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	if err := a.Run(context.Background(), "search twice"); err != nil {
+		t.Fatal(err)
+	}
+	if peak := probe.peak.Load(); peak != 2 {
+		t.Fatalf("peak in-flight read-only bash calls = %d, want 2", peak)
+	}
+}
+
+// TestPartitionToolCallsReadsBashArguments verifies bash joins a parallel run
+// when its arguments read as read-only, and serializes when they do not.
+func TestPartitionToolCallsReadsBashArguments(t *testing.T) {
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "ro", readOnly: true})
+	reg.Add(fakeTool{name: "bash", readOnly: false})
+	calls := []provider.ToolCall{
+		{Name: "ro"},
+		{Name: "bash", Arguments: `{"command":"grep -rn needle ."}`},
+		{Name: "bash", Arguments: `{"command":"rm -rf build"}`},
+	}
+	got := partitionToolCalls(reg, calls)
+	want := []toolCallBatch{
+		{start: 0, end: 2, parallel: true},
+		{start: 2, end: 3},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("partitionToolCalls = %+v, want %+v", got, want)
+	}
+}
+
 // TestPartitionToolCallsSegmentsAroundWriters verifies a writer only serializes
 // its own provider-order position; read-only runs on either side stay batchable.
 func TestPartitionToolCallsSegmentsAroundWriters(t *testing.T) {

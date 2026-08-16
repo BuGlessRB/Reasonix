@@ -415,10 +415,10 @@ type toolCallBatch struct {
 func partitionToolCalls(r *tool.Registry, calls []provider.ToolCall) []toolCallBatch {
 	var batches []toolCallBatch
 	for i := 0; i < len(calls); {
-		if parallelisable(r, calls[i].Name) {
+		if parallelisable(r, calls[i]) {
 			start := i
 			i++
-			for i < len(calls) && parallelisable(r, calls[i].Name) {
+			for i < len(calls) && parallelisable(r, calls[i]) {
 				i++
 			}
 			batches = append(batches, toolCallBatch{start: start, end: i, parallel: true})
@@ -430,13 +430,22 @@ func partitionToolCalls(r *tool.Registry, calls []provider.ToolCall) []toolCallB
 	return batches
 }
 
-func parallelisable(r *tool.Registry, name string) bool {
-	switch name {
+func parallelisable(r *tool.Registry, call provider.ToolCall) bool {
+	switch call.Name {
 	case "complete_step", "todo_write", "wait", "bash_output", "use_capability", "compress":
 		return false
 	}
-	t, _, ambiguous := r.ResolveCall(name)
-	return t != nil && len(ambiguous) == 0 && t.ReadOnly()
+	t, canonical, ambiguous := r.ResolveCall(call.Name)
+	if t == nil || len(ambiguous) > 0 {
+		return false
+	}
+	if t.ReadOnly() {
+		return true
+	}
+	// Bash is writer-capable in its schema, so it never joined a parallel run
+	// even when its arguments read as read-only — the same fact permission,
+	// mutation accounting, and evidence already act on.
+	return canonical == "bash" && permission.BashCommandIsReadOnly(json.RawMessage(call.Arguments))
 }
 
 func runParallel(ctx context.Context, start, end int, run func(int)) int {
