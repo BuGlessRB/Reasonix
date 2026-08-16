@@ -214,7 +214,10 @@ func TestCompleteStepDeliveryRejectsOpaqueEvalVerification(t *testing.T) {
 	if err == nil {
 		t.Fatal("delivery complete_step should reject a command the final gate cannot recognize")
 	}
-	for _, want := range []string{"not a recognized delivery verification", "node --check"} {
+	// Naming the category alone ("use a project lint command") sends the model
+	// back with another unrecognized command — a project's own checker reads as
+	// exactly that. The accepted set has to travel with the refusal.
+	for _, want := range []string{"not a recognized delivery verification", "node --check", "make test", "go test ./..."} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error %q missing recovery hint %q", err, want)
 		}

@@ -206,7 +206,11 @@ func verifyStepEvidence(ctx context.Context, items []stepEvidence) (hostVerified
 			}
 			_, deliveryHasMutation := ledger.LatestSuccessfulMutationIndex()
 			if evidence.DeliveryProfileFromContext(ctx) && deliveryHasMutation && !evidence.IsDeliveryVerificationCommand(command) {
-				return 0, 0, fmt.Errorf("evidence %d: command %q ran successfully but is not a recognized delivery verification; do not cite an opaque command as verification. Use a project test/check/lint command, or for JavaScript syntax use node --check <file> (a read-only extraction pipeline ending in node --check also works). If this was only a visible/manual inspection, cite kind manual or files without a command, then rerun and cite a recognized verifier after any opaque mutation", i+1, command)
+				// Naming only the category sends the model back with another
+				// unrecognized command — a project's own checker (go run ./tools/x)
+				// reads as "a project lint command" and is refused just the same.
+				// The summary is the accepted set, so cite it here as well.
+				return 0, 0, fmt.Errorf("evidence %d: command %q ran successfully but is not a recognized delivery verification; do not cite an opaque command as verification. If this was only a visible/manual inspection, cite kind manual or files without a command, then rerun and cite a recognized verifier after any opaque mutation. %s", i+1, command, evidence.VerificationCommandSummary())
 			}
 			hostVerified++
 		case "review":
