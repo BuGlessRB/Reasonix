@@ -301,10 +301,9 @@ func gapsOf(rep Report, c *taskcontract.Contract) []Gap {
 				gaps = append(gaps, Gap{GapInconclusiveVerification, v.Command})
 			}
 		case !v.Passed:
-			// A failure recorded before the latest change is usually what the
-			// change was for — a project that asks for a failing test first
-			// produces one every time. Once something fresh has proven the tree,
-			// reporting it back is reporting the bug as an outcome.
+			// A failure before the latest change is usually what the change was
+			// for — test-first projects produce one every time. Once something
+			// fresh has proven the tree, reporting it back reports the bug.
 			if !v.Stale || !proven {
 				gaps = append(gaps, Gap{GapFailedVerification, v.Command})
 			}

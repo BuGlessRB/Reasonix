@@ -26,11 +26,10 @@ type Tool interface {
 	// Execute parses the model-generated raw JSON args and returns result text
 	// to feed back to the model.
 	Execute(ctx context.Context, args json.RawMessage) (string, error)
-	// ReadOnly reports whether the tool has no observable side effects on the
-	// host. The agent parallelises a batch of tool calls only when every call
-	// in the batch is ReadOnly; mixed batches stay sequential so write/read
-	// ordering is preserved. bash and plugin tools must return false because
-	// their effects can't be inferred statically from args.
+	// ReadOnly reports whether the tool has no observable side effects. A batch
+	// parallelises only when every call in it is ReadOnly, so write/read order
+	// survives; bash and plugin tools return false, their effects being
+	// unknowable from args alone.
 	ReadOnly() bool
 }
 
@@ -43,11 +42,10 @@ type ContextualTool interface {
 }
 
 // ContextualReasoner is a ContextualTool that can say what would make it
-// available again. Only the tool knows that — it is the same state its own
-// ProviderVisible reads — so a host that answers the model with a name-keyed
-// table of excuses is keeping half the contract somewhere the other half will
-// drift away from. Every ContextualTool must implement this; the registry test
-// enforces it, so a new one cannot ship with a blank reason.
+// available again. Only the tool knows that — the same state ProviderVisible
+// reads — so a name-keyed table of excuses elsewhere would be half the contract
+// kept where the other half drifts from it. The registry test enforces this, so
+// a new ContextualTool cannot ship with a blank reason.
 type ContextualReasoner interface {
 	ContextualTool
 	Unavailable(context.Context) string

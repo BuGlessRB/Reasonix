@@ -18,13 +18,10 @@ import (
 func init() { tool.RegisterBuiltin(completeStep{}) }
 
 // completeStep records an evidence-backed completion of one step of an approved
-// plan. Like todo_write it has no host side effects — the claim and its evidence
-// live in the call's args, which a frontend renders as a signed-off step. Its
-// reason for existing is the enforcement in Execute: a completion with no evidence
-// is rejected, so the model can't flip a step to "done" without showing why it is
-// done (the verification it ran, the diff/files it changed, or a manual check).
-// It complements todo_write — todo_write keeps the list moving (one item
-// in_progress), complete_step is the formal sign-off of a finished step.
+// plan. It has no host side effects; what it exists for is the enforcement in
+// Execute, which rejects a completion carrying no evidence — so a step cannot
+// flip to "done" without showing why. todo_write keeps the list moving;
+// complete_step is the formal sign-off of a finished step.
 type completeStep struct{}
 
 type stepEvidence struct {
@@ -439,11 +436,10 @@ func receiptHint(label string, items []string) string {
 }
 
 // What tells one of these apart from the next, within a budget. Cutting the
-// tail is the wrong end for paths: under a deep root every entry ends up as the
-// same eighty characters of prefix followed by an ellipsis, which is what a
-// real session was answered with — three identical strings offered as the
-// evidence it should have cited. The shared head carries no information once
-// they are read together, so it goes first, and only then is the middle elided.
+// tail is the wrong end for paths: under a deep root every entry becomes the
+// same eighty characters and an ellipsis — one real session offered three
+// identical strings as the evidence it should have cited. The shared head
+// carries nothing once they are read together, so it goes before the middle.
 func distinguish(items []string) []string {
 	out := make([]string, len(items))
 	copy(out, items)
