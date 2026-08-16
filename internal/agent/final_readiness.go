@@ -220,7 +220,11 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 			out.missingSignoff++
 			missing = append(missing, "call complete_step after the latest mutation")
 		}
-		if !a.task.ledger.HasSuccessfulDeliverySignoffAfter(writer) && !blockedWithCheck {
+		// A sign-off that cited a passing check but lacks the review is missing
+		// the review, not the verification. Reporting both sends the model to
+		// re-run and re-cite a check it already ran, cited, and watched pass.
+		if !a.task.ledger.HasSuccessfulDeliverySignoffAfter(writer) && !blockedWithCheck &&
+			!a.task.ledger.HasCitedVerificationAfter(writer) {
 			out.missingVerification++
 			missing = append(missing, "run relevant verification after the latest mutation and cite that successful command in complete_step")
 		}

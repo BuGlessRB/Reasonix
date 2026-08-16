@@ -69,3 +69,26 @@ func TestReRunClearsAnEarlierFailure(t *testing.T) {
 		t.Fatal("the re-run passed, so nothing stands failed")
 	}
 }
+
+// A sign-off citing a check that passed is a cited verification even when the
+// review it also owes is missing, so the gate can name the one real gap.
+func TestCitedVerificationSeparatesFromReview(t *testing.T) {
+	l := NewLedger()
+	l.Record(Receipt{ToolName: "write_file", Success: true, Write: true, Mutation: true, MutationEvidence: MutationProven, Paths: []string{"slug.js"}})
+	writer, _ := l.LatestProvenMutationIndex()
+	l.Record(Receipt{ToolName: "bash", Success: true, Command: "npm test", Verification: VerificationPassed})
+	l.Record(Receipt{ToolName: "complete_step", Success: true, Args: []byte(`{"evidence":[{"kind":"verification","command":"npm test"}]}`)})
+
+	if !l.HasCitedVerificationAfter(writer) {
+		t.Fatal("the sign-off cited a check that passed")
+	}
+	if l.HasSuccessfulDeliverySignoffAfter(writer) {
+		t.Fatal("without a review of the change, the sign-off is not complete")
+	}
+
+	l.Record(Receipt{ToolName: "read_file", Success: true, Read: true, Paths: []string{"slug.js"}})
+	l.Record(Receipt{ToolName: "complete_step", Success: true, Args: []byte(`{"evidence":[{"kind":"verification","command":"npm test"}]}`)})
+	if !l.HasSuccessfulDeliverySignoffAfter(writer) {
+		t.Fatal("reading the changed file completes the sign-off")
+	}
+}

@@ -23,7 +23,7 @@ func TestFormatSectionSortsAndRedacts(t *testing.T) {
 		{Binary: "python3", Found: true, Output: "Python 3.12.0"},
 		{Binary: "go", Found: true, Output: "go version go1.24 darwin/arm64"},
 		{Binary: "docker", Error: "not found"},
-	}, "darwin/arm64", filepath.Join(home, "bin", "bash"), map[string]string{
+	}, "darwin/arm64", filepath.Join(home, "bin", "bash"), "git", map[string]string{
 		"python3": filepath.Join(home, ".pyenv", "shims", "python3"),
 		"go":      "/opt/homebrew/bin/go",
 	})
@@ -258,7 +258,7 @@ func TestFormatSectionLimitsToolOutput(t *testing.T) {
 		results = append(results, ProbeResult{Binary: "missing" + name, Error: "not found"})
 	}
 
-	section := FormatSection(results, "test/os", "", overrides)
+	section := FormatSection(results, "test/os", "", "git", overrides)
 	for _, want := range []string{
 		"- ... 2 more configured tools omitted",
 		"- ... 2 more detected tools omitted",

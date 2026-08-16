@@ -636,6 +636,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			}),
 			runtime.GOOS+"/"+runtime.GOARCH,
 			shellLabel,
+			environment.WorkspaceVCS(root),
 			cfg.Environment.Tools,
 		)
 		if envSection != "" {

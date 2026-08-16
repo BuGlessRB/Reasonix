@@ -736,6 +736,17 @@ func (l *Ledger) HasSuccessfulCompleteStepAfter(after int) bool {
 // host receipts; the additional ordering check prevents a pre-change test from
 // signing off changed code in the delivery profile.
 func (l *Ledger) HasSuccessfulDeliverySignoffAfter(after int) bool {
+	return l.deliverySignoffAfter(after, true)
+}
+
+// HasCitedVerificationAfter is the same minus the review requirement. They
+// differ only when the review is what is missing — the one case where asking
+// for a cited verification is false, since it has one.
+func (l *Ledger) HasCitedVerificationAfter(after int) bool {
+	return l.deliverySignoffAfter(after, false)
+}
+
+func (l *Ledger) deliverySignoffAfter(after int, needReview bool) bool {
 	if l == nil {
 		return false
 	}
@@ -749,7 +760,7 @@ func (l *Ledger) HasSuccessfulDeliverySignoffAfter(after int) bool {
 		if !r.Success || r.ToolName != "complete_step" {
 			continue
 		}
-		if after >= 0 && !receiptsReviewChanges(receipts, start, i, after) {
+		if needReview && after >= 0 && !receiptsReviewChanges(receipts, start, i, after) {
 			continue
 		}
 		for _, command := range completeStepVerificationCommands(r.Args) {
