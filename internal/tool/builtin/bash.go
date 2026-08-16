@@ -544,14 +544,19 @@ func (b bash) foregroundTimeout(sec int) time.Duration {
 	return toolTimeout(sec, host, host)
 }
 
-// bashTimeoutExit names the way out of a deadline, which differs by whose it
-// was: a call that set none has a parameter it never reached for, while one
-// that chose its own number already knows it can revise it.
-func bashTimeoutExit(sec int) string {
-	if sec > 0 {
+// timeoutExit names the way out of a deadline, which differs by whose it was. A
+// call that asked for longer than the cap is the case worth separating: telling
+// it to raise a number the cap already overrode sends it back to the same wall.
+func (b bash) timeoutExit(sec int) string {
+	host := max(b.timeout, 0)
+	switch {
+	case sec <= 0:
+		return "that was the host cap; set timeout_seconds to fail fast next time, narrow the command, or use run_in_background"
+	case host > 0 && time.Duration(sec)*time.Second > host:
+		return fmt.Sprintf("the host cap of %s overrode the %ds you asked for, so asking for longer cannot help; narrow the command or use run_in_background", host, sec)
+	default:
 		return "raise timeout_seconds, narrow the command, or use run_in_background"
 	}
-	return "that was the host cap; set timeout_seconds to fail fast next time, narrow the command, or use run_in_background"
 }
 
 func shouldTrackShellProcess(wrapped bool, sh sandbox.Shell, command string, preserveBackgroundProcesses bool) bool {

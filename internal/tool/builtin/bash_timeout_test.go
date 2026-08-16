@@ -122,6 +122,35 @@ func TestBashPerCallTimeoutAppliesWithoutHostCap(t *testing.T) {
 	}
 }
 
+// A real run asked for 600s under a 120s cap. Telling it to raise the number
+// the cap already overrode would send it back to the same wall.
+func TestBashTimeoutExitDoesNotAdviseRaisingACappedRequest(t *testing.T) {
+	b := bash{timeout: 120 * time.Second}
+
+	capped := b.timeoutExit(600)
+	if strings.Contains(capped, "raise timeout_seconds") {
+		t.Errorf("exit = %q, must not advise raising a request the cap already overrode", capped)
+	}
+	for _, want := range []string{"2m0s", "600", "run_in_background"} {
+		if !strings.Contains(capped, want) {
+			t.Errorf("exit = %q, missing %q", capped, want)
+		}
+	}
+
+	if room := b.timeoutExit(10); !strings.Contains(room, "raise timeout_seconds") {
+		t.Errorf("exit = %q, a request under the cap can still be raised", room)
+	}
+	if none := b.timeoutExit(0); !strings.Contains(none, "host cap") {
+		t.Errorf("exit = %q, a call that set no deadline should hear about the cap", none)
+	}
+	// With the cap disabled the per-call value is the only deadline, so raising
+	// it is once again the real advice.
+	uncapped := (bash{timeout: 0}).timeoutExit(600)
+	if !strings.Contains(uncapped, "raise timeout_seconds") {
+		t.Errorf("exit = %q, nothing overrode this request", uncapped)
+	}
+}
+
 func TestBashPerCallTimeoutCannotOutlastHostCap(t *testing.T) {
 	sh := sandbox.ResolveShell("", "", nil)
 

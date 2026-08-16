@@ -66,7 +66,7 @@ func (b bash) runForegroundDetailed(ctx context.Context, p bashParams, sh sandbo
 	}
 	runErr := res.Err
 	if res.State == tool.ShellStateTimedOut {
-		runErr = fmt.Errorf("%w; %s", runErr, bashTimeoutExit(p.TimeoutSeconds))
+		runErr = fmt.Errorf("%w; %s", runErr, b.timeoutExit(p.TimeoutSeconds))
 	}
 	return probe.harvest(res.Combined, ex), ex, runErr
 }
