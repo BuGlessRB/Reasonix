@@ -16,6 +16,7 @@ import { UserCard } from "./cards/UserCard";
 import { NoticeCard } from "./cards/NoticeCard";
 import { RememberCard } from "./cards/RememberCard";
 import { ExtensionCard } from "./cards/ExtensionCard";
+import { Rail, type RailMark } from "./Rail";
 
 interface Props {
   items: Item[];
@@ -277,6 +278,38 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
     if (pinned) follow();
   }, [items, pinned, follow]);
 
+  // A mark's message may be inside an unmounted block, which has no node to
+  // scroll to. Land on the block first — that always exists, holding its own
+  // height — and the observer mounts it because it is now in range; the second
+  // pass then puts the message itself under the reader. Marked as a gesture,
+  // or the follow would read this scroll as the transcript moving and stay
+  // pinned to the bottom the reader just left.
+  const jumpTo = useCallback(
+    (mark: RailMark) => {
+      const root = scroll.current;
+      const inner = flow.current;
+      if (!root || !inner) return;
+      gesture.current = 0;
+      at.current = false;
+      setPinned(false);
+      onPinned(false);
+      const chunk = inner.querySelectorAll<HTMLElement>(".chunk")[mark.block];
+      if (chunk) root.scrollTop = chunk.offsetTop + (mark.of > 1 ? (mark.within / mark.of) * chunk.offsetHeight : 0) - 12;
+      const settle = (tries: number) => {
+        const el = inner.querySelector<HTMLElement>(`[data-item="${CSS.escape(mark.id)}"]`);
+        if (el) {
+          root.scrollTop = el.offsetTop - 12;
+          el.setAttribute("data-hit", "");
+          setTimeout(() => el.removeAttribute("data-hit"), 1200);
+          return;
+        }
+        if (tries > 0) requestAnimationFrame(() => settle(tries - 1));
+      };
+      requestAnimationFrame(() => settle(6));
+    },
+    [scroll, flow, onPinned],
+  );
+
   // "Back to latest" cannot just write scrollTop once: where the bottom is
   // changes as blocks mount under it. Turning the follow back on lets the same
   // correction that tracks a live answer carry it the rest of the way.
@@ -310,6 +343,17 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
 
   const rowProps = { onApprove, onAnswer, onForget, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind };
 
+  // What you said, and where it sits. Derived from the same blocks the
+  // transcript renders, so a mark always knows which block holds it — that is
+  // what makes it locatable while the message itself is unmounted.
+  const marks: RailMark[] = [];
+  blocks.forEach((block, b) =>
+    block.forEach((it, i) => {
+      if (it.t !== "user") return;
+      marks.push({ id: it.id, text: it.text, block: b, within: i, of: block.length, files: checkpoints.get(it.id)?.files ?? 0 });
+    }),
+  );
+
   return (
     <div
       className="scroll"
@@ -318,6 +362,7 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
       ref={scroll}
       hidden={hidden}
     >
+      <Rail marks={marks} scroll={scroll} flow={flow} onJump={jumpTo} />
       <div className="flow" ref={flow}>
         {items.length === 0 && <Hero onPick={onSuggest} />}
         {blocks.map((block, i) => (

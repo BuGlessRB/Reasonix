@@ -17,7 +17,9 @@ export function UserCard({
   onUndoRewind?: (transactionId: string) => Promise<void>;
 }) {
   return (
-    <div className="call" data-k="me" data-pending={item.pending ? "" : undefined}>
+    // data-item is the rail's anchor: it jumps by block first, then finds the
+    // message itself once that block has mounted.
+    <div className="call" data-k="me" data-item={item.id} data-pending={item.pending ? "" : undefined}>
       <div className="g">
         <span className="sym">{t("你")}</span>
         <span className="line" />
