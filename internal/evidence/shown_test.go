@@ -141,3 +141,43 @@ func TestLedgerHostReviewCoverageRequiresContentForEveryPath(t *testing.T) {
 		t.Fatal("output that carried no change content must not count as review")
 	}
 }
+
+// The review gate used to accept a command by name: `git status` printed the
+// paths and counted, `echo internal/a.go` mentioned one and counted. Both show
+// nothing of what changed, and both were how a turn could look reviewed.
+func TestReviewOfAKnownChangeNeedsItsContent(t *testing.T) {
+	changed := func() *Ledger {
+		l := NewLedger()
+		l.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
+		return l
+	}
+	named := changed()
+	named.Record(Receipt{ToolName: "bash", Success: true, Read: true, Command: "git status --short", OutputBytes: 40})
+	if named.HasSuccessfulReviewAfter(mutationIndexOf(t, named)) {
+		t.Error("a status listing counted as review of the change it only named")
+	}
+
+	mentioned := changed()
+	mentioned.Record(Receipt{ToolName: "bash", Success: true, Read: true, Command: "echo internal/a.go", OutputBytes: 20})
+	if mentioned.HasSuccessfulReviewAfter(mutationIndexOf(t, mentioned)) {
+		t.Error("printing a path counted as review of the file at it")
+	}
+
+	shown := changed()
+	shown.Record(Receipt{
+		ToolName: "bash", Success: true, Command: "git status --short && git diff",
+		OutputBytes: 400, Showed: []string{"internal/a.go"},
+	})
+	if !shown.HasSuccessfulReviewAfter(mutationIndexOf(t, shown)) {
+		t.Error("an output that carried the change did not count as review of it")
+	}
+}
+
+func mutationIndexOf(t *testing.T, l *Ledger) int {
+	t.Helper()
+	i, ok := l.LatestSuccessfulMutationIndex()
+	if !ok {
+		t.Fatal("missing mutation index")
+	}
+	return i
+}

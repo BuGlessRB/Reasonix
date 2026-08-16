@@ -1221,9 +1221,8 @@ func TestNodeTestRunnerWriteFlagsCannotMasqueradeAsDeliveryVerification(t *testi
 
 func TestLedgerReviewAfterRestoredCheckpointBaseline(t *testing.T) {
 	// A negative index is the restored-checkpoint baseline: the mutation
-	// happened before a controller rebuild or cold resume, so its receipt (and
-	// touched paths) are not in this ledger. Fresh review-shaped receipts must
-	// still be able to satisfy the review gate.
+	// predates a controller rebuild or cold resume, so its receipt and touched
+	// paths are not in this ledger, and a fresh inspection must still satisfy.
 	if NewLedger().HasSuccessfulReviewAfter(-1) {
 		t.Fatal("an empty ledger must not satisfy the checkpoint-baseline review")
 	}
@@ -1234,8 +1233,11 @@ func TestLedgerReviewAfterRestoredCheckpointBaseline(t *testing.T) {
 		t.Fatal("a successful read must satisfy review for a restored mutation baseline")
 	}
 
+	// What counts here is the host's read-only classification, not the command's
+	// name: with the change itself unknowable, the bar can only be that the turn
+	// looked at something.
 	diff := NewLedger()
-	diff.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git diff"}`), true, false))
+	diff.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git diff"}`), true, true))
 	if !diff.HasSuccessfulReviewAfter(-1) {
 		t.Fatal("a git diff inspection must satisfy review for a restored mutation baseline")
 	}
@@ -1246,10 +1248,10 @@ func TestLedgerReviewAfterRestoredCheckpointBaseline(t *testing.T) {
 		t.Fatal("a failed read must not satisfy the checkpoint-baseline review")
 	}
 
-	opaque := NewLedger()
-	opaque.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"echo done"}`), true, false))
-	if opaque.HasSuccessfulReviewAfter(-1) {
-		t.Fatal("a non-review command must not satisfy the checkpoint-baseline review")
+	wrote := NewLedger()
+	wrote.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"rm -rf build"}`), true, false))
+	if wrote.HasSuccessfulReviewAfter(-1) {
+		t.Fatal("a command that changed something is not an inspection of anything")
 	}
 }
 

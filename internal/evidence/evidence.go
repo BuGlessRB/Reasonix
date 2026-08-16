@@ -854,13 +854,18 @@ func pathsAnswerFor(observed []string, needle string) bool {
 	return false
 }
 
+// receiptsReviewChanges reports whether the change at mutationIndex was
+// inspected between start and end. It asks the same question the coverage check
+// asks — did an output carry the change — because a command's shape answers
+// neither: `git status` prints names and `echo path/to/a.go` prints the path,
+// and both used to count here while showing nothing of what changed.
 func receiptsReviewChanges(receipts []Receipt, start, end, mutationIndex int) bool {
 	if mutationIndex >= len(receipts) {
 		return false
 	}
-	// A negative mutationIndex is the restored-checkpoint baseline: the
-	// mutation's receipt is not in this ledger, so its touched paths are
-	// unknowable and any successful review-shaped receipt counts.
+	// A negative mutationIndex is the restored-checkpoint baseline, and a
+	// mutation that named no path is the shell equivalent: what it touched is
+	// unknowable either way.
 	var wanted map[string]bool
 	if mutationIndex >= 0 {
 		wanted = pathSet(receipts[mutationIndex].Paths)
@@ -870,22 +875,28 @@ func receiptsReviewChanges(receipts []Receipt, start, end, mutationIndex int) bo
 		if !r.Success {
 			continue
 		}
-		if r.ToolName == "bash" && commandReviewsChanges(r.Command) {
-			return true
-		}
-		if r.ToolName == "bash" && len(wanted) > 0 && !bashMayMutate(r.Command) && commandMentionsPaths(r.Command, wanted) {
-			return true
-		}
-		if !r.Read {
-			continue
-		}
+		// Nothing is known about what the change touched, so the most that can
+		// honestly be required is that the turn looked at something.
 		if len(wanted) == 0 {
-			return true
-		}
-		for _, p := range r.Paths {
-			if wanted[p] {
+			if r.Read || len(r.Showed) > 0 {
 				return true
 			}
+			continue
+		}
+		if r.Read && pathSetHas(wanted, r.Paths) {
+			return true
+		}
+		if pathSetHas(wanted, r.Showed) {
+			return true
+		}
+	}
+	return false
+}
+
+func pathSetHas(wanted map[string]bool, observed []string) bool {
+	for _, p := range observed {
+		if wanted[p] {
+			return true
 		}
 	}
 	return false
@@ -2231,44 +2242,6 @@ func completeStepVerificationCommands(args json.RawMessage) []string {
 		}
 	}
 	return out
-}
-
-func commandReviewsChanges(command string) bool {
-	segments, _, ok := shellparse.SplitTopLevel(command)
-	if !ok {
-		return false
-	}
-	for _, segment := range segments {
-		normalized, safe := shellsafe.NormalizeBashSafeRedirectsForMatch(segment)
-		if !safe {
-			continue
-		}
-		fields, malformed := shellparse.StaticFields(normalized)
-		if malformed != "" || len(fields) == 0 {
-			continue
-		}
-		base := strings.ToLower(filepath.Base(fields[0]))
-		if base == "diff" || base == "cmp" {
-			return true
-		}
-		if base == "git" && len(fields) > 1 {
-			sub := strings.ToLower(fields[1])
-			if sub == "diff" || sub == "status" || sub == "show" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func commandMentionsPaths(command string, wanted map[string]bool) bool {
-	normalized := strings.ToLower(strings.ReplaceAll(command, `\`, "/"))
-	for path := range wanted {
-		if strings.Contains(normalized, strings.ToLower(filepath.ToSlash(path))) {
-			return true
-		}
-	}
-	return false
 }
 
 func isReadReceipt(name string, readOnly bool) bool {
