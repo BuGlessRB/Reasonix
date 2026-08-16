@@ -3811,20 +3811,8 @@ func formatCompletionSummaryLine(c *event.CompletionSummaryInfo) string {
 	return line
 }
 
-func completionSummaryNeedsAttention(c *event.CompletionSummaryInfo) bool {
-	if c == nil {
-		return false
-	}
-	verdict := strings.ToLower(strings.TrimSpace(c.Verdict))
-	review := strings.ToLower(strings.TrimSpace(c.Review))
-	return verdict == "partial" || verdict == "blocked" ||
-		c.ChecksFailed > 0 || c.ChecksSuppressed > 0 ||
-		review == "warned" || review == "failed" || review == "unavailable" ||
-		len(c.GapKinds) > 0
-}
-
 func completionSummaryWarning(c *event.CompletionSummaryInfo) string {
-	if c != nil && strings.EqualFold(strings.TrimSpace(c.Verdict), "blocked") {
+	if c.Blocked() {
 		return i18n.M.CompletionSummaryBlocked
 	}
 	return i18n.M.CompletionSummaryNeedsAttention
@@ -4565,7 +4553,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 
 	case event.CompletionSummary:
 		if e.Completion != nil {
-			if completionSummaryNeedsAttention(e.Completion) {
+			if e.Completion.NeedsAttention() {
 				m.finalizeStreamed()
 				m.commitLine(fmt.Sprintf("  ! %s", completionSummaryWarning(e.Completion)))
 			}

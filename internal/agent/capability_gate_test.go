@@ -47,7 +47,7 @@ func TestDeliveryReviewGateExplainsOpaqueMutationRecovery(t *testing.T) {
 	a := &Agent{deliveryProfile: true, task: taskRuntime{ledger: ledger}, svc: agentServices{tools: reg}}
 
 	got := a.deliveryReviewGateFailure()
-	for _, want := range []string{"high-risk", "git status --short", "git diff", "mutation did not report file paths"} {
+	for _, want := range []string{"high-risk", "reported no file paths", "reviewed_paths"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("review gate = %q, want %q", got, want)
 		}
@@ -63,7 +63,7 @@ func TestDeliveryReviewGateExplainsOpaqueMutationRecovery(t *testing.T) {
 		"findings":[]
 	}`)})
 	got = a.deliveryReviewGateFailure()
-	if !strings.Contains(got, "security_review") || !strings.Contains(got, "mutation did not report file paths") {
+	if !strings.Contains(got, "security_review") || !strings.Contains(got, "reported no file paths") {
 		t.Fatalf("security review gate = %q, want opaque-mutation recovery guidance", got)
 	}
 

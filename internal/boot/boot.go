@@ -1174,11 +1174,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	addSessionTools()
 	addMemoryTools()
 
-	// The `ask` tool puts structured multiple-choice questions to the user. It
-	// reaches them through the Asker on the call context, which interactive
-	// frontends wire to the controller (EnableInteractiveApproval); a headless run
-	// has none, so ask resolves to "decide for yourself".
-	reg.Add(agent.NewAskTool())
+	addTurnExitTools(reg)
 
 	// Skill tools: read_only_skill is a narrow explicitly read-only entry point; the
 	// full skills source adds run_skill / install_skill plus the dedicated

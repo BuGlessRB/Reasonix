@@ -191,9 +191,12 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 		}
 		return out
 	}
+	// A turn declared blocked still owes the check that establishes the blocker;
+	// what it cannot owe is a passing one, since the task being impossible is
+	// exactly why the check does not pass. Nothing else about the turn is waived.
+	verified, blockedWithCheck := a.postWriteVerification(writer)
 	if !a.deliveryProfile && a.turn.policySet && a.turn.policy.Verification >= taskpolicy.VerifyTargeted &&
-		toolPresent(a.svc.tools, "bash") &&
-		!a.task.ledger.HasSuccessfulVerificationCommandAfter(writer) &&
+		toolPresent(a.svc.tools, "bash") && !blockedWithCheck && !verified &&
 		!a.declaredChecksRanAfter(writer) {
 		out.applies = true
 		out.missingVerification++
@@ -217,7 +220,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 			out.missingSignoff++
 			missing = append(missing, "call complete_step after the latest mutation")
 		}
-		if !a.task.ledger.HasSuccessfulDeliverySignoffAfter(writer) {
+		if !a.task.ledger.HasSuccessfulDeliverySignoffAfter(writer) && !blockedWithCheck {
 			out.missingVerification++
 			missing = append(missing, "run relevant verification after the latest mutation and cite that successful command in complete_step")
 		}
@@ -247,18 +250,35 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	return out
 }
 
+// postWriteVerification reads what the checks after the latest write establish.
+// verified needs a passing check with none of them still standing failed — one
+// check passing cannot answer for another that did not. blockedWithCheck is the
+// declared-impossible case, which still owes the run that establishes it.
+func (a *Agent) postWriteVerification(writer int) (verified, blockedWithCheck bool) {
+	ledger := a.task.ledger
+	verified = ledger.HasSuccessfulVerificationCommandAfter(writer) &&
+		!ledger.HasFailedVerificationAfter(writer)
+	blockedWithCheck = ledger.HasBlockedConclusionAfter(writer) &&
+		ledger.HasVerificationCommandAfter(writer)
+	return verified, blockedWithCheck
+}
+
 // verificationGap says what is actually missing. A check whose exit status
 // belonged to a later stage of the same command did run, so asking for "a
 // verification command" reads as false to the model that just ran one; what it
 // needs is the command named and a shape whose status answers for the check.
 func (a *Agent) verificationGap(writer int) string {
 	const ask = "run a relevant verification command after the latest write for the current role setting"
-	unreadable, ok := a.task.ledger.LatestUnreadableVerificationAfter(writer)
-	if !ok || strings.TrimSpace(unreadable.Command) == "" {
-		return ask
+	if unreadable, ok := a.task.ledger.LatestUnreadableVerificationAfter(writer); ok && strings.TrimSpace(unreadable.Command) != "" {
+		return fmt.Sprintf("%s — %q ran, but its exit status is the last stage's, not the check's, "+
+			"so it proves nothing either way; re-run the check on its own", ask, strings.TrimSpace(unreadable.Command))
 	}
-	return fmt.Sprintf("%s — %q ran, but its exit status is the last stage's, not the check's, "+
-		"so it proves nothing either way; re-run the check on its own", ask, strings.TrimSpace(unreadable.Command))
+	// A check that ran and failed leaves two honest ways out, and a model told
+	// only to "run a verification command" can see neither: it already ran one.
+	if a.task.ledger.HasVerificationCommandAfter(writer) && toolPresent(a.svc.tools, "conclude_blocked") {
+		return "the check you ran after the latest write did not pass: either make it pass, or — if it cannot pass as specified — call conclude_blocked with the evidence for why"
+	}
+	return ask
 }
 
 func finalReadinessCheckSource(check instruction.VerifyCheck) string {

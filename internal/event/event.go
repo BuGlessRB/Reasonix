@@ -13,6 +13,7 @@ package event
 
 import (
 	"encoding/json"
+	"strings"
 
 	"reasonix/internal/billing"
 	"reasonix/internal/evidence"
@@ -152,6 +153,31 @@ type CompletionSummaryInfo struct {
 	ChecksSuppressed int
 	Review           string // none | passed | warned | failed | unavailable
 	GapKinds         []string
+}
+
+// NeedsAttention reports whether this turn ended with something the user should
+// know about. It lives here so every frontend answers it the same way: a turn
+// the headless runner reports as finished while the chat TUI would have flagged
+// it is the same turn described two ways.
+func (c *CompletionSummaryInfo) NeedsAttention() bool {
+	if c == nil {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(c.Verdict)) {
+	case "partial", "blocked":
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(c.Review)) {
+	case "warned", "failed", "unavailable":
+		return true
+	}
+	return c.ChecksFailed > 0 || c.ChecksSuppressed > 0 || len(c.GapKinds) > 0
+}
+
+// Blocked distinguishes the turn that could not finish from the one that
+// finished with gaps, which frontends word differently.
+func (c *CompletionSummaryInfo) Blocked() bool {
+	return c != nil && strings.EqualFold(strings.TrimSpace(c.Verdict), "blocked")
 }
 
 // StreamAttemptAction is the lifecycle phase of a local sampling attempt.

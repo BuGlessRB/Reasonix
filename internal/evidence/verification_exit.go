@@ -54,6 +54,67 @@ func VerificationOutcomeFromPipeStatus(command string, status []int) string {
 	return verdict
 }
 
+// HasVerificationCommandAfter reports whether a check ran after the boundary at
+// all, whatever it concluded. A turn the model declared blocked still owes the
+// run that establishes the blocker; what it cannot owe is a passing one.
+func (l *Ledger) HasVerificationCommandAfter(after int) bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, r := range l.receipts[max(after+1, 0):] {
+		if r.ToolName == "bash" && bashContainsVerificationSegment(r.Command) {
+			return true
+		}
+	}
+	return false
+}
+
+// HasFailedVerificationAfter reports whether any check still stands failed
+// after the boundary. Without it `go test; go vet` reads as verified on a red
+// suite, since the shell's status is go vet's. Outcomes fold per check, so
+// re-running one until it passes clears it.
+func (l *Ledger) HasFailedVerificationAfter(after int) bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	latest := map[string]string{}
+	for _, r := range l.receipts[max(after+1, 0):] {
+		if r.ToolName != "bash" || !CommandRunsVerification(r.Command) {
+			continue
+		}
+		if outcome := VerificationOutcome(r); outcome != "" {
+			latest[VerificationIdentity(r.Command)] = outcome
+		}
+	}
+	for _, outcome := range latest {
+		if outcome == VerificationFailed {
+			return true
+		}
+	}
+	return false
+}
+
+// HasBlockedConclusionAfter reports whether the model declared, after the
+// boundary, that the task cannot be completed as specified. The tool checked
+// the claim's evidence before the receipt could succeed.
+func (l *Ledger) HasBlockedConclusionAfter(after int) bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, r := range l.receipts[max(after+1, 0):] {
+		if r.ToolName == "conclude_blocked" && r.Success {
+			return true
+		}
+	}
+	return false
+}
+
 // LatestUnreadableVerificationAfter returns the most recent check that ran
 // after the boundary and whose outcome the host could not read. Telling a model
 // to "run a verification" when it just ran one it cannot see the result of

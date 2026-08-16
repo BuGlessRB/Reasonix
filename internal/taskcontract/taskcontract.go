@@ -156,7 +156,18 @@ type Contract struct {
 	Requirements []Requirement
 	Checks       []Check
 
-	epoch uint64
+	epoch   uint64
+	blocked bool
+}
+
+// MarkBlocked records that the work cannot proceed as specified — a claim the
+// model made and the host checked against the ledger. It is a fact about the
+// task, not about any one requirement, so a turn that could not name which
+// criterion is stuck still reports as blocked rather than merely incomplete.
+func (c *Contract) MarkBlocked() {
+	if c != nil {
+		c.blocked = true
+	}
 }
 
 // New returns an empty contract for one task; requirements arrive from a plan
@@ -504,10 +515,12 @@ func (c *Contract) GoalVerdict() Verdict {
 		}
 	}
 	switch {
+	// A declared blocker outranks missing evidence: the next action is not
+	// knowable, which is the whole content of the claim.
+	case c.blocked, blocked:
+		return VerdictBlocked
 	case missing:
 		return VerdictContinue
-	case blocked:
-		return VerdictBlocked
 	case partial:
 		return VerdictPartial
 	case c.Complete():

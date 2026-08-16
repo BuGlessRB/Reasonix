@@ -283,7 +283,10 @@ func (a *Agent) deliveryReviewGateFailure() string {
 
 func reviewCoverageHint(paths []string) string {
 	if len(paths) == 0 {
-		return "; the mutation did not report file paths, so first inspect `git status --short` and `git diff` to identify the changed files, then submit reviewed_paths for the files inspected"
+		// Name what the host needs, not the command to get it. Naming one sent
+		// the model to `git diff` in workspaces that are not repositories, where
+		// the instruction it was given had no way to succeed.
+		return "; the change reported no file paths, so establish which files it touched — by whatever this workspace supports — and submit those in reviewed_paths"
 	}
 	return " covering: " + strings.Join(paths, ", ")
 }

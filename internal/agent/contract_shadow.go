@@ -46,6 +46,7 @@ func buildShadowContract(input string, receipts []evidence.Receipt, plan *planco
 	for _, r := range receipts {
 		c.Observe(r)
 		resolveCitedCriteria(c, r)
+		resolveBlockedCriteria(c, r)
 	}
 	for i, todo := range todos {
 		if todo.Status == "completed" {
@@ -94,6 +95,33 @@ func resolveCitedCriteria(c *taskcontract.Contract, r evidence.Receipt) {
 			Success:       true,
 		})
 	}
+}
+
+// resolveBlockedCriteria is the other half of resolveCitedCriteria: a criterion
+// the model established cannot be met resolves Failed, which is what a contract
+// already means by Blocked. The tool checked the claim against the ledger before
+// succeeding, so what the citation adds is which criterion it was about.
+func resolveBlockedCriteria(c *taskcontract.Contract, r evidence.Receipt) {
+	if r.ToolName != "conclude_blocked" || !r.Success || len(r.Args) == 0 {
+		return
+	}
+	var payload struct {
+		CriterionID string `json:"criterion_id"`
+	}
+	if json.Unmarshal(r.Args, &payload) != nil {
+		return
+	}
+	c.MarkBlocked()
+	id := strings.TrimSpace(payload.CriterionID)
+	if id == "" {
+		return
+	}
+	c.Resolve(id, taskcontract.Failed, taskcontract.EvidenceRef{
+		Kind:          taskcontract.EvidenceRead,
+		MutationEpoch: c.Epoch(),
+		Source:        "conclude_blocked",
+		Success:       true,
+	})
 }
 
 // criterionEvidenceKind mirrors the ledger's own classification so staleness

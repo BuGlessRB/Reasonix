@@ -35,3 +35,37 @@ func TestVerificationOutcomeFromPipeStatusStaysSilentWhenUnsure(t *testing.T) {
 		}
 	}
 }
+
+// The shape that let a red suite read as verified: two checks in one turn, one
+// failing, and the shell's exit status belonging to the one that passed.
+func TestFailedVerificationIsNotAnsweredByAnotherPassingOne(t *testing.T) {
+	l := NewLedger()
+	l.Record(Receipt{ToolName: "edit_file", Success: true, Write: true, Mutation: true, MutationEvidence: MutationProven, Paths: []string{"quota.go"}})
+	l.Record(Receipt{ToolName: "bash", Success: false, Command: "go test ./...", Verification: VerificationFailed})
+	l.Record(Receipt{ToolName: "bash", Success: true, Command: "go vet ./...", Verification: VerificationPassed})
+
+	writer, ok := l.LatestProvenMutationIndex()
+	if !ok {
+		t.Fatal("expected a proven write")
+	}
+	if !l.HasSuccessfulVerificationCommandAfter(writer) {
+		t.Fatal("go vet did pass — the older gate saw only this")
+	}
+	if !l.HasFailedVerificationAfter(writer) {
+		t.Fatal("the failing suite must still count against the change")
+	}
+}
+
+// Re-running the same check until it passes is ordinary work, not a standing
+// failure: outcomes fold per check and only the latest one counts.
+func TestReRunClearsAnEarlierFailure(t *testing.T) {
+	l := NewLedger()
+	l.Record(Receipt{ToolName: "edit_file", Success: true, Write: true, Mutation: true, MutationEvidence: MutationProven, Paths: []string{"quota.go"}})
+	l.Record(Receipt{ToolName: "bash", Success: false, Command: "go test ./...", Verification: VerificationFailed})
+	l.Record(Receipt{ToolName: "bash", Success: true, Command: "go test ./...", Verification: VerificationPassed})
+
+	writer, _ := l.LatestProvenMutationIndex()
+	if l.HasFailedVerificationAfter(writer) {
+		t.Fatal("the re-run passed, so nothing stands failed")
+	}
+}

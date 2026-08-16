@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"reasonix/internal/event"
+	"reasonix/internal/i18n"
 	"reasonix/internal/provider"
 )
 
@@ -90,47 +91,7 @@ func (s *TextSink) Emit(e event.Event) {
 		s.wroteAnything = true
 
 	case event.ToolResult:
-		// A successful result is silent (it only feeds the model); a blocked
-		// call surfaces the same "⊘ name <reason>" line the agent used to print.
-		if e.Tool.Err != "" {
-			name := e.Tool.Name
-			if e.Tool.Name == "use_capability" {
-				name = textSinkToolHead(e.Tool.Name, e.Tool.Args)
-			} else if e.Tool.Name == "bash" && e.Tool.Execution != nil && e.Tool.Execution.Shell != "" {
-				name = e.Tool.Execution.Shell
-				switch e.Tool.Execution.Shell {
-				case "powershell":
-					name = "Windows PowerShell"
-				case "pwsh":
-					name = "PowerShell 7+"
-				case "git-bash":
-					name = "Git Bash"
-				}
-			}
-			errText := e.Tool.Err
-			if e.Tool.Execution != nil {
-				var parts []string
-				if e.Tool.Execution.ExitCode != nil {
-					parts = append(parts, fmt.Sprintf("exit %d", *e.Tool.Execution.ExitCode))
-				}
-				if e.Tool.Execution.FailurePhase != "" {
-					parts = append(parts, e.Tool.Execution.FailurePhase)
-				}
-				switch e.Tool.Execution.FailurePhase {
-				case "preflight", "authorization", "dependency", "launch":
-					parts = append(parts, "not executed")
-				default:
-					if e.Tool.Execution.MutationRisk == "may_be_partial" {
-						parts = append(parts, "may be partial")
-					}
-				}
-				if len(parts) > 0 {
-					errText = strings.Join(parts, " · ") + " · " + errText
-				}
-			}
-			fmt.Fprintf(s.out, "  ⊘ %s %s\n", name, errText)
-			s.wroteAnything = true
-		}
+		s.toolFailureLine(e.Tool)
 
 	case event.Usage:
 		// Close a still-open raw text block before the usage line, matching the
@@ -148,6 +109,9 @@ func (s *TextSink) Emit(e event.Event) {
 		}
 		fmt.Fprintf(s.out, "  %s %s\n", glyph, e.Text)
 		s.wroteAnything = true
+
+	case event.CompletionSummary:
+		s.completionAttention(e.Completion)
 
 	case event.Phase:
 		if s.wroteAnything {
@@ -295,4 +259,63 @@ func CompactArgs(s string) string {
 		return string(r[:120]) + "..."
 	}
 	return s
+}
+
+// completionAttention prints the end-of-turn warning a headless run would
+// otherwise swallow, reporting a turn as finished where the chat TUI flags it.
+func (s *TextSink) completionAttention(c *event.CompletionSummaryInfo) {
+	if !c.NeedsAttention() {
+		return
+	}
+	text := i18n.M.CompletionSummaryNeedsAttention
+	if c.Blocked() {
+		text = i18n.M.CompletionSummaryBlocked
+	}
+	fmt.Fprintf(s.out, "  ! %s\n", text)
+	s.wroteAnything = true
+}
+
+// toolFailureLine prints the "⊘ name <reason>" line for a call that did not
+// succeed. A successful result is silent: it only feeds the model.
+func (s *TextSink) toolFailureLine(t event.Tool) {
+	if t.Err == "" {
+		return
+	}
+	name := t.Name
+	if t.Name == "use_capability" {
+		name = textSinkToolHead(t.Name, t.Args)
+	} else if t.Name == "bash" && t.Execution != nil && t.Execution.Shell != "" {
+		name = t.Execution.Shell
+		switch t.Execution.Shell {
+		case "powershell":
+			name = "Windows PowerShell"
+		case "pwsh":
+			name = "PowerShell 7+"
+		case "git-bash":
+			name = "Git Bash"
+		}
+	}
+	errText := t.Err
+	if t.Execution != nil {
+		var parts []string
+		if t.Execution.ExitCode != nil {
+			parts = append(parts, fmt.Sprintf("exit %d", *t.Execution.ExitCode))
+		}
+		if t.Execution.FailurePhase != "" {
+			parts = append(parts, t.Execution.FailurePhase)
+		}
+		switch t.Execution.FailurePhase {
+		case "preflight", "authorization", "dependency", "launch":
+			parts = append(parts, "not executed")
+		default:
+			if t.Execution.MutationRisk == "may_be_partial" {
+				parts = append(parts, "may be partial")
+			}
+		}
+		if len(parts) > 0 {
+			errText = strings.Join(parts, " · ") + " · " + errText
+		}
+	}
+	fmt.Fprintf(s.out, "  ⊘ %s %s\n", name, errText)
+	s.wroteAnything = true
 }
