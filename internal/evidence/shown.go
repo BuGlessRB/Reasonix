@@ -55,7 +55,7 @@ func OutputShowsLines(output string, witness []string) bool {
 func distinctLines(text string) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, line := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
 		line = strings.TrimRight(line, " \t")
 		if line == "" || seen[line] {
 			continue
