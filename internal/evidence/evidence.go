@@ -12,8 +12,6 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"mvdan.cc/sh/v3/syntax"
-
 	"reasonix/internal/provider"
 	"reasonix/internal/shellparse"
 	"reasonix/internal/shellsafe"
@@ -801,10 +799,11 @@ func (l *Ledger) HasSuccessfulReviewAfter(after int) bool {
 
 // HasHostReviewCoverageAfter reports whether host-observed content inspection
 // after the latest mutation covers the production paths required by a Medium
-// Delivery review. A plain, output-producing `git diff` covers the current
-// change set; otherwise every required path needs a read receipt or a
-// content-printing command that names it. Summary/status/check-only commands
-// and model prose never satisfy this stronger alternative to review_report.
+// Delivery review. Every required path needs a read receipt naming it, or a
+// call whose model-visible output carried the change itself (Showed). What the
+// command looked like decides nothing: a `git diff` that printed the change and
+// a `git diff --stat` that printed a count differ in their output, not in their
+// shape, and the shape is what a compound statement hides.
 func (l *Ledger) HasHostReviewCoverageAfter(after int, requiredPaths []string) bool {
 	if l == nil {
 		return false
@@ -816,12 +815,6 @@ func (l *Ledger) HasHostReviewCoverageAfter(after int, requiredPaths []string) b
 	if after >= len(receipts) {
 		return false
 	}
-	for i := start; i < len(receipts); i++ {
-		r := receipts[i]
-		if r.Success && r.ToolName == "bash" && r.OutputBytes > 0 && commandShowsWholeGitDiff(r.Command) {
-			return true
-		}
-	}
 	wanted := normalizePaths(requiredPaths)
 	if len(wanted) == 0 {
 		return false
@@ -829,25 +822,16 @@ func (l *Ledger) HasHostReviewCoverageAfter(after int, requiredPaths []string) b
 	for _, path := range wanted {
 		needle := strings.ToLower(filepath.ToSlash(path))
 		covered := false
-		for i := start; i < len(receipts); i++ {
+		for i := start; i < len(receipts) && !covered; i++ {
 			r := receipts[i]
 			if !r.Success {
 				continue
 			}
-			if r.Read {
-				for _, observed := range r.Paths {
-					candidate := strings.ToLower(filepath.ToSlash(normalizePath(observed)))
-					if candidate == needle || strings.HasSuffix(candidate, "/"+needle) {
-						covered = true
-						break
-					}
-				}
-			}
-			if !covered && r.ToolName == "bash" && r.OutputBytes > 0 && commandShowsContentForPath(r.Command, needle) {
+			if r.Read && pathsAnswerFor(r.Paths, needle) {
 				covered = true
 			}
-			if covered {
-				break
+			if !covered && pathsAnswerFor(r.Showed, needle) {
+				covered = true
 			}
 		}
 		if !covered {
@@ -857,22 +841,17 @@ func (l *Ledger) HasHostReviewCoverageAfter(after int, requiredPaths []string) b
 	return true
 }
 
-func commandShowsWholeGitDiff(command string) bool {
-	file, err := shellparse.ParseBash(command)
-	if err != nil || shellparse.HasHereDoc(file) || len(file.Stmts) != 1 {
-		return false
+// pathsAnswerFor reports whether one of the observed paths is the claimed one,
+// matched on whole trailing components so a receipt's absolute path answers for
+// a workspace-relative claim — and path.bak never answers for path.
+func pathsAnswerFor(observed []string, needle string) bool {
+	for _, path := range observed {
+		candidate := strings.ToLower(filepath.ToSlash(normalizePath(path)))
+		if candidate == needle || strings.HasSuffix(candidate, "/"+needle) {
+			return true
+		}
 	}
-	stmt := file.Stmts[0]
-	if stmt == nil || stmt.Negated || stmt.Background || stmt.Coprocess || len(stmt.Redirs) > 0 {
-		return false
-	}
-	call, ok := stmt.Cmd.(*syntax.CallExpr)
-	if !ok || len(call.Assigns) > 0 || len(call.Args) != 2 {
-		return false
-	}
-	base, okBase := shellparse.StaticWord(call.Args[0])
-	sub, okSub := shellparse.StaticWord(call.Args[1])
-	return okBase && okSub && strings.EqualFold(filepath.Base(base), "git") && strings.EqualFold(sub, "diff")
+	return false
 }
 
 func receiptsReviewChanges(receipts []Receipt, start, end, mutationIndex int) bool {
@@ -2252,135 +2231,6 @@ func completeStepVerificationCommands(args json.RawMessage) []string {
 		}
 	}
 	return out
-}
-
-// commandShowsContentForPath reports whether a bash command demonstrably
-// printed the content of the (normalized, slash-lowered) claimed path: a
-// content-printing program — cat/head/tail/diff/cmp or git diff/git show —
-// whose statically parsed argv names the path exactly or by trailing path
-// components. The receipt must contain exactly one simple statement; compound
-// statements and pipelines are rejected because unrelated output can satisfy
-// the aggregate OutputBytes receipt. Redirected, negated, background, or
-// dynamically expanded commands and summary/quiet flags that suppress the
-// patch body (--stat, --name-only, -q, …) are rejected too. Matching is
-// per-argument and exact, so reading path.bak never satisfies path.
-func commandShowsContentForPath(command, needle string) bool {
-	file, err := shellparse.ParseBash(command)
-	if err != nil || shellparse.HasHereDoc(file) || len(file.Stmts) != 1 {
-		return false
-	}
-	return contentStatementShowsPath(file.Stmts[0], needle)
-}
-
-func contentStatementShowsPath(stmt *syntax.Stmt, needle string) bool {
-	if stmt == nil || stmt.Negated || stmt.Background || stmt.Coprocess {
-		return false
-	}
-	if len(stmt.Redirs) > 0 {
-		// Any redirect can divert the content away from the transcript.
-		return false
-	}
-	switch cmd := stmt.Cmd.(type) {
-	case *syntax.BinaryCmd:
-		// Pipelines transform or swallow content; AND/OR lists can contribute
-		// unrelated bytes to the aggregate receipt. Neither proves file output.
-		return false
-	case *syntax.CallExpr:
-		argv := make([]string, 0, len(cmd.Args))
-		for _, w := range cmd.Args {
-			f, ok := shellparse.StaticWord(w)
-			if !ok {
-				return false
-			}
-			argv = append(argv, f)
-		}
-		return contentArgvShowsPath(argv, needle)
-	default:
-		return false
-	}
-}
-
-// contentSuppressingFlags turn a content command into a summary that never
-// shows the patch body; their presence disqualifies the receipt as evidence.
-var contentSuppressingFlags = map[string]bool{
-	"-q": true, "--quiet": true, "-s": true, "--silent": true,
-	"--brief": true, "--no-patch": true, "--name-only": true,
-	"--name-status": true, "--numstat": true, "--shortstat": true,
-	"--summary": true, "--check": true,
-}
-
-func contentArgvShowsPath(argv []string, needle string) bool {
-	if len(argv) == 0 {
-		return false
-	}
-	rest := argv[1:]
-	gitShow := false
-	switch strings.ToLower(filepath.Base(argv[0])) {
-	case "cat", "head", "tail", "diff", "cmp":
-	case "git":
-		if len(rest) == 0 {
-			return false
-		}
-		sub := strings.ToLower(rest[0])
-		if sub != "diff" && sub != "show" {
-			return false
-		}
-		gitShow = sub == "show"
-		rest = rest[1:]
-	default:
-		return false
-	}
-	named := false
-	for _, a := range rest {
-		lower := strings.ToLower(a)
-		if contentSuppressingFlags[lower] || strings.HasPrefix(lower, "--stat") || strings.HasPrefix(lower, "--dirstat") {
-			return false
-		}
-		if gitShow {
-			if argNamesGitRevisionPath(a, needle) {
-				named = true
-			}
-		} else if argNamesPath(a, needle) {
-			named = true
-		}
-	}
-	return named
-}
-
-// argNamesGitRevisionPath accepts only git show's REV:path form. The ordinary
-// `git show REV -- path` form can print commit metadata with no file body while
-// still producing a non-empty aggregate receipt.
-func argNamesGitRevisionPath(arg, needle string) bool {
-	tok := strings.ToLower(filepath.ToSlash(normalizePath(arg)))
-	if tok == "" || strings.HasPrefix(tok, "-") {
-		return false
-	}
-	i := strings.Index(tok, ":")
-	if i <= 0 || i == len(tok)-1 {
-		return false
-	}
-	path := tok[i+1:]
-	return path == needle || strings.HasSuffix(path, "/"+needle)
-}
-
-// argNamesPath reports whether one static argv token names the claimed path:
-// exact after normalization, a trailing-components match of a fuller token,
-// or the path part of a git REV:path spec.
-func argNamesPath(arg, needle string) bool {
-	tok := strings.ToLower(filepath.ToSlash(normalizePath(arg)))
-	if tok == "" || strings.HasPrefix(tok, "-") {
-		return false
-	}
-	if tok == needle || strings.HasSuffix(tok, "/"+needle) {
-		return true
-	}
-	if _, after, ok := strings.Cut(tok, ":"); ok {
-		rest := after
-		if rest == needle || strings.HasSuffix(rest, "/"+needle) {
-			return true
-		}
-	}
-	return false
 }
 
 func commandReviewsChanges(command string) bool {

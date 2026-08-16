@@ -96,47 +96,6 @@ func TestLedgerRequiresReviewCoverageAfterMutation(t *testing.T) {
 	}
 }
 
-func TestLedgerHostReviewCoverageRequiresContentForEveryPath(t *testing.T) {
-	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/b.go"}`), true, false))
-	mutation, ok := ledger.LatestSuccessfulMutationIndex()
-	if !ok {
-		t.Fatal("missing mutation index")
-	}
-	ledger.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/a.go"}`), true, true))
-	if ledger.HasHostReviewCoverageAfter(mutation, []string{"internal/a.go", "internal/b.go"}) {
-		t.Fatal("one path read must not cover a two-path change set")
-	}
-	ledger.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/b.go"}`), true, true))
-	if !ledger.HasHostReviewCoverageAfter(mutation, []string{"internal/a.go", "internal/b.go"}) {
-		t.Fatal("fresh reads of every changed path should prove host review coverage")
-	}
-
-	diff := NewLedger()
-	diff.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
-	diffMutation, ok := diff.LatestSuccessfulMutationIndex()
-	if !ok {
-		t.Fatal("missing diff mutation index")
-	}
-	diff.Record(Receipt{ToolName: "bash", Success: true, Command: "git diff", OutputBytes: 200})
-	if !diff.HasHostReviewCoverageAfter(diffMutation, []string{"internal/a.go", "internal/b.go"}) {
-		t.Fatal("an output-producing whole git diff should cover the current change set")
-	}
-	for _, command := range []string{"git status --short", "git diff --check"} {
-		insufficient := NewLedger()
-		insufficient.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
-		idx, ok := insufficient.LatestSuccessfulMutationIndex()
-		if !ok {
-			t.Fatal("missing insufficient mutation index")
-		}
-		insufficient.Record(Receipt{ToolName: "bash", Success: true, Command: command, OutputBytes: 200})
-		if insufficient.HasHostReviewCoverageAfter(idx, []string{"internal/a.go"}) {
-			t.Fatalf("%q must not count as content review", command)
-		}
-	}
-}
-
 func TestLedgerAcceptsCollectedStructuredReviewReport(t *testing.T) {
 	ledger := NewLedger()
 	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, false))

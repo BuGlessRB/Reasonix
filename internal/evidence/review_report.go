@@ -243,15 +243,10 @@ func (l *Ledger) HasReadEvidenceForPath(path string) bool {
 		if !r.Success {
 			continue
 		}
-		if r.Read {
-			for _, rp := range r.Paths {
-				o := strings.ToLower(filepath.ToSlash(normalizePath(rp)))
-				if o == needle || strings.HasSuffix(o, "/"+needle) {
-					return true
-				}
-			}
+		if r.Read && pathsAnswerFor(r.Paths, needle) {
+			return true
 		}
-		if r.ToolName == "bash" && r.OutputBytes > 0 && commandShowsContentForPath(r.Command, needle) {
+		if pathsAnswerFor(r.Showed, needle) {
 			return true
 		}
 	}

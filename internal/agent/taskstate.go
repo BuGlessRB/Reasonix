@@ -13,6 +13,10 @@ type taskRuntime struct {
 	ledger     *evidence.Ledger
 	outcome    *evidence.OutcomeTracker
 	budget     runBudget
+	// witness holds, per changed path, the lines a later output has to carry to
+	// have shown that change. It is working state, not evidence: the verdict
+	// lands on the receipt, so the ledger never holds file content.
+	witness map[string][]string
 }
 
 // restartLedger begins a new task's accounting. It is written as one assignment

@@ -27,9 +27,14 @@ func TestTaskRuntimeRestartCarriesScopeAndResetsAccounting(t *testing.T) {
 		ledger:     ledger,
 		outcome:    evidence.NewOutcomeTracker(),
 		budget:     runBudget{rounds: 4, requests: 9, cost: 1.5, limit: TaskBudget{}},
+		witness:    map[string][]string{"tally.go": {"total += x"}},
 	}
 	after := *before
 	after.restartLedger()
+
+	if after.witness != nil {
+		t.Errorf("witness = %v, want the previous task's changes to prove nothing here", after.witness)
+	}
 
 	if after.scopeID != "scope-1" || after.checkpoint.ScopeID != "scope-1" {
 		t.Errorf("scope = %q/%q, want it carried: beginRunTurn owns the scope transition", after.scopeID, after.checkpoint.ScopeID)
@@ -51,6 +56,7 @@ func TestTaskRuntimeRestartCarriesScopeAndResetsAccounting(t *testing.T) {
 var taskRestarted = map[string]bool{
 	"outcome": true,
 	"budget":  true,
+	"witness": true,
 }
 
 // restartLedger is one assignment, so an unlisted field resets by default —

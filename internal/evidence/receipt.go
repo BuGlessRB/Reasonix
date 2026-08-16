@@ -46,6 +46,10 @@ type Receipt struct {
 	// ran, present after. A path the host watched appear is the only one it can
 	// later watch disappear and conclude the turn kept nothing there.
 	Created []string `json:"created,omitempty"`
+	// Showed lists the changed paths whose content this call's model-visible
+	// output demonstrably carried. It is decided while the output is in hand,
+	// so the ledger keeps the verdict and never the content.
+	Showed []string `json:"showed,omitempty"`
 }
 
 // ObserveOutput records the trimmed output size and a compact digest without

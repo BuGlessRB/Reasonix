@@ -1,12 +1,15 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"reasonix/internal/checkpoint"
 	"reasonix/internal/evidence"
+	"reasonix/internal/tool"
 )
 
 // A command the host cannot decompose statically — `rm x && ls`, a project
@@ -175,4 +178,60 @@ func (a *Agent) mutationBaseline(delivery bool) (int, bool) {
 		return ledger.LatestProvenMutationIndexFunc(survives)
 	}
 	return ledger.LatestSuccessfulWriterIndexFunc(survives)
+}
+
+// observeBeforeMutation captures preimages for Previewable writers and records
+// explicit coverage gaps for bash / opaque MCP tools. Host-internal only.
+func (a *Agent) observeBeforeMutation(ctx context.Context, plan *toolCallPlan) {
+	if a == nil || plan == nil {
+		return
+	}
+	toolName := plan.evidenceName
+	if toolName == "" {
+		toolName = plan.call.Name
+	}
+	obs := a.svc.mutationObserver
+	if obs != nil {
+		if pv, ok := plan.execTool.(tool.Previewer); ok {
+			if change, perr := pv.Preview(ctx, plan.execArgs); perr == nil && change.Path != "" {
+				obs.BeforeMutationFromChange(change, toolName)
+				plan.mutationPath = change.Path
+				plan.mutationWitness = evidence.ChangedLines(change.OldText, change.NewText)
+				return
+			}
+		}
+		// Non-previewable writers: record a coverage gap (do not guess paths).
+		switch toolName {
+		case "bash":
+			obs.RecordGap(checkpoint.CoverageGap{Reason: checkpoint.GapBashSideEffect, Tool: toolName, Detail: "bash side effects are not path-tracked"})
+		default:
+			// MCP or other writers without Previewer.
+			if !plan.readOnly {
+				obs.RecordGap(checkpoint.CoverageGap{Reason: checkpoint.GapMCPExternal, Tool: toolName, Detail: "tool cannot describe local write paths"})
+			}
+		}
+		return
+	}
+	// Legacy onPreEdit path.
+	if a.svc.preEdit != nil {
+		if pv, ok := plan.execTool.(tool.Previewer); ok {
+			if change, perr := pv.Preview(ctx, plan.execArgs); perr == nil {
+				a.svc.preEdit(change)
+				plan.mutationPath = change.Path
+			}
+		}
+	}
+}
+
+// observeAfterMutation records the after fingerprint when a concrete path was
+// known before execution, regardless of tool success or failure.
+func (a *Agent) observeAfterMutation(plan *toolCallPlan) {
+	if a == nil || plan == nil || plan.mutationPath == "" || a.svc.mutationObserver == nil {
+		return
+	}
+	toolName := plan.evidenceName
+	if toolName == "" {
+		toolName = plan.call.Name
+	}
+	a.svc.mutationObserver.AfterMutation(plan.mutationPath, toolName)
 }

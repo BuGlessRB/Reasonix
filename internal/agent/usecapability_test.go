@@ -746,10 +746,11 @@ func TestReviewReportRequiresHostReadEvidence(t *testing.T) {
 	if _, err := tl.Execute(ctx, json.RawMessage(`{"kind":"review","verdict":"pass","reviewed_paths":["internal/agent/agent.go"]}`)); err != nil {
 		t.Fatalf("host-read path should be accepted: %v", err)
 	}
-	// A git-diff bash receipt with real printed output also counts.
+	// A shell receipt whose output carried the change counts the same way.
 	led2 := evidence.NewLedger()
 	diffRec := evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git diff -- internal/boot/boot.go"}`), true, true)
 	diffRec.OutputBytes = 512
+	diffRec.Showed = []string{"internal/boot/boot.go"}
 	led2.Record(diffRec)
 	ctx2 := evidence.WithLedger(context.Background(), led2)
 	if _, err := tl.Execute(ctx2, json.RawMessage(`{"kind":"review","verdict":"pass","reviewed_paths":["internal/boot/boot.go"]}`)); err != nil {
@@ -785,45 +786,38 @@ func TestReviewReportRejectsNonContentEvidence(t *testing.T) {
 	if _, err := tl.Execute(evidence.WithLedger(context.Background(), led), report); err == nil {
 		t.Fatal("reverse basename matching must not count as review evidence")
 	}
-	// Content-suppressing shell shapes: each produced-or-not output case must fail.
-	bashCases := []struct {
-		name    string
-		command string
-		output  int
-	}{
-		{"null redirect", "cat internal/agent/agent.go >/dev/null", 0},
-		{"null redirect with output claim", "cat internal/agent/agent.go >/dev/null", 64},
-		{"stat only", "git diff --stat -- internal/agent/agent.go", 64},
-		{"name only", "git diff --name-only -- internal/agent/agent.go", 64},
-		{"zero lines", "head -n 0 internal/agent/agent.go", 0},
-		{"pipeline transform", "cat internal/agent/agent.go | wc -l", 8},
-		{"and unrelated output", "git diff HEAD~1 -- internal/agent/agent.go && echo done", 512},
-		{"or unrelated output", "git diff HEAD~1 -- internal/agent/agent.go || echo done", 512},
-		{"separate unrelated output", "git diff HEAD~1 -- internal/agent/agent.go; echo done", 512},
-		{"git show metadata", "git show HEAD -- internal/agent/agent.go", 512},
-		{"substring superset", "cat internal/agent/agent.go.bak", 512},
-	}
-	for _, tc := range bashCases {
-		led := evidence.NewLedger()
-		rec := evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":`+strconv.Quote(tc.command)+`}`), true, true)
-		rec.OutputBytes = tc.output
-		led.Record(rec)
-		if _, err := tl.Execute(evidence.WithLedger(context.Background(), led), report); err == nil {
-			t.Fatalf("%s (%q) must not count as review evidence", tc.name, tc.command)
-		}
-	}
-	// Genuine content commands with real output still pass.
+	// A command that names the path and printed something proves nothing on its
+	// own: what it printed may be a count, a status, or another segment's
+	// output. Only the host's record of what the output carried counts.
 	for _, cmd := range []string{
 		"cat internal/agent/agent.go",
-		"git show HEAD:internal/agent/agent.go",
-		"git diff HEAD~1 -- internal/agent/agent.go",
+		"cat internal/agent/agent.go >/dev/null",
+		"git diff --stat -- internal/agent/agent.go",
+		"cat internal/agent/agent.go | wc -l",
+		"git diff HEAD~1 -- internal/agent/agent.go && echo done",
+		"cat internal/agent/agent.go.bak",
 	} {
 		led := evidence.NewLedger()
 		rec := evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":`+strconv.Quote(cmd)+`}`), true, true)
 		rec.OutputBytes = 512
 		led.Record(rec)
+		if _, err := tl.Execute(evidence.WithLedger(context.Background(), led), report); err == nil {
+			t.Fatalf("%q printed something, but nothing said it printed the change", cmd)
+		}
+	}
+	// The same commands, with the host's record that the output carried the
+	// file: the shape never mattered, and a compound one is no longer a wall.
+	for _, cmd := range []string{
+		"cat internal/agent/agent.go",
+		"git diff HEAD~1 -- internal/agent/agent.go && echo done",
+	} {
+		led := evidence.NewLedger()
+		rec := evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":`+strconv.Quote(cmd)+`}`), true, true)
+		rec.OutputBytes = 512
+		rec.Showed = []string{"internal/agent/agent.go"}
+		led.Record(rec)
 		if _, err := tl.Execute(evidence.WithLedger(context.Background(), led), report); err != nil {
-			t.Fatalf("%q with real output should count as review evidence: %v", cmd, err)
+			t.Fatalf("%q carried the change and should count as review evidence: %v", cmd, err)
 		}
 	}
 }
