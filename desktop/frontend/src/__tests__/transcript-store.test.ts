@@ -176,7 +176,7 @@ function bigTranscript(turns: number): HistoryMessage[] {
     }
     if (i % 3 === 0) messages.push({ role: "phase", content: `phase ${i}` });
     if (i % 5 === 2) messages.push({ role: "notice", level: "info", content: `note ${i}` });
-    if (i % 7 === 3) messages.push({ role: "compaction", content: "", trigger: "auto", messages: 12, summary: `sum ${i}`, archive: `arch ${i}` });
+    if (i % 7 === 3) messages.push({ role: "compaction", content: "", trigger: "auto", messages: 12, summary: `sum ${i}` });
   }
   return messages;
 }
@@ -190,7 +190,7 @@ function canon(items: Item[]): unknown[] {
       case "assistant": return ["assistant", it.text, it.reasoning];
       case "phase": return ["phase", it.text];
       case "notice": return ["notice", it.level, it.text, it.detail ?? null];
-      case "compaction": return ["compaction", it.trigger, it.summary, it.archive];
+      case "compaction": return ["compaction", it.trigger, it.summary];
       case "tool": return ["tool", it.name, it.args, it.output ?? null, it.error ?? null, it.status, it.subject ?? null, it.summary ?? null];
       case "extension": return ["extension", it.surfaceKey];
     }

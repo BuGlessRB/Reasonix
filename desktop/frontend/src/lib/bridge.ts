@@ -1968,7 +1968,6 @@ function makeMockApp(): AppBindings {
       trigger: "manual",
       messages: 36,
       summary: "Mock 长会话用于验证桌面端 Transcript 自动贴底、多帧布局修正和跳到底部按钮。",
-      archive: "mock-scroll-preview",
     });
     out.push({
       role: "assistant",
@@ -2131,7 +2130,6 @@ function makeMockApp(): AppBindings {
 	      case "detail": return message.detail ?? "";
 	      case "code": return message.code ?? "";
 	      case "summary": return message.summary ?? "";
-	      case "archive": return message.archive ?? "";
 	      case "toolResultError": return message.toolResultError ?? "";
 	      case "toolArguments": return (message.toolCalls ?? []).find((tc) => tc.id === ref.toolCallId)?.arguments ?? "";
 	      case "toolSubject": return (message.toolCalls ?? []).find((tc) => tc.id === ref.toolCallId)?.subject ?? "";

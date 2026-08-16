@@ -181,7 +181,6 @@ function recordBytes(m: HistoryMessage): number {
     (m.detail?.length ?? 0) +
     (m.code?.length ?? 0) +
     (m.summary?.length ?? 0) +
-    (m.archive?.length ?? 0) +
     (m.toolResultError?.length ?? 0) +
     (m.toolCallId?.length ?? 0) +
     (m.toolName?.length ?? 0) +
@@ -266,7 +265,6 @@ function convertRecord(
       trigger: m.trigger ?? "",
       messages: m.messages ?? 0,
       summary: m.summary ?? "",
-      archive: m.archive ?? "",
     });
     return { items, claims, unresolvedIds, pendingPositional, matches };
   }
@@ -387,7 +385,6 @@ function applyResolvedField(rec: TranscriptRecord, ref: HistoryContentRef, data:
     case "detail": rec.message = { ...m, detail: data }; return true;
     case "code": rec.message = { ...m, code: data }; return true;
     case "summary": rec.message = { ...m, summary: data }; return true;
-    case "archive": rec.message = { ...m, archive: data }; return true;
     case "toolResultError": rec.message = { ...m, toolResultError: data }; return true;
     case "toolArguments":
     case "toolSubject":

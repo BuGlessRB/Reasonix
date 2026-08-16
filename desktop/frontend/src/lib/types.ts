@@ -687,7 +687,7 @@ export interface HistorySliceRequest {
 // the full value is fetchable in chunks via HistoryContentForTab.
 export interface HistoryContentRef {
   entryId: string;
-  field: string; // content|reasoning|submitText|detail|code|summary|archive|toolResultError|toolArguments|toolSubject|toolSummary|toolDiff
+  field: string; // content|reasoning|submitText|detail|code|summary|toolResultError|toolArguments|toolSubject|toolSummary|toolDiff
   size: number;
   chunks: number;
   toolCallId?: string;
