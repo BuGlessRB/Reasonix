@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"reasonix/internal/evidence"
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/store"
 )
@@ -20,6 +21,19 @@ const (
 	mutationEvidenceVersion         = 1
 	recoveredBackgroundTaskToolName = "background_task_recovery"
 )
+
+// The artifact itself proves the mutation; only this grade keeps
+// ClassifyMutationRisk's no-paths branch at RiskHigh instead of low.
+func recoveredTaskMutationReceipt(paths []string) evidence.Receipt {
+	return evidence.Receipt{
+		ToolName:         recoveredBackgroundTaskToolName,
+		Success:          true,
+		Write:            true,
+		Mutation:         true,
+		Paths:            paths,
+		MutationEvidence: evidence.MutationProven,
+	}
+}
 
 // ArtifactDir returns the sidecar directory for a persistent session transcript.
 func ArtifactDir(sessionPath string) string {

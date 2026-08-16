@@ -676,22 +676,11 @@ func mutationEvidenceFromArtifact(meta artifactMeta) evidence.ChildEvidenceSumma
 	default:
 		return opaqueRecoveredTaskMutation()
 	}
-	return evidence.ChildEvidenceSummary{Receipts: []evidence.Receipt{{
-		ToolName: recoveredBackgroundTaskToolName,
-		Success:  true,
-		Write:    true,
-		Mutation: true,
-		Paths:    paths,
-	}}}
+	return evidence.ChildEvidenceSummary{Receipts: []evidence.Receipt{recoveredTaskMutationReceipt(paths)}}
 }
 
 func opaqueRecoveredTaskMutation() evidence.ChildEvidenceSummary {
-	return evidence.ChildEvidenceSummary{Receipts: []evidence.Receipt{{
-		ToolName: recoveredBackgroundTaskToolName,
-		Success:  true,
-		Write:    true,
-		Mutation: true,
-	}}}
+	return evidence.ChildEvidenceSummary{Receipts: []evidence.Receipt{recoveredTaskMutationReceipt(nil)}}
 }
 
 func (m *Manager) artifactTargetDirForJob(j *Job) string {
