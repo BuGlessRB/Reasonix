@@ -8,6 +8,10 @@ export interface TrajRow {
   kind: string;
   payload: Span[];
   subs: Span[][];
+  // 时间轴画的是事实，不是格式化过的字：一条记录代表的活动跑了多久（秒），
+  // 以及是哪个工具跑的 —— 颜色由界面那层按类别决定。
+  dur?: number;
+  tool?: string;
 }
 
 export interface TrajState {
@@ -19,7 +23,7 @@ export const initialTraj: TrajState = { rows: [], t0: 0 };
 
 const kb = (n: number) => (n / 1000).toFixed(1) + "k";
 
-function record(ev: WireEvent): { kind: string; payload: Span[]; subs?: Span[][] } | null {
+function record(ev: WireEvent): { kind: string; payload: Span[]; subs?: Span[][]; dur?: number; tool?: string } | null {
   switch (ev.kind) {
     case "turn_started":
       return { kind: "turn_started", payload: [{ t: "run begin" }] };
@@ -43,7 +47,12 @@ function record(ev: WireEvent): { kind: string; payload: Span[]; subs?: Span[][]
       if (tool.parentId) head.push({ t: " ↳ " }, { b: tool.parentId });
       if (tool.durationMs != null) head.push({ t: " · " }, { n: (tool.durationMs / 1000).toFixed(2) + "s" });
       if (tool.err) head.push({ t: " · err=" }, { b: tool.err });
-      return { kind: "event", payload: head };
+      return {
+        kind: "event",
+        payload: head,
+        tool: tool.resolvedName || tool.name,
+        dur: tool.durationMs != null ? tool.durationMs / 1000 : undefined,
+      };
     }
 
     case "usage": {
@@ -71,12 +80,17 @@ function record(ev: WireEvent): { kind: string; payload: Span[]; subs?: Span[][]
         kind: "readiness_audit",
         payload: [{ t: "tool=" }, { b: g.tool }, { t: " · verdict=" }, { b: g.outcome }],
         subs: g.rationale ? [[{ t: g.rationale }]] : [],
+        tool: g.tool,
       };
     }
 
     case "approval_request":
       return ev.approval
-        ? { kind: "delegation_admission", payload: [{ t: "approval tool=" }, { b: ev.approval.tool }, { t: " · " + ev.approval.subject }] }
+        ? {
+            kind: "delegation_admission",
+            payload: [{ t: "approval tool=" }, { b: ev.approval.tool }, { t: " · " + ev.approval.subject }],
+            tool: ev.approval.tool,
+          }
         : null;
 
     case "ask_request":
@@ -157,6 +171,17 @@ export function reduceTraj(
   const t0 = s.t0 || now;
   return {
     t0,
-    rows: [...s.rows, { seq: s.rows.length + 1, at: (now - t0) / 1000, kind: r.kind, payload: r.payload, subs: r.subs ?? [] }],
+    rows: [
+      ...s.rows,
+      {
+        seq: s.rows.length + 1,
+        at: (now - t0) / 1000,
+        kind: r.kind,
+        payload: r.payload,
+        subs: r.subs ?? [],
+        dur: r.dur,
+        tool: r.tool,
+      },
+    ],
   };
 }

@@ -51,6 +51,22 @@ export function useBump(value: number, ms = 520): boolean {
   return on;
 }
 
+// One sample a second while the turn runs, capped at `span`. A rate is the one
+// figure on the rail whose shape says more than its current value — whether it
+// is climbing, stalling or ragged — and a single number cannot hold that. The
+// timer stops when the turn does: an idle rail must not tick.
+export function useTrail(value: number, on: boolean, span = 60): number[] {
+  const [trail, setTrail] = useState<number[]>([]);
+  const cur = useRef(value);
+  cur.current = value;
+  useEffect(() => {
+    if (!on) return;
+    const id = setInterval(() => setTrail((t) => [...t, cur.current].slice(-span)), 1000);
+    return () => clearInterval(id);
+  }, [on, span]);
+  return trail;
+}
+
 // Whether the value moved recently at all — the difference between "receiving"
 // and "stalled", which a still number cannot express on its own.
 export function useFresh(value: number, ms = 1600): boolean {

@@ -1,5 +1,6 @@
 import type { Metrics } from "../../state/session";
-import { useTicker } from "../num";
+import { useTicker, useTrail } from "../num";
+import { Spark } from "../Spark";
 import { t } from "../../i18n";
 
 const SRC: Record<string, string> = {
@@ -23,6 +24,9 @@ export function Cache({ metrics, rate: tps, done }: { metrics: Metrics; rate: nu
   const hit = useTicker(metrics.hit);
   const miss = useTicker(metrics.miss);
   const out = useTicker(metrics.out);
+  const cost = useTicker(metrics.cost);
+  // 速度的形状只有攒下来才有 —— 这一栏里唯一每秒都在变的数
+  const trail = useTrail(tps, !done);
 
   return (
     <div className="block" data-b="cache">
@@ -57,6 +61,7 @@ export function Cache({ metrics, rate: tps, done }: { metrics: Metrics; rate: nu
       </div>
       <div className="rate" data-live={tps >= 1 ? "" : undefined}>
         <span>{t("下行")}</span>
+        <Spark points={trail} />
         <span className="v">{tps >= 1 ? Math.round(tps) : "—"}</span>
         <span className="u">tok/s</span>
       </div>
@@ -65,7 +70,7 @@ export function Cache({ metrics, rate: tps, done }: { metrics: Metrics; rate: nu
           <span className="k">{t("本会话")}</span>
           <span className="v">
             {metrics.currency}
-            {metrics.cost.toFixed(2)}
+            {cost.toFixed(2)}
           </span>
           <span className="note">{up ? t("命中 {rate}%", { rate: rate.toFixed(1) }) : "—"}</span>
         </div>

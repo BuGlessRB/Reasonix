@@ -123,10 +123,13 @@
   .menu {
     position: absolute; z-index: 30; min-width: 244px; padding: 5px;
     max-height: min(58vh, 460px); overflow-y: auto; overscroll-behavior: contain;
-    border: 1px solid var(--border); border-radius: var(--r-md); background: var(--raised);
-    box-shadow: 0 14px 34px -12px rgba(0, 0, 0, .5);
+    border: 1px solid var(--border); border-radius: var(--r-md); background: var(--float);
+    box-shadow: var(--shadow-float);
     animation: panel var(--t-panel) var(--ease-out) both;
+    -webkit-user-select: none; user-select: none;
   }
+  /* 筛选框是要打字的，它不跟着菜单一起锁 */
+  .menu .mfind { -webkit-user-select: text; user-select: text }
   .menu[hidden] { display: none }
   .projmenu { top: calc(100% + 7px); left: 0; transform-origin: top left }
   .modemenu { bottom: calc(100% + 9px); left: 0; transform-origin: bottom left; width: max-content; max-width: 420px }
@@ -138,7 +141,7 @@
     border: 0; border-radius: var(--r-sm); background: transparent;
     color: inherit; font: inherit; cursor: pointer; transition: background .13s;
   }
-  .mi:hover { background: var(--overlay) }
+  .mi:hover { background: var(--float-hi) }
   .mi:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .mi .dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 5.5px; flex: none; background: var(--ghost) }
   .mi[data-on] .dot { background: var(--accent) }
@@ -146,6 +149,7 @@
   .mi .lb { display: block; font: 500 12.5px var(--ui); color: var(--text) }
   .mi .ds { display: block; margin-top: 2px; font: 400 11.5px/1.5 var(--ui); color: var(--muted) }
   .mi .rt { margin-left: auto; padding-left: 10px; font: 400 10.5px var(--mono); color: var(--faint); white-space: nowrap; flex: none }
+  .mi .mi-bars { margin: 5px 0 0 auto; padding-left: 16px; box-sizing: content-box }
   .mi[data-on] .rt { color: var(--accent) }
   .menu .div { height: 1px; margin: 5px 4px; background: var(--hair) }
   .mi.plain .lb { font-weight: 400; color: var(--muted) }
@@ -156,7 +160,7 @@
     position: sticky; top: -5px; z-index: 1; width: calc(100% + 10px);
     margin: -5px -5px 5px; padding: 9px 11px;
     border: 0; border-bottom: 1px solid var(--hair); border-radius: var(--r-md) var(--r-md) 0 0;
-    background: var(--raised); color: var(--text); font: 400 12.5px var(--ui);
+    background: var(--float); color: var(--text); font: 400 12.5px var(--ui);
   }
   .mfind:focus { outline: none }
   .mfind::placeholder { color: var(--ghost) }
@@ -198,24 +202,119 @@
 
   /* 模式是这一轮的能力，不是偏好开关 —— 所以它长在输入框上，不在设置里 */
   .mode {
+    position: relative; isolation: isolate;
     display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px;
     border: 1px solid var(--border); border-radius: var(--r-pill); background: transparent;
     color: var(--muted); font: 500 11.5px var(--ui); cursor: pointer;
-    transition: color .15s, border-color .15s;
+    transition: color .15s, border-color .15s, background-color .15s,
+                transform .16s var(--ease-out);
   }
-  .mode:hover { color: var(--text); border-color: var(--faint) }
+  .mode:hover { color: var(--text); border-color: var(--faint); background: var(--overlay); transform: translateY(-1px) }
+  /* 按下要顶到底再回弹，否则这一排在触控板上摸起来是块玻璃 */
+  .mode:active { transform: translateY(0) scale(.975); transition-duration: .06s }
   .mode:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  /* 菜单开着的时候按钮得留在按下态 —— 不然点开一个菜单，源头看着像没被点中 */
+  .mode[aria-expanded="true"] { color: var(--text); border-color: var(--faint); background: var(--overlay) }
   .mode .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--ok); transition: background .2s }
-  .mode.plain { padding-inline: 10px; color: var(--faint); font-weight: 400; font-family: var(--mono); font-size: 11px }
-  .mode.plain:hover { color: var(--text) }
-  .mode.tog[aria-pressed="true"] { color: var(--net); border-color: color-mix(in srgb, var(--net) 45%, var(--border)); background: var(--net-wash) }
-  .mode.tog[aria-pressed="true"]::before { content: "✓"; font-size: 9px; margin-right: 1px }
-  .mode.danger { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-wash) }
+  .mode.plain { padding-inline: 9px 10px; gap: 5px; font-weight: 400 }
+  /* 名字是人话，值是机器的字 —— 两种字体的对比就是这排里的层级 */
+  .mode .lb { color: var(--faint); font: 400 11px var(--ui); transition: color .15s }
+  .mode .vl {
+    color: var(--muted); font: 400 11px var(--mono);
+    animation: modeval .24s var(--ease-out);
+  }
+  .mode:hover .lb, .mode[aria-expanded="true"] .lb { color: var(--muted) }
+  .mode:hover .vl, .mode[aria-expanded="true"] .vl { color: var(--text) }
+  /* 默认值该安静，调离默认才该被看见 —— 分量跟着它真实的代价走 */
+  .mode .vl[data-lv="1"], .mode .vl[data-lv="2"], .mode .vl[data-g="0"] { color: var(--text) }
+  .mode .vl[data-lv="3"] { color: var(--net) }
+  .mode .vl[data-lv="4"], .mode .vl[data-lv="5"] { color: var(--accent) }
+  .mode .vl[data-g="2"] { color: var(--net) }
+  @keyframes modeval { from { opacity: 0; transform: translateY(2.5px) } to { opacity: 1; transform: none } }
+
+  /* 电平：想得多深是有档的，就该画成有档的样子。auto 那档一格不亮，改由一道
+     很慢的波从左扫到右 —— 意思是这个数不是你定的。 */
+  .bars { display: inline-flex; align-items: flex-end; gap: 1.5px; height: 9px; flex: none }
+  .bars i {
+    width: 2px; border-radius: 1px; background: var(--ghost); opacity: .42;
+    transition: opacity .22s var(--ease-out), background-color .22s;
+  }
+  .bars i:nth-child(1) { height: 3px }
+  .bars i:nth-child(2) { height: 4.5px }
+  .bars i:nth-child(3) { height: 6px }
+  .bars i:nth-child(4) { height: 7.5px }
+  .bars i:nth-child(5) { height: 9px }
+  /* 升档时逐格点亮（延迟只挂在点亮那一侧，所以降档是一起灭的） */
+  .bars i:nth-child(2) { transition-delay: .05s }
+  .bars i:nth-child(3) { transition-delay: .1s }
+  .bars i:nth-child(4) { transition-delay: .15s }
+  .bars i:nth-child(5) { transition-delay: .2s }
+  .bars[data-lv="1"] i:nth-child(-n+1),
+  .bars[data-lv="2"] i:nth-child(-n+2) { opacity: 1; background: var(--muted) }
+  .bars[data-lv="3"] i:nth-child(-n+3) { opacity: 1; background: var(--net) }
+  .bars[data-lv="4"] i:nth-child(-n+4),
+  .bars[data-lv="5"] i:nth-child(-n+5) { opacity: 1; background: var(--accent) }
+  /* auto 一格不亮 —— 一直在动的默认态是噪音，那道波只在你摸上去时走一次 */
+  .mode:hover .bars[data-lv="0"] i { animation: barwave 1.3s var(--ease) }
+  .mode:hover .bars[data-lv="0"] i:nth-child(2) { animation-delay: .08s }
+  .mode:hover .bars[data-lv="0"] i:nth-child(3) { animation-delay: .16s }
+  .mode:hover .bars[data-lv="0"] i:nth-child(4) { animation-delay: .24s }
+  .mode:hover .bars[data-lv="0"] i:nth-child(5) { animation-delay: .32s }
+  @keyframes barwave { 0%, 62%, 100% { opacity: .42 } 22% { opacity: .85 } }
+
+  /* 闸门：批准挡掉多少，就画成环缺多大一个口。最紧那档是闭环加一杠 —— 不是
+     「没开口」，是「一律不做」，两件事不能长一个样。 */
+  .gate { display: grid; place-items: center; width: 12px; height: 12px; flex: none }
+  .gate svg { width: 12px; height: 12px; transform: rotate(-90deg) }
+  .gate circle {
+    fill: none; stroke: var(--faint); stroke-width: 1.6; stroke-linecap: round;
+    stroke-dasharray: 1; stroke-dashoffset: 0;
+    transition: stroke-dashoffset .42s var(--ease-out), stroke .22s;
+  }
+  .gate .bar {
+    fill: none; stroke: var(--faint); stroke-width: 1.6; stroke-linecap: round;
+    transform: scaleX(0); transform-origin: center;
+    transition: transform .3s var(--ease-out), stroke .22s;
+  }
+  .gate[data-g="0"] .bar { transform: none }
+  .gate[data-g="2"] circle { stroke: var(--net); stroke-dashoffset: .24 }
+  .gate[data-g="3"] circle { stroke: var(--err); stroke-dashoffset: .68 }
+
+  .mode .ic { display: grid; place-items: center; width: 12px; height: 12px; flex: none }
+  .mode .ic svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round }
+  /* 关着时清单是灰的轮廓，开的瞬间沿着笔画描一遍 —— pathLength 归一，四段各画各的不会跳 */
+  .mode.tog .ic path { opacity: .4; transition: opacity .2s }
+  .mode.tog[aria-pressed="true"] .ic path { opacity: 1; animation: plandraw .5s var(--ease-out) }
+  @keyframes plandraw {
+    from { stroke-dasharray: 1; stroke-dashoffset: 1 }
+    to { stroke-dasharray: 1; stroke-dashoffset: 0 }
+  }
+  .mode.tog[aria-pressed="true"] { color: var(--net); border-color: color-mix(in srgb, var(--net) 45%, var(--border)) }
+  .mode.tog[aria-pressed="true"] .lb { color: var(--net) }
+  /* 底色从左推过去，方向和「先想再做」同向；单独一层是为了不跟 hover 抢 background */
+  .mode.tog::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+    background: var(--net-wash); transform: scaleX(0); transform-origin: left;
+    transition: transform .34s var(--ease-out);
+  }
+  .mode.tog[aria-pressed="true"]::before { transform: none }
+  .mode.danger { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--border)) }
+  .mode.danger .lb, .mode.danger .vl { color: var(--err) }
+  /* 闸门全开是个持续状态，不是一次动作 —— 所以它一直在轻轻呼吸 */
+  .mode.danger::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+    background: color-mix(in srgb, var(--err) 12%, transparent);
+    animation: gatepulse 2.6s var(--ease) infinite;
+  }
+  @keyframes gatepulse { 0%, 100% { opacity: .45 } 50% { opacity: 1 } }
+
+  /* 模型是「谁来做」，右边三个是「这一轮怎么跑」；一根发丝把两件事分开 */
+  .sep { width: 1px; height: 14px; flex: none; margin-inline: -1px; background: var(--border); opacity: .75 }
 
   /* 开关拨了，界面就得跟着变 —— 否则它只是个标签 */
   .side .block { transition: opacity .3s var(--ease-out), filter .3s var(--ease-out) }
   [data-plan="on"] .side [data-b="files"] { opacity: .28; filter: saturate(.35) }
-  [data-apv="yolo"] .side [data-b="files"] .lbl { color: var(--accent) }
+  [data-apv="yolo"] .side [data-b="files"] .lbl { color: var(--err) }
 
   .thbtn {
     display: grid; place-items: center; width: 25px; height: 25px; flex: none;
@@ -520,6 +619,35 @@
   .traj .t { width: 62px; color: var(--ghost); font-variant-numeric: tabular-nums }
   .traj .kind { width: 168px; white-space: nowrap; color: var(--faint) }
 
+  /* 这张表存的全是时间，却要读的人自己做减法。一条按耗时定长的横条把
+     「哪步慢、哪几步并行」直接画出来；表格一列不动，条是多出来的一列。 */
+  .traj .tl { width: 176px; padding-right: 16px }
+  .traj th.tl { color: var(--faint); white-space: nowrap }
+  .traj .tl-span { margin-left: 6px; color: var(--ghost) }
+  .tl-track {
+    position: relative; display: block; height: 9px; margin-top: 3px;
+    border-radius: 2px; background: color-mix(in srgb, var(--hair) 38%, transparent);
+    transition: background .15s;
+    /* 一条比整轴还长的耗时是可能的（子代理的时钟从它自己开始算），越界的部分
+       裁掉而不是让它压到下一列上去。 */
+    overflow: hidden;
+  }
+  .tl-bar, .tl-tick {
+    position: absolute; top: 1.5px; height: 6px; border-radius: 2px;
+    background: var(--faint); transition: opacity .15s;
+  }
+  .tl-bar { min-width: 2px }
+  /* 瞬时事件没有长度，画成刻点 —— 给它一个假宽度会谎报耗时 */
+  .tl-tick { width: 2px; margin-left: -1px; opacity: .65 }
+  .tl-bar[data-c="read"], .tl-tick[data-c="read"] { background: var(--ghost) }
+  .tl-bar[data-c="write"], .tl-tick[data-c="write"] { background: var(--accent) }
+  .tl-bar[data-c="net"], .tl-tick[data-c="net"] { background: var(--net) }
+  .tl-bar[data-c="deleg"], .tl-tick[data-c="deleg"] { background: var(--deleg) }
+  .tl-bar[data-c="mcp"], .tl-tick[data-c="mcp"] { background: var(--deleg) }
+  .tl-bar[data-c="plan"], .tl-tick[data-c="plan"] { background: var(--ok) }
+  .tl-bar[data-c="mem"], .tl-tick[data-c="mem"] { background: var(--ok) }
+  .traj tr:hover .tl-track { background: color-mix(in srgb, var(--faint) 22%, transparent) }
+
   /* 记录类型着色：只给那些揭示内部决策的类型上色，普通 event 保持中性 */
   .traj tr[data-k="memory_recall"]        .kind { color: var(--deleg) }
   .traj tr[data-k="delegation_admission"] .kind { color: var(--net) }
@@ -582,7 +710,24 @@
   @keyframes costin { from { opacity: 0; transform: translateX(5px) } to { opacity: 1; transform: none } }
 
   /* 跑着的时候符号是灰的，落定才染上类别色 —— 颜色本身就是完成信号 */
-  .call[data-running] > .g .sym { opacity: .5 }
+  /* 正在跑的那一步要比别人更实，不是更淡（原来是 opacity .5，方向反了）。
+     脉冲用 currentColor，所以它跟着这张卡的类别色走；连接线往下走光，说的是
+     「这一步还没完，后面还没有东西」。历史不降级 —— 滚回去看的内容不该变灰。 */
+  .call[data-running] > .g .sym {
+    animation: sympulse 1.9s var(--ease) infinite;
+  }
+  @keyframes sympulse {
+    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 38%, transparent) }
+    70%  { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 0%, transparent) }
+    100% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 0%, transparent) }
+  }
+  .call[data-running] > .g .line {
+    background: linear-gradient(to bottom,
+      color-mix(in srgb, var(--net) 65%, transparent) 0 26%, var(--hair) 26% 100%);
+    background-size: 100% 210%;
+    animation: linefeed 1.5s linear infinite;
+  }
+  @keyframes linefeed { from { background-position: 0 -105% } to { background-position: 0 105% } }
   .call > .g .sym { transition: opacity var(--t-card) var(--ease-out) }
   .call > .g .sym[data-done] { animation: symdone .34s var(--ease-out) }
   @keyframes symdone { 0% { transform: scale(1) } 38% { transform: scale(.86) } 100% { transform: scale(1) } }
@@ -1001,11 +1146,34 @@
     overflow-x: hidden; overflow-y: auto;
   }
   .compose textarea::placeholder { color: var(--ghost) }
-  .compose .row { display: flex; align-items: center; gap: 11px; margin-top: 10px }
+  /* 这一排是控件不是文字：能被拖选的标签会在按下拖出一点点时选中一片蓝，
+     而这里唯一值得复制的是你打的字和上面的正文。 */
+  .compose .row { position: relative; display: flex; align-items: center; gap: 10px; margin-top: 10px;
+    -webkit-user-select: none; user-select: none }
   .compose .row .go { margin-left: auto }
+  /* 一排东西同时出现是一堵墙，依次出现是一句话。只在挂载时走一次。
+     z-index 不是装饰：带 fill 的动画让这些子元素各自成层，弹出的菜单于是被
+     关在里面，输入框自己的描边（.compose::after）会横穿过菜单。 */
+  .compose .row > * { position: relative; z-index: 1; animation: rowin .32s var(--ease-out) both }
+  .compose .row > :nth-child(2) { animation-delay: .04s }
+  .compose .row > :nth-child(3) { animation-delay: .07s }
+  .compose .row > :nth-child(4) { animation-delay: .1s }
+  .compose .row > :nth-child(5) { animation-delay: .13s }
+  .compose .row > :nth-child(6) { animation-delay: .16s }
+  .compose .row > :nth-child(7) { animation-delay: .19s }
+  @keyframes rowin { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
   /* A model/effort switch rebuilds the runtime; keep the row live-looking but
      uninteractive rather than letting a second click queue another rebuild. */
-  .compose .row[data-busy] { opacity: .55; pointer-events: none; transition: opacity .12s }
+  .compose .row[data-busy] { pointer-events: none }
+  .compose .row[data-busy] > * { opacity: .5; transition: opacity .12s }
+  /* 那半秒不该看着像死了：一道光扫过这排，说明改动正在生效 */
+  .compose .row[data-busy]::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -7px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--net), transparent);
+    background-size: 34% 100%; background-repeat: no-repeat;
+    animation: rowsweep 1.1s linear infinite;
+  }
+  @keyframes rowsweep { from { background-position: -34% 0 } to { background-position: 134% 0 } }
   /* 两个图标叠在同一格里交叉旋入，按钮不跳宽 */
   .btn.send { display: inline-flex; align-items: center; gap: 6px }
   .btn.send .ic { display: grid; width: 13px; height: 13px; flex: none }
@@ -1071,6 +1239,14 @@
   /* 只有真的在收字的时候这个数才是活的；工具在跑时它就该是 "—" */
   .rate[data-live] .v { color: var(--text) }
   .rate .u { color: var(--ghost); font-size: 10px }
+  /* 曲线占中间那段弹性空白，数字仍旧右对齐 —— 加了图不该把读数挤走 */
+  .rate .spark { flex: 1; min-width: 34px; height: 18px; margin-inline: 2px; align-self: center; overflow: visible }
+  .rate .spark .line { fill: none; stroke: var(--ghost); stroke-width: 1.2; stroke-linejoin: round; transition: stroke .3s }
+  .rate .spark .fill { fill: color-mix(in srgb, var(--ghost) 10%, transparent); transition: fill .3s }
+  .rate .spark .tip { fill: var(--ghost); transition: fill .3s }
+  .rate[data-live] .spark .line, .rate[data-live] .spark .tip { stroke: var(--net); fill: var(--net) }
+  .rate[data-live] .spark .line { fill: none }
+  .rate[data-live] .spark .fill { fill: color-mix(in srgb, var(--net) 11%, transparent) }
   .srcs { display: flex; flex-direction: column; gap: 4px; padding-top: 9px; border-top: 1px solid var(--hair) }
   .srcs .r { display: flex; align-items: baseline; gap: 8px; font: 400 11px var(--mono); color: var(--faint) }
   .srcs .r .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums }
@@ -1155,6 +1331,14 @@
     .big .v[data-flash], .plan .s[data-done] .b,
     .rmark, .rmark path, .await i, .apv, .guard, .medit, .medit-r, .endbar { animation: none !important }
     .rmark path { stroke-dashoffset: 0 !important }
+    .bars i, .mode .vl, .mode.danger::before, .mode.tog .ic path,
+    .compose .row > *, .call[data-running] > .g .sym,
+    .call[data-running] > .g .line,
+    .app[data-run="running"] .sessrow[data-on][data-live] .pip { animation: none !important }
+    /* 动画停了，「正在跑」这件事还得说 —— 换成不动的实心表达 */
+    .call[data-running] > .g .line { background: color-mix(in srgb, var(--net) 55%, var(--hair)) }
+    /* 扫过去的那道光停下来就看不见了，换成一整条静止的线，「在生效」这句话还在 */
+    .compose .row[data-busy]::after { animation: none; background: var(--net); opacity: .5 }
     .scroll { scroll-behavior: auto }
     * { transition-duration: .01ms !important }
   }
@@ -1301,6 +1485,12 @@
     box-shadow: inset 2px 0 var(--err);
   }
   .prow[data-danger][data-on] .mark { border-color: var(--err); background: var(--err) }
+  /* 风险在你点之前就在：全放行选中时，整条分段条带上红边和红字，
+     而不是等选中之后才补一个提示。 */
+  .seg[data-danger] { border-color: color-mix(in srgb, var(--err) 45%, var(--border)) }
+  .seg[data-danger] button[aria-checked="true"] {
+    background: color-mix(in srgb, var(--err) 10%, transparent); color: var(--err);
+  }
 
   .kv { display: flex; gap: 12px; align-items: baseline; padding: 10px 12px; border-top: 1px solid var(--hair) }
   .kv:last-of-type { border-bottom: 1px solid var(--hair) }
@@ -1472,9 +1662,9 @@
 
   .rpick {
     position: absolute; z-index: 30; top: calc(100% + 5px); left: 0; min-width: 260px;
-    max-height: 288px; overflow: auto; padding: 4px; background: var(--raised);
+    max-height: 288px; overflow: auto; padding: 4px; background: var(--float);
     border: 1px solid var(--border); border-radius: var(--r-md);
-    box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .35);
+    box-shadow: var(--shadow-float);
     transform-origin: top; animation: panel var(--t-card) var(--ease-out) both;
   }
   .rpick button {
@@ -1482,7 +1672,7 @@
     background: none; border: 0; border-radius: var(--r-sm); text-align: left; cursor: pointer;
     font: 400 11.5px var(--mono); color: var(--text);
   }
-  .rpick button:hover { background: var(--overlay) }
+  .rpick button:hover { background: var(--float-hi) }
   .rpick button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .rpick button[data-cur] { background: var(--deleg-wash); color: var(--deleg) }
   .rpick button .sub { margin-left: auto; font: 400 10px var(--ui); color: var(--ghost) }
@@ -1734,41 +1924,98 @@
     font: 400 11px var(--mono); color: var(--faint) }
   .prow .sc { flex: none; font: 400 10.5px var(--mono); color: var(--ghost) }
 
-  /* 权限规则：三组的颜色就是它们的强度，从左边一条竖线读出来 —— 拒绝是红的，
-     问是黄的，放行是绿的。规则本身用等宽，因为它是要被逐字看的字符串。 */
-  /* update_goal 报的是一句主张：做完了 / 还在做 / 卡住了。左边一条竖线给出
-     它的分量，理由跟在后面 —— 载荷本身不该出现在卡片上。 */
-  .goalup { display: flex; align-items: baseline; gap: 10px; padding: 2px 0 2px 10px;
-    border-left: 2px solid var(--ghost) }
-  .goalup[data-s="ok"] { border-left-color: var(--ok) }
-  .goalup[data-s="warn"] { border-left-color: var(--warn) }
-  .goalup .st { flex: none; font: 500 12px var(--ui); color: var(--text) }
-  .goalup .rs { font: 400 11.5px/1.6 var(--ui); color: var(--muted) }
-
+  /* 权限规则读起来是一张判定表，不是三个箱子。工具名在组头上说一次，行里只
+     留真正有区别的那一段；强度是行上的一个属性，就地改 —— 二十条规矩堆成三个
+     列表的时候，「这条太严了」只能删了重打。 */
   .rules .fallback { display: flex; align-items: center; gap: 12px; margin-top: 18px }
   .rules .fallback .k { flex: none; font: 400 11px var(--mono); color: var(--faint) }
-  .rules .path { margin: 8px 0 0; font: 400 10.5px var(--mono); color: var(--ghost); word-break: break-all }
+  /* 跟在一句短标签后面的分段条按内容收，铺满会让它和上一层的分段条看着同级 */
+  /* 版本号是附注，不是名字的一部分：PowerShell 7 里的「7」要小一号、淡一档，
+     否则四个档位的名字长短不一，扫过去像四种不同的东西。 */
+  .seg .ver { margin-left: 5px; font: 400 9.5px var(--mono); font-style: normal; color: var(--ghost) }
+  .seg button[aria-checked="true"] .ver { color: var(--faint) }
+  /* 选中那一档的路径与告诫都在这行说完，所以它要能容下一条长路径 */
+  .shell .note code { font: 400 11px var(--mono); color: var(--muted); word-break: break-all }
+  .shell .seg { margin-top: 14px }
+
+  .seg.fit { flex: none; width: auto }
+  .seg.fit button { flex: none; min-width: 0; padding: 5px 14px }
+  .rules .path { margin: 10px 0 0; font: 400 10.5px var(--mono); color: var(--ghost); word-break: break-all }
   .rules .find { margin-bottom: 14px }
-  .rlist { padding: 10px 12px; border: 1px solid var(--hair); border-radius: var(--r-sm) }
-  .rlist[data-k="deny"] { box-shadow: inset 2px 0 var(--err) }
-  .rlist[data-k="ask"] { box-shadow: inset 2px 0 var(--warn) }
-  .rlist[data-k="allow"] { box-shadow: inset 2px 0 var(--ok) }
-  .rlist .rhd { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap }
-  .rlist .rhd .lb { flex: none; font: 500 12px var(--ui); color: var(--text) }
-  .rlist .rhd .ds { flex: 1; min-width: 180px; font: 400 10.5px/1.55 var(--ui); color: var(--faint) }
-  .prule { display: flex; align-items: center; gap: 10px; margin-top: 8px }
-  .prule code {
-    flex: 1; min-width: 0; padding: 4px 8px; border-radius: var(--r-xs); background: var(--overlay);
-    font: 400 11px var(--mono); color: var(--text); word-break: break-all;
+
+  .rhead { display: flex; align-items: center; gap: 10px; margin-top: 22px }
+  .rhead .n { flex: none; display: flex; align-items: baseline; gap: 8px; font: 400 12px var(--ui); color: var(--muted) }
+  /* 三个数字就是这条边界的形状：红的有几条、黄的有几条、绿的有几条 */
+  .rhead .mix { display: flex; gap: 4px }
+  .rhead .mix i {
+    min-width: 20px; padding: 1px 5px; border-radius: var(--r-pill); text-align: center;
+    font: 500 10px var(--mono); font-style: normal;
   }
-  .prule[data-ro] code { color: var(--faint) }
-  .prule .sc { flex: none; font: 400 10px var(--ui); color: var(--ghost) }
-  .radd { display: flex; gap: 8px; margin-top: 10px }
-  .radd input {
-    flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r-xs);
+  .rhead .mix i[data-k="deny"] { color: var(--err); background: color-mix(in srgb, var(--err) 13%, transparent) }
+  .rhead .mix i[data-k="ask"] { color: var(--warn); background: color-mix(in srgb, var(--warn) 15%, transparent) }
+  .rhead .mix i[data-k="allow"] { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent) }
+  .rhead .find-rule {
+    flex: 1; min-width: 0; margin-left: auto; padding: 5px 9px;
+    border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--raised); color: var(--text); font: 400 11.5px var(--ui);
+  }
+  .rhead .find-rule:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  .rhead > .act:last-child { margin-left: auto }
+  .rhead .find-rule ~ .act { margin-left: 0 }
+
+  .raddbox { margin-top: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--overlay) }
+  .raddbox .line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+  .raddbox select, .raddbox input {
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r-xs);
     background: var(--raised); color: var(--text); font: 400 11.5px var(--mono);
   }
-  .radd input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  .raddbox input { flex: 1; min-width: 160px }
+  .raddbox select:focus, .raddbox input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  /* 存下去之前先说清楚它会拦住什么 —— 语法是能学会的，但猜不出来 */
+  .raddbox .preview { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 0; flex-wrap: wrap }
+  .raddbox .preview code { font: 400 11px var(--mono); color: var(--text) }
+  .raddbox .preview .says { font: 400 11px var(--ui); color: var(--faint) }
+
+  .rtable { margin-top: 12px; border-top: 1px solid var(--hair) }
+  .rgroup { border-bottom: 1px solid var(--hair) }
+  .rg-hd {
+    display: flex; align-items: baseline; gap: 9px; width: 100%; padding: 9px 2px;
+    border: 0; background: none; cursor: pointer; text-align: left;
+  }
+  .rg-hd:hover .what { color: var(--muted) }
+  .rg-hd:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--r-xs) }
+  .rg-hd .caret {
+    flex: none; width: 0; height: 0; align-self: center;
+    border: 4px solid transparent; border-left-color: var(--ghost); margin-right: 1px;
+    transition: transform .16s var(--ease-out);
+  }
+  .rg-hd[aria-expanded="true"] .caret { transform: rotate(90deg) }
+  .rg-hd code { font: 500 12px var(--mono); color: var(--text) }
+  .rg-hd .what { font: 400 11px var(--ui); color: var(--faint) }
+  /* 这一类工具是怎么比对的，在组头上说一次就够 —— 行里再说十五遍就成了噪音 */
+  .rg-hd .how { font: 400 10.5px var(--ui); color: var(--ghost) }
+  .rg-hd .cnt { margin-left: auto; font: 400 10.5px var(--mono); color: var(--ghost) }
+
+  .rrow { display: flex; align-items: center; gap: 10px; padding: 5px 2px 5px 13px }
+  .rrow + .rrow { border-top: 1px solid color-mix(in srgb, var(--hair) 60%, transparent) }
+  /* 强度是一个点，不是一个箱子：一行扫过去就知道这条有多硬 */
+  .rrow .dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ghost) }
+  .rrow[data-k="deny"] .dot { background: var(--err) }
+  .rrow[data-k="ask"] .dot { background: var(--warn) }
+  .rrow[data-k="allow"] .dot { background: var(--ok) }
+  .rrow .pat { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap }
+  .rrow .pat code { font: 400 11.5px var(--mono); color: var(--text); word-break: break-all }
+  .rrow .pat .says { font: 400 10.5px var(--ui); color: var(--ghost) }
+  .rrow select {
+    flex: none; padding: 3px 6px; border: 1px solid transparent; border-radius: var(--r-xs);
+    background: transparent; color: var(--muted); font: 400 11px var(--ui); cursor: pointer;
+  }
+  .rrow:hover select { border-color: var(--border); background: var(--raised) }
+  .rrow select:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  /* 删除是不可逆的一步，所以它等到指针到了这一行才出现 */
+  .rrow .act.ghost { opacity: 0; transition: opacity .12s }
+  .rrow:hover .act.ghost, .rrow:focus-within .act.ghost { opacity: 1 }
+  .rtable .empty { padding: 14px 2px; font: 400 11.5px var(--ui); color: var(--faint) }
 
   /* 沙箱：两小节，读起来是「能写到哪」再「怎么跑」。实际可写的那几行是展开
      后的答案，不是你填进去的字面值 —— 留空的根在这里也有名字。 */
@@ -1788,12 +2035,26 @@
   .box .fields input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .box .extra { margin-top: 12px }
   .box .sublb { margin-bottom: 6px; font: 400 10.5px var(--ui); color: var(--faint) }
+  /* 一个可写目录：内容占满，能对它做的事贴右。加入行是同一个形态，只是内容
+     换成一个待填的输入框 —— 同一份清单不该长出两种行。 */
+  .prule { display: flex; align-items: center; gap: 10px; margin-top: 8px }
+  .prule code {
+    flex: 1; min-width: 0; padding: 4px 8px; border-radius: var(--r-xs); background: var(--overlay);
+    font: 400 11px var(--mono); color: var(--text); word-break: break-all;
+  }
+  .prule input {
+    flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--raised); color: var(--text); font: 400 11px var(--mono);
+  }
+  .prule input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  /* 指定可执行文件是这一段的边角料，折叠收着 */
+  .pinpath { margin-top: 14px }
+  .pinpath summary { cursor: pointer }
+  .pinpath summary .fold { font: 400 11.5px var(--ui); color: var(--muted) }
+  .pinpath summary:hover .fold { color: var(--text) }
   /* 开关那一行是「名字 + 后果 + 开关」，名字和后果各占一行 —— 挤成一行读起来
      像一句没断开的话。 */
-  .box .lrow { align-items: center; margin-top: 12px }
-  .box .lrow .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px }
-  .box .lrow .lb { font: 400 12.5px var(--ui); color: var(--text) }
-  .box .lrow .ds { font: 400 11px/1.55 var(--ui); color: var(--faint) }
+  .box .lrow { margin-top: 12px }
   .box .kv { margin-top: 16px }
   .box .kv .v { display: flex; flex-direction: column; gap: 4px }
   .box .kv .v code { font: 400 11.5px var(--mono); color: var(--text) }
@@ -1897,7 +2158,12 @@
 
   /* 名字 + 说明 + 归属的三列行。能打的那串是机器字面量，说明是给人读的，
      两种字体是有意的对比；定宽名字列让说明在整张表里对齐。 */
-  .lrow { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--hair) }
+  /* 一件事，和它右边能做的那一下。名字与后果各占一行 —— 挤成一行读起来像一
+     句没断开的话。开关行、动作行、只读行共用它。 */
+  .lrow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--hair) }
+  .lrow .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px }
+  .lrow .lb { font: 400 12.5px var(--ui); color: var(--text) }
+  .lrow .ds { font: 400 11px/1.55 var(--ui); color: var(--faint) }
   .lrow:last-of-type { border-bottom: 1px solid var(--hair) }
   .lrow .nm { flex: none; min-width: 152px; font: 400 11.5px var(--mono); color: var(--text) }
   .lrow .ds { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -2218,14 +2484,14 @@
     position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 30;
     display: flex; flex-direction: column; min-width: 132px; padding: 4px;
     border: 1px solid var(--border); border-radius: var(--r-sm);
-    background: var(--raised); box-shadow: 0 8px 24px rgb(0 0 0 / .18);
+    background: var(--float); box-shadow: var(--shadow-float);
   }
   .movemenu .who { padding: 3px 8px 5px; font: 400 10.5px var(--mono); color: var(--ghost) }
   .movemenu button {
     padding: 5px 8px; border: 0; border-radius: var(--r-xs); background: none;
     color: var(--muted); font: 400 12px var(--ui); text-align: left; cursor: pointer;
   }
-  .movemenu button:hover { background: var(--overlay); color: var(--text) }
+  .movemenu button:hover { background: var(--float-hi); color: var(--text) }
   .movemenu button[aria-checked="true"] { color: var(--text) }
   .movemenu button[aria-checked="true"]::after { content: " ·" }
   /* 接管的归属：卡片的框、名字和状态仍然是宿主的，body 换成了插件画的 —— 
@@ -2522,6 +2788,10 @@
   .sessrow[data-busy] { opacity: .55; pointer-events: none }
   .sessrow .pip { flex: none; opacity: .35 }
   .sessrow[data-live] .pip { opacity: 1; background: var(--net) }
+  /* 蓝点说的是「这条会话有活着的运行时」，不等于它此刻在推理。心跳只给真正在
+     跑的那一条 —— 全局的运行状态在 .app 上，当前那条会话是 data-on。 */
+  .app[data-run="running"] .sessrow[data-on][data-live] .pip { animation: tick 1.6s ease-in-out infinite }
+  .app[data-run="halt"] .sessrow[data-on] .pip { background: var(--accent); opacity: 1 }
   .sesstitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .sessmeta { flex: none; font: 400 10px var(--mono); color: var(--ghost) }
   .sessrow .wsdel, .sessrow .sessedit-btn { opacity: 0 }
@@ -2689,15 +2959,15 @@
   .tabmenu {
     position: fixed; z-index: 60; min-width: 132px;
     display: grid; padding: 4px; border-radius: var(--r-sm);
-    background: var(--raised); border: 1px solid var(--border);
-    box-shadow: 0 10px 28px -10px rgb(0 0 0 / .45);
+    background: var(--float); border: 1px solid var(--border);
+    box-shadow: var(--shadow-float);
     animation: card .14s var(--ease-out) both;
   }
   .tabmenu button {
     padding: 6px 9px; border: 0; border-radius: var(--r-xs); background: none;
     color: var(--muted); font: 400 12px var(--ui); text-align: left; cursor: pointer;
   }
-  .tabmenu button:hover:not(:disabled) { background: var(--overlay); color: var(--text) }
+  .tabmenu button:hover:not(:disabled) { background: var(--float-hi); color: var(--text) }
   .tabmenu button:disabled { color: var(--ghost); cursor: default }
 
   /* 关掉还在跑的东西要先问一声，并且说清会停下哪几个 */
@@ -2734,9 +3004,7 @@
   .ptab-in { user-select: text }
 
   /* 图片入口跟其它控件同一套外形，只是把字号提上来让「＋」有分量 */
-  .mode.attach {
-    padding-inline: 9px; font: 400 14px/1 var(--mono); color: var(--faint);
-  }
+  .mode.attach { padding-inline: 8px; color: var(--faint) }
   .mode.attach:hover { color: var(--accent) }
 
   /* 设置这一层也让壁纸透过来。它是全屏覆盖层，图在 body 上（z-index -2），
@@ -2768,8 +3036,8 @@
   .ctxpop {
     position: absolute; right: 0; bottom: calc(100% + 9px); z-index: 30; width: 232px;
     display: grid; gap: 5px; padding: 10px 11px 9px;
-    border-radius: var(--r-sm); background: var(--raised);
-    border: 1px solid var(--border); box-shadow: 0 12px 30px -12px rgb(0 0 0 / .5);
+    border-radius: var(--r-sm); background: var(--float);
+    border: 1px solid var(--border); box-shadow: var(--shadow-float);
     opacity: 0; transform: translateY(3px); pointer-events: none;
     transition: opacity .14s var(--ease-out), transform .14s var(--ease-out);
   }

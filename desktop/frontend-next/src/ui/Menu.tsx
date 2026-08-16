@@ -8,6 +8,9 @@ export interface MenuItem {
   right?: string;
   plain?: boolean;
   divide?: boolean;
+  // 有档位的选项在行尾画出它的刻度，和输入框上那个电平是同一件事 —— 打开菜单
+  // 看到的就是一道从低到高的色阶，而不是六个一样的词。
+  meter?: number;
   // A group caption. It labels the rows under it and cannot be chosen, so it
   // is not a button — a menu whose headings take focus is a menu you arrow
   // through twice.
@@ -151,6 +154,11 @@ export function Picker({ label, items, current, onPick, place, className, title 
                   <span className="lb">{it.label}</span>
                   {it.desc && <span className="ds">{it.desc}</span>}
                 </span>
+                {it.meter !== undefined && (
+                  <span className="bars mi-bars" data-lv={it.meter} aria-hidden="true">
+                    <i /><i /><i /><i /><i />
+                  </span>
+                )}
                 {it.right && <span className="rt">{it.right}</span>}
               </button>
             )}

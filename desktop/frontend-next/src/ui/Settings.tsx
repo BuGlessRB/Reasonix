@@ -27,9 +27,9 @@ const PRESETS: [Preset, string, string][] = [
 ];
 
 const APPROVALS: [ApprovalMode, string, string][] = [
+  ["dontAsk", "不打扰", "不弹审批；要批准才能做的一概不做"],
   ["ask", "询问", "每次动手前问你"],
   ["auto", "自动", "低风险自己过，写操作仍然问"],
-  ["dontAsk", "不再问", "这一类记住，本会话内不再问"],
   ["yolo", "全放行", "不问了。只在你完全信任这个工作区时用"],
 ];
 
@@ -268,17 +268,35 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
           <div className="prefs-col">
           {at === "session" && (
             <>
-              <Group title={t("执行设定")} hint={t("管的是「做完了」谁说了算。切档立刻生效，不重建运行时。")}>
-                {PRESETS.map(([id, name, desc]) => (
-                  <Row key={id} on={status?.preset === id} busy={busy === id} label={t(name)} desc={t(desc)}
-                    onClick={() => run(id, () => port.setPreset(id))} />
-                ))}
+              <Group title={t("执行设定")} now={preset} hint={t("管的是「做完了」谁说了算。切档立刻生效，不重建运行时。")}>
+                <div className="seg" data-text role="radiogroup" aria-label={t("执行设定")}>
+                  {PRESETS.map(([id, name]) => (
+                    <button key={id} role="radio" aria-checked={status?.preset === id} disabled={!!busy}
+                      onClick={() => run(id, () => port.setPreset(id))}>
+                      {t(name)}
+                    </button>
+                  ))}
+                </div>
+                <p className="note">{t(PRESETS.find(([id]) => id === status?.preset)?.[2] ?? "")}</p>
               </Group>
+              {/* An on/off that reverses by clicking again is a switch, not two
+                  options — the same control the recipes and the sandbox's
+                  network egress use. */}
               <Group title={t("计划模式")} hint={t("开着的时候拿不到写权限：这不是提示词里的约定，是没给这个能力。")}>
-                <Row on={status?.plan === true} label={t("开")} desc={t("只读加出计划，你批准后核心自己关掉它")}
-                  onClick={() => run("plan-on", () => port.setPlanMode(true))} />
-                <Row on={status?.plan === false} label={t("关")} desc={t("正常执行")}
-                  onClick={() => run("plan-off", () => port.setPlanMode(false))} />
+                <div className="lrow">
+                  <span className="tx">
+                    <span className="lb">{t("只读地出计划")}</span>
+                    <span className="ds">
+                      {t(status?.plan ? "只读加出计划，你批准后核心自己关掉它" : "正常执行：批准过的写操作直接做")}
+                    </span>
+                  </span>
+                  <Switch
+                    on={status?.plan === true}
+                    busy={busy === "plan"}
+                    label={t("计划模式")}
+                    onClick={() => run("plan", () => port.setPlanMode(!status?.plan))}
+                  />
+                </div>
               </Group>
               <Group title={t("这个会话在哪写")}>
                 <div className="kv">
@@ -288,12 +306,18 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
                 <p className="note">
                   {t("文件夹在左栏管：底部添加，展开后开新会话。一个会话属于开它的那个文件夹，不会跟着跑到别处。")}
                 </p>
-                <Row
-                  busy={busy === "isolate"}
-                  label={t("拉一份隔离副本")}
-                  desc={t("在 Git worktree 里开一份，改动不落回当前分支")}
-                  onClick={() => run("isolate", () => port.isolateWorkspace())}
-                />
+                {/* A thing that happens once, not a state to sit in — so it is
+                    a button. As an option row it carried a selected look it can
+                    never have. */}
+                <div className="lrow">
+                  <span className="tx">
+                    <span className="lb">{t("拉一份隔离副本")}</span>
+                    <span className="ds">{t("在 Git worktree 里开一份，改动不落回当前分支")}</span>
+                  </span>
+                  <button className="act" disabled={!!busy} onClick={() => run("isolate", () => port.isolateWorkspace())}>
+                    {t(busy === "isolate" ? "开着…" : "开一份")}
+                  </button>
+                </div>
               </Group>
             </>
           )}
@@ -347,11 +371,21 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
 
           {at === "tools" && (
             <>
-              <Group title={t("工具批准")} hint={t("这是唯一挡在 agent 和你的文件之间的闸。它拦下来的时候，没有第二个入口能绕过去。")}>
-                {APPROVALS.map(([id, name, desc]) => (
-                  <Row key={id} on={status?.toolApprovalMode === id} busy={busy === id} danger={id === "yolo"}
-                    label={t(name)} desc={t(desc)} onClick={() => run(id, () => port.setApprovalMode(id))} />
-                ))}
+              <Group title={t("工具批准")} now={approval} hint={t("这是唯一挡在 agent 和你的文件之间的闸。它拦下来的时候，没有第二个入口能绕过去。")}>
+                {/* Four rows of label-and-description was 190px for one choice,
+                    and it was the only choice in this pane shaped that way. The
+                    description follows the selection instead: what a档 does is
+                    read when it is picked, not compared four at a time. */}
+                <div className="seg" data-text data-danger={status?.toolApprovalMode === "yolo" ? "" : undefined}
+                  role="radiogroup" aria-label={t("工具批准")}>
+                  {APPROVALS.map(([id, name]) => (
+                    <button key={id} role="radio" aria-checked={status?.toolApprovalMode === id} disabled={!!busy}
+                      onClick={() => run(id, () => port.setApprovalMode(id))}>
+                      {t(name)}
+                    </button>
+                  ))}
+                </div>
+                <p className="note">{t(APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[2] ?? "")}</p>
               </Group>
               <Group
                 title={t("明确的规矩")}
@@ -693,19 +727,3 @@ function Group({
   );
 }
 
-function Row({
-  on, busy, danger, label, desc, onClick,
-}: {
-  on?: boolean; busy?: boolean; danger?: boolean; label: string; desc?: string; onClick: () => void;
-}) {
-  return (
-    <button className="prow" data-on={on ? "" : undefined} data-danger={danger ? "" : undefined}
-      onClick={onClick} disabled={busy}>
-      <span className="mark" />
-      <span className="tx">
-        <span className="lb">{label}</span>
-        {desc && <span className="ds">{desc}</span>}
-      </span>
-    </button>
-  );
-}

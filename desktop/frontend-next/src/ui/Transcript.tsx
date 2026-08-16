@@ -88,7 +88,6 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
   // Stick to the bottom only while the reader is already there; scrolling up
   // must not be yanked back by incoming frames.
   const [pinned, setPinned] = useState(true);
-  const anchor = useRef(0);
   const end = useRef<HTMLDivElement>(null);
   const flow = useRef<HTMLDivElement>(null);
   // Read from observer callbacks that must not be torn down and rebuilt every
@@ -96,22 +95,26 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
   const at = useRef(pinned);
   at.current = pinned;
 
-  // Set while a follow is scrolling, so the scroll event it causes is not read
-  // as the reader moving away.
+  // Set while a follow is scrolling, so the resize it causes is not read as new
+  // content arriving.
   const self = useRef(false);
+  // When the reader last touched an input device. Coming back to the bottom
+  // only resumes the follow if they are the one who went there.
+  const gesture = useRef(0);
   const wasAt = useRef(0);
   // Scroll events before this moment are the browser's, not the reader's.
   const quiet = useRef(0);
 
+  // Scrolls inside the layout pass, not on the next frame. Deferring it left a
+  // window where the DOM had grown and the scroller had not moved yet, and the
+  // reveal clock — which appends characters on its own rAF — kept reopening it:
+  // two loops chasing each other, measured as the distance to the bottom
+  // swinging 0→142px through the whole stream. That swing is the jitter.
   const follow = useCallback(() => {
-    if (anchor.current) return;
-    anchor.current = requestAnimationFrame(() => {
-      anchor.current = 0;
-      self.current = true;
-      end.current?.scrollIntoView({ block: "end" });
-      requestAnimationFrame(() => {
-        self.current = false;
-      });
+    self.current = true;
+    end.current?.scrollIntoView({ block: "end" });
+    requestAnimationFrame(() => {
+      self.current = false;
     });
   }, []);
 
@@ -135,35 +138,58 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
     return () => document.removeEventListener("selectionchange", onSelect);
   }, [scroll]);
 
-  // Following is about intent, not position: only the reader scrolling up ends
-  // it. Ending it on "the marker left the viewport" looked equivalent and was
-  // not — a block mounting makes the transcript taller, which pushes the bottom
-  // away on its own, and reading that as "they went to look at something else"
-  // stranded the viewport half a transcript up, permanently.
-  //
-  // Reading scrollTop is free; scrollHeight and clientHeight are the two that
-  // force a layout, and neither is needed here.
+  // Following is about intent. Two things carry it, and neither alone is
+  // enough. The input devices are unambiguous — a wheel, a key, a drag on the
+  // scrollbar is the reader, always — and they release immediately, without
+  // waiting for a position test that virtualisation makes unreliable. But a
+  // scroll can also arrive with no gesture at all (a screen reader moving the
+  // cursor, the browser's own find), and for those the position is the only
+  // evidence there is: an upward move that leaves the bottom behind is the
+  // reader, one that stays inside the margin is the transcript growing.
   useEffect(() => {
     const root = scroll.current;
     if (!root) return;
+    const release = () => {
+      // Zero, not now: this stamp is what lets the bottom marker resume the
+      // follow, and a gesture that just left the bottom must not also license
+      // going back to it. Only a downward one does.
+      gesture.current = 0;
+      if (!at.current) return;
+      at.current = false;
+      setPinned(false);
+      onPinned(false);
+    };
+    const mark = () => {
+      gesture.current = performance.now();
+    };
+    const onWheel = (e: WheelEvent) => (e.deltaY < 0 ? release() : mark());
+    const onKey = (e: KeyboardEvent) => {
+      if (["ArrowUp", "PageUp", "Home"].includes(e.key)) release();
+      else if (["ArrowDown", "PageDown", "End", " "].includes(e.key)) mark();
+    };
+    // Reading scrollTop is free; scrollHeight and clientHeight force a layout,
+    // which is why they are read only here — while following, on an upward
+    // event — and never per frame.
     const onScroll = () => {
       const top = root.scrollTop;
       const up = top < wasAt.current - 2;
       wasAt.current = top;
       if (!up || self.current || !at.current || performance.now() < quiet.current) return;
-      // A block leaving the DOM hands its place to a placeholder, and the
-      // browser adjusts scrollTop for whatever the two differ by. That is an
-      // upward move nobody asked for. Measuring costs a layout, which is why it
-      // happens only here — while following, on an upward event — rather than
-      // on every frame: still at the bottom means the transcript moved, not the
-      // reader. The margin matches the marker's below.
       if (root.scrollHeight - top - root.clientHeight <= 48) return;
-      at.current = false;
-      setPinned(false);
-      onPinned(false);
+      release();
     };
+    root.addEventListener("wheel", onWheel, { passive: true });
+    root.addEventListener("keydown", onKey);
+    root.addEventListener("pointerdown", mark);
+    root.addEventListener("touchmove", mark, { passive: true });
     root.addEventListener("scroll", onScroll, { passive: true });
-    return () => root.removeEventListener("scroll", onScroll);
+    return () => {
+      root.removeEventListener("wheel", onWheel);
+      root.removeEventListener("keydown", onKey);
+      root.removeEventListener("pointerdown", mark);
+      root.removeEventListener("touchmove", mark);
+      root.removeEventListener("scroll", onScroll);
+    };
   }, [scroll, onPinned]);
 
   // One observer for every block, not one per block. Hundreds of separate
@@ -217,6 +243,11 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
     const io = new IntersectionObserver(
       ([e]) => {
         if (!e.isIntersecting) return;
+        // The marker crossing back into view is not by itself a reason to
+        // resume: blocks mounting and unmounting move it past this edge on
+        // their own, and every one of those was yanking the reader back down.
+        // Only a hand on the wheel counts, and only just now.
+        if (performance.now() - gesture.current > 400 && performance.now() > quiet.current) return;
         at.current = true;
         setPinned(true);
         onPinned(true);
@@ -240,9 +271,9 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
     if (at.current) follow();
   }, [hidden, follow]);
 
-  // One write per animation frame is all a follow needs, however many deltas
-  // landed in between.
-  useEffect(() => {
+  // Before paint: the reader must never see a frame where new text landed and
+  // the view had not caught up.
+  useLayoutEffect(() => {
     if (pinned) follow();
   }, [items, pinned, follow]);
 
@@ -270,8 +301,6 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
     ro.observe(el);
     return () => ro.disconnect();
   }, [follow]);
-
-  useEffect(() => () => cancelAnimationFrame(anchor.current), []);
 
   // Only a message still being written can grow; anything else is final the
   // moment it lands, so the split is exactly one card wide.
@@ -340,9 +369,6 @@ const Block = memo(function Block({
 
   // Measured while mounted so the placeholder that replaces it is exactly as
   // tall — otherwise unmounting above the viewport would jerk the scroll.
-  // Sub-pixel, because offsetHeight rounds: a third of a pixel per block is
-  // nothing until eighty of them unmount at once, and then the browser corrects
-  // scrollTop for the difference and the correction reads as the reader moving.
   useLayoutEffect(() => {
     if (near && box.current) tall.current = box.current.offsetHeight;
   });

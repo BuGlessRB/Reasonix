@@ -6,14 +6,21 @@ import { modelMenu } from "./modelmenu";
 import { CompletionMenu, useCompletion } from "./Completion";
 import { useIme } from "./ime";
 
+// 从紧到松排，和闸门环的缺口一个方向。「不打扰」在内核是 permission.Deny：
+// 它比「询问」更严，不是更松 —— 排在询问前面才不会被读反。
 const APPROVALS: [ApprovalMode, string, string][] = [
+  ["dontAsk", "不打扰", "不弹审批；要批准才能做的一概不做。"],
   ["ask", "询问", "每次动手前问你。"],
   ["auto", "自动", "低风险自己过，写操作仍然问。"],
-  ["dontAsk", "不再问", "这一类记住，本会话不再问。"],
   ["yolo", "全放行", "不问了。只在你完全信任这个工作区时用。"],
 ];
 
 const EFFORTS = ["auto", "low", "medium", "high", "xhigh", "max"];
+
+// 强度是有序的，批准是有序的 —— 一排全等的胶囊把这件事藏了起来。两个刻度把
+// 它画回来：几格电平表示这一轮想得多深，环的缺口表示闸门开了多大。
+const LEVEL: Record<string, number> = { auto: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5 };
+const GATE: Record<ApprovalMode, number> = { dontAsk: 0, ask: 1, auto: 2, yolo: 3 };
 
 interface Props {
   port: AgentPort;
@@ -93,6 +100,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
   };
 
   const apv = status?.toolApprovalMode ?? "ask";
+  const eff = status?.effort || "auto";
   const modelLb = status?.modelRef?.split("/").pop() ?? status?.label ?? "—";
   // Every one of these rebuilds the runtime kernel-side (~0.4s on a real
   // session). Without a pending state the click reads as a dead control.
@@ -224,7 +232,11 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           aria-label={t("添加图片")}
           onClick={() => picker.current?.click()}
         >
-          ＋
+          <span className="ic" aria-hidden="true">
+            <svg viewBox="0 0 16 16">
+              <path d="M8 4.3v7.4M4.3 8h7.4" />
+            </svg>
+          </span>
         </button>
         <Picker
           className="mode"
@@ -239,20 +251,35 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
             </>
           }
         />
+        <span className="sep" aria-hidden="true" />
         <Picker
           className="mode plain"
           place="bottom"
-          current={status?.effort || "auto"}
-          items={EFFORTS.map((v) => ({ value: v, label: v }))}
+          current={eff}
+          items={EFFORTS.map((v) => ({ value: v, label: v, meter: LEVEL[v] }))}
           onPick={(v) => change(port.setEffort(v))}
-          label={<span>{t("强度")} {status?.effort || "auto"}</span>}
+          label={
+            <>
+              <span className="bars" data-lv={LEVEL[eff] ?? 0} aria-hidden="true">
+                <i /><i /><i /><i /><i />
+              </span>
+              <span className="lb">{t("强度")}</span>
+              {/* key 让值换一次就重挂载一次 —— 这是那半秒里唯一能看出「改动生效了」的地方 */}
+              <span className="vl" data-lv={LEVEL[eff] ?? 0} key={eff}>{eff}</span>
+            </>
+          }
         />
         <button
           className="mode tog"
           aria-pressed={status?.plan ?? false}
           onClick={() => change(port.setPlanMode(!status?.plan))}
         >
-          {t("计划")}
+          <span className="ic" aria-hidden="true">
+            <svg viewBox="0 0 16 16">
+              <path pathLength={1} d="M2.9 5.1 4.2 6.4l2.2-2.4M8 5.1h5.2M2.9 10.6l1.3 1.3 2.2-2.4M8 10.6h5.2" />
+            </svg>
+          </span>
+          <span className="lb">{t("计划")}</span>
         </button>
         <Picker
           className={apv === "yolo" ? "mode plain danger" : "mode plain"}
@@ -260,7 +287,21 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           current={apv}
           items={APPROVALS.map(([v, lb, ds]) => ({ value: v, label: t(lb), desc: t(ds) }))}
           onPick={(v) => change(port.setApprovalMode(v as ApprovalMode))}
-          label={<span>{t("批准")} {t(APPROVALS.find(([m]) => m === apv)?.[1] ?? "")}</span>}
+          label={
+            <>
+              <span className="gate" data-g={GATE[apv]} aria-hidden="true">
+                <svg viewBox="0 0 16 16">
+                  <circle cx="8" cy="8" r="4.4" pathLength={1} />
+                  {/* 闭合的环只说明「没开口」；一律不做还要再画一杠 */}
+                  <path className="bar" d="M5.4 8h5.2" />
+                </svg>
+              </span>
+              <span className="lb">{t("批准")}</span>
+              <span className="vl" data-g={GATE[apv]} key={apv}>
+                {t(APPROVALS.find(([m]) => m === apv)?.[1] ?? "")}
+              </span>
+            </>
+          }
         />
         <span className="go">
           <button

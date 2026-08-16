@@ -1,4 +1,5 @@
 import { t } from "../../i18n";
+import { useTicker } from "../num";
 import type { ContextBreakdown } from "../../port/port";
 
 // The order is the order they arrive in a prompt, so the bar reads the way the
@@ -20,7 +21,7 @@ const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n))
  *  breakdown stays folded because it is a diagnosis, not a running number. */
 export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
   if (!ctx || !ctx.window) return null;
-  const used = ctx.used || 0;
+  const used = useTicker(ctx.used || 0);
   const pct = Math.min((used / ctx.window) * 100, 100);
   const parts = PARTS.map(([k, label, why]) => ({ k, label, why, n: ctx[k] || 0 })).filter((p) => p.n > 0);
   const sum = parts.reduce((a, p) => a + p.n, 0) || 1;
@@ -30,7 +31,7 @@ export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
       <div className="lbl">
         {t("上下文")}
         <span className="n">
-          {fmt(used)} / {fmt(ctx.window)}
+          {fmt(Math.round(used))} / {fmt(ctx.window)}
         </span>
       </div>
       {/* Hover, not a permanent list: five more rows of numbers in a rail this

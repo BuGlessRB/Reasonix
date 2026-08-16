@@ -1,6 +1,14 @@
 :root {
     --page: #F3F5F8; --surface: #FAFBFD; --raised: #FFFFFF; --overlay: #EDF0F4;
     --border: #DBE0E7; --hair: #E8ECF1;
+    /* 浮在内容之上的层用这一组，不用 --raised：深色下 raised 和它压着的东西
+       几乎同亮，黑影落在近黑的底上又等于没画，菜单于是看着像透明的。抬面比
+       底色亮一档、顶一条内高光、影子更深更散，三样一起才让它离开背景。 */
+    --float: #FFFFFF; --float-hi: #EDF0F4;
+    --shadow-float:
+      inset 0 1px 0 rgb(255 255 255 / .9),
+      0 16px 40px -14px rgb(23 30 45 / .2),
+      0 4px 12px -8px rgb(23 30 45 / .14);
     --accent: #A96A0C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
     --net: #3555C4; --net-wash: #EBEFFC;
     --deleg: #0E7382; --deleg-wash: #E4F2F4;
@@ -39,6 +47,12 @@
     --net: #7391FF; --net-wash: #111629;
     --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
     --ok: #52B87C; --warn: #DDA144; --err: #E4675D; --add: #52B87C; --del: #E4675D;
+    --float: #1F2530; --float-hi: #2A313D;
+    --shadow-float:
+      inset 0 1px 0 rgb(255 255 255 / .06),
+      0 0 0 1px rgb(0 0 0 / .55),
+      0 22px 48px -14px rgb(0 0 0 / .8),
+      0 6px 18px -10px rgb(0 0 0 / .62);
     }
   }
   :root[data-theme="dark"] {
@@ -48,6 +62,12 @@
     --net: #7391FF; --net-wash: #111629;
     --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
     --ok: #52B87C; --warn: #DDA144; --err: #E4675D; --add: #52B87C; --del: #E4675D;
+    --float: #1F2530; --float-hi: #2A313D;
+    --shadow-float:
+      inset 0 1px 0 rgb(255 255 255 / .06),
+      0 0 0 1px rgb(0 0 0 / .55),
+      0 22px 48px -14px rgb(0 0 0 / .8),
+      0 6px 18px -10px rgb(0 0 0 / .62);
   }
   :root[data-theme="light"] {
     --page: #F3F5F8; --surface: #FAFBFD; --raised: #FFFFFF; --overlay: #EDF0F4;
@@ -56,6 +76,11 @@
     --net: #3555C4; --net-wash: #EBEFFC;
     --deleg: #0E7382; --deleg-wash: #E4F2F4;
     --ok: #2C7A4B; --warn: #A96A0C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
+    --float: #FFFFFF; --float-hi: #EDF0F4;
+    --shadow-float:
+      inset 0 1px 0 rgb(255 255 255 / .9),
+      0 16px 40px -14px rgb(23 30 45 / .2),
+      0 4px 12px -8px rgb(23 30 45 / .14);
   }
 
   /* 文字对比度分三档，背景与语义色不参与。默认「柔和」：深底上接近纯白的正文
