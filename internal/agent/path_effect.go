@@ -141,13 +141,36 @@ func leftSomethingBehind(ledger *evidence.Ledger, r evidence.Receipt) bool {
 	return false
 }
 
+// touchedTheWorkspace reports whether a change landed in the work product. A
+// probe written under $TMPDIR is outside it by construction, so a turn whose
+// only write was a scratch file owes no verification of the workspace — the
+// same reasoning the memory-write case already carries, read off the path.
+func (a *Agent) touchedTheWorkspace(r evidence.Receipt) bool {
+	if a.writeWorkspaceRoot == "" || len(r.Paths) == 0 {
+		return true
+	}
+	return slices.ContainsFunc(r.Paths, a.pathInWorkspace)
+}
+
+// pathInWorkspace reports whether one path is part of the work product. A
+// relative path is resolved against the workspace by every file tool, so it is
+// inside by construction; only an absolute one can leave.
+func (a *Agent) pathInWorkspace(path string) bool {
+	if a.writeWorkspaceRoot == "" {
+		return true
+	}
+	return !filepath.IsAbs(path) || pathWithinFold(a.writeWorkspaceRoot, path)
+}
+
 // mutationBaseline is what the turn's remaining obligations are measured from:
 // the latest change still on disk. A turn whose only writes were scratch files
 // and build artifacts it cleaned up has no baseline, and owes no verification
 // of changes it kept none of.
 func (a *Agent) mutationBaseline(delivery bool) (int, bool) {
 	ledger := a.task.ledger
-	survives := func(r evidence.Receipt) bool { return leftSomethingBehind(ledger, r) }
+	survives := func(r evidence.Receipt) bool {
+		return a.touchedTheWorkspace(r) && leftSomethingBehind(ledger, r)
+	}
 	if delivery {
 		return ledger.LatestProvenMutationIndexFunc(survives)
 	}

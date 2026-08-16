@@ -22,7 +22,7 @@ func TestPipedVerificationIsNotProof(t *testing.T) {
 		wrote("parse.go"),
 		classified("go test ./... 2>&1 | head -100", evidence.VerificationInconclusive, true),
 	)
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if len(rep.Verifications) != 1 || !rep.Verifications[0].Inconclusive {
 		t.Fatalf("verifications = %+v, want one inconclusive entry", rep.Verifications)
 	}
@@ -41,7 +41,7 @@ func TestTrailingFailureIsNotTheVerificationsFailure(t *testing.T) {
 		wrote("parse.go"),
 		classified("go test ./... && git status --short", evidence.VerificationInconclusive, false),
 	)
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if slices.Contains(gapKinds(rep), "failed_verification") {
 		t.Fatalf("gap kinds = %v, want no failure attributed to the suite", gapKinds(rep))
 	}
@@ -56,7 +56,7 @@ func TestInconclusiveIsQuietOnceSomethingFreshPassed(t *testing.T) {
 		classified("go vet ./... && go test ./...", evidence.VerificationPassed, true),
 		classified("go test -v ./... | tail -20 && git status", evidence.VerificationInconclusive, false),
 	)
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if kinds := gapKinds(rep); len(kinds) != 0 {
 		t.Fatalf("gap kinds = %v, want none: a readable run already proved the tree", kinds)
 	}
@@ -70,7 +70,7 @@ func TestSameCheckInADifferentWrapperIsOneItem(t *testing.T) {
 		wrote("parse.go"),
 		classified("cd /w && go test ./...", evidence.VerificationPassed, true),
 	)
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if len(rep.Verifications) != 1 {
 		t.Fatalf("verifications = %+v, want one item for one check", rep.Verifications)
 	}
@@ -84,7 +84,7 @@ func TestSameCheckInADifferentWrapperIsOneItem(t *testing.T) {
 // reading their own outcome, so the switch to host verdicts adds no gap.
 func TestUnclassifiedReceiptKeepsItsOwnOutcome(t *testing.T) {
 	ledger := ledgerOf(wrote("parse.go"), read("parse.go"), ran("go test ./...", true))
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if len(rep.Verifications) != 1 || !rep.Verifications[0].Passed || rep.Verifications[0].Inconclusive {
 		t.Fatalf("verifications = %+v, want the plain successful run to count", rep.Verifications)
 	}

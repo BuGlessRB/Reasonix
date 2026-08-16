@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"reasonix/internal/diff"
+	"reasonix/internal/sessiontemp"
 	"reasonix/internal/tool"
 )
 
@@ -17,8 +18,11 @@ type deleteRange struct {
 	roots   []string
 	guard   SessionDataGuard
 	managed ManagedConfigPaths
-	workDir string
-	overlay FileOverlay
+	// sessionTemp, when non-nil, adds the session's own temporary directory
+	// to the writable surface — the same directory bash writes through $TMPDIR.
+	sessionTemp *sessiontemp.Manager
+	workDir     string
+	overlay     FileOverlay
 }
 
 func (deleteRange) Name() string { return "delete_range" }
@@ -49,7 +53,7 @@ func (d deleteRange) Execute(ctx context.Context, args json.RawMessage) (string,
 	}
 	// preview ran the non-approving boundary check; the actual write needs the
 	// full one, which can gate a Reasonix-managed config target on user approval.
-	if err := confineWrite(ctx, d.roots, d.guard, d.managed, change.Path); err != nil {
+	if err := confineWrite(ctx, d.roots, d.guard, d.managed, d.sessionTemp, change.Path); err != nil {
 		return "", err
 	}
 	// src carries the route and encoding the read came from, so the rewrite
@@ -91,7 +95,7 @@ func (d deleteRange) preview(ctx context.Context, args json.RawMessage) (diff.Ch
 	}
 
 	p.Path = resolveIn(d.workDir, p.Path)
-	if err := confinePreview(d.roots, d.guard, d.managed, p.Path); err != nil {
+	if err := confinePreview(d.roots, d.guard, d.managed, d.sessionTemp, p.Path); err != nil {
 		return diff.Change{}, editSource{}, err
 	}
 

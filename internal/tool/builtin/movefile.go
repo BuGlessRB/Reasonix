@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"reasonix/internal/sessiontemp"
 	"reasonix/internal/tool"
 )
 
@@ -25,7 +26,10 @@ type moveFile struct {
 	roots   []string
 	guard   SessionDataGuard
 	managed ManagedConfigPaths
-	workDir string
+	// sessionTemp, when non-nil, adds the session's own temporary directory
+	// to the writable surface — the same directory bash writes through $TMPDIR.
+	sessionTemp *sessiontemp.Manager
+	workDir     string
 }
 
 func (moveFile) Name() string { return "move_file" }
@@ -56,10 +60,10 @@ func (m moveFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 	}
 	src := resolveIn(m.workDir, p.SourcePath)
 	dst := resolveIn(m.workDir, p.DestinationPath)
-	if err := confineWrite(ctx, m.roots, m.guard, m.managed, src); err != nil {
+	if err := confineWrite(ctx, m.roots, m.guard, m.managed, m.sessionTemp, src); err != nil {
 		return "", err
 	}
-	if err := confineWrite(ctx, m.roots, m.guard, m.managed, dst); err != nil {
+	if err := confineWrite(ctx, m.roots, m.guard, m.managed, m.sessionTemp, dst); err != nil {
 		return "", err
 	}
 	info, err := os.Stat(src)

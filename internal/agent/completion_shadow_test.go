@@ -15,7 +15,7 @@ func shadowReport(input string, receipts ...evidence.Receipt) (event.ContractSha
 		ledger.Record(r)
 	}
 	c := buildShadowContract(input, ledger.Receipts(), nil)
-	return contractShadowAudit(c), completionReportAudit(completion.Build(c, ledger))
+	return contractShadowAudit(c), completionReportAudit(completion.Build(c, ledger, nil))
 }
 
 // A green contract is not automatically a clean report: this turn changed

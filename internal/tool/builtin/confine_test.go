@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/secrets"
+	"reasonix/internal/sessiontemp"
 	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
@@ -602,5 +603,38 @@ func TestConfineReadFiltersPlainGlobMatches(t *testing.T) {
 	}
 	if out != "(no matches)" {
 		t.Fatalf("glob leaked forbidden paths:\n%s", out)
+	}
+}
+
+// The session's own temporary directory is where $TMPDIR points, so bash
+// already writes there. A writer that refuses it sends a run told to keep
+// scratch out of the repository straight back into the repository.
+func TestWriteFileAcceptsTheSessionTemporaryDirectory(t *testing.T) {
+	root := t.TempDir()
+	temp := sessiontemp.NewWithRoot(t.TempDir())
+	temp.Retain()
+	defer temp.Release()
+	lease, err := temp.Acquire()
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	defer lease.Release()
+
+	w := writeFile{roots: realRoots([]string{root}), sessionTemp: temp}
+
+	scratch := filepath.Join(lease.Dir(), "probe", "main.go")
+	args, _ := json.Marshal(map[string]string{"path": scratch, "content": "package main"})
+	if _, err := w.Execute(context.Background(), args); err != nil {
+		t.Fatalf("write into the session temporary directory failed: %v", err)
+	}
+	if _, err := os.Stat(scratch); err != nil {
+		t.Errorf("scratch file not created: %v", err)
+	}
+
+	// Everywhere else outside the roots stays refused.
+	out := filepath.Join(t.TempDir(), "out.txt")
+	args, _ = json.Marshal(map[string]string{"path": out, "content": "nope"})
+	if _, err := w.Execute(context.Background(), args); err == nil {
+		t.Error("a path outside both the roots and the session temp should error")
 	}
 }

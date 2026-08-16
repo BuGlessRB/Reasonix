@@ -199,7 +199,7 @@ func (a *Agent) emitTurnShadows(input string) {
 		}
 	}
 	event.RecordContractShadow(a.svc.sink, contractShadowAudit(c))
-	rep := completion.Build(c, a.task.ledger)
+	rep := completion.Build(c, a.task.ledger, a.pathInWorkspace)
 	a.turn.completion = &rep
 	event.RecordCompletionReport(a.svc.sink, completionReportAudit(rep))
 	a.emitCompletionSummary(c, rep)

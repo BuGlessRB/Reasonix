@@ -18,7 +18,7 @@ func TestClaimedVerificationThatNeverRanIsUnbacked(t *testing.T) {
 		wrote("parser.go"),
 		read("parser.go"),
 		claimed("complete", `{"verified":["go test ./..."]}`),
-	))
+	), nil)
 	if got := gapKinds(rep); !slices.Contains(got, "unbacked_claim") {
 		t.Fatalf("gap kinds = %v, want the fabricated verification caught", got)
 	}
@@ -36,7 +36,7 @@ func TestClaimedVerificationThatFailedIsUnbacked(t *testing.T) {
 		read("parser.go"),
 		ran("go test ./...", false),
 		claimed("complete", `{"verified":["go test ./..."]}`),
-	))
+	), nil)
 	if !strings.Contains(rep.Gaps[0].Detail, "its last run failed") {
 		t.Fatalf("gap = %+v, want the failed run named", rep.Gaps[0])
 	}
@@ -48,7 +48,7 @@ func TestClaimedVerificationBeforeTheLatestChangeIsUnbacked(t *testing.T) {
 		wrote("parser.go"),
 		read("parser.go"),
 		claimed("complete", `{"verified":["go test ./..."]}`),
-	))
+	), nil)
 	if !strings.Contains(rep.Gaps[0].Detail, "before the latest change") {
 		t.Fatalf("gap = %+v, want the stale claim named", rep.Gaps[0])
 	}
@@ -60,7 +60,7 @@ func TestBackedClaimAddsNoGap(t *testing.T) {
 		read("parser.go"),
 		ran("go test ./...", true),
 		claimed("complete", `{"verified":["go test ./..."]}`),
-	))
+	), nil)
 	if len(rep.Gaps) != 0 {
 		t.Fatalf("gaps = %+v, want none: the claim matches a fresh successful receipt", rep.Gaps)
 	}
@@ -80,7 +80,7 @@ func TestClaimMatchesTheCommandAsItActuallyRan(t *testing.T) {
 		read("parser.go"),
 		ran("cd /repo && go test ./...", true),
 		claimed("complete", `{"verified":["go test ./..."]}`),
-	))
+	), nil)
 	if len(rep.Gaps) != 0 {
 		t.Fatalf("gaps = %+v, want none: a cd prefix is not a different command", rep.Gaps)
 	}
@@ -92,7 +92,7 @@ func TestDeclaredUnverifiedAndRisksSurvive(t *testing.T) {
 		read("parser.go"),
 		ran("go test ./...", true),
 		claimed("complete", `{"unverified":["desktop UI never exercised"],"risks":["the migration is one-way"]}`),
-	))
+	), nil)
 	if got := gapKinds(rep); !slices.Equal(got, []string{"declared_unverified"}) {
 		t.Fatalf("gap kinds = %v, want the self-declared gap kept", got)
 	}
@@ -107,9 +107,9 @@ func TestDeclaredUnverifiedAndRisksSurvive(t *testing.T) {
 // The invariant that makes the claim safe to accept at all.
 func TestClaimCannotClearAHostFoundGap(t *testing.T) {
 	receipts := []evidence.Receipt{wrote("parser.go"), ran("go test ./...", true)}
-	bare := Build(nil, ledgerOf(receipts...))
+	bare := Build(nil, ledgerOf(receipts...), nil)
 	withClaim := Build(nil, ledgerOf(append(receipts,
-		claimed("complete", `{"verified":["go test ./..."],"unverified":[],"risks":[]}`))...))
+		claimed("complete", `{"verified":["go test ./..."],"unverified":[],"risks":[]}`))...), nil)
 
 	if len(withClaim.Gaps) < len(bare.Gaps) {
 		t.Fatalf("a claim removed a host-found gap: %d -> %d", len(bare.Gaps), len(withClaim.Gaps))
@@ -124,7 +124,7 @@ func TestFailedUpdateGoalClaimsNothing(t *testing.T) {
 		ToolName: "update_goal", Success: false,
 		Args: []byte(`{"status":"complete","completion":{"verified":["go test ./..."]}}`),
 	}
-	rep := Build(nil, ledgerOf(wrote("parser.go"), read("parser.go"), rejected))
+	rep := Build(nil, ledgerOf(wrote("parser.go"), read("parser.go"), rejected), nil)
 	if !rep.Claimed.Empty() {
 		t.Fatalf("a rejected update_goal must claim nothing, got %+v", rep.Claimed)
 	}
@@ -140,7 +140,7 @@ func TestLatestClaimWins(t *testing.T) {
 		claimed("continue", `{"unverified":["nothing run yet"]}`),
 		ran("go test ./...", true),
 		claimed("complete", `{"verified":["go test ./..."]}`),
-	))
+	), nil)
 	if len(rep.Gaps) != 0 {
 		t.Fatalf("gaps = %+v, want the superseded claim dropped", rep.Gaps)
 	}

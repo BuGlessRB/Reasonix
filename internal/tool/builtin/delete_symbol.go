@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"reasonix/internal/diff"
+	"reasonix/internal/sessiontemp"
 	"reasonix/internal/tool"
 )
 
@@ -20,8 +21,11 @@ type deleteSymbol struct {
 	roots   []string
 	guard   SessionDataGuard
 	managed ManagedConfigPaths
-	workDir string
-	overlay FileOverlay
+	// sessionTemp, when non-nil, adds the session's own temporary directory
+	// to the writable surface — the same directory bash writes through $TMPDIR.
+	sessionTemp *sessiontemp.Manager
+	workDir     string
+	overlay     FileOverlay
 }
 
 type symbolMatch struct {
@@ -73,7 +77,7 @@ func (d deleteSymbol) Execute(ctx context.Context, args json.RawMessage) (string
 		return "", fmt.Errorf("name is required")
 	}
 	p.Path = resolveIn(d.workDir, p.Path)
-	if err := confineWrite(ctx, d.roots, d.guard, d.managed, p.Path); err != nil {
+	if err := confineWrite(ctx, d.roots, d.guard, d.managed, d.sessionTemp, p.Path); err != nil {
 		return "", err
 	}
 
@@ -119,7 +123,7 @@ func (d deleteSymbol) Preview(ctx context.Context, args json.RawMessage) (diff.C
 		return diff.Change{}, fmt.Errorf("name is required")
 	}
 	p.Path = resolveIn(d.workDir, p.Path)
-	if err := confinePreview(d.roots, d.guard, d.managed, p.Path); err != nil {
+	if err := confinePreview(d.roots, d.guard, d.managed, d.sessionTemp, p.Path); err != nil {
 		return diff.Change{}, err
 	}
 

@@ -48,6 +48,27 @@ func BindSessionTemp(tl tool.Tool, m *sessiontemp.Manager) (tool.Tool, bool) {
 	case grepTool:
 		t.sessionTemp = m
 		return t, true
+	case writeFile:
+		t.sessionTemp = m
+		return t, true
+	case editFile:
+		t.sessionTemp = m
+		return t, true
+	case multiEdit:
+		t.sessionTemp = m
+		return t, true
+	case moveFile:
+		t.sessionTemp = m
+		return t, true
+	case notebookEdit:
+		t.sessionTemp = m
+		return t, true
+	case deleteRange:
+		t.sessionTemp = m
+		return t, true
+	case deleteSymbol:
+		t.sessionTemp = m
+		return t, true
 	default:
 		return nil, false
 	}
@@ -216,13 +237,13 @@ func confine(roots []string, target string) error {
 // matches a Reasonix-managed config file (see ManagedConfigPaths) may proceed
 // after a fresh per-write human approval carried on ctx; without an approver it
 // fails closed with the original confinement error semantics.
-func confineWrite(ctx context.Context, roots []string, guard SessionDataGuard, managed ManagedConfigPaths, target string) error {
+func confineWrite(ctx context.Context, roots []string, guard SessionDataGuard, managed ManagedConfigPaths, temp *sessiontemp.Manager, target string) error {
 	confineErr := confine(roots, target)
-	if confineErr == nil {
+	if confineErr == nil || underSessionTemp(temp, target) {
 		return guard.Check(target)
 	}
 	if !managed.Match(target) {
-		return confineErr
+		return withSessionTempAlternative(temp, confineErr)
 	}
 	if err := guard.Check(target); err != nil {
 		return err
@@ -230,12 +251,35 @@ func confineWrite(ctx context.Context, roots []string, guard SessionDataGuard, m
 	return managed.approve(ctx, target)
 }
 
+// withSessionTempAlternative names the one writable place outside the roots, so
+// a refused scratch write has somewhere to go that is not the repository.
+func withSessionTempAlternative(temp *sessiontemp.Manager, err error) error {
+	dir := temp.Dir()
+	if dir == "" {
+		return err
+	}
+	return fmt.Errorf("%w; scratch files may also go under $TMPDIR (%s)", err, dir)
+}
+
+// underSessionTemp reports whether target sits in the session's own temporary
+// directory. Bash already writes there — it is where $TMPDIR points — so a
+// writer refusing it sends a run that was told to keep scratch out of the
+// repository back into the repository, which one observed run did.
+func underSessionTemp(temp *sessiontemp.Manager, target string) bool {
+	dir := temp.Dir()
+	if dir == "" {
+		return false
+	}
+	roots := realRoots([]string{dir})
+	return len(roots) > 0 && confine(roots, target) == nil
+}
+
 // confinePreview mirrors confineWrite for ctx-less diff previews: they read the
 // target to render a diff but never write, so a managed config file passes
 // without the per-write approval — Execute still gates the actual write.
-func confinePreview(roots []string, guard SessionDataGuard, managed ManagedConfigPaths, target string) error {
+func confinePreview(roots []string, guard SessionDataGuard, managed ManagedConfigPaths, temp *sessiontemp.Manager, target string) error {
 	confineErr := confine(roots, target)
-	if confineErr == nil {
+	if confineErr == nil || underSessionTemp(temp, target) {
 		return guard.Check(target)
 	}
 	if !managed.Match(target) {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"reasonix/internal/diff"
+	"reasonix/internal/sessiontemp"
 	"reasonix/internal/tool"
 )
 
@@ -27,8 +28,11 @@ type notebookEdit struct {
 	roots   []string
 	guard   SessionDataGuard
 	managed ManagedConfigPaths
-	workDir string
-	overlay FileOverlay
+	// sessionTemp, when non-nil, adds the session's own temporary directory
+	// to the writable surface — the same directory bash writes through $TMPDIR.
+	sessionTemp *sessiontemp.Manager
+	workDir     string
+	overlay     FileOverlay
 }
 
 func (notebookEdit) Name() string { return "notebook_edit" }
@@ -82,7 +86,7 @@ func (n notebookEdit) Execute(ctx context.Context, raw json.RawMessage) (string,
 		return "", err
 	}
 	a.Path = resolveIn(n.workDir, a.Path)
-	if err := confineWrite(ctx, n.roots, n.guard, n.managed, a.Path); err != nil {
+	if err := confineWrite(ctx, n.roots, n.guard, n.managed, n.sessionTemp, a.Path); err != nil {
 		return "", err
 	}
 	src, err := readEditSource(ctx, n.overlay, a.Path)

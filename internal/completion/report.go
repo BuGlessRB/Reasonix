@@ -128,13 +128,15 @@ type Report struct {
 
 // Build derives the report from a contract and the turn's receipts. Both may
 // be nil: a nil contract means nothing declared acceptance criteria, which
-// leaves the ledger alone to speak.
-func Build(c *taskcontract.Contract, ledger *evidence.Ledger) Report {
+// leaves the ledger alone to speak. inWorkspace, when non-nil, says which paths
+// are the work product — a probe written to a scratch directory is a change to
+// nothing the turn owes a check or a review for. Nil keeps every path.
+func Build(c *taskcontract.Contract, ledger *evidence.Ledger, inWorkspace func(path string) bool) Report {
 	receipts := ledger.Receipts()
 	rep := Report{
-		Mutations:     mutationsOf(receipts),
+		Mutations:     mutationsOf(receipts, inWorkspace),
 		Criteria:      criteriaOf(c),
-		Changes:       changesOf(ledger, receipts),
+		Changes:       changesOf(ledger, receipts, inWorkspace),
 		Verifications: verificationsOf(receipts),
 	}
 	if c != nil {
@@ -172,7 +174,7 @@ func criteriaOf(c *taskcontract.Contract) []Criterion {
 // changesOf lists mutated paths in first-write order and asks the ledger
 // whether each one was inspected after its own latest write, so a review that
 // covered one file never vouches for another.
-func changesOf(ledger *evidence.Ledger, receipts []evidence.Receipt) []Change {
+func changesOf(ledger *evidence.Ledger, receipts []evidence.Receipt, inWorkspace func(string) bool) []Change {
 	var out []Change
 	at := map[string]int{}
 	lastWrite := map[string]int{}
@@ -185,7 +187,7 @@ func changesOf(ledger *evidence.Ledger, receipts []evidence.Receipt) []Change {
 			authored[p] = true
 		}
 		for _, p := range r.Paths {
-			if p == "" {
+			if p == "" || (inWorkspace != nil && !inWorkspace(p)) {
 				continue
 			}
 			if _, seen := at[p]; !seen {
@@ -214,14 +216,24 @@ func changesOf(ledger *evidence.Ledger, receipts []evidence.Receipt) []Change {
 // mutationsOf counts successful mutating receipts, path-named or not: a
 // `sed -i` or `rm` that named nothing still changed the workspace, and must
 // not escape the unverified-change gap by leaving no path behind.
-func mutationsOf(receipts []evidence.Receipt) int {
+func mutationsOf(receipts []evidence.Receipt, inWorkspace func(string) bool) int {
 	count := 0
 	for _, r := range receipts {
-		if r.Success && (r.Mutation || r.Write) {
+		if r.Success && (r.Mutation || r.Write) && keptAnyPath(r.Paths, inWorkspace) {
 			count++
 		}
 	}
 	return count
+}
+
+// keptAnyPath reports whether a receipt touched the work product. A receipt
+// that named no path counts either way: `sed -i` and `rm` name nothing and
+// must not escape the gap by staying silent about where they landed.
+func keptAnyPath(paths []string, inWorkspace func(string) bool) bool {
+	if inWorkspace == nil || len(paths) == 0 {
+		return true
+	}
+	return slices.ContainsFunc(paths, inWorkspace)
 }
 
 // verificationsOf keeps each delivery-verification command's latest run, in

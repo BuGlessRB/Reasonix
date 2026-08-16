@@ -2548,6 +2548,9 @@ func addBuiltins(reg *tool.Registry, enabled, writeRoots []string, bashSpec sand
 	}
 	writers := builtin.ConfineWriters(writeRoots, sessionGuard, managedConfig)
 	for i, writer := range writers {
+		if rebound, ok := builtin.BindSessionTemp(writer, sessionTemp); ok {
+			writer = rebound
+		}
 		writers[i] = builtin.BindFileWriteReceipt(writer, fileWriteReceipt)
 	}
 	confined := append(writers,

@@ -180,3 +180,39 @@ func TestRemovingAPreexistingFileStillCounts(t *testing.T) {
 		t.Fatal("deleting a file the turn never created is a change to account for")
 	}
 }
+
+// A probe written under $TMPDIR is not the work product, so it cannot be what
+// the turn owes a verification for. A relative path is the workspace by
+// construction — every file tool resolves it there — and must still count.
+func TestBaselineIgnoresWritesOutsideTheWorkspace(t *testing.T) {
+	root := t.TempDir()
+	a := &Agent{}
+	a.writeWorkspaceRoot = root
+
+	scratch := evidence.Receipt{
+		ToolName: "write_file", Success: true, Write: true, Mutation: true,
+		MutationEvidence: evidence.MutationProven,
+		Paths:            []string{filepath.Join(t.TempDir(), "probe", "main.go")},
+	}
+	if a.touchedTheWorkspace(scratch) {
+		t.Error("a write outside the workspace was counted as a change to it")
+	}
+
+	inside := scratch
+	inside.Paths = []string{filepath.Join(root, "internal", "agent", "x.go")}
+	if !a.touchedTheWorkspace(inside) {
+		t.Error("a write inside the workspace was not counted")
+	}
+
+	relative := scratch
+	relative.Paths = []string{filepath.Join("internal", "agent", "x.go")}
+	if !a.touchedTheWorkspace(relative) {
+		t.Error("a relative path resolves against the workspace and must count")
+	}
+
+	unnamed := scratch
+	unnamed.Paths = nil
+	if !a.touchedTheWorkspace(unnamed) {
+		t.Error("a change with no named path must be assumed to be the workspace")
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"reasonix/internal/sessiontemp"
 	"reasonix/internal/tool"
 )
 
@@ -18,8 +19,11 @@ type multiEdit struct {
 	roots   []string
 	guard   SessionDataGuard
 	managed ManagedConfigPaths
-	workDir string
-	overlay FileOverlay
+	// sessionTemp, when non-nil, adds the session's own temporary directory
+	// to the writable surface — the same directory bash writes through $TMPDIR.
+	sessionTemp *sessiontemp.Manager
+	workDir     string
+	overlay     FileOverlay
 }
 
 // editStep is one edit in a multi_edit operation. Mirrors edit_file's args
@@ -79,7 +83,7 @@ func (m multiEdit) Execute(ctx context.Context, args json.RawMessage) (string, e
 		return "", fmt.Errorf("edits must not be empty")
 	}
 	p.Path = resolveIn(m.workDir, p.Path)
-	if err := confineWrite(ctx, m.roots, m.guard, m.managed, p.Path); err != nil {
+	if err := confineWrite(ctx, m.roots, m.guard, m.managed, m.sessionTemp, p.Path); err != nil {
 		return "", err
 	}
 

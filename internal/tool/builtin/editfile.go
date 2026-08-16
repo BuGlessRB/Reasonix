@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"reasonix/internal/sessiontemp"
 	"reasonix/internal/tool"
 )
 
@@ -18,8 +19,11 @@ type editFile struct {
 	roots   []string
 	guard   SessionDataGuard
 	managed ManagedConfigPaths
-	workDir string
-	overlay FileOverlay
+	// sessionTemp, when non-nil, adds the session's own temporary directory
+	// to the writable surface — the same directory bash writes through $TMPDIR.
+	sessionTemp *sessiontemp.Manager
+	workDir     string
+	overlay     FileOverlay
 }
 
 func (editFile) Name() string { return "edit_file" }
@@ -50,7 +54,7 @@ func (e editFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 		return "", fmt.Errorf("old_string is required")
 	}
 	p.Path = resolveIn(e.workDir, p.Path)
-	if err := confineWrite(ctx, e.roots, e.guard, e.managed, p.Path); err != nil {
+	if err := confineWrite(ctx, e.roots, e.guard, e.managed, e.sessionTemp, p.Path); err != nil {
 		return "", err
 	}
 

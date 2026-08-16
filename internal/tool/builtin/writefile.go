@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	fileenc "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/sessiontemp"
 	"reasonix/internal/tool"
 )
 
@@ -22,7 +23,10 @@ type writeFile struct {
 	roots   []string
 	guard   SessionDataGuard
 	managed ManagedConfigPaths
-	workDir string
+	// sessionTemp, when non-nil, adds the session's own temporary directory
+	// to the writable surface — the same directory bash writes through $TMPDIR.
+	sessionTemp *sessiontemp.Manager
+	workDir     string
 	// overlay, when non-nil, routes the write through the host transport so an
 	// open editor buffer updates too. Consulted only after write confinement,
 	// and only for plain-UTF-8 targets (the overlay is text-only, so non-UTF-8
@@ -57,7 +61,7 @@ func (w writeFile) Execute(ctx context.Context, args json.RawMessage) (string, e
 		return "", fmt.Errorf("path is required")
 	}
 	p.Path = resolveIn(w.workDir, p.Path)
-	if err := confineWrite(ctx, w.roots, w.guard, w.managed, p.Path); err != nil {
+	if err := confineWrite(ctx, w.roots, w.guard, w.managed, w.sessionTemp, p.Path); err != nil {
 		return "", err
 	}
 	// Preserve the existing file's encoding (GBK/UTF-16/BOM) on overwrite instead

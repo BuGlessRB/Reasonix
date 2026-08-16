@@ -25,7 +25,7 @@ func TestSummaryVerdictFollowsTheReceiptsGaps(t *testing.T) {
 		evidence.Receipt{ToolName: "bash", Success: true, Command: "go test ./...", OutputBytes: 64},
 	)
 	c := buildShadowContract("fix the add bug in calc.py", ledger.Receipts(), nil)
-	rep := completion.Build(c, ledger)
+	rep := completion.Build(c, ledger, nil)
 
 	if got := c.GoalVerdict(); got != taskcontract.VerdictComplete {
 		t.Fatalf("contract verdict = %v, want the satisfied contract this case is about", got)
@@ -46,7 +46,7 @@ func TestSummaryVerdictKeepsCompleteWhenNothingIsUnproven(t *testing.T) {
 		evidence.Receipt{ToolName: "bash", Success: true, Command: "go test ./...", OutputBytes: 64},
 	)
 	c := buildShadowContract("fix the add bug in calc.py", ledger.Receipts(), nil)
-	rep := completion.Build(c, ledger)
+	rep := completion.Build(c, ledger, nil)
 
 	if len(rep.Gaps) != 0 {
 		t.Fatalf("gaps = %+v, want none once the change was read back and verified", rep.Gaps)
@@ -62,7 +62,7 @@ func TestSummaryVerdictKeepsBlocked(t *testing.T) {
 		evidence.Receipt{ToolName: "edit_file", Success: true, Write: true, Mutation: true, Paths: []string{"calc.py"}},
 	)
 	c := buildShadowContract("fix the add bug in calc.py", ledger.Receipts(), nil)
-	rep := completion.Build(c, ledger)
+	rep := completion.Build(c, ledger, nil)
 	if got := summaryVerdictOf(c, rep); got == taskcontract.VerdictComplete {
 		t.Fatalf("summary verdict = %v, want the contract's own unfinished answer", got)
 	}

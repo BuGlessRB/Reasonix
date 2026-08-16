@@ -32,7 +32,7 @@ func ran(command string, ok bool) evidence.Receipt {
 func gapKinds(rep Report) []string { return rep.GapKinds() }
 
 func TestBuildWithNothingToJudgeStaysUnknown(t *testing.T) {
-	rep := Build(nil, evidence.NewLedger())
+	rep := Build(nil, evidence.NewLedger(), nil)
 	if rep.Verdict != VerdictUnknown {
 		t.Fatalf("verdict = %v, want unknown for a turn with no contract and no receipts", rep.Verdict)
 	}
@@ -51,7 +51,7 @@ func TestBuildIsDoneWhenChangeIsVerifiedAndReviewed(t *testing.T) {
 	}
 	c.Resolve("r1", taskcontract.Satisfied, taskcontract.EvidenceRef{Kind: taskcontract.EvidenceVerification, MutationEpoch: c.Epoch(), Success: true})
 
-	rep := Build(c, ledger)
+	rep := Build(c, ledger, nil)
 	if rep.Verdict != VerdictDone {
 		t.Fatalf("verdict = %v (%s), want done; gaps %+v", rep.Verdict, rep.Summary(), rep.Gaps)
 	}
@@ -69,7 +69,7 @@ func TestBuildIsDoneWhenChangeIsVerifiedAndReviewed(t *testing.T) {
 func TestBuildReportsUnreviewedChangeAsPartial(t *testing.T) {
 	ledger := ledgerOf(wrote("parser.go"), ran("go test ./...", true))
 
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if rep.Verdict != VerdictPartial {
 		t.Fatalf("verdict = %v, want partial: a verified but never-inspected change is not a clean done", rep.Verdict)
 	}
@@ -84,7 +84,7 @@ func TestBuildReportsUnreviewedChangeAsPartial(t *testing.T) {
 func TestBuildReportsMutationWithNoVerificationAtAll(t *testing.T) {
 	ledger := ledgerOf(wrote("parser.go"), read("parser.go"))
 
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if got := gapKinds(rep); !slices.Equal(got, []string{"unverified_change"}) {
 		t.Fatalf("gap kinds = %v, want [unverified_change]", got)
 	}
@@ -96,7 +96,7 @@ func TestBuildReportsMutationWithNoVerificationAtAll(t *testing.T) {
 func TestBuildKeepsFailedVerificationVisible(t *testing.T) {
 	ledger := ledgerOf(wrote("parser.go"), read("parser.go"), ran("go test ./...", false))
 
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if len(rep.Verifications) != 1 || rep.Verifications[0].Passed {
 		t.Fatalf("verifications = %+v, want the failing run recorded", rep.Verifications)
 	}
@@ -108,7 +108,7 @@ func TestBuildKeepsFailedVerificationVisible(t *testing.T) {
 func TestBuildStalesVerificationThatPredatesTheLatestChange(t *testing.T) {
 	ledger := ledgerOf(ran("go test ./...", true), wrote("parser.go"), read("parser.go"))
 
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if !rep.Verifications[0].Stale {
 		t.Fatalf("verification = %+v, want stale: it ran before the change", rep.Verifications[0])
 	}
@@ -120,7 +120,7 @@ func TestBuildStalesVerificationThatPredatesTheLatestChange(t *testing.T) {
 func TestBuildLatestRunOfACommandWins(t *testing.T) {
 	ledger := ledgerOf(wrote("parser.go"), read("parser.go"), ran("go test ./...", false), ran("go test ./...", true))
 
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if len(rep.Verifications) != 1 || !rep.Verifications[0].Passed {
 		t.Fatalf("verifications = %+v, want one entry showing the latest (passing) run", rep.Verifications)
 	}
@@ -141,7 +141,7 @@ func TestBuildIncompleteWhenARequiredCriterionHasNoProof(t *testing.T) {
 		c.Observe(r)
 	}
 
-	rep := Build(c, ledger)
+	rep := Build(c, ledger, nil)
 	if rep.Verdict != VerdictIncomplete {
 		t.Fatalf("verdict = %v, want incomplete", rep.Verdict)
 	}
@@ -163,7 +163,7 @@ func TestBuildDeclaredCheckReplacesTheBlanketGap(t *testing.T) {
 		c.Observe(r)
 	}
 
-	rep := Build(c, ledger)
+	rep := Build(c, ledger, nil)
 	if got := gapKinds(rep); !slices.Equal(got, []string{"missing_check"}) {
 		t.Fatalf("gap kinds = %v, want only the specific missing check", got)
 	}
@@ -175,7 +175,7 @@ func TestBuildDeclaredCheckReplacesTheBlanketGap(t *testing.T) {
 func TestBuildReviewIsScopedPerPath(t *testing.T) {
 	ledger := ledgerOf(wrote("parser.go"), wrote("lexer.go"), read("parser.go"), ran("go test ./...", true))
 
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if len(rep.Changes) != 2 {
 		t.Fatalf("changes = %+v, want both paths", rep.Changes)
 	}
@@ -190,7 +190,7 @@ func TestBuildReviewIsScopedPerPath(t *testing.T) {
 func TestBuildRewritingAPathAfterReviewReopensIt(t *testing.T) {
 	ledger := ledgerOf(wrote("parser.go"), read("parser.go"), ran("go test ./...", true), wrote("parser.go"))
 
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	if rep.Changes[0].Reviewed {
 		t.Fatalf("change = %+v, want unreviewed: the last write came after the read", rep.Changes[0])
 	}
@@ -201,7 +201,7 @@ func TestBuildRewritingAPathAfterReviewReopensIt(t *testing.T) {
 
 func TestBuildCountsAPathlessMutation(t *testing.T) {
 	shell := evidence.Receipt{ToolName: "bash", Success: true, Command: "sed -i '' s/a/b/ parser.go", Mutation: true, OutputBytes: 8}
-	rep := Build(nil, ledgerOf(shell))
+	rep := Build(nil, ledgerOf(shell), nil)
 	if rep.Mutations != 1 || len(rep.Changes) != 0 {
 		t.Fatalf("mutations = %d, changes = %+v: a path-less mutation still changed the workspace", rep.Mutations, rep.Changes)
 	}
@@ -215,7 +215,7 @@ func TestSummaryCountsRequiredCriteriaOnly(t *testing.T) {
 	c.AddRequirement("r1", "done", true)
 	c.AddRequirement("r2", "optional", false)
 	c.Resolve("r1", taskcontract.Satisfied)
-	rep := Build(c, ledgerOf())
+	rep := Build(c, ledgerOf(), nil)
 	if got := rep.Summary(); !strings.Contains(got, "criteria 1/1") {
 		t.Fatalf("summary = %q, want required-only criteria counts", got)
 	}
@@ -229,7 +229,7 @@ func TestStaleCommandIsNotAGapOnceSomethingFreshPassed(t *testing.T) {
 		wrote("parser.go"),
 		read("parser.go"),
 		ran("python3 -m unittest discover", true),
-	))
+	), nil)
 	if got := gapKinds(rep); len(got) != 0 {
 		t.Fatalf("gap kinds = %v, want none: the fresh run proved the tree", got)
 	}
@@ -245,7 +245,7 @@ func TestStaleCommandIsAGapWhenNothingFreshPassed(t *testing.T) {
 		ran("go test ./...", true),
 		wrote("parser.go"),
 		read("parser.go"),
-	))
+	), nil)
 	if got := gapKinds(rep); !slices.Contains(got, "stale_verification") {
 		t.Fatalf("gap kinds = %v, want the stale command named", got)
 	}
@@ -262,7 +262,7 @@ func TestAuthoredFilesNeedNoSeparateReview(t *testing.T) {
 		Paths:            []string{"tally.go"}, Created: []string{"tally.go"},
 	}
 	ledger.Record(authored)
-	changes := changesOf(ledger, ledger.Receipts())
+	changes := changesOf(ledger, ledger.Receipts(), nil)
 	if len(changes) != 1 || !changes[0].Reviewed {
 		t.Fatalf("changes = %+v, want the authored file to need no review", changes)
 	}
@@ -271,7 +271,7 @@ func TestAuthoredFilesNeedNoSeparateReview(t *testing.T) {
 		ToolName: "edit_file", Success: true, Write: true, Mutation: true,
 		MutationEvidence: evidence.MutationProven, Paths: []string{"tally.go"},
 	})
-	changes = changesOf(ledger, ledger.Receipts())
+	changes = changesOf(ledger, ledger.Receipts(), nil)
 	if len(changes) != 1 || changes[0].Reviewed {
 		t.Fatalf("changes = %+v, want an edit over authored content to need review", changes)
 	}
@@ -290,7 +290,7 @@ func TestFailureBeforeTheFixIsNotAGapOnceProven(t *testing.T) {
 	ledger.Record(evidence.Receipt{ToolName: "read_file", Success: true, Read: true, Paths: []string{"window.go"}})
 	ledger.Record(evidence.Receipt{ToolName: "bash", Success: true, Command: "go test ./...", Verification: evidence.VerificationPassed})
 
-	rep := Build(nil, ledger)
+	rep := Build(nil, ledger, nil)
 	for _, g := range rep.Gaps {
 		if g.Kind == GapFailedVerification {
 			t.Fatalf("gaps = %+v, want the superseded failure left out", rep.Gaps)
@@ -305,12 +305,37 @@ func TestFailureBeforeTheFixIsNotAGapOnceProven(t *testing.T) {
 	})
 	stillRed.Record(evidence.Receipt{ToolName: "bash", Success: false, Command: "go test ./...", Verification: evidence.VerificationFailed})
 	found := false
-	for _, g := range Build(nil, stillRed).Gaps {
+	for _, g := range Build(nil, stillRed, nil).Gaps {
 		if g.Kind == GapFailedVerification {
 			found = true
 		}
 	}
 	if !found {
 		t.Fatal("a check that stands failed after the change must still be a gap")
+	}
+}
+
+// A probe written to a scratch directory is not the work product. Reported as
+// a change it asks the turn for a check and a review of a file the user will
+// never see — the whole "did nothing to the repository" answer, called partial.
+func TestScratchWritesOutsideTheWorkspaceAreNotChanges(t *testing.T) {
+	ledger := evidence.NewLedger()
+	ledger.Record(evidence.Receipt{
+		ToolName: "write_file", Success: true, Write: true, Mutation: true,
+		MutationEvidence: evidence.MutationProven,
+		Paths:            []string{"/tmp/session-abc/probe/main.go"},
+		Created:          []string{"/tmp/session-abc/probe/main.go"},
+	})
+	inWorkspace := func(path string) bool { return !strings.HasPrefix(path, "/tmp/") }
+
+	rep := Build(nil, ledger, inWorkspace)
+	if len(rep.Changes) != 0 || rep.Mutations != 0 {
+		t.Fatalf("changes = %+v, mutations = %d, want a scratch write to count as neither", rep.Changes, rep.Mutations)
+	}
+	if kinds := gapKinds(rep); len(kinds) != 0 {
+		t.Fatalf("gap kinds = %v, want none for a turn that changed nothing", kinds)
+	}
+	if kept := Build(nil, ledger, nil); len(kept.Changes) != 1 {
+		t.Fatalf("changes = %+v, want a nil filter to keep every path", kept.Changes)
 	}
 }
