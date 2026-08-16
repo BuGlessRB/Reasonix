@@ -1224,69 +1224,6 @@ func anchorRefreshRead(r Receipt) bool {
 	return true
 }
 
-func (l *Ledger) LatestSuccessfulWriterIndex() (int, bool) {
-	if l == nil {
-		return 0, false
-	}
-	latest := -1
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	for i, r := range l.receipts {
-		if r.Success && r.Write {
-			latest = i
-		}
-	}
-	return latest, latest >= 0
-}
-
-// LatestSuccessfulMutationIndex returns the most recent host-observed
-// state-changing call. It includes known file writers, writer-capable delegated
-// or external tools, and bash commands that are not demonstrably observational
-// or verification-only.
-func (l *Ledger) LatestSuccessfulMutationIndex() (int, bool) {
-	if l == nil {
-		return 0, false
-	}
-	latest := -1
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	for i, r := range l.receipts {
-		if r.Success && r.Mutation {
-			latest = i
-		}
-	}
-	return latest, latest >= 0
-}
-
-// LatestProvenMutationIndex is the baseline for what a change owes: the latest
-// write the host could prove, or — when it proved none — the latest it could
-// not classify. A check that merely resists classification must not become the
-// change set, or every post-verification `gofmt -l` moves the goalposts past
-// the verification that just ran.
-func (l *Ledger) LatestProvenMutationIndex() (int, bool) {
-	if l == nil {
-		return 0, false
-	}
-	proven, unproven := -1, -1
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	for i, r := range l.receipts {
-		if !r.Success || !r.Mutation {
-			continue
-		}
-		if r.MutationEvidence == MutationProven {
-			proven = i
-			continue
-		}
-		unproven = i
-	}
-	if proven >= 0 {
-		return proven, true
-	}
-	return unproven, unproven >= 0
-}
-
 func (l *Ledger) MatchLatestTodoStep(step string) (TodoStepMatch, bool) {
 	step = strings.TrimSpace(step)
 	if l == nil || step == "" {

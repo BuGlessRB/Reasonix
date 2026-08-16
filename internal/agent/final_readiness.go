@@ -141,13 +141,13 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 			missing = append(missing, finalReadinessIncompleteTodos(incomplete))
 		}
 	}
-	writer, hasWriter := a.task.ledger.LatestSuccessfulWriterIndex()
+	writer, hasWriter := a.mutationBaseline(false)
 	deliveryMutation := false
 	deliveryVerificationOnly := false
 	checkpoint := a.task.checkpoint
 	checkpointApplies := a.turn.deliveryScopeActive && checkpoint.ScopeID == a.task.scopeID
 	if a.deliveryProfile {
-		if mutation, ok := a.task.ledger.LatestProvenMutationIndex(); ok {
+		if mutation, ok := a.mutationBaseline(true); ok {
 			writer, hasWriter = mutation, true
 			deliveryMutation = true
 		} else if checkpointApplies && checkpoint.PendingMutation {

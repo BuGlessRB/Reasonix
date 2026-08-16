@@ -53,6 +53,10 @@ type toolCallPlan struct {
 	releaseParentWrite   func()
 	releaseMutationWrite func()
 
+	// pathsBefore is the state of the turn's known paths taken before an
+	// unclassifiable call ran, so its receipt can say what it actually touched.
+	pathsBefore pathSnapshot
+
 	// mutationPath is set when a Previewer described a concrete workspace path
 	// for AfterMutation fingerprint capture (success or failure).
 	mutationPath      string
@@ -690,6 +694,9 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 		a.svc.sink.Emit(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: callID, Output: chunk}})
 	})
 	plan.cctx = cctx
+	if plan.mutates {
+		plan.pathsBefore = snapshotPaths(a.task.ledger, evidence.ToolCallPaths(plan.evidenceArgs))
+	}
 	return toolOutcome{}, false
 }
 

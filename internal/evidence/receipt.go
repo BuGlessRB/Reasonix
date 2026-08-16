@@ -42,6 +42,10 @@ type Receipt struct {
 	// the host never graded it, which reads as unknown — a receipt from an older
 	// session cannot retroactively prove what it wrote.
 	MutationEvidence string `json:"mutation_evidence,omitempty"`
+	// Created lists paths this call brought into existence: absent before it
+	// ran, present after. A path the host watched appear is the only one it can
+	// later watch disappear and conclude the turn kept nothing there.
+	Created []string `json:"created,omitempty"`
 }
 
 // ObserveOutput records the trimmed output size and a compact digest without
