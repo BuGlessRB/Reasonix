@@ -10,7 +10,7 @@ GOEXE := $(shell go env GOEXE)
 GOLANGCI_VERSION := $(shell cat .golangci-version)
 WAILS_VERSION := $(shell tr -d '[:space:]' < .wails-version)
 
-.PHONY: build vet fmt lint lint-go lint-install lint-cross lint-update wails-install test desktop-test desktop-test-short desktop-test-times sdk-test sdk-test-race hooks cross clean
+.PHONY: build vet fmt lint lint-go lint-install lint-cross lint-update wails-install test desktop-test desktop-test-short desktop-test-times sdk-test sdk-test-race hooks cross clean studio
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/reasonix$(GOEXE) ./cmd/reasonix
@@ -18,6 +18,14 @@ build:
 
 vet:
 	go vet ./...
+
+# Build Studio and launch it. On macOS this is the ONLY correct way to run it by
+# hand: a bare binary draws its window but native panels (Add a folder…) open
+# and close in the same beat, because LaunchServices only treats a bundled
+# process as a real GUI app. The script explains the rest.
+studio:
+	bash desktop/next/run-studio.sh
+
 
 fmt:
 	gofmt -w .
