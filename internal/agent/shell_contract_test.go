@@ -94,6 +94,70 @@ func TestOrdinaryModeRunsShortCircuitBuildAndVerify(t *testing.T) {
 	}
 }
 
+// The host recovers each stage's status from PIPESTATUS, so a pipeline it reads
+// no longer hides the check. `&&` still short-circuits on the build, which
+// leaves nothing about this shape unreadable — it must not be blocked.
+func TestOrdinaryModeRunsBuildAndVerifyThroughReadablePipe(t *testing.T) {
+	command := "go build ./internal/x/ && go test ./internal/x/ -v 2>&1 | tail -10"
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "bash", readOnly: false})
+	args, err := json.Marshal(map[string]string{"command": command})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
+		{toolCallChunk("m1", "bash", string(args)), {Type: provider.ChunkDone}},
+		{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
+	}}
+	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	if err := a.Run(context.Background(), "test"); err != nil {
+		t.Fatal(err)
+	}
+	got := toolResultByID(a.sess.conversation, "m1")
+	if strings.Contains(got, "blocked:") {
+		t.Fatalf("ordinary mode blocked %q: %s", command, got)
+	}
+	if !strings.Contains(got, "bash done") {
+		t.Fatalf("command did not run: result = %q", got)
+	}
+}
+
+// The exemption covers exactly one masking source. Anything that drops a
+// mutation's status before the final pipeline stays blocked, because no
+// per-stage report can bring that status back.
+func TestPipeStatusExemptionStopsAtTheFinalPipeline(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		command string
+		exempt  bool
+	}{
+		{"&& into a readable pipe", "go build ./x/ && go test ./x/ 2>&1 | tail -10", true},
+		{"; drops the generate status", "go generate ./x/ ; go test ./x/ 2>&1 | tail -10", false},
+		{"|| decides the status itself", "go generate ./x/ || go test ./x/ 2>&1 | tail -3", false},
+		{"backgrounded mutation is never waited on", "go generate ./x/ & go test ./x/ 2>&1 | tail -3", false},
+		{"no pipeline leaves nothing for the probe", "go generate ./x/ && go test ./x/", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			args, err := json.Marshal(map[string]string{"command": tt.command})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := hostReadsCheckThroughPipeStatus(args); got != tt.exempt {
+				t.Errorf("hostReadsCheckThroughPipeStatus(%q) = %v, want %v", tt.command, got, tt.exempt)
+			}
+		})
+	}
+}
+
+// A background call never reaches the foreground probe, so its shape cannot be
+// exempted on the strength of a report nothing will write.
+func TestPipeStatusExemptionSkipsBackgroundCalls(t *testing.T) {
+	args := json.RawMessage(`{"command":"go build ./x/ && go test ./x/ 2>&1 | tail -10","run_in_background":true}`)
+	if hostReadsCheckThroughPipeStatus(args) {
+		t.Error("a background call has no foreground pipe-status report to read")
+	}
+}
+
 func TestOrdinaryModeBlocksMaskedVerifierExit(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "bash", readOnly: false})

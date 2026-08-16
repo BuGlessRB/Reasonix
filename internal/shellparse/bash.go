@@ -391,6 +391,50 @@ func stmtCanMaskEarlierFailure(stmt *syntax.Stmt) (bool, bool) {
 	}
 }
 
+// MasksOnlyInsideFinalPipeline reports whether the last pipeline is the only
+// thing that could hide an earlier failure: every stage outside it short-circuits
+// into the exit status. A caller that recovers per-stage statuses for that one
+// pipeline can then read the whole command, which `;`, `||`, and background
+// stages never allow.
+func MasksOnlyInsideFinalPipeline(command string) bool {
+	if strings.TrimSpace(command) == "" {
+		return false
+	}
+	file, err := ParseBash(command)
+	// More than one top-level statement means `;` or a newline, which drops the
+	// earlier statement's status whatever the last pipeline reports.
+	if err != nil || HasHereDoc(file) || len(file.Stmts) != 1 {
+		return false
+	}
+	return stmtMasksOnlyInFinalPipeline(file.Stmts[0])
+}
+
+func stmtMasksOnlyInFinalPipeline(stmt *syntax.Stmt) bool {
+	if stmt == nil || stmt.Negated || stmt.Background || stmt.Coprocess || stmt.Disown {
+		return false
+	}
+	switch cmd := stmt.Cmd.(type) {
+	case *syntax.BinaryCmd:
+		switch cmd.Op {
+		case syntax.AndStmt:
+			// The left side's failure short-circuits and becomes the status, so
+			// it only stays readable while nothing inside it masks either.
+			masks, ok := stmtCanMaskEarlierFailure(cmd.X)
+			if !ok || masks {
+				return false
+			}
+			return stmtMasksOnlyInFinalPipeline(cmd.Y)
+		case syntax.Pipe, syntax.PipeAll:
+			return true
+		}
+		return false
+	case *syntax.CallExpr:
+		return true
+	default:
+		return false
+	}
+}
+
 // SplitTopLevel returns simple command segments split at top-level shell
 // control operators. It preserves each segment's original source text. ok is
 // false when the command cannot be decomposed without losing safety.

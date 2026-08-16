@@ -3,13 +3,11 @@ package builtin
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"slices"
 	"strconv"
 	"strings"
 
 	"reasonix/internal/evidence"
 	"reasonix/internal/sandbox"
-	"reasonix/internal/shellparse"
 	"reasonix/internal/tool"
 )
 
@@ -21,7 +19,7 @@ import (
 type pipeStatusProbe struct{ nonce string }
 
 func newPipeStatusProbe(sh sandbox.Shell, command string, background bool) pipeStatusProbe {
-	if background || sh.Kind != sandbox.ShellBash || !pipeStatusWorthCapturing(command) {
+	if background || sh.Kind != sandbox.ShellBash || !evidence.PipeStatusCanDecideVerification(command) {
 		return pipeStatusProbe{}
 	}
 	var raw [8]byte
@@ -29,30 +27,6 @@ func newPipeStatusProbe(sh sandbox.Shell, command string, background bool) pipeS
 		return pipeStatusProbe{}
 	}
 	return pipeStatusProbe{nonce: hex.EncodeToString(raw[:])}
-}
-
-// pipeStatusWorthCapturing holds the probe to shapes it can decide: a pipeline
-// that could end the command and whose exit status a stage after the check
-// would decide. Widths must differ across candidates, or the captured statuses
-// could not say which pipeline produced them.
-func pipeStatusWorthCapturing(command string) bool {
-	candidates, ok := shellparse.TerminalPipelines(command)
-	if !ok {
-		return false
-	}
-	widths := map[int]int{}
-	for _, stages := range candidates {
-		widths[len(stages)]++
-	}
-	for _, stages := range candidates {
-		if len(stages) < 2 || widths[len(stages)] > 1 {
-			continue
-		}
-		if slices.ContainsFunc(stages[:len(stages)-1], evidence.CommandRunsVerification) {
-			return true
-		}
-	}
-	return false
 }
 
 func (p pipeStatusProbe) active() bool { return p.nonce != "" }

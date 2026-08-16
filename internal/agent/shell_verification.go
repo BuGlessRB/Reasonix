@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"encoding/json"
 	"strings"
 
 	"reasonix/internal/evidence"
+	"reasonix/internal/shellparse"
 	"reasonix/internal/tool"
 )
 
@@ -26,6 +28,21 @@ func shellVerificationVerdict(command string, pipeStatus []int, err error) strin
 	default:
 		return tool.ShellVerificationPassed
 	}
+}
+
+// hostReadsCheckThroughPipeStatus reports whether the pipe-status probe will
+// answer this call's check, which is the only thing the maskable-shape block
+// protects against. The shape test parses bash, so a shell whose pipelines it
+// cannot read fails it and the block still stands.
+func hostReadsCheckThroughPipeStatus(args json.RawMessage) bool {
+	command := bashCommandFromArgs(args)
+	if command == "" || isBackgroundTaskCall(string(args)) {
+		return false
+	}
+	// Both halves are required: the probe answers the check, and nothing outside
+	// that pipeline can swallow a mutation's failure on the way there.
+	return shellparse.MasksOnlyInsideFinalPipeline(command) &&
+		evidence.PipeStatusCanDecideVerification(command)
 }
 
 // shellVerificationNotice tells the model at the moment it happens that the

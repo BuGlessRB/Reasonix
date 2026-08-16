@@ -8,6 +8,33 @@ import (
 	"reasonix/internal/shellsafe"
 )
 
+// PipeStatusCanDecideVerification reports whether per-stage exit statuses could
+// answer the check inside command: a pipeline that could end the command, whose
+// stages have distinct widths, and whose check sits before the stage that
+// decides the status. Shape only — the caller says whether the shell in hand
+// reports those statuses.
+func PipeStatusCanDecideVerification(command string) bool {
+	candidates, ok := shellparse.TerminalPipelines(command)
+	if !ok {
+		return false
+	}
+	// Widths must differ across candidates, or the captured statuses could not
+	// say which pipeline produced them.
+	widths := map[int]int{}
+	for _, stages := range candidates {
+		widths[len(stages)]++
+	}
+	for _, stages := range candidates {
+		if len(stages) < 2 || widths[len(stages)] > 1 {
+			continue
+		}
+		if slices.ContainsFunc(stages[:len(stages)-1], CommandRunsVerification) {
+			return true
+		}
+	}
+	return false
+}
+
 // VerificationExitConclusive reports whether a zero exit status would prove the
 // verification inside command passed. A pipe, `;`, or `||` can hand the status
 // to a later stage — `go test ./... | head` exits 0 on a failing suite — while
