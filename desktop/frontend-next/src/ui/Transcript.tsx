@@ -294,12 +294,16 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
       at.current = false;
       setPinned(false);
       onPinned(false);
+      // Measured against the scroller, not offsetTop: the nearest positioned
+      // ancestor is .pane, which does not scroll, so offsetTop answers "where
+      // in the window" — writing that back as scrollTop barely moves anything.
+      const topOf = (el: HTMLElement) => el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
       const chunk = inner.querySelectorAll<HTMLElement>(".chunk")[mark.block];
-      if (chunk) root.scrollTop = chunk.offsetTop + (mark.of > 1 ? (mark.within / mark.of) * chunk.offsetHeight : 0) - 12;
+      if (chunk) root.scrollTop = topOf(chunk) + (mark.of > 1 ? (mark.within / mark.of) * chunk.offsetHeight : 0) - 12;
       const settle = (tries: number) => {
         const el = inner.querySelector<HTMLElement>(`[data-item="${CSS.escape(mark.id)}"]`);
         if (el) {
-          root.scrollTop = el.offsetTop - 12;
+          root.scrollTop = topOf(el) - 12;
           el.setAttribute("data-hit", "");
           setTimeout(() => el.removeAttribute("data-hit"), 1200);
           return;
@@ -351,7 +355,15 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
   blocks.forEach((block, b) =>
     block.forEach((it, i) => {
       if (it.t !== "user") return;
-      marks.push({ id: it.id, text: it.text, block: b, within: i, of: block.length, files: checkpoints.get(it.id)?.files ?? 0 });
+      marks.push({
+        id: it.id,
+        text: it.text,
+        at: b * BLOCK + i,
+        block: b,
+        within: i,
+        of: block.length,
+        files: checkpoints.get(it.id)?.files ?? 0,
+      });
     }),
   );
 
@@ -363,7 +375,7 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
       ref={scroll}
       hidden={hidden}
     >
-      <Rail marks={marks} scroll={scroll} flow={flow} onJump={jumpTo} onGrab={release} bound={!hidden} />
+      <Rail marks={marks} total={items.length} scroll={scroll} flow={flow} onJump={jumpTo} onGrab={release} bound={!hidden} />
       <div className="flow" ref={flow}>
         {items.length === 0 && <Hero onPick={onSuggest} />}
         {blocks.map((block, i) => (

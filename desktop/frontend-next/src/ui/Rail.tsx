@@ -7,6 +7,10 @@ export interface RailMark {
   // Which block holds it and where inside that block, because the block is what
   // survives virtualisation: an unmounted one is a placeholder with the right
   // height, so its position is known even when the message itself has no node.
+  // Position in the transcript, counted in entries — see fractionsOf.
+  at: number;
+  // Which block holds it, for a jump: the block is what exists while the
+  // message itself is unmounted.
   block: number;
   within: number;
   of: number;
@@ -15,6 +19,9 @@ export interface RailMark {
 
 interface Props {
   marks: RailMark[];
+  // How many entries the transcript holds, which is what a mark's position is a
+  // fraction of.
+  total: number;
   scroll: RefObject<HTMLDivElement | null>;
   flow: RefObject<HTMLDivElement | null>;
   onJump: (mark: RailMark) => void;
@@ -26,25 +33,25 @@ interface Props {
   bound: boolean;
 }
 
-// Where a mark sits, in pixels down the content. Measured off the blocks rather
-// than the messages: at any moment most of them are placeholders, and a
-// placeholder holds the height its block had. Inside a block the position is
-// interpolated — off by a card at worst, which a jump corrects by scrolling to
-// the message itself once the block mounts.
-function offsetsOf(root: HTMLElement, marks: RailMark[]): number[] {
-  const chunks = root.querySelectorAll<HTMLElement>(".chunk");
-  return marks.map((m) => {
-    const chunk = chunks[m.block];
-    if (!chunk) return 0;
-    return chunk.offsetTop + (m.of > 1 ? (m.within / m.of) * chunk.offsetHeight : 0);
-  });
+// Where a mark sits, as a fraction of the transcript. Counted in entries, not
+// pixels: a block mounting swaps its estimated height for its real one, which
+// moves every pixel-derived position on the rail a little — under a drag that
+// reads as the marks sliding around while the content underneath is still.
+// Entries do not move. They are also the better measure of "how long was that
+// turn": how much it produced, rather than how tall it happens to render.
+function fractionsOf(marks: RailMark[], total: number): number[] {
+  if (total <= 0) return marks.map(() => 0);
+  return marks.map((m) => Math.min(1, m.at / total));
 }
 
-export function Rail({ marks, scroll, flow, onJump, onGrab, bound }: Props) {
+export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const [tops, setTops] = useState<number[]>([]);
   const [view, setView] = useState({ top: 0, height: 0 });
   const [at, setAt] = useState(-1);
+  // Which mark the keys last walked to. Kept apart from `at`, which the pointer
+  // owns: hovering somewhere else must not move where the keys resume from.
+  const here = useRef(-1);
   // Content height and rail height, read when they change rather than per
   // frame: a follow writes scrollTop every frame and must not pay a layout for
   // this on the way.
@@ -58,12 +65,12 @@ export function Rail({ marks, scroll, flow, onJump, onGrab, bound }: Props) {
     const rail = root.clientHeight;
     box.style.setProperty("--rail-h", rail + "px");
     geom.current = { content: root.scrollHeight || 1, rail };
-    setTops(offsetsOf(inner, marks).map((y) => (y / (root.scrollHeight || 1)) * rail));
+    setTops(fractionsOf(marks, total).map((f) => f * rail));
     setView({
       top: (root.scrollTop / (root.scrollHeight || 1)) * rail,
       height: Math.max(16, (root.clientHeight / (root.scrollHeight || 1)) * rail),
     });
-  }, [marks, scroll, flow]);
+  }, [marks, total, scroll, flow]);
 
   useLayoutEffect(measure, [measure]);
 
@@ -98,19 +105,26 @@ export function Rail({ marks, scroll, flow, onJump, onGrab, bound }: Props) {
       if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.isContentEditable)) return;
       const root = scroll.current;
       if (!root || tops.length === 0) return;
-      const { content, rail } = geom.current;
-      const here = (root.scrollTop / content) * rail;
       const up = e.key === "ArrowUp";
-      let pick = -1;
-      tops.forEach((y, i) => {
-        if (up ? y < here - 2 : y > here + 2) {
-          if (pick < 0 || (up ? y > tops[pick] : y < tops[pick])) pick = i;
-        }
-      });
-      if (pick < 0) return;
+      // Walk the marks themselves. Comparing the viewport's pixel position
+      // against mark positions would mix two rulers — the marks are placed by
+      // entry count now, precisely so that mounting cannot move them.
+      let pick: number;
+      if (here.current >= 0) {
+        pick = here.current + (up ? -1 : 1);
+      } else {
+        // Nothing walked yet: start from whichever mark the viewport is nearest,
+        // which is the one fraction of the transcript it is showing.
+        const seen = Math.min(1, root.scrollTop / Math.max(1, root.scrollHeight - root.clientHeight));
+        const near = tops.reduce((best, y, i) => (Math.abs(y / Math.max(1, geom.current.rail) - seen) < Math.abs(tops[best] / Math.max(1, geom.current.rail) - seen) ? i : best), 0);
+        pick = up ? near : Math.min(near + 1, tops.length - 1);
+      }
+      if (pick < 0 || pick >= marks.length) return;
+      here.current = pick;
       e.preventDefault();
       onJump(marks[pick]);
       setAt(pick);
+      setTimeout(() => setAt((v) => (v === pick ? -1 : v)), 1400);
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
@@ -142,13 +156,22 @@ export function Rail({ marks, scroll, flow, onJump, onGrab, bound }: Props) {
     e.preventDefault();
     e.stopPropagation();
     onGrab();
-    const box = nav.getBoundingClientRect();
     const from = e.clientY;
     const start = root.scrollTop;
-    const { content, rail } = geom.current;
-    void box;
+    const { rail } = geom.current;
+    // What can be dragged is the track minus the box; what it covers is the
+    // content minus one screen. Using rail-over-content instead makes every
+    // drag fall behind the pointer by exactly the ratio of those two.
+    //
+    // Both are read per move, not captured on grab: blocks mount as the drag
+    // travels and the content grows under it, which otherwise leaves the box
+    // a few percent ahead of the pointer by the end. A drag is a handful of
+    // events, so the layout it costs is nothing next to a streaming frame.
     const move = (ev: PointerEvent) => {
-      root.scrollTop = start + ((ev.clientY - from) / rail) * content;
+      const content = root.scrollHeight || 1;
+      const box = Math.max(16, (root.clientHeight / content) * rail);
+      const track = Math.max(1, rail - box);
+      root.scrollTop = start + ((ev.clientY - from) / track) * Math.max(0, content - root.clientHeight);
     };
     const up = () => {
       removeEventListener("pointermove", move);

@@ -606,8 +606,10 @@
     height: var(--rail-h, 0px);
   }
   /* 它接替了滚动条，所以常驻 —— 只是平时很淡；也接替了滚动条的手感：能拖 */
+  /* 最右缘那一条是滚动条本身；标记的命中框在它左边，两者不叠 —— 叠着的时候
+     标记那 54px 宽的命中框把整条框盖住了，按下去根本到不了它。 */
   .srail-view {
-    position: absolute; right: 9px; width: 22px; border-radius: 4px; min-height: 18px;
+    position: absolute; right: 3px; width: 9px; border-radius: 5px; min-height: 20px;
     border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
     background: color-mix(in srgb, var(--text) 6%, transparent);
     opacity: .5; transition: opacity .2s, background-color .15s;
@@ -616,12 +618,12 @@
   .srail-view:active { cursor: grabbing }
   .pane:hover .srail-view { opacity: 1; background: color-mix(in srgb, var(--text) 10%, transparent) }
   .srail-m {
-    position: absolute; right: 0; width: 54px; height: 18px; margin-top: -9px;
+    position: absolute; right: 15px; width: 39px; height: 18px; margin-top: -9px;
     display: flex; align-items: center; justify-content: flex-end;
     border: 0; padding: 0; background: none; cursor: pointer;
   }
   .srail-m > i {
-    margin-right: 16px; border-radius: 2px; background: var(--ghost); opacity: .38;
+    margin-right: 3px; border-radius: 2px; background: var(--ghost); opacity: .38;
     transform-origin: right center;
     transition: opacity .16s, background-color .16s, transform .16s var(--ease-out);
   }
@@ -633,7 +635,7 @@
   .srail:hover ~ .srail-peek, .srail:hover .srail-m > i { opacity: 1 }
 
   .srail-peek {
-    position: absolute; right: 40px; z-index: 5; width: 300px; padding: 9px 11px;
+    position: absolute; right: 48px; z-index: 5; width: 300px; padding: 9px 11px;
     border: 1px solid var(--border); border-radius: var(--r-md); background: var(--float);
     box-shadow: var(--shadow-float); pointer-events: none; transform: translateY(-50%);
     animation: peekin .16s var(--ease-out) both;
