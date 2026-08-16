@@ -315,7 +315,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
             <span className="plus" aria-hidden="true">
               ＋
             </span>
-            {t("添加文件夹…")}
+            {t("打开或新建项目…")}
           </button>
         )}
       </div>

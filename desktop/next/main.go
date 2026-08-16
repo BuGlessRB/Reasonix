@@ -320,7 +320,10 @@ func (a *App) PickWorkspace() (string, error) {
 	if a.ctx == nil {
 		return "", nil
 	}
-	opts := runtime.OpenDialogOptions{Title: "打开工作目录", CanCreateDirectories: true}
+	// The panel can make a folder — that is what CanCreateDirectories is for —
+	// but nothing said so, and "打开" reads as "pick one that exists". Users
+	// concluded the app could only open projects, never start one.
+	opts := runtime.OpenDialogOptions{Title: "选择工作目录 · 也可以在这里新建一个", CanCreateDirectories: true}
 	// Wails refuses to open the panel at all when this points at nothing, and
 	// answers with an error instead — a workspace that has since been moved
 	// would take the picker down with it.

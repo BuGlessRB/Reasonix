@@ -2880,7 +2880,7 @@
   }
   .sessedit:focus { outline: none }
 
-  /* 两个「＋」都常驻：新会话长在它所属的文件夹里，添加文件夹钉在栏底。
+  /* 两个「＋」都常驻：新会话长在它所属的文件夹里，打开/新建项目钉在栏底。
      hover 才出现的控件，等于大多数人永远找不到。 */
   .newsess, .addws {
     display: flex; align-items: center; gap: 7px; width: 100%;
