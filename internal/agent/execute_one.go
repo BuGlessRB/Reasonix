@@ -806,7 +806,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		a.observeRecoveryResult(ctx, evidenceName, evidenceArgs, readOnly, mutates, result, err, false, false, recoveryGen)
 	}
 	if err != nil {
-		detail := result
+		detail := silentExitDetail(evidenceName, evidenceArgs, result)
 		// Malformed-args failures are a transient model JSON glitch (e.g. options
 		// written as ["a":"b"] → "invalid character ':' after array element"). The
 		// args can't be safely re-parsed, but echoing the tool's schema makes the

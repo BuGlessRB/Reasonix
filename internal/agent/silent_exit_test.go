@@ -1,0 +1,48 @@
+package agent
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func bashArgs(t *testing.T, command string) json.RawMessage {
+	t.Helper()
+	raw, err := json.Marshal(map[string]string{"command": command})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// A search that matched nothing exits non-zero with an empty body. Reported as
+// a bare error it reads as breakage, so the run tries the same search again;
+// a verification or anything that may have written keeps reading as a failure.
+func TestSilentExitIsAnAnswer(t *testing.T) {
+	answers := []string{
+		`grep -rn "missing" internal --include="*.go" | grep -v _test.go | head -20`,
+		`test -f internal/agent/nothing.go`,
+		`git diff --quiet`,
+	}
+	for _, command := range answers {
+		if !silentExitIsAnAnswer("bash", bashArgs(t, command), "") {
+			t.Errorf("%q: a silent non-zero exit was not read as an answer", command)
+		}
+	}
+	failures := []struct {
+		command string
+		output  string
+	}{
+		{`go test ./internal/agent/ > /dev/null`, ""}, // a verification's status is its verdict
+		{`go build ./... 2>/dev/null`, ""},            // the host cannot prove it wrote nothing
+		{`rm -rf build`, ""},
+		{`grep -rn "x" internal`, "internal/agent/agent.go:1:x"}, // it printed something
+	}
+	for _, tc := range failures {
+		if silentExitIsAnAnswer("bash", bashArgs(t, tc.command), tc.output) {
+			t.Errorf("%q: a failure was excused as an answer", tc.command)
+		}
+	}
+	if silentExitIsAnAnswer("read_file", bashArgs(t, "irrelevant"), "") {
+		t.Error("a non-bash tool was read through the shell classifier")
+	}
+}

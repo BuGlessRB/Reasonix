@@ -184,6 +184,9 @@ func (a *Agent) observeRecoveryResult(ctx context.Context, toolName string, args
 	if success && readOnly {
 		emptySearch = recoveryEmptySearch(toolName, result)
 	}
+	if !success && silentExitIsAnAnswer(toolName, args, result) {
+		emptySearch = true
+	}
 	errSummary := ""
 	if err != nil {
 		errSummary = firstLine(err.Error())
