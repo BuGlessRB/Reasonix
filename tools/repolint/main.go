@@ -28,7 +28,6 @@ const (
 	ruleDeadCode    = "commented-code"
 	ruleNarrative   = "narrative"
 	ruleFileSize    = "file-size"
-	ruleTestSize    = "test-file-size"
 	ruleLayering    = "layering"
 	ruleFuncSize    = "function-size"
 	ruleComplexity  = "complexity"
@@ -37,7 +36,7 @@ const (
 
 var allRules = []string{
 	ruleEssay, ruleBanner, ruleMarker, ruleDeadCode,
-	ruleNarrative, ruleFileSize, ruleTestSize, ruleLayering,
+	ruleNarrative, ruleFileSize, ruleLayering,
 	ruleFuncSize, ruleComplexity, ruleStructState,
 }
 

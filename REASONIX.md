@@ -52,7 +52,9 @@ an invariant the type system cannot express, or an external-protocol quirk.
 - Never: restatements of the code, phase/stage narrative, incident or
   conversation history, section banners, commented-out code, `@param` lists.
 - `TODO(#nnn):` and `HACK(#nnn):` need the issue anchor. `FIXME` is banned.
-- One responsibility per file; 800 lines is the ceiling.
+- One responsibility per file; 800 lines is the ceiling. Test files are exempt:
+  their length tracks how many cases they cover, not how many concerns they
+  carry, so splitting one only scatters a subject's table across files.
 
 `go run ./tools/repolint` enforces all of it against a ratchet baseline: recorded
 debt is tolerated, anything new fails CI. Never widen the baseline to land a

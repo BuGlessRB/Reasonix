@@ -24,13 +24,15 @@ func sizeExempt(rel string) bool {
 }
 
 func checkSize(s *sourceFile) []Finding {
+	// A test file's length tracks the number of cases it covers, not the number
+	// of concerns it carries; splitting one scatters a single subject's table
+	// across files that then have to be read together.
+	if s.isTest() {
+		return nil
+	}
 	if s.lines <= maxFileLines || sizeExempt(s.rel) {
 		return nil
 	}
-	rule := ruleFileSize
-	if s.isTest() {
-		rule = ruleTestSize
-	}
-	return []Finding{{s.rel, 1, rule,
+	return []Finding{{s.rel, 1, ruleFileSize,
 		fmt.Sprintf("%d lines exceeds the %d-line ceiling", s.lines, maxFileLines), s.lines - maxFileLines}}
 }
