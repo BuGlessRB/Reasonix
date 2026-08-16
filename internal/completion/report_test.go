@@ -276,3 +276,41 @@ func TestAuthoredFilesNeedNoSeparateReview(t *testing.T) {
 		t.Fatalf("changes = %+v, want an edit over authored content to need review", changes)
 	}
 }
+
+// A project that asks for a failing test before the fix produces one every
+// time. Once the fix has been proven fresh, reporting that failure back
+// reports the bug as an outcome of the work that removed it.
+func TestFailureBeforeTheFixIsNotAGapOnceProven(t *testing.T) {
+	ledger := evidence.NewLedger()
+	ledger.Record(evidence.Receipt{ToolName: "bash", Success: false, Command: "go test -run TestNewCase ./...", Verification: evidence.VerificationFailed})
+	ledger.Record(evidence.Receipt{
+		ToolName: "edit_file", Success: true, Write: true, Mutation: true,
+		MutationEvidence: evidence.MutationProven, Paths: []string{"window.go"},
+	})
+	ledger.Record(evidence.Receipt{ToolName: "read_file", Success: true, Read: true, Paths: []string{"window.go"}})
+	ledger.Record(evidence.Receipt{ToolName: "bash", Success: true, Command: "go test ./...", Verification: evidence.VerificationPassed})
+
+	rep := Build(nil, ledger)
+	for _, g := range rep.Gaps {
+		if g.Kind == GapFailedVerification {
+			t.Fatalf("gaps = %+v, want the superseded failure left out", rep.Gaps)
+		}
+	}
+
+	// Without the fresh green run it is the turn's standing outcome again.
+	stillRed := evidence.NewLedger()
+	stillRed.Record(evidence.Receipt{
+		ToolName: "edit_file", Success: true, Write: true, Mutation: true,
+		MutationEvidence: evidence.MutationProven, Paths: []string{"window.go"},
+	})
+	stillRed.Record(evidence.Receipt{ToolName: "bash", Success: false, Command: "go test ./...", Verification: evidence.VerificationFailed})
+	found := false
+	for _, g := range Build(nil, stillRed).Gaps {
+		if g.Kind == GapFailedVerification {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("a check that stands failed after the change must still be a gap")
+	}
+}

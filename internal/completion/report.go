@@ -240,10 +240,7 @@ func verificationsOf(receipts []evidence.Receipt) []Verification {
 	at := map[string]int{}
 	for i, r := range receipts {
 		command := strings.TrimSpace(r.Command)
-		if command == "" || !evidence.CommandRunsVerification(command) {
-			continue
-		}
-		if r.Verification == evidence.VerificationNotRun {
+		if command == "" || !evidence.ReceiptRunsVerification(r) {
 			continue
 		}
 		key := evidence.VerificationIdentity(command)
@@ -304,7 +301,13 @@ func gapsOf(rep Report, c *taskcontract.Contract) []Gap {
 				gaps = append(gaps, Gap{GapInconclusiveVerification, v.Command})
 			}
 		case !v.Passed:
-			gaps = append(gaps, Gap{GapFailedVerification, v.Command})
+			// A failure recorded before the latest change is usually what the
+			// change was for — a project that asks for a failing test first
+			// produces one every time. Once something fresh has proven the tree,
+			// reporting it back is reporting the bug as an outcome.
+			if !v.Stale || !proven {
+				gaps = append(gaps, Gap{GapFailedVerification, v.Command})
+			}
 		case v.Stale && !proven:
 			// Superseded commands matter only while nothing fresh has proven
 			// the tree; listing them after a green run is the pedantry that

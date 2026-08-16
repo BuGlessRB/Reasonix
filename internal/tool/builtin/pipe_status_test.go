@@ -22,7 +22,6 @@ func TestPipeStatusProbeAppliesOnlyToMaskedVerification(t *testing.T) {
 		"go test ./...",              // status already answers for the check
 		"cat notes.md | tail -5",     // nothing to decide
 		"tail -5 log | go test ./..", // the check already decides the status
-		"go vet ./... && go test ./... | tail",
 	} {
 		if testProbe(t, command).active() {
 			t.Errorf("%q was probed, want left alone", command)
@@ -94,5 +93,21 @@ func TestPipeStatusProbeReadWithoutReport(t *testing.T) {
 	}
 	if out != "ok  \tlogstat\t0.4s\n" {
 		t.Fatalf("output altered: %q", out)
+	}
+}
+
+// The shape the traces are full of: a cheap check, then the suite behind a
+// pipe. Both sides can end the command, but their widths differ, so the
+// captured statuses identify which one ran.
+func TestPipeStatusProbeCoversCheckThenPipedSuite(t *testing.T) {
+	if !testProbe(t, "go vet ./... && go test ./... 2>&1 | tail -5").active() {
+		t.Fatal("a suite piped behind a passing check must be probed")
+	}
+	if !testProbe(t, `echo "=== tests ===" && go test ./... | grep -E '^(ok|FAIL)'`).active() {
+		t.Fatal("an echoed banner before the suite must not hide it")
+	}
+	// Same width on both sides: the statuses cannot say which pipeline ran.
+	if testProbe(t, "cat log | tail && go test ./... | tail").active() {
+		t.Error("equal-width candidates must not be probed")
 	}
 }

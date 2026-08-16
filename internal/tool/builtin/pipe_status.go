@@ -31,14 +31,28 @@ func newPipeStatusProbe(sh sandbox.Shell, command string, background bool) pipeS
 	return pipeStatusProbe{nonce: hex.EncodeToString(raw[:])}
 }
 
-// pipeStatusWorthCapturing holds the probe to the shape it can decide: one
-// pipeline whose exit status is decided by a stage after the check.
+// pipeStatusWorthCapturing holds the probe to shapes it can decide: a pipeline
+// that could end the command and whose exit status a stage after the check
+// would decide. Widths must differ across candidates, or the captured statuses
+// could not say which pipeline produced them.
 func pipeStatusWorthCapturing(command string) bool {
-	stages, ok := shellparse.SinglePipelineStages(command)
+	candidates, ok := shellparse.TerminalPipelines(command)
 	if !ok {
 		return false
 	}
-	return slices.ContainsFunc(stages[:len(stages)-1], evidence.CommandRunsVerification)
+	widths := map[int]int{}
+	for _, stages := range candidates {
+		widths[len(stages)]++
+	}
+	for _, stages := range candidates {
+		if len(stages) < 2 || widths[len(stages)] > 1 {
+			continue
+		}
+		if slices.ContainsFunc(stages[:len(stages)-1], evidence.CommandRunsVerification) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p pipeStatusProbe) active() bool { return p.nonce != "" }

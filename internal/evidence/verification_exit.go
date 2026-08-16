@@ -1,6 +1,7 @@
 package evidence
 
 import (
+	"slices"
 	"strings"
 
 	"reasonix/internal/shellparse"
@@ -37,8 +38,8 @@ func VerificationOutcomeFromPipeStatus(command string, status []int) string {
 	if len(status) == 0 {
 		return ""
 	}
-	stages, ok := shellparse.SinglePipelineStages(command)
-	if !ok || len(stages) != len(status) {
+	stages, ok := shellparse.PipelineForStatus(command, len(status))
+	if !ok {
 		return ""
 	}
 	verdict := ""
@@ -63,12 +64,7 @@ func (l *Ledger) HasVerificationCommandAfter(after int) bool {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for _, r := range l.receipts[max(after+1, 0):] {
-		if r.ToolName == "bash" && bashContainsVerificationSegment(r.Command) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(l.receipts[max(after+1, 0):], ReceiptRunsVerification)
 }
 
 // HasFailedVerificationAfter reports whether any check still stands failed
@@ -83,7 +79,7 @@ func (l *Ledger) HasFailedVerificationAfter(after int) bool {
 	defer l.mu.Unlock()
 	latest := map[string]string{}
 	for _, r := range l.receipts[max(after+1, 0):] {
-		if r.ToolName != "bash" || !CommandRunsVerification(r.Command) {
+		if !ReceiptRunsVerification(r) {
 			continue
 		}
 		if outcome := VerificationOutcome(r); outcome != "" {
@@ -131,6 +127,21 @@ func (l *Ledger) LatestUnreadableVerificationAfter(after int) (Receipt, bool) {
 		}
 	}
 	return Receipt{}, false
+}
+
+// ReceiptRunsVerification reports whether a receipt carries a verification. The
+// host classified the call as it ran — including anything the static tables
+// could not read alone — so the receipt is the answer, and the tables only
+// stand in for receipts recorded before that classification existed.
+func ReceiptRunsVerification(r Receipt) bool {
+	switch r.Verification {
+	case VerificationNotRun, VerificationNotVerification:
+		return false
+	case "":
+		return r.ToolName == "bash" && bashContainsVerificationSegment(r.Command)
+	default:
+		return true
+	}
 }
 
 // CommandRunsVerification reports whether command runs a verification at all,
