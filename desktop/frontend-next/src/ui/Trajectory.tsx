@@ -15,13 +15,15 @@ function Spans({ of }: { of: Span[] }) {
   );
 }
 
-// 一条记录在轴上的位置。结果事件写下的时刻是它**结束**的时刻，所以带耗时的条
-// 从 at-dur 画到 at —— 并排看下来，重叠的就是并行跑的那几个。
+// 一行是一段活动，at 是它开始的时刻 —— 条从那里画，长度就是它跑了多久。
+// 并排看下来，重叠的就是并行跑的那几个：一个子代理的长条会罩住它内部的调用。
 function Track({ row, span }: { row: TrajRow; span: number }) {
   const dur = row.dur ?? 0;
-  const start = Math.max(0, row.at - dur);
-  const cat = row.tool ? categoryOf(row.tool) : "sys";
-  const label = dur > 0 ? `+${start.toFixed(2)}s → +${row.at.toFixed(2)}s · ${dur.toFixed(2)}s` : `+${row.at.toFixed(2)}s`;
+  const start = row.at;
+  // The round is the trunk of a turn, not one more tool; it gets its own tone
+  // so the coloured marks read as what happened inside it.
+  const cat = row.kind === "model_round" ? "round" : row.tool ? categoryOf(row.tool) : "sys";
+  const label = dur > 0 ? `+${start.toFixed(2)}s → +${(start + dur).toFixed(2)}s · ${dur.toFixed(2)}s` : `+${start.toFixed(2)}s`;
   return (
     <span className="tl-track" title={label}>
       <i
@@ -34,8 +36,9 @@ function Track({ row, span }: { row: TrajRow; span: number }) {
 }
 
 export function Trajectory({ rows }: { rows: TrajRow[] }) {
-  // 轴的跨度用最后一条记录的时刻。至少一秒，否则头几条会把整条轴撑满。
-  const span = Math.max(1, rows.length ? rows[rows.length - 1].at : 0);
+  // 轴的跨度是最后一段活动结束的时刻 —— 不是最后一行开始的时刻，一行现在
+  // 代表一段有长度的活动，最长的那条未必是最后开的。
+  const span = Math.max(1, ...rows.map((r) => r.at + (r.dur ?? 0)));
   return (
     <>
       <table className="traj">

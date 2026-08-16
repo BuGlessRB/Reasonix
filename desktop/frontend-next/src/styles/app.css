@@ -639,6 +639,9 @@
   .tl-bar { min-width: 2px }
   /* 瞬时事件没有长度，画成刻点 —— 给它一个假宽度会谎报耗时 */
   .tl-tick { width: 2px; margin-left: -1px; opacity: .65 }
+  /* 回合是主干：更粗、中性色，工具的彩色刻点落在它上面 */
+  .tl-bar[data-c="round"] { top: 0; height: 9px; background: color-mix(in srgb, var(--muted) 42%, transparent) }
+  .tl-tick[data-c="round"] { top: 0; height: 9px; background: var(--muted) }
   .tl-bar[data-c="read"], .tl-tick[data-c="read"] { background: var(--ghost) }
   .tl-bar[data-c="write"], .tl-tick[data-c="write"] { background: var(--accent) }
   .tl-bar[data-c="net"], .tl-tick[data-c="net"] { background: var(--net) }
