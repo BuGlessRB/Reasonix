@@ -724,6 +724,11 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if pluginHost == nil {
 		pluginHost = plugin.NewHost()
 	}
+	// Where the host reports that a server's state changed. Without it a lazy
+	// server that connects in the background — the common case, since a
+	// cache-miss server is started by its first real tool call — leaves every
+	// status view showing whatever it saw at boot.
+	pluginHost.SetStatusSink(opts.Sink)
 
 	// Enabled MCP servers enter the tool catalog at boot. Cached schemas
 	// register placeholders without starting processes; cache-miss servers get

@@ -15,7 +15,17 @@ const APPROVALS: [ApprovalMode, string, string][] = [
   ["yolo", "全放行", "不问了。只在你完全信任这个工作区时用。"],
 ];
 
-const EFFORTS = ["auto", "low", "medium", "high", "xhigh", "max"];
+// Only the ladder the kernel would accept for the model in hand. A fixed list
+// here offered rungs a given model does not have, and picking one looked like
+// the control was dead: the request was refused downstream, with nothing on the
+// composer to say so. auto is prepended because it is not a rung — it means
+// "whatever this model defaults to", which every model has.
+const EFFORT_FALLBACK = ["auto", "low", "medium", "high", "xhigh", "max"];
+
+function effortsFor(models: ModelEntry[], ref?: string): string[] {
+  const declared = models.find((m) => m.ref === ref)?.efforts;
+  return declared?.length ? ["auto", ...declared] : EFFORT_FALLBACK;
+}
 
 // 强度是有序的，批准是有序的 —— 一排全等的胶囊把这件事藏了起来。两个刻度把
 // 它画回来：几格电平表示这一轮想得多深，环的缺口表示闸门开了多大。
@@ -101,6 +111,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
 
   const apv = status?.toolApprovalMode ?? "ask";
   const eff = status?.effort || "auto";
+  const efforts = effortsFor(models, status?.modelRef);
   const modelLb = status?.modelRef?.split("/").pop() ?? status?.label ?? "—";
   // Every one of these rebuilds the runtime kernel-side (~0.4s on a real
   // session). Without a pending state the click reads as a dead control.
@@ -256,7 +267,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           className="mode plain"
           place="bottom"
           current={eff}
-          items={EFFORTS.map((v) => ({ value: v, label: v, meter: LEVEL[v] }))}
+          items={efforts.map((v) => ({ value: v, label: v, meter: LEVEL[v] }))}
           onPick={(v) => change(port.setEffort(v))}
           label={
             <>
