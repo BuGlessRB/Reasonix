@@ -3,6 +3,8 @@
 // "what still counts as changed" has one place to be answered.
 package evidence
 
+import "slices"
+
 // CreatedInTurn reports whether this turn is what brought path into existence.
 // It is what separates a cleanup from a deletion: removing a file the turn made
 // leaves the workspace as it was found, removing one it did not is the change.
@@ -13,13 +15,8 @@ func (l *Ledger) CreatedInTurn(path string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, r := range l.receipts {
-		if !r.Success {
-			continue
-		}
-		for _, created := range r.Created {
-			if created == path {
-				return true
-			}
+		if r.Success && slices.Contains(r.Created, path) {
+			return true
 		}
 	}
 	return false

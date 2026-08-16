@@ -2,6 +2,7 @@ package completion
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"reasonix/internal/evidence"
@@ -175,9 +176,13 @@ func changesOf(ledger *evidence.Ledger, receipts []evidence.Receipt) []Change {
 	var out []Change
 	at := map[string]int{}
 	lastWrite := map[string]int{}
+	authored := map[string]bool{}
 	for i, r := range receipts {
 		if !r.Success || !(r.Mutation || r.Write) {
 			continue
+		}
+		for _, p := range r.Created {
+			authored[p] = true
 		}
 		for _, p := range r.Paths {
 			if p == "" {
@@ -188,10 +193,20 @@ func changesOf(ledger *evidence.Ledger, receipts []evidence.Receipt) []Change {
 				out = append(out, Change{Path: p})
 			}
 			lastWrite[p] = i
+			// A path this turn created and has not since replaced is entirely
+			// its own writing; a later edit means there is again a before to
+			// compare the result against.
+			if !slices.Contains(r.Created, p) {
+				authored[p] = false
+			}
 		}
 	}
 	for i := range out {
-		out[i].Reviewed = ledger.HasHostReviewCoverageAfter(lastWrite[out[i].Path], []string{out[i].Path})
+		path := out[i].Path
+		// Reading back a file the turn authored end to end reviews the model's
+		// own text against itself. What answers for those is the check that ran
+		// over them, which the report accounts for separately.
+		out[i].Reviewed = authored[path] || ledger.HasHostReviewCoverageAfter(lastWrite[path], []string{path})
 	}
 	return out
 }

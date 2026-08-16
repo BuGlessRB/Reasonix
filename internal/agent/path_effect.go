@@ -30,7 +30,7 @@ type pathSnapshot struct {
 	state map[string]pathState
 }
 
-func (s pathSnapshot) empty() bool { return len(s.state) == 0 && s.root == "" }
+func (before pathSnapshot) empty() bool { return len(before.state) == 0 && before.root == "" }
 
 // snapshotPaths records the call's own targets, the paths this turn has already
 // read or written, and the workspace's top level. Take it as the last step

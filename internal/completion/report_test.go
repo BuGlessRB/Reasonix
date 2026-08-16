@@ -250,3 +250,29 @@ func TestStaleCommandIsAGapWhenNothingFreshPassed(t *testing.T) {
 		t.Fatalf("gap kinds = %v, want the stale command named", got)
 	}
 }
+
+// Reading back a file the turn wrote end to end compares the model's text with
+// itself. A later edit to the same file restores the question — there is a
+// before again — so the review requirement comes back with it.
+func TestAuthoredFilesNeedNoSeparateReview(t *testing.T) {
+	ledger := evidence.NewLedger()
+	authored := evidence.Receipt{
+		ToolName: "write_file", Success: true, Write: true, Mutation: true,
+		MutationEvidence: evidence.MutationProven,
+		Paths:            []string{"tally.go"}, Created: []string{"tally.go"},
+	}
+	ledger.Record(authored)
+	changes := changesOf(ledger, ledger.Receipts())
+	if len(changes) != 1 || !changes[0].Reviewed {
+		t.Fatalf("changes = %+v, want the authored file to need no review", changes)
+	}
+
+	ledger.Record(evidence.Receipt{
+		ToolName: "edit_file", Success: true, Write: true, Mutation: true,
+		MutationEvidence: evidence.MutationProven, Paths: []string{"tally.go"},
+	})
+	changes = changesOf(ledger, ledger.Receipts())
+	if len(changes) != 1 || changes[0].Reviewed {
+		t.Fatalf("changes = %+v, want an edit over authored content to need review", changes)
+	}
+}
