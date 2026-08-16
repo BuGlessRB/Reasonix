@@ -10,7 +10,7 @@ GOEXE := $(shell go env GOEXE)
 GOLANGCI_VERSION := $(shell cat .golangci-version)
 WAILS_VERSION := $(shell tr -d '[:space:]' < .wails-version)
 
-.PHONY: build vet fmt lint lint-go lint-install lint-cross lint-update wails-install test desktop-test desktop-test-short desktop-test-times sdk-test sdk-test-race hooks cross clean studio
+.PHONY: build vet fmt lint lint-go lint-install lint-cross lint-update check wails-install test desktop-test desktop-test-short desktop-test-times sdk-test sdk-test-race hooks cross clean studio
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/reasonix$(GOEXE) ./cmd/reasonix
@@ -48,6 +48,14 @@ lint-go:
 # the toolchain and breaks runtime/cgo.
 lint-install:
 	CGO_ENABLED=0 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+
+# repolint over what the working tree changed. It exists as a target rather than
+# a command to paste because the host recognizes `make check` as a verification
+# it can read the result of, while an arbitrary `go run ./tools/...` is an
+# unknown program it must assume writes — so only this form can be cited as
+# evidence that the standards gate passed.
+check:
+	go run ./tools/repolint -only "$$(git diff --name-only HEAD | paste -sd, -)"
 
 lint-update:
 	go run ./tools/repolint -update

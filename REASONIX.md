@@ -105,11 +105,16 @@ A full repolint run reports every file over budget, including debt your change
 never touched. To see only what your own edits owe:
 
 ```bash
-go run ./tools/repolint -only "$(git diff --name-only HEAD | paste -sd, -)"
+make check
 ```
 
 Repo-wide ceilings still report under `-only`, because a file can push the tree
 past one without exceeding its own budget.
+
+Run it through `make`, not as `go run ./tools/repolint -only ...`. The host
+recognizes a `make` target as a check whose result it can read, while an
+arbitrary `go run ./tools/...` is a program it has to assume writes — so only
+the `make` form can be cited as evidence that this gate passed.
 
 ## Import cycle rule
 
