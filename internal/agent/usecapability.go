@@ -587,7 +587,7 @@ func (t *UseCapabilityTool) ResolveCall(ctx context.Context, args json.RawMessag
 		return base, nil
 	case "inspect":
 		if id == "" {
-			return tool.ResolvedCall{}, fmt.Errorf("capability_id is required for action=inspect")
+			return tool.ResolvedCall{}, fmt.Errorf("capability_id is required for action=inspect%s", misplacedArgumentHint(p.Arguments, "capability_id"))
 		}
 		out, err := t.inspect(ctx, id)
 		if err != nil {
@@ -605,7 +605,7 @@ func (t *UseCapabilityTool) ResolveCall(ctx context.Context, args json.RawMessag
 		return base, nil
 	case "decline":
 		if id == "" {
-			return tool.ResolvedCall{}, fmt.Errorf("capability_id is required for action=decline")
+			return tool.ResolvedCall{}, fmt.Errorf("capability_id is required for action=decline%s", misplacedArgumentHint(p.Arguments, "capability_id"))
 		}
 		reason := strings.TrimSpace(p.Reason)
 		if reason == "" {
@@ -635,7 +635,7 @@ func (t *UseCapabilityTool) ResolveCall(ctx context.Context, args json.RawMessag
 		return base, nil
 	case "call":
 		if id == "" {
-			return tool.ResolvedCall{}, fmt.Errorf("capability_id is required for action=call")
+			return tool.ResolvedCall{}, fmt.Errorf("capability_id is required for action=call%s", misplacedArgumentHint(p.Arguments, "capability_id"))
 		}
 		return t.resolveCall(ctx, id, p.Arguments, base)
 	default:

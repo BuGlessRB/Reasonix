@@ -33,6 +33,13 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   the move this blocks — group by lifetime into a named sub-state instead
   (`agent.perTurnState` is the pattern), which costs one field and removes the
   whole product.
+- Judgements read structure, never wording: shell ASTs (`shellparse`), types,
+  contracts, tool schemas. Phrase tables and message sniffing have been retired
+  in batches (task-policy prose, the planner's approval phrases, the executor
+  handoff tables) because each one misfires on real input, and a misfiring
+  judgement inside a gate is worse than no gate. Security allow-lists are the
+  exception and stay. Something that can only be built by matching words does
+  not get built — say what is missing instead of guessing at it.
 
 ## Comments
 
@@ -70,6 +77,12 @@ extraction, and that diff must be justified in the PR.
 
 ## Notes
 
+One tool call costs one model round trip, so calls that do not depend on each
+other belong in the same round: several reads, edits to different files, a check
+after the edit that enables it. Several edits to the *same* file are one
+`multi_edit` — it applies them against each other in memory and rewrites the
+file only if all of them land, so a failure midway leaves nothing half-edited.
+
 ## Pre-push CI simulation
 
 Run these **before every commit** to catch the fastest CI failures locally:
@@ -85,6 +98,16 @@ go test ./internal/tool/builtin/ ./internal/boot/  # catches tool/boot test brea
 `make lint-install` installs it. Do not skip it: a `modernize` finding never
 shows up in `go vet`, and the CI round trip that catches it instead costs ten
 minutes.
+
+A full repolint run reports every file over budget, including debt your change
+never touched. To see only what your own edits owe:
+
+```bash
+go run ./tools/repolint -only "$(git diff --name-only HEAD | paste -sd, -)"
+```
+
+Repo-wide ceilings still report under `-only`, because a file can push the tree
+past one without exceeding its own budget.
 
 ## Import cycle rule
 

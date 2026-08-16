@@ -37,9 +37,9 @@ type ContextPreparePolicy struct {
 	Trigger      string
 	Instructions string
 	Force        bool
-	// ObservedInputTokens is used by compatibility harnesses that invoke the
-	// old post-turn shim directly. Production Prepare estimates the current view
-	// from its calibrated final request shape.
+	// ObservedInputTokens pins the input size instead of estimating it. Tests use
+	// it to trigger a fold at an exact size; production reads the calibrated
+	// shape, which is anchored on real provider counts.
 	ObservedInputTokens int
 }
 
@@ -57,12 +57,6 @@ func (a *Agent) contextManager() ContextManager { return ContextManager{agent: a
 func (a *Agent) PrepareContext(ctx context.Context) error {
 	_, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure})
 	return err
-}
-
-// ObserveUsage is retained as a compatibility hook. Usage observations never
-// mutate the provider-visible checkpoint.
-func (m ContextManager) ObserveUsage(u *provider.Usage) {
-	_ = u
 }
 
 // Prepare is the sole automatic maintenance entry. Below compact_ratio it does

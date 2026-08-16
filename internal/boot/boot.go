@@ -1646,16 +1646,18 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	})
 
 	execSess := newObservedSession(sysPrompt)
+	triageProv := resolveTriageProvider(cfg, modelRef, proxySpec)
 	executor := agent.New(execProv, reg, execSess, agent.Options{
-		MaxSteps:    maxSteps,
-		MaxStepsKey: opts.MaxStepsKey,
-		Temperature: cfg.Agent.Temperature,
-		TaskBudget:  taskBudgetFromConfig(cfg),
-		Pricing:     entry.Price,
-		ModelRef:    modelRef,
-		Gate:        headlessGate,
-		Hooks:       hookRunner,
-		Jobs:        jm,
+		MaxSteps:       maxSteps,
+		MaxStepsKey:    opts.MaxStepsKey,
+		Temperature:    cfg.Agent.Temperature,
+		TaskBudget:     taskBudgetFromConfig(cfg),
+		Pricing:        entry.Price,
+		ModelRef:       modelRef,
+		TriageProvider: triageProv,
+		Gate:           headlessGate,
+		Hooks:          hookRunner,
+		Jobs:           jm,
 		// Parent write reservation at the executor entry covers all writers
 		// (including late Economy/MCP adds) without wrapping tool schemas.
 		WriteScheduler:               subagentScheduler,

@@ -21,6 +21,8 @@ const ROUTES = [
   "/changes", "/attachments", "/checkpoints", "/branches", "/compact", "/rewind",
   "/extensions", "/themes", "/plugins", "/surfaces",
   "/fork", "/summarize", "/forget", "/bypass", "/auto-approve-tools",
+  "/permissions", "/sandbox", "/context",
+  "/slash", "/workspaces", "/welcome",
 ];
 
 // REASONIX_SERVE points at a running `reasonix serve`; without it the app boots

@@ -55,7 +55,24 @@ func (b *Baseline) write(path string) error {
 	return os.WriteFile(path, append(data, '\n'), 0o644)
 }
 
-func (b *Baseline) exceeded(findings []Finding) ([]Finding, []string) {
+// Overrun is one budget the tree went past: a file's rule budget, or a
+// repo-wide ceiling for a rule when File is empty. Callers format it; keeping
+// it structured is what lets a report be narrowed to the files a change touched.
+type Overrun struct {
+	File    string
+	Rule    string
+	Count   int
+	Allowed int
+}
+
+func (o Overrun) String() string {
+	if o.File == "" {
+		return fmt.Sprintf("repo total for %s is %d, above the %d ceiling", o.Rule, o.Count, o.Allowed)
+	}
+	return fmt.Sprintf("%s: %s is %d over its %d budget", o.File, o.Rule, o.Count, o.Allowed)
+}
+
+func (b *Baseline) exceeded(findings []Finding) ([]Finding, []Overrun) {
 	counts := map[string]map[string]int{}
 	totals := map[string]int{}
 	for _, f := range findings {
@@ -66,13 +83,13 @@ func (b *Baseline) exceeded(findings []Finding) ([]Finding, []string) {
 		totals[f.Rule] += f.Weight
 	}
 
-	var msgs []string
+	var overruns []Overrun
 	over := map[string]map[string]bool{}
 	for _, file := range sortedKeys(counts) {
 		for _, rule := range sortedKeys(counts[file]) {
 			allowed := b.Files[file][rule]
 			if got := counts[file][rule]; got > allowed {
-				msgs = append(msgs, fmt.Sprintf("%s: %s is %d over its %d budget", file, rule, got, allowed))
+				overruns = append(overruns, Overrun{File: file, Rule: rule, Count: got, Allowed: allowed})
 				if over[file] == nil {
 					over[file] = map[string]bool{}
 				}
@@ -82,7 +99,7 @@ func (b *Baseline) exceeded(findings []Finding) ([]Finding, []string) {
 	}
 	for _, rule := range sortedKeys(totals) {
 		if totals[rule] > b.Limits[rule] {
-			msgs = append(msgs, fmt.Sprintf("repo total for %s is %d, above the %d ceiling", rule, totals[rule], b.Limits[rule]))
+			overruns = append(overruns, Overrun{Rule: rule, Count: totals[rule], Allowed: b.Limits[rule]})
 		}
 	}
 
@@ -92,5 +109,5 @@ func (b *Baseline) exceeded(findings []Finding) ([]Finding, []string) {
 			shown = append(shown, f)
 		}
 	}
-	return shown, msgs
+	return shown, overruns
 }

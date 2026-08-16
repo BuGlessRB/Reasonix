@@ -258,8 +258,20 @@ export function App({ hub }: { hub: HubPort }) {
     return () => removeEventListener("keydown", onKey);
   }, [activePort, running]);
 
+  // A setting changed in the pane is a fact about the session behind it, and
+  // the pane is what holds that fact. Without a nudge it keeps polling only
+  // while a turn runs — so approving mode, preset and model all changed on disk
+  // while the screen went on showing what they were when it opened.
+  const [settingsPulse, setSettingsPulse] = useState(0);
+  // The chrome's own controls change this session's posture — its preset, its
+  // plan mode. Nothing about the pane list or the account moved, so reloading
+  // those left the button showing the posture it had when the window opened.
+  // What has to hear about it is the pane holding that fact.
+  const onSessionSettingChanged = useCallback(() => setSettingsPulse((n) => n + 1), []);
+
   const onSettingsChanged = useCallback(() => {
     reloadAccount();
+    setSettingsPulse((n) => n + 1);
     void reloadPanes();
   }, [reloadAccount, reloadPanes]);
 
@@ -358,7 +370,7 @@ export function App({ hub }: { hub: HubPort }) {
         theme={theme}
         onTheme={setTheme}
         onSettings={(sec) => setSettings(sec ?? true)}
-        onChanged={reloadPanes}
+        onChanged={onSessionSettingChanged}
         account={account}
       />
 
@@ -426,6 +438,7 @@ export function App({ hub }: { hub: HubPort }) {
                   // session path, and until /runtimes reports it the pane still
                   // looks blank — the next history row would take it over.
                   onSessionChanged={reloadPanes}
+                  pulse={settingsPulse}
                   onFoldSide={() => setSide(false)}
                   onSettings={() => setSettings(true)}
                 />

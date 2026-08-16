@@ -80,34 +80,34 @@ export function Shell({ port, onChanged }: { port: AgentPort; onChanged?: () => 
         </span>
       </div>
 
-      <div className="grp-items">
-        <button className="prow" data-on={auto ? "" : undefined} disabled={!!busy}
-          onClick={() => void save("auto", "auto", "")}>
-          <span className="mark" />
-          <span className="tx">
-            <span className="lb">{t("自动")}</span>
-            <span className="ds">
-              {t("自己找，优先真 bash。这台机器上会选到")} {label(s.auto)}
-            </span>
-          </span>
+      {/* One shape for "pick one of a few", the same as every other such choice
+          in this pane. The executable's path is too long for a segment, and it
+          is not what you pick by anyway — it rides the 当前生效 row above and
+          the note below, where it can be read rather than scanned. */}
+      <div className="seg" data-text role="radiogroup" aria-label={t("命令交给谁执行")}>
+        <button role="radio" aria-checked={auto} disabled={!!busy} onClick={() => void save("auto", "auto", "")}>
+          {t("自动")}
         </button>
         {options.map((o) => (
-          <button key={o.path} className="prow" data-on={picked(o) ? "" : undefined} disabled={!!busy}
+          <button key={o.path} role="radio" aria-checked={picked(o)} disabled={!!busy}
             onClick={() => void save(o.path, o.prefer, pin(o) ? o.path : "")}>
-            <span className="mark" />
-            <span className="tx">
-              <span className="lb">
-                {label(o)}
-                {o.version && <i className="ver">{o.version}</i>}
-              </span>
-              <span className="ds">
-                <code>{o.path}</code>
-                {NOTE[o.name] && <em className="cav">{t(NOTE[o.name])}</em>}
-              </span>
-            </span>
+            {label(o)}
+            {o.version && <i className="ver">{o.version}</i>}
           </button>
         ))}
       </div>
+      <p className="note">
+        {auto ? (
+          <>
+            {t("自己找，优先真 bash。这台机器上会选到")} {label(s.auto)}
+          </>
+        ) : (
+          <>
+            <code>{s.effective.path}</code>
+            {NOTE[s.effective.name] && <> · {t(NOTE[s.effective.name])}</>}
+          </>
+        )}
+      </p>
 
       {noBash && (
         <p className="note">

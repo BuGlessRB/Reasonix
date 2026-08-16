@@ -20,7 +20,6 @@ import (
 	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
 	"reasonix/internal/memory"
-	"reasonix/internal/permission"
 	"reasonix/internal/planmode"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessiontemp"
@@ -205,34 +204,6 @@ func (b foregroundOnlyBash) Execute(ctx context.Context, args json.RawMessage) (
 }
 
 func (b foregroundOnlyBash) ReadOnly() bool { return b.inner.ReadOnly() }
-
-type readOnlyBash struct {
-	inner tool.Tool
-}
-
-func (b readOnlyBash) Name() string { return "bash" }
-
-func (b readOnlyBash) Description() string {
-	desc := strings.TrimSpace(b.inner.Description())
-	if desc == "" {
-		desc = "Execute a command in the shell and return combined stdout/stderr."
-	}
-	desc = strings.Replace(desc, "Execute a command in the shell", "Execute a foreground read-only command in the shell", 1)
-	return desc + " Only permission-classified read-only commands are allowed; shell operators, background execution, process preservation, and write-capable arguments are blocked."
-}
-
-func (readOnlyBash) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"command":{"type":"string","description":"Read-only shell command to execute in the foreground. Must match the permission-layer read-only command policy."}},"required":["command"]}`)
-}
-
-func (b readOnlyBash) Execute(ctx context.Context, args json.RawMessage) (string, error) {
-	if !permission.BashCommandIsReadOnly(args) {
-		return "", tool.Blocked("blocked: read-only subagents can run only permission-classified foreground read-only commands")
-	}
-	return b.inner.Execute(ctx, args)
-}
-
-func (readOnlyBash) ReadOnly() bool { return true }
 
 // TaskTool spawns a sub-agent in its own session for a focused sub-task. The
 // sub-agent runs with a filtered tool whitelist and the same step budget shape

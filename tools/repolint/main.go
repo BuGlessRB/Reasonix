@@ -46,6 +46,7 @@ func main() {
 	baselinePath := flag.String("baseline", "", "baseline file (default <root>/tools/repolint/baseline.json)")
 	update := flag.Bool("update", false, "rewrite the baseline from the current tree")
 	strict := flag.Bool("strict", false, "report every finding, ignoring the baseline")
+	only := flag.String("only", "", "comma-separated paths: report file budgets for these only, so a change can be checked without reading the whole tree's recorded debt (repo-wide ceilings still report). Pair with `git diff --name-only`.")
 	flag.Parse()
 
 	if *baselinePath == "" {
@@ -87,15 +88,18 @@ func main() {
 		fmt.Fprintln(os.Stderr, "repolint:", err)
 		os.Exit(2)
 	}
-	over, msgs := baseline.exceeded(findings)
-	if len(msgs) == 0 {
+	over, overruns := baseline.exceeded(findings)
+	if paths := splitPaths(*only); len(paths) > 0 {
+		over, overruns = limitToPaths(over, overruns, paths)
+	}
+	if len(overruns) == 0 {
 		fmt.Printf("repolint: clean (%d baselined findings)\n", len(findings))
 		return
 	}
 	report(over)
 	fmt.Fprintln(os.Stderr)
-	for _, m := range msgs {
-		fmt.Fprintln(os.Stderr, "repolint:", m)
+	for _, o := range overruns {
+		fmt.Fprintln(os.Stderr, "repolint:", o)
 	}
 	fmt.Fprintf(os.Stderr, "\nNew standards violations. Fix them, or if this is a deliberate\n"+
 		"carry-forward (file rename, extraction), run:\n\n    go run ./tools/repolint -update\n\n"+

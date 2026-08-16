@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"reasonix/internal/evidence"
@@ -19,7 +20,7 @@ func TestObservationNamesWhatAnOpaqueCommandTouched(t *testing.T) {
 
 	ledger := evidence.NewLedger()
 	ledger.Record(evidence.Receipt{ToolName: "read_file", Success: true, Read: true, Paths: []string{edited}})
-	plan := &toolCallPlan{pathsBefore: snapshotPaths(ledger, []string{scratch})}
+	plan := &toolCallPlan{pathsBefore: snapshotPaths(ledger, dir, []string{scratch})}
 
 	// What `sed -i parse.go` and a scratch file would do, without the host
 	// knowing either command.
@@ -56,7 +57,7 @@ func TestObservationNeverDowngradesAnUnknownCall(t *testing.T) {
 	ledger.Record(evidence.Receipt{ToolName: "read_file", Success: true, Read: true, Paths: []string{quiet}})
 
 	rec := evidence.Receipt{ToolName: "bash", Success: true, Mutation: true, MutationEvidence: evidence.MutationUnknown}
-	decorateObservedPaths(&rec, &toolCallPlan{pathsBefore: snapshotPaths(ledger, nil)})
+	decorateObservedPaths(&rec, &toolCallPlan{pathsBefore: snapshotPaths(ledger, dir, nil)})
 
 	if rec.MutationEvidence != evidence.MutationUnknown {
 		t.Fatalf("MutationEvidence = %q, want it left unknown", rec.MutationEvidence)
@@ -70,13 +71,15 @@ func TestBaselineIgnoresScratchFilesTheTurnCleanedUp(t *testing.T) {
 	scratch := filepath.Join(dir, "zz_probe.go")
 	kept := filepath.Join(dir, "stats.go")
 
+	ledger := evidence.NewLedger()
 	cleaned := evidence.Receipt{
 		ToolName: "write_file", Success: true, Write: true, Mutation: true,
 		MutationEvidence: evidence.MutationProven,
 		Paths:            []string{scratch},
 		Created:          []string{scratch},
 	}
-	if leftSomethingBehind(cleaned) {
+	ledger.Record(cleaned)
+	if leftSomethingBehind(ledger, cleaned) {
 		t.Fatal("a created file that is now gone left nothing to verify")
 	}
 
@@ -86,7 +89,8 @@ func TestBaselineIgnoresScratchFilesTheTurnCleanedUp(t *testing.T) {
 	survivor := cleaned
 	survivor.Paths = []string{kept}
 	survivor.Created = []string{kept}
-	if !leftSomethingBehind(survivor) {
+	ledger.Record(survivor)
+	if !leftSomethingBehind(ledger, survivor) {
 		t.Fatal("a created file still on disk must be verified")
 	}
 }
@@ -101,7 +105,7 @@ func TestBaselineKeepsWritesItDidNotWatchCreate(t *testing.T) {
 		MutationEvidence: evidence.MutationProven,
 		Paths:            []string{gone},
 	}
-	if !leftSomethingBehind(edit) {
+	if !leftSomethingBehind(evidence.NewLedger(), edit) {
 		t.Fatal("a write with no observed creation must count as surviving")
 	}
 }
@@ -118,5 +122,61 @@ func TestObservedPathsSurviveReceiptRoundTrip(t *testing.T) {
 	}
 	if len(back.Created) != 1 || back.Created[0] != "a.go" {
 		t.Fatalf("Created = %v after round trip", back.Created)
+	}
+}
+
+// The build-artifact shape: a binary the workspace never named appears, is
+// used, and is removed. Watching the top level is what lets the host see both
+// halves, so the cleanup does not read as an unverified change.
+func TestBuildArtifactCreatedAndRemovedLeavesNothingBehind(t *testing.T) {
+	dir := t.TempDir()
+	artifact := filepath.Join(dir, "tally-bin")
+	ledger := evidence.NewLedger()
+
+	build := &toolCallPlan{pathsBefore: snapshotPaths(ledger, dir, nil)}
+	if err := os.WriteFile(artifact, []byte("binary\n"), 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	buildRec := evidence.Receipt{ToolName: "bash", Success: true, Mutation: true, MutationEvidence: evidence.MutationUnknown}
+	decorateObservedPaths(&buildRec, build)
+	ledger.Record(buildRec)
+	if !slices.Contains(buildRec.Created, artifact) {
+		t.Fatalf("Created = %v, want the artifact the build produced", buildRec.Created)
+	}
+
+	cleanup := &toolCallPlan{pathsBefore: snapshotPaths(ledger, dir, nil)}
+	if err := os.Remove(artifact); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	cleanupRec := evidence.Receipt{ToolName: "bash", Success: true, Mutation: true, MutationEvidence: evidence.MutationUnknown}
+	decorateObservedPaths(&cleanupRec, cleanup)
+	ledger.Record(cleanupRec)
+
+	if !slices.Contains(cleanupRec.Paths, artifact) {
+		t.Fatalf("Paths = %v, want the artifact the cleanup removed", cleanupRec.Paths)
+	}
+	if leftSomethingBehind(ledger, cleanupRec) {
+		t.Fatal("removing what this turn built leaves nothing to verify")
+	}
+}
+
+// Removing a file the turn did not create is the change, not a cleanup.
+func TestRemovingAPreexistingFileStillCounts(t *testing.T) {
+	dir := t.TempDir()
+	victim := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(victim, []byte("k: v\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	ledger := evidence.NewLedger()
+	plan := &toolCallPlan{pathsBefore: snapshotPaths(ledger, dir, nil)}
+	if err := os.Remove(victim); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	rec := evidence.Receipt{ToolName: "bash", Success: true, Mutation: true, MutationEvidence: evidence.MutationUnknown}
+	decorateObservedPaths(&rec, plan)
+	ledger.Record(rec)
+
+	if !leftSomethingBehind(ledger, rec) {
+		t.Fatal("deleting a file the turn never created is a change to account for")
 	}
 }

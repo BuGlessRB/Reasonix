@@ -20,6 +20,10 @@ import (
 type agentServices struct {
 	prov  provider.Provider
 	tools *tool.Registry
+	// triage answers the small classifications the static tables come up short
+	// on, off the turn's own model so a cheap one can serve them. nil falls back
+	// to prov, which is correct but pays the main model for a two-word answer.
+	triage provider.Provider
 	// pricing turns provider usage into money for the task budget.
 	pricing *provider.Pricing
 	// sink receives the turn's typed event stream. Frontends decide how to
@@ -86,6 +90,7 @@ func newAgentServices(
 ) agentServices {
 	return agentServices{
 		prov:             prov,
+		triage:           opts.TriageProvider,
 		tools:            tools,
 		pricing:          opts.Pricing,
 		sink:             sink,

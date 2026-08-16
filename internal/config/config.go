@@ -1269,7 +1269,11 @@ type AgentConfig struct {
 	// them with whatever model the receiving sub-agent already runs, which is
 	// chosen for other reasons — a cheap worker is usually text-only, and the
 	// attachment is then dropped during serialization with nothing to show why.
-	VisionModel      string            `toml:"vision_model"`
+	VisionModel string `toml:"vision_model"`
+	// TriageModel answers the small classifications the static tables come up
+	// short on (is this unrecognized command read-only?). Empty falls back to
+	// subagent_model, then the main model — set it to point them somewhere cheap.
+	TriageModel      string            `toml:"triage_model"`
 	SubagentEffort   string            `toml:"subagent_effort"`
 	SubagentEfforts  map[string]string `toml:"subagent_efforts"`
 	MaxSubagentDepth int               `toml:"max_subagent_depth"`

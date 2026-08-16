@@ -116,6 +116,13 @@ func ClassifyReadOnlyCommand(command string) (base, sub string, fields []string,
 			return "", "", nil, false
 		}
 	}
+	return ClassifyReadOnlyFields(fields)
+}
+
+// ClassifyReadOnlyFields classifies an already-resolved argv. Callers that got
+// their fields from the syntax tree (compound statements, whose leaves are not
+// separately quotable) share this one classification with the string form.
+func ClassifyReadOnlyFields(fields []string) (base, sub string, out []string, ok bool) {
 	if len(fields) == 0 {
 		return "", "", nil, false
 	}

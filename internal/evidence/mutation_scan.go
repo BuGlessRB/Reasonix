@@ -22,6 +22,15 @@ func bashMayMutate(command string) bool {
 	return bashMutationClass(command) != MutationNone
 }
 
+// UnprovenSegment returns the one segment of command the static tables could
+// not prove leaves the workspace alone. Callers that can escalate — ask a model,
+// consult a cache — need the segment itself, not just the verdict; the tables
+// will never enumerate every tool, and a caller stuck at "something here might
+// write" has nothing to escalate about.
+func UnprovenSegment(command string) (string, bool) {
+	return bashUnprovenSegment(command)
+}
+
 // ShellContractMixedMessage is the "mixed" block, naming the segment that
 // triggered it. Without the name the model rewrites the command it guesses is
 // at fault, which is how one block becomes three.

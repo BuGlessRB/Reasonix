@@ -92,3 +92,28 @@ func TestCitedVerificationSeparatesFromReview(t *testing.T) {
 		t.Fatal("reading the changed file completes the sign-off")
 	}
 }
+
+// The baseline predicate belongs to a caller that decides by asking the ledger
+// more questions. Running it under the ledger's own lock deadlocks, and a
+// deadlock here hangs the turn rather than failing it.
+func TestBaselinePredicateMayQueryTheLedger(t *testing.T) {
+	l := NewLedger()
+	l.Record(Receipt{
+		ToolName: "write_file", Success: true, Write: true, Mutation: true,
+		MutationEvidence: MutationProven, Paths: []string{"scratch.go"}, Created: []string{"scratch.go"},
+	})
+	asked := 0
+	probe := func(r Receipt) bool {
+		asked++
+		return l.CreatedInTurn("scratch.go")
+	}
+	if _, ok := l.LatestProvenMutationIndexFunc(probe); !ok {
+		t.Fatal("expected the write to be found")
+	}
+	if _, ok := l.LatestSuccessfulWriterIndexFunc(probe); !ok {
+		t.Fatal("expected the write to be found")
+	}
+	if asked != 2 {
+		t.Fatalf("predicate ran %d times, want once per query", asked)
+	}
+}

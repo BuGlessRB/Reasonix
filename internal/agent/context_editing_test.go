@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"reasonix/internal/event"
-	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
 
@@ -21,9 +20,9 @@ func TestNativeContextEditingRemoved(t *testing.T) {
 	if key := a.currentPromptCacheKey(); key != a.currentPromptCacheKey() {
 		t.Fatal("prompt cache key unstable")
 	}
-	// ObserveUsage must never mutate the checkpoint.
-	a.contextManager().ObserveUsage(&provider.Usage{PromptTokens: 90_000})
+	// Nothing installs a projection outside Prepare: observing usage is not a
+	// maintenance entry, and there is no longer a hook that could pretend to be.
 	if got := a.currentProjectionVersion(); got != 0 {
-		t.Fatalf("ObserveUsage installed projection version %d", got)
+		t.Fatalf("projection version %d installed without Prepare", got)
 	}
 }

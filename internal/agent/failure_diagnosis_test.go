@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -231,5 +233,33 @@ func TestHandoffNudgeReadsThePlanContract(t *testing.T) {
 		if got := a.shouldNudgeExecutorHandoff(); got != tc.want {
 			t.Errorf("%s: shouldNudgeExecutorHandoff = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// Oversize output is only truncated when there is nowhere to put it. An agent
+// with a transcript spills beside it; a sub-agent, which has none, spills into
+// the workspace — losing the middle of a long result is not the price of being
+// a sub-agent.
+func TestOversizeOutputSpillsRatherThanTruncates(t *testing.T) {
+	big := strings.Repeat("a line of tool output padded out a bit\n", 2000)
+	root := t.TempDir()
+
+	withRoot := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
+	out, notice := withRoot.boundToolOutput(big, "bash", "call-1")
+	if notice != "" {
+		t.Errorf("spilled output must carry no truncation notice: %q", notice)
+	}
+	if !strings.Contains(out, "kept out of context") || !strings.Contains(out, filepath.Join(root, "outputs")) {
+		t.Fatalf("expected a spill pointer into the workspace:\n%s", out[:min(240, len(out))])
+	}
+	spilled, err := os.ReadFile(filepath.Join(root, "outputs", "call-1.txt"))
+	if err != nil || len(spilled) != len(big) {
+		t.Fatalf("spill file: %d bytes, err=%v; want the full %d", len(spilled), err, len(big))
+	}
+
+	// With nowhere to write, truncation is still the honest fallback.
+	bare := New(nil, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
+	if _, notice := bare.boundToolOutput(big, "bash", "call-2"); notice == "" {
+		t.Error("without an archive root the caller must be told the result was truncated")
 	}
 }

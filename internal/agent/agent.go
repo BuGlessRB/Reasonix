@@ -882,6 +882,10 @@ type Options struct {
 	TaskBudget  TaskBudget
 	Pricing     *provider.Pricing // optional, for per-turn cost display
 	UsageSource string            // optional billable usage source; default executor
+	// TriageProvider answers the host's small classifications (an unrecognized
+	// shell command's read-only status, so far). nil leaves the static verdict
+	// standing rather than borrowing the turn's own provider mid-conversation.
+	TriageProvider provider.Provider
 	// ModelRef names the canonical "provider/model" ref backing this agent's
 	// provider instance. It is attached to emitted Usage events so downstream
 	// usage accounting can attribute tokens to the exact model.

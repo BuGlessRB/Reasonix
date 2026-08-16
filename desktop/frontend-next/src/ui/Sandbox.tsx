@@ -92,7 +92,10 @@ export function Sandbox({ port, onChanged }: { port: AgentPort; onChanged: () =>
               </button>
             </div>
           ))}
-          <div className="radd">
+          {/* Same row shape as the entries above it: one thing, then what you
+              can do to it. A differently-built add box read as a third kind of
+              control for what is the same list. */}
+          <div className="prule" data-add="">
             <input
               value={draft}
               placeholder={t("再开一个可写目录，例如 /tmp/scratch")}

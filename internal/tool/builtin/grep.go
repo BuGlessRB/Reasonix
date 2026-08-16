@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/text/transform"
 
+	"reasonix/internal/fileutil"
 	fileenc "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/proc"
 	"reasonix/internal/sandbox"
@@ -89,7 +90,7 @@ func (g grepTool) Description() string {
 }
 
 func (grepTool) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"Regular expression (RE2 syntax)"},"path":{"type":"string","description":"File or directory to search (default \".\")"},"timeout_seconds":{"type":"integer","description":"Abort and return partial matches after this many seconds (default 30, max 300). Raise it for a large tree; lower it for a quick probe.","minimum":1}},"required":["pattern"]}`)
+	return json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"Regular expression (RE2 syntax)"},"path":{"type":"string","description":"File or directory to search (default \".\")"},"glob":{"type":"string","description":"Only search files matching this glob. A glob with no slash matches the file name at any depth (\"*.go\"); one with a slash matches the path below the search root (\"internal/**/*_test.go\")."},"timeout_seconds":{"type":"integer","description":"Abort and return partial matches after this many seconds (default 30, max 300). Raise it for a large tree; lower it for a quick probe.","minimum":1}},"required":["pattern"]}`)
 }
 
 func (grepTool) ReadOnly() bool { return true }
@@ -104,6 +105,7 @@ func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	var p struct {
 		Pattern        string `json:"pattern"`
 		Path           string `json:"path"`
+		Glob           string `json:"glob"`
 		TimeoutSeconds int    `json:"timeout_seconds"`
 	}
 	if err := json.Unmarshal(args, &p); err != nil {
@@ -114,6 +116,11 @@ func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	}
 	if p.Path == "" {
 		p.Path = "."
+	}
+	p.Glob = strings.TrimSpace(p.Glob)
+	if strings.HasPrefix(p.Glob, "!") {
+		// A negated glob would re-admit the sensitive-file excludes below it.
+		return "", fmt.Errorf("glob must select files, not exclude them")
 	}
 	rp := resolveReadablePath(g.workDir, p.Path, g.paths)
 	p.Path = rp.Path
@@ -141,7 +148,7 @@ func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	}
 
 	if g.rg != "" {
-		out, wrapped, err := g.runRipgrep(ctx, p.Pattern, p.Path, to, rp)
+		out, wrapped, err := g.runRipgrep(ctx, p.Pattern, p.Path, p.Glob, to, rp)
 		if len(g.forbidRoots) == 0 || wrapped {
 			return out, err
 		}
@@ -149,10 +156,27 @@ func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 		// back to the native scanner, which prunes those roots in-process.
 	}
 
-	return g.runNative(ctx, p.Pattern, p.Path, info, to, rp)
+	return g.runNative(ctx, p.Pattern, p.Path, p.Glob, info, to, rp)
 }
 
-func (g grepTool) runNative(ctx context.Context, pattern, path string, info os.FileInfo, to time.Duration, rp ResolvedPath) (string, error) {
+// grepGlobMatches mirrors ripgrep's rule so both engines answer alike: a glob
+// with no slash is matched against the file name at any depth, one with a slash
+// against the path relative to the search root.
+func grepGlobMatches(glob, root, file string) bool {
+	if glob == "" {
+		return true
+	}
+	if !strings.Contains(glob, "/") {
+		return fileutil.MatchSlashGlob(filepath.Base(file), glob)
+	}
+	rel, err := filepath.Rel(root, file)
+	if err != nil {
+		rel = file
+	}
+	return fileutil.MatchSlashGlob(rel, glob)
+}
+
+func (g grepTool) runNative(ctx context.Context, pattern, path, glob string, info os.FileInfo, to time.Duration, rp ResolvedPath) (string, error) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return "", fmt.Errorf("invalid pattern: %w", err)
@@ -238,6 +262,7 @@ func (g grepTool) runNative(ctx context.Context, pattern, path string, info os.F
 	}
 
 	if info.IsDir() {
+		root := path // the walk callback shadows path with each entry
 		ig := newWalkIgnorer(path, g.forbidRoots)
 		_ = filepath.WalkDir(path, func(path string, d os.DirEntry, err error) error {
 			if ctx.Err() != nil {
@@ -253,7 +278,7 @@ func (g grepTool) runNative(ctx context.Context, pattern, path string, info os.F
 				ig.enter(path)
 				return nil
 			}
-			if ig.skip(path, d.Name(), false) {
+			if ig.skip(path, d.Name(), false) || !grepGlobMatches(glob, root, path) {
 				return nil
 			}
 			if errors.Is(searchFile(path), io.EOF) {
@@ -273,12 +298,17 @@ func (g grepTool) runNative(ctx context.Context, pattern, path string, info os.F
 // capped at grepMaxMatches so a flood of hits can't blow up memory.
 // The ripgrep subprocess is wrapped in the OS sandbox so forbid-read
 // directories are invisible to it.
-func (g grepTool) runRipgrep(ctx context.Context, pattern, path string, to time.Duration, rp ResolvedPath) (string, bool, error) {
+func (g grepTool) runRipgrep(ctx context.Context, pattern, path, glob string, to time.Duration, rp ResolvedPath) (string, bool, error) {
 	// Build the ripgrep argv and wrap it in the OS sandbox so forbid-read
 	// directories are invisible to the ripgrep subprocess.
 	args := []string{
 		g.rg,
 		"--no-heading", "--line-number", "--with-filename", "--color", "never",
+	}
+	if glob != "" {
+		// Before the excludes below: ripgrep lets a later glob win, so the
+		// denylist must be able to override anything the caller selected.
+		args = append(args, "--glob", glob)
 	}
 	if secrets.ProtectSensitiveFiles() {
 		// Mirror sensitiveReadPath for the subprocess: ripgrep cannot call

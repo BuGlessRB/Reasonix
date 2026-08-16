@@ -38,7 +38,9 @@ func isReadOnlyBashSubject(subject string) bool {
 	}
 	base, sub, fields, ok := shellsafe.ClassifyReadOnlyCommand(subject)
 	if !ok {
-		return false
+		// A compound statement is not one classifiable command, but every
+		// command it runs is; read-only leaves make the whole thing read-only.
+		return compoundIsReadOnly(subject)
 	}
 	if sub == "" {
 		return !hasUnsafeReadOnlyArgs(base, fields[1:])

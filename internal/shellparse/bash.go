@@ -204,6 +204,10 @@ type ApprovalFeatures struct {
 	Expansion          bool
 	Assignment         bool
 	Redirection        bool
+	// StdinHereDoc reports that the command reads its standard input from a
+	// here-document. For an interpreter that is the same thing as -c: the code
+	// arrives with the call rather than from a file the host can inspect.
+	StdinHereDoc bool
 }
 
 // AnalyzeApprovalFeatures inspects one simple Bash command without evaluating
@@ -234,6 +238,14 @@ func AnalyzeApprovalFeatures(command string) (features ApprovalFeatures, ok bool
 		}
 		return true
 	})
+	for _, redir := range stmt.Redirs {
+		if redir == nil || redir.Hdoc == nil {
+			continue
+		}
+		if redir.N == nil || redir.N.Value == "" || redir.N.Value == "0" {
+			features.StdinHereDoc = true
+		}
+	}
 	for _, arg := range call.Args {
 		if wordHasUnescapedBrace(arg) {
 			syntax.SplitBraces(arg)
@@ -568,4 +580,114 @@ func WordBase(word string) string {
 		return word[i+1:]
 	}
 	return word
+}
+
+// CompoundLeafCommands returns the static argv of every command a compound
+// statement would invoke, or ok=false when any part of it cannot be read
+// statically. A true result is the complete list of what runs; classifying
+// those argv is the caller's job.
+func CompoundLeafCommands(command string) (leaves [][]string, ok bool) {
+	file, err := ParseBash(command)
+	if err != nil || len(file.Stmts) == 0 {
+		return nil, false
+	}
+	readable, compound := true, false
+	syntax.Walk(file, func(node syntax.Node) bool {
+		if !readable || node == nil {
+			return false
+		}
+		switch n := node.(type) {
+		case *syntax.ForClause, *syntax.IfClause, *syntax.WhileClause,
+			*syntax.CaseClause, *syntax.Subshell, *syntax.Block:
+			// Only a statement that actually loops or branches goes down this
+			// path. A simple command keeps its own stricter classification,
+			// where a dynamic argument is already reason enough to stop.
+			compound = true
+		case *syntax.CmdSubst, *syntax.ProcSubst:
+			// Whatever these run never appears in the argv below.
+			readable = false
+			return false
+		case *syntax.Redirect:
+			// A redirect can create or truncate a file, and a here-document
+			// feeds a program source the argv does not show.
+			readable = false
+			return false
+		case *syntax.Stmt:
+			if n.Negated || n.Background || n.Coprocess || n.Disown {
+				readable = false
+				return false
+			}
+		case *syntax.CallExpr:
+			if len(n.Assigns) > 0 {
+				readable = false
+				return false
+			}
+			if len(n.Args) == 0 {
+				return true // a bare assignment-less call has nothing to run
+			}
+			argv := make([]string, 0, len(n.Args))
+			for i, arg := range n.Args {
+				field, static := StaticWord(arg)
+				if !static {
+					// A non-static argument is fine as data — the program still
+					// decides what it does — but never as the program itself.
+					if i == 0 {
+						readable = false
+						return false
+					}
+					field = dynamicArgPlaceholder
+				}
+				argv = append(argv, field)
+			}
+			leaves = append(leaves, argv)
+		}
+		return true
+	})
+	if !readable || !compound || len(leaves) == 0 {
+		return nil, false
+	}
+	return leaves, true
+}
+
+// dynamicArgPlaceholder stands in for an argument whose value is only known at
+// run time. It never occupies argv[0], so a classifier still sees the real
+// program name.
+const dynamicArgPlaceholder = "__reasonix_dynamic_arg__"
+
+// StdinHereDocPrograms returns the program name of every command in the
+// statement whose standard input comes from a here-document, at any nesting.
+// The caller decides which programs treat that input as source code.
+func StdinHereDocPrograms(command string) []string {
+	file, err := ParseBash(command)
+	if err != nil {
+		return nil
+	}
+	var programs []string
+	syntax.Walk(file, func(node syntax.Node) bool {
+		stmt, ok := node.(*syntax.Stmt)
+		if !ok || stmt == nil {
+			return true
+		}
+		fedFromHereDoc := false
+		for _, redir := range stmt.Redirs {
+			if redir == nil || redir.Hdoc == nil {
+				continue
+			}
+			if redir.N == nil || redir.N.Value == "" || redir.N.Value == "0" {
+				fedFromHereDoc = true
+			}
+		}
+		if !fedFromHereDoc {
+			return true
+		}
+		call, ok := stmt.Cmd.(*syntax.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			return true
+		}
+		if program, static := StaticWord(call.Args[0]); static {
+			programs = append(programs, program)
+		}
+		return true
+	})
+	return programs
 }

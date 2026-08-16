@@ -1,6 +1,9 @@
 package permission
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestBashSubjectRequiresExplicitApproval(t *testing.T) {
 	tests := []struct {
@@ -214,6 +217,105 @@ func TestDynamicBashRememberedAsLiteral(t *testing.T) {
 		}
 		if got := SessionGrantRuleForScope("bash", command); got != want {
 			t.Errorf("SessionGrantRuleForScope(%q) = %q, want %q", command, got, want)
+		}
+	}
+}
+
+// An interpreter reading a here-document carries its program in the call, the
+// same way -c does. The parser reports the redirect, so this is a fact about
+// the command rather than a guess about what the interpreter will read; a
+// here-document feeding a non-interpreter is ordinary data.
+func TestHereDocFedInterpreterIsInlineCode(t *testing.T) {
+	for _, tc := range []struct {
+		command string
+		want    BashApprovalBlocker
+	}{
+		{"python3 - <<'EOF'\nimport os\nEOF", BashApprovalBlockerInlineCode},
+		{"python3 <<'EOF'\nprint(1)\nEOF", BashApprovalBlockerInlineCode},
+		{"bash <<'EOF'\nls\nEOF", BashApprovalBlockerInlineCode},
+		{"node <<'EOF'\nconsole.log(1)\nEOF", BashApprovalBlockerInlineCode},
+		{"cat <<'EOF'\nplain text\nEOF", BashApprovalBlockerNone},
+		// The redirect is just as real one level down; a caller that prefixes
+		// its call with cd, or puts it in a loop, is not hiding anything.
+		{"cd /tmp/x && python3 - <<'EOF'\nimport os\nEOF", BashApprovalBlockerInlineCode},
+		{"for f in *; do python3 - <<'EOF'\nx\nEOF\ndone", BashApprovalBlockerInlineCode},
+		{"sort <<'EOF'\nb\na\nEOF", BashApprovalBlockerNone},
+		{"python3 script.py", BashApprovalBlockerNone},
+	} {
+		if got := BashSubjectApprovalBlocker(tc.command); got != tc.want {
+			t.Errorf("%q blocker = %v, want %v", firstLineOfCommand(tc.command), got, tc.want)
+		}
+	}
+}
+
+// Expressing batch inspection as a loop should not by itself require a human.
+// The parser names every command a compound statement would run, so when all of
+// them are read-only there is nothing left to rule on — and anything the parser
+// cannot fully read keeps needing approval.
+func TestReadOnlyCompoundStatementsNeedNoApproval(t *testing.T) {
+	for _, tc := range []struct {
+		command string
+		allowed bool
+	}{
+		{`for f in pkg/*.py; do echo "=== $f ==="; cat "$f"; done`, true},
+		{`if [ -f x.py ]; then cat x.py; fi`, true},
+		{`for d in */; do ls "$d"; done`, true},
+
+		{`for f in *.py; do rm "$f"; done`, false},              // a writer leaf
+		{`for f in *.py; do cat "$f" > out.txt; done`, false},   // redirect creates a file
+		{`for f in *; do eval "$f"; done`, false},               // runs what the argv does not name
+		{`for f in *; do python3 -c "print(1)"; done`, false},   // inline code inside the loop
+		{`for f in $(ls); do cat "$f"; done`, false},            // command substitution
+		{`while read l; do echo "$l"; done < input.txt`, false}, // stdin redirect
+		{`for f in *; do "$f"; done`, false},                    // the program itself is dynamic
+		{`for f in *; do cat "$f"; done; rm -rf /tmp/x`, false}, // a writer after the loop
+		{`if true; then git push; fi`, false},                   // external action
+		{`for f in *.go; do gofmt -w "$f"; done`, false},        // -w rewrites in place
+	} {
+		allowed := BashSubjectApprovalBlocker(tc.command) == BashApprovalBlockerNone
+		if allowed != tc.allowed {
+			t.Errorf("%q allowed = %v, want %v", tc.command, allowed, tc.allowed)
+		}
+	}
+}
+
+func firstLineOfCommand(s string) string {
+	for i, r := range s {
+		if r == '\n' {
+			return s[:i] + " …"
+		}
+	}
+	return s
+}
+
+// The three layers that see a bash call must agree about a read-only compound
+// statement: the approval blocker (needs a human?), the approval class (can it
+// become a rule?), and the read-only classification the policy decides on.
+// Disagreement is what left `for f in *.py; do cat "$f"; done` blocked even
+// after the blocker stopped objecting to it.
+func TestReadOnlyCompoundAgreesAcrossApprovalAndPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		command  string
+		readOnly bool
+		decision Decision
+	}{
+		{`cd /tmp/x && for f in pkg/*.py; do echo "== $f =="; cat "$f"; done`, true, Allow},
+		{`for f in *.py; do cat "$f"; done`, true, Allow},
+		{`if [ -f x ]; then cat x; fi`, true, Allow},
+		{`for f in *.py; do rm "$f"; done`, false, Ask},
+		{`for f in *; do cat "$f" > out; done`, false, Ask},
+	} {
+		args, err := json.Marshal(map[string]string{"command": tc.command})
+		if err != nil {
+			t.Fatal(err)
+		}
+		readOnly := BashCommandIsReadOnly(args)
+		if readOnly != tc.readOnly {
+			t.Errorf("%q readOnly = %v, want %v", tc.command, readOnly, tc.readOnly)
+			continue
+		}
+		if got := New("auto", nil, nil, nil).Decide("bash", readOnly, args); got != tc.decision {
+			t.Errorf("%q decision = %v, want %v", tc.command, got, tc.decision)
 		}
 	}
 }

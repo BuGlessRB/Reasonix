@@ -1,9 +1,11 @@
 package permission
 
 import (
+	"slices"
 	"strings"
 
 	"reasonix/internal/shellparse"
+	"reasonix/internal/shellsafe"
 )
 
 type bashApprovalClass uint8
@@ -70,6 +72,16 @@ func segmentApprovalBlocker(subject string) BashApprovalBlocker {
 	}
 	features, ok := shellparse.AnalyzeApprovalFeatures(subject)
 	if !ok {
+		// `cd x && python3 - <<EOF` hides the same inline code a bare
+		// `python3 - <<EOF` does; the redirect is visible at any nesting.
+		if hasHereDocFedInterpreter(subject) {
+			return BashApprovalBlockerInlineCode
+		}
+		// A compound statement is not a simple call, but the parser still names
+		// every command it runs; all-read-only leaves leave nothing to rule on.
+		if compoundIsReadOnly(subject) {
+			return BashApprovalBlockerNone
+		}
 		return BashApprovalBlockerUnparsable
 	}
 	if features.NestedExecution {
@@ -79,9 +91,31 @@ func segmentApprovalBlocker(subject string) BashApprovalBlocker {
 		return BashApprovalBlockerDynamicName
 	}
 	if len(features.CommandPrefix) > 0 {
-		return indirectExecutionBlocker(features.CommandPrefix)
+		if blocker := indirectExecutionBlocker(features.CommandPrefix); blocker != BashApprovalBlockerNone {
+			return blocker
+		}
+		// `python3 - <<EOF` carries its program in the call exactly like -c does;
+		// the parser reports the here-document, so this is the same fact, not a
+		// guess about what the interpreter will read.
+		if features.StdinHereDoc && isInterpreter(features.CommandPrefix[0]) {
+			return BashApprovalBlockerInlineCode
+		}
 	}
 	return BashApprovalBlockerNone
+}
+
+// isInterpreter reports whether a program executes source handed to it rather
+// than a fixed operation. Kept beside indirectExecutionBlocker, which already
+// enumerates the same programs for their inline-code flags.
+func isInterpreter(program string) bool {
+	switch executableBase(program) {
+	case "python", "python3", "py", "pypy", "pypy3",
+		"node", "bun", "deno",
+		"perl", "ruby", "lua", "luajit", "r", "rscript", "osascript", "php",
+		"bash", "dash", "fish", "ksh", "sh", "zsh", "powershell", "pwsh":
+		return true
+	}
+	return false
 }
 
 func bashSubjectRequiresExactRule(subject string) bool {
@@ -121,6 +155,12 @@ func classifyBashSegmentApproval(subject string) bashApprovalClass {
 	}
 	features, ok := shellparse.AnalyzeApprovalFeatures(subject)
 	if !ok {
+		if compoundIsReadOnly(subject) {
+			// Approvable, but never as a reusable prefix: its globs and loop
+			// variables make the next command with the same prefix a different
+			// command.
+			return bashApprovalExactOnly
+		}
 		return bashApprovalRequireHuman
 	}
 	if features.Expansion || features.Assignment || features.Redirection ||
@@ -266,4 +306,37 @@ func isEnvironmentAssignment(arg string) bool {
 		}
 	}
 	return true
+}
+
+// compoundIsReadOnly reports whether every command a compound statement would
+// run is read-only. It fails closed: the parser must be able to name each
+// program, and any substitution, redirect, or here-document rules the whole
+// statement out before its leaves are examined.
+func compoundIsReadOnly(subject string) bool {
+	leaves, ok := shellparse.CompoundLeafCommands(subject)
+	if !ok {
+		return false
+	}
+	for _, argv := range leaves {
+		base, sub, fields, classified := shellsafe.ClassifyReadOnlyFields(argv)
+		if !classified {
+			return false
+		}
+		if sub == "" {
+			if hasUnsafeReadOnlyArgs(base, fields[1:]) {
+				return false
+			}
+			continue
+		}
+		if hasUnsafePrefixArgs(base, sub, fields[2:]) {
+			return false
+		}
+	}
+	return true
+}
+
+// hasHereDocFedInterpreter reports whether any command in the statement reads
+// its source from a here-document.
+func hasHereDocFedInterpreter(subject string) bool {
+	return slices.ContainsFunc(shellparse.StdinHereDocPrograms(subject), isInterpreter)
 }

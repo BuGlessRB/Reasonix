@@ -35,10 +35,13 @@ func (a *Agent) toolOutputBudget() int {
 }
 
 // spillToolOutput writes body beside the session and returns the pointer text
-// that replaces it. ok is false with no session path (a headless run), and the
-// caller falls back to truncation.
+// that replaces it. ok is false only when there is nowhere the model could read
+// the file back from, and the caller falls back to truncation.
 func (a *Agent) spillToolOutput(body, toolName, toolCallID string) (string, bool) {
 	dir := store.SessionOutputsDir(a.SessionPath())
+	if dir == "" {
+		dir = a.archiveOutputsDir()
+	}
 	if dir == "" {
 		return "", false
 	}
@@ -51,6 +54,19 @@ func (a *Agent) spillToolOutput(body, toolName, toolCallID string) (string, bool
 		return "", false
 	}
 	return spillPointer(path, body, toolName), true
+}
+
+// archiveOutputsDir is where an agent with no transcript of its own spills.
+// Sub-agents are the case that matters: they carry no session path, so without
+// this every oversize result they saw was truncated while the lossless path sat
+// one field away. The archive already holds content moved out of context, and
+// they inherit its location from the parent.
+func (a *Agent) archiveOutputsDir() string {
+	root := strings.TrimSpace(a.archiveDir)
+	if root == "" {
+		return ""
+	}
+	return filepath.Join(root, "outputs")
 }
 
 // spillFileName keys the file by tool call, so a directory listing reads as the

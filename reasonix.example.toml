@@ -45,6 +45,11 @@ compact_ratio       = 0.85  # sole auto trigger; presets 0.70 (active) / 0.80 (s
 # planner_model = "deepseek-pro"   # optional: enable two-model collaboration
 # subagent_model = "deepseek-pro"   # optional default for runAs=subagent skills
 # subagent_models = { review = "deepseek-pro", security_review = "deepseek-pro" }   # per-skill overrides
+# triage_model = "deepseek-flash"   # answers the host's small classifications (is this unrecognized
+#                                   # shell command read-only?) when the static tables come up short.
+#                                   # A few dozen tokens per call and the verdict is cached. Empty falls
+#                                   # back to subagent_model, then the main model — set this to send the
+#                                   # classifications somewhere cheaper than the model doing the work.
 # max_subagent_concurrency = 6   # session-wide sub-agent concurrency (task/fleet/skills)
 # max_parallel_writers = 3       # concurrent writers with non-overlapping write_paths
 # output_style = "explanatory"   # persona/tone folded into the prompt: explanatory | learning | concise,
