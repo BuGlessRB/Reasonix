@@ -63,4 +63,5 @@ const (
 	VerificationNotRun          = "not_run"
 	VerificationPassed          = "passed"
 	VerificationFailed          = "failed"
+	VerificationInconclusive    = "inconclusive"
 )

@@ -625,7 +625,16 @@ func (a *Agent) ContextWindow() int { return a.contextWindow }
 // display them as a notice, not a regular user bubble.
 const MidTurnSteerPrefix = "[Mid-turn steer queued by the user. Do not treat this as a new task; use it only as additional guidance for the current task after completing the current step.]"
 
-func midTurnSteerMessage(text string) string {
+// HostNoticePrefix marks guidance the host runtime queued for itself, such as
+// recovery advice after a tool failed. It rides the steer path but must not
+// claim the user spoke: a model told the user interrupted starts answering a
+// person who said nothing, and cannot tell a real interruption from this one.
+const HostNoticePrefix = "[Mid-turn notice from the host runtime; the user did not send this. Do not treat it as a new task or as a message to answer; use it only as additional guidance for the current task after completing the current step.]"
+
+func midTurnSteerMessage(text string, host bool) string {
+	if host {
+		return HostNoticePrefix + "\n" + text
+	}
 	return MidTurnSteerPrefix + "\n" + text
 }
 
@@ -645,7 +654,11 @@ func midTurnSteerMessage(text string) string {
 func SteerText(content string) (string, bool) {
 	s := content
 	for {
-		if after, found := strings.CutPrefix(s, MidTurnSteerPrefix); found {
+		for _, prefix := range []string{MidTurnSteerPrefix, HostNoticePrefix} {
+			after, found := strings.CutPrefix(s, prefix)
+			if !found {
+				continue
+			}
 			// Strip only the "\n" separator, preserving the user's original text.
 			after = strings.TrimPrefix(after, "\n")
 			if trimmed, cut := strings.CutSuffix(after, "\n\n"+DeliveryRuntimeMarker); cut {
@@ -677,12 +690,15 @@ func trimLeadingSteerWrapper(content string) (string, bool) {
 	return content, false
 }
 
-// steerEntry is one mid-turn guidance admission.
+// steerEntry is one mid-turn guidance admission. host marks the ones the
+// runtime queued for itself, which the model must not read as the user
+// speaking.
 type steerEntry struct {
 	itemID string
 	load   func() (string, error)
 	// text is a fallback when load is nil (legacy Steer(string) path).
 	text string
+	host bool
 }
 
 // Steer queues a message for mid-turn injection. It reports whether an active
@@ -695,15 +711,25 @@ func (a *Agent) Steer(text string) bool {
 	return a.SteerItem("", func() (string, error) { return text, nil })
 }
 
+// SteerHostNotice queues runtime-authored guidance on the same path as Steer,
+// attributed to the host instead of the user.
+func (a *Agent) SteerHostNotice(text string) bool {
+	return a.queueSteer(steerEntry{load: func() (string, error) { return text, nil }, host: true})
+}
+
 // SteerItem queues durable-inbox guidance identified by itemID. load is called
 // only when the entry is consumed so the agent does not retain every body.
 func (a *Agent) SteerItem(itemID string, load func() (string, error)) bool {
+	return a.queueSteer(steerEntry{itemID: itemID, load: load})
+}
+
+func (a *Agent) queueSteer(e steerEntry) bool {
 	a.steerMu.Lock()
 	defer a.steerMu.Unlock()
 	if !a.steerRunActive {
 		return false
 	}
-	a.steerQueue = append(a.steerQueue, steerEntry{itemID: itemID, load: load})
+	a.steerQueue = append(a.steerQueue, e)
 	a.steerConsumed = false
 	return true
 }
@@ -728,11 +754,11 @@ func (a *Agent) SetSink(sink event.Sink) {
 	a.svc.sink = sink
 }
 
-func (a *Agent) consumeSteer() (text, itemID string, ok bool) {
+func (a *Agent) consumeSteer() (text, itemID string, host, ok bool) {
 	a.steerMu.Lock()
 	defer a.steerMu.Unlock()
 	if len(a.steerQueue) == 0 {
-		return "", "", false
+		return "", "", false, false
 	}
 	e := a.steerQueue[0]
 	a.steerQueue = a.steerQueue[1:]
@@ -740,11 +766,11 @@ func (a *Agent) consumeSteer() (text, itemID string, ok bool) {
 	if e.load != nil {
 		t, err := e.load()
 		if err != nil {
-			return "", e.itemID, false
+			return "", e.itemID, e.host, false
 		}
-		return t, e.itemID, true
+		return t, e.itemID, e.host, true
 	}
-	return e.text, e.itemID, true
+	return e.text, e.itemID, e.host, true
 }
 
 // closeSteerIntakeIfIdle atomically closes the normal-completion race between
@@ -807,7 +833,7 @@ func (a *Agent) RecordUnappliedSteer(text string, itemID ...string) {
 	}
 	a.sess.conversation.Add(provider.Message{
 		Role:       provider.RoleTool,
-		Content:    a.withTurnPreferences(midTurnSteerMessage(text)),
+		Content:    a.withTurnPreferences(midTurnSteerMessage(text, false)),
 		ToolCallID: provider.LocalOnlyToolID,
 		Name:       provider.LocalOnlyToolName,
 		LocalOnly:  true,

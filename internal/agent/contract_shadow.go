@@ -174,7 +174,7 @@ func (a *Agent) emitTurnShadows(input string) {
 	rep := completion.Build(c, a.task.ledger)
 	a.turn.completion = &rep
 	event.RecordCompletionReport(a.svc.sink, completionReportAudit(rep))
-	a.emitCompletionSummary(c)
+	a.emitCompletionSummary(c, rep)
 }
 
 // CompletionReceipt returns the turn's completion record for the host to

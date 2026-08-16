@@ -83,19 +83,20 @@ type ContractShadowAudit struct {
 
 // CompletionReport mirrors event.CompletionReportAudit with stable keys.
 type CompletionReport struct {
-	Verdict             string   `json:"verdict"`
-	Risk                string   `json:"risk,omitempty"`
-	Criteria            int      `json:"criteria,omitempty"`
-	CriteriaSatisfied   int      `json:"criteria_satisfied,omitempty"`
-	Changes             int      `json:"changes,omitempty"`
-	ChangesUnreviewed   int      `json:"changes_unreviewed,omitempty"`
-	Verifications       int      `json:"verifications,omitempty"`
-	VerificationsFailed int      `json:"verifications_failed,omitempty"`
-	VerificationsStale  int      `json:"verifications_stale,omitempty"`
-	Gaps                int      `json:"gaps,omitempty"`
-	GapKinds            []string `json:"gap_kinds,omitempty"`
-	ClaimsVerified      int      `json:"claims_verified,omitempty"`
-	ClaimsUnbacked      int      `json:"claims_unbacked,omitempty"`
+	Verdict                   string   `json:"verdict"`
+	Risk                      string   `json:"risk,omitempty"`
+	Criteria                  int      `json:"criteria,omitempty"`
+	CriteriaSatisfied         int      `json:"criteria_satisfied,omitempty"`
+	Changes                   int      `json:"changes,omitempty"`
+	ChangesUnreviewed         int      `json:"changes_unreviewed,omitempty"`
+	Verifications             int      `json:"verifications,omitempty"`
+	VerificationsFailed       int      `json:"verifications_failed,omitempty"`
+	VerificationsStale        int      `json:"verifications_stale,omitempty"`
+	VerificationsInconclusive int      `json:"verifications_inconclusive,omitempty"`
+	Gaps                      int      `json:"gaps,omitempty"`
+	GapKinds                  []string `json:"gap_kinds,omitempty"`
+	ClaimsVerified            int      `json:"claims_verified,omitempty"`
+	ClaimsUnbacked            int      `json:"claims_unbacked,omitempty"`
 }
 
 // ReadinessAudit mirrors evidence.ReadinessAudit with stable snake_case keys.
@@ -212,19 +213,20 @@ func (r *Recorder) RecordContractShadow(a event.ContractShadowAudit) {
 
 func (r *Recorder) RecordCompletionReport(a event.CompletionReportAudit) {
 	r.append(Record{CompletionReport: &CompletionReport{
-		Verdict:             a.Verdict,
-		Risk:                a.Risk,
-		Criteria:            a.Criteria,
-		CriteriaSatisfied:   a.CriteriaSatisfied,
-		Changes:             a.Changes,
-		ChangesUnreviewed:   a.ChangesUnreviewed,
-		Verifications:       a.Verifications,
-		VerificationsFailed: a.VerificationsFailed,
-		VerificationsStale:  a.VerificationsStale,
-		Gaps:                a.Gaps,
-		GapKinds:            a.GapKinds,
-		ClaimsVerified:      a.ClaimsVerified,
-		ClaimsUnbacked:      a.ClaimsUnbacked,
+		Verdict:                   a.Verdict,
+		Risk:                      a.Risk,
+		Criteria:                  a.Criteria,
+		CriteriaSatisfied:         a.CriteriaSatisfied,
+		Changes:                   a.Changes,
+		ChangesUnreviewed:         a.ChangesUnreviewed,
+		Verifications:             a.Verifications,
+		VerificationsFailed:       a.VerificationsFailed,
+		VerificationsStale:        a.VerificationsStale,
+		VerificationsInconclusive: a.VerificationsInconclusive,
+		Gaps:                      a.Gaps,
+		GapKinds:                  a.GapKinds,
+		ClaimsVerified:            a.ClaimsVerified,
+		ClaimsUnbacked:            a.ClaimsUnbacked,
 	}})
 	event.RecordCompletionReport(r.inner, a)
 }

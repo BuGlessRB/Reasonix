@@ -71,7 +71,7 @@ func receiptEvidenceTail(r *event.CompletionReceipt) string {
 		parts = append(parts, fmt.Sprintf("%d changed", n))
 	}
 	for _, v := range r.Verifications {
-		if v.Passed && !v.Stale {
+		if v.Passed && !v.Stale && !v.Inconclusive {
 			parts = append(parts, v.Command)
 		}
 	}

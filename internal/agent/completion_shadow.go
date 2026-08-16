@@ -39,6 +39,8 @@ func completionReportAudit(rep completion.Report) event.CompletionReportAudit {
 	audit.Verifications = len(rep.Verifications)
 	for _, verification := range rep.Verifications {
 		switch {
+		case verification.Inconclusive:
+			audit.VerificationsInconclusive++
 		case !verification.Passed:
 			audit.VerificationsFailed++
 		case verification.Stale:
@@ -60,7 +62,9 @@ func completionReceipt(rep completion.Report) *event.CompletionReceipt {
 		out.Changes = append(out.Changes, event.ReceiptChange{Path: change.Path, Reviewed: change.Reviewed})
 	}
 	for _, v := range rep.Verifications {
-		out.Verifications = append(out.Verifications, event.ReceiptVerification{Command: v.Command, Passed: v.Passed, Stale: v.Stale})
+		out.Verifications = append(out.Verifications, event.ReceiptVerification{
+			Command: v.Command, Passed: v.Passed, Stale: v.Stale, Inconclusive: v.Inconclusive,
+		})
 	}
 	for _, gap := range rep.Gaps {
 		out.Gaps = append(out.Gaps, event.ReceiptGap{Kind: gap.Kind.String(), Detail: gap.Detail})

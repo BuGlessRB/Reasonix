@@ -19,11 +19,14 @@ type ReceiptChange struct {
 }
 
 // ReceiptVerification is a verification command's last outcome. Stale means it
-// ran before the newest change, so it proves nothing about the current tree.
+// ran before the newest change, so it proves nothing about the current tree;
+// Inconclusive means the shell reported a later stage's status instead of this
+// check's, so it proves nothing either.
 type ReceiptVerification struct {
-	Command string
-	Passed  bool
-	Stale   bool
+	Command      string
+	Passed       bool
+	Stale        bool
+	Inconclusive bool
 }
 
 // ReceiptGap is one thing the receipt refuses to present as verified.

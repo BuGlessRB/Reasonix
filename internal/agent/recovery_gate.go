@@ -231,7 +231,7 @@ func (a *Agent) observeRecoveryResult(ctx context.Context, toolName string, args
 		// or sub-agent turn that failed. Never fall back to Controller.Steer here:
 		// synchronous headless Run does not participate in controller admission,
 		// and a fallback would start a second Agent.Run concurrently.
-		_ = a.Steer(guidance)
+		_ = a.SteerHostNotice(guidance)
 	}
 }
 

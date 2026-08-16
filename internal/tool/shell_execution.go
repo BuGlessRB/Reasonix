@@ -65,12 +65,15 @@ const (
 	ShellMutationUnknown          = "unknown"
 )
 
-// Shell verification values.
+// Shell verification values. Inconclusive is a verification that ran and whose
+// exit status belongs to a later stage of the same command, so it proves
+// neither outcome.
 const (
 	ShellVerificationNotVerification = "not_verification"
 	ShellVerificationNotRun          = "not_run"
 	ShellVerificationPassed          = "passed"
 	ShellVerificationFailed          = "failed"
+	ShellVerificationInconclusive    = "inconclusive"
 )
 
 // Shell name values for ShellExecution.Shell.

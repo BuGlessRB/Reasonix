@@ -32,7 +32,7 @@ func TestSteerText(t *testing.T) {
 		},
 		{
 			name:    "round-trip through midTurnSteerMessage",
-			content: midTurnSteerMessage("stop using such large diffs"),
+			content: midTurnSteerMessage("stop using such large diffs", false),
 			want:    "stop using such large diffs",
 			wantOK:  true,
 		},
@@ -103,15 +103,32 @@ func TestMidTurnSteerMessageRoundTrip(t *testing.T) {
 		"",
 		"  keep going  ",
 	}
-	for _, in := range inputs {
-		msg := midTurnSteerMessage(in)
-		got, ok := SteerText(msg)
-		if !ok {
-			t.Errorf("SteerText(midTurnSteerMessage(%q)): not recognized as steer", in)
-			continue
+	for _, host := range []bool{false, true} {
+		for _, in := range inputs {
+			msg := midTurnSteerMessage(in, host)
+			got, ok := SteerText(msg)
+			if !ok {
+				t.Errorf("SteerText(midTurnSteerMessage(%q, %v)): not recognized as steer", in, host)
+				continue
+			}
+			if got != in {
+				t.Errorf("SteerText(midTurnSteerMessage(%q, %v)) = %q, want %q", in, host, got, in)
+			}
 		}
-		if got != in {
-			t.Errorf("SteerText(midTurnSteerMessage(%q)) = %q, want %q", in, got, in)
-		}
+	}
+}
+
+// Recovery guidance rides the steer path but must never present itself as the
+// user speaking: a model told the user interrupted answers a person who did not.
+func TestHostNoticeDoesNotClaimTheUserSpoke(t *testing.T) {
+	msg := midTurnSteerMessage("a tool failed", true)
+	if strings.Contains(msg, MidTurnSteerPrefix) {
+		t.Fatalf("host notice = %q, want no user-steer prefix", msg)
+	}
+	if !strings.HasPrefix(msg, HostNoticePrefix) {
+		t.Fatalf("host notice = %q, want the host prefix", msg)
+	}
+	if !strings.Contains(HostNoticePrefix, "the user did not send this") {
+		t.Fatalf("host prefix = %q, want it to disclaim the user", HostNoticePrefix)
 	}
 }

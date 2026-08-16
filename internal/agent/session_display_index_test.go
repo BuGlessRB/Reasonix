@@ -26,7 +26,7 @@ func displayIndexTestMessages() []provider.Message {
 		}},
 		{Role: provider.RoleTool, ToolCallID: "call_1", Name: "shell", Content: "file.go"},
 		{Role: provider.RoleAssistant, Content: "interrupted partial", LocalOnly: true},
-		{Role: provider.RoleUser, Content: midTurnSteerMessage("hurry up")},
+		{Role: provider.RoleUser, Content: midTurnSteerMessage("hurry up", false)},
 		{Role: provider.RoleUser, Content: "Plan approved — plan mode is off. Implement the plan now."},
 		{Role: provider.RoleUser, Content: "second question", Images: []string{"data:image/png;base64,iVBORw0KGgo="}},
 		{Role: provider.RoleAssistant, Content: "second answer"},

@@ -465,7 +465,7 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 	// permission approval and workspace write-lock acquisition, so a waiting
 	// recovery card never holds a write lease. Consult on mutations,
 	// verification, and plan transitions. Ask/Yolo still bypass inside the gate.
-	plan.verification = plan.evidenceName == "bash" && evidence.IsDeliveryVerificationCommand(bashCommandFromArgs(plan.evidenceArgs))
+	plan.verification = plan.evidenceName == "bash" && evidence.CommandRunsVerification(bashCommandFromArgs(plan.evidenceArgs))
 	plan.planTransition, plan.planBefore, plan.planAfter, plan.planDiff = a.recoveryPlanTransition(plan.evidenceName, plan.evidenceArgs)
 	if ctrl := a.recoveryEpisodeControl(); ctrl != nil {
 		plan.recoveryGen = ctrl.Generation()
@@ -746,9 +746,13 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		var detailed tool.DetailedResult
 		detailed, err = de.ExecuteDetailed(cctx, runArgs)
 		result, images, execution = detailed.Output, detailed.Images, detailed.Execution
-		// Annotate verification outcome when the host classified this call as a verifier.
+		// Annotate verification outcome when the host classified this call as a
+		// verifier. The exit status answers for the whole command, so it is a
+		// verdict about the verifier only when no later stage can decide it.
 		if execution != nil && plan.verification {
 			switch {
+			case !evidence.VerificationExitConclusive(bashCommandFromArgs(plan.evidenceArgs)):
+				execution.Verification = tool.ShellVerificationInconclusive
 			case err != nil:
 				execution.Verification = tool.ShellVerificationFailed
 			default:

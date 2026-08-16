@@ -51,11 +51,13 @@ type Change struct {
 
 // Verification is a delivery-verification command's latest outcome. Stale
 // means it last ran before the newest mutation, so it proves nothing about
-// the current tree.
+// the current tree. Inconclusive means every run of it so far hid its own
+// verdict behind a later stage's exit status, which proves nothing either.
 type Verification struct {
-	Command string
-	Passed  bool
-	Stale   bool
+	Command      string
+	Passed       bool
+	Stale        bool
+	Inconclusive bool
 }
 
 // GapKind classifies one thing the report refuses to present as verified.
@@ -69,6 +71,7 @@ const (
 	GapMissingCheck
 	GapFailedVerification
 	GapStaleVerification
+	GapInconclusiveVerification
 	GapUnverifiedChange
 	GapUnreviewedChange
 	GapDeclaredUnverified
@@ -88,6 +91,8 @@ func (k GapKind) String() string {
 		return "failed_verification"
 	case GapStaleVerification:
 		return "stale_verification"
+	case GapInconclusiveVerification:
+		return "inconclusive_verification"
 	case GapUnverifiedChange:
 		return "unverified_change"
 	case GapUnreviewedChange:
@@ -205,7 +210,10 @@ func mutationsOf(receipts []evidence.Receipt) int {
 }
 
 // verificationsOf keeps each delivery-verification command's latest run, in
-// first-run order, and marks the ones that predate the newest mutation.
+// first-run order, and marks the ones that predate the newest mutation. Runs
+// key on the verification they carry, not their shell wrapper, and the verdict
+// is the host's classification, never the call's error: `go test ./... | head`
+// exits 0 on a failing suite.
 func verificationsOf(receipts []evidence.Receipt) []Verification {
 	lastMutation := -1
 	for i, r := range receipts {
@@ -217,15 +225,34 @@ func verificationsOf(receipts []evidence.Receipt) []Verification {
 	at := map[string]int{}
 	for i, r := range receipts {
 		command := strings.TrimSpace(r.Command)
-		if command == "" || !evidence.IsDeliveryVerificationCommand(command) {
+		if command == "" || !evidence.CommandRunsVerification(command) {
 			continue
 		}
-		if _, seen := at[command]; !seen {
-			at[command] = len(out)
-			out = append(out, Verification{Command: command})
+		if r.Verification == evidence.VerificationNotRun {
+			continue
 		}
-		out[at[command]].Passed = r.Success
-		out[at[command]].Stale = i < lastMutation
+		key := evidence.VerificationIdentity(command)
+		if _, seen := at[key]; !seen {
+			at[key] = len(out)
+			out = append(out, Verification{Command: key, Inconclusive: true})
+		}
+		v := &out[at[key]]
+		switch r.Verification {
+		case evidence.VerificationPassed:
+			v.Passed, v.Inconclusive = true, false
+		case evidence.VerificationFailed:
+			v.Passed, v.Inconclusive = false, false
+		case "":
+			// No host classification at all — a command the turn declared, or a
+			// receipt replayed from an older session. The call's own outcome is
+			// the only evidence there is.
+			v.Passed, v.Inconclusive = r.Success, false
+		default:
+			// An unreadable status neither proves nor refutes, so it must not
+			// overwrite what an earlier readable run of the same check settled.
+			continue
+		}
+		v.Stale = i < lastMutation
 	}
 	return out
 }
@@ -249,12 +276,18 @@ func gapsOf(rep Report, c *taskcontract.Contract) []Gap {
 	}
 	proven := false
 	for _, v := range rep.Verifications {
-		if v.Passed && !v.Stale {
+		if v.Passed && !v.Stale && !v.Inconclusive {
 			proven = true
 		}
 	}
 	for _, v := range rep.Verifications {
 		switch {
+		case v.Inconclusive:
+			// Same reason as the stale case below: a check whose verdict the
+			// shell hid matters only while nothing fresh has proven the tree.
+			if !proven {
+				gaps = append(gaps, Gap{GapInconclusiveVerification, v.Command})
+			}
 		case !v.Passed:
 			gaps = append(gaps, Gap{GapFailedVerification, v.Command})
 		case v.Stale && !proven:
@@ -324,7 +357,7 @@ func (r Report) Summary() string {
 func (r Report) GapKinds() []string {
 	seen := map[GapKind]bool{}
 	var out []string
-	for _, kind := range []GapKind{GapUnbackedClaim, GapUnprovenCriterion, GapMissingCheck, GapFailedVerification, GapStaleVerification, GapUnverifiedChange, GapUnreviewedChange, GapDeclaredUnverified} {
+	for _, kind := range []GapKind{GapUnbackedClaim, GapUnprovenCriterion, GapMissingCheck, GapFailedVerification, GapStaleVerification, GapInconclusiveVerification, GapUnverifiedChange, GapUnreviewedChange, GapDeclaredUnverified} {
 		for _, gap := range r.Gaps {
 			if gap.Kind == kind && !seen[kind] {
 				seen[kind] = true

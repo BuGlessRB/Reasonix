@@ -758,7 +758,7 @@ func (l *Ledger) HasSuccessfulDeliverySignoffAfter(after int) bool {
 			}
 			for j := start; j < i; j++ {
 				candidate := receipts[j]
-				if candidate.Success && candidate.ToolName == "bash" && CommandMatches(command, candidate.Command) {
+				if candidate.ToolName == "bash" && CommandMatches(command, candidate.Command) && verificationPassed(candidate) {
 					return true
 				}
 			}
@@ -1131,7 +1131,7 @@ func (l *Ledger) HasSuccessfulVerificationCommandAfter(after int) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, r := range l.receipts[max(after+1, 0):] {
-		if r.Success && r.ToolName == "bash" && bashCommandIsVerification(r.Command) {
+		if r.ToolName == "bash" && bashContainsVerificationSegment(r.Command) && verificationPassed(r) {
 			return true
 		}
 	}

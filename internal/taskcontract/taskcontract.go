@@ -330,15 +330,16 @@ func (c *Contract) Observe(r evidence.Receipt) {
 			continue
 		}
 		c.Checks[i].Evidence = append(c.Checks[i].Evidence, ref)
-		if r.Success {
+		switch {
+		case ref.Success:
 			c.Checks[i].Status = Satisfied
-		} else if c.Checks[i].Status != Satisfied {
+		case proofRefuted(r, ref) && c.Checks[i].Status != Satisfied:
 			c.Checks[i].Status = Failed
 		}
 	}
 	for i := range c.Requirements {
 		req := &c.Requirements[i]
-		if req.Auto && req.Status != Satisfied && r.Success && ref.Kind == req.AutoKind {
+		if req.Auto && req.Status != Satisfied && ref.Success && ref.Kind == req.AutoKind {
 			req.Status = Satisfied
 			req.Evidence = append(req.Evidence, ref)
 		}
@@ -736,19 +737,6 @@ func (c *Contract) Graph() string {
 	return string(b)
 }
 
-func refFor(epoch uint64, r evidence.Receipt) EvidenceRef {
-	kind := EvidenceRead
-	switch {
-	case r.ToolName == "review_report":
-		kind = EvidenceReview
-	case r.Command != "" && evidence.IsDeliveryVerificationCommand(r.Command):
-		kind = EvidenceVerification
-	case r.Mutation || r.Write:
-		kind = EvidenceMutation
-	}
-	return EvidenceRef{Kind: kind, MutationEpoch: epoch, Source: r.ToolName, Success: r.Success}
-}
-
 func (c *Contract) checkMatches(check Check, r evidence.Receipt, ref EvidenceRef) bool {
 	if check.Kind == CheckMutation {
 		if ref.Kind != EvidenceMutation {
@@ -763,7 +751,7 @@ func (c *Contract) checkMatches(check Check, r evidence.Receipt, ref EvidenceRef
 		return false
 	}
 	if check.Command == "" {
-		return evidence.IsDeliveryVerificationCommand(r.Command)
+		return evidence.CommandRunsVerification(r.Command)
 	}
 	return evidence.CommandMatches(check.Command, r.Command)
 }

@@ -660,8 +660,11 @@ type CompletionReportAudit struct {
 	Verifications       int
 	VerificationsFailed int
 	VerificationsStale  int
-	Gaps                int
-	GapKinds            []string
+	// VerificationsInconclusive counts checks that ran behind a shell stage
+	// that decided the exit status, so neither outcome was readable.
+	VerificationsInconclusive int
+	Gaps                      int
+	GapKinds                  []string
 	// ClaimsVerified counts the turn's own asserted verifications;
 	// ClaimsUnbacked is how many of them the ledger did not support.
 	ClaimsVerified int

@@ -1,10 +1,23 @@
 package agent
 
 import (
+	"reasonix/internal/completion"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/taskcontract"
 )
+
+// summaryVerdictOf keeps the summary line and the completion receipt on one
+// answer. A contract can be satisfied while the ledger still carries unproven
+// work, and a line claiming complete beside a receipt listing gaps contradicts
+// the same turn's own evidence.
+func summaryVerdictOf(c *taskcontract.Contract, rep completion.Report) taskcontract.Verdict {
+	verdict := c.GoalVerdict()
+	if verdict == taskcontract.VerdictComplete && len(rep.Gaps) > 0 {
+		return taskcontract.VerdictPartial
+	}
+	return verdict
+}
 
 // emitTurnPhase publishes a content-free host phase for the active turn.
 func (a *Agent) emitTurnPhase(phase event.TurnPhaseName) {
@@ -17,19 +30,12 @@ func (a *Agent) emitTurnPhase(phase event.TurnPhaseName) {
 // emitCompletionSummary publishes the content-free end-of-turn quality summary
 // when the turn mutated state or finished Partial/Blocked. Pure conversation
 // and ordinary read-only success do not emit a quality card.
-func (a *Agent) emitCompletionSummary(c *taskcontract.Contract) {
+func (a *Agent) emitCompletionSummary(c *taskcontract.Contract, rep completion.Report) {
 	if a == nil || a.svc.sink == nil || c == nil {
 		return
 	}
-	mutations := 0
-	if a.task.ledger != nil {
-		for _, r := range a.task.ledger.Receipts() {
-			if r.Success && (r.Mutation || r.Write) {
-				mutations++
-			}
-		}
-	}
-	verdict := c.GoalVerdict()
+	mutations := rep.Mutations
+	verdict := summaryVerdictOf(c, rep)
 	// Skip noise: no mutations and ordinary complete/continue conversation.
 	if mutations == 0 && (verdict == taskcontract.VerdictComplete || verdict == taskcontract.VerdictContinue || verdict == taskcontract.VerdictUncertain) {
 		if !c.HasSuppressed() {

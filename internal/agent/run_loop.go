@@ -238,8 +238,8 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		// survives tab switches and history replay. The model sees it as
 		// guidance (with a prefix), not a new task. One cache miss per
 		// steer is unavoidable — the model must see the new instruction.
-		if text, itemID, ok := a.consumeSteer(); ok {
-			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(midTurnSteerMessage(text))})
+		if text, itemID, host, ok := a.consumeSteer(); ok {
+			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(midTurnSteerMessage(text, host))})
 			a.svc.sink.Emit(event.Event{Kind: event.Steer, Text: text, ItemID: itemID})
 		} else if itemID != "" {
 			// Loader failed after dequeue: durable entry stays for inspection
@@ -499,14 +499,12 @@ func sleepStreamRetryBackoff(ctx context.Context, attempt int) bool {
 func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, text, reasoning string, usage *provider.Usage) (cont bool, err error) {
 	readiness := a.finalReadinessCheckFor()
 	if state.graceRound && (readiness.reason != "" || !hasVisibleFinalAnswer(text)) {
-		a.contextManager().ObserveUsage(usage)
 		return false, a.gracePause(state)
 	}
 	if state.graceRound && (state.landCause.kind == "task_budget" || !state.runLimitHostOwned) {
 		// Explicit max_steps and spend budgets are user-selected boundaries.
 		// Preserve the summary, then return a resumable pause so Goal does not
 		// immediately open another Run and silently bypass the chosen limit.
-		a.contextManager().ObserveUsage(usage)
 		return false, a.gracePause(state)
 	}
 	if readiness.reason != "" {
@@ -535,7 +533,6 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 			}
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeEmptyFinal, Text: emptyFinalNotice(), Detail: emptyFinalNoticeDetail(a.svc.prov.Name(), usage, len(reasoning))})
 			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(emptyFinalRetryMessage())})
-			a.contextManager().ObserveUsage(usage)
 			return true, nil
 		}
 	}
@@ -543,7 +540,6 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		state.handoffNudges++
 		a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeExecutorHandoff, Text: executorHandoffNoticeText(), Detail: "executor answered without taking any action; nudging it to use its tools"})
 		a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(executorHandoffRetryMessage())})
-		a.contextManager().ObserveUsage(usage)
 		return true, nil
 	}
 	if readiness.applies {
@@ -556,7 +552,6 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 	// A final-answer turn otherwise skips compaction, so a large context
 	// carries into the next turn un-folded and can overflow the model window.
 	// No-op below the trigger, so normal turns keep their warm cache.
-	a.contextManager().ObserveUsage(usage)
 	return false, nil // model gave a final answer
 }
 
@@ -625,7 +620,6 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 
 	// The prompt only grows from here; compact before the next turn so it
 	// stays within the model's window.
-	a.contextManager().ObserveUsage(usage)
 
 	// Spend is checked before rounds: it is the axis a runaway is actually
 	// reported in, so on the turns both would catch it should be the one named.
