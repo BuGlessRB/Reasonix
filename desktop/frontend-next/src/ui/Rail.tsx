@@ -18,6 +18,12 @@ interface Props {
   scroll: RefObject<HTMLDivElement | null>;
   flow: RefObject<HTMLDivElement | null>;
   onJump: (mark: RailMark) => void;
+  // Dragging the box is the reader moving, and the follow has to be told so —
+  // the same release a wheel gets.
+  onGrab: () => void;
+  // Only the transcript on screen answers the keys; a pane on another tab keeps
+  // its rail but must not fight for them.
+  bound: boolean;
 }
 
 // Where a mark sits, in pixels down the content. Measured off the blocks rather
@@ -34,7 +40,7 @@ function offsetsOf(root: HTMLElement, marks: RailMark[]): number[] {
   });
 }
 
-export function Rail({ marks, scroll, flow, onJump }: Props) {
+export function Rail({ marks, scroll, flow, onJump, onGrab, bound }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const [tops, setTops] = useState<number[]>([]);
   const [view, setView] = useState({ top: 0, height: 0 });
@@ -81,6 +87,35 @@ export function Rail({ marks, scroll, flow, onJump }: Props) {
     };
   }, [scroll, flow, measure]);
 
+  // ⌘↑ / ⌘↓ walk the marks. Which one you are "at" is decided by the viewport,
+  // not by a cursor the rail would have to keep: the nearest mark above the top
+  // of the view is where you are, so the keys agree with what you can see.
+  useEffect(() => {
+    if (!bound) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.isContentEditable)) return;
+      const root = scroll.current;
+      if (!root || tops.length === 0) return;
+      const { content, rail } = geom.current;
+      const here = (root.scrollTop / content) * rail;
+      const up = e.key === "ArrowUp";
+      let pick = -1;
+      tops.forEach((y, i) => {
+        if (up ? y < here - 2 : y > here + 2) {
+          if (pick < 0 || (up ? y > tops[pick] : y < tops[pick])) pick = i;
+        }
+      });
+      if (pick < 0) return;
+      e.preventDefault();
+      onJump(marks[pick]);
+      setAt(pick);
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [bound, tops, marks, scroll, onJump]);
+
   // The pointer's y decides which mark it means. Hitting a three-pixel line is
   // not a thing anyone should have to do, and a mark that moved under the
   // pointer to acknowledge the hover would take itself out from under it.
@@ -95,6 +130,32 @@ export function Rail({ marks, scroll, flow, onJump }: Props) {
       }
     });
     setAt(dist <= 120 ? best : -1);
+  };
+
+  // Dragging the viewport box scrolls, because it is now the only scroll
+  // indicator this transcript has — the native bar is hidden, two things saying
+  // "you are here" side by side being the thing that made it look doubled.
+  const drag = (e: React.PointerEvent) => {
+    const root = scroll.current;
+    const nav = e.currentTarget.parentElement;
+    if (!root || !nav) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onGrab();
+    const box = nav.getBoundingClientRect();
+    const from = e.clientY;
+    const start = root.scrollTop;
+    const { content, rail } = geom.current;
+    void box;
+    const move = (ev: PointerEvent) => {
+      root.scrollTop = start + ((ev.clientY - from) / rail) * content;
+    };
+    const up = () => {
+      removeEventListener("pointermove", move);
+      removeEventListener("pointerup", up);
+    };
+    addEventListener("pointermove", move);
+    addEventListener("pointerup", up);
   };
 
   if (marks.length === 0) return null;
@@ -113,7 +174,7 @@ export function Rail({ marks, scroll, flow, onJump }: Props) {
           if (i >= 0) onJump(marks[i]);
         }}
       >
-        <i className="srail-view" style={{ top: view.top, height: view.height }} />
+        <i className="srail-view" style={{ top: view.top, height: view.height }} onPointerDown={drag} />
         {marks.map((m, i) => (
           <button
             key={m.id}

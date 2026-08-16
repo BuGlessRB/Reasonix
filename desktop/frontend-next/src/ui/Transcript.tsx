@@ -147,19 +147,20 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
   // cursor, the browser's own find), and for those the position is the only
   // evidence there is: an upward move that leaves the bottom behind is the
   // reader, one that stays inside the margin is the transcript growing.
+  // Zero, not now: this stamp is what lets the bottom marker resume the follow,
+  // and a gesture that just left the bottom must not also license going back to
+  // it. Only a downward one does.
+  const release = useCallback(() => {
+    gesture.current = 0;
+    if (!at.current) return;
+    at.current = false;
+    setPinned(false);
+    onPinned(false);
+  }, [onPinned]);
+
   useEffect(() => {
     const root = scroll.current;
     if (!root) return;
-    const release = () => {
-      // Zero, not now: this stamp is what lets the bottom marker resume the
-      // follow, and a gesture that just left the bottom must not also license
-      // going back to it. Only a downward one does.
-      gesture.current = 0;
-      if (!at.current) return;
-      at.current = false;
-      setPinned(false);
-      onPinned(false);
-    };
     const mark = () => {
       gesture.current = performance.now();
     };
@@ -191,7 +192,7 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
       root.removeEventListener("touchmove", mark);
       root.removeEventListener("scroll", onScroll);
     };
-  }, [scroll, onPinned]);
+  }, [scroll, onPinned, release]);
 
   // One observer for every block, not one per block. Hundreds of separate
   // observers did not reliably report a block leaving — blocks stayed mounted
@@ -362,7 +363,7 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
       ref={scroll}
       hidden={hidden}
     >
-      <Rail marks={marks} scroll={scroll} flow={flow} onJump={jumpTo} />
+      <Rail marks={marks} scroll={scroll} flow={flow} onJump={jumpTo} onGrab={release} bound={!hidden} />
       <div className="flow" ref={flow}>
         {items.length === 0 && <Hero onPick={onSuggest} />}
         {blocks.map((block, i) => (
