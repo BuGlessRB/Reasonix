@@ -186,3 +186,37 @@ func TestBashDangerWarning(t *testing.T) {
 		})
 	}
 }
+
+// TestBashPipelineReadOnly pins where a pipeline sits: a stage that only reads
+// keeps the whole call read-only, and one writer anywhere ends it. Pipelines
+// used to fall between the single-command classifier and the compound one, so
+// every `… | head` counted as a write.
+func TestBashPipelineReadOnly(t *testing.T) {
+	tests := []struct {
+		cmd  string
+		want bool
+	}{
+		{`grep -rn pattern binding/*.go context.go | head -40`, true},
+		{`ls -la | head -20`, true},
+		{`cat file.go | wc -l`, true},
+		{`grep -rn x . && ls -la`, true},
+		{`grep -rn x . | tee out.txt`, false},
+		{`find . -name "*.go" | xargs grep pattern`, false},
+		{`ls | rm -rf x`, false},
+		{`cat f | python3 -c "import os"`, false},
+		{`grep x . && rm -rf build`, false},
+		{`ls | sed -i s/a/b/ f`, false},
+		{`cat f | tee >(sh)`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.cmd, func(t *testing.T) {
+			args, err := json.Marshal(map[string]string{"command": tt.cmd})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := BashCommandIsReadOnly(args); got != tt.want {
+				t.Errorf("BashCommandIsReadOnly(%q) = %v, want %v", tt.cmd, got, tt.want)
+			}
+		})
+	}
+}

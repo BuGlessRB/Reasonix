@@ -647,6 +647,11 @@ func CompoundLeafCommands(command string) (leaves [][]string, ok bool) {
 			// path. A simple command keeps its own stricter classification,
 			// where a dynamic argument is already reason enough to stop.
 			compound = true
+		case *syntax.BinaryCmd:
+			// A pipeline or an && / || chain is several commands, so the
+			// single-command classifier cannot read it either. Without this it
+			// fell between the two and every `… | head` counted as a write.
+			compound = true
 		case *syntax.CmdSubst, *syntax.ProcSubst:
 			// Whatever these run never appears in the argv below.
 			readable = false
