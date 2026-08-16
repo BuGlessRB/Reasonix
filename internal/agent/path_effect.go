@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -234,4 +235,104 @@ func (a *Agent) observeAfterMutation(plan *toolCallPlan) {
 		toolName = plan.call.Name
 	}
 	a.svc.mutationObserver.AfterMutation(plan.mutationPath, toolName)
+}
+
+// workspaceScanLimit bounds the walk. Past it the scan reports itself
+// incomplete and nothing is concluded from it, so a very large workspace keeps
+// the behaviour it has today instead of paying for an answer it cannot trust.
+const workspaceScanLimit = 50_000
+
+// vcsStoreDirs are the repositories' own stores. They are not the work product
+// — `git status` alone rewrites the index — and a change there says nothing
+// about whether a command touched the tree.
+var vcsStoreDirs = map[string]bool{".git": true, ".hg": true, ".svn": true}
+
+// workspaceScan is every file under the workspace at one moment. complete is
+// false when the walk was cut short, which is the only honest answer a partial
+// scan can give: "changed nothing" cannot be read off a tree half-looked-at.
+type workspaceScan struct {
+	state    map[string]pathState
+	complete bool
+}
+
+// scanWorkspace walks the whole tree rather than an ignore-filtered part of it:
+// npm install and a build write exactly where ignore rules point away, so a
+// filtered walk would report the biggest writes there are as no change at all.
+func scanWorkspace(root string) workspaceScan {
+	if root == "" {
+		return workspaceScan{}
+	}
+	state := make(map[string]pathState, 4096)
+	complete := true
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			complete = false
+			return nil
+		}
+		if d.IsDir() {
+			if vcsStoreDirs[d.Name()] && path != root {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if len(state) >= workspaceScanLimit {
+			complete = false
+			return filepath.SkipAll
+		}
+		info, err := d.Info()
+		if err != nil {
+			complete = false
+			return nil
+		}
+		state[path] = pathState{exists: true, size: info.Size(), modTime: info.ModTime().UnixNano()}
+		return nil
+	})
+	if err != nil {
+		complete = false
+	}
+	return workspaceScan{state: state, complete: complete}
+}
+
+// unchanged reports whether the workspace is byte-for-byte as this scan found
+// it. Both scans must be complete; either one short of that proves nothing.
+func (before workspaceScan) unchanged(after workspaceScan) bool {
+	if !before.complete || !after.complete || len(before.state) != len(after.state) {
+		return false
+	}
+	for path, was := range before.state {
+		if now, ok := after.state[path]; !ok || now != was {
+			return false
+		}
+	}
+	return true
+}
+
+// settleUnchangedWorkspace answers by observation what no reading of a command
+// can: whether it changed anything. A call the host could not classify — sed
+// through its own script language, a wrapper, a path built from a variable —
+// stays a mutation unless the workspace it ran against is exactly as it was.
+func (a *Agent) settleUnchangedWorkspace(rec *evidence.Receipt, plan *toolCallPlan) {
+	if rec == nil || plan == nil || !rec.Success || rec.MutationEvidence != evidence.MutationUnknown {
+		return
+	}
+	if !plan.scanBefore.complete || !plan.scanBefore.unchanged(scanWorkspace(a.writeWorkspaceRoot)) {
+		return
+	}
+	rec.Mutation = false
+	rec.MutationEvidence = ""
+}
+
+// scanBeforeUnprovenCall takes the whole-workspace scan only for a call the
+// host could not classify. A proven writer already reports its paths, and a
+// proven reader has nothing to settle, so neither pays for the walk.
+func (a *Agent) scanBeforeUnprovenCall(plan *toolCallPlan) workspaceScan {
+	if evidence.ToolCallMutationClass(plan.evidenceName, plan.evidenceArgs, plan.readOnly) != evidence.MutationUnknown {
+		return workspaceScan{}
+	}
+	// A backgrounded job's receipt is written when it starts, so the workspace
+	// it will write to still looks untouched. It never settles.
+	if isBackgroundTaskCall(string(plan.evidenceArgs)) {
+		return workspaceScan{}
+	}
+	return scanWorkspace(a.writeWorkspaceRoot)
 }

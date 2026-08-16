@@ -56,6 +56,9 @@ type toolCallPlan struct {
 	// pathsBefore is the state of the turn's known paths taken before an
 	// unclassifiable call ran, so its receipt can say what it actually touched.
 	pathsBefore pathSnapshot
+	// scanBefore is the whole workspace before the same call, which is what
+	// lets an unclassifiable one be settled as having changed nothing.
+	scanBefore workspaceScan
 
 	// mutationPath is set when a Previewer described a concrete workspace path
 	// for AfterMutation fingerprint capture (success or failure).
@@ -703,6 +706,7 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 	plan.cctx = cctx
 	if plan.mutates {
 		plan.pathsBefore = snapshotPaths(a.task.ledger, a.writeWorkspaceRoot, evidence.ToolCallPaths(plan.evidenceArgs))
+		plan.scanBefore = a.scanBeforeUnprovenCall(plan)
 	}
 	return toolOutcome{}, false
 }

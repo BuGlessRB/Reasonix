@@ -28,12 +28,14 @@ func (a *Agent) recordToolReceipts(plan *toolCallPlan, result string, execution 
 		rec := evidence.ReceiptFromToolCall(plan.evidenceName, plan.evidenceArgs, err == nil, plan.readOnly)
 		decorateExecutionReceipt(&rec, result, execution)
 		decorateObservedPaths(&rec, plan)
+		a.settleUnchangedWorkspace(&rec, plan)
 		a.reviewCoverageOf(&rec, plan, result)
 		a.task.ledger.Record(rec)
 	default:
 		rec := evidence.ReceiptFromToolCall(call.Name, args, err == nil, plan.tool.ReadOnly())
 		decorateExecutionReceipt(&rec, result, execution)
 		decorateObservedPaths(&rec, plan)
+		a.settleUnchangedWorkspace(&rec, plan)
 		a.reviewCoverageOf(&rec, plan, result)
 		a.task.ledger.Record(rec)
 		if err == nil && call.Name == "todo_write" {
