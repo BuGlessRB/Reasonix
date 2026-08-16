@@ -625,6 +625,20 @@ func normalizeToolApprovalMode(mode string) string {
 	}
 }
 
+// ParseToolApprovalMode canonicalises a posture name and reports whether it
+// names one. A frontend validating a request must call this instead of keeping
+// its own list: the HTTP face carried a three-name copy and answered 400 to
+// dontAsk, a posture the kernel has always had.
+func ParseToolApprovalMode(mode string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case ToolApprovalAsk, ToolApprovalAuto, "approve", "allow",
+		"dontask", "dont-ask", "deny",
+		ToolApprovalYolo, "full", "full-access", "bypass":
+		return normalizeToolApprovalMode(mode), true
+	}
+	return "", false
+}
+
 // RequiresFreshHumanApprovalTool reports whether a tool's unsafe variants must
 // be answered by a human decision, not by YOLO/auto approval, Guardian, or a
 // non-interactive nil approver. A controller that owns the scoped memory store

@@ -181,6 +181,21 @@ func TestServeEndpoints(t *testing.T) {
 	if got := ctrl.ToolApprovalMode(); got != control.ToolApprovalAuto {
 		t.Fatalf("tool approval mode = %q, want auto", got)
 	}
+	// Every posture the kernel has, not the three this face used to list: a
+	// composer offering dontAsk got a 400 from its own backend.
+	for _, mode := range []string{control.ToolApprovalAsk, control.ToolApprovalDontAsk, control.ToolApprovalYolo} {
+		resp, err = http.Post(srv.URL+"/tool-approval-mode", "application/json", strings.NewReader(`{"mode":"`+mode+`"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("tool approval mode %s status = %d, want 204", mode, resp.StatusCode)
+		}
+		if got := ctrl.ToolApprovalMode(); got != mode {
+			t.Fatalf("tool approval mode = %q, want %q", got, mode)
+		}
+	}
 	resp, err = http.Post(srv.URL+"/tool-approval-mode", "application/json", strings.NewReader(`{"mode":"surprise"}`))
 	if err != nil {
 		t.Fatal(err)

@@ -1082,13 +1082,12 @@ func (s *Server) toolApprovalMode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad body", http.StatusBadRequest)
 		return
 	}
-	switch strings.ToLower(strings.TrimSpace(body.Mode)) {
-	case control.ToolApprovalAsk, control.ToolApprovalAuto, control.ToolApprovalYolo:
-		s.applyApprovalMode(body.Mode)
-	default:
-		http.Error(w, "mode must be ask, auto, or yolo", http.StatusBadRequest)
+	mode, ok := control.ParseToolApprovalMode(body.Mode)
+	if !ok {
+		http.Error(w, "mode must be ask, auto, dontAsk, or yolo", http.StatusBadRequest)
 		return
 	}
+	s.applyApprovalMode(mode)
 	w.WriteHeader(http.StatusNoContent)
 }
 
