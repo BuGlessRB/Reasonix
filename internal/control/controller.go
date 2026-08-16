@@ -2343,10 +2343,21 @@ func (c *Controller) newHeadlessGate(mode string) *freshHumanHeadlessGate {
 	return gate
 }
 
+// denyPermissionApprover answers for a session nobody is watching: a headless
+// run has no prompt to show, so a call that needs approval can only be refused.
 type denyPermissionApprover struct{}
 
 func (denyPermissionApprover) Approve(context.Context, string, string, json.RawMessage) (bool, bool, error) {
 	return false, false, nil
+}
+
+// ApproveWithReason says which of the two refusals this is. Without it the gate
+// falls back to "the user declined this tool call", which is untrue when there
+// was no user, and it sends the model to ask someone who was never there: one
+// headless run rewrote its file, was refused again, and closed by offering the
+// user three choices about the file's contents.
+func (denyPermissionApprover) ApproveWithReason(context.Context, string, string, json.RawMessage) (bool, bool, string, error) {
+	return false, false, "this session has no interactive approver, so any call that needs approval is refused — nobody declined it, and neither retrying nor rewriting it can change that. If this work is meant to run unattended, it needs a permission mode that does not ask (or an explicit allow rule for this tool). Otherwise do the part that needs no approval and call conclude_blocked naming what was refused.", nil
 }
 
 // rulesWithoutFreshHumanApproval drops any session-allow rule that targets a

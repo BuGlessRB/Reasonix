@@ -205,6 +205,30 @@ func TestApplyHeadlessApprovalModeAllowsOnlyLowRiskProjectMemoryCreate(t *testin
 	}
 }
 
+// A headless refusal used to arrive as "the user declined this tool call".
+// Nobody declined it — there was nobody — and the wording sent the model off to
+// consult a user who could not answer: one observed run rewrote its file, was
+// refused again, and closed by offering the user three choices about the
+// contents. The refusal has to name the session, not a person.
+func TestHeadlessRefusalDoesNotBlameAUser(t *testing.T) {
+	gate := BuildHeadlessApprovalGate(permission.New("ask", nil, []string{"write_file"}, nil), ToolApprovalAsk)
+	allow, reason, err := gate.Check(context.Background(), "write_file", json.RawMessage(`{"path":"a.txt"}`), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allow {
+		t.Fatal("an ask decision with no approver must be refused")
+	}
+	if strings.Contains(reason, "the user declined") {
+		t.Errorf("refusal blames a user who was never asked: %q", reason)
+	}
+	for _, want := range []string{"no interactive approver", "conclude_blocked"} {
+		if !strings.Contains(reason, want) {
+			t.Errorf("reason = %q, missing %q", reason, want)
+		}
+	}
+}
+
 // TestBuildHeadlessApprovalGateMatchesParentExecutorContract pins boot's single
 // construction point for every headless-only sub-agent gate (task,
 // writer-capable skill runners, the planner) to the identical mode contract
