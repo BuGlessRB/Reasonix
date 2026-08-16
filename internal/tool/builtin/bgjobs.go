@@ -28,7 +28,15 @@ func init() {
 
 // bash_output: poll a background job's new output (non-blocking)
 
-type bashOutput struct{}
+// The three background-job tools are unavailable for one and the same reason,
+// so they say it once. What makes them available is a job context on the turn.
+type noJobs struct{}
+
+func (noJobs) Unavailable(context.Context) string {
+	return "background jobs are not available in this context"
+}
+
+type bashOutput struct{ noJobs }
 
 func (bashOutput) Name() string { return "bash_output" }
 
@@ -100,7 +108,7 @@ func filterLines(s, re string) (string, error) {
 
 // kill_shell: terminate a running background job
 
-type killShell struct{}
+type killShell struct{ noJobs }
 
 func (killShell) Name() string { return "kill_shell" }
 
@@ -141,7 +149,7 @@ func (killShell) Execute(ctx context.Context, args json.RawMessage) (string, err
 
 // wait: block until background jobs finish, then return their results
 
-type waitJob struct{}
+type waitJob struct{ noJobs }
 
 func (waitJob) Name() string { return "wait" }
 

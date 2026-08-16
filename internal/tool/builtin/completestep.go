@@ -91,6 +91,10 @@ func (completeStep) ProviderVisible(ctx context.Context) bool {
 	return !planmode.Active(ctx)
 }
 
+func (completeStep) Unavailable(context.Context) string {
+	return "blocked: complete_step is only available after plan approval. While planning, keep task state with todo_write and present the plan for user approval."
+}
+
 // PlanModeSafe reports false: although complete_step is read-only, it signs off a
 // completed execution step, which is meaningful only after plan approval — not
 // during planning. This explicit phase opt-out is the Plan gate's enforced
@@ -431,12 +435,62 @@ func receiptHint(label string, items []string) string {
 	if len(items) == 0 {
 		return ""
 	}
-	for i, item := range items {
-		if len(item) > 80 {
-			items[i] = item[:80] + "…"
+	return fmt.Sprintf("; %s: %q — cite one as it actually ran, or run the check now", label, distinguish(items))
+}
+
+// What tells one of these apart from the next, within a budget. Cutting the
+// tail is the wrong end for paths: under a deep root every entry ends up as the
+// same eighty characters of prefix followed by an ellipsis, which is what a
+// real session was answered with — three identical strings offered as the
+// evidence it should have cited. The shared head carries no information once
+// they are read together, so it goes first, and only then is the middle elided.
+func distinguish(items []string) []string {
+	out := make([]string, len(items))
+	copy(out, items)
+	if head := commonDirPrefix(out); head != "" {
+		for i, item := range out {
+			out[i] = "…/" + strings.TrimPrefix(item, head)
 		}
 	}
-	return fmt.Sprintf("; %s: %q — cite one as it actually ran, or run the check now", label, items)
+	for i, item := range out {
+		if len([]rune(item)) <= receiptHintWidth {
+			continue
+		}
+		r := []rune(item)
+		keep := receiptHintWidth - 1
+		out[i] = string(r[:keep/3]) + "…" + string(r[len(r)-(keep-keep/3):])
+	}
+	return out
+}
+
+// How wide one cited item may be. Wide enough for a path with a couple of
+// directories on it, narrow enough that a list of eight stays readable.
+const receiptHintWidth = 80
+
+// The longest directory prefix every item shares. Directory, not character: a
+// prefix that stops mid-name would read as a different file.
+func commonDirPrefix(items []string) string {
+	if len(items) < 2 {
+		return ""
+	}
+	head := items[0]
+	for _, item := range items[1:] {
+		for !strings.HasPrefix(item, head) {
+			cut := strings.LastIndexByte(strings.TrimSuffix(head, "/"), '/')
+			if cut <= 0 {
+				return ""
+			}
+			head = head[:cut+1]
+		}
+	}
+	if !strings.HasSuffix(head, "/") {
+		cut := strings.LastIndexByte(head, '/')
+		if cut <= 0 {
+			return ""
+		}
+		head = head[:cut+1]
+	}
+	return head
 }
 
 // allCommandHints builds a combined hint from both the per-turn ledger and the

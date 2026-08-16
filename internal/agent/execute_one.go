@@ -167,7 +167,7 @@ func (a *Agent) resolveToolPolicy(ctx context.Context, turn *turnRuntime, plan *
 	if blocked, early := a.applyContextualToolGate(ctx, plan); early {
 		return blocked, true
 	}
-	if blocked, early := a.applyDeliveryPolicyGates(turn, plan); early {
+	if blocked, early := a.applyDeliveryPolicyGates(ctx, turn, plan); early {
 		return blocked, true
 	}
 	// After proxy resolution, re-apply the batch mutation barrier using the
@@ -203,16 +203,20 @@ func contextualToolGateOutcome(ctx context.Context, target tool.Tool, name strin
 	if !ok || contextual.ProviderVisible(ctx) {
 		return toolOutcome{}, false
 	}
-	msg := fmt.Sprintf("blocked: tool %q is unavailable in the current workflow context", name)
-	switch name {
-	case "update_goal":
-		msg = "update_goal is only available while an active goal turn is running — no goal state was changed"
-	case "complete_step":
-		msg = "blocked: complete_step is only available after plan approval. While planning, keep task state with todo_write and present the plan for user approval."
-	case "bash_output", "wait", "kill_shell":
-		msg = "background jobs are not available in this context"
-	}
+	msg := unavailableReason(ctx, target, name)
 	return toolOutcome{output: msg, blocked: true, errMsg: firstLine(msg)}, true
+}
+
+// What the model is told when a contextual tool is out of context. The tool
+// answers it, because the tool is what knows; a table here keyed by name would
+// go stale the first time one is added.
+func unavailableReason(ctx context.Context, target tool.Tool, name string) string {
+	if r, ok := target.(tool.ContextualReasoner); ok {
+		if why := strings.TrimSpace(r.Unavailable(ctx)); why != "" {
+			return why
+		}
+	}
+	return fmt.Sprintf("blocked: tool %q is unavailable in the current workflow context", name)
 }
 
 // applyMutationDependencyBarrier blocks later mutations and verifications in the
@@ -381,7 +385,7 @@ func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (
 
 // applyDeliveryPolicyGates enforces global deterministic shell contracts plus
 // delivery-profile-only criteria rules, and classifies mutation/verification.
-func (a *Agent) applyDeliveryPolicyGates(turn *turnRuntime, plan *toolCallPlan) (toolOutcome, bool) {
+func (a *Agent) applyDeliveryPolicyGates(ctx context.Context, turn *turnRuntime, plan *toolCallPlan) (toolOutcome, bool) {
 	// Global deterministic shell contract (ordinary + Delivery). PowerShell 5.1
 	// &&/|| is enforced inside the bash tool itself so descriptor and error text
 	// stay shell-accurate; the agent layers apply command-shape protections.
@@ -411,7 +415,7 @@ func (a *Agent) applyDeliveryPolicyGates(turn *turnRuntime, plan *toolCallPlan) 
 		if a.deliveryProfile {
 			mixed = evidence.BashToolCallMixesMutationAndVerification
 		}
-		if mixed(plan.evidenceArgs) {
+		if mixed(plan.evidenceArgs) && !a.mixedShapeClearedByEscalation(ctx, plan) {
 			msg := evidence.ShellContractMixedMessage(plan.evidenceArgs)
 			if a.deliveryProfile {
 				msg = "blocked: this command mixes a verification check with a segment that may write state. Run the state-changing preparation separately while a todo is in_progress, then run a read-only verification command. For generated input, prefer a host-recognized read-only pipeline into the verifier (for example: tail ... | head ... | node --check -) instead of writing a temporary file."
@@ -695,7 +699,7 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 	})
 	plan.cctx = cctx
 	if plan.mutates {
-		plan.pathsBefore = snapshotPaths(a.task.ledger, evidence.ToolCallPaths(plan.evidenceArgs))
+		plan.pathsBefore = snapshotPaths(a.task.ledger, a.writeWorkspaceRoot, evidence.ToolCallPaths(plan.evidenceArgs))
 	}
 	return toolOutcome{}, false
 }

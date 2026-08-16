@@ -57,6 +57,10 @@ func (updateGoal) ProviderVisible(ctx context.Context) bool {
 	return ok
 }
 
+func (updateGoal) Unavailable(context.Context) string {
+	return "update_goal is only available while an active goal turn is running — no goal state was changed"
+}
+
 // PlanModeSafe reports true: the tool is read-only host bookkeeping, and
 // outside an active goal turn its Execute fails closed anyway.
 func (updateGoal) PlanModeSafe() bool { return true }

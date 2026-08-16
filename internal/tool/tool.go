@@ -42,6 +42,17 @@ type ContextualTool interface {
 	ProviderVisible(context.Context) bool
 }
 
+// ContextualReasoner is a ContextualTool that can say what would make it
+// available again. Only the tool knows that — it is the same state its own
+// ProviderVisible reads — so a host that answers the model with a name-keyed
+// table of excuses is keeping half the contract somewhere the other half will
+// drift away from. Every ContextualTool must implement this; the registry test
+// enforces it, so a new one cannot ship with a blank reason.
+type ContextualReasoner interface {
+	ContextualTool
+	Unavailable(context.Context) string
+}
+
 // Previewer is an optional capability a writer Tool may implement: given the
 // same raw JSON args Execute would receive, compute the file change the call
 // *would* make — without touching disk. ctx must be Execute's, so the preview

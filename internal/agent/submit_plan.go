@@ -99,6 +99,10 @@ func (*SubmitPlanTool) ProviderVisible(ctx context.Context) bool {
 	return ok
 }
 
+func (*SubmitPlanTool) Unavailable(context.Context) string {
+	return "submit_plan is only available while a planning turn is running — this turn is executing, so keep task state with todo_write instead"
+}
+
 func (*SubmitPlanTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	submission, ok := planSubmissionFromContext(ctx)
 	if !ok {
