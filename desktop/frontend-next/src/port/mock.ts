@@ -1,10 +1,10 @@
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, WorkspaceInfo, WorkspaceChanges, Attachment, ThemePack } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, WorkspaceInfo, WorkspaceChanges, Attachment, ThemePack } from "./port";
 import type { WireEvent } from "./wire";
-import { MockShell } from "./mock_shell";
+import { MockProvider } from "./mock_provider";
 import { SCRIPT } from "./fixture";
 
 
-export class MockPort extends MockShell implements AgentPort {
+export class MockPort extends MockProvider implements AgentPort {
   private listeners = new Set<(ev: WireEvent) => void>();
   private log: WireEvent[] = [];
   // What the user has sent, so checkpoints() can mirror one per turn.
@@ -351,64 +351,10 @@ export class MockPort extends MockShell implements AgentPort {
     return { current: "dev", pinned: "", stalePin: false, latest: "", newer: false, versions: [] };
   }
 
-  // Three shapes the account grouping has to keep apart: one vendor reached
-  // under two protocols, a custom relay serving other vendors' models, and two
-  // tenants of that same relay holding different keys.
-  private sources: ProviderEntry[] = [
-    {
-      name: "deepseek", kind: "openai", baseUrl: "https://api.deepseek.com",
-      models: ["deepseek-v4-pro", "deepseek-v4-flash"], default: "deepseek-v4-pro",
-      hasKey: true, inUse: true, preset: false, keyEnv: "DEEPSEEK_API_KEY", canSetVision: false,
-    },
-    {
-      name: "deepseek-anthropic", kind: "anthropic", baseUrl: "https://api.deepseek.com/anthropic",
-      models: ["deepseek-v4-pro"], default: "deepseek-v4-pro",
-      hasKey: true, inUse: false, preset: false, keyEnv: "DEEPSEEK_API_KEY",
-      canSetVision: false, canWebSearch: true, webSearch: true,
-      canSetThinking: true, sendsThinking: true,
-    },
-    {
-      name: "myrelay", kind: "openai", baseUrl: "https://relay.example.com/v1",
-      models: ["gpt-4o", "claude-sonnet-4"], default: "gpt-4o",
-      hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_API_KEY",
-      visionModels: ["gpt-4o"], canSetVision: true,
-    },
-    {
-      name: "myrelay-work", kind: "openai", baseUrl: "https://relay.example.com/v1",
-      models: ["gpt-4o"], default: "gpt-4o",
-      hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_WORK_API_KEY",
-    },
-  ];
-
-  async providers(): Promise<ProviderEntry[]> {
-    return this.sources;
-  }
-
-  async probeProvider(): Promise<ProviderProbe> {
-    throw new Error("演示模式不会真的去连端点");
-  }
-
-  async saveProvider(): Promise<void> {}
-
-  async setProviderWebSearch(name: string, on: boolean): Promise<void> {
-    this.sources = this.sources.map((p) => (p.name === name ? { ...p, webSearch: on } : p));
-  }
-
-  async setProviderThinking(name: string, on: boolean): Promise<void> {
-    this.sources = this.sources.map((p) => (p.name === name ? { ...p, sendsThinking: on } : p));
-  }
-
   private welcomed = true;
   async welcomeSeen(): Promise<boolean> { return this.welcomed; }
   async markWelcomed(): Promise<void> { this.welcomed = true; }
 
-  async editProvider(edit: ProviderEdit): Promise<void> {
-    this.sources = this.sources.map((p) =>
-      p.name === edit.name ? { ...p, models: edit.models, default: edit.default, visionModels: edit.vision } : p,
-    );
-  }
-
-  async removeProvider(): Promise<void> {}
 
   async pinVersion(): Promise<void> {}
 

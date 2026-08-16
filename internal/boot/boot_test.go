@@ -1258,7 +1258,11 @@ model = "x"
 		}
 		defer ctrl.Close()
 
-		if err := ctrl.Run(context.Background(), "use a task subagent to write a file without tests"); err != nil {
+		// The fake provider writes without verifying, so the role setting's
+		// readiness gate legitimately reports a gap. What this test asserts is
+		// the approval contract — whether sub.txt exists — not turn readiness.
+		if err := ctrl.Run(context.Background(), "use a task subagent to write a file"); err != nil &&
+			!strings.Contains(err.Error(), "readiness") {
 			t.Fatalf("Run: %v", err)
 		}
 		_, statErr := os.Stat(filepath.Join(dir, "sub.txt"))
@@ -4132,7 +4136,10 @@ model = "x"
 		t.Fatalf("Build writer: %v", err)
 	}
 	defer ctrl.Close()
-	if err := ctrl.Run(context.Background(), "write into the additional directory without tests"); err != nil {
+	// The mock writes without verifying, so the readiness gate legitimately
+	// reports a gap; this test asserts where the write landed.
+	if err := ctrl.Run(context.Background(), "write into the additional directory"); err != nil &&
+		!strings.Contains(err.Error(), "readiness") {
 		t.Fatalf("Run writer: %v", err)
 	}
 	if got, err := os.ReadFile(target); err != nil || string(got) != "ok" {

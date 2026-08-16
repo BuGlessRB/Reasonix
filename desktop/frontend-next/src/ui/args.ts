@@ -9,8 +9,40 @@ export function shortArgs(raw: string) {
     }
     return "";
   } catch {
+    // A model occasionally emits JSON with an unescaped quote inside a string.
+    // Spilling the first 96 characters of that is not "what this call touched",
+    // it is a broken payload's innards pasted onto the card — so a thing that
+    // was meant to be an object shows nothing rather than showing its guts.
+    if (raw.trimStart().startsWith("{")) return "";
     return raw.replace(/\s+/g, " ").slice(0, 96);
   }
+}
+
+// GOAL_STATUS is the vocabulary update_goal is allowed to report, and each entry
+// says what the model just claimed rather than naming the enum value.
+export const GOAL_STATUS: Record<string, [string, string]> = {
+  complete: ["宣告做完", "ok"],
+  continue: ["还在做", "run"],
+  blocked: ["卡住了，要你介入", "warn"],
+};
+
+// goalUpdate reads what update_goal was called with. It falls back to a regex
+// because that call is exactly where malformed JSON shows up: the payload
+// carries free-form prose the model wrote, quotes and all.
+export function goalUpdate(raw: string | undefined): { status: string; reason: string } | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as { status?: unknown; reason?: unknown };
+    if (typeof v.status === "string") {
+      return { status: v.status, reason: typeof v.reason === "string" ? v.reason : "" };
+    }
+  } catch {
+    // fall through to the salvage below
+  }
+  const status = /"status"\s*:\s*"([a-z]+)"/.exec(raw)?.[1] ?? "";
+  const reason = /"reason"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(raw)?.[1] ?? "";
+  if (!status) return null;
+  return { status, reason: reason.replace(/\\"/g, '"').replace(/\\n/g, " ") };
 }
 
 export function argOf(raw: string | undefined, ...keys: string[]): string {

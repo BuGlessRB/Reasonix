@@ -18,9 +18,9 @@ func StripGoalMarkers(text string) string {
 		if trimmed == "[goal:complete]" || trimmed == "[goal:continue]" {
 			continue
 		}
-		// Planner conclusion markers are coordinator protocol, not prose: the
-		// relay path trusts them (isNoOpPlan / plan approval) but users should
-		// see the planner's words, not the contract.
+		// Retired planner conclusion markers. Nothing reads them for decisions
+		// any more, but saved sessions still carry them and a planner may still
+		// emit one out of habit; either way they are not the planner's words.
 		if lower := strings.ToLower(trimmed); lower == "[no_changes]" || lower == "[planner_requires_approval]" {
 			continue
 		}

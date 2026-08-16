@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { t } from "../i18n";
 import type { UpdateProgress, VersionHub } from "../port/port";
 
 // The panel answers three questions in the order a user asks them: what am I
@@ -14,13 +15,13 @@ type Port = {
 };
 
 function when(iso: string): string {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return "";
-  const days = Math.floor((Date.now() - t) / 86400000);
-  if (days <= 0) return "今天";
-  if (days === 1) return "昨天";
-  if (days < 30) return `${days} 天前`;
-  return new Date(t).toLocaleDateString();
+  const at = Date.parse(iso);
+  if (Number.isNaN(at)) return "";
+  const days = Math.floor((Date.now() - at) / 86400000);
+  if (days <= 0) return t("今天");
+  if (days === 1) return t("昨天");
+  if (days < 30) return t("{n} 天前", { n: days });
+  return new Date(at).toLocaleDateString();
 }
 
 function mb(bytes: number): string {
@@ -32,11 +33,11 @@ function mb(bytes: number): string {
 function say(p: UpdateProgress): string {
   switch (p.phase) {
     case "downloading":
-      return p.total > 0 ? `下载中 ${mb(p.received)} / ${mb(p.total)}` : `下载中 ${mb(p.received)}`;
+      return p.total > 0 ? t("下载中 {got} / {all}", { got: mb(p.received), all: mb(p.total) }) : t("下载中 {got}", { got: mb(p.received) });
     case "verifying":
-      return "校验签名…";
+      return t("校验签名…");
     case "downloaded":
-      return "准备安装…";
+      return t("准备安装…");
     case "relaunching":
       return "正在重启到新版本…";
     case "error":
@@ -83,7 +84,7 @@ export function Versions({ port }: { port: Port }) {
   };
 
   if (hub === null) {
-    return <p className="acct-note">正在读取版本…</p>;
+    return <p className="acct-note">{t("正在读取版本…")}</p>;
   }
 
   // A shell that answers null (or an older one that omits the field) must not
@@ -95,15 +96,15 @@ export function Versions({ port }: { port: Port }) {
     <div className="vers">
       <div className="vnow">
         <span className="cur">{hub.current || "dev"}</span>
-        <span className="lb">{dev ? "本地构建" : "当前版本"}</span>
-        {hub.pinned && !hub.stalePin && <span className="pin">已固定</span>}
+        <span className="lb">{t(dev ? "本地构建" : "当前版本")}</span>
+        {hub.pinned && !hub.stalePin && <span className="pin">{t("已固定")}</span>}
       </div>
 
       {/* Severity language is the transcript's: a coloured left rule, no icons.
           Pinned is not a problem, so it is ok-coloured; a stale pin is. */}
       {hub.err && (
         <div className="find" data-lvl="warn">
-          <span className="t">连不上版本目录</span>
+          <span className="t">{t("连不上版本目录")}</span>
           <span className="why">{hub.err}　—— 本地功能不受影响，稍后再试。</span>
         </div>
       )}
@@ -111,9 +112,9 @@ export function Versions({ port }: { port: Port }) {
         <div className="find" data-lvl="ok">
           <span className="t">已固定在 {hub.pinned}，不会自动更新</span>
           <span className="why">
-            回退之后固定是有意的：否则下次更新会把你放回刚离开的那个版本。
+            {t("回退之后固定是有意的：否则下次更新会把你放回刚离开的那个版本。")}
             <button className="lnk" onClick={() => pin("")} disabled={locked}>
-              恢复自动更新
+              {t("恢复自动更新")}
             </button>
           </span>
         </div>
@@ -122,9 +123,9 @@ export function Versions({ port }: { port: Port }) {
         <div className="find" data-lvl="warn">
           <span className="t">固定的是 {hub.pinned}，但现在跑的是 {hub.current}</span>
           <span className="why">
-            这条固定已经不再描述现实，自动更新按未固定处理。
+            {t("这条固定已经不再描述现实，自动更新按未固定处理。")}
             <button className="lnk" onClick={() => pin("")} disabled={locked}>
-              清除固定
+              {t("清除固定")}
             </button>
           </span>
         </div>
@@ -132,7 +133,7 @@ export function Versions({ port }: { port: Port }) {
       {!hub.err && hub.newer && !hub.pinned && (
         <div className="find" data-lvl="ok">
           <span className="t">有新版本 {hub.latest}</span>
-          <span className="why">在下面那一行装它，安装完会自动重启。</span>
+          <span className="why">{t("在下面那一行装它，安装完会自动重启。")}</span>
         </div>
       )}
       {progress?.phase === "error" && (
@@ -144,7 +145,7 @@ export function Versions({ port }: { port: Port }) {
       {/* Going back is the one move with a consequence the user cannot undo by
           going forward again, so it is said before they click, not after. */}
       {going !== "" && (
-        <p className="acct-note">切换版本期间请不要关窗口。较新版本写过的会话，回到旧版本后会暂时打不开，升回去就能看。</p>
+        <p className="acct-note">{t("切换版本期间请不要关窗口。较新版本写过的会话，回到旧版本后会暂时打不开，升回去就能看。")}</p>
       )}
 
       {/* Newest first: the list reads as history, and where you are in it is
@@ -168,13 +169,13 @@ export function Versions({ port }: { port: Port }) {
             ) : (
               !v.current && (
                 <button className="sa lnk" onClick={() => goTo(v.version)} disabled={locked}>
-                  {v.older ? "回退到这个版本" : "安装这个版本"}
+                  {t(v.older ? "回退到这个版本" : "安装这个版本")}
                 </button>
               )
             )}
             {v.current && !hub.pinned && (
               <button className="sa lnk" onClick={() => pin(v.version)} disabled={locked}>
-                固定在这里
+                {t("固定在这里")}
               </button>
             )}
           </div>

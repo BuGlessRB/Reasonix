@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { t } from "../i18n";
 import type { AccountState, AgentPort } from "../port/port";
 
 // Nothing here gates the agent, so the panel says what an account is for before
@@ -69,7 +70,7 @@ export function Account({ port, state, reload }: { port: AgentPort; state: Accou
   // Unknown is its own state. Rendering it as signed out puts an action on
   // screen that the next tick may replace with its opposite.
   if (state === null) {
-    return <p className="acct-note">正在检查登录状态…</p>;
+    return <p className="acct-note">{t("正在检查登录状态…")}</p>;
   }
 
   if (state.signedIn && state.user) {
@@ -82,9 +83,9 @@ export function Account({ port, state, reload }: { port: AgentPort; state: Accou
         {state.error && <p className="acct-note">连不上身份服务：{state.error}</p>}
         <div className="acct-act">
           <button className="btn" onClick={signOut} disabled={busy} onMouseLeave={() => setConfirm(false)}>
-            {confirm ? "确认退出" : "退出登录"}
+            {t(confirm ? "确认退出" : "退出登录")}
           </button>
-          <span className="acct-note">只清除本地登录凭证，不影响会话、记忆和配置</span>
+          <span className="acct-note">{t("只清除本地登录凭证，不影响会话、记忆和配置")}</span>
         </div>
       </div>
     );
@@ -93,9 +94,9 @@ export function Account({ port, state, reload }: { port: AgentPort; state: Accou
   return (
     <div className="acct">
       <p className="acct-note">
-        用于社区发帖和崩溃问题跟进。与你的模型 API key 无关 —— 登录不会上传你的对话、代码或密钥。
+        {t("用于社区发帖和崩溃问题跟进。与你的模型 API key 无关 —— 登录不会上传你的对话、代码或密钥。")}
       </p>
-      {state.expired && <p className="acct-note">上次的登录已过期。</p>}
+      {state.expired && <p className="acct-note">{t("上次的登录已过期。")}</p>}
       {code ? (
         <div className="acct-code">
           <span className="cd">{code.userCode}</span>
@@ -103,13 +104,13 @@ export function Account({ port, state, reload }: { port: AgentPort; state: Accou
             在浏览器里打开的页面输入这串代码。没自动打开就手动访问 {code.uri}
           </span>
           <button className="btn" onClick={() => (cancelled.current = true)}>
-            取消
+            {t("取消")}
           </button>
         </div>
       ) : (
         <div className="acct-act">
           <button className="btn" onClick={signIn} disabled={busy}>
-            {busy ? "正在打开…" : "登录"}
+            {t(busy ? "正在打开…" : "登录")}
           </button>
         </div>
       )}

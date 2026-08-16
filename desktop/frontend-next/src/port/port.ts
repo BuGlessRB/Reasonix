@@ -20,15 +20,40 @@ export interface WorkspaceChanges {
 }
 
 export class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
+  // The kernel's machine-readable refusal, when it sent one. Callers show it
+  // through i18n/kernel.say() rather than printing message: the message is
+  // English fallback for logs, not what a reader should see.
+  readonly reason?: { code?: string; error?: string; params?: Record<string, string | number> };
+
+  constructor(
+    readonly status: number,
+    message: string,
+    reason?: { code?: string; error?: string; params?: Record<string, string | number> },
+  ) {
     super(message);
+    this.reason = reason;
   }
 }
 
 import type { WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
+import type { Appearance, ThemePack } from "./look";
+import type { PermissionLists, PermissionRules, SandboxSettings } from "./boundary";
+import type { ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe } from "./provider";
 
 export type * from "./plugin";
+
+// GET /context: how full the window is, and what is filling it. The classes
+// are measured with the same estimator the compaction thresholds use.
+export interface ContextBreakdown {
+  used: number;
+  window: number;
+  system: number;
+  tools: number;
+  user: number;
+  reply: number;
+  output: number;
+}
 
 // GET /history returns the provider conversation, not the event stream: the
 // stream is live-only, so a reload rebuilds the transcript from these.
@@ -149,33 +174,10 @@ export interface SessionEntry {
 // disabled | idle: disabled is switched off and stays off across restarts, idle
 // is configured and simply not needed yet. They look identical to the live host
 // and mean opposite things, so the server resolves which one it is.
-// A theme pack is data: named colours for a light and a dark scheme. Nothing
-// in it is code, so installing one cannot run anything.
-export interface ThemeBackground {
-  image: boolean;
-  focusX: number;
-  focusY: number;
-  safeArea?: "left" | "center" | "right";
-  // The same picture at rest and at work — a photo behind a transcript being
-  // read is in the way, so a pack says how far it should recede.
-  homeOpacity: number;
-  taskOpacity: number;
-  overlayStrength: number;
-}
-
-export interface ThemePack {
-  id: string;
-  name: string;
-  author?: string;
-  description?: string;
-  active?: boolean;
-  tokens: { light?: Record<string, string>; dark?: Record<string, string> };
-  background?: ThemeBackground;
-  hasPreview?: boolean;
-  // Tokens the kernel dropped and why: an unknown name, or a value that could
-  // not be let into a stylesheet. The pack still loads without them.
-  warnings?: string[];
-}
+// A theme pack is data and the reader's own settings sit on top of it; both
+// live next door, because they are one subject and this file is the port's
+// whole surface rather than any one part of it.
+export type * from "./look";
 
 export interface McpEntry {
   name: string;
@@ -285,6 +287,8 @@ export interface CompletionItem {
 // What GET /complete answers: the menu, and the half-open span of the token an
 // accepted item replaces. Offsets are UTF-16 code units — the units a string
 // index uses here, converted from the kernel's bytes at the boundary.
+export type * from "./boundary";
+
 export interface Completion {
   kind: "" | "slash" | "slash-arg" | "ref";
   from: number;
@@ -379,89 +383,7 @@ export interface RoleAssignments {
   vision: string;
 }
 
-export interface ProviderEntry {
-  name: string;
-  kind: string;
-  baseUrl: string;
-  models: string[];
-  default: string;
-  hasKey: boolean;
-  keyEnv?: string;
-  // Which of them read images, so an editor shows the current answer rather
-  // than asking the user to remember it.
-  visionModels?: string[];
-  // False where the kernel refuses image input for this endpoint regardless of
-  // config, so an editor can say so instead of offering a dead switch.
-  canSetVision?: boolean;
-  // The endpoint-executed search tool. canWebSearch says this door offers one
-  // at all; webSearch whether it is on. They differ between an account's doors.
-  canWebSearch?: boolean;
-  webSearch?: boolean;
-  // Whether thinking/reasoning_effort may go on the wire. canSetThinking is
-  // false where the protocol never carries them, so the switch appears only
-  // where a relay can actually reject the request over it.
-  canSetThinking?: boolean;
-  sendsThinking?: boolean;
-  // Removing the one in use would leave the session on a model that no longer
-  // resolves, so the row offers no delete.
-  inUse: boolean;
-  preset: boolean;
-}
-
-// What an endpoint turned out to be. Every field is a guess the user confirms
-// before anything is written — a model list cannot prove which protocol a
-// gateway speaks, only which ones it answers.
-export interface ProviderProbe {
-  kind: string;
-  authHeader: boolean;
-  models: string[];
-  default: string;
-  efforts: string[];
-  effort: string;
-  vision: string[];
-  // ambiguous: more than one protocol answered, so the kind is a preference
-  // rather than a finding.
-  ambiguous: boolean;
-  // noProxy: it answered only with the proxy bypassed (a China-only endpoint
-  // behind a foreign exit resets the handshake).
-  noProxy: boolean;
-}
-
-// What re-probing a saved provider found. `error` carries the endpoint's own
-// words, because "401" and "no chat models" send the user to different fixes.
-export interface ProviderCheck {
-  ok: boolean;
-  kind?: string;
-  models?: string[];
-  ambiguous?: boolean;
-  noProxy?: boolean;
-  error?: string;
-}
-
-// Changing a source that already exists: everything else on the entry stays.
-export interface ProviderEdit {
-  name: string;
-  baseUrl?: string;
-  // Empty keeps the stored key.
-  apiKey?: string;
-  models: string[];
-  default: string;
-  vision: string[];
-}
-
-// What the panel sends back after the user has looked at the probe.
-export interface ProviderDraft {
-  name: string;
-  kind: string;
-  baseUrl: string;
-  apiKey: string;
-  models: string[];
-  default: string;
-  authHeader: boolean;
-  noProxy: boolean;
-  effort: string;
-  vision: string[];
-}
+export type * from "./provider";
 
 // One report from an install in flight. received/total are meaningful only
 // while downloading; verifying is the pause after the last byte, which is long
@@ -523,6 +445,14 @@ export interface AgentPort {
   // runtime that is already up. Refused mid-turn, like every other rebuild.
   // An empty path leaves the executable to detection.
   saveShell(prefer: string, path: string): Promise<ShellSettings>;
+  permissions(): Promise<PermissionRules>;
+  // Replaces all three lists at once, then rebuilds — the gate is assembled
+  // with the runtime, so a rule cannot reach one that is already up. Every rule
+  // is validated by the parser the gate itself uses, so a typo comes back as an
+  // error here rather than as a rule that silently never matches.
+  savePermissions(lists: PermissionLists): Promise<PermissionRules>;
+  sandbox(): Promise<SandboxSettings>;
+  saveSandbox(s: SandboxSettings): Promise<SandboxSettings>;
   mcp(): Promise<McpEntry[]>;
   // Retries a failed or disconnected server and answers with its new state, so
   // the caller never has to race a follow-up GET against the connect.
@@ -630,7 +560,14 @@ export interface AgentPort {
   answer(id: string, answers: { questionId: string; selected: string[] }[]): Promise<void>;
   // Installed theme packs and which one is active. The list carries every
   // pack's tokens so a picker can preview without a second request.
+  context(): Promise<ContextBreakdown>;
   themes(): Promise<ThemePack[]>;
+  // The reader's own size, type and picture — kept apart from the pack, which
+  // is a palette somebody else authored.
+  appearance(): Promise<Appearance>;
+  saveAppearance(look: Appearance): Promise<Appearance>;
+  uploadWallpaper(blob: Blob): Promise<Appearance>;
+  clearWallpaper(): Promise<void>;
   // Where the user put each extension surface, keyed "<pluginId>:<surfaceId>".
   // It outranks what the extension asked for; an empty slot hands the decision
   // back rather than hiding the surface.

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { t } from "../i18n";
 import type { AccountState, AgentPort, Preset, SessionStatus, WorkspaceInfo } from "../port/port";
-import { Picker, type MenuItem } from "./Menu";
 import { WindowControls, zoomOnTitleBar } from "./WindowControls";
 
 const PRESETS: [Preset, string][] = [
@@ -16,10 +16,12 @@ const base = (p: string) => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || p;
 // title from /sessions is always present once the turn is on disk: a generated
 // one when it is ready, the first message truncated until then.
 const sessionName = (title?: string, p?: string) =>
-  title?.trim() || (p ? base(p).replace(/\.jsonl$/, "") : "新会话");
+  title?.trim() || (p ? base(p).replace(/\.jsonl$/, "") : t("新会话"));
 
 interface Props {
-  port: AgentPort;
+  // Null while the window has no pane: the chrome still draws, and the few
+  // controls that need a session simply do nothing until one is focused.
+  port: AgentPort | null;
   status: SessionStatus | null;
   title?: string;
   steer: number;
@@ -28,127 +30,52 @@ interface Props {
   onSettings: (section?: string) => void;
   account: AccountState | null;
   onChanged: () => void;
-  onWorkspace: () => void;
-  onError: (e: unknown) => void;
 }
 
-export function Chrome({ port, status, title, steer, theme, onTheme, onSettings, onChanged, onWorkspace, onError, account }: Props) {
+export function Chrome({ port, status, title, steer, theme, onTheme, onSettings, onChanged, account }: Props) {
   const root = status?.workspaceRoot || status?.cwd || "";
   const project = root ? base(root) : "—";
+  // Only for the "隔离" tag: the folder list and the switch itself moved to the
+  // sidebar, where adding one and opening one are the same gesture.
   const [ws, setWs] = useState<WorkspaceInfo | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const reload = useCallback(() => {
+  useEffect(() => {
+    if (!port) {
+      setWs(null);
+      return;
+    }
     port.workspaces().then(setWs).catch(() => setWs(null));
-  }, [port]);
-
-  useEffect(reload, [reload, root]);
-
-  const items: MenuItem[] = [
-    { value: root, label: project, desc: root || "未知工作区", right: "当前" },
-    ...(ws?.recents ?? []).map((r, i) => ({
-      value: r.path,
-      label: r.name,
-      desc: r.path,
-      divide: i === 0,
-    })),
-  ];
-  if (ws?.canSwitch) {
-    items.push({ value: "__open", label: "打开其他目录…", plain: true, divide: true });
-    if (ws.canIsolate) {
-      items.push({
-        value: "__isolate",
-        label: "拉一份隔离副本",
-        desc: "在 Git worktree 里开一份，改动不落回当前分支",
-        plain: true,
-      });
-    }
-  }
-  items.push({ value: "__settings", label: "设置", plain: true, divide: true, right: "⌘," });
-
-  // Rebuilding the runtime takes seconds, so the breadcrumb says so rather than
-  // looking unresponsive; every path ends by reloading what the new root owns.
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    try {
-      await fn();
-      onWorkspace();
-      reload();
-    } catch (e) {
-      onError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const pick = (v: string) => {
-    if (v === "__settings") return onSettings();
-    if (v === "__isolate") return void run(() => port.isolateWorkspace());
-    if (v === "__open") {
-      return void run(async () => {
-        const dir = await port.pickFolder();
-        // "" is the user closing the panel — an answer, not a reason to ask
-        // again through a second dialog.
-        if (dir !== null) {
-          if (dir) await port.setWorkspace(dir);
-          return;
-        }
-        // No native picker. A browser tab types the path instead; the shell is
-        // supposed to have one, and WKWebView answers prompt() with nothing at
-        // all, so there it is a broken build rather than a fallback.
-        if (document.documentElement.dataset.shell === "wails") {
-          throw new Error("这个窗口打不开目录选择器（缺少绑定），请从设置里切换工作区");
-        }
-        const typed = prompt("工作目录的完整路径") || "";
-        if (typed) await port.setWorkspace(typed);
-      });
-    }
-    if (v && v !== root) void run(() => port.setWorkspace(v));
-  };
+  }, [port, root]);
 
   return (
     <div className="chrome" onDoubleClick={zoomOnTitleBar}>
       <span className="brand" role="img" aria-label="Reasonix" />
 
       <div className="crumb">
-        <Picker
-          className="crumb-btn"
-          place="top"
-          current={root}
-          items={items}
-          onPick={pick}
-          title={root}
-          label={
-            <>
-              <span>{busy ? "打开中…" : project}</span>
-              <span className="cv" aria-hidden="true">
-                ▾
-              </span>
-            </>
-          }
-        />
+        <span className="crumb-proj" title={root}>
+          {project}
+        </span>
         <span className="isolab" hidden={!ws?.isolated}>
-          隔离
+          {t("隔离")}
         </span>
         <span className="sep">/</span>
         <b title={status?.sessionPath}>{sessionName(title, status?.sessionPath)}</b>
         <span className="sep">·</span>
-        <span className="goal">{status?.goal || "交待一个任务"}</span>
+        <span className="goal">{status?.goal || t("交待一个任务")}</span>
       </div>
 
       <span className="badge" hidden={steer === 0}>
-        插话待送达 <b>{steer}</b>
+        {t("插话待送达")} <b>{steer}</b>
       </span>
 
       <div className="r">
-        <div className="themer" role="group" aria-label="执行设定">
+        <div className="themer" role="group" aria-label={t("执行设定")}>
           {PRESETS.map(([id, lb]) => (
             <button
               key={id}
               aria-pressed={status?.preset === id}
-              onClick={() => void port.setPreset(id).then(onChanged)}
+              onClick={() => void port?.setPreset(id).then(onChanged)}
             >
-              {lb}
+              {t(lb)}
             </button>
           ))}
         </div>
@@ -159,8 +86,8 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
           className="thbtn acct-btn"
           data-on={account?.signedIn ? "" : undefined}
           onClick={() => onSettings("account")}
-          aria-label={account?.signedIn ? `账号：${account.user?.label ?? ""}` : "登录"}
-          title={account?.signedIn ? `${account.user?.label ?? ""} <${account.user?.email ?? ""}>` : "登录（社区与崩溃跟进，不影响使用）"}
+          aria-label={account?.signedIn ? t("账号：{name}", { name: account.user?.label ?? "" }) : t("登录")}
+          title={account?.signedIn ? `${account.user?.label ?? ""} <${account.user?.email ?? ""}>` : t("登录（社区与崩溃跟进，不影响使用）")}
         >
           {account?.signedIn && account.user?.label ? (
             <span className="ini" aria-hidden="true">
@@ -175,7 +102,7 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
         </button>
         {/* Same class as the theme toggle on purpose: settings belongs in the
             icon cluster's weight class, not competing with the preset control. */}
-        <button className="thbtn" onClick={() => onSettings()} aria-label="设置" title="设置　⌘,">
+        <button className="thbtn" onClick={() => onSettings()} aria-label={t("设置")} title="设置　⌘,">
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d="M8 5.9a2.1 2.1 0 1 0 0 4.2 2.1 2.1 0 0 0 0-4.2" />
             <path d="M12.7 9.8a1 1 0 0 0 .2 1.1l.04.04a1.2 1.2 0 1 1-1.7 1.7l-.04-.04a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9v.11a1.2 1.2 0 1 1-2.4 0v-.06a1 1 0 0 0-.65-.9 1 1 0 0 0-1.1.2l-.04.04a1.2 1.2 0 1 1-1.7-1.7l.04-.04a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6h-.11a1.2 1.2 0 0 1 0-2.4h.06a1 1 0 0 0 .9-.65 1 1 0 0 0-.2-1.1l-.04-.04a1.2 1.2 0 1 1 1.7-1.7l.04.04a1 1 0 0 0 1.1.2h.05a1 1 0 0 0 .6-.9v-.11a1.2 1.2 0 1 1 2.4 0v.06a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.04-.04a1.2 1.2 0 1 1 1.7 1.7l-.04.04a1 1 0 0 0-.2 1.1v.05a1 1 0 0 0 .9.6h.11a1.2 1.2 0 0 1 0 2.4h-.06a1 1 0 0 0-.9.6" />
@@ -184,8 +111,8 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
         <button
           className="thbtn"
           data-th={theme}
-          aria-label="主题"
-          title={"主题：" + THEME_LB[theme]}
+          aria-label={t("主题")}
+          title={t("主题：{name}", { name: t(THEME_LB[theme]) })}
           onClick={() => onTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true">

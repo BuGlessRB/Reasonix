@@ -185,6 +185,10 @@ type Capabilities interface {
 	DiagnoseNetwork(ctx context.Context) []NetworkProbe
 	ShellSettings() ShellSettings
 	SaveShellSettings(prefer, path string) error
+	PermissionRules() PermissionRules
+	SavePermissionRules(in PermissionLists) error
+	SandboxSettings() SandboxSettings
+	SaveSandboxSettings(in SandboxSettings) error
 	CustomCommand(input string) (sent string, found bool)
 	MCPPrompt(ctx context.Context, input string) (sent string, found bool, err error)
 	RunSkill(input string) (sent string, found bool)
@@ -219,6 +223,7 @@ type Capabilities interface {
 // Status covers read-only run/usage/billing telemetry and task list state.
 type Status interface {
 	ContextSnapshot() (int, int)
+	ContextBreakdown() agent.ContextBreakdown
 	ContextMaintenanceSnapshot() agent.ContextMaintenanceSnapshot
 	LastUsage() *provider.Usage
 	Balance(ctx context.Context) (*billing.Balance, error)

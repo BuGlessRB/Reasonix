@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"reasonix/internal/config"
@@ -217,5 +218,84 @@ api_key_env = "DEEPSEEK_API_KEY"
 	}
 	if !config.EffectiveWebSearch(anthropicDoor) {
 		t.Fatal("an official DeepSeek Anthropic endpoint defaults its search on")
+	}
+}
+
+// The three fields a probe cannot answer have to survive a save and come back
+// on the next read — that round trip is the whole reason they are in the panel.
+func TestEditProviderKeepsCompatibilityFields(t *testing.T) {
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	body := `{"name":"existing","models":["model-a"],"default":"model-a","contextWindow":128000,` +
+		`"headers":{"HTTP-Referer":"https://example.com"," ":"x"},"extraBody":{"enable_thinking":true}}`
+	resp := postProvider(t, srv.URL, "/providers/edit", body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("POST /providers/edit = %d", resp.StatusCode)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := cfg.Provider("existing")
+	if !ok {
+		t.Fatal("provider went missing")
+	}
+	if entry.ContextWindow != 128000 {
+		t.Fatalf("context window = %d", entry.ContextWindow)
+	}
+	if len(entry.Headers) != 1 || entry.Headers["HTTP-Referer"] != "https://example.com" {
+		t.Fatalf("headers = %v, want the blank name dropped", entry.Headers)
+	}
+	if entry.ExtraBody["enable_thinking"] != true {
+		t.Fatalf("extra body = %v", entry.ExtraBody)
+	}
+}
+
+// Omitting them means "leave them alone": a client that does not show the
+// fields must not wipe the headers a gateway needs.
+func TestEditProviderLeavesCompatibilityFieldsAloneWhenUnsent(t *testing.T) {
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	first := postProvider(t, srv.URL, "/providers/edit",
+		`{"name":"existing","models":["model-a"],"default":"model-a","contextWindow":64000,"headers":{"X-Title":"Reasonix"}}`)
+	first.Body.Close()
+	second := postProvider(t, srv.URL, "/providers/edit", `{"name":"existing","models":["model-a"],"default":"model-a"}`)
+	second.Body.Close()
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, _ := cfg.Provider("existing")
+	if entry.ContextWindow != 64000 || entry.Headers["X-Title"] != "Reasonix" {
+		t.Fatalf("an unsent field was cleared: window=%d headers=%v", entry.ContextWindow, entry.Headers)
+	}
+}
+
+// A null cannot be written to TOML, so accepting one would store a field that
+// silently never reaches the wire.
+func TestEditProviderRejectsNullInExtraBody(t *testing.T) {
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	resp := postProvider(t, srv.URL, "/providers/edit",
+		`{"name":"existing","models":["model-a"],"default":"model-a","extraBody":{"outer":{"inner":null}}}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("POST with a null = %d, want 400", resp.StatusCode)
+	}
+	got, _ := readAllString(resp)
+	if !strings.Contains(got, "outer.inner") {
+		t.Fatalf("refusal does not name the offending path: %s", got)
 	}
 }

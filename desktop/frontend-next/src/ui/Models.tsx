@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { t } from "../i18n";
 import type { ModelEntry } from "../port/port";
 import { accountKey, disambiguate, vendorLabel } from "./vendors";
 
@@ -104,7 +105,7 @@ export function Models({ models, current, busy, protocol, onPick }: Props) {
   const vendors = useMemo(() => groupVendors(models), [models]);
   const query = q.trim().toLowerCase();
 
-  if (models.length === 0) return <div className="empty">读不到模型列表。</div>;
+  if (models.length === 0) return <div className="empty">{t("读不到模型列表。")}</div>;
 
   const shown = vendors.map((v) => {
     const kind = protocol[v.key] ?? activeKind(v, current);
@@ -122,8 +123,8 @@ export function Models({ models, current, busy, protocol, onPick }: Props) {
             type="search"
             value={q}
             spellCheck={false}
-            placeholder="搜模型名，或输入「图」只看能读图的…"
-            aria-label="搜索模型"
+            placeholder={t("搜模型名，或输入「图」只看能读图的…")}
+            aria-label={t("搜索模型")}
             onChange={(e) => setQ(e.target.value)}
           />
           {query && (
@@ -141,7 +142,7 @@ export function Models({ models, current, busy, protocol, onPick }: Props) {
             <div className="mgrp-hd">
               <span className="nm">{v.label}</span>
               <span className="url">{v.host}</span>
-              <span className="n">{rows.length} 个模型</span>
+              <span className="n">{t("{n} 个模型", { n: rows.length })}</span>
             </div>
           )}
           {rows.map((m) => (
@@ -155,9 +156,9 @@ export function Models({ models, current, busy, protocol, onPick }: Props) {
               <span className="mark" />
               <span className="nm">{m.model}</span>
               <span className="caps">
-                {tagsFor(m).map(([k, t]) => (
+                {tagsFor(m).map(([k, label]) => (
                   <i className="cap" data-k={k} key={k}>
-                    {t}
+                    {t(label)}
                   </i>
                 ))}
               </span>
@@ -165,7 +166,7 @@ export function Models({ models, current, busy, protocol, onPick }: Props) {
           ))}
         </div>
       ))}
-      {live.length === 0 && <div className="empty">没有匹配的模型。</div>}
+      {live.length === 0 && <div className="empty">{t("没有匹配的模型。")}</div>}
     </>
   );
 }

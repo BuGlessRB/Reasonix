@@ -220,7 +220,10 @@ func TestE2ECrossTurnDiffEvidenceViaSessionFallback(t *testing.T) {
 	)
 	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, event.Discard)
 
-	if err := a.Run(context.Background(), "edit x.go without tests"); err != nil {
+	// The mock edits without verifying, so turn 1 legitimately ends with a
+	// readiness gap; what this test proves is turn 2's cross-turn citation.
+	if err := a.Run(context.Background(), "edit x.go"); err != nil &&
+		!strings.Contains(err.Error(), "readiness") {
 		t.Fatalf("turn 1: %v", err)
 	}
 	if err := a.Run(context.Background(), "now sign off that change"); err != nil {

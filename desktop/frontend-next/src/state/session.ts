@@ -50,6 +50,13 @@ export interface PlanStep {
 export interface SessionState {
   error: string;
   items: Item[];
+  // Bumped when the transcript's composition changes — a card added, settled,
+  // folded, answered — but NOT when a message still being written grows by a
+  // chunk. Everything derived from the tool and user cards (the rail's panels,
+  // the step count, the checkpoint pairing) can key off this and skip the
+  // hundreds of frames a single answer streams in. A derivation that reads the
+  // *text* of a card must key off items instead.
+  revision: number;
   plan: PlanStep[];
   // Recent streamed-output samples. The down-rate has to come from what arrived
   // in the last few seconds; usage totals only land at round boundaries, and
@@ -78,6 +85,7 @@ export interface SessionState {
 export const initialState: SessionState = {
   error: "",
   items: [],
+  revision: 0,
   plan: [],
   outWindow: [],
   metrics: { hit: 0, miss: 0, out: 0, bySource: {}, cost: 0, currency: "¥" },
@@ -185,23 +193,31 @@ const lookup = (i: Item | undefined) =>
 
 const toolOf = (i: Item) => (i as Extract<Item, { t: "tool" }>).tool;
 
-function mergeReads(items: Item[]): Item[] {
+// foldLastRead folds the item just appended into the one before it, in place,
+// and says whether it did. Rebuilding a whole transcript calls it once per item,
+// so it must not copy the list it is folding.
+function foldLastRead(items: Item[]): boolean {
   const n = items.length;
   const last = items[n - 1];
-  if (!lookup(last)) return items;
+  if (!lookup(last)) return false;
   const tool = toolOf(last);
   const prev = items[n - 2];
   if (prev?.t === "reads") {
-    const next = items.slice(0, n - 1);
-    next[n - 2] = { ...prev, tools: [...prev.tools, tool] };
-    return next;
+    items[n - 2] = { ...prev, tools: [...prev.tools, tool] };
+    items.length = n - 1;
+    return true;
   }
   if (lookup(prev) && (tool.name === "read_file" || toolOf(prev).name === "read_file")) {
-    const next = items.slice(0, n - 1);
-    next[n - 2] = { t: "reads", id: prev.id, tools: [toolOf(prev), tool] };
-    return next;
+    items[n - 2] = { t: "reads", id: prev.id, tools: [toolOf(prev), tool] };
+    items.length = n - 1;
+    return true;
   }
-  return items;
+  return false;
+}
+
+function mergeReads(items: Item[]): Item[] {
+  const next = items.slice();
+  return foldLastRead(next) ? next : items;
 }
 
 function appendText(items: Item[], text: string, field: "text" | "reasoning"): Item[] {
@@ -227,16 +243,34 @@ function appendText(items: Item[], text: string, field: "text" | "reasoning"): I
 // what the card renders, and putting it there would make every append rewrite it.
 const thoughtSince = new Map<string, number>();
 
-export function reduce(
-  s: SessionState,
-  ev:
-    | WireEvent
-    | { kind: "__restore"; items: Item[]; plan: PlanStep[]; hit: number; miss: number; cost?: number }
-    | { kind: "__error"; text: string }
-    | { kind: "__user"; text: string; pending: boolean }
-    | { kind: "__decided"; id: string; verdict?: string; answers?: string[][] }
-    | { kind: "__forgot"; id: string },
-): SessionState {
+// Every delta clears the waiting state, and a fresh `{}` each time is a new
+// reference for a value that did not change — enough to defeat the memo on any
+// component holding one. Already-empty stays itself.
+const settle = (w: Waiting): Waiting => (w.ttftSince || w.retry ? {} : w);
+
+// A streamed chunk lands on the card being written and touches nothing else, so
+// it leaves the revision alone; every other event that moves the transcript
+// bumps it. Wrapping the switch keeps that rule in one place instead of on each
+// of its two dozen returns.
+export function reduce(s: SessionState, ev: SessionEvent): SessionState {
+  const next = apply(s, ev);
+  if (next.items === s.items) return next;
+  const streamed = ev.kind === "text" || ev.kind === "reasoning";
+  return streamed ? next : { ...next, revision: next.revision + 1 };
+}
+
+// What the wire carries, plus the turns the client owns itself: your own
+// message, a decision you just made, an error with no event behind it.
+export type SessionEvent =
+  | WireEvent
+  | { kind: "__restore"; items: Item[]; plan: PlanStep[] }
+  | { kind: "__totals"; hit: number; miss: number; cost?: number }
+  | { kind: "__error"; text: string }
+  | { kind: "__user"; text: string; pending: boolean }
+  | { kind: "__decided"; id: string; verdict?: string; answers?: string[][] }
+  | { kind: "__forgot"; id: string };
+
+function apply(s: SessionState, ev: SessionEvent): SessionState {
   if (ev.kind === "__error") return { ...s, error: ev.text };
   // Both event.Message emitters carry assistant text, so nothing on the wire
   // echoes what you typed — only /history has it, and only after a reload. The
@@ -282,12 +316,16 @@ export function reduce(
     };
   }
   if (ev.kind === "__restore") {
-    return {
-      ...s,
-      items: ev.items,
-      plan: ev.plan,
-      metrics: { ...s.metrics, hit: ev.hit, miss: ev.miss, cost: ev.cost ?? s.metrics.cost },
-    };
+    return { ...s, items: ev.items, plan: ev.plan };
+  }
+  // The session's own running totals, read back from the kernel rather than
+  // restarted here: a count that begins at zero makes the next request the whole
+  // sample, and one request that misses on what it just added reads as a 75%
+  // session on a session the kernel has held at 96%. It arrives on its own
+  // rather than with the transcript — the record is what the reader is waiting
+  // for, and it must not wait behind a status read that goes to the network.
+  if (ev.kind === "__totals") {
+    return { ...s, metrics: { ...s.metrics, hit: ev.hit, miss: ev.miss, cost: ev.cost ?? s.metrics.cost } };
   }
   switch (ev.kind) {
     case "turn_started":
@@ -297,7 +335,7 @@ export function reduce(
       return {
         ...s,
         doing: "思考中",
-        waiting: {},
+        waiting: settle(s.waiting),
         outWindow: sample(s.outWindow, estimateTokens(ev.text ?? ""), Date.now()),
         items: appendText(s.items, ev.text ?? "", "reasoning"),
       };
@@ -306,7 +344,7 @@ export function reduce(
       return {
         ...s,
         doing: "正在回答",
-        waiting: {},
+        waiting: settle(s.waiting),
         outWindow: sample(s.outWindow, estimateTokens(ev.text ?? ""), Date.now()),
         items: appendText(s.items, ev.text ?? "", "text"),
       };
@@ -564,6 +602,7 @@ function splitProviderSearch(content: string): { text: string; search?: boolean 
 // the kernel prepends to each user message) are not part of what was said.
 export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: PlanStep[] } {
   const out: Item[] = [];
+  const calls = new Map<string, number>();
   let plan: PlanStep[] = [];
   for (const m of msgs) {
     if (m.role === "system") continue;
@@ -607,6 +646,7 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
           const p = parsePlan({ name: c.name, args: c.arguments, readOnly: true });
           if (p) plan = p;
         }
+        if (c.id) calls.set(c.id, out.length);
         out.push({
           t: "tool",
           id: nextId(),
@@ -618,8 +658,10 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
       continue;
     }
     if (m.role === "tool") {
-      const at = out.findIndex((i) => i.t === "tool" && i.tool.id === m.toolCallId);
-      if (at >= 0) {
+      // Where the call landed is remembered when it is pushed. Searching for it
+      // instead made rebuilding cost the square of the conversation's length.
+      const at = m.toolCallId === undefined ? undefined : calls.get(m.toolCallId);
+      if (at !== undefined) {
         const prev = out[at] as Extract<Item, { t: "tool" }>;
         out[at] = { ...prev, tool: { ...prev.tool, output: m.content } };
       }
@@ -627,7 +669,10 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
   }
   // A reload has to fold reads the same way the live stream does, or the same
   // conversation reads differently before and after a reopen.
-  let merged: Item[] = [];
-  for (const it of out) merged = mergeReads([...merged, it]);
+  const merged: Item[] = [];
+  for (const it of out) {
+    merged.push(it);
+    foldLastRead(merged);
+  }
   return { items: merged, plan };
 }

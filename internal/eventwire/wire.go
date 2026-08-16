@@ -48,15 +48,14 @@ type Event struct {
 
 // CompletionSummary is the JSON form of event.CompletionSummaryInfo.
 type CompletionSummary struct {
-	Preset             string   `json:"preset"`
-	Verdict            string   `json:"verdict"`
-	Mutations          int      `json:"mutations"`
-	ChecksPassed       int      `json:"checks_passed"`
-	ChecksFailed       int      `json:"checks_failed"`
-	ChecksSuppressed   int      `json:"checks_suppressed"`
-	Review             string   `json:"review"`
-	GapKinds           []string `json:"gap_kinds,omitempty"`
-	ConstraintDegraded bool     `json:"constraint_degraded"`
+	Preset           string   `json:"preset"`
+	Verdict          string   `json:"verdict"`
+	Mutations        int      `json:"mutations"`
+	ChecksPassed     int      `json:"checks_passed"`
+	ChecksFailed     int      `json:"checks_failed"`
+	ChecksSuppressed int      `json:"checks_suppressed"`
+	Review           string   `json:"review"`
+	GapKinds         []string `json:"gap_kinds,omitempty"`
 }
 
 type WorkspaceChanged struct {
@@ -215,15 +214,14 @@ func ToWire(e event.Event) Event {
 	case event.CompletionSummary:
 		if c := e.Completion; c != nil {
 			w.Completion = &CompletionSummary{
-				Preset:             c.Preset,
-				Verdict:            c.Verdict,
-				Mutations:          c.Mutations,
-				ChecksPassed:       c.ChecksPassed,
-				ChecksFailed:       c.ChecksFailed,
-				ChecksSuppressed:   c.ChecksSuppressed,
-				Review:             c.Review,
-				GapKinds:           append([]string(nil), c.GapKinds...),
-				ConstraintDegraded: c.ConstraintDegraded,
+				Preset:           c.Preset,
+				Verdict:          c.Verdict,
+				Mutations:        c.Mutations,
+				ChecksPassed:     c.ChecksPassed,
+				ChecksFailed:     c.ChecksFailed,
+				ChecksSuppressed: c.ChecksSuppressed,
+				Review:           c.Review,
+				GapKinds:         append([]string(nil), c.GapKinds...),
 			}
 		}
 	}

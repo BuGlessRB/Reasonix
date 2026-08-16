@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { t } from "../i18n";
 import type { AgentPort, McpDraftServer, McpInstallResult, McpRisk } from "../port/port";
 
 // Nobody types a transport into a form: they arrive holding whatever the server's
@@ -68,7 +69,7 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
         ))}
         <div className="acts">
           <button className="act" onClick={onClose}>
-            完成
+            {t("完成")}
           </button>
         </div>
       </div>
@@ -91,12 +92,12 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
             }}
           />
           <div className="acts">
-            <span className="note">一段 JSON、一行命令，或者一个 https 地址</span>
+            <span className="note">{t("一段 JSON、一行命令，或者一个 https 地址")}</span>
             <button className="act" onClick={onClose}>
-              取消
+              {t("取消")}
             </button>
             <button className="act" data-primary disabled={!text.trim() || busy} onClick={() => void parse()}>
-              {busy ? "读取中…" : "看看是什么"}
+              {t(busy ? "读取中…" : "看看是什么")}
             </button>
           </div>
         </>
@@ -114,7 +115,7 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
                 .filter((k) => k.server === s.name)
                 .map((k) => (
                   <div className="risk" key={k.field} data-kind={k.kind}>
-                    <span className="lb">{KIND_LABEL[k.kind] ?? k.kind}</span>
+                    <span className="lb">{t(KIND_LABEL[k.kind] ?? k.kind)}</span>
                     <span className="dt">{k.kind === "secret" ? k.field.split(".").pop() : k.detail}</span>
                     {k.kind === "secret" && <span className="why">{k.detail}</span>}
                   </div>
@@ -123,9 +124,9 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
           ))}
           {/* Where it is written decides who else gets it: a project entry ships
               to everyone who clones the repository. */}
-          <div className="scope" role="radiogroup" aria-label="装到哪">
+          <div className="scope" role="radiogroup" aria-label={t("装到哪")}>
             <button role="radio" aria-checked={scope === "user"} onClick={() => setScope("user")}>
-              我的<i>所有项目里都能用</i>
+              我的<i>{t("所有项目里都能用")}</i>
             </button>
             <button
               role="radio"
@@ -133,15 +134,15 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
               disabled={!canProject}
               onClick={() => setScope("project")}
             >
-              这个项目<i>写进仓库，clone 的人也会拿到</i>
+              这个项目<i>{t("写进仓库，clone 的人也会拿到")}</i>
             </button>
           </div>
           <div className="acts">
             <button className="act" onClick={() => setDraft(null)}>
-              返回
+              {t("返回")}
             </button>
             <button className="act" data-primary disabled={busy} onClick={() => void install()}>
-              {busy ? "连接中…" : "接入"}
+              {t(busy ? "连接中…" : "接入")}
             </button>
           </div>
         </>

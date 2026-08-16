@@ -74,7 +74,6 @@ func (a *Agent) emitCompletionSummary(c *taskcontract.Contract) {
 			break
 		}
 	}
-	constraintDegraded := a.turn.policySet && (a.turn.policy.Constraints.ForbidTests || len(a.turn.policy.Constraints.AllowedChecks) > 0)
 	summaryVerdict := verdict.String()
 	switch verdict {
 	case taskcontract.VerdictComplete:
@@ -89,15 +88,14 @@ func (a *Agent) emitCompletionSummary(c *taskcontract.Contract) {
 	a.svc.sink.Emit(event.Event{
 		Kind: event.CompletionSummary,
 		Completion: &event.CompletionSummaryInfo{
-			Preset:             a.AgentPreset(),
-			Verdict:            summaryVerdict,
-			Mutations:          mutations,
-			ChecksPassed:       passed,
-			ChecksFailed:       failed,
-			ChecksSuppressed:   suppressed,
-			Review:             review,
-			GapKinds:           gaps,
-			ConstraintDegraded: constraintDegraded,
+			Preset:           a.AgentPreset(),
+			Verdict:          summaryVerdict,
+			Mutations:        mutations,
+			ChecksPassed:     passed,
+			ChecksFailed:     failed,
+			ChecksSuppressed: suppressed,
+			Review:           review,
+			GapKinds:         gaps,
 		},
 	})
 }

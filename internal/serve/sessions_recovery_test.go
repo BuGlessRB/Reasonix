@@ -1,0 +1,82 @@
+package serve
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"reasonix/internal/agent"
+	"reasonix/internal/config"
+	"reasonix/internal/control"
+	"reasonix/internal/provider"
+)
+
+func recoveryFork(t *testing.T, root string) string {
+	t.Helper()
+	fork := agent.NewSession("sys")
+	fork.Add(provider.Message{Role: provider.RoleUser, Content: "今日热点"})
+	info, err := fork.SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info.Path
+}
+
+// Folding the copies out of the listing leaves them on disk. Every other host
+// sweeps them; serve kept a conflict loop's forks — one full transcript copy
+// each — until the user found them by hand.
+func TestSweepRecoveryBranchesTrashesCoveredForks(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
+	saveVisibilitySession(t, root, "今日热点", "好的")
+	covered := recoveryFork(t, root)
+	open := recoveryFork(t, root)
+
+	ctrl := control.New(control.Options{SessionDir: dir})
+	defer ctrl.Close()
+	ctrl.SetSessionPath(open)
+	srv := New(ctrl, NewBroadcaster(), config.ServeConfig{})
+
+	if got := srv.sweepRecoveryBranches(0); got != 1 {
+		t.Fatalf("swept %d branches, want only the idle covered fork", got)
+	}
+	if _, err := os.Stat(covered); !os.IsNotExist(err) {
+		t.Fatalf("covered fork still in the session directory: %v", err)
+	}
+	for _, keep := range []string{root, open} {
+		if _, err := os.Stat(keep); err != nil {
+			t.Fatalf("%s must survive the sweep: %v", filepath.Base(keep), err)
+		}
+	}
+}
+
+// A branch someone continued on holds turns the parent never saw. The sweep
+// proves coverage from content, so it must leave that branch where it is.
+func TestSweepRecoveryBranchesKeepsContinuedFork(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
+	saveVisibilitySession(t, root, "今日热点", "好的")
+
+	continued := agent.NewSession("sys")
+	continued.Add(provider.Message{Role: provider.RoleUser, Content: "今日热点"})
+	info, err := continued.SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	continued.Add(provider.Message{Role: provider.RoleAssistant, Content: "只有分支里有的回答"})
+	if err := continued.Save(info.Path); err != nil {
+		t.Fatal(err)
+	}
+
+	ctrl := control.New(control.Options{SessionDir: dir})
+	defer ctrl.Close()
+	ctrl.SetSessionPath(root)
+	srv := New(ctrl, NewBroadcaster(), config.ServeConfig{})
+
+	if got := srv.sweepRecoveryBranches(0); got != 0 {
+		t.Fatalf("swept %d branches, want none", got)
+	}
+	if _, err := os.Stat(info.Path); err != nil {
+		t.Fatalf("continued fork must survive the sweep: %v", err)
+	}
+}

@@ -1,5 +1,6 @@
 import type { Compaction } from "../../port/wire";
 import { Sym } from "../Sym";
+import { t } from "../../i18n";
 import { tokenLabel } from "../Cost";
 
 const TRIGGER: Record<string, string> = {
@@ -65,17 +66,37 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
       </div>
       <div className="c">
         <div className="hl">
-          <span className={done ? "nm" : "nm shim"}>{done ? "压缩完成" : "正在压缩…"}</span>
+          <span className={done ? "nm" : "nm shim"}>{t(done ? "压缩完成" : "正在压缩…")}</span>
           <span className="tag">compaction</span>
           {c.trigger && <span className="arg">{TRIGGER[c.trigger] ?? c.trigger}</span>}
         </div>
         {/* While it runs, the digest's own last line is the progress bar: a
             fold can take a minute, and a placeholder that says nothing for a
             minute cannot be told apart from one that has hung. */}
-        {!done && c.summary && (
+        {!done && (
           <div className="out">
             <div className="comp">
-              <div className="comp-n">{lastLine(c.summary)}</div>
+              {/* Before the first word of the digest arrives there is still
+                  something true to say: how much is being folded. Without it
+                  the card sits blank for the length of a model call. */}
+              {(c.messages || before > 0) && (
+                <div className="comp-n">
+                  {c.messages ? (
+                    <>
+                      正在把 <b>{c.messages}</b> 条消息折成简报
+                    </>
+                  ) : (
+                    "正在折成简报"
+                  )}
+                  {before > 0 && (
+                    <>
+                      {" · "}
+                      <b>{tokenLabel(before)}</b>
+                    </>
+                  )}
+                </div>
+              )}
+              {c.summary && <div className="comp-n">{lastLine(c.summary)}</div>}
             </div>
           </div>
         )}
@@ -109,7 +130,7 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
               {c.summary && (
                 <details>
                   <summary>
-                    <span className="fold">看它接着往下用的简报</span>
+                    <span className="fold">{t("看它接着往下用的简报")}</span>
                   </summary>
                   <div className="txt">{c.summary}</div>
                 </details>

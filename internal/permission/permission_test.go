@@ -389,3 +389,25 @@ func TestLegacyLiteralRuleMatchesExactly(t *testing.T) {
 		t.Errorf("literal rule wildcard-matched %q — '*' must stay literal", "rm secrets.log")
 	}
 }
+
+// The turn policy no longer freezes "don't push" off the user's wording, so
+// this gate is the only thing standing between the model and an irreversible
+// external action. No mode, YOLO included, may answer Allow on its own.
+func TestExternalActionsAlwaysReachApproval(t *testing.T) {
+	for _, mode := range []string{"auto", "ask", "yolo"} {
+		p := New(mode, nil, nil, nil)
+		for _, command := range []string{
+			"git push", "git push --force origin main", "git -C ../repo push origin HEAD",
+			"npm publish", "npm --workspace pkg publish", "gh release create v1",
+			"kubectl -n production apply -f deploy.yaml",
+		} {
+			args, err := json.Marshal(map[string]string{"command": command})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := p.Decide("bash", isReadOnlyBashSubject(command), args); got == Allow {
+				t.Errorf("mode=%s %q decided Allow; external actions must reach a human", mode, command)
+			}
+		}
+	}
+}

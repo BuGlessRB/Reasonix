@@ -345,7 +345,9 @@ func TestHeadlessAutoDynamicShellBlockNamesTheAuditableWorkaround(t *testing.T) 
 	if allow {
 		t.Fatal("python -c must stay blocked in headless auto (inline code is not auditable)")
 	}
-	for _, want := range []string{"write_file", "python repro.py", "read_file"} {
+	// Naming the workspace is part of the workaround: told only to write a
+	// file, a caller reaches for /tmp and loses a second round to the sandbox.
+	for _, want := range []string{"write_file", "repro.py", "workspace", "/tmp"} {
 		if !strings.Contains(reason, want) {
 			t.Errorf("block reason must name the in-session workaround %q: %s", want, reason)
 		}

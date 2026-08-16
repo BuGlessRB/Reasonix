@@ -65,7 +65,16 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 	}
 	api := s.inboxAPI()
 	if ensurer, ok := any(api).(interface{ EnsureSessionPath() }); ok {
+		before := api.SessionPath()
 		ensurer.EnsureSessionPath()
+		// Same reason as submit: the keeper has never seen a path minted here,
+		// and a controller with no authority over its session drops the work.
+		if after := api.SessionPath(); after != before {
+			if err := s.rebindSessionLease(after); err != nil {
+				http.Error(w, sessionInUseError(err), http.StatusConflict)
+				return
+			}
+		}
 	}
 	req := control.InboxRequest{
 		Intent:      intent,

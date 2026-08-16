@@ -8,12 +8,10 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"reasonix/internal/serve"
 )
 
 // runServeListenerAfterReady opens the browser only after HTTP responds.
-func runServeListenerAfterReady(ctx context.Context, srv *serve.Server, ln net.Listener, addr string, onReady func()) error {
+func runServeListenerAfterReady(ctx context.Context, srv serveHost, ln net.Listener, addr string, onReady func()) error {
 	serveCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	done := make(chan error, 1)
@@ -52,7 +50,7 @@ func waitForServeHTTPReady(ctx context.Context, addr string) error {
 }
 
 // webBrowserURL maps wildcard binds to loopback and keeps tokens in fragments.
-func webBrowserURL(srv *serve.Server, addr, sessionID string) string {
+func webBrowserURL(srv serveHost, addr, sessionID string) string {
 	base := "http://" + browserHostPort(addr)
 	entryPath := "/"
 	if sessionID != "" {
@@ -71,7 +69,7 @@ func webBrowserURL(srv *serve.Server, addr, sessionID string) string {
 	}
 }
 
-func launchWebBrowser(srv *serve.Server, addr, sessionID string) (string, error) {
+func launchWebBrowser(srv serveHost, addr, sessionID string) (string, error) {
 	browserURL := webBrowserURL(srv, addr, sessionID)
 	return browserURL, openBrowserURL(browserURL)
 }

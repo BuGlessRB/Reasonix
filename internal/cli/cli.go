@@ -907,7 +907,12 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 
 	srv := serve.New(ctrl, bc, serveCfg)
 	_ = srv.SetSessionLeases(leases) // same live keeper was bound above
-	return runServeFrontend(ctrl, srv, serveCfg, serveFrontendOptions{
+	// A hub around it, so this frontend drives several sessions at once the way
+	// the studio window does. The session this command was started for is the
+	// first pane; the browser opens the rest.
+	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg})
+	hub.Adopt(srv, bc)
+	return runServeFrontend(ctrl, hub, serveCfg, serveFrontendOptions{
 		command: opts.command, address: *addr,
 		portFile: *portFile, tokenFile: *tokenFile, pidFile: *pidFile,
 		openBrowser: *openBrowser && !*noOpen,

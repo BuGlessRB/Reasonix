@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reasonix/internal/event"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -98,18 +99,16 @@ func (g *coordinatorApprovalGate) RunWithPlannerApproval(ctx context.Context, _ 
 	return run(ctx)
 }
 
+// The planner asks for approval in requires_approval; nothing it writes in
+// prose can raise or lower that gate.
 func TestCoordinatorBindsPlannerApprovalRequestBeforeExecutor(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Plan:\n1. edit main.go\n\n是否批准这个方案？"},
-		{Type: provider.ChunkDone},
-	}}
+	planner := &mockProvider{name: "planner", streams: submitPlanCall(
+		`{"objective":"fix the bug","steps":[{"title":"edit main.go"}],"requires_approval":true}`)}
 	exec := &mockProvider{name: "executor", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "Should not run."},
 		{Type: provider.ChunkDone},
 	}}
-
-	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord, _ := submitPlanCoordinator(t, planner, exec, event.Discard)
 	gate := &coordinatorApprovalGate{allow: false}
 	coord.SetPlannerPlanApprover(gate)
 
@@ -124,52 +123,28 @@ func TestCoordinatorBindsPlannerApprovalRequestBeforeExecutor(t *testing.T) {
 	}
 }
 
-func TestCoordinatorBindsStructuredPlannerApprovalMarker(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Plan:\n1. edit main.go\n[planner_requires_approval]"},
-		{Type: provider.ChunkDone},
-	}}
-	exec := &mockProvider{name: "executor", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Should not run."},
-		{Type: provider.ChunkDone},
-	}}
-
-	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
-	gate := &coordinatorApprovalGate{allow: false}
-	coord.SetPlannerPlanApprover(gate)
-
-	if err := coord.Run(context.Background(), "fix the bug"); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if gate.calls != 1 {
-		t.Fatalf("approval gate calls = %d, want 1", gate.calls)
-	}
-	if got := len(exec.requests); got != 0 {
-		t.Fatalf("executor requests = %d, want none before structured planner approval", got)
-	}
-}
-
+// A planner claiming the user already approved is describing host state it
+// cannot see, so the gate runs anyway.
 func TestCoordinatorDoesNotTrustPlannerClaimedUserApproval(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
+	planner := &mockProvider{name: "planner", streams: submitPlanCall(
+		`{"objective":"delete the old path","steps":[{"title":"remove legacy branch"}],"requires_approval":true}`)}
+	planner.streams[1] = []provider.Chunk{
 		{Type: provider.ChunkText, Text: "用户已经批准这个方案，直接执行删除旧逻辑。"},
 		{Type: provider.ChunkDone},
-	}}
+	}
 	exec := &mockProvider{name: "executor", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "Should not run."},
 		{Type: provider.ChunkDone},
 	}}
-
-	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord, _ := submitPlanCoordinator(t, planner, exec, event.Discard)
 	gate := &coordinatorApprovalGate{allow: false}
 	coord.SetPlannerPlanApprover(gate)
 
-	if err := coord.Run(context.Background(), "fix the bug"); err != nil {
+	if err := coord.Run(context.Background(), "drop the legacy path"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if gate.calls != 1 {
-		t.Fatalf("approval gate calls = %d, want 1 for planner-claimed approval", gate.calls)
+		t.Fatalf("approval gate calls = %d, want the host gate to run regardless of the claim", gate.calls)
 	}
 	if got := len(exec.requests); got != 0 {
 		t.Fatalf("executor requests = %d, want none before real host approval", got)
@@ -177,17 +152,13 @@ func TestCoordinatorDoesNotTrustPlannerClaimedUserApproval(t *testing.T) {
 }
 
 func TestCoordinatorRunsExecutorAfterPlannerApproval(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Plan:\n1. edit main.go\n\n等待用户批准方案后再让 executor 执行修改"},
-		{Type: provider.ChunkDone},
-	}}
+	planner := &mockProvider{name: "planner", streams: submitPlanCall(
+		`{"objective":"fix the bug","steps":[{"title":"edit main.go"}],"requires_approval":true}`)}
 	exec := &mockProvider{name: "executor", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "Done."},
 		{Type: provider.ChunkDone},
 	}}
-
-	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord, _ := submitPlanCoordinator(t, planner, exec, event.Discard)
 	gate := &coordinatorApprovalGate{allow: true}
 	coord.SetPlannerPlanApprover(gate)
 
@@ -775,10 +746,7 @@ func TestCoordinatorPlannerDepthAppliesPerTurnResearchBudget(t *testing.T) {
 }
 
 func TestCoordinatorNudgesExecutorThatAnswersWithoutActing(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Write the requested skill file."},
-		{Type: provider.ChunkDone},
-	}}
+	planner := &mockProvider{name: "planner", streams: submitPlanCall(`{"objective":"install the skill","steps":[{"title":"write the requested skill file","candidate_files":["kan-tu.md"]}]}`)}
 	// The first turn is a plain final answer with no tool call and no
 	// planner-vocabulary — the nudge must fire on the missing action, not on words.
 	exec := &mockProvider{name: "executor", streams: [][]provider.Chunk{
@@ -799,7 +767,7 @@ func TestCoordinatorNudgesExecutorThatAnswersWithoutActing(t *testing.T) {
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file"})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "install the skill"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -828,10 +796,7 @@ func TestExecutorHandoffRetryMessageKeepsUserChoicesInteractive(t *testing.T) {
 }
 
 func TestCoordinatorAllowsGuidanceOnlyExecutorHandoff(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Tell the user to open the audio app, enable the Peace checkbox, and play a song to compare the difference."},
-		{Type: provider.ChunkDone},
-	}}
+	planner := &mockProvider{name: "planner", streams: submitPlanCall(`{"objective":"guide the user through the audio settings","steps":[{"title":"explain how to enable the checkbox and compare by ear"}]}`)}
 	exec := &mockProvider{name: "executor", streams: [][]provider.Chunk{
 		{
 			{Type: provider.ChunkText, Text: "Open the audio app, enable the Peace checkbox, then play a familiar song and compare the sound with the switch on and off."},
@@ -840,7 +805,7 @@ func TestCoordinatorAllowsGuidanceOnlyExecutorHandoff(t *testing.T) {
 	}}
 
 	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "I just installed EqualizerAPO, now what?"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -851,10 +816,7 @@ func TestCoordinatorAllowsGuidanceOnlyExecutorHandoff(t *testing.T) {
 }
 
 func TestCoordinatorAllowsGuidanceOnlyPlanWithExecutorToolContext(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Tell the user to open the audio app, enable the checkbox, and listen to compare the difference."},
-		{Type: provider.ChunkDone},
-	}}
+	planner := &mockProvider{name: "planner", streams: submitPlanCall(`{"objective":"guide the user through the audio settings","steps":[{"title":"explain how to enable the checkbox and listen"}]}`)}
 	exec := &mockProvider{name: "executor", streams: [][]provider.Chunk{
 		{
 			{Type: provider.ChunkText, Text: "Open the app, enable the checkbox, then listen and compare."},
@@ -866,7 +828,7 @@ func TestCoordinatorAllowsGuidanceOnlyPlanWithExecutorToolContext(t *testing.T) 
 	execReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "file"})
 	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file"})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "Please advise on the manual audio check."); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -877,10 +839,7 @@ func TestCoordinatorAllowsGuidanceOnlyPlanWithExecutorToolContext(t *testing.T) 
 }
 
 func TestCoordinatorNudgesWorkTaskEvenIfPlannerMentionsUserGuidance(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Tell the user to edit main.go and add the missing branch."},
-		{Type: provider.ChunkDone},
-	}}
+	planner := &mockProvider{name: "planner", streams: submitPlanCall(`{"objective":"add the missing branch","steps":[{"title":"edit main.go and add the missing branch","candidate_files":["main.go"]}]}`)}
 	exec := &mockProvider{name: "executor", streams: [][]provider.Chunk{
 		{
 			{Type: provider.ChunkText, Text: "Open main.go and add the missing branch in the handler."},
@@ -899,7 +858,7 @@ func TestCoordinatorNudgesWorkTaskEvenIfPlannerMentionsUserGuidance(t *testing.T
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file"})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "fix the bug"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -913,10 +872,7 @@ func TestCoordinatorNudgesWorkTaskEvenIfPlannerMentionsUserGuidance(t *testing.T
 }
 
 func TestCoordinatorNudgesMixedGuidanceAndWorkTask(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Tell the user to summarize the behavior and update README."},
-		{Type: provider.ChunkDone},
-	}}
+	planner := &mockProvider{name: "planner", streams: submitPlanCall(`{"objective":"summarize the behavior and update README","steps":[{"title":"update README with the summary","candidate_files":["README.md"]}]}`)}
 	exec := &mockProvider{name: "executor", streams: [][]provider.Chunk{
 		{
 			{Type: provider.ChunkText, Text: "Here is the current behavior summary."},
@@ -935,7 +891,7 @@ func TestCoordinatorNudgesMixedGuidanceAndWorkTask(t *testing.T) {
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file"})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "summarize the current behavior and update the README"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -948,18 +904,32 @@ func TestCoordinatorNudgesMixedGuidanceAndWorkTask(t *testing.T) {
 	}
 }
 
+// concludeNoChangesCall is one planner round that ends the turn through the
+// structured no-op exit, then says something unhelpful, like a real model.
+func concludeNoChangesCall(reason string) [][]provider.Chunk {
+	return [][]provider.Chunk{
+		{
+			{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "call-1", Name: "conclude_no_changes",
+				Arguments: `{"reason":` + strconv.Quote(reason) + `}`}},
+			{Type: provider.ChunkDone},
+		},
+		{
+			{Type: provider.ChunkText, Text: "I concluded above."},
+			{Type: provider.ChunkDone},
+		},
+	}
+}
+
+// The planner's no-op conclusion skips the executor and is persisted as the
+// turn's answer, so a reloaded session knows nothing ran.
 func TestCoordinatorSkipsExecutorWhenPlannerConcludesNoChanges(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "No changes are needed; the current implementation already handles this.\n[no_changes]"},
-		{Type: provider.ChunkDone},
-	}}
+	const reason = "No changes are needed; the current implementation already handles this."
+	planner := &mockProvider{name: "planner", streams: concludeNoChangesCall(reason)}
 	exec := &mockProvider{name: "executor", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "Should not run."},
 		{Type: provider.ChunkDone},
 	}}
-
-	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord, executor := submitPlanCoordinator(t, planner, exec, event.Discard)
 
 	if err := coord.Run(context.Background(), "check whether the fix is already present"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1030,10 +1000,7 @@ func TestCoordinatorDoesNotSkipExecutorForPartialNoOpPlanWithActions(t *testing.
 }
 
 func TestCoordinatorHandoffAffirmsExecutorToolSchemasWhenPlannerClaimsNoMCP(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "I only have read-only tools and cannot access GitHub MCP; use the executor to search GitHub."},
-		{Type: provider.ChunkDone},
-	}}
+	planner := &mockProvider{name: "planner", streams: submitPlanCall(`{"objective":"search GitHub for the issue","steps":[{"title":"query the GitHub MCP capability","verification":[{"command":"search issues"}]}]}`)}
 	exec := &mockProvider{name: "executor", streams: [][]provider.Chunk{
 		{
 			{Type: provider.ChunkText, Text: "GitHub MCP is unavailable."},
@@ -1052,7 +1019,7 @@ func TestCoordinatorHandoffAffirmsExecutorToolSchemasWhenPlannerClaimsNoMCP(t *t
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "mcp__github__search", readOnly: true, output: "discussion results"})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
+	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
 
 	if err := coord.Run(context.Background(), "search GitHub discussions"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1208,45 +1175,64 @@ func (e *errorProvider) Stream(context.Context, provider.Request) (<-chan provid
 	return nil, fmt.Errorf("provider unavailable")
 }
 
-// TestIsNoOpPlan pins the no-op conclusion contract: only a final non-empty
-// line that is exactly the [no_changes] marker skips the executor. Phrase
-// conclusions without the marker deliberately do not — a wrong skip silently
-// drops the task, a missed one costs a single executor round.
-func TestIsNoOpPlan(t *testing.T) {
-	cases := []struct {
-		name string
-		plan string
-		want bool
-	}{
-		{"empty", "", false},
-		{"conclusion phrase without marker", "No changes are needed; the current implementation already handles this.", false},
-		{"already implemented with follow-up work", "The auth flow is already implemented; extend it to cover refresh tokens.", false},
-		{"mid-plan aside is not a conclusion", "Findings:\nThis part is already handled by the retry helper.\nConfirm the desired direction with the user.", false},
-		{"explicit marker on final line", "The retry logic exists in client.go and the tests already run this path.\n[no_changes]", true},
-		{"marker with surrounding whitespace", "Notes on the guard.\n  [no_changes]  ", true},
-		{"marker mentioned before remaining work", "[no_changes] does not apply here.\nEdit main.go to add the missing guard.", false},
-		{"final line mentions marker in prose", "The guard exists but the tests are missing.\nDo not emit [no_changes] because work remains.", false},
-		{"marker with trailing prose on final line", "[no_changes] — but confirm the flag default first.", false},
-		{"negated conclusion", "It is not already implemented.", false},
-		{"no-op phrase with action verb", "No changes are needed in code, but run the test suite.", false},
-		{"chinese conclusion without marker", "无需改动,当前逻辑已经覆盖该场景。", false},
-		{"chinese follow-up work", "重试逻辑已经实现,但需要扩展覆盖刷新令牌。", false},
+// A no-op conclusion is a structured call now: prose carries no decision,
+// whether it holds the retired marker or says "no changes are needed" in a
+// language nobody listed.
+func TestNoOpConclusionComesOnlyFromTheStructuredExit(t *testing.T) {
+	for _, prose := range []string{
+		"The retry logic exists in client.go and the tests already run this path.\n[no_changes]",
+		"No changes are needed; the current implementation already handles this.",
+		"无需改动,当前逻辑已经覆盖该场景。",
+		"[no_changes] does not apply here.\nEdit main.go to add the missing guard.",
+	} {
+		if got := (plannerOutcome{text: prose}); got.exit != plannerExitProse || got.requestsApproval() {
+			t.Errorf("prose %q produced exit=%v approval=%v, want an inert prose outcome", prose, got.exit, got.requestsApproval())
+		}
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := isNoOpPlan(tc.plan); got != tc.want {
-				t.Errorf("isNoOpPlan(%q) = %v, want %v", tc.plan, got, tc.want)
-			}
-		})
+	tool := NewConcludeNoChangesTool()
+	ctx, submission := WithPlanSubmission(context.Background())
+	if _, err := tool.Execute(ctx, json.RawMessage(`{"reason":"already handled by the retry helper"}`)); err != nil {
+		t.Fatalf("conclude_no_changes: %v", err)
+	}
+	reason, ok := submission.NoChanges()
+	if !ok || reason != "already handled by the retry helper" {
+		t.Fatalf("NoChanges() = %q, %v; want the submitted reason", reason, ok)
+	}
+	if _, err := tool.Execute(ctx, json.RawMessage(`{"reason":"   "}`)); err == nil {
+		t.Fatal("a blank reason must be rejected: it would deliver an empty answer")
 	}
 }
 
-// TestDefaultPlannerPromptRequestsNoChangesMarker keeps the producer and parser
-// of the no-op contract in sync: isNoOpPlan trusts the marker because the
-// planner prompt asks for it.
-func TestDefaultPlannerPromptRequestsNoChangesMarker(t *testing.T) {
-	if !strings.Contains(DefaultPlannerPrompt, noChangesMarker) {
-		t.Fatalf("DefaultPlannerPrompt does not request the %s marker isNoOpPlan parses", noChangesMarker)
+// A planner turn ends one way: the later exit retracts the earlier one.
+func TestPlanAndNoChangesExitsAreMutuallyExclusive(t *testing.T) {
+	ctx, submission := WithPlanSubmission(context.Background())
+	plan := json.RawMessage(`{"objective":"fix the guard","steps":[{"title":"edit main.go"}]}`)
+	if _, err := NewSubmitPlanTool().Execute(ctx, plan); err != nil {
+		t.Fatalf("submit_plan: %v", err)
+	}
+	if _, err := NewConcludeNoChangesTool().Execute(ctx, json.RawMessage(`{"reason":"actually nothing to do"}`)); err != nil {
+		t.Fatalf("conclude_no_changes: %v", err)
+	}
+	if _, ok := submission.Plan(); ok {
+		t.Fatal("concluding no changes must retract the earlier plan")
+	}
+	if _, err := NewSubmitPlanTool().Execute(ctx, plan); err != nil {
+		t.Fatalf("resubmit: %v", err)
+	}
+	if _, ok := submission.NoChanges(); ok {
+		t.Fatal("submitting a plan must retract the earlier no-changes conclusion")
+	}
+}
+
+// A marker in the prompt is a protocol the host no longer honors.
+func TestDefaultPlannerPromptTeachesStructuredExitsOnly(t *testing.T) {
+	if !strings.Contains(DefaultPlannerPrompt, "conclude_no_changes") {
+		t.Fatal("DefaultPlannerPrompt does not name the no-op exit conclude_no_changes")
+	}
+	for _, retired := range []string{"[no_changes]", "[planner_requires_approval]"} {
+		if strings.Contains(DefaultPlannerPrompt, retired) {
+			t.Fatalf("DefaultPlannerPrompt still teaches the retired %s marker", retired)
+		}
 	}
 }
 
@@ -1292,42 +1278,10 @@ func TestCoordinatorDoesNotSkipExecutorForAlreadyImplementedPlanWithFollowUp(t *
 	}
 }
 
-// TestCoordinatorSkipsExecutorOnExplicitNoChangesMarker checks the marker
-// contract end to end: research prose above the marker may mention runs/tests
-// of existing code without vetoing the explicit conclusion.
-func TestCoordinatorSkipsExecutorOnExplicitNoChangesMarker(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "The retry logic exists in client.go and the tests already run this path.\n[no_changes]"},
-		{Type: provider.ChunkDone},
-	}}
-	exec := &mockProvider{name: "executor", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Should not run."},
-		{Type: provider.ChunkDone},
-	}}
-
-	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
-
-	if err := coord.Run(context.Background(), "check whether retries are covered"); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if got := len(exec.requests); got != 0 {
-		t.Fatalf("executor requests = %d, want skip on explicit [no_changes] marker", got)
-	}
-	messages := executor.sess.conversation.Messages
-	if got := len(messages); got != 3 {
-		t.Fatalf("executor session messages = %d, want system + user + no-op assistant", got)
-	}
-	if got := messages[2].Content; !strings.Contains(got, "[no_changes]") {
-		t.Fatalf("persisted executor assistant message = %q, want the planner conclusion", got)
-	}
-}
-
-// TestCoordinatorFallsBackToExecutorWhenPlannerFails checks that a planner
-// failure degrades the turn to executor-only instead of failing it: the
-// executor gets the raw input (no handoff boilerplate), a warning notice is
-// emitted, and the planner session is rolled back so the next plan does not
-// start with consecutive user messages.
+// TestIsNoOpPlan pins the no-op conclusion contract: only a final non-empty
+// line that is exactly the [no_changes] marker skips the executor. Phrase
+// conclusions without the marker deliberately do not — a wrong skip silently
+// drops the task, a missed one costs a single executor round.
 func TestCoordinatorFallsBackToExecutorWhenPlannerFails(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -1599,27 +1553,19 @@ func TestCoordinatorHandoffSurvivesPlannerCompaction(t *testing.T) {
 	}
 }
 
-// TestCoordinatorNoOpConclusionAttributedToPlanner pins the event source on the
-// relayed no-op conclusion: it is planner text and must not be attributed to
-// the executor by sinks that key styling/usage off Source.
 func TestCoordinatorNoOpConclusionAttributedToPlanner(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "The guard already exists in parser.go.\n[no_changes]"},
-		{Type: provider.ChunkDone},
-	}}
+	planner := &mockProvider{name: "planner", streams: concludeNoChangesCall("The guard already exists in parser.go.")}
 	exec := &mockProvider{name: "executor"}
 	var events []event.Event
 	sink := event.FuncSink(func(e event.Event) { events = append(events, e) })
-
-	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, sink, nil)
+	coord, _ := submitPlanCoordinator(t, planner, exec, sink)
 
 	if err := coord.Run(context.Background(), "check the parser guard"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	var conclusion *event.Event
 	for i := range events {
-		if events[i].Kind == event.Text && strings.Contains(events[i].Text, "[no_changes]") {
+		if events[i].Kind == event.Text && strings.Contains(events[i].Text, "The guard already exists") {
 			conclusion = &events[i]
 		}
 	}
@@ -1752,17 +1698,14 @@ func TestCoordinatorFailedTurnRollbackKeepsCompaction(t *testing.T) {
 // session (like the no-op path) so the turn survives save/reload, with a note
 // telling the next executor turn that nothing ran, plus a user-facing notice.
 func TestCoordinatorPersistsDeniedPlanTurnToExecutorSession(t *testing.T) {
-	planner := &mockProvider{name: "planner", chunks: []provider.Chunk{
-		{Type: provider.ChunkText, Text: "Plan: rewrite auth.\n[planner_requires_approval]"},
-		{Type: provider.ChunkDone},
-	}}
+	planner := &mockProvider{name: "planner", streams: submitPlanCall(
+		`{"objective":"rewrite auth","steps":[{"title":"replace the auth path"}],"requires_approval":true}`)}
 	exec := &mockProvider{name: "executor", chunks: []provider.Chunk{
 		{Type: provider.ChunkText, Text: "should not run"},
 		{Type: provider.ChunkDone},
 	}}
 	sink := &recordSink{}
-	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, sink)
-	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, sink, nil)
+	coord, executor := submitPlanCoordinator(t, planner, exec, sink)
 	gate := &coordinatorApprovalGate{allow: false}
 	coord.SetPlannerPlanApprover(gate)
 

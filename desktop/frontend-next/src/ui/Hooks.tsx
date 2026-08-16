@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { t } from "../i18n";
 import type { AgentPort, HookCatalog, HookDryRun, HookEntry } from "../port/port";
 
 // Nobody arrives wanting a "PreToolUse hook with an anchored matcher". They
@@ -72,7 +73,7 @@ export function Hooks({ port, onChanged }: Props) {
   };
   useEffect(reload, [port]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!cat) return <div className="empty">读不到 hooks 配置。</div>;
+  if (!cat) return <div className="empty">{t("读不到 hooks 配置。")}</div>;
 
   const mine = cat.hooks.filter((h) => h.scope === (scope === "user" ? "global" : "project"));
   const plugin = cat.hooks.filter((h) => h.scope === "plugin");
@@ -116,7 +117,7 @@ export function Hooks({ port, onChanged }: Props) {
 
   return (
     <div className="hooks">
-      <div className="scope" role="radiogroup" aria-label="这些规则写在哪">
+      <div className="scope" role="radiogroup" aria-label={t("这些规则写在哪")}>
         {(["user", "project"] as const).map((s) => (
           <button
             key={s}
@@ -125,16 +126,16 @@ export function Hooks({ port, onChanged }: Props) {
             disabled={s === "project" && !cat.projectPath}
             onClick={() => setScope(s)}
           >
-            {SCOPE_LABEL[s]}
-            <i>{s === "user" ? "只在这台机器上" : "写进仓库，clone 的人也会拿到"}</i>
+            {t(SCOPE_LABEL[s])}
+            <i>{t(s === "user" ? "只在这台机器上" : "写进仓库，clone 的人也会拿到")}</i>
           </button>
         ))}
       </div>
-      <p className="path">{scope === "user" ? cat.globalPath : cat.projectPath || "没有打开项目"}</p>
+      <p className="path">{scope === "user" ? cat.globalPath : cat.projectPath || t("没有打开项目")}</p>
 
       {broken.map((s) => (
         <div className="why" key={s.path}>
-          {s.path} 读不了：{s.parseError || s.status}
+          {s.path} {t("读不了：")}{s.parseError || s.status}
         </div>
       ))}
 
@@ -142,8 +143,8 @@ export function Hooks({ port, onChanged }: Props) {
         {RECIPES.map((r) => (
           <div className="recipe" key={r.id} data-on={has(r) ? "" : undefined}>
             <div className="tx">
-              <span className="lb">{r.title}</span>
-              <span className="ds">{r.desc}</span>
+              <span className="lb">{t(r.title)}</span>
+              <span className="ds">{t(r.desc)}</span>
             </div>
             <button
               className="sw"
@@ -160,8 +161,8 @@ export function Hooks({ port, onChanged }: Props) {
       </div>
 
       <button className="more" aria-expanded={expert} onClick={() => setExpert((v) => !v)}>
-        {expert ? "收起" : "自己写一条"}
-        <span className="c">{mine.length} 条规则</span>
+        {t(expert ? "收起" : "自己写一条")}
+        <span className="c">{t("{n} 条规则", { n: mine.length })}</span>
       </button>
 
       {expert && (
@@ -220,19 +221,19 @@ function Expert({
                 <input
                   className="match"
                   value={h.match ?? ""}
-                  placeholder="匹配哪些工具（正则，留空=全部）"
+                  placeholder={t("匹配哪些工具（正则，留空=全部）")}
                   onChange={(e) => patch(i, { match: e.target.value })}
                 />
               )}
-              {meta?.blocking && <i className="warn">能挡住 agent</i>}
+              {meta?.blocking && <i className="warn">{t("能挡住 agent")}</i>}
               <button className="act ghost" onClick={() => onSave(draft.filter((_, k) => k !== i))}>
-                删掉
+                {t("删掉")}
               </button>
             </div>
             <input
               className="cmd"
               value={h.command}
-              placeholder="要运行的命令"
+              placeholder={t("要运行的命令")}
               onChange={(e) => patch(i, { command: e.target.value })}
             />
             {h.issues?.map((msg) => (
@@ -242,11 +243,11 @@ function Expert({
             ))}
             <div className="line">
               <button className="act" disabled={busy === key} onClick={() => onTry(h, key)}>
-                {busy === key ? "运行中…" : "试跑一次"}
+                {t(busy === key ? "运行中…" : "试跑一次")}
               </button>
               {/* The command really runs. Saying so is the difference between a
                   button that checks syntax and one that might delete a file. */}
-              <span className="note">会真的执行这条命令</span>
+              <span className="note">{t("会真的执行这条命令")}</span>
             </div>
             {res && <DryRun res={res} blocking={!!meta?.blocking} />}
           </div>
@@ -258,21 +259,21 @@ function Expert({
           className="act"
           onClick={() => setDraft((d) => [...d, { event: "PostToolUse", command: "", scope }])}
         >
-          加一条
+          {t("加一条")}
         </button>
         <button className="act" data-primary disabled={busy === "save"} onClick={() => onSave(draft)}>
-          {busy === "save" ? "保存中…" : "保存"}
+          {t(busy === "save" ? "保存中…" : "保存")}
         </button>
       </div>
 
       {plugin.length > 0 && (
         <div className="fromplugin">
-          <span className="lb">插件带来的 {plugin.length} 条</span>
+          <span className="lb">{t("插件带来的 {n} 条", { n: plugin.length })}</span>
           {plugin.map((h, i) => (
             <div className="prow" key={i}>
               <span className="ev">{h.event}</span>
               <span className="cm">{h.command}</span>
-              <span className="sc">只读</span>
+              <span className="sc">{t("只读")}</span>
             </div>
           ))}
         </div>

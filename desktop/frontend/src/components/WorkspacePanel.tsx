@@ -1750,7 +1750,6 @@ export function WorkspacePanel({
                     {(completionSummary.gap_kinds?.length ?? 0) > 0 && (
                       <span>{t("completion.gaps", { gaps: completionSummary.gap_kinds!.map((gap) => completionGapLabel(gap, t)).join(t("notice.deliveryRequirementSeparator")) })}</span>
                     )}
-                    {completionSummary.constraint_degraded && <span>{t("completion.constraintsLimited")}</span>}
                   </div>
                 </section>
               )}

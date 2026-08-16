@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { t } from "../i18n";
 import type { ModelEntry, RoleAssignments } from "../port/port";
 import { useDismiss } from "./dismiss";
 
@@ -33,7 +34,7 @@ export function Roles({ models, roles, main, busy, onSet }: Props) {
   const visionModel = models.find((m) => m.ref === visionRef);
   const readable = visionModel?.vision === true;
 
-  if (!roles) return <div className="empty">读不到分工。</div>;
+  if (!roles) return <div className="empty">{t("读不到分工。")}</div>;
 
   const following = ROLES.filter(([k]) => !roles[k]).length;
 
@@ -41,10 +42,10 @@ export function Roles({ models, roles, main, busy, onSet }: Props) {
     <>
       <div className="band">
         <div className="anchor">
-          <span className="cap">对话 · 主模型</span>
+          <span className="cap">{t("对话 · 主模型")}</span>
           <span className="nm">{anchor?.model ?? main ?? "—"}</span>
           <span className="meta">
-            {[anchor?.provider, following === ROLES.length ? "所有分工都跟着它" : `${following} 个分工跟着它`]
+            {[anchor?.provider, following === ROLES.length ? t("所有分工都跟着它") : t("{n} 个分工跟着它", { n: following })]
               .filter(Boolean)
               .join(" · ")}
           </span>
@@ -53,8 +54,8 @@ export function Roles({ models, roles, main, busy, onSet }: Props) {
           {ROLES.map(([key, name, tag]) => (
             <Slot
               key={key}
-              name={name}
-              tag={tag}
+              name={t(name)}
+              tag={t(tag)}
               set={roles[key]}
               models={models}
               busy={busy}
@@ -71,7 +72,7 @@ export function Roles({ models, roles, main, busy, onSet }: Props) {
       <p className="note">
         {readable
           ? `主模型看不了的图会交给 ${visionModel?.model}，它读图，所以附件真的会被看到。`
-          : "主模型看不了的图现在没人读得了 —— 会在发出去之前被丢掉。给「看图」指一个带「读图」标签的模型就能接上。"}
+          : t("主模型看不了的图现在没人读得了 —— 会在发出去之前被丢掉。给「看图」指一个带「读图」标签的模型就能接上。")}
       </p>
     </>
   );
@@ -102,13 +103,13 @@ function Slot({
         {/* Keyed on the assignment so the value replays its entrance when it
             changes — the row is the only thing that moved, and a silent swap
             reads as nothing having happened. */}
-        <span className="val" key={set || "follow"}>{set ? (chosen?.model ?? set) : "跟随主模型"}</span>
-        <span className="tag">{set ? "已指派" : tag}</span>
+        <span className="val" key={set || "follow"}>{set ? (chosen?.model ?? set) : t("跟随主模型")}</span>
+        <span className="tag">{set ? t("已指派") : tag}</span>
       </button>
       {open && (
-        <div className="rpick" role="listbox" aria-label={`${name}用哪个模型`}>
+        <div className="rpick" role="listbox" aria-label={t("{name}用哪个模型", { name })}>
           <button role="option" aria-selected={!set} data-cur={!set ? "" : undefined} onClick={() => onPick("")}>
-            跟随主模型
+            {t("跟随主模型")}
           </button>
           <div className="sep" />
           {models.map((m) => (

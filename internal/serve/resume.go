@@ -8,6 +8,7 @@ package serve
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -28,38 +29,42 @@ func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing path", http.StatusBadRequest)
 		return
 	}
+	if status, err := s.resumeInto(body.Path); err != nil {
+		writeErr(w, status, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// resumeInto binds this runtime to the transcript at path, answering with the
+// status a refusal deserves so both the HTTP handler and a hub opening a
+// session in a new pane refuse for the same reasons.
+func (s *Server) resumeInto(path string) (int, error) {
 	dir := s.ctl().SessionDir()
 	if dir == "" {
-		http.Error(w, "sessions disabled", http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, refusal(http.StatusBadRequest, "session.disabled", errors.New("sessions disabled"), nil)
 	}
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		http.Error(w, "invalid session dir", http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, errors.New("invalid session dir")
 	}
 	realDir, err := filepath.EvalSymlinks(absDir)
 	if err != nil {
-		http.Error(w, "invalid session dir", http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, errors.New("invalid session dir")
 	}
-	absPath, err := filepath.Abs(strings.TrimSpace(body.Path))
+	absPath, err := filepath.Abs(strings.TrimSpace(path))
 	if err != nil || !store.IsSessionTranscriptName(filepath.Base(absPath)) {
-		http.Error(w, "invalid session path", http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, errors.New("invalid session path")
 	}
 	realPath, err := filepath.EvalSymlinks(absPath)
 	if err != nil {
-		http.Error(w, "invalid session path", http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, errors.New("invalid session path")
 	}
 	if realPath == realDir || !strings.HasPrefix(realPath, realDir+string(os.PathSeparator)) {
-		http.Error(w, "path outside session dir", http.StatusForbidden)
-		return
+		return http.StatusForbidden, errors.New("path outside session dir")
 	}
 	if agent.IsCleanupPending(realPath) {
-		http.Error(w, "session is pending cleanup", http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, refusal(http.StatusBadRequest, "session.pending_cleanup", errors.New("session is pending cleanup"), nil)
 	}
 	// Serialize with /new, /fork, and switchModel so the controller and lease
 	// cannot land on different sessions. Validate first to avoid slow holders.
@@ -75,11 +80,9 @@ func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
 	if s.leases != nil {
 		if err := s.leases.Rebind(realPath); err != nil {
 			if errors.Is(err, agent.ErrSessionLeaseHeld) {
-				http.Error(w, sessionInUseError(err), http.StatusConflict)
-			} else {
-				http.Error(w, "session lease: "+err.Error(), http.StatusInternalServerError)
+				return http.StatusConflict, refusal(http.StatusConflict, "session.in_use", errors.New(sessionInUseError(err)), nil)
 			}
-			return
+			return http.StatusInternalServerError, fmt.Errorf("session lease: %w", err)
 		}
 	}
 	loaded, err := agent.LoadSession(realPath)
@@ -87,8 +90,7 @@ func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
 		// The lease already moved to the target; re-point it at the session the
 		// controller still owns (best-effort).
 		_ = s.rebindSessionLease(s.ctl().SessionPath())
-		http.Error(w, "load session: "+err.Error(), http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, fmt.Errorf("load session: %w", err)
 	}
 	if hook := resumeBindHookForTest; hook != nil {
 		hook()
@@ -98,15 +100,13 @@ func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
 		// one under it is how the running conversation's output lands in the
 		// transcript the user just switched to.
 		_ = s.rebindSessionLease(s.ctl().SessionPath())
-		http.Error(w, err.Error(), http.StatusConflict)
-		return
+		return http.StatusConflict, err
 	}
 	if ctrl, ok := s.ctl().(*control.Controller); ok && s.leases != nil {
 		if err := s.leases.BindControllerAuthority(ctrl); err != nil {
-			http.Error(w, "session authority: unable to bind resumed session", http.StatusInternalServerError)
-			return
+			return http.StatusInternalServerError, refusal(http.StatusInternalServerError, "session.bind_failed", errors.New("session authority: unable to bind resumed session"), nil)
 		}
 	}
 	s.bc.ResetSession()
-	w.WriteHeader(http.StatusNoContent)
+	return http.StatusNoContent, nil
 }

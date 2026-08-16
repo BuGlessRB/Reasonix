@@ -1,0 +1,97 @@
+import type { Appearance } from "../port/port";
+
+// The user's own settings, applied after a pack so they win: a pack is a
+// palette somebody else authored, and the size someone reads at is not
+// something an author gets to overrule.
+//
+// It shares the pack's image variables rather than adding a second layer —
+// two backgrounds behind one window is a bug, not a feature — so a wallpaper
+// replaces a pack's picture instead of stacking on it.
+const IMAGE_VARS = ["--bg-image", "--bg-x", "--bg-y", "--bg-alpha", "--bg-overlay"];
+
+/** apply paints the user's appearance, or clears back to the pack's own.
+ *  `busy` fades the picture while a turn runs, the same as a pack's does: a
+ *  photo that is right behind an idle window is in the way of one being read. */
+export function apply(look: Appearance | null, busy = false) {
+  const root = document.documentElement;
+  const style = root.style;
+
+  // Zoom scales everything — type, spacing, borders — which is what "make it
+  // bigger" means when 1500 sizes in the stylesheet are written in pixels. It
+  // rides a variable as well, because vh and vw keep measuring the unscaled
+  // viewport: without dividing them back out, a scaled-up window pushes its own
+  // composer off the bottom of the screen.
+  if (look?.zoom && look.zoom !== 1) {
+    style.setProperty("zoom", String(look.zoom));
+    style.setProperty("--zoom", String(look.zoom));
+  } else {
+    style.removeProperty("zoom");
+    style.removeProperty("--zoom");
+  }
+
+  // Reading size moves the transcript's prose alone, so the frame around it
+  // stays where the layout put it.
+  if (look?.readSize) style.setProperty("--read", `${look.readSize}px`);
+  else style.removeProperty("--read");
+
+  if (look?.fontUi) style.setProperty("--ui", `${look.fontUi}, ${FALLBACK_UI}`);
+  else style.removeProperty("--ui");
+  if (look?.fontMono) style.setProperty("--mono", `${look.fontMono}, ${FALLBACK_MONO}`);
+  else style.removeProperty("--mono");
+
+  const paper = look?.wallpaper;
+  if (!paper) return;
+  for (const v of IMAGE_VARS) style.removeProperty(v);
+  style.setProperty("--bg-image", `url("${paper.url}")`);
+  style.setProperty("--bg-x", `${pct(paper.focusX)}%`);
+  style.setProperty("--bg-y", `${pct(paper.focusY)}%`);
+  // At work it recedes to a third of what it is at rest, so the picture never
+  // competes with the run it is behind.
+  style.setProperty("--bg-alpha", String(busy ? paper.opacity * 0.35 : paper.opacity));
+  style.setProperty("--bg-overlay", String(paper.dim));
+  root.dataset.bg = "on";
+}
+
+// A chosen family is a first choice, never the only one: a name that stops
+// resolving — an uninstalled font, a synced config from another machine —
+// must not take the interface's legibility with it.
+const FALLBACK_UI = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", Arial, sans-serif`;
+const FALLBACK_MONO = `ui-monospace, "Cascadia Code", "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace`;
+
+function pct(v: number): number {
+  if (!Number.isFinite(v)) return 50;
+  return Math.round(Math.max(0, Math.min(1, v)) * 100);
+}
+
+/** installed filters a list of families down to the ones this machine really
+ *  has. It measures rather than asks: document.fonts.check() answers true for
+ *  every name, including ones nobody has ever installed, so a picker built on
+ *  it offers fonts that silently do nothing when chosen.
+ *
+ *  A family that is present renders the probe at a different width than the
+ *  generic it would otherwise fall back to. Two generics are tried because a
+ *  font can coincidentally match one of them. */
+export function installed(families: string[]): string[] {
+  const cv = document.createElement("canvas").getContext("2d");
+  if (!cv) return families;
+  const PROBE = "mmmmmmmmmmlliWWWW@#$%1234";
+  const width = (family: string) => {
+    cv.font = `72px ${family}`;
+    return cv.measureText(PROBE).width;
+  };
+  const mono = width("monospace");
+  const serif = width("serif");
+  return families.filter((f) => width(`"${f}", monospace`) !== mono || width(`"${f}", serif`) !== serif);
+}
+
+// Offered because they are common, not because they are the only ones that
+// work: the field next to the list takes any family the machine has.
+export const UI_FAMILIES = [
+  "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", "Source Han Sans SC", "HarmonyOS Sans SC",
+  "LXGW WenKai", "Songti SC", "SimSun", "Inter", "Segoe UI", "Roboto", "Helvetica Neue", "Arial",
+];
+
+export const MONO_FAMILIES = [
+  "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas", "JetBrains Mono", "Fira Code",
+  "Source Code Pro", "IBM Plex Mono", "LXGW WenKai Mono", "Sarasa Mono SC", "Maple Mono",
+];

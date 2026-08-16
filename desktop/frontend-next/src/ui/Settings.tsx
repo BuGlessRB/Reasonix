@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AccountState, AgentPort, ApprovalMode, McpEntry, ModelEntry, PluginPackage, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
+import { t } from "../i18n";
+import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, McpEntry, ModelEntry, PluginPackage, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 import { WindowControls } from "./WindowControls";
 import { AddServer } from "./AddServer";
@@ -9,6 +10,8 @@ import { Switch } from "./Switch";
 import { Hooks } from "./Hooks";
 import { Network } from "./Network";
 import { Shell as ShellPicker } from "./Shell";
+import { Rules } from "./Rules";
+import { Sandbox } from "./Sandbox";
 import { Account } from "./Account";
 import { Providers } from "./Providers";
 import { Models, activeKind, groupVendors } from "./Models";
@@ -75,6 +78,10 @@ interface Props {
   theme: string;
   reloadThemes: () => void;
   onTheme: (t: string) => void;
+  contrast: string;
+  look: Look;
+  onLook: (look: Look) => void;
+  onContrast: (c: string) => void;
   onClose: () => void;
   onChanged: () => void;
   at?: string;
@@ -82,7 +89,7 @@ interface Props {
   reloadAccount: () => void;
 }
 
-export function Settings({ port, status, theme, onTheme, onClose, onChanged, reloadThemes, at: opened, account: acct, reloadAccount }: Props) {
+export function Settings({ port, status, theme, onTheme, contrast, onContrast, look, onLook, onClose, onChanged, reloadThemes, at: opened, account: acct, reloadAccount }: Props) {
   const [at, setAt] = useState<Section>((opened as Section) || "session");
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [roles, setRoles] = useState<RoleAssignments | null>(null);
@@ -99,14 +106,19 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
   const [hookCount, setHookCount] = useState(0);
   const [netMode, setNetMode] = useState("");
   const [memCount, setMemCount] = useState(0);
+  const [ruleCount, setRuleCount] = useState(0);
   const root = useRef<HTMLDivElement>(null);
 
   const reloadExt = useCallback(() => {
     port.mcp().then(setMcp).catch(() => setMcp([]));
     port.plugins().then(setPackages).catch(() => setPackages([]));
     port.hooks().then((c) => setHookCount(c.hooks.length)).catch(() => setHookCount(0));
-    port.network().then((n) => setNetMode(NET_MODE[n.mode] ?? n.mode)).catch(() => setNetMode(""));
+    port.network().then((n) => setNetMode(t(NET_MODE[n.mode] ?? n.mode))).catch(() => setNetMode(""));
     port.memories().then((c) => setMemCount(c.memories.length)).catch(() => setMemCount(0));
+    port
+      .permissions()
+      .then((p) => setRuleCount(p.deny.length + p.ask.length + p.allow.length))
+      .catch(() => setRuleCount(0));
     port
       .skills()
       .then((c) => {
@@ -191,8 +203,8 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
   };
   const efforts = models.find((m) => m.ref === status?.modelRef)?.efforts ?? [];
   const assigned = roles ? Object.values(roles).filter(Boolean).length : 0;
-  const preset = PRESETS.find(([id]) => id === status?.preset)?.[1] ?? "—";
-  const approval = APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[1] ?? "—";
+  const preset = t(PRESETS.find(([id]) => id === status?.preset)?.[1] ?? "") || "—";
+  const approval = t(APPROVALS.find(([id]) => id === status?.toolApprovalMode)?.[1] ?? "—");
   const broken = mcp.filter((m) => m.state === "failed").length;
   // A package owns what it brought, and its own row already lists it. What is
   // left is what the user added by hand, which is the only thing these two
@@ -206,16 +218,16 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
   // The table of contents is also the status board: the value that matters for
   // each section rides on its own row, so the risky one is legible from here.
   const nav: Record<Section, string> = {
-    session: status?.plan ? "计划模式" : preset,
+    session: status?.plan ? t("计划模式") : preset,
     model: status?.modelRef?.split("/").pop() ?? "—",
-    tools: approval,
-    hooks: hookCount ? `${hookCount} 条` : "关",
-    ext: broken ? `${broken} 个异常` : packages.length ? `${packages.length} 个包` : `${looseMcp.length + looseOn}`,
+    tools: ruleCount ? `${approval} · ${ruleCount}` : approval,
+    hooks: hookCount ? t("{n} 条", { n: hookCount }) : t("关"),
+    ext: broken ? t("{n} 个异常", { n: broken }) : packages.length ? t("{n} 个包", { n: packages.length }) : `${looseMcp.length + looseOn}`,
     network: netMode,
-    memory: memCount ? `${memCount} 条` : "",
-    account: acct === null ? "" : acct.signedIn ? (acct.user?.label ?? "已登录") : "未登录",
+    memory: memCount ? t("{n} 条", { n: memCount }) : "",
+    account: acct === null ? "" : acct.signedIn ? (acct.user?.label ?? t("已登录")) : t("未登录"),
     versions: "",
-    appearance: SCHEMES.find(([id]) => id === theme)?.[1] ?? "",
+    appearance: t(SCHEMES.find(([id]) => id === theme)?.[1] ?? ""),
     advanced: ELSEWHERE.length ? `${ELSEWHERE.length}` : "",
   };
   const danger = (id: Section) =>
@@ -225,18 +237,18 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
     <div className="prefs" ref={root} tabIndex={-1}>
       <div className="prefs-hd">
         <button className="back" onClick={onClose}>
-          ‹ 返回工作台
+          ‹ {t("返回工作台")}
         </button>
-        <span className="ttl">设置</span>
+        <span className="ttl">{t("设置")}</span>
         <span className="esc">esc</span>
         <WindowControls />
       </div>
 
       <div className="prefs-body">
-        <nav className="prefs-nav" role="tablist" aria-label="设置分类" onKeyDown={arrowTabs}>
+        <nav className="prefs-nav" role="tablist" aria-label={t("设置分类")} onKeyDown={arrowTabs}>
           {NAV.map(([id, name]) => (
             <button key={id} id={`prefs-${id}`} role="tab" aria-selected={at === id} onClick={() => setAt(id)}>
-              {name}
+              {t(name)}
               <span className="nv" data-danger={danger(id) ? "" : undefined}>
                 {nav[id]}
               </span>
@@ -248,35 +260,40 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
           <Boundary
             fallback={
               <div className="find" data-lvl="err" role="alert">
-                <span className="t">这个设置分区出错了</span>
-                <span className="why">其它分区和你的会话不受影响；关掉设置再打开可重试。</span>
+                <span className="t">{t("这个设置分区出错了")}</span>
+                <span className="why">{t("其它分区和你的会话不受影响；关掉设置再打开可重试。")}</span>
               </div>
             }
           >
           <div className="prefs-col">
           {at === "session" && (
             <>
-              <Group title="执行设定" hint="管的是「做完了」谁说了算。切档立刻生效，不重建运行时。">
+              <Group title={t("执行设定")} hint={t("管的是「做完了」谁说了算。切档立刻生效，不重建运行时。")}>
                 {PRESETS.map(([id, name, desc]) => (
-                  <Row key={id} on={status?.preset === id} busy={busy === id} label={name} desc={desc}
+                  <Row key={id} on={status?.preset === id} busy={busy === id} label={t(name)} desc={t(desc)}
                     onClick={() => run(id, () => port.setPreset(id))} />
                 ))}
               </Group>
-              <Group title="计划模式" hint="开着的时候拿不到写权限：这不是提示词里的约定，是没给这个能力。">
-                <Row on={status?.plan === true} label="开" desc="只读加出计划，你批准后核心自己关掉它"
+              <Group title={t("计划模式")} hint={t("开着的时候拿不到写权限：这不是提示词里的约定，是没给这个能力。")}>
+                <Row on={status?.plan === true} label={t("开")} desc={t("只读加出计划，你批准后核心自己关掉它")}
                   onClick={() => run("plan-on", () => port.setPlanMode(true))} />
-                <Row on={status?.plan === false} label="关" desc="正常执行"
+                <Row on={status?.plan === false} label={t("关")} desc={t("正常执行")}
                   onClick={() => run("plan-off", () => port.setPlanMode(false))} />
               </Group>
-              <Group title="这个会话在哪写">
+              <Group title={t("这个会话在哪写")}>
                 <div className="kv">
-                  <span className="k">工作目录</span>
+                  <span className="k">{t("工作目录")}</span>
                   <span className="v">{status?.cwd ?? "—"}</span>
                 </div>
                 <p className="note">
-                  在顶栏点项目名换目录。换目录会整个重建运行时，当前对话留在原来那个
-                  项目里，不跟过去。
+                  {t("文件夹在左栏管：底部添加，展开后开新会话。一个会话属于开它的那个文件夹，不会跟着跑到别处。")}
                 </p>
+                <Row
+                  busy={busy === "isolate"}
+                  label={t("拉一份隔离副本")}
+                  desc={t("在 Git worktree 里开一份，改动不落回当前分支")}
+                  onClick={() => run("isolate", () => port.isolateWorkspace())}
+                />
               </Group>
             </>
           )}
@@ -287,25 +304,25 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
                   say why one was refused covers all of them. */}
               {failed && (
                 <div className="find" data-lvl="warn" role="alert">
-                  <span className="t">这一步没做成</span>
+                  <span className="t">{t("这一步没做成")}</span>
                   <span className="why">{failed}</span>
                 </div>
               )}
-              <Group title="分工" now={roles ? `${assigned} 个已指派` : undefined}
-                hint="每个位置默认跟着主模型走，只有你明确指派过的才会分出去。换指派跟换主模型一样要重建运行时，有活儿在跑的时候换不了。">
+              <Group title={t("分工")} now={roles ? t("{n} 个已指派", { n: assigned }) : undefined}
+                hint={t("每个位置默认跟着主模型走，只有你明确指派过的才会分出去。换指派跟换主模型一样要重建运行时，有活儿在跑的时候换不了。")}>
                 <Roles models={models} roles={roles} main={status?.modelRef} busy={busy}
                   onSet={(role, ref) => run(`role:${role}`, async () => {
                     await port.setRole(role, ref);
                     loadRoles();
                   })} />
               </Group>
-              <Group title="模型" now={nav.model} hint="切换会带着对话重建运行时；有活儿在跑的时候切不了。标签只写探得到的能力 —— 空着就是没人声明过，不是「不支持」。">
+              <Group title={t("模型")} now={nav.model} hint={t("切换会带着对话重建运行时；有活儿在跑的时候切不了。标签只写探得到的能力 —— 空着就是没人声明过，不是「不支持」。")}>
                 <Models models={models} current={status?.modelRef} busy={busy} protocol={protocol}
                   onPick={(ref) => run(ref, () => port.setModel(ref))} />
               </Group>
               {efforts.length > 0 ? (
-                <Group title="推理强度" hint="这几档是当前模型的端点真正认的，auto 表示交给它自己的默认。">
-                  <div className="seg" role="group" aria-label="推理强度">
+                <Group title={t("推理强度")} hint={t("这几档是当前模型的端点真正认的，auto 表示交给它自己的默认。")}>
+                  <div className="seg" role="group" aria-label={t("推理强度")}>
                     {efforts.map((e) => (
                       <button key={e} aria-pressed={(status?.effort || "auto") === e}
                         onClick={() => run(e, () => port.setEffort(e))}>
@@ -315,11 +332,11 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
                   </div>
                 </Group>
               ) : (
-                <Group title="推理强度" hint="当前模型没有暴露可调的推理档位，调它不会有任何效果，所以这里不给开关。" />
+                <Group title={t("推理强度")} hint={t("当前模型没有暴露可调的推理档位，调它不会有任何效果，所以这里不给开关。")} />
               )}
               <Group
-                title="连接"
-                hint="模型从哪里来。添加只问地址和 key —— 协议、模型列表、能不能看图，都去问端点，问不出来的才让你填。"
+                title={t("连接")}
+                hint={t("模型从哪里来。添加只问地址和 key —— 协议、模型列表、能不能看图，都去问端点，问不出来的才让你填。")}
               >
                 <Providers port={port} onChanged={loadModels} protocol={protocol}
                   activeKindFor={(a) => kindFor(a.key)}
@@ -330,15 +347,27 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
 
           {at === "tools" && (
             <>
-              <Group title="工具批准" hint="这是唯一挡在 agent 和你的文件之间的闸。它拦下来的时候，没有第二个入口能绕过去。">
+              <Group title={t("工具批准")} hint={t("这是唯一挡在 agent 和你的文件之间的闸。它拦下来的时候，没有第二个入口能绕过去。")}>
                 {APPROVALS.map(([id, name, desc]) => (
                   <Row key={id} on={status?.toolApprovalMode === id} busy={busy === id} danger={id === "yolo"}
-                    label={name} desc={desc} onClick={() => run(id, () => port.setApprovalMode(id))} />
+                    label={t(name)} desc={t(desc)} onClick={() => run(id, () => port.setApprovalMode(id))} />
                 ))}
               </Group>
               <Group
-                title="命令交给谁执行"
-                hint="agent 的每条命令都由这个程序来跑，所以它也决定命令该写成哪一种语法 —— 选错了不是慢，是每条都报错。下面列的是这台机器上真有的，装什么才能选什么。换一个要重建运行时，有活儿在跑的时候换不了。"
+                title={t("明确的规矩")}
+                hint={t("上面那档管的是「问不问你」，这里管的是「哪些根本不许，哪些永远不用问」。改动会重建运行时，有活儿在跑的时候改不了。")}
+              >
+                <Rules port={port} onChanged={onChanged} />
+              </Group>
+              <Group
+                title={t("沙箱")}
+                hint={t("批准之后能碰到多大范围。这一层不靠 agent 自觉：写入范围由工具执行，命令隔离由操作系统执行。")}
+              >
+                <Sandbox port={port} onChanged={onChanged} />
+              </Group>
+              <Group
+                title={t("命令交给谁执行")}
+                hint={t("agent 的每条命令都由这个程序来跑，所以它也决定命令该写成哪一种语法 —— 选错了不是慢，是每条都报错。下面列的是这台机器上真有的，装什么才能选什么。换一个要重建运行时，有活儿在跑的时候换不了。")}
               >
                 <ShellPicker port={port} onChanged={onChanged} />
               </Group>
@@ -347,8 +376,8 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
 
           {at === "hooks" && (
             <Group
-              title="自动化"
-              hint="在 agent 干活的前后插进你自己的命令。它们跑在你的机器上，用你的权限 —— 挡得住 agent 的那两个事件在下面会标出来。"
+              title={t("自动化")}
+              hint={t("在 agent 干活的前后插进你自己的命令。它们跑在你的机器上，用你的权限 —— 挡得住 agent 的那两个事件在下面会标出来。")}
             >
               <Hooks port={port} onChanged={afterExtChange} />
             </Group>
@@ -357,13 +386,13 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
           {at === "ext" && (
             <>
               <Group
-                title="插件包"
-                now={packages.length ? `${packages.length} 个` : undefined}
-                hint="一个包能一次带来技能、命令、自动化钩子和外部服务。装和导入是同一件事：给它一个仓库地址，或者机器上的一个文件夹。"
+                title={t("插件包")}
+                now={packages.length ? t("{n} 个", { n: packages.length }) : undefined}
+                hint={t("一个包能一次带来技能、命令、自动化钩子和外部服务。装和导入是同一件事：给它一个仓库地址，或者机器上的一个文件夹。")}
                 action={
                   addingPkg ? undefined : (
                     <button className="act" onClick={() => setAddingPkg(true)}>
-                      添加
+                      {t("添加")}
                     </button>
                   )
                 }
@@ -386,19 +415,19 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
                   updating={updatingPkg}
                   onUpdate={setUpdatingPkg}
                 />
-                {packages.length === 0 && !addingPkg && <div className="empty">还没装插件包。</div>}
+                {packages.length === 0 && !addingPkg && <div className="empty">{t("还没装插件包。")}</div>}
               </Group>
               {/* Below the packages: what was added by hand. A server the user
                   typed in themselves is not part of anyone's package, and
                   filing it under one would misname where it came from. */}
               <Group
-                title="外部工具"
-                now={looseMcp.length ? `${looseMcp.length} 个服务` : undefined}
-                hint="你自己接进来的 MCP 服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。关掉一个会立刻从这一轮的工具表里消失，并且重启后依然是关的。"
+                title={t("外部工具")}
+                now={looseMcp.length ? t("{n} 个服务", { n: looseMcp.length }) : undefined}
+                hint={t("你自己接进来的 MCP 服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。关掉一个会立刻从这一轮的工具表里消失，并且重启后依然是关的。")}
                 action={
                   adding ? undefined : (
                     <button className="act" onClick={() => setAdding(true)}>
-                      接入服务
+                      {t("接入服务")}
                     </button>
                   )
                 }
@@ -414,29 +443,29 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
                 {looseMcp.map((m) => (
                   <Server key={m.name} m={m} port={port} onDone={afterExtChange} />
                 ))}
-                {looseMcp.length === 0 && !adding && <div className="empty">没有自己接入的外部服务。</div>}
+                {looseMcp.length === 0 && !adding && <div className="empty">{t("没有自己接入的外部服务。")}</div>}
               </Group>
               <Group
-                title="技能"
-                now={looseSkills.length ? `${looseOn}/${looseSkills.length} 开着` : undefined}
-                hint={
+                title={t("技能")}
+                now={looseSkills.length ? t("{on}/{all} 开着", { on: looseOn, all: looseSkills.length }) : undefined}
+                hint={t(
                   implicit
                     ? "工作目录与「我的」里的技能。带 / 的可以自己点名调用；其余的由模型按任务自行判断要不要用。关掉的那些两条路都走不通。改动在下一次新建会话时进入模型的索引。"
-                    : "模型自动发现已关闭：现在只有你点名的技能会跑。改动在下一次新建会话时生效。"
-                }
+                    : "模型自动发现已关闭：现在只有你点名的技能会跑。改动在下一次新建会话时生效。",
+                )}
               >
                 {looseSkills.map((sk) => (
                   <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} />
                 ))}
-                {looseSkills.length === 0 && <div className="empty">这个工作目录下没有技能。</div>}
+                {looseSkills.length === 0 && <div className="empty">{t("这个工作目录下没有技能。")}</div>}
               </Group>
             </>
           )}
 
           {at === "network" && (
             <Group
-              title="网络"
-              hint="模型请求、MCP 的远程服务、网页抓取都走这里。配错了通常表现为聊天时莫名其妙卡住 —— 所以先测一下，它会告诉你断在哪一段。"
+              title={t("网络")}
+              hint={t("模型请求、MCP 的远程服务、网页抓取都走这里。配错了通常表现为聊天时莫名其妙卡住 —— 所以先测一下，它会告诉你断在哪一段。")}
             >
               <Network port={port} />
             </Group>
@@ -444,8 +473,8 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
 
           {at === "account" && (
             <Group
-              title="账号"
-              hint="Reasonix 本身不需要账号。它只用在天生要联网的地方：社区发帖、崩溃问题跟进，以后还有技能发布。"
+              title={t("账号")}
+              hint={t("Reasonix 本身不需要账号。它只用在天生要联网的地方：社区发帖、崩溃问题跟进，以后还有技能发布。")}
             >
               <Account port={port} state={acct} reload={reloadAccount} />
             </Group>
@@ -453,8 +482,8 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
 
           {at === "versions" && (
             <Group
-              title="版本"
-              hint="装的是哪一版、有没有更新，以及出问题时怎么退回去。回退会固定在你选的版本，不会被自动更新拽回来。"
+              title={t("版本")}
+              hint={t("装的是哪一版、有没有更新，以及出问题时怎么退回去。回退会固定在你选的版本，不会被自动更新拽回来。")}
             >
               <Versions port={port} />
             </Group>
@@ -462,21 +491,23 @@ export function Settings({ port, status, theme, onTheme, onClose, onChanged, rel
 
           {at === "memory" && (
             <Group
-              title="记忆"
-              hint="它自己记下来的东西 —— 你没配置过，但它会照着做。所以这里按「什么时候会被想起」分，并且标出上一轮真正用上了哪几条。"
+              title={t("记忆")}
+              hint={t("它自己记下来的东西 —— 你没配置过，但它会照着做。所以这里按「什么时候会被想起」分，并且标出上一轮真正用上了哪几条。")}
             >
               <Memory port={port} />
             </Group>
           )}
 
-          {at === "appearance" && <Appearance port={port} theme={theme} onTheme={onTheme} reloadThemes={reloadThemes} />}
+          {at === "appearance" && (
+            <Appearance port={port} theme={theme} onTheme={onTheme} contrast={contrast} onContrast={onContrast} reloadThemes={reloadThemes} look={look} onLook={onLook} />
+          )}
 
           {at === "advanced" && (
-            <Group title="还不在这一版里" hint="每一项都需要自己的界面，做半个不如先说清楚它现在在哪。">
+            <Group title={t("还不在这一版里")} hint={t("每一项都需要自己的界面，做半个不如先说清楚它现在在哪。")}>
               {ELSEWHERE.map((x) => (
                 <div className="lrow" key={x}>
                   <span className="ds">{x}</span>
-                  <span className="sc">旧版桌面端</span>
+                  <span className="sc">{t("旧版桌面端")}</span>
                 </div>
               ))}
             </Group>
@@ -498,7 +529,7 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
   // 401/403 is not a broken server, it is a server that stopped trusting this
   // machine — retrying without saying so sends the user around the same loop.
   const auth = /\b(401|403|unauthorized|forbidden|auth)/i.test(m.error ?? failed);
-  const meta = [MCP_STATE[m.state] ?? m.state, m.transport, m.source].filter(Boolean).join(" · ");
+  const meta = [t(MCP_STATE[m.state] ?? m.state), m.transport, m.source].filter(Boolean).join(" · ");
 
   const run = async (what: string, fn: () => Promise<unknown>) => {
     setBusy(what);
@@ -518,18 +549,18 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
     <span className="acts">
       {m.enabled && m.state !== "ready" && (
         <button className="act" disabled={!!busy} onClick={() => void run("retry", () => port.reconnectMcp(m.name))}>
-          {busy === "retry" ? "连接中…" : auth ? "重新授权" : "重连"}
+          {t(busy === "retry" ? "连接中…" : auth ? "重新授权" : "重连")}
         </button>
       )}
       {/* Removal is the one action here that cannot be undone by clicking again,
           so it asks — and the question names the file it is about to edit. */}
-      <button className="act ghost" aria-label={`移除 ${m.name}`} disabled={!!busy} onClick={() => setConfirming(true)}>
-        移除
+      <button className="act ghost" aria-label={t("移除 {name}", { name: m.name })} disabled={!!busy} onClick={() => setConfirming(true)}>
+        {t("移除")}
       </button>
       <Switch
         on={m.enabled}
         busy={busy === "toggle"}
-        label={`${m.enabled ? "关闭" : "启用"} ${m.name}`}
+        label={t(m.enabled ? "关闭 {name}" : "启用 {name}", { name: m.name })}
         onClick={() => void run("toggle", () => port.setMcpEnabled(m.name, !m.enabled))}
       />
     </span>
@@ -538,10 +569,10 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
   const confirm = confirming && (
     <div className="confirm">
       <span className="q">
-        把 {m.name} 从{m.source ? ` ${m.source} ` : "配置"}里删掉？只是想暂时不用的话，关掉开关就够了。
+        {t("把 {name} 从 {where} 里删掉？只是想暂时不用的话，关掉开关就够了。", { name: m.name, where: m.source || t("配置") })}
       </span>
       <button className="act" onClick={() => setConfirming(false)}>
-        算了
+        {t("算了")}
       </button>
       <button
         className="act danger"
@@ -552,11 +583,11 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
             setConfirming(false);
             // A lower-precedence declaration with the same name may have taken
             // over; saying so beats a list that looks like the delete failed.
-            if (r.stillConfigured) setFailed("同名的另一处声明现在生效了，这一行不会消失。");
+            if (r.stillConfigured) setFailed(t("同名的另一处声明现在生效了，这一行不会消失。"));
           })
         }
       >
-        {busy === "remove" ? "移除中…" : "移除"}
+        {t(busy === "remove" ? "移除中…" : "移除")}
       </button>
     </div>
   );
@@ -565,7 +596,7 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
     <>
       <i className="pip" />
       <span className="nm">{m.name}</span>
-      {m.toolNames?.length ? <span className="fold">{m.tools} 个工具</span> : null}
+      {m.toolNames?.length ? <span className="fold">{t("{n} 个工具", { n: m.tools })}</span> : null}
       <span className="meta">{meta}</span>
       {actions}
     </>
@@ -630,16 +661,16 @@ function SkillRow({
   return (
     <div className="skrow" data-off={sk.enabled ? undefined : ""}>
       <span className="nm">{sk.slashName ? "/" + sk.slashName : sk.name}</span>
-      <span className="ds">{sk.description || "没有写说明"}</span>
-      <span className="how">{note && <i className={note === "调不到" ? "w none" : "w"}>{note}</i>}</span>
+      <span className="ds">{sk.description || t("没有写说明")}</span>
+      <span className="how">{note && <i className={note === "调不到" ? "w none" : "w"}>{t(note)}</i>}</span>
       <span className="face">
-        {sk.subagent && <i className="sa">子代理</i>}
-        {sk.readOnly && <i className="ro">只读</i>}
+        {sk.subagent && <i className="sa">{t("子代理")}</i>}
+        {sk.readOnly && <i className="ro">{t("只读")}</i>}
       </span>
       <span className="sc" title={sk.path}>
-        {sk.plugin || SCOPE[sk.scope ?? ""] || sk.scope}
+        {sk.plugin || t(SCOPE[sk.scope ?? ""] ?? "") || sk.scope}
       </span>
-      <Switch on={sk.enabled} busy={busy} label={`${sk.enabled ? "关闭" : "启用"} ${sk.name}`} onClick={toggle} />
+      <Switch on={sk.enabled} busy={busy} label={t(sk.enabled ? "关闭 {name}" : "启用 {name}", { name: sk.name })} onClick={toggle} />
     </div>
   );
 }

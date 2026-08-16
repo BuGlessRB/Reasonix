@@ -1,12 +1,13 @@
 import type { Metrics } from "../state/session";
 import { RMark } from "./RMark";
+import { t } from "../i18n";
 import { useBump, useFresh, useTicker } from "./num";
 
 const kk = (n: number) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(Math.round(n)));
 
 const clock = (secs: number) => {
   const s = Math.floor(secs);
-  return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分 ${s % 60} 秒`;
+  return s < 60 ? t("{n} 秒", { n: s }) : t("{m} 分 {s} 秒", { m: Math.floor(s / 60), s: s % 60 });
 };
 
 interface Props {
@@ -29,8 +30,8 @@ export function RunStrip({ doing, metrics, steps, elapsed }: Props) {
   return (
     <div className="runstrip" data-rx={useFresh(metrics.out) ? "" : undefined}>
       <RMark />
-      <span className="doing">{doing}</span>
-      <span className="mt">{steps ? `${steps} 步 · ${clock(elapsed)}` : ""}</span>
+      <span className="doing">{t(doing)}</span>
+      <span className="mt">{steps ? t("{n} 步 · {clock}", { n: steps, clock: clock(elapsed) }) : ""}</span>
       <span className="io">
         <span className="up" data-bump={useBump(up) ? "" : undefined}>
           ↑ {kk(upShown)}
@@ -40,7 +41,7 @@ export function RunStrip({ doing, metrics, steps, elapsed }: Props) {
         </span>
       </span>
       <span className="mt">
-        缓存 <span className="hit">{rateShown.toFixed(1)}%</span>
+        {t("缓存")} <span className="hit">{rateShown.toFixed(1)}%</span>
       </span>
       <span className="yen">
         {metrics.currency}

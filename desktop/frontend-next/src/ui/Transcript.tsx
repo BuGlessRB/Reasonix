@@ -1,4 +1,5 @@
-import { memo, useEffect, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { t } from "../i18n";
 import type { Item, Waiting } from "../state/session";
 import type { ExtensionSurface } from "../port/wire";
 import type { ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope } from "../port/port";
@@ -18,10 +19,14 @@ import { ExtensionCard } from "./cards/ExtensionCard";
 
 interface Props {
   items: Item[];
+  // Changes only when the transcript's composition does — see state/session.
+  revision: number;
   waiting: Waiting;
   scroll: RefObject<HTMLDivElement | null>;
   hidden: boolean;
   onPinned: (v: boolean) => void;
+  // Bumped to ask for the bottom back — see the effect that consumes it.
+  jump: number;
   onApprove: (itemId: string, id: string, v: ApprovalVerdict) => void;
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => void;
   onSuggest: (text: string) => void;
@@ -40,16 +45,241 @@ interface Props {
   onUndoRewind: (transactionId: string) => Promise<void>;
 }
 
-export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove, onAnswer, onSuggest, onForget, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind }: Props) {
+// How many settled cards share one mounting unit. Small enough that scrolling
+// mounts a block within a frame, large enough that a long session holds a few
+// hundred blocks rather than tens of thousands.
+const BLOCK = 48;
+
+// A streamed delta rewrites the last card and leaves every earlier one at the
+// same identity, so the settled head is cut into blocks that keep their array
+// identity across frames — that is what lets each block memo instead of being
+// rebuilt on every chunk of text.
+//
+// Revision and length decide when to re-cut: anything that edits a card in the
+// middle — a tool settling, an approval being answered — bumps the revision by
+// construction, and a delta that opens a new message changes the cut. Between
+// two revisions this is O(1); on a revision it walks the blocks once and hands
+// back the ones whose contents did not move, which is a per-turn cost, not a
+// per-frame one.
+function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
+  const held = useRef<{ at: number; cut: number; blocks: Item[][] }>({ at: -1, cut: -1, blocks: [] });
+  if (held.current.at === revision && held.current.cut === cut) return held.current.blocks;
+
+  const prev = held.current.blocks;
+  const blocks: Item[][] = [];
+  for (let at = 0; at < cut; at += BLOCK) {
+    const end = Math.min(at + BLOCK, cut);
+    const old = prev[blocks.length];
+    let same = old !== undefined && old.length === end - at;
+    for (let i = 0; same && i < end - at; i++) same = old[i] === items[at + i];
+    blocks.push(same ? old : items.slice(at, end));
+  }
+  held.current = { at: revision, cut, blocks };
+  return blocks;
+}
+
+export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, onApprove, onAnswer, onSuggest, onForget, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind }: Props) {
+  // A block the selection touches must not leave the DOM. Unmounting the node a
+  // selection is anchored to makes the browser remap that selection onto
+  // whatever is still mounted — which reads as "I selected up there and the
+  // bottom got selected too".
+  const [held, setHeld] = useState<Set<number>>(new Set());
+
   // Stick to the bottom only while the reader is already there; scrolling up
   // must not be yanked back by incoming frames.
   const [pinned, setPinned] = useState(true);
+  const anchor = useRef(0);
+  const end = useRef<HTMLDivElement>(null);
+  const flow = useRef<HTMLDivElement>(null);
+  // Read from observer callbacks that must not be torn down and rebuilt every
+  // time the reader crosses the bottom.
+  const at = useRef(pinned);
+  at.current = pinned;
+
+  // Set while a follow is scrolling, so the scroll event it causes is not read
+  // as the reader moving away.
+  const self = useRef(false);
+  const wasAt = useRef(0);
+  // Scroll events before this moment are the browser's, not the reader's.
+  const quiet = useRef(0);
+
+  const follow = useCallback(() => {
+    if (anchor.current) return;
+    anchor.current = requestAnimationFrame(() => {
+      anchor.current = 0;
+      self.current = true;
+      end.current?.scrollIntoView({ block: "end" });
+      requestAnimationFrame(() => {
+        self.current = false;
+      });
+    });
+  }, []);
 
   useEffect(() => {
-    if (!pinned) return;
-    const el = scroll.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [items, pinned, scroll]);
+    const onSelect = () => {
+      const sel = document.getSelection();
+      const root = scroll.current;
+      if (!root || !sel || sel.isCollapsed || sel.rangeCount === 0) {
+        setHeld((prev) => (prev.size ? new Set() : prev));
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      if (!root.contains(range.commonAncestorContainer)) return;
+      const next = new Set<number>();
+      root.querySelectorAll(".chunk").forEach((el, i) => {
+        if (range.intersectsNode(el)) next.add(i);
+      });
+      setHeld((prev) => (prev.size === next.size && [...next].every((i) => prev.has(i)) ? prev : next));
+    };
+    document.addEventListener("selectionchange", onSelect);
+    return () => document.removeEventListener("selectionchange", onSelect);
+  }, [scroll]);
+
+  // Following is about intent, not position: only the reader scrolling up ends
+  // it. Ending it on "the marker left the viewport" looked equivalent and was
+  // not — a block mounting makes the transcript taller, which pushes the bottom
+  // away on its own, and reading that as "they went to look at something else"
+  // stranded the viewport half a transcript up, permanently.
+  //
+  // Reading scrollTop is free; scrollHeight and clientHeight are the two that
+  // force a layout, and neither is needed here.
+  useEffect(() => {
+    const root = scroll.current;
+    if (!root) return;
+    const onScroll = () => {
+      const top = root.scrollTop;
+      const up = top < wasAt.current - 2;
+      wasAt.current = top;
+      if (!up || self.current || !at.current || performance.now() < quiet.current) return;
+      // A block leaving the DOM hands its place to a placeholder, and the
+      // browser adjusts scrollTop for whatever the two differ by. That is an
+      // upward move nobody asked for. Measuring costs a layout, which is why it
+      // happens only here — while following, on an upward event — rather than
+      // on every frame: still at the bottom means the transcript moved, not the
+      // reader. The margin matches the marker's below.
+      if (root.scrollHeight - top - root.clientHeight <= 48) return;
+      at.current = false;
+      setPinned(false);
+      onPinned(false);
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => root.removeEventListener("scroll", onScroll);
+  }, [scroll, onPinned]);
+
+  // One observer for every block, not one per block. Hundreds of separate
+  // observers did not reliably report a block leaving — blocks stayed mounted
+  // 400,000px above the viewport — and each one is per-frame work of its own.
+  // A single observer watching many targets is what the API is for.
+  const watchers = useRef(new Map<Element, (near: boolean) => void>());
+  const lens = useRef<IntersectionObserver | null>(null);
+
+  // Not while hidden: nothing intersects a display:none root, so the observer
+  // would report every block as far away and unmount the entire transcript.
+  // Coming back would then have to rebuild it from estimated heights under a
+  // scroll position that no longer means anything. A pane on another tab keeps
+  // what it had — that is the whole point of leaving it mounted.
+  useEffect(() => {
+    const root = scroll.current;
+    if (!root || hidden) return;
+    // Two screens of margin: a block is mounted well before it can be scrolled
+    // to, so reaching it never waits on a render.
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) watchers.current.get(e.target)?.(e.isIntersecting);
+      },
+      { root, rootMargin: "200% 0px" },
+    );
+    lens.current = obs;
+    for (const el of watchers.current.keys()) obs.observe(el);
+    return () => {
+      obs.disconnect();
+      lens.current = null;
+    };
+  }, [scroll, hidden]);
+
+  // Stable, so a block subscribes once for its lifetime.
+  const watch = useCallback((el: Element, cb: (near: boolean) => void) => {
+    watchers.current.set(el, cb);
+    lens.current?.observe(el);
+    return () => {
+      watchers.current.delete(el);
+      lens.current?.unobserve(el);
+    };
+  }, []);
+
+  // Coming back to the bottom resumes it. Watching a marker at the end of the
+  // flow answers that without measuring the scroller, which following a live
+  // answer would otherwise do on every frame.
+  useEffect(() => {
+    const marker = end.current;
+    const root = scroll.current;
+    if (!marker || !root || hidden) return;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (!e.isIntersecting) return;
+        at.current = true;
+        setPinned(true);
+        onPinned(true);
+      },
+      { root, rootMargin: "0px 0px 48px 0px" },
+    );
+    io.observe(marker);
+    return () => io.disconnect();
+  }, [scroll, hidden, onPinned]);
+
+  // A hidden container scrolls nothing: scrollIntoView is a no-op there, and
+  // every block unmounts because nothing intersects a display:none root. So
+  // coming back has to do two things. Restore the follow — otherwise the
+  // transcript sits where you left it, thousands of pixels above what arrived
+  // meanwhile. And ignore the scroll events of the next few frames: putting
+  // scrollTop back and remounting the blocks both move it, and reading either
+  // as "the reader scrolled up" is what silently ended the follow.
+  useEffect(() => {
+    if (hidden) return;
+    quiet.current = performance.now() + 400;
+    if (at.current) follow();
+  }, [hidden, follow]);
+
+  // One write per animation frame is all a follow needs, however many deltas
+  // landed in between.
+  useEffect(() => {
+    if (pinned) follow();
+  }, [items, pinned, follow]);
+
+  // "Back to latest" cannot just write scrollTop once: where the bottom is
+  // changes as blocks mount under it. Turning the follow back on lets the same
+  // correction that tracks a live answer carry it the rest of the way.
+  useEffect(() => {
+    if (!jump) return;
+    at.current = true;
+    setPinned(true);
+    onPinned(true);
+    follow();
+  }, [jump, follow, onPinned]);
+
+  // Blocks mounting and unmounting move the bottom out from under a follow that
+  // only fires on events — which left the viewport stranded half a transcript
+  // up. Watching the height itself covers every cause: a block loading, a card
+  // expanding, a webfont finally arriving.
+  useEffect(() => {
+    const el = flow.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (at.current) follow();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [follow]);
+
+  useEffect(() => () => cancelAnimationFrame(anchor.current), []);
+
+  // Only a message still being written can grow; anything else is final the
+  // moment it lands, so the split is exactly one card wide.
+  const last = items.length > 0 ? items[items.length - 1] : undefined;
+  const live = last?.t === "say" && !last.done ? last : undefined;
+  const blocks = useBlocks(items, live ? items.length - 1 : items.length, revision);
+
+  const rowProps = { onApprove, onAnswer, onForget, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind };
 
   return (
     <div
@@ -58,36 +288,86 @@ export function Transcript({ items, waiting, scroll, hidden, onPinned, onApprove
       data-pane="flow"
       ref={scroll}
       hidden={hidden}
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        const at = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
-        if (at === pinned) return;
-        setPinned(at);
-        onPinned(at);
-      }}
     >
-      <div className="flow">
+      <div className="flow" ref={flow}>
         {items.length === 0 && <Hero onPick={onSuggest} />}
-        {items.map((it) => (
-          <Row
-            key={it.id}
-            it={it}
-            onApprove={onApprove}
-            onAnswer={onAnswer}
-            onForget={onForget}
-            onExtInvoke={onExtInvoke}
-            takeovers={takeovers}
-            onExtSubmit={onExtSubmit}
-            cp={checkpoints.get(it.id)}
-            onPrepareRewind={onPrepareRewind}
-            onCommitRewind={onCommitRewind}
-            onUndoRewind={onUndoRewind}
+        {blocks.map((block, i) => (
+          <Block
+            key={i}
+            items={block}
+            checkpoints={checkpoints}
+            watch={watch}
+            // The block a new card lands in has no measured height yet, so it
+            // mounts without waiting for the observer's first callback.
+            eager={i === blocks.length - 1}
+            keep={held.has(i)}
+            {...rowProps}
           />
         ))}
+        {live && <Row it={live} {...rowProps} cp={checkpoints.get(live.id)} />}
         {waiting.ttftSince && <Await retry={waiting.retry} />}
+        <div ref={end} className="flow-end" aria-hidden="true" />
       </div>
     </div>
   );
+}
+
+// Off-screen cards leave the DOM entirely, holding their place with the height
+// they last measured. content-visibility already spared them layout and paint;
+// this is about the cost of existing at all — at 4000 turns the nodes alone put
+// 300k of them and 111MB behind a window nobody can see through.
+const Block = memo(function Block({
+  items,
+  checkpoints,
+  watch,
+  eager,
+  keep,
+  ...rowProps
+}: {
+  items: Item[];
+  checkpoints: Map<string, Checkpoint>;
+  watch: (el: Element, cb: (near: boolean) => void) => () => void;
+  eager: boolean;
+  // The selection reaches into this block, so it stays mounted however far
+  // off-screen it scrolls.
+  keep: boolean;
+} & RowHandlers) {
+  const box = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(eager);
+  const tall = useRef(0);
+
+  useEffect(() => (box.current ? watch(box.current, setNear) : undefined), [watch]);
+
+  // Measured while mounted so the placeholder that replaces it is exactly as
+  // tall — otherwise unmounting above the viewport would jerk the scroll.
+  // Sub-pixel, because offsetHeight rounds: a third of a pixel per block is
+  // nothing until eighty of them unmount at once, and then the browser corrects
+  // scrollTop for the difference and the correction reads as the reader moving.
+  useLayoutEffect(() => {
+    if (near && box.current) tall.current = box.current.offsetHeight;
+  });
+
+  return (
+    <div
+      className="chunk"
+      ref={box}
+      style={near || keep ? undefined : { height: `${tall.current || items.length * 96}px` }}
+    >
+      {(near || keep) && items.map((it) => <Row key={it.id} it={it} {...rowProps} cp={checkpoints.get(it.id)} />)}
+    </div>
+  );
+});
+
+interface RowHandlers {
+  onApprove: Props["onApprove"];
+  onAnswer: Props["onAnswer"];
+  onForget: Props["onForget"];
+  onExtInvoke: Props["onExtInvoke"];
+  takeovers: Record<string, ExtensionSurface>;
+  onExtSubmit: Props["onExtSubmit"];
+  onPrepareRewind: Props["onPrepareRewind"];
+  onCommitRewind: Props["onCommitRewind"];
+  onUndoRewind: Props["onUndoRewind"];
 }
 
 // A streamed token replaces one item and leaves the rest identical, so the rest
@@ -105,19 +385,7 @@ const Row = memo(function Row({
   onPrepareRewind,
   onCommitRewind,
   onUndoRewind,
-}: {
-  it: Item;
-  onApprove: Props["onApprove"];
-  onForget: Props["onForget"];
-  onAnswer: Props["onAnswer"];
-  onExtInvoke: Props["onExtInvoke"];
-  takeovers: Record<string, ExtensionSurface>;
-  onExtSubmit: Props["onExtSubmit"];
-  cp?: Checkpoint;
-  onPrepareRewind: Props["onPrepareRewind"];
-  onCommitRewind: Props["onCommitRewind"];
-  onUndoRewind: Props["onUndoRewind"];
-}) {
+}: RowHandlers & { it: Item; cp?: Checkpoint }) {
   switch (it.t) {
     case "user":
       return <UserCard item={it} cp={cp} onPrepareRewind={onPrepareRewind} onCommitRewind={onCommitRewind} onUndoRewind={onUndoRewind} />;
@@ -175,8 +443,8 @@ function Await({ retry }: { retry?: { attempt: number; max: number } }) {
       <i />
       <span className="t">
         {retry
-          ? `连接在响应头前断了，重试 ${retry.attempt}/${retry.max} · ${secs.toFixed(1)}s`
-          : `等待回包 ${secs.toFixed(1)}s`}
+          ? t("连接在响应头前断了，重试 {attempt}/{max} · {secs}s", { attempt: retry.attempt, max: retry.max, secs: secs.toFixed(1) })
+          : t("等待回包 {secs}s", { secs: secs.toFixed(1) })}
       </span>
     </div>
   );
@@ -192,14 +460,14 @@ function Hero({ onPick }: { onPick: (t: string) => void }) {
   return (
     <div className="hero">
       <RMark />
-      <div className="t">交待一件事，它自己往下做</div>
+      <div className="t">{t("交待一件事，它自己往下做")}</div>
       <div className="s">
-        读代码、联网查证、派子代理、改文件 —— 每一步都同时落进「轨迹」，那是机器记录，不是给人读的叙事。
+        {t("读代码、联网查证、派子代理、改文件 —— 每一步都同时落进「轨迹」，那是机器记录，不是给人读的叙事。")}
       </div>
       <div className="qs">
-        {SUGGESTIONS.map((t) => (
-          <button className="sug" key={t} onClick={() => onPick(t)}>
-            {t}
+        {SUGGESTIONS.map((s) => (
+          <button className="sug" key={s} onClick={() => onPick(t(s))}>
+            {t(s)}
           </button>
         ))}
       </div>

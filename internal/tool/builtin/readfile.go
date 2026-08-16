@@ -174,10 +174,7 @@ func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 	}
 
 	if bytes.IndexByte(peek, 0) >= 0 {
-		if rp.External {
-			return "", fmt.Errorf("binary file %s (NUL byte detected); not shown by read_file", displayPath)
-		}
-		return "", fmt.Errorf("binary file %s (NUL byte detected); use `bash hexdump` or another tool", displayPath)
+		return "", binaryRefusal(displayPath, peek, rp.External)
 	}
 
 	// Read up to a bounded sample for encoding detection, then stream the rest —
@@ -252,4 +249,33 @@ func (r readFile) scan(src io.Reader, offset, limit int) (string, error) {
 		fmt.Fprintf(&b, "\n[more lines below; pass offset=%d to continue]\n", offset+len(collected))
 	}
 	return b.String(), nil
+}
+
+// binaryRefusal says why the bytes are not shown. An image is sent to the path
+// images actually travel: told to hexdump instead, a model spends a megabyte of
+// context on hex that answers nothing.
+func binaryRefusal(displayPath string, head []byte, external bool) error {
+	if kind := imageKind(head); kind != "" {
+		return fmt.Errorf("%s is a %s image; read_file reads text. Reference it as @%s — a model that reads images receives the picture itself, and one that cannot delegates with read_only_task", displayPath, kind, displayPath)
+	}
+	if external {
+		return fmt.Errorf("binary file %s (NUL byte detected); not shown by read_file", displayPath)
+	}
+	return fmt.Errorf("binary file %s (NUL byte detected); use `bash hexdump` or another tool", displayPath)
+}
+
+// imageKind names a picture from its magic bytes. Only the formats the vision
+// path accepts are listed: anything else is binary like any other.
+func imageKind(head []byte) string {
+	switch {
+	case bytes.HasPrefix(head, []byte("\x89PNG\r\n\x1a\n")):
+		return "PNG"
+	case bytes.HasPrefix(head, []byte{0xFF, 0xD8, 0xFF}):
+		return "JPEG"
+	case bytes.HasPrefix(head, []byte("GIF8")):
+		return "GIF"
+	case len(head) >= 12 && bytes.Equal(head[:4], []byte("RIFF")) && bytes.Equal(head[8:12], []byte("WEBP")):
+		return "WebP"
+	}
+	return ""
 }

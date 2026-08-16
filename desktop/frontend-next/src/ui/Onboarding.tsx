@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 import type { AgentPort, ProviderProbe, ProviderSetup } from "../port/port";
 import { KIND_LABEL } from "./vendors";
 import { Picker } from "./Menu";
@@ -94,12 +95,12 @@ export function Onboarding({ port, setup, onDone }: Props) {
   return (
     <div className="onb">
       <div className="onb-card">
-        <h1 className="onb-t">先连一个模型服务</h1>
+        <h1 className="onb-t">{t("先连一个模型服务")}</h1>
         <p className="onb-s">
-          填地址和 key，剩下的问它自己 —— 协议、模型清单、能不能读图，都是探得到的。
+          {t("填地址和 key，剩下的问它自己 —— 协议、模型清单、能不能读图，都是探得到的。")}
         </p>
 
-        <div className="onb-chips" role="group" aria-label="常用服务">
+        <div className="onb-chips" role="group" aria-label={t("常用服务")}>
           {SHORTCUTS.map((s) => (
             <button
               key={s.label}
@@ -115,14 +116,14 @@ export function Onboarding({ port, setup, onDone }: Props) {
         </div>
 
         <div className="onb-field">
-          <label htmlFor="onb-url">服务地址</label>
+          <label htmlFor="onb-url">{t("服务地址")}</label>
           <input
             id="onb-url"
             ref={first}
             value={url}
             spellCheck={false}
             autoComplete="off"
-            placeholder="https://你的地址/v1"
+            placeholder={t("https://你的地址/v1")}
             disabled={busy}
             onChange={(e) => { setUrl(e.target.value); setFound(null); }}
           />
@@ -156,11 +157,11 @@ export function Onboarding({ port, setup, onDone }: Props) {
             </div>
             {found.ambiguous && (
               <p className="onb-why">
-                这个端点不止一种协议答应了，上面是偏好而不是事实。连上之后能在设置里换。
+                {t("这个端点不止一种协议答应了，上面是偏好而不是事实。连上之后能在设置里换。")}
               </p>
             )}
             <div className="onb-field">
-              <span className="lb">先用哪个</span>
+              <span className="lb">{t("先用哪个")}</span>
               {/* The app's own picker rather than a <select>: a gateway can
                   publish a hundred models, and this one grows a filter past
                   ten. A native dropdown would also paint its list in the
@@ -172,7 +173,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
                   current={model}
                   onPick={setModel}
                   place="bottom"
-                  title="选择默认模型"
+                  title={t("选择默认模型")}
                 />
               </div>
             </div>
@@ -189,7 +190,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
         </button>
 
         <div className="onb-note">
-          key 存进本机配置，不上传任何第三方。模型、推理强度、执行设定都有默认值，随时能在输入框那排改。
+          {t("key 存进本机配置，不上传任何第三方。模型、推理强度、执行设定都有默认值，随时能在输入框那排改。")}
         </div>
       </div>
     </div>

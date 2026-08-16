@@ -20,7 +20,7 @@ const (
 
 // PolicyVersion is the host-visible policy schema version embedded in the
 // transient execution-policy block. Bump when the block shape changes.
-const PolicyVersion = 2
+const PolicyVersion = 3
 
 // Normalize maps free-form and legacy values onto a canonical AgentPreset.
 // Empty, unknown, and the retired "light"/"economy" names answer Balanced:

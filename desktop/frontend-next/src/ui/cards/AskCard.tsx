@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { t } from "../../i18n";
 import { Sym } from "../Sym";
 import type { Item } from "../../state/session";
 
@@ -88,7 +89,7 @@ export function AskCard({ item, onAnswer }: Props) {
             {qs.map((q, i) => (
               <div className="ask-pane" key={q.id} data-on={i === tab ? "" : undefined}>
                 <div className="ask-q">{q.prompt}</div>
-                <div className="ask-hint">{q.multi ? "可多选" : "选一个"}</div>
+                <div className="ask-hint">{t(q.multi ? "可多选" : "选一个")}</div>
                 <div className="opts">
                   {q.options.map((o, j) => (
                     <button
@@ -102,7 +103,7 @@ export function AskCard({ item, onAnswer }: Props) {
                       <span className="txt">
                         <span className="lb">
                           {o.label}
-                          {j === 0 && !q.multi && <span className="rec">推荐</span>}
+                          {j === 0 && !q.multi && <span className="rec">{t("推荐")}</span>}
                         </span>
                         {o.description && <span className="ds">{o.description}</span>}
                       </span>
@@ -116,7 +117,7 @@ export function AskCard({ item, onAnswer }: Props) {
                   >
                     <span className="mark" />
                     <span className="txt">
-                      <span className="lb">其他 —— 我自己写</span>
+                      <span className="lb">{t("其他 —— 我自己写")}</span>
                     </span>
                   </button>
                 </div>

@@ -51,7 +51,6 @@ function ev(s: typeof initialState, e: WireEvent) {
       checks_suppressed: 0,
       review: "passed",
       gap_kinds: [],
-      constraint_degraded: false,
     },
   });
   eq(complete.items, before.items, "ordinary completion summary stays off the transcript");
@@ -68,7 +67,6 @@ function ev(s: typeof initialState, e: WireEvent) {
       checks_suppressed: 2,
       review: "passed",
       gap_kinds: ["stale_check"],
-      constraint_degraded: true,
     },
   });
   eq(after.items.length, before.items.length + 1, "actionable completion summary adds one compact transcript notice");

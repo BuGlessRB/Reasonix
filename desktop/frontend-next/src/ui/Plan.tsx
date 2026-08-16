@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 import type { PlanStep } from "../state/session";
 
 // Keyed by text, not index: todo_write rewrites the whole list every call, and
@@ -31,10 +32,10 @@ export function Plan({ steps }: { steps: PlanStep[] }) {
     return (
       <div className="block" data-b="plan">
         <div className="lbl">
-          计划<span className="c">0 / 0</span>
+          {t("计划")}<span className="c">0 / 0</span>
         </div>
         <div className="plan">
-          <span className="empty">尚未制定</span>
+          <span className="empty">{t("尚未制定")}</span>
         </div>
       </div>
     );
@@ -44,7 +45,7 @@ export function Plan({ steps }: { steps: PlanStep[] }) {
   return (
     <div className="block" data-b="plan">
       <div className="lbl">
-        计划
+        {t("计划")}
         <span className="c">
           {done} / {steps.length}
         </span>

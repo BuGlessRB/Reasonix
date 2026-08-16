@@ -18,6 +18,16 @@ func (c *Controller) ContextReport() (summary, detail string) {
 	return renderContextReport(c.executor.ContextReport())
 }
 
+// ContextBreakdown says where the prompt's tokens went. The gauge answers how
+// full the window is; this answers what is filling it, which is the half a user
+// can act on.
+func (c *Controller) ContextBreakdown() agent.ContextBreakdown {
+	if c.executor == nil {
+		return agent.ContextBreakdown{}
+	}
+	return c.executor.ContextBreakdown()
+}
+
 // runSessionVerb runs a session mutation off the dispatch path and reports the
 // outcome, so the slash switch holds routing rather than goroutine plumbing.
 func (c *Controller) runSessionVerb(run func() error, done, failPrefix string) {

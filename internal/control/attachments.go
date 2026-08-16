@@ -279,8 +279,12 @@ func saveLinuxClipboardImage() (string, error) {
 	return "", fmt.Errorf("clipboard image paste needs wl-paste (Wayland) or xclip (X11)")
 }
 
-func ImageDataURL(path string) (string, error) {
-	raw, mime, err := readAttachmentImage(path)
+func ImageDataURL(path string) (string, error) { return ImageDataURLInRoot(".", path) }
+
+// ImageDataURLInRoot is ImageDataURL for a host whose process directory is not
+// the workspace.
+func ImageDataURLInRoot(root, path string) (string, error) {
+	raw, mime, err := readAttachmentImage(root, path)
 	if err != nil {
 		return "", err
 	}
@@ -291,8 +295,8 @@ func ImageDataURL(path string) (string, error) {
 // the desktop preview at full resolution), downscales/recompresses it before
 // base64 so an oversized photo doesn't balloon the request bytes and image
 // tokens. Best-effort: an undecodable format passes through at original size.
-func visionImageDataURL(path string) (string, error) {
-	raw, mime, err := readAttachmentImage(path)
+func visionImageDataURL(base, path string) (string, error) {
+	raw, mime, err := readAttachmentImage(base, path)
 	if err != nil {
 		return "", err
 	}
@@ -300,8 +304,8 @@ func visionImageDataURL(path string) (string, error) {
 	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(raw), nil
 }
 
-func readAttachmentImage(path string) (raw []byte, mime string, err error) {
-	clean, err := cleanAttachmentPath(path)
+func readAttachmentImage(base, path string) (raw []byte, mime string, err error) {
+	clean, err := cleanAttachmentPath(base, path)
 	if err != nil {
 		return nil, "", err
 	}
@@ -346,7 +350,12 @@ func readAttachmentImage(path string) (raw []byte, mime string, err error) {
 	return raw, mime, nil
 }
 
-func cleanAttachmentPath(path string) (string, error) {
+// cleanAttachmentPath resolves a stored reference under base. The reference
+// itself stays relative and inside .reasonix/attachments; base only says which
+// workspace that is. Without it the path resolves against the process working
+// directory — which is the workspace for the CLI and "/" for a window launched
+// from Finder, so every attachment a desktop session pasted read as missing.
+func cleanAttachmentPath(base, path string) (string, error) {
 	if filepath.IsAbs(path) {
 		return "", fmt.Errorf("attachment path must be relative")
 	}
@@ -355,13 +364,16 @@ func cleanAttachmentPath(path string) (string, error) {
 	if clean == "." || clean == root || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || !strings.HasPrefix(clean, root+string(filepath.Separator)) {
 		return "", fmt.Errorf("attachment path is outside .reasonix/attachments")
 	}
-	if err := ensureAttachmentRoot(); err != nil {
+	if strings.TrimSpace(base) == "" {
+		base = "."
+	}
+	if err := ensureAttachmentRootIn(base); err != nil {
 		return "", err
 	}
-	if err := rejectSymlinkComponents(clean, root); err != nil {
+	if err := rejectSymlinkComponents(filepath.Join(base, clean), filepath.Join(base, root)); err != nil {
 		return "", err
 	}
-	return clean, nil
+	return filepath.Join(base, clean), nil
 }
 
 func rejectSymlinkComponents(path, root string) error {

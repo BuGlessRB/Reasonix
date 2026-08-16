@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { t } from "../i18n";
 import type { Span, TrajRow } from "../state/trajectory";
 
 function Spans({ of }: { of: Span[] }) {
@@ -45,7 +46,7 @@ export function Trajectory({ rows }: { rows: TrajRow[] }) {
       </table>
       {/* serve builds no trajectory.Recorder — only the CLI does — so there is
           nothing on disk to reload. Say so rather than imply otherwise. */}
-      <div className="traj-note">实时事件流 · 仅本次连接，切换或重进会话后重建</div>
+      <div className="traj-note">{t("实时事件流 · 仅本次连接，切换或重进会话后重建")}</div>
     </>
   );
 }

@@ -1,7 +1,6 @@
 :root {
     --page: #F3F5F8; --surface: #FAFBFD; --raised: #FFFFFF; --overlay: #EDF0F4;
     --border: #DBE0E7; --hair: #E8ECF1;
-    --text: #14171C; --muted: #59616D; --faint: #858D9A; --ghost: #AEB6C2;
     --accent: #A96A0C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
     --net: #3555C4; --net-wash: #EBEFFC;
     --deleg: #0E7382; --deleg-wash: #E4F2F4;
@@ -21,6 +20,10 @@
     --t-line: .14s; --t-card: .22s; --t-panel: .34s;
     --r-xs: 3px; --r-sm: 5px; --r-md: 8px; --r-pill: 999px;
 
+    /* 对话正文的字号。单独立一个令牌，是因为「看不清」要调的是这一处，而
+       不是整套界面 —— 整体缩放走 zoom，两件事各调各的。 */
+    --read: 13.5px;
+
     /* 正文仍封在 68ch，那是设计稿的排版决定。但外面这一列不该再收一次：900px 的
        上限在宽窗口下把整条流吊在中间，只有终端块看着铺满、其它都在很早换行，读
        起来就是右边豁了一块。中栏本身就是这个宽度 —— 活动流、运行条、输入框共用
@@ -32,7 +35,6 @@
     :root {
     --page: #090B0F; --surface: #0C0E13; --raised: #151920; --overlay: #1D222B;
     --border: #292F39; --hair: #1A1F27;
-    --text: #E5E9F0; --muted: #8892A0; --faint: #5A6270; --ghost: #3C4451;
     --accent: #DDA144; --accent-fg: #171104; --accent-wash: #201907;
     --net: #7391FF; --net-wash: #111629;
     --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
@@ -42,7 +44,6 @@
   :root[data-theme="dark"] {
     --page: #090B0F; --surface: #0C0E13; --raised: #151920; --overlay: #1D222B;
     --border: #292F39; --hair: #1A1F27;
-    --text: #E5E9F0; --muted: #8892A0; --faint: #5A6270; --ghost: #3C4451;
     --accent: #DDA144; --accent-fg: #171104; --accent-wash: #201907;
     --net: #7391FF; --net-wash: #111629;
     --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
@@ -51,9 +52,72 @@
   :root[data-theme="light"] {
     --page: #F3F5F8; --surface: #FAFBFD; --raised: #FFFFFF; --overlay: #EDF0F4;
     --border: #DBE0E7; --hair: #E8ECF1;
-    --text: #14171C; --muted: #59616D; --faint: #858D9A; --ghost: #AEB6C2;
     --accent: #A96A0C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
     --net: #3555C4; --net-wash: #EBEFFC;
     --deleg: #0E7382; --deleg-wash: #E4F2F4;
     --ok: #2C7A4B; --warn: #A96A0C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
+  }
+
+  /* 文字对比度分三档，背景与语义色不参与。默认「柔和」：深底上接近纯白的正文
+     （原来 15.9:1）会起光晕，而 faint/ghost 原来低到 2~3:1 又读不清 —— 同屏
+     跨度 8 倍，眼睛在两端反复适应才是真正累人的地方。现在两头都收进 4 倍内。 */
+  :root, :root[data-contrast="soft"] {
+  --text: #2C333E; --muted: #59616C; --faint: #6C7583; --ghost: #8893A5;
+  }
+  :root[data-contrast="normal"] {
+  --text: #272D36; --muted: #515963; --faint: #636B78; --ghost: #7D899D;
+  }
+  :root[data-contrast="strong"] {
+  --text: #14171D; --muted: #484F58; --faint: #555C67; --ghost: #68768A;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root, :root[data-contrast="soft"] {
+    --text: #C6CEDE; --muted: #8792A0; --faint: #717A8C; --ghost: #545F72;
+    }
+    :root[data-contrast="normal"] {
+    --text: #D1D8E5; --muted: #929CA8; --faint: #7C8696; --ghost: #5B687B;
+    }
+    :root[data-contrast="strong"] {
+    --text: #E6E9F0; --muted: #9FA8B3; --faint: #8E97A5; --ghost: #6D7B92;
+    }
+  }
+
+  :root[data-theme="dark"], :root[data-theme="dark"][data-contrast="soft"] {
+  --text: #C6CEDE; --muted: #8792A0; --faint: #717A8C; --ghost: #545F72;
+  }
+  :root[data-theme="dark"][data-contrast="normal"] {
+  --text: #D1D8E5; --muted: #929CA8; --faint: #7C8696; --ghost: #5B687B;
+  }
+  :root[data-theme="dark"][data-contrast="strong"] {
+  --text: #E6E9F0; --muted: #9FA8B3; --faint: #8E97A5; --ghost: #6D7B92;
+  }
+  :root[data-theme="light"], :root[data-theme="light"][data-contrast="soft"] {
+  --text: #2C333E; --muted: #59616C; --faint: #6C7583; --ghost: #8893A5;
+  }
+  :root[data-theme="light"][data-contrast="normal"] {
+  --text: #272D36; --muted: #515963; --faint: #636B78; --ghost: #7D899D;
+  }
+  :root[data-theme="light"][data-contrast="strong"] {
+  --text: #14171D; --muted: #484F58; --faint: #555C67; --ghost: #68768A;
+  }
+
+  /* 系统开了「增强对比度」而用户没自己选过档，就按它来。明暗要单独判：手动
+     选过深色而系统配色是浅色时，只看 prefers-color-scheme 会把浅色主题的深色
+     正文刷到深背景上。 */
+  @media (prefers-contrast: more) {
+    :root:not([data-contrast]) {
+    --text: #14171D; --muted: #484F58; --faint: #555C67; --ghost: #68768A;
+    }
+    :root[data-theme="dark"]:not([data-contrast]) {
+    --text: #E6E9F0; --muted: #9FA8B3; --faint: #8E97A5; --ghost: #6D7B92;
+    }
+  }
+  @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+    :root:not([data-contrast]) {
+    --text: #E6E9F0; --muted: #9FA8B3; --faint: #8E97A5; --ghost: #6D7B92;
+    }
+    :root[data-theme="light"]:not([data-contrast]) {
+    --text: #14171D; --muted: #484F58; --faint: #555C67; --ghost: #68768A;
+    }
   }

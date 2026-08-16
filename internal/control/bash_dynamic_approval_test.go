@@ -307,3 +307,33 @@ func TestHeadlessExactOnlyBashApprovalModes(t *testing.T) {
 		})
 	}
 }
+
+// The refusal must name the shape it actually stopped. Telling a caller that
+// `env | grep` is "inline interpreter code" sends it rewriting toward a fix
+// that cannot apply, which costs a model round and teaches it nothing.
+func TestHeadlessBashRefusalNamesTheRealBlocker(t *testing.T) {
+	cases := []struct {
+		command string
+		blocker permission.BashApprovalBlocker
+		says    string
+		omits   string
+	}{
+		{`python3 -c "assert 1 == 1"`, permission.BashApprovalBlockerInlineCode, "inline interpreter code", "wrapper"},
+		{`env | grep -iE "plan|task"`, permission.BashApprovalBlockerIndirectExecution, "wrapper", "inline interpreter code"},
+		{"git diff || diff <(git show HEAD:x.py) x.py", permission.BashApprovalBlockerNestedExecution, "substitution", "inline interpreter code"},
+		{`eval "$CMD"`, permission.BashApprovalBlockerIndirectExecution, "wrapper", "inline interpreter code"},
+	}
+	for _, tc := range cases {
+		if got := permission.BashSubjectApprovalBlocker(tc.command); got != tc.blocker {
+			t.Errorf("%q blocker = %v, want %v", tc.command, got, tc.blocker)
+			continue
+		}
+		reason := headlessBashBlockReason(tc.blocker)
+		if !strings.Contains(reason, tc.says) {
+			t.Errorf("%q refusal does not explain %q:\n%s", tc.command, tc.says, reason)
+		}
+		if strings.Contains(reason, tc.omits) {
+			t.Errorf("%q refusal wrongly blames %q:\n%s", tc.command, tc.omits, reason)
+		}
+	}
+}

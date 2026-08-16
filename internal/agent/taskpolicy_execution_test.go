@@ -2,41 +2,24 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
+	"reasonix/internal/instruction"
 	"reasonix/internal/provider"
 	"reasonix/internal/taskpolicy"
 	"reasonix/internal/tool"
 )
 
-func TestTaskPolicyEnforcesVerificationAllowlist(t *testing.T) {
-	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "bash", readOnly: true})
-	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{}, event.Discard)
-	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{Raw: "fix it; only run go test ./internal/parser"})
-	a.turn.policySet = true
-
-	blocked := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "bash", Arguments: `{"command":"npm test"}`})
-	if !blocked.blocked || !strings.Contains(blocked.errMsg, "allowlist") {
-		t.Fatalf("npm test outcome = %+v, want allowlist block", blocked)
-	}
-	allowed := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "bash", Arguments: `{"command":"go test ./internal/parser"}`})
-	if allowed.blocked || allowed.errMsg != "" {
-		t.Fatalf("allowed go test outcome = %+v", allowed)
-	}
-}
-
 // A registered explore worker is the model's to call. The turn policy carries
-// user constraints, not a quota on how the model gathers context.
+// the plan-mode boundary, not a quota on how the model gathers context.
 func TestTaskPolicyLeavesExploreSubagentAlone(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "explore", readOnly: true})
 	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{}, event.Discard)
-	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{Raw: "find where the parser is wired"})
+	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{})
 	a.turn.policySet = true
 
 	got := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "explore", Arguments: `{}`})
@@ -45,49 +28,23 @@ func TestTaskPolicyLeavesExploreSubagentAlone(t *testing.T) {
 	}
 }
 
-func TestTaskPolicyBlocksExternalActionCommandVariants(t *testing.T) {
+// Ordinary work carries no host-invented limits: the gate blocks a writer only
+// under plan mode, and reaches for no reading of what the user wrote.
+func TestTaskPolicyBlocksWritersOnlyInPlanMode(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "bash", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false})
 	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{}, event.Discard)
-	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{Raw: "fix it, but don't push"})
 	a.turn.policySet = true
+	call := provider.ToolCall{Name: "write_file", Arguments: `{"path":"notes.txt","content":"x"}`}
 
-	for _, command := range []string{
-		"git -C ../repo push origin HEAD",
-		"npm --workspace pkg publish",
-		"kubectl -n production apply -f deploy.yaml",
-	} {
-		args, err := json.Marshal(map[string]string{"command": command})
-		if err != nil {
-			t.Fatal(err)
-		}
-		got := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "bash", Arguments: string(args)})
-		if !got.blocked || !strings.Contains(got.errMsg, "external action") {
-			t.Fatalf("command %q outcome = %+v, want task-policy block", command, got)
-		}
+	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{})
+	if got := a.executeOne(context.Background(), &a.turn, call); got.blocked {
+		t.Fatalf("outcome = %+v, want no policy block outside plan mode", got)
 	}
-}
-
-func TestTaskPolicyBlocksResolvedExternalCapability(t *testing.T) {
-	calls := 0
-	target := readOnlyBoundaryTarget{name: "mcp__vercel__deploy_project", readOnly: false, calls: &calls}
-	proxy := readOnlyBoundaryProxy{resolved: tool.ResolvedCall{
-		ProxyAction: "call", TargetName: target.Name(), Target: target, ReadOnly: false, Args: json.RawMessage(`{}`),
-	}}
-	reg := tool.NewRegistry()
-	reg.Add(proxy)
-	a := New(nil, reg, NewSession("sys"), Options{}, event.Discard)
-	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{Raw: "prepare the release, but don't deploy"})
-	a.turn.policySet = true
-
-	got := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
-		ID: "deploy-1", Name: "use_capability", Arguments: `{"action":"call","capability_id":"mcp-tool:vercel/deploy_project"}`,
-	})
-	if !got.blocked || !strings.Contains(got.errMsg, "external action") {
-		t.Fatalf("resolved deploy outcome = %+v, want task-policy block", got)
-	}
-	if calls != 0 {
-		t.Fatalf("resolved deploy Execute calls = %d, want 0", calls)
+	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{PlanMode: true})
+	got := a.executeOne(context.Background(), &a.turn, call)
+	if !got.blocked || !strings.Contains(got.errMsg, "forbids mutation") {
+		t.Fatalf("plan-mode outcome = %+v, want mutation block", got)
 	}
 }
 
@@ -110,5 +67,37 @@ func TestTaskPolicyRequiresPostMutationVerification(t *testing.T) {
 	a.task.ledger.Record(check)
 	if got := a.finalReadinessCheckFor(); got.reason != "" {
 		t.Fatalf("readiness after verification = %+v, want ready", got)
+	}
+}
+
+// A project that declares its own checks has defined what verification means
+// there. Running them satisfies the floor even when the host's classifier does
+// not recognize the command — it cannot tell a test script from a deploy one.
+func TestDeclaredProjectChecksSatisfyVerificationFloor(t *testing.T) {
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "bash", readOnly: true})
+	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Mutation: true}
+	unrecognized := evidence.Receipt{ToolName: "bash", Success: true, Command: "python3 test_stats.py"}
+	newAgent := func(checks []instruction.VerifyCheck, receipts ...evidence.Receipt) *Agent {
+		return &Agent{
+			task:          taskRuntime{ledger: readinessLedger(receipts...)},
+			svc:           agentServices{tools: reg},
+			projectChecks: checks,
+			turn: turnRuntime{
+				policy:    taskpolicy.TaskPolicy{Verification: taskpolicy.VerifyTargeted},
+				policySet: true,
+			},
+		}
+	}
+	declared := []instruction.VerifyCheck{{Command: "python3 test_stats.py", SourcePath: "REASONIX.md"}}
+
+	if got := newAgent(nil, writer, unrecognized).finalReadinessCheckFor(); !strings.Contains(got.reason, "verification command") {
+		t.Fatalf("undeclared project: readiness = %+v, want the classifier floor to still apply", got)
+	}
+	if got := newAgent(declared, writer, unrecognized).finalReadinessCheckFor(); got.reason != "" {
+		t.Fatalf("declared check ran: readiness = %+v, want ready", got)
+	}
+	if got := newAgent(declared, writer).finalReadinessCheckFor(); !strings.Contains(got.reason, "test_stats.py") {
+		t.Fatalf("declared check skipped: readiness = %+v, want it demanded", got)
 	}
 }

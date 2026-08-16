@@ -16,6 +16,10 @@ type PlanSubmission struct {
 	plan     plancontract.Plan
 	previous plancontract.Plan
 	attempts int
+	// noChanges holds conclude_no_changes' reason; empty unless that was the
+	// planner's last word. The two exits overwrite each other, so a turn can
+	// never be both a plan and a conclusion that no plan is needed.
+	noChanges string
 }
 
 type planSubmissionKey struct{}
@@ -53,7 +57,29 @@ func (s *PlanSubmission) record(p plancontract.Plan) plancontract.Plan {
 	s.attempts++
 	p.Revision = s.attempts
 	s.plan = p
+	s.noChanges = ""
 	return p
+}
+
+// NoChanges returns the planner's conclusion that nothing needs to change, when
+// it ended the turn that way. A no-op is the ABSENCE of a plan, so it gets its
+// own structured exit rather than a field on one.
+func (s *PlanSubmission) NoChanges() (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.noChanges, s.noChanges != ""
+}
+
+func (s *PlanSubmission) recordNoChanges(reason string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noChanges = reason
+	s.plan = plancontract.Plan{}
+	s.previous = plancontract.Plan{}
+	s.attempts = 0
 }
 
 // Revised compares a resubmission against the revision it replaces, so the

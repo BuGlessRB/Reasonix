@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"strings"
 )
 
@@ -47,4 +48,20 @@ func visionRefFor(ctx context.Context, childRef string) string {
 		return childRef
 	}
 	return routing.model
+}
+
+// subagentImageNote tells a delegate that the pictures ride the message it is
+// reading. Without it the child sees a path in its task and calls read_file,
+// which reads text and refuses — the delegation exists precisely because
+// something had to look at the image instead.
+func subagentImageNote(ctx context.Context) string {
+	n := len(SubagentImageCandidates(ctx))
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"<attached-images>\nThe %d image(s) this task is about are attached to this message. Look at them directly.\n"+
+			"Never call read_file on an image and never hexdump one: read_file reads text and will refuse.\n"+
+			"If you cannot see them at all, say so plainly instead of guessing what they show.\n</attached-images>\n\n",
+		n)
 }

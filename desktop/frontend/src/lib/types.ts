@@ -374,7 +374,6 @@ export interface WireCompletionSummary {
   checks_suppressed: number;
   review: string;
   gap_kinds?: string[];
-  constraint_degraded: boolean;
 }
 
 export type WorkspaceWatchState = "active" | "degraded" | "unavailable";

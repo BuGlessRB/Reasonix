@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { t } from "../i18n";
 import type { AgentPort, PluginExport, PluginItem, PluginPackage } from "../port/port";
 import { Switch } from "./Switch";
 
@@ -35,17 +36,18 @@ export function Packages({ port, packages, onChanged, updating, onUpdate }: Prop
 // the second hide inside the first.
 function summary(p: PluginPackage): string {
   const parts: string[] = [];
+  // 单位跟着数量走一句译文，而不是数字加一个词——英文里那样拼不出复数。
   const add = (n: number | undefined, unit: string) => {
-    if (n) parts.push(`${n} ${unit}`);
+    if (n) parts.push(t(unit, { n }));
   };
-  add(p.skills?.length, "个技能");
-  add(p.commands?.length, "个命令");
-  add(p.agents?.length, "个子代理");
-  add(p.prompts?.length, "个提示词");
-  add(p.themes?.length, "套配色");
-  add(p.hooks?.length, "条钩子");
-  add(p.mcpServers?.length, "个服务");
-  if (p.runtime) parts.push("常驻进程");
+  add(p.skills?.length, "{n} 个技能");
+  add(p.commands?.length, "{n} 个命令");
+  add(p.agents?.length, "{n} 个子代理");
+  add(p.prompts?.length, "{n} 个提示词");
+  add(p.themes?.length, "{n} 套配色");
+  add(p.hooks?.length, "{n} 条钩子");
+  add(p.mcpServers?.length, "{n} 个服务");
+  if (p.runtime) parts.push(t("常驻进程"));
   return parts.join(" · ");
 }
 
@@ -79,7 +81,7 @@ function Package({
           one installed from a folder that has since moved cannot. */}
       {p.source && (
         <button className="act ghost" disabled={!!busy || updating} onClick={onUpdate}>
-          更新
+          {t("更新")}
         </button>
       )}
       {/* Export and install are one door seen from both sides, so this button
@@ -93,15 +95,15 @@ function Package({
           })
         }
       >
-        {busy === "export" ? "打包中…" : "导出"}
+        {t(busy === "export" ? "打包中…" : "导出")}
       </button>
       <button className="act ghost" aria-label={`移除 ${p.name}`} disabled={!!busy} onClick={() => setConfirming(true)}>
-        移除
+        {t("移除")}
       </button>
       <Switch
         on={p.enabled}
         busy={busy === "toggle"}
-        label={`${p.enabled ? "关闭" : "启用"} ${p.name}`}
+        label={`${t(p.enabled ? "关闭" : "启用")} ${p.name}`}
         onClick={() => void run("toggle", () => port.setPluginEnabled(p.name, !p.enabled))}
       />
     </span>
@@ -113,7 +115,7 @@ function Package({
         删掉 {p.name}？它带来的技能、命令和服务会一起消失。只是想暂时不用的话，关掉开关就够了。
       </span>
       <button className="act" onClick={() => setConfirming(false)}>
-        算了
+        {t("算了")}
       </button>
       <button
         className="act danger"
@@ -126,7 +128,7 @@ function Package({
           })
         }
       >
-        {busy === "remove" ? "移除中…" : "删掉"}
+        {t(busy === "remove" ? "移除中…" : "删掉")}
       </button>
     </div>
   );
@@ -155,7 +157,7 @@ function Package({
       ))}
       {exported && (
         <div className="why">
-          {exported.savedTo ? `存到 ${exported.savedTo}。` : "导出好了。"}
+          {exported.savedTo ? t("存到 {path}。", { path: exported.savedTo }) : t("导出好了。")}
           {exported.required.length
             ? `里面的密钥值已经去掉，装它的人要自己提供：${exported.required.join("、")}`
             : "这个包里没有需要对方填的密钥。"}
@@ -175,7 +177,7 @@ function Package({
         {p.runtime && (
           <div className="row" data-run>
             <span className="d">▸</span>
-            <span>常驻进程</span>
+            <span>{t("常驻进程")}</span>
             <span className="sc">{[p.runtime.command, ...(p.runtime.args ?? [])].join(" ")}</span>
           </div>
         )}

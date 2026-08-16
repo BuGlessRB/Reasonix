@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import { t } from "../../i18n";
 import type { RememberedFact } from "../../state/session";
 
 // Saving a fact is the only tool call that changes what the agent will do in
@@ -29,14 +30,14 @@ export const RememberCard = memo(function RememberCard({
   return (
     <div className="remember" data-gone={forgotten ? "" : undefined}>
       <div className="hd">
-        <span className="lb">{forgotten ? "已经忘掉" : "记住了"}</span>
+        <span className="lb">{t(forgotten ? "已经忘掉" : "记住了")}</span>
         <span className="tag">REMEMBER</span>
         <span className="meta">
           {SCOPE[m.scope] ?? m.scope} · {ACTIVATION[m.activation] ?? m.activation}
         </span>
         {!forgotten && (
           <button className="act" disabled={busy} onClick={forget}>
-            {busy ? "忘掉中…" : "忘掉"}
+            {t(busy ? "忘掉中…" : "忘掉")}
           </button>
         )}
       </div>

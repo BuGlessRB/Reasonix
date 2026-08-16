@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { t } from "../i18n";
 import type { ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe } from "../port/port";
 import { KIND_LABEL, accountKey, disambiguate, hostOf, vendorLabel } from "./vendors";
 
@@ -95,7 +96,7 @@ export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor
     }
   };
 
-  if (list === null) return <p className="acct-note">正在读取…</p>;
+  if (list === null) return <p className="acct-note">{t("正在读取…")}</p>;
 
   return (
     <>
@@ -107,7 +108,7 @@ export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor
             onRemove={remove}
             onEdited={() => { reload(); onChanged(); }} />
         ))}
-        {list.length === 0 && <div className="empty">还没有配置任何模型来源。</div>}
+        {list.length === 0 && <div className="empty">{t("还没有配置任何模型来源。")}</div>}
       </div>
       {adding ? (
         <AddProvider
@@ -123,7 +124,7 @@ export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor
         />
       ) : (
         <button className="lnk" onClick={() => setAdding(true)}>
-          添加模型来源
+          {t("添加模型来源")}
         </button>
       )}
     </>
@@ -185,73 +186,69 @@ function Conn({
         <span className="nm">{a.label}</span>
         <span className="ds">
           {a.host}
-          {models > 0 ? ` · ${models} 个模型` : ""}
-          {entry.hasKey ? "" : " · 缺 key"}
+          {models > 0 ? ` · ${t("{n} 个模型", { n: models })}` : ""}
+          {t(entry.hasKey ? "" : " · 缺 key")}
         </span>
-        <span className="sc">{inUse ? "正在用" : ""}</span>
+        <span className="sc">{t(inUse ? "正在用" : "")}</span>
         {/* Hover-reveal is right for 删除; a diagnostic nobody can find is not
             a diagnostic, so this one stays on the row. */}
         <button className="sa lnk" data-keep onClick={() => setEditing((v) => !v)} disabled={busy !== ""}>
-          {editing ? "收起" : "编辑"}
+          {t(editing ? "收起" : "编辑")}
         </button>
         <button className="sa lnk" data-keep onClick={check} disabled={busy !== ""}>
-          {checking ? "测试中…" : "测一下"}
+          {t(checking ? "测试中…" : "测一下")}
         </button>
         {!entry.inUse && (
           <button className="sa lnk" onClick={() => onRemove(entry.name)} disabled={busy !== ""}>
-            删除
+            {t("删除")}
           </button>
         )}
       </div>
       {a.kinds.length > 1 && (
         <div className="vway">
-          <span className="lb">接入方式</span>
-          <div className="seg" role="group" aria-label={`${a.label} 的接入方式`}>
+          <span className="lb">{t("接入方式")}</span>
+          <div className="seg" role="group" aria-label={t("{name} 的接入方式", { name: a.label })}>
             {a.kinds.map((k) => (
               <button key={k} aria-pressed={k === kind} disabled={busy !== ""} onClick={() => onProtocol(k)}>
-                {KIND_LABEL[k] || k}
+                {t(KIND_LABEL[k] ?? k)}
                 {/* A door that carries a capability the other lacks has to say
                     so on itself: switching is otherwise a silent downgrade. */}
-                {a.byKind[k].canWebSearch && <i className="perk">联网搜索</i>}
+                {a.byKind[k].canWebSearch && <i className="perk">{t("联网搜索")}</i>}
               </button>
             ))}
           </div>
           <span className="why">
-            {a.kinds.some((k) => a.byKind[k].canWebSearch) && !entry.canWebSearch
-              ? "同一个账号的两扇门。这一扇没有联网搜索 —— 那是协议的差别，不是设置。"
-              : "同一个账号的两扇门。换一扇，下面的模型跟着换。"}
+            {t(a.kinds.some((k) => a.byKind[k].canWebSearch) && !entry.canWebSearch ? "同一个账号的两扇门。这一扇没有联网搜索 —— 那是协议的差别，不是设置。" : "同一个账号的两扇门。换一扇，下面的模型跟着换。")}
           </span>
         </div>
       )}
       {entry.canWebSearch && (
         <div className="vway">
-          <span className="lb">联网搜索</span>
-          <div className="seg" role="group" aria-label={`${a.label} 的联网搜索`}>
+          <span className="lb">{t("联网搜索")}</span>
+          <div className="seg" role="group" aria-label={t("{name} 的联网搜索", { name: a.label })}>
             {[true, false].map((on) => (
               <button key={String(on)} aria-pressed={entry.webSearch === on} disabled={busy !== ""}
                 onClick={() => setSearch(on)}>
-                {on ? "开" : "关"}
+                {t(on ? "开" : "关")}
               </button>
             ))}
           </div>
-          <span className="why">端点自己执行的搜索，不占本地工具。</span>
+          <span className="why">{t("端点自己执行的搜索，不占本地工具。")}</span>
         </div>
       )}
       {entry.canSetThinking && (
         <div className="vway">
-          <span className="lb">思考参数</span>
-          <div className="seg" role="group" aria-label={`${a.label} 的思考参数`}>
+          <span className="lb">{t("思考参数")}</span>
+          <div className="seg" role="group" aria-label={t("{name} 的思考参数", { name: a.label })}>
             {[true, false].map((on) => (
               <button key={String(on)} aria-pressed={(entry.sendsThinking ?? true) === on} disabled={busy !== ""}
                 onClick={() => setThinking(on)}>
-                {on ? "自动" : "不发送"}
+                {t(on ? "自动" : "不发送")}
               </button>
             ))}
           </div>
           <span className="why">
-            {entry.sendsThinking === false
-              ? "只发普通聊天参数。模型自己该怎么想还怎么想，只是这边不再指定深度。"
-              : "有的中转站不认 thinking 字段，会整个请求拒掉。真遇上了就切「不发送」。"}
+            {t(entry.sendsThinking === false ? "只发普通聊天参数。模型自己该怎么想还怎么想，只是这边不再指定深度。" : "有的中转站不认 thinking 字段，会整个请求拒掉。真遇上了就切「不发送」。")}
           </span>
         </div>
       )}
@@ -271,13 +268,13 @@ function Conn({
         <div className="find" data-lvl={found.ok ? "ok" : "warn"} role="status">
           <span className="t">
             {found.ok
-              ? `连上了 · ${KIND_LABEL[found.kind ?? ""] || found.kind} · ${found.models?.length ?? 0} 个模型`
-              : "连不上"}
+              ? `${t("连上了")} · ${t(KIND_LABEL[found.kind ?? ""] ?? found.kind ?? "")} · ${t("{n} 个模型", { n: found.models?.length ?? 0 })}`
+              : t("连不上")}
           </span>
           <span className="why">
             {!found.ok && found.error}
             {found.ok && found.kind !== entry.kind &&
-              `记的是 ${KIND_LABEL[entry.kind] || entry.kind}，但它答的是 ${KIND_LABEL[found.kind ?? ""] || found.kind}。`}
+              t("记的是 {had}，但它答的是 {got}。", { had: t(KIND_LABEL[entry.kind] ?? entry.kind), got: t(KIND_LABEL[found.kind ?? ""] ?? found.kind ?? "") })}
             {found.ok && found.kind === entry.kind && "key 有效，协议也对得上。"}
             {found.ok && found.noProxy && " 走代理连不上、直连可以。"}
           </span>
@@ -301,7 +298,12 @@ function EditConn({
   const [vision, setVision] = useState<string[]>(entry.visionModels ?? []);
   const [def, setDef] = useState(entry.default || entry.models[0] || "");
   const [err, setErr] = useState("");
+  const [more, setMore] = useState(false);
+  const [win, setWin] = useState(entry.contextWindow ? String(entry.contextWindow) : "");
+  const [heads, setHeads] = useState(headerLines(entry.headers));
+  const [extra, setExtra] = useState(entry.extraBody ? JSON.stringify(entry.extraBody, null, 2) : "");
   const saving = busy === `edit:${entry.name}`;
+  const extraBad = extra.trim() !== "" && parseExtraBody(extra) === null;
 
   const toggle = (list: string[], set: (v: string[]) => void, m: string) =>
     set(list.includes(m) ? list.filter((x) => x !== m) : [...list, m]);
@@ -338,6 +340,9 @@ function EditConn({
         models: picked,
         default: picked.includes(def) ? def : picked[0] ?? "",
         vision: vision.filter((m) => picked.includes(m)),
+        contextWindow: Number(win.replace(/\D/g, "")) || 0,
+        headers: parseHeaders(heads),
+        extraBody: parseExtraBody(extra) ?? {},
       });
       onDone();
     } catch (e) {
@@ -351,11 +356,11 @@ function EditConn({
     <div className="addp" data-edit>
       <div className="fields">
         <label className="grow full">
-          <span>接口地址</span>
+          <span>{t("接口地址")}</span>
           <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} spellCheck={false} />
         </label>
         <label className="grow full">
-          <span>API Key（留空就不动它）</span>
+          <span>{t("API Key（留空就不动它）")}</span>
           <input type="password" value={apiKey} placeholder="········"
             onChange={(e) => setApiKey(e.target.value)} spellCheck={false} />
         </label>
@@ -364,9 +369,7 @@ function EditConn({
       <div className="mlist">
         <span className="mlb">
           模型（{picked.length}/{models.length}）·{" "}
-          {entry.canSetVision === false
-            ? "这个端点不接受图片输入，勾了也不会生效"
-            : "勾「读图」的才会收到图片"}
+          {t(entry.canSetVision === false ? "这个端点不接受图片输入，勾了也不会生效" : "勾「读图」的才会收到图片")}
         </span>
         {models.map((m) => (
           <div className="mline" key={m} data-off={picked.includes(m) ? undefined : ""}>
@@ -379,32 +382,82 @@ function EditConn({
               disabled={!picked.includes(m) || entry.canSetVision === false}
               title={entry.canSetVision === false ? "内核不给这个端点发图片，改这里不会有效果" : undefined}
               onClick={() => toggle(vision, setVision, m)}>
-              读图
+              {t("读图")}
             </button>
             <button className="dtag" aria-pressed={def === m} disabled={!picked.includes(m)}
               onClick={() => setDef(m)}>
-              默认
+              {t("默认")}
             </button>
           </div>
         ))}
       </div>
 
+      {/* Folded, and worth folding: these three are the ones no probe can
+          answer, and most endpoints need none of them. */}
+      <button className="more" aria-expanded={more} onClick={() => setMore((v) => !v)}>
+        {t(more ? "收起" : "端点要求的额外设置")}
+        <span className="c">{compatSummary(win, heads, extra)}</span>
+      </button>
+
+      {more && (
+        <div className="fields compat">
+          <label className="grow full">
+            <span>{t("上下文窗口（tokens）")}</span>
+            <input
+              inputMode="numeric"
+              value={win}
+              placeholder={t("留空 = 用内置的已知值；0 = 这个来源不自动压缩")}
+              onChange={(e) => setWin(e.target.value.replace(/\D/g, ""))}
+            />
+            <i className="tip">
+              {t("填模型文档写的上下文上限，不是最大输出。填小了会一直压缩，填大了会在真到上限时被端点拒绝。")}
+            </i>
+          </label>
+          <label className="grow full">
+            <span>{t("额外请求头")}</span>
+            <textarea
+              rows={3}
+              value={heads}
+              spellCheck={false}
+              placeholder={"HTTP-Referer: https://example.com\nX-Title: Reasonix"}
+              onChange={(e) => setHeads(e.target.value)}
+            />
+            <i className="tip">{t("一行一个 名字: 值。中转站常要它来认站点；密钥仍然走上面那栏。")}</i>
+          </label>
+          <label className="grow full">
+            <span>{t("额外请求体")}</span>
+            <textarea
+              rows={4}
+              value={extra}
+              spellCheck={false}
+              placeholder={'{\n  "enable_thinking": true\n}'}
+              onChange={(e) => setExtra(e.target.value)}
+              aria-invalid={extraBad || undefined}
+            />
+            <i className="tip">
+              {t("会并进请求体的顶层。model、messages、tools、stream 这些仍由内核说了算，写了也不生效。")}
+            </i>
+          </label>
+          {extraBad && <div className="why">{t("这段不是合法的 JSON 对象，保存会被拒绝。")}</div>}
+        </div>
+      )}
+
       {err && (
         <div className="find" data-lvl="warn">
-          <span className="t">没保存成功</span>
+          <span className="t">{t("没保存成功")}</span>
           <span className="why">{err}</span>
         </div>
       )}
 
       <div className="acts">
-        <button className="act" data-primary onClick={save} disabled={busy !== "" || picked.length === 0}>
-          {saving ? "保存中…" : "保存"}
+        <button className="act" data-primary onClick={save} disabled={busy !== "" || picked.length === 0 || extraBad}>
+          {t(saving ? "保存中…" : "保存")}
         </button>
         <button className="act" onClick={refetch} disabled={busy !== ""}
-          title="重新问这个端点要一次模型列表 —— 它上新或下架模型之后用">
-          重新问一次有哪些模型
+          title={t("重新问这个端点要一次模型列表 —— 它上新或下架模型之后用")}>
+          {t("重新问一次有哪些模型")}
         </button>
-        <button className="act" onClick={onDone} disabled={busy !== ""}>取消</button>
+        <button className="act" onClick={onDone} disabled={busy !== ""}>{t("取消")}</button>
       </div>
     </div>
   );
@@ -480,7 +533,7 @@ function AddProvider({
     <div className="addp">
       <div className="fields">
         <label className="grow full">
-          <span>接口地址</span>
+          <span>{t("接口地址")}</span>
           <input
             value={baseUrl}
             placeholder="https://api.moonshot.cn/v1"
@@ -489,31 +542,30 @@ function AddProvider({
           />
         </label>
         <label className="grow full">
-          <span>API Key{sibling ? "（留空就用现有那个来源的 key）" : ""}</span>
+          <span>API Key{t(sibling ? "（留空就用现有那个来源的 key）" : "")}</span>
           <input type="password" value={apiKey} placeholder={sibling ? "········" : ""}
             onChange={(e) => setApiKey(e.target.value)} spellCheck={false} />
         </label>
         {sibling && (
           <p className="acct-note">
             这个地址上已经有「{vendorLabel(hostOf(sibling.baseUrl))}」了。留空 key
-            就是给它再开一扇门，两条会并成同一个来源、由「接入方式」切换；填了 key
-            就是这台机器上的另一个账号，各算各的。
+            {t("就是给它再开一扇门，两条会并成同一个来源、由「接入方式」切换；填了 key就是这台机器上的另一个账号，各算各的。")}
           </p>
         )}
       </div>
 
       <div className="acts">
         <button className="act" data-primary onClick={connect} disabled={busy || baseUrl.trim() === ""}>
-          {busy && !probe ? "连接中…" : "连一下试试"}
+          {t(busy && !probe ? "连接中…" : "连一下试试")}
         </button>
         <button className="act" onClick={onCancel} disabled={busy}>
-          取消
+          {t("取消")}
         </button>
       </div>
 
       {err && (
         <div className="find" data-lvl="warn">
-          <span className="t">连不上</span>
+          <span className="t">{t("连不上")}</span>
           <span className="why">{err}</span>
         </div>
       )}
@@ -521,28 +573,28 @@ function AddProvider({
       {probe && (
         <>
           {/* The heading says these are guesses, so no row has to repeat it. */}
-          <p className="acct-note">探到了下面这些。都是猜的，不对就改。</p>
+          <p className="acct-note">{t("探到了下面这些。都是猜的，不对就改。")}</p>
 
           <div className="fields">
             <label className="grow">
-              <span>名字</span>
+              <span>{t("名字")}</span>
               <input value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} />
             </label>
             <label className="grow">
-              <span>接入方式</span>
+              <span>{t("接入方式")}</span>
               <select value={kind} onChange={(e) => setKind(e.target.value)}>
-                <option value="openai">OpenAI 兼容</option>
-                <option value="anthropic">Anthropic 兼容</option>
+                <option value="openai">{t("OpenAI 兼容")}</option>
+                <option value="anthropic">{t("Anthropic 兼容")}</option>
               </select>
             </label>
           </div>
           {probe.ambiguous && (
             <p className="acct-note">
-              两种接入方式的模型列表它都答得上来，光看列表分不出来 —— 聊天入口通常不在同一个路径下，选错了聊天会报错。要两条都用就再添加一次、选另一个。
+              {t("两种接入方式的模型列表它都答得上来，光看列表分不出来 —— 聊天入口通常不在同一个路径下，选错了聊天会报错。要两条都用就再添加一次、选另一个。")}
             </p>
           )}
           {probe.noProxy && (
-            <p className="acct-note">走代理连不上、直连可以，已经记成「这个来源不走代理」。</p>
+            <p className="acct-note">{t("走代理连不上、直连可以，已经记成「这个来源不走代理」。")}</p>
           )}
 
           <div className="fields">
@@ -556,7 +608,7 @@ function AddProvider({
                   onClick={() => toggle(m)}
                 >
                   {m}
-                  {probe.vision.includes(m) ? " ·图" : ""}
+                  {t(probe.vision.includes(m) ? " ·图" : "")}
                 </button>
               ))}
             </div>
@@ -564,7 +616,7 @@ function AddProvider({
 
           <div className="acts">
             <button className="act" data-primary onClick={save} disabled={busy || picked.length === 0 || name.trim() === ""}>
-              {busy ? "保存中…" : "添加"}
+              {t(busy ? "保存中…" : "添加")}
             </button>
           </div>
         </>
@@ -580,4 +632,48 @@ function uniqueName(base: string, taken: string[]): string {
     if (!taken.includes(`${base}-${i}`)) return `${base}-${i}`;
   }
   return base;
+}
+
+// The three compatibility fields move between a config object and the text the
+// user types. Headers are one "name: value" per line because that is how the
+// gateway's own documentation writes them.
+function headerLines(headers?: Record<string, string>): string {
+  return Object.entries(headers ?? {})
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n");
+}
+
+function parseHeaders(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const at = line.indexOf(":");
+    if (at <= 0) continue;
+    const name = line.slice(0, at).trim();
+    const value = line.slice(at + 1).trim();
+    if (name && value) out[name] = value;
+  }
+  return out;
+}
+
+// null means "typed but not valid JSON yet", which is different from an empty
+// object — the save button reads the difference rather than sending garbage.
+function parseExtraBody(text: string): Record<string, unknown> | null {
+  if (!text.trim()) return {};
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function compatSummary(win: string, heads: string, extra: string): string {
+  const parts: string[] = [];
+  if (win.trim()) parts.push(win === "0" ? t("不压缩") : `${Number(win) / 1000}k`);
+  const headCount = Object.keys(parseHeaders(heads)).length;
+  if (headCount) parts.push(t("{n} 个头", { n: headCount }));
+  const body = parseExtraBody(extra);
+  if (body && Object.keys(body).length) parts.push(t("有请求体"));
+  return parts.join(" · ");
 }

@@ -1,200 +1,149 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { AccountState, AgentPort, ApprovalVerdict, Checkpoint, McpEntry, ProviderSetup, RewindScope, SessionEntry, SessionStatus, WorkspaceChanges, ThemePack } from "../port/port";
-import { fromHistory, initialState, quoteAmount, reduce } from "../state/session";
-import { pairCheckpoints } from "../state/checkpoints";
-import { initialTraj, reduceTraj } from "../state/trajectory";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { reason } from "../i18n/kernel";
+import { t } from "../i18n";
+import type { AccountState, AgentPort, Appearance as Look, ProviderSetup, ThemePack } from "../port/port";
+import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { Chrome } from "./Chrome";
-import { Transcript } from "./Transcript";
-import { Trajectory } from "./Trajectory";
-import { Composer } from "./Composer";
-import { RunStrip } from "./RunStrip";
-import { SlottedView } from "./SlottedView";
-import { key as slotKey, placement } from "./slots";
 import { apply as applyThemePack } from "./theme";
-import { Metrics } from "./Metrics";
-import { Sessions } from "./Sessions";
+import { apply as applyLook } from "./look";
+import { adopt as adoptLang } from "../i18n";
+import { Pane, type PaneReport } from "./Pane";
+import { Workspaces } from "./Workspaces";
+import { PaneTabs } from "./PaneTabs";
 import { Settings } from "./Settings";
 import { Onboarding } from "./Onboarding";
 import { Welcome } from "./Welcome";
-import { arrowTabs } from "./tablist";
-import { tokensPerSecond } from "../port/tokens";
 
-export function App({ port }: { port: AgentPort }) {
-  const [s, dispatch] = useReducer(reduce, initialState);
-  const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
-  const [status, setStatus] = useState<SessionStatus | null>(null);
+const NO_REPORT: PaneReport = { status: null, title: "", steer: 0, run: "idle", live: false, cost: "" };
+
+// App is the window around the panes, not a session itself: the workspace tree,
+// the chrome, the settings sheet and the theme are the window's, while every
+// conversation — its transcript, metrics and event stream — lives in the Pane
+// that owns it. That split is what lets two sessions run side by side.
+export function App({ hub }: { hub: HubPort }) {
+  const [runtimes, setRuntimes] = useState<RuntimeView[]>([]);
+  const [active, setActive] = useState("");
+  const [tree, setTree] = useState<TreeWorkspace[]>([]);
+  const [folded, setFolded] = useState<Set<string>>(new Set());
   const [rail, setRail] = useState(true);
   const [side, setSide] = useState(true);
-  const [pane, setPane] = useState<"flow" | "traj">("flow");
-  const [pinned, setPinned] = useState(true);
+  const [report, setReport] = useState<PaneReport>(NO_REPORT);
+  const [error, setError] = useState("");
   // false = closed, true = open at its last section, a string = open there.
   const [settings, setSettings] = useState<string | boolean>(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("rx-theme") ?? "auto");
+  // "" means never chosen, which is what lets the system's own contrast setting
+  // decide. Any explicit pick wins over it from then on.
+  const [contrast, setContrast] = useState(() => localStorage.getItem("rx-contrast") ?? "");
   const [setup, setSetup] = useState<ProviderSetup | null | undefined>(undefined);
   // undefined until asked; false means the opening sequence is still owed.
   const [welcomed, setWelcomed] = useState<boolean | undefined>(undefined);
-  const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [account, setAccount] = useState<AccountState | null>(null);
-  const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [pack, setPack] = useState<ThemePack | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-  const [tps, setTps] = useState(0);
-  const [tree, setTree] = useState<WorkspaceChanges | null>(null);
-  const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
-  const flow = useRef<HTMLDivElement>(null);
-  const startedAt = useRef(0);
-  // Read by the 250ms tick without making it a dependency, so a delta arriving
-  // between ticks does not restart the interval.
-  const win = useRef(s.outWindow);
-  win.current = s.outWindow;
+  const [look, setLook] = useState<Look>({});
+  // The metrics column is the window's, but its contents belong to the focused
+  // pane, which renders into it through a portal.
+  const [sideHost, setSideHost] = useState<HTMLElement | null>(null);
+  // Bumped when a pane is rebound to another transcript. It rides the Pane key,
+  // so the takeover remounts it: every bit of what is on screen belonged to the
+  // conversation it just left.
+  const [takeover, setTakeover] = useState<Record<string, number>>({});
+  // Every pane's run state, so a tab can show that the conversation behind it
+  // is still working. Read through a ref by the report handler, which must stay
+  // stable or each frame would re-render every pane.
+  const [runs, setRuns] = useState<Record<string, { run: string; live: boolean }>>({});
+  const activeRef = useRef("");
+  activeRef.current = active;
 
-  const reloadMcp = useCallback(() => {
-    void port.mcp().then(setMcp).catch(() => setMcp([]));
-  }, [port]);
+  const fail = useCallback((e: unknown) => setError(reason(e)), []);
 
-  useEffect(
-    () =>
-      port.subscribe((ev) => {
-        dispatch(ev);
-        trajDispatch(ev);
-        // A server finishing its handshake changes what /mcp answers, and this
-        // is the only precise signal for it — the turn boundary below is the
-        // fallback for changes that arrive without an event.
-        if (ev.kind === "mcp_surface_ready" || ev.kind === "extension_status") reloadMcp();
-      }),
-    [port, reloadMcp],
-  );
-
-  useEffect(() => {
-    let alive = true;
-    port.providerSetup().then((v) => alive && setSetup(v)).catch(() => alive && setSetup(null));
-    // A machine that cannot answer has met the app before as far as we care:
-    // the sequence must never be what stands between someone and their session.
-    port.welcomeSeen().then((v) => alive && setWelcomed(v)).catch(() => alive && setWelcomed(true));
-    return () => {
-      alive = false;
-    };
-  }, [port]);
-
-  useEffect(() => {
-    let alive = true;
-    port.trajectory().then((evs) => alive && evs.forEach((e) => trajDispatch(e))).catch(() => {});
-    port.checkpoints().then((cps) => alive && setCheckpoints(cps)).catch(() => {});
-    Promise.all([port.history(), port.status()]).then(([msgs, st]) => {
-      if (!alive) return;
-      setStatus(st);
-      const restored = fromHistory(msgs);
-      dispatch({
-        kind: "__restore",
-        items: restored.items,
-        plan: restored.plan,
-        hit: st.cacheHit,
-        miss: st.cacheMiss,
-        cost: quoteAmount(st.sessionCostQuote),
-      } as never);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [port]);
-
-  const refreshStatus = useCallback(() => {
-    port.status().then(setStatus).catch(() => {});
-  }, [port]);
-
-  // Stable so the settings pane's own reload effect does not re-run every render.
-  const reloadAccount = useCallback(() => {
-    port.account().then(setAccount).catch(() => setAccount(null));
-  }, [port]);
-
-  const onSettingsChanged = useCallback(() => {
-    refreshStatus();
-    reloadMcp();
-    reloadAccount();
-  }, [refreshStatus, reloadMcp, reloadAccount]);
-
-  const fail = useCallback((e: unknown) => {
-    dispatch({ kind: "__error", text: e instanceof Error ? e.message : String(e) } as never);
+  const onReport = useCallback((id: string, next: PaneReport) => {
+    setRuns((prev) =>
+      prev[id]?.run === next.run && prev[id]?.live === next.live ? prev : { ...prev, [id]: { run: next.run, live: next.live } },
+    );
+    if (id === activeRef.current) setReport(next);
   }, []);
 
-  // Resolves once the new list is in: the delete animation has to hold the
-  // collapsed row until then, or it springs back open for a round trip.
-  const reloadSessions = useCallback(
-    () => port.sessions().then(setSessions).catch(() => setSessions([])),
-    [port],
+  const reloadTree = useCallback(
+    () =>
+      hub
+        .tree()
+        .then(setTree)
+        .catch(() => setTree([])),
+    [hub],
   );
 
-  // Everything on screen belongs to one session; when the kernel moves to
-  // another one — a switch, a new session, a whole new workspace — all of it
-  // has to be re-read rather than patched.
-  const reloadSession = useCallback(() => {
-    refreshStatus();
-    reloadSessions();
-    trajDispatch({ kind: "__clear" } as never);
-    port.trajectory().then((evs) => evs.forEach((e) => trajDispatch(e))).catch(() => {});
-    port.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([]));
-    port.history().then((msgs) => {
-      const r = fromHistory(msgs);
-      dispatch({ kind: "__restore", items: r.items, plan: r.plan, hit: 0, miss: 0 } as never);
-    });
-  }, [port, refreshStatus, reloadSessions]);
+  // Panes and tree move together: opening a session marks its row live, closing
+  // one hands the row back.
+  const reloadPanes = useCallback(async () => {
+    const list = await hub.runtimes().catch(() => [] as RuntimeView[]);
+    setRuntimes(list);
+    setActive((cur) => (list.some((rt) => rt.id === cur) ? cur : (list[0]?.id ?? "")));
+    await reloadTree();
+  }, [hub, reloadTree]);
 
-  // A rewind rewrites the transcript and the files under it, so the whole
-  // session is re-read rather than patched — the same treatment a session
-  // switch gets, for the same reason.
-  const onPrepareRewind = useCallback(
-    (turn: number, scope: RewindScope) => port.prepareRewind(turn, scope),
-    [port],
-  );
-  const onCommitRewind = useCallback(
-    async (planId: string) => {
-      const result = await port.commitRewind(planId);
-      reloadSession();
-      return result;
-    },
-    [port, reloadSession],
-  );
-  const onUndoRewind = useCallback(
-    (transactionId: string) => port.undoRewind(transactionId).then(reloadSession),
-    [port, reloadSession],
-  );
-
-  // Keyed by item id, so a streamed frame does not change any row's own value
-  // and the transcript's memo still holds.
-  const paired = useMemo(() => pairCheckpoints(s.items, checkpoints), [s.items, checkpoints]);
-
-  // The shell deliberately mints no session file at launch, so the list starts
-  // empty and the first turn is what creates one — and its title only exists
-  // once that turn is on disk. Re-read when the session changes or a run ends.
-  // An MCP server connects lazily and fails at first use, so a turn boundary is
-  // also when its status can have changed — no timer of its own needed.
   useEffect(() => {
-    reloadSessions();
-    reloadMcp();
-    // A finished turn is exactly when the kernel has one more checkpoint.
-    port.checkpoints().then(setCheckpoints).catch(() => {});
-    port.changes().then(setTree).catch(() => setTree(null));
-  }, [reloadSessions, reloadMcp, port, status?.sessionPath, s.running]);
+    void reloadPanes();
+  }, [reloadPanes]);
 
+  // One port per pane, held across renders — a fresh instance would resubscribe
+  // the event stream and drop the frames in between.
+  const panePorts = useMemo(() => {
+    const map = new Map<string, AgentPort>();
+    for (const rt of runtimes) map.set(rt.id, hub.portFor(rt));
+    return map;
+  }, [hub, runtimes]);
+  const activePort = panePorts.get(active) ?? panePorts.values().next().value ?? null;
+
+  useEffect(() => {
+    if (!activePort) return;
+    let alive = true;
+    activePort.providerSetup().then((v) => alive && setSetup(v)).catch(() => alive && setSetup(null));
+    // A machine that cannot answer has met the app before as far as we care:
+    // the sequence must never be what stands between someone and their session.
+    activePort.welcomeSeen().then((v) => alive && setWelcomed(v)).catch(() => alive && setWelcomed(true));
+    return () => {
+      alive = false;
+    };
+  }, [activePort]);
+
+  const reloadAccount = useCallback(() => {
+    activePort?.account().then(setAccount).catch(() => setAccount(null));
+  }, [activePort]);
   useEffect(reloadAccount, [reloadAccount]);
 
-  // /status is the only source for background jobs and for settings the run does
-  // not echo, so a live turn has to re-read it rather than infer from events.
-  useEffect(() => {
-    if (!s.running) {
-      startedAt.current = 0;
-      setTps(0);
-      return;
-    }
-    if (!startedAt.current) startedAt.current = Date.now();
-    const t = setInterval(() => {
-      setElapsed((Date.now() - startedAt.current) / 1000);
-      setTps(tokensPerSecond(win.current, Date.now()));
-      refreshStatus();
-    }, 250);
-    return () => clearInterval(t);
-  }, [s.running, refreshStatus]);
+  const reloadThemes = useCallback(() => {
+    activePort
+      ?.themes()
+      .then((list) => setPack(list.find((p) => p.active) ?? null))
+      .catch(() => setPack(null));
+  }, [activePort]);
+  useEffect(reloadThemes, [reloadThemes]);
 
+  useEffect(() => {
+    activePort
+      ?.appearance()
+      .then((look) => {
+        // The kernel's copy is the authority across machines; adopt reloads if
+        // this window booted in the wrong language from a stale local cache.
+        if (adoptLang(look.language)) return;
+        setLook(look);
+      })
+      .catch(() => {});
+  }, [activePort]);
+
+  // The control moves now and the config catches up: a size or a colour that
+  // waits on a round trip reads as a dead click. The kernel's answer is what
+  // is kept, since it clamps what the slider sent.
+  const onLook = useCallback(
+    (next: Look) => {
+      setLook(next);
+      activePort?.saveAppearance(next).then(setLook).catch(fail);
+    },
+    [activePort, fail],
+  );
+
+  const running = report.run === "running";
   // A pack carries a light and a dark set, so it is repainted with the scheme
   // rather than once at load: switching the OS to dark has to move both. The
   // running flag rides along because a pack's picture recedes while a turn is
@@ -204,60 +153,91 @@ export function App({ port }: { port: AgentPort }) {
     const paint = () => {
       const scheme = theme === "auto" ? (mq.matches ? "dark" : "light") : theme;
       document.documentElement.dataset.theme = scheme;
-      applyThemePack(pack, scheme as "light" | "dark", s.running);
+      applyThemePack(pack, scheme as "light" | "dark", running);
+      // After the pack, never before: size and type are the reader's, and a
+      // palette someone else authored does not get to overrule them.
+      applyLook(look, running);
     };
     paint();
     mq.addEventListener("change", paint);
     localStorage.setItem("rx-theme", theme);
     return () => mq.removeEventListener("change", paint);
-  }, [theme, pack, s.running]);
+  }, [theme, pack, running, look]);
 
-  const reloadThemes = useCallback(() => {
-    port
-      .themes()
-      .then((list) => setPack(list.find((p) => p.active) ?? null))
-      .catch(() => setPack(null));
-  }, [port]);
-  useEffect(reloadThemes, [reloadThemes]);
-
-  // Where the user put each extension surface. Loaded once and updated in
-  // place: a move is the user's own action, so waiting for a round trip to see
-  // it land would read as the control ignoring the click.
-  const [slots, setSlots] = useState<Record<string, string>>({});
   useEffect(() => {
-    void port.surfaceSlots().then(setSlots).catch(() => setSlots({}));
-  }, [port]);
-  const moveSurface = useCallback(
-    async (ext: { pluginId: string; surfaceId: string }, slot: string) => {
-      const id = `${ext.pluginId}:${ext.surfaceId}`;
-      setSlots((prev) => {
-        const next = { ...prev };
-        if (slot) next[id] = slot;
-        else delete next[id];
-        return next;
-      });
-      await port.assignSurface(id, slot).catch(fail);
+    if (contrast) document.documentElement.dataset.contrast = contrast;
+    else delete document.documentElement.dataset.contrast;
+    localStorage.setItem("rx-contrast", contrast);
+  }, [contrast]);
+
+  // A pane with no session file has never been written to — the empty one every
+  // window opens with. Opening a conversation takes it over instead of parking
+  // a blank column next to it.
+  const openPane = useCallback(
+    async (req: { root?: string; sessionPath?: string }) => {
+      const blank = runtimes.find((rt) => !rt.sessionPath);
+      // Asking for a new session when an unused one is already open in that
+      // folder: it is the pane being asked for. Rebuilding it would cost a full
+      // assembly to arrive back where we started.
+      if (blank && !req.sessionPath && blank.root === req.root) {
+        setActive(blank.id);
+        return;
+      }
+      // Same folder: the pane just rebinds, so nothing is torn down and a draft
+      // in its composer survives. The kernel refuses a path from another
+      // project's session dir, which is why the root has to match.
+      if (blank && req.sessionPath && blank.root === req.root) {
+        await panePorts.get(blank.id)?.resume(req.sessionPath);
+        setTakeover((prev) => ({ ...prev, [blank.id]: (prev[blank.id] ?? 0) + 1 }));
+        await reloadPanes();
+        setActive(blank.id);
+        return;
+      }
+      const rt = await hub.open(req);
+      // Another folder needs its own runtime, so the blank one is retired
+      // rather than left behind.
+      if (blank && blank.id !== rt.id) await hub.close(blank.id);
+      await reloadPanes();
+      setActive(rt.id);
     },
-    [port, fail],
+    [hub, reloadPanes, runtimes, panePorts],
   );
-  const atComposer = s.views.filter((v) => placement(v, slots) === "composer-trailing");
-  const inRail = s.views.filter((v) => placement(v, slots) !== "composer-trailing");
+
+  const closePane = useCallback(
+    (id: string) => {
+      void hub.close(id).then(reloadPanes).catch(fail);
+    },
+    [hub, reloadPanes, fail],
+  );
+
+  // Stable, or the sidebar's memo is defeated by its own handlers and a window
+  // with a few hundred sessions rebuilds that whole tree on every repaint.
+  const onFold = useCallback((root: string, shut: boolean) => {
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (shut) next.add(root);
+      else next.delete(root);
+      return next;
+    });
+  }, []);
+  const foldRail = useCallback(() => setRail(false), []);
 
   // A webview has nowhere to put a new tab, so target="_blank" opens nothing at
   // all, and letting the link navigate in place would replace the session with
   // the page. Every link leaves through the host instead.
   useEffect(() => {
+    if (!activePort) return;
     const onClick = (e: MouseEvent) => {
       if (e.defaultPrevented || e.button !== 0) return;
       const link = (e.target as Element | null)?.closest?.("a[href]");
       const href = link?.getAttribute("href") ?? "";
       if (!/^https?:\/\//i.test(href)) return;
       e.preventDefault();
-      void port.openExternal(href).catch(fail);
+      void activePort.openExternal(href).catch(fail);
     };
     addEventListener("click", onClick);
     return () => removeEventListener("click", onClick);
-  }, [port, fail]);
+  }, [activePort, fail]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -270,101 +250,78 @@ export function App({ port }: { port: AgentPort }) {
         e.preventDefault();
         setSettings(true);
       }
-      if (e.key === "Escape" && s.running) port.cancel();
+      // Escape stops the turn you are looking at, not every live turn in the
+      // window — the other panes are someone else's work in progress.
+      if (e.key === "Escape" && running) activePort?.cancel();
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [port, s.running]);
+  }, [activePort, running]);
 
-  const submit = useCallback(
-    (text: string) => {
-      const steering = s.running;
-      dispatch({ kind: "__user", text, pending: steering } as never);
-      trajDispatch({ kind: "__user", text });
-      if (steering) {
-        port.steer(text).catch(fail);
-        return;
+  const onSettingsChanged = useCallback(() => {
+    reloadAccount();
+    void reloadPanes();
+  }, [reloadAccount, reloadPanes]);
+
+  // A pane's label comes from the tree row it opened, so the sidebar and the
+  // tab never disagree. An unnamed session gets a number rather than a third
+  // "新会话" — with several open, identical labels are the same as no labels.
+  const titleFor = useCallback(
+    (rt: RuntimeView, at: number) => {
+      for (const ws of tree) {
+        for (const session of ws.sessions) {
+          if (session.runtimeId === rt.id) return session.title || session.name;
+        }
       }
-      port.submit(text).then(refreshStatus).catch(fail);
+      return at === 0 ? "新会话" : `新会话 ${at + 1}`;
     },
-    [port, s.running, refreshStatus, fail],
+    [tree],
   );
 
-  // Transcript rows are memoised on their item; a callback rebuilt every render
-  // would defeat that on the two cards that take one.
-  const onApprove = useCallback(
-    (itemId: string, id: string, v: ApprovalVerdict) => {
-      dispatch({ kind: "__decided", id: itemId, verdict: v } as never);
-      port.approve(id, v).then(refreshStatus).catch(fail);
+  const tabs = useMemo(
+    () => runtimes.map((rt, i) => ({ rt, title: titleFor(rt, i), run: runs[rt.id]?.run ?? "idle", live: runs[rt.id]?.live ?? false })),
+    [runtimes, titleFor, runs],
+  );
+  // The folder only earns tab space when the panes actually span more than one.
+  const manyRoots = useMemo(() => new Set(runtimes.map((rt) => rt.root)).size > 1, [runtimes]);
+
+  const closePanes = useCallback(
+    (ids: string[]) => {
+      void (async () => {
+        for (const id of ids) await hub.close(id).catch(fail);
+        await reloadPanes();
+      })();
     },
-    [port, refreshStatus, fail],
+    [hub, reloadPanes, fail],
   );
 
-  // Taking it back is only cheap while the conversation that caused it is still
-  // on screen; the card stays, marked, so the record of what happened survives.
-  const onForget = useCallback(
-    (itemId: string, name: string) => {
-      port
-        .forgetMemory(name)
-        .then(() => dispatch({ kind: "__forgot", id: itemId } as never))
-        .catch(fail);
+  // One rename for both surfaces: the tab renames by the pane's session path,
+  // the sidebar by the row's — the same file either way.
+  const renameSession = useCallback(
+    (path: string, title: string) => {
+      if (!path) return;
+      void hub.renameSession(path, title).then(reloadTree).catch(fail);
     },
-    [port, fail],
+    [hub, reloadTree, fail],
   );
-
-  // An extension action reports back in its own words. Surfacing the result as
-  // a notice keeps it in the transcript where the card that offered it sits,
-  // and a refusal lands on the same path as any other failure.
-  const onExtInvoke = useCallback(
-    (name: string) => {
-      port
-        .invokeExtensionAction(name)
-        .then((message) => {
-          if (message.trim()) dispatch({ kind: "notice", level: "info", text: message });
-        })
-        .catch(fail);
-    },
-    [port, fail],
-  );
-
-  const onExtSubmit = useCallback(
-    (pluginId: string, surfaceId: string, values: Record<string, unknown>) => {
-      port.submitExtensionForm(pluginId, surfaceId, values).catch(fail);
-    },
-    [port, fail],
-  );
-
-  const onAnswer = useCallback(
-    (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => {
-      dispatch({ kind: "__decided", id: itemId, answers: answers.map((a) => a.selected) } as never);
-      void port.answer(id, answers).catch(fail);
-    },
-    [port, fail],
-  );
-
-  const toLatest = () => {
-    const el = flow.current;
-    if (el) el.scrollTop = el.scrollHeight;
-    setPinned(true);
-  };
 
   if (setup === undefined || welcomed === undefined) return <div className="app" data-run="idle" />;
   // The sequence and the first connection are one scene, not two screens: the
   // card rises inside it after the collapse, with the introduction still above.
   // A machine that has seen the sequence but still owes a key gets the card
   // over a still scene rather than a replay.
-  if (!welcomed || setup?.required) {
+  if ((!welcomed || setup?.required) && activePort) {
     const card = setup?.required ? (
       <Onboarding
-        port={port}
+        port={activePort}
         setup={setup}
         onDone={() => {
           setSetup(null);
           if (!welcomed) {
             setWelcomed(true);
-            void port.markWelcomed().catch(() => {});
+            void activePort.markWelcomed().catch(() => {});
           }
-          refreshStatus();
+          void reloadPanes();
         }}
       />
     ) : undefined;
@@ -374,7 +331,7 @@ export function App({ port }: { port: AgentPort }) {
         replay={!welcomed}
         onDone={() => {
           setWelcomed(true);
-          void port.markWelcomed().catch(() => {});
+          void activePort.markWelcomed().catch(() => {});
         }}
       >
         {card}
@@ -382,56 +339,51 @@ export function App({ port }: { port: AgentPort }) {
     );
   }
 
-  // A turn blocked on you is not a turn in motion: the glow says "it is moving"
-  // and has to go out, and the action slot goes back to send so you can talk.
-  const blocked = s.doing === "等你批准" || s.doing === "等你决定";
-  const run = blocked ? "halt" : s.running ? "running" : s.items.length ? (s.doing === "已完成" ? "done" : "halt") : "idle";
-  const steps = s.items.filter((i) => i.t === "tool").length;
-  const pendingSteer = s.items.filter((i) => i.t === "user" && i.pending).length;
-  const yolo = status?.toolApprovalMode === "yolo";
-
   return (
     <div
       className="app"
-      data-run={run}
+      data-run={report.run}
       data-rail={rail ? "on" : "off"}
       data-side={side ? "on" : "off"}
-      data-plan={status?.plan ? "on" : "off"}
-      data-apv={status?.toolApprovalMode ?? "ask"}
+      data-plan={report.status?.plan ? "on" : "off"}
+      data-apv={report.status?.toolApprovalMode ?? "ask"}
       data-prefs={settings ? "" : undefined}
+      data-tabs={runtimes.length > 1 ? "" : undefined}
     >
       <Chrome
-        port={port}
-        status={status}
-        title={sessions.find((e) => e.current || e.path === status?.sessionPath)?.title}
-        steer={pendingSteer}
+        port={activePort}
+        status={report.status}
+        title={report.title}
+        steer={report.steer}
         theme={theme}
         onTheme={setTheme}
         onSettings={(sec) => setSettings(sec ?? true)}
-        onChanged={refreshStatus}
+        onChanged={reloadPanes}
         account={account}
-        onWorkspace={reloadSession}
-        onError={fail}
       />
 
       <div className="cols">
         <div className="rail">
-          <Sessions
-            port={port}
-            status={status}
-            list={sessions}
-            reload={reloadSessions}
-            run={run}
-            cost={`${s.metrics.currency}${s.metrics.cost.toFixed(2)}`}
+          <Workspaces
+            hub={hub}
+            tree={tree}
+            runtimes={runtimes}
+            active={active}
+            folded={folded}
+            onFold={onFold}
+            reload={reloadTree}
+            onOpen={openPane}
+            onFocus={setActive}
+            onClose={closePane}
+            onCollapse={foldRail}
+            onRename={renameSession}
             onError={fail}
-            onFold={() => setRail(false)}
-            onSwitched={reloadSession}
           />
         </div>
 
         <div className="main">
           {!rail && (
-            <button className="handle handle-l" onClick={() => setRail(true)} title="展开会话栏　⌘\" aria-label="展开会话栏">
+            <button className="handle handle-l" onClick={() => setRail(true)} title="展开工作区栏　⌘\" aria-label="展开工作区栏">
               ›
             </button>
           )}
@@ -441,106 +393,77 @@ export function App({ port }: { port: AgentPort }) {
             </button>
           )}
 
-          <div className="tabs" role="tablist" onKeyDown={arrowTabs}>
-            <button className="tab" role="tab" aria-selected={pane === "flow"} onClick={() => setPane("flow")}>
-              活动<span className="n">{s.items.length}</span>
-            </button>
-            <button className="tab" role="tab" aria-selected={pane === "traj"} onClick={() => setPane("traj")}>
-              轨迹<span className="n">{traj.rows.length}</span>
-            </button>
-          </div>
-
-          <Transcript
-            items={s.items}
-            takeovers={s.takeovers}
-            waiting={s.waiting}
-            scroll={flow}
-            hidden={pane !== "flow"}
-            onPinned={setPinned}
-            onSuggest={submit}
-            onApprove={onApprove}
-            onAnswer={onAnswer}
-            onForget={onForget}
-            onExtInvoke={onExtInvoke}
-            onExtSubmit={onExtSubmit}
-            checkpoints={paired}
-            onPrepareRewind={onPrepareRewind}
-            onCommitRewind={onCommitRewind}
-            onUndoRewind={onUndoRewind}
-          />
-
-          <div className="scroll" id="trajScroll" data-pane="traj" hidden={pane !== "traj"}>
-            <Trajectory rows={traj.rows} />
-          </div>
-
-          <div className="compose">
-            <button className="jump" hidden={pinned || pane !== "flow"} onClick={toLatest}>
-              ↓ 回到最新
-            </button>
-            <span className="glowring" aria-hidden="true">
-              <i />
-            </span>
-            <RunStrip doing={s.doing} metrics={s.metrics} steps={steps} elapsed={elapsed} />
-            {/* Views the user (or the extension) put next to the composer.
-                They sit above it rather than inside it: the input box is the
-                one thing an extension must never be able to crowd out. */}
-            {atComposer.length > 0 && (
-              <div className="slotrail">
-                {atComposer.map((ext) => (
-                  <SlottedView
-                    key={slotKey(ext)}
-                    ext={ext}
-                    assigned={slots}
-                    onAction={(id) => void port.invokeExtensionAction(id).catch(fail)}
-                    onMove={(slot) => void moveSurface(ext, slot)}
-                  />
-                ))}
-              </div>
-            )}
-            <Composer
-              port={port}
-              status={status}
-              running={s.running && !blocked}
-              onSubmit={submit}
-              onChanged={refreshStatus}
-              onError={fail}
+          {/* One conversation on screen at a time. Side by side, two panes
+              squeezed each other and a glance could not tell which composer
+              belonged to which run; the ones behind keep streaming either way. */}
+          {tabs.length > 1 && (
+            <PaneTabs
+              tabs={tabs}
+              active={active}
+              showRoot={manyRoots}
+              onFocus={setActive}
+              onClose={closePanes}
+              onRename={(rt, title) => renameSession(rt.sessionPath ?? "", title)}
             />
-            {s.error && (
-              <div className="errbar" role="alert">
-                <span>{s.error}</span>
-                <button onClick={() => dispatch({ kind: "__error", text: "" } as never)}>知道了</button>
+          )}
+
+          <div className="panes">
+            {runtimes.map((rt) => {
+              const port = panePorts.get(rt.id);
+              return port ? (
+                <Pane
+                  key={`${rt.id}:${takeover[rt.id] ?? 0}`}
+                  rt={rt}
+                  port={port}
+                  title={tabs.find((t) => t.rt.id === rt.id)?.title ?? "新会话"}
+                  active={rt.id === active}
+                  sideHost={sideHost}
+                  side={side}
+                  onFocus={() => setActive(rt.id)}
+                  visible={rt.id === active}
+                  onReport={onReport}
+                  // Panes, not just the tree: the first turn gives this pane a
+                  // session path, and until /runtimes reports it the pane still
+                  // looks blank — the next history row would take it over.
+                  onSessionChanged={reloadPanes}
+                  onFoldSide={() => setSide(false)}
+                  onSettings={() => setSettings(true)}
+                />
+              ) : null;
+            })}
+            {runtimes.length === 0 && (
+              <div className="panes-empty">
+                <span className="mk" aria-hidden="true">
+                  ⌘
+                </span>
+                <p className="t">{t("没有打开的会话")}</p>
+                <p className="h">{t("从左边挑一个，或者在当前文件夹开一个新的")}</p>
+                <button onClick={() => void openPane({ root: tree[0]?.root }).catch(fail)}>{t("开一个新会话")}</button>
               </div>
             )}
           </div>
+
+          {error && (
+            <div className="errbar" role="alert">
+              <span>{error}</span>
+              <button onClick={() => setError("")}>知道了</button>
+            </div>
+          )}
         </div>
 
-        <div className="side">
-          <Metrics
-            metrics={s.metrics}
-            plan={s.plan}
-            items={s.items}
-            jobs={status?.jobs ?? []}
-            mcp={mcp}
-            rate={tps}
-            done={!s.running}
-            tree={tree}
-            yolo={yolo}
-            onFold={() => setSide(false)}
-            onSettings={() => setSettings(true)}
-            panels={s.panels}
-            views={inRail}
-            onMoveSurface={moveSurface}
-            onExtInvoke={onExtInvoke}
-          />
-        </div>
+        <div className="side" ref={setSideHost} />
       </div>
 
-      {settings && (
+      {settings && activePort && (
         <Settings
-          port={port}
-          status={status}
+          port={activePort}
+          status={report.status}
           theme={theme}
           onTheme={setTheme}
+          contrast={contrast}
+          look={look}
+          onLook={onLook}
+          onContrast={setContrast}
           onClose={() => setSettings(false)}
           onChanged={onSettingsChanged}
           reloadThemes={reloadThemes}
@@ -552,4 +475,3 @@ export function App({ port }: { port: AgentPort }) {
     </div>
   );
 }
-

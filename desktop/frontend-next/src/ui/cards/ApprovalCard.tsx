@@ -1,5 +1,6 @@
 import type { Item } from "../../state/session";
 import { Sym } from "../Sym";
+import { t } from "../../i18n";
 import type { ApprovalVerdict } from "../../port/port";
 
 interface Props {
@@ -19,7 +20,7 @@ export function ApprovalCard({ item, onApprove }: Props) {
       </div>
       <div className="c">
         <div className="hl">
-          <span className="nm">要动手了</span>
+          <span className="nm">{t("要动手了")}</span>
           <span className="tag">approval_request</span>
         </div>
         <div className="out">
@@ -45,11 +46,11 @@ export function ApprovalCard({ item, onApprove }: Props) {
             {sealed && (
               <div className="apv-done">
                 {item.verdict === "always" ? (
-                  <><b>本会话不再问这一类。</b>核心把它记进会话授权，不落盘。</>
+                  <><b>{t("本会话不再问这一类。")}</b>核心把它记进会话授权，不落盘。</>
                 ) : item.verdict === "deny" ? (
-                  <><b>已拒绝。</b>agent 收到否决，会另想办法或停手。</>
+                  <><b>{t("已拒绝。")}</b>agent 收到否决，会另想办法或停手。</>
                 ) : (
-                  <><b>允许这一次。</b>下次同样的操作仍会问你。</>
+                  <><b>{t("允许这一次。")}</b>下次同样的操作仍会问你。</>
                 )}
               </div>
             )}

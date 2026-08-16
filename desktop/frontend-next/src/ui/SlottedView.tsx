@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { t } from "../i18n";
 import type { ExtensionSurface } from "../port/wire";
 import { ExtensionView } from "./cards/ExtensionView";
 import { SLOTS, placement } from "./slots";
@@ -47,7 +48,7 @@ export function SlottedView({
           {/* Clearing hands the choice back to the extension rather than
               hiding the surface: it is a different act from moving it. */}
           <button role="menuitem" onClick={() => { setOpen(false); onMove(""); }}>
-            交还给插件
+            {t("交还给插件")}
           </button>
         </div>
       )}

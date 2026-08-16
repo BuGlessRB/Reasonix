@@ -566,11 +566,7 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 // PreToolUse hooks and preview checkpoints, and injects call context. All of
 // this happens after permission and before the concrete Execute call.
 func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (toolOutcome, bool) {
-	policyArgs := plan.permArgs
-	if len(plan.resolved.Args) > 0 {
-		policyArgs = plan.resolved.Args
-	}
-	if outcome, blocked := a.taskPolicyToolGate(plan, policyArgs); blocked {
+	if outcome, blocked := a.taskPolicyToolGate(plan); blocked {
 		return outcome, true
 	}
 	// Acquire after permission is granted but before PreToolUse: hooks are user

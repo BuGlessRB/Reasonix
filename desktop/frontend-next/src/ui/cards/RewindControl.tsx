@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { t } from "../../i18n";
 import type { Checkpoint, RewindPlan, RewindResult, RewindScope } from "../../port/port";
 import { useDismiss } from "../dismiss";
 
@@ -81,10 +82,10 @@ export function RewindControl({
         <button
           aria-haspopup="menu"
           aria-expanded={stage.at !== "closed"}
-          title="把工作区和对话退回这条消息之前"
+          title={t("把工作区和对话退回这条消息之前")}
           onClick={() => setStage(stage.at === "closed" ? { at: "menu" } : { at: "closed" })}
         >
-          ↩ 回到这里
+          {t("↩ 回到这里")}
         </button>
         <div className="menu projmenu" role="menu" hidden={stage.at === "closed"}>
           {stage.at === "menu" &&
@@ -101,7 +102,7 @@ export function RewindControl({
             <div className="mi plain">
               <span className="dot" />
               <span className="tx">
-                <span className="lb">这一轮没有改动文件</span>
+                <span className="lb">{t("这一轮没有改动文件")}</span>
               </span>
             </div>
           )}
@@ -109,7 +110,7 @@ export function RewindControl({
             <div className="mi plain">
               <span className="dot" />
               <span className="tx">
-                <span className="lb">正在还原…</span>
+                <span className="lb">{t("正在还原…")}</span>
               </span>
             </div>
           )}
@@ -118,7 +119,7 @@ export function RewindControl({
               <div className="mi plain">
                 <span className="dot" />
                 <span className="tx">
-                  <span className="lb">这一轮有改动还原不了</span>
+                  <span className="lb">{t("这一轮有改动还原不了")}</span>
                   <span className="ds">
                     {(stage.plan.coverageGaps ?? [])
                       .map((g) => GAP_REASONS[g.reason] ?? g.detail)
@@ -130,14 +131,14 @@ export function RewindControl({
               <button className="mi" role="menuitem" onClick={() => commit(stage.plan)}>
                 <span className="dot" />
                 <span className="tx">
-                  <span className="lb">仍然还原剩下的</span>
+                  <span className="lb">{t("仍然还原剩下的")}</span>
                 </span>
                 <span className="rt">{stage.plan.fileCount} 个文件</span>
               </button>
               <button className="mi plain" role="menuitem" onClick={() => setStage({ at: "closed" })}>
                 <span className="dot" />
                 <span className="tx">
-                  <span className="lb">取消</span>
+                  <span className="lb">{t("取消")}</span>
                 </span>
               </button>
             </>
@@ -154,7 +155,7 @@ export function RewindControl({
               <button className="mi" role="menuitem" onClick={() => undo(stage.tx)}>
                 <span className="dot" />
                 <span className="tx">
-                  <span className="lb">撤销这次还原</span>
+                  <span className="lb">{t("撤销这次还原")}</span>
                 </span>
               </button>
             </>
@@ -163,7 +164,7 @@ export function RewindControl({
             <div className="mi plain">
               <span className="dot" />
               <span className="tx">
-                <span className="lb">没能还原</span>
+                <span className="lb">{t("没能还原")}</span>
                 <span className="ds">{stage.why}</span>
               </span>
             </div>

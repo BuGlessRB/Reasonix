@@ -2910,7 +2910,6 @@ export const en = {
   "completion.review": "Independent review: {status}",
   "completion.gaps": "Verification gaps: {gaps}",
   "completion.gapStaleCheck": "stale checks",
-  "completion.constraintsLimited": "Turn verification limited",
   "notice.deliveryIncompleteMissing": "Still needed: {items}",
   "notice.deliveryRequirementSeparator": ", ",
   "notice.deliveryRequirementProjectCheck": "project checks",

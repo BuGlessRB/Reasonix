@@ -66,6 +66,7 @@ func renderDesktopSection(b *strings.Builder, c *Config) {
 	if width := c.DesktopConversationWidth(); width == "full" {
 		fmt.Fprintf(b, "conversation_width = %q   # desktop: standard|full transcript width; empty = standard\n", width)
 	}
+	renderAppearanceSection(b, c.Desktop.Appearance)
 	b.WriteString("\n")
 
 	b.WriteString("[billing]\n")
@@ -75,4 +76,42 @@ func renderDesktopSection(b *strings.Builder, c *Config) {
 		b.WriteString("# display_currency = \"auto\"   # auto|CNY|USD; display only — does not rewrite provider list prices\n")
 	}
 	b.WriteString("\n")
+}
+
+// renderAppearanceSection writes [desktop.appearance]. Every writer that adds a
+// field to the struct has to add it here too: this renderer is hand-written, so
+// anything it does not know about is dropped on the next save — the wallpaper
+// landed on disk and vanished from the config the moment anything else was
+// written.
+func renderAppearanceSection(b *strings.Builder, a AppearanceConfig) {
+	paper := strings.TrimSpace(a.Wallpaper.File)
+	if a.Zoom == 0 && a.ReadSize == 0 && a.FontUI == "" && a.FontMono == "" && paper == "" {
+		return
+	}
+	// The child table implies the parent, so an empty [desktop.appearance] is
+	// noise in a file people read.
+	if a.Zoom != 0 || a.ReadSize != 0 || a.FontUI != "" || a.FontMono != "" {
+		b.WriteString("\n[desktop.appearance]\n")
+	}
+	if a.Zoom != 0 {
+		fmt.Fprintf(b, "zoom = %g   # whole-interface scale, 0.8..1.6\n", a.Zoom)
+	}
+	if a.ReadSize != 0 {
+		fmt.Fprintf(b, "read_size = %g   # transcript body size in px\n", a.ReadSize)
+	}
+	if a.FontUI != "" {
+		fmt.Fprintf(b, "font_ui = %q   # interface font family\n", a.FontUI)
+	}
+	if a.FontMono != "" {
+		fmt.Fprintf(b, "font_mono = %q   # code and output font family\n", a.FontMono)
+	}
+	if paper == "" {
+		return
+	}
+	b.WriteString("\n[desktop.appearance.wallpaper]\n")
+	fmt.Fprintf(b, "file = %q   # a name inside the appearance directory, never a path\n", paper)
+	fmt.Fprintf(b, "opacity = %g   # at rest, 0..1\n", a.Wallpaper.Opacity)
+	fmt.Fprintf(b, "dim = %g   # scrim of page colour over it, 0..1\n", a.Wallpaper.Dim)
+	fmt.Fprintf(b, "focus_x = %g   # 0..1, the point that survives cropping\n", a.Wallpaper.FocusX)
+	fmt.Fprintf(b, "focus_y = %g\n", a.Wallpaper.FocusY)
 }

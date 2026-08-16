@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { t } from "../i18n";
 import type { AgentPort, MemoryEntry } from "../port/port";
 
 // Memory is the only thing here that changes how the agent behaves without the
@@ -29,8 +30,8 @@ export function Memory({ port }: { port: AgentPort }) {
   };
   useEffect(reload, [port]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!items) return <div className="empty">读不到记忆。</div>;
-  if (items.length === 0) return <div className="empty">还没有记下任何东西。</div>;
+  if (!items) return <div className="empty">{t("读不到记忆。")}</div>;
+  if (items.length === 0) return <div className="empty">{t("还没有记下任何东西。")}</div>;
 
   const forget = async (name: string) => {
     setBusy(name);
@@ -51,8 +52,8 @@ export function Memory({ port }: { port: AgentPort }) {
     <div className="mem">
       {query && (
         <p className="recall">
-          上一轮从「{clip(query)}」出发翻了一次记忆
-          {usedCount > 0 ? `，用上了 ${usedCount} 条` : "，一条都没用上"}
+          {t("上一轮从「{q}」出发翻了一次记忆", { q: clip(query) })}
+          {usedCount > 0 ? t("，用上了 {n} 条", { n: usedCount }) : t("，一条都没用上")}
         </p>
       )}
       {GROUPS.map(([id, label, desc]) => {
@@ -61,26 +62,26 @@ export function Memory({ port }: { port: AgentPort }) {
         return (
           <section className="memgrp" key={id}>
             <div className="hd">
-              <span className="lb">{label}</span>
+              <span className="lb">{t(label)}</span>
               <span className="c">{group.length}</span>
             </div>
-            <p className="ds">{desc}</p>
+            <p className="ds">{t(desc)}</p>
             {group.map((m) => (
               <div className="memrow" key={m.name} data-used={m.usedLastTurn ? "" : undefined}>
                 <div className="line">
-                  <i className="dot" title={m.usedLastTurn ? "上一轮用上了" : undefined} />
+                  <i className="dot" title={m.usedLastTurn ? t("上一轮用上了") : undefined} />
                   <button className="nm" onClick={() => setOpen(open === m.name ? "" : m.name)}>
                     {m.title || m.name}
                   </button>
                   <span className="ds">{m.description}</span>
-                  {m.expired && <i className="stale">已过期</i>}
-                  <span className="sc">{SCOPE[m.scope ?? ""] || m.scope}</span>
+                  {m.expired && <i className="stale">{t("已过期")}</i>}
+                  <span className="sc">{t(SCOPE[m.scope ?? ""] ?? m.scope ?? "")}</span>
                   <span className="at">{m.updatedAt || m.createdAt}</span>
                   <button className="act ghost" disabled={busy === m.name} onClick={() => void forget(m.name)}>
-                    {busy === m.name ? "…" : "忘掉"}
+                    {t(busy === m.name ? "…" : "忘掉")}
                   </button>
                 </div>
-                {m.usedLastTurn && m.why && <div className="why-used">上一轮因为「{m.why}」被翻出来</div>}
+                {m.usedLastTurn && m.why && <div className="why-used">{t("上一轮因为「{why}」被翻出来", { why: m.why })}</div>}
                 {open === m.name && (
                   <div className="peek">
                     <pre>{m.body?.trim() || "（没有正文）"}</pre>

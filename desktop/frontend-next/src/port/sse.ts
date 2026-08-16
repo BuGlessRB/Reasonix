@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
+import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, PermissionLists, PermissionRules, SandboxSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
 import { HttpError, type Attachment, type WorkspaceChanges } from "./port";
 import type { WireEvent } from "./wire";
 
@@ -43,10 +43,23 @@ interface WailsBind {
 }
 
 export class SsePort implements AgentPort {
-  constructor(private readonly base = "") {}
+  // rt names the pane this port speaks for. The shell's bus carries every
+  // pane's frames, so a channel per runtime is what keeps two live
+  // conversations out of each other's transcript.
+  constructor(private readonly base = "", private readonly rt = "") {}
 
   private readonly dropSubs = new Set<(paths: string[]) => void>();
   private dropWired = false;
+
+  // A refusal carries a code; only when it does not do we fall back to text.
+  // Throwing HttpError with the reason attached keeps that choice at the point
+  // that renders it, instead of flattening it to a string here.
+  private static async fail(path: string, res: Response): Promise<never> {
+    const body = (await res.json().catch(() => null)) as
+      | { code?: string; error?: string; params?: Record<string, string | number> }
+      | null;
+    throw new HttpError(res.status, body?.error || `${path}: ${res.status}`, body ?? undefined);
+  }
 
   private async post(path: string, body?: unknown): Promise<void> {
     const res = await fetch(this.base + path, {
@@ -55,7 +68,7 @@ export class SsePort implements AgentPort {
       credentials: "same-origin",
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (!res.ok) throw new HttpError(res.status, `${path}: ${res.status} ${await res.text()}`);
+    if (!res.ok) await SsePort.fail(path, res);
   }
 
   // A POST whose answer is the payload, not a status code.
@@ -66,7 +79,7 @@ export class SsePort implements AgentPort {
       credentials: "same-origin",
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`${path}: ${res.status}`);
+    if (!res.ok) await SsePort.fail(path, res);
     return (await res.json()) as T;
   }
 
@@ -224,6 +237,22 @@ export class SsePort implements AgentPort {
     const body = (await res.json().catch(() => ({}))) as ShellSettings & { error?: string };
     if (!res.ok) throw new Error(body.error || `/shell: ${res.status}`);
     return body;
+  }
+
+  permissions() {
+    return this.get<PermissionRules>("/permissions");
+  }
+
+  savePermissions(lists: PermissionLists) {
+    return this.post0<PermissionRules>("/permissions", lists);
+  }
+
+  sandbox() {
+    return this.get<SandboxSettings>("/sandbox");
+  }
+
+  saveSandbox(s: SandboxSettings) {
+    return this.post0<SandboxSettings>("/sandbox", s);
   }
 
   mcp() {
@@ -525,7 +554,7 @@ export class SsePort implements AgentPort {
     // same frames over its own bus; the payload is identical.
     const bus = (window as unknown as { runtime?: WailsBus }).runtime;
     if (bus?.EventsOn) {
-      const off = bus.EventsOn(WAILS_EVENT, feed);
+      const off = bus.EventsOn(this.rt ? `${WAILS_EVENT}:${this.rt}` : WAILS_EVENT, feed);
       // Subscribing to the bus is not the handshake /events is: ask the shell
       // to replay whatever prompt is already waiting for an answer.
       void fetch(this.base + WAILS_REPLAY, { method: "POST" }).catch(() => {});
@@ -562,8 +591,55 @@ export class SsePort implements AgentPort {
       answers: answers.map((a) => ({ QuestionID: a.questionId, Selected: a.selected })),
     });
   }
+  context() {
+    return this.get<ContextBreakdown>("/context");
+  }
+
   themes() {
     return this.get<ThemePack[]>("/themes");
+  }
+
+  appearance() {
+    return this.get<Appearance>("/appearance");
+  }
+
+  saveAppearance(look: Appearance) {
+    return this.post0<Appearance>("/appearance", {
+      language: look.language ?? "",
+      zoom: look.zoom ?? 0,
+      readSize: look.readSize ?? 0,
+      fontUi: look.fontUi ?? "",
+      fontMono: look.fontMono ?? "",
+      opacity: look.wallpaper?.opacity ?? 0,
+      dim: look.wallpaper?.dim ?? 0,
+      focusX: look.wallpaper?.focusX ?? 0.5,
+      focusY: look.wallpaper?.focusY ?? 0.5,
+    });
+  }
+
+  // JSON, not raw bytes: csrfGuard admits nothing else, which is what stops a
+  // cross-site form from posting here at all.
+  async uploadWallpaper(blob: Blob) {
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    const res = await fetch(this.base + "/appearance/wallpaper", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ mime: blob.type, data: btoa(bin) }),
+    });
+    const body = (await res.json().catch(() => ({}))) as Appearance & { error?: string };
+    if (!res.ok) throw new Error(body.error || `/appearance/wallpaper: ${res.status}`);
+    return body;
+  }
+
+  async clearWallpaper() {
+    const res = await fetch(this.base + "/appearance/wallpaper", {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    if (!res.ok) throw new Error(`/appearance/wallpaper: ${res.status}`);
   }
   async surfaceSlots() {
     const r = await this.get<{ slots?: Record<string, string> }>("/surfaces");

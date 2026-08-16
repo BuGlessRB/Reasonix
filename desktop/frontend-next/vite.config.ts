@@ -9,6 +9,10 @@ interface ProxyEvents {
 // also carries /mcp/reconnect. A route missing here answers with the SPA shell
 // instead of JSON, which is indistinguishable from a broken endpoint.
 const ROUTES = [
+  // The hub's own surface, plus /rt — every pane's requests carry that prefix,
+  // so without it a second session's traffic answers with the SPA shell.
+  "/runtimes", "/tree", "/rt",
+  "/appearance",
   "/events", "/history", "/status", "/submit", "/cancel", "/approve", "/answer",
   "/plan", "/goal", "/resume", "/models", "/tool-approval-mode", "/preset",
   "/model", "/effort", "/new", "/sessions", "/delete-session", "/provider-setup",

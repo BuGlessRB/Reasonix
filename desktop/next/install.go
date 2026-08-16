@@ -74,8 +74,8 @@ func (a *App) GoToVersion(target string) error {
 // and macOS already have a helper waiting for the exit; Linux replaced the files
 // in place, so this process is the one that has to start the new one.
 func (a *App) handOver(layout update.Layout) {
-	if a.srv != nil {
-		a.srv.Controller().Close()
+	if a.hub != nil {
+		a.hub.Shutdown()
 	}
 	if goruntime.GOOS == "linux" {
 		_ = layout.Relaunch()

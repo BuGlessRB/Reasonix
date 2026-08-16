@@ -17,7 +17,7 @@ func TestEveryRouteTheKernelRegistersIsRouted(t *testing.T) {
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no serve sources found: %v", err)
 	}
-	handler := regexp.MustCompile(`mux\.HandleFunc\("(?:GET|POST|PUT|PATCH|DELETE) (/[^"]*)", (s\.\w+)\)`)
+	handler := regexp.MustCompile(`mux\.HandleFunc\("(?:GET|POST|PUT|PATCH|DELETE) (/[^"]*)", ([sh]\.\w+)\)`)
 	wildcard := regexp.MustCompile(`\{[^}]*\}`)
 	seen := map[string]bool{}
 	for _, file := range files {
@@ -38,7 +38,7 @@ func TestEveryRouteTheKernelRegistersIsRouted(t *testing.T) {
 				continue
 			}
 			probe := wildcard.ReplaceAllString(route, "x")
-			if !isAPIPath(probe) {
+			if !isAPIPath(probe) && !isHubPath(probe) {
 				t.Errorf("%s registers %q but the shell routes %q to the assets, so it answers index.html", filepath.Base(file), route, probe)
 			}
 		}

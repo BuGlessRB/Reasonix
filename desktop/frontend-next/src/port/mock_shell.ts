@@ -1,4 +1,4 @@
-import type { ShellOption, ShellSettings } from "./port";
+import type { ContextBreakdown, ShellOption, ShellSettings } from "./port";
 import { MockExtensions } from "./mock_ext";
 
 // The interpreter half of the fixture. It stands on a Windows host because that
@@ -30,6 +30,10 @@ const POWERSHELL: ShellOption = {
 };
 
 export class MockShell extends MockExtensions {
+  async context(): Promise<ContextBreakdown> {
+    return CONTEXT;
+  }
+
   private sh: ShellSettings = {
     prefer: "auto",
     effective: GIT_BASH,
@@ -51,3 +55,7 @@ export class MockShell extends MockExtensions {
     return { ...this.sh };
   }
 }
+
+// 够把分段条和悬停面板画出来的一份构成：工具定义比对话本身还大，正是这个面板
+// 要让人看见的那种情况。
+const CONTEXT: ContextBreakdown = { used: 24800, window: 128000, system: 5200, tools: 7400, user: 1800, reply: 3100, output: 7300 };

@@ -579,7 +579,7 @@ func (c *Controller) resolveInputImageCandidates(line string) []string {
 func visionRefImageDataURL(r ref, baseDir string) (string, error) {
 	switch r.kind {
 	case refImage:
-		return visionImageDataURL(r.path)
+		return visionImageDataURL(baseDir, r.path)
 	case refFile:
 		return visionFileImageDataURL(r.path, baseDir)
 	default:
@@ -897,7 +897,7 @@ func (c *Controller) resolveRefs(ctx context.Context, line string, scopedOnly bo
 			}
 			appendRefBlock(&b, tag, `path="`+displayPath+`"`, text)
 		case refImage:
-			appendRefBlock(&b, "image", `path="`+r.path+`"`, "[image attachment available at @"+r.path+"; sent as direct model image input only when the selected model supports vision. Text-only models can still use an available OCR/image/vision tool with this local path; image bytes are not inlined into prompt text.]")
+			appendRefBlock(&b, "image", `path="`+r.path+`"`, "[image attachment at @"+r.path+"; image bytes are never inlined into prompt text. Whether this model receives the image, and what to do when it cannot, is stated once in the turn's attached-images note.]")
 		}
 	}
 	return b.String(), errs
@@ -1123,9 +1123,9 @@ func readFileRefUnscoped(path string) (content string, isDir bool, err error) {
 
 func imageFileRefNote(displayPath, mime string, size int64, attached bool) string {
 	if attached {
-		return fmt.Sprintf("[image file %s, mime=%s, %d bytes — sent as direct model image input only when the selected model supports vision. Text-only models can still use an available OCR/image/vision tool with this local path; image bytes are not inlined into prompt text.]", displayPath, mime, size)
+		return fmt.Sprintf("[image file %s, mime=%s, %d bytes — image bytes are never inlined into prompt text. Whether this model receives the image, and what to do when it cannot, is stated once in the turn's attached-images note.]", displayPath, mime, size)
 	}
-	return fmt.Sprintf("[image file %s, mime=%s, %d bytes — not sent as direct model image input because no workspace root is available. Use a workspace-scoped file reference, image attachment, or an available OCR/image/vision tool with a readable local path.]", displayPath, mime, size)
+	return fmt.Sprintf("[image file %s, mime=%s, %d bytes — not readable from here: no workspace root is available. Re-attach it, or reference it from inside the workspace.]", displayPath, mime, size)
 }
 
 // walkRootDir walks a directory under a sandboxed *os.Root and writes each

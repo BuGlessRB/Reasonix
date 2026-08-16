@@ -81,6 +81,43 @@ func (c finalReadinessCheck) audit(result evidence.ReadinessAuditResult, recover
 	}
 }
 
+// declaredChecksRanAfter reports whether the project's own declared checks all
+// ran after the latest write. A project that names its checks has defined what
+// verification means there, so the host's command classifier — which cannot
+// tell `python3 test_x.py` from `python3 deploy.py` — does not get a second
+// say. Projects that declare nothing keep the classifier as the only floor.
+func (a *Agent) declaredChecksRanAfter(writer int) bool {
+	if len(a.projectChecks) == 0 {
+		return false
+	}
+	for _, check := range a.projectChecks {
+		command := strings.TrimSpace(check.Command)
+		if command == "" {
+			continue
+		}
+		if !a.task.ledger.HasSuccessfulCommandAfter(command, writer) {
+			return false
+		}
+	}
+	return true
+}
+
+// unmetProjectChecks lists the declared checks that have not run since the
+// latest write, phrased as the instruction that would settle each one.
+func (a *Agent) unmetProjectChecks(writer int) []string {
+	var gaps []string
+	for _, check := range a.projectChecks {
+		command := strings.TrimSpace(check.Command)
+		if command == "" {
+			continue
+		}
+		if !a.task.ledger.HasSuccessfulCommandAfter(command, writer) {
+			gaps = append(gaps, fmt.Sprintf("run %q from %s after the latest write", command, finalReadinessCheckSource(check)))
+		}
+	}
+	return gaps
+}
+
 func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	if a.task.ledger == nil || a.ablation.Off(ablation.Evidence) {
 		return finalReadinessCheck{}
@@ -155,8 +192,9 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 		return out
 	}
 	if !a.deliveryProfile && a.turn.policySet && a.turn.policy.Verification >= taskpolicy.VerifyTargeted &&
-		a.turn.policy.AllowsTests() && toolPresent(a.svc.tools, "bash") &&
-		!a.task.ledger.HasSuccessfulVerificationCommandAfter(writer) {
+		toolPresent(a.svc.tools, "bash") &&
+		!a.task.ledger.HasSuccessfulVerificationCommandAfter(writer) &&
+		!a.declaredChecksRanAfter(writer) {
 		out.applies = true
 		out.missingVerification++
 		missing = append(missing, "run a relevant verification command after the latest write for the current role setting")
@@ -193,18 +231,10 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 		}
 		// The capability gate already ran before the no-writer fast path above.
 	}
-	for _, check := range a.projectChecks {
-		if deliveryVerificationOnly {
-			break
-		}
-		command := strings.TrimSpace(check.Command)
-		if command == "" {
-			continue
-		}
-		if !a.task.ledger.HasSuccessfulCommandAfter(command, writer) {
-			out.missingProjectChecks++
-			missing = append(missing, fmt.Sprintf("run %q from %s after the latest write", command, finalReadinessCheckSource(check)))
-		}
+	if !deliveryVerificationOnly {
+		gaps := a.unmetProjectChecks(writer)
+		out.missingProjectChecks += len(gaps)
+		missing = append(missing, gaps...)
 	}
 
 	outstanding := a.outstandingPlanCriteria()

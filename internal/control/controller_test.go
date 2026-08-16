@@ -2542,13 +2542,15 @@ func TestNewSessionResetsTwoModelPlannerContext(t *testing.T) {
 func TestTwoModelPlannerApprovalUsesHostGate(t *testing.T) {
 	dir := t.TempDir()
 	planner := &recordingProvider{name: "planner", streams: [][]provider.Chunk{
-		textTurn("Plan:\n1. Edit main.go\n\n是否批准这个方案？"),
+		toolCallTurn("plan-1", "submit_plan",
+			`{"objective":"fix the planner approval bug","steps":[{"title":"Edit main.go"}],"requires_approval":true}`),
+		textTurn("plan submitted"),
 	}}
 	execProv := &recordingProvider{name: "executor", streams: [][]provider.Chunk{
 		textTurn("approved execution complete"),
 	}}
 	exec := agent.New(execProv, tool.NewRegistry(), agent.NewSession("exec sys"), agent.Options{}, event.Discard)
-	coord := agent.NewCoordinator(planner, agent.NewSession("planner sys"), nil, tool.NewRegistry(), agent.Options{}, exec, 0, event.Discard, nil)
+	coord := agent.NewCoordinator(planner, agent.NewSession("planner sys"), nil, agent.PlannerToolRegistry(tool.NewRegistry()), agent.Options{}, exec, 0, event.Discard, nil)
 
 	ids := make(chan string, 1)
 	var prompts int

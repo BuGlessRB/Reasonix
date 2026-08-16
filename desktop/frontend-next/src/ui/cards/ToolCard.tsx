@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { t } from "../../i18n";
 import type { ExtensionSurface, Tool } from "../../port/wire";
 import { categoryOf, labelFor, mcpOrigin, runLabelFor } from "../icons";
 import { Sym, glyphFor } from "../Sym";
-import { shortArgs } from "../args";
+import { GOAL_STATUS, argOf, goalUpdate, shortArgs } from "../args";
 import { Cost, secondsLabel, tokenLabel } from "../Cost";
 import { parsePlan } from "../../state/session";
 import { DiffView } from "./DiffView";
@@ -74,6 +75,14 @@ export function ToolCard({
   // subagent" is not a thing you can go read, "skill:security-review" is.
   const who = tool.profile?.name?.trim();
   const settling = useSettling(running);
+  // A refused call carries the same sentence twice: the kernel writes it to the
+  // model as output and to the reader as an error. Rendering both prints it
+  // twice, and the second copy reads like a second failure.
+  const echoed = !!tool.err && tool.err.trim() === (tool.output ?? "").trim();
+  // update_goal's payload is the model's own prose about the turn. Its shape is
+  // one claim — done, still going, or stuck — so the card says the claim rather
+  // than the object carrying it.
+  const goal = tool.name === "update_goal" ? goalUpdate(tool.args) : null;
   return (
     <div className="call" data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined} data-running={running ? "" : undefined}>
       <div className="g">
@@ -83,8 +92,8 @@ export function ToolCard({
       <div className="c">
         <div className="hl" data-swap={settling.swap ? "" : undefined}>
           <span className={running ? "nm shim" : "nm"}>{head}</span>
-          {who && <span className="who" title={`按 ${who} 这份技能的设定跑的子代理`}>{who}</span>}
-          {from && <span className="src" title={`外部服务 ${from.server} 提供的工具`}>{from.server}</span>}
+          {who && <span className="who" title={t("按 {name} 这份技能的设定跑的子代理", { name: who })}>{who}</span>}
+          {from && <span className="src" title={t("外部服务 {name} 提供的工具", { name: from.server })}>{from.server}</span>}
           <span className="tag" title={tagHint(tool)}>{tagFor(tool)}</span>
           {arg && <span className={streaming ? "arg shim" : "arg"}>{arg}</span>}
           {bad && <span className="fail">{badLabel}</span>}
@@ -98,26 +107,32 @@ export function ToolCard({
           {takeover ? (
             <>
               <ExtensionView body={takeover.view?.body ?? []} onAction={(id) => onExtInvoke?.(id)} />
-              <div className="drawnby">由 {takeover.pluginId} 渲染</div>
+              <div className="drawnby">{t("由 {name} 渲染", { name: takeover.pluginId })}</div>
             </>
           ) : (
             <>
-          {tool.diff && <DiffView diff={tool.diff} path={tool.args} />}
+          {tool.diff && <DiffView diff={tool.diff} path={argOf(tool.args, "path", "file_path")} />}
           {!tool.diff && tool.name === "todo_write" && <Steps tool={tool} />}
-          {!tool.diff && tool.name !== "todo_write" && tool.output && children.length === 0 && (
+          {goal && (
+            <div className="goalup" data-s={GOAL_STATUS[goal.status]?.[1] ?? "run"}>
+              <span className="st">{t(GOAL_STATUS[goal.status]?.[0] ?? goal.status)}</span>
+              {goal.reason && <span className="rs">{goal.reason}</span>}
+            </div>
+          )}
+          {!tool.diff && !goal && tool.name !== "todo_write" && tool.output && !echoed && children.length === 0 && (
             <ToolOutput name={shown} text={tool.output} />
           )}
             </>
           )}
           {/* The error stays outside the takeover: an extension may redraw what
               a call produced, never whether it failed. */}
-          {tool.err && <div className="txt">{tool.err}</div>}
+          {tool.err && <div className="txt bad">{tool.err}</div>}
           {children.length > 0 && (
             <div className="nest">
               <div className="nest-hd">
                 <i className="pip" />
-                <span className="who">{who ? `${who} 做了 ${children.length} 步` : `${children.length} 个子代理`}</span>
-                <span className="prof">独立上下文 · 不进主轨迹</span>
+                <span className="who">{who ? t("{name} 做了 {n} 步", { name: who, n: children.length }) : t("{n} 个子代理", { n: children.length })}</span>
+                <span className="prof">{t("独立上下文 · 不进主轨迹")}</span>
                 {/* 委派出去那部分的账：耗时是父调用的，token 是子步骤各自留下的 */}
                 <span className="rt">
                   {[
@@ -173,7 +188,7 @@ function NestedCall({ tool }: { tool: Tool }) {
 // it for the rest of the turn, the card records what it was when it was written.
 function Steps({ tool }: { tool: Tool }) {
   const steps = parsePlan(tool);
-  if (!steps?.length) return <span className="fold">计划已进右栏</span>;
+  if (!steps?.length) return <span className="fold">{t("计划已进右栏")}</span>;
   const now = steps.findIndex((s) => !s.done);
   return (
     <div className="steps">

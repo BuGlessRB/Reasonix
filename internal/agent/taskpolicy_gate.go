@@ -1,53 +1,19 @@
 package agent
 
-import (
-	"encoding/json"
-	"strings"
-)
-
-// taskPolicyToolGate binds natural-language constraints to both direct tools
-// and use_capability-resolved targets before any workspace mutation.
-func (a *Agent) taskPolicyToolGate(plan *toolCallPlan, args json.RawMessage) (toolOutcome, bool) {
+// taskPolicyToolGate enforces the turn's plan-mode read-only boundary for both
+// direct tools and use_capability-resolved targets before any mutation. Limits
+// the user asked for in prose are the permission system's to enforce, on the
+// concrete command, not this gate's to infer from wording.
+func (a *Agent) taskPolicyToolGate(plan *toolCallPlan) (toolOutcome, bool) {
 	if !a.turn.policySet {
 		return toolOutcome{}, false
 	}
 	if plan.mutates && !a.turn.policy.AllowsMutation() {
-		return policyBlock("the current task policy forbids workspace modifications (user constraint or plan mode)", "task policy forbids mutation")
-	}
-	if !a.turn.policy.AllowsExternal() && isExternalActionTool(plan.evidenceName, plan.permName, args) {
-		return policyBlock("the current task policy forbids push/publish/deploy-style external actions", "task policy forbids external action")
-	}
-	if isVerificationCommandTool(plan.evidenceName, plan.permName, args) {
-		if !a.turn.policy.AllowsTests() {
-			return policyBlock("the current task policy forbids running tests (user constraint)", "task policy forbids tests")
-		}
-		if !a.turn.policy.AllowsCommand(bashCommandFromArgs(args)) {
-			return policyBlock("the current task policy allows only the verification commands named by the user", "verification command is outside the user allowlist")
-		}
+		return policyBlock("plan mode is read-only; leave plan mode before changing the workspace", "task policy forbids mutation")
 	}
 	return toolOutcome{}, false
 }
 
 func policyBlock(output, reason string) (toolOutcome, bool) {
 	return toolOutcome{output: "blocked: " + output, blocked: true, errMsg: "blocked: " + reason}, true
-}
-
-func isVerificationCommandTool(evidenceName, permName string, args json.RawMessage) bool {
-	name := strings.ToLower(strings.TrimSpace(evidenceName))
-	if name == "" {
-		name = strings.ToLower(strings.TrimSpace(permName))
-	}
-	if name != "bash" && name != "shell" {
-		return false
-	}
-	cmd := strings.ToLower(bashCommandFromArgs(args))
-	for _, verifier := range []string{
-		"go test", "npm test", "npm run test", "pnpm test", "yarn test",
-		"pytest", "cargo test", "mvn test", "gradle test", "make test", "bun test", "deno test",
-	} {
-		if strings.Contains(cmd, verifier) {
-			return true
-		}
-	}
-	return false
 }

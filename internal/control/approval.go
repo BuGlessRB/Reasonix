@@ -182,9 +182,11 @@ func (g *freshHumanHeadlessGate) Check(ctx context.Context, toolName string, arg
 		}
 		return false, "this tool requires fresh human approval and cannot run in a non-interactive session. Use an interactive session or a user-initiated memory command.", nil
 	}
-	if strings.EqualFold(toolName, "bash") && permission.BashSubjectRequiresExplicitApproval(permission.Subject(args)) {
-		if g.gate.Policy.Decide(toolName, readOnly, args) != permission.Allow && !g.dynamicBashBypass {
-			return false, "this dynamic shell command requires human approval and cannot run in a non-interactive session. Inline interpreter code (python -c, node -e) is blocked because the host cannot audit it; write the code to a file with write_file and run that file instead (e.g. `python repro.py`), or use read_file/grep for inspection. The user can also switch to an interactive session or YOLO mode.", nil
+	if strings.EqualFold(toolName, "bash") {
+		if blocker := permission.BashSubjectApprovalBlocker(permission.Subject(args)); blocker != permission.BashApprovalBlockerNone {
+			if g.gate.Policy.Decide(toolName, readOnly, args) != permission.Allow && !g.dynamicBashBypass {
+				return false, headlessBashBlockReason(blocker), nil
+			}
 		}
 	}
 	return g.gate.Check(ctx, toolName, args, readOnly)
@@ -192,6 +194,30 @@ func (g *freshHumanHeadlessGate) Check(ctx context.Context, toolName string, arg
 
 func (g *freshHumanHeadlessGate) ExplicitlyDenies(toolName string, args json.RawMessage) bool {
 	return g.gate.Policy.ExplicitlyDenies(toolName, args)
+}
+
+// Every blocked shape leads callers toward writing a script, so the writable
+// boundary belongs in all of them: told only to use a file, models reach for
+// /tmp and lose a second round to the sandbox.
+const headlessBashBlockSuffix = " Any file you create must be inside the workspace — paths outside it, /tmp included, are not writable. The user can also switch to an interactive session or YOLO mode."
+
+// headlessBashBlockReason names the shape that actually stopped the command.
+// A caller told "inline interpreter code is blocked" about `env | grep` learns
+// nothing and rewrites toward the wrong fix.
+func headlessBashBlockReason(blocker permission.BashApprovalBlocker) string {
+	const lead = "this shell command requires human approval and cannot run in a non-interactive session. "
+	switch blocker {
+	case permission.BashApprovalBlockerInlineCode:
+		return lead + "It carries inline interpreter code (python -c, node -e, bash -c), which the host cannot audit; write the code to a file with write_file and run that file instead (e.g. write repro.py, then `python3 repro.py`)." + headlessBashBlockSuffix
+	case permission.BashApprovalBlockerNestedExecution:
+		return lead + "It nests another command through substitution ($(...), `...`, or <(...)), so what would actually run is not visible in the command; split it into separate calls and pass the values literally." + headlessBashBlockSuffix
+	case permission.BashApprovalBlockerDynamicName:
+		return lead + "The program it runs comes from a variable, so the host cannot tell what would execute; name the program literally." + headlessBashBlockSuffix
+	case permission.BashApprovalBlockerIndirectExecution:
+		return lead + "It runs through a wrapper (eval, source, xargs, env without a command, find -exec) that executes something the command itself does not name; call the target program directly." + headlessBashBlockSuffix
+	default:
+		return lead + "The host could not statically read what it would run; use a simpler literal command, or read_file/grep for inspection." + headlessBashBlockSuffix
+	}
 }
 
 // preApproved reports whether a tool call can skip the prompt — either the

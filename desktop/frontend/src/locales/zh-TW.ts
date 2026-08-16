@@ -2009,7 +2009,6 @@ export const zhTW: Record<DictKey, string> = {
   "completion.review": "獨立複審：{status}",
   "completion.gaps": "驗證缺口：{gaps}",
   "completion.gapStaleCheck": "檢查結果已過期",
-  "completion.constraintsLimited": "本輪驗證受限",
   "notice.deliveryIncompleteMissing": "仍需完成：{items}",
   "notice.deliveryRequirementSeparator": "、",
   "notice.deliveryRequirementProjectCheck": "專案檢查",

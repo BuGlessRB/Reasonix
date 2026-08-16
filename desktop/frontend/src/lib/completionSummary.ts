@@ -15,7 +15,6 @@ export function normalizeCompletionSummary(summary: WireCompletionSummary): Wire
     checks_suppressed: count(summary.checks_suppressed),
     review: String(summary.review ?? "").trim().toLowerCase(),
     gap_kinds: [...new Set((summary.gap_kinds ?? []).map((gap) => String(gap).trim().toLowerCase()).filter(Boolean))].slice(0, 8),
-    constraint_degraded: Boolean(summary.constraint_degraded),
   };
 }
 
@@ -30,8 +29,7 @@ export function completionSummaryNeedsAttention(summary?: WireCompletionSummary)
     || review === "warned"
     || review === "failed"
     || review === "unavailable"
-    || (summary.gap_kinds?.length ?? 0) > 0
-    || summary.constraint_degraded;
+    || (summary.gap_kinds?.length ?? 0) > 0;
 }
 
 export function completionSummaryNotice(summary: WireCompletionSummary, t: Translator): { title: string; body: string } {

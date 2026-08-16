@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 import type { AgentPort, ApprovalMode, ModelEntry, SessionStatus, Attachment } from "../port/port";
 import { Picker } from "./Menu";
 import { modelMenu } from "./modelmenu";
@@ -30,6 +31,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
   const [caret, setCaret] = useState(0);
   const [shots, setShots] = useState<Attachment[]>([]);
   const [over, setOver] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [switching, setSwitching] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
@@ -60,9 +62,15 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
       el.setSelectionRange(pending.current, pending.current);
       pending.current = null;
     }
-    // max-height caps it at 96px; the element still has to be told to grow.
+    // CSS caps the top at five lines; the element still has to be told to grow.
+    // The floor is not decoration: under an interface zoom, scrollHeight is not
+    // in the same units the height we write back is, and the two engines do not
+    // round it the same way. Writing a smaller number than one line squeezes the
+    // box shut — an empty composer with both scrollbars showing and nowhere to
+    // type. One line is the least it can ever legitimately be.
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 22;
     el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
+    el.style.height = `${Math.max(line, el.scrollHeight)}px`;
   }, [text]);
 
   // Attachments ride into the turn as path references, exactly as they do from
@@ -110,14 +118,14 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           {shots.map((a) => (
             <span className="shot" key={a.ref} title={a.path}>
               <span className="nm">{a.path.split("/").pop()}</span>
-              <button aria-label="移除这张图" onClick={() => setShots((p) => p.filter((x) => x !== a))}>
+              <button aria-label={t("移除这张图")} onClick={() => setShots((p) => p.filter((x) => x !== a))}>
                 ×
               </button>
             </span>
           ))}
           {/* The kernel keeps the image either way, but a text-only model never
               sees it — say so here rather than letting the paste vanish. */}
-          {status?.vision === false && <span className="warn">当前模型不读图 · 将交给能读图的子代理</span>}
+          {status?.vision === false && <span className="warn">{t("当前模型不读图 · 将交给能读图的子代理")}</span>}
         </div>
       )}
       <textarea
@@ -125,7 +133,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
         rows={1}
         data-over={over ? "" : undefined}
         value={text}
-        placeholder="交待一个任务，回车发送…　/ 调用命令与技能，@ 引用文件"
+        placeholder={t("交待一个任务，回车发送…　/ 调用命令与技能，@ 引用文件")}
         role="combobox"
         aria-expanded={menu.open}
         aria-controls="slashmenu"
@@ -196,6 +204,28 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
         }}
       />
       <div className="row" data-busy={switching ? "" : undefined}>
+        {/* 拖进来和粘贴都走同一条路，但那两个都得先有一张图在手边。点开系统
+            选择器是唯一不需要预备动作的入口。 */}
+        <input
+          ref={picker}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            grab([...(e.target.files ?? [])]);
+            // 同一张图再选一次也要能进来，所以每次用完清空。
+            e.target.value = "";
+          }}
+        />
+        <button
+          className="mode plain attach"
+          title={t("添加图片　也可以直接拖进来或粘贴")}
+          aria-label={t("添加图片")}
+          onClick={() => picker.current?.click()}
+        >
+          ＋
+        </button>
         <Picker
           className="mode"
           place="bottom"
@@ -215,22 +245,22 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           current={status?.effort || "auto"}
           items={EFFORTS.map((v) => ({ value: v, label: v }))}
           onPick={(v) => change(port.setEffort(v))}
-          label={<span>强度 {status?.effort || "auto"}</span>}
+          label={<span>{t("强度")} {status?.effort || "auto"}</span>}
         />
         <button
           className="mode tog"
           aria-pressed={status?.plan ?? false}
           onClick={() => change(port.setPlanMode(!status?.plan))}
         >
-          计划
+          {t("计划")}
         </button>
         <Picker
           className={apv === "yolo" ? "mode plain danger" : "mode plain"}
           place="bottom"
           current={apv}
-          items={APPROVALS.map(([v, lb, ds]) => ({ value: v, label: lb, desc: ds }))}
+          items={APPROVALS.map(([v, lb, ds]) => ({ value: v, label: t(lb), desc: t(ds) }))}
           onPick={(v) => change(port.setApprovalMode(v as ApprovalMode))}
-          label={<span>批准 {APPROVALS.find(([m]) => m === apv)?.[1]}</span>}
+          label={<span>{t("批准")} {t(APPROVALS.find(([m]) => m === apv)?.[1] ?? "")}</span>}
         />
         <span className="go">
           <button
@@ -246,7 +276,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
                 <rect x="4.8" y="4.8" width="6.4" height="6.4" rx="1.3" />
               </svg>
             </span>
-            <span>{running ? "停下" : "发送"}</span>
+            <span>{t(running ? "停下" : "发送")}</span>
           </button>
         </span>
       </div>

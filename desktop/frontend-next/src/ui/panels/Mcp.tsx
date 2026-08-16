@@ -1,4 +1,5 @@
 import type { McpEntry } from "../../port/port";
+import { t } from "../../i18n";
 
 // Only the servers that need a decision get a row. A healthy MCP fleet is the
 // least interesting thing on this rail: it is all green and never changes, and
@@ -12,15 +13,15 @@ export function Mcp({ servers, onOpen }: { servers: McpEntry[]; onOpen: () => vo
   return (
     <div className="block" data-b="mcp">
       <div className="lbl">
-        外部服务<span className="c">{broken.length} 个连不上</span>
+        {t("外部服务")}<span className="c">{t("{n} 个连不上", { n: broken.length })}</span>
       </div>
       <div className="jobs">
         {broken.map((s) => (
-          <button className="job" key={s.name} data-done="" onClick={onOpen} title="到设置里重连">
+          <button className="job" key={s.name} data-done="" onClick={onOpen} title={t("到设置里重连")}>
             <i className="pip" style={{ background: "var(--err)" }} />
             <span className="cmd">{s.name}</span>
             <span className="rt" title={s.error}>
-              {s.error || "失败"}
+              {s.error || t("失败")}
             </span>
           </button>
         ))}

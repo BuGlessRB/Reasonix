@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import type { AgentPort, ThemePack } from "../port/port";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import type { AgentPort, Appearance as Look, ThemePack } from "../port/port";
+import { MONO_FAMILIES, UI_FAMILIES, installed } from "./look";
+import { STORAGE as LANG_KEY, t } from "../i18n";
+import { reason } from "../i18n/kernel";
+
+// "" follows the machine; the rest are explicit, the same shape the light/dark
+// control uses.
+const LANGS: [string, string][] = [
+  ["", "跟随系统"],
+  ["zh", "中文"],
+  ["en", "英文"],
+];
 
 // Exported because the nav rail names the current one next to the tab.
 export const SCHEMES: [string, string][] = [
@@ -11,11 +22,44 @@ export const SCHEMES: [string, string][] = [
 interface Props {
   port: AgentPort;
   theme: string;
+  contrast: string;
+  onContrast: (c: string) => void;
   onTheme: (t: string) => void;
   reloadThemes: () => void;
+  look: Look;
+  onLook: (look: Look) => void;
 }
 
-export function Appearance({ port, theme, onTheme, reloadThemes }: Props) {
+// Whole-interface scale. Named by what it does to reading rather than by its
+// number: nobody wants "115%", they want it bigger.
+const ZOOMS: [number, string][] = [
+  [0.9, "紧凑"],
+  [1, "标准"],
+  [1.15, "宽松"],
+  [1.3, "更大"],
+];
+
+// Body size in the transcript alone, so the frame stays where the layout put it.
+const READS: [number, string][] = [
+  [12, "小"],
+  [13.5, "标准"],
+  [15, "大"],
+  [17, "更大"],
+];
+
+// "" follows the system's own accessibility setting; the rest are explicit.
+const CONTRASTS: [string, string, string][] = [
+  ["", "跟随系统", "系统开了「增强对比度」就用最强的一档"],
+  ["soft", "柔和", "正文没那么刺眼，长时间看更省力"],
+  ["normal", "标准", "介于两者之间"],
+  ["strong", "更强", "环境光很亮，或需要更清楚的边界"],
+];
+
+// WebKit 的滑块轨道不知道当前值，填充比例得由调用方喂进来。
+const at = (v: number, min: number, max: number) =>
+  ({ "--at": `${Math.round(((v - min) / (max - min)) * 100)}%` }) as React.CSSProperties;
+
+export function Appearance({ port, theme, onTheme, contrast, onContrast, reloadThemes, look, onLook }: Props) {
   const [packs, setPacks] = useState<ThemePack[]>([]);
 
   const load = useCallback(() => {
@@ -40,18 +84,250 @@ export function Appearance({ port, theme, onTheme, reloadThemes }: Props) {
 
   const custom = packs.some((p) => p.active);
 
+  // A change lands on screen through App's own effect; this only sends it on
+  // so the next launch opens the same way.
+  const set = useCallback((patch: Partial<Look>) => onLook({ ...look, ...patch }), [look, onLook]);
+  const setPaper = useCallback(
+    (patch: Partial<NonNullable<Look["wallpaper"]>>) =>
+      look.wallpaper && onLook({ ...look, wallpaper: { ...look.wallpaper, ...patch } }),
+    [look, onLook],
+  );
+
+  const file = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState("");
+
+  const pickPaper = useCallback(
+    async (chosen: File | undefined) => {
+      if (!chosen) return;
+      setBusy(true);
+      setFailed("");
+      try {
+        onLook(await port.uploadWallpaper(chosen));
+      } catch (e) {
+        setFailed(reason(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [port, onLook],
+  );
+
+  const dropPaper = useCallback(() => {
+    void port.clearWallpaper().then(() => onLook({ ...look, wallpaper: undefined })).catch(() => {});
+  }, [port, look, onLook]);
+
+  // Only families this machine can really draw with, asked of the font system
+  // rather than assumed per platform.
+  const uiFonts = useMemo(() => installed(UI_FAMILIES), []);
+  const monoFonts = useMemo(() => installed(MONO_FAMILIES), []);
+
+  // Applying a language under a running tree would mean every memoised
+  // component subscribing to one, for a setting that changes once in a window's
+  // life. Storing it and reloading is the honest trade.
+  const setLang = useCallback(
+    (next: string) => {
+      localStorage.setItem(LANG_KEY, next);
+      onLook({ ...look, language: next });
+      setTimeout(() => location.reload(), 120);
+    },
+    [look, onLook],
+  );
+  const langNow = localStorage.getItem(LANG_KEY) ?? look.language ?? "";
+
   return (
     <>
       <section className="grp">
         <div className="grp-hd">
-          <h2>明暗</h2>
+          <h2>{t("语言")}</h2>
         </div>
-        <p className="hint">跟随系统时，系统切换会立刻反映；手动选过就固定住。</p>
+        <p className="hint">
+          {t("界面用哪种语言。它跟模型回你话的语言是两件事 —— 模型跟着你这条消息用的语言走。")}
+        </p>
         <div className="grp-items">
-          <div className="seg" data-text role="group" aria-label="明暗">
-            {SCHEMES.map(([id, name]) => (
-              <button key={id} aria-pressed={theme === id} onClick={() => onTheme(id)}>
-                {name}
+          <div className="seg" data-text role="group" aria-label={t("语言")}>
+            {LANGS.map(([id, name]) => (
+              <button key={id} aria-pressed={langNow === id} onClick={() => setLang(id)}>
+                {t(name)}
+              </button>
+            ))}
+          </div>
+          <p className="note">{t("改语言要重开窗口才生效")}</p>
+        </div>
+      </section>
+
+      <section className="grp">
+        <div className="grp-hd">
+          <h2>{t("大小")}</h2>
+        </div>
+        <p className="hint">{t("「界面」连边距和控件一起缩放，「正文」只动对话里的字。两个各调各的。")}</p>
+        <div className="grp-items">
+          <div className="prow">
+            <span className="tx">{t("界面")}</span>
+            <div className="seg" data-text role="group" aria-label={t("界面大小")}>
+              {ZOOMS.map(([v, name]) => (
+                <button key={v} aria-pressed={(look.zoom || 1) === v} onClick={() => set({ zoom: v })}>
+                  {t(name)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="prow">
+            <span className="tx">{t("正文")}</span>
+            <div className="seg" data-text role="group" aria-label={t("正文字号")}>
+              {READS.map(([v, name]) => (
+                <button key={v} aria-pressed={(look.readSize || 13.5) === v} onClick={() => set({ readSize: v })}>
+                  {t(name)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="grp">
+        <div className="grp-hd">
+          <h2>{t("字体")}</h2>
+        </div>
+        <p className="hint">{t("输入框里可以直接写字体名，也可以从这台机器装了的里面挑。下面那行就用它画 ——没变样说明这个名字在这台机器上找不到，界面会退回默认字体，不会弄花。")}</p>
+        <div className="grp-items">
+          <FontPick
+            slot="ui"
+            label={t("界面")}
+            value={look.fontUi ?? ""}
+            options={uiFonts}
+            sample={t("交待一件事，它自己往下做 · Aa Bb 0123")}
+            onPick={(v) => set({ fontUi: v })}
+          />
+          <FontPick
+            slot="mono"
+            label={t("等宽")}
+            value={look.fontMono ?? ""}
+            options={monoFonts}
+            sample="func main() { fmt.Println(0O1lI) }"
+            onPick={(v) => set({ fontMono: v })}
+          />
+        </div>
+      </section>
+
+      <section className="grp">
+        <div className="grp-hd">
+          <h2>{t("壁纸")}</h2>
+          {look.wallpaper && (
+            <button className="now nowbtn" onClick={dropPaper}>
+              {t("移除")}
+            </button>
+          )}
+        </div>
+        <p className="hint">{t("图片只铺在窗口的空白处，卡片和输入框始终不透明 —— 背景值一圈留白，不值一段读不清的正文。跑起来的时候它会自动退到更淡。")}</p>
+        <div className="grp-items">
+          <input
+            ref={file}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/avif,image/gif"
+            hidden
+            onChange={(e) => {
+              void pickPaper(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          <button className="addws paperpick" data-busy={busy ? "" : undefined} onClick={() => file.current?.click()}>
+            <span className="plus" aria-hidden="true">
+              ＋
+            </span>
+            {t(look.wallpaper ? "换一张…" : "选一张图片…")}
+          </button>
+          {failed && (
+            <div className="find" data-lvl="err">
+              <span className="t">{failed}</span>
+            </div>
+          )}
+          {/* 设置这一层是不透明的（正文密集，透出图就读不清了），所以调浓度、
+              压暗、焦点时看不见效果。预览按主界面同一套合成：图片一层，页面色
+              一层压在上面，浓度不到位时压暗也跟着弱下去。 */}
+          {look.wallpaper && (
+            <div
+              className="paperview"
+              style={{
+                backgroundImage: `url("${look.wallpaper.url}")`,
+                backgroundPosition: `${Math.round(look.wallpaper.focusX * 100)}% ${Math.round(look.wallpaper.focusY * 100)}%`,
+              }}
+            >
+              <i style={{ opacity: 1 - look.wallpaper.opacity }} />
+              <b style={{ opacity: look.wallpaper.dim * Math.min(look.wallpaper.opacity * 4, 1) }} />
+            </div>
+          )}
+          {look.wallpaper && (
+            <>
+              <div className="prow">
+                <span className="tx">{t("浓度")}</span>
+                <input
+                  className="slider"
+                  style={at(look.wallpaper.opacity, 0.05, 1)}
+                  type="range"
+                  min={0.05}
+                  max={1}
+                  step={0.05}
+                  value={look.wallpaper.opacity}
+                  onChange={(e) => setPaper({ opacity: Number(e.target.value) })}
+                />
+                <span className="now">{Math.round(look.wallpaper.opacity * 100)}%</span>
+              </div>
+              <div className="prow">
+                <span className="tx">{t("压暗")}</span>
+                <input
+                  className="slider"
+                  style={at(look.wallpaper.dim, 0, 1)}
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={look.wallpaper.dim}
+                  onChange={(e) => setPaper({ dim: Number(e.target.value) })}
+                />
+                <span className="now">{Math.round(look.wallpaper.dim * 100)}%</span>
+              </div>
+              {/* 竖构图在宽窗口里会被裁掉主体，所以焦点是图片自己的，不是窗口的 */}
+              <div className="prow">
+                <span className="tx">{t("焦点")}</span>
+                <input
+                  className="slider"
+                  style={at(look.wallpaper.focusX, 0, 1)}
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={look.wallpaper.focusX}
+                  onChange={(e) => setPaper({ focusX: Number(e.target.value) })}
+                  aria-label={t("横向焦点")}
+                />
+                <input
+                  className="slider"
+                  style={at(look.wallpaper.focusY, 0, 1)}
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={look.wallpaper.focusY}
+                  onChange={(e) => setPaper({ focusY: Number(e.target.value) })}
+                  aria-label={t("纵向焦点")}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="grp">
+        <div className="grp-hd">
+          <h2>{t("文字对比度")}</h2>
+        </div>
+        <p className="hint">{t("深色底上接近纯白的正文会起光晕，太淡的次要文字又读不清 —— 这一档同时管两头。看着累就往「柔和」调。")}</p>
+        <div className="grp-items">
+          <div className="seg" data-text role="group" aria-label="文字对比度">
+            {CONTRASTS.map(([id, name, why]) => (
+              <button key={id || "auto"} aria-pressed={contrast === id} title={t(why)} onClick={() => onContrast(id)}>
+                {t(name)}
               </button>
             ))}
           </div>
@@ -60,15 +336,29 @@ export function Appearance({ port, theme, onTheme, reloadThemes }: Props) {
 
       <section className="grp">
         <div className="grp-hd">
-          <h2>配色</h2>
-          <span className="now">{packs.length ? `${packs.length} 个已装` : ""}</span>
+          <h2>{t("明暗")}</h2>
         </div>
-        <p className="hint">
-          装在记忆目录的 themes/ 下，一个目录一个 theme.json。表面、强调色、圆角与字体跟着走；状态色（成功/警告/失败）不跟，那是含义不是装饰。
-        </p>
+        <p className="hint">{t("跟随系统时，系统切换会立刻反映；手动选过就固定住。")}</p>
         <div className="grp-items">
-          <div className="palettes" role="group" aria-label="配色">
-            <Swatch name="默认" on={!custom} onPick={() => pick("")} />
+          <div className="seg" data-text role="group" aria-label={t("明暗")}>
+            {SCHEMES.map(([id, name]) => (
+              <button key={id} aria-pressed={theme === id} onClick={() => onTheme(id)}>
+                {t(name)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="grp">
+        <div className="grp-hd">
+          <h2>{t("配色")}</h2>
+          <span className="now">{packs.length ? t("{n} 个已装", { n: packs.length }) : ""}</span>
+        </div>
+        <p className="hint">{t("装在记忆目录的 themes/ 下，一个目录一个 theme.json。表面、强调色、圆角与字体跟着走；状态色（成功/警告/失败）不跟，那是含义不是装饰。")}</p>
+        <div className="grp-items">
+          <div className="palettes" role="group" aria-label={t("配色")}>
+            <Swatch name={t("默认")} on={!custom} onPick={() => pick("")} />
             {packs.map((p) => (
               <Swatch key={p.id} pack={p} theme={theme} name={p.name} on={!!p.active} onPick={() => pick(p.id)} />
             ))}
@@ -86,10 +376,63 @@ export function Appearance({ port, theme, onTheme, reloadThemes }: Props) {
               ))}
             </div>
           ))}
-          {packs.length === 0 && <p className="note">还没装配色。把一个带 theme.json 的目录放进 themes/ 就会出现在这里。</p>}
+          {packs.length === 0 && <p className="note">{t("还没装配色。把一个带 theme.json 的目录放进 themes/ 就会出现在这里。")}</p>}
         </div>
       </section>
     </>
+  );
+}
+
+// One control, not two. A dropdown beside a text field looked like two settings
+// and read as a question — which of them wins? — when they were only ever two
+// views of one value. A field with suggestions is the same affordance without
+// the question: pick one of the installed families, or type any other name.
+//
+// The sample underneath is drawn in the family itself, which is the only way to
+// tell whether the name actually resolved to anything on this machine.
+function FontPick({
+  slot, label, value, options, sample, onPick,
+}: {
+  slot: string;
+  label: string;
+  value: string;
+  options: string[];
+  sample: string;
+  onPick: (v: string) => void;
+}) {
+  const list = `fonts-${slot}`;
+  return (
+    <div className="fontrow">
+      <div className="prow">
+        <span className="tx">{label}</span>
+        <input
+          className="fontown"
+          list={list}
+          value={value}
+          placeholder={options.length ? t("默认 · 本机有 {n} 个可选", { n: options.length }) : t("默认")}
+          spellCheck={false}
+          autoComplete="off"
+          onChange={(e) => onPick(e.target.value)}
+        />
+        <datalist id={list}>
+          {options.map((f) => (
+            <option key={f} value={f} />
+          ))}
+        </datalist>
+        {value && (
+          <button className="nowbtn" onClick={() => onPick("")} title={t("回到默认字体")}>
+            {t("清除")}
+          </button>
+        )}
+      </div>
+      <div
+        className="fontsample"
+        data-slot={slot}
+        style={value ? { fontFamily: `"${value}", ${slot === "mono" ? "monospace" : "sans-serif"}` } : undefined}
+      >
+        {sample}
+      </div>
+    </div>
   );
 }
 
@@ -140,7 +483,7 @@ function Swatch({
       </span>
       <span className="pal-nm">
         <b>{name}</b>
-        <em>{pack ? pack.author || "第三方" : "内置"}</em>
+        <em>{pack ? pack.author || t("第三方") : t("内置")}</em>
       </span>
     </button>
   );

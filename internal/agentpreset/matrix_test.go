@@ -20,7 +20,7 @@ func TestRoleSettingMatrix(t *testing.T) {
 			if got := agentpreset.PolicyOf(preset).VerificationPolicy.Level; got != verify {
 				t.Fatalf("verify = %v, want %v", got, verify)
 			}
-			tp := taskpolicy.Derive(taskpolicy.Input{Raw: "hello", Preset: preset})
+			tp := taskpolicy.Derive(taskpolicy.Input{Preset: preset})
 			if tp.Preset != preset {
 				t.Fatalf("derived preset = %v", tp.Preset)
 			}

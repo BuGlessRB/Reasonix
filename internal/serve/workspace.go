@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"reasonix/internal/boot"
@@ -17,7 +18,9 @@ import (
 	"reasonix/internal/worktree"
 )
 
-const workspaceRecentMax = 12
+// workspaceRecentMax bounds the remembered list. It is the sidebar's tree, not
+// a recents menu, so it holds more than a dropdown would.
+const workspaceRecentMax = 32
 
 // AllowWorkspaceSwitch grants POST /workspace. It is off until a host asks for
 // it, and no config file can turn it on: a server reachable over the network
@@ -64,19 +67,42 @@ func Workspaces() []string {
 	return out
 }
 
+// rememberWorkspace adds dir to the remembered list, newest first. A folder
+// already on the list keeps its position: the sidebar renders this order, and
+// re-sorting it on every open makes the tree jump under the pointer.
 func rememberWorkspace(dir string) {
-	p := workspacesPath()
-	if p == "" || dir == "" {
+	if dir == "" {
 		return
 	}
-	paths := []string{dir}
+	existing := Workspaces()
+	if slices.Contains(existing, dir) {
+		return
+	}
+	paths := append([]string{dir}, existing...)
+	if len(paths) > workspaceRecentMax {
+		paths = paths[:workspaceRecentMax]
+	}
+	writeWorkspaces(paths)
+}
+
+// forgetWorkspace drops dir from the sidebar. Nothing on disk is touched.
+func forgetWorkspace(dir string) {
+	if dir == "" {
+		return
+	}
+	var paths []string
 	for _, path := range Workspaces() {
-		if len(paths) >= workspaceRecentMax {
-			break
-		}
 		if path != dir {
 			paths = append(paths, path)
 		}
+	}
+	writeWorkspaces(paths)
+}
+
+func writeWorkspaces(paths []string) {
+	p := workspacesPath()
+	if p == "" {
+		return
 	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return
@@ -159,11 +185,11 @@ func (s *Server) workspace(w http.ResponseWriter, r *http.Request) {
 	}
 	dir, err := resolveWorkspaceDir(dir)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := s.switchWorkspaceLocked(r.Context(), dir); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+		writeErr(w, http.StatusConflict, err)
 		return
 	}
 	writeJSON(w, struct {
@@ -198,7 +224,7 @@ func (s *Server) switchWorkspaceLocked(ctx context.Context, dir string) error {
 		return nil
 	}
 	if controllerHasActiveRuntimeWork(cur) {
-		return fmt.Errorf("cannot change the workspace while active work or background jobs are running")
+		return busyErr("busy.change_workspace", "cannot change the workspace while active work or background jobs are running")
 	}
 	// The outgoing conversation stays in its own project's session dir; persist
 	// it before letting go, because nothing carries it forward.

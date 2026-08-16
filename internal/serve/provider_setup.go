@@ -150,30 +150,30 @@ func (s *Server) providerSetupSave(w http.ResponseWriter, r *http.Request) {
 	}
 	key := strings.TrimSpace(body.APIKey)
 	if len(key) > 16<<10 {
-		http.Error(w, "API key is too large", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, "provider.key_too_large", "API key is too large", nil)
 		return
 	}
 	if err := s.configureProviderCredential(r.Context(), key); err != nil {
 		status := providerSetupHTTPStatus(err)
 		if errors.Is(err, errProviderSetupAPIKeyRequired) {
-			http.Error(w, errProviderSetupAPIKeyRequired.Error(), status)
+			writeErr(w, status, errProviderSetupAPIKeyRequired)
 			return
 		}
 		if status == http.StatusConflict {
-			http.Error(w, errProviderSetupUnavailable.Error(), status)
+			writeErr(w, status, errProviderSetupUnavailable)
 			return
 		}
 		// Setup failures can contain filesystem or provider details. Keep those in
 		// the remote process log rather than reflecting them into the browser.
 		slog.Warn("serve: remote provider setup failed", "err", err)
-		http.Error(w, "unable to complete remote Provider setup", status)
+		refuse(w, status, "provider.setup_failed", "unable to complete remote Provider setup", nil)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-var errProviderSetupUnavailable = errors.New("provider setup is no longer required")
-var errProviderSetupAPIKeyRequired = errors.New("API key is required")
+var errProviderSetupUnavailable = refusal(http.StatusConflict, "provider.setup_done", errors.New("provider setup is no longer required"), nil)
+var errProviderSetupAPIKeyRequired = refusal(http.StatusBadRequest, "provider.key_required", errors.New("API key is required"), nil)
 
 func (s *Server) configureProviderCredential(ctx context.Context, key string) error {
 	s.bindMu.Lock()

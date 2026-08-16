@@ -1,10 +1,11 @@
+import { t } from "../../i18n";
 export function DiffView({ diff, path }: { diff: string; path?: string }) {
   const lines = diff.split("\n").filter((l) => l.length > 0);
   return (
     <div className="dif">
       <div className="dif-hd">
-        <span>{path ?? "改动"}</span>
-        <span className="ro">只读</span>
+        <span>{path ?? t("改动")}</span>
+        <span className="ro">{t("只读")}</span>
       </div>
       {lines.map((l, i) => {
         const sign = l[0] === "+" || l[0] === "-" ? l[0] : " ";

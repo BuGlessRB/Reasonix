@@ -1,6 +1,8 @@
 package control
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -19,8 +21,32 @@ func TestUnreadableImagesRideTheTurnTail(t *testing.T) {
 	if !strings.Contains(got, "<"+imageRoutingTag+">") || !strings.Contains(got, "2 image(s)") {
 		t.Fatalf("note = %q, want an attached-images block naming the count", got)
 	}
+	// No vision model is configured here, so promising a delegate that also
+	// cannot read would send the model down a path with nothing at the end.
+	if !strings.Contains(got, "no vision model is configured") {
+		t.Fatalf("note = %q, want it to say no reader is configured", got)
+	}
+}
+
+// With a reader configured the note names it and closes the door on self-OCR —
+// the two together are what stopped the model writing its own OCR script while
+// the vision model sat unused.
+func TestConfiguredVisionModelIsNamedInTheNote(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[agent]\nvision_model = \"looker/eyes\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := New(Options{Sink: event.Discard, WorkspaceRoot: t.TempDir()})
+	got := c.imageRoutingNote(1)
 	if !strings.Contains(got, "read_only_task") {
 		t.Fatalf("note = %q, want it to name the delegated read", got)
+	}
+	if !strings.Contains(got, "looker/eyes") {
+		t.Fatalf("note = %q, want it to name the model that reads", got)
+	}
+	if !strings.Contains(got, "Do not OCR") {
+		t.Fatalf("note = %q, want self-OCR ruled out when a reader exists", got)
 	}
 }
 

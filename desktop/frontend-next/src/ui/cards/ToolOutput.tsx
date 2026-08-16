@@ -288,5 +288,34 @@ export function ToolOutput({ name, text }: { name: string; text: string }) {
     const rows = parseSearchResults(text);
     if (rows) return <Hits rows={rows} />;
   }
-  return <Term text={text} />;
+  return <Folded text={text} />;
+}
+
+// Anything without a shape of its own: a shell command, an MCP server's result,
+// a listing that did not parse. Forty lines of build log buries the rest of the
+// turn exactly the way a whole file did, so it folds for the same reason — with
+// the first line kept on the summary, because that is usually the answer.
+// 4, not read_file's 12: a shell result's median is three lines, and folding
+// those costs a click to read what a glance already had. Past four it is worth
+// the fold — a whole file is long by nature, a command's answer usually is not.
+const FOLD_LINES = 4;
+const HEAD_CHARS = 48;
+
+function Folded({ text }: { text: string }) {
+  const lines = text.split("\n");
+  if (lines.length <= FOLD_LINES) return <Term text={text} />;
+  // MCP results are JSON, whose first line is "{" — a summary of one brace
+  // tells you nothing. Take the first line that carries a word.
+  const head = lines.find((l) => /[\p{L}\p{N}]/u.test(l))?.trim() ?? "";
+  return (
+    <details>
+      <summary>
+        <span className="fold">
+          {lines.length} 行输出
+          {head && ` · ${head.length > HEAD_CHARS ? head.slice(0, HEAD_CHARS - 1) + "…" : head}`}
+        </span>
+      </summary>
+      <Term text={text} />
+    </details>
+  );
 }

@@ -54,12 +54,9 @@ func plannerTurnMetadataFromContext(ctx context.Context) (plannerTurnMetadata, b
 }
 
 func (c *Controller) withPlannerTurnMetadata(ctx context.Context, userText string, synthetic bool) context.Context {
-	text := strings.TrimSpace(agent.StripTransientUserBlocks(userText))
 	policy := taskpolicy.Derive(taskpolicy.Input{
-		Raw:         text,
-		Instruction: taskpolicy.StripQuotedConstraints(text),
-		Preset:      agentpreset.Normalize(c.AgentPreset()),
-		PlanMode:    c.PlanMode(),
+		Preset:   agentpreset.Normalize(c.AgentPreset()),
+		PlanMode: c.PlanMode(),
 	})
 	ctx = taskpolicy.WithContext(ctx, policy)
 	return withPlannerTurnMetadata(ctx, plannerTurnMetadata{

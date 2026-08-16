@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -15,6 +16,19 @@ import (
 	"reasonix/internal/i18n"
 	"reasonix/internal/serve"
 )
+
+// serveHost is what the frontend loop needs from whatever is serving: a single
+// server, or a hub driving several sessions at once. Both answer the same way,
+// so the command reads the same either way.
+type serveHost interface {
+	Handler() http.Handler
+	AuthMode() string
+	AuthToken() string
+	RunGraceful(ctx context.Context, addr string) error
+	RunGracefulListener(ctx context.Context, ln net.Listener) error
+	StartRecoveryGC(ctx context.Context)
+	EnableProviderSetupForListener(addr string) bool
+}
 
 // runServe exposes the controller's HTTP and SSE frontend.
 func runServe(args []string) int {
@@ -104,7 +118,7 @@ func (r *serveFrontendResources) release(closeListener bool) {
 	}
 }
 
-func runServeFrontend(ctrl *control.Controller, srv *serve.Server, cfg config.ServeConfig, opts serveFrontendOptions) int {
+func runServeFrontend(ctrl *control.Controller, srv serveHost, cfg config.ServeConfig, opts serveFrontendOptions) int {
 	resources, err := prepareServeFrontend(opts)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
@@ -117,7 +131,7 @@ func runServeFrontend(ctrl *control.Controller, srv *serve.Server, cfg config.Se
 	return serveFrontendLoop(ctrl, srv, resources, opts)
 }
 
-func reportServeFrontend(ctrl *control.Controller, srv *serve.Server, cfg config.ServeConfig, address string, opts serveFrontendOptions) {
+func reportServeFrontend(ctrl *control.Controller, srv serveHost, cfg config.ServeConfig, address string, opts serveFrontendOptions) {
 	fmt.Printf("reasonix %s — %s on http://%s\n", opts.command, ctrl.Label(), address)
 	if srv.AuthMode() == "token" {
 		fmt.Println("  auth: token")
@@ -147,9 +161,10 @@ func startServeBalanceDiagnostics(ctrl *control.Controller) {
 	}()
 }
 
-func serveFrontendLoop(ctrl *control.Controller, srv *serve.Server, resources *serveFrontendResources, opts serveFrontendOptions) int {
+func serveFrontendLoop(ctrl *control.Controller, srv serveHost, resources *serveFrontendResources, opts serveFrontendOptions) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	srv.StartRecoveryGC(ctx)
 	if resources.listener == nil {
 		if err := srv.RunGraceful(ctx, opts.address); err != nil {
 			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

@@ -14,11 +14,74 @@ const (
 	bashApprovalRequireHuman
 )
 
+// BashApprovalBlocker names which shape forced a command to a human. Hosts use
+// it to say what they actually stopped: a caller told "inline interpreter code
+// is blocked" about `env | grep` will rewrite toward the wrong thing.
+type BashApprovalBlocker uint8
+
+const (
+	BashApprovalBlockerNone BashApprovalBlocker = iota
+	// BashApprovalBlockerUnparsable is a command static analysis could not read
+	// at all, so nothing about it can be trusted.
+	BashApprovalBlockerUnparsable
+	// BashApprovalBlockerNestedExecution is command substitution or process
+	// substitution: $(...), `...`, <(...).
+	BashApprovalBlockerNestedExecution
+	BashApprovalBlockerDynamicName
+	// BashApprovalBlockerInlineCode is an interpreter running code from an
+	// argument: python -c, node -e, bash -c.
+	BashApprovalBlockerInlineCode
+	// BashApprovalBlockerIndirectExecution is a wrapper that runs some other
+	// command the argv does not name: eval, source, xargs, find -exec.
+	BashApprovalBlockerIndirectExecution
+)
+
 // BashSubjectRequiresExplicitApproval reports whether subject can execute a
 // nested or indirect command and therefore needs a human in Ask/Auto. Exact
 // command rules are handled separately by Policy before this classification.
 func BashSubjectRequiresExplicitApproval(subject string) bool {
-	return classifyBashApproval(subject) == bashApprovalRequireHuman
+	return BashSubjectApprovalBlocker(subject) != BashApprovalBlockerNone
+}
+
+// BashSubjectApprovalBlocker returns why subject needs a human, or None when it
+// does not. The first blocking segment wins, matching the classification order.
+func BashSubjectApprovalBlocker(subject string) BashApprovalBlocker {
+	if strings.TrimSpace(subject) == "" {
+		return BashApprovalBlockerNone
+	}
+	segments, _, ok := shellparse.SplitTopLevel(subject)
+	if !ok {
+		return segmentApprovalBlocker(subject)
+	}
+	if len(segments) == 0 {
+		return BashApprovalBlockerUnparsable
+	}
+	for _, segment := range segments {
+		if blocker := segmentApprovalBlocker(segment); blocker != BashApprovalBlockerNone {
+			return blocker
+		}
+	}
+	return BashApprovalBlockerNone
+}
+
+func segmentApprovalBlocker(subject string) BashApprovalBlocker {
+	if normalized, ok := normalizeBashSafeRedirectsForMatch(subject); ok {
+		subject = normalized
+	}
+	features, ok := shellparse.AnalyzeApprovalFeatures(subject)
+	if !ok {
+		return BashApprovalBlockerUnparsable
+	}
+	if features.NestedExecution {
+		return BashApprovalBlockerNestedExecution
+	}
+	if features.DynamicCommandName {
+		return BashApprovalBlockerDynamicName
+	}
+	if len(features.CommandPrefix) > 0 {
+		return indirectExecutionBlocker(features.CommandPrefix)
+	}
+	return BashApprovalBlockerNone
 }
 
 func bashSubjectRequiresExactRule(subject string) bool {
@@ -50,14 +113,14 @@ func classifyBashApproval(subject string) bashApprovalClass {
 }
 
 func classifyBashSegmentApproval(subject string) bashApprovalClass {
+	if segmentApprovalBlocker(subject) != BashApprovalBlockerNone {
+		return bashApprovalRequireHuman
+	}
 	if normalized, ok := normalizeBashSafeRedirectsForMatch(subject); ok {
 		subject = normalized
 	}
 	features, ok := shellparse.AnalyzeApprovalFeatures(subject)
-	if !ok || features.NestedExecution || features.DynamicCommandName {
-		return bashApprovalRequireHuman
-	}
-	if len(features.CommandPrefix) > 0 && isIndirectExecution(features.CommandPrefix) {
+	if !ok {
 		return bashApprovalRequireHuman
 	}
 	if features.Expansion || features.Assignment || features.Redirection ||
@@ -67,49 +130,62 @@ func classifyBashSegmentApproval(subject string) bashApprovalClass {
 	return bashApprovalReusable
 }
 
-func isIndirectExecution(fields []string) bool {
+// indirectExecutionBlocker separates code carried in an argument from wrappers
+// that run a command the argv does not name. Both need a human; only the first
+// is fixed by writing the code to a file.
+func indirectExecutionBlocker(fields []string) BashApprovalBlocker {
 	if len(fields) == 0 {
-		return true
+		return BashApprovalBlockerIndirectExecution
 	}
 	base := executableBase(fields[0])
 	args := fields[1:]
 
+	inline := func(ok bool) BashApprovalBlocker {
+		if ok {
+			return BashApprovalBlockerInlineCode
+		}
+		return BashApprovalBlockerNone
+	}
+
 	switch base {
 	case "eval", "source", ".", "xargs":
-		return true
+		return BashApprovalBlockerIndirectExecution
 	case "env":
 		for len(args) > 0 && isEnvironmentAssignment(args[0]) {
 			args = args[1:]
 		}
 		if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-			return true
+			return BashApprovalBlockerIndirectExecution
 		}
-		return isIndirectExecution(args)
+		return indirectExecutionBlocker(args)
 	case "builtin", "command", "exec", "nohup", "sudo":
 		if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-			return true
+			return BashApprovalBlockerIndirectExecution
 		}
-		return isIndirectExecution(args)
+		return indirectExecutionBlocker(args)
 	case "bash", "dash", "fish", "ksh", "sh", "zsh":
-		return hasShellCommandFlag(args)
+		return inline(hasShellCommandFlag(args))
 	case "powershell", "pwsh":
-		return hasAnyFoldedArg(args, "-c", "-command", "-e", "-enc", "-encodedcommand")
+		return inline(hasAnyFoldedArg(args, "-c", "-command", "-e", "-enc", "-encodedcommand"))
 	case "cmd":
-		return hasAnyFoldedArg(args, "/c", "/k")
+		return inline(hasAnyFoldedArg(args, "/c", "/k"))
 	case "node", "bun":
-		return hasAnyFoldedArg(args, "-e", "--eval", "-p", "--print")
+		return inline(hasAnyFoldedArg(args, "-e", "--eval", "-p", "--print"))
 	case "deno":
-		return hasAnyFoldedArg(args, "eval")
+		return inline(hasAnyFoldedArg(args, "eval"))
 	case "python", "python3", "py", "pypy", "pypy3":
-		return hasAnyFoldedArg(args, "-c")
+		return inline(hasAnyFoldedArg(args, "-c"))
 	case "perl", "ruby", "lua", "luajit", "r", "rscript", "osascript":
-		return hasAnyFoldedArg(args, "-e")
+		return inline(hasAnyFoldedArg(args, "-e"))
 	case "php":
-		return hasAnyFoldedArg(args, "-r")
+		return inline(hasAnyFoldedArg(args, "-r"))
 	case "find":
-		return hasAnyFoldedArg(args, "-exec", "-execdir", "-ok", "-okdir")
+		if hasAnyFoldedArg(args, "-exec", "-execdir", "-ok", "-okdir") {
+			return BashApprovalBlockerIndirectExecution
+		}
+		return BashApprovalBlockerNone
 	default:
-		return false
+		return BashApprovalBlockerNone
 	}
 }
 

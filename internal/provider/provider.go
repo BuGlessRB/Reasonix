@@ -119,6 +119,11 @@ type ToolExecution struct {
 	MutationRisk   string `json:"mutationRisk,omitempty"`
 	Verification   string `json:"verification,omitempty"`
 	DurationMs     int64  `json:"durationMs,omitempty"`
+	// DiagnosticLines are 1-based line numbers of Content that a model picked
+	// out as carrying the failure, recorded once so every later fold shortens
+	// the same way. Written during compaction, never by the tool run, and
+	// stripped from provider requests with the rest of this struct.
+	DiagnosticLines []int `json:"diagnosticLines,omitempty"`
 }
 
 // DecisionReceipt is durable, provider-excluded evidence of a user-owned

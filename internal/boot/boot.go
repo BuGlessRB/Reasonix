@@ -125,7 +125,11 @@ type Options struct {
 	// StatsSource labels this frontend's usage records (desktop/cli/serve).
 	// Empty disables usage recording for this controller.
 	StatsSource string
-	TaskStore   taskmonitor.WriteStore // Authoritative store, never a SQLite catalog.
+	// BalanceStore lets a host that builds several runtimes — a window with more
+	// than one pane — read one wallet through one cache. Nil gives each runtime
+	// a private one.
+	BalanceStore *billing.Store
+	TaskStore    taskmonitor.WriteStore // Authoritative store, never a SQLite catalog.
 	// OnConfigLoadWarnings accepts resilient-loader warnings. Returning true
 	// lets boot suppress the duplicate migration diagnostic.
 	OnConfigLoadWarnings func([]string) bool
@@ -1766,9 +1770,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		// the end of build (snapshot assembly runs after control.New), and the
 		// controller must observe the final chain at Close time.
 		Cleanup:               func() { cleanup() },
-		BalanceURL:            entry.BalanceURL,
-		BalanceKey:            entry.APIKey(),
-		BalanceClient:         balanceClient,
+		Balance:               opts.BalanceStore.Cache(balanceClient, entry.BalanceURL, entry.APIKey()),
 		Jobs:                  jm,
 		TaskStore:             opts.TaskStore,
 		WorkspaceLease:        workspaceLease,

@@ -23,7 +23,7 @@ func TestDeliveryReviewGateHoldsUnderFrozenTaskPolicy(t *testing.T) {
 	reg.Add(fakeTool{name: "security_review", readOnly: true})
 
 	a := &Agent{deliveryProfile: true, task: taskRuntime{ledger: ledger}, svc: agentServices{tools: reg}}
-	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{Raw: "harden the permission gate", Preset: agentpreset.Delivery})
+	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{Preset: agentpreset.Delivery})
 	a.turn.policySet = true
 
 	if got := a.deliveryReviewGateFailure(); !strings.Contains(got, "high-risk") {

@@ -2913,7 +2913,6 @@ export const zh: Record<DictKey, string> = {
   "completion.review": "独立复审：{status}",
   "completion.gaps": "验证缺口：{gaps}",
   "completion.gapStaleCheck": "检查结果已过期",
-  "completion.constraintsLimited": "本轮验证受限",
   "notice.deliveryIncompleteMissing": "仍需完成：{items}",
   "notice.deliveryRequirementSeparator": "、",
   "notice.deliveryRequirementProjectCheck": "项目检查",

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -58,10 +57,6 @@ If execution needs a user-owned decision or a missing user-provided value
 before it can be safe, call ask and let the answer shape the plan; never ask in
 prose and never plan around a guess you could have settled.
 
-If submit_plan is unavailable to you, fall back to writing the plan as your
-reply, and end it with a final line containing exactly
-[planner_requires_approval] when execution must stop for user approval.
-
 Crucial: You only have research tools plus the stable use_capability proxy for
 authorized MCP. You do NOT have bash, execute, file writers, or other
 side-effect tools — those belong to the executor. Never question or dwell on
@@ -74,14 +69,13 @@ servers, then inspect or call a non-destructive capability. If a capability is
 destructive, do not treat that as missing configuration or an unavailable MCP:
 write the operation into the plan for the executor instead.
 
-If the task needs no executor actions at all, end your reply with a final line
-containing exactly [no_changes]. That covers two cases: your research shows the
-work is already done (already implemented, already resolved — explain that
-briefly), and the task is a question, comparison, analysis, or explanation that
-your reply itself fully answers — write the complete answer, then the marker.
-The host then delivers your reply directly instead of starting the executor.
-Never emit that marker when any workspace change, command, verification, or
-follow-up action remains.`
+If the task needs no executor actions at all, call conclude_no_changes instead
+of submit_plan. That covers two cases: your research shows the work is already
+done (already implemented, already resolved), and the task is a question,
+comparison, analysis, or explanation that an answer fully settles — put the
+complete answer in its reason field, which the host delivers directly instead of
+starting the executor. Never conclude that way when any workspace change,
+command, verification, or follow-up action remains.`
 
 const executorHandoffMarker = "Reasonix executor handoff"
 
@@ -97,13 +91,6 @@ const (
 	plannerResearchFallbackNotice = "Planner reached its research limit without a final plan; continuing this turn with the executor."
 	plannerResearchBoundaryError  = "planner could not finalize within its research budget; no execution was started"
 )
-
-// noChangesMarker is the explicit no-op conclusion the planner is asked to emit
-// on its final line (see DefaultPlannerPrompt). isNoOpPlan trusts it over the
-// legacy phrase heuristics.
-const noChangesMarker = "[no_changes]"
-
-const plannerRequiresApprovalMarker = "[planner_requires_approval]"
 
 // PlannerPromptWithContext appends cache-stable standing context, such as loaded
 // REASONIX.md / AGENTS.md memory, to the planner's smaller system prompt.
@@ -400,18 +387,15 @@ func (c *Coordinator) Run(ctx context.Context, input string) error {
 // Run so the routing reads as one decision table.
 func (c *Coordinator) deliverPlan(ctx context.Context, input string, outcome plannerOutcome, decision PlannerDecision) error {
 	plan := outcome.text
-	// A submitted plan is never a no-op conclusion: [no_changes] marks the
-	// ABSENCE of a plan, which by construction cannot be a field of one.
-	if !outcome.structured && isNoOpPlan(plan) {
+	if outcome.exit == plannerExitNoChanges {
 		c.persistExecutorNoOp(ctx, input, plan)
 		// The relayed conclusion is planner text; keep its source so sinks
-		// attribute it like every other planner emission. Display goes through
-		// the standard filter so the [no_changes] contract line stays internal.
+		// attribute it like every other planner emission.
 		c.sink.Emit(event.Event{Kind: event.Text, Text: DisplayAssistantText(plan), Source: event.UsageSourcePlanner})
 		return nil
 	}
 	runExecutorWithPlan := func(ctx context.Context, planText string) error {
-		if outcome.structured {
+		if outcome.exit == plannerExitPlan {
 			c.executor.SetPlanContract(&outcome.plan)
 		}
 		c.sink.Emit(event.Event{Kind: event.Phase, Text: c.executor.svc.prov.Name() + " · executing", Source: event.UsageSourceExecutor})
@@ -465,27 +449,6 @@ const (
 	plannerDecisionUnansweredNotice   = "Waiting for your decision; nothing was executed. Reply to continue."
 )
 
-// isNoOpPlan reports whether the plan explicitly concludes that nothing needs
-// to change: the final non-empty line is exactly the [no_changes] marker that
-// DefaultPlannerPrompt requests. The marker is trusted as-is, so research notes
-// above it (which may mention tests, runs, or edits that already exist) cannot
-// veto the conclusion. There is deliberately no phrase heuristic behind it: a
-// wrong skip silently drops the task, while a planner that ignores the marker
-// contract just costs one executor round.
-func isNoOpPlan(plan string) bool {
-	return strings.ToLower(lastNonEmptyLine(plan)) == noChangesMarker
-}
-
-func lastNonEmptyLine(s string) string {
-	lines := strings.Split(s, "\n")
-	for _, v := range slices.Backward(lines) {
-		if t := strings.TrimSpace(v); t != "" {
-			return t
-		}
-	}
-	return ""
-}
-
 func (c *Coordinator) persistExecutorNoOp(ctx context.Context, input, plan string) {
 	if c == nil || c.executor == nil || c.executor.sess.conversation == nil {
 		return
@@ -506,23 +469,36 @@ func (c *Coordinator) persistExecutorNoOp(ctx context.Context, input, plan strin
 // plannerOutcome is one planning turn's result. A submitted plan is the
 // contract; text is what the user and the executor read — rendered from the plan
 // when there is one, the planner's prose when there is not.
+// plannerExit is how the planning turn ended. The three are mutually exclusive
+// by construction, so no combination of flags can claim a plan and a no-op at
+// once.
+type plannerExit uint8
+
+const (
+	// plannerExitProse is a planner that called neither structured exit. Its
+	// text is handed to the executor as-is; the host reads no decision out of
+	// it, because prose has no field to read.
+	plannerExitProse plannerExit = iota
+	plannerExitPlan
+	plannerExitNoChanges
+)
+
 type plannerOutcome struct {
-	text       string
-	plan       plancontract.Plan
-	structured bool
+	text string
+	plan plancontract.Plan
+	exit plannerExit
 }
 
-// requestsApproval reports whether execution should stop for the user. A
-// structured plan states it in a field; prose falls back to phrase matching,
-// which exists only because free text has no field to read.
+// requestsApproval reports whether execution should stop for the user. Only a
+// submitted plan can say so; the host's own routes (plan mode, an explicit
+// request for a plan) decide it in every other case.
 func (o plannerOutcome) requestsApproval() bool {
-	if o.structured {
-		return o.plan.RequiresApproval
-	}
-	return plannerPlanRequestsApproval(o.text)
+	return o.exit == plannerExitPlan && o.plan.RequiresApproval
 }
 
-// plan produces this turn's plan, structured when the planner submitted one.
+// plan produces this turn's plan, carrying which structured exit the planner
+// took. The product path always has the exits available; a tool-less planner
+// can only return prose, which the executor receives as plain instructions.
 func (c *Coordinator) plan(ctx context.Context, input string) (plannerOutcome, error) {
 	if c.plannerAgent != nil {
 		return c.planWithTools(ctx, input)
@@ -531,8 +507,8 @@ func (c *Coordinator) plan(ctx context.Context, input string) (plannerOutcome, e
 	return plannerOutcome{text: text}, err
 }
 
-// planFromStream is the tool-less planner path: with no submit_plan available
-// its result is always prose, which the host reads with the text fallback.
+// planFromStream is the tool-less planner path: with no structured exit
+// available its result is always prose, handed to the executor as-is.
 func (c *Coordinator) planFromStream(ctx context.Context, input string) (string, error) {
 	// On failure, roll the just-added user message back: a dangling user turn
 	// would produce consecutive user roles on the next plan (which some
@@ -608,10 +584,13 @@ func (c *Coordinator) planWithTools(ctx context.Context, input string) (plannerO
 	// A submitted plan is the contract, whatever the planner said afterwards.
 	// The host renders it so the user sees the plan itself rather than the
 	// planner's acknowledgement of having submitted it.
+	if reason, ok := submission.NoChanges(); ok {
+		return plannerOutcome{text: reason, exit: plannerExitNoChanges}, nil
+	}
 	if plan, ok := submission.Plan(); ok {
 		text := plancontract.Render(plan)
 		c.sink.Emit(event.Event{Kind: event.Text, Text: text, Source: event.UsageSourcePlanner})
-		return plannerOutcome{text: text, plan: plan, structured: true}, nil
+		return plannerOutcome{text: text, plan: plan, exit: plannerExitPlan}, nil
 	}
 	// The plan is this turn's final answer: the last non-empty assistant
 	// message appended after the pre-turn boundary. When a session rewrite

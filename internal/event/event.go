@@ -144,15 +144,14 @@ const (
 // events. It never carries user prompts, file contents, command args, or
 // reviewer reasoning.
 type CompletionSummaryInfo struct {
-	Preset             string // light | balanced | delivery
-	Verdict            string // complete | partial | blocked | continue
-	Mutations          int
-	ChecksPassed       int
-	ChecksFailed       int
-	ChecksSuppressed   int
-	Review             string // none | passed | warned | failed | unavailable
-	GapKinds           []string
-	ConstraintDegraded bool
+	Preset           string // light | balanced | delivery
+	Verdict          string // complete | partial | blocked | continue
+	Mutations        int
+	ChecksPassed     int
+	ChecksFailed     int
+	ChecksSuppressed int
+	Review           string // none | passed | warned | failed | unavailable
+	GapKinds         []string
 }
 
 // StreamAttemptAction is the lifecycle phase of a local sampling attempt.
@@ -359,9 +358,10 @@ type Ask struct {
 }
 
 // Compaction carries a context-compaction pass for the CompactionStarted /
-// CompactionDone events. On CompactionStarted only Trigger is set. On
-// CompactionDone, Messages/Summary are filled in (an aborted pass leaves
-// Summary empty). Trigger is "auto" (the prompt reached the window threshold) or
+// CompactionDone events. On CompactionStarted, Trigger plus the scale about to
+// be folded (Messages, SourceTokens): the fold's own model call takes long
+// enough that a card with no numbers reads as a hang. On CompactionDone,
+// Summary and the rest are filled in (an aborted pass leaves Summary empty). Trigger is "auto" (the prompt reached the window threshold) or
 // "manual" (the user ran /compact).
 type Compaction struct {
 	Trigger  string // "auto" | "manual"

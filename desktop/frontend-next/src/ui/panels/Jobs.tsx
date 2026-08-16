@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { t } from "../../i18n";
 import type { JobEntry } from "../../port/port";
 
 export function Jobs({ jobs }: { jobs: JobEntry[] }) {
@@ -13,10 +14,10 @@ export function Jobs({ jobs }: { jobs: JobEntry[] }) {
   return (
     <div className="block" data-b="jobs">
       <div className="lbl">
-        后台任务<span className="c">{jobs.length}</span>
+        {t("后台任务")}<span className="c">{jobs.length}</span>
       </div>
       <div className="jobs">
-        {jobs.length === 0 && <span className="empty">无</span>}
+        {jobs.length === 0 && <span className="empty">{t("无")}</span>}
         {jobs.map((j) => {
           const running = j.status === "running";
           return (

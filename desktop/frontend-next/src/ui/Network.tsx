@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { t } from "../i18n";
 import type { AgentPort, NetworkProbe, NetworkSettings } from "../port/port";
 
 // Three modes, not six input boxes. Nobody's first question is whether they want
@@ -31,7 +32,7 @@ export function Network({ port }: { port: AgentPort }) {
     port.network().then(setNet).catch(() => setNet(null));
   }, [port]);
 
-  if (!net) return <div className="empty">读不到网络配置。</div>;
+  if (!net) return <div className="empty">{t("读不到网络配置。")}</div>;
 
   const patch = (p: Partial<NetworkSettings>) => setNet({ ...net, ...p });
 
@@ -66,28 +67,28 @@ export function Network({ port }: { port: AgentPort }) {
 
   return (
     <div className="net">
-      <div className="seg" data-text role="radiogroup" aria-label="代理模式">
+      <div className="seg" data-text role="radiogroup" aria-label={t("代理模式")}>
         {MODES.map(([id, label]) => (
           <button key={id} role="radio" aria-checked={net.mode === id} onClick={() => patch({ mode: id })}>
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>
-      <p className="note">{MODES.find(([id]) => id === net.mode)?.[2]}</p>
+      <p className="note">{t(MODES.find(([id]) => id === net.mode)?.[2] ?? "")}</p>
 
       <div className="kv">
-        <span className="k">当前生效</span>
+        <span className="k">{t("当前生效")}</span>
         <span className="v">{net.effective || "—"}</span>
       </div>
       {net.endpoint && (
         <div className="kv">
-          <span className="k">测试目标</span>
+          <span className="k">{t("测试目标")}</span>
           <span className="v">{net.endpoint}</span>
         </div>
       )}
       {!!net.direct?.length && (
         <div className="kv">
-          <span className="k">始终直连</span>
+          <span className="k">{t("始终直连")}</span>
           <span className="v">{net.direct.join(", ")}</span>
         </div>
       )}
@@ -95,7 +96,7 @@ export function Network({ port }: { port: AgentPort }) {
       {net.mode === "custom" && (
         <div className="fields">
           <label>
-            <span>协议</span>
+            <span>{t("协议")}</span>
             <select value={net.type || "http"} onChange={(e) => patch({ type: e.target.value })}>
               {TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -105,11 +106,11 @@ export function Network({ port }: { port: AgentPort }) {
             </select>
           </label>
           <label className="grow">
-            <span>服务器</span>
+            <span>{t("服务器")}</span>
             <input value={net.server ?? ""} placeholder="proxy.corp" onChange={(e) => patch({ server: e.target.value })} />
           </label>
           <label>
-            <span>端口</span>
+            <span>{t("端口")}</span>
             <input
               className="port"
               inputMode="numeric"
@@ -119,15 +120,15 @@ export function Network({ port }: { port: AgentPort }) {
             />
           </label>
           <label className="grow">
-            <span>用户名（可选）</span>
+            <span>{t("用户名（可选）")}</span>
             <input value={net.username ?? ""} onChange={(e) => patch({ username: e.target.value })} />
           </label>
           <label className="grow">
-            <span>密码（可选）</span>
+            <span>{t("密码（可选）")}</span>
             <input
               type="password"
               value={password}
-              placeholder={net.hasPassword ? "已保存，留空即保持不变" : "可以写 ${PROXY_PASSWORD}"}
+              placeholder={t(net.hasPassword ? "已保存，留空即保持不变" : "可以写 ${PROXY_PASSWORD}")}
               onChange={(e) => {
                 setPassword(e.target.value);
                 setClear(false);
@@ -137,11 +138,11 @@ export function Network({ port }: { port: AgentPort }) {
           {net.hasPassword && !password && (
             <label className="chk">
               <input type="checkbox" checked={clearPassword} onChange={(e) => setClear(e.target.checked)} />
-              <span>删掉已保存的密码</span>
+              <span>{t("删掉已保存的密码")}</span>
             </label>
           )}
           <label className="grow full">
-            <span>这些地址直连</span>
+            <span>{t("这些地址直连")}</span>
             <input
               value={net.noProxy ?? ""}
               placeholder="localhost, 127.0.0.1, *.internal"
@@ -153,10 +154,10 @@ export function Network({ port }: { port: AgentPort }) {
 
       <div className="acts">
         <button className="act" disabled={!!busy} onClick={() => void diagnose()}>
-          {busy === "test" ? "测试中…" : "测一下"}
+          {t(busy === "test" ? "测试中…" : "测一下")}
         </button>
         <button className="act" data-primary disabled={!!busy} onClick={() => void save()}>
-          {busy === "save" ? "保存中…" : "保存"}
+          {t(busy === "save" ? "保存中…" : "保存")}
         </button>
       </div>
 

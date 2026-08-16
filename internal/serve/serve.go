@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -205,7 +204,7 @@ func (s *Server) switchModelLocked(ctx context.Context, ref string) error {
 	// Snapshot the current controller under a short read of s.mu only.
 	cur := s.ctl()
 	if controllerHasActiveRuntimeWork(cur) {
-		return fmt.Errorf("cannot switch model while active work or background jobs are running")
+		return busyErr("busy.switch_model", "cannot switch model while active work or background jobs are running")
 	}
 
 	// Off-lock: snapshot, carry history, and build the replacement. None of these
@@ -317,7 +316,7 @@ func (s *Server) reloadExtensions(ctx context.Context) error {
 
 	curAPI := s.ctl()
 	if controllerHasActiveRuntimeWork(curAPI) {
-		return fmt.Errorf("cannot reload extensions while active work or background jobs are running")
+		return busyErr("busy.reload_extensions", "cannot reload extensions while active work or background jobs are running")
 	}
 	cur, ok := curAPI.(*control.Controller)
 	if !ok {
@@ -391,7 +390,7 @@ func (s *Server) rebuild(ctx context.Context, old *control.Controller, ref strin
 func (s *Server) switchEffort(ctx context.Context, level string) error {
 	cur := s.ctl()
 	if controllerHasActiveRuntimeWork(cur) {
-		return fmt.Errorf("cannot change effort while active work or background jobs are running")
+		return busyErr("busy.change_effort", "cannot change effort while active work or background jobs are running")
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -467,6 +466,13 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) handler() http.Handler {
+	return logMiddleware(s.auth.middleware(csrfGuard(s.routes())))
+}
+
+// routes is this server's bare mux. A hub mounts several of them behind one
+// set of middleware, so auth, CSRF and logging run once per request rather
+// than once per runtime.
+func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.index)
 	mux.HandleFunc("GET /sessions/{id}", s.index)
@@ -480,6 +486,7 @@ func (s *Server) handler() http.Handler {
 	s.registerExtensionRoutes(mux)
 	s.registerPluginRoutes(mux)
 	s.registerThemeRoutes(mux)
+	s.registerAppearanceRoutes(mux)
 	s.registerSurfaceRoutes(mux)
 	s.registerInboxRoutes(mux)
 	s.registerProviderRoutes(mux)
@@ -516,6 +523,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /memory", s.memories)
 	mux.HandleFunc("POST /memory/forget", s.forgetMemory)
 	s.registerShellRoutes(mux)
+	s.registerBoundaryRoutes(mux)
 	mux.HandleFunc("GET /network", s.network)
 	mux.HandleFunc("POST /network", s.saveNetwork)
 	mux.HandleFunc("POST /network/diagnose", s.diagnoseNetwork)
@@ -542,12 +550,12 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /changes", s.changes)
 	mux.HandleFunc("POST /attachments", s.attachments)
 	mux.HandleFunc("POST /delete-session", s.deleteSession)
-	return logMiddleware(s.auth.middleware(csrfGuard(mux)))
+	return mux
 }
 
 func (s *Server) reloadExtensionsHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := s.reloadExtensions(r.Context()); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+		writeErr(w, http.StatusConflict, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -574,59 +582,6 @@ func csrfGuard(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-// Run serves until the process is killed. Interactive approval is enabled so
-// "ask" decisions surface as approval_request events answered via POST /approve.
-func (s *Server) Run(addr string) error {
-	s.ctl().EnableInteractiveApproval()
-	return http.ListenAndServe(addr, s.Handler())
-}
-
-// RunGraceful serves with graceful shutdown. It listens for SIGINT/SIGTERM on
-// the provided context and drains active connections for up to 10 seconds
-// before returning.
-func (s *Server) RunGraceful(ctx context.Context, addr string) error {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-	return s.RunGracefulListener(ctx, ln)
-}
-
-// RunGracefulListener is RunGraceful over a caller-supplied listener. Callers
-// that need the real bound address (e.g. --addr 127.0.0.1:0 with --port-file)
-// listen first, record ln.Addr(), then hand the listener here.
-func (s *Server) RunGracefulListener(ctx context.Context, ln net.Listener) error {
-	s.ctl().EnableInteractiveApproval()
-	srv := &http.Server{
-		Handler:           s.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- srv.Serve(ln)
-	}()
-	select {
-	case err := <-errCh:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return err
-	case <-ctx.Done():
-		slog.Info("serve: shutting down gracefully")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			slog.Warn("serve: graceful shutdown failed", "err", err)
-		}
-		err := <-errCh
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return err
-	}
 }
 
 func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
@@ -747,7 +702,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		ref := strings.TrimSpace(strings.TrimPrefix(trimmed, "/model"))
 		if ref != "" {
 			if err := s.switchModel(r.Context(), ref); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				writeErr(w, http.StatusInternalServerError, err)
 				return
 			}
 			w.WriteHeader(http.StatusNoContent)
@@ -759,7 +714,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		level := strings.TrimSpace(strings.TrimPrefix(trimmed, "/effort"))
 		if level != "" {
 			if err := s.switchEffort(r.Context(), level); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				writeErr(w, http.StatusInternalServerError, err)
 				return
 			}
 			w.WriteHeader(http.StatusNoContent)
@@ -784,7 +739,18 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	// no empty transcript — left the whole conversation unsaved. Pinning on the
 	// first submit keeps both halves. POST /inbox/items already did this.
 	if ensurer, ok := any(ctrl).(interface{ EnsureSessionPath() }); ok {
+		before := ctrl.SessionPath()
 		ensurer.EnsureSessionPath()
+		// The keeper has never seen a path minted here, and a controller with
+		// no write authority over its own session drops the input — how a
+		// freshly opened pane answered 409 to its own first turn.
+		if after := ctrl.SessionPath(); after != before {
+			if err := s.rebindSessionLease(after); err != nil {
+				s.bindMu.Unlock()
+				http.Error(w, sessionInUseError(err), http.StatusConflict)
+				return
+			}
+		}
 	}
 	ctrl.SubmitHTTPFormat(body.Input, body.Format)
 	// After synchronous admission, a successful start sets Running. A silent
@@ -840,10 +806,10 @@ func (s *Server) compact(w http.ResponseWriter, r *http.Request) {
 		// A declined fold is a verdict, not a fault: the candidate was no smaller
 		// than what it would replace. 500 made every frontend show it as a failure.
 		if agent.IsCompactionDeclined(err) {
-			http.Error(w, err.Error(), http.StatusConflict)
+			writeErr(w, http.StatusConflict, err)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	// Persist the compacted session to disk — ctrl.Compact() only mutates in-memory.
@@ -859,7 +825,7 @@ func (s *Server) newSession(w http.ResponseWriter, _ *http.Request) {
 	s.bindMu.Lock()
 	defer s.bindMu.Unlock()
 	if err := s.ctl().NewSession(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.bc.ResetSession()
@@ -930,9 +896,21 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 
 // context returns the prompt-vs-window gauge numbers. Supports ETag caching
 // so reconnecting clients avoid re-fetching unchanged context data.
+// context answers how full the window is and what is filling it. The breakdown
+// rides the same request: a gauge alone says a session is at 70% without saying
+// whether that is a tool catalogue, a memory file, or one enormous output.
 func (s *Server) context(w http.ResponseWriter, r *http.Request) {
 	used, window := s.ctl().ContextSnapshot()
-	writeJSONCached(w, r, map[string]int{"used": used, "window": window})
+	b := s.ctl().ContextBreakdown()
+	writeJSONCached(w, r, struct {
+		Used   int `json:"used"`
+		Window int `json:"window"`
+		System int `json:"system"`
+		Tools  int `json:"tools"`
+		User   int `json:"user"`
+		Reply  int `json:"reply"`
+		Output int `json:"output"`
+	}{used, window, b.System, b.Tools, b.User, b.Reply, b.Output})
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -1019,7 +997,7 @@ func (s *Server) rewind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().Rewind(body.Turn, rewindScope(body.Scope)); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -1042,7 +1020,7 @@ func (s *Server) fork(w http.ResponseWriter, r *http.Request) {
 	defer s.bindMu.Unlock()
 	path, err := s.ctl().ForkNamed(body.Turn, body.Name)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.bc.ResetSession()
@@ -1075,7 +1053,7 @@ func (s *Server) summarize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -1165,7 +1143,7 @@ func (s *Server) forget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().ForgetMemory(body.Name); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -1190,7 +1168,7 @@ func (s *Server) checkpoints(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) branches(w http.ResponseWriter, _ *http.Request) {
 	branches, err := s.ctl().Branches()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	tree := s.ctl().BranchTreeText()
@@ -1201,7 +1179,7 @@ func (s *Server) branches(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) models(w http.ResponseWriter, _ *http.Request) {
 	cfg, err := config.Load()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	ctrl := s.ctl()
@@ -1405,6 +1383,9 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		if store.IsSubagentTranscriptName(base) {
 			continue
 		}
+		if hiddenRecoveryCopy(si, current) {
+			continue
+		}
 		out = append(out, sessionEntry{
 			Name:    strings.TrimSuffix(base, ".jsonl"),
 			Path:    si.Path,
@@ -1463,7 +1444,7 @@ func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
 	if result := finishSessionDestroy(destroy); result.HasTimedOut() {
 		if err := agent.MarkCleanupPending(abs, "delete"); err != nil {
 			go delayedSessionDelete(absDir, abs, destroy)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
 		go delayedSessionDelete(absDir, abs, destroy)
@@ -1471,7 +1452,7 @@ func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := removeSessionFiles(absDir, abs); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

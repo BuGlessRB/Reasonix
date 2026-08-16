@@ -1,5 +1,6 @@
 import type { CompletionSummary } from "../../port/wire";
 import { Sym } from "../Sym";
+import { t } from "../../i18n";
 
 type Lvl = "ok" | "warn" | "err" | "";
 type Row = { k: string; t: string; why?: string; lvl: Lvl };
@@ -36,9 +37,6 @@ function rowsOf(c: CompletionSummary): Row[] {
   const review = REVIEW[c.review];
   if (review) rows.push(review);
   for (const g of c.gap_kinds ?? []) rows.push({ k: `g${g}`, t: GAP[g] ?? g, lvl: "warn" });
-  if (c.constraint_degraded) {
-    rows.push({ k: "d", t: "本轮的验证被约束限住了", why: "禁用了测试或只允许指定检查项", lvl: "warn" });
-  }
   return rows;
 }
 
@@ -52,7 +50,7 @@ export function CompletionCard({ c }: { c: CompletionSummary }) {
       </div>
       <div className="c">
         <div className="hl">
-          <span className="nm">收工检查</span>
+          <span className="nm">{t("收工检查")}</span>
           <span className="tag">{c.preset}</span>
         </div>
         <div className="out">

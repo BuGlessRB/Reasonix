@@ -26,6 +26,7 @@ func PlannerToolRegistry(parent *tool.Registry) *tool.Registry {
 	base := FilterReadOnlyRegistry(parent, exclude...)
 	sub := tool.NewRegistry()
 	sub.Add(NewSubmitPlanTool())
+	sub.Add(NewConcludeNoChangesTool())
 	if base != nil {
 		for _, name := range base.Names() {
 			if name == "use_capability" || strings.HasPrefix(name, tool.MCPNamePrefix) {

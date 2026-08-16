@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 import type { AgentPort, Completion, CompletionItem } from "../port/port";
 
 const EMPTY: Completion = { kind: "", from: 0, to: 0, items: [] };
@@ -152,7 +153,7 @@ export function CompletionMenu({ items, active, kind, query, onPick, onHover }: 
     // completing a path replays the open animation: the menu is answering a
     // different question, and swapping the rows in place hides that.
     <div className="menu slashmenu" key={kind}>
-      <div className="mlist" id="slashmenu" role="listbox" aria-label="补全">
+      <div className="mlist" id="slashmenu" role="listbox" aria-label={t("补全")}>
         {items.map((it, i) => {
           const [before, hit, after] = split(it.label, query);
           return (

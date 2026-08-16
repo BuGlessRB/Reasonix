@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 
 interface Props {
   // full plays the whole sequence; short stops after the introduction, for a
@@ -81,15 +82,15 @@ export function Welcome({ variant, children, replay, onDone }: Props) {
 
         <div className="oobe-lines" aria-live="polite">
           <div className="oobe-line l1">
-            <b>我是小 R。</b>
+            <b>{t("我是小 R。")}</b>
           </div>
           <div className="oobe-line l2">
-            <b>你交待一件事，我把它做完。</b>
-            <span>读代码、查证、动手、验证 —— 不是给你一段建议就完了。</span>
+            <b>{t("你交待一件事，我把它做完。")}</b>
+            <span>{t("读代码、查证、动手、验证 —— 不是给你一段建议就完了。")}</span>
           </div>
           <div className="oobe-line l3">
-            <b>每一步都留得下来。</b>
-            <span>改了哪个文件、跑了哪条命令、花了多少 token，都能翻回去看。</span>
+            <b>{t("每一步都留得下来。")}</b>
+            <span>{t("改了哪个文件、跑了哪条命令、花了多少 token，都能翻回去看。")}</span>
           </div>
         </div>
       </div>
@@ -99,7 +100,7 @@ export function Welcome({ variant, children, replay, onDone }: Props) {
       {replay && !holds && (
         <>
           <div className="oobe-prog"><i /></div>
-          <span className="oobe-skip">按任意键跳过</span>
+          <span className="oobe-skip">{t("按任意键跳过")}</span>
         </>
       )}
     </div>

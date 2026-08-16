@@ -5178,7 +5178,7 @@ func TestBalanceForTabUsesDesktopPricingCurrency(t *testing.T) {
 
 	app := NewApp()
 	app.ctx = context.Background()
-	ctrl := control.New(control.Options{BalanceURL: srv.URL, BalanceClient: srv.Client()})
+	ctrl := control.New(control.Options{Balance: billing.NewCache(srv.Client(), srv.URL, "")})
 	t.Cleanup(ctrl.Close)
 	app.setTestCtrl(ctrl, "deepseek/deepseek-v4-flash")
 

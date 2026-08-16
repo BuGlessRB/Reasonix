@@ -89,16 +89,39 @@ func (c *Controller) runEditedGoalLoopWithImageRefsRawDisplay(ctx context.Contex
 // cache-stable prefix, the same way memory and job notes do.
 const imageRoutingTag = "attached-images"
 
-func imageRoutingNote(n int) string {
+// imageRoutingNote is the only place that tells the model what to do about an
+// attachment it cannot read. The reference block beside the image states facts
+// and nothing else, because two blocks proposing different routes is how a turn
+// ends with the model writing its own OCR script while the configured vision
+// model sits unused.
+func (c *Controller) imageRoutingNote(n int) string {
 	if n <= 0 {
 		return ""
 	}
+	reader := c.visionModelRef()
+	if reader == "" {
+		return fmt.Sprintf(
+			"<%s>\nThe user attached %d image(s). This model cannot read images, so they are not in your context, "+
+				"and no vision model is configured to read them for you.\n"+
+				"Say so plainly, or use an OCR/image tool if one is available for the local path. "+
+				"Never answer as if no image was attached, and never guess what it shows.\n</%s>\n\n",
+			imageRoutingTag, n, imageRoutingTag)
+	}
 	return fmt.Sprintf(
 		"<%s>\nThe user attached %d image(s). This model cannot read images, so they are not in your context.\n"+
-			"Delegate with read_only_task to inspect them: the attachments are handed to the sub-agent automatically.\n"+
+			"Delegate with read_only_task: the attachments are handed to %s, which reads them, automatically.\n"+
+			"Do not OCR them yourself and do not write a script to do it — that path is configured and working. "+
 			"Never answer as if no image was attached, and never guess what it shows.\n</%s>\n\n",
-		imageRoutingTag, n, imageRoutingTag,
-	)
+		imageRoutingTag, n, reader, imageRoutingTag)
+}
+
+// visionModelRef is the model configured to read what this one cannot.
+func (c *Controller) visionModelRef() string {
+	cfg, err := config.LoadForRoot(c.workspaceRoot)
+	if err != nil || cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Agent.VisionModel)
 }
 
 // bindOrchestratedTurnImages resolves the turn's attachments, binds them both
@@ -127,5 +150,5 @@ func (c *Controller) imageRoutingPrefix(unreadable int) string {
 		return ""
 	}
 	c.notice(fmt.Sprintf(i18n.M.ImagesNotReadable, unreadable))
-	return imageRoutingNote(unreadable)
+	return c.imageRoutingNote(unreadable)
 }

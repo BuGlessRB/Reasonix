@@ -442,7 +442,6 @@ export const SCRIPT: Beat[] = [
         checks_suppressed: 1,
         review: "passed",
         gap_kinds: ["suppressed"],
-        constraint_degraded: false,
       },
     },
   },

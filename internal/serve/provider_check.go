@@ -38,7 +38,7 @@ func (s *Server) registerProviderCheckRoutes(mux *http.ServeMux) {
 // button rather than a delete and a re-add.
 func (s *Server) checkProvider(w http.ResponseWriter, r *http.Request) {
 	if !s.grants.providerEdit {
-		http.Error(w, "provider editing is not enabled on this server", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}
 	var body struct {

@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
+	"sync"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -45,6 +46,8 @@ import (
 const (
 	wailsEventName = "rx:event"
 	replayPath     = "/rx-replay"
+	// Must match runtimePrefix in internal/serve and the frontend's pane base.
+	runtimePrefix = "/rt/"
 )
 
 var apiPaths = map[string]bool{
@@ -62,7 +65,8 @@ var apiPaths = map[string]bool{
 	"/memory": true, "/network": true, "/shell": true, "/todos": true, "/providers": true,
 	"/changes": true, "/attachments": true, "/roles": true,
 	"/themes": true, "/extensions": true, "/plugins": true, "/surfaces": true,
-	"/welcome": true,
+	"/welcome": true, "/appearance": true,
+	"/permissions": true, "/sandbox": true,
 }
 
 // A sub-path belongs to the resource it hangs off: /mcp/reconnect is the same
@@ -70,7 +74,30 @@ var apiPaths = map[string]bool{
 // endpoint from silently answering with index.html instead of JSON — and
 // TestEveryPathTheFrontendCallsIsRouted is what keeps this list honest, because
 // the comment alone did not.
-var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/"}
+var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/", "/appearance/"}
+
+// splitRuntimePath separates a pane's address from the route it is asking for:
+// /rt/r2/status is runtime r2 asking for /status. An unprefixed path belongs to
+// no pane in particular and reaches the hub's first runtime.
+func splitRuntimePath(p string) (id, path string) {
+	if !strings.HasPrefix(p, runtimePrefix) {
+		return "", p
+	}
+	rest := strings.TrimPrefix(p, runtimePrefix)
+	id, path, found := strings.Cut(rest, "/")
+	if !found {
+		return id, "/"
+	}
+	return id, "/" + path
+}
+
+// isHubPath covers the routes that belong to the hub rather than to any one
+// runtime: the pane list and the workspace tree the sidebar reads.
+func isHubPath(p string) bool {
+	p = strings.TrimSuffix(p, "/")
+	return p == "/runtimes" || strings.HasPrefix(p, "/runtimes/") ||
+		p == "/tree" || strings.HasPrefix(p, "/tree/")
+}
 
 func isAPIPath(p string) bool {
 	p = strings.TrimSuffix(p, "/")
@@ -125,25 +152,24 @@ func run() error {
 	// Ask/Auto/YOLO is a posture the user set on the composer, not a per-launch
 	// default — the old shell has read this since it had a picker.
 	ctrl.SetToolApprovalMode(cfg.DesktopDefaultToolApprovalMode())
+	shell := &App{pumps: map[string]context.CancelFunc{}}
+	// One hub, several panes: each session gets its own runtime, so a second
+	// conversation runs beside the first instead of rebuilding it.
+	hub := serve.NewHub(serve.HubOptions{
+		Serve:   cfg.Serve,
+		Grant:   grantWindowCapabilities,
+		OnOpen:  shell.startPump,
+		OnClose: shell.stopPump,
+	})
+	shell.hub = hub
 	srv := serve.New(ctrl, bc, cfg.Serve)
 	srv.AdoptRuntime(built)
-	// The only client is the window in front of the user, so the folder switch
-	// this grants is a local file dialog rather than a remote capability.
-	srv.AllowWorkspaceSwitch()
-	// Same reasoning as the folder switch: the only client is this window, and
-	// the token lands in this machine's own credential store.
-	srv.AllowAccountAuth()
-	// And the same again for provider keys, which land in the same store.
-	srv.AllowProviderEdit()
-	// Without this the first-run connection step never appears: /provider-setup
-	// answers 404 while it is off, the window reads that as "nothing to set up",
-	// and a machine with no key lands in the composer where every turn fails.
-	srv.EnableProviderSetup()
-	api := srv.Handler()
-	// Read the controller through the server from here on: a model, extension,
-	// or workspace switch replaces it, and the one built above is then dead.
-	defer func() { srv.Controller().Close() }()
-	shell := &App{srv: srv}
+	// Without this a past save-conflict loop's forks stay on disk forever: the
+	// CLI and the old shell each sweep them, this window is the third host.
+	srv.StartRecoveryGC(ctx)
+	hub.Adopt(srv, bc)
+	api := hub.Handler()
+	defer hub.Shutdown()
 
 	assets, err := frontendAssets()
 	if err != nil {
@@ -169,9 +195,15 @@ func run() error {
 		Bind:                     []any{shell},
 		DragAndDrop:              dragAndDrop(),
 		OnStartup: func(ctx context.Context) {
+			shell.mu.Lock()
 			shell.ctx = ctx
+			shell.mu.Unlock()
 			applyDockIcon()
-			go pumpEvents(ctx, srv, bc)
+			// Panes opened before the window came up have no pump yet; from here
+			// on the hub's OnOpen starts one as each is published.
+			for _, rt := range hub.Runtimes() {
+				shell.startPump(rt)
+			}
 		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
@@ -179,14 +211,17 @@ func run() error {
 			// sync with the browser build.
 			Middleware: func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					id, path := splitRuntimePath(r.URL.Path)
 					// The bus has no reconnect handshake, so a reloaded page asks
 					// for the replay resubscribing to /events would have given it.
-					if r.URL.Path == replayPath {
-						srv.Controller().ReplayPendingPromptsWith(func() event.Sink { return bc })
+					if path == replayPath {
+						if rt := hub.Get(id); rt != nil {
+							rt.Server.Controller().ReplayPendingPromptsWith(func() event.Sink { return rt.Events })
+						}
 						w.WriteHeader(http.StatusNoContent)
 						return
 					}
-					if isAPIPath(r.URL.Path) {
+					if isAPIPath(path) || isHubPath(path) {
 						api.ServeHTTP(w, r)
 						return
 					}
@@ -194,7 +229,7 @@ func run() error {
 				})
 			},
 		},
-		OnShutdown: func(context.Context) { srv.Controller().Close() },
+		OnShutdown: func(context.Context) { hub.Shutdown() },
 	})
 }
 
@@ -214,10 +249,68 @@ func appMenu() *menu.Menu {
 }
 
 // App is the one thing the SPA cannot do over HTTP: open the platform's folder
-// picker. Everything else it needs is a route on the embedded server.
+// picker. Everything else it needs is a route on the embedded hub. It also owns
+// the per-runtime event pumps, because the bus is the window's, not a server's.
 type App struct {
-	srv *serve.Server
+	hub *serve.Hub
 	ctx context.Context
+
+	mu    sync.Mutex
+	pumps map[string]context.CancelFunc
+}
+
+// grantWindowCapabilities opens up what only a local window may do. The single
+// client is the person in front of it, so the folder picker, the account token
+// and provider keys are local dialogs rather than remote capabilities — and
+// every pane gets them, not just the one the window started with.
+func grantWindowCapabilities(srv *serve.Server) {
+	srv.AllowWorkspaceSwitch()
+	srv.AllowAccountAuth()
+	srv.AllowProviderEdit()
+	// Without this the first-run connection step never appears: /provider-setup
+	// answers 404 while it is off, the window reads that as "nothing to set up",
+	// and a machine with no key lands in the composer where every turn fails.
+	srv.EnableProviderSetup()
+}
+
+// startPump forwards one runtime's frames onto the Wails bus under its own
+// event name. Before OnStartup there is no context to emit into; the shell
+// pumps whatever the hub already holds once the window comes up.
+func (a *App) startPump(rt *serve.Runtime) {
+	if rt == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ctx == nil || a.pumps[rt.ID] != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.pumps[rt.ID] = cancel
+	go pumpEvents(ctx, rt)
+}
+
+func (a *App) stopPump(rt *serve.Runtime) {
+	if rt == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if cancel := a.pumps[rt.ID]; cancel != nil {
+		cancel()
+		delete(a.pumps, rt.ID)
+	}
+}
+
+// currentRoot is the folder the picker should open at: whichever pane the hub
+// lists first. A window with no pane left has nothing to anchor to.
+func (a *App) currentRoot() string {
+	for _, rt := range a.hub.Runtimes() {
+		if root := rt.Server.Controller().WorkspaceRoot(); root != "" {
+			return root
+		}
+	}
+	return ""
 }
 
 // PickWorkspace returns the folder the user chose, or "" if they cancelled.
@@ -231,7 +324,7 @@ func (a *App) PickWorkspace() (string, error) {
 	// Wails refuses to open the panel at all when this points at nothing, and
 	// answers with an error instead — a workspace that has since been moved
 	// would take the picker down with it.
-	if root := a.srv.Controller().WorkspaceRoot(); root != "" {
+	if root := a.currentRoot(); root != "" {
 		if st, err := os.Stat(root); err == nil && st.IsDir() {
 			opts.DefaultDirectory = root
 		}
@@ -277,28 +370,33 @@ func lastWorkspace() string {
 // when the page gives up. Wails' own bus is the one channel that does push, so
 // the shell forwards the same broadcaster frames the browser reads over SSE.
 // The payload is byte-identical either way; only the transport differs.
-func pumpEvents(ctx context.Context, srv *serve.Server, bc *serve.Broadcaster) {
+func pumpEvents(ctx context.Context, rt *serve.Runtime) {
 	var ch <-chan []byte
 	var unsubscribe func()
 	// The same handoff GET /events performs: subscribe and replay as one step,
 	// so a prompt already waiting for an answer survives the handover.
-	srv.Controller().ReplayPendingPromptsWith(func() event.Sink {
-		ch, unsubscribe = bc.Subscribe()
-		return event.FuncSink(func(e event.Event) { bc.EmitTo(ch, e) })
+	rt.Server.Controller().ReplayPendingPromptsWith(func() event.Sink {
+		ch, unsubscribe = rt.Events.Subscribe()
+		return event.FuncSink(func(e event.Event) { rt.Events.EmitTo(ch, e) })
 	})
 	defer unsubscribe()
+	name := runtimeEventName(rt.ID)
 	for {
 		select {
 		case data, ok := <-ch:
 			if !ok {
 				return
 			}
-			runtime.EventsEmit(ctx, wailsEventName, string(data))
+			runtime.EventsEmit(ctx, name, string(data))
 		case <-ctx.Done():
 			return
 		}
 	}
 }
+
+// runtimeEventName is the bus channel one pane listens on. Panes run at the
+// same time, so a single channel would interleave two conversations into both.
+func runtimeEventName(id string) string { return wailsEventName + ":" + id }
 
 func frontendAssets() (fs.FS, error) {
 	exe, err := os.Executable()

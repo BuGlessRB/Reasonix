@@ -187,10 +187,8 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 		a.turn.policy = policy
 	} else {
 		a.turn.policy = taskpolicy.Derive(taskpolicy.Input{
-			Raw:         a.turn.turnInput,
-			Instruction: taskpolicy.StripQuotedConstraints(a.turn.turnInput),
-			Preset:      agentpreset.AgentPreset(a.AgentPreset()),
-			PlanMode:    a.planMode.Load(),
+			Preset:   agentpreset.AgentPreset(a.AgentPreset()),
+			PlanMode: a.planMode.Load(),
 		})
 	}
 	a.turn.policySet = true
@@ -541,7 +539,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 			return true, nil
 		}
 	}
-	if state.executorHandoff && !state.usedAnyTool && state.handoffNudges < maxExecutorHandoffNudges && shouldNudgeExecutorHandoff(state.input, text) {
+	if state.executorHandoff && !state.usedAnyTool && state.handoffNudges < maxExecutorHandoffNudges && a.shouldNudgeExecutorHandoff() {
 		state.handoffNudges++
 		a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeExecutorHandoff, Text: executorHandoffNoticeText(), Detail: "executor answered without taking any action; nudging it to use its tools"})
 		a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(executorHandoffRetryMessage())})

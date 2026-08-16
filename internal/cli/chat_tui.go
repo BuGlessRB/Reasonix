@@ -3808,9 +3808,6 @@ func formatCompletionSummaryLine(c *event.CompletionSummaryInfo) string {
 	if len(c.GapKinds) > 0 {
 		line += " · gaps=" + strings.Join(c.GapKinds, ",")
 	}
-	if c.ConstraintDegraded {
-		line += " · constraints"
-	}
 	return line
 }
 
@@ -3823,7 +3820,7 @@ func completionSummaryNeedsAttention(c *event.CompletionSummaryInfo) bool {
 	return verdict == "partial" || verdict == "blocked" ||
 		c.ChecksFailed > 0 || c.ChecksSuppressed > 0 ||
 		review == "warned" || review == "failed" || review == "unavailable" ||
-		len(c.GapKinds) > 0 || c.ConstraintDegraded
+		len(c.GapKinds) > 0
 }
 
 func completionSummaryWarning(c *event.CompletionSummaryInfo) string {

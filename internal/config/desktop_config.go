@@ -34,4 +34,41 @@ type DesktopConfig struct {
 	ReasoningDisplayMode    string            `toml:"reasoning_display_mode"`
 	ConversationWidth       string            `toml:"conversation_width"` // standard|full; max transcript width; empty = standard
 	PinnedVersion           string            `toml:"pinned_version"`     // release pinned by a rollback; empty follows the channel
+	// MaxPanes caps concurrently driven sessions. Each pane owns plugin
+	// subprocesses, so the ceiling is real work; 0 keeps the default.
+	MaxPanes   int              `toml:"max_panes"`
+	Appearance AppearanceConfig `toml:"appearance"`
+}
+
+// DesktopMaxPanes resolves the pane ceiling: the configured value clamped to a
+// range one process can plausibly hold, or the default when unset.
+func (c *Config) DesktopMaxPanes(fallback int) int {
+	if c == nil || c.Desktop.MaxPanes <= 0 {
+		return fallback
+	}
+	return min(c.Desktop.MaxPanes, 32)
+}
+
+// AppearanceConfig is what the user set for themselves, on top of whichever
+// theme pack is active: how large it all is, what it is set in, and their own
+// picture. A pack ships a palette; these are the reader's own eyes and desk.
+// Zero means "unset" throughout, so an untouched config resolves to the
+// stylesheet's own defaults rather than to a number written here.
+type AppearanceConfig struct {
+	Zoom      float64         `toml:"zoom"`      // whole-interface scale, 0.8..1.6; 0 = 1.0
+	ReadSize  float64         `toml:"read_size"` // transcript body size in px; 0 = the stylesheet's
+	FontUI    string          `toml:"font_ui"`   // CSS font-family list for the interface
+	FontMono  string          `toml:"font_mono"` // CSS font-family list for code and output
+	Wallpaper WallpaperConfig `toml:"wallpaper"`
+}
+
+// WallpaperConfig is the user's own background image. File is a name inside
+// the appearance directory, not a path: the bytes live where the app can find
+// them after the picture the user picked has moved or been deleted.
+type WallpaperConfig struct {
+	File    string  `toml:"file"`
+	Opacity float64 `toml:"opacity"` // at rest, 0..1
+	Dim     float64 `toml:"dim"`     // scrim of page colour over it, 0..1
+	FocusX  float64 `toml:"focus_x"` // 0..1, the point that survives cropping
+	FocusY  float64 `toml:"focus_y"` // 0..1
 }

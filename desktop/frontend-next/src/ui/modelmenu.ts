@@ -2,6 +2,7 @@
 import type { ModelEntry } from "../port/port";
 import type { MenuItem } from "./Menu";
 import { groupVendors } from "./Models";
+import { t } from "../i18n";
 import { KIND_LABEL } from "./vendors";
 
 // One flat list said "deepseek" four times: the provider name is the config's
@@ -23,7 +24,7 @@ export function modelMenu(models: ModelEntry[]): MenuItem[] {
         out.push({
           value: m.ref,
           label: m.model,
-          right: manyDoors ? KIND_LABEL[kind] ?? kind : undefined,
+          right: manyDoors ? t(KIND_LABEL[kind] ?? kind) : undefined,
         });
       }
     }

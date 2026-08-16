@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { t } from "../i18n";
 
 export interface MenuItem {
   value: string;
@@ -119,7 +120,7 @@ export function Picker({ label, items, current, onPick, place, className, title 
             className="mfind"
             value={query}
             placeholder={`筛选 ${choosable} 项`}
-            aria-label="筛选"
+            aria-label={t("筛选")}
             spellCheck={false}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -155,7 +156,7 @@ export function Picker({ label, items, current, onPick, place, className, title 
             )}
           </Fragment>
         ))}
-        {filtering && shown.length === 0 && <div className="mnone">没有匹配的项</div>}
+        {filtering && shown.length === 0 && <div className="mnone">{t("没有匹配的项")}</div>}
       </div>
     </div>
   );

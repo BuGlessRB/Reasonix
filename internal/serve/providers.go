@@ -4,6 +4,7 @@ package serve
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -82,6 +83,11 @@ type providerView struct {
 	// Preset marks an entry that came from the curated catalog rather than
 	// from this panel, so the UI can say where it came from.
 	Preset bool `json:"preset"`
+	// The three no probe can answer: a wrong window moves compaction to the
+	// wrong moment, and a relay without its headers refuses every request.
+	ContextWindow int               `json:"contextWindow,omitempty"`
+	Headers       map[string]string `json:"headers,omitempty"`
+	ExtraBody     map[string]any    `json:"extraBody,omitempty"`
 }
 
 func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
@@ -110,6 +116,9 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 			KeyEnv:         p.APIKeyEnv,
 			InUse:          p.Name == current,
 			Preset:         strings.TrimSpace(p.PresetID) != "",
+			ContextWindow:  p.ContextWindow,
+			Headers:        p.Headers,
+			ExtraBody:      p.ExtraBody,
 		})
 	}
 	writeJSON(w, out)
@@ -119,7 +128,7 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 // the user sees the guesses and confirms them before anything is saved.
 func (s *Server) probeProvider(w http.ResponseWriter, r *http.Request) {
 	if !s.grants.providerEdit {
-		http.Error(w, "provider editing is not enabled on this server", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}
 	var body struct {
@@ -172,7 +181,7 @@ func (s *Server) probeProvider(w http.ResponseWriter, r *http.Request) {
 // an issue.
 func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
 	if !s.grants.providerEdit {
-		http.Error(w, "provider editing is not enabled on this server", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}
 	var body struct {
@@ -219,7 +228,7 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) removeProvider(w http.ResponseWriter, r *http.Request) {
 	if !s.grants.providerEdit {
-		http.Error(w, "provider editing is not enabled on this server", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "provider.editing_disabled", "provider editing is not enabled on this server", nil)
 		return
 	}
 	var body struct {
@@ -230,13 +239,13 @@ func (s *Server) removeProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	name := strings.TrimSpace(body.Name)
 	if name == "" {
-		http.Error(w, "a provider name is required", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, "provider.name_required", "a provider name is required", nil)
 		return
 	}
 	if current, _, _ := strings.Cut(currentModelRef(s.ctl()), "/"); current == name {
 		// Removing it would leave the conversation on a model that no longer
 		// resolves, and the next turn would fail instead of this call.
-		http.Error(w, "switch to another model before removing the one in use", http.StatusConflict)
+		busy(w, "provider.model_in_use", "switch to another model before removing the one in use")
 		return
 	}
 	cfg := config.LoadForEdit(config.UserConfigPath())
@@ -257,14 +266,14 @@ func (s *Server) removeProvider(w http.ResponseWriter, r *http.Request) {
 func providerEntryFrom(name, kind, baseURL, def, effort string, models, vision []string, authHeader, noProxy bool) (config.ProviderEntry, error) {
 	name = strings.TrimSpace(name)
 	if !providerNameRE.MatchString(name) {
-		return config.ProviderEntry{}, fmt.Errorf("provider name must be letters, digits, dot, dash or underscore")
+		return config.ProviderEntry{}, refusal(http.StatusUnprocessableEntity, "provider.name_invalid", errors.New("provider name must be letters, digits, dot, dash or underscore"), nil)
 	}
 	kind = strings.ToLower(strings.TrimSpace(kind))
 	if kind != "openai" && kind != "anthropic" && kind != "responses" {
-		return config.ProviderEntry{}, fmt.Errorf("unsupported provider kind %q", kind)
+		return config.ProviderEntry{}, refusal(http.StatusUnprocessableEntity, "provider.kind_unsupported", fmt.Errorf("unsupported provider kind %q", kind), map[string]any{"kind": kind})
 	}
 	if strings.TrimSpace(baseURL) == "" {
-		return config.ProviderEntry{}, fmt.Errorf("an endpoint address is required")
+		return config.ProviderEntry{}, refusal(http.StatusUnprocessableEntity, "provider.endpoint_required", errors.New("an endpoint address is required"), nil)
 	}
 	chat := make([]string, 0, len(models))
 	for _, m := range models {
@@ -273,11 +282,11 @@ func providerEntryFrom(name, kind, baseURL, def, effort string, models, vision [
 		}
 	}
 	if len(chat) == 0 {
-		return config.ProviderEntry{}, fmt.Errorf("pick at least one model")
+		return config.ProviderEntry{}, refusal(http.StatusUnprocessableEntity, "provider.no_models_picked", errors.New("pick at least one model"), nil)
 	}
 	def = strings.TrimSpace(def)
 	if def != "" && !slices.Contains(chat, def) {
-		return config.ProviderEntry{}, fmt.Errorf("default model %q is not one of the selected models", def)
+		return config.ProviderEntry{}, refusal(http.StatusUnprocessableEntity, "provider.default_not_selected", fmt.Errorf("default model %q is not one of the selected models", def), map[string]any{"model": def})
 	}
 	return config.ProviderEntry{
 		Name:         name,

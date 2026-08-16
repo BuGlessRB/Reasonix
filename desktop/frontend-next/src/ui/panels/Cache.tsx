@@ -1,5 +1,6 @@
 import type { Metrics } from "../../state/session";
 import { useTicker } from "../num";
+import { t } from "../../i18n";
 
 const SRC: Record<string, string> = {
   executor: "主循环",
@@ -25,15 +26,15 @@ export function Cache({ metrics, rate: tps, done }: { metrics: Metrics; rate: nu
 
   return (
     <div className="block" data-b="cache">
-      <div className="lbl">缓存</div>
+      <div className="lbl">{t("缓存")}</div>
       <div className="big">
         <span className="v" data-live={up ? "" : undefined} data-flash={done && up ? "" : undefined}>
           {shown.toFixed(1)}%
         </span>
         <span className="k">
-          前缀命中
+          {t("前缀命中")}
           <br />
-          本工作区
+          {t("本会话")}
         </span>
       </div>
       <div className="bar">
@@ -43,41 +44,41 @@ export function Cache({ metrics, rate: tps, done }: { metrics: Metrics; rate: nu
       <div className="legend">
         <div className="r">
           <i style={{ background: "var(--ok)" }} />
-          命中<span className="n">{fmt(Math.round(hit))}</span>
+          {t("命中")}<span className="n">{fmt(Math.round(hit))}</span>
         </div>
         <div className="r">
           <i style={{ background: "var(--ghost)" }} />
-          未命中<span className="n">{fmt(Math.round(miss))}</span>
+          {t("未命中")}<span className="n">{fmt(Math.round(miss))}</span>
         </div>
         <div className="r aside">
           <i />
-          输出<span className="n">{fmt(Math.round(out))}</span>
+          {t("输出")}<span className="n">{fmt(Math.round(out))}</span>
         </div>
       </div>
       <div className="rate" data-live={tps >= 1 ? "" : undefined}>
-        <span>下行</span>
+        <span>{t("下行")}</span>
         <span className="v">{tps >= 1 ? Math.round(tps) : "—"}</span>
         <span className="u">tok/s</span>
       </div>
       <div className="money">
         <div className="col">
-          <span className="k">本工作区</span>
+          <span className="k">{t("本会话")}</span>
           <span className="v">
             {metrics.currency}
             {metrics.cost.toFixed(2)}
           </span>
-          <span className="note">{up ? `命中 ${rate.toFixed(1)}%` : "—"}</span>
+          <span className="note">{up ? t("命中 {rate}%", { rate: rate.toFixed(1) }) : "—"}</span>
         </div>
         <div className="col">
-          <span className="k">若不命中</span>
+          <span className="k">{t("若不命中")}</span>
           <span className="v sm">—</span>
-          <span className="note">价目未上报</span>
+          <span className="note">{t("价目未上报")}</span>
         </div>
       </div>
       <div className="srcs">
         {sources.map(([k, v]) => (
           <div className="r" key={k}>
-            <span>{SRC[k] ?? k}</span>
+            <span>{t(SRC[k] ?? k)}</span>
             <span className="n">
               {metrics.currency}
               {v.toFixed(2)}

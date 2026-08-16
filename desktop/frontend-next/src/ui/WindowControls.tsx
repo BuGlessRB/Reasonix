@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { t } from "../i18n";
 
 // Wails publishes bound methods at window.go.<package>.<Struct>.<Method>.
 interface Shell {
@@ -55,7 +56,7 @@ export function WindowControls() {
           void app()?.ToggleMaximiseWindow?.();
           app()?.IsWindowMaximised?.().then(setMax).catch(() => {});
         }}
-        aria-label={max ? "还原" : "最大化"}
+        aria-label={t(max ? "还原" : "最大化")}
       >
         <svg viewBox="0 0 12 12" aria-hidden="true">
           {max ? (

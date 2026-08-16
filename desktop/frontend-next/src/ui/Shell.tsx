@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { t } from "../i18n";
 import type { AgentPort, ShellOption, ShellSettings } from "../port/port";
 
 // The product name, not the executable: "powershell.exe" is what the file is
@@ -42,7 +43,7 @@ export function Shell({ port, onChanged }: { port: AgentPort; onChanged?: () => 
 
   useEffect(load, [load]);
 
-  if (!s) return <div className="empty">读不到 shell 配置。</div>;
+  if (!s) return <div className="empty">{t("读不到 shell 配置。")}</div>;
 
   const options = s.options ?? [];
   // Two bashes on one machine are two different programs, so picking one has to
@@ -72,7 +73,7 @@ export function Shell({ port, onChanged }: { port: AgentPort; onChanged?: () => 
   return (
     <div className="shell">
       <div className="kv">
-        <span className="k">当前生效</span>
+        <span className="k">{t("当前生效")}</span>
         <span className="v">
           {label(s.effective)}
           {s.effective.version ? ` ${s.effective.version}` : ""} · {s.effective.path || "—"}
@@ -84,9 +85,9 @@ export function Shell({ port, onChanged }: { port: AgentPort; onChanged?: () => 
           onClick={() => void save("auto", "auto", "")}>
           <span className="mark" />
           <span className="tx">
-            <span className="lb">自动</span>
+            <span className="lb">{t("自动")}</span>
             <span className="ds">
-              自己找，优先真 bash。这台机器上会选到 {label(s.auto)}
+              {t("自己找，优先真 bash。这台机器上会选到")} {label(s.auto)}
             </span>
           </span>
         </button>
@@ -101,7 +102,7 @@ export function Shell({ port, onChanged }: { port: AgentPort; onChanged?: () => 
               </span>
               <span className="ds">
                 <code>{o.path}</code>
-                {NOTE[o.name] && <em className="cav">{NOTE[o.name]}</em>}
+                {NOTE[o.name] && <em className="cav">{t(NOTE[o.name])}</em>}
               </span>
             </span>
           </button>
@@ -110,23 +111,20 @@ export function Shell({ port, onChanged }: { port: AgentPort; onChanged?: () => 
 
       {noBash && (
         <p className="note">
-          这台机器上没有 bash，所以命令只能按 PowerShell 写。装一个 Git for Windows
-          就会多出 Git Bash 这一项 —— WSL 里的那个不算，它看到的是 /mnt 下的另一套路径，
-          够不着这个工作目录。
+          {t("这台机器上没有 bash，所以命令只能按 PowerShell 写。装一个 Git for Windows就会多出 Git Bash 这一项 —— WSL 里的那个不算，它看到的是 /mnt 下的另一套路径，够不着这个工作目录。")}
         </p>
       )}
 
       <details className="pinpath">
         <summary>
-          <span className="fold">指定一个可执行文件</span>
+          <span className="fold">{t("指定一个可执行文件")}</span>
         </summary>
         <p className="note">
-          自己编的 bash、MSYS2、装在别处的 pwsh 都填这里。保存前会真的拿它跑一条命令，
-          跑不起来就不会写进配置。
+          {t("自己编的 bash、MSYS2、装在别处的 pwsh 都填这里。保存前会真的拿它跑一条命令，跑不起来就不会写进配置。")}
         </p>
         <div className="fields">
           <label className="grow full">
-            <span>可执行文件路径</span>
+            <span>{t("可执行文件路径")}</span>
             <input
               value={custom}
               placeholder={s.auto.path}
@@ -137,19 +135,19 @@ export function Shell({ port, onChanged }: { port: AgentPort; onChanged?: () => 
         <div className="acts">
           {s.path && (
             <button className="act" disabled={!!busy} onClick={() => void save("clear", s.prefer, "")}>
-              取消指定
+              {t("取消指定")}
             </button>
           )}
           <button className="act" data-primary disabled={!!busy || !custom.trim()}
             onClick={() => void save("custom", kindOf(custom), custom.trim())}>
-            {busy === "custom" ? "验证中…" : "保存这个路径"}
+            {t(busy === "custom" ? "验证中…" : "保存这个路径")}
           </button>
         </div>
       </details>
 
       {failed && (
         <div className="find" data-lvl="warn" role="alert">
-          <span className="t">没换成</span>
+          <span className="t">{t("没换成")}</span>
           <span className="why">{failed}</span>
         </div>
       )}

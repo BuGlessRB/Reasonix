@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { t } from "../i18n";
 import type { AgentPort, PluginAction, PluginPackage, PluginPlan } from "../port/port";
 
 // Installing and importing are the same act from two doors, so there is one
@@ -47,7 +48,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
       // "Nothing installable here" is the plan's own answer, and its reason is
       // more useful than anything this component could invent.
       if (!p.actions?.length) {
-        setError(p.error || p.next || "这个来源里没有能装的东西");
+        setError(p.error || p.next || t("这个来源里没有能装的东西"));
         setPlan(null);
         return;
       }
@@ -98,7 +99,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
         <Outcome plan={done} />
         <div className="acts">
           <button className="act" onClick={onClose}>
-            完成
+            {t("完成")}
           </button>
         </div>
       </div>
@@ -121,9 +122,9 @@ export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
             <span className="t">
               {version(plan.actions) && updating.version
                 ? `${updating.name} ${updating.version} → ${version(plan.actions)}`
-                : `重装 ${updating.name}`}
+                : t("重装 {name}", { name: updating.name })}
             </span>
-            <span className="why">{gained.length ? `这一版新增了：${gained.join("、")}` : "没有新增会执行的东西。"}</span>
+            <span className="why">{gained.length ? t("这一版新增了：{list}", { list: gained.join("、") }) : t("没有新增会执行的东西。")}</span>
           </div>
         )}
         {groups.map((g) => (
@@ -140,12 +141,12 @@ export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
           </div>
         ))}
         <div className="acts">
-          <span className="note">{updating ? "覆盖已装的那一份" : "装到「我的」，所有项目都能用"}</span>
+          <span className="note">{t(updating ? "覆盖已装的那一份" : "装到「我的」，所有项目都能用")}</span>
           <button className="act" onClick={() => (updating ? onClose() : setPlan(null))}>
-            {updating ? "取消" : "返回"}
+            {t(updating ? "取消" : "返回")}
           </button>
           <button className="act" data-primary disabled={busy} onClick={() => void install()}>
-            {busy ? (updating ? "更新中…" : "安装中…") : updating ? "更新" : "装上"}
+            {t(busy ? (updating ? "更新中…" : "安装中…") : updating ? "更新" : "装上")}
           </button>
         </div>
         {error && <div className="why">{error}</div>}
@@ -159,12 +160,12 @@ export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
     return (
       <div className="addpkg" data-stage="reading">
         <div className="find" data-lvl={error ? "err" : undefined}>
-          <span className="t">{error ? `读不到 ${updating.name} 的来源` : `正在读取 ${updating.name} 的来源…`}</span>
+          <span className="t">{error ? t("读不到 {name} 的来源", { name: updating.name }) : t("正在读取 {name} 的来源…", { name: updating.name })}</span>
           <span className="why">{error || updating.source}</span>
         </div>
         <div className="acts">
           <button className="act" onClick={onClose}>
-            {error ? "关掉" : "取消"}
+            {t(error ? "关掉" : "取消")}
           </button>
         </div>
       </div>
@@ -185,15 +186,15 @@ export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
         }}
       />
       <div className="acts">
-        <span className="note">一个仓库地址，或者把文件夹拖进来</span>
+        <span className="note">{t("一个仓库地址，或者把文件夹拖进来")}</span>
         <button className="act" onClick={() => void pick()}>
-          选文件夹
+          {t("选文件夹")}
         </button>
         <button className="act" onClick={onClose}>
-          取消
+          {t("取消")}
         </button>
         <button className="act" data-primary disabled={!text.trim() || busy} onClick={() => void look()}>
-          {busy ? "读取中…" : "看看是什么"}
+          {t(busy ? "读取中…" : "看看是什么")}
         </button>
       </div>
       {error && <div className="why">{error}</div>}
@@ -224,26 +225,26 @@ function Candidate({ a }: { a: PluginAction }) {
       ))}
       {adds.length > 0 && (
         <div className="risk">
-          <span className="lb">会加进来</span>
+          <span className="lb">{t("会加进来")}</span>
           <span className="dt">{adds.join(" · ")}</span>
         </div>
       )}
       {Object.keys(a.env ?? {}).map((k) => (
         <div className="risk" data-kind="secret" key={k}>
-          <span className="lb">要你填</span>
+          <span className="lb">{t("要你填")}</span>
           <span className="dt">{k}</span>
         </div>
       ))}
       {a.skippedCapabilities?.map((s) => (
         <div className="risk" key={s.capability + s.reason}>
-          <span className="lb">用不了</span>
+          <span className="lb">{t("用不了")}</span>
           <span className="dt">{s.capability}</span>
           <span className="why">{s.reason}</span>
         </div>
       ))}
       {a.riskReasons?.length ? (
         <details className="reasons">
-          <summary>核心给出的判定（{a.riskReasons.length}）</summary>
+          <summary>{t("核心给出的判定（{n}）", { n: a.riskReasons.length })}</summary>
           {a.riskReasons.map((r) => (
             <p key={r}>{r}</p>
           ))}

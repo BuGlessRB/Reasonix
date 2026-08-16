@@ -176,7 +176,12 @@ func (a *Agent) compressVisibleRange(
 	}
 	result := plan.result
 
-	a.svc.sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: event.Compaction{Trigger: trigger}})
+	// The size is already known here, and the fold's own model call can take
+	// most of a minute. Announcing only the trigger leaves a card that says
+	// "compacting" and nothing else for that whole time, which reads as a hang.
+	a.svc.sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: event.Compaction{
+		Trigger: trigger, Messages: len(plan.fold), SourceTokens: plan.result.SourceTokens,
+	}})
 	prepared, reason, err := a.prepareVisibleCompression(ctx, trigger, plan.fold, instructions)
 	if err != nil {
 		a.emitCompactionAborted(trigger)
@@ -405,7 +410,9 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	if !ok {
 		return CompactionNoop, nil
 	}
-	kept, fold, retention, policyKeep := a.partitionFoldForProjection(msgs[head:start])
+	// The annotation rides the projection, not the canonical transcript: the
+	// original stays whole for resume and rewind.
+	kept, fold, retention, policyKeep := a.partitionFoldForProjection(a.annotateFailureDiagnostics(ctx, msgs[head:start]))
 	if len(fold) == 0 || (!force && !a.foldEconomics(fold)) {
 		return CompactionNoop, nil
 	}
@@ -417,7 +424,10 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		return CompactionNoop, fmt.Errorf("%w: fixed prefix (%d tokens) already exceeds trigger (%d)", errCheckpointRejected, fixedPrefixTokens, a.compactTrigger())
 	}
 
-	a.svc.sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: event.Compaction{Trigger: trigger}})
+	sourceTokens := a.estimatedPromptTokens(msgs)
+	a.svc.sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: event.Compaction{
+		Trigger: trigger, Messages: len(fold), SourceTokens: sourceTokens,
+	}})
 	if a.svc.hooks != nil {
 		if hookInstr := a.svc.hooks.PreCompact(ctx, trigger); hookInstr != "" {
 			if instructions != "" {
@@ -437,7 +447,6 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		return CompactionNoop, nil
 	}
 
-	sourceTokens := a.estimatedPromptTokens(msgs)
 	res, tele, err := a.foldOrDegrade(ctx, trigger, mustFree, fold, instructions, sourceTokens)
 	if err != nil {
 		a.emitCompactionTelemetry(tele)

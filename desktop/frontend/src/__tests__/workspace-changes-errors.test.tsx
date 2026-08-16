@@ -243,7 +243,6 @@ console.log("\nworkspace changes git errors");
         checks_suppressed: 2,
         review: "passed",
         gap_kinds: ["stale_check", "future_internal_value"],
-        constraint_degraded: true,
       },
     },
   );
@@ -252,7 +251,6 @@ console.log("\nworkspace changes git errors");
   ok(text.includes("Balanced") && text.includes("Partially complete"), "change panel localizes preset and verdict");
   ok(text.includes("1 checks failed") && text.includes("2 checks skipped"), "change panel shows detailed check counts on demand");
   ok(text.includes("stale checks") && text.includes("Other"), "change panel uses safe labels for known and unknown gaps");
-  ok(text.includes("Turn verification limited"), "change panel explains constrained verification without exposing an internal flag");
   ok(!text.includes("balanced") && !text.includes("partial") && !text.includes("stale_check") && !text.includes("future_internal_value"), "change panel exposes no raw enum values");
   await act(async () => {
     root.unmount();

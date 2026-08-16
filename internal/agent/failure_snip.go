@@ -15,6 +15,13 @@ const (
 	failureContextLines = 2  // lines kept either side of a failure line
 	failureMaxKeptLines = 60 // ceiling, so a log that fails throughout still shrinks
 	failureMinLines     = 24 // below this the result is already small enough to keep whole
+	// failureTailLines is the position floor, kept whether or not any word in it
+	// is recognised: a command's verdict lands at the end — the FAIL summary,
+	// the error count, the panic, the last thing printed before a non-zero
+	// exit. Word matching alone drops that whenever some unrelated line happens
+	// to carry a listed word, because one stray hit is what switches snipping on.
+	failureTailLines = 12
+	failureHeadLines = 3 // the command and its first context, for orientation
 )
 
 // elisionMarker labels the gap a previous pass left behind. Its presence means
@@ -23,8 +30,10 @@ const (
 // byte from one folded once, for no gain.
 const elisionMarker = " lines omitted …"
 
-// failureMarkers mark a line as carrying the failure. Deliberately generous:
-// keeping a spare line costs a few tokens, dropping the assertion costs a re-run.
+// failureMarkers find failure detail buried mid-log, above the tail the
+// position floor already keeps. Deliberately generous: keeping a spare line
+// costs a few tokens, dropping the assertion costs a re-run. They are a
+// supplement, never the only thing standing between a failure and the elision.
 var failureMarkers = []string{
 	"fail", "error", "panic:", "fatal", "assert", "expected", "want:", "got:",
 	"exit status", "undefined:", "cannot ", "no such", "timeout", "timed out",
@@ -37,8 +46,30 @@ func (a *Agent) keptForProjection(m provider.Message) provider.Message {
 	if !failedExecution(m.ToolExecution) {
 		return m
 	}
-	m.Content = snipFailureResult(m.Content)
+	// A recorded selection is a model's reading of this exact output, so it
+	// wins over the word list and the position floor, which only approximate it.
+	if sel := m.ToolExecution.DiagnosticLines; len(sel) > 0 {
+		m.Content = keepFromSelection(m.Content, sel)
+		return m
+	}
+	m.Content = snipFailureTail(m.Content, recordedTailLines(m.ToolExecution))
 	return m
+}
+
+// recordedTailLines is how many trailing lines the runner itself captured as
+// the failure diagnosis (ToolExecution.OutputTail, populated only on failure).
+// Following it beats a fixed guess: the tail is recorded by the code that saw
+// the process exit. Runs without one — a non-shell tool, or a command that
+// exited zero but failed verification — keep the fixed floor.
+func recordedTailLines(ex *provider.ToolExecution) int {
+	if ex == nil {
+		return failureTailLines
+	}
+	tail := strings.TrimRight(ex.OutputTail, "\n")
+	if tail == "" {
+		return failureTailLines
+	}
+	return min(max(failureTailLines, strings.Count(tail, "\n")+1), failureMaxKeptLines)
 }
 
 func isFailureLine(s string) bool {
@@ -55,6 +86,10 @@ func isFailureLine(s string) bool {
 // rest. It returns content unchanged when there is nothing worth dropping, so
 // an unchanged return means "leave this message alone".
 func snipFailureResult(content string) string {
+	return snipFailureTail(content, failureTailLines)
+}
+
+func snipFailureTail(content string, tailLines int) string {
 	if strings.Contains(content, elisionMarker) {
 		return content
 	}
@@ -64,6 +99,20 @@ func snipFailureResult(content string) string {
 	}
 	keep := make([]bool, len(lines))
 	kept := 0
+	mark := func(i int) {
+		if i >= 0 && i < len(lines) && !keep[i] {
+			keep[i], kept = true, kept+1
+		}
+	}
+	// The position floor comes first and ignores the ceiling: it is the part
+	// that must survive even when word matching finds nothing here, or finds
+	// only an unrelated line elsewhere.
+	for i := range min(failureHeadLines, len(lines)) {
+		mark(i)
+	}
+	for i := max(0, len(lines)-tailLines); i < len(lines); i++ {
+		mark(i)
+	}
 	for i, line := range lines {
 		if kept >= failureMaxKeptLines {
 			break
@@ -72,15 +121,18 @@ func snipFailureResult(content string) string {
 			continue
 		}
 		for j := max(0, i-failureContextLines); j <= min(len(lines)-1, i+failureContextLines); j++ {
-			if !keep[j] {
-				keep[j], kept = true, kept+1
-			}
+			mark(j)
 		}
 	}
 	if kept == 0 || kept >= len(lines) {
 		return content
 	}
+	return renderKeptLines(lines, keep)
+}
 
+// renderKeptLines joins the kept lines and labels each gap with what it cost,
+// so a reader can tell content was dropped rather than never produced.
+func renderKeptLines(lines []string, keep []bool) string {
 	var b strings.Builder
 	omitted := 0
 	flush := func() {
