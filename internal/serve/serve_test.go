@@ -353,6 +353,41 @@ func TestServeCancelEndpoint(t *testing.T) {
 	}
 }
 
+// The wire field name is the whole contract here: a body the handler cannot
+// read decodes to an empty goal, and an empty goal means "clear". A client that
+// sends the wrong key therefore erases the goal while appearing to set one, so
+// this pins the key rather than only the status code.
+func TestServeGoalEndpointSetsAndClears(t *testing.T) {
+	bc := NewBroadcaster()
+	ctrl := control.New(control.Options{Sink: bc})
+	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/goal", "application/json", strings.NewReader(`{"goal":"ship the release"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("set goal status = %d, want 204", resp.StatusCode)
+	}
+	if got := ctrl.Goal(); got != "ship the release" {
+		t.Fatalf("goal = %q, want it set from the request body", got)
+	}
+	if ctrl.PlanMode() {
+		t.Error("setting a goal must leave plan mode off")
+	}
+
+	clear, err := http.Post(srv.URL+"/goal", "application/json", strings.NewReader(`{"goal":"  "}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	clear.Body.Close()
+	if got := ctrl.Goal(); got != "" {
+		t.Fatalf("goal = %q, want blank-only body to clear it", got)
+	}
+}
+
 func TestServeApproveMissingID(t *testing.T) {
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Sink: bc})

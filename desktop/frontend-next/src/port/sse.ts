@@ -687,6 +687,6 @@ export class SsePort implements AgentPort {
     return this.post("/effort", { effort });
   }
   setGoal(text: string) {
-    return this.post("/goal", { text });
+    return this.post("/goal", { goal: text });
   }
 }
