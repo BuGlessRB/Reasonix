@@ -405,6 +405,18 @@ func (a *Agent) applyDeliveryPolicyGates(ctx context.Context, turn *turnRuntime,
 	// npm test`, and every other short-circuit chain would be rejected for every
 	// user, though bash already reports the failing step's status for them.
 	if plan.evidenceName == "bash" {
+		// Delivery-only, and first: no rearrangement of an inline interpreter is
+		// acceptable here, so every shape block below would send the run to a form
+		// this one refuses anyway. The mixed block's "run that segment on its own"
+		// names exactly the call this rejects.
+		if a.deliveryProfile && evidence.BashToolCallUsesOpaqueInlineInterpreter(plan.evidenceArgs) {
+			return toolOutcome{
+				output:    "blocked: delivery mode cannot audit inline interpreter source such as node -e or python -c, so executing it would become an opaque mutation and invalidate prior verification. For inspection, use read_file/grep or another host-proven read-only command. For validation, use a conventional verifier such as node --check, a project test/check/lint command, or a read-only extraction pipeline into the verifier. For an intentional state change, use a file tool or a script file under the current in_progress todo. " + evidence.VerificationCommandSummary(),
+				blocked:   true,
+				errMsg:    "blocked: opaque inline interpreter command",
+				execution: shellPreflightExecution(plan, false),
+			}, true
+		}
 		if evidence.BashToolCallMasksVerificationExit(plan.evidenceArgs) {
 			msg := evidence.ShellContractPreflightMessage("mask_exit")
 			if a.deliveryProfile {
@@ -444,16 +456,6 @@ func (a *Agent) applyDeliveryPolicyGates(ctx context.Context, turn *turnRuntime,
 			}, true
 		}
 	}
-	// Delivery-only: any opaque inline interpreter is unauditable as evidence.
-	if a.deliveryProfile && plan.evidenceName == "bash" && evidence.BashToolCallUsesOpaqueInlineInterpreter(plan.evidenceArgs) {
-		return toolOutcome{
-			output:    "blocked: delivery mode cannot audit inline interpreter source such as node -e or python -c, so executing it would become an opaque mutation and invalidate prior verification. For inspection, use read_file/grep or another host-proven read-only command. For validation, use a conventional verifier such as node --check, a project test/check/lint command, or a read-only extraction pipeline into the verifier. For an intentional state change, use a file tool or a script file under the current in_progress todo. " + evidence.VerificationCommandSummary(),
-			blocked:   true,
-			errMsg:    "blocked: opaque inline interpreter command",
-			execution: shellPreflightExecution(plan, false),
-		}, true
-	}
-
 	plan.mutates = evidence.ToolCallMutates(plan.evidenceName, plan.evidenceArgs, plan.readOnly)
 	persistentWorkflowCall := plan.evidenceName == "remember"
 	if a.deliveryProfile && !persistentWorkflowCall && evidence.ToolCallRequiresDeliveryCriteria(plan.evidenceName, plan.evidenceArgs, plan.readOnly) && !turn.deliveryCriteriaEstablished {

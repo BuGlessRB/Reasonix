@@ -178,6 +178,41 @@ func TestOrdinaryModeBlocksMaskedVerifierExit(t *testing.T) {
 	}
 }
 
+// Delivery refuses an inline interpreter in every arrangement, so the shape
+// blocks must not answer first: their ways out — "run that segment on its own",
+// "make it the final command" — all name a call this gate rejects, which turns
+// one refusal into two. The probe for this walked exactly that path: the mixed
+// block sent the run to a bare `python3 -c`, which the next gate refused.
+func TestDeliveryRefusesInlineInterpreterBeforeTheShapeBlocks(t *testing.T) {
+	for _, command := range []string{
+		"python3 -c 'print(1)' && go test ./...",
+		"go test ./... && python3 -c 'print(1)'",
+		"python3 -c 'print(1)'",
+	} {
+		t.Run(command, func(t *testing.T) {
+			reg := tool.NewRegistry()
+			reg.Add(fakeTool{name: "bash", readOnly: false})
+			args, err := json.Marshal(map[string]string{"command": command})
+			if err != nil {
+				t.Fatal(err)
+			}
+			prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
+				{toolCallChunk("t1", "todo_write", `{"todos":[{"content":"check","status":"in_progress"}]}`), {Type: provider.ChunkDone}},
+				{toolCallChunk("m1", "bash", string(args)), {Type: provider.ChunkDone}},
+				{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
+			}}
+			a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+			if err := a.Run(context.Background(), "check"); err != nil {
+				t.Fatal(err)
+			}
+			got := toolResultByID(a.sess.conversation, "m1")
+			if !strings.Contains(got, "cannot audit inline interpreter source") {
+				t.Fatalf("result = %q, want the interpreter refusal rather than a shape block", got)
+			}
+		})
+	}
+}
+
 func TestOrdinaryModeBlocksNonTerminalInlineInterpreter(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "bash", readOnly: false})
