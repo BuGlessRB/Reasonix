@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
+
+	"reasonix/internal/evidence"
 )
 
 // trajectorySummary is the harness-side digest of one run's trajectory file:
@@ -312,6 +315,23 @@ func summarizeTrajectory(path string) (*trajectorySummary, error) {
 	return scan.finish(), nil
 }
 
+// verificationKey mirrors the host's identity for a verification, so an offline
+// digest scores the same fail→pass edges the live tracker does instead of
+// treating every output filter as a separate check.
+func verificationKey(name, args string) string {
+	raw := name + "\x00" + args
+	if name != "bash" {
+		return raw
+	}
+	var p struct {
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal([]byte(args), &p); err != nil || strings.TrimSpace(p.Command) == "" {
+		return raw
+	}
+	return name + "\x00" + evidence.VerificationIdentity(p.Command)
+}
+
 // scanTrajectoryFile runs the record pass without finishing, so callers that
 // need the raw series (the live dashboard) can read it before finish folds it.
 func scanTrajectoryFile(path string) (*trajScan, error) {
@@ -589,7 +609,7 @@ func (t *trajScan) recordResult(rec trajectoryRecord) {
 		}
 	}
 	if ex := tl.Execution; ex != nil && (ex.Verification == "passed" || ex.Verification == "failed") {
-		t.observeVerification(tl.Name+"\x00"+tl.Args, ex.Verification == "passed", rec.TS)
+		t.observeVerification(verificationKey(tl.Name, tl.Args), ex.Verification == "passed", rec.TS)
 	}
 	if ex := tl.Execution; ex != nil && ex.State == "not_run" && ex.FailurePhase != "" {
 		if t.s.RefusedCalls == nil {

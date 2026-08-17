@@ -163,13 +163,17 @@ func (t *OutcomeTracker) scoreCommand(command string, r Receipt, s *OutcomeSampl
 	}
 	if verify {
 		s.Verification++
-		seen, wasPass := t.verifySeen[command], t.verifyPass[command]
-		t.verifySeen[command] = true
-		t.verifyPass[command] = r.Success
-		if seen && r.Success && !wasPass {
+		// The receipt's own exit status is the pipeline's, so `go test … | head`
+		// reports success while the suite failed. The host's classification is
+		// what read the failing stage.
+		key, passed := VerificationIdentity(command), verificationPassed(r)
+		seen, wasPass := t.verifySeen[key], t.verifyPass[key]
+		t.verifySeen[key] = true
+		t.verifyPass[key] = passed
+		if seen && passed && !wasPass {
 			s.Objective++
 		}
-		if seen && !r.Success && wasPass {
+		if seen && !passed && wasPass {
 			s.Regression++
 		}
 	}

@@ -114,3 +114,30 @@ func TestOutcomeTrackerVerificationDebtLifecycle(t *testing.T) {
 		t.Fatalf("verification round = %+v, want discriminating 1, no debt", s)
 	}
 }
+
+// TestOutcomeObjectiveSurvivesOutputTrimming pins the transition an agent
+// actually produces: it never re-runs a verification byte-for-byte, so keying
+// the fail→pass edge on the raw command string never fires.
+func TestOutcomeObjectiveSurvivesOutputTrimming(t *testing.T) {
+	tr := NewOutcomeTracker()
+
+	// The pipeline's exit status is head's, so the receipt reports success even
+	// though the suite failed; the host's classification is the honest one.
+	failing := bashReceipt(`go test ./... 2>&1 | head -60`, true)
+	failing.Verification = VerificationFailed
+	s := tr.ScoreRound([]Receipt{failing})
+	if s.Objective != 0 || s.Verification != 1 {
+		t.Fatalf("first failing verify = %+v, want verification 1 objective 0", s)
+	}
+
+	s = tr.ScoreRound([]Receipt{bashReceipt(`go test ./... 2>&1 | grep -E 'FAIL|ok ' | head -12`, true)})
+	if s.Objective != 1 {
+		t.Fatalf("same check re-run through a different filter = %+v, want objective 1", s)
+	}
+
+	// A narrower run is a different check, so it starts its own history.
+	s = tr.ScoreRound([]Receipt{bashReceipt(`go test -run 'TestOne' -v . 2>&1 | tail -5`, true)})
+	if s.Objective != 0 {
+		t.Fatalf("first run of a narrower check = %+v, want objective 0", s)
+	}
+}
