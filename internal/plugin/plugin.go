@@ -1309,10 +1309,9 @@ func (h *Host) addConnectedWithLifecycle(lifeCtx, callCtx context.Context, s Spe
 	}
 	h.clearFailure(s.Name)
 	h.mu.Unlock()
-	// The status changed here, not when prompts finish arriving. A tools-only
-	// server has no prompts and no resources, so announcing from those paths
-	// left it showing its startup failure forever while the agent used it
-	// perfectly well.
+	// The status changed here, not when prompts finish arriving: a tools-only
+	// server has neither, so announcing from those paths leaves it showing a
+	// startup failure forever while the agent uses it perfectly well.
 	h.announce("%s: connected", s.Name)
 	// Prompts and resources stream in on the long lifeCtx the caller passed (Host.Add
 	// uses the session-scoped PluginCtx, not a per-turn ctx), so the slow list

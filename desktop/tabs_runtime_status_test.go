@@ -264,9 +264,12 @@ func TestTopicActivityStatusPresentsReadinessAsPaused(t *testing.T) {
 	if status, ok := topicActivityStatusFromEvent(readiness); !ok || status != topicStatusPaused {
 		t.Fatalf("readiness turn end = (%q, %v), want (%q, true)", status, ok, topicStatusPaused)
 	}
+	// Nothing emits this outcome any more; a session recorded before the retry
+	// budgets were removed replays the string beside an ordinary error, and the
+	// outcome still has to win over it.
 	recoveryPause := event.Event{
 		Kind:    event.TurnDone,
-		Err:     &agent.RecoveryPauseError{Message: "automatic recovery paused"},
+		Err:     io.EOF,
 		Outcome: event.TurnOutcomeRecoveryPaused,
 	}
 	if status, ok := topicActivityStatusFromEvent(recoveryPause); !ok || status != topicStatusPaused {

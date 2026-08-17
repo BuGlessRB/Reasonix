@@ -5,10 +5,12 @@ import (
 
 	"reasonix/internal/command"
 	"reasonix/internal/control"
+	"reasonix/internal/event"
 	"reasonix/internal/extension"
 	"reasonix/internal/hook"
 	"reasonix/internal/instruction"
 	"reasonix/internal/memory"
+	"reasonix/internal/migration"
 	"reasonix/internal/skill"
 	"reasonix/internal/tool"
 )
@@ -53,6 +55,17 @@ func shouldReuseDiscovery(plan *extension.RuntimePlan) bool {
 // import that launch exists to run.
 func continuesGeneration(opts Options) bool {
 	return opts.PreviousSnapshot != nil
+}
+
+// migrateLegacySources moves pre-v2 memory and session files into place. A
+// continued generation already did it, and rescanning on every rebuild would
+// charge a window with several panes for the same disk walk once per pane.
+func migrateLegacySources(opts Options, sink event.Sink) {
+	if continuesGeneration(opts) {
+		return
+	}
+	migration.MigrateLegacyMemorySources(sink)
+	migration.MigrateLegacySessionSources(sink)
 }
 
 // changesModel reports a build targeting a different model than the live

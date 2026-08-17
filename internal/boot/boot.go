@@ -47,7 +47,6 @@ import (
 	"reasonix/internal/lsp"
 	"reasonix/internal/mcplaunch"
 	"reasonix/internal/memory"
-	"reasonix/internal/migration"
 	"reasonix/internal/netclient"
 	"reasonix/internal/outputstyle"
 	"reasonix/internal/permission"
@@ -529,10 +528,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: text, Detail: detail})
 	}
 	timer.mark("config")
-	if !continuesGeneration(opts) {
-		migration.MigrateLegacyMemorySources(sink)
-		migration.MigrateLegacySessionSources(sink)
-	}
+	migrateLegacySources(opts, sink)
 	timer.mark("migrations")
 	if ignored := cfg.IgnoredProjectDefaultModel(); ignored != "" {
 		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Ignored the project config's default_model.", Detail: fmt.Sprintf("./reasonix.toml sets default_model = %q but no configured provider serves it; using %q from your user config instead. Edit or remove that default_model line to silence this notice.", ignored, cfg.DefaultModel)})

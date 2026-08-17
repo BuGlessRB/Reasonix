@@ -14,12 +14,10 @@ import (
 // while "most of it, not all of it" reads the same at every size.
 const screenShare = 90
 
-// fitted returns the size to open at: the preferred size treated as a ceiling,
-// not a constant. The window is whatever is smaller — what we would like, or
-// what this screen can comfortably show.
-//
-// A screen reporting nothing (some drivers do before the first paint) leaves
-// the preference alone rather than collapsing the window to a share of zero.
+// fitted returns the size to open at: the preference is a ceiling, not a
+// constant, so the window is whichever is smaller. A screen reporting nothing
+// (some drivers do before the first paint) leaves the preference alone rather
+// than collapsing the window to a share of zero.
 func fitted(maxW, maxH, screenW, screenH int) (int, int) {
 	if screenW > 0 {
 		maxW = min(maxW, screenW*screenShare/100)
@@ -30,20 +28,11 @@ func fitted(maxW, maxH, screenW, screenH int) (int, int) {
 	return maxW, maxH
 }
 
-// fitWindow puts the window where it fits, on the screen it opened on.
-//
-// Sizes here are logical pixels, which is where this bites: a 1920x1080 display
-// at Windows' common 125% scaling is 1536x864 to lay out in, and 150% leaves
-// 1280x720. The default 1440x900 does not fit either, and centred in 864 its top
-// edge lands at -18 — exactly the title bar. The report was from a 1080p screen,
-// so the trap is not a small display, it is the scale factor between what the
-// user reads off their monitor and what the window is measured in.
-//
-// Centring happens regardless: Wails does not promise a centred window on
-// Windows, and a window that merely fits can still open partly off-screen.
-//
-// The window starts hidden and is shown from here, so none of this is visible
-// as a resize — it opens already the right size, in the right place.
+// fitWindow sizes and centres the window before it is shown. Sizes are logical
+// pixels, which is the trap: 1080p at Windows' common 125% scaling lays out in
+// 1536x864, so the 1440x900 default centres with its top edge at -18 — exactly
+// the title bar, and with it the way to move the window. Centring is
+// unconditional because Wails does not promise it on Windows.
 func fitWindow(ctx context.Context) {
 	// Whatever happens below, the window becomes visible. A measurement that
 	// fails must cost a badly sized window, never an invisible one.

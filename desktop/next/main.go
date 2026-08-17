@@ -153,10 +153,9 @@ func run() error {
 	// Ask/Auto/YOLO is a posture the user set on the composer, not a per-launch
 	// default — the old shell has read this since it had a picker.
 	ctrl.SetToolApprovalMode(cfg.DesktopDefaultToolApprovalMode())
-	// Native panels the shell opens itself are outside the webview, so the
-	// frontend's own catalogue cannot reach them. They follow the desktop
-	// interface language, which is a separate setting from the kernel's — hence
-	// a catalogue read rather than the active one.
+	// Native panels the shell opens are outside the webview, so the frontend's
+	// catalogue cannot reach them. They follow the desktop interface language, a
+	// separate setting from the kernel's — hence a catalogue read, not the active one.
 	shell := &App{pumps: map[string]context.CancelFunc{}, say: i18n.Catalog(cfg.DesktopLanguage())}
 	// One hub, several panes: each session gets its own runtime, so a second
 	// conversation runs beside the first instead of rebuilding it.
