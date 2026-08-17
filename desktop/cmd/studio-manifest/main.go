@@ -1,16 +1,11 @@
 // Command studio-manifest writes Studio's latest.json from a directory of built
-// artifacts.
+// artifacts. cmd/sign's manifest subcommand is the desktop line's: it hardcodes
+// desktop's download page and drops any windows file that is not -installer.exe.
 //
-// cmd/sign's manifest subcommand cannot be reused: it is the desktop line's, so
-// it hardcodes desktop's download page and changelog URL, and its artifact
-// matcher drops any windows file that is not -installer.exe.
-//
-// Every artifact lands in downloads and none in platforms. That is the honest
-// state, not an oversight: the shared apply path names the desktop line's
-// release members (see update.ExtractReleaseUnit) and Windows installs through
-// NSIS, so Studio's portable archives have no install path yet. Filling
-// platforms is what turns self-update on, and it may only happen together with
-// an apply path that accepts this layout.
+// Every artifact lands in downloads, none in platforms — the shared apply path
+// names the desktop line's release members (update.ExtractReleaseUnit) and
+// Windows installs through NSIS, so Studio has no install path yet. Filling
+// platforms turns self-update on, and must land with that path.
 package main
 
 import (

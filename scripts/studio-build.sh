@@ -53,12 +53,13 @@ build_shell() {
 	local goos="$1" goarch="$2" version="$3" out="$4"
 	local ldflags="-s -w -X main.version=$version"
 	[ "$goos" = windows ] && ldflags="$ldflags -H windowsgui"
-	local args=(-trimpath -tags "$TAGS" -ldflags "$ldflags" -o "$out")
+	local tags="$TAGS"
 	# WebKitGTK 4.1: 4.0 (libwebkit2gtk-4.0.so.37) is gone on Ubuntu 24.04+ and
 	# Fedora 40+, while 4.1 ships from Ubuntu 22.04 onward.
-	[ "$goos" = linux ] && args=(-tags "$TAGS webkit2_41" "${args[@]:2}")
+	[ "$goos" = linux ] && tags="$TAGS webkit2_41"
 	echo "==> go build $goos/$goarch"
-	(cd "$ROOT/desktop" && GOOS="$goos" GOARCH="$goarch" go build "${args[@]}" ./next)
+	(cd "$ROOT/desktop" && GOOS="$goos" GOARCH="$goarch" go build \
+		-trimpath -tags "$tags" -ldflags "$ldflags" -o "$out" ./next)
 }
 
 # CI smoke: the host's own platform, no frontend, no packaging. This is the
