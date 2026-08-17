@@ -103,6 +103,29 @@ const nextId = () => `i${++seq}`;
 
 // tool_dispatch and tool_result are two phases of one call; the UI shows one
 // row that flips from running to settled, so they fold onto the same item.
+// The end of a turn is the only authority on whether its work finished. A turn
+// that died put its reason in the status label, where the next turn overwrites
+// it and a long one is cut off mid-sentence — and left every dispatched call
+// spinning, which reads as a hang rather than a stop. The reason belongs in the
+// transcript, which is the record of what happened, and a call that never
+// reported back says so on its own card.
+//
+// A backgrounded command is not caught by this: it answers with a result the
+// moment it is launched, so its card is already settled when the turn ends.
+const NO_REPORT = "这一步没有回报结果就随本轮结束了";
+
+function sealTurn(items: Item[], err?: string): Item[] {
+  const sealed = items.map((i) =>
+    i.t === "tool" && i.running
+      ? { ...i, running: false, tool: { ...i.tool, err: i.tool.err || NO_REPORT } }
+      : i,
+  );
+  if (!err) return sealed;
+  // The kernel's own words: classifying them here would be this file guessing
+  // at failures it cannot see.
+  return [...sealed, { t: "notice" as const, id: nextId(), level: "error", text: err }];
+}
+
 function foldTool(items: Item[], tool: Tool, running: boolean): Item[] {
   // A subagent's calls carry parentId; they belong inside the task that spawned
   // them, not as siblings in the main flow.
@@ -513,10 +536,10 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       return {
         ...s,
         running: false,
-        doing: ev.err ? ev.err : "已完成",
+        doing: ev.err ? "已中断" : "已完成",
         waiting: {},
         plan: s.plan.length > 0 && s.plan.every((p) => p.done) ? [] : s.plan,
-        items: sealSay(s.items, true),
+        items: sealTurn(sealSay(s.items, true), ev.err),
       };
 
     default:
