@@ -73,7 +73,7 @@ function ScopePicker({
     return !needle || (sc.label || sc.name).toLowerCase().includes(needle) || sc.root.toLowerCase().includes(needle);
   });
   return (
-    <div className="picker" role="listbox">
+    <div className="scope-pick" role="listbox">
       {searchable && (
         <input
           className="q"
