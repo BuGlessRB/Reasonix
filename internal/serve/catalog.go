@@ -88,6 +88,15 @@ type skillEntry struct {
 // model-initiated discovery is on at all — a global off makes every "auto"
 // skill manual in practice, and hiding that would misreport all of them.
 func (s *Server) skills(w http.ResponseWriter, r *http.Request) {
+	root, other, ok := s.requestedRoot(r)
+	if !ok {
+		http.Error(w, "unknown project", http.StatusBadRequest)
+		return
+	}
+	if other {
+		s.skillsForProject(w, root)
+		return
+	}
 	ctl := s.ctl()
 	raw := ctl.AllSkills()
 	entries := make([]skillEntry, 0, len(raw))
@@ -130,12 +139,26 @@ func (s *Server) skillEnabled(w http.ResponseWriter, r *http.Request) {
 		Enabled bool   `json:"enabled"`
 		Scope   string `json:"scope"`
 		Clear   bool   `json:"clear"`
+		Root    string `json:"root"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
 		http.Error(w, "missing name", http.StatusBadRequest)
 		return
 	}
 	name, scope := strings.TrimSpace(body.Name), activationScope(body.Scope)
+	root, other, ok := s.resolveRoot(body.Root)
+	if !ok {
+		http.Error(w, "unknown project", http.StatusBadRequest)
+		return
+	}
+	if other {
+		if err := s.switchForProject(root, string(config.CapabilitySkill), name, scope, body.Enabled, body.Clear); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]any{"enabled": body.Enabled, "scope": string(scope), "root": root})
+		return
+	}
 	if body.Clear {
 		if err := s.ctl().ClearSkillOverride(name, scope); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -187,6 +210,15 @@ type mcpEntry struct {
 // resolved for every configured name, because "off" and "never needed yet" look
 // identical from the live host and mean opposite things to the user.
 func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
+	root, other, ok := s.requestedRoot(r)
+	if !ok {
+		http.Error(w, "unknown project", http.StatusBadRequest)
+		return
+	}
+	if other {
+		s.mcpForProject(w, root)
+		return
+	}
 	ctl := s.ctl()
 	out := []mcpEntry{}
 	configured := ctl.ConfiguredMCPServers()
@@ -279,12 +311,26 @@ func (s *Server) mcpEnabled(w http.ResponseWriter, r *http.Request) {
 		Enabled bool   `json:"enabled"`
 		Scope   string `json:"scope"`
 		Clear   bool   `json:"clear"`
+		Root    string `json:"root"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
 		http.Error(w, "missing name", http.StatusBadRequest)
 		return
 	}
 	name, scope := strings.TrimSpace(body.Name), activationScope(body.Scope)
+	root, other, ok := s.resolveRoot(body.Root)
+	if !ok {
+		http.Error(w, "unknown project", http.StatusBadRequest)
+		return
+	}
+	if other {
+		if err := s.switchForProject(root, string(config.CapabilityMCP), name, scope, body.Enabled, body.Clear); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]any{"name": name, "enabled": body.Enabled, "scope": string(scope), "root": root})
+		return
+	}
 	if body.Clear {
 		if err := s.ctl().ClearMCPServerOverride(name, scope); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

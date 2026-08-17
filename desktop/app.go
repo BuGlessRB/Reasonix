@@ -8836,8 +8836,6 @@ func (a *App) InstallMCPServer(in MCPServerInput) (plugin.MCPInstallResult, erro
 	return plugin.ReadyInstallResult(entry.Name, toolCount), nil
 }
 
-// The legacy shell has no surface for a per-project exception, so it writes the
-// global layer only: a row it can neither show nor clear would be worse.
 func persistMCPInstallActivation(entry config.PluginEntry, root string) error {
 	store := config.DefaultActivationStore()
 	if !entry.ShouldAutoStart() {

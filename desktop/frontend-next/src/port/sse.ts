@@ -3,6 +3,12 @@ import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion,
 import { HttpError, type Attachment, type WorkspaceChanges } from "./port";
 import type { WireEvent } from "./wire";
 
+// The running project is the default, so its requests stay the bare path they
+// have always been and only a cross-project read carries the folder.
+function rootQuery(root?: string): string {
+  return root ? "?root=" + encodeURIComponent(root) : "";
+}
+
 // Must match wailsEventName / replayPath in desktop/next.
 const WAILS_EVENT = "rx:event";
 // Install progress rides its own channel: it is the shell reporting on itself,
@@ -116,16 +122,16 @@ export class SsePort implements AgentPort {
     return this.get<Completion>("/complete?" + q);
   }
 
-  skills() {
-    return this.get<SkillCatalog>("/skills");
+  skills(root?: string) {
+    return this.get<SkillCatalog>("/skills" + rootQuery(root));
   }
 
-  setSkillEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project") {
-    return this.post("/skills/enabled", { name, enabled, scope });
+  setSkillEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project", root?: string) {
+    return this.post("/skills/enabled", { name, enabled, scope, root });
   }
 
-  clearSkillOverride(name: string) {
-    return this.post("/skills/enabled", { name, clear: true, scope: "project" });
+  clearSkillOverride(name: string, root?: string) {
+    return this.post("/skills/enabled", { name, clear: true, scope: "project", root });
   }
 
   plugins() {
@@ -268,12 +274,17 @@ export class SsePort implements AgentPort {
     return this.post0<SandboxSettings>("/sandbox", s);
   }
 
-  mcp() {
-    return this.get<McpCatalog>("/mcp");
+  mcp(root?: string) {
+    return this.get<McpCatalog>("/mcp" + rootQuery(root));
   }
 
   capabilityScope() {
     return this.get<CapabilityScope>("/capability-scope");
+  }
+
+  async capabilityScopes() {
+    const r = await this.get<{ scopes?: CapabilityScope[] }>("/capability-scope?all");
+    return r.scopes ?? [];
   }
 
   // 502 carries the diagnosis in the body — the reason the retry failed is the
@@ -290,12 +301,12 @@ export class SsePort implements AgentPort {
     return { state: body.state ?? (res.ok ? "ready" : "failed"), tools: body.tools, error: body.error };
   }
 
-  setMcpEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project") {
-    return this.post("/mcp/enabled", { name, enabled, scope });
+  setMcpEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project", root?: string) {
+    return this.post("/mcp/enabled", { name, enabled, scope, root });
   }
 
-  clearMcpOverride(name: string) {
-    return this.post("/mcp/enabled", { name, clear: true, scope: "project" });
+  clearMcpOverride(name: string, root?: string) {
+    return this.post("/mcp/enabled", { name, clear: true, scope: "project", root });
   }
 
   // A parse failure is the normal case while typing, and its message is the

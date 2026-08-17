@@ -133,6 +133,21 @@ export class MockPort extends MockProvider implements AgentPort {
 
   // A repository with several worktrees is the case the scope bar exists for,
   // so the fixture is one rather than a lone folder.
+  // Three projects, two of them sharing a name: the case the picker's labels
+  // and its override filter exist for.
+  async capabilityScopes(): Promise<CapabilityScope[]> {
+    const here = await this.capabilityScope();
+    return [
+      here,
+      { root: "F:\work\api\frontend", name: "frontend", label: "api/frontend",
+        key: "repo:1a2b3c4d5e6f7a8b", repo: true, trees: 1, branch: "main", overrides: 1 },
+      { root: "F:\side\shop\frontend", name: "frontend", label: "shop/frontend",
+        key: "repo:9f8e7d6c5b4a3928", repo: true, trees: 1, branch: "main", overrides: 0 },
+      { root: "D:\svn\tuyou_richman", name: "tuyou_richman",
+        key: "path:44556677aabbccdd", repo: false, trees: 1, overrides: 2 },
+    ];
+  }
+
   async capabilityScope(): Promise<CapabilityScope> {
     return {
       root: "F:\Reasonix",
@@ -142,6 +157,7 @@ export class MockPort extends MockProvider implements AgentPort {
       trees: 3,
       branch: "studio",
       overrides: this.servers.filter((s) => s.localOverride).length + this.localSkills.size,
+      current: true,
     };
   }
 

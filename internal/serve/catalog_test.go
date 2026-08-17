@@ -323,3 +323,77 @@ func TestSlashOmitsHiddenCommands(t *testing.T) {
 		}
 	}
 }
+
+// The picker's whole point: manage a folder the session is not sitting in.
+// The runtime must not move, and the other project's switch must land under
+// its own identity rather than the running one's.
+func TestCapabilitySwitchReachesAnotherProject(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	here, there := t.TempDir(), t.TempDir()
+	rememberWorkspace(there)
+	t.Cleanup(func() { forgetWorkspace(there) })
+
+	ctrl := control.New(control.Options{
+		Skills:        []skill.Skill{{Name: "deploy", Scope: skill.ScopeProject}},
+		WorkspaceRoot: here,
+	})
+	defer ctrl.Close()
+	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/skills/enabled", "application/json",
+		strings.NewReader(`{"name":"deploy","enabled":false,"scope":"project","root":`+
+			mustJSON(t, there)+`}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST /skills/enabled = %d (%s), want 200", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	if ctrl.WorkspaceRoot() != here {
+		t.Fatalf("the runtime moved to %q; managing another project must not repoint it", ctrl.WorkspaceRoot())
+	}
+	if !ctrl.SkillEnabled("deploy") {
+		t.Fatal("switching another project's skill off also switched it off here")
+	}
+	store := config.DefaultActivationStore()
+	if on, err := store.SkillEnabled("deploy", there, true); err != nil || on {
+		t.Fatalf("the other project: enabled=%v err=%v, want the switch to have landed there", on, err)
+	}
+}
+
+// A folder the shell never opened is not addressable: the request would
+// otherwise be a way to read or edit any directory's config.
+func TestCapabilitySwitchRefusesAnUnknownProject(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	ctrl := control.New(control.Options{
+		Skills:        []skill.Skill{{Name: "deploy"}},
+		WorkspaceRoot: t.TempDir(),
+	})
+	defer ctrl.Close()
+	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/skills/enabled", "application/json",
+		strings.NewReader(`{"name":"deploy","enabled":false,"root":`+mustJSON(t, t.TempDir())+`}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("POST with an unopened project = %d, want 400", resp.StatusCode)
+	}
+}
+
+func mustJSON(t *testing.T, value string) string {
+	t.Helper()
+	body, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
+}

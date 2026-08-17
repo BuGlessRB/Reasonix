@@ -20,6 +20,7 @@ import { Boundary } from "./Boundary";
 import { Versions } from "./Versions";
 import { Memory } from "./Memory";
 import { Appearance, SCHEMES } from "./Appearance";
+import { Exception, ScopeBar } from "./CapabilityScope";
 
 const PRESETS: [Preset, string, string][] = [
   ["balanced", "均衡", "做到模型认为做完为止。日常用这档"],
@@ -96,8 +97,13 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
   const [protocol, setProtocol] = useState<Record<string, string>>({});
   const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [scope, setScope] = useState<CapabilityScope | null>(null);
+  const [scopes, setScopes] = useState<CapabilityScope[]>([]);
+  // Which project the extension tab is answering for. Empty is the running one,
+  // so the common case stays exactly what it was.
+  const [scopeAt, setScopeAt] = useState("");
   const [skills, setSkills] = useState<SkillEntry[]>([]);
   const [implicit, setImplicit] = useState(true);
+  const [live, setLive] = useState(true);
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
   const [adding, setAdding] = useState(false);
@@ -111,11 +117,14 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
   const root = useRef<HTMLDivElement>(null);
 
   const reloadExt = useCallback(() => {
+    const where = scopeAt || undefined;
+    port.capabilityScopes().then(setScopes).catch(() => setScopes([]));
     port
-      .mcp()
+      .mcp(where)
       .then((c) => {
         setMcp(c.servers);
         setScope(c.scope);
+        setLive(c.live !== false);
       })
       .catch(() => setMcp([]));
     port.plugins().then(setPackages).catch(() => setPackages([]));
@@ -127,13 +136,13 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
       .then((p) => setRuleCount(p.deny.length + p.ask.length + p.allow.length))
       .catch(() => setRuleCount(0));
     port
-      .skills()
+      .skills(where)
       .then((c) => {
         setSkills(c.skills);
         setImplicit(c.implicit);
       })
       .catch(() => setSkills([]));
-  }, [port]);
+  }, [port, scopeAt]);
 
   // An extension switch moves the metrics rail too, so the change has to leave
   // this pane as well as refresh it.
@@ -426,7 +435,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
 
           {at === "ext" && (
             <>
-              {scope && <ScopeBar scope={scope} />}
+              {scope && <ScopeBar scope={scope} scopes={scopes} onPick={setScopeAt} />}
               <Group
                 title={t("插件包")}
                 now={packages.length ? t("{n} 个", { n: packages.length }) : undefined}
@@ -467,14 +476,14 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
                 now={looseMcp.length ? t("{n} 个服务", { n: looseMcp.length }) : undefined}
                 hint={t("你自己接进来的 MCP 服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。关掉一个会立刻从这一轮的工具表里消失，并且重启后依然是关的。")}
                 action={
-                  adding ? undefined : (
+                  adding || !live ? undefined : (
                     <button className="act" onClick={() => setAdding(true)}>
                       {t("接入服务")}
                     </button>
                   )
                 }
               >
-                {adding && (
+                {adding && live && (
                   <AddServer
                     port={port}
                     canProject={!!status?.workspaceRoot}
@@ -483,7 +492,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
                   />
                 )}
                 {looseMcp.map((m) => (
-                  <Server key={m.name} m={m} port={port} onDone={afterExtChange} />
+                  <Server key={m.name} m={m} port={port} onDone={afterExtChange} root={scopeAt} live={live} />
                 ))}
                 {looseMcp.length === 0 && !adding && <div className="empty">{t("没有自己接入的外部服务。")}</div>}
               </Group>
@@ -497,7 +506,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
                 )}
               >
                 {looseSkills.map((sk) => (
-                  <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} />
+                  <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} root={scopeAt} />
                 ))}
                 {looseSkills.length === 0 && <div className="empty">{t("这个工作目录下没有技能。")}</div>}
               </Group>
@@ -564,7 +573,11 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
 
 // The tool list is the long half and the least urgent, so it folds behind its
 // own count — the same idiom a long file read uses in the transcript.
-function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () => void }) {
+function Server({
+  m, port, onDone, root, live,
+}: {
+  m: McpEntry; port: AgentPort; onDone: () => void; root: string; live: boolean;
+}) {
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -589,21 +602,23 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
 
   const actions = (
     <span className="acts">
-      {m.enabled && m.state !== "ready" && (
+      {live && m.enabled && m.state !== "ready" && (
         <button className="act" disabled={!!busy} onClick={() => void run("retry", () => port.reconnectMcp(m.name))}>
           {t(busy === "retry" ? "连接中…" : auth ? "重新授权" : "重连")}
         </button>
       )}
       {/* Removal is the one action here that cannot be undone by clicking again,
           so it asks — and the question names the file it is about to edit. */}
-      <button className="act ghost" aria-label={t("移除 {name}", { name: m.name })} disabled={!!busy} onClick={() => setConfirming(true)}>
-        {t("移除")}
-      </button>
+      {live && (
+        <button className="act ghost" aria-label={t("移除 {name}", { name: m.name })} disabled={!!busy} onClick={() => setConfirming(true)}>
+          {t("移除")}
+        </button>
+      )}
       <Switch
         on={m.enabled}
         busy={busy === "toggle"}
         label={t(m.enabled ? "关闭 {name}" : "启用 {name}", { name: m.name })}
-        onClick={() => void run("toggle", () => port.setMcpEnabled(m.name, !m.enabled, "project"))}
+        onClick={() => void run("toggle", () => port.setMcpEnabled(m.name, !m.enabled, "project", root || undefined))}
       />
     </span>
   );
@@ -640,7 +655,7 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
       <span className="nm">{m.name}</span>
       {m.toolNames?.length ? <span className="fold">{t("{n} 个工具", { n: m.tools })}</span> : null}
       <span className="meta">{meta}</span>
-      {m.localOverride && <Exception onClear={() => void run("clear", () => port.clearMcpOverride(m.name))} busy={busy === "clear"} />}
+      {m.localOverride && <Exception onClear={() => void run("clear", () => port.clearMcpOverride(m.name, root || undefined))} busy={busy === "clear"} />}
       {actions}
     </>
   );
@@ -686,9 +701,9 @@ function triggerNote(sk: SkillEntry, implicit: boolean): string {
 }
 
 function SkillRow({
-  sk, implicit, port, onDone,
+  sk, implicit, port, onDone, root,
 }: {
-  sk: SkillEntry; implicit: boolean; port: AgentPort; onDone: () => void;
+  sk: SkillEntry; implicit: boolean; port: AgentPort; onDone: () => void; root: string;
 }) {
   const [busy, setBusy] = useState(false);
   const note = triggerNote(sk, implicit);
@@ -702,7 +717,7 @@ function SkillRow({
       onDone();
     }
   };
-  const toggle = () => act(() => port.setSkillEnabled(sk.name, !sk.enabled, "project"));
+  const toggle = () => act(() => port.setSkillEnabled(sk.name, !sk.enabled, "project", root || undefined));
   return (
     <div className="skrow" data-off={sk.enabled ? undefined : ""} data-local={local ? "" : undefined}>
       <span className="nm">{sk.slashName ? "/" + sk.slashName : sk.name}</span>
@@ -715,41 +730,8 @@ function SkillRow({
       <span className="sc" title={sk.path}>
         {sk.plugin || t(SCOPE[sk.scope ?? ""] ?? "") || sk.scope}
       </span>
-      {local && <Exception onClear={() => act(() => port.clearSkillOverride(sk.name))} busy={busy} />}
+      {local && <Exception onClear={() => act(() => port.clearSkillOverride(sk.name, root || undefined))} busy={busy} />}
       <Switch on={sk.enabled} busy={busy} label={t(sk.enabled ? "关闭 {name}" : "启用 {name}", { name: sk.name })} onClick={toggle} />
-    </div>
-  );
-}
-
-// A switch flipped here answers for this project, not for every project. That
-// is the useful default and also the invisible one, so the row that carries an
-// exception says so and offers the way back — without it the same list would
-// read identically in a project that simply inherited everything.
-function Exception({ onClear, busy }: { onClear: () => void; busy: boolean }) {
-  return (
-    <button className="exc" disabled={busy} title={t("恢复成跟随全局")} onClick={onClear}>
-      {t("仅本项目")}
-    </button>
-  );
-}
-
-// Which folder this page is answering for. The shell holds several projects at
-// once and the pane follows whichever one is in front, so the heading has to
-// name it — otherwise switching tabs silently changes the list under an
-// unchanged title. Worktrees of one repository share one answer, and saying how
-// many is what stops "my settings vanished on a new branch".
-function ScopeBar({ scope }: { scope: CapabilityScope }) {
-  const shared = scope.repo && (scope.trees ?? 1) > 1;
-  return (
-    <div className="scopebar">
-      <span className="nm">{scope.name}</span>
-      <span className="pt" title={scope.root}>{scope.root}</span>
-      {scope.branch && <span className="br">{scope.branch}</span>}
-      {shared && <span className="sh">{t("{n} 个工作树共用这份设置", { n: scope.trees ?? 1 })}</span>}
-      {!scope.repo && <span className="sh">{t("不是 git 仓库，按目录单独记")}</span>}
-      <span className="ov">
-        {scope.overrides ? t("{n} 项只在这里生效", { n: scope.overrides }) : t("没有本项目的例外")}
-      </span>
     </div>
   );
 }
