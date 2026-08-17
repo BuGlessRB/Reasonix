@@ -54,6 +54,8 @@ export const EN: Record<string, string> = {
   "工作区": "Workspaces",
   "收起工作区栏": "Collapse the workspace rail",
   "收起度量栏": "Collapse the metrics rail",
+  "调整工作区栏宽度": "Resize the workspace rail",
+  "调整度量栏宽度": "Resize the metrics rail",
   "从列表移除": "Remove from the list",
   "改为输入路径": "Type a path instead",
   "输入文件夹路径": "Type the folder's path",

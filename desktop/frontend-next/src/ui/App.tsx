@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
 import type { AccountState, AgentPort, Appearance as Look, ProviderSetup, ThemePack } from "../port/port";
@@ -8,6 +8,7 @@ import { apply as applyThemePack } from "./theme";
 import { apply as applyLook } from "./look";
 import { adopt as adoptLang } from "../i18n";
 import { Pane, type PaneReport } from "./Pane";
+import { Gutter, RAIL, SIDE, widthOf } from "./Gutter";
 import { Workspaces } from "./Workspaces";
 import { PaneTabs } from "./PaneTabs";
 import { Settings } from "./Settings";
@@ -27,6 +28,8 @@ export function App({ hub }: { hub: HubPort }) {
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const [rail, setRail] = useState(true);
   const [side, setSide] = useState(true);
+  const [railW, setRailW] = useState(() => widthOf(RAIL));
+  const [sideW, setSideW] = useState(() => widthOf(SIDE));
   const [report, setReport] = useState<PaneReport>(NO_REPORT);
   const [error, setError] = useState("");
   // false = closed, true = open at its last section, a string = open there.
@@ -203,11 +206,15 @@ export function App({ hub }: { hub: HubPort }) {
     [hub, reloadPanes, runtimes, panePorts],
   );
 
+  // Awaitable because deleting a conversation has to close its pane first and
+  // then wait: the kernel refuses to erase a transcript its runtime still holds,
+  // so firing the close off and deleting in the same breath races the teardown.
   const closePane = useCallback(
-    (id: string) => {
-      void hub.close(id).then(reloadPanes).catch(fail);
+    async (id: string) => {
+      await hub.close(id);
+      await reloadPanes();
     },
-    [hub, reloadPanes, fail],
+    [hub, reloadPanes],
   );
 
   // Stable, or the sidebar's memo is defeated by its own handlers and a window
@@ -221,6 +228,15 @@ export function App({ hub }: { hub: HubPort }) {
     });
   }, []);
   const foldRail = useCallback(() => setRail(false), []);
+
+  const onRailW = useCallback((w: number) => {
+    setRailW(w);
+    localStorage.setItem(RAIL.key, String(Math.round(w)));
+  }, []);
+  const onSideW = useCallback((w: number) => {
+    setSideW(w);
+    localStorage.setItem(SIDE.key, String(Math.round(w)));
+  }, []);
 
   // A webview has nowhere to put a new tab, so target="_blank" opens nothing at
   // all, and letting the link navigate in place would replace the session with
@@ -361,6 +377,7 @@ export function App({ hub }: { hub: HubPort }) {
       data-apv={report.status?.toolApprovalMode ?? "ask"}
       data-prefs={settings ? "" : undefined}
       data-tabs={runtimes.length > 1 ? "" : undefined}
+      style={{ "--rail-open": `${railW}px`, "--side-open": `${sideW}px` } as CSSProperties}
     >
       <Chrome
         port={activePort}
@@ -394,12 +411,16 @@ export function App({ hub }: { hub: HubPort }) {
         </div>
 
         <div className="main">
-          {!rail && (
+          {rail ? (
+            <Gutter edge="l" span={RAIL} width={railW} label={t("调整工作区栏宽度")} onWidth={onRailW} />
+          ) : (
             <button className="handle handle-l" onClick={() => setRail(true)} title="展开工作区栏　⌘\" aria-label="展开工作区栏">
               ›
             </button>
           )}
-          {!side && (
+          {side ? (
+            <Gutter edge="r" span={SIDE} width={sideW} label={t("调整度量栏宽度")} onWidth={onSideW} />
+          ) : (
             <button className="handle handle-r" onClick={() => setSide(true)} title="展开度量栏　⌘⇧\" aria-label="展开度量栏">
               ‹
             </button>

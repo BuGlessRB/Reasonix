@@ -407,21 +407,27 @@
   .pend[data-sent] { color: var(--ok); background: transparent; padding-inline: 0 }
   .call[data-pending] > .c { opacity: .7 }
 
-  .cols {
-    flex: 1; display: grid; grid-template-columns: 214px minmax(0, 1fr) 296px; min-height: 0;
-    transition: grid-template-columns .34s cubic-bezier(.32, .72, 0, 1);
+  /* 栏宽在 .app 上换值，补间也就归它 —— .cols 只是把结果读进列宽。拖动期间
+     必须断掉：一条 .34s 的补间会让栏追着指针跑，手感是黏的。 */
+  .app {
+    --rail-w: var(--rail-open); --side-w: var(--side-open);
+    transition: --rail-w var(--t-panel) cubic-bezier(.32, .72, 0, 1), --side-w var(--t-panel) cubic-bezier(.32, .72, 0, 1);
   }
+  .app[data-rail="off"] { --rail-w: 0px }
+  .app[data-side="off"] { --side-w: 0px }
+  .app[data-drag] { transition: none }
+  .app[data-drag="pointer"] { user-select: none; cursor: col-resize }
+  .app[data-drag="pointer"] * { cursor: col-resize }
+
+  .cols { flex: 1; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--side-w); min-height: 0 }
   .rail, .side { overflow: hidden }
-  [data-rail="off"] .cols { grid-template-columns: 0 minmax(0, 1fr) 296px }
-  [data-side="off"] .cols { grid-template-columns: 214px minmax(0, 1fr) 0 }
-  [data-rail="off"][data-side="off"] .cols { grid-template-columns: 0 minmax(0, 1fr) 0 }
   [data-rail="off"] .rail { border-right: 0 }
   [data-side="off"] .side { border-left: 0 }
 
   /* 收起时栏内文字跟着重排，是「难受」的真正来源。锁死原宽让内容被裁掉而不是被挤扁，
      再让它比容器收得更快 —— 看到的就是被抽走，不是在挣扎。 */
-  .rail > * { width: 214px; flex: none }
-  .side > * { width: 296px }
+  .rail > * { width: var(--rail-open); flex: none }
+  .side > * { width: var(--side-open) }
   .rail > .scroll, .side > .scroll { flex: 1 }   /* 列表撑开，位置声明才会被推到栏底 */
   .rail, .side { transition: opacity .2s var(--ease-out) .05s }
   [data-rail="off"] .rail, [data-side="off"] .side { opacity: 0; transition: opacity .12s var(--ease-in) }
@@ -437,6 +443,24 @@
   .collapse:hover { background: var(--overlay); color: var(--text) }
   .collapse:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
+  /* 分栏线本来就在那儿（栏自己的 border），这里只加一条够宽的热区，手不用瞄准。
+     停住才显形，且晚 .14s —— 鼠标路过一次不该点亮一条线。用中性色：accent 说
+     的是「需要你介入」，一条能拖的边界不是那个意思。 */
+  .gutter {
+    position: absolute; top: 0; bottom: 0; width: 11px; z-index: 5;
+    cursor: col-resize; touch-action: none;
+  }
+  .gutter-l { left: -5px }
+  .gutter-r { right: -5px }
+  .gutter::after {
+    content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px;
+    background: var(--faint); opacity: 0;
+    transition: opacity .16s var(--ease-out) .14s;
+  }
+  .gutter:hover::after { opacity: .55; transition-delay: 0s }
+  .gutter[data-on]::after { opacity: .9; transition-delay: 0s }
+  .gutter:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; border-radius: var(--r-xs) }
+
   /* 收起后入口留在中间栏的那一侧：手往哪边够，面板就从哪边回来。
      它得是个看得见的按钮 —— 一条融进背景的细线等于没有入口。 */
   .handle {
@@ -447,7 +471,7 @@
     border: 1px solid var(--border); font: 400 12px/1 var(--mono);
     box-shadow: 0 2px 9px -3px rgba(0, 0, 0, .4);
     transition: background .15s, color .15s, border-color .15s;
-    animation: handlein .24s var(--ease-out) both;
+    animation: handlein .24s var(--ease-out) .18s both;   /* 等栏收完再露面，别抢在它前头 */
   }
   .handle-l { left: 0; border-left: 0; border-radius: 0 var(--r-sm) var(--r-sm) 0 }
   .handle-r { right: 0; border-right: 0; border-radius: var(--r-sm) 0 0 var(--r-sm) }
@@ -1413,7 +1437,10 @@
     * { transition-duration: .01ms !important }
   }
 
-  @media (max-width: 1200px) { .cols { grid-template-columns: minmax(0, 1fr) 282px } .rail { display: none } }
+  @media (max-width: 1200px) {
+    .cols { grid-template-columns: minmax(0, 1fr) var(--side-w) }
+    .rail, .gutter-l { display: none }
+  }
   /* 右栏是这套东西的卖点，窄屏别整块丢掉 —— 落到流下方，仍可滚 */
   @media (max-width: 840px) {
     .cols { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto }
@@ -1421,6 +1448,9 @@
     .chrome .goal, .chrome .crumb .sep:last-of-type { display: none }
     .side { border-left: 0; border-top: 1px solid var(--border); max-height: 40vh }
     .side .scroll { padding: 12px 14px 16px; gap: 16px }
+    /* 栏横过来占满一行，拖出来的那个宽度在这儿没有意义，也没地方去拖 */
+    .side > * { width: 100% }
+    .gutter { display: none }
   }
 
   /* ── 首次引导：一屏，一件事 ──────────────────────────────────────── */

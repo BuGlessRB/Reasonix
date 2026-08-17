@@ -19,6 +19,7 @@ node perf/rail.mjs       # 左栏会话树：2×8 / 10×50 / 20×200 / 40×500 �
 node perf/profile.mjs    # CPU 采样，按自耗时列热点
 node perf/panes.mjs      # 并行窗格的代价：两个会话同时流式
 node perf/verify.mjs     # 行为验证：跟随、块的装卸、切页往返、大会话树
+node perf/panels.mjs     # 两侧栏：收起补间、拖动改宽、上下限、窄屏退场
 node perf/look.mjs       # 外观验证：字号、界面缩放、自定义字体、壁纸上传与调节
 node perf/lang.mjs       # 双语验证：英文启动、界面译文到位、切回中文
 node perf/locale.mjs     # 跟随系统语言：中文各写法都归中文，其余归英文
@@ -61,6 +62,11 @@ node perf/reason.mjs     # 内核拒绝的双语落地：同一个码，中英�
 - **块的装卸必须收敛。** `verify.mjs` 会检查远处的块已卸载。历史教训：给每个
   块各建一个 IntersectionObserver 时，几百个实例的回调并不可靠，块会滞留在
   视口外 40 万像素处不卸载——必须是一个观察器观察多个目标。
+- **栏收起时看得见地收。** `panels.mjs` 量的是那 45 帧里落在两头之间的宽度有
+  几个，因为这件事退化时不报错。补间挂在 `--rail-w`/`--side-w` 上——两个用
+  `@property` 注册成长度的变量；`grid-template-columns` 自己插不了值，那一列
+  里有 `minmax(0, 1fr)`，而它只在纯长度之间可动画，写上 transition 也只会安静
+  地退回跳变。拖动期间必须断开补间（`.app[data-drag]`），否则栏是追着指针走的。
 - **没选过语言就跟机器走。** 判据在 `i18n/index.ts` 的 `isChinese`：以 zh /
   yue / cmn 开头，或含 hans / hant，都是中文；其余一律英文——英文是兜底，不是
   对机器语言的判断。只看首选语言：一台法语机器把中文排第二，答案仍是英文。

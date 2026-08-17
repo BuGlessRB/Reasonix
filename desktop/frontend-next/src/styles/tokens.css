@@ -1,4 +1,12 @@
+/* 两栏的当前宽度。注册成长度，是因为「收起」要看得见 —— 自定义属性默认只能
+   跳变，而 grid-template-columns 自己也插不了值（那一列里有 minmax()，它只在
+   纯长度之间可动画）。注册过的变量能补间，栏宽于是跟着它走。
+   --rail-open / --side-open 是展开时的宽度，由拖动写在 .app 的行内样式上。 */
+@property --rail-w { syntax: "<length>"; inherits: true; initial-value: 214px }
+@property --side-w { syntax: "<length>"; inherits: true; initial-value: 296px }
+
 :root {
+    --rail-open: 214px; --side-open: 296px;
     --page: #F3F5F8; --surface: #FAFBFD; --raised: #FFFFFF; --overlay: #EDF0F4;
     --border: #DBE0E7; --hair: #E8ECF1;
     /* 浮在内容之上的层用这一组，不用 --raised：深色下 raised 和它压着的东西
