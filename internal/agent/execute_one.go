@@ -482,7 +482,7 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 	// permission approval and workspace write-lock acquisition, so a waiting
 	// recovery card never holds a write lease. Consult on mutations,
 	// verification, and plan transitions. Ask/Yolo still bypass inside the gate.
-	plan.verification = plan.evidenceName == "bash" && a.runsVerification(ctx, bashCommandFromArgs(plan.evidenceArgs))
+	plan.verification = plan.evidenceName == "bash" && evidence.CommandRunsVerification(bashCommandFromArgs(plan.evidenceArgs))
 	plan.planTransition, plan.planBefore, plan.planAfter, plan.planDiff = a.recoveryPlanTransition(plan.evidenceName, plan.evidenceArgs)
 	if ctrl := a.recoveryEpisodeControl(); ctrl != nil {
 		plan.recoveryGen = ctrl.Generation()
