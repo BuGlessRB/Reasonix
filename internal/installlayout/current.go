@@ -347,22 +347,29 @@ func ResolveInstallRoot(fromPath string) (string, error) {
 	}
 }
 
-// ActiveUpdateHelperPath resolves the active update helper binary.
-func ActiveUpdateHelperPath(installRoot string) (string, error) {
+// ActiveMemberPath resolves one file inside the active version directory. The
+// caller names it: current.json records where the active version lives, not
+// which files a product line publishes into it.
+func ActiveMemberPath(installRoot, name string) (string, error) {
 	ptr, err := ReadCurrent(installRoot)
 	if err != nil {
 		return "", err
 	}
 	dir := filepath.Join(installRoot, filepath.FromSlash(ptr.ActiveDir))
-	path := filepath.Join(dir, UpdateHelperBinaryName())
+	path := filepath.Join(dir, name)
 	info, err := os.Lstat(path)
 	if err != nil {
-		return "", fmt.Errorf("installlayout: active update helper: %w", err)
+		return "", fmt.Errorf("installlayout: active %s: %w", name, err)
 	}
 	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("installlayout: active update helper is not a regular file")
+		return "", fmt.Errorf("installlayout: active %s is not a regular file", name)
 	}
 	return path, nil
+}
+
+// ActiveUpdateHelperPath resolves the active update helper binary.
+func ActiveUpdateHelperPath(installRoot string) (string, error) {
+	return ActiveMemberPath(installRoot, UpdateHelperBinaryName())
 }
 
 // LauncherBinaryName is the permanent thin launcher at InstallRoot.

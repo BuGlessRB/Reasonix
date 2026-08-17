@@ -73,11 +73,17 @@ func run(dir, version, tag string) error {
 			fmt.Printf("download: %s (%d bytes)\n", name, size)
 		}
 		// A .deb installs through dpkg, which carries a binary and the SPA tree
-		// alike — so it is the one artifact Studio can self-update from today.
-		// Platforms stays empty until the shared apply path can publish a tree.
+		// alike, so Linux updates through its package.
 		if key, ok := nativePackageKey(name); ok {
 			m.NativePackages[key] = asset
 			fmt.Printf("native package: %s -> %s\n", name, key)
+		}
+		// Windows updates by running the next installer, so that is what the
+		// platform lookup has to resolve. The portable archive is never listed:
+		// resolving it would hand the updater an artifact it cannot install.
+		if key, ok := windowsInstallerKey(name); ok {
+			m.Platforms[key] = asset
+			fmt.Printf("platform: %s -> %s\n", name, key)
 		}
 	}
 	if seen == 0 {
@@ -97,6 +103,20 @@ func installable(name string) bool {
 	return strings.HasSuffix(name, ".dmg") ||
 		strings.HasSuffix(name, "-installer.exe") ||
 		strings.HasSuffix(name, ".deb")
+}
+
+// windowsInstallerKey maps an installer artifact to the platform it upgrades.
+// Artifacts are named ReasonixStudio-windows-<arch>-installer.exe.
+func windowsInstallerKey(name string) (string, bool) {
+	base, ok := strings.CutSuffix(name, "-installer.exe")
+	if !ok {
+		return "", false
+	}
+	arch, ok := strings.CutPrefix(base, artifactPrefix+"windows-")
+	if !ok || arch == "" {
+		return "", false
+	}
+	return update.PlatformKey("windows", arch), true
 }
 
 // nativePackageKey maps a .deb artifact name to the platform whose dpkg install

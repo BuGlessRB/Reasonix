@@ -74,11 +74,22 @@ func (a *App) GoToVersion(target string) error {
 	if err := a.PinVersion(target); err != nil {
 		return a.failUpdate(target, err)
 	}
-	inst := update.VersionedInstaller{Layout: layout, Staging: dir, Current: version, Line: studioLine()}
 	cached, err := u.DownloadManifest(ctx, m, a.updateReport(target))
 	if err != nil {
 		return a.failUpdate(target, err)
 	}
+	// Windows publishes an installer, not an archive: it replaces the install
+	// itself, so there is nothing here to stage or swap. Going back is running
+	// an older installer, which is why nothing asks the direction.
+	if goruntime.GOOS == "windows" {
+		if err := studioLine().RunInstaller(cached.Path); err != nil {
+			return a.failUpdate(target, err)
+		}
+		a.emit(UpdateProgress{Version: target, Phase: "relaunching"})
+		a.handOver(layout)
+		return nil
+	}
+	inst := update.VersionedInstaller{Layout: layout, Staging: dir, Current: version, Line: studioLine()}
 	if err := inst.Install(ctx, cached); err != nil {
 		return a.failUpdate(target, err)
 	}

@@ -89,10 +89,32 @@ Function EnsureWebView2
 !endif
 FunctionEnd
 
+; An in-app update starts this installer and then exits, so for a moment the old
+; Studio still holds its executable open and Windows refuses to replace it.
+; Waiting for the file to become writable is what turns that race into a pause;
+; giving up after the timeout lets the File command report the real error rather
+; than looping forever behind an app the user never closed.
+Function WaitForRunningStudio
+  StrCpy $R1 0
+  wait:
+    IfFileExists "$INSTDIR\${BINNAME}" 0 done
+    ClearErrors
+    FileOpen $R2 "$INSTDIR\${BINNAME}" a
+    IfErrors busy
+    FileClose $R2
+    Goto done
+  busy:
+    IntOp $R1 $R1 + 1
+    IntCmp $R1 40 done done 0
+    DetailPrint "Waiting for ${APPNAME} to close…"
+    Sleep 500
+    Goto wait
+  done:
+FunctionEnd
+
 Section "install"
   SetOutPath "$INSTDIR"
-  ; A running Studio holds its own executable open, so an upgrade over a live
-  ; install fails on the copy rather than half-writing it.
+  Call WaitForRunningStudio
   File "${PAYLOAD}\${BINNAME}"
   File "${PAYLOAD}\appicon.ico"
   ; frontendAssets() resolves the SPA next to the executable, so the tree has to

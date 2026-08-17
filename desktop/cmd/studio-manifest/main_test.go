@@ -67,14 +67,21 @@ func TestManifestRecordsEveryArtifactWithItsSignature(t *testing.T) {
 	}
 }
 
-// A manifest that lists a platform asset is a claim that this build can install
-// it, and the shared apply path cannot install Studio's archives yet. The claim
-// has to arrive with the apply path that honours it, not before.
-func TestManifestClaimsNoInstallableAsset(t *testing.T) {
+// An archive is not an install: the updater would have to place it, and nothing
+// on the Studio side does. Only what installs itself may resolve as a platform
+// asset, or the version panel offers a move it cannot make.
+func TestManifestResolvesOnlyWhatCanInstallItself(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GITHUB_REPOSITORY", "esengine/DeepSeek-Reasonix")
-	if err := os.WriteFile(filepath.Join(dir, "ReasonixStudio-linux-amd64.tar.gz"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{
+		"ReasonixStudio-linux-amd64.tar.gz",
+		"ReasonixStudio-windows-amd64.zip",
+		"ReasonixStudio-windows-amd64-installer.exe",
+		"ReasonixStudio-linux-amd64.deb",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := run(dir, "v0.1.0", "studio-v0.1.0"); err != nil {
 		t.Fatalf("run: %v", err)
@@ -87,11 +94,24 @@ func TestManifestClaimsNoInstallableAsset(t *testing.T) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.Platforms) != 0 {
-		t.Errorf("platforms = %v, want none until the apply path accepts Studio's layout", m.Platforms)
+	// Windows updates by running the next installer.
+	if got, ok := m.Platforms[update.PlatformKey("windows", "amd64")]; !ok ||
+		!strings.HasSuffix(got.URL, "-installer.exe") {
+		t.Errorf("windows platform asset = %+v, want the installer", got)
+	}
+	if len(m.Platforms) != 1 {
+		t.Errorf("platforms = %v, want the installer alone", m.Platforms)
+	}
+	// Linux updates through dpkg: a package channel, not a platform asset,
+	// because writing a .deb's files behind apt leaves the two disagreeing.
+	if _, ok := m.NativePackages[update.PlatformKey("linux", "amd64")]; !ok {
+		t.Errorf("native packages = %v, want the .deb", m.NativePackages)
+	}
+	if _, ok := m.Platforms[update.PlatformKey("linux", "amd64")]; ok {
+		t.Error("the .deb must not also resolve as a platform asset")
 	}
 	if m.DownloadPage == "" {
-		t.Error("with no installable asset the download page is the only way forward, and it is empty")
+		t.Error("a platform with no installable asset has only the download page, and it is empty")
 	}
 }
 
