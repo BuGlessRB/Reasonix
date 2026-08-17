@@ -170,7 +170,9 @@ type Capabilities interface {
 	AllSkills() []skill.Skill
 	DisabledSkills() []skill.Skill
 	SkillEnabled(name string) bool
-	SetSkillEnabled(name string, enabled bool) error
+	SkillOverrideScope(name string) (config.ActivationScope, bool)
+	SetSkillEnabled(name string, scope config.ActivationScope, enabled bool) error
+	ClearSkillOverride(name string, scope config.ActivationScope) error
 	ImplicitSkillInvocationEnabled() bool
 	CreateSkill(name string, scope skill.Scope, content string) (string, error)
 	UpdateSkill(name string, scope skill.Scope, content string) error
@@ -199,7 +201,9 @@ type Capabilities interface {
 	InstallMCPServer(e config.PluginEntry, scope MCPScope) (plugin.MCPInstallResult, error)
 	ReconnectMCPServer(name string) (int, error)
 	MCPServerEnabled(name string) (bool, error)
-	SetMCPServerEnabled(name string, enabled bool) error
+	SetMCPServerEnabled(name string, scope config.ActivationScope, enabled bool) error
+	ClearMCPServerOverride(name string, scope config.ActivationScope) error
+	CapabilityScope() CapabilityScope
 	DisconnectMCPServer(name string) bool
 	RemoveMCPServer(name string) (disconnected bool, err error)
 	ConfiguredMCPNames() []string

@@ -4940,54 +4940,76 @@ func (c *Controller) AllSkills() []skill.Skill {
 	return c.skills.listAll()
 }
 
-// DisabledSkills returns all discoverable skills that are disabled in config.
+// DisabledSkills returns all discoverable skills that are off in this project.
 func (c *Controller) DisabledSkills() []skill.Skill {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil
-	}
+	resolve := c.skillActivation()
 	var out []skill.Skill
 	for _, sk := range c.AllSkills() {
-		if cfg.IsSkillDisabled(sk.Name) {
+		if !resolve(sk.Name) {
 			out = append(out, sk)
 		}
 	}
 	return out
 }
 
-// SkillEnabled reports whether a discoverable skill is enabled.
+// SkillEnabled reports whether a skill is on in this project.
 func (c *Controller) SkillEnabled(name string) bool {
-	cfg, err := config.Load()
-	if err != nil {
-		return true
-	}
-	return !cfg.IsSkillDisabled(name)
+	return c.skillActivation()(name)
 }
 
-// SetSkillEnabled persists a skill enable/disable preference. The caller should
-// rebuild the controller for the prompt/tool registry to reflect it immediately.
-func (c *Controller) SetSkillEnabled(name string, enabled bool) error {
-	found := false
-	for _, sk := range c.AllSkills() {
-		if config.SkillNameKey(sk.Name) == config.SkillNameKey(name) {
-			name = sk.Name
-			found = true
-			break
-		}
+// skillActivation resolves several names against one config and one store read.
+// skills.disabled_skills stays readable as the declared default, so a
+// hand-written config keeps working even though the switch no longer writes it.
+func (c *Controller) skillActivation() func(string) bool {
+	declared := func(string) bool { return true }
+	if cfg, err := config.Load(); err == nil {
+		declared = func(name string) bool { return !cfg.IsSkillDisabled(name) }
 	}
-	if !found {
-		return fmt.Errorf("unknown skill: %s", name)
+	resolver, err := config.DefaultActivationStore().SkillResolverFor(c.workspaceRoot)
+	if err != nil {
+		return declared
 	}
-	// Serialize the load-modify-save against other in-process user-config
-	// editors so concurrent writers (bot mapping persistence, desktop
-	// settings) don't drop this toggle or lose their own fields.
-	unlock := config.LockUserConfigEdits()
-	defer unlock()
-	cfg := config.LoadForEdit(config.UserConfigPath())
-	if err := cfg.SetSkillEnabled(name, enabled); err != nil {
+	return func(name string) bool { return resolver.Enabled(name, declared(name)) }
+}
+
+// SkillOverrideScope reports where the decision governing name lives, so the
+// settings surface can show whether this project set it for itself.
+func (c *Controller) SkillOverrideScope(name string) (config.ActivationScope, bool) {
+	scope, found, err := config.DefaultActivationStore().SkillOverrideScope(name, c.workspaceRoot)
+	if err != nil {
+		return config.ActivationGlobal, false
+	}
+	return scope, found
+}
+
+// SetSkillEnabled persists a skill's switch at scope. The caller should rebuild
+// the controller for the prompt/tool registry to reflect it immediately.
+// Flipping a skill the project inherits writes a project row: the user answered
+// for this folder, and two projects may hold different skills of one name.
+func (c *Controller) SetSkillEnabled(name string, scope config.ActivationScope, enabled bool) error {
+	canonical, err := c.canonicalSkillName(name)
+	if err != nil {
 		return err
 	}
-	return cfg.SaveTo(config.UserConfigPath())
+	return config.DefaultActivationStore().SetSkillEnabled(canonical, c.workspaceRoot, scope, enabled)
+}
+
+// ClearSkillOverride drops this project's exception for name.
+func (c *Controller) ClearSkillOverride(name string, scope config.ActivationScope) error {
+	canonical, err := c.canonicalSkillName(name)
+	if err != nil {
+		return err
+	}
+	return config.DefaultActivationStore().ClearSkill(canonical, c.workspaceRoot, scope)
+}
+
+func (c *Controller) canonicalSkillName(name string) (string, error) {
+	for _, sk := range c.AllSkills() {
+		if config.SkillNameKey(sk.Name) == config.SkillNameKey(name) {
+			return sk.Name, nil
+		}
+	}
+	return "", fmt.Errorf("unknown skill: %s", name)
 }
 
 // CreateSkill writes a new skill file at the given scope and returns its
@@ -5148,7 +5170,7 @@ func (c *Controller) syncCapabilityRuntimeFromConfig(name string, enabledOverrid
 		enabled := entry.ShouldAutoStart()
 		if enabledOverride != nil {
 			enabled = *enabledOverride
-		} else if resolved, resolveErr := config.DefaultMCPActivationStore().IsEnabled(entry, c.workspaceRoot); resolveErr == nil {
+		} else if resolved, resolveErr := config.DefaultActivationStore().IsEnabled(entry, c.workspaceRoot); resolveErr == nil {
 			enabled = resolved
 		}
 		c.capabilityRuntime.UpsertServer(entry, c.mcpSpec(entry), enabled)
@@ -5291,7 +5313,7 @@ func (c *Controller) RemoveMCPServer(name string) (disconnected bool, err error)
 	if !removed {
 		return false, fmt.Errorf("no removable MCP server named %q", name)
 	}
-	_ = config.DefaultMCPActivationStore().ClearServer(entry, c.workspaceRoot)
+	_ = config.DefaultActivationStore().ClearServerEverywhere(entry, c.workspaceRoot)
 	removedState := reconcileRemovedMCPState(c.workspaceRoot, name)
 	if c.capabilityRuntime != nil {
 		// Revoke before touching the shared Host so an overlapping resolver cannot
@@ -5307,7 +5329,7 @@ func (c *Controller) RemoveMCPServer(name string) (disconnected bool, err error)
 	// removed name stays absent.
 	if removedState.fallbackFound {
 		enabled := removedState.fallback.ShouldAutoStart()
-		if resolved, resolveErr := config.DefaultMCPActivationStore().IsEnabled(removedState.fallback, c.workspaceRoot); resolveErr == nil {
+		if resolved, resolveErr := config.DefaultActivationStore().IsEnabled(removedState.fallback, c.workspaceRoot); resolveErr == nil {
 			enabled = resolved
 		}
 		if enabled {

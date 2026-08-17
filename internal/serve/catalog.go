@@ -77,6 +77,10 @@ type skillEntry struct {
 	// Manual means the model never discovers it; only an explicit call runs it.
 	Manual  bool `json:"manual,omitempty"`
 	Enabled bool `json:"enabled"`
+	// SwitchScope is where the decision governing Enabled lives — "project" when
+	// this project set it for itself, "global" when it applies everywhere, and
+	// empty when nothing overrides what the skill itself declares.
+	SwitchScope string `json:"switchScope,omitempty"`
 }
 
 // skills lists every discoverable skill, disabled ones included, so the
@@ -84,11 +88,25 @@ type skillEntry struct {
 // model-initiated discovery is on at all — a global off makes every "auto"
 // skill manual in practice, and hiding that would misreport all of them.
 func (s *Server) skills(w http.ResponseWriter, r *http.Request) {
+	root, other, ok := s.requestedRoot(r)
+	if !ok {
+		http.Error(w, "unknown project", http.StatusBadRequest)
+		return
+	}
+	if other {
+		s.skillsForProject(w, root)
+		return
+	}
 	ctl := s.ctl()
 	raw := ctl.AllSkills()
 	entries := make([]skillEntry, 0, len(raw))
 	for _, sk := range raw {
+		switchScope := ""
+		if scope, found := ctl.SkillOverrideScope(sk.Name); found {
+			switchScope = string(scope)
+		}
 		entries = append(entries, skillEntry{
+			SwitchScope: switchScope,
 			Name:        sk.Name,
 			SlashName:   sk.SlashName(),
 			Description: sk.Description,
@@ -107,26 +125,67 @@ func (s *Server) skills(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"implicit": ctl.ImplicitSkillInvocationEnabled(),
 		"skills":   entries,
+		"scope":    scopeView(ctl),
 	})
 }
 
-// skillEnabled persists one skill's enable switch. The runtime keeps serving the
-// old prompt index until the session is rebuilt, so the response says so rather
-// than letting the frontend imply the change already reached the model.
+// skillEnabled persists one skill's switch at the requested scope, or clears it
+// so the skill inherits again. The runtime keeps serving the old prompt index
+// until the session is rebuilt, so the response says so rather than letting the
+// frontend imply the change already reached the model.
 func (s *Server) skillEnabled(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name    string `json:"name"`
 		Enabled bool   `json:"enabled"`
+		Scope   string `json:"scope"`
+		Clear   bool   `json:"clear"`
+		Root    string `json:"root"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
 		http.Error(w, "missing name", http.StatusBadRequest)
 		return
 	}
-	if err := s.ctl().SetSkillEnabled(strings.TrimSpace(body.Name), body.Enabled); err != nil {
+	name, scope := strings.TrimSpace(body.Name), activationScope(body.Scope)
+	root, other, ok := s.resolveRoot(body.Root)
+	if !ok {
+		http.Error(w, "unknown project", http.StatusBadRequest)
+		return
+	}
+	if other {
+		if err := s.switchForProject(root, string(config.CapabilitySkill), name, scope, body.Enabled, body.Clear); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]any{"enabled": body.Enabled, "scope": string(scope), "root": root})
+		return
+	}
+	if body.Clear {
+		if err := s.ctl().ClearSkillOverride(name, scope); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]any{
+			"enabled": s.ctl().SkillEnabled(name), "cleared": true, "restartRequired": true,
+		})
+		return
+	}
+	if err := s.ctl().SetSkillEnabled(name, scope, body.Enabled); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, map[string]any{"enabled": body.Enabled, "restartRequired": true})
+	writeJSON(w, map[string]any{
+		"enabled": body.Enabled, "scope": string(scope), "restartRequired": true,
+	})
+}
+
+// activationScope reads the scope a mutation asks for. Project is the default:
+// a switch flipped while looking at one project answers for that project, and
+// applying it everywhere is the deliberate choice.
+func activationScope(raw string) config.ActivationScope {
+	if strings.EqualFold(strings.TrimSpace(raw), string(config.ActivationGlobal)) {
+		return config.ActivationGlobal
+	}
+	return config.ActivationProject
 }
 
 // mcpEntry is one external tool provider. State is what the user can act on —
@@ -142,20 +201,34 @@ type mcpEntry struct {
 	Resources int      `json:"resources,omitempty"`
 	ToolNames []string `json:"toolNames,omitempty"`
 	Error     string   `json:"error,omitempty"`
+	// LocalOverride marks a switch this project set for itself instead of
+	// inheriting the global one, which the surface shows as a local exception.
+	LocalOverride bool `json:"localOverride,omitempty"`
 }
 
 // mcp lists the session's external tool providers. The activation switch is
 // resolved for every configured name, because "off" and "never needed yet" look
 // identical from the live host and mean opposite things to the user.
 func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
+	root, other, ok := s.requestedRoot(r)
+	if !ok {
+		http.Error(w, "unknown project", http.StatusBadRequest)
+		return
+	}
+	if other {
+		s.mcpForProject(w, root)
+		return
+	}
 	ctl := s.ctl()
 	out := []mcpEntry{}
 	configured := ctl.ConfiguredMCPServers()
 	enabled := make(map[string]bool, len(configured))
 	source := make(map[string]string, len(configured))
+	local := make(map[string]bool, len(configured))
 	for _, st := range configured {
 		enabled[st.Entry.Name] = st.Enabled
 		source[st.Entry.Name] = string(st.Entry.Source)
+		local[st.Entry.Name] = st.LocalOverride
 	}
 	// A runtime-only server has no configured declaration; it is live, so it is
 	// on by definition.
@@ -173,7 +246,7 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 				names = append(names, t.Name)
 			}
 			out = append(out, mcpEntry{
-				Name: srv.Name, State: "ready", Enabled: on(srv.Name),
+				Name: srv.Name, State: "ready", Enabled: on(srv.Name), LocalOverride: local[srv.Name],
 				Transport: srv.Transport, Source: srv.ConfigSource,
 				Tools: srv.Tools, Prompts: srv.Prompts, Resources: srv.Resources, ToolNames: names,
 			})
@@ -181,7 +254,7 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 		for _, name := range host.ConnectingServers() {
 			if !seen[name] {
 				seen[name] = true
-				out = append(out, mcpEntry{Name: name, State: "connecting", Enabled: on(name), Source: source[name]})
+				out = append(out, mcpEntry{Name: name, State: "connecting", Enabled: on(name), Source: source[name], LocalOverride: local[name]})
 			}
 		}
 		for _, f := range host.Failures() {
@@ -190,7 +263,7 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 			}
 			seen[f.Name] = true
 			out = append(out, mcpEntry{
-				Name: f.Name, State: "failed", Enabled: on(f.Name),
+				Name: f.Name, State: "failed", Enabled: on(f.Name), LocalOverride: local[f.Name],
 				Transport: f.Transport, Source: source[f.Name], Error: f.Error,
 			})
 		}
@@ -207,11 +280,11 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 			state = "disabled"
 		}
 		out = append(out, mcpEntry{
-			Name: st.Entry.Name, State: state, Enabled: st.Enabled,
+			Name: st.Entry.Name, State: state, Enabled: st.Enabled, LocalOverride: st.LocalOverride,
 			Transport: st.Entry.Type, Source: string(st.Entry.Source),
 		})
 	}
-	writeJSON(w, out)
+	writeJSON(w, map[string]any{"servers": out, "scope": scopeView(ctl)})
 }
 
 // mcpReconnect retries one server. It answers with the refreshed row rather than
@@ -230,22 +303,52 @@ func (s *Server) mcpReconnect(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"name": name, "state": "ready", "tools": tools})
 }
 
-// mcpEnabled flips the durable activation switch for one server.
+// mcpEnabled flips the durable activation switch for one server at the
+// requested scope, or clears this project's exception so it inherits again.
 func (s *Server) mcpEnabled(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name    string `json:"name"`
 		Enabled bool   `json:"enabled"`
+		Scope   string `json:"scope"`
+		Clear   bool   `json:"clear"`
+		Root    string `json:"root"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
 		http.Error(w, "missing name", http.StatusBadRequest)
 		return
 	}
-	name := strings.TrimSpace(body.Name)
-	if err := s.ctl().SetMCPServerEnabled(name, body.Enabled); err != nil {
+	name, scope := strings.TrimSpace(body.Name), activationScope(body.Scope)
+	root, other, ok := s.resolveRoot(body.Root)
+	if !ok {
+		http.Error(w, "unknown project", http.StatusBadRequest)
+		return
+	}
+	if other {
+		if err := s.switchForProject(root, string(config.CapabilityMCP), name, scope, body.Enabled, body.Clear); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]any{"name": name, "enabled": body.Enabled, "scope": string(scope), "root": root})
+		return
+	}
+	if body.Clear {
+		if err := s.ctl().ClearMCPServerOverride(name, scope); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		enabled, err := s.ctl().MCPServerEnabled(name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]any{"name": name, "enabled": enabled, "cleared": true})
+		return
+	}
+	if err := s.ctl().SetMCPServerEnabled(name, scope, body.Enabled); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, map[string]any{"name": name, "enabled": body.Enabled})
+	writeJSON(w, map[string]any{"name": name, "enabled": body.Enabled, "scope": string(scope)})
 }
 
 // draftServer is one server a paste resolved to, in the shape the confirmation
@@ -334,8 +437,11 @@ func (s *Server) mcpInstall(w http.ResponseWriter, r *http.Request) {
 		entry.Type = ""
 	}
 	scope := control.MCPScopeUser
-	if strings.EqualFold(strings.TrimSpace(body.Scope), string(control.MCPScopeProject)) {
+	switch strings.ToLower(strings.TrimSpace(body.Scope)) {
+	case string(control.MCPScopeProject):
 		scope = control.MCPScopeProject
+	case string(control.MCPScopeLocal):
+		scope = control.MCPScopeLocal
 	}
 	result, err := s.ctl().InstallMCPServer(entry, scope)
 	if err != nil {

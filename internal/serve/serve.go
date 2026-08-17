@@ -534,6 +534,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /skills/enabled", s.skillEnabled)
 	mux.HandleFunc("GET /slash", s.slash)
 	mux.HandleFunc("GET /complete", s.complete)
+	mux.HandleFunc("GET /capability-scope", s.capabilityScopeHandler)
 	mux.HandleFunc("GET /mcp", s.mcp)
 	mux.HandleFunc("POST /mcp/reconnect", s.mcpReconnect)
 	mux.HandleFunc("POST /mcp/enabled", s.mcpEnabled)

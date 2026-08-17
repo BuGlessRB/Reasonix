@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { t } from "../i18n";
-import type { AgentPort, McpDraftServer, McpInstallResult, McpRisk } from "../port/port";
+import type { AgentPort, McpDraftServer, McpInstallResult, McpInstallScope, McpRisk } from "../port/port";
 
 // Nobody types a transport into a form: they arrive holding whatever the server's
 // docs printed. So the input is one box that takes all three shapes, and the
@@ -27,7 +27,7 @@ interface Props {
 export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<{ servers: McpDraftServer[]; risks: McpRisk[] } | null>(null);
-  const [scope, setScope] = useState<"user" | "project">("user");
+  const [scope, setScope] = useState<McpInstallScope>("user");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<McpInstallResult[]>([]);
@@ -122,11 +122,20 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
                 ))}
             </div>
           ))}
-          {/* Where it is written decides who else gets it: a project entry ships
-              to everyone who clones the repository. */}
+          {/* Installing is a global act; how far it reaches is a separate
+              question. Only the third option edits a tracked file, so it is the
+              one that has to say so out loud — and it is never the default. */}
           <div className="scope" role="radiogroup" aria-label={t("装到哪")}>
             <button role="radio" aria-checked={scope === "user"} onClick={() => setScope("user")}>
               我的<i>{t("所有项目里都能用")}</i>
+            </button>
+            <button
+              role="radio"
+              aria-checked={scope === "local"}
+              disabled={!canProject}
+              onClick={() => setScope("local")}
+            >
+              只在这个项目<i>{t("不写进仓库，别人不会拿到")}</i>
             </button>
             <button
               role="radio"
@@ -134,9 +143,12 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
               disabled={!canProject}
               onClick={() => setScope("project")}
             >
-              这个项目<i>{t("写进仓库，clone 的人也会拿到")}</i>
+              写进仓库<i>{t("clone 的人也会拿到")}</i>
             </button>
           </div>
+          {scope === "project" && (
+            <div className="warn">{t("这会改动仓库里的配置文件，是一处等着提交的改动。")}</div>
+          )}
           <div className="acts">
             <button className="act" onClick={() => setDraft(null)}>
               {t("返回")}

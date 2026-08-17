@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -223,10 +224,14 @@ func mcpEnableCLI(args []string, enabled bool) int {
 		if !enabled {
 			action = "disable"
 		}
-		fmt.Fprintf(os.Stderr, "usage: reasonix mcp %s <name>\n", action)
+		fmt.Fprintf(os.Stderr, "usage: reasonix mcp %s <name> [--global]\n", action)
 		return 2
 	}
 	name := strings.TrimSpace(args[0])
+	scope, where := config.ActivationProject, "in this project"
+	if slices.Contains(args[1:], "--global") {
+		scope, where = config.ActivationGlobal, "for every project"
+	}
 	workspace := mcpCLIWorkspaceRoot()
 	cfg, err := config.LoadForRoot(workspace)
 	if err != nil {
@@ -246,15 +251,15 @@ func mcpEnableCLI(args []string, enabled bool) int {
 		fmt.Fprintf(os.Stderr, "no MCP server named %q in config\n", name)
 		return 1
 	}
-	store := config.DefaultMCPActivationStore()
-	if err := store.SetServerEnabled(entry, workspace, enabled); err != nil {
+	store := config.DefaultActivationStore()
+	if err := store.SetServerEnabled(entry, workspace, scope, enabled); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	if enabled {
-		fmt.Printf("enabled MCP server %q — tools restore from cache; process starts on first call\n", name)
+		fmt.Printf("enabled MCP server %q %s — tools restore from cache; process starts on first call\n", name, where)
 	} else {
-		fmt.Printf("disabled MCP server %q — tools removed from the catalog; authorization retained\n", name)
+		fmt.Printf("disabled MCP server %q %s — tools removed from the catalog; authorization retained\n", name, where)
 	}
 	return 0
 }
@@ -466,7 +471,7 @@ func mcpRemoveCLI(args []string) int {
 	}
 	// Uninstall clears activation overrides and Reasonix-owned OAuth state. A
 	// same-resource lower-priority declaration keeps owning the shared state.
-	_ = config.DefaultMCPActivationStore().ClearServer(removed, workspace)
+	_ = config.DefaultActivationStore().ClearServerEverywhere(removed, workspace)
 	if err := reconcileRemovedMCPOAuth(workspace, name); err != nil {
 		fmt.Fprintf(os.Stderr, "removed MCP server %q, but failed to reconcile OAuth state: %v\n", name, err)
 		return 1

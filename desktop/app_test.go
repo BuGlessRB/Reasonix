@@ -9247,7 +9247,7 @@ func TestUpdateMCPServerEditsProjectMCPJSONEntry(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("load codegraph entry: found=%v err=%v", ok, err)
 	}
-	if err := config.DefaultMCPActivationStore().SetServerEnabled(entry, dir, false); err != nil {
+	if err := config.DefaultActivationStore().SetServerEnabled(entry, dir, config.ActivationGlobal, false); err != nil {
 		t.Fatal(err)
 	}
 	app.activeTab().disabledMCP["codegraph"] = ServerView{}
@@ -9311,7 +9311,7 @@ command = "project-docs"
 	if err != nil || !ok || entry.Source != config.MCPSourceProjectConfig {
 		t.Fatalf("load project docs entry: entry=%+v found=%v err=%v", entry, ok, err)
 	}
-	if err := config.DefaultMCPActivationStore().SetServerEnabled(entry, dir, false); err != nil {
+	if err := config.DefaultActivationStore().SetServerEnabled(entry, dir, config.ActivationGlobal, false); err != nil {
 		t.Fatal(err)
 	}
 	app.activeTab().disabledMCP["docs"] = ServerView{}
@@ -9764,7 +9764,7 @@ tier = "lazy"
 	if err != nil || !ok {
 		t.Fatalf("load playwright entry: found=%v err=%v", ok, err)
 	}
-	if err := config.DefaultMCPActivationStore().SetServerEnabled(entry, dir, false); err != nil {
+	if err := config.DefaultActivationStore().SetServerEnabled(entry, dir, config.ActivationGlobal, false); err != nil {
 		t.Fatal(err)
 	}
 	app.activeTab().disabledMCP["playwright"] = ServerView{Name: "playwright", Status: "disabled", Enabled: false}

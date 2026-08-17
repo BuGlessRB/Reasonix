@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -451,12 +452,15 @@ func (c *Controller) managementNotice(trimmed string) bool {
 		}
 		if len(fields) >= 3 && (sub == "enable" || sub == "disable") {
 			enabled := sub == "enable"
-			if err := c.SetSkillEnabled(fields[2], enabled); err != nil {
+			scope, where := config.ActivationProject, "in this project"
+			if slices.Contains(fields[3:], "--global") {
+				scope, where = config.ActivationGlobal, "everywhere"
+			}
+			if err := c.SetSkillEnabled(fields[2], scope, enabled); err != nil {
 				c.notice("skill " + sub + ": " + err.Error())
-			} else if enabled {
-				c.notice("enabled skill " + fields[2] + " — restart or refresh the session for the prompt and tools to update")
 			} else {
-				c.notice("disabled skill " + fields[2] + " — restart or refresh the session for the prompt and tools to update")
+				c.notice(sub + "d skill " + fields[2] + " " + where +
+					" — restart or refresh the session for the prompt and tools to update")
 			}
 			return true
 		}

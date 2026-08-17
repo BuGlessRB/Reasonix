@@ -1,7 +1,13 @@
 import { download } from "./download";
-import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, PermissionLists, PermissionRules, SandboxSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
+import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, PermissionLists, PermissionRules, SandboxSettings, McpCatalog, McpDraft, McpDraftServer, McpInstallResult, McpInstallScope, CapabilityScope, ScopeLayer, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
 import { HttpError, type Attachment, type WorkspaceChanges } from "./port";
 import type { WireEvent } from "./wire";
+
+// The running project is the default, so its requests stay the bare path they
+// have always been and only a cross-project read carries the folder.
+function rootQuery(root?: string): string {
+  return root ? "?root=" + encodeURIComponent(root) : "";
+}
 
 // Must match wailsEventName / replayPath in desktop/next.
 const WAILS_EVENT = "rx:event";
@@ -116,12 +122,16 @@ export class SsePort implements AgentPort {
     return this.get<Completion>("/complete?" + q);
   }
 
-  skills() {
-    return this.get<SkillCatalog>("/skills");
+  skills(root?: string) {
+    return this.get<SkillCatalog>("/skills" + rootQuery(root));
   }
 
-  setSkillEnabled(name: string, enabled: boolean) {
-    return this.post("/skills/enabled", { name, enabled });
+  setSkillEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project", root?: string) {
+    return this.post("/skills/enabled", { name, enabled, scope, root });
+  }
+
+  clearSkillOverride(name: string, root?: string) {
+    return this.post("/skills/enabled", { name, clear: true, scope: "project", root });
   }
 
   plugins() {
@@ -264,8 +274,17 @@ export class SsePort implements AgentPort {
     return this.post0<SandboxSettings>("/sandbox", s);
   }
 
-  mcp() {
-    return this.get<McpEntry[]>("/mcp");
+  mcp(root?: string) {
+    return this.get<McpCatalog>("/mcp" + rootQuery(root));
+  }
+
+  capabilityScope() {
+    return this.get<CapabilityScope>("/capability-scope");
+  }
+
+  async capabilityScopes() {
+    const r = await this.get<{ scopes?: CapabilityScope[] }>("/capability-scope?all");
+    return r.scopes ?? [];
   }
 
   // 502 carries the diagnosis in the body — the reason the retry failed is the
@@ -282,8 +301,12 @@ export class SsePort implements AgentPort {
     return { state: body.state ?? (res.ok ? "ready" : "failed"), tools: body.tools, error: body.error };
   }
 
-  setMcpEnabled(name: string, enabled: boolean) {
-    return this.post("/mcp/enabled", { name, enabled });
+  setMcpEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project", root?: string) {
+    return this.post("/mcp/enabled", { name, enabled, scope, root });
+  }
+
+  clearMcpOverride(name: string, root?: string) {
+    return this.post("/mcp/enabled", { name, clear: true, scope: "project", root });
   }
 
   // A parse failure is the normal case while typing, and its message is the
@@ -300,7 +323,7 @@ export class SsePort implements AgentPort {
     return { servers: body.servers ?? [], risks: body.risks ?? [] };
   }
 
-  async installMcp(server: McpDraftServer, scope: "user" | "project"): Promise<McpInstallResult> {
+  async installMcp(server: McpDraftServer, scope: McpInstallScope): Promise<McpInstallResult> {
     const res = await fetch(this.base + "/mcp/install", {
       method: "POST",
       headers: { "content-type": "application/json" },

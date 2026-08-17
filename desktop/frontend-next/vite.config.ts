@@ -16,7 +16,7 @@ const ROUTES = [
   "/events", "/history", "/status", "/submit", "/cancel", "/approve", "/answer",
   "/plan", "/goal", "/resume", "/models", "/tool-approval-mode", "/preset",
   "/model", "/effort", "/new", "/sessions", "/delete-session", "/provider-setup",
-  "/inbox", "/trajectory", "/mcp", "/skills", "/complete", "/workspace",
+  "/inbox", "/trajectory", "/mcp", "/skills", "/complete", "/workspace", "/capability-scope",
   "/providers", "/roles", "/account", "/hooks", "/memory", "/network", "/shell", "/todos",
   "/changes", "/attachments", "/checkpoints", "/branches", "/compact", "/rewind",
   "/extensions", "/themes", "/plugins", "/surfaces",

@@ -7951,7 +7951,7 @@ func (a *App) mcpServersView() []ServerView {
 }
 
 func mcpEntryEnabled(p config.PluginEntry, workspace string) bool {
-	enabled, err := config.DefaultMCPActivationStore().IsEnabled(p, workspace)
+	enabled, err := config.DefaultActivationStore().IsEnabled(p, workspace)
 	if err != nil {
 		return p.ShouldAutoStart()
 	}
@@ -8835,12 +8835,13 @@ func (a *App) InstallMCPServer(in MCPServerInput) (plugin.MCPInstallResult, erro
 	a.bumpExtensionGeneration()
 	return plugin.ReadyInstallResult(entry.Name, toolCount), nil
 }
+
 func persistMCPInstallActivation(entry config.PluginEntry, root string) error {
-	store := config.DefaultMCPActivationStore()
+	store := config.DefaultActivationStore()
 	if !entry.ShouldAutoStart() {
-		return store.ClearServer(entry, root)
+		return store.ClearServer(entry, root, config.ActivationGlobal)
 	}
-	return store.SetServerEnabled(entry, root, true)
+	return store.SetServerEnabled(entry, root, config.ActivationGlobal, true)
 }
 
 // AddMCPServer is retained for old generated Wails clients. New clients use
@@ -8970,7 +8971,7 @@ func (a *App) RemoveMCPServer(name string) error {
 		return fmt.Errorf("no removable MCP server named %q", name)
 	}
 	if hasEntry {
-		_ = config.DefaultMCPActivationStore().ClearServer(entry, root)
+		_ = config.DefaultActivationStore().ClearServerEverywhere(entry, root)
 	}
 	authCleanupErr := reconcileRemovedMCPAuthentication(name, a.mcpWorkspaceRoots(root))
 	disconnectMCPServerControllers(name, ctrl, controllers)
@@ -9071,13 +9072,12 @@ func (a *App) SetMCPServerEnabled(name string, enabled bool) error {
 	if !hasConfiguredEntry {
 		return fmt.Errorf("no configured MCP server named %q", name)
 	}
-	activationStore := config.DefaultMCPActivationStore()
-	scope, workspaceFP, source, owner := config.ActivationIdentity(configuredEntry, root)
-	previousEnabled, previousFound, err := activationStore.Lookup(scope, workspaceFP, source, owner, configuredEntry.Name)
+	activationStore := config.DefaultActivationStore()
+	previous, previousFound, err := activationStore.ServerOverride(configuredEntry, root, config.ActivationGlobal)
 	if err != nil {
 		return err
 	}
-	if err := activationStore.SetServerEnabled(configuredEntry, root, enabled); err != nil {
+	if err := activationStore.SetServerEnabled(configuredEntry, root, config.ActivationGlobal, enabled); err != nil {
 		return err
 	}
 	a.bumpExtensionGeneration()
@@ -9093,9 +9093,9 @@ func (a *App) SetMCPServerEnabled(name string, enabled bool) error {
 		}
 		var rollbackErr error
 		if previousFound {
-			rollbackErr = activationStore.SetServerEnabled(configuredEntry, root, previousEnabled)
+			rollbackErr = activationStore.SetOverride(previous)
 		} else {
-			rollbackErr = activationStore.ClearServer(configuredEntry, root)
+			rollbackErr = activationStore.ClearServer(configuredEntry, root, config.ActivationGlobal)
 		}
 		return errors.Join(err, rollbackErr)
 	}

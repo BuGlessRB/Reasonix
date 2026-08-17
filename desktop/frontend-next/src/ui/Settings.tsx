@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
-import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, McpEntry, ModelEntry, PluginPackage, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
+import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, CapabilityScope, McpEntry, ModelEntry, PluginPackage, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 import { WindowControls } from "./WindowControls";
 import { AddServer } from "./AddServer";
@@ -20,6 +20,7 @@ import { Boundary } from "./Boundary";
 import { Versions } from "./Versions";
 import { Memory } from "./Memory";
 import { Appearance, SCHEMES } from "./Appearance";
+import { Exception, ScopeBar } from "./CapabilityScope";
 
 const PRESETS: [Preset, string, string][] = [
   ["balanced", "均衡", "做到模型认为做完为止。日常用这档"],
@@ -95,8 +96,14 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
   const [roles, setRoles] = useState<RoleAssignments | null>(null);
   const [protocol, setProtocol] = useState<Record<string, string>>({});
   const [mcp, setMcp] = useState<McpEntry[]>([]);
+  const [scope, setScope] = useState<CapabilityScope | null>(null);
+  const [scopes, setScopes] = useState<CapabilityScope[]>([]);
+  // Which project the extension tab is answering for. Empty is the running one,
+  // so the common case stays exactly what it was.
+  const [scopeAt, setScopeAt] = useState("");
   const [skills, setSkills] = useState<SkillEntry[]>([]);
   const [implicit, setImplicit] = useState(true);
+  const [live, setLive] = useState(true);
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
   const [adding, setAdding] = useState(false);
@@ -110,7 +117,16 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
   const root = useRef<HTMLDivElement>(null);
 
   const reloadExt = useCallback(() => {
-    port.mcp().then(setMcp).catch(() => setMcp([]));
+    const where = scopeAt || undefined;
+    port.capabilityScopes().then(setScopes).catch(() => setScopes([]));
+    port
+      .mcp(where)
+      .then((c) => {
+        setMcp(c.servers);
+        setScope(c.scope);
+        setLive(c.live !== false);
+      })
+      .catch(() => setMcp([]));
     port.plugins().then(setPackages).catch(() => setPackages([]));
     port.hooks().then((c) => setHookCount(c.hooks.length)).catch(() => setHookCount(0));
     port.network().then((n) => setNetMode(t(NET_MODE[n.mode] ?? n.mode))).catch(() => setNetMode(""));
@@ -120,13 +136,13 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
       .then((p) => setRuleCount(p.deny.length + p.ask.length + p.allow.length))
       .catch(() => setRuleCount(0));
     port
-      .skills()
+      .skills(where)
       .then((c) => {
         setSkills(c.skills);
         setImplicit(c.implicit);
       })
       .catch(() => setSkills([]));
-  }, [port]);
+  }, [port, scopeAt]);
 
   // An extension switch moves the metrics rail too, so the change has to leave
   // this pane as well as refresh it.
@@ -419,6 +435,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
 
           {at === "ext" && (
             <>
+              {scope && <ScopeBar scope={scope} scopes={scopes} onPick={setScopeAt} />}
               <Group
                 title={t("插件包")}
                 now={packages.length ? t("{n} 个", { n: packages.length }) : undefined}
@@ -459,14 +476,14 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
                 now={looseMcp.length ? t("{n} 个服务", { n: looseMcp.length }) : undefined}
                 hint={t("你自己接进来的 MCP 服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。关掉一个会立刻从这一轮的工具表里消失，并且重启后依然是关的。")}
                 action={
-                  adding ? undefined : (
+                  adding || !live ? undefined : (
                     <button className="act" onClick={() => setAdding(true)}>
                       {t("接入服务")}
                     </button>
                   )
                 }
               >
-                {adding && (
+                {adding && live && (
                   <AddServer
                     port={port}
                     canProject={!!status?.workspaceRoot}
@@ -475,7 +492,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
                   />
                 )}
                 {looseMcp.map((m) => (
-                  <Server key={m.name} m={m} port={port} onDone={afterExtChange} />
+                  <Server key={m.name} m={m} port={port} onDone={afterExtChange} root={scopeAt} live={live} />
                 ))}
                 {looseMcp.length === 0 && !adding && <div className="empty">{t("没有自己接入的外部服务。")}</div>}
               </Group>
@@ -489,7 +506,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
                 )}
               >
                 {looseSkills.map((sk) => (
-                  <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} />
+                  <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} root={scopeAt} />
                 ))}
                 {looseSkills.length === 0 && <div className="empty">{t("这个工作目录下没有技能。")}</div>}
               </Group>
@@ -556,7 +573,11 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
 
 // The tool list is the long half and the least urgent, so it folds behind its
 // own count — the same idiom a long file read uses in the transcript.
-function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () => void }) {
+function Server({
+  m, port, onDone, root, live,
+}: {
+  m: McpEntry; port: AgentPort; onDone: () => void; root: string; live: boolean;
+}) {
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -581,21 +602,23 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
 
   const actions = (
     <span className="acts">
-      {m.enabled && m.state !== "ready" && (
+      {live && m.enabled && m.state !== "ready" && (
         <button className="act" disabled={!!busy} onClick={() => void run("retry", () => port.reconnectMcp(m.name))}>
           {t(busy === "retry" ? "连接中…" : auth ? "重新授权" : "重连")}
         </button>
       )}
       {/* Removal is the one action here that cannot be undone by clicking again,
           so it asks — and the question names the file it is about to edit. */}
-      <button className="act ghost" aria-label={t("移除 {name}", { name: m.name })} disabled={!!busy} onClick={() => setConfirming(true)}>
-        {t("移除")}
-      </button>
+      {live && (
+        <button className="act ghost" aria-label={t("移除 {name}", { name: m.name })} disabled={!!busy} onClick={() => setConfirming(true)}>
+          {t("移除")}
+        </button>
+      )}
       <Switch
         on={m.enabled}
         busy={busy === "toggle"}
         label={t(m.enabled ? "关闭 {name}" : "启用 {name}", { name: m.name })}
-        onClick={() => void run("toggle", () => port.setMcpEnabled(m.name, !m.enabled))}
+        onClick={() => void run("toggle", () => port.setMcpEnabled(m.name, !m.enabled, "project", root || undefined))}
       />
     </span>
   );
@@ -632,13 +655,14 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
       <span className="nm">{m.name}</span>
       {m.toolNames?.length ? <span className="fold">{t("{n} 个工具", { n: m.tools })}</span> : null}
       <span className="meta">{meta}</span>
+      {m.localOverride && <Exception onClear={() => void run("clear", () => port.clearMcpOverride(m.name, root || undefined))} busy={busy === "clear"} />}
       {actions}
     </>
   );
   const why = m.error || failed;
   if (!m.toolNames?.length) {
     return (
-      <div className="srv" data-st={m.state}>
+      <div className="srv" data-st={m.state} data-local={m.localOverride ? "" : undefined}>
         <div className="srv-hd">{head}</div>
         {why && <div className="why">{why}</div>}
         {confirm}
@@ -648,7 +672,7 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
   return (
     // Asking to remove has to open the row: the confirmation lives inside the
     // fold, and what the server contributes is worth seeing before dropping it.
-    <details className="srv" data-st={m.state} open={confirming || undefined}>
+    <details className="srv" data-st={m.state} data-local={m.localOverride ? "" : undefined} open={confirming || undefined}>
       <summary>{head}</summary>
       {confirm}
       <div className="peek">
@@ -677,23 +701,25 @@ function triggerNote(sk: SkillEntry, implicit: boolean): string {
 }
 
 function SkillRow({
-  sk, implicit, port, onDone,
+  sk, implicit, port, onDone, root,
 }: {
-  sk: SkillEntry; implicit: boolean; port: AgentPort; onDone: () => void;
+  sk: SkillEntry; implicit: boolean; port: AgentPort; onDone: () => void; root: string;
 }) {
   const [busy, setBusy] = useState(false);
   const note = triggerNote(sk, implicit);
-  const toggle = async () => {
+  const local = sk.switchScope === "project";
+  const act = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
-      await port.setSkillEnabled(sk.name, !sk.enabled);
+      await fn();
     } finally {
       setBusy(false);
       onDone();
     }
   };
+  const toggle = () => act(() => port.setSkillEnabled(sk.name, !sk.enabled, "project", root || undefined));
   return (
-    <div className="skrow" data-off={sk.enabled ? undefined : ""}>
+    <div className="skrow" data-off={sk.enabled ? undefined : ""} data-local={local ? "" : undefined}>
       <span className="nm">{sk.slashName ? "/" + sk.slashName : sk.name}</span>
       <span className="ds">{sk.description || t("没有写说明")}</span>
       <span className="how">{note && <i className={note === "调不到" ? "w none" : "w"}>{t(note)}</i>}</span>
@@ -704,6 +730,7 @@ function SkillRow({
       <span className="sc" title={sk.path}>
         {sk.plugin || t(SCOPE[sk.scope ?? ""] ?? "") || sk.scope}
       </span>
+      {local && <Exception onClear={() => act(() => port.clearSkillOverride(sk.name, root || undefined))} busy={busy} />}
       <Switch on={sk.enabled} busy={busy} label={t(sk.enabled ? "关闭 {name}" : "启用 {name}", { name: sk.name })} onClick={toggle} />
     </div>
   );

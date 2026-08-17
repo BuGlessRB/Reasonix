@@ -81,7 +81,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   win.current = s.outWindow;
 
   const reloadMcp = useCallback(() => {
-    void port.mcp().then(setMcp).catch(() => setMcp([]));
+    void port.mcp().then((c) => setMcp(c.servers)).catch(() => setMcp([]));
   }, [port]);
 
   useEffect(

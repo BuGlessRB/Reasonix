@@ -1693,6 +1693,93 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .addsrv > .why { margin-top: 9px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
 
+  /* 作用域条：这一页在替哪个目录回答。壳里同时挂着好几个项目，面板跟着最前
+     面那个走，所以标题必须把目录名写出来 —— 否则切标签页会在同一个标题下把
+     列表换掉。同一仓库的工作树共用一份答案，说清楚有几个，是为了不让人以为
+     「换了分支设置就没了」。 */
+  .scopebar {
+    position: relative;
+    display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+    padding: 9px 12px; margin-bottom: 14px;
+    border: 1px solid var(--hair); border-radius: var(--r-md); background: var(--surface);
+  }
+  .scopebar .nm { font: 500 12px var(--ui); color: var(--text) }
+  .scopebar .pt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 400 10.5px var(--mono); color: var(--faint) }
+  .scopebar .br {
+    padding: 1px 6px; border-radius: var(--r-pill);
+    font: 400 10px var(--mono); color: var(--muted); background: var(--overlay);
+  }
+  .scopebar .sh { font: 400 10.5px var(--ui); color: var(--muted) }
+  .scopebar .ov { margin-left: auto; font: 400 10.5px var(--ui); color: var(--faint) }
+  .scopebar .who {
+    display: inline-flex; align-items: baseline; gap: 5px; cursor: pointer;
+    padding: 1px 6px; margin-left: -6px; border-radius: var(--r-sm);
+    border: 1px solid transparent; background: transparent;
+    font: 500 12px var(--ui); color: var(--text);
+  }
+  .scopebar .who:hover { border-color: var(--border); background: var(--overlay) }
+  .scopebar .who:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .scopebar .who .cv { font-style: normal; font-size: 9px; color: var(--faint) }
+  /* 正在看别的项目：整条带上强调边，因为这一页此刻不代表当前会话 */
+  .scopebar[data-away] { border-color: color-mix(in srgb, var(--accent) 45%, var(--hair)) }
+  .scopebar .away { flex-basis: 100%; font: 400 10.5px var(--ui); color: var(--accent) }
+
+  .scope-pick {
+    position: absolute; z-index: 3; top: calc(100% + 4px); left: 8px; min-width: 320px; max-width: 460px;
+    max-height: 340px; overflow-y: auto; padding: 6px;
+    display: flex; flex-direction: column; gap: 1px;
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    background: var(--float); box-shadow: var(--shadow-float);
+  }
+  .scope-pick .q {
+    padding: 5px 8px; margin-bottom: 4px; border: 1px solid var(--border); border-radius: var(--r-sm);
+    background: var(--surface); color: var(--text); font: 400 11.5px var(--ui);
+  }
+  .scope-pick .fl {
+    align-self: flex-start; margin: 2px 0 6px; padding: 2px 8px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: var(--r-pill); background: transparent;
+    font: 400 10.5px var(--ui); color: var(--faint);
+  }
+  .scope-pick .fl[aria-pressed="true"] {
+    color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .scope-pick .pk {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; text-align: left;
+    padding: 6px 8px; border: 1px solid transparent; border-radius: var(--r-sm);
+    background: transparent; cursor: pointer;
+  }
+  .scope-pick .pk:hover { background: var(--float-hi) }
+  .scope-pick .pk[aria-selected="true"] { border-color: color-mix(in srgb, var(--accent) 45%, transparent) }
+  .scope-pick .pk .nm { display: flex; align-items: baseline; gap: 6px; font: 400 11.5px var(--ui); color: var(--text) }
+  .scope-pick .pk .cur { font: 400 9.5px var(--ui); font-style: normal; color: var(--faint) }
+  .scope-pick .pk .pt {
+    grid-column: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 400 10px var(--mono); color: var(--faint);
+  }
+  .scope-pick .pk .ct {
+    grid-row: 1 / span 2; align-self: center; font-style: normal; white-space: nowrap;
+    padding: 1px 7px; border-radius: var(--r-pill);
+    font: 400 10px var(--ui); color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .scope-pick .empty { padding: 10px 8px; font: 400 11.5px var(--ui); color: var(--faint) }
+
+  /* 例外标记：开关默认只答这一个项目，这既是想要的默认，也是看不见的默认。
+     所以带例外的行自己说出来，并且给出回去的路。 */
+  .exc {
+    flex: none; padding: 1px 7px; border-radius: var(--r-pill); cursor: pointer;
+    font: 400 10px var(--ui); color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .exc:hover:not(:disabled) { border-color: var(--accent) }
+  .exc:disabled { opacity: .5; cursor: default }
+  .exc:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .srv[data-local] .srv-hd, .srv[data-local] > summary,
+  .skrow[data-local] { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 55%, transparent) }
+
   /* 分工带：主模型在上，四个位置挂在它下面的那根轨上。这里不用卡片 ——
      卡片会把四个位置画成四件平等的东西，而它们的真实关系是「都跟着上面那个，
      除非你把某一条拽出来」。所以状态由轨上的节点担：空心=跟随，实心=已指派，
@@ -1953,6 +2040,12 @@
   .scope button i { font: 400 10.5px var(--ui); font-style: normal; color: var(--ghost) }
   .scope button[aria-checked="true"] { border-color: var(--accent); color: var(--text) }
   .scope button:disabled { opacity: .5; cursor: default }
+  /* 只有「写进仓库」会动被跟踪的文件，所以只有它带警告，并且不是默认项 */
+  .addsrv > .warn {
+    margin-top: 9px; padding: 7px 10px; border-radius: var(--r-sm);
+    font: 400 11.5px/1.5 var(--ui); color: var(--warn);
+    background: color-mix(in srgb, var(--warn) 10%, transparent);
+  }
   .scope button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
   .outcome { display: flex; align-items: baseline; gap: 9px; padding: 8px 0 }
