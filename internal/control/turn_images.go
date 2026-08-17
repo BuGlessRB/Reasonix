@@ -82,12 +82,12 @@ func (c *Controller) runEditedGoalLoopWithImageRefsRawDisplay(ctx context.Contex
 	return newTurnOrchestrator(c).runEditedGoalLoopWithImageRefsRawDisplay(ctx, input, raw, imageRefs, display, original)
 }
 
-// A turn can carry images the current model cannot read. The data is already
-// resolved and handed down as subagent candidates, so a delegated read is the
-// one way to look at it — but the model has to be told the images are there, or
-// it answers as though nothing was attached. This rides the turn tail, never the
-// cache-stable prefix, the same way memory and job notes do.
-const imageRoutingTag = "attached-images"
+// ImageRoutingTag wraps the note telling the model about images it cannot read;
+// without it the model answers as though nothing was attached. It rides the turn
+// tail, never the cache-stable prefix, the same way memory and job notes do.
+// Exported so a frontend's tests can assert the note arrived without copying its
+// wording, which is this package's to change.
+const ImageRoutingTag = "attached-images"
 
 // imageRoutingNote is the only place that tells the model what to do about an
 // attachment it cannot read. The reference block beside the image states facts
@@ -105,14 +105,14 @@ func (c *Controller) imageRoutingNote(n int) string {
 				"and no vision model is configured to read them for you.\n"+
 				"Say so plainly, or use an OCR/image tool if one is available for the local path. "+
 				"Never answer as if no image was attached, and never guess what it shows.\n</%s>\n\n",
-			imageRoutingTag, n, imageRoutingTag)
+			ImageRoutingTag, n, ImageRoutingTag)
 	}
 	return fmt.Sprintf(
 		"<%s>\nThe user attached %d image(s). This model cannot read images, so they are not in your context.\n"+
 			"Delegate with read_only_task: the attachments are handed to %s, which reads them, automatically.\n"+
 			"Do not OCR them yourself and do not write a script to do it — that path is configured and working. "+
 			"Never answer as if no image was attached, and never guess what it shows.\n</%s>\n\n",
-		imageRoutingTag, n, reader, imageRoutingTag)
+		ImageRoutingTag, n, reader, ImageRoutingTag)
 }
 
 // visionModelRef is the model configured to read what this one cannot.

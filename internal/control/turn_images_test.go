@@ -18,7 +18,7 @@ func TestUnreadableImagesRideTheTurnTail(t *testing.T) {
 	if !strings.HasSuffix(got, "look at this") {
 		t.Fatalf("the user's text must stay last in the turn: %q", got)
 	}
-	if !strings.Contains(got, "<"+imageRoutingTag+">") || !strings.Contains(got, "2 image(s)") {
+	if !strings.Contains(got, "<"+ImageRoutingTag+">") || !strings.Contains(got, "2 image(s)") {
 		t.Fatalf("note = %q, want an attached-images block naming the count", got)
 	}
 	// No vision model is configured here, so promising a delegate that also

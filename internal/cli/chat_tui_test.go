@@ -3367,8 +3367,11 @@ func TestTextOnlyModelSendsPastedImageRefsForToolUse(t *testing.T) {
 	if !strings.Contains(runner.inputs[0], "@"+path) {
 		t.Fatalf("runner input should retain the image ref context, got %q", runner.inputs[0])
 	}
-	if !strings.Contains(runner.inputs[0], "OCR/image/vision tool") {
-		t.Fatalf("runner input should mention tool-based image handling, got %q", runner.inputs[0])
+	// The turn has to carry the note that decides what happens to an image this
+	// model cannot read. What the note says is control's to word and control's
+	// tests to check; asserting the sentence here only breaks when it improves.
+	if !strings.Contains(runner.inputs[0], "<"+control.ImageRoutingTag+">") {
+		t.Fatalf("runner input should carry the image routing note, got %q", runner.inputs[0])
 	}
 	if got := strings.Join(m.transcript, "\n"); strings.Contains(got, "will not receive images directly") {
 		t.Fatalf("text-only model should not block image refs that tools can read, transcript=%q", got)
