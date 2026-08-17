@@ -8,9 +8,8 @@ LDFLAGS := -s -w \
 GOEXE := $(shell go env GOEXE)
 # One pin for the Makefile and the CI lint job; see .github/workflows/ci.yml.
 GOLANGCI_VERSION := $(shell cat .golangci-version)
-WAILS_VERSION := $(shell tr -d '[:space:]' < .wails-version)
 
-.PHONY: build vet fmt lint lint-go lint-install lint-cross lint-update check wails-install test desktop-test desktop-test-short desktop-test-times sdk-test sdk-test-race hooks cross clean studio
+.PHONY: build vet fmt lint lint-go lint-install lint-cross lint-update check test studio-test sdk-test sdk-test-race hooks cross clean studio
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/reasonix$(GOEXE) ./cmd/reasonix
@@ -35,8 +34,6 @@ fmt:
 # particular never surface in `go vet`.
 lint: lint-go
 	go run ./tools/repolint
-	bash scripts/check-wails-pin.sh
-	bash scripts/check-wails-pin.test.sh
 
 lint-go:
 	@command -v golangci-lint >/dev/null || { echo "golangci-lint not installed; run: make lint-install"; exit 1; }
@@ -60,10 +57,6 @@ check:
 lint-update:
 	go run ./tools/repolint -update
 
-wails-install:
-	bash scripts/check-wails-pin.sh
-	go install "github.com/wailsapp/wails/v2/cmd/wails@$(WAILS_VERSION)"
-
 # Linting one GOOS leaves every //go:build windows and darwin file unchecked.
 lint-cross:
 	@for t in "linux ." "darwin ." "windows ." "linux desktop" "windows desktop"; do \
@@ -75,14 +68,9 @@ lint-cross:
 test:
 	go test ./...
 
-desktop-test:
-	cd desktop && go test .
-
-desktop-test-short:
-	cd desktop && go test -short .
-
-desktop-test-times:
-	cd desktop && go test -count=1 -json . | python3 ../scripts/desktop-test-times.py
+# The shell is a nested module, so the root `test` target never reaches it.
+studio-test:
+	cd desktop && go test ./...
 
 sdk-test:
 	cd sdk/go && go test ./...

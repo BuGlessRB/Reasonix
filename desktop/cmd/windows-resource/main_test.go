@@ -37,7 +37,7 @@ func TestParseNumericVersion(t *testing.T) {
 }
 
 func TestStampExecutableSupportsWindowsReleaseArchitectures(t *testing.T) {
-	icon, err := filepath.Abs(filepath.Join("..", "..", "build", "windows", "icon.ico"))
+	icon, err := filepath.Abs(filepath.Join("..", "..", "next", "build", "windows", "icon.ico"))
 	if err != nil {
 		t.Fatal(err)
 	}

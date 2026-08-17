@@ -47,12 +47,11 @@ func SkipEntry(rel, name string, isDir bool) bool {
 }
 
 var skipDirPaths = map[string]bool{
-	"bin":                      true,
-	"desktop/frontend/wailsjs": true,
-	"npm/.stage":               true,
-	"site/.astro":              true,
-	"stage":                    true,
-	"tmp":                      true,
+	"bin":         true,
+	"npm/.stage":  true,
+	"site/.astro": true,
+	"stage":       true,
+	"tmp":         true,
 }
 
 const (
