@@ -192,10 +192,14 @@ func TestNoSolutionCorpusGradesTheInverseContract(t *testing.T) {
 	// The graders are POSIX shell and python3 fixtures, and the suite they
 	// belong to only ever runs on POSIX CI. Where either is missing this
 	// checks the host, not the corpus.
-	for _, bin := range []string{"bash", "python3"} {
-		if _, err := exec.LookPath(bin); err != nil {
-			t.Skipf("%s unavailable; the no-solution graders need a POSIX shell and python3", bin)
-		}
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash unavailable; the no-solution graders need a POSIX shell")
+	}
+	// Windows ships a Store stub named python3 that resolves on PATH and exits 0
+	// printing nothing, so findable is not usable: the graders would run against
+	// nothing and report the corpus as broken. Ask it for a version instead.
+	if out, err := exec.Command("python3", "--version").Output(); err != nil || !strings.Contains(string(out), "Python") {
+		t.Skipf("python3 reported no version (%q, err=%v); the graders need a real one", out, err)
 	}
 	tasks, err := loadTasks(corpusDir)
 	if err != nil {
