@@ -19,6 +19,7 @@ import (
 func writeWalletConfig(t *testing.T, walletURL string) {
 	t.Helper()
 	t.Setenv("REASONIX_HOME", t.TempDir())
+	closeSharedCatalogsOnCleanup(t)
 	cfgPath := config.UserConfigPath()
 	if cfgPath == "" {
 		t.Fatal("user config path is empty")

@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,9 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/history"
+	"reasonix/internal/stats"
 )
 
 // newProviderEditServer is a server with one configured provider, its config
@@ -40,7 +44,25 @@ api_key_env = "EXISTING_API_KEY"
 	ctrl := control.New(control.Options{
 		Sink: bc, Label: "model-a", ModelRef: "existing/model-a", SessionDir: t.TempDir(),
 	})
+	t.Cleanup(ctrl.Close)
+	closeSharedCatalogsOnCleanup(t)
 	return New(ctrl, bc, config.ServeConfig{})
+}
+
+// closeSharedCatalogsOnCleanup releases the usage and history catalogs before the
+// test's home is removed. They are process-wide, cached per home rather than
+// owned by a controller or hub, so no Close on either reaches them — right in
+// production, where one process wants one handle. Any test pointing
+// REASONIX_HOME at a TempDir needs this: Windows refuses to unlink a file still
+// held open, so the cleanup fails the test after it has already passed.
+func closeSharedCatalogsOnCleanup(t *testing.T) {
+	t.Helper()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = stats.CloseUsageCatalogs(ctx)
+		_ = history.CloseSharedCatalog(ctx)
+	})
 }
 
 func postProvider(t *testing.T, base, path, body string) *http.Response {

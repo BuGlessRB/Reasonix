@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -91,7 +92,10 @@ func TestUnpackTarballStripsRootAndOmitsSymlinks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hook missing: %v", err)
 	}
-	if hook.Mode().Perm() != 0o755 {
+	// Windows carries no executable bit — os.Chmod only toggles read-only there —
+	// so the mode a tarball declared cannot survive an unpack onto it. The claim
+	// is checkable only where the bit means something.
+	if runtime.GOOS != "windows" && hook.Mode().Perm() != 0o755 {
 		t.Fatalf("hook mode = %v, want 0755 so it stays runnable", hook.Mode().Perm())
 	}
 	if _, err := os.Lstat(filepath.Join(dir, "escape")); !os.IsNotExist(err) {
