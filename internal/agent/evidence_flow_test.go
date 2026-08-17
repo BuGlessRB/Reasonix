@@ -266,8 +266,14 @@ func TestDeliveryProfileBlocksMixedVerificationBeforeItBecomesMutation(t *testin
 	if err := a.Run(context.Background(), "check the snake game"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got := toolResult(a.sess.conversation, "bash"); !strings.Contains(got, "mixes a verification check") {
+	got := toolResult(a.sess.conversation, "bash")
+	if !strings.Contains(got, "blocked:") {
 		t.Fatalf("mixed command result = %q, want pre-execution split guidance", got)
+	}
+	// Naming the segment is the difference between one block and three: an
+	// unnamed refusal makes the run rewrite whichever part it guesses.
+	if !strings.Contains(got, "python3 -c") {
+		t.Fatalf("delivery block = %q, want the offending segment named", got)
 	}
 	if _, ok := a.task.ledger.LatestSuccessfulMutationIndex(); ok {
 		t.Fatal("blocked scratch-file verification must not become a successful mutation")

@@ -35,20 +35,44 @@ func UnprovenSegment(command string) (string, bool) {
 // triggered it. Without the name the model rewrites the command it guesses is
 // at fault, which is how one block becomes three.
 func ShellContractMixedMessage(args json.RawMessage) string {
-	segment := ""
-	if command, ok := bashCommandFromArgs(args); ok {
-		if found, unproven := bashUnprovenSegment(command); unproven {
-			segment = strings.TrimSpace(found)
-		}
-	}
+	segment := namedUnprovenSegment(args)
 	if segment == "" {
 		return ShellContractPreflightMessage("mixed")
-	}
-	if len(segment) > unprovenSegmentLimit {
-		segment = segment[:unprovenSegmentLimit] + "…"
 	}
 	return "blocked: this command runs a verification check after `" + segment +
 		"`, which the host cannot prove leaves the workspace alone, and the check's exit status " +
 		"would hide a failure in it. Chain them with '&&' so a failed step stops the command and " +
 		"stays the result, or run that segment and the verification as separate calls."
+}
+
+// ShellContractMixedDeliveryMessage names the segment the same way, but not the
+// '&&' way out: Delivery refuses the mixture whatever the exit status does, so
+// sending a run there earns it the same block again. One observed delivery run
+// was refused three times in a row by the unnamed version of this message.
+func ShellContractMixedDeliveryMessage(args json.RawMessage) string {
+	segment := namedUnprovenSegment(args)
+	if segment == "" {
+		return ShellContractPreflightMessage("mixed_delivery")
+	}
+	return "blocked: `" + segment + "` is a segment the host cannot prove leaves the workspace " +
+		"alone, and delivery keeps a verification call free of anything else — chaining it with " +
+		"'&&' is refused too, because the receipt has to be a check and nothing besides. Run that " +
+		"segment as its own call while a todo is in_progress, then run the verification by itself."
+}
+
+// namedUnprovenSegment returns the offending segment, bounded for display.
+func namedUnprovenSegment(args json.RawMessage) string {
+	command, ok := bashCommandFromArgs(args)
+	if !ok {
+		return ""
+	}
+	found, unproven := bashUnprovenSegment(command)
+	if !unproven {
+		return ""
+	}
+	segment := strings.TrimSpace(found)
+	if len(segment) > unprovenSegmentLimit {
+		segment = segment[:unprovenSegmentLimit] + "…"
+	}
+	return segment
 }

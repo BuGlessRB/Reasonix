@@ -1731,6 +1731,12 @@ func ShellContractPreflightMessage(reason string) string {
 			"check's exit status would hide a failure in that earlier segment. " +
 			"Chain them with '&&' so a failed step stops the command and stays the result, " +
 			"or run the modification and the verification as separate calls."
+	case "mixed_delivery":
+		return "blocked: this command mixes a verification check with a segment that may write state. " +
+			"Delivery refuses the mixture whatever the exit status does, so chaining with '&&' is refused too. " +
+			"Run the state-changing preparation as its own call while a todo is in_progress, then run a read-only " +
+			"verification command. For generated input, prefer a host-recognized read-only pipeline into the " +
+			"verifier (for example: tail ... | head ... | node --check -) instead of writing a temporary file."
 	case "mask_exit":
 		return "blocked: the trailing echo/printf of $? masks the verifier's exit status, so this command would look successful even when the check failed. " +
 			"Run the verifier by itself and let its exit status be the tool result."

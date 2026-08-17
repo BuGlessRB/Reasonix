@@ -425,7 +425,7 @@ func (a *Agent) applyDeliveryPolicyGates(ctx context.Context, turn *turnRuntime,
 		if mixedShape && !a.mixedShapeClearedByEscalation(ctx, plan) {
 			msg := evidence.ShellContractMixedMessage(plan.evidenceArgs)
 			if a.deliveryProfile {
-				msg = "blocked: this command mixes a verification check with a segment that may write state. Run the state-changing preparation separately while a todo is in_progress, then run a read-only verification command. For generated input, prefer a host-recognized read-only pipeline into the verifier (for example: tail ... | head ... | node --check -) instead of writing a temporary file."
+				msg = evidence.ShellContractMixedDeliveryMessage(plan.evidenceArgs)
 			}
 			return toolOutcome{
 				output:    msg,

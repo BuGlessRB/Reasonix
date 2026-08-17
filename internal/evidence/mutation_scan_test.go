@@ -32,6 +32,35 @@ func TestMixedBlockNamesTheSegment(t *testing.T) {
 	}
 }
 
+// Delivery gets the same name and a different way out. One observed delivery
+// run was refused three times running by the unnamed version: it rewrote the
+// command, moved to '&&', then to ';', and every refusal read identically.
+func TestDeliveryMixedBlockNamesTheSegmentAndRefusesTheAndAndRoute(t *testing.T) {
+	got := ShellContractMixedDeliveryMessage(bashArgs("gofmt -l internal/ && go vet ./... && go test ./..."))
+	if !strings.Contains(got, "gofmt -l internal/") {
+		t.Fatalf("message = %q, want the unproven segment named", got)
+	}
+	// Ordinary mode's exit is '&&'. Delivery refuses the mixture whatever the
+	// exit status does, so offering it there buys the same block again.
+	if !strings.Contains(got, "refused too") {
+		t.Fatalf("message = %q, want it to say the '&&' route is refused as well", got)
+	}
+	if strings.Contains(got, "Chain them with '&&'") {
+		t.Fatalf("message = %q, must not offer a route delivery refuses", got)
+	}
+}
+
+// Nothing to name is still a usable block: the generic text stands in.
+func TestDeliveryMixedBlockFallsBackWithoutASegment(t *testing.T) {
+	got := ShellContractMixedDeliveryMessage(json.RawMessage(`{"command":""}`))
+	if !strings.HasPrefix(got, "blocked:") {
+		t.Fatalf("message = %q, want a usable block", got)
+	}
+	if strings.Contains(got, "Chain them with '&&'") {
+		t.Fatalf("fallback = %q, must not offer a route delivery refuses", got)
+	}
+}
+
 // Nothing to name is still a usable block: the generic text stands in.
 func TestMixedBlockFallsBackWithoutASegment(t *testing.T) {
 	got := ShellContractMixedMessage(json.RawMessage(`{"command":""}`))
