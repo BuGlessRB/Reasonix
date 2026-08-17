@@ -95,43 +95,5 @@ func detectLinuxInstallProfile() installProfile {
 // isDpkgOwnedReasonix reports whether absolute path belongs to the reasonix-desktop
 // package. Uses absolute dpkg-query and requires both package name and path match.
 func isDpkgOwnedReasonix(absPath string) bool {
-	if absPath == "" || !filepath.IsAbs(absPath) {
-		return false
-	}
-	if _, err := os.Stat("/usr/bin/dpkg-query"); err != nil {
-		return false
-	}
-	cmd := exec.Command("/usr/bin/dpkg-query", "-S", absPath)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return false
-	}
-	// Output shape: "reasonix-desktop: /usr/bin/reasonix-desktop"
-	line := strings.TrimSpace(stdout.String())
-	if line == "" {
-		return false
-	}
-	// dpkg-query may return multiple lines for diversions; require an exact package hit.
-	for raw := range strings.SplitSeq(line, "\n") {
-		raw = strings.TrimSpace(raw)
-		pkg, path, ok := strings.Cut(raw, ":")
-		if !ok {
-			continue
-		}
-		pkg = strings.TrimSpace(pkg)
-		path = strings.TrimSpace(path)
-		if pkg != linuxDebPackageName {
-			continue
-		}
-		if path == absPath {
-			return true
-		}
-		// Some dpkg versions report the path relative or with //; compare cleaned.
-		if filepath.Clean(path) == filepath.Clean(absPath) {
-			return true
-		}
-	}
-	return false
+	return desktopLine().OwnsInstalledPath(absPath)
 }

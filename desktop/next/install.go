@@ -58,12 +58,15 @@ func (a *App) GoToVersion(target string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), updateTimeout)
 	defer cancel()
-	// The shared apply path names the desktop line's release members
-	// (ExtractReleaseUnit), so Studio's manifest lists no installable asset yet.
-	// Ask it rather than assume: filling platforms is what turns self-update on.
 	m, err := u.ManifestFor(ctx, target)
 	if err != nil {
 		return a.failUpdate(target, err)
+	}
+	// A dpkg install upgrades through its package, or apt and the filesystem end
+	// up disagreeing. It is also the only channel that carries Studio's SPA tree:
+	// the versioned layout stages single files.
+	if _, ok := m.NativePackage(); ok && studioLine().OwnsInstalledPath(layout.Executable) {
+		return a.installNativePackage(ctx, dir, target, m)
 	}
 	if _, ok := m.Asset(); !ok {
 		return a.failUpdate(target, fmt.Errorf("%s 没有 %s 的可安装包，请到 %s 手动下载", target, update.CurrentPlatform(), m.DownloadPage))
@@ -81,6 +84,43 @@ func (a *App) GoToVersion(target string) error {
 	}
 	a.emit(UpdateProgress{Version: target, Phase: "relaunching"})
 	a.handOver(layout)
+	return nil
+}
+
+// installNativePackage hands a verified .deb to Polkit. The updater is rebuilt
+// declaring the deb kind so it resolves the package rather than the tarball —
+// handing a dpkg install the portable archive would leave apt and the
+// filesystem disagreeing about what is installed.
+func (a *App) installNativePackage(ctx context.Context, cacheDir, target string, m *update.Manifest) error {
+	u, err := studioUpdaterOfKind(target, cacheDir, update.KindDeb)
+	if err != nil {
+		return a.failUpdate(target, err)
+	}
+	if err := a.PinVersion(target); err != nil {
+		return a.failUpdate(target, err)
+	}
+	cached, err := u.DownloadManifest(ctx, m, a.updateReport(target))
+	if err != nil {
+		return a.failUpdate(target, err)
+	}
+	if cached.SignaturePath == "" {
+		return a.failUpdate(target, fmt.Errorf("%s 的安装包缺少签名，拒绝安装", target))
+	}
+	a.emit(UpdateProgress{Version: target, Phase: "authorizing"})
+	err = studioLine().InstallDeb(cached.Path, cached.SignaturePath, func(phase string) {
+		a.emit(UpdateProgress{Version: target, Phase: phase})
+	})
+	if update.DebAuthCancelled(err) {
+		// A dismissed prompt is a decision. The verified cache stays, so a retry
+		// costs no download, and this is not reported as an update error.
+		a.emit(UpdateProgress{Version: target, Phase: "downloaded"})
+		return nil
+	}
+	if err != nil {
+		return a.failUpdate(target, err)
+	}
+	a.emit(UpdateProgress{Version: target, Phase: "relaunching"})
+	a.handOver(update.Here(studioLine()))
 	return nil
 }
 
@@ -125,6 +165,12 @@ func (a *App) emit(p UpdateProgress) {
 }
 
 func studioUpdater(target, cacheDir string) (*update.Updater, error) {
+	return studioUpdaterOfKind(target, cacheDir, "")
+}
+
+// studioUpdaterOfKind names which artifact this install can apply. An empty
+// kind resolves the portable asset; KindDeb resolves the package channel.
+func studioUpdaterOfKind(target, cacheDir, kind string) (*update.Updater, error) {
 	client, err := netclient.NewHTTPClient(proxySpecForUpdates(), netclient.TransportOptions{})
 	if err != nil {
 		return nil, err
@@ -138,6 +184,7 @@ func studioUpdater(target, cacheDir string) (*update.Updater, error) {
 		Fallback: v4,
 		CacheDir: cacheDir,
 		IndexURL: studioCatalog,
+		Kind:     kind,
 		// Go's default user agent is what release-edge bot protection scores
 		// worst (#6005), and a 403 there looks like "no versions" to the panel.
 		UserAgent:      fmt.Sprintf("Reasonix-Studio/%s (%s/%s)", version, goruntime.GOOS, goruntime.GOARCH),
