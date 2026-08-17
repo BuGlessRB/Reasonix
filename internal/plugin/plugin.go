@@ -826,66 +826,6 @@ func (h *Host) clearFailure(name string) {
 // command), which keeps the controller's host pointer stable for the session.
 func NewHost() *Host { return &Host{} }
 
-// SetStatusSink installs where connection-state changes are announced. A status
-// change has no caller to hand a sink to — a lazy server connects in the
-// background, long after whoever configured it went away — so the Host holds
-// one rather than taking it per call. Safe to call before or after servers
-// connect; a nil sink is tolerated and simply drops the announcements.
-func (h *Host) SetStatusSink(sink event.Sink) {
-	h.statusMu.Lock()
-	h.statusSink = sink
-	h.statusMu.Unlock()
-}
-
-// announce reports a change in what /mcp would answer. Never called while
-// holding h.mu: a sink writes to a frontend and must not run under the lock a
-// status read would need.
-func (h *Host) announce(format string, args ...any) {
-	h.statusMu.RLock()
-	sink := h.statusSink
-	h.statusMu.RUnlock()
-	if sink == nil {
-		return
-	}
-	sink.Emit(event.Event{Kind: event.MCPSurfaceReady, Text: fmt.Sprintf(format, args...)})
-}
-
-func (h *Host) registerDeferredCancel(name string, cancel context.CancelFunc) uint64 {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.closed {
-		cancel()
-		return 0
-	}
-	if h.deferredCancels == nil {
-		h.deferredCancels = make(map[string][]context.CancelFunc)
-	}
-	if h.deferredGenerations == nil {
-		h.deferredGenerations = make(map[string]uint64)
-	}
-	generation := h.deferredGenerations[name]
-	if generation == 0 {
-		generation = 1
-		h.deferredGenerations[name] = generation
-	}
-	h.deferredCancels[name] = append(h.deferredCancels[name], cancel)
-	return generation
-}
-
-func (h *Host) beginDeferredSpawn() bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.closed {
-		return false
-	}
-	h.deferredWG.Add(1)
-	return true
-}
-
-func (h *Host) endDeferredSpawn() {
-	h.deferredWG.Done()
-}
-
 // ErrSpawningInFlight is returned by Host.Add when another caller is already
 // spawning the same server on this host. The caller should retry later.
 var ErrSpawningInFlight = errors.New("server spawn already in progress")
