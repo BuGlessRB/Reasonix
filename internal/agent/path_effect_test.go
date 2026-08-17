@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -325,5 +326,34 @@ func TestABackgroundJobNeverSettles(t *testing.T) {
 	foreground := &toolCallPlan{evidenceName: "bash", evidenceArgs: []byte(`{"command":"make build"}`)}
 	if !a.scanBeforeUnprovenCall(foreground).complete {
 		t.Error("a foreground unprovable call should scan")
+	}
+}
+
+// The ledger folds path case on Windows and a directory read does not, so the
+// same file reaches the snapshot spelled two ways. Watching it twice makes one
+// change count as two everywhere downstream reads Receipt.Paths.
+func TestOneFileIsWatchedOnceAcrossSpellings(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("only Windows folds path case, so the two spellings are two files elsewhere")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "Parse.go")
+	if err := os.WriteFile(path, []byte("before\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	ledger := evidence.NewLedger()
+	ledger.Record(evidence.Receipt{ToolName: "read_file", Success: true, Read: true, Paths: []string{path}})
+
+	snap := snapshotPaths(ledger, dir, []string{path})
+	if len(snap.state) != 1 {
+		t.Fatalf("watching %d entries for one file: %v", len(snap.state), snap.state)
+	}
+	if err := os.WriteFile(path, []byte("after\n"), 0o644); err != nil {
+		t.Fatalf("rewrite: %v", err)
+	}
+	rec := evidence.Receipt{ToolName: "bash", Success: true, Mutation: true, MutationEvidence: evidence.MutationUnknown}
+	decorateObservedPaths(&rec, &toolCallPlan{pathsBefore: snap})
+	if len(rec.Paths) != 1 {
+		t.Fatalf("Paths = %v, want the one file it changed", rec.Paths)
 	}
 }

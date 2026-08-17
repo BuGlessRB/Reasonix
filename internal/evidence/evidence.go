@@ -2605,6 +2605,11 @@ func normalizePaths(paths []string) []string {
 	return out
 }
 
+// NormalizePath is the identity a path has in the ledger. Anything keying its
+// own map by path has to use it: Windows hands back the same file under
+// different cases, and a raw key then watches it twice.
+func NormalizePath(p string) string { return normalizePath(p) }
+
 func normalizePath(p string) string {
 	p = strings.TrimSpace(p)
 	if p == "" {

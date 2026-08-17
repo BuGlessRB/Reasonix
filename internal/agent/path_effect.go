@@ -31,7 +31,15 @@ type pathState struct {
 // build artifact appears under a name no tool ever passed to the host.
 type pathSnapshot struct {
 	root  string
-	state map[string]pathState
+	state map[string]watchedPath // keyed by evidence.NormalizePath
+}
+
+// watchedPath keeps the spelling the call used beside the state, because the map
+// is keyed by the ledger's path identity: the same file reaches here from the
+// ledger and from a directory read, and on Windows those differ in case only.
+type watchedPath struct {
+	path string
+	pathState
 }
 
 func (before pathSnapshot) empty() bool { return len(before.state) == 0 && before.root == "" }
@@ -48,11 +56,16 @@ func snapshotPaths(ledger *evidence.Ledger, root string, targets []string) pathS
 	if len(paths) == 0 && root == "" {
 		return pathSnapshot{}
 	}
-	snap := pathSnapshot{root: root, state: make(map[string]pathState, len(paths))}
+	snap := pathSnapshot{root: root, state: make(map[string]watchedPath, len(paths))}
 	for _, p := range paths {
-		if p != "" {
-			snap.state[p] = statePathOf(p)
+		key := evidence.NormalizePath(p)
+		if key == "" {
+			continue
 		}
+		if _, seen := snap.state[key]; seen {
+			continue
+		}
+		snap.state[key] = watchedPath{path: p, pathState: statePathOf(p)}
 	}
 	return snap
 }
@@ -86,18 +99,18 @@ func statePathOf(path string) pathState {
 // since compares the snapshot against the workspace as it is now, returning
 // what the call changed and, of those, what it brought into existence.
 func (before pathSnapshot) since() (affected, created []string) {
-	for path, was := range before.state {
-		now := statePathOf(path)
-		if now == was {
+	for _, was := range before.state {
+		now := statePathOf(was.path)
+		if now == was.pathState {
 			continue
 		}
-		affected = append(affected, path)
+		affected = append(affected, was.path)
 		if !was.exists && now.exists {
-			created = append(created, path)
+			created = append(created, was.path)
 		}
 	}
 	for _, path := range workspaceTopLevel(before.root) {
-		if _, watched := before.state[path]; watched {
+		if _, watched := before.state[evidence.NormalizePath(path)]; watched {
 			continue
 		}
 		affected = append(affected, path)
@@ -122,10 +135,23 @@ func decorateObservedPaths(rec *evidence.Receipt, plan *toolCallPlan) {
 	}
 	rec.MutationEvidence = evidence.MutationProven
 	for _, path := range affected {
-		if !slices.Contains(rec.Paths, path) {
+		if !holdsPath(rec.Paths, path) {
 			rec.Paths = append(rec.Paths, path)
 		}
 	}
+}
+
+// holdsPath asks whether the receipt already names this file, by the ledger's
+// identity rather than by spelling — otherwise a receipt lists one Windows file
+// twice and every count downstream reads one change as two.
+func holdsPath(paths []string, want string) bool {
+	key := evidence.NormalizePath(want)
+	for _, p := range paths {
+		if evidence.NormalizePath(p) == key {
+			return true
+		}
+	}
+	return false
 }
 
 // leftSomethingBehind reports whether a change still has anything on disk to
