@@ -79,13 +79,16 @@ export interface Tool {
   execution?: Execution;
 }
 
+// Only prefixChangeReasons is omitempty on the wire; the rest always arrive, so
+// marking them optional would make every reader handle an absence that the
+// producer never sends.
 export interface CacheDiagnostics {
-  prefixHash?: string;
-  prefixChanged?: boolean;
+  prefixHash: string;
+  prefixChanged: boolean;
   prefixChangeReasons?: string[];
-  toolSchemaTokens?: number;
-  cacheMissTokens?: number;
-  cacheHitTokens?: number;
+  toolSchemaTokens: number;
+  cacheMissTokens: number;
+  cacheHitTokens: number;
 }
 
 export interface Money {
@@ -112,6 +115,13 @@ export interface Usage {
   cacheDiagnostics?: CacheDiagnostics;
   sessionCacheHitTokens: number;
   sessionCacheMissTokens: number;
+  // Context* is the latest single request's shape, for gauges and rebind. Absent
+  // means fall back to the billable prompt/completion totals above.
+  contextPromptTokens?: number;
+  contextCompletionTokens?: number;
+  contextReasoningTokens?: number;
+  contextCacheHitTokens?: number;
+  contextCacheMissTokens?: number;
   cost?: number;
   currency?: string;
   currencyCode?: string;
@@ -297,6 +307,17 @@ export interface CompletionSummary {
   gap_kinds?: string[];
 }
 
+// MemoryCitation is one local memory the turn drew on, so an answer can show
+// what it was grounded in rather than asserting it.
+export interface MemoryCitation {
+  id?: string;
+  source: string;
+  lineStart?: number;
+  lineEnd?: number;
+  note?: string;
+  kind?: string;
+}
+
 export interface WireEvent {
   kind: Kind;
   text?: string;
@@ -314,7 +335,13 @@ export interface WireEvent {
   streamAttempt?: StreamAttempt;
   completion?: CompletionSummary;
   err?: string;
-  outcome?: string;
+  memoryCitations?: MemoryCitation[];
+  // The turn a compaction checkpoint committed under, so a reader can tell a
+  // fold apart from the turns around it.
+  checkpointTurn?: number;
+  // recovery_paused is no longer emitted; sessions recorded before the retry
+  // budgets were removed still carry it, so a reader has to render it.
+  outcome?: "final_readiness" | "recovery_paused";
   phase?: string;
   retryAttempt?: number;
   retryMax?: number;

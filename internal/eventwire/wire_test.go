@@ -158,8 +158,8 @@ func TestDesktopWireEventTypeCoversSharedPayloadFields(t *testing.T) {
 		"retryAttempt?: number;",
 		"retryMax?: number;",
 		"retryScope?:",
-		"streamAttempt?: WireStreamAttempt;",
-		"export interface WireStreamAttempt",
+		"streamAttempt?: StreamAttempt;",
+		"export interface StreamAttempt",
 		"attemptId?: string;",
 		"contextPromptTokens?: number;",
 		"contextCompletionTokens?: number;",
@@ -167,8 +167,8 @@ func TestDesktopWireEventTypeCoversSharedPayloadFields(t *testing.T) {
 		"export interface MemoryCitation",
 		"resolvedName?: string;",
 		"capabilityId?: string;",
-		"cacheDiagnostics?: WireCacheDiagnostics;",
-		"export interface WireCacheDiagnostics",
+		"cacheDiagnostics?: CacheDiagnostics;",
+		"export interface CacheDiagnostics",
 		"prefixHash: string;",
 		"prefixChanged: boolean;",
 		"prefixChangeReasons?: string[];",
@@ -313,7 +313,7 @@ func readDesktopTypes(t *testing.T) string {
 	if !ok {
 		t.Fatal("runtime caller unavailable")
 	}
-	path := filepath.Join(filepath.Dir(file), "..", "..", "desktop", "frontend", "src", "lib", "types.ts")
+	path := filepath.Join(filepath.Dir(file), "..", "..", "desktop", "frontend-next", "src", "port", "wire.ts")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read desktop types: %v", err)
