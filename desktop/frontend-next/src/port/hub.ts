@@ -61,9 +61,19 @@ export class SseHub implements HubPort {
   // pretending to belong to a runtime.
   private readonly shell = new SsePort();
 
+  // A refusal carries a code, and it is the code that has words in the reader's
+  // language. Flattening the body into the message threw that away: what
+  // reached the screen was the raw JSON, or a filesystem error naming a path.
+  private static async fail(path: string, res: Response): Promise<never> {
+    const body = (await res.json().catch(() => null)) as
+      | { code?: string; error?: string; params?: Record<string, string | number> }
+      | null;
+    throw new HttpError(res.status, body?.error || `${path}: ${res.status}`, body ?? undefined);
+  }
+
   private async get<T>(path: string): Promise<T> {
     const res = await fetch(path, { credentials: "same-origin" });
-    if (!res.ok) throw new HttpError(res.status, `${path}: ${res.status}`);
+    if (!res.ok) await SseHub.fail(path, res);
     return (await res.json()) as T;
   }
 
@@ -74,7 +84,7 @@ export class SseHub implements HubPort {
       credentials: "same-origin",
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (!res.ok) throw new HttpError(res.status, `${path}: ${res.status} ${await res.text()}`);
+    if (!res.ok) await SseHub.fail(path, res);
     return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
   }
 

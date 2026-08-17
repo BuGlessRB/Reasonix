@@ -1483,21 +1483,38 @@ func delayedSessionDelete(absDir, abs string, destroy control.SessionDestroyHand
 	}
 }
 
+// removeSessionFiles erases a conversation: hidden first, swept second. The
+// sweep can die halfway — Windows refuses to unlink an event log a reader still
+// has open — and the transcript is the first file to go, which left the
+// conversation neither present nor gone. The marker makes it one act: whatever
+// survives keeps it, and ReconcileCleanupPending finishes on the next start.
 func removeSessionFiles(absDir, abs string) error {
-	remove := append([]string{abs}, store.SessionSidecarFiles(abs)...)
-	for _, p := range remove {
+	if err := agent.MarkCleanupPending(abs, "remove"); err != nil {
+		return err
+	}
+	var held error
+	// The marker already hides them all, so stopping at the first refusal would
+	// strand the rest for no gain.
+	for _, p := range append([]string{abs}, store.SessionSidecarFiles(abs)...) {
 		if p == "" {
 			continue
 		}
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-			return err
+			held = errors.Join(held, err)
 		}
 	}
 	if err := agent.DeleteSubagentsByParent(absDir, agent.BranchID(abs)); err != nil {
-		return err
+		held = errors.Join(held, err)
 	}
 	if err := jobs.RemoveArtifacts(abs); err != nil {
-		return err
+		held = errors.Join(held, err)
+	}
+	if held != nil {
+		// Not an error: the conversation is gone from every list, resume and
+		// search surface, and cannot return. Only the bytes are late.
+		slog.Warn("serve: session hidden, artifacts still held; cleanup stays pending",
+			"path", abs, "err", held)
+		return nil
 	}
 	return agent.ClearCleanupPending(abs)
 }

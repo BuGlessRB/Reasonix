@@ -1,6 +1,5 @@
 import { memo, useState } from "react";
 import { t } from "../i18n";
-import { HttpError } from "../port/port";
 import type { HubPort, RuntimeView, TreeSession, TreeWorkspace } from "../port/hub";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
@@ -17,7 +16,7 @@ interface Props {
   reload: () => Promise<void>;
   onOpen: (req: { root?: string; sessionPath?: string }) => Promise<void>;
   onFocus: (id: string) => void;
-  onClose: (id: string) => void;
+  onClose: (id: string) => Promise<void>;
   onCollapse: () => void;
   onRename: (path: string, title: string) => void;
   onError: (e: unknown) => void;
@@ -120,7 +119,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
       await hub.removeWorkspace(ws.root);
       await reload();
     } catch (e) {
-      onError(e instanceof HttpError && e.status === 409 ? new Error(t("这个文件夹还有打开的面板，先关掉再移除")) : e);
+      onError(e);
     }
   };
 
@@ -131,7 +130,9 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
     }
     setConfirm("");
     try {
-      if (session.runtimeId) onClose(session.runtimeId);
+      // Waited on, not just fired: the pane's runtime holds the transcript's
+      // lease until it is down, and the kernel will not erase a held one.
+      if (session.runtimeId) await onClose(session.runtimeId);
       await hub.removeSession(session.path);
       await reload();
     } catch (e) {

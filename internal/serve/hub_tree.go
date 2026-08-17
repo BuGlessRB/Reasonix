@@ -2,6 +2,8 @@ package serve
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -181,9 +183,28 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusForbidden, "session.outside_workspace", "path outside a known workspace", nil)
 		return
 	}
-	if err := removeSessionFiles(dir, path); err != nil {
+	// A pane's current path is narrower than "anyone writing this file": a
+	// recovery branch or a mid-rotation session is held without being one.
+	// Taking the guard beats probing it, which leaves a window for a writer.
+	guard, err := agent.TryAcquireSessionRemovalGuard(path)
+	if err != nil {
+		var held *agent.SessionLeaseError
+		if errors.As(err, &held) {
+			busy(w, "session.in_use", "this conversation is still being written to")
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err)
 		return
+	}
+	if err := removeSessionFiles(dir, path); err != nil {
+		guard.Release()
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	if err := guard.RemoveSidecarsAndRelease(); err != nil {
+		// The conversation is already gone; a surviving lock file is stale
+		// bookkeeping, not a failed delete.
+		slog.Warn("serve: session removed, lock files survived", "path", path, "err", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
