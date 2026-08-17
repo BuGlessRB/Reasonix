@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -244,11 +245,8 @@ func (s *ActivationStore) ProjectOverrides(root string) ([]ActivationOverride, e
 		if row.Scope != ActivationProject {
 			continue
 		}
-		for _, key := range keys {
-			if row.Key == key {
-				out = append(out, row)
-				break
-			}
+		if slices.Contains(keys, row.Key) {
+			out = append(out, row)
 		}
 	}
 	return out, nil
