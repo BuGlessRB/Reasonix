@@ -11,10 +11,19 @@ import (
 	"reasonix/internal/provider"
 )
 
-func recoveryFork(t *testing.T, root string) string {
+// Each fork carries a different prefix of the parent: still covered by it, so
+// the sweep may reclaim them, but distinct, because two conflicts holding the
+// identical transcript now share one branch rather than making two files.
+func recoveryFork(t *testing.T, root string, messages ...string) string {
 	t.Helper()
 	fork := agent.NewSession("sys")
-	fork.Add(provider.Message{Role: provider.RoleUser, Content: "今日热点"})
+	for i, message := range messages {
+		role := provider.RoleUser
+		if i%2 == 1 {
+			role = provider.RoleAssistant
+		}
+		fork.Add(provider.Message{Role: role, Content: message})
+	}
 	info, err := fork.SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: root})
 	if err != nil {
 		t.Fatal(err)
@@ -29,8 +38,8 @@ func TestSweepRecoveryBranchesTrashesCoveredForks(t *testing.T) {
 	dir := t.TempDir()
 	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
 	saveVisibilitySession(t, root, "今日热点", "好的")
-	covered := recoveryFork(t, root)
-	open := recoveryFork(t, root)
+	covered := recoveryFork(t, root, "今日热点")
+	open := recoveryFork(t, root, "今日热点", "好的")
 
 	ctrl := control.New(control.Options{SessionDir: dir})
 	defer ctrl.Close()

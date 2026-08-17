@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"reasonix/internal/provider"
@@ -39,6 +40,37 @@ func fixedWriterRecoverySessionPath(originalPath string) string {
 	return recoverySessionPathForLane(originalPath, SessionWriterID())
 }
 
+// siblingRecoveryBranchWithDigest finds a recovery branch of the same parent
+// already holding exactly this content. Lanes are per live Session, so a resume
+// or a runtime rebuild starts a new one and the same unsaved turns land in file
+// after file — a sidebar of identical rows. Digests come from branch metadata,
+// so this reads sidecars, not transcripts.
+func siblingRecoveryBranchWithDigest(originalPath, digestText string) (string, bool) {
+	if strings.TrimSpace(digestText) == "" {
+		return "", false
+	}
+	dir := filepath.Dir(originalPath)
+	stem := recoveryParentStem(BranchID(originalPath))
+	matches, err := filepath.Glob(filepath.Join(dir, stem+"-recovery-*.jsonl"))
+	if err != nil {
+		return "", false
+	}
+	sort.Strings(matches)
+	for _, path := range matches {
+		if path == originalPath || IsCleanupPending(path) {
+			continue
+		}
+		meta, ok, err := LoadBranchMeta(path)
+		if err != nil || !ok || !meta.Recovered {
+			continue
+		}
+		if meta.RecoveryDigest == digestText {
+			return path, true
+		}
+	}
+	return "", false
+}
+
 func recoverySessionPathForLane(originalPath, lane string) string {
 	writerDigest := sha256.Sum256([]byte(lane))
 	// Keep the established 16-hex suffix so metadata-less recovery files are
@@ -52,11 +84,52 @@ func recoverySessionPathForLane(originalPath, lane string) string {
 		fmt.Sprintf("%s%s.jsonl", recoveryParentStem(id), suffix))
 }
 
-func (s *Session) isolatedRecoverySessionPath(originalPath string) (string, string) {
+// writeRecoveryBranchIsolated lands one conflict, preferring a sibling that
+// already holds this exact transcript over a new file. A path that turns out to
+// hold something else is never retried: branch metadata records the digest at
+// fork time, and a branch written to since then no longer matches it.
+func (s *Session) writeRecoveryBranchIsolated(
+	originalPath string,
+	opts RecoveryBranchOptions,
+	msgs []provider.Message,
+	digest [sha256.Size]byte,
+	version uint64,
+	rewriteVersion int,
+	preview string,
+	turns int,
+	digestText string,
+	recoveryDepth int,
+	shutdown bool,
+) (RecoveryBranchInfo, error) {
+	taken := map[string]bool{}
+	for range 8 {
+		path, lane := s.isolatedRecoverySessionPath(originalPath, digestText, taken)
+		info, collision, err := s.writeRecoveryBranchAtPath(path, opts, msgs, digest,
+			version, rewriteVersion, preview, turns, digestText, recoveryDepth, shutdown)
+		if err != nil {
+			return RecoveryBranchInfo{}, err
+		}
+		if !collision {
+			return info, nil
+		}
+		taken[path] = true
+		s.rotateRecoveryLane(lane)
+	}
+	return RecoveryBranchInfo{}, fmt.Errorf("allocate isolated recovery lane: too many existing collisions")
+}
+
+// isolatedRecoverySessionPath picks where this conflict lands: a sibling that
+// already holds the identical transcript when there is one, otherwise this
+// Session's own lane. The lane is returned either way, so a collision rotates
+// it and the next attempt gets a fresh file.
+func (s *Session) isolatedRecoverySessionPath(originalPath, digestText string, taken map[string]bool) (string, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.recoveryLane == "" {
 		s.recoveryLane = newSessionWriterID()
+	}
+	if sibling, ok := siblingRecoveryBranchWithDigest(originalPath, digestText); ok && !taken[sibling] {
+		return sibling, s.recoveryLane
 	}
 	return recoverySessionPathForLane(originalPath, s.recoveryLane), s.recoveryLane
 }

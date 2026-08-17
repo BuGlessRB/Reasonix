@@ -772,22 +772,8 @@ func (s *Session) saveRecoveryBranch(opts RecoveryBranchOptions, shutdown bool) 
 		// still enforce the existing anti-cascade policy.
 		SessionRecoveryMaxDepth)
 
-	// A live Session gets one stable lane. A different live Session in the same
-	// process gets a different lane, so it never overwrites an independent
-	// recovery branch merely because the process-wide writer ID matches.
-	for range 8 {
-		recoveryPath, lane := s.isolatedRecoverySessionPath(originalPath)
-		info, collision, err := s.writeRecoveryBranchAtPath(recoveryPath, opts, msgs, digest,
-			version, rewriteVersion, preview, turns, digestText, recoveryDepth, shutdown)
-		if err != nil {
-			return RecoveryBranchInfo{}, err
-		}
-		if !collision {
-			return info, nil
-		}
-		s.rotateRecoveryLane(lane)
-	}
-	return RecoveryBranchInfo{}, fmt.Errorf("allocate isolated recovery lane: too many existing collisions")
+	return s.writeRecoveryBranchIsolated(originalPath, opts, msgs, digest,
+		version, rewriteVersion, preview, turns, digestText, recoveryDepth, shutdown)
 }
 
 func (s *Session) saveRecoveryBranchMeta(path string, opts RecoveryBranchOptions, preview string, turns int, digest string, depth int) (BranchMeta, error) {
