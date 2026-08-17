@@ -70,8 +70,16 @@ func TestSaveShellSettingsRefusesUnusablePath(t *testing.T) {
 func TestSaveShellSettingsAutoClearsPinnedPath(t *testing.T) {
 	path := seedShellConfig(t)
 	c := &Controller{}
-	if err := c.SaveShellSettings("bash", "/bin/sh"); err != nil {
-		t.Fatalf("pin: %v", err)
+	// Pinning proves the interpreter runs before saving it, so the path has to be
+	// one this host really has — /bin/sh only ever existed off Windows. Prefer is
+	// what the option itself says to pass, rather than a guess at the mapping.
+	opts := c.ShellSettings().Options
+	if len(opts) == 0 {
+		t.Skip("no interpreter detected on this host")
+	}
+	pin := opts[0]
+	if err := c.SaveShellSettings(pin.Prefer, pin.Path); err != nil {
+		t.Fatalf("pin %s at %s: %v", pin.Prefer, pin.Path, err)
 	}
 	if err := c.SaveShellSettings("auto", ""); err != nil {
 		t.Fatalf("auto: %v", err)

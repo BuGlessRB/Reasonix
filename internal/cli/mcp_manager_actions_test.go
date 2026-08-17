@@ -58,6 +58,11 @@ func TestMCPActionsOfferOAuthOnlyForEligibleHTTPServers(t *testing.T) {
 
 func TestClearMCPAuthenticationUsesControllerWorkspace(t *testing.T) {
 	isolateCLIConfigHome(t)
+	// An isolated home has no user config, so provider resolution falls back to
+	// the built-in presets — whose DeepSeek entries are kind "anthropic", a kind
+	// this test binary never links. Pinning an offline provider keeps the setup
+	// about MCP rather than about which providers happen to be compiled in.
+	pinProviderOffline(t)
 	controllerRoot := t.TempDir()
 	cwdRoot := t.TempDir()
 	const pluginConfig = `
