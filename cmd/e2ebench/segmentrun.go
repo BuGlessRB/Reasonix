@@ -17,9 +17,18 @@ import (
 func runSegments(ctx context.Context, cfg suiteConfig, t task, work, trajDir string, env []string, r *result) error {
 	segs := planSegments(t, cfg.segments, cfg.steers)
 	r.Segments = len(segs)
+	// Out of the work dir: the agent reads what is in front of it, and one run
+	// spent a tool call on the harness's own token counts. Snapshots already
+	// dropped these, which kept them out of the grade, not out of the context.
+	metricsDir, err := os.MkdirTemp("", "e2ebench-metrics-"+t.ID+"-")
+	if err != nil {
+		metricsDir = work
+	} else {
+		defer func() { _ = os.RemoveAll(metricsDir) }()
+	}
 	var runErr error
 	for _, seg := range segs {
-		metricsPath := filepath.Join(work, fmt.Sprintf(".run-metrics-%d.json", seg.index))
+		metricsPath := filepath.Join(metricsDir, fmt.Sprintf(".run-metrics-%d.json", seg.index))
 		trajPath := segmentTrajectoryPath(trajDir, t.ID, seg, len(segs))
 		args := buildSegmentArgs(cfg, seg, metricsPath, trajPath)
 

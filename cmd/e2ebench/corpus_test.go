@@ -36,8 +36,12 @@ func protectedFiles(t *testing.T, verifyPath string) []string {
 func stageSeed(t *testing.T, taskDir string) string {
 	t.Helper()
 	work := t.TempDir()
-	if err := copyDir(filepath.Join(taskDir, "workdir"), work); err != nil {
-		t.Fatalf("copy seed: %v", err)
+	// workdir is optional: a task that asks for a file to be written from
+	// scratch seeds nothing, and starts in an empty directory.
+	if seed := filepath.Join(taskDir, "workdir"); dirExists(seed) {
+		if err := copyDir(seed, work); err != nil {
+			t.Fatalf("copy seed: %v", err)
+		}
 	}
 	src, err := os.ReadFile(filepath.Join(taskDir, "verify.sh"))
 	if err != nil {
@@ -146,6 +150,37 @@ func TestAnchorCorpusSeedsBothArmsOrNeither(t *testing.T) {
 	}
 	if seeded == 0 {
 		t.Fatal("no seeded tasks found; the anchor corpus is missing")
+	}
+}
+
+// A seed that already grades clean measures nothing: the task scores the same
+// whether the agent solved it or never ran, and reports 100% forever. A
+// loosened threshold is how a task drifts into it.
+func TestSolvableCorpusSeedsMustNotGradeClean(t *testing.T) {
+	for _, bin := range []string{"bash", "python3"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			t.Skipf("%s unavailable; the graders need a POSIX shell and python3", bin)
+		}
+	}
+	tasks, err := loadTasks(corpusDir)
+	if err != nil {
+		t.Fatalf("load corpus: %v", err)
+	}
+	seen := 0
+	for _, task := range tasks {
+		if task.NoSolution {
+			continue
+		}
+		seen++
+		t.Run(task.ID, func(t *testing.T) {
+			t.Parallel()
+			if err := gradeSeed(t, stageSeed(t, task.dir)); err == nil {
+				t.Fatal("the pristine seed already grades clean: this task cannot tell a solved run from one that did nothing")
+			}
+		})
+	}
+	if seen == 0 {
+		t.Fatal("no solvable tasks found; the corpus is missing")
 	}
 }
 

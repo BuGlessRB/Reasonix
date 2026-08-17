@@ -103,9 +103,31 @@ func TestSegmentedRunKeepsPerLegMetricsApart(t *testing.T) {
 	if err := runSegments(t.Context(), suiteConfig{bin: bin, segments: 2}, task{ID: "x", Prompt: "p", MaxSteps: 4, TimeoutSec: 60}, work, "", nil, &r); err != nil {
 		t.Fatalf("runSegments: %v", err)
 	}
-	for _, name := range []string{".run-metrics-1.json", ".run-metrics-2.json"} {
-		if _, err := os.Stat(filepath.Join(work, name)); err != nil {
-			t.Fatalf("%s missing: one shared path would have let the last leg overwrite the rest", name)
+	// Both legs' spend has to survive. One shared path would let the last leg
+	// overwrite the first, and the tokens it spent would simply vanish.
+	if r.PromptTokens != 20 || r.CompletionTokens != 2 {
+		t.Fatalf("folded %d prompt / %d completion tokens, want 20 / 2 from two legs",
+			r.PromptTokens, r.CompletionTokens)
+	}
+}
+
+// The agent lists and reads its own working directory, so the harness may not
+// leave its bookkeeping there: one observed run spent a tool call reading the
+// benchmark's token counts back out of the work dir.
+func TestHarnessMetricsStayOutOfTheWorkDir(t *testing.T) {
+	bin, _ := fakeAgent(t, 10, 1)
+	work := t.TempDir()
+	var r result
+	if err := runSegments(t.Context(), suiteConfig{bin: bin, segments: 2}, task{ID: "x", Prompt: "p", MaxSteps: 4, TimeoutSec: 60}, work, "", nil, &r); err != nil {
+		t.Fatalf("runSegments: %v", err)
+	}
+	entries, err := os.ReadDir(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if isHarnessArtifact(e.Name()) {
+			t.Errorf("the agent would have seen %s in its own directory", e.Name())
 		}
 	}
 }

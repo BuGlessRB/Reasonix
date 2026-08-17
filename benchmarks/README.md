@@ -36,21 +36,31 @@ utility readouts key on. Current coverage vs. target:
 
 | Class | Target | Committed | Notes |
 | --- | ---: | ---: | --- |
-| `atomic-bugfix` | 8 | 8 | short anchored fixes; routes ExecutorOnly by design |
-| `repo-exploration` | 6 | 6 | multi-file reading, invented-token answers so they can't be guessed |
+| `atomic-bugfix` | 8 | 11 | short anchored fixes; routes ExecutorOnly by design |
+| `repo-exploration` | 6 | 7 | multi-file reading, invented-token answers so they can't be guessed |
 | `multi-file-bugfix` | 8 | 8 | one bug spanning ≥2 files; naturally engages the planner gate |
 | `refactor` | 6 | 6 | behavior-preserving restructuring, structure asserted |
-| `failing-test-diagnosis` | 6 | 6 | unittest suite red → fix source; tests checksummed |
+| `failing-test-diagnosis` | 6 | 8 | unittest suite red → fix source; tests checksummed |
 | `api-integration` | 4 | 4 | use a provided local package per its README |
 | `ambiguous` | 4 | 4 | underspecified ask; grader accepts the defensible core |
 | `long-horizon` | 4 | 4 | multi-requirement specs; planner-depth full |
-| `codegen` / `delegation` | — | 3 | legacy smoke tasks (fizzbuzz, palindrome, subagent-delegation) |
-| `completion-integrity` | 11 | 11 | **no reachable solution**; scored on honesty, not correctness (below) |
+| `codegen` / `delegation` | — | 4 | fizzbuzz, palindrome, and two Go tasks that build a tool from nothing |
+| `completion-integrity` | 12 | 12 | **no reachable solution**; scored on honesty, not correctness (below) |
 
 Grader authoring rule: every task must fail `verify.sh` on the pristine seed
-and pass it on a reference solution (validated before commit). SWE-bench
-Verified (below) supplies the realistic-repo end of the spectrum; this corpus
-covers the fast, controlled, per-class end.
+and pass it on a reference solution (validated before commit). The first half
+is enforced by `TestSolvableCorpusSeedsMustNotGradeClean` — a seed that already
+grades clean scores the same whether the agent solved it or never ran, and
+reports 100% forever. SWE-bench Verified (below) supplies the realistic-repo
+end of the spectrum; this corpus covers the fast, controlled, per-class end.
+
+**Language coverage.** The corpus was Python-only for its whole history, while
+the agent's own repository is Go. A compiled language is a different verification
+loop — `go build` before anything runs, `go vet`, `-race`, a module path that
+must agree with every import — and its defects have no Python analogue: a data
+race, a `+=` in a loop that is quadratic where Python's would be too, map
+iteration order that makes a test pass only sometimes. The `go-*` tasks cover
+that half; they are ordinary members of the classes above, not a separate tier.
 
 ## Completion Integrity
 
@@ -177,8 +187,11 @@ are then counted identically for anything that speaks the endpoint.
 go run ./cmd/e2ebench -meter ~/.reasonix/config.toml -trajectories t/
 ```
 
-- **Credentials are never touched.** The config names an `api_key_env`, so the
-  key stays in the environment the child inherits; only `base_url` is rewritten.
+- **Credentials are never touched.** The config only names an `api_key_env`;
+  only `base_url` is rewritten. The key itself is resolved from Reasonix's own
+  `$REASONIX_HOME/.env`, never from the process environment — exporting
+  `DEEPSEEK_API_KEY` into the shell is not enough to run a benchmark against a
+  temporary home, which needs its own `.env`.
 - **Only the provider serving `-model` is redirected.** Rewriting every endpoint
   would send one vendor's traffic to another's host.
 - **Streamed requests are opted into usage.** An OpenAI-compatible stream
