@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -18,17 +17,6 @@ type ExtensionActionView struct {
 	Action      string `json:"action"`
 	Slash       string `json:"slash"`
 	Description string `json:"description,omitempty"`
-}
-
-// extensionFormSubmitter is the slice of *control.Controller that delivers a
-// form surface's values back to the owning sidecar. control.SessionAPI does
-// not expose SubmitExtensionForm yet (stage 8a added it to the concrete
-// controller only; the Capabilities port carries just ExtensionActions and
-// InvokeExtensionAction), so the desktop binding asserts it locally, mirroring
-// cancelJobForController's CancelJob assertion. If the port grows the method,
-// this alias can go away.
-type extensionFormSubmitter interface {
-	SubmitExtensionForm(ctx context.Context, pluginID, surfaceID string, values map[string]any) error
 }
 
 // extensionActionsForCtrl maps the control port's action views to their JSON
@@ -99,9 +87,5 @@ func (a *App) SubmitExtensionForm(tabID, pluginID, surfaceID string, values map[
 	if err != nil {
 		return err
 	}
-	submitter, ok := ctrl.(extensionFormSubmitter)
-	if !ok {
-		return fmt.Errorf("extension form submission is unavailable on this runtime")
-	}
-	return submitter.SubmitExtensionForm(a.bootContext(), pluginID, surfaceID, values)
+	return ctrl.SubmitExtensionForm(a.bootContext(), pluginID, surfaceID, values)
 }

@@ -172,21 +172,3 @@ func TestSubmitExtensionFormRoutesValues(t *testing.T) {
 		t.Fatal("unknown tab must fail")
 	}
 }
-
-// SubmitExtensionForm is not on control.SessionAPI yet; a controller that only
-// satisfies the port must produce a clean error instead of a panic.
-func TestSubmitExtensionFormWithoutSubmitterFailsCleanly(t *testing.T) {
-	isolateDesktopUserDirs(t)
-	app := newExtensionTestApp(&extensionUIActionsOnlyController{})
-	if err := app.SubmitExtensionForm("target", "alpha", "f1", nil); err == nil {
-		t.Fatal("SubmitExtensionForm without a submitter must fail")
-	}
-}
-
-type extensionUIActionsOnlyController struct {
-	control.SessionAPI
-}
-
-func (c *extensionUIActionsOnlyController) ExtensionActions() []control.ExtensionActionView {
-	return nil
-}
