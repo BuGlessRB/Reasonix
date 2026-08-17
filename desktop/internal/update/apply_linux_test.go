@@ -38,7 +38,7 @@ func TestVersionedInstallActivatesWithoutPersistingGuard(t *testing.T) {
 
 	var headers []tar.Header
 	var bodies [][]byte
-	for _, name := range releaseUnitMembers {
+	for _, name := range testLine().ArchiveNames() {
 		body := []byte("new-" + name)
 		headers = append(headers, regularMember(name, body))
 		bodies = append(bodies, body)
@@ -100,7 +100,7 @@ func TestVersionedInstallGoesBackwards(t *testing.T) {
 
 	var headers []tar.Header
 	var bodies [][]byte
-	for _, name := range releaseUnitMembers {
+	for _, name := range testLine().ArchiveNames() {
 		body := []byte("v2.0.0-" + name)
 		headers = append(headers, regularMember(name, body))
 		bodies = append(bodies, body)

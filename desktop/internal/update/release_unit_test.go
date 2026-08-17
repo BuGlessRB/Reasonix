@@ -47,18 +47,28 @@ func completeRelease() ([]tar.Header, [][]byte) {
 		}
 }
 
+// testLine mirrors the desktop's shape — two installed members and one the
+// archive only has to carry — without importing the host that declares it.
+func testLine() Line {
+	return Line{Members: []ReleaseMember{
+		{Archive: "reasonix-desktop", Installed: "reasonix-desktop", Mode: 0o700},
+		{Archive: "reasonix-guard"},
+		{Archive: "reasonix", Installed: "reasonix-cli", Mode: 0o700},
+	}}
+}
+
 // Every member is resolved by basename, so an archive carrying two paths that
 // end in the same name is ambiguous about which one gets published.
 func TestExtractReleaseUnitRejectsAmbiguousMembers(t *testing.T) {
 	headers, bodies := completeRelease()
-	if got, err := ExtractReleaseUnit(makeArchive(t, headers, bodies)); err != nil ||
+	if got, err := ExtractReleaseUnit(makeArchive(t, headers, bodies), testLine()); err != nil ||
 		string(got["reasonix-desktop"]) != "desktop" {
 		t.Fatalf("complete release extraction = %v, %q", err, got["reasonix-desktop"])
 	}
 
 	duplicateHeaders := append(append([]tar.Header(nil), headers...), regularMember("nested/reasonix", []byte("duplicate")))
 	duplicateBodies := append(append([][]byte(nil), bodies...), []byte("duplicate"))
-	if _, err := ExtractReleaseUnit(makeArchive(t, duplicateHeaders, duplicateBodies)); err == nil ||
+	if _, err := ExtractReleaseUnit(makeArchive(t, duplicateHeaders, duplicateBodies), testLine()); err == nil ||
 		!strings.Contains(err.Error(), "appears more than once") {
 		t.Fatalf("duplicate release member error = %v", err)
 	}
@@ -66,7 +76,7 @@ func TestExtractReleaseUnitRejectsAmbiguousMembers(t *testing.T) {
 	nonRegular := append([]tar.Header(nil), headers...)
 	nonRegular[1] = tar.Header{Name: "reasonix-guard", Typeflag: tar.TypeSymlink, Linkname: "outside"}
 	nonRegularBodies := [][]byte{bodies[0], nil, bodies[2]}
-	if _, err := ExtractReleaseUnit(makeArchive(t, nonRegular, nonRegularBodies)); err == nil ||
+	if _, err := ExtractReleaseUnit(makeArchive(t, nonRegular, nonRegularBodies), testLine()); err == nil ||
 		!strings.Contains(err.Error(), "not a regular file") {
 		t.Fatalf("non-regular release member error = %v", err)
 	}
@@ -76,12 +86,12 @@ func TestExtractReleaseUnitRejectsAmbiguousMembers(t *testing.T) {
 // would otherwise make a version directory current that has no binary in it.
 func TestExtractReleaseUnitRequiresEveryMember(t *testing.T) {
 	headers, bodies := completeRelease()
-	for i, missing := range releaseUnitMembers {
+	for i, missing := range testLine().ArchiveNames() {
 		short := append([]tar.Header(nil), headers[:i]...)
 		short = append(short, headers[i+1:]...)
 		shortBodies := append([][]byte(nil), bodies[:i]...)
 		shortBodies = append(shortBodies, bodies[i+1:]...)
-		_, err := ExtractReleaseUnit(makeArchive(t, short, shortBodies))
+		_, err := ExtractReleaseUnit(makeArchive(t, short, shortBodies), testLine())
 		if err == nil || !strings.Contains(err.Error(), missing) {
 			t.Fatalf("archive without %s: err = %v, want it named", missing, err)
 		}

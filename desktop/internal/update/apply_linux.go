@@ -20,7 +20,7 @@ func (v VersionedInstaller) apply(_ context.Context, c Cached) error {
 	if err != nil {
 		return err
 	}
-	release, err := ExtractReleaseUnit(targz)
+	release, err := ExtractReleaseUnit(targz, v.Line)
 	if err != nil {
 		return err
 	}
@@ -40,23 +40,23 @@ func (v VersionedInstaller) apply(_ context.Context, c Cached) error {
 		return fmt.Errorf("update: create Linux version staging: %w", err)
 	}
 	defer os.RemoveAll(staging)
-	desktopPath := filepath.Join(staging, installlayout.DesktopBinaryName())
-	cliPath := filepath.Join(staging, installlayout.CLIBinaryName())
-	if err := os.WriteFile(desktopPath, release["reasonix-desktop"], 0o700); err != nil {
-		return fmt.Errorf("update: stage Linux desktop: %w", err)
-	}
-	if err := os.WriteFile(cliPath, release["reasonix"], 0o700); err != nil {
-		return fmt.Errorf("update: stage Linux CLI: %w", err)
+	members := make([]installlayout.Member, 0, len(v.Line.Members))
+	for _, m := range v.Line.Members {
+		if m.Installed == "" {
+			continue
+		}
+		path := filepath.Join(staging, m.Installed)
+		if err := os.WriteFile(path, release[m.Archive], m.Mode); err != nil {
+			return fmt.Errorf("update: stage %s: %w", m.Installed, err)
+		}
+		members = append(members, installlayout.Member{Name: m.Installed, Path: path, Mode: m.Mode})
 	}
 	if err := installlayout.ActivateVersion(installlayout.ActivationRequest{
-		InstallRoot: root,
-		Version:     target,
-		RequestID:   "linux-" + target,
-		Members: []installlayout.Member{
-			{Name: installlayout.DesktopBinaryName(), Path: desktopPath, Mode: 0o700},
-			{Name: installlayout.CLIBinaryName(), Path: cliPath, Mode: 0o700},
-		},
-		RequiredNames: []string{installlayout.DesktopBinaryName(), installlayout.CLIBinaryName()},
+		InstallRoot:   root,
+		Version:       target,
+		RequestID:     "linux-" + target,
+		Members:       members,
+		RequiredNames: v.Line.InstalledNames(),
 	}); err != nil {
 		return fmt.Errorf("update: activate Linux version: %w", err)
 	}

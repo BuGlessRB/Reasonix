@@ -439,7 +439,7 @@ func extractBinary(targz []byte, name string) ([]byte, error) {
 // applyLinux replaces the running binary with the one inside the downloaded
 // tar.gz; the caller relaunches afterwards.
 func applyLinux(targz []byte, prepared *repair.UpdateTransaction) error {
-	release, err := update.ExtractReleaseUnit(targz)
+	release, err := update.ExtractReleaseUnit(targz, desktopLine())
 	if err != nil {
 		return err
 	}

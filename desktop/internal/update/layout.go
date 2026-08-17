@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"reasonix/internal/installlayout"
@@ -22,7 +21,7 @@ type Layout struct {
 // Here resolves the running build's layout. Every field is empty when the
 // executable path cannot be resolved at all — a caller must treat that as "do
 // not install", not as "install into the current directory".
-func Here() Layout {
+func Here(line Line) Layout {
 	exe := currentExecutable()
 	if exe == "" {
 		return Layout{}
@@ -31,7 +30,7 @@ func Here() Layout {
 	if root, err := installlayout.ResolveInstallRoot(exe); err == nil && root != "" {
 		l.Root = root
 	}
-	l.Launcher = launcherIn(l.Root, exe)
+	l.Launcher = launcherIn(l.Root, exe, line.Launchers)
 	return l
 }
 
@@ -73,27 +72,20 @@ func currentExecutable() string {
 // launcherIn finds the entry point that survives the running binary being
 // replaced. An install missing every candidate relaunches itself, which is
 // correct for a portable copy that was never installed.
-func launcherIn(root, exe string) string {
-	for _, name := range launcherNames() {
+func launcherIn(root, exe string, candidates []string) string {
+	for _, name := range candidates {
 		path := filepath.Join(root, name)
 		if _, err := os.Stat(path); err == nil {
 			return path
 		}
 	}
-	// An incomplete install can still have Guard beside the executable when the
-	// resolved root pointed elsewhere.
-	if runtime.GOOS == "windows" {
-		guard := filepath.Join(filepath.Dir(exe), "reasonix-guard.exe")
-		if _, err := os.Stat(guard); err == nil {
-			return guard
+	// An incomplete install can still have a launcher beside the executable
+	// when the resolved root pointed elsewhere.
+	for _, name := range candidates {
+		path := filepath.Join(filepath.Dir(exe), name)
+		if _, err := os.Stat(path); err == nil {
+			return path
 		}
 	}
 	return exe
-}
-
-func launcherNames() []string {
-	if runtime.GOOS == "windows" {
-		return []string{"reasonix-launcher.exe", "Reasonix.exe", "reasonix-guard.exe"}
-	}
-	return []string{"reasonix-launcher", "reasonix-guard"}
 }

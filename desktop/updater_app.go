@@ -371,7 +371,7 @@ func (a *App) installDebUpdate(requestID, selectedChannel string, meta update.Ca
 func (a *App) installPortableUpdate(requestID, selectedChannel string, meta update.Cached, data []byte) error {
 	a.emitProgress(requestID, selectedChannel, meta.Version, "installing", meta.Size, meta.Size, "")
 	var preparedUpdate *repair.UpdateTransaction
-	layout := update.Here()
+	layout := update.Here(desktopLine())
 	versionedPortable := (runtime.GOOS == "windows" || runtime.GOOS == "linux") && layout.Versioned()
 	if (runtime.GOOS == "windows" || runtime.GOOS == "linux") && !versionedPortable {
 		// Back up the complete legacy release unit (main binary plus launcher
@@ -477,7 +477,7 @@ func (a *App) ApplyUpdateRequest(selectedChannel, expectedVersion, requestID str
 // which the Windows handoff refuses rather than staging the helper anywhere.
 func (a *App) versionedInstaller(layout update.Layout) update.VersionedInstaller {
 	staging, _ := updateCacheDir()
-	return update.VersionedInstaller{Layout: layout, Staging: staging, Current: version}
+	return update.VersionedInstaller{Layout: layout, Staging: staging, Current: version, Line: desktopLine()}
 }
 
 // updateReport forwards the updater's narration to the frontend. The

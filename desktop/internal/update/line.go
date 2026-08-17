@@ -1,0 +1,63 @@
+package update
+
+import "os"
+
+// Line is the product line an install belongs to. The desktop and Studio ship
+// different binaries into different paths and answer to different package
+// names, so each host declares its own identity here rather than the shared
+// apply path naming either. A zero Line installs nothing: a caller that has not
+// said which line it is must not fall through to some other line's layout.
+type Line struct {
+	// Members are the files a release archive must carry, in staging order.
+	Members []ReleaseMember
+	// Launchers are the entry points that survive the running binary being
+	// replaced, most specific first. Empty relaunches the executable itself,
+	// which is correct for a portable copy that was never installed.
+	Launchers []string
+	// Deb names this line to dpkg and to the privileged update path.
+	Deb DebLine
+}
+
+// ReleaseMember is one file in a release: what the archive calls it and what it
+// installs as. The two differ because an archive is platform-neutral and the
+// installed name is not. An empty Installed means the archive must carry the
+// file but this version does not persist it — how the desktop keeps shipping
+// reasonix-guard for updaters that still read these archives.
+type ReleaseMember struct {
+	Archive   string
+	Installed string
+	Mode      os.FileMode
+}
+
+// DebLine is what the Linux package path needs to recognize this line's install
+// and ask Polkit for the one privileged action that may replace it. Two lines
+// installed side by side share no file here, or dpkg would see one package
+// overwriting the other's helper.
+type DebLine struct {
+	Package      string
+	HelperPath   string
+	PolkitAction string
+}
+
+// ArchiveNames returns the member names an archive must carry, which is what
+// the extractor checks against.
+func (l Line) ArchiveNames() []string {
+	out := make([]string, 0, len(l.Members))
+	for _, m := range l.Members {
+		out = append(out, m.Archive)
+	}
+	return out
+}
+
+// InstalledNames returns the names members take inside a version directory,
+// which is the exact allow-list an activation is held to. Members the archive
+// only has to carry are not among them.
+func (l Line) InstalledNames() []string {
+	out := make([]string, 0, len(l.Members))
+	for _, m := range l.Members {
+		if m.Installed != "" {
+			out = append(out, m.Installed)
+		}
+	}
+	return out
+}

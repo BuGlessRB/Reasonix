@@ -11,18 +11,17 @@ import (
 	"strings"
 )
 
-// releaseUnitMembers are the binaries a Linux tarball must carry. reasonix-guard
-// is still packaged for v1.18-v1.19 updaters reading these archives; v1.20+
-// extracts it and never persists it again.
-var releaseUnitMembers = []string{"reasonix-desktop", "reasonix-guard", "reasonix"}
-
-// ExtractReleaseUnit reads the release binaries out of a verified .tar.gz. It
-// requires every member and rejects duplicates: a partial extraction would
-// publish a version directory that is missing a binary, which the pointer swap
-// would then make current.
-func ExtractReleaseUnit(targz []byte) (map[string][]byte, error) {
-	want := make(map[string]struct{}, len(releaseUnitMembers))
-	for _, name := range releaseUnitMembers {
+// ExtractReleaseUnit reads a line's release files out of a verified .tar.gz. It
+// requires every member the line declares and rejects duplicates: a partial
+// extraction would publish a version directory missing a file, which the
+// pointer swap would then make current.
+func ExtractReleaseUnit(targz []byte, line Line) (map[string][]byte, error) {
+	members := line.ArchiveNames()
+	if len(members) == 0 {
+		return nil, errors.New("update: release unit has no members; the host did not declare its line")
+	}
+	want := make(map[string]struct{}, len(members))
+	for _, name := range members {
 		want[name] = struct{}{}
 	}
 	found := make(map[string][]byte, len(want))
@@ -56,7 +55,7 @@ func ExtractReleaseUnit(targz []byte) (map[string][]byte, error) {
 		}
 		found[name] = body
 	}
-	for _, name := range releaseUnitMembers {
+	for _, name := range members {
 		if _, ok := found[name]; !ok {
 			return nil, fmt.Errorf("update: release member %q not found in archive", name)
 		}

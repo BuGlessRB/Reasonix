@@ -44,7 +44,7 @@ func (a *App) GoToVersion(target string) error {
 	if update.SameVersion(target, version) {
 		return nil
 	}
-	layout := update.Here()
+	layout := update.Here(studioLine())
 	if layout.Root == "" {
 		return fmt.Errorf("认不出当前安装位置，无法切换版本")
 	}
@@ -71,7 +71,7 @@ func (a *App) GoToVersion(target string) error {
 	if err := a.PinVersion(target); err != nil {
 		return a.failUpdate(target, err)
 	}
-	inst := update.VersionedInstaller{Layout: layout, Staging: dir, Current: version}
+	inst := update.VersionedInstaller{Layout: layout, Staging: dir, Current: version, Line: studioLine()}
 	cached, err := u.DownloadManifest(ctx, m, a.updateReport(target))
 	if err != nil {
 		return a.failUpdate(target, err)

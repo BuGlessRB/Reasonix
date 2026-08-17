@@ -13,6 +13,7 @@ type VersionedInstaller struct {
 	Layout  Layout
 	Staging string // update cache dir; the Windows helper copy is placed here
 	Current string // running version, recorded in the macOS handoff transaction
+	Line    Line   // which product line's members this archive carries
 }
 
 // MacSelfUpdate reports whether this macOS build was Developer ID signed and
