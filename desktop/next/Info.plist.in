@@ -8,7 +8,7 @@
     <key>CFBundleIconFile</key><string>appicon</string>
     <key>CFBundleShortVersionString</key><string>@VERSION@</string>
     <key>CFBundleVersion</key><string>@NUMVER@</string>
-    <key>LSMinimumSystemVersion</key><string>10.13.0</string>
+    <key>LSMinimumSystemVersion</key><string>@MACOSMIN@</string>
     <key>NSHighResolutionCapable</key><string>true</string>
   </dict>
 </plist>
