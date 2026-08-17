@@ -16,27 +16,11 @@ import (
 // Head lines that ride along, so the model can judge whether to open the file.
 const spilledOutputHeadLines = 20
 
-// The threshold is window-relative: a fixed cap is wrong at both ends, being a
-// rounding error in a 1M window and larger than a 20K one. Windows at or above
-// ~128K keep the historical 32KB exactly.
-const (
-	toolOutputBudgetRatio = 0.10
-	minToolOutputBytes    = 4 * 1024
-	spillBytesPerToken    = 3 // deliberately low; CJK runs near 1
-)
-
-// toolOutputBudget is the byte ceiling for one first-visible tool result.
-func (a *Agent) toolOutputBudget() int {
-	if a == nil || a.contextWindow <= 0 {
-		return maxToolOutputBytes
-	}
-	n := int(float64(a.contextWindow) * spillBytesPerToken * toolOutputBudgetRatio)
-	return min(max(n, minToolOutputBytes), maxToolOutputBytes)
-}
-
-// spillToolOutput writes body beside the session and returns the pointer text
-// that replaces it. ok is false only when there is nowhere the model could read
-// the file back from, and the caller falls back to truncation.
+// spillToolOutput writes body beside the session and returns the pointer that
+// replaces it. ok is false when there is nowhere the model could read the file
+// back from, or when spilling would not pay for itself. There is deliberately
+// no size threshold: context pays the pointer, the pointer is a pure function
+// of the body, so the decision is derived rather than configured.
 func (a *Agent) spillToolOutput(body, toolName, toolCallID string) (string, bool) {
 	dir := store.SessionOutputsDir(a.SessionPath())
 	if dir == "" {
@@ -45,15 +29,26 @@ func (a *Agent) spillToolOutput(body, toolName, toolCallID string) (string, bool
 	if dir == "" {
 		return "", false
 	}
-	name := spillFileName(toolName, toolCallID)
+	path := filepath.Join(dir, spillFileName(toolName, toolCallID))
+	pointer := spillPointer(path, body, toolName)
+	if !spillPays(len(body), len(pointer)) {
+		return "", false
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", false
 	}
-	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		return "", false
 	}
-	return spillPointer(path, body, toolName), true
+	return pointer, true
+}
+
+// spillPays reports whether moving a result out of context earns its keep: what
+// is saved has to be worth at least what is spent. Spending is the pointer that
+// stays behind, and a spill the model has to read back costs a whole extra turn,
+// so breaking even is not enough to justify one.
+func spillPays(body, pointer int) bool {
+	return body-pointer >= pointer
 }
 
 // archiveOutputsDir is where an agent with no transcript of its own spills.
@@ -142,11 +137,11 @@ func humanBytes(n int) string {
 // context. The second return is the truncation notice; spilling has none,
 // because nothing was lost.
 func (a *Agent) boundToolOutput(body, toolName, toolCallID string) (string, string) {
-	if len(body) <= a.toolOutputBudget() {
-		return body, ""
-	}
 	if pointer, ok := a.spillToolOutput(body, toolName, toolCallID); ok {
 		return pointer, ""
 	}
-	return truncateToolOutputFor(body, toolName, toolCallID, a.toolOutputBudget())
+	if len(body) <= maxToolOutputBytes {
+		return body, ""
+	}
+	return truncateToolOutputFor(body, toolName, toolCallID, maxToolOutputBytes)
 }
