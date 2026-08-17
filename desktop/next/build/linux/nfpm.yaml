@@ -1,0 +1,93 @@
+# nfpm config for Reasonix Studio's Linux .deb. scripts/studio-build.sh runs
+# `nfpm package` from the repository root after the shell and frontend are
+# built, so every src path below is relative to that root.
+#
+# Studio installs under /usr/lib/reasonix-studio and answers to its own dpkg
+# package and Polkit action. The desktop package owns /usr/lib/reasonix and
+# io.reasonix.desktop.update, so the two can be installed side by side without
+# dpkg seeing either overwrite the other's files.
+#
+# $DEB_VERSION and $DEB_ARCH are exported by studio-build.sh. DEB_VERSION follows
+# Debian ordering: stable X.Y.Z, prereleases as X.Y.Z~preview.N so they sort
+# below the matching stable package.
+name: "reasonix-studio"
+arch: "${DEB_ARCH}"
+platform: "linux"
+version: "${DEB_VERSION}"
+section: "utils"
+priority: "optional"
+maintainer: "esengine <esengine@users.noreply.github.com>"
+description: |
+  Reasonix Studio — the parallel preview shell around the Go kernel.
+vendor: "Reasonix Contributors"
+homepage: "https://github.com/esengine/DeepSeek-Reasonix"
+license: "MIT"
+# Runtime libraries the WebKitGTK 4.1 build links against (-tags webkit2_41).
+# pkexec carries the in-app update through Polkit.
+depends:
+  - libgtk-3-0
+  - libwebkit2gtk-4.1-0
+  - pkexec
+contents:
+  # os.Executable resolves /usr/bin/reasonix-studio through the symlink, so
+  # frontendAssets() finds the SPA as a sibling of the real binary here.
+  - src: ./dist/deb-payload/reasonix-studio
+    dst: /usr/lib/reasonix-studio/reasonix-studio
+    file_info:
+      mode: 0755
+  - src: ./dist/deb-payload/frontend-next/dist
+    dst: /usr/lib/reasonix-studio/frontend-next/dist
+    type: tree
+  - src: ./dist/deb-payload/reasonix-studio-update-helper
+    dst: /usr/lib/reasonix-studio/reasonix-studio-update-helper
+    file_info:
+      mode: 0755
+  - src: /usr/lib/reasonix-studio/reasonix-studio
+    dst: /usr/bin/reasonix-studio
+    type: symlink
+  - src: ./desktop/next/build/linux/io.reasonix.studio.update.policy
+    dst: /usr/share/polkit-1/actions/io.reasonix.studio.update.policy
+    file_info:
+      mode: 0644
+  - src: ./desktop/next/build/linux/reasonix-studio.desktop
+    dst: /usr/share/applications/reasonix-studio.desktop
+    file_info:
+      mode: 0644
+  # The 1024x1024 master is not a standard hicolor size, so it goes to the
+  # size-agnostic pixmaps path the .desktop's Icon=reasonix-studio also finds.
+  - src: ./desktop/next/build/linux/icons/reasonix-studio.png
+    dst: /usr/share/pixmaps/reasonix-studio.png
+    file_info:
+      mode: 0644
+  - src: ./desktop/next/build/linux/icons/reasonix-studio-16.png
+    dst: /usr/share/icons/hicolor/16x16/apps/reasonix-studio.png
+    file_info:
+      mode: 0644
+  - src: ./desktop/next/build/linux/icons/reasonix-studio-24.png
+    dst: /usr/share/icons/hicolor/24x24/apps/reasonix-studio.png
+    file_info:
+      mode: 0644
+  - src: ./desktop/next/build/linux/icons/reasonix-studio-32.png
+    dst: /usr/share/icons/hicolor/32x32/apps/reasonix-studio.png
+    file_info:
+      mode: 0644
+  - src: ./desktop/next/build/linux/icons/reasonix-studio-48.png
+    dst: /usr/share/icons/hicolor/48x48/apps/reasonix-studio.png
+    file_info:
+      mode: 0644
+  - src: ./desktop/next/build/linux/icons/reasonix-studio-64.png
+    dst: /usr/share/icons/hicolor/64x64/apps/reasonix-studio.png
+    file_info:
+      mode: 0644
+  - src: ./desktop/next/build/linux/icons/reasonix-studio-128.png
+    dst: /usr/share/icons/hicolor/128x128/apps/reasonix-studio.png
+    file_info:
+      mode: 0644
+  - src: ./desktop/next/build/linux/icons/reasonix-studio-256.png
+    dst: /usr/share/icons/hicolor/256x256/apps/reasonix-studio.png
+    file_info:
+      mode: 0644
+  - src: ./desktop/next/build/linux/icons/reasonix-studio-512.png
+    dst: /usr/share/icons/hicolor/512x512/apps/reasonix-studio.png
+    file_info:
+      mode: 0644

@@ -62,6 +62,42 @@ build_shell() {
 		-trimpath -tags "$tags" -ldflags "$ldflags" -o "$out" ./next)
 }
 
+# build_deb packages the Linux payload for dpkg. The .deb is what makes Studio
+# self-updating on Linux: the versioned layout stages single files, and Studio's
+# release is a binary plus the SPA tree, which dpkg installs and the shared
+# apply path does not. nfpm builds it without dpkg-deb, so this runs anywhere.
+build_deb() {
+	local arch="$1" version="$2" src="$3"
+	command -v nfpm >/dev/null 2>&1 || {
+		echo "==> skipping .deb: nfpm is not installed" >&2
+		return 0
+	}
+	local payload="$ROOT/dist/deb-payload"
+	rm -rf "$payload"
+	mkdir -p "$payload/frontend-next"
+	cp "$src/$BINNAME" "$payload/$BINNAME"
+	cp -R "$ROOT/desktop/frontend-next/dist" "$payload/frontend-next/dist"
+	# Same helper source as the desktop line, built with Studio's package name so
+	# it will only ever install Studio's own .deb.
+	echo "==> go build $BINNAME-update-helper"
+	(cd "$ROOT/desktop" && GOOS=linux GOARCH="$arch" go build -trimpath \
+		-ldflags "-s -w -X main.packageName=reasonix-studio" \
+		-o "$payload/$BINNAME-update-helper" ./cmd/update-helper)
+	# Debian orders a prerelease below its stable: 2.0.0~preview.1 < 2.0.0.
+	local body="${version#v}" deb_version
+	if [ "$body" != "${body%%-*}" ]; then
+		local pre="${body#*-}"
+		deb_version="${body%%-*}~${pre//-/.}"
+	else
+		deb_version="$body"
+	fi
+	echo "==> nfpm package $deb_version ($arch)"
+	(cd "$ROOT" && DEB_VERSION="$deb_version" DEB_ARCH="$arch" \
+		nfpm package --config desktop/next/build/linux/nfpm.yaml --packager deb \
+		--target "$ROOT/dist/${APPNAME}-linux-${arch}.deb")
+	rm -rf "$payload"
+}
+
 # CI smoke: the host's own platform, no frontend, no packaging. This is the
 # check that a kernel change did not break the shell's compile.
 if [ "${1:-}" = "--shell-only" ]; then
@@ -131,6 +167,7 @@ linux)
 	mkdir -p "$staging/frontend-next"
 	cp -R "$ROOT/desktop/frontend-next/dist" "$staging/frontend-next/dist"
 	tar -czf "$ROOT/dist/${APPNAME}-linux-${arch}.tar.gz" -C "$staging" .
+	build_deb "$arch" "$VERSION" "$staging"
 	;;
 *)
 	echo "unsupported os: $os" >&2

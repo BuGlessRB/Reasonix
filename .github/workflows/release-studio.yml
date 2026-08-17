@@ -115,6 +115,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc libgtk-3-dev libwebkit2gtk-4.1-dev
 
+      # nfpm builds the .deb without dpkg-deb. Pinned to the version the desktop
+      # line uses, so both packages are produced by one packager.
+      - name: Install nfpm
+        if: runner.os == 'Linux'
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.46.3
+
       - name: Build
         shell: bash
         run: bash scripts/studio-build.sh "${{ matrix.platform }}" "${{ needs.resolve.outputs.version }}"
@@ -156,13 +162,19 @@ jobs:
           mkdir -p dist
           find staging -type f -name 'ReasonixStudio-*' -exec mv {} dist/ \;
           ls -la dist
-          # Three platforms were built; fewer files means an artifact was lost
-          # between jobs, and a partial release is worse than a failed one.
+          # Three platforms plus Linux's .deb; fewer files means an artifact was
+          # lost between jobs, and a partial release is worse than a failed one.
           count=$(find dist -type f -name 'ReasonixStudio-*' | wc -l)
-          if [ "$count" -lt 3 ]; then
-            echo "::error::expected 3 platform artifacts, found $count"
+          if [ "$count" -lt 4 ]; then
+            echo "::error::expected 4 artifacts (3 platforms + the Linux .deb), found $count"
             exit 1
           fi
+          # The .deb is the Linux self-update channel, so its absence is a
+          # silently degraded release rather than a missing download.
+          find dist -type f -name 'ReasonixStudio-linux-*.deb' | grep -q . || {
+            echo "::error::no Linux .deb in the release; nfpm did not run"
+            exit 1
+          }
 
       # The same minisign key the desktop line uses, because the public key that
       # verifies it is compiled into the client (update.PublicKey).

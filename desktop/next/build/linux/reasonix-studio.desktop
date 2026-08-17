@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Reasonix Studio
+Comment=Reasonix Studio — the parallel preview shell around the Go kernel
+Exec=reasonix-studio
+Icon=reasonix-studio
+Categories=Development;Utility;
+Terminal=false
+StartupWMClass=reasonix-studio

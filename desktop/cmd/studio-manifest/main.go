@@ -45,6 +45,7 @@ func run(dir, version, tag string) error {
 		DownloadPage:    page,
 		ReleaseNotesURL: page,
 		Platforms:       map[string]update.Asset{},
+		NativePackages:  map[string]update.Asset{},
 		Downloads:       map[string]update.Asset{},
 	}
 	entries, err := os.ReadDir(dir)
@@ -61,8 +62,16 @@ func run(dir, version, tag string) error {
 			return err
 		}
 		url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, name)
-		m.Downloads[name] = update.Asset{URL: url, Sig: url + ".minisig", Size: size, SHA256: sum}
+		asset := update.Asset{URL: url, Sig: url + ".minisig", Size: size, SHA256: sum}
+		m.Downloads[name] = asset
 		fmt.Printf("download: %s (%d bytes)\n", name, size)
+		// A .deb installs through dpkg, which carries a binary and the SPA tree
+		// alike — so it is the one artifact Studio can self-update from today.
+		// Platforms stays empty until the shared apply path can publish a tree.
+		if key, ok := nativePackageKey(name); ok {
+			m.NativePackages[key] = asset
+			fmt.Printf("native package: %s -> %s\n", name, key)
+		}
 	}
 	if len(m.Downloads) == 0 {
 		return fmt.Errorf("studio-manifest: no %s* artifacts in %s", artifactPrefix, dir)
@@ -72,6 +81,21 @@ func run(dir, version, tag string) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, "latest.json"), append(b, '\n'), 0o644)
+}
+
+// nativePackageKey maps a .deb artifact name to the platform whose dpkg install
+// it upgrades. Artifacts are named ReasonixStudio-linux-<arch>.deb, and only a
+// package channel belongs here — a tarball is a download, not an install.
+func nativePackageKey(name string) (string, bool) {
+	base, ok := strings.CutSuffix(name, ".deb")
+	if !ok {
+		return "", false
+	}
+	arch, ok := strings.CutPrefix(base, artifactPrefix+"linux-")
+	if !ok || arch == "" {
+		return "", false
+	}
+	return update.PlatformKey("linux", arch), true
 }
 
 func hashFile(path string) (int64, string, error) {

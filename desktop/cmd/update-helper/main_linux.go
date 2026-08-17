@@ -37,8 +37,13 @@ const (
 	exitPostVerify      = 16
 )
 
+// packageName is the only dpkg package this helper will install, fixed at
+// build time so no runtime input can redirect it. Studio builds the same
+// source with its own name; each package installs its own binary, and Polkit
+// authorizes that path alone.
+var packageName = "reasonix-desktop"
+
 const (
-	packageName   = "reasonix-desktop"
 	dpkgDebPath   = "/usr/bin/dpkg-deb"
 	dpkgQueryPath = "/usr/bin/dpkg-query"
 	dpkgPath      = "/usr/bin/dpkg"
