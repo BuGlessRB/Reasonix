@@ -1,6 +1,8 @@
 package completion
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -319,14 +321,19 @@ func TestFailureBeforeTheFixIsNotAGapOnceProven(t *testing.T) {
 // a change it asks the turn for a check and a review of a file the user will
 // never see — the whole "did nothing to the repository" answer, called partial.
 func TestScratchWritesOutsideTheWorkspaceAreNotChanges(t *testing.T) {
+	scratch := filepath.Join(os.TempDir(), "session-abc", "probe", "main.go")
 	ledger := evidence.NewLedger()
 	ledger.Record(evidence.Receipt{
 		ToolName: "write_file", Success: true, Write: true, Mutation: true,
 		MutationEvidence: evidence.MutationProven,
-		Paths:            []string{"/tmp/session-abc/probe/main.go"},
-		Created:          []string{"/tmp/session-abc/probe/main.go"},
+		Paths:            []string{scratch},
+		Created:          []string{scratch},
 	})
-	inWorkspace := func(path string) bool { return !strings.HasPrefix(path, "/tmp/") }
+	// Build hands the filter what the ledger stored, so the filter compares in the
+	// ledger's path identity. A literal "/tmp/" prefix matched nothing on Windows,
+	// where the same path is recorded with its separators flipped.
+	scratchRoot := evidence.NormalizePath(os.TempDir())
+	inWorkspace := func(path string) bool { return !strings.HasPrefix(path, scratchRoot) }
 
 	rep := Build(nil, ledger, inWorkspace)
 	if len(rep.Changes) != 0 || rep.Mutations != 0 {
