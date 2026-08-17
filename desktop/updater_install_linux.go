@@ -3,11 +3,8 @@
 package main
 
 import (
-	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"reasonix/desktop/internal/update"
 )
