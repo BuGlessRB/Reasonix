@@ -195,7 +195,7 @@ func TestSessionRecoveryCallbackFailureKeepsOriginalLeaseAndPath(t *testing.T) {
 	if strings.Contains(err.Error(), dir) || strings.Contains(err.Error(), filepath.Base(originalPath)) {
 		t.Fatalf("recovery bind error exposed a local path: %q", err)
 	}
-	if !strings.Contains(err.Error(), "session is in use") {
+	if !strings.Contains(err.Error(), "already open elsewhere in this Reasonix") {
 		t.Fatalf("recovery bind error = %q, want sanitized lease refusal", err)
 	}
 	if got := ctrl.SessionPath(); got != originalPath {

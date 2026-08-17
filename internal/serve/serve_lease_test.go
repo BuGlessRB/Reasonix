@@ -68,8 +68,13 @@ func TestResumeRefusedWhenSessionLeaseHeld(t *testing.T) {
 	if resp.StatusCode != http.StatusConflict {
 		t.Fatalf("held resume status = %d, want 409 (body %q)", resp.StatusCode, respBody)
 	}
-	if !strings.Contains(respBody, "in use by another Reasonix") {
-		t.Fatalf("held resume body = %q, want holder wording", respBody)
+	// The holder here is this very process, so the refusal must not send the
+	// reader looking for a second window; it still has to name a holder.
+	if !strings.Contains(respBody, "already open elsewhere in this Reasonix") {
+		t.Fatalf("held resume body = %q, want the same-process holder wording", respBody)
+	}
+	if strings.Contains(respBody, "another Reasonix process") {
+		t.Fatalf("held resume body blames a separate process for our own lease: %q", respBody)
 	}
 	if strings.Contains(respBody, held) {
 		t.Fatalf("held resume body leaks the session path: %q", respBody)

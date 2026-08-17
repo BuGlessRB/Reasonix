@@ -196,8 +196,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	// exactly why the check does not pass. Nothing else about the turn is waived.
 	verified, blockedWithCheck := a.postWriteVerification(writer)
 	if !a.deliveryProfile && a.turn.policySet && a.turn.policy.Verification >= taskpolicy.VerifyTargeted &&
-		toolPresent(a.svc.tools, "bash") && !blockedWithCheck && !verified &&
-		!a.declaredChecksRanAfter(writer) {
+		toolPresent(a.svc.tools, "bash") && !blockedWithCheck && !a.checkEstablished(writer, verified) {
 		out.applies = true
 		out.missingVerification++
 		missing = append(missing, a.verificationGap(writer))
@@ -252,6 +251,15 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	}
 	out.reason = strings.Join(missing, "; ")
 	return out
+}
+
+// checkEstablished reports that something after the latest write stands as its
+// check: one the table recognised, a project's declared one, or one a
+// completion named and the ledger corroborated.
+func (a *Agent) checkEstablished(writer int, verified bool) bool {
+	return verified ||
+		a.declaredChecksRanAfter(writer) ||
+		a.task.ledger.HasCorroboratedCitedCheckAfter(writer)
 }
 
 // postWriteVerification reads what the checks after the latest write establish.

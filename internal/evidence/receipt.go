@@ -17,12 +17,16 @@ type Receipt struct {
 	Command   string          `json:"command,omitempty"`
 	Step      string          `json:"step,omitempty"`
 	StepProof bool            `json:"step_proof,omitempty"`
-	TodoStep  *TodoStepMatch  `json:"todo_step,omitempty"`
-	Paths     []string        `json:"paths,omitempty"`
-	Read      bool            `json:"read,omitempty"`
-	Write     bool            `json:"write,omitempty"`
-	Mutation  bool            `json:"mutation,omitempty"`
-	Todos     []TodoItem      `json:"todos,omitempty"`
+	// CitedChecks are the verification commands a complete_step named. The tool
+	// refuses a citation whose command has no successful receipt, so a command
+	// here is one the host already matched against what actually ran.
+	CitedChecks []string       `json:"cited_checks,omitempty"`
+	TodoStep    *TodoStepMatch `json:"todo_step,omitempty"`
+	Paths       []string       `json:"paths,omitempty"`
+	Read        bool           `json:"read,omitempty"`
+	Write       bool           `json:"write,omitempty"`
+	Mutation    bool           `json:"mutation,omitempty"`
+	Todos       []TodoItem     `json:"todos,omitempty"`
 	// OutputBytes is the host-observed length of the tool's (redacted, trimmed)
 	// output. Content-evidence checks require it to be non-zero so a command
 	// that printed nothing (head -n 0, >/dev/null) can never count as reading.

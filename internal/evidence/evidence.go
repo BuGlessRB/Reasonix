@@ -711,6 +711,38 @@ func (l *Ledger) HasSuccessfulCommandAfter(command string, after int) bool {
 	return false
 }
 
+// HasCorroboratedCitedCheckAfter reports whether a completion after `after`
+// named a verification command that also ran successfully after `after`.
+//
+// complete_step already refuses a citation with no matching successful receipt,
+// so the model's part is naming which command was the check — the thing a
+// static table cannot know about a project's own script, and the model does
+// know, having read or written it. The host still supplies both halves that
+// matter: that the command ran, and that it passed.
+func (l *Ledger) HasCorroboratedCitedCheckAfter(after int) bool {
+	if l == nil {
+		return false
+	}
+	for _, command := range l.citedChecksAfter(after) {
+		if l.HasSuccessfulCommandAfter(command, after) {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *Ledger) citedChecksAfter(after int) []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []string
+	for i := max(after+1, 0); i < len(l.receipts); i++ {
+		if r := l.receipts[i]; r.Success && r.ToolName == "complete_step" {
+			out = append(out, r.CitedChecks...)
+		}
+	}
+	return out
+}
+
 func (l *Ledger) HasSuccessfulCompleteStepAfter(after int) bool {
 	if l == nil {
 		return false
@@ -1501,6 +1533,7 @@ func ReceiptFromToolCall(toolName string, args json.RawMessage, success bool, re
 		if toolName == "complete_step" {
 			r.Step = completeStepIdentity(fields)
 			r.StepProof = completeStepHasProof(fields)
+			r.CitedChecks = completeStepCitedChecks(fields)
 		}
 		if toolName == "todo_write" {
 			r.Todos = todoItemsField(fields, "todos")
@@ -2341,6 +2374,31 @@ func todoItemsField(fields map[string]json.RawMessage, key string) []TodoItem {
 
 // A failed complete_step can unlock todo recovery only when the payload had the
 // same structural proof shape Execute expects before host verification runs.
+// completeStepCitedChecks returns the commands a completion named as its
+// verification. Whether each one actually ran is the ledger's question, asked
+// where it matters rather than here.
+func completeStepCitedChecks(fields map[string]json.RawMessage) []string {
+	raw, ok := fields["evidence"]
+	if !ok {
+		return nil
+	}
+	var items []struct {
+		Kind    string `json:"kind"`
+		Command string `json:"command"`
+	}
+	if json.Unmarshal(raw, &items) != nil {
+		return nil
+	}
+	var out []string
+	for _, item := range items {
+		command := strings.TrimSpace(item.Command)
+		if strings.EqualFold(strings.TrimSpace(item.Kind), "verification") && command != "" {
+			out = append(out, command)
+		}
+	}
+	return out
+}
+
 func completeStepHasProof(fields map[string]json.RawMessage) bool {
 	if strings.TrimSpace(stringField(fields, "result")) == "" {
 		return false
