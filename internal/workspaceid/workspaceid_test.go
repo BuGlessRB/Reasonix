@@ -93,8 +93,8 @@ func TestKeyDistinctPerFolderOutsideRepositories(t *testing.T) {
 	if Key(a) == Key(b) {
 		t.Fatalf("two plain folders share key %q", Key(a))
 	}
-	if Key(a) != Key(a) {
-		t.Fatal("Key is not stable for one folder")
+	if Key(a) != Key(a+string(filepath.Separator)) {
+		t.Fatal("Key is not stable across spellings of one folder")
 	}
 }
 

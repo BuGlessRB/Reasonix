@@ -107,15 +107,15 @@ func branchAt(gitDir string) string {
 // gitDirsAt resolves one .git marker into the shared git dir and this tree's
 // own. A directory is the repository itself; a file points at a real git dir,
 // which for a linked worktree lives under <common>/worktrees/<name> — cutting
-// there is what makes worktrees converge. A submodule's gitdir has no worktrees
-// element and stays its own repository.
+// there is what makes worktrees converge, and a submodule has no such element.
+// Both sides canonicalize, or /var/… and /private/var/… read as two repositories.
 func gitDirsAt(marker string) (common, own string, ok bool) {
 	info, err := os.Lstat(marker)
 	if err != nil {
 		return "", "", false
 	}
 	if info.IsDir() {
-		dir := filepath.Clean(marker)
+		dir := canonical(marker)
 		return dir, dir, true
 	}
 	if !info.Mode().IsRegular() {
@@ -126,7 +126,7 @@ func gitDirsAt(marker string) (common, own string, ok bool) {
 		return "", "", false
 	}
 	target := ""
-	for _, line := range strings.Split(string(body), "\n") {
+	for line := range strings.SplitSeq(string(body), "\n") {
 		if rest, cut := strings.CutPrefix(strings.TrimSpace(line), "gitdir:"); cut {
 			target = strings.TrimSpace(rest)
 			break
@@ -138,8 +138,8 @@ func gitDirsAt(marker string) (common, own string, ok bool) {
 	if !filepath.IsAbs(target) {
 		target = filepath.Join(filepath.Dir(marker), target)
 	}
-	own = filepath.Clean(target)
-	return filepath.Clean(cutWorktrees(own)), own, true
+	own = canonical(target)
+	return canonical(cutWorktrees(own)), own, true
 }
 
 func cutWorktrees(gitDir string) string {
