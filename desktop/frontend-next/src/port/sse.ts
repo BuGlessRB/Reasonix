@@ -1,5 +1,5 @@
 import { download } from "./download";
-import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, PermissionLists, PermissionRules, SandboxSettings, McpDraft, McpDraftServer, McpEntry, McpInstallResult, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
+import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, PermissionLists, PermissionRules, SandboxSettings, McpCatalog, McpDraft, McpDraftServer, McpInstallResult, McpInstallScope, CapabilityScope, ScopeLayer, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
 import { HttpError, type Attachment, type WorkspaceChanges } from "./port";
 import type { WireEvent } from "./wire";
 
@@ -120,8 +120,12 @@ export class SsePort implements AgentPort {
     return this.get<SkillCatalog>("/skills");
   }
 
-  setSkillEnabled(name: string, enabled: boolean) {
-    return this.post("/skills/enabled", { name, enabled });
+  setSkillEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project") {
+    return this.post("/skills/enabled", { name, enabled, scope });
+  }
+
+  clearSkillOverride(name: string) {
+    return this.post("/skills/enabled", { name, clear: true, scope: "project" });
   }
 
   plugins() {
@@ -265,7 +269,11 @@ export class SsePort implements AgentPort {
   }
 
   mcp() {
-    return this.get<McpEntry[]>("/mcp");
+    return this.get<McpCatalog>("/mcp");
+  }
+
+  capabilityScope() {
+    return this.get<CapabilityScope>("/capability-scope");
   }
 
   // 502 carries the diagnosis in the body — the reason the retry failed is the
@@ -282,8 +290,12 @@ export class SsePort implements AgentPort {
     return { state: body.state ?? (res.ok ? "ready" : "failed"), tools: body.tools, error: body.error };
   }
 
-  setMcpEnabled(name: string, enabled: boolean) {
-    return this.post("/mcp/enabled", { name, enabled });
+  setMcpEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project") {
+    return this.post("/mcp/enabled", { name, enabled, scope });
+  }
+
+  clearMcpOverride(name: string) {
+    return this.post("/mcp/enabled", { name, clear: true, scope: "project" });
   }
 
   // A parse failure is the normal case while typing, and its message is the
@@ -300,7 +312,7 @@ export class SsePort implements AgentPort {
     return { servers: body.servers ?? [], risks: body.risks ?? [] };
   }
 
-  async installMcp(server: McpDraftServer, scope: "user" | "project"): Promise<McpInstallResult> {
+  async installMcp(server: McpDraftServer, scope: McpInstallScope): Promise<McpInstallResult> {
     const res = await fetch(this.base + "/mcp/install", {
       method: "POST",
       headers: { "content-type": "application/json" },

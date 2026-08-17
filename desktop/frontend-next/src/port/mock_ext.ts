@@ -1,5 +1,5 @@
 import { download } from "./download";
-import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, SkillEntry } from "./port";
+import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, ScopeLayer, SkillCatalog, SkillEntry } from "./port";
 import { MockLook } from "./mock_look";
 
 // The extension half of the fixture: skills, and the packages that bring them.
@@ -60,9 +60,25 @@ export class MockExtensions extends MockLook {
     return { implicit: true, skills: this.skillList.map((s) => ({ ...s })) };
   }
 
-  async setSkillEnabled(name: string, enabled: boolean) {
+  // localSkills is what the fixture counts as this project's exceptions; the
+  // real store keys them by repository, which a browser fixture cannot do.
+  protected localSkills = new Set<string>();
+
+  async setSkillEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project") {
     const sk = this.skillList.find((x) => x.name === name);
-    if (sk) sk.enabled = enabled;
+    if (!sk) return;
+    sk.enabled = enabled;
+    sk.switchScope = scope;
+    if (scope === "project") this.localSkills.add(name);
+    else this.localSkills.delete(name);
+  }
+
+  async clearSkillOverride(name: string) {
+    const sk = this.skillList.find((x) => x.name === name);
+    if (!sk) return;
+    sk.switchScope = undefined;
+    sk.enabled = true;
+    this.localSkills.delete(name);
   }
 
   async plugins(): Promise<PluginPackage[]> {

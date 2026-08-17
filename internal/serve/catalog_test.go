@@ -87,8 +87,14 @@ func TestMcpWithoutHostReturnsEmptyList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.TrimSpace(string(body)); got != "[]" {
-		t.Fatalf("GET /mcp = %q, want []", got)
+	var got struct {
+		Servers []mcpEntry `json:"servers"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("GET /mcp = %q: %v", strings.TrimSpace(string(body)), err)
+	}
+	if len(got.Servers) != 0 {
+		t.Fatalf("GET /mcp servers = %+v, want none", got.Servers)
 	}
 }
 
@@ -139,7 +145,9 @@ func TestSkillsListsWhatSlashCannotShow(t *testing.T) {
 }
 
 // The switch has to survive the request that set it, or the UI is reporting a
-// state the next reload will contradict.
+// state the next reload will contradict. With no workspace open the decision
+// lands on the global layer — a project row keyed by nothing would resolve for
+// nobody, so the switch would silently do nothing.
 func TestSkillEnabledPersists(t *testing.T) {
 	ctrl := control.New(control.Options{
 		Skills: []skill.Skill{{Name: "audit", Scope: skill.ScopeBuiltin}},
@@ -160,6 +168,37 @@ func TestSkillEnabledPersists(t *testing.T) {
 	}
 	if ctrl.SkillEnabled("audit") {
 		t.Fatal("the skill is still enabled after the switch said off")
+	}
+}
+
+// The same switch in one project must not answer for another. This is the
+// asymmetry the skill surface used to have against MCP: a bare name in the
+// user config disabled every same-named skill in every project at once.
+func TestSkillSwitchIsScopedToItsProject(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	here, there := t.TempDir(), t.TempDir()
+	skills := []skill.Skill{{Name: "deploy", Scope: skill.ScopeProject}}
+
+	mine := control.New(control.Options{Skills: skills, WorkspaceRoot: here})
+	defer mine.Close()
+	theirs := control.New(control.Options{Skills: skills, WorkspaceRoot: there})
+	defer theirs.Close()
+
+	srv := httptest.NewServer(New(mine, NewBroadcaster(), config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/skills/enabled", "application/json",
+		strings.NewReader(`{"name":"deploy","enabled":false,"scope":"project"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if mine.SkillEnabled("deploy") {
+		t.Fatal("the skill stayed on in the project that switched it off")
+	}
+	if !theirs.SkillEnabled("deploy") {
+		t.Fatal("switching a skill off in one project also switched it off in another")
 	}
 }
 

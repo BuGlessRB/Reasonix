@@ -1718,18 +1718,18 @@ func resolvedMCPTier(tier string) string {
 }
 
 // AutoStartPlugins returns enabled MCP entries for the catalog. Durable
-// enable/disable overrides in mcp-activation.json take precedence over the
-// legacy auto_start field. auto_start=false without an override still maps to
-// disabled; true/nil map to enabled. "Auto start" no longer means "spawn the
+// enable/disable overrides in capability-activation.json take precedence over
+// the legacy auto_start field. auto_start=false without an override still maps
+// to disabled; true/nil map to enabled. "Auto start" no longer means "spawn the
 // process at session boot" — enabled servers register cached tools and start
 // on first real tool call.
 func (c *Config) AutoStartPlugins() []PluginEntry {
-	return c.EnabledPlugins("", DefaultMCPActivationStore())
+	return c.EnabledPlugins("", DefaultActivationStore())
 }
 
 // EnabledPlugins returns catalog-enabled MCP entries for workspace, consulting
 // the activation store when provided.
-func (c *Config) EnabledPlugins(workspace string, activation *MCPActivationStore) []PluginEntry {
+func (c *Config) EnabledPlugins(workspace string, activation *ActivationStore) []PluginEntry {
 	if c == nil {
 		return nil
 	}

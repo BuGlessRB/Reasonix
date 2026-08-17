@@ -746,7 +746,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		PackageOwners:         pluginspec.PackageOwners(cfg),
 		OAuthHTTPClient:       balanceClient,
 	}
-	autoStartEntries := cfg.EnabledPlugins(root, config.DefaultMCPActivationStore())
+	autoStartEntries := cfg.EnabledPlugins(root, config.DefaultActivationStore())
 	enabledMCPNames := make(map[string]bool, len(autoStartEntries))
 	for _, enabled := range autoStartEntries {
 		if name := strings.TrimSpace(enabled.Name); name != "" {

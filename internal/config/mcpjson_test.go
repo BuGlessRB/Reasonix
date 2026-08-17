@@ -1179,7 +1179,7 @@ func TestInstallUserPluginForRootRestoresConfigWhenActivationFails(t *testing.T)
 	if err := cfg.SaveTo(UserConfigPath()); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(MCPActivationPath(home), 0o700); err != nil {
+	if err := os.MkdirAll(ActivationPath(home), 0o700); err != nil {
 		t.Fatal(err)
 	}
 

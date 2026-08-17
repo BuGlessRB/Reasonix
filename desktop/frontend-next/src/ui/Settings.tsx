@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
-import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, McpEntry, ModelEntry, PluginPackage, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
+import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, CapabilityScope, McpEntry, ModelEntry, PluginPackage, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 import { WindowControls } from "./WindowControls";
 import { AddServer } from "./AddServer";
@@ -95,6 +95,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
   const [roles, setRoles] = useState<RoleAssignments | null>(null);
   const [protocol, setProtocol] = useState<Record<string, string>>({});
   const [mcp, setMcp] = useState<McpEntry[]>([]);
+  const [scope, setScope] = useState<CapabilityScope | null>(null);
   const [skills, setSkills] = useState<SkillEntry[]>([]);
   const [implicit, setImplicit] = useState(true);
   const [busy, setBusy] = useState("");
@@ -110,7 +111,13 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
   const root = useRef<HTMLDivElement>(null);
 
   const reloadExt = useCallback(() => {
-    port.mcp().then(setMcp).catch(() => setMcp([]));
+    port
+      .mcp()
+      .then((c) => {
+        setMcp(c.servers);
+        setScope(c.scope);
+      })
+      .catch(() => setMcp([]));
     port.plugins().then(setPackages).catch(() => setPackages([]));
     port.hooks().then((c) => setHookCount(c.hooks.length)).catch(() => setHookCount(0));
     port.network().then((n) => setNetMode(t(NET_MODE[n.mode] ?? n.mode))).catch(() => setNetMode(""));
@@ -419,6 +426,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
 
           {at === "ext" && (
             <>
+              {scope && <ScopeBar scope={scope} />}
               <Group
                 title={t("插件包")}
                 now={packages.length ? t("{n} 个", { n: packages.length }) : undefined}
@@ -595,7 +603,7 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
         on={m.enabled}
         busy={busy === "toggle"}
         label={t(m.enabled ? "关闭 {name}" : "启用 {name}", { name: m.name })}
-        onClick={() => void run("toggle", () => port.setMcpEnabled(m.name, !m.enabled))}
+        onClick={() => void run("toggle", () => port.setMcpEnabled(m.name, !m.enabled, "project"))}
       />
     </span>
   );
@@ -632,13 +640,14 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
       <span className="nm">{m.name}</span>
       {m.toolNames?.length ? <span className="fold">{t("{n} 个工具", { n: m.tools })}</span> : null}
       <span className="meta">{meta}</span>
+      {m.localOverride && <Exception onClear={() => void run("clear", () => port.clearMcpOverride(m.name))} busy={busy === "clear"} />}
       {actions}
     </>
   );
   const why = m.error || failed;
   if (!m.toolNames?.length) {
     return (
-      <div className="srv" data-st={m.state}>
+      <div className="srv" data-st={m.state} data-local={m.localOverride ? "" : undefined}>
         <div className="srv-hd">{head}</div>
         {why && <div className="why">{why}</div>}
         {confirm}
@@ -648,7 +657,7 @@ function Server({ m, port, onDone }: { m: McpEntry; port: AgentPort; onDone: () 
   return (
     // Asking to remove has to open the row: the confirmation lives inside the
     // fold, and what the server contributes is worth seeing before dropping it.
-    <details className="srv" data-st={m.state} open={confirming || undefined}>
+    <details className="srv" data-st={m.state} data-local={m.localOverride ? "" : undefined} open={confirming || undefined}>
       <summary>{head}</summary>
       {confirm}
       <div className="peek">
@@ -683,17 +692,19 @@ function SkillRow({
 }) {
   const [busy, setBusy] = useState(false);
   const note = triggerNote(sk, implicit);
-  const toggle = async () => {
+  const local = sk.switchScope === "project";
+  const act = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
-      await port.setSkillEnabled(sk.name, !sk.enabled);
+      await fn();
     } finally {
       setBusy(false);
       onDone();
     }
   };
+  const toggle = () => act(() => port.setSkillEnabled(sk.name, !sk.enabled, "project"));
   return (
-    <div className="skrow" data-off={sk.enabled ? undefined : ""}>
+    <div className="skrow" data-off={sk.enabled ? undefined : ""} data-local={local ? "" : undefined}>
       <span className="nm">{sk.slashName ? "/" + sk.slashName : sk.name}</span>
       <span className="ds">{sk.description || t("没有写说明")}</span>
       <span className="how">{note && <i className={note === "调不到" ? "w none" : "w"}>{t(note)}</i>}</span>
@@ -704,7 +715,41 @@ function SkillRow({
       <span className="sc" title={sk.path}>
         {sk.plugin || t(SCOPE[sk.scope ?? ""] ?? "") || sk.scope}
       </span>
+      {local && <Exception onClear={() => act(() => port.clearSkillOverride(sk.name))} busy={busy} />}
       <Switch on={sk.enabled} busy={busy} label={t(sk.enabled ? "关闭 {name}" : "启用 {name}", { name: sk.name })} onClick={toggle} />
+    </div>
+  );
+}
+
+// A switch flipped here answers for this project, not for every project. That
+// is the useful default and also the invisible one, so the row that carries an
+// exception says so and offers the way back — without it the same list would
+// read identically in a project that simply inherited everything.
+function Exception({ onClear, busy }: { onClear: () => void; busy: boolean }) {
+  return (
+    <button className="exc" disabled={busy} title={t("恢复成跟随全局")} onClick={onClear}>
+      {t("仅本项目")}
+    </button>
+  );
+}
+
+// Which folder this page is answering for. The shell holds several projects at
+// once and the pane follows whichever one is in front, so the heading has to
+// name it — otherwise switching tabs silently changes the list under an
+// unchanged title. Worktrees of one repository share one answer, and saying how
+// many is what stops "my settings vanished on a new branch".
+function ScopeBar({ scope }: { scope: CapabilityScope }) {
+  const shared = scope.repo && (scope.trees ?? 1) > 1;
+  return (
+    <div className="scopebar">
+      <span className="nm">{scope.name}</span>
+      <span className="pt" title={scope.root}>{scope.root}</span>
+      {scope.branch && <span className="br">{scope.branch}</span>}
+      {shared && <span className="sh">{t("{n} 个工作树共用这份设置", { n: scope.trees ?? 1 })}</span>}
+      {!scope.repo && <span className="sh">{t("不是 git 仓库，按目录单独记")}</span>}
+      <span className="ov">
+        {scope.overrides ? t("{n} 项只在这里生效", { n: scope.overrides }) : t("没有本项目的例外")}
+      </span>
     </div>
   );
 }

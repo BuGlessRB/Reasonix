@@ -242,18 +242,18 @@ command = "project-mcp"
 		t.Fatal(err)
 	}
 	entry := cfg.Plugins[0]
-	enabled, err := config.DefaultMCPActivationStore().IsEnabled(entry, workspace)
+	store := config.DefaultActivationStore()
+	enabled, err := store.IsEnabled(entry, workspace)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if enabled {
 		t.Fatal("project MCP remained enabled after CLI disable")
 	}
-	scope, _, source, owner := config.ActivationIdentity(entry, workspace)
-	if _, found, err := config.DefaultMCPActivationStore().Lookup(scope, "", source, owner, entry.Name); err != nil {
+	if _, found, err := store.ServerOverride(entry, "", config.ActivationProject); err != nil {
 		t.Fatal(err)
 	} else if found {
-		t.Fatal("project MCP activation was incorrectly stored under an empty workspace fingerprint")
+		t.Fatal("project MCP activation was incorrectly stored under an empty workspace identity")
 	}
 }
 

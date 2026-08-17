@@ -1101,12 +1101,12 @@ func InstallUserPluginForRoot(root string, entry PluginEntry, forceEnable bool) 
 		return path, err
 	}
 
-	store := DefaultMCPActivationStore()
+	store := DefaultActivationStore()
 	var activationErr error
 	if forceEnable {
-		activationErr = store.SetServerEnabled(entry, root, true)
+		activationErr = store.SetServerEnabled(entry, root, ActivationGlobal, true)
 	} else {
-		activationErr = store.ClearServer(entry, root)
+		activationErr = store.ClearServer(entry, root, ActivationGlobal)
 	}
 	if activationErr == nil {
 		return path, nil

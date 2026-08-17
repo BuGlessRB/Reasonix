@@ -190,7 +190,39 @@ export interface McpEntry {
   resources?: number;
   toolNames?: string[];
   error?: string;
+  // This project decided the switch for itself instead of inheriting it.
+  localOverride?: boolean;
 }
+
+// Where a capability decision applies: this folder alone, or every project.
+// The same two words for servers and for skills.
+export type ScopeLayer = "project" | "global";
+
+// GET /capability-scope, and carried on both listings. The shell holds several
+// projects at once, so a pane that silently follows the active tab would show
+// different content under an unchanged heading. Every listing says which folder
+// it answered for, and trees says how many working trees share that answer —
+// worktrees of one repository are one project, not several.
+export interface CapabilityScope {
+  root: string;
+  name: string;
+  key: string;
+  repo: boolean;
+  trees?: number;
+  branch?: string;
+  overrides: number;
+}
+
+export interface McpCatalog {
+  servers: McpEntry[];
+  scope: CapabilityScope;
+}
+
+// How far a newly installed server reaches. user is every project; local is
+// this project only — installing is a global act either way, so local declares
+// the server globally and switches it off everywhere but here; project writes
+// the declaration into the repository, reaching everyone who clones it.
+export type McpInstallScope = "user" | "local" | "project";
 
 // One server a paste resolved to, before anything has been installed.
 export interface McpDraftServer {
@@ -244,6 +276,9 @@ export interface SkillEntry {
   allowedTools?: string[];
   manual?: boolean;
   enabled: boolean;
+  // Where the decision behind enabled lives, or absent when nothing overrides
+  // what the skill itself declares.
+  switchScope?: ScopeLayer;
 }
 
 // implicit is the session-wide switch for model-initiated discovery. With it
@@ -251,6 +286,7 @@ export interface SkillEntry {
 export interface SkillCatalog {
   implicit: boolean;
   skills: SkillEntry[];
+  scope?: CapabilityScope;
 }
 
 export interface WorkspaceEntry {
@@ -407,7 +443,12 @@ export interface AgentPort {
   skills(): Promise<SkillCatalog>;
   // Persisted, but the running session keeps the prompt index it was built
   // with: the switch reaches the model on the next rebuild, not this turn.
-  setSkillEnabled(name: string, enabled: boolean): Promise<void>;
+  // Flipping a skill this project inherits writes a project row by default: the
+  // user answered for this folder, and two projects may hold different skills
+  // of one name.
+  setSkillEnabled(name: string, enabled: boolean, scope?: ScopeLayer): Promise<void>;
+  // Drops this project's exception so the skill inherits again.
+  clearSkillOverride(name: string): Promise<void>;
   plugins(): Promise<PluginPackage[]>;
   // Two calls, because what a package brings has to be looked at before it is
   // let in: plan writes nothing, and install echoes the plan's id back so a
@@ -456,15 +497,19 @@ export interface AgentPort {
   savePermissions(lists: PermissionLists): Promise<PermissionRules>;
   sandbox(): Promise<SandboxSettings>;
   saveSandbox(s: SandboxSettings): Promise<SandboxSettings>;
-  mcp(): Promise<McpEntry[]>;
+  mcp(): Promise<McpCatalog>;
   // Retries a failed or disconnected server and answers with its new state, so
   // the caller never has to race a follow-up GET against the connect.
   reconnectMcp(name: string): Promise<{ state: string; tools?: number; error?: string }>;
-  setMcpEnabled(name: string, enabled: boolean): Promise<void>;
+  setMcpEnabled(name: string, enabled: boolean, scope?: ScopeLayer): Promise<void>;
+  clearMcpOverride(name: string): Promise<void>;
+  // The project a capability listing answers for, on its own — a surface can
+  // name its folder before either list has loaded.
+  capabilityScope(): Promise<CapabilityScope>;
   // Resolves a pasted block without touching anything. Separate from install so
   // the user sees what would run before agreeing to it.
   parseMcp(input: string): Promise<McpDraft>;
-  installMcp(server: McpDraftServer, scope: "user" | "project"): Promise<McpInstallResult>;
+  installMcp(server: McpDraftServer, scope: McpInstallScope): Promise<McpInstallResult>;
   removeMcp(name: string): Promise<{ disconnected: boolean; stillConfigured: boolean }>;
   // An account is only for the networked surfaces (forum, crash follow-ups);
   // nothing in the agent loop calls these.

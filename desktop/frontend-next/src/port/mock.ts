@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, McpDraft, McpDraftServer, McpEntry, McpInstallResult, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, WorkspaceInfo, WorkspaceChanges, Attachment, ThemePack } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, ScopeLayer, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, WorkspaceInfo, WorkspaceChanges, Attachment, ThemePack } from "./port";
 import type { WireEvent } from "./wire";
 import { MockProvider } from "./mock_provider";
 import { SCRIPT } from "./fixture";
@@ -127,8 +127,22 @@ export class MockPort extends MockProvider implements AgentPort {
     { name: "figma", state: "failed", enabled: true, transport: "http", tools: 0, error: "401 unauthorized" },
   ];
 
-  async mcp(): Promise<McpEntry[]> {
-    return this.servers.map((s) => ({ ...s }));
+  async mcp(): Promise<McpCatalog> {
+    return { servers: this.servers.map((s) => ({ ...s })), scope: await this.capabilityScope() };
+  }
+
+  // A repository with several worktrees is the case the scope bar exists for,
+  // so the fixture is one rather than a lone folder.
+  async capabilityScope(): Promise<CapabilityScope> {
+    return {
+      root: "F:\Reasonix",
+      name: "Reasonix",
+      key: "repo:8f3c1a92d4e05b17",
+      repo: true,
+      trees: 3,
+      branch: "studio",
+      overrides: this.servers.filter((s) => s.localOverride).length + this.localSkills.size,
+    };
   }
 
   async reconnectMcp(name: string) {
@@ -147,11 +161,20 @@ export class MockPort extends MockProvider implements AgentPort {
     return { state: "ready", tools: s.tools };
   }
 
-  async setMcpEnabled(name: string, enabled: boolean) {
+  async setMcpEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project") {
     const s = this.servers.find((x) => x.name === name);
     if (!s) return;
     s.enabled = enabled;
     s.state = enabled ? (s.error ? "failed" : "idle") : "disabled";
+    s.localOverride = scope === "project";
+  }
+
+  async clearMcpOverride(name: string) {
+    const s = this.servers.find((x) => x.name === name);
+    if (!s) return;
+    s.localOverride = false;
+    s.enabled = true;
+    s.state = s.error ? "failed" : "idle";
   }
 
   // A rough stand-in for internal/mcpsetup: enough shape for the confirmation
