@@ -52,19 +52,26 @@ func run(dir, version, tag string) error {
 	if err != nil {
 		return err
 	}
+	seen := 0
 	for _, e := range entries {
 		name := e.Name()
 		if e.IsDir() || !strings.HasPrefix(name, artifactPrefix) || strings.HasSuffix(name, ".minisig") {
 			continue
 		}
+		seen++
 		size, sum, err := hashFile(filepath.Join(dir, name))
 		if err != nil {
 			return err
 		}
 		url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, name)
 		asset := update.Asset{URL: url, Sig: url + ".minisig", Size: size, SHA256: sum}
-		m.Downloads[name] = asset
-		fmt.Printf("download: %s (%d bytes)\n", name, size)
+		// Downloads is what a person is offered, so it lists what installs
+		// itself. A portable archive stays a release asset, but offering it
+		// beside the installer only asks the reader to choose blind.
+		if installable(name) {
+			m.Downloads[name] = asset
+			fmt.Printf("download: %s (%d bytes)\n", name, size)
+		}
 		// A .deb installs through dpkg, which carries a binary and the SPA tree
 		// alike — so it is the one artifact Studio can self-update from today.
 		// Platforms stays empty until the shared apply path can publish a tree.
@@ -73,7 +80,7 @@ func run(dir, version, tag string) error {
 			fmt.Printf("native package: %s -> %s\n", name, key)
 		}
 	}
-	if len(m.Downloads) == 0 {
+	if seen == 0 {
 		return fmt.Errorf("studio-manifest: no %s* artifacts in %s", artifactPrefix, dir)
 	}
 	b, err := json.MarshalIndent(m, "", "  ")
@@ -81,6 +88,15 @@ func run(dir, version, tag string) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, "latest.json"), append(b, '\n'), 0o644)
+}
+
+// installable reports whether an artifact installs itself rather than expecting
+// the reader to place it: a disk image to drag from, an installer to run, a
+// package for dpkg.
+func installable(name string) bool {
+	return strings.HasSuffix(name, ".dmg") ||
+		strings.HasSuffix(name, "-installer.exe") ||
+		strings.HasSuffix(name, ".deb")
 }
 
 // nativePackageKey maps a .deb artifact name to the platform whose dpkg install

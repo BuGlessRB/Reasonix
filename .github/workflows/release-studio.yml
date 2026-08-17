@@ -121,6 +121,11 @@ jobs:
         if: runner.os == 'Linux'
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.46.3
 
+      # Same pinned, checksum-verified NSIS the desktop line installs.
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        run: pwsh -NoProfile -File scripts/install-nsis.ps1
+
       - name: Build
         shell: bash
         run: bash scripts/studio-build.sh "${{ matrix.platform }}" "${{ needs.resolve.outputs.version }}"
@@ -162,19 +167,23 @@ jobs:
           mkdir -p dist
           find staging -type f -name 'ReasonixStudio-*' -exec mv {} dist/ \;
           ls -la dist
-          # Three platforms plus Linux's .deb; fewer files means an artifact was
-          # lost between jobs, and a partial release is worse than a failed one.
+          # Three portable archives, the Linux .deb and the Windows installer.
+          # Fewer means an artifact was lost between jobs, and a partial release
+          # is worse than a failed one.
           count=$(find dist -type f -name 'ReasonixStudio-*' | wc -l)
-          if [ "$count" -lt 4 ]; then
-            echo "::error::expected 4 artifacts (3 platforms + the Linux .deb), found $count"
+          if [ "$count" -lt 5 ]; then
+            echo "::error::expected 5 artifacts (3 portable + Linux .deb + Windows installer), found $count"
             exit 1
           fi
-          # The .deb is the Linux self-update channel, so its absence is a
-          # silently degraded release rather than a missing download.
-          find dist -type f -name 'ReasonixStudio-linux-*.deb' | grep -q . || {
-            echo "::error::no Linux .deb in the release; nfpm did not run"
-            exit 1
-          }
+          # These two are how a user installs rather than unzips, and the .deb is
+          # also the Linux self-update channel — missing either degrades the
+          # release silently instead of failing it.
+          for required in 'ReasonixStudio-linux-*.deb' 'ReasonixStudio-windows-*-installer.exe'; do
+            find dist -type f -name "$required" | grep -q . || {
+              echo "::error::no $required in the release; its packager did not run"
+              exit 1
+            }
+          done
 
       # The same minisign key the desktop line uses, because the public key that
       # verifies it is compiled into the client (update.PublicKey).

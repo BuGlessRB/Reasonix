@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"reasonix/desktop/internal/update"
@@ -16,9 +17,10 @@ func TestManifestRecordsEveryArtifactWithItsSignature(t *testing.T) {
 	t.Setenv("GITHUB_REPOSITORY", "esengine/DeepSeek-Reasonix")
 	body := []byte("studio archive bytes")
 	for _, name := range []string{
+		"ReasonixStudio-windows-amd64-installer.exe",
+		"ReasonixStudio-darwin-universal.dmg",
+		"ReasonixStudio-linux-amd64.deb",
 		"ReasonixStudio-windows-amd64.zip",
-		"ReasonixStudio-darwin-universal.zip",
-		"ReasonixStudio-linux-amd64.tar.gz",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), body, 0o644); err != nil {
 			t.Fatal(err)
@@ -40,8 +42,16 @@ func TestManifestRecordsEveryArtifactWithItsSignature(t *testing.T) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatalf("the manifest must parse as the type the updater reads: %v", err)
 	}
+	// The portable archive is a release asset but not an offer: downloads names
+	// what installs itself, so a reader is not asked to choose between an
+	// installer and a zip with no way to tell which one to take.
 	if len(m.Downloads) != 3 {
-		t.Fatalf("downloads = %d, want the 3 archives (the .minisig files are not artifacts)", len(m.Downloads))
+		t.Fatalf("downloads = %d, want the installer, the disk image and the package", len(m.Downloads))
+	}
+	for name := range m.Downloads {
+		if strings.HasSuffix(name, ".zip") || strings.HasSuffix(name, ".tar.gz") {
+			t.Errorf("downloads offers %q, which the reader has to place themselves", name)
+		}
 	}
 	sum := sha256.Sum256(body)
 	for name, a := range m.Downloads {
