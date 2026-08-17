@@ -15,6 +15,12 @@ import (
 // says so rather than pretending to be a release.
 var version = "dev"
 
+// studioCatalog is Studio's own rollback catalog, published by
+// release-studio.yml. Leaving it empty falls back to update.IndexURL, the
+// desktop line's catalog, whose entries name desktop artifacts — Studio would
+// offer to "update" itself into reasonix-desktop. Every Options here sets it.
+const studioCatalog = "https://dl.reasonix.io/studio/versions.json"
+
 // VersionEntry is one published release as the panel shows it.
 type VersionEntry struct {
 	Version     string `json:"version"`
@@ -54,7 +60,7 @@ func (a *App) Versions() VersionHub {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	st, err := update.New(update.Options{Current: version, Pinned: pinned, HTTP: client}).Check(ctx)
+	st, err := update.New(update.Options{Current: version, Pinned: pinned, HTTP: client, IndexURL: studioCatalog}).Check(ctx)
 	hub.Latest, hub.Newer, hub.StalePin = st.Latest, st.Newer, st.StalePin
 	hub.Versions = versionRows(st.Entries, version)
 	if err != nil {

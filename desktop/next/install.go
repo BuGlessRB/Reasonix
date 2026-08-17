@@ -56,13 +56,27 @@ func (a *App) GoToVersion(target string) error {
 	if err != nil {
 		return a.failUpdate(target, err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), updateTimeout)
+	defer cancel()
+	// The shared apply path names the desktop line's release members
+	// (ExtractReleaseUnit), so Studio's manifest lists no installable asset yet.
+	// Ask it rather than assume: filling platforms is what turns self-update on.
+	m, err := u.ManifestFor(ctx, target)
+	if err != nil {
+		return a.failUpdate(target, err)
+	}
+	if _, ok := m.Asset(); !ok {
+		return a.failUpdate(target, fmt.Errorf("%s 没有 %s 的可安装包，请到 %s 手动下载", target, update.CurrentPlatform(), m.DownloadPage))
+	}
 	if err := a.PinVersion(target); err != nil {
 		return a.failUpdate(target, err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), updateTimeout)
-	defer cancel()
 	inst := update.VersionedInstaller{Layout: layout, Staging: dir, Current: version}
-	if err := u.Apply(ctx, target, inst, a.updateReport(target)); err != nil {
+	cached, err := u.DownloadManifest(ctx, m, a.updateReport(target))
+	if err != nil {
+		return a.failUpdate(target, err)
+	}
+	if err := inst.Install(ctx, cached); err != nil {
 		return a.failUpdate(target, err)
 	}
 	a.emit(UpdateProgress{Version: target, Phase: "relaunching"})
@@ -123,6 +137,7 @@ func studioUpdater(target, cacheDir string) (*update.Updater, error) {
 		HTTP:     client,
 		Fallback: v4,
 		CacheDir: cacheDir,
+		IndexURL: studioCatalog,
 		// Go's default user agent is what release-edge bot protection scores
 		// worst (#6005), and a 403 there looks like "no versions" to the panel.
 		UserAgent:      fmt.Sprintf("Reasonix-Studio/%s (%s/%s)", version, goruntime.GOOS, goruntime.GOARCH),
