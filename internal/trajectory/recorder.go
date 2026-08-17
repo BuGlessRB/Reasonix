@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"reflect"
 	"sync"
 	"time"
 
@@ -33,6 +34,11 @@ type Record struct {
 	CompletionReport *CompletionReport    `json:"completion_report,omitempty"`
 	OutcomeProgress  *OutcomeProgress     `json:"outcome_progress,omitempty"`
 	MemoryRecall     *MemoryRecall        `json:"memory_recall,omitempty"`
+	// Deltas counts the streamed increments merged into this record; absent
+	// means one. TS stays the first increment's — that is the observation
+	// time-to-first-token readers key on — and EndTS carries the last's.
+	Deltas int   `json:"deltas,omitempty"`
+	EndTS  int64 `json:"end_ts,omitempty"`
 }
 
 // MemoryRecall mirrors event.MemoryRecallAudit with stable snake_case keys.
@@ -130,7 +136,18 @@ type Recorder struct {
 	seq    uint64
 	err    error
 	closed bool
+
+	// The run in flight, held only while consecutive same-kind deltas arrive.
+	pend    *eventwire.Event
+	pendTS  int64
+	pendEnd int64
+	pendN   int
 }
+
+// coalesceCap bounds what one merged record can hold. A kill loses the run in
+// flight, so the cap is what keeps that loss bounded; every ordinary turn ends
+// on a usage or message event, which flushes long before this is reached.
+const coalesceCap = 256
 
 // New opens (or truncates) path and returns a Recorder forwarding to inner.
 // A nil clock means time.Now.
@@ -149,13 +166,22 @@ func New(inner event.Sink, path string, clock func() time.Time) (*Recorder, erro
 func (r *Recorder) append(rec Record) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// Anything that is not a delta ends the run in flight, so the file keeps
+	// the order the events arrived in.
+	r.flushPendingLocked()
+	r.appendLocked(rec)
+}
+
+func (r *Recorder) appendLocked(rec Record) {
 	if r.closed || r.err != nil {
 		return
 	}
 	r.seq++
 	rec.SchemaVersion = SchemaVersion
 	rec.Seq = r.seq
-	rec.TS = r.clock().UnixMilli()
+	if rec.TS == 0 {
+		rec.TS = r.clock().UnixMilli()
+	}
 	if err := r.enc.Encode(rec); err != nil {
 		r.err = err
 		return
@@ -166,9 +192,64 @@ func (r *Recorder) append(rec Record) {
 	}
 }
 
+// plainDelta reports whether w is a streamed increment carrying nothing but
+// its text. Citations, a tool, an error — anything else set means it is not
+// one, so a field added to the wire later stops merging instead of being
+// silently dropped into a neighbour's record.
+func plainDelta(w *eventwire.Event) bool {
+	if w.Kind != "reasoning" && w.Kind != "text" {
+		return false
+	}
+	if w.Text == "" {
+		return false
+	}
+	bare := *w
+	bare.Kind, bare.Text = "", ""
+	return reflect.DeepEqual(bare, eventwire.Event{})
+}
+
+// A run emits these by the hundred — 832 reasoning increments carrying 6.5k
+// characters in one observed turn — and one record each is what made a
+// two-minute benchmark cost a 484KB trajectory whose content was 19KB. Merging
+// adjacent same-kind deltas keeps every character and every reader: the only
+// timestamp anything consumes is the first one, which TS still carries.
+func (r *Recorder) appendDelta(w eventwire.Event) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.err != nil {
+		return
+	}
+	now := r.clock().UnixMilli()
+	if r.pend != nil && r.pend.Kind == w.Kind && r.pendN < coalesceCap {
+		r.pend.Text += w.Text
+		r.pendEnd = now
+		r.pendN++
+		return
+	}
+	r.flushPendingLocked()
+	held := w
+	r.pend, r.pendTS, r.pendEnd, r.pendN = &held, now, now, 1
+}
+
+func (r *Recorder) flushPendingLocked() {
+	if r.pend == nil {
+		return
+	}
+	rec := Record{Event: r.pend, TS: r.pendTS}
+	if r.pendN > 1 {
+		rec.Deltas, rec.EndTS = r.pendN, r.pendEnd
+	}
+	r.pend, r.pendTS, r.pendEnd, r.pendN = nil, 0, 0, 0
+	r.appendLocked(rec)
+}
+
 func (r *Recorder) Emit(e event.Event) {
 	w := eventwire.ToWire(e)
-	r.append(Record{Event: &w})
+	if plainDelta(&w) {
+		r.appendDelta(w)
+	} else {
+		r.append(Record{Event: &w})
+	}
 	r.inner.Emit(e)
 }
 
@@ -280,6 +361,7 @@ func (r *Recorder) Close() error {
 	if r.closed {
 		return r.err
 	}
+	r.flushPendingLocked()
 	r.closed = true
 	if err := r.buf.Flush(); err != nil && r.err == nil {
 		r.err = err
