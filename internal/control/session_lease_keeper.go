@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 
@@ -51,11 +52,32 @@ func (k *SessionLeaseKeeper) Rebind(path string) error {
 	}
 	lease, err := agent.TryAcquireSessionLease(path)
 	if err != nil {
-		return err
+		reclaimed, reclaimErr := reclaimOwnSessionLease(path, err)
+		if reclaimErr != nil {
+			return err
+		}
+		lease = reclaimed
 	}
 	k.releaseLocked()
 	k.lease = lease
 	return nil
+}
+
+// reclaimOwnSessionLease recovers a lease this process dropped without
+// releasing, whose stranded owner entry then refuses every later bind while
+// naming this very process as the holder. Only our own leftover is taken: a
+// readable info naming someone else is respected, and the OS lock refuses a
+// live holder anyway — damaged info with a free lock is a leftover, not one.
+func reclaimOwnSessionLease(path string, cause error) (*agent.SessionLease, error) {
+	if !errors.Is(cause, agent.ErrSessionLeaseHeld) {
+		return nil, cause
+	}
+	var leaseErr *agent.SessionLeaseError
+	if errors.As(cause, &leaseErr) && leaseErr != nil && leaseErr.Info != nil &&
+		(leaseErr.Info.PID != os.Getpid() || leaseErr.Info.WriterID != agent.SessionWriterID()) {
+		return nil, cause
+	}
+	return agent.TryReclaimCurrentProcessSessionLease(path)
 }
 
 // HandleSessionRecovered moves the single-session frontend lease before a
@@ -74,6 +96,11 @@ func (k *SessionLeaseKeeper) HandleSessionRecovered(info SessionRecoveryInfo) er
 		return nil
 	}
 	lease, err := agent.TryAcquireSessionLease(recoveryPath)
+	if err != nil {
+		if reclaimed, reclaimErr := reclaimOwnSessionLease(recoveryPath, err); reclaimErr == nil {
+			lease, err = reclaimed, nil
+		}
+	}
 	if err == nil && k.controller != nil {
 		err = k.controller.BindSessionWriteAuthority(lease)
 	}
@@ -209,6 +236,16 @@ func SessionInUseMessage(err error) string {
 	}
 	info := leaseErr.Info
 	var b strings.Builder
+	// Naming our own pid as "another process" sends the reader looking for a
+	// second window that does not exist; the holder is this Reasonix, on
+	// another session binding.
+	if info.PID == os.Getpid() {
+		b.WriteString("this session is already open elsewhere in this Reasonix")
+		if !info.AcquiredAt.IsZero() {
+			b.WriteString(" (since " + info.AcquiredAt.Local().Format("15:04") + ")")
+		}
+		return b.String()
+	}
 	fmt.Fprintf(&b, "this session is in use by another Reasonix process (pid %d", info.PID)
 	if host := strings.TrimSpace(info.Hostname); host != "" {
 		b.WriteString(" on " + host)
