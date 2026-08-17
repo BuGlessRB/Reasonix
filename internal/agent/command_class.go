@@ -44,6 +44,12 @@ const (
 	commandClassMaxCommand   = 400
 )
 
+// A classification is a lookup, not a sample: the same command answering
+// differently on a retry is exactly what the cache exists to hide, and hiding it
+// only fixes the second call. The turn's own temperature has nothing to say
+// about it, and OptionalTemperature drops a zero, so the pointer is taken here.
+var classTemperature = func() *float64 { zero := 0.0; return &zero }()
+
 // commandClassCache remembers one verdict per segment for the process. The
 // evidence ledger is audited, so the same segment must classify the same way
 // every time it appears; a cached answer is what makes that true.
@@ -149,9 +155,16 @@ func (a *Agent) askClass(ctx context.Context, systemPrompt, segment, affirmative
 
 	var usage *provider.Usage
 	defer func() {
-		if usage != nil && usage.TotalTokens > 0 {
-			a.svc.sink.Emit(event.Event{Kind: event.Usage, ModelRef: a.modelRef, Usage: usage,
-				Pricing: a.svc.pricing, UsageSource: event.UsageSourceCompaction})
+		if usage != nil && usage.TotalTokens > 0 && a.svc.sink != nil {
+			// Reported as what it is, on the model that answered it. Billing a
+			// classification to compaction at the turn's own price hid both how
+			// often the tables run short and how little the cheap tier costs.
+			modelRef, pricing := a.modelRef, a.svc.pricing
+			if ref := strings.TrimSpace(a.svc.triageRef); ref != "" {
+				modelRef, pricing = ref, a.svc.triagePricing
+			}
+			a.svc.sink.Emit(event.Event{Kind: event.Usage, ModelRef: modelRef, Usage: usage,
+				Pricing: pricing, UsageSource: event.UsageSourceClassifier})
 		}
 	}()
 
@@ -162,7 +175,7 @@ func (a *Agent) askClass(ctx context.Context, systemPrompt, segment, affirmative
 		},
 		MaxTokens:      commandClassMaxOutTokens,
 		EffortOverride: commandClassEffort,
-		Temperature:    provider.OptionalTemperature(a.temperature),
+		Temperature:    classTemperature,
 	})
 	if err != nil {
 		return false

@@ -886,6 +886,11 @@ type Options struct {
 	// shell command's read-only status, so far). nil leaves the static verdict
 	// standing rather than borrowing the turn's own provider mid-conversation.
 	TriageProvider provider.Provider
+	// TriageModelRef and TriagePricing describe TriageProvider, so a
+	// classification is reported as what it was and priced at the tier it ran
+	// on rather than the turn's.
+	TriageModelRef string
+	TriagePricing  *provider.Pricing
 	// ModelRef names the canonical "provider/model" ref backing this agent's
 	// provider instance. It is attached to emitted Usage events so downstream
 	// usage accounting can attribute tokens to the exact model.

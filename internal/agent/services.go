@@ -24,6 +24,10 @@ type agentServices struct {
 	// on, off the turn's own model so a cheap one can serve them. nil falls back
 	// to prov, which is correct but pays the main model for a two-word answer.
 	triage provider.Provider
+	// triageRef and triagePricing describe triage, so a classification is
+	// attributed to the model that answered it and priced at its tier.
+	triageRef     string
+	triagePricing *provider.Pricing
 	// pricing turns provider usage into money for the task budget.
 	pricing *provider.Pricing
 	// sink receives the turn's typed event stream. Frontends decide how to
@@ -91,6 +95,8 @@ func newAgentServices(
 	return agentServices{
 		prov:             prov,
 		triage:           opts.TriageProvider,
+		triageRef:        opts.TriageModelRef,
+		triagePricing:    opts.TriagePricing,
 		tools:            tools,
 		pricing:          opts.Pricing,
 		sink:             sink,
