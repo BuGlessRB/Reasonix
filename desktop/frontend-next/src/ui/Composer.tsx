@@ -18,13 +18,14 @@ const APPROVALS: [ApprovalMode, string, string][] = [
 // Only the ladder the kernel would accept for the model in hand. A fixed list
 // here offered rungs a given model does not have, and picking one looked like
 // the control was dead: the request was refused downstream, with nothing on the
-// composer to say so. auto is prepended because it is not a rung — it means
-// "whatever this model defaults to", which every model has.
+// composer to say so. The kernel's list already opens with "auto" — prepending
+// another one put the same rung in the menu twice. The fallback is for a model
+// that declares nothing at all, and only then.
 const EFFORT_FALLBACK = ["auto", "low", "medium", "high", "xhigh", "max"];
 
 function effortsFor(models: ModelEntry[], ref?: string): string[] {
   const declared = models.find((m) => m.ref === ref)?.efforts;
-  return declared?.length ? ["auto", ...declared] : EFFORT_FALLBACK;
+  return declared?.length ? declared : EFFORT_FALLBACK;
 }
 
 // 强度是有序的，批准是有序的 —— 一排全等的胶囊把这件事藏了起来。两个刻度把
