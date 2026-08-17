@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/desktop/internal/update"
 )
 
 func TestDirIsWritable(t *testing.T) {
@@ -31,7 +33,7 @@ func TestDetectLinuxInstallProfilePortableWritable(t *testing.T) {
 		return
 	}
 	if profile.Mode == installModePortable {
-		if !profile.CanSelfUpdate || profile.ArtifactKind != artifactKindTarball {
+		if !profile.CanSelfUpdate || profile.ArtifactKind != update.KindTarball {
 			t.Fatalf("portable profile incomplete: %+v", profile)
 		}
 		return

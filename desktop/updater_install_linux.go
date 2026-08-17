@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"reasonix/desktop/internal/update"
 )
 
 // dirIsWritable reports whether the process can create a temporary file in dir.
@@ -64,7 +66,7 @@ func detectLinuxInstallProfile() installProfile {
 				Mode:          installModeDeb,
 				CanSelfUpdate: true,
 				RequiresElev:  true,
-				ArtifactKind:  artifactKindDeb,
+				ArtifactKind:  update.KindDeb,
 			}
 		}
 		return installProfile{
@@ -79,7 +81,7 @@ func detectLinuxInstallProfile() installProfile {
 		return installProfile{
 			Mode:          installModePortable,
 			CanSelfUpdate: true,
-			ArtifactKind:  artifactKindTarball,
+			ArtifactKind:  update.KindTarball,
 		}
 	}
 

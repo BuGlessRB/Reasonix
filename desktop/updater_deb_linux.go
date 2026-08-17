@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"reasonix/desktop/internal/update"
 )
 
 // Linux privileged-install error classes. errorClass maps these substrings into
