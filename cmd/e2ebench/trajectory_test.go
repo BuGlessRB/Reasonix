@@ -462,7 +462,7 @@ func TestRenderTimeAttributionIncludesBatchingLine(t *testing.T) {
 		"**calls/round** 1.7",
 		"**single-read rounds** 2 (67%)",
 		"**parallel rounds** 1 (saved 0.5s)",
-		"**start-delay p95** 50ms",
+		"**queue p95** 50ms",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("batching line missing %q:\n%s", want, got)
@@ -557,5 +557,37 @@ func TestRenderBodyIncludesTimeAttributionOnlyForRecordedRuns(t *testing.T) {
 	got := renderBody([]result{recorded})
 	if !strings.Contains(got, "Time attribution") || !strings.Contains(got, "(1 recorded runs)") {
 		t.Fatalf("recorded run missing time attribution:\n%s", got)
+	}
+}
+
+// TestSummarizeTrajectorySplitsQueueFromWaitingOnWork pins what a start delay
+// means: b was dispatched with a but could not begin until a finished, so its
+// delay is time spent behind work, not scheduling. Booking both as one number
+// reported a serial batch as if the scheduler were slow.
+func TestSummarizeTrajectorySplitsQueueFromWaitingOnWork(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "serial.trajectory.jsonl")
+	lines := []string{
+		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
+		`{"seq":2,"ts":1000,"event":{"kind":"tool_dispatch","tool":{"id":"a","name":"bash"}}}`,
+		`{"seq":3,"ts":1000,"event":{"kind":"tool_dispatch","tool":{"id":"b","name":"bash"}}}`,
+		`{"seq":4,"ts":3000,"event":{"kind":"tool_result","tool":{"id":"a","name":"bash","durationMs":2000,"startedAt":1000,"endedAt":3000}}}`,
+		`{"seq":5,"ts":3010,"event":{"kind":"tool_result","tool":{"id":"b","name":"bash","durationMs":10,"startedAt":3000,"endedAt":3010}}}`,
+		`{"seq":6,"ts":4000,"event":{"kind":"turn_done"}}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	s, err := summarizeTrajectory(path)
+	if err != nil {
+		t.Fatalf("summarizeTrajectory: %v", err)
+	}
+	if s.SerialWaitP95Ms != 2000 {
+		t.Errorf("serial wait p95 = %d, want 2000 (b waited for a)", s.SerialWaitP95Ms)
+	}
+	if s.StartDelayP95Ms != 0 {
+		t.Errorf("queue p95 = %d, want 0 (neither call waited on the scheduler)", s.StartDelayP95Ms)
+	}
+	if s.ToolQueueMs != 2000 {
+		t.Errorf("total queue ms = %d, want 2000 (both halves still counted once)", s.ToolQueueMs)
 	}
 }

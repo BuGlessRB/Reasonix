@@ -149,7 +149,7 @@ func TestRenderOutcomeProgressAggregatesRuns(t *testing.T) {
 	results := []result{
 		{Trajectory: &trajectorySummary{Outcome: &outcomeSummary{
 			Rounds: 8, ProgressRounds: 5, FalseProgressRounds: 2,
-			Objective: 2, BestScore: 2, FinalScore: 2,
+			Objective: 2, BestScore: 2, FinalScore: 2, VerificationRevisits: 3,
 		}}},
 		{Trajectory: &trajectorySummary{Outcome: &outcomeSummary{
 			Objective: 1, Regression: 1, BestScore: 1, FinalScore: 0,
@@ -172,5 +172,23 @@ func TestRenderOutcomeProgressAggregatesRuns(t *testing.T) {
 	}
 	if renderOutcomeProgress(nil) != "" {
 		t.Error("no runs must render nothing")
+	}
+}
+
+// TestRenderOutcomeProgressWithoutRepeatedChecks pins the honest reading: with
+// no check ever run twice, a fail→pass edge was never observable, so the ratio
+// would be reporting its own blindness.
+func TestRenderOutcomeProgressWithoutRepeatedChecks(t *testing.T) {
+	results := []result{
+		{Trajectory: &trajectorySummary{Outcome: &outcomeSummary{
+			Rounds: 6, ProgressRounds: 4, FalseProgressRounds: 4, FinalScore: 0,
+		}}},
+	}
+	got := renderOutcomeProgress(results)
+	if !strings.Contains(got, "**false progress** unmeasured (no check ran twice)") {
+		t.Errorf("render must say unmeasured, got:\n%s", got)
+	}
+	if strings.Contains(got, "100%") {
+		t.Errorf("render must not claim a ratio it could not observe, got:\n%s", got)
 	}
 }

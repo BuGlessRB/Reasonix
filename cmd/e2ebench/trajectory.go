@@ -40,7 +40,11 @@ type trajectorySummary struct {
 	ParallelSavedMs  int64 `json:"parallel_saved_ms,omitempty"`  // Σ durations − batch wall
 	SingleReadRounds int   `json:"single_read_rounds,omitempty"` // 1-call read-only batches
 	SingleReadStreak int   `json:"single_read_streak,omitempty"` // longest consecutive run
-	StartDelayP95Ms  int64 `json:"start_delay_p95_ms,omitempty"` // dispatch→start, in-batch queue
+	// StartDelayP95Ms is dispatch→start inside batches that actually overlapped,
+	// so it prices scheduling. SerialWaitP95Ms is the same span in batches that
+	// ran one at a time, where waiting for the previous call is the design.
+	StartDelayP95Ms int64 `json:"start_delay_p95_ms,omitempty"`
+	SerialWaitP95Ms int64 `json:"serial_wait_p95_ms,omitempty"`
 
 	// RefusedCalls counts calls stopped before they ran, keyed by the gate that
 	// stopped them. A misfiring gate repeats one phase across runs, which the
@@ -237,72 +241,13 @@ type toolBatch struct {
 	readOnly   int
 	serialMs   int64
 	intervals  [][2]int64
+	waits      []callWait
 }
 
-// renderTimeAttribution aggregates recorded runs into one report line; empty
-// when no run in the suite carried a trajectory.
-func renderTimeAttribution(results []result) string {
-	var toolMs, modelMs, gapMs, savedMs, delayP95, recoveryGapMs, cleanP95 int64
-	var retryWaitMs, compactionMs, plannerMs, modelStreamMs, agentOtherMs, startupMs int64
-	runs, rounds, batches, calls, singleReads, parallelBatches := 0, 0, 0, 0, 0, 0
-	recoveryRounds, streamRetries, headerRetries, replays, emptyFinals := 0, 0, 0, 0, 0
-	for _, r := range results {
-		if r.Trajectory != nil {
-			runs++
-			toolMs += r.Trajectory.toolWall()
-			modelMs += r.Trajectory.ModelMs
-			rounds += r.Trajectory.ModelRounds
-			gapMs += r.Trajectory.ModelGapTotalMs
-			batches += r.Trajectory.ToolBatches
-			calls += r.Trajectory.TopLevelCalls
-			singleReads += r.Trajectory.SingleReadRounds
-			parallelBatches += r.Trajectory.ParallelBatches
-			savedMs += r.Trajectory.ParallelSavedMs
-			delayP95 = max(delayP95, r.Trajectory.StartDelayP95Ms)
-			recoveryRounds += r.Trajectory.RecoveryRounds
-			recoveryGapMs += r.Trajectory.RecoveryGapMs
-			cleanP95 = max(cleanP95, r.Trajectory.CleanGapP95Ms)
-			streamRetries += r.Trajectory.StreamRetries
-			headerRetries += r.Trajectory.HeaderRetries
-			replays += r.Trajectory.ReasoningReplays
-			emptyFinals += r.Trajectory.EmptyFinalRetries
-			retryWaitMs += r.Trajectory.RetryWaitMs
-			compactionMs += r.Trajectory.CompactionMs
-			plannerMs += r.Trajectory.PlannerStreamMs
-			modelStreamMs += r.Trajectory.ModelStreamMs
-			agentOtherMs += r.Trajectory.AgentOtherMs
-			if r.WallMs > r.Trajectory.SpanMs {
-				startupMs += r.WallMs - r.Trajectory.SpanMs
-			}
-		}
-	}
-	if runs == 0 {
-		return ""
-	}
-	line := fmt.Sprintf("**Time attribution** (%d recorded runs): **tools** %s (%s) · **model** %s (%s)",
-		runs, dur(toolMs), pct(int(toolMs), int(toolMs+modelMs)),
-		dur(modelMs), pct(int(modelMs), int(toolMs+modelMs)))
-	if rounds > 0 {
-		line += fmt.Sprintf(" · **model rounds** %d (avg gap %s)", rounds, dur(gapMs/int64(rounds)))
-	}
-	if batches > 0 {
-		line += fmt.Sprintf("\n\n**Batching** (%d tool rounds): **calls/round** %.1f · **single-read rounds** %d (%s) · **parallel rounds** %d (saved %s) · **start-delay p95** %s",
-			batches, float64(calls)/float64(batches),
-			singleReads, pct(singleReads, batches),
-			parallelBatches, dur(savedMs), durMs(delayP95))
-	}
-	if recoveryRounds+streamRetries+headerRetries+replays+emptyFinals > 0 {
-		line += fmt.Sprintf("\n\n**Recovery**: recovery rounds %d (%s of rounds, %s) · stream retries %d · header retries %d · reasoning replays %d · empty-final retries %d · clean gap p95 %s",
-			recoveryRounds, pct(recoveryRounds, rounds), dur(recoveryGapMs),
-			streamRetries, headerRetries, replays, emptyFinals, durMs(cleanP95))
-	}
-	if plannerMs+modelStreamMs > 0 {
-		line += fmt.Sprintf("\n\n**Wall decomposition**: **startup** %s · **agent** %s · **planner** %s · **model** %s · **tools** %s · **retry** %s · **compaction** %s",
-			dur(startupMs), dur(agentOtherMs), dur(plannerMs), dur(modelStreamMs),
-			dur(toolMs), dur(retryWaitMs), dur(compactionMs))
-	}
-	line += renderRoundEfficiency(results)
-	return line + "\n\n"
+// callWait is one call's dispatch→start window, kept whole so the batch can
+// ask whether another call occupied it rather than guessing from batch shape.
+type callWait struct {
+	dispatch, start int64
 }
 
 // summarizeTrajectory reads a run's JSONL trajectory. A truncated final line
@@ -627,7 +572,7 @@ func (t *trajScan) recordResult(rec trajectoryRecord) {
 			t.firstToolTS = tl.StartedAt
 		}
 		if disp, ok := t.batch.dispatchTS[tl.ID]; ok && tl.StartedAt >= disp {
-			t.delays = append(t.delays, tl.StartedAt-disp)
+			t.batch.waits = append(t.batch.waits, callWait{dispatch: disp, start: tl.StartedAt})
 		}
 	} else {
 		t.orphanMs += tl.DurationMs
@@ -658,13 +603,33 @@ func (t *trajScan) closeBatch() {
 	} else {
 		t.streakRun = 0
 	}
+	overlapped := false
 	if len(b.intervals) > 1 {
-		wall, overlapped := intervalSpan(b.intervals)
+		wall, ov := intervalSpan(b.intervals)
+		overlapped = ov
 		if overlapped {
 			s.ParallelBatches++
 		}
 		if saved := b.serialMs - wall; saved > 0 {
 			s.ParallelSavedMs += saved
+		}
+	}
+	// A call waited on work, rather than on the scheduler, when another call in
+	// the batch was still executing inside its dispatch→start window.
+	for _, w := range b.waits {
+		delay := w.start - w.dispatch
+		t.queueMs += delay
+		blocked := false
+		for _, iv := range b.intervals {
+			if iv[0] < w.start && iv[1] > w.dispatch {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			t.serialWaits = append(t.serialWaits, delay)
+		} else {
+			t.delays = append(t.delays, delay)
 		}
 	}
 	t.allIntervals = append(t.allIntervals, b.intervals...)
@@ -690,9 +655,8 @@ func (t *trajScan) finish() *trajectorySummary {
 	s.ModelGapP95Ms = p95(t.gaps)
 	s.CleanGapP95Ms = p95(t.cleanGaps)
 	s.StartDelayP95Ms = p95(t.delays)
-	for _, d := range t.delays {
-		s.ToolQueueMs += d
-	}
+	s.SerialWaitP95Ms = p95(t.serialWaits)
+	s.ToolQueueMs = t.queueMs
 	if t.firstDelta > t.firstTS {
 		s.TTFTMs = t.firstDelta - t.firstTS
 	}

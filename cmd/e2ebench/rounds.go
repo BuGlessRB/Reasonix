@@ -66,12 +66,16 @@ type trajScan struct {
 	firstTS, lastTS    int64
 	orphanMs, gapStart int64
 	gaps, cleanGaps    []int64
-	delays             []int64
-	allIntervals       [][2]int64
-	inModel            bool
-	taint              string
-	streakRun          int
-	batch              *toolBatch
+	// delays are dispatch→start inside batches that overlapped; serialWaits the
+	// same span where the batch ran one call at a time. queueMs totals both.
+	delays       []int64
+	serialWaits  []int64
+	queueMs      int64
+	allIntervals [][2]int64
+	inModel      bool
+	taint        string
+	streakRun    int
+	batch        *toolBatch
 
 	attemptBegin            map[string]int64
 	attempts                []modelAttempt
@@ -88,6 +92,9 @@ type trajScan struct {
 	outcomePoints          []outcomePoint
 	verifySeen, verifyPass map[string]bool
 	verifyPoints           []verifyPoint
+	// verifyRevisits counts checks observed a second time — the only rounds in
+	// which a fail→pass edge could be seen at all.
+	verifyRevisits int
 
 	gapReason, gapCompl, gapPrompt int64
 

@@ -22,6 +22,10 @@ type outcomeSummary struct {
 	TTFDCMs    int64 `json:"ttfdc_ms,omitempty"`
 	DebtAgeMax int   `json:"debt_age_max,omitempty"`
 	Backfilled bool  `json:"backfilled,omitempty"`
+	// VerificationRevisits is how many checks ran a second time. At zero no
+	// transition was observable, so a false-progress ratio would be measuring
+	// its own blindness.
+	VerificationRevisits int `json:"verification_revisits,omitempty"`
 
 	// DebtArea is the run's total unverified-mutation exposure (debt age summed
 	// over rounds); BlindPeak the worst run of mutations with no check between.
@@ -54,6 +58,9 @@ func (t *trajScan) observeVerification(key string, passed bool, ts int64) {
 		t.verifyPass = map[string]bool{}
 	}
 	seen, was := t.verifySeen[key], t.verifyPass[key]
+	if seen {
+		t.verifyRevisits++
+	}
 	t.verifySeen[key] = true
 	t.verifyPass[key] = passed
 	p := verifyPoint{ts: ts}
@@ -69,15 +76,18 @@ func (t *trajScan) observeVerification(key string, passed bool, ts int64) {
 // summarizeOutcome prefers recorded shadow samples; older recordings fall back
 // to the verification backfill, which cannot price legacy-scorer claims.
 func (t *trajScan) summarizeOutcome() *outcomeSummary {
-	if len(t.outcomePoints) > 0 {
-		o := summarizeOutcomePoints(t.outcomePoints, t.firstTS, t.lastTS)
+	var o *outcomeSummary
+	switch {
+	case len(t.outcomePoints) > 0:
+		o = summarizeOutcomePoints(t.outcomePoints, t.firstTS, t.lastTS)
 		t.attachDebtExposure(o)
-		return o
+	case len(t.verifyPoints) > 0:
+		o = summarizeVerifyBackfill(t.verifyPoints, t.lastTS)
+	default:
+		return nil
 	}
-	if len(t.verifyPoints) > 0 {
-		return summarizeVerifyBackfill(t.verifyPoints, t.lastTS)
-	}
-	return nil
+	o.VerificationRevisits = t.verifyRevisits
+	return o
 }
 
 func summarizeOutcomePoints(points []outcomePoint, firstTS, lastTS int64) *outcomeSummary {
@@ -179,7 +189,7 @@ func finishScore(o *outcomeSummary, score, best int, bestTS, lastTS int64) {
 func renderOutcomeProgress(results []result) string {
 	runs, backfilled := 0, 0
 	progress, falseProgress := 0, 0
-	objective, regression, regressed := 0, 0, 0
+	objective, regression, regressed, revisits := 0, 0, 0, 0
 	var regretMs int64
 	stallMax := 0
 	for _, r := range results {
@@ -193,6 +203,7 @@ func renderOutcomeProgress(results []result) string {
 		}
 		progress += o.ProgressRounds
 		falseProgress += o.FalseProgressRounds
+		revisits += o.VerificationRevisits
 		objective += o.Objective
 		regression += o.Regression
 		stallMax = max(stallMax, o.SolutionStallMax)
@@ -227,7 +238,11 @@ func renderOutcomeProgress(results []result) string {
 		line += fmt.Sprintf(" · **verification debt max** %d rounds", debtMax)
 	}
 	if progress > 0 {
-		line += fmt.Sprintf(" · **false progress** %d/%d (%s)", falseProgress, progress, pct(falseProgress, progress))
+		if revisits == 0 {
+			line += " · **false progress** unmeasured (no check ran twice)"
+		} else {
+			line += fmt.Sprintf(" · **false progress** %d/%d (%s)", falseProgress, progress, pct(falseProgress, progress))
+		}
 	}
 	if stallMax > 0 {
 		line += fmt.Sprintf(" · **solution stall max** %d rounds", stallMax)
