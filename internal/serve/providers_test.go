@@ -50,11 +50,10 @@ api_key_env = "EXISTING_API_KEY"
 }
 
 // closeSharedCatalogsOnCleanup releases the usage and history catalogs before the
-// test's home is removed. They are process-wide, cached per home rather than
-// owned by a controller or hub, so no Close on either reaches them — right in
-// production, where one process wants one handle. Any test pointing
-// REASONIX_HOME at a TempDir needs this: Windows refuses to unlink a file still
-// held open, so the cleanup fails the test after it has already passed.
+// test's home is removed. They are process-wide, cached per home rather than owned
+// by a controller or hub, so no Close reaches them — right in production, wrong
+// here: Windows will not unlink an open file, failing a test that already passed.
+// Any test pointing REASONIX_HOME at a TempDir needs this.
 func closeSharedCatalogsOnCleanup(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
