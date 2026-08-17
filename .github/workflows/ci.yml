@@ -1,10 +1,14 @@
 name: CI
 
+# studio is a parallel release line, not a feature branch: it carries the
+# kernel changes Studio is built on, so it needs the same kernel gates main-v2
+# has. Studio's own surface (desktop/next, desktop/frontend-next) exists only
+# there and is covered by studio.yml.
 on:
   push:
-    branches: [main-v2]
+    branches: [main-v2, studio]
   pull_request:
-    branches: [main-v2]
+    branches: [main-v2, studio]
 
 permissions:
   contents: read

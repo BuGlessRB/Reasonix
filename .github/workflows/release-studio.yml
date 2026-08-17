@@ -1,0 +1,252 @@
+name: Release Studio
+run-name: Release Studio ${{ inputs.tag || github.ref_name }}
+
+# Studio's release line, parallel to the desktop/CLI/npm set and deliberately
+# separate from it. release-stable.yml validates that every tag it publishes sits
+# on main-v2 history, which studio commits never do, so this line has its own tag
+# namespace (studio-v*), its own environment gate, and its own rollback catalog
+# at dl.reasonix.io/studio/versions.json.
+#
+# What it must never touch: the repository-wide "latest" release (every Studio
+# release is a prerelease) and the root dl.reasonix.io/versions.json, which is
+# the desktop line's catalog. Studio artifacts land under the tag prefix, which
+# cannot collide because the tag name itself differs.
+#
+# Windows artifacts are unsigned. The production SignPath policy allows exactly
+# one origin (protected main-v2), so a build from this branch cannot request it
+# and users will see a SmartScreen warning.
+on:
+  push:
+    tags: ['studio-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing studio tag to recover (for example studio-v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write # create the release and upload artifacts
+
+concurrency:
+  group: release-studio-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: resolve Studio release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag and version
+        id: release
+        env:
+          IN_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          tag="${IN_TAG:-$REF_NAME}"
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+)(\.[0-9A-Za-z-]+)*)?$'
+          if [[ ! "$tag" =~ ^studio-v(.+)$ ]] || [[ ! "${BASH_REMATCH[1]}" =~ $semver ]]; then
+            echo "::error::studio release tag must be studio-vMAJOR.MINOR.PATCH[-PRERELEASE], got: $tag"
+            exit 1
+          fi
+          # A dispatch recovers an existing tag; it must not invent one.
+          sha="$(git rev-parse --verify "refs/tags/$tag^{commit}")"
+          # The tag has to be on the studio line. Publishing a main-v2 commit
+          # from here would produce a Studio build without Studio in it.
+          if ! git merge-base --is-ancestor "$sha" origin/studio; then
+            echo "::error::$tag is not on studio history"
+            exit 1
+          fi
+          version="${tag#studio-}"
+          { echo "tag=$tag"; echo "version=$version"; echo "sha=$sha"; } >> "$GITHUB_OUTPUT"
+          echo "resolved $tag -> $version at $sha"
+
+  build:
+    name: build (${{ matrix.platform }})
+    needs: resolve
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows/amd64
+            runner: windows-latest
+          - platform: darwin/universal
+            runner: macos-latest
+          - platform: linux/amd64
+            runner: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: desktop/go.mod
+          cache: true
+          cache-dependency-path: desktop/go.sum
+
+      - uses: pnpm/action-setup@v6.0.9
+        with:
+          version: 10
+          run_install: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: desktop/frontend-next/pnpm-lock.yaml
+
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Build
+        shell: bash
+        run: bash scripts/studio-build.sh "${{ matrix.platform }}" "${{ needs.resolve.outputs.version }}"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: studio-${{ strategy.job-index }}
+          path: dist/ReasonixStudio-*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: sign, publish and mirror
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    # Owner approval for the whole line. The gate sits here rather than before
+    # build so the approval is given with the artifacts already proven to build.
+    environment: studio-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: desktop/go.mod
+          cache: true
+          cache-dependency-path: desktop/go.sum
+
+      - uses: actions/download-artifact@v6
+        with:
+          path: staging
+          merge-multiple: true
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          find staging -type f -name 'ReasonixStudio-*' -exec mv {} dist/ \;
+          ls -la dist
+          # Three platforms were built; fewer files means an artifact was lost
+          # between jobs, and a partial release is worse than a failed one.
+          count=$(find dist -type f -name 'ReasonixStudio-*' | wc -l)
+          if [ "$count" -lt 3 ]; then
+            echo "::error::expected 3 platform artifacts, found $count"
+            exit 1
+          fi
+
+      # The same minisign key the desktop line uses, because the public key that
+      # verifies it is compiled into the client (update.PublicKey).
+      - name: Sign
+        working-directory: desktop
+        env:
+          MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          go run ./cmd/sign sign ../dist/*
+          for f in ../dist/ReasonixStudio-*; do
+            case "$f" in *.minisig) continue ;; esac
+            go run ./cmd/sign verify "$f"
+          done
+
+      - name: Generate manifest
+        working-directory: desktop
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: go run ./cmd/studio-manifest ../dist "${{ needs.resolve.outputs.version }}" "${{ needs.resolve.outputs.tag }}"
+
+      # Always a prerelease: this line is not the public product line, and
+      # GitHub never promotes a prerelease to the repository-wide "latest".
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          notes=$(cat <<EOF
+          Reasonix Studio $VERSION — parallel preview line, built from the \`studio\` branch.
+
+          Windows and macOS artifacts are **unsigned**: production signing is bound to
+          protected \`main-v2\`, so expect a SmartScreen warning on Windows and to clear
+          the quarantine attribute on macOS (\`xattr -dr com.apple.quarantine\`).
+
+          Self-update is not available on this line yet — download and replace manually.
+          EOF
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --title "Reasonix Studio $VERSION" \
+              --notes "$notes" \
+              --prerelease \
+              --latest=false
+          fi
+
+      - name: Mirror to R2 and update the Studio catalog
+        env:
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          HAS_R2: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ACCOUNT_ID != '' && secrets.R2_BUCKET != '' }}
+        run: |
+          if [ "$HAS_R2" != "true" ]; then
+            echo "::warning::R2 credentials are not configured; the GitHub release is published but the Studio catalog was not updated, so running builds will not see this version"
+            exit 0
+          fi
+          aws configure set aws_access_key_id "${{ secrets.R2_ACCESS_KEY_ID }}"
+          aws configure set aws_secret_access_key "${{ secrets.R2_SECRET_ACCESS_KEY }}"
+          aws configure set default.region auto
+          endpoint="https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com"
+
+          # Immutable per-tag objects. The tag prefix cannot collide with the
+          # desktop line's because the tag names differ (studio-v* vs desktop-v*).
+          aws s3 cp dist/ "s3://${R2_BUCKET}/${TAG}/" --recursive --endpoint-url "$endpoint"
+
+          # Studio's own catalog. Writing the ROOT versions.json here would hand
+          # desktop users Studio releases, so the prefix is not optional.
+          current=/tmp/studio-versions-current.json
+          next=/tmp/studio-versions-next.json
+          source=-
+          if aws s3 cp "s3://${R2_BUCKET}/studio/versions.json" "$current" --endpoint-url "$endpoint" 2>/dev/null; then
+            source="$current"
+          else
+            echo "no existing Studio catalog; starting a new one"
+          fi
+          bash scripts/update-versions-index.sh "$source" "$VERSION" "$TAG" studio \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$next"
+          jq -e --arg v "$VERSION" '.versions | map(select(.version == $v)) | length == 1' "$next" >/dev/null
+          aws s3 cp "$next" "s3://${R2_BUCKET}/studio/versions.json" \
+            --endpoint-url "$endpoint" \
+            --content-type "application/json; charset=utf-8" \
+            --cache-control "public, max-age=300, stale-if-error=86400"
+          echo "Studio catalog -> $VERSION"

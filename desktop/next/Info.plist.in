@@ -1,0 +1,14 @@
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleName</key><string>Reasonix Studio</string>
+    <key>CFBundleExecutable</key><string>ReasonixStudio</string>
+    <key>CFBundleIdentifier</key><string>io.reasonix.studio</string>
+    <key>CFBundleIconFile</key><string>appicon</string>
+    <key>CFBundleShortVersionString</key><string>@VERSION@</string>
+    <key>CFBundleVersion</key><string>@NUMVER@</string>
+    <key>LSMinimumSystemVersion</key><string>10.13.0</string>
+    <key>NSHighResolutionCapable</key><string>true</string>
+  </dict>
+</plist>
