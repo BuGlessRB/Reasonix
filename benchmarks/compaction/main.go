@@ -17,13 +17,13 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"reasonix/internal/ablation"
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	_ "reasonix/internal/provider/openai"
+	"reasonix/internal/tokencount"
 	"reasonix/internal/tool"
 )
 
@@ -134,7 +134,7 @@ func foldArm(incremental bool) ablation.Set {
 // runGeneration grows the session and folds it, returning what that fold cost.
 func (h *harness) runGeneration(ctx context.Context, gen int, probes []probe) genResult {
 	growSession(h.sess, gen, probes)
-	r := genResult{Gen: gen, CanonicalTokens: estimateTokens(renderAll(h.sess.Snapshot()))}
+	r := genResult{Gen: gen, CanonicalTokens: tokencount.Text(renderAll(h.sess.Snapshot()))}
 
 	h.calls.reset()
 	start := time.Now()
@@ -377,18 +377,6 @@ func reportAt(spec string) map[int]bool {
 	return at
 }
 
-// estimateTokens mirrors the kernel's own estimator so bench numbers and
-// compaction telemetry are read in the same unit.
-func estimateTokens(s string) int {
-	if s == "" {
-		return 0
-	}
-	if runes := utf8.RuneCountInString(s); runes > (len(s)+3)/4 {
-		return runes
-	}
-	return (len(s) + 3) / 4
-}
-
 func renderAll(msgs []provider.Message) string {
 	var b strings.Builder
 	for _, m := range msgs {
@@ -439,7 +427,7 @@ func (r *callRecorder) reset() { r.calls = nil }
 func (r *callRecorder) note(req provider.Request) {
 	c := recordedCall{}
 	for _, m := range req.Messages {
-		c.tokens += estimateTokens(m.Content)
+		c.tokens += tokencount.Text(m.Content)
 		if m.Role == provider.RoleSystem {
 			c.system = m.Content
 		}
