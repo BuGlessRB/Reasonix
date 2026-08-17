@@ -29,18 +29,33 @@ func TestSpillNeverGrowsTheContext(t *testing.T) {
 	}
 }
 
-// The bar for spilling is derived from the pointer that would stay behind, so a
-// shape that carries a bigger pointer raises its own bar. Nothing in the package
-// is tuned per shape — which is exactly what a constant could not do: change
-// spilledOutputHeadLines and every fixed cap becomes wrong silently.
-func TestSpillBarFollowsPointerCost(t *testing.T) {
-	short := spillBarFor(t, 40)
-	long := spillBarFor(t, 120)
-	if short == 0 || long == 0 {
-		t.Fatal("no bar found; spilling never engaged")
+// Leaving context is a fixed price, so the bar cannot move with the shape of the
+// output. A preview counted in lines would break this: wide lines would make a
+// result cost more to move out of context, which is the opposite of the point.
+// Bars still round to whole lines, so they are close rather than identical.
+func TestSpillBarDoesNotFollowLineLength(t *testing.T) {
+	lo, hi := 0, 0
+	for _, lineLen := range []int{20, 40, 80, 120, 200} {
+		bar := spillBarFor(t, lineLen)
+		if bar == 0 {
+			t.Fatalf("lineLen=%d: spilling never engaged", lineLen)
+		}
+		if lo == 0 || bar < lo {
+			lo = bar
+		}
+		if bar > hi {
+			hi = bar
+		}
+		t.Logf("lineLen=%3d bar=%5d", lineLen, bar)
 	}
-	if long <= short {
-		t.Errorf("bar for 120-char lines = %d, for 40-char lines = %d; the longer head must cost more", long, short)
+	if hi > 2*lo {
+		t.Errorf("bars span %d..%d; a fixed-price pointer must not let line length double the bar", lo, hi)
+	}
+	// The whole point is that this stays small. Two instruction blocks plus the
+	// rounding of one line is the ceiling; anything near the old 32KB clamp means
+	// the cost model regressed into a threshold again.
+	if hi > 4096 {
+		t.Errorf("highest bar = %d; a pointer costs a few hundred bytes, so the bar belongs near 1KB", hi)
 	}
 }
 

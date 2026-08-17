@@ -13,8 +13,9 @@ import (
 // sketch is a guess about which part mattered, made by the wrong party — only
 // the model knows, and read_file plus grep let it decide.
 
-// Head lines that ride along, so the model can judge whether to open the file.
-const spilledOutputHeadLines = 20
+// A spill is a fixed price: the instructions, plus at most the same again in
+// preview. Counting the preview in lines would instead make a wide result cost
+// more to leave context than a narrow one — the opposite of the point.
 
 // spillToolOutput writes body beside the session and returns the pointer that
 // replaces it. ok is false when there is nowhere the model could read the file
@@ -94,17 +95,45 @@ func spillFileName(toolName, toolCallID string) string {
 }
 
 // spillPointer is what the model sees: the size, the path, how to get the rest,
-// then the opening lines.
+// then as much of the start as the instructions themselves cost.
 func spillPointer(path, body, toolName string) string {
-	lines := strings.Count(body, "\n") + 1
+	instr := spillInstructions(path, body, toolName)
+	head := headWithin(body, len(instr))
+	if head == "" {
+		return instr
+	}
+	return instr + "\nOpening lines:\n" + head + "\n"
+}
+
+// spillInstructions is the irreducible part: where the output went and how to
+// read it back. Its size is what a spill really costs, so it also bounds the
+// preview — the model is told the shape, not shown a guess at the substance.
+func spillInstructions(path, body, toolName string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "[%s output kept out of context: %d lines, %s]\n", displayToolName(toolName), lines, humanBytes(len(body)))
+	fmt.Fprintf(&b, "[%s output kept out of context: %d lines, %s]\n", displayToolName(toolName), strings.Count(body, "\n")+1, humanBytes(len(body)))
 	fmt.Fprintf(&b, "Full output: %s\n", path)
 	b.WriteString("Read a window of it with read_file (offset/limit), or search it with grep. It is not in this conversation.\n")
-	if head := headLines(body, spilledOutputHeadLines); head != "" {
-		fmt.Fprintf(&b, "\nFirst %d lines:\n%s\n", spilledOutputHeadLines, head)
-	}
 	return b.String()
+}
+
+// headWithin returns the whole leading lines of body that fit in max bytes, so a
+// preview never cuts mid-line and never exceeds its budget.
+func headWithin(body string, max int) string {
+	end := 0
+	for end < len(body) {
+		nl := strings.IndexByte(body[end:], '\n')
+		if nl < 0 {
+			if len(body) <= max {
+				end = len(body)
+			}
+			break
+		}
+		if end+nl+1 > max {
+			break
+		}
+		end += nl + 1
+	}
+	return strings.TrimRight(body[:end], "\n")
 }
 
 func displayToolName(name string) string {
@@ -112,14 +141,6 @@ func displayToolName(name string) string {
 		return n
 	}
 	return "tool"
-}
-
-func headLines(body string, n int) string {
-	lines := strings.SplitN(body, "\n", n+1)
-	if len(lines) > n {
-		lines = lines[:n]
-	}
-	return strings.Join(lines, "\n")
 }
 
 func humanBytes(n int) string {
