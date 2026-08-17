@@ -4,7 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
+	"os"
 	"strings"
 	"testing"
 
@@ -27,34 +27,42 @@ func TestStudioCatalogIsNotTheDesktopLine(t *testing.T) {
 // call site, not a changed one.
 func TestEveryUpdaterOptionsSetsIndexURL(t *testing.T) {
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(fi fs.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, 0)
+	entries, err := os.ReadDir(".")
 	if err != nil {
-		t.Fatalf("parse package: %v", err)
+		t.Fatalf("read package dir: %v", err)
 	}
 	found := 0
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			ast.Inspect(file, func(n ast.Node) bool {
-				lit, ok := n.(*ast.CompositeLit)
-				if !ok || !isUpdateOptions(lit.Type) {
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		// Every file, whatever its build tags: an Options behind a tag reads the
+		// wrong catalog just as surely as one in the default build. Reading the
+		// directory says that outright, where ParseDir left it to a deprecated
+		// package-association rule.
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			lit, ok := n.(*ast.CompositeLit)
+			if !ok || !isUpdateOptions(lit.Type) {
+				return true
+			}
+			found++
+			for _, elt := range lit.Elts {
+				kv, ok := elt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if id, ok := kv.Key.(*ast.Ident); ok && id.Name == "IndexURL" {
 					return true
 				}
-				found++
-				for _, elt := range lit.Elts {
-					kv, ok := elt.(*ast.KeyValueExpr)
-					if !ok {
-						continue
-					}
-					if id, ok := kv.Key.(*ast.Ident); ok && id.Name == "IndexURL" {
-						return true
-					}
-				}
-				t.Errorf("%s: update.Options does not set IndexURL, so it reads the desktop catalog", fset.Position(lit.Pos()))
-				return true
-			})
-		}
+			}
+			t.Errorf("%s: update.Options does not set IndexURL, so it reads the desktop catalog", fset.Position(lit.Pos()))
+			return true
+		})
 	}
 	if found == 0 {
 		t.Fatal("no update.Options literal found; this guard is no longer watching anything")
