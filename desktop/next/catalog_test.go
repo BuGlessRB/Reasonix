@@ -38,9 +38,8 @@ func TestEveryUpdaterOptionsSetsIndexURL(t *testing.T) {
 			continue
 		}
 		// Every file, whatever its build tags: an Options behind a tag reads the
-		// wrong catalog just as surely as one in the default build. Reading the
-		// directory says that outright, where ParseDir left it to a deprecated
-		// package-association rule.
+		// wrong catalog just as surely as one in the default build, and ParseDir
+		// left that to a deprecated package-association rule.
 		file, err := parser.ParseFile(fset, name, nil, 0)
 		if err != nil {
 			t.Fatalf("parse %s: %v", name, err)
