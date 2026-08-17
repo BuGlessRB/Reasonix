@@ -9,13 +9,19 @@ import "slices"
 // It is what separates a cleanup from a deletion: removing a file the turn made
 // leaves the workspace as it was found, removing one it did not is the change.
 func (l *Ledger) CreatedInTurn(path string) bool {
-	if l == nil || path == "" {
+	if l == nil {
+		return false
+	}
+	// Created is stored under the ledger's path identity, so the question has to
+	// be asked in it as well.
+	want := normalizePath(path)
+	if want == "" {
 		return false
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, r := range l.receipts {
-		if r.Success && slices.Contains(r.Created, path) {
+		if r.Success && slices.Contains(r.Created, want) {
 			return true
 		}
 	}
