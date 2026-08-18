@@ -2,16 +2,13 @@
 
 package remote
 
-import (
-	"fmt"
-	"net"
-)
+import "golang.org/x/crypto/ssh"
 
-// dialAgent connects to the ssh-agent on Windows. The OpenSSH agent listens on
-// the named pipe \\.\pipe\openssh-ssh-agent; SSH_AUTH_SOCK may name a pipe
-// path. Named-pipe dialing needs a Windows-specific transport that is a V2
-// follow-up, so V1 reports agent auth as unavailable on Windows and falls back
-// to key/password methods.
-func dialAgent(sock string) (net.Conn, error) {
-	return nil, fmt.Errorf("remote: ssh-agent support on Windows is not yet implemented (SSH_AUTH_SOCK=%s)", sock)
+// agentAuth reports ssh-agent as unavailable on Windows. The OpenSSH agent
+// listens on the named pipe \\.\pipe\openssh-ssh-agent, and dialing one needs a
+// Windows-specific transport that is a V2 follow-up; until then the caller
+// falls back to key and password methods. Saying so here rather than failing
+// inside a callback keeps the dead branch out of the shared path.
+func agentAuth(_ []string, _ bool) (ssh.AuthMethod, func()) {
+	return nil, func() {}
 }
