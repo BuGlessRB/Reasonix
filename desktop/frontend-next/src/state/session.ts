@@ -1,6 +1,7 @@
 import type { Ask, Approval, Compaction, CompletionSummary, ExtensionSurface, Guardian, Tool, WireEvent } from "../port/wire";
 import { estimateTokens, sample, type Sample } from "../port/tokens";
 import type { HistoryMessage } from "../port/port";
+import { plural, t } from "../i18n";
 
 export type Item =
   | { t: "user"; id: string; text: string; pending?: boolean }
@@ -114,17 +115,44 @@ const nextId = () => `i${++seq}`;
 // moment it is launched, so its card is already settled when the turn ends.
 const NO_REPORT = "这一步没有回报结果就随本轮结束了";
 
+// A call still on its streaming placeholder is the other case, and the opposite
+// claim: no arguments ever reached it, so it never ran and nothing on disk
+// moved. Those are folded into one line — a turn interrupted while the model
+// was writing a batch of edits left one identical sentence per abandoned call,
+// burying the reason the turn ended under twenty copies of it.
 function sealTurn(items: Item[], err?: string): Item[] {
-  const sealed = items.map((i) =>
-    i.t === "tool" && i.running
-      ? { ...i, running: false, tool: { ...i.tool, err: i.tool.err || NO_REPORT } }
-      : i,
-  );
+  let stillborn = 0;
+  const sealed: Item[] = [];
+  for (const i of items) {
+    if (i.t === "tool" && i.running && i.tool.partial) {
+      stillborn++;
+      continue;
+    }
+    sealed.push(
+      i.t === "tool" && i.running
+        ? { ...i, running: false, tool: { ...i.tool, err: i.tool.err || t(NO_REPORT) } }
+        : i,
+    );
+  }
+  if (stillborn > 0) {
+    const text = plural(
+      stillborn,
+      "还有 1 个调用没来得及开始，它没有改动任何文件",
+      "还有 {n} 个调用没来得及开始，它们没有改动任何文件",
+    );
+    sealed.push({ t: "notice", id: nextId(), level: "info", text });
+  }
   if (!err) return sealed;
   // The kernel's own words: classifying them here would be this file guessing
   // at failures it cannot see.
   return [...sealed, { t: "notice" as const, id: nextId(), level: "error", text: err }];
 }
+
+// The wire omits `partial: false`, so spreading a full dispatch over the
+// streaming placeholder would leave its flag standing and every dispatched call
+// would read as one that never started. Merging through here is what lets
+// sealTurn tell the two apart.
+const merge = (prev: Tool, next: Tool): Tool => ({ ...prev, ...next, partial: next.partial ?? false });
 
 function foldTool(items: Item[], tool: Tool, running: boolean): Item[] {
   // A subagent's calls carry parentId; they belong inside the task that spawned
@@ -135,8 +163,8 @@ function foldTool(items: Item[], tool: Tool, running: boolean): Item[] {
       const parent = items[at] as Extract<Item, { t: "tool" }>;
       const kids = parent.children.slice();
       const k = kids.findIndex((c) => c.id === tool.id);
-      if (k >= 0) kids[k] = { ...kids[k], ...tool };
-      else kids.push(tool);
+      if (k >= 0) kids[k] = merge(kids[k], tool);
+      else kids.push({ ...tool, partial: tool.partial ?? false });
       const next = items.slice();
       next[at] = { ...parent, children: kids };
       return next;
@@ -148,11 +176,11 @@ function foldTool(items: Item[], tool: Tool, running: boolean): Item[] {
     if (at >= 0) {
       const prev = items[at] as Extract<Item, { t: "tool" }>;
       const next = items.slice();
-      next[at] = { ...prev, tool: { ...prev.tool, ...tool }, running };
+      next[at] = { ...prev, tool: merge(prev.tool, tool), running };
       return next;
     }
   }
-  return [...items, { t: "tool", id: nextId(), tool, running, children: [] }];
+  return [...items, { t: "tool", id: nextId(), tool: { ...tool, partial: tool.partial ?? false }, running, children: [] }];
 }
 
 // dropTool removes the dispatch row a specialised card replaces, so the same

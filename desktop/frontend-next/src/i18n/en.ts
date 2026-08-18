@@ -27,6 +27,11 @@ export const EN: Record<string, string> = {
   "想了 {chars}": "Thought · {chars}",
   "想了 {secs} 秒 · {chars}": "Thought for {secs}s · {chars}",
   "{n} 字": "{n} chars",
+  "这一步没有回报结果就随本轮结束了": "This step ended with the turn without reporting a result",
+  "还有 1 个调用没来得及开始，它没有改动任何文件":
+    "1 call never got started; it changed no files",
+  "还有 {n} 个调用没来得及开始，它们没有改动任何文件":
+    "{n} calls never got started; they changed no files",
 
   // ── 运行状态 ─────────────────────────────────────────────────────
   "空闲": "Idle",
