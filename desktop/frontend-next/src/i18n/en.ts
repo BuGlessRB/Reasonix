@@ -183,6 +183,8 @@ export const EN: Record<string, string> = {
   "外观": "Appearance",
   "大小": "Size",
   "界面": "Interface",
+  "微调": "Fine-tune",
+  "界面大小微调": "Fine-tune interface size",
   "正文": "Body text",
   "紧凑": "Compact",
   "标准": "Standard",
@@ -604,4 +606,26 @@ export const EN: Record<string, string> = {
   "主题：{name}": "Theme: {name}",
   "交待一个任务": "Give it a task",
   "返回工作台": "Back to the workbench",
+
+  // ── 作用范围：一处例外归谁管 ─────────────────────────────────────
+  "仅本项目": "This project only",
+  "恢复成跟随全局": "Go back to following the global setting",
+  "{n} 个工作树共用这份设置": "{n} worktrees share this setting",
+  "不是 git 仓库，按目录单独记": "Not a git repository — kept per directory",
+  "{n} 项只在这里生效": "{n} settings apply only here",
+  "没有本项目的例外": "No exceptions for this project",
+  "不是当前会话所在的项目 —— 只能改开关": "Not the project this session is in — only the switches can change",
+  "搜索项目…": "Search projects…",
+  "只看有例外的": "Only those with exceptions",
+  "当前会话": "This session",
+  "{n} 个工作树": "{n} worktrees",
+  "非 git": "not git",
+  "{n} 项例外": "{n} exceptions",
+  "没有匹配的项目。": "No project matches.",
+
+  // ── 接入外部服务 ─────────────────────────────────────────────────
+  "不写进仓库，别人不会拿到": "stays out of the repository; nobody else gets it",
+  "clone 的人也会拿到": "whoever clones it gets it too",
+  "这会改动仓库里的配置文件，是一处等着提交的改动。":
+    "This edits a config file in the repository, and leaves a change waiting to be committed.",
 };
