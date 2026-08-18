@@ -591,3 +591,35 @@ func TestSummarizeTrajectorySplitsQueueFromWaitingOnWork(t *testing.T) {
 		t.Errorf("total queue ms = %d, want 2000 (both halves still counted once)", s.ToolQueueMs)
 	}
 }
+
+func TestSummarizeTrajectoryCountsRefusedRoundsAsWaste(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "refused.trajectory.jsonl")
+	lines := []string{
+		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
+		// Round 1: the only call was stopped before launch, so the trip bought
+		// nothing about the workspace.
+		`{"seq":2,"ts":2000,"event":{"kind":"tool_dispatch","tool":{"id":"a","name":"bash","args":"{\"command\":\"python3 -c 'x'\"}"}}}`,
+		`{"seq":3,"ts":2100,"event":{"kind":"tool_result","tool":{"id":"a","name":"bash","err":"blocked by permission policy","durationMs":0,"startedAt":2000,"endedAt":2100,"execution":{"state":"not_run","failurePhase":"authorization"}}}}`,
+		// Round 2: a real read still counts as evidence, so the new bucket does
+		// not swallow ordinary rounds.
+		`{"seq":4,"ts":3000,"event":{"kind":"tool_dispatch","tool":{"id":"b","name":"read_file","args":"{\"f\":\"x\"}","readOnly":true}}}`,
+		`{"seq":5,"ts":3100,"event":{"kind":"tool_result","tool":{"id":"b","name":"read_file","readOnly":true,"durationMs":100,"startedAt":3000,"endedAt":3100}}}`,
+		`{"seq":6,"ts":4000,"event":{"kind":"turn_done"}}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	s, err := summarizeTrajectory(path)
+	if err != nil {
+		t.Fatalf("summarizeTrajectory: %v", err)
+	}
+	if s.RoundOutcomes["refused"] != 1 {
+		t.Errorf("refused rounds = %d, want 1 (all: %v)", s.RoundOutcomes["refused"], s.RoundOutcomes)
+	}
+	if s.RoundOutcomes["evidence_gain"] != 1 {
+		t.Errorf("evidence_gain = %d, want 1 (all: %v)", s.RoundOutcomes["evidence_gain"], s.RoundOutcomes)
+	}
+	if s.RoundOutcomeMs["refused"] == 0 {
+		t.Error("a refused round must carry its gap time into the waste breakdown")
+	}
+}

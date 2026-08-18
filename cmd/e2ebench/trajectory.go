@@ -220,6 +220,9 @@ type roundCall struct {
 	name, verification string
 	readOnly, errored  bool
 	resolved, dup      bool
+	// refused means the host stopped the call before launch (permission,
+	// preflight): the round paid a full trip and the workspace never saw it.
+	refused bool
 }
 
 // gapInfo carries one model gap until its batch closes and can classify it.
@@ -557,6 +560,9 @@ func (t *trajScan) recordResult(rec trajectoryRecord) {
 		t.observeVerification(verificationKey(tl.Name, tl.Args), ex.Verification == "passed", rec.TS)
 	}
 	if ex := tl.Execution; ex != nil && ex.State == "not_run" && ex.FailurePhase != "" {
+		if info, ok := t.batch.infos[tl.ID]; ok {
+			info.refused = true
+		}
 		if t.s.RefusedCalls == nil {
 			t.s.RefusedCalls = map[string]int{}
 		}

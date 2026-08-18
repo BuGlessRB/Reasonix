@@ -146,8 +146,11 @@ func classifyRound(gap gapInfo, b *toolBatch) string {
 		return "finalization"
 	}
 	verification, mutation, delegation := false, false, false
-	allBookkeeping, allDup := true, true
+	allBookkeeping, allDup, allRefused := true, true, true
 	for _, c := range b.infos {
+		if !c.refused {
+			allRefused = false
+		}
 		if c.verification == "passed" || c.verification == "failed" {
 			verification = true
 		}
@@ -165,6 +168,11 @@ func classifyRound(gap gapInfo, b *toolBatch) string {
 		}
 	}
 	switch {
+	case allRefused:
+		// Nothing launched, so nothing was learned about the workspace — the
+		// trip bought only the refusal text. Counting it as evidence reported
+		// 99% useful rounds on a run where 8% were refusals.
+		return "refused"
 	case delegation:
 		return "delegation"
 	case verification:
