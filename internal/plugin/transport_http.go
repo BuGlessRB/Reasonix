@@ -101,11 +101,7 @@ func sameHTTPOrigin(a, b *url.URL) bool {
 }
 
 func (t *httpTransport) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	t.nextID++
-	id := t.nextID
+	id := t.nextRequestID()
 	body, err := json.Marshal(rpcRequest{JSONRPC: "2.0", ID: id, Method: method, Params: params})
 	if err != nil {
 		return nil, err
@@ -122,7 +118,7 @@ func (t *httpTransport) call(ctx context.Context, method string, params any) (js
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		msg := strings.TrimSpace(string(b))
 		if isHTTPSessionExpiredResponse(resp.StatusCode, b) {
-			t.session = ""
+			t.clearSession()
 			return nil, fmt.Errorf("plugin %q: %s: %w", t.name, method, &httpSessionExpiredError{
 				status: resp.StatusCode,
 				body:   msg,
@@ -138,9 +134,6 @@ func (t *httpTransport) call(ctx context.Context, method string, params any) (js
 }
 
 func (t *httpTransport) notify(ctx context.Context, method string, params any) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	body, err := json.Marshal(rpcRequest{JSONRPC: "2.0", Method: method, Params: params})
 	if err != nil {
 		return err
@@ -166,8 +159,30 @@ func (t *httpTransport) registerProgress(token string, sink tool.ProgressFunc) f
 	return t.progress.registerProgress(token, sink)
 }
 
+// mu covers the shared fields below and never a round trip: a request in flight
+// must not stop the next call — or this one's own cancellation — from being
+// written. Each request already carries its own context for that.
+func (t *httpTransport) nextRequestID() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.nextID++
+	return t.nextID
+}
+
+func (t *httpTransport) sessionID() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.session
+}
+
+func (t *httpTransport) clearSession() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.session = ""
+}
+
 // do POSTs one JSON-RPC body with the standard MCP headers, the configured
-// static headers, and the session id (once known). Caller holds t.mu.
+// static headers, and the session id (once known).
 func (t *httpTransport) do(ctx context.Context, body []byte) (*http.Response, error) {
 	return t.doOAuth(ctx, body, false)
 }
@@ -193,8 +208,8 @@ func (t *httpTransport) doOAuth(ctx context.Context, body []byte, refreshed bool
 			usedOAuth = used
 		}
 	}
-	if t.session != "" {
-		req.Header.Set("Mcp-Session-Id", t.session)
+	if sid := t.sessionID(); sid != "" {
+		req.Header.Set("Mcp-Session-Id", sid)
 	}
 	resp, err := t.client.Do(req)
 	if err != nil || refreshed || resp.StatusCode != http.StatusUnauthorized || !usedOAuth || !t.oauth.canRefresh() {
@@ -209,7 +224,9 @@ func (t *httpTransport) doOAuth(ctx context.Context, body []byte, refreshed bool
 
 func (t *httpTransport) captureSession(resp *http.Response) {
 	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
+		t.mu.Lock()
 		t.session = sid
+		t.mu.Unlock()
 	}
 }
 

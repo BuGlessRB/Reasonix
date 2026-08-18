@@ -30,10 +30,10 @@ const (
 // stdioTransport speaks newline-delimited JSON-RPC 2.0 over a subprocess's
 // stdin/stdout — the MCP stdio convention (one JSON message per line, no
 // embedded newlines). A dedicated reader goroutine owns stdout and demuxes each
-// response to the waiting call by id, so a call can abandon a blocking read the
-// moment its context is cancelled (the subprocess is bound to the session, not
-// the turn, so a hung server would otherwise hang a cancelled turn forever).
-// callMu serialises a request/response round-trip over the shared pipe.
+// response to the waiting call by id, so a cancelled call abandons its wait at
+// once (the child outlives the turn, so a hung server would otherwise hang it
+// forever) and calls overlap freely: no lock spans a round trip, so one slow
+// tool cannot hold the pipe against the whole server.
 type stdioTransport struct {
 	name   string
 	roots  []mcpRoot
@@ -43,7 +43,6 @@ type stdioTransport struct {
 	stdout *bufio.Reader
 	stderr *tailBuffer
 
-	callMu  sync.Mutex // one in-flight request/response at a time over the shared pipe
 	writeMu sync.Mutex // client calls and server-request replies share stdin
 
 	mu      sync.Mutex
@@ -646,9 +645,6 @@ func (t *stdioTransport) failAll(err error) {
 }
 
 func (t *stdioTransport) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
-	t.callMu.Lock()
-	defer t.callMu.Unlock()
-
 	t.mu.Lock()
 	if t.readErr != nil {
 		t.mu.Unlock()
@@ -672,6 +668,7 @@ func (t *stdioTransport) call(ctx context.Context, method string, params any) (j
 
 	select {
 	case <-ctx.Done():
+		cancelInFlight(t, method, id, ctx.Err())
 		return nil, ctx.Err()
 	case resp, ok := <-ch:
 		if !ok {
@@ -707,8 +704,8 @@ func (t *stdioTransport) withStderr(err error) error {
 	}
 	// Reap the exited child so its stderr copy goroutine has flushed the tail.
 	// Budgeted: a surviving grandchild keeps cmd.Wait blocked forever (see
-	// close), and this path runs with callMu held — an unbounded wait here
-	// would wedge every future call on this transport.
+	// close), and an unbounded wait here would strand the call that is trying
+	// to report why the server went away.
 	waitWithBudget(t.wait, closeWaitBudget)
 	// This error is returned directly to callers outside startup as well as
 	// copied into diagnostics. Redact at the transport boundary so an early

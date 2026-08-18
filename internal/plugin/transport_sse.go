@@ -35,7 +35,6 @@ type sseTransport struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	callMu        sync.Mutex
 	mu            sync.Mutex
 	nextID        int
 	pending       map[int]chan rpcResponse
@@ -254,9 +253,6 @@ func (t *sseTransport) replyLoop() {
 }
 
 func (t *sseTransport) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
-	t.callMu.Lock()
-	defer t.callMu.Unlock()
-
 	if err := t.waitEndpoint(ctx); err != nil {
 		return nil, fmt.Errorf("plugin %q: %s: %w", t.name, method, err)
 	}
@@ -286,6 +282,7 @@ func (t *sseTransport) call(ctx context.Context, method string, params any) (jso
 	}
 	select {
 	case <-ctx.Done():
+		cancelInFlight(t, method, id, ctx.Err())
 		return nil, ctx.Err()
 	case response, ok := <-ch:
 		if !ok {
