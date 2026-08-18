@@ -820,10 +820,15 @@ Context Engine v2 把上下文分成两个用途不同的层：
   `scope`（`project`、`global`），以及 freshness。事实可能过时，因此永远不能覆盖
   当前请求和常驻指令。
 
-改过文件的回合在收尾前，Reasonix 会检查最后一次写入之后是否跑过检查。常见形态它自己认得
+改过文件的回合在收尾前，Reasonix 会检查最后一次写入之后是否跑过检查。常见 runner 它自己认得
 （`go test`、`pytest`、`npm test`、`make check`、`cargo test`、`tsc --noEmit` 等），
-但它**有意**分不出 `python deploy.py` 和 `python run_tests.py`，所以靠自有脚本驱动的项目
-应当自己声明什么算检查。在任意常驻指令文件中用这个标题声明（标题必须一字不差）：
+但它**有意**分不出 `python deploy.py` 和 `python run_tests.py`。靠自有脚本驱动的项目
+无需为此做任何配置：agent 在签收这一步时说明哪条命令是检查（`complete_step` 的 evidence 用
+`kind: verification`，command 写成实际跑的那条），宿主再用自己的 receipts 证明那条命令确实
+在写入之后跑过且通过。agent 能决定的只有"我跑过的哪条是检查"，至于它跑没跑、退出码是否为零、
+是否在写入之后，全部由 receipts 说了算，不由它声称。
+
+声明检查是更强的**可选**形式。在任意常驻指令文件中用这个标题声明（标题必须一字不差）：
 
 ```markdown
 ## Reasonix host checks
@@ -832,7 +837,7 @@ Context Engine v2 把上下文分成两个用途不同的层：
 - verify: python scripts/screening.py --self-check
 ```
 
-声明之后，每条检查都必须在最新一次写入之后跑过，回合才能结束；内置分类器不再有发言权——
+一旦声明，每条检查都必须在最新一次写入之后跑过，回合才能结束；内置分类器不再有发言权——
 项目已经自己定义了那里的"验证"是什么。条目写作 `- verify: <命令>`（`* verify:` 也可）；
 文件里其他位置的普通指令仍然只是指引，不会变成硬门槛。
 

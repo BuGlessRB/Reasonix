@@ -7,6 +7,7 @@ import (
 	"reasonix/internal/evidence"
 	"reasonix/internal/instruction"
 	"reasonix/internal/provider"
+	"reasonix/internal/tool"
 )
 
 func readinessLedger(receipts ...evidence.Receipt) *evidence.Ledger {
@@ -94,41 +95,62 @@ func TestFinalReadinessIgnoresLoopGuardQuotedInToolOutput(t *testing.T) {
 	}
 }
 
-// The classifier recognises a fixed set of commands, so a project driven by its
-// own scripts can run its checks all day and still be told to run one. Widening
-// the set would read a deploy as a check; naming them is the way out, and the
-// ask is the only place the model could learn that.
-func TestVerificationGapNamesTheWayOutWhenNothingIsRecognised(t *testing.T) {
+// The table will never enumerate every project's own runner, so a project
+// driven by its own scripts can run its checks all day and still be told to run
+// one. What the table lacks is in the turn, and a citation carries it — the ask
+// is the only place the model could learn that, so it has to say so.
+func TestVerificationGapPointsAtCitationWhenNothingIsRecognised(t *testing.T) {
 	const ran = "python scripts/inventory_analysis_screening.py --self-check"
 	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"screening.py"}}
 	command := evidence.Receipt{ToolName: "bash", Success: true, Command: ran}
 	declared := instruction.VerifyCheck{Command: "make check", SourcePath: "AGENTS.md", Line: 3}
 
+	withSignoff := tool.NewRegistry()
+	withSignoff.Add(fakeTool{name: "complete_step"})
+
 	cases := []struct {
-		name        string
-		checks      []instruction.VerifyCheck
-		ledger      *evidence.Ledger
-		wantCommand bool
-		wantHeading bool
+		name     string
+		checks   []instruction.VerifyCheck
+		ledger   *evidence.Ledger
+		tools    *tool.Registry
+		wantCite bool
 	}{
-		{"unrecognised command names the section", nil, readinessLedger(writer, command), true, true},
-		{"nothing ran keeps the bare ask", nil, readinessLedger(writer), false, false},
-		{"a project that declared checks is told about those", []instruction.VerifyCheck{declared}, readinessLedger(writer, command), false, false},
+		{"unrecognised command points at the citation", nil, readinessLedger(writer, command), withSignoff, true},
+		{"nothing ran keeps the bare ask", nil, readinessLedger(writer), withSignoff, false},
+		{"declared checks are settled by running those", []instruction.VerifyCheck{declared}, readinessLedger(writer, command), withSignoff, false},
+		{"no sign-off tool leaves nothing to point at", nil, readinessLedger(writer, command), tool.NewRegistry(), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			a := &Agent{task: taskRuntime{ledger: tc.ledger}, projectChecks: tc.checks}
+			a := &Agent{task: taskRuntime{ledger: tc.ledger}, projectChecks: tc.checks, svc: agentServices{tools: tc.tools}}
 			got := a.verificationGap(0)
 			if !strings.Contains(got, "run a relevant verification command") {
 				t.Fatalf("gap dropped the underlying ask: %q", got)
 			}
-			if strings.Contains(got, ran) != tc.wantCommand {
-				t.Errorf("quoting the command that ran = %v, want %v: %q", !tc.wantCommand, tc.wantCommand, got)
-			}
-			if strings.Contains(got, instruction.HostChecksHeading) != tc.wantHeading {
-				t.Errorf("naming %q = %v, want %v: %q", instruction.HostChecksHeading, !tc.wantHeading, tc.wantHeading, got)
+			if cited := strings.Contains(got, "complete_step") && strings.Contains(got, ran); cited != tc.wantCite {
+				t.Errorf("offering the citation = %v, want %v: %q", cited, tc.wantCite, got)
 			}
 		})
+	}
+}
+
+// A cited check the ledger corroborates settles readiness on its own: the model
+// says which command was the check, the host proves it ran and passed.
+func TestCitedCheckSettlesWhatTheTableCouldNot(t *testing.T) {
+	const ran = "python scripts/screening.py --self-check"
+	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"screening.py"}}
+	command := evidence.Receipt{ToolName: "bash", Success: true, Command: ran}
+	signoff := evidence.Receipt{ToolName: "complete_step", Success: true, Step: "screen", CitedChecks: []string{ran}}
+
+	a := &Agent{task: taskRuntime{ledger: readinessLedger(writer, command, signoff)}}
+	if !a.checkEstablished(0, false) {
+		t.Fatal("a corroborated citation after the write must establish the check")
+	}
+
+	uncorroborated := evidence.Receipt{ToolName: "complete_step", Success: true, Step: "screen", CitedChecks: []string{"python never_ran.py"}}
+	b := &Agent{task: taskRuntime{ledger: readinessLedger(writer, command, uncorroborated)}}
+	if b.checkEstablished(0, false) {
+		t.Fatal("a citation naming a command that never ran must not establish anything")
 	}
 }
 

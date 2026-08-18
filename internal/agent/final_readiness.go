@@ -290,14 +290,15 @@ func (a *Agent) verificationGap(writer int) string {
 	if a.task.ledger.HasVerificationCommandAfter(writer) && toolPresent(a.svc.tools, "conclude_blocked") {
 		return "the check you ran after the latest write did not pass: either make it pass, or — if it cannot pass as specified — call conclude_blocked with the evidence for why"
 	}
-	// Nothing the classifier recognises, yet commands did run. Widening what it
-	// accepts would make a deploy script read as a check; naming the project's
-	// own is the way out, and asking again for "a verification command" hides it.
-	if len(a.projectChecks) == 0 {
+	// Commands ran and the table read none as a check. Widening it would read a
+	// deploy as one; what it lacks is in the turn, not the command, and a
+	// citation carries it — so point there, not at what the model just did.
+	if len(a.projectChecks) == 0 && toolPresent(a.svc.tools, "complete_step") {
 		if ran, ok := a.task.ledger.LatestUnrecognizedCommandAfter(writer); ok {
-			return fmt.Sprintf("%s — %q ran, but the host cannot tell a project's check from any other command, "+
-				"so it counted as neither; declare the ones that decide this project under %q in project memory",
-				ask, strings.TrimSpace(ran.Command), instruction.HostChecksHeading)
+			return fmt.Sprintf("%s — or, if %q was that check, sign the step off with complete_step citing it "+
+				"(evidence kind=verification, command exactly as run): the host cannot tell a project's own "+
+				"runner from any other command, but it can prove the one you name ran after the write and passed",
+				ask, strings.TrimSpace(ran.Command))
 		}
 	}
 	return ask

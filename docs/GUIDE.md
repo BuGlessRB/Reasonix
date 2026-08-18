@@ -1040,11 +1040,18 @@ Context Engine v2 separates two intentionally different layers:
   the current request or standing instructions.
 
 Before a turn that changed files may finish, Reasonix asks whether a check ran
-after the last write. It recognises the usual suspects on its own — `go test`,
+after the last write. It recognises the common runners on its own — `go test`,
 `pytest`, `npm test`, `make check`, `cargo test`, `tsc --noEmit` and the like —
-but it deliberately cannot tell `python deploy.py` from `python run_tests.py`,
-so a project driven by its own scripts should name what counts. Declare them in
-any standing-instruction file under exactly this heading:
+but it deliberately cannot tell `python deploy.py` from `python run_tests.py`.
+A project that runs its checks through its own scripts needs no setup for this:
+the agent names which command was the check when it signs the step off
+(`complete_step` evidence with `kind: verification` and the command as run), and
+the host proves from its own receipts that the command ran after the write and
+passed. The agent decides only which of the commands it ran was the check;
+whether it ran, exited zero, and did so after the write are never its to claim.
+
+Declaring checks is the stronger, optional form. Name them in any
+standing-instruction file, under exactly this heading:
 
 ```markdown
 ## Reasonix host checks
@@ -1053,11 +1060,11 @@ any standing-instruction file under exactly this heading:
 - verify: python scripts/screening.py --self-check
 ```
 
-Every declared check must have run since the latest write for the turn to end,
-and the built-in classifier stops having a say — the project has defined what
-verification means there. Entries are `- verify: <command>` (or `* verify:`);
-ordinary instructions elsewhere in the file stay guidance and never become
-gates.
+Every declared check must then have run since the latest write for the turn to
+end, and the built-in classifier stops having a say — the project has defined
+what verification means there. Entries are `- verify: <command>` (or
+`* verify:`); ordinary instructions elsewhere in the file stay guidance and
+never become gates.
 
 Reasonix automatically recalls a small set of relevant facts before each real
 user turn. It searches the raw user message, suppresses generic requests such as
