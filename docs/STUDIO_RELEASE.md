@@ -44,7 +44,8 @@ running builds will not see the new version.
 ## Cutting a release
 
 Write the version's notes first. `release-studio.yml` reads
-`release-notes/studio/<version>.md` and appends the standing text about signing,
+`release-notes/studio/<semver>.md` — named without the tag's v — and appends
+the standing text about signing,
 installation and self-update; without that file it publishes the standing text
 alone and warns.
 

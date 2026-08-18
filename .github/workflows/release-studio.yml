@@ -264,15 +264,17 @@ jobs:
           TAG: ${{ needs.resolve.outputs.tag }}
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          # A version's own notes live in release-notes/studio/<version>.md. The
-          # release still publishes without one, carrying only the standing text.
+          # A version's own notes live in release-notes/studio/<semver>.md, named
+          # without the v the tag carries. The release still publishes without
+          # one, carrying only the standing text.
+          version_notes="release-notes/studio/${VERSION#v}.md"
           notes="$RUNNER_TEMP/release-notes.md"
           : > "$notes"
-          if [ -f "release-notes/studio/$VERSION.md" ]; then
-            cat "release-notes/studio/$VERSION.md" >> "$notes"
+          if [ -f "$version_notes" ]; then
+            cat "$version_notes" >> "$notes"
             printf '\n' >> "$notes"
           else
-            echo "::warning::no release-notes/studio/$VERSION.md; publishing the standing text only"
+            echo "::warning::no $version_notes; publishing the standing text only"
           fi
           cat >> "$notes" <<'BODY'
           ---
