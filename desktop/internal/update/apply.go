@@ -16,11 +16,6 @@ type VersionedInstaller struct {
 	Line    Line   // which product line's members this archive carries
 }
 
-// MacSelfUpdate reports whether this macOS build was Developer ID signed and
-// notarized. Only the host knows, so the host sets it at startup; false keeps
-// the manual download path rather than writing a bundle Gatekeeper will reject.
-var MacSelfUpdate bool
-
 // Install applies a verified artifact. It returns only if the handover failed:
 // on success the caller is expected to shut down so the new build can take over.
 func (v VersionedInstaller) Install(ctx context.Context, c Cached) error {

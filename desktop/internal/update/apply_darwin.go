@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	macBundleID         = "com.wails.reasonix-desktop"
 	macUpdateHandoffArg = "--reasonix-mac-update-handoff"
 	macHandoffReadyFD   = 3
 	macHandoffProceedFD = 4
@@ -65,11 +64,11 @@ var (
 // the bundle is the unit — so the equivalent of a pointer swap is a detached
 // child that holds the repair lock across the rename while this process exits.
 func (v VersionedInstaller) apply(_ context.Context, c Cached) error {
-	return applyMac(c.Path, c.Version, v.Current)
+	return applyMac(c.Path, c.Version, v.Current, v.Line.Mac)
 }
 
-func applyMac(zipPath, targetVersion, current string) error {
-	if !MacSelfUpdate {
+func applyMac(zipPath, targetVersion, current string, mac MacLine) error {
+	if !mac.SelfUpdate {
 		return fmt.Errorf("macOS automatic update is not enabled for this build")
 	}
 	currentApp, err := CurrentMacAppBundle()
@@ -97,7 +96,7 @@ func applyMac(zipPath, targetVersion, current string) error {
 	if err != nil {
 		return err
 	}
-	if err := verifyMacApp(nextApp); err != nil {
+	if err := verifyMacApp(nextApp, mac.BundleID); err != nil {
 		return err
 	}
 	backupApp := currentApp + ".reasonix-update-backup"
@@ -143,6 +142,7 @@ func applyMac(zipPath, targetVersion, current string) error {
 		"-to-version", tx.ToVersion,
 		"-created-at", tx.CreatedAt,
 		"-transaction-id", repair.UpdateTransactionID(tx),
+		"-bundle-id", mac.BundleID,
 		"-ready-fd", fmt.Sprintf("%d", macHandoffReadyFD),
 		"-proceed-fd", fmt.Sprintf("%d", macHandoffProceedFD),
 	)
@@ -262,6 +262,10 @@ type macUpdateHandoffConfig struct {
 	ToVersion     string
 	CreatedAt     string
 	TransactionID string
+	// BundleID is passed in rather than read back from disk: the child verifies
+	// a bundle, and a bundle that fails verification cannot also be trusted to
+	// say what it is.
+	BundleID      string
 	ReadyFD       int
 	ProceedFD     int
 }
@@ -272,6 +276,7 @@ func parseMacUpdateHandoffArgs(args []string) (macUpdateHandoffConfig, error) {
 	fs.StringVar(&cfg.ToVersion, "to-version", "", "pending update target version")
 	fs.StringVar(&cfg.CreatedAt, "created-at", "", "pending update creation timestamp")
 	fs.StringVar(&cfg.TransactionID, "transaction-id", "", "complete pending update identity")
+	fs.StringVar(&cfg.BundleID, "bundle-id", "", "expected app bundle identifier")
 	fs.IntVar(&cfg.ReadyFD, "ready-fd", 0, "parent readiness pipe")
 	fs.IntVar(&cfg.ProceedFD, "proceed-fd", 0, "parent proceed pipe")
 	if err := fs.Parse(args); err != nil {
@@ -283,7 +288,8 @@ func parseMacUpdateHandoffArgs(args []string) (macUpdateHandoffConfig, error) {
 	cfg.ToVersion = strings.TrimSpace(cfg.ToVersion)
 	cfg.CreatedAt = strings.TrimSpace(cfg.CreatedAt)
 	cfg.TransactionID = strings.TrimSpace(cfg.TransactionID)
-	if cfg.ToVersion == "" || cfg.CreatedAt == "" || cfg.TransactionID == "" {
+	cfg.BundleID = strings.TrimSpace(cfg.BundleID)
+	if cfg.ToVersion == "" || cfg.CreatedAt == "" || cfg.TransactionID == "" || cfg.BundleID == "" {
 		return macUpdateHandoffConfig{}, fmt.Errorf("missing required handoff arguments")
 	}
 	if (cfg.ReadyFD == 0) != (cfg.ProceedFD == 0) ||
@@ -367,7 +373,7 @@ func runMacUpdateHandoff(cfg macUpdateHandoffConfig) int {
 			return 1
 		}
 		cleanupStaging(cancelled)
-		if verifyErr := verifyMacHandoffApp(cancelled.TargetPath); verifyErr != nil {
+		if verifyErr := verifyMacHandoffApp(cancelled.TargetPath, cfg.BundleID); verifyErr != nil {
 			logf("original app bundle no longer verifies: %v", verifyErr)
 			return 1
 		}
@@ -390,7 +396,7 @@ func runMacUpdateHandoff(cfg macUpdateHandoffConfig) int {
 		}
 		return nil
 	}
-	if err := verifyMacHandoffApp(newApp); err != nil {
+	if err := verifyMacHandoffApp(newApp, cfg.BundleID); err != nil {
 		logf("replacement app bundle no longer verifies: %v", err)
 		if clearErr := clearPending(); clearErr != nil {
 			return 1
@@ -546,7 +552,7 @@ func runMacUpdateHandoff(cfg macUpdateHandoffConfig) int {
 		}
 		return 1
 	}
-	if err := verifyMacHandoffApp(installApp); err != nil {
+	if err := verifyMacHandoffApp(installApp, cfg.BundleID); err != nil {
 		logf("staged replacement app bundle no longer verifies: %v", err)
 		if rollbackErr := rollback(); rollbackErr != nil {
 			logf("failed to restore backup bundle: %v", rollbackErr)
@@ -575,7 +581,7 @@ func runMacUpdateHandoff(cfg macUpdateHandoffConfig) int {
 		}
 		return 1
 	}
-	if err := verifyMacHandoffApp(oldApp); err != nil {
+	if err := verifyMacHandoffApp(oldApp, cfg.BundleID); err != nil {
 		logf("installed app bundle no longer verifies: %v", err)
 		if rollbackErr := rollback(); rollbackErr != nil {
 			logf("failed to restore backup bundle: %v", rollbackErr)
@@ -764,14 +770,14 @@ func findMacApp(root string) (string, error) {
 	return found, nil
 }
 
-func verifyMacApp(appPath string) error {
+func verifyMacApp(appPath, bundleID string) error {
 	info := filepath.Join(appPath, "Contents", "Info.plist")
 	out, err := exec.Command("/usr/libexec/PlistBuddy", "-c", "Print :CFBundleIdentifier", info).Output()
 	if err != nil {
 		return fmt.Errorf("read macOS bundle identifier: %w", err)
 	}
-	if got := strings.TrimSpace(string(out)); got != macBundleID {
-		return fmt.Errorf("update: bundle identifier %q does not match %q", got, macBundleID)
+	if got := strings.TrimSpace(string(out)); got != bundleID {
+		return fmt.Errorf("update: bundle identifier %q does not match %q", got, bundleID)
 	}
 	if err := exec.Command("/usr/bin/codesign", "--verify", "--deep", "--strict", appPath).Run(); err != nil {
 		return fmt.Errorf("verify macOS code signature: %w", err)

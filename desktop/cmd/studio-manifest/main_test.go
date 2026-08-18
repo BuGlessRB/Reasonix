@@ -78,6 +78,8 @@ func TestManifestResolvesOnlyWhatCanInstallItself(t *testing.T) {
 		"ReasonixStudio-windows-amd64.zip",
 		"ReasonixStudio-windows-amd64-installer.exe",
 		"ReasonixStudio-linux-amd64.deb",
+		"ReasonixStudio-darwin-universal.zip",
+		"ReasonixStudio-darwin-universal.dmg",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
@@ -99,8 +101,17 @@ func TestManifestResolvesOnlyWhatCanInstallItself(t *testing.T) {
 		!strings.HasSuffix(got.URL, "-installer.exe") {
 		t.Errorf("windows platform asset = %+v, want the installer", got)
 	}
-	if len(m.Platforms) != 1 {
-		t.Errorf("platforms = %v, want the installer alone", m.Platforms)
+	// One universal archive answers for both macOS architectures; the .dmg is a
+	// human download, and handing it to the bundle swap would give it an image
+	// to extract rather than an app.
+	for _, arch := range []string{"amd64", "arm64"} {
+		got, ok := m.Platforms[update.PlatformKey("darwin", arch)]
+		if !ok || !strings.HasSuffix(got.URL, "-universal.zip") {
+			t.Errorf("darwin-%s platform asset = %+v, want the universal archive", arch, got)
+		}
+	}
+	if len(m.Platforms) != 3 {
+		t.Errorf("platforms = %v, want the installer and both macOS keys", m.Platforms)
 	}
 	// Linux updates through dpkg: a package channel, not a platform asset,
 	// because writing a .deb's files behind apt leaves the two disagreeing.

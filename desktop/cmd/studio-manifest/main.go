@@ -85,6 +85,13 @@ func run(dir, version, tag string) error {
 			m.Platforms[key] = asset
 			fmt.Printf("platform: %s -> %s\n", name, key)
 		}
+		// macOS swaps the bundle out of a zip. One universal archive serves both
+		// architectures, so it answers to both keys rather than asking the
+		// release to carry two identical downloads.
+		for _, key := range macArchiveKeys(name) {
+			m.Platforms[key] = asset
+			fmt.Printf("platform: %s -> %s\n", name, key)
+		}
 	}
 	if seen == 0 {
 		return fmt.Errorf("studio-manifest: no %s* artifacts in %s", artifactPrefix, dir)
@@ -103,6 +110,24 @@ func installable(name string) bool {
 	return strings.HasSuffix(name, ".dmg") ||
 		strings.HasSuffix(name, "-installer.exe") ||
 		strings.HasSuffix(name, ".deb")
+}
+
+// macArchiveKeys maps a macOS archive to the platforms it can install. The
+// bundle swap extracts a zip, so the .dmg is a human download only; a universal
+// archive answers for both architectures because the slices ride in one file.
+func macArchiveKeys(name string) []string {
+	base, ok := strings.CutSuffix(name, ".zip")
+	if !ok {
+		return nil
+	}
+	arch, ok := strings.CutPrefix(base, artifactPrefix+"darwin-")
+	if !ok || arch == "" {
+		return nil
+	}
+	if arch == "universal" {
+		return []string{update.PlatformKey("darwin", "amd64"), update.PlatformKey("darwin", "arm64")}
+	}
+	return []string{update.PlatformKey("darwin", arch)}
 }
 
 // windowsInstallerKey maps an installer artifact to the platform it upgrades.

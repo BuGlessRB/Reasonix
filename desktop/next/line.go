@@ -18,6 +18,10 @@ func studioLine() update.Line {
 			HelperPath:   "/usr/lib/reasonix-studio/reasonix-studio-update-helper",
 			PolkitAction: "io.reasonix.studio.update",
 		},
+		// Studio's releases are Developer ID signed and notarized, so a swapped
+		// bundle is one Gatekeeper still opens. The identifier is what the swap
+		// checks a downloaded bundle against before it replaces anything.
+		Mac: update.MacLine{BundleID: "io.reasonix.studio", SelfUpdate: true},
 	}
 }
 

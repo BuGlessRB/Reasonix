@@ -16,6 +16,16 @@ type Line struct {
 	Launchers []string
 	// Deb names this line to dpkg and to the privileged update path.
 	Deb DebLine
+	// Mac is what the bundle swap needs to recognize and trust a replacement.
+	Mac MacLine
+}
+
+// MacLine identifies this line's app bundle. SelfUpdate is false for a line
+// whose releases are not Developer ID signed and notarized: writing a bundle
+// Gatekeeper will refuse is worse than sending the user to the download page.
+type MacLine struct {
+	BundleID   string
+	SelfUpdate bool
 }
 
 // ReleaseMember is one file in a release: what the archive calls it and what it

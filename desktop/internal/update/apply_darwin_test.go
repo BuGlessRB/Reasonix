@@ -88,7 +88,7 @@ func installMacHandoffTestDeps(
 	clearMacUpdateHandoff = func(*repair.UpdateTransaction) error {
 		return os.Remove(pendingPath)
 	}
-	verifyMacHandoffApp = func(string) error { return nil }
+	verifyMacHandoffApp = func(string, string) error { return nil }
 	cleanupMacHandoffStaging = func(tx *repair.UpdateTransaction) error {
 		return os.RemoveAll(tx.HandoffStagingPath)
 	}
@@ -514,7 +514,7 @@ func TestMacUpdateHandoffReverifiesStagedBundleBeforeSwap(t *testing.T) {
 		HandoffOwnerPID:    99999999,
 	}
 	installMacHandoffTestDeps(t, tx, pending, filepath.Join(root, "update.log"), nil)
-	verifyMacHandoffApp = func(string) error { return fmt.Errorf("signature changed") }
+	verifyMacHandoffApp = func(string, string) error { return fmt.Errorf("signature changed") }
 
 	code := runMacUpdateHandoff(macHandoffConfigFor(tx))
 	if code == 0 {
@@ -562,7 +562,7 @@ func TestMacUpdateHandoffPreservesStateWhenSafeClearFails(t *testing.T) {
 		HandoffOwnerPID:    99999999,
 	}
 	installMacHandoffTestDeps(t, tx, pending, filepath.Join(root, "update.log"), nil)
-	verifyMacHandoffApp = func(path string) error {
+	verifyMacHandoffApp = func(path, _ string) error {
 		if path == newApp {
 			return fmt.Errorf("signature changed")
 		}
@@ -693,7 +693,7 @@ func TestMacUpdateHandoffRollsBackWhenInstalledBundleFailsVerification(t *testin
 	}
 	installMacHandoffTestDeps(t, tx, pending, filepath.Join(root, "update.log"), nil)
 	verifyCalls := 0
-	verifyMacHandoffApp = func(path string) error {
+	verifyMacHandoffApp = func(path, _ string) error {
 		verifyCalls++
 		if path == oldApp {
 			return fmt.Errorf("installed signature changed")
@@ -1010,6 +1010,7 @@ func TestMacUpdateHandoffParserRequiresCompletePipePair(t *testing.T) {
 		"-to-version", "v2",
 		"-created-at", "2026-07-28T00:00:00Z",
 		"-transaction-id", strings.Repeat("a", 64),
+		"-bundle-id", "io.reasonix.studio",
 		"-ready-fd", "3",
 	})
 	if err == nil || !strings.Contains(err.Error(), "pipe arguments") {
