@@ -1,4 +1,25 @@
 import type { Appearance } from "../port/port";
+import { current } from "../i18n";
+
+/** 正文起点。汉字同字号下笔画更密，中文高一档。求值留到调用时：模块加载早于
+ *  i18n 定语言。 */
+export const readDefault = (): number => (current() === "zh" ? 14.5 : 13.5);
+
+/** 字号档位。中间那档就是 readDefault()，两边一起改。 */
+export const readSteps = (): [number, string][] =>
+  current() === "zh"
+    ? [
+        [12.5, "小"],
+        [14.5, "标准"],
+        [16, "大"],
+        [18, "更大"],
+      ]
+    : [
+        [12, "小"],
+        [13.5, "标准"],
+        [15, "大"],
+        [17, "更大"],
+      ];
 
 // The user's own settings, applied after a pack so they win: a pack is a
 // palette somebody else authored, and the size someone reads at is not
@@ -31,8 +52,7 @@ export function apply(look: Appearance | null, busy = false) {
 
   // Reading size moves the transcript's prose alone, so the frame around it
   // stays where the layout put it.
-  if (look?.readSize) style.setProperty("--read", `${look.readSize}px`);
-  else style.removeProperty("--read");
+  style.setProperty("--read", `${look?.readSize || readDefault()}px`);
 
   if (look?.fontUi) style.setProperty("--ui", `${look.fontUi}, ${FALLBACK_UI}`);
   else style.removeProperty("--ui");

@@ -37,7 +37,8 @@
     --r-xs: 3px; --r-sm: 5px; --r-md: 8px; --r-pill: 999px;
 
     /* 对话正文的字号。单独立一个令牌，是因为「看不清」要调的是这一处，而
-       不是整套界面 —— 整体缩放走 zoom，两件事各调各的。 */
+       不是整套界面 —— 整体缩放走 zoom，两件事各调各的。这里只是首帧兜底，
+       实际默认在 look.ts 的 readDefault()。 */
     --read: 13.5px;
 
     /* 正文仍封在 68ch，那是设计稿的排版决定。但外面这一列不该再收一次：900px 的
@@ -93,9 +94,10 @@
 
   /* 文字对比度分三档，背景与语义色不参与。默认「柔和」：深底上接近纯白的正文
      （原来 15.9:1）会起光晕，而 faint/ghost 原来低到 2~3:1 又读不清 —— 同屏
-     跨度 8 倍，眼睛在两端反复适应才是真正累人的地方。现在两头都收进 4 倍内。 */
+     跨度 8 倍，眼睛在两端反复适应才是真正累人的地方。现在两头都收进 4 倍内。
+     ghost 的下限按 --raised 量，不按 --page —— 它几乎只出现在卡片里。 */
   :root, :root[data-contrast="soft"] {
-  --text: #2C333E; --muted: #59616C; --faint: #6C7583; --ghost: #8893A5;
+  --text: #2C333E; --muted: #59616C; --faint: #6C7583; --ghost: #7F8B9E;
   }
   :root[data-contrast="normal"] {
   --text: #272D36; --muted: #515963; --faint: #636B78; --ghost: #7D899D;
@@ -106,7 +108,7 @@
 
   @media (prefers-color-scheme: dark) {
     :root, :root[data-contrast="soft"] {
-    --text: #C6CEDE; --muted: #8792A0; --faint: #717A8C; --ghost: #545F72;
+    --text: #C6CEDE; --muted: #8792A0; --faint: #717A8C; --ghost: #626E85;
     }
     :root[data-contrast="normal"] {
     --text: #D1D8E5; --muted: #929CA8; --faint: #7C8696; --ghost: #5B687B;
@@ -117,7 +119,7 @@
   }
 
   :root[data-theme="dark"], :root[data-theme="dark"][data-contrast="soft"] {
-  --text: #C6CEDE; --muted: #8792A0; --faint: #717A8C; --ghost: #545F72;
+  --text: #C6CEDE; --muted: #8792A0; --faint: #717A8C; --ghost: #626E85;
   }
   :root[data-theme="dark"][data-contrast="normal"] {
   --text: #D1D8E5; --muted: #929CA8; --faint: #7C8696; --ghost: #5B687B;
@@ -126,7 +128,7 @@
   --text: #E6E9F0; --muted: #9FA8B3; --faint: #8E97A5; --ghost: #6D7B92;
   }
   :root[data-theme="light"], :root[data-theme="light"][data-contrast="soft"] {
-  --text: #2C333E; --muted: #59616C; --faint: #6C7583; --ghost: #8893A5;
+  --text: #2C333E; --muted: #59616C; --faint: #6C7583; --ghost: #7F8B9E;
   }
   :root[data-theme="light"][data-contrast="normal"] {
   --text: #272D36; --muted: #515963; --faint: #636B78; --ghost: #7D899D;

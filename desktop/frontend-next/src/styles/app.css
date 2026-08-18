@@ -4,9 +4,12 @@
      底部的输入框就是这么被顶出屏幕的。除回去，视口还是视口。 */
   body {
     margin: 0; padding: 0; background: var(--surface); color: var(--text);
-    font: 400 13px/1.6 var(--ui); -webkit-font-smoothing: antialiased;
+    font: 400 13px/1.6 var(--ui);
     height: calc(100vh / var(--zoom, 1)); overflow: hidden;
   }
+
+  /* 别放开平台限制：WebView2 上这行会关掉 ClearType，汉字小字号下发虚。 */
+  [data-platform="darwin"] body { -webkit-font-smoothing: antialiased }
 
   /* A theme's picture, when it has one. It sits behind everything and under a
      scrim of the page colour, so text keeps its contrast whatever the photo is

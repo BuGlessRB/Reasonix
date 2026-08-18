@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { AgentPort, Appearance as Look, ThemePack } from "../port/port";
-import { MONO_FAMILIES, UI_FAMILIES, installed } from "./look";
+import { MONO_FAMILIES, UI_FAMILIES, installed, readDefault, readSteps } from "./look";
 import { STORAGE as LANG_KEY, t } from "../i18n";
 import { reason } from "../i18n/kernel";
 
@@ -40,12 +40,7 @@ const ZOOMS: [number, string][] = [
 ];
 
 // Body size in the transcript alone, so the frame stays where the layout put it.
-const READS: [number, string][] = [
-  [12, "小"],
-  [13.5, "标准"],
-  [15, "大"],
-  [17, "更大"],
-];
+// The steps live in look.ts next to the default they have to agree with.
 
 // "" follows the system's own accessibility setting; the rest are explicit.
 const CONTRASTS: [string, string, string][] = [
@@ -175,8 +170,8 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, reloadT
           <div className="prow">
             <span className="tx">{t("正文")}</span>
             <div className="seg" data-text role="group" aria-label={t("正文字号")}>
-              {READS.map(([v, name]) => (
-                <button key={v} aria-pressed={(look.readSize || 13.5) === v} onClick={() => set({ readSize: v })}>
+              {readSteps().map(([v, name]) => (
+                <button key={v} aria-pressed={(look.readSize || readDefault()) === v} onClick={() => set({ readSize: v })}>
                   {t(name)}
                 </button>
               ))}
