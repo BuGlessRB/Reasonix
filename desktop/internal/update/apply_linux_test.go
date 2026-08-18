@@ -48,7 +48,13 @@ func TestVersionedInstallActivatesWithoutPersistingGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inst := VersionedInstaller{Layout: Layout{Root: root, Executable: filepath.Join(root, "reasonix-desktop")}}
+	// The line is the host's declaration of what a release carries; without it
+	// the installer has no members to extract. testLine is the same one the
+	// archive above was built from.
+	inst := VersionedInstaller{
+		Layout: Layout{Root: root, Executable: filepath.Join(root, "reasonix-desktop")},
+		Line:   testLine(),
+	}
 	// The version arrives without its leading v, the way a manifest can spell it.
 	if err := inst.Install(context.Background(), Cached{Version: "1.20.1", Path: artifact, Kind: KindTarball}); err != nil {
 		t.Fatal(err)
@@ -110,7 +116,13 @@ func TestVersionedInstallGoesBackwards(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inst := VersionedInstaller{Layout: Layout{Root: root, Executable: filepath.Join(root, "reasonix-desktop")}}
+	// The line is the host's declaration of what a release carries; without it
+	// the installer has no members to extract. testLine is the same one the
+	// archive above was built from.
+	inst := VersionedInstaller{
+		Layout: Layout{Root: root, Executable: filepath.Join(root, "reasonix-desktop")},
+		Line:   testLine(),
+	}
 	if err := inst.Install(context.Background(), Cached{Version: "v2.0.0", Path: artifact, Kind: KindTarball}); err != nil {
 		t.Fatalf("rollback install: %v", err)
 	}
