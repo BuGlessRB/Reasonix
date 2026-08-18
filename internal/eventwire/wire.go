@@ -44,6 +44,10 @@ type Event struct {
 	Phase string `json:"phase,omitempty"`
 	// Completion is set on completion_summary events (content-free quality summary).
 	Completion *CompletionSummary `json:"completion,omitempty"`
+	// Seq numbers frames a client must not miss, so a resume can ask for what it
+	// missed. Streaming deltas carry none — the same reason SSE omits `id:` on a
+	// frame that should not move Last-Event-ID. Set by the transport.
+	Seq int64 `json:"seq,omitempty"`
 }
 
 // CompletionSummary is the JSON form of event.CompletionSummaryInfo.

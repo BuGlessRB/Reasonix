@@ -12,17 +12,17 @@ import (
 
 // read drains ch until want is seen or the deadline passes, the way a real SSE
 // handler reads: blocking on the channel rather than sampling its length.
-func read(t *testing.T, ch <-chan []byte, want string) (seen int) {
+func read(t *testing.T, ch <-chan Frame, want string) (seen int) {
 	t.Helper()
 	deadline := time.After(2 * time.Second)
 	for {
 		select {
-		case data, ok := <-ch:
+		case f, ok := <-ch:
 			if !ok {
 				t.Fatalf("stream closed before %q arrived (after %d frames)", want, seen)
 			}
 			seen++
-			if strings.Contains(string(data), want) {
+			if strings.Contains(string(f.Data), want) {
 				return seen
 			}
 		case <-deadline:
@@ -44,9 +44,9 @@ func TestBroadcasterFanOut(t *testing.T) {
 
 	b.Emit(event.Event{Kind: event.Text, Text: "hi"})
 
-	for i, ch := range []<-chan []byte{a, d} {
+	for i, ch := range []<-chan Frame{a, d} {
 		var w eventwire.Event
-		if err := json.Unmarshal(<-ch, &w); err != nil {
+		if err := json.Unmarshal((<-ch).Data, &w); err != nil {
 			t.Fatalf("subscriber %d: %v", i, err)
 		}
 		if w.Kind != "text" || w.Text != "hi" {
@@ -62,7 +62,7 @@ func TestBroadcasterEmitsRetryingJSON(t *testing.T) {
 
 	b.Emit(event.Event{Kind: event.Retrying, RetryAttempt: 3, RetryMax: 10})
 
-	s := string(<-ch)
+	s := string((<-ch).Data)
 	for _, want := range []string{`"kind":"retrying"`, `"retryAttempt":3`, `"retryMax":10`} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("retrying broadcast JSON = %s, want it to contain %s", s, want)

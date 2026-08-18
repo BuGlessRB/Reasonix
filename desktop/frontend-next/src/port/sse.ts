@@ -573,10 +573,77 @@ export class SsePort implements AgentPort {
     return this.post("/rewind/undo", { transactionId });
   }
 
-  subscribe(onEvent: (ev: WireEvent) => void) {
+  /** subscribe delivers the kernel's events, in order, with no holes it did not
+   *  announce. Frames that matter are numbered, so a break in the numbers is
+   *  the client noticing it missed something rather than a gap it renders as a
+   *  quiet turn — and the two transports differ only in how they fetch the
+   *  missing frames back, not in what a gap means.
+   *
+   *  onGap fires when the replay log can no longer close one, which is the
+   *  caller's cue to rebuild from the transcript. */
+  subscribe(onEvent: (ev: WireEvent) => void, onGap?: () => void) {
+    // Frames arriving while a recovery request is in flight wait for it: the
+    // whole point is that the reducer sees one ordered stream, and delivering
+    // the new frame first would put a result ahead of the dispatch it answers.
+    let seen = 0;
+    let recovering = false;
+    let held: WireEvent[] = [];
+    let live = true;
+
+    const deliver = (ev: WireEvent) => {
+      if (ev.seq) seen = Math.max(seen, ev.seq);
+      onEvent(ev);
+    };
+
+    const recover = async (after: number) => {
+      recovering = true;
+      try {
+        const res = await fetch(`${this.base}/events/replay?lastEventId=${after}`, { credentials: "same-origin" });
+        if (!res.ok) throw new Error(String(res.status));
+        const body = (await res.json()) as { frames?: WireEvent[]; complete?: boolean };
+        if (!live) return;
+        for (const ev of body.frames ?? []) deliver(ev);
+        if (!body.complete) onGap?.();
+      } catch {
+        // The frames are gone and asking again would not bring them back. The
+        // transcript is the one source that can still answer.
+        if (live) onGap?.();
+      } finally {
+        recovering = false;
+        const queued = held;
+        held = [];
+        for (const ev of queued) deliver(ev);
+      }
+    };
+
+    const accept = (ev: WireEvent) => {
+      // The stream describing itself: a watermark states the number the client
+      // should have reached, which is the only way to notice a frame lost at
+      // the end of a turn. Neither reaches the reducer.
+      if (ev.kind === "stream_watermark") {
+        if (!recovering && ev.seq && ev.seq > seen) void recover(seen);
+        return;
+      }
+      if (ev.kind === "stream_gap") {
+        seen = Math.max(seen, ev.seq ?? 0);
+        onGap?.();
+        return;
+      }
+      if (recovering) {
+        held.push(ev);
+        return;
+      }
+      if (ev.seq && seen && ev.seq > seen + 1) {
+        held.push(ev);
+        void recover(seen);
+        return;
+      }
+      deliver(ev);
+    };
+
     const feed = (raw: string) => {
       try {
-        onEvent(JSON.parse(raw) as WireEvent);
+        accept(JSON.parse(raw) as WireEvent);
       } catch {
         // A malformed frame must not tear down the stream.
       }
@@ -590,12 +657,21 @@ export class SsePort implements AgentPort {
       // Subscribing to the bus is not the handshake /events is: ask the shell
       // to replay whatever prompt is already waiting for an answer.
       void fetch(this.base + WAILS_REPLAY, { method: "POST" }).catch(() => {});
-      return off;
+      return () => {
+        live = false;
+        off();
+      };
     }
 
+    // EventSource resumes on its own: it reconnects carrying the last id it
+    // saw, and the server replays from there. Recovery here is for the frames
+    // shed without the connection ever dropping.
     const es = new EventSource(this.base + "/events", { withCredentials: true });
     es.onmessage = (m) => feed(m.data);
-    return () => es.close();
+    return () => {
+      live = false;
+      es.close();
+    };
   }
 
   submit(text: string) {

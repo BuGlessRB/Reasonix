@@ -17,6 +17,7 @@ import (
 	goruntime "runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -388,7 +389,7 @@ func lastWorkspace() string {
 // the shell forwards the same broadcaster frames the browser reads over SSE.
 // The payload is byte-identical either way; only the transport differs.
 func pumpEvents(ctx context.Context, rt *serve.Runtime) {
-	var ch <-chan []byte
+	var ch <-chan serve.Frame
 	var unsubscribe func()
 	// The same handoff GET /events performs: subscribe and replay as one step,
 	// so a prompt already waiting for an answer survives the handover.
@@ -398,13 +399,20 @@ func pumpEvents(ctx context.Context, rt *serve.Runtime) {
 	})
 	defer unsubscribe()
 	name := runtimeEventName(rt.ID)
+	// The bus has nothing resembling a connection, so a page that missed a frame
+	// has no reconnect to notice it by. Same watermark the SSE keepalive sends,
+	// for the same reason: a loss at the end of a turn is otherwise invisible.
+	watermark := time.NewTicker(serve.SSEWatermarkInterval)
+	defer watermark.Stop()
 	for {
 		select {
-		case data, ok := <-ch:
+		case f, ok := <-ch:
 			if !ok {
 				return
 			}
-			runtime.EventsEmit(ctx, name, string(data))
+			runtime.EventsEmit(ctx, name, string(f.Data))
+		case <-watermark.C:
+			runtime.EventsEmit(ctx, name, fmt.Sprintf(`{"kind":"stream_watermark","seq":%d}`, rt.Events.Watermark()))
 		case <-ctx.Done():
 			return
 		}

@@ -137,9 +137,9 @@ func TestServeSubmitRunsAndBroadcastsTurnDone(t *testing.T) {
 	deadline := time.After(2 * time.Second)
 	for {
 		select {
-		case data := <-sub:
+		case f := <-sub:
 			var w eventwire.Event
-			if err := json.Unmarshal(data, &w); err == nil && w.Kind == "turn_done" {
+			if err := json.Unmarshal(f.Data, &w); err == nil && w.Kind == "turn_done" {
 				return
 			}
 		case <-deadline:
@@ -1052,8 +1052,8 @@ func TestServeEventsReplaysPendingAskOnAttach(t *testing.T) {
 
 	select {
 	case data := <-firstSub:
-		if !strings.Contains(string(data), `"kind":"ask_request"`) {
-			t.Fatalf("initial subscriber got %s, want ask_request", data)
+		if !strings.Contains(string(data.Data), `"kind":"ask_request"`) {
+			t.Fatalf("initial subscriber got %s, want ask_request", data.Data)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for initial ask_request")
@@ -1103,7 +1103,7 @@ func TestServeEventsReplaysPendingAskOnAttach(t *testing.T) {
 	// must not receive the same prompt a second time.
 	select {
 	case data := <-firstSub:
-		t.Fatalf("existing subscriber got duplicate replay: %s", data)
+		t.Fatalf("existing subscriber got duplicate replay: %s", data.Data)
 	default:
 	}
 
@@ -1126,7 +1126,7 @@ func TestServeEventsReplayHandoffSerializesPromptEmission(t *testing.T) {
 	askCtx, cancelAsk := context.WithCancel(context.Background())
 	defer cancelAsk()
 	taskDone := make(chan struct{})
-	var sub <-chan []byte
+	var sub <-chan Frame
 	var cancelSub func()
 	ctrl.ReplayPendingPromptsWith(func() event.Sink {
 		sub, cancelSub = bc.Subscribe()
@@ -1142,15 +1142,15 @@ func TestServeEventsReplayHandoffSerializesPromptEmission(t *testing.T) {
 
 	select {
 	case data := <-sub:
-		if !strings.Contains(string(data), `"kind":"ask_request"`) {
-			t.Fatalf("handoff subscriber got %s, want ask_request", data)
+		if !strings.Contains(string(data.Data), `"kind":"ask_request"`) {
+			t.Fatalf("handoff subscriber got %s, want ask_request", data.Data)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("handoff subscriber never received ask_request")
 	}
 	select {
 	case data := <-sub:
-		t.Fatalf("handoff subscriber got duplicate ask_request: %s", data)
+		t.Fatalf("handoff subscriber got duplicate ask_request: %s", data.Data)
 	default:
 	}
 

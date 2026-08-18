@@ -42,7 +42,7 @@ func (s *Server) attachWireLog() {
 		for frame := range ch {
 			// Path is read per frame, not cached: /resume and /new swap it
 			// underneath and the next row belongs to the new session.
-			s.wire.write(store.SessionWireLog(s.ctl().SessionPath()), frame)
+			s.wire.write(store.SessionWireLog(s.ctl().SessionPath()), frame.Data)
 		}
 	}()
 }

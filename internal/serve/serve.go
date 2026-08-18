@@ -479,6 +479,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /provider-setup", s.providerSetupStatus)
 	mux.HandleFunc("POST /provider-setup", s.providerSetupSave)
 	mux.HandleFunc("GET /events", s.events)
+	mux.HandleFunc("GET /events/replay", s.eventsReplay)
 	mux.HandleFunc("GET /history", s.history)
 	mux.HandleFunc("GET /context", s.context)
 	mux.HandleFunc("POST /submit", s.submit)
@@ -606,68 +607,6 @@ func (s *Server) logoWordmark(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	_, _ = w.Write(logoWordmarkSVG)
-}
-
-// sseKeepaliveInterval is how often the /events handler emits a `: ping`
-// SSE comment. Most reverse proxies (nginx, ALB, Cloudflare) close idle
-// upstream connections after 30–60 s; a long quiet turn (the agent
-// thinking, the model generating a single long response) easily hits
-// that window. The comment is one byte on the wire and is dropped by
-// the EventSource client, so it's a no-op for the consumer while it
-// keeps the TCP socket warm for the proxy.
-const sseKeepaliveInterval = 15 * time.Second
-
-// events streams the controller's event flow as SSE until the client
-// disconnects. Each event is one `data:` frame of the JSON wire form.
-func (s *Server) events(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	var ch <-chan []byte
-	var unsubscribe func()
-	// Subscribe and replay as one handoff. Prompt producers are serialized with
-	// this operation, so no original event can land between the two steps.
-	s.ctl().ReplayPendingPromptsWith(func() event.Sink {
-		ch, unsubscribe = s.bc.Subscribe()
-		return event.FuncSink(func(e event.Event) {
-			s.bc.EmitTo(ch, e)
-		})
-	})
-	defer unsubscribe()
-
-	fmt.Fprint(w, ": connected\n\n") // open the stream immediately
-	flusher.Flush()
-
-	keepalive := time.NewTicker(sseKeepaliveInterval)
-	defer keepalive.Stop()
-
-	for {
-		select {
-		case data, ok := <-ch:
-			if !ok {
-				return
-			}
-			fmt.Fprintf(w, "data: %s\n\n", data)
-			flusher.Flush()
-		case <-keepalive.C:
-			// SSE comment lines start with `:` and are ignored by the
-			// client. Emit one every sseKeepaliveInterval so the
-			// upstream socket stays warm; without this, a long quiet
-			// turn (e.g. a model thinking) lets a proxy like nginx
-			// or an ALB close the idle connection and the next
-			// event arrives on a half-closed stream.
-			fmt.Fprint(w, ": ping\n\n")
-			flusher.Flush()
-		case <-r.Context().Done():
-			return
-		}
-	}
 }
 
 // submit runs raw user input as a turn (slash commands and @-references

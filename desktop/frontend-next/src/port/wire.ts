@@ -28,7 +28,11 @@ export type Kind =
   | "stream_attempt"
   | "context_maintenance"
   | "workspace_changed"
-  | "completion_summary";
+  | "completion_summary"
+  // Transport frames, not kernel events: the stream describing itself. Handled
+  // in the port and never reaching the reducer.
+  | "stream_gap"
+  | "stream_watermark";
 
 export interface Profile {
   name?: string;
@@ -347,4 +351,8 @@ export interface WireEvent {
   retryMax?: number;
   retryScope?: "headers" | "stream";
   itemId?: string;
+  // Set by the transport on frames that must not be missed, so a client can
+  // tell it missed one. Streaming deltas carry none — losing one costs nothing
+  // the next frame does not restate.
+  seq?: number;
 }

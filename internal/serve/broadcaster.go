@@ -2,7 +2,6 @@ package serve
 
 import (
 	"encoding/json"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -11,15 +10,21 @@ import (
 	"reasonix/internal/eventwire"
 )
 
-// Broadcaster is the event.Sink the controller emits to in server mode. It
-// marshals each event once and fans it out to every connected SSE subscriber.
-// A slow subscriber never back-pressures the agent goroutine: it loses frames
-// instead. Which frames it may lose is the whole design — see droppable.
+// Broadcaster is the event.Sink the controller emits to in server mode: one
+// marshal, fanned out to every subscriber. A slow one loses frames rather than
+// back-pressuring the agent, so frames worth keeping are numbered and held for
+// a while — a drop becomes something the client can ask for again, through the
+// same numbers on either transport. See SubscribeFrom.
 type Broadcaster struct {
 	mu              sync.Mutex
 	subs            map[*subscriber]struct{}
 	ledger          *billing.Ledger
 	displayCurrency string
+	// The transport's, not the session's: numbering outlives /new and /resume, so
+	// resuming across one is told to rebuild rather than handed another
+	// conversation's frames under numbers it already has.
+	seq    int64
+	replay replayLog
 }
 
 // NewBroadcaster returns an empty Broadcaster ready to accept subscribers.
@@ -52,13 +57,17 @@ func (b *Broadcaster) SetDisplayCurrency(currency string) {
 	b.mu.Unlock()
 }
 
-// ResetSession clears the usage ledger for /new, /resume and /fork.
+// ResetSession clears the usage ledger for /new, /resume and /fork, and drops
+// the replay tail with it: those frames describe a conversation no client is
+// looking at any more. The sequence keeps counting, so a client resuming across
+// the switch lands before the log's first frame and is told to refetch.
 func (b *Broadcaster) ResetSession() {
 	if b == nil {
 		return
 	}
 	b.mu.Lock()
 	b.ledger = billing.NewLedger()
+	b.replay.reset()
 	b.mu.Unlock()
 }
 
@@ -75,17 +84,27 @@ func (b *Broadcaster) SessionCostQuote() billing.CostQuote {
 	return b.ledger.Total(b.displayCurrency)
 }
 
-// Emit marshals the event to JSON and delivers it to every subscriber. Never
-// blocks: a subscriber that has fallen behind loses droppable frames. A marshal
-// failure is dropped silently — one bad event shouldn't stall the stream.
+// Emit numbers the event, records it for replay when it is one a client cannot
+// afford to miss, and hands it to every subscriber. Never blocks: a subscriber
+// that has fallen behind loses frames, and the number is what lets it notice
+// and ask for them back. A marshal failure is dropped silently — one bad event
+// shouldn't stall the stream.
 func (b *Broadcaster) Emit(e event.Event) {
-	data, err := json.Marshal(eventwire.ToWire(e))
-	if err != nil {
-		return
-	}
 	drop := droppable(e.Kind)
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	w := eventwire.ToWire(e)
+	if !drop {
+		b.seq++
+		w.Seq = b.seq
+	}
+	data, err := json.Marshal(w)
+	if err != nil {
+		return
+	}
+	if !drop {
+		b.replay.add(b.seq, data)
+	}
 	if e.Kind == event.Usage && e.Usage != nil && e.CostQuote != nil {
 		if b.ledger == nil {
 			b.ledger = billing.NewLedger()
@@ -98,15 +117,15 @@ func (b *Broadcaster) Emit(e event.Event) {
 		}, time.Now().UTC())
 	}
 	for s := range b.subs {
-		s.push(data, drop)
+		s.push(Frame{Seq: w.Seq, Data: data}, drop)
 	}
 }
 
-// EmitTo delivers an event only to the supplied subscriber. It is used for
-// connection-local recovery frames, such as replaying a prompt to a browser
-// that attached after the original event was emitted. Normal runtime events
-// should continue to use Emit so every subscriber receives them.
-func (b *Broadcaster) EmitTo(target <-chan []byte, e event.Event) {
+// EmitTo delivers an event only to the supplied subscriber: connection-local
+// recovery, such as replaying a prompt to a browser that attached after it was
+// asked. Unnumbered by definition — replaying it to a second client would be
+// replaying a conversation that client never had. Runtime events use Emit.
+func (b *Broadcaster) EmitTo(target <-chan Frame, e event.Event) {
 	data, err := json.Marshal(eventwire.ToWire(e))
 	if err != nil {
 		return
@@ -115,19 +134,36 @@ func (b *Broadcaster) EmitTo(target <-chan []byte, e event.Event) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for s := range b.subs {
-		if (<-chan []byte)(s.ch) != target {
+		if (<-chan Frame)(s.ch) != target {
 			continue
 		}
-		s.push(data, drop)
+		s.push(Frame{Data: data}, drop)
 		return
 	}
 }
 
-// Subscribe registers a new SSE client and returns its channel plus an
-// unsubscribe func the handler must call (defer) when the client disconnects.
-func (b *Broadcaster) Subscribe() (<-chan []byte, func()) {
+// Subscribe registers a client that wants the stream from here on.
+func (b *Broadcaster) Subscribe() (<-chan Frame, func()) {
+	return b.SubscribeFrom(0)
+}
+
+// SubscribeFrom registers a client resuming after frame `after` — an SSE
+// reconnect carries Last-Event-ID, the shell's bus carries what it last
+// forwarded. What the log still holds goes out before the live stream and
+// before Emit can see the subscriber, so the resume has no seam. A gap the log
+// cannot close is announced instead: the first sequence the client can trust.
+func (b *Broadcaster) SubscribeFrom(after int64) (<-chan Frame, func()) {
 	s := newSubscriber()
 	b.mu.Lock()
+	if after > 0 && after < b.seq {
+		missed, complete := b.replay.since(after)
+		if gap, from := b.gapFrame(missed); !complete && gap != nil {
+			s.push(Frame{Seq: from, Data: gap}, false)
+		}
+		for _, f := range missed {
+			s.push(Frame{Seq: f.seq, Data: f.data}, false)
+		}
+	}
 	b.subs[s] = struct{}{}
 	b.mu.Unlock()
 	return s.ch, func() {
@@ -141,100 +177,51 @@ func (b *Broadcaster) Subscribe() (<-chan []byte, func()) {
 	}
 }
 
+// Watermark is the last numbered frame. A client compares it against what it
+// has seen to notice that the frame ending a turn never arrived — the one case
+// no later frame would reveal on its own.
+func (b *Broadcaster) Watermark() int64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.seq
+}
+
+// Replay answers what a client missed after a given frame, and whether the log
+// could still account for all of it. It serves the transport that has no
+// connection to re-establish: the desktop shell's bus delivers frames without
+// anything resembling a reconnect, so its client asks in a request instead of
+// carrying Last-Event-ID into a new stream. Both arrive at the same log.
+func (b *Broadcaster) Replay(after int64) (frames []json.RawMessage, complete bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if after >= b.seq {
+		return nil, true
+	}
+	missed, ok := b.replay.since(after)
+	for _, f := range missed {
+		frames = append(frames, json.RawMessage(f.data))
+	}
+	return frames, ok
+}
+
+// gapFrame tells a client where the recoverable stream starts. Seq is the first
+// frame it is about to receive (or the current watermark when the log has
+// nothing left), so everything before that has to come from the transcript.
+func (b *Broadcaster) gapFrame(have []replayFrame) (data []byte, from int64) {
+	from = b.seq
+	if len(have) > 0 {
+		from = have[0].seq
+	}
+	data, err := json.Marshal(eventwire.Event{Kind: "stream_gap", Seq: from})
+	if err != nil {
+		return nil, from
+	}
+	return data, from
+}
+
 // Subscribers reports the current connection count (for diagnostics/tests).
 func (b *Broadcaster) Subscribers() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return len(b.subs)
-}
-
-// softCap is where droppable frames start being shed. hardCap bounds the queue
-// for the case where even the frames that matter are outrunning the client;
-// losing the oldest is the least bad option left, since the newest are the ones
-// carrying the state that would let the frontend stop waiting.
-const (
-	softCap = 64
-	hardCap = 4096
-)
-
-// subscriber is one client's outbound queue. Frames land on the queue and a
-// single pump goroutine moves them onto ch, which is what lets Emit stay
-// non-blocking while a frame's fate depends on its kind rather than on how full
-// a buffer happened to be at the moment it arrived.
-type subscriber struct {
-	ch   chan []byte
-	done chan struct{}
-	wake chan struct{}
-
-	mu     sync.Mutex
-	queue  [][]byte
-	closed bool
-	warned bool
-}
-
-func newSubscriber() *subscriber {
-	s := &subscriber{ch: make(chan []byte, 64), done: make(chan struct{}), wake: make(chan struct{}, 1)}
-	go s.pump()
-	return s
-}
-
-func (s *subscriber) push(data []byte, drop bool) {
-	s.mu.Lock()
-	if s.closed || (drop && len(s.queue) >= softCap) {
-		s.mu.Unlock()
-		return
-	}
-	if len(s.queue) >= hardCap {
-		s.queue[0] = nil
-		s.queue = s.queue[1:]
-		if !s.warned {
-			s.warned = true
-			slog.Warn("serve: event subscriber too far behind; dropping frames it needs", "queued", hardCap)
-		}
-	}
-	s.queue = append(s.queue, data)
-	s.mu.Unlock()
-	select {
-	case s.wake <- struct{}{}:
-	default:
-	}
-}
-
-// pump owns ch: the only goroutine that sends on it, and the only one that
-// closes it — so a client disconnecting mid-send cannot race a send on a closed
-// channel.
-func (s *subscriber) pump() {
-	defer close(s.ch)
-	for {
-		s.mu.Lock()
-		if len(s.queue) == 0 {
-			s.mu.Unlock()
-			select {
-			case <-s.wake:
-				continue
-			case <-s.done:
-				return
-			}
-		}
-		data := s.queue[0]
-		s.queue[0] = nil
-		s.queue = s.queue[1:]
-		s.mu.Unlock()
-		select {
-		case s.ch <- data:
-		case <-s.done:
-			return
-		}
-	}
-}
-
-func (s *subscriber) close() {
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return
-	}
-	s.closed = true
-	s.mu.Unlock()
-	close(s.done)
 }

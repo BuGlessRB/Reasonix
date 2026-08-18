@@ -607,7 +607,10 @@ export interface AgentPort {
   // Saves pasted or dropped image bytes into the workspace's attachment
   // directory and returns the "@path" token a turn references it by.
   attach(blob: Blob): Promise<Attachment>;
-  subscribe(onEvent: (ev: WireEvent) => void): () => void;
+  // onGap fires when frames were lost beyond what the stream can replay, which
+  // is the caller's cue to rebuild from the transcript rather than to keep
+  // rendering a conversation with a hole in it.
+  subscribe(onEvent: (ev: WireEvent) => void, onGap?: () => void): () => void;
 
   submit(text: string): Promise<void>;
   // /submit 409s once a turn holds the session. Mid-turn input is durable and

@@ -84,6 +84,19 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     void port.mcp().then((c) => setMcp(c.servers)).catch(() => setMcp([]));
   }, [port]);
 
+  // What the pane already does on mount, reused as the answer to a gap the
+  // stream could not close: the transcript is the record, so rebuilding from it
+  // is how a hole gets filled rather than rendered as a quiet turn.
+  const rebuild = useCallback(() => {
+    port
+      .history()
+      .then((msgs) => {
+        const restored = fromHistory(msgs);
+        dispatch({ kind: "__restore", items: restored.items, plan: restored.plan } as never);
+      })
+      .catch(() => {});
+  }, [port]);
+
   useEffect(
     () =>
       port.subscribe((ev) => {
@@ -93,8 +106,8 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         // is the only precise signal for it — the turn boundary below is the
         // fallback for changes that arrive without an event.
         if (ev.kind === "mcp_surface_ready" || ev.kind === "extension_status") reloadMcp();
-      }),
-    [port, reloadMcp],
+      }, rebuild),
+    [port, reloadMcp, rebuild],
   );
 
   useEffect(() => {
