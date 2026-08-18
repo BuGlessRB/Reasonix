@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"reasonix/internal/store"
@@ -23,10 +25,7 @@ import (
 // no size threshold: context pays the pointer, the pointer is a pure function
 // of the body, so the decision is derived rather than configured.
 func (a *Agent) spillToolOutput(body, toolName, toolCallID string) (string, bool) {
-	dir := store.SessionOutputsDir(a.SessionPath())
-	if dir == "" {
-		dir = a.archiveOutputsDir()
-	}
+	dir := a.spillDir()
 	if dir == "" {
 		return "", false
 	}
@@ -44,12 +43,83 @@ func (a *Agent) spillToolOutput(body, toolName, toolCallID string) (string, bool
 	return pointer, true
 }
 
-// spillPays reports whether moving a result out of context earns its keep: what
-// is saved has to be worth at least what is spent. Spending is the pointer that
-// stays behind, and a spill the model has to read back costs a whole extra turn,
-// so breaking even is not enough to justify one.
+// spillPays reports whether moving a result out of context earns its keep. What
+// is spent is the pointer plus the turn spent reading it back, and that turn was
+// what comparing bytes alone kept leaving out: a body a single fetch recovers
+// whole buys both to arrive exactly where leaving it would have. Past that limit
+// the model reads a window instead, which is the case a pointer exists for.
 func spillPays(body, pointer int) bool {
+	if body <= maxToolOutputBytes {
+		return false
+	}
 	return body-pointer >= pointer
+}
+
+// spillDir is where this agent's oversize results go: beside its transcript
+// when it has one, the archive it inherited otherwise, and failing both a
+// scratch directory. The last is what keeps the lossless path open — with
+// nowhere to write, the only remaining bound is truncation, which discards
+// almost all of a large result rather than parking it.
+func (a *Agent) spillDir() string {
+	if dir := store.SessionOutputsDir(a.SessionPath()); dir != "" {
+		return dir
+	}
+	if dir := a.archiveOutputsDir(); dir != "" {
+		return dir
+	}
+	return scratchOutputsDir()
+}
+
+// scratchOutputsDir is the spill of last resort, for an agent owning neither a
+// transcript nor an archive. Nothing there has an owner to be collected with,
+// so reconcileOrphanOutputs ages it out instead.
+func scratchOutputsDir() string {
+	return filepath.Join(os.TempDir(), "reasonix-outputs")
+}
+
+// readsSpilledOutput reports whether this call is the model fetching a spilled
+// result back. Such a fetch must never spill: it would return a pointer to a
+// further file, and read_file's line numbers grow the body each round, so the
+// loop has no exit. Decided by where the path points, so a tool reading
+// anything else still spills normally.
+func (a *Agent) readsSpilledOutput(toolName, toolArgs string) bool {
+	switch toolName {
+	case "read_file", "grep":
+	default:
+		return false
+	}
+	var p struct {
+		Path string `json:"path"`
+	}
+	if json.Unmarshal([]byte(toolArgs), &p) != nil || p.Path == "" {
+		return false
+	}
+	abs, err := filepath.Abs(p.Path)
+	if err != nil {
+		return false
+	}
+	// A spill lands directly in the directory, so the file's own parent is the
+	// only candidate; grep aimed at the directory itself matches as-is.
+	for _, dir := range []string{a.spillDir(), a.archiveOutputsDir()} {
+		if dir == "" {
+			continue
+		}
+		if sameDir(filepath.Dir(abs), dir) || sameDir(abs, dir) {
+			return true
+		}
+	}
+	return false
+}
+
+// sameDir compares paths the way the host filesystem resolves them. Erring
+// toward equal is the safe side: a false match only forgoes one spill, while a
+// missed one restores the read-back loop.
+func sameDir(a, b string) bool {
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 // archiveOutputsDir is where an agent with no transcript of its own spills.
@@ -157,9 +227,11 @@ func humanBytes(n int) string {
 // boundToolOutput is the single gate every tool result passes before it becomes
 // context. The second return is the truncation notice; spilling has none,
 // because nothing was lost.
-func (a *Agent) boundToolOutput(body, toolName, toolCallID string) (string, string) {
-	if pointer, ok := a.spillToolOutput(body, toolName, toolCallID); ok {
-		return pointer, ""
+func (a *Agent) boundToolOutput(body, toolName, toolCallID, toolArgs string) (string, string) {
+	if !a.readsSpilledOutput(toolName, toolArgs) {
+		if pointer, ok := a.spillToolOutput(body, toolName, toolCallID); ok {
+			return pointer, ""
+		}
 	}
 	if len(body) <= maxToolOutputBytes {
 		return body, ""

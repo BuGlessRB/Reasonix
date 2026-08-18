@@ -245,7 +245,7 @@ func TestOversizeOutputSpillsRatherThanTruncates(t *testing.T) {
 	root := t.TempDir()
 
 	withRoot := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
-	out, notice := withRoot.boundToolOutput(big, "bash", "call-1")
+	out, notice := withRoot.boundToolOutput(big, "bash", "call-1", "")
 	if notice != "" {
 		t.Errorf("spilled output must carry no truncation notice: %q", notice)
 	}
@@ -257,9 +257,17 @@ func TestOversizeOutputSpillsRatherThanTruncates(t *testing.T) {
 		t.Fatalf("spill file: %d bytes, err=%v; want the full %d", len(spilled), err, len(big))
 	}
 
-	// With nowhere to write, truncation is still the honest fallback.
+	// Owning neither a transcript nor an archive is likewise not a reason to
+	// lose the middle: scratch is somewhere, and truncation drops most of a
+	// result this size.
 	bare := New(nil, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
-	if _, notice := bare.boundToolOutput(big, "bash", "call-2"); notice == "" {
-		t.Error("without an archive root the caller must be told the result was truncated")
+	bareOut, bareNotice := bare.boundToolOutput(big, "bash", "call-2", "")
+	if bareNotice != "" {
+		t.Errorf("the scratch fallback must keep the result whole, not truncate it: %q", bareNotice)
+	}
+	scratch := spillPathIn(t, bareOut)
+	t.Cleanup(func() { _ = os.Remove(scratch) })
+	if kept, err := os.ReadFile(scratch); err != nil || len(kept) != len(big) {
+		t.Fatalf("scratch spill: %d bytes, err=%v; want the full %d", len(kept), err, len(big))
 	}
 }

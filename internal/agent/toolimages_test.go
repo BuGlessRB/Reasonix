@@ -30,9 +30,9 @@ func (f *fakeImageTool) ExecuteWithImages(ctx context.Context, args json.RawMess
 	return f.text, f.images, nil
 }
 
-// Tool-result images must reach the session message intact even when the text
-// output blows the truncation budget: the head+tail splice that trims tool text
-// would corrupt a base64 payload, so images ride outside the truncated text.
+// Tool-result images must reach the session message intact however the text
+// alongside them is bounded: a head+tail splice would corrupt a base64 payload,
+// so images ride outside the text rather than inside it.
 func TestToolResultImagesBypassTruncation(t *testing.T) {
 	dataURL := "data:image/png;base64," + strings.Repeat("QUFB", 20000) // ~80KB payload, alone over the text budget
 	longText := strings.Repeat("x", maxToolOutputBytes+1024) + "[image: image/png]"
@@ -42,7 +42,7 @@ func TestToolResultImagesBypassTruncation(t *testing.T) {
 		{toolCallChunk("c1", "shot", `{}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	a := New(prov, reg, NewSession(""), Options{ArchiveDir: t.TempDir()}, event.Discard)
 	if err := a.Run(context.Background(), "take a screenshot"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -59,8 +59,8 @@ func TestToolResultImagesBypassTruncation(t *testing.T) {
 	if len(msg.Images) != 1 || msg.Images[0] != dataURL {
 		t.Fatalf("tool message images corrupted or missing: got %d images", len(msg.Images))
 	}
-	if len(msg.Content) > maxToolOutputBytes+1024 || !strings.Contains(msg.Content, "truncated") {
-		t.Fatalf("tool text should be head+tail truncated, len=%d", len(msg.Content))
+	if len(msg.Content) >= len(longText) {
+		t.Fatalf("tool text should have been bounded, len=%d", len(msg.Content))
 	}
 	if strings.Contains(msg.Content, dataURL) {
 		t.Fatal("image payload must not be embedded in the tool text")
