@@ -228,25 +228,7 @@ func run() error {
 			Assets: assets,
 			// In-process HTTP: no port, no CORS, no second transport to keep in
 			// sync with the browser build.
-			Middleware: func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					id, path := splitRuntimePath(r.URL.Path)
-					// The bus has no reconnect handshake, so a reloaded page asks
-					// for the replay resubscribing to /events would have given it.
-					if path == replayPath {
-						if rt := hub.Get(id); rt != nil {
-							rt.Server.Controller().ReplayPendingPromptsWith(func() event.Sink { return rt.Events })
-						}
-						w.WriteHeader(http.StatusNoContent)
-						return
-					}
-					if isAPIPath(path) || isHubPath(path) {
-						api.ServeHTTP(w, r)
-						return
-					}
-					next.ServeHTTP(w, r)
-				})
-			},
+			Middleware: hubMiddleware(hub, api),
 		},
 		// The window is held open across the shutdown rather than vanishing into
 		// one; see closing.go. OnShutdown stays as the backstop for exits that
@@ -254,6 +236,28 @@ func run() error {
 		OnBeforeClose: shell.beginClose,
 		OnShutdown:    func(context.Context) { hub.Shutdown() },
 	})
+}
+
+func hubMiddleware(hub *serve.Hub, api http.Handler) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			id, path := splitRuntimePath(r.URL.Path)
+			// The bus has no reconnect handshake, so a reloaded page asks for the
+			// replay resubscribing to /events would have given it.
+			if path == replayPath {
+				if rt := hub.Get(id); rt != nil {
+					rt.Server.Controller().ReplayPendingPromptsWith(func() event.Sink { return rt.Events })
+				}
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			if isAPIPath(path) || isHubPath(path) {
+				api.ServeHTTP(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // appMenu is what makes ⌘C work: a WKWebView takes its editing shortcuts from
@@ -289,10 +293,6 @@ type App struct {
 	closing closeState
 }
 
-// grantWindowCapabilities opens up what only a local window may do. The single
-// client is the person in front of it, so the folder picker, the account token
-// and provider keys are local dialogs rather than remote capabilities — and
-// every pane gets them, not just the one the window started with.
 // windowNotifications returns the sink wrapper every runtime in this window
 // gets. Off by default and per the shared [notifications] config, so the CLI
 // and the window answer to one setting rather than each growing its own.
@@ -306,6 +306,10 @@ func windowNotifications(cfg *config.Config) func(event.Sink) event.Sink {
 	}
 }
 
+// grantWindowCapabilities opens up what only a local window may do. The single
+// client is the person in front of it, so the folder picker, the account token
+// and provider keys are local dialogs rather than remote capabilities — and
+// every pane gets them, not just the one the window started with.
 func grantWindowCapabilities(srv *serve.Server) {
 	srv.AllowWorkspaceSwitch()
 	srv.AllowAccountAuth()
