@@ -1,9 +1,9 @@
 import type { Metrics } from "../state/session";
 import { RMark } from "./RMark";
 import { t } from "../i18n";
+import { money, pct, tokens } from "../i18n/format";
 import { useBump, useFresh, useTicker } from "./num";
 
-const kk = (n: number) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(Math.round(n)));
 
 const clock = (secs: number) => {
   const s = Math.floor(secs);
@@ -34,19 +34,16 @@ export function RunStrip({ doing, metrics, steps, elapsed }: Props) {
       <span className="mt">{steps ? t("{n} 步 · {clock}", { n: steps, clock: clock(elapsed) }) : ""}</span>
       <span className="io">
         <span className="up" data-bump={useBump(up) ? "" : undefined}>
-          ↑ {kk(upShown)}
+          ↑ {tokens(upShown)}
         </span>
         <span className="dn" data-bump={useBump(metrics.out) ? "" : undefined}>
-          ↓ {kk(outShown)}
+          ↓ {tokens(outShown)}
         </span>
       </span>
       <span className="mt">
-        {t("缓存")} <span className="hit">{rateShown.toFixed(1)}%</span>
+        {t("缓存")} <span className="hit">{pct(rateShown / 100, 1)}</span>
       </span>
-      <span className="yen">
-        {metrics.currency}
-        {costShown.toFixed(2)}
-      </span>
+      <span className="yen">{money(costShown, metrics.currency)}</span>
     </div>
   );
 }

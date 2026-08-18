@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { bytes } from "../i18n/format";
 import { t } from "../i18n";
 import type { UpdateProgress, VersionHub } from "../port/port";
 
@@ -24,16 +25,12 @@ function when(iso: string): string {
   return new Date(at).toLocaleDateString();
 }
 
-function mb(bytes: number): string {
-  return `${(bytes / 1048576).toFixed(1)} MB`;
-}
-
 // The phase is the sentence. Verifying gets its own because it is the pause
 // after the bar fills, which otherwise reads as a hang on a large artifact.
 function say(p: UpdateProgress): string {
   switch (p.phase) {
     case "downloading":
-      return p.total > 0 ? t("下载中 {got} / {all}", { got: mb(p.received), all: mb(p.total) }) : t("下载中 {got}", { got: mb(p.received) });
+      return p.total > 0 ? t("下载中 {got} / {all}", { got: bytes(p.received), all: bytes(p.total) }) : t("下载中 {got}", { got: bytes(p.received) });
     case "verifying":
       return t("校验签名…");
     case "downloaded":

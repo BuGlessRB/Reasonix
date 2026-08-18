@@ -441,7 +441,10 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
           out: s.metrics.out + u.completionTokens,
           bySource: { ...s.metrics.bySource, [src]: (s.metrics.bySource[src] ?? 0) + spent },
           cost: s.metrics.cost + spent,
-          currency: u.costQuote?.original.currency || u.currency || s.metrics.currency,
+          // The kernel sends both, and says the code is preferred: only it can
+          // tell CN¥ from ¥ in an English window. The symbol stays as the
+          // fallback for a quote that carries one instead.
+          currency: u.currencyCode || u.costQuote?.original.currency || u.currency || s.metrics.currency,
         },
       };
     }

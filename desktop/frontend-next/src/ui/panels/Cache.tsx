@@ -1,4 +1,5 @@
 import type { Metrics } from "../../state/session";
+import { decimals, money, pct } from "../../i18n/format";
 import { useTicker, useTrail } from "../num";
 import { Spark } from "../Spark";
 import { t } from "../../i18n";
@@ -33,7 +34,7 @@ export function Cache({ metrics, rate: tps, done }: { metrics: Metrics; rate: nu
       <div className="lbl">{t("缓存")}</div>
       <div className="big">
         <span className="v" data-live={up ? "" : undefined} data-flash={done && up ? "" : undefined}>
-          {shown.toFixed(1)}%
+          {pct(shown / 100, 1)}
         </span>
         <span className="k">
           {t("前缀命中")}
@@ -68,11 +69,8 @@ export function Cache({ metrics, rate: tps, done }: { metrics: Metrics; rate: nu
       <div className="money">
         <div className="col">
           <span className="k">{t("本会话")}</span>
-          <span className="v">
-            {metrics.currency}
-            {cost.toFixed(2)}
-          </span>
-          <span className="note">{up ? t("命中 {rate}%", { rate: rate.toFixed(1) }) : "—"}</span>
+          <span className="v">{money(cost, metrics.currency)}</span>
+          <span className="note">{up ? t("命中 {rate}%", { rate: decimals(rate, 1) }) : "—"}</span>
         </div>
         <div className="col">
           <span className="k">{t("若不命中")}</span>
@@ -84,10 +82,7 @@ export function Cache({ metrics, rate: tps, done }: { metrics: Metrics; rate: nu
         {sources.map(([k, v]) => (
           <div className="r" key={k}>
             <span>{t(SRC[k] ?? k)}</span>
-            <span className="n">
-              {metrics.currency}
-              {v.toFixed(2)}
-            </span>
+            <span className="n">{money(v, metrics.currency)}</span>
           </div>
         ))}
       </div>

@@ -1,6 +1,7 @@
 import { t } from "../../i18n";
 import { useTicker } from "../num";
 import type { ContextBreakdown } from "../../port/port";
+import { pct as percent, tokens } from "../../i18n/format";
 
 // The order is the order they arrive in a prompt, so the bar reads the way the
 // request is built rather than by size — a class that grows is easier to spot
@@ -13,7 +14,6 @@ const PARTS: [keyof ContextBreakdown, string, string][] = [
   ["output", t("工具输出"), t("命令、读取、检索返回的内容")],
 ];
 
-const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 /** Context is the gauge plus what fills it. The gauge alone says a session is
  *  at 70% without saying whether that is a tool catalogue, a memory file, or
@@ -31,7 +31,7 @@ export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
       <div className="lbl">
         {t("上下文")}
         <span className="n">
-          {fmt(Math.round(used))} / {fmt(ctx.window)}
+          {tokens(Math.round(used))} / {tokens(ctx.window)}
         </span>
       </div>
       {/* Hover, not a permanent list: five more rows of numbers in a rail this
@@ -43,14 +43,14 @@ export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
         <div className="ctxpop" role="tooltip">
           <div className="hd">
             <span>{t("上下文构成")}</span>
-            <span className="n">{pct.toFixed(0)}%</span>
+            <span className="n">{percent(pct / 100)}</span>
           </div>
           {parts.map((p) => (
             <div className="row" key={p.k} title={p.why}>
               <i data-p={p.k} />
               <span className="t">{p.label}</span>
-              <span className="v">{fmt(p.n)}</span>
-              <span className="p">{Math.round((p.n / sum) * 100)}%</span>
+              <span className="v">{tokens(p.n)}</span>
+              <span className="p">{percent(p.n / sum)}</span>
             </div>
           ))}
           <p className="foot">{t("估算值，和触发压缩用的是同一把尺子")}</p>

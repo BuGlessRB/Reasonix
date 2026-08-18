@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { money } from "../i18n/format";
 import { t } from "../i18n";
 import type { ModelEntry } from "../port/port";
 import { accountKey, accountLabel, disambiguate } from "./vendors";
@@ -7,7 +8,6 @@ import { accountKey, accountLabel, disambiguate } from "./vendors";
 // once above — an earlier version put a route selector on every row, so picking
 // a model silently moved the session to another endpoint.
 
-const CURRENCY: Record<string, string> = { CNY: "¥", USD: "$", EUR: "€" };
 
 export interface Vendor {
   key: string;
@@ -70,9 +70,8 @@ function contextLabel(tokens?: number): string {
 function priceLabel(m: ModelEntry): string {
   const p = m.price;
   if (!p) return "";
-  const sign = CURRENCY[p.currency ?? ""] ?? "";
-  const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0$/, ""));
-  return `${sign}${n(p.input)} / ${sign}${n(p.output)}`;
+  const code = p.currency ?? "";
+  return `${money(p.input, code)} / ${money(p.output, code)}`;
 }
 
 // Every tag needs something in the config or the catalog behind it. An inferred

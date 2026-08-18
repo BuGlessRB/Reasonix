@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { decimals } from "../i18n/format";
 import { t } from "../i18n";
 import { categoryOf } from "./icons";
 import type { Span, TrajRow } from "../state/trajectory";
@@ -50,7 +51,8 @@ function Track({ row, span }: { row: TrajRow; span: number }) {
   // The round is the trunk of a turn, not one more tool; it gets its own tone
   // so the coloured marks read as what happened inside it.
   const cat = row.kind === "model_round" ? "round" : row.tool ? categoryOf(row.tool) : "sys";
-  const label = dur > 0 ? `+${start.toFixed(2)}s → +${(start + dur).toFixed(2)}s · ${dur.toFixed(2)}s` : `+${start.toFixed(2)}s`;
+  const at = (v: number) => `+${decimals(v, 2)}s`;
+  const label = dur > 0 ? `${at(start)} → ${at(start + dur)} · ${decimals(dur, 2)}s` : at(start);
   return (
     <span className="tl-track" title={label}>
       <i
@@ -93,7 +95,7 @@ export function Trajectory({ rows, onSave }: { rows: TrajRow[]; onSave: (name: s
             <th className="seq">seq</th>
             <th className="t">+t</th>
             <th className="tl">
-              {t("时间轴")} <span className="tl-span">0 – {span.toFixed(1)}s</span>
+              {t("时间轴")} <span className="tl-span">0 – {decimals(span, 1)}s</span>
             </th>
             <th className="kind">record</th>
             <th>payload</th>
@@ -103,7 +105,7 @@ export function Trajectory({ rows, onSave }: { rows: TrajRow[]; onSave: (name: s
           {rows.map((r) => (
             <tr key={r.seq} data-k={r.kind}>
               <td className="seq">{r.seq}</td>
-              <td className="t">{r.at.toFixed(2)}s</td>
+              <td className="t">{decimals(r.at, 2)}s</td>
               <td className="tl">
                 <Track row={r} span={span} />
               </td>

@@ -1,7 +1,7 @@
 import type { Compaction } from "../../port/wire";
 import { Sym } from "../Sym";
 import { t } from "../../i18n";
-import { tokenLabel } from "../Cost";
+import { tokens } from "../../i18n/format";
 
 const TRIGGER: Record<string, string> = {
   auto: "上下文到阈值，自动触发",
@@ -91,7 +91,7 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
                   {before > 0 && (
                     <>
                       {" · "}
-                      <b>{tokenLabel(before)}</b>
+                      <b>{tokens(before)}</b>
                     </>
                   )}
                 </div>
@@ -122,7 +122,7 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
                 {shrank && (
                   <>
                     {" · "}
-                    <b>{tokenLabel(before)}</b> → <b>{tokenLabel(after)}</b>
+                    <b>{tokens(before)}</b> → <b>{tokens(after)}</b>
                   </>
                 )}
               </div>

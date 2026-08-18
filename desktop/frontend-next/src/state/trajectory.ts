@@ -1,4 +1,5 @@
 import type { WireEvent } from "../port/wire";
+import { seconds, tokens } from "../i18n/format";
 
 export type Span = { t: string } | { b: string } | { n: string };
 
@@ -28,7 +29,6 @@ export interface TrajState {
 
 export const initialTraj: TrajState = { rows: [], t0: 0, open: {} };
 
-const kb = (n: number) => (n / 1000).toFixed(1) + "k";
 
 interface Made {
   kind: string;
@@ -79,7 +79,7 @@ function record(ev: WireEvent): Made | null {
       const tail: Span[] = [];
       // The kernel measured this one; the wall clock here would also count the
       // trip back to the browser.
-      if (tool.durationMs != null) tail.push({ t: " · " }, { n: (tool.durationMs / 1000).toFixed(2) + "s" });
+      if (tool.durationMs != null) tail.push({ t: " · " }, { n: seconds(tool.durationMs, 2) });
       if (tool.err) tail.push({ t: " · err=" }, { b: tool.err });
       return {
         kind: tool.err ? "protocol_recovery" : "tool",
@@ -111,11 +111,11 @@ function record(ev: WireEvent): Made | null {
         touch: "@round",
         payload: [
           { t: " · hit " },
-          { n: kb(u.cacheHitTokens) },
+          { n: tokens(u.cacheHitTokens) },
           { t: " · miss " },
-          { n: kb(u.cacheMissTokens) },
+          { n: tokens(u.cacheMissTokens) },
           { t: " · out " },
-          { n: kb(u.completionTokens) },
+          { n: tokens(u.completionTokens) },
           { t: " · src=" },
           { b: u.source || "executor" },
         ],

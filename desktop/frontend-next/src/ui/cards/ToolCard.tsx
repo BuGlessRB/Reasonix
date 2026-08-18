@@ -4,7 +4,8 @@ import type { ExtensionSurface, Tool } from "../../port/wire";
 import { categoryOf, labelFor, mcpOrigin, runLabelFor } from "../icons";
 import { Sym, glyphFor } from "../Sym";
 import { GOAL_STATUS, argOf, goalUpdate, shortArgs } from "../args";
-import { Cost, secondsLabel, tokenLabel } from "../Cost";
+import { Cost } from "../Cost";
+import { seconds, tokens } from "../../i18n/format";
 import { parsePlan } from "../../state/session";
 import { DiffView } from "./DiffView";
 import { Term, ToolOutput } from "./ToolOutput";
@@ -60,7 +61,7 @@ export function ToolCard({
   // Showing that count is the difference between a card that is visibly filling
   // and one that sits blank until the whole file arrives at once.
   const streaming = running && !tool.args && (tool.argChars ?? 0) > 0;
-  const arg = tool.name === "todo_write" ? "" : streaming ? `${chars(tool.argChars!)} 字符` : shortArgs(tool.args ?? "");
+  const arg = tool.name === "todo_write" ? "" : streaming ? `${tokens(tool.argChars!)} 字符` : shortArgs(tool.args ?? "");
   // A shell result carries its exit status separately from stdout, and stdout
   // alone cannot say whether the command worked.
   const ex = tool.execution;
@@ -136,8 +137,8 @@ export function ToolCard({
                 {/* 委派出去那部分的账：耗时是父调用的，token 是子步骤各自留下的 */}
                 <span className="rt">
                   {[
-                    tool.durationMs ? secondsLabel(tool.durationMs) : "",
-                    childTokens(children) ? tokenLabel(childTokens(children)) : "",
+                    tool.durationMs ? seconds(tool.durationMs) : "",
+                    childTokens(children) ? tokens(childTokens(children)) : "",
                   ]
                     .filter(Boolean)
                     .join(" · ")}
@@ -206,7 +207,6 @@ function Steps({ tool }: { tool: Tool }) {
 
 const childTokens = (kids: Tool[]) => kids.reduce((n, k) => n + (k.contextTokens ?? 0), 0);
 
-const chars = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 // An identifier reads correctly in the mono tag and nowhere else, so this is the
 // one place a raw tool id is allowed to surface. A shell call spends it on the

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { t } from "../../i18n";
+import { count, decimals } from "../../i18n/format";
 import { Sym } from "../Sym";
 import type { Item } from "../../state/session";
 import { Markdown } from "../Markdown";
@@ -9,8 +11,12 @@ import { useRevealed } from "../reveal";
 // spec puts both halves there — how long, and how much — because either alone
 // hides whether a slow turn was spent thinking or waiting.
 function thoughtLabel(item: Extract<Item, { t: "say" }>) {
-  const chars = `${[...(item.reasoning ?? "")].length} 字`;
-  return item.thoughtMs ? `想了 ${(item.thoughtMs / 1000).toFixed(1)} 秒 · ${chars}` : `想了 ${chars}`;
+  // Graphemes, not code units: an emoji in the reasoning is one character to
+  // the reader and two to the string.
+  const chars = t("{n} 字", { n: count([...(item.reasoning ?? "")].length) });
+  return item.thoughtMs
+    ? t("想了 {secs} 秒 · {chars}", { secs: decimals(item.thoughtMs / 1000, 1), chars })
+    : t("想了 {chars}", { chars });
 }
 
 export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {

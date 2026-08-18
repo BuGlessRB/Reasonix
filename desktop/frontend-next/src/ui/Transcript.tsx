@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { decimals } from "../i18n/format";
 import { t } from "../i18n";
 import type { Item, Waiting } from "../state/session";
 import type { ExtensionSurface } from "../port/wire";
@@ -527,8 +528,8 @@ function Await({ retry }: { retry?: { attempt: number; max: number } }) {
       <i />
       <span className="t">
         {retry
-          ? t("连接在响应头前断了，重试 {attempt}/{max} · {secs}s", { attempt: retry.attempt, max: retry.max, secs: secs.toFixed(1) })
-          : t("等待回包 {secs}s", { secs: secs.toFixed(1) })}
+          ? t("连接在响应头前断了，重试 {attempt}/{max} · {secs}s", { attempt: retry.attempt, max: retry.max, secs: decimals(secs, 1) })
+          : t("等待回包 {secs}s", { secs: decimals(secs, 1) })}
       </span>
     </div>
   );

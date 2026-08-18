@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { money } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
 import { createPortal } from "react-dom";
@@ -353,7 +354,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // and has to go out, and the action slot goes back to send so you can talk.
   const blocked = s.doing === "等你批准" || s.doing === "等你决定";
   const run = blocked ? "halt" : s.running ? "running" : s.items.length ? (s.doing === "已完成" ? "done" : "halt") : "idle";
-  const cost = `${s.metrics.currency}${s.metrics.cost.toFixed(2)}`;
+  const cost = money(s.metrics.cost, s.metrics.currency);
 
   // The chrome reads the focused pane. Reporting from an effect keeps it out of
   // render, where it would set state on the parent mid-paint.

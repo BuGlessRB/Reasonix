@@ -1,4 +1,5 @@
 import type { Item } from "../../state/session";
+import { seconds } from "../../i18n/format";
 import { shortArgs } from "../args";
 import { t } from "../../i18n";
 
@@ -31,7 +32,7 @@ export function Agents({ tasks }: { tasks: Task[] }) {
             />
             <span className="nm">{x.tool.profile?.name || shortArgs(x.tool.args ?? "") || "task"}</span>
             <span className="rt">
-              {x.running ? t("运行中") : x.tool.durationMs ? `${(x.tool.durationMs / 1000).toFixed(0)}s` : t("已交活")}
+              {x.running ? t("运行中") : x.tool.durationMs ? seconds(x.tool.durationMs, 0) : t("已交活")}
             </span>
           </div>
         ))}

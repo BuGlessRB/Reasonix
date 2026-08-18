@@ -6,6 +6,7 @@
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
+import { bytes } from "../../i18n/format";
 import type { Bound } from "../../port/wire";
 import { splitPath } from "../args";
 
@@ -314,9 +315,6 @@ function Clip({ id, deps, children }: { id?: string; deps?: unknown; children: R
   );
 }
 
-const humanBytes = (n: number) =>
-  n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1 << 10 ? `${Math.round(n / (1 << 10))} KB` : `${n} B`;
-
 // The three outcomes are not the same news, and a card that renders them alike
 // is why "folded" and "the model never saw this" looked identical. Only
 // truncation is a warning; the other two say where the rest is.
@@ -327,7 +325,7 @@ function BoundNote({ bound }: { bound?: Bound }) {
       <div className="bound" title={bound.path}>
         {t("完整输出已存盘（{lines} 行 · {size}），模型按需读取", {
           lines: bound.lines ?? 0,
-          size: humanBytes(bound.bytes ?? 0),
+          size: bytes(bound.bytes ?? 0),
         })}
       </div>
     );
@@ -338,8 +336,8 @@ function BoundNote({ bound }: { bound?: Bound }) {
   return (
     <div className="bound bad">
       {t("模型只收到 {kept}，共 {size} — 其余未进入上下文", {
-        kept: humanBytes(bound.keptBytes ?? 0),
-        size: humanBytes(bound.bytes ?? 0),
+        kept: bytes(bound.keptBytes ?? 0),
+        size: bytes(bound.bytes ?? 0),
       })}
     </div>
   );
