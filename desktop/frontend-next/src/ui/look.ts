@@ -1,5 +1,6 @@
 import type { Appearance } from "../port/port";
 import { current } from "../i18n";
+import { refresh as refreshWidth } from "./viewport";
 
 /** 正文起点。汉字同字号下笔画更密，中文高一档。求值留到调用时：模块加载早于
  *  i18n 定语言。 */
@@ -49,6 +50,9 @@ export function apply(look: Appearance | null, busy = false) {
     style.removeProperty("zoom");
     style.removeProperty("--zoom");
   }
+  // Zoom changes how much room the layout has without the window moving, so the
+  // resize observer has nothing to report. Say so directly.
+  refreshWidth();
 
   // Reading size moves the transcript's prose alone, so the frame around it
   // stays where the layout put it.

@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { boot as bootLang } from "./i18n";
+import { track as trackWidth } from "./ui/viewport";
 import "./styles/tokens.css";
 import "./styles/app.css";
 import { App } from "./ui/App";
@@ -54,6 +55,7 @@ focus();
 // Before the first paint: a language that arrives after one would show the
 // interface in one language and then swap it.
 bootLang();
+trackWidth();
 
 const root = createRoot(document.getElementById("root")!);
 pick().then(
