@@ -53,7 +53,7 @@ func (e editFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 	if p.OldString == "" {
 		return "", fmt.Errorf("old_string is required")
 	}
-	p.Path = resolveIn(e.workDir, p.Path)
+	p.Path = resolveIn(e.workDir, resolveSessionTemp(e.sessionTemp, p.Path))
 	if err := confineWrite(ctx, e.roots, e.guard, e.managed, e.sessionTemp, p.Path); err != nil {
 		return "", err
 	}

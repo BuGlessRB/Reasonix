@@ -130,6 +130,42 @@ func resolveIn(workDir, p string) string {
 	return filepath.Join(workDir, p)
 }
 
+// resolveSessionTemp rewrites a leading session-temp variable into the directory
+// it names. The host exports these spellings to bash and names $TMPDIR in its
+// own refusal text, so a writer that cannot read them creates a literal
+// "$TMPDIR" directory inside the workspace. Only the first segment is expanded.
+func resolveSessionTemp(temp *sessiontemp.Manager, p string) string {
+	if temp == nil || p == "" {
+		return p
+	}
+	head, rest, _ := strings.Cut(filepath.ToSlash(p), "/")
+	named := false
+	for _, key := range sandbox.SessionTempEnvKeys {
+		if head == "$"+key || head == "${"+key+"}" || strings.EqualFold(head, "%"+key+"%") {
+			named = true
+			break
+		}
+	}
+	if !named {
+		return p
+	}
+	dir := temp.Dir()
+	if dir == "" {
+		// The generation is created lazily by whoever first needs it — usually
+		// bash. A writer that names the directory needs it to exist too.
+		lease, err := temp.Acquire()
+		if err != nil {
+			return p
+		}
+		dir = lease.Dir()
+		lease.Release()
+	}
+	if dir == "" {
+		return p
+	}
+	return filepath.Join(dir, filepath.FromSlash(rest))
+}
+
 // PathResolver maps session-authorized token paths to local read-only roots.
 // It is intentionally used only by read tools; write tools continue to rely on
 // WriteRoots confinement and never resolve these aliases.

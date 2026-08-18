@@ -60,7 +60,7 @@ func (w writeFile) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if p.Path == "" {
 		return "", fmt.Errorf("path is required")
 	}
-	p.Path = resolveIn(w.workDir, p.Path)
+	p.Path = resolveIn(w.workDir, resolveSessionTemp(w.sessionTemp, p.Path))
 	if err := confineWrite(ctx, w.roots, w.guard, w.managed, w.sessionTemp, p.Path); err != nil {
 		return "", err
 	}

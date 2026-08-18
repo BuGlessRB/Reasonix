@@ -58,8 +58,8 @@ func (m moveFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 	if p.DestinationPath == "" {
 		return "", fmt.Errorf("destination_path is required")
 	}
-	src := resolveIn(m.workDir, p.SourcePath)
-	dst := resolveIn(m.workDir, p.DestinationPath)
+	src := resolveIn(m.workDir, resolveSessionTemp(m.sessionTemp, p.SourcePath))
+	dst := resolveIn(m.workDir, resolveSessionTemp(m.sessionTemp, p.DestinationPath))
 	if err := confineWrite(ctx, m.roots, m.guard, m.managed, m.sessionTemp, src); err != nil {
 		return "", err
 	}

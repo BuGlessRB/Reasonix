@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"reasonix/internal/sessiontemp"
 	"reasonix/internal/tool"
 )
 
@@ -285,5 +286,56 @@ func assertExternalToolError(t *testing.T, tl tool.Tool, args map[string]any, wa
 	}
 	if strings.Contains(msg, filepath.ToSlash(externalRoot)) || strings.Contains(msg, externalRoot) {
 		t.Fatalf("%s error leaked external root: %q", tl.Name(), msg)
+	}
+}
+
+func TestResolveSessionTempExpandsTheVariableTheHostExports(t *testing.T) {
+	m := sessiontemp.NewWithRoot(t.TempDir())
+	m.Retain()
+	defer m.Release()
+	lease, err := m.Acquire()
+	if err != nil {
+		t.Fatalf("acquire session temp: %v", err)
+	}
+	defer lease.Release()
+	dir := lease.Dir()
+
+	cases := []struct{ in, want string }{
+		{"$TMPDIR/check.py", filepath.Join(dir, "check.py")},
+		{"${TMPDIR}/a/b.py", filepath.Join(dir, "a", "b.py")},
+		{"$TMP/check.py", filepath.Join(dir, "check.py")},
+		{"$TEMP/check.py", filepath.Join(dir, "check.py")},
+		{"%TEMP%/check.py", filepath.Join(dir, "check.py")},
+		{"$TMPDIR", filepath.Join(dir)},
+		{"src/$TMPDIR/x.py", "src/$TMPDIR/x.py"}, // only the first segment
+		{"$TMPDIRX/x.py", "$TMPDIRX/x.py"},
+		{"repro.py", "repro.py"},
+	}
+	for _, c := range cases {
+		if got := resolveSessionTemp(m, c.in); got != c.want {
+			t.Errorf("resolveSessionTemp(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	if got := resolveSessionTemp(nil, "$TMPDIR/check.py"); got != "$TMPDIR/check.py" {
+		t.Errorf("nil manager must not rewrite: got %q", got)
+	}
+}
+
+func TestWriteFileUnderSessionTempVariableLeavesTheWorkspaceClean(t *testing.T) {
+	m := sessiontemp.NewWithRoot(t.TempDir())
+	m.Retain()
+	defer m.Release()
+	work := t.TempDir()
+
+	w := writeFile{workDir: work, roots: []string{work}, sessionTemp: m}
+	out, err := w.Execute(context.Background(), json.RawMessage(`{"path":"$TMPDIR/check.py","content":"print(1)\n"}`))
+	if err != nil {
+		t.Fatalf("write under $TMPDIR: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(work, "$TMPDIR")); !os.IsNotExist(err) {
+		t.Fatalf("a literal $TMPDIR directory was created in the workspace (out=%q)", out)
+	}
+	if _, err := os.Stat(filepath.Join(m.Dir(), "check.py")); err != nil {
+		t.Fatalf("file did not land in the session temp dir: %v (out=%q)", err, out)
 	}
 }
