@@ -19,7 +19,16 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/event"
 )
+
+// decorateSink applies the host's sink wrapper, if it asked for one.
+func (h *Hub) decorateSink(sink event.Sink) event.Sink {
+	if h.opts.DecorateSink == nil {
+		return sink
+	}
+	return h.opts.DecorateSink(sink)
+}
 
 // runtimePrefix is where a hub publishes its runtimes. The frontend builds
 // every request under it, so it is part of the wire contract.
@@ -87,6 +96,11 @@ type HubOptions struct {
 	// Wails shell pumps each one's frames onto its bus, keyed by ID.
 	OnOpen  func(*Runtime)
 	OnClose func(*Runtime)
+	// DecorateSink wraps each runtime's event sink, the way Grant applies each
+	// runtime's capabilities. A desktop window adds system notifications here;
+	// a server reachable over the network leaves it nil, because a notification
+	// would fire on the machine running the kernel, not the one watching it.
+	DecorateSink func(event.Sink) event.Sink
 }
 
 // OpenRequest asks for a runtime. An empty SessionPath opens a fresh session in
@@ -126,17 +140,50 @@ func (h *Hub) AuthMode() string { return h.auth.Mode() }
 
 // Adopt takes over a runtime the host assembled before the hub existed — the
 // window's first session — and publishes it under an ID.
-func (h *Hub) Adopt(srv *Server, bc *Broadcaster) *Runtime {
+func (h *Hub) Adopt(srv *Server, bc *Broadcaster) (*Runtime, error) {
 	if srv == nil {
-		return nil
+		return nil, nil
 	}
 	srv.auth = h.auth
 	if h.opts.Grant != nil {
 		h.opts.Grant(srv)
 	}
-	rt := &Runtime{ID: h.nextID(), Root: srv.Controller().WorkspaceRoot(), Server: srv, Events: bc}
+	leases, err := h.ownSession(srv)
+	if err != nil {
+		return nil, err
+	}
+	rt := &Runtime{ID: h.nextID(), Root: srv.Controller().WorkspaceRoot(), Server: srv, Events: bc, leases: leases}
 	h.publish(rt)
-	return rt
+	return rt, nil
+}
+
+// ownSession makes "a runtime owns the session it writes" true however the
+// runtime was born. A host that arranged ownership itself keeps it; anything
+// else is given a keeper here — before it holds anything, since a window opens
+// with no session and the first turn mints one. SetOnSessionPathChanged carries
+// the lease onto that path when it appears.
+func (h *Hub) ownSession(srv *Server) (keeper *control.SessionLeaseKeeper, err error) {
+	if srv.leases != nil {
+		return nil, nil // the host's, and the host's to release
+	}
+	leases := control.NewSessionLeaseKeeper()
+	// A refusal must leave the server as it was found, so the caller can decide
+	// on another session and adopt again.
+	defer func() {
+		if err != nil {
+			_ = srv.SetSessionLeases(nil)
+			leases.Release()
+		}
+	}()
+	if err = srv.SetSessionLeases(leases); err != nil {
+		return nil, err
+	}
+	if path := strings.TrimSpace(srv.Controller().SessionPath()); path != "" {
+		if err = srv.rebindSessionLease(path); err != nil {
+			return nil, err
+		}
+	}
+	return leases, nil
 }
 
 // Open builds a runtime for req, or returns the one already driving that
@@ -162,7 +209,7 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 		Model:         strings.TrimSpace(req.Model),
 		WorkspaceRoot: root,
 		SessionDir:    SessionDirFor(root),
-		Sink:          bc,
+		Sink:          h.decorateSink(bc),
 		Stderr:        os.Stderr,
 		StatsSource:   "serve",
 		BalanceStore:  h.wallets,

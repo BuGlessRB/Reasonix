@@ -148,6 +148,7 @@ type Controller struct {
 	onRememberPlanModeReadOnlyCommand func(prefix string) PlanModeReadOnlyCommandTrustResult
 	sessionRecoveryMeta               func(SessionRecoveryRequest) agent.BranchMeta
 	onSessionRecovered                func(SessionRecoveryInfo) error
+	onSessionPathChanged              func(path string)
 
 	// balance is the active provider's optional wallet endpoint (nil-answering
 	// when the provider declares none). Captured at build so a model/key switch —
@@ -4669,6 +4670,11 @@ func (c *Controller) setSessionPath(p string, fresh bool) {
 		c.loadRecoveryState(p)
 	}
 	c.snapshotMu.Unlock()
+	// After the unlock: taking the lease touches the filesystem, and doing that
+	// under snapshotMu puts a file lock behind the mutex a live save holds.
+	if follow := c.sessionPathChangedHandler(); follow != nil {
+		follow(p)
+	}
 	c.rebindInbox()
 	if !fresh {
 		c.recoverCheckpointTransactions()

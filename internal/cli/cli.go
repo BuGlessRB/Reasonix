@@ -909,9 +909,9 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	_ = srv.SetSessionLeases(leases) // same live keeper was bound above
 	// A hub around it, so this frontend drives several sessions at once the way
 	// the studio window does. The session this command was started for is the
-	// first pane; the browser opens the rest.
+	// first pane — already leased above, so adopting it cannot be refused.
 	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg})
-	hub.Adopt(srv, bc)
+	_, _ = hub.Adopt(srv, bc)
 	return runServeFrontend(ctrl, hub, serveCfg, serveFrontendOptions{
 		command: opts.command, address: *addr,
 		portFile: *portFile, tokenFile: *tokenFile, pidFile: *pidFile,

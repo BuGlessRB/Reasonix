@@ -31,6 +31,7 @@ import (
 	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/event"
+	"reasonix/internal/notify"
 	"reasonix/internal/serve"
 
 	// Kinds register from init, so a binary builds only what it links. Without
@@ -53,7 +54,7 @@ const (
 )
 
 var apiPaths = map[string]bool{
-	"/events": true, "/history": true, "/context": true, "/status": true,
+	"/events": true, "/events/replay": true, "/history": true, "/context": true, "/status": true,
 	"/sessions": true, "/checkpoints": true, "/branches": true, "/models": true,
 	"/submit": true, "/cancel": true, "/approve": true, "/answer": true,
 	"/plan": true, "/preset": true, "/model": true, "/effort": true,
@@ -130,13 +131,21 @@ func main() {
 func run() error {
 	ctx := context.Background()
 
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	// This window is the only client of its kernel, so a system notification
+	// reaches the person who asked for it. A networked server leaves this off.
+	notifySink := windowNotifications(cfg)
+
 	bc := serve.NewBroadcaster()
 	// A window opens where it was left, not where its shortcut happened to point.
 	root := boot.ResolveWorkspaceRoot(lastWorkspace())
 	built, err := boot.BuildRuntime(ctx, boot.Options{
 		WorkspaceRoot: root,
 		SessionDir:    serve.SessionDirFor(root),
-		Sink:          bc,
+		Sink:          notifySink(bc),
 		Stderr:        os.Stderr,
 	})
 	if err != nil {
@@ -147,10 +156,6 @@ func run() error {
 	// transcript behind every time the window opened. The first turn creates
 	// it, and the inbox ensures its own path when it enqueues.
 
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
 	// Ask/Auto/YOLO is a posture the user set on the composer, not a per-launch
 	// default — the old shell has read this since it had a picker.
 	ctrl.SetToolApprovalMode(cfg.DesktopDefaultToolApprovalMode())
@@ -161,10 +166,11 @@ func run() error {
 	// One hub, several panes: each session gets its own runtime, so a second
 	// conversation runs beside the first instead of rebuilding it.
 	hub := serve.NewHub(serve.HubOptions{
-		Serve:   cfg.Serve,
-		Grant:   grantWindowCapabilities,
-		OnOpen:  shell.startPump,
-		OnClose: shell.stopPump,
+		Serve:        cfg.Serve,
+		Grant:        grantWindowCapabilities,
+		DecorateSink: notifySink,
+		OnOpen:       shell.startPump,
+		OnClose:      shell.stopPump,
 	})
 	shell.hub = hub
 	srv := serve.New(ctrl, bc, cfg.Serve)
@@ -172,7 +178,9 @@ func run() error {
 	// Without this a past save-conflict loop's forks stay on disk forever: the
 	// CLI and the old shell each sweep them, this window is the third host.
 	srv.StartRecoveryGC(ctx)
-	hub.Adopt(srv, bc)
+	if err := adoptWindowPane(hub, srv, bc, ctrl); err != nil {
+		return err
+	}
 	api := hub.Handler()
 	defer hub.Shutdown()
 
@@ -240,7 +248,11 @@ func run() error {
 				})
 			},
 		},
-		OnShutdown: func(context.Context) { hub.Shutdown() },
+		// The window is held open across the shutdown rather than vanishing into
+		// one; see closing.go. OnShutdown stays as the backstop for exits that
+		// never pass the close button (a signal, a quit from the dock menu).
+		OnBeforeClose: shell.beginClose,
+		OnShutdown:    func(context.Context) { hub.Shutdown() },
 	})
 }
 
@@ -272,12 +284,28 @@ type App struct {
 
 	mu    sync.Mutex
 	pumps map[string]context.CancelFunc
+	// See closing.go: the window outlives the close button by however long the
+	// session takes to reach disk.
+	closing closeState
 }
 
 // grantWindowCapabilities opens up what only a local window may do. The single
 // client is the person in front of it, so the folder picker, the account token
 // and provider keys are local dialogs rather than remote capabilities — and
 // every pane gets them, not just the one the window started with.
+// windowNotifications returns the sink wrapper every runtime in this window
+// gets. Off by default and per the shared [notifications] config, so the CLI
+// and the window answer to one setting rather than each growing its own.
+func windowNotifications(cfg *config.Config) func(event.Sink) event.Sink {
+	if cfg == nil || !cfg.Notifications.Enabled {
+		return func(sink event.Sink) event.Sink { return sink }
+	}
+	sender := notify.NewPlatformSender()
+	return func(sink event.Sink) event.Sink {
+		return notify.NewSink(sink, sender, cfg.Notifications)
+	}
+}
+
 func grantWindowCapabilities(srv *serve.Server) {
 	srv.AllowWorkspaceSwitch()
 	srv.AllowAccountAuth()

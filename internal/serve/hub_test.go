@@ -22,7 +22,11 @@ func hubRuntime(t *testing.T, h *Hub, root string) *Runtime {
 	ctrl := control.New(control.Options{WorkspaceRoot: root, SessionDir: SessionDirFor(root)})
 	t.Cleanup(ctrl.Close)
 	bc := NewBroadcaster()
-	return h.Adopt(New(ctrl, bc, config.ServeConfig{}), bc)
+	rt, err := h.Adopt(New(ctrl, bc, config.ServeConfig{}), bc)
+	if err != nil {
+		t.Fatalf("adopt: %v", err)
+	}
+	return rt
 }
 
 func hubGet[T any](t *testing.T, srv *httptest.Server, path string) T {

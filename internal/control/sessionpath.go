@@ -19,6 +19,26 @@ func (c *Controller) EnsureSessionPath() {
 	c.SetFreshSessionPath(agent.NewSessionPath(c.SessionDir(), c.Label()))
 }
 
+// SetOnSessionPathChanged installs the handler that moves write authority onto
+// the session this controller is about to write. It runs from setSessionPath,
+// the one place every path change lands, so authority follows the file instead
+// of being re-established at each entry point able to move it — which is what
+// left a freshly minted path unowned, and unowned sessions fork on conflict.
+func (c *Controller) SetOnSessionPathChanged(fn func(path string)) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onSessionPathChanged = fn
+}
+
+func (c *Controller) sessionPathChangedHandler() func(string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.onSessionPathChanged
+}
+
 // Resume seeds the session from a loaded transcript and pins auto-save to it.
 // Arriving from a different path rotates the private temporary generation; a
 // same-path resume (rebuild migration) keeps it. It claims the rotation gate
