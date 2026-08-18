@@ -32,13 +32,6 @@ const RECIPES: Recipe[] = [
     command: `grep -q '"\\.env' <<< "$REASONIX_HOOK_PAYLOAD" && exit 2 || exit 0`,
   },
   {
-    id: "notify",
-    title: "任务做完通知我",
-    desc: "一轮结束时响一下，人不用一直盯着",
-    event: "Stop",
-    command: `osascript -e 'display notification "任务完成" with title "Reasonix"'`,
-  },
-  {
     id: "test-before-stop",
     title: "收工前跑一遍测试",
     desc: "一轮结束时跑测试，红了会作为提醒显示出来",
