@@ -41,6 +41,31 @@ func TestRolesDefaultToTheMainModel(t *testing.T) {
 	}
 }
 
+// Every role the UI offers, not just one: guardian_model was assignable, saved
+// without error, and gone on the next read, because config writing is
+// hand-rolled TOML and the renderer had no line for it. A test that exercised
+// only subagent could not see that.
+func TestEveryRoleTheUIOffersSurvivesARoundTrip(t *testing.T) {
+	for _, role := range []string{"planner", "subagent", "guardian", "vision"} {
+		t.Run(role, func(t *testing.T) {
+			s := newProviderEditServer(t)
+			s.AllowProviderEdit()
+			srv := httptest.NewServer(s.Handler())
+			defer srv.Close()
+
+			resp := postProvider(t, srv.URL, "/roles", `{"role":"`+role+`","ref":"existing/model-a"}`)
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusNoContent {
+				b, _ := readAllString(resp)
+				t.Fatalf("POST /roles %s = %d: %s", role, resp.StatusCode, b)
+			}
+			if got := readRoles(t, srv.URL)[role]; got != "existing/model-a" {
+				t.Fatalf("%s = %q after assigning it", role, got)
+			}
+		})
+	}
+}
+
 func TestSetRoleWritesTheAssignmentAndReadsBack(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()

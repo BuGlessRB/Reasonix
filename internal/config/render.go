@@ -217,26 +217,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# plan_mode_read_only_commands = [\"gh issue view\"]   # legacy compatibility only; Plan bash uses Permissions\n")
 	}
-	if c.Agent.PlannerModel != "" {
-		fmt.Fprintf(&b, "planner_model = %q   # low-frequency planner (two-model collaboration)\n", c.Agent.PlannerModel)
-	} else {
-		b.WriteString("# planner_model = \"deepseek-pro\"   # optional: enable two-model collaboration\n")
-	}
-	if c.Agent.SubagentModel != "" {
-		fmt.Fprintf(&b, "subagent_model = %q   # default model for runAs=subagent skills\n", c.Agent.SubagentModel)
-	} else {
-		b.WriteString("# subagent_model = \"deepseek-pro\"   # optional default for runAs=subagent skills\n")
-	}
-	if len(c.Agent.SubagentModels) > 0 {
-		fmt.Fprintf(&b, "subagent_models = %s   # per-skill overrides\n", renderStringMap(c.Agent.SubagentModels))
-	} else {
-		b.WriteString("# subagent_models = { review = \"deepseek-pro\", security_review = \"deepseek-pro\" }   # per-skill overrides\n")
-	}
-	if c.Agent.VisionModel != "" {
-		fmt.Fprintf(&b, "vision_model = %q   # reads images a text-only main model cannot\n", c.Agent.VisionModel)
-	} else {
-		b.WriteString("# vision_model = \"kimi/kimi-k2-vision\"   # optional: reads images a text-only main model cannot\n")
-	}
+	renderAgentDelegation(&b, c)
 	if c.Agent.SubagentEffort != "" {
 		fmt.Fprintf(&b, "subagent_effort = %q   # default effort for subagent entry points\n", c.Agent.SubagentEffort)
 	} else {
