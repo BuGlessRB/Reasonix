@@ -373,10 +373,6 @@ func (s *Server) reloadExtensions(ctx context.Context) error {
 	return nil
 }
 
-func (s *Server) rebuild(ctx context.Context, old *control.Controller, ref string) (*control.Controller, error) {
-	return s.rebuildWith(ctx, old, ref, s.rebuildOptions(old, ref), false)
-}
-
 // rebuildWith runs one rebuild. adopt records the new generation as the base
 // for later reuse: a reload must, because it replaced the sidecars and the old
 // manager is about to be closed, and reusing a closed one later would serve a
