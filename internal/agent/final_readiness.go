@@ -290,6 +290,16 @@ func (a *Agent) verificationGap(writer int) string {
 	if a.task.ledger.HasVerificationCommandAfter(writer) && toolPresent(a.svc.tools, "conclude_blocked") {
 		return "the check you ran after the latest write did not pass: either make it pass, or — if it cannot pass as specified — call conclude_blocked with the evidence for why"
 	}
+	// Nothing the classifier recognises, yet commands did run. Widening what it
+	// accepts would make a deploy script read as a check; naming the project's
+	// own is the way out, and asking again for "a verification command" hides it.
+	if len(a.projectChecks) == 0 {
+		if ran, ok := a.task.ledger.LatestUnrecognizedCommandAfter(writer); ok {
+			return fmt.Sprintf("%s — %q ran, but the host cannot tell a project's check from any other command, "+
+				"so it counted as neither; declare the ones that decide this project under %q in project memory",
+				ask, strings.TrimSpace(ran.Command), instruction.HostChecksHeading)
+		}
+	}
 	return ask
 }
 

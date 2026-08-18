@@ -820,6 +820,22 @@ Context Engine v2 把上下文分成两个用途不同的层：
   `scope`（`project`、`global`），以及 freshness。事实可能过时，因此永远不能覆盖
   当前请求和常驻指令。
 
+改过文件的回合在收尾前，Reasonix 会检查最后一次写入之后是否跑过检查。常见形态它自己认得
+（`go test`、`pytest`、`npm test`、`make check`、`cargo test`、`tsc --noEmit` 等），
+但它**有意**分不出 `python deploy.py` 和 `python run_tests.py`，所以靠自有脚本驱动的项目
+应当自己声明什么算检查。在任意常驻指令文件中用这个标题声明（标题必须一字不差）：
+
+```markdown
+## Reasonix host checks
+
+- verify: python -m pytest tests/
+- verify: python scripts/screening.py --self-check
+```
+
+声明之后，每条检查都必须在最新一次写入之后跑过，回合才能结束；内置分类器不再有发言权——
+项目已经自己定义了那里的"验证"是什么。条目写作 `- verify: <命令>`（`* verify:` 也可）；
+文件里其他位置的普通指令仍然只是指引，不会变成硬门槛。
+
 每个真实用户回合前，Reasonix 会自动召回一小组相关事实。它用原始用户消息搜索，抑制“继续”
 这类泛化请求，在等价事实中优先项目级版本，对 stale 内容降权，并最多把四条事实 / 2,400
 字符追加到本轮 user turn。这段动态后缀不会改写 cache-stable system prompt 或工具 schema。

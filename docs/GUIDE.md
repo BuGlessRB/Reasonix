@@ -1039,6 +1039,26 @@ Context Engine v2 separates two intentionally different layers:
   `global`), plus freshness metadata. Facts may be stale, so they never outrank
   the current request or standing instructions.
 
+Before a turn that changed files may finish, Reasonix asks whether a check ran
+after the last write. It recognises the usual suspects on its own — `go test`,
+`pytest`, `npm test`, `make check`, `cargo test`, `tsc --noEmit` and the like —
+but it deliberately cannot tell `python deploy.py` from `python run_tests.py`,
+so a project driven by its own scripts should name what counts. Declare them in
+any standing-instruction file under exactly this heading:
+
+```markdown
+## Reasonix host checks
+
+- verify: python -m pytest tests/
+- verify: python scripts/screening.py --self-check
+```
+
+Every declared check must have run since the latest write for the turn to end,
+and the built-in classifier stops having a say — the project has defined what
+verification means there. Entries are `- verify: <command>` (or `* verify:`);
+ordinary instructions elsewhere in the file stay guidance and never become
+gates.
+
 Reasonix automatically recalls a small set of relevant facts before each real
 user turn. It searches the raw user message, suppresses generic requests such as
 "continue", prefers project facts over equivalent global fallbacks, down-ranks

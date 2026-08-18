@@ -31,8 +31,14 @@ func FromContext(ctx context.Context) []VerifyCheck {
 	return append([]VerifyCheck(nil), checks...)
 }
 
-// ExtractHostChecks reads only the structured "Reasonix host checks" section.
-// Ordinary project instructions remain guidance and do not become hard gates.
+// HostChecksHeading is the one section a project's checks are read from. It is
+// exported because the host quotes it back when its own classifier cannot
+// recognise what a project runs, and a name told to the model in one place and
+// parsed in another drifts.
+const HostChecksHeading = "Reasonix host checks"
+
+// ExtractHostChecks reads only the HostChecksHeading section. Ordinary project
+// instructions remain guidance and do not become hard gates.
 func ExtractHostChecks(docs []Document) []VerifyCheck {
 	seen := map[string]bool{}
 	var checks []VerifyCheck
@@ -41,7 +47,7 @@ func ExtractHostChecks(docs []Document) []VerifyCheck {
 		for i, raw := range strings.Split(doc.Body, "\n") {
 			line := strings.TrimRight(raw, "\r")
 			if heading, ok := markdownHeading(line); ok {
-				inSection = strings.EqualFold(heading, "Reasonix host checks")
+				inSection = strings.EqualFold(heading, HostChecksHeading)
 				continue
 			}
 			if !inSection {

@@ -156,6 +156,25 @@ func (l *Ledger) LatestUnreadableVerificationAfter(after int) (Receipt, bool) {
 	return Receipt{}, false
 }
 
+// LatestUnrecognizedCommandAfter returns the most recent successful command
+// after the boundary that the host did not read as a check. It answers a
+// different question from "no check ran": the model ran something and the
+// classifier, which cannot tell a project's check from a deploy, saw nothing.
+func (l *Ledger) LatestUnrecognizedCommandAfter(after int) (Receipt, bool) {
+	if l == nil {
+		return Receipt{}, false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i := len(l.receipts) - 1; i > after && i >= 0; i-- {
+		r := l.receipts[i]
+		if r.Success && strings.TrimSpace(r.Command) != "" && !ReceiptRunsVerification(r) {
+			return r, true
+		}
+	}
+	return Receipt{}, false
+}
+
 // ReceiptRunsVerification reports whether a receipt carries a verification. The
 // host classified the call as it ran — including anything the static tables
 // could not read alone — so the receipt is the answer, and the tables only
