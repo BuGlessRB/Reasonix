@@ -2469,7 +2469,7 @@ func NewProviderWithProxy(e *config.ProviderEntry, proxy netclient.ProxySpec) (p
 		Name:    e.Name,
 		BaseURL: e.BaseURL,
 		Model:   e.Model,
-		APIKey:  e.APIKey(),
+		APIKey:  e.APIKey(), APIKeyFunc: e.APIKey, // live: a replaced key reaches the next request
 		// Pass the key's env var so auth failures can name where to fix it, plus
 		// provider-kind-specific knobs. EffectiveEffort applies a configured
 		// default_effort when the user has not explicitly selected /effort.

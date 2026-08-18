@@ -1019,15 +1019,6 @@ func MissingToolCallReasoningWarningFingerprint(p Provider) string {
 	return hex.EncodeToString(digest[:])
 }
 
-// Config is a resolved provider instance configuration.
-type Config struct {
-	Name    string         // instance name, e.g. "deepseek"
-	BaseURL string         // OpenAI-compatible endpoint
-	Model   string         // model id
-	APIKey  string         // resolved from api_key_env
-	Extra   map[string]any // kind-specific options
-}
-
 // AuthError reports that a provider rejected the API key (HTTP 401/403). Its
 // message is already user-facing and actionable — it names the provider and,
 // when known, the environment variable the key comes from — and it carries the

@@ -50,7 +50,7 @@ func newFromConfig(cfg provider.Config) (provider.Provider, error) {
 	maxOutputTokens, _ := cfg.Extra["max_output_tokens"].(int)
 	requestURL, _ := cfg.Extra["request_url"].(string)
 	return New(Config{
-		Name: cfg.Name, APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model,
+		Name: cfg.Name, APIKey: cfg.APIKey, APIKeyFunc: cfg.APIKeyFunc, BaseURL: cfg.BaseURL, Model: cfg.Model,
 		Effort: effort, Mode: mode, Stateful: stateful, WebSearch: webSearch, Proxy: proxy,
 		KeyEnv: keyEnv, KeySource: keySource, MaxOutputTokens: maxOutputTokens, RequestURL: requestURL,
 		// Extra 原样透传：vision 等能力开关由调用方（boot/CLI）写入
@@ -61,18 +61,18 @@ func newFromConfig(cfg provider.Config) (provider.Provider, error) {
 
 // Config holds Responses API provider settings.
 type Config struct {
-	Name       string
-	APIKey     string
-	BaseURL    string
-	Model      string
-	Effort     string
-	Mode       string // stateful | stateless; empty uses vendor detection.
-	Stateful   *bool  // legacy form of Mode; nil preserves vendor detection.
-	WebSearch  bool   // expose the provider-executed web_search tool.
-	Proxy      netclient.ProxySpec
-	KeyEnv     string
-	KeySource  string
-	RequestURL string // optional exact Responses request URL; empty derives from BaseURL
+	Name              string
+	APIKey            string
+	APIKeyFunc        func() string // asked per request; an empty answer falls back to APIKey
+	BaseURL           string
+	Model             string
+	Effort            string
+	Mode              string // stateful | stateless; empty uses vendor detection.
+	Stateful          *bool  // legacy form of Mode; nil preserves vendor detection.
+	WebSearch         bool   // expose the provider-executed web_search tool.
+	Proxy             netclient.ProxySpec
+	KeyEnv, KeySource string
+	RequestURL        string // optional exact Responses request URL; empty derives from BaseURL
 	// MaxOutputTokens is the total provider output budget. Zero enables Reasonix's
 	// 32K reasoning safety default on official DeepSeek and otherwise omits the
 	// field; thinking-disabled DeepSeek requests and negative values omit it.
@@ -106,12 +106,12 @@ func (c Config) mode() string {
 // deepseek (incl. eu.deepseek.com) / mimo via exact-host matching.
 
 type client struct {
-	name, apiKey, keyEnv, keySource    string
+	name, keyEnv, keySource            string
+	apiKey                             func() string
 	baseURL, requestURL, model, effort string
 	vendor, mode                       string
 	caps                               vendorCapabilities
-	sessionCache                       bool
-	webSearch                          bool
+	sessionCache, webSearch            bool
 	maxOutputTokens                    int
 	vision                             bool // model accepts image input; embed Images as input_image parts
 	http                               *http.Client
@@ -160,7 +160,7 @@ func New(cfg Config) provider.Provider {
 		requestURL = baseURL + "/responses"
 	}
 	return &client{
-		name: cfg.Name, apiKey: cfg.APIKey, keyEnv: cfg.KeyEnv, keySource: cfg.KeySource,
+		name: cfg.Name, apiKey: cfg.apiKeyResolver(), keyEnv: cfg.KeyEnv, keySource: cfg.KeySource,
 		baseURL: baseURL, requestURL: requestURL, model: cfg.Model, effort: cfg.Effort,
 		vendor: vendor, caps: cap, mode: cfg.mode(), sessionCache: sessionCache, webSearch: cfg.WebSearch, maxOutputTokens: maxOutputTokens,
 		vision: vision,
@@ -233,7 +233,7 @@ func (c *client) WarnOnMissingToolCallReasoning() bool {
 }
 
 func (c *client) sendOpts() provider.SendOptions {
-	return provider.SendOptions{Provider: c.name, KeyEnv: c.keyEnv, KeySource: c.keySource, KeyPresent: c.apiKey != "", RetryAuth: c.authed.Load()}
+	return provider.SendOptions{Provider: c.name, KeyEnv: c.keyEnv, KeySource: c.keySource, KeyPresent: c.apiKey() != "", RetryAuth: c.authed.Load()}
 }
 
 // ResetContext drops stateful continuation metadata. Full-input stateless mode
@@ -276,7 +276,7 @@ func (c *client) send(ctx context.Context, body map[string]any) (*http.Response,
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+		req.Header.Set("Authorization", "Bearer "+c.apiKey())
 		if c.caps.sessionCacheHeader && c.sessionCache {
 			req.Header.Set("x-dashscope-session-cache", "enable")
 		}
@@ -843,7 +843,7 @@ func authErrorFromResponse(c *client, responseError *sseError) error {
 	if strings.Contains(value, "forbidden") || strings.Contains(value, "permission") {
 		status = http.StatusForbidden
 	}
-	return &provider.AuthError{Provider: c.name, KeyEnv: c.keyEnv, KeySource: c.keySource, Status: status, HasKey: c.apiKey != "", Body: responseError.Message}
+	return &provider.AuthError{Provider: c.name, KeyEnv: c.keyEnv, KeySource: c.keySource, Status: status, HasKey: c.apiKey() != "", Body: responseError.Message}
 }
 
 type sseEvent struct {

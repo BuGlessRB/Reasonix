@@ -238,7 +238,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	}
 	return &client{
 		name:            name,
-		apiKey:          cfg.APIKey,
+		apiKey:          cfg.APIKeyResolver(),
 		keyEnv:          keyEnv,
 		keySource:       keySource,
 		baseURL:         strings.TrimRight(cfg.BaseURL, "/"),
@@ -277,7 +277,7 @@ func newHTTPClient(cfg provider.Config) (*http.Client, error) {
 
 type client struct {
 	name            string
-	apiKey          string
+	apiKey          func() string
 	keyEnv          string // api_key_env name, surfaced in auth errors
 	keySource       string // source of keyEnv, surfaced in auth errors
 	baseURL         string
@@ -360,7 +360,7 @@ func (c *client) sendOpts() provider.SendOptions {
 		Provider:   c.name,
 		KeyEnv:     c.keyEnv,
 		KeySource:  c.keySource,
-		KeyPresent: c.apiKey != "",
+		KeyPresent: c.apiKey() != "",
 		RetryAuth:  c.authed.Load(),
 	}
 }
@@ -494,7 +494,7 @@ func (c *client) openStream(ctx context.Context, targetURL string, wireReq chatR
 			return nil, err
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
-		applyAPIKeyHeader(httpReq.Header, c.baseURL, c.apiKey)
+		applyAPIKeyHeader(httpReq.Header, c.baseURL, c.apiKey())
 		httpReq.Header.Set("Accept", "text/event-stream")
 		applyCustomHeaders(httpReq.Header, c.headers)
 		return httpReq, nil

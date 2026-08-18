@@ -84,6 +84,9 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 		entry.ExtraBody = *body.ExtraBody
 	}
 
+	// Storing the key is the whole update: providers ask for it per request, so
+	// a session running on an exhausted key picks up its replacement on the next
+	// one without a rebuild that would interrupt the conversation.
 	if key := strings.TrimSpace(body.APIKey); key != "" {
 		if _, err := config.SetCredential(entry.APIKeyEnv, key); err != nil {
 			http.Error(w, fmt.Sprintf("save provider key: %v", err), http.StatusInternalServerError)

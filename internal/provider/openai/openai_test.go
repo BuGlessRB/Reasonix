@@ -269,7 +269,7 @@ func TestStreamContinuesDeepSeekLengthWithAssistantPrefix(t *testing.T) {
 	defer srv.Close()
 
 	c := &client{
-		name: "deepseek", apiKey: "k", baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
+		name: "deepseek", apiKey: staticKey("k"), baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
 		prefixChatURL: srv.URL + "/beta/chat/completions", model: "deepseek-v4-flash", deepseek: true,
 		effort: "high", http: srv.Client(), idleTimeout: defaultStreamIdleTimeout,
 	}
@@ -345,7 +345,7 @@ func TestStreamContinuesReasoningOnlyDeepSeekLength(t *testing.T) {
 	defer srv.Close()
 
 	c := &client{
-		name: "deepseek", apiKey: "k", baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
+		name: "deepseek", apiKey: staticKey("k"), baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
 		prefixChatURL: srv.URL + "/beta/chat/completions", model: "deepseek-v4-flash", deepseek: true,
 		effort: "high", http: srv.Client(), idleTimeout: defaultStreamIdleTimeout,
 	}
@@ -392,7 +392,7 @@ func TestStreamKeepsTruncatedAnswerWhenDeepSeekBetaFails(t *testing.T) {
 	defer srv.Close()
 
 	c := &client{
-		name: "deepseek", apiKey: "k", baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
+		name: "deepseek", apiKey: staticKey("k"), baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
 		prefixChatURL: srv.URL + "/beta/chat/completions", model: "deepseek-v4-flash", deepseek: true,
 		effort: "high", http: srv.Client(), idleTimeout: defaultStreamIdleTimeout,
 	}
@@ -429,7 +429,7 @@ func TestStreamBoundsRepeatedDeepSeekLengthContinuation(t *testing.T) {
 	defer srv.Close()
 
 	c := &client{
-		name: "deepseek", apiKey: "k", baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
+		name: "deepseek", apiKey: staticKey("k"), baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
 		prefixChatURL: srv.URL + "/beta/chat/completions", model: "deepseek-v4-flash", deepseek: true,
 		effort: "high", http: srv.Client(), idleTimeout: defaultStreamIdleTimeout,
 	}
@@ -467,7 +467,7 @@ func TestStreamDoesNotPrefixContinueToolCalls(t *testing.T) {
 	defer srv.Close()
 
 	c := &client{
-		name: "deepseek", apiKey: "k", baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
+		name: "deepseek", apiKey: staticKey("k"), baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
 		prefixChatURL: srv.URL + "/beta/chat/completions", model: "deepseek-v4-flash", deepseek: true,
 		effort: "high", http: srv.Client(), idleTimeout: defaultStreamIdleTimeout,
 	}
