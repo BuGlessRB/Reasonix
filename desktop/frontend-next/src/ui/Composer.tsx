@@ -190,6 +190,11 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
             // Esc dismisses the candidate window; letting it through would
             // cancel the running turn as a side effect of closing an IME.
             if (e.key === "Escape") e.stopPropagation();
+            // That Enter belongs to the input method, so it must do nothing —
+            // returning without stopping it left the textarea to insert a
+            // newline, which is why the first Enter after a word broke the line
+            // and only the second one sent.
+            if (e.key === "Enter") e.preventDefault();
             return;
           }
           if (menu.open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
