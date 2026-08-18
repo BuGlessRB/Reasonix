@@ -532,15 +532,14 @@ func (h *Host) StartPhaseB(ctx context.Context, sink event.Sink) {
 }
 
 func (h *Host) fetchPrompts(ctx context.Context, c *Client, sink event.Sink) {
-	aux, auxCtx, cancel, err := c.auxiliaryClient(ctx)
+	aux, err := c.auxiliaryClient(ctx)
 	if err != nil {
 		slog.Warn("plugin: start auxiliary prompt client failed", "server", c.name, "err", err)
 		return
 	}
-	defer cancel()
 	defer aux.close()
 
-	ps, err := aux.listPrompts(auxCtx)
+	ps, err := aux.listPrompts(ctx)
 	if err != nil {
 		slog.Warn("plugin: listPrompts failed", "server", c.name, "err", err)
 		return
@@ -561,15 +560,14 @@ func (h *Host) fetchPrompts(ctx context.Context, c *Client, sink event.Sink) {
 }
 
 func (h *Host) fetchResources(ctx context.Context, c *Client, sink event.Sink) {
-	aux, auxCtx, cancel, err := c.auxiliaryClient(ctx)
+	aux, err := c.auxiliaryClient(ctx)
 	if err != nil {
 		slog.Warn("plugin: start auxiliary resource client failed", "server", c.name, "err", err)
 		return
 	}
-	defer cancel()
 	defer aux.close()
 
-	rs, err := aux.listResources(auxCtx)
+	rs, err := aux.listResources(ctx)
 	if err != nil {
 		slog.Warn("plugin: listResources failed", "server", c.name, "err", err)
 		return
@@ -627,14 +625,15 @@ type Client struct {
 	progressID   atomic.Uint64
 }
 
-func (c *Client) auxiliaryClient(ctx context.Context) (*Client, context.Context, context.CancelFunc, error) {
-	auxCtx, cancel := context.WithTimeout(ctx, defaultStartTimeout)
-	aux, err := start(auxCtx, auxCtx, c.spec)
-	if err != nil {
-		cancel()
-		return nil, nil, nil, err
-	}
-	return aux, auxCtx, cancel, nil
+// auxiliaryClient opens a second connection so a background listing cannot
+// queue behind a tool call: many servers answer one request at a time. ctx owns
+// the child and the caller closes it — bounding its life by the handshake
+// budget instead killed servers still importing, so the spawn never reached
+// their entry point and the next call read EOF.
+func (c *Client) auxiliaryClient(ctx context.Context) (*Client, error) {
+	callCtx, cancel := context.WithTimeout(ctx, c.spec.ResolvedStartupTimeout())
+	defer cancel()
+	return start(ctx, callCtx, c.spec)
 }
 
 // ToolInfo is the human-facing metadata returned by MCP tools/list for one tool.
