@@ -103,8 +103,12 @@ build_nsis() {
 		echo "==> skipping installer: makensis is not installed" >&2
 		return 0
 	}
-	local payload
-	payload=$(mktemp -d)
+	# The payload sits under the repo rather than /tmp: MSYS maps /tmp through the
+	# user profile and hands makensis an 8.3 short path it cannot open, while a
+	# path under $ROOT converts to a plain drive path.
+	local payload="$ROOT/dist/nsis-payload-$arch"
+	rm -rf "$payload"
+	mkdir -p "$payload"
 	cp "$src/$BINNAME.exe" "$payload/$BINNAME.exe"
 	cp -R "$src/frontend-next" "$payload/frontend-next"
 	cp "$ROOT/desktop/next/build/windows/appicon.ico" "$payload/appicon.ico"
