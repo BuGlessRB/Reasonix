@@ -339,6 +339,12 @@ system_prompt = "BASE"
 [codegraph]
 enabled = false
 
+# The subject is the pointer, not the jail: a host without an OS sandbox
+# refuses bash fail-closed, and the parked output this test follows never
+# exists. CI runners vary on whether bwrap is installed.
+[sandbox]
+bash = "off"
+
 [[providers]]
 name = "test-model"
 kind = "boot-spill-follow"
