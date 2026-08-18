@@ -54,7 +54,10 @@ func TestPipeStatusProbePreservesExitStatusAndReports(t *testing.T) {
 	}{
 		{"masked failure", "sh -c 'echo boom; exit 3' | tail -1", 0, []int{3, 0}},
 		{"clean pass", "echo ok | tail -1", 0, []int{0, 0}},
-		{"failing tail", "echo ok | sh -c 'exit 4'", 4, []int{0, 4}},
+		// The right side exits without reading, so a writing left side races it
+		// for the pipe and reports SIGPIPE's 141 when it loses — only on a loaded
+		// machine, which is what made this a CI-only failure. `true` never writes.
+		{"failing tail", "true | sh -c 'exit 4'", 4, []int{0, 4}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := exec.Command("bash", "-c", probe.wrap(tc.command)).CombinedOutput()
