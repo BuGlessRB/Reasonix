@@ -6,8 +6,12 @@ package boot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -224,4 +228,146 @@ model = "x"
 	if rec.roundCount() == 0 {
 		t.Fatal("no round reached the provider; the run never started")
 	}
+}
+
+// spillFollowProvider walks the two turns the read-back loop lived in: read a
+// large file, then follow whatever pointer comes back — which is exactly what a
+// model does when told its output was kept out of context.
+type spillFollowProvider struct {
+	mu     sync.Mutex
+	target string
+	turn   int
+	reqs   []provider.Request
+}
+
+func (p *spillFollowProvider) Name() string { return "boot-spill-follow" }
+
+func (p *spillFollowProvider) Stream(_ context.Context, req provider.Request) (<-chan provider.Chunk, error) {
+	p.mu.Lock()
+	p.reqs = append(p.reqs, req)
+	p.turn++
+	turn := p.turn
+	p.mu.Unlock()
+
+	ch := make(chan provider.Chunk, 3)
+	switch results := effectToolResults(req); turn {
+	case 1:
+		emitReadFile(ch, "call-first", p.target)
+	case 2:
+		if path := effectPointerPath(results[len(results)-1]); path != "" {
+			emitReadFile(ch, "call-readback", path)
+			break
+		}
+		ch <- provider.Chunk{Type: provider.ChunkText, Text: "no pointer to follow"}
+	default:
+		ch <- provider.Chunk{Type: provider.ChunkText, Text: "done"}
+	}
+	ch <- provider.Chunk{Type: provider.ChunkDone}
+	close(ch)
+	return ch, nil
+}
+
+func (p *spillFollowProvider) lastRequest(t *testing.T) provider.Request {
+	t.Helper()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.reqs) == 0 {
+		t.Fatal("no request reached the provider boundary")
+	}
+	return p.reqs[len(p.reqs)-1]
+}
+
+func emitReadFile(ch chan<- provider.Chunk, id, path string) {
+	args, _ := json.Marshal(map[string]string{"path": path})
+	ch <- provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{
+		ID: id, Name: "read_file", Arguments: string(args),
+	}}
+}
+
+func effectToolResults(req provider.Request) []string {
+	var out []string
+	for _, m := range req.Messages {
+		if m.Role == provider.RoleTool {
+			out = append(out, m.Content)
+		}
+	}
+	return out
+}
+
+func effectPointerPath(result string) string {
+	for _, l := range strings.Split(result, "\n") {
+		if rest, ok := strings.CutPrefix(l, "Full output: "); ok {
+			return strings.TrimSpace(rest)
+		}
+	}
+	return ""
+}
+
+// TestEffectSpilledOutputSurvivesTheReadBack pins the promise the pointer makes,
+// at the boundary that decides whether it was kept: a parked result the model
+// reaches for must arrive as content. Spilling that fetch instead returns a new
+// pointer to a new file, and read_file numbers what it returns, so each round is
+// larger than the last — the arithmetic every component test passed.
+func TestEffectSpilledOutputSurvivesTheReadBack(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+
+	const marker = "a line of recorded output"
+	writeFile(t, dir, "big.log", strings.Repeat(marker+"\n", 3000))
+
+	rec := &spillFollowProvider{target: filepath.Join(dir, "big.log")}
+	provider.Register("boot-spill-follow", func(provider.Config) (provider.Provider, error) {
+		return rec, nil
+	})
+	writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+
+[codegraph]
+enabled = false
+
+[[providers]]
+name = "test-model"
+kind = "boot-spill-follow"
+model = "x"
+`)
+
+	ctrl, err := Build(context.Background(), Options{Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+	if err := ctrl.Run(context.Background(), "read big.log"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	results := effectToolResults(rec.lastRequest(t))
+	if len(results) < 2 {
+		t.Fatalf("want the first read and its read-back at the boundary, got %d tool result(s)", len(results))
+	}
+	first, readBack := results[0], results[1]
+	if !strings.Contains(first, "kept out of context") {
+		t.Fatalf("a file this far past the cap should have been parked:\n%s", effectHead(first))
+	}
+	// This assembly has no transcript, so the spill lands in scratch outside the
+	// isolated home; the aging sweep would not reach it for an hour.
+	if p := effectPointerPath(first); p != "" && !strings.HasPrefix(p, dir) {
+		t.Cleanup(func() { _ = os.Remove(p) })
+	}
+	if strings.Contains(readBack, "kept out of context") {
+		t.Fatalf("the read-back was parked too, so the content can never arrive:\n%s", effectHead(readBack))
+	}
+	if !strings.Contains(readBack, marker) {
+		t.Fatalf("the read-back reached the model without the file's content:\n%s", effectHead(readBack))
+	}
+}
+
+func effectHead(s string) string {
+	if len(s) > 240 {
+		return s[:240]
+	}
+	return s
 }
