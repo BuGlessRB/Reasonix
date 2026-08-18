@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import type { AgentPort, Appearance as Look, ThemePack } from "../port/port";
 import { MONO_FAMILIES, UI_FAMILIES, installed, readDefault, readSteps } from "./look";
 import { STORAGE as LANG_KEY, t } from "../i18n";
+import { pct } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 
 // "" follows the machine; the rest are explicit, the same shape the light/dark
@@ -38,6 +39,13 @@ const ZOOMS: [number, string][] = [
   [1.15, "宽松"],
   [1.3, "更大"],
 ];
+
+// The named steps stop where a 1080p window does. Past that there is no step
+// anyone could have named in advance — a 2560 display wants something a 3840 one
+// does not — so the range takes over rather than the list growing a tail of
+// numbers. It reaches this far safely because the layout now folds on the room
+// it actually has (see viewport.ts) instead of on the unscaled window.
+const ZOOM_RANGE = { min: 0.8, max: 2.5, step: 0.05 };
 
 // Body size in the transcript alone, so the frame stays where the layout put it.
 // The steps live in look.ts next to the default they have to agree with.
@@ -166,6 +174,21 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, reloadT
                 </button>
               ))}
             </div>
+          </div>
+          <div className="prow">
+            <span className="tx">{t("微调")}</span>
+            <input
+              className="slider"
+              style={at(look.zoom || 1, ZOOM_RANGE.min, ZOOM_RANGE.max)}
+              type="range"
+              min={ZOOM_RANGE.min}
+              max={ZOOM_RANGE.max}
+              step={ZOOM_RANGE.step}
+              value={look.zoom || 1}
+              aria-label={t("界面大小微调")}
+              onChange={(e) => set({ zoom: Number(e.target.value) })}
+            />
+            <span className="now">{pct(look.zoom || 1)}</span>
           </div>
           <div className="prow">
             <span className="tx">{t("正文")}</span>
