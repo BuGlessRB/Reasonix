@@ -3,6 +3,7 @@ package serve
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -234,5 +235,82 @@ func TestPaneCeilingComesFromConfig(t *testing.T) {
 	}
 	if got := maxRuntimes(); got != maxRuntimesDefault {
 		t.Fatalf("maxRuntimes unset = %d, want the default %d", got, maxRuntimesDefault)
+	}
+}
+
+// A save that keeps conflicting leaves one copy per turn, every one of them
+// carrying the first message as its title. They fold into the conversation they
+// came from, or the sidebar fills with rows the user never made.
+func TestHubTreeFoldsRecoveryCopiesIntoTheirConversation(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	root := t.TempDir()
+	h := NewHub(HubOptions{})
+	hubRuntime(t, h, root)
+	dir := SessionDirFor(root)
+
+	origin := filepath.Join(dir, "20260817-090000-deepseek-v4-flash.jsonl")
+	live := agent.NewSession("sys")
+	live.Add(provider.Message{Role: provider.RoleUser, Content: `"C:\Users\FuChen\report.txt"`})
+	live.Add(provider.Message{Role: provider.RoleAssistant, Content: "好的"})
+	if err := live.Save(origin); err != nil {
+		t.Fatal(err)
+	}
+	// The origin moves on to content no runtime had, so no copy is covered by
+	// its parent and none of them is hidden.
+	outside, err := agent.LoadSession(origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside.Add(provider.Message{Role: provider.RoleUser, Content: "外部写入"})
+	if err := outside.Save(origin); err != nil {
+		t.Fatal(err)
+	}
+
+	parent := origin
+	var copies []string
+	for turn := range 3 {
+		conflicted := agent.NewSession("sys")
+		for _, m := range live.Snapshot() {
+			if m.Role != provider.RoleSystem {
+				conflicted.Add(m)
+			}
+		}
+		conflicted.Add(provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("第 %d 轮", turn)})
+		conflicted.Add(provider.Message{Role: provider.RoleAssistant, Content: "好"})
+		info, err := conflicted.SaveRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: parent})
+		if err != nil {
+			t.Fatal(err)
+		}
+		copies = append(copies, info.Path)
+		parent = info.Path
+		live = conflicted
+	}
+
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+	tree := hubGet[[]treeWorkspace](t, srv, "/tree")
+	if len(tree) != 1 {
+		t.Fatalf("/tree = %+v, want the one workspace", tree)
+	}
+	rows := tree[0].Sessions
+	if len(rows) != 2 {
+		t.Fatalf("sidebar shows %d rows (%+v), want the conversation and one folded copy row", len(rows), rows)
+	}
+	var folded treeSession
+	for _, row := range rows {
+		if len(row.Copies) > 0 {
+			folded = row
+		}
+	}
+	if folded.Path != copies[len(copies)-1] {
+		t.Fatalf("folded row is %q, want the newest copy %q", folded.Path, copies[len(copies)-1])
+	}
+	if len(folded.Copies) != len(copies)-1 {
+		t.Fatalf("row carries %d copies, want %d", len(folded.Copies), len(copies)-1)
+	}
+	for _, copy := range folded.Copies {
+		if copy.Turns == 0 || copy.Path == "" {
+			t.Fatalf("folded copy %+v needs a path and turn count to be openable", copy)
+		}
 	}
 }

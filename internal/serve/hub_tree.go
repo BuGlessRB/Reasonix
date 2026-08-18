@@ -20,6 +20,11 @@ import (
 // sidebar that shows a dozen rows.
 const treeSessionsPerWorkspace = 50
 
+// maxRecoveryLineageWalk bounds the parent walk that groups recovery copies.
+// The chain is short by construction; the bound is there so damaged metadata
+// cannot spin the sidebar.
+const maxRecoveryLineageWalk = 16
+
 // treeWorkspace is one folder in the sidebar: what it is called, whether a pane
 // is driving it, and the conversations saved under it.
 type treeWorkspace struct {
@@ -42,6 +47,10 @@ type treeSession struct {
 	Title     string `json:"title,omitempty"`
 	Turns     int    `json:"turns,omitempty"`
 	RuntimeID string `json:"runtimeId,omitempty"`
+	// Copies are this conversation's conflict-recovery copies. A save that
+	// keeps conflicting writes one file per turn, all under the one title, and
+	// unfolded that is a sidebar of rows the user never made.
+	Copies []treeSession `json:"copies,omitempty"`
 }
 
 func (h *Hub) registerTreeRoutes(mux *http.ServeMux) {
@@ -86,7 +95,14 @@ func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSessi
 		return nil
 	}
 	titles := h.titleCacheFor(dir)
+	byID := make(map[string]agent.SessionInfo, len(listed))
+	for _, si := range listed {
+		byID[agent.BranchID(si.Path)] = si
+	}
 	out := make([]treeSession, 0, len(listed))
+	// Lineage root -> the row that copies of it fold into. The list is
+	// newest-first, so the first copy to arrive is the one still being written.
+	lead := map[string]int{}
 	for _, si := range listed {
 		if len(out) >= treeSessionsPerWorkspace {
 			break
@@ -100,6 +116,15 @@ func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSessi
 			continue
 		}
 		name := strings.TrimSuffix(base, ".jsonl")
+		// A pane driving a copy keeps its own row: folding it away would hide
+		// the conversation someone is looking at.
+		folds := si.Recovered && runtimeID == ""
+		if folds {
+			if at, ok := lead[recoveryLineageRoot(si, byID)]; ok {
+				out[at].Copies = append(out[at].Copies, treeSession{Path: si.Path, Name: name, Turns: si.Turns})
+				continue
+			}
+		}
 		// A name the user typed outranks the generated one; without this a
 		// rename would be written to the sidecar and never show up.
 		title := strings.TrimSpace(si.CustomTitle)
@@ -109,11 +134,33 @@ func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSessi
 		if title == "" {
 			title = previewTitle(si.Preview)
 		}
+		if folds {
+			lead[recoveryLineageRoot(si, byID)] = len(out)
+		}
 		out = append(out, treeSession{
 			Path: si.Path, Name: name, Title: title, Turns: si.Turns, RuntimeID: runtimeID,
 		})
 	}
 	return out
+}
+
+// recoveryLineageRoot walks a recovery copy back to the conversation it forked
+// from, so every copy left by one conflict storm folds under the same key. A
+// parent that is gone (reclaimed, deleted) still keys its own surviving copies.
+func recoveryLineageRoot(si agent.SessionInfo, byID map[string]agent.SessionInfo) string {
+	id := agent.BranchID(si.Path)
+	for range maxRecoveryLineageWalk {
+		info, ok := byID[id]
+		if !ok || !info.Recovered {
+			return id
+		}
+		parent := strings.TrimSpace(info.ParentID)
+		if parent == "" || parent == id {
+			return id
+		}
+		id = parent
+	}
+	return id
 }
 
 // addWorkspace remembers a folder without opening it. Adding and opening are

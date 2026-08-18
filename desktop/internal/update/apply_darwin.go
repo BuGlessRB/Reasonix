@@ -265,9 +265,9 @@ type macUpdateHandoffConfig struct {
 	// BundleID is passed in rather than read back from disk: the child verifies
 	// a bundle, and a bundle that fails verification cannot also be trusted to
 	// say what it is.
-	BundleID      string
-	ReadyFD       int
-	ProceedFD     int
+	BundleID  string
+	ReadyFD   int
+	ProceedFD int
 }
 
 func parseMacUpdateHandoffArgs(args []string) (macUpdateHandoffConfig, error) {

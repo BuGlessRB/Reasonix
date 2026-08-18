@@ -179,11 +179,11 @@ func recoveryBranchCoveredByParent(path, parentDir string, meta BranchMeta) bool
 //  1. The branch meta says Recovered and records the fork digest.
 //  2. The transcript still matches that fork digest: the branch was never
 //     continued on. A single follow-up turn disqualifies it permanently.
-//  3. The parent transcript (meta.ParentID, same directory) exists and covers
-//     the branch content — equal digest, or the branch is a strict prefix
-//     (allowing a compatible leading-system swap). These are the same checks
-//     SaveRecoveryBranch uses to declare a recovery not needed in the first
-//     place, so "covered" here means the fork preserves nothing unique.
+//  3. Another session covers the branch content — equal digest, or the branch
+//     is a strict prefix (allowing a compatible leading-system swap): the
+//     parent transcript (meta.ParentID) went on to contain it, or another
+//     recovery branch holds it in full. Same checks SaveRecoveryBranch uses to
+//     declare a recovery not needed, so "covered" means nothing unique is lost.
 //  4. No live runtime holds the branch's session lease.
 //  5. The branch has been idle for at least grace.
 //
@@ -223,7 +223,9 @@ func ReclaimableRecoveryBranches(dir string, now time.Time, grace time.Duration)
 			continue
 		}
 		if !recoveryBranchCoveredByParent(path, dir, meta) {
-			continue
+			if _, superseded := recoveryBranchSuccessor(path, dir, meta); !superseded {
+				continue
+			}
 		}
 		out = append(out, path)
 	}
@@ -232,8 +234,8 @@ func ReclaimableRecoveryBranches(dir string, now time.Time, grace time.Duration)
 
 // TrashCoveredRecoveryBranch moves a redundant recovery branch into the same
 // recoverable .trash layout used by Desktop. This is the explicit/manual cleanup
-// path, so it does not require the background GC idle grace period. Parent
-// coverage is rechecked while both parent and branch removal guards are held.
+// path, so it does not require the background GC idle grace period. Coverage is
+// rechecked while the removal guards of the branch and its prover are held.
 func TrashCoveredRecoveryBranch(path, parentDir string) error {
 	return trashCoveredRecoveryBranch(path, parentDir, false)
 }
@@ -256,11 +258,11 @@ func trashCoveredRecoveryBranch(path, parentDir string, requireIdle bool) error 
 		return fmt.Errorf("invalid recovery session path")
 	}
 
-	parentGuard, err := TryAcquireRecoveryParentGuard(path, parentDir)
+	coverageGuard, err := tryAcquireRecoveryCoverageGuard(path, parentDir)
 	if err != nil {
 		return err
 	}
-	defer parentGuard.Release()
+	defer coverageGuard.Release()
 
 	branchGuard, err := TryAcquireSessionRemovalGuard(path)
 	if err != nil {
@@ -273,7 +275,7 @@ func trashCoveredRecoveryBranch(path, parentDir string, requireIdle bool) error 
 			return ErrRecoveryBranchNotIdle
 		}
 	}
-	if !RecoveryBranchCoveredByParent(path, parentDir) {
+	if !recoveryBranchRedundant(path, parentDir) {
 		return ErrRecoveryBranchNotCovered
 	}
 

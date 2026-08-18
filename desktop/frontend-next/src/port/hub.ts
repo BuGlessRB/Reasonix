@@ -19,6 +19,9 @@ export interface TreeSession {
   // Set when a pane already drives this transcript: the sidebar focuses that
   // pane rather than opening a second writer for one file.
   runtimeId?: string;
+  // Conflict-recovery copies of this same conversation. A save that keeps
+  // conflicting writes one per turn, all under one title.
+  copies?: TreeSession[];
 }
 
 export interface TreeWorkspace {
