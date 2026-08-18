@@ -46,6 +46,12 @@ jobs:
       - name: typecheck
         run: pnpm typecheck
 
+      # The reducer and the event port carry the two pieces of logic a type
+      # error cannot reach: what a card means when a turn is interrupted, and
+      # what the client does about a frame that never arrived.
+      - name: test
+        run: pnpm test
+
       # `build` runs tsc -b before vite, so this also proves the project
       # references resolve — typecheck alone uses --noEmit and does not.
       - name: build
