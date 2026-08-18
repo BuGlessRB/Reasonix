@@ -906,7 +906,28 @@
   /* 设计稿把正文封在 68ch 是排版上的道理，但一屏里只有它收着、终端块和卡片都
      铺满，读起来就是右边豁了一块。要么全收要么全铺，这里选全铺。 */
   .out .txt { font-size: var(--read); line-height: 1.72; color: var(--muted) }
-  .call[data-k="me"] .out .txt { color: var(--text) }
+  /* 时间线上每张卡都是同一个形状，「我」原来只靠 20px 的反色符号区分 —— 一屏
+     十几张卡滚下来，自己说过的话就找不着了。给它一块实底和左轨，用中性的
+     --text 而不是色相：色相在这套系统里都已经派了语义（net/deleg/warn/err），
+     借一个就是撒谎。pre-wrap 是同一件事的另一半 —— 分行是你打字时的形状。 */
+  .call[data-k="me"] .out .txt {
+    color: var(--text); white-space: pre-wrap;
+    padding: 7px 11px; background: color-mix(in srgb, var(--text) 5%, transparent);
+    border-left: 2px solid var(--text); border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  }
+
+  /* 正文底下的动作行。复制入口这个窗口原来一个都没有（只能走系统右键菜单），
+     所以它常驻，不跟 .stepctl 一样 hover 才浮现 —— 找不到的入口等于没加。 */
+  .acts { display: flex; gap: 6px; margin-top: 7px }
+  .copy {
+    border: 0; background: transparent; color: var(--ghost); cursor: pointer;
+    font: 500 10px var(--mono); letter-spacing: .06em; padding: 2px 6px;
+    border-radius: var(--r-xs); transition: color .12s, background .12s;
+  }
+  .copy:hover { background: var(--overlay); color: var(--text) }
+  .copy:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .copy[data-state="done"] { color: var(--ok) }
+  .copy[data-state="failed"] { color: var(--warn) }
   /* 一步没成，读起来不能和正常输出一样。挡下来和跑失败在事件里分不开，所以
      用告警而不是错误 —— 说「这一步有问题」，不替它断定是哪一种。 */
   .out .txt.bad { padding-left: 10px; border-left: 2px solid var(--warn) }

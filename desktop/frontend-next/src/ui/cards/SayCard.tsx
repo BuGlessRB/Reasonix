@@ -5,6 +5,7 @@ import { Sym } from "../Sym";
 import type { Item } from "../../state/session";
 import { Markdown } from "../Markdown";
 import { Boundary } from "../Boundary";
+import { CopyButton } from "../CopyButton";
 import { useRevealed } from "../reveal";
 
 // Folded, the only thing left of a thought is how much of the turn it was. The
@@ -39,7 +40,7 @@ export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {
           {item.reasoning && (
             <details className="think" open={open && !item.done} onToggle={(e) => setOpen(e.currentTarget.open)}>
               <summary>
-                <span className="fold">{item.done ? thoughtLabel(item) : "思考中…"}</span>
+                <span className="fold">{item.done ? thoughtLabel(item) : t("思考中…")}</span>
               </summary>
               <div className="tk">
                 {thought}
@@ -52,6 +53,13 @@ export function SayCard({ item }: { item: Extract<Item, { t: "say" }> }) {
               <Boundary fallback={<div className="md">{item.text}</div>}>
                 <Markdown text={item.text} streaming={!item.done} />
               </Boundary>
+            </div>
+          )}
+          {/* Only once the answer is whole: copying half a stream hands over
+              something that was never said. */}
+          {item.done && item.text.trim() && (
+            <div className="acts">
+              <CopyButton text={item.text} />
             </div>
           )}
         </div>
