@@ -43,7 +43,13 @@ running builds will not see the new version.
 
 ## Cutting a release
 
+Write the version's notes first. `release-studio.yml` reads
+`release-notes/studio/<version>.md` and appends the standing text about signing,
+installation and self-update; without that file it publishes the standing text
+alone and warns.
+
 ```bash
+$EDITOR release-notes/studio/2.0.0.md
 git checkout studio
 git tag studio-v2.0.0
 git push origin studio-v2.0.0

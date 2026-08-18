@@ -264,25 +264,29 @@ jobs:
           TAG: ${{ needs.resolve.outputs.tag }}
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          notes=$(cat <<EOF
-          Reasonix Studio $VERSION — built from the \`studio\` branch and published as a
-          prerelease, so it never takes the repository's "latest" from the CLI line.
+          # A version's own notes live in release-notes/studio/<version>.md. The
+          # release still publishes without one, carrying only the standing text.
+          notes="$RUNNER_TEMP/release-notes.md"
+          : > "$notes"
+          if [ -f "release-notes/studio/$VERSION.md" ]; then
+            cat "release-notes/studio/$VERSION.md" >> "$notes"
+            printf '\n' >> "$notes"
+          else
+            echo "::warning::no release-notes/studio/$VERSION.md; publishing the standing text only"
+          fi
+          cat >> "$notes" <<'BODY'
+          ---
 
-          **macOS** is signed with a Developer ID and notarized: it opens without clearing
-          quarantine. **Windows is unsigned** — Authenticode signing is bound to protected
-          \`main-v2\`, which this branch is not, so SmartScreen will warn: choose "More info"
-          then "Run anyway". **Linux** installs from the \`.deb\`.
+          **macOS** 已用 Developer ID 签名并公证，打开时不需要清除隔离属性。**Windows 包未签名** —— Authenticode 签名绑定在受保护的 `main-v2` 上，本分支拿不到它，所以 SmartScreen 会告警：选「更多信息」，再选「仍要运行」。**Linux** 从 `.deb` 安装。
 
-          Self-update works on all three: Linux upgrades through its package, Windows runs
-          the next installer, macOS replaces its own bundle.
-          EOF
-          )
+          三个平台都能自更新：Linux 走自己的包，Windows 运行下一个安装器，macOS 替换自身 bundle。
+          BODY
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
             gh release create "$TAG" dist/* \
               --title "Reasonix Studio $VERSION" \
-              --notes "$notes" \
+              --notes-file "$notes" \
               --prerelease \
               --latest=false
           fi
