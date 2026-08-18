@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -1493,17 +1492,9 @@ func removeSessionFiles(absDir, abs string) error {
 	if err := agent.MarkCleanupPending(abs, "remove"); err != nil {
 		return err
 	}
-	var held error
 	// The marker already hides them all, so stopping at the first refusal would
 	// strand the rest for no gain.
-	for _, p := range append([]string{abs}, store.SessionSidecarFiles(abs)...) {
-		if p == "" {
-			continue
-		}
-		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-			held = errors.Join(held, err)
-		}
-	}
+	held := store.RemoveSessionArtifacts(abs)
 	if err := agent.DeleteSubagentsByParent(absDir, agent.BranchID(abs)); err != nil {
 		held = errors.Join(held, err)
 	}

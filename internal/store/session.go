@@ -15,6 +15,8 @@
 package store
 
 import (
+	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -193,6 +195,42 @@ func SessionOutputsDir(sessionPath string) string {
 	return sessionStem(sessionPath) + ".outputs"
 }
 
+// RemoveSessionArtifacts deletes a transcript and everything beside it. Each
+// front end hand-rolled this loop and each dropped something different: a path
+// list handed to os.Remove silently skips whatever is not a file, which is how
+// spilled output survived every delete. extra takes the per-front-end
+// companions (ACP metadata, guardian cursors). Refusals are joined, not hidden.
+func RemoveSessionArtifacts(sessionPath string, extra ...string) error {
+	paths := append([]string{sessionPath}, extra...)
+	paths = append(paths, SessionSidecarFiles(sessionPath)...)
+	var errs []error
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, err)
+		}
+	}
+	for _, d := range SessionSidecarDirs(sessionPath) {
+		if err := os.RemoveAll(d); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// SessionPathForOutputsDir inverts SessionOutputsDir: the transcript a spill
+// directory belongs to, or empty when the path is not one. A sweep needs the
+// mapping backwards, and only this file should know its shape.
+func SessionPathForOutputsDir(outputsDir string) string {
+	stem, ok := strings.CutSuffix(strings.TrimSpace(outputsDir), ".outputs")
+	if !ok || stem == "" {
+		return ""
+	}
+	return stem + ".jsonl"
+}
+
 // SessionJobsDir is the background-job artifact directory (<id>.jobs).
 func SessionJobsDir(sessionPath string) string {
 	sessionPath = strings.TrimSpace(sessionPath)
@@ -245,4 +283,17 @@ func SessionSidecarFiles(sessionPath string) []string {
 		SessionRecoveryState(sessionPath),
 		SessionContext(sessionPath),
 	}
+}
+
+// SessionSidecarDirs returns directory sidecars with no life past the
+// transcript. Listed apart because they need RemoveAll — handed to os.Remove
+// they fail on their own contents and get skipped, which is how spilled output
+// outlived the conversations it belonged to. Checkpoints, jobs and the inbox
+// keep their own lifecycles and stay out.
+func SessionSidecarDirs(sessionPath string) []string {
+	sessionPath = strings.TrimSpace(sessionPath)
+	if sessionPath == "" {
+		return nil
+	}
+	return []string{SessionOutputsDir(sessionPath)}
 }

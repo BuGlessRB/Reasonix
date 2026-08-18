@@ -2941,18 +2941,8 @@ func parseSessionUpdatedAt(s string) time.Time {
 }
 
 func deleteSessionFiles(sessionPath string) error {
-	paths := []string{
-		sessionPath,
-		acpMetaPath(sessionPath),
-	}
-	paths = append(paths, store.SessionSidecarFiles(sessionPath)...)
-	for _, path := range paths {
-		if path == "" {
-			continue
-		}
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return err
-		}
+	if err := store.RemoveSessionArtifacts(sessionPath, acpMetaPath(sessionPath)); err != nil {
+		return err
 	}
 	if dir := checkpointPath(sessionPath); dir != "" {
 		if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {

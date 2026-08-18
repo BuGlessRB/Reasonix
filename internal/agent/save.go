@@ -1673,7 +1673,7 @@ func ReconcileCleanupPending(dir string, cleanup func(CleanupPendingInfo) error)
 	if err := reconcileSessionDir(dir, cleanup); err != nil {
 		errs = append(errs, err)
 	}
-	if err := reconcileRecoveryTrashStages(dir); err != nil {
+	if err := reconcileStaleArtifacts(dir); err != nil {
 		errs = append(errs, err)
 	}
 	pending, err := ListCleanupPending(dir)

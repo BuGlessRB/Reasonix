@@ -3117,21 +3117,15 @@ func removeSessionArtifacts(path string) error {
 	if err := jobs.RemoveArtifacts(path); err != nil {
 		return err
 	}
-	remove := []string{path}
-	// Sidecars include the event log — the authoritative transcript. Leaving
-	// it behind would both leak the cleared conversation and let LoadSession
+	// Artifacts include the event log — the authoritative transcript. Leaving it
+	// behind would both leak the cleared conversation and let LoadSession
 	// resurrect it on the recycled path. The guardian transcript saves through
-	// the same session layer, so its sidecars are swept too.
-	remove = append(remove, store.SessionSidecarFiles(path)...)
-	remove = append(remove, guardian.PathFor(path), guardian.CursorPathFor(path))
-	remove = append(remove, store.SessionSidecarFiles(guardian.PathFor(path))...)
-	for _, p := range remove {
-		if p == "" {
-			continue
-		}
-		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-			return err
-		}
+	// the same session layer, so its own artifacts go the same way.
+	if err := store.RemoveSessionArtifacts(path); err != nil {
+		return err
+	}
+	if err := store.RemoveSessionArtifacts(guardian.PathFor(path), guardian.CursorPathFor(path)); err != nil {
+		return err
 	}
 	if err := sessioninbox.RemoveDir(path); err != nil && !os.IsNotExist(err) {
 		return err
