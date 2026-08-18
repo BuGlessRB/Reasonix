@@ -49,6 +49,7 @@ func (t *trajScan) recordRound(outcome string, gap gapInfo, b *toolBatch) {
 func renderCognition(results []result) string {
 	var reason, compl, slowGapMs, gapMs, delegToolMs int64
 	slow, delegRounds, runs, solved := 0, 0, 0, 0
+	streamed := false
 	var slowReason int64
 	var rates []int64
 	for _, r := range results {
@@ -60,6 +61,9 @@ func renderCognition(results []result) string {
 			continue
 		}
 		runs++
+		if t.ReasoningStreamed {
+			streamed = true
+		}
 		reason += t.ReasoningTokensTotal
 		compl += t.CompletionTokensTotal
 		slow += t.SlowRounds
@@ -79,17 +83,29 @@ func renderCognition(results []result) string {
 	if runs == 0 {
 		return ""
 	}
-	line := fmt.Sprintf("**Cognition** (%d recorded runs): **reasoning** %s tok · **completion** %s tok",
-		runs, comma(int(reason)), comma(int(compl)))
-	if solved > 0 {
+	// A provider that folds thinking into output_tokens reports no count at
+	// all; printing "0 tok" there asserts the model did not think, which the
+	// streamed reasoning blocks disprove.
+	unreported := reason == 0 && streamed
+	reasonTok := comma(int(reason)) + " tok"
+	if unreported {
+		reasonTok = "unreported by this provider"
+	}
+	line := fmt.Sprintf("**Cognition** (%d recorded runs): **reasoning** %s · **completion** %s tok",
+		runs, reasonTok, comma(int(compl)))
+	if solved > 0 && !unreported {
 		line += fmt.Sprintf(" (**%s reasoning/solved**)", comma(int(reason/int64(solved))))
 	}
 	if len(rates) > 0 {
 		line += fmt.Sprintf(" · **output rate** p50 %d · p90 %d tok/s", pctile(rates, 50), pctile(rates, 90))
 	}
 	if slow > 0 {
-		line += fmt.Sprintf(" · **slow rounds** (≥%ds) %d = %s of model time, %s reasoning tok",
-			slowRoundGapMs/1000, slow, pct(int(slowGapMs), int(gapMs)), comma(int(slowReason)))
+		tail := comma(int(slowReason)) + " reasoning tok"
+		if unreported {
+			tail = "reasoning unreported"
+		}
+		line += fmt.Sprintf(" · **slow rounds** (≥%ds) %d = %s of model time, %s",
+			slowRoundGapMs/1000, slow, pct(int(slowGapMs), int(gapMs)), tail)
 	}
 	if delegRounds > 0 {
 		line += fmt.Sprintf(" · **delegation** %d rounds (%s in subagents)", delegRounds, dur(delegToolMs))

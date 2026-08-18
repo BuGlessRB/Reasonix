@@ -131,7 +131,11 @@ type trajectorySummary struct {
 
 	// Cognition: executor reasoning/completion joined per model round, plus a
 	// census of slow rounds — gaps that bought unusually large thinking.
-	ReasoningTokensTotal     int64         `json:"reasoning_tokens_total,omitempty"`
+	ReasoningTokensTotal int64 `json:"reasoning_tokens_total,omitempty"`
+	// ReasoningStreamed separates "did not think" from "the provider reports no
+	// count": DeepSeek's Anthropic endpoint folds thinking into output_tokens,
+	// while its OpenAI one reports reasoning_tokens.
+	ReasoningStreamed        bool          `json:"reasoning_streamed,omitempty"`
 	CompletionTokensTotal    int64         `json:"completion_tokens_total,omitempty"`
 	SlowRounds               int           `json:"slow_rounds,omitempty"`
 	SlowRoundGapMs           int64         `json:"slow_round_gap_ms,omitempty"`
@@ -373,6 +377,9 @@ func (t *trajScan) record(rec trajectoryRecord) {
 			t.s.NoProgressSignals++
 		}
 	case "reasoning", "text":
+		if rec.Event.Kind == "reasoning" {
+			t.s.ReasoningStreamed = true
+		}
 		if t.firstDelta == 0 {
 			t.firstDelta = rec.TS
 		}

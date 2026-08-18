@@ -102,3 +102,39 @@ func TestRenderCognitionPricesThinking(t *testing.T) {
 		t.Error("no runs must render nothing")
 	}
 }
+
+func TestRenderCognitionSeparatesUnreportedReasoningFromZero(t *testing.T) {
+	withRounds := func(streamed bool, reasoning int64) result {
+		r := result{task: task{ID: "a"}, Passed: true}
+		r.Trajectory = &trajectorySummary{
+			ReasoningStreamed:        streamed,
+			ReasoningTokensTotal:     reasoning,
+			CompletionTokensTotal:    500,
+			SlowRounds:               2,
+			SlowRoundGapMs:           20000,
+			SlowRoundReasoningTokens: 0,
+			ModelGapTotalMs:          40000,
+			Rounds:                   []roundDigest{{Index: 1, Outcome: "mutation", GapMs: 10000}},
+		}
+		return r
+	}
+	// The model streamed thinking but the provider folded it into output
+	// tokens: the count is missing, not zero.
+	got := renderCognition([]result{withRounds(true, 0)})
+	if !strings.Contains(got, "unreported by this provider") {
+		t.Errorf("streamed reasoning with no count must say unreported, got: %s", got)
+	}
+	if strings.Contains(got, "0 reasoning tok") {
+		t.Errorf("must not assert zero reasoning when the count is missing, got: %s", got)
+	}
+	// A provider that reports the count keeps the number.
+	got = renderCognition([]result{withRounds(true, 1234)})
+	if !strings.Contains(got, "1,234 tok") {
+		t.Errorf("a reported count must still render, got: %s", got)
+	}
+	// No thinking streamed at all (effort disabled): zero is the measurement.
+	got = renderCognition([]result{withRounds(false, 0)})
+	if !strings.Contains(got, "0 tok") {
+		t.Errorf("no streamed reasoning means a real zero, got: %s", got)
+	}
+}
