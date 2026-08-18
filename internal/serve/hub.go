@@ -96,10 +96,9 @@ type HubOptions struct {
 	// Wails shell pumps each one's frames onto its bus, keyed by ID.
 	OnOpen  func(*Runtime)
 	OnClose func(*Runtime)
-	// DecorateSink wraps each runtime's event sink, the way Grant applies each
-	// runtime's capabilities. A desktop window adds system notifications here;
-	// a server reachable over the network leaves it nil, because a notification
-	// would fire on the machine running the kernel, not the one watching it.
+	// DecorateSink wraps each runtime's event sink, the way Grant applies its
+	// capabilities. A window adds system notifications here; a networked server
+	// leaves it nil, or they fire on the kernel's machine, not the watcher's.
 	DecorateSink func(event.Sink) event.Sink
 }
 
