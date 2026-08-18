@@ -58,7 +58,7 @@ func TestEveryLiveAgentSettingSurvivesARoundTrip(t *testing.T) {
 	t.Setenv("REASONIX_HOME", dir)
 	path := filepath.Join(dir, "config.toml")
 
-	fields := reflect.VisibleFields(reflect.TypeOf(AgentConfig{}))
+	fields := reflect.VisibleFields(reflect.TypeFor[AgentConfig]())
 	for _, sf := range fields {
 		key := sf.Tag.Get("toml")
 		if key == "" || key == "-" {

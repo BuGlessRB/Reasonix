@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -29,8 +30,8 @@ func TestStdioCallsOverlapOnOneServer(t *testing.T) {
 			served <- err
 			return
 		}
-		for i := len(ids) - 1; i >= 0; i-- {
-			if err := server.reply(ids[i], map[string]any{"id": ids[i]}); err != nil {
+		for _, v := range slices.Backward(ids) {
+			if err := server.reply(v, map[string]any{"id": v}); err != nil {
 				served <- err
 				return
 			}
@@ -43,11 +44,9 @@ func TestStdioCallsOverlapOnOneServer(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
 	for i, name := range []string{"run_flow_screening", "query_model"} {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_, errs[i] = tr.call(ctx, "tools/call", map[string]any{"name": name})
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -76,8 +75,8 @@ func TestStdioOverlappingCallsEachGetTheirOwnReply(t *testing.T) {
 			served <- err
 			return
 		}
-		for i := len(reqs) - 1; i >= 0; i-- {
-			if err := server.reply(*reqs[i].ID, map[string]any{"marker": reqs[i].Params.Arguments.Marker}); err != nil {
+		for _, v := range slices.Backward(reqs) {
+			if err := server.reply(*v.ID, map[string]any{"marker": v.Params.Arguments.Marker}); err != nil {
 				served <- err
 				return
 			}
@@ -90,9 +89,7 @@ func TestStdioOverlappingCallsEachGetTheirOwnReply(t *testing.T) {
 	var wg sync.WaitGroup
 	wrong := make(chan string, callers)
 	for i := range callers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			marker := fmt.Sprintf("caller-%d", i)
 			raw, err := tr.call(ctx, "tools/call", map[string]any{"arguments": map[string]any{"marker": marker}})
 			if err != nil {
@@ -109,7 +106,7 @@ func TestStdioOverlappingCallsEachGetTheirOwnReply(t *testing.T) {
 			if got.Marker != marker {
 				wrong <- fmt.Sprintf("%s received %q", marker, got.Marker)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	close(wrong)
@@ -126,8 +123,7 @@ func TestStdioOverlappingCallsEachGetTheirOwnReply(t *testing.T) {
 func TestStdioCallDeadlineHoldsWhileAnotherIsInFlight(t *testing.T) {
 	tr := &stdioTransport{name: "das", stdin: discardWriteCloser{}, pending: map[int]chan rpcResponse{}}
 
-	stuck, releaseStuck := context.WithCancel(context.Background())
-	defer releaseStuck()
+	stuck := t.Context()
 	go func() { _, _ = tr.call(stuck, "tools/call", map[string]any{"name": "run_flow_screening"}) }()
 	time.Sleep(150 * time.Millisecond) // let it park waiting for a reply
 
@@ -154,8 +150,7 @@ func TestStdioCallDeadlineHoldsWhileAnotherIsInFlight(t *testing.T) {
 func TestStdioCancelledCallReturnsWhileAnotherIsInFlight(t *testing.T) {
 	tr := &stdioTransport{name: "das", stdin: discardWriteCloser{}, pending: map[int]chan rpcResponse{}}
 
-	stuck, releaseStuck := context.WithCancel(context.Background())
-	defer releaseStuck()
+	stuck := t.Context()
 	go func() { _, _ = tr.call(stuck, "tools/call", map[string]any{"name": "run_flow_screening"}) }()
 	time.Sleep(150 * time.Millisecond)
 
