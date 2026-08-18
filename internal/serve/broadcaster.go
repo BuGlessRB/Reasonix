@@ -2,6 +2,7 @@ package serve
 
 import (
 	"encoding/json"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -12,19 +13,31 @@ import (
 
 // Broadcaster is the event.Sink the controller emits to in server mode. It
 // marshals each event once and fans it out to every connected SSE subscriber.
-// A slow subscriber's buffer is allowed to drop rather than back-pressure the
-// agent goroutine — a browser that can't keep up loses intermediate frames, not
-// the whole session (it can refetch /history).
+// A slow subscriber never back-pressures the agent goroutine: it loses frames
+// instead. Which frames it may lose is the whole design — see droppable.
 type Broadcaster struct {
 	mu              sync.Mutex
-	subs            map[chan []byte]struct{}
+	subs            map[*subscriber]struct{}
 	ledger          *billing.Ledger
 	displayCurrency string
 }
 
 // NewBroadcaster returns an empty Broadcaster ready to accept subscribers.
 func NewBroadcaster() *Broadcaster {
-	return &Broadcaster{subs: map[chan []byte]struct{}{}, ledger: billing.NewLedger()}
+	return &Broadcaster{subs: map[*subscriber]struct{}{}, ledger: billing.NewLedger()}
+}
+
+// droppable reports whether losing this frame degrades the view rather than
+// breaking it. A streaming delta is superseded by the text after it and the
+// full version is in /history; a prompt, a result or a turn boundary has no
+// successor carrying it, and a frontend that misses one waits forever on a
+// state that already changed.
+func droppable(k event.Kind) bool {
+	switch k {
+	case event.Text, event.Reasoning, event.ToolProgress, event.CompactionProgress:
+		return true
+	}
+	return false
 }
 
 // SetDisplayCurrency rebinds the session ledger to a stored valuation. Empty
@@ -62,14 +75,15 @@ func (b *Broadcaster) SessionCostQuote() billing.CostQuote {
 	return b.ledger.Total(b.displayCurrency)
 }
 
-// Emit marshals the event to JSON and delivers it to every subscriber. Drops to
-// a subscriber whose buffer is full rather than blocking. A marshal failure is
-// dropped silently — one bad event shouldn't stall the stream.
+// Emit marshals the event to JSON and delivers it to every subscriber. Never
+// blocks: a subscriber that has fallen behind loses droppable frames. A marshal
+// failure is dropped silently — one bad event shouldn't stall the stream.
 func (b *Broadcaster) Emit(e event.Event) {
 	data, err := json.Marshal(eventwire.ToWire(e))
 	if err != nil {
 		return
 	}
+	drop := droppable(e.Kind)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if e.Kind == event.Usage && e.Usage != nil && e.CostQuote != nil {
@@ -83,11 +97,8 @@ func (b *Broadcaster) Emit(e event.Event) {
 			Estimated: e.Usage.Estimated,
 		}, time.Now().UTC())
 	}
-	for ch := range b.subs {
-		select {
-		case ch <- data:
-		default: // subscriber is behind; drop this frame for it
-		}
+	for s := range b.subs {
+		s.push(data, drop)
 	}
 }
 
@@ -100,16 +111,14 @@ func (b *Broadcaster) EmitTo(target <-chan []byte, e event.Event) {
 	if err != nil {
 		return
 	}
+	drop := droppable(e.Kind)
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for ch := range b.subs {
-		if (<-chan []byte)(ch) != target {
+	for s := range b.subs {
+		if (<-chan []byte)(s.ch) != target {
 			continue
 		}
-		select {
-		case ch <- data:
-		default: // subscriber is behind; drop this frame rather than blocking.
-		}
+		s.push(data, drop)
 		return
 	}
 }
@@ -117,17 +126,18 @@ func (b *Broadcaster) EmitTo(target <-chan []byte, e event.Event) {
 // Subscribe registers a new SSE client and returns its channel plus an
 // unsubscribe func the handler must call (defer) when the client disconnects.
 func (b *Broadcaster) Subscribe() (<-chan []byte, func()) {
-	ch := make(chan []byte, 64)
+	s := newSubscriber()
 	b.mu.Lock()
-	b.subs[ch] = struct{}{}
+	b.subs[s] = struct{}{}
 	b.mu.Unlock()
-	return ch, func() {
+	return s.ch, func() {
 		b.mu.Lock()
-		if _, ok := b.subs[ch]; ok {
-			delete(b.subs, ch)
-			close(ch)
-		}
+		_, ok := b.subs[s]
+		delete(b.subs, s)
 		b.mu.Unlock()
+		if ok {
+			s.close()
+		}
 	}
 }
 
@@ -136,4 +146,95 @@ func (b *Broadcaster) Subscribers() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return len(b.subs)
+}
+
+// softCap is where droppable frames start being shed. hardCap bounds the queue
+// for the case where even the frames that matter are outrunning the client;
+// losing the oldest is the least bad option left, since the newest are the ones
+// carrying the state that would let the frontend stop waiting.
+const (
+	softCap = 64
+	hardCap = 4096
+)
+
+// subscriber is one client's outbound queue. Frames land on the queue and a
+// single pump goroutine moves them onto ch, which is what lets Emit stay
+// non-blocking while a frame's fate depends on its kind rather than on how full
+// a buffer happened to be at the moment it arrived.
+type subscriber struct {
+	ch   chan []byte
+	done chan struct{}
+	wake chan struct{}
+
+	mu     sync.Mutex
+	queue  [][]byte
+	closed bool
+	warned bool
+}
+
+func newSubscriber() *subscriber {
+	s := &subscriber{ch: make(chan []byte, 64), done: make(chan struct{}), wake: make(chan struct{}, 1)}
+	go s.pump()
+	return s
+}
+
+func (s *subscriber) push(data []byte, drop bool) {
+	s.mu.Lock()
+	if s.closed || (drop && len(s.queue) >= softCap) {
+		s.mu.Unlock()
+		return
+	}
+	if len(s.queue) >= hardCap {
+		s.queue[0] = nil
+		s.queue = s.queue[1:]
+		if !s.warned {
+			s.warned = true
+			slog.Warn("serve: event subscriber too far behind; dropping frames it needs", "queued", hardCap)
+		}
+	}
+	s.queue = append(s.queue, data)
+	s.mu.Unlock()
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
+// pump owns ch: the only goroutine that sends on it, and the only one that
+// closes it — so a client disconnecting mid-send cannot race a send on a closed
+// channel.
+func (s *subscriber) pump() {
+	defer close(s.ch)
+	for {
+		s.mu.Lock()
+		if len(s.queue) == 0 {
+			s.mu.Unlock()
+			select {
+			case <-s.wake:
+				continue
+			case <-s.done:
+				return
+			}
+		}
+		data := s.queue[0]
+		s.queue[0] = nil
+		s.queue = s.queue[1:]
+		s.mu.Unlock()
+		select {
+		case s.ch <- data:
+		case <-s.done:
+			return
+		}
+	}
+}
+
+func (s *subscriber) close() {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	s.closed = true
+	s.mu.Unlock()
+	close(s.done)
 }
