@@ -60,6 +60,13 @@ export class MockExtensions extends MockLook {
     return { implicit: true, skills: this.skillList.map((s) => ({ ...s })) };
   }
 
+  // The fixture has no runtime to restart, but the button's states — pending,
+  // settled, refused-while-busy — are exactly what needs designing without a Go
+  // process, so it takes long enough to see.
+  async reloadExtensions(): Promise<void> {
+    await new Promise((r) => setTimeout(r, 600));
+  }
+
   // localSkills is what the fixture counts as this project's exceptions; the
   // real store keys them by repository, which a browser fixture cannot do.
   protected localSkills = new Set<string>();

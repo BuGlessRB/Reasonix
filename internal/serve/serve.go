@@ -326,7 +326,7 @@ func (s *Server) reloadExtensions(ctx context.Context) error {
 	}
 
 	ref := currentModelRef(cur)
-	newCtrl, err := s.rebuild(ctx, cur, ref)
+	newCtrl, err := s.rebuildWith(ctx, cur, ref, s.reloadOptions(cur, ref), true)
 	if err != nil {
 		return fmt.Errorf("reload extensions: %w", err)
 	}
@@ -374,12 +374,23 @@ func (s *Server) reloadExtensions(ctx context.Context) error {
 }
 
 func (s *Server) rebuild(ctx context.Context, old *control.Controller, ref string) (*control.Controller, error) {
+	return s.rebuildWith(ctx, old, ref, s.rebuildOptions(old, ref), false)
+}
+
+// rebuildWith runs one rebuild. adopt records the new generation as the base
+// for later reuse: a reload must, because it replaced the sidecars and the old
+// manager is about to be closed, and reusing a closed one later would serve a
+// generation that no longer exists.
+func (s *Server) rebuildWith(ctx context.Context, old *control.Controller, ref string, opts boot.Options, adopt bool) (*control.Controller, error) {
 	if s.rebuildController != nil {
 		return s.rebuildController(ctx, old, ref)
 	}
-	res, err := boot.Rebuild(ctx, old, s.rebuildOptions(old, ref))
+	res, err := boot.Rebuild(ctx, old, opts)
 	if err != nil {
 		return nil, err
+	}
+	if adopt {
+		s.lastBuild = res
 	}
 	return res.Controller, nil
 }

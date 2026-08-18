@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
+import { useRuntimeReload } from "./RuntimeReload";
 import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, CapabilityScope, McpEntry, ModelEntry, PluginPackage, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
 import { WindowControls } from "./WindowControls";
@@ -150,6 +151,8 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
     reloadExt();
     onChanged();
   }, [reloadExt, onChanged]);
+
+  const reload = useRuntimeReload(port, afterExtChange);
 
   // Adding or removing a source changes what the picker above can offer, so
   // the list is reloadable rather than read once at mount.
@@ -436,6 +439,15 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
           {at === "ext" && (
             <>
               {scope && <ScopeBar scope={scope} scopes={scopes} onPick={setScopeAt} />}
+              {/* 装完、改完、删完都要过这一步才算数——把它放在包列表上面，
+                  因为它管的是整个运行时，不是某一个包。 */}
+              <Group
+                title={t("运行时")}
+                hint={t("改了扩展的代码，或者装、删、开关了插件包之后，用它让改动生效。当前这一轮不受影响，下一轮开始用新的。")}
+                action={reload.action}
+              >
+                {reload.note}
+              </Group>
               <Group
                 title={t("插件包")}
                 now={packages.length ? t("{n} 个", { n: packages.length }) : undefined}

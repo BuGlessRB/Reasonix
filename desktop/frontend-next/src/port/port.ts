@@ -369,6 +369,9 @@ export interface ModelEntry {
   price?: ModelPrice;
   // The credential this route spends; pairs with vendor to name the account.
   keyEnv?: string;
+  // Whether provider is a name we shipped. A name the user chose outranks the
+  // host when the account is labelled; one of ours does not.
+  preset?: boolean;
 }
 
 export interface AccountUser {
@@ -478,6 +481,11 @@ export interface AgentPort {
   // never a path, so this returns an unsubscribe that fires nowhere there —
   // the same shape onUpdateProgress uses for a shell-only signal.
   onFileDrop(cb: (paths: string[]) => void): () => void;
+  // Rebuilds the runtime from what is on disk now: restarts extension sidecars
+  // and rescans skills/commands/hooks. An extension author editing code needs
+  // this; without it the only way to load an edit is restarting the app.
+  // Rejected while a turn or background job is running (busy.reload_extensions).
+  reloadExtensions(): Promise<void>;
   hooks(): Promise<HookCatalog>;
   // Replaces one scope wholesale: a client that merges partial edits wrong
   // silently drops somebody else's rule.

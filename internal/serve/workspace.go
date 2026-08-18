@@ -281,6 +281,17 @@ func (s *Server) rebuildOptions(cur control.SessionAPI, ref string) boot.Options
 	return opts
 }
 
+// reloadOptions is the opposite of a switch. A switch reuses the running
+// sidecars and the discovered assembly because the extensions did not move; a
+// reload exists precisely because what is on disk did move, so reusing either
+// would hand the old code back and the user would keep restarting the app.
+// Owner survives — it identifies the session lineage, not the extension state.
+func (s *Server) reloadOptions(cur control.SessionAPI, ref string) boot.Options {
+	opts := s.rebuildOptions(cur, ref)
+	opts.RuntimeReload = boot.RuntimeReload{ForceFullRebuild: true, Owner: opts.Owner}
+	return opts
+}
+
 // AdoptRuntime records the generation a host assembled before handing the
 // controller over, so the first model or effort switch reuses it instead of
 // paying for a cold assembly. Hosts that build with boot.Build have no

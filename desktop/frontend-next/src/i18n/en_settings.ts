@@ -187,6 +187,14 @@ export const EN_SETTINGS: Record<string, string> = {
   "自动化": "Automation",
   "在 agent 干活的前后插进你自己的命令。它们跑在你的机器上，用你的权限 —— 挡得住 agent 的那两个事件在下面会标出来。":
     "Run your own commands before and after the agent acts. They run on your machine with your permissions — the two events that can actually stop the agent are marked below.",
+  "运行时": "Runtime",
+  "重载运行时": "Reload runtime",
+  "重载中": "Reloading",
+  "已生效": "Live",
+  "改了扩展的代码，或者装、删、开关了插件包之后，用它让改动生效。当前这一轮不受影响，下一轮开始用新的。":
+    "Use this after editing an extension's code, or installing, removing or toggling a package. The turn in flight is untouched; the next one runs the new build.",
+  "正在重启常驻进程，重新扫描技能、命令和钩子…": "Restarting resident processes and rescanning skills, commands and hooks…",
+  "已生效，下一轮开始用新的扩展": "Live — the next turn runs the new extensions",
   "插件包": "Plugin packages",
   "一个包能一次带来技能、命令、自动化钩子和外部服务。装和导入是同一件事：给它一个仓库地址，或者机器上的一个文件夹。":
     "One package can bring skills, commands, hooks and external services at once. Installing and importing are the same act: give it a repository address, or a folder on this machine.",
