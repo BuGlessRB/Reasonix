@@ -633,6 +633,18 @@ export class SsePort implements AgentPort {
         held.push(ev);
         return;
       }
+      // Numbering that goes backwards is a different stream, not a gap: the
+      // server restarted and is counting from one again. Inferred rather than
+      // carried as a stream id — a resumed client is never sent a lower number
+      // than it holds, so nothing else produces this. Without it the client
+      // compares against a watermark that will never be reached again and
+      // silently stops noticing losses.
+      if (ev.seq && seen && ev.seq < seen) {
+        seen = ev.seq;
+        onGap?.();
+        onEvent(ev);
+        return;
+      }
       if (ev.seq && seen && ev.seq > seen + 1) {
         held.push(ev);
         void recover(seen);
