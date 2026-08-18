@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { AgentPort, ProviderProbe, ProviderSetup } from "../port/port";
-import { KIND_LABEL } from "./vendors";
+import { KIND_LABEL, nameFrom } from "./vendors";
 import { Picker } from "./Menu";
-import { nameFrom } from "./Providers";
 
 interface Props {
   port: AgentPort;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
 import type { ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe } from "../port/port";
-import { KIND_LABEL, accountKey, disambiguate, hostOf, vendorLabel } from "./vendors";
+import { KIND_LABEL, accountKey, accountLabel, disambiguate, hostOf, nameFrom, vendorLabel } from "./vendors";
 
 // A connection is an account, not a config row. One endpoint answering two
 // protocols is two rows in the file and one service to the person paying for it,
@@ -24,17 +24,6 @@ type Port = {
   setProviderThinking(name: string, on: boolean): Promise<void>;
 };
 
-// A name for the config table, derived from the host so the user does not have
-// to invent one. "api.moonshot.cn/v1" becomes "moonshot".
-export function nameFrom(baseUrl: string): string {
-  try {
-    const host = new URL(baseUrl).hostname.replace(/^(www|api|open)\./, "");
-    return host.split(".")[0].replace(/[^a-zA-Z0-9._-]/g, "-") || "custom";
-  } catch {
-    return "custom";
-  }
-}
-
 // One account: every configured entry that answers on the same host.
 interface Account {
   key: string;
@@ -53,7 +42,7 @@ function groupAccounts(list: ProviderEntry[]): Account[] {
     const key = accountKey(host, p.keyEnv);
     let a = out.get(key);
     if (!a) {
-      a = { key, label: vendorLabel(host), host, hint: p.name, byKind: {}, kinds: [] };
+      a = { key, label: "", host, hint: p.name, byKind: {}, kinds: [] };
       out.set(key, a);
     }
     const kind = p.kind || "openai";
@@ -62,6 +51,9 @@ function groupAccounts(list: ProviderEntry[]): Account[] {
       a.kinds.push(kind);
     }
   }
+  // Every door has to be in hand before the account can be named: the one the
+  // user renamed is not always the first the config file lists.
+  for (const a of out.values()) a.label = accountLabel(a.host, Object.values(a.byKind));
   return disambiguate([...out.values()]);
 }
 

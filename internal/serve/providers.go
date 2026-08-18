@@ -245,7 +245,7 @@ func (s *Server) removeProvider(w http.ResponseWriter, r *http.Request) {
 	if current, _, _ := strings.Cut(currentModelRef(s.ctl()), "/"); current == name {
 		// Removing it would leave the conversation on a model that no longer
 		// resolves, and the next turn would fail instead of this call.
-		busy(w, "provider.model_in_use", "switch to another model before removing the one in use")
+		busy(w, "provider.model_in_use", "switch to another model before removing the one in use", nil)
 		return
 	}
 	cfg := config.LoadForEdit(config.UserConfigPath())

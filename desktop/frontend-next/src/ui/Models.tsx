@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { t } from "../i18n";
 import type { ModelEntry } from "../port/port";
-import { accountKey, disambiguate, vendorLabel } from "./vendors";
+import { accountKey, accountLabel, disambiguate } from "./vendors";
 
 // Models only. Which protocol reaches them is the connection's business, chosen
 // once above — an earlier version put a route selector on every row, so picking
@@ -27,7 +27,7 @@ export function groupVendors(models: ModelEntry[]): Vendor[] {
     const key = accountKey(host, m.keyEnv);
     let v = out.get(key);
     if (!v) {
-      v = { key, label: vendorLabel(host), host, hint: m.provider, byKind: {}, kinds: [] };
+      v = { key, label: "", host, hint: m.provider, byKind: {}, kinds: [] };
       out.set(key, v);
     }
     const kind = m.kind || "openai";
@@ -36,6 +36,12 @@ export function groupVendors(models: ModelEntry[]): Vendor[] {
       v.kinds.push(kind);
     }
     v.byKind[kind].push(m);
+  }
+  // The connection list names the same accounts from the same rule; a picker
+  // calling one of them something else is two names for one thing.
+  for (const v of out.values()) {
+    const entries = Object.values(v.byKind).flat();
+    v.label = accountLabel(v.host, entries.map((m) => ({ name: m.provider, preset: m.preset })));
   }
   return disambiguate([...out.values()]);
 }

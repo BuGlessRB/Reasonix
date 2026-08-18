@@ -182,6 +182,9 @@ type modelEntry struct {
 	// KeyEnv is the credential this route spends. It pairs with Vendor to
 	// identify the account: one host can hold more than one.
 	KeyEnv string `json:"keyEnv,omitempty"`
+	// Preset marks a name we shipped rather than one the user chose, so a picker
+	// knows whose name Provider is before putting it on screen.
+	Preset bool `json:"preset,omitempty"`
 	// The capability face; see describeModel. Omitted fields mean "nothing
 	// declares this", never "no".
 	Vision        bool        `json:"vision,omitempty"`
