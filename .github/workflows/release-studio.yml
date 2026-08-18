@@ -1,11 +1,9 @@
 name: Release Studio
 run-name: Release Studio ${{ inputs.tag || github.ref_name }}
 
-# Studio's release line, parallel to the desktop/CLI/npm set and deliberately
-# separate from it. release-stable.yml validates that every tag it publishes sits
-# on main-v2 history, which studio commits never do, so this line has its own tag
-# namespace (studio-v*), its own environment gate, and its own rollback catalog
-# at dl.reasonix.io/studio/versions.json.
+# The only release line this branch publishes. It has its own tag namespace
+# (studio-v*), its own environment gate, and its own rollback catalog at
+# dl.reasonix.io/studio/versions.json.
 #
 # What it must never touch: the repository-wide "latest" release (every Studio
 # release is a prerelease) and the root dl.reasonix.io/versions.json, which is
@@ -267,13 +265,16 @@ jobs:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           notes=$(cat <<EOF
-          Reasonix Studio $VERSION — parallel preview line, built from the \`studio\` branch.
+          Reasonix Studio $VERSION — built from the \`studio\` branch and published as a
+          prerelease, so it never takes the repository's "latest" from the CLI line.
 
-          Windows and macOS artifacts are **unsigned**: production signing is bound to
-          protected \`main-v2\`, so expect a SmartScreen warning on Windows and to clear
-          the quarantine attribute on macOS (\`xattr -dr com.apple.quarantine\`).
+          **macOS** is signed with a Developer ID and notarized: it opens without clearing
+          quarantine. **Windows is unsigned** — Authenticode signing is bound to protected
+          \`main-v2\`, which this branch is not, so SmartScreen will warn: choose "More info"
+          then "Run anyway". **Linux** installs from the \`.deb\`.
 
-          Self-update is not available on this line yet — download and replace manually.
+          Self-update works on all three: Linux upgrades through its package, Windows runs
+          the next installer, macOS replaces its own bundle.
           EOF
           )
           if gh release view "$TAG" >/dev/null 2>&1; then

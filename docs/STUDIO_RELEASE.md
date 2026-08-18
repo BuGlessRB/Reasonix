@@ -1,23 +1,21 @@
 # Releasing Reasonix Studio
 
-Studio ships from the `studio` branch, in parallel with `main-v2`. It is a
-preview line: it does not enter the website's download page, does not claim the
-repository-wide "latest" release, and does not touch the desktop line's rollback
-catalog. Nothing here changes how `main-v2` publishes.
+Studio ships from the `studio` branch and publishes as a prerelease: it does not
+enter the website's download page, does not claim the repository-wide "latest"
+release, and does not touch the desktop line's rollback catalog.
 
-## Why it cannot use the stable pipeline
+## Its own line
 
-`release-stable.yml` validates that the CLI, npm and desktop tags all point at a
-reviewed candidate on **main-v2 history**. Studio commits are never on that
-history, so they cannot pass its preflight — hence a separate line rather than a
-new input to the existing one.
+`release-studio.yml` is the only release workflow this branch carries. It has its
+own tag namespace (`studio-v*`), its own environment gate and its own rollback
+catalog, so nothing it publishes can reach the desktop line's users.
 
-The same boundary applies to signing. The production SignPath policy allows
-exactly one origin (protected `main-v2`), which is what lets it avoid trusting
-wildcard tag-like branch names. A build from `studio` cannot request it, so
-**Windows artifacts are unsigned** and users see a SmartScreen warning. macOS
-artifacts are ad-hoc signed, not notarized: users clear the quarantine attribute
-with `xattr -dr com.apple.quarantine`.
+Windows signing is the one boundary that still bites. The production SignPath
+policy allows exactly one origin (protected `main-v2`), which is what lets it
+avoid trusting wildcard tag-like branch names. A build from `studio` cannot
+request it, so **Windows artifacts are unsigned** and users see a SmartScreen
+warning. macOS is not affected: one Developer ID signs any bundle identifier its
+team owns, so Studio is signed and notarized exactly as the desktop line is.
 
 ## One-time setup
 
@@ -33,18 +31,22 @@ It reuses these existing repository secrets — none are Studio-specific:
 | --- | --- |
 | `MINISIGN_PRIVATE_KEY`, `MINISIGN_PASSWORD` | detached signatures |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`, `R2_BUCKET` | catalog + artifact mirror |
+| `APPLE_CERT_P12`, `APPLE_CERT_PASSWORD`, `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID` | Developer ID signing and notarization |
 
 The minisign key is deliberately the desktop line's: the public key that verifies
 it is compiled into the client (`update.PublicKey`), so a separate key would not
-verify. If R2 secrets are absent the GitHub release still publishes, but the
-catalog is not updated and running builds will not see the new version.
+verify. The five `APPLE_*` secrets are required rather than optional — the macOS
+job fails closed without them, because an unsigned build that reached users would
+break the next self-update rather than the first launch. If the R2 secrets are
+absent the GitHub release still publishes, but the catalog is not updated and
+running builds will not see the new version.
 
 ## Cutting a release
 
 ```bash
 git checkout studio
-git tag studio-v0.1.0
-git push origin studio-v0.1.0
+git tag studio-v2.0.0
+git push origin studio-v2.0.0
 ```
 
 The tag triggers `release-studio.yml`, which:
@@ -68,42 +70,37 @@ The tag triggers `release-studio.yml`, which:
 dl.reasonix.io/
   versions.json              # desktop line — release-studio.yml never writes this
   studio/versions.json       # Studio's catalog; studioCatalog in desktop/next
-  studio-v0.1.0/…            # Studio artifacts, latest.json, signatures
+  studio-v2.0.0/…            # Studio artifacts, latest.json, signatures
   desktop-v1.26.0/…          # desktop artifacts
 ```
 
 Tag prefixes cannot collide because the tag names differ, so Studio artifacts sit
 beside desktop ones without a separate bucket.
 
-## Self-update is not available yet
+## Self-update
 
-The version panel reads Studio's catalog and will show that a newer version
-exists, but installing it is not wired up, so `latest.json` lists artifacts under
-`downloads` and leaves `platforms` empty. Asking for a version then reports that
-no installable package exists for this platform and points at the download page.
+`latest.json` carries three maps and the updater reads each by role:
 
-That is a property of the shared install path, not an oversight:
+- `downloads` is what a person is offered, so it lists only what installs itself:
+  the `.dmg`, the Windows installer, the `.deb`.
+- `platforms` is what the updater resolves — the Windows installer, which it runs
+  to upgrade in place, and the macOS universal `.zip`, whose bundle it swaps. A
+  portable archive is never listed: resolving one would hand the updater an
+  artifact it cannot install.
+- `nativePackages` carries the `.deb`, which is how Linux upgrades, because dpkg
+  replaces the binary and the SPA tree together.
 
-- **Windows** installs through the NSIS updater (`installerCommand` passes `/D=`),
-  and Studio has no `wails.json`, so it produces no installer.
-- **Linux** reads fixed member names out of the tarball —
-  `update.ExtractReleaseUnit` requires `reasonix-desktop`, `reasonix-guard` and
-  `reasonix` — which Studio's archive does not contain.
-- **macOS** self-update additionally requires a Developer ID signature and
-  notarization (`update.MacSelfUpdate`), which this line cannot obtain.
-
-Turning self-update on means teaching the apply path Studio's layout and filling
-`platforms` in the same change. `desktop/cmd/studio-manifest`'s tests assert that
-the manifest claims nothing it cannot install, so the claim and the capability
-have to land together.
+`desktop/cmd/studio-manifest` derives all three from the artifact names, and its
+tests assert the manifest never claims a platform it cannot install.
 
 ## Known gaps
 
-- No Windows installer and no `versioninfo` stamp: `desktop/next` builds with
-  plain `go build`, not the Wails CLI. Windows x64 gets its icon from the
-  committed `rsrc_windows_amd64.syso`; **arm64 has no `.syso`, so it is not built**.
-- Giving `desktop/next` its own `wails.json` fixes the installer, the version
-  stamp and arm64 at once, and is the prerequisite for self-update. When doing
-  it, keep Studio's install directory and uninstall registry key distinct from
-  `reasonix-desktop` — sharing them would let installing Studio overwrite an
-  existing desktop install.
+- No `versioninfo` stamp and **no windows/arm64 build**: `desktop/next` builds
+  with plain `go build` rather than the Wails CLI, and Windows x64 takes its icon
+  from the committed `rsrc_windows_amd64.syso` — arm64 has no `.syso`.
+- Giving `desktop/next` its own `wails.json` fixes the version stamp and arm64
+  together. When doing it, keep Studio's install directory and uninstall registry
+  key distinct from `reasonix-desktop` — sharing them would let installing Studio
+  overwrite an existing desktop install.
+- Installs of the desktop line (`desktop-v*`) read the root catalog, so they are
+  never offered Studio. Migrating them is not wired up.

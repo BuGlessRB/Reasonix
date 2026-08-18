@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Build Reasonix Studio (desktop/next + desktop/frontend-next) for one platform.
 #
-# Studio has no wails.json yet, so this drives `go build` directly rather than
-# the Wails CLI. That costs the NSIS installer and the versioninfo stamp the
-# desktop line gets for free (see docs/STUDIO_RELEASE.md), which is why the
-# Windows artifact here is a portable archive and not an updater-installable
-# installer. The Wails build tags are still required: without them the shell
+# Studio has no wails.json, so this drives `go build` directly rather than the
+# Wails CLI, and packages the NSIS installer itself (see docs/STUDIO_RELEASE.md).
+# What is still missing without it is the versioninfo stamp and a windows/arm64
+# .syso. The Wails build tags are required either way: without them the shell
 # opens a "will not build without the correct build tags" dialog at runtime
 # instead of failing to compile, so a missing tag ships silently.
 #

@@ -2,10 +2,9 @@
 // artifacts. cmd/sign's manifest subcommand is the desktop line's: it hardcodes
 // desktop's download page and drops any windows file that is not -installer.exe.
 //
-// Every artifact lands in downloads, none in platforms — the shared apply path
-// names the desktop line's release members (update.ExtractReleaseUnit) and
-// Windows installs through NSIS, so Studio has no install path yet. Filling
-// platforms turns self-update on, and must land with that path.
+// Downloads is what a person is offered, so it lists only what installs itself.
+// Platforms and NativePackages are what the updater resolves, which is why a
+// portable archive never appears in either.
 package main
 
 import (
