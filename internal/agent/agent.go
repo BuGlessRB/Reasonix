@@ -2423,26 +2423,18 @@ func firstLine(s string) string {
 // RawContent by the session writer. The bounded form is stable for the message
 // lifetime and is never re-truncated by later maintenance.
 func truncateToolOutput(s string) (string, string) {
-	return truncateToolOutputFor(s, "", "", maxToolOutputBytes)
+	return truncateToolOutputFor(s, "", "", maxToolOutputBytes, defaultSideEffectingSnip)
 }
 
-// truncateToolOutputFor is the tool-aware first-visible limiter. toolName and
-// toolCallID populate the truncation marker so the model can re-fetch.
-func truncateToolOutputFor(s, toolName, toolCallID string, cap int) (string, string) {
+// truncateToolOutputFor is the first-visible limiter. The geometry comes from
+// the caller, which reads it off the tool's own SnipHint contract; toolName and
+// toolCallID only populate the marker so the model can re-fetch.
+func truncateToolOutputFor(s, toolName, toolCallID string, cap int, strategy snipStrategy) (string, string) {
 	if cap <= 0 {
 		cap = maxToolOutputBytes
 	}
 	if len(s) <= cap {
 		return s, ""
-	}
-	strategy := snipStrategy{head: 40, tail: 40, headChars: 8000, tailChars: 8000}
-	switch {
-	case toolName == "bash" || toolName == "shell" || strings.Contains(toolName, "bash"):
-		strategy = snipStrategy{head: 40, tail: 40, headChars: 8000, tailChars: 8000}
-	case toolName == "read_file" || toolName == "web_fetch" || strings.Contains(toolName, "read"):
-		strategy = snipStrategy{head: 120, tail: 12, headChars: 12000, tailChars: 2000}
-	case toolName == "grep" || toolName == "glob" || toolName == "ls" || toolName == "list_dir":
-		strategy = snipStrategy{head: 80, tail: 8, headChars: 10000, tailChars: 1000}
 	}
 	headKeep := strategy.headChars
 	tailKeep := strategy.tailChars
@@ -2453,14 +2445,6 @@ func truncateToolOutputFor(s, toolName, toolCallID string, cap int) (string, str
 	if headKeep < 1024 {
 		headKeep = cap / 2
 		tailKeep = cap / 2
-	}
-	// Prefer more tail when the body looks like a failure.
-	lower := strings.ToLower(s)
-	if strings.Contains(lower, "error:") || strings.Contains(lower, "panic:") || strings.Contains(lower, "fatal:") {
-		tailKeep = max(tailKeep, cap/3)
-		if headKeep+tailKeep > cap-512 {
-			headKeep = cap - 512 - tailKeep
-		}
 	}
 	head := snapToRuneBoundary(s, 0, headKeep)
 	tail := snapToRuneBoundary(s, len(s)-tailKeep, len(s))

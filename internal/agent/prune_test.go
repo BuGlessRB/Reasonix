@@ -48,7 +48,7 @@ func TestSnipStrategyStillAvailableForFirstVisibleAndSummaryInput(t *testing.T) 
 	if s.head <= 0 || s.tail <= 0 {
 		t.Fatalf("snip strategy for read_file = %+v", s)
 	}
-	body, notice := truncateToolOutputFor(strings.Repeat("x", maxToolOutputBytes+100), "read_file", "call-1", maxToolOutputBytes)
+	body, notice := truncateToolOutputFor(strings.Repeat("x", maxToolOutputBytes+100), "read_file", "call-1", maxToolOutputBytes, s)
 	if notice == "" || !strings.Contains(body, "call_id=call-1") {
 		t.Fatalf("first-visible truncation missing marker: notice=%q body=%.200q", notice, body)
 	}

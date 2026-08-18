@@ -245,7 +245,7 @@ func TestOversizeOutputSpillsRatherThanTruncates(t *testing.T) {
 	root := t.TempDir()
 
 	withRoot := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
-	out, notice := withRoot.boundToolOutput(big, "bash", "call-1", "")
+	out, _, notice := withRoot.boundToolOutput(big, "bash", "call-1", "", false)
 	if notice != "" {
 		t.Errorf("spilled output must carry no truncation notice: %q", notice)
 	}
@@ -261,7 +261,7 @@ func TestOversizeOutputSpillsRatherThanTruncates(t *testing.T) {
 	// lose the middle: scratch is somewhere, and truncation drops most of a
 	// result this size.
 	bare := New(nil, tool.NewRegistry(), NewSession("sys"), Options{}, event.Discard)
-	bareOut, bareNotice := bare.boundToolOutput(big, "bash", "call-2", "")
+	bareOut, _, bareNotice := bare.boundToolOutput(big, "bash", "call-2", "", false)
 	if bareNotice != "" {
 		t.Errorf("the scratch fallback must keep the result whole, not truncate it: %q", bareNotice)
 	}

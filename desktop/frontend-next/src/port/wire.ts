@@ -55,6 +55,17 @@ export interface Execution {
   contextTokens?: number;
 }
 
+// How a result was fitted into the model's context, absent when it arrived
+// whole. The distinction is what a card has to show: spilled and windowed are
+// still reachable, truncated is content the model never saw.
+export interface Bound {
+  kind: "spilled" | "windowed" | "truncated";
+  lines?: number;
+  bytes?: number;
+  keptBytes?: number;
+  path?: string;
+}
+
 export interface Tool {
   id?: string;
   name: string;
@@ -64,7 +75,9 @@ export interface Tool {
   output?: string;
   err?: string;
   readOnly: boolean;
+  // truncated is the pre-Bound projection kept for old journals; read bound.
   truncated?: boolean;
+  bound?: Bound;
   durationMs?: number;
   contextTokens?: number;
   startedAt?: number;

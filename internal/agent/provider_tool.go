@@ -26,7 +26,7 @@ func appendProviderItem(items []json.RawMessage, item json.RawMessage) []json.Ra
 func (a *Agent) absorbProviderRunCall(text *strings.Builder, sink event.Sink, chunk provider.Chunk, attemptID string) {
 	// The listing joins the turn text, so it passes the same gate a tool result
 	// does. The card still shows every result — an event is not context.
-	bounded, _ := a.boundToolOutput(chunk.Text, providerToolName(chunk), providerToolCallID(chunk), providerToolArgs(chunk))
+	bounded, _, _ := a.boundToolOutput(chunk.Text, providerToolName(chunk), providerToolCallID(chunk), providerToolArgs(chunk), false)
 	text.WriteString(bounded)
 	tc := chunk.ToolCall
 	if tc == nil {

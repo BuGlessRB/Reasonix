@@ -494,13 +494,16 @@ func (m *subagentProgressMerger) emitToolProgressLocked(childID, name, output st
 	if parentID == childID {
 		parentID = ""
 	}
-	m.sink.Emit(event.Event{
-		Kind: event.ToolProgress,
-		Tool: event.Tool{
-			ID: childID, Name: name, ParentID: parentID,
-			Output: output, Truncated: truncated, DurationMs: durationMs,
-		},
-	})
+	t := event.Tool{
+		ID: childID, Name: name, ParentID: parentID,
+		Output: output, DurationMs: durationMs,
+	}
+	// A dropped preview round is the same claim a truncated result makes: what
+	// is shown is not all there was.
+	if truncated {
+		t.Bound.Kind = event.BoundTruncated
+	}
+	m.sink.Emit(event.Event{Kind: event.ToolProgress, Tool: t})
 }
 
 // trimToBudgetLocked keeps the child's pending total at or under

@@ -52,7 +52,11 @@ func subagentStatus(id, phase string) event.Event {
 }
 
 func subagentPreview(id, channel, text string, truncated bool) event.Event {
-	return event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: id, Name: channel, Output: text, Truncated: truncated}}
+	t := event.Tool{ID: id, Name: channel, Output: text}
+	if truncated {
+		t.Bound.Kind = event.BoundTruncated
+	}
+	return event.Event{Kind: event.ToolProgress, Tool: t}
 }
 
 func TestCacheRateLabelKeepsTwoDecimals(t *testing.T) {

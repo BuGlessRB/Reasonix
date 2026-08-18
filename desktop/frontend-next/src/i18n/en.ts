@@ -134,10 +134,18 @@ export const EN: Record<string, string> = {
   "重命名这个会话": "Rename this session",
   "展开": "Expand",
   "收起": "Collapse",
+  "展开全部": "Show all",
+  "完整输出已存盘（{lines} 行 · {size}），模型按需读取": "Full output saved to disk ({lines} lines · {size}); the model reads it on demand",
+  "已显示开头部分，模型可继续往下读": "Showing the start; the model can read on from there",
+  "模型只收到 {kept}，共 {size} — 其余未进入上下文": "The model received only {kept} of {size} — the rest never entered its context",
   "在 {name} 下开一个新会话": "Start a new session in {name}",
   "最多同时开 {n} 个面板，先关掉一个": "At most {n} panes at once — close one first",
   "关闭这个会话面板": "Close this pane",
-  "这个文件夹还有打开的面板，先关掉再移除": "This folder still has open panes — close them before removing it",
+  "这个文件夹还有 {n} 个打开的面板，先关掉再移除": "This folder still has {n} open panes — close them before removing it",
+  "不会删除任何文件": "No files are deleted",
+  "会先关掉 {n} 个面板；不会删除任何文件": "Closes {n} panes first; no files are deleted",
+  "会先关掉 {n} 个面板，其中 {live} 个还在跑；不会删除任何文件":
+    "Closes {n} panes first, {live} of them mid-turn; no files are deleted",
 
   // ── 输入区 ───────────────────────────────────────────────────────
   "↓ 回到最新": "↓ Back to latest",

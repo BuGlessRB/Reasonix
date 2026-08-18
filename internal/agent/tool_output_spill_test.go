@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -20,7 +23,7 @@ func TestSpillNeverGrowsTheContext(t *testing.T) {
 	line := strings.Repeat("x", 78) + "\n"
 	for _, lines := range []int{1, 4, 13, 20, 26, 40, 64, 200, 800, 2000} {
 		body := strings.Repeat(line, lines)
-		out, notice := a.boundToolOutput(body, "bash", fmt.Sprintf("call-%d", lines), "")
+		out, _, notice := a.boundToolOutput(body, "bash", fmt.Sprintf("call-%d", lines), "", false)
 		if len(out) > len(body) {
 			t.Errorf("%d lines (%d bytes) came back as %d bytes", lines, len(body), len(out))
 		}
@@ -37,7 +40,7 @@ func TestResultsThatFitOneReadBackStayInContext(t *testing.T) {
 	a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: t.TempDir()}, event.Discard)
 	for _, size := range []int{1 << 10, 4 << 10, 16 << 10, maxToolOutputBytes} {
 		body := strings.Repeat("x", size)
-		out, notice := a.boundToolOutput(body, "bash", fmt.Sprintf("fit-%d", size), "")
+		out, _, notice := a.boundToolOutput(body, "bash", fmt.Sprintf("fit-%d", size), "", false)
 		if out != body || notice != "" {
 			t.Errorf("%d bytes came back changed (notice=%q); one fetch recovers it whole, so it should stay", size, notice)
 		}
@@ -49,9 +52,11 @@ func TestResultsThatFitOneReadBackStayInContext(t *testing.T) {
 // numbers what it returns, so every round is bigger than the last: the content
 // never arrives. This is the loop that issued 1936 reads in one session.
 func TestReadingASpillBackDoesNotSpillAgain(t *testing.T) {
-	a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: t.TempDir()}, event.Discard)
+	reg := tool.NewRegistry()
+	reg.Add(pagedReader{})
+	a := New(nil, reg, NewSession("sys"), Options{ArchiveDir: t.TempDir()}, event.Discard)
 	body := strings.Repeat(strings.Repeat("payload ", 12)+"\n", 500)
-	out, _ := a.boundToolOutput(body, "bash", "call_00_ORIGIN", "")
+	out, _, _ := a.boundToolOutput(body, "bash", "call_00_ORIGIN", "", false)
 	if !strings.Contains(out, spillMarker) {
 		t.Fatalf("a %d-byte body should have spilled", len(body))
 	}
@@ -66,7 +71,7 @@ func TestReadingASpillBackDoesNotSpillAgain(t *testing.T) {
 
 	// A window, the way read_file is meant to be used: it must arrive verbatim.
 	window := numberLines(lines[:200])
-	got, notice := a.boundToolOutput(window, "read_file", "call_01_WINDOW", args)
+	got, _, notice := a.boundToolOutput(window, "read_file", "call_01_WINDOW", args, false)
 	if got != window || notice != "" {
 		t.Errorf("a %d-byte window came back changed (notice=%q); the fetch must deliver", len(window), notice)
 	}
@@ -75,7 +80,7 @@ func TestReadingASpillBackDoesNotSpillAgain(t *testing.T) {
 	// spilling — that is the step which has no exit.
 	for round := 1; round <= 5; round++ {
 		whole := numberLines(lines)
-		got, _ := a.boundToolOutput(whole, "read_file", fmt.Sprintf("call_%02d_WHOLE", round), args)
+		got, _, _ := a.boundToolOutput(whole, "read_file", fmt.Sprintf("call_%02d_WHOLE", round), args, false)
 		if strings.Contains(got, spillMarker) {
 			t.Fatalf("round %d: the fetch was spilled again, so the model gets a pointer where it asked for content", round)
 		}
@@ -122,7 +127,7 @@ func TestSpillEarnsAtLeastItsOwnCost(t *testing.T) {
 	line := strings.Repeat("y", 96) + "\n"
 	for lines := 1; lines <= 600; lines += 3 {
 		body := strings.Repeat(line, lines)
-		out, _ := a.boundToolOutput(body, "read_file", fmt.Sprintf("earn-%d", lines), "")
+		out, _, _ := a.boundToolOutput(body, "bash", fmt.Sprintf("earn-%d", lines), "", false)
 		if !strings.Contains(out, spillMarker) {
 			continue
 		}
@@ -134,16 +139,128 @@ func TestSpillEarnsAtLeastItsOwnCost(t *testing.T) {
 	t.Fatal("spilling never engaged within 600 lines")
 }
 
-// Reading something that merely lives elsewhere still spills normally — the
-// exemption is about where the path points, not which tool asked.
-func TestOrdinaryReadsStillSpill(t *testing.T) {
+// pagedReader stands in for read_file. This package's tests cannot import
+// tool/builtin — that package imports back into agent — so the Paged contract is
+// exercised through a stub registered under the same name.
+type pagedReader struct{}
+
+func (pagedReader) Name() string            { return "read_file" }
+func (pagedReader) Description() string     { return "stub" }
+func (pagedReader) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (pagedReader) ReadOnly() bool          { return true }
+func (pagedReader) Paged() bool             { return true }
+func (pagedReader) Execute(context.Context, json.RawMessage) (string, error) {
+	return "", nil
+}
+func (pagedReader) ReadTarget(args json.RawMessage) string { return stubReadTarget(args) }
+
+// targetedSearch stands in for grep: it names the path it reads but has no
+// continuation of its own, so the ReadTargeter contract is the only thing that
+// can spare it — which is what makes it the honest test of that contract.
+type targetedSearch struct{}
+
+func (targetedSearch) Name() string            { return "grep" }
+func (targetedSearch) Description() string     { return "stub" }
+func (targetedSearch) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (targetedSearch) ReadOnly() bool          { return true }
+func (targetedSearch) Execute(context.Context, json.RawMessage) (string, error) {
+	return "", nil
+}
+func (targetedSearch) ReadTarget(args json.RawMessage) string { return stubReadTarget(args) }
+
+// stubReadTarget stands in for the real resolvers: the contract is that a tool
+// reports the path it reads, not how it derived it.
+func stubReadTarget(args json.RawMessage) string {
+	var p struct {
+		Path string `json:"path"`
+	}
+	if json.Unmarshal(args, &p) != nil {
+		return ""
+	}
+	return p.Path
+}
+
+// Sparing a fetch is decided by where it points, not by which tool made it. A
+// tool that cannot page is still spared inside the spill directory, and the same
+// tool reading anywhere else still spills — so no name is load-bearing.
+func TestFetchingASpillIsSparedByContractNotByName(t *testing.T) {
+	root := t.TempDir()
+	reg := tool.NewRegistry()
+	reg.Add(targetedSearch{})
+	a := New(nil, reg, NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
+	body := strings.Repeat("a matching line of spilled content\n", 2000)
+
+	inSpill := fmt.Sprintf(`{"path":%q}`, filepath.Join(a.spillDir(), "call-1.txt"))
+	out, bound, notice := a.boundToolOutput(body, "grep", "call-fetch", inSpill, false)
+	if strings.Contains(out, spillMarker) {
+		t.Error("a fetch aimed at the spill directory must deliver content, not a further pointer")
+	}
+	if bound.Kind != event.BoundWindowed || notice != "" {
+		t.Errorf("kind = %d notice = %q; a spared fetch is windowed and loses nothing", bound.Kind, notice)
+	}
+
+	elsewhere := fmt.Sprintf(`{"path":%q}`, filepath.Join(root, "src", "main.go"))
+	out, _, _ = a.boundToolOutput(body, "grep", "call-ordinary", elsewhere, false)
+	if !strings.Contains(out, spillMarker) {
+		t.Error("the same tool reading outside the spill directory still spills")
+	}
+}
+
+// A tool that claims no read target — a shell, whose path is knowable only by
+// parsing the command — keeps spilling. The gate must not guess one for it.
+func TestToolWithoutTheContractIsNeverSpared(t *testing.T) {
+	root := t.TempDir()
+	reg := tool.NewRegistry()
+	a := New(nil, reg, NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
+	body := strings.Repeat("a wide line of ordinary command output\n", 2000)
+	args := fmt.Sprintf(`{"command":"cat %s"}`, filepath.Join(a.spillDir(), "call-1.txt"))
+	if a.readsSpilledOutput("bash", args) {
+		t.Fatal("a shell cannot name what it reads without parsing it, so it must not be spared")
+	}
+	out, bound, _ := a.boundToolOutput(body, "bash", "call-shell", args, false)
+	if !strings.Contains(out, spillMarker) || bound.Kind != event.BoundSpilled {
+		t.Errorf("kind = %d; output that names no target still spills", bound.Kind)
+	}
+}
+
+// A tool that addresses its own continuation is windowed, not moved: the model
+// gets real bytes now and reads on from where they stop. Spilling would hand it
+// a pointer instead of content, and point it at a numbered duplicate of a file
+// already on disk.
+func TestPagedReadsWindowRatherThanSpill(t *testing.T) {
+	root := t.TempDir()
+	reg := tool.NewRegistry()
+	reg.Add(pagedReader{})
+	a := New(nil, reg, NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
+	body := strings.Repeat("a wide line of ordinary file content\n", 2000)
+	args := fmt.Sprintf(`{"path":%q}`, filepath.Join(root, "somewhere", "else.go"))
+	out, bound, notice := a.boundToolOutput(body, "read_file", "call-ordinary", args, false)
+	if strings.Contains(out, spillMarker) {
+		t.Error("a paged read should window rather than spill: it can continue from where it stops")
+	}
+	if bound.Kind != event.BoundWindowed {
+		t.Errorf("kind = %d, want BoundWindowed", bound.Kind)
+	}
+	if notice != "" || bound.Lossy() {
+		t.Errorf("a window discards nothing and must not report a loss (notice=%q)", notice)
+	}
+	if !strings.HasPrefix(body, strings.TrimSuffix(out, windowMarker)) {
+		t.Error("the window must be a verbatim leading run of the body")
+	}
+}
+
+// A tool with no continuation of its own still spills: its output happened once,
+// so parking it somewhere readable is the only way to keep it whole.
+func TestUnpagedResultsStillSpill(t *testing.T) {
 	root := t.TempDir()
 	a := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
-	body := strings.Repeat("a wide line of ordinary file content\n", 2000)
-	args := fmt.Sprintf(`{"path":%q}`, root+"/somewhere/else.go")
-	out, _ := a.boundToolOutput(body, "read_file", "call-ordinary", args)
+	body := strings.Repeat("a wide line of ordinary command output\n", 2000)
+	out, bound, _ := a.boundToolOutput(body, "bash", "call-unpaged", "", false)
 	if !strings.Contains(out, spillMarker) {
-		t.Errorf("a %d-byte read of an ordinary file should still spill", len(body))
+		t.Fatalf("a %d-byte result from a tool that cannot re-read should spill", len(body))
+	}
+	if bound.Kind != event.BoundSpilled || bound.Path == "" {
+		t.Errorf("kind = %d, path = %q; a spill must say where it went", bound.Kind, bound.Path)
 	}
 }
 
@@ -153,7 +270,7 @@ func spillBarFor(t *testing.T, lineLen int) int {
 	line := strings.Repeat("x", lineLen) + "\n"
 	for lines := 1; lines <= 4000; lines++ {
 		body := strings.Repeat(line, lines)
-		out, _ := a.boundToolOutput(body, "bash", fmt.Sprintf("bar-%d-%d", lineLen, lines), "")
+		out, _, _ := a.boundToolOutput(body, "bash", fmt.Sprintf("bar-%d-%d", lineLen, lines), "", false)
 		if strings.Contains(out, spillMarker) {
 			return len(body)
 		}
@@ -163,7 +280,7 @@ func spillBarFor(t *testing.T, lineLen int) int {
 
 func spillPathIn(t *testing.T, pointer string) string {
 	t.Helper()
-	for _, l := range strings.Split(pointer, "\n") {
+	for l := range strings.SplitSeq(pointer, "\n") {
 		if rest, ok := strings.CutPrefix(l, "Full output: "); ok {
 			return strings.TrimSpace(rest)
 		}

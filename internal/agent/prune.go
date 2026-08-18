@@ -68,6 +68,18 @@ func snipStrategyFromHint(h tool.SnipHint) snipStrategy {
 	return snipStrategy{head: h.Head, tail: h.Tail, headChars: h.HeadChars, tailChars: h.TailChars}
 }
 
+// forFailure reweights a geometry toward the tail. A failed call's answer is at
+// its end — the diagnostic, the stack, the exit status — whatever shape the
+// tool carries when it succeeds. The caller knows the call failed; reading that
+// back out of the body would be guessing at wording.
+func (s snipStrategy) forFailure(cap int) snipStrategy {
+	s.tailChars = max(s.tailChars, cap/3)
+	if s.headChars+s.tailChars > cap-512 {
+		s.headChars = cap - 512 - s.tailChars
+	}
+	return s
+}
+
 func firstRunes(s string, n int) string {
 	if len(s) <= n {
 		return s

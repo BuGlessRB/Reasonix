@@ -374,7 +374,7 @@ func (s *runOutputSink) machineEventRecordFor(e event.Event, sequence uint64) ma
 		record.ToolName = machineOpaqueValue(s.machineToolNames, &s.nextMachineToolName, "tool_name", e.Tool.Name)
 		record.ToolReadOnly = e.Tool.ReadOnly
 		record.ToolError = e.Tool.Err != ""
-		record.ToolTruncated = e.Tool.Truncated
+		record.ToolTruncated = e.Tool.Bound.Lossy()
 		record.ToolDurationMS = e.Tool.DurationMs
 	case event.Usage:
 		if e.Usage != nil {

@@ -210,7 +210,7 @@ func TestSubagentProgressPreviewMergesWithinWindow(t *testing.T) {
 	if merged.Tool.Output != "first second third" {
 		t.Fatalf("preview output = %q, want merged deltas", merged.Tool.Output)
 	}
-	if merged.Tool.Truncated {
+	if merged.Tool.Bound.Lossy() {
 		t.Fatal("merged preview must not be marked truncated")
 	}
 	// The window is per (child, channel): a text delta is due on its own timer,
@@ -460,8 +460,8 @@ func TestSubagentProgressUtf8TailKeepsRuneBoundaries(t *testing.T) {
 		if !utf8.ValidString(e.Tool.Output) {
 			t.Fatalf("preview split a multi-byte rune: %q", e.Tool.Output)
 		}
-		if !e.Tool.Truncated {
-			t.Fatalf("overflowing preview %q must set Truncated", e.Tool.Name)
+		if !e.Tool.Bound.Lossy() {
+			t.Fatalf("overflowing preview %q must report its loss", e.Tool.Name)
 		}
 	}
 	if pending > subagentProgressMaxPendingBytes {
@@ -557,8 +557,8 @@ func TestSubagentProgressTrimTruncationPropagates(t *testing.T) {
 	if textEvent == nil {
 		t.Fatalf("no text preview emitted: %+v", got)
 	}
-	if !textEvent.Tool.Truncated {
-		t.Fatalf("budget-trimmed preview must carry Truncated: %+v", textEvent.Tool)
+	if !textEvent.Tool.Bound.Lossy() {
+		t.Fatalf("budget-trimmed preview must report its loss: %+v", textEvent.Tool)
 	}
 	if textEvent.Tool.Output == "" || !utf8.ValidString(textEvent.Tool.Output) {
 		t.Fatalf("trimmed preview must keep a UTF-8-safe tail: %+v", textEvent.Tool)

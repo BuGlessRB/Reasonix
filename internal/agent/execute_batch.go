@@ -22,7 +22,7 @@ type toolOutcome struct {
 	images                     []string
 	blocked                    bool
 	errMsg                     string
-	truncated                  bool
+	bound                      event.OutputBound
 	truncMsg                   string
 	resolved                   bool
 	resolvedName               string
@@ -294,7 +294,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			Output:       o.output,
 			Err:          o.errMsg,
 			ReadOnly:     readOnly,
-			Truncated:    o.truncated,
+			Bound:        o.bound,
 			DurationMs:   durations[i],
 			Execution:    toEventShellExecution(o.execution, durations[i]),
 		}
@@ -308,7 +308,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			}
 		}
 		a.svc.sink.Emit(event.Event{Kind: event.ToolResult, Tool: tr})
-		if o.truncated && o.truncMsg != "" {
+		if o.truncMsg != "" {
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: o.truncMsg})
 		}
 	}

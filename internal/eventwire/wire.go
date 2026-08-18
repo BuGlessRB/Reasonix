@@ -111,24 +111,7 @@ func ToWire(e event.Event) Event {
 			w.Level = "info"
 		}
 	case event.ToolDispatch, event.ToolResult, event.ToolProgress:
-		wt := &Tool{
-			ID: e.Tool.ID, Name: e.Tool.Name, Args: e.Tool.Args,
-			ResolvedName: e.Tool.ResolvedName, CapabilityID: e.Tool.CapabilityID,
-			Output: e.Tool.Output, Err: e.Tool.Err,
-			ReadOnly: e.Tool.ReadOnly, Truncated: e.Tool.Truncated,
-			DurationMs: e.Tool.DurationMs, ContextTokens: e.Tool.ContextTokens(),
-			Partial: e.Tool.Partial, StartedAt: e.Tool.StartedAt, EndedAt: e.Tool.EndedAt,
-			ArgChars: e.Tool.ArgChars, Refreshed: e.Tool.Refreshed,
-			ParentID: e.Tool.ParentID, AttemptID: e.Tool.AttemptID,
-			Diff: e.Tool.Diff, Added: e.Tool.Added, Removed: e.Tool.Removed,
-		}
-		if e.Tool.Profile != nil {
-			wt.Profile = &Profile{Model: e.Tool.Profile.Model, Effort: e.Tool.Profile.Effort}
-		}
-		if e.Tool.Execution != nil {
-			wt.Execution = toWireShellExecution(e.Tool.Execution)
-		}
-		w.Tool = wt
+		w.Tool = toWireTool(e.Tool)
 	case event.WorkspaceChanged:
 		ws := e.Workspace
 		if ws == nil {
@@ -374,6 +357,50 @@ type Profile struct {
 	Effort string `json:"effort,omitempty"`
 }
 
+// Bound is the JSON form of event.OutputBound, present only when the result did
+// not arrive whole. "spilled" keeps Path, which a frontend can offer to open;
+// "truncated" keeps KeptBytes, which is all the model ever saw.
+type Bound struct {
+	Kind      string `json:"kind"`
+	Lines     int    `json:"lines,omitempty"`
+	Bytes     int    `json:"bytes,omitempty"`
+	KeptBytes int    `json:"keptBytes,omitempty"`
+	Path      string `json:"path,omitempty"`
+}
+
+var boundKindNames = map[event.BoundKind]string{
+	event.BoundSpilled:   "spilled",
+	event.BoundWindowed:  "windowed",
+	event.BoundTruncated: "truncated",
+}
+
+func toWireTool(t event.Tool) *Tool {
+	wt := &Tool{
+		ID: t.ID, Name: t.Name, Args: t.Args,
+		ResolvedName: t.ResolvedName, CapabilityID: t.CapabilityID,
+		Output: t.Output, Err: t.Err,
+		ReadOnly: t.ReadOnly, Truncated: t.Bound.Lossy(),
+		DurationMs: t.DurationMs, ContextTokens: t.ContextTokens(),
+		Partial: t.Partial, StartedAt: t.StartedAt, EndedAt: t.EndedAt,
+		ArgChars: t.ArgChars, Refreshed: t.Refreshed,
+		ParentID: t.ParentID, AttemptID: t.AttemptID,
+		Diff: t.Diff, Added: t.Added, Removed: t.Removed,
+	}
+	if b := t.Bound; b.Kind != event.BoundWhole {
+		wt.Bound = &Bound{
+			Kind: boundKindNames[b.Kind], Lines: b.Lines,
+			Bytes: b.Bytes, KeptBytes: b.KeptBytes, Path: b.Path,
+		}
+	}
+	if t.Profile != nil {
+		wt.Profile = &Profile{Model: t.Profile.Model, Effort: t.Profile.Effort}
+	}
+	if t.Execution != nil {
+		wt.Execution = toWireShellExecution(t.Execution)
+	}
+	return wt
+}
+
 // Tool is the JSON form of an event.Tool.
 type Tool struct {
 	ID           string `json:"id,omitempty"`
@@ -384,8 +411,11 @@ type Tool struct {
 	Output       string `json:"output,omitempty" externalizable:"true"`
 	Err          string `json:"err,omitempty" externalizable:"true"`
 	ReadOnly     bool   `json:"readOnly"`
-	Truncated    bool   `json:"truncated,omitempty"`
-	DurationMs   int64  `json:"durationMs,omitempty"`
+	// Truncated is the compatibility projection of Bound for journals written
+	// before it existed; Bound is what a current frontend reads.
+	Truncated  bool   `json:"truncated,omitempty"`
+	Bound      *Bound `json:"bound,omitempty"`
+	DurationMs int64  `json:"durationMs,omitempty"`
 	// ContextTokens is what this call left in the prompt (args + result), so a
 	// card can say which step is eating the window. Estimated, never billed.
 	ContextTokens int             `json:"contextTokens,omitempty"`

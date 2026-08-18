@@ -2632,19 +2632,19 @@ func (m *chatTUI) streamSubagentProgress(t event.Tool) {
 		m.renderSubagentProgress(t.ID)
 	case event.SubagentProgressReasoningName:
 		sp.reasoning = cliPreviewTail(sp.reasoning+t.Output, subagentPreviewMax)
-		sp.truncated = sp.truncated || t.Truncated
+		sp.truncated = sp.truncated || t.Bound.Lossy()
 		if m.showReasoning {
 			m.renderSubagentProgress(t.ID)
 		}
 	case event.SubagentProgressTextName:
 		sp.text = cliPreviewTail(sp.text+t.Output, subagentPreviewMax)
-		sp.truncated = sp.truncated || t.Truncated
+		sp.truncated = sp.truncated || t.Bound.Lossy()
 		if m.showReasoning {
 			m.renderSubagentProgress(t.ID)
 		}
 	case event.SubagentProgressNoticeName:
 		sp.notice = cliPreviewTail(sp.notice+t.Output, subagentNoticeMax)
-		sp.truncated = sp.truncated || t.Truncated
+		sp.truncated = sp.truncated || t.Bound.Lossy()
 		if m.showReasoning {
 			m.renderSubagentProgress(t.ID)
 		}

@@ -343,8 +343,8 @@ func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (
 			if rc.Unavailable {
 				return toolOutcome{output: result, errMsg: firstLine(rc.UnavailableReason)}, true
 			}
-			body, truncMsg := a.boundToolOutput(result, plan.call.Name, plan.call.ID, plan.call.Arguments)
-			out := toolOutcome{output: body, truncated: truncMsg != "", truncMsg: truncMsg}
+			body, bound, truncMsg := a.boundToolOutput(result, plan.call.Name, plan.call.ID, plan.call.Arguments, false)
+			out := toolOutcome{output: body, bound: bound, truncMsg: truncMsg}
 			if truncMsg != "" {
 				out.rawOutput = result
 			}
@@ -827,9 +827,9 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 			detail = strings.TrimRight(detail, "\n") + "\nThe arguments were not valid JSON. Re-emit them exactly per this schema:\n" + string(t.Schema())
 		}
 		rawErr := fmt.Sprintf("error: %v\n%s", err, detail)
-		body, truncMsg := a.boundToolOutput(rawErr, call.Name, call.ID, call.Arguments)
+		body, bound, truncMsg := a.boundToolOutput(rawErr, call.Name, call.ID, call.Arguments, true)
 		out := toolOutcome{
-			output: body, errMsg: firstLine(err.Error()), truncated: truncMsg != "", truncMsg: truncMsg,
+			output: body, errMsg: firstLine(err.Error()), bound: bound, truncMsg: truncMsg,
 			execution: execution, recoveryGeneration: recoveryGen,
 		}
 		if truncMsg != "" {
@@ -843,9 +843,9 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	if a.svc.hooks != nil && call.Name == "task" && !isBackgroundTaskCall(call.Arguments) {
 		a.svc.hooks.SubagentStop(ctx, result)
 	}
-	body, truncMsg := a.boundToolOutput(result, call.Name, call.ID, call.Arguments)
+	body, bound, truncMsg := a.boundToolOutput(result, call.Name, call.ID, call.Arguments, false)
 	out := toolOutcome{
-		output: body, images: images, truncated: truncMsg != "", truncMsg: truncMsg,
+		output: body, images: images, bound: bound, truncMsg: truncMsg,
 		execution: execution, recoveryGeneration: recoveryGen,
 	}
 	if truncMsg != "" {

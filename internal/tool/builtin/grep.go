@@ -88,6 +88,18 @@ func (grepTool) SnipHint() tool.SnipHint {
 	return tool.SnipHint{Head: 80, Tail: 8, HeadChars: 10000, TailChars: 1000}
 }
 
+// ReadTarget resolves the same path Execute will. An unset path searches the
+// work dir, which names no single target, so it reports none.
+func (g grepTool) ReadTarget(args json.RawMessage) string {
+	var p struct {
+		Path string `json:"path"`
+	}
+	if json.Unmarshal(args, &p) != nil || p.Path == "" {
+		return ""
+	}
+	return resolveReadablePath(g.workDir, p.Path, g.paths).Path
+}
+
 func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Pattern        string `json:"pattern"`

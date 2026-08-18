@@ -71,6 +71,22 @@ func (readFile) SnipHint() tool.SnipHint {
 	return tool.SnipHint{Head: 120, Tail: 12, HeadChars: 12000, TailChars: 2000}
 }
 
+// Paged: every returned line carries its 1-based number and the trailer names
+// the offset to continue from, so an oversize read is a window, not a loss.
+func (readFile) Paged() bool { return true }
+
+// ReadTarget resolves the same path Execute will, so a fetch of a spilled result
+// is recognised by where it points rather than by the tool's name.
+func (r readFile) ReadTarget(args json.RawMessage) string {
+	var p struct {
+		Path string `json:"path"`
+	}
+	if json.Unmarshal(args, &p) != nil || p.Path == "" {
+		return ""
+	}
+	return resolveReadablePath(r.workDir, p.Path, r.paths).Path
+}
+
 func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Path   string `json:"path"`

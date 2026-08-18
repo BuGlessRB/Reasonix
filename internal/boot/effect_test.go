@@ -230,9 +230,10 @@ model = "x"
 	}
 }
 
-// spillFollowProvider walks the two turns the read-back loop lived in: read a
-// large file, then follow whatever pointer comes back — which is exactly what a
-// model does when told its output was kept out of context.
+// spillFollowProvider walks the two turns the read-back loop lived in: a shell
+// read, which cannot page and so parks its output, then read_file following
+// whatever pointer came back — exactly what a model does when told its output
+// was kept out of context.
 type spillFollowProvider struct {
 	mu     sync.Mutex
 	target string
@@ -252,7 +253,7 @@ func (p *spillFollowProvider) Stream(_ context.Context, req provider.Request) (<
 	ch := make(chan provider.Chunk, 3)
 	switch results := effectToolResults(req); turn {
 	case 1:
-		emitReadFile(ch, "call-first", p.target)
+		emitBash(ch, "call-first", "cat "+filepath.Base(p.target))
 	case 2:
 		if path := effectPointerPath(results[len(results)-1]); path != "" {
 			emitReadFile(ch, "call-readback", path)
@@ -277,6 +278,15 @@ func (p *spillFollowProvider) lastRequest(t *testing.T) provider.Request {
 	return p.reqs[len(p.reqs)-1]
 }
 
+// emitBash drives the one shape that still parks its output: a tool with no
+// continuation of its own, so the pointer is the only way back to the bytes.
+func emitBash(ch chan<- provider.Chunk, id, command string) {
+	args, _ := json.Marshal(map[string]string{"command": command})
+	ch <- provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{
+		ID: id, Name: "bash", Arguments: string(args),
+	}}
+}
+
 func emitReadFile(ch chan<- provider.Chunk, id, path string) {
 	args, _ := json.Marshal(map[string]string{"path": path})
 	ch <- provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{
@@ -295,7 +305,7 @@ func effectToolResults(req provider.Request) []string {
 }
 
 func effectPointerPath(result string) string {
-	for _, l := range strings.Split(result, "\n") {
+	for l := range strings.SplitSeq(result, "\n") {
 		if rest, ok := strings.CutPrefix(l, "Full output: "); ok {
 			return strings.TrimSpace(rest)
 		}

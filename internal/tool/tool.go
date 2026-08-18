@@ -251,6 +251,24 @@ type SnipHinter interface {
 	SnipHint() SnipHint
 }
 
+// Paged marks a tool whose result addresses its own continuation: it accepts an
+// offset and its output says where the next page starts. An oversize result from
+// one of these is cut back to a leading window instead of being moved to a file
+// — the remainder is already one call away, so copying it would duplicate what
+// the tool can re-read at will, and snipping its middle would undo its paging.
+type Paged interface {
+	Paged() bool
+}
+
+// ReadTargeter is an optional capability a Tool implements when a call names the
+// one filesystem path it reads. It is how a fetch of an already-spilled result is
+// recognised, and such a fetch must never spill again — it is how the pointer
+// gets redeemed. The tool resolves the path itself because only it knows its own
+// argument shape; "" means the call names no single path, as a shell cannot.
+type ReadTargeter interface {
+	ReadTarget(args json.RawMessage) string
+}
+
 // process-global built-in set (populated by builtin subpackage init)
 
 var builtins = map[string]Tool{}

@@ -64,7 +64,7 @@ function Body({ tool }: { tool: Tool }) {
   if (!out) return null;
   if (tool.name === "grep") {
     const found = parseHits(out);
-    if (found) return <Hits rows={hitRows(found.hits)} note={found.note} unit="处匹配" />;
+    if (found) return <Hits rows={hitRows(found.hits)} note={found.note} />;
   }
   if (tool.name === "glob") {
     const rows = parseRows(out, PATH);

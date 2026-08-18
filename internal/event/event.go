@@ -40,7 +40,7 @@ const (
 	Message
 	// ToolDispatch announces a tool call is about to run (Tool: ID/Name/Args/ReadOnly).
 	ToolDispatch
-	// ToolResult reports a finished tool call (Tool: Output/Err/Truncated set).
+	// ToolResult reports a finished tool call (Tool: Output/Err/Bound set).
 	ToolResult
 	// Usage carries per-turn token telemetry (Usage; Pricing optional, for cost).
 	Usage
@@ -243,7 +243,7 @@ type Profile struct {
 
 // Tool describes a tool call for ToolDispatch / ToolResult events. On dispatch
 // ID/Name/Args/ReadOnly and optional preview metadata are set; on result
-// Output/Err/Truncated are filled in. Args is the raw JSON arguments — a sink
+// Output/Err/Bound are filled in. Args is the raw JSON arguments — a sink
 // compacts it for display.
 type Tool struct {
 	ID   string
@@ -257,8 +257,8 @@ type Tool struct {
 	Output       string // ToolResult: the result text fed to the model
 	Err          string // ToolResult: non-empty when the call failed or was blocked
 	ReadOnly     bool
-	Truncated    bool  // ToolResult: Output was head+tailed before display/model
-	DurationMs   int64 // ToolResult: wall-clock execution time in milliseconds
+	Bound        OutputBound // ToolResult: how Output was fitted into context
+	DurationMs   int64       // ToolResult: wall-clock execution time in milliseconds
 	// StartedAt/EndedAt are unix-millisecond execution bounds (ToolResult).
 	// Zero when the call never ran (dependency-skipped, cancelled, synthetic).
 	StartedAt int64

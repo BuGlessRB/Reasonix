@@ -8,7 +8,9 @@ import (
 	"runtime"
 	"strings"
 
+	"reasonix/internal/event"
 	"reasonix/internal/store"
+	"reasonix/internal/tool"
 )
 
 // Oversize tool output goes to a file; the context keeps a pointer. A head+tail
@@ -20,27 +22,27 @@ import (
 // more to leave context than a narrow one — the opposite of the point.
 
 // spillToolOutput writes body beside the session and returns the pointer that
-// replaces it. ok is false when there is nowhere the model could read the file
-// back from, or when spilling would not pay for itself. There is deliberately
-// no size threshold: context pays the pointer, the pointer is a pure function
-// of the body, so the decision is derived rather than configured.
-func (a *Agent) spillToolOutput(body, toolName, toolCallID string) (string, bool) {
+// replaces it, plus where it landed. ok is false when there is nowhere the model
+// could read the file back from, or when spilling would not pay for itself.
+// There is deliberately no size threshold: context pays the pointer, the pointer
+// is a pure function of the body, so the decision is derived rather than configured.
+func (a *Agent) spillToolOutput(body, toolName, toolCallID string) (string, string, bool) {
 	dir := a.spillDir()
 	if dir == "" {
-		return "", false
+		return "", "", false
 	}
 	path := filepath.Join(dir, spillFileName(toolName, toolCallID))
 	pointer := spillPointer(path, body, toolName)
 	if !spillPays(len(body), len(pointer)) {
-		return "", false
+		return "", "", false
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", false
+		return "", "", false
 	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		return "", false
+		return "", "", false
 	}
-	return pointer, true
+	return pointer, path, true
 }
 
 // spillPays reports whether moving a result out of context earns its keep. What
@@ -77,24 +79,44 @@ func scratchOutputsDir() string {
 	return filepath.Join(os.TempDir(), "reasonix-outputs")
 }
 
+// toolIsPaged reports whether this tool addresses its own continuation, read off
+// its contract rather than its name.
+func (a *Agent) toolIsPaged(name string) bool {
+	p, ok := toolCapability[tool.Paged](a.svc.tools, name)
+	return ok && p.Paged()
+}
+
+// toolCapability type-asserts a registered tool to one of its optional capability
+// interfaces. An unregistered tool and one lacking the capability are the same
+// answer to a caller, so both report false.
+func toolCapability[T any](reg *tool.Registry, name string) (T, bool) {
+	var zero T
+	if reg == nil {
+		return zero, false
+	}
+	t, ok := reg.Get(name)
+	if !ok {
+		return zero, false
+	}
+	c, ok := t.(T)
+	return c, ok
+}
+
 // readsSpilledOutput reports whether this call is the model fetching a spilled
 // result back. Such a fetch must never spill: it would return a pointer to a
 // further file, and read_file's line numbers grow the body each round, so the
-// loop has no exit. Decided by where the path points, so a tool reading
-// anything else still spills normally.
+// loop has no exit. The tool names the path it reads because only it knows its
+// own arguments; a shell names none, so its output spills as usual.
 func (a *Agent) readsSpilledOutput(toolName, toolArgs string) bool {
-	switch toolName {
-	case "read_file", "grep":
-	default:
+	rt, ok := toolCapability[tool.ReadTargeter](a.svc.tools, toolName)
+	if !ok {
 		return false
 	}
-	var p struct {
-		Path string `json:"path"`
-	}
-	if json.Unmarshal([]byte(toolArgs), &p) != nil || p.Path == "" {
+	target := rt.ReadTarget(json.RawMessage(toolArgs))
+	if target == "" {
 		return false
 	}
-	abs, err := filepath.Abs(p.Path)
+	abs, err := filepath.Abs(target)
 	if err != nil {
 		return false
 	}
@@ -225,16 +247,53 @@ func humanBytes(n int) string {
 }
 
 // boundToolOutput is the single gate every tool result passes before it becomes
-// context. The second return is the truncation notice; spilling has none,
-// because nothing was lost.
-func (a *Agent) boundToolOutput(body, toolName, toolCallID, toolArgs string) (string, string) {
-	if !a.readsSpilledOutput(toolName, toolArgs) {
-		if pointer, ok := a.spillToolOutput(body, toolName, toolCallID); ok {
-			return pointer, ""
+// context. The bound records which of the three outcomes happened, so a frontend
+// can tell a result that moved to disk from one that lost its middle; the last
+// return is the truncation notice, empty unless something was lost. failed comes
+// from the caller because reading it back out of the body would guess at wording.
+func (a *Agent) boundToolOutput(body, toolName, toolCallID, toolArgs string, failed bool) (string, event.OutputBound, string) {
+	bound := event.OutputBound{Lines: strings.Count(body, "\n") + 1, Bytes: len(body)}
+	paged := a.toolIsPaged(toolName) || a.readsSpilledOutput(toolName, toolArgs)
+	if !paged {
+		if pointer, path, ok := a.spillToolOutput(body, toolName, toolCallID); ok {
+			bound.Kind, bound.Path = event.BoundSpilled, path
+			return pointer, bound, ""
 		}
 	}
 	if len(body) <= maxToolOutputBytes {
-		return body, ""
+		bound.KeptBytes = len(body)
+		return body, bound, ""
 	}
-	return truncateToolOutputFor(body, toolName, toolCallID, maxToolOutputBytes)
+	// A paged read addresses its own continuation, so cutting it back to a leading
+	// window discards nothing: the model reads on from where this stops. Snipping
+	// its middle would, and would also undo the paging the tool already did.
+	if paged {
+		out := windowToolOutput(body, maxToolOutputBytes)
+		bound.Kind, bound.KeptBytes = event.BoundWindowed, len(out)
+		return out, bound, ""
+	}
+	strategy := a.snipStrategyFor(toolName)
+	if failed {
+		strategy = strategy.forFailure(maxToolOutputBytes)
+	}
+	out, notice := truncateToolOutputFor(body, toolName, toolCallID, maxToolOutputBytes, strategy)
+	bound.Kind, bound.KeptBytes = event.BoundTruncated, len(out)
+	return out, bound, notice
+}
+
+const windowMarker = "\n…[window ends here to fit one result — nothing was discarded; read on from where this stops]…\n"
+
+// windowToolOutput cuts body back to whole leading lines that fit in cap. What
+// is left out stays reachable by continuing the page, so this is a window, not
+// a loss — which is why it carries no truncation notice.
+func windowToolOutput(body string, cap int) string {
+	keep := cap - len(windowMarker) - 8
+	if keep < 1 || len(body) <= keep {
+		return body
+	}
+	cut := strings.LastIndexByte(body[:keep], '\n')
+	if cut <= 0 {
+		cut = len(snapToRuneBoundary(body, 0, keep))
+	}
+	return body[:cut] + windowMarker
 }

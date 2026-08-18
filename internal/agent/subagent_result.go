@@ -50,6 +50,10 @@ func (*SubagentResultTool) ReadOnly() bool { return true }
 
 func (*SubagentResultTool) PlanModeSafe() bool { return true }
 
+// Paged: answers are addressed by UTF-8 byte offset and each page reports the
+// next one, so a page that overflows one result is windowed, never snipped.
+func (*SubagentResultTool) Paged() bool { return true }
+
 func (t *SubagentResultTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Ref         string `json:"ref"`

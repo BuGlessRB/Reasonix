@@ -120,7 +120,7 @@ export function ToolCard({
             </div>
           )}
           {!tool.diff && !goal && tool.name !== "todo_write" && tool.output && !echoed && children.length === 0 && (
-            <ToolOutput name={shown} text={tool.output} />
+            <ToolOutput name={shown} text={tool.output} bound={tool.bound} id={tool.id} />
           )}
             </>
           )}

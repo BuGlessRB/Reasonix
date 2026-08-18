@@ -4,6 +4,9 @@
 // cleanly falls back to the terminal block rather than being forced into a
 // list — a wrong list reads as authoritative, a raw block only reads as raw.
 
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { t } from "../../i18n";
+import type { Bound } from "../../port/wire";
 import { splitPath } from "../args";
 
 const MATCH = /^(.+?):(\d+):([\s\S]*)$/;
@@ -13,8 +16,6 @@ const LS_FILE = /^(.+)\t(\d+)$/;
 
 // Below this share of lines fitting the shape, the output is something else.
 const CONFIDENT = 0.8;
-// A search can return hundreds; the rest are counted, never silently dropped.
-const ROWS = 40;
 
 export interface Hit {
   path: string;
@@ -95,10 +96,9 @@ export function Peek({
   onPick?: (i: number) => void;
   at?: number;
 }) {
-  const shown = rows.slice(0, ROWS);
   return (
     <div className="peek">
-      {shown.map((r, i) => {
+      {rows.map((r, i) => {
         const [dir, name] = splitPath(r.name);
         const body = (
           <>
@@ -124,11 +124,6 @@ export function Peek({
           </div>
         );
       })}
-      {rows.length > shown.length && (
-        <div className="row">
-          <span className="d">还有 {rows.length - shown.length} 条</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -148,11 +143,10 @@ export const hitRows = (hits: Hit[]): Row3[] =>
     return { t: name, u: `${dir}${name}:${h.line}`, q: [h.text, ...h.more] };
   });
 
-export function Hits({ rows, note, unit = "条" }: { rows: Row3[]; note?: string; unit?: string }) {
-  const shown = rows.slice(0, ROWS);
+export function Hits({ rows, note }: { rows: Row3[]; note?: string }) {
   return (
     <div className="hits">
-      {shown.map((r, i) => (
+      {rows.map((r, i) => (
         <div className="hit-row" key={i}>
           <div className="i">{i + 1}</div>
           {/* .t/.u/.q carry margin-top and ellipsis but no display in the
@@ -177,14 +171,10 @@ export function Hits({ rows, note, unit = "条" }: { rows: Row3[]; note?: string
           </div>
         </div>
       ))}
-      {(rows.length > shown.length || note) && (
+      {note && (
         <div className="hit-row">
           <div className="i" />
-          <div className="u">
-            {rows.length > shown.length && `还有 ${rows.length - shown.length} ${unit}`}
-            {rows.length > shown.length && note && " · "}
-            {note}
-          </div>
+          <div className="u">{note}</div>
         </div>
       )}
     </div>
@@ -248,30 +238,26 @@ export function parseSearchResults(out: string): Row3[] | null {
   return rows.length && loose / lines.length <= 1 - CONFIDENT ? rows : null;
 }
 
-// read_file numbers every line it returns ("  1→…"), so the count is already in
-// the output. A whole file inline buries the rest of the turn, so anything long
-// folds behind what it is.
-const NUMBERED = /^\s*\d+→/;
 // glob returns one path per line. Requiring a separator keeps a one-line error
 // message from being dressed up as a manifest of one file.
 export const PATH = /^\s*([^\s]*[/\\][^\s]*)\s*$/;
 const TRAILER = /^\.\.\. \(/;
 
-export function ToolOutput({ name, text }: { name: string; text: string }) {
-  if (name === "read_file") {
-    const numbered = text.split("\n").filter((l) => NUMBERED.test(l)).length;
-    if (numbered <= 12) return <Term text={text} />;
-    return (
-      <details>
-        <summary>
-          <span className="fold">读了 {numbered} 行</span>
-        </summary>
-        <Term text={text} />
-      </details>
-    );
-  }
-  // A directory listing and a glob result are both manifests, which is what
-  // .peek is for. grep prints "path:line:text" and gets the excerpt list.
+export function ToolOutput({ name, text, bound, id }: { name: string; text: string; bound?: Bound; id?: string }) {
+  return (
+    <>
+      <Clip id={id} deps={text}>
+        {shapeFor(name, text)}
+      </Clip>
+      <BoundNote bound={bound} />
+    </>
+  );
+}
+
+// A directory listing and a glob result are both manifests, which is what .peek
+// is for. grep prints "path:line:text" and gets the excerpt list. Everything
+// else — a shell run, an MCP result, a listing that did not parse — is a block.
+function shapeFor(name: string, text: string): ReactNode {
   if (name === "ls") {
     const rows = parseListing(text);
     if (rows) return <Peek rows={rows} unit="B" />;
@@ -282,40 +268,79 @@ export function ToolOutput({ name, text }: { name: string; text: string }) {
   }
   if (name === "grep") {
     const found = parseHits(text);
-    if (found) return <Hits rows={hitRows(found.hits)} note={found.note} unit="处匹配" />;
+    if (found) return <Hits rows={hitRows(found.hits)} note={found.note} />;
   }
   if (name === "web_search") {
     const rows = parseSearchResults(text);
     if (rows) return <Hits rows={rows} />;
   }
-  return <Folded text={text} />;
+  return <Term text={text} />;
 }
 
-// Anything without a shape of its own: a shell command, an MCP server's result,
-// a listing that did not parse. Forty lines of build log buries the rest of the
-// turn exactly the way a whole file did, so it folds for the same reason — with
-// the first line kept on the summary, because that is usually the answer.
-// 4, not read_file's 12: a shell result's median is three lines, and folding
-// those costs a click to read what a glance already had. Past four it is worth
-// the fold — a whole file is long by nature, a command's answer usually is not.
-const FOLD_LINES = 4;
-const HEAD_CHARS = 48;
+// One visual budget for every shape above, carried by CSS rather than counted
+// here. Three line thresholds only made a manifest, a block and a hit list
+// disagree about what "long" means, and each one dropped rows the model had
+// actually been given. Clipping keeps the content scannable and complete.
+const opened = new Map<string, boolean>();
 
-function Folded({ text }: { text: string }) {
-  const lines = text.split("\n");
-  if (lines.length <= FOLD_LINES) return <Term text={text} />;
-  // MCP results are JSON, whose first line is "{" — a summary of one brace
-  // tells you nothing. Take the first line that carries a word.
-  const head = lines.find((l) => /[\p{L}\p{N}]/u.test(l))?.trim() ?? "";
+function Clip({ id, deps, children }: { id?: string; deps?: unknown; children: ReactNode }) {
+  const [open, setOpen] = useState(() => (id ? (opened.get(id) ?? false) : false));
+  const [over, setOver] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  // Measuring reads scrollHeight, which forces layout — so it keys off the
+  // content and the clip state, not every render the turn above it causes.
+  useLayoutEffect(() => {
+    const el = body.current;
+    if (el) setOver(el.scrollHeight > el.clientHeight + 1);
+  }, [deps, open]);
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    // Keyed by call, so reopening a card the user already expanded does not ask
+    // them to expand it again.
+    if (id) opened.set(id, next);
+  };
   return (
-    <details>
-      <summary>
-        <span className="fold">
-          {lines.length} 行输出
-          {head && ` · ${head.length > HEAD_CHARS ? head.slice(0, HEAD_CHARS - 1) + "…" : head}`}
-        </span>
-      </summary>
-      <Term text={text} />
-    </details>
+    <div className="out-clip" data-open={open ? "" : undefined}>
+      <div className="out-body" ref={body}>
+        {children}
+      </div>
+      {(over || open) && (
+        <button className="out-more" onClick={toggle}>
+          {open ? t("收起") : t("展开全部")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+const humanBytes = (n: number) =>
+  n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1 << 10 ? `${Math.round(n / (1 << 10))} KB` : `${n} B`;
+
+// The three outcomes are not the same news, and a card that renders them alike
+// is why "folded" and "the model never saw this" looked identical. Only
+// truncation is a warning; the other two say where the rest is.
+function BoundNote({ bound }: { bound?: Bound }) {
+  if (!bound) return null;
+  if (bound.kind === "spilled") {
+    return (
+      <div className="bound" title={bound.path}>
+        {t("完整输出已存盘（{lines} 行 · {size}），模型按需读取", {
+          lines: bound.lines ?? 0,
+          size: humanBytes(bound.bytes ?? 0),
+        })}
+      </div>
+    );
+  }
+  if (bound.kind === "windowed") {
+    return <div className="bound">{t("已显示开头部分，模型可继续往下读")}</div>;
+  }
+  return (
+    <div className="bound bad">
+      {t("模型只收到 {kept}，共 {size} — 其余未进入上下文", {
+        kept: humanBytes(bound.keptBytes ?? 0),
+        size: humanBytes(bound.bytes ?? 0),
+      })}
+    </div>
   );
 }

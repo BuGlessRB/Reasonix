@@ -724,7 +724,7 @@ func TestUpdateSinkDropsSubagentProgress(t *testing.T) {
 	}})
 	sink.Emit(event.Event{Kind: event.ToolProgress, Tool: event.Tool{
 		ID: "task-1", Name: event.SubagentProgressNoticeName, Output: "heads up",
-		Truncated: true,
+		Bound: event.OutputBound{Kind: event.BoundTruncated},
 	}})
 	if got := len(fn.notifs); got != 0 {
 		t.Fatalf("sub-agent progress produced %d notifications, want 0", got)

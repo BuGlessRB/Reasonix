@@ -205,11 +205,11 @@ func TestToolStruct(t *testing.T) {
 	}
 
 	result := Tool{
-		ID:        "call-1",
-		Name:      "bash",
-		Output:    "hi\n",
-		Err:       "",
-		Truncated: false,
+		ID:     "call-1",
+		Name:   "bash",
+		Output: "hi\n",
+		Err:    "",
+		Bound:  OutputBound{Kind: BoundWhole},
 	}
 	if result.Output != "hi\n" {
 		t.Errorf("Output = %q", result.Output)
