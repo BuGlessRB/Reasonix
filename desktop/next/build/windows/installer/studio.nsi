@@ -84,7 +84,7 @@ Function EnsureWebView2
   ${EndIf}
   DetailPrint "Installing the WebView2 runtime…"
   InitPluginsDir
-  File /oname=$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe "${WEBVIEW2}"
+  File /oname=$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe "${PAYLOAD}\MicrosoftEdgeWebview2Setup.exe"
   ExecWait '"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" /silent /install'
 !endif
 FunctionEnd

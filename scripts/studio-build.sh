@@ -117,7 +117,9 @@ build_nsis() {
 	if curl --fail --location --silent --show-error --connect-timeout 30 --max-time 120 \
 		--output "$webview2" "https://go.microsoft.com/fwlink/p/?LinkId=2124703" &&
 		[ -s "$webview2" ]; then
-		webview2_def=("-DWEBVIEW2=$webview2")
+		# A flag, not a path: File resolves it under PAYLOAD like every other
+		# member, and NSIS reads a bare forward-slash path as a wildcard.
+		webview2_def=("-DWEBVIEW2=1")
 	else
 		echo "==> WebView2 bootstrapper unavailable; installer will not bundle it" >&2
 		rm -f "$webview2"
