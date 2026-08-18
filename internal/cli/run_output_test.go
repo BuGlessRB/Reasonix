@@ -26,6 +26,32 @@ func TestRunOutputTextPrintsOnlyFinalMessage(t *testing.T) {
 	}
 }
 
+// A warning had nowhere to go in print mode and was dropped, so a run whose
+// planner fell back or whose check went unread said nothing about it. stdout
+// still carries only the answer; the warning goes where the run already
+// reports itself.
+func TestRunOutputTextSendsWarningsToDiagnostics(t *testing.T) {
+	var out, errOut bytes.Buffer
+	sink := newRunOutputSink(&out, runOutputText)
+	sink.errOut = &errOut
+	sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "just so you know"})
+	sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "./check.sh went unread", Detail: "declare it to have it enforced"})
+	sink.Emit(event.Event{Kind: event.Message, Text: "final answer"})
+	if err := sink.Finalize("session", time.Now(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "final answer\n" {
+		t.Fatalf("stdout = %q, want the answer alone", got)
+	}
+	got := errOut.String()
+	if !strings.Contains(got, "./check.sh went unread") || !strings.Contains(got, "declare it to have it enforced") {
+		t.Errorf("diagnostics = %q, want the warning and its detail", got)
+	}
+	if strings.Contains(got, "just so you know") {
+		t.Errorf("diagnostics carried an info notice too: %q", got)
+	}
+}
+
 func TestRunOutputJSONResult(t *testing.T) {
 	var out bytes.Buffer
 	sink := newRunOutputSink(&out, runOutputJSON)

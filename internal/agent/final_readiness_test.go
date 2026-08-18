@@ -7,6 +7,7 @@ import (
 	"reasonix/internal/evidence"
 	"reasonix/internal/instruction"
 	"reasonix/internal/provider"
+	"reasonix/internal/taskpolicy"
 	"reasonix/internal/tool"
 )
 
@@ -96,41 +97,65 @@ func TestFinalReadinessIgnoresLoopGuardQuotedInToolOutput(t *testing.T) {
 }
 
 // The table will never enumerate every project's own runner, so a project
-// driven by its own scripts can run its checks all day and still be told to run
-// one. What the table lacks is in the turn, and a citation carries it — the ask
-// is the only place the model could learn that, so it has to say so.
-func TestVerificationGapPointsAtCitationWhenNothingIsRecognised(t *testing.T) {
-	const ran = "python scripts/inventory_analysis_screening.py --self-check"
-	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"screening.py"}}
+// driven by its own scripts runs its check, passes it, and is told it verified
+// nothing. That miss is the host's, so it is reported and not charged: failing
+// the turn punishes work that did verify itself, and the gate lapses next turn
+// regardless, so the failure collects nothing later either.
+func TestVerificationGapSeparatesTheHostsBlindSpotFromTheTurns(t *testing.T) {
+	const ran = "./check.sh"
+	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"wordcount.sh"}}
 	command := evidence.Receipt{ToolName: "bash", Success: true, Command: ran}
 	declared := instruction.VerifyCheck{Command: "make check", SourcePath: "AGENTS.md", Line: 3}
 
-	withSignoff := tool.NewRegistry()
-	withSignoff.Add(fakeTool{name: "complete_step"})
-
 	cases := []struct {
-		name     string
-		checks   []instruction.VerifyCheck
-		ledger   *evidence.Ledger
-		tools    *tool.Registry
-		wantCite bool
+		name         string
+		checks       []instruction.VerifyCheck
+		ledger       *evidence.Ledger
+		wantAdvisory bool
+		wantQuoted   bool
 	}{
-		{"unrecognised command points at the citation", nil, readinessLedger(writer, command), withSignoff, true},
-		{"nothing ran keeps the bare ask", nil, readinessLedger(writer), withSignoff, false},
-		{"declared checks are settled by running those", []instruction.VerifyCheck{declared}, readinessLedger(writer, command), withSignoff, false},
-		{"no sign-off tool leaves nothing to point at", nil, readinessLedger(writer, command), tool.NewRegistry(), false},
+		{"a command the table could not read is advisory", nil, readinessLedger(writer, command), true, true},
+		{"nothing ran at all is the turn's own miss", nil, readinessLedger(writer), false, false},
+		{"a project that declared checks owes those", []instruction.VerifyCheck{declared}, readinessLedger(writer, command), false, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			a := &Agent{task: taskRuntime{ledger: tc.ledger}, projectChecks: tc.checks, svc: agentServices{tools: tc.tools}}
-			got := a.verificationGap(0)
-			if !strings.Contains(got, "run a relevant verification command") {
-				t.Fatalf("gap dropped the underlying ask: %q", got)
+			a := &Agent{task: taskRuntime{ledger: tc.ledger}, projectChecks: tc.checks}
+			got, advisory := a.verificationGap(0)
+			if advisory != tc.wantAdvisory {
+				t.Fatalf("advisory = %v, want %v: %q", advisory, tc.wantAdvisory, got)
 			}
-			if cited := strings.Contains(got, "complete_step") && strings.Contains(got, ran); cited != tc.wantCite {
-				t.Errorf("offering the citation = %v, want %v: %q", cited, tc.wantCite, got)
+			if strings.Contains(got, ran) != tc.wantQuoted {
+				t.Errorf("quoting what ran = %v, want %v: %q", !tc.wantQuoted, tc.wantQuoted, got)
+			}
+			if !advisory && !strings.Contains(got, "run a relevant verification command") {
+				t.Errorf("a blocking gap must still carry the ask: %q", got)
+			}
+			if advisory && !strings.Contains(got, instruction.HostChecksHeading) {
+				t.Errorf("an advisory must say how to make the check count: %q", got)
 			}
 		})
+	}
+}
+
+// An advisory reports; it must never be what fails a run.
+func TestAdvisoryDoesNotFailTheTurn(t *testing.T) {
+	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"wordcount.sh"}}
+	command := evidence.Receipt{ToolName: "bash", Success: true, Command: "./check.sh"}
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "bash"})
+
+	a := &Agent{
+		task: taskRuntime{ledger: readinessLedger(writer, command)},
+		svc:  agentServices{tools: reg},
+		turn: turnRuntime{policySet: true, policy: taskpolicy.TaskPolicy{Verification: taskpolicy.VerifyTargeted}},
+	}
+	got := a.ReadinessResult()
+	if !got.Ready {
+		t.Fatalf("ReadinessResult() = %+v, want ready: the host's blind spot must not fail the run", got)
+	}
+	if got.Advisory == "" {
+		t.Error("the advisory was dropped; the user never learns the check went unread")
 	}
 }
 

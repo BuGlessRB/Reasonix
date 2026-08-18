@@ -507,6 +507,12 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		// immediately open another Run and silently bypass the chosen limit.
 		return false, a.gracePause(state)
 	}
+	if readiness.advisory != "" {
+		// What the host could not read is reported, not charged to the turn: it
+		// would fail work that did verify itself, and the gate lapses next turn
+		// anyway, so the failure would buy nothing it could later collect.
+		a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: readiness.advisory})
+	}
 	if readiness.reason != "" {
 		// Delivery no longer retries readiness with hidden model messages: the
 		// run ends immediately with the missing requirements, and the host owns

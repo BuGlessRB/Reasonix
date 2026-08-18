@@ -16,8 +16,12 @@ import (
 // says what is missing rather than merely that something is.
 
 type finalReadinessCheck struct {
-	applies                   bool
-	reason                    string
+	applies bool
+	reason  string
+	// advisory is what the host could not read, not what the turn failed to do.
+	// It reaches the user and never fails the run: charging a turn for the
+	// host's own blind spot buys nothing this gate could later collect.
+	advisory                  string
 	missingProjectChecks      int
 	incompleteTodos           int
 	missingAcceptanceCriteria int
@@ -195,16 +199,11 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	// what it cannot owe is a passing one, since the task being impossible is
 	// exactly why the check does not pass. Nothing else about the turn is waived.
 	verified, blockedWithCheck := a.postWriteVerification(writer)
-	if !a.deliveryProfile && a.turn.policySet && a.turn.policy.Verification >= taskpolicy.VerifyTargeted &&
-		toolPresent(a.svc.tools, "bash") && !blockedWithCheck && !a.checkEstablished(writer, verified) {
-		out.applies = true
-		out.missingVerification++
-		missing = append(missing, a.verificationGap(writer))
-	}
+	missing = a.appendVerificationGap(&out, missing, writer, blockedWithCheck, verified)
 	hasProjectChecks := len(a.projectChecks) > 0
 	hasTodoReceipt := a.task.ledger.HasSuccessfulTodoWrite()
 	if !a.deliveryProfile && !hasProjectChecks && !hasTodoReceipt && len(missing) == 0 {
-		return finalReadinessCheck{}
+		return finalReadinessCheck{advisory: out.advisory}
 	}
 	out.applies = true
 	if a.deliveryProfile {
@@ -275,33 +274,52 @@ func (a *Agent) postWriteVerification(writer int) (verified, blockedWithCheck bo
 	return verified, blockedWithCheck
 }
 
-// verificationGap says what is actually missing. A check whose exit status
+// appendVerificationGap records what this turn owes for verification. A gap the
+// host cannot read lands in advisory and never in missing: it is reported, and
+// only what the turn itself failed to do fails the turn.
+func (a *Agent) appendVerificationGap(out *finalReadinessCheck, missing []string, writer int, blockedWithCheck, verified bool) []string {
+	if a.deliveryProfile || !a.turn.policySet || a.turn.policy.Verification < taskpolicy.VerifyTargeted ||
+		!toolPresent(a.svc.tools, "bash") || blockedWithCheck || a.checkEstablished(writer, verified) {
+		return missing
+	}
+	detail, advisory := a.verificationGap(writer)
+	if advisory {
+		out.advisory = detail
+		return missing
+	}
+	out.applies = true
+	out.missingVerification++
+	return append(missing, detail)
+}
+
+// verificationGap says what is actually missing, and whether the miss is the
+// host's own blind spot rather than the turn's. A check whose exit status
 // belonged to a later stage of the same command did run, so asking for "a
 // verification command" reads as false to the model that just ran one; what it
 // needs is the command named and a shape whose status answers for the check.
-func (a *Agent) verificationGap(writer int) string {
+func (a *Agent) verificationGap(writer int) (string, bool) {
 	const ask = "run a relevant verification command after the latest write for the current role setting"
 	if unreadable, ok := a.task.ledger.LatestUnreadableVerificationAfter(writer); ok && strings.TrimSpace(unreadable.Command) != "" {
 		return fmt.Sprintf("%s — %q ran, but its exit status is the last stage's, not the check's, "+
-			"so it proves nothing either way; re-run the check on its own", ask, strings.TrimSpace(unreadable.Command))
+			"so it proves nothing either way; re-run the check on its own", ask, strings.TrimSpace(unreadable.Command)), false
 	}
 	// A check that ran and failed leaves two honest ways out, and a model told
 	// only to "run a verification command" can see neither: it already ran one.
 	if a.task.ledger.HasVerificationCommandAfter(writer) && toolPresent(a.svc.tools, "conclude_blocked") {
-		return "the check you ran after the latest write did not pass: either make it pass, or — if it cannot pass as specified — call conclude_blocked with the evidence for why"
+		return "the check you ran after the latest write did not pass: either make it pass, or — if it cannot pass as specified — call conclude_blocked with the evidence for why", false
 	}
-	// Commands ran and the table read none as a check. Widening it would read a
-	// deploy as one; what it lacks is in the turn, not the command, and a
-	// citation carries it — so point there, not at what the model just did.
-	if len(a.projectChecks) == 0 && toolPresent(a.svc.tools, "complete_step") {
+	// Commands ran and the table read none as a check. That is the host's blind
+	// spot — it cannot tell a runner from a deploy — so it reports what it could
+	// not read instead of failing a turn that may well have verified itself.
+	if len(a.projectChecks) == 0 {
 		if ran, ok := a.task.ledger.LatestUnrecognizedCommandAfter(writer); ok {
-			return fmt.Sprintf("%s — or, if %q was that check, sign the step off with complete_step citing it "+
-				"(evidence kind=verification, command exactly as run): the host cannot tell a project's own "+
-				"runner from any other command, but it can prove the one you name ran after the write and passed",
-				ask, strings.TrimSpace(ran.Command))
+			return fmt.Sprintf("%q ran after the last write, but the host cannot tell a project's own runner "+
+				"from any other command, so it could not count as a check. Declare the commands that decide "+
+				"this project under %q in project memory to have them enforced.",
+				strings.TrimSpace(ran.Command), instruction.HostChecksHeading), true
 		}
 	}
-	return ask
+	return ask, false
 }
 
 func finalReadinessCheckSource(check instruction.VerifyCheck) string {

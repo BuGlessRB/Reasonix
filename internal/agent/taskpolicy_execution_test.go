@@ -91,8 +91,14 @@ func TestDeclaredProjectChecksSatisfyVerificationFloor(t *testing.T) {
 	}
 	declared := []instruction.VerifyCheck{{Command: "python3 test_stats.py", SourcePath: "REASONIX.md"}}
 
-	if got := newAgent(nil, writer, unrecognized).finalReadinessCheckFor(); !strings.Contains(got.reason, "verification command") {
-		t.Fatalf("undeclared project: readiness = %+v, want the classifier floor to still apply", got)
+	// A command the table cannot read is the host's blind spot, not the turn's
+	// omission: reported, never charged. The floor itself still stands — it is
+	// the case below, where nothing ran at all.
+	if got := newAgent(nil, writer, unrecognized).finalReadinessCheckFor(); got.reason != "" || got.advisory == "" {
+		t.Fatalf("undeclared project: readiness = %+v, want the unreadable command reported, not charged", got)
+	}
+	if got := newAgent(nil, writer).finalReadinessCheckFor(); !strings.Contains(got.reason, "verification command") {
+		t.Fatalf("nothing ran: readiness = %+v, want the classifier floor to still apply", got)
 	}
 	if got := newAgent(declared, writer, unrecognized).finalReadinessCheckFor(); got.reason != "" {
 		t.Fatalf("declared check ran: readiness = %+v, want ready", got)

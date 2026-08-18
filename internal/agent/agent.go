@@ -1316,20 +1316,19 @@ type ReadinessResult struct {
 	// evidence state. Identical ProgressKey across consecutive goal turns
 	// means no host-observable progress was made.
 	ProgressKey string
+	// Advisory is what the host could not read, not what the turn left undone.
+	// Reported and never blocking, so it can accompany Ready.
+	Advisory string
 }
 
 // ReadinessResult returns the current final-readiness outcome for the host.
 func (a *Agent) ReadinessResult() ReadinessResult {
 	check := a.finalReadinessCheckFor()
-	if check.reason == "" {
-		return ReadinessResult{Ready: true, ProgressKey: check.progressSignature()}
+	out := ReadinessResult{Ready: check.reason == "", ProgressKey: check.progressSignature(), Advisory: check.advisory}
+	if !out.Ready {
+		out.Missing, out.Reason = check.missingIDs(), check.reason
 	}
-	return ReadinessResult{
-		Ready:       false,
-		Missing:     check.missingIDs(),
-		Reason:      check.reason,
-		ProgressKey: check.progressSignature(),
-	}
+	return out
 }
 
 func boolInt(v bool) int {

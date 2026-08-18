@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -127,9 +128,12 @@ type machineRunDone struct {
 }
 
 type runOutputSink struct {
-	mu                  sync.Mutex
-	format              runOutputFormat
-	out                 io.Writer
+	mu     sync.Mutex
+	format runOutputFormat
+	out    io.Writer
+	// errOut takes what is about the run rather than its answer. Separate so a
+	// caller piping stdout still sees warnings, and tests can capture them.
+	errOut              io.Writer
 	encoder             *json.Encoder
 	final               string
 	usage               runResultUsage
@@ -156,6 +160,7 @@ func newRunOutputSink(out io.Writer, format runOutputFormat) *runOutputSink {
 	return &runOutputSink{
 		format:           format,
 		out:              out,
+		errOut:           os.Stderr,
 		encoder:          json.NewEncoder(out),
 		machineToolIDs:   make(map[string]string),
 		machineToolNames: make(map[string]string),
@@ -221,12 +226,34 @@ func (s *runOutputSink) Emit(e event.Event) {
 	if e.Kind == event.TurnDone {
 		s.turns++
 	}
+	// stdout carries the answer alone, so a warning had nowhere to go and was
+	// dropped — a planner fallback, a folded user turn, an unread check. stderr
+	// already carries what the run says about itself and breaks no pipeline.
+	if s.format == runOutputText && e.Kind == event.Notice && e.Level == event.LevelWarn {
+		s.writeDiagnostic(e)
+	}
 	if s.format == runOutputStreamJSON && s.err == nil {
 		s.err = s.encoder.Encode(eventwire.ToWire(e))
 	} else if s.format == runOutputEventsJSONL && s.err == nil {
 		s.sequence++
 		s.err = s.encoder.Encode(s.machineEventRecordFor(e, s.sequence))
 	}
+}
+
+// writeDiagnostic reports one warning on the run's diagnostic stream, detail
+// included, so the reason travels with the symptom.
+func (s *runOutputSink) writeDiagnostic(e event.Event) {
+	if s.errOut == nil {
+		return
+	}
+	text := strings.TrimSpace(e.Text)
+	if detail := strings.TrimSpace(e.Detail); detail != "" && detail != text {
+		text = strings.TrimSpace(text + " " + detail)
+	}
+	if text == "" {
+		return
+	}
+	fmt.Fprintf(s.errOut, "warning: %s\n", text)
 }
 
 func (s *runOutputSink) Finalize(sessionID string, started time.Time, runErr error) error {
