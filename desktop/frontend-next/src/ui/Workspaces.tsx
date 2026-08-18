@@ -16,7 +16,10 @@ interface Props {
   reload: () => Promise<void>;
   onOpen: (req: { root?: string; sessionPath?: string }) => Promise<void>;
   onFocus: (id: string) => void;
-  onClose: (id: string) => Promise<void>;
+  onClose: (ids: string[]) => Promise<void>;
+  // Which of these panes are mid-turn. A callback rather than a prop: run state
+  // changes constantly and this is only ever asked at confirmation time.
+  liveIds: (ids: string[]) => string[];
   onCollapse: () => void;
   onRename: (path: string, title: string) => void;
   onError: (e: unknown) => void;
@@ -28,7 +31,7 @@ interface Props {
 // nodes in the sidebar — more than the transcript at 20000 turns.
 const SHOWN = 30;
 
-function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, onCollapse, onRename, onError }: Props) {
+function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, onCollapse, onRename, onError }: Props) {
   const [busy, setBusy] = useState("");
   const [confirm, setConfirm] = useState("");
   const [typing, setTyping] = useState(false);
@@ -109,6 +112,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
     }
   };
 
+  const panesOf = (root: string) => runtimes.filter((rt) => rt.root === root).map((rt) => rt.id);
+
   const dropWorkspace = async (ws: TreeWorkspace) => {
     if (confirm !== ws.root) {
       setConfirm(ws.root);
@@ -116,6 +121,11 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
     }
     setConfirm("");
     try {
+      // Closed here for the same reason dropSession does it: the kernel will not
+      // pull a folder out from under a pane that is writing, and leaving that to
+      // the reader only means asking which of eight tabs belong to this one.
+      const open = panesOf(ws.root);
+      if (open.length) await onClose(open);
       await hub.removeWorkspace(ws.root);
       await reload();
     } catch (e) {
@@ -132,7 +142,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
     try {
       // Waited on, not just fired: the pane's runtime holds the transcript's
       // lease until it is down, and the kernel will not erase a held one.
-      if (session.runtimeId) await onClose(session.runtimeId);
+      if (session.runtimeId) await onClose([session.runtimeId]);
       await hub.removeSession(session.path);
       await reload();
     } catch (e) {
@@ -155,13 +165,17 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
         <div role="tree" aria-label="工作区与会话">
           {tree.map((ws) => {
             const shut = folded.has(ws.root);
+            // Only while the question is on screen: panesOf walks every runtime.
+            const doomed = confirm === ws.root ? panesOf(ws.root) : [];
+            const busyPanes = liveIds(doomed).length;
             return (
               <div className="wsnode" key={ws.root} data-missing={ws.missing ? "" : undefined}>
                 {confirm === ws.root ? (
                   <Confirm
                     what={`从列表移除「${ws.name}」？`}
-                    hint="不会删除任何文件"
+                    hint={removeHint(doomed.length, busyPanes)}
                     go={t("移除")}
+                    danger={busyPanes > 0}
                     onGo={() => void dropWorkspace(ws)}
                     onCancel={() => setConfirm("")}
                   />
@@ -248,6 +262,8 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                             onKeyDown={(ev) => {
                               if (ev.key === "Enter") ev.currentTarget.blur();
                               if (ev.key === "Escape") {
+                                // Abandoning a rename is not stopping the run behind it.
+                                ev.stopPropagation();
                                 ev.currentTarget.value = session.title || session.name;
                                 ev.currentTarget.blur();
                               }
@@ -327,6 +343,15 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
 // Panes report upward on every usage round, so the window repaints often; the
 // tree it holds does not change nearly that often.
 export const Workspaces = memo(WorkspacesView);
+
+// Removing a folder closes its panes, and closing one stops what it is running.
+// That price is said here rather than discovered afterwards — the kernel refuses
+// the removal either way, and a refusal names no pane the reader can go find.
+export function removeHint(panes: number, live: number): string {
+  if (panes === 0) return t("不会删除任何文件");
+  if (live === 0) return t("会先关掉 {n} 个面板；不会删除任何文件", { n: panes });
+  return t("会先关掉 {n} 个面板，其中 {live} 个还在跑；不会删除任何文件", { n: panes, live });
+}
 
 // 确认不跟原来那行抢位置：把「×」换成「移除」两个字，宽度一变就把文件夹名挤扁
 // 了。整行换成一条问句，取消永远在手边，误点的代价是零。

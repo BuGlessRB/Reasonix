@@ -143,6 +143,8 @@ export function PaneTabs({ tabs, active, showRoot, onFocus, onClose, onRename }:
               onKeyDown={(ev) => {
                 if (ev.key === "Enter") ev.currentTarget.blur();
                 if (ev.key === "Escape") {
+                  // Abandoning a rename is not stopping the run behind it.
+                  ev.stopPropagation();
                   ev.currentTarget.value = title;
                   ev.currentTarget.blur();
                 }

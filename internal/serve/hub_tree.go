@@ -72,7 +72,7 @@ func (h *Hub) tree(w http.ResponseWriter, _ *http.Request) {
 		// Open means a pane is driving this folder — true from the moment one is
 		// opened, before its first turn has written a transcript to list.
 		node := treeWorkspace{
-			Root: root, Name: filepath.Base(root), Open: h.rootRuntime(root) != nil,
+			Root: root, Name: filepath.Base(root), Open: h.rootPanes(root) > 0,
 			Isolated: worktree.IsManagedPath(root, config.DeliveryWorktreeDir()),
 			Sessions: []treeSession{},
 		}
@@ -197,8 +197,8 @@ func (h *Hub) removeWorkspace(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing path", http.StatusBadRequest)
 		return
 	}
-	if rt := h.rootRuntime(dir); rt != nil {
-		busy(w, "workspace.has_open_panes", "close this workspace's panes first")
+	if n := h.rootPanes(dir); n > 0 {
+		busy(w, "workspace.has_open_panes", "close this workspace's panes first", map[string]any{"n": n})
 		return
 	}
 	forgetWorkspace(dir)
@@ -222,7 +222,7 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.openSessions()[agent.CanonicalSessionPath(path)] != "" {
-		busy(w, "session.has_open_pane", "close this session's pane first")
+		busy(w, "session.has_open_pane", "close this session's pane first", nil)
 		return
 	}
 	dir := filepath.Dir(path)
@@ -237,7 +237,7 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var held *agent.SessionLeaseError
 		if errors.As(err, &held) {
-			busy(w, "session.in_use", "this conversation is still being written to")
+			busy(w, "session.in_use", "this conversation is still being written to", nil)
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err)
@@ -328,13 +328,14 @@ func (h *Hub) openSessions() map[string]string {
 	return out
 }
 
-func (h *Hub) rootRuntime(root string) *Runtime {
+func (h *Hub) rootPanes(root string) int {
+	n := 0
 	for _, rt := range h.Runtimes() {
 		if rt.Server.Controller().WorkspaceRoot() == root {
-			return rt
+			n++
 		}
 	}
-	return nil
+	return n
 }
 
 // titleCacheFor keeps one reader per project directory. Titles are file-name

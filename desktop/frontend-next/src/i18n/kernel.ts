@@ -19,7 +19,7 @@ const SAID: Record<string, string> = {
   "busy.reload_extensions": "有活儿在跑，先停下再重载扩展",
 
   // ── 冲突：有东西挡着 ─────────────────────────────────────────────
-  "workspace.has_open_panes": "这个文件夹还有打开的面板，先关掉再移除",
+  "workspace.has_open_panes": "这个文件夹还有 {n} 个打开的面板，先关掉再移除",
   "provider.model_in_use": "这个来源正在用，先换一个模型再删",
   "hub.too_many_panes": "最多同时开 {max} 个面板，先关掉一个",
 

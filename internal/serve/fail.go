@@ -27,9 +27,10 @@ func refuse(w http.ResponseWriter, status int, code, message string, params map[
 
 // busy is the refusal a frontend has to phrase most carefully: nothing is
 // wrong, the answer is "not while this is running". It is one helper because
-// every caller of it means the same thing.
-func busy(w http.ResponseWriter, code, message string) {
-	refuse(w, http.StatusConflict, code, message, nil)
+// every caller of it means the same thing. Params carry what the reader needs
+// in order to act — "close the pane first" is only useful alongside which one.
+func busy(w http.ResponseWriter, code, message string, params map[string]any) {
+	refuse(w, http.StatusConflict, code, message, params)
 }
 
 // coded carries a Reason out through call sites that only return `error`.

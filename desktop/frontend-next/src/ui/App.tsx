@@ -57,8 +57,15 @@ export function App({ hub }: { hub: HubPort }) {
   const [runs, setRuns] = useState<Record<string, { run: string; live: boolean }>>({});
   const activeRef = useRef("");
   activeRef.current = active;
+  const runsRef = useRef(runs);
+  runsRef.current = runs;
 
   const fail = useCallback((e: unknown) => setError(reason(e)), []);
+
+  // Asked at the moment a confirmation opens, never subscribed to: runs moves
+  // on every usage round, and handing the sidebar that would rebuild a tree of
+  // a few hundred sessions each frame — which is what its memo is there for.
+  const liveIds = useCallback((ids: string[]) => ids.filter((id) => runsRef.current[id]?.live), []);
 
   const onReport = useCallback((id: string, next: PaneReport) => {
     setRuns((prev) =>
@@ -209,9 +216,11 @@ export function App({ hub }: { hub: HubPort }) {
   // Awaitable because deleting a conversation has to close its pane first and
   // then wait: the kernel refuses to erase a transcript its runtime still holds,
   // so firing the close off and deleting in the same breath races the teardown.
-  const closePane = useCallback(
-    async (id: string) => {
-      await hub.close(id);
+  // Batched because the reload behind it walks every session on disk, and a
+  // folder's worth of panes must not pay for that once each.
+  const closePanes = useCallback(
+    async (ids: string[]) => {
+      for (const id of ids) await hub.close(id);
       await reloadPanes();
     },
     [hub, reloadPanes],
@@ -267,12 +276,13 @@ export function App({ hub }: { hub: HubPort }) {
         setSettings(true);
       }
       // Escape stops the turn you are looking at, not every live turn in the
-      // window — the other panes are someone else's work in progress.
-      if (e.key === "Escape" && running) activePort?.cancel();
+      // window — the other panes are someone else's work in progress. A pane
+      // over that turn owns the press first: closing it is not stopping it.
+      if (e.key === "Escape" && running && !settings) activePort?.cancel();
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [activePort, running]);
+  }, [activePort, running, settings]);
 
   // A setting changed in the pane is a fact about the session behind it, and
   // the pane is what holds that fact. Without a nudge it keeps polling only
@@ -313,15 +323,9 @@ export function App({ hub }: { hub: HubPort }) {
   // The folder only earns tab space when the panes actually span more than one.
   const manyRoots = useMemo(() => new Set(runtimes.map((rt) => rt.root)).size > 1, [runtimes]);
 
-  const closePanes = useCallback(
-    (ids: string[]) => {
-      void (async () => {
-        for (const id of ids) await hub.close(id).catch(fail);
-        await reloadPanes();
-      })();
-    },
-    [hub, reloadPanes, fail],
-  );
+  // The tab strip has nowhere to await: closing is the end of the gesture there,
+  // so a refusal has to land in the error bar rather than in a caller.
+  const dropPanes = useCallback((ids: string[]) => void closePanes(ids).catch(fail), [closePanes, fail]);
 
   // One rename for both surfaces: the tab renames by the pane's session path,
   // the sidebar by the row's — the same file either way.
@@ -403,7 +407,8 @@ export function App({ hub }: { hub: HubPort }) {
             reload={reloadTree}
             onOpen={openPane}
             onFocus={setActive}
-            onClose={closePane}
+            onClose={closePanes}
+            liveIds={liveIds}
             onCollapse={foldRail}
             onRename={renameSession}
             onError={fail}
@@ -435,7 +440,7 @@ export function App({ hub }: { hub: HubPort }) {
               active={active}
               showRoot={manyRoots}
               onFocus={setActive}
-              onClose={closePanes}
+              onClose={dropPanes}
               onRename={(rt, title) => renameSession(rt.sessionPath ?? "", title)}
             />
           )}
