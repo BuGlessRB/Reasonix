@@ -46,30 +46,35 @@ func acquireServeLock(ctx context.Context, fs *sftpfs.FS, paths StatePaths, cloc
 		}
 
 		lockInfo, statErr := fs.Stat(ctx, paths.LockDir)
-		if statErr != nil || !lockInfo.IsDir {
+		// The lock can vanish between the failed mkdir and this stat: its owner
+		// released it. That is contention, not a failure, so it falls through to
+		// the retry below.
+		if statErr == nil && !lockInfo.IsDir {
 			return nil, fmt.Errorf("bootstrap: create serve lock: %w", mkdirErr)
 		}
-		data, _, _, readErr := fs.ReadFile(ctx, paths.LockOwner, 512)
-		if readErr == nil {
-			observed := strings.TrimSpace(string(data))
-			parts := strings.SplitN(observed, ":", 2)
-			created, parseErr := strconv.ParseInt(parts[0], 10, 64)
-			if parseErr == nil && len(parts) == 2 && clock().Sub(time.Unix(created, 0)) > serveLockStaleAfter {
-				// Compare the owner again immediately before removal. A new owner never
-				// inherits the old random token, so we cannot delete a replacement lock.
-				current, _, _, currentErr := fs.ReadFile(ctx, paths.LockOwner, 512)
-				if currentErr == nil && strings.TrimSpace(string(current)) == observed {
+		if statErr == nil {
+			data, _, _, readErr := fs.ReadFile(ctx, paths.LockOwner, 512)
+			if readErr == nil {
+				observed := strings.TrimSpace(string(data))
+				parts := strings.SplitN(observed, ":", 2)
+				created, parseErr := strconv.ParseInt(parts[0], 10, 64)
+				if parseErr == nil && len(parts) == 2 && clock().Sub(time.Unix(created, 0)) > serveLockStaleAfter {
+					// Compare the owner again immediately before removal. A new owner never
+					// inherits the old random token, so we cannot delete a replacement lock.
+					current, _, _, currentErr := fs.ReadFile(ctx, paths.LockOwner, 512)
+					if currentErr == nil && strings.TrimSpace(string(current)) == observed {
+						_ = fs.Remove(ctx, paths.LockDir, true)
+						continue
+					}
+				}
+			} else if clock().Sub(time.Unix(lockInfo.ModTime, 0)) > serveLockStaleAfter {
+				// The creator may have crashed between mkdir and writing owner. The
+				// critical section cannot legitimately leave an owner-less directory
+				// this old, so reclaim it.
+				if _, _, _, currentErr := fs.ReadFile(ctx, paths.LockOwner, 512); currentErr != nil {
 					_ = fs.Remove(ctx, paths.LockDir, true)
 					continue
 				}
-			}
-		} else if clock().Sub(time.Unix(lockInfo.ModTime, 0)) > serveLockStaleAfter {
-			// The creator may have crashed between mkdir and writing owner. The
-			// critical section cannot legitimately leave an owner-less directory
-			// this old, so reclaim it.
-			if _, _, _, currentErr := fs.ReadFile(ctx, paths.LockOwner, 512); currentErr != nil {
-				_ = fs.Remove(ctx, paths.LockDir, true)
-				continue
 			}
 		}
 
