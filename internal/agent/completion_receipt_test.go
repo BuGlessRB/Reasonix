@@ -4,14 +4,17 @@ import (
 	"testing"
 
 	"reasonix/internal/completion"
+	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 )
 
 func TestReceiptCarriesWhatProseDoesNot(t *testing.T) {
 	ledger := evidence.NewLedger()
+	// The run came before the edit, so it proves nothing about what is there
+	// now — which is exactly the kind of thing a transcript reads past.
 	for _, r := range []evidence.Receipt{
-		{ToolName: "edit_file", Success: true, Write: true, Mutation: true, Paths: []string{"calc.py"}},
 		{ToolName: "bash", Success: true, Command: "go test ./...", OutputBytes: 64},
+		{ToolName: "edit_file", Success: true, Write: true, Mutation: true, Paths: []string{"calc.py"}},
 	} {
 		ledger.Record(r)
 	}
@@ -26,11 +29,14 @@ func TestReceiptCarriesWhatProseDoesNot(t *testing.T) {
 	if len(got.Changes) != 1 || got.Changes[0].Path != "calc.py" || got.Changes[0].Reviewed {
 		t.Fatalf("changes = %+v, want calc.py recorded as unreviewed", got.Changes)
 	}
-	if len(got.Verifications) != 1 || !got.Verifications[0].Passed {
-		t.Fatalf("verifications = %+v, want the passing command named", got.Verifications)
+	if len(got.Verifications) != 1 || !got.Verifications[0].Passed || !got.Verifications[0].Stale {
+		t.Fatalf("verifications = %+v, want the passing but superseded command named", got.Verifications)
 	}
-	if len(got.Gaps) != 1 || got.Gaps[0].Kind != "unreviewed_change" || got.Gaps[0].Detail != "calc.py" {
+	if !receiptHasGap(got, "unreviewed_change", "calc.py") {
 		t.Fatalf("gaps = %+v, want the unreviewed path named", got.Gaps)
+	}
+	if !receiptHasGap(got, "stale_verification", "go test ./...") {
+		t.Fatalf("gaps = %+v, want the superseded run named", got.Gaps)
 	}
 }
 
@@ -54,4 +60,13 @@ func TestAgentHoldsTheLastTurnsReceipt(t *testing.T) {
 	if a.CompletionReceipt() != nil {
 		t.Fatal("an agent that has not finished a turn has no receipt")
 	}
+}
+
+func receiptHasGap(r *event.CompletionReceipt, kind, detail string) bool {
+	for _, gap := range r.Gaps {
+		if gap.Kind == kind && gap.Detail == detail {
+			return true
+		}
+	}
+	return false
 }

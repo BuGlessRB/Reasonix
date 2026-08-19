@@ -9,7 +9,11 @@ type CompletionReceipt struct {
 	Changes       []ReceiptChange
 	Verifications []ReceiptVerification
 	Gaps          []ReceiptGap
-	Risks         []string
+	// Risks and Unverified are the turn's own declarations, kept apart from
+	// Gaps: a gap is something the host found missing, a declaration is
+	// something the turn volunteered, and neither reads as the other.
+	Risks      []string
+	Unverified []string
 }
 
 // ReceiptChange is one mutated path and whether anything looked at it again.
@@ -33,4 +37,16 @@ type ReceiptVerification struct {
 type ReceiptGap struct {
 	Kind   string
 	Detail string
+}
+
+// SaysSomething reports whether this receipt has anything a person needs. It
+// lives here for the reason NeedsAttention does: two frontends deciding it
+// separately is two answers to one question. A receipt with no gaps, no
+// declarations and no clean verdict says only that the host could not judge,
+// which a transcript that already showed every step does not need repeated.
+func (r *CompletionReceipt) SaysSomething() bool {
+	if r == nil {
+		return false
+	}
+	return len(r.Gaps) > 0 || len(r.Risks) > 0 || len(r.Unverified) > 0 || r.Verdict == "done"
 }

@@ -57,7 +57,7 @@ func completionReceipt(rep completion.Report) *event.CompletionReceipt {
 	if rep.Verdict == completion.VerdictUnknown {
 		return nil
 	}
-	out := &event.CompletionReceipt{Verdict: rep.Verdict.String(), Risks: rep.Risks}
+	out := &event.CompletionReceipt{Verdict: rep.Verdict.String(), Risks: rep.Risks, Unverified: rep.Unverified}
 	for _, change := range rep.Changes {
 		out.Changes = append(out.Changes, event.ReceiptChange{Path: change.Path, Reviewed: change.Reviewed})
 	}

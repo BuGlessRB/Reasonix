@@ -10,14 +10,15 @@ var Chinese = Messages{
 	PickWorkspaceTitle: "选择工作目录 · 也可以在这里新建一个",
 	InitHint:           "项目记忆（AGENTS.md）在会话内由模型生成：运行 `reasonix`，然后 `/init` —— 模型会分析代码库并写入。配置请用 `reasonix setup`。",
 
-	ChatTip:             "对话上下文将跨轮保留。输入 'exit' 或按 Ctrl-D 退出。",
-	TurnCancelled:       "已取消 — 回到提示符",
-	InterruptedRecovery: "本轮已中断。部分输出会永久保留供查看；只有完整工具调用及结果和有界恢复摘要会进入模型下一轮。继续或回滚前请先检查当前工作区。",
-	RecoveryPaused:      "已暂停自动重试。Reasonix 已停止重复尝试，并保留已完成的工作。发送“继续”即可开始新一轮，也可以补充要求来调整方向。",
-	ReceiptVerified:     "没有未经验证的部分",
-	ReceiptGapsHeader:   "未验证:",
-	ReceiptRisksHeader:  "已申报的风险:",
-	ReceiptMore:         "另有 %d 项",
+	ChatTip:                 "对话上下文将跨轮保留。输入 'exit' 或按 Ctrl-D 退出。",
+	TurnCancelled:           "已取消 — 回到提示符",
+	InterruptedRecovery:     "本轮已中断。部分输出会永久保留供查看；只有完整工具调用及结果和有界恢复摘要会进入模型下一轮。继续或回滚前请先检查当前工作区。",
+	RecoveryPaused:          "已暂停自动重试。Reasonix 已停止重复尝试，并保留已完成的工作。发送“继续”即可开始新一轮，也可以补充要求来调整方向。",
+	ReceiptVerified:         "没有未经验证的部分",
+	ReceiptGapsHeader:       "未验证:",
+	ReceiptRisksHeader:      "已申报的风险:",
+	ReceiptUnverifiedHeader: "这一轮自己说明的:",
+	ReceiptMore:             "另有 %d 项",
 	ReceiptGapKinds: map[string]string{
 		"unbacked_claim":            "声称过但账本不支持",
 		"unproven_criterion":        "验收项没有证据",
@@ -455,6 +456,14 @@ var Chinese = Messages{
 	CustomPromptAPIKey:   "请输入 API Key",
 	CustomPromptWindow:   "上下文窗口(tokens,填得比模型真实窗口小会导致过早压缩)",
 	CustomAddedFmt:       "已添加自定义模型: %s",
+
+	ProtocolChooseLabel:   "这个地址按哪种协议驱动？",
+	ProtocolOpenAIName:    "OpenAI Chat Completions",
+	ProtocolOpenAIDesc:    "最常见的那条线；这条线上供应商不跑联网搜索",
+	ProtocolResponsesName: "OpenAI Responses",
+	ProtocolResponsesDesc: "无状态；联网搜索由供应商自己跑",
+	ProtocolAnthropicName: "Anthropic Messages",
+	ProtocolAnthropicDesc: "联网搜索由供应商自己跑",
 
 	// Anthropic 兼容 provider
 	AnthropicProviderDesc:          "添加第三方 Anthropic 兼容模型",

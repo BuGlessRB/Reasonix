@@ -17,28 +17,44 @@ const maxReceiptGapLines = 5
 // work back is noise. What no transcript carries is the absence, and that is
 // what the card spends its lines on.
 func renderReceiptCard(r *event.CompletionReceipt, width int) []string {
-	if r == nil {
+	if !r.SaysSomething() {
 		return nil
 	}
+	var lines []string
 	gaps := receiptGapLines(r, width)
 	if len(gaps) == 0 {
-		if r.Verdict != "done" {
-			return nil
+		lines = append(lines, wrapForViewport("  ✓ "+i18n.M.ReceiptVerified+receiptEvidenceTail(r), width, activeCLITheme.muted))
+	} else {
+		lines = append(lines, wrapForViewport("  ⚠ "+i18n.M.ReceiptGapsHeader, width, activeCLITheme.warn))
+		shown := min(len(gaps), maxReceiptGapLines)
+		for _, gap := range gaps[:shown] {
+			lines = append(lines, wrapForViewport("      "+gap, width, activeCLITheme.muted))
 		}
-		return []string{wrapForViewport("  ✓ "+i18n.M.ReceiptVerified+receiptEvidenceTail(r), width, activeCLITheme.muted)}
+		if rest := len(gaps) - shown; rest > 0 {
+			lines = append(lines, wrapForViewport("      "+fmt.Sprintf(i18n.M.ReceiptMore, rest), width, activeCLITheme.muted))
+		}
 	}
-	lines := []string{wrapForViewport("  ⚠ "+i18n.M.ReceiptGapsHeader, width, activeCLITheme.warn)}
-	shown := min(len(gaps), maxReceiptGapLines)
-	for _, gap := range gaps[:shown] {
-		lines = append(lines, wrapForViewport("      "+gap, width, activeCLITheme.muted))
-	}
-	if rest := len(gaps) - shown; rest > 0 {
-		lines = append(lines, wrapForViewport("      "+fmt.Sprintf(i18n.M.ReceiptMore, rest), width, activeCLITheme.muted))
-	}
-	if len(r.Risks) > 0 {
-		lines = append(lines, wrapForViewport("  · "+i18n.M.ReceiptRisksHeader, width, activeCLITheme.muted))
-		for _, risk := range r.Risks {
-			lines = append(lines, wrapForViewport("      "+risk, width, activeCLITheme.muted))
+	// Declarations outlive the gap branch they used to ride in on: what the turn
+	// volunteered is the part nothing else in the transcript carries.
+	return append(lines, receiptDeclarationLines(r, width)...)
+}
+
+func receiptDeclarationLines(r *event.CompletionReceipt, width int) []string {
+	var lines []string
+	for _, section := range []struct {
+		header string
+		items  []string
+	}{
+		{i18n.M.ReceiptUnverifiedHeader, r.Unverified},
+		{i18n.M.ReceiptRisksHeader, r.Risks},
+	} {
+		header, items := section.header, section.items
+		if len(items) == 0 {
+			continue
+		}
+		lines = append(lines, wrapForViewport("  · "+header, width, activeCLITheme.muted))
+		for _, item := range items {
+			lines = append(lines, wrapForViewport("      "+item, width, activeCLITheme.muted))
 		}
 	}
 	return lines

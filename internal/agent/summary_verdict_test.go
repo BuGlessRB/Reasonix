@@ -21,8 +21,8 @@ func ledgerWith(receipts ...evidence.Receipt) *evidence.Ledger {
 // beside a receipt that lists what is still unproven.
 func TestSummaryVerdictFollowsTheReceiptsGaps(t *testing.T) {
 	ledger := ledgerWith(
-		evidence.Receipt{ToolName: "edit_file", Success: true, Write: true, Mutation: true, Paths: []string{"calc.py"}},
 		evidence.Receipt{ToolName: "bash", Success: true, Command: "go test ./...", OutputBytes: 64},
+		evidence.Receipt{ToolName: "edit_file", Success: true, Write: true, Mutation: true, Paths: []string{"calc.py"}},
 	)
 	c := buildShadowContract("fix the add bug in calc.py", ledger.Receipts(), nil)
 	rep := completion.Build(c, ledger, nil)
@@ -31,7 +31,7 @@ func TestSummaryVerdictFollowsTheReceiptsGaps(t *testing.T) {
 		t.Fatalf("contract verdict = %v, want the satisfied contract this case is about", got)
 	}
 	if len(rep.Gaps) == 0 {
-		t.Fatal("expected the unreviewed change to stay a gap")
+		t.Fatal("expected the change made after the run to stay a gap")
 	}
 	if got := summaryVerdictOf(c, rep); got != taskcontract.VerdictPartial {
 		t.Fatalf("summary verdict = %v, want partial beside a receipt listing gaps", got)
@@ -65,5 +65,24 @@ func TestSummaryVerdictKeepsBlocked(t *testing.T) {
 	rep := completion.Build(c, ledger, nil)
 	if got := summaryVerdictOf(c, rep); got == taskcontract.VerdictComplete {
 		t.Fatalf("summary verdict = %v, want the contract's own unfinished answer", got)
+	}
+}
+
+// A fresh passing run carries the change it covers. Demanding a read-back on
+// top of it would flag every correct turn, which is how a signal stops meaning
+// anything.
+func TestSummaryVerdictKeepsCompleteWhenAFreshRunProvedTheChange(t *testing.T) {
+	ledger := ledgerWith(
+		evidence.Receipt{ToolName: "edit_file", Success: true, Write: true, Mutation: true, Paths: []string{"calc.py"}},
+		evidence.Receipt{ToolName: "bash", Success: true, Command: "go test ./...", OutputBytes: 64},
+	)
+	c := buildShadowContract("fix the add bug in calc.py", ledger.Receipts(), nil)
+	rep := completion.Build(c, ledger, nil)
+
+	if len(rep.Gaps) != 0 {
+		t.Fatalf("gaps = %+v, want none: the run is the proof", rep.Gaps)
+	}
+	if got := summaryVerdictOf(c, rep); got != taskcontract.VerdictComplete {
+		t.Fatalf("summary verdict = %v, want complete", got)
 	}
 }

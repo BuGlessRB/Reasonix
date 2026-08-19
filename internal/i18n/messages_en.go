@@ -9,14 +9,15 @@ var English = Messages{
 	PickWorkspaceTitle: "Choose a working folder — or make a new one here",
 	InitHint:           "Project memory (AGENTS.md) is generated in-session: run `reasonix`, then `/init` — the model analyzes the codebase and writes it. For configuration, use `reasonix setup`.",
 
-	ChatTip:             "Context is kept across turns. Type 'exit' or Ctrl-D to quit.",
-	TurnCancelled:       "cancelled — back to prompt",
-	InterruptedRecovery: "This turn was interrupted. Partial output is kept for reference; only completed tool pairs and a bounded recovery summary enter the next model turn. Inspect the workspace before continuing or reverting changes.",
-	RecoveryPaused:      "Automatic retries paused. Reasonix stopped repeated attempts and kept completed work. Send “Continue” to start a fresh attempt, or add instructions to change direction.",
-	ReceiptVerified:     "nothing left unverified",
-	ReceiptGapsHeader:   "not verified:",
-	ReceiptRisksHeader:  "declared risks:",
-	ReceiptMore:         "and %d more",
+	ChatTip:                 "Context is kept across turns. Type 'exit' or Ctrl-D to quit.",
+	TurnCancelled:           "cancelled — back to prompt",
+	InterruptedRecovery:     "This turn was interrupted. Partial output is kept for reference; only completed tool pairs and a bounded recovery summary enter the next model turn. Inspect the workspace before continuing or reverting changes.",
+	RecoveryPaused:          "Automatic retries paused. Reasonix stopped repeated attempts and kept completed work. Send “Continue” to start a fresh attempt, or add instructions to change direction.",
+	ReceiptVerified:         "nothing left unverified",
+	ReceiptGapsHeader:       "not verified:",
+	ReceiptRisksHeader:      "declared risks:",
+	ReceiptUnverifiedHeader: "this turn said so itself:",
+	ReceiptMore:             "and %d more",
 	ReceiptGapKinds: map[string]string{
 		"unbacked_claim":            "claimed but unsupported",
 		"unproven_criterion":        "criterion without proof",
@@ -454,6 +455,14 @@ var English = Messages{
 	CustomPromptAPIKey:   "Enter API Key",
 	CustomPromptWindow:   "Context window in tokens (a value below the model's real window makes compaction fire early)",
 	CustomAddedFmt:       "Added custom model: %s",
+
+	ProtocolChooseLabel:   "Which protocol should drive this endpoint?",
+	ProtocolOpenAIName:    "OpenAI Chat Completions",
+	ProtocolOpenAIDesc:    "the common wire; the provider runs no web search on it",
+	ProtocolResponsesName: "OpenAI Responses",
+	ProtocolResponsesDesc: "stateless; the provider runs web search itself",
+	ProtocolAnthropicName: "Anthropic Messages",
+	ProtocolAnthropicDesc: "the provider runs web search itself",
 
 	// Anthropic compatible provider
 	AnthropicProviderDesc:          "Add third-party Anthropic compatible model",

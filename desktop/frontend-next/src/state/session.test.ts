@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { initialState, reduce, type Item, type SessionEvent, type SessionState } from "./session";
+import { fromHistory, initialState, reduce, type Item, type SessionEvent, type SessionState } from "./session";
+import type { HistoryMessage } from "../port/port";
 
 const run = (evs: SessionEvent[]): SessionState => evs.reduce(reduce, initialState);
 const tools = (s: SessionState) => s.items.filter((i): i is Extract<Item, { t: "tool" }> => i.t === "tool");
@@ -70,5 +71,68 @@ describe("sealing a turn", () => {
     const progress = { kind: "tool_progress", tool: { id: "c1", name: "bash", output: "…" } } as SessionEvent;
     const s = run([partial("c1"), full("c1"), progress, done("context canceled")]);
     expect(tools(s)).toHaveLength(1);
+  });
+});
+
+describe("rebuilding a reopened transcript", () => {
+  const users = (msgs: HistoryMessage[]) =>
+    fromHistory(msgs).items.filter((i): i is Extract<Item, { t: "user" }> => i.t === "user");
+
+  // The control blocks come off before the transcript sees a turn, and a turn
+  // you sent as an image and nothing else has nothing left after that. Dropping
+  // it is how a message that was on screen while you sent it went missing the
+  // next time the window opened.
+  it("keeps a turn that was an attachment and no text", () => {
+    const got = users([
+      { role: "user", content: "", images: 2 },
+      { role: "assistant", content: "看到了" },
+    ]);
+    expect(got).toHaveLength(1);
+    expect(got[0].images).toBe(2);
+  });
+
+  it("still drops a row that is neither text nor attachment", () => {
+    expect(users([{ role: "user", content: "<reasoning-language>zh</reasoning-language>" }])).toHaveLength(0);
+  });
+
+  it("leaves an ordinary turn as its text", () => {
+    const got = users([{ role: "user", content: "第一句话" }]);
+    expect(got).toHaveLength(1);
+    expect(got[0].text).toBe("第一句话");
+  });
+});
+
+describe("the turn's completion receipt", () => {
+  const receipts = (s: SessionState) => s.items.filter((i) => i.t === "receipt");
+  const finish = (r: unknown): SessionEvent => ({ kind: "turn_done", receipt: r }) as SessionEvent;
+
+  it("keeps the quality summary out of the transcript", () => {
+    const s = run([{ kind: "completion_summary", completion: { verdict: "partial", mutations: 2 } } as SessionEvent]);
+    expect(s.items).toHaveLength(0);
+  });
+
+  it("sources a clean verdict instead of asserting it", () => {
+    const s = run([finish({
+      verdict: "done", saysSomething: true,
+      changes: [{ path: "parser.go", reviewed: false }],
+      verifications: [{ command: "go test ./...", passed: true }],
+    })]);
+    expect(receipts(s)).toHaveLength(1);
+  });
+
+  it("shows the turn what it could not verify", () => {
+    const s = run([finish({
+      verdict: "partial", saysSomething: true,
+      gaps: [{ kind: "unreviewed_change", detail: "lexer.go" }],
+    })]);
+    expect(receipts(s)).toHaveLength(1);
+  });
+
+  // The kernel decides; the window does not second-guess it. A receipt with no
+  // gaps and no clean verdict says only that the host could not judge, which a
+  // transcript that already showed every step does not need repeated.
+  it("follows the kernel on what is worth a line", () => {
+    expect(receipts(run([finish({ verdict: "incomplete", saysSomething: false })]))).toHaveLength(0);
+    expect(receipts(run([done()]))).toHaveLength(0);
   });
 });

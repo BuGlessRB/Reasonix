@@ -1,10 +1,10 @@
-import type { Ask, Approval, Compaction, CompletionSummary, ExtensionSurface, Guardian, Tool, WireEvent } from "../port/wire";
+import type { Ask, Approval, Compaction, ExtensionSurface, Guardian, Receipt, Tool, WireEvent } from "../port/wire";
 import { estimateTokens, sample, type Sample } from "../port/tokens";
 import type { HistoryMessage } from "../port/port";
 import { plural, t } from "../i18n";
 
 export type Item =
-  | { t: "user"; id: string; text: string; pending?: boolean }
+  | { t: "user"; id: string; text: string; pending?: boolean; images?: number }
   | { t: "say"; id: string; text: string; reasoning?: string; done: boolean; thoughtMs?: number }
   | { t: "tool"; id: string; tool: Tool; running: boolean; children: Tool[] }
   | { t: "reads"; id: string; tools: Tool[] }
@@ -13,9 +13,9 @@ export type Item =
   | { t: "ask"; id: string; ask: Ask; answered?: string[][] }
   | { t: "compaction"; id: string; c: Compaction; done: boolean }
   | { t: "remember"; id: string; m: RememberedFact; forgotten?: boolean }
-  | { t: "completion"; id: string; c: CompletionSummary }
+  | { t: "receipt"; id: string; r: Receipt }
   | { t: "extension"; id: string; ext: ExtensionSurface }
-  | { t: "notice"; id: string; level: string; text: string };
+  | { t: "notice"; id: string; level: string; text: string; detail?: string };
 
 // What a remember call wrote, read off its own arguments. Saving a fact changes
 // what the agent will do in later sessions, which no other tool call does — so it
@@ -527,12 +527,11 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       return { ...s, items };
     }
 
-    // The kernel already suppresses the boring case: a summary only reaches the
-    // wire when the turn mutated state or ended anything but cleanly.
+    // The quality summary is a machine record — content-free counts for
+    // strategy and audit. The trajectory keeps it; the transcript gets the
+    // receipt on turn_done instead, which is the one written for a person.
     case "completion_summary":
-      return ev.completion
-        ? { ...s, items: [...s.items, { t: "completion", id: nextId(), c: ev.completion }] }
-        : s;
+      return s;
 
     case "retrying":
       return {
@@ -551,7 +550,10 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
     case "notice":
       return {
         ...s,
-        items: [...s.items, { t: "notice", id: nextId(), level: ev.level ?? "info", text: ev.text ?? "" }],
+        items: [
+          ...s.items,
+          { t: "notice", id: nextId(), level: ev.level ?? "info", text: ev.text ?? "", detail: ev.detail },
+        ],
       };
 
     case "turn_done":
@@ -560,8 +562,8 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       // keeps the run amber rather than claiming the tick.
       // Sealing here too: a turn that ends without a closing message otherwise
       // leaves the caret blinking on a message nothing will be appended to.
-      // A plan that ran to the end is spent: it says nothing the completion card
-      // does not, and leaving it struck through in the rail reads as if the next
+      // A plan that ran to the end is spent: it says nothing the receipt does
+      // not, and leaving it struck through in the rail reads as if the next
       // turn already has a plan. One that still has open steps stays — that is
       // the half the user needs.
       return {
@@ -570,12 +572,20 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
         doing: ev.err ? "已中断" : "已完成",
         waiting: {},
         plan: s.plan.length > 0 && s.plan.every((p) => p.done) ? [] : s.plan,
-        items: sealTurn(sealSay(s.items, true), ev.err),
+        items: withReceipt(sealTurn(sealSay(s.items, true), ev.err), ev.receipt),
       };
 
     default:
       return s;
   }
+}
+
+// withReceipt appends the turn's completion record when the kernel says it has
+// something to say. The rule is not restated here: a receipt shown in one
+// window and swallowed in the terminal is the same turn described two ways.
+function withReceipt(items: Item[], r?: Receipt): Item[] {
+  if (!r?.saysSomething) return items;
+  return [...items, { t: "receipt", id: nextId(), r }];
 }
 
 // The kernel wraps each user turn in control-plane blocks (language policy,
@@ -661,8 +671,12 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
   for (const m of msgs) {
     if (m.role === "system") continue;
     if (m.role === "user") {
+      // A turn you sent as an image and nothing else has no text once the
+      // control blocks come off. Keeping it out of the transcript is how a
+      // message that was on screen while you sent it went missing on reload;
+      // a row with neither text nor attachment is host chrome and still goes.
       const text = stripControl(m.content);
-      if (text) out.push({ t: "user", id: nextId(), text });
+      if (text || m.images) out.push({ t: "user", id: nextId(), text, images: m.images });
       continue;
     }
     if (m.role === "assistant") {

@@ -33,6 +33,15 @@ func ran(command string, ok bool) evidence.Receipt {
 
 func gapKinds(rep Report) []string { return rep.GapKinds() }
 
+func gapDetail(rep Report, kind string) string {
+	for _, gap := range rep.Gaps {
+		if gap.Kind.String() == kind {
+			return gap.Detail
+		}
+	}
+	return ""
+}
+
 func TestBuildWithNothingToJudgeStaysUnknown(t *testing.T) {
 	rep := Build(nil, evidence.NewLedger(), nil)
 	if rep.Verdict != VerdictUnknown {
@@ -68,18 +77,43 @@ func TestBuildIsDoneWhenChangeIsVerifiedAndReviewed(t *testing.T) {
 	}
 }
 
-func TestBuildReportsUnreviewedChangeAsPartial(t *testing.T) {
-	ledger := ledgerOf(wrote("parser.go"), ran("go test ./...", true))
+// Nothing ran and nothing looked: the change is unproven twice over, and the
+// path is named so the reader knows which one to go and check.
+func TestBuildReportsAnUnprovenChangeAsPartial(t *testing.T) {
+	rep := Build(nil, ledgerOf(wrote("parser.go")), nil)
 
-	rep := Build(nil, ledger, nil)
 	if rep.Verdict != VerdictPartial {
-		t.Fatalf("verdict = %v, want partial: a verified but never-inspected change is not a clean done", rep.Verdict)
+		t.Fatalf("verdict = %v, want partial: nothing proved this change", rep.Verdict)
 	}
-	if got := gapKinds(rep); !slices.Equal(got, []string{"unreviewed_change"}) {
-		t.Fatalf("gap kinds = %v, want [unreviewed_change]", got)
+	if got := gapKinds(rep); !slices.Equal(got, []string{"unverified_change", "unreviewed_change"}) {
+		t.Fatalf("gap kinds = %v, want both absences named", got)
 	}
-	if rep.Gaps[0].Detail != "parser.go" {
-		t.Fatalf("gap detail = %q, want the unreviewed path", rep.Gaps[0].Detail)
+	if got := gapDetail(rep, "unreviewed_change"); got != "parser.go" {
+		t.Fatalf("gap detail = %q, want the unreviewed path", got)
+	}
+}
+
+// A fresh passing run is the proof. Asking for a read-back on top of it asks
+// for a habit, not for evidence — and a gap that fires on correct work is the
+// one that teaches people to stop reading the receipt.
+func TestBuildTreatsAFreshPassAsProofOfTheChangeItCovers(t *testing.T) {
+	rep := Build(nil, ledgerOf(wrote("parser.go"), ran("go test ./...", true)), nil)
+
+	if rep.Verdict != VerdictDone {
+		t.Fatalf("verdict = %v (%s), want done; gaps %+v", rep.Verdict, rep.Summary(), rep.Gaps)
+	}
+	if len(rep.Changes) != 1 || rep.Changes[0].Reviewed {
+		t.Fatalf("changes = %+v: the run proved the change, it did not look at it", rep.Changes)
+	}
+}
+
+// A pass that predates the newest write proves nothing about it, so the
+// read-back is owed again.
+func TestBuildStaleProofDoesNotCoverALaterChange(t *testing.T) {
+	rep := Build(nil, ledgerOf(wrote("parser.go"), ran("go test ./...", true), wrote("lexer.go")), nil)
+
+	if !slices.Contains(gapKinds(rep), "unreviewed_change") {
+		t.Fatalf("gap kinds = %v, want the change made after the run still named", gapKinds(rep))
 	}
 }
 
@@ -175,7 +209,7 @@ func TestBuildDeclaredCheckReplacesTheBlanketGap(t *testing.T) {
 }
 
 func TestBuildReviewIsScopedPerPath(t *testing.T) {
-	ledger := ledgerOf(wrote("parser.go"), wrote("lexer.go"), read("parser.go"), ran("go test ./...", true))
+	ledger := ledgerOf(wrote("parser.go"), wrote("lexer.go"), read("parser.go"))
 
 	rep := Build(nil, ledger, nil)
 	if len(rep.Changes) != 2 {
@@ -184,8 +218,8 @@ func TestBuildReviewIsScopedPerPath(t *testing.T) {
 	if !rep.Changes[0].Reviewed || rep.Changes[1].Reviewed {
 		t.Fatalf("changes = %+v: reading parser.go must not vouch for lexer.go", rep.Changes)
 	}
-	if rep.Gaps[0].Detail != "lexer.go" {
-		t.Fatalf("gap = %+v, want the unreviewed path only", rep.Gaps[0])
+	if got := gapDetail(rep, "unreviewed_change"); got != "lexer.go" {
+		t.Fatalf("gap detail = %q, want the unreviewed path only: %+v", got, rep.Gaps)
 	}
 }
 

@@ -18,30 +18,30 @@ func shadowReport(input string, receipts ...evidence.Receipt) (event.ContractSha
 	return contractShadowAudit(c), completionReportAudit(completion.Build(c, ledger, nil))
 }
 
-// A green contract is not automatically a clean report: this turn changed
-// calc.py, verified it, and never looked at the result.
+// A green contract is not automatically a clean report: the todo list says the
+// step is done and the file did change, but nothing ran over the result and
+// nothing looked at it either.
 func TestCompletionShadowFlagsWhatTheContractCallsComplete(t *testing.T) {
 	contract, report := shadowReport("fix the add bug in calc.py",
 		evidence.Receipt{ToolName: "todo_write", Success: true, Todos: []evidence.TodoItem{
 			{Content: "fix add()", Status: "completed"},
 		}},
 		evidence.Receipt{ToolName: "edit_file", Mutation: true, Write: true, Success: true, Paths: []string{"calc.py"}},
-		evidence.Receipt{ToolName: "bash", Command: "go test ./...", Success: true, OutputBytes: 64},
 	)
 	if !contract.Complete {
 		t.Fatalf("contract = %+v, want complete — the report's disagreement is the point", contract)
 	}
 	if report.Verdict != "partial" {
-		t.Fatalf("verdict = %q, want partial: the changed file was never inspected", report.Verdict)
+		t.Fatalf("verdict = %q, want partial: nothing proved the changed file", report.Verdict)
 	}
 	if report.Changes != 1 || report.ChangesUnreviewed != 1 {
 		t.Fatalf("changes = %d, unreviewed = %d, want 1/1", report.Changes, report.ChangesUnreviewed)
 	}
-	if report.Verifications != 1 || report.VerificationsFailed != 0 || report.VerificationsStale != 0 {
-		t.Fatalf("verifications = %+v, want one fresh pass", report)
+	if report.Verifications != 0 {
+		t.Fatalf("verifications = %+v, want none: that is what the report is reporting", report)
 	}
-	if !slices.Equal(report.GapKinds, []string{"unreviewed_change"}) {
-		t.Fatalf("gap kinds = %v, want [unreviewed_change]", report.GapKinds)
+	if !slices.Equal(report.GapKinds, []string{"unverified_change", "unreviewed_change"}) {
+		t.Fatalf("gap kinds = %v, want both absences named", report.GapKinds)
 	}
 }
 

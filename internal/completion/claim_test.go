@@ -86,18 +86,25 @@ func TestClaimMatchesTheCommandAsItActuallyRan(t *testing.T) {
 	}
 }
 
-func TestDeclaredUnverifiedAndRisksSurvive(t *testing.T) {
+// update_goal promises the turn that what it declares unverified never counts
+// against it. A report that downgraded the honest answer would be teaching the
+// next turn to declare nothing, so the declaration is kept and shown, beside
+// the risks rather than among the host's findings.
+func TestDeclaredUnverifiedAndRisksAreKeptWithoutCostingTheVerdict(t *testing.T) {
 	rep := Build(nil, ledgerOf(
 		wrote("parser.go"),
 		read("parser.go"),
 		ran("go test ./...", true),
 		claimed("complete", `{"unverified":["desktop UI never exercised"],"risks":["the migration is one-way"]}`),
 	), nil)
-	if got := gapKinds(rep); !slices.Equal(got, []string{"declared_unverified"}) {
-		t.Fatalf("gap kinds = %v, want the self-declared gap kept", got)
+	if got := gapKinds(rep); len(got) != 0 {
+		t.Fatalf("gap kinds = %v, want a declaration to be no gap at all", got)
 	}
-	if rep.Verdict != VerdictPartial {
-		t.Fatalf("verdict = %v, want partial: declaring a gap is honest, not clean", rep.Verdict)
+	if rep.Verdict != VerdictDone {
+		t.Fatalf("verdict = %v, want done: saying so cost the turn its verdict", rep.Verdict)
+	}
+	if !slices.Equal(rep.Unverified, []string{"desktop UI never exercised"}) {
+		t.Fatalf("unverified = %v, want the declaration carried through", rep.Unverified)
 	}
 	if !slices.Equal(rep.Risks, []string{"the migration is one-way"}) {
 		t.Fatalf("risks = %v", rep.Risks)
@@ -106,10 +113,10 @@ func TestDeclaredUnverifiedAndRisksSurvive(t *testing.T) {
 
 // The invariant that makes the claim safe to accept at all.
 func TestClaimCannotClearAHostFoundGap(t *testing.T) {
-	receipts := []evidence.Receipt{wrote("parser.go"), ran("go test ./...", true)}
+	receipts := []evidence.Receipt{wrote("parser.go")}
 	bare := Build(nil, ledgerOf(receipts...), nil)
 	withClaim := Build(nil, ledgerOf(append(receipts,
-		claimed("complete", `{"verified":["go test ./..."],"unverified":[],"risks":[]}`))...), nil)
+		claimed("complete", `{"verified":[],"unverified":["ran out of time"],"risks":[]}`))...), nil)
 
 	if len(withClaim.Gaps) < len(bare.Gaps) {
 		t.Fatalf("a claim removed a host-found gap: %d -> %d", len(bare.Gaps), len(withClaim.Gaps))

@@ -335,6 +335,43 @@ export interface MemoryCitation {
   kind?: string;
 }
 
+// The user-facing completion record on turn_done: what the host could verify
+// about the turn's work and, the part no prose reliably carries, what it could
+// not. The quality summary beside it is a machine record and belongs in the
+// trajectory; this is the one written for a person.
+export interface Receipt {
+  verdict: string;
+  changes?: ReceiptChange[];
+  verifications?: ReceiptVerification[];
+  gaps?: ReceiptGap[];
+  // Declarations the turn volunteered, kept apart from the gaps the host found.
+  // Folding them together reads a caveat somebody offered as a failure.
+  risks?: string[];
+  unverified?: string[];
+  // The kernel's own answer to "is this worth showing at all", carried rather
+  // than recomputed here so the windows and the terminal never drift apart.
+  saysSomething?: boolean;
+}
+
+export interface ReceiptChange {
+  path: string;
+  reviewed: boolean;
+}
+
+// stale: it ran before the newest change, so it proves nothing about the tree
+// as it stands. inconclusive: the shell reported a later stage's status.
+export interface ReceiptVerification {
+  command: string;
+  passed: boolean;
+  stale?: boolean;
+  inconclusive?: boolean;
+}
+
+export interface ReceiptGap {
+  kind: string;
+  detail?: string;
+}
+
 export interface WireEvent {
   kind: Kind;
   text?: string;
@@ -351,6 +388,7 @@ export interface WireEvent {
   compaction?: Compaction;
   streamAttempt?: StreamAttempt;
   completion?: CompletionSummary;
+  receipt?: Receipt;
   err?: string;
   memoryCitations?: MemoryCitation[];
   // The turn a compaction checkpoint committed under, so a reader can tell a

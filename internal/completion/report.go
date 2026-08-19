@@ -75,15 +75,12 @@ const (
 	GapInconclusiveVerification
 	GapUnverifiedChange
 	GapUnreviewedChange
-	GapDeclaredUnverified
 )
 
 func (k GapKind) String() string {
 	switch k {
 	case GapUnbackedClaim:
 		return "unbacked_claim"
-	case GapDeclaredUnverified:
-		return "declared_unverified"
 	case GapUnprovenCriterion:
 		return "unproven_criterion"
 	case GapMissingCheck:
@@ -120,10 +117,12 @@ type Report struct {
 	Changes       []Change
 	Verifications []Verification
 	Gaps          []Gap
-	// Claimed is what the turn said about itself; Risks is its declared risk
-	// list. Both are model-authored and never clear a host-found gap.
-	Claimed Claim
-	Risks   []string
+	// Claimed is what the turn said about itself; Risks and Unverified are its
+	// declarations. All three are model-authored: they never clear a host-found
+	// gap, and being honest about one never counts as a gap either.
+	Claimed    Claim
+	Risks      []string
+	Unverified []string
 }
 
 // Build derives the report from a contract and the turn's receipts. Both may
@@ -332,9 +331,13 @@ func gapsOf(rep Report, c *taskcontract.Contract) []Gap {
 		gaps = append(gaps, Gap{GapUnverifiedChange, "no verification passed after the latest change"})
 	}
 	for _, ch := range rep.Changes {
-		if !ch.Reviewed {
-			gaps = append(gaps, Gap{GapUnreviewedChange, ch.Path})
+		// Same rule the gaps above follow: once something fresh has proven the
+		// tree, a read-back on top of it is a habit, not proof — and a gap that
+		// fires on correct work stops being read.
+		if ch.Reviewed || proven {
+			continue
 		}
+		gaps = append(gaps, Gap{GapUnreviewedChange, ch.Path})
 	}
 	return gaps
 }
@@ -386,7 +389,7 @@ func (r Report) Summary() string {
 func (r Report) GapKinds() []string {
 	seen := map[GapKind]bool{}
 	var out []string
-	for _, kind := range []GapKind{GapUnbackedClaim, GapUnprovenCriterion, GapMissingCheck, GapFailedVerification, GapStaleVerification, GapInconclusiveVerification, GapUnverifiedChange, GapUnreviewedChange, GapDeclaredUnverified} {
+	for _, kind := range []GapKind{GapUnbackedClaim, GapUnprovenCriterion, GapMissingCheck, GapFailedVerification, GapStaleVerification, GapInconclusiveVerification, GapUnverifiedChange, GapUnreviewedChange} {
 		for _, gap := range r.Gaps {
 			if gap.Kind == kind && !seen[kind] {
 				seen[kind] = true

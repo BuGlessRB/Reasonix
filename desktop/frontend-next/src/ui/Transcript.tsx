@@ -11,7 +11,7 @@ import { ApprovalCard } from "./cards/ApprovalCard";
 import { AskCard } from "./cards/AskCard";
 import { SayCard } from "./cards/SayCard";
 import { CompactionCard } from "./cards/CompactionCard";
-import { CompletionCard } from "./cards/CompletionCard";
+import { ReceiptCard } from "./cards/ReceiptCard";
 import { ReadsCard } from "./cards/ReadsCard";
 import { UserCard } from "./cards/UserCard";
 import { NoticeCard } from "./cards/NoticeCard";
@@ -377,6 +377,7 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
       hidden={hidden}
     >
       <Rail marks={marks} total={items.length} scroll={scroll} flow={flow} onJump={jumpTo} onGrab={release} bound={!hidden} />
+      <div className="flow-edge" aria-hidden="true" />
       <div className="flow" ref={flow}>
         {items.length === 0 && <Hero onPick={onSuggest} />}
         {blocks.map((block, i) => (
@@ -506,8 +507,8 @@ const Row = memo(function Row({
 
     case "remember":
       return <RememberCard m={it.m} forgotten={it.forgotten} onForget={(name) => onForget(it.id, name)} />;
-    case "completion":
-      return <CompletionCard c={it.c} />;
+    case "receipt":
+      return <ReceiptCard r={it.r} />;
     case "extension":
       return <ExtensionCard ext={it.ext} onInvoke={onExtInvoke} onSubmit={onExtSubmit} />;
     case "notice":

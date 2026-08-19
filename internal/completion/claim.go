@@ -62,20 +62,19 @@ func trimAll(in []string) []string {
 }
 
 // reconcile folds the claim into a host-built report. Claimed verifications
-// are matched against real receipts, and every mismatch becomes a gap; the
-// model's own declarations are carried through untouched. Nothing here can
-// clear a gap the host found — a claim only ever adds.
+// are matched against real receipts and every mismatch becomes a gap. What the
+// turn declares it could not verify is carried beside the risks instead:
+// update_goal promises those never count against the turn, and a report that
+// downgrades the honest answer teaches the next turn to say nothing.
 func reconcile(rep Report, claim Claim, receipts []evidence.Receipt) Report {
 	rep.Claimed = claim
 	rep.Risks = claim.Risks
+	rep.Unverified = claim.Unverified
 	var gaps []Gap
 	for _, command := range claim.Verified {
 		if why := unbackedClaim(command, receipts); why != "" {
 			gaps = append(gaps, Gap{GapUnbackedClaim, why})
 		}
-	}
-	for _, note := range claim.Unverified {
-		gaps = append(gaps, Gap{GapDeclaredUnverified, note})
 	}
 	rep.Gaps = append(gaps, rep.Gaps...)
 	return rep

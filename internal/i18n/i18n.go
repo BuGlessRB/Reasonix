@@ -41,8 +41,11 @@ type Messages struct {
 	RecoveryPaused      string // controlled Auto retry pause; user can continue in the next message
 	ReceiptVerified     string // end-of-turn receipt, nothing unproven
 	ReceiptGapsHeader   string // end-of-turn receipt, header above the unproven list
-	ReceiptRisksHeader  string // end-of-turn receipt, header above declared risks
-	ReceiptMore         string // end-of-turn receipt, "and N more" tail
+	ReceiptRisksHeader  string
+	// ReceiptUnverifiedHeader labels what the turn itself said it could not
+	// verify — a declaration, kept apart from the gaps the host found.
+	ReceiptUnverifiedHeader string // end-of-turn receipt, header above declared risks
+	ReceiptMore             string // end-of-turn receipt, "and N more" tail
 	// ReceiptGapKinds maps a completion gap kind to its short human phrase.
 	ReceiptGapKinds   map[string]string
 	NoSessionToResume string // shown when --continue / --resume finds nothing
@@ -492,6 +495,15 @@ type Messages struct {
 	CustomPromptAPIKey   string // "Enter API Key"
 	CustomPromptWindow   string // "Enter context window in tokens"
 	CustomAddedFmt       string // "Added custom model: %s"
+
+	// protocol chooser
+	ProtocolChooseLabel   string // "Which protocol should drive this endpoint?"
+	ProtocolOpenAIName    string // "OpenAI Chat Completions"
+	ProtocolOpenAIDesc    string // "the common wire; no provider-run search"
+	ProtocolResponsesName string // "OpenAI Responses"
+	ProtocolResponsesDesc string // "stateless; provider-run web search"
+	ProtocolAnthropicName string // "Anthropic Messages"
+	ProtocolAnthropicDesc string // "provider-run web search"
 
 	// Anthropic compatible provider
 	AnthropicProviderDesc          string // "Add Anthropic API compatible model"
