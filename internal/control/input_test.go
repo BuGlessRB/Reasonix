@@ -1099,7 +1099,9 @@ func TestSubmitBlockCommentPrefixStartsTurn(t *testing.T) {
 	c.Submit(input)
 	waitForTurnDone(t, events)
 
-	if len(runner.inputs) != 1 || runner.inputs[0] != input {
+	// A transient block may ride ahead of the user's text; what this pins is
+	// that the comment started a turn and reached the runner intact.
+	if len(runner.inputs) != 1 || !strings.HasSuffix(runner.inputs[0], input) {
 		t.Fatalf("block comment prefix should start a model turn, inputs=%q", runner.inputs)
 	}
 }

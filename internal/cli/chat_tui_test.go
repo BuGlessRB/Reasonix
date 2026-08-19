@@ -3524,7 +3524,10 @@ func TestSlashCodeCommentSubmitStartsTurn(t *testing.T) {
 			m = model.(chatTUI)
 			waitForCLIEvent(t, events, event.TurnDone)
 
-			if len(r.inputs) != 1 || r.inputs[0] != input {
+			// A transient block (reasoning language) may ride ahead of the
+			// user's text; what this pins is that the comment started a turn
+			// and reached the runner intact, not that nothing preceded it.
+			if len(r.inputs) != 1 || !strings.HasSuffix(r.inputs[0], input) {
 				t.Fatalf("slash code comment should start a model turn, inputs=%q", r.inputs)
 			}
 		})

@@ -295,26 +295,27 @@ func routeEntry(text string, e Entry) (AutoUse, string, bool) {
 			return e.AutoUse, "the skill trigger matches the user request", true
 		}
 	}
-	if e.Kind == KindMCPTool && explicitMCP(text, e.Source) {
-		return AutoUsePrefer, "the user named this MCP server", true
+	if e.Kind == KindMCPTool && namesMCPTool(text, e) {
+		return AutoUsePrefer, "the user named this MCP tool", true
 	}
 	return "", "", false
 }
 
+// explicitSkill matches the host's own invocation syntax. Six prose forms used
+// to sit beside it in two languages, all demanding "use <name> skill" with no
+// article, so "use the review skill" — how anyone actually writes it — missed
+// while the phrasings that did match said nothing about wanting the skill.
 func explicitSkill(text, name string) bool {
-	n := normalize(name)
-	return strings.Contains(text, "/"+n) ||
-		strings.Contains(text, "use "+n+" skill") ||
-		strings.Contains(text, "using "+n+" skill") ||
-		strings.Contains(text, "使用 "+n+" skill") ||
-		strings.Contains(text, "用 "+n+" skill") ||
-		strings.Contains(text, "使用"+n+"技能") ||
-		strings.Contains(text, "用"+n+"技能")
+	return strings.Contains(text, "/"+normalize(name))
 }
 
-func explicitMCP(text, server string) bool {
-	s := normalize(server)
-	return strings.Contains(text, s+" mcp") || strings.Contains(text, "mcp "+s) || strings.Contains(text, "使用 "+s+" mcp") || strings.Contains(text, "用 "+s+" mcp")
+// namesMCPTool matches the identifier the host mints for the tool. Matching
+// "<server> mcp" instead fired on every sentence that mentioned the server,
+// including "don't use the acme mcp server" and "别用 acme mcp", which then
+// preferred the server the user had just declined.
+func namesMCPTool(text string, e Entry) bool {
+	tool := normalize(e.ToolName)
+	return tool != "" && strings.Contains(text, tool)
 }
 
 func triggerMatch(text string, triggers []string) bool {

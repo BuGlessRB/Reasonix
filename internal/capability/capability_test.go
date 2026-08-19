@@ -44,12 +44,21 @@ func TestRouteRequiresExplicitSkill(t *testing.T) {
 		Scope:       skill.ScopeProject,
 	}}, []tool.ContractEntry{{Name: "run_skill"}})
 
-	decision := Route("请使用 audit skill 检查一下", entries)
+	decision := Route("/audit 检查一下", entries)
 	if len(decision.Candidates) == 0 {
 		t.Fatal("Route returned no candidates")
 	}
 	if got := decision.Candidates[0].Policy; got != AutoUseRequire {
 		t.Fatalf("policy = %s, want require", got)
+	}
+
+	// Prose naming is not the host's syntax: it hands off to the semantic
+	// router, which reads the whole request. The phrase forms this replaced
+	// demanded "use audit skill" with no article, so real phrasing missed.
+	for _, prose := range []string{"请使用 audit skill 检查一下", "use the audit skill", "don't use the audit skill"} {
+		if d := Route(prose, entries); len(d.Candidates) != 0 {
+			t.Errorf("%q routed deterministically: %+v", prose, d.Candidates)
+		}
 	}
 }
 
@@ -132,13 +141,22 @@ func TestRouteMatchesNamedMCPServerNotVendorMentions(t *testing.T) {
 		t.Fatalf("a vendor mention routed an MCP tool: %+v", decision.Candidates)
 	}
 
-	decision := Route("用 github mcp 查一下相关反馈", entries)
+	// Naming the tool is naming the identifier the host minted for it.
+	decision := Route("用 mcp__github__search_issues 查一下相关反馈", entries)
 	if len(decision.Candidates) == 0 {
-		t.Fatal("named MCP server did not route")
+		t.Fatal("named MCP tool did not route")
 	}
 	got := decision.Candidates[0]
 	if got.Entry.ID != "mcp-tool:github/search_issues" || got.Policy != AutoUsePrefer {
 		t.Fatalf("candidate = %+v, want github mcp/prefer", got)
+	}
+
+	// "<server> mcp" matched any sentence containing it, so declining the
+	// server preferred it. Both of these used to route.
+	for _, refusal := range []string{"don't use the github mcp server", "别用 github mcp"} {
+		if d := Route(refusal, entries); len(d.Candidates) != 0 {
+			t.Errorf("%q routed: %+v", refusal, d.Candidates)
+		}
 	}
 }
 
