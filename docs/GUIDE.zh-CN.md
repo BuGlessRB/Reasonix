@@ -844,6 +844,19 @@ Context Engine v2 把上下文分成两个用途不同的层：
 项目已经自己定义了那里的"验证"是什么。条目写作 `- verify: <命令>`（`* verify:` 也可）；
 文件里其他位置的普通指令仍然只是指引，不会变成硬门槛。
 
+同一个小节还用来声明"哪些路径的改动值得最严的审查"：
+
+```markdown
+## Reasonix host checks
+
+- sensitive: src/auth/**
+- sensitive: infra/network.tf
+```
+
+改动落在已声明的路径下，回合结束前必须跑过 `review` 与 `security_review`；其余改动只按
+结构判定（host 证明发生了却报不出路径的不透明写入，或一次触及十个以上路径）。敏感性只
+声明、不推断——路径的拼写分不清 `internal/auth` 和 `session_write_authority.go`。
+
 每个真实用户回合前，Reasonix 会自动召回一小组相关事实。它用原始用户消息搜索，抑制“继续”
 这类泛化请求，在等价事实中优先项目级版本，对 stale 内容降权，并最多把四条事实 / 2,400
 字符追加到本轮 user turn。这段动态后缀不会改写 cache-stable system prompt 或工具 schema。

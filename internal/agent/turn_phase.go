@@ -59,7 +59,7 @@ func (a *Agent) emitCompletionSummary(c *taskcontract.Contract, rep completion.R
 			switch {
 			case a.task.ledger.HasSuccessfulReviewAfter(mut):
 				review = "passed"
-			case a.deliveryProfile && a.task.ledger.MutationRiskAfter(mut) >= evidence.RiskMedium:
+			case a.deliveryProfile && a.task.ledger.MutationRiskAfter(mut, a.projectSensitivePaths) >= evidence.RiskMedium:
 				review = "unavailable"
 			}
 		}

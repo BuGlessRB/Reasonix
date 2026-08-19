@@ -47,29 +47,42 @@ func TestClassifyMutationRisk(t *testing.T) {
 	low := []Receipt{
 		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"docs/GUIDE.md"}`), true, false),
 	}
-	if got := ClassifyMutationRisk(low, 0); got != RiskLow {
+	if got := ClassifyMutationRisk(low, 0, nil); got != RiskLow {
 		t.Fatalf("docs risk = %s, want low", got)
 	}
 
 	med := []Receipt{
 		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, false),
 	}
-	if got := ClassifyMutationRisk(med, 0); got != RiskMedium {
+	if got := ClassifyMutationRisk(med, 0, nil); got != RiskMedium {
 		t.Fatalf("prod risk = %s, want medium", got)
 	}
 
+	// Sensitivity is declared, never inferred from spelling. Undeclared, a
+	// permission file is ordinary production code; declared, it is High.
 	high := []Receipt{
 		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, false),
 	}
-	if got := ClassifyMutationRisk(high, 0); got != RiskHigh {
-		t.Fatalf("auth risk = %s, want high", got)
+	if got := ClassifyMutationRisk(high, 0, nil); got != RiskMedium {
+		t.Fatalf("undeclared path risk = %s, want medium", got)
+	}
+	if got := ClassifyMutationRisk(high, 0, []string{"internal/permission/**"}); got != RiskHigh {
+		t.Fatalf("declared-sensitive risk = %s, want high", got)
+	}
+	// The retired table matched any path spelling these words. A trace file is
+	// not a data race and a blocked-outcome file is not a lock.
+	for _, p := range []string{"cmd/e2ebench/phasetrace.go", "internal/agent/conclude_blocked.go"} {
+		spurious := []Receipt{ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"`+p+`"}`), true, false)}
+		if got := ClassifyMutationRisk(spurious, 0, []string{"internal/permission/**"}); got != RiskMedium {
+			t.Fatalf("%s risk = %s, want medium (spelling is not sensitivity)", p, got)
+		}
 	}
 
 	// A proven path-less write cannot be scored by path, so it remains high risk.
 	opaque := []Receipt{
 		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"printf hi > out.log"}`), true, false),
 	}
-	if got := ClassifyMutationRisk(opaque, 0); got != RiskHigh {
+	if got := ClassifyMutationRisk(opaque, 0, nil); got != RiskHigh {
 		t.Fatalf("opaque risk = %s, want high", got)
 	}
 
@@ -78,7 +91,7 @@ func TestClassifyMutationRisk(t *testing.T) {
 	unproven := []Receipt{
 		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"gofmt -l ."}`), true, false),
 	}
-	if got := ClassifyMutationRisk(unproven, 0); got != RiskLow {
+	if got := ClassifyMutationRisk(unproven, 0, nil); got != RiskLow {
 		t.Fatalf("unproven risk = %s, want low", got)
 	}
 
@@ -86,17 +99,17 @@ func TestClassifyMutationRisk(t *testing.T) {
 	opaquePrivileged := []Receipt{
 		{ToolName: "mcp__srv__write", Success: true, Mutation: true},
 	}
-	if got := ClassifyMutationRisk(opaquePrivileged, 0); got != RiskHigh {
+	if got := ClassifyMutationRisk(opaquePrivileged, 0, nil); got != RiskHigh {
 		t.Fatalf("privileged opaque risk = %s, want high", got)
 	}
 
-	// An opaque write alongside a security-sensitive path still classifies High.
+	// An opaque write alongside a declared-sensitive path still classifies High.
 	opaqueHighPath := []Receipt{
 		{ToolName: "bash", Success: true, Mutation: true},
 		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, false),
 	}
-	if got := ClassifyMutationRisk(opaqueHighPath, 0); got != RiskHigh {
-		t.Fatalf("opaque+auth risk = %s, want high", got)
+	if got := ClassifyMutationRisk(opaqueHighPath, 0, []string{"internal/permission/**"}); got != RiskHigh {
+		t.Fatalf("opaque+declared risk = %s, want high", got)
 	}
 }
 

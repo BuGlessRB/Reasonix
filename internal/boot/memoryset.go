@@ -7,11 +7,12 @@ import (
 )
 
 // memoryAssembly is the memory surface for one build: the live set the remember
-// tools write through, the host checks its docs declare, and the prompt with
-// the memory block folded in.
+// tools write through, the host checks and sensitive paths its docs declare,
+// and the prompt with the memory block folded in.
 type memoryAssembly struct {
 	set       *memory.Set
 	checks    []instruction.VerifyCheck
+	sensitive []string
 	sysPrompt string
 }
 
@@ -23,6 +24,7 @@ func buildMemoryAssembly(opts Options, cfg *config.Config, root, sysPrompt strin
 		return memoryAssembly{
 			set:       opts.ReuseAssembly.Memory,
 			checks:    opts.ReuseAssembly.ProjectChecks,
+			sensitive: opts.ReuseAssembly.ProjectSensitivePaths,
 			sysPrompt: sysPrompt,
 		}
 	}
@@ -35,6 +37,7 @@ func buildMemoryAssembly(opts Options, cfg *config.Config, root, sysPrompt strin
 	return memoryAssembly{
 		set:       set,
 		checks:    instruction.ExtractHostChecks(set.Docs),
+		sensitive: instruction.ExtractSensitivePaths(set.Docs),
 		sysPrompt: memory.Compose(sysPrompt, set),
 	}
 }

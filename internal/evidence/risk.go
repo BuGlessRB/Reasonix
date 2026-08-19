@@ -3,6 +3,8 @@ package evidence
 import (
 	"path/filepath"
 	"strings"
+
+	"reasonix/internal/fileutil"
 )
 
 // RiskLevel classifies the latest post-mutation change set for adaptive review.
@@ -14,29 +16,17 @@ const (
 	RiskHigh   RiskLevel = "high"
 )
 
-// highRiskPathHints elevate ordinary production edits to High when the path
-// touches auth, crypto, networking, providers, plugins, sandbox, config,
-// migrations, persistence, or concurrency.
-var highRiskPathHints = []string{
-	"auth", "permission", "secret", "credential", "token", "password", "oauth",
-	"crypto", "encrypt", "decrypt", "tls", "ssl", "keyring",
-	"network", "proxy", "http", "websocket", "provider",
-	"plugin", "mcp", "tool", "schema", "sandbox",
-	"config", "migrate", "migration", "persist", "store", "database", "db",
-	"concurrent", "mutex", "race", "lock", "atomic",
-}
-
 // highRiskToolHints elevate opaque or privileged mutation surfaces.
 var highRiskToolHints = []string{
 	"mcp__", "install_source", "install_skill", "plugin",
 }
 
 // ClassifyMutationRisk scores the change set after the latest mutation.
-// Low: docs/tests/i18n only. Medium: ordinary production code. High:
-// security-sensitive surfaces, 10+ paths, or an opaque write — one the host
+// Low: docs/tests/i18n only. Medium: ordinary production code. High: a path the
+// project declared sensitive, 10+ paths, or an opaque write — one the host
 // proved happened but cannot name a path for. A command it merely failed to
 // prove read-only names no change set at all, so it scores nothing.
-func ClassifyMutationRisk(receipts []Receipt, after int) RiskLevel {
+func ClassifyMutationRisk(receipts []Receipt, after int, sensitive []string) RiskLevel {
 	start := max(after+1, 0)
 	var paths []string
 	seen := map[string]bool{}
@@ -84,7 +74,7 @@ func ClassifyMutationRisk(receipts []Receipt, after int) RiskLevel {
 		return RiskHigh
 	}
 	for _, p := range paths {
-		if pathLooksHighRisk(p) {
+		if pathIsDeclaredSensitive(p, sensitive) {
 			return RiskHigh
 		}
 		if !pathLooksLowRisk(p) {
@@ -99,14 +89,14 @@ func ClassifyMutationRisk(receipts []Receipt, after int) RiskLevel {
 }
 
 // MutationRiskAfter classifies risk from the ledger using the latest mutation.
-func (l *Ledger) MutationRiskAfter(after int) RiskLevel {
+func (l *Ledger) MutationRiskAfter(after int, sensitive []string) RiskLevel {
 	if l == nil {
 		return RiskLow
 	}
 	l.mu.Lock()
 	receipts := append([]Receipt(nil), l.receipts...)
 	l.mu.Unlock()
-	return ClassifyMutationRisk(receipts, after)
+	return ClassifyMutationRisk(receipts, after, sensitive)
 }
 
 // PathsSince returns distinct paths from successful mutation/write receipts at
@@ -136,11 +126,12 @@ func (l *Ledger) PathsSince(after int) []string {
 	return out
 }
 
-func pathLooksHighRisk(path string) bool {
-	lower := strings.ToLower(filepath.ToSlash(path))
-	base := strings.ToLower(filepath.Base(path))
-	for _, hint := range highRiskPathHints {
-		if strings.Contains(lower, hint) || strings.Contains(base, hint) {
+// pathIsDeclaredSensitive reports whether the project itself named this path.
+// The predecessor guessed from spelling and could not tell `internal/auth` from
+// `session_write_authority.go`, or a trace file from a data race.
+func pathIsDeclaredSensitive(path string, sensitive []string) bool {
+	for _, glob := range sensitive {
+		if fileutil.MatchSlashGlob(path, glob) {
 			return true
 		}
 	}

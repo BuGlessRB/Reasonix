@@ -95,7 +95,7 @@ func TestUnknownStillCountsAsMutation(t *testing.T) {
 // receipt cannot retroactively prove it wrote something.
 func TestUngradedMutationDoesNotScoreOpaque(t *testing.T) {
 	legacy := []Receipt{{ToolName: "bash", Success: true, Mutation: true, Command: "some-unknown-writer"}}
-	if got := ClassifyMutationRisk(legacy, 0); got != RiskLow {
+	if got := ClassifyMutationRisk(legacy, 0, nil); got != RiskLow {
 		t.Fatalf("ungraded risk = %s, want %s", got, RiskLow)
 	}
 }
@@ -107,7 +107,7 @@ func TestCheckAfterEditKeepsPathScoredRisk(t *testing.T) {
 		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, false),
 		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"gofmt -l ."}`), true, false),
 	}
-	if got := ClassifyMutationRisk(receipts, 0); got != RiskMedium {
+	if got := ClassifyMutationRisk(receipts, 0, nil); got != RiskMedium {
 		t.Fatalf("risk after check = %s, want %s", got, RiskMedium)
 	}
 }

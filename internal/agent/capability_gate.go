@@ -217,7 +217,7 @@ func (a *Agent) deliveryReviewGateFailure() string {
 		return ""
 	}
 	a.emitTurnPhase(event.TurnPhaseReviewing)
-	risk := a.task.ledger.MutationRiskAfter(mutation)
+	risk := a.task.ledger.MutationRiskAfter(mutation, a.projectSensitivePaths)
 	paths := productionPaths(a.task.ledger.PathsSince(mutation))
 	hasReviewTool := a.svc.tools != nil && (toolPresent(a.svc.tools, "review") || toolPresent(a.svc.tools, "run_skill") || toolPresent(a.svc.tools, "use_capability"))
 	hasSecurityTool := a.svc.tools != nil && (toolPresent(a.svc.tools, "security_review") || toolPresent(a.svc.tools, "run_skill") || toolPresent(a.svc.tools, "use_capability"))

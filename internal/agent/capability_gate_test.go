@@ -23,11 +23,19 @@ func TestDeliveryReviewGateHoldsUnderFrozenTaskPolicy(t *testing.T) {
 	reg.Add(fakeTool{name: "security_review", readOnly: true})
 
 	a := &Agent{deliveryProfile: true, task: taskRuntime{ledger: ledger}, svc: agentServices{tools: reg}}
+	a.projectSensitivePaths = []string{"internal/permission/**"}
 	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{Preset: agentpreset.Delivery})
 	a.turn.policySet = true
 
 	if got := a.deliveryReviewGateFailure(); !strings.Contains(got, "high-risk") {
 		t.Fatalf("gate under a frozen policy = %q, want high-risk review demand", got)
+	}
+
+	// Without the project's declaration the same edit is ordinary production
+	// code: the host does not read sensitivity out of the path's spelling.
+	a.projectSensitivePaths = nil
+	if got := a.deliveryReviewGateFailure(); !strings.Contains(got, "medium-risk") {
+		t.Fatalf("undeclared gate = %q, want medium-risk demand", got)
 	}
 }
 
@@ -100,6 +108,7 @@ func TestDeliveryReviewGateHighRiskStillRequiresSecurityReview(t *testing.T) {
 	reg.Add(fakeTool{name: "review", readOnly: true})
 	reg.Add(fakeTool{name: "security_review", readOnly: true})
 	a := &Agent{deliveryProfile: true, task: taskRuntime{ledger: ledger}, svc: agentServices{tools: reg}}
+	a.projectSensitivePaths = []string{"internal/permission/**"}
 
 	if got := a.deliveryReviewGateFailure(); !strings.Contains(got, "high-risk") {
 		t.Fatalf("review gate = %q, want high-risk review demand", got)

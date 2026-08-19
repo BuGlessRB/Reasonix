@@ -27,6 +27,7 @@ type ReusedAssembly struct {
 	ImplicitSkillInvocation bool
 	Memory                  *memory.Set
 	ProjectChecks           []instruction.VerifyCheck
+	ProjectSensitivePaths   []string
 }
 
 // shouldReuseDiscovery reports whether rediscovery of skills/commands/hooks

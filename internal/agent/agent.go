@@ -351,6 +351,10 @@ type Agent struct {
 	// projectChecks are structured project instructions that complete_step can
 	// verify against same-turn bash receipts after a write-backed completion.
 	projectChecks []instruction.VerifyCheck
+	// projectSensitivePaths are the globs the project declared as needing the
+	// hardest review. Empty means undeclared, and the host says so rather than
+	// guessing sensitivity from how a path is spelled.
+	projectSensitivePaths []string
 
 	// deliveryProfile enables the runtime-enforced delivery contract. The stable
 	// profile prompt explains intent; this is host state and never enters the
@@ -966,7 +970,8 @@ type Options struct {
 	WorkspaceLease *workspacelease.Owner
 
 	// ProjectChecks are host-observable structured checks extracted during boot.
-	ProjectChecks []instruction.VerifyCheck
+	ProjectChecks         []instruction.VerifyCheck
+	ProjectSensitivePaths []string
 
 	// DeliveryProfile enforces acceptance criteria before mutations and requires
 	// post-change review, verification, and evidence-backed sign-off before a
@@ -1130,6 +1135,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 		readOnlyExecution:      opts.ReadOnlyExecution,
 		plannerMCPExecution:    opts.PlannerMCPExecution,
 		projectChecks:          append([]instruction.VerifyCheck(nil), opts.ProjectChecks...),
+		projectSensitivePaths:  append([]string(nil), opts.ProjectSensitivePaths...),
 		deliveryProfile:        opts.DeliveryProfile || agentpreset.Normalize(opts.AgentPreset) == agentpreset.Delivery,
 		ablation:               opts.Ablation,
 		capabilityLedger:       opts.CapabilityLedger,

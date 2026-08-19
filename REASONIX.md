@@ -161,3 +161,22 @@ whether the same PR edited `docs/*.md`:
 Documentation-impact: updated - <what changed>            # docs/*.md edited
 Documentation-impact: none - <why the docs stay correct>  # not edited
 ```
+
+## Reasonix host checks
+
+The paths below decide what the agent is allowed to do — a wrong change here
+is not a bug in a feature, it is a hole in a boundary. Declaring them makes
+every change under them demand `review` plus `security_review` before a turn
+can finish. Sensitivity is declared, never inferred: the host does not read it
+out of how a path is spelled, which cannot tell `internal/auth` from
+`session_write_authority.go`, or a trace file from a data race.
+
+- sensitive: internal/permission/**
+- sensitive: internal/sandbox/**
+- sensitive: internal/shellsafe/**
+- sensitive: internal/shellparse/**
+- sensitive: internal/control/approval.go
+- sensitive: internal/installsource/**
+- sensitive: internal/plugin/**
+- sensitive: internal/pluginpkg/**
+- sensitive: internal/netclient/**

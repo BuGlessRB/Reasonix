@@ -636,7 +636,7 @@ func mutationEvidenceForArtifact(summary evidence.ChildEvidenceSummary) *artifac
 		return nil
 	}
 	return &artifactMutationEvidence{
-		Risk:  string(evidence.ClassifyMutationRisk(summary.Receipts, firstMutation)),
+		Risk:  string(evidence.ClassifyMutationRisk(summary.Receipts, firstMutation, nil)), // nil: the parent re-classifies against its own declaration
 		Paths: summary.MutationPaths(),
 	}
 }

@@ -1071,6 +1071,21 @@ what verification means there. Entries are `- verify: <command>` (or
 `* verify:`); ordinary instructions elsewhere in the file stay guidance and
 never become gates.
 
+The same section names the paths whose changes deserve the hardest review:
+
+```markdown
+## Reasonix host checks
+
+- sensitive: src/auth/**
+- sensitive: infra/network.tf
+```
+
+A change under a declared path requires `review` plus `security_review` before
+the turn can end; everything else is scored by structure alone (an opaque write
+the host cannot name a path for, or ten or more paths at once). Sensitivity is
+declared rather than inferred, because a path's spelling cannot tell
+`internal/auth` from `session_write_authority.go`.
+
 Reasonix automatically recalls a small set of relevant facts before each real
 user turn. It searches the raw user message, suppresses generic requests such as
 "continue", prefers project facts over equivalent global fallbacks, down-ranks

@@ -1661,9 +1661,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		Jobs:  jm,
 		// Parent write reservation at the executor entry covers all writers
 		// (including late Economy/MCP adds) without wrapping tool schemas.
-		WriteScheduler:               subagentScheduler,
-		WriteWorkspaceRoot:           root,
-		ProjectChecks:                projectChecks,
+		WriteScheduler:     subagentScheduler,
+		WriteWorkspaceRoot: root,
+		ProjectChecks:      projectChecks, ProjectSensitivePaths: memSet.sensitive,
 		AgentPreset:                  agentPreset,
 		DeliveryProfile:              tokenDelivery,
 		Ablation:                     opts.Ablation,
@@ -2025,7 +2025,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		Registry:                reg,
 		ImplicitSkillInvocation: implicitSkillInvocation,
 		Memory:                  mem,
-		ProjectChecks:           projectChecks,
+		ProjectChecks:           projectChecks, ProjectSensitivePaths: memSet.sensitive,
 	}
 	return finalizeBuildResult(&BuildResult{Controller: ctrl, Snapshot: snap, Runtime: runtimeSet, Owner: owner, Extensions: extensionMgr, Dispatcher: extensionDispatcher, ExtensionUI: extUIHub, ProviderResolver: providerResolver, BaseProviderResolver: baseResolver, Assembly: assembly, Phases: timer.done("assemble")}, !opts.deferPublish), nil
 }

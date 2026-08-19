@@ -42,6 +42,20 @@ const HostChecksHeading = "Reasonix host checks"
 func ExtractHostChecks(docs []Document) []VerifyCheck {
 	seen := map[string]bool{}
 	var checks []VerifyCheck
+	forEachHostCheckLine(docs, func(line string, doc Document, i int) {
+		command, ok := verifyBullet(line)
+		if !ok || seen[command] {
+			return
+		}
+		seen[command] = true
+		checks = append(checks, VerifyCheck{Command: command, SourcePath: doc.Path, Line: i + 1})
+	})
+	return checks
+}
+
+// forEachHostCheckLine visits every line inside the HostChecksHeading section,
+// so the bullet kinds a project may declare there stay one parser.
+func forEachHostCheckLine(docs []Document, visit func(line string, doc Document, index int)) {
 	for _, doc := range docs {
 		inSection := false
 		for i, raw := range strings.Split(doc.Body, "\n") {
@@ -50,22 +64,11 @@ func ExtractHostChecks(docs []Document) []VerifyCheck {
 				inSection = strings.EqualFold(heading, HostChecksHeading)
 				continue
 			}
-			if !inSection {
-				continue
+			if inSection {
+				visit(line, doc, i)
 			}
-			command, ok := verifyBullet(line)
-			if !ok || seen[command] {
-				continue
-			}
-			seen[command] = true
-			checks = append(checks, VerifyCheck{
-				Command:    command,
-				SourcePath: doc.Path,
-				Line:       i + 1,
-			})
 		}
 	}
-	return checks
 }
 
 func markdownHeading(line string) (string, bool) {
@@ -86,15 +89,36 @@ func markdownHeading(line string) (string, bool) {
 }
 
 func verifyBullet(line string) (string, bool) {
+	return prefixedBullet(line, "verify:")
+}
+
+func prefixedBullet(line, prefix string) (string, bool) {
 	line = strings.TrimSpace(line)
 	if len(line) < 2 || (line[:2] != "- " && line[:2] != "* ") {
 		return "", false
 	}
 	body := strings.TrimSpace(line[2:])
-	const prefix = "verify:"
 	if len(body) < len(prefix) || !strings.EqualFold(body[:len(prefix)], prefix) {
 		return "", false
 	}
-	command := strings.TrimSpace(body[len(prefix):])
-	return command, command != ""
+	value := strings.TrimSpace(body[len(prefix):])
+	return value, value != ""
+}
+
+// ExtractSensitivePaths reads the `sensitive:` bullets of the same section.
+// A project names the paths whose changes it wants reviewed hardest; the host
+// does not try to infer that from path spelling, which cannot distinguish
+// `internal/auth` from `session_write_authority.go`.
+func ExtractSensitivePaths(docs []Document) []string {
+	seen := map[string]bool{}
+	var globs []string
+	forEachHostCheckLine(docs, func(line string, _ Document, _ int) {
+		glob, ok := prefixedBullet(line, "sensitive:")
+		if !ok || seen[glob] {
+			return
+		}
+		seen[glob] = true
+		globs = append(globs, glob)
+	})
+	return globs
 }
