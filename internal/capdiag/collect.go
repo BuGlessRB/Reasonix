@@ -337,6 +337,9 @@ func collectHooks(root, home, reasonixHome string, cfg *config.Config, disp func
 		if issue, ok := hookRuntimeIssue(e, hook.CheckEntryRuntime(e, runtimeOptions), disp); ok {
 			issues = append(issues, issue)
 		}
+		if issue, ok := hookPayloadVarIssue(e, disp); ok {
+			issues = append(issues, issue)
+		}
 		if e.ContextFile != "" {
 			if !hook.ContextFileUsable(e.ContextFile) {
 				issues = append(issues, Issue{
@@ -368,19 +371,6 @@ func collectHooks(root, home, reasonixHome string, cfg *config.Config, disp func
 		}
 	}
 	return rep, issues
-}
-
-func hookRuntimeIssue(entry hook.Entry, err error, disp func(string) string) (Issue, bool) {
-	if err == nil {
-		return Issue{}, false
-	}
-	return Issue{
-		Severity: "error", Code: "hook.shell_unavailable", Subsystem: "hooks",
-		Name: string(entry.Event), Source: disp(entry.Source),
-		Message:     sanitizeErrText(err.Error()),
-		Remediation: "Install Git for Windows, or configure [tools.shell] prefer=\"bash\" and path to a usable bash.exe, then re-run doctor capabilities",
-		SettingsTab: "hooks",
-	}, true
 }
 
 func collectPlugins(reasonixHome string, disp func(string) string) (PluginPackageReport, []Issue) {
