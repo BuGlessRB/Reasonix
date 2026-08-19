@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/command"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/plugin"
 	"reasonix/internal/skill"
 )
 
@@ -396,4 +397,67 @@ func mustJSON(t *testing.T, value string) string {
 		t.Fatal(err)
 	}
 	return string(body)
+}
+
+// The settings pane lists a server so the user can decide whether to keep it.
+// Name, transport and source cannot answer that; what the server says it is
+// and what its tools do can, so both have to survive the wire shape.
+func TestMcpRowCarriesWhatTheServerSaidAboutItself(t *testing.T) {
+	row := remembered(control.MCPServerState{
+		Description: "Maps a repository's symbols.",
+		Tools: []plugin.ToolInfo{
+			{Name: "find_symbol", Description: "Locate a symbol by name.", ReadOnlyHint: true},
+			{Name: "rewrite", Description: "Rewrite a file in place.", DestructiveHint: true},
+			{Name: "broken", SchemaError: "input schema is not an object"},
+		},
+		Stale: true,
+	}, mcpEntry{Name: "atlas", State: "disabled"})
+
+	b, err := json.Marshal(row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Description string    `json:"description"`
+		Tools       int       `json:"tools"`
+		ToolList    []mcpTool `json:"toolList"`
+		Remembered  bool      `json:"remembered"`
+		Stale       bool      `json:"stale"`
+	}
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Description != "Maps a repository's symbols." {
+		t.Fatalf("description = %q, want the server's own words", got.Description)
+	}
+	if got.Tools != 3 || len(got.ToolList) != 3 {
+		t.Fatalf("tool count = %d, list = %d, want 3 and 3", got.Tools, len(got.ToolList))
+	}
+	if got.ToolList[0].Description != "Locate a symbol by name." || !got.ToolList[0].ReadOnly {
+		t.Errorf("tool row = %+v, want its description and read-only hint", got.ToolList[0])
+	}
+	if !got.ToolList[1].Destructive {
+		t.Error("a destructive tool reached the pane looking like any other")
+	}
+	if got.ToolList[2].Error == "" {
+		t.Error("a tool the host cannot call was listed as if it could be")
+	}
+	// A disconnected server's answer is a record, not a report: an unmarked row
+	// would claim something switched off is speaking for itself.
+	if !got.Remembered || !got.Stale {
+		t.Errorf("remembered = %v, stale = %v, want both marked", got.Remembered, got.Stale)
+	}
+}
+
+// Server-written text lands in a browser row. Escape sequences and line breaks
+// are not display, and one verbose server must not make the page expensive.
+func TestServerTextIsSanitizedAndBounded(t *testing.T) {
+	got := displayText("\x1b[31mred\x1b[0m\nline\ttwo\x00", mcpToolTextLimit)
+	if got != "red line two" {
+		t.Fatalf("displayText = %q, want the control characters gone", got)
+	}
+	long := strings.Repeat("x", mcpServerTextLimit*2)
+	if bounded := displayText(long, mcpServerTextLimit); len([]rune(bounded)) > mcpServerTextLimit+1 {
+		t.Fatalf("displayText kept %d runes, want it bounded at %d", len([]rune(bounded)), mcpServerTextLimit)
+	}
 }

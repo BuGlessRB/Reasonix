@@ -1668,6 +1668,30 @@
   .srv .meta { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--faint) }
   .srv .why { margin: 4px 0 0 15px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
   .srv .peek { margin: 7px 0 1px 15px }
+  /* 服务自己写的一句话，跟技能行的说明同一个位置、同一种字：来源不同，读法
+     一样。旁边那枚标是「现在没连着，这是上次的记录」—— 不标就等于替一个关着
+     的服务打包票。 */
+  .srv .srv-ab { display: flex; align-items: baseline; gap: 8px; margin: 5px 0 0 15px }
+  .srv .srv-ab .ds { font: 400 11.5px/1.6 var(--ui); color: var(--faint); min-width: 0 }
+  .srv .srv-ab .w {
+    flex: none; padding: 1px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
+    font: 400 10px var(--mono); color: var(--ghost); font-style: normal;
+  }
+  /* 工具一行三段：名字（机器事实）、它自己的说明、以及会不会动你的东西。 */
+  .srv .peek .trow { display: flex; align-items: baseline; gap: 9px; padding: 1px 0 }
+  .srv .peek .trow .nm { flex: none; font: 400 11.5px var(--mono); color: var(--faint) }
+  .srv .peek .trow .ds {
+    font: 400 11.5px/1.55 var(--ui); color: var(--ghost); min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .srv .peek .trow[data-bad] .nm { color: var(--ghost); text-decoration: line-through }
+  .srv .peek .trow[data-bad] .ds { color: var(--warn) }
+  .srv .peek .trow .face { margin-left: auto; flex: none; display: flex; gap: 5px }
+  .srv .peek .trow .face i {
+    padding: 1px 5px; border-radius: var(--r-xs); font: 400 10px var(--mono); font-style: normal;
+  }
+  .srv .peek .trow .face .ro { color: var(--ghost); border: 1px solid var(--hair) }
+  .srv .peek .trow .face .dg { color: var(--err); border: 1px solid var(--err) }
   /* 动作贴在行尾，跟状态元数据之间留出一道空隙：读状态和动手是两件事 */
   .acts { display: flex; align-items: center; gap: 8px; margin-left: 14px; flex: none }
   .act {

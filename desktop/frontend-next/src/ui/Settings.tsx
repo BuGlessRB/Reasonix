@@ -661,21 +661,35 @@ function Server({
     </div>
   );
 
+  const tools = m.toolList ?? [];
   const head = (
     <>
       <i className="pip" />
       <span className="nm">{m.name}</span>
-      {m.toolNames?.length ? <span className="fold">{t("{n} 个工具", { n: m.tools })}</span> : null}
+      {tools.length ? <span className="fold">{t("{n} 个工具", { n: m.tools })}</span> : null}
       <span className="meta">{meta}</span>
       {m.localOverride && <Exception onClear={() => void run("clear", () => port.clearMcpOverride(m.name, root || undefined))} busy={busy === "clear"} />}
       {actions}
     </>
   );
+  // 服务是干什么的，只有服务自己说了算：MCP 握手里的那段自述。它没写，这里就
+  // 没有 —— 拿名字或配置凑一句出来，等于替它编。
+  const about = (!!m.description || (!tools.length && m.state !== "connecting")) && (
+    <div className="srv-ab">
+      <span className="ds">{m.description || t("这个服务没写自我说明。")}</span>
+      {m.remembered && (
+        <i className="w" title={t("现在没连着，这是上一次连上时它自己给的答复。")}>
+          {t(m.stale ? "上次连上时的记录 · 声明改过，可能对不上了" : "上次连上时的记录")}
+        </i>
+      )}
+    </div>
+  );
   const why = m.error || failed;
-  if (!m.toolNames?.length) {
+  if (!tools.length) {
     return (
       <div className="srv" data-st={m.state} data-local={m.localOverride ? "" : undefined}>
         <div className="srv-hd">{head}</div>
+        {about}
         {why && <div className="why">{why}</div>}
         {confirm}
       </div>
@@ -686,12 +700,19 @@ function Server({
     // fold, and what the server contributes is worth seeing before dropping it.
     <details className="srv" data-st={m.state} data-local={m.localOverride ? "" : undefined} open={confirming || undefined}>
       <summary>{head}</summary>
+      {about}
+      {why && <div className="why">{why}</div>}
       {confirm}
       <div className="peek">
-        {m.toolNames.map((t) => (
-          <div className="row" key={t}>
-            <span className="d">·</span>
-            <span>{t}</span>
+        {tools.map((tool) => (
+          // 一行一个工具：它叫什么、它自己说它干什么、以及这一刀下去会不会动
+          // 你的东西。schema 被拒的那些照列，但写明为什么调不了。
+          <div className="trow" key={tool.name} data-bad={tool.error ? "" : undefined}>
+            <span className="nm">{tool.name}</span>
+            <span className="ds">{tool.error || tool.description || t("没有写说明")}</span>
+            <span className="face">
+              {tool.destructive ? <i className="dg">{t("会改东西")}</i> : tool.readOnly ? <i className="ro">{t("只读")}</i> : null}
+            </span>
           </div>
         ))}
       </div>

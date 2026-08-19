@@ -62,10 +62,14 @@ type CachedSchema struct {
 	Version int `json:"version"`
 	// Keep the historical JSON key so older versions can reuse the same
 	// best-effort cache during rolling upgrades.
-	CacheKey      string          `json:"spec_hash"`
-	Capabilities  map[string]bool `json:"capabilities"`
-	Tools         []CachedTool    `json:"tools"`
-	LastValidated time.Time       `json:"last_validated"`
+	CacheKey     string          `json:"spec_hash"`
+	Capabilities map[string]bool `json:"capabilities"`
+	// Instructions is the server's own description, kept so a configured but
+	// unconnected server can still say what it is for. Optional by design: an
+	// older cache file simply has none.
+	Instructions  string       `json:"instructions,omitempty"`
+	Tools         []CachedTool `json:"tools"`
+	LastValidated time.Time    `json:"last_validated"`
 }
 
 // CachedTool mirrors the subset of an MCP tool definition we need to register
@@ -281,4 +285,19 @@ func writeKeys(h io.Writer, key string, m map[string]string) {
 	for _, k := range keys {
 		writeField(h, key+"."+k, "present")
 	}
+}
+
+// saveHandshakeSchema persists what the handshake just learned about a server:
+// what it can do, what it said it is for, and the tools it listed.
+func (c *Client) saveHandshakeSchema(spec Spec, tools []tool.Tool) {
+	_ = SaveCachedSchema(spec.Name, CachedSchema{
+		CacheKey: SchemaCacheKey(spec),
+		Capabilities: map[string]bool{
+			"tools":     c.hasTools,
+			"prompts":   c.hasPrompts,
+			"resources": c.hasResources,
+		},
+		Instructions: c.instructions,
+		Tools:        cacheableToolsOf(tools),
+	})
 }

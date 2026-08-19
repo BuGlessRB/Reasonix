@@ -120,11 +120,25 @@ export class MockPort extends MockProvider implements AgentPort {
       enabled: true,
       transport: "stdio",
       source: "built-in",
+      description: "Current time in any IANA zone, and conversion between two of them.",
       tools: 2,
-      toolNames: ["get_current_time", "convert_time"],
+      toolList: [
+        { name: "get_current_time", description: "Current time in a given IANA timezone.", readOnly: true },
+        { name: "convert_time", description: "Convert a wall-clock time between two zones.", readOnly: true },
+      ],
     },
-    { name: "context7", state: "idle", enabled: true, tools: 0, transport: "http" },
-    { name: "figma", state: "failed", enabled: true, transport: "http", tools: 0, error: "401 unauthorized" },
+    // 关着和连不上的那两个也有说明 —— 那是上次连上时它们自己给的答复，界面里
+    // 必须看得出这一点。
+    {
+      name: "context7", state: "idle", enabled: true, tools: 1, transport: "http", remembered: true,
+      description: "Up-to-date library documentation, pulled per package and version.",
+      toolList: [{ name: "get_library_docs", description: "Fetch docs for a resolved library ID.", readOnly: true }],
+    },
+    {
+      name: "figma", state: "failed", enabled: true, transport: "http", tools: 1, error: "401 unauthorized",
+      description: "Read Figma files, frames and comments.", remembered: true, stale: true,
+      toolList: [{ name: "get_file", description: "Read one Figma file's node tree." }],
+    },
   ];
 
   async mcp(): Promise<McpCatalog> {
@@ -238,7 +252,7 @@ export class MockPort extends MockProvider implements AgentPort {
       this.servers.push({ ...toEntry(server), state: "failed", error: "401 unauthorized" });
       return { name: server.name, state: "action_required", toolCount: 0, action: "authenticate", message: "需要先授权" };
     }
-    this.servers.push({ ...toEntry(server), state: "ready", tools: 3, toolNames: ["one", "two", "three"] });
+    this.servers.push({ ...toEntry(server), state: "ready", tools: 3, toolList: [{ name: "one", description: "第一个工具" }, { name: "two", description: "第二个工具", readOnly: true }, { name: "three", description: "第三个工具", destructive: true }] });
     return { name: server.name, state: "ready", toolCount: 3, action: "none", message: "" };
   }
 

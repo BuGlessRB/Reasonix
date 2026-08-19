@@ -3845,6 +3845,9 @@ func snapshotConflictLogAttrs(saveErr error, path, mode string) []any {
 			"snapshot_messages", conflict.SnapshotMessages,
 			"base_revision", conflict.BaseRevision,
 			"disk_revision", conflict.DiskRevision,
+			"diverged_at", conflict.DivergedAt,
+			"disk_role", conflict.DiskRole,
+			"snapshot_role", conflict.SnapshotRole,
 		)
 	}
 	return attrs
@@ -5118,28 +5121,14 @@ func (c *Controller) connectMCPServer(e config.PluginEntry) (int, error) {
 
 func (c *Controller) mcpSpec(e config.PluginEntry) plugin.Spec {
 	exp := e.ExpandedPlugin()
-	configSource := strings.TrimSpace(string(exp.Source))
-	spec := plugin.ApplyKnownOverrides(plugin.Spec{
-		Name:               exp.Name,
-		Type:               exp.Type,
-		Command:            exp.Command,
-		Args:               exp.Args,
-		Env:                exp.Env,
-		URL:                exp.URL,
-		Headers:            exp.Headers,
-		StartupTimeout:     controllerMCPTimeout(exp.StartupTimeoutSeconds),
-		DefaultCallTimeout: c.mcpDefaultCallTimeout,
-		CallTimeout:        controllerMCPTimeout(exp.CallTimeoutSeconds),
-		ToolTimeouts:       controllerMCPToolTimeouts(exp.ToolTimeoutSeconds),
-		WorkspaceRoot:      c.WorkspaceRoot(),
-		ConfigSource:       configSource,
-		Authorized:         exp.Source.UserAuthorized(),
-		// Explicit user installs and reconnects run as trusted host processes.
-		ProcessMode: plugin.MCPProcessHost,
-	}, c.WorkspaceRoot())
-	if exp.Source.ProjectScoped() && strings.TrimSpace(spec.Dir) == "" {
-		spec.Dir = c.WorkspaceRoot()
-	}
+	spec := mcpIdentitySpec(e, c.WorkspaceRoot())
+	spec.StartupTimeout = controllerMCPTimeout(exp.StartupTimeoutSeconds)
+	spec.DefaultCallTimeout = c.mcpDefaultCallTimeout
+	spec.CallTimeout = controllerMCPTimeout(exp.CallTimeoutSeconds)
+	spec.ToolTimeouts = controllerMCPToolTimeouts(exp.ToolTimeoutSeconds)
+	spec.Authorized = exp.Source.UserAuthorized()
+	// Explicit user installs and reconnects run as trusted host processes.
+	spec.ProcessMode = plugin.MCPProcessHost
 	if c.mcpConfigureSpec != nil {
 		c.mcpConfigureSpec(&spec)
 		if spec.ProcessMode == "" {

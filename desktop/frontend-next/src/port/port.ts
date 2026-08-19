@@ -185,13 +185,26 @@ export interface McpEntry {
   enabled: boolean;
   transport?: string;
   source?: string;
+  description?: string; // the server's own words, from the handshake; often absent
   tools: number;
   prompts?: number;
   resources?: number;
-  toolNames?: string[];
+  toolList?: McpTool[];
+  remembered?: boolean; // recovered from the last handshake, nothing is connected
+  stale?: boolean; // and the declaration changed since that cache was written
   error?: string;
   // This project decided the switch for itself instead of inheriting it.
   localOverride?: boolean;
+}
+
+// One tool as its own server describes it. error carries a schema this host
+// rejected: listed but not callable, which is not the same as absent.
+export interface McpTool {
+  name: string;
+  description?: string;
+  readOnly?: boolean;
+  destructive?: boolean;
+  error?: string;
 }
 
 // Where a capability decision applies: this folder alone, or every project.

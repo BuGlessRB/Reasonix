@@ -172,9 +172,9 @@ func InspectProject(root string) ProjectCapabilities {
 		if resolveErr != nil {
 			enabled = entry.ShouldAutoStart()
 		}
-		out.Servers = append(out.Servers, MCPServerState{
-			Entry: entry, Enabled: enabled, LocalOverride: local[entry.Name],
-		})
+		state := MCPServerState{Entry: entry, Enabled: enabled, LocalOverride: local[entry.Name]}
+		state.Description, state.Tools, state.Stale = mcpCachedFacts(mcpIdentitySpec(entry, root))
+		out.Servers = append(out.Servers, state)
 	}
 
 	discovered := skill.New(skill.Options{

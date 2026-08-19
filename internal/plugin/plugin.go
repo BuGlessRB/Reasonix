@@ -407,15 +407,7 @@ func Start(ctx context.Context, specs []Spec, p StartPolicy) (*Host, []tool.Tool
 			if !p.SkipPersistence {
 				h.bgWrites.Go(func() {
 					_ = RecordStartup(spec.Name, phaseADur)
-					_ = SaveCachedSchema(spec.Name, CachedSchema{
-						CacheKey: SchemaCacheKey(spec),
-						Capabilities: map[string]bool{
-							"tools":     c.hasTools,
-							"prompts":   c.hasPrompts,
-							"resources": c.hasResources,
-						},
-						Tools: cacheableToolsOf(ts),
-					})
+					c.saveHandshakeSchema(spec, ts)
 				})
 			}
 
@@ -604,6 +596,9 @@ type Client struct {
 	hasTools     bool
 	hasPrompts   bool
 	hasResources bool
+	// instructions is the server's own account of itself, offered once at
+	// initialize. Written during the handshake, before the client is published.
+	instructions string
 
 	toolCount int    // tools discovered, for /mcp status
 	transport string // declared transport type, for /mcp status ("stdio"/"http")
@@ -633,30 +628,6 @@ func (c *Client) auxiliaryClient(ctx context.Context) (*Client, error) {
 	callCtx, cancel := context.WithTimeout(ctx, c.spec.ResolvedStartupTimeout())
 	defer cancel()
 	return start(ctx, callCtx, c.spec)
-}
-
-// ToolInfo is the human-facing metadata returned by MCP tools/list for one tool.
-type ToolInfo struct {
-	Name            string
-	Description     string
-	ReadOnlyHint    bool
-	DestructiveHint bool
-	SchemaError     string
-}
-
-// ServerStatus summarises one connected server for the /mcp command.
-type ServerStatus struct {
-	Name      string
-	Transport string
-	// ConfigSource is the config plane that registered this server
-	// (user_config, project_config, workspace, built-in, …). Empty when unknown.
-	// Surfaced in /mcp status so operators can tell where a tool came from (#6578).
-	ConfigSource string
-	Tools        int
-	Prompts      int
-	Resources    int
-	HasTools     bool
-	ToolList     []ToolInfo
 }
 
 // AuthorizeSpecLaunch records durable consent for an explicitly user-installed
@@ -737,37 +708,6 @@ func (e *launchApprovalError) Error() string {
 func requiresLaunchApproval(err error) bool {
 	var launchTarget *launchApprovalError
 	return errors.As(err, &launchTarget)
-}
-
-// Servers returns a status summary per connected server, in connection order.
-func (h *Host) Servers() []ServerStatus {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	out := make([]ServerStatus, 0, len(h.clients))
-	for _, c := range h.clients {
-		s := ServerStatus{
-			Name:         c.name,
-			Transport:    c.transport,
-			ConfigSource: strings.TrimSpace(c.spec.ConfigSource),
-			Tools:        c.toolCount,
-			HasTools:     c.hasTools,
-		}
-		c.toolsMu.Lock()
-		s.ToolList = append([]ToolInfo(nil), c.tools...)
-		c.toolsMu.Unlock()
-		for _, p := range h.prompts {
-			if p.Server == c.name {
-				s.Prompts++
-			}
-		}
-		for _, r := range h.resources {
-			if r.Server == c.name {
-				s.Resources++
-			}
-		}
-		out = append(out, s)
-	}
-	return out
 }
 
 // RecordFailure stores a failed MCP connection attempt for status UIs.

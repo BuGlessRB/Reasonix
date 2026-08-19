@@ -204,6 +204,12 @@ export const EN_SETTINGS: Record<string, string> = {
     "MCP services you connected yourself. What they give the agent is as real as any built-in tool — everything listed here can touch your things. Switching one off drops it from this turn's tool list immediately, and it stays off across restarts.",
   "接入服务": "Connect a service",
   "没有自己接入的外部服务。": "No external services connected.",
+  "这个服务没写自我说明。": "This service does not describe itself.",
+  "上次连上时的记录": "From the last time it connected",
+  "上次连上时的记录 · 声明改过，可能对不上了": "From the last time it connected · the declaration changed since",
+  "现在没连着，这是上一次连上时它自己给的答复。":
+    "Nothing is connected right now; this is what the service itself answered the last time it was.",
+  "会改东西": "Changes things",
   "技能": "Skills",
   "这个工作目录下没有技能。": "No skills in this working directory.",
   "没有写说明": "No description written",

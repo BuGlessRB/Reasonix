@@ -8,7 +8,9 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/mcpsetup"
+	"reasonix/internal/plugin"
 	"reasonix/internal/skill"
+	"reasonix/internal/textutil"
 )
 
 // slashEntry is one thing the user can type after "/". Kind separates the two
@@ -191,19 +193,65 @@ func activationScope(raw string) config.ActivationScope {
 // mcpEntry is one external tool provider. State is what the user can act on —
 // running, still connecting, failed, disabled, or configured but not connected.
 type mcpEntry struct {
-	Name      string   `json:"name"`
-	State     string   `json:"state"`
-	Enabled   bool     `json:"enabled"`
-	Transport string   `json:"transport,omitempty"`
-	Source    string   `json:"source,omitempty"`
-	Tools     int      `json:"tools"`
-	Prompts   int      `json:"prompts,omitempty"`
-	Resources int      `json:"resources,omitempty"`
-	ToolNames []string `json:"toolNames,omitempty"`
-	Error     string   `json:"error,omitempty"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	Enabled   bool   `json:"enabled"`
+	Transport string `json:"transport,omitempty"`
+	Source    string `json:"source,omitempty"`
+	// Description is the server's own account of itself. Nothing local can
+	// stand in for it: a server that never said what it is for has none.
+	Description string    `json:"description,omitempty"`
+	Tools       int       `json:"tools"`
+	Prompts     int       `json:"prompts,omitempty"`
+	Resources   int       `json:"resources,omitempty"`
+	ToolList    []mcpTool `json:"toolList,omitempty"`
+	// Remembered marks an answer recovered from the schema cache rather than a
+	// live connection, and Stale that the declaration changed since. A row that
+	// hides the difference claims a disconnected server is reporting for itself.
+	Remembered bool   `json:"remembered,omitempty"`
+	Stale      bool   `json:"stale,omitempty"`
+	Error      string `json:"error,omitempty"`
 	// LocalOverride marks a switch this project set for itself instead of
 	// inheriting the global one, which the surface shows as a local exception.
 	LocalOverride bool `json:"localOverride,omitempty"`
+}
+
+// mcpTool is one tool as the server describes it, plus the two hints that
+// decide how a call is classified. Error carries a schema the host rejected:
+// the tool is listed but not callable, which is a different thing from absent.
+type mcpTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	ReadOnly    bool   `json:"readOnly,omitempty"`
+	Destructive bool   `json:"destructive,omitempty"`
+	Error       string `json:"error,omitempty"`
+}
+
+// Server-written text lands in a settings row, not a document. The cap is
+// generous enough for a paragraph and small enough that one verbose server
+// cannot make the page it is listed on expensive to load.
+const (
+	mcpServerTextLimit = 400
+	mcpToolTextLimit   = 240
+)
+
+func mcpToolViews(tools []plugin.ToolInfo) []mcpTool {
+	out := make([]mcpTool, 0, len(tools))
+	for _, t := range tools {
+		out = append(out, mcpTool{
+			Name:        textutil.SanitizeDisplay(t.Name),
+			Description: displayText(t.Description, mcpToolTextLimit),
+			ReadOnly:    t.ReadOnlyHint,
+			Destructive: t.DestructiveHint,
+			Error:       displayText(t.SchemaError, mcpToolTextLimit),
+		})
+	}
+	return out
+}
+
+// displayText prepares one piece of server-written text for a UI row.
+func displayText(s string, limit int) string {
+	return textutil.TruncateGraphemes(textutil.SanitizeDisplay(s), limit, "…")
 }
 
 // mcp lists the session's external tool providers. The activation switch is
@@ -222,39 +270,36 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 	ctl := s.ctl()
 	out := []mcpEntry{}
 	configured := ctl.ConfiguredMCPServers()
-	enabled := make(map[string]bool, len(configured))
-	source := make(map[string]string, len(configured))
-	local := make(map[string]bool, len(configured))
+	declared := make(map[string]control.MCPServerState, len(configured))
 	for _, st := range configured {
-		enabled[st.Entry.Name] = st.Enabled
-		source[st.Entry.Name] = string(st.Entry.Source)
-		local[st.Entry.Name] = st.LocalOverride
+		declared[st.Entry.Name] = st
 	}
 	// A runtime-only server has no configured declaration; it is live, so it is
 	// on by definition.
 	on := func(name string) bool {
-		v, ok := enabled[name]
-		return v || !ok
+		st, ok := declared[name]
+		return st.Enabled || !ok
 	}
 	host := ctl.Host()
 	seen := map[string]bool{}
 	if host != nil {
 		for _, srv := range host.Servers() {
 			seen[srv.Name] = true
-			names := make([]string, 0, len(srv.ToolList))
-			for _, t := range srv.ToolList {
-				names = append(names, t.Name)
-			}
 			out = append(out, mcpEntry{
-				Name: srv.Name, State: "ready", Enabled: on(srv.Name), LocalOverride: local[srv.Name],
+				Name: srv.Name, State: "ready", Enabled: on(srv.Name), LocalOverride: declared[srv.Name].LocalOverride,
 				Transport: srv.Transport, Source: srv.ConfigSource,
-				Tools: srv.Tools, Prompts: srv.Prompts, Resources: srv.Resources, ToolNames: names,
+				Description: displayText(srv.Description, mcpServerTextLimit),
+				Tools:       srv.Tools, Prompts: srv.Prompts, Resources: srv.Resources,
+				ToolList: mcpToolViews(srv.ToolList),
 			})
 		}
 		for _, name := range host.ConnectingServers() {
 			if !seen[name] {
 				seen[name] = true
-				out = append(out, mcpEntry{Name: name, State: "connecting", Enabled: on(name), Source: source[name], LocalOverride: local[name]})
+				out = append(out, remembered(declared[name], mcpEntry{
+					Name: name, State: "connecting", Enabled: on(name),
+					Source: string(declared[name].Entry.Source), LocalOverride: declared[name].LocalOverride,
+				}))
 			}
 		}
 		for _, f := range host.Failures() {
@@ -262,10 +307,10 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			seen[f.Name] = true
-			out = append(out, mcpEntry{
-				Name: f.Name, State: "failed", Enabled: on(f.Name), LocalOverride: local[f.Name],
-				Transport: f.Transport, Source: source[f.Name], Error: f.Error,
-			})
+			out = append(out, remembered(declared[f.Name], mcpEntry{
+				Name: f.Name, State: "failed", Enabled: on(f.Name), LocalOverride: declared[f.Name].LocalOverride,
+				Transport: f.Transport, Source: string(declared[f.Name].Entry.Source), Error: f.Error,
+			}))
 		}
 	}
 	// Configured but not live: switched off, or lazy and not needed yet. Saying
@@ -279,12 +324,30 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 		if !st.Enabled {
 			state = "disabled"
 		}
-		out = append(out, mcpEntry{
+		out = append(out, remembered(st, mcpEntry{
 			Name: st.Entry.Name, State: state, Enabled: st.Enabled, LocalOverride: st.LocalOverride,
 			Transport: st.Entry.Type, Source: string(st.Entry.Source),
-		})
+		}))
 	}
 	writeJSON(w, map[string]any{"servers": out, "scope": scopeView(ctl)})
+}
+
+// remembered fills a row that has no live connection to ask with what the last
+// successful handshake recorded. It is marked as remembered rather than merged
+// silently: a row that cannot tell the two apart claims a server that is off or
+// broken is reporting for itself.
+func remembered(st control.MCPServerState, e mcpEntry) mcpEntry {
+	if st.Description == "" && len(st.Tools) == 0 {
+		return e
+	}
+	e.Description = displayText(st.Description, mcpServerTextLimit)
+	if len(st.Tools) > 0 {
+		e.ToolList = mcpToolViews(st.Tools)
+		e.Tools = len(st.Tools)
+	}
+	e.Remembered = true
+	e.Stale = st.Stale
+	return e
 }
 
 // mcpReconnect retries one server. It answers with the refreshed row rather than

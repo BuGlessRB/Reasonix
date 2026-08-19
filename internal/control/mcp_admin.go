@@ -130,6 +130,12 @@ type MCPServerState struct {
 	Entry         config.PluginEntry
 	Enabled       bool
 	LocalOverride bool
+	// What the server itself said, recovered from the schema cache the last
+	// handshake wrote: a server that is off has no live answer, and the
+	// alternative is a row that can only repeat its own name back.
+	Description string
+	Tools       []plugin.ToolInfo
+	Stale       bool // the declaration changed since that cache was written
 }
 
 // ConfiguredMCPServers lists every configured server with its resolved
@@ -154,7 +160,9 @@ func (c *Controller) ConfiguredMCPServers() []MCPServerState {
 		if err != nil {
 			enabled = p.ShouldAutoStart()
 		}
-		out = append(out, MCPServerState{Entry: p, Enabled: enabled, LocalOverride: local[p.Name]})
+		state := MCPServerState{Entry: p, Enabled: enabled, LocalOverride: local[p.Name]}
+		state.Description, state.Tools, state.Stale = mcpCachedFacts(c.mcpSpec(p))
+		out = append(out, state)
 	}
 	return out
 }
@@ -243,4 +251,49 @@ func (c *Controller) ClearMCPServerOverride(name string, scope config.Activation
 	}
 	_, err = c.RegisterMCPServerOnDemand(entry)
 	return err
+}
+
+// mcpIdentitySpec builds the part of a server's spec that decides which server
+// it is: what gets launched or dialled, where, and with which named inputs.
+// Timeouts and process mode are how this session runs it and change nothing
+// about its identity, so the schema cache — which is keyed on exactly these
+// fields — can be reached from a project the session is not pointed at.
+func mcpIdentitySpec(e config.PluginEntry, root string) plugin.Spec {
+	exp := e.ExpandedPlugin()
+	spec := plugin.ApplyKnownOverrides(plugin.Spec{
+		Name:          exp.Name,
+		Type:          exp.Type,
+		Command:       exp.Command,
+		Args:          exp.Args,
+		Env:           exp.Env,
+		URL:           exp.URL,
+		Headers:       exp.Headers,
+		WorkspaceRoot: root,
+		ConfigSource:  strings.TrimSpace(string(exp.Source)),
+	}, root)
+	if exp.Source.ProjectScoped() && strings.TrimSpace(spec.Dir) == "" {
+		spec.Dir = root
+	}
+	return spec
+}
+
+// mcpCachedFacts recovers what a server said about itself the last time it
+// connected: its own description and the tools it offered. A cache the current
+// declaration no longer matches is returned anyway, marked stale — the server's
+// own words, one edit out of date, still beat a row that can say nothing.
+func mcpCachedFacts(spec plugin.Spec) (description string, tools []plugin.ToolInfo, stale bool) {
+	cs, ok, keyOK := plugin.LoadCachedSchemaAny(spec.Name, plugin.SchemaCacheKey(spec))
+	if !ok {
+		return "", nil, false
+	}
+	tools = make([]plugin.ToolInfo, 0, len(cs.Tools))
+	for _, t := range cs.Tools {
+		tools = append(tools, plugin.ToolInfo{
+			Name:            t.Name,
+			Description:     t.Description,
+			ReadOnlyHint:    t.ReadOnly,
+			DestructiveHint: t.Destructive,
+		})
+	}
+	return cs.Instructions, tools, !keyOK
 }

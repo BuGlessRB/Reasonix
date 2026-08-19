@@ -22,10 +22,10 @@ func (s *Server) mcpForProject(w http.ResponseWriter, root string) {
 		if !st.Enabled {
 			state = "disabled"
 		}
-		out = append(out, mcpEntry{
+		out = append(out, remembered(st, mcpEntry{
 			Name: st.Entry.Name, State: state, Enabled: st.Enabled, LocalOverride: st.LocalOverride,
 			Transport: st.Entry.Type, Source: string(st.Entry.Source),
-		})
+		}))
 	}
 	writeJSON(w, map[string]any{"servers": out, "scope": view.Scope, "live": false})
 }

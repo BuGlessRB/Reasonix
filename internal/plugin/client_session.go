@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"strings"
 	"time"
 
 	"reasonix/internal/tool"
@@ -174,6 +175,9 @@ func (c *Client) initializeSessionOn(ctx context.Context, t transport, recordCap
 	// key (even with an empty object) signals support.
 	var ir struct {
 		Capabilities map[string]json.RawMessage `json:"capabilities"`
+		// instructions is optional and free-form: the server describing what it
+		// is for. Nothing else in the protocol answers that question.
+		Instructions string `json:"instructions"`
 	}
 	if err := json.Unmarshal(res, &ir); err != nil {
 		slog.Warn("plugin: parse initialize capabilities", "server", c.name, "err", err)
@@ -181,6 +185,7 @@ func (c *Client) initializeSessionOn(ctx context.Context, t transport, recordCap
 	_, c.hasTools = ir.Capabilities["tools"]
 	_, c.hasPrompts = ir.Capabilities["prompts"]
 	_, c.hasResources = ir.Capabilities["resources"]
+	c.instructions = strings.TrimSpace(ir.Instructions)
 
 	return c.notifyOn(ctx, t, "notifications/initialized", map[string]any{})
 }

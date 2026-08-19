@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"unicode"
-
-	"github.com/charmbracelet/x/ansi"
 
 	"reasonix/internal/plugin"
+	"reasonix/internal/textutil"
 )
 
 const mcpMaxItemsPerSection = 6
@@ -76,6 +74,11 @@ func writeMCPServer(b *strings.Builder, width int, s plugin.ServerStatus, prompt
 	}
 	name := viewCompactText(sanitizeExternalDisplayText(s.Name), viewBudget(width, 4+2+1+visibleWidth(meta)))
 	fmt.Fprintf(b, "    %s %s %s\n", accent("✓"), bold(name), viewMeta(meta))
+	// What the server says it is for, when it said anything: nothing local can
+	// stand in for it.
+	if desc := sanitizeExternalDisplayText(s.Description); desc != "" {
+		fmt.Fprintf(b, "      %s\n", viewMeta(viewCompactText(desc, viewBudget(width, 6))))
+	}
 	if len(availableTools) > 0 {
 		writeMCPToolList(b, width, s, availableTools)
 	}
@@ -217,24 +220,7 @@ func writeMCPItem(b *strings.Builder, width int, indent, ref, desc string) {
 // Fields alone leave CSI sequences intact and would let a malicious MCP rewrite
 // the terminal, spoof chrome, or poke the clipboard.
 func sanitizeExternalDisplayText(s string) string {
-	s = ansi.Strip(s)
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		switch {
-		case r == '\t' || r == '\n' || r == '\r':
-			b.WriteByte(' ')
-		case r < 0x20 || r == 0x7f:
-			// Drop remaining C0 controls and DEL.
-		case r >= 0x80 && r <= 0x9f:
-			// Drop C1 controls (including after partial decode).
-		case unicode.Is(unicode.Cc, r):
-			// Other control categories.
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return strings.Join(strings.Fields(b.String()), " ")
+	return textutil.SanitizeDisplay(s)
 }
 
 func oneLineText(s string) string {
