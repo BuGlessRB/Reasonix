@@ -34,6 +34,7 @@ func (s *Server) AllowProviderEdit() { s.grants.providerEdit = true }
 
 func (s *Server) registerProviderRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /providers", s.providers)
+	mux.HandleFunc("GET /providers/protocols", s.providerProtocols)
 	mux.HandleFunc("POST /providers", s.saveProvider)
 	mux.HandleFunc("POST /providers/probe", s.probeProvider)
 	mux.HandleFunc("POST /providers/remove", s.removeProvider)
@@ -124,6 +125,31 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, out)
 }
 
+// protocolView is one wire format a source may be saved as. No label rides
+// along: the list is the kernel's, the words for it are each frontend's.
+type protocolView struct {
+	Kind            string `json:"kind"`
+	Discovery       string `json:"discovery"`
+	ServerWebSearch bool   `json:"serverWebSearch"`
+	ReasoningParams bool   `json:"reasoningParams"`
+}
+
+// providerProtocols lists what a chooser may offer, so a wire added to the
+// kernel reaches every panel without a frontend release.
+func (s *Server) providerProtocols(w http.ResponseWriter, _ *http.Request) {
+	catalog := config.Protocols()
+	out := make([]protocolView, 0, len(catalog))
+	for _, p := range catalog {
+		out = append(out, protocolView{
+			Kind:            p.Kind,
+			Discovery:       p.Discovery,
+			ServerWebSearch: p.ServerWebSearch,
+			ReasoningParams: p.ReasoningParams,
+		})
+	}
+	writeJSON(w, out)
+}
+
 // probeProvider reports what an endpoint turns out to be. It writes nothing:
 // the user sees the guesses and confirms them before anything is saved.
 func (s *Server) probeProvider(w http.ResponseWriter, r *http.Request) {
@@ -155,6 +181,7 @@ func (s *Server) probeProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, struct {
 		Kind       string   `json:"kind"`
+		Kinds      []string `json:"kinds"`
 		AuthHeader bool     `json:"authHeader"`
 		Models     []string `json:"models"`
 		Default    string   `json:"default"`
@@ -165,6 +192,7 @@ func (s *Server) probeProvider(w http.ResponseWriter, r *http.Request) {
 		NoProxy    bool     `json:"noProxy"`
 	}{
 		Kind:       got.Kind,
+		Kinds:      nonNilStrings(got.Kinds),
 		AuthHeader: got.AuthHeader,
 		Models:     nonNilStrings(got.Models),
 		Default:    got.Default,
@@ -269,7 +297,7 @@ func providerEntryFrom(name, kind, baseURL, def, effort string, models, vision [
 		return config.ProviderEntry{}, refusal(http.StatusUnprocessableEntity, "provider.name_invalid", errors.New("provider name must be letters, digits, dot, dash or underscore"), nil)
 	}
 	kind = strings.ToLower(strings.TrimSpace(kind))
-	if kind != "openai" && kind != "anthropic" && kind != "responses" {
+	if !config.SupportedProviderKind(kind) {
 		return config.ProviderEntry{}, refusal(http.StatusUnprocessableEntity, "provider.kind_unsupported", fmt.Errorf("unsupported provider kind %q", kind), map[string]any{"kind": kind})
 	}
 	if strings.TrimSpace(baseURL) == "" {

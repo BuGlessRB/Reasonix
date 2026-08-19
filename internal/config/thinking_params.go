@@ -7,10 +7,13 @@ import "strings"
 const reasoningProtocolNone = "none"
 
 // CanConfigureThinkingParams reports whether reasoning_protocol governs this
-// entry's request shape. Only the OpenAI-compatible wire carries the
-// thinking/reasoning_effort fields a relay can reject outright.
+// entry's request shape, which the protocol catalog decides.
 func CanConfigureThinkingParams(e *ProviderEntry) bool {
-	return e != nil && strings.EqualFold(strings.TrimSpace(e.Kind), "openai")
+	if e == nil {
+		return false
+	}
+	p, ok := ProtocolFor(e.Kind)
+	return ok && p.ReasoningParams
 }
 
 // SendsThinkingParams reports whether this endpoint may receive thinking

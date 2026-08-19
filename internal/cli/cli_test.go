@@ -1848,6 +1848,7 @@ func TestAPIKeyEnvFromProviderName(t *testing.T) {
 func TestPromptCustomProviderManualDefaultsKeyEnvFromBaseURL(t *testing.T) {
 	result, err := promptCustomProviderManualWith(
 		bufio.NewScanner(strings.NewReader("sensenova-chat\n\n\n")),
+		"openai",
 		"https://token.sensenova.cn/v1",
 		"",
 		"",
@@ -1867,6 +1868,7 @@ func TestPromptCustomProviderManualDefaultsKeyEnvFromBaseURL(t *testing.T) {
 func TestPromptCustomProviderManualPreservesExplicitKeyEnv(t *testing.T) {
 	result, err := promptCustomProviderManualWith(
 		bufio.NewScanner(strings.NewReader("manual-chat\n\n")),
+		"openai",
 		"https://token.sensenova.cn/v1",
 		"CUSTOM_API_KEY",
 		"",
@@ -1903,6 +1905,7 @@ func TestPromptAPIKeyEnvNameRejectsModelName(t *testing.T) {
 func TestPromptCustomProviderManualAsksForModelBeforeCredentialName(t *testing.T) {
 	result, err := promptCustomProviderManualWith(
 		bufio.NewScanner(strings.NewReader("grok-4.5\ngrok-4.5\n\n\n")),
+		"openai",
 		"https://api.example.com/v1",
 		"",
 		"",
@@ -1924,6 +1927,7 @@ func TestPromptCustomProviderStagesExplicitKeyEvenWhenProcessEnvMatches(t *testi
 	t.Setenv(key, "same-secret")
 	result, err := promptCustomProviderManualWith(
 		bufio.NewScanner(strings.NewReader("grok-4.5\n")),
+		"openai",
 		"https://api.example.com/v1",
 		key,
 		"same-secret",
@@ -1939,6 +1943,7 @@ func TestPromptCustomProviderStagesExplicitKeyEvenWhenProcessEnvMatches(t *testi
 	}
 	result, err = promptCustomProviderManualWith(
 		bufio.NewScanner(strings.NewReader("grok-4.5\n")),
+		"openai",
 		"https://api.example.com/v1",
 		key,
 		"new-secret",

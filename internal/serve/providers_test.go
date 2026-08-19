@@ -306,3 +306,65 @@ func readAllString(resp *http.Response) (string, error) {
 		}
 	}
 }
+
+// The panel renders its protocol chooser from this, so a wire the kernel can
+// build has to reach it without a frontend release.
+func TestProviderProtocolsListsEveryWireASourceMayBeSavedAs(t *testing.T) {
+	s := newProviderEditServer(t)
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/providers/protocols")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got []struct {
+		Kind            string `json:"kind"`
+		Discovery       string `json:"discovery"`
+		ServerWebSearch bool   `json:"serverWebSearch"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	byKind := map[string]bool{}
+	for _, p := range got {
+		byKind[p.Kind] = p.ServerWebSearch
+		if p.Kind == "responses" && p.Discovery != "openai" {
+			t.Errorf("responses discovered as %q, want the OpenAI model listing", p.Discovery)
+		}
+	}
+	for _, kind := range []string{"openai", "anthropic", "responses"} {
+		if _, ok := byKind[kind]; !ok {
+			t.Errorf("protocol catalog is missing %q: %#v", kind, got)
+		}
+	}
+	if !byKind["responses"] {
+		t.Error("the Responses wire runs web search on the provider and must say so")
+	}
+}
+
+func TestSaveProviderAcceptsEveryCatalogedWire(t *testing.T) {
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	resp := postProvider(t, srv.URL, "/providers", `{
+		"name":"deepseek-responses","kind":"responses","baseUrl":"https://api.deepseek.com",
+		"apiKey":"sk-value","models":["deepseek-v4-flash"],"default":"deepseek-v4-flash",
+		"authHeader":false,"noProxy":false,"effort":"","vision":[]
+	}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := readAllString(resp)
+		t.Fatalf("POST /providers with kind=responses = %d: %s", resp.StatusCode, b)
+	}
+	raw, err := os.ReadFile(config.UserConfigPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"responses"`) {
+		t.Fatalf("the Responses source did not reach the config:\n%s", raw)
+	}
+}

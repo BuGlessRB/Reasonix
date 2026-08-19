@@ -13,7 +13,10 @@ import (
 // an OpenAI-compatible gateway serving Claude answers the same /models call as
 // one serving GPT, and only the person holding the key knows which they bought.
 type Probe struct {
-	Kind       string   // openai | anthropic
+	Kind string // the protocol catalog kind whose listing answered
+	// Kinds are every kind that listing shape may be driven with, in catalog
+	// order, so a chooser offers the alternatives instead of hiding them.
+	Kinds      []string
 	AuthHeader bool     // anthropic-compatible gateway that wants Authorization: Bearer
 	Models     []string // chat models only; audio/embedding/rerank ids are dropped
 	Default    string   // suggested default — the first chat model
@@ -171,6 +174,7 @@ func listChatModels(ctx context.Context, s shape, baseURL, apiKey string, client
 func describe(baseURL string, s shape, chat []string) Probe {
 	p := Probe{
 		Kind:       s.kind,
+		Kinds:      ProtocolsDiscoveredAs(s.kind),
 		AuthHeader: s.authHeader,
 		Models:     chat,
 		Default:    chat[0],

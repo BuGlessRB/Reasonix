@@ -6,18 +6,13 @@ import (
 )
 
 // SupportsServerWebSearch reports whether the provider kind has a wire format
-// for a provider-executed web search tool. OpenAI Chat Completions is excluded:
-// DeepSeek's documented chat-completions tool contract only supports functions.
+// for a provider-executed web search tool.
 func SupportsServerWebSearch(e *ProviderEntry) bool {
 	if e == nil {
 		return false
 	}
-	switch strings.ToLower(strings.TrimSpace(e.Kind)) {
-	case "anthropic", "responses":
-		return true
-	default:
-		return false
-	}
+	p, ok := ProtocolFor(e.Kind)
+	return ok && p.ServerWebSearch
 }
 
 // IsOfficialDeepSeekWebSearchEndpoint matches the exact protocol base URLs

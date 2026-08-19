@@ -14,8 +14,12 @@ import (
 // the endpoint answered to, which is not always the one the entry claims: a
 // gateway that changed hands, or a guess made when both protocols replied.
 type providerCheck struct {
-	OK        bool     `json:"ok"`
-	Kind      string   `json:"kind,omitempty"`
+	OK   bool   `json:"ok"`
+	Kind string `json:"kind,omitempty"`
+	// Matches is whether that answer is consistent with the kind the entry
+	// declares. Protocols sharing a listing shape are consistent with each
+	// other, so a Responses source answering the OpenAI listing is not a change.
+	Matches   bool     `json:"matches"`
 	Models    []string `json:"models,omitempty"`
 	Ambiguous bool     `json:"ambiguous,omitempty"`
 	NoProxy   bool     `json:"noProxy,omitempty"`
@@ -75,6 +79,7 @@ func (s *Server) checkProvider(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, providerCheck{
 		OK:        true,
 		Kind:      got.Kind,
+		Matches:   config.ProtocolAnswerMatches(entry.Kind, got.Kind),
 		Models:    nonNilStrings(got.Models),
 		Ambiguous: got.Ambiguous,
 		NoProxy:   got.NoProxy,

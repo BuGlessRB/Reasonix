@@ -351,7 +351,9 @@ func (s *providerSetupSession) setCredential(key, value string) error {
 
 func (s *providerSetupSession) setDefaultModel(model string) error {
 	before := s.cfg.DefaultModel
-	if err := s.cfg.SetDefaultModel(model); err != nil {
+	// Setup runs before any runtime exists, so the configuration is the only
+	// catalog there is to check against.
+	if err := s.cfg.SetDefaultModel(model, nil); err != nil {
 		return err
 	}
 	if before != s.cfg.DefaultModel {
@@ -485,11 +487,11 @@ func runProviderSetupManager(s *providerSetupSession, configPath, envPath string
 		providerCount := len(cfg.Providers)
 		switch idx {
 		case providerCount:
-			if !addProviderToSession(s, false) {
+			if !addProviderToSession(s, "openai") {
 				continue
 			}
 		case providerCount + 1:
-			if !addProviderToSession(s, true) {
+			if !addProviderToSession(s, "anthropic") {
 				continue
 			}
 		case providerCount + 2:
@@ -528,41 +530,6 @@ func providerManagerItems(s *providerSetupSession) []menuItem {
 		menuItem{name: i18n.M.SetupSaveExit, desc: i18n.M.SetupSaveExitDesc},
 		menuItem{name: i18n.M.SetupCancel, desc: i18n.M.SetupCancelDesc},
 	)
-}
-
-func addProviderToSession(s *providerSetupSession, anthropic bool) bool {
-	var result providerPromptResult
-	var err error
-	if anthropic {
-		result, err = promptAnthropicProvider()
-	} else {
-		result, err = promptCustomProvider()
-	}
-	if err != nil {
-		if !errors.Is(err, errCancelled) {
-			fmt.Fprintln(os.Stderr, err)
-		}
-		return false
-	}
-	for _, entry := range result.entries {
-		if !confirmSharedCredential(s.cfg, entry, "") {
-			return false
-		}
-	}
-	if err := s.add(result.entries); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return false
-	}
-	s.addProviderAccess(result.entries)
-	for key, value := range result.credentials {
-		if err := s.setCredential(key, value); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return false
-		}
-	}
-	// After the new keys are staged, so usability sees them.
-	s.promoteDefaultToNewProviders(result.entries)
-	return true
 }
 
 func manageProvider(s *providerSetupSession, providerIndex int) {
@@ -787,7 +754,7 @@ func (s *providerSetupSession) replayOperations(cfg *config.Config, accessDeclar
 			if cfg.DefaultModel != operation.beforeString {
 				return &providerSetupConflictError{field: "default_model"}
 			}
-			if err := cfg.SetDefaultModel(operation.afterString); err != nil {
+			if err := cfg.SetDefaultModel(operation.afterString, nil); err != nil {
 				return fmt.Errorf("replay default_model: %w", err)
 			}
 		case setupOpLanguage:
