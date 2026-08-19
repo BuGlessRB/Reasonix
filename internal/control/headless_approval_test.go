@@ -355,11 +355,11 @@ func TestInteractiveGateIgnoresSessionAllowForFreshHumanTools(t *testing.T) {
 
 // A blocked inline interpreter must tell a headless agent what it CAN do in
 // this session. The old message only offered "interactive session or YOLO
-// mode", which a non-interactive run cannot act on — benchmark agents burned
-// dozens of calls retrying python -c variants before stumbling onto the
-// script-file workaround on their own.
-func TestHeadlessAutoDynamicShellBlockNamesTheAuditableWorkaround(t *testing.T) {
-	gate := BuildHeadlessApprovalGate(permission.New("ask", nil, nil, nil), ToolApprovalAuto)
+// mode", which a non-interactive run cannot act on — agents burned dozens of
+// calls retrying python -c variants before finding the script-file workaround.
+// Asserted on ask: auto no longer blocks these shapes.
+func TestHeadlessAskDynamicShellBlockNamesTheAuditableWorkaround(t *testing.T) {
+	gate := BuildHeadlessApprovalGate(permission.New("ask", nil, nil, nil), ToolApprovalAsk)
 
 	allow, reason, err := gate.Check(context.Background(), "bash",
 		json.RawMessage(`{"command":"cd /testbed && python -c \"print(1)\""}`), false)
@@ -367,7 +367,7 @@ func TestHeadlessAutoDynamicShellBlockNamesTheAuditableWorkaround(t *testing.T) 
 		t.Fatalf("Check: %v", err)
 	}
 	if allow {
-		t.Fatal("python -c must stay blocked in headless auto (inline code is not auditable)")
+		t.Fatal("python -c must stay blocked in headless ask (nobody can approve it)")
 	}
 	// Naming the workspace is part of the workaround: told only to write a
 	// file, a caller reaches for /tmp and loses a second round to the sandbox.
@@ -377,10 +377,43 @@ func TestHeadlessAutoDynamicShellBlockNamesTheAuditableWorkaround(t *testing.T) 
 		}
 	}
 
-	// The workaround the message advertises must actually pass the same gate.
-	allow, reason, err = gate.Check(context.Background(), "bash",
+	// The workaround the message advertises must actually run somewhere a
+	// headless caller can reach: ask refuses every approval-needing call, so
+	// auto is the mode that has to honor it.
+	auto := BuildHeadlessApprovalGate(permission.New("ask", nil, nil, nil), ToolApprovalAuto)
+	allow, reason, err = auto.Check(context.Background(), "bash",
 		json.RawMessage(`{"command":"cd /testbed && python repro.py"}`), false)
 	if err != nil || !allow {
 		t.Fatalf("script-file execution must be allowed in auto: allow=%v reason=%q err=%v", allow, reason, err)
+	}
+}
+
+// Refusing inline code unattended never stopped it — the model wrote the same
+// script to a file and ran it, on 16 of 17 refusals. Auto runs it directly;
+// ask and dontAsk keep failing closed.
+func TestHeadlessAutoRunsInlineInterpreterCodeItCannotOtherwiseStop(t *testing.T) {
+	inline := json.RawMessage(`{"command":"python3 -c \"from stats import median; assert median([1,2]) == 1.5\""}`)
+	for _, tc := range []struct {
+		mode string
+		want bool
+	}{
+		{ToolApprovalAuto, true},
+		{ToolApprovalAsk, false},
+		{ToolApprovalDontAsk, false},
+	} {
+		gate := BuildHeadlessApprovalGate(permission.New("ask", nil, nil, nil), tc.mode)
+		allow, reason, err := gate.Check(context.Background(), "bash", inline, false)
+		if err != nil || allow != tc.want {
+			t.Fatalf("%s inline code = (%v,%q,%v), want allow=%v", tc.mode, allow, reason, err, tc.want)
+		}
+	}
+	// The sandbox, deny rules and explicit ask rules are untouched by the waiver.
+	gate := BuildHeadlessApprovalGate(permission.New("ask", nil, nil, []string{"Bash(python3*)"}), ToolApprovalAuto)
+	if allow, _, err := gate.Check(context.Background(), "bash", inline, false); err != nil || allow {
+		t.Fatalf("a deny rule must still stop inline code under auto: allow=%v err=%v", allow, err)
+	}
+	gate = BuildHeadlessApprovalGate(permission.New("ask", nil, []string{"Bash(python3*)"}, nil), ToolApprovalAuto)
+	if allow, _, err := gate.Check(context.Background(), "bash", inline, false); err != nil || allow {
+		t.Fatalf("an explicit ask rule must still stop inline code under auto: allow=%v err=%v", allow, err)
 	}
 }

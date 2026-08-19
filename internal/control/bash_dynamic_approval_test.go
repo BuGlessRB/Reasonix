@@ -260,7 +260,7 @@ func TestHeadlessDynamicBashApprovalModes(t *testing.T) {
 		want bool
 	}{
 		{mode: ToolApprovalAsk},
-		{mode: ToolApprovalAuto},
+		{mode: ToolApprovalAuto, want: true},
 		{mode: ToolApprovalDontAsk},
 		{mode: ToolApprovalYolo, want: true},
 	} {
@@ -285,6 +285,14 @@ func TestHeadlessDynamicBashApprovalModes(t *testing.T) {
 	allow, reason, err = BuildHeadlessApprovalGate(optIn, ToolApprovalAuto).Check(context.Background(), "bash", args, false)
 	if err != nil || !allow || reason != "" {
 		t.Fatalf("headless dynamic fallback opt-in = (%v,%q,%v), want allow", allow, reason, err)
+	}
+
+	// Auto waives the shape-based human requirement, never a rule. A deny rule
+	// covering the same command still stops it.
+	denied := permission.New("ask", nil, nil, []string{"Bash(git*)"})
+	allow, reason, err = BuildHeadlessApprovalGate(denied, ToolApprovalAuto).Check(context.Background(), "bash", args, false)
+	if err != nil || allow {
+		t.Fatalf("deny rule under auto = (%v,%q,%v), want deny", allow, reason, err)
 	}
 }
 

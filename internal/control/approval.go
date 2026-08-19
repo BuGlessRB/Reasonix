@@ -106,6 +106,10 @@ func BuildHeadlessApprovalGate(policy permission.Policy, mode string) *freshHuma
 		return &freshHumanHeadlessGate{gate: permission.NewGate(policy, nil), dynamicBashBypass: true}
 	case ToolApprovalAuto:
 		policy.Mode = permission.Allow
+		// Auto preserves explicit ask rules; a shape static analysis cannot read
+		// is not one, and refusing it unattended only buys a round trip — the
+		// model writes the same script to a file and runs it. policy is a copy.
+		policy.AllowDynamicBash = true
 		return &freshHumanHeadlessGate{gate: permission.NewGate(policy, denyPermissionApprover{})}
 	case ToolApprovalDontAsk:
 		policy.Mode = permission.Deny
