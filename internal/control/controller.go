@@ -134,9 +134,8 @@ type Controller struct {
 	// save never stalls an approval or status poll. See memory.go.
 	memory                 memoryManager
 	cleanup                func()
-	responseLanguage       string
-	reasoningLanguage      string
-	disableColdResumePrune bool // legacy; rewrite elision removed, still gates cold notice
+	display                displayPrefs // what this session shows; see display_prefs.go
+	disableColdResumePrune bool         // legacy; rewrite elision removed, still gates cold notice
 	// testCacheColdAfter overrides cacheColdAfter() in tests. Zero uses the
 	// vendor-aware resolution from config.
 	testCacheColdAfter time.Duration
@@ -489,6 +488,7 @@ type Options struct {
 	// no confinement). Frontends pass the cwd they launched the session in.
 	WorkspaceRoot          string
 	ExternalFolderToolRefs externalFolderToolRefs
+	ShowTurnReceipt        bool // attach the end-of-turn verification report; see display_prefs.go
 	// ResponseLanguage controls final-answer language preference. Empty/auto
 	// means no transient injection because the stable language policy follows the
 	// current user turn.
@@ -600,8 +600,7 @@ func New(opts Options) *Controller {
 		hooks:                             opts.Hooks,
 		memory:                            newMemoryManager(opts.Memory),
 		cleanup:                           opts.Cleanup,
-		responseLanguage:                  config.NormalizeLanguage(opts.ResponseLanguage),
-		reasoningLanguage:                 config.NormalizeReasoningLanguage(opts.ReasoningLanguage),
+		display:                           displayPrefsFrom(opts),
 		disableColdResumePrune:            opts.DisableColdResumePrune,
 		shell:                             opts.Shell,
 		onRemember:                        opts.OnRemember,
@@ -2025,8 +2024,8 @@ func (c *Controller) RunSubagentProfile(ctx context.Context, name, task string, 
 	ctx = agent.WithParentSession(ctx, parentSession)
 	ctx = jobs.WithSession(ctx, parentSession)
 	ctx = c.withTurnImages(ctx, task)
-	ctx = agent.WithResponseLanguagePreference(ctx, c.responseLanguage)
-	ctx = agent.WithReasoningLanguagePreference(ctx, c.reasoningLanguage)
+	ctx = agent.WithResponseLanguagePreference(ctx, c.display.responseLanguage)
+	ctx = agent.WithReasoningLanguagePreference(ctx, c.display.reasoningLanguage)
 	ctx = agent.WithSubagentDepth(ctx, 0)
 	answer, err := runner(ctx, sk, task, skill.SubagentRunOptions{HostInitiated: true})
 	if err != nil {
@@ -2748,7 +2747,7 @@ func (c *Controller) applyPlanMode(v bool) {
 func (c *Controller) SetResponseLanguage(lang string) {
 	mode := config.NormalizeLanguage(lang)
 	c.mu.Lock()
-	c.responseLanguage = mode
+	c.display.responseLanguage = mode
 	c.mu.Unlock()
 	if setter, ok := c.runner.(interface{ SetResponseLanguage(string) }); ok {
 		setter.SetResponseLanguage(mode)
@@ -2762,7 +2761,7 @@ func (c *Controller) SetResponseLanguage(lang string) {
 func (c *Controller) SetReasoningLanguage(lang string) {
 	mode := config.NormalizeReasoningLanguage(lang)
 	c.mu.Lock()
-	c.reasoningLanguage = mode
+	c.display.reasoningLanguage = mode
 	c.mu.Unlock()
 	if setter, ok := c.runner.(interface{ SetReasoningLanguage(string) }); ok {
 		setter.SetReasoningLanguage(mode)

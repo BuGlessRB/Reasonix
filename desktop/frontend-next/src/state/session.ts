@@ -618,11 +618,27 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
 }
 
 // withReceipt appends the turn's completion record when the kernel says it has
-// something to say. The rule is not restated here: a receipt shown in one
-// window and swallowed in the terminal is the same turn described two ways.
+// something to say — and when this reader wants to read it. Whether a receipt
+// has content is the kernel's answer and is not restated here; whether it is
+// wanted on this screen is the reader's, and belongs where the panel widths
+// already live rather than in a config the whole install shares.
+//
+// The check itself is untouched either way: it still runs, still decides
+// readiness, and still reaches the trajectory. Only the card is withheld.
 function withReceipt(items: Item[], r?: Receipt): Item[] {
-  if (!r?.saysSomething) return items;
+  if (!r?.saysSomething || !showsReceipt()) return items;
   return [...items, { t: "receipt", id: nextId(), r }];
+}
+
+// Off unless this machine asked for it: the card reports what went unverified,
+// which is worth reading and easy to tire of seeing after every turn.
+const RECEIPT_KEY = "rx-turn-receipt";
+export function showsReceipt(): boolean {
+  try {
+    return localStorage.getItem(RECEIPT_KEY) === "on";
+  } catch {
+    return false;
+  }
 }
 
 // The kernel wraps each user turn in control-plane blocks (language policy,

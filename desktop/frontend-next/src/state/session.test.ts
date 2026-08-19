@@ -2,6 +2,24 @@ import { describe, expect, it } from "vitest";
 import { fromHistory, initialState, reduce, type Item, type SessionEvent, type SessionState } from "./session";
 import type { HistoryMessage } from "../port/port";
 
+// vitest runs these in Node, where there is no localStorage. The preference
+// reader tolerates its absence by staying off, so a test that wants a receipt
+// has to supply one.
+const store = new Map<string, string>();
+(globalThis as { localStorage?: unknown }).localStorage = {
+  getItem: (k: string) => store.get(k) ?? null,
+  setItem: (k: string, v: string) => void store.set(k, v),
+  removeItem: (k: string) => void store.delete(k),
+};
+const showingReceipts = <T,>(body: () => T): T => {
+  store.set("rx-turn-receipt", "on");
+  try {
+    return body();
+  } finally {
+    store.delete("rx-turn-receipt");
+  }
+};
+
 const run = (evs: SessionEvent[]): SessionState => evs.reduce(reduce, initialState);
 const tools = (s: SessionState) => s.items.filter((i): i is Extract<Item, { t: "tool" }> => i.t === "tool");
 const notices = (s: SessionState) =>
@@ -112,19 +130,19 @@ describe("the turn's completion receipt", () => {
   });
 
   it("sources a clean verdict instead of asserting it", () => {
-    const s = run([finish({
+    const s = showingReceipts(() => run([finish({
       verdict: "done", saysSomething: true,
       changes: [{ path: "parser.go", reviewed: false }],
       verifications: [{ command: "go test ./...", passed: true }],
-    })]);
+    })]));
     expect(receipts(s)).toHaveLength(1);
   });
 
   it("shows the turn what it could not verify", () => {
-    const s = run([finish({
+    const s = showingReceipts(() => run([finish({
       verdict: "partial", saysSomething: true,
       gaps: [{ kind: "unreviewed_change", detail: "lexer.go" }],
-    })]);
+    })]));
     expect(receipts(s)).toHaveLength(1);
   });
 
@@ -172,5 +190,27 @@ describe("a notice about the runtime rather than the conversation", () => {
     const s = run([notice(undefined, "info", "undid last rewind")]);
     expect(notices(s)).toEqual(["undid last rewind"]);
     expect(s.runtime).toEqual([]);
+  });
+});
+
+describe("the turn's verification receipt", () => {
+  const done = (receipt: unknown): SessionEvent => ({ kind: "turn_done", receipt }) as SessionEvent;
+  const card = { saysSomething: true, verdict: "unproven", gaps: [{ kind: "unverified_change" }] };
+  const receipts = (s: SessionState) => s.items.filter((i) => i.t === "receipt");
+
+  // Off unless this machine asked. The card reports what went unverified —
+  // worth reading, and easy to tire of after every turn.
+  it("stays out of the transcript by default", () => {
+    expect(receipts(run([done(card)]))).toEqual([]);
+  });
+
+  it("appears when this machine asked for it", () => {
+    expect(receipts(showingReceipts(() => run([done(card)])))).toHaveLength(1);
+  });
+
+  // The kernel still decides whether a receipt has content at all; the
+  // preference only decides whether a reader sees one that does.
+  it("still respects the kernel's own answer", () => {
+    expect(receipts(showingReceipts(() => run([done({ ...card, saysSomething: false })])))).toEqual([]);
   });
 });

@@ -127,8 +127,8 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	ctx = jobs.WithSession(ctx, parentSession)
 	ctx = agent.WithUserImages(ctx, images)
 	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, imageCandidates))
-	ctx = agent.WithResponseLanguagePreference(ctx, c.responseLanguage)
-	ctx = agent.WithReasoningLanguagePreference(ctx, c.reasoningLanguage)
+	ctx = agent.WithResponseLanguagePreference(ctx, c.display.responseLanguage)
+	ctx = agent.WithReasoningLanguagePreference(ctx, c.display.reasoningLanguage)
 
 	input := c.imageRoutingPrefix(unreadableImages(images, imageCandidates)) + c.compose(task, raw, true)
 	startMessages := c.messageCount()

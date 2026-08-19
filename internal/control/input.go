@@ -164,8 +164,8 @@ func (c *Controller) composeWithGoal(
 ) string {
 	c.mu.Lock()
 	plan := c.planMode
-	responseLanguage := c.responseLanguage
-	reasoningLanguage := c.reasoningLanguage
+	responseLanguage := c.display.responseLanguage
+	reasoningLanguage := c.display.reasoningLanguage
 	c.mu.Unlock()
 	notes := c.memory.drainPending()
 
@@ -300,8 +300,8 @@ func reasoningLanguageBlock(lang string) string {
 
 func (c *Controller) ComposeSynthetic(text string) string {
 	c.mu.Lock()
-	responseLang := c.responseLanguage
-	lang := c.reasoningLanguage
+	responseLang := c.display.responseLanguage
+	lang := c.display.reasoningLanguage
 	c.mu.Unlock()
 	text = agent.WithResponseLanguage(text, responseLang)
 	return agent.WithReasoningLanguageForSource(text, lang, text)
