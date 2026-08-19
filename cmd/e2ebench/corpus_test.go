@@ -10,6 +10,11 @@ import (
 
 const corpusDir = "../../benchmarks/e2e"
 
+// verificationStressDir is the second committed corpus. It is graded by the
+// same runner, so it needs the same authoring guard: without one a seed that
+// already passes reports 100% whether the agent solved it or never ran.
+const verificationStressDir = "../../benchmarks/verification-stress"
+
 // protectedFiles reads the manifest embedded in a no-solution grader. The
 // manifest lives inside verify.sh precisely because e2ebench drops that file
 // in only after the run, so the agent never sees which files are watched.
@@ -162,25 +167,29 @@ func TestSolvableCorpusSeedsMustNotGradeClean(t *testing.T) {
 			t.Skipf("%s unavailable; the graders need a POSIX shell and python3", bin)
 		}
 	}
-	tasks, err := loadTasks(corpusDir)
-	if err != nil {
-		t.Fatalf("load corpus: %v", err)
-	}
-	seen := 0
-	for _, task := range tasks {
-		if task.NoSolution {
-			continue
-		}
-		seen++
-		t.Run(task.ID, func(t *testing.T) {
-			t.Parallel()
-			if err := gradeSeed(t, stageSeed(t, task.dir)); err == nil {
-				t.Fatal("the pristine seed already grades clean: this task cannot tell a solved run from one that did nothing")
+	for _, dir := range []string{corpusDir, verificationStressDir} {
+		t.Run(filepath.Base(dir), func(t *testing.T) {
+			tasks, err := loadTasks(dir)
+			if err != nil {
+				t.Fatalf("load corpus: %v", err)
+			}
+			seen := 0
+			for _, task := range tasks {
+				if task.NoSolution {
+					continue
+				}
+				seen++
+				t.Run(task.ID, func(t *testing.T) {
+					t.Parallel()
+					if err := gradeSeed(t, stageSeed(t, task.dir)); err == nil {
+						t.Fatal("the pristine seed already grades clean: this task cannot tell a solved run from one that did nothing")
+					}
+				})
+			}
+			if seen == 0 {
+				t.Fatal("no solvable tasks found; the corpus is missing")
 			}
 		})
-	}
-	if seen == 0 {
-		t.Fatal("no solvable tasks found; the corpus is missing")
 	}
 }
 
