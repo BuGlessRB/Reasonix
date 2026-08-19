@@ -508,10 +508,17 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		return false, a.gracePause(state)
 	}
 	if readiness.advisory != "" {
-		// What the host could not read is reported, not charged to the turn: it
-		// would fail work that did verify itself, and the gate lapses next turn
-		// anyway, so the failure would buy nothing it could later collect.
-		a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: readiness.advisory})
+		// Reported, not charged: it would fail work that did verify itself.
+		// Operator audience because it describes how the host is configured,
+		// not something said in the conversation.
+		a.svc.sink.Emit(event.Event{
+			Kind:     event.Notice,
+			Level:    event.LevelWarn,
+			Audience: event.NoticeAudienceOperator,
+			Code:     readiness.advisoryCode,
+			Text:     readiness.advisory,
+			Detail:   readiness.advisorySubject,
+		})
 	}
 	if readiness.reason != "" {
 		// Delivery no longer retries readiness with hidden model messages: the

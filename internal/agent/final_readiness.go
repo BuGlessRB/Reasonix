@@ -8,6 +8,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/instruction"
+	"reasonix/internal/shellparse"
 	"reasonix/internal/taskpolicy"
 )
 
@@ -19,9 +20,12 @@ type finalReadinessCheck struct {
 	applies bool
 	reason  string
 	// advisory is what the host could not read, not what the turn failed to do.
-	// It reaches the user and never fails the run: charging a turn for the
-	// host's own blind spot buys nothing this gate could later collect.
-	advisory                  string
+	// It reaches the user and never fails the run.
+	advisory string
+	// code is what a window says this in its own language by; subject is what
+	// the advisory is about, kept out of the sentence because it is a command.
+	advisoryCode              string
+	advisorySubject           string
 	missingProjectChecks      int
 	incompleteTodos           int
 	missingAcceptanceCriteria int
@@ -282,11 +286,12 @@ func (a *Agent) appendVerificationGap(out *finalReadinessCheck, missing []string
 		!toolPresent(a.svc.tools, "bash") || blockedWithCheck || a.checkEstablished(writer, verified) {
 		return missing
 	}
-	detail, advisory := a.verificationGap(writer)
-	if advisory {
-		out.advisory = detail
+	gap := a.verificationGap(writer)
+	if gap.advisory {
+		out.advisory, out.advisoryCode, out.advisorySubject = gap.text, gap.code, gap.subject
 		return missing
 	}
+	detail := gap.text
 	out.applies = true
 	out.missingVerification++
 	return append(missing, detail)
@@ -297,29 +302,79 @@ func (a *Agent) appendVerificationGap(out *finalReadinessCheck, missing []string
 // belonged to a later stage of the same command did run, so asking for "a
 // verification command" reads as false to the model that just ran one; what it
 // needs is the command named and a shape whose status answers for the check.
-func (a *Agent) verificationGap(writer int) (string, bool) {
+func (a *Agent) verificationGap(writer int) verificationGapResult {
 	const ask = "run a relevant verification command after the latest write for the current role setting"
 	if unreadable, ok := a.task.ledger.LatestUnreadableVerificationAfter(writer); ok && strings.TrimSpace(unreadable.Command) != "" {
-		return fmt.Sprintf("%s — %q ran, but its exit status is the last stage's, not the check's, "+
-			"so it proves nothing either way; re-run the check on its own", ask, strings.TrimSpace(unreadable.Command)), false
+		return verificationGapResult{text: fmt.Sprintf("%s — %q ran, but its exit status is the last stage's, not the check's, "+
+			"so it proves nothing either way; re-run the check on its own", ask, strings.TrimSpace(unreadable.Command))}
 	}
 	// A check that ran and failed leaves two honest ways out, and a model told
 	// only to "run a verification command" can see neither: it already ran one.
 	if a.task.ledger.HasVerificationCommandAfter(writer) && toolPresent(a.svc.tools, "conclude_blocked") {
-		return "the check you ran after the latest write did not pass: either make it pass, or — if it cannot pass as specified — call conclude_blocked with the evidence for why", false
+		return verificationGapResult{text: "the check you ran after the latest write did not pass: either make it pass, or — if it cannot pass as specified — call conclude_blocked with the evidence for why"}
 	}
 	// Commands ran and the table read none as a check. That is the host's blind
 	// spot — it cannot tell a runner from a deploy — so it reports what it could
 	// not read instead of failing a turn that may well have verified itself.
 	if len(a.projectChecks) == 0 {
 		if ran, ok := a.task.ledger.LatestUnrecognizedCommandAfter(writer); ok {
-			return fmt.Sprintf("%q ran after the last write, but the host cannot tell a project's own runner "+
-				"from any other command, so it could not count as a check. Declare the commands that decide "+
-				"this project under %q in project memory to have them enforced.",
-				strings.TrimSpace(ran.Command), instruction.HostChecksHeading), true
+			subject := commandPrograms(ran.Command)
+			named := subject
+			if named == "" {
+				named = "a command"
+			}
+			return verificationGapResult{
+				text: fmt.Sprintf("%s ran after the last write, but this project has not said which commands "+
+					"decide it, so the host could not read that as a check. Declare them under %q in project "+
+					"memory to have them enforced.", named, instruction.HostChecksHeading),
+				code:     event.NoticeCodeUndeclaredChecks,
+				subject:  subject,
+				advisory: true,
+			}
 		}
 	}
-	return ask, false
+	return verificationGapResult{text: ask}
+}
+
+// verificationGapResult separates what the turn is missing from what the host
+// could not read about it. advisory means the second: it reaches the user and
+// never fails the run.
+type verificationGapResult struct {
+	text     string
+	code     string
+	subject  string
+	advisory bool
+}
+
+// commandPrograms names what a command runs, so a message can say which one
+// without carrying it: the advisory that used to quote it shipped forty lines
+// of here-document into the middle of a sentence. Each source below reads the
+// parsed command, never its spelling, and an unreadable one goes unnamed.
+func commandPrograms(command string) string {
+	if fields, _ := shellparse.StaticFields(command); len(fields) > 0 {
+		return shellparse.WordBase(fields[0])
+	}
+	var names []string
+	seen := map[string]bool{}
+	add := func(word string) {
+		base := shellparse.WordBase(strings.TrimSpace(word))
+		if base == "" || seen[base] {
+			return
+		}
+		seen[base] = true
+		names = append(names, base)
+	}
+	if leaves, ok := shellparse.CompoundLeafCommands(command); ok {
+		for _, argv := range leaves {
+			if len(argv) > 0 {
+				add(argv[0])
+			}
+		}
+	}
+	for _, program := range shellparse.StdinHereDocPrograms(command) {
+		add(program)
+	}
+	return strings.Join(names, " · ")
 }
 
 func finalReadinessCheckSource(check instruction.VerifyCheck) string {

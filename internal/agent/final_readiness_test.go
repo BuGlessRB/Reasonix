@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/instruction"
 	"reasonix/internal/provider"
@@ -112,7 +113,7 @@ func TestVerificationGapSeparatesTheHostsBlindSpotFromTheTurns(t *testing.T) {
 		checks       []instruction.VerifyCheck
 		ledger       *evidence.Ledger
 		wantAdvisory bool
-		wantQuoted   bool
+		wantNamed    bool
 	}{
 		{"a command the table could not read is advisory", nil, readinessLedger(writer, command), true, true},
 		{"nothing ran at all is the turn's own miss", nil, readinessLedger(writer), false, false},
@@ -121,18 +122,27 @@ func TestVerificationGapSeparatesTheHostsBlindSpotFromTheTurns(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			a := &Agent{task: taskRuntime{ledger: tc.ledger}, projectChecks: tc.checks}
-			got, advisory := a.verificationGap(0)
-			if advisory != tc.wantAdvisory {
-				t.Fatalf("advisory = %v, want %v: %q", advisory, tc.wantAdvisory, got)
+			got := a.verificationGap(0)
+			if got.advisory != tc.wantAdvisory {
+				t.Fatalf("advisory = %v, want %v: %q", got.advisory, tc.wantAdvisory, got.text)
 			}
-			if strings.Contains(got, ran) != tc.wantQuoted {
-				t.Errorf("quoting what ran = %v, want %v: %q", !tc.wantQuoted, tc.wantQuoted, got)
+			// Named, never quoted. The command reaches the message as the
+			// program it runs; carrying the command itself is what put a forty
+			// line here-document inside a sentence in a chat window.
+			if (got.subject != "") != tc.wantNamed {
+				t.Errorf("named what ran = %q, want named = %v", got.subject, tc.wantNamed)
 			}
-			if !advisory && !strings.Contains(got, "run a relevant verification command") {
-				t.Errorf("a blocking gap must still carry the ask: %q", got)
+			if strings.Contains(got.text, ran) {
+				t.Errorf("the advisory carries the command verbatim: %q", got.text)
 			}
-			if advisory && !strings.Contains(got, instruction.HostChecksHeading) {
-				t.Errorf("an advisory must say how to make the check count: %q", got)
+			if !got.advisory && !strings.Contains(got.text, "run a relevant verification command") {
+				t.Errorf("a blocking gap must still carry the ask: %q", got.text)
+			}
+			if got.advisory && !strings.Contains(got.text, instruction.HostChecksHeading) {
+				t.Errorf("an advisory must say how to make the check count: %q", got.text)
+			}
+			if got.advisory && got.code != event.NoticeCodeUndeclaredChecks {
+				t.Errorf("an advisory needs a code a window can say in its own language: %q", got.code)
 			}
 		})
 	}
