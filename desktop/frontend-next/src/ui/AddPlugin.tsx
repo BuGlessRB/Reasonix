@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { t } from "../i18n";
+import { useFileDrop } from "./filedrop";
 import type { AgentPort, PluginAction, PluginPackage, PluginPlan } from "../port/port";
 
 // Installing and importing are the same act from two doors, so there is one
@@ -90,8 +91,10 @@ export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
 
   // A dropped folder is a source typed for you. It fills the box rather than
   // planning straight away: dropping is how you point at something, not how
-  // you agree to install it.
-  useEffect(() => port.onFileDrop((paths) => paths[0] && setText(paths[0])), [port]);
+  // you agree to install it. A tab has no path to fill it with, so nothing is
+  // typed there and the box still takes an address.
+  const [over, setOver] = useState(false);
+  const drop = useFileDrop((d) => d.paths[0] && setText(d.paths[0]), setOver);
 
   if (done) {
     return (
@@ -173,7 +176,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
   }
 
   return (
-    <div className="addpkg" data-stage="paste">
+    <div className="addpkg" data-stage="paste" ref={drop} data-over={over ? "" : undefined}>
       <textarea
         className="paste"
         rows={3}

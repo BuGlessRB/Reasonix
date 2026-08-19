@@ -4,7 +4,7 @@ import type { HistoryMessage } from "../port/port";
 import { plural, t } from "../i18n";
 
 export type Item =
-  | { t: "user"; id: string; text: string; pending?: boolean; images?: number }
+  | { t: "user"; id: string; text: string; pending?: boolean }
   | { t: "say"; id: string; text: string; reasoning?: string; done: boolean; thoughtMs?: number }
   | { t: "tool"; id: string; tool: Tool; running: boolean; children: Tool[] }
   | { t: "reads"; id: string; tools: Tool[] }
@@ -671,12 +671,11 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; plan: Plan
   for (const m of msgs) {
     if (m.role === "system") continue;
     if (m.role === "user") {
-      // A turn you sent as an image and nothing else has no text once the
-      // control blocks come off. Keeping it out of the transcript is how a
-      // message that was on screen while you sent it went missing on reload;
-      // a row with neither text nor attachment is host chrome and still goes.
+      // An attachment rides in as the "@path" token it was referenced by, so a
+      // turn that was nothing but a dropped file still has text here. What is
+      // left with none is host chrome, and that is what goes.
       const text = stripControl(m.content);
-      if (text || m.images) out.push({ t: "user", id: nextId(), text, images: m.images });
+      if (text) out.push({ t: "user", id: nextId(), text });
       continue;
     }
     if (m.role === "assistant") {

@@ -85,6 +85,11 @@ export class MockHub implements HubPort {
     return Promise.resolve<string | null>("~/projects/mock-workspace");
   }
 
+  // The fixture has no shell to report a path, so a drop there carries bytes.
+  onDroppedPaths(): () => void {
+    return () => {};
+  }
+
   portFor(rt: RuntimeView): AgentPort {
     const held = this.ports.get(rt.id);
     if (held) return held;

@@ -1,6 +1,6 @@
 import { download } from "./download";
 import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, PermissionLists, PermissionRules, SandboxSettings, McpCatalog, McpDraft, McpDraftServer, McpInstallResult, McpInstallScope, CapabilityScope, ScopeLayer, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
-import { HttpError, type Attachment, type WorkspaceChanges } from "./port";
+import { HttpError, type Attachment, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseHttp } from "./sse_http";
 import type { WireEvent } from "./wire";
 
@@ -27,8 +27,8 @@ interface WailsUpdateBus {
   EventsOn(name: string, cb: (data: UpdateProgress) => void): () => void;
 }
 
-// Wails' own drop API, which is the only subscriber that honours
-// --wails-drop-target. Absent in a browser tab, where a page never learns a path.
+// Wails' own drop API: the only channel that reports where a dropped file
+// lives. Absent in a browser tab, where a page never learns a path.
 interface WailsFileDropBus {
   OnFileDrop(cb: (x: number, y: number, paths: string[]) => void, useDropTarget: boolean): void;
 }
@@ -407,15 +407,18 @@ export class SsePort extends SseHttp implements AgentPort {
   }
 
   // Wails registers its drop listeners once and ignores a second call, so the
-  // one subscription is fanned out here. useDropTarget=true is what keeps this
-  // to elements that opted in: without it every drop in the window arrives,
-  // including an image the composer is about to attach.
-  onFileDrop(cb: (paths: string[]) => void): () => void {
+  // one subscription is fanned out here. useDropTarget=false because the filter
+  // it offers is the wrong one: it hit-tests the drop coordinates against the
+  // CSS opt-in, and those coordinates are native pixels, which stop agreeing
+  // with CSS pixels the moment the interface is zoomed. The page routes the
+  // drop against the DOM instead, where the element under the pointer is a
+  // fact rather than an arithmetic result.
+  onDroppedPaths(cb: (paths: string[]) => void): () => void {
     const rt = (window as unknown as { runtime?: WailsFileDropBus }).runtime;
     if (!rt?.OnFileDrop) return () => {};
     if (!this.dropWired) {
       this.dropWired = true;
-      rt.OnFileDrop((_x, _y, paths) => this.dropSubs.forEach((f) => f(paths ?? [])), true);
+      rt.OnFileDrop((_x, _y, paths) => this.dropSubs.forEach((f) => f(paths ?? [])), false);
     }
     this.dropSubs.add(cb);
     return () => {
@@ -493,7 +496,7 @@ export class SsePort extends SseHttp implements AgentPort {
 
   // JSON, not raw bytes: csrfGuard admits nothing else, and that guard is what
   // stops a cross-site form posting here at all.
-  async attach(blob: Blob) {
+  async attach(blob: Blob, name?: string) {
     const buf = new Uint8Array(await blob.arrayBuffer());
     let bin = "";
     for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
@@ -501,10 +504,14 @@ export class SsePort extends SseHttp implements AgentPort {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ mime: blob.type, data: btoa(bin) }),
+      body: JSON.stringify({ mime: blob.type, name: name ?? "", data: btoa(bin) }),
     });
     if (!res.ok) throw new HttpError(res.status, `/attachments: ${res.status} ${await res.text()}`);
     return (await res.json()) as Attachment;
+  }
+
+  dropRefs(paths: string[]) {
+    return this.post0<DroppedRef[]>("/drop", { paths });
   }
 
   changes() {

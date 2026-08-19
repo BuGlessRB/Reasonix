@@ -187,61 +187,18 @@ func isAttachmentRef(token string) bool {
 	return strings.HasPrefix(filepath.ToSlash(token), ".reasonix/attachments/")
 }
 
+// RefIsImage reports whether a reference resolves as a picture rather than as
+// text, by the same rule the resolver uses. A frontend needs the answer to say
+// whether a text-only model will miss what was just attached, and restating the
+// rule there is how the two drift.
+func RefIsImage(token string) bool { return isImageAttachmentRef(token) }
+
 func isImageAttachmentRef(token string) bool {
 	switch strings.ToLower(filepath.Ext(token)) {
 	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".tif", ".tiff":
 		return true
 	}
 	return false
-}
-
-// RegisterExternalFolderRef authorizes one dropped directory outside the
-// workspace as a structured @reference for this controller session. The returned
-// token is path-like and whitespace-free so it survives the existing @ token
-// parser even when the real directory path contains spaces or Windows drive
-// punctuation.
-func (c *Controller) RegisterExternalFolderRef(path string) (token, displayPath string, err error) {
-	if c == nil {
-		return "", "", fmt.Errorf("controller is not ready")
-	}
-	abs, err := normalizeExternalFolderRoot(path)
-	if err != nil {
-		return "", "", err
-	}
-	token = externalFolderRefToken(abs)
-	c.externalFolderRefsMu.Lock()
-	if c.externalFolderRefs == nil {
-		c.externalFolderRefs = map[string]string{}
-	}
-	c.externalFolderRefs[token] = abs
-	c.externalFolderRefsMu.Unlock()
-	if c.externalFolderToolRefs != nil {
-		c.externalFolderToolRefs.RegisterReadRoot(token, abs)
-	}
-	return token, filepath.ToSlash(abs), nil
-}
-
-func normalizeExternalFolderRoot(path string) (string, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "", os.ErrInvalid
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	abs = filepath.Clean(abs)
-	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-		abs = filepath.Clean(resolved)
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return "", err
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("%s is not a directory", path)
-	}
-	return abs, nil
 }
 
 func externalFolderRefToken(abs string) string {

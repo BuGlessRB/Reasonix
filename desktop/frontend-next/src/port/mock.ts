@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, ScopeLayer, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, WorkspaceInfo, WorkspaceChanges, Attachment, ThemePack } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, ScopeLayer, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, ThemePack } from "./port";
 import type { WireEvent } from "./wire";
 import { MockProvider } from "./mock_provider";
 import { SCRIPT } from "./fixture";
@@ -420,7 +420,7 @@ export class MockPort extends MockProvider implements AgentPort {
   }
 
   // Both of these are the shell reporting on itself; the fixture has no shell.
-  onFileDrop(): () => void {
+  onDroppedPaths(): () => void {
     return () => {};
   }
 
@@ -555,13 +555,17 @@ export class MockPort extends MockProvider implements AgentPort {
     return { ...this.state };
   }
 
-  // The fixture has no working tree behind it, so the panel falls back to what
-  // the transcript says rather than claiming git reported nothing changed.
   // No host behind the fixture, so a paste resolves to a token nothing reads.
   async attach(): Promise<Attachment> {
     return { path: ".reasonix/attachments/mock.png", ref: "@.reasonix/attachments/mock.png" };
   }
 
+  async dropRefs(paths: string[]): Promise<DroppedRef[]> {
+    return paths.map((path) => ({ ref: "@" + path, path }));
+  }
+
+  // The fixture has no working tree behind it, so the panel falls back to what
+  // the transcript says rather than claiming git reported nothing changed.
   async changes(): Promise<WorkspaceChanges> {
     return { repo: false, changes: [] };
   }

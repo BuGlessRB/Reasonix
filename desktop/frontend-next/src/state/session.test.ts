@@ -78,17 +78,17 @@ describe("rebuilding a reopened transcript", () => {
   const users = (msgs: HistoryMessage[]) =>
     fromHistory(msgs).items.filter((i): i is Extract<Item, { t: "user" }> => i.t === "user");
 
-  // The control blocks come off before the transcript sees a turn, and a turn
-  // you sent as an image and nothing else has nothing left after that. Dropping
-  // it is how a message that was on screen while you sent it went missing the
-  // next time the window opened.
-  it("keeps a turn that was an attachment and no text", () => {
+  // The control blocks come off before the transcript sees a turn. A turn sent
+  // as a dropped file and nothing else still has the "@path" it was referenced
+  // by, and keeping that row is how a message that was on screen while you sent
+  // it is still there the next time the window opens.
+  it("keeps a turn that was an attachment reference and no words", () => {
     const got = users([
-      { role: "user", content: "", images: 2 },
+      { role: "user", content: "@.reasonix/attachments/clipboard-1.png" },
       { role: "assistant", content: "看到了" },
     ]);
     expect(got).toHaveLength(1);
-    expect(got[0].images).toBe(2);
+    expect(got[0].text).toBe("@.reasonix/attachments/clipboard-1.png");
   });
 
   it("still drops a row that is neither text nor attachment", () => {

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../i18n";
+import { useFileDrop, type Dropped } from "./filedrop";
 import type { AgentPort, ApprovalMode, ModelEntry, SessionStatus, Attachment } from "../port/port";
 import { Picker } from "./Menu";
 import { modelMenu } from "./modelmenu";
@@ -92,7 +93,8 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
   }, [text]);
 
   // Attachments ride into the turn as path references, exactly as they do from
-  // the CLI — the host saved the bytes, the turn parser resolves the token.
+  // the CLI. What the reference points at is the difference: a dropped file is
+  // still where it was, and only pasted bytes were written into the workspace.
   const send = () => {
     const v = text.trim();
     if (!v && shots.length === 0) return;
@@ -102,13 +104,39 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
     onSubmit(line);
   };
 
-  const grab = (files: Blob[]) => {
-    const images = files.filter((f) => f.type.startsWith("image/"));
-    if (images.length === 0) return;
-    Promise.all(images.map((f) => port.attach(f)))
+  // Bytes, for the two cases that have nothing else to offer: the clipboard,
+  // which never says where what it holds came from, and the picker, which hands
+  // back a File and no path. The host writes them into the workspace and the
+  // turn references that copy — which is right for a screenshot and wrong for a
+  // file that already exists somewhere, so a drop does not come through here.
+  const grab = (files: File[]) => {
+    if (files.length === 0) return;
+    Promise.all(files.map((f) => port.attach(f, f.name)))
       .then((added) => setShots((prev) => [...prev, ...added]))
       .catch(onError);
   };
+
+  // A dropped file is referenced where it lives. Copying it into the workspace
+  // is what let a turn edit the copy and report the edit as done while the file
+  // the user pointed at never changed — and what filled the attachment
+  // directory with a second version of everything anybody dragged in.
+  const dropped = (d: Dropped) => {
+    if (d.paths.length === 0) {
+      // A tab, or a drag that carried a promise rather than a file on disk.
+      grab(d.files.filter((f) => f.size > 0));
+      return;
+    }
+    port
+      .dropRefs(d.paths)
+      .then((refs) => {
+        const took = refs.filter((r) => r.ref).map((r) => ({ path: r.path ?? "", ref: r.ref ?? "", image: r.image }));
+        if (took.length > 0) setShots((prev) => [...prev, ...took]);
+        const refused = refs.filter((r) => r.error).map((r) => r.error);
+        if (refused.length > 0) onError(new Error(refused.join("\n")));
+      })
+      .catch(onError);
+  };
+  const drop = useFileDrop(dropped, setOver);
 
   const apv = status?.toolApprovalMode ?? "ask";
   const eff = status?.effort || "auto";
@@ -122,7 +150,9 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
   };
 
   return (
-    <>
+    // display:contents, so the box looks exactly as it did and the drop layer
+    // still has one node to ask "did this land in the composer" about.
+    <div className="dropzone" ref={drop}>
       {menu.open && (
         <CompletionMenu
           items={menu.completion.items}
@@ -145,7 +175,9 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           ))}
           {/* The kernel keeps the image either way, but a text-only model never
               sees it — say so here rather than letting the paste vanish. */}
-          {status?.vision === false && <span className="warn">{t("当前模型不读图 · 将交给能读图的子代理")}</span>}
+          {status?.vision === false && shots.some((a) => a.image) && (
+            <span className="warn">{t("当前模型不读图 · 将交给能读图的子代理")}</span>
+          )}
         </div>
       )}
       <textarea
@@ -170,16 +202,6 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
             e.preventDefault();
             grab(files);
           }
-        }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setOver(true);
-        }}
-        onDragLeave={() => setOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setOver(false);
-          grab([...e.dataTransfer.files]);
         }}
         {...ime.handlers}
         onKeyDown={(e) => {
@@ -229,8 +251,9 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
         }}
       />
       <div className="row" data-busy={switching ? "" : undefined}>
-        {/* 拖进来和粘贴都走同一条路，但那两个都得先有一张图在手边。点开系统
-            选择器是唯一不需要预备动作的入口。 */}
+        {/* 只挑图片：选出来的文件跟剪贴板一样只有字节没有路径，只能复制一份
+            进工作区。对截图这是对的，对一个已经躺在磁盘上的文件就不是——那条
+            路留给拖进来。 */}
         <input
           ref={picker}
           type="file"
@@ -338,6 +361,6 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           </button>
         </span>
       </div>
-    </>
+    </div>
   );
 }

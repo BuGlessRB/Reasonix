@@ -1301,6 +1301,9 @@
   /* 减去 .flow 的内边距，输入框的可见边缘才跟卡片的左右边缘落在同一条线上 */
   /* 附件是「这一轮要带上的东西」，所以它贴在输入框上沿，不在别处 */
   .compose textarea[data-over] { outline: 2px dashed var(--accent); outline-offset: -3px }
+  /* 输入区整块都收拖放，但它本身不该占布局：display:contents 让盒子消失、
+     节点还在，拖放层就能问「这一下落在输入框里没有」。 */
+  .dropzone { display: contents }
   .shots { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 2px 7px }
   .shot { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 9px; border: 1px solid var(--border); border-radius: var(--r-pill); font: 400 11px var(--mono); color: var(--muted) }
   .shot .nm { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
@@ -1874,11 +1877,9 @@
   .addsrv .act[data-primary], .addpkg .act[data-primary] { border-color: var(--accent); background: var(--accent); color: var(--accent-fg) }
   .addsrv .act[data-primary]:disabled, .addpkg .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
   .addpkg > .why { margin-top: 9px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
-  /* 只有这块声明自己收文件：Wails 把路径只交给带这个属性的元素，所以拖图片给
-     输入框的那条既有路径不受影响。属性会继承，落在里面的 textarea 上也算。
-     wails-drop-target-active 是运行时在悬停时挂上的类。 */
-  .addpkg[data-stage="paste"] { --wails-drop-target: drop }
-  .addpkg.wails-drop-target-active .paste { border-color: var(--accent); background: var(--overlay) }
+  /* data-over 由页面自己的拖放层挂：落在哪个元素上由 DOM 判定，不靠外壳给的
+     坐标——界面一缩放，坐标和 CSS 像素就对不上了。 */
+  .addpkg[data-over] .paste { border-color: var(--accent); background: var(--overlay) }
 
   /* 计划按风险分组：会跑东西的那一组自带警戒线，剩下的只是文件。
      等级是核心判的，这里只负责让它一眼可见。 */

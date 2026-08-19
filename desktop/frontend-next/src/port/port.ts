@@ -1,9 +1,7 @@
 // The status is the part callers branch on: a 409 from /resume means a turn owns
 // that session, which is a question to put to the user rather than a failure.
-export interface Attachment {
-  path: string;
-  ref: string;
-}
+import type { Attachment, DroppedRef } from "./attachment";
+export type { Attachment, DroppedRef };
 
 export interface WorkspaceChange {
   path: string;
@@ -489,11 +487,6 @@ export interface AgentPort {
   // Text the window assembled, put on disk. Returns where it went, or null when
   // the host handled it without a path to report (a browser download).
   saveText(name: string, content: string): Promise<string | null>;
-  // Absolute paths of files dropped on an element that opted in with
-  // `--wails-drop-target: drop`. A browser tab only ever sees a File object,
-  // never a path, so this returns an unsubscribe that fires nowhere there —
-  // the same shape onUpdateProgress uses for a shell-only signal.
-  onFileDrop(cb: (paths: string[]) => void): () => void;
   // Rebuilds the runtime from what is on disk now: restarts extension sidecars
   // and rescans skills/commands/hooks. An extension author editing code needs
   // this; without it the only way to load an edit is restarting the app.
@@ -625,9 +618,15 @@ export interface AgentPort {
   // file created and then removed by a shell command leaves both events behind
   // and nothing on disk.
   changes(): Promise<WorkspaceChanges>;
-  // Saves pasted or dropped image bytes into the workspace's attachment
-  // directory and returns the "@path" token a turn references it by.
-  attach(blob: Blob): Promise<Attachment>;
+  // Saves bytes into the workspace's attachment directory and returns the
+  // "@path" token a turn references it by. This is the door for what has no
+  // path to offer — the clipboard, and a browser tab's dropped File. A window
+  // that knows where the file came from uses dropRefs and copies nothing.
+  // Naming the bytes is what stores them as that kind of file; unnamed bytes
+  // must prove they are an image.
+  attach(blob: Blob, name?: string): Promise<Attachment>;
+  // Names what dropped paths are called inside a turn, in the order given.
+  dropRefs(paths: string[]): Promise<DroppedRef[]>;
   // onGap fires when frames were lost beyond what the stream can replay, which
   // is the caller's cue to rebuild from the transcript rather than to keep
   // rendering a conversation with a hole in it.

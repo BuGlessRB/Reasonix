@@ -7,6 +7,7 @@ import "./styles/app.css";
 import { App } from "./ui/App";
 import { SseHub } from "./port/hub";
 import type { HubPort } from "./port/hub";
+import { install as installFileDrop } from "./ui/filedrop";
 
 // The dev proxy only exists when REASONIX_SERVE was set at vite start; probing
 // /status decides which port to boot on, so neither mode needs a build flag.
@@ -59,12 +60,17 @@ trackWidth();
 
 const root = createRoot(document.getElementById("root")!);
 pick().then(
-  (hub) =>
+  (hub) => {
+    // Before the first render, and not from whichever view happens to want a
+    // drop: a window with no drop target mounted still has to refuse a file, or
+    // the webview navigates to it and the app is replaced by what was dropped.
+    installFileDrop(hub);
     root.render(
       <StrictMode>
         <App hub={hub} />
       </StrictMode>,
-    ),
+    );
+  },
   (e: unknown) =>
     root.render(
       <div className="app" data-run="idle">

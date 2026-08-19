@@ -682,7 +682,7 @@ func TestScopedRefsRequireExternalFolderRegistration(t *testing.T) {
 	}
 }
 
-func TestRegisterExternalFolderRefResolvesScopedDir(t *testing.T) {
+func TestDroppedRefResolvesScopedDirOutsideTheWorkspace(t *testing.T) {
 	workspace := t.TempDir()
 	parent := t.TempDir()
 	external := filepath.Join(parent, "Folder With Spaces")
@@ -700,9 +700,9 @@ func TestRegisterExternalFolderRefResolvesScopedDir(t *testing.T) {
 
 	registrar := &recordingExternalFolderToolRefs{}
 	c := &Controller{workspaceRoot: workspace, externalFolderToolRefs: registrar}
-	token, displayPath, err := c.RegisterExternalFolderRef(external)
+	token, displayPath, err := c.DroppedRef(external)
 	if err != nil {
-		t.Fatalf("RegisterExternalFolderRef: %v", err)
+		t.Fatalf("DroppedRef: %v", err)
 	}
 	if registrar.token != token || registrar.root != expectedExternal {
 		t.Fatalf("tool read root registration = (%q, %q), want (%q, %q)", registrar.token, registrar.root, token, expectedExternal)
@@ -780,9 +780,9 @@ func TestExternalFolderRefListAndSearch(t *testing.T) {
 	expectedDisplayPath := filepath.ToSlash(expectedExternal)
 
 	c := &Controller{}
-	token, _, err := c.RegisterExternalFolderRef(external)
+	token, _, err := c.DroppedRef(external)
 	if err != nil {
-		t.Fatalf("RegisterExternalFolderRef: %v", err)
+		t.Fatalf("DroppedRef: %v", err)
 	}
 
 	rootEntries, handled := c.ListExternalFolderRefDir(token + "/")
@@ -937,5 +937,87 @@ func TestReadFileRefPDFExtractionWithBaseDirUsesAbsPath(t *testing.T) {
 	}
 	if !strings.Contains(got, "workspace pdf") {
 		t.Fatalf("scoped pdf extraction missing text: %s", got)
+	}
+}
+
+// A drop inside the workspace must stay a workspace path: that is the spelling
+// every other surface shows, and registering a read root for it would widen
+// what the session may read to the whole folder the file happened to sit in.
+func TestDroppedRefInsideTheWorkspaceStaysAWorkspacePath(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspace, "src dir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(workspace, "src dir", "main go.txt")
+	if err := os.WriteFile(file, []byte("inside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	registrar := &recordingExternalFolderToolRefs{}
+	c := &Controller{workspaceRoot: workspace, externalFolderToolRefs: registrar}
+	token, displayPath, err := c.DroppedRef(file)
+	if err != nil {
+		t.Fatalf("DroppedRef: %v", err)
+	}
+	if registrar.token != "" {
+		t.Fatalf("a workspace path registered an external read root: %q -> %q", registrar.token, registrar.root)
+	}
+	if displayPath != "src dir/main go.txt" {
+		t.Fatalf("display path = %q, want the workspace-relative path", displayPath)
+	}
+	line := "look at @" + token
+	if got := parseRefTokens(line); len(got) != 1 {
+		t.Fatalf("parseRefTokens(%q) = %v, want one token — the space ended it", line, got)
+	}
+	block, errs := c.ResolveScopedRefs(context.Background(), line)
+	if len(errs) != 0 {
+		t.Fatalf("ResolveScopedRefs errors = %v", errs)
+	}
+	if !strings.Contains(block, "inside") {
+		t.Fatalf("dropped workspace file did not resolve to its contents:\n%s", block)
+	}
+}
+
+// A dropped file outside the workspace cannot be referenced by its own
+// spelling — a drive letter reads as an MCP server and a space ends the token —
+// so it is registered under the directory holding it and referenced from there.
+func TestDroppedRefOutsideTheWorkspaceResolvesTheFileItself(t *testing.T) {
+	workspace := t.TempDir()
+	parent := t.TempDir()
+	external := filepath.Join(parent, "Notes Folder")
+	if err := os.MkdirAll(external, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(external, "term list.txt")
+	if err := os.WriteFile(file, []byte("outside body"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	expectedRoot := external
+	if resolved, err := filepath.EvalSymlinks(external); err == nil {
+		expectedRoot = resolved
+	}
+
+	registrar := &recordingExternalFolderToolRefs{}
+	c := &Controller{workspaceRoot: workspace, externalFolderToolRefs: registrar}
+	token, displayPath, err := c.DroppedRef(file)
+	if err != nil {
+		t.Fatalf("DroppedRef: %v", err)
+	}
+	if registrar.root != expectedRoot {
+		t.Fatalf("registered read root = %q, want the directory holding the file (%q)", registrar.root, expectedRoot)
+	}
+	if displayPath != filepath.ToSlash(filepath.Join(expectedRoot, "term list.txt")) {
+		t.Fatalf("display path = %q, want the real path of the dropped file", displayPath)
+	}
+	line := "read @" + token
+	if got := parseRefTokens(line); len(got) != 1 {
+		t.Fatalf("parseRefTokens(%q) = %v, want one token", line, got)
+	}
+	block, errs := c.ResolveScopedRefs(context.Background(), line)
+	if len(errs) != 0 {
+		t.Fatalf("ResolveScopedRefs errors = %v", errs)
+	}
+	if !strings.Contains(block, "outside body") {
+		t.Fatalf("dropped external file did not resolve to its contents:\n%s", block)
 	}
 }

@@ -553,6 +553,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /todos", s.todos)
 	mux.HandleFunc("GET /changes", s.changes)
 	mux.HandleFunc("POST /attachments", s.attachments)
+	mux.HandleFunc("POST /drop", s.drop)
 	mux.HandleFunc("POST /delete-session", s.deleteSession)
 	return mux
 }
