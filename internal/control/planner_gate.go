@@ -2,7 +2,6 @@ package control
 
 import (
 	"context"
-	"slices"
 	"strings"
 	"unicode"
 
@@ -26,7 +25,6 @@ const (
 	plannerReasonSlash              = "slash_command"
 	plannerReasonEmpty              = "empty_turn"
 	plannerReasonUserPlanOnly       = "user_plan_only"
-	plannerReasonUserPlanApproval   = "user_plan_for_approval"
 	plannerReasonUserPlanAndExecute = "user_plan_and_execute"
 	plannerReasonExecutorOwns       = "executor_owns_the_turn"
 )
@@ -92,9 +90,6 @@ func DecidePlannerRoute(ctx context.Context, input string) agent.PlannerDecision
 	}
 
 	lower := normalizePlannerText(text)
-	if requestsPlanApproval(lower) {
-		return plannerPlanDecision(agent.PlannerRoutePlanForApproval, agent.PlannerDepthFull, plannerReasonUserPlanApproval)
-	}
 	if requestsPlanOnly(lower) {
 		return plannerPlanDecision(agent.PlannerRoutePlanOnly, agent.PlannerDepthFull, plannerReasonUserPlanOnly)
 	}
@@ -160,7 +155,7 @@ var planAndExecuteDirectives = []string{
 }
 
 var planFirstDirectives = []string{
-	"先规划", "先给方案", "先出方案",
+	"先规划", "先给方案", "先出方案", "给我方案",
 	"plan first", "draft a plan", "give me a plan", "make a plan",
 }
 
@@ -169,83 +164,12 @@ var planOnlyDirectives = []string{
 	"plan only", "only plan", "just plan", "give me only a plan", "give me a plan only",
 }
 
-var planOnlyBoundaryTerms = []string{
-	"give me only a plan", "give me a plan only", "only give me the plan",
-	"给我方案即可", "只要方案",
-}
-
-var plannerNoExecutionTerms = []string{
-	"不要执行", "先别执行", "暂不执行", "不要实现", "先别实现", "暂不实现",
-	"不要修改", "先别修改", "不要改代码", "先别改代码", "不要动代码",
-	"do not execute", "don't execute", "do not implement", "don't implement",
-	"do not make changes", "don't make changes", "without executing",
-	"without implementation", "no execution", "no implementation",
-}
-
-var plannerApprovalTerms = []string{
-	"等我确认", "等待我确认", "我确认后", "确认后再",
-	"等我批准", "等待我批准", "我批准后", "批准后再",
-	"wait for my approval", "wait for approval", "after i approve", "after my approval",
-	"until i approve", "until my approval", "let me approve", "let me confirm",
-	"确认后执行", "批准后执行",
-}
-
-var plannerIntentTerms = []string{
-	"plan", "planning", "方案", "规划", "计划",
-}
-
+// requestsPlanOnly reads a leading directive, never the body. Free-text
+// matching used to decide this and stopped the turn dead on requests that only
+// mentioned planning: "add a test for the plan contract" and "document why we
+// do not implement the plan cache" both routed to plan-only and did no work.
 func requestsPlanOnly(lower string) bool {
-	directiveText := plannerDirectiveText(lower)
-	if hasLeadingDirective(directiveText, planOnlyDirectives) {
-		return true
-	}
-	if containsAnyLexical(directiveText, planOnlyBoundaryTerms) {
-		return true
-	}
-	if (strings.Contains(directiveText, "只给") || strings.Contains(directiveText, "只要")) &&
-		containsAnyLexical(directiveText, plannerIntentTerms) {
-		return true
-	}
-	return containsAnyLexical(directiveText, plannerNoExecutionTerms) &&
-		containsAnyLexical(directiveText, plannerIntentTerms)
-}
-
-func requestsPlanApproval(lower string) bool {
-	directiveText := plannerDirectiveText(lower)
-	return containsAnyLexical(directiveText, plannerIntentTerms) &&
-		containsUnnegatedPlannerApproval(directiveText)
-}
-
-func containsUnnegatedPlannerApproval(text string) bool {
-	for _, term := range plannerApprovalTerms {
-		offset := 0
-		for offset < len(text) {
-			idx := strings.Index(text[offset:], term)
-			if idx < 0 {
-				break
-			}
-			idx += offset
-			if !plannerApprovalNegated(text[:idx]) {
-				return true
-			}
-			offset = idx + len(term)
-		}
-	}
-	return false
-}
-
-func plannerApprovalNegated(prefix string) bool {
-	prefix = strings.TrimSpace(prefix)
-	for _, negation := range []string{
-		"不要", "不需要", "无需", "无须", "不用", "不必", "别",
-		"do not", "don't", "not", "no need to", "do not need to", "don't need to",
-		"not necessary to", "without",
-	} {
-		if strings.HasSuffix(prefix, negation) {
-			return true
-		}
-	}
-	return false
+	return hasLeadingDirective(plannerDirectiveText(lower), planOnlyDirectives)
 }
 
 // plannerDirectiveText removes quoted examples before applying execution
@@ -314,37 +238,6 @@ func plannerInlineApostrophe(runes []rune, i int) bool {
 	return i > 0 && i+1 < len(runes) &&
 		(unicode.IsLetter(runes[i-1]) || unicode.IsDigit(runes[i-1])) &&
 		(unicode.IsLetter(runes[i+1]) || unicode.IsDigit(runes[i+1]))
-}
-
-func containsAnyLexical(s string, terms []string) bool {
-	for _, term := range terms {
-		if containsLexicalTerm(s, term) {
-			return true
-		}
-	}
-	return false
-}
-
-func containsLexicalTerm(s, term string) bool {
-	term = strings.ToLower(strings.TrimSpace(term))
-	if term == "" {
-		return false
-	}
-	if containsNonASCII(term) || strings.ContainsAny(term, " -_/") {
-		return strings.Contains(s, term)
-	}
-	return slices.Contains(strings.FieldsFunc(s, func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_'
-	}), term)
-}
-
-func containsNonASCII(s string) bool {
-	for _, r := range s {
-		if r > unicode.MaxASCII {
-			return true
-		}
-	}
-	return false
 }
 
 // TaskWarrantsPlanner is retained as a small compatibility predicate for

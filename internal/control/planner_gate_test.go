@@ -77,8 +77,11 @@ func TestStatedDirectivesRouteToThePlanner(t *testing.T) {
 		{"make a plan", "make a plan for the parser rewrite", agent.PlannerRoutePlanAndExecute},
 		{"plan only", "只给方案，不要执行", agent.PlannerRoutePlanOnly},
 		{"plan only en", "give me a plan only for the parser rewrite", agent.PlannerRoutePlanOnly},
-		{"plan for approval", "给我方案，等我确认后再执行", agent.PlannerRoutePlanForApproval},
-		{"plan for approval en", "draft a plan and wait for my approval", agent.PlannerRoutePlanForApproval},
+		// Asking to approve first routes to the planner; whether the turn stops
+		// for approval is the plan contract's RequiresApproval, set by the
+		// planner after it read the request, not the host matching phrases.
+		{"plan then approve", "给我方案，等我确认后再执行", agent.PlannerRoutePlanAndExecute},
+		{"plan then approve en", "draft a plan and wait for my approval", agent.PlannerRoutePlanAndExecute},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -138,5 +141,23 @@ func TestNewPlannerGateTracksTheRoute(t *testing.T) {
 	}
 	if !gate(context.Background(), "make a plan for the parser rewrite") {
 		t.Error("planner gate should honour a stated plan request")
+	}
+}
+
+// Free-text matching decided this before and stopped the turn dead on requests
+// that only mentioned planning. plan-only ends the turn with no execution, so a
+// false positive here is work silently not done.
+func TestPlanningMentionedAsSubjectDoesNotStopTheTurn(t *testing.T) {
+	for _, input := range []string{
+		"Add a test for the plan contract that asserts we do not execute steps twice",
+		"Document why we do not implement the plan cache",
+		"实现一个方案对比页面，等我确认后再发布的那个流程有 bug",
+		"The approval flow does not wait for my approval before executing the plan; fix it",
+		"修一下计划任务不执行的问题",
+	} {
+		got := DecidePlannerRoute(context.Background(), input)
+		if got.Route == agent.PlannerRoutePlanOnly || got.Route == agent.PlannerRoutePlanForApproval {
+			t.Errorf("%q routed to %s: planning is the subject here, not the instruction", input, got.Route)
+		}
 	}
 }
