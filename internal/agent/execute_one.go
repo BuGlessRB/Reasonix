@@ -170,6 +170,9 @@ func (a *Agent) resolveToolPolicy(ctx context.Context, turn *turnRuntime, plan *
 	if blocked, early := a.applyPlanModeAndProxy(ctx, plan); early {
 		return blocked, true
 	}
+	if blocked, early := a.applyCallContract(plan); early {
+		return blocked, true
+	}
 	if blocked, early := a.applyContextualToolGate(ctx, plan); early {
 		return blocked, true
 	}
