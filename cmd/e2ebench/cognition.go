@@ -50,7 +50,7 @@ func renderCognition(results []result) string {
 	var reason, compl, slowGapMs, gapMs, delegToolMs int64
 	slow, delegRounds, runs, solved := 0, 0, 0, 0
 	streamed := false
-	var slowReason int64
+	var slowReason, reasonChars int64
 	var rates []int64
 	for _, r := range results {
 		if r.Passed {
@@ -64,6 +64,7 @@ func renderCognition(results []result) string {
 		if t.ReasoningStreamed {
 			streamed = true
 		}
+		reasonChars += t.ReasoningChars
 		reason += t.ReasoningTokensTotal
 		compl += t.CompletionTokensTotal
 		slow += t.SlowRounds
@@ -89,7 +90,7 @@ func renderCognition(results []result) string {
 	unreported := reason == 0 && streamed
 	reasonTok := comma(int(reason)) + " tok"
 	if unreported {
-		reasonTok = "unreported by this provider"
+		reasonTok = fmt.Sprintf("%s chars streamed (this provider reports no token count)", comma(int(reasonChars)))
 	}
 	line := fmt.Sprintf("**Cognition** (%d recorded runs): **reasoning** %s · **completion** %s tok",
 		runs, reasonTok, comma(int(compl)))
