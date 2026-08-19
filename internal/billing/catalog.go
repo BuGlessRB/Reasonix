@@ -1,6 +1,9 @@
 package billing
 
-import "strings"
+import (
+	"net/url"
+	"strings"
+)
 
 // Official catalog metadata: currency, model, effective dates, documentation
 // sources, and price fingerprints. User-custom prices always win over catalog.
@@ -29,6 +32,29 @@ const (
 	DocMiMoPAYG          = "https://mimo.mi.com/docs/price/pay-as-you-go"
 	DocMiMoTokenPlan     = "https://platform.xiaomimimo.com/token-plan"
 )
+
+// officialEndpointHosts maps a vendor's own API hostnames to the catalog
+// provider whose list prices apply there. Host equality is the test: a reseller
+// or proxy bills on its own terms even when it serves the same model, and an
+// entry merely named after a vendor is not evidence of the vendor's endpoint.
+var officialEndpointHosts = map[string]string{
+	"api.deepseek.com":              "deepseek",
+	"api.longcat.chat":              "longcat",
+	"api.xiaomimimo.com":            "mimo",
+	"token-plan-cn.xiaomimimo.com":  "mimo",
+	"token-plan-sgp.xiaomimimo.com": "mimo",
+	"token-plan-ams.xiaomimimo.com": "mimo",
+}
+
+// OfficialProviderForEndpoint returns the catalog provider whose official
+// prices apply to baseURL, or "" when the address is not a vendor's own API.
+func OfficialProviderForEndpoint(baseURL string) string {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return ""
+	}
+	return officialEndpointHosts[strings.ToLower(u.Hostname())]
+}
 
 // OfficialCatalog is the built-in price book. Rates match config defaults.
 func OfficialCatalog() []CatalogEntry {

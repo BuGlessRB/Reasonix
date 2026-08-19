@@ -1,6 +1,7 @@
 package evidence
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 
@@ -249,4 +250,19 @@ func VerificationIdentity(command string) string {
 		return command
 	}
 	return strings.Join(verifiers, " && ")
+}
+
+// IsVerificationToolCall reports whether a persisted tool call is a bash
+// command whose exit status provides implementation evidence. Diagnostic
+// readers share the delivery classifier so "verification" means the same thing
+// in a report as it does in the gate that accepts a sign-off.
+func IsVerificationToolCall(toolName string, args json.RawMessage) bool {
+	if !strings.EqualFold(strings.TrimSpace(toolName), "bash") {
+		return false
+	}
+	command, ok := bashCommandFromArgs(args)
+	if !ok {
+		return false
+	}
+	return bashCommandIsVerification(command)
 }

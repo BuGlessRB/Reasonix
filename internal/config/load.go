@@ -13,6 +13,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"reasonix/internal/billing"
 	"reasonix/internal/fileutil"
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/provider"
@@ -370,7 +371,7 @@ func backfillDeepSeekPro(c *Config) {
 			case proModel:
 				return // pro already reachable
 			case flashModel:
-				if strings.Contains(p.BaseURL, "api.deepseek.com") {
+				if officialProviderKind(p) == "deepseek" {
 					flash = p
 				}
 			}
@@ -459,14 +460,7 @@ func officialProviderKind(p *ProviderEntry) string {
 	if p == nil {
 		return ""
 	}
-	u, err := url.Parse(strings.TrimSpace(p.BaseURL))
-	if err != nil {
-		return ""
-	}
-	if strings.EqualFold(u.Hostname(), "api.deepseek.com") {
-		return "deepseek"
-	}
-	return ""
+	return billing.OfficialProviderForEndpoint(p.BaseURL)
 }
 
 func resolveRoot(root string) string {

@@ -1,6 +1,9 @@
 package evidence
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestVerificationExitConclusive(t *testing.T) {
 	cases := []struct {
@@ -124,5 +127,32 @@ func TestVerificationFloorKeepsUnclassifiedReceipts(t *testing.T) {
 	ledger.Record(Receipt{ToolName: "bash", Command: "go test ./...", Success: true})
 	if !ledger.HasSuccessfulVerificationCommandAfter(-1) {
 		t.Fatal("an unclassified successful run must keep counting as verification")
+	}
+}
+
+// A substring scan over the raw argument JSON accepts every case below;
+// the classifier parses the command and accepts only the first.
+func TestIsVerificationToolCallReadsCommandNotSubstrings(t *testing.T) {
+	cases := []struct {
+		name string
+		args string
+		want bool
+	}{
+		{"runs the verifier", `{"command":"go test ./..."}`, true},
+		{"reads a file named after one", `{"command":"cat notes-about-go-test.md"}`, false},
+		{"prints advice about one", `{"command":"echo 'npm test is what you should run'"}`, false},
+		{"searches for one", `{"command":"grep -rn 'pytest' ."}`, false},
+		{"non-bash tool", `{"command":"go test ./..."}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tool := "bash"
+			if tc.name == "non-bash tool" {
+				tool = "read_file"
+			}
+			if got := IsVerificationToolCall(tool, json.RawMessage(tc.args)); got != tc.want {
+				t.Fatalf("IsVerificationToolCall(%q, %s) = %v, want %v", tool, tc.args, got, tc.want)
+			}
+		})
 	}
 }

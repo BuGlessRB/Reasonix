@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -63,7 +64,7 @@ func TestCollectQualityProducesPublicSafeSummary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CollectQuality: %v", err)
 	}
-	if report.Profile.ModelFamily != "custom/unknown" || report.Profile.RuntimeProfile != "economy" {
+	if report.Profile.ModelID != "custom" || report.Profile.RuntimeProfile != "economy" {
 		t.Fatalf("profile = %+v", report.Profile)
 	}
 	if report.Profile.CollaborationMode != "plan" || report.Profile.ToolApprovalMode != "yolo" || !report.Profile.GoalActive || !report.Profile.Recovered {
@@ -72,8 +73,16 @@ func TestCollectQualityProducesPublicSafeSummary(t *testing.T) {
 	if report.Transcript.ToolCalls != 2 || report.Transcript.WriterCalls != 1 || report.Transcript.VerificationCalls != 1 || report.Transcript.CompactionSummaries != 1 {
 		t.Fatalf("transcript = %+v", report.Transcript)
 	}
-	if report.Transcript.ToolCallTurnsWithoutReasoning != 1 {
-		t.Fatalf("tool-call turns without reasoning = %d", report.Transcript.ToolCallTurnsWithoutReasoning)
+	if report.Transcript.ToolCallTurnsWithoutReasoning != 1 || report.Transcript.ReasoningTurns != 1 {
+		t.Fatalf("reasoning turns = %d, tool-call turns without reasoning = %d",
+			report.Transcript.ReasoningTurns, report.Transcript.ToolCallTurnsWithoutReasoning)
+	}
+	// The session reasoned on one turn and not on the tool-call turn, so the
+	// warning fires on the evidence alone — no vendor is consulted.
+	if !slices.ContainsFunc(report.Warnings, func(w string) bool {
+		return strings.Contains(w, "no persisted reasoning content")
+	}) {
+		t.Fatalf("warnings = %q", report.Warnings)
 	}
 	if report.Usage.CacheHitPercent == nil || *report.Usage.CacheHitPercent != 75 {
 		t.Fatalf("usage = %+v", report.Usage)
@@ -127,5 +136,29 @@ func TestPublicTokenModeUsesRuntimeProfileNames(t *testing.T) {
 		if got := publicTokenMode(input); got != want {
 			t.Errorf("publicTokenMode(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+// The report may name a model only when the built-in catalog declares it.
+// A vendor's name appearing inside a private deployment id is not a licence
+// to report that vendor.
+func TestPublicModelIDNamesOnlyDeclaredModels(t *testing.T) {
+	cases := []struct {
+		name string
+		ref  string
+		want string
+	}{
+		{"declared, bare", "deepseek-v4-flash", "deepseek-v4-flash"},
+		{"declared, provider-qualified", "deepseek-responses/deepseek-v4-flash", "deepseek-v4-flash"},
+		{"private deployment naming a vendor", "corp.internal/deepseek-tuned-secretproject", "custom"},
+		{"private deployment", "corp.private.example/supersecret-model", "custom"},
+		{"empty", "", "unknown"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := publicModelID(tc.ref); got != tc.want {
+				t.Fatalf("publicModelID(%q) = %q, want %q", tc.ref, got, tc.want)
+			}
+		})
 	}
 }

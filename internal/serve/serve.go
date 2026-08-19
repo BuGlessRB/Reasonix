@@ -64,7 +64,7 @@ type Server struct {
 	buildWorkspaceController func(ctx context.Context, dir, ref string) (*control.Controller, error)
 	lastBuild                *boot.BuildResult // serving generation, guarded by bindMu; see reuseFromLastBuild
 	grants                   hostGrants        // what the embedding host has opened up
-	titleProv                provider.Provider // lightweight flash provider for session titles
+	titleProv                provider.Provider // best-effort provider for session titles
 	titlePrice               *provider.Pricing
 	titleModelRef            string
 	titleUsageSink           event.Sink
@@ -143,16 +143,22 @@ func (s *Server) AuthMode() string {
 	return s.auth.Mode()
 }
 
-// initTitleProvider builds a lightweight flash-model provider used solely to
-// generate short session titles. Errors are silently swallowed — title
-// generation is best-effort, and the server works fine without it.
+// initTitleProvider builds the provider used solely to generate short session
+// titles. It follows the same model a new session would open with, so titles
+// work for whichever provider the user configured. Errors are silently
+// swallowed — title generation is best-effort, and the server works fine
+// without it.
 func (s *Server) initTitleProvider() {
 	cfg, err := config.Load()
 	if err != nil {
 		return
 	}
-	entry, ok := cfg.ResolveModel("deepseek-flash")
+	ref, _, ok := cfg.ResolveNewSessionChatModel()
 	if !ok {
+		return
+	}
+	entry, ok := cfg.ResolveModel(ref)
+	if !ok || !entry.Configured() {
 		return
 	}
 	prov, err := provider.New(entry.Kind, titleProviderConfig(entry))

@@ -105,22 +105,15 @@ func prefLabel(pref string) string {
 	return pref
 }
 
+// officialKindForBilling reports which catalog provider's list prices apply to
+// p. The endpoint decides: an entry pointing at a proxy resells on its own
+// terms, so matching it against the vendor's official rate card would label a
+// resold price as official.
 func officialKindForBilling(p *config.ProviderEntry) string {
 	if p == nil {
 		return ""
 	}
-	name := strings.ToLower(p.Name)
-	base := strings.ToLower(p.BaseURL)
-	switch {
-	case strings.Contains(base, "deepseek") || strings.Contains(name, "deepseek"):
-		return "deepseek"
-	case strings.Contains(base, "longcat") || strings.Contains(name, "longcat"):
-		return "longcat"
-	case strings.Contains(base, "mimo") || strings.Contains(name, "mimo"):
-		return "mimo"
-	default:
-		return name
-	}
+	return billing.OfficialProviderForEndpoint(p.BaseURL)
 }
 
 // RenderBillingText formats a human-readable billing doctor report.

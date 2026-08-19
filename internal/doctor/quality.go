@@ -7,41 +7,19 @@ import (
 	"strings"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/config"
+	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
 )
-
-// verificationCommandMarkers identify shell commands whose exit status verifies
-// the turn's work (tests, vet, typecheck, lint, build). Matched as lowercase
-// substrings of the bash tool's raw argument JSON. Inlined from the removed
-// Memory v5 compiler so the quality report keeps its counting behavior.
-var verificationCommandMarkers = []string{
-	"go test", "go vet", "go build", "gofmt -l", "golangci-lint",
-	"npm test", "npm run test", "pnpm test", "pnpm run test", "yarn test",
-	"vitest", "jest", "npx tsc", "tsc ", "typecheck", "type-check", "check:css",
-	"eslint", "pytest", "ruff check", "cargo test", "cargo check", "cargo build",
-	"mvn test", "gradle test", "make test", "ctest", "phpunit", "rspec",
-}
 
 // isVerificationToolCall reports whether a persisted tool call is a shell
 // command whose exit status provides implementation evidence. It intentionally
 // returns only a boolean so diagnostic callers never need to expose arguments.
 func isVerificationToolCall(name, args string) bool {
-	if !strings.EqualFold(strings.TrimSpace(name), "bash") {
-		return false
-	}
-	args = strings.ToLower(args)
-	if args == "" {
-		return false
-	}
-	for _, marker := range verificationCommandMarkers {
-		if strings.Contains(args, marker) {
-			return true
-		}
-	}
-	return false
+	return evidence.IsVerificationToolCall(name, json.RawMessage(args))
 }
 
-const qualityReportSchemaVersion = 1
+const qualityReportSchemaVersion = 2
 
 // QualityOptions selects one persisted session and produces a content-free
 // diagnostic summary suitable for a public issue or discussion.
@@ -61,7 +39,7 @@ type QualityReport struct {
 }
 
 type QualityProfile struct {
-	ModelFamily       string `json:"model_family"`
+	ModelID           string `json:"model_id"`
 	RuntimeProfile    string `json:"runtime_profile"`
 	CollaborationMode string `json:"collaboration_mode"`
 	ToolApprovalMode  string `json:"tool_approval_mode"`
@@ -77,6 +55,7 @@ type QualityTranscript struct {
 	ToolCalls                     int `json:"tool_calls"`
 	WriterCalls                   int `json:"writer_calls"`
 	VerificationCalls             int `json:"verification_calls"`
+	ReasoningTurns                int `json:"reasoning_turns"`
 	ToolCallTurnsWithoutReasoning int `json:"tool_call_turns_without_reasoning"`
 	CompactionSummaries           int `json:"compaction_summaries"`
 }
@@ -140,7 +119,7 @@ func CollectQuality(opts QualityOptions) (QualityReport, error) {
 		SchemaVersion: qualityReportSchemaVersion,
 		Version:       strings.TrimSpace(opts.Version),
 		Profile: QualityProfile{
-			ModelFamily:       publicModelFamily(meta.Model),
+			ModelID:           publicModelID(meta.Model),
 			RuntimeProfile:    publicTokenMode(meta.TokenMode),
 			CollaborationMode: publicCollaborationMode(meta.Mode, meta.Goal),
 			ToolApprovalMode:  publicToolApprovalMode(meta.Mode, meta.ToolApprovalMode),
@@ -155,8 +134,12 @@ func CollectQuality(opts QualityOptions) (QualityReport, error) {
 	} else {
 		report.Warnings = append(report.Warnings, "desktop telemetry is unavailable for this session")
 	}
-	if report.Profile.ModelFamily == "deepseek" && report.Transcript.ToolCallTurnsWithoutReasoning > 0 {
-		report.Warnings = append(report.Warnings, "one or more DeepSeek tool-call turns have no persisted reasoning content")
+	// The session says whether reasoning was expected: a model that produced any
+	// should produce it on tool-call turns too. Read from the evidence, this
+	// reports the same fault for every vendor and stays quiet for plain models.
+	if report.Transcript.ToolCallTurnsWithoutReasoning > 0 &&
+		(report.Transcript.ReasoningTurns > 0 || report.Usage.ReasoningTokens > 0) {
+		report.Warnings = append(report.Warnings, "tool-call turns have no persisted reasoning content although this session produced reasoning elsewhere")
 	}
 	if report.Transcript.WriterCalls > 0 && report.Transcript.VerificationCalls == 0 {
 		report.Warnings = append(report.Warnings, "writer tools were used without a persisted verification-shaped shell call")
@@ -176,7 +159,9 @@ func summarizeQualityTranscript(messages []provider.Message) QualityTranscript {
 			}
 		case provider.RoleAssistant:
 			out.AssistantMessages++
-			if len(message.ToolCalls) > 0 && strings.TrimSpace(message.ReasoningContent) == "" {
+			if strings.TrimSpace(message.ReasoningContent) != "" {
+				out.ReasoningTurns++
+			} else if len(message.ToolCalls) > 0 {
 				out.ToolCallTurnsWithoutReasoning++
 			}
 			for _, call := range message.ToolCalls {
@@ -259,34 +244,23 @@ func summarizeQualitySignals(sources map[string]qualitySourceUsage, total int) Q
 	return out
 }
 
-func publicModelFamily(model string) string {
-	model = strings.ToLower(strings.TrimSpace(model))
-	switch {
-	case model == "":
+// publicModelID returns the session's model id when the curated preset catalog
+// declares it. Those ids ship in the binary, so naming one leaks nothing. Any
+// other id may be a private deployment name, and the report withholds it
+// rather than guessing a vendor out of how it is spelled.
+func publicModelID(modelRef string) string {
+	ref := strings.TrimSpace(modelRef)
+	if ref == "" {
 		return "unknown"
-	case strings.Contains(model, "deepseek"):
-		return "deepseek"
-	case strings.Contains(model, "claude"), strings.Contains(model, "anthropic"):
-		return "anthropic"
-	case strings.Contains(model, "openai"), strings.Contains(model, "gpt"), strings.Contains(model, "codex"):
-		return "openai"
-	case strings.Contains(model, "glm"), strings.Contains(model, "zhipu"):
-		return "zhipu/glm"
-	case strings.Contains(model, "kimi"), strings.Contains(model, "moonshot"):
-		return "kimi/moonshot"
-	case strings.Contains(model, "minimax"):
-		return "minimax"
-	case strings.Contains(model, "qwen"), strings.Contains(model, "dashscope"):
-		return "qwen"
-	case strings.Contains(model, "mimo"):
-		return "mimo"
-	case strings.Contains(model, "gemini"), strings.Contains(model, "google"):
-		return "google/gemini"
-	case strings.Contains(model, "ollama"):
-		return "ollama/local"
-	default:
-		return "custom/unknown"
 	}
+	model := ref
+	if _, after, ok := strings.Cut(ref, "/"); ok {
+		model = strings.TrimSpace(after)
+	}
+	if config.CuratedModelDeclared(model) {
+		return model
+	}
+	return "custom"
 }
 
 func publicTokenMode(mode string) string {
@@ -331,7 +305,7 @@ func RenderQualityText(report QualityReport) string {
 	var out strings.Builder
 	fmt.Fprintf(&out, "Reasonix quality diagnostics\n")
 	fmt.Fprintf(&out, "- version: %s\n", valueOrUnknown(report.Version))
-	fmt.Fprintf(&out, "- model family: %s\n", report.Profile.ModelFamily)
+	fmt.Fprintf(&out, "- model: %s\n", report.Profile.ModelID)
 	fmt.Fprintf(&out, "- profile: runtime=%s collaboration=%s approval=%s goal=%t recovered=%t\n",
 		report.Profile.RuntimeProfile, report.Profile.CollaborationMode, report.Profile.ToolApprovalMode,
 		report.Profile.GoalActive, report.Profile.Recovered)
