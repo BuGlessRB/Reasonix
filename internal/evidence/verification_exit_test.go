@@ -89,11 +89,12 @@ func TestVerificationFloorRejectsAnUnreadableRun(t *testing.T) {
 	}
 }
 
-// A check is not discarded for its company: the host cannot prove `gofmt -l .`
-// leaves the tree alone, but `&&` still proves the suite that ran before it
-// passed. Delivery sign-off keeps asking the stricter question.
+// A check is not discarded for its company: the host cannot prove `sed` leaves
+// the tree alone — it writes through a script language nothing here parses —
+// but `&&` still proves the suite that ran before it passed. Delivery sign-off
+// keeps asking the stricter question.
 func TestVerificationIsNotDiscardedForItsCompany(t *testing.T) {
-	const mixed = "go test ./... && go vet ./... && gofmt -l ."
+	const mixed = "go test ./... && go vet ./... && sed -n '1p' out.txt"
 	if !CommandRunsVerification(mixed) {
 		t.Fatal("a suite in a chain with an unclassified command stopped counting as verification")
 	}

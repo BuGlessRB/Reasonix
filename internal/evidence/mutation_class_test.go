@@ -78,7 +78,7 @@ func TestBashMutationClassUnknown(t *testing.T) {
 // The boolean floors that permission and delivery rely on must not loosen:
 // unknown still counts as a mutation everywhere Mutation is consulted.
 func TestUnknownStillCountsAsMutation(t *testing.T) {
-	args := json.RawMessage(`{"command":"gofmt -l ."}`)
+	args := json.RawMessage(`{"command":"sed -n '1p' out.txt"}`)
 	if !ToolCallMutates("bash", args, false) {
 		t.Fatal("unknown command must still count as a mutation")
 	}

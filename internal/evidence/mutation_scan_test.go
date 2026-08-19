@@ -17,8 +17,8 @@ func bashArgs(command string) json.RawMessage {
 // A block that does not say which segment tripped it makes the model rewrite
 // the part it guesses is at fault, which is how one block becomes three.
 func TestMixedBlockNamesTheSegment(t *testing.T) {
-	got := ShellContractMixedMessage(bashArgs("gofmt -l internal/; go vet ./... && go test ./..."))
-	if !strings.Contains(got, "gofmt -l internal/") {
+	got := ShellContractMixedMessage(bashArgs("sed -n '1p' out.txt; go vet ./... && go test ./..."))
+	if !strings.Contains(got, "sed -n '1p' out.txt") {
 		t.Fatalf("message = %q, want the unproven segment named", got)
 	}
 	// "cannot prove" rather than "changes state": an unrecognized command is
@@ -36,8 +36,8 @@ func TestMixedBlockNamesTheSegment(t *testing.T) {
 // run was refused three times running by the unnamed version: it rewrote the
 // command, moved to '&&', then to ';', and every refusal read identically.
 func TestDeliveryMixedBlockNamesTheSegmentAndRefusesTheAndAndRoute(t *testing.T) {
-	got := ShellContractMixedDeliveryMessage(bashArgs("gofmt -l internal/ && go vet ./... && go test ./..."))
-	if !strings.Contains(got, "gofmt -l internal/") {
+	got := ShellContractMixedDeliveryMessage(bashArgs("sed -n '1p' out.txt && go vet ./... && go test ./..."))
+	if !strings.Contains(got, "sed -n '1p' out.txt") {
 		t.Fatalf("message = %q, want the unproven segment named", got)
 	}
 	// Ordinary mode's exit is '&&'. Delivery refuses the mixture whatever the
