@@ -62,7 +62,10 @@ func TestSpawnerRunsShellSyntaxHookThroughPOSIXShell(t *testing.T) {
 		}
 	}
 	result := DefaultSpawner(t.Context(), SpawnInput{
-		Command: `payload=$(cat); grep -q 'secret' <<< "$payload" && printf blocked || printf allowed`,
+		// POSIX only. A here-string is a bashism, and the shell this reaches is
+		// `sh` — which is dash on Debian-family runners, where the fixture died
+		// on its own syntax before it could test anything.
+		Command: `payload=$(cat); printf '%s' "$payload" | grep -q 'secret' && printf blocked || printf allowed`,
 		Stdin:   `{"tool":"read","path":"secret.env"}`,
 		Timeout: realSpawnTimeout,
 	})
