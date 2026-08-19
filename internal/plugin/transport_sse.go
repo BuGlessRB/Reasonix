@@ -260,7 +260,9 @@ func (t *sseTransport) call(ctx context.Context, method string, params any) (jso
 	if t.readErr != nil {
 		err := t.readErr
 		t.mu.Unlock()
-		return nil, fmt.Errorf("plugin %q: %s: %w", t.name, method, err)
+		// The event stream ended before this request was posted; the mid-flight
+		// case below stays unmarked because the server may have run the call.
+		return nil, markGone(fmt.Errorf("plugin %q: %s: %w", t.name, method, err))
 	}
 	t.nextID++
 	id := t.nextID

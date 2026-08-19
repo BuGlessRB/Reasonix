@@ -1275,7 +1275,11 @@ func TestHelperProcess(t *testing.T) {
 		return
 	}
 	defer os.Exit(0)
-	incrementHelperCounter(os.Getenv("GO_WANT_HELPER_START_COUNT"))
+	startOrdinal := incrementHelperCounter(os.Getenv("GO_WANT_HELPER_START_COUNT"))
+	// GO_WANT_HELPER_DIE_ON_CALL stands in for a server whose process dies after
+	// a healthy handshake (a crash, an OOM kill, a database driver aborting).
+	// Only the first instance dies, so a reconnecting host finds a working one.
+	dieOnCall := os.Getenv("GO_WANT_HELPER_DIE_ON_CALL") == "1" && startOrdinal == 1
 	if msg := os.Getenv("GO_WANT_HELPER_STARTUP_STDERR"); msg != "" {
 		_, _ = os.Stderr.WriteString(msg + "\n")
 	}
@@ -1351,6 +1355,9 @@ func TestHelperProcess(t *testing.T) {
 				},
 			}}}
 		case "tools/call":
+			if dieOnCall {
+				os.Exit(1) // no reply, no farewell on stderr: the pipe just ends
+			}
 			incrementHelperCounter(os.Getenv("GO_WANT_HELPER_CALL_COUNT"))
 			var p struct {
 				Arguments struct {

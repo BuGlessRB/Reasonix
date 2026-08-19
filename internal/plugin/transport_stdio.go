@@ -648,7 +648,9 @@ func (t *stdioTransport) call(ctx context.Context, method string, params any) (j
 	t.mu.Lock()
 	if t.readErr != nil {
 		t.mu.Unlock()
-		return nil, t.withStderr(fmt.Errorf("plugin %q: read: %w", t.name, t.readErr))
+		// Nothing was written for this request, so a replacement connection may
+		// carry it. The mid-flight case below stays unmarked.
+		return nil, markGone(t.withStderr(fmt.Errorf("plugin %q: read: %w", t.name, t.readErr)))
 	}
 	t.nextID++
 	id := t.nextID
