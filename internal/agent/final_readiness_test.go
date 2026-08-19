@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/instruction"
 	"reasonix/internal/provider"
@@ -113,11 +112,10 @@ func TestVerificationGapSeparatesTheHostsBlindSpotFromTheTurns(t *testing.T) {
 		checks       []instruction.VerifyCheck
 		ledger       *evidence.Ledger
 		wantAdvisory bool
-		wantNamed    bool
 	}{
-		{"a command the table could not read is advisory", nil, readinessLedger(writer, command), true, true},
-		{"nothing ran at all is the turn's own miss", nil, readinessLedger(writer), false, false},
-		{"a project that declared checks owes those", []instruction.VerifyCheck{declared}, readinessLedger(writer, command), false, false},
+		{"a command the table could not read is advisory", nil, readinessLedger(writer, command), true},
+		{"nothing ran at all is the turn's own miss", nil, readinessLedger(writer), false},
+		{"a project that declared checks owes those", []instruction.VerifyCheck{declared}, readinessLedger(writer, command), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -126,23 +124,17 @@ func TestVerificationGapSeparatesTheHostsBlindSpotFromTheTurns(t *testing.T) {
 			if got.advisory != tc.wantAdvisory {
 				t.Fatalf("advisory = %v, want %v: %q", got.advisory, tc.wantAdvisory, got.text)
 			}
-			// Named, never quoted. The command reaches the message as the
-			// program it runs; carrying the command itself is what put a forty
-			// line here-document inside a sentence in a chat window.
-			if (got.subject != "") != tc.wantNamed {
-				t.Errorf("named what ran = %q, want named = %v", got.subject, tc.wantNamed)
+			// An advisory says nothing at all now: it exists to keep the host's
+			// blind spot from failing the turn, and the receipt already reports
+			// that the turn went unverified.
+			if got.advisory && got.text != "" {
+				t.Errorf("an advisory still carries a message: %q", got.text)
 			}
 			if strings.Contains(got.text, ran) {
-				t.Errorf("the advisory carries the command verbatim: %q", got.text)
+				t.Errorf("a gap carries the command verbatim: %q", got.text)
 			}
 			if !got.advisory && !strings.Contains(got.text, "run a relevant verification command") {
 				t.Errorf("a blocking gap must still carry the ask: %q", got.text)
-			}
-			if got.advisory && !strings.Contains(got.text, instruction.HostChecksHeading) {
-				t.Errorf("an advisory must say how to make the check count: %q", got.text)
-			}
-			if got.advisory && got.code != event.NoticeCodeUndeclaredChecks {
-				t.Errorf("an advisory needs a code a window can say in its own language: %q", got.code)
 			}
 		})
 	}
@@ -163,9 +155,6 @@ func TestAdvisoryDoesNotFailTheTurn(t *testing.T) {
 	got := a.ReadinessResult()
 	if !got.Ready {
 		t.Fatalf("ReadinessResult() = %+v, want ready: the host's blind spot must not fail the run", got)
-	}
-	if got.Advisory == "" {
-		t.Error("the advisory was dropped; the user never learns the check went unread")
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/instruction"
-	"reasonix/internal/shellparse"
 	"reasonix/internal/taskpolicy"
 )
 
@@ -17,15 +16,8 @@ import (
 // says what is missing rather than merely that something is.
 
 type finalReadinessCheck struct {
-	applies bool
-	reason  string
-	// advisory is what the host could not read, not what the turn failed to do.
-	// It reaches the user and never fails the run.
-	advisory string
-	// code is what a window says this in its own language by; subject is what
-	// the advisory is about, kept out of the sentence because it is a command.
-	advisoryCode              string
-	advisorySubject           string
+	applies                   bool
+	reason                    string
 	missingProjectChecks      int
 	incompleteTodos           int
 	missingAcceptanceCriteria int
@@ -207,7 +199,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	hasProjectChecks := len(a.projectChecks) > 0
 	hasTodoReceipt := a.task.ledger.HasSuccessfulTodoWrite()
 	if !a.deliveryProfile && !hasProjectChecks && !hasTodoReceipt && len(missing) == 0 {
-		return finalReadinessCheck{advisory: out.advisory}
+		return finalReadinessCheck{}
 	}
 	out.applies = true
 	if a.deliveryProfile {
@@ -287,8 +279,10 @@ func (a *Agent) appendVerificationGap(out *finalReadinessCheck, missing []string
 		return missing
 	}
 	gap := a.verificationGap(writer)
+	// The host's own blind spot is not the turn's miss: a project whose checks
+	// run through a script the table cannot read did verify itself, and failing
+	// it here collects nothing the gate could use next turn.
 	if gap.advisory {
-		out.advisory, out.advisoryCode, out.advisorySubject = gap.text, gap.code, gap.subject
 		return missing
 	}
 	detail := gap.text
@@ -317,20 +311,8 @@ func (a *Agent) verificationGap(writer int) verificationGapResult {
 	// spot — it cannot tell a runner from a deploy — so it reports what it could
 	// not read instead of failing a turn that may well have verified itself.
 	if len(a.projectChecks) == 0 {
-		if ran, ok := a.task.ledger.LatestUnrecognizedCommandAfter(writer); ok {
-			subject := commandPrograms(ran.Command)
-			named := subject
-			if named == "" {
-				named = "a command"
-			}
-			return verificationGapResult{
-				text: fmt.Sprintf("%s ran after the last write, but this project has not said which commands "+
-					"decide it, so the host could not read that as a check. Declare them under %q in project "+
-					"memory to have them enforced.", named, instruction.HostChecksHeading),
-				code:     event.NoticeCodeUndeclaredChecks,
-				subject:  subject,
-				advisory: true,
-			}
+		if _, ok := a.task.ledger.LatestUnrecognizedCommandAfter(writer); ok {
+			return verificationGapResult{advisory: true}
 		}
 	}
 	return verificationGapResult{text: ask}
@@ -341,40 +323,7 @@ func (a *Agent) verificationGap(writer int) verificationGapResult {
 // never fails the run.
 type verificationGapResult struct {
 	text     string
-	code     string
-	subject  string
 	advisory bool
-}
-
-// commandPrograms names what a command runs, so a message can say which one
-// without carrying it: the advisory that used to quote it shipped forty lines
-// of here-document into the middle of a sentence. Each source below reads the
-// parsed command, never its spelling, and an unreadable one goes unnamed.
-func commandPrograms(command string) string {
-	if fields, _ := shellparse.StaticFields(command); len(fields) > 0 {
-		return shellparse.WordBase(fields[0])
-	}
-	var names []string
-	seen := map[string]bool{}
-	add := func(word string) {
-		base := shellparse.WordBase(strings.TrimSpace(word))
-		if base == "" || seen[base] {
-			return
-		}
-		seen[base] = true
-		names = append(names, base)
-	}
-	if leaves, ok := shellparse.CompoundLeafCommands(command); ok {
-		for _, argv := range leaves {
-			if len(argv) > 0 {
-				add(argv[0])
-			}
-		}
-	}
-	for _, program := range shellparse.StdinHereDocPrograms(command) {
-		add(program)
-	}
-	return strings.Join(names, " · ")
 }
 
 func finalReadinessCheckSource(check instruction.VerifyCheck) string {

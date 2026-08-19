@@ -507,19 +507,6 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		// immediately open another Run and silently bypass the chosen limit.
 		return false, a.gracePause(state)
 	}
-	if readiness.advisory != "" {
-		// Reported, not charged: it would fail work that did verify itself.
-		// Operator audience because it describes how the host is configured,
-		// not something said in the conversation.
-		a.svc.sink.Emit(event.Event{
-			Kind:     event.Notice,
-			Level:    event.LevelWarn,
-			Audience: event.NoticeAudienceOperator,
-			Code:     readiness.advisoryCode,
-			Text:     readiness.advisory,
-			Detail:   readiness.advisorySubject,
-		})
-	}
 	if readiness.reason != "" {
 		// Delivery no longer retries readiness with hidden model messages: the
 		// run ends immediately with the missing requirements, and the host owns
