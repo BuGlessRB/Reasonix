@@ -681,13 +681,7 @@ func (t *UseCapabilityTool) Execute(ctx context.Context, args json.RawMessage) (
 	}
 	out, err := resolved.Target.Execute(ctx, resolved.Args)
 	if err != nil {
-		if t.ledger != nil {
-			t.ledger.MarkFailed(resolved.CapabilityID, err.Error())
-		}
-		if t.audit != nil {
-			t.audit.RecordMCPProxy(false, true, true)
-		}
-		return out, err
+		return out, t.recordCallFailure(resolved, err)
 	}
 	if t.ledger != nil {
 		t.ledger.MarkSucceeded(resolved.CapabilityID)

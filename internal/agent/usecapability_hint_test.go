@@ -6,25 +6,34 @@ import (
 	"testing"
 )
 
-// Observed live: a caller put capability_id inside "arguments" and retried four
-// times, rearranging the nesting each round, because "capability_id is required"
-// reads as "you did not send it" when it was sent one level too deep.
-func TestMisplacedArgumentHintNamesTheNesting(t *testing.T) {
-	got := misplacedArgumentHint(json.RawMessage(`{"capability_id":"tool:read_subagent_result","subagent_ref":"sa_1"}`), "capability_id")
-	if !strings.Contains(got, "nested inside") {
-		t.Fatalf("hint = %q, want it to say the value was nested", got)
-	}
-	if !strings.Contains(got, "capability_id") {
-		t.Fatalf("hint = %q, want the field named", got)
+// The fleet call that motivated this: "items" was rejected without the error
+// naming "tasks", and finding that one name cost an inspect and two doc calls.
+func TestContractHintNamesTheParameterTheCallShouldHaveUsed(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"tasks":{},"max_parallel":{}},"required":["tasks"]}`)
+	got := contractHint(schema, json.RawMessage(`{"items":[]}`))
+	for _, want := range []string{`"items" is not a parameter`, `requires "tasks"`, `accepts "max_parallel", "tasks"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("hint = %q, want it to contain %q", got, want)
+		}
 	}
 }
 
-// A caller that genuinely omitted the field gets the plain requirement, with no
-// invented claim about where it is.
-func TestMisplacedArgumentHintStaysSilentWhenAbsent(t *testing.T) {
-	for _, args := range []string{`{"subagent_ref":"sa_1"}`, `{}`, ``, `not json`, `[1,2]`} {
-		if got := misplacedArgumentHint(json.RawMessage(args), "capability_id"); got != "" {
-			t.Errorf("misplacedArgumentHint(%q) = %q, want no hint", args, got)
-		}
+// A hint on a failure it cannot explain is noise: the capability may have
+// failed for its own reasons while the arguments fit the schema exactly.
+func TestContractHintStaysSilentWhenTheArgumentsFit(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"tasks":{}},"required":["tasks"]}`)
+	if got := contractHint(schema, json.RawMessage(`{"tasks":[]}`)); got != "" {
+		t.Errorf("arguments that fit produced hint %q, want silence", got)
+	}
+	// Absent arguments do break a contract that requires one, so that case is
+	// deliberately not silent.
+	if got := contractHint(schema, json.RawMessage(``)); !strings.Contains(got, `requires "tasks"`) {
+		t.Errorf("missing required parameter went unreported: %q", got)
+	}
+	if got := contractHint(json.RawMessage(``), json.RawMessage(`{"items":[]}`)); got != "" {
+		t.Errorf("no schema must produce no hint, got %q", got)
+	}
+	if got := contractHint(json.RawMessage(`{"type":"object"}`), json.RawMessage(`{"items":[]}`)); got != "" {
+		t.Errorf("a schema without properties must produce no hint, got %q", got)
 	}
 }
