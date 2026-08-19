@@ -144,3 +144,23 @@ func TestStructuredReviewReportGate(t *testing.T) {
 		t.Fatalf("security block: ok=%v blocking=%v", ok, blocking)
 	}
 }
+
+// The retired table matched substrings, so any tool whose name merely contained
+// "plugin" or "tool" counted as a privileged surface. Identity is exact now:
+// the MCP namespace the host mints, and two built-in installers.
+func TestPrivilegedMutationMatchesIdentityNotFragments(t *testing.T) {
+	privileged := []string{"mcp__srv__write", "mcp__plugin_acme_files__write", "install_source", "install_skill"}
+	for _, name := range privileged {
+		got := ClassifyMutationRisk([]Receipt{{ToolName: name, Success: true, Mutation: true}}, 0, nil)
+		if got != RiskHigh {
+			t.Errorf("%s risk = %s, want high", name, got)
+		}
+	}
+	ordinary := []string{"plugin_lint", "list_plugins", "edit_file", "multi_edit", "install_sourcemap"}
+	for _, name := range ordinary {
+		r := ReceiptFromToolCall(name, json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, false)
+		if got := ClassifyMutationRisk([]Receipt{r}, 0, nil); got == RiskHigh {
+			t.Errorf("%s risk = high: a name fragment is not a privileged surface", name)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"reasonix/internal/fileutil"
@@ -16,10 +17,9 @@ const (
 	RiskHigh   RiskLevel = "high"
 )
 
-// highRiskToolHints elevate opaque or privileged mutation surfaces.
-var highRiskToolHints = []string{
-	"mcp__", "install_source", "install_skill", "plugin",
-}
+// privilegedMutationTools are the built-in surfaces that install code the host
+// did not write. They are exact names, not fragments.
+var privilegedMutationTools = []string{"install_source", "install_skill"}
 
 // ClassifyMutationRisk scores the change set after the latest mutation.
 // Low: docs/tests/i18n only. Medium: ordinary production code. High: a path the
@@ -41,7 +41,7 @@ func ClassifyMutationRisk(receipts []Receipt, after int, sensitive []string) Ris
 		if len(r.Paths) == 0 && r.MutationEvidence == MutationProven {
 			opaque = true
 		}
-		if toolLooksHighRisk(r.ToolName) {
+		if toolIsPrivilegedMutation(r.ToolName) {
 			return true
 		}
 		for _, p := range r.Paths {
@@ -164,12 +164,15 @@ func pathLooksLowRisk(path string) bool {
 	return false
 }
 
-func toolLooksHighRisk(name string) bool {
+// toolIsPrivilegedMutation matches identifiers the host itself defines: the
+// MCP namespace prefix it mints (plugin servers included, as
+// mcp__plugin_<pkg>_<server>__) and two exact built-in names. Substring
+// matching used to stand in for this and made any tool whose name merely
+// contained "plugin" or "tool" a privileged surface.
+func toolIsPrivilegedMutation(name string) bool {
 	lower := strings.ToLower(strings.TrimSpace(name))
-	for _, hint := range highRiskToolHints {
-		if strings.Contains(lower, hint) {
-			return true
-		}
+	if strings.HasPrefix(lower, "mcp__") {
+		return true
 	}
-	return false
+	return slices.Contains(privilegedMutationTools, lower)
 }
