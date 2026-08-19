@@ -935,8 +935,8 @@ slots, then writers, then claim. An arm that let an earlier check fire would
 report that refusal as the later one, so each clears every check above the one
 it measures — the slots arm refuses a reader, which is not a writer at all; the
 writers arm leaves total capacity free and gives its two writers disjoint
-paths; the claim arm leaves both ceilings free. The ceilings come from a project
-`reasonix.toml`, which is where a person sets them, rather than from a poked
+paths; the claim arm leaves both ceilings free. The ceilings come from the project-local
+config, which is where a person sets them, rather than from a poked
 field.
 
 `wait-claim` needs two fan-outs. A single fleet's preflight refuses concurrent
