@@ -107,7 +107,7 @@ func (s *Set) DocPath(scope Scope) string {
 // the base prompt byte-for-byte untouched (and the cache prefix maximal) when
 // there is no memory at all.
 func (s *Set) Empty() bool {
-	return s == nil || (len(s.Docs) == 0 && len(s.PinnedGuidance) == 0 && strings.TrimSpace(s.Index) == "")
+	return s == nil || (len(s.Docs) == 0 && len(s.PinnedGuidance) == 0 && strings.TrimSpace(s.Index) == "" && s.Store.Dir == "")
 }
 
 // docScopes are the scopes the panel can target for a quick-add or a new doc.
@@ -155,8 +155,12 @@ func (s *Set) WriteDoc(path, body string) (string, error) {
 // standing instruction files. Keeping these sections separate prevents stale
 // facts from acquiring instruction authority.
 func (s *Set) BackgroundBlock() string {
-	if s == nil || (len(s.PinnedGuidance) == 0 && strings.TrimSpace(s.Index) == "") {
+	if s == nil {
 		return ""
+	}
+	index := strings.TrimSpace(s.Index)
+	if len(s.PinnedGuidance) == 0 && index == "" {
+		return emptyStoreBlock(s.Store)
 	}
 	var b strings.Builder
 	b.WriteString("# Memory\n\n")
@@ -169,14 +173,26 @@ func (s *Set) BackgroundBlock() string {
 				NormalizeFactScope(string(m.Scope)), NormalizeType(string(m.Type)), strings.TrimSpace(m.Body))
 		}
 	}
-	if idx := strings.TrimSpace(s.Index); idx != "" {
+	if index != "" {
 		b.WriteString("\n## Background memory index\n\n")
 		b.WriteString("Facts you saved in earlier sessions. They reflect what was true when written and may now be stale — treat them as background, not standing instructions. " +
 			"Read a relevant linked fact with the `memory` tool, and before acting on one that names a file, function, or flag, verify it still exists. " +
 			"Save new durable facts with the `remember` tool; archive ones that turn out wrong with `forget`.\n\n")
-		b.WriteString(idx)
+		b.WriteString(index)
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// emptyStoreBlock states that an available store holds nothing yet. The index
+// section is the only place the prompt names `remember`, so skipping the block
+// on an empty store leaves a fresh project unable to save its first fact.
+func emptyStoreBlock(store Store) string {
+	if store.Dir == "" {
+		return ""
+	}
+	return "# Memory\n\n## Background memory index\n\n" +
+		"No facts are saved for this project yet. Durable ones — who the user is, how they want you to work, " +
+		"project constraints the code does not record — reach later sessions only when you save them with the `remember` tool."
 }
 
 // Block combines background memory with separately resolved standing

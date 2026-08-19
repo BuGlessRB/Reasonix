@@ -24,6 +24,25 @@ func TestComposeEmptyIsIdentity(t *testing.T) {
 	}
 }
 
+// The index section is the only place the prompt names `remember`, so a store
+// that exists but holds nothing still has to say so: a silent empty store is
+// what a first session reads as an agent with no memory at all.
+func TestEmptyStoreStillNamesRemember(t *testing.T) {
+	block := (&Set{Store: Store{Dir: t.TempDir()}}).Block()
+	if !strings.Contains(block, "remember") {
+		t.Fatalf("empty store block never names the remember tool:\n%s", block)
+	}
+	// An unavailable store (no user dir) stays identical to no memory at all.
+	if got := Compose("BASE", &Set{}); got != "BASE" {
+		t.Fatalf("unavailable store changed the prompt: %q", got)
+	}
+	// Once facts exist the index replaces the empty notice rather than joining it.
+	populated := (&Set{Store: Store{Dir: t.TempDir()}, Index: "- [a fact](a.md) — hook"}).Block()
+	if strings.Contains(populated, "No facts are saved") {
+		t.Fatalf("populated index still carries the empty notice:\n%s", populated)
+	}
+}
+
 // TestComposeAppendsAfterBase verifies memory folds in *after* the base prompt,
 // so the base stays a valid cache prefix even as memory changes between sessions.
 func TestComposeAppendsAfterBase(t *testing.T) {
