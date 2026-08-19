@@ -50,10 +50,10 @@ function evidence(r: Receipt): string[] {
 function Verified({ r }: { r: Receipt }) {
   const parts = evidence(r);
   return (
-    <div className="rcpt" data-lvl="ok">
-      <span className="tick">✓</span>
-      <span className="t">{t("没有未经验证的部分")}</span>
-      {parts.length > 0 && <span className="src">{parts.join(" · ")}</span>}
+    <div className="rc rc-ok">
+      <span className="rc-tick">✓</span>
+      <span className="rc-t">{t("没有未经验证的部分")}</span>
+      {parts.length > 0 && <span className="rc-src">{parts.join(" · ")}</span>}
     </div>
   );
 }
@@ -68,27 +68,31 @@ export function ReceiptCard({ r }: { r: Receipt }) {
   const shown = gaps.slice(0, MAX_GAPS);
   const rest = gaps.length - shown.length;
   return (
-    <div className="rcpt rcpt-open">
+    <div className="rc">
       {clean && <Verified r={r} />}
       {gaps.length > 0 && (
-        <section className="rgroup">
-          <span className="hd">{t("未验证")}</span>
+        <section className="rc-group">
+          <span className="rc-hd">{t("未验证")}</span>
           {shown.map((g, i) => (
-            <div className="rrow" key={`${g.kind}:${g.detail ?? i}`} style={{ "--i": i } as React.CSSProperties}>
-              <span className="t">{gapPhrase(g.kind)}</span>
-              {g.detail && <span className="d">{g.detail}</span>}
+            <div className="rc-row" key={`${g.kind}:${g.detail ?? i}`} style={{ "--i": i } as React.CSSProperties}>
+              <span className="rc-t">{gapPhrase(g.kind)}</span>
+              {g.detail && (
+                <code className="rc-d" title={g.detail}>
+                  {g.detail}
+                </code>
+              )}
             </div>
           ))}
-          {rest > 0 && <span className="more">{t("另有 {n} 项", { n: rest })}</span>}
+          {rest > 0 && <span className="rc-more">{t("另有 {n} 项", { n: rest })}</span>}
         </section>
       )}
       {declared.length > 0 && (
-        <section className="rgroup" data-declared>
+        <section className="rc-group" data-declared>
           {/* Volunteered, not found — so it carries no severity bar. */}
-          <span className="hd">{t("这一轮自己说明的")}</span>
+          <span className="rc-hd">{t("这一轮自己说明的")}</span>
           {declared.map((d, i) => (
-            <div className="rrow" key={d} style={{ "--i": gaps.length + i } as React.CSSProperties}>
-              <span className="t">{d}</span>
+            <div className="rc-row" key={d} style={{ "--i": gaps.length + i } as React.CSSProperties}>
+              <span className="rc-t">{d}</span>
             </div>
           ))}
         </section>

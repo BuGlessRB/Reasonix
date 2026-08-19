@@ -284,6 +284,9 @@ export const EN: Record<string, string> = {
   // 收工回执
   "没有未经验证的部分": "nothing left unverified",
   "未验证": "not verified",
+  "{p} 跑过了，但这个项目没有声明哪些命令算数，所以它没能算作一次检查。在项目记忆的 Reasonix host checks 下写明，就能让它们生效。":
+    "{p} ran, but this project has not declared which commands count, so it could not be read as a check. Name them under Reasonix host checks in project memory to have them enforced.",
+  "一条命令": "a command",
   "这一轮自己说明的": "this turn said so itself",
   "另有 {n} 项": "and {n} more",
   "声称过但账本不支持": "claimed, but the ledger does not back it",

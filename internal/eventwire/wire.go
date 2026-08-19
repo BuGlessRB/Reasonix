@@ -11,13 +11,16 @@ import (
 // externalizable:"true" marks large string payloads the Remote protocol may
 // offload via content refs without changing provider-visible semantics.
 type Event struct {
-	Kind            string              `json:"kind"`
-	Text            string              `json:"text,omitempty" externalizable:"true"`
-	Detail          string              `json:"detail,omitempty" externalizable:"true"`
-	Code            string              `json:"code,omitempty"`
-	Reasoning       string              `json:"reasoning,omitempty" externalizable:"true"`
-	MemoryCitations []MemoryCitation    `json:"memoryCitations,omitempty"`
-	Level           string              `json:"level,omitempty"`
+	Kind            string           `json:"kind"`
+	Text            string           `json:"text,omitempty" externalizable:"true"`
+	Detail          string           `json:"detail,omitempty" externalizable:"true"`
+	Code            string           `json:"code,omitempty"`
+	Reasoning       string           `json:"reasoning,omitempty" externalizable:"true"`
+	MemoryCitations []MemoryCitation `json:"memoryCitations,omitempty"`
+	Level           string           `json:"level,omitempty"`
+	// Audience separates a notice about this conversation from one about the
+	// machine running it. Only the first belongs in a transcript.
+	Audience        string              `json:"audience,omitempty"`
 	Tool            *Tool               `json:"tool,omitempty"`
 	Usage           *Usage              `json:"usage,omitempty"`
 	Approval        *Approval           `json:"approval,omitempty"`
@@ -105,6 +108,7 @@ func ToWire(e event.Event) Event {
 		if e.DecisionReceipt != nil {
 			w.DecisionReceipt = ToWireDecisionReceipt(e.DecisionReceipt)
 		}
+		w.Audience = string(e.Audience)
 		if e.Level == event.LevelWarn {
 			w.Level = "warn"
 		} else {

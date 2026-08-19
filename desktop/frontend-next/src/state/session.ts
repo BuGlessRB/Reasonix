@@ -48,8 +48,24 @@ export interface PlanStep {
   done: boolean;
 }
 
+export interface RuntimeNotice {
+  id: string;
+  level: string;
+  // The stable id a window says this in its own language by; text is what the
+  // kernel wrote for a terminal, and the fallback when nothing maps the code.
+  code?: string;
+  text: string;
+  detail?: string;
+}
+
 export interface SessionState {
   error: string;
+  // Notices about the machine running this conversation rather than about the
+  // conversation. They describe something that is still true — which model was
+  // resolved, which server failed to start — so, like a standing extension
+  // surface, they hold their own place instead of scrolling away in the
+  // transcript as if they had been said by someone.
+  runtime: RuntimeNotice[];
   items: Item[];
   // Bumped when the transcript's composition changes — a card added, settled,
   // folded, answered — but NOT when a message still being written grows by a
@@ -85,6 +101,7 @@ export interface SessionState {
 
 export const initialState: SessionState = {
   error: "",
+  runtime: [],
   items: [],
   revision: 0,
   plan: [],
@@ -319,10 +336,12 @@ export type SessionEvent =
   | { kind: "__error"; text: string }
   | { kind: "__user"; text: string; pending: boolean }
   | { kind: "__decided"; id: string; verdict?: string; answers?: string[][] }
-  | { kind: "__forgot"; id: string };
+  | { kind: "__forgot"; id: string }
+  | { kind: "__runtime_seen"; id: string };
 
 function apply(s: SessionState, ev: SessionEvent): SessionState {
   if (ev.kind === "__error") return { ...s, error: ev.text };
+  if (ev.kind === "__runtime_seen") return { ...s, runtime: s.runtime.filter((n) => n.id !== ev.id) };
   // Both event.Message emitters carry assistant text, so nothing on the wire
   // echoes what you typed — only /history has it, and only after a reload. The
   // client owns its own turn. Mid-turn input stays pending until the steer
@@ -547,14 +566,32 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       return { ...s, steerQueue: q, items };
     }
 
-    case "notice":
+    case "notice": {
+      const level = ev.level ?? "info";
+      // A notice about the runtime is not a turn in the conversation, so it
+      // does not join the record of one. What it says is still kept: every
+      // frame reaches the trajectory either way, which is where a question
+      // like "why did it pick that model" is actually answered. A warning
+      // needs to be seen now, so that one takes a place of its own.
+      if (ev.audience === "operator") {
+        if (level === "info") return s;
+        // The same standing fact does not stack. This one is about how the
+        // project is configured, so it is true again every turn, and a strip
+        // that grew a row each time would be the noise it replaced.
+        const said = (n: { code?: string; text: string; detail?: string }) =>
+          `${n.code ?? n.text}\u0000${n.detail ?? ""}`;
+        const fresh = { id: nextId(), level, code: ev.code, text: ev.text ?? "", detail: ev.detail };
+        if (s.runtime.some((n) => said(n) === said(fresh))) return s;
+        return { ...s, runtime: [...s.runtime, fresh] };
+      }
       return {
         ...s,
         items: [
           ...s.items,
-          { t: "notice", id: nextId(), level: ev.level ?? "info", text: ev.text ?? "", detail: ev.detail },
+          { t: "notice", id: nextId(), level, text: ev.text ?? "", detail: ev.detail },
         ],
       };
+    }
 
     case "turn_done":
       // A readiness complaint ends the turn without the work having failed, and

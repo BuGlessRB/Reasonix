@@ -379,6 +379,9 @@ export interface WireEvent {
   code?: string;
   reasoning?: string;
   level?: string;
+  // "operator" means the notice is about the machine running this conversation,
+  // not about the conversation. Only the latter belongs in a transcript.
+  audience?: string;
   tool?: Tool;
   usage?: Usage;
   approval?: Approval;

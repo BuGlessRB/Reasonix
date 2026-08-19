@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { t } from "../../i18n";
 import { useTicker } from "../num";
 import type { ContextBreakdown } from "../../port/port";
@@ -15,6 +16,25 @@ const PARTS: [keyof ContextBreakdown, string, string][] = [
 ];
 
 
+// Gap between the bar and the bubble. It lives here rather than in CSS because
+// a fixed bubble is placed by measurement, so no rule owns the offset any more.
+const GAP = 9;
+
+// The metrics rail scrolls, and a scroller clips: an absolutely positioned
+// bubble lost its left edge to the middle pane as soon as the rail was dragged
+// narrower than the bubble. Fixed lifts it out of the scroller; the size stays
+// CSS's, read back off the element so no measurement is copied into JS.
+function place(anchor: RefObject<HTMLElement | null>) {
+  return (el: HTMLDivElement | null) => {
+    if (!el || !anchor.current) return;
+    const to = anchor.current.getBoundingClientRect();
+    const box = el.getBoundingClientRect();
+    const above = to.top - box.height - GAP;
+    el.style.left = `${Math.max(6, Math.min(to.right - box.width, innerWidth - box.width - 6))}px`;
+    el.style.top = `${above >= 6 ? above : to.bottom + GAP}px`;
+  };
+}
+
 /** Context is the gauge plus what fills it. The gauge alone says a session is
  *  at 70% without saying whether that is a tool catalogue, a memory file, or
  *  one enormous output — and those are fixed in completely different ways. The
@@ -25,6 +45,21 @@ export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
   const pct = Math.min((used / ctx.window) * 100, 100);
   const parts = PARTS.map(([k, label, why]) => ({ k, label, why, n: ctx[k] || 0 })).filter((p) => p.n > 0);
   const sum = parts.reduce((a, p) => a + p.n, 0) || 1;
+  const [open, setOpen] = useState(false);
+  const bar = useRef<HTMLDivElement>(null);
+
+  // A bubble placed once against the viewport goes stale the moment anything
+  // moves it, and there is nothing useful to show mid-scroll — so it closes.
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    addEventListener("scroll", close, true);
+    addEventListener("resize", close);
+    return () => {
+      removeEventListener("scroll", close, true);
+      removeEventListener("resize", close);
+    };
+  }, [open]);
 
   return (
     <div className="block" data-b="ctx">
@@ -36,11 +71,23 @@ export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
       </div>
       {/* Hover, not a permanent list: five more rows of numbers in a rail this
           narrow costs more than it tells anyone who is not debugging. */}
-      <div className="ctxbar" tabIndex={0} role="group" aria-label={t("上下文构成")}>
+      <div
+        className="ctxbar"
+        ref={bar}
+        tabIndex={0}
+        role="group"
+        aria-label={t("上下文构成")}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+      >
         {parts.map((p) => (
           <i key={p.k} data-p={p.k} style={{ width: `${(p.n / sum) * pct}%` }} />
         ))}
-        <div className="ctxpop" role="tooltip">
+      </div>
+      {open && (
+        <div className="ctxpop" role="tooltip" ref={place(bar)}>
           <div className="hd">
             <span>{t("上下文构成")}</span>
             <span className="n">{percent(pct / 100)}</span>
@@ -55,7 +102,7 @@ export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
           ))}
           <p className="foot">{t("估算值，和触发压缩用的是同一把尺子")}</p>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -136,3 +136,41 @@ describe("the turn's completion receipt", () => {
     expect(receipts(run([done()]))).toHaveLength(0);
   });
 });
+
+describe("a notice about the runtime rather than the conversation", () => {
+  const notice = (audience: string | undefined, level: string, text: string): SessionEvent =>
+    ({ kind: "notice", audience, level, text }) as SessionEvent;
+
+  // The transcript is the record of a conversation. "guardian enabled ·
+  // model=deepseek-v4-pro" was the first row of a session nobody had spoken in
+  // yet — a fact about the assembly, rendered with the weight of a turn.
+  it("keeps an assembly fact out of the transcript", () => {
+    const s = run([notice("operator", "info", "guardian enabled · model=x")]);
+    expect(notices(s)).toEqual([]);
+    expect(s.runtime).toEqual([]);
+  });
+
+  // Dropping it entirely would trade one bug for another. A warning is the
+  // runtime saying something is wrong with itself, and that has to be seen —
+  // just not as something someone said.
+  it("gives a runtime warning its own place, not a transcript card", () => {
+    const s = run([notice("operator", "warn", "An MCP server failed to start.")]);
+    expect(notices(s)).toEqual([]);
+    expect(s.runtime.map((n) => n.text)).toEqual(["An MCP server failed to start."]);
+  });
+
+  it("lets a runtime warning be dismissed", () => {
+    const s = run([notice("operator", "warn", "An MCP server failed to start.")]);
+    const gone = reduce(s, { kind: "__runtime_seen", id: s.runtime[0].id } as SessionEvent);
+    expect(gone.runtime).toEqual([]);
+  });
+
+  // Everything else is still about the conversation and still belongs in it:
+  // a permission that was saved, a rewind that was undone, a plan awaiting
+  // approval all answer something the user just did.
+  it("leaves a conversation notice where it was", () => {
+    const s = run([notice(undefined, "info", "undid last rewind")]);
+    expect(notices(s)).toEqual(["undid last rewind"]);
+    expect(s.runtime).toEqual([]);
+  });
+});

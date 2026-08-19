@@ -61,6 +61,22 @@ interface Props {
   onSettings: () => void;
 }
 
+// What the runtime said, in the reader's language. Literal t() calls rather
+// than a lookup table: the catalogue gate reads t("…") out of the source, and
+// a table's values are invisible to it. An unmapped code prints the kernel's
+// own words rather than nothing — the fallback is the point of Code being
+// documented as "empty = unmapped".
+function runtimeSaid(n: { code?: string; text: string; detail?: string }): string {
+  switch (n.code) {
+    case "undeclared_checks":
+      return t("{p} 跑过了，但这个项目没有声明哪些命令算数，所以它没能算作一次检查。在项目记忆的 Reasonix host checks 下写明，就能让它们生效。", {
+        p: n.detail || t("一条命令"),
+      });
+    default:
+      return [n.text, n.detail].filter(Boolean).join(" — ");
+  }
+}
+
 function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, onFoldSide, onSettings }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
@@ -445,6 +461,16 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             <button onClick={() => dispatch({ kind: "__error", text: "" } as never)}>{t("知道了")}</button>
           </div>
         )}
+        {/* Something the runtime has to report about itself. It sits with the
+            composer rather than in the transcript because it was not said by
+            anyone in the conversation — and it is dismissible, because reading
+            it is the whole of the response it needs. */}
+        {s.runtime.map((n) => (
+          <div key={n.id} className="rtbar" data-lvl={n.level} role="status">
+            <span className="t">{runtimeSaid(n)}</span>
+            <button onClick={() => dispatch({ kind: "__runtime_seen", id: n.id } as never)}>{t("知道了")}</button>
+          </div>
+        ))}
       </div>
 
       {active &&

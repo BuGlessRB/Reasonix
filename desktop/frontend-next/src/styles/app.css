@@ -2672,6 +2672,58 @@
     color: var(--err); font: 500 11px var(--ui); text-decoration: underline; text-underline-offset: 3px;
   }
 
+  /* 运行时对自己的汇报：它不是对话里的一句话，所以不进正文，而是贴着输入框
+     待到你看过为止。份量比 .errbar 轻一档 —— 那条说的是"这次请求挂了"。 */
+  .rtbar {
+    display: flex; align-items: baseline; gap: 10px; margin-top: 9px; padding: 7px 10px;
+    border-radius: var(--r-sm); border: 1px solid var(--border);
+    background: var(--overlay); font: 400 11.5px/1.5 var(--ui); color: var(--muted);
+    animation: card var(--t-card) var(--ease-out) both;
+  }
+  .rtbar[data-lvl="warn"] {
+    border-color: color-mix(in srgb, var(--warn) 38%, var(--border));
+    background: color-mix(in srgb, var(--warn) 8%, transparent);
+    color: var(--warn);
+  }
+  .rtbar .t { flex: none; font-weight: 500 }
+  .rtbar .why { flex: 1; min-width: 0; color: var(--ghost); word-break: break-word }
+  .rtbar button {
+    flex: none; border: 0; background: transparent; cursor: pointer; color: inherit;
+    font: 500 11px var(--ui); text-decoration: underline; text-underline-offset: 3px;
+  }
+
+  /* ── 回合回执 ─────────────────────────────────────────────────────── */
+  /* 一张回执要说三件不同的事，所以有三种字面。原来三者共用一个字号一个颜色，
+     读起来是一句跑不完的话 —— 而且它借了权限表的 .rrow/.rgroup，自己的类名
+     一条规则都没有，缺样式这件事就一直没人发现。
+     标题说这是哪一组；短语说缺了什么，是句子；详情说关于哪个东西 —— 一条路径、
+     一条命令，那是代码不是散文，所以等宽、单行、超出用省略号（完整内容在 title
+     里）。一条 40 行的 heredoc 被当成段落铺开，是这张卡最难读的地方。 */
+  .rc { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 2px }
+  .rc-ok {
+    flex-direction: row; align-items: baseline; gap: 8px;
+    font: 400 11.5px/1.6 var(--ui); color: var(--ghost);
+  }
+  .rc-ok .rc-tick { color: var(--ok) }
+  .rc-ok .rc-src { min-width: 0; font: 400 10.5px var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+
+  .rc-group { display: flex; flex-direction: column; padding-left: 9px; border-left: 2px solid var(--warn) }
+  /* 自己说明的不是主机查出来的，所以不挂警戒线。 */
+  .rc-group[data-declared] { border-left-color: var(--hair) }
+  .rc-hd {
+    padding: 2px 0 4px; font: 500 10px var(--mono); letter-spacing: .06em;
+    text-transform: uppercase; color: var(--ghost);
+  }
+  .rc-group[data-declared] .rc-hd { text-transform: none; letter-spacing: 0 }
+  .rc-row { display: flex; align-items: baseline; gap: 9px; padding: 3px 0; min-width: 0 }
+  .rc-row + .rc-row { border-top: 1px solid color-mix(in srgb, var(--hair) 55%, transparent) }
+  .rc-t { flex: none; font: 400 11.5px/1.6 var(--ui); color: var(--text) }
+  .rc-d {
+    flex: 1; min-width: 0; font: 400 10.5px/1.6 var(--mono); color: var(--ghost);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .rc-more { padding: 3px 0 0; font: 400 10.5px var(--ui); color: var(--ghost) }
+
   /* ── markdown ─────────────────────────────────────────────────────── */
   /* The stream lands mid-sentence, so vertical rhythm is set by margins that
      collapse: first/last child must not push the bubble open before text. */
@@ -3499,15 +3551,16 @@
   .ctxbar > i[data-p="reply"]  { background: var(--ok) }
   .ctxbar > i[data-p="output"] { background: var(--faint) }
 
+  /* 度量栏会滚动，滚动容器就会裁：这颗气泡定在视口上，位置由 Context 量出来
+     写在行内，栏拖窄时才不会先被削掉左边一条。 */
   .ctxpop {
-    position: absolute; right: 0; bottom: calc(100% + 9px); z-index: 30; width: 232px;
+    position: fixed; z-index: 60; width: 232px;
     display: grid; gap: 5px; padding: 10px 11px 9px;
     border-radius: var(--r-sm); background: var(--float);
     border: 1px solid var(--border); box-shadow: var(--shadow-float);
-    opacity: 0; transform: translateY(3px); pointer-events: none;
-    transition: opacity .14s var(--ease-out), transform .14s var(--ease-out);
+    pointer-events: none;
+    animation: card .14s var(--ease-out) both;
   }
-  .ctxbar:hover .ctxpop, .ctxbar:focus-visible .ctxpop { opacity: 1; transform: none }
   .ctxpop .hd { display: flex; align-items: baseline; font: 500 11.5px var(--ui); color: var(--text) }
   .ctxpop .hd .n { margin-left: auto; font: 400 10.5px var(--mono); color: var(--muted) }
   .ctxpop .row { display: flex; align-items: center; gap: 7px; font: 400 11px var(--ui); color: var(--muted) }
