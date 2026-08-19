@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 
 	"reasonix/internal/evidence"
@@ -45,4 +46,18 @@ func (a *Agent) recordToolReceipts(plan *toolCallPlan, result string, execution 
 			}
 		}
 	}
+}
+
+// notifyToolHooks lets success and failure hooks observe a finished call. The
+// name is the real target's, so a proxied tool reaches hooks under the tool
+// they were written against rather than under the proxy.
+func (a *Agent) notifyToolHooks(ctx context.Context, name string, args json.RawMessage, result string, err error) {
+	if a.svc.hooks == nil {
+		return
+	}
+	if err != nil {
+		a.svc.hooks.PostToolUseFailure(ctx, name, args, result, err)
+		return
+	}
+	a.svc.hooks.PostToolUse(ctx, name, args, result)
 }

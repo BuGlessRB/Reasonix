@@ -798,18 +798,11 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	if msg, refused := tool.BlockedMessage(err); refused {
 		return a.blockedToolOutcome(plan, msg)
 	}
+	err = withContractHint(err, runTool, runArgs)
 	a.recordToolReceipts(plan, result, execution, err)
 	// Track skill/capability outcomes for Delivery gates.
 	a.noteCapabilityInvocation(call.Name, json.RawMessage(call.Arguments), err)
-	// Success and failure hooks observe the result after the tool ran. Use the
-	// real target name for proxied tools.
-	if a.svc.hooks != nil {
-		if err != nil {
-			a.svc.hooks.PostToolUseFailure(ctx, permName, permArgs, result, err)
-		} else {
-			a.svc.hooks.PostToolUse(ctx, permName, permArgs, result)
-		}
-	}
+	a.notifyToolHooks(ctx, permName, permArgs, result, err)
 	// Always re-read after post hooks — partial writes and hook side effects can
 	// change the previewed path even when the concrete tool returned an error.
 	a.observeAfterMutation(plan)
