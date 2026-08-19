@@ -1834,7 +1834,7 @@ func Default() *Config {
 				Name: "deepseek-flash", Kind: "anthropic", BaseURL: deepSeekAnthropicBaseURL,
 				Model: "deepseek-v4-flash", APIKeyEnv: "DEEPSEEK_API_KEY",
 				BalanceURL: "https://api.deepseek.com/user/balance", Thinking: "enabled",
-				WebSearch: boolPointer(true), SupportedEfforts: []string{"disabled", "low", "high", "max"}, DefaultEffort: "high",
+				WebSearch: boolPointer(true), SupportedEfforts: []string{"disabled", "low", "high", "max"}, DefaultEffort: "low",
 				ContextWindow: 1_000_000, Price: deepSeekV4FlashPriceUSD(),
 				BillingCurrency: "USD", BillingMode: "payg",
 			},
