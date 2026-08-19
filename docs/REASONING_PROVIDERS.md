@@ -78,6 +78,42 @@ The Anthropic-compatible endpoint accepts `low|high|max` on the wire. Legacy
 `max` for Pro. Claude Opus aliases use the Pro mapping, while Sonnet/Haiku and
 unsupported model names follow DeepSeek's documented Flash fallback.
 
+## Anthropic-compatible endpoints (`kind = "anthropic"`)
+
+Reasoning depth on the Messages API rides on fields Anthropic defines:
+`thinking.type=adaptive` with `display=summarized`, `output_config.effort`, and
+a raised automatic output budget. First-party endpoints — `api.anthropic.com`,
+or an entry with no `base_url` — implement all of it, so they expose the full
+`auto`/`low`/`medium`/`high`/`xhigh`/`max` menu and selecting a level engages
+extended thinking by itself. Nothing writes a `thinking` mode into the config to
+make the knob work.
+
+A compatible gateway is not assumed to implement any of it. Undeclared, it
+exposes the binary menu (`auto`/`enabled`/`disabled`) and receives
+`thinking.type` alone — no `display`, no `output_config`, no budget raise —
+because those are the fields a relay answers with a 4xx or 5xx for. A depth
+level persisted for such an endpoint goes dormant rather than reaching the wire,
+and a configured `thinking = "adaptive"` — a value only Anthropic's contract
+defines — falls back to the provider default. `/effort enabled` still turns
+thinking on through the toggle every compatible gateway implements.
+
+Declare the contract to opt an endpoint in, either by naming the protocol or by
+advertising a depth vocabulary:
+
+```toml
+[[providers]]
+name               = "my-claude-relay"
+kind               = "anthropic"
+base_url           = "https://relay.example.com/anthropic"
+model              = "claude-opus-4-8"
+api_key_env        = "MY_RELAY_API_KEY"
+reasoning_protocol = "anthropic"          # or: supported_efforts = ["low", "high", "max"]
+```
+
+An entry installed from a curated Anthropic-compatible preset (Kimi Coding Plan,
+MiMo, GLM/Z.AI and Qwen coding plans, StepFun) needs neither: the `preset_id` it
+records carries the vetting, so it keeps the thinking mode its preset declares.
+
 ## Everything else (standard `reasoning_effort`)
 
 Any other OpenAI-compatible backend falls through to the standard

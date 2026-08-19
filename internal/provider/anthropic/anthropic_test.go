@@ -1049,3 +1049,83 @@ func TestRegistered(t *testing.T) {
 	}
 	_ = context.Background()
 }
+
+// Depth is Anthropic's own contract. A gateway that never declared it must not
+// receive adaptive thinking, display, output_config, or the high-effort output
+// budget — not even from a config still carrying the adaptive mode an earlier
+// effort edit wrote for it, which is what such an endpoint rejects.
+func TestNewUndeclaredGatewayKeepsAnthropicOnlyFieldsOff(t *testing.T) {
+	p, err := New(provider.Config{
+		Name: "relay", BaseURL: "https://relay.example.com/anthropic", Model: "claude-opus-4-8",
+		Extra: map[string]any{"thinking": "adaptive", "effort": "max"},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	c := p.(*client)
+	if c.thinking != "" {
+		t.Fatalf("thinking = %q, want the provider default", c.thinking)
+	}
+	if c.defaultMaxTokens != provider.DefaultOrdinaryOutputTokens {
+		t.Fatalf("max_tokens = %d, want the ordinary budget %d", c.defaultMaxTokens, provider.DefaultOrdinaryOutputTokens)
+	}
+	r := c.buildRequest(context.Background(), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
+	if r.Thinking != nil || r.OutputConfig != nil {
+		t.Fatalf("thinking = %+v / %+v, want no Anthropic-only fields", r.Thinking, r.OutputConfig)
+	}
+
+	// The universal toggle stays reachable: /effort enabled turns thinking on
+	// through the one field every compatible gateway implements.
+	c.effort = "enabled"
+	r = c.buildRequest(context.Background(), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
+	if r.Thinking == nil || r.Thinking.Type != "enabled" || r.Thinking.Display != "" || r.OutputConfig != nil {
+		t.Fatalf("effort enabled = %+v / %+v, want thinking.type=enabled alone", r.Thinking, r.OutputConfig)
+	}
+}
+
+func TestNewDeclaredGatewayGetsAnthropicDepthContract(t *testing.T) {
+	p, err := New(provider.Config{
+		Name: "relay", BaseURL: "https://relay.example.com/anthropic", Model: "claude-opus-4-8",
+		Extra: map[string]any{"thinking": "adaptive", "effort": "max", "reasoning_protocol": "anthropic"},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	c := p.(*client)
+	if c.thinking != "adaptive" {
+		t.Fatalf("thinking = %q, want the declared adaptive mode", c.thinking)
+	}
+	if c.defaultMaxTokens != provider.DefaultHighReasoningOutputTokens {
+		t.Fatalf("max_tokens = %d, want the high-effort budget %d", c.defaultMaxTokens, provider.DefaultHighReasoningOutputTokens)
+	}
+	r := c.buildRequest(context.Background(), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
+	if r.Thinking == nil || r.Thinking.Type != "adaptive" || r.Thinking.Display != "summarized" {
+		t.Fatalf("thinking config = %+v, want adaptive/summarized", r.Thinking)
+	}
+	if r.OutputConfig == nil || r.OutputConfig.Effort != "max" {
+		t.Fatalf("output_config = %+v, want max", r.OutputConfig)
+	}
+}
+
+// On a first-party endpoint the level itself engages extended thinking: depth
+// means nothing without it, and nothing outside this package may write that
+// mode into the user's config to make the knob work.
+func TestNewNativeEffortEngagesExtendedThinking(t *testing.T) {
+	p, err := New(provider.Config{Name: "anthropic", Model: "claude-opus-4-8", Extra: map[string]any{"effort": "high"}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	r := p.(*client).buildRequest(context.Background(), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
+	if r.Thinking == nil || r.Thinking.Type != "adaptive" || r.OutputConfig == nil || r.OutputConfig.Effort != "high" {
+		t.Fatalf("native thinking = %+v / %+v, want adaptive with output_config high", r.Thinking, r.OutputConfig)
+	}
+
+	plain, err := New(provider.Config{Name: "anthropic", Model: "claude-opus-4-8"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	r = plain.(*client).buildRequest(context.Background(), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
+	if r.Thinking != nil || r.OutputConfig != nil {
+		t.Fatalf("effort auto = %+v / %+v, want no thinking fields", r.Thinking, r.OutputConfig)
+	}
+}

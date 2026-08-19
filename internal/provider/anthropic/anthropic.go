@@ -97,10 +97,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	officialDeepSeek := openai.IsDeepSeek(root)
 	keyEnv, _ := cfg.Extra["api_key_env"].(string) // for actionable auth errors
 	keySource, _ := cfg.Extra["api_key_source"].(string)
-	thinking, _ := cfg.Extra["thinking"].(string)
-	thinking = strings.ToLower(strings.TrimSpace(thinking))
-	effort, _ := cfg.Extra["effort"].(string)
-	effort = strings.ToLower(strings.TrimSpace(effort))
+	thinking, effort := resolveReasoning(root, cfg.Extra)
 	vision, _ := cfg.Extra["vision"].(bool)
 	// DeepSeek's official Anthropic-compatible endpoint is text-only. Enforce
 	// that wire constraint here as defense in depth, independent of config or
@@ -123,7 +120,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		} else {
 			// Native Anthropic and unknown gateways: conservative ordinary default.
 			maxOutputTokens = defaultMaxTokens
-			if strings.EqualFold(thinking, "adaptive") || strings.EqualFold(thinking, "enabled") {
+			if thinking == "adaptive" || thinking == "enabled" || effort == "enabled" {
 				maxOutputTokens = provider.AutoOutputBudget(true, effort)
 			}
 		}
@@ -140,7 +137,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		baseURL:          root,
 		requestURL:       requestURL,
 		model:            cfg.Model,
-		nativeAnthropic:  strings.EqualFold(root, defaultBaseURL),
+		nativeAnthropic:  provider.IsNativeAnthropic(root),
 		deepseek:         officialDeepSeek,
 		thinking:         thinking,
 		effort:           effort,
@@ -170,7 +167,7 @@ type client struct {
 	model            string
 	nativeAnthropic  bool   // first-party endpoint: documented default-5m cache-write pricing applies
 	deepseek         bool   // official DeepSeek Anthropic endpoint: unsigned reasoning replay + automatic cache
-	thinking         string // "adaptive" enables extended thinking; "" = off (config-driven)
+	thinking         string // resolved wire mode: adaptive (Anthropic contract) | enabled | disabled | "" = off
 	effort           string // output_config.effort: low|medium|high|xhigh|max; "" = provider default
 	vision           bool   // model accepts image input — embed attached images as base64 image blocks
 	mimo             bool   // true for MiMo — upgrades legacy tuple schemas to Draft 2020-12
@@ -455,9 +452,9 @@ func (c *client) buildRequest(_ context.Context, req provider.Request) anthReque
 		Stream:    true,
 	}
 	// Extended thinking is provider-specific. DeepSeek defaults to enabled and
-	// accepts output_config.effort alongside its binary toggle. Anthropic proper
-	// uses type=adaptive plus display/output_config. LongCat-style compatible
-	// gateways use the simpler enabled|disabled knob and reject output_config.
+	// accepts output_config.effort alongside its binary toggle. Adaptive reaches
+	// here only for endpoints under Anthropic's contract (resolveReasoning);
+	// LongCat-style gateways take enabled|disabled and reject output_config.
 	if c.deepseek {
 		r.Temperature = req.Temperature
 		t := c.thinking
@@ -476,17 +473,17 @@ func (c *client) buildRequest(_ context.Context, req provider.Request) anthReque
 			}
 		}
 	} else {
-		switch c.thinking {
+		t := c.thinking
+		if c.effort == "enabled" || c.effort == "disabled" {
+			t = c.effort // on a binary endpoint /effort is the toggle itself
+		}
+		switch t {
 		case "adaptive":
 			r.Thinking = &thinkingConfig{Type: "adaptive", Display: "summarized"}
 			if c.effort != "" {
 				r.OutputConfig = &outputConfig{Effort: c.effort}
 			}
 		case "enabled", "disabled":
-			t := c.thinking
-			if c.effort == "enabled" || c.effort == "disabled" {
-				t = c.effort
-			}
 			r.Thinking = &thinkingConfig{Type: t}
 		}
 	}

@@ -103,7 +103,7 @@ func probeThrough(ctx context.Context, base, apiKey string, client *http.Client)
 		return Probe{}, firstErr
 	}
 	best := pick(base, answered)
-	p := describe(best, answered[best])
+	p := describe(base, best, answered[best])
 	p.Ambiguous = len(answered) > 1
 	return p, nil
 }
@@ -163,10 +163,12 @@ func listChatModels(ctx context.Context, s shape, baseURL, apiKey string, client
 	return chat, nil
 }
 
-// describe fills in what can be told from the model ids alone. These are the
-// same registries a saved provider is read through, so what the panel shows is
-// what the runtime will do.
-func describe(s shape, chat []string) Probe {
+// describe fills in what can be told from the endpoint and its model ids.
+// These are the same registries a saved provider is read through, so what the
+// panel shows is what the runtime will do — which is why the probed base URL
+// goes into the entry: reasoning contracts are resolved per endpoint, not per
+// kind.
+func describe(baseURL string, s shape, chat []string) Probe {
 	p := Probe{
 		Kind:       s.kind,
 		AuthHeader: s.authHeader,
@@ -174,7 +176,7 @@ func describe(s shape, chat []string) Probe {
 		Default:    chat[0],
 		Vision:     InferVisionModels(chat),
 	}
-	entry := &ProviderEntry{Kind: s.kind, Model: p.Default}
+	entry := &ProviderEntry{Kind: s.kind, BaseURL: baseURL, AuthHeader: s.authHeader, Model: p.Default}
 	if capability := EffortCapabilityForEntry(entry); capability.Supported {
 		p.Efforts, p.Effort = capability.Levels, capability.Default
 	}

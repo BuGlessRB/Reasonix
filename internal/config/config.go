@@ -1352,7 +1352,7 @@ type ProviderEntry struct {
 	ModelsURL     string            `toml:"models_url"`  // auto-fetch models from this URL on startup
 	Default       string            `toml:"default"`     // default model when Models is set (else Models[0])
 	APIKeyEnv     string            `toml:"api_key_env"`
-	PresetID      string            `toml:"preset_id"`      // curated preset identity; UI-only metadata, not sent to model providers.
+	PresetID      string            `toml:"preset_id"`      // curated preset provenance: UI dedupe, and the vetting a wire contract reads.
 	PresetVersion int               `toml:"preset_version"` // curated preset schema version for future migrations.
 	Headers       map[string]string `toml:"headers"`        // optional extra HTTP headers for compatible gateways; secrets should stay in api_key_env.
 	ExtraBody     map[string]any    `toml:"extra_body"`     // optional extra top-level JSON request body fields for OpenAI-compatible gateways.

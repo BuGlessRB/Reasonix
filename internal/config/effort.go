@@ -9,12 +9,13 @@ import (
 )
 
 const (
-	ReasoningProtocolAuto     = "auto"
-	ReasoningProtocolDeepSeek = "deepseek"
-	ReasoningProtocolGLM      = "glm"
-	ReasoningProtocolKimiK3   = "kimi-k3"
-	ReasoningProtocolOpenAI   = "openai"
-	ReasoningProtocolNone     = "none"
+	ReasoningProtocolAuto      = "auto"
+	ReasoningProtocolAnthropic = "anthropic"
+	ReasoningProtocolDeepSeek  = "deepseek"
+	ReasoningProtocolGLM       = "glm"
+	ReasoningProtocolKimiK3    = "kimi-k3"
+	ReasoningProtocolOpenAI    = "openai"
+	ReasoningProtocolNone      = "none"
 )
 
 // EffortCapability describes the abstract effort levels a provider/model can set
@@ -74,7 +75,7 @@ func EffortCapabilityForEntry(e *ProviderEntry) EffortCapability {
 		}
 		return deepSeekEffortCapability()
 	case ReasoningProtocolGLM:
-		return glmEffortCapability()
+		return binaryThinkingEffortCapability("enabled")
 	case ReasoningProtocolOpenAI:
 		if isMimoEntry(e) {
 			// MiMo's Responses API documents a binary thinking knob: "none"
@@ -89,10 +90,12 @@ func EffortCapabilityForEntry(e *ProviderEntry) EffortCapability {
 		return effortCapabilityFromModel(cap)
 	}
 	switch ReasoningProtocolForEntry(e) {
+	case ReasoningProtocolAnthropic:
+		return anthropicEffortCapability()
 	case ReasoningProtocolDeepSeek:
 		return deepSeekEffortCapability()
 	case ReasoningProtocolGLM:
-		return glmEffortCapability()
+		return binaryThinkingEffortCapability("enabled")
 	case ReasoningProtocolKimiK3:
 		return kimiK3EffortCapability()
 	case ReasoningProtocolOpenAI:
@@ -112,11 +115,11 @@ func EffortCapabilityForEntry(e *ProviderEntry) EffortCapability {
 		// mirrors that vocabulary. Default is "enabled" because GLM runs with
 		// thinking on out of the box; "auto" means "don't override the model
 		// default" (== enabled for GLM).
-		return glmEffortCapability()
+		return binaryThinkingEffortCapability("enabled")
 	case isLongCatEntry(e):
 		// LongCat exposes the same binary thinking vocabulary on its
 		// OpenAI-compatible endpoint and documents no reasoning_effort depth scale.
-		return EffortCapability{Supported: true, Levels: []string{"auto", "enabled", "disabled"}, Default: "enabled"}
+		return binaryThinkingEffortCapability("enabled")
 	case isOllamaCloudEntry(e):
 		// Ollama Cloud accepts top-level reasoning_effort values low|medium|
 		// high|max. "none" means omit the field so the hosted model runs without
@@ -124,7 +127,9 @@ func EffortCapabilityForEntry(e *ProviderEntry) EffortCapability {
 		// default until the user chooses an effort explicitly.
 		return EffortCapability{Supported: true, Levels: []string{"auto", "none", "low", "medium", "high", "max"}, Default: "auto"}
 	case e != nil && e.Kind == "anthropic":
-		return EffortCapability{Supported: true, Levels: []string{"auto", "low", "medium", "high", "xhigh", "max"}, Default: "auto"}
+		// An Anthropic-compatible gateway that declared nothing keeps the
+		// binary toggle; depth takes a declaration (isAnthropicDepthEntry).
+		return binaryThinkingEffortCapability("auto")
 	default:
 		return EffortCapability{}
 	}
@@ -189,7 +194,9 @@ func NormalizeEffort(e *ProviderEntry, raw string) (string, error) {
 	case ReasoningProtocolKimiK3:
 		return normalizeKimiK3ReasoningEffort(level)
 	case ReasoningProtocolGLM:
-		return normalizeGLMEffort(level)
+		return normalizeBinaryThinkingEffort(level)
+	case ReasoningProtocolAnthropic:
+		return normalizeAnthropicEffort(level)
 	}
 	switch {
 	case isMiniMaxEntry(e):
@@ -215,20 +222,11 @@ func NormalizeEffort(e *ProviderEntry, raw string) (string, error) {
 		// depth levels onto the nearest valid value so a stale /effort high|low
 		// still works. "off" is a retired DeepSeek level meaning "no thinking",
 		// which maps to "disabled".
-		return normalizeGLMEffort(level)
+		return normalizeBinaryThinkingEffort(level)
 	case isLongCatEntry(e):
 		// LongCat's knob is binary (enabled|disabled); depth-like aliases mean
 		// thinking on, while the legacy off spellings disable it.
-		switch level {
-		case "enabled", "disabled":
-			return level, nil
-		case "off":
-			return "disabled", nil
-		case "low", "medium", "high", "xhigh", "max":
-			return "enabled", nil
-		default:
-			return "", fmt.Errorf("usage: /effort auto|enabled|disabled")
-		}
+		return normalizeBinaryThinkingEffort(level)
 	case isOllamaCloudEntry(e):
 		switch level {
 		case "none", "disabled", "off":
@@ -241,12 +239,7 @@ func NormalizeEffort(e *ProviderEntry, raw string) (string, error) {
 			return "", fmt.Errorf("usage: /effort auto|none|low|medium|high|max")
 		}
 	case e != nil && e.Kind == "anthropic":
-		switch level {
-		case "low", "medium", "high", "xhigh", "max":
-			return level, nil
-		default:
-			return "", fmt.Errorf("usage: /effort auto|low|medium|high|xhigh|max")
-		}
+		return normalizeBinaryThinkingEffort(level)
 	default:
 		return "", effortNotConfigurableError(e)
 	}
@@ -259,7 +252,7 @@ func EffortDisplay(e *ProviderEntry) string {
 		return "auto"
 	}
 	effort := normalizeEffortLevel(e.Effort)
-	if explicitReasoningProtocol(e) == ReasoningProtocolKimiK3 && !isKimiK3ReasoningEffort(effort) {
+	if !effortInContract(e, effort) {
 		return "auto"
 	}
 	return effort
@@ -274,7 +267,7 @@ func EffectiveEffort(e *ProviderEntry) string {
 		return ""
 	}
 	if effort := normalizeStoredEffort(e.Effort); effort != "" {
-		if explicitReasoningProtocol(e) == ReasoningProtocolKimiK3 && !isKimiK3ReasoningEffort(effort) {
+		if !effortInContract(e, effort) {
 			return ""
 		}
 		return effort
@@ -332,6 +325,9 @@ func ReasoningProtocolForEntry(e *ProviderEntry) string {
 	if cap, ok := resolvedModelReasoningCapability(e); ok {
 		return cap.Protocol
 	}
+	if isAnthropicDepthEntry(e) {
+		return ReasoningProtocolAnthropic
+	}
 	if isTokenRhythmGLMEntry(e) {
 		return ReasoningProtocolGLM
 	}
@@ -356,7 +352,7 @@ func normalizeReasoningProtocol(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", ReasoningProtocolAuto:
 		return ""
-	case ReasoningProtocolDeepSeek, ReasoningProtocolGLM, ReasoningProtocolKimiK3, ReasoningProtocolOpenAI, ReasoningProtocolNone:
+	case ReasoningProtocolAnthropic, ReasoningProtocolDeepSeek, ReasoningProtocolGLM, ReasoningProtocolKimiK3, ReasoningProtocolOpenAI, ReasoningProtocolNone:
 		return strings.ToLower(strings.TrimSpace(raw))
 	default:
 		return ""
@@ -365,6 +361,19 @@ func normalizeReasoningProtocol(raw string) string {
 
 func kimiK3EffortCapability() EffortCapability {
 	return EffortCapability{Supported: true, Levels: []string{"auto", "low", "high", "max"}, Default: "max"}
+}
+
+// effortInContract reports whether a stored level is one the endpoint's
+// resolved menu still exposes. A level outside it goes dormant instead of
+// erroring: a protocol switch, or an effort persisted before the endpoint's
+// vocabulary was known, must not resurrect a value the endpoint would reject.
+// An unknown vocabulary keeps the value — the provider layer validates it.
+func effortInContract(e *ProviderEntry, level string) bool {
+	cap := EffortCapabilityForEntry(e)
+	if !cap.Supported {
+		return true
+	}
+	return containsString(cap.Levels, level)
 }
 
 // isDeepSeekEntry reports whether the entry points at DeepSeek's API. The
@@ -466,11 +475,17 @@ func openAIEffortCapability() EffortCapability {
 	return EffortCapability{Supported: true, Levels: []string{"auto", "low", "medium", "high"}, Default: "auto"}
 }
 
-func glmEffortCapability() EffortCapability {
-	return EffortCapability{Supported: true, Levels: []string{"auto", "enabled", "disabled"}, Default: "enabled"}
+// binaryThinkingEffortCapability is the menu for an endpoint whose only
+// reasoning control is on/off: Zhipu GLM, LongCat, and undeclared
+// Anthropic-compatible gateways. def is what "auto" resolves to.
+func binaryThinkingEffortCapability(def string) EffortCapability {
+	return EffortCapability{Supported: true, Levels: []string{"auto", "enabled", "disabled"}, Default: def}
 }
 
-func normalizeGLMEffort(level string) (string, error) {
+// normalizeBinaryThinkingEffort maps depth vocabularies onto the binary knob so
+// a level carried over from another provider still means something: any depth
+// is thinking on, the retired off spellings are thinking off.
+func normalizeBinaryThinkingEffort(level string) (string, error) {
 	switch level {
 	case "enabled", "disabled":
 		return level, nil

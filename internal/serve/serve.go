@@ -446,16 +446,12 @@ func controllerHasActiveRuntimeWork(ctrl control.SessionAPI) bool {
 }
 
 // applyEffortEdit writes effort onto entry within edit, mirroring CLI/desktop
-// SetEffort: upsert the provider when the user config has no block for it yet, and
-// enable adaptive thinking for Anthropic so the effort knob actually engages.
+// SetEffort: upsert the provider when the user config has no block for it yet.
+// It writes nothing else — which request fields an endpoint accepts is the
+// provider contract's call, not a side effect of selecting a level.
 func applyEffortEdit(edit *config.Config, entry *config.ProviderEntry, effort string) error {
 	if _, ok := edit.Provider(entry.Name); !ok {
 		if err := edit.UpsertProvider(*entry); err != nil {
-			return err
-		}
-	}
-	if entry.Kind == "anthropic" && effort != "" && entry.Thinking == "" {
-		if err := edit.SetProviderThinking(entry.Name, "adaptive"); err != nil {
 			return err
 		}
 	}

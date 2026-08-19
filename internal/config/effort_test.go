@@ -486,3 +486,115 @@ func TestEffectiveEffortMiniMax(t *testing.T) {
 		t.Errorf("explicit EffectiveEffort = %q, want disabled", got)
 	}
 }
+
+// Anthropic's depth vocabulary rides on request fields — adaptive thinking,
+// output_config.effort — that first-party Anthropic defines. A compatible
+// gateway reaches them only by declaring the contract, so an undeclared relay
+// gets the binary menu instead of a level it would answer 5xx for.
+func TestEffortCapabilityAnthropicDepthNeedsFirstPartyOrDeclaration(t *testing.T) {
+	depth := []string{"auto", "low", "medium", "high", "xhigh", "max"}
+	binary := []string{"auto", "enabled", "disabled"}
+	for _, tc := range []struct {
+		name     string
+		entry    *ProviderEntry
+		levels   []string
+		protocol string
+	}{
+		{
+			name:     "unset base URL is first-party",
+			entry:    &ProviderEntry{Name: "claude", Kind: "anthropic", Model: "claude-opus-4-8"},
+			levels:   depth,
+			protocol: ReasoningProtocolAnthropic,
+		},
+		{
+			name:     "official host with the versioned path",
+			entry:    &ProviderEntry{Name: "claude", Kind: "anthropic", BaseURL: "https://api.anthropic.com/v1", Model: "claude-opus-4-8"},
+			levels:   depth,
+			protocol: ReasoningProtocolAnthropic,
+		},
+		{
+			name:     "undeclared gateway",
+			entry:    &ProviderEntry{Name: "relay", Kind: "anthropic", BaseURL: "https://relay.example.com/anthropic", Model: "claude-opus-4-8"},
+			levels:   binary,
+			protocol: "",
+		},
+		{
+			name: "gateway declaring a depth vocabulary",
+			entry: &ProviderEntry{Name: "relay", Kind: "anthropic", BaseURL: "https://relay.example.com/anthropic", Model: "claude-opus-4-8",
+				SupportedEfforts: []string{"low", "high", "max"}},
+			levels:   []string{"auto", "low", "high", "max"},
+			protocol: ReasoningProtocolAnthropic,
+		},
+		{
+			name: "gateway declaring the protocol",
+			entry: &ProviderEntry{Name: "relay", Kind: "anthropic", BaseURL: "https://relay.example.com/anthropic", Model: "claude-opus-4-8",
+				ReasoningProtocol: ReasoningProtocolAnthropic},
+			levels:   depth,
+			protocol: ReasoningProtocolAnthropic,
+		},
+		{
+			name: "gateway declaring only the binary toggle",
+			entry: &ProviderEntry{Name: "relay", Kind: "anthropic", BaseURL: "https://relay.example.com/anthropic", Model: "claude-opus-4-8",
+				SupportedEfforts: []string{"enabled", "disabled"}},
+			levels:   binary,
+			protocol: "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cap := EffortCapabilityForEntry(tc.entry)
+			if !cap.Supported || !stringSlicesEqual(cap.Levels, tc.levels) {
+				t.Fatalf("levels = %+v, want %v", cap, tc.levels)
+			}
+			if got := ReasoningProtocolForEntry(tc.entry); got != tc.protocol {
+				t.Fatalf("protocol = %q, want %q", got, tc.protocol)
+			}
+		})
+	}
+}
+
+// A depth level persisted for a gateway before its contract was known must not
+// reach the wire: it goes dormant, the way a protocol switch retires a level.
+func TestAnthropicGatewayEffortDormantOutsideItsMenu(t *testing.T) {
+	relay := &ProviderEntry{Name: "relay", Kind: "anthropic", BaseURL: "https://relay.example.com/anthropic",
+		Model: "claude-opus-4-8", Effort: "max", Thinking: "adaptive"}
+	if got := EffortDisplay(relay); got != "auto" {
+		t.Fatalf("display = %q, want auto", got)
+	}
+	if got := EffectiveEffort(relay); got != "" {
+		t.Fatalf("effective = %q, want the provider default", got)
+	}
+	if got, err := NormalizeEffort(relay, "max"); err != nil || got != "enabled" {
+		t.Fatalf("NormalizeEffort(max) = %q/%v, want enabled/nil", got, err)
+	}
+	relay.ReasoningProtocol = ReasoningProtocolAnthropic
+	if got := EffectiveEffort(relay); got != "max" {
+		t.Fatalf("declared gateway effective = %q, want max", got)
+	}
+}
+
+// A curated preset is a vetted declaration: the adaptive mode in its definition
+// was confirmed against the vendor, and an installed entry records which preset
+// it came from, so the contract survives the copy into the user's config.
+func TestCuratedAnthropicPresetKeepsItsDepthContract(t *testing.T) {
+	preset, ok := CuratedProviderPreset("kimi-coding-plan")
+	if !ok || len(preset.Entries) != 1 {
+		t.Fatalf("kimi-coding-plan preset = %+v, want one entry", preset)
+	}
+	installed := preset.Entries[0]
+	if installed.PresetID == "" || !strings.EqualFold(installed.Thinking, "adaptive") {
+		t.Fatalf("installed entry = %+v, want a preset id and adaptive thinking", installed)
+	}
+	if got := ReasoningProtocolForEntry(&installed); got != ReasoningProtocolAnthropic {
+		t.Fatalf("protocol = %q, want anthropic", got)
+	}
+	if got, err := NormalizeEffort(&installed, "max"); err != nil || got != "max" {
+		t.Fatalf("NormalizeEffort(max) = %q/%v, want max/nil", got, err)
+	}
+
+	// The same endpoint without the preset provenance is just a relay again.
+	bare := installed
+	bare.PresetID = ""
+	if got := ReasoningProtocolForEntry(&bare); got != "" {
+		t.Fatalf("bare relay protocol = %q, want none", got)
+	}
+}

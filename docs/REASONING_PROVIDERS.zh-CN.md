@@ -74,6 +74,38 @@ provider（包括旧的 `deepseek-anthropic` 条目）保留其原协议。Reaso
 Pro 归一化为 `max`。Claude Opus 别名使用 Pro 映射，而 Sonnet/Haiku 以及不支持
 的模型名遵循 DeepSeek 文档记载的 Flash 回退。
 
+## Anthropic-compatible 端点（`kind = "anthropic"`）
+
+Messages API 上的推理深度依赖 Anthropic 自己定义的字段：`thinking.type=adaptive`
+配合 `display=summarized`、`output_config.effort`，以及被抬高的自动输出预算。
+第一方端点——`api.anthropic.com`，或未填 `base_url` 的条目——完整实现了这些，
+因此暴露完整的 `auto`/`low`/`medium`/`high`/`xhigh`/`max` 菜单，并且选择档位本身
+就会开启扩展思考。不会再有任何一侧为了"让这个旋钮生效"而往配置里写 `thinking`。
+
+中转/兼容网关不会被假定实现了其中任何一项。未声明时它暴露二元菜单
+（`auto`/`enabled`/`disabled`），并且只收到 `thinking.type`——不发 `display`、
+不发 `output_config`、不抬高预算——因为这些正是中转站会用 4xx/5xx 拒绝的字段。
+为这类端点持久化过的深度档位会转为休眠而不会上线；配置里的
+`thinking = "adaptive"`——这是只有 Anthropic 契约才定义的取值——会回落为服务端
+默认（即不发送该字段）。`/effort enabled` 仍可通过所有兼容网关都实现的开关
+显式打开思考。
+
+要让某个端点选择加入，就显式声明契约：指定协议，或声明一份深度档位表。
+
+```toml
+[[providers]]
+name               = "my-claude-relay"
+kind               = "anthropic"
+base_url           = "https://relay.example.com/anthropic"
+model              = "claude-opus-4-8"
+api_key_env        = "MY_RELAY_API_KEY"
+reasoning_protocol = "anthropic"          # 或：supported_efforts = ["low", "high", "max"]
+```
+
+从精选预设安装的条目（Kimi Coding Plan、MiMo、GLM/Z.AI coding plan、Qwen coding
+plan、StepFun）无需再声明：条目里记录的 `preset_id` 就是那份审核过的出处，因此它
+会保留预设本身声明的 thinking 模式。
+
 ## 其他所有后端（标准 `reasoning_effort`）
 
 任何其他 OpenAI-compatible 后端都会回退到标准的 `reasoning_effort` 档位

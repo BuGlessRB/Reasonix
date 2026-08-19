@@ -22,7 +22,10 @@ func TestApplyEffortEditUpsertsMissingProvider(t *testing.T) {
 	}
 }
 
-func TestApplyEffortEditEnablesAnthropicThinking(t *testing.T) {
+// Selecting a level writes the level and nothing else: which request fields an
+// endpoint accepts is resolved from its contract, so an effort edit must not
+// leave a thinking mode behind that outlives the provider it was guessed for.
+func TestApplyEffortEditWritesOnlyTheEffort(t *testing.T) {
 	edit := &config.Config{}
 	entry := &config.ProviderEntry{Name: "anthropic", Kind: "anthropic", BaseURL: "https://api.anthropic.com", Model: "claude-opus-4-8"}
 
@@ -30,8 +33,8 @@ func TestApplyEffortEditEnablesAnthropicThinking(t *testing.T) {
 		t.Fatalf("applyEffortEdit: %v", err)
 	}
 	got, _ := edit.Provider("anthropic")
-	if got.Thinking != "adaptive" {
-		t.Fatalf("thinking = %q, want adaptive (effort needs extended thinking to engage)", got.Thinking)
+	if got.Thinking != "" {
+		t.Fatalf("thinking = %q, want it unset", got.Thinking)
 	}
 	if got.Effort != "max" {
 		t.Fatalf("effort = %q, want max", got.Effort)
