@@ -82,24 +82,49 @@ func TestWithReasoningLanguageAutoUsesRawSourceOverReferencedContext(t *testing.
 	}
 }
 
-// The retired cue list held 30 common Chinese words, so an English request that
-// merely named one of them switched the visible reasoning to Chinese. What
-// separates the two is which script opens the request.
-func TestAmbiguousBandReadsTheOpeningScript(t *testing.T) {
-	chinese := []string{"看下 parser.go", "修复 parser", "帮我 review", "优化 build.sh"}
+// Two thresholds and a 30-word cue list decided this before. Both are gone: the
+// prose left after code tokens is weighed script against script, so naming an
+// English symbol does not make a Chinese request English, and quoting a Chinese
+// term does not make an English one Chinese.
+func TestReasoningLanguageWeighsProseNotMentions(t *testing.T) {
+	chinese := []string{
+		"看下 parser.go", "修复 parser", "帮我 review", "优化 build.sh", "继续",
+		"看下 run.log 里的 IndexError 是怎么来的",
+		"修复 app.py 的 parse 函数，run.log 里有 Traceback",
+		"这个 bug 怎么修：IndexError: list index out of range in app.py line 2",
+		"把 internal/agent/agent.go 里的 SetGate 拆出来",
+		"为什么 CI 一直红？把 go vet 的输出贴出来看看",
+		"PR #123 修复了什么问题",
+	}
 	for _, in := range chinese {
 		if got := InferReasoningLanguageFromText(in); got != "zh" {
 			t.Errorf("%q = %s, want zh", in, got)
 		}
 	}
-	english := []string{"Add a 中文 test", "grep for 问题 in the logs", "rename 代码 to code", "Document the 设置 flag"}
+	english := []string{
+		"Add a 中文 test", "grep for 问题 in the logs", "rename 代码 to code",
+		"Fix the 编码 bug", "Document the 设置 flag",
+		"Refactor the parser and add tests",
+		"The error message says 文件不存在 — where does that string live?",
+		"Translate the 用户手册 section into English",
+		"why does normalizeName strip 全角 characters?",
+	}
 	for _, in := range english {
 		if got := InferReasoningLanguageFromText(in); got != "auto" {
 			t.Errorf("%q = %s, want auto: naming a Chinese term is not writing in Chinese", in, got)
 		}
 	}
-	// Above the band the script count decides on its own, opening script or not.
-	if got := InferReasoningLanguageFromText("PR #123 修复了什么问题"); got != "zh" {
-		t.Errorf("clear Chinese = %s, want zh", got)
+}
+
+func TestCodeTokensCarryNoLanguage(t *testing.T) {
+	for _, token := range []string{"parser.go", "internal/agent", "run.log", "snake_case", "camelCase", "IndexError", "`inline`", "a/b/c"} {
+		if !tokenIsCode(token) {
+			t.Errorf("%q should not vote on the prose language", token)
+		}
+	}
+	for _, token := range []string{"parser", "Add", "the", "问题", "CI", "SQL"} {
+		if tokenIsCode(token) {
+			t.Errorf("%q is prose, not code", token)
+		}
 	}
 }

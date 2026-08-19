@@ -79,21 +79,22 @@ func ResolveReasoningLanguage(lang, source string) string {
 	return InferReasoningLanguageFromText(source)
 }
 
-// InferReasoningLanguageFromText conservatively detects Chinese user-authored
-// turns for auto reasoning-language mode. It strips Reasonix-injected context
-// wrappers first so large @file payloads or transient XML blocks do not drown
-// out the user's actual prompt. English and ambiguous turns intentionally return
-// auto, preserving the old no-extra-instruction behaviour.
+// InferReasoningLanguageFromText reads which script the user wrote in. It
+// strips Reasonix-injected wrappers and code tokens first, then compares the
+// two scripts on what is left: Han characters against Latin words. CJK
+// punctuation is the second script signal. Ambiguous turns return auto, which
+// injects nothing.
 func InferReasoningLanguageFromText(source string) string {
 	source = reasoningLanguageSourceText(source)
 	if source == "" {
 		return "auto"
 	}
-	han, cjkPunct := reasoningLanguageScriptCounts(source)
+	han, latinWords := proseScriptCounts(source)
+	_, cjkPunct := reasoningLanguageScriptCounts(source)
 	switch {
-	case han >= 4:
+	case han > latinWords:
 		return "zh"
-	case han >= 2 && (cjkPunct > 0 || opensInHan(source)):
+	case han >= 2 && cjkPunct > 0:
 		return "zh"
 	default:
 		return "auto"
@@ -154,19 +155,71 @@ func isCJKPunctuation(r rune) bool {
 	}
 }
 
-// opensInHan reports whether the first character that carries meaning is Han.
-// In the ambiguous band it separates a Chinese request that names Latin
-// identifiers ("看下 parser.go") from an English one that quotes a Chinese term
-// ("Add a 中文 test") — which a list of common Chinese words cannot do, because
-// the quoted term is usually on it.
-func opensInHan(source string) bool {
-	for _, r := range source {
-		if unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsSymbol(r) || unicode.IsDigit(r) {
+// tokenIsCode reports whether a whitespace-delimited token is an identifier,
+// path or filename rather than prose. Those carry no language: a Chinese
+// request naming parser.go is still Chinese. The shapes are structural — a
+// path separator, a dotted or underscored name, an internal capital — so no
+// list of extensions or keywords decides it.
+func tokenIsCode(token string) bool {
+	var letters, digits, upperAfterLower int
+	var prevLower bool
+	for _, r := range token {
+		switch {
+		case r == '/' || r == '\\' || r == '`':
+			return true
+		case r == '_':
+			if letters > 0 {
+				return true
+			}
+		case r == '.':
+			if letters+digits > 0 {
+				return true
+			}
+		case unicode.IsUpper(r):
+			if prevLower {
+				upperAfterLower++
+			}
+			letters++
+			prevLower = false
+		case unicode.IsLower(r):
+			letters++
+			prevLower = true
+		case unicode.IsDigit(r):
+			digits++
+			prevLower = false
+		default:
+			prevLower = false
+		}
+	}
+	return upperAfterLower > 0
+}
+
+// proseScriptCounts weighs the two scripts on the prose left after code tokens
+// are set aside. One Han character carries about what one Latin word does, so
+// they are the units compared; counting Latin letters instead would call every
+// Chinese request that names an English symbol English.
+func proseScriptCounts(source string) (han, latinWords int) {
+	for token := range strings.FieldsSeq(source) {
+		if tokenIsCode(token) {
 			continue
 		}
-		return unicode.In(r, unicode.Han)
+		inWord := false
+		for _, r := range token {
+			switch {
+			case unicode.In(r, unicode.Han):
+				han++
+				inWord = false
+			case unicode.IsLetter(r) && r < unicode.MaxASCII:
+				if !inWord {
+					latinWords++
+					inWord = true
+				}
+			default:
+				inWord = false
+			}
+		}
 	}
-	return false
+	return han, latinWords
 }
 
 func reasoningLanguageBlockForSource(lang, source string) string {
