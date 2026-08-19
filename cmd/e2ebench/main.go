@@ -18,6 +18,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"reasonix/internal/ablation"
+	"reasonix/internal/control"
 	fileencoding "reasonix/internal/fileutil/encoding"
 )
 
@@ -521,10 +522,9 @@ func runTask(cfg suiteConfig, t task) result {
 	r.Anchor = cfg.anchor
 	t.Prompt = anchorPrompt(cfg.anchor, t)
 	if cfg.forcePlanner {
-		// Leading directive matched by the planner gate's
-		// planAndExecuteDirectives, so the two-model turn engages even for
-		// prompts the gate would route ExecutorOnly.
-		t.Prompt = "Plan first, then implement the following task.\n\n" + t.Prompt
+		// The host's own routing marker, so the two-model turn engages without
+		// putting an English sentence in front of every prompt.
+		t.Prompt = control.PlannerRouteMarker + "\n\n" + t.Prompt
 		r.PlanForced = true
 	}
 

@@ -65,45 +65,35 @@ func TestHostFactsRouteToTheExecutor(t *testing.T) {
 	}
 }
 
-// What still buys a planner round: the user saying so.
-func TestStatedDirectivesRouteToThePlanner(t *testing.T) {
-	cases := []struct {
-		name  string
-		input string
-		route agent.PlannerRoute
-	}{
-		{"plan first then execute", "先规划再执行：重写解析器", agent.PlannerRoutePlanAndExecute},
-		{"plan first en", "plan first, then rewrite the parser", agent.PlannerRoutePlanAndExecute},
-		{"make a plan", "make a plan for the parser rewrite", agent.PlannerRoutePlanAndExecute},
-		{"plan only", "只给方案，不要执行", agent.PlannerRoutePlanOnly},
-		{"plan only en", "give me a plan only for the parser rewrite", agent.PlannerRoutePlanOnly},
-		// Asking to approve first routes to the planner; whether the turn stops
-		// for approval is the plan contract's RequiresApproval, set by the
-		// planner after it read the request, not the host matching phrases.
-		{"plan then approve", "给我方案，等我确认后再执行", agent.PlannerRoutePlanAndExecute},
-		{"plan then approve en", "draft a plan and wait for my approval", agent.PlannerRoutePlanAndExecute},
+// What buys a planner round: the host's own marker, which a frontend prepends
+// when the user asked for the two-model workflow.
+func TestPlannerMarkerRoutesToThePlanner(t *testing.T) {
+	got := DecidePlannerRoute(context.Background(), PlannerRouteMarker+"\n\nrewrite the parser")
+	if got.Route != agent.PlannerRoutePlanAndExecute {
+		t.Fatalf("decision = %+v, want plan_and_execute", got)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := DecidePlannerRoute(context.Background(), tc.input)
-			if got.Route != tc.route {
-				t.Fatalf("decision = %+v, want %s", got, tc.route)
-			}
-			if got.MaxResearchRounds <= 0 {
-				t.Fatalf("planned decision has no research budget: %+v", got)
-			}
-		})
+	if got.MaxResearchRounds <= 0 {
+		t.Fatalf("planned decision has no research budget: %+v", got)
 	}
 }
 
-// A directive quoted as an example is the user describing one, not issuing one.
-func TestQuotedDirectivesDoNotBind(t *testing.T) {
+// The leading-directive tables this replaced matched a prefix with no word
+// boundary and no idea what the sentence was about, so six of nine probed
+// requests routed to the planner when they asked for ordinary work. Every one
+// of these used to.
+func TestPlanAsTheObjectOfTheWorkIsNotADirective(t *testing.T) {
 	for _, input := range []string{
-		`the docs say "plan first, then implement" — is that still true?`,
-		`用户说“先规划再执行”是什么意思`,
+		"make a plan.md file listing the migration steps",
+		"draft a plan document for the team and commit it",
+		"give me a plan.json schema for the scheduler",
+		"先出方案文档提交到 docs/",
+		"make a plan_test.go that covers the contract",
+		"plan first-class support for windows paths",
+		"plan first, then rewrite the parser",
+		"只给方案，不要执行",
 	} {
 		if got := DecidePlannerRoute(context.Background(), input); got.Route != agent.PlannerRouteExecutorOnly {
-			t.Errorf("%q routed to %s from a quoted directive", input, got.Route)
+			t.Errorf("%q routed to %s: only the marker states the workflow", input, got.Route)
 		}
 	}
 }
@@ -126,8 +116,8 @@ func TestTaskWarrantsPlannerTracksTheRoute(t *testing.T) {
 	if TaskWarrantsPlanner("fix the bug") {
 		t.Error("an ordinary work request must not warrant the planner")
 	}
-	if !TaskWarrantsPlanner("先规划再执行：重写解析器") {
-		t.Error("a stated plan-first directive must warrant the planner")
+	if !TaskWarrantsPlanner(PlannerRouteMarker + "\n\n重写解析器") {
+		t.Error("the planner marker must warrant the planner")
 	}
 }
 
@@ -139,8 +129,8 @@ func TestNewPlannerGateTracksTheRoute(t *testing.T) {
 	if gate(context.Background(), "what is this?") {
 		t.Error("planner gate should leave a question with the executor")
 	}
-	if !gate(context.Background(), "make a plan for the parser rewrite") {
-		t.Error("planner gate should honour a stated plan request")
+	if !gate(context.Background(), PlannerRouteMarker+"\n\nrewrite the parser") {
+		t.Error("planner gate should honour the marker")
 	}
 }
 
