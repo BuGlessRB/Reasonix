@@ -23,6 +23,9 @@ await page.waitForSelector(".app", { timeout: 15000 });
 await page.waitForTimeout(700);
 
 const widthOf = (sel) => page.evaluate((s) => Math.round(document.querySelector(s).getBoundingClientRect().width), sel);
+// 栏收起时列宽归零，量正文的左边界比量面板自己的盒子更直接。
+const colOf = () => page.evaluate(() => Math.round(document.querySelector(".main").getBoundingClientRect().x));
+const railState = () => page.evaluate(() => document.querySelector(".app").dataset.rail);
 const fold = (which) =>
   page.evaluate(
     (w) => dispatchEvent(new KeyboardEvent("keydown", { key: "\\", metaKey: true, shiftKey: w === "side", bubbles: true })),
@@ -30,11 +33,16 @@ const fold = (which) =>
   );
 
 // 1) 收起与展开都补间：连着采一段帧，看落在两头之间的值有多少。
+// 收起之后面板是退到屏外，不再被压成零宽 —— 所以要量的是它让出的那一列，
+// 也就是正文的边界。判据没变（收得要看得见），变的是这件事现在做在哪里。
 const sweep = (which) =>
   page.evaluate(async (w) => {
-    const el = document.querySelector("." + w);
+    const main = document.querySelector(".main");
     const out = [];
-    const tick = () => out.push(el.getBoundingClientRect().width);
+    const tick = () => {
+      const m = main.getBoundingClientRect();
+      out.push(w === "rail" ? m.x : innerWidth - m.right);
+    };
     tick();
     dispatchEvent(new KeyboardEvent("keydown", { key: "\\", metaKey: true, shiftKey: w === "side", bubbles: true }));
     for (let i = 0; i < 45; i++) {
@@ -82,30 +90,52 @@ check(
 // 3) 拖出来的宽度熬得过一次收起：展开回的是它，不是默认值。
 await fold("rail");
 await page.waitForTimeout(450);
-check("拖过之后仍收得干净", (await widthOf(".rail")) === 0);
+check("拖过之后仍收得干净", (await colOf()) === 0);
 await fold("rail");
 await page.waitForTimeout(450);
 check("展开回到拖出来的宽度", (await widthOf(".rail")) === dropped, `${await widthOf(".rail")} vs ${dropped}`);
 
-// 4) 上下限：越过就停住，不会把中间栏挤没。
+// 4) 上限仍是尽头；下限不再是 —— 推穿那段阻尼，就是「关掉它」。这是收起最顺手
+//    的入口，也是这一版把它从两个按钮手里拿回来的地方。
 const b2 = await page.locator(".gutter-l").boundingBox();
-await page.mouse.move(b2.x + b2.width / 2, b2.y + 300);
+const grab = b2.x + b2.width / 2;
+await page.mouse.move(grab, b2.y + 300);
 await page.mouse.down();
-await page.mouse.move(b2.x - 500, b2.y + 300);
+await page.mouse.move(grab + 900, b2.y + 300, { steps: 10 });
 await page.waitForTimeout(80);
-const low = await widthOf(".rail");
-await page.mouse.move(b2.x + 900, b2.y + 300);
+const high = await colOf();
+// 目标 150px：已经越过 168 的下限，但还在手柄让出的那段余量里。
+await page.mouse.move(grab - (dropped - 150), b2.y + 300, { steps: 10 });
 await page.waitForTimeout(80);
-const high = await widthOf(".rail");
+const held = await colOf();
 await page.mouse.up();
-check("拖不过下限", low === RAIL.min, `${low}px`);
+await page.waitForTimeout(450);
 check("拖不过上限", high === RAIL.max, `${high}px`);
+check("越过下限但还在阻尼里：停住", held === RAIL.min, `${held}px`);
+
+const b3 = await page.locator(".gutter-l").boundingBox();
+await page.mouse.move(b3.x + b3.width / 2, b3.y + 300);
+await page.mouse.down();
+await page.mouse.move(b3.x - 400, b3.y + 300, { steps: 14 });
+await page.mouse.up();
+await page.waitForTimeout(450);
+check("推穿阻尼即收起", (await colOf()) === 0 && (await railState()) === "off");
+
+// 反向是同一个手势：从边上拖回来就展开。
+const b4 = await page.locator(".gutter-l").boundingBox();
+await page.mouse.move(b4.x + b4.width / 2, b4.y + 300);
+await page.mouse.down();
+await page.mouse.move(b4.x + 300, b4.y + 300, { steps: 14 });
+await page.mouse.up();
+await page.waitForTimeout(450);
+check("反向拖回展开", (await railState()) === "on" && (await colOf()) >= RAIL.min, `${await colOf()}px`);
 
 // 5) 键盘也能调，且按住时不补间 —— 一步 12px 配一段 .34s 会追不上手。
 await page.locator(".gutter-l").focus();
+const beforeKey = await colOf();
 await page.keyboard.press("ArrowLeft");
 await page.waitForTimeout(40);
-check("方向键退一步", (await widthOf(".rail")) === high - 12, `${await widthOf(".rail")}px`);
+check("方向键退一步", (await colOf()) === beforeKey - 12, `${await colOf()}px`);
 check(
   "按键期间不补间",
   (await page.evaluate(() => getComputedStyle(document.querySelector(".app")).transitionProperty)) === "none",

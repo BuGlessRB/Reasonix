@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
 import type { AccountState, AgentPort, Appearance as Look, ProviderSetup, ThemePack } from "../port/port";
@@ -16,6 +17,27 @@ import { Onboarding } from "./Onboarding";
 import { Welcome } from "./Welcome";
 
 const NO_REPORT: PaneReport = { status: null, title: "", steer: 0, run: "idle", live: false, cost: "" };
+
+// Swapping a pane was a hard replace: the old one gone, the new one there, with
+// nothing expressing the relation. Only the current pane carries a
+// view-transition-name, and handing that name over lets the browser join the two
+// frames into one action. flushSync is required — the callback has to finish
+// mutating the DOM before it returns, or the transition captures the old frame.
+function swapping(apply: () => void, kind: string) {
+  if (!document.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    apply();
+    return;
+  }
+  // Which switch this is has to reach the root: a named element is lifted out of
+  // every transition regardless of what triggered it, so without the mark opening
+  // settings would slide the pane too. An attribute predates view-transition
+  // types by a long way, and this only needs that much of it.
+  const root = document.documentElement;
+  root.dataset.vt = kind;
+  document.startViewTransition(() => flushSync(apply)).finished.finally(() => {
+    if (root.dataset.vt === kind) delete root.dataset.vt;
+  });
+}
 
 // App is the window around the panes, not a session itself: the workspace tree,
 // the chrome, the settings sheet and the theme are the window's, while every
@@ -183,6 +205,13 @@ export function App({ hub }: { hub: HubPort }) {
   // A pane with no session file has never been written to — the empty one every
   // window opens with. Opening a conversation takes it over instead of parking
   // a blank column next to it.
+  const focusPane = useCallback((id: string) => swapping(() => setActive(id), "pane"), []);
+  // Settings is the next layer over the whole screen and had entry but no exit: it
+  // simply vanished on unmount. A view transition can animate out an element that
+  // is absent from the new state, so the tree need not stay mounted.
+  const showPrefs = useCallback((sec?: string) => swapping(() => setSettings(sec ?? true), "prefs"), []);
+  const hidePrefs = useCallback(() => swapping(() => setSettings(false), "prefs"), []);
+
   const openPane = useCallback(
     async (req: { root?: string; sessionPath?: string }) => {
       const blank = runtimes.find((rt) => !rt.sessionPath);
@@ -190,7 +219,7 @@ export function App({ hub }: { hub: HubPort }) {
       // folder: it is the pane being asked for. Rebuilding it would cost a full
       // assembly to arrive back where we started.
       if (blank && !req.sessionPath && blank.root === req.root) {
-        setActive(blank.id);
+        focusPane(blank.id);
         return;
       }
       // Same folder: the pane just rebinds, so nothing is torn down and a draft
@@ -200,7 +229,7 @@ export function App({ hub }: { hub: HubPort }) {
         await panePorts.get(blank.id)?.resume(req.sessionPath);
         setTakeover((prev) => ({ ...prev, [blank.id]: (prev[blank.id] ?? 0) + 1 }));
         await reloadPanes();
-        setActive(blank.id);
+        focusPane(blank.id);
         return;
       }
       const rt = await hub.open(req);
@@ -208,9 +237,9 @@ export function App({ hub }: { hub: HubPort }) {
       // rather than left behind.
       if (blank && blank.id !== rt.id) await hub.close(blank.id);
       await reloadPanes();
-      setActive(rt.id);
+      focusPane(rt.id);
     },
-    [hub, reloadPanes, runtimes, panePorts],
+    [hub, reloadPanes, runtimes, panePorts, focusPane],
   );
 
   // Awaitable because deleting a conversation has to close its pane first and
@@ -273,7 +302,7 @@ export function App({ hub }: { hub: HubPort }) {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
-        setSettings(true);
+        showPrefs();
       }
       // Escape stops the turn you are looking at, not every live turn in the
       // window — the other panes are someone else's work in progress. A pane
@@ -282,7 +311,7 @@ export function App({ hub }: { hub: HubPort }) {
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [activePort, running, settings]);
+  }, [activePort, running, settings, showPrefs]);
 
   // A setting changed in the pane is a fact about the session behind it, and
   // the pane is what holds that fact. Without a nudge it keeps polling only
@@ -390,7 +419,7 @@ export function App({ hub }: { hub: HubPort }) {
         steer={report.steer}
         theme={theme}
         onTheme={setTheme}
-        onSettings={(sec) => setSettings(sec ?? true)}
+        onSettings={showPrefs}
         onChanged={onSessionSettingChanged}
         account={account}
       />
@@ -406,7 +435,7 @@ export function App({ hub }: { hub: HubPort }) {
             onFold={onFold}
             reload={reloadTree}
             onOpen={openPane}
-            onFocus={setActive}
+            onFocus={focusPane}
             onClose={closePanes}
             liveIds={liveIds}
             onCollapse={foldRail}
@@ -416,20 +445,24 @@ export function App({ hub }: { hub: HubPort }) {
         </div>
 
         <div className="main">
-          {rail ? (
-            <Gutter edge="l" span={RAIL} width={railW} label={t("调整工作区栏宽度")} onWidth={onRailW} />
-          ) : (
-            <button className="handle handle-l" onClick={() => setRail(true)} title="展开工作区栏　⌘\" aria-label="展开工作区栏">
-              ›
-            </button>
-          )}
-          {side ? (
-            <Gutter edge="r" span={SIDE} width={sideW} label={t("调整度量栏宽度")} onWidth={onSideW} />
-          ) : (
-            <button className="handle handle-r" onClick={() => setSide(true)} title="展开度量栏　⌘⇧\" aria-label="展开度量栏">
-              ‹
-            </button>
-          )}
+          <Gutter
+            edge="l"
+            span={RAIL}
+            width={railW}
+            label={t("调整工作区栏宽度")}
+            open={rail}
+            onWidth={onRailW}
+            onOpen={setRail}
+          />
+          <Gutter
+            edge="r"
+            span={SIDE}
+            width={sideW}
+            label={t("调整度量栏宽度")}
+            open={side}
+            onWidth={onSideW}
+            onOpen={setSide}
+          />
 
           {/* One conversation on screen at a time. Side by side, two panes
               squeezed each other and a glance could not tell which composer
@@ -439,7 +472,7 @@ export function App({ hub }: { hub: HubPort }) {
               tabs={tabs}
               active={active}
               showRoot={manyRoots}
-              onFocus={setActive}
+              onFocus={focusPane}
               onClose={dropPanes}
               onRename={(rt, title) => renameSession(rt.sessionPath ?? "", title)}
             />
@@ -457,7 +490,7 @@ export function App({ hub }: { hub: HubPort }) {
                   active={rt.id === active}
                   sideHost={sideHost}
                   side={side}
-                  onFocus={() => setActive(rt.id)}
+                  onFocus={() => focusPane(rt.id)}
                   visible={rt.id === active}
                   onReport={onReport}
                   // Panes, not just the tree: the first turn gives this pane a
@@ -466,7 +499,7 @@ export function App({ hub }: { hub: HubPort }) {
                   onSessionChanged={reloadPanes}
                   pulse={settingsPulse}
                   onFoldSide={() => setSide(false)}
-                  onSettings={() => setSettings(true)}
+                  onSettings={() => showPrefs()}
                 />
               ) : null;
             })}
@@ -503,7 +536,7 @@ export function App({ hub }: { hub: HubPort }) {
           look={look}
           onLook={onLook}
           onContrast={setContrast}
-          onClose={() => setSettings(false)}
+          onClose={hidePrefs}
           onChanged={onSettingsChanged}
           reloadThemes={reloadThemes}
           at={typeof settings === "string" ? settings : undefined}

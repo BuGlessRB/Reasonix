@@ -10,7 +10,7 @@
 ```bash
 npx vite build --config vite.perf.config.ts     # 产出 dist-perf/
 npx http-server dist-perf -p 4399 -s            # 或任意静态服务器
-npx playwright install chromium                 # 首次
+pnpm exec playwright install chromium           # 首次:npx 会另装一份版本对不上的
 
 node perf/bench.mjs      # 规模基准：0/40/150/400 轮下的帧时间与脚本/样式/布局
 node perf/scale.mjs      # 极长会话：400/2000/8000/20000 轮的节点数、堆内存、帧时间

@@ -106,6 +106,9 @@ function Slot({
         <span className="val" key={set || "follow"}>{set ? (chosen?.model ?? set) : t("跟随主模型")}</span>
         <span className="tag">{set ? t("已指派") : tag}</span>
       </button>
+      {/* Kept conditional: .mgrp rounds its corners with overflow:hidden, released
+          via :has(.rpick) only while the menu is open. Mounting it always would
+          defeat that clip for good. */}
       {open && (
         <div className="rpick" role="listbox" aria-label={t("{name}用哪个模型", { name })}>
           <button role="option" aria-selected={!set} data-cur={!set ? "" : undefined} onClick={() => onPick("")}>

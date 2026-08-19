@@ -136,14 +136,38 @@
     max-height: min(calc(58vh / var(--zoom, 1)), 460px); overflow-y: auto; overscroll-behavior: contain;
     border: 1px solid var(--border); border-radius: var(--r-md); background: var(--float);
     box-shadow: var(--shadow-float);
-    animation: panel var(--t-panel) var(--ease-out) both;
     -webkit-user-select: none; user-select: none;
+    transition: opacity var(--t-panel) var(--ease-out),
+                transform var(--t-panel) var(--ease-out),
+                display var(--t-panel) allow-discrete;
   }
   /* 筛选框是要打字的，它不跟着菜单一起锁 */
   .menu .mfind { -webkit-user-select: text; user-select: text }
-  .menu[hidden] { display: none }
+  /* One transition in and out, rather than keyframes for entry and nothing for
+     exit. display rides allow-discrete so the element leaves only once the
+     animation is done, and it must stop taking clicks while it goes. The
+     conditionally rendered menus get the same entry: @starting-style is for
+     insertion. */
+  .menu[hidden] {
+    display: none; opacity: 0; pointer-events: none;
+    transform: translateY(-4px) scaleY(.985);
+  }
+  @starting-style {
+    .menu:not([hidden]) { opacity: 0; transform: translateY(-4px) scaleY(.985) }
+  }
   .projmenu { top: calc(100% + 7px); left: 0; transform-origin: top left }
   .modemenu { bottom: calc(100% + 9px); left: 0; transform-origin: bottom left; width: max-content; max-width: 420px }
+  /* The two rules above fix which side opens and never flip when there is no room.
+     Anchor positioning lets the browser pick the side and recompute on scroll.
+     Only one picker is expanded at a time, so hanging the name on [aria-expanded]
+     keeps it unique and anchor-scope is not needed. Engines without this block
+     fall back to the calc() rules above, which have been in use all along. */
+  @supports (position-try-fallbacks: flip-block) {
+    .picker > button[aria-expanded="true"] { anchor-name: --pick }
+    .projmenu, .modemenu { position-anchor: --pick; position-try-fallbacks: flip-block }
+    .projmenu { top: calc(anchor(bottom) + 7px); bottom: auto }
+    .modemenu { bottom: calc(anchor(top) + 9px); top: auto }
+  }
   .modemenu .mi .lb, .modemenu .mi.head .lb { white-space: nowrap }
   .modemenu .mi .rt { margin-left: auto; padding-left: 14px; white-space: nowrap }
 
@@ -232,7 +256,7 @@
   .mode .lb { color: var(--faint); font: 400 11px var(--ui); transition: color .15s }
   .mode .vl {
     color: var(--muted); font: 400 11px var(--mono);
-    animation: modeval .24s var(--ease-out);
+    animation: modeval .34s var(--ease-spring);
   }
   .mode:hover .lb, .mode[aria-expanded="true"] .lb { color: var(--muted) }
   .mode:hover .vl, .mode[aria-expanded="true"] .vl { color: var(--text) }
@@ -285,7 +309,7 @@
   .gate .bar {
     fill: none; stroke: var(--faint); stroke-width: 1.6; stroke-linecap: round;
     transform: scaleX(0); transform-origin: center;
-    transition: transform .3s var(--ease-out), stroke .22s;
+    transition: transform .34s var(--ease-spring), stroke .22s;
   }
   .gate[data-g="0"] .bar { transform: none }
   .gate[data-g="2"] circle { stroke: var(--net); stroke-dashoffset: .24 }
@@ -466,30 +490,48 @@
   .gutter::after {
     content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px;
     background: var(--faint); opacity: 0;
-    transition: opacity .16s var(--ease-out) .14s;
+    transform: translateX(var(--over, 0px));
+    transition: opacity .16s var(--ease-out) .14s, transform .4s var(--ease-spring);
   }
   .gutter:hover::after { opacity: .55; transition-delay: 0s }
-  .gutter[data-on]::after { opacity: .9; transition-delay: 0s }
+  /* Reaching a limit by keyboard nudges this line, so the line has to be there to
+     see. A focused separator should show itself anyway. */
+  .gutter:focus-visible::after { opacity: .7; transition-delay: 0s }
+  /* While dragging the handle tracks the pointer, so transform must not tween.
+     Releasing drops data-on, which hands transform back to the spring above and
+     the borrowed pixels return on their own. */
+  .gutter[data-on]::after { opacity: .9; transition-delay: 0s; transition-duration: .16s, 0s }
+  .gutter[data-edge]::after { animation: edgebump .22s var(--ease-out) }
+  @keyframes edgebump { 0%, 100% { transform: none } 40% { transform: translateX(var(--bump, 0px)) } }
   .gutter:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; border-radius: var(--r-xs) }
-
-  /* 收起后入口留在中间栏的那一侧：手往哪边够，面板就从哪边回来。
-     它得是个看得见的按钮 —— 一条融进背景的细线等于没有入口。 */
-  .handle {
-    position: absolute; top: 50%; margin-top: -16px; z-index: 6;
-    width: 21px; height: 32px; padding: 0; cursor: pointer;
-    display: grid; place-items: center;
-    background: var(--raised); color: var(--faint);
-    border: 1px solid var(--border); font: 400 12px/1 var(--mono);
-    box-shadow: 0 2px 9px -3px rgba(0, 0, 0, .4);
-    transition: background .15s, color .15s, border-color .15s;
-    animation: handlein .24s var(--ease-out) .18s both;   /* 等栏收完再露面，别抢在它前头 */
+  /* One switch deserves one vocabulary. The grip lives on the divider — where the
+     hand already is — and serves both directions. Open, it surfaces on hover and
+     spends no standing visual budget; closed, it stays put, because then it is
+     the way back. */
+  .gutter[data-shut] { width: 14px }
+  [data-rail="off"] .gutter-l { left: 0 }
+  [data-side="off"] .gutter-r { right: 0 }
+  .grip {
+    position: absolute; top: 50%; left: 50%; margin: -14px 0 0 -7px; z-index: 1;
+    width: 14px; height: 28px; padding: 0; display: grid; place-items: center;
+    border: 1px solid transparent; border-radius: var(--r-pill);
+    background: transparent; color: var(--ghost);
+    font: 400 10px/1 var(--mono); cursor: pointer; opacity: .45;
+    transition: opacity .16s, color .14s, background .14s, border-color .14s;
   }
-  .handle-l { left: 0; border-left: 0; border-radius: 0 var(--r-sm) var(--r-sm) 0 }
-  .handle-r { right: 0; border-right: 0; border-radius: var(--r-sm) 0 0 var(--r-sm) }
-  .handle:hover { background: var(--overlay); color: var(--text); border-color: var(--faint) }
-  .handle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
-  .handle[hidden] { display: none }
-  @keyframes handlein { from { opacity: 0 } to { opacity: 1 } }
+  /* Quiet, but never absent. A control that is fully transparent until you happen
+     to hover the right 11px does not read as restraint — it reads as a seam that
+     does nothing. The hairline says where the boundary is; this says it is a
+     control. Chrome only arrives on hover, so the standing cost is one glyph. */
+  .gutter:hover .grip, .gutter:focus-visible .grip, .gutter[data-on] .grip { opacity: 1 }
+  .grip:hover { color: var(--text); background: var(--overlay); border-color: var(--border) }
+  .gutter[data-shut] .grip {
+    opacity: 1; color: var(--faint);
+    background: var(--raised); border-color: var(--border);
+    box-shadow: 0 2px 9px -3px rgb(0 0 0 / .4);
+  }
+  .gutter[data-shut] .grip:hover { color: var(--text); background: var(--overlay) }
+
 
   /* 不用 scroll-behavior: smooth —— 流式期间每帧重设 scrollTop 会让平滑动画
      不断重启，主线程被占死，setTimeout 全被推迟。滚动改由 JS 直接赋值。 */
@@ -594,8 +636,18 @@
 
   /* 分隔线要通栏，标签要跟文档列左对齐 —— 所以缩进走 padding，元素本身不收窄 */
   .tabs {
+    position: relative;
     display: flex; gap: 2px; flex: none; border-bottom: 1px solid var(--hair);
     padding: 9px 0 0; padding-inline: max(16px, calc((100% - var(--doc)) / 2 + 18px));
+  }
+  /* One shared marker travels instead of each tab lighting its own underline, so
+     switching gives the eye something to follow — most of all on the keyboard.
+     marker.ts measures the live element; this only says how it moves. The plan
+     cursor is the same idea, generalised. */
+  .tabmark {
+    position: absolute; bottom: 0; left: 0; height: 2px; border-radius: 1px;
+    background: var(--accent); pointer-events: none;
+    transition: transform .3s var(--ease-out), width .3s var(--ease-out);
   }
   .tab {
     padding: 6px 11px 8px; border: 0; background: none; cursor: pointer;
@@ -603,7 +655,7 @@
     margin-bottom: -1px; transition: color .15s;
   }
   .tab:hover { color: var(--text) }
-  .tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent) }
+  .tab[aria-selected="true"] { color: var(--text) }
   .tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .tab .n { font: 400 10px var(--mono); color: var(--ghost); margin-left: 5px; font-variant-numeric: tabular-nums }
 
@@ -622,6 +674,27 @@
   .hero .s { margin-top: 7px; max-width: 44ch; font-size: 12px; line-height: 1.7; color: var(--faint) }
   .hero .qs { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-top: 17px }
   #flowScroll[hidden], #trajScroll[hidden] { display: none }
+
+  /* Content is cut off under the tab strip with nothing saying "more above". The
+     fade rides a scroll timeline, not a scroll listener: it stays off the main
+     thread, which is busy drawing streamed tokens. Zero-height host, same idiom
+     as .railhost; z-index sits under the rail so its marks are not veiled. */
+  .flow-edge { position: sticky; top: 0; height: 0; z-index: 3; flex: none; pointer-events: none }
+  .flow-edge::before {
+    content: ""; position: absolute; inset-inline: 0; top: 0; height: 30px; opacity: 0;
+    background: linear-gradient(to bottom, var(--surface), transparent);
+  }
+  /* Without a scroll timeline this stays at opacity 0, which is today's hard edge.
+     Drop the @supports and a zero-duration animation with fill jumps straight to
+     the end value: a fade that hangs there forever. */
+  @supports (animation-timeline: scroll()) {
+    .flow-edge::before {
+      animation: edgein linear both;
+      animation-timeline: scroll(nearest block);
+      animation-range: 0 44px;
+    }
+    @keyframes edgein { to { opacity: 1 } }
+  }
   /* ── 你说过的话：贴在转录右缘的一条轨道 ─────────────────────────
      宿主高度为零、sticky 在滚动容器顶部，所以它既不占布局宽度也不跟着内容滚。
      命中框是整条轨道那么宽的固定块，会动的只有里面那条线 —— 让刻度自己在
@@ -901,6 +974,15 @@
     font: 400 12px/1.68 var(--ui); color: var(--faint); white-space: pre-wrap;
   }
   .think[open] > summary .fold { color: var(--faint) }
+  /* A details toggle is instant by default. content-visibility has to be carried
+     along, or the content appears whole on the first frame while the height is
+     still moving, and the two stop reading as one action. */
+  .think::details-content {
+    block-size: 0; overflow: hidden;
+    transition: block-size var(--t-card) var(--ease-out),
+                content-visibility var(--t-card) allow-discrete;
+  }
+  .think[open]::details-content { block-size: auto }
 
   .out { margin-top: 6px }
   /* 设计稿把正文封在 68ch 是排版上的道理，但一屏里只有它收着、终端块和卡片都
@@ -969,12 +1051,20 @@
 
   /* 一个输出预算,三种形态共用:裁到固定高度而不是塌成一行标签,内容始终可扫 */
   .out-clip { position: relative }
-  .out-body { max-height: var(--out-peek, 16rem); overflow: hidden }
-  .out-clip[data-open] .out-body { max-height: none }
-  .out-clip:not([data-open])::after {
+  .out-body {
+    max-height: var(--out-peek, 16rem); overflow: hidden;
+    transition: max-height var(--t-panel) var(--ease-out);
+  }
+  /* max-content rather than none: none is not a size, so interpolation has no far
+     end. Equivalent here, and engines without interpolate-size still get "as tall
+     as the content". */
+  .out-clip[data-open] .out-body { max-height: max-content }
+  .out-clip::after {
     content: ""; position: absolute; inset-inline: 0; bottom: 0; height: 3rem; pointer-events: none;
     background: linear-gradient(to bottom, transparent, var(--bg));
+    transition: opacity var(--t-card) var(--ease-out);
   }
+  .out-clip[data-open]::after { opacity: 0 }
   .out-more {
     margin-top: 5px; padding: 2px 7px; border: 0; border-radius: var(--r-xs); background: var(--overlay);
     font: 400 11px var(--mono); color: var(--faint); cursor: pointer;
@@ -1477,8 +1567,18 @@
     .reload, .reload .rdot, .rnote { animation: none !important }
     .bars i, .mode .vl, .mode.danger::before, .mode.tog .ic path,
     .compose .row > *, .call[data-running] > .g .sym,
-    .call[data-running] > .g .line,
+    .call[data-running] > .g .line, .runstrip[data-rx] .dn,
     .app[data-run="running"] .sessrow[data-on][data-live] .pip { animation: none !important }
+    /* The down marker says "receiving" through that breath alone, so stopping the
+       animation leaves the two states identical. Two static levels instead — the
+       sentence still gets said. */
+    .runstrip[data-rx] .dn { opacity: 1 }
+    .runstrip:not([data-rx]) .dn { opacity: .55 }
+    /* The limit nudge is a displacement, and displacement is the thing motion
+       sensitivity is about. A still dip in the line says "this is the edge"
+       without moving anything. */
+    .gutter[data-edge]::after { animation: edgeflash .26s var(--ease) }
+    @keyframes edgeflash { 0%, 100% { opacity: .9 } 50% { opacity: .25 } }
     /* 动画停了，「正在跑」这件事还得说 —— 换成不动的实心表达 */
     .call[data-running] > .g .line { background: color-mix(in srgb, var(--net) 55%, var(--hair)) }
     /* 扫过去的那道光停下来就看不见了，换成一整条静止的线，「在生效」这句话还在 */
@@ -1560,6 +1660,16 @@
   }
   /* 从右推入：进入的是「下一层」，不是浮在上面的一张卡 */
   @keyframes prefsin { from { transform: translateX(3%); opacity: 0 } to { transform: none; opacity: 1 } }
+  /* The sheet is conditionally rendered, so it had a push-in and no way out — it
+     just stopped existing. A view transition can animate an element that is
+     absent from one of the two states, which is what buys the exit without
+     keeping the whole settings tree mounted. */
+  @supports (view-transition-name: none) {
+    .prefs { view-transition-name: prefs; animation: none }
+    [data-vt="prefs"]::view-transition-new(prefs) { animation: prefsin .34s cubic-bezier(.32, .72, 0, 1) both }
+    [data-vt="prefs"]::view-transition-old(prefs) { animation: prefsout .26s var(--ease-in) both }
+    @keyframes prefsout { to { transform: translateX(3%); opacity: 0 } }
+  }
   .app[data-prefs] > .chrome, .app[data-prefs] > .cols {
     transform: translateX(-1.2%); opacity: .55; filter: saturate(.7);
     transition: transform .34s cubic-bezier(.32, .72, 0, 1), opacity .3s, filter .3s;
@@ -1934,7 +2044,7 @@
   }
   .slot .node::after {
     content: ""; position: absolute; inset: 1px; border-radius: 50%; background: var(--deleg);
-    transform: scale(0); transition: transform var(--t-line) var(--ease-out);
+    transform: scale(0); transition: transform var(--t-card) var(--ease-spring);
   }
   .slot[data-set] .node { border-color: var(--deleg) }
   .slot[data-set] .node::after { transform: scale(1) }
@@ -1951,7 +2061,25 @@
     max-height: 288px; overflow: auto; padding: 4px; background: var(--float);
     border: 1px solid var(--border); border-radius: var(--r-md);
     box-shadow: var(--shadow-float);
-    transform-origin: top; animation: panel var(--t-card) var(--ease-out) both;
+    transform-origin: top;
+    transition: opacity var(--t-card) var(--ease-out),
+                transform var(--t-card) var(--ease-out);
+  }
+  /* Conditionally rendered (see Roles.tsx), so entry only: @starting-style gives
+     the value it enters from. The exit is ruled out by the clipping constraint
+     that comment explains. */
+  @starting-style {
+    .rpick { opacity: 0; transform: translateY(-4px) scaleY(.985) }
+  }
+  /* This menu is 288px tall and the role list scrolls, so a row near the bottom
+     opens past the visible area. Flip it up when it will not fit. Only one slot
+     is expanded at a time, so the anchor name stays unique. */
+  @supports (position-try-fallbacks: flip-block) {
+    .slot[aria-expanded="true"] { anchor-name: --slot }
+    .rpick {
+      position-anchor: --slot; position-try-fallbacks: flip-block;
+      top: calc(anchor(bottom) + 5px); bottom: auto;
+    }
   }
   .rpick button {
     display: flex; width: 100%; gap: 9px; align-items: baseline; padding: 6px 9px;
@@ -2777,6 +2905,16 @@
     display: flex; flex-direction: column; min-width: 132px; padding: 4px;
     border: 1px solid var(--border); border-radius: var(--r-sm);
     background: var(--float); box-shadow: var(--shadow-float);
+    transition: opacity var(--t-card) var(--ease-out),
+                transform var(--t-card) var(--ease-out),
+                display var(--t-card) allow-discrete;
+  }
+  .movemenu[hidden] {
+    display: none; opacity: 0; pointer-events: none;
+    transform: translateY(-4px) scaleY(.985);
+  }
+  @starting-style {
+    .movemenu:not([hidden]) { opacity: 0; transform: translateY(-4px) scaleY(.985) }
   }
   .movemenu .who { padding: 3px 8px 5px; font: 400 10.5px var(--mono); color: var(--ghost) }
   .movemenu button {
@@ -2992,8 +3130,19 @@
     display: flex; flex-direction: column;
   }
   .pane[data-off] { visibility: hidden; pointer-events: none }
+  /* Only the current pane is named, so the name is globally unique: handing it
+     from the old pane to the new one lets the browser read switching sessions as
+     one action rather than two unrelated replacements. A named element is lifted
+     out of the root snapshot; the rest of the window still crossfades. The travel
+     reuses the card / panel distance, so it speaks the same language. */
+  .pane:not([data-off]) { view-transition-name: pane }
+  [data-vt="pane"]::view-transition-old(pane) { animation: paneout .2s var(--ease-in) both }
+  [data-vt="pane"]::view-transition-new(pane) { animation: panein .3s var(--ease-out) both }
+  @keyframes paneout { to { opacity: 0; transform: translateY(-6px) } }
+  @keyframes panein { from { opacity: 0; transform: translateY(8px) } }
 
   .panetabs {
+    position: relative;
     flex: none; display: flex; align-items: stretch; gap: 2px;
     padding: 6px 10px 0; border-bottom: 1px solid var(--hair);
     overflow-x: auto; scrollbar-width: none;
@@ -3010,7 +3159,7 @@
     transition: color .14s, background .14s;
   }
   .ptab:hover { color: var(--text); background: var(--overlay) }
-  .ptab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent) }
+  .ptab[aria-selected="true"] { color: var(--text) }
   .ptab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .ptab-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis }
   .ptab-x { margin-left: auto }

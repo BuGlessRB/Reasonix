@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { RuntimeView } from "../port/hub";
 import { arrowTabs } from "./tablist";
+import { useMarker } from "./marker";
 
 export interface TabView {
   rt: RuntimeView;
@@ -23,6 +24,7 @@ interface Props {
 
 export function PaneTabs({ tabs, active, showRoot, onFocus, onClose, onRename }: Props) {
   const bar = useRef<HTMLDivElement>(null);
+  const mark = useMarker(bar, '.ptab[aria-selected="true"]', "x", [active, tabs.length]);
   // id + 屏幕坐标：页签条是横向滚动容器，overflow 会把 absolute 定位的菜单
   // 裁掉（点了像没反应），所以菜单挂在 fixed 上，位置由触发点决定。
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -169,11 +171,21 @@ export function PaneTabs({ tabs, active, showRoot, onFocus, onClose, onRename }:
         </div>
       ))}
 
+      {mark && <i className="tabmark" style={{ width: mark.len, transform: `translateX(${mark.at}px)` }} />}
+
       {menu && (
         <div
           className="tabmenu"
           role="menu"
-          style={{ left: Math.min(menu.x, innerWidth - 152), top: menu.y }}
+          ref={(el) => {
+            if (!el) return;
+            // This used to clamp against innerWidth - 152, where 152 was the menu
+            // width: a CSS fact copied into JS that drifts as labels grow, and it
+            // only clamped one edge. Measure the menu itself and clamp both.
+            const box = el.getBoundingClientRect();
+            el.style.left = `${Math.max(6, Math.min(menu.x, innerWidth - box.width - 6))}px`;
+            el.style.top = `${Math.max(6, Math.min(menu.y, innerHeight - box.height - 6))}px`;
+          }}
           onClick={(ev) => ev.stopPropagation()}
         >
           <button role="menuitem" onClick={() => { const id = menu.id; setMenu(null); setEditing(id); }}>

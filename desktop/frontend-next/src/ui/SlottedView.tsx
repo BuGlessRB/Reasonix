@@ -29,29 +29,29 @@ export function SlottedView({
       >
         ⋯
       </button>
-      {open && (
-        <div className="movemenu" role="menu">
-          <span className="who">{ext.pluginId}</span>
-          {SLOTS.map((slot) => (
-            <button
-              key={slot.id}
-              role="menuitemradio"
-              aria-checked={here === slot.id}
-              onClick={() => {
-                setOpen(false);
-                onMove(slot.id);
-              }}
-            >
-              {slot.label}
-            </button>
-          ))}
-          {/* Clearing hands the choice back to the extension rather than
-              hiding the surface: it is a different act from moving it. */}
-          <button role="menuitem" onClick={() => { setOpen(false); onMove(""); }}>
-            {t("交还给插件")}
+      {/* hidden rather than conditional: the menu has to stay in the DOM to have
+          anything to animate on the way out. */}
+      <div className="movemenu" role="menu" hidden={!open}>
+        <span className="who">{ext.pluginId}</span>
+        {SLOTS.map((slot) => (
+          <button
+            key={slot.id}
+            role="menuitemradio"
+            aria-checked={here === slot.id}
+            onClick={() => {
+              setOpen(false);
+              onMove(slot.id);
+            }}
+          >
+            {slot.label}
           </button>
-        </div>
-      )}
+        ))}
+        {/* Clearing hands the choice back to the extension rather than
+            hiding the surface: it is a different act from moving it. */}
+        <button role="menuitem" onClick={() => { setOpen(false); onMove(""); }}>
+          {t("交还给插件")}
+        </button>
+      </div>
     </div>
   );
 }

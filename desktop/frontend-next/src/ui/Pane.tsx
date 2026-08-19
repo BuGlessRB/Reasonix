@@ -16,6 +16,7 @@ import { SlottedView } from "./SlottedView";
 import { key as slotKey, placement } from "./slots";
 import { Metrics } from "./Metrics";
 import { arrowTabs } from "./tablist";
+import { useMarker } from "./marker";
 import { tokensPerSecond } from "../port/tokens";
 
 // PaneReport is what the window's own chrome needs from whichever pane has
@@ -75,6 +76,8 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [slots, setSlots] = useState<Record<string, string>>({});
   const flow = useRef<HTMLDivElement>(null);
+  const tabs = useRef<HTMLDivElement>(null);
+  const tabMark = useMarker(tabs, '.tab[aria-selected="true"]', "x", [tab]);
   const startedAt = useRef(0);
   // Read by the 250ms tick without making it a dependency, so a delta arriving
   // between ticks does not restart the interval.
@@ -373,13 +376,14 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       onMouseDownCapture={active ? undefined : onFocus}
       onFocusCapture={active ? undefined : onFocus}
     >
-      <div className="tabs" role="tablist" onKeyDown={arrowTabs}>
+      <div className="tabs" role="tablist" ref={tabs} onKeyDown={arrowTabs}>
         <button className="tab" role="tab" aria-selected={tab === "flow"} onClick={() => setTab("flow")}>
           {t("活动")}<span className="n">{s.items.length}</span>
         </button>
         <button className="tab" role="tab" aria-selected={tab === "traj"} onClick={() => setTab("traj")}>
           {t("轨迹")}<span className="n">{traj.rows.length}</span>
         </button>
+        {tabMark && <i className="tabmark" style={{ width: tabMark.len, transform: `translateX(${tabMark.at}px)` }} />}
       </div>
 
       <Transcript
