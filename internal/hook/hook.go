@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -352,15 +353,8 @@ func appendPluginHooks(out *[]ResolvedHook, reasonixHomeDir, projectRoot string)
 				for key, value := range env {
 					env[key] = expandPluginRoot(value, pkg.Root)
 				}
-				env["REASONIX_PLUGIN_ROOT"] = pkg.Root
-				env["REASONIX_PLUGIN_NAME"] = item.Installed.Name
-				env["REASONIX_HOME"] = reasonixHomeDir
-				env["REASONIX_WORKSPACE_ROOT"] = projectRoot
-				env["CLAUDE_PROJECT_DIR"] = projectRoot
-				env["CLAUDE_PLUGIN_ROOT"] = pkg.Root
-				if item.Installed.Version != "" {
-					env["REASONIX_PLUGIN_VERSION"] = item.Installed.Version
-				}
+				maps.Copy(env, pluginHookEnv(pkg.Root, item.Installed.Name,
+					item.Installed.Version, reasonixHomeDir, projectRoot))
 				*out = append(*out, ResolvedHook{
 					HookConfig: HookConfig{
 						Match:         h.Match,
@@ -1397,6 +1391,9 @@ func spawnLegacyCommand(ctx context.Context, command string, args []string, opti
 		}
 		if node, flag, script, ok := directNodeEvalArgs(command); ok {
 			return exec.CommandContext(ctx, node, flag, script), nil
+		}
+		if cmd, matched, err := windowsPOSIXShellCommand(ctx, command, options); matched {
+			return cmd, err
 		}
 		if cmd, ok := windowsCmdShellCommand(ctx, command); ok {
 			return cmd, nil

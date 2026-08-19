@@ -125,7 +125,12 @@ func requiresWindowsBashForHook(config HookConfig) bool {
 			return true
 		}
 		fields, _, _, ok := parseSimpleHookCommandFields(config.Command)
-		return ok && len(fields) >= 3 && isBarePOSIXShellWord(fields[0]) && hasCommandStringFlag(fields[1:])
+		if ok && len(fields) >= 3 && isBarePOSIXShellWord(fields[0]) && hasCommandStringFlag(fields[1:]) {
+			return true
+		}
+		// A settings hook written in shell syntax names no interpreter, so the
+		// shapes above miss it and the cmd.exe fallback cannot parse it.
+		return requiresPOSIXShell(config.Command)
 	default:
 		return false
 	}
