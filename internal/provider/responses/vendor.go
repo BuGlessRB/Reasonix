@@ -63,6 +63,11 @@ type vendorCapabilities struct {
 	// back to ordinary summarize without inheriting a large default".
 	compactionOutputTokens int
 
+	// omitReasoningIdentity marks vendors that fold an input reasoning item
+	// into the adjacent assistant message, leaving `id`/`status` nothing to
+	// refer to (DeepSeek). OpenAI marks Reasoning.id required — zero sends it.
+	omitReasoningIdentity bool
+
 	// summaryRequired marks vendors whose Responses API requires the
 	// `summary` list on input reasoning items (DashScope; without it the
 	// server rejects with "Invalid 'summary': summary is required..."). The
@@ -91,6 +96,7 @@ var vendorTable = map[string]vendorCapabilities{
 		toolCallReasoning:      true,
 		singleSegmentReasoning: false,
 		ignoresTemperature:     false,
+		omitReasoningIdentity:  true,
 		// Auto ceiling for ordinary reasoning; high/max is applied via
 		// AutoOutputBudget at construction/request time (64K). Never 128K.
 		defaultMaxOutputTokens: provider.DefaultReasoningOutputTokens,

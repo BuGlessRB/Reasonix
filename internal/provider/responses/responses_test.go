@@ -516,7 +516,9 @@ func TestExpiredPreviousResponseRetriesOnceWithFullHistory(t *testing.T) {
 		attempt := len(bodies)
 		mu.Unlock()
 		if attempt == 2 {
-			http.Error(w, `previous_response_id expired`, http.StatusBadRequest)
+			// The wire shape a real server sends: the rejected field is named
+			// in `param`, which is what the client reads instead of the prose.
+			http.Error(w, `{"error":{"message":"Previous response not found.","type":"invalid_request_error","param":"previous_response_id","code":"previous_response_not_found"}}`, http.StatusBadRequest)
 			return
 		}
 		id := "resp_1"

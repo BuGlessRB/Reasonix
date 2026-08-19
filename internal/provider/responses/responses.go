@@ -4,7 +4,6 @@
 package responses
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -12,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -285,15 +283,24 @@ func (c *client) send(ctx context.Context, body map[string]any) (*http.Response,
 	return provider.SendWithRetry(ctx, c.http, c.sendOpts(), newRequest)
 }
 
+// isStalePreviousResponseError reads the error object, not its prose: the
+// protocol names the field it rejected in `param`, and a server that names
+// nothing is not telling us the id expired.
 func isStalePreviousResponseError(err error) bool {
 	var apiErr *provider.APIError
 	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusBadRequest {
 		return false
 	}
-	body := strings.ToLower(apiErr.Body)
-	mentionsID := strings.Contains(body, "previous_response_id") || strings.Contains(body, "previous response") || strings.Contains(body, "response id")
-	return mentionsID &&
-		(strings.Contains(body, "not found") || strings.Contains(body, "invalid") || strings.Contains(body, "expired"))
+	var body struct {
+		Error struct {
+			Param string `json:"param"`
+			Code  string `json:"code"`
+		} `json:"error"`
+	}
+	if json.Unmarshal([]byte(apiErr.Body), &body) != nil {
+		return false
+	}
+	return body.Error.Param == "previous_response_id" || body.Error.Code == "previous_response_not_found"
 }
 
 func (c *client) buildRequestBody(req provider.Request) (map[string]any, bool, []provider.Message) {
@@ -370,7 +377,7 @@ func (c *client) buildRequestBody(req provider.Request) (map[string]any, bool, [
 		return body, true, messages
 	}
 
-	body["input"] = messagesToInput(rest, c.vision, c.webSearch, c.caps.summaryRequired)
+	body["input"] = messagesToInput(rest, c.vision, c.webSearch, c.caps)
 	return body, false, messages
 }
 
@@ -381,7 +388,7 @@ func splitInstructions(messages []provider.Message) (string, []provider.Message)
 	return messages[0].Content, messages[1:]
 }
 
-func messagesToInput(messages []provider.Message, vision, replayWebSearchItems, summary bool) []map[string]any {
+func messagesToInput(messages []provider.Message, vision, replayWebSearchItems bool, caps vendorCapabilities) []map[string]any {
 	input := make([]map[string]any, 0, len(messages)*2)
 	for _, message := range messages {
 		switch message.Role {
@@ -418,15 +425,15 @@ func messagesToInput(messages []provider.Message, vision, replayWebSearchItems, 
 					"type":    "reasoning",
 					"content": []map[string]string{{"type": "reasoning_text", "text": message.ReasoningContent}},
 				}
-				if message.ReasoningID != "" {
+				if message.ReasoningID != "" && !caps.omitReasoningIdentity {
 					// OpenAI Responses schema marks Reasoning.id required;
 					// round-trip the provider-issued id when we captured one.
 					item["id"] = message.ReasoningID
 				}
-				if message.ReasoningStatus != "" {
+				if message.ReasoningStatus != "" && !caps.omitReasoningIdentity {
 					item["status"] = message.ReasoningStatus
 				}
-				if summary {
+				if caps.summaryRequired {
 					item["summary"] = []map[string]string{{"type": "summary_text", "text": message.ReasoningContent}}
 				}
 				input = append(input, item)
@@ -477,337 +484,13 @@ func (c *client) conversationDigest(messages []provider.Message) string {
 	// Digest must mirror the wire exactly: the stateful fast path compares
 	// this against the previous request's input, so a mismatch would skip
 	// previous_response_id and force a full replay (cache-hit loss). Use the
-	// same vision/summary knobs as buildRequestBody.
+	// same vision and capability knobs as buildRequestBody.
 	payload, _ := json.Marshal(struct {
 		Instructions string           `json:"instructions,omitempty"`
 		Input        []map[string]any `json:"input"`
-	}{Instructions: instructions, Input: messagesToInput(rest, c.vision, c.webSearch, c.caps.summaryRequired)})
+	}{Instructions: instructions, Input: messagesToInput(rest, c.vision, c.webSearch, c.caps)})
 	sum := sha256.Sum256(payload)
 	return hex.EncodeToString(sum[:])
-}
-
-type streamedCall struct {
-	id, name, arguments string
-	argChars            int
-	completed           bool
-}
-
-func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<- provider.Chunk, requestMessages []provider.Message) {
-	defer resp.Body.Close()
-	defer close(out)
-
-	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-	idle := c.idleTimeout
-	if idle <= 0 {
-		idle = defaultStreamIdleTimeout
-	}
-	watchDone := make(chan struct{})
-	activity := make(chan struct{}, 1)
-	var stalled atomic.Bool
-	go func() {
-		timer := time.NewTimer(idle)
-		defer timer.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				_ = resp.Body.Close()
-				return
-			case <-watchDone:
-				return
-			case <-activity:
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-				timer.Reset(idle)
-			case <-timer.C:
-				stalled.Store(true)
-				_ = resp.Body.Close()
-				return
-			}
-		}
-	}()
-	defer close(watchDone)
-
-	calls := make(map[string]*streamedCall)
-	callOrder := make([]string, 0)
-	callForItem := func(itemID string) *streamedCall {
-		if call := calls[itemID]; call != nil {
-			return call
-		}
-		call := &streamedCall{id: itemID}
-		calls[itemID] = call
-		callOrder = append(callOrder, itemID)
-		return call
-	}
-	textDeltas := make(map[string]bool)
-	reasoningDeltas := make(map[string]bool)
-	seenSearchItems := make(map[string]struct{})
-	var responsesItems []json.RawMessage
-	var text, reasoning strings.Builder
-	reasoningID := ""
-	reasoningStatus := ""
-	terminal := false
-	failed := false
-	completedResponseID := ""
-
-	for scanner.Scan() {
-		select {
-		case activity <- struct{}{}:
-		default:
-		}
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if data == "[DONE]" {
-			terminal = true
-			break
-		}
-		var event sseEvent
-		if json.Unmarshal([]byte(data), &event) != nil {
-			continue
-		}
-		key := fmt.Sprintf("%s:%d", event.ItemID, event.ContentIndex)
-		switch event.Type {
-		case "response.output_text.delta":
-			textDeltas[key] = true
-			text.WriteString(event.Delta)
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkText, Text: event.Delta}) {
-				return
-			}
-		case "response.output_text.done":
-			if event.Text != "" && !textDeltas[key] {
-				text.WriteString(event.Text)
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkText, Text: event.Text}) {
-					return
-				}
-			}
-		case "response.reasoning_text.delta", "response.reasoning_summary_text.delta":
-			reasoningDeltas[key] = true
-			reasoning.WriteString(event.Delta)
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: event.Delta}) {
-				return
-			}
-		case "response.reasoning_text.done", "response.reasoning_summary_text.done":
-			if event.Text != "" && !reasoningDeltas[key] {
-				reasoning.WriteString(event.Text)
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: event.Text}) {
-					return
-				}
-			}
-		case "response.output_item.added":
-			if event.Item != nil {
-				switch event.Item.Type {
-				case "function_call":
-					call := callForItem(event.Item.ID)
-					call.id = event.Item.CallID
-					call.name = event.Item.Name
-					if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallStart, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name}}) {
-						return
-					}
-				case "reasoning":
-					// Capture the provider-issued reasoning item id so the
-					// next turn's input reasoning item can carry it (the
-					// OpenAI Responses schema marks Reasoning.id required).
-					if event.Item.ID != "" {
-						// 多段推理（DeepSeek 长思考分多段）时末段 id 覆盖：round-trip
-						// 合并为一个 reasoning item 只带末段 id（服务端接受）。
-						reasoningID = event.Item.ID
-					}
-				}
-			}
-		case "response.function_call_arguments.delta":
-			call := callForItem(event.ItemID)
-			call.arguments += event.Delta
-			call.argChars += len(event.Delta)
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallArgsDelta, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name}, ArgChars: call.argChars}) {
-				return
-			}
-		case "response.function_call_arguments.done":
-			call := callForItem(event.ItemID)
-			if event.Arguments != "" {
-				call.arguments = event.Arguments
-			}
-			if !call.completed {
-				call.completed = true
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name, Arguments: call.arguments}}) {
-					return
-				}
-			}
-		case "response.output_item.done":
-			if event.Item != nil && event.Item.Type == "web_search_call" && c.webSearch {
-				if _, ok := decodeReplayableWebSearchItem(event.Item.Raw); ok {
-					key := event.Item.ID
-					if key == "" {
-						key = string(event.Item.Raw)
-					}
-					if _, seen := seenSearchItems[key]; !seen {
-						seenSearchItems[key] = struct{}{}
-						raw := append(json.RawMessage(nil), event.Item.Raw...)
-						responsesItems = append(responsesItems, raw)
-						if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkResponsesItem, ResponsesItem: raw}) {
-							return
-						}
-					}
-				}
-			}
-			if event.Item != nil {
-				switch event.Item.Type {
-				case "function_call":
-					call := callForItem(event.Item.ID)
-					if event.Item.CallID != "" {
-						call.id = event.Item.CallID
-					}
-					if event.Item.Name != "" {
-						call.name = event.Item.Name
-					}
-					if event.Item.Arguments != "" {
-						call.arguments = event.Item.Arguments
-					}
-					if !call.completed {
-						call.completed = true
-						if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name, Arguments: call.arguments}}) {
-							return
-						}
-					}
-				case "reasoning":
-					// The done event carries the final item status
-					// ("completed" after the thinking stream finishes);
-					// round-trip it with the reasoning item so the input
-					// matches the wire schema.
-					if event.Item.Status != "" {
-						reasoningStatus = event.Item.Status
-					}
-				}
-			}
-		case "response.completed", "response.incomplete", "response.failed":
-			terminal = true
-			if event.Response != nil {
-				if event.Type == "response.completed" {
-					completedResponseID = event.Response.ID
-				}
-				usage := usageFromResponse(event.Response)
-				provider.ApplyRequestAttemptCount(ctx, usage)
-				if event.Type == "response.incomplete" {
-					switch event.Response.IncompleteDetails.Reason {
-					case "max_output_tokens":
-						usage.FinishReason = "length"
-					case "content_filter":
-						usage.FinishReason = "content_filter"
-					default:
-						usage.FinishReason = "incomplete"
-					}
-				} else if event.Type == "response.completed" && usage.FinishReason == "" {
-					// A completed response finished normally (stop). Preserve any
-					// vendor-specific reason already set by usageFromResponse.
-					usage.FinishReason = "stop"
-				}
-				// DashScope occasionally reports a completed event whose usage
-				// object exists but is all zeros (server-side reporting gap; the
-				// tokens were actually billed). Emitting that as ChunkUsage
-				// would corrupt cache-ratio and cost accounting with a spurious
-				// zero record. 但完成语义必须保留：全零+stop 也发送——计费层
-				// （Pricing.Cost）对全零记录天然返回 0 成本，不污染统计；而
-				// agent 侧 reasoningOnlyFinishHonoured 依赖收到 usage 对象
-				// （FinishReason=stop）才能确认 reasoning-only 完成（#7168
-				// 评审"完成语义保留"的完整实现——此前 stop 被抑制时该语义
-				// 失效，空回复被误判触发重试）。异常终止 reason
-				// （length/content_filter/...）始终上报。
-				if usage.TotalTokens > 0 || usage.FinishReason != "" {
-
-					if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkUsage, Usage: usage}) {
-						return
-					}
-				}
-			}
-			if event.Type == "response.failed" {
-				failed = true
-				err := fmt.Errorf("responses: response failed")
-				if event.Response != nil && event.Response.Error != nil {
-					if authErr := authErrorFromResponse(c, event.Response.Error); authErr != nil {
-						err = authErr
-					} else {
-						err = fmt.Errorf("responses: %s", event.Response.Error.Message)
-					}
-				}
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err}) {
-					return
-				}
-			}
-		}
-		if terminal {
-			break
-		}
-	}
-
-	if ctx.Err() != nil {
-		return
-	}
-	if err := scanner.Err(); err != nil {
-		var reason string
-		if stalled.Load() {
-			err = fmt.Errorf("responses: stream idle timeout after %s", idle)
-			reason = provider.StreamInterruptIdleTimeout
-		} else {
-			reason = provider.ClassifyStreamInterrupt(err)
-		}
-		_ = sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: provider.StreamInterrupt(err, reason)})
-		return
-	}
-	// Protocol-defined terminal response events are required. Connection close
-	// before a terminal event leaves the attempt uncommitted — including any
-	// complete tool calls already forwarded as speculative output.
-	if !terminal {
-		_ = sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: provider.StreamInterrupt(io.ErrUnexpectedEOF, provider.StreamInterruptPrematureEOF)})
-		return
-	}
-	if completedResponseID != "" {
-		assistant := provider.Message{Role: provider.RoleAssistant, Content: text.String(), ReasoningContent: reasoning.String(), ReasoningID: reasoningID, ReasoningStatus: reasoningStatus, ResponsesItems: responsesItems}
-		for _, itemID := range callOrder {
-			call := calls[itemID]
-			if call.completed {
-				assistant.ToolCalls = append(assistant.ToolCalls, provider.ToolCall{ID: call.id, Name: call.name, Arguments: call.arguments})
-			}
-		}
-		expected := append(append([]provider.Message(nil), requestMessages...), assistant)
-		c.mu.Lock()
-		c.lastResponseID = completedResponseID
-		c.expectedPrefixDigest = c.conversationDigest(expected)
-		c.mu.Unlock()
-	} else {
-		c.ResetContext()
-	}
-	if !failed {
-		// 把 reasoning item 的 id/status 作为元数据 chunk 流给 Agent
-		// （空 Text，随 ChunkReasoning 语义）——Agent 持久化进 session，
-		// 下一轮 input reasoning item 回传 id/status（评审 #7234 第 1 点）。
-		if reasoningID != "" || reasoningStatus != "" {
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, ReasoningID: reasoningID, ReasoningStatus: reasoningStatus}) {
-				return
-			}
-		}
-		_ = sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkDone})
-	}
-}
-
-func sendChunk(ctx context.Context, out chan<- provider.Chunk, chunk provider.Chunk) bool {
-	select {
-	case out <- chunk:
-		return true
-	default:
-	}
-	notifySendChunkEnterBlocking()
-	select {
-	case out <- chunk:
-		return true
-	case <-ctx.Done():
-		return false
-	}
 }
 
 func usageFromResponse(response *sseResponse) *provider.Usage {
@@ -831,26 +514,38 @@ func usageFromResponse(response *sseResponse) *provider.Usage {
 	return &provider.Usage{PromptTokens: u.InputTokens, CompletionTokens: u.OutputTokens, TotalTokens: total, CacheHitTokens: cached, CacheMissTokens: miss, ReasoningTokens: reasoning}
 }
 
+// responsesAuthCodes maps the protocol's credential error codes to the status
+// each stands for. A code outside it is an ordinary stream error: the message
+// beside it is prose, and reading prose is how a classifier starts misfiring.
+var responsesAuthCodes = map[string]int{
+	"invalid_api_key":        http.StatusUnauthorized,
+	"invalid_authentication": http.StatusUnauthorized,
+	"authentication_error":   http.StatusUnauthorized,
+	"permission_denied":      http.StatusForbidden,
+	"account_deactivated":    http.StatusForbidden,
+}
+
 func authErrorFromResponse(c *client, responseError *sseError) error {
 	if responseError == nil {
 		return nil
 	}
-	value := strings.ToLower(responseError.Code + " " + responseError.Message)
-	if !strings.Contains(value, "auth") && !strings.Contains(value, "api key") && !strings.Contains(value, "unauthorized") && !strings.Contains(value, "forbidden") && !strings.Contains(value, "permission") {
+	status, ok := responsesAuthCodes[strings.ToLower(strings.TrimSpace(responseError.Code))]
+	if !ok {
 		return nil
-	}
-	status := http.StatusUnauthorized
-	if strings.Contains(value, "forbidden") || strings.Contains(value, "permission") {
-		status = http.StatusForbidden
 	}
 	return &provider.AuthError{Provider: c.name, KeyEnv: c.keyEnv, KeySource: c.keySource, Status: status, HasKey: c.apiKey() != "", Body: responseError.Message}
 }
 
 type sseEvent struct {
-	Type         string       `json:"type"`
-	Delta        string       `json:"delta"`
-	Text         string       `json:"text"`
-	Arguments    string       `json:"arguments"`
+	Type      string `json:"type"`
+	Delta     string `json:"delta"`
+	Text      string `json:"text"`
+	Refusal   string `json:"refusal"`
+	Arguments string `json:"arguments"`
+	// Code and Message ride the protocol's top-level `error` event, which is
+	// not a response event and carries no response object to read them from.
+	Code         string       `json:"code"`
+	Message      string       `json:"message"`
 	ItemID       string       `json:"item_id"`
 	ContentIndex int          `json:"content_index"`
 	Item         *sseItem     `json:"item"`
