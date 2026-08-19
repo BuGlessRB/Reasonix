@@ -974,7 +974,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	}
 	hookRunner := hook.NewRunner(
 		resolvedHooks, root, hook.NewDefaultSpawner(hookRuntime),
-		func(msg string) { sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg}) },
+		func(n hook.Notice) { sink.Emit(hookNoticeEvent(n)) },
 	)
 	// The `task` tool spawns sub-agents that reuse the parent's provider and
 	// tool registry. Wired here after the built-ins / plugins are loaded so

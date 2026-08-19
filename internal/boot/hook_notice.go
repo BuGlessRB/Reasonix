@@ -1,0 +1,32 @@
+// hook_notice.go — a hook outcome as the notice a frontend renders.
+package boot
+
+import (
+	"reasonix/internal/event"
+	"reasonix/internal/hook"
+)
+
+// hookNoticeEvent maps what a hook did onto the notice contract: a stable code
+// frontends localize by, the English headline they fall back to, and the hook's
+// own words as detail a surface can put behind a disclosure. Flattening all
+// three into Text is what turned a broken hook into one unreadable line.
+func hookNoticeEvent(n hook.Notice) event.Event {
+	return event.Event{
+		Kind:   event.Notice,
+		Level:  event.LevelWarn,
+		Code:   hookNoticeCode(n.Decision),
+		Text:   n.Text,
+		Detail: n.Detail,
+	}
+}
+
+func hookNoticeCode(decision hook.Decision) string {
+	switch decision {
+	case hook.DecisionBlock:
+		return event.NoticeCodeHookBlocked
+	case hook.DecisionError:
+		return event.NoticeCodeHookFailed
+	default:
+		return event.NoticeCodeHookWarned
+	}
+}

@@ -96,7 +96,7 @@ func TestRunnerPreToolUseBlock(t *testing.T) {
 		return SpawnResult{ExitCode: 2, Stderr: "blocked by policy"}
 	}
 	var notified string
-	notify := func(msg string) { notified = msg }
+	notify := func(n Notice) { notified = n.Text + " " + n.Detail }
 	r := NewRunner(hooks, "/tmp", spawner, notify)
 	block, msg := r.PreToolUse(context.Background(), "bash", nil)
 	if !block {
@@ -126,7 +126,7 @@ func TestRunnerPostToolUseWarn(t *testing.T) {
 		return SpawnResult{ExitCode: 1, Stdout: "warning message"}
 	}
 	var notified string
-	notify := func(msg string) { notified = msg }
+	notify := func(n Notice) { notified = n.Text + " " + n.Detail }
 	r := NewRunner(hooks, "/tmp", spawner, notify)
 	r.PostToolUse(context.Background(), "bash", nil, "result")
 	if notified == "" {
@@ -189,7 +189,7 @@ func TestRunnerPermissionRequestWarnOnly(t *testing.T) {
 		return SpawnResult{ExitCode: 2, Stderr: "notification failed"}
 	}
 	var notified string
-	r := NewRunner(hooks, "/tmp", spawner, func(msg string) { notified = msg })
+	r := NewRunner(hooks, "/tmp", spawner, func(n Notice) { notified = n.Text + " " + n.Detail })
 	decision, _ := r.PermissionRequest(context.Background(), "bash", "go test", nil)
 	if decision != nil {
 		t.Errorf("native PermissionRequest hook must stay advisory-only, got decision=%v", *decision)
@@ -330,7 +330,7 @@ func TestRunnerSessionStartWarnsOnInvalidJSON(t *testing.T) {
 		return SpawnResult{ExitCode: 0, Stdout: `{"hookSpecificOutput":`}
 	}
 	var notified string
-	r := NewRunner(hooks, "/tmp", spawner, func(msg string) { notified = msg })
+	r := NewRunner(hooks, "/tmp", spawner, func(n Notice) { notified = n.Text + " " + n.Detail })
 	if got := r.SessionStart(context.Background()); len(got) != 0 {
 		t.Fatalf("SessionStart contexts = %#v, want none", got)
 	}
@@ -572,4 +572,52 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// The reader wrote the command; sixty clipped characters of their own script
+// identify it worse than the label they gave it does. What they cannot know
+// without being told is which hook, what happened, and where it lives.
+func TestDescribeOutcomeNamesTheHookNotItsSource(t *testing.T) {
+	o := Outcome{
+		Hook: ResolvedHook{
+			HookConfig: HookConfig{Command: reportedGuardHook, Description: "block .env reads"},
+			Event:      PreToolUse, Scope: ScopeGlobal, Source: `C:\Users\x\.reasonix\settings.json`,
+		},
+		Decision: DecisionWarn,
+		Stderr:   "'grep' is not recognized as an internal or external command",
+	}
+	n := DescribeOutcome(o)
+
+	if contains(n.Text, "grep") || contains(n.Text, "REASONIX_HOOK_PAYLOAD") {
+		t.Fatalf("headline replays the command: %q", n.Text)
+	}
+	if !contains(n.Text, "block .env reads") {
+		t.Fatalf("headline = %q, want the label its author gave it", n.Text)
+	}
+	if !contains(n.Text, string(ScopeGlobal)) {
+		t.Fatalf("headline = %q, want the scope that says which settings file", n.Text)
+	}
+	for _, want := range []string{"not recognized", reportedGuardHook, `settings.json`} {
+		if !contains(n.Detail, want) {
+			t.Fatalf("detail = %q, want %q in it", n.Detail, want)
+		}
+	}
+	if n.Decision != DecisionWarn {
+		t.Fatalf("decision = %q, want the outcome carried for the caller to map", n.Decision)
+	}
+}
+
+// Without a label the event is the name: an unnamed hook is still identified by
+// what it hooks and which settings file it came from.
+func TestDescribeOutcomeFallsBackToTheEvent(t *testing.T) {
+	n := DescribeOutcome(Outcome{
+		Hook:     ResolvedHook{HookConfig: HookConfig{Command: "guard.sh"}, Event: PreToolUse, Scope: ScopeProject},
+		Decision: DecisionBlock,
+	})
+	if !contains(n.Text, string(PreToolUse)) || !contains(n.Text, string(ScopeProject)) {
+		t.Fatalf("headline = %q, want the event and scope", n.Text)
+	}
+	if contains(n.Text, string(DecisionBlock)) {
+		t.Fatalf("headline = %q, want words rather than the decision enum", n.Text)
+	}
 }

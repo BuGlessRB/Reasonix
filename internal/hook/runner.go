@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,7 +19,7 @@ type Runner struct {
 	hooks     []ResolvedHook
 	cwd       string
 	spawner   Spawner
-	notify    func(string) // surface a non-blocking (warn/error) hook message; may be nil
+	notify    func(Notice) // surface a non-pass hook outcome; may be nil
 	mu        sync.RWMutex
 	sessionID string
 	// lastOutcome holds the message each hook reported last, so a repeat of the
@@ -47,7 +48,7 @@ func (r *Runner) payload(event Event) Payload {
 
 // NewRunner builds a Runner. spawner nil uses DefaultSpawner; notify nil drops
 // non-blocking messages.
-func NewRunner(hooks []ResolvedHook, cwd string, spawner Spawner, notify func(string)) *Runner {
+func NewRunner(hooks []ResolvedHook, cwd string, spawner Spawner, notify func(Notice)) *Runner {
 	return &Runner{hooks: hooks, cwd: cwd, spawner: spawner, notify: notify}
 }
 
@@ -352,7 +353,7 @@ func (r *Runner) additionalContexts(rep Report) []string {
 		out, warnings := ParseOutput(rep.Event, o.Stdout)
 		for _, warning := range warnings {
 			if r.notify != nil {
-				r.notify(FormatOutcome(Outcome{
+				r.notify(DescribeOutcome(Outcome{
 					Hook:     o.Hook,
 					Decision: DecisionWarn,
 					Stdout:   warning,
@@ -374,12 +375,13 @@ func (r *Runner) handle(rep Report) (bool, string) {
 		if o.Decision == DecisionPass {
 			continue
 		}
+		n := DescribeOutcome(o)
 		msg := FormatOutcome(o)
 		// A block always surfaces: it is how the user learns why the turn stopped.
 		// A repeat does not — a hook broken on this host says the same thing
 		// before every tool call, and the second copy adds nothing.
 		if r.notify != nil && (o.Decision == DecisionBlock || r.outcomeChanged(o, msg)) {
-			r.notify(msg)
+			r.notify(n)
 		}
 		if o.Decision == DecisionBlock {
 			blockMsg = msg
@@ -402,27 +404,77 @@ func (r *Runner) outcomeChanged(o Outcome, msg string) bool {
 	return !seen || previous != msg
 }
 
-// FormatOutcome renders a non-pass outcome as a one-line human message.
+// Notice is one outcome as a surface renders it: a headline naming the hook, the
+// detail behind it, and a stable code for frontends that localize. The parts
+// stay apart because the surfaces differ — a card puts the detail under the
+// headline, a terminal puts it on the next line.
+type Notice struct {
+	// Decision is carried rather than a notice code: this package knows what a
+	// hook did, and the frontends' own vocabulary for saying so is theirs.
+	Decision Decision
+	Text     string
+	Detail   string
+}
+
+// DescribeOutcome turns a non-pass outcome into what a person needs: which hook,
+// what happened to it, and its own words underneath. The command is not the
+// headline — the reader wrote it, and sixty clipped characters of their own
+// script identify it worse than the event and the label they gave it do.
+func DescribeOutcome(o Outcome) Notice {
+	return Notice{Decision: o.Decision, Text: outcomeHeadline(o), Detail: outcomeDetail(o)}
+}
+
+// outcomeHeadline is English by contract: frontends localize by Code and fall
+// back to this. It names the hook by the label its author gave it, and by the
+// event and scope when they gave it none.
+func outcomeHeadline(o Outcome) string {
+	name := strings.TrimSpace(o.Hook.Description)
+	if name == "" {
+		name = string(o.Hook.Event)
+	}
+	where := string(o.Hook.Scope)
+	switch {
+	case o.TimedOut:
+		return fmt.Sprintf("%s hook (%s) ran out of time", name, where)
+	case o.Decision == DecisionBlock:
+		return fmt.Sprintf("%s hook (%s) stopped this call", name, where)
+	case o.Decision == DecisionError:
+		return fmt.Sprintf("%s hook (%s) could not run", name, where)
+	default:
+		return fmt.Sprintf("%s hook (%s) reported a problem", name, where)
+	}
+}
+
+// outcomeDetail leads with the hook's own words, then names the command that
+// produced them. The command is whole here: this is the place a reader goes
+// looking for it, and a clipped one sends them to the settings file anyway.
+func outcomeDetail(o Outcome) string {
+	var parts []string
+	if said := strings.TrimSpace(cmp.Or(o.Stderr, o.Stdout)); said != "" {
+		if o.Truncated {
+			said += " (output truncated)"
+		}
+		parts = append(parts, said)
+	}
+	if cmd := strings.TrimSpace(o.Hook.Command); cmd != "" {
+		parts = append(parts, "command: "+cmd)
+	} else if o.Hook.ContextFile != "" {
+		parts = append(parts, "context: "+o.Hook.ContextFile)
+	}
+	if src := strings.TrimSpace(o.Hook.Source); src != "" {
+		parts = append(parts, "source: "+src)
+	}
+	return strings.Join(parts, "\n")
+}
+
+// FormatOutcome renders a non-pass outcome as one line, for surfaces that have
+// only one. It is the same words as the Notice, joined.
 func FormatOutcome(o Outcome) string {
-	detail := strings.TrimSpace(o.Stderr)
-	if detail == "" {
-		detail = strings.TrimSpace(o.Stdout)
+	n := DescribeOutcome(o)
+	if n.Detail == "" {
+		return n.Text
 	}
-	tag := string(o.Hook.Scope) + "/" + string(o.Hook.Event)
-	cmd := o.Hook.Command
-	if cmd == "" && o.Hook.ContextFile != "" {
-		cmd = "context:" + o.Hook.ContextFile
-	}
-	cmd = clipRunes(cmd, 60)
-	trunc := ""
-	if o.Truncated {
-		trunc = " (output truncated)"
-	}
-	head := fmt.Sprintf("hook [%s] %s — %s%s", tag, cmd, o.Decision, trunc)
-	if detail != "" {
-		return head + ": " + detail
-	}
-	return head
+	return n.Text + " — " + strings.ReplaceAll(n.Detail, "\n", " · ")
 }
 
 func clipRunes(s string, max int) string {

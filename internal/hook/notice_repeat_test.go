@@ -9,7 +9,7 @@ import (
 // this host reports the same failure forever. The user needs to see it once.
 func TestRepeatedHookWarningSurfacesOnce(t *testing.T) {
 	var notices []string
-	r := NewRunner(nil, t.TempDir(), nil, func(msg string) { notices = append(notices, msg) })
+	r := NewRunner(nil, t.TempDir(), nil, func(n Notice) { notices = append(notices, n.Text+" "+n.Detail) })
 	broken := Outcome{
 		Hook:     ResolvedHook{HookConfig: HookConfig{Command: reportedGuardHook}, Event: PreToolUse, Scope: ScopeGlobal},
 		Decision: DecisionWarn,
@@ -45,7 +45,7 @@ func TestRepeatedHookWarningSurfacesOnce(t *testing.T) {
 // Two different hooks failing the same way are two separate problems.
 func TestRepeatSuppressionIsPerHook(t *testing.T) {
 	var notices []string
-	r := NewRunner(nil, t.TempDir(), nil, func(msg string) { notices = append(notices, msg) })
+	r := NewRunner(nil, t.TempDir(), nil, func(n Notice) { notices = append(notices, n.Text+" "+n.Detail) })
 	for _, command := range []string{"first.sh", "second.sh"} {
 		r.handle(Report{Outcomes: []Outcome{{
 			Hook:     ResolvedHook{HookConfig: HookConfig{Command: command}, Event: PreToolUse, Scope: ScopeGlobal},
@@ -67,7 +67,7 @@ func TestRepeatSuppressionIsPerHook(t *testing.T) {
 // against the new configuration, not the old one's history.
 func TestReplaceClearsRepeatSuppression(t *testing.T) {
 	var notices []string
-	r := NewRunner(nil, t.TempDir(), nil, func(msg string) { notices = append(notices, msg) })
+	r := NewRunner(nil, t.TempDir(), nil, func(n Notice) { notices = append(notices, n.Text+" "+n.Detail) })
 	outcome := Outcome{
 		Hook:     ResolvedHook{HookConfig: HookConfig{Command: "guard.sh"}, Event: PreToolUse, Scope: ScopeGlobal},
 		Decision: DecisionWarn,
