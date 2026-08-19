@@ -21,6 +21,10 @@ type Runner struct {
 	notify    func(string) // surface a non-blocking (warn/error) hook message; may be nil
 	mu        sync.RWMutex
 	sessionID string
+	// lastOutcome holds the message each hook reported last, so a repeat of the
+	// same one is not surfaced again. Keyed by hook, so it is bounded by the
+	// configured hook count rather than by how often they run.
+	lastOutcome map[string]string
 }
 
 // SetSessionID updates the Claude-compatible session identifier used in hook
@@ -59,6 +63,9 @@ func (r *Runner) Replace(hooks []ResolvedHook) {
 	}
 	r.mu.Lock()
 	r.hooks = hooks
+	// Edited hooks report from a clean slate: a message suppressed as a repeat
+	// of the old configuration says something new about the new one.
+	r.lastOutcome = nil
 	r.mu.Unlock()
 }
 
@@ -368,7 +375,10 @@ func (r *Runner) handle(rep Report) (bool, string) {
 			continue
 		}
 		msg := FormatOutcome(o)
-		if r.notify != nil {
+		// A block always surfaces: it is how the user learns why the turn stopped.
+		// A repeat does not — a hook broken on this host says the same thing
+		// before every tool call, and the second copy adds nothing.
+		if r.notify != nil && (o.Decision == DecisionBlock || r.outcomeChanged(o, msg)) {
 			r.notify(msg)
 		}
 		if o.Decision == DecisionBlock {
@@ -376,6 +386,20 @@ func (r *Runner) handle(rep Report) (bool, string) {
 		}
 	}
 	return rep.Blocked, blockMsg
+}
+
+// outcomeChanged reports whether this hook is saying something different from
+// what it said last time, recording the message either way.
+func (r *Runner) outcomeChanged(o Outcome, msg string) bool {
+	key := strings.Join([]string{string(o.Hook.Scope), string(o.Hook.Event), o.Hook.Source, o.Hook.Command}, "\x00")
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.lastOutcome == nil {
+		r.lastOutcome = map[string]string{}
+	}
+	previous, seen := r.lastOutcome[key]
+	r.lastOutcome[key] = msg
+	return !seen || previous != msg
 }
 
 // FormatOutcome renders a non-pass outcome as a one-line human message.
