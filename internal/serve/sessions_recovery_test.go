@@ -11,9 +11,10 @@ import (
 	"reasonix/internal/provider"
 )
 
-// Each fork carries a different prefix of the parent: still covered by it, so
-// the sweep may reclaim them, but distinct, because two conflicts holding the
-// identical transcript now share one branch rather than making two files.
+// Each fork carries a different prefix of the parent, so both stay covered by
+// it and the sweep may reclaim either. They land in separate files because one
+// writer's branch is only taken over by a save that keeps every turn already
+// in it: the shorter fork cannot, so it gets a lane of its own.
 func recoveryFork(t *testing.T, root string, messages ...string) string {
 	t.Helper()
 	fork := agent.NewSession("sys")
@@ -38,8 +39,10 @@ func TestSweepRecoveryBranchesTrashesCoveredForks(t *testing.T) {
 	dir := t.TempDir()
 	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
 	saveVisibilitySession(t, root, "今日热点", "好的")
-	covered := recoveryFork(t, root, "今日热点")
+	// The fork the session is still on is written first: the shorter one that
+	// follows drops out of its lane rather than truncating it.
 	open := recoveryFork(t, root, "今日热点", "好的")
+	covered := recoveryFork(t, root, "今日热点")
 
 	ctrl := control.New(control.Options{SessionDir: dir})
 	defer ctrl.Close()

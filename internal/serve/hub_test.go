@@ -270,11 +270,15 @@ func TestHubTreeFoldsRecoveryCopiesIntoTheirConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Three panes that resumed the same conversation and each took it somewhere
+	// else. A branch is taken over only by a save that keeps every turn already
+	// in it, so transcripts that diverge cannot share one — the pile to fold.
+	base := live.Snapshot()
 	parent := origin
 	var copies []string
 	for turn := range 3 {
 		conflicted := agent.NewSession("sys")
-		for _, m := range live.Snapshot() {
+		for _, m := range base {
 			if m.Role != provider.RoleSystem {
 				conflicted.Add(m)
 			}
@@ -287,7 +291,6 @@ func TestHubTreeFoldsRecoveryCopiesIntoTheirConversation(t *testing.T) {
 		}
 		copies = append(copies, info.Path)
 		parent = info.Path
-		live = conflicted
 	}
 
 	srv := httptest.NewServer(h.Handler())

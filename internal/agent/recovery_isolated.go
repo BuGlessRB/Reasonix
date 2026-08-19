@@ -41,10 +41,10 @@ func fixedWriterRecoverySessionPath(originalPath string) string {
 }
 
 // siblingRecoveryBranchWithDigest finds a recovery branch of the same parent
-// already holding exactly this content. Lanes are per live Session, so a resume
-// or a runtime rebuild starts a new one and the same unsaved turns land in file
-// after file — a sidebar of identical rows. Digests come from branch metadata,
-// so this reads sidecars, not transcripts.
+// already holding exactly this content. One writer keeps one lane, but another
+// writer — or a lane rotated off a transcript it could not keep — can hold the
+// same unsaved turns, and identical rows are worth one file. Digests come from
+// branch metadata, so this reads sidecars, not transcripts.
 func siblingRecoveryBranchWithDigest(originalPath, digestText string) (string, bool) {
 	if strings.TrimSpace(digestText) == "" {
 		return "", false
