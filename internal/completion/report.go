@@ -328,7 +328,10 @@ func gapsOf(rep Report, c *taskcontract.Contract) []Gap {
 	// Only report the blanket gap when no declared check already said it: a
 	// contract with checks states the same absence in more specific words.
 	if rep.Mutations > 0 && !proven && !missingCheck {
-		gaps = append(gaps, Gap{GapUnverifiedChange, "no verification passed after the latest change"})
+		// No detail: the kind's own phrase already says this in the reader's
+		// language, and both surfaces render phrase and detail side by side —
+		// restating it shipped a row that said the same thing twice.
+		gaps = append(gaps, Gap{Kind: GapUnverifiedChange})
 	}
 	for _, ch := range rep.Changes {
 		// Same rule the gaps above follow: once something fresh has proven the
