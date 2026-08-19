@@ -3845,9 +3845,6 @@ func snapshotConflictLogAttrs(saveErr error, path, mode string) []any {
 			"snapshot_messages", conflict.SnapshotMessages,
 			"base_revision", conflict.BaseRevision,
 			"disk_revision", conflict.DiskRevision,
-			"diverged_at", conflict.DivergedAt,
-			"disk_role", conflict.DiskRole,
-			"snapshot_role", conflict.SnapshotRole,
 		)
 	}
 	return attrs
