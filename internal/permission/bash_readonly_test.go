@@ -220,3 +220,33 @@ func TestBashPipelineReadOnly(t *testing.T) {
 		})
 	}
 }
+
+// `;` chains commands the way `&&` and `|` do, but only the operators marked a
+// statement compound, so `a; b` fell between the single-command classifier and
+// the compound one and every chain counted as a write.
+func TestSemicolonChainIsReadOnlyWhenEveryLeafIs(t *testing.T) {
+	for _, tc := range []struct {
+		cmd  string
+		want bool
+	}{
+		{`echo hi; pwd`, true},
+		{`printenv GOROOT; printenv GOTOOLCHAIN`, true},
+		{`which -a go; go env GOROOT`, true},
+		{`cat a.txt; ls`, true},
+		{`cd /tmp; ls`, true},
+
+		{`ls; rm -rf /tmp/x`, false},           // a writer leaf
+		{`echo hi; go build ./...`, false},     // go build writes
+		{`pwd; python3 -c "import os"`, false}, // inline code
+		{`ls > out.txt; pwd`, false},           // the redirect creates a file
+		{`ls; $CMD`, false},                    // the program itself is dynamic
+	} {
+		args, err := json.Marshal(map[string]string{"command": tc.cmd})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := BashCommandIsReadOnly(args); got != tc.want {
+			t.Errorf("%q read-only = %v, want %v", tc.cmd, got, tc.want)
+		}
+	}
+}

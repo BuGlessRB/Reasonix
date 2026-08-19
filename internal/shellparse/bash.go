@@ -635,7 +635,10 @@ func CompoundLeafCommands(command string) (leaves [][]string, ok bool) {
 	if err != nil || len(file.Stmts) == 0 {
 		return nil, false
 	}
-	readable, compound := true, false
+	// `;`-separated statements are several commands too. Only the chaining
+	// operators used to set this, so a plain `a; b` fell between the
+	// single-command classifier and this one and counted as a write.
+	readable, compound := true, len(file.Stmts) > 1
 	syntax.Walk(file, func(node syntax.Node) bool {
 		if !readable || node == nil {
 			return false
