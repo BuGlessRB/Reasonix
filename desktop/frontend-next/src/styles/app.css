@@ -3233,6 +3233,18 @@
   .app[data-run="halt"] .sessrow[data-on] .pip { background: var(--accent); opacity: 1 }
   .sesstitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .sessmeta { flex: none; font: 400 10px var(--mono); color: var(--ghost) }
+  /* 冲突副本折进它来自的那条对话。计数常驻（不像改名/删除只在 hover 出现）：
+     它是「这里发生过什么」的唯一提示，藏起来就等于没有。 */
+  .sesscopies {
+    flex: none; padding: 0 5px; height: 15px;
+    border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: transparent; color: var(--ghost); cursor: pointer;
+    font: 400 9px var(--mono);
+  }
+  .sesscopies:hover { border-color: var(--warn); color: var(--warn) }
+  .sesscopies[aria-expanded="true"] { border-color: var(--warn); color: var(--warn) }
+  .sessrow.sesscopy { padding-left: 34px }
+  .sessrow.sesscopy .sesstitle { color: var(--ghost); font-style: italic }
   .sessrow .wsdel, .sessrow .sessedit-btn { opacity: 0 }
   .sessrow:hover .wsdel, .sessrow:hover .sessedit-btn,
   .sessrow .wsdel:focus-visible, .sessrow .sessedit-btn:focus-visible { opacity: 1 }
