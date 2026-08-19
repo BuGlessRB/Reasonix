@@ -181,7 +181,9 @@ export function Gutter({ edge, span, width, label, open, onWidth, onOpen }: Prop
     >
       {/* The one control for both directions, sitting where the hand already is.
           Not a tab stop of its own — Enter on the separator does the same thing,
-          and a second stop per divider buys nothing. */}
+          and a second stop per divider buys nothing. Two marks, cross-faded: the
+          divider's own gesture is dragging, so at rest it shows a handle, and
+          the arrow — what a click would do — arrives with the hand. */}
       <button
         className="grip"
         tabIndex={-1}
@@ -190,7 +192,8 @@ export function Gutter({ edge, span, width, label, open, onWidth, onOpen }: Prop
         onPointerDown={(e) => e.stopPropagation()}
         onClick={toggle}
       >
-        {(edge === "l") === open ? "‹" : "›"}
+        <i className="knurl" aria-hidden="true" />
+        <span className="dir" aria-hidden="true">{(edge === "l") === open ? "‹" : "›"}</span>
       </button>
     </div>
   );

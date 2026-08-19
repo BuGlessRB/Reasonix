@@ -265,7 +265,6 @@ export function App({ hub }: { hub: HubPort }) {
       return next;
     });
   }, []);
-  const foldRail = useCallback(() => setRail(false), []);
 
   const onRailW = useCallback((w: number) => {
     setRailW(w);
@@ -438,7 +437,6 @@ export function App({ hub }: { hub: HubPort }) {
             onFocus={focusPane}
             onClose={closePanes}
             liveIds={liveIds}
-            onCollapse={foldRail}
             onRename={renameSession}
             onError={fail}
           />

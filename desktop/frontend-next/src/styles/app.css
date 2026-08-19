@@ -467,14 +467,15 @@
   .rail, .side { transition: opacity .2s var(--ease-out) .05s }
   [data-rail="off"] .rail, [data-side="off"] .side { opacity: 0; transition: opacity .12s var(--ease-in) }
 
-  /* 折叠控件长在它控制的面板上，hover 才浮现，不常驻占视觉预算 */
-  .collapse {
+  /* 收起一栏是分隔条上那个把手的事。这个按钮只在栏横过来的那一档存在 ——
+     那时没有缝可抓，它是唯一的出口。别处出现就成了同一个开关的第二个按钮。 */
+  .collapse { display: none }
+  [data-fold~="side"] .side .collapse {
     display: grid; place-items: center; width: 19px; height: 19px; flex: none;
     border: 0; border-radius: var(--r-xs); background: transparent; color: var(--ghost);
-    font: 400 12px/1 var(--mono); cursor: pointer; opacity: 0;
-    transition: opacity .16s, background .14s, color .14s;
+    font: 400 12px/1 var(--mono); cursor: pointer;
+    transition: background .14s, color .14s;
   }
-  .rail:hover .collapse, .side:hover .collapse, .collapse:focus-visible { opacity: 1 }
   .collapse:hover { background: var(--overlay); color: var(--text) }
   .collapse:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
@@ -485,8 +486,11 @@
     position: absolute; top: 0; bottom: 0; width: 11px; z-index: 5;
     cursor: col-resize; touch-action: none;
   }
-  .gutter-l { left: -5px }
-  .gutter-r { right: -5px }
+  /* -6 not -5: the panel's own 1px border sits outside this box, so the seam's
+     centre is half a pixel further out than the column edge. At a hairline the
+     miss did not show; with a mark standing on the seam it does. */
+  .gutter-l { left: -6px }
+  .gutter-r { right: -6px }
   .gutter::after {
     content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px;
     background: var(--faint); opacity: 0;
@@ -504,32 +508,42 @@
   .gutter[data-edge]::after { animation: edgebump .22s var(--ease-out) }
   @keyframes edgebump { 0%, 100% { transform: none } 40% { transform: translateX(var(--bump, 0px)) } }
   .gutter:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; border-radius: var(--r-xs) }
-  /* One switch deserves one vocabulary. The grip lives on the divider — where the
-     hand already is — and serves both directions. Open, it surfaces on hover and
-     spends no standing visual budget; closed, it stays put, because then it is
-     the way back. */
+  /* One switch, one shape, three weights. The grip lives on the divider — where
+     the hand already is — and serves both directions; what changes between its
+     states is only how much it asserts itself, and that tracks how much it is
+     needed. Shut, it is the only way back and looks like it. */
   .gutter[data-shut] { width: 14px }
   [data-rail="off"] .gutter-l { left: 0 }
   [data-side="off"] .gutter-r { right: 0 }
   .grip {
-    position: absolute; top: 50%; left: 50%; margin: -14px 0 0 -7px; z-index: 1;
-    width: 14px; height: 28px; padding: 0; display: grid; place-items: center;
+    position: absolute; top: 50%; left: 50%; margin: -13px 0 0 -7px; z-index: 1;
+    width: 14px; height: 26px; padding: 0; display: grid; place-items: center;
     border: 1px solid transparent; border-radius: var(--r-pill);
-    background: transparent; color: var(--ghost);
-    font: 400 10px/1 var(--mono); cursor: pointer; opacity: .45;
-    transition: opacity .16s, color .14s, background .14s, border-color .14s;
+    background: transparent; color: var(--faint);
+    font: 400 10px/1 var(--mono); cursor: pointer;
+    transition: color .14s, background .14s, border-color .14s, box-shadow .18s;
   }
-  /* Quiet, but never absent. A control that is fully transparent until you happen
-     to hover the right 11px does not read as restraint — it reads as a seam that
-     does nothing. The hairline says where the boundary is; this says it is a
-     control. Chrome only arrives on hover, so the standing cost is one glyph. */
-  .gutter:hover .grip, .gutter:focus-visible .grip, .gutter[data-on] .grip { opacity: 1 }
-  .grip:hover { color: var(--text); background: var(--overlay); border-color: var(--border) }
+  .grip > * { grid-area: 1 / 1; transition: opacity .14s var(--ease-out) }
+  /* Three dots on the seam, at a weight that survives a glance. The previous
+     resting state was one chevron at 45% — invisible until hovered, which is
+     not restraint but a seam that appears to do nothing. Dots rather than an
+     arrow because the divider's own gesture is dragging: this says "grab me",
+     and the arrow that says "click me" waits until the hand is here. */
+  .knurl { width: 2px; height: 16px; border-radius: 1px; background: currentColor }
+  .dir { opacity: 0 }
+  .gutter:hover .grip, .gutter:focus-visible .grip, .gutter[data-on] .grip {
+    color: var(--text); background: var(--raised); border-color: var(--border);
+    box-shadow: 0 2px 9px -4px rgb(0 0 0 / .35);
+  }
+  .gutter:hover .knurl, .gutter:focus-visible .knurl, .gutter[data-on] .knurl { opacity: 0 }
+  .gutter:hover .dir, .gutter:focus-visible .dir, .gutter[data-on] .dir { opacity: 1 }
+  /* Shut, there is no seam left to drag and only one thing to say. */
   .gutter[data-shut] .grip {
-    opacity: 1; color: var(--faint);
-    background: var(--raised); border-color: var(--border);
+    color: var(--faint); background: var(--raised); border-color: var(--border);
     box-shadow: 0 2px 9px -3px rgb(0 0 0 / .4);
   }
+  .gutter[data-shut] .knurl { opacity: 0 }
+  .gutter[data-shut] .dir { opacity: 1 }
   .gutter[data-shut] .grip:hover { color: var(--text); background: var(--overlay) }
 
 

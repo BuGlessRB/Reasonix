@@ -20,7 +20,6 @@ interface Props {
   // Which of these panes are mid-turn. A callback rather than a prop: run state
   // changes constantly and this is only ever asked at confirmation time.
   liveIds: (ids: string[]) => string[];
-  onCollapse: () => void;
   onRename: (path: string, title: string) => void;
   onError: (e: unknown) => void;
 }
@@ -31,7 +30,7 @@ interface Props {
 // nodes in the sidebar — more than the transcript at 20000 turns.
 const SHOWN = 30;
 
-function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, onCollapse, onRename, onError }: Props) {
+function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, onRename, onError }: Props) {
   const [busy, setBusy] = useState("");
   const [confirm, setConfirm] = useState("");
   const [typing, setTyping] = useState(false);
@@ -158,9 +157,6 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
         <div className="lbl">
           {t("工作区")}<span className="c">{tree.length}</span>
         </div>
-        <button className="collapse" onClick={onCollapse} title={t("收起工作区栏")} aria-label={t("收起工作区栏")}>
-          ‹
-        </button>
       </div>
 
       <div className="scroll">
