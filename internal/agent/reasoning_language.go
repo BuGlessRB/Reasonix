@@ -93,7 +93,7 @@ func InferReasoningLanguageFromText(source string) string {
 	switch {
 	case han >= 4:
 		return "zh"
-	case han >= 2 && (cjkPunct > 0 || hasChineseReasoningCue(source)):
+	case han >= 2 && (cjkPunct > 0 || opensInHan(source)):
 		return "zh"
 	default:
 		return "auto"
@@ -154,20 +154,19 @@ func isCJKPunctuation(r rune) bool {
 	}
 }
 
-func hasChineseReasoningCue(source string) bool {
-	for _, cue := range chineseReasoningLanguageCues {
-		if strings.Contains(source, cue) {
-			return true
+// opensInHan reports whether the first character that carries meaning is Han.
+// In the ambiguous band it separates a Chinese request that names Latin
+// identifiers ("看下 parser.go") from an English one that quotes a Chinese term
+// ("Add a 中文 test") — which a list of common Chinese words cannot do, because
+// the quoted term is usually on it.
+func opensInHan(source string) bool {
+	for _, r := range source {
+		if unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsSymbol(r) || unicode.IsDigit(r) {
+			continue
 		}
+		return unicode.In(r, unicode.Han)
 	}
 	return false
-}
-
-var chineseReasoningLanguageCues = []string{
-	"你好", "请", "帮我", "帮忙", "看看", "看下", "解释", "说明", "总结", "分析",
-	"修复", "实现", "优化", "排查", "处理", "继续", "为什么", "怎么",
-	"是否", "能否", "支持", "设置", "中文", "思考", "问题", "报错",
-	"代码", "文件", "这个", "那个",
 }
 
 func reasoningLanguageBlockForSource(lang, source string) string {

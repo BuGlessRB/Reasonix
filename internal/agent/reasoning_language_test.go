@@ -81,3 +81,25 @@ func TestWithReasoningLanguageAutoUsesRawSourceOverReferencedContext(t *testing.
 		t.Fatalf("referenced English code should not make auto prefer English:\n%s", got)
 	}
 }
+
+// The retired cue list held 30 common Chinese words, so an English request that
+// merely named one of them switched the visible reasoning to Chinese. What
+// separates the two is which script opens the request.
+func TestAmbiguousBandReadsTheOpeningScript(t *testing.T) {
+	chinese := []string{"看下 parser.go", "修复 parser", "帮我 review", "优化 build.sh"}
+	for _, in := range chinese {
+		if got := InferReasoningLanguageFromText(in); got != "zh" {
+			t.Errorf("%q = %s, want zh", in, got)
+		}
+	}
+	english := []string{"Add a 中文 test", "grep for 问题 in the logs", "rename 代码 to code", "Document the 设置 flag"}
+	for _, in := range english {
+		if got := InferReasoningLanguageFromText(in); got != "auto" {
+			t.Errorf("%q = %s, want auto: naming a Chinese term is not writing in Chinese", in, got)
+		}
+	}
+	// Above the band the script count decides on its own, opening script or not.
+	if got := InferReasoningLanguageFromText("PR #123 修复了什么问题"); got != "zh" {
+		t.Errorf("clear Chinese = %s, want zh", got)
+	}
+}
