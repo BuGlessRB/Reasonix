@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 
 	"reasonix/internal/provider"
@@ -106,5 +109,70 @@ func TestIdenticalConflictContentReusesOneBranch(t *testing.T) {
 	}
 	if first.Path != second.Path {
 		t.Errorf("identical content wrote two branches:\n  %s\n  %s", first.Path, second.Path)
+	}
+}
+
+// conflictRecoveryTick mirrors control.recoverSnapshotConflict: fork while the
+// chain has room, then keep landing in this writer's isolated lane.
+func conflictRecoveryTick(t *testing.T, s *Session, path string) RecoveryBranchInfo {
+	t.Helper()
+	info, err := s.SaveRecoveryBranch(RecoveryBranchOptions{OriginalPath: path})
+	if err == nil {
+		return info
+	}
+	if !errors.Is(err, ErrSessionRecoveryDepthExceeded) {
+		t.Fatalf("recovery tick on %s: %v", filepath.Base(path), err)
+	}
+	info, err = s.SaveConflictRecoveryBranch(RecoveryBranchOptions{OriginalPath: path})
+	if err != nil {
+		t.Fatalf("isolated recovery tick on %s: %v", filepath.Base(path), err)
+	}
+	return info
+}
+
+// The live-turn shape of the fan-out: the canonical file keeps being written
+// from outside while one writer works on, so every tick conflicts over content
+// that grew since the last — identical-digest reuse cannot collapse those, and
+// each tick runs on a new Session. One writer, one lineage, one file. The
+// report behind this test gained a sidebar row every 30s for 25 minutes.
+func TestGrowingConflictsFromOneWriterStayInOneLane(t *testing.T) {
+	dir := t.TempDir()
+	canonical := filepath.Join(dir, "session.jsonl")
+	seed := []provider.Message{
+		{Role: provider.RoleUser, Content: "你好"},
+		{Role: provider.RoleAssistant, Content: "hi"},
+	}
+	rewriteTranscriptOutsideReasonix(t, canonical, seed...)
+
+	live := append([]provider.Message(nil), seed...)
+	target := canonical
+	branches := map[string]bool{}
+	for i := range 8 {
+		live = append(live, provider.Message{Role: provider.RoleAssistant, Content: fmt.Sprintf("turn output %d", i)})
+		session := NewSession("sys")
+		for _, m := range live {
+			session.Add(m)
+		}
+		rewriteTranscriptOutsideReasonix(t, canonical, append(append([]provider.Message(nil), seed...),
+			provider.Message{Role: provider.RoleAssistant, Content: fmt.Sprintf("别处写进来的第 %d 版", i)})...)
+		if err := session.SaveSnapshot(target); err == nil {
+			continue // the branch already holds this writer's work; nothing to fork
+		} else if !errors.Is(err, ErrSessionSnapshotConflict) {
+			t.Fatalf("tick %d: save = %v, want a conflict", i, err)
+		}
+		info := conflictRecoveryTick(t, session, target)
+		branches[info.Path] = true
+		// The controller commits to the branch it just wrote.
+		target = info.Path
+	}
+
+	if len(branches) > 1 {
+		names := make([]string, 0, len(branches))
+		for p := range branches {
+			names = append(names, filepath.Base(p))
+		}
+		sort.Strings(names)
+		t.Errorf("8 conflicts from one writer on one lineage produced %d recovery files, want 1:\n  %s",
+			len(branches), strings.Join(names, "\n  "))
 	}
 }

@@ -119,19 +119,21 @@ func (s *Session) writeRecoveryBranchIsolated(
 }
 
 // isolatedRecoverySessionPath picks where this conflict lands: a sibling that
-// already holds the identical transcript when there is one, otherwise this
-// Session's own lane. The lane is returned either way, so a collision rotates
-// it and the next attempt gets a fresh file.
+// already holds the identical transcript, otherwise this writer's lane. An
+// empty lane means the writer's own, which a resume, a rebuild, or a reopened
+// pane keeps — keying it to the live Session gave each of them a file. The
+// lane is returned either way, so a collision rotates it.
 func (s *Session) isolatedRecoverySessionPath(originalPath, digestText string, taken map[string]bool) (string, string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.recoveryLane == "" {
-		s.recoveryLane = newSessionWriterID()
-	}
+	lane := s.recoveryLane
+	s.mu.Unlock()
 	if sibling, ok := siblingRecoveryBranchWithDigest(originalPath, digestText); ok && !taken[sibling] {
-		return sibling, s.recoveryLane
+		return sibling, lane
 	}
-	return recoverySessionPathForLane(originalPath, s.recoveryLane), s.recoveryLane
+	if lane == "" {
+		return fixedWriterRecoverySessionPath(originalPath), lane
+	}
+	return recoverySessionPathForLane(originalPath, lane), lane
 }
 
 func (s *Session) rotateRecoveryLane(current string) {

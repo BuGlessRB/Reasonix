@@ -9,10 +9,11 @@ import (
 	"reasonix/internal/provider"
 )
 
-// forkChain builds root ← A ← B ← C. Recovery lanes are per live Session, so
-// each reopened pane conflicts into a file of its own, carrying the transcript
-// as of that turn. The root moves on to content no runtime had, so parent
-// coverage never holds for any of them.
+// forkChain builds root ← A ← B ← C: the pile a lane-per-Session build left
+// behind, each file carrying the transcript as of that turn. A live writer now
+// keeps one lane, so the chain is staged with an explicit lane per turn — the
+// GC still has to clean up what is already on disk. The root moves on to
+// content no runtime had, so parent coverage never holds for any of them.
 func forkChain(t *testing.T, dir string) (root string, branches []string) {
 	t.Helper()
 	root = filepath.Join(dir, "session.jsonl")
@@ -41,6 +42,7 @@ func forkChain(t *testing.T, dir string) (root string, branches []string) {
 		}
 		live.Add(provider.Message{Role: provider.RoleUser, Content: "turn"})
 		live.Add(provider.Message{Role: provider.RoleAssistant, Content: "reply"})
+		live.recoveryLane = newSessionWriterID()
 		info, err := live.SaveRecoveryBranch(RecoveryBranchOptions{OriginalPath: parent})
 		if err != nil {
 			t.Fatalf("conflict %d: %v", turn, err)

@@ -35,7 +35,8 @@ func (s *Session) writeRecoveryBranchAtPath(
 	}
 	defer unlockFile()
 	if loaded, loadErr := loadSessionUnlocked(path); loadErr == nil && loaded != nil {
-		existingDigest, digestErr := digestSessionMessages(loaded.Snapshot())
+		existing := loaded.Snapshot()
+		existingDigest, digestErr := digestSessionMessages(existing)
 		if digestErr != nil {
 			return RecoveryBranchInfo{}, false, digestErr
 		}
@@ -48,8 +49,10 @@ func (s *Session) writeRecoveryBranchAtPath(
 			s.markPersisted(path, digest, version, meta.Revision, rewriteVersion)
 			return RecoveryBranchInfo{Path: path, Digest: digestText, Existing: true, Meta: meta, Preview: preview, Turns: turns}, false, nil
 		}
-		state := s.persistState(path)
-		if !state.ok || !bytes.Equal(state.digest[:], existingDigest[:]) {
+		// Taking over a branch is safe exactly when it holds an ancestor of
+		// this save: the rewrite keeps every turn already there. Asking who
+		// wrote it instead rotated the lane on every tick of a growing turn.
+		if !messagesHavePrefix(msgs, existing) && !messagesHavePrefixWithCompatibleSystem(msgs, existing) {
 			return RecoveryBranchInfo{}, true, nil
 		}
 	} else if loadErr != nil && !os.IsNotExist(loadErr) {
