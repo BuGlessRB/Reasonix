@@ -30,7 +30,6 @@ import (
 	"reasonix/internal/command"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
-	"reasonix/internal/environment"
 	"reasonix/internal/event"
 	"reasonix/internal/extension"
 	"reasonix/internal/extension/dispatch"
@@ -42,13 +41,10 @@ import (
 	"reasonix/internal/guardian"
 	"reasonix/internal/history"
 	"reasonix/internal/hook"
-	"reasonix/internal/installsource"
-	"reasonix/internal/jobs"
 	"reasonix/internal/lsp"
 	"reasonix/internal/mcplaunch"
 	"reasonix/internal/memory"
 	"reasonix/internal/netclient"
-	"reasonix/internal/outputstyle"
 	"reasonix/internal/permission"
 	"reasonix/internal/plugin"
 	"reasonix/internal/pluginspec"
@@ -64,7 +60,6 @@ import (
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
 	"reasonix/internal/tool/sessiontool"
-	"reasonix/internal/workspacelease"
 )
 
 // ErrUnknownModel is returned by Build when the configured model can't be
@@ -309,7 +304,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	extWarn := func(msg string) {
 		redacted := secrets.RedactCredentials(msg)
 		slog.Warn("boot: extension runtime: "+redacted, "root", root)
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: redacted})
+		report(sink, event.Event{Level: event.LevelWarn, Text: redacted})
 	}
 	// Stage 8a: the host extension UI hub serves every sidecar's host/ui/* calls
 	// for this generation — publications become frontend events through the
@@ -420,8 +415,6 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		agentPreset = AgentPresetFromTokenMode(opts.TokenMode)
 	}
 	agentPreset = NormalizeAgentPreset(agentPreset)
-	// tokenMode is dual-write compatibility only; policy uses agentPreset.
-	tokenMode := TokenModeFromAgentPreset(agentPreset)
 	tokenDelivery := agentPreset == AgentPresetDelivery
 	runtimeProfile := capability.ProfileBalanced
 	if agentPreset == AgentPresetDelivery {
@@ -456,9 +449,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	}
 
 	if migErr != nil {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Config migration did not complete.", Detail: "config migration from ~/.reasonix failed: " + migErr.Error()})
+		report(sink, event.Event{Level: event.LevelWarn, Text: "Config migration did not complete.", Detail: "config migration from ~/.reasonix failed: " + migErr.Error()})
 	} else if migrated != nil {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: migrated.Notice()})
+		report(sink, event.Event{Level: event.LevelInfo, Text: migrated.Notice()})
 	}
 	if deepSeekProtocolMigrated {
 		sink.Emit(event.Event{
@@ -492,7 +485,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			Detail: detail,
 		})
 	} else if stepLimitMigErr != nil {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Deprecated agent step-limit migration did not complete.", Detail: stepLimitMigErr.Error()})
+		report(sink, event.Event{Level: event.LevelWarn, Text: "Deprecated agent step-limit migration did not complete.", Detail: stepLimitMigErr.Error()})
 	}
 	if redactToolOutputMigrated || redactToolOutputMigErr != nil {
 		level := event.LevelInfo
@@ -503,7 +496,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			text = "Deprecated redact_tool_output setting was ignored."
 			detail += " The old key could not be removed: " + redactToolOutputMigErr.Error()
 		}
-		sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: text, Detail: detail})
+		report(sink, event.Event{Level: level, Text: text, Detail: detail})
 	}
 	if memoryCompilerMigrated || memoryCompilerMigErr != nil {
 		level := event.LevelInfo
@@ -514,7 +507,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			text = "Deprecated memory_compiler setting was ignored."
 			detail += " The old key could not be removed: " + memoryCompilerMigErr.Error()
 		}
-		sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: text, Detail: detail})
+		report(sink, event.Event{Level: level, Text: text, Detail: detail})
 	}
 	if multiThresholdMigrated || multiThresholdMigErr != nil {
 		level := event.LevelInfo
@@ -525,52 +518,24 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			text = "Deprecated multi-threshold compaction keys were ignored."
 			detail += " The old keys could not be removed: " + multiThresholdMigErr.Error()
 		}
-		sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: text, Detail: detail})
+		report(sink, event.Event{Level: level, Text: text, Detail: detail})
 	}
 	timer.mark("config")
 	migrateLegacySources(opts, sink)
 	timer.mark("migrations")
 	if ignored := cfg.IgnoredProjectDefaultModel(); ignored != "" {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Ignored the project config's default_model.", Detail: fmt.Sprintf("./reasonix.toml sets default_model = %q but no configured provider serves it; using %q from your user config instead. Edit or remove that default_model line to silence this notice.", ignored, cfg.DefaultModel)})
+		report(sink, event.Event{Level: event.LevelWarn, Text: "Ignored the project config's default_model.", Detail: fmt.Sprintf("./reasonix.toml sets default_model = %q but no configured provider serves it; using %q from your user config instead. Edit or remove that default_model line to silence this notice.", ignored, cfg.DefaultModel)})
 	}
 
 	// A resolvable model whose API key env is unset would otherwise build fine
 	// (RequireKey is false so the UI stays reachable) and then fail silently on the
 	// first request, showing as an empty/dead model. Surface the cause up front.
 	if !opts.RequireKey && entry.RequiresAPIKey() && entry.APIKey() == "" {
-		sink.Emit(event.Event{Kind: event.Notice, Text: "Selected model is missing its API key.", Detail: fmt.Sprintf("model %q is selected but its API key %s is not set — requests will fail until you set it", modelName, entry.APIKeyEnv)})
+		report(sink, event.Event{Text: "Selected model is missing its API key.", Detail: fmt.Sprintf("model %q is selected but its API key %s is not set — requests will fail until you set it", modelName, entry.APIKeyEnv)})
 	}
-	// Every role setting lazily acquires a workspace write lease on the first
-	// real writer. Read-only turns never take the lease.
-	var workspaceLease *workspacelease.Owner
-	jobOptions := []jobs.Option{
-		jobs.WithStalledWarningAfter(time.Duration(cfg.BackgroundJobStalledWarningSeconds()) * time.Second),
-		jobs.WithSessionOwnershipProbe(agent.SessionLeaseHeldByCurrentRuntime),
-	}
-	workspaceLease, err = workspacelease.New(root, config.WorkspaceLeaseDir(), func() {
-		sink.Emit(event.Event{
-			Kind:   event.Notice,
-			Level:  event.LevelInfo,
-			Code:   event.NoticeCodeWorkspaceLease,
-			Text:   "Another session is writing to this workspace; this session will continue automatically when it is safe.",
-			Detail: "workspace write lease is busy; read-only work remains concurrent",
-		})
-	})
+	session, err := startSessionRuntime(opts, cfg, root, sink)
 	if err != nil {
-		return nil, fmt.Errorf("initialize workspace write lease: %w", err)
-	}
-	jobOptions = append(jobOptions, jobs.WithJobStartObserver(workspaceLease.RetainUntil))
-	jm := jobs.NewManager(sink, jobOptions...)
-	sessionDir := opts.SessionDir
-	if sessionDir == "" {
-		sessionDir = config.SessionDir()
-	}
-	reconcileCleanupPending := opts.CleanupPendingReconciler
-	if reconcileCleanupPending == nil {
-		reconcileCleanupPending = control.ReconcileCleanupPending
-	}
-	if err := reconcileCleanupPending(sessionDir); err != nil {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "cleanup-pending reconciliation failed: " + err.Error()})
+		return nil, err
 	}
 	timer.mark("sessions")
 
@@ -590,78 +555,11 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	timer.mark("provider")
 	shell := sandbox.ResolveShell(cfg.Tools.Shell.Prefer, cfg.Tools.Shell.Path, stderr)
 
-	sysPrompt, err := cfg.ResolveSystemPromptForRoot(root)
+	prompt, err := buildPromptAssembly(ctx, opts, cfg, root, shell, sink, timer)
 	if err != nil {
-		if !config.IsMissingSystemPromptFile(err) {
-			return nil, err
-		}
-		// A stale missing prompt file must not block startup: warn and fall back
-		// to the inline (or built-in default) system prompt. Other read failures
-		// stay fatal so Reasonix never runs without explicitly configured policy.
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: err.Error() + "; falling back to inline/default system prompt"})
-		sysPrompt = cfg.InlineSystemPrompt()
+		return nil, err
 	}
-	// Output style: fold the selected persona/tone block into the base prompt
-	// before language/memory/skills append, so a "replace" style (keep-coding
-	// false) still keeps those. Applied once, into the cache-stable prefix.
-	if st, ok := outputstyle.Resolve(cfg.Agent.OutputStyle, outputstyle.Dirs()); ok {
-		sysPrompt = outputstyle.Apply(sysPrompt, st)
-	}
-	sysPrompt = appendCorePolicies(sysPrompt)
-	if workspaceLine := currentWorkspacePromptLine(root); workspaceLine != "" {
-		sysPrompt += "\n\n" + workspaceLine
-	}
-	// Role settings no longer inject mode-specific system prompts. Planning,
-	// verification, and review intensity travel in the per-turn transient
-	// <execution-policy> user block so the cache-stable prefix stays shared.
-	_ = tokenMode
-	if cfg.EnvironmentEnabled() {
-		shellLabel := shell.Kind.String()
-		if strings.TrimSpace(cfg.Tools.Shell.Path) != "" {
-			shellLabel = shell.Path
-		}
-		envSection := environment.FormatSection(
-			environment.RunProbesWithOptions(ctx, environment.DefaultProbes(), environment.ProbeOptions{
-				Overrides: cfg.Environment.Tools,
-				DenyRoots: []string{root},
-				// Persist probe results across restarts: the section below sits
-				// inside the provider-cached prompt prefix, and re-observing
-				// per boot let transient probe flaps (timeouts, PATH drift)
-				// rewrite the prefix and cold-start every session's cache.
-				SnapshotDir: config.CacheDir(),
-			}),
-			runtime.GOOS+"/"+runtime.GOARCH,
-			shellLabel,
-			environment.WorkspaceVCS(root),
-			cfg.Environment.Tools,
-		)
-		if envSection != "" {
-			sysPrompt += "\n\n" + envSection
-		}
-	}
-	sysPrompt = appendOfflineEnvironmentNote(sysPrompt, cfg.Environment.Offline)
 
-	// Persistent memory (REASONIX.md / AGENTS.md hierarchy + auto-memory index)
-	// folds into the system prompt exactly here, once: it becomes part of the
-	// durable, cache-stable prefix every turn reuses, so memory costs nothing per
-	// turn. Mid-session changes never touch this prefix — they ride the
-	// controller's transient turn-injection and fold in on the next session.
-	if !continuesGeneration(opts) {
-		if _, err := memory.StoreFor(config.MemoryUserDir(), root).MigrateV2(); err != nil {
-			sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Memory metadata migration did not complete.", Detail: err.Error()})
-		}
-	}
-	memSet := buildMemoryAssembly(opts, cfg, root, sysPrompt)
-	mem, projectChecks, sysPrompt := memSet.set, memSet.checks, memSet.sysPrompt
-
-	timer.mark("memory")
-	implicitSkillInvocation := cfg.ImplicitSkillInvocationEnabled()
-	skillSet := buildSkillAssembly(opts, cfg, root, implicitSkillInvocation, sysPrompt)
-	skillStore, allSkillStore := skillSet.store, skillSet.all
-	skills, allSkills := skillSet.skills, skillSet.allSkills
-	sysPrompt = skillSet.sysPrompt
-
-	timer.mark("skills")
 	reg := tool.NewRegistry()
 	writeRoots := cfg.WriteRootsForRoot(root)
 	writeRoots = appendUniquePaths(writeRoots, additionalDirs...)
@@ -742,81 +640,14 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		PackageOwners:         pluginspec.PackageOwners(cfg),
 		OAuthHTTPClient:       balanceClient,
 	}
-	autoStartEntries := cfg.EnabledPlugins(root, config.DefaultActivationStore())
-	enabledMCPNames := make(map[string]bool, len(autoStartEntries))
-	for _, enabled := range autoStartEntries {
-		if name := strings.TrimSpace(enabled.Name); name != "" {
-			enabledMCPNames[name] = true
-		}
-	}
-	// Legacy eager/background tiers are still parsed for config compatibility
-	// but no longer change process start timing. Keep the partition only so
-	// demotion notices remain meaningful for chronically slow eager configs.
-	eagerEntries, bgEntries := partitionByTier(autoStartEntries)
-	extraSpecs := pluginspec.ApplyDefaultStartupTimeout(
-		pluginspec.ApplyDefaultCallTimeout(
-			pluginspec.ApplyKnownOverrides(opts.ExtraPlugins, root),
-			pluginSpecOptions.DefaultCallTimeout,
-		),
-		pluginSpecOptions.DefaultStartupTimeout,
-	)
-	for i := range extraSpecs {
-		if strings.TrimSpace(extraSpecs[i].WorkspaceRoot) == "" {
-			extraSpecs[i].WorkspaceRoot = root
-		}
-		if extraSpecs[i].LaunchManager == nil {
-			extraSpecs[i].LaunchManager = pluginSpecOptions.LaunchManager
-		}
-		if strings.TrimSpace(extraSpecs[i].ConfigSource) == "" {
-			extraSpecs[i].ConfigSource = "host_session"
-		}
-		if !extraSpecs[i].RequireLaunchApproval {
-			// Session-scoped MCP specs arrive through an explicit host/user action
-			// (for example ACP session/new), so they follow installed-server
-			// authorization without another per-tool or per-session prompt.
-			extraSpecs[i].Authorized = true
-		}
-		pluginspec.ApplyIsolation(&extraSpecs[i], root, pluginSpecOptions)
-	}
-	// Auto-demote: any eager plugin that has been chronically slow (recent
-	// samples repeatedly hit the blocking startup budget) drops to background
-	// for this session. The user keeps eager intent, just doesn't pay for it
-	// on a server that's been misbehaving. A notice surfaces the demotion.
-	var demoteMessages []string
-	budget := plugin.DefaultStartupBudget()
-	kept := eagerEntries[:0]
-	for _, e := range eagerEntries {
-		rec := plugin.Recommend(e.Name, budget, 0)
-		if rec.Demote {
-			demoteMessages = append(demoteMessages, rec.Reason)
-			bgEntries = append(bgEntries, e)
-			continue
-		}
-		kept = append(kept, e)
-	}
-	eagerEntries = kept
-
-	eagerSpecs := pluginspec.ForRootWithOptions(eagerEntries, root, pluginSpecOptions)
-	bgSpecs := pluginspec.ForRootWithOptions(bgEntries, root, pluginSpecOptions)
-
-	eagerSpecs = append(eagerSpecs, extraSpecs...)
-
-	// Apply caller-supplied stderr override to every spec across tiers.
-	if opts.Stderr != nil {
-		for i := range eagerSpecs {
-			eagerSpecs[i].Stderr = opts.Stderr
-		}
-		for i := range bgSpecs {
-			bgSpecs[i].Stderr = opts.Stderr
-		}
-	}
+	mcp := resolveMCPSpecs(opts, cfg, root, pluginSpecOptions)
 
 	// Host-session ExtraPlugins (for example ACP session servers) are explicit
 	// for this controller and still take a short readiness probe so recovery and
 	// session-scoped servers are deterministic. User/project config MCP stays
 	// catalog-first and process-idle until first real tool call.
-	if len(extraSpecs) > 0 {
-		for _, s := range extraSpecs {
+	if len(mcp.extra) > 0 {
+		for _, s := range mcp.extra {
 			if pluginHost.HasClient(s.Name) {
 				if tools, err := pluginHost.ToolsFor(ctx, s.Name); err == nil {
 					for _, t := range tools {
@@ -842,7 +673,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 				for _, t := range plugin.LazyToolset(s, cs, pluginHost, reg, ctx, false) {
 					reg.Add(t)
 				}
-				sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn,
+				report(sink, event.Event{Level: event.LevelWarn,
 					Text: "An MCP server failed to start.", Detail: fmt.Sprintf("mcp %s: %v", s.Name, err)})
 				continue
 			}
@@ -874,12 +705,12 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			}
 		}
 	}
-	// eagerSpecs already includes extraSpecs; avoid double
+	// mcp.eager already includes mcp.extra; avoid double
 	// registration of host-session servers that connected above.
-	configSpecs := append(append([]plugin.Spec{}, eagerSpecs...), bgSpecs...)
-	if len(extraSpecs) > 0 {
+	configSpecs := append(append([]plugin.Spec{}, mcp.eager...), mcp.background...)
+	if len(mcp.extra) > 0 {
 		extraNames := map[string]bool{}
-		for _, s := range extraSpecs {
+		for _, s := range mcp.extra {
 			extraNames[s.Name] = true
 		}
 		filtered := configSpecs[:0]
@@ -893,8 +724,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	}
 	registerEnabledMCP(configSpecs)
 
-	for _, msg := range demoteMessages {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: msg})
+	for _, msg := range mcp.demotions {
+		report(sink, event.Event{Level: event.LevelInfo, Text: msg})
 	}
 
 	cleanup := pluginHost.Close
@@ -905,47 +736,30 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		cleanup = func() {}
 	}
 
-	// addTools registers tools on reg and returns the names that were added.
-	addTools := func(reg *tool.Registry, tools []tool.Tool) []string {
-		names := make([]string, 0, len(tools))
-		for _, t := range tools {
-			if t == nil {
-				continue
-			}
-			reg.Add(t)
-			names = append(names, t.Name())
-		}
-		return names
-	}
-
 	// LSP tools resolve their servers on PATH and spawn lazily on first query, so
 	// registering them is cheap even when no server is installed (a query then
 	// returns an install hint). The manager is session-scoped; chain its shutdown
 	// into the controller's cleanup so servers stop with the session, not the turn.
 	var lspMgr *lsp.Manager
-	lspToolsAdded := false
-	addLSPTools := func() []string {
-		if lspMgr == nil || lspToolsAdded {
-			return nil
-		}
-		lspToolsAdded = true
-		return addTools(reg, lsp.Tools(lspMgr))
-	}
 	if cfg.LSP.Enabled {
 		lspMgr = lsp.NewManager(root, LSPSpecs(cfg.LSP))
-		addLSPTools()
+		for _, t := range lsp.Tools(lspMgr) {
+			if t != nil {
+				reg.Add(t)
+			}
+		}
 		prev := cleanup
 		cleanup = func() { prev(); lspMgr.Close() }
 	}
 
 	timer.mark("mcp")
 	maxSteps := max(opts.MaxSteps, 0)
-	subagentStore, err := newSubagentStore(sessionDir, opts.SubagentParentLive)
+	subagentStore, err := newSubagentStore(session.dir, opts.SubagentParentLive)
 	if err != nil {
 		return nil, err
 	}
 	if subagentStore != nil {
-		subagentStore.WithDestroyedChecker(jm.IsDestroying)
+		subagentStore.WithDestroyedChecker(session.jobs.IsDestroying)
 	}
 
 	// Permission policy gates every tool call. With no HeadlessApprovalMode
@@ -981,80 +795,11 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// sub-agents inherit the full tool set (minus `task` itself, to keep
 	// nesting out of the picture). It registers into the same reg the
 	// executor uses, so the model surfaces it like any other tool.
-	resolveSubagentProvider := func(modelRef, effort string) (provider.Provider, *provider.Pricing, int, error) {
-		me := *entry
-		selectedRef := modelRefFromEntry(entry)
-		if strings.TrimSpace(modelRef) != "" {
-			if resolved, ok := cfg.ResolveModel(modelRef); ok {
-				me = *resolved
-				selectedRef = modelRefFromEntry(resolved)
-			} else if effectiveResolver != nil {
-				me = *syntheticEntryFromResolver(effectiveResolver, modelRef)
-				selectedRef = modelRef
-			} else {
-				return nil, nil, 0, fmt.Errorf("unknown model %q", modelRef)
-			}
-		}
-		var effortOverride *string
-		if strings.TrimSpace(effort) != "" {
-			normalized, err := config.NormalizeEffort(&me, effort)
-			if err != nil {
-				if effectiveResolver == nil {
-					return nil, nil, 0, err
-				}
-				normalized = effort
-			}
-			me.Effort = normalized
-			effortOverride = &normalized
-			if me.Kind == "anthropic" && strings.TrimSpace(me.Effort) != "" && strings.TrimSpace(me.Thinking) == "" {
-				me.Thinking = "adaptive"
-			}
-		}
-		p, err := resolveProvider(effectiveResolver, cfg, proxySpec, provider.Selection{Ref: selectedRef, Effort: effortOverride})
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		return p, me.Price, me.ContextWindow, nil
-	}
-	subagentIdentity := func(modelRef, effort string) (string, string) {
-		return subagentEffectiveIdentity(cfg, opts.ProviderResolver, modelName, entry, modelRef, effort)
-	}
-	taskModel := firstNonEmpty(cfg.Agent.SubagentModels["task"], cfg.Agent.SubagentModel)
-	taskEffort := firstNonEmpty(cfg.Agent.SubagentEfforts["task"], cfg.Agent.SubagentEffort)
-	maxSubagentDepth := agent.NormalizeMaxSubagentDepth(cfg.Agent.MaxSubagentDepth)
-	maxSubagentConcurrency, maxParallelWriters := agent.NormalizeConcurrencyLimits(
-		cfg.Agent.MaxSubagentConcurrency, cfg.Agent.MaxParallelWriters,
-	)
-	subagentScheduler := agent.NewSubagentScheduler(maxSubagentConcurrency, maxParallelWriters)
-	profileLookup := func(name string) (agent.ProfileDefinition, bool) {
-		sk, ok := skillStore.Read(name)
-		if !ok || sk.RunAs != skill.RunSubagent {
-			return agent.ProfileDefinition{}, false
-		}
-		return agent.ProfileFromSkill(skillStore.Prepare(sk)), true
-	}
-	profileConfigModel := func(profile string) string {
-		for _, key := range SubagentModelKeys(profile) {
-			if m := strings.TrimSpace(cfg.Agent.SubagentModels[key]); m != "" {
-				return m
-			}
-		}
-		return ""
-	}
-	profileConfigEffort := func(profile string) string {
-		for _, key := range SubagentModelKeys(profile) {
-			if e := strings.TrimSpace(cfg.Agent.SubagentEfforts[key]); e != "" {
-				return e
-			}
-		}
-		return ""
-	}
+	sub := newSubagentConfig(opts, cfg, entry, modelName, effectiveResolver, proxySpec, prompt.skillStore)
 	bashSandboxEnforced := bashSpec.Enforce
-	taskToolAdded := false
-	readOnlyTaskToolAdded := false
 	var taskTool *agent.TaskTool
-	// capRuntime is assigned after MCP specs load; closures capture the variable
-	// so task tools created later still receive the session-shared substrate.
+	// capRuntime is assigned after the MCP specs load, so the task tool gets it
+	// through WithCapabilityRuntime once it exists.
 	var capRuntime *agent.MCPCapabilityRuntime
 	newTaskTool := func() *agent.TaskTool {
 		return agent.NewTaskToolWithOptions(agent.TaskToolOptions{
@@ -1072,33 +817,24 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			SysPrompt:         "",
 			Gate:              headlessGate,
 			KeepPolicy:        keepPolicy,
-			SubagentModel:     taskModel,
-			SubagentEffort:    taskEffort,
-			ResolveProvider:   resolveSubagentProvider,
+			SubagentModel:     sub.taskModel,
+			SubagentEffort:    sub.taskEffort,
+			ResolveProvider:   sub.resolveProvider,
 		}).
 			WithTranscripts(subagentStore, root, modelName, entry.Effort).
-			WithTranscriptIdentityResolver(subagentIdentity).
-			WithMaxSubagentDepth(maxSubagentDepth).
+			WithTranscriptIdentityResolver(sub.identity).
+			WithMaxSubagentDepth(sub.maxDepth).
 			WithDeliveryProfile(tokenDelivery).
 			WithAblation(opts.Ablation).
-			WithWorkspaceLease(workspaceLease).
-			WithScheduler(subagentScheduler).
-			WithProfileLookup(profileLookup).
-			WithProfileConfigResolvers(profileConfigModel, profileConfigEffort).
+			WithWorkspaceLease(session.lease).
+			WithScheduler(sub.scheduler).
+			WithProfileLookup(sub.profileLookup).
+			WithProfileConfigResolvers(sub.profileModel, sub.profileEffort).
 			WithBashSandboxEnforced(bashSandboxEnforced).
 			WithCapabilityRuntime(capRuntime)
 	}
-	addTaskTool := func() string {
-		if opts.Ablation.Off(ablation.Subagent) {
-			return "task tool is disabled for this run."
-		}
-		if taskToolAdded {
-			return "task tool is already enabled."
-		}
-		taskToolAdded = true
-		if taskTool == nil {
-			taskTool = newTaskTool()
-		}
+	if !opts.Ablation.Off(ablation.Subagent) {
+		taskTool = newTaskTool()
 		// The registry exports schemas in stable name order. Keep this surface
 		// static: profile names and result refs never enter provider-visible
 		// schemas, and the result reader does not change between turns.
@@ -1106,76 +842,27 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		reg.Add(agent.NewParallelTasksTool(taskTool, reg))
 		reg.Add(agent.NewFleetTool(taskTool))
 		reg.Add(agent.NewSubagentResultTool(taskTool))
-		return "enabled task."
-	}
-	addReadOnlyTaskTool := func() string {
-		if opts.Ablation.Off(ablation.Subagent) {
-			return "read_only_task tool is disabled for this run."
-		}
-		if readOnlyTaskToolAdded {
-			return "read_only_task tool is already enabled."
-		}
-		readOnlyTaskToolAdded = true
-		if taskTool == nil {
-			taskTool = newTaskTool()
-		}
 		reg.Add(agent.NewReadOnlyTaskTool(taskTool))
-		return "enabled read_only_task."
 	}
-	addTaskTool()
-	addReadOnlyTaskTool()
 
 	// Product documentation, session, and memory tools are always present on the
 	// unified host registry for every role setting. Provider-visible surface stays
 	// lean via use_capability; these tools are dispatchable without schema growth.
-	docsToolAdded := false
-	addDocsTool := func() string {
-		if docsToolAdded {
-			return "docs is already enabled."
-		}
-		docsToolAdded = true
-		reg.Add(productdocs.NewTool())
-		return "enabled docs."
+	reg.Add(productdocs.NewTool())
+	// history and memory are the BM25-backed surfaces; the ablation arm drops
+	// only those two and leaves the direct-access tools alone, so a lost solve
+	// is attributable to retrieval and not to a missing session reader.
+	retrievalOff := opts.Ablation.Off(ablation.Retrieval)
+	if !retrievalOff {
+		reg.Add(history.NewIndexedTool(history.Options{SessionDir: session.dir, GlobalSessionDir: config.SessionDir(), ArchiveDir: config.ArchiveDir()}))
 	}
-	sessionToolsAdded := false
-	addSessionTools := func() string {
-		if sessionToolsAdded {
-			return "sessions are already enabled."
-		}
-		sessionToolsAdded = true
-		// history and memory are the BM25-backed surfaces; the ablation arm drops
-		// only those two and leaves the direct-access tools alone, so a lost solve
-		// is attributable to retrieval and not to a missing session reader.
-		if opts.Ablation.Off(ablation.Retrieval) {
-			reg.Add(sessiontool.NewListSessionsTool(sessionDir))
-			reg.Add(sessiontool.NewReadSessionTool(sessionDir))
-			return "enabled list_sessions, read_session."
-		}
-		reg.Add(history.NewIndexedTool(history.Options{SessionDir: sessionDir, GlobalSessionDir: config.SessionDir(), ArchiveDir: config.ArchiveDir()}))
-		reg.Add(sessiontool.NewListSessionsTool(sessionDir))
-		reg.Add(sessiontool.NewReadSessionTool(sessionDir))
-		return "enabled history, list_sessions, read_session."
+	reg.Add(sessiontool.NewListSessionsTool(session.dir))
+	reg.Add(sessiontool.NewReadSessionTool(session.dir))
+	if !retrievalOff {
+		reg.Add(memory.NewRecallTool(prompt.memory.Store))
 	}
-	memoryToolsAdded := false
-	addMemoryTools := func() string {
-		if memoryToolsAdded {
-			return "memory tools are already enabled."
-		}
-		memoryToolsAdded = true
-		if opts.Ablation.Off(ablation.Retrieval) {
-			reg.Add(memory.NewRememberTool(mem.Store))
-			reg.Add(memory.NewForgetTool(mem.Store))
-			return "enabled remember, forget."
-		}
-		reg.Add(memory.NewRecallTool(mem.Store))
-		reg.Add(memory.NewRememberTool(mem.Store))
-		reg.Add(memory.NewForgetTool(mem.Store))
-		return "enabled memory, remember, forget."
-	}
-	addDocsTool()
-	addSessionTools()
-	addMemoryTools()
-
+	reg.Add(memory.NewRememberTool(prompt.memory.Store))
+	reg.Add(memory.NewForgetTool(prompt.memory.Store))
 	addTurnExitTools(reg)
 
 	// Skill tools: read_only_skill is a narrow explicitly read-only entry point; the
@@ -1205,212 +892,28 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			ResponseLanguage:  agent.ResponseLanguageFromContext(sctx),
 			ReasoningLanguage: agent.ReasoningLanguageFromContext(sctx),
 			SubagentDepth:     childDepth,
-			MaxSubagentDepth:  maxSubagentDepth,
+			MaxSubagentDepth:  sub.maxDepth,
 			DeliveryProfile:   tokenDelivery,
 			Ablation:          opts.Ablation,
-			WorkspaceLease:    workspaceLease,
+			WorkspaceLease:    session.lease,
 		}
 	}
-	readOnlySkillRunner := func(sctx context.Context, sk skill.Skill, task string, runOpts skill.SubagentRunOptions) (string, error) {
-		if strings.TrimSpace(runOpts.ContinueFrom) != "" || strings.TrimSpace(runOpts.ForkFrom) != "" {
-			return "", fmt.Errorf("read_only_skill does not support continue_from/fork_from")
-		}
-		releaseSlot, err := subagentScheduler.Acquire(sctx, agent.AcquireRequest{
-			Writer: false,
-			Nested: agent.SubagentDepth(sctx) > 0,
-			Label:  sk.Name,
-		})
-		if err != nil {
-			return "", err
-		}
-		defer releaseSlot()
-		sk = skill.WithCodeGraphTools(sk, skill.CodeGraphReadTools(reg))
-		prov, price, ctxWin := execProv, entry.Price, entry.ContextWindow
-		modelRef := subagentModelRef(cfg, sk)
-		effortRef := subagentEffortRef(cfg, sk)
-		if modelRef != "" || effortRef != "" {
-			p, pr, cw, err := resolveSubagentProvider(modelRef, effortRef)
-			if err != nil {
-				return "", fmt.Errorf("read-only subagent skill %q profile: %w", sk.Name, err)
-			}
-			prov, price, ctxWin = p, pr, cw
-		}
-		childDepth := agent.SubagentDepth(sctx) + 1
-		if childDepth > maxSubagentDepth {
-			return "", fmt.Errorf("subagent delegation depth limit reached (max_subagent_depth=%d)", maxSubagentDepth)
-		}
-		subReg := agent.ReadOnlySubagentToolRegistryForDepthWithRuntime(reg, sk.AllowedTools, childDepth, maxSubagentDepth, capRuntime)
-		if subReg.Len() == 0 {
-			return "", fmt.Errorf("read_only_skill: skill %q has no read-only tools available", sk.Name)
-		}
-		switch sk.Name {
-		case "review", "security-review", "security_review":
-			agent.AttachReviewReportTool(subReg)
-		}
-		steps := maxSteps
-		if steps > 0 {
-			if steps /= 2; steps < 5 {
-				steps = 5
-			}
-		}
-		// Custom and named built-in profiles fully control their system prompt
-		// (no implicit concise/DefaultReadOnlyTaskSystemPrompt overlay).
-		sysPrompt := strings.TrimSpace(sk.Body)
-		if sysPrompt == "" {
-			sysPrompt = agent.DefaultReadOnlyTaskSystemPrompt
-		}
-		runOptions := subagentSkillOptions(sctx, steps, price, ctxWin, childDepth)
-		usageModelRef, _ := subagentIdentity(modelRef, effortRef)
-		runOptions.ModelRef = usageModelRef
-		// Delivery risk gates consume typed reports; outside Delivery a casual
-		// /review run may finish with prose only.
-		if runOptions.DeliveryProfile {
-			runOptions.RequireReviewReportKind = agent.ReviewReportKindForSkill(sk.Name)
-		}
-		// Provider serializers decide whether these images are wire-visible from
-		// the child model's own vision capability. Text-only children retain the
-		// attachment metadata locally but never receive image parts on the wire.
-		childCtx := agent.WithUserImages(sctx, agent.SubagentImageCandidates(sctx))
-		return agent.RunReadOnlySubAgentWithSession(childCtx, prov, subReg, agent.NewSession(sysPrompt), task,
-			runOptions, agent.NestedSink(sctx, event.Discard))
+	skillRun := &skillSubagents{
+		root:            root,
+		cfg:             cfg,
+		registry:        reg,
+		scheduler:       sub.scheduler,
+		store:           subagentStore,
+		provider:        execProv,
+		entry:           entry,
+		maxDepth:        sub.maxDepth,
+		maxSteps:        maxSteps,
+		resolveProvider: sub.resolveProvider,
+		identity:        sub.identity,
+		runOptions:      subagentSkillOptions,
 	}
-	// Writer-capable subagent skills reuse the sub-agent machinery via this
-	// runner: an isolated loop with the skill body as system prompt, a tool set
-	// scoped to the skill's allowed-tools (minus recursive meta-tools), optional
-	// per-skill model, and resumable transcripts when the parent session supports
-	// them. Its tool activity nests under the invoking call, like `task`.
-	skillRunner := func(sctx context.Context, sk skill.Skill, task string, runOpts skill.SubagentRunOptions) (string, error) {
-		// Writer skills without write_paths claim the whole workspace so they
-		// cannot race fleet/task writers that declared disjoint paths.
-		acq := agent.AcquireRequest{
-			Writer: !sk.ReadOnly,
-			Nested: agent.SubagentDepth(sctx) > 0,
-			Label:  sk.Name,
-		}
-		if !sk.ReadOnly {
-			whole, werr := agent.WholeWorkspaceWriteClaim(root)
-			if werr != nil {
-				return "", fmt.Errorf("subagent skill %q write claim: %w", sk.Name, werr)
-			}
-			acq.WritePaths = whole
-		}
-		releaseSlot, err := subagentScheduler.Acquire(sctx, acq)
-		if err != nil {
-			return "", err
-		}
-		defer releaseSlot()
-		sk = skill.WithCodeGraphTools(sk, skill.CodeGraphReadTools(reg))
-		prov, price, ctxWin := execProv, entry.Price, entry.ContextWindow
-		modelRef := subagentModelRef(cfg, sk)
-		effortRef := subagentEffortRef(cfg, sk)
-		if modelRef != "" || effortRef != "" {
-			p, pr, cw, err := resolveSubagentProvider(modelRef, effortRef)
-			if err != nil {
-				return "", fmt.Errorf("subagent skill %q profile: %w", sk.Name, err)
-			}
-			prov, price, ctxWin = p, pr, cw
-		}
-		childDepth := agent.SubagentDepth(sctx) + 1
-		if childDepth > maxSubagentDepth {
-			return "", fmt.Errorf("subagent delegation depth limit reached (max_subagent_depth=%d)", maxSubagentDepth)
-		}
-		// A read-only skill (builtin review/security-review, or frontmatter
-		// `read-only: true`) gets its promise enforced at the tool boundary:
-		// writer tools are stripped and bash runs under the read-only
-		// command policy. Transcripts recorded against the writer-capable
-		// registry stop matching on continue_from (schema-hash check reports
-		// the mismatch).
-		var subReg *tool.Registry
-		if sk.ReadOnly {
-			subReg = agent.ReadOnlySubagentToolRegistryForDepthWithRuntime(reg, sk.AllowedTools, childDepth, maxSubagentDepth, capRuntime)
-		} else {
-			subReg = agent.SubagentToolRegistryForDepthWithRuntime(reg, sk.AllowedTools, childDepth, maxSubagentDepth, capRuntime)
-		}
-		// Delivery risk gates require structured review_report from review
-		// subagents only — never expose it on the parent tool surface.
-		switch sk.Name {
-		case "review", "security-review", "security_review":
-			agent.AttachReviewReportTool(subReg)
-		}
-		continueFrom := strings.TrimSpace(runOpts.ContinueFrom)
-		legacyForkFrom := strings.TrimSpace(runOpts.ForkFrom)
-		if continueFrom != "" && legacyForkFrom != "" {
-			return "", fmt.Errorf("continue_from and fork_from are mutually exclusive; pass only continue_from")
-		}
-		parentID, _, _, _ := agent.CallContext(sctx)
-		if runOpts.HostInitiated {
-			parentID = ""
-		}
-		parentSession := agent.ParentSession(sctx)
-		var run *agent.SubagentRun
-		if subagentStore == nil || parentSession == "" {
-			// Headless runs (e.g. `reasonix run`) have no persistent session to
-			// own a transcript. Run the skill sub-agent ephemerally, as before
-			// persisted transcripts existed, instead of failing. Continuation needs
-			// a persisted owner, so it errors here.
-			if continueFrom != "" || legacyForkFrom != "" {
-				return "", fmt.Errorf("subagent continuation requires a persisted session; none is active in this run")
-			}
-			run = agent.EphemeralSubagentRun(sk.Body)
-		} else {
-			identityModel, identityEffort := subagentIdentity(modelRef, effortRef)
-			spec := agent.SubagentSpec{
-				Kind:             "skill",
-				Name:             sk.Name,
-				WorkspaceRoot:    root,
-				ParentSession:    parentSession,
-				ParentToolCallID: parentID,
-				SystemPrompt:     sk.Body,
-				Registry:         subReg,
-				Model:            identityModel,
-				Effort:           identityEffort,
-			}
-			var prepErr error
-			if continueFrom != "" {
-				run, prepErr = subagentStore.PrepareContinue(continueFrom, spec)
-			} else if legacyForkFrom != "" {
-				run, prepErr = subagentStore.PrepareLegacyForkFrom(legacyForkFrom, spec)
-			} else {
-				run, prepErr = subagentStore.PrepareFresh(spec)
-			}
-			if prepErr != nil {
-				return "", prepErr
-			}
-		}
-		defer run.Release()
-		steps := maxSteps
-		if steps > 0 {
-			if steps /= 2; steps < 5 {
-				steps = 5
-			}
-		}
-		runOptions := subagentSkillOptions(sctx, steps, price, ctxWin, childDepth)
-		usageModelRef, _ := subagentIdentity(modelRef, effortRef)
-		runOptions.ModelRef = usageModelRef
-		// Delivery risk gates consume typed reports; outside Delivery a casual
-		// /review run may finish with prose only.
-		if runOptions.DeliveryProfile {
-			runOptions.RequireReviewReportKind = agent.ReviewReportKindForSkill(sk.Name)
-		}
-		var answer string
-		// See the read-only runner above: the child provider, not the parent
-		// model, owns the final vision decision.
-		childCtx := agent.WithUserImages(sctx, agent.SubagentImageCandidates(sctx))
-		if sk.ReadOnly {
-			answer, err = agent.RunReadOnlySubAgentWithSession(childCtx, prov, subReg, run.Session, task,
-				runOptions, agent.NestedSink(sctx, event.Discard))
-		} else {
-			answer, err = agent.RunSubAgentWithSession(childCtx, prov, subReg, run.Session, task,
-				runOptions, agent.NestedSink(sctx, event.Discard))
-		}
-		if err != nil {
-			return "", errors.Join(err, subagentStore.SaveFailed(run))
-		}
-		if err := subagentStore.SaveCompleted(run); err != nil {
-			return "", errors.Join(err, subagentStore.SaveFailed(run))
-		}
-		return agent.FormatSubagentRunResult(answer, run, false), nil
-	}
+	readOnlySkillRunner := skillRun.runReadOnly
+	skillRunner := skillRun.run
 	skillProfile := func(sk skill.Skill) *event.Profile {
 		model, effort := subagentModelRef(cfg, sk), subagentEffortRef(cfg, sk)
 		if model == "" && effort == "" {
@@ -1424,145 +927,39 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	} else {
 		cmds, _ = command.LoadRoots(config.CommandRootsForRoot(root)...)
 	}
-	slashCommandAdded := false
-	slashCommandIncludesSkills := false
-	addSlashCommandTool := func(includeSkills bool) string {
-		if slashCommandAdded && (!includeSkills || slashCommandIncludesSkills) {
-			return "slash commands are already enabled."
-		}
-		// Expose loaded slash commands to the model via slash_command. In economy
-		// mode skills join this list only after the skills source is enabled.
-		var slashEntries []command.SlashEntry
-		if includeSkills && implicitSkillInvocation {
-			for _, sk := range skillStore.SlashList() {
-				slashEntries = append(slashEntries, command.SlashEntry{
-					Name:        sk.SlashName(),
-					Description: sk.Description,
-					Render:      func(args []string) string { return skillStore.Render(sk, strings.Join(args, " ")) },
-				})
-			}
-		}
-		for _, cmd := range cmds {
-			if cmd.Hidden {
-				continue
-			}
-
-			slashEntries = append(slashEntries, command.SlashEntry{
-				Name:        cmd.Name,
-				Description: cmd.Description,
-				ArgHint:     cmd.ArgHint,
-				Render:      func(args []string) string { return cmd.Render(args) },
-			})
-		}
-		reg.Add(command.NewSlashCommandTool(slashEntries))
-		slashCommandAdded = true
-		slashCommandIncludesSkills = slashCommandIncludesSkills || includeSkills
-		return "enabled slash_command."
-	}
-	installSourceAdded := false
-	addInstallSourceTool := func() string {
-		if installSourceAdded {
-			return "install_source is already enabled."
-		}
-		installSourceAdded = true
-		reg.Add(installsource.NewTool(installsource.Options{
-			ProjectRoot: root,
-			HTTPClient:  balanceClient,
-			// The model's apply must present back a plan someone could read.
-			// Hosts skip this: the click that reached them already was the user.
-			RequireApprovedPlan: true,
-			ConnectMCP: func(e config.PluginEntry) (installsource.MCPConnectResult, error) {
-				spec := pluginspec.FromEntry(e, root, pluginSpecOptions)
-				if opts.Stderr != nil {
-					spec.Stderr = opts.Stderr
-				}
-				// Applying an install plan is already an explicit user decision.
-				// Project-scoped installs retain project provenance, but record the
-				// exact durable launch grant now so neither this connection nor the
-				// next session asks the user to authorize the same install again.
-				launchAuthorized := false
-				if spec.RequireLaunchApproval {
-					if err := plugin.AuthorizeSpecLaunch(ctx, spec); err != nil {
-						return installsource.MCPConnectResult{}, err
-					}
-					launchAuthorized = true
-				}
-				tools, err := pluginHost.Add(ctx, spec)
-				if err != nil {
-					// The install did not complete, so do not retain consent for a
-					// server that never connected. Replacement rollback reauthorizes
-					// the previous project entry before reconnecting it.
-					if launchAuthorized && spec.LaunchManager != nil {
-						_ = spec.LaunchManager.Revoke(spec.Name)
-					}
-					return installsource.MCPConnectResult{}, err
-				}
-				reg.RemovePrefix(plugin.ToolPrefix(spec.Name))
-				for _, t := range tools {
-					reg.Add(t)
-				}
-				// Disconnect closes the server and drops its namespaced tools.
-				// Used by the install_source rollback path when SaveTo fails.
-				disconnect := func() {
-					if prefix, ok := pluginHost.Remove(spec.Name); ok {
-						reg.RemovePrefix(prefix)
-					}
-					if spec.LaunchManager != nil {
-						_ = spec.LaunchManager.Revoke(spec.Name)
-					}
-				}
-				return installsource.MCPConnectResult{
-					ToolCount:  len(tools),
-					Disconnect: disconnect,
-				}, nil
-			},
-			OnDisconnect: func(serverName string) bool {
-				if prefix, ok := pluginHost.Remove(serverName); ok {
-					reg.RemovePrefix(prefix)
-					return true
-				}
-				return false
-			},
-		}))
-		return "enabled install_source."
-	}
-	readOnlySkillToolsAdded := false
-	addReadOnlySkillTools := func() string {
-		if !implicitSkillInvocation {
-			return "automatic skill invocation is disabled; use an explicit /skill command instead."
-		}
-		if readOnlySkillToolsAdded {
-			return "read_only_skill tool is already enabled.\n\n" + skill.ReadOnlyIndexBlock(skills)
-		}
-		readOnlySkillToolsAdded = true
-		reg.Add(skill.NewReadOnlySkillTool(skillStore, gateSubagentArm(opts.Ablation, readOnlySkillRunner), skillProfile))
-		return "enabled read_only_skill. Use read_only_skill for inline skills or read-only subagent skills on the next model request.\n\n" + skill.ReadOnlyIndexBlock(skills)
-	}
-	skillToolsAdded := false
-	addSkillTools := func() string {
-		if !implicitSkillInvocation {
-			return "automatic skill invocation is disabled; use an explicit /skill command instead."
-		}
-		if skillToolsAdded {
-			return "skills are already enabled.\n\n" + skill.IndexBlock(skills)
-		}
-		skillToolsAdded = true
-		addReadOnlySkillTools()
-		reg.Add(skill.NewRunSkillTool(skillStore, gateSubagentArm(opts.Ablation, skillRunner), skillProfile))
-		reg.Add(skill.NewReadSkillTool(skillStore))
-		reg.Add(skill.NewInstallSkillTool(skillStore, nil))
-		for _, t := range builtinSubagentTools(opts.Ablation, skillStore, skillRunner, skillProfile) {
+	addInstallSourceTool(ctx, reg, pluginHost, root, balanceClient, pluginSpecOptions, opts.Stderr)
+	// Skill tools and their slash entries ride the same switch: automatic
+	// invocation is what decides whether the model sees skills at all. Slash
+	// commands register last so the tool carries every entry collected above.
+	var slashEntries []command.SlashEntry
+	if prompt.implicitSkills {
+		reg.Add(skill.NewReadOnlySkillTool(prompt.skillStore, gateSubagentArm(opts.Ablation, readOnlySkillRunner), skillProfile))
+		reg.Add(skill.NewRunSkillTool(prompt.skillStore, gateSubagentArm(opts.Ablation, skillRunner), skillProfile))
+		reg.Add(skill.NewReadSkillTool(prompt.skillStore))
+		reg.Add(skill.NewInstallSkillTool(prompt.skillStore, nil))
+		for _, t := range builtinSubagentTools(opts.Ablation, prompt.skillStore, skillRunner, skillProfile) {
 			reg.Add(t)
 		}
-		addSlashCommandTool(implicitSkillInvocation)
-		return "enabled skills. Use run_skill/read_skill/read_only_skill or the dedicated skill tools on the next model request.\n\n" + skill.IndexBlock(skills)
+		for _, sk := range prompt.skillStore.SlashList() {
+			slashEntries = append(slashEntries, command.SlashEntry{
+				Name:        sk.SlashName(),
+				Description: sk.Description,
+				Render:      func(args []string) string { return prompt.skillStore.Render(sk, strings.Join(args, " ")) },
+			})
+		}
 	}
-	addInstallSourceTool()
-	if implicitSkillInvocation {
-		addSkillTools()
-	} else {
-		addSlashCommandTool(false)
+	for _, cmd := range cmds {
+		if cmd.Hidden {
+			continue
+		}
+		slashEntries = append(slashEntries, command.SlashEntry{
+			Name:        cmd.Name,
+			Description: cmd.Description,
+			ArgHint:     cmd.ArgHint,
+			Render:      func(args []string) string { return cmd.Render(args) },
+		})
 	}
+	reg.Add(command.NewSlashCommandTool(slashEntries))
 
 	// Session-shared MCP runtime: Host, specs, and connection snapshots. Each
 	// agent gets its own use_capability frontend (ledger/audit isolation) while
@@ -1573,12 +970,11 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	var capAudit *capability.Audit
 	capSpecs := pluginspec.ForRootWithOptions(cfg.Plugins, root, pluginSpecOptions)
 	cachedTools, cacheKeyOK := capability.LoadCachedToolsForSpecs(capSpecs)
-	skillStore.ConfigureToolBindings(func(sk skill.Skill) []tool.MCPBinding {
+	prompt.skillStore.ConfigureToolBindings(func(sk skill.Skill) []tool.MCPBinding {
 		return skillMCPBindings(sk, reg, capSpecs, cachedTools, cacheKeyOK)
 	})
 	// Detect dual-model planner early so Balanced/Delivery can attach the same
 	// stable use_capability surface to both Planner and Executor.
-	profile := runtimeProfile
 	var capProxy *agent.UseCapabilityTool
 	// Catalog closes over capRuntime so proxy-connected tools stay routable.
 	// Use AllContractEntries so tool: capabilities include non-provider-visible
@@ -1596,9 +992,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 		catOpts := capability.CatalogOptions{
 			Tools:       reg.AllContractEntries(),
-			Skills:      skillStore.List(),
+			Skills:      prompt.skillStore.List(),
 			Plugins:     cfg.Plugins,
-			Profile:     profile,
+			Profile:     runtimeProfile,
 			Connected:   conn,
 			Failed:      failedNow,
 			CachedTools: cachedTools,
@@ -1612,41 +1008,18 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// Always build the capability runtime and provider-visible use_capability
 	// proxy so both role settings share one tool schema.
 	capRuntime = agent.NewMCPCapabilityRuntime(ctx, pluginHost, capSpecs, reg, catalogFn)
-	capRuntime.ConfigureServers(cfg.Plugins, capSpecs, enabledMCPNames)
+	skillRun.capRuntime = capRuntime
+	capRuntime.ConfigureServers(cfg.Plugins, capSpecs, mcp.enabled)
 	capLedger = capability.NewLedger()
 	capAudit = &capability.Audit{}
 	capProxy = capRuntime.NewFrontend(capLedger, capAudit)
 	reg.Add(capProxy)
-	skillStore.ConfigureInvocationPolicy(func(requires []string) []string {
-		connected := map[string]bool{}
-		failedNow := map[string]string{}
-		if pluginHost != nil {
-			for _, name := range pluginHost.ServerNames() {
-				connected[name] = true
-			}
-			for _, failure := range pluginHost.Failures() {
-				failedNow[failure.Name] = failure.Error
-			}
-		}
-		catOpts := capability.CatalogOptions{
-			Tools:       reg.AllContractEntries(),
-			Skills:      skillStore.List(),
-			Plugins:     cfg.Plugins,
-			Profile:     runtimeProfile,
-			Connected:   connected,
-			Failed:      failedNow,
-			CachedTools: cachedTools,
-			CacheKeyOK:  cacheKeyOK,
-		}
-		if capRuntime != nil {
-			catOpts.Plugins, catOpts.CachedTools, catOpts.CacheKeyOK, catOpts.Disabled, catOpts.ProxyTools = capRuntime.CapabilityCatalogState()
-		}
-		catalog := capability.BuildCatalog(catOpts)
-		_, missing := catalog.RequiresReady(requires)
+	prompt.skillStore.ConfigureInvocationPolicy(func(requires []string) []string {
+		_, missing := catalogFn().RequiresReady(requires)
 		return missing
 	})
 
-	execSess := newObservedSession(sysPrompt)
+	execSess := newObservedSession(prompt.prompt)
 	triageProv, triageRef, triagePrice := resolveTriage(cfg, modelRef, proxySpec)
 	executor := agent.New(execProv, reg, execSess, agent.Options{
 		MaxSteps:       maxSteps,
@@ -1658,16 +1031,16 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		TriageProvider: triageProv, TriageModelRef: triageRef, TriagePricing: triagePrice,
 		Gate:  headlessGate,
 		Hooks: hookRunner,
-		Jobs:  jm,
+		Jobs:  session.jobs,
 		// Parent write reservation at the executor entry covers all writers
 		// (including late Economy/MCP adds) without wrapping tool schemas.
-		WriteScheduler:     subagentScheduler,
+		WriteScheduler:     sub.scheduler,
 		WriteWorkspaceRoot: root,
-		ProjectChecks:      projectChecks, ProjectSensitivePaths: memSet.sensitive,
+		ProjectChecks:      prompt.projectChecks, ProjectSensitivePaths: prompt.sensitivePaths,
 		AgentPreset:                  agentPreset,
 		DeliveryProfile:              tokenDelivery,
 		Ablation:                     opts.Ablation,
-		WorkspaceLease:               workspaceLease,
+		WorkspaceLease:               session.lease,
 		CapabilityLedger:             capLedger,
 		CapabilityAudit:              capAudit,
 		ContextWindow:                entry.ContextWindow,
@@ -1680,7 +1053,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		ReasoningLanguage:            cfg.ReasoningLanguage(),
 		PlanModeReadOnlyCommands:     cfg.Agent.PlanModeReadOnlyCommands,
 		SubagentDepth:                0,
-		MaxSubagentDepth:             maxSubagentDepth,
+		MaxSubagentDepth:             sub.maxDepth,
 		MissingReasoningWarnStateDir: config.MissingReasoningWarnStateDir(),
 	}, sink)
 
@@ -1697,7 +1070,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		// the executor is what the user talks to. Degrades like the guardian
 		// model below (#4615).
 		slog.Warn("planner model is not a configured provider — planning disabled", "model", pm)
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn,
+		report(sink, event.Event{Level: event.LevelWarn,
 			Text: fmt.Sprintf("planner_model %q is not a configured provider — continuing with the executor alone", pm)})
 	}
 	if pm != "" && plannerResolved {
@@ -1706,7 +1079,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			if err != nil {
 				return nil, fmt.Errorf("planner %q: %w", pm, err)
 			}
-			plannerSess := agent.NewSession(agent.PlannerPromptWithContext(mem.Block()))
+			plannerSess := agent.NewSession(agent.PlannerPromptWithContext(prompt.memory.Block()))
 			// Planner owns an independent ledger/audit and use_capability frontend
 			// so its MCP calls cannot satisfy or poison Executor Delivery gates.
 			plannerLedger := capability.NewLedger()
@@ -1752,28 +1125,28 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		SubagentGate:                   headlessGate,
 		Label:                          label,
 		ModelRef:                       modelRef,
-		SystemPrompt:                   sysPrompt,
-		SessionDir:                     sessionDir,
+		SystemPrompt:                   prompt.prompt,
+		SessionDir:                     session.dir,
 		Host:                           pluginHost,
 		Commands:                       cmds,
-		Skills:                         skills,
-		AllSkills:                      allSkills,
-		SkillStore:                     skillStore,
-		AllSkillStore:                  allSkillStore,
-		DisableImplicitSkillInvocation: !implicitSkillInvocation,
+		Skills:                         prompt.skills,
+		AllSkills:                      prompt.allSkills,
+		SkillStore:                     prompt.skillStore,
+		AllSkillStore:                  prompt.allSkillStore,
+		DisableImplicitSkillInvocation: !prompt.implicitSkills,
 		SkillRunner:                    skillRunner,
 		ReadOnlySkillRunner:            readOnlySkillRunner,
 		SkillProfile:                   skillProfile,
 		Hooks:                          hookRunner,
-		Memory:                         mem,
+		Memory:                         prompt.memory,
 		// Indirection: the cleanup variable gains the extension runtime set at
 		// the end of build (snapshot assembly runs after control.New), and the
 		// controller must observe the final chain at Close time.
 		Cleanup:               func() { cleanup() },
 		Balance:               opts.BalanceStore.Cache(balanceClient, entry.BalanceURL, entry.APIKey()),
-		Jobs:                  jm,
+		Jobs:                  session.jobs,
 		TaskStore:             opts.TaskStore,
-		WorkspaceLease:        workspaceLease,
+		WorkspaceLease:        session.lease,
 		Registry:              reg,
 		PluginCtx:             ctx,
 		MCPDefaultCallTimeout: pluginSpecOptions.DefaultCallTimeout,
@@ -1824,16 +1197,16 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		ge, ok := resolveOptionalEntry(effectiveResolver, cfg, guardianModel)
 		if !ok {
 			slog.Warn("guardian model is not a configured provider — guardian disabled", "model", guardianModel)
-			sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Guardian was disabled because its model was not found.", Detail: fmt.Sprintf("guardian_model %q not found — guardian disabled", guardianModel)})
+			report(sink, event.Event{Level: event.LevelWarn, Text: "Guardian was disabled because its model was not found.", Detail: fmt.Sprintf("guardian_model %q not found — guardian disabled", guardianModel)})
 		} else {
 			pProv, err := resolveProvider(effectiveResolver, cfg, proxySpec, provider.Selection{Ref: modelRefFromEntry(ge)})
 			if err != nil {
 				slog.Warn("guardian provider construction failed — guardian disabled", "model", guardianModel, "err", err)
-				sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Guardian was disabled because it could not start.", Detail: fmt.Sprintf("guardian construction failed: %v — guardian disabled", err)})
+				report(sink, event.Event{Level: event.LevelWarn, Text: "Guardian was disabled because it could not start.", Detail: fmt.Sprintf("guardian construction failed: %v — guardian disabled", err)})
 			} else {
 				guardianReg := agent.FilterReadOnlyRegistry(reg, agent.SubagentMetaTools()...)
 				ctrlOpts.Guardian = guardian.NewSession(pProv, guardianReg, guardian.PolicyPrompt(), modelRefFromEntry(ge), cfg.Agent.GuardianTemperature, ge.Price, sink)
-				sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf("guardian enabled · model=%s", ge.Model)})
+				report(sink, event.Event{Level: event.LevelInfo, Text: fmt.Sprintf("guardian enabled · model=%s", ge.Model)})
 			}
 		}
 	}
@@ -1920,8 +1293,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	var router *capability.SemanticRouter
 	if modelRef := strings.TrimSpace(cfg.Agent.SubagentModels["capability-router"]); modelRef != "" {
 		effortRef := strings.TrimSpace(cfg.Agent.SubagentEfforts["capability-router"])
-		if p, price, _, err := resolveSubagentProvider(modelRef, effortRef); err == nil && p != nil {
-			usageModelRef, _ := subagentIdentity(modelRef, effortRef)
+		if p, price, _, err := sub.resolveProvider(modelRef, effortRef); err == nil && p != nil {
+			usageModelRef, _ := sub.identity(modelRef, effortRef)
 			router = &capability.SemanticRouter{Provider: p, Sink: sink, Model: usageModelRef, Pricing: price, Audit: capAudit}
 		}
 	}
@@ -1945,11 +1318,11 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// provider catalog is the BASE catalog, exactly as before the preflight
 	// refactor: sidecar providers enter the snapshot through the Manager's own
 	// contributions, not through the legacy provider list.
-	mcpSpecs := enabledMCPSpecs(configSpecs, extraSpecs)
+	mcpSpecs := enabledMCPSpecs(configSpecs, mcp.extra)
 	snap, runtimeSet, extensionDispatcher, snapErr := assembleLegacySnapshot(ctx, legacyAssembly{
-		systemPrompt: sysPrompt,
+		systemPrompt: prompt.prompt,
 		registry:     reg,
-		skills:       skills,
+		skills:       prompt.skills,
 		commands:     cmds,
 		hooks:        resolvedHooks,
 		mcpSpecs:     mcpSpecs,
@@ -2013,19 +1386,19 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// carrying the final prompt now — before any turn or history resume, so
 	// the live session and the frozen snapshot describe the same session.
 	if snap != nil {
-		if final := snap.SystemPrompt(); final != sysPrompt {
+		if final := snap.SystemPrompt(); final != prompt.prompt {
 			ctrl.ApplyExtensionSystemPrompt(final)
 		}
 	}
 	assembly := &ReusedAssembly{
-		SystemPrompt:            sysPrompt,
-		Skills:                  skills,
+		SystemPrompt:            prompt.prompt,
+		Skills:                  prompt.skills,
 		Commands:                cmds,
 		Hooks:                   resolvedHooks,
 		Registry:                reg,
-		ImplicitSkillInvocation: implicitSkillInvocation,
-		Memory:                  mem,
-		ProjectChecks:           projectChecks, ProjectSensitivePaths: memSet.sensitive,
+		ImplicitSkillInvocation: prompt.implicitSkills,
+		Memory:                  prompt.memory,
+		ProjectChecks:           prompt.projectChecks, ProjectSensitivePaths: prompt.sensitivePaths,
 	}
 	return finalizeBuildResult(&BuildResult{Controller: ctrl, Snapshot: snap, Runtime: runtimeSet, Owner: owner, Extensions: extensionMgr, Dispatcher: extensionDispatcher, ExtensionUI: extUIHub, ProviderResolver: providerResolver, BaseProviderResolver: baseResolver, Assembly: assembly, Phases: timer.done("assemble")}, !opts.deferPublish), nil
 }

@@ -18,10 +18,10 @@ import (
 // gets missed in another. The list may shrink; adding to it needs a reason in
 // the pull request.
 var knownDirectChildRunners = map[string]string{
-	"internal/agent/task.go":   "defines the runners and is the unified path itself",
-	"internal/boot/boot.go":    "skill try + run_skill runners",
-	"internal/cli/review.go":   "reasonix review",
-	"desktop/subagents_app.go": "desktop profile preview",
+	"internal/agent/task.go":          "defines the runners and is the unified path itself",
+	"internal/boot/skill_subagent.go": "run_skill + read_only_skill runners",
+	"internal/cli/review.go":          "reasonix review",
+	"desktop/subagents_app.go":        "desktop profile preview",
 }
 
 // A new fork must be a deliberate, reviewed choice rather than something that
