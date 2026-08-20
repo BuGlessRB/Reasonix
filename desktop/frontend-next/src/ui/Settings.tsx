@@ -16,6 +16,8 @@ import { Sandbox } from "./Sandbox";
 import { Account } from "./Account";
 import { Providers } from "./Providers";
 import { Models, activeKind, groupVendors } from "./Models";
+import { KIND_LABEL } from "./vendors";
+import { planProtocolSwitch } from "./protocolswitch";
 import { Roles } from "./Roles";
 import { Boundary } from "./Boundary";
 import { Versions } from "./Versions";
@@ -210,17 +212,17 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
     const v = vendors.find((x) => x.key === key);
     return v ? activeKind(v, status?.modelRef) : "";
   };
-  // Switching the door an account is reached through is a real switch when that
-  // account is the one running: the same model on the other protocol is a
-  // different endpoint, so it has to go through setModel like any other change.
   const switchProtocol = (key: string, kind: string) => {
+    const plan = planProtocolSwitch(vendors.find((x) => x.key === key), models, status?.modelRef, kind);
+    if (plan.do === "stay") {
+      setFailed(t("{door} 这扇门上没有 {model}，先在下面挑一个它有的模型。", {
+        door: t(KIND_LABEL[kind] ?? kind),
+        model: plan.model,
+      }));
+      return;
+    }
     setProtocol((p) => ({ ...p, [key]: kind }));
-    const v = vendors.find((x) => x.key === key);
-    const running = v && Object.values(v.byKind).flat().some((m) => m.ref === status?.modelRef);
-    if (!v || !running) return;
-    const here = models.find((m) => m.ref === status?.modelRef);
-    const same = (v.byKind[kind] ?? []).find((m) => m.model === here?.model);
-    if (same && same.ref !== status?.modelRef) run(same.ref, () => port.setModel(same.ref));
+    if (plan.do === "switch") run(plan.ref, () => port.setModel(plan.ref));
   };
   const efforts = models.find((m) => m.ref === status?.modelRef)?.efforts ?? [];
   const assigned = roles ? Object.values(roles).filter(Boolean).length : 0;
