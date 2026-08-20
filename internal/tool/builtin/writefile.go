@@ -40,7 +40,7 @@ type writeFile struct {
 func (writeFile) Name() string { return "write_file" }
 
 func (writeFile) Description() string {
-	return "Write content to a file at the given path (overwriting existing content). Creates parent directories as needed."
+	return "Write content to a file at the given path (overwriting existing content). Creates parent directories as needed. Sends the whole file every time: for a change to part of one that already exists, edit_file and multi_edit send only the changed region."
 }
 
 func (writeFile) Schema() json.RawMessage {

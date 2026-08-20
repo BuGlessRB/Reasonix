@@ -170,6 +170,13 @@ func (c *Contract) MarkBlocked() {
 	}
 }
 
+// Blocked reports whether the turn established that the task cannot be done as
+// specified. It is orthogonal to Complete: a contract can have every declared
+// check satisfied and still be work that stopped short of what was asked.
+func (c *Contract) Blocked() bool {
+	return c != nil && c.blocked
+}
+
 // New returns an empty contract for one task; requirements arrive from a plan
 // or a todo list, and Kind fills in from the receipts Observe folds.
 func New(_ string) *Contract {

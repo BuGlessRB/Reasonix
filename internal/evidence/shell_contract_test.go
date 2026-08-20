@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -96,5 +97,45 @@ func TestOrdinaryModeAllowsShortCircuitBuildAndVerify(t *testing.T) {
 		if !BashToolCallMixesMutationAndVerification(args) {
 			t.Errorf("delivery mode should still classify %q as mixed", command)
 		}
+	}
+}
+
+// A way out the block names has to survive being followed. Told only to "chain
+// with '&&'", a run writes `python3 -c "…" && echo found || echo missing` and
+// earns the same block again, because the '||' hands the status on exactly like
+// the ';' did. So the block names the segment that took the exit status, and
+// says which separators do that.
+func TestInlineNonTerminalBlockNamesTheSegmentThatTookTheStatus(t *testing.T) {
+	args, err := json.Marshal(map[string]string{
+		"command": `python3 -c "import acmeconfig" 2>&1; pip3 show acmeconfig | head -5`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !BashToolCallUsesNonTerminalInlineInterpreter(args) {
+		t.Fatal("this shape must still be blocked; the message is what changed")
+	}
+	msg := ShellContractInlineNonTerminalMessage(args)
+	for _, want := range []string{
+		`python3 -c "import acmeconfig" 2>&1`,
+		"pip3 show acmeconfig",
+		"';' and '||'",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("block should name %q, got: %s", want, msg)
+		}
+	}
+}
+
+// An unparseable or single-segment command has no pair to name; the block must
+// still say something rather than quote an empty segment back.
+func TestInlineNonTerminalBlockFallsBackWhenNothingToName(t *testing.T) {
+	args, err := json.Marshal(map[string]string{"command": `python3 -c "import acmeconfig"`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := ShellContractInlineNonTerminalMessage(args)
+	if msg != ShellContractPreflightMessage("inline_nonterminal") {
+		t.Fatalf("message = %q, want the generic block when there is no follower to name", msg)
 	}
 }

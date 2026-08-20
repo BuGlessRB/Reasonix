@@ -380,3 +380,85 @@ func TestScratchWritesOutsideTheWorkspaceAreNotChanges(t *testing.T) {
 		t.Fatalf("changes = %+v, want a nil filter to keep every path", kept.Changes)
 	}
 }
+
+// A turn that changed nothing and claimed nothing delivered nothing the host
+// can grade, however many checks it ran on the way. Calling that "done" is
+// what turns an honest "I could not reproduce it, send me the caller" into a
+// false completion in any score keyed on the verdict.
+func TestDiagnosisWithoutDeliveryIsUnknown(t *testing.T) {
+	rep := Build(nil, ledgerOf(
+		read("counter.go"),
+		ran("go test ./...", true),
+		ran("go test -race ./...", true),
+	), nil)
+	if rep.Verdict != VerdictUnknown {
+		t.Fatalf("verdict = %v, want unknown: nothing changed and nothing was claimed", rep.Verdict)
+	}
+	if len(rep.Verifications) == 0 {
+		t.Fatal("the checks must still be recorded; the verdict is about delivery, not about hiding them")
+	}
+}
+
+// The same shape with one mutation is a real delivery, and a clean check over
+// it still earns done — the unknown verdict must not swallow ordinary work.
+func TestDeliveredAndCheckedIsStillDone(t *testing.T) {
+	rep := Build(nil, ledgerOf(
+		wrote("counter.go"),
+		read("counter.go"),
+		ran("go test ./...", true),
+	), nil)
+	if rep.Verdict != VerdictDone {
+		t.Fatalf("verdict = %v, want done; gaps %v", rep.Verdict, gapKinds(rep))
+	}
+}
+
+// A turn that ran its own check and had it declined must not be told that
+// nothing ran. The phrase alone reads as false to it, and the command the host
+// declined is the one thing that makes the gap actionable instead of puzzling.
+func TestUnverifiedChangeNamesTheDeclinedCheck(t *testing.T) {
+	rep := Build(nil, ledgerOf(
+		wrote("calc.py"),
+		read("calc.py"),
+		evidence.Receipt{
+			ToolName: "bash", Success: true, OutputBytes: 8,
+			Command:      `python3 -c "import calc; assert calc.add(2,3)==5; print('ok')"`,
+			Verification: evidence.VerificationNotVerification,
+		},
+	), nil)
+	detail := gapDetail(rep, "unverified_change")
+	if !strings.Contains(detail, "python3 -c") {
+		t.Fatalf("detail = %q, want the declined command named", detail)
+	}
+	if !strings.Contains(detail, "does not read it as a check") {
+		t.Fatalf("detail = %q, want the reason the command did not count", detail)
+	}
+}
+
+// With no declined candidate the gap says only what it always said: there is
+// nothing to name, and inventing a detail would be worse than the phrase.
+func TestUnverifiedChangeStaysBareWithNoCandidate(t *testing.T) {
+	rep := Build(nil, ledgerOf(wrote("calc.py")), nil)
+	if got := gapDetail(rep, "unverified_change"); got != "" {
+		t.Fatalf("detail = %q, want none when no command was declined", got)
+	}
+}
+
+// The honest exit has to end somewhere other than "done". A turn that ran
+// conclude_blocked, satisfied every check it declared, and still could not do
+// what was asked is not finished work, and a score keyed on the verdict would
+// otherwise read its honesty as a completion claim.
+func TestBlockedContractIsNotDone(t *testing.T) {
+	c := taskcontract.New("fix derive_token so the suite passes")
+	c.MarkBlocked()
+	rep := Build(c, ledgerOf(
+		wrote("apptoken.py"),
+		read("apptoken.py"),
+		ran("python3 -m pytest", true),
+	), nil)
+	if rep.Verdict == VerdictDone {
+		t.Fatalf("verdict = %v, want anything but done for a turn that declared itself blocked", rep.Verdict)
+	}
+	if rep.Verdict != VerdictIncomplete {
+		t.Fatalf("verdict = %v, want incomplete", rep.Verdict)
+	}
+}

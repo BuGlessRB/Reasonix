@@ -68,3 +68,21 @@ func TestCompleteArgumentsReachPermissionAndTool(t *testing.T) {
 		t.Fatalf("permission consulted %d times, want 1 (%v)", len(g.checked), g.checked)
 	}
 }
+
+// A tool call cut off mid-argument and one that mistyped an escape both arrive
+// as "invalid JSON". They need opposite fixes, so the detail has to separate
+// them: one run truncated a 2KB subtask summary and spent its retry hunting a
+// syntax error that was never there.
+func TestMalformedArgumentsSeparateTruncationFromTypos(t *testing.T) {
+	cut := malformedArgumentsDetail(`{"status":"complete","summary":"Updated every fmt_amount(value`)
+	if !strings.Contains(cut, "cut off") || !strings.Contains(cut, "short") {
+		t.Errorf("truncated args detail = %q, want the length named as the cause", cut)
+	}
+	typo := malformedArgumentsDetail(`{"status":"complete","summary":"a \some path"}`)
+	if !strings.Contains(typo, "byte 36") {
+		t.Errorf("mistyped args detail = %q, want the offset named", typo)
+	}
+	if strings.Contains(typo, "cut off") {
+		t.Errorf("mistyped args detail = %q, must not blame length", typo)
+	}
+}

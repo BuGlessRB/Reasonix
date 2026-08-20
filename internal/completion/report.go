@@ -117,6 +117,10 @@ type Report struct {
 	Changes       []Change
 	Verifications []Verification
 	Gaps          []Gap
+	// UnreadCheck is the last successful command the ledger ran and did not read
+	// as a check. A blanket "nothing verified this" is false to a turn that just
+	// ran one, and a gap that reads as false stops being read at all.
+	UnreadCheck string
 	// Claimed is what the turn said about itself; Risks and Unverified are its
 	// declarations. All three are model-authored: they never clear a host-found
 	// gap, and being honest about one never counts as a gap either.
@@ -137,6 +141,7 @@ func Build(c *taskcontract.Contract, ledger *evidence.Ledger, inWorkspace func(p
 		Criteria:      criteriaOf(c),
 		Changes:       changesOf(ledger, receipts, inWorkspace),
 		Verifications: verificationsOf(receipts),
+		UnreadCheck:   unreadCheckOf(receipts),
 	}
 	if c != nil {
 		rep.Risk = c.Risk
@@ -328,10 +333,10 @@ func gapsOf(rep Report, c *taskcontract.Contract) []Gap {
 	// Only report the blanket gap when no declared check already said it: a
 	// contract with checks states the same absence in more specific words.
 	if rep.Mutations > 0 && !proven && !missingCheck {
-		// No detail: the kind's own phrase already says this in the reader's
-		// language, and both surfaces render phrase and detail side by side —
-		// restating it shipped a row that said the same thing twice.
-		gaps = append(gaps, Gap{Kind: GapUnverifiedChange})
+		// The kind's own phrase already says the absence in the reader's
+		// language; the detail says what was there instead, which is the part
+		// a turn that just ran a command of its own cannot get from the phrase.
+		gaps = append(gaps, Gap{Kind: GapUnverifiedChange, Detail: unreadCheckDetail(rep.UnreadCheck)})
 	}
 	for _, ch := range rep.Changes {
 		// Same rule the gaps above follow: once something fresh has proven the
@@ -359,9 +364,15 @@ func checkLabel(check taskcontract.Check) string {
 func verdictOf(rep Report, c *taskcontract.Contract) Verdict {
 	declared := c != nil && (len(c.Requirements) > 0 || len(c.Checks) > 0)
 	switch {
-	case !declared && rep.Mutations == 0 && len(rep.Verifications) == 0 && rep.Claimed.Empty():
+	// Nothing declared, nothing changed, nothing claimed. Checks may well have
+	// run, but a check reports on the tree, not on what this turn delivered,
+	// so no verdict but "no answer" has ground to stand on.
+	case !declared && rep.Mutations == 0 && rep.Claimed.Empty():
 		return VerdictUnknown
-	case c != nil && !c.Complete():
+	// Blocked before Complete: a turn that established it cannot do the task as
+	// specified can still leave every declared check satisfied, and reading only
+	// Complete turns its honest exit into the same word success gets.
+	case c != nil && (c.Blocked() || !c.Complete()):
 		return VerdictIncomplete
 	case len(rep.Gaps) > 0:
 		return VerdictPartial
@@ -401,4 +412,30 @@ func (r Report) GapKinds() []string {
 		}
 	}
 	return out
+}
+
+// unreadCheckLimit bounds the command a gap quotes back; the head of it is
+// enough to recognize, and a whole heredoc in a summary row is noise.
+const unreadCheckLimit = 80
+
+// unreadCheckOf returns the last successful command the host ran and classified
+// as something other than a check. It is only ever a candidate: the classifier
+// is what decides, and this reports what it declined.
+func unreadCheckOf(receipts []evidence.Receipt) string {
+	for _, r := range slices.Backward(receipts) {
+		if r.Success && strings.TrimSpace(r.Command) != "" && r.Verification == evidence.VerificationNotVerification {
+			return strings.TrimSpace(r.Command)
+		}
+	}
+	return ""
+}
+
+func unreadCheckDetail(command string) string {
+	if command == "" {
+		return ""
+	}
+	if len(command) > unreadCheckLimit {
+		command = command[:unreadCheckLimit] + "…"
+	}
+	return "`" + command + "` ran, but the host does not read it as a check"
 }
