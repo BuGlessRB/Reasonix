@@ -42,6 +42,12 @@ const SAID: Record<string, string> = {
   "provider.setup_done": "已经连上了，不用再配一次",
   "provider.setup_failed": "远端配置没做成，稍后再试",
 
+  // ── 推理强度：这个端点给不了 ─────────────────────────────────────
+  "effort.not_configurable":
+    "{provider} 没说自己有哪些推理强度档位。要有，得在它的配置块里写 reasoning_protocol 或 supported_efforts",
+  "effort.unsupported_level": "{provider} 没有「{level}」这一档，能选的是：{levels}",
+  "effort.no_provider": "认不出现在用的是哪个来源，先切一次模型",
+
   // ── 会话 ─────────────────────────────────────────────────────────
   "session.disabled": "这台服务器关掉了会话切换",
   "session.pending_cleanup": "这个会话正在清理，等一下再打开",

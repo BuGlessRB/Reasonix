@@ -107,7 +107,7 @@ func (s *Server) effort(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.switchEffort(r.Context(), strings.TrimSpace(body.Effort)); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

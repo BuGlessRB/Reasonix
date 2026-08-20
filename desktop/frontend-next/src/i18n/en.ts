@@ -234,6 +234,10 @@ export const EN: Record<string, string> = {
   "图片是空的": "The image is empty",
   "有活儿在跑，先停下再换模型": "Something is running — stop it before switching models",
   "有活儿在跑，先停下再改推理强度": "Something is running — stop it before changing the reasoning effort",
+  "{provider} 没说自己有哪些推理强度档位。要有，得在它的配置块里写 reasoning_protocol 或 supported_efforts":
+    "{provider} names no reasoning-effort levels. To give it some, set reasoning_protocol or supported_efforts in its config block",
+  "{provider} 没有「{level}」这一档，能选的是：{levels}": "{provider} has no \"{level}\" level. Available: {levels}",
+  "认不出现在用的是哪个来源，先切一次模型": "Cannot tell which source is in use — switch models once and try again",
   "有活儿在跑，先停下再换工作区": "Something is running — stop it before changing the workspace",
   "有活儿在跑，先停下再重载扩展": "Something is running — stop it before reloading extensions",
   "这个来源正在用，先换一个模型再删": "This source is in use — switch models before deleting it",

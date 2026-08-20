@@ -411,14 +411,22 @@ func (s *Server) switchEffort(ctx context.Context, level string) error {
 	ref := currentModelRef(cur)
 	entry, ok := cfg.ResolveModel(ref)
 	if !ok {
-		return fmt.Errorf("cannot resolve current provider %q", ref)
+		return refusal(http.StatusConflict, "effort.no_provider",
+			fmt.Errorf("cannot resolve current provider %q", ref), nil)
 	}
-	if !config.EffortCapabilityForEntry(entry).Supported {
-		return fmt.Errorf("effort is not configurable for %s", entry.Name)
+	// Refusals, not failures: an endpoint with no effort vocabulary and a level
+	// outside the one it has are both answers about this request. Reporting
+	// them as 500 told a user their machine had broken instead of what to do.
+	capability := config.EffortCapabilityForEntry(entry)
+	if !capability.Supported {
+		return refusal(http.StatusBadRequest, "effort.not_configurable",
+			fmt.Errorf("%s declares no reasoning-effort levels; give it one with reasoning_protocol or supported_efforts in the provider's config block", entry.Name),
+			map[string]any{"provider": entry.Name})
 	}
 	effort, err := config.NormalizeEffort(entry, level)
 	if err != nil {
-		return err
+		return refusal(http.StatusBadRequest, "effort.unsupported_level", err,
+			map[string]any{"provider": entry.Name, "level": level, "levels": strings.Join(capability.Levels, " | ")})
 	}
 	editPath := config.UserConfigPath()
 	if editPath == "" {
