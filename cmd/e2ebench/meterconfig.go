@@ -113,6 +113,14 @@ func writeMeteredConfig(configPath, dir, model, meterBase string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
+	// The redirect moves an endpoint, not an identity: provider keys resolve
+	// from the home's own .env, so a metered home without one authenticates
+	// as nobody and every arm fails at the first request.
+	if env, err := os.ReadFile(filepath.Join(filepath.Dir(configPath), ".env")); err == nil {
+		if err := os.WriteFile(filepath.Join(dir, ".env"), env, 0o600); err != nil {
+			return err
+		}
+	}
 	out, err := os.Create(filepath.Join(dir, "config.toml"))
 	if err != nil {
 		return err
