@@ -113,8 +113,11 @@ export type ApprovalVerdict = "once" | "always" | "deny";
 // Shape of GET /status as internal/serve writes it. Anything the UI wants that
 // is not here has to be added on the Go side, not invented in the client.
 export interface SessionStatus {
-  // Whether the current model reads images at all.
+  // Whether the current model reads images at all, and whether that answer was
+  // ever given: a relay forwards models nothing here has a label for, and an
+  // undeclared one is not the same claim as a text-only one.
   vision?: boolean;
+  visionDeclared?: boolean;
   label: string;
   running: boolean;
   plan: boolean;

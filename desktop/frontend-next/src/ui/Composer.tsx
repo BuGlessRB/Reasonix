@@ -176,7 +176,11 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           {/* The kernel keeps the image either way, but a text-only model never
               sees it — say so here rather than letting the paste vanish. */}
           {status?.vision === false && shots.some((a) => a.image) && (
-            <span className="warn">{t("当前模型不读图 · 将交给能读图的子代理")}</span>
+            <span className="warn">
+              {status?.visionDeclared === false
+                ? t("没人说过这个模型读不读图 · 先按不读处理；在「连接」里勾上它就直接发")
+                : t("当前模型不读图 · 将交给能读图的子代理")}
+            </span>
           )}
         </div>
       )}

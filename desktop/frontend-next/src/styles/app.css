@@ -3535,6 +3535,9 @@
      它对大多数人的价值。真要查是什么把窗口填满了，hover 再摊开。 */
   .block[data-b="ctx"] .lbl { display: flex; align-items: baseline; gap: 8px }
   .block[data-b="ctx"] .lbl .n { margin-left: auto; font: 400 10px var(--mono); color: var(--ghost) }
+  /* 没有分母时替代进度条的那一行。占位和进度条一样高，栏里不会因为换了
+     状态就跳一下。 */
+  .ctxnote { margin: 5px 0 0; font: 400 10.5px/1.5 var(--ui); color: var(--faint) }
   .ctxbar {
     position: relative; display: flex; gap: 1px; height: 6px; margin-top: 7px;
     border-radius: 3px; background: var(--overlay); overflow: visible; cursor: default;

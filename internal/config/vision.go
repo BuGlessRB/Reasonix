@@ -86,6 +86,22 @@ func EffectiveVision(e *ProviderEntry) bool {
 	return isOfficialMimoVisionEntry(e)
 }
 
+// VisionDeclared reports whether anything answers the image question for this
+// entry at all, as opposed to nobody having said. EffectiveVision folds "no"
+// and "unlabelled" into one false — the right default for deciding whether to
+// send pixels, and the wrong thing to tell a user, because a relay's model is
+// not text-only, it is undeclared.
+func VisionDeclared(e *ProviderEntry) bool {
+	// The kernel's own refusal is an answer, and it is a no.
+	if !CanConfigureVision(e) {
+		return true
+	}
+	if _, explicit := explicitModelVision(e); explicit {
+		return true
+	}
+	return e.Vision || isOfficialMimoVisionEntry(e)
+}
+
 // ExplicitModelVision reports whether the selected model has an explicit,
 // positive image capability declaration that the endpoint is allowed to use.
 // Keep this query separate from EffectiveVision so callers can distinguish a

@@ -412,7 +412,7 @@ function EditConn({
             <input
               inputMode="numeric"
               value={win}
-              placeholder={t("留空 = 用内置的已知值；0 = 这个来源不自动压缩")}
+              placeholder={t("留空 = 用内置的已知值；自己加的来源没有内置值，那就是不压缩")}
               onChange={(e) => setWin(e.target.value.replace(/\D/g, ""))}
             />
             <i className="tip">

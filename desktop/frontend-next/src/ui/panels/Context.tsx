@@ -40,11 +40,10 @@ function place(anchor: RefObject<HTMLElement | null>) {
  *  one enormous output — and those are fixed in completely different ways. The
  *  breakdown stays folded because it is a diagnosis, not a running number. */
 export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
-  if (!ctx || !ctx.window) return null;
-  const used = useTicker(ctx.used || 0);
-  const pct = Math.min((used / ctx.window) * 100, 100);
-  const parts = PARTS.map(([k, label, why]) => ({ k, label, why, n: ctx[k] || 0 })).filter((p) => p.n > 0);
-  const sum = parts.reduce((a, p) => a + p.n, 0) || 1;
+  // Every hook runs before the first return: ctx arrives one render after the
+  // rail mounts, and a guard above them made that render ask for hooks the
+  // previous one never did.
+  const used = useTicker(ctx?.used || 0);
   const [open, setOpen] = useState(false);
   const bar = useRef<HTMLDivElement>(null);
 
@@ -60,6 +59,27 @@ export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
       removeEventListener("resize", close);
     };
   }, [open]);
+
+  if (!ctx) return null;
+  // A window nobody declared has no denominator to draw against — but the
+  // number still matters, and so does what else a zero window means: it is
+  // what turns automatic compaction off. Vanishing said neither.
+  if (!ctx.window) {
+    return (
+      <div className="block" data-b="ctx">
+        <div className="lbl">
+          {t("上下文")}
+          <span className="n">{tokens(Math.round(used))}</span>
+        </div>
+        <p className="ctxnote">
+          {t("没人说过这个来源的窗口有多大，所以画不出用了多少 —— 也不会自动压缩。去「连接」里给它填一个上下文窗口。")}
+        </p>
+      </div>
+    );
+  }
+  const pct = Math.min((used / ctx.window) * 100, 100);
+  const parts = PARTS.map(([k, label, why]) => ({ k, label, why, n: ctx[k] || 0 })).filter((p) => p.n > 0);
+  const sum = parts.reduce((a, p) => a + p.n, 0) || 1;
 
   return (
     <div className="block" data-b="ctx">

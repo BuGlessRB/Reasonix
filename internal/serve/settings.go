@@ -160,6 +160,10 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 			// lets the user paste a screenshot into a text-only model and watch
 			// nothing happen.
 			sess["vision"] = config.EffectiveVision(entry)
+			// And whether that false is an answer or a silence: a relay forwards
+			// models nothing here has a label for, and telling its user the model
+			// cannot read images states a limitation that was never established.
+			sess["visionDeclared"] = config.VisionDeclared(entry)
 		}
 	}
 	sess["sessionCostQuote"] = s.bc.SessionCostQuote()

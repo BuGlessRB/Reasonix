@@ -180,6 +180,10 @@ export const EN: Record<string, string> = {
   "添加图片": "Add an image",
   "添加图片　也可以直接拖进来或粘贴": "Add an image　or just drop or paste one in",
   "当前模型不读图 · 将交给能读图的子代理": "This model does not read images · a subagent that does will take it",
+  "没人说过这个模型读不读图 · 先按不读处理；在「连接」里勾上它就直接发":
+    "Nobody has said whether this model reads images · treated as no for now; tick it under Connection to send them straight through",
+  "没人说过这个来源的窗口有多大，所以画不出用了多少 —— 也不会自动压缩。去「连接」里给它填一个上下文窗口。":
+    "Nobody has said how large this source's window is, so there is no share to draw — and no automatic compaction either. Give it a context window under Connection.",
   "每次动手前问你。": "Asks before every action.",
   "自动": "Auto",
   "低风险自己过，写操作仍然问。": "Low-risk steps proceed; writes still ask.",
