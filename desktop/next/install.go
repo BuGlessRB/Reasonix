@@ -78,19 +78,7 @@ func (a *App) GoToVersion(target string) error {
 	if err != nil {
 		return a.failUpdate(target, err)
 	}
-	// Windows publishes an installer, not an archive: it replaces the install
-	// itself, so there is nothing here to stage or swap. Going back is running
-	// an older installer, which is why nothing asks the direction.
-	if goruntime.GOOS == "windows" {
-		if err := studioLine().RunInstaller(cached.Path); err != nil {
-			return a.failUpdate(target, err)
-		}
-		a.emit(UpdateProgress{Version: target, Phase: "relaunching"})
-		a.handOver(layout)
-		return nil
-	}
-	inst := update.VersionedInstaller{Layout: layout, Staging: dir, Current: version, Line: studioLine()}
-	if err := inst.Install(ctx, cached); err != nil {
+	if err := a.applyDownloaded(ctx, target, version, dir, layout, cached); err != nil {
 		return a.failUpdate(target, err)
 	}
 	a.emit(UpdateProgress{Version: target, Phase: "relaunching"})
@@ -118,7 +106,7 @@ func (a *App) installNativePackage(ctx context.Context, cacheDir, target string,
 		return a.failUpdate(target, fmt.Errorf("%s 的安装包缺少签名，拒绝安装", target))
 	}
 	a.emit(UpdateProgress{Version: target, Phase: "authorizing"})
-	err = studioLine().InstallDeb(cached.Path, cached.SignaturePath, func(phase string) {
+	err = a.installDebPackage(cached.Path, cached.SignaturePath, func(phase string) {
 		a.emit(UpdateProgress{Version: target, Phase: phase})
 	})
 	if update.DebAuthCancelled(err) {
