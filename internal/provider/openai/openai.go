@@ -642,7 +642,7 @@ func usageRequestCount(usage *provider.Usage) int {
 // replay the body themselves (that would stack retry budgets with the Agent).
 func (c *client) streamOnce(ctx context.Context, resp *http.Response, out chan<- provider.Chunk) {
 	defer close(out)
-	_, err := c.readStream(ctx, resp, out)
+	emitted, err := c.readStream(ctx, resp, out)
 	if err == nil {
 		return
 	}
@@ -650,11 +650,7 @@ func (c *client) streamOnce(ctx context.Context, resp *http.Response, out chan<-
 		sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err})
 		return
 	}
-	if provider.IsConnReset(err) {
-		sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: provider.StreamInterrupt(err, provider.ClassifyStreamInterrupt(err))})
-		return
-	}
-	sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err})
+	sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: streamFailure(emitted, err)})
 }
 
 func sendChunk(ctx context.Context, out chan<- provider.Chunk, chunk provider.Chunk) bool {
@@ -966,7 +962,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			return emitted, provider.StreamDecodeError(c.name, data, err)
 		}
 		if sr.Error != nil {
-			return emitted, fmt.Errorf("%s: %s", c.name, sr.Error.Message)
+			return emitted, &provider.StreamPayloadError{Provider: c.name, Message: sr.Error.Message}
 		}
 		if len(sr.Choices) > 0 && sr.Choices[0].FinishReason != nil && *sr.Choices[0].FinishReason != "" {
 			lastFinishReason = *sr.Choices[0].FinishReason
