@@ -141,3 +141,59 @@ func TestOutcomeObjectiveSurvivesOutputTrimming(t *testing.T) {
 		t.Fatalf("first run of a narrower check = %+v, want objective 0", s)
 	}
 }
+
+// The shape a turn spends itself on: edit, check, same failure, edit again.
+// The live scorer pays gainMutation for the edit and gainRepeatFailure for the
+// check, so every round of this nets positive and the no-progress ladder it
+// feeds never arrives. Outcome scoring is where the standing still has to be
+// counted, because nothing else counts it.
+func TestOutcomeTrackerCountsTheCheckATurnIsStuckOn(t *testing.T) {
+	tr := NewOutcomeTracker()
+	edit := func() Receipt {
+		return ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"game.js"}`), true, false)
+	}
+	check := func(passed bool) Receipt { return bashReceipt("node --check game.js", passed) }
+
+	s := tr.ScoreRound([]Receipt{check(false)})
+	if s.Stall != 0 || s.StallAge != 0 {
+		t.Fatalf("a check's first failure = %+v, want it localizing, not stalling", s)
+	}
+	for round := 1; round <= 3; round++ {
+		if s = tr.ScoreRound([]Receipt{edit()}); s.Churn != 1 {
+			t.Fatalf("edit round = %+v, want churn 1", s)
+		}
+		s = tr.ScoreRound([]Receipt{check(false)})
+		if s.Stall != 1 || s.StallAge != round || s.StallMutations != round {
+			t.Fatalf("repeat %d = %+v, want stall 1, age %d, %d change(s) against it", round, s, round, round)
+		}
+		// Every round of it reads as progress to the scorer that drives the ladder.
+		if s.LegacyGain+gainMutation <= 0 {
+			t.Fatalf("repeat %d legacy gain = %d + %d, want the pair to stay positive", round, gainMutation, s.LegacyGain)
+		}
+	}
+
+	s = tr.ScoreRound([]Receipt{check(true)})
+	if s.Objective != 1 || s.Stall != 0 || s.StallAge != 0 || s.StallMutations != 0 {
+		t.Fatalf("the check going green = %+v, want the stall cleared with it", s)
+	}
+	if s = tr.ScoreRound([]Receipt{edit()}); s.StallAge != 0 || s.StallMutations != 0 {
+		t.Fatalf("change after the check moved = %+v, want no stall carried over", s)
+	}
+}
+
+// A check that fails once, gets fixed, and is broken again by a later change is
+// the regression path — a turn moving, badly. It must not read as standing still.
+func TestOutcomeTrackerKeepsRegressionOutOfTheStall(t *testing.T) {
+	tr := NewOutcomeTracker()
+	tr.ScoreRound([]Receipt{bashReceipt("go test ./x", false)})
+	tr.ScoreRound([]Receipt{bashReceipt("go test ./x", true)})
+	s := tr.ScoreRound([]Receipt{bashReceipt("go test ./x", false)})
+	if s.Regression != 1 || s.Stall != 0 || s.StallAge != 0 {
+		t.Fatalf("pass→fail = %+v, want a regression and no stall", s)
+	}
+	// It is now failing again, so the next repeat is where a stall can start.
+	s = tr.ScoreRound([]Receipt{bashReceipt("go test ./x", false)})
+	if s.Stall != 1 || s.StallAge != 1 {
+		t.Fatalf("fail→fail after a regression = %+v, want the stall to start here", s)
+	}
+}

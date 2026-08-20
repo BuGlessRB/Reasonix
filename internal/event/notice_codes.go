@@ -27,5 +27,6 @@ const (
 	NoticeCodeSessionRecoveryAdoptedCovered                     = "session_recovery_adopted_covered"
 	NoticeCodeSessionRecoveryDepthCap                           = "session_recovery_depth_cap"
 	NoticeCodeSessionShutdownRecoveryForked                     = "session_shutdown_recovery_forked"
+	NoticeCodeVerificationStalled                               = "verification_stalled"
 	NoticeCodeDecisionReceipt, NoticeCodeContextEditingFallback = "decision_receipt", "context_editing_fallback"
 )

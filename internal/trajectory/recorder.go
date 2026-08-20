@@ -72,6 +72,9 @@ type OutcomeProgress struct {
 	Discriminating int `json:"discriminating,omitempty"`
 	DebtAge        int `json:"debt_age,omitempty"`
 	BlindMutations int `json:"blind_mutations,omitempty"`
+	Stall          int `json:"stall,omitempty"`
+	StallAge       int `json:"stall_age,omitempty"`
+	StallMutations int `json:"stall_mutations,omitempty"`
 }
 
 // ContractShadowAudit mirrors event.ContractShadowAudit with stable keys.
@@ -324,6 +327,9 @@ func (r *Recorder) RecordOutcomeProgress(sample evidence.OutcomeSample) {
 		Discriminating: sample.Discriminating,
 		DebtAge:        sample.DebtAge,
 		BlindMutations: sample.BlindMutations,
+		Stall:          sample.Stall,
+		StallAge:       sample.StallAge,
+		StallMutations: sample.StallMutations,
 	}})
 	event.RecordOutcomeProgress(r.inner, sample)
 }

@@ -30,6 +30,23 @@ type OutcomeSample struct {
 	DebtAge int
 	// BlindMutations counts mutations since the last discriminating observation.
 	BlindMutations int
+	// Stall counts this round's checks that ran, failed, and had already
+	// failed: the third transition beside Objective and Regression, and the one
+	// the live scorer prices as motion instead of as standing still.
+	Stall int
+	// StallAge counts consecutive rounds one check has stayed failed, and
+	// StallMutations the change that landed against it without moving it.
+	StallAge       int
+	StallMutations int
+}
+
+// stall is the check a turn is currently stuck on: which one, how long it has
+// stayed failed, and how much change landed against it in the meantime. The
+// three share one lifetime — a state transition ends all of them at once.
+type stall struct {
+	identity  string
+	age       int
+	mutations int
 }
 
 // OutcomeTracker is the shadow counterpart of ProgressTracker: same per-round
@@ -48,6 +65,12 @@ type OutcomeTracker struct {
 	debt         bool
 	debtAge      int
 	blind        int
+	stall        stall
+	// failedCheck is the verification identity that failed this round and
+	// refailed says it had already failed, handed from scoreCommand to the
+	// round tail where the streak is kept.
+	failedCheck string
+	refailed    bool
 }
 
 func NewOutcomeTracker() *OutcomeTracker {
@@ -71,6 +94,7 @@ func (t *OutcomeTracker) ScoreRound(receipts []Receipt) OutcomeSample {
 	}
 	t.round++
 	s := OutcomeSample{Round: t.round}
+	t.failedCheck, t.refailed = "", false
 	for _, r := range receipts {
 		t.scoreReceipt(r, &s)
 	}
@@ -90,7 +114,32 @@ func (t *OutcomeTracker) ScoreRound(receipts []Receipt) OutcomeSample {
 	}
 	s.DebtAge = t.debtAge
 	s.BlindMutations = t.blind
+	t.trackStall(&s)
 	return s
+}
+
+// trackStall follows the one check a turn is stuck on. A transition in either
+// direction ends the streak because the check moved; a different check failing
+// again starts a new one; everything in between is change that landed without
+// moving anything.
+func (t *OutcomeTracker) trackStall(s *OutcomeSample) {
+	switch {
+	case s.Objective > 0 || s.Regression > 0:
+		t.stall = stall{}
+	case t.failedCheck != "" && t.failedCheck != t.stall.identity:
+		// Opened by the first failure, not the repeat: the change made in
+		// between is the change that failed to move it, and it is already made
+		// by the time the repeat proves so.
+		t.stall = stall{identity: t.failedCheck}
+	}
+	if t.stall.identity == "" {
+		return
+	}
+	if t.refailed {
+		t.stall.age++
+	}
+	t.stall.mutations += s.Churn
+	s.StallAge, s.StallMutations = t.stall.age, t.stall.mutations
 }
 
 // noteMutatedPaths remembers mutated file basenames so a later command that
@@ -175,6 +224,13 @@ func (t *OutcomeTracker) scoreCommand(command string, r Receipt, s *OutcomeSampl
 		}
 		if seen && !passed && wasPass {
 			s.Regression++
+		}
+		if !passed {
+			t.failedCheck = key
+			if seen && !wasPass {
+				s.Stall++
+				t.refailed = true
+			}
 		}
 	}
 	if r.Success {
