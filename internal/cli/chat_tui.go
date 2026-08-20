@@ -3791,33 +3791,6 @@ func turnPhaseStatusLabel(phase string) string {
 	}
 }
 
-// formatCompletionSummaryLine renders a content-free quality summary for TUI scrollback.
-func formatCompletionSummaryLine(c *event.CompletionSummaryInfo) string {
-	if c == nil {
-		return ""
-	}
-	preset := strings.TrimSpace(c.Preset)
-	if preset == "" {
-		preset = "balanced"
-	}
-	line := fmt.Sprintf("%s · %s · mut=%d · checks %d✓/%d✗/%d⊘",
-		preset, c.Verdict, c.Mutations, c.ChecksPassed, c.ChecksFailed, c.ChecksSuppressed)
-	if c.Review != "" && c.Review != "none" {
-		line += " · review=" + c.Review
-	}
-	if len(c.GapKinds) > 0 {
-		line += " · gaps=" + strings.Join(c.GapKinds, ",")
-	}
-	return line
-}
-
-func completionSummaryWarning(c *event.CompletionSummaryInfo) string {
-	if c.Blocked() {
-		return i18n.M.CompletionSummaryBlocked
-	}
-	return i18n.M.CompletionSummaryNeedsAttention
-}
-
 // renderApprovalBanner is the slim notice shown above the input while a tool
 // call (or a plan) awaits the user's decision.
 func (m chatTUI) renderApprovalBanner() string {

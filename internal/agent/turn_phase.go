@@ -94,14 +94,15 @@ func (a *Agent) emitCompletionSummary(c *taskcontract.Contract, rep completion.R
 	a.svc.sink.Emit(event.Event{
 		Kind: event.CompletionSummary,
 		Completion: &event.CompletionSummaryInfo{
-			Preset:           a.AgentPreset(),
-			Verdict:          summaryVerdict,
-			Mutations:        mutations,
-			ChecksPassed:     passed,
-			ChecksFailed:     failed,
-			ChecksSuppressed: suppressed,
-			Review:           review,
-			GapKinds:         gaps,
+			Preset:            a.AgentPreset(),
+			Verdict:           summaryVerdict,
+			Mutations:         mutations,
+			ChecksPassed:      passed,
+			ChecksFailed:      failed,
+			ChecksSuppressed:  suppressed,
+			Review:            review,
+			GapKinds:          gaps,
+			CriteriaRewritten: a.task.ledger.RewrittenCriteria(),
 		},
 	})
 }

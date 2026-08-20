@@ -63,6 +63,8 @@ type CompletionSummary struct {
 	ChecksSuppressed int      `json:"checks_suppressed"`
 	Review           string   `json:"review"`
 	GapKinds         []string `json:"gap_kinds,omitempty"`
+	// CriteriaRewritten names existing tests the turn rewrote or removed.
+	CriteriaRewritten []string `json:"criteria_rewritten,omitempty"`
 }
 
 type WorkspaceChanged struct {
@@ -205,14 +207,15 @@ func ToWire(e event.Event) Event {
 	case event.CompletionSummary:
 		if c := e.Completion; c != nil {
 			w.Completion = &CompletionSummary{
-				Preset:           c.Preset,
-				Verdict:          c.Verdict,
-				Mutations:        c.Mutations,
-				ChecksPassed:     c.ChecksPassed,
-				ChecksFailed:     c.ChecksFailed,
-				ChecksSuppressed: c.ChecksSuppressed,
-				Review:           c.Review,
-				GapKinds:         append([]string(nil), c.GapKinds...),
+				Preset:            c.Preset,
+				Verdict:           c.Verdict,
+				Mutations:         c.Mutations,
+				ChecksPassed:      c.ChecksPassed,
+				ChecksFailed:      c.ChecksFailed,
+				ChecksSuppressed:  c.ChecksSuppressed,
+				Review:            c.Review,
+				GapKinds:          append([]string(nil), c.GapKinds...),
+				CriteriaRewritten: append([]string(nil), c.CriteriaRewritten...),
 			}
 		}
 	}

@@ -153,6 +153,10 @@ type CompletionSummaryInfo struct {
 	ChecksSuppressed int
 	Review           string // none | passed | warned | failed | unavailable
 	GapKinds         []string
+	// CriteriaRewritten names existing tests the turn rewrote or removed.
+	// A suite green after its checks moved is not the suite that was green
+	// before, so this is reported rather than folded into the pass count.
+	CriteriaRewritten []string
 }
 
 // NeedsAttention reports whether this turn ended with something the user should
@@ -171,7 +175,8 @@ func (c *CompletionSummaryInfo) NeedsAttention() bool {
 	case "warned", "failed", "unavailable":
 		return true
 	}
-	return c.ChecksFailed > 0 || c.ChecksSuppressed > 0 || len(c.GapKinds) > 0
+	return c.ChecksFailed > 0 || c.ChecksSuppressed > 0 || len(c.GapKinds) > 0 ||
+		len(c.CriteriaRewritten) > 0
 }
 
 // Blocked distinguishes the turn that could not finish from the one that

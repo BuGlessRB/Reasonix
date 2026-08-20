@@ -23,10 +23,14 @@ type Receipt struct {
 	CitedChecks []string       `json:"cited_checks,omitempty"`
 	TodoStep    *TodoStepMatch `json:"todo_step,omitempty"`
 	Paths       []string       `json:"paths,omitempty"`
-	Read        bool           `json:"read,omitempty"`
-	Write       bool           `json:"write,omitempty"`
-	Mutation    bool           `json:"mutation,omitempty"`
-	Todos       []TodoItem     `json:"todos,omitempty"`
+	// CriteriaRewritten names existing tests this call rewrote or removed
+	// (see RewrittenTestCriteria). Editing a check is legitimate; doing it
+	// silently while reporting the suite as green is not.
+	CriteriaRewritten []string   `json:"criteria_rewritten,omitempty"`
+	Read              bool       `json:"read,omitempty"`
+	Write             bool       `json:"write,omitempty"`
+	Mutation          bool       `json:"mutation,omitempty"`
+	Todos             []TodoItem `json:"todos,omitempty"`
 	// OutputBytes is the host-observed length of the tool's (redacted, trimmed)
 	// output. Content-evidence checks require it to be non-zero so a command
 	// that printed nothing (head -n 0, >/dev/null) can never count as reading.

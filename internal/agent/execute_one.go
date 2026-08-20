@@ -66,6 +66,7 @@ type toolCallPlan struct {
 	// which lines a later output has to carry to have shown this change.
 	mutationWitness   []string
 	mutationPath      string
+	criteriaRewritten []string
 	mutationObserved  bool
 	mutationAfterDone bool
 	executed          bool
