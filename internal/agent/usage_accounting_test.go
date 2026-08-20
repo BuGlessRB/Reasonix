@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"reasonix/internal/agent/testutil"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
@@ -175,9 +176,12 @@ func TestStreamReturnsRequestOnlyUsageOnProviderFailure(t *testing.T) {
 	if st.usage == nil || st.usage.TotalTokens != 0 || st.usage.RequestCount != 1 {
 		t.Fatalf("failed stream usage = %+v, want tokens=0 requests=1", st.usage)
 	}
-	a.emitTurnUsage(st.usage, nil)
+	a.emitTurnUsage(st.usage, nil, "sa-1")
 	if len(events) != 1 || events[0].Kind != event.Usage || events[0].Usage.RequestCount != 1 {
 		t.Fatalf("request-only usage event = %+v", events)
+	}
+	if events[0].AttemptID != "sa-1" {
+		t.Fatalf("usage attempt id = %q, want the attempt that billed it", events[0].AttemptID)
 	}
 }
 
@@ -195,5 +199,44 @@ func TestTaskUsageModelRefUsesCanonicalRuntimeIdentity(t *testing.T) {
 	}
 	if got := task.usageModelRef("", ""); got != "deepseek/deepseek-v4-pro" {
 		t.Fatalf("inherited usage model = %q", got)
+	}
+}
+
+// The trajectory pane attaches a round's tokens by the attempt id on the usage
+// event. A stream that retries is where a positional guess goes wrong, so this
+// asserts the billed attempt is the committed one and not the discarded one.
+func TestTurnUsageNamesTheCommittedStreamAttempt(t *testing.T) {
+	interrupted := &provider.StreamInterruptedError{Err: errors.New("m: read stream: unexpected EOF")}
+	mp := testutil.NewMock("m",
+		testutil.Turn{Text: "partial ", ChunkError: interrupted},
+		testutil.Turn{Text: "done"},
+	)
+	sink := &recordSink{}
+	a := New(mp, echoRegistry(), NewSession(""), Options{}, sink)
+	if err := a.Run(context.Background(), "go"); err != nil {
+		t.Fatalf("Run should recover the interrupted stream, got %v", err)
+	}
+
+	var committed, discarded string
+	for _, e := range sink.kinds(event.StreamAttempt) {
+		switch e.StreamAttempt.Action {
+		case event.StreamAttemptCommit:
+			committed = e.StreamAttempt.ID
+		case event.StreamAttemptDiscard:
+			discarded = e.StreamAttempt.ID
+		}
+	}
+	if committed == "" || discarded == "" || committed == discarded {
+		t.Fatalf("want a discarded and a distinct committed attempt, got %q and %q", discarded, committed)
+	}
+
+	usages := sink.kinds(event.Usage)
+	if len(usages) == 0 {
+		t.Fatal("turn emitted no usage event")
+	}
+	for _, e := range usages {
+		if e.AttemptID != committed {
+			t.Fatalf("usage attempt id = %q, want the committed attempt %q", e.AttemptID, committed)
+		}
 	}
 }

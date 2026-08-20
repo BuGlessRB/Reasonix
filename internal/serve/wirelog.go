@@ -22,6 +22,10 @@ const wireLogMaxBytes = 8 << 20
 var wireLogKinds = map[string]bool{
 	"turn_started": true, "turn_done": true, "message": true,
 	"tool_dispatch": true, "tool_result": true, "usage": true,
+	// The round is the row a turn's time lands on, and usage is addressed by
+	// the attempt id it carries. Without these frames a replayed pane loses
+	// both, and it is this list's row-for-row claim that breaks.
+	"stream_attempt":      true,
 	"guardian_assessment": true, "approval_request": true, "ask_request": true,
 	"compaction_started": true, "compaction_done": true, "retrying": true,
 	"steer": true, "context_maintenance": true, "completion_summary": true,

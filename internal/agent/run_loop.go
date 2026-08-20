@@ -34,7 +34,8 @@ type streamedTurn struct {
 	interrupted        bool
 	partialToolStarted bool
 	partialCalls       []provider.ToolCall
-	maxArgChars        int // peak streaming tool-arg size for failed-attempt estimates
+	maxArgChars        int    // peak streaming tool-arg size for failed-attempt estimates
+	attemptID          string // the stream attempt this result came from, for usage correlation
 	err                error
 }
 
@@ -268,7 +269,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		partialCalls, err := streamed.partialCalls, streamed.err
 		cacheDiagnostics := CompareShape(prevPrefixShape, prefixShape, usage, contentReasons)
 		if err != nil {
-			a.emitTurnUsage(usage, &cacheDiagnostics)
+			a.emitTurnUsage(usage, &cacheDiagnostics, streamed.attemptID)
 			a.observeRunBudget(state, usage)
 			if msg, ok := finishReasonMessage(usage); ok {
 				a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg})
@@ -281,7 +282,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		}
 		a.sess.lastPrefixShape = prefixShape
 		a.sess.haveLastPrefixShape = true
-		a.emitTurnUsage(usage, &cacheDiagnostics)
+		a.emitTurnUsage(usage, &cacheDiagnostics, streamed.attemptID)
 		a.observeRunBudget(state, usage)
 		if msg, ok := finishReasonMessage(usage); ok {
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg})
@@ -345,8 +346,8 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 	runAttempt := func(attemptID string, sink event.Sink) streamedTurn {
 		before := provider.RequestAttemptCount(ctx)
 		result := a.streamWithFrozen(ctx, turn, sink, &frozen, attemptID)
-		after := provider.RequestAttemptCount(ctx)
-		delta := max(after-before, 0)
+		result.attemptID = attemptID
+		delta := max(provider.RequestAttemptCount(ctx)-before, 0)
 		// httpRequests=0 means the provider does not use SendWithRetry
 		// (extension/custom), or it failed before issuing an HTTP request.
 		// Only overwrite RequestCount when the built-in counter observed POSTs;
@@ -412,7 +413,7 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 						a.emitStreamAttempt(attemptID, event.StreamAttemptDiscard, attempt, provider.StreamInterruptReason(retry.err), retry.err)
 						// Use the cancelled retry as the "latest" shape so
 						// FinishReason=interrupted is preserved for accounting.
-						return streamedTurn{usage: finalizeSamplingUsage(billable, retry.usage), err: retry.err}
+						return streamedTurn{usage: finalizeSamplingUsage(billable, retry.usage), attemptID: attemptID, err: retry.err}
 					}
 					// Fall back to the first complete response; no tool ran.
 					streamSink.Flush()

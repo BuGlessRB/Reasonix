@@ -129,6 +129,9 @@ export interface Usage {
   reasoningTokens?: number;
   estimated?: boolean;
   source?: string;
+  // The stream attempt that billed these tokens. Usage lands after its round
+  // has settled, so this is what attaches it — not whatever is still open.
+  attemptId?: string;
   cacheDiagnostics?: CacheDiagnostics;
   sessionCacheHitTokens: number;
   sessionCacheMissTokens: number;
@@ -393,6 +396,9 @@ export interface WireEvent {
   completion?: CompletionSummary;
   receipt?: Receipt;
   err?: string;
+  // turn_done: the user asked to stop. A cancelled turn and a dropped
+  // connection both end with a context-canceled err; only this tells them apart.
+  cancelled?: boolean;
   memoryCitations?: MemoryCitation[];
   // The turn a compaction checkpoint committed under, so a reader can tell a
   // fold apart from the turns around it.

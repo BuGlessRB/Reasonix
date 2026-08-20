@@ -22,12 +22,13 @@ export interface TrajState {
   // when one starts and settled when it ends — the two halves are one line, not
   // two, and until the second half lands the line is the thing in flight.
   open: Record<string, number>;
-  // The model round a usage report belongs to. Usage carries no attempt id, but
-  // a turn has one round open at a time, so the open one is the one it reports.
-  round?: number;
+  // Model rounds by the attempt id the kernel gave them, kept after they settle.
+  // A round's usage arrives once the round has closed, so "whichever one is
+  // still open" resolves to nothing and the tokens go on the floor.
+  rounds: Record<string, number>;
 }
 
-export const initialTraj: TrajState = { rows: [], t0: 0, open: {} };
+export const initialTraj: TrajState = { rows: [], t0: 0, open: {}, rounds: {} };
 
 
 interface Made {
@@ -40,6 +41,11 @@ interface Made {
   open?: string;
   close?: string;
   touch?: string;
+  // The model round this record belongs to, by attempt id, open or settled.
+  round?: string;
+  // Head for the row this opens when it joins no round — compaction and planner
+  // calls bill tokens against no round at all, and a row of their own says so.
+  standalone?: Span[];
   // The activity is still running: stretch its bar to now. What it printed
   // belongs to the transcript — this table records when, not what.
   grow?: boolean;
@@ -100,7 +106,9 @@ function record(ev: WireEvent): Made | null {
         if ((sa.attempt ?? 1) > 1) head.push({ t: " · retry " }, { n: `${sa.attempt}/${sa.max ?? "?"}` });
         return { kind: "model_round", payload: head, open: sa.id };
       }
-      return { kind: "model_round", payload: [], close: sa.id };
+      const spent: Span[] =
+        sa.action === "discard" ? [{ t: " · discarded" }, { t: " · " }, { b: sa.reason || "unknown" }] : [];
+      return { kind: "model_round", payload: spent, close: sa.id };
     }
 
     case "usage": {
@@ -108,7 +116,8 @@ function record(ev: WireEvent): Made | null {
       if (!u) return null;
       return {
         kind: "event",
-        touch: "@round",
+        round: u.attemptId,
+        standalone: [{ t: "usage" }],
         payload: [
           { t: " · hit " },
           { n: tokens(u.cacheHitTokens) },
@@ -196,8 +205,11 @@ function record(ev: WireEvent): Made | null {
         payload: [{ t: "notice " }, { b: ev.level ?? "info" }, { t: " · " + (ev.text ?? "") }],
       };
 
-    case "turn_done":
-      return { kind: "event", payload: [{ t: ev.err ? "turn_done · err=" + ev.err : "turn_done" }] };
+    case "turn_done": {
+      const head: Span[] = [{ t: ev.err ? "turn_done · err=" + ev.err : "turn_done" }];
+      if (ev.cancelled) head.push({ t: " · " }, { b: "cancelled by user" });
+      return { kind: "event", payload: head };
+    }
 
     default:
       return null;
@@ -222,35 +234,44 @@ export function reduceTraj(
 
   // Settling or adding to a line already on the page: the activity is one row
   // from the moment it starts, so its end is an edit, not another entry.
-  const key = r.close ?? r.touch;
-  if (key) {
-    const i = key === "@round" ? s.round : s.open[key];
-    if (i === undefined || !s.rows[i]) return r.close ? s : s;
-    const row = s.rows[i];
-    const rows = s.rows.slice();
-    rows[i] = {
-      ...row,
-      payload: r.payload.length ? [...row.payload, ...r.payload] : row.payload,
-      subs: r.subs?.length ? [...row.subs, ...r.subs] : row.subs,
-      // A tool reports its own duration; a round is measured by how long the
-      // reader waited for it.
-      dur: r.close ? (r.dur ?? at - row.at) : r.grow ? at - row.at : row.dur,
-      tool: row.tool ?? r.tool,
-    };
-    if (!r.close) return { ...s, rows };
-    const open = { ...s.open };
-    delete open[key];
-    return { ...s, rows, open, round: i === s.round ? undefined : s.round };
+  // A round is addressed by its attempt id whether or not it is still running,
+  // which is what lets usage find it after it settled.
+  const key = r.close ?? r.touch ?? r.round;
+  if (key !== undefined) {
+    const i = r.round !== undefined ? s.rounds[key] : s.open[key];
+    if (i !== undefined && s.rows[i]) {
+      const row = s.rows[i];
+      const rows = s.rows.slice();
+      rows[i] = {
+        ...row,
+        payload: r.payload.length ? [...row.payload, ...r.payload] : row.payload,
+        subs: r.subs?.length ? [...row.subs, ...r.subs] : row.subs,
+        // A tool reports its own duration; a round is measured by how long the
+        // reader waited for it.
+        dur: r.close ? (r.dur ?? at - row.at) : r.grow ? at - row.at : row.dur,
+        tool: row.tool ?? r.tool,
+      };
+      if (!r.close) return { ...s, rows };
+      const open = { ...s.open };
+      delete open[key];
+      return { ...s, rows, open };
+    }
+    // Settling or growing something never opened is a frame missing its other
+    // half, not a new activity. A record naming a round is different: the round
+    // may be off the page, and the record still has something to report.
+    if (r.close ?? r.touch) return s;
   }
 
+  const payload = r.standalone ? [...r.standalone, ...r.payload] : r.payload;
   const rows = [
     ...s.rows,
-    { seq: s.rows.length + 1, at, kind: r.kind, payload: r.payload, subs: r.subs ?? [], dur: r.dur, tool: r.tool },
+    { seq: s.rows.length + 1, at, kind: r.kind, payload, subs: r.subs ?? [], dur: r.dur, tool: r.tool },
   ];
   const next: TrajState = { ...s, t0, rows };
   if (r.open) {
     next.open = { ...s.open, [r.open]: rows.length - 1 };
-    if (r.kind === "model_round") next.round = rows.length - 1;
+    // Kept past the close: this is the row a late usage report has to find.
+    if (r.kind === "model_round") next.rounds = { ...s.rounds, [r.open]: rows.length - 1 };
   }
   return next;
 }

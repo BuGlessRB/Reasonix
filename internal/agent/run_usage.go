@@ -256,7 +256,7 @@ func usageRequestCount(usage *provider.Usage) int {
 	return 1
 }
 
-func (a *Agent) emitTurnUsage(usage *provider.Usage, cacheDiagnostics *CacheDiagnostics) {
+func (a *Agent) emitTurnUsage(usage *provider.Usage, cacheDiagnostics *CacheDiagnostics, attemptID string) {
 	if usage == nil || (usage.TotalTokens <= 0 && usage.RequestCount <= 0) {
 		return
 	}
@@ -268,6 +268,7 @@ func (a *Agent) emitTurnUsage(usage *provider.Usage, cacheDiagnostics *CacheDiag
 	}
 	a.svc.sink.Emit(event.Event{Kind: event.Usage, ModelRef: a.modelRef, Usage: usage, Pricing: a.svc.pricing,
 		UsageSource:      a.usageSource,
+		AttemptID:        attemptID,
 		CacheDiagnostics: cacheDiagnostics,
 		SessionHit:       int(a.sess.cacheHit.Load()), SessionMiss: int(a.sess.cacheMiss.Load())})
 }

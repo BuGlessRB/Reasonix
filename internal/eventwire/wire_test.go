@@ -458,6 +458,21 @@ func TestToWireInteractionAndLifecyclePayloads(t *testing.T) {
 			want: []string{`"kind":"turn_done"`, `"err":"boom"`},
 		},
 		{
+			// A cancelled turn and a dropped connection both surface as a
+			// context-canceled error string. Only this bit tells them apart.
+			name: "turn done cancelled by the user",
+			in:   event.Event{Kind: event.TurnDone, Cancelled: true, Err: errors.New("post: context canceled")},
+			want: []string{`"kind":"turn_done"`, `"cancelled":true`, `"err":"post: context canceled"`},
+		},
+		{
+			name: "usage names the round that billed it",
+			in: event.Event{
+				Kind: event.Usage, AttemptID: "sa-2-17", UsageSource: event.UsageSourceCompaction,
+				Usage: &provider.Usage{PromptTokens: 11, CompletionTokens: 3, TotalTokens: 14},
+			},
+			want: []string{`"kind":"usage"`, `"attemptId":"sa-2-17"`, `"source":"compaction"`},
+		},
+		{
 			name: "steer",
 			in:   event.Event{Kind: event.Steer, Text: "mid-turn guidance"},
 			want: []string{`"kind":"steer"`, `"text":"mid-turn guidance"`},

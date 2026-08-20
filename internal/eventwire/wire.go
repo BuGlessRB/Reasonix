@@ -31,6 +31,7 @@ type Event struct {
 	DecisionReceipt *DecisionReceipt    `json:"decisionReceipt,omitempty"`
 	Extension       *ExtensionSurface   `json:"extension,omitempty"`
 	Err             string              `json:"err,omitempty" externalizable:"true"`
+	Cancelled       bool                `json:"cancelled,omitempty"` // TurnDone: the user asked to stop
 	Outcome         string              `json:"outcome,omitempty"`
 	Readiness       *FinalReadiness     `json:"readiness,omitempty"`
 	Receipt         *CompletionReceipt  `json:"receipt,omitempty"`
@@ -176,6 +177,7 @@ func ToWire(e event.Event) Event {
 	case event.ExtensionSurface, event.ExtensionStatus:
 		w.Extension = ToWireExtensionSurface(e.Extension)
 	case event.TurnDone:
+		w.Cancelled = e.Cancelled
 		w.Outcome = e.Outcome
 		w.CheckpointTurn = e.CheckpointTurn
 		w.Receipt = completionReceiptWire(e.Receipt)
@@ -233,6 +235,7 @@ func toWireUsage(e event.Event) *Usage {
 		CacheMissTokens: u.CacheMissTokens, ReasoningTokens: u.ReasoningTokens,
 		Estimated:               u.Estimated,
 		Source:                  e.UsageSource,
+		AttemptID:               e.AttemptID,
 		ContextPromptTokens:     u.ContextPromptTokens,
 		ContextCompletionTokens: u.ContextCompletionTokens,
 		ContextReasoningTokens:  u.ContextReasoningTokens,
@@ -484,6 +487,7 @@ type Usage struct {
 	ReasoningTokens  int               `json:"reasoningTokens,omitempty"`
 	Estimated        bool              `json:"estimated,omitempty"`
 	Source           string            `json:"source,omitempty"`
+	AttemptID        string            `json:"attemptId,omitempty"` // the stream attempt that billed these tokens
 	CacheDiagnostics *CacheDiagnostics `json:"cacheDiagnostics,omitempty"`
 	// Session-cumulative cache tokens keep status displays steadier than one-turn values.
 	SessionCacheHitTokens  int `json:"sessionCacheHitTokens"`

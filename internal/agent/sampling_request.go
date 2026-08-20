@@ -41,7 +41,7 @@ func (a *Agent) handleSamplingError(
 			RetryScope: event.RetryScopeStream,
 		})
 		if !streamRetrySleep(ctx, attempt) {
-			return false, streamedTurn{usage: finalizeSamplingUsage(billable, result.usage), interrupted: true, err: ctx.Err()}
+			return false, streamedTurn{usage: finalizeSamplingUsage(billable, result.usage), attemptID: attemptID, interrupted: true, err: ctx.Err()}
 		}
 		return true, streamedTurn{}
 	}
