@@ -420,7 +420,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	foldIndex := buildFoldIndex(msgs[head:start], policyKeep, a.toolIsReadOnly,
 		a.canonicalOriginFor(stateSnapshot, canonical, msgs, head))
 	fixedPrefixTokens := a.estimatedPromptTokens(a.providerProjectionMessages(msgs[:head]))
-	if a.contextWindow > 0 && fixedPrefixTokens >= a.compactTrigger() {
+	if a.effectiveContextWindow() > 0 && fixedPrefixTokens >= a.compactTrigger() {
 		return CompactionNoop, fmt.Errorf("%w: fixed prefix (%d tokens) already exceeds trigger (%d)", errCheckpointRejected, fixedPrefixTokens, a.compactTrigger())
 	}
 

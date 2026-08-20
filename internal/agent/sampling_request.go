@@ -13,6 +13,10 @@ import (
 // messages, no schema reorder, no previous_response_id drift from failed attempts.
 type samplingRequest struct {
 	req provider.Request
+	// overflowFolded records that this round already answered a context-overflow
+	// rejection by folding. The recovery is one-shot: a second rejection means
+	// the fold did not reach far enough, not that another one will.
+	overflowFolded bool
 }
 
 func (a *Agent) streamProviderRequest(ctx context.Context, req provider.Request) (<-chan provider.Chunk, error) {
@@ -39,6 +43,11 @@ func (a *Agent) handleSamplingError(
 		if !streamRetrySleep(ctx, attempt) {
 			return false, streamedTurn{usage: finalizeSamplingUsage(billable, result.usage), interrupted: true, err: ctx.Err()}
 		}
+		return true, streamedTurn{}
+	}
+	if attempt < maxSamplingAttempts && a.recoverContextOverflow(ctx, frozen, result.err) {
+		streamSink.Discard()
+		a.emitStreamAttempt(attemptID, event.StreamAttemptDiscard, attempt, "context overflow", result.err)
 		return true, streamedTurn{}
 	}
 	// Exhausted retries or non-retryable error: leave the last speculative UI

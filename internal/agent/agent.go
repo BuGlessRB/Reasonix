@@ -391,6 +391,10 @@ type Agent struct {
 	// subagentDepth tracks the current agent's nesting depth. maxSubagentDepth
 	// caps delegation; when reached, recursive agent/skill tools are excluded.
 
+	// windowProbe holds what a provider that declares no context window has
+	// revealed about it by rejecting or accepting requests of a known size.
+	windowProbe contextWindowProbe
+
 	// Context management keeps the canonical transcript immutable and installs
 	// at most one provider-visible checkpoint each time compactRatio is crossed.
 	keepPolicy             KeepPolicy
@@ -621,7 +625,7 @@ func (a *Agent) SessionCache() (hit, miss int) {
 
 // ContextWindow returns the configured context-window size in tokens. 0
 // means compaction is disabled for this agent.
-func (a *Agent) ContextWindow() int { return a.contextWindow }
+func (a *Agent) ContextWindow() int { return a.effectiveContextWindow() }
 
 // mid-turn steer marker.
 // MidTurnSteerPrefix marks user messages that were injected mid-turn as

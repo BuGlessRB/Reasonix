@@ -87,7 +87,8 @@ Rules: be terse — bullet points and fragments, not prose. Preserve identifiers
 // at send time and must never make compaction happen earlier than the user's
 // configured compact_ratio.
 func (a *Agent) compactTrigger() int {
-	if a == nil || a.contextWindow <= 0 {
+	window := a.effectiveContextWindow()
+	if window <= 0 {
 		return 0
 	}
 	ratio := a.compactRatio
@@ -97,16 +98,17 @@ func (a *Agent) compactTrigger() int {
 	if a.ablation.Off(ablation.Compaction) {
 		ratio = 0.5
 	}
-	return max(1, int(float64(a.contextWindow)*ratio))
+	return max(1, int(float64(window)*ratio))
 }
 
 // hardInputCeiling is a physical input-safety boundary, not another user
 // compaction threshold. Reply budgets are resolved independently at send time.
 func (a *Agent) hardInputCeiling() int {
-	if a == nil || a.contextWindow <= 0 {
+	window := a.effectiveContextWindow()
+	if window <= 0 {
 		return 0
 	}
-	return max(1, a.contextWindow-protocolReserveTokens)
+	return max(1, window-protocolReserveTokens)
 }
 
 // recentTailBudget is the content-construction budget for the recent verbatim
@@ -114,11 +116,12 @@ func (a *Agent) hardInputCeiling() int {
 // windows (tests / constrained providers) drop the 32K floor so the tail cannot
 // alone exceed the window.
 func (a *Agent) recentTailBudget() int {
-	if a == nil || a.contextWindow <= 0 {
+	window := a.effectiveContextWindow()
+	if window <= 0 {
 		return minRecentTailTokens
 	}
-	n := int(float64(a.contextWindow) * recentTailBudgetRatio)
-	if a.contextWindow >= minRecentTailTokens*2 {
+	n := int(float64(window) * recentTailBudgetRatio)
+	if window >= minRecentTailTokens*2 {
 		if n < minRecentTailTokens {
 			n = minRecentTailTokens
 		}
@@ -126,7 +129,7 @@ func (a *Agent) recentTailBudget() int {
 	if n > maxRecentTailTokens {
 		n = maxRecentTailTokens
 	}
-	if max := a.contextWindow / 2; max > 0 && n > max {
+	if max := window / 2; max > 0 && n > max {
 		n = max
 	}
 	return max(1, n)
@@ -137,23 +140,25 @@ func (a *Agent) recentTailBudget() int {
 // user who would rather accept a looser fold than pay for another summary
 // raises it.
 func (a *Agent) checkpointCeiling() int {
-	if a == nil || a.contextWindow <= 0 {
+	window := a.effectiveContextWindow()
+	if window <= 0 {
 		return 0
 	}
 	ratio := checkpointCeilingRatio
 	if a.budgets.CheckpointCeilingRatio > 0 {
 		ratio = a.budgets.CheckpointCeilingRatio
 	}
-	return max(1, int(float64(a.contextWindow)*ratio))
+	return max(1, int(float64(window)*ratio))
 }
 
 // exceptionalMinimumSavings is required only when the fixed prefix alone already
 // exceeds the 50% ceiling; otherwise ordinary candidates simply stay under 50%.
 func (a *Agent) exceptionalMinimumSavings() int {
-	if a == nil || a.contextWindow <= 0 {
+	window := a.effectiveContextWindow()
+	if window <= 0 {
 		return 0
 	}
-	return max(1, int(float64(a.contextWindow)*exceptionalMinSavingsRatio))
+	return max(1, int(float64(window)*exceptionalMinSavingsRatio))
 }
 
 // foldEconomics estimates whether compacting the given region saves enough
@@ -267,8 +272,8 @@ func (a *Agent) fixedPinnableUserTurn(m provider.Message) bool {
 	}
 	// The window guard stands whatever the setting: the pinned first turn sits
 	// in the fixed prefix and is paid for on every request of the session.
-	if a.contextWindow > 0 {
-		if f := int(float64(a.contextWindow) * pinnedFirstUserWindowFrac); f < budget {
+	if window := a.effectiveContextWindow(); window > 0 {
+		if f := int(float64(window) * pinnedFirstUserWindowFrac); f < budget {
 			budget = f
 		}
 	}
@@ -405,7 +410,7 @@ func toolCallIDs(m provider.Message) map[string]bool {
 // unless force halves it so CompactNow still reduces mid-size sessions.
 func (a *Agent) planCompaction(msgs []provider.Message, min int, force bool) (head, start int, ok bool) {
 	head = a.pinnedPrefixLen(msgs)
-	if a.contextWindow > 0 {
+	if a.effectiveContextWindow() > 0 {
 		budget := a.recentTailBudget()
 		if force {
 			if half := a.estimatedPromptTokens(provider.ModelMessages(msgs)) / 2; half > 0 && half < budget {

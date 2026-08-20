@@ -240,7 +240,8 @@ func isCJKRune(r rune) bool {
 // effectiveOutputBudget clips completion tokens at send time only; it never
 // moves compact_ratio. Exhausted windows fail locally before HTTP 400.
 func (a *Agent) effectiveOutputBudget(req provider.Request) (int, bool, error) {
-	if a == nil || a.contextWindow <= 0 || !sharesContextWindow(a.svc.prov) {
+	window := a.effectiveContextWindow()
+	if window <= 0 || !sharesContextWindow(a.svc.prov) {
 		return 0, false, nil
 	}
 	budget := a.configuredOutputBudget(req.MaxTokens)
@@ -248,7 +249,7 @@ func (a *Agent) effectiveOutputBudget(req provider.Request) (int, bool, error) {
 		return 0, false, nil
 	}
 	est := a.estimatedRequestTokens(req)
-	available := a.contextWindow - est - outputBudgetReserve
+	available := window - est - outputBudgetReserve
 	if available <= 0 {
 		return 0, false, fmt.Errorf("%w: estimated prompt %d leaves no shared-window output budget", ErrCompactionRequired, est)
 	}

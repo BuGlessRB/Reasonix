@@ -56,7 +56,8 @@ func (a *Agent) summaryInputTokens(msgs []provider.Message) int {
 // summaryInputBudget is the transcript ceiling for one summarizer call.
 // Zero means the window cannot host a useful summary request.
 func (a *Agent) summaryInputBudget(instructions string) int {
-	if a.contextWindow <= 0 {
+	window := a.effectiveContextWindow()
+	if window <= 0 {
 		return 0
 	}
 	reserve := summaryOutputReserve
@@ -67,7 +68,7 @@ func (a *Agent) summaryInputBudget(instructions string) int {
 		{Role: provider.RoleSystem, Content: summarySystemPrompt},
 		{Role: provider.RoleUser, Content: instructions},
 	})
-	budget := a.contextWindow - reserve - framing - protocolReserveTokens
+	budget := window - reserve - framing - protocolReserveTokens
 	if budget < minSummarySpanTokens {
 		return 0
 	}

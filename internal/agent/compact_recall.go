@@ -18,10 +18,11 @@ const minRecallBudgetTokens = 2000
 
 // recallBudget is one generation's ceiling on pulling folded content back.
 func (a *Agent) recallBudget() int {
-	if a.contextWindow <= 0 {
+	window := a.effectiveContextWindow()
+	if window <= 0 {
 		return minRecallBudgetTokens
 	}
-	return max(minRecallBudgetTokens, int(float64(a.contextWindow)*recallBudgetRatio))
+	return max(minRecallBudgetTokens, int(float64(window)*recallBudgetRatio))
 }
 
 // RecallContext returns folded canonical positions as text the caller can read.

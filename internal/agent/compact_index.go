@@ -227,10 +227,11 @@ func quotedOpening(content string) string {
 // line says, and only a line can be recalled.
 func (a *Agent) foldIndexBudget() int {
 	const floor = 256
-	if a.contextWindow <= 0 {
+	window := a.effectiveContextWindow()
+	if window <= 0 {
 		return floor
 	}
-	return max(floor, a.contextWindow/100)
+	return max(floor, window/100)
 }
 
 // stripFoldIndexFromDigests pulls the host-written index out of any prior
