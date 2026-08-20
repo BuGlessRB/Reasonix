@@ -42,8 +42,17 @@ make_zip() {
 	elif command -v zip >/dev/null 2>&1; then
 		(cd "$src" && zip -qr "$out" .)
 	elif command -v powershell >/dev/null 2>&1; then
+		# Git Bash hands out /d/… and /tmp/…, and PowerShell resolves neither —
+		# it reads the first as a path relative to the current drive. cygpath is
+		# what that shell ships for this, and a CI runner never reaches the
+		# powershell branch, so nothing else depends on the POSIX spelling.
+		local winsrc="$src" winout="$out"
+		if command -v cygpath >/dev/null 2>&1; then
+			winsrc=$(cygpath -w "$src")
+			winout=$(cygpath -w "$out")
+		fi
 		powershell -NoProfile -Command \
-			"Compress-Archive -Path '$src/*' -DestinationPath '$out' -CompressionLevel Optimal"
+			"Compress-Archive -Path '$winsrc\\*' -DestinationPath '$winout' -CompressionLevel Optimal"
 	else
 		echo "no zip tool found (need 7z, zip, or powershell)" >&2
 		return 1
