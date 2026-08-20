@@ -851,18 +851,21 @@ func TestMessagesToInputIncludesSummaryOnReasoningItems(t *testing.T) {
 	}
 }
 
-func TestMessagesToInputOmitsSummaryForNonDashScope(t *testing.T) {
-	// MiMo/DeepSeek/unknown endpoints do not define `summary` in their
-	// reasoning-item schema; sending it leaks the reasoning text into an
-	// extra field the server may echo back into the model context (the
-	// chain-of-thought doubling that truncates long tool loops). Only
-	// `content` must be serialized.
+// A gateway nobody has characterized validates against the published OpenAI
+// schema, where `summary` is required — one such Console Go endpoint rejects
+// the whole turn with "missing required field summary". So the shape no table
+// names is the schema's own: the field present and empty. MiMo is the one
+// vendor that must not receive it at all; there the extra field is folded back
+// into the model context and doubles the chain-of-thought each turn.
+func TestMessagesToInputSummaryShapePerVendor(t *testing.T) {
 	for _, tc := range []struct {
 		name, baseURL, model string
+		wantSummary          bool
 	}{
-		{"mimo", "https://api.xiaomimimo.com/v1", "mimo-v2.5"},
-		{"deepseek", "https://api.deepseek.com", "deepseek-v4-flash"},
-		{"unknown", "https://example.com", "m"},
+		{"mimo", "https://api.xiaomimimo.com/v1", "mimo-v2.5", false},
+		{"deepseek", "https://api.deepseek.com", "deepseek-v4-flash", true},
+		{"unknown", "https://example.com", "m", true},
+		{"unknown-console-gateway", "https://opencode.ai/zen/go/v1", "muse", true},
 	} {
 		client := New(Config{Name: tc.name, BaseURL: tc.baseURL, Model: tc.model}).(*client)
 		body, _, _ := client.buildRequestBody(provider.Request{Messages: []provider.Message{
@@ -880,8 +883,15 @@ func TestMessagesToInputOmitsSummaryForNonDashScope(t *testing.T) {
 		if reasoning == nil {
 			t.Fatalf("%s: missing reasoning item in input", tc.name)
 		}
-		if _, has := reasoning["summary"]; has {
-			t.Fatalf("%s: must not serialize summary (not in vendor schema), got %#v", tc.name, reasoning["summary"])
+		summary, has := reasoning["summary"]
+		if has != tc.wantSummary {
+			t.Fatalf("%s: summary present = %v, want %v (%#v)", tc.name, has, tc.wantSummary, summary)
+		}
+		if tc.wantSummary {
+			list, ok := summary.([]map[string]string)
+			if !ok || len(list) != 0 {
+				t.Fatalf("%s: summary = %#v, want an empty list", tc.name, summary)
+			}
 		}
 		content, ok := reasoning["content"].([]map[string]string)
 		if !ok || len(content) != 1 || content[0]["type"] != "reasoning_text" || content[0]["text"] != "think step by step" {
@@ -1058,7 +1068,7 @@ func TestConversationDigestMirrorsWireKnobs(t *testing.T) {
 	// DashScope summary knob: wire includes summary, digest must too.
 	ds := New(Config{Name: "dashscope", APIKey: "k", BaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", Model: "qwen3"}).(*client)
 	ds.caps = capabilitiesFor("dashscope")
-	if ds.caps.summaryRequired && ds.conversationDigest(messages) == plain.conversationDigest(messages) {
+	if ds.caps.summary == summaryEcho && ds.conversationDigest(messages) == plain.conversationDigest(messages) {
 		t.Fatal("dashscope summary must change the digest (wire sends summary)")
 	}
 }

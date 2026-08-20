@@ -10,8 +10,10 @@ import (
 // vendorCapabilities describes how a Responses-compatible endpoint deviates
 // from the base OpenAI Responses wire behavior. Vendors are detected from the
 // base URL (DetectVendor); unknown endpoints get the zero value, which is the
-// standard OpenAI-compatible behavior (stateful, no session-cache header, no
-// summary requirement, no tool-call reasoning retention, temperature honored).
+// standard OpenAI-compatible behavior (stateful, no session-cache header, the
+// schema's own summary shape, no tool-call reasoning retention, temperature
+// honored). The zero value has to be what the published schema says, because
+// it is what every endpoint no one has characterized will be sending.
 //
 // This table is the single source of truth for wire-level vendor differences:
 // adding a new Responses-compatible vendor means adding one entry here and a
@@ -68,16 +70,34 @@ type vendorCapabilities struct {
 	// refer to (DeepSeek). OpenAI marks Reasoning.id required — zero sends it.
 	omitReasoningIdentity bool
 
-	// summaryRequired marks vendors whose Responses API requires the
-	// `summary` list on input reasoning items (DashScope; without it the
-	// server rejects with "Invalid 'summary': summary is required..."). The
-	// OpenAI base format only needs `content`. Sending `summary` to vendors
-	// that do not define it (MiMo) leaks the reasoning text into an extra
-	// field the server may fold back into the model context, doubling the
-	// chain-of-thought echoed each turn and inflating reasoning output
-	// until truncation. Only send it where the wire demands it.
-	summaryRequired bool
+	// summary is the shape the `summary` field takes on an input reasoning
+	// item. The zero value is the OpenAI base shape, so an endpoint nobody
+	// has characterized still sends what the published schema asks for.
+	summary summaryShape
 }
+
+// summaryShape is what an input reasoning item's `summary` must look like.
+// OpenAI marks the field required, so the zero value carries it and leaves it
+// empty: a gateway that validates against the published schema rejects the
+// item outright when the field is missing ("missing required field summary"),
+// and an endpoint nobody has characterized is exactly the one that must not
+// depend on being in a table.
+type summaryShape uint8
+
+const (
+	// summaryEmpty sends `summary: []` — the required field, carrying
+	// nothing, so no reasoning text is repeated into a second place.
+	summaryEmpty summaryShape = iota
+	// summaryEcho repeats the reasoning into summary for vendors that read
+	// it from nowhere else (DashScope, which otherwise rejects with
+	// "Invalid 'summary': summary is required and must be a list").
+	summaryEcho
+	// summaryOmit drops the field for vendors whose reasoning item has no
+	// summary in its schema (MiMo): there the extra field is folded back
+	// into the model context, doubling the chain-of-thought each turn and
+	// inflating reasoning output until it truncates.
+	summaryOmit
+)
 
 var vendorTable = map[string]vendorCapabilities{
 	"dashscope": {
@@ -86,7 +106,7 @@ var vendorTable = map[string]vendorCapabilities{
 		toolCallReasoning:      false,
 		singleSegmentReasoning: false,
 		ignoresTemperature:     false,
-		summaryRequired:        true,
+		summary:                summaryEcho,
 		// No native compact endpoint yet; summarize fallback only.
 		compactionOutputTokens: 8192,
 	},
@@ -110,6 +130,7 @@ var vendorTable = map[string]vendorCapabilities{
 		toolCallReasoning:      true,
 		singleSegmentReasoning: true,
 		ignoresTemperature:     true,
+		summary:                summaryOmit,
 		// Coding-agent default 32K; users may raise explicitly. Not 128K auto.
 		defaultMaxOutputTokens: provider.DefaultReasoningOutputTokens,
 		compactionOutputTokens: provider.DefaultOrdinaryOutputTokens,

@@ -413,14 +413,9 @@ func messagesToInput(messages []provider.Message, vision, replayWebSearchItems b
 			}
 		case provider.RoleAssistant:
 			if message.ReasoningContent != "" {
-				// Reasoning items: the OpenAI base format only needs
-				// `content`. DashScope additionally requires a `summary`
-				// list ("Invalid 'summary': summary is required and must be
-				// a list for reasoning."). Other vendors (MiMo) do not
-				// define summary in their schema; sending it leaks the
-				// reasoning text into an extra field the server may echo
-				// back into the model context, doubling chain-of-thought
-				// each turn — so only send it where the wire demands it.
+				// Reasoning items carry `content`; what `summary` looks
+				// like beside it is the vendor's, and the default is the
+				// published schema's own shape (see summaryShape).
 				item := map[string]any{
 					"type":    "reasoning",
 					"content": []map[string]string{{"type": "reasoning_text", "text": message.ReasoningContent}},
@@ -433,8 +428,12 @@ func messagesToInput(messages []provider.Message, vision, replayWebSearchItems b
 				if message.ReasoningStatus != "" && !caps.omitReasoningIdentity {
 					item["status"] = message.ReasoningStatus
 				}
-				if caps.summaryRequired {
+				switch caps.summary {
+				case summaryEcho:
 					item["summary"] = []map[string]string{{"type": "summary_text", "text": message.ReasoningContent}}
+				case summaryOmit:
+				case summaryEmpty:
+					item["summary"] = []map[string]string{}
 				}
 				input = append(input, item)
 			}
