@@ -12,12 +12,26 @@
      底部的输入框就是这么被顶出屏幕的。除回去，视口还是视口。 */
   body {
     margin: 0; padding: 0; background: var(--surface); color: var(--text);
-    font: 400 13px/1.6 var(--ui);
+    font: var(--w-reg) 13px/1.6 var(--ui);
     height: calc(100vh / var(--zoom, 1)); overflow: hidden;
   }
 
   /* 别放开平台限制：WebView2 上这行会关掉 ClearType，汉字小字号下发虚。 */
   [data-platform="darwin"] body { -webkit-font-smoothing: antialiased }
+
+  /* 没有那一档字形就别合成一个：合成加粗是把轮廓描粗，汉字那么密的笔画描粗
+     就是糊。有 Medium 的（苹方、Noto）用真字形，没有的（雅黑）老实退回。 */
+  body { font-synthesis-weight: none }
+
+  /* 小型大写标签是拉丁字母的排版：mono 栈里没有汉字，字距把词拆开，uppercase
+     对汉字无意义，10px 更是压在可读下限之下。英文那套原样留着，这里只把中文
+     接住 —— 同一个类，两种文字，本来就该是两套排版。 */
+  :lang(zh) :is(.lbl, .isolab, .traj th, .hl .tag, .copy, .rgroup .hd, .par,
+    .apv-hd .tool, .opt .rec, .money .col .k, .anchor .cap, .menu .mi.head .lb,
+    .remember .tag, .rc-hd, .vnow .pin) {
+    font-family: var(--ui); font-size: 11px;
+    letter-spacing: 0; text-transform: none;
+  }
 
   /* A theme's picture, when it has one. It sits behind everything and under a
      scrim of the page colour, so text keeps its contrast whatever the photo is
@@ -93,14 +107,14 @@
             mask: url("../assets/logo-wordmark.svg") no-repeat center / contain;
   }
   /* flex:1 + min-width:0 是承重的：没有它，长目标会把整条顶栏顶爆而不是省略 */
-  .crumb { display: flex; align-items: center; gap: 6px; font: 400 12px var(--mono); color: var(--muted); flex: 1; min-width: 0; }
+  .crumb { display: flex; align-items: center; gap: 6px; font: var(--w-reg) 12px var(--mono); color: var(--muted); flex: 1; min-width: 0; }
   .crumb .sep { color: var(--ghost); }
-  .crumb b { font-weight: 400; color: var(--text); }
+  .crumb b { font-weight: var(--w-reg); color: var(--text); }
   .chrome .r { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
   .btn {
     padding: 4px 11px; border-radius: var(--r-sm); border: 1px solid var(--border);
-    background: transparent; color: var(--muted); font: 500 12px var(--ui);
+    background: transparent; color: var(--muted); font: var(--w-med) 12px var(--ui);
     cursor: pointer; white-space: nowrap;
     transition: color .15s, border-color .15s, background .15s, transform .1s;
   }
@@ -117,13 +131,13 @@
   .crumb-btn {
     display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px;
     border: 0; border-radius: var(--r-xs); background: transparent;
-    color: var(--muted); font: 400 12px var(--mono); cursor: pointer;
+    color: var(--muted); font: var(--w-reg) 12px var(--mono); cursor: pointer;
     transition: background .14s, color .14s;
   }
   .crumb-btn:hover { background: var(--overlay); color: var(--text) }
   .crumb-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .crumb-btn .cv { font-size: 8px; color: var(--ghost); transition: transform .18s var(--ease) }
-  .isolab { font: 500 9.5px var(--mono); letter-spacing: .08em; color: var(--ok); padding: 1.5px 6px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--ok) 13%, transparent) }
+  .isolab { font: var(--w-med) 9.5px var(--mono); letter-spacing: .08em; color: var(--ok); padding: 1.5px 6px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--ok) 13%, transparent) }
   .isolab[hidden] { display: none }
   .crumb-btn[aria-expanded="true"] .cv { transform: rotate(180deg) }
 
@@ -181,13 +195,13 @@
   .mi .dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 5.5px; flex: none; background: var(--ghost) }
   .mi[data-on] .dot { background: var(--accent) }
   .mi .tx { min-width: 0; flex: 1 }
-  .mi .lb { display: block; font: 500 12.5px var(--ui); color: var(--text) }
-  .mi .ds { display: block; margin-top: 2px; font: 400 11.5px/1.5 var(--ui); color: var(--muted) }
-  .mi .rt { margin-left: auto; padding-left: 10px; font: 400 10.5px var(--mono); color: var(--faint); white-space: nowrap; flex: none }
+  .mi .lb { display: block; font: var(--w-med) 12.5px var(--ui); color: var(--text) }
+  .mi .ds { display: block; margin-top: 2px; font: var(--w-reg) 11.5px/1.5 var(--ui); color: var(--muted) }
+  .mi .rt { margin-left: auto; padding-left: 10px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint); white-space: nowrap; flex: none }
   .mi .mi-bars { margin: 5px 0 0 auto; padding-left: 16px; box-sizing: content-box }
   .mi[data-on] .rt { color: var(--accent) }
   .menu .div { height: 1px; margin: 5px 4px; background: var(--hair) }
-  .mi.plain .lb { font-weight: 400; color: var(--muted) }
+  .mi.plain .lb { font-weight: var(--w-reg); color: var(--muted) }
 
   /* Sticky because the rows are the scrolling part: a field that scrolls away
      takes the query out of sight while its result is still on screen. */
@@ -195,14 +209,14 @@
     position: sticky; top: -5px; z-index: 1; width: calc(100% + 10px);
     margin: -5px -5px 5px; padding: 9px 11px;
     border: 0; border-bottom: 1px solid var(--hair); border-radius: var(--r-md) var(--r-md) 0 0;
-    background: var(--float); color: var(--text); font: 400 12.5px var(--ui);
+    background: var(--float); color: var(--text); font: var(--w-reg) 12.5px var(--ui);
   }
   .mfind:focus { outline: none }
   .mfind::placeholder { color: var(--ghost) }
   /* What Enter takes while the field still holds focus. Deliberately the same
      weight as hover: it is a standing offer, not a selection. */
   .mi[data-lead] { background: var(--overlay) }
-  .mnone { padding: 9px 10px; font: 400 11.5px var(--ui); color: var(--faint) }
+  .mnone { padding: 9px 10px; font: var(--w-reg) 11.5px var(--ui); color: var(--faint) }
   .mi.plain .dot { background: transparent }   /* 它不是一个可选中的项目 */
 
   /* 斜杠补全补的是正在打的那一行，所以它贴着输入框上沿，宽度也跟着输入框 */
@@ -217,21 +231,21 @@
      而 scrollIntoView 仍把那一行算作"可见"，往下走第一格就不滚 */
   .slashmenu .mlist { overflow-y: auto; min-height: 0 }
   .slashmenu .lb { font-family: var(--mono) }
-  .slashmenu .ah { margin-left: 6px; font: 400 11px var(--mono); font-style: normal; color: var(--ghost) }
+  .slashmenu .ah { margin-left: 6px; font: var(--w-reg) 11px var(--mono); font-style: normal; color: var(--ghost) }
   /* 目录能继续往下走，文件到此为止 —— 这个区别值一个颜色 */
   .slashmenu .mi[data-on] .ah { color: var(--accent) }
   /* 指出这一行是因为哪几个字母被选中的，模糊匹配才不像是在乱给 */
-  .slashmenu .hit { color: var(--accent); font-weight: 600 }
+  .slashmenu .hit { color: var(--accent); font-weight: var(--w-semi) }
 
   /* Tab 补全、Tab 进目录：不写出来没人会去试 */
   .mkeys {
     flex: none; margin-top: 3px; padding: 6px 9px 2px;
     border-top: 1px solid var(--hair);
-    font: 400 10.5px var(--ui); color: var(--faint);
+    font: var(--w-reg) 10.5px var(--ui); color: var(--faint);
   }
   .sa {
     margin-left: 7px; padding: 1px 5px; border-radius: var(--r-pill);
-    font: 500 9.5px var(--ui); font-style: normal; vertical-align: 1px;
+    font: var(--w-med) 9.5px var(--ui); font-style: normal; vertical-align: 1px;
     color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent);
   }
 
@@ -240,7 +254,7 @@
     position: relative; isolation: isolate;
     display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px;
     border: 1px solid var(--border); border-radius: var(--r-pill); background: transparent;
-    color: var(--muted); font: 500 11.5px var(--ui); cursor: pointer;
+    color: var(--muted); font: var(--w-med) 11.5px var(--ui); cursor: pointer;
     transition: color .15s, border-color .15s, background-color .15s,
                 transform .16s var(--ease-out);
   }
@@ -251,11 +265,11 @@
   /* 菜单开着的时候按钮得留在按下态 —— 不然点开一个菜单，源头看着像没被点中 */
   .mode[aria-expanded="true"] { color: var(--text); border-color: var(--faint); background: var(--overlay) }
   .mode .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--ok); transition: background .2s }
-  .mode.plain { padding-inline: 9px 10px; gap: 5px; font-weight: 400 }
+  .mode.plain { padding-inline: 9px 10px; gap: 5px; font-weight: var(--w-reg) }
   /* 名字是人话，值是机器的字 —— 两种字体的对比就是这排里的层级 */
-  .mode .lb { color: var(--faint); font: 400 11px var(--ui); transition: color .15s }
+  .mode .lb { color: var(--faint); font: var(--w-reg) 11px var(--ui); transition: color .15s }
   .mode .vl {
-    color: var(--muted); font: 400 11px var(--mono);
+    color: var(--muted); font: var(--w-reg) 11px var(--mono);
     animation: modeval .34s var(--ease-spring);
   }
   .mode:hover .lb, .mode[aria-expanded="true"] .lb { color: var(--muted) }
@@ -367,7 +381,7 @@
 
   /* 分段控件只留给「三档之间没有优劣」的单选，比如执行设定 */
   .themer { display: inline-flex; padding: 2px; gap: 2px; background: var(--overlay); border: 1px solid var(--border); border-radius: var(--r-sm); }
-  .themer button { padding: 3px 9px; border: 0; border-radius: var(--r-xs); background: transparent; color: var(--faint); font: 500 11px var(--ui); cursor: pointer; }
+  .themer button { padding: 3px 9px; border: 0; border-radius: var(--r-xs); background: transparent; color: var(--faint); font: var(--w-med) 11px var(--ui); cursor: pointer; }
   .themer button:hover { color: var(--text); }
   .themer button[aria-pressed="true"] { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
   .themer button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
@@ -407,7 +421,7 @@
   .runstrip {
     display: flex; align-items: center; gap: 9px;
     height: 0; margin-bottom: 0; opacity: 0; overflow: hidden;
-    font: 400 11px var(--mono); color: var(--faint);
+    font: var(--w-reg) 11px var(--mono); color: var(--faint);
     transition: height .26s var(--ease-out), opacity .2s var(--ease-out), margin-bottom .26s var(--ease-out);
   }
   .pane:not([data-run="idle"]) .runstrip { height: 19px; margin-bottom: 10px; opacity: 1 }
@@ -432,13 +446,13 @@
   @keyframes rx { 0%, 100% { opacity: .45 } 50% { opacity: 1 } }
 
   /* 度量全部下沉到输入框上沿了：顶栏只留身份（项目/位置/目标） */
-  .chrome .goal { flex: 1; font: 400 12px var(--ui); color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .chrome .goal { flex: 1; font: var(--w-reg) 12px var(--ui); color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .chrome .crumb > .picker, .chrome .crumb > b, .chrome .crumb > .sep { flex: none }
-  .chrome .badge { font: 400 10.5px var(--mono); color: var(--accent); padding: 2.5px 8px; border-radius: var(--r-pill); background: var(--accent-wash); white-space: nowrap; flex: none }
+  .chrome .badge { font: var(--w-reg) 10.5px var(--mono); color: var(--accent); padding: 2.5px 8px; border-radius: var(--r-pill); background: var(--accent-wash); white-space: nowrap; flex: none }
   .chrome .badge[hidden] { display: none }
 
   /* 插话在流里，但还没生效 —— 这两件事得分得开 */
-  .pend { margin-left: auto; flex: none; font: 400 10px var(--mono); color: var(--accent); padding: 1.5px 7px; border-radius: var(--r-pill); background: var(--accent-wash) }
+  .pend { margin-left: auto; flex: none; font: var(--w-reg) 10px var(--mono); color: var(--accent); padding: 1.5px 7px; border-radius: var(--r-pill); background: var(--accent-wash) }
   .pend[data-sent] { color: var(--ok); background: transparent; padding-inline: 0 }
   .call[data-pending] > .c { opacity: .7 }
 
@@ -488,7 +502,7 @@
     width: 2.5px; height: 2.5px; border-radius: 50%; background: currentColor;
     box-shadow: -5.5px 0 currentColor, 5.5px 0 currentColor;
   }
-  .sidepeek .dir { opacity: 0; font: 400 10px/1 var(--mono) }
+  .sidepeek .dir { opacity: 0; font: var(--w-reg) 10px/1 var(--mono) }
   .sidepeek:hover { color: var(--text) }
   .sidepeek:hover::before {
     background: var(--raised); border-color: var(--border);
@@ -553,7 +567,7 @@
     width: 16px; height: 32px; padding: 0; display: grid; place-items: center;
     border: 1px solid transparent; border-radius: var(--r-pill);
     background: var(--surface); color: var(--muted);
-    font: 400 10px/1 var(--mono); cursor: pointer;
+    font: var(--w-reg) 10px/1 var(--mono); cursor: pointer;
     transition: color .14s, background .14s, border-color .14s, box-shadow .18s;
   }
   .grip > * { grid-area: 1 / 1; transition: opacity .14s var(--ease-out) }
@@ -590,7 +604,7 @@
   /* flex:1 是承重的：流为空时若不撑开，输入框会被顶到顶部去 */
   .scroll { flex: 1; overflow: auto; min-height: 0 }
 
-  .lbl { display: flex; align-items: baseline; gap: 9px; font: 500 10px var(--mono); letter-spacing: .15em; text-transform: uppercase; color: var(--ghost) }
+  .lbl { display: flex; align-items: baseline; gap: 9px; font: var(--w-med) 10px var(--mono); letter-spacing: .15em; text-transform: uppercase; color: var(--ghost) }
   .lbl .c { margin-left: auto; letter-spacing: 0; font-variant-numeric: tabular-nums }
 
   /* ── 左：工作区 ────────────────────────────────────────────────────── */
@@ -607,7 +621,7 @@
   .ws:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .ws[aria-selected="true"] { background: var(--overlay); border-left-color: var(--net) }
   .ws[aria-selected="true"][data-s="awaiting"] { border-left-color: var(--accent) }
-  .ws .goal { display: flex; align-items: baseline; gap: 7px; font: 500 12.5px/1.45 var(--ui); color: var(--muted) }
+  .ws .goal { display: flex; align-items: baseline; gap: 7px; font: var(--w-med) 12.5px/1.45 var(--ui); color: var(--muted) }
   /* The delete control is positioned over the row, so the title has to stop
      short of it — otherwise a long one runs underneath. Reserved even when the
      button is hidden, so revealing it on hover does not reflow the text. */
@@ -619,7 +633,7 @@
   .ws[data-s="awaiting"] .pip { background: var(--accent) }
   .ws[data-s="running"] .pip { background: var(--net); animation: tick 1.6s ease-in-out infinite }
   .ws[data-s="done"] .pip { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ok) }
-  .ws .meta { margin-top: 3px; padding-left: 13px; display: flex; gap: 8px; font: 400 10.5px var(--mono); color: var(--faint); white-space: nowrap; overflow: hidden }
+  .ws .meta { margin-top: 3px; padding-left: 13px; display: flex; gap: 8px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint); white-space: nowrap; overflow: hidden }
   .ws[data-s="awaiting"] .meta .st { color: var(--accent) }
   .ws .meta .cost { margin-left: auto; font-variant-numeric: tabular-nums }
   .ws .meta .loc { color: var(--ok) }   /* 这条会话跑在隔离副本里 */
@@ -627,12 +641,12 @@
   .wsdel {
     position: absolute; top: 7px; right: 7px; width: 17px; height: 17px;
     display: grid; place-items: center; border: 0; border-radius: var(--r-xs);
-    background: var(--overlay); color: var(--ghost); font: 400 12px/1 var(--mono);
+    background: var(--overlay); color: var(--ghost); font: var(--w-reg) 12px/1 var(--mono);
     cursor: pointer; opacity: 0; transition: opacity .14s, background .14s, color .14s;
   }
   .ws:hover .wsdel, .wsdel:focus-visible { opacity: 1 }
   .wsdel:hover { background: var(--border); color: var(--err) }
-  .ws[data-confirm] .wsdel { opacity: 1; width: auto; padding: 0 6px; font: 500 10px var(--mono); color: var(--err); background: color-mix(in srgb, var(--err) 15%, transparent) }
+  .ws[data-confirm] .wsdel { opacity: 1; width: auto; padding: 0 6px; font: var(--w-med) 10px var(--mono); color: var(--err); background: color-mix(in srgb, var(--err) 15%, transparent) }
   /* 切走要先停下那一轮 —— 用和删除同一套「再点一次」的确认语言 */
   .ws[data-stop] { background: var(--accent-wash) }
   .ws[data-stop] .meta .st { color: var(--accent) }
@@ -643,7 +657,7 @@
   .mkbtn {
     width: 19px; height: 19px; flex: none; display: grid; place-items: center;
     border: 0; border-radius: var(--r-xs); background: transparent; color: var(--ghost);
-    font: 400 13px/1 var(--mono); cursor: pointer; transition: background .14s, color .14s;
+    font: var(--w-reg) 13px/1 var(--mono); cursor: pointer; transition: background .14s, color .14s;
   }
   .mkbtn:hover { background: var(--overlay); color: var(--text) }
   .mkbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
@@ -652,7 +666,7 @@
   .ws .where { display: none }
   .ws[aria-selected="true"] .where {
     display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-left: 13px;
-    font: 400 10.5px var(--mono); color: var(--faint);
+    font: var(--w-reg) 10.5px var(--mono); color: var(--faint);
   }
   .ws .where .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none }
   .ws[data-iso="on"] .where .dot { background: var(--ok) }
@@ -663,7 +677,7 @@
   .railfoot { flex: none; display: flex; gap: 14px; padding: 9px 13px 11px; border-top: 1px solid var(--hair) }
   .lnk {
     border: 0; background: none; padding: 2px 0; cursor: pointer;
-    color: var(--muted); font: 400 11px var(--ui); text-align: left; transition: color .14s;
+    color: var(--muted); font: var(--w-reg) 11px var(--ui); text-align: left; transition: color .14s;
   }
   .lnk:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px }
   .lnk[disabled] { opacity: .4; cursor: default; pointer-events: none }
@@ -678,7 +692,7 @@
     position: absolute; left: 50%; bottom: calc(100% + 9px); transform: translateX(-50%);
     z-index: 5; padding: 5px 13px; border-radius: var(--r-pill);
     border: 1px solid var(--border); background: var(--overlay); color: var(--muted);
-    font: 500 11.5px var(--ui); cursor: pointer; white-space: nowrap;
+    font: var(--w-med) 11.5px var(--ui); cursor: pointer; white-space: nowrap;
     box-shadow: 0 4px 14px -4px rgba(0, 0, 0, .3);
     animation: card var(--t-card) var(--ease-out) both;
   }
@@ -703,13 +717,13 @@
   }
   .tab {
     padding: 6px 11px 8px; border: 0; background: none; cursor: pointer;
-    font: 500 12px var(--ui); color: var(--faint); border-bottom: 2px solid transparent;
+    font: var(--w-med) 12px var(--ui); color: var(--faint); border-bottom: 2px solid transparent;
     margin-bottom: -1px; transition: color .15s;
   }
   .tab:hover { color: var(--text) }
   .tab[aria-selected="true"] { color: var(--text) }
   .tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
-  .tab .n { font: 400 10px var(--mono); color: var(--ghost); margin-left: 5px; font-variant-numeric: tabular-nums }
+  .tab .n { font: var(--w-reg) 10px var(--mono); color: var(--ghost); margin-left: 5px; font-variant-numeric: tabular-nums }
 
   /* 空流时压到底部。用 margin-top:auto 而不是 justify-content:flex-end ——
      后者在滚动容器上会把溢出的内容锁在视口外，滚不到。 */
@@ -722,7 +736,7 @@
   .hero .rmark path { stroke-width: 1.4; animation: drawin 1.1s var(--ease-out) both }
   .hero .rmark path:nth-child(2) { animation-delay: .18s }
   .hero .rmark path:nth-child(3) { animation-delay: .36s }
-  .hero .t { margin-top: 15px; font: 500 15px var(--ui); color: var(--text) }
+  .hero .t { margin-top: 15px; font: var(--w-med) 15px var(--ui); color: var(--text) }
   .hero .s { margin-top: 7px; max-width: 44ch; font-size: 12px; line-height: 1.7; color: var(--faint) }
   .hero .qs { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-top: 17px }
   /* 一个动作，和一句「不用了」。空态该给的就是这两样，不是一条横在顶上的通知。 */
@@ -730,13 +744,13 @@
   .pick {
     padding: 8px 20px; border: 1px solid var(--accent); border-radius: var(--r-sm);
     background: var(--accent); color: var(--accent-fg);
-    font: 500 13px var(--ui); cursor: pointer;
+    font: var(--w-med) 13px var(--ui); cursor: pointer;
     transition: filter .14s;
   }
   .pick:hover { filter: brightness(1.06) }
   .stay {
     padding: 2px 6px; border: 0; border-radius: var(--r-xs); background: transparent;
-    color: var(--ghost); font: 400 11.5px var(--ui); cursor: pointer;
+    color: var(--ghost); font: var(--w-reg) 11.5px var(--ui); cursor: pointer;
   }
   .stay:hover { color: var(--muted) }
   .pick:focus-visible, .stay:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
@@ -813,10 +827,10 @@
     animation: peekin .16s var(--ease-out) both;
   }
   @keyframes peekin { from { opacity: 0; transform: translate(8px, -50%) } to { opacity: 1; transform: translateY(-50%) } }
-  .srail-peek .hd { display: flex; align-items: baseline; gap: 8px; font: 400 10.5px var(--mono); color: var(--faint) }
+  .srail-peek .hd { display: flex; align-items: baseline; gap: 8px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   .srail-peek .hd .n { color: var(--accent) }
   .srail-peek .tx {
-    margin-top: 5px; font: 400 13px/1.55 var(--ui); color: var(--text);
+    margin-top: 5px; font: var(--w-reg) 13px/1.55 var(--ui); color: var(--text);
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }
   /* 跳过去之后眼睛还要再找一次，这一下省掉它 */
@@ -843,11 +857,11 @@
   .flow-end { height: 1px; margin-top: -1px }
 
   /* ── 轨迹：机器记录，不是给人读的叙事 ───────────────────────────── */
-  .traj { width: 100%; border-collapse: collapse; font: 400 11.5px/1.55 var(--mono) }
+  .traj { width: 100%; border-collapse: collapse; font: var(--w-reg) 11.5px/1.55 var(--mono) }
   .traj th {
     text-align: left; padding: 7px 12px; position: sticky; top: 0; z-index: 1;
     background: var(--surface); border-bottom: 1px solid var(--border);
-    font: 500 9.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ghost);
+    font: var(--w-med) 9.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ghost);
   }
   .traj td { padding: 6px 12px; border-bottom: 1px solid var(--hair); vertical-align: top; color: var(--muted) }
   .traj tr:hover td { background: var(--overlay) }
@@ -899,12 +913,12 @@
     display: block; margin-top: 4px; padding-left: 9px;
     border-left: 1px solid var(--border); color: var(--faint);
   }
-  .traj .sub b { color: var(--muted); font-weight: 400 }
+  .traj .sub b { color: var(--muted); font-weight: var(--w-reg) }
   .traj .num { color: var(--text); font-variant-numeric: tabular-nums }
   /* 表在这条栏下面开始：导出是对这张表整体的操作，不是某一行的 */
   .traj-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px 0 }
-  .traj-saved { font: 400 10.5px var(--mono); color: var(--ok); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .traj-note { padding: 12px; font: 400 10.5px var(--mono); color: var(--ghost) }
+  .traj-saved { font: var(--w-reg) 10.5px var(--mono); color: var(--ok); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .traj-note { padding: 12px; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
   .traj-note code { color: var(--faint) }
 
   /* 一次调用 */
@@ -912,7 +926,7 @@
   .call > .g { display: flex; flex-direction: column; align-items: center }
   .call > .g .sym {
     width: 20px; height: 20px; margin-top: 8px; display: grid; place-items: center;
-    border-radius: var(--r-xs); font: 500 10px/1 var(--mono); color: var(--faint);
+    border-radius: var(--r-xs); font: var(--w-med) 10px/1 var(--mono); color: var(--faint);
     background: var(--overlay); flex: none;
   }
   .call > .g .sym svg {
@@ -973,23 +987,23 @@
   .call > .g .sym { transition: opacity var(--t-card) var(--ease-out) }
   .call > .g .sym[data-done] { animation: symdone .34s var(--ease-out) }
   @keyframes symdone { 0% { transform: scale(1) } 38% { transform: scale(.86) } 100% { transform: scale(1) } }
-  .hl .nm { font: 500 12.5px var(--ui); color: var(--text) }
-  .call[data-k="say"] .hl .nm, .call[data-k="me"] .hl .nm { font-size: 11px; font-family: var(--mono); font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--faint) }
-  .hl .arg { font: 400 11.5px var(--mono); color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .hl .tag { font: 500 9.5px var(--mono); letter-spacing: .11em; text-transform: uppercase; padding: 1.5px 5px; border-radius: var(--r-xs); color: var(--faint); background: var(--overlay) }
+  .hl .nm { font: var(--w-med) 12.5px var(--ui); color: var(--text) }
+  .call[data-k="say"] .hl .nm, .call[data-k="me"] .hl .nm { font-size: 11px; font-family: var(--mono); font-weight: var(--w-med); letter-spacing: .12em; text-transform: uppercase; color: var(--faint) }
+  .hl .arg { font: var(--w-reg) 11.5px var(--mono); color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .hl .tag { font: var(--w-med) 9.5px var(--mono); letter-spacing: .11em; text-transform: uppercase; padding: 1.5px 5px; border-radius: var(--r-xs); color: var(--faint); background: var(--overlay) }
   /* 来源比工具名重要：这一步是外部服务干的，颜色跟 mcp 卡的色相一致 */
   .hl .src {
-    font: 500 9.5px var(--mono); letter-spacing: .09em; padding: 1.5px 6px;
+    font: var(--w-med) 9.5px var(--mono); letter-spacing: .09em; padding: 1.5px 6px;
     border-radius: var(--r-pill); color: var(--net); background: var(--net-wash);
   }
   /* 派活用委派色，外部服务用联网色 —— 两者都是"这一步不是核心自己干的",
      但一个跑在你机器上，一个跑在别人家。 */
   .hl .who {
-    font: 500 9.5px var(--mono); letter-spacing: .09em; padding: 1.5px 6px;
+    font: var(--w-med) 9.5px var(--mono); letter-spacing: .09em; padding: 1.5px 6px;
     border-radius: var(--r-pill); color: var(--deleg); background: var(--deleg-wash);
   }
 
-  .cost { margin-left: auto; display: inline-flex; align-items: baseline; gap: 7px; font: 400 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none }
+  .cost { margin-left: auto; display: inline-flex; align-items: baseline; gap: 7px; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none }
   .cost .hit { color: var(--ok) }
 
   /* 运行态在文字本身上扫一道微光,不在旁边加脉动的点 */
@@ -1004,7 +1018,7 @@
   @keyframes shim { from { background-position: 220% 0 } to { background-position: 0 0 } }
 
   /* 折叠态的「此刻在干什么」——收起来不等于看不见 */
-  .doing { font: 400 11px var(--mono); color: var(--faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .doing { font: var(--w-reg) 11px var(--mono); color: var(--faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .doing .d { color: var(--ghost) }
 
   /* 步骤级干预：hover 才出现 */
@@ -1012,7 +1026,7 @@
   .call > .c:hover .stepctl, .call > .c:focus-within .stepctl { opacity: 1 }
   .stepctl button {
     border: 0; background: var(--overlay); color: var(--faint); cursor: pointer;
-    font: 500 10px var(--mono); padding: 2px 6px; border-radius: var(--r-xs); white-space: nowrap;
+    font: var(--w-med) 10px var(--mono); padding: 2px 6px; border-radius: var(--r-xs); white-space: nowrap;
   }
   .stepctl button:hover { background: var(--border); color: var(--text) }
   .stepctl button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
@@ -1024,7 +1038,7 @@
   .call > .c:has(.rewind .menu:not([hidden])) .stepctl { opacity: 1 }
 
   /* 首字节之前那段空白是真实存在的，别装作一问就有回应 */
-  .await { display: flex; align-items: center; gap: 5px; padding: 4px 0; font: 400 11px var(--mono); color: var(--ghost) }
+  .await { display: flex; align-items: center; gap: 5px; padding: 4px 0; font: var(--w-reg) 11px var(--mono); color: var(--ghost) }
   .await i { width: 4px; height: 4px; border-radius: 50%; background: var(--ghost); animation: bob 1.15s ease-in-out infinite }
   .await i:nth-child(2) { animation-delay: .15s }
   .await i:nth-child(3) { animation-delay: .3s }
@@ -1038,7 +1052,7 @@
   .think > summary { display: inline-flex }
   .think .tk {
     margin-top: 5px; padding-left: 10px; border-left: 2px solid var(--hair);
-    font: 400 12px/1.68 var(--ui); color: var(--faint); white-space: pre-wrap;
+    font: var(--w-reg) 12px/1.68 var(--ui); color: var(--faint); white-space: pre-wrap;
   }
   .think[open] > summary .fold { color: var(--faint) }
   /* A details toggle is instant by default. content-visibility has to be carried
@@ -1070,7 +1084,7 @@
   .acts { display: flex; gap: 6px; margin-top: 7px }
   .copy {
     border: 0; background: transparent; color: var(--ghost); cursor: pointer;
-    font: 500 10px var(--mono); letter-spacing: .06em; padding: 2px 6px;
+    font: var(--w-med) 10px var(--mono); letter-spacing: .06em; padding: 2px 6px;
     border-radius: var(--r-xs); transition: color .12s, background .12s;
   }
   .copy:hover { background: var(--overlay); color: var(--text) }
@@ -1080,7 +1094,7 @@
   /* 一步没成，读起来不能和正常输出一样。挡下来和跑失败在事件里分不开，所以
      用告警而不是错误 —— 说「这一步有问题」，不替它断定是哪一种。 */
   .out .txt.bad { padding-left: 10px; border-left: 2px solid var(--warn) }
-  .out .txt code { font: 400 11.5px var(--mono); color: var(--deleg) }
+  .out .txt code { font: var(--w-reg) 11.5px var(--mono); color: var(--deleg) }
   /* 硬切的方波闪烁跟匀速流出的文字对不上拍，看着更抖 */
   .caret { display: inline-block; width: 6px; height: 13px; background: var(--net); vertical-align: -2px; animation: blink 1.1s var(--ease) infinite }
   @keyframes blink { 0%, 100% { opacity: 1 } 55% { opacity: .15 } }
@@ -1096,18 +1110,18 @@
   /* 只淡入不位移：位移读作「又来了一步」，而这是这一轮落停。 */
   .rcpt[data-lvl="ok"] {
     display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-    font: 400 11.5px var(--ui); color: var(--faint);
+    font: var(--w-reg) 11.5px var(--ui); color: var(--faint);
     animation: settle .26s var(--ease-out) both;
   }
   .rcpt[data-lvl="ok"] .tick { font-size: 10px; color: var(--ok); opacity: .75 }
-  .rcpt[data-lvl="ok"] .src { font: 400 10.5px var(--mono); color: var(--ghost); min-width: 0; overflow-wrap: anywhere }
+  .rcpt[data-lvl="ok"] .src { font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); min-width: 0; overflow-wrap: anywhere }
   @keyframes settle { from { opacity: 0 } to { opacity: 1 } }
 
   .rcpt-open { display: flex; flex-direction: column; gap: 10px; padding-top: 9px }
   /* 干净那行落在展开卡里时不再吃一次左边距 */
   .rcpt-open .rcpt { padding: 0 }
   .rgroup { display: flex; flex-direction: column; gap: 4px }
-  .rgroup .hd { font: 500 10px var(--mono); letter-spacing: .07em; color: var(--warn) }
+  .rgroup .hd { font: var(--w-med) 10px var(--mono); letter-spacing: .07em; color: var(--warn) }
   .rgroup[data-declared] .hd { color: var(--faint) }
   /* 逐行错开 40ms：五行一起弹出来是一坨，错开才读得出这是一份清单 */
   .rrow {
@@ -1116,9 +1130,9 @@
     animation-delay: calc(var(--i, 0) * 40ms);
   }
   .rgroup[data-declared] .rrow { border-left-color: var(--hair) }
-  .rrow .t { display: block; font: 400 12px var(--ui); color: var(--text) }
-  .rrow .d { display: block; margin-top: 2px; font: 400 11px var(--mono); color: var(--muted); overflow-wrap: anywhere }
-  .rgroup .more { padding-left: 12px; font: 400 11px var(--ui); color: var(--ghost) }
+  .rrow .t { display: block; font: var(--w-reg) 12px var(--ui); color: var(--text) }
+  .rrow .d { display: block; margin-top: 2px; font: var(--w-reg) 11px var(--mono); color: var(--muted); overflow-wrap: anywhere }
+  .rgroup .more { padding-left: 12px; font: var(--w-reg) 11px var(--ui); color: var(--ghost) }
 
   /* review findings：严重度用左侧 2px 色条编码，不新增文字标签 */
   .finds { margin-top: 7px; display: flex; flex-direction: column; gap: 5px }
@@ -1126,30 +1140,30 @@
   .find[data-lvl="ok"] { border-left-color: var(--ok) }
   .find[data-lvl="warn"] { border-left-color: var(--warn) }
   .find[data-lvl="err"] { border-left-color: var(--err) }
-  .find .t { display: block; font: 500 12.5px var(--ui); color: var(--text) }
+  .find .t { display: block; font: var(--w-med) 12.5px var(--ui); color: var(--text) }
   .find .why { display: block; margin-top: 2px; font-size: 11.5px; line-height: 1.55; color: var(--muted) }
   /* 通知的第二行是机器文本：系统原话、命令、来源路径。等宽 + 保留换行，长
      路径断得开 —— 拿正文字体铺成一坨，就会和标题糊在一起，也就是用户看到
      的那面墙。 */
   .find .why.nwhy {
-    margin-top: 5px; font: 400 11px/1.6 var(--mono); color: var(--faint);
+    margin-top: 5px; font: var(--w-reg) 11px/1.6 var(--mono); color: var(--faint);
     white-space: pre-wrap; overflow-wrap: anywhere;
   }
 
-  .term { margin-top: 6px; padding: 8px 11px; background: var(--overlay); border-radius: var(--r-sm); font: 400 11.5px/19px var(--mono); color: var(--muted); overflow-x: auto }
+  .term { margin-top: 6px; padding: 8px 11px; background: var(--overlay); border-radius: var(--r-sm); font: var(--w-reg) 11.5px/19px var(--mono); color: var(--muted); overflow-x: auto }
   .term-l { white-space: pre }
   .term .ok { color: var(--ok) } .term .er { color: var(--err) } .term .dim { color: var(--ghost) }
 
   details > summary { cursor: pointer; list-style: none }
   details > summary::-webkit-details-marker { display: none }
   details > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs) }
-  .fold { display: inline-flex; align-items: center; gap: 5px; font: 400 11px var(--mono); color: var(--faint) }
+  .fold { display: inline-flex; align-items: center; gap: 5px; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
   .fold::before { content: "▸"; font-size: 8px; color: var(--ghost); transition: transform .18s var(--ease) }
   details[open] > summary .fold::before { transform: rotate(90deg) }
   .fold:hover { color: var(--text) }
 
   .peek { margin-top: 7px; display: flex; flex-direction: column; gap: 3px }
-  .peek .row { display: flex; gap: 9px; font: 400 11.5px var(--mono); color: var(--faint) }
+  .peek .row { display: flex; gap: 9px; font: var(--w-reg) 11.5px var(--mono); color: var(--faint) }
   .peek .row .d { color: var(--ghost) }
   .peek .row .n { margin-left: auto; color: var(--ghost); font-variant-numeric: tabular-nums }
   /* 合并后的读清单要能翻回正文，否则收起卡片等于把内容藏没了 */
@@ -1175,30 +1189,30 @@
   .out-clip[data-open]::after { opacity: 0 }
   .out-more {
     margin-top: 5px; padding: 2px 7px; border: 0; border-radius: var(--r-xs); background: var(--overlay);
-    font: 400 11px var(--mono); color: var(--faint); cursor: pointer;
+    font: var(--w-reg) 11px var(--mono); color: var(--faint); cursor: pointer;
   }
   .out-more:hover { color: var(--text) }
   .out-more:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
 
   /* 搬走和丢掉不是同一件事,只有后者是警告 */
-  .bound { margin-top: 5px; font: 400 11px var(--mono); color: var(--faint) }
+  .bound { margin-top: 5px; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
   .bound.bad { color: var(--err) }
 
   .hits { margin-top: 7px; display: flex; flex-direction: column; gap: 1px }
   .hit-row { display: grid; grid-template-columns: 16px 1fr; gap: 9px; padding: 6px 8px; border-radius: var(--r-xs) }
   .hit-row:hover { background: var(--overlay) }
-  .hit-row .i { font: 400 10px/17px var(--mono); color: var(--ghost); text-align: right; font-variant-numeric: tabular-nums }
+  .hit-row .i { font: var(--w-reg) 10px/17px var(--mono); color: var(--ghost); text-align: right; font-variant-numeric: tabular-nums }
   .hit-row .t { font-size: 12px; color: var(--text); line-height: 1.45 }
-  .hit-row .u { margin-top: 2px; font: 400 10.5px var(--mono); color: var(--net); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .hit-row .u { margin-top: 2px; font: var(--w-reg) 10.5px var(--mono); color: var(--net); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .hit-row .q { margin-top: 4px; font-size: 11.5px; line-height: 1.55; color: var(--muted); border-left: 2px solid var(--border); padding-left: 8px }
 
   /* subagent */
   .nest { margin-top: 8px; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden }
   .nest-hd { display: flex; align-items: center; gap: 9px; padding: 7px 11px; background: var(--deleg-wash); border-bottom: 1px solid var(--border) }
-  .nest-hd .who { font: 500 11.5px var(--ui); color: var(--deleg) }
-  .nest-hd .prof { font: 400 10.5px var(--mono); color: var(--faint) }
+  .nest-hd .who { font: var(--w-med) 11.5px var(--ui); color: var(--deleg) }
+  .nest-hd .prof { font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   .nest-hd .doing { margin-left: auto; max-width: 46% }
-  .nest-hd .rt { margin-left: 13px; font: 400 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums; flex: none }
+  .nest-hd .rt { margin-left: 13px; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums; flex: none }
   .nest-bd { padding: 3px 11px 8px }
   .nest-bd .call { grid-template-columns: 17px minmax(0, 1fr); gap: 9px }
   .nest-bd .call > .g .sym { width: 17px; height: 17px; margin-top: 6px; font-size: 9px }
@@ -1208,16 +1222,16 @@
   /* 子代理交活：脉动停下、收一下、落成实心。inline style 起手，所以要 !important 压过去 */
   .pip[data-settled] { animation: pipdone .38s var(--ease-out) !important; background: var(--ok) !important }
   @keyframes pipdone { 0% { transform: scale(1.5); opacity: .45 } 55% { transform: scale(.74) } 100% { transform: scale(1); opacity: 1 } }
-  .nest-ret b { color: var(--text); font-weight: 500 }
-  .nest-ret code { font: 400 11.5px var(--mono); color: var(--deleg) }
-  .par { display: flex; align-items: center; gap: 8px; margin: 4px 0 1px; font: 500 9.5px var(--mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ghost) }
+  .nest-ret b { color: var(--text); font-weight: var(--w-med) }
+  .nest-ret code { font: var(--w-reg) 11.5px var(--mono); color: var(--deleg) }
+  .par { display: flex; align-items: center; gap: 8px; margin: 4px 0 1px; font: var(--w-med) 9.5px var(--mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ghost) }
   .par::after { content: ""; flex: 1; height: 1px; background: var(--hair) }
 
   /* diff */
   .dif { margin-top: 7px; border: 1px solid var(--hair); border-radius: var(--r-sm); overflow: hidden }
-  .dif-hd { display: flex; gap: 9px; padding: 6px 11px; background: var(--overlay); font: 400 11px var(--mono); color: var(--faint) }
+  .dif-hd { display: flex; gap: 9px; padding: 6px 11px; background: var(--overlay); font: var(--w-reg) 11px var(--mono); color: var(--faint) }
   .dif-hd .ro { margin-left: auto; font-size: 9.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--ghost) }
-  .dl { display: grid; grid-template-columns: 36px 14px 1fr; font: 400 11.5px/20px var(--mono); white-space: pre }
+  .dl { display: grid; grid-template-columns: 36px 14px 1fr; font: var(--w-reg) 11.5px/20px var(--mono); white-space: pre }
   .dl > .no { text-align: right; padding-right: 9px; color: var(--ghost); font-variant-numeric: tabular-nums; user-select: none }
   .dl > .sg { color: var(--ghost); user-select: none }
   .dl > .cd { padding-right: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis }
@@ -1229,14 +1243,14 @@
   /* agent 改写了自己的目标 —— 顶栏那行字变了，得看得见是谁改的 */
   .goalup { margin-top: 6px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12.5px; line-height: 1.6 }
   .goalup .o { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--ghost) }
-  .goalup .ar { font: 400 11px var(--mono); color: var(--ghost) }
-  .goalup .n { color: var(--text); font-weight: 500 }
+  .goalup .ar { font: var(--w-reg) 11px var(--mono); color: var(--ghost) }
+  .goalup .n { color: var(--text); font-weight: var(--w-med) }
   .chrome .goal[data-flash] { animation: flash 1.3s var(--ease-out) }
 
   /* multi_edit 是一次事务：所以它是一张卡，不是 N 个各自为政的 diff */
   .medit { margin-top: 7px; border: 1px solid var(--hair); border-radius: var(--r-sm); overflow: hidden }
-  .medit-hd { padding: 6px 11px; background: var(--overlay); font: 400 11px var(--mono); color: var(--faint) }
-  .medit-r { display: flex; align-items: baseline; gap: 10px; padding: 6px 11px; font: 400 11.5px var(--mono); color: var(--muted); border-top: 1px solid var(--hair); animation: line var(--t-line) var(--ease-out) both }
+  .medit-hd { padding: 6px 11px; background: var(--overlay); font: var(--w-reg) 11px var(--mono); color: var(--faint) }
+  .medit-r { display: flex; align-items: baseline; gap: 10px; padding: 6px 11px; font: var(--w-reg) 11.5px var(--mono); color: var(--muted); border-top: 1px solid var(--hair); animation: line var(--t-line) var(--ease-out) both }
   .medit-r .p { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .medit-r .p .d { color: var(--ghost) }
   .medit-r .at { color: var(--ghost); font-size: 10.5px; white-space: nowrap }
@@ -1250,7 +1264,7 @@
   .guard[data-risk="medium"] { border-left-color: var(--accent) }
   .guard[data-risk="high"] { border-left-color: var(--err) }
   .guard-hd { display: flex; align-items: baseline; gap: 8px }
-  .guard-hd .verdict { font: 500 12.5px var(--ui); color: var(--text); flex: none }
+  .guard-hd .verdict { font: var(--w-med) 12.5px var(--ui); color: var(--text); flex: none }
   .guard-hd .scope { font-size: 12px; color: var(--muted); min-width: 0 }
   .guard-hd .gauge { margin-left: auto; display: flex; gap: 2px; flex: none; align-self: center }
   .guard-hd .gauge i { width: 3px; height: 9px; border-radius: 1px; background: var(--hair) }
@@ -1263,17 +1277,17 @@
   .comp { margin-top: 7px }
   .comp-bar { height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--accent) 26%, var(--overlay)); overflow: hidden }
   .comp-bar i { display: block; height: 100%; background: var(--ok); transition: width .6s var(--ease-out) }
-  .comp-n { margin-top: 5px; font: 400 11px var(--mono); color: var(--faint) }
-  .comp-n b { color: var(--text); font-weight: 400; font-variant-numeric: tabular-nums }
+  .comp-n { margin-top: 5px; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
+  .comp-n b { color: var(--text); font-weight: var(--w-reg); font-variant-numeric: tabular-nums }
   .comp details { margin-top: 5px }
   .comp-l { margin-top: 5px; display: flex; flex-direction: column; gap: 3px }
-  .comp-l .row { display: flex; gap: 8px; font: 400 11px var(--mono); color: var(--faint) }
+  .comp-l .row { display: flex; gap: 8px; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
   .comp-l .row .x { color: var(--del); flex: none; width: 10px }
   .comp-l .row .k { color: var(--ok); flex: none; width: 10px; font-size: 10px }
 
   .steps { margin-top: 6px; display: flex; flex-direction: column; gap: 4px }
   .steps .s { display: flex; align-items: baseline; gap: 9px; font-size: 12.5px; color: var(--muted) }
-  .steps .s .b { font: 400 10px/1.5 var(--mono); width: 10px; flex: none; color: var(--ghost) }
+  .steps .s .b { font: var(--w-reg) 10px/1.5 var(--mono); width: 10px; flex: none; color: var(--ghost) }
   .steps .s[data-done] { color: var(--faint) }
   .steps .s[data-done] .b { color: var(--ok) }
   .steps .s[data-now] { color: var(--text) }
@@ -1291,14 +1305,14 @@
     background: color-mix(in srgb, var(--warn) 9%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--warn) 20%, var(--border));
   }
-  .apv-hd .tool { font: 500 11px var(--mono); letter-spacing: .06em; color: var(--warn) }
-  .apv-hd .sub { font: 400 12px var(--ui); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .apv-dt { padding: 9px 12px 0; font: 400 11.5px/1.6 var(--mono); color: var(--muted) }
+  .apv-hd .tool { font: var(--w-med) 11px var(--mono); letter-spacing: .06em; color: var(--warn) }
+  .apv-hd .sub { font: var(--w-reg) 12px var(--ui); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .apv-dt { padding: 9px 12px 0; font: var(--w-reg) 11.5px/1.6 var(--mono); color: var(--muted) }
   .apv-ft { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 11px 12px }
-  .apv-ft .hint { margin-left: auto; font: 400 10.5px var(--mono); color: var(--ghost) }
-  .apv-ft .hint b { color: var(--faint); font-weight: 400 }
+  .apv-ft .hint { margin-left: auto; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
+  .apv-ft .hint b { color: var(--faint); font-weight: var(--w-reg) }
   .apv-done { padding: 10px 12px; font-size: 12px; line-height: 1.65; color: var(--muted); border-top: 1px solid var(--hair) }
-  .apv-done b { color: var(--text); font-weight: 500 }
+  .apv-done b { color: var(--text); font-weight: var(--w-med) }
   .apv[data-sealed="no"] { border-color: color-mix(in srgb, var(--err) 42%, var(--border)) }
   .apv[data-sealed] .apv-hd { background: transparent }
 
@@ -1316,7 +1330,7 @@
   }
   .ask-tab {
     padding: 5px 11px 7px; border: 0; background: none; cursor: pointer;
-    font: 500 11.5px var(--ui); color: color-mix(in srgb, var(--accent) 62%, var(--muted));
+    font: var(--w-med) 11.5px var(--ui); color: color-mix(in srgb, var(--accent) 62%, var(--muted));
     border-bottom: 2px solid transparent; margin-bottom: -1px;
   }
   .ask-tab:hover { color: var(--accent) }
@@ -1327,8 +1341,8 @@
 
   .ask-pane { padding: 13px 13px 0; display: none }
   .ask-pane[data-on] { display: block }
-  .ask-q { font: 500 13px/1.5 var(--ui); color: var(--text); margin-bottom: 3px }
-  .ask-hint { font: 400 11px var(--mono); color: var(--ghost); margin-bottom: 10px }
+  .ask-q { font: var(--w-med) 13px/1.5 var(--ui); color: var(--text); margin-bottom: 3px }
+  .ask-hint { font: var(--w-reg) 11px var(--mono); color: var(--ghost); margin-bottom: 10px }
 
   .opts { display: flex; flex-direction: column }
   /* ask 卡的选项行和设置里的 .prow 是同一个控件，共用这一份定义。
@@ -1362,10 +1376,10 @@
   .opt[data-on] .mark::after, .prow[data-on] .mark::after { opacity: 1 }
 
   .opt .txt, .prow .tx { min-width: 0 }
-  .opt .lb, .prow .lb { display: flex; align-items: baseline; gap: 8px; font: 500 12.5px var(--ui); color: var(--text) }
-  .opt .rec { font: 500 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); flex: none }
+  .opt .lb, .prow .lb { display: flex; align-items: baseline; gap: 8px; font: var(--w-med) 12.5px var(--ui); color: var(--text) }
+  .opt .rec { font: var(--w-med) 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); flex: none }
   .opt .ds, .prow .ds { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.55; color: var(--muted) }
-  .opt .ds code, .prow .ds code { font: 400 11px var(--mono); color: var(--deleg) }
+  .opt .ds code, .prow .ds code { font: var(--w-reg) 11px var(--mono); color: var(--deleg) }
 
   .opt-other .lb { color: var(--muted) }
   .opt-other[data-on] .lb { color: var(--text) }
@@ -1376,7 +1390,7 @@
     width: 100%; padding: 9px 11px; border-radius: var(--r-sm);
     border: 1px solid color-mix(in srgb, var(--accent) 46%, var(--border));
     background: var(--surface); color: var(--text);
-    font: 400 12.5px var(--ui); outline: none;
+    font: var(--w-reg) 12.5px var(--ui); outline: none;
   }
   .other-wrap input::placeholder { color: var(--ghost) }
   .other-wrap input:focus { border-color: var(--accent) }
@@ -1384,7 +1398,7 @@
   .ask-foot { display: flex; align-items: center; gap: 12px; padding: 13px }
   .ask-foot .dismiss {
     margin-left: auto; background: none; border: 0; cursor: pointer;
-    color: var(--faint); font: 400 11.5px var(--ui);
+    color: var(--faint); font: var(--w-reg) 11.5px var(--ui);
     text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px;
   }
   .ask-foot .dismiss:hover { color: var(--muted) }
@@ -1404,7 +1418,7 @@
     border-top: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
     background: var(--accent-wash);
   }
-  .ask-done b { color: var(--text); font-weight: 500 }
+  .ask-done b { color: var(--text); font-weight: var(--w-med) }
 
   /* 减去 .flow 的内边距，输入框的可见边缘才跟卡片的左右边缘落在同一条线上 */
   /* 附件是「这一轮要带上的东西」，所以它贴在输入框上沿，不在别处 */
@@ -1436,7 +1450,7 @@
 
   /* 说的是动词，不是「把文件拖到这里」—— 松手之前就知道会得到什么 */
   .intake {
-    margin: 0 0 7px; padding: 0 2px; font: 500 11.5px var(--ui);
+    margin: 0 0 7px; padding: 0 2px; font: var(--w-med) 11.5px var(--ui);
     animation: intakein .12s var(--ease-out) both;
   }
   .intake[data-tone="attach"] { color: var(--accent) }
@@ -1462,26 +1476,26 @@
   .shot .glyph {
     width: 30px; height: 30px; flex: none; border-radius: 4px; display: grid; place-items: center;
     background: color-mix(in srgb, var(--net) 12%, transparent); color: var(--net);
-    font: 500 9.5px var(--mono); letter-spacing: .04em;
+    font: var(--w-med) 9.5px var(--mono); letter-spacing: .04em;
   }
   .shot .meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding-right: 2px }
-  .shot .nm { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 11.5px var(--mono); color: var(--text) }
-  .shot .sz { font: 400 10px var(--mono); color: var(--ghost) }
+  .shot .nm { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--w-reg) 11.5px var(--mono); color: var(--text) }
+  .shot .sz { font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
   /* 收起来的粘贴要能原样放回去 —— 自动改掉用户手打的内容，代价比帮的忙大 */
   .shot .undo {
     align-self: flex-start; border: 0; background: none; padding: 0; cursor: pointer;
-    font: 400 10px var(--mono); color: var(--faint); text-decoration: underline;
+    font: var(--w-reg) 10px var(--mono); color: var(--faint); text-decoration: underline;
     text-decoration-style: dotted; text-underline-offset: 2px;
   }
   .shot .undo:hover { color: var(--accent) }
   .shot .x {
     width: 22px; height: 22px; flex: none; border: 0; border-radius: var(--r-sm); cursor: pointer;
-    background: transparent; color: var(--ghost); font: 400 13px/1 var(--mono);
+    background: transparent; color: var(--ghost); font: var(--w-reg) 13px/1 var(--mono);
     display: grid; place-items: center; transition: color .12s, background .12s;
   }
   .shot .x:hover { color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent) }
   .shot button:focus-visible, .intake:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
-  .shots .warn { font: 400 11px var(--ui); color: var(--accent) }
+  .shots .warn { font: var(--w-reg) 11px var(--ui); color: var(--accent) }
 
   .compose {
     position: relative; flex: none; margin: 0 auto 16px;
@@ -1547,7 +1561,7 @@
      每个属性各写各的，坏一个也只坏一个。上限按行数走（1.6 × 5 行）。 */
   .compose textarea {
     width: 100%; border: 0; background: transparent; color: var(--text);
-    font-family: var(--ui); font-size: var(--read, 13.5px); font-weight: 400; line-height: 1.6;
+    font-family: var(--ui); font-size: var(--read, 13.5px); font-weight: var(--w-reg); line-height: 1.6;
     resize: none; outline: none; padding: 0;
     max-height: calc(var(--read, 13.5px) * 8);
     overflow-x: hidden; overflow-y: auto;
@@ -1598,10 +1612,10 @@
   /* 建议是「可点的一句话」，不是开关 —— 所以不给它边框，别跟左边那排混 */
   .sug {
     border: 0; background: var(--overlay); border-radius: var(--r-sm);
-    padding: 4px 10px; color: var(--faint); font: 400 11.5px var(--ui); cursor: pointer;
+    padding: 4px 10px; color: var(--faint); font: var(--w-reg) 11.5px var(--ui); cursor: pointer;
     transition: color .15s, background .15s;
   }
-  .sug::before { content: "↩ "; color: var(--ghost); font: 400 10px var(--mono) }
+  .sug::before { content: "↩ "; color: var(--ghost); font: var(--w-reg) 10px var(--mono) }
   .sug:hover { color: var(--text); background: var(--border) }
   .sug:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
@@ -1612,7 +1626,7 @@
   .block:has(.empty) { gap: 4px }   /* 空块压一行 */
 
   .big { display: flex; align-items: flex-end; gap: 12px }
-  .big .v { font: 500 25px/1 var(--mono); letter-spacing: -.03em; color: var(--ghost); font-variant-numeric: tabular-nums; transition: color .3s }
+  .big .v { font: var(--w-med) 25px/1 var(--mono); letter-spacing: -.03em; color: var(--ghost); font-variant-numeric: tabular-nums; transition: color .3s }
   .big .v[data-live] { color: var(--ok) }
   /* 收工时这个数字亮一下 —— 全场唯一一次主动索取注意力 */
   .big .v[data-flash] { animation: vflash 1.2s var(--ease-out) }
@@ -1620,14 +1634,14 @@
     0%, 100% { text-shadow: none }
     32% { text-shadow: 0 0 20px color-mix(in srgb, var(--ok) 62%, transparent) }
   }
-  .big .k { font: 400 10.5px var(--mono); color: var(--faint); padding-bottom: 2px; line-height: 1.35 }
+  .big .k { font: var(--w-reg) 10.5px var(--mono); color: var(--faint); padding-bottom: 2px; line-height: 1.35 }
 
   .bar { display: flex; height: 6px; border-radius: var(--r-xs); overflow: hidden; background: var(--overlay); gap: 1px }
   .bar i { display: block; transition: flex-grow .6s var(--ease) }
   .bar .c { background: var(--ok) } .bar .f { background: var(--ghost) }
 
   .legend { display: flex; flex-direction: column; gap: 5px }
-  .legend .r { display: flex; align-items: baseline; gap: 8px; font: 400 11px var(--mono); color: var(--faint) }
+  .legend .r { display: flex; align-items: baseline; gap: 8px; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
   .legend .r i { width: 7px; height: 7px; border-radius: 2px; flex: none }
   .legend .r .n { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted) }
   /* 命中率只由输入侧的两段构成；输出 token 不在那条 bar 里，就不给它色块 */
@@ -1635,13 +1649,13 @@
 
   .money { display: flex; align-items: flex-end; justify-content: space-between; gap: 11px; padding-top: 10px; border-top: 1px solid var(--hair) }
   .money .col { display: flex; flex-direction: column; gap: 3px }
-  .money .col .k { font: 400 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ghost) }
-  .money .col .v { font: 500 16px/1 var(--mono); color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -.02em }
+  .money .col .k { font: var(--w-reg) 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ghost) }
+  .money .col .v { font: var(--w-med) 16px/1 var(--mono); color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -.02em }
   .money .col .v.sm { font-size: 13px; color: var(--muted) }
-  .money .col .note { font: 400 10px var(--mono); color: var(--faint) }
+  .money .col .note { font: var(--w-reg) 10px var(--mono); color: var(--faint) }
 
   /* 上下行是两笔独立的账：上行按命中/未命中分档计价，下行只有一个价 */
-  .rate { display: flex; align-items: baseline; gap: 7px; font: 400 11px var(--mono); color: var(--faint) }
+  .rate { display: flex; align-items: baseline; gap: 7px; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
   .rate .v { color: var(--ghost); font-variant-numeric: tabular-nums; transition: color .3s }
   /* 只有真的在收字的时候这个数才是活的；工具在跑时它就该是 "—" */
   .rate[data-live] .v { color: var(--text) }
@@ -1655,7 +1669,7 @@
   .rate[data-live] .spark .line { fill: none }
   .rate[data-live] .spark .fill { fill: color-mix(in srgb, var(--net) 11%, transparent) }
   .srcs { display: flex; flex-direction: column; gap: 4px; padding-top: 9px; border-top: 1px solid var(--hair) }
-  .srcs .r { display: flex; align-items: baseline; gap: 8px; font: 400 11px var(--mono); color: var(--faint) }
+  .srcs .r { display: flex; align-items: baseline; gap: 8px; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
   .srcs .r .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums }
   .srcs:empty { display: none }
 
@@ -1670,7 +1684,7 @@
   .plan .s:hover { background: var(--overlay) }
   .plan .s[data-done] { opacity: .72 }
   .plan .s:last-child { border-bottom: 0 }
-  .plan .s .b { font: 400 10px var(--mono); width: 10px; flex: none; color: var(--ghost); font-variant-numeric: tabular-nums; transition: color .2s }
+  .plan .s .b { font: var(--w-reg) 10px var(--mono); width: 10px; flex: none; color: var(--ghost); font-variant-numeric: tabular-nums; transition: color .2s }
   .plan .s[data-done] { color: var(--faint) }
   .plan .s[data-done] .b { color: var(--ok) }
   /* 划线是画出来的，不是凭空出现的 —— 这是「刚刚完成」和「本来就完成」的区别。
@@ -1687,30 +1701,30 @@
   @keyframes pop { 0% { transform: scale(.4); opacity: .2 } 60% { transform: scale(1.14) } 100% { transform: scale(1) } }
   .plan .s[data-now] { color: var(--text) }
   .plan .s[data-now] .b { color: var(--net) }
-  .plan .s[data-now] .t { font-weight: 500 }
-  .plan .s .n { margin-left: auto; font: 400 10px var(--mono); color: var(--ghost); flex: none; font-variant-numeric: tabular-nums }
+  .plan .s[data-now] .t { font-weight: var(--w-med) }
+  .plan .s .n { margin-left: auto; font: var(--w-reg) 10px var(--mono); color: var(--ghost); flex: none; font-variant-numeric: tabular-nums }
 
   .prog2 { display: flex; align-items: center; gap: 9px }
   .prog2 .track { flex: 1; height: 3px; border-radius: 2px; background: var(--overlay); overflow: hidden }
   .prog2 .track i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .5s var(--ease) }
 
   .agents { display: flex; flex-direction: column; gap: 7px; min-height: 18px }
-  .ag { display: flex; align-items: center; gap: 9px; font: 400 11.5px var(--mono); color: var(--muted); animation: card var(--t-card) var(--ease-out) both }
+  .ag { display: flex; align-items: center; gap: 9px; font: var(--w-reg) 11.5px var(--mono); color: var(--muted); animation: card var(--t-card) var(--ease-out) both }
   .ag .nm { color: var(--text) }
   .ag .rt { margin-left: auto; font-size: 10.5px; color: var(--ghost); font-variant-numeric: tabular-nums }
 
   .jobs { display: flex; flex-direction: column; gap: 7px; min-height: 18px }
-  .job { display: flex; align-items: center; gap: 8px; font: 400 11px var(--mono); color: var(--muted); animation: card var(--t-card) var(--ease-out) both }
+  .job { display: flex; align-items: center; gap: 8px; font: var(--w-reg) 11px var(--mono); color: var(--muted); animation: card var(--t-card) var(--ease-out) both }
   .job .cmd { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .job .rt { margin-left: auto; color: var(--ghost); font-variant-numeric: tabular-nums; flex: none }
-  .job .kill { flex: none; border: 0; border-radius: var(--r-xs); background: var(--overlay); color: var(--faint); font: 500 10px var(--mono); padding: 2px 6px; cursor: pointer }
+  .job .kill { flex: none; border: 0; border-radius: var(--r-xs); background: var(--overlay); color: var(--faint); font: var(--w-med) 10px var(--mono); padding: 2px 6px; cursor: pointer }
   .job .kill:hover { background: var(--border); color: var(--err) }
   .job .kill:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .job[data-done] { color: var(--faint) }
-  .bgnote { margin-top: 6px; font: 400 11px var(--mono); color: var(--faint) }
+  .bgnote { margin-top: 6px; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
 
   .files { display: flex; flex-direction: column; min-height: 18px }
-  .file { display: flex; gap: 9px; padding: 6px 0; font: 400 11.5px var(--mono); color: var(--muted); animation: card var(--t-card) var(--ease-out) both }
+  .file { display: flex; gap: 9px; padding: 6px 0; font: var(--w-reg) 11.5px var(--mono); color: var(--muted); animation: card var(--t-card) var(--ease-out) both }
   /* 目录可以被裁，文件名不行 —— 之前整条 .p 一起省略号，先没的恰好是文件名 */
   .file .p { min-width: 0; display: flex; white-space: nowrap }
   .file .p .d { color: var(--ghost); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto }
@@ -1724,7 +1738,7 @@
     from { background: color-mix(in srgb, var(--accent) 22%, transparent) }
     to { background: transparent }
   }
-  .empty { font: 400 11px var(--mono); color: var(--ghost) }
+  .empty { font: var(--w-reg) 11px var(--mono); color: var(--ghost) }
 
 
   @media (prefers-reduced-motion: reduce) {
@@ -1803,36 +1817,36 @@
   .onb-r path { stroke-width: 1.4; animation: drawin .9s var(--ease-out) both }
   .onb-r path:nth-child(2) { animation-delay: .16s }
   .onb-r path:nth-child(3) { animation-delay: .32s }
-  .onb-t { margin: 0; font: 400 12.5px var(--ui); color: rgb(255 255 255 / .62) }
-  .onb-s { margin: -4px 0 2px; font: 400 11.5px/1.6 var(--ui); color: rgb(255 255 255 / .38) }
+  .onb-t { margin: 0; font: var(--w-reg) 12.5px var(--ui); color: rgb(255 255 255 / .62) }
+  .onb-s { margin: -4px 0 2px; font: var(--w-reg) 11.5px/1.6 var(--ui); color: rgb(255 255 255 / .38) }
 
   .onb-field { width: 100%; display: grid; gap: 5px; text-align: left }
   /* 不 uppercase：字距会把中英混排里的「的」也拉开 */
   .onb-field > label {
     display: flex; align-items: center; gap: 6px;
-    font: 400 10.5px var(--mono); color: rgb(255 255 255 / .36); letter-spacing: .06em;
+    font: var(--w-reg) 10.5px var(--mono); color: rgb(255 255 255 / .36); letter-spacing: .06em;
   }
   .onb-field > label code {
-    font: 400 10px var(--mono); color: rgb(255 255 255 / .3);
+    font: var(--w-reg) 10px var(--mono); color: rgb(255 255 255 / .3);
     padding: 1px 5px; border-radius: var(--r-xs); background: rgb(255 255 255 / .06);
   }
   .onb-field > input {
     width: 100%; padding: 9px 11px; border-radius: var(--r-sm);
     border: 1px solid rgb(255 255 255 / .14); background: rgb(255 255 255 / .05); color: #fff;
-    font: 400 13px var(--mono); outline: none;
+    font: var(--w-reg) 13px var(--mono); outline: none;
   }
   .onb-field > input::placeholder { color: rgb(255 255 255 / .26) }
   .onb-field > input:focus-visible, .onb-chip:focus-visible,
   .onb-go:focus-visible, .onb-pick > .picker > button:focus-visible {
     outline: 2px solid #7391FF; outline-offset: 1px;
   }
-  .onb-err { font: 400 11.5px/1.6 var(--ui); color: #E4675D; overflow-wrap: anywhere }
+  .onb-err { font: var(--w-reg) 11.5px/1.6 var(--ui); color: #E4675D; overflow-wrap: anywhere }
   .onb-go {
-    justify-self: start; padding: 9px 20px; font: 500 13px var(--ui);
+    justify-self: start; padding: 9px 20px; font: var(--w-med) 13px var(--ui);
     background: #DDA144; color: #171104; border: 1px solid #DDA144; border-radius: var(--r-sm);
   }
   .onb-go[disabled] { opacity: .45 }
-  .onb-note { font: 400 11px/1.6 var(--ui); color: rgb(255 255 255 / .34) }
+  .onb-note { font: var(--w-reg) 11px/1.6 var(--ui); color: rgb(255 255 255 / .34) }
 
   /* ── 设置：一个专门的界面。它承载的东西只会越来越多，塞不进侧栏。 ── */
   .prefs {
@@ -1868,11 +1882,11 @@
   [data-shell="wails"] .prefs-hd { --wails-draggable: drag }
   [data-shell="wails"] .prefs-hd button { --wails-draggable: no-drag }
   [data-shell="wails"][data-platform="darwin"] .prefs-hd { height: 51px; padding-left: 78px }
-  .prefs-hd .ttl { font: 500 12.5px var(--ui); color: var(--text) }
-  .prefs-hd .esc { margin-left: auto; margin-right: 4px; font: 400 10px var(--mono); color: var(--ghost); border: 1px solid var(--border); border-radius: var(--r-xs); padding: 1px 5px }
+  .prefs-hd .ttl { font: var(--w-med) 12.5px var(--ui); color: var(--text) }
+  .prefs-hd .esc { margin-left: auto; margin-right: 4px; font: var(--w-reg) 10px var(--mono); color: var(--ghost); border: 1px solid var(--border); border-radius: var(--r-xs); padding: 1px 5px }
   .back {
     border: 0; background: transparent; cursor: pointer; padding: 4px 8px 4px 4px; border-radius: var(--r-xs);
-    color: var(--muted); font: 400 12px var(--ui); transition: color .14s, background .14s;
+    color: var(--muted); font: var(--w-reg) 12px var(--ui); transition: color .14s, background .14s;
   }
   .back:hover { color: var(--text); background: var(--overlay) }
   .back:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
@@ -1887,16 +1901,16 @@
   .prefs-nav button {
     display: flex; align-items: baseline; gap: 10px;
     text-align: left; padding: 8px 11px; border: 0; border-radius: var(--r-sm); cursor: pointer;
-    background: transparent; color: var(--muted); font: 400 12.5px var(--ui);
+    background: transparent; color: var(--muted); font: var(--w-reg) 12.5px var(--ui);
     transition: background .14s, color .14s;
   }
   .prefs-nav button:hover { background: var(--overlay); color: var(--text) }
-  .prefs-nav button[aria-selected="true"] { background: var(--overlay); color: var(--text); font-weight: 500 }
+  .prefs-nav button[aria-selected="true"] { background: var(--overlay); color: var(--text); font-weight: var(--w-med) }
   .prefs-nav button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   /* 这一列是真信息不是装饰：ghost 在 10.5px 上对比度只有 2:1，读不出来 */
   .prefs-nav .nv {
     margin-left: auto; flex: none; max-width: 88px; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; font: 400 10.5px var(--mono); color: var(--faint);
+    white-space: nowrap; font: var(--w-reg) 10.5px var(--mono); color: var(--faint);
   }
   .prefs-nav button[aria-selected="true"] .nv { color: var(--muted) }
   .prefs-nav .nv[data-danger] { color: var(--err) }
@@ -1910,16 +1924,16 @@
   .grp { margin-bottom: 40px; animation: card var(--t-card) var(--ease-out) both }
   .grp:last-child { margin-bottom: 0 }
   .grp-hd { display: flex; align-items: baseline; gap: 12px }
-  .grp h2 { margin: 0; font: 600 14.5px var(--ui); color: var(--text) }
-  .grp .now { margin-left: auto; flex: none; font: 400 11px var(--mono); color: var(--faint) }
+  .grp h2 { margin: 0; font: var(--w-semi) 14.5px var(--ui); color: var(--text) }
+  .grp .now { margin-left: auto; flex: none; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
   .grp-hd .act { margin-left: 12px; align-self: center }
   .grp-hd .now + .act { margin-left: 0 }
   .grp-hd > .act:first-of-type:not(.now + .act) { margin-left: auto }
-  .grp .hint { margin: 6px 0 0; font: 400 11.5px/1.7 var(--ui); color: var(--faint); max-width: 64ch }
+  .grp .hint { margin: 6px 0 0; font: var(--w-reg) 11.5px/1.7 var(--ui); color: var(--faint); max-width: 64ch }
   .grp-items { margin-top: 14px; display: flex; flex-direction: column }
-  .grp .note { margin: 11px 0 0; font: 400 11px/1.7 var(--ui); color: var(--faint); max-width: 60ch }
+  .grp .note { margin: 11px 0 0; font: var(--w-reg) 11px/1.7 var(--ui); color: var(--faint); max-width: 60ch }
   .grp .empty { padding: 14px 12px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair);
-    font: 400 11.5px var(--ui); color: var(--faint) }
+    font: var(--w-reg) 11.5px var(--ui); color: var(--faint) }
 
   /* 一行一个选项，settings 和 ask 卡是同一个控件 —— 分成两套只会各自漂。
      .prow 的差别只剩它自己的失效态和危险态。 */
@@ -1940,8 +1954,8 @@
 
   .kv { display: flex; gap: 12px; align-items: baseline; padding: 10px 12px; border-top: 1px solid var(--hair) }
   .kv:last-of-type { border-bottom: 1px solid var(--hair) }
-  .kv .k { flex: none; font: 400 11px var(--mono); color: var(--faint) }
-  .kv .v { font: 400 11.5px var(--mono); color: var(--text); word-break: break-all }
+  .kv .k { flex: none; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
+  .kv .v { font: var(--w-reg) 11.5px var(--mono); color: var(--text); word-break: break-all }
 
   /* 外部服务：名字是名字（界面字），其余是机器事实（等宽）。连不上是这一行
      唯一需要动作的状态，用左色条说 —— 全绿时整块不该有任何视觉重量。 */
@@ -1957,31 +1971,31 @@
   .srv[data-st="failed"] .pip { background: var(--err) }
   .srv[data-st="disabled"] .pip { background: var(--ghost) }
   .srv[data-st="disabled"] .nm, .srv[data-st="disabled"] .meta { color: var(--faint) }
-  .srv .nm { font: 500 12.5px var(--ui); color: var(--text); min-width: 0 }
-  .srv .meta { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--faint) }
-  .srv .why { margin: 4px 0 0 15px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
+  .srv .nm { font: var(--w-med) 12.5px var(--ui); color: var(--text); min-width: 0 }
+  .srv .meta { margin-left: auto; flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
+  .srv .why { margin: 4px 0 0 15px; font: var(--w-reg) 11.5px/1.55 var(--ui); color: var(--err) }
   .srv .peek { margin: 7px 0 1px 15px }
   /* 服务自己写的一句话，跟技能行的说明同一个位置、同一种字：来源不同，读法
      一样。旁边那枚标是「现在没连着，这是上次的记录」—— 不标就等于替一个关着
      的服务打包票。 */
   .srv .srv-ab { display: flex; align-items: baseline; gap: 8px; margin: 5px 0 0 15px }
-  .srv .srv-ab .ds { font: 400 11.5px/1.6 var(--ui); color: var(--faint); min-width: 0 }
+  .srv .srv-ab .ds { font: var(--w-reg) 11.5px/1.6 var(--ui); color: var(--faint); min-width: 0 }
   .srv .srv-ab .w {
     flex: none; padding: 1px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
-    font: 400 10px var(--mono); color: var(--ghost); font-style: normal;
+    font: var(--w-reg) 10px var(--mono); color: var(--ghost); font-style: normal;
   }
   /* 工具一行三段：名字（机器事实）、它自己的说明、以及会不会动你的东西。 */
   .srv .peek .trow { display: flex; align-items: baseline; gap: 9px; padding: 1px 0 }
-  .srv .peek .trow .nm { flex: none; font: 400 11.5px var(--mono); color: var(--faint) }
+  .srv .peek .trow .nm { flex: none; font: var(--w-reg) 11.5px var(--mono); color: var(--faint) }
   .srv .peek .trow .ds {
-    font: 400 11.5px/1.55 var(--ui); color: var(--ghost); min-width: 0;
+    font: var(--w-reg) 11.5px/1.55 var(--ui); color: var(--ghost); min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .srv .peek .trow[data-bad] .nm { color: var(--ghost); text-decoration: line-through }
   .srv .peek .trow[data-bad] .ds { color: var(--warn) }
   .srv .peek .trow .face { margin-left: auto; flex: none; display: flex; gap: 5px }
   .srv .peek .trow .face i {
-    padding: 1px 5px; border-radius: var(--r-xs); font: 400 10px var(--mono); font-style: normal;
+    padding: 1px 5px; border-radius: var(--r-xs); font: var(--w-reg) 10px var(--mono); font-style: normal;
   }
   .srv .peek .trow .face .ro { color: var(--ghost); border: 1px solid var(--hair) }
   .srv .peek .trow .face .dg { color: var(--err); border: 1px solid var(--err) }
@@ -1989,7 +2003,7 @@
   .acts { display: flex; align-items: center; gap: 8px; margin-left: 14px; flex: none }
   .act {
     padding: 3px 9px; border: 1px solid var(--border); border-radius: var(--r-pill);
-    background: transparent; color: var(--text); font: 400 11px var(--ui); cursor: pointer;
+    background: transparent; color: var(--text); font: var(--w-reg) 11px var(--ui); cursor: pointer;
     transition: background .14s, border-color .14s;
   }
   .act:hover:not(:disabled) { background: var(--overlay); border-color: var(--muted) }
@@ -2014,7 +2028,7 @@
   @keyframes nudge { 0%, 100% { transform: none } 30% { transform: translateX(-2px) } 70% { transform: translateX(2px) } }
 
   /* 按钮上放不下的那句:正在做什么,或者为什么没做 */
-  .rnote { margin-top: 9px; font: 400 11.5px/1.6 var(--mono); color: var(--faint); animation: modeval var(--t-line) var(--ease-out) }
+  .rnote { margin-top: 9px; font: var(--w-reg) 11.5px/1.6 var(--mono); color: var(--faint); animation: modeval var(--t-line) var(--ease-out) }
   .rnote[data-s="ok"] { color: var(--ok) }
   .rnote[data-s="bad"] { color: var(--err) }
 
@@ -2041,22 +2055,22 @@
     display: flex; align-items: center; gap: 9px; margin: 8px 0 2px 15px; padding: 9px 11px;
     border-radius: var(--r-sm); background: var(--overlay);
   }
-  .confirm .q { flex: 1; font: 400 11.5px/1.55 var(--ui); color: var(--text) }
+  .confirm .q { flex: 1; font: var(--w-reg) 11.5px/1.55 var(--ui); color: var(--text) }
 
   /* 接入流程：先粘，再确认，最后说结果。三步共用一块地方，靠 data-stage 换内容。
      插件包走的是同一条路（来源 → 计划 → 结果），所以它们是同一个版式。 */
   .addsrv, .addpkg { border-top: 1px solid var(--hair); padding: 12px }
   .addsrv .paste, .addpkg .paste {
     width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--r-sm);
-    background: var(--raised); color: var(--text); font: 400 11.5px/1.7 var(--mono); resize: vertical;
+    background: var(--raised); color: var(--text); font: var(--w-reg) 11.5px/1.7 var(--mono); resize: vertical;
   }
   .addsrv .paste::placeholder, .addpkg .paste::placeholder { color: var(--ghost); white-space: pre-line }
   .addsrv .paste:focus, .addpkg .paste:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .addsrv .acts, .addpkg .acts { display: flex; align-items: center; gap: 8px; margin-top: 10px }
-  .addsrv .acts .note, .addpkg .acts .note { flex: 1; font: 400 10.5px var(--ui); color: var(--ghost) }
+  .addsrv .acts .note, .addpkg .acts .note { flex: 1; font: var(--w-reg) 10.5px var(--ui); color: var(--ghost) }
   .addsrv .act[data-primary], .addpkg .act[data-primary] { border-color: var(--accent); background: var(--accent); color: var(--accent-fg) }
   .addsrv .act[data-primary]:disabled, .addpkg .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
-  .addpkg > .why { margin-top: 9px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
+  .addpkg > .why { margin-top: 9px; font: var(--w-reg) 11.5px/1.55 var(--ui); color: var(--err) }
   /* data-over 由页面自己的拖放层挂：落在哪个元素上由 DOM 判定，不靠外壳给的
      坐标——界面一缩放，坐标和 CSS 像素就对不上了。 */
   .addpkg[data-over] .paste { border-color: var(--accent); background: var(--overlay) }
@@ -2065,23 +2079,23 @@
      等级是核心判的，这里只负责让它一眼可见。 */
   .rgrp { margin-top: 10px }
   .rgrp:first-child { margin-top: 0 }
-  .rgrp h3 { margin: 0; font: 500 11px var(--ui); color: var(--faint) }
+  .rgrp h3 { margin: 0; font: var(--w-med) 11px var(--ui); color: var(--faint) }
   .rgrp[data-lvl="high"] { padding-left: 9px; box-shadow: inset 2px 0 var(--err) }
   .rgrp[data-lvl="high"] h3 { color: var(--err) }
   /* 核心的判定是写给读 JSON 的模型的，所以它在一次点击之后 —— 但它必须在，
      否则这里不认识的新理由就会静悄悄消失。 */
   .reasons { margin-top: 7px }
-  .reasons > summary { font: 400 10.5px var(--ui); color: var(--ghost); cursor: pointer; list-style: none }
+  .reasons > summary { font: var(--w-reg) 10.5px var(--ui); color: var(--ghost); cursor: pointer; list-style: none }
   .reasons > summary::-webkit-details-marker { display: none }
-  .reasons p { margin: 4px 0 0; font: 400 10.5px/1.6 var(--mono); color: var(--muted) }
+  .reasons p { margin: 4px 0 0; font: var(--w-reg) 10.5px/1.6 var(--mono); color: var(--muted) }
 
   /* 一个包带进来的东西分两类：能被叫到的（技能、命令），和会自己跑的
      （常驻进程、钩子、外部服务）。后者不该和前者读起来一样。 */
   .peek .row[data-run] { color: var(--text) }
   .peek .row[data-run] .d { color: var(--warn, var(--accent)) }
-  .peek .row .sc { margin-left: auto; padding-left: 12px; color: var(--ghost); font: 400 10.5px var(--ui);
+  .peek .row .sc { margin-left: auto; padding-left: 12px; color: var(--ghost); font: var(--w-reg) 10.5px var(--ui);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .addsrv > .why { margin-top: 9px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
+  .addsrv > .why { margin-top: 9px; font: var(--w-reg) 11.5px/1.55 var(--ui); color: var(--err) }
 
   /* 作用域条：这一页在替哪个目录回答。壳里同时挂着好几个项目，面板跟着最前
      面那个走，所以标题必须把目录名写出来 —— 否则切标签页会在同一个标题下把
@@ -2093,27 +2107,27 @@
     padding: 9px 12px; margin-bottom: 14px;
     border: 1px solid var(--hair); border-radius: var(--r-md); background: var(--surface);
   }
-  .scopebar .nm { font: 500 12px var(--ui); color: var(--text) }
+  .scopebar .nm { font: var(--w-med) 12px var(--ui); color: var(--text) }
   .scopebar .pt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 400 10.5px var(--mono); color: var(--faint) }
+    font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   .scopebar .br {
     padding: 1px 6px; border-radius: var(--r-pill);
-    font: 400 10px var(--mono); color: var(--muted); background: var(--overlay);
+    font: var(--w-reg) 10px var(--mono); color: var(--muted); background: var(--overlay);
   }
-  .scopebar .sh { font: 400 10.5px var(--ui); color: var(--muted) }
-  .scopebar .ov { margin-left: auto; font: 400 10.5px var(--ui); color: var(--faint) }
+  .scopebar .sh { font: var(--w-reg) 10.5px var(--ui); color: var(--muted) }
+  .scopebar .ov { margin-left: auto; font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
   .scopebar .who {
     display: inline-flex; align-items: baseline; gap: 5px; cursor: pointer;
     padding: 1px 6px; margin-left: -6px; border-radius: var(--r-sm);
     border: 1px solid transparent; background: transparent;
-    font: 500 12px var(--ui); color: var(--text);
+    font: var(--w-med) 12px var(--ui); color: var(--text);
   }
   .scopebar .who:hover { border-color: var(--border); background: var(--overlay) }
   .scopebar .who:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .scopebar .who .cv { font-style: normal; font-size: 9px; color: var(--faint) }
   /* 正在看别的项目：整条带上强调边，因为这一页此刻不代表当前会话 */
   .scopebar[data-away] { border-color: color-mix(in srgb, var(--accent) 45%, var(--hair)) }
-  .scopebar .away { flex-basis: 100%; font: 400 10.5px var(--ui); color: var(--accent) }
+  .scopebar .away { flex-basis: 100%; font: var(--w-reg) 10.5px var(--ui); color: var(--accent) }
 
   .scope-pick {
     position: absolute; z-index: 3; top: calc(100% + 4px); left: 8px; min-width: 320px; max-width: 460px;
@@ -2124,12 +2138,12 @@
   }
   .scope-pick .q {
     padding: 5px 8px; margin-bottom: 4px; border: 1px solid var(--border); border-radius: var(--r-sm);
-    background: var(--surface); color: var(--text); font: 400 11.5px var(--ui);
+    background: var(--surface); color: var(--text); font: var(--w-reg) 11.5px var(--ui);
   }
   .scope-pick .fl {
     align-self: flex-start; margin: 2px 0 6px; padding: 2px 8px; cursor: pointer;
     border: 1px solid var(--border); border-radius: var(--r-pill); background: transparent;
-    font: 400 10.5px var(--ui); color: var(--faint);
+    font: var(--w-reg) 10.5px var(--ui); color: var(--faint);
   }
   .scope-pick .fl[aria-pressed="true"] {
     color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
@@ -2142,25 +2156,25 @@
   }
   .scope-pick .pk:hover { background: var(--float-hi) }
   .scope-pick .pk[aria-selected="true"] { border-color: color-mix(in srgb, var(--accent) 45%, transparent) }
-  .scope-pick .pk .nm { display: flex; align-items: baseline; gap: 6px; font: 400 11.5px var(--ui); color: var(--text) }
-  .scope-pick .pk .cur { font: 400 9.5px var(--ui); font-style: normal; color: var(--faint) }
+  .scope-pick .pk .nm { display: flex; align-items: baseline; gap: 6px; font: var(--w-reg) 11.5px var(--ui); color: var(--text) }
+  .scope-pick .pk .cur { font: var(--w-reg) 9.5px var(--ui); font-style: normal; color: var(--faint) }
   .scope-pick .pk .pt {
     grid-column: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 400 10px var(--mono); color: var(--faint);
+    font: var(--w-reg) 10px var(--mono); color: var(--faint);
   }
   .scope-pick .pk .ct {
     grid-row: 1 / span 2; align-self: center; font-style: normal; white-space: nowrap;
     padding: 1px 7px; border-radius: var(--r-pill);
-    font: 400 10px var(--ui); color: var(--accent);
+    font: var(--w-reg) 10px var(--ui); color: var(--accent);
     background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
-  .scope-pick .empty { padding: 10px 8px; font: 400 11.5px var(--ui); color: var(--faint) }
+  .scope-pick .empty { padding: 10px 8px; font: var(--w-reg) 11.5px var(--ui); color: var(--faint) }
 
   /* 例外标记：开关默认只答这一个项目，这既是想要的默认，也是看不见的默认。
      所以带例外的行自己说出来，并且给出回去的路。 */
   .exc {
     flex: none; padding: 1px 7px; border-radius: var(--r-pill); cursor: pointer;
-    font: 400 10px var(--ui); color: var(--accent);
+    font: var(--w-reg) 10px var(--ui); color: var(--accent);
     border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
     background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
@@ -2176,10 +2190,10 @@
      只有环=借来的。行本身沿用设置列表的发丝分隔，跟 .vrow/.skrow 是一家。 */
   .band { margin-top: 14px }
   .anchor { display: block; padding-bottom: 13px }
-  .anchor .cap { font: 500 9.5px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--accent) }
-  .anchor .nm { display: block; margin-top: 5px; font: 500 15px var(--mono); color: var(--text);
+  .anchor .cap { font: var(--w-med) 9.5px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--accent) }
+  .anchor .nm { display: block; margin-top: 5px; font: var(--w-med) 15px var(--mono); color: var(--text);
     overflow-wrap: anywhere }
-  .anchor .meta { display: block; margin-top: 3px; font: 400 11px var(--ui); color: var(--faint) }
+  .anchor .meta { display: block; margin-top: 3px; font: var(--w-reg) 11px var(--ui); color: var(--faint) }
 
   /* 轨从锚底下直接落下来，停在最后一个节点上 —— 它连的是「这个模型」和
      「这些活」，所以两头都不该悬空。 */
@@ -2211,10 +2225,10 @@
   .slot:hover { background: var(--overlay) }
   .slot:disabled { cursor: default }
   .slot:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
-  .slot .role { font: 500 11.5px var(--ui); color: var(--muted) }
-  .slot .val { min-width: 0; font: 400 11.5px var(--mono); color: var(--ghost); overflow-wrap: anywhere;
+  .slot .role { font: var(--w-med) 11.5px var(--ui); color: var(--muted) }
+  .slot .val { min-width: 0; font: var(--w-reg) 11.5px var(--mono); color: var(--ghost); overflow-wrap: anywhere;
     animation: bumpup var(--t-line) var(--ease-out) both }
-  .slot .tag { font: 400 10px var(--ui); color: var(--ghost); white-space: nowrap }
+  .slot .tag { font: var(--w-reg) 10px var(--ui); color: var(--ghost); white-space: nowrap }
 
   /* 节点压在轨上，所以要有不透明底色把轨挡住。实心那一下是分叉真正接上的瞬间，
      值得一个 transition —— 委派用 deleg，token 表里这个色本来就是这个意思。 */
@@ -2229,7 +2243,7 @@
   }
   .slot[data-set] .node { border-color: var(--deleg) }
   .slot[data-set] .node::after { transform: scale(1) }
-  .slot[data-set] .role { color: var(--deleg); font-weight: 600 }
+  .slot[data-set] .role { color: var(--deleg); font-weight: var(--w-semi) }
   .slot[data-set] .val { color: var(--text) }
   .slot[data-set] .tag { color: var(--deleg) }
   /* 借来的：它真的在干活，但开关不在这一行，所以给环不给实心。 */
@@ -2265,12 +2279,12 @@
   .rpick button {
     display: flex; width: 100%; gap: 9px; align-items: baseline; padding: 6px 9px;
     background: none; border: 0; border-radius: var(--r-sm); text-align: left; cursor: pointer;
-    font: 400 11.5px var(--mono); color: var(--text);
+    font: var(--w-reg) 11.5px var(--mono); color: var(--text);
   }
   .rpick button:hover { background: var(--float-hi) }
   .rpick button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .rpick button[data-cur] { background: var(--deleg-wash); color: var(--deleg) }
-  .rpick button .sub { margin-left: auto; font: 400 10px var(--ui); color: var(--ghost) }
+  .rpick button .sub { margin-left: auto; font: var(--w-reg) 10px var(--ui); color: var(--ghost) }
   .rpick .sep { height: 1px; margin: 4px 0; background: var(--hair) }
 
   /* 模型库：按端点分组，一行一个模型。同一台主机被两种协议接进来是一个服务的
@@ -2279,10 +2293,10 @@
   .mfind { display: flex; align-items: center; gap: 10px; margin-bottom: 12px }
   .mfind input {
     flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border);
-    border-radius: var(--r-sm); background: var(--raised); color: var(--text); font: 400 12px var(--ui);
+    border-radius: var(--r-sm); background: var(--raised); color: var(--text); font: var(--w-reg) 12px var(--ui);
   }
   .mfind input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
-  .mfind .cnt { flex: none; font: 400 11px var(--mono); color: var(--faint) }
+  .mfind .cnt { flex: none; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
 
   .mgrp { margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden;
     animation: card var(--t-card) var(--ease-out) both }
@@ -2293,10 +2307,10 @@
     display: flex; align-items: center; gap: 9px; padding: 8px 12px;
     background: var(--surface); border-bottom: 1px solid var(--hair);
   }
-  .mgrp-hd .nm { font: 500 12px var(--ui); color: var(--text) }
+  .mgrp-hd .nm { font: var(--w-med) 12px var(--ui); color: var(--text) }
   .mgrp-hd .url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 400 10.5px var(--mono); color: var(--faint) }
-  .mgrp-hd .n { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--ghost) }
+    font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
+  .mgrp-hd .n { margin-left: auto; flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
 
   .mrow { display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 12px;
     background: var(--raised); border: 0; border-bottom: 1px solid var(--hair);
@@ -2322,11 +2336,11 @@
     background: var(--raised); transform: scale(0);
     transition: transform var(--t-line) var(--ease-out) }
   .mrow[data-on] .mark::after { transform: scale(1) }
-  .mrow .nm { min-width: 0; font: 400 12.5px var(--mono); color: var(--text); overflow-wrap: anywhere }
+  .mrow .nm { min-width: 0; font: var(--w-reg) 12.5px var(--mono); color: var(--text); overflow-wrap: anywhere }
   .mrow .caps { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px }
   .mrow .cap {
     padding: 1.5px 6px; border: 1px solid var(--hair); border-radius: var(--r-pill);
-    background: var(--surface); color: var(--faint); font: 400 10px var(--ui); white-space: nowrap;
+    background: var(--surface); color: var(--faint); font: var(--w-reg) 10px var(--ui); white-space: nowrap;
   }
   .mrow .cap[data-k="vis"] { color: var(--deleg); background: var(--deleg-wash);
     border-color: color-mix(in srgb, var(--deleg) 30%, transparent) }
@@ -2336,32 +2350,32 @@
      协议是这个来源的属性，切模型不该顺带换掉它。 */
   .vway { display: flex; align-items: center; gap: 10px; padding: 2px 12px 10px;
     border-bottom: 1px solid var(--hair) }
-  .vway .lb { font: 400 10.5px var(--ui); color: var(--faint); flex: none }
+  .vway .lb { font: var(--w-reg) 10.5px var(--ui); color: var(--faint); flex: none }
   /* 这里的分段控件是按内容排的，不是铺满一行 —— 基础 .seg 的 flex:1 会把两个
      不等长的中文标签拉成两种宽度，长的那个还会折行。 */
   .vway .seg { flex: none; width: auto; flex-wrap: nowrap }
   .vway .seg button { flex: none; min-width: 0; padding: 4px 12px; white-space: nowrap;
-    font: 400 11px var(--ui) }
-  .vway .why { font: 400 10.5px var(--ui); color: var(--ghost); min-width: 0 }
+    font: var(--w-reg) 11px var(--ui) }
+  .vway .why { font: var(--w-reg) 10.5px var(--ui); color: var(--ghost); min-width: 0 }
   /* 一扇门比另一扇多出来的能力，写在门上 —— 换过去才发现少了东西太晚了。 */
   .menu .mi.head {
     display: flex; align-items: baseline; gap: 8px; padding: 7px 10px 4px; cursor: default;
   }
-  .menu .mi.head .lb { font: 500 10.5px var(--ui); letter-spacing: .06em; color: var(--faint) }
-  .menu .mi.head .rt { margin-left: auto; font: 400 10px var(--mono); color: var(--ghost) }
+  .menu .mi.head .lb { font: var(--w-med) 10.5px var(--ui); letter-spacing: .06em; color: var(--faint) }
+  .menu .mi.head .rt { margin-left: auto; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
 
   .vway .seg button .perk { margin-left: 6px; padding: 0 5px; border-radius: var(--r-pill);
-    background: var(--net-wash); color: var(--net); font: 400 9.5px var(--ui) }
+    background: var(--net-wash); color: var(--net); font: var(--w-reg) 9.5px var(--ui) }
 
   /* 编辑一个来源：模型一行一个，选用 / 读图 / 默认三件事各自是独立的开关。
      「读图」必须能手动改 —— 名字猜不出来的中转站，探测也给不出答案。 */
   .addp[data-edit] { border-top: 0; border-left: 2px solid var(--border); padding-left: 12px; margin: 4px 0 10px }
   .mlist { margin-top: 12px; display: flex; flex-direction: column }
-  .mlist .mlb { margin-bottom: 6px; font: 400 10.5px var(--ui); color: var(--faint) }
+  .mlist .mlb { margin-bottom: 6px; font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
   .mline { display: flex; align-items: center; gap: 10px; padding: 6px 2px; border-top: 1px solid var(--hair) }
   .mline:last-child { border-bottom: 1px solid var(--hair) }
   .mline[data-off] .nm { color: var(--ghost) }
-  .mline .nm { flex: 1; min-width: 0; font: 400 12px var(--mono); color: var(--text); overflow-wrap: anywhere }
+  .mline .nm { flex: 1; min-width: 0; font: var(--w-reg) 12px var(--mono); color: var(--text); overflow-wrap: anywhere }
   .mline .tick { flex: none; width: 14px; height: 14px; padding: 0; display: grid; place-items: center;
     border: 1.5px solid var(--ghost); border-radius: var(--r-xs); background: transparent; cursor: pointer }
   .mline .tick[aria-checked="true"] { border-color: var(--accent); background: var(--accent) }
@@ -2370,7 +2384,7 @@
   .mline .tick[aria-checked="true"] i { opacity: 1 }
   .mline .vtag, .mline .dtag {
     flex: none; padding: 2px 8px; border: 1px solid var(--hair); border-radius: var(--r-pill);
-    background: var(--surface); color: var(--ghost); font: 400 10px var(--ui); cursor: pointer;
+    background: var(--surface); color: var(--ghost); font: var(--w-reg) 10px var(--ui); cursor: pointer;
   }
   .mline .vtag[aria-pressed="true"] { color: var(--deleg); background: var(--deleg-wash);
     border-color: color-mix(in srgb, var(--deleg) 32%, transparent) }
@@ -2381,7 +2395,7 @@
   .viabox { position: relative; flex: none; margin-right: 10px }
   .mrow .via {
     padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--raised); color: var(--muted); font: 400 10.5px var(--mono); cursor: pointer;
+    background: var(--raised); color: var(--muted); font: var(--w-reg) 10.5px var(--mono); cursor: pointer;
     transition: border-color var(--t-line) var(--ease-out), color var(--t-line) var(--ease-out);
   }
   .mrow .via:hover, .mrow .via[aria-expanded="true"] { border-color: var(--ghost); color: var(--text) }
@@ -2401,57 +2415,57 @@
   .addp .fields.compat { margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--hair) }
   .addp .fields.compat textarea {
     padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--raised); color: var(--text); font: 400 11px/1.6 var(--mono); resize: vertical;
+    background: var(--raised); color: var(--text); font: var(--w-reg) 11px/1.6 var(--mono); resize: vertical;
   }
   .addp .fields.compat textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .addp .fields.compat textarea[aria-invalid] { border-color: var(--err) }
-  .addp .fields.compat .tip { font: 400 10.5px/1.6 var(--ui); font-style: normal; color: var(--ghost) }
-  .addp .fields.compat .why { flex-basis: 100%; font: 400 11px var(--ui); color: var(--err) }
+  .addp .fields.compat .tip { font: var(--w-reg) 10.5px/1.6 var(--ui); font-style: normal; color: var(--ghost) }
+  .addp .fields.compat .why { flex-basis: 100%; font: var(--w-reg) 11px var(--ui); color: var(--err) }
   .addp .more { margin-top: 14px }
-  .addp .fields span { font: 400 10.5px var(--ui); color: var(--faint) }
+  .addp .fields span { font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
   .addp .fields input, .addp .fields select {
     padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--raised); color: var(--text); font: 400 11.5px var(--mono);
+    background: var(--raised); color: var(--text); font: var(--w-reg) 11.5px var(--mono);
   }
   .addp .fields input:focus, .addp .fields select:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .addp .acts { display: flex; gap: 8px; margin-top: 12px }
   .addp .act[data-primary] { border-color: var(--accent); background: var(--accent); color: var(--accent-fg) }
   .addp .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
-  .addp .mlb { flex-basis: 100%; font: 400 10.5px var(--ui); color: var(--faint) }
+  .addp .mlb { flex-basis: 100%; font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
   /* 模型多到几十个是常态，所以给一个上限再滚动，别把按钮顶到屏幕外。 */
   .mpick { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; max-height: 168px; overflow-y: auto }
   .chip {
     padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px;
     background: transparent; color: var(--muted); cursor: pointer;
-    font: 400 11px var(--mono); white-space: nowrap;
+    font: var(--w-reg) 11px var(--mono); white-space: nowrap;
   }
   .chip[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: var(--raised) }
 
   .cand { padding: 10px 0; border-bottom: 1px solid var(--hair) }
   .cand-hd { display: flex; align-items: baseline; gap: 9px }
-  .cand-hd .nm { font: 500 12.5px var(--ui); color: var(--text) }
-  .cand-hd .meta { font: 400 10.5px var(--mono); color: var(--faint) }
+  .cand-hd .nm { font: var(--w-med) 12.5px var(--ui); color: var(--text) }
+  .cand-hd .meta { font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   /* 三种风险一个版式：左边一句人话，右边是它到底会做什么 */
   .risk { display: flex; align-items: baseline; gap: 9px; margin-top: 7px; flex-wrap: wrap }
-  .risk .lb { flex: none; min-width: 98px; font: 400 11px var(--ui); color: var(--faint) }
-  .risk .dt { font: 400 11.5px var(--mono); color: var(--text); word-break: break-all }
+  .risk .lb { flex: none; min-width: 98px; font: var(--w-reg) 11px var(--ui); color: var(--faint) }
+  .risk .dt { font: var(--w-reg) 11.5px var(--mono); color: var(--text); word-break: break-all }
   .risk[data-kind="secret"] .dt { color: var(--err) }
-  .risk .why { flex-basis: 100%; margin-left: 107px; font: 400 10.5px/1.6 var(--ui); color: var(--muted) }
+  .risk .why { flex-basis: 100%; margin-left: 107px; font: var(--w-reg) 10.5px/1.6 var(--ui); color: var(--muted) }
 
   /* 两个选项并排，但不该撑满一整行 —— 它们是一次选择，不是版面的主体 */
   .scope { display: flex; gap: 8px; margin-top: 12px; max-width: 520px }
   .scope button {
     flex: 1; display: flex; flex-direction: column; gap: 3px; padding: 8px 11px; text-align: left;
     border: 1px solid var(--border); border-radius: var(--r-sm); background: transparent;
-    color: var(--muted); font: 400 12px var(--ui); cursor: pointer; transition: border-color .14s, color .14s;
+    color: var(--muted); font: var(--w-reg) 12px var(--ui); cursor: pointer; transition: border-color .14s, color .14s;
   }
-  .scope button i { font: 400 10.5px var(--ui); font-style: normal; color: var(--ghost) }
+  .scope button i { font: var(--w-reg) 10.5px var(--ui); font-style: normal; color: var(--ghost) }
   .scope button[aria-checked="true"] { border-color: var(--accent); color: var(--text) }
   .scope button:disabled { opacity: .5; cursor: default }
   /* 只有「写进仓库」会动被跟踪的文件，所以只有它带警告，并且不是默认项 */
   .addsrv > .warn {
     margin-top: 9px; padding: 7px 10px; border-radius: var(--r-sm);
-    font: 400 11.5px/1.5 var(--ui); color: var(--warn);
+    font: var(--w-reg) 11.5px/1.5 var(--ui); color: var(--warn);
     background: color-mix(in srgb, var(--warn) 10%, transparent);
   }
   .scope button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
@@ -2461,27 +2475,27 @@
   .outcome[data-state="ready"] .pip { background: var(--ok) }
   .outcome[data-state="action_required"] .pip { background: var(--warn, var(--accent)) }
   .outcome[data-state="issue"] .pip { background: var(--err) }
-  .outcome .nm { font: 500 12.5px var(--ui); color: var(--text) }
-  .outcome .dt { font: 400 11.5px var(--ui); color: var(--muted) }
+  .outcome .nm { font: var(--w-med) 12.5px var(--ui); color: var(--text) }
+  .outcome .dt { font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
 
   /* 自动化：成品配方在前，事件表在后。多数人只需要前者，而后者是能挡住
      agent 的东西 —— 所以它藏在一次点击之后，并且阻断型规则自带警戒线。 */
   .hooks .scope { max-width: 460px; margin-top: 0 }
-  .hooks .path { margin: 8px 0 0; font: 400 10.5px var(--mono); color: var(--ghost); word-break: break-all }
-  .hooks > .why { margin-top: 9px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
+  .hooks .path { margin: 8px 0 0; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); word-break: break-all }
+  .hooks > .why { margin-top: 9px; font: var(--w-reg) 11.5px/1.55 var(--ui); color: var(--err) }
   .recipes { margin-top: 14px; display: flex; flex-direction: column }
   .recipe { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--hair) }
   .recipe:last-of-type { border-bottom: 1px solid var(--hair) }
   .recipe .tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0 }
-  .recipe .lb { font: 400 12.5px var(--ui); color: var(--text) }
-  .recipe .ds { font: 400 11px/1.55 var(--ui); color: var(--faint) }
+  .recipe .lb { font: var(--w-reg) 12.5px var(--ui); color: var(--text) }
+  .recipe .ds { font: var(--w-reg) 11px/1.55 var(--ui); color: var(--faint) }
 
   .more {
     margin-top: 14px; display: flex; align-items: baseline; gap: 10px; padding: 0;
-    border: 0; background: none; color: var(--muted); font: 400 12px var(--ui); cursor: pointer;
+    border: 0; background: none; color: var(--muted); font: var(--w-reg) 12px var(--ui); cursor: pointer;
   }
   .more:hover { color: var(--text) }
-  .more .c { font: 400 10.5px var(--mono); color: var(--ghost) }
+  .more .c { font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
   .more:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--r-xs) }
 
   .expert { margin-top: 12px; display: flex; flex-direction: column; gap: 10px }
@@ -2493,64 +2507,64 @@
   .rule .line + .line { margin-top: 8px }
   .rule select, .rule input {
     padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--raised); color: var(--text); font: 400 11.5px var(--mono);
+    background: var(--raised); color: var(--text); font: var(--w-reg) 11.5px var(--mono);
   }
   .rule select:focus, .rule input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .rule .match { flex: 1; min-width: 140px }
   .rule .cmd { display: block; width: 100%; margin-top: 8px }
   .rule .warn {
-    padding: 1px 6px; border-radius: var(--r-pill); font: 500 10px var(--ui); font-style: normal;
+    padding: 1px 6px; border-radius: var(--r-pill); font: var(--w-med) 10px var(--ui); font-style: normal;
     color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent);
   }
-  .rule .note { font: 400 10.5px var(--ui); color: var(--ghost) }
-  .rule .why { margin-top: 6px; font: 400 11px/1.5 var(--ui); color: var(--err) }
+  .rule .note { font: var(--w-reg) 10.5px var(--ui); color: var(--ghost) }
+  .rule .why { margin-top: 6px; font: var(--w-reg) 11px/1.5 var(--ui); color: var(--err) }
   .rule .act[data-primary] { border-color: var(--accent); background: var(--accent); color: var(--accent-fg) }
 
   /* 试跑结果说的是后果，不是退出码 —— 退出码只是它右边的旁证 */
   .dryrun { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-top: 8px }
-  .dryrun b { font: 500 11.5px var(--ui); color: var(--ok) }
+  .dryrun b { font: var(--w-med) 11.5px var(--ui); color: var(--ok) }
   .dryrun[data-blocks] b { color: var(--err) }
-  .dryrun .meta { font: 400 10.5px var(--mono); color: var(--ghost) }
+  .dryrun .meta { font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
   .dryrun .out {
     flex-basis: 100%; margin-top: 4px; padding: 6px 8px; border-radius: var(--r-xs);
-    background: var(--overlay); font: 400 10.5px/1.6 var(--mono); color: var(--muted);
+    background: var(--overlay); font: var(--w-reg) 10.5px/1.6 var(--mono); color: var(--muted);
     white-space: pre-wrap; word-break: break-all;
   }
 
   .fromplugin { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--hair) }
-  .fromplugin .lb { font: 400 11px var(--ui); color: var(--faint) }
+  .fromplugin .lb { font: var(--w-reg) 11px var(--ui); color: var(--faint) }
   .prow { display: flex; align-items: baseline; gap: 10px; margin-top: 6px }
-  .prow .ev { flex: none; min-width: 128px; font: 400 11px var(--mono); color: var(--muted) }
+  .prow .ev { flex: none; min-width: 128px; font: var(--w-reg) 11px var(--mono); color: var(--muted) }
   .prow .cm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 400 11px var(--mono); color: var(--faint) }
-  .prow .sc { flex: none; font: 400 10.5px var(--mono); color: var(--ghost) }
+    font: var(--w-reg) 11px var(--mono); color: var(--faint) }
+  .prow .sc { flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
 
   /* 权限规则读起来是一张判定表，不是三个箱子。工具名在组头上说一次，行里只
      留真正有区别的那一段；强度是行上的一个属性，就地改 —— 二十条规矩堆成三个
      列表的时候，「这条太严了」只能删了重打。 */
   .rules .fallback { display: flex; align-items: center; gap: 12px; margin-top: 18px }
-  .rules .fallback .k { flex: none; font: 400 11px var(--mono); color: var(--faint) }
+  .rules .fallback .k { flex: none; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
   /* 跟在一句短标签后面的分段条按内容收，铺满会让它和上一层的分段条看着同级 */
   /* 版本号是附注，不是名字的一部分：PowerShell 7 里的「7」要小一号、淡一档，
      否则四个档位的名字长短不一，扫过去像四种不同的东西。 */
-  .seg .ver { margin-left: 5px; font: 400 9.5px var(--mono); font-style: normal; color: var(--ghost) }
+  .seg .ver { margin-left: 5px; font: var(--w-reg) 9.5px var(--mono); font-style: normal; color: var(--ghost) }
   .seg button[aria-checked="true"] .ver { color: var(--faint) }
   /* 选中那一档的路径与告诫都在这行说完，所以它要能容下一条长路径 */
-  .shell .note code { font: 400 11px var(--mono); color: var(--muted); word-break: break-all }
+  .shell .note code { font: var(--w-reg) 11px var(--mono); color: var(--muted); word-break: break-all }
   .shell .seg { margin-top: 14px }
 
   .seg.fit { flex: none; width: auto }
   .seg.fit button { flex: none; min-width: 0; padding: 5px 14px }
-  .rules .path { margin: 10px 0 0; font: 400 10.5px var(--mono); color: var(--ghost); word-break: break-all }
+  .rules .path { margin: 10px 0 0; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); word-break: break-all }
   .rules .find { margin-bottom: 14px }
 
   .rhead { display: flex; align-items: center; gap: 10px; margin-top: 22px }
-  .rhead .n { flex: none; display: flex; align-items: baseline; gap: 8px; font: 400 12px var(--ui); color: var(--muted) }
+  .rhead .n { flex: none; display: flex; align-items: baseline; gap: 8px; font: var(--w-reg) 12px var(--ui); color: var(--muted) }
   /* 三个数字就是这条边界的形状：红的有几条、黄的有几条、绿的有几条 */
   .rhead .mix { display: flex; gap: 4px }
   .rhead .mix i {
     min-width: 20px; padding: 1px 5px; border-radius: var(--r-pill); text-align: center;
-    font: 500 10px var(--mono); font-style: normal;
+    font: var(--w-med) 10px var(--mono); font-style: normal;
   }
   .rhead .mix i[data-k="deny"] { color: var(--err); background: color-mix(in srgb, var(--err) 13%, transparent) }
   .rhead .mix i[data-k="ask"] { color: var(--warn); background: color-mix(in srgb, var(--warn) 15%, transparent) }
@@ -2558,7 +2572,7 @@
   .rhead .find-rule {
     flex: 1; min-width: 0; margin-left: auto; padding: 5px 9px;
     border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--raised); color: var(--text); font: 400 11.5px var(--ui);
+    background: var(--raised); color: var(--text); font: var(--w-reg) 11.5px var(--ui);
   }
   .rhead .find-rule:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .rhead > .act:last-child { margin-left: auto }
@@ -2568,14 +2582,14 @@
   .raddbox .line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
   .raddbox select, .raddbox input {
     padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--raised); color: var(--text); font: 400 11.5px var(--mono);
+    background: var(--raised); color: var(--text); font: var(--w-reg) 11.5px var(--mono);
   }
   .raddbox input { flex: 1; min-width: 160px }
   .raddbox select:focus, .raddbox input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   /* 存下去之前先说清楚它会拦住什么 —— 语法是能学会的，但猜不出来 */
   .raddbox .preview { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 0; flex-wrap: wrap }
-  .raddbox .preview code { font: 400 11px var(--mono); color: var(--text) }
-  .raddbox .preview .says { font: 400 11px var(--ui); color: var(--faint) }
+  .raddbox .preview code { font: var(--w-reg) 11px var(--mono); color: var(--text) }
+  .raddbox .preview .says { font: var(--w-reg) 11px var(--ui); color: var(--faint) }
 
   .rtable { margin-top: 12px; border-top: 1px solid var(--hair) }
   .rgroup { border-bottom: 1px solid var(--hair) }
@@ -2591,11 +2605,11 @@
     transition: transform .16s var(--ease-out);
   }
   .rg-hd[aria-expanded="true"] .caret { transform: rotate(90deg) }
-  .rg-hd code { font: 500 12px var(--mono); color: var(--text) }
-  .rg-hd .what { font: 400 11px var(--ui); color: var(--faint) }
+  .rg-hd code { font: var(--w-med) 12px var(--mono); color: var(--text) }
+  .rg-hd .what { font: var(--w-reg) 11px var(--ui); color: var(--faint) }
   /* 这一类工具是怎么比对的，在组头上说一次就够 —— 行里再说十五遍就成了噪音 */
-  .rg-hd .how { font: 400 10.5px var(--ui); color: var(--ghost) }
-  .rg-hd .cnt { margin-left: auto; font: 400 10.5px var(--mono); color: var(--ghost) }
+  .rg-hd .how { font: var(--w-reg) 10.5px var(--ui); color: var(--ghost) }
+  .rg-hd .cnt { margin-left: auto; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
 
   .rrow { display: flex; align-items: center; gap: 10px; padding: 5px 2px 5px 13px }
   .rrow + .rrow { border-top: 1px solid color-mix(in srgb, var(--hair) 60%, transparent) }
@@ -2605,75 +2619,75 @@
   .rrow[data-k="ask"] .dot { background: var(--warn) }
   .rrow[data-k="allow"] .dot { background: var(--ok) }
   .rrow .pat { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap }
-  .rrow .pat code { font: 400 11.5px var(--mono); color: var(--text); word-break: break-all }
-  .rrow .pat .says { font: 400 10.5px var(--ui); color: var(--ghost) }
+  .rrow .pat code { font: var(--w-reg) 11.5px var(--mono); color: var(--text); word-break: break-all }
+  .rrow .pat .says { font: var(--w-reg) 10.5px var(--ui); color: var(--ghost) }
   .rrow select {
     flex: none; padding: 3px 6px; border: 1px solid transparent; border-radius: var(--r-xs);
-    background: transparent; color: var(--muted); font: 400 11px var(--ui); cursor: pointer;
+    background: transparent; color: var(--muted); font: var(--w-reg) 11px var(--ui); cursor: pointer;
   }
   .rrow:hover select { border-color: var(--border); background: var(--raised) }
   .rrow select:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   /* 删除是不可逆的一步，所以它等到指针到了这一行才出现 */
   .rrow .act.ghost { opacity: 0; transition: opacity .12s }
   .rrow:hover .act.ghost, .rrow:focus-within .act.ghost { opacity: 1 }
-  .rtable .empty { padding: 14px 2px; font: 400 11.5px var(--ui); color: var(--faint) }
+  .rtable .empty { padding: 14px 2px; font: var(--w-reg) 11.5px var(--ui); color: var(--faint) }
 
   /* 沙箱：两小节，读起来是「能写到哪」再「怎么跑」。实际可写的那几行是展开
      后的答案，不是你填进去的字面值 —— 留空的根在这里也有名字。 */
   .box .sec + .sec { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--hair) }
-  .box h3 { margin: 0; font: 500 12.5px var(--ui); color: var(--text) }
-  .box .note { margin: 6px 0 0; font: 400 11px/1.7 var(--ui); color: var(--faint); max-width: 60ch }
+  .box h3 { margin: 0; font: var(--w-med) 12.5px var(--ui); color: var(--text) }
+  .box .note { margin: 6px 0 0; font: var(--w-reg) 11px/1.7 var(--ui); color: var(--faint); max-width: 60ch }
   .box .find { margin-top: 10px }
   .box .fields { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; align-items: flex-end }
   .box .fields label { display: flex; flex-direction: column; gap: 4px }
   .box .fields label.grow { flex: 1; min-width: 150px }
   .box .fields label.full { flex-basis: 100% }
-  .box .fields span { font: 400 10.5px var(--ui); color: var(--faint) }
+  .box .fields span { font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
   .box .fields input {
     padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--raised); color: var(--text); font: 400 11.5px var(--mono);
+    background: var(--raised); color: var(--text); font: var(--w-reg) 11.5px var(--mono);
   }
   .box .fields input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .box .extra { margin-top: 12px }
-  .box .sublb { margin-bottom: 6px; font: 400 10.5px var(--ui); color: var(--faint) }
+  .box .sublb { margin-bottom: 6px; font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
   /* 一个可写目录：内容占满，能对它做的事贴右。加入行是同一个形态，只是内容
      换成一个待填的输入框 —— 同一份清单不该长出两种行。 */
   .prule { display: flex; align-items: center; gap: 10px; margin-top: 8px }
   .prule code {
     flex: 1; min-width: 0; padding: 4px 8px; border-radius: var(--r-xs); background: var(--overlay);
-    font: 400 11px var(--mono); color: var(--text); word-break: break-all;
+    font: var(--w-reg) 11px var(--mono); color: var(--text); word-break: break-all;
   }
   .prule input {
     flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--raised); color: var(--text); font: 400 11px var(--mono);
+    background: var(--raised); color: var(--text); font: var(--w-reg) 11px var(--mono);
   }
   .prule input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   /* 指定可执行文件是这一段的边角料，折叠收着 */
   .pinpath { margin-top: 14px }
   .pinpath summary { cursor: pointer }
-  .pinpath summary .fold { font: 400 11.5px var(--ui); color: var(--muted) }
+  .pinpath summary .fold { font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
   .pinpath summary:hover .fold { color: var(--text) }
   /* 开关那一行是「名字 + 后果 + 开关」，名字和后果各占一行 —— 挤成一行读起来
      像一句没断开的话。 */
   .box .lrow { margin-top: 12px }
   .box .kv { margin-top: 16px }
   .box .kv .v { display: flex; flex-direction: column; gap: 4px }
-  .box .kv .v code { font: 400 11.5px var(--mono); color: var(--text) }
+  .box .kv .v code { font: var(--w-reg) 11.5px var(--mono); color: var(--text) }
   .box .seg { margin-top: 12px }
 
   /* 网络：三选一在最上面，手动的字段只在选中手动时出现 —— 大多数人一辈子
      不会展开它。诊断结果按段落读，绿的一带而过，红的那一行才带建议。 */
-  .net .note { margin: 8px 0 0; font: 400 11px/1.6 var(--ui); color: var(--faint) }
+  .net .note { margin: 8px 0 0; font: var(--w-reg) 11px/1.6 var(--ui); color: var(--faint) }
   .net .kv { border-top: 1px solid var(--hair) }
   .net .kv:first-of-type { margin-top: 12px }
   .net .fields { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px }
   .net .fields label { display: flex; flex-direction: column; gap: 4px }
   .net .fields label.grow { flex: 1; min-width: 150px }
   .net .fields label.full { flex-basis: 100% }
-  .net .fields span { font: 400 10.5px var(--ui); color: var(--faint) }
+  .net .fields span { font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
   .net .fields input, .net .fields select {
     padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--raised); color: var(--text); font: 400 11.5px var(--mono);
+    background: var(--raised); color: var(--text); font: var(--w-reg) 11.5px var(--mono);
   }
   .net .fields input:focus, .net .fields select:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .net .fields .port { width: 76px }
@@ -2682,30 +2696,30 @@
   .net .acts { display: flex; gap: 8px; margin-top: 14px }
   .net .act[data-primary] { border-color: var(--accent); background: var(--accent); color: var(--accent-fg) }
   .net .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
-  .net > .why { margin-top: 10px; font: 400 11.5px/1.55 var(--ui); color: var(--err) }
+  .net > .why { margin-top: 10px; font: var(--w-reg) 11.5px/1.55 var(--ui); color: var(--err) }
 
   .probes { margin-top: 14px; display: flex; flex-direction: column }
   .probe { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; padding: 7px 0; border-top: 1px solid var(--hair) }
   .probe:last-of-type { border-bottom: 1px solid var(--hair) }
   .probe .mk { flex: none; width: 14px; font-style: normal; color: var(--err) }
   .probe[data-ok] .mk { color: var(--ok) }
-  .probe .lb { flex: none; min-width: 68px; font: 400 11.5px var(--ui); color: var(--muted) }
-  .probe .dt { flex: 1; min-width: 0; font: 400 11.5px var(--mono); color: var(--text); word-break: break-all }
+  .probe .lb { flex: none; min-width: 68px; font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
+  .probe .dt { flex: 1; min-width: 0; font: var(--w-reg) 11.5px var(--mono); color: var(--text); word-break: break-all }
   .probe:not([data-ok]) .dt { color: var(--err) }
-  .probe .ms { flex: none; font: 400 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
+  .probe .ms { flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
   /* 建议只挂在失败那一行，并且缩进到和详情对齐：它是这一行的下一步 */
-  .probe .adv { flex-basis: 100%; margin-left: 91px; margin-top: 4px; font: 400 11px/1.6 var(--ui); color: var(--muted) }
+  .probe .adv { flex-basis: 100%; margin-left: 91px; margin-top: 4px; font: var(--w-reg) 11px/1.6 var(--ui); color: var(--muted) }
 
   /* 记忆：分组说的是「什么时候会被想起」，不是它属于哪一类 —— 后者是写入方
      的分类，对读的人没意义。左边那个点是这一页唯一真正重要的像素：它把一条
      记忆和用户刚看到的行为连起来。 */
-  .mem .recall { margin: 0 0 14px; font: 400 11.5px/1.6 var(--ui); color: var(--muted) }
+  .mem .recall { margin: 0 0 14px; font: var(--w-reg) 11.5px/1.6 var(--ui); color: var(--muted) }
   .memgrp { margin-bottom: 22px }
   .memgrp:last-of-type { margin-bottom: 0 }
   .memgrp .hd { display: flex; align-items: baseline; gap: 9px }
-  .memgrp .hd .lb { font: 500 12.5px var(--ui); color: var(--text) }
-  .memgrp .hd .c { font: 400 10.5px var(--mono); color: var(--ghost) }
-  .memgrp > .ds { margin: 3px 0 8px; font: 400 11px/1.6 var(--ui); color: var(--faint) }
+  .memgrp .hd .lb { font: var(--w-med) 12.5px var(--ui); color: var(--text) }
+  .memgrp .hd .c { font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
+  .memgrp > .ds { margin: 3px 0 8px; font: var(--w-reg) 11px/1.6 var(--ui); color: var(--faint) }
 
   .memrow { border-top: 1px solid var(--hair) }
   .memrow:last-of-type { border-bottom: 1px solid var(--hair) }
@@ -2717,26 +2731,26 @@
   .memrow[data-used] .dot { background: var(--net); box-shadow: none }
   .memrow .nm {
     flex: none; min-width: 168px; padding: 0; border: 0; background: none; text-align: left;
-    font: 400 12px var(--ui); color: var(--text); cursor: pointer;
+    font: var(--w-reg) 12px var(--ui); color: var(--text); cursor: pointer;
   }
   .memrow .nm:hover { text-decoration: underline }
   .memrow .nm:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs) }
   .memrow .line > .ds { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 400 11.5px var(--ui); color: var(--muted) }
+    font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
   .memrow .stale {
-    flex: none; padding: 1px 5px; border-radius: var(--r-pill); font: 500 9.5px var(--ui); font-style: normal;
+    flex: none; padding: 1px 5px; border-radius: var(--r-pill); font: var(--w-med) 9.5px var(--ui); font-style: normal;
     color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent);
   }
-  .memrow .sc { flex: none; min-width: 30px; font: 400 10.5px var(--mono); color: var(--faint) }
-  .memrow .at { flex: none; font: 400 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
-  .memrow .why-used { margin: -2px 0 8px 26px; font: 400 11px/1.6 var(--ui); color: var(--net) }
+  .memrow .sc { flex: none; min-width: 30px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
+  .memrow .at { flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
+  .memrow .why-used { margin: -2px 0 8px 26px; font: var(--w-reg) 11px/1.6 var(--ui); color: var(--net) }
   .memrow .peek { margin: 0 12px 10px 26px }
   .memrow .peek pre {
     margin: 0; padding: 9px 11px; border-radius: var(--r-sm); background: var(--overlay);
-    font: 400 11px/1.7 var(--mono); color: var(--muted); white-space: pre-wrap; word-break: break-word;
+    font: var(--w-reg) 11px/1.7 var(--mono); color: var(--muted); white-space: pre-wrap; word-break: break-word;
   }
-  .memrow .peek .path { display: block; margin-top: 5px; font: 400 10px var(--mono); color: var(--ghost); word-break: break-all }
-  .mem > .why { margin-top: 10px; font: 400 11.5px var(--ui); color: var(--err) }
+  .memrow .peek .path { display: block; margin-top: 5px; font: var(--w-reg) 10px var(--mono); color: var(--ghost); word-break: break-all }
+  .mem > .why { margin-top: 10px; font: var(--w-reg) 11.5px var(--ui); color: var(--err) }
 
   /* 记忆写入卡：用记忆色（mem）而不是工具色 —— 这一步改的不是文件，是它以后
      的行为。撤销只在当下便宜，所以按钮就在卡上，不藏进设置里。 */
@@ -2747,15 +2761,15 @@
   }
   .remember[data-gone] { border-left-color: var(--hair); opacity: .6 }
   .remember .hd { display: flex; align-items: baseline; gap: 9px }
-  .remember .lb { font: 500 12px var(--ui); color: var(--deleg) }
+  .remember .lb { font: var(--w-med) 12px var(--ui); color: var(--deleg) }
   .remember[data-gone] .lb { color: var(--faint) }
-  .remember .tag { font: 500 9.5px var(--mono); letter-spacing: .09em; color: var(--ghost) }
-  .remember .meta { margin-left: auto; font: 400 10.5px var(--mono); color: var(--faint) }
+  .remember .tag { font: var(--w-med) 9.5px var(--mono); letter-spacing: .09em; color: var(--ghost) }
+  .remember .meta { margin-left: auto; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   .remember .act { margin-left: 10px; flex: none }
   .remember .bd { margin-top: 6px; display: flex; flex-direction: column; gap: 2px }
-  .remember .ti { font: 400 12.5px var(--ui); color: var(--text) }
+  .remember .ti { font: var(--w-reg) 12.5px var(--ui); color: var(--text) }
   .remember[data-gone] .ti { text-decoration: line-through; color: var(--faint) }
-  .remember .ds { font: 400 11.5px/1.6 var(--ui); color: var(--muted) }
+  .remember .ds { font: var(--w-reg) 11.5px/1.6 var(--ui); color: var(--muted) }
 
   /* 名字 + 说明 + 归属的三列行。能打的那串是机器字面量，说明是给人读的，
      两种字体是有意的对比；定宽名字列让说明在整张表里对齐。 */
@@ -2763,15 +2777,15 @@
      句没断开的话。开关行、动作行、只读行共用它。 */
   .lrow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--hair) }
   .lrow .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px }
-  .lrow .lb { font: 400 12.5px var(--ui); color: var(--text) }
-  .lrow .ds { font: 400 11px/1.55 var(--ui); color: var(--faint) }
+  .lrow .lb { font: var(--w-reg) 12.5px var(--ui); color: var(--text) }
+  .lrow .ds { font: var(--w-reg) 11px/1.55 var(--ui); color: var(--faint) }
   .lrow:last-of-type { border-bottom: 1px solid var(--hair) }
-  .lrow .nm { flex: none; min-width: 152px; font: 400 11.5px var(--mono); color: var(--text) }
+  .lrow .nm { flex: none; min-width: 152px; font: var(--w-reg) 11.5px var(--mono); color: var(--text) }
   .lrow .ds { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 400 11.5px var(--ui); color: var(--muted) }
+    font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
   .lrow .sa { margin-left: auto; flex: none }
   .lrow .sa + .sc { margin-left: 8px }
-  .lrow .sc { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--faint) }
+  .lrow .sc { margin-left: auto; flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
 
   /* 技能行比服务表多一列：怎么才能跑起来。这一列不是装饰 —— 它是这张表跟
      斜杠菜单的区别所在，所以它排在能力标签前面，靠说明文字右边。 */
@@ -2779,28 +2793,28 @@
   .skrow:last-of-type { border-bottom: 1px solid var(--hair) }
   .skrow[data-off] .nm, .skrow[data-off] .ds { color: var(--ghost) }
   .skrow[data-off] .how, .skrow[data-off] .face { opacity: .45 }
-  .skrow .nm { flex: none; min-width: 152px; font: 400 11.5px var(--mono); color: var(--text) }
+  .skrow .nm { flex: none; min-width: 152px; font: var(--w-reg) 11.5px var(--mono); color: var(--text) }
   .skrow .ds { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 400 11.5px var(--ui); color: var(--muted) }
+    font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
   .skrow .how, .skrow .face { flex: none; display: flex; gap: 5px }
   .skrow .w {
-    padding: 1px 6px; border-radius: var(--r-pill); font: 400 10px var(--ui); font-style: normal;
+    padding: 1px 6px; border-radius: var(--r-pill); font: var(--w-reg) 10px var(--ui); font-style: normal;
     color: var(--faint); background: var(--overlay);
   }
   .skrow .w.none { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent) }
   .skrow .ro {
-    padding: 1px 5px; border-radius: var(--r-pill); font: 500 9.5px var(--ui); font-style: normal;
+    padding: 1px 5px; border-radius: var(--r-pill); font: var(--w-med) 9.5px var(--ui); font-style: normal;
     color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent);
   }
-  .skrow .sc { flex: none; min-width: 44px; text-align: right; font: 400 10.5px var(--mono); color: var(--faint) }
+  .skrow .sc { flex: none; min-width: 44px; text-align: right; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   .skrow .sw { margin-left: 4px; align-self: center }
 
   .seg { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; background: var(--overlay); border-radius: var(--r-sm) }
   /* 中文标签在 mono 栈里会掉到回退字体，跟旁边的界面字对不齐 */
-  .seg[data-text] button { font: 400 12px var(--ui) }
+  .seg[data-text] button { font: var(--w-reg) 12px var(--ui) }
   .seg button {
     flex: 1; min-width: 60px; padding: 6px 10px; border: 0; border-radius: var(--r-xs);
-    background: transparent; color: var(--faint); font: 400 11.5px var(--mono); cursor: pointer;
+    background: transparent; color: var(--faint); font: var(--w-reg) 11.5px var(--mono); cursor: pointer;
     transition: background .14s, color .14s;
   }
   .seg button:hover { color: var(--text) }
@@ -2822,20 +2836,20 @@
   }
 
   .ws[data-busy] { opacity: .5; pointer-events: none }
-  .ws-empty { padding: 12px 13px; font: 400 11px var(--mono); color: var(--ghost) }
+  .ws-empty { padding: 12px 13px; font: var(--w-reg) 11px var(--mono); color: var(--ghost) }
 
   /* 一个被吞掉的失败比失败本身更糟：请求挂了就得说出来 */
   .errbar {
     display: flex; align-items: center; gap: 10px; margin-top: 9px; padding: 7px 10px;
     border-radius: var(--r-sm); border: 1px solid color-mix(in srgb, var(--err) 40%, var(--border));
     background: color-mix(in srgb, var(--err) 9%, transparent);
-    font: 400 11.5px/1.5 var(--ui); color: var(--err);
+    font: var(--w-reg) 11.5px/1.5 var(--ui); color: var(--err);
     animation: card var(--t-card) var(--ease-out) both;
   }
   .errbar span { flex: 1; min-width: 0; word-break: break-word }
   .errbar button {
     flex: none; border: 0; background: transparent; cursor: pointer;
-    color: var(--err); font: 500 11px var(--ui); text-decoration: underline; text-underline-offset: 3px;
+    color: var(--err); font: var(--w-med) 11px var(--ui); text-decoration: underline; text-underline-offset: 3px;
   }
 
   /* 运行时对自己的汇报：它不是对话里的一句话，所以不进正文，而是贴着输入框
@@ -2843,7 +2857,7 @@
   .rtbar {
     display: flex; align-items: baseline; gap: 10px; margin-top: 9px; padding: 7px 10px;
     border-radius: var(--r-sm); border: 1px solid var(--border);
-    background: var(--overlay); font: 400 11.5px/1.5 var(--ui); color: var(--muted);
+    background: var(--overlay); font: var(--w-reg) 11.5px/1.5 var(--ui); color: var(--muted);
     animation: card var(--t-card) var(--ease-out) both;
   }
   .rtbar[data-lvl="warn"] {
@@ -2851,11 +2865,11 @@
     background: color-mix(in srgb, var(--warn) 8%, transparent);
     color: var(--warn);
   }
-  .rtbar .t { flex: none; font-weight: 500 }
+  .rtbar .t { flex: none; font-weight: var(--w-med) }
   .rtbar .why { flex: 1; min-width: 0; color: var(--ghost); word-break: break-word }
   .rtbar button {
     flex: none; border: 0; background: transparent; cursor: pointer; color: inherit;
-    font: 500 11px var(--ui); text-decoration: underline; text-underline-offset: 3px;
+    font: var(--w-med) 11px var(--ui); text-decoration: underline; text-underline-offset: 3px;
   }
 
   /* ── 回合回执 ─────────────────────────────────────────────────────── */
@@ -2868,27 +2882,27 @@
   .rc { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 2px }
   .rc-ok {
     flex-direction: row; align-items: baseline; gap: 8px;
-    font: 400 11.5px/1.6 var(--ui); color: var(--ghost);
+    font: var(--w-reg) 11.5px/1.6 var(--ui); color: var(--ghost);
   }
   .rc-ok .rc-tick { color: var(--ok) }
-  .rc-ok .rc-src { min-width: 0; font: 400 10.5px var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .rc-ok .rc-src { min-width: 0; font: var(--w-reg) 10.5px var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 
   .rc-group { display: flex; flex-direction: column; padding-left: 9px; border-left: 2px solid var(--warn) }
   /* 自己说明的不是主机查出来的，所以不挂警戒线。 */
   .rc-group[data-declared] { border-left-color: var(--hair) }
   .rc-hd {
-    padding: 2px 0 4px; font: 500 10px var(--mono); letter-spacing: .06em;
+    padding: 2px 0 4px; font: var(--w-med) 10px var(--mono); letter-spacing: .06em;
     text-transform: uppercase; color: var(--ghost);
   }
   .rc-group[data-declared] .rc-hd { text-transform: none; letter-spacing: 0 }
   .rc-row { display: flex; align-items: baseline; gap: 9px; padding: 3px 0; min-width: 0 }
   .rc-row + .rc-row { border-top: 1px solid color-mix(in srgb, var(--hair) 55%, transparent) }
-  .rc-t { flex: none; font: 400 11.5px/1.6 var(--ui); color: var(--text) }
+  .rc-t { flex: none; font: var(--w-reg) 11.5px/1.6 var(--ui); color: var(--text) }
   .rc-d {
-    flex: 1; min-width: 0; font: 400 10.5px/1.6 var(--mono); color: var(--ghost);
+    flex: 1; min-width: 0; font: var(--w-reg) 10.5px/1.6 var(--mono); color: var(--ghost);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .rc-more { padding: 3px 0 0; font: 400 10.5px var(--ui); color: var(--ghost) }
+  .rc-more { padding: 3px 0 0; font: var(--w-reg) 10.5px var(--ui); color: var(--ghost) }
 
   /* ── markdown ─────────────────────────────────────────────────────── */
   /* The stream lands mid-sentence, so vertical rhythm is set by margins that
@@ -2897,7 +2911,7 @@
   .md > :last-child { margin-bottom: 0 }
   .md p { margin: 0 0 .7em }
   .md h1, .md h2, .md h3, .md h4 {
-    margin: 1.1em 0 .5em; font-weight: 600; line-height: 1.35; color: var(--text);
+    margin: 1.1em 0 .5em; font-weight: var(--w-semi); line-height: 1.35; color: var(--text);
   }
   /* 跟着正文一起动，标题与正文的层级差是固定的 */
   .md h1 { font-size: calc(var(--read) + 1.5px) } .md h2 { font-size: calc(var(--read) + .5px) }
@@ -2906,7 +2920,7 @@
   .md ul, .md ol { margin: 0 0 .7em; padding-left: 1.4em }
   .md li { margin: .18em 0 }
   .md li::marker { color: var(--ghost) }
-  .md strong { font-weight: 600; color: var(--text) }
+  .md strong { font-weight: var(--w-semi); color: var(--text) }
   .md em { font-style: italic }
   .md del { color: var(--faint) }
   .md hr { height: 1px; margin: 1em 0; border: 0; background: var(--hair) }
@@ -2921,7 +2935,7 @@
   .md mark { background: var(--accent-wash); color: var(--text); padding: 0 2px; border-radius: var(--r-xs) }
   .md sub, .md sup { font-size: .75em; line-height: 0 }
   .md kbd {
-    font: 400 10.5px var(--mono); color: var(--muted); padding: 1px 5px;
+    font: var(--w-reg) 10.5px var(--mono); color: var(--muted); padding: 1px 5px;
     border: 1px solid var(--border); border-bottom-width: 2px; border-radius: var(--r-xs);
   }
   /* KaTeX inherits the surface, and a long display equation scrolls in its own
@@ -2935,7 +2949,7 @@
   .md th, .md td {
     padding: 5px 10px; text-align: left; border: 1px solid var(--hair); white-space: nowrap;
   }
-  .md th { color: var(--faint); font: 500 11px var(--mono); background: var(--overlay) }
+  .md th { color: var(--faint); font: var(--w-med) 11px var(--mono); background: var(--overlay) }
   .md td { color: var(--muted) }
   .md a { color: var(--net); text-decoration: underline; text-underline-offset: 2px }
   .md a:hover { color: var(--text) }
@@ -2948,33 +2962,33 @@
      carries the initial, so the bar states a fact instead of asking for one. */
   .acct-btn .ini {
     display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%;
-    background: var(--accent); color: var(--bg); font: 600 9.5px var(--ui); letter-spacing: 0;
+    background: var(--accent); color: var(--bg); font: var(--w-semi) 9.5px var(--ui); letter-spacing: 0;
   }
   .acct-btn[data-on] { color: var(--text) }
 
   .acct { display: flex; flex-direction: column; gap: 11px }
   .acct-who { display: flex; align-items: baseline; gap: 9px }
-  .acct-who .nm { font: 500 13px var(--ui); color: var(--text) }
-  .acct-who .em { font: 400 11.5px var(--mono); color: var(--muted) }
-  .acct-note { font: 400 11.5px/1.6 var(--ui); color: var(--muted); margin: 0 }
+  .acct-who .nm { font: var(--w-med) 13px var(--ui); color: var(--text) }
+  .acct-who .em { font: var(--w-reg) 11.5px var(--mono); color: var(--muted) }
+  .acct-note { font: var(--w-reg) 11.5px/1.6 var(--ui); color: var(--muted); margin: 0 }
   .acct-note[data-err] { color: var(--err) }
   .acct-act { display: flex; align-items: center; gap: 11px; flex-wrap: wrap }
   .acct-code { display: flex; flex-direction: column; gap: 9px; align-items: flex-start }
   /* The code is the one thing the user must copy by eye: give it the room a
      one-shot secret needs rather than making them squint at body text. */
   .acct-code .cd {
-    font: 600 22px/1 var(--mono); letter-spacing: .16em; color: var(--text);
+    font: var(--w-semi) 22px/1 var(--mono); letter-spacing: .16em; color: var(--text);
     padding: 11px 14px; border: 1px solid var(--hair); border-radius: 8px; background: var(--overlay);
   }
 
   .vers { display: flex; flex-direction: column; gap: 11px }
   .vnow { display: flex; align-items: baseline; gap: 9px }
-  .vnow .cur { font: 600 21px/1 var(--mono); letter-spacing: .01em; color: var(--text) }
+  .vnow .cur { font: var(--w-semi) 21px/1 var(--mono); letter-spacing: .01em; color: var(--text) }
   /* The label rides one beat behind the number it explains: the version is the
      answer, the words are the footnote. */
-  .vnow .lb { font: 400 11.5px var(--ui); color: var(--muted); animation: card var(--t-card) var(--ease-out) .07s both }
+  .vnow .lb { font: var(--w-reg) 11.5px var(--ui); color: var(--muted); animation: card var(--t-card) var(--ease-out) .07s both }
   .vnow .pin {
-    font: 500 10px var(--mono); letter-spacing: .08em; color: var(--ok);
+    font: var(--w-med) 10px var(--mono); letter-spacing: .08em; color: var(--ok);
     padding: 2px 6px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--ok);
   }
 
@@ -2990,15 +3004,15 @@
   }
   .vrow:last-of-type { border-bottom: 1px solid var(--hair) }
   .vrow[data-on] { box-shadow: inset 2px 0 0 var(--accent); background: var(--accent-wash) }
-  .vrow .nm { flex: none; min-width: 104px; font: 400 12px var(--mono); color: var(--muted) }
+  .vrow .nm { flex: none; min-width: 104px; font: var(--w-reg) 12px var(--mono); color: var(--muted) }
   /* Where you are reads at full weight; what you left behind recedes. Position
      in the list is carried by type, not by an ornament beside it. */
-  .vrow[data-on] .nm { font-weight: 500; color: var(--text) }
+  .vrow[data-on] .nm { font-weight: var(--w-med); color: var(--text) }
   .vrow[data-side="ahead"] .nm { color: var(--text) }
   .vrow[data-side="past"] .nm, .vrow[data-side="past"] .ds { color: var(--faint) }
   .vrow .ds { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 400 11.5px var(--ui); color: var(--muted) }
-  .vrow .sc { margin-left: auto; flex: none; font: 400 10.5px var(--mono); color: var(--faint) }
+    font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
+  .vrow .sc { margin-left: auto; flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   /* The action stays out of the way until the row is under the pointer — the
      list is for reading first, acting second. Keyboard users get it on focus. */
   .vrow .sa { margin-left: 10px; flex: none; opacity: 0; transition: opacity var(--t-line) var(--ease-out) }
@@ -3013,7 +3027,7 @@
   /* Same shape as .tag — a small mono pill — in the colour that means broken,
      so a failed command reads as failed without a second layout. */
   .hl .fail {
-    font: 500 9.5px var(--mono); letter-spacing: .11em; text-transform: uppercase;
+    font: var(--w-med) 9.5px var(--mono); letter-spacing: .11em; text-transform: uppercase;
     padding: 1.5px 5px; border-radius: var(--r-xs); flex: none;
     color: var(--err); background: color-mix(in srgb, var(--err) 13%, transparent);
   }
@@ -3034,7 +3048,7 @@
   .extkv dd { margin: 0; color: var(--text); overflow-wrap: anywhere }
   .extacts, .extfoot { display: flex; flex-wrap: wrap; gap: 6px }
   .extfield { display: flex; flex-direction: column; gap: 4px }
-  .extlabel { font: 500 12px var(--ui); color: var(--text) }
+  .extlabel { font: var(--w-med) 12px var(--ui); color: var(--text) }
   .extlabel .req, .extfield .req { color: var(--err); font-style: normal; margin-left: 3px }
   .extfield input {
     font: 12.5px var(--ui); color: var(--text); background: var(--surface);
@@ -3074,18 +3088,18 @@
   .pal-shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover }
   /* Name over source, each on one line: side by side they both wrapped, and a
      grid of two-line-by-two-column labels reads as noise between the cards. */
-  .pal-nm { display: block; min-width: 0; font: 400 11.5px var(--ui); color: var(--muted) }
+  .pal-nm { display: block; min-width: 0; font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
   .pal-nm b, .pal-nm em { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .pal-nm b { font-weight: 400 }
+  .pal-nm b { font-weight: var(--w-reg) }
   .pal[data-on] .pal-nm b { color: var(--text) }
-  .pal-nm em { margin-top: 2px; font: 400 10.5px var(--mono); font-style: normal; color: var(--ghost) }
+  .pal-nm em { margin-top: 2px; font: var(--w-reg) 10.5px var(--mono); font-style: normal; color: var(--ghost) }
 
   /* A standing panel sits in the side rail, so it is denser than the same
      content would be in the transcript and borrows the rail's own row rhythm. */
   .extpanel { display: flex; flex-direction: column; gap: 4px; padding: 6px 0 }
   .extpanel + .extpanel { border-top: 1px solid var(--hair) }
   .extpanel-hd { display: flex; align-items: baseline; gap: 6px }
-  .extpanel-hd .nm { font: 500 12px var(--ui); color: var(--text) }
+  .extpanel-hd .nm { font: var(--w-med) 12px var(--ui); color: var(--text) }
   .extpanel-hd .src { font: 10.5px var(--mono); color: var(--faint) }
   .extpanel-tx { font-size: 11.5px; line-height: 1.5; color: var(--muted) }
   .extpanel .extkv { font-size: 11.5px }
@@ -3097,21 +3111,21 @@
   .xview { display: flex; flex-direction: column; gap: 7px; min-width: 0 }
   .xv-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0 }
   .xv-stack { display: flex; flex-direction: column; gap: 6px; min-width: 0 }
-  .xv-t { font: 400 12px var(--ui); color: var(--text); min-width: 0; overflow-wrap: anywhere }
+  .xv-t { font: var(--w-reg) 12px var(--ui); color: var(--text); min-width: 0; overflow-wrap: anywhere }
   .xv-t[data-tone="dim"] { color: var(--faint) }
-  .xv-t[data-tone="strong"] { font-weight: 500 }
+  .xv-t[data-tone="strong"] { font-weight: var(--w-med) }
   .xv-t[data-tone="ok"] { color: var(--ok) }
   .xv-t[data-tone="warn"] { color: var(--warn) }
   .xv-t[data-tone="err"] { color: var(--err) }
   .xv-t[data-tone="accent"] { color: var(--accent) }
   /* 扩展递来的 markdown 按纯文本画：抄本的渲染器假定内容可信，视图不是。 */
-  .xv-md { margin: 0; font: 400 12px/1.6 var(--ui); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere }
-  .xv-kv { display: flex; align-items: baseline; gap: 9px; font: 400 11.5px var(--ui) }
+  .xv-md { margin: 0; font: var(--w-reg) 12px/1.6 var(--ui); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere }
+  .xv-kv { display: flex; align-items: baseline; gap: 9px; font: var(--w-reg) 11.5px var(--ui) }
   .xv-kv .k { flex: none; min-width: 84px; color: var(--faint) }
   .xv-kv .v { color: var(--text); font-family: var(--mono); overflow-wrap: anywhere }
   .xv-meter { position: relative; height: 4px; border-radius: var(--r-pill); background: var(--overlay); overflow: hidden }
   .xv-meter > i { display: block; height: 100%; background: var(--deleg); transition: width var(--t-card) var(--ease) }
-  .xv-meter .lb { position: absolute; right: 0; top: 6px; font: 400 10.5px var(--ui); color: var(--ghost) }
+  .xv-meter .lb { position: absolute; right: 0; top: 6px; font: var(--w-reg) 10.5px var(--ui); color: var(--ghost) }
   .xv-hr { margin: 2px 0; border: 0; border-top: 1px solid var(--hair) }
   .xview .pip[data-tone="ok"] { background: var(--ok) }
   .xview .pip[data-tone="warn"] { background: var(--warn) }
@@ -3129,7 +3143,7 @@
   .slotted { position: relative; display: flex; align-items: center; gap: 6px }
   .movegrip {
     flex: none; padding: 0 4px; border: 0; background: none; cursor: pointer;
-    color: transparent; font: 400 12px var(--ui); line-height: 1; transition: color .14s;
+    color: transparent; font: var(--w-reg) 12px var(--ui); line-height: 1; transition: color .14s;
   }
   .slotted:hover .movegrip, .movegrip:focus-visible { color: var(--ghost) }
   .movegrip:hover { color: var(--muted) }
@@ -3149,17 +3163,17 @@
   @starting-style {
     .movemenu:not([hidden]) { opacity: 0; transform: translateY(-4px) scaleY(.985) }
   }
-  .movemenu .who { padding: 3px 8px 5px; font: 400 10.5px var(--mono); color: var(--ghost) }
+  .movemenu .who { padding: 3px 8px 5px; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
   .movemenu button {
     padding: 5px 8px; border: 0; border-radius: var(--r-xs); background: none;
-    color: var(--muted); font: 400 12px var(--ui); text-align: left; cursor: pointer;
+    color: var(--muted); font: var(--w-reg) 12px var(--ui); text-align: left; cursor: pointer;
   }
   .movemenu button:hover { background: var(--float-hi); color: var(--text) }
   .movemenu button[aria-checked="true"] { color: var(--text) }
   .movemenu button[aria-checked="true"]::after { content: " ·" }
   /* 接管的归属：卡片的框、名字和状态仍然是宿主的，body 换成了插件画的 —— 
      所以这一行必须在，读的人要知道眼前这块是谁画的。 */
-  .drawnby { margin-top: 6px; font: 400 10.5px var(--ui); color: var(--ghost) }
+  .drawnby { margin-top: 6px; font: var(--w-reg) 10.5px var(--ui); color: var(--ghost) }
 
   /* ══ 开场序列 ══════════════════════════════════════════════════════
      固定深色，不跟应用主题走：它是一场仪式，不是界面的一部分。一辈子
@@ -3275,7 +3289,7 @@
   @keyframes oobefill { to { width: 100% } }
   @keyframes oobegone { to { opacity: 0; visibility: hidden } }
   .oobe-skip { position: absolute; right: 18px; bottom: 16px; z-index: 3;
-               font: 400 11px var(--mono); color: rgb(255 255 255 / .28) }
+               font: var(--w-reg) 11px var(--mono); color: rgb(255 255 255 / .28) }
 
   @media (prefers-reduced-motion: reduce) {
     .oobe[data-play] * { animation: none !important }
@@ -3292,7 +3306,7 @@
   /* 引导页的服务选择：快捷键只填地址，不代表支持范围。 */
   .onb-chips { display: flex; flex-wrap: wrap; gap: 6px; width: 100% }
   .onb-chip {
-    font: 400 12px var(--ui); color: rgb(255 255 255 / .62); cursor: pointer;
+    font: var(--w-reg) 12px var(--ui); color: rgb(255 255 255 / .62); cursor: pointer;
     padding: 5px 12px; border-radius: var(--r-pill);
     background: rgb(255 255 255 / .05); border: 1px solid rgb(255 255 255 / .12);
     transition: color var(--t-line) var(--ease), border-color var(--t-line) var(--ease);
@@ -3305,14 +3319,14 @@
   /* 模型选择用应用自己的 Picker。它的按钮要跟这张卡片上的输入框对齐，
      所以在这里覆写成同一套场景配色；弹出的菜单沿用应用主题，浮层本来
      就该从场景里浮起来。 */
-  .onb-field .lb { font: 400 10.5px var(--mono); color: rgb(255 255 255 / .36); letter-spacing: .06em }
+  .onb-field .lb { font: var(--w-reg) 10.5px var(--mono); color: rgb(255 255 255 / .36); letter-spacing: .06em }
   .onb-pick .picker { display: block }
   /* 只有触发按钮。菜单项也是 button，一个不限定层级的选择器会把它们一起
      刷成白字半透明底 —— 落在应用主题的浅色菜单上就是白字白底。 */
   .onb-pick > .picker > button {
     width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 9px 11px; border-radius: var(--r-sm); cursor: pointer;
-    font: 400 13px var(--mono); color: #fff; text-align: left;
+    font: var(--w-reg) 13px var(--mono); color: #fff; text-align: left;
     background: rgb(255 255 255 / .05); border: 1px solid rgb(255 255 255 / .14);
   }
   .onb-pick > .picker > button::after {
@@ -3349,9 +3363,9 @@
     border: 1px solid rgb(255 255 255 / .14);
   }
   .onb-found-hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgb(255 255 255 / .86) }
-  .onb-found-hd .tick { color: #52B87C; font-weight: 600 }
-  .onb-found-hd .k { font: 400 11px var(--mono); color: rgb(255 255 255 / .36) }
-  .onb-why { margin: 0; font: 400 11.5px/1.65 var(--ui); color: rgb(255 255 255 / .5) }
+  .onb-found-hd .tick { color: #52B87C; font-weight: var(--w-semi) }
+  .onb-found-hd .k { font: var(--w-reg) 11px var(--mono); color: rgb(255 255 255 / .36) }
+  .onb-why { margin: 0; font: var(--w-reg) 11.5px/1.65 var(--ui); color: rgb(255 255 255 / .5) }
 
   /* ── 会话面板：叠着放，一次看一个 ─────────────────────────────────
      并排时两个面板互相挤，而且一眼分不清哪个输入框属于哪个 run。改成页签后
@@ -3388,7 +3402,7 @@
     display: flex; align-items: center; gap: 7px;
     padding: 7px 8px 8px 11px; cursor: pointer; border-radius: var(--r-xs) var(--r-xs) 0 0;
     border-bottom: 2px solid transparent; margin-bottom: -1px;
-    font: 500 12px var(--ui); color: var(--faint); white-space: nowrap;
+    font: var(--w-med) 12px var(--ui); color: var(--faint); white-space: nowrap;
     transition: color .14s, background .14s;
   }
   .ptab:hover { color: var(--text); background: var(--overlay) }
@@ -3396,7 +3410,7 @@
   .ptab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .ptab-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis }
   .ptab-x { margin-left: auto }
-  .ptab-ws { flex: none; font: 400 10px var(--mono); color: var(--ghost) }
+  .ptab-ws { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
   .ptab .pip { flex: none; background: var(--ghost) }
   /* 后台那个也在跑，页签上得看得出来 */
   .ptab[data-run="running"] .pip { background: var(--net); animation: tick 1.6s ease-in-out infinite }
@@ -3405,7 +3419,7 @@
   .ptab-x {
     flex: none; width: 17px; height: 17px; display: grid; place-items: center;
     border: 0; border-radius: var(--r-xs); background: transparent; color: var(--ghost);
-    font: 400 12px/1 var(--mono); cursor: pointer; opacity: 0; transition: opacity .14s, color .14s;
+    font: var(--w-reg) 12px/1 var(--mono); cursor: pointer; opacity: 0; transition: opacity .14s, color .14s;
   }
   .ptab:hover .ptab-x, .ptab[aria-selected="true"] .ptab-x, .ptab-x:focus-visible { opacity: 1 }
   .ptab-x:hover { color: var(--err) }
@@ -3419,12 +3433,12 @@
     animation: card var(--t-card) var(--ease-out) both;
   }
   .panes-empty .mk { font: 300 30px/1 var(--ui); color: var(--ghost); margin-bottom: 2px }
-  .panes-empty .t { margin: 0; font: 500 14px var(--ui); color: var(--muted) }
-  .panes-empty .h { margin: 0 0 4px; font: 400 12px/1.6 var(--ui); color: var(--faint); max-width: 34ch }
+  .panes-empty .t { margin: 0; font: var(--w-med) 14px var(--ui); color: var(--muted) }
+  .panes-empty .h { margin: 0 0 4px; font: var(--w-reg) 12px/1.6 var(--ui); color: var(--faint); max-width: 34ch }
   .panes-empty button {
     justify-self: center; padding: 7px 15px; border-radius: var(--r-pill);
     border: 1px solid var(--border); background: var(--overlay); color: var(--text);
-    font: 500 12px var(--ui); cursor: pointer;
+    font: var(--w-med) 12px var(--ui); cursor: pointer;
   }
   .panes-empty button:hover { border-color: var(--faint) }
 
@@ -3433,18 +3447,18 @@
   .wsnode[data-missing] .wsname { color: var(--err); text-decoration: line-through }
   .wsrow {
     position: relative; display: flex; align-items: center; gap: 6px;
-    padding: 6px 9px 6px 4px; font: 500 12px var(--ui); color: var(--muted);
+    padding: 6px 9px 6px 4px; font: var(--w-med) 12px var(--ui); color: var(--muted);
   }
   .wsrow:hover { background: var(--overlay) }
   .wsrow[data-open] { color: var(--text) }
   .twist {
     flex: none; width: 17px; height: 17px; display: grid; place-items: center;
     border: 0; background: none; color: var(--ghost); cursor: pointer;
-    font: 400 9px/1 var(--mono);
+    font: var(--w-reg) 9px/1 var(--mono);
   }
   .twist:hover { color: var(--text) }
   .wsname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .wscount { flex: none; font: 400 10px var(--mono); color: var(--ghost) }
+  .wscount { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
   .wsrow .mkbtn, .wsrow .wsdel { opacity: 0; transition: opacity .16s }
   .wsrow:hover .mkbtn, .wsrow:hover .wsdel, .wsrow :focus-visible { opacity: 1 }
 
@@ -3452,7 +3466,7 @@
     position: relative; display: flex; align-items: center; gap: 7px;
     padding: 5px 9px 5px 22px; cursor: pointer;
     border-left: 2px solid transparent;
-    font: 400 12px var(--ui); color: var(--faint);
+    font: var(--w-reg) 12px var(--ui); color: var(--faint);
   }
   .sessrow:hover { background: var(--overlay); color: var(--muted) }
   .sessrow[data-live] { color: var(--muted) }
@@ -3465,14 +3479,14 @@
   .app[data-run="running"] .sessrow[data-on][data-live] .pip { animation: tick 1.6s ease-in-out infinite }
   .app[data-run="halt"] .sessrow[data-on] .pip { background: var(--accent); opacity: 1 }
   .sesstitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .sessmeta { flex: none; font: 400 10px var(--mono); color: var(--ghost) }
+  .sessmeta { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
   /* 冲突副本折进它来自的那条对话。计数常驻（不像改名/删除只在 hover 出现）：
      它是「这里发生过什么」的唯一提示，藏起来就等于没有。 */
   .sesscopies {
     flex: none; padding: 0 5px; height: 15px;
     border: 1px solid var(--border); border-radius: var(--r-xs);
     background: transparent; color: var(--ghost); cursor: pointer;
-    font: 400 9px var(--mono);
+    font: var(--w-reg) 9px var(--mono);
   }
   .sesscopies:hover { border-color: var(--warn); color: var(--warn) }
   .sesscopies[aria-expanded="true"] { border-color: var(--warn); color: var(--warn) }
@@ -3484,13 +3498,13 @@
   .sessedit-btn {
     flex: none; width: 18px; height: 18px; display: grid; place-items: center;
     border: 0; border-radius: var(--r-xs); background: transparent; color: var(--ghost);
-    font: 400 10px/1 var(--mono); cursor: pointer; transition: opacity .14s, color .14s;
+    font: var(--w-reg) 10px/1 var(--mono); cursor: pointer; transition: opacity .14s, color .14s;
   }
   .sessedit-btn:hover { color: var(--accent) }
   .sessedit {
     flex: 1; min-width: 0; padding: 1px 5px; border-radius: var(--r-xs);
     border: 1px solid var(--accent); background: var(--page); color: var(--text);
-    font: 400 12px var(--ui);
+    font: var(--w-reg) 12px var(--ui);
   }
   .sessedit:focus { outline: none }
 
@@ -3499,7 +3513,7 @@
   .newsess {
     display: flex; align-items: center; gap: 7px; width: 100%;
     border: 0; background: none; cursor: pointer; text-align: left;
-    font: 500 11.5px var(--ui); color: var(--faint);
+    font: var(--w-med) 11.5px var(--ui); color: var(--faint);
     transition: color .14s, background .14s;
   }
   .newsess .plus, .paperpick .plus {
@@ -3523,14 +3537,14 @@
   .fontown {
     flex: 1 1 200px; min-width: 0; padding: 5px 8px;
     border: 1px solid var(--border); border-radius: var(--r-sm);
-    background: var(--raised); color: var(--text); font: 400 12px var(--ui);
+    background: var(--raised); color: var(--text); font: var(--w-reg) 12px var(--ui);
   }
   .fontown::placeholder { color: var(--ghost) }
   .fontown:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
   /* 用选中的字体画一行，是唯一能看出这个名字在本机存不存在的办法 */
   .fontsample {
     padding: 7px 10px; border-radius: var(--r-sm); background: var(--overlay);
-    color: var(--muted); font: 400 13px/1.6 var(--ui); white-space: nowrap;
+    color: var(--muted); font: var(--w-reg) 13px/1.6 var(--ui); white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
   }
   .fontsample[data-slot="mono"] { font-family: var(--mono); font-size: 12px }
@@ -3539,7 +3553,7 @@
     display: flex; align-items: center; gap: 7px; width: 100%;
     padding: 8px 10px; border: 1px dashed var(--border); border-radius: var(--r-sm);
     background: none; cursor: pointer; text-align: left;
-    font: 500 11.5px var(--ui); color: var(--faint);
+    font: var(--w-med) 11.5px var(--ui); color: var(--faint);
     transition: color .14s, background .14s;
   }
   .paperpick:hover { color: var(--text); background: var(--overlay) }
@@ -3593,7 +3607,7 @@
   /* 攒了几百次对话时只列最近的，其余收在这一行后面 */
   .sessmore {
     width: 100%; padding: 5px 9px 7px 22px; border: 0; background: none; cursor: pointer;
-    text-align: left; font: 400 11px var(--mono); color: var(--ghost);
+    text-align: left; font: var(--w-reg) 11px var(--mono); color: var(--ghost);
     transition: color .14s, background .14s;
   }
   .sessmore:hover { color: var(--text); background: var(--overlay) }
@@ -3618,7 +3632,7 @@
   /* 同名的两个文件夹（隔离副本最常见）靠这一小块区分 */
   .wstag {
     flex: none; padding: 1px 5px; border-radius: var(--r-pill);
-    font: 400 9.5px var(--mono); color: var(--ghost);
+    font: var(--w-reg) 9.5px var(--mono); color: var(--ghost);
     background: var(--overlay); white-space: nowrap;
     max-width: 8ch; overflow: hidden; text-overflow: ellipsis;
   }
@@ -3628,7 +3642,7 @@
   .addpath input {
     width: 100%; padding: 5px 8px; border-radius: var(--r-xs);
     border: 1px solid var(--border); background: var(--raised); color: var(--text);
-    font: 400 11.5px var(--mono);
+    font: var(--w-reg) 11.5px var(--mono);
   }
   .addpath input:focus { outline: 2px solid var(--focus); outline-offset: -1px }
 
@@ -3642,15 +3656,15 @@
   }
   .wsconfirm-t { flex: 1; min-width: 0; display: grid; gap: 1px }
   .wsconfirm-t .q {
-    font: 500 11.5px var(--ui); color: var(--text);
+    font: var(--w-med) 11.5px var(--ui); color: var(--text);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .wsconfirm-t .h { font: 400 10px var(--ui); color: var(--ghost) }
+  .wsconfirm-t .h { font: var(--w-reg) 10px var(--ui); color: var(--ghost) }
   .wsconfirm-a { flex: none; display: flex; gap: 4px }
   .wsconfirm-a button {
     padding: 4px 9px; border-radius: var(--r-xs); cursor: pointer;
     border: 1px solid var(--border); background: transparent; color: var(--muted);
-    font: 500 11px var(--ui); white-space: nowrap;
+    font: var(--w-med) 11px var(--ui); white-space: nowrap;
     transition: color .14s, border-color .14s, background .14s;
   }
   .wsconfirm-a button:hover { color: var(--text); border-color: var(--faint) }
@@ -3662,7 +3676,7 @@
   .ptab-in {
     flex: 1; min-width: 0; padding: 1px 4px; border-radius: var(--r-xs);
     border: 1px solid var(--accent); background: var(--page); color: var(--text);
-    font: 500 12px var(--ui);
+    font: var(--w-med) 12px var(--ui);
   }
   .ptab-in:focus { outline: none }
 
@@ -3675,7 +3689,7 @@
   }
   .tabmenu button {
     padding: 6px 9px; border: 0; border-radius: var(--r-xs); background: none;
-    color: var(--muted); font: 400 12px var(--ui); text-align: left; cursor: pointer;
+    color: var(--muted); font: var(--w-reg) 12px var(--ui); text-align: left; cursor: pointer;
   }
   .tabmenu button:hover:not(:disabled) { background: var(--float-hi); color: var(--text) }
   .tabmenu button:disabled { color: var(--ghost); cursor: default }
@@ -3685,16 +3699,16 @@
     flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0;
     padding: 6px 10px 8px; animation: card .16s var(--ease-out) both;
   }
-  .tabconfirm .q { flex: none; font: 500 12px var(--ui); color: var(--text) }
+  .tabconfirm .q { flex: none; font: var(--w-med) 12px var(--ui); color: var(--text) }
   .tabconfirm .h {
-    flex: 1; min-width: 0; font: 400 11px var(--ui); color: var(--muted);
+    flex: 1; min-width: 0; font: var(--w-reg) 11px var(--ui); color: var(--muted);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .tabconfirm .a { flex: none; display: flex; gap: 4px }
   .tabconfirm .a button {
     padding: 4px 10px; border-radius: var(--r-xs); cursor: pointer;
     border: 1px solid var(--border); background: transparent; color: var(--muted);
-    font: 500 11px var(--ui);
+    font: var(--w-med) 11px var(--ui);
   }
   .tabconfirm .a button:hover { color: var(--text); border-color: var(--faint) }
   .tabconfirm .a button[data-danger] { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--border)) }
@@ -3726,10 +3740,10 @@
   /* 上下文构成：常驻只有一条分段细条 —— 在这么窄的栏里，五行数字的代价高过
      它对大多数人的价值。真要查是什么把窗口填满了，hover 再摊开。 */
   .block[data-b="ctx"] .lbl { display: flex; align-items: baseline; gap: 8px }
-  .block[data-b="ctx"] .lbl .n { margin-left: auto; font: 400 10px var(--mono); color: var(--ghost) }
+  .block[data-b="ctx"] .lbl .n { margin-left: auto; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
   /* 没有分母时替代进度条的那一行。占位和进度条一样高，栏里不会因为换了
      状态就跳一下。 */
-  .ctxnote { margin: 5px 0 0; font: 400 10.5px/1.5 var(--ui); color: var(--faint) }
+  .ctxnote { margin: 5px 0 0; font: var(--w-reg) 10.5px/1.5 var(--ui); color: var(--faint) }
   .ctxbar {
     position: relative; display: flex; gap: 1px; height: 6px; margin-top: 7px;
     border-radius: 3px; background: var(--overlay); overflow: visible; cursor: default;
@@ -3756,9 +3770,9 @@
     pointer-events: none;
     animation: card .14s var(--ease-out) both;
   }
-  .ctxpop .hd { display: flex; align-items: baseline; font: 500 11.5px var(--ui); color: var(--text) }
-  .ctxpop .hd .n { margin-left: auto; font: 400 10.5px var(--mono); color: var(--muted) }
-  .ctxpop .row { display: flex; align-items: center; gap: 7px; font: 400 11px var(--ui); color: var(--muted) }
+  .ctxpop .hd { display: flex; align-items: baseline; font: var(--w-med) 11.5px var(--ui); color: var(--text) }
+  .ctxpop .hd .n { margin-left: auto; font: var(--w-reg) 10.5px var(--mono); color: var(--muted) }
+  .ctxpop .row { display: flex; align-items: center; gap: 7px; font: var(--w-reg) 11px var(--ui); color: var(--muted) }
   .ctxpop .row > i { width: 7px; height: 7px; border-radius: 2px; flex: none }
   .ctxpop .row > i[data-p="system"] { background: var(--deleg) }
   .ctxpop .row > i[data-p="tools"]  { background: var(--net) }
@@ -3766,39 +3780,39 @@
   .ctxpop .row > i[data-p="reply"]  { background: var(--ok) }
   .ctxpop .row > i[data-p="output"] { background: var(--faint) }
   .ctxpop .row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .ctxpop .row .v { font: 400 10.5px var(--mono); color: var(--text); font-variant-numeric: tabular-nums }
-  .ctxpop .row .p { width: 30px; text-align: right; font: 400 10px var(--mono); color: var(--ghost) }
-  .ctxpop .foot { margin: 3px 0 0; font: 400 10px/1.5 var(--ui); color: var(--ghost) }
+  .ctxpop .row .v { font: var(--w-reg) 10.5px var(--mono); color: var(--text); font-variant-numeric: tabular-nums }
+  .ctxpop .row .p { width: 30px; text-align: right; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
+  .ctxpop .foot { margin: 3px 0 0; font: var(--w-reg) 10px/1.5 var(--ui); color: var(--ghost) }
 
   /* 存储：一屏三段 —— 占了多少、放在哪、正在搬什么。条形按最大的那一项归一，
      所以读的是相对关系而不是绝对像素；数字全部等宽对齐，因为它们是拿来比的。 */
   .storage .vol { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px }
   .storage .vol .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px }
-  .storage .vol .nm { font: 500 12px var(--ui); color: var(--text) }
-  .storage .vol .sz { font: 400 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
+  .storage .vol .nm { font: var(--w-med) 12px var(--ui); color: var(--text) }
+  .storage .vol .sz { font: var(--w-reg) 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
   .storage .meter { height: 5px; border-radius: var(--r-xs); background: var(--hair); overflow: hidden }
   .storage .meter > i { display: block; height: 100%; background: var(--accent); transition: width var(--t-line) var(--ease-out) }
   .storage .drives { margin: 10px 0 0 }
-  .storage .drives p { margin: 0; font: 400 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
+  .storage .drives p { margin: 0; font: var(--w-reg) 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
 
   .storage .item { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap;
     padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-sm); margin-bottom: 8px }
   .storage .item .l { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 }
-  .storage .item .l b { font: 600 12px var(--ui); color: var(--text) }
-  .storage .item .hint { font: 400 11px var(--ui); color: var(--muted) }
-  .storage .item .p { font: 400 10.5px var(--mono); color: var(--ghost); word-break: break-all }
+  .storage .item .l b { font: var(--w-semi) 12px var(--ui); color: var(--text) }
+  .storage .item .hint { font: var(--w-reg) 11px var(--ui); color: var(--muted) }
+  .storage .item .p { font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); word-break: break-all }
   /* 被环境变量钉住、或本来就不可移动 —— 说明为什么这一行没有按钮 */
-  .storage .item .held { font: 400 10.5px var(--mono); color: var(--warn) }
+  .storage .item .held { font: var(--w-reg) 10.5px var(--mono); color: var(--warn) }
 
   .storage .mover { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 4px }
   .storage .mover input { width: 100%; padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--r-xs);
-    background: var(--surface); color: var(--text); font: 400 11px var(--mono) }
+    background: var(--surface); color: var(--text); font: var(--w-reg) 11px var(--mono) }
   .storage .mover input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .storage .mover .acts { display: flex; gap: 8px; justify-content: flex-end }
   .storage .refusals { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px }
-  .storage .refusals li { font: 400 11px/1.5 var(--ui); color: var(--err) }
-  .storage .ready { margin: 0; font: 400 11px/1.5 var(--ui); color: var(--muted) }
-  .storage .moving .failed { margin: 0; font: 400 11px/1.5 var(--ui); color: var(--err) }
+  .storage .refusals li { font: var(--w-reg) 11px/1.5 var(--ui); color: var(--err) }
+  .storage .ready { margin: 0; font: var(--w-reg) 11px/1.5 var(--ui); color: var(--muted) }
+  .storage .moving .failed { margin: 0; font: var(--w-reg) 11px/1.5 var(--ui); color: var(--err) }
   .storage .moving .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 5px }
-  .storage .moving .nm { font: 500 12px var(--ui); color: var(--text) }
-  .storage .moving .sz { font: 400 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
+  .storage .moving .nm { font: var(--w-med) 12px var(--ui); color: var(--text) }
+  .storage .moving .sz { font: var(--w-reg) 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }

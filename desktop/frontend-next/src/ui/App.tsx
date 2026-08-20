@@ -83,6 +83,8 @@ export function App({ hub }: { hub: HubPort }) {
   // "" means never chosen, which is what lets the system's own contrast setting
   // decide. Any explicit pick wins over it from then on.
   const [contrast, setContrast] = useState(() => localStorage.getItem("rx-contrast") ?? "");
+  // 空串是「跟随语言」：中文界面本来就该比西文粗一档，样式表按 :lang 给默认。
+  const [weight, setWeight] = useState(() => localStorage.getItem("rx-weight") ?? "");
   const [setup, setSetup] = useState<ProviderSetup | null | undefined>(undefined);
   // undefined until asked; false means the opening sequence is still owed.
   const [welcomed, setWelcomed] = useState<boolean | undefined>(undefined);
@@ -223,7 +225,10 @@ export function App({ hub }: { hub: HubPort }) {
     if (contrast) document.documentElement.dataset.contrast = contrast;
     else delete document.documentElement.dataset.contrast;
     localStorage.setItem("rx-contrast", contrast);
-  }, [contrast]);
+    if (weight) document.documentElement.dataset.weight = weight;
+    else delete document.documentElement.dataset.weight;
+    localStorage.setItem("rx-weight", weight);
+  }, [contrast, weight]);
 
   // A pane with no session file has never been written to — the empty one every
   // window opens with. Opening a conversation takes it over instead of parking
@@ -588,6 +593,8 @@ export function App({ hub }: { hub: HubPort }) {
           theme={theme}
           onTheme={setTheme}
           contrast={contrast}
+          weight={weight}
+          onWeight={setWeight}
           look={look}
           onLook={onLook}
           onContrast={setContrast}

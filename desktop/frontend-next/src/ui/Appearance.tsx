@@ -24,6 +24,8 @@ interface Props {
   port: AgentPort;
   theme: string;
   contrast: string;
+  weight: string;
+  onWeight: (v: string) => void;
   onContrast: (c: string) => void;
   onTheme: (t: string) => void;
   reloadThemes: () => void;
@@ -51,6 +53,14 @@ const ZOOM_RANGE = { min: 0.8, max: 2.5, step: 0.05 };
 // The steps live in look.ts next to the default they have to agree with.
 
 // "" follows the system's own accessibility setting; the rest are explicit.
+// 笔画粗细是另一条轴：颜色调得再亮，400 的汉字在 11px 上仍然是细的。默认跟着
+// 语言走 —— 汉字笔画密，同字号下比拉丁更早糊。
+const WEIGHTS: [string, string, string][] = [
+  ["", "跟随语言", "中文界面用中等字重，西文用常规"],
+  ["light", "常规", "笔画更细，字距看着更松"],
+  ["heavy", "加粗", "小字号下更实，屏幕远或反光时更好读"],
+];
+
 const CONTRASTS: [string, string, string][] = [
   ["", "跟随系统", "系统开了「增强对比度」就用最强的一档"],
   ["soft", "柔和", "正文没那么刺眼，长时间看更省力"],
@@ -62,7 +72,7 @@ const CONTRASTS: [string, string, string][] = [
 const at = (v: number, min: number, max: number) =>
   ({ "--at": `${Math.round(((v - min) / (max - min)) * 100)}%` }) as React.CSSProperties;
 
-export function Appearance({ port, theme, onTheme, contrast, onContrast, reloadThemes, look, onLook }: Props) {
+export function Appearance({ port, theme, onTheme, contrast, onContrast, weight, onWeight, reloadThemes, look, onLook }: Props) {
   const [packs, setPacks] = useState<ThemePack[]>([]);
 
   const load = useCallback(() => {
@@ -335,6 +345,22 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, reloadT
               </div>
             </>
           )}
+        </div>
+      </section>
+
+      <section className="grp">
+        <div className="grp-hd">
+          <h2>{t("文字粗细")}</h2>
+        </div>
+        <p className="hint">{t("看不清有两种：颜色太淡，和笔画太细。这一档管后者 —— 汉字笔画密，小字号下最先糊掉的就是它。")}</p>
+        <div className="grp-items">
+          <div className="seg" data-text role="group" aria-label={t("文字粗细")}>
+            {WEIGHTS.map(([id, name, why]) => (
+              <button key={id || "auto"} aria-pressed={weight === id} title={t(why)} onClick={() => onWeight(id)}>
+                {t(name)}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 

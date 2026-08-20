@@ -103,49 +103,62 @@
       0 4px 12px -8px rgb(23 30 45 / .14);
   }
 
-  /* 文字对比度分三档，背景与语义色不参与。默认「柔和」：深底上接近纯白的正文
-     （原来 15.9:1）会起光晕，而 faint/ghost 原来低到 2~3:1 又读不清 —— 同屏
-     跨度 8 倍，眼睛在两端反复适应才是真正累人的地方。现在两头都收进 4 倍内。
-     ghost 的下限按 --raised 量，不按 --page —— 它几乎只出现在卡片里。 */
+  /* 笔画粗细是和对比度并列的一个轴，不是它的一部分：颜色调得再亮，400 的汉字
+     在 11px 上仍然是细的。汉字笔画密，同字号下比拉丁更早糊，所以中文界面从
+     medium 起步 —— 这两件事以前只有「整体放大」一个旋钮去凑。 */
+  :root { --w-reg: 400; --w-med: 500; --w-semi: 600 }
+  :root:lang(zh) { --w-reg: 500; --w-med: 600; --w-semi: 700 }
+  :root[data-weight="light"], :root[data-weight="light"]:lang(zh) {
+  --w-reg: 400; --w-med: 500; --w-semi: 600;
+  }
+  :root[data-weight="heavy"] { --w-reg: 500; --w-med: 600; --w-semi: 700 }
+  /* 中文的默认已经是西文的加粗档，所以这一档要再让一步，否则选了等于没选。
+     上限停在 700：再往上汉字的封闭笔画会糊成一块。 */
+  :root[data-weight="heavy"]:lang(zh) { --w-reg: 600; --w-med: 700; --w-semi: 700 }
+
+  /* 文字对比度分三档，背景与语义色不参与。四档文字色的下限按 AA 正文定：最弱
+     的 ghost 在它实际出现的 --raised 上也要够 4.5:1，因为它落在 10-11px 的
+     字上，而 AA 的大字豁免是给 18.66px 以上的。默认档从那条线起算，另外两档
+     递增；正文一端不动 —— 深底上接近纯白会起光晕，收窄跨度才是柔和的意思。 */
   :root, :root[data-contrast="soft"] {
-  --text: #2C333E; --muted: #59616C; --faint: #6C7583; --ghost: #7F8B9E;
+  --text: #2C333E; --muted: #484F58; --faint: #5A616D; --ghost: #69778B;
   }
   :root[data-contrast="normal"] {
-  --text: #272D36; --muted: #515963; --faint: #636B78; --ghost: #7D899D;
+  --text: #272D36; --muted: #3F464D; --faint: #515762; --ghost: #5F6A7E;
   }
   :root[data-contrast="strong"] {
-  --text: #14171D; --muted: #484F58; --faint: #555C67; --ghost: #68768A;
+  --text: #14171D; --muted: #353A41; --faint: #474D56; --ghost: #545F70;
   }
 
   @media (prefers-color-scheme: dark) {
     :root, :root[data-contrast="soft"] {
-    --text: #C6CEDE; --muted: #8792A0; --faint: #717A8C; --ghost: #626E85;
+    --text: #C6CEDE; --muted: #9FA7B3; --faint: #888F9F; --ghost: #76829A;
     }
     :root[data-contrast="normal"] {
-    --text: #D1D8E5; --muted: #929CA8; --faint: #7C8696; --ghost: #5B687B;
+    --text: #D1D8E5; --muted: #ADB4BE; --faint: #949DAA; --ghost: #8290A3;
     }
     :root[data-contrast="strong"] {
-    --text: #E6E9F0; --muted: #9FA8B3; --faint: #8E97A5; --ghost: #6D7B92;
+    --text: #E6E9F0; --muted: #BEC4CC; --faint: #A3AAB6; --ghost: #929CAE;
     }
   }
 
   :root[data-theme="dark"], :root[data-theme="dark"][data-contrast="soft"] {
-  --text: #C6CEDE; --muted: #8792A0; --faint: #717A8C; --ghost: #626E85;
+  --text: #C6CEDE; --muted: #9FA7B3; --faint: #888F9F; --ghost: #76829A;
   }
   :root[data-theme="dark"][data-contrast="normal"] {
-  --text: #D1D8E5; --muted: #929CA8; --faint: #7C8696; --ghost: #5B687B;
+  --text: #D1D8E5; --muted: #ADB4BE; --faint: #949DAA; --ghost: #8290A3;
   }
   :root[data-theme="dark"][data-contrast="strong"] {
-  --text: #E6E9F0; --muted: #9FA8B3; --faint: #8E97A5; --ghost: #6D7B92;
+  --text: #E6E9F0; --muted: #BEC4CC; --faint: #A3AAB6; --ghost: #929CAE;
   }
   :root[data-theme="light"], :root[data-theme="light"][data-contrast="soft"] {
-  --text: #2C333E; --muted: #59616C; --faint: #6C7583; --ghost: #7F8B9E;
+  --text: #2C333E; --muted: #484F58; --faint: #5A616D; --ghost: #69778B;
   }
   :root[data-theme="light"][data-contrast="normal"] {
-  --text: #272D36; --muted: #515963; --faint: #636B78; --ghost: #7D899D;
+  --text: #272D36; --muted: #3F464D; --faint: #515762; --ghost: #5F6A7E;
   }
   :root[data-theme="light"][data-contrast="strong"] {
-  --text: #14171D; --muted: #484F58; --faint: #555C67; --ghost: #68768A;
+  --text: #14171D; --muted: #353A41; --faint: #474D56; --ghost: #545F70;
   }
 
   /* 系统开了「增强对比度」而用户没自己选过档，就按它来。明暗要单独判：手动
@@ -153,17 +166,17 @@
      正文刷到深背景上。 */
   @media (prefers-contrast: more) {
     :root:not([data-contrast]) {
-    --text: #14171D; --muted: #484F58; --faint: #555C67; --ghost: #68768A;
+    --text: #14171D; --muted: #353A41; --faint: #474D56; --ghost: #545F70;
     }
     :root[data-theme="dark"]:not([data-contrast]) {
-    --text: #E6E9F0; --muted: #9FA8B3; --faint: #8E97A5; --ghost: #6D7B92;
+    --text: #E6E9F0; --muted: #BEC4CC; --faint: #A3AAB6; --ghost: #929CAE;
     }
   }
   @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
     :root:not([data-contrast]) {
-    --text: #E6E9F0; --muted: #9FA8B3; --faint: #8E97A5; --ghost: #6D7B92;
+    --text: #E6E9F0; --muted: #BEC4CC; --faint: #A3AAB6; --ghost: #929CAE;
     }
     :root[data-theme="light"]:not([data-contrast]) {
-    --text: #14171D; --muted: #484F58; --faint: #555C67; --ghost: #68768A;
+    --text: #14171D; --muted: #353A41; --faint: #474D56; --ghost: #545F70;
     }
   }
