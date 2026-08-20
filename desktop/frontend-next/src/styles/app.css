@@ -56,6 +56,22 @@
   /* Only the empty page lets it through. Cards, panels, and the composer stay
      opaque: a background is worth a window's margins, not its content. */
   :root[data-bg] .app { background: transparent }
+  /* 那句话过去只对卡片成立：两栏和标签条从来没有自己的底，是借 body 的，于是
+     .app 一透明，图就一路透到它们的文字底下。面就该自己是面。 */
+  .rail, .side, .tabs { background: var(--surface) }
+  /* 转录里的一条不是卡片，是无边框的一行，所以图会一路透到正文底下。图值一个
+     窗口的边距，不值它的内容 —— 一有内容，这一层就自己接住，图退到栏和边距上。 */
+  :root[data-bg] .flow:not([data-empty]) {
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  }
+
+  /* 空白页上的字是唯一还站在图上的：给它垫一层从中心散开的底，边缘仍是透的 ——
+     图还在，字也还在。方框会把「空白」本身消掉，所以是渐变不是卡片。 */
+  :root[data-bg] .hero {
+    background: radial-gradient(58% 62% at 50% 42%,
+      color-mix(in srgb, var(--surface) 88%, transparent) 38%, transparent 78%);
+  }
 
   /* ── app：占满视口，没有别的东西 ─────────────────────────────────── */
   .app {
@@ -3734,8 +3750,13 @@
   /* 设置这一层也让壁纸透过来。它是全屏覆盖层，图在 body 上（z-index -2），
      所以只要这层不再是实心的就看得见。正文密集，透得比主界面克制：读设置
      的时候图是背景，不是内容。 */
-  :root[data-bg] .prefs { background: color-mix(in srgb, var(--surface) 86%, transparent) }
-  :root[data-bg] .prefs-nav { background: color-mix(in srgb, var(--surface) 60%, transparent) }
+  /* 半透明是想让图还在场，但透过去的是原图 —— 一张高对比的照片直接顶在正文
+     后面。模糊掉它：层次留住，字底下就只剩一片色。 */
+  :root[data-bg] .prefs {
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  }
+  :root[data-bg] .prefs-nav { background: color-mix(in srgb, var(--surface) 66%, transparent) }
 
   /* 上下文构成：常驻只有一条分段细条 —— 在这么窄的栏里，五行数字的代价高过
      它对大多数人的价值。真要查是什么把窗口填满了，hover 再摊开。 */
