@@ -41,6 +41,21 @@ var modelReasoningCapabilities = map[string]modelReasoningCapability{
 		Aliases:  map[string]string{"xhigh": "high"},
 	},
 	"deepseek-v4-pro": {Protocol: ReasoningProtocolDeepSeek, Levels: []string{"disabled", "high", "max"}, Default: "high"},
+	// GPT-5.6, measured 2026-08-20: the endpoint refuses "minimal" by naming the
+	// model, though the generic API vocabulary carries it. Keyed by model so a
+	// gateway serving them under its own name inherits the ladder.
+	"gpt-5.6-luna":  gpt56EffortCapability(),
+	"gpt-5.6-sol":   gpt56EffortCapability(),
+	"gpt-5.6-terra": gpt56EffortCapability(),
+}
+
+func gpt56EffortCapability() modelReasoningCapability {
+	return modelReasoningCapability{
+		Protocol: ReasoningProtocolOpenAI,
+		Levels:   []string{"none", "low", "medium", "high", "xhigh", "max"},
+		Default:  "medium",
+		Aliases:  map[string]string{"minimal": "low"},
+	}
 }
 
 // EffortCapabilityForEntry returns the user-facing /effort levels for a resolved
