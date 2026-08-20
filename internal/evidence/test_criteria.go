@@ -11,13 +11,9 @@ import (
 
 // RewrittenTestCriteria names the tests an edit changed the meaning of: one
 // that existed before and now asserts something else, or one that is gone. A
-// test is the measure a claim is checked against, so rewriting one rewrites the
-// measure — a suite green afterwards is not the suite that was green before,
-// and a run that edits its own checks has to say so rather than report the pass.
-//
-// Only Go test files are read, and only when both sides parse. An edit the host
-// cannot parse is not evidence that a criterion moved, and inferring one from
-// the text would be a guess. Tests present only in the new file are additions.
+// suite green afterwards is not the suite that was green before, so a run that
+// edits its own checks has to say so. Only Go test files are read, and only
+// when both sides parse; tests present only in the new file are additions.
 func RewrittenTestCriteria(path, oldText, newText string) []string {
 	if !strings.HasSuffix(strings.ToLower(path), "_test.go") {
 		return nil
