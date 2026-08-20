@@ -151,6 +151,17 @@ func SessionConflictLog(sessionPath string) string {
 	return sessionStem(sessionPath) + ".conflicts.jsonl"
 }
 
+// SessionSuperseded holds what a leaseholder's overriding write replaced. The
+// suffix deliberately does not end in ".jsonl": a session listing globs for
+// those, and the point of keeping these bytes this way is that no second
+// conversation shows up next to the one the user is in.
+func SessionSuperseded(sessionPath string) string {
+	if sessionPath == "" {
+		return ""
+	}
+	return sessionStem(sessionPath) + ".superseded.jsonl.bak"
+}
+
 // SessionLockFile is the advisory save lock (<id>.jsonl.lock).
 func SessionLockFile(sessionPath string) string {
 	if sessionPath == "" {

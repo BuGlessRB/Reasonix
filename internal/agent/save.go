@@ -117,7 +117,8 @@ type snapshotWriteDecision struct {
 	// repairLog is set when the on-disk event log was damaged (torn tail with
 	// a lost suffix, or nothing decodable): the safe write shape is a full
 	// rewrite that also compacts the log back to a healthy single event.
-	repairLog bool
+	repairLog  bool
+	supersedes bool // lease-authorized write over a disagreeing transcript
 	// ledgerStale is set when the on-disk transcript already matches the
 	// snapshot but the meta ledger still describes older content — the
 	// aftermath of a save whose bytes landed and whose revision record then
@@ -419,6 +420,7 @@ func (s *Session) saveLocked(path string, mode sessionSaveMode) error {
 			return err
 		}
 	}
+	keepSupersededTranscript(path, decision.supersedes)
 	if err := writeSessionMessages(path, msgs); err != nil {
 		return err
 	}
@@ -587,9 +589,9 @@ func (s *Session) checkSnapshotWrite(path string, next []provider.Message, nextD
 			return snapshotWriteDecision{revision: currentRevision, repairLog: current.eventLogDamaged}, nil
 		}
 	}
-	// Bound controllers: missing/stale authority must not fork recovery.
-	if err := s.authorityErrorForPath(path); err != nil {
-		return snapshotWriteDecision{}, err
+	// Who holds the lease decides; see leaseholderDecision.
+	if decision, handled, err := s.leaseholderDecision(path, currentRevision, current.eventLogDamaged); handled {
+		return decision, err
 	}
 	if messagesHavePrefix(existing, next) || messagesHavePrefixWithCompatibleSystem(existing, next) ||
 		(rawDiffers && (messagesHavePrefix(raw, next) || messagesHavePrefixWithCompatibleSystem(raw, next))) {

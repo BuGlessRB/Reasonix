@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/store"
 	"reasonix/internal/tool"
 )
 
@@ -112,13 +113,13 @@ func primarySessionFiles(paths []string) []string {
 	return out
 }
 
-// TestSwitchModelContinuesRecoveryPathAfterSnapshotConflict is the serve twin
-// of the desktop rebuild fix: when the pre-switch Snapshot hits a conflict and
-// retargets the old controller to a recovery branch, the rebuilt controller
-// must continue on that recovery path. Capturing prevPath before Snapshot
-// bound the just-recovered transcript back to the original file, so every
-// later save re-conflicted and derived yet another recovery branch.
-func TestSwitchModelContinuesRecoveryPathAfterSnapshotConflict(t *testing.T) {
+// #4103: a model switch used to answer a snapshot conflict by forking the
+// transcript, and the user got a second identical conversation in their list.
+// The lease is what says whose file this is: holding it makes the write
+// authoritative, so the switch stays on the one session. What the disk held is
+// kept beside it under a name no session listing globs, so the bytes survive
+// without becoming a conversation.
+func TestSwitchModelStaysOnOneSessionThroughASnapshotConflict(t *testing.T) {
 	t.Setenv("REASONIX_HOME", t.TempDir())
 	dir := t.TempDir()
 	originalPath := filepath.Join(dir, "switch-conflict.jsonl")
@@ -167,61 +168,54 @@ func TestSwitchModelContinuesRecoveryPathAfterSnapshotConflict(t *testing.T) {
 		t.Fatalf("switchModel: %v", err)
 	}
 
-	recoveryPath := built.SessionPath()
-	if recoveryPath == "" || recoveryPath == originalPath || !strings.Contains(filepath.Base(recoveryPath), "-recovery-") {
-		t.Fatalf("switched session path = %q, want recovery path distinct from %q", recoveryPath, originalPath)
+	if got := built.SessionPath(); got != originalPath {
+		t.Fatalf("switched session path = %q, want the original %q", got, originalPath)
 	}
 	if s.ctl() != built {
 		t.Fatal("switchModel did not publish the rebuilt controller")
 	}
-	if got, want := leases.HeldPath(), agent.CanonicalSessionPath(recoveryPath); got != want {
-		t.Fatalf("lease after pre-switch recovery = %q, want %q", got, want)
+	if got, want := leases.HeldPath(), agent.CanonicalSessionPath(originalPath); got != want {
+		t.Fatalf("lease after the switch = %q, want %q", got, want)
+	}
+	assertNoRecoveryBranch(t, dir, "after the switch")
+
+	// The bytes the write replaced are kept, and not as a session.
+	kept := store.SessionSuperseded(originalPath)
+	if body, err := os.ReadFile(kept); err != nil {
+		t.Fatalf("superseded transcript not kept: %v", err)
+	} else if !strings.Contains(string(body), "disk second") {
+		t.Fatal("the superseded copy does not hold what was overwritten")
 	}
 
+	// And a later divergence does the same thing: still one session.
+	diskAgain, err := agent.LoadSession(originalPath)
+	if err != nil {
+		t.Fatalf("load transcript for external change: %v", err)
+	}
+	diskAgain.Add(provider.Message{Role: provider.RoleUser, Content: "disk third"})
+	if err := diskAgain.Save(originalPath); err != nil {
+		t.Fatalf("save external change: %v", err)
+	}
+	built.Executor().Session().Add(provider.Message{Role: provider.RoleUser, Content: "local third"})
+	if err := built.Snapshot(); err != nil {
+		t.Fatalf("Snapshot after a second divergence: %v", err)
+	}
+	if got := built.SessionPath(); got != originalPath {
+		t.Fatalf("path after a second divergence = %q, want the original %q", got, originalPath)
+	}
+	assertNoRecoveryBranch(t, dir, "after a second divergence")
+}
+
+// assertNoRecoveryBranch is the whole point of #4103: no run of this should
+// ever leave a second conversation in the directory.
+func assertNoRecoveryBranch(t *testing.T, dir, when string) {
+	t.Helper()
 	matches, err := filepath.Glob(filepath.Join(dir, "*-recovery-*.jsonl"))
 	if err != nil {
 		t.Fatalf("glob recovery branches: %v", err)
 	}
-	matches = primarySessionFiles(matches)
-	if len(matches) != 1 || matches[0] != recoveryPath {
-		t.Fatalf("recovery branches after switch = %v, want only %q", matches, recoveryPath)
-	}
-
-	// The rebuilt controller adopted the recovery file's baseline, so its next
-	// snapshot must not derive a second recovery branch.
-	if err := built.Snapshot(); err != nil {
-		t.Fatalf("Snapshot after switch: %v", err)
-	}
-	matches, err = filepath.Glob(filepath.Join(dir, "*-recovery-*.jsonl"))
-	if err != nil {
-		t.Fatalf("glob recovery branches after snapshot: %v", err)
-	}
-	matches = primarySessionFiles(matches)
-	if len(matches) != 1 || matches[0] != recoveryPath {
-		t.Fatalf("recovery branches after follow-up snapshot = %v, want only %q", matches, recoveryPath)
-	}
-
-	// A later ordinary autosave on the rebuilt controller must use the same
-	// ownership callback. Force another divergence after the switch and verify
-	// the keeper follows the second recovery before the controller commits it.
-	diskAfterSwitch, err := agent.LoadSession(recoveryPath)
-	if err != nil {
-		t.Fatalf("load recovery transcript for external change: %v", err)
-	}
-	diskAfterSwitch.Add(provider.Message{Role: provider.RoleUser, Content: "disk third"})
-	if err := diskAfterSwitch.Save(recoveryPath); err != nil {
-		t.Fatalf("save external recovery transcript change: %v", err)
-	}
-	built.Executor().Session().Add(provider.Message{Role: provider.RoleUser, Content: "local third"})
-	if err := built.Snapshot(); err != nil {
-		t.Fatalf("Snapshot rebuilt controller after divergence: %v", err)
-	}
-	secondRecoveryPath := built.SessionPath()
-	if secondRecoveryPath == recoveryPath || !strings.Contains(filepath.Base(secondRecoveryPath), "-recovery-") {
-		t.Fatalf("rebuilt controller path = %q, want recovery path distinct from %q", secondRecoveryPath, recoveryPath)
-	}
-	if got, want := leases.HeldPath(), agent.CanonicalSessionPath(secondRecoveryPath); got != want {
-		t.Fatalf("lease after rebuilt-controller recovery = %q, want %q", got, want)
+	if got := primarySessionFiles(matches); len(got) != 0 {
+		t.Fatalf("recovery branches %s = %v, want none", when, got)
 	}
 }
 

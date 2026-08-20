@@ -302,3 +302,107 @@ func TestSaveSnapshotZeroByteCheckpointHealsFromWAL(t *testing.T) {
 		t.Fatalf("checkpoint size = %v err=%v, want healed non-empty", info, err)
 	}
 }
+
+// #4103: a model switch forked a byte-identical "conflict copy". The rebuilt
+// controller carries no persistence baseline and holds a reshape rather than an
+// extension, which together used to read as a foreign writer. The lease says
+// otherwise: nobody else may write this file.
+func TestSaveSnapshotLeaseHeldWithoutBaselineRewritesInsteadOfForking(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	base := NewSession("sys")
+	base.Add(provider.Message{Role: provider.RoleUser, Content: "ask"})
+	base.Add(provider.Message{
+		Role: provider.RoleAssistant, Content: "answering",
+		ToolCalls: []provider.ToolCall{{ID: "call_1", Name: "edit", Arguments: `{"path":"f"}`}},
+	})
+	if err := base.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	// The rebuilt runtime: same conversation, reshaped tool row, and no
+	// persisted baseline of its own — exactly what boot leaves after a switch.
+	rebuilt := NewSession("sys")
+	rebuilt.Add(provider.Message{Role: provider.RoleUser, Content: "ask"})
+	rebuilt.Add(provider.Message{
+		Role: provider.RoleAssistant, Content: "answering",
+		ToolCalls: []provider.ToolCall{{
+			ID: "call_1", Name: "edit", Arguments: `{"path":"f"}`,
+			Diff: "@@ -1 +1 @@\n-a\n+b\n", Added: 1, Removed: 1,
+		}},
+	})
+
+	lease, err := TryAcquireSessionLease(path)
+	if err != nil {
+		t.Fatalf("TryAcquireSessionLease: %v", err)
+	}
+	defer lease.Release()
+	auth, err := lease.IssueWriteAuthority(NextSessionWriteGeneration())
+	if err != nil {
+		t.Fatalf("IssueWriteAuthority: %v", err)
+	}
+	rebuilt.BindWriteAuthority(auth)
+
+	if err := rebuilt.SaveSnapshot(path); err != nil {
+		t.Fatalf("SaveSnapshot under a held lease = %v, want the write to land", err)
+	}
+	if errors.Is(err, ErrSessionSnapshotConflict) {
+		t.Fatal("a leaseholder still forked a recovery branch")
+	}
+
+	// The file is the runtime's now, and the ledger describes what is in it.
+	back, err := LoadSession(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Load normalizes the dangling tool call into a placeholder result, so the
+	// reloaded transcript is one longer; the reshaped row is what matters.
+	got := back.Snapshot()
+	if len(got) < 3 {
+		t.Fatalf("reloaded %d messages, want at least the three written", len(got))
+	}
+	if len(got[2].ToolCalls) == 0 || got[2].ToolCalls[0].Diff == "" {
+		t.Fatalf("the rewrite did not persist the reshaped tool row: %+v", got[2].ToolCalls)
+	}
+	raw, _, _, err := loadSessionMessages(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := digestSessionMessages(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ledger, err := sessionContentRevision(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ledger != digestString(digest) {
+		t.Fatalf("ledger digest %s does not describe the transcript beside it (%s)", ledger, digestString(digest))
+	}
+}
+
+// Without a lease the same shape is still refused: removing the fork must not
+// turn "somebody else owns this file" into a silent overwrite.
+func TestSaveSnapshotWithoutLeaseStillRefusesAReshape(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	base := NewSession("sys")
+	base.Add(provider.Message{Role: provider.RoleUser, Content: "ask"})
+	base.Add(provider.Message{
+		Role: provider.RoleAssistant, Content: "answering",
+		ToolCalls: []provider.ToolCall{{ID: "call_1", Name: "edit", Arguments: `{"path":"f"}`}},
+	})
+	if err := base.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	rebuilt := NewSession("sys")
+	rebuilt.Add(provider.Message{Role: provider.RoleUser, Content: "ask"})
+	rebuilt.Add(provider.Message{
+		Role: provider.RoleAssistant, Content: "answering",
+		ToolCalls: []provider.ToolCall{{
+			ID: "call_1", Name: "edit", Arguments: `{"path":"f"}`,
+			Diff: "@@ -1 +1 @@\n-a\n+b\n", Added: 1, Removed: 1,
+		}},
+	})
+	if err := rebuilt.SaveSnapshot(path); !errors.Is(err, ErrSessionSnapshotConflict) {
+		t.Fatalf("SaveSnapshot without a lease = %v, want ErrSessionSnapshotConflict", err)
+	}
+}

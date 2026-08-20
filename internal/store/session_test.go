@@ -1,6 +1,9 @@
 package store
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestSessionSidecarLayout(t *testing.T) {
 	const p = "/home/u/.reasonix/sessions/abc.jsonl"
@@ -108,5 +111,21 @@ func TestSessionSidecarFiles(t *testing.T) {
 	}
 	if SessionSidecarFiles("") != nil {
 		t.Error("SessionSidecarFiles(\"\") should be nil")
+	}
+}
+
+// #4103: the superseded copy exists so a leaseholder's overriding write loses
+// no bytes. It must never be a session — that is the whole difference between
+// it and the recovery branch it replaces.
+func TestSupersededTranscriptIsNotASession(t *testing.T) {
+	name := filepath.Base(SessionSuperseded("/tmp/sessions/20260820-1-model.jsonl"))
+	if name == "" {
+		t.Fatal("no superseded path")
+	}
+	if IsSessionTranscriptName(name) {
+		t.Fatalf("%q lists as a conversation; the whole point is that it does not", name)
+	}
+	if IsSessionTranscriptName(filepath.Base(SessionConflictLog("/tmp/sessions/x.jsonl"))) {
+		t.Fatal("the conflict log lists as a conversation")
 	}
 }
