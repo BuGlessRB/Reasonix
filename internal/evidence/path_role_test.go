@@ -28,9 +28,25 @@ func TestUnknownPathIsProduction(t *testing.T) {
 			t.Errorf("ClassifyPath(%q) = %v, want PathProduction", p, got)
 		}
 	}
-	for _, p := range []string{"internal/x_test.go", "docs/guide.md", "src/i18n/zh.ts", "pkg/testdata/a.json"} {
+	for _, p := range []string{"internal/x_test.go", "docs/guide.md", "pkg/testdata/a.json", "src/__tests__/a.ts"} {
 		if got := ClassifyPath(p); got != PathSupporting {
 			t.Errorf("ClassifyPath(%q) = %v, want PathSupporting", p, got)
+		}
+	}
+}
+
+// A directory name is not a toolchain contract. This test asserted the
+// opposite until `desktop/frontend-next/src/i18n/format.ts` turned up under
+// the rule: a number-formatting module, waived out of review for sitting in a
+// directory named i18n. Stylesheets and fixtures were waived the same way, and
+// this repo has shipped a swallowed CSS brace and a duplicated locale key.
+func TestDirectoryNameDoesNotLowerAPath(t *testing.T) {
+	for _, p := range []string{
+		"src/i18n/format.ts", "src/i18n/zh.ts", "src/locales/en.json",
+		"src/styles/app.css", "bench/fixtures/alpha.csv", "docs/render.go", "readme_generator.go",
+	} {
+		if got := ClassifyPath(p); got != PathProduction {
+			t.Errorf("ClassifyPath(%q) = %v, want PathProduction", p, got)
 		}
 	}
 }

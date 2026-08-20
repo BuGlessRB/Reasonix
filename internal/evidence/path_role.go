@@ -1,7 +1,6 @@
 package evidence
 
 import (
-	"path/filepath"
 	"strings"
 
 	"reasonix/internal/fileutil"
@@ -23,10 +22,11 @@ const (
 	PathVCSStore
 )
 
-// ClassifyPath is the single answer to what a changed path is. Risk scoring and
-// review coverage both read it, so a path cannot be supporting material to one
-// and production code to the other — they disagreed before, and the coverage
-// side counted a repository store as code to be reviewed.
+// ClassifyPath is the single answer to what a changed path is, read by risk
+// scoring and review coverage alike. Only a toolchain's own contract lowers a
+// path from production: `/i18n/` held a number-formatting module, so reading a
+// directory name as "not really code" waived the review of code. Lowering the
+// bar is where a wrong guess costs something, so it gets no guesses.
 func ClassifyPath(path string) PathRole {
 	if strings.TrimSpace(path) == "" {
 		return PathSupporting
@@ -34,24 +34,20 @@ func ClassifyPath(path string) PathRole {
 	if fileutil.UnderVCSStore(path) {
 		return PathVCSStore
 	}
-	lower := strings.ToLower(filepath.ToSlash(path))
-	base := filepath.Base(lower)
+	lower := strings.ToLower(fileutil.NormalizeSlashPath(path))
 	switch {
-	case strings.HasSuffix(lower, "_test.go"), strings.HasSuffix(lower, "_test.ts"),
-		strings.HasSuffix(lower, ".test.ts"), strings.HasSuffix(lower, ".test.tsx"),
-		strings.HasSuffix(lower, "_spec.ts"), strings.HasSuffix(lower, ".spec.ts"):
+	// Toolchain contracts, not conventions: `go build` excludes _test.go and
+	// testdata outright, and the runners match these names to decide what is a
+	// test. What the build refuses to ship is not what review was called for.
+	case strings.HasSuffix(lower, "_test.go"), strings.Contains(lower, "/testdata/"):
 		return PathSupporting
-	case strings.Contains(lower, "/testdata/"), strings.Contains(lower, "/__tests__/"),
-		strings.Contains(lower, "/fixtures/"):
+	case strings.HasSuffix(lower, ".test.ts"), strings.HasSuffix(lower, ".test.tsx"),
+		strings.HasSuffix(lower, "_test.ts"), strings.HasSuffix(lower, ".spec.ts"),
+		strings.HasSuffix(lower, "_spec.ts"), strings.Contains(lower, "/__tests__/"):
 		return PathSupporting
-	case strings.HasSuffix(base, ".md"), strings.HasSuffix(base, ".mdx"),
-		strings.HasSuffix(base, ".txt"), strings.HasSuffix(base, ".rst"):
-		return PathSupporting
-	case strings.Contains(lower, "/docs/"), strings.Contains(lower, "/locales/"),
-		strings.Contains(lower, "/i18n/"), strings.HasPrefix(base, "readme"):
-		return PathSupporting
-	case strings.HasSuffix(base, ".css") && !strings.Contains(lower, "sandbox"):
-		// Pure presentation styles, unless mixed with a sandbox path.
+	// Prose formats carry no behaviour to review, whatever directory they sit in.
+	case strings.HasSuffix(lower, ".md"), strings.HasSuffix(lower, ".mdx"),
+		strings.HasSuffix(lower, ".txt"), strings.HasSuffix(lower, ".rst"):
 		return PathSupporting
 	}
 	return PathProduction
