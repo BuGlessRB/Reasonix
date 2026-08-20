@@ -139,7 +139,10 @@ build_nsis() {
 	local numver="${version#v}"
 	numver="${numver%%-*}"
 	echo "==> makensis ${APPNAME}-windows-${arch}-installer.exe"
-	makensis -V2 \
+	# The .nsi is UTF-8 with no BOM, which NSIS 3 reads as ANSI and then rejects
+	# at its first non-ASCII byte. Naming the encoding fixes that without relying
+	# on a byte order mark surviving an editor.
+	makensis -INPUTCHARSET UTF8 -V2 \
 		"-DVERSION=$numver" \
 		"-DPAYLOAD=$payload" \
 		"-DOUTFILE=$ROOT/dist/${APPNAME}-windows-${arch}-installer.exe" \
