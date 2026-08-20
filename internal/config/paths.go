@@ -195,6 +195,14 @@ func IsolatedHomeDir() string {
 	return cleanEnvDir("REASONIX_HOME")
 }
 
+// IsolatedStateDir returns the state root when REASONIX_STATE_HOME explicitly
+// set it. That root owns sessions, archive, stats and projects, so a run that
+// redirected it asked for its own copies of exactly what the legacy importers
+// copy in — and importing the production install's would defeat the redirect.
+func IsolatedStateDir() string {
+	return cleanEnvDir("REASONIX_STATE_HOME")
+}
+
 // userConfigDisplayPath is userConfigPath collapsed to a ~-relative form for
 // comments rendered into the user's own config.toml, so Windows users see the
 // real location instead of a hardcoded ~/.reasonix path.

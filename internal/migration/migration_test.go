@@ -283,3 +283,38 @@ func totalMemoryImported(imports []MemoryImport) int {
 	}
 	return total
 }
+
+// A redirected state root owns sessions and projects, so the automatic
+// importers must leave the production install alone. Before this, pointing
+// REASONIX_STATE_HOME at a scratch directory copied every project's history
+// into it — 460 sessions on the machine that found this, once per process.
+func TestAutomaticImportSkipsProductionWhenStateRootRedirected(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	t.Setenv("REASONIX_HOME", "")
+	t.Setenv("REASONIX_STATE_HOME", "")
+
+	production := filepath.Join(home, ".reasonix", "projects", "some-project", "sessions")
+	if err := os.MkdirAll(production, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(production, "old.jsonl"), []byte(legacyMessageLog), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	isolated := filepath.Join(home, "isolated-state")
+	t.Setenv("REASONIX_STATE_HOME", isolated)
+
+	if got := totalImported(MigrateLegacySessionSources(event.FuncSink(func(event.Event) {}))); got != 0 {
+		t.Fatalf("imported %d session(s) into a redirected state root, want 0", got)
+	}
+	if totalMemoryImported(MigrateLegacyMemorySources(event.FuncSink(func(event.Event) {}))) != 0 {
+		t.Fatal("memory import ran against a redirected state root")
+	}
+	if entries, err := os.ReadDir(filepath.Join(isolated, "projects")); err == nil && len(entries) > 0 {
+		t.Fatalf("production projects were copied into the isolated root: %d entries", len(entries))
+	}
+}
