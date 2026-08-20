@@ -72,7 +72,10 @@ func TestOrdinaryChatTurnRunsPastTheOldRoundCeiling(t *testing.T) {
 	c, done := newChatBudgetController(t, exec)
 
 	c.Submit("collect the real state, then rewrite HANDOVER.md")
-	waitForDone(t, done)
+	// 121 rounds against a default written for one or two: ~50ms idle, past
+	// five seconds on a loaded Windows runner. A budget that tracks the rounds
+	// keeps a failure here meaning "the ceiling came back".
+	waitForDoneWithin(t, done, time.Minute)
 
 	if got, want := prov.calls.Load(), int32(121); got != want {
 		t.Fatalf("provider rounds = %d, want %d (the model's own 120 plus its final answer)", got, want)
