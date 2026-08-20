@@ -57,11 +57,15 @@ interface Props {
   // its session. /status is polled only while a turn runs, so without this the
   // pane keeps reporting the posture it had when it opened.
   pulse: number;
-  onFoldSide: () => void;
   onSettings: () => void;
+  // 这个窗口还没有人选过的项目文件夹。空转录是唯一说得出这句话的地方 —— 那里
+  // 本来就在替一段还没开始的对话说明它该怎么开始。
+  needsProject: boolean;
+  onOpenProject: () => void;
+  onKeepHere: () => void;
 }
 
-function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, onFoldSide, onSettings }: Props) {
+function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, onSettings, needsProject, onOpenProject, onKeepHere }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
   const [status, setStatus] = useState<SessionStatus | null>(null);
@@ -405,6 +409,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         onPrepareRewind={onPrepareRewind}
         onCommitRewind={onCommitRewind}
         onUndoRewind={onUndoRewind}
+        needsProject={needsProject}
+        onOpenProject={onOpenProject}
+        onKeepHere={onKeepHere}
       />
 
       {/* Mounted only while it is the tab on screen. Hiding it with an
@@ -473,7 +480,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             tree={tree}
             ctx={ctx}
             yolo={status?.toolApprovalMode === "yolo"}
-            onFold={onFoldSide}
             onSettings={onSettings}
             panels={s.panels}
             views={inRail}

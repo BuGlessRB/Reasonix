@@ -24,7 +24,6 @@ interface Props {
   tree: WorkspaceChanges | null;
   ctx: ContextBreakdown | null;
   yolo: boolean;
-  onFold: () => void;
   onSettings: () => void;
   panels: ExtensionSurface[];
   // Composed views that resolved to the rail — the default place for a standing
@@ -58,7 +57,6 @@ const Rail = memo(function Rail({
   tree,
   ctx,
   yolo,
-  onFold,
   onSettings,
   panels,
   views,
@@ -69,11 +67,6 @@ const Rail = memo(function Rail({
     <>
       <div className="side-hd">
         <div className="lbl">{t("度量")}</div>
-        {/* 分隔条上的把手是这个开关，除了栏横过来的那一档 —— 那时没有缝可抓，
-            这个按钮才是唯一的出口。CSS 只在那一档显示它。 */}
-        <button className="collapse" onClick={onFold} title={t("收起度量栏")} aria-label={t("收起度量栏")}>
-          ▾
-        </button>
       </div>
       <div className="scroll">
         <Cache metrics={metrics} rate={rate} done={done} />

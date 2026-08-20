@@ -41,6 +41,9 @@ interface Props {
   onExtSubmit: (pluginId: string, surfaceId: string, values: Record<string, unknown>) => void;
   // The checkpoint each user card can return to, keyed by item id. Absent for a
   // card whose turn could not be matched — see state/checkpoints.
+  needsProject: boolean;
+  onOpenProject: () => void;
+  onKeepHere: () => void;
   checkpoints: Map<string, Checkpoint>;
   onPrepareRewind: (turn: number, scope: RewindScope) => Promise<RewindPlan>;
   onCommitRewind: (planId: string) => Promise<RewindResult>;
@@ -80,7 +83,7 @@ function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
   return blocks;
 }
 
-export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, onApprove, onAnswer, onSuggest, onForget, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind }: Props) {
+export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, onApprove, onAnswer, onSuggest, onForget, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, needsProject, onOpenProject, onKeepHere }: Props) {
   // A block the selection touches must not leave the DOM. Unmounting the node a
   // selection is anchored to makes the browser remap that selection onto
   // whatever is still mounted — which reads as "I selected up there and the
@@ -379,7 +382,9 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
       <Rail marks={marks} total={items.length} scroll={scroll} flow={flow} onJump={jumpTo} onGrab={release} bound={!hidden} />
       <div className="flow-edge" aria-hidden="true" />
       <div className="flow" ref={flow}>
-        {items.length === 0 && <Hero onPick={onSuggest} />}
+        {items.length === 0 && (
+          <Hero onPick={onSuggest} needsProject={needsProject} onOpen={onOpenProject} onKeep={onKeepHere} />
+        )}
         {blocks.map((block, i) => (
           <Block
             key={i}
@@ -542,21 +547,43 @@ const SUGGESTIONS = [
   "查一下这个项目的缓存命中率为什么会掉",
 ];
 
-function Hero({ onPick }: { onPick: (t: string) => void }) {
+interface HeroProps {
+  onPick: (text: string) => void;
+  needsProject: boolean;
+  onOpen: () => void;
+  onKeep: () => void;
+}
+
+// 没有项目时那三条建议说的是「这个仓库」，而这个窗口的根只是它碰巧启动的地方 ——
+// 建议本身就不成立。同一块地方换成这次真正该做的那一件事。
+function Hero({ onPick, needsProject, onOpen, onKeep }: HeroProps) {
   return (
     <div className="hero">
       <RMark />
-      <div className="t">{t("交待一件事，它自己往下做")}</div>
+      <div className="t">{needsProject ? t("先打开一个项目") : t("交待一件事，它自己往下做")}</div>
       <div className="s">
-        {t("读代码、联网查证、派子代理、改文件 —— 每一步都同时落进「轨迹」，那是机器记录，不是给人读的叙事。")}
+        {needsProject
+          ? t("它读代码、跑测试、改文件 —— 都在你选定的那个文件夹里。")
+          : t("读代码、联网查证、派子代理、改文件 —— 每一步都同时落进「轨迹」，那是机器记录，不是给人读的叙事。")}
       </div>
-      <div className="qs">
-        {SUGGESTIONS.map((s) => (
-          <button className="sug" key={s} onClick={() => onPick(t(s))}>
-            {t(s)}
+      {needsProject ? (
+        <div className="herogo">
+          <button className="pick" onClick={onOpen}>
+            {t("打开项目…")}
           </button>
-        ))}
-      </div>
+          <button className="stay" onClick={onKeep}>
+            {t("就用当前位置")}
+          </button>
+        </div>
+      ) : (
+        <div className="qs">
+          {SUGGESTIONS.map((s) => (
+            <button className="sug" key={s} onClick={() => onPick(t(s))}>
+              {t(s)}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

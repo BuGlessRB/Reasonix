@@ -1,6 +1,7 @@
 import { Fragment, memo, useState } from "react";
 import { t } from "../i18n";
 import type { HubPort, RuntimeView, TreeSession, TreeWorkspace } from "../port/hub";
+import type { Adder } from "./addws";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
 
@@ -22,6 +23,8 @@ interface Props {
   liveIds: (ids: string[]) => string[];
   onRename: (path: string, title: string) => void;
   onError: (e: unknown) => void;
+  // 打开项目这个动作归 App —— 首启那条横幅按的是同一个它。
+  adder: Adder;
 }
 
 // How many of a folder's sessions get a row before the rest are summarised.
@@ -30,10 +33,9 @@ interface Props {
 // nodes in the sidebar — more than the transcript at 20000 turns.
 const SHOWN = 30;
 
-function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, onRename, onError }: Props) {
+function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, onRename, onError, adder }: Props) {
   const [busy, setBusy] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [typing, setTyping] = useState(false);
   // Renaming is a pencil, not a double-click: a single click already opens the
   // session, so a double one would open it twice on the way to the edit.
   const [editing, setEditing] = useState("");
@@ -48,41 +50,6 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
   // Two folders can share a name — a worktree copy carries the project's own.
   // Only then is the extra word worth the room it takes.
   const twice = new Set(tree.map((w) => w.name).filter((n, i, all) => all.indexOf(n) !== i));
-
-  const addPath = async (path: string) => {
-    if (!path.trim()) return;
-    setBusy("__add");
-    try {
-      await hub.addWorkspace(path.trim());
-      await reload();
-    } catch (e) {
-      onError(e);
-    } finally {
-      setBusy("");
-    }
-  };
-
-  // The native panel is the main path; typing one is the escape hatch. A
-  // browser tab never learns a real path, and a shell whose panel refuses to
-  // open would otherwise leave no way in at all.
-  const add = async () => {
-    setBusy("__add");
-    try {
-      const dir = await hub.pickFolder();
-      if (dir === null) {
-        setTyping(true);
-        return;
-      }
-      // "" is the user closing the panel — an answer, not a reason to ask again.
-      if (!dir) return;
-      await hub.addWorkspace(dir);
-      await reload();
-    } catch (e) {
-      onError(e);
-    } finally {
-      setBusy("");
-    }
-  };
 
   // A row that is already open is a pane to focus, never a second runtime for
   // one transcript — the kernel refuses that, and it is what forked a recovery
@@ -157,7 +124,32 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
         <div className="lbl">
           {t("工作区")}<span className="c">{tree.length}</span>
         </div>
+        <button
+          className="addws"
+          data-busy={adder.busy ? "" : undefined}
+          title={t("打开或新建项目…")}
+          aria-label={t("打开或新建项目…")}
+          onClick={() => adder.add("rail")}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 3.7v8.6M3.7 8h8.6" />
+          </svg>
+        </button>
       </div>
+
+      {adder.typing === "rail" && (
+        <form
+          className="addpath"
+          onSubmit={(ev) => {
+            ev.preventDefault();
+            const input = ev.currentTarget.elements.namedItem("path") as HTMLInputElement | null;
+            adder.setTyping("");
+            adder.addPath(input?.value ?? "");
+          }}
+        >
+          <input name="path" autoFocus placeholder={t("文件夹的完整路径")} onBlur={() => adder.setTyping("")} />
+        </form>
+      )}
 
       <div className="scroll">
         <div role="tree" aria-label="工作区与会话">
@@ -212,7 +204,9 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                     onClick={() => void startSession(ws)}
                   >
                     <span className="plus" aria-hidden="true">
-                      ＋
+                      <svg viewBox="0 0 16 16">
+                        <path d="M8 3.7v8.6M3.7 8h8.6" />
+                      </svg>
                     </span>
                     {t("新会话")}
                   </button>
@@ -366,32 +360,10 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
               </div>
             );
           })}
-          {tree.length === 0 && <div className="ws-empty">{t("还没有文件夹 —— 从下面添加一个")}</div>}
+          {tree.length === 0 && <div className="ws-empty">{t("还没有文件夹")}</div>}
         </div>
       </div>
 
-      <div className="rail-ft">
-        {typing ? (
-          <form
-            className="addpath"
-            onSubmit={(ev) => {
-              ev.preventDefault();
-              const input = ev.currentTarget.elements.namedItem("path") as HTMLInputElement | null;
-              setTyping(false);
-              void addPath(input?.value ?? "");
-            }}
-          >
-            <input name="path" autoFocus placeholder={t("文件夹的完整路径")} onBlur={() => setTyping(false)} />
-          </form>
-        ) : (
-          <button className="addws" data-busy={busy === "__add" ? "" : undefined} onClick={() => void add()}>
-            <span className="plus" aria-hidden="true">
-              ＋
-            </span>
-            {t("打开或新建项目…")}
-          </button>
-        )}
-      </div>
     </>
   );
 }

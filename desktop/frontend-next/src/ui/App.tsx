@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { flushSync } from "react-dom";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
@@ -10,7 +10,9 @@ import { apply as applyLook } from "./look";
 import { adopt as adoptLang } from "../i18n";
 import { Pane, type PaneReport } from "./Pane";
 import { Gutter, RAIL, SIDE, widthOf } from "./Gutter";
+import { folded as roomGaveUp, onFolds } from "./viewport";
 import { Workspaces } from "./Workspaces";
+import { useAddWorkspace } from "./addws";
 import { PaneTabs } from "./PaneTabs";
 import { Settings } from "./Settings";
 import { Onboarding } from "./Onboarding";
@@ -39,6 +41,25 @@ function swapping(apply: () => void, kind: string) {
   });
 }
 
+// 两栏共用一条规则：窄到放不下就收起，缝和把手留在原处。宽档下的那个选择要留
+// 着 —— 拖窄一下再拖回来，不该把用户自己收起或展开的决定抹掉。
+function useFoldAway(name: string, set: Dispatch<SetStateAction<boolean>>) {
+  const wide = useRef(true);
+  useEffect(() => {
+    let tight = roomGaveUp(name);
+    return onFolds((f) => {
+      const now = f.split(" ").includes(name);
+      if (now === tight) return;
+      tight = now;
+      set((cur) => {
+        if (!now) return wide.current;
+        wide.current = cur;
+        return false;
+      });
+    });
+  }, [name, set]);
+}
+
 // App is the window around the panes, not a session itself: the workspace tree,
 // the chrome, the settings sheet and the theme are the window's, while every
 // conversation — its transcript, metrics and event stream — lives in the Pane
@@ -48,8 +69,10 @@ export function App({ hub }: { hub: HubPort }) {
   const [active, setActive] = useState("");
   const [tree, setTree] = useState<TreeWorkspace[]>([]);
   const [folded, setFolded] = useState<Set<string>>(new Set());
-  const [rail, setRail] = useState(true);
-  const [side, setSide] = useState(true);
+  // 窄到放不下工作区栏时它是收起的，而不是消失的：栏一旦从 DOM 里拿掉，把手也
+  // 跟着没了，剩下的入口只有一个没人知道的快捷键。
+  const [rail, setRail] = useState(() => !roomGaveUp("rail"));
+  const [side, setSide] = useState(() => !roomGaveUp("side"));
   const [railW, setRailW] = useState(() => widthOf(RAIL));
   const [sideW, setSideW] = useState(() => widthOf(SIDE));
   const [report, setReport] = useState<PaneReport>(NO_REPORT);
@@ -266,6 +289,15 @@ export function App({ hub }: { hub: HubPort }) {
     });
   }, []);
 
+  const adder = useAddWorkspace(hub, reloadTree, fail);
+  // 每个窗口都有一个根 —— 没选过项目时那是它碰巧启动的地方。两者读起来一样，
+  // 于是「从哪加项目」这句问题永远问不出口；只有内核说的 remembered 分得开。
+  const [claimed, setClaimed] = useState(() => localStorage.getItem("rx-claim") === "off");
+  const needsProject = !claimed && tree.every((ws) => !ws.remembered);
+
+  useFoldAway("rail", setRail);
+  useFoldAway("side", setSide);
+
   const onRailW = useCallback((w: number) => {
     setRailW(w);
     localStorage.setItem(RAIL.key, String(Math.round(w)));
@@ -439,6 +471,7 @@ export function App({ hub }: { hub: HubPort }) {
             liveIds={liveIds}
             onRename={renameSession}
             onError={fail}
+            adder={adder}
           />
         </div>
 
@@ -496,7 +529,16 @@ export function App({ hub }: { hub: HubPort }) {
                   // looks blank — the next history row would take it over.
                   onSessionChanged={reloadPanes}
                   pulse={settingsPulse}
-                  onFoldSide={() => setSide(false)}
+                  needsProject={needsProject}
+                  // 手输那条逃生口只在侧栏有一份 UI，所以先把栏打开再问。
+                  onOpenProject={() => {
+                    setRail(true);
+                    adder.add("rail");
+                  }}
+                  onKeepHere={() => {
+                    localStorage.setItem("rx-claim", "off");
+                    setClaimed(true);
+                  }}
                   onSettings={() => showPrefs()}
                 />
               ) : null;
@@ -520,6 +562,21 @@ export function App({ hub }: { hub: HubPort }) {
             </div>
           )}
         </div>
+
+        {/* 栏横过来时缝也横过来，把手跟着走：位置仍是「主区和度量之间」，形状和
+            左边那枚一样，只是转了 90°。DOM 在栏之前，收起后它就落到窗口底边。 */}
+        <button
+          className="sidepeek"
+          data-shut={side ? undefined : ""}
+          title={side ? t("收起") : t("展开")}
+          aria-label={side ? t("收起度量栏") : t("展开度量栏")}
+          onClick={() => setSide(!side)}
+        >
+          <i className="knurl" aria-hidden="true" />
+          <span className="dir" aria-hidden="true">
+            {side ? "⌄" : "⌃"}
+          </span>
+        </button>
 
         <div className="side" ref={setSideHost} />
       </div>

@@ -32,6 +32,9 @@ export interface TreeWorkspace {
   isolated?: boolean;
   missing?: boolean;
   open?: boolean;
+  // True when the user chose this folder. A window always has a root — the one
+  // it happened to launch in — and only this tells that apart from a project.
+  remembered?: boolean;
   sessions: TreeSession[];
 }
 

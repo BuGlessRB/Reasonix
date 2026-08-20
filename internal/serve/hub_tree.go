@@ -32,10 +32,14 @@ type treeWorkspace struct {
 	Name string `json:"name"`
 	// Isolated marks a delivery worktree. Its folder name is the project's, so
 	// without this the sidebar shows two rows with one name.
-	Isolated bool          `json:"isolated,omitempty"`
-	Missing  bool          `json:"missing,omitempty"`
-	Open     bool          `json:"open,omitempty"`
-	Sessions []treeSession `json:"sessions"`
+	Isolated bool `json:"isolated,omitempty"`
+	Missing  bool `json:"missing,omitempty"`
+	Open     bool `json:"open,omitempty"`
+	// Remembered marks a folder the user chose. A window always has a root — the
+	// one it happened to launch in — and a client that cannot tell the two apart
+	// shows "never picked a project" as if it were a project.
+	Remembered bool          `json:"remembered,omitempty"`
+	Sessions   []treeSession `json:"sessions"`
 }
 
 // treeSession is one conversation. RuntimeID is set when a pane already has it
@@ -68,18 +72,19 @@ func (h *Hub) tree(w http.ResponseWriter, _ *http.Request) {
 	open := h.openSessions()
 	roots := h.roots()
 	out := make([]treeWorkspace, 0, len(roots))
-	for _, root := range roots {
+	for _, ref := range roots {
 		// Open means a pane is driving this folder — true from the moment one is
 		// opened, before its first turn has written a transcript to list.
 		node := treeWorkspace{
-			Root: root, Name: filepath.Base(root), Open: h.rootPanes(root) > 0,
-			Isolated: worktree.IsManagedPath(root, config.DeliveryWorktreeDir()),
-			Sessions: []treeSession{},
+			Root: ref.dir, Name: filepath.Base(ref.dir), Open: h.rootPanes(ref.dir) > 0,
+			Isolated:   worktree.IsManagedPath(ref.dir, config.DeliveryWorktreeDir()),
+			Remembered: ref.remembered,
+			Sessions:   []treeSession{},
 		}
-		if st, err := os.Stat(root); err != nil || !st.IsDir() {
+		if st, err := os.Stat(ref.dir); err != nil || !st.IsDir() {
 			node.Missing = true
 		}
-		node.Sessions = append(node.Sessions, h.workspaceSessions(root, open)...)
+		node.Sessions = append(node.Sessions, h.workspaceSessions(ref.dir, open)...)
 		out = append(out, node)
 	}
 	writeJSON(w, out)
@@ -287,26 +292,38 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request) {
 // ownsSessionDir reports whether dir is the session directory of a workspace
 // this hub lists, which is the boundary a delete may not reach past.
 func (h *Hub) ownsSessionDir(dir string) bool {
-	for _, root := range h.roots() {
-		if known, err := filepath.Abs(SessionDirFor(root)); err == nil && known == dir {
+	for _, ref := range h.roots() {
+		if known, err := filepath.Abs(SessionDirFor(ref.dir)); err == nil && known == dir {
 			return true
 		}
 	}
 	return false
 }
 
+// rootRef is one sidebar folder and whether the user ever chose it.
+type rootRef struct {
+	dir        string
+	remembered bool
+}
+
 // roots returns the sidebar's folders: everything remembered, plus whatever a
 // pane is driving, so an open workspace can never be missing from the tree.
-func (h *Hub) roots() []string {
+func (h *Hub) roots() []rootRef {
+	saved := map[string]bool{}
+	for _, dir := range Workspaces() {
+		if dir = strings.TrimSpace(dir); dir != "" {
+			saved[dir] = true
+		}
+	}
 	seen := map[string]bool{}
-	var out []string
+	var out []rootRef
 	add := func(dir string) {
 		dir = strings.TrimSpace(dir)
 		if dir == "" || seen[dir] {
 			return
 		}
 		seen[dir] = true
-		out = append(out, dir)
+		out = append(out, rootRef{dir: dir, remembered: saved[dir]})
 	}
 	for _, rt := range h.Runtimes() {
 		add(rt.Server.Controller().WorkspaceRoot())

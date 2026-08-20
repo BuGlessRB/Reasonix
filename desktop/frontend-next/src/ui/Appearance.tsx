@@ -249,9 +249,11 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, reloadT
               e.target.value = "";
             }}
           />
-          <button className="addws paperpick" data-busy={busy ? "" : undefined} onClick={() => file.current?.click()}>
+          <button className="paperpick" data-busy={busy ? "" : undefined} onClick={() => file.current?.click()}>
             <span className="plus" aria-hidden="true">
-              ＋
+              <svg viewBox="0 0 16 16">
+                <path d="M8 3.7v8.6M3.7 8h8.6" />
+              </svg>
             </span>
             {t(look.wallpaper ? "换一张…" : "选一张图片…")}
           </button>

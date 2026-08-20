@@ -21,6 +21,8 @@ export function foldsAt(width: number): string {
     .join(" ");
 }
 
+const subs = new Set<(folds: string) => void>();
+
 /** refresh re-reads the room and republishes it. Two things change it — the
  *  window resizing and the zoom setting — and each calls this rather than
  *  keeping its own copy of the thresholds. */
@@ -28,7 +30,22 @@ export function refresh() {
   const now = foldsAt(document.body.clientWidth);
   // Only on a real change: writing the attribute is a style invalidation, and an
   // unconditional write inside the observer is how a resize loop starts.
-  if (document.documentElement.dataset.fold !== now) document.documentElement.dataset.fold = now;
+  if (document.documentElement.dataset.fold === now) return;
+  document.documentElement.dataset.fold = now;
+  subs.forEach((fn) => fn(now));
+}
+
+/** onFolds reports a change in what the layout has given up. A column that folds
+ *  also has to stop being open, and open is state the stylesheet cannot reach. */
+export function onFolds(fn: (folds: string) => void): () => void {
+  subs.add(fn);
+  return () => subs.delete(fn);
+}
+
+/** folded answers for right now — for state that has to be right on first paint,
+ *  before any change has been reported. */
+export function folded(name: string): boolean {
+  return (document.documentElement.dataset.fold ?? "").split(" ").includes(name);
 }
 
 /** track publishes the width for the life of the page. */

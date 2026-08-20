@@ -467,17 +467,47 @@
   .rail, .side { transition: opacity .2s var(--ease-out) .05s }
   [data-rail="off"] .rail, [data-side="off"] .side { opacity: 0; transition: opacity .12s var(--ease-in) }
 
-  /* 收起一栏是分隔条上那个把手的事。这个按钮只在栏横过来的那一档存在 ——
-     那时没有缝可抓，它是唯一的出口。别处出现就成了同一个开关的第二个按钮。 */
-  .collapse { display: none }
-  [data-fold~="side"] .side .collapse {
-    display: grid; place-items: center; width: 19px; height: 19px; flex: none;
-    border: 0; border-radius: var(--r-xs); background: transparent; color: var(--ghost);
-    font: 400 12px/1 var(--mono); cursor: pointer;
-    transition: background .14s, color .14s;
+  /* 栏横过来的那一档，缝也横过来。这枚把手是左边那枚转了 90°：同样三点静止、
+     同样收起时变成一枚带箭头的标签，位置同样在两块内容之间。 */
+  .sidepeek { display: none }
+  [data-fold~="side"] .sidepeek {
+    display: grid; place-items: center; position: relative; z-index: 5;
+    width: 100%; height: 13px; padding: 0; border: 0;
+    border-top: 1px solid var(--border); background: var(--surface);
+    color: var(--faint); cursor: pointer;
   }
-  .collapse:hover { background: var(--overlay); color: var(--text) }
-  .collapse:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  /* 药丸本身，和左边那枚同一套尺寸，只是躺下了 */
+  .sidepeek::before {
+    content: ""; position: absolute; left: 50%; top: 50%;
+    width: 32px; height: 16px; margin: -8px 0 0 -16px;
+    border: 1px solid transparent; border-radius: var(--r-pill); background: var(--surface);
+    transition: background .14s, border-color .14s, box-shadow .18s;
+  }
+  .sidepeek > * { grid-area: 1 / 1; z-index: 1; transition: opacity .14s var(--ease-out) }
+  .sidepeek .knurl {
+    width: 2.5px; height: 2.5px; border-radius: 50%; background: currentColor;
+    box-shadow: -5.5px 0 currentColor, 5.5px 0 currentColor;
+  }
+  .sidepeek .dir { opacity: 0; font: 400 10px/1 var(--mono) }
+  .sidepeek:hover { color: var(--text) }
+  .sidepeek:hover::before {
+    background: var(--raised); border-color: var(--border);
+    box-shadow: 0 2px 9px -4px rgb(0 0 0 / .35);
+  }
+  .sidepeek:hover .knurl { opacity: 0 }
+  .sidepeek:hover .dir { opacity: 1 }
+  .sidepeek:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  /* 收起后它是回来的唯一一条路，和左边收起时一样：不再是发丝，是一枚标签。 */
+  .sidepeek[data-shut] { height: 15px; color: var(--muted); border-top-color: var(--hair) }
+  .sidepeek[data-shut]::before {
+    width: 46px; height: 17px; margin: -8.5px 0 0 -23px;
+    background: var(--raised); border-color: var(--border);
+    box-shadow: 0 -2px 10px -3px rgb(0 0 0 / .45);
+  }
+  .sidepeek[data-shut] .knurl { opacity: 0 }
+  .sidepeek[data-shut] .dir { opacity: 1 }
+  .sidepeek[data-shut]:hover { color: var(--text) }
+  .sidepeek[data-shut]:hover::before { background: var(--overlay) }
 
   /* 分栏线本来就在那儿（栏自己的 border），这里只加一条够宽的热区，手不用瞄准。
      停住才显形，且晚 .14s —— 鼠标路过一次不该点亮一条线。用中性色：accent 说
@@ -515,11 +545,14 @@
   .gutter[data-shut] { width: 14px }
   [data-rail="off"] .gutter-l { left: 0 }
   [data-side="off"] .gutter-r { right: 0 }
+  /* 贴着窗口边的那一档，把手会被画面边缘切掉一角 —— 往里让两像素 */
+  [data-rail="off"] .gutter-l .grip { margin-left: -6px }
+  [data-side="off"] .gutter-r .grip { margin-left: -10px }
   .grip {
-    position: absolute; top: 50%; left: 50%; margin: -13px 0 0 -7px; z-index: 1;
-    width: 14px; height: 26px; padding: 0; display: grid; place-items: center;
+    position: absolute; top: 50%; left: 50%; margin: -16px 0 0 -8px; z-index: 1;
+    width: 16px; height: 32px; padding: 0; display: grid; place-items: center;
     border: 1px solid transparent; border-radius: var(--r-pill);
-    background: transparent; color: var(--faint);
+    background: var(--surface); color: var(--muted);
     font: 400 10px/1 var(--mono); cursor: pointer;
     transition: color .14s, background .14s, border-color .14s, box-shadow .18s;
   }
@@ -529,7 +562,10 @@
      not restraint but a seam that appears to do nothing. Dots rather than an
      arrow because the divider's own gesture is dragging: this says "grab me",
      and the arrow that says "click me" waits until the hand is here. */
-  .knurl { width: 2px; height: 16px; border-radius: 1px; background: currentColor }
+  .knurl {
+    width: 2.5px; height: 2.5px; border-radius: 50%; background: currentColor;
+    box-shadow: 0 -5.5px currentColor, 0 5.5px currentColor;
+  }
   .dir { opacity: 0 }
   .gutter:hover .grip, .gutter:focus-visible .grip, .gutter[data-on] .grip {
     color: var(--text); background: var(--raised); border-color: var(--border);
@@ -537,10 +573,12 @@
   }
   .gutter:hover .knurl, .gutter:focus-visible .knurl, .gutter[data-on] .knurl { opacity: 0 }
   .gutter:hover .dir, .gutter:focus-visible .dir, .gutter[data-on] .dir { opacity: 1 }
-  /* Shut, there is no seam left to drag and only one thing to say. */
+  /* Shut, there is no seam left to drag and only one thing to say — and it is
+     the only way back, so it stops being a hairline and becomes a tab. */
   .gutter[data-shut] .grip {
-    color: var(--faint); background: var(--raised); border-color: var(--border);
-    box-shadow: 0 2px 9px -3px rgb(0 0 0 / .4);
+    height: 46px; margin-top: -23px;
+    color: var(--muted); background: var(--raised); border-color: var(--border);
+    box-shadow: 0 2px 10px -3px rgb(0 0 0 / .45);
   }
   .gutter[data-shut] .knurl { opacity: 0 }
   .gutter[data-shut] .dir { opacity: 1 }
@@ -687,6 +725,21 @@
   .hero .t { margin-top: 15px; font: 500 15px var(--ui); color: var(--text) }
   .hero .s { margin-top: 7px; max-width: 44ch; font-size: 12px; line-height: 1.7; color: var(--faint) }
   .hero .qs { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-top: 17px }
+  /* 一个动作，和一句「不用了」。空态该给的就是这两样，不是一条横在顶上的通知。 */
+  .herogo { display: flex; flex-direction: column; align-items: center; gap: 9px; margin-top: 19px }
+  .pick {
+    padding: 8px 20px; border: 1px solid var(--accent); border-radius: var(--r-sm);
+    background: var(--accent); color: var(--accent-fg);
+    font: 500 13px var(--ui); cursor: pointer;
+    transition: filter .14s;
+  }
+  .pick:hover { filter: brightness(1.06) }
+  .stay {
+    padding: 2px 6px; border: 0; border-radius: var(--r-xs); background: transparent;
+    color: var(--ghost); font: 400 11.5px var(--ui); cursor: pointer;
+  }
+  .stay:hover { color: var(--muted) }
+  .pick:focus-visible, .stay:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
   #flowScroll[hidden], #trajScroll[hidden] { display: none }
 
   /* Content is cut off under the tab strip with nothing saying "more above". The
@@ -1714,12 +1767,16 @@
   /* 让位的顺序写在 viewport.ts 里，这里只说让掉什么。阈值不用媒体查询是因为
      媒体查询答的是真实视口，而缩放不改视口：1.3 档下界面大了三成、布局却还以为
      自己占着整块屏，该让位的时候不让。 */
-  [data-fold~="rail"] .cols { grid-template-columns: minmax(0, 1fr) var(--side-w) }
-  [data-fold~="rail"] .rail,
-  [data-fold~="rail"] .gutter-l { display: none }
+  /* 让位是把栏收起来，不是把它拿掉：拿掉的话分隔条上那个把手也一起没了，剩下
+     的入口就只有一个没人看得见的快捷键。App 在这一档替用户收起它，缝还在。 */
 
   /* 右栏是这套东西的卖点，窄了别整块丢掉 —— 落到流下方，仍可滚 */
-  [data-fold~="side"] .cols { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto }
+  [data-fold~="side"] .cols {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
+  }
+  [data-fold~="side"] .side, [data-fold~="side"] .sidepeek { grid-column: 1 / -1 }
+  [data-fold~="side"] .side { border-top: 0 }
   [data-fold~="side"] .flow { padding-inline: 14px }
   [data-fold~="side"] .compose { width: calc(100% - 28px) }
   [data-fold~="side"] .chrome .goal,
@@ -1728,7 +1785,9 @@
   [data-fold~="side"] .side .scroll { padding: 12px 14px 16px; gap: 16px }
   /* 栏横过来占满一行，拖出来的那个宽度在这儿没有意义，也没地方去拖 */
   [data-fold~="side"] .side > * { width: 100% }
-  [data-fold~="side"] .gutter { display: none }
+  [data-fold~="side"] .gutter-r { display: none }
+  /* 收起时整块让开，别在流底下留一条一像素的空行 */
+  [data-fold~="side"] [data-side="off"] .side { display: none }
 
   /* ── 首次引导：一屏，一件事 ──────────────────────────────────────── */
   /* 连接卡片长在开场场景里，不另起一屏：介绍语收在上方仍然在场。所以这里
@@ -3437,17 +3496,23 @@
 
   /* 两个「＋」都常驻：新会话长在它所属的文件夹里，打开/新建项目钉在栏底。
      hover 才出现的控件，等于大多数人永远找不到。 */
-  .newsess, .addws {
+  .newsess {
     display: flex; align-items: center; gap: 7px; width: 100%;
     border: 0; background: none; cursor: pointer; text-align: left;
     font: 500 11.5px var(--ui); color: var(--faint);
     transition: color .14s, background .14s;
   }
-  .newsess .plus, .addws .plus { font: 400 12px/1 var(--mono); color: var(--ghost) }
-  .newsess:hover, .addws:hover { color: var(--text); background: var(--overlay) }
-  .newsess:hover .plus, .addws:hover .plus { color: var(--accent) }
-  .newsess:focus-visible, .addws:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
-  .newsess[data-busy], .addws[data-busy] { opacity: .5; pointer-events: none }
+  .newsess .plus, .paperpick .plus {
+    display: grid; place-items: center; width: 13px; height: 13px; flex: none; color: var(--ghost);
+  }
+  .newsess .plus svg, .paperpick .plus svg {
+    width: 13px; height: 13px; fill: none; stroke: currentColor;
+    stroke-width: 1.5; stroke-linecap: round;
+  }
+  .newsess:hover { color: var(--text); background: var(--overlay) }
+  .newsess:hover .plus { color: var(--accent) }
+  .newsess:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  .newsess[data-busy] { opacity: .5; pointer-events: none }
 
   /* 缩进对齐会话行，读起来就是「这个文件夹下面的一条」 */
   .newsess { padding: 5px 9px 7px 22px }
@@ -3470,7 +3535,15 @@
   }
   .fontsample[data-slot="mono"] { font-family: var(--mono); font-size: 12px }
 
-  .paperpick { padding: 8px 10px; border: 1px dashed var(--border); border-radius: var(--r-sm) }
+  .paperpick {
+    display: flex; align-items: center; gap: 7px; width: 100%;
+    padding: 8px 10px; border: 1px dashed var(--border); border-radius: var(--r-sm);
+    background: none; cursor: pointer; text-align: left;
+    font: 500 11.5px var(--ui); color: var(--faint);
+    transition: color .14s, background .14s;
+  }
+  .paperpick:hover { color: var(--text); background: var(--overlay) }
+  .paperpick:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .paperpick[data-busy] { opacity: .5; pointer-events: none }
   /* 滑块用强调色，是因为它调的是「多少」，不是开关 */
   /* accent-color 只是给系统控件上色，滑块仍是平台自己那一套 —— 在这套界面里
@@ -3526,8 +3599,21 @@
   .sessmore:hover { color: var(--text); background: var(--overlay) }
   .sessmore:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
 
-  .rail-ft { flex: none; border-top: 1px solid var(--hair) }
-  .addws { padding: 10px 13px 12px }
+  /* 加项目的按钮长在分组标签的尾侧，和栏里其他东西同一种语言：没有边框，只有
+     停下来时的那块底色。栏底那条描边按钮是网页表单的语气，不是这里的。 */
+  .addws {
+    flex: none; display: grid; place-items: center; width: 20px; height: 20px;
+    margin-right: -3px; padding: 0; border: 0; border-radius: var(--r-xs);
+    background: transparent; color: var(--faint); cursor: pointer;
+    transition: background .14s, color .14s;
+  }
+  .addws svg {
+    width: 13px; height: 13px; fill: none; stroke: currentColor;
+    stroke-width: 1.5; stroke-linecap: round;
+  }
+  .addws:hover { background: var(--overlay); color: var(--text) }
+  .addws:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
+  .addws[data-busy] { opacity: .5; pointer-events: none }
 
   /* 同名的两个文件夹（隔离副本最常见）靠这一小块区分 */
   .wstag {
@@ -3538,8 +3624,7 @@
   }
   .wsrow[data-open] .wstag { color: var(--muted) }
 
-  .rail-ft .addws { width: 100% }
-  .addpath { flex: 1; padding: 8px 10px 10px }
+  .addpath { flex: none; padding: 2px 11px 8px }
   .addpath input {
     width: 100%; padding: 5px 8px; border-radius: var(--r-xs);
     border: 1px solid var(--border); background: var(--raised); color: var(--text);

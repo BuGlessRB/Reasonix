@@ -51,6 +51,7 @@ export class MockHub implements HubPort {
         root,
         name: root.split("/").pop() ?? root,
         open: this.views.some((v) => v.root === root),
+        remembered: true,
         sessions:
           i === 0
             ? [
@@ -64,7 +65,7 @@ export class MockHub implements HubPort {
 
   addWorkspace(path: string) {
     if (!this.roots.includes(path)) this.roots.push(path);
-    return Promise.resolve<TreeWorkspace>({ root: path, name: path.split("/").pop() ?? path, sessions: [] });
+    return Promise.resolve<TreeWorkspace>({ root: path, name: path.split("/").pop() ?? path, remembered: true, sessions: [] });
   }
 
   removeWorkspace(path: string) {
