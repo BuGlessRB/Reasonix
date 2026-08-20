@@ -108,6 +108,13 @@ func (todoWrite) Execute(ctx context.Context, args json.RawMessage) (string, err
 	if err := verifyTodoCompletionTransitions(ctx, p.Todos); err != nil {
 		return "", err
 	}
+	// Restating the list the host already holds is what a sign-off leaves
+	// behind: complete_step advanced it and said so. Reporting that back as an
+	// update is what makes a round of nothing look like progress.
+	if evidence.SameTodos(todoBaseline(ctx), toEvidenceTodos(p.Todos)) {
+		return fmt.Sprintf("Task list unchanged: %d total — %d completed, %d in progress, %d pending. The host already holds this list.",
+			len(p.Todos), done, active, pending), nil
+	}
 	return fmt.Sprintf("Todos updated: %d total — %d completed, %d in progress, %d pending.",
 		len(p.Todos), done, active, pending), nil
 }
@@ -237,7 +244,7 @@ func verifyTodoCompletionTransitions(ctx context.Context, todos []todoItem) erro
 	if len(missing) == 0 {
 		return nil
 	}
-	const hint = "; sign each finished item off with complete_step first, then re-send this todo_write"
+	const hint = "; sign each finished item off with complete_step first — it advances the list for you, so send this todo_write again only to change something else about it"
 	if len(missing) == 1 {
 		m := missing[0]
 		return fmt.Errorf("todo %d %q is newly completed but has no matching successful complete_step receipt in this turn%s", m.Index, m.Content, hint)

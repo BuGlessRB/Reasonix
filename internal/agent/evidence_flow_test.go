@@ -843,8 +843,12 @@ func TestEvidenceFlowAcceptsTodoCompletionAfterCompleteStep(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	if got := lastToolResult(a.sess.conversation, "todo_write"); !strings.Contains(got, "Todos updated") {
-		t.Fatalf("final todo_write result = %q, want update accepted", got)
+	// The sign-off advanced the list already, so the final call restates it
+	// rather than changing anything. What this test is about is that it is
+	// accepted at all — the completion-transition guard has its receipt.
+	got := lastToolResult(a.sess.conversation, "todo_write")
+	if strings.Contains(got, "complete_step receipt") || !strings.Contains(got, "1 completed") {
+		t.Fatalf("final todo_write result = %q, want the completion accepted", got)
 	}
 }
 

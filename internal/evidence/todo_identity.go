@@ -6,8 +6,16 @@ package evidence
 
 import (
 	"context"
+	"slices"
 	"strings"
 )
+
+// SameTodos reports whether two task lists say the same thing. Both are
+// normalized first, so a list restated with a status the state machine would
+// have rewritten anyway counts as unchanged rather than as a new plan.
+func SameTodos(a, b []TodoItem) bool {
+	return slices.Equal(NormalizeSerialTodos(a), NormalizeSerialTodos(b))
+}
 
 // todoMatchAt is the one place a positive match is built, so every path reports
 // the matched item's stable id alongside its position.

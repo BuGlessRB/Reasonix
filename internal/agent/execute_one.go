@@ -78,6 +78,8 @@ type toolCallPlan struct {
 func (a *Agent) executeOne(ctx context.Context, turn *turnRuntime, call provider.ToolCall) (out toolOutcome) {
 	ctx = a.withAgentContext(ctx)
 	plan := &toolCallPlan{call: call}
+	todosBefore := a.todoStateBefore(call)
+	defer func() { out.todoEcho = a.todoWriteEchoes(call, todosBefore, out.errMsg) }()
 	defer func() {
 		if plan.mutationObserved && !plan.mutationAfterDone {
 			a.observeAfterMutation(plan)

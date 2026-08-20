@@ -36,6 +36,8 @@ type toolOutcome struct {
 	// recoveryGeneration is the gate generation captured before execution so
 	// ObserveResult can ignore stale results after a mode switch.
 	recoveryGeneration uint64
+	// todoEcho marks a todo_write that wrote the list the host already held.
+	todoEcho bool
 }
 
 // refusedShellExecution describes a shell call the host stopped before launch,
@@ -83,7 +85,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 	// session memory outside Session's lock.
 	calls = append([]provider.ToolCall(nil), calls...)
 	for _, c := range calls {
-		a.emitFullToolDispatch(ctx, c, false)
+		a.emitEagerToolDispatch(ctx, c)
 	}
 
 	results := make([]string, len(calls))
@@ -307,7 +309,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 				tr.WorkspaceAllPaths = mutation.AllPaths
 			}
 		}
-		a.svc.sink.Emit(event.Event{Kind: event.ToolResult, Tool: tr})
+		a.emitToolCard(ctx, c, tr, o.todoEcho)
 		if o.truncMsg != "" {
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: o.truncMsg})
 		}
