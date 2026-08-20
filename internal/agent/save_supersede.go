@@ -34,13 +34,9 @@ func (s *Session) leaseholderDecision(path string, revision int64, repairLog boo
 }
 
 // keepSupersededTranscript copies what is on disk aside before a leaseholder
-// writes over it. Holding the lease makes the write authoritative, but bytes
-// nobody chose to discard are still worth keeping: the alternative used to be
-// a recovery branch, which kept them by turning them into a second identical
-// conversation in the user's session list.
-//
-// Failures are warnings. A save whose transcript is authoritative must not be
-// held up by an archive of what it replaced.
+// writes over it: the lease makes the write authoritative, but bytes nobody
+// chose to discard are still worth keeping. Failures only warn — an
+// authoritative save must not wait on an archive of what it replaced.
 func keepSupersededTranscript(path string, superseding bool) {
 	if !superseding || path == "" {
 		return

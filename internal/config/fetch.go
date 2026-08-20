@@ -34,6 +34,21 @@ func (e *ProviderEntry) FetchModels(ctx context.Context) ([]string, error) {
 // client while chatting over a proxied one reports an empty catalog for an
 // endpoint that works.
 func (e *ProviderEntry) FetchModelsVia(ctx context.Context, client *http.Client) ([]string, error) {
+	listed, err := e.FetchModelListingVia(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(listed))
+	for _, m := range listed {
+		ids = append(ids, m.ID)
+	}
+	return ids, nil
+}
+
+// FetchModelListingVia is FetchModelsVia without discarding what each row
+// declares about itself — the probe reads the wires a relay names there rather
+// than inferring them from the shape of the listing.
+func (e *ProviderEntry) FetchModelListingVia(ctx context.Context, client *http.Client) ([]openai.ListedModel, error) {
 	if e.BaseURL == "" {
 		return nil, fmt.Errorf("fetch models: provider %q has no base_url", e.Name)
 	}
@@ -49,7 +64,7 @@ func (e *ProviderEntry) FetchModelsVia(ctx context.Context, client *http.Client)
 	var firstHardErr error
 	authMode := modelFetchAuthMode(e)
 	for _, u := range candidates {
-		models, err := openai.FetchModelsWithOptions(ctx, u, key, openai.FetchModelsOptions{
+		models, err := openai.FetchModelListing(ctx, u, key, openai.FetchModelsOptions{
 			Headers:  e.Headers,
 			AuthMode: authMode,
 			Client:   client,

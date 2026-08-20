@@ -88,9 +88,10 @@ func ProbeEndpoint(ctx context.Context, opts ProbeOptions) (Probe, error) {
 
 func probeThrough(ctx context.Context, base, apiKey string, client *http.Client) (Probe, error) {
 	answered := make(map[shape][]string)
+	var declared []string
 	var firstErr error
 	for _, s := range probeShapes {
-		chat, err := listChatModels(ctx, s, base, apiKey, client)
+		chat, named, err := listChatModels(ctx, s, base, apiKey, client)
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -98,6 +99,7 @@ func probeThrough(ctx context.Context, base, apiKey string, client *http.Client)
 			continue
 		}
 		answered[s] = chat
+		declared = mergeProtocolChoices(declared, named)
 	}
 	if len(answered) == 0 {
 		if firstErr == nil {
@@ -107,6 +109,7 @@ func probeThrough(ctx context.Context, base, apiKey string, client *http.Client)
 	}
 	best := pick(base, answered)
 	p := describe(base, best, answered[best])
+	p.Kinds = mergeProtocolChoices(p.Kinds, declared)
 	p.Ambiguous = len(answered) > 1
 	return p, nil
 }
@@ -143,7 +146,7 @@ func allClaude(models []string) bool {
 	return len(models) > 0
 }
 
-func listChatModels(ctx context.Context, s shape, baseURL, apiKey string, client *http.Client) ([]string, error) {
+func listChatModels(ctx context.Context, s shape, baseURL, apiKey string, client *http.Client) ([]string, []string, error) {
 	entry := &ProviderEntry{
 		Name:       "probe",
 		Kind:       s.kind,
@@ -153,17 +156,21 @@ func listChatModels(ctx context.Context, s shape, baseURL, apiKey string, client
 	// The key is held for this call only — a probe runs before there is a
 	// provider to store it against, and nothing here writes to disk.
 	entry.resolvedAPIKey = strings.TrimSpace(apiKey)
-	models, err := entry.FetchModelsVia(ctx, client)
+	listed, err := entry.FetchModelListingVia(ctx, client)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	models := make([]string, 0, len(listed))
+	for _, m := range listed {
+		models = append(models, m.ID)
 	}
 	chat := chatModelsOf(models)
 	if len(chat) == 0 {
 		// The endpoint answered but offers nothing we can hold a conversation
 		// with — a rerank or embedding gateway.
-		return nil, fmt.Errorf("probe: %s lists %d models but none of them are chat models", baseURL, len(models))
+		return nil, nil, fmt.Errorf("probe: %s lists %d models but none of them are chat models", baseURL, len(models))
 	}
-	return chat, nil
+	return chat, ProtocolsDeclaredBy(listed), nil
 }
 
 // describe fills in what can be told from the endpoint and its model ids.
