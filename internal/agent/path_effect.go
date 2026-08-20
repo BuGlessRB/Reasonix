@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	"reasonix/internal/checkpoint"
+	"reasonix/internal/diff"
 	"reasonix/internal/evidence"
+	"reasonix/internal/fileutil"
 	"reasonix/internal/tool"
 )
 
@@ -125,7 +127,13 @@ func (before pathSnapshot) since() (affected, created []string) {
 // only ever sharpened: a call observed to change nothing stays unknown, since
 // it may have changed something outside the watched set.
 func decorateObservedPaths(rec *evidence.Receipt, plan *toolCallPlan) {
-	if rec == nil || plan == nil || plan.pathsBefore.empty() || !rec.Success {
+	if rec == nil || plan == nil {
+		return
+	}
+	if rec.Success {
+		rec.CriteriaRewritten = plan.criteriaRewritten
+	}
+	if plan.pathsBefore.empty() || !rec.Success {
 		return
 	}
 	affected, created := plan.pathsBefore.since()
@@ -217,15 +225,24 @@ func (a *Agent) observeBeforeMutation(ctx context.Context, plan *toolCallPlan) {
 	if toolName == "" {
 		toolName = plan.call.Name
 	}
+	// One preview serves every reader below. Which check the edit rewrites is
+	// a property of the edit itself, so it is read here rather than inside any
+	// one observer's branch — a build with no mutation observer still may not
+	// move its own criteria silently.
+	var change diff.Change
+	if pv, ok := plan.execTool.(tool.Previewer); ok {
+		if c, perr := pv.Preview(ctx, plan.execArgs); perr == nil {
+			change = c
+			plan.criteriaRewritten = evidence.RewrittenTestCriteria(c.Path, c.OldText, c.NewText)
+		}
+	}
 	obs := a.svc.mutationObserver
 	if obs != nil {
-		if pv, ok := plan.execTool.(tool.Previewer); ok {
-			if change, perr := pv.Preview(ctx, plan.execArgs); perr == nil && change.Path != "" {
-				obs.BeforeMutationFromChange(change, toolName)
-				plan.mutationPath = change.Path
-				plan.mutationWitness = evidence.ChangedLines(change.OldText, change.NewText)
-				return
-			}
+		if change.Path != "" {
+			obs.BeforeMutationFromChange(change, toolName)
+			plan.mutationPath = change.Path
+			plan.mutationWitness = evidence.ChangedLines(change.OldText, change.NewText)
+			return
 		}
 		// Non-previewable writers: record a coverage gap (do not guess paths).
 		switch toolName {
@@ -240,13 +257,9 @@ func (a *Agent) observeBeforeMutation(ctx context.Context, plan *toolCallPlan) {
 		return
 	}
 	// Legacy onPreEdit path.
-	if a.svc.preEdit != nil {
-		if pv, ok := plan.execTool.(tool.Previewer); ok {
-			if change, perr := pv.Preview(ctx, plan.execArgs); perr == nil {
-				a.svc.preEdit(change)
-				plan.mutationPath = change.Path
-			}
-		}
+	if a.svc.preEdit != nil && change.Path != "" {
+		a.svc.preEdit(change)
+		plan.mutationPath = change.Path
 	}
 }
 
@@ -267,11 +280,6 @@ func (a *Agent) observeAfterMutation(plan *toolCallPlan) {
 // incomplete and nothing is concluded from it, so a very large workspace keeps
 // the behaviour it has today instead of paying for an answer it cannot trust.
 const workspaceScanLimit = 50_000
-
-// vcsStoreDirs are the repositories' own stores. They are not the work product
-// — `git status` alone rewrites the index — and a change there says nothing
-// about whether a command touched the tree.
-var vcsStoreDirs = map[string]bool{".git": true, ".hg": true, ".svn": true}
 
 // workspaceScan is every file under the workspace at one moment. complete is
 // false when the walk was cut short, which is the only honest answer a partial
@@ -296,7 +304,7 @@ func scanWorkspace(root string) workspaceScan {
 			return nil
 		}
 		if d.IsDir() {
-			if vcsStoreDirs[d.Name()] && path != root {
+			if fileutil.IsVCSStoreDir(d.Name()) && path != root {
 				return filepath.SkipDir
 			}
 			return nil

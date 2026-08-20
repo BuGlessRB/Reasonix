@@ -1,7 +1,6 @@
 package evidence
 
 import (
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -45,10 +44,14 @@ func ClassifyMutationRisk(receipts []Receipt, after int, sensitive []string) Ris
 			return true
 		}
 		for _, p := range r.Paths {
-			if !seen[p] {
-				seen[p] = true
-				paths = append(paths, p)
+			// A repository store is not part of any change set: `git commit`
+			// writes one, and reading that as a change made the tree's own
+			// bookkeeping the thing a reviewer was sent to inspect.
+			if ClassifyPath(p) == PathVCSStore || seen[p] {
+				continue
 			}
+			seen[p] = true
+			paths = append(paths, p)
 		}
 		return false
 	}
@@ -77,7 +80,7 @@ func ClassifyMutationRisk(receipts []Receipt, after int, sensitive []string) Ris
 		if pathIsDeclaredSensitive(p, sensitive) {
 			return RiskHigh
 		}
-		if !pathLooksLowRisk(p) {
+		if ClassifyPath(p) == PathProduction {
 			onlyLow = false
 			hasProd = true
 		}
@@ -134,32 +137,6 @@ func pathIsDeclaredSensitive(path string, sensitive []string) bool {
 		if fileutil.MatchSlashGlob(path, glob) {
 			return true
 		}
-	}
-	return false
-}
-
-func pathLooksLowRisk(path string) bool {
-	lower := strings.ToLower(filepath.ToSlash(path))
-	base := filepath.Base(lower)
-	if strings.HasSuffix(lower, "_test.go") || strings.HasSuffix(lower, "_test.ts") ||
-		strings.HasSuffix(lower, ".test.ts") || strings.HasSuffix(lower, ".test.tsx") ||
-		strings.HasSuffix(lower, "_spec.ts") || strings.HasSuffix(lower, ".spec.ts") {
-		return true
-	}
-	if strings.Contains(lower, "/testdata/") || strings.Contains(lower, "/__tests__/") ||
-		strings.Contains(lower, "/fixtures/") {
-		return true
-	}
-	switch {
-	case strings.HasSuffix(base, ".md"), strings.HasSuffix(base, ".mdx"),
-		strings.HasSuffix(base, ".txt"), strings.HasSuffix(base, ".rst"):
-		return true
-	case strings.Contains(lower, "/docs/"), strings.Contains(lower, "/locales/"),
-		strings.Contains(lower, "/i18n/"), strings.HasPrefix(base, "readme"):
-		return true
-	case strings.HasSuffix(base, ".css") && !strings.Contains(lower, "sandbox"):
-		// Pure presentation styles are low risk unless mixed with other paths.
-		return true
 	}
 	return false
 }

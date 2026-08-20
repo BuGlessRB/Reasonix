@@ -299,23 +299,25 @@ func toolPresent(reg *tool.Registry, name string) bool {
 	return ok
 }
 
+// productionPaths is what review coverage must name. Supporting material is
+// dropped only when production code is also in the set; a repository store is
+// dropped always, since asking for a diff of `.git` is asking for the one thing
+// that says nothing about the work.
 func productionPaths(paths []string) []string {
-	var out []string
+	var production, supporting []string
 	for _, p := range paths {
-		if p == "" {
-			continue
+		switch evidence.ClassifyPath(p) {
+		case evidence.PathVCSStore:
+		case evidence.PathProduction:
+			production = append(production, p)
+		default:
+			supporting = append(supporting, p)
 		}
-		// Skip pure test/doc paths for coverage requirements when mixed sets exist.
-		lower := strings.ToLower(p)
-		if strings.HasSuffix(lower, "_test.go") || strings.Contains(lower, "/docs/") {
-			continue
-		}
-		out = append(out, p)
 	}
-	if len(out) == 0 {
-		return paths
+	if len(production) > 0 {
+		return production
 	}
-	return out
+	return supporting
 }
 
 // ReviewWarnings returns warn-level review findings collected this turn.
