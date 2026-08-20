@@ -247,6 +247,27 @@ func (a *Agent) recoveryEpisodeControl() RecoveryEpisodeControl {
 	return ctrl
 }
 
+// bashDeclaredCheck returns the check a bash call declared through `verifies`,
+// which is what asks the host to read this call's exit status as a verdict.
+func bashDeclaredCheck(args json.RawMessage) string {
+	if len(args) == 0 {
+		return ""
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(args, &fields); err != nil {
+		return ""
+	}
+	raw, ok := fields["verifies"]
+	if !ok {
+		return ""
+	}
+	var declared string
+	if err := json.Unmarshal(raw, &declared); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(declared)
+}
+
 func bashCommandFromArgs(args json.RawMessage) string {
 	if len(args) == 0 {
 		return ""

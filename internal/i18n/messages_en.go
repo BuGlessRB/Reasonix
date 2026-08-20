@@ -25,7 +25,7 @@ var English = Messages{
 		"failed_verification":       "verification failed",
 		"stale_verification":        "verified before the last change",
 		"inconclusive_verification": "ran, but the shell reported another command's status",
-		"unverified_change":         "changed with nothing verifying it",
+		"unverified_change":         "changed; no check the host could read as proof",
 		"unreviewed_change":         "changed, never looked at again",
 		"declared_unverified":       "declared unverified",
 	},

@@ -26,7 +26,7 @@ var ChineseTraditional = Messages{
 		"failed_verification":       "驗證失敗",
 		"stale_verification":        "驗證早於最後一次改動",
 		"inconclusive_verification": "跑過，但退出碼是命令裡另一段的",
-		"unverified_change":         "改動了但沒有任何驗證",
+		"unverified_change":         "有改動；沒有主機能讀作證據的檢查",
 		"unreviewed_change":         "改動後再沒看過",
 		"declared_unverified":       "自己申報未驗證",
 	},

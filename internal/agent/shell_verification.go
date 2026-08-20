@@ -13,7 +13,7 @@ import (
 // actually knows: bash's own per-stage statuses when it reported them, then the
 // exit status when it can only belong to the check, and inconclusive when a
 // later stage of the same command could have decided it instead.
-func shellVerificationVerdict(command string, pipeStatus []int, err error) string {
+func shellVerificationVerdict(command string, declared bool, pipeStatus []int, err error) string {
 	switch evidence.VerificationOutcomeFromPipeStatus(command, pipeStatus) {
 	case evidence.VerificationPassed:
 		return tool.ShellVerificationPassed
@@ -21,7 +21,9 @@ func shellVerificationVerdict(command string, pipeStatus []int, err error) strin
 		return tool.ShellVerificationFailed
 	}
 	switch {
-	case !evidence.VerificationExitConclusive(command):
+	// A declared check already passed the whole-command shape gate in preflight,
+	// so its exit status is the verdict without the name table having a say.
+	case !declared && !evidence.VerificationExitConclusive(command):
 		return tool.ShellVerificationInconclusive
 	case err != nil:
 		return tool.ShellVerificationFailed

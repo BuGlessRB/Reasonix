@@ -26,7 +26,7 @@ var Chinese = Messages{
 		"failed_verification":       "验证失败",
 		"stale_verification":        "验证早于最后一次改动",
 		"inconclusive_verification": "跑过，但退出码是命令里另一段的",
-		"unverified_change":         "改动了但没有任何验证",
+		"unverified_change":         "有改动；没有主机能读作证据的检查",
 		"unreviewed_change":         "改动后再没看过",
 		"declared_unverified":       "自己申报未验证",
 	},

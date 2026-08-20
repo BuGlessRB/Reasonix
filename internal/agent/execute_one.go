@@ -398,69 +398,8 @@ func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (
 // applyDeliveryPolicyGates enforces global deterministic shell contracts plus
 // delivery-profile-only criteria rules, and classifies mutation/verification.
 func (a *Agent) applyDeliveryPolicyGates(ctx context.Context, turn *turnRuntime, plan *toolCallPlan) (toolOutcome, bool) {
-	// Global deterministic shell contract (ordinary + Delivery). PowerShell 5.1
-	// &&/|| is enforced inside the bash tool itself so descriptor and error text
-	// stay shell-accurate; the agent layers apply command-shape protections.
-	// Delivery keeps its longer recovery copy so existing delivery guidance tests
-	// and model recovery prompts stay stable.
-	//
-	// Ordinary mode blocks only shapes where a later segment can actually hide an
-	// earlier failure. Delivery keeps the broader classifier because a mutation
-	// invalidates the verification receipt even when the exit status is honest.
-	// Without that split, `go build ./... && go test ./...`, `npm install &&
-	// npm test`, and every other short-circuit chain would be rejected for every
-	// user, though bash already reports the failing step's status for them.
-	if plan.evidenceName == "bash" {
-		// Delivery-only, and first: no rearrangement of an inline interpreter is
-		// acceptable here, so every shape block below would send the run to a form
-		// this one refuses anyway. The mixed block's "run that segment on its own"
-		// names exactly the call this rejects.
-		if a.deliveryProfile && evidence.BashToolCallUsesOpaqueInlineInterpreter(plan.evidenceArgs) {
-			return toolOutcome{
-				output:    "blocked: delivery mode cannot audit inline interpreter source such as node -e or python -c, so executing it would become an opaque mutation and invalidate prior verification. For inspection, use read_file/grep or another host-proven read-only command. For validation, use a conventional verifier such as node --check, a project test/check/lint command, or a read-only extraction pipeline into the verifier. For an intentional state change, use a file tool or a script file under the current in_progress todo. " + evidence.VerificationCommandSummary(),
-				blocked:   true,
-				errMsg:    "blocked: opaque inline interpreter command",
-				execution: shellPreflightExecution(plan, false),
-			}, true
-		}
-		if evidence.BashToolCallMasksVerificationExit(plan.evidenceArgs) {
-			msg := evidence.ShellContractPreflightMessage("mask_exit")
-			if a.deliveryProfile {
-				msg = "blocked: the trailing echo/printf of $? masks the verifier's exit status, so this command would look successful even when the check failed. Run the verifier or read-only extraction pipeline by itself and let its exit status be the tool result; for example: tail ... | head ... | node --check -"
-			}
-			return toolOutcome{
-				output:    msg,
-				blocked:   true,
-				errMsg:    "blocked: verification exit status masked",
-				execution: shellPreflightExecution(plan, true),
-			}, true
-		}
-		mixedShape := evidence.BashToolCallMixesMutationAndVerification(plan.evidenceArgs)
-		if !a.deliveryProfile {
-			mixedShape = evidence.BashToolCallMixesMutationAndMaskableVerification(plan.evidenceArgs) &&
-				!hostReadsCheckThroughPipeStatus(plan.evidenceArgs)
-		}
-		if mixedShape && !a.mixedShapeClearedByEscalation(ctx, plan) {
-			msg := evidence.ShellContractMixedMessage(plan.evidenceArgs)
-			if a.deliveryProfile {
-				msg = evidence.ShellContractMixedDeliveryMessage(plan.evidenceArgs)
-			}
-			return toolOutcome{
-				output:    msg,
-				blocked:   true,
-				errMsg:    "blocked: mixed mutation and verification command",
-				execution: shellPreflightExecution(plan, true),
-			}, true
-		}
-		if evidence.BashToolCallUsesNonTerminalInlineInterpreter(plan.evidenceArgs) {
-			msg := evidence.ShellContractPreflightMessage("inline_nonterminal")
-			return toolOutcome{
-				output:    msg,
-				blocked:   true,
-				errMsg:    "blocked: non-terminal inline interpreter command",
-				execution: shellPreflightExecution(plan, false),
-			}, true
-		}
+	if outcome, blocked := a.applyShellShapeGates(ctx, plan); blocked {
+		return outcome, true
 	}
 	plan.mutates = evidence.ToolCallMutates(plan.evidenceName, plan.evidenceArgs, plan.readOnly)
 	persistentWorkflowCall := plan.evidenceName == "remember"
@@ -488,7 +427,8 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 	// permission approval and workspace write-lock acquisition, so a waiting
 	// recovery card never holds a write lease. Consult on mutations,
 	// verification, and plan transitions. Ask/Yolo still bypass inside the gate.
-	plan.verification = plan.evidenceName == "bash" && evidence.CommandRunsVerification(bashCommandFromArgs(plan.evidenceArgs))
+	plan.verification = plan.evidenceName == "bash" &&
+		(bashDeclaredCheck(plan.evidenceArgs) != "" || evidence.CommandRunsVerification(bashCommandFromArgs(plan.evidenceArgs)))
 	plan.planTransition, plan.planBefore, plan.planAfter, plan.planDiff = a.recoveryPlanTransition(plan.evidenceName, plan.evidenceArgs)
 	if ctrl := a.recoveryEpisodeControl(); ctrl != nil {
 		plan.recoveryGen = ctrl.Generation()
@@ -779,7 +719,8 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		// verifier. The exit status answers for the whole command, so it is a
 		// verdict about the verifier only when no later stage can decide it.
 		if execution != nil && plan.verification {
-			execution.Verification = shellVerificationVerdict(bashCommandFromArgs(plan.evidenceArgs), execution.PipeStatus, err)
+			execution.Verification = shellVerificationVerdict(bashCommandFromArgs(plan.evidenceArgs),
+				bashDeclaredCheck(plan.evidenceArgs) != "", execution.PipeStatus, err)
 			result = shellVerificationNotice(result, execution)
 		} else if execution != nil && execution.Verification == "" {
 			execution.Verification = tool.ShellVerificationNotVerification
@@ -823,7 +764,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		// args can't be safely re-parsed, but echoing the tool's schema makes the
 		// retry land valid instead of repeating the same broken shape.
 		if !json.Valid([]byte(call.Arguments)) {
-			detail = strings.TrimRight(detail, "\n") + "\nThe arguments were not valid JSON. Re-emit them exactly per this schema:\n" + string(t.Schema())
+			detail = strings.TrimRight(detail, "\n") + "\n" + malformedArgumentsDetail(call.Arguments) + "\n" + string(t.Schema())
 		}
 		rawErr := fmt.Sprintf("error: %v\n%s", err, detail)
 		body, bound, truncMsg := a.boundToolOutput(rawErr, call.Name, call.ID, call.Arguments, true)
