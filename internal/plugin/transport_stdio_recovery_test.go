@@ -35,6 +35,14 @@ func TestStdioServerRecoversAfterChildDies(t *testing.T) {
 	if !strings.Contains(err.Error(), startupLine) {
 		t.Fatalf("error should carry the child's last words, got %v", err)
 	}
+	// The last words of a server that died quietly are its startup banner, so
+	// the message has to say which of the two happened — a bare "read: EOF"
+	// next to a connect line reads as a server that never came up.
+	for _, want := range []string{"server exited while handling", "the next call starts a fresh one"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error should say the server left mid-call, got %v", err)
+		}
+	}
 
 	// Every call after it must recover: the child is known dead before this
 	// request is written, so reconnecting and dispatching repeats nothing.

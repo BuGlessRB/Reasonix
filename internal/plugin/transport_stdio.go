@@ -674,7 +674,8 @@ func (t *stdioTransport) call(ctx context.Context, method string, params any) (j
 		return nil, ctx.Err()
 	case resp, ok := <-ch:
 		if !ok {
-			return nil, t.withStderr(fmt.Errorf("plugin %q: read: %w", t.name, t.readErr))
+			// A quiet death leaves only the startup banner, which alone misreads.
+			return nil, t.withStderr(fmt.Errorf("plugin %q: server exited while handling %s; the next call starts a fresh one: %w", t.name, method, t.readErr))
 		}
 		if resp.Error != nil {
 			return nil, fmt.Errorf("plugin %q: %w", t.name, resp.Error)
@@ -716,7 +717,7 @@ func (t *stdioTransport) withStderr(err error) error {
 	if msg == "" {
 		return err
 	}
-	return fmt.Errorf("%w: stderr: %s", err, msg)
+	return fmt.Errorf("%w; last stderr: %s", err, msg) // the tail, not the startup log
 }
 
 func (t *stdioTransport) startupStderr() string {
