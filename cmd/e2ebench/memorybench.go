@@ -16,22 +16,17 @@ import (
 	"reasonix/internal/config"
 )
 
-// seedTaskMemory populates an isolated memory state root from the task's
-// memory/ directory (memory/project/*.md and memory/global/*.md) and returns
-// the env entry pointing the child at it. Tasks without seeds get no env, so
-// ordinary suites keep using the developer's real store root untouched.
-func seedTaskMemory(taskDir, work string) ([]string, error) {
+// seedTaskMemory populates stateHome's memory store from the task's memory/
+// directory (memory/project/*.md and memory/global/*.md). Tasks without seeds
+// leave the store empty, which is the ordinary arm.
+func seedTaskMemory(taskDir, work, stateHome string) error {
 	seeds := filepath.Join(taskDir, "memory")
 	if _, err := os.Stat(seeds); err != nil {
-		return nil, nil
-	}
-	stateHome, err := os.MkdirTemp("", "e2ebench-mem-")
-	if err != nil {
-		return nil, err
+		return nil
 	}
 	absWork, err := filepath.Abs(work)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// The child derives its project slug from Getwd, which returns the
 	// symlink-resolved path (/private/var vs /var on macOS); seed under the
@@ -48,27 +43,46 @@ func seedTaskMemory(taskDir, work string) ([]string, error) {
 			continue
 		}
 		if err := os.MkdirAll(pair[1], 0o755); err != nil {
-			return nil, err
+			return err
 		}
 		if err := copyDir(pair[0], pair[1]); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return []string{"REASONIX_STATE_HOME=" + stateHome}, nil
+	return nil
 }
 
-// taskExperimentEnv assembles one run's experiment environment: the policy
-// arm and the seeded memory state root. The note reports a seeding failure
-// without aborting the run.
-func taskExperimentEnv(cfg suiteConfig, t task, work string) (env []string, note string) {
+// taskExperimentEnv assembles one run's experiment environment: a state root of
+// its own, the policy arm, and any seeded memory inside it. Per task on purpose:
+// a shared root leaves each finished task's event stream where the next one can
+// grep for it, and files benchmark sessions in the operator's real store.
+// cleanup drops the root; note reports a failure without aborting the run.
+func taskExperimentEnv(cfg suiteConfig, t task, work string) (env []string, cleanup func(), note string) {
+	cleanup = func() {}
 	if cfg.policy == "memory-off" {
 		env = append(env, "REASONIX_EXPERIMENT_NO_MEMORY=1")
 	}
-	seedEnv, err := seedTaskMemory(t.dir, work)
+	// Named without the task id: a run that goes looking for its own name in
+	// the temp root must not find the directory holding its session either.
+	stateHome, err := os.MkdirTemp("", "e2ebench-state-")
 	if err != nil {
-		return env, "memory seed: " + err.Error()
+		return env, cleanup, "state root: " + err.Error()
 	}
-	return append(env, seedEnv...), ""
+	cleanup = func() { _ = os.RemoveAll(stateHome) }
+	env = append(env, "REASONIX_STATE_HOME="+stateHome)
+	// A run that inherits the host temp root reads what earlier runs left in
+	// it. A no-solution task that finds its missing dependency there — a .pyc
+	// some previous run compiled — has stopped being a no-solution task.
+	tmpDir, err := os.MkdirTemp("", "e2ebench-tmp-")
+	if err != nil {
+		return env, cleanup, "temp root: " + err.Error()
+	}
+	cleanup = func() { _ = os.RemoveAll(stateHome); _ = os.RemoveAll(tmpDir) }
+	env = append(env, "TMPDIR="+tmpDir)
+	if err := seedTaskMemory(t.dir, work, stateHome); err != nil {
+		return env, cleanup, "memory seed: " + err.Error()
+	}
+	return env, cleanup, ""
 }
 
 // applyMemoryStats folds one trajectory's recall behavior into the result row.

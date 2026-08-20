@@ -18,6 +18,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"reasonix/internal/ablation"
+	"reasonix/internal/config"
 	"reasonix/internal/control"
 	fileencoding "reasonix/internal/fileutil/encoding"
 )
@@ -168,6 +169,10 @@ type result struct {
 	// CacheArm records whether the run was cold (fresh session) or warm
 	// (prefix pre-warmed in the same workdir), so arms never get mixed.
 	CacheArm string `json:"cache_arm,omitempty"`
+	// ReplyLanguage is the reply language the agent's own config resolved to.
+	// It is not an arm the harness sets: it rides in so two reports made on
+	// two machines cannot be read side by side without the difference showing.
+	ReplyLanguage string `json:"reply_language,omitempty"`
 	// Effort records the reasoning-effort override the arm ran with ("" =
 	// model default), the adaptive-reasoning-budget experiment axis.
 	Effort string `json:"effort,omitempty"`
@@ -271,7 +276,7 @@ func main() {
 	repo := flag.String("repo", ".", "repo root (diff mode)")
 	base := flag.String("base", "", "base ref to diff the PR head against (diff mode)")
 	testCmd := flag.String("test-cmd", "go test", "grader command run on the affected packages (diff mode)")
-	maxSteps := flag.Int("max-steps", 80, "agent tool-call cap for the diff task")
+	maxSteps := flag.Int("max-steps", 0, "diff mode: agent tool-call cap (0 = unbounded, the shipped default; the timeout is the resource bound)")
 	timeoutSec := flag.Int("timeout", 1200, "agent timeout in seconds (diff mode)")
 	attempts := flag.Int("attempts", 1, "suite/diff modes: retry a task up to N times until an attempt passes (stochastic agent); enables Pass@≤N")
 	flag.Parse()
@@ -332,6 +337,7 @@ func main() {
 		trajDir: *trajDir, forcePlanner: *forcePlanner, attempts: *attempts, anchor: anchor,
 		cacheArm: cache, effort: *effort, checkpoints: *checkpoints, policy: *policyFlag,
 		meterConfig: meterSource, meterFaults: faults, segments: segments, steers: steers,
+		replyLanguage: agentReplyLanguage(),
 	}, *suite, *taskFilter, *outMD, *outJSON)
 }
 
@@ -462,6 +468,7 @@ func filterTasks(tasks []task, filter string) ([]task, error) {
 // model, tool-surface profile, ablation arm, cache arm, and reasoning effort.
 type suiteConfig struct {
 	bin, model, profile, cacheArm, effort string
+	replyLanguage                         string
 	arm                                   ablation.Set
 	anchor                                string
 	policy                                string
@@ -517,7 +524,7 @@ func runSuite(cfg suiteConfig, tasks []task) []result {
 // then drops in verify.sh and runs it as the grader. The grader is added only
 // after the run so the agent can't read the answer key.
 func runTask(cfg suiteConfig, t task) result {
-	r := result{task: t, Profile: cfg.profile, CacheArm: cfg.cacheArm, Effort: cfg.effort}
+	r := result{task: t, Profile: cfg.profile, CacheArm: cfg.cacheArm, Effort: cfg.effort, ReplyLanguage: cfg.replyLanguage}
 	r.Arm = cfg.arm.Arm()
 	r.Anchor = cfg.anchor
 	t.Prompt = anchorPrompt(cfg.anchor, t)
@@ -553,17 +560,20 @@ func runTask(cfg suiteConfig, t task) result {
 		}
 	}
 
+	extraEnv, dropState, seedNote := taskExperimentEnv(cfg, t, work)
+	defer dropState()
+	if seedNote != "" {
+		r.Note = seedNote
+	}
+
+	// The warming pass shares the graded run's state root: a prefix warmed in
+	// one session and graded from another is warming somebody else's cache.
 	if cfg.cacheArm == benchmarkCacheWarm {
-		warmPrefix(cfg, work)
+		warmPrefix(cfg, work, extraEnv)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(t.TimeoutSec)*time.Second)
 	defer cancel()
-
-	extraEnv, seedNote := taskExperimentEnv(cfg, t, work)
-	if seedNote != "" {
-		r.Note = seedNote
-	}
 	mtr := attachMeter(cfg, &r)
 	defer mtr.close()
 	extraEnv = append(extraEnv, mtr.env...)
@@ -669,7 +679,7 @@ func buildSegmentArgs(cfg suiteConfig, seg segment, metricsPath, trajectoryPath 
 // deliberately untracked: the warm arm measures a long-lived session's steady
 // state, not the price of reaching it. Prefix-shaping flags (model, profile,
 // ablation, cwd) must match the graded invocation exactly.
-func warmPrefix(cfg suiteConfig, work string) {
+func warmPrefix(cfg suiteConfig, work string, env []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	args := []string{"run", "--auto", "--max-steps", "1"}
@@ -686,6 +696,9 @@ func warmPrefix(cfg suiteConfig, work string) {
 	args = append(args, "Reply with exactly: ok")
 	cmd := exec.CommandContext(ctx, cfg.bin, args...)
 	cmd.Dir = work
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -753,4 +766,16 @@ func copyFile(src, dst string) error {
 	}
 	// Mirror the source mode so a seed's read-only / exec bit survives the copy.
 	return os.Chmod(dst, info.Mode().Perm())
+}
+
+// agentReplyLanguage reads the reply language the agent will resolve from the
+// same config it runs under. A suite that never records this compares a run
+// answered in one language against a run answered in another and calls the
+// completion-token difference a result.
+func agentReplyLanguage() string {
+	cfg, err := config.Load()
+	if err != nil || cfg == nil {
+		return ""
+	}
+	return cfg.ResponseLanguage()
 }

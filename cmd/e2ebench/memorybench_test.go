@@ -70,11 +70,10 @@ func TestSeedTaskMemoryBuildsIsolatedStateRoot(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	env, err := seedTaskMemory(taskDir, work)
-	if err != nil || len(env) != 1 || !strings.HasPrefix(env[0], "REASONIX_STATE_HOME=") {
-		t.Fatalf("env = %v err = %v", env, err)
+	stateHome := t.TempDir()
+	if err := seedTaskMemory(taskDir, work, stateHome); err != nil {
+		t.Fatalf("seed: %v", err)
 	}
-	stateHome := strings.TrimPrefix(env[0], "REASONIX_STATE_HOME=")
 	if _, err := os.Stat(filepath.Join(stateHome, "memory", "global", "pref.md")); err != nil {
 		t.Fatalf("global seed missing: %v", err)
 	}
@@ -83,7 +82,50 @@ func TestSeedTaskMemoryBuildsIsolatedStateRoot(t *testing.T) {
 		t.Fatalf("project seed not under the work dir's slug: %v", matches)
 	}
 
-	if env, err := seedTaskMemory(t.TempDir(), work); err != nil || env != nil {
-		t.Fatalf("task without seeds must be a no-op, got %v %v", env, err)
+	if err := seedTaskMemory(t.TempDir(), work, t.TempDir()); err != nil {
+		t.Fatalf("task without seeds must be a no-op, got %v", err)
+	}
+}
+
+// Every task gets a state root of its own, seeded or not. Sharing one leaves
+// each finished task's whole event stream on disk under a directory named for
+// its work dir, and one observed run found exactly that by grepping the store
+// for its own task id while looking for an answer it was not meant to have.
+func TestTaskExperimentEnvIsolatesEveryRun(t *testing.T) {
+	roots := map[string]bool{}
+	for _, id := range []string{"nosol-absent-oracle", "fix-add-bug"} {
+		env, drop, note := taskExperimentEnv(suiteConfig{}, task{ID: id, dir: t.TempDir()}, t.TempDir())
+		defer drop()
+		if note != "" {
+			t.Fatalf("%s: %s", id, note)
+		}
+		root := ""
+		for _, e := range env {
+			if after, ok := strings.CutPrefix(e, "REASONIX_STATE_HOME="); ok {
+				root = after
+			}
+		}
+		if root == "" {
+			t.Fatalf("%s ran against the operator's own store root", id)
+		}
+		if strings.Contains(root, id) {
+			t.Errorf("%s: state root %q carries the task id, which is what a run greps for", id, root)
+		}
+		roots[root] = true
+		tmp := ""
+		for _, e := range env {
+			if after, ok := strings.CutPrefix(e, "TMPDIR="); ok {
+				tmp = after
+			}
+		}
+		if tmp == "" {
+			t.Errorf("%s inherited the host temp root, where an earlier run's leftovers are still readable", id)
+		}
+		roots[tmp] = true
+	}
+	// Two tasks, two roots each, all distinct: a shared one is what lets a
+	// no-solution task find the dependency an earlier run compiled for itself.
+	if len(roots) != 4 {
+		t.Fatalf("two tasks did not get four distinct roots: %v", roots)
 	}
 }

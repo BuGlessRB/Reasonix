@@ -5,5 +5,4 @@ prompt = """Build a word-frequency CLI in wordfreq.py, runnable as `python3 word
 - print the top N tokens (default 10), one per line as `word count`, sorted by count descending, ties broken alphabetically ascending
 - print nothing else"""
 class = "long-horizon"
-max_steps = 30
 timeout_sec = 600

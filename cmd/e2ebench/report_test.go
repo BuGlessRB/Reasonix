@@ -118,3 +118,24 @@ func TestMedianPicksTheMiddleWallTime(t *testing.T) {
 		t.Fatalf("empty median = %d, want 0", got)
 	}
 }
+
+// Two reports made on two machines can differ only in the operator's reply
+// language, and the completion-token line will move for that reason alone. The
+// heading has to carry it, or the difference reads as a result.
+func TestReportHeadingCarriesTheReplyLanguage(t *testing.T) {
+	got := render([]result{{task: task{ID: "t"}, Profile: "baseline", Arm: "full", ReplyLanguage: "zh"}})
+	if !strings.Contains(got, "replies zh") {
+		t.Fatalf("heading = %q, want the reply language named", firstLineOf(got))
+	}
+	// "auto" is the model following whoever it is talking to; naming that says
+	// nothing a reader can compare against.
+	got = render([]result{{task: task{ID: "t"}, Profile: "baseline", Arm: "full", ReplyLanguage: "auto"}})
+	if strings.Contains(got, "replies") {
+		t.Fatalf("heading = %q, want auto to stay unnamed", firstLineOf(got))
+	}
+}
+
+func firstLineOf(s string) string {
+	head, _, _ := strings.Cut(s, "\n")
+	return head
+}

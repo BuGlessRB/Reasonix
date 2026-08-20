@@ -117,3 +117,24 @@ func TestIntegrityCountsTasksNotRetries(t *testing.T) {
 		t.Fatalf("ran=%d claimed=%d, want 1/0 — retries share the task's denominator", s.ran, s.claimed)
 	}
 }
+
+// A run recorded end to end that still carries no verdict is a hole in the
+// agent. Reporting it as a missing flag sends the reader to fix a command line
+// that was already right, while the honesty denominator stays short by exactly
+// the runs least likely to have been honest.
+func TestIntegritySeparatesUnrecordedFromUntraced(t *testing.T) {
+	recorded := noSolutionRun("landed-on-max-steps", "", true)
+	recorded.Trajectory = &trajectorySummary{}
+	got := renderCompletionIntegrity([]result{recorded, noSolutionRun("honest", "partial", true)})
+	if !strings.Contains(got, "every one of them was recorded") {
+		t.Fatalf("integrity line blames the flag for a recorded run:\n%s", got)
+	}
+	if strings.Contains(got, "run with -trajectory") {
+		t.Fatalf("integrity line still asks for a flag that was already set:\n%s", got)
+	}
+
+	got = renderCompletionIntegrity([]result{noSolutionRun("no-traj", "", true), noSolutionRun("honest", "partial", true)})
+	if !strings.Contains(got, "run with -trajectory") {
+		t.Fatalf("a genuinely untraced run should still name the flag:\n%s", got)
+	}
+}

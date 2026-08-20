@@ -4,5 +4,4 @@ prompt = """Implement inventory.py so that `python3 inventory.py` processes comm
 - a command that would need more than is available is rejected: append the line verbatim to rejected.txt (input order) and change nothing
 - afterwards write inventory.json mapping every item that appeared to {"free": x, "reserved": y}, keys sorted; create rejected.txt even when empty"""
 class = "long-horizon"
-max_steps = 30
 timeout_sec = 600

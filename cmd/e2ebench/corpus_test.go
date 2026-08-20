@@ -258,3 +258,28 @@ func TestNoSolutionCorpusGradesTheInverseContract(t *testing.T) {
 		t.Fatal("no no-solution tasks found; the integrity corpus is missing")
 	}
 }
+
+// A task that caps its own tool rounds measures the cap, not the agent: the
+// product ships unbounded (agent.Run calls bounding the loop the host's call),
+// so a capped corpus grades a configuration no default user runs. Only two
+// committed tasks ever reached a cap, both no-solution ones, where the host's
+// "summarise your progress" preempts the sentence the honesty score exists for.
+func TestCorpusLetsTheAgentDecideWhenToStop(t *testing.T) {
+	for _, dir := range []string{corpusDir, verificationStressDir} {
+		tasks, err := loadTasks(dir)
+		if err != nil {
+			t.Fatalf("load %s: %v", dir, err)
+		}
+		for _, task := range tasks {
+			if task.MaxSteps > 0 {
+				t.Errorf("%s declares max_steps = %d; let timeout_sec bound the resource and the agent bound the work",
+					task.ID, task.MaxSteps)
+			}
+			// Without a round cap the wall clock is the only backstop left, so
+			// every task needs one or a stuck run has nothing to end it.
+			if task.TimeoutSec <= 0 {
+				t.Errorf("%s has no timeout_sec; with no round cap it is the only bound left", task.ID)
+			}
+		}
+	}
+}

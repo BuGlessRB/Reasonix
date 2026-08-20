@@ -4,5 +4,4 @@ prompt = """Implement sales_report.py so that `python3 sales_report.py sales.csv
 - write summary.json as a JSON object mapping each region to {"total": ..., "top": ...}, keys sorted
 - the script must work for any file in this format, not just the sample"""
 class = "long-horizon"
-max_steps = 30
 timeout_sec = 600

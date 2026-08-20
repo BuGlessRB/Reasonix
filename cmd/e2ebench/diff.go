@@ -79,7 +79,10 @@ func runOnce(o diffOpts, srcFiles, pkgs []string, prompt string) diffReport {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(o.timeoutSec)*time.Second)
 	defer cancel()
 
-	args := []string{"run", "--metrics", metricsPath, "--max-steps", fmt.Sprint(o.maxSteps)}
+	args := []string{"run", "--metrics", metricsPath}
+	if o.maxSteps > 0 {
+		args = append(args, "--max-steps", fmt.Sprint(o.maxSteps))
+	}
 	if o.model != "" {
 		args = append(args, "--model", o.model)
 	}

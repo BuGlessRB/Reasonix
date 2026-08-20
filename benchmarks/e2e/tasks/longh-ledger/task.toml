@@ -5,5 +5,4 @@ prompt = """Implement ledger.py so that `python3 ledger.py` processes transactio
 - afterwards write balances.json: a JSON object mapping every account that appeared to its final integer balance, keys sorted
 - create rejected.txt even when nothing was rejected"""
 class = "long-horizon"
-max_steps = 30
 timeout_sec = 600

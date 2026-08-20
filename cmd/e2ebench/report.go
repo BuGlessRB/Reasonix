@@ -23,7 +23,14 @@ func render(results []result) string {
 	if len(results) > 0 && results[0].CacheArm != "" && results[0].CacheArm != benchmarkCacheCold {
 		cache = " · " + results[0].CacheArm + "-cache"
 	}
-	return fmt.Sprintf("## 🤖 Reasonix e2e benchmark (%s · arm `%s`%s)\n\n", profile, arm, cache) + renderBody(results)
+	// The reply language is the operator's config, not an arm this harness
+	// chose. It rides in the heading so two reports made under two configs
+	// cannot be laid side by side without the difference showing.
+	language := ""
+	if len(results) > 0 && results[0].ReplyLanguage != "" && results[0].ReplyLanguage != "auto" {
+		language = " · replies " + results[0].ReplyLanguage
+	}
+	return fmt.Sprintf("## 🤖 Reasonix e2e benchmark (%s · arm `%s`%s%s)\n\n", profile, arm, cache, language) + renderBody(results)
 }
 
 // suiteStats aggregates result entries; ran/pass1 count tasks (first

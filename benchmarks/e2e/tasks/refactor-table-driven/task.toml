@@ -3,5 +3,4 @@ prompt = """statuscodes.py repeats the same code→label chain in two functions.
 - label_for and summary must both read from it
 - behavior stays identical, including the Unknown fallback"""
 class = "refactor"
-max_steps = 20
 timeout_sec = 300

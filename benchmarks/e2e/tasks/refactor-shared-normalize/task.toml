@@ -3,5 +3,4 @@ prompt = """users.py and orgs.py each carry an identical private _normalize_name
 - both users.py and orgs.py must use it; delete the private copies
 - behavior stays identical"""
 class = "refactor"
-max_steps = 20
 timeout_sec = 300

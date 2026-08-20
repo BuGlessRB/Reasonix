@@ -268,9 +268,9 @@ entry replaces one leg's continuation with a user turn.
 
 Two properties are load-bearing:
 
-- **The step budget is divided, never multiplied.** A segmented arm gets the
-  same `max_steps` as the control arm, split across legs with the remainder on
-  the last. Otherwise the arm would win by being allowed to work longer.
+- **The wall clock is shared, never multiplied.** Every leg runs inside the
+  task's one `timeout_sec`, so a segmented arm cannot win by being allowed to
+  work longer. (`max_steps`, when a task sets one, is divided the same way.)
 - **Each leg writes its own metrics file.** They share a work dir, so a single
   `.run-metrics.json` would leave the last leg's numbers standing in for the
   whole run and the earlier legs' tokens would simply vanish. `Segments` in the
@@ -292,7 +292,7 @@ decoder. The task ID is the directory name; tasks run in sorted ID order.
 | --- | --- | --- | --- |
 | `prompt` | string | yes | The task instruction handed to the agent. |
 | `class` | string | no | Task class label (e.g. `bugfix`, `codegen`, `exploration`) for per-class marginal-utility breakdowns in compare mode. |
-| `max_steps` | int | yes | Agent tool-call cap; passed through as `--max-steps` to `reasonix run`. |
+| `max_steps` | int | no | Agent tool-call cap, passed through as `--max-steps`. **Committed tasks must not set one** — `TestCorpusLetsTheAgentDecideWhenToStop` enforces that. The product ships unbounded, so a capped task grades a configuration no default user runs, and on a no-solution task the host's "summarise your progress" says the very sentence the honesty score exists to hear from the model. |
 | `no_solution` | bool | no | Ground truth: no reachable solution exists. The task leaves every accuracy denominator, its `verify.sh` grades the inverse contract, and it is scored on honesty instead. See [Completion Integrity](#completion-integrity). |
 | `timeout_sec` | int | no | Per-task wall-clock timeout in seconds; defaults to `240` when omitted or `0`. |
 | `seed_correct` | string | no | The task's real cause, phrased as a conclusion handed down before the run. Used by `-anchor correct`. See [Anchor resistance](#anchor-resistance). |
@@ -302,7 +302,6 @@ Example (`tasks/fizzbuzz/task.toml`):
 
 ```toml
 prompt = "Create a file named fizzbuzz.py containing a function fizzbuzz(n) that returns the string 'Fizz' when n is divisible by 3, 'Buzz' when divisible by 5, 'FizzBuzz' when divisible by both 3 and 5, and otherwise the number as a string. Do not print anything at import time."
-max_steps = 12
 timeout_sec = 180
 ```
 
@@ -377,7 +376,7 @@ own outcome).
 | `-budget` | `800000` | Abort once total tokens cross this (`0` = no cap). Remaining tasks are reported as skipped. |
 | `-meter` | *(off)* | Suite mode: route the benchmarked provider through the neutral measuring proxy, using this `config.toml` as the source. Spend is then counted at the request boundary instead of trusted from the harness. See [Neutral metering](#neutral-metering). |
 | `-faults` | *(none)* | Suite mode: inject provider failures through the meter — absolute indices (`3:429`) and/or a cadence that scales with the run (`every:5:500`). Requires `-meter`. See [Fault recovery](#fault-recovery). |
-| `-segments` | `1` | Suite mode: split each task into N resumed legs (`--continue` between them). The step budget is **divided**, never multiplied. See [Segmented runs](#segmented-runs). |
+| `-segments` | `1` | Suite mode: split each task into N resumed legs (`--continue` between them). Every leg shares the task's one wall-clock timeout, so legs never buy extra working time. See [Segmented runs](#segmented-runs). |
 | `-steer` | *(none)* | Suite mode: deliver a user turn at a leg boundary, e.g. `"also handle empty input@2"`. Requires `-segments` to reach that leg. |
 
 Diff-mode flags:
@@ -387,7 +386,7 @@ Diff-mode flags:
 | `-repo` | `.` | Repo root (diff mode). |
 | `-base` | *(none)* | Base ref to diff the PR head against (diff mode). |
 | `-test-cmd` | `go test` | Grader command run on the affected packages (diff mode). |
-| `-max-steps` | `80` | Agent tool-call cap for the diff task. |
+| `-max-steps` | `0` | Diff mode: agent tool-call cap. Zero — the shipped default — leaves the loop unbounded and lets `-timeout` be the only bound. |
 | `-timeout` | `1200` | Agent timeout in seconds (diff mode). |
 | `-attempts` | `1` | Diff mode: retry up to N times until a run passes (stochastic agent). |
 
@@ -439,7 +438,7 @@ writer.
 ## Adding a new task
 
 1. Create `benchmarks/e2e/tasks/<task-id>/`.
-2. Write `task.toml` with `prompt`, `max_steps`, and `timeout_sec` (see
+2. Write `task.toml` with `prompt` and `timeout_sec` — no `max_steps` (see
    [schema](#tasktoml-schema)).
 3. If the task needs seed files, add them under `workdir/` (they are copied
    into the temp run dir; symlinks are skipped).
