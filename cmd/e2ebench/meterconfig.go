@@ -49,8 +49,16 @@ func meterUpstream(configPath, model string) (upstream string, err error) {
 func providerForModel(providers []map[string]any, model string) map[string]any {
 	model = strings.TrimSpace(model)
 	if model != "" {
-		if _, want, ok := strings.Cut(model, "/"); ok {
+		if provider, want, ok := strings.Cut(model, "/"); ok {
 			model = want
+			// Two providers can serve one model over different protocols, so
+			// matching the model alone picks whichever is declared first —
+			// which proxied OpenAI calls at an Anthropic path.
+			for _, p := range providers {
+				if name, _ := p["name"].(string); name == provider {
+					return p
+				}
+			}
 		}
 		for _, p := range providers {
 			if name, _ := p["default"].(string); name == model {
