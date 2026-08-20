@@ -132,6 +132,12 @@ func (a *Agent) recentTailBudget() int {
 	if max := window / 2; max > 0 && n > max {
 		n = max
 	}
+	// A tail reaching the trigger leaves nothing to fold: every message is
+	// still held verbatim when the threshold arrives, so maintenance folds
+	// nothing for the rest of the session. The user's threshold wins.
+	if trigger := a.compactTrigger(); trigger > 0 && n > trigger/2 {
+		n = trigger / 2
+	}
 	return max(1, n)
 }
 
