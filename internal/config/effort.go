@@ -31,30 +31,46 @@ type modelReasoningCapability struct {
 	Levels   []string
 	Default  string
 	Aliases  map[string]string
+	// ContextWindow is what the model holds, which is a fact about the model and
+	// not about who serves it — a relay passing it through has the same ceiling.
+	// Zero means nobody has established one; see ResolvedContextWindow.
+	ContextWindow int
 }
 
 var modelReasoningCapabilities = map[string]modelReasoningCapability{
+	// Windows are the ones already stated for these models in the shipped
+	// entries; carrying them by model is what lets a gateway serving the same
+	// model inherit the ceiling instead of resolving to nothing.
 	"deepseek-v4-flash": {
-		Protocol: ReasoningProtocolDeepSeek,
-		Levels:   []string{"disabled", "low", "high", "max"},
-		Default:  "high",
-		Aliases:  map[string]string{"xhigh": "high"},
+		Protocol:      ReasoningProtocolDeepSeek,
+		Levels:        []string{"disabled", "low", "high", "max"},
+		Default:       "high",
+		Aliases:       map[string]string{"xhigh": "high"},
+		ContextWindow: 1_000_000,
 	},
-	"deepseek-v4-pro": {Protocol: ReasoningProtocolDeepSeek, Levels: []string{"disabled", "high", "max"}, Default: "high"},
+	"deepseek-v4-pro": {
+		Protocol:      ReasoningProtocolDeepSeek,
+		Levels:        []string{"disabled", "high", "max"},
+		Default:       "high",
+		ContextWindow: 1_000_000,
+	},
 	// GPT-5.6, measured 2026-08-20: the endpoint refuses "minimal" by naming the
 	// model, though the generic API vocabulary carries it. Keyed by model so a
 	// gateway serving them under its own name inherits the ladder.
-	"gpt-5.6-luna":  gpt56EffortCapability(),
-	"gpt-5.6-sol":   gpt56EffortCapability(),
-	"gpt-5.6-terra": gpt56EffortCapability(),
+	"gpt-5.6-luna":  gpt56Capability(),
+	"gpt-5.6-sol":   gpt56Capability(),
+	"gpt-5.6-terra": gpt56Capability(),
 }
 
-func gpt56EffortCapability() modelReasoningCapability {
+func gpt56Capability() modelReasoningCapability {
 	return modelReasoningCapability{
 		Protocol: ReasoningProtocolOpenAI,
 		Levels:   []string{"none", "low", "medium", "high", "xhigh", "max"},
 		Default:  "medium",
 		Aliases:  map[string]string{"minimal": "low"},
+		// ContextWindow unset on purpose: the ladder was measured, a window here
+		// would only have been recalled, and a number nobody checked silently
+		// moves compaction.
 	}
 }
 
