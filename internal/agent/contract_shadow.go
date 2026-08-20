@@ -179,8 +179,10 @@ func (a *Agent) LiveContract() *taskcontract.Contract {
 
 // emitTurnShadows records the end-of-turn shadow observations: the contract's
 // state, and the completion report derived from it. Both observe; neither
-// decides.
-func (a *Agent) emitTurnShadows(input string) {
+// decides. blocked says the host stopped this turn at the readiness gate, so
+// the summary reports the turn that happened rather than the one the model
+// believed it had finished.
+func (a *Agent) emitTurnShadows(input string, blocked bool) {
 	if a.task.ledger == nil {
 		return
 	}
@@ -202,7 +204,7 @@ func (a *Agent) emitTurnShadows(input string) {
 	rep := completion.Build(c, a.task.ledger, a.pathInWorkspace)
 	a.turn.completion = &rep
 	event.RecordCompletionReport(a.svc.sink, completionReportAudit(rep))
-	a.emitCompletionSummary(c, rep)
+	a.emitCompletionSummary(c, rep, blocked)
 }
 
 // CompletionReceipt returns the turn's completion record for the host to

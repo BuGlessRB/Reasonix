@@ -515,6 +515,10 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		// the recovery card for an explicit user continuation.
 		event.RecordReadinessAudit(a.svc.sink, readiness.audit(evidence.ReadinessErrored, false))
 		a.pending.deliveryRecovery = true
+		// The blocked turn is the one whose summary matters most — it is where
+		// a rewritten check or an unverified mutation is still outstanding —
+		// and it was the only turn that never reported one.
+		a.emitTurnShadows(a.turn.turnInput, true)
 		return false, &FinalReadinessError{Attempts: 1, Reason: readiness.reason, Missing: readiness.missingIDs()}
 	}
 	if !hasVisibleFinalAnswer(text) {
@@ -545,7 +549,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 	if readiness.applies {
 		event.RecordReadinessAudit(a.svc.sink, readiness.audit(evidence.ReadinessAllowed, a.turn.readinessRecovered))
 	}
-	a.emitTurnShadows(a.turn.turnInput)
+	a.emitTurnShadows(a.turn.turnInput, false)
 	if !a.closeSteerIntakeIfIdle() {
 		return true, nil
 	}

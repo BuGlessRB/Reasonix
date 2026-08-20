@@ -30,12 +30,16 @@ func (a *Agent) emitTurnPhase(phase event.TurnPhaseName) {
 // emitCompletionSummary publishes the content-free end-of-turn quality summary
 // when the turn mutated state or finished Partial/Blocked. Pure conversation
 // and ordinary read-only success do not emit a quality card.
-func (a *Agent) emitCompletionSummary(c *taskcontract.Contract, rep completion.Report) {
+func (a *Agent) emitCompletionSummary(c *taskcontract.Contract, rep completion.Report, blocked bool) {
 	if a == nil || a.svc.sink == nil || c == nil {
 		return
 	}
 	mutations := rep.Mutations
 	verdict := summaryVerdictOf(c, rep)
+	if blocked {
+		// The gate, not the contract, had the last word on this turn.
+		verdict = taskcontract.VerdictBlocked
+	}
 	// Skip noise: no mutations and ordinary complete/continue conversation.
 	if mutations == 0 && (verdict == taskcontract.VerdictComplete || verdict == taskcontract.VerdictContinue || verdict == taskcontract.VerdictUncertain) {
 		if !c.HasSuppressed() {
