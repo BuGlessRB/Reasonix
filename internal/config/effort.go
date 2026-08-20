@@ -348,6 +348,24 @@ func explicitReasoningProtocol(e *ProviderEntry) string {
 	return protocol
 }
 
+// StoredReasoningProtocol validates a declared protocol and returns what to
+// store for it. Auto stores as empty — no declaration is what leaves the model
+// registry and endpoint heuristics in charge. An unrecognised value is refused
+// rather than normalized away: a typo that quietly means "auto" is a setting
+// that does nothing and reads as one that failed.
+func StoredReasoningProtocol(raw string) (string, bool) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	switch value {
+	case "", ReasoningProtocolAuto:
+		return "", true
+	case ReasoningProtocolAnthropic, ReasoningProtocolDeepSeek, ReasoningProtocolGLM,
+		ReasoningProtocolKimiK3, ReasoningProtocolOpenAI, ReasoningProtocolNone:
+		return value, true
+	default:
+		return "", false
+	}
+}
+
 func normalizeReasoningProtocol(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", ReasoningProtocolAuto:

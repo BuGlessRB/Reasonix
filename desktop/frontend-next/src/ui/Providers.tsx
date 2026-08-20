@@ -67,6 +67,18 @@ interface ProvidersProps {
   activeKindFor: (account: Account) => string;
 }
 
+// The reasoning vocabularies the kernel knows, in config's own spelling. Auto
+// is the absence of a declaration, not a seventh shape.
+const THINKING: [string, string][] = [
+  ["", "自动 · 按模型和地址推断"],
+  ["openai", "OpenAI reasoning_effort"],
+  ["anthropic", "Anthropic thinking"],
+  ["deepseek", "DeepSeek"],
+  ["glm", "GLM enable_thinking"],
+  ["kimi-k3", "Kimi K3"],
+  ["none", "不发思考参数"],
+];
+
 export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor }: ProvidersProps) {
   const [list, setList] = useState<ProviderEntry[] | null>(null);
   const [adding, setAdding] = useState(false);
@@ -292,6 +304,7 @@ function EditConn({
   const [err, setErr] = useState("");
   const [more, setMore] = useState(false);
   const [win, setWin] = useState(entry.contextWindow ? String(entry.contextWindow) : "");
+  const [think, setThink] = useState(entry.reasoningProtocol ?? "");
   const [heads, setHeads] = useState(headerLines(entry.headers));
   const [extra, setExtra] = useState(entry.extraBody ? JSON.stringify(entry.extraBody, null, 2) : "");
   const saving = busy === `edit:${entry.name}`;
@@ -333,6 +346,7 @@ function EditConn({
         default: picked.includes(def) ? def : picked[0] ?? "",
         vision: vision.filter((m) => picked.includes(m)),
         contextWindow: Number(win.replace(/\D/g, "")) || 0,
+        reasoningProtocol: think,
         headers: parseHeaders(heads),
         extraBody: parseExtraBody(extra) ?? {},
       });
@@ -403,6 +417,19 @@ function EditConn({
             />
             <i className="tip">
               {t("填模型文档写的上下文上限，不是最大输出。填小了会一直压缩，填大了会在真到上限时被端点拒绝。")}
+            </i>
+          </label>
+          <label className="grow full">
+            <span>{t("思考参数")}</span>
+            <select value={think} onChange={(e) => setThink(e.target.value)}>
+              {THINKING.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {t(label)}
+                </option>
+              ))}
+            </select>
+            <i className="tip">
+              {t("端点用哪种写法控制思考深度。探不出来 —— 中转站转发的是别人的模型，只有你知道后面是什么。选了才有推理强度可调；选错了请求会被端点拒。")}
             </i>
           </label>
           <label className="grow full">

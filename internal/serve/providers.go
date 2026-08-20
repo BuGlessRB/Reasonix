@@ -89,6 +89,10 @@ type providerView struct {
 	ContextWindow int               `json:"contextWindow,omitempty"`
 	Headers       map[string]string `json:"headers,omitempty"`
 	ExtraBody     map[string]any    `json:"extraBody,omitempty"`
+	// Which request shape controls thinking here, as declared. Empty is "not
+	// declared", which is a different answer from "none" and the reason the
+	// effort ladder can come out empty on a relay.
+	ReasoningProtocol string `json:"reasoningProtocol,omitempty"`
 }
 
 func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
@@ -102,24 +106,25 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 	for i := range cfg.Providers {
 		p := &cfg.Providers[i]
 		out = append(out, providerView{
-			Name:           p.Name,
-			Kind:           strings.ToLower(strings.TrimSpace(p.Kind)),
-			BaseURL:        p.BaseURL,
-			Models:         nonNilStrings(p.ChatModelList()),
-			VisionModels:   nonNilStrings(visionModelsOf(cfg, p)),
-			CanSetVision:   config.CanConfigureVision(p),
-			CanWebSearch:   config.HasServerWebSearchCapability(p),
-			WebSearch:      config.EffectiveWebSearch(p),
-			CanSetThinking: config.CanConfigureThinkingParams(p),
-			SendsThinking:  config.SendsThinkingParams(p),
-			Default:        p.DefaultModel(),
-			HasKey:         p.APIKey() != "",
-			KeyEnv:         p.APIKeyEnv,
-			InUse:          p.Name == current,
-			Preset:         strings.TrimSpace(p.PresetID) != "",
-			ContextWindow:  p.ContextWindow,
-			Headers:        p.Headers,
-			ExtraBody:      p.ExtraBody,
+			Name:              p.Name,
+			Kind:              strings.ToLower(strings.TrimSpace(p.Kind)),
+			BaseURL:           p.BaseURL,
+			Models:            nonNilStrings(p.ChatModelList()),
+			VisionModels:      nonNilStrings(visionModelsOf(cfg, p)),
+			CanSetVision:      config.CanConfigureVision(p),
+			CanWebSearch:      config.HasServerWebSearchCapability(p),
+			WebSearch:         config.EffectiveWebSearch(p),
+			CanSetThinking:    config.CanConfigureThinkingParams(p),
+			SendsThinking:     config.SendsThinkingParams(p),
+			Default:           p.DefaultModel(),
+			HasKey:            p.APIKey() != "",
+			KeyEnv:            p.APIKeyEnv,
+			InUse:             p.Name == current,
+			Preset:            strings.TrimSpace(p.PresetID) != "",
+			ReasoningProtocol: strings.ToLower(strings.TrimSpace(p.ReasoningProtocol)),
+			ContextWindow:     p.ContextWindow,
+			Headers:           p.Headers,
+			ExtraBody:         p.ExtraBody,
 		})
 	}
 	writeJSON(w, out)

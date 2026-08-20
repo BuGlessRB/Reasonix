@@ -169,6 +169,11 @@ export const EN_SETTINGS: Record<string, string> = {
     "Empty = use the built-in known value; 0 = never auto-compact on this source",
   "填模型文档写的上下文上限，不是最大输出。填小了会一直压缩，填大了会在真到上限时被端点拒绝。":
     "Use the context limit from the model's documentation, not its max output. Too small and it compacts constantly; too large and the endpoint refuses once the real limit is hit.",
+  "思考参数": "Thinking parameter",
+  "端点用哪种写法控制思考深度。探不出来 —— 中转站转发的是别人的模型，只有你知道后面是什么。选了才有推理强度可调；选错了请求会被端点拒。":
+    "Which shape this endpoint controls thinking depth with. No probe answers it — a relay forwards someone else's models, and only you know what is behind it. Declaring one is what gives this source an effort ladder; declaring the wrong one gets the request refused.",
+  "自动 · 按模型和地址推断": "Auto · inferred from the model and address",
+  "不发思考参数": "Send no thinking parameter",
   "额外请求头": "Extra request headers",
   "一行一个 名字: 值。中转站常要它来认站点；密钥仍然走上面那栏。":
     "One name: value per line. Relays often require these to identify the site; the key still goes in the field above.",

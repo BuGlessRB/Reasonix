@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -298,4 +299,73 @@ func TestEditProviderRejectsNullInExtraBody(t *testing.T) {
 	if !strings.Contains(got, "outer.inner") {
 		t.Fatalf("refusal does not name the offending path: %s", got)
 	}
+}
+
+// A relay forwards someone else's models under its own name, so nothing about
+// it can be probed for a reasoning vocabulary — and with none, every effort
+// level but auto is refused and the composer shows no ladder at all. Declaring
+// the shape is the only way in, and the panel is where a user does it.
+func TestDeclaringAReasoningProtocolGivesTheSourceAnEffortLadder(t *testing.T) {
+	srv := newRichProviderServer(t)
+
+	before, ok := loadEntry(t, "rich/alpha")
+	if !ok {
+		t.Fatal("seed provider did not resolve")
+	}
+	if config.EffortCapabilityForEntry(before).Supported {
+		t.Fatal("an undeclared OpenAI-compatible gateway already had a ladder; this test proves nothing")
+	}
+
+	resp := postProvider(t, srv.URL, "/providers/edit", `{
+		"name":"rich","models":["alpha","beta"],"default":"alpha","vision":[],
+		"reasoningProtocol":"openai"
+	}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("edit status = %d, want 204", resp.StatusCode)
+	}
+
+	after, ok := loadEntry(t, "rich/alpha")
+	if !ok {
+		t.Fatal("provider stopped resolving after the edit")
+	}
+	got := config.EffortCapabilityForEntry(after)
+	if !got.Supported {
+		t.Fatal("declaring the protocol left the source without an effort ladder")
+	}
+	if !slices.Equal(got.Levels, []string{"auto", "low", "medium", "high"}) {
+		t.Fatalf("levels = %v, want the OpenAI ladder", got.Levels)
+	}
+}
+
+// A value outside the vocabulary is refused rather than normalized to auto: a
+// typo that silently means "no declaration" is a control that did nothing and
+// said it worked.
+func TestEditProviderRefusesAnUnknownReasoningProtocol(t *testing.T) {
+	srv := newRichProviderServer(t)
+
+	resp := postProvider(t, srv.URL, "/providers/edit", `{
+		"name":"rich","models":["alpha"],"default":"alpha","vision":[],
+		"reasoningProtocol":"gpt5-thinking"
+	}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	var reason Reason
+	if err := json.NewDecoder(resp.Body).Decode(&reason); err != nil {
+		t.Fatalf("decode reason: %v", err)
+	}
+	if reason.Code != "provider.bad_reasoning_protocol" {
+		t.Fatalf("code = %q, want provider.bad_reasoning_protocol", reason.Code)
+	}
+}
+
+func loadEntry(t *testing.T, ref string) (*config.ProviderEntry, bool) {
+	t.Helper()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg.ResolveModel(ref)
 }

@@ -24,6 +24,10 @@ export interface ProviderEntry {
   // where a relay can actually reject the request over it.
   canSetThinking?: boolean;
   sendsThinking?: boolean;
+  // Which request shape this endpoint controls thinking with, as declared.
+  // Absent is "nobody said", which is why a relay's effort ladder comes out
+  // empty — nothing can be probed for it.
+  reasoningProtocol?: string;
   // Removing the one in use would leave the session on a model that no longer
   // resolves, so the row offers no delete.
   inUse: boolean;
@@ -81,6 +85,9 @@ export interface ProviderEdit {
   contextWindow?: number;
   headers?: Record<string, string>;
   extraBody?: Record<string, unknown>;
+  // Which request shape controls thinking here. "" is auto — no declaration,
+  // which leaves the registry in charge. Omitted still means "leave it alone".
+  reasoningProtocol?: string;
 }
 
 // What the panel sends back after the user has looked at the probe.

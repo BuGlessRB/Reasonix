@@ -32,6 +32,10 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 		ContextWindow *int               `json:"contextWindow"`
 		Headers       *map[string]string `json:"headers"`
 		ExtraBody     *map[string]any    `json:"extraBody"`
+		// Which request shape this endpoint controls thinking with. No probe
+		// answers it — a relay forwards a vendor's models under its own name —
+		// so the declaration has to come from whoever knows what is behind it.
+		ReasoningProtocol *string `json:"reasoningProtocol"`
 	}
 	if !decodeProviderBody(w, r, &body) {
 		return
@@ -72,6 +76,16 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Headers != nil {
 		entry.Headers = trimmedHeaders(*body.Headers)
+	}
+	if body.ReasoningProtocol != nil {
+		stored, ok := config.StoredReasoningProtocol(*body.ReasoningProtocol)
+		if !ok {
+			refuse(w, http.StatusBadRequest, "provider.bad_reasoning_protocol",
+				fmt.Sprintf("%q is not a reasoning protocol", *body.ReasoningProtocol),
+				map[string]any{"protocol": *body.ReasoningProtocol})
+			return
+		}
+		entry.ReasoningProtocol = stored
 	}
 	if body.ExtraBody != nil {
 		// A null cannot be written to TOML, so it would be dropped on save and
