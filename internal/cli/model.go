@@ -148,7 +148,13 @@ func (m *chatTUI) persistModel(ref string) {
 	unlock := config.LockUserConfigEdits()
 	defer unlock()
 	edit := config.LoadForEdit(path)
-	if err := edit.SetDefaultModel(ref); err != nil {
+	// An extension model is only in the live catalog, so the runtime has to be
+	// asked; before one is bound the configuration is the only authority there is.
+	var catalog []provider.Descriptor
+	if m.ctrl != nil {
+		catalog = m.ctrl.ProviderCatalog()
+	}
+	if err := edit.SetDefaultModel(ref, catalog); err != nil {
 		m.notice(fmt.Sprintf("model: persist refused: %v (ref=%s)", err, ref))
 		return
 	}

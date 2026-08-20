@@ -26,6 +26,12 @@ type snapshotConflictDiagnostic struct {
 	DiskRevision     int64     `json:"disk_revision,omitempty"`
 	RecoveryBranchID string    `json:"recovery_branch_id,omitempty"`
 	ExistingRecovery bool      `json:"existing_recovery,omitempty"`
+	// DivergedAt and the two roles say where the transcripts parted and what
+	// stood there: an assistant turn that became a tool row is a local reshape,
+	// two different assistant turns are two writers. No content is recorded.
+	DivergedAt   int    `json:"diverged_at"`
+	DiskRole     string `json:"disk_role,omitempty"`
+	SnapshotRole string `json:"snapshot_role,omitempty"`
 }
 
 // conflictDiagDedup bounds repeated conflict event log lines for the same
@@ -47,10 +53,11 @@ func appendSnapshotConflictDiagnostic(path, mode, outcome string, saveErr error,
 		return
 	}
 	rec := snapshotConflictDiagnostic{
-		At:       time.Now(),
-		BranchID: agent.BranchID(path),
-		Mode:     mode,
-		Outcome:  outcome,
+		At:         time.Now(),
+		BranchID:   agent.BranchID(path),
+		Mode:       mode,
+		Outcome:    outcome,
+		DivergedAt: -1,
 	}
 	if conflict != nil {
 		rec.Kind = string(conflict.Kind)
@@ -58,6 +65,9 @@ func appendSnapshotConflictDiagnostic(path, mode, outcome string, saveErr error,
 		rec.SnapshotMessages = conflict.SnapshotMessages
 		rec.BaseRevision = conflict.BaseRevision
 		rec.DiskRevision = conflict.DiskRevision
+		rec.DivergedAt = conflict.DivergedAt
+		rec.DiskRole = conflict.DiskRole
+		rec.SnapshotRole = conflict.SnapshotRole
 	}
 	if recoveryPath != "" {
 		rec.RecoveryBranchID = agent.BranchID(recoveryPath)

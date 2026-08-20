@@ -172,7 +172,7 @@ func TestSwitchingModelSurvivesARestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	persistDefaultModel("mixed-anthropic/text-only")
+	persistDefaultModel("mixed-anthropic/text-only", nil)
 
 	// A fresh load is what a restart sees.
 	cfg, err := config.Load()
@@ -199,7 +199,7 @@ func TestPersistingAnUnknownModelLeavesTheDefaultAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	persistDefaultModel("nobody/nothing")
+	persistDefaultModel("nobody/nothing", nil)
 
 	cfg, err := config.Load()
 	if err != nil {

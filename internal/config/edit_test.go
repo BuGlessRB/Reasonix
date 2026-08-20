@@ -15,32 +15,63 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"reasonix/internal/provider"
 )
+
+// The configuration is one catalog of two. An extension-hosted model lives in
+// a sidecar and never appears in a config file, so a caller holding the live
+// catalog is what lets it qualify — and a ref no catalog carries still cannot,
+// which is what keeps this from degrading into "anything with a slash".
+func TestSelectableModelRefsComeFromBothCatalogs(t *testing.T) {
+	c := Default()
+	const hosted = "plugin/demo/cloud/extension-chat"
+	catalog := []provider.Descriptor{{Ref: hosted, Model: "extension-chat"}}
+
+	if c.ModelRefSelectable(hosted, nil) {
+		t.Fatal("the configuration alone must not vouch for an extension model")
+	}
+	if !c.ModelRefSelectable(hosted, catalog) {
+		t.Fatal("the live catalog must vouch for the model it carries")
+	}
+	if c.ModelRefSelectable("plugin/ghost/cloud/nothing", catalog) {
+		t.Fatal("a ref no catalog carries is not selectable")
+	}
+	if err := c.SetDefaultModel(hosted, catalog); err != nil {
+		t.Fatalf("set extension default: %v", err)
+	}
+	if c.DefaultModel != hosted {
+		t.Errorf("default = %q, want %q", c.DefaultModel, hosted)
+	}
+	if err := c.SetDefaultModel("plugin/ghost/cloud/nothing", catalog); err == nil {
+		t.Error("expected a refusal for a ref neither catalog carries")
+	}
+}
 
 func TestSetDefaultModel(t *testing.T) {
 	c := Default()
-	if err := c.SetDefaultModel("deepseek-pro"); err != nil {
+	if err := c.SetDefaultModel("deepseek-pro", nil); err != nil {
 		t.Fatalf("set valid default: %v", err)
 	}
 	if c.DefaultModel != "deepseek-pro" {
 		t.Errorf("default = %q, want deepseek-pro", c.DefaultModel)
 	}
-	if err := c.SetDefaultModel("nope"); err == nil {
+	if err := c.SetDefaultModel("nope", nil); err == nil {
 		t.Error("expected error for unknown provider")
 	}
 	// "provider/model" form is also accepted: the /model picker stores the
 	// full ref so a user can land on a non-default model under the same
 	// provider across restarts.
-	if err := c.SetDefaultModel("deepseek-pro/deepseek-v4-pro"); err != nil {
+	if err := c.SetDefaultModel("deepseek-pro/deepseek-v4-pro", nil); err != nil {
 		t.Fatalf("set provider/model default: %v", err)
 	}
 	if c.DefaultModel != "deepseek-pro/deepseek-v4-pro" {
 		t.Errorf("default = %q, want deepseek-pro/deepseek-v4-pro", c.DefaultModel)
 	}
-	if err := c.SetDefaultModel("deepseek-pro/missing"); err == nil {
+	if err := c.SetDefaultModel("deepseek-pro/missing", nil); err == nil {
 		t.Error("expected error for unknown model under known provider")
 	}
-	if err := c.SetDefaultModel(""); err == nil {
+	if err := c.SetDefaultModel("", nil); err == nil {
 		t.Error("expected error for empty name")
 	}
 }
@@ -414,22 +445,6 @@ func TestSetUICloseBehavior(t *testing.T) {
 	}
 	if err := c.SetUICloseBehavior("later"); err == nil {
 		t.Fatal("expected error for invalid close behavior")
-	}
-}
-
-func TestSetPlannerModel(t *testing.T) {
-	c := Default()
-	if err := c.SetPlannerModel("deepseek-pro"); err != nil {
-		t.Fatalf("set planner: %v", err)
-	}
-	if c.Agent.PlannerModel != "deepseek-pro" {
-		t.Errorf("planner = %q", c.Agent.PlannerModel)
-	}
-	if err := c.SetPlannerModel(""); err != nil || c.Agent.PlannerModel != "" {
-		t.Errorf("clearing planner failed: err=%v planner=%q", err, c.Agent.PlannerModel)
-	}
-	if err := c.SetPlannerModel("ghost"); err == nil {
-		t.Error("expected error for unknown planner")
 	}
 }
 
@@ -1254,12 +1269,10 @@ func TestClearPluginAuthentication(t *testing.T) {
 // re-decodes the file to confirm the changes survived a write/read cycle.
 func TestSaveToRoundTrips(t *testing.T) {
 	c := Default()
-	if err := c.SetDefaultModel("deepseek-pro"); err != nil {
+	if err := c.SetDefaultModel("deepseek-pro", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.SetPlannerModel("deepseek-pro"); err != nil {
-		t.Fatal(err)
-	}
+	c.Agent.PlannerModel = "deepseek-pro"
 	if err := c.UpsertProvider(ProviderEntry{Name: "local", Kind: "openai", BaseURL: "http://localhost:1234/v1", Model: "llama"}); err != nil {
 		t.Fatal(err)
 	}
@@ -2038,7 +2051,7 @@ func TestSaveToExistingProjectPersistsTopLevelDelta(t *testing.T) {
 	}
 	cfg := Default()
 	cfg.ConfigVersion = 2
-	if err := cfg.SetDefaultModel("deepseek-pro"); err != nil {
+	if err := cfg.SetDefaultModel("deepseek-pro", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := cfg.SaveTo(projectPath); err != nil {
@@ -2162,7 +2175,7 @@ func TestUnrelatedProjectSavePreservesExplicitDefaultSkillOverride(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.SetDefaultModel("deepseek-pro"); err != nil {
+	if err := cfg.SetDefaultModel("deepseek-pro", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := cfg.SaveTo(projectPath); err != nil {

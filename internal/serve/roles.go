@@ -72,7 +72,7 @@ func (s *Server) setRole(w http.ResponseWriter, r *http.Request) {
 		}
 		// Naming a model that does not resolve would strand the role on the next
 		// build, and the failure would surface as a broken turn rather than here.
-		if _, found := cfg.ResolveModel(ref); !found {
+		if !cfg.ModelRefSelectable(ref, s.ctl().ProviderCatalog()) {
 			http.Error(w, fmt.Sprintf("no configured model matches %q", ref), http.StatusBadRequest)
 			return
 		}

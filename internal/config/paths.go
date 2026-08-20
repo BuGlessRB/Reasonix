@@ -44,27 +44,7 @@ func userConfigDir() string {
 	return reasonixHomeDir()
 }
 
-func reasonixHomeDir() string {
-	if dir := cleanEnvDir("REASONIX_HOME"); dir != "" {
-		return dir
-	}
-	if runtimeGOOS == "windows" {
-		if dir := osUserConfigDir(); dir != "" {
-			return filepath.Join(dir, "reasonix")
-		}
-		if home, err := osUserHomeDir(); err == nil && home != "" {
-			return filepath.Join(home, "AppData", "Roaming", "reasonix")
-		}
-		return ""
-	}
-	if home, err := osUserHomeDir(); err == nil && home != "" {
-		return filepath.Join(home, ".reasonix")
-	}
-	if dir := osUserConfigDir(); dir != "" {
-		return filepath.Join(dir, "reasonix")
-	}
-	return ""
-}
+func reasonixHomeDir() string { return storageRootDir(RootHome) }
 
 func userConfigLoadPath() string {
 	primary := userConfigPath()
@@ -143,12 +123,7 @@ func legacyXDGConfigPaths() []string {
 	return paths
 }
 
-func userSupportDir() string {
-	if dir := cleanEnvDir("REASONIX_STATE_HOME"); dir != "" {
-		return dir
-	}
-	return reasonixHomeDir()
-}
+func userSupportDir() string { return storageRootDir(RootState) }
 
 func legacyOSSupportDir() string {
 	if IsolatedHomeDir() != "" {
@@ -165,22 +140,17 @@ func legacyOSSupportDir() string {
 	return path
 }
 
-func userCacheDir() string {
-	if dir := cleanEnvDir("REASONIX_CACHE_HOME"); dir != "" {
-		return dir
-	}
-	if dir := cleanEnvDir("REASONIX_HOME"); dir != "" {
-		return filepath.Join(dir, "cache")
-	}
-	dir := osUserCacheDir()
-	if dir == "" {
-		return ""
-	}
-	return filepath.Join(dir, "reasonix")
-}
+func userCacheDir() string { return storageRootDir(RootCache) }
 
 func cleanEnvDir(name string) string {
-	dir := strings.TrimSpace(os.Getenv(name))
+	return expandDirValue(os.Getenv(name))
+}
+
+// expandDirValue turns a directory someone wrote — in the environment or in
+// config.toml — into an absolute path. Both layers of the root chain share it,
+// so a location is spelled the same way wherever it is set.
+func expandDirValue(dir string) string {
+	dir = strings.TrimSpace(dir)
 	if dir == "" {
 		return ""
 	}
@@ -351,53 +321,21 @@ func MissingReasoningWarnStateDir() string {
 // workspaces. It intentionally follows the cache root rather than project or
 // session state: taking a lease must never dirty the repository it protects.
 func WorkspaceLeaseDir() string {
-	// Deliberately ignore REASONIX_HOME/REASONIX_CACHE_HOME here. Two app
-	// instances with different state profiles can still open the same user
-	// workspace, so their safety lock must converge on one OS-user cache root.
-	dir := osUserCacheDir()
-	if strings.TrimSpace(dir) == "" {
-		return ""
-	}
-	return filepath.Join(dir, "reasonix", "workspace-leases")
+	return joinRoot(storageRootDir(RootLocks), "workspace-leases")
 }
 
 // RepairMutationLockDir stores target-path repair locks in the OS-user cache.
 // It deliberately ignores Reasonix home/cache overrides: isolated instances
 // can still repair the same project reasonix.toml, so their locks must converge.
 func RepairMutationLockDir() string {
-	dir := osUserCacheDir()
-	if strings.TrimSpace(dir) == "" {
-		return ""
-	}
-	return filepath.Join(dir, "reasonix", "repair-mutation-locks")
+	return joinRoot(storageRootDir(RootLocks), "repair-mutation-locks")
 }
 
 // DeliveryWorktreeDir is durable storage for user-visible isolated Delivery
 // workspaces. Explicit state/home overrides remain authoritative. Windows uses
 // LocalAppData by default so large Git worktrees do not roam with the user's
 // profile; other platforms keep using Reasonix state storage.
-func DeliveryWorktreeDir() string {
-	if dir := cleanEnvDir("REASONIX_STATE_HOME"); dir != "" {
-		return filepath.Join(dir, "worktrees")
-	}
-	if dir := cleanEnvDir("REASONIX_HOME"); dir != "" {
-		return filepath.Join(dir, "worktrees")
-	}
-	if runtimeGOOS == "windows" {
-		if dir := osUserCacheDir(); dir != "" {
-			return filepath.Join(dir, "reasonix", "worktrees")
-		}
-		if home, err := osUserHomeDir(); err == nil && home != "" {
-			return filepath.Join(home, "AppData", "Local", "reasonix", "worktrees")
-		}
-		return ""
-	}
-	dir := userSupportDir()
-	if dir == "" {
-		return ""
-	}
-	return filepath.Join(dir, "worktrees")
-}
+func DeliveryWorktreeDir() string { return storageRootDir(RootWorktrees) }
 
 // UserCredentialsPath is the reasonix-owned global .env file under Reasonix
 // home. It is the single source for provider credentials saved by Reasonix, so

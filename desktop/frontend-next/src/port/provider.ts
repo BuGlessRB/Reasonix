@@ -40,11 +40,28 @@ export interface ProviderEntry {
   extraBody?: Record<string, unknown>;
 }
 
+// One wire format a source may be saved as, as the kernel declares it. The
+// list is the kernel's and the words for it are ours: no label rides along.
+export interface Protocol {
+  kind: string;
+  // Which model-listing shape this wire is discovered under. Protocols sharing
+  // one value answer the same listing and cannot be told apart by a probe.
+  discovery: string;
+  // Whether the wire has a format for a provider-executed web search tool, and
+  // whether thinking/effort fields ride it at all.
+  serverWebSearch: boolean;
+  reasoningParams: boolean;
+}
+
 // What an endpoint turned out to be. Every field is a guess the user confirms
 // before anything is written — a model list cannot prove which protocol a
 // gateway speaks, only which ones it answers.
 export interface ProviderProbe {
   kind: string;
+  // Every kind that listing may be driven with, kernel order. `kind` is the
+  // pre-selection among them, not the only answer: DeepSeek serves both the
+  // OpenAI chat wire and the Responses API off one model list.
+  kinds: string[];
   authHeader: boolean;
   models: string[];
   default: string;
@@ -64,6 +81,9 @@ export interface ProviderProbe {
 export interface ProviderCheck {
   ok: boolean;
   kind?: string;
+  // Whether that answer is consistent with the kind the entry records. A
+  // Responses source answers the OpenAI listing, so equality is the wrong test.
+  matches?: boolean;
   models?: string[];
   ambiguous?: boolean;
   noProxy?: boolean;
@@ -102,4 +122,16 @@ export interface ProviderDraft {
   noProxy: boolean;
   effort: string;
   vision: string[];
+}
+
+// What the opening sequence still owes a machine with no usable key. GET
+// /provider-setup 404s once one exists, so null means "ready".
+export interface ProviderSetup {
+  required: boolean;
+  provider?: string;
+  model?: string;
+  modelRef?: string;
+  keyEnv?: string;
+  error?: string;
+  activationPending?: boolean;
 }

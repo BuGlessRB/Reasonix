@@ -64,6 +64,7 @@ type Server struct {
 	buildWorkspaceController func(ctx context.Context, dir, ref string) (*control.Controller, error)
 	lastBuild                *boot.BuildResult // serving generation, guarded by bindMu; see reuseFromLastBuild
 	grants                   hostGrants        // what the embedding host has opened up
+	moves                    moveTracker       // the one storage relocation this server may be running
 	titleProv                provider.Provider // best-effort provider for session titles
 	titlePrice               *provider.Pricing
 	titleModelRef            string
@@ -508,6 +509,7 @@ func (s *Server) routes() http.Handler {
 	s.registerInboxRoutes(mux)
 	s.registerProviderRoutes(mux)
 	s.registerRoleRoutes(mux)
+	s.registerStorageRoutes(mux)
 	s.registerWelcomeRoutes(mux)
 	mux.HandleFunc("POST /cancel", s.cancel)
 	mux.HandleFunc("POST /approve", s.approve)
@@ -801,9 +803,13 @@ type historyToolCall struct {
 }
 
 type historyMessage struct {
-	Role       string            `json:"role"`
-	Content    string            `json:"content"`
-	Reasoning  string            `json:"reasoning,omitempty"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Reasoning string `json:"reasoning,omitempty"`
+	// Images is how many attachments the turn carried, not the attachments
+	// themselves: a turn that was only an image has no text to rebuild from,
+	// and a reader that sees zero of both drops it as host chrome.
+	Images     int               `json:"images,omitempty"`
 	ToolCalls  []historyToolCall `json:"toolCalls,omitempty"`
 	ToolCallID string            `json:"toolCallId,omitempty"`
 	ToolName   string            `json:"toolName,omitempty"`
@@ -824,6 +830,7 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 			// Content is what the model saw, and one @-reference expands into a
 			// whole file. A reopened session has to show what was typed.
 			hm.Content = agent.UserMessageText(m)
+			hm.Images = len(m.Images)
 		}
 		if m.Role == provider.RoleAssistant {
 			hm.Reasoning = m.ReasoningContent

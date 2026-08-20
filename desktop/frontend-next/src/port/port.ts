@@ -37,7 +37,8 @@ import type { WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
 import type { Appearance, ThemePack } from "./look";
 import type { PermissionLists, PermissionRules, SandboxSettings } from "./boundary";
-import type { ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe } from "./provider";
+import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, ProviderSetup } from "./provider";
+import type { StoragePlan, StorageState } from "./storage";
 
 export type * from "./plugin";
 
@@ -53,12 +54,12 @@ export interface ContextBreakdown {
   output: number;
 }
 
-// GET /history returns the provider conversation, not the event stream: the
-// stream is live-only, so a reload rebuilds the transcript from these.
+// GET /history: the event stream is live-only, so a reload rebuilds from these.
 export interface HistoryMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
   reasoning?: string;
+  images?: number; // attachments on a user turn; an image-only one has no text
   toolCalls?: { id: string; name: string; arguments?: string }[];
   toolCallId?: string;
   toolName?: string;
@@ -152,17 +153,6 @@ export interface JobEntry {
 // The UI depends on this and nothing else. SsePort talks to internal/serve;
 // MockPort replays a fixture. Neither is allowed to leak transport details
 // upward, which is what keeps the same UI usable in a browser and in Wails.
-// GET /provider-setup 404s once a usable key exists, so null means "ready".
-export interface ProviderSetup {
-  required: boolean;
-  provider?: string;
-  model?: string;
-  modelRef?: string;
-  keyEnv?: string;
-  error?: string;
-  activationPending?: boolean;
-}
-
 export interface SessionEntry {
   name: string;
   path: string;
@@ -548,7 +538,13 @@ export interface AgentPort {
   // Persisted, then the runtime is rebuilt: boot reads every role model while
   // assembling, so an assignment cannot reach a runtime that is already up.
   setRole(role: string, ref: string): Promise<void>;
+  storage(): Promise<StorageState>;
+  planStorageMove(root: string, dir: string): Promise<StoragePlan>;
+  moveStorage(root: string, dir: string): Promise<StoragePlan>;
   providers(): Promise<ProviderEntry[]>;
+  // The wire formats a source may be saved as. Read from the kernel so a
+  // protocol added there reaches this panel without a frontend release.
+  protocols(): Promise<Protocol[]>;
   // Asks an endpoint what it is. Writes nothing — the answer is shown for
   // confirmation, because only the person holding the key knows what they
   // bought.

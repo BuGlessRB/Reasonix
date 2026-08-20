@@ -353,7 +353,7 @@ func (s *providerSetupSession) setDefaultModel(model string) error {
 	before := s.cfg.DefaultModel
 	// Setup runs before any runtime exists, so the configuration is the only
 	// catalog there is to check against.
-	if err := s.cfg.SetDefaultModel(model); err != nil {
+	if err := s.cfg.SetDefaultModel(model, nil); err != nil {
 		return err
 	}
 	if before != s.cfg.DefaultModel {
@@ -754,7 +754,7 @@ func (s *providerSetupSession) replayOperations(cfg *config.Config, accessDeclar
 			if cfg.DefaultModel != operation.beforeString {
 				return &providerSetupConflictError{field: "default_model"}
 			}
-			if err := cfg.SetDefaultModel(operation.afterString); err != nil {
+			if err := cfg.SetDefaultModel(operation.afterString, nil); err != nil {
 				return fmt.Errorf("replay default_model: %w", err)
 			}
 		case setupOpLanguage:

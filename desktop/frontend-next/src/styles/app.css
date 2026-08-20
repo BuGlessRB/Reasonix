@@ -1033,6 +1033,40 @@
   @keyframes blink { 0%, 100% { opacity: 1 } 55% { opacity: .15 } }
   .tk .caret { width: 5px; height: 11px; background: var(--faint); margin-left: 2px }
 
+  /* 收工回执：它说的是「证据」，不是「进度」。所以整张卡不渲染 verdict 名词
+     —— 主机知道自己验到了什么、没验到什么，但完全不知道这一单还剩多少，
+     把「没验证」写成「没做完」就是拿一句它答不上来的话去否定用户刚看完的
+     那一屏。三档权重：干净的一轮沉成一行 ghost；这一轮自己申报的用 hair
+     起小节、不给色相（是主动说的，不是被查出来的）；只有主机找出来的缺口
+     才配那道 2px warn。 */
+  .rcpt { padding: 7px 0 3px 31px }
+  /* 只淡入不位移：位移读作「又来了一步」，而这是这一轮落停。 */
+  .rcpt[data-lvl="ok"] {
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    font: 400 11.5px var(--ui); color: var(--faint);
+    animation: settle .26s var(--ease-out) both;
+  }
+  .rcpt[data-lvl="ok"] .tick { font-size: 10px; color: var(--ok); opacity: .75 }
+  .rcpt[data-lvl="ok"] .src { font: 400 10.5px var(--mono); color: var(--ghost); min-width: 0; overflow-wrap: anywhere }
+  @keyframes settle { from { opacity: 0 } to { opacity: 1 } }
+
+  .rcpt-open { display: flex; flex-direction: column; gap: 10px; padding-top: 9px }
+  /* 干净那行落在展开卡里时不再吃一次左边距 */
+  .rcpt-open .rcpt { padding: 0 }
+  .rgroup { display: flex; flex-direction: column; gap: 4px }
+  .rgroup .hd { font: 500 10px var(--mono); letter-spacing: .07em; color: var(--warn) }
+  .rgroup[data-declared] .hd { color: var(--faint) }
+  /* 逐行错开 40ms：五行一起弹出来是一坨，错开才读得出这是一份清单 */
+  .rrow {
+    padding: 5px 0 5px 10px; border-left: 2px solid var(--warn);
+    animation: card var(--t-card) var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 40ms);
+  }
+  .rgroup[data-declared] .rrow { border-left-color: var(--hair) }
+  .rrow .t { display: block; font: 400 12px var(--ui); color: var(--text) }
+  .rrow .d { display: block; margin-top: 2px; font: 400 11px var(--mono); color: var(--muted); overflow-wrap: anywhere }
+  .rgroup .more { padding-left: 12px; font: 400 11px var(--ui); color: var(--ghost) }
+
   /* review findings：严重度用左侧 2px 色条编码，不新增文字标签 */
   .finds { margin-top: 7px; display: flex; flex-direction: column; gap: 5px }
   .find { padding: 6px 0 6px 10px; border-left: 2px solid var(--ghost); animation: card var(--t-card) var(--ease-out) both }
@@ -1041,6 +1075,13 @@
   .find[data-lvl="err"] { border-left-color: var(--err) }
   .find .t { display: block; font: 500 12.5px var(--ui); color: var(--text) }
   .find .why { display: block; margin-top: 2px; font-size: 11.5px; line-height: 1.55; color: var(--muted) }
+  /* 通知的第二行是机器文本：系统原话、命令、来源路径。等宽 + 保留换行，长
+     路径断得开 —— 拿正文字体铺成一坨，就会和标题糊在一起，也就是用户看到
+     的那面墙。 */
+  .find .why.nwhy {
+    margin-top: 5px; font: 400 11px/1.6 var(--mono); color: var(--faint);
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
 
   .term { margin-top: 6px; padding: 8px 11px; background: var(--overlay); border-radius: var(--r-sm); font: 400 11.5px/19px var(--mono); color: var(--muted); overflow-x: auto }
   .term-l { white-space: pre }
@@ -1314,15 +1355,79 @@
 
   /* 减去 .flow 的内边距，输入框的可见边缘才跟卡片的左右边缘落在同一条线上 */
   /* 附件是「这一轮要带上的东西」，所以它贴在输入框上沿，不在别处 */
-  .compose textarea[data-over] { outline: 2px dashed var(--accent); outline-offset: -3px }
   /* 输入区整块都收拖放，但它本身不该占布局：display:contents 让盒子消失、
      节点还在，拖放层就能问「这一下落在输入框里没有」。 */
   .dropzone { display: contents }
-  .shots { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 2px 7px }
-  .shot { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 9px; border: 1px solid var(--border); border-radius: var(--r-pill); font: 400 11px var(--mono); color: var(--muted) }
-  .shot .nm { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .shot button { border: 0; background: none; color: var(--ghost); cursor: pointer; font: 400 12px/1 var(--mono); padding: 0 3px }
-  .shot button:hover { color: var(--err) }
+  /* 落点是整块面板，不是输入框那 40px —— 瞄一行高的框，就是在瞄 40px。
+     外壳把整窗的落点都报上来，落在哪一格由 DOM 说了算（见 filedrop.ts）。 */
+  .pane::after {
+    content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    background: color-mix(in srgb, var(--page) 74%, transparent);
+    opacity: 0; transition: opacity .12s var(--ease-out);
+  }
+  .pane[data-intake]::after { opacity: 1 }
+  /* 输入框自己抬起来换色，亮的是它而不是一个虚线矩形 */
+  .pane[data-intake] .compose {
+    position: relative; z-index: 4;
+    transform: translateY(-2px);
+    transition: transform .12s var(--ease-out), box-shadow .12s var(--ease-out);
+  }
+  .pane[data-intake="attach"] .compose { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent) }
+  .pane[data-intake="attach"] .compose::after { border-color: var(--accent) }
+  .pane[data-intake="ref"] .compose { box-shadow: 0 0 0 3px color-mix(in srgb, var(--net) 22%, transparent) }
+  .pane[data-intake="ref"] .compose::after { border-color: var(--net) }
+  .pane[data-intake="insert"] .compose { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent) }
+  .pane[data-intake="insert"] .compose::after { border-color: var(--ok) }
+  /* 拒绝态不抖也不闪红：落点单纯不亮，那行字说明原因 */
+  .pane[data-intake="reject"] .compose { transform: none; box-shadow: none }
+
+  /* 说的是动词，不是「把文件拖到这里」—— 松手之前就知道会得到什么 */
+  .intake {
+    margin: 0 0 7px; padding: 0 2px; font: 500 11.5px var(--ui);
+    animation: intakein .12s var(--ease-out) both;
+  }
+  .intake[data-tone="attach"] { color: var(--accent) }
+  .intake[data-tone="ref"] { color: var(--net) }
+  .intake[data-tone="insert"] { color: var(--ok) }
+  .intake[data-tone="reject"] { color: var(--faint) }
+  @keyframes intakein { from { opacity: 0; transform: translateY(3px) } to { opacity: 1; transform: none } }
+
+  /* 附件是「这一轮要带上的东西」，所以它贴在输入框上沿，不在别处。
+     连着贴两张截图，只有文件名不一样 —— 而那正是卡片唯一要说清的事，
+     所以缩略图不是装饰。 */
+  .shots { list-style: none; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 0 2px 8px }
+  .shot {
+    display: inline-flex; align-items: center; gap: 8px; padding: 4px 4px 4px 5px;
+    border: 1px solid var(--border); border-radius: 7px; background: var(--raised);
+    animation: shotin .1s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 45ms);
+  }
+  @keyframes shotin { from { opacity: 0; transform: scale(.94) } to { opacity: 1; transform: none } }
+  .shot .thumb {
+    width: 30px; height: 30px; flex: none; border-radius: 4px; background: var(--overlay);
+    background-size: cover; background-position: center;
+  }
+  .shot .glyph {
+    width: 30px; height: 30px; flex: none; border-radius: 4px; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--net) 12%, transparent); color: var(--net);
+    font: 500 9.5px var(--mono); letter-spacing: .04em;
+  }
+  .shot .meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding-right: 2px }
+  .shot .nm { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 11.5px var(--mono); color: var(--text) }
+  .shot .sz { font: 400 10px var(--mono); color: var(--ghost) }
+  /* 收起来的粘贴要能原样放回去 —— 自动改掉用户手打的内容，代价比帮的忙大 */
+  .shot .undo {
+    align-self: flex-start; border: 0; background: none; padding: 0; cursor: pointer;
+    font: 400 10px var(--mono); color: var(--faint); text-decoration: underline;
+    text-decoration-style: dotted; text-underline-offset: 2px;
+  }
+  .shot .undo:hover { color: var(--accent) }
+  .shot .x {
+    width: 22px; height: 22px; flex: none; border: 0; border-radius: var(--r-sm); cursor: pointer;
+    background: transparent; color: var(--ghost); font: 400 13px/1 var(--mono);
+    display: grid; place-items: center; transition: color .12s, background .12s;
+  }
+  .shot .x:hover { color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent) }
+  .shot button:focus-visible, .intake:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .shots .warn { font: 400 11px var(--ui); color: var(--accent) }
 
   .compose {
@@ -1578,7 +1683,9 @@
     .call, .nest, .ask, .hits > *, .steps > *, .term-l, .dl, .plan .s, .find,
     .ag, .file, .jump, .menu, .nest-ret, .hl .cost, .sym, .pip[data-settled],
     .big .v[data-flash], .plan .s[data-done] .b,
-    .rmark, .rmark path, .await i, .apv, .guard, .medit, .medit-r, .endbar { animation: none !important }
+    .rmark, .rmark path, .await i, .apv, .guard, .medit, .medit-r, .endbar,
+    .rcpt[data-lvl="ok"], .rrow, .shot, .intake { animation: none !important }
+    .pane[data-intake] .compose { transform: none !important }
     .rmark path { stroke-dashoffset: 0 !important }
     /* 三个状态本来就靠颜色和那行字说话，停掉动画不丢任何信息 */
     .reload, .reload .rdot, .rnote { animation: none !important }
@@ -3577,3 +3684,36 @@
   .ctxpop .row .v { font: 400 10.5px var(--mono); color: var(--text); font-variant-numeric: tabular-nums }
   .ctxpop .row .p { width: 30px; text-align: right; font: 400 10px var(--mono); color: var(--ghost) }
   .ctxpop .foot { margin: 3px 0 0; font: 400 10px/1.5 var(--ui); color: var(--ghost) }
+
+  /* 存储：一屏三段 —— 占了多少、放在哪、正在搬什么。条形按最大的那一项归一，
+     所以读的是相对关系而不是绝对像素；数字全部等宽对齐，因为它们是拿来比的。 */
+  .storage .vol { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px }
+  .storage .vol .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px }
+  .storage .vol .nm { font: 500 12px var(--ui); color: var(--text) }
+  .storage .vol .sz { font: 400 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
+  .storage .meter { height: 5px; border-radius: var(--r-xs); background: var(--hair); overflow: hidden }
+  .storage .meter > i { display: block; height: 100%; background: var(--accent); transition: width var(--t-line) var(--ease-out) }
+  .storage .drives { margin: 10px 0 0 }
+  .storage .drives p { margin: 0; font: 400 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
+
+  .storage .item { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-sm); margin-bottom: 8px }
+  .storage .item .l { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 }
+  .storage .item .l b { font: 600 12px var(--ui); color: var(--text) }
+  .storage .item .hint { font: 400 11px var(--ui); color: var(--muted) }
+  .storage .item .p { font: 400 10.5px var(--mono); color: var(--ghost); word-break: break-all }
+  /* 被环境变量钉住、或本来就不可移动 —— 说明为什么这一行没有按钮 */
+  .storage .item .held { font: 400 10.5px var(--mono); color: var(--warn) }
+
+  .storage .mover { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 4px }
+  .storage .mover input { width: 100%; padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--surface); color: var(--text); font: 400 11px var(--mono) }
+  .storage .mover input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .storage .mover .acts { display: flex; gap: 8px; justify-content: flex-end }
+  .storage .refusals { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px }
+  .storage .refusals li { font: 400 11px/1.5 var(--ui); color: var(--err) }
+  .storage .ready { margin: 0; font: 400 11px/1.5 var(--ui); color: var(--muted) }
+  .storage .moving .failed { margin: 0; font: 400 11px/1.5 var(--ui); color: var(--err) }
+  .storage .moving .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 5px }
+  .storage .moving .nm { font: 500 12px var(--ui); color: var(--text) }
+  .storage .moving .sz { font: 400 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }

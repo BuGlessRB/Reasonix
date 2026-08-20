@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
-import type { ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe } from "../port/port";
+import type { Protocol, ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe } from "../port/port";
 import { KIND_LABEL, accountKey, accountLabel, disambiguate, hostOf, nameFrom, vendorLabel } from "./vendors";
 
 // A connection is an account, not a config row. One endpoint answering two
@@ -12,6 +12,7 @@ import { KIND_LABEL, accountKey, accountLabel, disambiguate, hostOf, nameFrom, v
 
 type Port = {
   providers(): Promise<ProviderEntry[]>;
+  protocols(): Promise<Protocol[]>;
   probeProvider(baseUrl: string, apiKey: string): Promise<ProviderProbe>;
   saveProvider(draft: {
     name: string; kind: string; baseUrl: string; apiKey: string; models: string[];
@@ -277,9 +278,9 @@ function Conn({
           </span>
           <span className="why">
             {!found.ok && found.error}
-            {found.ok && found.kind !== entry.kind &&
+            {found.ok && found.matches === false &&
               t("记的是 {had}，但它答的是 {got}。", { had: t(KIND_LABEL[entry.kind] ?? entry.kind), got: t(KIND_LABEL[found.kind ?? ""] ?? found.kind ?? "") })}
-            {found.ok && found.kind === entry.kind && "key 有效，协议也对得上。"}
+            {found.ok && found.matches !== false && "key 有效，协议也对得上。"}
             {found.ok && found.noProxy && " 走代理连不上、直连可以。"}
           </span>
         </div>
@@ -490,8 +491,18 @@ function AddProvider({
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [probe, setProbe] = useState<ProviderProbe | null>(null);
+  const [catalog, setCatalog] = useState<Protocol[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // The endpoint says which wires are on the table and the kernel says what
+  // each one is, so neither list is written here.
+  useEffect(() => {
+    port.protocols().then(setCatalog).catch(() => setCatalog([]));
+  }, [port]);
+  const choices = probe ? (probe.kinds?.length ? probe.kinds : [probe.kind]) : [];
+  const searchOn = choices.filter((k) => catalog.find((p) => p.kind === k)?.serverWebSearch);
+  const searchSplit = searchOn.length > 0 && searchOn.length < choices.length;
 
   // Everything below is editable after the probe, because every one of these
   // is something the endpoint could not tell us for certain.
@@ -602,11 +613,19 @@ function AddProvider({
             <label className="grow">
               <span>{t("接入方式")}</span>
               <select value={kind} onChange={(e) => setKind(e.target.value)}>
-                <option value="openai">{t("OpenAI 兼容")}</option>
-                <option value="anthropic">{t("Anthropic 兼容")}</option>
+                {choices.map((k) => (
+                  <option key={k} value={k}>{t(KIND_LABEL[k] ?? k)}</option>
+                ))}
               </select>
             </label>
           </div>
+          {searchSplit && (
+            <p className="acct-note">
+              {t("这个地址两条线都答得上来。{on} 那条上联网搜索由供应商自己跑，另一条没有 —— 那是协议的差别，不是设置。", {
+                on: searchOn.map((k) => t(KIND_LABEL[k] ?? k)).join("、"),
+              })}
+            </p>
+          )}
           {probe.ambiguous && (
             <p className="acct-note">
               {t("两种接入方式的模型列表它都答得上来，光看列表分不出来 —— 聊天入口通常不在同一个路径下，选错了聊天会报错。要两条都用就再添加一次、选另一个。")}

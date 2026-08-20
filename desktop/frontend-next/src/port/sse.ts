@@ -1,7 +1,8 @@
 import { download } from "./download";
-import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion, DeviceGrant, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, PermissionLists, PermissionRules, SandboxSettings, McpCatalog, McpDraft, McpDraftServer, McpInstallResult, McpInstallScope, CapabilityScope, ScopeLayer, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
+import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion, DeviceGrant, Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, PermissionLists, PermissionRules, SandboxSettings, McpCatalog, McpDraft, McpDraftServer, McpInstallResult, McpInstallScope, CapabilityScope, ScopeLayer, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
 import { HttpError, type Attachment, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseHttp } from "./sse_http";
+import type { StoragePlan, StorageState } from "./storage";
 import type { WireEvent } from "./wire";
 
 // The running project is the default, so its requests stay the bare path they
@@ -317,6 +318,10 @@ export class SsePort extends SseHttp implements AgentPort {
     return this.get<ProviderEntry[]>("/providers");
   }
 
+  protocols() {
+    return this.get<Protocol[]>("/providers/protocols");
+  }
+
   // The failure message is the answer here — a 401, a wrong path and "no chat
   // models" send the user to three different fixes — so it is read out of the
   // body rather than thrown away as a status code.
@@ -363,6 +368,20 @@ export class SsePort extends SseHttp implements AgentPort {
 
   setRole(role: string, ref: string) {
     return this.post("/roles", { role, ref });
+  }
+
+  storage() {
+    return this.get<StorageState>("/storage");
+  }
+
+  // Both answer with a plan: a refused move is reported in the body rather
+  // than as a failed request, because its refusals are what the panel shows.
+  planStorageMove(root: string, dir: string) {
+    return this.post0<StoragePlan>("/storage/plan", { root, dir });
+  }
+
+  moveStorage(root: string, dir: string) {
+    return this.post0<StoragePlan>("/storage/move", { root, dir });
   }
 
   // Like the add-a-source probe, the interesting answer is in the body: a

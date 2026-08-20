@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/agentpreset"
 	"reasonix/internal/config"
+	"reasonix/internal/provider"
 )
 
 func (s *Server) preset(w http.ResponseWriter, r *http.Request) {
@@ -39,18 +40,19 @@ func (s *Server) model(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	catalog := s.ctl().ProviderCatalog()
 	// The switch only rebuilt the running controller. Without this the next
 	// launch boots from default_model and lands back on whatever was there
 	// before, which reads as the choice not having been saved at all — the CLI
 	// and the old desktop have both persisted it since they had a picker.
-	persistDefaultModel(ref)
+	persistDefaultModel(ref, catalog)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // persistDefaultModel records the choice in the user config. A refusal is worth
 // a log and nothing more: the live switch already succeeded, and failing the
 // request would say the model did not change when it did.
-func persistDefaultModel(ref string) {
+func persistDefaultModel(ref string, catalog []provider.Descriptor) {
 	path := config.UserConfigPath()
 	if path == "" {
 		return
@@ -60,7 +62,7 @@ func persistDefaultModel(ref string) {
 	unlock := config.LockUserConfigEdits()
 	defer unlock()
 	edit := config.LoadForEdit(path)
-	if err := edit.SetDefaultModel(ref); err != nil {
+	if err := edit.SetDefaultModel(ref, catalog); err != nil {
 		slog.Warn("serve: persist default model", "ref", ref, "err", err)
 		return
 	}

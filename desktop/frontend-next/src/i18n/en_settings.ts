@@ -165,8 +165,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "卡住了，要你介入": "Stuck — needs you",
   "端点要求的额外设置": "Extra settings this endpoint demands",
   "上下文窗口（tokens）": "Context window (tokens)",
-  "留空 = 用内置的已知值；0 = 这个来源不自动压缩":
-    "Empty = use the built-in known value; 0 = never auto-compact on this source",
+  "留空 = 用内置的已知值；自己加的来源没有内置值，那就是不压缩":
+    "Empty = use the built-in known value; a source you added yourself has none, which means no compaction",
   "填模型文档写的上下文上限，不是最大输出。填小了会一直压缩，填大了会在真到上限时被端点拒绝。":
     "Use the context limit from the model's documentation, not its max output. Too small and it compacts constantly; too large and the endpoint refuses once the real limit is hit.",
   "思考参数": "Thinking parameter",

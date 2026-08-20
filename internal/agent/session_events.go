@@ -573,7 +573,7 @@ func loadSessionMessagesWithLimits(sessionPath string, limits sessionReplayLimit
 			return nil, true, false, replayErr
 		}
 		if replay.records > 0 {
-			return replay.msgs, true, replay.damaged, nil
+			return resolveReplayedMessages(sessionPath, replay)
 		}
 		// Defensive: the probe saw a native head but nothing replayed; fall
 		// back to the checkpoint and let the next save rebuild the log.

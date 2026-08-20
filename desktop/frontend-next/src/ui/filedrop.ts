@@ -8,6 +8,9 @@ import type { HubPort } from "../port/hub";
 export interface Dropped {
   paths: string[];
   files: File[];
+  // A drag that carried no file at all — a link, a selection. Absent for every
+  // drop that did, so the two never have to be told apart downstream.
+  text?: string;
 }
 
 // How long a window's drop waits for the paths before it settles for the bytes
@@ -29,14 +32,14 @@ interface Clock {
 // disk, and answering that with nothing is how a drop looks broken.
 export interface DropRouter<Z> {
   over(zone: Z | null): void;
-  dropped(zone: Z, files: File[]): void;
+  dropped(zone: Z, files: File[], text?: string): void;
   paths(list: string[]): void;
   forget(zone: Z): void;
 }
 
 export function createDropRouter<Z>(deliver: (zone: Z, d: Dropped) => void, clock: Clock): DropRouter<Z> {
   let hover: Z | null = null;
-  let pending: { id: number; zone: Z; files: File[] } | null = null;
+  let pending: { id: number; zone: Z; files: File[]; text?: string } | null = null;
   let seq = 0;
   let settled = -Infinity;
 
@@ -50,21 +53,28 @@ export function createDropRouter<Z>(deliver: (zone: Z, d: Dropped) => void, cloc
     over(zone) {
       hover = zone;
     },
-    dropped(zone, files) {
+    dropped(zone, files, text) {
       // The paths beat the DOM event to it, and this is the same drop.
       if (clock.now() - settled < clock.grace) return;
+      // No file was dropped, so no host will ever name one: waiting out the
+      // grace here would only make a dropped link feel broken.
+      if (files.length === 0 && text) {
+        settle(zone, { paths: [], files, text });
+        return;
+      }
       const id = ++seq;
-      pending = { id, zone, files };
+      pending = { id, zone, files, text };
       clock.wait(() => {
-        if (pending?.id === id) settle(zone, { paths: [], files });
+        if (pending?.id === id) settle(zone, { paths: [], files, text });
       }, clock.grace);
     },
     paths(list) {
       const zone = pending?.zone ?? hover;
       const files = pending?.files ?? [];
+      const text = pending?.text;
       pending = null;
       if (!zone || list.length === 0) return;
-      settle(zone, { paths: list, files });
+      settle(zone, { paths: list, files, text });
     },
     forget(zone) {
       if (hover === zone) hover = null;
@@ -76,7 +86,10 @@ export function createDropRouter<Z>(deliver: (zone: Z, d: Dropped) => void, cloc
 interface Zone {
   el: HTMLElement;
   onDrop: (d: Dropped) => void;
-  onOver: (over: boolean) => void;
+  // The transfer rides along so a zone can say what letting go will do while
+  // the drag is still in the air; it names kinds and MIME types only, never a
+  // path and never bytes.
+  onOver: (over: boolean, dt: DataTransfer | null) => void;
 }
 
 const zones = new Set<Zone>();
@@ -84,7 +97,8 @@ let router: DropRouter<Zone> | null = null;
 let lit: Zone | null = null;
 
 function carriesFiles(e: DragEvent): boolean {
-  return !!e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+  const types = e.dataTransfer ? [...e.dataTransfer.types] : [];
+  return types.includes("Files") || types.includes("text/uri-list") || types.includes("text/plain");
 }
 
 function zoneAt(target: EventTarget | null): Zone | null {
@@ -95,11 +109,11 @@ function zoneAt(target: EventTarget | null): Zone | null {
   return null;
 }
 
-function light(next: Zone | null) {
+function light(next: Zone | null, dt: DataTransfer | null = null) {
   if (lit === next) return;
-  lit?.onOver(false);
+  lit?.onOver(false, null);
   lit = next;
-  lit?.onOver(true);
+  lit?.onOver(true, dt);
   router?.over(next);
 }
 
@@ -121,7 +135,7 @@ export function install(hub: HubPort) {
       if (!carriesFiles(e)) return;
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
-      light(zoneAt(e.target));
+      light(zoneAt(e.target), e.dataTransfer);
     },
     true,
   );
@@ -142,7 +156,11 @@ export function install(hub: HubPort) {
       e.preventDefault();
       const zone = zoneAt(e.target) ?? lit;
       light(null);
-      if (zone) router?.dropped(zone, [...(e.dataTransfer?.files ?? [])]);
+      if (!zone) return;
+      const dt = e.dataTransfer;
+      const files = [...(dt?.files ?? [])];
+      const text = files.length > 0 ? undefined : dt?.getData("text/uri-list") || dt?.getData("text/plain") || undefined;
+      router?.dropped(zone, files, text);
     },
     true,
   );
@@ -162,8 +180,8 @@ export function install(hub: HubPort) {
 // ref object would keep the old one registered.
 export function useFileDrop(
   onDrop: (d: Dropped) => void,
-  onOver: (over: boolean) => void,
-): (node: HTMLElement | null) => void {
+  onOver: (over: boolean, dt: DataTransfer | null) => void,
+): (node: HTMLElement | null) => (() => void) | void {
   // Read through a ref so a caller does not have to memoize either callback to
   // avoid re-registering the zone on every render.
   const live = useRef({ onDrop, onOver });
@@ -173,7 +191,7 @@ export function useFileDrop(
     const zone: Zone = {
       el: node,
       onDrop: (d) => live.current.onDrop(d),
-      onOver: (over) => live.current.onOver(over),
+      onOver: (over, dt) => live.current.onOver(over, dt),
     };
     zones.add(zone);
     return () => {

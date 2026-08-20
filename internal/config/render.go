@@ -611,6 +611,8 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		b.WriteString("\n")
 	}
 
+	renderStorage(&b, c, scope)
+
 	// [secrets] is user/global only: LoadForRoot discards project values, so
 	// the project scope never renders it. Rendering it here is what lets a
 	// user's saved toggles survive config rewrites (WriteFile re-renders the
@@ -1361,6 +1363,23 @@ func renderLSPConfig(b *strings.Builder, cfg LSPConfig) {
 		}
 		b.WriteString("\n")
 	}
+}
+
+// renderStorage writes the relocated roots, from the struct so a move survives
+// a full rewrite. User/global only: a cloned repo must not redirect this machine.
+func renderStorage(b *strings.Builder, c *Config, scope RenderScope) {
+	if scope == RenderScopeProject || len(c.Storage) == 0 {
+		return
+	}
+	b.WriteString("[storage]   # where data lives; user/global only, ./reasonix.toml cannot override\n")
+	for _, id := range RootIDs() {
+		dir := strings.TrimSpace(c.Storage[string(id)])
+		if dir == "" || !RootRelocatable(id) {
+			continue
+		}
+		fmt.Fprintf(b, "%s = %q\n", renderTOMLKeyPart(string(id)), dir)
+	}
+	b.WriteString("\n")
 }
 
 func renderTOMLKeyPart(key string) string {

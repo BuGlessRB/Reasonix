@@ -174,6 +174,7 @@ export const EN: Record<string, string> = {
   "松手 → 插入到光标处": "Release to insert at the caret",
   "工作区外的文件引用不到 · 这里放不下": "A file outside the workspace cannot be referenced — this drop has nowhere to go",
   "图片": "image",
+  "文件": "file",
   "粘贴的文本": "pasted text",
   "{n} 行 · 展开到输入框": "{n} lines · put it back in the box",
   "移除这张图":"Remove this image",

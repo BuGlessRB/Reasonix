@@ -1,7 +1,9 @@
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, ScopeLayer, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, McpRisk, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, ThemePack } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, ScopeLayer, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, ThemePack } from "./port";
 import type { WireEvent } from "./wire";
 import { MockProvider } from "./mock_provider";
 import { SCRIPT } from "./fixture";
+import { mockStorage, mockStoragePlan } from "./mock_storage";
+import { risksOf, toEntry } from "./mock_mcp";
 
 
 export class MockPort extends MockProvider implements AgentPort {
@@ -756,6 +758,18 @@ export class MockPort extends MockProvider implements AgentPort {
   async setPreset(preset: Preset) {
     this.state.preset = preset;
   }
+  async storage() {
+    return mockStorage();
+  }
+
+  async planStorageMove(root: string, dir: string) {
+    return mockStoragePlan(root, dir);
+  }
+
+  async moveStorage(root: string, dir: string) {
+    return mockStoragePlan(root, dir);
+  }
+
   async setModel(ref: string) {
     this.state.modelRef = ref;
     this.state.label = ref.split("/").pop() ?? ref;
@@ -766,35 +780,5 @@ export class MockPort extends MockProvider implements AgentPort {
   async setGoal(text: string) {
     this.state.goal = text;
   }
-}
-
-function toEntry(s: McpDraftServer): McpEntry {
-  return {
-    name: s.name,
-    state: "idle",
-    enabled: true,
-    transport: s.transport,
-    source: "user config",
-    tools: 0,
-  };
-}
-
-const SECRETY = /auth|token|secret|credential|api[-_]?key|cookie/i;
-
-function risksOf(servers: McpDraftServer[]): McpRisk[] {
-  const out: McpRisk[] = [];
-  for (const s of servers) {
-    if (s.command) {
-      out.push({ server: s.name, kind: "shell", field: "command", detail: [s.command, ...(s.args ?? [])].join(" ") });
-    }
-    if (s.url) out.push({ server: s.name, kind: "unknown-host", field: "url", detail: s.url });
-    for (const [k, v] of Object.entries(s.env ?? {})) {
-      if (SECRETY.test(k) && !v.startsWith("$")) {
-        out.push({ server: s.name, kind: "secret", field: "env." + k,
-          detail: `明文写进配置文件；改成 \${${k.toUpperCase()}} 可以只留在环境变量里` });
-      }
-    }
-  }
-  return out;
 }
 

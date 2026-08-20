@@ -15,12 +15,12 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"reasonix/internal/extension/protocol"
 	"reasonix/internal/fileutil"
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/mcpdiag"
 	"reasonix/internal/netclient"
 	"reasonix/internal/permission"
+	"reasonix/internal/provider"
 )
 
 var validDesktopExternalOpenerID = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
@@ -41,39 +41,40 @@ const (
 	listDeny  = "deny"
 )
 
-// SetDefaultModel points default_model at an existing model. It accepts both
-// forms used by the runtime resolver:
-//   - "provider"          — the provider's own default model;
-//   - "provider/model"    — that specific model under that provider.
-//
-// Either is rejected when the target does not exist, so a UI can't strand
-// the config on a model that doesn't exist. Plugin-namespaced refs
-// (plugin/<plugin>/<provider>/<model>) are the exception: they belong to
-// extension sidecars, so the config catalog cannot vouch for them — boot's
-// merged resolver gates them at the next launch instead.
-func (c *Config) SetDefaultModel(name string) error {
+// ModelRefSelectable reports whether ref names a model this installation can be
+// pointed at, in any role: one the configuration carries, or one only the live
+// catalog vouches for — extension-hosted models never reach a config file. A nil
+// catalog asks the configuration alone. Every surface that offers a model decides
+// with this, so what it offers and what it accepts cannot drift into two sets.
+func (c *Config) ModelRefSelectable(ref string, catalog []provider.Descriptor) bool {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return false
+	}
+	if _, ok := c.ResolveModel(ref); ok {
+		return true
+	}
+	for _, d := range catalog {
+		if strings.TrimSpace(d.Ref) == ref {
+			return true
+		}
+	}
+	return false
+}
+
+// SetDefaultModel points default_model at any model ModelRefSelectable accepts:
+// a provider name, a "provider/model" ref, or a ref the live catalog carries.
+// Anything else is refused, so a UI cannot strand the config on a model that
+// will not resolve at the next launch.
+func (c *Config) SetDefaultModel(name string, catalog []provider.Descriptor) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("set default: empty name")
 	}
-	if _, ok := c.ResolveModel(name); !ok && protocol.PluginRefOwner(name) == "" {
+	if !c.ModelRefSelectable(name, catalog) {
 		return fmt.Errorf("set default: no such model %q (configured: %s)", name, c.providerNames())
 	}
 	c.DefaultModel = name
-	return nil
-}
-
-// SetPlannerModel sets (or, with "", clears) agent.planner_model for two-model
-// collaboration. A non-empty name must be a configured provider.
-func (c *Config) SetPlannerModel(name string) error {
-	if name == "" {
-		c.Agent.PlannerModel = ""
-		return nil
-	}
-	if _, ok := c.Provider(name); !ok {
-		return fmt.Errorf("set planner: no provider %q (configured: %s)", name, c.providerNames())
-	}
-	c.Agent.PlannerModel = name
 	return nil
 }
 

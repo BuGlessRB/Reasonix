@@ -1,4 +1,4 @@
-import type { ProviderEdit, ProviderEntry, ProviderProbe } from "./port";
+import type { Protocol, ProviderEdit, ProviderEntry, ProviderProbe } from "./port";
 import { MockBoundary } from "./mock_boundary";
 
 // The sources half of the fixture. Chained on for the reason the others are:
@@ -36,6 +36,15 @@ export class MockProvider extends MockBoundary {
 
   async providers(): Promise<ProviderEntry[]> {
     return this.sources;
+  }
+
+  // Mirrors the kernel catalog: two wires answer one OpenAI model listing.
+  async protocols(): Promise<Protocol[]> {
+    return [
+      { kind: "openai", discovery: "openai", serverWebSearch: false, reasoningParams: true },
+      { kind: "responses", discovery: "openai", serverWebSearch: true, reasoningParams: false },
+      { kind: "anthropic", discovery: "anthropic", serverWebSearch: true, reasoningParams: false },
+    ];
   }
 
   async probeProvider(): Promise<ProviderProbe> {

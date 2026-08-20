@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -435,4 +436,22 @@ func TestSessionLeaseReleaseRetiresLockSidecars(t *testing.T) {
 		t.Fatalf("holder's lease lock must survive a failed acquire: %v", err)
 	}
 	first.Release()
+}
+
+// The probe exists to name the writers that still save without a lease, so its
+// origin has to point past this package — a report that says "the session
+// package saved it" names nobody. The frame filter is derived, not written out,
+// so this also catches a package move quietly turning it into a no-op.
+func TestUnleasedWriteOriginPointsPastTheSessionPackage(t *testing.T) {
+	prefix := sessionPackageFramePrefix()
+	if prefix == "" || !strings.HasSuffix(prefix, ".") {
+		t.Fatalf("frame prefix = %q, want this package's own, dot-terminated", prefix)
+	}
+	origin := unleasedWriteOrigin()
+	if origin == "" || origin == "unknown" {
+		t.Fatalf("origin = %q, want a caller", origin)
+	}
+	if strings.HasPrefix(origin, prefix) {
+		t.Fatalf("origin = %q, want a frame outside %s", origin, prefix)
+	}
 }

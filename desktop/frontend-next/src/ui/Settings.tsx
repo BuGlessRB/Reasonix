@@ -20,6 +20,7 @@ import { Roles } from "./Roles";
 import { Boundary } from "./Boundary";
 import { Versions } from "./Versions";
 import { Memory } from "./Memory";
+import { Storage } from "./Storage";
 import { Appearance, SCHEMES } from "./Appearance";
 import { Exception, ScopeBar } from "./CapabilityScope";
 
@@ -35,7 +36,7 @@ const APPROVALS: [ApprovalMode, string, string][] = [
   ["yolo", "全放行", "不问了。只在你完全信任这个工作区时用"],
 ];
 
-type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "memory" | "account" | "versions" | "appearance" | "advanced";
+type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "memory" | "storage" | "account" | "versions" | "appearance" | "advanced";
 
 // What still lives in the old desktop app. Bots are not on the roadmap, so
 // they are not a promise to keep here either. Signing in and reading
@@ -54,6 +55,7 @@ const NAV: [Section, string][] = [
   ["ext", "扩展"],
   ["network", "网络"],
   ["memory", "记忆"],
+  ["storage", "存储"],
   ["account", "账号"],
   ["versions", "版本"],
   ["appearance", "外观"],
@@ -244,6 +246,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
     ext: broken ? t("{n} 个异常", { n: broken }) : packages.length ? t("{n} 个包", { n: packages.length }) : `${looseMcp.length + looseOn}`,
     network: netMode,
     memory: memCount ? t("{n} 条", { n: memCount }) : "",
+    storage: "",
     account: acct === null ? "" : acct.signedIn ? (acct.user?.label ?? t("已登录")) : t("未登录"),
     versions: "",
     appearance: t(SCHEMES.find(([id]) => id === theme)?.[1] ?? ""),
@@ -559,6 +562,10 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, l
             >
               <Memory port={port} />
             </Group>
+          )}
+
+          {at === "storage" && (
+            <Group title={t("存储")} hint={t("它把数据写在哪、占了多少。会话和索引会一直长，配置和凭据不会 —— 所以只有前者能搬走，搬迁在重启后生效。")}><Storage port={port} /></Group>
           )}
 
           {at === "appearance" && (

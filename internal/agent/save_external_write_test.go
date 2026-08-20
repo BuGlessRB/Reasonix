@@ -102,3 +102,65 @@ func TestRepeatedExternalRewritesShareOneBranch(t *testing.T) {
 		t.Fatalf("six external rewrites over the same unsaved turn produced %d branches, want 1", len(branches))
 	}
 }
+
+// What a conflict cannot say today is why it happened, and the answer lives in
+// where the two transcripts parted: a turn whose role changed under us is this
+// process reshaping its own history, while a different turn at the same index
+// is another writer. The error carries the position and the two roles — never
+// the content, which a diagnostic must not carry off the machine.
+func TestSnapshotConflictNamesWhereTheTranscriptsParted(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.jsonl")
+	seed := []provider.Message{
+		{Role: provider.RoleUser, Content: "你好"},
+		{Role: provider.RoleAssistant, Content: "hi"},
+	}
+	rewriteTranscriptOutsideReasonix(t, path, seed...)
+
+	// The live runtime reshaped the assistant turn into a local-only row, the
+	// way cancel cleanup does, and added one more.
+	live := NewSession("sys")
+	live.Add(seed[0])
+	live.Add(provider.Message{Role: provider.RoleTool, ToolCallID: provider.LocalOnlyToolID,
+		Name: provider.LocalOnlyToolName, LocalOnly: true, Content: "hi"})
+	live.Add(provider.Message{Role: provider.RoleUser, Content: "还没落盘"})
+
+	err := live.SaveSnapshot(path)
+	var conflict *SessionSnapshotConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("save = %v, want a snapshot conflict", err)
+	}
+	if conflict.DivergedAt != 2 {
+		t.Fatalf("diverged at %d, want index 2 (the reshaped turn, after the system prompt)", conflict.DivergedAt)
+	}
+	if conflict.DiskRole != string(provider.RoleAssistant) || conflict.SnapshotRole != string(provider.RoleTool) {
+		t.Fatalf("roles = %q/%q, want assistant on disk and tool in memory", conflict.DiskRole, conflict.SnapshotRole)
+	}
+}
+
+// A transcript the other side has merely not caught up with parted nowhere:
+// reporting an index there would send a reader looking for a rewrite that
+// never happened.
+func TestFirstStorageDivergenceTreatsAPrefixAsAgreement(t *testing.T) {
+	shared := []provider.Message{
+		{Role: provider.RoleSystem, Content: "sys"},
+		{Role: provider.RoleUser, Content: "你好"},
+	}
+	longer := append(append([]provider.Message(nil), shared...),
+		provider.Message{Role: provider.RoleAssistant, Content: "hi"})
+
+	for _, tc := range []struct {
+		name       string
+		disk, snap []provider.Message
+	}{
+		{name: "snapshot ahead", disk: shared, snap: longer},
+		{name: "disk ahead", disk: longer, snap: shared},
+		{name: "identical", disk: longer, snap: longer},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if at, diskRole, snapRole := firstStorageDivergence(tc.disk, tc.snap); at != -1 || diskRole != "" || snapRole != "" {
+				t.Fatalf("divergence = %d %q/%q, want none", at, diskRole, snapRole)
+			}
+		})
+	}
+}

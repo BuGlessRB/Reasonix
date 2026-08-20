@@ -154,7 +154,9 @@ export function Onboarding({ port, setup, onDone }: Props) {
               <span>{KIND_LABEL[found.kind] || found.kind}</span>
               <span className="k">{found.models.length} 个模型 · key 存本机</span>
             </div>
-            {found.ambiguous && (
+            {/* More than one wire answered, or one listing several may be
+                driven with: either way the line above is a preference. */}
+            {(found.ambiguous || (found.kinds?.length ?? 0) > 1) && (
               <p className="onb-why">
                 {t("这个端点不止一种协议答应了，上面是偏好而不是事实。连上之后能在设置里换。")}
               </p>

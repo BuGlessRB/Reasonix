@@ -125,48 +125,6 @@ type snapshotWriteDecision struct {
 	ledgerStale bool
 }
 
-type SessionSnapshotConflictKind string
-
-const (
-	SessionSnapshotConflictStalePrefix SessionSnapshotConflictKind = "stale_prefix"
-	SessionSnapshotConflictDiverged    SessionSnapshotConflictKind = "diverged"
-)
-
-type SessionSnapshotConflictError struct {
-	Path             string
-	Kind             SessionSnapshotConflictKind
-	ExistingMessages int
-	SnapshotMessages int
-	BaseRevision     int64
-	DiskRevision     int64
-}
-
-func (e *SessionSnapshotConflictError) Error() string {
-	if e == nil {
-		return ErrSessionSnapshotConflict.Error()
-	}
-	switch e.Kind {
-	case SessionSnapshotConflictStalePrefix:
-		return fmt.Sprintf("%s: %s has %d messages at revision %d; stale snapshot has %d messages from revision %d",
-			ErrSessionSnapshotConflict, e.Path, e.ExistingMessages, e.DiskRevision, e.SnapshotMessages, e.BaseRevision)
-	default:
-		return fmt.Sprintf("%s: %s diverged on disk (%d messages, revision %d) from snapshot (%d messages, revision %d)",
-			ErrSessionSnapshotConflict, e.Path, e.ExistingMessages, e.DiskRevision, e.SnapshotMessages, e.BaseRevision)
-	}
-}
-
-func (e *SessionSnapshotConflictError) Unwrap() error {
-	return ErrSessionSnapshotConflict
-}
-
-func SnapshotConflictKind(err error) (SessionSnapshotConflictKind, bool) {
-	var conflict *SessionSnapshotConflictError
-	if errors.As(err, &conflict) && conflict != nil {
-		return conflict.Kind, true
-	}
-	return "", false
-}
-
 const RecoveryBranchDefaultName = "Recovered unsaved changes from stale runtime"
 
 type RecoveryBranchOptions struct {
@@ -397,6 +355,10 @@ func (s *Session) saveLocked(path string, mode sessionSaveMode) error {
 		if err != nil {
 			slog.Warn("session: keeping save after display read-model append failure", "path", path, "err", err)
 		}
+		// A declined in-place append must not leave the checkpoint describing
+		// the transcript from before this save; republishing it also re-arms
+		// the append fast path for every later save.
+		displayModelCurrent, indexFrom := settleDisplayReadModel(path, msgs, displayModelCurrent, decision.appendFrom)
 		revision, err := recordSessionContentRevision(path, digest, decision.revision)
 		if err != nil {
 			return err
@@ -410,7 +372,7 @@ func (s *Session) saveLocked(path string, mode sessionSaveMode) error {
 			slog.Warn("session: keeping save after event index write failure", "path", path, "err", err)
 		}
 		if displayModelCurrent {
-			if err := refreshSessionDisplayIndex(path, msgs, digest, revision, decision.appendFrom); err != nil {
+			if err := refreshSessionDisplayIndex(path, msgs, digest, revision, indexFrom); err != nil {
 				// The append boundary lets the refresh extend the previous index
 				// instead of re-encoding the whole transcript.
 				slog.Warn("session: keeping save after display index write failure", "path", path, "err", err)
@@ -631,38 +593,11 @@ func (s *Session) checkSnapshotWrite(path string, next []provider.Message, nextD
 	}
 	if messagesHavePrefix(existing, next) || messagesHavePrefixWithCompatibleSystem(existing, next) ||
 		(rawDiffers && (messagesHavePrefix(raw, next) || messagesHavePrefixWithCompatibleSystem(raw, next))) {
-		return snapshotWriteDecision{}, &SessionSnapshotConflictError{
-			Path:             path,
-			Kind:             SessionSnapshotConflictStalePrefix,
-			ExistingMessages: len(existing),
-			SnapshotMessages: len(next),
-			BaseRevision:     baseState.revision,
-			DiskRevision:     currentRevision,
-		}
+		return snapshotWriteDecision{}, snapshotConflictOfKind(path, SessionSnapshotConflictStalePrefix,
+			existing, next, baseState.revision, currentRevision)
 	}
-	return snapshotWriteDecision{}, &SessionSnapshotConflictError{
-		Path:             path,
-		Kind:             SessionSnapshotConflictDiverged,
-		ExistingMessages: len(existing),
-		SnapshotMessages: len(next),
-		BaseRevision:     baseState.revision,
-		DiskRevision:     currentRevision,
-	}
-}
-
-func snapshotConflict(path string, existing, next []provider.Message, baseRevision, diskRevision int64) error {
-	kind := SessionSnapshotConflictDiverged
-	if messagesHavePrefix(existing, next) || messagesHavePrefixWithCompatibleSystem(existing, next) {
-		kind = SessionSnapshotConflictStalePrefix
-	}
-	return &SessionSnapshotConflictError{
-		Path:             path,
-		Kind:             kind,
-		ExistingMessages: len(existing),
-		SnapshotMessages: len(next),
-		BaseRevision:     baseRevision,
-		DiskRevision:     diskRevision,
-	}
+	return snapshotWriteDecision{}, snapshotConflictOfKind(path, SessionSnapshotConflictDiverged,
+		existing, next, baseState.revision, currentRevision)
 }
 
 func (s *Session) SaveRecoveryBranch(opts RecoveryBranchOptions) (RecoveryBranchInfo, error) {

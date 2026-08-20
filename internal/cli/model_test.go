@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"reasonix/internal/config"
+	"reasonix/internal/control"
 	"reasonix/internal/provider"
 )
 
@@ -124,15 +125,18 @@ func TestPersistModelRejectsUnknownRef(t *testing.T) {
 }
 
 // TestPersistModelAcceptsPluginRef: a plugin-namespaced ref picked in /model
-// persists like any config ref — the config catalog cannot vouch for it, but
-// boot's merged resolver gates it at the next launch.
+// persists like any config ref, on the live catalog's word rather than its own
+// spelling — the config catalog never holds an extension-hosted model.
 func TestPersistModelAcceptsPluginRef(t *testing.T) {
 	isolateUserConfig(t)
 	if _, err := config.SetCredential("DEEPSEEK_API_KEY", "test-key"); err != nil {
 		t.Fatalf("SetCredential: %v", err)
 	}
 
+	// The live catalog is what vouches for an extension model: no config file
+	// holds one, and the picker offered it from here in the first place.
 	m := newTestChatTUI()
+	m.ctrl = newPluginCatalogController(t)
 	m.persistModel("plugin/demo/fake/x")
 
 	body, err := os.ReadFile(config.UserConfigPath())
@@ -141,6 +145,36 @@ func TestPersistModelAcceptsPluginRef(t *testing.T) {
 	}
 	if !strings.Contains(string(body), `default_model = "plugin/demo/fake/x"`) {
 		t.Fatalf("saved config missing plugin default_model ref:\n%s", body)
+	}
+}
+
+// newPluginCatalogController is a runtime whose merged catalog carries one
+// extension-hosted model, the state a plugin install leaves behind.
+func newPluginCatalogController(t *testing.T) *control.Controller {
+	t.Helper()
+	ctrl := control.New(control.Options{ProviderResolver: &provider.StaticResolver{
+		Descriptors: []provider.Descriptor{{Ref: "plugin/demo/fake/x", Model: "x"}},
+	}})
+	t.Cleanup(ctrl.Close)
+	return ctrl
+}
+
+// The namespace is not the permission it used to stand in for: a plugin-shaped
+// ref no catalog carries is a typo, and persisting it strands the next launch
+// on a model nothing can resolve.
+func TestPersistModelRejectsAPluginRefNoCatalogCarries(t *testing.T) {
+	isolateUserConfig(t)
+	if _, err := config.SetCredential("DEEPSEEK_API_KEY", "test-key"); err != nil {
+		t.Fatalf("SetCredential: %v", err)
+	}
+
+	m := newTestChatTUI()
+	m.ctrl = newPluginCatalogController(t)
+	m.persistModel("plugin/ghost/fake/nothing")
+
+	if body, err := os.ReadFile(config.UserConfigPath()); err == nil &&
+		strings.Contains(string(body), "plugin/ghost/fake/nothing") {
+		t.Fatalf("persisted a ref no catalog carries:\n%s", body)
 	}
 }
 

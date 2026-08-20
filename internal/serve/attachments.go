@@ -3,7 +3,10 @@ package serve
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +20,33 @@ import (
 // control enforces the real per-kind limit once these are decoded.
 const maxAttachmentUpload = 25 << 20
 
+// attachmentBytes takes the bytes from whichever half the client had. A desktop
+// drop reports a path and never the bytes, so the host reads the file it was
+// pointed at — bounded to a regular file under the size cap, and still handed to
+// the same saver, which admits nothing that does not sniff as a real image.
+func attachmentBytes(path, data string) ([]byte, error) {
+	if strings.TrimSpace(path) == "" {
+		raw, err := base64.StdEncoding.DecodeString(data)
+		if err != nil {
+			return nil, errors.New("attachment data must be base64")
+		}
+		return raw, nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("read attachment: %w", err)
+	}
+	// A directory or a device would read as something no image sniff would
+	// admit, but refusing here says what was wrong instead of what it was not.
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("attachment path is not a regular file")
+	}
+	if info.Size() > maxAttachmentUpload {
+		return nil, errors.New("attachment is larger than 10 MB")
+	}
+	return os.ReadFile(path)
+}
+
 func (s *Server) attachments(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, (maxAttachmentUpload/3)*4+1024)
 	var body struct {
@@ -25,14 +55,15 @@ func (s *Server) attachments(w http.ResponseWriter, r *http.Request) {
 		// stored name is generated either way.
 		Name string `json:"name"`
 		Data string `json:"data"`
+		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "read attachment: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	raw, err := base64.StdEncoding.DecodeString(body.Data)
+	raw, err := attachmentBytes(body.Path, body.Data)
 	if err != nil {
-		http.Error(w, "attachment data must be base64", http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	root := s.ctl().WorkspaceRoot()

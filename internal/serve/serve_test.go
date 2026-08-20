@@ -295,6 +295,27 @@ func TestHistoryMessagesPreserveToolDetails(t *testing.T) {
 	}
 }
 
+// A turn sent as an attachment and nothing else has no text left once the
+// control blocks come off, and /history carries no attachments. The count is
+// what tells a rebuilding client the turn happened at all.
+func TestHistoryMessagesCountAttachmentsOnATextlessTurn(t *testing.T) {
+	got := historyMessages([]provider.Message{
+		{Role: provider.RoleUser, Content: "<reasoning-language>zh</reasoning-language>",
+			Images: []string{"data:image/png;base64,aa", "data:image/png;base64,bb"}},
+		{Role: provider.RoleUser, Content: "看看这个", RawContent: "看看这个"},
+	})
+
+	if len(got) != 2 {
+		t.Fatalf("history length = %d, want 2", len(got))
+	}
+	if got[0].Content != "" || got[0].Images != 2 {
+		t.Fatalf("attachment-only turn = %+v, want empty text and two images", got[0])
+	}
+	if got[1].Content != "看看这个" || got[1].Images != 0 {
+		t.Fatalf("ordinary turn = %+v, want its text and no image count", got[1])
+	}
+}
+
 func TestSessionsListPreviewStripsTransientReasoningLanguageBlock(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "session.jsonl")

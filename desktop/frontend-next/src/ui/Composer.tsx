@@ -1,11 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../i18n";
-import { useFileDrop, type Dropped } from "./filedrop";
 import type { AgentPort, ApprovalMode, ModelEntry, SessionStatus, Attachment } from "../port/port";
 import { Picker } from "./Menu";
 import { modelMenu } from "./modelmenu";
 import { CompletionMenu, useCompletion } from "./Completion";
 import { useIme } from "./ime";
+import { countLines, pasteIsLong, planTone, planVerb } from "./intake";
+import { useIntake } from "./useIntake";
+import type { Dropped } from "./filedrop";
 
 // 从紧到松排，和闸门环的缺口一个方向。「不打扰」在内核是 permission.Deny：
 // 它比「询问」更严，不是更松 —— 排在询问前面才不会被读反。
@@ -25,8 +27,13 @@ const APPROVALS: [ApprovalMode, string, string][] = [
 const EFFORT_FALLBACK = ["auto", "low", "medium", "high", "xhigh", "max"];
 
 function effortsFor(models: ModelEntry[], ref?: string): string[] {
-  const declared = models.find((m) => m.ref === ref)?.efforts;
-  return declared?.length ? declared : EFFORT_FALLBACK;
+  const model = models.find((m) => m.ref === ref);
+  // A model that is in the list and names no levels has none: the host omits
+  // the field exactly when it would refuse every level but auto. Filling that
+  // in from the fallback is what put a full ladder in front of a relay whose
+  // every rung came back refused. The fallback is for a list not answered yet.
+  if (model) return model.efforts ?? [];
+  return EFFORT_FALLBACK;
 }
 
 // 强度是有序的，批准是有序的 —— 一排全等的胶囊把这件事藏了起来。两个刻度把
@@ -43,13 +50,46 @@ interface Props {
   onError: (e: unknown) => void;
 }
 
+// What is riding along with this turn. An image travels as bytes the kernel
+// already saved; a long paste is the text itself, held out of the box so eight
+// hundred lines of log do not become the composer.
+type Chip =
+  | { k: "image"; id: string; a: Attachment; url?: string }
+  | { k: "paste"; id: string; body: string; lines: number; name?: string };
+
+// Two screenshots pasted in a row are one filename apart, which is the one
+// thing the chip has to tell them by. The preview comes off the blob that was
+// just attached — the kernel keeps the bytes, this keeps a handle to look at.
+function previewURL(blob: Blob): string | undefined {
+  try {
+    return URL.createObjectURL(blob);
+  } catch {
+    return undefined;
+  }
+}
+
+// A dropped file has no preview to stand behind: the host named it, it was
+// never read. Its kind fills the square, because a blank one reads as an image
+// that failed to load.
+function kindOf(path: string): string {
+  const name = path.split(/[\\/]/).pop() ?? path;
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot + 1).toUpperCase().slice(0, 4) : "FILE";
+}
+
+function releaseChip(c: Chip) {
+  if (c.k === "image" && c.url) URL.revokeObjectURL(c.url);
+}
+
+let chipSeq = 0;
+const chipId = () => `c${++chipSeq}`;
+
 export function Composer({ port, status, running, onSubmit, onChanged, onError }: Props) {
   const [text, setText] = useState("");
   // The caret decides which token is being completed, so it is state here
   // rather than something read off the element when a menu happens to open.
   const [caret, setCaret] = useState(0);
-  const [shots, setShots] = useState<Attachment[]>([]);
-  const [over, setOver] = useState(false);
+  const [shots, setShots] = useState<Chip[]>([]);
   const picker = useRef<HTMLInputElement>(null);
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [switching, setSwitching] = useState(false);
@@ -62,9 +102,13 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
     port.models().then(setModels).catch(() => setModels([]));
   }, [port]);
 
+  // A drop lands where the caret is, and the handler that receives it was built
+  // once — so the position it reads has to be a ref, not the render's copy.
+  const caretRef = useRef(0);
   const type = (next: string, at: number) => {
     setText(next);
     setCaret(at);
+    caretRef.current = at;
   };
 
   const menu = useCompletion(port, text, caret, (next, at) => {
@@ -93,50 +137,114 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
   }, [text]);
 
   // Attachments ride into the turn as path references, exactly as they do from
-  // the CLI. What the reference points at is the difference: a dropped file is
-  // still where it was, and only pasted bytes were written into the workspace.
+  // the CLI — the host saved the bytes, the turn parser resolves the token. A
+  // held-back paste follows the typed text, which is where it reads as the
+  // material the message is about rather than as part of the sentence.
   const send = () => {
     const v = text.trim();
     if (!v && shots.length === 0) return;
-    const line = [...shots.map((a) => a.ref), v].filter(Boolean).join(" ");
+    const refs = shots.flatMap((c) => (c.k === "image" ? [c.a.ref] : []));
+    const pastes = shots.flatMap((c) => (c.k === "paste" ? [c.body] : []));
+    const line = [[...refs, v].filter(Boolean).join(" "), ...pastes].filter(Boolean).join("\n\n");
     type("", 0);
+    shots.forEach(releaseChip);
     setShots([]);
     onSubmit(line);
   };
 
-  // Bytes, for the two cases that have nothing else to offer: the clipboard,
-  // which never says where what it holds came from, and the picker, which hands
-  // back a File and no path. The host writes them into the workspace and the
-  // turn references that copy — which is right for a screenshot and wrong for a
-  // file that already exists somewhere, so a drop does not come through here.
-  const grab = (files: File[]) => {
-    if (files.length === 0) return;
-    Promise.all(files.map((f) => port.attach(f, f.name)))
-      .then((added) => setShots((prev) => [...prev, ...added]))
-      .catch(onError);
-  };
+  const insert = useCallback((snippet: string) => {
+    const el = box.current;
+    const at = el ? el.selectionStart : caretRef.current;
+    setText((prev) => {
+      const cut = Math.min(at, prev.length);
+      const next = prev.slice(0, cut) + snippet + prev.slice(cut);
+      pending.current = cut + snippet.length;
+      return next;
+    });
+  }, []);
 
-  // A dropped file is referenced where it lives. Copying it into the workspace
-  // is what let a turn edit the copy and report the edit as done while the file
-  // the user pointed at never changed — and what filled the attachment
-  // directory with a second version of everything anybody dragged in.
-  const dropped = (d: Dropped) => {
-    if (d.paths.length === 0) {
-      // A tab, or a drag that carried a promise rather than a file on disk.
-      grab(d.files.filter((f) => f.size > 0));
-      return;
-    }
-    port
-      .dropRefs(d.paths)
-      .then((refs) => {
-        const took = refs.filter((r) => r.ref).map((r) => ({ path: r.path ?? "", ref: r.ref ?? "", image: r.image }));
-        if (took.length > 0) setShots((prev) => [...prev, ...took]);
-        const refused = refs.filter((r) => r.error).map((r) => r.error);
-        if (refused.length > 0) onError(new Error(refused.join("\n")));
-      })
-      .catch(onError);
-  };
-  const drop = useFileDrop(dropped, setOver);
+  const discard = useCallback((c: Chip) => {
+    releaseChip(c);
+    setShots((prev) => prev.filter((x) => x !== c));
+  }, []);
+
+  const attach = useCallback(
+    (blobs: File[]) => {
+      if (blobs.length === 0) return;
+      Promise.all(blobs.map((b) => port.attach(b, b.name).then((a) => ({ a, url: previewURL(b) }))))
+        .then((added) =>
+          setShots((prev) => [...prev, ...added.map(({ a, url }) => ({ k: "image" as const, id: chipId(), a, url }))]),
+        )
+        .catch(onError);
+    },
+    [port, onError],
+  );
+
+  // A dropped file is referenced where it lives. Copying it in is what let a
+  // turn edit the copy and report the edit as done while the file the user
+  // pointed at never changed. Only the host can mint the token: whether a path
+  // is inside the workspace compares two spellings of one location.
+  const refIn = useCallback(
+    (paths: string[]) => {
+      port
+        .dropRefs(paths)
+        .then((refs) => {
+          const took = refs.flatMap((r) =>
+            r.ref
+              ? [{ k: "image" as const, id: chipId(), a: { path: r.path ?? "", ref: r.ref, image: r.image } }]
+              : [],
+          );
+          if (took.length > 0) setShots((prev) => [...prev, ...took]);
+          const refused = refs.flatMap((r) => (r.error ? [r.error] : []));
+          if (refused.length > 0) onError(new Error(refused.join("\n")));
+        })
+        .catch(onError);
+    },
+    [port, onError],
+  );
+
+  const readIn = useCallback(
+    (files: File[]) => {
+      for (const file of files) {
+        void file
+          .text()
+          .then((body) => {
+            if (!body.trim()) return;
+            setShots((prev) => [
+              ...prev,
+              { k: "paste", id: chipId(), body, lines: countLines(body), name: file.name },
+            ]);
+          })
+          .catch(onError);
+      }
+    },
+    [onError],
+  );
+
+  // One place decides what a payload becomes, whichever channel carried it.
+  const receive = useCallback(
+    (d: Dropped) => {
+      if (d.paths.length > 0) refIn(d.paths);
+      else if (d.files.length > 0) {
+        const pictures = d.files.filter((f) => f.type.startsWith("image/"));
+        attach(pictures);
+        // Bytes that are not pixels have nowhere else to go: the kernel's
+        // attachment store keeps images only, and there is no path to point at.
+        // Reading them as text is the one answer left, and a good one for a
+        // dropped log.
+        readIn(d.files.filter((f) => !pictures.includes(f)));
+      }
+      if (d.text) insert(d.text + " ");
+      // A drop is the start of typing, not the end of it.
+      box.current?.focus();
+    },
+    [refIn, attach, readIn, insert],
+  );
+
+  const { plan: drag, ref: dropzone } = useIntake({
+    root: status?.workspaceRoot ?? status?.cwd,
+    onReceive: receive,
+  });
 
   const apv = status?.toolApprovalMode ?? "ask";
   const eff = status?.effort || "auto";
@@ -151,8 +259,8 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
 
   return (
     // display:contents, so the box looks exactly as it did and the drop layer
-    // still has one node to ask "did this land in the composer" about.
-    <div className="dropzone" ref={drop}>
+    // still has one node to ask which pane a drop landed in.
+    <div className="dropzone" ref={dropzone}>
       {menu.open && (
         <CompletionMenu
           items={menu.completion.items}
@@ -163,31 +271,73 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           onHover={menu.hover}
         />
       )}
+      {/* What letting go will do, said before it happens. A drop that only
+          reports afterwards is the pattern this replaces. */}
+      {drag && (
+        <p className="intake" data-tone={planTone(drag)} role="status" aria-live="polite">
+          {planVerb(drag)}
+        </p>
+      )}
       {shots.length > 0 && (
-        <div className="shots">
-          {shots.map((a) => (
-            <span className="shot" key={a.ref} title={a.path}>
-              <span className="nm">{a.path.split("/").pop()}</span>
-              <button aria-label={t("移除这张图")} onClick={() => setShots((p) => p.filter((x) => x !== a))}>
+        <ul className="shots">
+          {shots.map((c, i) => (
+            <li className="shot" key={c.id} style={{ "--i": i } as React.CSSProperties}>
+              {c.k === "image" ? (
+                <>
+                  {c.a.image === false ? (
+                    <span className="glyph" aria-hidden="true">{kindOf(c.a.path)}</span>
+                  ) : (
+                    <span
+                      className="thumb"
+                      aria-hidden="true"
+                      style={c.url ? { backgroundImage: `url(${c.url})` } : undefined}
+                    />
+                  )}
+                  <span className="meta">
+                    <span className="nm" title={c.a.path}>{c.a.path.split("/").pop()}</span>
+                    <span className="sz">{c.a.image === false ? t("文件") : t("图片")}</span>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="glyph" aria-hidden="true">TXT</span>
+                  <span className="meta">
+                    <span className="nm">{c.name ?? t("粘贴的文本")}</span>
+                    <button
+                      className="undo"
+                      onClick={() => {
+                        discard(c);
+                        insert(c.body);
+                      }}
+                    >
+                      {t("{n} 行 · 展开到输入框", { n: c.lines })}
+                    </button>
+                  </span>
+                </>
+              )}
+              <button
+                className="x"
+                aria-label={t("移除")}
+                onClick={() => discard(c)}
+              >
                 ×
               </button>
-            </span>
+            </li>
           ))}
           {/* The kernel keeps the image either way, but a text-only model never
               sees it — say so here rather than letting the paste vanish. */}
-          {status?.vision === false && shots.some((a) => a.image) && (
-            <span className="warn">
+          {status?.vision === false && shots.some((c) => c.k === "image" && c.a.image !== false) && (
+            <li className="warn">
               {status?.visionDeclared === false
                 ? t("没人说过这个模型读不读图 · 先按不读处理；在「连接」里勾上它就直接发")
                 : t("当前模型不读图 · 将交给能读图的子代理")}
-            </span>
+            </li>
           )}
-        </div>
+        </ul>
       )}
       <textarea
         ref={box}
         rows={1}
-        data-over={over ? "" : undefined}
         value={text}
         placeholder={t("交待一个任务，回车发送…　/ 调用命令与技能，@ 引用文件")}
         role="combobox"
@@ -200,12 +350,22 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
         // the caret is what decides which token the menu is completing.
         onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
         onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+        // Dropping is the pane's job — a one-row box is 40px to aim at, and the
+        // handler that used to live here prevented the default and then did
+        // nothing with text, which is worse than not handling it at all.
         onPaste={(e) => {
-          const files = [...e.clipboardData.files];
-          if (files.some((f) => f.type.startsWith("image/"))) {
+          const images = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+          if (images.length > 0) {
             e.preventDefault();
-            grab(files);
+            attach(images);
+            return;
           }
+          const body = e.clipboardData.getData("text/plain");
+          if (!pasteIsLong(body)) return;
+          // Long enough to bury the composer. It still goes with the turn — it
+          // is just held beside the box instead of becoming it.
+          e.preventDefault();
+          setShots((prev) => [...prev, { k: "paste", id: chipId(), body, lines: countLines(body) }]);
         }}
         {...ime.handlers}
         onKeyDown={(e) => {
@@ -255,9 +415,8 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
         }}
       />
       <div className="row" data-busy={switching ? "" : undefined}>
-        {/* 只挑图片：选出来的文件跟剪贴板一样只有字节没有路径，只能复制一份
-            进工作区。对截图这是对的，对一个已经躺在磁盘上的文件就不是——那条
-            路留给拖进来。 */}
+        {/* 拖进来和粘贴都走同一条路，但那两个都得先有一张图在手边。点开系统
+            选择器是唯一不需要预备动作的入口。 */}
         <input
           ref={picker}
           type="file"
@@ -265,7 +424,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           multiple
           hidden
           onChange={(e) => {
-            grab([...(e.target.files ?? [])]);
+            attach([...(e.target.files ?? [])].filter((f) => f.type.startsWith("image/")));
             // 同一张图再选一次也要能进来，所以每次用完清空。
             e.target.value = "";
           }}
@@ -295,24 +454,30 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
             </>
           }
         />
-        <span className="sep" aria-hidden="true" />
-        <Picker
-          className="mode plain"
-          place="bottom"
-          current={eff}
-          items={efforts.map((v) => ({ value: v, label: v, meter: LEVEL[v] }))}
-          onPick={(v) => change(port.setEffort(v))}
-          label={
-            <>
-              <span className="bars" data-lv={LEVEL[eff] ?? 0} aria-hidden="true">
-                <i /><i /><i /><i /><i />
-              </span>
-              <span className="lb">{t("强度")}</span>
-              {/* key 让值换一次就重挂载一次 —— 这是那半秒里唯一能看出「改动生效了」的地方 */}
-              <span className="vl" data-lv={LEVEL[eff] ?? 0} key={eff}>{eff}</span>
-            </>
-          }
-        />
+        {/* An endpoint that names no levels gets no control: a picker whose
+            every rung is refused downstream reads as a dead one. */}
+        {efforts.length > 0 && (
+          <>
+            <span className="sep" aria-hidden="true" />
+            <Picker
+              className="mode plain"
+              place="bottom"
+              current={eff}
+              items={efforts.map((v) => ({ value: v, label: v, meter: LEVEL[v] }))}
+              onPick={(v) => change(port.setEffort(v))}
+              label={
+                <>
+                  <span className="bars" data-lv={LEVEL[eff] ?? 0} aria-hidden="true">
+                    <i /><i /><i /><i /><i />
+                  </span>
+                  <span className="lb">{t("强度")}</span>
+                  {/* key 让值换一次就重挂载一次 —— 这是那半秒里唯一能看出「改动生效了」的地方 */}
+                  <span className="vl" data-lv={LEVEL[eff] ?? 0} key={eff}>{eff}</span>
+                </>
+              }
+            />
+          </>
+        )}
         <button
           className="mode tog"
           aria-pressed={status?.plan ?? false}

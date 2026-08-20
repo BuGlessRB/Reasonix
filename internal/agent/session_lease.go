@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -371,5 +372,43 @@ func observeUnleasedSessionWrite(path string, mode sessionSaveMode) {
 		"path", filepath.Base(path),
 		"mode", int(mode),
 		"writer", SessionWriterID(),
+		"origin", unleasedWriteOrigin(),
 	)
+}
+
+// unleasedWriteOrigin names the first caller outside this package: the writer
+// the probe exists to enumerate. Reading it off the stack keeps the label out
+// of every save signature, where a new writer would have to remember to pass
+// one — and the writer that forgets is the one being hunted.
+func unleasedWriteOrigin() string {
+	var pcs [24]uintptr
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs[:])])
+	for {
+		frame, more := frames.Next()
+		if frame.Function == "" && !more {
+			break
+		}
+		if frame.Function != "" && !strings.HasPrefix(frame.Function, sessionPackageFramePrefix()) {
+			return fmt.Sprintf("%s (%s:%d)", frame.Function, filepath.Base(frame.File), frame.Line)
+		}
+		if !more {
+			break
+		}
+	}
+	return "unknown"
+}
+
+// sessionPackageFramePrefix reads this package's own frame prefix off a local
+// function, so moving the package cannot quietly turn the filter above into a
+// no-op the way a written-out import path would.
+func sessionPackageFramePrefix() string {
+	pc, _, _, ok := runtime.Caller(0)
+	if !ok {
+		return ""
+	}
+	name := runtime.FuncForPC(pc).Name()
+	if cut := strings.LastIndex(name, "."); cut > 0 {
+		return name[:cut+1]
+	}
+	return ""
 }
