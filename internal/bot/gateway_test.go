@@ -19,6 +19,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/store"
 	"reasonix/internal/tool"
 )
 
@@ -877,7 +878,11 @@ func TestGatewayNewSessionRemembersRotatedSessionPath(t *testing.T) {
 	gw.closeSessions()
 }
 
-func TestGatewayRecoveryRebindsLeaseAndRemembersSessionPath(t *testing.T) {
+// A leaseholder that no longer recognises its own transcript supersedes it
+// instead of forking: the gateway keeps one session, one lease, one remembered
+// path. The bytes it wrote over are kept beside the session, not listed as a
+// second conversation for the user to wonder about.
+func TestGatewayOwnedDivergenceSupersedesWithoutForking(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	dir := t.TempDir()
 	originalPath := filepath.Join(dir, "session.jsonl")
@@ -939,32 +944,30 @@ func TestGatewayRecoveryRebindsLeaseAndRemembersSessionPath(t *testing.T) {
 	if err := ctrl.Snapshot(); err != nil {
 		t.Fatalf("snapshot diverged session: %v", err)
 	}
-	recoveryPath := ctrl.SessionPath()
-	if recoveryPath == "" || recoveryPath == originalPath {
-		t.Fatalf("controller path = %q, want recovery path", recoveryPath)
+	if got := ctrl.SessionPath(); got != originalPath {
+		t.Fatalf("controller path = %q, want the original %q", got, originalPath)
 	}
-	if got := leases.HeldPath(); got != agent.CanonicalSessionPath(recoveryPath) {
-		t.Fatalf("held lease = %q, want recovery path %q", got, agent.CanonicalSessionPath(recoveryPath))
+	if got, want := leases.HeldPath(), agent.CanonicalSessionPath(originalPath); got != want {
+		t.Fatalf("held lease = %q, want the original %q", got, want)
 	}
-	leases.WaitForRetiredLeases()
-	mustAcquireAndReleaseBotSessionLease(t, originalPath)
 
 	gw.mu.Lock()
 	gotStatePath := state.sessionPath
 	gotOverridePath := gw.sessionOverrides[key].sessionPath
 	gw.mu.Unlock()
-	if canonicalBotPath(gotStatePath) != canonicalBotPath(recoveryPath) {
-		t.Fatalf("state path = %q, want recovery path %q", gotStatePath, recoveryPath)
+	if canonicalBotPath(gotStatePath) != canonicalBotPath(originalPath) {
+		t.Fatalf("state path = %q, want the original %q", gotStatePath, originalPath)
 	}
-	if canonicalBotPath(gotOverridePath) != canonicalBotPath(recoveryPath) {
-		t.Fatalf("override path = %q, want recovery path %q", gotOverridePath, recoveryPath)
+	if canonicalBotPath(gotOverridePath) != canonicalBotPath(originalPath) {
+		t.Fatalf("override path = %q, want the original %q", gotOverridePath, originalPath)
 	}
-	if len(remembered) != 1 || remembered[0] != botSessionTarget(recoveryPath) {
-		t.Fatalf("remembered sessions = %v, want [%q]", remembered, botSessionTarget(recoveryPath))
+	// Nothing was recovered, so nothing announced a new session.
+	if len(remembered) != 0 {
+		t.Fatalf("remembered sessions = %v, want none", remembered)
 	}
 
 	if err := ctrl.Snapshot(); err != nil {
-		t.Fatalf("snapshot recovered session: %v", err)
+		t.Fatalf("snapshot again: %v", err)
 	}
 	matches, err := filepath.Glob(filepath.Join(dir, "*-recovery-*.jsonl"))
 	if err != nil {
@@ -976,8 +979,14 @@ func TestGatewayRecoveryRebindsLeaseAndRemembersSessionPath(t *testing.T) {
 			transcripts = append(transcripts, path)
 		}
 	}
-	if len(transcripts) != 1 || transcripts[0] != recoveryPath {
-		t.Fatalf("recovery transcripts = %v, want only %q", transcripts, recoveryPath)
+	if len(transcripts) != 0 {
+		t.Fatalf("recovery transcripts = %v, want none", transcripts)
+	}
+	// What the authoritative write replaced is kept, and not as a session.
+	if body, err := os.ReadFile(store.SessionSuperseded(originalPath)); err != nil {
+		t.Fatalf("superseded transcript not kept: %v", err)
+	} else if len(body) == 0 {
+		t.Fatal("the superseded copy is empty")
 	}
 	if sent := adapter.sentMessages(); len(sent) != 0 {
 		t.Fatalf("recovery maintenance leaked into IM messages: %+v", sent)

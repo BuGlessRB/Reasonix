@@ -19,6 +19,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/jobs"
 	"reasonix/internal/provider"
+	"reasonix/internal/store"
 )
 
 func chatTUIWithRunningBackgroundJob(t *testing.T) chatTUI {
@@ -125,7 +126,10 @@ func divergedSessionControllerWithRecovery(t *testing.T, dir, path string, onRec
 	})
 }
 
-func TestSessionRecoveryCallbackMovesLeaseBeforeControllerCommit(t *testing.T) {
+// A leaseholder that no longer recognises its own transcript supersedes it
+// rather than forking, so the callback never runs and the path never moves.
+// What the write replaced is kept beside the session instead.
+func TestOwnedDivergenceSupersedesWithoutMovingTheLease(t *testing.T) {
 	dir := t.TempDir()
 	originalPath := filepath.Join(dir, "turn-end-conflict.jsonl")
 	leases := control.NewSessionLeaseKeeper()
@@ -142,24 +146,30 @@ func TestSessionRecoveryCallbackMovesLeaseBeforeControllerCommit(t *testing.T) {
 	if err := ctrl.Snapshot(); err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
-	recoveryPath := ctrl.SessionPath()
-	if recoveryPath == "" || recoveryPath == originalPath || !strings.Contains(filepath.Base(recoveryPath), "-recovery-") {
-		t.Fatalf("controller path = %q, want recovery path distinct from %q", recoveryPath, originalPath)
+	if got := ctrl.SessionPath(); got != originalPath {
+		t.Fatalf("controller path = %q, want the original %q", got, originalPath)
 	}
-	if got, want := leases.HeldPath(), agent.CanonicalSessionPath(recoveryPath); got != want {
-		t.Fatalf("lease after recovery callback = %q, want %q", got, want)
+	if got, want := leases.HeldPath(), agent.CanonicalSessionPath(originalPath); got != want {
+		t.Fatalf("lease after the save = %q, want the original %q", got, want)
 	}
-	leases.WaitForRetiredLeases()
-	if probe, err := agent.TryAcquireSessionLease(originalPath); err != nil {
-		t.Fatalf("original lease was not released after recovery: %v", err)
-	} else {
-		probe.Release()
-	}
-	if probe, err := agent.TryAcquireSessionLease(recoveryPath); !errors.Is(err, agent.ErrSessionLeaseHeld) {
+	// The original stays guarded: it is still this runtime's session.
+	if probe, err := agent.TryAcquireSessionLease(originalPath); !errors.Is(err, agent.ErrSessionLeaseHeld) {
 		if probe != nil {
 			probe.Release()
 		}
-		t.Fatalf("recovery path was not guarded after callback: %v", err)
+		t.Fatalf("original path was not guarded after the save: %v", err)
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "*-recovery-*.jsonl"))
+	if err != nil {
+		t.Fatalf("glob recovery sessions: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("recovery branches = %v, want none", matches)
+	}
+	if body, err := os.ReadFile(store.SessionSuperseded(originalPath)); err != nil {
+		t.Fatalf("superseded transcript not kept: %v", err)
+	} else if len(body) == 0 {
+		t.Fatal("the superseded copy is empty")
 	}
 }
 
