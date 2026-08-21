@@ -113,6 +113,7 @@ export const EN: Record<string, string> = {
   "无": "None",
   "外部服务": "External services",
   "{n} 个连不上": "{n} unreachable",
+  "还有 {n} 个，都在设置里": "{n} more, all in Settings",
   "到设置里重连": "Reconnect from Settings",
   "失败": "Failed",
   "OpenAI 兼容": "OpenAI-compatible",
@@ -295,6 +296,17 @@ export const EN: Record<string, string> = {
   "联网搜索": "Web search",
   "端点自己执行的搜索，不占本地工具。": "The endpoint runs the search itself; it costs no local tool.",
   "思考参数": "Thinking parameter",
+  "模型 · 已启用 {on}/{all}": "Models · {on} of {all} enabled",
+  "搜模型名；列表里没有的，直接把名字写在这里":
+    "Search the list — or type a name that is not on it",
+  "搜索或添加模型": "Search or add a model",
+  "选用 {name}": "Enable {name}",
+  "就用「{name}」": "Use “{name}”",
+  "端点没报出这个名字，能不能用只有你知道":
+    "The endpoint never reported this name; whether it answers is something only you know",
+  "还有 {n} 个没列出来，搜一下就能找到": "{n} more not listed — search to reach them",
+  "内核不给这个端点发图片，改这里不会有效果":
+    "The kernel sends no images to this endpoint; changing this has no effect",
   "读图": "Reads images",
   "推理": "Reasoning",
   "自己写一条": "Write one myself",

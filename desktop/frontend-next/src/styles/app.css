@@ -253,6 +253,21 @@
   /* 指出这一行是因为哪几个字母被选中的，模糊匹配才不像是在乱给 */
   .slashmenu .hit { color: var(--accent); font-weight: var(--w-semi) }
 
+  /* Here data-on is the caret, not a stored value, and it has to be readable
+     in peripheral vision: the eye resolves area, not a hue shift on a 6px dot.
+     Not --accent-wash — it is mixed against --page and lands darker than
+     --float, so on a dark theme the selected row would read as a hole. */
+  .slashmenu .mi[data-on] {
+    background: color-mix(in srgb, var(--accent) 15%, var(--float-hi));
+    box-shadow: inset 2px 0 var(--accent);
+  }
+  /* Hover means "you could take this"; data-on is what Enter takes. A pointer
+     left parked over the list made the wrong row the heaviest thing on screen,
+     so the keys hold the highlight until the mouse actually moves again. */
+  .slashmenu .mlist[data-kb] .mi:hover:not([data-on]) { background: transparent }
+  /* Held arrows outrun the .13s fade, and three rows glow at once. */
+  .slashmenu .mlist[data-kb] .mi { transition: none }
+
   /* Tab 补全、Tab 进目录：不写出来没人会去试 */
   .mkeys {
     flex: none; margin-top: 3px; padding: 6px 9px 2px;
@@ -1739,6 +1754,35 @@
   .job[data-done] { color: var(--faint) }
   .bgnote { margin-top: 6px; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
 
+  /* 外部服务连不上：和设置页的 .srv 是同一件东西，所以读法也一样 —— 名字一行、
+     原因一行、状态用左色条说。它曾经借 .job 的样式，于是一个失败被画成「做完
+     了」的灰，而 .job 是给 div 写的，这里的 button 就带着系统那圈按钮边框。 */
+  .srvs { display: flex; flex-direction: column; gap: 7px; min-height: 18px }
+  .srvrow {
+    display: flex; flex-direction: column; gap: 3px; width: 100%;
+    padding: 4px 7px 5px; border: 0; border-radius: var(--r-sm);
+    box-shadow: inset 2px 0 var(--err); background: transparent;
+    color: inherit; font: inherit; text-align: left; cursor: pointer;
+    animation: card var(--t-card) var(--ease-out) both;
+    transition: background var(--t-line) var(--ease-out);
+  }
+  .srvrow:hover { background: var(--overlay) }
+  .srvrow:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .srvrow .hd { display: flex; align-items: center; gap: 8px; min-width: 0 }
+  .srvrow .pip { background: var(--err) }
+  /* 名字是这一行的身份，先被截掉的绝不能是它 —— 文件面板的同一条规矩。 */
+  .srvrow .nm {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: var(--w-reg) 11.5px var(--mono); color: var(--text);
+  }
+  /* 端点自己写的一句话：长度不由我们定，所以它只能换行、只能截，绝不能参与
+     决定这一栏有多宽。界面字而不是等宽 —— 等宽栈里没有汉字，中文报错会散。 */
+  .srvrow .why {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+    font: var(--w-reg) 11px/1.5 var(--ui); color: var(--err); overflow-wrap: anywhere;
+  }
+  .srvs .more { font: var(--w-reg) 11px var(--ui); color: var(--faint) }
+
   .files { display: flex; flex-direction: column; min-height: 18px }
   .file { display: flex; gap: 9px; padding: 6px 0; font: var(--w-reg) 11.5px var(--mono); color: var(--muted); animation: card var(--t-card) var(--ease-out) both }
   /* 目录可以被裁，文件名不行 —— 之前整条 .p 一起省略号，先没的恰好是文件名 */
@@ -2407,6 +2451,31 @@
   .mline .dtag[aria-pressed="true"] { color: var(--accent); background: var(--accent-wash);
     border-color: color-mix(in srgb, var(--accent) 32%, transparent) }
   .mline .vtag:disabled, .mline .dtag:disabled { opacity: .35; cursor: default }
+  /* 探测答出来的能力,不是一个开关 —— 添加来源时读图是既成事实。 */
+  .mline .vtag[data-flat] { color: var(--deleg); background: var(--deleg-wash); border-color: transparent; cursor: default }
+
+  /* The list is the scrolling part. Without a cap a gateway's few hundred rows
+     push the save button off the bottom of the page — the panel below it is
+     what the list is for, so the list is what gets bounded. */
+  .mlist .mfind { position: static; width: auto; margin: 0 0 8px; padding: 0; border: 0; background: none }
+  .mlist .mrows { max-height: 292px; overflow-y: auto; overscroll-behavior: contain }
+  .mlist .mmore { margin-top: 7px; font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
+  .mlist .empty { margin-top: 9px }
+
+  /* 不是列表里的一行:它做的是别的事,长得像一行就会被当成一行来勾。 */
+  .mnew {
+    display: flex; align-items: flex-start; gap: 9px; width: 100%; margin-top: 8px;
+    padding: 8px 9px; text-align: left; cursor: pointer;
+    border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 7%, transparent);
+    transition: background var(--t-line) var(--ease-out);
+  }
+  .mnew:hover { background: color-mix(in srgb, var(--accent) 13%, transparent) }
+  .mnew:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .mnew .k { flex: none; font: var(--w-med) 13px/1.2 var(--mono); color: var(--accent) }
+  .mnew .tx { min-width: 0 }
+  .mnew .lb { display: block; font: var(--w-med) 12px var(--mono); color: var(--text); overflow-wrap: anywhere }
+  .mnew .ds { display: block; margin-top: 2px; font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
 
   .viabox { position: relative; flex: none; margin-right: 10px }
   .mrow .via {

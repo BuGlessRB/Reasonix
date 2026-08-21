@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
 import type { Protocol, ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe } from "../port/port";
+import { ModelChoice } from "./ModelChoice";
 import { KIND_LABEL, accountKey, accountLabel, disambiguate, hostOf, nameFrom, vendorLabel } from "./vendors";
 
 // A connection is an account, not a config row. One endpoint answering two
@@ -314,6 +315,14 @@ function EditConn({
   const toggle = (list: string[], set: (v: string[]) => void, m: string) =>
     set(list.includes(m) ? list.filter((x) => x !== m) : [...list, m]);
 
+  // A name the endpoint never reported. It lands ticked because typing it out
+  // is already the answer to "do you want this one", and at the head of the
+  // list because a new row three hundred names down reads as nothing happening.
+  const addModel = (m: string) => {
+    setModels((cur) => (cur.includes(m) ? cur : [m, ...cur]));
+    setPicked((cur) => (cur.includes(m) ? cur : [...cur, m]));
+  };
+
   // Re-asking the endpoint is how a source that gained models catches up; the
   // ticks the user already made survive it.
   // A blank key field means "keep the stored one", so re-probing has to go
@@ -375,28 +384,20 @@ function EditConn({
 
       <div className="mlist">
         <span className="mlb">
-          模型（{picked.length}/{models.length}）·{" "}
+          {t("模型 · 已启用 {on}/{all}", { on: picked.length, all: models.length })}{" · "}
           {t(entry.canSetVision === false ? "这个端点不接受图片输入，勾了也不会生效" : "勾「读图」的才会收到图片")}
         </span>
-        {models.map((m) => (
-          <div className="mline" key={m} data-off={picked.includes(m) ? undefined : ""}>
-            <button className="tick" role="checkbox" aria-checked={picked.includes(m)}
-              aria-label={`选用 ${m}`} onClick={() => toggle(picked, setPicked, m)}>
-              <i />
-            </button>
-            <span className="nm">{m}</span>
-            <button className="vtag" aria-pressed={vision.includes(m)}
-              disabled={!picked.includes(m) || entry.canSetVision === false}
-              title={entry.canSetVision === false ? "内核不给这个端点发图片，改这里不会有效果" : undefined}
-              onClick={() => toggle(vision, setVision, m)}>
-              {t("读图")}
-            </button>
-            <button className="dtag" aria-pressed={def === m} disabled={!picked.includes(m)}
-              onClick={() => setDef(m)}>
-              {t("默认")}
-            </button>
-          </div>
-        ))}
+        <ModelChoice
+          models={models}
+          picked={picked}
+          vision={vision}
+          def={def}
+          visionLocked={entry.canSetVision === false}
+          onToggle={(m) => toggle(picked, setPicked, m)}
+          onVision={(m) => toggle(vision, setVision, m)}
+          onDefault={setDef}
+          onAdd={addModel}
+        />
       </div>
 
       {/* Folded, and worth folding: these three are the ones no probe can
@@ -509,6 +510,9 @@ function AddProvider({
   const [name, setName] = useState("");
   const [kind, setKind] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
+  // What the probe reported, plus anything typed in. Kept apart from `probe` so
+  // an added name survives without pretending the endpoint reported it.
+  const [models, setModels] = useState<string[]>([]);
 
   // A source already at this host changes what a blank key means: another door
   // onto that account rather than an account with no credential.
@@ -521,6 +525,7 @@ function AddProvider({
       const got = await port.probeProvider(baseUrl.trim(), apiKey.trim());
       setProbe(got);
       setKind(got.kind);
+      setModels(got.models);
       setPicked(got.models.slice(0, 8));
       setName(uniqueName(nameFrom(baseUrl), taken));
     } catch (e) {
@@ -558,6 +563,11 @@ function AddProvider({
 
   const toggle = (m: string) =>
     setPicked((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
+
+  const addModel = (m: string) => {
+    setModels((cur) => (cur.includes(m) ? cur : [m, ...cur]));
+    setPicked((cur) => (cur.includes(m) ? cur : [...cur, m]));
+  };
 
   return (
     <div className="addp">
@@ -635,21 +645,17 @@ function AddProvider({
             <p className="acct-note">{t("走代理连不上、直连可以，已经记成「这个来源不走代理」。")}</p>
           )}
 
-          <div className="fields">
-            <span className="mlb">模型（{picked.length}/{probe.models.length}）</span>
-            <div className="mpick">
-              {probe.models.map((m) => (
-                <button
-                  key={m}
-                  className="chip"
-                  aria-pressed={picked.includes(m)}
-                  onClick={() => toggle(m)}
-                >
-                  {m}
-                  {t(probe.vision.includes(m) ? " ·图" : "")}
-                </button>
-              ))}
-            </div>
+          <div className="mlist">
+            <span className="mlb">
+              {t("模型 · 已启用 {on}/{all}", { on: picked.length, all: models.length })}
+            </span>
+            <ModelChoice
+              models={models}
+              picked={picked}
+              vision={probe.vision}
+              onToggle={toggle}
+              onAdd={addModel}
+            />
           </div>
 
           <div className="acts">

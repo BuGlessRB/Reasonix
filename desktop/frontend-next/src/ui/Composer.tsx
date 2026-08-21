@@ -267,6 +267,7 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           active={menu.active}
           kind={menu.completion.kind}
           query={menu.completion.query ?? ""}
+          kb={menu.kb}
           onPick={menu.accept}
           onHover={menu.hover}
         />

@@ -1,4 +1,4 @@
-import type { Protocol, ProviderEdit, ProviderEntry, ProviderProbe } from "./port";
+import type { Protocol, ProviderCheck, ProviderEdit, ProviderEntry, ProviderProbe } from "./port";
 import { MockBoundary } from "./mock_boundary";
 
 // The sources half of the fixture. Chained on for the reason the others are:
@@ -51,6 +51,15 @@ export class MockProvider extends MockBoundary {
     throw new Error("演示模式不会真的去连端点");
   }
 
+  // The fixture's endpoints answer both protocols, which is the case the row's
+  // "改用…" repair exists for. The relay answers at gateway scale, which is the
+  // case the model list's search and its row cap exist for.
+  async checkProvider(name: string): Promise<ProviderCheck> {
+    if (name === "mimo") return { ok: false, error: "401 unauthorized: key 过期了" };
+    const models = name.startsWith("myrelay") ? relayCatalog() : ["gpt-4o", "claude-sonnet-4"];
+    return { ok: true, kind: "openai", models, ambiguous: true };
+  }
+
   async saveProvider(): Promise<void> {}
 
   async setProviderWebSearch(name: string, on: boolean): Promise<void> {
@@ -78,4 +87,24 @@ export class MockProvider extends MockBoundary {
   }
 
   async removeProvider(): Promise<void> {}
+}
+
+// A gateway answering at the scale the connection panel has to survive: the
+// families repeat under date suffixes, which is exactly what makes such a list
+// unscannable by eye. Issue #9192 is one of these, with 216 entries.
+function relayCatalog(): string[] {
+  const families = [
+    "qwen3-max", "qwen3-omni-flash", "qwen3-vl-plus", "qwen3-next-80b-a3b",
+    "MiniMax-M2", "MiniMax/speech-02", "ZHIPU/GLM-5", "kimi-k2",
+    "deepseek-v4-pro", "deepseek-v4-flash", "gpt-4o", "claude-sonnet-4",
+    "gemini-3-pro", "llama-4-maverick", "mistral-large", "grok-4",
+  ];
+  const out: string[] = [];
+  for (const f of families) {
+    out.push(f);
+    for (const s of ["preview", "realtime", "2025-09-15", "2025-12-01", "2026-01-23", "2026-02-23"]) {
+      out.push(`${f}-${s}`);
+    }
+  }
+  return out;
 }

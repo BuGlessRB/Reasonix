@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, ProviderCheck, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, ScopeLayer, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, ThemePack } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, ScopeLayer, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, ThemePack } from "./port";
 import type { WireEvent } from "./wire";
 import { MockProvider } from "./mock_provider";
 import { SCRIPT } from "./fixture";
@@ -59,14 +59,6 @@ export class MockPort extends MockProvider implements AgentPort {
   async roles(): Promise<RoleAssignments> {
     return this.assigned;
   }
-
-  // The fixture's endpoints answer both protocols, which is the case the row's
-  // "改用…" repair exists for.
-  async checkProvider(name: string): Promise<ProviderCheck> {
-    if (name === "mimo") return { ok: false, error: "401 unauthorized: key 过期了" };
-    return { ok: true, kind: "openai", models: ["gpt-4o", "claude-sonnet-4"], ambiguous: true };
-  }
-
 
   async setRole(role: string, ref: string) {
     this.assigned = { ...this.assigned, [role]: ref };
@@ -137,7 +129,10 @@ export class MockPort extends MockProvider implements AgentPort {
       toolList: [{ name: "get_library_docs", description: "Fetch docs for a resolved library ID.", readOnly: true }],
     },
     {
-      name: "figma", state: "failed", enabled: true, transport: "http", tools: 1, error: "401 unauthorized",
+      // 真实的连不上就是这个长度：端点把整句话都塞进 error，而它有多长不由我们
+      // 定 —— 右栏那一行必须扛得住，否则名字先被挤没。
+      name: "figma", state: "failed", enabled: true, transport: "http", tools: 1,
+      error: "401 unauthorized: figma-mcp needs a personal access token with file_read scope; set FIGMA_TOKEN and reconnect",
       description: "Read Figma files, frames and comments.", remembered: true, stale: true,
       toolList: [{ name: "get_file", description: "Read one Figma file's node tree." }],
     },
@@ -781,4 +776,3 @@ export class MockPort extends MockProvider implements AgentPort {
     this.state.goal = text;
   }
 }
-

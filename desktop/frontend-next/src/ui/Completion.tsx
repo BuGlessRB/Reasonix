@@ -40,6 +40,9 @@ interface State {
   hover: (i: number) => void;
   dismiss: () => void;
   accept: (item?: CompletionItem) => void;
+  // Whether the keys still hold the highlight. A menu opens under whatever the
+  // pointer happens to be resting on, so the pointer only takes it by moving.
+  kb: boolean;
   // Whether Enter belongs to the menu. A half-typed command is not a message,
   // so Enter completes it; a reference is ordinary prose the moment it resolves,
   // so Enter sends unless the user went looking through the list.
@@ -60,6 +63,7 @@ export function useCompletion(
   const [active, setActive] = useState(0);
   const [picked, setPicked] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [kb, setKb] = useState(true);
   // Answers can land out of order; only the newest question still has an answer
   // worth showing.
   const asked = useRef(0);
@@ -80,10 +84,13 @@ export function useCompletion(
       });
   }, [port, text, caret]);
 
+  // A keystroke changed the list under the pointer, so its claim on the
+  // highlight is stale even though it never moved.
   useEffect(() => {
     setActive(0);
     setPicked(false);
     setDismissed(false);
+    setKb(true);
   }, [completion]);
 
   const items = completion.items;
@@ -105,12 +112,15 @@ export function useCompletion(
     active: at,
     open,
     ownsEnter: open && (completion.kind !== "ref" || picked),
+    kb,
     move: (delta) => {
       setPicked(true);
+      setKb(true);
       setActive((i) => (((Math.min(i, items.length - 1) + delta) % items.length) + items.length) % items.length);
     },
     hover: (i) => {
       setPicked(true);
+      setKb(false);
       setActive(i);
     },
     dismiss: () => setDismissed(true),
@@ -132,11 +142,12 @@ interface Props {
   active: number;
   kind: string;
   query: string;
+  kb: boolean;
   onPick: (item: CompletionItem) => void;
   onHover: (i: number) => void;
 }
 
-export function CompletionMenu({ items, active, kind, query, onPick, onHover }: Props) {
+export function CompletionMenu({ items, active, kind, query, kb, onPick, onHover }: Props) {
   const on = useRef<HTMLButtonElement>(null);
 
   // Arrow keys walk past the eight rows that fit; the list has to follow, or
@@ -153,7 +164,13 @@ export function CompletionMenu({ items, active, kind, query, onPick, onHover }: 
     // completing a path replays the open animation: the menu is answering a
     // different question, and swapping the rows in place hides that.
     <div className="menu slashmenu" key={kind}>
-      <div className="mlist" id="slashmenu" role="listbox" aria-label={t("补全")}>
+      <div
+        className="mlist"
+        id="slashmenu"
+        role="listbox"
+        aria-label={t("补全")}
+        data-kb={kb ? "" : undefined}
+      >
         {items.map((it, i) => {
           const [before, hit, after] = split(it.label, query);
           return (
