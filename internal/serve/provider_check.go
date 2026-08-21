@@ -52,7 +52,7 @@ func (s *Server) checkProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg, err := config.Load()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	entry, ok := cfg.Provider(strings.TrimSpace(body.Name))

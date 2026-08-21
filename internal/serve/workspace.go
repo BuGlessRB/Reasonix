@@ -178,7 +178,7 @@ func (s *Server) workspace(w http.ResponseWriter, r *http.Request) {
 	if body.Isolate {
 		res, err := worktree.Create(r.Context(), s.ctl().WorkspaceRoot(), config.DeliveryWorktreeDir())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			writeErr(w, http.StatusUnprocessableEntity, err)
 			return
 		}
 		dir = res.WorkspaceRoot

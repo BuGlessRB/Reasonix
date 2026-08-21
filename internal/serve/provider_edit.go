@@ -108,7 +108,7 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -223,7 +223,7 @@ func (s *Server) setProviderThinking(w http.ResponseWriter, r *http.Request) {
 	}
 	config.SetThinkingParams(entry, body.On)
 	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -257,7 +257,7 @@ func (s *Server) setProviderWebSearch(w http.ResponseWriter, r *http.Request) {
 	on := body.On
 	entry.WebSearch = &on
 	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -63,7 +63,7 @@ func (s *Server) attachments(w http.ResponseWriter, r *http.Request) {
 	}
 	raw, err := attachmentBytes(body.Path, body.Data)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	root := s.ctl().WorkspaceRoot()
@@ -76,7 +76,7 @@ func (s *Server) attachments(w http.ResponseWriter, r *http.Request) {
 	}
 	saved, err := save()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	// The turn parser resolves "@<path>"; hand back the exact token so the

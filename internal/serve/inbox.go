@@ -30,15 +30,15 @@ func (s *Server) inboxAPI() control.SessionAPI {
 func writeInboxError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, sessioninbox.ErrItemTooLarge):
-		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge) // 413
+		writeErr(w, http.StatusRequestEntityTooLarge, err) // 413
 	case errors.Is(err, sessioninbox.ErrCapacityItems), errors.Is(err, sessioninbox.ErrCapacityBytes),
 		errors.Is(err, sessioninbox.ErrInvalidState), errors.Is(err, sessioninbox.ErrPaused),
 		errors.Is(err, sessioninbox.ErrNotFound):
-		http.Error(w, err.Error(), http.StatusConflict) // 409
+		writeErr(w, http.StatusConflict, err) // 409
 	case errors.Is(err, sessioninbox.ErrEmpty):
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, err)
 	default:
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 	}
 }
 
@@ -71,7 +71,7 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 		// and a controller with no authority over its session drops the work.
 		if after := api.SessionPath(); after != before {
 			if err := s.rebindSessionLease(after); err != nil {
-				http.Error(w, sessionInUseError(err), http.StatusConflict)
+				sessionInUse(w, err)
 				return
 			}
 		}

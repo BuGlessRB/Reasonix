@@ -706,7 +706,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		if after := ctrl.SessionPath(); after != before {
 			if err := s.rebindSessionLease(after); err != nil {
 				s.bindMu.Unlock()
-				http.Error(w, sessionInUseError(err), http.StatusConflict)
+				sessionInUse(w, err)
 				return
 			}
 		}
@@ -790,7 +790,7 @@ func (s *Server) newSession(w http.ResponseWriter, _ *http.Request) {
 	s.bc.ResetSession()
 	// Fresh path — the lease follows it; failure is theoretical but not silent.
 	if err := s.rebindSessionLease(s.ctl().SessionPath()); err != nil {
-		http.Error(w, sessionInUseError(err), http.StatusConflict)
+		sessionInUse(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -990,7 +990,7 @@ func (s *Server) fork(w http.ResponseWriter, r *http.Request) {
 	s.bc.ResetSession()
 	// The controller switched to the fork (a fresh path); the lease follows it.
 	if err := s.rebindSessionLease(s.ctl().SessionPath()); err != nil {
-		http.Error(w, sessionInUseError(err), http.StatusConflict)
+		sessionInUse(w, err)
 		return
 	}
 	writeJSON(w, map[string]string{"path": path})

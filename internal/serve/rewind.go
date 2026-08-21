@@ -35,7 +35,7 @@ func (s *Server) rewindPrepare(w http.ResponseWriter, r *http.Request) {
 	}
 	plan, err := s.ctl().PrepareRewind(body.Turn, rewindScope(body.Scope))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, struct {
@@ -54,11 +54,11 @@ func (s *Server) rewindCommit(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.ctl().CommitRewind(body.PlanID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	if err := s.ctl().Snapshot(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, result)
@@ -77,11 +77,11 @@ func (s *Server) rewindUndo(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.ctl().UndoRewind(body.TransactionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	if err := s.ctl().Snapshot(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, result)

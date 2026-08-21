@@ -37,6 +37,7 @@ const SAID: Record<string, string> = {
   "request.missing_field": "还缺一个「{field}」",
   "request.not_found": "找不到叫「{name}」的{kind}",
   "project.unknown": "这个项目没有在当前窗口打开",
+  "busy.session_in_use": "这个会话正被别处占用：{detail}",
   "provider.bad_context_window": "上下文长度不能是负数；填 0 表示不自动压缩",
   "provider.bad_reasoning_protocol": "不认识「{protocol}」这种思考协议",
   "provider.extra_body_null": "额外设置里「{path}」不能是空值（null）",

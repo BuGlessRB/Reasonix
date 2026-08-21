@@ -37,7 +37,7 @@ func (s *Server) model(w http.ResponseWriter, r *http.Request) {
 	}
 	ref := strings.TrimSpace(body.Ref)
 	if err := s.switchModel(r.Context(), ref); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	catalog := s.ctl().ProviderCatalog()

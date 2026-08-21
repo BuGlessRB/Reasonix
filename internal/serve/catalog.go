@@ -155,7 +155,7 @@ func (s *Server) skillEnabled(w http.ResponseWriter, r *http.Request) {
 	}
 	if other {
 		if err := s.switchForProject(root, string(config.CapabilitySkill), name, scope, body.Enabled, body.Clear); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		writeJSON(w, map[string]any{"enabled": body.Enabled, "scope": string(scope), "root": root})
@@ -163,7 +163,7 @@ func (s *Server) skillEnabled(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Clear {
 		if err := s.ctl().ClearSkillOverride(name, scope); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		writeJSON(w, map[string]any{
@@ -172,7 +172,7 @@ func (s *Server) skillEnabled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().SetSkillEnabled(name, scope, body.Enabled); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, map[string]any{
@@ -388,7 +388,7 @@ func (s *Server) mcpEnabled(w http.ResponseWriter, r *http.Request) {
 	}
 	if other {
 		if err := s.switchForProject(root, string(config.CapabilityMCP), name, scope, body.Enabled, body.Clear); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		writeJSON(w, map[string]any{"name": name, "enabled": body.Enabled, "scope": string(scope), "root": root})
@@ -396,19 +396,19 @@ func (s *Server) mcpEnabled(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Clear {
 		if err := s.ctl().ClearMCPServerOverride(name, scope); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		enabled, err := s.ctl().MCPServerEnabled(name)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		writeJSON(w, map[string]any{"name": name, "enabled": enabled, "cleared": true})
 		return
 	}
 	if err := s.ctl().SetMCPServerEnabled(name, scope, body.Enabled); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, map[string]any{"name": name, "enabled": body.Enabled, "scope": string(scope)})

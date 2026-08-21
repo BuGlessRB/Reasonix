@@ -66,7 +66,7 @@ func (s *Server) assignSurfaceSlot(w http.ResponseWriter, r *http.Request) {
 		edit.Desktop.SurfaceSlots[surface] = slot
 	}
 	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -34,7 +34,7 @@ func (s *Server) markWelcomed(w http.ResponseWriter, _ *http.Request) {
 	edit := config.LoadForEdit(config.UserConfigPath())
 	edit.Desktop.Welcomed = true
 	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

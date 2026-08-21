@@ -16,6 +16,7 @@ const (
 	codeMissingField   = "request.missing_field"
 	codeNotFound       = "request.not_found"
 	codeUnknownProject = "project.unknown"
+	codeSessionInUse   = "busy.session_in_use"
 )
 
 // badBody refuses a request whose body did not parse. The parse error itself is
@@ -44,6 +45,13 @@ func notFound(w http.ResponseWriter, kind, name string) {
 func unknownProject(w http.ResponseWriter, root string) {
 	refuse(w, http.StatusBadRequest, codeUnknownProject, "project is not open here",
 		map[string]any{"root": root})
+}
+
+// sessionInUse is the refusal a reader has to be able to act on: the session is
+// held somewhere else, and the detail says where. It is a conflict, not a
+// failure — nothing is broken and nothing needs reporting.
+func sessionInUse(w http.ResponseWriter, err error) {
+	busy(w, codeSessionInUse, sessionInUseError(err), map[string]any{"detail": sessionInUseError(err)})
 }
 
 // decodeBody reads a JSON body under a size cap and refuses as one kind when it

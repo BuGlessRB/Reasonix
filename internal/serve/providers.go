@@ -97,7 +97,7 @@ type providerView struct {
 func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 	cfg, err := config.Load()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	current, _, _ := strings.Cut(currentModelRef(s.ctl()), "/")
@@ -180,7 +180,7 @@ func (s *Server) probeProvider(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// The message is the answer here — "401" and "no chat models" send the
 		// user to different fixes — so it is the body, not a bare status.
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
 	writeJSON(w, struct {
@@ -233,7 +233,7 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	entry, err := providerEntryFrom(body.Name, body.Kind, body.BaseURL, body.Default, body.Effort, body.Models, body.Vision, body.AuthHeader, body.NoProxy)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	entry.APIKeyEnv = keyEnvForNewSource(entry.Name, entry.BaseURL, body.APIKey)
@@ -245,11 +245,11 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := config.LoadForEdit(config.UserConfigPath())
 	if err := cfg.UpsertProvider(entry); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := cfg.SaveTo(config.UserConfigPath()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	// No rebuild: the model list and every switch read config from disk, so the
@@ -282,11 +282,11 @@ func (s *Server) removeProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := config.LoadForEdit(config.UserConfigPath())
 	if err := cfg.RemoveProvider(name); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := cfg.SaveTo(config.UserConfigPath()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

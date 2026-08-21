@@ -371,7 +371,7 @@ func (h *Hub) openRuntime(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) closeRuntime(w http.ResponseWriter, r *http.Request) {
 	if err := h.Close(r.PathValue("id")); err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeErr(w, http.StatusNotFound, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

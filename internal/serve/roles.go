@@ -31,7 +31,7 @@ func (s *Server) registerRoleRoutes(mux *http.ServeMux) {
 func (s *Server) roles(w http.ResponseWriter, _ *http.Request) {
 	cfg, err := config.Load()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	out := make(map[string]string, len(roleFields))
@@ -67,7 +67,7 @@ func (s *Server) setRole(w http.ResponseWriter, r *http.Request) {
 	if ref != "" {
 		cfg, err := config.Load()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
 		// Naming a model that does not resolve would strand the role on the next
@@ -80,11 +80,11 @@ func (s *Server) setRole(w http.ResponseWriter, r *http.Request) {
 	edit := config.LoadForEdit(config.UserConfigPath())
 	*field(edit) = ref
 	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	if err := s.rebuildInPlace(r.Context()); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+		writeErr(w, http.StatusConflict, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -72,12 +72,12 @@ func (s *Server) accountLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	client, err := s.accountClient()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	grant, err := client.StartDevice(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
 	writeJSON(w, map[string]any{
@@ -105,7 +105,7 @@ func (s *Server) accountPoll(w http.ResponseWriter, r *http.Request) {
 	}
 	client, err := s.accountClient()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	token, user, err := client.PollDevice(r.Context(), req.DeviceCode)
@@ -114,11 +114,11 @@ func (s *Server) accountPoll(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"status": "pending", "slowDown": errors.Is(err, account.ErrSlowDown)})
 		return
 	case err != nil:
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
 	if _, err := account.SaveToken(token); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, map[string]any{"status": "complete", "user": accountUserJSON(user)})
@@ -136,7 +136,7 @@ func (s *Server) accountLogout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := account.ClearToken(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -200,16 +200,25 @@ func TestSaveProviderRejectsWhatItCannotStore(t *testing.T) {
 	srv := httptest.NewServer(s.Handler())
 	defer srv.Close()
 
-	for name, body := range map[string]string{
-		"a name that would break the model ref": `{"name":"a/b","kind":"openai","baseUrl":"https://x.invalid","models":["m"]}`,
-		"an unsupported protocol":               `{"name":"x","kind":"grpc","baseUrl":"https://x.invalid","models":["m"]}`,
-		"no endpoint":                           `{"name":"x","kind":"openai","baseUrl":"","models":["m"]}`,
-		"no models":                             `{"name":"x","kind":"openai","baseUrl":"https://x.invalid","models":[]}`,
-		"a default outside the model list":      `{"name":"x","kind":"openai","baseUrl":"https://x.invalid","models":["m"],"default":"other"}`,
+	// The status the producer chose now reaches the wire, so this asserts what a
+	// client actually branches on: the code. Before, the handler discarded both
+	// the code and the 422 and wrote a bare 400.
+	for name, tc := range map[string]struct{ body, code string }{
+		"a name that would break the model ref": {`{"name":"a/b","kind":"openai","baseUrl":"https://x.invalid","models":["m"]}`, "provider.name_invalid"},
+		"an unsupported protocol":               {`{"name":"x","kind":"grpc","baseUrl":"https://x.invalid","models":["m"]}`, "provider.kind_unsupported"},
+		"no endpoint":                           {`{"name":"x","kind":"openai","baseUrl":"","models":["m"]}`, "provider.endpoint_required"},
+		"no models":                             {`{"name":"x","kind":"openai","baseUrl":"https://x.invalid","models":[]}`, "provider.no_models_picked"},
+		"a default outside the model list":      {`{"name":"x","kind":"openai","baseUrl":"https://x.invalid","models":["m"],"default":"other"}`, "provider.default_not_selected"},
 	} {
-		resp := postProvider(t, srv.URL, "/providers", body)
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("%s: status = %d, want 400", name, resp.StatusCode)
+		resp := postProvider(t, srv.URL, "/providers", tc.body)
+		if resp.StatusCode < 400 || resp.StatusCode >= 500 {
+			t.Errorf("%s: status = %d, want a client refusal", name, resp.StatusCode)
+		}
+		var got Reason
+		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+			t.Errorf("%s: refusal was not a Reason: %v", name, err)
+		} else if got.Code != tc.code {
+			t.Errorf("%s: code = %q, want %q", name, got.Code, tc.code)
 		}
 		resp.Body.Close()
 	}

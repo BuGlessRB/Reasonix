@@ -73,7 +73,7 @@ func (s *Server) activateTheme(w http.ResponseWriter, r *http.Request) {
 	edit := config.LoadForEdit(config.UserConfigPath())
 	edit.Desktop.ThemePack = id
 	if err := edit.SaveTo(config.UserConfigPath()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
