@@ -40,6 +40,16 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   judgement inside a gate is worse than no gate. Security allow-lists are the
   exception and stay. Something that can only be built by matching words does
   not get built — say what is missing instead of guessing at it.
+- The other half of that rule: an error a caller must tell apart **carries an
+  identity** — a sentinel, a typed code — never a sentence. Only the producer
+  knows a deadline expired rather than a socket closed, and a message is where
+  that knowledge goes to die: the reader is left matching words, or with
+  nothing. Across HTTP the identity is a dotted code through `refuse`;
+  `refusal-path` fails a new `http.Error` in `internal/serve`, and the parity
+  test fails a code the frontend cannot say. Inside Go it is `errors.Is` on a
+  sentinel the wrapping preserves; `error-text` fails a new match against an
+  error message, following it one hop into a local because storing the text
+  first is what the direct form turns into.
 
 ## Comments
 

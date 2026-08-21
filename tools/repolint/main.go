@@ -32,12 +32,14 @@ const (
 	ruleFuncSize    = "function-size"
 	ruleComplexity  = "complexity"
 	ruleStructState = "struct-state"
+	ruleRefusalPath = "refusal-path"
+	ruleErrorText   = "error-text"
 )
 
 var allRules = []string{
 	ruleEssay, ruleBanner, ruleMarker, ruleDeadCode,
 	ruleNarrative, ruleFileSize, ruleLayering,
-	ruleFuncSize, ruleComplexity, ruleStructState,
+	ruleFuncSize, ruleComplexity, ruleStructState, ruleRefusalPath, ruleErrorText,
 }
 
 func main() {
@@ -128,6 +130,8 @@ func run(root string) ([]Finding, error) {
 		findings = append(findings, checkComments(src)...)
 		findings = append(findings, checkComplexity(src)...)
 		findings = append(findings, checkStructState(src)...)
+		findings = append(findings, checkRefusalPath(src)...)
+		findings = append(findings, checkErrorText(src)...)
 		imports[rel] = src.importRefs()
 	}
 	return append(findings, checkLayering(imports)...), nil
