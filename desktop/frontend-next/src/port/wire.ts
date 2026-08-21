@@ -34,9 +34,15 @@ export type Kind =
   | "stream_gap"
   | "stream_watermark";
 
+// Present when a call hands work to sub-agents: who runs it, how many of them,
+// and the model/effort they resolved to. Its presence is what marks a
+// delegation — the model only ever calls use_capability, so the tool name does
+// not say whether the work left this context.
 export interface Profile {
   name?: string;
-  description?: string;
+  count?: number;
+  model?: string;
+  effort?: string;
 }
 
 // Present on shell tools. A non-zero exit was invisible before: the card only

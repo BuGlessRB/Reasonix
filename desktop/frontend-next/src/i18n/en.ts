@@ -584,6 +584,8 @@ export const EN: Record<string, string> = {
   "{n} 个": "{n}",
   "{n} 个技能": "{n} skills",
   "{n} 个子代理": "{n} subagents",
+  "{n} 个子代理 · {steps} 步": "{n} subagents · {steps} steps",
+  "子代理做了 {n} 步": "the subagent took {n} steps",
   "{n} 个提示词": "{n} prompts",
   "{n} 套配色": "{n} palettes",
   "{n} 条钩子": "{n} hooks",

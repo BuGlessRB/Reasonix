@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n";
+import { nestLabel } from "../delegation";
 import type { ExtensionSurface, Tool } from "../../port/wire";
 import { categoryOf, labelFor, mcpOrigin, runLabelFor } from "../icons";
 import { Sym, glyphFor } from "../Sym";
@@ -132,7 +133,7 @@ export function ToolCard({
             <div className="nest">
               <div className="nest-hd">
                 <i className="pip" />
-                <span className="who">{who ? t("{name} 做了 {n} 步", { name: who, n: children.length }) : t("{n} 个子代理", { n: children.length })}</span>
+                <span className="who">{nestLabel(who, tool.profile?.count, children.length)}</span>
                 <span className="prof">{t("独立上下文 · 不进主轨迹")}</span>
                 {/* 委派出去那部分的账：耗时是父调用的，token 是子步骤各自留下的 */}
                 <span className="rt">
