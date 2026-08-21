@@ -223,7 +223,7 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 	}
 	path, err := filepath.Abs(strings.TrimSpace(body.Path))
 	if err != nil || !store.IsSessionTranscriptName(filepath.Base(path)) {
-		http.Error(w, "invalid session path", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, codeSessionBadPath, "the session path could not be resolved", nil)
 		return
 	}
 	if h.openSessions()[agent.CanonicalSessionPath(path)] != "" {
@@ -275,7 +275,7 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request) {
 	}
 	path, err := filepath.Abs(strings.TrimSpace(body.Path))
 	if err != nil || !store.IsSessionTranscriptName(filepath.Base(path)) {
-		http.Error(w, "invalid session path", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, codeSessionBadPath, "the session path could not be resolved", nil)
 		return
 	}
 	if !h.ownsSessionDir(filepath.Dir(path)) {

@@ -901,7 +901,7 @@ func writeJSONCached(w http.ResponseWriter, r *http.Request, v any) {
 	body, err := json.Marshal(v)
 	if err != nil {
 		slog.Warn("serve: writeJSONCached marshal failed", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		refuse(w, http.StatusInternalServerError, "internal.failed", "something went wrong on this side", nil)
 		return
 	}
 	etag := fmt.Sprintf(`"%x"`, sha256.Sum256(body))

@@ -47,7 +47,7 @@ func (s *Server) assignSurfaceSlot(w http.ResponseWriter, r *http.Request) {
 	// The names are a frontend's own vocabulary, so this end checks only that
 	// they are names: what a slot means is not knowable from here.
 	if surface == "" || len(surface) > 128 || len(slot) > 64 {
-		http.Error(w, "surface required", http.StatusBadRequest)
+		missingField(w, "surface")
 		return
 	}
 	edit := config.LoadForEdit(config.UserConfigPath())

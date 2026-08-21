@@ -20,14 +20,14 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	line := q.Get("line")
 	if len(line) > maxCompleteLine {
-		http.Error(w, "line too long", http.StatusRequestEntityTooLarge)
+		refuse(w, http.StatusRequestEntityTooLarge, "complete.line_too_long", "that line is too long to complete", nil)
 		return
 	}
 	cursor := len(line)
 	if v := q.Get("cursor"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil {
-			http.Error(w, "cursor must be a number", http.StatusBadRequest)
+			refuse(w, http.StatusBadRequest, codeBadValue, "cursor must be a number", map[string]any{"field": "cursor", "allowed": []string{"a number"}})
 			return
 		}
 		cursor = byteOffset(line, n)

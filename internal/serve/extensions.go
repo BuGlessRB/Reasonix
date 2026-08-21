@@ -76,7 +76,7 @@ func (s *Server) submitExtensionForm(w http.ResponseWriter, r *http.Request) {
 	pluginID := strings.TrimSpace(req.PluginID)
 	surfaceID := strings.TrimSpace(req.SurfaceID)
 	if pluginID == "" || surfaceID == "" {
-		http.Error(w, "pluginId and surfaceId required", http.StatusBadRequest)
+		missingField(w, "pluginId and surfaceId")
 		return
 	}
 	if err := s.ctl().SubmitExtensionForm(r.Context(), pluginID, surfaceID, req.Values); err != nil {

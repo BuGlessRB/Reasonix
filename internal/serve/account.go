@@ -100,7 +100,7 @@ func (s *Server) accountPoll(w http.ResponseWriter, r *http.Request) {
 		DeviceCode string `json:"deviceCode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.DeviceCode) == "" {
-		http.Error(w, "deviceCode required", http.StatusBadRequest)
+		missingField(w, "deviceCode")
 		return
 	}
 	client, err := s.accountClient()
@@ -146,7 +146,7 @@ func (s *Server) accountAuthAllowed(w http.ResponseWriter) bool {
 	if s.grants.accountAuth {
 		return true
 	}
-	http.Error(w, "account sign-in is not enabled for this server", http.StatusForbidden)
+	refuse(w, http.StatusForbidden, "account.signin_disabled", "account sign-in is not enabled for this server", nil)
 	return false
 }
 

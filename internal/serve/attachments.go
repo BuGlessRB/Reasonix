@@ -58,7 +58,7 @@ func (s *Server) attachments(w http.ResponseWriter, r *http.Request) {
 		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "read attachment: "+err.Error(), http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	raw, err := attachmentBytes(body.Path, body.Data)

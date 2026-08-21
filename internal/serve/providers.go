@@ -239,7 +239,7 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
 	entry.APIKeyEnv = keyEnvForNewSource(entry.Name, entry.BaseURL, body.APIKey)
 	if key := strings.TrimSpace(body.APIKey); key != "" {
 		if _, err := config.SetCredential(entry.APIKeyEnv, key); err != nil {
-			http.Error(w, fmt.Sprintf("save provider key: %v", err), http.StatusInternalServerError)
+			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
 	}

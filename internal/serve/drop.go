@@ -2,7 +2,6 @@ package serve
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"reasonix/internal/control"
@@ -35,11 +34,11 @@ func (s *Server) drop(w http.ResponseWriter, r *http.Request) {
 		Paths []string `json:"paths"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
-		http.Error(w, "read drop: "+err.Error(), http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	if len(body.Paths) > maxDroppedPaths {
-		http.Error(w, fmt.Sprintf("%d paths dropped at once; %d is the most one drop carries", len(body.Paths), maxDroppedPaths), http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, "drop.too_many_paths", "too many paths in one drop", map[string]any{"count": len(body.Paths), "limit": maxDroppedPaths})
 		return
 	}
 	ctl := s.ctl()

@@ -159,7 +159,7 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 // all belong to the project that produced them.
 func (s *Server) workspace(w http.ResponseWriter, r *http.Request) {
 	if !s.grants.workspaceSwitch {
-		http.Error(w, "this server may not change its workspace", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "workspace.changing_disabled", "this server may not change its workspace", nil)
 		return
 	}
 	var body struct {

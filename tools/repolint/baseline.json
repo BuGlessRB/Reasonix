@@ -10,7 +10,7 @@
     "layering": 0,
     "marker": 0,
     "narrative": 57,
-    "refusal-path": 27,
+    "refusal-path": 0,
     "struct-state": 69
   },
   "files": {
@@ -1265,56 +1265,15 @@
       "complexity": 9,
       "essay": 1
     },
-    "internal/serve/account.go": {
-      "refusal-path": 2
-    },
-    "internal/serve/attachments.go": {
-      "refusal-path": 1
-    },
     "internal/serve/auth.go": {
       "essay": 2
     },
-    "internal/serve/changes.go": {
-      "refusal-path": 1
-    },
-    "internal/serve/complete.go": {
-      "refusal-path": 2
-    },
-    "internal/serve/drop.go": {
-      "refusal-path": 2
-    },
-    "internal/serve/eventstream.go": {
-      "refusal-path": 1
-    },
-    "internal/serve/extensions.go": {
-      "refusal-path": 1
-    },
-    "internal/serve/fail.go": {
-      "refusal-path": 1
-    },
-    "internal/serve/hub.go": {
-      "refusal-path": 1
-    },
-    "internal/serve/hub_tree.go": {
-      "refusal-path": 2
-    },
-    "internal/serve/provider_edit.go": {
-      "refusal-path": 2
-    },
     "internal/serve/provider_setup.go": {
-      "essay": 1,
-      "refusal-path": 2
-    },
-    "internal/serve/providers.go": {
-      "refusal-path": 1
-    },
-    "internal/serve/rewind.go": {
-      "refusal-path": 2
+      "essay": 1
     },
     "internal/serve/serve.go": {
       "essay": 22,
-      "file-size": 714,
-      "refusal-path": 1
+      "file-size": 714
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3
@@ -1323,20 +1282,10 @@
       "essay": 1
     },
     "internal/serve/settings.go": {
-      "essay": 1,
-      "refusal-path": 1
-    },
-    "internal/serve/shell.go": {
-      "refusal-path": 2
-    },
-    "internal/serve/surfaces.go": {
-      "refusal-path": 1
+      "essay": 1
     },
     "internal/serve/switch_recovery_test.go": {
       "essay": 2
-    },
-    "internal/serve/workspace.go": {
-      "refusal-path": 1
     },
     "internal/sessiontemp/manager.go": {
       "essay": 5

@@ -141,11 +141,11 @@ func (s *Server) providerSetupSave(w http.ResponseWriter, r *http.Request) {
 		APIKey string `json:"apiKey"`
 	}
 	if err := dec.Decode(&body); err != nil {
-		http.Error(w, "invalid provider setup request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	if err := ensureProviderSetupJSONEOF(dec); err != nil {
-		http.Error(w, "invalid provider setup request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	key := strings.TrimSpace(body.APIKey)

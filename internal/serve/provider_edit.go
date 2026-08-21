@@ -54,7 +54,7 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	def := strings.TrimSpace(body.Default)
 	if def != "" && !slices.Contains(models, def) {
-		http.Error(w, fmt.Sprintf("default model %q is not one of the selected models", def), http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, "provider.default_not_selected", "the default is not one of the selected models", map[string]any{"model": def})
 		return
 	}
 	if base := strings.TrimSpace(body.BaseURL); base != "" {
@@ -103,7 +103,7 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 	// one without a rebuild that would interrupt the conversation.
 	if key := strings.TrimSpace(body.APIKey); key != "" {
 		if _, err := config.SetCredential(entry.APIKeyEnv, key); err != nil {
-			http.Error(w, fmt.Sprintf("save provider key: %v", err), http.StatusInternalServerError)
+			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
 	}

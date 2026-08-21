@@ -22,7 +22,7 @@ func (s *Server) shellSettings(w http.ResponseWriter, _ *http.Request) {
 // program the agent's commands are handed to.
 func (s *Server) saveShellSettings(w http.ResponseWriter, r *http.Request) {
 	if !s.grants.providerEdit {
-		http.Error(w, "shell editing is not enabled on this server", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "shell.editing_disabled", "shell editing is not enabled on this server", nil)
 		return
 	}
 	var body struct {
@@ -30,7 +30,7 @@ func (s *Server) saveShellSettings(w http.ResponseWriter, r *http.Request) {
 		Path   string `json:"path"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
-		http.Error(w, "invalid shell request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	if err := s.ctl().SaveShellSettings(body.Prefer, body.Path); err != nil {

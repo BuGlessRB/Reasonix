@@ -240,7 +240,7 @@ const sseKeepaliveInterval = 15 * time.Second
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		refuse(w, http.StatusInternalServerError, "stream.unsupported", "this transport cannot stream", nil)
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")

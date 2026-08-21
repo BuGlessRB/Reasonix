@@ -49,7 +49,7 @@ func (s *Server) rewindCommit(w http.ResponseWriter, r *http.Request) {
 		PlanID string `json:"planId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PlanID == "" {
-		http.Error(w, "missing planId", http.StatusBadRequest)
+		missingField(w, "planId")
 		return
 	}
 	result, err := s.ctl().CommitRewind(body.PlanID)
@@ -72,7 +72,7 @@ func (s *Server) rewindUndo(w http.ResponseWriter, r *http.Request) {
 		TransactionID string `json:"transactionId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.TransactionID == "" {
-		http.Error(w, "missing transactionId", http.StatusBadRequest)
+		missingField(w, "transactionId")
 		return
 	}
 	result, err := s.ctl().UndoRewind(body.TransactionID)

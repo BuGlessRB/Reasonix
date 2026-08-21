@@ -32,3 +32,16 @@ func TestRefusalPathIgnoresPackagesWithoutThatContract(t *testing.T) {
 		}
 	}
 }
+
+// The adapter is exempt because it is where the fallback lives; the exemption
+// is one file, not a habit that spreads to whatever moves in beside it.
+func TestRefusalPathExemptsOnlyTheAdapter(t *testing.T) {
+	if got := checkRefusalPath(parseBytes(refusalAdapter, []byte(refusalSource))); len(got) != 0 {
+		t.Fatalf("the adapter was flagged: %v", got)
+	}
+	for _, rel := range []string{"internal/serve/fail_extra.go", "internal/serve/failure.go", "internal/serve/sub/fail.go"} {
+		if got := checkRefusalPath(parseBytes(rel, []byte(refusalSource))); len(got) != 1 {
+			t.Fatalf("%s took the adapter's exemption: %v", rel, got)
+		}
+	}
+}

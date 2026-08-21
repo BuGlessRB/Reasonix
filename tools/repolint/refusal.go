@@ -10,11 +10,20 @@ import (
 // English only when it has no wording. http.Error writes prose with no code, so
 // a caller sees a status and a sentence nobody translated — and, before the
 // transport read plain bodies at all, only the status.
-const refusalPackage = "internal/serve/"
+const (
+	refusalPackage = "internal/serve/"
+	refusalAdapter = "internal/serve/fail.go"
+)
 
 // checkRefusalPath flags a plain http.Error where the coded refusal belongs.
 func checkRefusalPath(s *sourceFile) []Finding {
 	if !strings.HasPrefix(s.rel, refusalPackage) || strings.HasSuffix(s.rel, "_test.go") {
+		return nil
+	}
+	// writeErr is the one adapter allowed plain text: it renders a coded error
+	// and falls back for one carrying none, which is what lets the code below
+	// adopt codes without a flag day. The exemption is this file, not its name.
+	if s.rel == refusalAdapter {
 		return nil
 	}
 	var out []Finding

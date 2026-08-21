@@ -20,7 +20,7 @@ func (s *Server) preset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !agentpreset.IsValid(body.Preset) {
-		http.Error(w, "unknown preset", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, "settings.unknown_preset", "no such preset", nil)
 		return
 	}
 	s.ctl().SetAgentPreset(body.Preset)

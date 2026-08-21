@@ -380,7 +380,7 @@ func (h *Hub) closeRuntime(w http.ResponseWriter, r *http.Request) {
 func (h *Hub) routeRuntime(w http.ResponseWriter, r *http.Request) {
 	rt := h.Get(r.PathValue("id"))
 	if rt == nil {
-		http.Error(w, "no such runtime", http.StatusNotFound)
+		notFound(w, "runtime", r.PathValue("rt"))
 		return
 	}
 	rt.handler.ServeHTTP(w, r)

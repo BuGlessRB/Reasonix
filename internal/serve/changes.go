@@ -15,7 +15,7 @@ import (
 func (s *Server) changes(w http.ResponseWriter, r *http.Request) {
 	list, ok, err := gitstatus.Status(r.Context(), s.ctl().WorkspaceRoot())
 	if err != nil {
-		http.Error(w, "workspace status: "+err.Error(), http.StatusInternalServerError)
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	if list == nil {
