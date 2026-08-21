@@ -16,6 +16,9 @@ type ContractEntry struct {
 	Description string
 	ReadOnly    bool
 	Schema      json.RawMessage
+	// CapabilityAliases are the extra capability ids this tool answers to.
+	// Omitted when empty so a tool without aliases keeps its contract bytes.
+	CapabilityAliases []string `json:",omitempty"`
 }
 
 // BuiltinContractEntries returns a stable snapshot of compile-time built-ins.
@@ -32,11 +35,16 @@ func contractEntriesFromTools(tools []Tool, canonical map[string]json.RawMessage
 				schema = append(json.RawMessage(nil), c...)
 			}
 		}
+		var aliases []string
+		if a, ok := t.(CapabilityAliased); ok {
+			aliases = a.CapabilityAliases()
+		}
 		entries = append(entries, ContractEntry{
-			Name:        t.Name(),
-			Description: strings.TrimSpace(t.Description()),
-			ReadOnly:    t.ReadOnly(),
-			Schema:      schema,
+			Name:              t.Name(),
+			Description:       strings.TrimSpace(t.Description()),
+			ReadOnly:          t.ReadOnly(),
+			Schema:            schema,
+			CapabilityAliases: aliases,
 		})
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })

@@ -526,8 +526,14 @@ func (t *UseCapabilityTool) CloneForAgent(ledger *capability.Ledger, audit *capa
 
 func (*UseCapabilityTool) Name() string { return "use_capability" }
 
+// CapabilityIDExamples are the concrete ids the proxy description names. Each
+// must be listed, inspectable, and callable in a real assembly; the boot effect
+// test that reads this stops the description from promising an id the catalog
+// refuses.
+var CapabilityIDExamples = []string{"tool:grep", "skill:review", "task:subagent"}
+
 func (*UseCapabilityTool) Description() string {
-	return "Unified capability proxy with a fixed schema: list catalog capabilities, inspect metadata, call a capability by stable id (tool:grep, skill:review, mcp-tool:server/tool, task:subagent, workflow:name, web:/lsp:/session:/memory: namespaces), or decline a prefer capability with a non-empty reason. Calling does not change the provider-visible tool schema. Resolved writers still pass permission, plan mode, sandbox, write-path, and workspace-lease checks. The Planner leaves destructive MCP for the Executor."
+	return "Unified capability proxy with a fixed schema: list catalog capabilities, inspect one (metadata plus its input schema), call a capability by stable id (tool:grep, skill:review, task:subagent, mcp-tool:server/tool), or decline a prefer capability with a non-empty reason. action=list names every callable id and its aliases; inspect one for its arguments before calling. Calling does not change the provider-visible tool schema. Resolved writers still pass permission, plan mode, sandbox, write-path, and workspace-lease checks. The Planner leaves destructive MCP for the Executor."
 }
 
 func (*UseCapabilityTool) ReadOnly() bool { return true }
@@ -541,7 +547,7 @@ func (*UseCapabilityTool) Schema() json.RawMessage {
 		"type":"object",
 		"properties":{
 			"action":{"type":"string","description":"list | inspect | call | decline"},
-			"capability_id":{"type":"string","description":"Capability id such as skill:review, mcp-server:github, or mcp-tool:github/search_issues. Not required for action=list."},
+			"capability_id":{"type":"string","description":"Capability id such as skill:review, task:subagent, mcp-server:github, or mcp-tool:github/search_issues. Not required for action=list."},
 			"arguments":{"type":"object","description":"Raw MCP tool arguments for action=call"},
 			"reason":{"type":"string","description":"Required non-empty reason when action=decline"}
 		},
@@ -705,12 +711,13 @@ type listServerInfo struct {
 // filtering.
 func (t *UseCapabilityTool) listCapabilities() (string, error) {
 	type capInfo struct {
-		ID          string `json:"id"`
-		Kind        string `json:"kind"`
-		Name        string `json:"name"`
-		Status      string `json:"status,omitempty"`
-		ReadOnly    bool   `json:"read_only,omitempty"`
-		Description string `json:"description,omitempty"`
+		ID          string   `json:"id"`
+		Aliases     []string `json:"aliases,omitempty"`
+		Kind        string   `json:"kind"`
+		Name        string   `json:"name"`
+		Status      string   `json:"status,omitempty"`
+		ReadOnly    bool     `json:"read_only,omitempty"`
+		Description string   `json:"description,omitempty"`
 	}
 	var caps []capInfo
 	if t.catalog != nil {
@@ -721,6 +728,7 @@ func (t *UseCapabilityTool) listCapabilities() (string, error) {
 			}
 			caps = append(caps, capInfo{
 				ID:          e.ID,
+				Aliases:     e.Aliases,
 				Kind:        string(e.Kind),
 				Name:        e.Name,
 				Status:      string(e.Status),
@@ -803,7 +811,7 @@ func (t *UseCapabilityTool) listServers() (string, error) {
 func (t *UseCapabilityTool) inspect(ctx context.Context, id string) (string, error) {
 	cat := t.currentCatalog()
 	if e, ok := cat.Lookup(id); ok {
-		b, _ := json.MarshalIndent(map[string]any{
+		info := map[string]any{
 			"id":          e.ID,
 			"kind":        e.Kind,
 			"name":        e.Name,
@@ -815,7 +823,18 @@ func (t *UseCapabilityTool) inspect(ctx context.Context, id string) (string, err
 			"profiles":    e.Profiles,
 			"tool_name":   e.ToolName,
 			"auto_start":  e.AutoStart,
-		}, "", "  ")
+		}
+		if len(e.Aliases) > 0 {
+			info["aliases"] = e.Aliases
+		}
+		// A registry tool answers with its own schema. Without it the model is
+		// left guessing argument names for a tool the provider schema hides.
+		if e.Kind == capability.KindTool && t.registry != nil {
+			if tl, ok := t.registry.Get(e.ToolName); ok {
+				info["input_schema"] = json.RawMessage(tl.Schema())
+			}
+		}
+		b, _ := json.MarshalIndent(info, "", "  ")
 		// For MCP entries, list tools without side effects: live tools when the
 		// server is already connected, cached schema otherwise. Inspect runs
 		// during call resolution — before permission and hook gates — so it must
@@ -934,16 +953,10 @@ func (t *UseCapabilityTool) resolveCall(ctx context.Context, id string, args jso
 	if name, ok := strings.CutPrefix(id, "skill:"); ok {
 		return t.resolveSkillCall(strings.TrimSpace(name), id, args, base)
 	}
-	if name, ok := strings.CutPrefix(id, "task:"); ok {
-		return t.resolveRegistryTool(taskToolName(name), id, args, base)
-	}
-	if name, ok := strings.CutPrefix(id, "workflow:"); ok {
-		return t.resolveRegistryTool(strings.TrimSpace(name), "tool:"+strings.TrimSpace(name), args, base)
-	}
-	for _, prefix := range []string{"web:", "lsp:", "session:", "memory:"} {
-		if rest, ok := strings.CutPrefix(id, prefix); ok {
-			return t.resolveRegistryTool(strings.TrimSpace(rest), id, args, base)
-		}
+	// An alias resolves through the catalog that listed it: the id the model
+	// read from list/inspect is the id this call answers to.
+	if e, ok := t.currentCatalog().Lookup(id); ok && e.Kind == capability.KindTool && e.ToolName != "" {
+		return t.resolveRegistryTool(e.ToolName, id, args, base)
 	}
 	// Server-level call is the first-discovery path for servers with no
 	// schema cache: it resolves to a gated connect-and-list target so the
@@ -1120,22 +1133,6 @@ func (t *UseCapabilityTool) resolveSkillCall(skillName, id string, args json.Raw
 		}
 	}
 	return t.resolveUnavailable(base, id, skillName, fmt.Sprintf("skill tools are not available for %q", skillName)), nil
-}
-
-func taskToolName(name string) string {
-	name = strings.TrimSpace(name)
-	switch name {
-	case "subagent", "task":
-		return "task"
-	case "read_only_subagent", "read_only_task", "research":
-		return "read_only_task"
-	case "parallel", "parallel_tasks":
-		return "parallel_tasks"
-	case "fleet":
-		return "fleet"
-	default:
-		return name
-	}
 }
 
 // resolveUnavailable fills the host-proven unavailable shape shared by the

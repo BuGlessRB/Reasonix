@@ -119,6 +119,13 @@ type ReadOnlyExecutionBlockReason interface {
 	ReadOnlyExecutionBlockReason() string
 }
 
+// CapabilityAliased is implemented by a tool that answers to capability ids
+// besides tool:<name>. Declaring them on the tool is what keeps the catalog
+// that lists an id and the proxy that resolves one reading the same table.
+type CapabilityAliased interface {
+	CapabilityAliases() []string
+}
+
 // MCPMetadata exposes the original MCP identity behind a model-visible
 // "mcp__<server>__<tool>" adapter. The model name may be normalized for provider
 // function-name rules; host policy and diagnostics use the raw server-local

@@ -467,7 +467,7 @@
     },
     {
       "name": "use_capability",
-      "description": "Unified capability proxy with a fixed schema: list catalog capabilities, inspect metadata, call a capability by stable id (tool:grep, skill:review, mcp-tool:server/tool, task:subagent, workflow:name, web:/lsp:/session:/memory: namespaces), or decline a prefer capability with a non-empty reason. Calling does not change the provider-visible tool schema. Resolved writers still pass permission, plan mode, sandbox, write-path, and workspace-lease checks. The Planner leaves destructive MCP for the Executor.",
+      "description": "Unified capability proxy with a fixed schema: list catalog capabilities, inspect one (metadata plus its input schema), call a capability by stable id (tool:grep, skill:review, task:subagent, mcp-tool:server/tool), or decline a prefer capability with a non-empty reason. action=list names every callable id and its aliases; inspect one for its arguments before calling. Calling does not change the provider-visible tool schema. Resolved writers still pass permission, plan mode, sandbox, write-path, and workspace-lease checks. The Planner leaves destructive MCP for the Executor.",
       "parameters": {
         "properties": {
           "action": {
@@ -479,7 +479,7 @@
             "type": "object"
           },
           "capability_id": {
-            "description": "Capability id such as skill:review, mcp-server:github, or mcp-tool:github/search_issues. Not required for action=list.",
+            "description": "Capability id such as skill:review, task:subagent, mcp-server:github, or mcp-tool:github/search_issues. Not required for action=list.",
             "type": "string"
           },
           "reason": {

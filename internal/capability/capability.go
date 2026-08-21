@@ -52,12 +52,15 @@ type Entry struct {
 	Triggers         []string
 	NegativeTriggers []string
 	ToolName         string
-	ConnectSource    string
-	ConnectName      string
-	Requires         []string // capability IDs this skill depends on
-	Profiles         []string // economy|balanced|delivery; empty = all
-	AutoStart        bool     // MCP: configured auto_start
-	FailureReason    string   // host-proven failure detail
+	// Aliases are extra capability IDs this entry answers to, declared by the
+	// tool itself. Lookup accepts any of them.
+	Aliases       []string
+	ConnectSource string
+	ConnectName   string
+	Requires      []string // capability IDs this skill depends on
+	Profiles      []string // economy|balanced|delivery; empty = all
+	AutoStart     bool     // MCP: configured auto_start
+	FailureReason string   // host-proven failure detail
 }
 
 type RouteCandidate struct {
@@ -130,6 +133,7 @@ func ToolEntries(tools []tool.ContractEntry) []Entry {
 			Status:      StatusReady,
 			ReadOnly:    t.ReadOnly,
 			ToolName:    t.Name,
+			Aliases:     cleanList(t.CapabilityAliases),
 		}
 		if server, raw, ok := tool.SplitMCPName(t.Name); ok {
 			e.ID = "mcp-tool:" + server + "/" + raw

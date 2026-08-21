@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -258,11 +259,20 @@ func catalogFingerprint(entries []Entry) string {
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
-// Lookup returns the entry with the given capability ID.
+// Lookup returns the entry with the given capability ID or declared alias.
+// Exact IDs win over aliases so a namespace can never shadow a real entry.
 func (c Catalog) Lookup(id string) (Entry, bool) {
 	id = strings.TrimSpace(id)
+	if id == "" {
+		return Entry{}, false
+	}
 	for _, e := range c.Entries {
 		if e.ID == id {
+			return e, true
+		}
+	}
+	for _, e := range c.Entries {
+		if slices.Contains(e.Aliases, id) {
 			return e, true
 		}
 	}
