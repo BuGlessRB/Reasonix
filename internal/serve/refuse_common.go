@@ -39,8 +39,10 @@ func missingField(w http.ResponseWriter, field string) {
 	refuse(w, http.StatusBadRequest, codeMissingField, "missing "+field, map[string]any{"field": field})
 }
 
-// notFound refuses a name the runtime does not know: what kind of thing was
-// asked for, and which one.
+// notFound answers 404, which is the trap in it: a name that is merely invalid
+// in this request is a 400, and folding one into the other turned an unknown
+// project and an unknown role into missing resources until the suite objected.
+// Reach for it only when the thing could exist and does not.
 func notFound(w http.ResponseWriter, kind, name string) {
 	refuse(w, http.StatusNotFound, codeNotFound, "no "+kind+" named "+name,
 		map[string]any{"kind": kind, "name": name})

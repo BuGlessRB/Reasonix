@@ -139,12 +139,12 @@ func (s *Server) uploadWallpaper(w http.ResponseWriter, r *http.Request) {
 		Data string `json:"data"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "read wallpaper: "+err.Error(), http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	raw, err := base64.StdEncoding.DecodeString(body.Data)
 	if err != nil {
-		http.Error(w, "wallpaper data must be base64", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, "wallpaper.not_base64", "the image data was not base64", nil)
 		return
 	}
 	name, err := writeWallpaper(body.Mime, raw)
@@ -194,12 +194,12 @@ func (s *Server) wallpaperAsset(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	cfg, err := config.Load()
 	if err != nil || cfg.Desktop.Appearance.Wallpaper.File != name {
-		http.Error(w, "not found", http.StatusNotFound)
+		notFound(w, "wallpaper", name)
 		return
 	}
 	raw, err := os.ReadFile(filepath.Join(appearanceDir(), name))
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		notFound(w, "wallpaper", name)
 		return
 	}
 	w.Header().Set("Content-Type", contentTypeOf(name))

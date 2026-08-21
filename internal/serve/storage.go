@@ -153,7 +153,7 @@ func (s *Server) storagePlan(w http.ResponseWriter, r *http.Request) {
 // the request open for it would leave the panel unable to say anything.
 func (s *Server) storageMove(w http.ResponseWriter, r *http.Request) {
 	if !s.grants.providerEdit {
-		http.Error(w, "moving data is not enabled on this server", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "storage.moving_disabled", "moving data is not enabled on this server", nil)
 		return
 	}
 	root, dir, ok := decodeStorageTarget(w, r)
@@ -166,7 +166,7 @@ func (s *Server) storageMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.moves.begin(storageMove{Root: string(plan.Root), To: plan.To, Phase: string(storage.PhaseCopying), Total: plan.Bytes}) {
-		http.Error(w, "a move is already running", http.StatusConflict)
+		busy(w, "storage.move_running", "a move is already running", nil)
 		return
 	}
 	// Detached from the request: the copy outlives the client that asked for

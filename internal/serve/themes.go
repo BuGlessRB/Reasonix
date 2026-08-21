@@ -85,12 +85,12 @@ func (s *Server) activateTheme(w http.ResponseWriter, r *http.Request) {
 func (s *Server) themeAsset(w http.ResponseWriter, r *http.Request) {
 	kind, ok := theme.KindOf(r.PathValue("asset"))
 	if !ok {
-		http.Error(w, "unknown asset", http.StatusNotFound)
+		notFound(w, "asset", r.PathValue("asset"))
 		return
 	}
 	raw, contentType, err := theme.Asset(r.PathValue("id"), kind)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		notFound(w, "theme", r.PathValue("id"))
 		return
 	}
 	w.Header().Set("Content-Type", contentType)

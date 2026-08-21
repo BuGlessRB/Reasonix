@@ -47,7 +47,7 @@ func (s *Server) roles(w http.ResponseWriter, _ *http.Request) {
 // thing a server reachable over a network must not let a client do.
 func (s *Server) setRole(w http.ResponseWriter, r *http.Request) {
 	if !s.grants.providerEdit {
-		http.Error(w, "role editing is not enabled on this server", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "roles.editing_disabled", "role editing is not enabled on this server", nil)
 		return
 	}
 	var body struct {
@@ -55,12 +55,12 @@ func (s *Server) setRole(w http.ResponseWriter, r *http.Request) {
 		Ref  string `json:"ref"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
-		http.Error(w, "invalid role request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	field, ok := roleFields[strings.TrimSpace(body.Role)]
 	if !ok {
-		http.Error(w, fmt.Sprintf("unknown role %q", body.Role), http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, "roles.unknown", "no such role", map[string]any{"role": body.Role})
 		return
 	}
 	ref := strings.TrimSpace(body.Ref)
@@ -73,7 +73,7 @@ func (s *Server) setRole(w http.ResponseWriter, r *http.Request) {
 		// Naming a model that does not resolve would strand the role on the next
 		// build, and the failure would surface as a broken turn rather than here.
 		if !cfg.ModelRefSelectable(ref, s.ctl().ProviderCatalog()) {
-			http.Error(w, fmt.Sprintf("no configured model matches %q", ref), http.StatusBadRequest)
+			refuse(w, http.StatusBadRequest, "roles.model_unknown", "no configured model matches that reference", map[string]any{"model": ref})
 			return
 		}
 	}

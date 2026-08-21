@@ -257,7 +257,7 @@ func tokenBootstrapPublicPath(r *http.Request) bool {
 // keeping it out of request lines, access logs, browser history, and referrers.
 func (ag *authGate) handleTokenBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		refuse(w, http.StatusMethodNotAllowed, "request.method_not_allowed", "that method is not accepted here", nil)
 		return
 	}
 	contentType := r.Header.Get("Content-Type")
@@ -265,7 +265,7 @@ func (ag *authGate) handleTokenBootstrap(w http.ResponseWriter, r *http.Request)
 		contentType = contentType[:i]
 	}
 	if !strings.EqualFold(strings.TrimSpace(contentType), "application/json") {
-		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+		refuse(w, http.StatusUnsupportedMediaType, "request.bad_content_type", "the body must be application/json", nil)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
@@ -274,12 +274,12 @@ func (ag *authGate) handleTokenBootstrap(w http.ResponseWriter, r *http.Request)
 	}
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(&body); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	var extra any
 	if err := dec.Decode(&extra); err != io.EOF {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(body.Token), []byte(ag.token)) != 1 {
@@ -387,7 +387,7 @@ func (ag *authGate) handleLogin(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		ag.loginSubmit(w, r)
 	default:
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		refuse(w, http.StatusMethodNotAllowed, "request.method_not_allowed", "that method is not accepted here", nil)
 	}
 }
 
@@ -411,7 +411,7 @@ func (ag *authGate) loginSubmit(w http.ResponseWriter, r *http.Request) {
 
 	// Parse the password from the form.
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	password := r.FormValue("password")

@@ -26,12 +26,12 @@ func (s *Server) permissions(w http.ResponseWriter, _ *http.Request) {
 // not be able to widen its own boundary.
 func (s *Server) savePermissions(w http.ResponseWriter, r *http.Request) {
 	if !s.grants.providerEdit {
-		http.Error(w, "permission editing is not enabled on this server", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "permissions.editing_disabled", "permission editing is not enabled on this server", nil)
 		return
 	}
 	var body control.PermissionLists
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&body); err != nil {
-		http.Error(w, "invalid permissions request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	if err := s.ctl().SavePermissionRules(body); err != nil {
@@ -51,12 +51,12 @@ func (s *Server) sandboxSettings(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) saveSandboxSettings(w http.ResponseWriter, r *http.Request) {
 	if !s.grants.providerEdit {
-		http.Error(w, "sandbox editing is not enabled on this server", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "sandbox.editing_disabled", "sandbox editing is not enabled on this server", nil)
 		return
 	}
 	var body control.SandboxSettings
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10)).Decode(&body); err != nil {
-		http.Error(w, "invalid sandbox request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	if err := s.ctl().SaveSandboxSettings(body); err != nil {

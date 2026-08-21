@@ -215,7 +215,7 @@ func (s *Server) installPlugin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) removePlugin(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PathValue("name"))
 	if !pluginpkg.IsValidName(name) {
-		http.Error(w, "invalid plugin name", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, "plugin.bad_name", "that is not a plugin name", nil)
 		return
 	}
 	body := map[string]any{"op": "uninstall", "kind": "plugin", "name": name, "scope": "global"}
@@ -254,7 +254,7 @@ func (s *Server) pluginEnabled(w http.ResponseWriter, r *http.Request) {
 func (s *Server) exportPlugin(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PathValue("name"))
 	if !pluginpkg.IsValidName(name) {
-		http.Error(w, "invalid plugin name", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, "plugin.bad_name", "that is not a plugin name", nil)
 		return
 	}
 	home := config.ReasonixHomeDir()
@@ -271,7 +271,7 @@ func (s *Server) exportPlugin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if root == "" {
-		http.Error(w, "plugin is not installed", http.StatusNotFound)
+		refuse(w, http.StatusNotFound, "plugin.not_installed", "that plugin is not installed", nil)
 		return
 	}
 	archive, required, err := pluginpkg.Export(name, root)
@@ -295,7 +295,7 @@ func decodePluginInstall(w http.ResponseWriter, r *http.Request) (pluginInstallR
 	}
 	req.Source = strings.TrimSpace(req.Source)
 	if req.Source == "" {
-		http.Error(w, "source required", http.StatusBadRequest)
+		missingField(w, "source")
 		return req, false
 	}
 	return req, true

@@ -597,7 +597,7 @@ func csrfGuard(next http.Handler) http.Handler {
 				ct = ct[:i]
 			}
 			if !strings.EqualFold(strings.TrimSpace(ct), "application/json") {
-				http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+				refuse(w, http.StatusUnsupportedMediaType, "request.bad_content_type", "the body must be application/json", nil)
 				return
 			}
 		}
@@ -652,7 +652,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	}
 	trimmed := strings.TrimSpace(body.Input)
 	if strings.HasPrefix(trimmed, "!") {
-		http.Error(w, "shell commands are unavailable over HTTP", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, "shell.unavailable_over_http", "shell commands are unavailable over HTTP", nil)
 		return
 	}
 	// Intercept /model <ref> for runtime model switching (the controller's
