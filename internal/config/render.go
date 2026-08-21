@@ -334,7 +334,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 				fmt.Fprintf(&b, "vision_models = %s   # models in this provider that accept image input\n", renderStringArray(p.VisionModels))
 			}
 			if p.VisionDetail != "" {
-				fmt.Fprintf(&b, "vision_detail = %q   # openai image detail hint: low|high; empty = auto\n", p.VisionDetail)
+				fmt.Fprintf(&b, "vision_detail = %q   # openai image detail hint: low|high (DeepSeek also original); empty = auto\n", p.VisionDetail)
 			}
 			if p.WebSearch != nil {
 				fmt.Fprintf(&b, "web_search  = %t   # provider-executed web_search tool; omitted defaults on for supported official DeepSeek APIs\n", *p.WebSearch)

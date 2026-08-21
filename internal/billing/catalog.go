@@ -64,6 +64,11 @@ func OfficialCatalog() []CatalogEntry {
 		{Provider: "deepseek", Model: "deepseek-v4-pro", Currency: "CNY", CacheHit: 0.025, Input: 3, Output: 6, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG},
 		{Provider: "deepseek", Model: "deepseek-v4-flash", Currency: "USD", CacheHit: 0.0028, Input: 0.14, Output: 0.28, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG},
 		{Provider: "deepseek", Model: "deepseek-v4-pro", Currency: "USD", CacheHit: 0.003625, Input: 0.435, Output: 0.87, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG},
+		// Vision bills at the flash rates; an image is charged as the tokens it
+		// scales to, so it arrives already counted in the prompt total and needs
+		// no per-image rate of its own.
+		{Provider: "deepseek", Model: "deepseek-v4-flash-vision-exp", Currency: "CNY", CacheHit: 0.02, Input: 1, Output: 2, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG},
+		{Provider: "deepseek", Model: "deepseek-v4-flash-vision-exp", Currency: "USD", CacheHit: 0.0028, Input: 0.14, Output: 0.28, DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG},
 
 		// LongCat dual currency tables (official discounted list prices).
 		// https://longcat.chat/platform/docs/Pricing/LongCat-2.0.html

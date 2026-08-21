@@ -99,10 +99,10 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	keySource, _ := cfg.Extra["api_key_source"].(string)
 	thinking, effort := resolveReasoning(root, cfg.Extra)
 	vision, _ := cfg.Extra["vision"].(bool)
-	// DeepSeek's official Anthropic-compatible endpoint is text-only. Enforce
-	// that wire constraint here as defense in depth, independent of config or
-	// extension capability metadata.
-	vision = vision && !officialDeepSeek
+	// DeepSeek's Anthropic-compatible endpoint documents image source blocks, so
+	// the constraint is the model's rather than the endpoint's. Defense in depth,
+	// independent of config or extension capability metadata.
+	vision = vision && (!officialDeepSeek || openai.DeepSeekTakesImages(cfg.Model))
 	webSearch, _ := cfg.Extra["web_search"].(bool)
 	headers, _ := cfg.Extra["headers"].(map[string]string)
 	authHeader, _ := cfg.Extra["auth_header"].(bool)

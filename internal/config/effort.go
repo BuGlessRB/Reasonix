@@ -54,6 +54,16 @@ var modelReasoningCapabilities = map[string]modelReasoningCapability{
 		Default:       "high",
 		ContextWindow: 1_000_000,
 	},
+	// Vision, measured 2026-08-21: the docs say nothing about reasoning, but the
+	// endpoint answers this model exactly as it answers flash — same vocabulary,
+	// same rejections, reasoning_content throughout. So it carries flash's ladder.
+	"deepseek-v4-flash-vision-exp": {
+		Protocol:      ReasoningProtocolDeepSeek,
+		Levels:        []string{"disabled", "low", "high", "max"},
+		Default:       "high",
+		Aliases:       map[string]string{"xhigh": "high"},
+		ContextWindow: 1_000_000,
+	},
 	// GPT-5.6, measured 2026-08-20: the endpoint refuses "minimal" by naming the
 	// model, though the generic API vocabulary carries it. Keyed by model so a
 	// gateway serving them under its own name inherits the ladder.

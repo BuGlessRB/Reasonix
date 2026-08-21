@@ -27,3 +27,45 @@ func TestVisionDeclaredSeparatesNoFromNobodySaid(t *testing.T) {
 		t.Fatal("the kernel's own refusal is a settled answer, not a silence")
 	}
 }
+
+// One DeepSeek endpoint now serves a model that reads images beside models that
+// reject them, so the kernel's refusal is the model's and not the host's. The
+// panel has to say so per row: a connection-wide answer speaks for models it was
+// never asked about, and it would lock the one model that works.
+func TestDeepSeekVisionIsAnsweredPerModel(t *testing.T) {
+	entry := func(model string) *ProviderEntry {
+		return &ProviderEntry{
+			Name: "deepseek", Kind: "openai", BaseURL: "https://api.deepseek.com", Model: model,
+			Models: []string{model}, VisionModels: []string{model},
+		}
+	}
+
+	seeing := entry("deepseek-v4-flash-vision-exp")
+	if !CanConfigureVision(seeing) {
+		t.Fatal("the declared image-taking model must be configurable")
+	}
+	if !EffectiveVision(seeing) {
+		t.Fatal("ticking it in the panel must settle it, as it does anywhere else")
+	}
+
+	for _, model := range []string{"deepseek-v4-flash", "deepseek-v4-pro"} {
+		if CanConfigureVision(entry(model)) {
+			t.Fatalf("%s takes text only; ticking it must stay a dead switch", model)
+		}
+	}
+
+	// The vendor's list is the declaration. A model id containing "vision" is a
+	// word, and matching it would enable pixels for an endpoint that rejects them.
+	if CanConfigureVision(entry("deepseek-v5-vision")) {
+		t.Fatal("a name is not a capability declaration")
+	}
+
+	// A gateway that reimplements the wire is still the user's call to make.
+	relay := &ProviderEntry{
+		Name: "relay", Kind: "openai", BaseURL: "https://relay.example.com/v1",
+		Model: "deepseek-v4-pro", Models: []string{"deepseek-v4-pro"}, VisionModels: []string{"deepseek-v4-pro"},
+	}
+	if !CanConfigureVision(relay) {
+		t.Fatal("a custom gateway may implement its own multimodal translation")
+	}
+}

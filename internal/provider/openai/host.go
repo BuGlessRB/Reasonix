@@ -37,6 +37,42 @@ func IsDeepSeek(baseURL string) bool {
 	return matchesVendorHost(baseURL, "deepseek.com", "api.deepseek.com")
 }
 
+// deepSeekImageModels are the official DeepSeek models that accept image input.
+// Declared, not inferred: the host serves text-only and image-taking models
+// side by side, and nothing on the wire distinguishes them before a request is
+// rejected. A name is not evidence — "vision" in a model id is a word, and the
+// list is what the vendor documents.
+var deepSeekImageModels = map[string]bool{
+	"deepseek-v4-flash-vision-exp": true,
+}
+
+// DeepSeekTakesImages reports whether this official DeepSeek model accepts
+// image content. Callers pair it with IsDeepSeek: the host alone stopped being
+// the answer when one endpoint began serving both kinds.
+func DeepSeekTakesImages(model string) bool {
+	return deepSeekImageModels[strings.ToLower(strings.TrimSpace(model))]
+}
+
+// visionReachesModel folds the host question into the model one, so a caller
+// carries a single boolean instead of the pair.
+func visionReachesModel(officialDeepSeek bool, model string) bool {
+	return !officialDeepSeek || DeepSeekTakesImages(model)
+}
+
+// detailAccepted reports whether this image_url detail hint reaches the wire.
+// "original" is DeepSeek's fourth level, measured 2026-08-21; OpenAI's API has
+// no such variant, so widening the clamp for everyone would turn a setting that
+// works into a rejected request. Anything else falls back to auto by omission.
+func detailAccepted(detail string, officialDeepSeek bool) bool {
+	switch detail {
+	case "low", "high":
+		return true
+	case "original":
+		return officialDeepSeek
+	}
+	return false
+}
+
 // IsOpenAI reports whether baseURL points at OpenAI's official API host. Keep
 // this exact-host so a compatible gateway under another openai.com subdomain
 // cannot accidentally receive the official max_completion_tokens wire shape.

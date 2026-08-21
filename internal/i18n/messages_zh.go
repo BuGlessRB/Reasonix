@@ -345,6 +345,8 @@ var Chinese = Messages{
 	GoalNotPaused:                "没有已暂停或被阻塞的目标可恢复",
 	GoalPaused:                   "目标已暂停 — /goal resume 可继续",
 	ImagesNotReadable:            "当前模型不读图 — 已附 %d 张，改由委派的子代理去看",
+	ImagesNeedVisionRole:         "当前模型不读图 — 已附 %d 张，现在没人读得了。%s 能读图：到 设置 › 模型 › 分工 里把「看图」指给它。",
+	ImagesDropped:                "当前模型不读图 — 已附 %d 张，会在发出去之前被丢掉。配置里没有任何模型能读图。",
 	GoalPausedReason:             "用户手动暂停",
 	GoalPausedFmt:                "目标已暂停（%s）— 使用 /goal resume 继续",
 	GoalRuntimeFmt:               "运行状态：轮次 %d · 请求 %d · token %d · 工作时间 %s",

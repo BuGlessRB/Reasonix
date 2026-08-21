@@ -12,9 +12,12 @@ export interface ProviderEntry {
   // Which of them read images, so an editor shows the current answer rather
   // than asking the user to remember it.
   visionModels?: string[];
-  // False where the kernel refuses image input for this endpoint regardless of
-  // config, so an editor can say so instead of offering a dead switch.
+  // False where the kernel refuses image input for every model on this endpoint
+  // regardless of config, so an editor can say so instead of offering a dead
+  // switch. visionSettable narrows it to the models the refusal spares — one
+  // endpoint serves text-only and image-taking models side by side.
   canSetVision?: boolean;
+  visionSettable?: string[];
   // The endpoint-executed search tool. canWebSearch says this door offers one
   // at all; webSearch whether it is on. They differ between an account's doors.
   canWebSearch?: boolean;

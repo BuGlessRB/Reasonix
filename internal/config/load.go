@@ -805,7 +805,7 @@ func normalizeConfigForEdit(cfg *Config) bool {
 	changed = normalizeLegacyMimoCustomProviders(cfg) || changed
 	normalizeLegacyProviderFields(cfg)
 	normalizeDesktopOfficialProviderAccess(cfg)
-	normalizeOfficialDeepSeekModels(cfg)
+	changed = normalizeOfficialDeepSeekModels(cfg) || changed
 	migrateBillingDisplayCurrency(cfg)
 	freezeProviderBillingCurrencies(cfg)
 	applyDeepSeekOfficialDefaultPricing(cfg)
@@ -1622,31 +1622,6 @@ func stringSlicesEqual(a, b []string) bool {
 		}
 	}
 	return true
-}
-
-func normalizeOfficialDeepSeekModels(c *Config) {
-	if c == nil {
-		return
-	}
-	for i := range c.Providers {
-		p := &c.Providers[i]
-		if officialProviderHost(p.BaseURL) != "api.deepseek.com" {
-			continue
-		}
-		switch strings.TrimSpace(p.Name) {
-		case "deepseek":
-			required := []string{"deepseek-v4-flash", "deepseek-v4-pro"}
-			if strings.EqualFold(strings.TrimSpace(p.Kind), "responses") {
-				required = required[:1]
-			}
-			ensureProviderModels(p, required, "deepseek-v4-flash")
-		case "deepseek-flash":
-			ensureProviderModels(p, []string{"deepseek-v4-flash"}, "deepseek-v4-flash")
-		case "deepseek-pro":
-			ensureProviderModels(p, []string{"deepseek-v4-pro"}, "deepseek-v4-pro")
-		}
-		backfillDeepSeekAnthropicCapabilities(p)
-	}
 }
 
 func backfillDeepSeekAnthropicCapabilities(p *ProviderEntry) {

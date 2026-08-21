@@ -290,3 +290,83 @@ func TestBuildRequestSkipsToolImagesWithoutVision(t *testing.T) {
 		t.Fatalf("tool content = %#v, want the plain placeholder string", req.Messages[2].Content)
 	}
 }
+
+// The host stopped being the answer: one DeepSeek endpoint serves a model that
+// takes images beside models that reject them. The declared model decides, and
+// the parts are the ordinary OpenAI ones — DeepSeek documents that shape.
+func TestOfficialDeepSeekVisionModelSendsImageParts(t *testing.T) {
+	p, err := New(provider.Config{
+		Name:    "deepseek",
+		BaseURL: "https://api.deepseek.com",
+		Model:   "deepseek-v4-flash-vision-exp",
+		Extra:   map[string]any{"vision": true},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	c := p.(*client)
+	if !c.vision {
+		t.Fatal("the declared image-taking DeepSeek model must keep vision on")
+	}
+
+	req := c.buildRequest(provider.Request{Messages: []provider.Message{{
+		Role: provider.RoleUser, Content: "describe this image",
+		Images: []string{"data:image/png;base64,AAAA"},
+	}}})
+	parts, ok := req.Messages[0].Content.([]chatContentPart)
+	if !ok {
+		t.Fatalf("content = %#v, want image parts", req.Messages[0].Content)
+	}
+	var sawImage bool
+	for _, part := range parts {
+		if part.Type == "image_url" && part.ImageURL != nil && part.ImageURL.URL == "data:image/png;base64,AAAA" {
+			sawImage = true
+		}
+	}
+	if !sawImage {
+		body, _ := json.Marshal(req)
+		t.Fatalf("no image_url part reached the request: %s", body)
+	}
+}
+
+// The sibling models on the same host keep refusing, so the change is the model
+// list and not the endpoint guard coming off.
+func TestOfficialDeepSeekTextModelsStillRefuseImages(t *testing.T) {
+	for _, model := range []string{"deepseek-v4-flash", "deepseek-v4-pro"} {
+		p, err := New(provider.Config{
+			Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: model,
+			Extra: map[string]any{"vision": true},
+		})
+		if err != nil {
+			t.Fatalf("New(%s): %v", model, err)
+		}
+		if p.(*client).vision {
+			t.Fatalf("%s must stay text-only", model)
+		}
+	}
+}
+
+// "original" is DeepSeek's fourth detail level, measured 2026-08-21. OpenAI has
+// no such variant, so it reaches one wire and is dropped from the other rather
+// than turning a working setting into a rejected request.
+func TestVisionDetailOriginalReachesOnlyDeepSeek(t *testing.T) {
+	for _, tc := range []struct {
+		name, baseURL, model, detail, want string
+	}{
+		{"deepseek keeps original", "https://api.deepseek.com", "deepseek-v4-flash-vision-exp", "original", "original"},
+		{"openai drops original", "https://api.openai.com/v1", "gpt-4o", "original", ""},
+		{"low reaches both", "https://api.openai.com/v1", "gpt-4o", "low", "low"},
+		{"nonsense falls back to auto", "https://api.deepseek.com", "deepseek-v4-flash-vision-exp", "sharp", ""},
+	} {
+		p, err := New(provider.Config{
+			Name: "p", BaseURL: tc.baseURL, Model: tc.model,
+			Extra: map[string]any{"vision": true, "vision_detail": tc.detail},
+		})
+		if err != nil {
+			t.Fatalf("%s: New: %v", tc.name, err)
+		}
+		if got := p.(*client).visionDetail; got != tc.want {
+			t.Fatalf("%s: visionDetail = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

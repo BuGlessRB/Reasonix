@@ -22,8 +22,10 @@ interface Props {
   def?: string;
   // Absent where the answer is the endpoint's and not the user's to change.
   onVision?: (m: string) => void;
-  // The endpoint refuses image input, so the switch would be a dead control.
-  visionLocked?: boolean;
+  // Per row: the kernel refuses image input for this model, so the switch would
+  // be a dead control. One endpoint can serve both kinds, so it is not a
+  // property of the connection.
+  visionLocked?: (m: string) => boolean;
   onToggle: (m: string) => void;
   onAdd: (m: string) => void;
 }
@@ -83,8 +85,8 @@ export function ModelChoice({
             <span className="nm">{m}</span>
             {onVision ? (
               <button className="vtag" aria-pressed={vision.includes(m)}
-                disabled={!on.has(m) || visionLocked}
-                title={visionLocked ? t("内核不给这个端点发图片，改这里不会有效果") : undefined}
+                disabled={!on.has(m) || visionLocked?.(m)}
+                title={visionLocked?.(m) ? t("内核不给这个模型发图片，改这里不会有效果") : undefined}
                 onClick={() => onVision(m)}>
                 {t("读图")}
               </button>

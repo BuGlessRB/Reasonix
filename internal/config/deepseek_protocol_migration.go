@@ -97,7 +97,10 @@ func CanUpgradeDeepSeekProviderProtocol(p *ProviderEntry) bool {
 		}
 		for _, model := range models {
 			switch strings.TrimSpace(model) {
-			case "deepseek-v4-flash", "deepseek-v4-pro":
+			// The vision model counts as shipped, not as curation: the catalog
+			// backfill puts it here, so treating it as a user edit would freeze
+			// everyone it reached out of this upgrade.
+			case "deepseek-v4-flash", "deepseek-v4-pro", DeepSeekVisionModel:
 			default:
 				return false
 			}

@@ -19,6 +19,9 @@ func deepSeekV4PricesCNY() map[string]*provider.Pricing {
 	return map[string]*provider.Pricing{
 		"deepseek-v4-flash": deepSeekV4FlashPriceCNY(),
 		"deepseek-v4-pro":   deepSeekV4ProPriceCNY(),
+		// Vision bills at the flash rates; an image is charged as the tokens
+		// it scales to, so it lands in the prompt total already counted.
+		DeepSeekVisionModel: deepSeekV4FlashPriceCNY(),
 	}
 }
 
@@ -34,6 +37,7 @@ func deepSeekV4PricesUSD() map[string]*provider.Pricing {
 	return map[string]*provider.Pricing{
 		"deepseek-v4-flash": deepSeekV4FlashPriceUSD(),
 		"deepseek-v4-pro":   deepSeekV4ProPriceUSD(),
+		DeepSeekVisionModel: deepSeekV4FlashPriceUSD(),
 	}
 }
 

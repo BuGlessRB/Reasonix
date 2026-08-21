@@ -113,6 +113,8 @@ export const EN: Record<string, string> = {
   "无": "None",
   "外部服务": "External services",
   "{n} 个连不上": "{n} unreachable",
+  "这个端点还有 {n} 个模型不在列表里：{names}。点「编辑」把它们加进来。":
+    "This endpoint serves {n} models this connection does not list: {names}. Add them under Edit.",
   "还有 {n} 个，都在设置里": "{n} more, all in Settings",
   "到设置里重连": "Reconnect from Settings",
   "失败": "Failed",
@@ -305,8 +307,8 @@ export const EN: Record<string, string> = {
   "端点没报出这个名字，能不能用只有你知道":
     "The endpoint never reported this name; whether it answers is something only you know",
   "还有 {n} 个没列出来，搜一下就能找到": "{n} more not listed — search to reach them",
-  "内核不给这个端点发图片，改这里不会有效果":
-    "The kernel sends no images to this endpoint; changing this has no effect",
+  "内核不给这个模型发图片，改这里不会有效果":
+    "The kernel sends no images to this model; changing this has no effect",
   "读图": "Reads images",
   "推理": "Reasoning",
   "自己写一条": "Write one myself",

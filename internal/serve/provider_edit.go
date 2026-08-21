@@ -196,6 +196,20 @@ func visionModelsOf(cfg *config.Config, p *config.ProviderEntry) []string {
 	return out
 }
 
+// visionSettableOf is which models on this connection the kernel would honour a
+// vision flag for. Resolved per model rather than per endpoint: DeepSeek serves
+// an image-taking model beside text-only ones, and a connection-wide answer
+// would speak for models it was never asked about.
+func visionSettableOf(cfg *config.Config, p *config.ProviderEntry) []string {
+	out := make([]string, 0, len(p.Models))
+	for _, model := range p.ChatModelList() {
+		if entry, ok := cfg.ResolveModel(p.Name + "/" + model); ok && config.CanConfigureVision(entry) {
+			out = append(out, model)
+		}
+	}
+	return out
+}
+
 // setProviderThinking pins or releases the plain-chat request shape. Relays
 // that reject an unknown thinking/reasoning_effort field fail every request
 // until this is off, and the endpoint's own error rarely names the field.

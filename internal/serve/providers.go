@@ -58,10 +58,14 @@ type providerView struct {
 	// VisionModels is which of them read images, so the form shows the current
 	// answer instead of asking the user to remember it.
 	VisionModels []string `json:"visionModels"`
-	// CanSetVision is false where the kernel refuses image input for the
-	// endpoint whatever the config says — an editor offering the toggle there
-	// is offering a switch that does nothing.
+	// CanSetVision is false where the kernel refuses image input for every model
+	// on this endpoint whatever the config says — an editor offering the toggle
+	// there is offering a switch that does nothing.
 	CanSetVision bool `json:"canSetVision"`
+	// VisionSettable narrows that to the models the refusal does not cover. One
+	// endpoint now serves text-only and image-taking models side by side, so a
+	// single boolean per connection answers for models it was never asked about.
+	VisionSettable []string `json:"visionSettable"`
 	// WebSearch is the endpoint-executed search tool: CanWebSearch says this
 	// door offers one at all, WebSearch whether it is on. The OpenAI chat wire
 	// has no format for it, so the answer differs per protocol on one account.
@@ -104,13 +108,15 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 	out := make([]providerView, 0, len(cfg.Providers))
 	for i := range cfg.Providers {
 		p := &cfg.Providers[i]
+		settable := visionSettableOf(cfg, p)
 		out = append(out, providerView{
 			Name:              p.Name,
 			Kind:              strings.ToLower(strings.TrimSpace(p.Kind)),
 			BaseURL:           p.BaseURL,
 			Models:            nonNilStrings(p.ChatModelList()),
 			VisionModels:      nonNilStrings(visionModelsOf(cfg, p)),
-			CanSetVision:      config.CanConfigureVision(p),
+			CanSetVision:      len(settable) > 0 || config.CanConfigureVision(p),
+			VisionSettable:    nonNilStrings(settable),
 			CanWebSearch:      config.HasServerWebSearchCapability(p),
 			WebSearch:         config.EffectiveWebSearch(p),
 			CanSetThinking:    config.CanConfigureThinkingParams(p),

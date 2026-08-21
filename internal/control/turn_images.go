@@ -149,6 +149,29 @@ func (c *Controller) imageRoutingPrefix(unreadable int) string {
 	if unreadable <= 0 {
 		return ""
 	}
-	c.notice(fmt.Sprintf(i18n.M.ImagesNotReadable, unreadable))
+	c.notice(c.imagesNotReadableNotice(unreadable))
 	return c.imageRoutingNote(unreadable)
+}
+
+// imagesNotReadableNotice says where the attachment actually went. Announcing a
+// delegated read while no vision role is set is the one thing this must not do:
+// the picture is dropped before the request, and a user told otherwise goes on
+// to ask about what it showed.
+func (c *Controller) imagesNotReadableNotice(unreadable int) string {
+	if c.visionModelRef() != "" {
+		return fmt.Sprintf(i18n.M.ImagesNotReadable, unreadable)
+	}
+	if offer := c.firstVisionModelRef(); offer != "" {
+		return fmt.Sprintf(i18n.M.ImagesNeedVisionRole, unreadable, offer)
+	}
+	return fmt.Sprintf(i18n.M.ImagesDropped, unreadable)
+}
+
+// firstVisionModelRef is a configured model that could have read it.
+func (c *Controller) firstVisionModelRef() string {
+	cfg, err := config.LoadForRoot(c.workspaceRoot)
+	if err != nil || cfg == nil {
+		return ""
+	}
+	return cfg.FirstVisionModelRef()
 }

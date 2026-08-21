@@ -173,3 +173,31 @@ func TestBuildRequestToolResultTextOnlyKeepsStringContent(t *testing.T) {
 		t.Fatalf("serialized tool_result = %s, want %s", body, want)
 	}
 }
+
+// DeepSeek's Anthropic-compatible endpoint documents image source blocks and
+// does not list image among its unsupported content types, so the constraint is
+// the model's. Sibling models on the same host keep refusing — the change is
+// which models take images, not the endpoint guard coming off.
+func TestOfficialDeepSeekVisionIsPerModel(t *testing.T) {
+	for _, tc := range []struct {
+		model string
+		want  bool
+	}{
+		{"deepseek-v4-flash-vision-exp", true},
+		{"deepseek-v4-flash", false},
+		{"deepseek-v4-pro", false},
+		// A name is not a declaration: this model does not exist.
+		{"deepseek-v5-vision", false},
+	} {
+		p, err := New(provider.Config{
+			Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: tc.model,
+			Extra: map[string]any{"vision": true},
+		})
+		if err != nil {
+			t.Fatalf("New(%s): %v", tc.model, err)
+		}
+		if got := p.(*client).vision; got != tc.want {
+			t.Fatalf("%s: vision = %v, want %v", tc.model, got, tc.want)
+		}
+	}
+}

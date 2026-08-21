@@ -186,6 +186,10 @@ function Conn({
   };
 
   const models = entry.models.length;
+  // What the endpoint answered with that this connection does not list. The
+  // vendor adds models to endpoints we already know; a stored list never finds
+  // out on its own, and the probe is the one place that already has the answer.
+  const unlisted = (found?.models ?? []).filter((m) => !entry.models.includes(m));
   return (
     <>
       <div className="vrow" data-on={inUse ? "" : undefined}>
@@ -283,6 +287,14 @@ function Conn({
               t("记的是 {had}，但它答的是 {got}。", { had: t(KIND_LABEL[entry.kind] ?? entry.kind), got: t(KIND_LABEL[found.kind ?? ""] ?? found.kind ?? "") })}
             {found.ok && found.matches !== false && "key 有效，协议也对得上。"}
             {found.ok && found.noProxy && " 走代理连不上、直连可以。"}
+            {/* A stored list cannot learn that the vendor shipped something. The
+                probe already knows, so saying it costs nothing and is the only
+                moment anyone finds out. */}
+            {found.ok && unlisted.length > 0 &&
+              " " + t("这个端点还有 {n} 个模型不在列表里：{names}。点「编辑」把它们加进来。", {
+                n: unlisted.length,
+                names: unlisted.slice(0, 3).join("、") + (unlisted.length > 3 ? "…" : ""),
+              })}
           </span>
         </div>
       )}
@@ -314,6 +326,12 @@ function EditConn({
 
   const toggle = (list: string[], set: (v: string[]) => void, m: string) =>
     set(list.includes(m) ? list.filter((x) => x !== m) : [...list, m]);
+
+  // Which rows may take images. The kernel answers per model now — one endpoint
+  // serves an image-taking model beside text-only ones — so an older kernel that
+  // only sends the connection-wide boolean still gets the old answer.
+  const visionLocked = (m: string) =>
+    entry.visionSettable ? !entry.visionSettable.includes(m) : entry.canSetVision === false;
 
   // A name the endpoint never reported. It lands ticked because typing it out
   // is already the answer to "do you want this one", and at the head of the
@@ -392,7 +410,7 @@ function EditConn({
           picked={picked}
           vision={vision}
           def={def}
-          visionLocked={entry.canSetVision === false}
+          visionLocked={visionLocked}
           onToggle={(m) => toggle(picked, setPicked, m)}
           onVision={(m) => toggle(vision, setVision, m)}
           onDefault={setDef}
