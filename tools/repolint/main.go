@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 )
 
 type Finding struct {
@@ -47,6 +48,7 @@ func main() {
 	baselinePath := flag.String("baseline", "", "baseline file (default <root>/tools/repolint/baseline.json)")
 	update := flag.Bool("update", false, "rewrite the baseline from the current tree")
 	strict := flag.Bool("strict", false, "report every finding, ignoring the baseline")
+	allowWiden := flag.Bool("allow-widen", false, "let -update raise a budget. Lowering one needs nothing; raising one carries debt forward, which is the diff a reviewer has to be shown on purpose")
 	only := flag.String("only", "", "comma-separated paths: report file budgets for these only, so a change can be checked without reading the whole tree's recorded debt (repo-wide ceilings still report). Pair with `git diff --name-only`.")
 	flag.Parse()
 
@@ -67,7 +69,17 @@ func main() {
 	})
 
 	if *update {
-		if err := baselineFrom(findings).write(*baselinePath); err != nil {
+		next := baselineFrom(findings)
+		prev, _ := loadBaseline(*baselinePath)
+		if widened := widenings(prev, next); len(widened) > 0 && !*allowWiden {
+			fmt.Fprintln(os.Stderr, "repolint: this -update would raise budgets, which carries debt forward:")
+			for _, w := range widened {
+				fmt.Fprintln(os.Stderr, "  "+w)
+			}
+			fmt.Fprintln(os.Stderr, "\nFix the code, or pass -allow-widen and justify the diff in the pull request.")
+			os.Exit(1)
+		}
+		if err := next.write(*baselinePath); err != nil {
 			fmt.Fprintln(os.Stderr, "repolint:", err)
 			os.Exit(2)
 		}
@@ -95,6 +107,16 @@ func main() {
 	}
 	if len(overruns) == 0 {
 		fmt.Printf("repolint: clean (%d baselined findings)\n", len(findings))
+		// Budget the tree no longer needs is budget a file can quietly grow back
+		// into, and it only comes down when someone runs -update.
+		if slack := reclaimable(baseline, findings); len(slack) > 0 {
+			rules := slices.Sorted(maps.Keys(slack))
+			parts := make([]string, 0, len(rules))
+			for _, rule := range rules {
+				parts = append(parts, fmt.Sprintf("%s %d", rule, slack[rule]))
+			}
+			fmt.Printf("repolint: %s of budget is no longer used; -update reclaims it\n", strings.Join(parts, ", "))
+		}
 		return
 	}
 	report(over)

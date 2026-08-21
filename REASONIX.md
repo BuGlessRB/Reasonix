@@ -68,8 +68,11 @@ an invariant the type system cannot express, or an external-protocol quirk.
 
 `go run ./tools/repolint` enforces all of it against a ratchet baseline: recorded
 debt is tolerated, anything new fails CI. Never widen the baseline to land a
-change — fix the code. `-update` exists for carrying debt through a rename or an
-extraction, and that diff must be justified in the PR.
+change — fix the code. `-update` lowers budgets freely and refuses to raise one
+without `-allow-widen`, so carrying debt through a rename or an extraction is
+asked for in the command and justified in the PR. A clean run also reports
+budget the tree stopped using: it is only reclaimed by an `-update`, and until
+then it is room a file can grow back into.
 
 ## Memory
 

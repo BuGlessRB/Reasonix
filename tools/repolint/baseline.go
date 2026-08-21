@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 )
 
 // Ratchet snapshot, in weighted units: no file may exceed its budget and no
@@ -110,4 +111,53 @@ func (b *Baseline) exceeded(findings []Finding) ([]Finding, []Overrun) {
 		}
 	}
 	return shown, overruns
+}
+
+// widenings names every budget the new baseline would raise. Tightening is what
+// a ratchet is for and needs no ceremony; raising one carries debt forward and
+// is the move REASONIX.md refuses — so it has to be asked for rather than
+// arriving inside a routine -update.
+func widenings(old, next *Baseline) []string {
+	if old == nil {
+		return nil
+	}
+	var out []string
+	for rule, want := range next.Limits {
+		if had, ok := old.Limits[rule]; ok && want > had {
+			out = append(out, fmt.Sprintf("ceiling %s: %d -> %d", rule, had, want))
+		}
+	}
+	for file, rules := range next.Files {
+		for rule, want := range rules {
+			had := 0
+			if prev, ok := old.Files[file]; ok {
+				had = prev[rule]
+			}
+			if want > had {
+				out = append(out, fmt.Sprintf("%s: %s %d -> %d", file, rule, had, want))
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// reclaimable is how much budget the tree no longer needs: debt paid down since
+// the last -update. It is not a failure, but an unreported surplus is a file
+// that may quietly regress to where it used to be.
+func reclaimable(old *Baseline, findings []Finding) map[string]int {
+	if old == nil {
+		return nil
+	}
+	actual := map[string]int{}
+	for _, f := range findings {
+		actual[f.Rule] += f.Weight
+	}
+	out := map[string]int{}
+	for rule, had := range old.Limits {
+		if slack := had - actual[rule]; slack > 0 {
+			out[rule] = slack
+		}
+	}
+	return out
 }
