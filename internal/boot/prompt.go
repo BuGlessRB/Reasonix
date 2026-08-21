@@ -54,12 +54,9 @@ func buildPromptAssembly(ctx context.Context, opts Options, cfg *config.Config, 
 		sysPrompt = outputstyle.Apply(sysPrompt, st)
 	}
 	sysPrompt = appendCorePolicies(sysPrompt)
-	if workspaceLine := currentWorkspacePromptLine(root); workspaceLine != "" {
-		sysPrompt += "\n\n" + workspaceLine
-	}
-	// Role settings no longer inject mode-specific system prompts. Planning,
-	// verification, and review intensity travel in the per-turn transient
-	// <execution-policy> user block so the cache-stable prefix stays shared.
+	// Role settings and the workspace path both ride the per-turn transient user
+	// blocks instead of landing here, so this prefix is identical for every
+	// project and session on the machine and they share one cache entry.
 	if cfg.EnvironmentEnabled() {
 		shellLabel := shell.Kind.String()
 		if strings.TrimSpace(cfg.Tools.Shell.Path) != "" {

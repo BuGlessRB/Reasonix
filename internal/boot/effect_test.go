@@ -387,3 +387,71 @@ func effectHead(s string) string {
 	}
 	return s
 }
+
+// TestEffectPrefixCarriesNoProjectText asserts the property the goldens can
+// only catch drift from: two projects produce the same prefix. The workspace
+// path was the one per-project string in it, and everything behind it — the
+// rest of the prompt and 4.3k tokens of tool schema — missed the provider's
+// prefix cache on every project the machine had not already warmed.
+func TestEffectPrefixCarriesNoProjectText(t *testing.T) {
+	a := effectRun(t, "boot-effect-proj-a", "", ablation.Set{})
+	b := effectRun(t, "boot-effect-proj-b", "", ablation.Set{})
+	sysA, sysB := systemMessage(a[0].Messages), systemMessage(b[0].Messages)
+	if sysA == "" {
+		t.Fatal("no system message reached the provider boundary")
+	}
+	if sysA != sysB {
+		for i := range min(len(sysA), len(sysB)) {
+			if sysA[i] != sysB[i] {
+				t.Fatalf("prefix differs between projects at byte %d of %d:\n a: %.160q\n b: %.160q",
+					i, len(sysA), sysA[max(i-80, 0):], sysB[max(i-80, 0):])
+			}
+		}
+		t.Fatalf("prefix length differs between projects: %d vs %d", len(sysA), len(sysB))
+	}
+	if !reflect.DeepEqual(toolSchemaNames(a[0].Tools), toolSchemaNames(b[0].Tools)) {
+		t.Fatal("tool surface differs between projects")
+	}
+}
+
+// Moving the workspace out of the prefix must not stop the model being told
+// which directory it is in, or which one it is not.
+func TestEffectTurnCarriesThisProjectsWorkspace(t *testing.T) {
+	a := effectRun(t, "boot-effect-ws-a", "", ablation.Set{})
+	b := effectRun(t, "boot-effect-ws-b", "", ablation.Set{})
+	rootA, rootB := workspaceOf(a[0]), workspaceOf(b[0])
+	if rootA == "" || rootB == "" {
+		t.Fatal("a turn reached the provider with no workspace stated")
+	}
+	if rootA == rootB {
+		t.Fatalf("both projects reported the same workspace %q", rootA)
+	}
+	if strings.Contains(userMessages(a[0]), rootB) {
+		t.Fatalf("project A carried project B's root %q", rootB)
+	}
+}
+
+// workspaceOf returns the root the turn stated, read from the host's block.
+func workspaceOf(req provider.Request) string {
+	const open = "<workspace>\nCurrent workspace: "
+	_, rest, ok := strings.Cut(userMessages(req), open)
+	if !ok {
+		return ""
+	}
+	root, _, ok := strings.Cut(rest, "\n")
+	if !ok {
+		return ""
+	}
+	return root
+}
+
+func userMessages(req provider.Request) string {
+	var b strings.Builder
+	for _, m := range req.Messages {
+		if m.Role == provider.RoleUser {
+			b.WriteString(m.Content)
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
+}

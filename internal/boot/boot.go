@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1607,18 +1606,6 @@ func SubagentModelKeys(name string) []string {
 		}
 	}
 	return keys
-}
-
-// currentWorkspacePromptLine states where the run is bound and that the tools
-// already start there. Given only the path, a model prefixes every command with
-// `cd <root> &&` and spells every path out in full: that turns a simple call
-// into a compound statement neither the evidence nor the approval reader credits.
-func currentWorkspacePromptLine(root string) string {
-	if root == "" {
-		return ""
-	}
-	return "Current workspace: " + strconv.Quote(root) +
-		". Shell commands start there and every tool resolves relative paths from it."
 }
 
 func resolveWorkspaceRoot(explicit string) string {

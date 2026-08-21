@@ -546,6 +546,7 @@ func (a *Agent) withTurnPreferences(input string) string {
 		}
 	}
 	input = WithReasoningLanguage(input, lang)
+	input = WithWorkspace(input, a.writeWorkspaceRoot)
 	// Role settings no longer inject a stable delivery-runtime system-like
 	// marker. Per-turn <execution-policy> carries the frozen role setting.
 	return input
