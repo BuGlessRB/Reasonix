@@ -106,17 +106,10 @@ serialization, compaction, or MCP/tool registration need explicit cache review.
 For these changes:
 
 - Keep system prompt changes low-frequency and require explicit review.
-- Fill the PR body `Cache-impact:` line with `none`, `low`, `medium`, or `high`
-  plus the reason.
-- Fill the PR body `Cache-guard:` line with the focused guard test/command added
-  or run, or explain why an existing guard covers the change.
-- Fill `System-prompt-review:` when system prompt, memory prefix, output style,
-  or skill index behavior changes.
+- Say in the PR what the change does to the provider-visible prefix, and why
+  that cost is worth paying.
 - Prefer focused guard tests near the changed surface; `scripts/cache-guard.sh`
   remains the broader release-level cache-hit check.
-
-CI enforces this metadata for cache-sensitive paths so prompt/tool prefix churn
-is called out before review.
 
 ### Running tests
 

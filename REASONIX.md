@@ -145,36 +145,6 @@ Use `go test ./path/to/target/` to detect cycles **before** pushing. A `[setup f
 - **Keep the PR diff minimal.** Only the files relevant to the PR's purpose — no stray changes from other branches.
 - **Amend, don't add commits, for review feedback** — keeps the commit history clean.
 
-## PR metadata gates
-
-Two CI guards read the PR body. The scripts are the source of truth and both
-run locally: `scripts/check-cache-impact.sh`, `scripts/check-docs-impact.sh`.
-Separators must be an ASCII `-` or `:` — an em dash fails the docs guard.
-
-Cache-sensitive diffs (`internal/tool/`, `internal/provider/`,
-`internal/boot/`, `internal/agent/agent.go`, and the rest of the list in the
-script) require:
-
-```
-Cache-impact: <none|low|medium|high> - <reason>
-Cache-guard: <focused guard test/command or existing guard rationale>
-```
-
-`none` is a legitimate impact when the provider-visible prefix stays
-byte-identical; only an empty value, `todo`, or `tbd` is rejected. If the diff
-also touches `internal/config/`, `internal/memory/`, `internal/outputstyle/`,
-`internal/skill/`, or `internal/boot/`, add `System-prompt-review: <note>` —
-that field additionally rejects `none` and `n/a`, so it must name a reviewer.
-
-User-visible diffs (`cmd/reasonix/`, `desktop/`, `npm/`, and most of
-`internal/`; tests and lockfiles are exempt) require one of these, chosen by
-whether the same PR edited `docs/*.md`:
-
-```
-Documentation-impact: updated - <what changed>            # docs/*.md edited
-Documentation-impact: none - <why the docs stay correct>  # not edited
-```
-
 ## Reasonix host checks
 
 The paths below decide what the agent is allowed to do — a wrong change here

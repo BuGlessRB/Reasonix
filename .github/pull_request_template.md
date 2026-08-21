@@ -20,25 +20,3 @@ the source-to-target contract here: easing syntax, time units, callbacks,
 cancellation, reduced-motion behavior, and failure fallback. Verification must
 assert that the target API was actually called; a mock that silently skips it
 does not count.
-
-## Documentation impact
-
-Documentation-impact: TODO
-
-For changes to user-visible CLI, Desktop, configuration, provider, permission,
-or tool behavior, use one of:
-
-- `Documentation-impact: updated - <what changed>` and update `docs/*.md`.
-- `Documentation-impact: none - <why the embedded documentation remains correct>`.
-
-## Cache impact
-
-Cache-impact: TODO
-Cache-guard: TODO
-System-prompt-review: N/A
-
-For cache-sensitive changes, fill these lines before requesting review:
-
-- `Cache-impact`: `none`, `low`, `medium`, or `high`, plus the reason.
-- `Cache-guard`: the focused guard test/command added or run, or why an existing guard covers the change.
-- `System-prompt-review`: required reviewer/approval note when provider-visible system prompt, memory prefix, output style, or skill index behavior changes.
