@@ -77,3 +77,6 @@ site/.generated/
 
 # Committed pointer at REASONIX.md; overrides a global CLAUDE.md ignore rule.
 !/CLAUDE.md
+
+# Go build output left in the tree by `go build ./tools/...`.
+*.exe
