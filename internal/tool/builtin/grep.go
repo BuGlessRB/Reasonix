@@ -330,7 +330,7 @@ func (g grepTool) runRipgrep(ctx context.Context, pattern, path, glob string, to
 	if m := g.sessionTempManager(ctx); m != nil {
 		l, err := m.Acquire()
 		if err != nil {
-			return "", false, fmt.Errorf("session temporary directory: %w", err)
+			return "", false, fmt.Errorf("%w: %w", errSessionTemp, err)
 		}
 		lease = l
 		sessionDir = l.Dir()

@@ -225,7 +225,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	if err != nil {
 		ex.State = tool.ShellStateNotRun
 		ex.FailurePhase = tool.ShellPhaseAuthorization
-		if strings.Contains(err.Error(), "session temporary") {
+		if errors.Is(err, errSessionTemp) {
 			ex.FailurePhase = tool.ShellPhaseLaunch
 		}
 		ex.MutationRisk = tool.ShellMutationNotStarted
@@ -379,7 +379,7 @@ func (b bash) prepareLaunch(ctx context.Context, sh sandbox.Shell, p bashParams,
 	if m := b.sessionTempManager(ctx); m != nil {
 		l, err := m.Acquire()
 		if err != nil {
-			return sandbox.Prepared{}, probe, nil, fmt.Errorf("session temporary directory: %w", err)
+			return sandbox.Prepared{}, probe, nil, fmt.Errorf("%w: %w", errSessionTemp, err)
 		}
 		lease = l
 		sessionDir = l.Dir()
