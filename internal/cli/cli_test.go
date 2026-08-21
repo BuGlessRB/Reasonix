@@ -1521,16 +1521,26 @@ func TestAppendEnvUpsertHandlesExportPrefix(t *testing.T) {
 	}
 }
 
-// TestGroupByFamily verifies the wizard groups the default preset into
-// "deepseek" (flash + pro), preserving the order each family first appears in.
+// TestGroupByFamily verifies the wizard collapses the whole default preset into
+// the single "deepseek" family, in the order each provider appears. The member
+// list is derived from the preset rather than pinned: adding a provider to the
+// family is an ordinary change, and pinning the count only dates the test.
 func TestGroupByFamily(t *testing.T) {
-	order, members, info := groupByFamily(config.Default().Providers)
-
-	if got := order; !reflect.DeepEqual(got, []string{"deepseek"}) {
-		t.Fatalf("family order = %v, want [deepseek]", got)
+	providers := config.Default().Providers
+	if len(providers) < 2 {
+		t.Fatalf("default preset has %d providers; the grouping assertion is vacuous", len(providers))
 	}
-	if got := members["deepseek"]; !reflect.DeepEqual(got, []int{0, 1}) {
-		t.Errorf("deepseek members = %v, want [0 1]", got)
+	order, members, info := groupByFamily(providers)
+
+	if !reflect.DeepEqual(order, []string{"deepseek"}) {
+		t.Fatalf("family order = %v, want [deepseek]", order)
+	}
+	wantMembers := make([]int, len(providers))
+	for i := range wantMembers {
+		wantMembers[i] = i
+	}
+	if !reflect.DeepEqual(members["deepseek"], wantMembers) {
+		t.Errorf("deepseek members = %v, want every provider in order %v", members["deepseek"], wantMembers)
 	}
 	if info["deepseek"].name != "DeepSeek" {
 		t.Errorf("display name = %q", info["deepseek"].name)
@@ -2038,7 +2048,8 @@ func TestWithBuiltinFamiliesDoesNotAddMissingMimo(t *testing.T) {
 		{Name: "deepseek-flash", Kind: "openai", BaseURL: "https://api.deepseek.com"},
 		{Name: "deepseek-pro", Kind: "openai", BaseURL: "https://api.deepseek.com"},
 	}
-	order, _, info := groupByFamily(withBuiltinFamilies(cfg))
+	merged := withBuiltinFamilies(cfg)
+	order, _, info := groupByFamily(merged)
 	seen := map[string]bool{}
 	for _, k := range order {
 		seen[info[k].name] = true
@@ -2049,9 +2060,26 @@ func TestWithBuiltinFamiliesDoesNotAddMissingMimo(t *testing.T) {
 	if seen["MiMo (Xiaomi)"] {
 		t.Fatalf("wizard families = %v, should not inject MiMo", order)
 	}
-	// A user's customized deepseek must not be duplicated.
-	if n := len(groupByFamilyKeys(withBuiltinFamilies(cfg), "deepseek")); n != 2 {
-		t.Fatalf("deepseek members = %d, want the user's 2 (no injected duplicate)", n)
+
+	// The merge dedupes by name, so a customized entry must survive exactly once.
+	// A builtin the user has not named is a genuine addition, not a duplicate, so
+	// this counts names rather than members.
+	count := map[string]int{}
+	for _, p := range merged {
+		count[p.Name]++
+	}
+	for _, p := range cfg {
+		if count[p.Name] != 1 {
+			t.Fatalf("%s appears %d times; the user's entry was duplicated", p.Name, count[p.Name])
+		}
+	}
+	for name, n := range count {
+		if n != 1 {
+			t.Fatalf("%s appears %d times in the merged list", name, n)
+		}
+	}
+	if len(groupByFamilyKeys(merged, "deepseek")) < len(cfg) {
+		t.Fatalf("the user's deepseek entries did not survive the merge: %v", merged)
 	}
 }
 
