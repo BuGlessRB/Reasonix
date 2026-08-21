@@ -47,14 +47,21 @@ func TestStreamStallSurfacesAsInterrupt(t *testing.T) {
 		t.Fatalf("Stream: %v", err)
 	}
 	var gotInterrupted bool
+	var reason string
 	for chunk := range ch {
 		if chunk.Type == provider.ChunkError {
 			var interrupted *provider.StreamInterruptedError
 			gotInterrupted = errors.As(chunk.Err, &interrupted)
+			reason = provider.StreamInterruptReason(chunk.Err)
 		}
 	}
 	if !gotInterrupted {
 		t.Error("half-open stall must surface as StreamInterruptedError for Agent replay")
+	}
+	// Only this read loop knows a deadline expired; downstream the error is
+	// indistinguishable from an ordinary premature EOF.
+	if reason != provider.StreamInterruptIdleTimeout {
+		t.Errorf("reason = %q, want %q", reason, provider.StreamInterruptIdleTimeout)
 	}
 	if got := reqs.Load(); got != 1 {
 		t.Errorf("server saw %d requests, want 1 (no provider body replay)", got)

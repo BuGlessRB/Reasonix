@@ -27,7 +27,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"net/http"
 	"sort"
@@ -1062,9 +1061,9 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		return emitted, err
 	}
 	if stalled.Load() {
-		// Idle stall is a body-phase cut: wrap so the Agent can replay the
-		// frozen request. Providers no longer reconnect here.
-		return emitted, fmt.Errorf("%s: stream stalled — no data for %s, connection likely dropped: %w", c.name, idleTimeout, io.ErrUnexpectedEOF)
+		// A body-phase cut, so the Agent can replay the frozen request.
+		// Providers no longer reconnect here.
+		return emitted, stallCut(c.name, idleTimeout)
 	}
 	if err := scanner.Err(); err != nil {
 		return emitted, fmt.Errorf("%s: read stream: %w", c.name, err)
@@ -1074,7 +1073,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	// tool-call arguments, which then 400 on every replay (#3953). OpenAI Chat
 	// accepts either [DONE] or a legal finish_reason as a complete terminal.
 	if !sawDone && lastFinishReason == "" {
-		return emitted, fmt.Errorf("%s: stream ended before completion: %w", c.name, io.ErrUnexpectedEOF)
+		return emitted, prematureCut(c.name)
 	}
 
 	if r, txt := think.flush(); r != "" || txt != "" {

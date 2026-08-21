@@ -888,20 +888,18 @@ func StreamInterruptReason(err error) string {
 	return ClassifyStreamInterrupt(interrupted.Err)
 }
 
-// ClassifyStreamInterrupt maps a transport error onto a fixed reason enum.
-// Prefer attaching Reason at the emit site; this is a best-effort fallback.
+// ClassifyStreamInterrupt maps a transport error onto a fixed reason enum from
+// its identity, never its text. An idle timeout is not in that identity at all
+// -- only the read loop that set the deadline knows one happened -- so a stall
+// attaches StreamInterruptIdleTimeout where it is detected, and never here.
 func ClassifyStreamInterrupt(err error) string {
 	if err == nil {
 		return StreamInterruptPrematureEOF
 	}
-	msg := strings.ToLower(err.Error())
 	switch {
-	case strings.Contains(msg, "stalled") || strings.Contains(msg, "idle timeout") || strings.Contains(msg, "no data for"):
-		return StreamInterruptIdleTimeout
-	case errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || strings.Contains(msg, "before completion") || strings.Contains(msg, "unexpected eof"):
+	case errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF):
 		return StreamInterruptPrematureEOF
-	case errors.Is(err, net.ErrClosed) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNABORTED) ||
-		strings.Contains(msg, "connection reset") || strings.Contains(msg, "forcibly closed") || strings.Contains(msg, "broken pipe"):
+	case errors.Is(err, net.ErrClosed) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNABORTED):
 		return StreamInterruptConnectionReset
 	default:
 		if IsConnReset(err) {

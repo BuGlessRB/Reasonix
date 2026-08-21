@@ -3,6 +3,9 @@ package openai
 
 import (
 	"errors"
+	"fmt"
+	"io"
+	"time"
 
 	"reasonix/internal/provider"
 )
@@ -13,6 +16,12 @@ import (
 // would show it twice. The budget stays the Agent's — counting here too would
 // stack two.
 func streamFailure(emitted bool, err error) error {
+	// A cut the read loop named already carries its reason; re-wrapping would
+	// bury it under one this cannot infer as well.
+	var interrupted *provider.StreamInterruptedError
+	if errors.As(err, &interrupted) {
+		return err
+	}
 	if provider.IsConnReset(err) {
 		return provider.StreamInterrupt(err, provider.ClassifyStreamInterrupt(err))
 	}
@@ -21,4 +30,18 @@ func streamFailure(emitted bool, err error) error {
 		return provider.StreamInterrupt(err, provider.StreamInterruptUpstreamError)
 	}
 	return err
+}
+
+// stallCut is the end only this read loop can recognise: the deadline it set
+// expired. Downstream the error is an unexpected EOF like any other, so the
+// reason is attached here rather than inferred from the message later.
+func stallCut(name string, idle time.Duration) error {
+	err := fmt.Errorf("%s: stream stalled — no data for %s, connection likely dropped: %w", name, idle, io.ErrUnexpectedEOF)
+	return provider.StreamInterrupt(err, provider.StreamInterruptIdleTimeout)
+}
+
+// prematureCut is a clean close before any terminal the protocol accepts.
+func prematureCut(name string) error {
+	err := fmt.Errorf("%s: stream ended before completion: %w", name, io.ErrUnexpectedEOF)
+	return provider.StreamInterrupt(err, provider.StreamInterruptPrematureEOF)
 }
