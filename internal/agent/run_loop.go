@@ -247,6 +247,14 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 			// (unapplied path marks uncertain + pause via the notice sink).
 			a.RecordUnappliedSteer("(body load failed)", itemID)
 		}
+		// Context pressure rides the turn tail, never the cached prefix: an
+		// append leaves the prefix byte-stable, and a model that knows a fold
+		// is near can restate what the summary would drop.
+		if notice := a.contextBudgetNotice(); notice != "" {
+			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: midTurnSteerMessage(notice, true)})
+			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: contextBudgetNoticeSummary(a.ContextBudget())})
+		}
+
 		schemas := a.svc.tools.Schemas()
 		prefixShape := a.capturePrefixShape(schemas)
 		prevPrefixShape := a.sess.lastPrefixShape

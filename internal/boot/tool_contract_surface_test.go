@@ -18,6 +18,7 @@ func unifiedBootToolNames() []string {
 		"bash_output",
 		"complete_step",
 		"compress",
+		"context_budget",
 		"edit_file",
 		"kill_shell",
 		"read_file",

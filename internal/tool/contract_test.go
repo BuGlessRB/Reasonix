@@ -57,22 +57,23 @@ func boolString(v bool) string {
 // which is the guard against a context-maintenance strategy silently desyncing
 // from the tool surface.
 var acceptsDefaultSnip = map[string]bool{
-	"bash_output":   true, // streamed job output; tailing handled by the job, not the snip pass
-	"code_index":    true,
-	"complete_step": true,
-	"compress":      true,
-	"delete_range":  true,
-	"delete_symbol": true,
-	"edit_file":     true,
-	"kill_shell":    true,
-	"move_file":     true,
-	"multi_edit":    true,
-	"notebook_edit": true,
-	"recall":        true, // recalled transcript: head and tail are both real content, like any read
-	"todo_write":    true,
-	"update_goal":   true,
-	"wait":          true,
-	"write_file":    true,
+	"bash_output":    true, // streamed job output; tailing handled by the job, not the snip pass
+	"code_index":     true,
+	"complete_step":  true,
+	"compress":       true,
+	"context_budget": true, // a fixed four-number JSON; never large enough to snip
+	"delete_range":   true,
+	"delete_symbol":  true,
+	"edit_file":      true,
+	"kill_shell":     true,
+	"move_file":      true,
+	"multi_edit":     true,
+	"notebook_edit":  true,
+	"recall":         true, // recalled transcript: head and tail are both real content, like any read
+	"todo_write":     true,
+	"update_goal":    true,
+	"wait":           true,
+	"write_file":     true,
 }
 
 func TestEveryBuiltinDeclaresSnipStance(t *testing.T) {

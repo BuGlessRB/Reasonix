@@ -50,6 +50,10 @@ type sessionRuntime struct {
 	todoMu    sync.Mutex
 	todoState []evidence.TodoItem
 
+	// budgetNotice latches which context-pressure rung the model has already
+	// been told about. Plain fields: the run loop is the only reader/writer.
+	budgetNotice budgetNoticeLatch
+
 	// lastPrefixShape records the previous provider request's cacheable prefix
 	// so usage events can explain prefix churn on the next request. Carried
 	// across a conversation swap; see sessionCarryOver.
@@ -78,6 +82,7 @@ func (r *sessionRuntime) reset(s *Session) {
 	r.compactionMu.Unlock()
 	r.compaction.stuck = false
 	r.compaction.lastTurn.Store(0)
+	r.budgetNotice = budgetNoticeLatch{}
 }
 
 // session returns the bound conversation under the lock that guards the

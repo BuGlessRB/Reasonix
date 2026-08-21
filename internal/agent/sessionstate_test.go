@@ -24,6 +24,7 @@ var sessionReset = map[string]bool{
 	"cacheState":       true,
 	"compaction":       true,
 	"coveredHash":      true,
+	"budgetNotice":     true,
 }
 
 // sessionCarryOver names the fields reset deliberately leaves alone, each with
