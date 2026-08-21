@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -553,5 +554,35 @@ func TestRenderSinkIgnoresSubagentProgress(t *testing.T) {
 		if strings.Contains(m.Text, "thinking out loud") || strings.Contains(m.Text, "answer preview") {
 			t.Fatalf("sub-agent preview leaked into IM message %d: %+v", i, m)
 		}
+	}
+}
+
+// A cancelled turn is the user stopping, not a failure to report. This used to
+// be decided by looking for "context canceled" in the message, which a wrapped
+// or reworded error would have slipped past — and the identity only survives
+// because the event carries the error itself rather than its text.
+func TestRenderSinkStaysQuietOnACancelledTurn(t *testing.T) {
+	for name, err := range map[string]error{
+		"the sentinel":    context.Canceled,
+		"wrapped":         fmt.Errorf("run turn: %w", context.Canceled),
+		"wrapped further": fmt.Errorf("gateway: %w", fmt.Errorf("run turn: %w", context.Canceled)),
+	} {
+		adapter := newFakeAdapter(PlatformWeixin, "fake-weixin")
+		sink := newRenderSink(context.Background(), adapter, "weixin-weixin", "weixin", "chat-1", ChatDM, "user-1", "msg-1", slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil)
+		sink.Emit(event.Event{Kind: event.TurnDone, Err: err})
+		if sent := adapter.sentMessages(); len(sent) != 0 {
+			t.Errorf("%s: sent %+v, want silence", name, sent)
+		}
+	}
+}
+
+// Anything else still reaches the reader; going quiet on every error would be
+// the opposite failure.
+func TestRenderSinkStillReportsARealFailure(t *testing.T) {
+	adapter := newFakeAdapter(PlatformWeixin, "fake-weixin")
+	sink := newRenderSink(context.Background(), adapter, "weixin-weixin", "weixin", "chat-1", ChatDM, "user-1", "msg-1", slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil)
+	sink.Emit(event.Event{Kind: event.TurnDone, Err: errors.New("disk went away")})
+	if sent := adapter.sentMessages(); len(sent) == 0 {
+		t.Fatal("a real failure was swallowed")
 	}
 }

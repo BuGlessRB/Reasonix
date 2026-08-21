@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -180,7 +181,7 @@ func (s *renderSink) Emit(e event.Event) {
 		// 刷新缓冲
 		s.flush()
 		if e.Err != nil {
-			if !strings.Contains(e.Err.Error(), "context canceled") {
+			if !errors.Is(e.Err, context.Canceled) {
 				_ = s.send(OutboundMessage{
 					ConnectionID: s.connID,
 					Domain:       s.domain,

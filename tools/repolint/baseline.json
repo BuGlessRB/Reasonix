@@ -2,8 +2,8 @@
   "limits": {
     "banner": 0,
     "commented-code": 0,
-    "complexity": 1597,
-    "error-text": 18,
+    "complexity": 1595,
+    "error-text": 16,
     "essay": 3315,
     "file-size": 44334,
     "function-size": 6891,
@@ -385,7 +385,6 @@
       "function-size": 11
     },
     "internal/bot/render.go": {
-      "error-text": 1,
       "essay": 5,
       "function-size": 24
     },
@@ -436,8 +435,7 @@
       "essay": 15
     },
     "internal/cli/chat_tui.go": {
-      "complexity": 330,
-      "error-text": 1,
+      "complexity": 328,
       "essay": 109,
       "file-size": 4693,
       "function-size": 1289
