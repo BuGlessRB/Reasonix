@@ -17,6 +17,12 @@ import (
 // staged or swapped here — for a line that installs rather than publishing
 // version directories, the installer is the helper.
 func (l Line) RunInstaller(path string) error {
+	// The launch call follows the line's own manifest: CreateProcess refuses an
+	// image that requests admin, and ShellExecute is what raises the consent
+	// prompt. A line that has not said which it ships must not guess.
+	if !l.Windows.Elevated {
+		return fmt.Errorf("update: this line declares no elevated installer to run")
+	}
 	if path == "" {
 		return fmt.Errorf("update: no installer to run")
 	}
@@ -31,9 +37,7 @@ func (l Line) RunInstaller(path string) error {
 	if err != nil {
 		return fmt.Errorf("update: start installer: %w", err)
 	}
-	// CreateProcess refuses an image whose manifest requests admin, so
-	// exec.Command can never start this one. ShellExecute raises the consent
-	// prompt, and what it starts already outlives this process.
+	// ShellExecute detaches on its own, so what it starts outlives this process.
 	if err := windows.ShellExecute(0, verb, target, nil, nil, windows.SW_SHOWNORMAL); err != nil {
 		return runInstallerStartError(err)
 	}

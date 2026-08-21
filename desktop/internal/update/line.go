@@ -18,6 +18,16 @@ type Line struct {
 	Deb DebLine
 	// Mac is what the bundle swap needs to recognize and trust a replacement.
 	Mac MacLine
+	// Windows is what starting this line's downloaded installer needs.
+	Windows WindowsLine
+}
+
+// WindowsLine is what starting this line's installer needs to know. The two
+// lines disagree and nothing else records it: Studio installs into Program
+// Files and HKLM so its manifest requests admin, while the desktop hands off to
+// a helper that must never be asked to elevate.
+type WindowsLine struct {
+	Elevated bool // the installer manifest requests admin; CreateProcess cannot start it
 }
 
 // MacLine identifies this line's app bundle. SelfUpdate is false for a line
