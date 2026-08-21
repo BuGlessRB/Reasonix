@@ -100,14 +100,6 @@ func (c *Catalog) ReconcileDirectory(ctx context.Context, target DirectoryTarget
 		}
 		runtime.Gosched()
 	}
-	lineageRecords := make([]SessionRecord, 0, len(ordered))
-	for _, info := range ordered {
-		lineageRecords = append(lineageRecords, recordFromOrder(target, info))
-	}
-	if err := c.refreshDirectoryRecoveryLineage(ctx, target, lineageRecords); err != nil {
-		c.failDirectoryScan(context.Background(), target.Path, err)
-		return err
-	}
 	if err := c.finishDirectoryScan(ctx, target, signature, generation, now, len(ordered)); err != nil {
 		return err
 	}

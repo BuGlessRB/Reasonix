@@ -117,28 +117,12 @@ type SessionRecord struct {
 	RecoveryDigest string     `json:"recoveryDigest,omitempty"`
 	ParentID       string     `json:"parentId,omitempty"`
 	// RecoveryCopy is true only when real content is still covered by the parent.
-	RecoveryCopy bool `json:"recoveryCopy,omitempty"`
-	// RecoveryGroupID clusters a lineage of normal + recovery branches that
-	// share content ancestry. Empty for ordinary non-recovery sessions.
-	RecoveryGroupID string `json:"recoveryGroupId,omitempty"`
-	// RecoveryRole is normal | covered_copy | adopted | diverged.
-	RecoveryRole string `json:"recoveryRole,omitempty"`
-	// RecoveryCanonical marks the unique leaf that covers the group and should
-	// be opened by default. Never moves or rewrites files.
-	RecoveryCanonical  bool   `json:"recoveryCanonical,omitempty"`
+	RecoveryCopy       bool   `json:"recoveryCopy,omitempty"`
 	ContentFingerprint string `json:"contentFingerprint,omitempty"`
 	MetaFingerprint    string `json:"metaFingerprint,omitempty"`
 	Health             Health `json:"health"`
 	MissingSince       int64  `json:"missingSince,omitempty"`
 }
-
-// Recovery role constants for catalog lineage classification.
-const (
-	RecoveryRoleNormal      = "normal"
-	RecoveryRoleCoveredCopy = "covered_copy"
-	RecoveryRoleAdopted     = "adopted"
-	RecoveryRoleDiverged    = "diverged"
-)
 
 type TopicKey struct {
 	Scope         string `json:"scope"`

@@ -272,3 +272,53 @@ func TestRecoveryOnlyTopicState(t *testing.T) {
 		t.Fatalf("turns = %d, want 0 for recovery-only topic", topic.Turns)
 	}
 }
+
+// TestListSessionsOmitsConflictCopies is the row the sidebar was showing. A
+// save conflict forks the transcript into a recovery branch — one per conflict,
+// each a valid session file with the same title and one fewer turn. Listing
+// them turned repeated conflicts into a staircase of duplicate conversations
+// nobody started, while the file the user was actually in sat at the top.
+func TestListSessionsOmitsConflictCopies(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	parentPath, coveredPath, _ := forkCatalogRecoveryBranch(t, dir, "covered")
+	coverCatalogRecoveryParent(t, parentPath, coveredPath)
+	_, divergedPath, _ := forkCatalogRecoveryBranch(t, dir, "diverged")
+
+	catalog, err := Open(ctx, Options{Path: filepath.Join(t.TempDir(), "catalog.sqlite"), DisableRepair: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = catalog.Close(context.Background()) })
+	if err := catalog.ReconcileDirectory(ctx, DirectoryTarget{Path: dir, Scope: "global"}); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := catalog.ListSessions(ctx, SessionPageRequest{Scope: "all", Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := map[string]bool{}
+	for _, item := range page.Items {
+		listed[item.Path] = true
+		if item.Recovered {
+			t.Errorf("conflict copy listed as a session: %s", item.Path)
+		}
+	}
+	// Both kinds stay off the list: a covered copy is redundant, and a diverged
+	// one is a rescued file the user never opened.
+	for _, hidden := range []string{coveredPath, divergedPath} {
+		if listed[hidden] {
+			t.Errorf("%s is a conflict copy, not a conversation", hidden)
+		}
+	}
+	// The transcript they forked from is still the user's session.
+	if !listed[parentPath] {
+		t.Errorf("the session the user was in is missing from the list; got %d items", len(page.Items))
+	}
+	// Hidden from the list, still indexed: GC and diagnostics read them by path.
+	if _, ok, err := catalog.GetSession(ctx, divergedPath); err != nil || !ok {
+		t.Errorf("conflict copy dropped from the catalog entirely: ok=%v err=%v", ok, err)
+	}
+}

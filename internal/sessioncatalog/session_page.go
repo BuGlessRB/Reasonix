@@ -20,31 +20,19 @@ type sessionPageCursor struct {
 
 const sessionSelectColumns = `path,directory,scope,workspace_root,topic_id,topic_title,
     custom_title,created_at,last_activity_at,preview,turns,turns_state,recovered,
-    recovery_reason,recovery_digest,parent_id,recovery_copy,recovery_group_id,
-    recovery_role,recovery_canonical,content_fingerprint,
+    recovery_reason,recovery_digest,parent_id,recovery_copy,content_fingerprint,
     meta_fingerprint,health,missing_since`
 
 func scanSession(scanner interface{ Scan(...any) error }) (SessionRecord, error) {
 	var record SessionRecord
-	var recoveryCopy, recoveryCanonical int
+	var recoveryCopy int
 	err := scanner.Scan(&record.Path, &record.Directory, &record.Scope, &record.WorkspaceRoot,
 		&record.TopicID, &record.TopicTitle, &record.CustomTitle, &record.CreatedAt,
 		&record.LastActivityAt, &record.Preview, &record.Turns, &record.TurnsState,
 		&record.Recovered, &record.RecoveryReason, &record.RecoveryDigest,
-		&record.ParentID, &recoveryCopy, &record.RecoveryGroupID, &record.RecoveryRole,
-		&recoveryCanonical, &record.ContentFingerprint, &record.MetaFingerprint,
+		&record.ParentID, &recoveryCopy, &record.ContentFingerprint, &record.MetaFingerprint,
 		&record.Health, &record.MissingSince)
 	record.RecoveryCopy = recoveryCopy != 0
-	record.RecoveryCanonical = recoveryCanonical != 0
-	if record.RecoveryRole == "" {
-		if record.RecoveryCopy {
-			record.RecoveryRole = RecoveryRoleCoveredCopy
-		} else if record.Recovered {
-			record.RecoveryRole = RecoveryRoleDiverged
-		} else {
-			record.RecoveryRole = RecoveryRoleNormal
-		}
-	}
 	return record, err
 }
 
@@ -66,7 +54,10 @@ func (c *Catalog) ListSessions(ctx context.Context, req SessionPageRequest) (Ses
 		out.StaleCursor = true
 		return out, nil
 	}
-	where := []string{`missing_since=0`, `health<>'missing'`}
+	// A conflict copy is a rescued file, not a conversation the user started.
+	// Listing them put one row per save conflict in the sidebar, which is what
+	// a chain of same-titled sessions with descending turn counts was.
+	where := []string{`missing_since=0`, `health<>'missing'`, `recovered=0`}
 	args := []any{}
 	switch strings.ToLower(strings.TrimSpace(req.Scope)) {
 	case "", "all":
