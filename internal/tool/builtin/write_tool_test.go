@@ -3,7 +3,6 @@ package builtin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -245,7 +244,7 @@ func TestMoveFileFallsBackForCrossDeviceRename(t *testing.T) {
 
 	oldRename := renameFile
 	renameFile = func(oldpath, newpath string) error {
-		return &os.LinkError{Op: "rename", Old: oldpath, New: newpath, Err: errors.New("invalid cross-device link")}
+		return &os.LinkError{Op: "rename", Old: oldpath, New: newpath, Err: crossDeviceErrno}
 	}
 	t.Cleanup(func() { renameFile = oldRename })
 

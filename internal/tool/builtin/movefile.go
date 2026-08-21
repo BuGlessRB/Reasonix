@@ -3,12 +3,10 @@ package builtin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/tool"
@@ -138,18 +136,6 @@ func renameSameFileDestination(src, dst string) error {
 		return err
 	}
 	return nil
-}
-
-func isCrossDeviceMove(err error) bool {
-	var linkErr *os.LinkError
-	if !errors.As(err, &linkErr) {
-		return false
-	}
-	msg := strings.ToLower(linkErr.Err.Error())
-	return strings.Contains(msg, "cross-device") ||
-		strings.Contains(msg, "different device") ||
-		strings.Contains(msg, "different disk") ||
-		strings.Contains(msg, "not same device")
 }
 
 func copyRegularFileAndRemoveSource(src, dst string, info os.FileInfo) error {
