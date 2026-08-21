@@ -56,3 +56,39 @@ func TestDeclaredCheckShapeMessageNamesTheRealShape(t *testing.T) {
 		t.Errorf("split command got the unreadable message:\n%s", msg)
 	}
 }
+
+// The mixed-shape gate below already accepts a check the host reads out of
+// PIPESTATUS; the declared-check gate refused the same shape. A run that
+// declares `verifies` and pipes the suite into tail to keep 200 lines of output
+// out of its context is doing the thing the declaration is for, and the host
+// reads that stage's status directly rather than the pipeline's.
+func TestDeclaredCheckClearsWhenTheHostReadsTheStage(t *testing.T) {
+	gate := func(command string) bool {
+		a := &Agent{}
+		args, err := json.Marshal(map[string]string{"command": command, "verifies": "the suite passes"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan := &toolCallPlan{evidenceName: "bash", evidenceArgs: args}
+		_, blocked := a.applyShellShapeGates(t.Context(), plan)
+		return blocked
+	}
+	for _, cmd := range []string{
+		"go test ./handlers/ -run TestCreateOrder -v 2>&1 | tail -20",
+		"python3 -m unittest discover -s tests 2>&1 | tail -5",
+	} {
+		if gate(cmd) {
+			t.Errorf("blocked %q, but the host reads the verifier's own stage status", cmd)
+		}
+	}
+	// The shapes the probe cannot answer for stay blocked: a `;` hands the
+	// status on outside any pipeline, and no probe recovers it.
+	for _, cmd := range []string{
+		`python3 check.py; echo "exit=$?"`,
+		`grep -rn foo pkgs/ > /dev/null; test $? -eq 1`,
+	} {
+		if !gate(cmd) {
+			t.Errorf("allowed %q, but nothing here proves what the check exited with", cmd)
+		}
+	}
+}

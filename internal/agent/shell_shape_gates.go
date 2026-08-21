@@ -25,11 +25,12 @@ func (a *Agent) applyShellShapeGates(ctx context.Context, plan *toolCallPlan) (t
 				execution: shellPreflightExecution(plan, false),
 			}, true
 		}
-		// A declared check is read off its exit status, so the status has to
-		// answer for the whole line. Refusing here is what keeps the declaration
-		// worth trusting: the alternative records a verdict the shell never gave.
+		// A declared check is read off its exit status, so something has to
+		// answer for it: the whole line, or the pipe-status probe the mixed-shape
+		// gate below also takes. Neither records a verdict the shell never gave.
 		if declared := bashDeclaredCheck(plan.evidenceArgs); declared != "" &&
-			!evidence.WholeCommandExitConclusive(bashCommandFromArgs(plan.evidenceArgs)) {
+			!evidence.WholeCommandExitConclusive(bashCommandFromArgs(plan.evidenceArgs)) &&
+			!hostReadsCheckThroughPipeStatus(plan.evidenceArgs) {
 			return toolOutcome{
 				output:    declaredCheckShapeMessage(bashCommandFromArgs(plan.evidenceArgs)),
 				blocked:   true,
