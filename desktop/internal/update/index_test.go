@@ -149,3 +149,11 @@ func TestPrereleaseRanksBelowItsRelease(t *testing.T) {
 		t.Error("1.25.1 must read as older than 2.0.0-rc1")
 	}
 }
+
+// The catalog is per line. An empty URL used to fall back to a constant naming
+// the desktop line's, which nothing publishes, so the mistake surfaced as a 404.
+func TestFetchIndexRequiresACatalogURL(t *testing.T) {
+	if _, err := FetchIndex(context.Background(), http.DefaultClient, "  "); err == nil {
+		t.Fatal("an empty catalog URL was accepted")
+	}
+}

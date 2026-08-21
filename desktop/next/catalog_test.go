@@ -7,24 +7,22 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"reasonix/desktop/internal/update"
 )
 
-func TestStudioCatalogIsNotTheDesktopLine(t *testing.T) {
+func TestStudioCatalogNamesTheStudioLine(t *testing.T) {
 	if studioCatalog == "" {
-		t.Fatal("studioCatalog is empty, so update.Options would fall back to the desktop catalog")
+		t.Fatal("studioCatalog is empty, so every update.Options built here fails at fetch")
 	}
-	if studioCatalog == update.IndexURL {
-		t.Fatalf("studioCatalog is the desktop line's catalog (%q); its entries name desktop artifacts", update.IndexURL)
+	if !strings.Contains(studioCatalog, "/studio/") {
+		t.Fatalf("studioCatalog does not name the studio line (%q); its entries would name another product's artifacts", studioCatalog)
 	}
 }
 
 // The version panel and the installer each build their own update.Options, and
 // a release listed by one catalog cannot be installed from another. An Options
-// that omits IndexURL silently reads the desktop line, so this asserts on the
-// package's source rather than on any single call: the failure mode is a new
-// call site, not a changed one.
+// that omits IndexURL now fails at fetch, but only once a user asks for an
+// update; this asserts on the package's source so the mistake is caught at
+// test time, and because the failure mode is a new call site, not a changed one.
 func TestEveryUpdaterOptionsSetsIndexURL(t *testing.T) {
 	fset := token.NewFileSet()
 	entries, err := os.ReadDir(".")
@@ -59,7 +57,7 @@ func TestEveryUpdaterOptionsSetsIndexURL(t *testing.T) {
 					return true
 				}
 			}
-			t.Errorf("%s: update.Options does not set IndexURL, so it reads the desktop catalog", fset.Position(lit.Pos()))
+			t.Errorf("%s: update.Options does not set IndexURL, so its fetch has no catalog to read", fset.Position(lit.Pos()))
 			return true
 		})
 	}

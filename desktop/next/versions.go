@@ -16,9 +16,9 @@ import (
 var version = "dev"
 
 // studioCatalog is Studio's own rollback catalog, published by
-// release-studio.yml. Leaving it empty falls back to update.IndexURL, the
-// desktop line's catalog, whose entries name desktop artifacts — Studio would
-// offer to "update" itself into reasonix-desktop. Every Options here sets it.
+// release-studio.yml. There is no package default to fall back to: an Options
+// that omits it fails at fetch rather than reading another line's catalog,
+// whose entries would offer to "update" Studio into a different product.
 const studioCatalog = "https://dl.reasonix.io/studio/versions.json"
 
 // VersionEntry is one published release as the panel shows it.

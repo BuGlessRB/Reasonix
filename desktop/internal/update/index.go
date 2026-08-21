@@ -10,10 +10,6 @@ import (
 	"strings"
 )
 
-// IndexURL is the rollback catalog published beside the release assets: which
-// versions were ever public, and where each one's immutable manifest lives.
-const IndexURL = "https://dl.reasonix.io/versions.json"
-
 // Index is versions.json. It deliberately carries no asset URLs or signatures —
 // an entry points at that version's own manifest, so rolling back resolves and
 // verifies through the same path a forward update does.
@@ -38,8 +34,10 @@ type IndexEntry struct {
 // failing the list: one malformed row must not cost the user every other
 // version they could go back to.
 func FetchIndex(ctx context.Context, c *http.Client, url string) (*Index, error) {
+	// No default: the catalog is per line, and falling back to another line's
+	// URL is how a caller that forgot to name one gets a silent 404.
 	if strings.TrimSpace(url) == "" {
-		url = IndexURL
+		return nil, fmt.Errorf("update: no catalog URL")
 	}
 	body, err := fetchJSON(ctx, c, url)
 	if err != nil {

@@ -24,7 +24,7 @@ type Installer interface {
 type Options struct {
 	Current  string       // running version
 	Pinned   string       // release the user pinned, or ""
-	IndexURL string       // catalog; empty uses the published one
+	IndexURL string       // this line's catalog; required
 	HTTP     *http.Client // carries the caller's proxy and timeouts
 	Fallback *http.Client // IPv4-pinned route, tried from the second attempt
 	CacheDir string       // where a verified artifact waits for its install
