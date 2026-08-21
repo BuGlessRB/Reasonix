@@ -229,8 +229,8 @@ type Controller struct {
 
 	// checkpoints owns the snapshot-based rewind bookkeeping (the per-session
 	// store, the monotonic turn counter, and the conversation-rewind boundary map)
-	// behind its own lock, off c.mu — so a boundary read for a rewind/fork never
-	// contends on the run-state lock. The Controller keeps the rewind/fork/summarize
+	// behind its own lock, off c.mu — so a boundary read for a rewind never
+	// contends on the run-state lock. The Controller keeps the rewind/summarize
 	// orchestration (truncating the session, restoring code, emitting events). See
 	// checkpoint.go.
 	checkpoints checkpointManager
@@ -289,7 +289,7 @@ type Controller struct {
 	// controller-owned state (sessionPath, guardianPath, checkpoints, rewrite
 	// baseline). Letting a second snapshot observe that migration halfway through
 	// can turn one conflict into a recovery cascade. Session/path swaps
-	// (new/clear/fork/branch/switch/resume/SetSessionPath) hold it for the same
+	// (new/clear/branch/switch/resume/SetSessionPath) hold it for the same
 	// reason: a save that reads the old path but the new session would write one
 	// transcript's messages into another's file, or manufacture a bogus conflict.
 	// Not reentrant — never call snapshot (or anything that snapshots, such as
@@ -1477,17 +1477,9 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 			c.notice(c.BranchTreeText())
 			return
 		case "/branch":
-			args := strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0]))
-			if turn, name, fromTurn, err := ParseBranchTarget(args); err != nil {
+			name := strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0]))
+			if _, err := c.Branch(name); err != nil {
 				c.notice(err.Error())
-			} else if fromTurn {
-				if _, err := c.ForkNamed(turn-1, name); err != nil {
-					c.notice(err.Error())
-				}
-			} else {
-				if _, err := c.Branch(name); err != nil {
-					c.notice(err.Error())
-				}
 			}
 			return
 		case "/switch":
@@ -3203,108 +3195,6 @@ func (c *Controller) rewindFail(err error) error {
 
 // Rewind is implemented in rewind.go (transactional conversation+file restore).
 
-// Fork branches the conversation at the start of turn into a NEW session file,
-// preserving the current one as the branch point, and switches to the branch. Code
-// is untouched (it's a conversation operation). Like a conversation rewind it needs
-// the live boundary, so it is unavailable for resumed-session turns and refused
-// while a turn runs. Returns the new session path.
-func (c *Controller) Fork(turn int) (string, error) {
-	return c.ForkNamed(turn, "")
-}
-
-func (c *Controller) ForkNamed(turn int, name string) (string, error) {
-	return c.forkNamed(turn, name, true)
-}
-
-// ForkSession copies the conversation at the start of turn into a new session
-// file without switching this controller to it. Desktop uses this to open the
-// branch in a new tab while the source tab keeps its current transcript.
-func (c *Controller) ForkSession(turn int, name string) (string, error) {
-	return c.forkNamed(turn, name, false)
-}
-
-func (c *Controller) forkNamed(turn int, name string, switchToFork bool) (string, error) {
-	if c.executor == nil {
-		return "", c.rewindFail(fmt.Errorf("checkpoints unavailable"))
-	}
-	if c.sessionDir == "" {
-		return "", c.rewindFail(fmt.Errorf("fork needs session persistence, which is disabled"))
-	}
-	// Hold the rotation gate from before the pre-fork Snapshot through the
-	// switch below: a bare Running() check released here would let a turn start
-	// during the snapshot and then be switched onto the fork.
-	if err := c.beginRotation(); err != nil {
-		if errors.Is(err, errTurnRunningRotation) {
-			return "", c.rewindFail(fmt.Errorf("cannot fork while a turn is running"))
-		}
-		return "", c.rewindFail(err)
-	}
-	defer c.endRotation()
-	boundary, hasBound := c.checkpoints.boundary(turn)
-	if !hasBound {
-		return "", c.rewindFail(fmt.Errorf("fork unavailable for turn %d (resumed session)", turn))
-	}
-
-	// Persist the current conversation first so the branch point survives, then
-	// seed a fresh session with the messages up to the fork and switch to it.
-	if err := c.Snapshot(); err != nil {
-		slog.Warn("controller: pre-fork snapshot", "err", err)
-	}
-	parentPath := c.SessionPath()
-	parentID := agent.BranchID(parentPath)
-	src := c.executor.Session().Snapshot()
-	if boundary > len(src) {
-		boundary = len(src)
-	}
-	forked := append([]provider.Message(nil), src[:boundary]...)
-	sess := agent.NewSession("")
-	sess.Messages = forked
-
-	newPath := agent.NewSessionPath(c.sessionDir, c.label)
-	if err := sess.SaveIfAbsent(newPath); err != nil {
-		return "", c.rewindFail(err)
-	}
-	forkPreview, forkTurns := agent.SessionPreviewFromMessages(forked)
-	if err := agent.SaveBranchMeta(newPath, agent.BranchMeta{
-		Name:             strings.TrimSpace(name),
-		ParentID:         parentID,
-		ForkTurn:         turn,
-		ForkMessageIndex: boundary,
-		Preview:          forkPreview,
-		Turns:            forkTurns,
-		SchemaVersion:    agent.BranchMetaCountsVersion,
-	}); err != nil {
-		return "", c.rewindFail(err)
-	}
-	if switchToFork {
-		// See snapshotMu: the swap must not interleave with an in-flight save.
-		c.snapshotMu.Lock()
-		c.executor.SetSession(sess)
-		c.mu.Lock()
-		c.sessionPath = newPath
-		c.guardianPath = guardian.PathFor(newPath)
-		c.mu.Unlock()
-		// New lineage: rebind sidecar path and clear any in-memory projection
-		// without deleting the parent session's .context.json.
-		c.bindExecutorProjection(newPath, false)
-		c.ResetPlannerSession()
-		c.setActiveJobSession(newPath)
-		c.rebindCheckpoints(newPath)
-		// A historical fork rewinds before later failures, so it starts with no
-		// active recovery event even though it inherits the session preference.
-		c.loadRecoveryState(newPath)
-		if c.guardianSess != nil {
-			c.guardianSess.Reset()
-		}
-		// Switching into the fork is a new logical session for temporary files.
-		c.rotateSessionTemp()
-		c.snapshotMu.Unlock()
-	}
-	c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo,
-		Text: fmt.Sprintf("forked conversation at turn %d into a new session", turn)})
-	return newPath, nil
-}
-
 func (c *Controller) CheckpointHasBoundary(turn int) bool {
 	boundary, ok := c.checkpoints.boundary(turn)
 	if !ok {
@@ -3318,7 +3208,7 @@ func (c *Controller) CheckpointHasBoundary(turn int) bool {
 }
 
 // Branch copies the current conversation into a child branch and switches to it.
-// Unlike Fork, it branches at the current tip and does not require a checkpoint.
+// It branches at the current tip and does not require a checkpoint.
 func (c *Controller) Branch(name string) (string, error) {
 	if c.executor == nil {
 		return "", c.rewindFail(fmt.Errorf("branch unavailable"))
@@ -3354,13 +3244,11 @@ func (c *Controller) Branch(name string) (string, error) {
 	}
 	branchPreview, branchTurns := agent.SessionPreviewFromMessages(branched)
 	if err := agent.SaveBranchMeta(newPath, agent.BranchMeta{
-		Name:             strings.TrimSpace(name),
-		ParentID:         parentID,
-		ForkTurn:         -1,
-		ForkMessageIndex: len(branched),
-		Preview:          branchPreview,
-		Turns:            branchTurns,
-		SchemaVersion:    agent.BranchMetaCountsVersion,
+		Name:          strings.TrimSpace(name),
+		ParentID:      parentID,
+		Preview:       branchPreview,
+		Turns:         branchTurns,
+		SchemaVersion: agent.BranchMetaCountsVersion,
 	}); err != nil {
 		return "", c.rewindFail(err)
 	}
@@ -3493,7 +3381,7 @@ func branchDisplayName(b agent.BranchInfo) string {
 
 // SummarizeFrom and SummarizeUpTo preserve the historical turn-index API while
 // changing only the model-visible context projection. The canonical transcript
-// and checkpoint boundaries remain available for rewind, undo, and fork.
+// and checkpoint boundaries remain available for rewind and undo.
 func (c *Controller) SummarizeFrom(ctx context.Context, turn int) error {
 	return c.summarizeAt(ctx, turn, true)
 }

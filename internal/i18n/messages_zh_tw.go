@@ -349,7 +349,6 @@ var ChineseTraditional = Messages{
 	RewindCodeConversation:       "程式碼 + 對話",
 	RewindConversationOnly:       "僅對話",
 	RewindCodeOnly:               "僅程式碼",
-	RewindFork:                   "分叉",
 	RewindSummarizeFrom:          "壓縮此處之後（保留歷史）",
 	RewindSummarizeUpto:          "壓縮此處之前（保留歷史）",
 	RewindPickTitle:              "⟲ 回滾 — 選擇一輪",

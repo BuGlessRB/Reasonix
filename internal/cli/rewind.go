@@ -27,13 +27,12 @@ type rewindPicker struct {
 }
 
 var rewindActions = []struct {
-	kind  string // "scope" | "fork" | "summ-from" | "summ-upto"
+	kind  string // "scope" | "summ-from" | "summ-upto"
 	scope control.RewindScope
 }{
 	{"scope", control.RewindBoth},
 	{"scope", control.RewindConversation},
 	{"scope", control.RewindCode},
-	{"fork", 0},
 	{"summ-from", 0},
 	{"summ-upto", 0},
 }
@@ -133,13 +132,6 @@ func (m chatTUI) applyRewind() (tea.Model, tea.Cmd) {
 	// A prepared-but-disabled plan has no controller error, so this picker reports
 	// that precheck result itself below.
 	switch act.kind {
-	case "fork":
-		m.rewind = nil
-		if _, err := m.ctrl.Fork(meta.Turn); err == nil {
-			m.followSessionLease()
-			m.replayActiveBranch(fmt.Sprintf("branched from turn %d", meta.Turn+1))
-		}
-		return m, nil // the branch is a new session
 	case "summ-from":
 		m.rewind = nil
 		_ = m.ctrl.SummarizeFrom(context.Background(), meta.Turn)
@@ -260,10 +252,8 @@ func rewindActionLabel(i int) string {
 	case 2:
 		return i18n.M.RewindCodeOnly
 	case 3:
-		return i18n.M.RewindFork
-	case 4:
 		return i18n.M.RewindSummarizeFrom
-	case 5:
+	case 4:
 		return i18n.M.RewindSummarizeUpto
 	default:
 		return ""

@@ -523,7 +523,6 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /rewind/prepare", s.rewindPrepare)
 	mux.HandleFunc("POST /rewind/commit", s.rewindCommit)
 	mux.HandleFunc("POST /rewind/undo", s.rewindUndo)
-	mux.HandleFunc("POST /fork", s.fork)
 	mux.HandleFunc("POST /summarize", s.summarize)
 	mux.HandleFunc("POST /tool-approval-mode", s.toolApprovalMode)
 	mux.HandleFunc("POST /auto-approve-tools", s.autoApproveTools)
@@ -965,35 +964,6 @@ func (s *Server) rewind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// fork creates a new branch at a checkpoint.
-func (s *Server) fork(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Turn int    `json:"turn"`
-		Name string `json:"name"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Turn < 0 {
-		missingField(w, "turn")
-		return
-	}
-	// Session-path-changing critical sequence: serialize with /resume, /new,
-	// and switchModel so the controller and the lease keeper move together.
-	// Taken after body decoding so a slow client cannot hold the binding lock.
-	s.bindMu.Lock()
-	defer s.bindMu.Unlock()
-	path, err := s.ctl().ForkNamed(body.Turn, body.Name)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	s.bc.ResetSession()
-	// The controller switched to the fork (a fresh path); the lease follows it.
-	if err := s.rebindSessionLease(s.ctl().SessionPath()); err != nil {
-		sessionInUse(w, err)
-		return
-	}
-	writeJSON(w, map[string]string{"path": path})
 }
 
 // summarize runs summarize-from or summarize-up-to on a turn.

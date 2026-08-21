@@ -722,8 +722,6 @@ func (s *Session) saveRecoveryBranchMeta(path string, opts RecoveryBranchOptions
 	if strings.TrimSpace(meta.ParentID) == "" {
 		meta.ParentID = BranchID(opts.OriginalPath)
 	}
-	meta.ForkTurn = -1
-	meta.ForkMessageIndex = len(s.Snapshot())
 	meta.Preview = preview
 	meta.Turns = turns
 	meta.SchemaVersion = BranchMetaCountsVersion

@@ -378,7 +378,6 @@ var English = Messages{
 	RewindCodeConversation:       "Code + conversation",
 	RewindConversationOnly:       "Conversation only",
 	RewindCodeOnly:               "Code only",
-	RewindFork:                   "Fork",
 	RewindSummarizeFrom:          "Compress after here (history kept)",
 	RewindSummarizeUpto:          "Compress before here (history kept)",
 	RewindPickTitle:              "⟲ Rewind — pick a turn",

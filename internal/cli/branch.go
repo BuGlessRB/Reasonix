@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -66,26 +65,12 @@ func (m *chatTUI) runBranchCommand(input string) {
 	cmd := strings.Fields(input)[0]
 	args := strings.TrimSpace(strings.TrimPrefix(input, cmd))
 
-	// /branch 3 optional-name branches from displayed turn 3. Plain /branch
-	// branches from the current tip.
-	if n, name, fromTurn, err := control.ParseBranchTarget(args); err != nil {
-		m.notice(err.Error())
-		return
-	} else if fromTurn {
-		if _, err := m.ctrl.ForkNamed(n-1, name); err != nil {
-			m.followSessionLease()
-			return
-		}
+	// /branch [name] branches from the current tip.
+	if _, err := m.ctrl.Branch(args); err != nil {
 		m.followSessionLease()
-		m.replayActiveBranch(fmt.Sprintf("branched from turn %d", n))
 		return
-	} else {
-		if _, err := m.ctrl.Branch(name); err != nil {
-			m.followSessionLease()
-			return
-		}
-		m.followSessionLease()
 	}
+	m.followSessionLease()
 	m.showBranchTree()
 }
 

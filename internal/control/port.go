@@ -131,9 +131,6 @@ type SessionHistory interface {
 	UndoRewind(transactionID string) (checkpoint.RewindResult, error)
 	PrepareFileRevert(path string) (checkpoint.RewindPlan, error)
 	CommitFileRevert(planID string, resolution checkpoint.ConflictResolution) (checkpoint.RewindResult, error)
-	Fork(turn int) (string, error)
-	ForkNamed(turn int, name string) (string, error)
-	ForkSession(turn int, name string) (string, error)
 	Branch(name string) (string, error)
 	Branches() ([]agent.BranchInfo, error)
 	BranchTreeText() string

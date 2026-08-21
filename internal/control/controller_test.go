@@ -2432,9 +2432,6 @@ func TestSessionMutationsRefuseWhileRotating(t *testing.T) {
 	if _, err := c.Branch("x"); !errors.Is(err, errRotationInProgress) {
 		t.Fatalf("Branch while rotating = %v, want errRotationInProgress", err)
 	}
-	if _, err := c.ForkNamed(1, "x"); !errors.Is(err, errRotationInProgress) {
-		t.Fatalf("ForkNamed while rotating = %v, want errRotationInProgress", err)
-	}
 	if _, err := c.SwitchBranch("x"); !errors.Is(err, errRotationInProgress) {
 		t.Fatalf("SwitchBranch while rotating = %v, want errRotationInProgress", err)
 	}

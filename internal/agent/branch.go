@@ -19,19 +19,17 @@ import (
 // navigable conversation tree. The conversation itself remains in the .jsonl
 // file; metadata lives beside it at <session>.meta.
 type BranchMeta struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name,omitempty"`
-	ParentID         string    `json:"parent_id,omitempty"`
-	ForkTurn         int       `json:"fork_turn,omitempty"`
-	ForkMessageIndex int       `json:"fork_message_index,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	Scope            string    `json:"scope,omitempty"`
-	WorkspaceRoot    string    `json:"workspace_root,omitempty"`
-	TopicID          string    `json:"topic_id,omitempty"`
-	TopicTitle       string    `json:"topic_title,omitempty"`
-	CustomTitle      string    `json:"custom_title,omitempty"`
-	Model            string    `json:"model,omitempty"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name,omitempty"`
+	ParentID      string    `json:"parent_id,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Scope         string    `json:"scope,omitempty"`
+	WorkspaceRoot string    `json:"workspace_root,omitempty"`
+	TopicID       string    `json:"topic_id,omitempty"`
+	TopicTitle    string    `json:"topic_title,omitempty"`
+	CustomTitle   string    `json:"custom_title,omitempty"`
+	Model         string    `json:"model,omitempty"`
 	// TokenMode is the legacy dual-write value (economy|full|delivery). Prefer
 	// AgentPreset (balanced|delivery) when both are present.
 	TokenMode string `json:"token_mode,omitempty"`

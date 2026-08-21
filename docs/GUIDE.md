@@ -985,9 +985,8 @@ at `reasonix doctor capabilities` (see
 [Capability diagnostics](./CAPABILITY_DIAGNOSTICS.md)). `/new` starts a new
 session while saving the previous transcript for history/resume; `/clear` asks
 for confirmation, then discards the current context without saving it. `/tree`
-shows saved conversation branches, `/branch [name]` forks the current
-conversation tip, `/branch <turn> [name]` forks from an earlier checkpointed
-turn, and `/switch <id|name>` loads another branch. **Custom commands** are
+shows saved conversation branches, `/branch [name]` branches from the current
+conversation tip, and `/switch <id|name>` loads another branch. **Custom commands** are
 Markdown files under `.reasonix/commands/` (project) or `~/.reasonix/commands/`
 (user) — `review.md` becomes `/review`, a subdirectory namespaces it
 (`git/commit.md` → `/git:commit`). The body is a prompt template; invoking the

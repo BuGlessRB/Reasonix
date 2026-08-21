@@ -137,13 +137,11 @@ func copySessionForWriting(src string) (string, error) {
 	}
 	preview, turns := agent.SessionPreviewFromMessages(msgs)
 	meta := agent.BranchMeta{
-		ParentID:         agent.BranchID(src),
-		ForkTurn:         -1,
-		ForkMessageIndex: len(msgs),
-		Preview:          preview,
-		Turns:            turns,
-		SchemaVersion:    agent.BranchMetaCountsVersion,
-		Model:            srcMeta.Model,
+		ParentID:      agent.BranchID(src),
+		Preview:       preview,
+		Turns:         turns,
+		SchemaVersion: agent.BranchMetaCountsVersion,
+		Model:         srcMeta.Model,
 	}
 	if title := strings.TrimSpace(firstNonEmpty(srcMeta.CustomTitle, srcMeta.TopicTitle)); title != "" {
 		meta.CustomTitle = title + " (copy)"

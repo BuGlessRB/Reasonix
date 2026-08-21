@@ -140,7 +140,7 @@ func TestBranchMetaRoundTripAndList(t *testing.T) {
 	if err := child.Save(childPath); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveBranchMeta(childPath, BranchMeta{Name: "experiment", ParentID: BranchID(rootPath), ForkTurn: 2}); err != nil {
+	if err := SaveBranchMeta(childPath, BranchMeta{Name: "experiment", ParentID: BranchID(rootPath)}); err != nil {
 		t.Fatal(err)
 	}
 

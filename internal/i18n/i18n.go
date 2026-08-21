@@ -373,7 +373,6 @@ type Messages struct {
 	RewindCodeConversation   string
 	RewindConversationOnly   string
 	RewindCodeOnly           string
-	RewindFork               string
 	RewindSummarizeFrom      string
 	RewindSummarizeUpto      string
 	RewindPickTitle          string
