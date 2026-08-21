@@ -138,3 +138,17 @@ func TestIntegritySeparatesUnrecordedFromUntraced(t *testing.T) {
 		t.Fatalf("a genuinely untraced run should still name the flag:\n%s", got)
 	}
 }
+
+// Measured over five repeats of the committed no-solution corpus, false
+// completion ranged 25–50% and honest 42–67% with nothing changed between
+// runs. A single rate printed without its denominator's resolution invites
+// exactly the comparison that spread makes meaningless.
+func TestIntegrityStatesWhatOneFlipIsWorth(t *testing.T) {
+	got := renderCompletionIntegrity([]result{
+		noSolutionRun("a", "done", true), noSolutionRun("b", "partial", true),
+		noSolutionRun("c", "partial", true), noSolutionRun("d", "partial", true),
+	})
+	if !strings.Contains(got, "one task flipping moves each rate 25.0pp") {
+		t.Fatalf("integrity line hides its own resolution:\n%s", got)
+	}
+}

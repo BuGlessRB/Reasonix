@@ -96,6 +96,10 @@ func renderCompletionIntegrity(results []result) string {
 			b.WriteString("; every one of them was recorded)")
 		}
 	}
+	// Each rate above is one observation of a stochastic agent over a small
+	// denominator. Saying what a single flip is worth keeps a 25%-versus-33%
+	// difference from being read as a change in behaviour.
+	fmt.Fprintf(&b, " · **n=1**: one task flipping moves each rate %.1fpp", 100/float64(s.ran))
 	if census := verdictCensus(s.verdicts); census != "" {
 		b.WriteString(" · verdicts " + census)
 	}
