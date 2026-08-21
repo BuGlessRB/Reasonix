@@ -33,6 +33,9 @@ const SAID: Record<string, string> = {
 
   // ── 来源：这个协议做不到 ─────────────────────────────────────────
   "provider.no_thinking_param": "这个协议不发思考参数，开了也没用",
+  "provider.bad_context_window": "上下文长度不能是负数；填 0 表示不自动压缩",
+  "provider.bad_reasoning_protocol": "不认识「{protocol}」这种思考协议",
+  "provider.extra_body_null": "额外设置里「{path}」不能是空值（null）",
   "provider.no_websearch_wire": "这个协议没有让端点自己搜索的写法",
 
   // ── 来源：连接与授权 ─────────────────────────────────────────────
