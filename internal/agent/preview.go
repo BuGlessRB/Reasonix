@@ -30,6 +30,27 @@ var TransientUserBlockTags = []string{
 	"workspace",
 }
 
+// SupersededUserBlockTags names the transient blocks carrying standing state
+// rather than a one-time fact: the live turn always restates them, so an older
+// copy in retained history is redundant. A block reporting something that
+// happened once — a memory write, a finished job, the policy that governed one
+// turn — is absent on purpose: dropping those destroys the only record of it.
+var SupersededUserBlockTags = []string{
+	"active-goal",
+	"response-language",
+	"reasoning-language",
+	"workspace",
+}
+
+// supersededUserBlock indexes SupersededUserBlockTags so the two cannot drift.
+var supersededUserBlock = func() map[string]bool {
+	m := make(map[string]bool, len(SupersededUserBlockTags))
+	for _, tag := range SupersededUserBlockTags {
+		m[tag] = true
+	}
+	return m
+}()
+
 // reTrailingExecutionPolicy matches the host-appended execution-policy block at
 // the end of a user turn (attributes allowed on the open tag).
 var reTrailingExecutionPolicy = regexp.MustCompile(`(?s)\n*<execution-policy(?:\s+[^>]*)?>.*?</execution-policy>\s*$`)

@@ -39,23 +39,6 @@ var failureMarkers = []string{
 	"exit status", "undefined:", "cannot ", "no such", "timeout", "timed out",
 }
 
-// keptForProjection shortens a protected failure before it rides into the
-// projection. The keep policy exists so the failure is not lost, not so its
-// passing noise is carried through every later fold.
-func (a *Agent) keptForProjection(m provider.Message) provider.Message {
-	if !failedExecution(m.ToolExecution) {
-		return m
-	}
-	// A recorded selection is a model's reading of this exact output, so it
-	// wins over the word list and the position floor, which only approximate it.
-	if sel := m.ToolExecution.DiagnosticLines; len(sel) > 0 {
-		m.Content = keepFromSelection(m.Content, sel)
-		return m
-	}
-	m.Content = snipFailureTail(m.Content, recordedTailLines(m.ToolExecution))
-	return m
-}
-
 // recordedTailLines is how many trailing lines the runner itself captured as
 // the failure diagnosis (ToolExecution.OutputTail, populated only on failure).
 // Following it beats a fixed guess: the tail is recorded by the code that saw

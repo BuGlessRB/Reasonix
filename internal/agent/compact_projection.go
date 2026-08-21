@@ -589,7 +589,7 @@ func (a *Agent) partitionFoldForProjection(region []provider.Message) (kept, fol
 			fold = append(fold, m)
 		}
 	}
-	return kept, fold, retention, policyKeep
+	return supersedeStandingState(kept), fold, retention, policyKeep
 }
 
 // runCompactionSummary uses the single local summarizer path for every provider.

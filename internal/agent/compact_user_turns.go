@@ -40,7 +40,7 @@ func (a *Agent) keepUserTurns(region []provider.Message, keep []bool) userTurnRe
 		// The remaining budget is the only gate. A separate per-turn ceiling
 		// used to drop a long turn even when the budget could hold it, and
 		// [[keep]] is the documented way to insist on a specific one.
-		cost := fixedTokenEstimate(m)
+		cost := fixedTokenEstimate(projectedUserTurnFloor(m))
 		if cost > budget {
 			ret.Dropped++
 			ret.DroppedTokens += cost
