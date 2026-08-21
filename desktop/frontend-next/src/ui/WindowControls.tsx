@@ -39,8 +39,19 @@ export function zoomOnTitleBar(e: { target: EventTarget | null }) {
 // its whole frame.
 export function WindowControls() {
   const [max, setMax] = useState(false);
+  // The window owns this state, so read it back rather than inferring it from
+  // our own click: the button is one of several ways it changes, alongside a
+  // double-click on the bar, a snap and the keyboard.
   useEffect(() => {
-    app()?.IsWindowMaximised?.().then(setMax).catch(() => {});
+    const read = () => {
+      app()?.IsWindowMaximised?.().then(setMax).catch(() => {});
+    };
+    read();
+    // The observer the layout already rides on, so it is the one proven to fire
+    // in this shell when the window changes size.
+    const ro = new ResizeObserver(read);
+    ro.observe(document.body);
+    return () => ro.disconnect();
   }, []);
   if (document.documentElement.dataset.platform !== "windows") return null;
   return (
@@ -52,10 +63,7 @@ export function WindowControls() {
       </button>
       <button
         className="wc"
-        onClick={() => {
-          void app()?.ToggleMaximiseWindow?.();
-          app()?.IsWindowMaximised?.().then(setMax).catch(() => {});
-        }}
+        onClick={() => void app()?.ToggleMaximiseWindow?.()}
         aria-label={t(max ? "还原" : "最大化")}
       >
         <svg viewBox="0 0 12 12" aria-hidden="true">
