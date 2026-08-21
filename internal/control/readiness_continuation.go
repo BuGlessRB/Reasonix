@@ -13,32 +13,39 @@ import (
 
 // A turn that ends owing verification has not failed: the host read what is
 // missing off its own receipts, so asking the user to press continue asks them
-// to relay a message the host wrote. What bounds the work instead is the gap —
-// admitted only while it is still shrinking.
-const readinessStallRounds = 2
+// to relay a message the host wrote. What bounds it is a round that moved
+// nothing, plus a ceiling for a gap that changes shape without shrinking.
+const (
+	readinessStallRounds = 2
+	// A list growing an item for each one it closes looks like progress by every
+	// local measure and never ends; the ceiling hands it back instead.
+	readinessMaxRounds = 8
+)
 
 // continueUntilReady runs the missing requirements as further turns. turnErr is
 // the outcome of the turn just finished; the returned error is the outcome of
 // the last one run, so a caller cannot tell whether one turn or four produced it.
 func (o *turnOrchestrator) continueUntilReady(ctx context.Context, turnErr error) error {
-	best, stall := -1, 0
+	last, stall, rounds := "", 0, 0
 	for {
 		var readinessErr *agent.FinalReadinessError
 		if !errors.As(turnErr, &readinessErr) {
 			// Ready, or a failure that has nothing to do with readiness.
 			return turnErr
 		}
-		gap := len(readinessErr.Missing)
-		switch {
-		case best < 0 || gap < best:
-			best, stall = gap, 0
-		default:
-			// Compared against the best round so far, not the last one, so a gap
-			// that oscillates cannot reset the counter and run forever.
+		// A round that moved nothing at all is the only reliable stall: the
+		// category list stays identical while counts inside it move, and the
+		// counts themselves rise when landed work reveals a new requirement.
+		if sig := readinessErr.Signature; sig == last {
 			stall++
 			if stall >= readinessStallRounds {
 				return turnErr
 			}
+		} else {
+			last, stall = sig, 0
+		}
+		if rounds++; rounds > readinessMaxRounds {
+			return turnErr
 		}
 		if err := ctx.Err(); err != nil {
 			return err
@@ -82,6 +89,11 @@ func readinessContinuationPrompt(todos []evidence.TodoItem, reason string) strin
 	for _, p := range parts {
 		b.WriteString("- " + p + "\n")
 	}
-	b.WriteString("Finish it now. Do the remaining work, then verify it and record the outcome.")
+	// "Finish it" alone deadlocked: the completion guard rejects a todo_write
+	// that marks an item done, so the demand named an action that cannot land.
+	// Every way out below is one the guard lets through.
+	b.WriteString("Do the remaining work, then verify it. Mark each finished item with complete_step — that is what advances the list; a todo_write that flips an item to completed is rejected. " +
+		"If an item should no longer be done — the request changed, or it was superseded — send a todo_write without it. " +
+		"If one cannot be done as specified, call conclude_blocked with the evidence for why.")
 	return b.String()
 }

@@ -528,7 +528,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		// a rewritten check or an unverified mutation is still outstanding —
 		// and it was the only turn that never reported one.
 		a.emitTurnShadows(a.turn.turnInput, true)
-		return false, &FinalReadinessError{Attempts: 1, Reason: readiness.reason, Missing: readiness.missingIDs()}
+		return false, &FinalReadinessError{Attempts: 1, Reason: readiness.reason, Missing: readiness.missingIDs(), Signature: readiness.progressSignature()}
 	}
 	if !hasVisibleFinalAnswer(text) {
 		// DeepSeek thinking mode can stream a long reasoning_content and

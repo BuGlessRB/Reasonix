@@ -54,6 +54,9 @@ type FinalReadinessError struct {
 	Attempts int
 	Reason   string
 	Missing  []string
+	// Signature is the full unmet-requirement state. Missing names only the
+	// categories, which stay put while the counts inside them move.
+	Signature string
 }
 
 func (e *FinalReadinessError) Error() string {
