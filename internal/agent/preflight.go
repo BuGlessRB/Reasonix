@@ -40,6 +40,16 @@ func (a *Agent) modelVisibleMessages() []provider.Message {
 	if a == nil || a.sess.conversation == nil {
 		return nil
 	}
+	if visible, ok := a.visibleBehindMemoisedFold(); ok {
+		return visible
+	}
+	return a.visibleByFullScan()
+}
+
+// visibleByFullScan is the same answer read out of the canonical transcript. It
+// runs where the memo cannot vouch for the folded prefix — a fold, a rewrite,
+// the first turn after a load — and refills the memo on its way through.
+func (a *Agent) visibleByFullScan() []provider.Message {
 	snap := a.snapshotForProjection()
 	msgs := snap.msgs
 	a.sess.compactionMu.Lock()
@@ -52,6 +62,12 @@ func (a *Agent) modelVisibleMessages() []provider.Message {
 	}
 	return msgs
 }
+
+// ProjectionVersion is the installed fold's version. A caller comparing folds
+// across a run wants this scalar, not ContextMaintenanceSnapshot — that one
+// reads the whole canonical transcript to report what the fold saved, which is
+// a large answer to a small question.
+func (a *Agent) ProjectionVersion() uint64 { return a.currentProjectionVersion() }
 
 func (a *Agent) currentProjectionVersion() uint64 {
 	if a == nil {

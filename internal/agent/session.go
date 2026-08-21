@@ -387,6 +387,21 @@ func (s *Session) snapshotMessagesVersion() ([]provider.Message, uint64) {
 	return msgs, version
 }
 
+// snapshotTail copies only Messages[from:], with the length and identity of the
+// whole in the same lock window. A turn behind a valid projection reads the
+// messages appended since the fold and nothing else: copying the canonical
+// transcript to reach them is what made a long session pay for history the
+// model never sees.
+func (s *Session) snapshotTail(from int) (tail []provider.Message, total int, version uint64, rewriteVersion int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	total = len(s.Messages)
+	if from >= 0 && from < total {
+		tail = append([]provider.Message(nil), s.Messages[from:]...)
+	}
+	return tail, total, s.version, s.rewriteVersion
+}
+
 // TranscriptVersion returns the current append/rewrite counter used by
 // context-projection validity checks.
 func (s *Session) TranscriptVersion() uint64 {

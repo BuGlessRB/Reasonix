@@ -331,13 +331,21 @@ func projectionValid(st CompactionState, msgs []provider.Message, transcriptVers
 	if len(st.Projection.Messages) == 0 {
 		return false
 	}
-	// Current lineage known: stored key must match (legacy native suffix ok).
-	if cacheKey != "" {
-		if _, ok := lineageKeyCompatible(st.PromptCacheKey, cacheKey); !ok {
-			return false
-		}
+	if !projectionLineageOK(st, cacheKey) {
+		return false
 	}
 	return projectionContentValid(st, msgs, transcriptVersion, fingerprint)
+}
+
+// projectionLineageOK reports whether the sidecar was written for the lineage
+// asking for it. A blank current key means the lineage is not known yet.
+func projectionLineageOK(st CompactionState, cacheKey string) bool {
+	if cacheKey == "" {
+		return true
+	}
+	// Stored key must match (legacy native suffix ok).
+	_, ok := lineageKeyCompatible(st.PromptCacheKey, cacheKey)
+	return ok
 }
 
 // projectionContentValid reports whether st's projection body still matches the
@@ -347,25 +355,32 @@ func projectionContentValid(st CompactionState, msgs []provider.Message, transcr
 	if fingerprint == nil {
 		fingerprint = coveredPrefixHash
 	}
-	if len(st.Projection.Messages) == 0 {
+	n := st.Projection.CoveredCount
+	if len(st.Projection.Messages) == 0 || n <= 0 || n > len(msgs) {
 		return false
 	}
+	return projectionCoversTail(st, len(msgs), transcriptVersion, fingerprint(msgs, n))
+}
+
+// projectionCoversTail is the validity judgement itself, over scalars: what the
+// projection claims, how long the transcript is now, and the hash of the prefix
+// it claims to cover. Who produced that hash — a memo or a fresh pass over the
+// canonical slice — is not this decision's business, and keeping it out is what
+// lets a turn answer without copying a transcript it does not read.
+func projectionCoversTail(st CompactionState, total int, transcriptVersion uint64, prefixHash string) bool {
 	n := st.Projection.CoveredCount
-	if n <= 0 || n > len(msgs) {
+	if len(st.Projection.Messages) == 0 || n <= 0 || n > total {
 		return false
 	}
 	// Prefix hash is required; legacy sidecars without it are rebuilt.
-	if st.Projection.CoveredPrefixHash == "" {
-		return false
-	}
-	if fingerprint(msgs, n) != st.Projection.CoveredPrefixHash {
+	if st.Projection.CoveredPrefixHash == "" || prefixHash != st.Projection.CoveredPrefixHash {
 		return false
 	}
 	if st.TranscriptVersion == transcriptVersion || st.Projection.TranscriptVersion == transcriptVersion {
 		return true
 	}
 	// Append-only growth with a verified covered prefix.
-	return n < len(msgs)
+	return n < total
 }
 
 // modelVisibleFromProjection splices the projection with any messages appended

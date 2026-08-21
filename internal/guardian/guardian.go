@@ -176,13 +176,13 @@ func (gs *Session) review(ctx context.Context, toolName string, args json.RawMes
 	// verdict.
 	before := gs.sess.Snapshot()
 	rewriteBefore := gs.sess.RewriteVersion()
-	projectionBefore := gs.agent.ContextMaintenanceSnapshot().ProjectionVersion
+	projectionBefore := gs.agent.ProjectionVersion()
 	start := time.Now()
 	agentErr := gs.agent.Run(reviewCtx, transcriptText+"\n"+formatReviewRequest(toolName, args))
 	dur := time.Since(start).Milliseconds()
 	// Pressure maintenance runs before sampling. Do not pay for a second summary
 	// when that same review already advanced the visible projection.
-	projectionAfter := gs.agent.ContextMaintenanceSnapshot().ProjectionVersion
+	projectionAfter := gs.agent.ProjectionVersion()
 	if agentErr == nil && reviewN%compactEvery == 0 && projectionAfter == projectionBefore {
 		_ = gs.agent.CompactNow(reviewCtx, "")
 	}
