@@ -10,7 +10,7 @@
     "layering": 0,
     "marker": 0,
     "narrative": 57,
-    "refusal-path": 66,
+    "refusal-path": 55,
     "struct-state": 69
   },
   "files": {
@@ -1327,7 +1327,7 @@
     "internal/serve/serve.go": {
       "essay": 22,
       "file-size": 714,
-      "refusal-path": 14
+      "refusal-path": 3
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3

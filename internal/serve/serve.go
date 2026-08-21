@@ -647,7 +647,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	case "", "json_object":
 		// Supported: empty = default text output, json_object = structured.
 	default:
-		http.Error(w, `unsupported format (supported: "json_object")`, http.StatusBadRequest)
+		badValue(w, "format", "json_object")
 		return
 	}
 	trimmed := strings.TrimSpace(body.Input)
@@ -691,7 +691,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	// concurrent input. Clients must use POST /inbox/items for durable follow-up.
 	if ctrl.Running() {
 		s.bindMu.Unlock()
-		http.Error(w, "session is busy; use POST /inbox/items for durable follow-up", http.StatusConflict)
+		sessionBusy(w, "use POST /inbox/items for durable follow-up")
 		return
 	}
 	// A shell that pins no auto-save path at launch — so an opened window leaves
@@ -721,7 +721,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	// answered 409 while doing exactly what was asked.
 	if !control.IsNonTurnInput(body.Input) && !ctrl.Running() && !ctrl.RuntimeStatus().PendingPrompt {
 		s.bindMu.Unlock()
-		http.Error(w, "input was not admitted; session is rotating, closed, or finishing — use POST /inbox/items", http.StatusConflict)
+		sessionBusy(w, "the session is rotating, closed, or finishing; use POST /inbox/items")
 		return
 	}
 	s.bindMu.Unlock()
@@ -1013,7 +1013,7 @@ func (s *Server) summarize(w http.ResponseWriter, r *http.Request) {
 	case "upto":
 		err = s.ctl().SummarizeUpTo(r.Context(), body.Turn)
 	default:
-		http.Error(w, "mode must be 'from' or 'upto'", http.StatusBadRequest)
+		badValue(w, "mode", "from", "upto")
 		return
 	}
 	if err != nil {
@@ -1048,7 +1048,7 @@ func (s *Server) toolApprovalMode(w http.ResponseWriter, r *http.Request) {
 	}
 	mode, ok := control.ParseToolApprovalMode(body.Mode)
 	if !ok {
-		http.Error(w, "mode must be ask, auto, dontAsk, or yolo", http.StatusBadRequest)
+		badValue(w, "mode", "ask", "auto", "dontAsk", "yolo")
 		return
 	}
 	s.applyApprovalMode(mode)
@@ -1375,32 +1375,32 @@ func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
-		http.Error(w, "invalid session name", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, codeSessionBadName, "a session name cannot be a path", nil)
 		return
 	}
 	dir := s.ctl().SessionDir()
 	if dir == "" {
-		http.Error(w, "sessions disabled", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, "session.disabled", "sessions are not being kept", nil)
 		return
 	}
 	target := filepath.Join(dir, name+".jsonl")
 	abs, err := filepath.Abs(target)
 	if err != nil {
-		http.Error(w, "invalid session path", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, codeSessionBadPath, "the session path could not be resolved", nil)
 		return
 	}
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		http.Error(w, "invalid session dir", http.StatusBadRequest)
+		refuse(w, http.StatusBadRequest, codeSessionBadPath, "the session directory could not be resolved", nil)
 		return
 	}
 	rel, err := filepath.Rel(absDir, abs)
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		http.Error(w, "path outside session dir", http.StatusForbidden)
+		refuse(w, http.StatusForbidden, codeSessionOutside, "that path is outside the session directory", nil)
 		return
 	}
 	if filepath.Clean(abs) == filepath.Clean(s.ctl().SessionPath()) {
-		http.Error(w, "cannot delete active session", http.StatusConflict)
+		busy(w, codeSessionActive, "this session is the one open here", nil)
 		return
 	}
 	destroy := s.ctl().BeginDestroySession(abs)

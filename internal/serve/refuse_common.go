@@ -5,6 +5,7 @@ package serve
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
 
 // The recurring kinds. A frontend that has wording for these can say most
@@ -17,6 +18,12 @@ const (
 	codeNotFound       = "request.not_found"
 	codeUnknownProject = "project.unknown"
 	codeSessionInUse   = "busy.session_in_use"
+	codeBadValue       = "request.bad_value"
+	codeSessionBusy    = "busy.session_running"
+	codeSessionBadName = "session.bad_name"
+	codeSessionBadPath = "session.bad_path"
+	codeSessionOutside = "session.outside_dir"
+	codeSessionActive  = "busy.session_active"
 )
 
 // badBody refuses a request whose body did not parse. The parse error itself is
@@ -52,6 +59,21 @@ func unknownProject(w http.ResponseWriter, root string) {
 // failure — nothing is broken and nothing needs reporting.
 func sessionInUse(w http.ResponseWriter, err error) {
 	busy(w, codeSessionInUse, sessionInUseError(err), map[string]any{"detail": sessionInUseError(err)})
+}
+
+// badValue refuses a field whose value is not one this build accepts. The
+// allowed set travels with it: "mode must be one of" and then nothing is a
+// refusal a reader cannot act on.
+func badValue(w http.ResponseWriter, field string, allowed ...string) {
+	refuse(w, http.StatusBadRequest, codeBadValue, field+" is not one of "+strings.Join(allowed, ", "),
+		map[string]any{"field": field, "allowed": allowed})
+}
+
+// sessionBusy is the turn-in-flight conflict: the input was not refused because
+// it was wrong, but because this session is not taking it right now. detail
+// carries where to put it instead.
+func sessionBusy(w http.ResponseWriter, detail string) {
+	busy(w, codeSessionBusy, detail, map[string]any{"detail": detail})
 }
 
 // decodeBody reads a JSON body under a size cap and refuses as one kind when it
