@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -205,7 +206,9 @@ func TestBusyOpenDoesNotQuarantineHealthyDatabase(t *testing.T) {
 	if isCorruptionError(errors.New("unable to open database file")) {
 		t.Fatal("CANTOPEN must not be treated as corruption")
 	}
-	if !isCorruptionError(errors.New("projection integrity check: *** in database main ***")) {
+	// Built the way the open path builds it: a message shaped like this one is
+	// not the check having failed, the sentinel is.
+	if !isCorruptionError(fmt.Errorf("%w: *** in database main ***", ErrIntegrityCheckFailed)) {
 		t.Fatal("integrity failures must quarantine")
 	}
 	if err := os.Rename(locked, path); err != nil {
@@ -280,4 +283,29 @@ func TestRebuildHoldsExclusiveLifecycleLock(t *testing.T) {
 		t.Fatalf("lifecycle lock remained held: %v", err)
 	}
 	release()
+}
+
+// The verdict PRAGMA integrity_check reports was recognised by looking for
+// "integrity check" in the message, alongside three phrases the result codes
+// above already cover. It travels as a sentinel now, so the wording of the
+// message this package writes is free to change.
+func TestCorruptionIsReadFromIdentityNotWording(t *testing.T) {
+	failed := fmt.Errorf("%w: *** in database main", ErrIntegrityCheckFailed)
+	if !isCorruptionError(failed) {
+		t.Fatal("an integrity failure did not read as corruption")
+	}
+	if !isCorruptionError(fmt.Errorf("open projection: %w", failed)) {
+		t.Fatal("a wrapped integrity failure did not survive")
+	}
+	// A message quoting the words is not the check having failed.
+	if isCorruptionError(errors.New("running integrity check on the projection")) {
+		t.Fatal("text quoting the words read as corruption")
+	}
+	// The phrases dropped with the sniffing are covered by the result codes,
+	// which is why dropping them is safe; a bare message is not corruption.
+	for _, msg := range []string{"database disk image is malformed", "file is not a database"} {
+		if isCorruptionError(errors.New(msg)) {
+			t.Fatalf("%q read as corruption without a result code", msg)
+		}
+	}
 }

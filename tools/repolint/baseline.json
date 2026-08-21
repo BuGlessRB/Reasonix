@@ -3,7 +3,7 @@
     "banner": 0,
     "commented-code": 0,
     "complexity": 1595,
-    "error-text": 16,
+    "error-text": 12,
     "essay": 3315,
     "file-size": 44334,
     "function-size": 6891,
@@ -1089,9 +1089,6 @@
     },
     "internal/productdocs/docs.go": {
       "file-size": 5
-    },
-    "internal/projectiondb/projectiondb.go": {
-      "error-text": 4
     },
     "internal/provider/anthropic/anthropic.go": {
       "complexity": 47,

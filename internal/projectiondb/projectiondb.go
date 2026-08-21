@@ -243,7 +243,7 @@ func open(ctx context.Context, opts OpenOptions, mode Mode) (*sql.DB, error) {
 		return fail(err)
 	}
 	if integrity != "ok" {
-		return fail(fmt.Errorf("projection integrity check: %s", integrity))
+		return fail(fmt.Errorf("%w: %s", ErrIntegrityCheckFailed, integrity))
 	}
 	if err := ApplyMigrations(ctx, db, opts.Migrations, opts.Now); err != nil {
 		return fail(err)
@@ -359,6 +359,12 @@ func Quarantine(path string, now time.Time) string {
 	return quarantined
 }
 
+// ErrIntegrityCheckFailed is the corruption PRAGMA integrity_check reports. It
+// answers with a string, not a SQLite error, so this verdict cannot arrive as a
+// result code and the sentinel carries it instead of the sentence it was read
+// out of.
+var ErrIntegrityCheckFailed = errors.New("projection integrity check failed")
+
 // isCorruptionError reports whether err proves the on-disk projection is unsafe
 // to keep open. Temporary busy/permission/IO failures must return false so a
 // multi-process client never renames a healthy database out from under peers.
@@ -377,11 +383,7 @@ func isCorruptionError(err error) bool {
 			return true
 		}
 	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "integrity check") ||
-		strings.Contains(msg, "malformed") ||
-		strings.Contains(msg, "file is not a database") ||
-		strings.Contains(msg, "not a database")
+	return errors.Is(err, ErrIntegrityCheckFailed)
 }
 
 func PathLooksRemote(path string) bool {
