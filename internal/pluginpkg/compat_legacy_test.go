@@ -1,6 +1,8 @@
 package pluginpkg
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,8 +24,8 @@ func TestLegacyNativeManifestRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err := ParseDir(root)
-	if err == nil || !strings.Contains(err.Error(), "missing apiVersion") {
-		t.Fatalf("ParseDir legacy = %v, want missing apiVersion", err)
+	if !errors.Is(err, ErrMissingAPIVersion) {
+		t.Fatalf("ParseDir legacy = %v, want ErrMissingAPIVersion", err)
 	}
 	pkg, _, err := ParseNativeForMigrate(root)
 	if err != nil {
@@ -110,5 +112,35 @@ func TestLoadInstalledQuarantinesExternalLegacyManifestWithoutModifyingIt(t *tes
 	}
 	if len(state.Plugins) != 1 || state.Plugins[0].Status != PluginStatusDisabledIncompatible {
 		t.Fatalf("plugin state = %#v", state.Plugins)
+	}
+}
+
+// The identity gates a rewrite of a managed plugin's manifest on disk, so a
+// parse failure that merely quotes the words must not reach it. Matching the
+// message sent this manifest down the migration path and reported that failure
+// instead of the real defect.
+func TestQuotingTheWordsDoesNotTriggerManagedMigration(t *testing.T) {
+	home := t.TempDir()
+	root := InstallRoot(home, "quoter")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := fmt.Sprintf(`{"apiVersion":%q,"name":"quoter","version":"1.0.0","missing apiVersion":1}`, ManifestAPIVersionV2)
+	if err := os.WriteFile(filepath.Join(root, NativeManifest), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Upsert(home, InstalledPlugin{Name: "quoter", Root: RelativeRoot(home, root), Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, warnings := LoadInstalled(home)
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %v", warnings)
+	}
+	if strings.Contains(warnings[0], "migrat") {
+		t.Fatalf("a manifest that only quotes the words was sent down the migration path: %s", warnings[0])
+	}
+	if _, err := os.Stat(filepath.Join(root, NativeManifest+".bak")); err == nil {
+		t.Fatal("the manifest was rewritten")
 	}
 }

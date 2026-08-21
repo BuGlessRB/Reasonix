@@ -1,6 +1,7 @@
 package pluginpkg
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ func LoadInstalled(reasonixHome string) ([]InstalledPackage, []string) {
 		}
 		root := ResolveRoot(reasonixHome, installed.Root)
 		pkg, pkgWarnings, err := ParseDir(root)
-		if err != nil && strings.Contains(err.Error(), "missing apiVersion") && managedPluginRoot(reasonixHome, installed, root) {
+		if err != nil && errors.Is(err, ErrMissingAPIVersion) && managedPluginRoot(reasonixHome, installed, root) {
 			legacy, _, migrateErr := ParseNativeForMigrate(root)
 			if migrateErr == nil {
 				var data []byte
@@ -51,7 +52,7 @@ func LoadInstalled(reasonixHome string) ([]InstalledPackage, []string) {
 				stateChanged = true
 			}
 			remediation := "repair or reinstall the plugin"
-			if strings.Contains(reason, "missing apiVersion") {
+			if errors.Is(err, ErrMissingAPIVersion) {
 				remediation = fmt.Sprintf("reasonix plugin migrate %s --to-v2", installed.Name)
 			}
 			warnings = append(warnings, fmt.Sprintf("%s: %s: %v; remediation: %s", installed.Name, PluginStatusDisabledIncompatible, err, remediation))

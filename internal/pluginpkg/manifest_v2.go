@@ -70,10 +70,16 @@ func checkAPIVersionV2(v string) error {
 	return fmt.Errorf("%s: unsupported apiVersion %q: want exact %s", NativeManifest, v, ManifestAPIVersionV2)
 }
 
+// ErrMissingAPIVersion marks a native manifest that declares no apiVersion --
+// the one parse failure a managed plugin can be migrated out of. That decision
+// rewrites a manifest on disk, so it is taken from the error's identity: a
+// parse failure that merely quotes these words is not this.
+var ErrMissingAPIVersion = errors.New("missing apiVersion")
+
 // rejectNonV2Native explains why a non-v2 native manifest is refused.
 func rejectNonV2Native(apiVersion string) error {
 	if apiVersion == "" {
-		return fmt.Errorf("%s: missing apiVersion; native manifests must declare %s", NativeManifest, ManifestAPIVersionV2)
+		return fmt.Errorf("%s: %w; native manifests must declare %s", NativeManifest, ErrMissingAPIVersion, ManifestAPIVersionV2)
 	}
 	return checkAPIVersionV2(apiVersion)
 }

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -401,7 +402,7 @@ func pluginDoctorCommand(args []string) int {
 	pkg, warnings, err := pluginpkg.ParseDir(root)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "invalid:", err)
-		if strings.Contains(err.Error(), "missing apiVersion") {
+		if errors.Is(err, pluginpkg.ErrMissingAPIVersion) {
 			fmt.Fprintf(os.Stderr, "remediation: reasonix plugin migrate %s --to-v2\n", args[0])
 		}
 		return 1
