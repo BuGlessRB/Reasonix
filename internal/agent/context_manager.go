@@ -174,7 +174,7 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 		// with the overflow error — a sentence about a provider limit nowhere
 		// near being hit. Nothing to fold is a verdict, not a failure.
 		if policy.Trigger == CompactionTriggerManual && est < hard {
-			return PreparedContext{}, fmt.Errorf("%w: %s", errCheckpointRejected, reason)
+			return PreparedContext{}, rejectCheckpoint("%s", reason)
 		}
 		if policy.Trigger == CompactionTriggerOverflow || policy.Force || est >= hard {
 			return PreparedContext{}, fmt.Errorf("%w: %s", ErrCompactionRequired, reason)

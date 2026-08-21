@@ -421,7 +421,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		a.canonicalOriginFor(stateSnapshot, canonical, msgs, head))
 	fixedPrefixTokens := a.estimatedPromptTokens(a.providerProjectionMessages(msgs[:head]))
 	if a.effectiveContextWindow() > 0 && fixedPrefixTokens >= a.compactTrigger() {
-		return CompactionNoop, fmt.Errorf("%w: fixed prefix (%d tokens) already exceeds trigger (%d)", errCheckpointRejected, fixedPrefixTokens, a.compactTrigger())
+		return CompactionNoop, rejectCheckpoint("fixed prefix (%d tokens) already exceeds trigger (%d)", fixedPrefixTokens, a.compactTrigger())
 	}
 
 	sourceTokens := a.estimatedPromptTokens(msgs)
@@ -519,7 +519,7 @@ func checkpointProjectionMessages(msgs []provider.Message, head, start int, kept
 // only if still below trigger; manual below trigger accepts any savings.
 func (a *Agent) acceptCheckpointCandidate(trigger string, force bool, sourceTokens, candidateTokens, fixedPrefixTokens int) error {
 	if candidateTokens >= sourceTokens {
-		return fmt.Errorf("%w: candidate would not reduce tokens (%d >= %d)", errCheckpointRejected, candidateTokens, sourceTokens)
+		return rejectCheckpoint("candidate would not reduce tokens (%d >= %d)", candidateTokens, sourceTokens)
 	}
 	triggerTokens := a.compactTrigger()
 	ceiling := a.checkpointCeiling()
@@ -533,13 +533,13 @@ func (a *Agent) acceptCheckpointCandidate(trigger string, force bool, sourceToke
 		// Exceptional path: fixed prefix alone already exceeds 50%.
 		savings := sourceTokens - candidateTokens
 		if savings < a.exceptionalMinimumSavings() {
-			return fmt.Errorf("%w: fixed-prefix exception requires ≥%d token savings, got %d", errCheckpointRejected, a.exceptionalMinimumSavings(), savings)
+			return rejectCheckpoint("fixed-prefix exception requires ≥%d token savings, got %d", a.exceptionalMinimumSavings(), savings)
 		}
 		if triggerTokens > 0 && candidateTokens >= triggerTokens {
-			return fmt.Errorf("%w: candidate %d still at or above trigger %d", errCheckpointRejected, candidateTokens, triggerTokens)
+			return rejectCheckpoint("candidate %d still at or above trigger %d", candidateTokens, triggerTokens)
 		}
 		if hard > 0 && candidateTokens >= hard {
-			return fmt.Errorf("%w: candidate %d still at or above physical ceiling %d", errCheckpointRejected, candidateTokens, hard)
+			return rejectCheckpoint("candidate %d still at or above physical ceiling %d", candidateTokens, hard)
 		}
 		return nil
 	}
@@ -548,14 +548,14 @@ func (a *Agent) acceptCheckpointCandidate(trigger string, force bool, sourceToke
 		// this is not a fixed-prefix exception. Force/overflow may still land
 		// a strictly smaller view below the trigger when the ceiling cannot.
 		if !force {
-			return fmt.Errorf("%w: candidate %d exceeds checkpoint ceiling %d (protected content too large)", errCheckpointRejected, candidateTokens, ceiling)
+			return rejectCheckpoint("candidate %d exceeds checkpoint ceiling %d (protected content too large)", candidateTokens, ceiling)
 		}
 	}
 	if triggerTokens > 0 && candidateTokens >= triggerTokens && !force {
-		return fmt.Errorf("%w: candidate %d still at or above trigger %d", errCheckpointRejected, candidateTokens, triggerTokens)
+		return rejectCheckpoint("candidate %d still at or above trigger %d", candidateTokens, triggerTokens)
 	}
 	if force && triggerTokens > 0 && candidateTokens >= triggerTokens {
-		return fmt.Errorf("%w: forced candidate %d still at or above trigger %d", errCheckpointRejected, candidateTokens, triggerTokens)
+		return rejectCheckpoint("forced candidate %d still at or above trigger %d", candidateTokens, triggerTokens)
 	}
 	return nil
 }

@@ -293,7 +293,7 @@ func (a *Agent) repairFoldCoverage(ctx context.Context, mustFree bool, fold []pr
 		}
 	}
 	if cov.LostEveryChange() {
-		return res, fmt.Errorf("%w: the digest carried none of the fold's changes (%s)", errCheckpointRejected, cov.Reason())
+		return res, rejectCheckpoint("the digest carried none of the fold's changes (%s)", cov.Reason())
 	}
 	return res, nil
 }

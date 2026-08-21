@@ -697,14 +697,6 @@ func feishuTextContent(text string) string {
 	return string(content)
 }
 
-func isCardLimitError(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := err.Error()
-	return strings.Contains(s, "11310") || strings.Contains(s, "11325")
-}
-
 const feishuReplyRecalledCode = 230011
 
 type feishuAPIError struct {
@@ -791,7 +783,7 @@ func (a *adapter) sendSDKContent(ctx context.Context, msg bot.OutboundMessage, m
 			return fmt.Errorf("feishu send error: empty response")
 		}
 		if !resp.Success() {
-			return fmt.Errorf("feishu send error: %s", feishuCodeError(resp.Code, resp.Msg))
+			return &feishuAPIError{op: "send", code: resp.Code, msg: resp.Msg}
 		}
 		if resp.Data != nil {
 			result = bot.SendResult{MessageID: stringPtrValue(resp.Data.MessageId)}

@@ -26,11 +26,11 @@ func CompactionDeclineReason(err error) string {
 	if err == nil {
 		return ""
 	}
-	_, reason, found := strings.Cut(err.Error(), errCheckpointRejected.Error()+": ")
-	if !found {
-		return err.Error()
+	var rejected *checkpointRejection
+	if errors.As(err, &rejected) {
+		return rejected.reason
 	}
-	return reason
+	return err.Error()
 }
 
 // modelVisibleMessages returns the provider-bound message list: a valid

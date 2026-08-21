@@ -3,9 +3,9 @@
     "banner": 0,
     "commented-code": 0,
     "complexity": 1597,
-    "error-text": 21,
+    "error-text": 18,
     "essay": 3315,
-    "file-size": 44342,
+    "file-size": 44334,
     "function-size": 6891,
     "layering": 0,
     "marker": 0,
@@ -190,9 +190,6 @@
     "internal/agent/parallel_tasks_test.go": {
       "essay": 2
     },
-    "internal/agent/preflight.go": {
-      "error-text": 1
-    },
     "internal/agent/preview.go": {
       "essay": 17
     },
@@ -366,9 +363,8 @@
       "essay": 4
     },
     "internal/bot/feishu/feishu.go": {
-      "error-text": 2,
       "essay": 1,
-      "file-size": 210
+      "file-size": 202
     },
     "internal/bot/feishu/retry.go": {
       "error-text": 1
