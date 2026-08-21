@@ -67,11 +67,23 @@ func (p *capabilityProbeProvider) toolResults() []string {
 // given use_capability calls, and returns each call's result text.
 func probeCapabilities(t *testing.T, kind string, calls []string) []string {
 	t.Helper()
+	probe := &capabilityProbeProvider{calls: calls}
+	runProbeWith(t, kind, probe, event.Discard)
+	results := probe.toolResults()
+	if len(results) != len(calls) {
+		t.Fatalf("expected %d tool results, got %d: %v", len(calls), len(results), results)
+	}
+	return results
+}
+
+// runProbeWith builds the real stack around the probe and runs one turn,
+// reporting events to the given sink.
+func runProbeWith(t *testing.T, kind string, probe *capabilityProbeProvider, sink event.Sink) {
+	t.Helper()
 	isolateConfigHome(t)
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
-	probe := &capabilityProbeProvider{calls: calls}
 	provider.Register(kind, func(provider.Config) (provider.Provider, error) { return probe, nil })
 	writeFile(t, dir, "reasonix.toml", `
 default_model = "test-model"
@@ -84,7 +96,7 @@ name = "test-model"
 kind = "`+kind+`"
 model = "x"
 `)
-	ctrl, err := Build(context.Background(), Options{Sink: event.Discard})
+	ctrl, err := Build(context.Background(), Options{Sink: sink})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -92,11 +104,6 @@ model = "x"
 	if err := ctrl.Run(context.Background(), "check what you can delegate to"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	results := probe.toolResults()
-	if len(results) != len(calls) {
-		t.Fatalf("expected %d tool results, got %d: %v", len(calls), len(results), results)
-	}
-	return results
 }
 
 // TestEffectDescribedCapabilityIDsAreDiscoverable pins the promise at its final

@@ -465,43 +465,6 @@ func (t *TaskTool) Schema() json.RawMessage {
 // running two sub-agents at once and letting their writes race.
 func (t *TaskTool) ReadOnly() bool { return false }
 
-// ResolveProfile extracts model/effort from task args (and optional profile
-// overrides) for dispatch-line display. Runtime execution re-resolves with the
-// full precedence chain.
-func (t *TaskTool) ResolveProfile(args json.RawMessage) *event.Profile {
-	var p struct {
-		Model   string `json:"model"`
-		Effort  string `json:"effort"`
-		Profile string `json:"profile"`
-	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return nil
-	}
-	profileModel, profileEffort := "", ""
-	configModel, configEffort := "", ""
-	if name := strings.TrimSpace(p.Profile); name != "" {
-		if def, err := ResolveProfileDefinition(t.profileLookup, name); err == nil {
-			profileModel, profileEffort = def.Model, def.Effort
-		}
-		if t.profileConfigModel != nil {
-			configModel = t.profileConfigModel(name)
-		}
-		if t.profileConfigEffort != nil {
-			configEffort = t.profileConfigEffort(name)
-		}
-	}
-	model, effort := ResolveModelEffort(
-		configModel, configEffort,
-		p.Model, p.Effort,
-		profileModel, profileEffort,
-		t.subagentModel, t.subagentEffort,
-	)
-	if model == "" && effort == "" {
-		return nil
-	}
-	return &event.Profile{Model: model, Effort: effort}
-}
-
 // ReadOnlyTaskTool runs an isolated sub-agent with a strictly read-only tool
 // registry. It intentionally omits background execution and transcript
 // continuation/fork controls so the call has no durable host side effects.
@@ -540,13 +503,6 @@ func (*ReadOnlyTaskTool) ReadOnly() bool { return true }
 // sub-agent (no writers, installers, memory mutation, background jobs, or
 // delegation), so it is safe to run while planning.
 func (*ReadOnlyTaskTool) PlanModeSafe() bool { return true }
-
-func (r *ReadOnlyTaskTool) ResolveProfile(args json.RawMessage) *event.Profile {
-	if r == nil || r.task == nil {
-		return nil
-	}
-	return r.task.ResolveProfile(args)
-}
 
 func (r *ReadOnlyTaskTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if r == nil || r.task == nil {

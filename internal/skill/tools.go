@@ -246,17 +246,21 @@ func (t *readOnlySkillTool) ResolveProfile(args json.RawMessage) *event.Profile 
 	return profileForSkill(sk, t.profileResolver)
 }
 
+// profileForSkill names the delegation after the skill that runs it. A skill
+// without its own model/effort still delegates, so the profile is returned
+// either way — the name is what a reader needs to audit the step.
 func profileForSkill(sk Skill, resolver ProfileResolver) *event.Profile {
+	pr := &event.Profile{}
 	if resolver != nil {
-		if pr := resolver(sk); pr != nil {
-			return pr
+		if resolved := resolver(sk); resolved != nil {
+			pr = resolved
 		}
 	}
-	model, effort := strings.TrimSpace(sk.Model), strings.TrimSpace(sk.Effort)
-	if model == "" && effort == "" {
-		return nil
+	if pr.Model == "" && pr.Effort == "" {
+		pr.Model, pr.Effort = strings.TrimSpace(sk.Model), strings.TrimSpace(sk.Effort)
 	}
-	return &event.Profile{Model: model, Effort: effort}
+	pr.Name, pr.Count = sk.Name, 1
+	return pr
 }
 
 // readSkillTool loads an inline skill body into context without running anything.
@@ -381,16 +385,7 @@ func (t *subagentSkillTool) ResolveProfile(json.RawMessage) *event.Profile {
 	if !ok || sk.RunAs != RunSubagent {
 		return nil
 	}
-	if t.profile != nil {
-		if pr := t.profile(sk); pr != nil {
-			return pr
-		}
-	}
-	model, effort := strings.TrimSpace(sk.Model), strings.TrimSpace(sk.Effort)
-	if model == "" && effort == "" {
-		return nil
-	}
-	return &event.Profile{Model: model, Effort: effort}
+	return profileForSkill(sk, t.profile)
 }
 
 // BuiltinSubagentTools returns top-level wrapper tools for the built-in subagent

@@ -2016,11 +2016,7 @@ func (a *Agent) emitFullToolDispatch(ctx context.Context, c provider.ToolCall, r
 		}
 	}
 	if ok {
-		if pr, ok := t.(interface {
-			ResolveProfile(json.RawMessage) *event.Profile
-		}); ok {
-			ev.Profile = pr.ResolveProfile(json.RawMessage(c.Arguments))
-		}
+		ev.Profile = delegationProfile(t, json.RawMessage(c.Arguments))
 	}
 	a.svc.sink.Emit(event.Event{Kind: event.ToolDispatch, Tool: ev})
 }
@@ -2028,7 +2024,7 @@ func (a *Agent) emitFullToolDispatch(ctx context.Context, c provider.ToolCall, r
 // emitResolvedToolDispatch upserts the real target classification of a stable
 // proxy call without changing the provider-visible Name/Args. Append-only sinks
 // ignore Refreshed events; stateful frontends replace the existing card by ID.
-func (a *Agent) emitResolvedToolDispatch(c provider.ToolCall) {
+func (a *Agent) emitResolvedToolDispatch(c provider.ToolCall, profile *event.Profile) {
 	if c.ResolvedReadOnly == nil {
 		return
 	}
@@ -2047,6 +2043,7 @@ func (a *Agent) emitResolvedToolDispatch(c provider.ToolCall) {
 		CapabilityID: c.CapabilityID,
 		ReadOnly:     *c.ResolvedReadOnly,
 		Refreshed:    true,
+		Profile:      profile,
 		FileDiff: event.FileDiff{
 			Diff: c.Diff, Added: c.Added, Removed: c.Removed,
 		},

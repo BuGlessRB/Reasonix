@@ -363,6 +363,8 @@ type Ask struct {
 
 // Profile carries the subagent model/effort resolved for a tool call.
 type Profile struct {
+	Name   string `json:"name,omitempty"`
+	Count  int    `json:"count,omitempty"`
 	Model  string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
 }
@@ -403,7 +405,7 @@ func toWireTool(t event.Tool) *Tool {
 		}
 	}
 	if t.Profile != nil {
-		wt.Profile = &Profile{Model: t.Profile.Model, Effort: t.Profile.Effort}
+		wt.Profile = &Profile{Name: t.Profile.Name, Count: t.Profile.Count, Model: t.Profile.Model, Effort: t.Profile.Effort}
 	}
 	if t.Execution != nil {
 		wt.Execution = toWireShellExecution(t.Execution)

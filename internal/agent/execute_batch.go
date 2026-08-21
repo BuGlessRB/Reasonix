@@ -17,16 +17,20 @@ import (
 // form the model sees; rawOutput is the full original when truncation applied
 // (empty when identical so we avoid double storage). images ride outside text.
 type toolOutcome struct {
-	output                     string
-	rawOutput                  string // full original when different from output
-	images                     []string
-	blocked                    bool
-	errMsg                     string
-	bound                      event.OutputBound
-	truncMsg                   string
-	resolved                   bool
-	resolvedName               string
-	capabilityID               string
+	output       string
+	rawOutput    string // full original when different from output
+	images       []string
+	blocked      bool
+	errMsg       string
+	bound        event.OutputBound
+	truncMsg     string
+	resolved     bool
+	resolvedName string
+	capabilityID string
+	// resolvedProfile is the delegation behind a proxy call: the model only
+	// ever sees use_capability, so without this a dispatched sub-agent reaches
+	// the frontend anonymous.
+	resolvedProfile            *event.Profile
 	resolvedReadOnly, executed bool
 	workspaceMutation          *event.WorkspaceMutation
 	effective                  workspaceEffectiveCall
@@ -144,7 +148,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 	finalize := func(i int) {
 		if calls[i].ResolvedReadOnly != nil {
 			a.sess.conversation.UpdateToolCallResolution(calls[i])
-			a.emitResolvedToolDispatch(calls[i])
+			a.emitResolvedToolDispatch(calls[i], outcomes[i].resolvedProfile)
 		}
 		if surfaceWriters[i] || (outcomes[i].resolved && !outcomes[i].resolvedReadOnly) {
 			earlierWriterRan = true

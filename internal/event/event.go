@@ -240,8 +240,12 @@ const (
 	NoticeAudienceOperator NoticeAudience = "operator"
 )
 
-// Profile carries the subagent model/effort resolved for this call.
+// Profile describes the sub-agents a call hands work to: who runs (Name), how
+// many of them (Count), and the model/effort they resolved to. A non-nil
+// Profile is what marks a tool call as a delegation.
 type Profile struct {
+	Name   string
+	Count  int
 	Model  string
 	Effort string
 }
@@ -291,7 +295,7 @@ type Tool struct {
 	// AttemptID matches the active stream_attempt begin.
 	AttemptID string
 	FileDiff
-	Profile *Profile // ToolDispatch: subagent model/effort (set for task/skill calls)
+	Profile *Profile // ToolDispatch: set when the call dispatches sub-agents
 	// Execution is optional local shell metadata (ToolResult). Never sent to
 	// model providers; omitempty keeps old wire readers compatible.
 	Execution *ShellExecution

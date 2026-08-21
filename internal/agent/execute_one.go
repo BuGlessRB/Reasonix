@@ -92,6 +92,7 @@ func (a *Agent) executeOne(ctx context.Context, turn *turnRuntime, call provider
 		out.resolvedName = plan.resolvedMeta.TargetName
 		out.capabilityID = plan.resolvedMeta.CapabilityID
 		out.resolvedReadOnly = plan.resolvedMeta.ReadOnly
+		out.resolvedProfile = delegationProfile(plan.resolvedMeta.Target, plan.resolvedMeta.Args)
 	}()
 	defer finalizeWorkspaceMutationOutcome(&out, plan)
 
