@@ -58,15 +58,17 @@ func continuesGeneration(opts Options) bool {
 	return opts.PreviousSnapshot != nil
 }
 
-// migrateLegacySources moves pre-v2 memory and session files into place. A
-// continued generation already did it, and rescanning on every rebuild would
-// charge a window with several panes for the same disk walk once per pane.
+// migrateLegacySources moves pre-v2 memory and session files into place, and
+// collects what an older relocation left in the previous root. A continued
+// generation already did it, and rescanning on every rebuild would charge a
+// window with several panes for the same disk walk once per pane.
 func migrateLegacySources(opts Options, sink event.Sink) {
 	if continuesGeneration(opts) {
 		return
 	}
 	migration.MigrateLegacyMemorySources(sink)
 	migration.MigrateLegacySessionSources(sink)
+	migration.AdoptRelocatedStateEntries(sink)
 }
 
 // changesModel reports a build targeting a different model than the live
