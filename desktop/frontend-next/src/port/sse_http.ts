@@ -1,5 +1,7 @@
 import { HttpError } from "./port";
 
+type Refusal = { code?: string; error?: string; params?: Record<string, string | number> };
+
 // The transport half of SsePort: where the kernel is, and the four shapes every
 // call to it takes. Split out because the port itself is the whole AgentPort
 // surface — a hundred endpoint methods — and none of them should have to be
@@ -17,10 +19,19 @@ export class SseHttp {
   // Throwing HttpError with the reason attached keeps that choice at the point
   // that renders it, instead of flattening it to a string here.
   protected static async fail(path: string, res: Response): Promise<never> {
-    const body = (await res.json().catch(() => null)) as
-      | { code?: string; error?: string; params?: Record<string, string | number> }
-      | null;
-    throw new HttpError(res.status, body?.error || `${path}: ${res.status}`, body ?? undefined);
+    // Read once as text: a refusal envelope is JSON, but http.Error writes the
+    // reason as plain text, and parsing first threw that account away and left
+    // the panel showing only a path and a number.
+    const raw = (await res.text().catch(() => "")).trim();
+    let body: Refusal | null = null;
+    try {
+      const parsed: unknown = raw === "" ? null : JSON.parse(raw);
+      if (parsed && typeof parsed === "object") body = parsed as Refusal;
+    } catch {
+      // Plain text, which is the whole message.
+    }
+    const detail = body?.error || raw.slice(0, 400);
+    throw new HttpError(res.status, detail || `${path}: ${res.status}`, body ?? undefined);
   }
 
   protected async post(path: string, body?: unknown): Promise<void> {
