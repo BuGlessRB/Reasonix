@@ -573,13 +573,15 @@ export class SsePort extends SseHttp implements AgentPort {
     // Frames arriving while a recovery request is in flight wait for it: the
     // whole point is that the reducer sees one ordered stream, and delivering
     // the new frame first would put a result ahead of the dispatch it answers.
-    let seen = 0;
+    // null until the stream states a position: 0 cannot tell a subscriber that
+    // just attached from one that has seen the stream start.
+    let seen: number | null = null;
     let recovering = false;
     let held: WireEvent[] = [];
     let live = true;
 
     const deliver = (ev: WireEvent) => {
-      if (ev.seq) seen = Math.max(seen, ev.seq);
+      if (ev.seq) seen = Math.max(seen ?? 0, ev.seq);
       onEvent(ev);
     };
 
@@ -609,11 +611,17 @@ export class SsePort extends SseHttp implements AgentPort {
       // should have reached, which is the only way to notice a frame lost at
       // the end of a turn. Neither reaches the reducer.
       if (ev.kind === "stream_watermark") {
+        // The first one states where this subscriber attached: a live-only
+        // subscription replays nothing before it, so nothing before it was lost.
+        if (seen === null) {
+          seen = ev.seq ?? 0;
+          return;
+        }
         if (!recovering && ev.seq && ev.seq > seen) void recover(seen);
         return;
       }
       if (ev.kind === "stream_gap") {
-        seen = Math.max(seen, ev.seq ?? 0);
+        seen = Math.max(seen ?? 0, ev.seq ?? 0);
         onGap?.();
         return;
       }

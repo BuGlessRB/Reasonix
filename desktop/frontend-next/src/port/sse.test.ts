@@ -139,6 +139,28 @@ describe("recovering the event stream", () => {
     s.stop();
   });
 
+  // A live-only subscription replays nothing before it, so a high watermark on
+  // a fresh attach states where the stream is, not a backlog this client lost.
+  // Recovering from zero here replayed the whole log into the reducer.
+  it("takes the first watermark as its position, not as a loss", async () => {
+    const s = attach();
+    s.feed("stream_watermark", 500);
+    await settle();
+    expect(s.replays()).toHaveLength(0);
+    s.stop();
+  });
+
+  // Baselining must not blind it afterwards: the next watermark is a real test.
+  it("still notices a loss once the first watermark set its position", async () => {
+    const s = attach(() => ({ frames: [{ kind: "turn_done", seq: 502 }], complete: true }));
+    s.feed("stream_watermark", 500);
+    s.feed("turn_started", 501);
+    s.feed("stream_watermark", 502);
+    await settle();
+    expect(s.kinds()).toContain("turn_done");
+    s.stop();
+  });
+
   it("takes the server's own gap signal without rendering it", async () => {
     const s = attach();
     s.feed("stream_gap", 7);
