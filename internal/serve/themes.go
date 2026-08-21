@@ -58,7 +58,7 @@ func (s *Server) activateTheme(w http.ResponseWriter, r *http.Request) {
 		ID string `json:"id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	id := strings.TrimSpace(req.ID)

@@ -23,7 +23,7 @@ func (s *Server) saveNetwork(w http.ResponseWriter, r *http.Request) {
 		ClearPassword bool   `json:"clearPassword"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	if err := s.ctl().SaveNetworkSettings(body.NetworkSettings, body.Password, body.ClearPassword); err != nil {

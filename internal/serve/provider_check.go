@@ -3,7 +3,6 @@ package serve
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -58,7 +57,7 @@ func (s *Server) checkProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	entry, ok := cfg.Provider(strings.TrimSpace(body.Name))
 	if !ok {
-		http.Error(w, fmt.Sprintf("no provider named %q", body.Name), http.StatusNotFound)
+		notFound(w, "provider", body.Name)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), providerProbeTimeout)

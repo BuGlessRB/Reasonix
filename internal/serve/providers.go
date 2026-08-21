@@ -3,7 +3,6 @@ package serve
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -364,14 +363,7 @@ func probeClients() (proxied, direct *http.Client) {
 }
 
 func decodeProviderBody(w http.ResponseWriter, r *http.Request, into any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(into); err != nil {
-		http.Error(w, "invalid provider request", http.StatusBadRequest)
-		return false
-	}
-	return true
+	return decodeBody(w, r, into)
 }
 
 // nonNilStrings keeps an empty list an empty list. A nil slice marshals to

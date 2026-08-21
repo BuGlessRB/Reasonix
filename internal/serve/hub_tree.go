@@ -175,7 +175,7 @@ func (h *Hub) addWorkspace(w http.ResponseWriter, r *http.Request) {
 		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	dir, err := resolveWorkspaceDir(strings.TrimSpace(body.Path))
@@ -194,12 +194,12 @@ func (h *Hub) removeWorkspace(w http.ResponseWriter, r *http.Request) {
 		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	dir := strings.TrimSpace(body.Path)
 	if dir == "" {
-		http.Error(w, "missing path", http.StatusBadRequest)
+		missingField(w, "path")
 		return
 	}
 	if n := h.rootPanes(dir); n > 0 {
@@ -218,7 +218,7 @@ func (h *Hub) removeSession(w http.ResponseWriter, r *http.Request) {
 		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	path, err := filepath.Abs(strings.TrimSpace(body.Path))
@@ -270,7 +270,7 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request) {
 		Title string `json:"title"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	path, err := filepath.Abs(strings.TrimSpace(body.Path))

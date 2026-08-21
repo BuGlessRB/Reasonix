@@ -56,7 +56,7 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 		IdempotencyKey string `json:"idempotencyKey"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Input) == "" {
-		http.Error(w, "missing input", http.StatusBadRequest)
+		missingField(w, "input")
 		return
 	}
 	intent := sessioninbox.IntentFollowup
@@ -117,7 +117,7 @@ func (s *Server) inboxUpdate(w http.ResponseWriter, r *http.Request) {
 		Input string `json:"input"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Input) == "" {
-		http.Error(w, "missing input", http.StatusBadRequest)
+		missingField(w, "input")
 		return
 	}
 	meta, err := s.inboxAPI().UpdateInboxItem(id, body.Input, body.Input, body.Input)
@@ -144,7 +144,7 @@ func (s *Server) inboxMove(w http.ResponseWriter, r *http.Request) {
 		ToIndex int    `json:"toIndex"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
-		http.Error(w, "missing id", http.StatusBadRequest)
+		missingField(w, "id")
 		return
 	}
 	if err := s.inboxAPI().MoveInboxItem(body.ID, body.ToIndex); err != nil {

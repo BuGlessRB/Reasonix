@@ -3,7 +3,6 @@ package serve
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"sync"
@@ -209,13 +208,12 @@ func decodeStorageTarget(w http.ResponseWriter, r *http.Request) (config.RootID,
 		Root string `json:"root"`
 		Dir  string `json:"dir"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
-		http.Error(w, "invalid storage request", http.StatusBadRequest)
+	if !decodeBody(w, r, &body) {
 		return "", "", false
 	}
 	root := config.RootID(strings.TrimSpace(body.Root))
 	if root == "" {
-		http.Error(w, "missing root", http.StatusBadRequest)
+		missingField(w, "root")
 		return "", "", false
 	}
 	return root, strings.TrimSpace(body.Dir), true

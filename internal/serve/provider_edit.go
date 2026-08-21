@@ -44,7 +44,7 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 	edit := config.LoadForEdit(config.UserConfigPath())
 	entry, ok := edit.Provider(name)
 	if !ok {
-		http.Error(w, fmt.Sprintf("no provider named %q", name), http.StatusNotFound)
+		notFound(w, "provider", name)
 		return
 	}
 	models := trimmedNonEmpty(body.Models)
@@ -214,7 +214,7 @@ func (s *Server) setProviderThinking(w http.ResponseWriter, r *http.Request) {
 	edit := config.LoadForEdit(config.UserConfigPath())
 	entry, ok := edit.Provider(strings.TrimSpace(body.Name))
 	if !ok {
-		http.Error(w, fmt.Sprintf("no provider named %q", body.Name), http.StatusNotFound)
+		notFound(w, "provider", body.Name)
 		return
 	}
 	if !config.CanConfigureThinkingParams(entry) {
@@ -247,7 +247,7 @@ func (s *Server) setProviderWebSearch(w http.ResponseWriter, r *http.Request) {
 	edit := config.LoadForEdit(config.UserConfigPath())
 	entry, ok := edit.Provider(strings.TrimSpace(body.Name))
 	if !ok {
-		http.Error(w, fmt.Sprintf("no provider named %q", body.Name), http.StatusNotFound)
+		notFound(w, "provider", body.Name)
 		return
 	}
 	if !config.SupportsServerWebSearch(entry) {

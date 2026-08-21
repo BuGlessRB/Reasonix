@@ -228,12 +228,12 @@ func (s *Server) pluginEnabled(w http.ResponseWriter, r *http.Request) {
 		Enabled bool   `json:"enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		http.Error(w, "name required", http.StatusBadRequest)
+		missingField(w, "name")
 		return
 	}
 	if err := pluginpkg.SetEnabled(config.ReasonixHomeDir(), name, req.Enabled); err != nil {
@@ -290,7 +290,7 @@ func (s *Server) exportPlugin(w http.ResponseWriter, r *http.Request) {
 func decodePluginInstall(w http.ResponseWriter, r *http.Request) (pluginInstallRequest, bool) {
 	var req pluginInstallRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		badBody(w)
 		return req, false
 	}
 	req.Source = strings.TrimSpace(req.Source)

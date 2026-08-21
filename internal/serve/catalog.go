@@ -92,7 +92,7 @@ type skillEntry struct {
 func (s *Server) skills(w http.ResponseWriter, r *http.Request) {
 	root, other, ok := s.requestedRoot(r)
 	if !ok {
-		http.Error(w, "unknown project", http.StatusBadRequest)
+		unknownProject(w, root)
 		return
 	}
 	if other {
@@ -144,13 +144,13 @@ func (s *Server) skillEnabled(w http.ResponseWriter, r *http.Request) {
 		Root    string `json:"root"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
-		http.Error(w, "missing name", http.StatusBadRequest)
+		missingField(w, "name")
 		return
 	}
 	name, scope := strings.TrimSpace(body.Name), activationScope(body.Scope)
 	root, other, ok := s.resolveRoot(body.Root)
 	if !ok {
-		http.Error(w, "unknown project", http.StatusBadRequest)
+		unknownProject(w, root)
 		return
 	}
 	if other {
@@ -260,7 +260,7 @@ func displayText(s string, limit int) string {
 func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 	root, other, ok := s.requestedRoot(r)
 	if !ok {
-		http.Error(w, "unknown project", http.StatusBadRequest)
+		unknownProject(w, root)
 		return
 	}
 	if other {
@@ -377,13 +377,13 @@ func (s *Server) mcpEnabled(w http.ResponseWriter, r *http.Request) {
 		Root    string `json:"root"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
-		http.Error(w, "missing name", http.StatusBadRequest)
+		missingField(w, "name")
 		return
 	}
 	name, scope := strings.TrimSpace(body.Name), activationScope(body.Scope)
 	root, other, ok := s.resolveRoot(body.Root)
 	if !ok {
-		http.Error(w, "unknown project", http.StatusBadRequest)
+		unknownProject(w, root)
 		return
 	}
 	if other {
@@ -441,7 +441,7 @@ func (s *Server) mcpParse(w http.ResponseWriter, r *http.Request) {
 		Input string `json:"input"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	draft, err := mcpsetup.Parse(body.Input)
@@ -484,7 +484,7 @@ func (s *Server) mcpInstall(w http.ResponseWriter, r *http.Request) {
 		Scope  string      `json:"scope"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	entry := config.PluginEntry{
@@ -541,8 +541,11 @@ func decodeMCPName(w http.ResponseWriter, r *http.Request) (string, bool) {
 	var body struct {
 		Name string `json:"name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
-		http.Error(w, "missing name", http.StatusBadRequest)
+	if !decodeBody(w, r, &body) {
+		return "", false
+	}
+	if strings.TrimSpace(body.Name) == "" {
+		missingField(w, "name")
 		return "", false
 	}
 	return strings.TrimSpace(body.Name), true

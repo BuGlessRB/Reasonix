@@ -104,7 +104,7 @@ func (s *Server) saveAppearance(w http.ResponseWriter, r *http.Request) {
 		FocusY   float64 `json:"focusY"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	edit := config.LoadForEdit(config.UserConfigPath())

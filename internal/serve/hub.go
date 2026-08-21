@@ -358,7 +358,7 @@ func (h *Hub) listRuntimes(w http.ResponseWriter, _ *http.Request) {
 func (h *Hub) openRuntime(w http.ResponseWriter, r *http.Request) {
 	var req OpenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	rt, err := h.Open(r.Context(), req)

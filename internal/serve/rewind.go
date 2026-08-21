@@ -30,7 +30,7 @@ func (s *Server) rewindPrepare(w http.ResponseWriter, r *http.Request) {
 		Scope string `json:"scope"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Turn < 0 {
-		http.Error(w, "missing turn", http.StatusBadRequest)
+		missingField(w, "turn")
 		return
 	}
 	plan, err := s.ctl().PrepareRewind(body.Turn, rewindScope(body.Scope))

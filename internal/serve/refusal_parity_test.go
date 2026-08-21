@@ -26,11 +26,14 @@ func serveRefusalCodes(t *testing.T) map[string]string {
 		t.Fatalf("read package dir: %v", err)
 	}
 	fset := token.NewFileSet()
+	sources := make([]string, 0, len(entries))
 	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
+		if name := e.Name(); !e.IsDir() && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
+			sources = append(sources, name)
 		}
+	}
+	consts := packageStringConsts(t, fset, sources)
+	for _, name := range sources {
 		file, err := parser.ParseFile(fset, name, nil, 0)
 		if err != nil {
 			t.Fatalf("parse %s: %v", name, err)
@@ -48,12 +51,8 @@ func serveRefusalCodes(t *testing.T) map[string]string {
 			if !ok || at >= len(call.Args) {
 				return true
 			}
-			lit, ok := call.Args[at].(*ast.BasicLit)
-			if !ok || lit.Kind != token.STRING {
-				return true
-			}
-			code, err := strconv.Unquote(lit.Value)
-			if err == nil && strings.Contains(code, ".") {
+			code := codeOf(call.Args[at], consts)
+			if strings.Contains(code, ".") {
 				out[code] = name
 			}
 			return true
@@ -98,4 +97,61 @@ func TestEveryRefusalCodeIsTranslated(t *testing.T) {
 	if len(missing) > 0 {
 		t.Fatalf("refusal codes with no wording in kernel.ts:\n  %s", strings.Join(missing, "\n  "))
 	}
+}
+
+// codeOf reads the code a call passes, whether it is spelled at the call or
+// named by a constant. Reading only literals is how a vocabulary moved into
+// constants leaves the catalogue unchecked — the shared refusals did exactly
+// that, and this test went on passing.
+func codeOf(arg ast.Expr, consts map[string]string) string {
+	switch v := arg.(type) {
+	case *ast.BasicLit:
+		if v.Kind != token.STRING {
+			return ""
+		}
+		code, err := strconv.Unquote(v.Value)
+		if err != nil {
+			return ""
+		}
+		return code
+	case *ast.Ident:
+		return consts[v.Name]
+	}
+	return ""
+}
+
+// packageStringConsts collects the package's string constants so a code named
+// by one resolves to what it holds.
+func packageStringConsts(t *testing.T, fset *token.FileSet, names []string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for _, name := range names {
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			continue
+		}
+		for _, decl := range file.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for i, id := range vs.Names {
+					if i >= len(vs.Values) {
+						continue
+					}
+					if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+						if code, err := strconv.Unquote(lit.Value); err == nil {
+							out[id.Name] = code
+						}
+					}
+				}
+			}
+		}
+	}
+	return out
 }

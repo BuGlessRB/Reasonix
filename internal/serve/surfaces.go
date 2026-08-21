@@ -39,7 +39,7 @@ func (s *Server) assignSurfaceSlot(w http.ResponseWriter, r *http.Request) {
 		Slot    string `json:"slot"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	surface := strings.TrimSpace(req.Surface)

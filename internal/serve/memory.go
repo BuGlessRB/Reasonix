@@ -75,7 +75,7 @@ func (s *Server) forgetMemory(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
-		http.Error(w, "missing name", http.StatusBadRequest)
+		missingField(w, "name")
 		return
 	}
 	if err := s.ctl().ForgetMemory(strings.TrimSpace(body.Name)); err != nil {

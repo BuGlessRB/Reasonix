@@ -16,7 +16,7 @@ func (s *Server) preset(w http.ResponseWriter, r *http.Request) {
 		Preset string `json:"preset"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	if !agentpreset.IsValid(body.Preset) {
@@ -32,7 +32,7 @@ func (s *Server) model(w http.ResponseWriter, r *http.Request) {
 		Ref string `json:"ref"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Ref) == "" {
-		http.Error(w, "missing ref", http.StatusBadRequest)
+		missingField(w, "ref")
 		return
 	}
 	ref := strings.TrimSpace(body.Ref)
@@ -105,7 +105,7 @@ func (s *Server) effort(w http.ResponseWriter, r *http.Request) {
 		Effort string `json:"effort"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Effort) == "" {
-		http.Error(w, "missing effort", http.StatusBadRequest)
+		missingField(w, "effort")
 		return
 	}
 	if err := s.switchEffort(r.Context(), strings.TrimSpace(body.Effort)); err != nil {

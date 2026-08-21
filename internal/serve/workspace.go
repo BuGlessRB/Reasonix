@@ -167,7 +167,7 @@ func (s *Server) workspace(w http.ResponseWriter, r *http.Request) {
 		Isolate bool   `json:"isolate"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 

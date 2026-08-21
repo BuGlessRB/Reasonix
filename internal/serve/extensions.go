@@ -45,12 +45,12 @@ func (s *Server) invokeExtensionAction(w http.ResponseWriter, r *http.Request) {
 		Args map[string]string `json:"args"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		http.Error(w, "name required", http.StatusBadRequest)
+		missingField(w, "name")
 		return
 	}
 	// The extension owns the outcome: a declined action is its answer, not a
@@ -70,7 +70,7 @@ func (s *Server) submitExtensionForm(w http.ResponseWriter, r *http.Request) {
 		Values    map[string]any `json:"values"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	pluginID := strings.TrimSpace(req.PluginID)

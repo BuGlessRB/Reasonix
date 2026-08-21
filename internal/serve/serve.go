@@ -639,7 +639,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		Format string `json:"format"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Input == "" {
-		http.Error(w, "missing input", http.StatusBadRequest)
+		missingField(w, "input")
 		return
 	}
 	body.Format = strings.TrimSpace(body.Format)
@@ -741,7 +741,7 @@ func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 		Persist bool   `json:"persist"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
-		http.Error(w, "missing id", http.StatusBadRequest)
+		missingField(w, "id")
 		return
 	}
 	s.ctl().Approve(body.ID, body.Allow, body.Session, body.Persist)
@@ -753,7 +753,7 @@ func (s *Server) plan(w http.ResponseWriter, r *http.Request) {
 		On bool `json:"on"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	s.ctl().SetPlanMode(body.On)
@@ -957,7 +957,7 @@ func (s *Server) rewind(w http.ResponseWriter, r *http.Request) {
 		Scope string `json:"scope"` // "code", "conversation", "both"
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Turn < 0 {
-		http.Error(w, "missing turn", http.StatusBadRequest)
+		missingField(w, "turn")
 		return
 	}
 	if err := s.ctl().Rewind(body.Turn, rewindScope(body.Scope)); err != nil {
@@ -974,7 +974,7 @@ func (s *Server) fork(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Turn < 0 {
-		http.Error(w, "missing turn", http.StatusBadRequest)
+		missingField(w, "turn")
 		return
 	}
 	// Session-path-changing critical sequence: serialize with /resume, /new,
@@ -1003,7 +1003,7 @@ func (s *Server) summarize(w http.ResponseWriter, r *http.Request) {
 		Mode string `json:"mode"` // "from" or "upto"
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Turn < 0 {
-		http.Error(w, "missing turn", http.StatusBadRequest)
+		missingField(w, "turn")
 		return
 	}
 	var err error
@@ -1029,7 +1029,7 @@ func (s *Server) autoApproveTools(w http.ResponseWriter, r *http.Request) {
 		On bool `json:"on"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	s.ctl().SetAutoApproveTools(body.On)
@@ -1043,7 +1043,7 @@ func (s *Server) toolApprovalMode(w http.ResponseWriter, r *http.Request) {
 		Mode string `json:"mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	mode, ok := control.ParseToolApprovalMode(body.Mode)
@@ -1067,7 +1067,7 @@ func (s *Server) goal(w http.ResponseWriter, r *http.Request) {
 		Goal string `json:"goal"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	goal := strings.TrimSpace(body.Goal)
@@ -1089,7 +1089,7 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 		Answers []event.AskAnswer `json:"answers"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
-		http.Error(w, "missing id", http.StatusBadRequest)
+		missingField(w, "id")
 		return
 	}
 	s.ctl().AnswerQuestion(body.ID, body.Answers)
@@ -1102,7 +1102,7 @@ func (s *Server) forget(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
-		http.Error(w, "missing name", http.StatusBadRequest)
+		missingField(w, "name")
 		return
 	}
 	if err := s.ctl().ForgetMemory(body.Name); err != nil {
@@ -1366,12 +1366,12 @@ func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		http.Error(w, "name required", http.StatusBadRequest)
+		missingField(w, "name")
 		return
 	}
 	if name == "." || name == ".." || strings.ContainsAny(name, `/\`) {

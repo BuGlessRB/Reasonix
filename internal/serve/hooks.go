@@ -93,7 +93,7 @@ func (s *Server) saveHooks(w http.ResponseWriter, r *http.Request) {
 		Hooks []hookEntry `json:"hooks"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	scope := hook.ScopeGlobal
@@ -126,7 +126,7 @@ func (s *Server) dryRunHook(w http.ResponseWriter, r *http.Request) {
 		Cwd     string `json:"cwd"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
+		badBody(w)
 		return
 	}
 	cfg := hook.HookConfig{Match: body.Match, Command: body.Command, Timeout: body.Timeout, Cwd: body.Cwd}

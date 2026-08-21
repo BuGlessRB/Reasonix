@@ -26,7 +26,7 @@ func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
 		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Path == "" {
-		http.Error(w, "missing path", http.StatusBadRequest)
+		missingField(w, "path")
 		return
 	}
 	if status, err := s.resumeInto(body.Path); err != nil {
