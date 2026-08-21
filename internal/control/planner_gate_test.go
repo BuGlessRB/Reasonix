@@ -104,7 +104,7 @@ func TestPlannerPolicyUsesPristineMetadataInsteadOfInjectedContext(t *testing.T)
 	ctx := withPlannerTurnMetadata(context.Background(), plannerTurnMetadata{
 		UserText: "fix typo in README",
 	})
-	input := activeGoalBlock("先规划再执行：migrate authentication") +
+	input := activeGoalBlock("先规划再执行：migrate authentication", true) +
 		"\n\n<capability-route>\nhigh risk migration\n</capability-route>\n\nfix typo in README"
 	got := DecidePlannerRoute(ctx, input)
 	if got.Route != agent.PlannerRouteExecutorOnly || got.Reason != plannerReasonExecutorOwns {

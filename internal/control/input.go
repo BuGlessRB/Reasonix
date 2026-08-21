@@ -37,9 +37,11 @@ const PlannerRouteMarker = "[Reasonix: plan-first]"
 const legacyPlanModeMarker = "[Plan mode — read-only. Explore the codebase first (read_file, ls, grep, glob, web_fetch, task, ask are available; writers are refused by the harness). Before planning, if a decision that is genuinely the user's — tech stack, an ambiguous requirement, scope, an irreversible choice — would materially shape the plan and you can't settle it from the codebase or a sensible default, use the ask tool to clarify it first; otherwise pick the obvious default and state the assumption in the plan instead of asking. Then present a LAYERED plan as your reply and stop — do not write files, edit, or run side-effecting bash. Structure the plan as a two-level markdown list so it becomes a layered task list: each PHASE is a top-level numbered list item (a coherent milestone, e.g. \"1. Add the config loader\"), and each phase's concrete, verifiable sub-steps are bullets indented beneath it (e.g. \"   - parse the TOML into Config\"). Use plain numbered list items for phases — do NOT write phases as markdown headings (##, ###) — so both levels parse. Keep phases few (about 2-6). The user will be asked to approve before any changes are made.]"
 
 const (
-	activeGoalOpen  = "<active-goal>"
-	activeGoalClose = "</active-goal>"
-	hookContextTag  = "hook-context"
+	activeGoalOpen = "<active-goal>"
+	// activeGoalFullOpen marks the turn carrying the whole task contract.
+	activeGoalFullOpen = `<active-goal contract="full">`
+	activeGoalClose    = "</active-goal>"
+	hookContextTag     = "hook-context"
 )
 
 const (
@@ -170,8 +172,7 @@ func (c *Controller) composeWithGoal(
 	notes := c.memory.drainPending()
 
 	if strings.TrimSpace(goal) != "" && goalStatus == GoalStatusRunning {
-		prefix := activeGoalBlock(goal)
-		text = prefix + "\n\n" + text
+		text = c.activeGoalBlockForTurn(goal) + "\n\n" + text
 	}
 	if plan {
 		text = PlanModeMarker + "\n\n" + text
@@ -307,19 +308,67 @@ func (c *Controller) ComposeSynthetic(text string) string {
 	return agent.WithReasoningLanguageForSource(text, lang, text)
 }
 
-func activeGoalBlock(goal string) string {
+// activeGoalBlockForTurn states the full task contract when the model cannot see
+// one and a short reminder when it can. The condition is read off the transcript
+// rather than latched: a fold, a rewind, or a resumed session all change whether
+// the contract is still there, and none of them tell the controller.
+func (c *Controller) activeGoalBlockForTurn(goal string) string {
+	return activeGoalBlock(goal, c.needsFullGoalContract(goal))
+}
+
+// needsFullGoalContract is true while the model has no full statement of THIS
+// goal in view. A reminder pointing at a contract that is gone - or at the
+// contract of a goal the user replaced - is worse than restating it.
+func (c *Controller) needsFullGoalContract(goal string) bool {
+	if c == nil || c.executor == nil {
+		return true
+	}
+	if !c.executor.SeesStandingBlock(activeGoalFullOpen) {
+		return true
+	}
+	return !c.executor.SeesStandingBlock(goalContractIdentity(goal))
+}
+
+// goalTextForBlock is how the goal reads inside the block. goalContractIdentity
+// reuses it so the identity check cannot drift from what the renderer writes.
+func goalTextForBlock(goal string) string {
 	goal = strings.TrimSpace(goal)
 	goal = strings.ReplaceAll(goal, activeGoalClose, "<\\/active-goal>")
+	return goal
+}
+
+// goalContractIdentity is the exact opening a full statement of this goal
+// renders: the variant tag and the goal text it governs.
+func goalContractIdentity(goal string) string {
+	return activeGoalFullOpen + "\n" + goalTextForBlock(goal)
+}
+func activeGoalBlock(goal string, full bool) string {
+	goal = goalTextForBlock(goal)
 	var b strings.Builder
-	b.WriteString(activeGoalOpen)
+	// The full statement is its own variant so a fold supersedes reminders
+	// against reminders and never lets one displace the contract it points at.
+	if full {
+		b.WriteString(activeGoalFullOpen)
+	} else {
+		b.WriteString(activeGoalOpen)
+	}
 	b.WriteString("\n")
 	b.WriteString(goal)
 	b.WriteString("\n\n")
-	b.WriteString(goalTaskContractInstructions)
+	if full {
+		b.WriteString(goalTaskContractInstructions)
+	} else {
+		b.WriteString(goalContractReminder)
+	}
 	b.WriteString("\n")
 	b.WriteString(activeGoalClose)
 	return b.String()
 }
+
+// goalContractReminder carries only what a turn must act on: the operative
+// call and the standing instruction not to stop at a plan. The judgement rules
+// stay in the full contract, which is restated whenever a fold removed it.
+const goalContractReminder = `Goal mode: keep working autonomously toward this goal under the task contract stated earlier in this conversation. Do not stop after describing a plan; execute the next useful step. End this turn by calling the update_goal tool with your disposition: continue (give the next concrete step in next_action), complete (only when fully done and verified), or blocked (only when the user can unblock).`
 
 const goalTaskContractInstructions = `Goal mode: pursue this goal autonomously. Treat the user's goal as a task contract:
 - Honor Context, Request, Output format, Constraints, and Checkpoint/Pause policy sections when present; otherwise infer a lightweight contract from the conversation and workspace.

@@ -3496,7 +3496,7 @@ func TestStrongResearchPromptStaysInOrdinaryMode(t *testing.T) {
 	if len(r.inputs) != 1 || !strings.HasSuffix(r.inputs[0], input) {
 		t.Fatalf("ordinary prompt was not sent unchanged at the user boundary: %q", r.inputs)
 	}
-	if strings.Contains(r.inputs[0], "<active-goal>") || strings.Contains(r.inputs[0], "AutoResearch protocol") {
+	if strings.Contains(r.inputs[0], "<active-goal") || strings.Contains(r.inputs[0], "AutoResearch protocol") {
 		t.Fatalf("ordinary TUI prompt should not enter Goal or AutoResearch:\n%s", r.inputs[0])
 	}
 	if ctrl.GoalStatus() != control.GoalStatusStopped {

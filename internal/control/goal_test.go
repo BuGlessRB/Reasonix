@@ -106,7 +106,7 @@ func TestGoalCommandAutoContinuesUntilComplete(t *testing.T) {
 		t.Fatalf("GoalStatus() = %q, want complete", got)
 	}
 	first := firstUserMessage(ag.Session().Messages)
-	if !strings.Contains(first, "<active-goal>\nship the redesign") {
+	if !strings.Contains(first, goalContractIdentity("ship the redesign")) {
 		t.Fatalf("first goal turn should include active goal block, got %q", first)
 	}
 	if strings.HasPrefix(first, PlanModeMarker) {
@@ -130,7 +130,7 @@ func toolCallChunk(id, name, args string) provider.Chunk {
 }
 
 func TestActiveGoalBlockCarriesTaskContractAndPausePolicy(t *testing.T) {
-	block := activeGoalBlock("fix the parser")
+	block := activeGoalBlock("fix the parser", true)
 	for _, want := range []string{
 		"Treat the user's goal as a task contract",
 		"Context, Request, Output format, Constraints",
@@ -175,7 +175,7 @@ func TestPlainInputWithStrongResearchSignalStaysNormal(t *testing.T) {
 	if !strings.HasSuffix(first, "持续排查这个线上卡顿直到根因明确，并验证修复") {
 		t.Fatalf("ordinary turn should preserve the original prompt suffix: %q", first)
 	}
-	if strings.Contains(first, "<active-goal>") || strings.Contains(first, "AutoResearch protocol") {
+	if strings.Contains(first, "<active-goal") || strings.Contains(first, "AutoResearch protocol") {
 		t.Fatalf("ordinary prompt should not enter Goal or AutoResearch:\n%s", first)
 	}
 	if got := c.GoalStatus(); got != GoalStatusStopped {
@@ -215,7 +215,7 @@ func TestPlainInputWithStrongResearchSignalPreservesRefsWithoutStartingGoal(t *t
 			t.Fatalf("ordinary turn with refs missing %q:\n%s", want, first)
 		}
 	}
-	if strings.Contains(first, "<active-goal>") || strings.Contains(first, "AutoResearch protocol") {
+	if strings.Contains(first, "<active-goal") || strings.Contains(first, "AutoResearch protocol") {
 		t.Fatalf("ordinary prompt with refs should not enter Goal or AutoResearch:\n%s", first)
 	}
 	if got := c.GoalStatus(); got != GoalStatusStopped {
@@ -329,7 +329,7 @@ func TestPlainInputWithWeakResearchSignalStaysNormal(t *testing.T) {
 	waitForTurnDone(t, events)
 
 	first := firstUserMessage(ag.Session().Messages)
-	if strings.Contains(first, "<active-goal>") || strings.Contains(first, "AutoResearch protocol") {
+	if strings.Contains(first, "<active-goal") || strings.Contains(first, "AutoResearch protocol") {
 		t.Fatalf("ordinary prompt should stay outside Goal and AutoResearch:\n%s", first)
 	}
 	if got := c.GoalStatus(); got != GoalStatusStopped {
@@ -788,7 +788,7 @@ func TestSessionRotationClearsActiveGoal(t *testing.T) {
 	if got := c.Goal(); got != "ship the release checklist" {
 		t.Fatalf("Goal() = %q after SetGoal", got)
 	}
-	if composed := c.Compose("hello"); !strings.Contains(composed, "<active-goal>") {
+	if composed := c.Compose("hello"); !strings.Contains(composed, "<active-goal") {
 		t.Fatalf("running goal should inject into turns, composed = %q", composed)
 	}
 
@@ -798,7 +798,7 @@ func TestSessionRotationClearsActiveGoal(t *testing.T) {
 	if got := c.Goal(); got != "" {
 		t.Fatalf("Goal() after /new = %q, want empty", got)
 	}
-	if composed := c.Compose("hello"); strings.Contains(composed, "<active-goal>") {
+	if composed := c.Compose("hello"); strings.Contains(composed, "<active-goal") {
 		t.Fatalf("old goal leaked into the fresh session's turn: %q", composed)
 	}
 	// The old session keeps its running goal on disk for /resume.
@@ -827,7 +827,7 @@ func TestSessionRotationClearsActiveGoal(t *testing.T) {
 	if got := c.Goal(); got != "" {
 		t.Fatalf("Goal() after /clear = %q, want empty", got)
 	}
-	if composed := c.Compose("hello"); strings.Contains(composed, "<active-goal>") {
+	if composed := c.Compose("hello"); strings.Contains(composed, "<active-goal") {
 		t.Fatalf("old goal leaked into the cleared session's turn: %q", composed)
 	}
 }

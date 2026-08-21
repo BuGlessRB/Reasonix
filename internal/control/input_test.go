@@ -333,7 +333,7 @@ func TestSubmitInvocationDisplayRunsInlineSkillInsideActiveGoal(t *testing.T) {
 		t.Fatalf("active Goal structured turns = %d, want 1", prov.call)
 	}
 	input := firstUserMessage(ag.Session().Messages)
-	for _, want := range []string{"<active-goal>\nlist the existing notes", "INSPECT_NOTES", "list the existing notes"} {
+	for _, want := range []string{goalContractIdentity("list the existing notes"), "INSPECT_NOTES", "list the existing notes"} {
 		if !strings.Contains(input, want) {
 			t.Fatalf("active Goal structured input missing %q: %q", want, input)
 		}
@@ -369,7 +369,7 @@ func TestSubmitInvocationDisplayRunsSubagentSkillInsideActiveGoal(t *testing.T) 
 	)
 	waitForTurnDone(t, events)
 
-	if !strings.Contains(gotTask, "<active-goal>\nlist the existing notes") {
+	if !strings.Contains(gotTask, goalContractIdentity("list the existing notes")) {
 		t.Fatalf("active Goal subagent task missing goal: %q", gotTask)
 	}
 	if !strings.Contains(gotTask, "list the existing notes") {
@@ -819,7 +819,7 @@ func TestComposeIncludesActiveGoal(t *testing.T) {
 	c.SetGoal("ship the approval redesign")
 
 	got := c.Compose("next step?")
-	if !strings.Contains(got, "<active-goal>\nship the approval redesign") {
+	if !strings.Contains(got, goalContractIdentity("ship the approval redesign")) {
 		t.Fatalf("Compose should include active goal block, got %q", got)
 	}
 	if !strings.Contains(got, "update_goal") {
@@ -844,7 +844,7 @@ func TestGoalAutoResearchTriggersForLongHorizonGoals(t *testing.T) {
 	c.SetGoal("持续排查这个线上卡顿直到根因明确，并验证修复")
 
 	got := c.Compose("next step?")
-	if !strings.Contains(got, "<active-goal>") || strings.Contains(strings.ToLower(got), "autoresearch") {
+	if !strings.Contains(got, "<active-goal") || strings.Contains(strings.ToLower(got), "autoresearch") {
 		t.Fatalf("unified research Goal prompt = %q", got)
 	}
 	if c.GoalRuntime().TurnsLimit != 0 {
