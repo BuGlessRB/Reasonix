@@ -257,7 +257,7 @@ build_dmg() {
 	ln -s /Applications "$stage/Applications"
 	rm -f "$out"
 	echo "==> hdiutil ${APPNAME}-darwin-${arch}.dmg"
-	hdiutil create -quiet -volname "$APPNAME" -srcfolder "$stage" \
+	hdiutil create -volname "$APPNAME" -srcfolder "$stage" \
 		-ov -format UDZO "$out"
 	rm -rf "$stage"
 	# The image is what the user downloads, so it carries quarantine and is what
