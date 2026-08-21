@@ -147,10 +147,7 @@ func credentialEnvNamesForRoot(root string) []string {
 	root = resolveRoot(root)
 	cfg := Default()
 
-	projectTOML := "reasonix.toml"
-	if root != "." {
-		projectTOML = filepath.Join(root, "reasonix.toml")
-	}
+	projectTOML := ProjectConfigPath(root)
 	if uc := userConfigLoadPath(); uc != "" {
 		_ = mergeFile(cfg, uc)
 	}
@@ -228,6 +225,9 @@ func resolveProviderCredentialsForRoot(root string, cfg *Config) {
 	resolver := NewCredentialResolverForRoot(root)
 	for i := range cfg.Providers {
 		resolveProviderCredentialWithResolver(&cfg.Providers[i], resolver)
+		// Stamp the workspace cachecontext onto every entry; when none is
+		// configured, fall back to the auto "<user>:<repo>" default.
+		cfg.Providers[i].cacheContext = cfg.EffectiveCacheContext(root)
 	}
 }
 
