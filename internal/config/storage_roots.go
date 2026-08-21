@@ -65,7 +65,7 @@ func storageRootTable() []storageRoot {
 		rootsTable = []storageRoot{
 			{id: RootHome, env: "REASONIX_HOME", relocatable: false, fallback: defaultHomeDir},
 			{id: RootState, env: "REASONIX_STATE_HOME", relocatable: true,
-				owns: []string{"sessions", "archive", "stats", "projects"},
+				owns: StateRootEntries,
 				fallback: func() string {
 					return storageRootDir(RootHome)
 				}},
@@ -117,6 +117,12 @@ func RootIDs() []RootID {
 	}
 	return out
 }
+
+// StateRootEntries is everything written under the state root. A move and a
+// size report read it, so a directory missing from here is left behind by a
+// relocation while the config still names what was in it — which is how a
+// wallpaper and a theme pack came back gone from a moved install.
+var StateRootEntries = []string{"sessions", "archive", "stats", "projects", "appearance", "themes", "repair"}
 
 // RootOwns names the entries a root may claim inside its directory, empty when
 // it has the directory to itself. A move and a size report read this rather
