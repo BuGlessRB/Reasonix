@@ -125,6 +125,9 @@ func (s *Server) storage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	body := map[string]any{"roots": out, "editable": s.grants.providerEdit}
+	if dir, names := storage.LeftBehind(); len(names) > 0 {
+		body["leftBehind"] = map[string]any{"dir": dir, "names": names}
+	}
 	if move, ok := s.moves.snapshot(); ok {
 		body["move"] = move
 	}

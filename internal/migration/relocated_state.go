@@ -9,12 +9,6 @@ import (
 	"reasonix/internal/event"
 )
 
-// entriesTheMoveUsedToLeave is what the state root failed to claim before it
-// listed appearance, themes and repair. It is a fixed historical fact — what
-// the owned list held at the version that shipped relocation — so it does not
-// track config.StateRootEntries, which is free to grow.
-var entriesTheMoveUsedToLeave = []string{"appearance", "themes", "repair"}
-
 // AdoptRelocatedStateEntries brings across what an earlier relocation left in
 // the home root. The wallpaper and theme pack a config still names are the
 // visible half; the repair backups an update rolls back to are the half nobody
@@ -31,7 +25,7 @@ func AdoptRelocatedStateEntries(sink event.Sink) []string {
 		return nil
 	}
 	var adopted []string
-	for _, name := range entriesTheMoveUsedToLeave {
+	for _, name := range config.StateRootEntriesEarlyMovesLeft {
 		src := filepath.Join(home, name)
 		if !isDir(src) {
 			continue

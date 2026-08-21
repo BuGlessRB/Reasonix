@@ -692,6 +692,8 @@ export const EN: Record<string, string> = {
   "读不到存储占用。": "Cannot read what is on disk.",
   "正在统计…": "Measuring…",
   "占用": "Space used",
+  "上一个位置还留着东西": "Still in the previous location",
+  "这些还在 {dir}：{names}。移动存储位置时它们没有被一起带走，所以这台机器上的壁纸、主题包或更新回滚备份可能看起来不见了。手动把这几个目录复制到当前位置即可恢复。": "These are still in {dir}: {names}. A move left them behind, so a wallpaper, a theme pack or the backups an update rolls back to can look gone on this machine. Copying those folders into the current location restores them.",
   "位置": "Locations",
   "搬迁": "Move",
   "搬迁没能开始。": "The move could not be started.",

@@ -124,6 +124,12 @@ func RootIDs() []RootID {
 // wallpaper and a theme pack came back gone from a moved install.
 var StateRootEntries = []string{"sessions", "archive", "stats", "projects", "appearance", "themes", "repair"}
 
+// StateRootEntriesEarlyMovesLeft is what StateRootEntries did not hold when
+// relocation shipped, so a move performed by those versions left them in the
+// previous root. It is a fixed historical fact and does not grow with the list
+// above; the recovery and the panel notice both read it.
+var StateRootEntriesEarlyMovesLeft = []string{"appearance", "themes", "repair"}
+
 // RootOwns names the entries a root may claim inside its directory, empty when
 // it has the directory to itself. A move and a size report read this rather
 // than assuming a root owns everything beneath it, because state shares a

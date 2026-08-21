@@ -48,6 +48,9 @@ export interface StorageState {
   editable: boolean;
   move?: StorageMove;
   pending?: StoragePending;
+  // Entries an earlier move left in the previous root, when this run cannot
+  // bring them across itself. Absent is the normal case.
+  leftBehind?: { dir: string; names: string[] };
 }
 
 // One objection to a move. code is what a client branches on, detail the

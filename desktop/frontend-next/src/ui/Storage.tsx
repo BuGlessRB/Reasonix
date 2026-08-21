@@ -104,6 +104,8 @@ export function Storage({ port }: { port: AgentPort }) {
         <Drives roots={state.roots} />
       </section>
 
+      {state.leftBehind && <LeftBehind at={state.leftBehind} />}
+
       <section className="grp">
         <h3 className="lbl">{t("位置")}</h3>
         {state.roots.map((root) => (
@@ -159,6 +161,24 @@ function Bar({ root, largest }: { root: StorageRoot; largest: number }) {
 
 // Which disks this adds up on. Roots sharing a volume are one line, because
 // moving one of them off a full drive only helps if the others go too.
+// A move made before the state root claimed these left them where they were,
+// and this run is not allowed to fetch them: an install whose roots come from
+// the environment gets its own copies, never the production one moved into it.
+// Saying where they are beats a wallpaper that is simply gone.
+function LeftBehind({ at }: { at: { dir: string; names: string[] } }) {
+  return (
+    <section className="grp">
+      <h3 className="lbl">{t("上一个位置还留着东西")}</h3>
+      <p className="note">
+        {t("这些还在 {dir}：{names}。移动存储位置时它们没有被一起带走，所以这台机器上的壁纸、主题包或更新回滚备份可能看起来不见了。手动把这几个目录复制到当前位置即可恢复。", {
+          dir: at.dir,
+          names: at.names.join("、"),
+        })}
+      </p>
+    </section>
+  );
+}
+
 function Drives({ roots }: { roots: StorageRoot[] }) {
   const seen = new Map<string, StorageRoot>();
   for (const root of roots) {

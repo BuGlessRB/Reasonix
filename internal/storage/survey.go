@@ -164,3 +164,29 @@ func SortedByBytes(roots []Root) []Root {
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Bytes > out[j].Bytes })
 	return out
 }
+
+// LeftBehind names the entries an earlier relocation left in the previous root,
+// and where they still are. Boot brings them across on an ordinary install; a
+// run whose roots are redirected by environment refuses that, on the rule that
+// such a run asked for its own copies — so the panel says where they went
+// rather than leaving a wallpaper and a set of rollback backups quietly gone.
+func LeftBehind() (dir string, names []string) {
+	home, state := config.ReasonixHomeDir(), config.MemoryUserDir()
+	if home == "" || state == "" || strings.EqualFold(filepath.Clean(home), filepath.Clean(state)) {
+		return "", nil
+	}
+	for _, name := range config.StateRootEntriesEarlyMovesLeft {
+		if isDirAt(filepath.Join(home, name)) && !isDirAt(filepath.Join(state, name)) {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return "", nil
+	}
+	return home, names
+}
+
+func isDirAt(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
