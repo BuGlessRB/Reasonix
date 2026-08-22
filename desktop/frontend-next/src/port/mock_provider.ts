@@ -47,8 +47,16 @@ export class MockProvider extends MockBoundary {
     ];
   }
 
+  // The opening sequence is the only way into the fixture, and it advances on
+  // what the probe found: refusing here leaves the demo on its first screen
+  // with no way past, so it answers with data like every other face does.
   async probeProvider(): Promise<ProviderProbe> {
-    throw new Error("演示模式不会真的去连端点");
+    return {
+      kind: "openai", kinds: ["openai", "responses"], authHeader: true,
+      models: ["deepseek-v4-pro", "deepseek-v4-flash"], default: "deepseek-v4-pro",
+      efforts: ["high", "max"], effort: "high", vision: [],
+      ambiguous: true, noProxy: false,
+    };
   }
 
   // The fixture's endpoints answer both protocols, which is the case the row's
