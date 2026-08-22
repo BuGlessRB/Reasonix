@@ -54,10 +54,13 @@ type RangeStats struct {
 	// Derived
 	// Cost is one entry per billing currency: summing two would have to invent
 	// an exchange rate, and the rate a turn was billed at is not today's.
-	Cost        []billing.Money `json:"cost,omitempty"`
-	ActiveDays  int             `json:"active_days"`
-	TopModel    string          `json:"top_model"`
-	TopProvider string          `json:"top_provider"`
+	Cost []billing.Money `json:"cost,omitempty"`
+	// CostEstimated marks a total that folded in at least one quote priced from
+	// a fallback rate card. A surface labelling the sum "paid" has to say so.
+	CostEstimated bool   `json:"costEstimated,omitempty"`
+	ActiveDays    int    `json:"active_days"`
+	TopModel      string `json:"top_model"`
+	TopProvider   string `json:"top_provider"`
 	// Series
 	Daily     []DailyTokens   `json:"daily"`
 	Models    []ModelUsage    `json:"models"`
@@ -167,8 +170,10 @@ func (w *Writer) queryJSONL(f SourceFilter) (RangeStats, error) {
 				providerTotals[providerOf(model)] += t
 				dayTotals[model] += t
 			}
-			addCost(dayCost, rec.CostAmount, rec.CostCurrency)
-			addCost(totalCost, rec.CostAmount, rec.CostCurrency)
+			if addCost(dayCost, rec.CostAmount, rec.CostCurrency) {
+				addCost(totalCost, rec.CostAmount, rec.CostCurrency)
+				out.CostEstimated = out.CostEstimated || rec.CostEstimated
+			}
 			dayActive = dayActive || rec.Total > 0 || requests > 0
 		}
 		if dayActive {
@@ -186,17 +191,8 @@ func (w *Writer) queryJSONL(f SourceFilter) (RangeStats, error) {
 		for m, v := range dayTotals {
 			byProvider[providerOf(m)] += v
 		}
-		out.Daily = append(out.Daily, DailyTokens{
-			Day:        day,
-			Total:      int(sum(dayTotals)),
-			ByModel:    byModel,
-			ByProvider: byProvider,
-			Requests:   dayRequests,
-			Turns:      dayTurns,
-			CacheHit:   dayCacheHit,
-			CacheMiss:  dayCacheMiss,
-			Cost:       moneySorted(dayCost),
-		})
+		out.Daily = append(out.Daily, dailyRow(day, byModel, byProvider, dayCost,
+			dayRequests, dayTurns, dayCacheHit, dayCacheMiss))
 	}
 	out.ActiveDays = len(active)
 	out.Cost = moneySorted(totalCost)
@@ -260,9 +256,14 @@ func rangeStatsFromRollups(f SourceFilter, days []string, rows []usagecatalog.Ro
 				dayModels[model] += row.Total
 				dayProviders[provider] += row.Total
 			}
-			if row.CostCurrency != "" && row.Cost != 0 {
-				dayCost[row.CostCurrency] += billing.Amount(row.Cost)
-				totalCost[row.CostCurrency] += billing.Amount(row.Cost)
+			for _, entry := range row.Costs {
+				currency := billing.NormalizeCurrency(entry.Currency)
+				if currency == "" || entry.Amount == 0 {
+					continue
+				}
+				dayCost[currency] += billing.Amount(entry.Amount)
+				totalCost[currency] += billing.Amount(entry.Amount)
+				out.CostEstimated = out.CostEstimated || entry.Estimated
 			}
 			if row.Total > 0 || row.Requests > 0 {
 				active[day] = true
@@ -293,18 +294,30 @@ func rangeStatsFromRollups(f SourceFilter, days []string, rows []usagecatalog.Ro
 	return out
 }
 
+// dailyRow assembles one day of the trend series.
+func dailyRow(day string, byModel, byProvider map[string]int64, cost map[string]billing.Amount,
+	requests, turns int, cacheHit, cacheMiss int64,
+) DailyTokens {
+	return DailyTokens{
+		Day: day, Total: int(sum(byModel)), ByModel: byModel, ByProvider: byProvider,
+		Requests: requests, Turns: turns, CacheHit: cacheHit, CacheMiss: cacheMiss,
+		Cost: moneySorted(cost),
+	}
+}
+
 // addCost folds one row's quote into a per-currency tally. An unparseable
 // amount is skipped rather than guessed: a missing total beats a wrong one.
-func addCost(into map[string]billing.Amount, amount, currency string) {
+func addCost(into map[string]billing.Amount, amount, currency string) bool {
 	currency = billing.NormalizeCurrency(currency)
 	if currency == "" || strings.TrimSpace(amount) == "" {
-		return
+		return false
 	}
 	parsed, err := billing.ParseAmount(amount)
 	if err != nil {
-		return
+		return false
 	}
 	into[currency] += parsed
+	return true
 }
 
 // moneySorted renders the tally in a stable currency order so a repeated query

@@ -1,36 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { current, t } from "../i18n";
+import { t } from "../i18n";
+import { money, tokens as fmtTokens } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import type { AgentPort, Money, UsageDay, UsageReport } from "../port/port";
 
 const RANGES: [number, string][] = [[7, "7 天"], [30, "30 天"], [365, "全部"]];
 
-// Tokens run to nine figures; a raw group-separated number stops being a
-// quantity a reader can hold. The break points are the language's, not a
-// translation of one set of them: Chinese counts in 万/亿, English in K/M/B.
-function short(n: number): string {
-  if (current() === "zh") {
-    if (n >= 1e8) return trim((n / 1e8).toFixed(2)) + " 亿";
-    if (n >= 1e4) return trim((n / 1e4).toFixed(1)) + " 万";
-    return n.toLocaleString();
-  }
-  if (n >= 1e9) return trim((n / 1e9).toFixed(2)) + "B";
-  if (n >= 1e6) return trim((n / 1e6).toFixed(1)) + "M";
-  if (n >= 1e3) return trim((n / 1e3).toFixed(1)) + "K";
-  return n.toLocaleString();
-}
-const trim = (v: string) => v.replace(/\.0+$/, "");
-
-const SYMBOL: Record<string, string> = { CNY: "¥", USD: "$" };
-function money(m: Money): string {
-  return (SYMBOL[m.currency] ?? m.currency + " ") + trim(Number(m.amount).toFixed(2));
-}
-
-// Two currencies are shown side by side. Adding them would need an exchange
-// rate nobody recorded, and the rate a turn was billed at is not today's.
+// Money and token counts go through i18n/format: its whole reason for existing
+// is that five files each grew their own rule. Intl also spells CNY as CN¥ in
+// an English window, where a bare ¥ reads as yen.
 function moneyList(list?: Money[]): string {
   if (!list?.length) return "—";
-  return list.map(money).join("  ·  ");
+  return list.map((m) => money(Number(m.amount), m.currency)).join("  ·  ");
 }
 
 // A tick ladder a person reads: round the top up to a 1/2/5-ish step.
@@ -55,9 +36,17 @@ function Plot({ days, pick, label, aria }: PlotProps) {
   const max = niceMax(Math.max(...days.map(pick), 0));
   const x = (i: number) => PL + (days.length < 2 ? 0 : (i * (W - PL - PR)) / (days.length - 1));
   const y = (v: number) => PT + (1 - v / max) * (H - PT - PB);
-  const pts = days.map((d, i) => [x(i), y(pick(d))] as const);
-  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
-  const fill = pts.length ? `${line} L${x(days.length - 1).toFixed(1)} ${H - PB} L${PL} ${H - PB} Z` : "";
+  // The 365-day range rebuilds a ~365-segment path string; none of it depends
+  // on which day the cursor is over, so a hover must not pay for it.
+  const { pts, line, fill } = useMemo(() => {
+    const at2 = days.map((d, i) => [x(i), y(pick(d))] as const);
+    const path = at2.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    return {
+      pts: at2, line: path,
+      fill: at2.length ? `${path} L${x(days.length - 1).toFixed(1)} ${H - PB} L${PL} ${H - PB} Z` : "",
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days, pick, max]);
   const every = Math.max(1, Math.ceil(days.length / 5));
   const hover = at === null ? null : days[at];
 
@@ -98,7 +87,9 @@ function Plot({ days, pick, label, aria }: PlotProps) {
               const d = Math.abs(x(i) - vx);
               if (d < dist) { dist = d; best = i; }
             });
-            setAt(best);
+            // Only when the nearest day actually changed: pointermove fires far
+            // faster than the reading can change.
+            if (best !== at) setAt(best);
           }}
           onPointerLeave={() => setAt(null)}
         />
@@ -158,9 +149,21 @@ export function Usage({ port }: { port: AgentPort }) {
     [report],
   );
   const unpricedDays = (report?.daily.filter((d) => d.total > 0 && !d.cost?.length) ?? []).length;
-  const hitRate = report && report.cache_hit + report.cache_miss > 0
-    ? (report.cache_hit / (report.cache_hit + report.cache_miss)) * 100
-    : 0;
+  // Every currency the range touched, in the order the kernel sorted them.
+  const currencies = useMemo(() => {
+    const seen: string[] = [];
+    for (const day of report?.daily ?? []) {
+      for (const entry of day.cost ?? []) {
+        if (!seen.includes(entry.currency)) seen.push(entry.currency);
+      }
+    }
+    return seen;
+  }, [report]);
+  // The rate partitions the input side only (cache_hit + cache_miss), while
+  // report.tokens counts prompt + completion. Stating one against the other
+  // would put the panel's headline claim on the wrong denominator.
+  const input = report ? report.cache_hit + report.cache_miss : 0;
+  const hitRate = input > 0 ? (report!.cache_hit / input) * 100 : 0;
 
   if (err) return <div className="uerr">{err}</div>;
   if (!report) return <div className="uwait">{t("正在读记录…")}</div>;
@@ -177,57 +180,66 @@ export function Usage({ port }: { port: AgentPort }) {
       </div>
 
       <section className="uhero">
-        <div className="uhero-k">{t("实付")}</div>
+        {/* "Paid" is only honest while every folded quote came from the
+            provider. One fallback-priced row and the label needs the caveat. */}
+        <div className="uhero-k">{report.costEstimated ? t("花费") : t("实付")}</div>
         <div className="uhero-fig">
           <div className="uhero-v">{moneyList(report.cost)}</div>
           {pricedFrom && <span className="uhero-scope">{t("{day} 起 · {n} 天有记录", { day: pricedFrom.slice(5), n: priced.length })}</span>}
+          {report.costEstimated && <span className="uhero-scope">{t("含估算")}</span>}
         </div>
         <p className="uhero-note">
-          {t("这段时间 {tok} tokens 里有 {rate}% 命中前缀缓存 —— 命中的部分按缓存价计费，比未命中便宜一个量级。", {
-            tok: short(report.tokens), rate: hitRate.toFixed(1),
+          {t("这段时间送进去的 {tok} 输入 tokens 里，{rate}% 命中前缀缓存 —— 命中的部分按缓存价计费，比未命中便宜一个量级。", {
+            tok: fmtTokens(input), rate: hitRate.toFixed(1),
           })}
         </p>
       </section>
 
       <div className="utiles">
-        <div className="utile"><div className="k">Tokens</div><div className="v">{short(report.tokens)}</div>
-          <div className="m">{t("命中 {a} · 未命中 {b}", { a: short(report.cache_hit), b: short(report.cache_miss) })}</div></div>
+        <div className="utile"><div className="k">Tokens</div><div className="v">{fmtTokens(report.tokens)}</div>
+          <div className="m">{t("其中输入 {n}：命中 {a} · 未命中 {b}", { n: fmtTokens(input), a: fmtTokens(report.cache_hit), b: fmtTokens(report.cache_miss) })}</div></div>
         <div className="utile"><div className="k">{t("缓存命中率")}</div><div className="v">{hitRate.toFixed(1)}%</div>
           <div className="m">{t("越高越省 —— 前缀保持稳定")}</div></div>
-        <div className="utile"><div className="k">Turns</div><div className="v">{report.turns.toLocaleString()}</div>
-          <div className="m">{t("{n} 次 API 请求", { n: report.requests.toLocaleString() })}</div></div>
+        <div className="utile"><div className="k">Turns</div><div className="v">{fmtTokens(report.turns)}</div>
+          <div className="m">{t("{n} 次 API 请求", { n: fmtTokens(report.requests) })}</div></div>
         <div className="utile"><div className="k">{t("活跃天数")}</div><div className="v">{report.active_days}</div>
           <div className="m">{t("共 {n} 天中", { n: report.daily.length })}</div></div>
       </div>
 
       <section className="ucard">
         <div className="ucard-h"><h3>{t("每日用量")}</h3><span className="hint">{t("悬停查看某天")}</span></div>
-        <Plot days={report.daily} pick={(d) => d.total} label={(v) => short(Math.round(v))} aria={t("每日 tokens")} />
+        <Plot days={report.daily} pick={(d) => d.total} label={(v) => fmtTokens(Math.round(v))} aria={t("每日 tokens")} />
       </section>
 
-      {priced.length > 0 && (
-        <section className="ucard">
-          <div className="ucard-h"><h3>{t("每日支出")}</h3><span className="hint">{priced[0].cost?.[0]?.currency}</span></div>
+      {/* One chart per currency, for the same reason tokens and money get their
+          own: two currencies do not share an axis either, and the panel keeping
+          them apart everywhere else would be undone by one merged plot. */}
+      {currencies.map((code, at) => (
+        <section className="ucard" key={code}>
+          <div className="ucard-h"><h3>{t("每日支出")}</h3><span className="hint">{code}</span></div>
           <p className="ucard-s">{t("与用量分开画：两者量纲不同，共用一根轴会读错")}</p>
-          <Plot days={priced} pick={(d) => Number(d.cost?.[0]?.amount ?? 0)}
-            label={(v) => (SYMBOL[priced[0].cost?.[0]?.currency ?? ""] ?? "") + v.toFixed(2)}
-            aria={t("每日支出")} />
-          {unpricedDays > 0 && (
+          <Plot
+            days={priced.filter((d) => d.cost?.some((c) => c.currency === code))}
+            pick={(d) => Number(d.cost?.find((c) => c.currency === code)?.amount ?? 0)}
+            label={(v) => money(v, code)}
+            aria={t("每日支出")}
+          />
+          {at === currencies.length - 1 && unpricedDays > 0 && (
             <div className="unote">
               {t("另有 {n} 天有用量但没有成本记录 —— 不是那几天没花费，是成本字段后来才开始持久化。", { n: unpricedDays })}
             </div>
           )}
         </section>
-      )}
+      ))}
 
       <div className="utwo">
         <section className="ucard">
           <div className="ucard-h"><h3>{t("按模型")}</h3></div>
-          <Bars rows={report.models.map((m) => [m.model, m.tokens, `${short(m.tokens)}  ${m.percent.toFixed(1)}%`])} />
+          <Bars rows={report.models.map((m) => [m.model, m.tokens, `${fmtTokens(m.tokens)}  ${m.percent.toFixed(1)}%`])} />
         </section>
         <section className="ucard">
           <div className="ucard-h"><h3>{t("按来源")}</h3></div>
-          <Bars rows={report.providers.map((p) => [p.provider, p.tokens, `${short(p.tokens)}  ${p.percent.toFixed(1)}%`])} />
+          <Bars rows={report.providers.map((p) => [p.provider, p.tokens, `${fmtTokens(p.tokens)}  ${p.percent.toFixed(1)}%`])} />
         </section>
       </div>
     </div>

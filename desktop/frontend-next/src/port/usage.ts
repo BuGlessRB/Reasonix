@@ -43,6 +43,9 @@ export interface UsageReport {
   cache_hit: number;
   cache_miss: number;
   cost?: Money[];
+  // Set when any folded quote was priced from a fallback rate card. The
+  // total is then an estimate wearing a "paid" label unless the panel says so.
+  costEstimated?: boolean;
   active_days: number;
   top_model: string;
   top_provider: string;

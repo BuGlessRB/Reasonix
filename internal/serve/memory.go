@@ -159,6 +159,10 @@ func (s *Server) memoryRevisions(w http.ResponseWriter, r *http.Request) {
 		missingField(w, "name")
 		return
 	}
+	if s.ctl().Memory() == nil {
+		refuse(w, http.StatusConflict, "memory.unavailable", "memory is not enabled for this session", nil)
+		return
+	}
 	out := []memoryEntry{}
 	for _, m := range s.ctl().MemoryRevisions(name) {
 		out = append(out, memoryEntry{
@@ -182,6 +186,10 @@ func (s *Server) restoreMemory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(body.Name)
+	if s.ctl().Memory() == nil {
+		refuse(w, http.StatusConflict, "memory.unavailable", "memory is not enabled for this session", nil)
+		return
+	}
 	restored, err := s.ctl().RestoreMemory(name, body.Revision)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)

@@ -27,7 +27,7 @@ import (
 
 // SchemaVersion names the projection file, so a bump retires the old one
 // rather than migrating it: every column here is replayable from the JSONL.
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 type AppendReceipt struct {
 	Path     string
@@ -52,25 +52,35 @@ type Entry struct {
 	Turns      int
 	// Cost is billing.Amount fixed-point, never a float. CostCurrency is empty
 	// on rows written before cost was recorded, which is not the same as zero.
-	Cost         int64
-	CostCurrency string
+	Cost          int64
+	CostCurrency  string
+	CostEstimated bool
+}
+
+// CostAmount is one currency's total. Currencies never add, so they never share
+// a column with each other or with the token counts.
+type CostAmount struct {
+	Currency string
+	Amount   int64
+	// Estimated is set when any row folded in here was priced from a fallback
+	// rate card rather than a provider-reported amount.
+	Estimated bool
 }
 
 type Rollup struct {
-	Day          string
-	Source       string
-	ModelRef     string
-	Provider     string
-	Prompt       int64
-	Completion   int64
-	Reasoning    int64
-	CacheHit     int64
-	CacheMiss    int64
-	Total        int64
-	Requests     int64
-	Turns        int64
-	Cost         int64
-	CostCurrency string
+	Day        string
+	Source     string
+	ModelRef   string
+	Provider   string
+	Prompt     int64
+	Completion int64
+	Reasoning  int64
+	CacheHit   int64
+	CacheMiss  int64
+	Total      int64
+	Requests   int64
+	Turns      int64
+	Costs      []CostAmount
 }
 
 type Status struct {
@@ -119,6 +129,29 @@ func DefaultPath() string {
 	return filepath.Join(cache, "usage-catalog", fmt.Sprintf("v%d.sqlite", SchemaVersion))
 }
 
+// retireOlderProjections deletes the versions this build no longer opens. A
+// bump replaces the file rather than migrating it, so without this every bump
+// leaves another multi-MB orphan in the cache directory forever.
+func retireOlderProjections(current string) {
+	dir := filepath.Dir(current)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	keep := filepath.Base(current)
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, "v") || !strings.Contains(name, ".sqlite") {
+			continue
+		}
+		// The -wal and -shm siblings go with their database.
+		if name == keep || strings.HasPrefix(name, keep+"-") {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, name))
+	}
+}
+
 const schema = `
 CREATE TABLE usage_state(id INTEGER PRIMARY KEY CHECK(id=1),revision INTEGER NOT NULL DEFAULT 0);
 INSERT INTO usage_state(id,revision) VALUES(1,0);
@@ -138,8 +171,12 @@ CREATE TABLE usage_rollups(
  day TEXT NOT NULL,source TEXT NOT NULL,model_ref TEXT NOT NULL,provider TEXT NOT NULL,
  prompt INTEGER NOT NULL,completion INTEGER NOT NULL,reasoning INTEGER NOT NULL,cache_hit INTEGER NOT NULL,
  cache_miss INTEGER NOT NULL,total INTEGER NOT NULL,requests INTEGER NOT NULL,turns INTEGER NOT NULL,
- cost INTEGER NOT NULL DEFAULT 0,cost_currency TEXT NOT NULL DEFAULT '',
  PRIMARY KEY(day,source,model_ref)
+);
+CREATE TABLE usage_cost(
+ day TEXT NOT NULL,source TEXT NOT NULL,model_ref TEXT NOT NULL,
+ currency TEXT NOT NULL,cost INTEGER NOT NULL,estimated INTEGER NOT NULL DEFAULT 0,
+ PRIMARY KEY(day,source,model_ref,currency)
 );
 CREATE INDEX idx_usage_rollups_range ON usage_rollups(day,source,model_ref);
 `
@@ -158,6 +195,8 @@ func Open(ctx context.Context, path string) (*Catalog, error) {
 	inMemory := strings.TrimSpace(path) == ""
 	if inMemory {
 		path = ""
+	} else {
+		retireOlderProjections(path)
 	}
 	handle, err := projectiondb.Open(ctx, projectiondb.OpenOptions{
 		Path: path, MemoryName: "usage-catalog", Migrations: migrations(), InMemory: inMemory, MaxOpenConns: 4,
@@ -336,14 +375,23 @@ func insertRecord(ctx context.Context, tx *sql.Tx, receipt AppendReceipt, entry 
 		return nil
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO usage_rollups(day,source,model_ref,provider,prompt,completion,reasoning,cache_hit,
-        cache_miss,total,requests,turns,cost,cost_currency) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(day,source,model_ref) DO UPDATE SET
+        cache_miss,total,requests,turns) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(day,source,model_ref) DO UPDATE SET
         prompt=prompt+excluded.prompt,completion=completion+excluded.completion,reasoning=reasoning+excluded.reasoning,
         cache_hit=cache_hit+excluded.cache_hit,cache_miss=cache_miss+excluded.cache_miss,total=total+excluded.total,
-        requests=requests+excluded.requests,turns=turns+excluded.turns,cost=cost+excluded.cost,
-        cost_currency=CASE WHEN excluded.cost_currency<>'' THEN excluded.cost_currency ELSE cost_currency END`,
+        requests=requests+excluded.requests,turns=turns+excluded.turns`,
 		entry.Day, entry.Source, entry.ModelRef, entry.Provider,
-		entry.Prompt, entry.Completion, entry.Reasoning, entry.CacheHit, entry.CacheMiss, entry.Total, entry.Requests, entry.Turns,
-		entry.Cost, entry.CostCurrency)
+		entry.Prompt, entry.Completion, entry.Reasoning, entry.CacheHit, entry.CacheMiss, entry.Total, entry.Requests, entry.Turns)
+	if err != nil || entry.CostCurrency == "" || entry.Cost == 0 {
+		return err
+	}
+	estimated := 0
+	if entry.CostEstimated {
+		estimated = 1
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO usage_cost(day,source,model_ref,currency,cost,estimated)
+        VALUES(?,?,?,?,?,?) ON CONFLICT(day,source,model_ref,currency) DO UPDATE SET cost=cost+excluded.cost,
+        estimated=MAX(estimated,excluded.estimated)`,
+		entry.Day, entry.Source, entry.ModelRef, entry.CostCurrency, entry.Cost, estimated)
 	return err
 }
 
@@ -360,8 +408,9 @@ type rawRecord struct {
 	Requests   int       `json:"requests"`
 	Turn       bool      `json:"turn"`
 	// The cost quote the row was written with; absent on older rows.
-	CostAmount   string `json:"cost_amount"`
-	CostCurrency string `json:"cost_currency"`
+	CostAmount    string `json:"cost_amount"`
+	CostCurrency  string `json:"cost_currency"`
+	CostEstimated bool   `json:"cost_estimated"`
 }
 
 // costOf parses the row's quote into fixed-point. An unparseable amount is
@@ -391,7 +440,8 @@ func entryFromRaw(day string, raw rawRecord) Entry {
 	}
 	return Entry{Day: day, Source: raw.Source, ModelRef: raw.ModelRef, Provider: providerOf(raw.ModelRef), Prompt: raw.Prompt,
 		Completion: raw.Completion, Reasoning: raw.Reasoning, CacheHit: raw.CacheHit, CacheMiss: raw.CacheMiss,
-		Total: raw.Total, Requests: raw.Requests, Turns: turns, Cost: costOf(raw), CostCurrency: raw.CostCurrency}
+		Total: raw.Total, Requests: raw.Requests, Turns: turns,
+		Cost: costOf(raw), CostCurrency: billing.NormalizeCurrency(raw.CostCurrency), CostEstimated: raw.CostEstimated}
 }
 
 func (c *Catalog) ReconcileFile(ctx context.Context, path, day string) error {
@@ -522,7 +572,7 @@ func (c *Catalog) Query(ctx context.Context, fromDay, toDay, source string) ([]R
 		where += ` AND source=?`
 		args = append(args, source)
 	}
-	rows, err := c.db.QueryContext(ctx, `SELECT day,source,model_ref,provider,prompt,completion,reasoning,cache_hit,cache_miss,total,requests,turns,cost,cost_currency
+	rows, err := c.db.QueryContext(ctx, `SELECT day,source,model_ref,provider,prompt,completion,reasoning,cache_hit,cache_miss,total,requests,turns
         FROM usage_rollups WHERE `+where+` ORDER BY day,source,model_ref`, args...)
 	if err != nil {
 		return nil, err
@@ -532,13 +582,50 @@ func (c *Catalog) Query(ctx context.Context, fromDay, toDay, source string) ([]R
 	for rows.Next() {
 		var row Rollup
 		if err := rows.Scan(&row.Day, &row.Source, &row.ModelRef, &row.Provider, &row.Prompt, &row.Completion, &row.Reasoning,
-			&row.CacheHit, &row.CacheMiss, &row.Total, &row.Requests, &row.Turns, &row.Cost, &row.CostCurrency); err != nil {
+			&row.CacheHit, &row.CacheMiss, &row.Total, &row.Requests, &row.Turns); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return c.attachCosts(ctx, out, where, args)
 }
+
+// attachCosts folds the per-currency totals onto the rollups they belong to. A
+// second query rather than a join: joining would multiply the token columns by
+// however many currencies share that key.
+func (c *Catalog) attachCosts(ctx context.Context, rows []Rollup, where string, args []any) ([]Rollup, error) {
+	if len(rows) == 0 {
+		return rows, nil
+	}
+	found, err := c.db.QueryContext(ctx, `SELECT day,source,model_ref,currency,cost,estimated
+        FROM usage_cost WHERE `+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer found.Close()
+	at := make(map[string]int, len(rows))
+	for i, row := range rows {
+		at[costKey(row.Day, row.Source, row.ModelRef)] = i
+	}
+	for found.Next() {
+		var day, source, model, currency string
+		var amount int64
+		var estimated int
+		if err := found.Scan(&day, &source, &model, &currency, &amount, &estimated); err != nil {
+			return nil, err
+		}
+		if i, ok := at[costKey(day, source, model)]; ok {
+			rows[i].Costs = append(rows[i].Costs,
+				CostAmount{Currency: currency, Amount: amount, Estimated: estimated != 0})
+		}
+	}
+	return rows, found.Err()
+}
+
+func costKey(day, source, model string) string { return day + "\x00" + source + "\x00" + model }
 
 func bump(ctx context.Context, tx *sql.Tx) (uint64, error) {
 	if _, err := tx.ExecContext(ctx, `UPDATE usage_state SET revision=revision+1 WHERE id=1`); err != nil {

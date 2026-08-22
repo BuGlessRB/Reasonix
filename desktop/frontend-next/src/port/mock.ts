@@ -139,9 +139,13 @@ export class MockPort extends MockTheme implements AgentPort {
       5_910_837, 27_075_946, 8_447_084, 31_405_730, 1_672_731, 4_319_099];
     const priced = [null, null, null, null, null, "0.028", "0.204", "1.107",
       "1.778", "0.440", "5.749", "0.330", "0.853"];
-    const daily = shape.slice(-Math.min(days, shape.length)).map((total, i) => {
-      const at = new Date(Date.now() - (shape.length - 1 - i) * 864e5).toISOString().slice(0, 10);
-      const amount = priced[i];
+    // Index against the full arrays, not the slice: taking 7 of 13 days shifted
+    // both the dates and the cost column by six.
+    const from = shape.length - Math.min(days, shape.length);
+    const daily = shape.slice(from).map((total, i) => {
+      const day = from + i;
+      const at = new Date(Date.now() - (shape.length - 1 - day) * 864e5).toISOString().slice(0, 10);
+      const amount = priced[day];
       return {
         day: at, total,
         byModel: (total ? { "deepseek/deepseek-v4-flash": total } : {}) as Record<string, number>,
