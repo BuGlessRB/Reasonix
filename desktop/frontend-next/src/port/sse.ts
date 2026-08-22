@@ -103,6 +103,12 @@ export class SsePort extends SseTheme implements AgentPort {
     return this.get<MemoryCatalog>("/memory");
   }
 
+  prepareFileRevert(path: string) {
+    return this.post0<RewindPlan>("/rewind/file/prepare", { path });
+  }
+  commitFileRevert(planId: string, resolution?: string) {
+    return this.post0<RewindResult>("/rewind/file/commit", { planId, resolution });
+  }
   saveMemory(edit: MemoryEdit) {
     return this.post("/memory/save", edit);
   }

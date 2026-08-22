@@ -46,6 +46,8 @@ interface Props {
   onKeepHere: () => void;
   checkpoints: Map<string, Checkpoint>;
   onPrepareRewind: (turn: number, scope: RewindScope) => Promise<RewindPlan>;
+  onPrepareFileRevert: (path: string) => Promise<RewindPlan>;
+  onCommitFileRevert: (planId: string, resolution?: string) => Promise<RewindResult>;
   onCommitRewind: (planId: string) => Promise<RewindResult>;
   onUndoRewind: (transactionId: string) => Promise<void>;
 }
@@ -83,7 +85,7 @@ function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
   return blocks;
 }
 
-export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, onApprove, onAnswer, onSuggest, onForget, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, needsProject, onOpenProject, onKeepHere }: Props) {
+export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, onApprove, onAnswer, onSuggest, onForget, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
   // A block the selection touches must not leave the DOM. Unmounting the node a
   // selection is anchored to makes the browser remap that selection onto
   // whatever is still mounted — which reads as "I selected up there and the
@@ -350,7 +352,7 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
   const live = last?.t === "say" && !last.done ? last : undefined;
   const blocks = useBlocks(items, live ? items.length - 1 : items.length, revision);
 
-  const rowProps = { onApprove, onAnswer, onForget, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind };
+  const rowProps = { onApprove, onAnswer, onForget, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
 
   // What you said, and where it sits. Derived from the same blocks the
   // transcript renders, so a mark always knows which block holds it — that is
@@ -460,6 +462,8 @@ interface RowHandlers {
   onPrepareRewind: Props["onPrepareRewind"];
   onCommitRewind: Props["onCommitRewind"];
   onUndoRewind: Props["onUndoRewind"];
+  onPrepareFileRevert: Props["onPrepareFileRevert"];
+  onCommitFileRevert: Props["onCommitFileRevert"];
 }
 
 // A streamed token replaces one item and leaves the rest identical, so the rest
@@ -477,6 +481,8 @@ const Row = memo(function Row({
   onPrepareRewind,
   onCommitRewind,
   onUndoRewind,
+  onPrepareFileRevert,
+  onCommitFileRevert,
 }: RowHandlers & { it: Item; cp?: Checkpoint }) {
   switch (it.t) {
     case "user":
@@ -498,6 +504,8 @@ const Row = memo(function Row({
             children={it.children}
             takeover={it.tool.id ? takeovers[`tool:${it.tool.id}`] : undefined}
             onExtInvoke={onExtInvoke}
+            onPrepareFileRevert={onPrepareFileRevert}
+            onCommitFileRevert={onCommitFileRevert}
           />
       );
     case "reads":

@@ -4031,3 +4031,26 @@
 .memedit .row, .peek .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
 .peek .row { margin-top: 8px }
 .memedit .hint { color: var(--muted); font: var(--w-reg) 11px var(--ui) }
+
+/* ── diff：把这个文件还原回去 ───────────────────────────────────────
+   两步：先问文件还是不是检查点里那份，只有不是时才需要读者作答。 */
+.dif-act {
+  padding: 3px 9px; cursor: pointer; border-radius: var(--r-sm);
+  border: 1px solid var(--border); background: var(--raised); color: var(--fg);
+  font: var(--w-med) 11px var(--ui);
+  transition: border-color var(--t-line) var(--ease), color var(--t-line) var(--ease);
+}
+.dif-act:hover { border-color: var(--focus); color: var(--focus) }
+.dif-act.ghost { background: none; border-color: transparent; color: var(--muted) }
+.dif-act.ghost:hover { color: var(--fg) }
+.dif-act[disabled] { opacity: .5; cursor: default }
+.dif-act:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+.dif-ask {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 9px 11px; border-bottom: 1px solid var(--hair); background: var(--overlay);
+  color: var(--fg); font: var(--w-reg) 11.5px/1.5 var(--ui);
+}
+/* A file changed since the checkpoint is the case that needs a decision, so it
+   reads as one rather than as another confirmation. */
+.dif-ask[data-clash] { background: color-mix(in oklab, var(--warn) 12%, var(--overlay)) }
+.dif-ask .row { display: flex; gap: 7px; flex-wrap: wrap }

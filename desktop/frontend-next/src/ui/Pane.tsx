@@ -195,6 +195,13 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     [port, reloadSession],
   );
   const onUndoRewind = useCallback((transactionId: string) => port.undoRewind(transactionId).then(reloadSession), [port, reloadSession]);
+  // Reverting one file touches disk but not the transcript, so unlike a rewind
+  // it does not reload the session — only the file changes.
+  const onPrepareFileRevert = useCallback((path: string) => port.prepareFileRevert(path), [port]);
+  const onCommitFileRevert = useCallback(
+    (planId: string, resolution?: string) => port.commitFileRevert(planId, resolution),
+    [port],
+  );
 
   // Both of these read only the user and tool cards, so they key off the
   // revision rather than the items array: a streamed answer leaves every card
@@ -418,6 +425,8 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         onPrepareRewind={onPrepareRewind}
         onCommitRewind={onCommitRewind}
         onUndoRewind={onUndoRewind}
+        onPrepareFileRevert={onPrepareFileRevert}
+        onCommitFileRevert={onCommitFileRevert}
         needsProject={needsProject}
         onOpenProject={onOpenProject}
         onKeepHere={onKeepHere}

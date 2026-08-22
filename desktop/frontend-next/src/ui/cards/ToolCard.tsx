@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n";
 import { nestLabel } from "../delegation";
 import type { ExtensionSurface, Tool } from "../../port/wire";
+import type { RewindPlan, RewindResult } from "../../port/port";
 import { categoryOf, labelFor, mcpOrigin, runLabelFor } from "../icons";
 import { Sym, glyphFor } from "../Sym";
 import { GOAL_STATUS, argOf, goalUpdate, shortArgs } from "../args";
@@ -40,11 +41,15 @@ function useSettling(running: boolean): { pop: boolean; swap: boolean } {
 }
 
 export function ToolCard({
-  tool, running, children = [], takeover, onExtInvoke,
+  tool, running, children = [], takeover, onExtInvoke, onPrepareFileRevert, onCommitFileRevert,
 }: {
   tool: Tool;
   running: boolean;
   children?: Tool[];
+  // Reverting the file this call wrote. Optional: a card drawn outside a live
+  // pane (history, a fixture) has nothing to revert against.
+  onPrepareFileRevert?: (path: string) => Promise<RewindPlan>;
+  onCommitFileRevert?: (planId: string, resolution?: string) => Promise<RewindResult>;
   // A view an extension published against this call. It replaces the body only.
   takeover?: ExtensionSurface;
   onExtInvoke?: (actionId: string) => void;
@@ -113,7 +118,14 @@ export function ToolCard({
             </>
           ) : (
             <>
-          {tool.diff && <DiffView diff={tool.diff} path={argOf(tool.args, "path", "file_path")} />}
+          {tool.diff && (
+            <DiffView
+              diff={tool.diff}
+              path={argOf(tool.args, "path", "file_path")}
+              onPrepare={onPrepareFileRevert}
+              onCommit={onCommitFileRevert}
+            />
+          )}
           {!tool.diff && tool.name === "todo_write" && <Steps tool={tool} />}
           {goal && (
             <div className="goalup" data-s={GOAL_STATUS[goal.status]?.[1] ?? "run"}>

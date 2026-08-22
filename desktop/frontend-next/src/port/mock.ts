@@ -182,6 +182,22 @@ export class MockPort extends MockTheme implements AgentPort {
     };
   }
 
+  // The fixture reports a clean revert on the first ask and a conflicted one
+  // for a path that says so, since the conflict branch is the half a reader
+  // cannot reach by accident.
+  async prepareFileRevert(path: string): Promise<RewindPlan> {
+    const clash = /conflict|冲突/.test(path);
+    return {
+      planId: "file-" + path, turn: 0, coverage: "full",
+      canFiles: true, canConversation: false, fileCount: 1, files: [path],
+      requiresConfirmation: clash, path,
+      conflicts: clash ? [{ path, reason: "edited since the checkpoint", currentExisted: true }] : undefined,
+    };
+  }
+  async commitFileRevert(): Promise<RewindResult> {
+    return { ok: true, undoAvailable: true, written: [], deleted: [] };
+  }
+
   async saveMemory(edit: MemoryEdit) {
     const at = this.mem.findIndex((m) => m.name === edit.name);
     if (at >= 0) {

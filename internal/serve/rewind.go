@@ -3,6 +3,7 @@ package serve
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"reasonix/internal/checkpoint"
 	"reasonix/internal/control"
@@ -81,6 +82,50 @@ func (s *Server) rewindUndo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().Snapshot(); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, result)
+}
+
+// fileRevertPrepare works out what reverting one file would do. Separate from
+// the turn-scoped prepare because the question is different: not "how far back"
+// but "is this one file still the one the checkpoint captured".
+func (s *Server) fileRevertPrepare(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Path) == "" {
+		missingField(w, "path")
+		return
+	}
+	plan, err := s.ctl().PrepareFileRevert(strings.TrimSpace(body.Path))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, plan)
+}
+
+// fileRevertCommit applies a prepared single-file revert. A file edited since
+// the checkpoint needs the caller to say which side wins — the API has always
+// taken that answer, and until now nothing could ask the question.
+func (s *Server) fileRevertCommit(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		PlanID     string `json:"planId"`
+		Resolution string `json:"resolution"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.PlanID) == "" {
+		missingField(w, "planId")
+		return
+	}
+	resolution := checkpoint.ConflictResolution(strings.TrimSpace(body.Resolution))
+	if resolution != "" && resolution != checkpoint.ResolveKeepCurrent && resolution != checkpoint.ResolveOverwriteCheckpoint {
+		badValue(w, "resolution", string(checkpoint.ResolveKeepCurrent), string(checkpoint.ResolveOverwriteCheckpoint))
+		return
+	}
+	result, err := s.ctl().CommitFileRevert(strings.TrimSpace(body.PlanID), resolution)
+	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}

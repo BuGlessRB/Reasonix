@@ -48,6 +48,17 @@ export interface RewindPlan {
   files?: string[];
   fileCount: number;
   requiresConfirmation: boolean;
+  // Single-file revert only: which file, and whether it has moved since the
+  // checkpoint captured it. A conflict is the one case the caller must answer.
+  path?: string;
+  conflicts?: RewindConflict[];
+}
+
+// Why one file cannot be put back without a decision.
+export interface RewindConflict {
+  path: string;
+  reason: string;
+  currentExisted?: boolean;
 }
 
 export type ApprovalMode = "ask" | "auto" | "dontAsk" | "yolo";

@@ -524,6 +524,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /rewind/prepare", s.rewindPrepare)
 	mux.HandleFunc("POST /rewind/commit", s.rewindCommit)
 	mux.HandleFunc("POST /rewind/undo", s.rewindUndo)
+	mux.HandleFunc("POST /rewind/file/prepare", s.fileRevertPrepare)
+	mux.HandleFunc("POST /rewind/file/commit", s.fileRevertCommit)
 	mux.HandleFunc("POST /summarize", s.summarize)
 	mux.HandleFunc("POST /tool-approval-mode", s.toolApprovalMode)
 	mux.HandleFunc("POST /auto-approve-tools", s.autoApproveTools)

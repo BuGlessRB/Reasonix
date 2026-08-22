@@ -104,6 +104,8 @@ export interface AgentPort {
   // Archives rather than deletes: a fact dropped by mistake stays recoverable.
   forgetMemory(name: string): Promise<void>;
   saveMemory(edit: MemoryEdit): Promise<void>;
+  prepareFileRevert(path: string): Promise<RewindPlan>;
+  commitFileRevert(planId: string, resolution?: string): Promise<RewindResult>;
   network(): Promise<NetworkSettings>;
   // password empty keeps whatever is stored; clearPassword removes it.
   saveNetwork(s: NetworkSettings, password: string, clearPassword: boolean): Promise<NetworkSettings>;
