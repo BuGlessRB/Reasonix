@@ -2,6 +2,32 @@
    跳变，而 grid-template-columns 自己也插不了值（那一列里有 minmax()，它只在
    纯长度之间可动画）。注册过的变量能补间，栏宽于是跟着它走。
    --rail-open / --side-open 是展开时的宽度，由拖动写在 .app 的行内样式上。 */
+/* The interface ships its own faces. Reading it on Windows meant Segoe UI and
+   Microsoft YaHei, and neither carries a 500 or a 600: CSS then resolves
+   --w-reg (500) down to 400 and --w-med (600) up to 700, so the three weights
+   below collapse into two and the body text thins out. Both files here are
+   variable, so every step exists on every platform and the design has one
+   answer instead of one per OS. Licences sit beside them (both OFL 1.1).
+
+   The Chinese face is subset to GB2312 plus the interface's own characters:
+   1.6MB instead of 14MB, and a character outside it still falls back through
+   the stack below rather than disappearing. */
+@font-face {
+  font-family: "Inter var";
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Noto Sans SC var";
+  src: url("/fonts/NotoSansSC-subset.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2E80-9FFF, U+3000-303F, U+FF00-FFEF, U+2010-2027, U+00B7;
+}
+
 @property --rail-w { syntax: "<length>"; inherits: true; initial-value: 214px }
 @property --side-w { syntax: "<length>"; inherits: true; initial-value: 296px }
 
@@ -27,7 +53,7 @@
     --deleg: #0E7382; --deleg-wash: #E4F2F4;
     --ok: #2C7A4B; --warn: #A96A0C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
     --mono: ui-monospace, "Cascadia Code", "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
-    --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", Arial, sans-serif;
+    --ui: "Inter var", "Noto Sans SC var", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", Arial, sans-serif;
     /* 每个色只担一件事：
        accent=需要你介入 · net=系统在自主跑 · deleg=委派出去的 · ok=成
        warn=有风险但放行 · err=坏了或会毁东西 · ghost=中性事实（比如未命中）
