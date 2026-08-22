@@ -2,8 +2,18 @@ package boot
 
 import "reasonix/internal/config"
 
+// corePolicies is every block appended to the base prompt at boot, in order.
+// One list so a policy cannot be added to the prefix without the tests that
+// strip it back off knowing about it.
+var corePolicies = []string{
+	config.UserDecisionPolicy,
+	config.WorkPracticePolicy,
+	config.ToolBatchPolicy,
+	config.LanguagePolicy,
+}
+
 func appendCorePolicies(prompt string) string {
-	for _, policy := range []string{config.UserDecisionPolicy, config.WorkPracticePolicy, config.LanguagePolicy} {
+	for _, policy := range corePolicies {
 		prompt += "\n\n" + policy
 	}
 	return prompt

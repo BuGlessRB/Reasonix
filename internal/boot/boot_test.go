@@ -2831,10 +2831,9 @@ func systemMessage(msgs []provider.Message) string {
 
 func stripLanguagePolicy(s string) string {
 	s = strings.TrimSpace(s)
-	for _, policy := range []string{
-		config.LanguagePolicy, config.WorkPracticePolicy,
-		config.UserDecisionPolicy,
-	} {
+	// Reverse order: they are appended in corePolicies order, so the last one
+	// added is the first suffix to come off.
+	for _, policy := range slices.Backward(corePolicies) {
 		s = strings.TrimSpace(strings.TrimSuffix(s, policy))
 	}
 	return s
