@@ -245,6 +245,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                         {editing === session.path ? (
                           <input
                             className="sessedit"
+                            aria-label={t("重命名这个会话")}
                             autoFocus
                             defaultValue={session.title || session.name}
                             onClick={(ev) => ev.stopPropagation()}
@@ -264,7 +265,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                             }}
                           />
                         ) : (
-                          <span className="sesstitle">{session.title || session.name}</span>
+                          <span className="sesstitle" title={session.title || session.name}>{session.title || session.name}</span>
                         )}
                         <span className="sessmeta">{session.turns ? t("{n} 轮", { n: session.turns }) : t("空会话")}</span>
                         {copies.length > 0 && (

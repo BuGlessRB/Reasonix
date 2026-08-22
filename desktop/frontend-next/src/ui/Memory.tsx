@@ -73,7 +73,7 @@ export function Memory({ port }: { port: AgentPort }) {
                   <button className="nm" onClick={() => setOpen(open === m.name ? "" : m.name)}>
                     {m.title || m.name}
                   </button>
-                  <span className="ds">{m.description}</span>
+                  <span className="ds" title={m.description}>{m.description}</span>
                   {m.expired && <i className="stale">{t("已过期")}</i>}
                   <span className="sc">{t(SCOPE[m.scope ?? ""] ?? m.scope ?? "")}</span>
                   <span className="at">{m.updatedAt || m.createdAt}</span>
@@ -84,7 +84,7 @@ export function Memory({ port }: { port: AgentPort }) {
                 {m.usedLastTurn && m.why && <div className="why-used">{t("上一轮因为「{why}」被翻出来", { why: m.why })}</div>}
                 {open === m.name && (
                   <div className="peek">
-                    <pre>{m.body?.trim() || "（没有正文）"}</pre>
+                    <pre>{m.body?.trim() || t("（没有正文）")}</pre>
                     {m.path && <span className="path">{m.path}</span>}
                   </div>
                 )}

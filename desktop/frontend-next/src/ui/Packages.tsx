@@ -112,7 +112,7 @@ function Package({
   const confirm = confirming && (
     <div className="confirm">
       <span className="q">
-        删掉 {p.name}？它带来的技能、命令和服务会一起消失。只是想暂时不用的话，关掉开关就够了。
+        {t("删掉 {name}？它带来的技能、命令和服务会一起消失。只是想暂时不用的话，关掉开关就够了。", { name: p.name })}
       </span>
       <button className="act" onClick={() => setConfirming(false)}>
         {t("算了")}
@@ -136,9 +136,9 @@ function Package({
   const head = (
     <>
       <i className="pip" />
-      <span className="nm">{p.name}</span>
-      <span className="fold">{summary(p) || "没有可用的贡献"}</span>
-      <span className="meta">{meta}</span>
+      <span className="nm" title={p.name}>{p.name}</span>
+      <span className="fold" title={summary(p) || undefined}>{summary(p) || t("没有可用的贡献")}</span>
+      <span className="meta" title={meta || undefined}>{meta}</span>
       {actions}
     </>
   );

@@ -275,7 +275,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
           {NAV.map(([id, name]) => (
             <button key={id} id={`prefs-${id}`} role="tab" aria-selected={at === id} onClick={() => setAt(id)}>
               {t(name)}
-              <span className="nv" data-danger={danger(id) ? "" : undefined}>
+              <span className="nv" title={nav[id] || undefined} data-danger={danger(id) ? "" : undefined}>
                 {nav[id]}
               </span>
             </button>
@@ -765,7 +765,7 @@ function SkillRow({
   return (
     <div className="skrow" data-off={sk.enabled ? undefined : ""} data-local={local ? "" : undefined}>
       <span className="nm">{sk.slashName ? "/" + sk.slashName : sk.name}</span>
-      <span className="ds">{sk.description || t("没有写说明")}</span>
+      <span className="ds" title={sk.description || undefined}>{sk.description || t("没有写说明")}</span>
       <span className="how">{note && <i className={note === "调不到" ? "w none" : "w"}>{t(note)}</i>}</span>
       <span className="face">
         {sk.subagent && <i className="sa">{t("子代理")}</i>}
