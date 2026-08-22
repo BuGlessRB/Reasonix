@@ -217,7 +217,7 @@
   .mi .ds { display: block; margin-top: 2px; font: var(--w-reg) 11.5px/1.5 var(--ui); color: var(--muted) }
   .mi .rt { margin-left: auto; padding-left: 10px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint); white-space: nowrap; flex: none }
   .mi .mi-bars { margin: 5px 0 0 auto; padding-left: 16px; box-sizing: content-box }
-  .mi[data-on] .rt { color: var(--accent) }
+  .mi[data-on] .rt { color: var(--accent-ink) }
   .menu .div { height: 1px; margin: 5px 4px; background: var(--hair) }
   .mi.plain .lb { font-weight: var(--w-reg); color: var(--muted) }
 
@@ -249,20 +249,22 @@
      而 scrollIntoView 仍把那一行算作"可见"，往下走第一格就不滚 */
   .slashmenu .mlist { overflow-y: auto; min-height: 0 }
   .slashmenu .lb { font-family: var(--mono) }
-  .slashmenu .ah { margin-left: 6px; font: var(--w-reg) 11px var(--mono); font-style: normal; color: var(--ghost) }
+  .slashmenu .ah { margin-left: 6px; font: var(--w-reg) 11px var(--mono); font-style: normal; color: var(--faint) }
   /* 目录能继续往下走，文件到此为止 —— 这个区别值一个颜色 */
-  .slashmenu .mi[data-on] .ah { color: var(--accent) }
+  .slashmenu .mi[data-on] .ah { color: var(--accent-ink) }
   /* 指出这一行是因为哪几个字母被选中的，模糊匹配才不像是在乱给 */
-  .slashmenu .hit { color: var(--accent); font-weight: var(--w-semi) }
+  .slashmenu .hit { color: var(--accent-ink); font-weight: var(--w-semi) }
 
   /* Here data-on is the caret, not a stored value, and it has to be readable
      in peripheral vision: the eye resolves area, not a hue shift on a 6px dot.
      Not --accent-wash — it is mixed against --page and lands darker than
      --float, so on a dark theme the selected row would read as a hole. */
   .slashmenu .mi[data-on] {
-    background: color-mix(in srgb, var(--accent) 15%, var(--float-hi));
+    background: color-mix(in srgb, var(--accent) 12%, var(--float-hi));
     box-shadow: inset 2px 0 var(--accent);
   }
+  /* 选中行本来就该更重，说明文字跟着提一档，正好也把它从 AA 线下拿回来。 */
+  .slashmenu .mi[data-on] .ds { color: var(--text) }
   /* Hover means "you could take this"; data-on is what Enter takes. A pointer
      left parked over the list made the wrong row the heaviest thing on screen,
      so the keys hold the highlight until the mouse actually moves again. */
@@ -460,7 +462,7 @@
   .pane:not([data-run="idle"]) .runstrip { height: 19px; margin-bottom: 10px; opacity: 1 }
   .runstrip .doing { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .pane[data-run="running"] .runstrip .doing { color: var(--muted) }
-  .pane[data-run="halt"] .runstrip .doing { color: var(--accent) }
+  .pane[data-run="halt"] .runstrip .doing { color: var(--accent-ink) }
   .pane[data-run="done"] .runstrip .doing { color: var(--ok) }
   .runstrip .io { display: flex; gap: 9px; flex: none; font-variant-numeric: tabular-nums }
   .runstrip .up { color: var(--net) }
@@ -1245,7 +1247,7 @@
   .nest-hd .who { font: var(--w-med) 11.5px var(--ui); color: var(--deleg) }
   .nest-hd .prof { font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   .nest-hd .doing { margin-left: auto; max-width: 46% }
-  .nest-hd .rt { margin-left: 13px; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums; flex: none }
+  .nest-hd .rt { margin-left: 13px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; flex: none }
   .nest-bd { padding: 3px 11px 8px }
   .nest-bd .call { grid-template-columns: 17px minmax(0, 1fr); gap: 9px }
   .nest-bd .call > .g .sym { width: 17px; height: 17px; margin-top: 6px; font-size: 9px }
@@ -1338,7 +1340,7 @@
     background: color-mix(in srgb, var(--warn) 9%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--warn) 20%, var(--border));
   }
-  .apv-hd .tool { font: var(--w-med) 11px var(--mono); letter-spacing: .06em; color: var(--warn) }
+  .apv-hd .tool { font: var(--w-med) 11px var(--mono); letter-spacing: .06em; color: var(--warn-ink) }
   .apv-hd .sub { font: var(--w-reg) 12px var(--ui); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .apv-dt { padding: 9px 12px 0; font: var(--w-reg) 11.5px/1.6 var(--mono); color: var(--muted) }
   .apv-ft { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 11px 12px }
@@ -2161,7 +2163,7 @@
   /* 一个包带进来的东西分两类：能被叫到的（技能、命令），和会自己跑的
      （常驻进程、钩子、外部服务）。后者不该和前者读起来一样。 */
   .peek .row[data-run] { color: var(--text) }
-  .peek .row[data-run] .d { color: var(--warn, var(--accent)) }
+  .peek .row[data-run] .d { color: var(--warn-ink) }
   .peek .row .sc { margin-left: auto; padding-left: 12px; color: var(--ghost); font: var(--w-reg) 10.5px var(--ui);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .addsrv > .why { margin-top: 9px; font: var(--w-reg) 11.5px/1.55 var(--ui); color: var(--err) }
@@ -2439,7 +2441,7 @@
     display: flex; align-items: baseline; gap: 8px; padding: 7px 10px 4px; cursor: default;
   }
   .menu .mi.head .lb { font: var(--w-med) 10.5px var(--ui); letter-spacing: .06em; color: var(--faint) }
-  .menu .mi.head .rt { margin-left: auto; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
+  .menu .mi.head .rt { margin-left: auto; font: var(--w-reg) 10px var(--mono); color: var(--faint) }
 
   .vway .seg button .perk { margin-left: 6px; padding: 0 5px; border-radius: var(--r-pill);
     background: var(--net-wash); color: var(--net); font: var(--w-reg) 9.5px var(--ui) }
@@ -2649,7 +2651,7 @@
   /* 跟在一句短标签后面的分段条按内容收，铺满会让它和上一层的分段条看着同级 */
   /* 版本号是附注，不是名字的一部分：PowerShell 7 里的「7」要小一号、淡一档，
      否则四个档位的名字长短不一，扫过去像四种不同的东西。 */
-  .seg .ver { margin-left: 5px; font: var(--w-reg) 9.5px var(--mono); font-style: normal; color: var(--ghost) }
+  .seg .ver { margin-left: 5px; font: var(--w-reg) 9.5px var(--mono); font-style: normal; color: var(--faint) }
   .seg button[aria-checked="true"] .ver { color: var(--faint) }
   /* 选中那一档的路径与告诫都在这行说完，所以它要能容下一条长路径 */
   .shell .note code { font: var(--w-reg) 11px var(--mono); color: var(--muted); word-break: break-all }
@@ -2668,9 +2670,9 @@
     min-width: 20px; padding: 1px 5px; border-radius: var(--r-pill); text-align: center;
     font: var(--w-med) 10px var(--mono); font-style: normal;
   }
-  .rhead .mix i[data-k="deny"] { color: var(--err); background: color-mix(in srgb, var(--err) 13%, transparent) }
-  .rhead .mix i[data-k="ask"] { color: var(--warn); background: color-mix(in srgb, var(--warn) 15%, transparent) }
-  .rhead .mix i[data-k="allow"] { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent) }
+  .rhead .mix i[data-k="deny"] { color: var(--err-ink); background: color-mix(in srgb, var(--err) 13%, transparent) }
+  .rhead .mix i[data-k="ask"] { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 15%, transparent) }
+  .rhead .mix i[data-k="allow"] { color: var(--ok-ink); background: color-mix(in srgb, var(--ok) 14%, transparent) }
   .rhead .find-rule {
     flex: 1; min-width: 0; margin-left: auto; padding: 5px 9px;
     border: 1px solid var(--border); border-radius: var(--r-xs);
@@ -2841,7 +2843,7 @@
     font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
   .memrow .stale {
     flex: none; padding: 1px 5px; border-radius: var(--r-pill); font: var(--w-med) 9.5px var(--ui); font-style: normal;
-    color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent);
+    color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 14%, transparent);
   }
   .memrow .sc { flex: none; min-width: 30px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   .memrow .at { flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
@@ -3582,6 +3584,8 @@
   .app[data-run="halt"] .sessrow[data-on] .pip { background: var(--accent); opacity: 1 }
   .sesstitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .sessmeta { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
+  /* 选中和悬停把行底换成 overlay，ghost 的余量是照默认底给的，到这里就不够了。 */
+  .sessrow:hover .sessmeta, .sessrow[data-on] .sessmeta { color: var(--faint) }
   /* 冲突副本折进它来自的那条对话。计数常驻（不像改名/删除只在 hover 出现）：
      它是「这里发生过什么」的唯一提示，藏起来就等于没有。 */
   .sesscopies {

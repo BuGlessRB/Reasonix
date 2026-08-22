@@ -58,7 +58,7 @@
        is the reading value — it clears 4.5:1 on that tint over any of our
        surfaces — while the base stays the fill. In dark they coincide, because
        there the tint is darker than the hue rather than lighter. */
-    --accent-ink: #8C580A; --ok-ink: #286F44; --err-ink: #AF362E;
+    --accent-ink: #8C580A; --warn-ink: #8C580A; --ok-ink: #286F44; --err-ink: #AF362E;
     /* Terminal output and diffs carry Chinese, and none of the monospaced faces
        above has a Chinese glyph — the character fell through to whatever the OS
        picked, which on Windows is a serif. Naming the shipped face makes that
@@ -105,7 +105,7 @@
     --net: #7391FF; --net-wash: #111629;
     --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
     --ok: #52B87C; --warn: #DDA144; --err: #E4675D; --add: #52B87C; --del: #E4675D;
-    --accent-ink: #DDA144; --ok-ink: #52B87C; --err-ink: #E4675D;
+    --accent-ink: #DDA144; --warn-ink: #DDA144; --ok-ink: #52B87C; --err-ink: #E4675D;
     --float: #1F2530; --float-hi: #2A313D;
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .06),
@@ -121,7 +121,7 @@
     --net: #7391FF; --net-wash: #111629;
     --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
     --ok: #52B87C; --warn: #DDA144; --err: #E4675D; --add: #52B87C; --del: #E4675D;
-    --accent-ink: #DDA144; --ok-ink: #52B87C; --err-ink: #E4675D;
+    --accent-ink: #DDA144; --warn-ink: #DDA144; --ok-ink: #52B87C; --err-ink: #E4675D;
     --float: #1F2530; --float-hi: #2A313D;
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .06),
@@ -136,7 +136,7 @@
     --net: #3555C4; --net-wash: #EBEFFC;
     --deleg: #0E7382; --deleg-wash: #E4F2F4;
     --ok: #2C7A4B; --warn: #A7690C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
-    --accent-ink: #8C580A; --ok-ink: #286F44; --err-ink: #AF362E;
+    --accent-ink: #8C580A; --warn-ink: #8C580A; --ok-ink: #286F44; --err-ink: #AF362E;
     --float: #FFFFFF; --float-hi: #EDF0F4;
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .9),
