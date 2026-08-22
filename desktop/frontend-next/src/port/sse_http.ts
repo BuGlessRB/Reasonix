@@ -62,3 +62,9 @@ export class SseHttp {
     return (await res.json()) as T;
   }
 }
+
+// A capability scope rides as a query rather than a path segment: every one of
+// these endpoints answers for the running workspace when it is absent.
+export function rootQuery(root?: string): string {
+  return root ? "?root=" + encodeURIComponent(root) : "";
+}

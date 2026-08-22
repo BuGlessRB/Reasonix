@@ -1,16 +1,13 @@
-import { download } from "./download";
-import type { AccountState, AgentPort, Appearance, ContextBreakdown, Completion, DeviceGrant, Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, ShellSettings, PermissionLists, PermissionRules, SandboxSettings, McpCatalog, McpDraft, McpDraftServer, McpInstallResult, McpInstallScope, CapabilityScope, ScopeLayer, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, SkillCatalog, WorkspaceInfo, ThemePack } from "./port";
+import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpCatalog, McpDraft, McpDraftServer, McpInstallResult, McpInstallScope, CapabilityScope, ScopeLayer, PluginExport, WorkspaceInfo, ThemePack } from "./port";
 import { HttpError, type Attachment, type DroppedRef, type WorkspaceChanges } from "./port";
-import { SseHttp } from "./sse_http";
+import { rootQuery } from "./sse_http";
+import { SseProvider } from "./sse_provider";
+import type { WailsBind } from "./wails";
 import type { StoragePlan, StorageState } from "./storage";
 import type { WireEvent } from "./wire";
 
 // The running project is the default, so its requests stay the bare path they
 // have always been and only a cross-project read carries the folder.
-function rootQuery(root?: string): string {
-  return root ? "?root=" + encodeURIComponent(root) : "";
-}
-
 // Must match wailsEventName / replayPath in desktop/next.
 const WAILS_EVENT = "rx:event";
 // Install progress rides its own channel: it is the shell reporting on itself,
@@ -36,23 +33,8 @@ interface WailsFileDropBus {
 
 // Wails publishes bound methods at window.go.<package>.<Struct>.<Method>; the
 // shell's package is main and the struct is App. Absent in a browser tab.
-interface WailsBind {
-  go?: {
-    main?: {
-      App?: {
-        PickWorkspace?: () => Promise<string>;
-        OpenExternal?: (url: string) => Promise<void>;
-        Versions?: () => Promise<VersionHub>;
-        PinVersion?: (version: string) => Promise<void>;
-        GoToVersion?: (version: string) => Promise<void>;
-        SavePluginExport?: (name: string) => Promise<{ path: string; required: string[] }>;
-        SaveText?: (name: string, content: string) => Promise<string>;
-      };
-    };
-  };
-}
 
-export class SsePort extends SseHttp implements AgentPort {
+export class SsePort extends SseProvider implements AgentPort {
   private readonly dropSubs = new Set<(paths: string[]) => void>();
   private dropWired = false;
 
@@ -65,10 +47,6 @@ export class SsePort extends SseHttp implements AgentPort {
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`/provider-setup: ${res.status}`);
     return (await res.json()) as ProviderSetup;
-  }
-
-  reloadExtensions() {
-    return this.post("/extensions/reload");
   }
 
   saveProviderKey(apiKey: string) {
@@ -85,48 +63,6 @@ export class SsePort extends SseHttp implements AgentPort {
     return this.get<Completion>("/complete?" + q);
   }
 
-  skills(root?: string) {
-    return this.get<SkillCatalog>("/skills" + rootQuery(root));
-  }
-
-  setSkillEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project", root?: string) {
-    return this.post("/skills/enabled", { name, enabled, scope, root });
-  }
-
-  clearSkillOverride(name: string, root?: string) {
-    return this.post("/skills/enabled", { name, clear: true, scope: "project", root });
-  }
-
-  plugins() {
-    return this.get<PluginPackage[]>("/plugins");
-  }
-
-  planPlugin(req: PluginInstallRequest) {
-    return this.post0<PluginPlan>("/plugins/plan", req);
-  }
-
-  installPlugin(req: PluginInstallRequest) {
-    return this.post0<PluginPlan>("/plugins/install", req);
-  }
-
-  async setPluginEnabled(name: string, enabled: boolean) {
-    await this.post0<{ reloadError?: string }>("/plugins/enabled", { name, enabled });
-  }
-
-  async removePlugin(name: string): Promise<PluginPlan> {
-    const res = await fetch(this.base + "/plugins/" + encodeURIComponent(name), {
-      method: "DELETE",
-      credentials: "same-origin",
-    });
-    const body = (await res.json().catch(() => ({}))) as PluginPlan & { error?: string };
-    if (!res.ok) throw new Error(body.error || `/plugins/${name}: ${res.status}`);
-    return body;
-  }
-
-  // A webview starts no downloads of its own, so the shell writes the file
-  // through its own save dialog when there is one. In a browser tab the archive
-  // is an ordinary download, and the header is read first because the body is
-  // bytes and has nowhere to say what was stripped out of it.
   async exportPlugin(name: string): Promise<PluginExport> {
     const save = (window as WailsBind).go?.main?.App?.SavePluginExport;
     if (save) {
@@ -145,13 +81,6 @@ export class SsePort extends SseHttp implements AgentPort {
     a.click();
     URL.revokeObjectURL(url);
     return { required };
-  }
-
-  async saveText(name: string, content: string): Promise<string | null> {
-    const save = (window as WailsBind).go?.main?.App?.SaveText;
-    if (save) return (await save(name, content)) || null;
-    download(name, content);
-    return null;
   }
 
   hooks() {
@@ -203,38 +132,6 @@ export class SsePort extends SseHttp implements AgentPort {
   async diagnoseNetwork() {
     const r = await this.post0<{ probes?: NetworkProbe[] }>("/network/diagnose");
     return r.probes ?? [];
-  }
-
-  shell() {
-    return this.get<ShellSettings>("/shell");
-  }
-
-  async saveShell(prefer: string, path: string) {
-    const res = await fetch(this.base + "/shell", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ prefer, path }),
-    });
-    const body = (await res.json().catch(() => ({}))) as ShellSettings & { error?: string };
-    if (!res.ok) throw new Error(body.error || `/shell: ${res.status}`);
-    return body;
-  }
-
-  permissions() {
-    return this.get<PermissionRules>("/permissions");
-  }
-
-  savePermissions(lists: PermissionLists) {
-    return this.post0<PermissionRules>("/permissions", lists);
-  }
-
-  sandbox() {
-    return this.get<SandboxSettings>("/sandbox");
-  }
-
-  saveSandbox(s: SandboxSettings) {
-    return this.post0<SandboxSettings>("/sandbox", s);
   }
 
   mcp(root?: string) {
@@ -314,17 +211,6 @@ export class SsePort extends SseHttp implements AgentPort {
     return { disconnected: !!body.disconnected, stillConfigured: !!body.stillConfigured };
   }
 
-  providers() {
-    return this.get<ProviderEntry[]>("/providers");
-  }
-
-  protocols() {
-    return this.get<Protocol[]>("/providers/protocols");
-  }
-
-  // The failure message is the answer here — a 401, a wrong path and "no chat
-  // models" send the user to three different fixes — so it is read out of the
-  // body rather than thrown away as a status code.
   async probeProvider(baseUrl: string, apiKey: string): Promise<ProviderProbe> {
     const res = await fetch(this.base + "/providers/probe", {
       method: "POST",
@@ -335,22 +221,6 @@ export class SsePort extends SseHttp implements AgentPort {
     const text = await res.text();
     if (!res.ok) throw new Error(text.trim() || `/providers/probe: ${res.status}`);
     return JSON.parse(text) as ProviderProbe;
-  }
-
-  saveProvider(draft: ProviderDraft) {
-    return this.post("/providers", draft);
-  }
-
-  editProvider(edit: ProviderEdit) {
-    return this.post("/providers/edit", edit);
-  }
-
-  setProviderWebSearch(name: string, on: boolean) {
-    return this.post("/providers/websearch", { name, on });
-  }
-
-  setProviderThinking(name: string, on: boolean) {
-    return this.post("/providers/thinking", { name, on });
   }
 
   async welcomeSeen(): Promise<boolean> {
@@ -382,24 +252,6 @@ export class SsePort extends SseHttp implements AgentPort {
 
   moveStorage(root: string, dir: string) {
     return this.post0<StoragePlan>("/storage/move", { root, dir });
-  }
-
-  // Like the add-a-source probe, the interesting answer is in the body: a
-  // refused key and a moved endpoint are different fixes.
-  async checkProvider(name: string): Promise<ProviderCheck> {
-    const res = await fetch(this.base + "/providers/check", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ name }),
-    });
-    const text = await res.text();
-    if (!res.ok) throw new Error(text.trim() || `/providers/check: ${res.status}`);
-    return JSON.parse(text) as ProviderCheck;
-  }
-
-  removeProvider(name: string) {
-    return this.post("/providers/remove", { name });
   }
 
   async versions(): Promise<VersionHub> {
@@ -707,34 +559,10 @@ export class SsePort extends SseHttp implements AgentPort {
       answers: answers.map((a) => ({ QuestionID: a.questionId, Selected: a.selected })),
     });
   }
-  context() {
-    return this.get<ContextBreakdown>("/context");
-  }
-
   themes() {
     return this.get<ThemePack[]>("/themes");
   }
 
-  appearance() {
-    return this.get<Appearance>("/appearance");
-  }
-
-  saveAppearance(look: Appearance) {
-    return this.post0<Appearance>("/appearance", {
-      language: look.language ?? "",
-      zoom: look.zoom ?? 0,
-      readSize: look.readSize ?? 0,
-      fontUi: look.fontUi ?? "",
-      fontMono: look.fontMono ?? "",
-      opacity: look.wallpaper?.opacity ?? 0,
-      dim: look.wallpaper?.dim ?? 0,
-      focusX: look.wallpaper?.focusX ?? 0.5,
-      focusY: look.wallpaper?.focusY ?? 0.5,
-    });
-  }
-
-  // JSON, not raw bytes: csrfGuard admits nothing else, which is what stops a
-  // cross-site form from posting here at all.
   async uploadWallpaper(blob: Blob) {
     const buf = new Uint8Array(await blob.arrayBuffer());
     let bin = "";
@@ -750,13 +578,6 @@ export class SsePort extends SseHttp implements AgentPort {
     return body;
   }
 
-  async clearWallpaper() {
-    const res = await fetch(this.base + "/appearance/wallpaper", {
-      method: "DELETE",
-      credentials: "same-origin",
-    });
-    if (!res.ok) throw new Error(`/appearance/wallpaper: ${res.status}`);
-  }
   async surfaceSlots() {
     const r = await this.get<{ slots?: Record<string, string> }>("/surfaces");
     return r.slots ?? {};
