@@ -44,6 +44,7 @@ export const EN: Record<string, string> = {
   "思考中": "Thinking",
   "正在回答": "Answering",
   "已完成": "Done",
+  "已中断": "Interrupted",
   "等你批准": "Waiting for approval",
   "等你决定": "Waiting on you",
   "缓存": "Cache",

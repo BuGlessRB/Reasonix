@@ -69,6 +69,29 @@ const scan = (label) => evaluate(`(() => {
 
 const results = [];
 results.push(await scan("main"));
+
+// A failing turn renders text no settled screen does — the kernel's own error
+// and the run label that follows it. Point the config at a key the endpoint
+// will reject and this walks that half too; with a working key the step finds
+// nothing and says so rather than passing silently.
+const sent = await evaluate(`(() => {
+  const ta = document.querySelector(".compose textarea");
+  if (!ta) return false;
+  ta.focus();
+  Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta), "value").set.call(ta, "hello");
+  ta.dispatchEvent(new Event("input", { bubbles: true }));
+  const b = [...document.querySelectorAll("button")].find((x) => /Send|发送/i.test(x.textContent || ""));
+  b?.click();
+  return !!b;
+})()`);
+if (!sent) console.log("[failed-turn] SKIPPED — no composer on screen");
+else {
+  await new Promise((r) => setTimeout(r, 7000));
+  const ended = await evaluate(`document.querySelector(".pane")?.dataset.run ?? ""`);
+  if (ended !== "halt") console.log(`[failed-turn] the turn did not end in error (run=${ended}); this half went unwalked`);
+  results.push(await scan("failed-turn"));
+}
+
 await evaluate(`document.querySelector('.thbtn[aria-label="Settings"]')?.click()`);
 await new Promise((r) => setTimeout(r, 1500));
 const count = await evaluate(`document.querySelectorAll('.prefs-nav button').length`);
