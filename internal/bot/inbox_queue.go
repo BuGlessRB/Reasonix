@@ -77,7 +77,7 @@ func firstNonEmptyBotText(values ...string) string {
 
 // enqueueViaInbox durably queues an inbound message on the controller's
 // session inbox. Platform message IDs are used as idempotency keys.
-func enqueueViaInbox(ctrl control.SessionAPI, msg InboundMessage, intent sessioninbox.InboxIntent) (sessioninbox.InboxReceipt, error) {
+func enqueueViaInbox(ctrl control.GatewayAPI, msg InboundMessage, intent sessioninbox.InboxIntent) (sessioninbox.InboxReceipt, error) {
 	if ctrl == nil {
 		return sessioninbox.InboxReceipt{}, fmt.Errorf("no controller")
 	}
@@ -108,7 +108,7 @@ func enqueueViaInbox(ctrl control.SessionAPI, msg InboundMessage, intent session
 
 // collectAppend tries to append text into the last queued follow-up blob within
 // the debounce window. Falls back to a new enqueue.
-func collectAppend(ctrl control.SessionAPI, msg InboundMessage, debounce time.Duration) (sessioninbox.InboxReceipt, error) {
+func collectAppend(ctrl control.GatewayAPI, msg InboundMessage, debounce time.Duration) (sessioninbox.InboxReceipt, error) {
 	if ctrl == nil {
 		return sessioninbox.InboxReceipt{}, fmt.Errorf("no controller")
 	}
@@ -137,7 +137,7 @@ func collectAppend(ctrl control.SessionAPI, msg InboundMessage, debounce time.Du
 }
 
 // interruptEnqueue cancels the current turn and moves a new item to the front.
-func interruptEnqueue(ctrl control.SessionAPI, msg InboundMessage) (sessioninbox.InboxReceipt, error) {
+func interruptEnqueue(ctrl control.GatewayAPI, msg InboundMessage) (sessioninbox.InboxReceipt, error) {
 	if ctrl == nil {
 		return sessioninbox.InboxReceipt{}, fmt.Errorf("no controller")
 	}
@@ -214,7 +214,7 @@ func (gw *BotGateway) handleQueueInboxCommand(ctx context.Context, key string, m
 	return "", false, false
 }
 
-func formatBotInboxList(api control.SessionAPI) string {
+func formatBotInboxList(api control.GatewayAPI) string {
 	snap := api.InboxSnapshot()
 	if len(snap.Items) == 0 {
 		return "inbox empty" + pausedSuffix(snap.Paused)
@@ -233,7 +233,7 @@ func formatBotInboxList(api control.SessionAPI) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func showBotInboxItem(api control.SessionAPI, parts []string) string {
+func showBotInboxItem(api control.GatewayAPI, parts []string) string {
 	if len(parts) < 3 {
 		return "用法: /queue show <n|id>"
 	}
@@ -248,7 +248,7 @@ func showBotInboxItem(api control.SessionAPI, parts []string) string {
 	return env.SubmitText
 }
 
-func deleteBotInboxItem(api control.SessionAPI, parts []string) string {
+func deleteBotInboxItem(api control.GatewayAPI, parts []string) string {
 	if len(parts) < 3 {
 		return "用法: /queue delete <n|id>"
 	}
@@ -262,7 +262,7 @@ func deleteBotInboxItem(api control.SessionAPI, parts []string) string {
 	return "deleted #" + shortItemID(id)
 }
 
-func moveBotInboxItem(api control.SessionAPI, parts []string) string {
+func moveBotInboxItem(api control.GatewayAPI, parts []string) string {
 	if len(parts) < 4 {
 		return "用法: /queue move <n|id> <to>"
 	}
@@ -280,7 +280,7 @@ func moveBotInboxItem(api control.SessionAPI, parts []string) string {
 	return "moved #" + shortItemID(id)
 }
 
-func setBotInboxPaused(api control.SessionAPI, paused bool) string {
+func setBotInboxPaused(api control.GatewayAPI, paused bool) string {
 	setter, ok := any(api).(interface{ SetInboxPausedPassive(bool) error })
 	var err error
 	if ok {
@@ -297,7 +297,7 @@ func setBotInboxPaused(api control.SessionAPI, paused bool) string {
 	return "inbox resumed"
 }
 
-func retryBotInboxItem(api control.SessionAPI, parts []string) string {
+func retryBotInboxItem(api control.GatewayAPI, parts []string) string {
 	if len(parts) < 3 {
 		return "用法: /queue retry <n|id>"
 	}
@@ -318,7 +318,7 @@ func retryBotInboxItem(api control.SessionAPI, parts []string) string {
 	return "retry #" + shortItemID(id)
 }
 
-func refreshBotInboxItem(api control.SessionAPI, parts []string) string {
+func refreshBotInboxItem(api control.GatewayAPI, parts []string) string {
 	if len(parts) < 3 {
 		return "用法: /queue refresh <n|id>"
 	}
@@ -348,7 +348,7 @@ func pausedSuffix(paused bool) string {
 	return ""
 }
 
-func resolveBotInboxRef(api control.SessionAPI, ref string) (string, error) {
+func resolveBotInboxRef(api control.GatewayAPI, ref string) (string, error) {
 	snap := api.InboxSnapshot()
 	var n int
 	if _, err := fmt.Sscanf(ref, "%d", &n); err == nil && n >= 1 && n <= len(snap.Items) {

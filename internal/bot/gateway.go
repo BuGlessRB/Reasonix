@@ -858,14 +858,14 @@ func (gw *BotGateway) queueMode(key string, msg InboundMessage) string {
 	return gw.sessions.QueueMode(key, gw.cfg.QueueMode)
 }
 
-func (gw *BotGateway) sessionAPI(key string) control.SessionAPI {
+func (gw *BotGateway) sessionAPI(key string) control.GatewayAPI {
 	gw.mu.Lock()
 	state, ok := gw.controllers[key]
 	gw.mu.Unlock()
 	if !ok || state == nil || state.ctrl == nil {
 		return nil
 	}
-	if api, ok := state.ctrl.(control.SessionAPI); ok {
+	if api, ok := state.ctrl.(control.GatewayAPI); ok {
 		return api
 	}
 	return nil
@@ -888,7 +888,7 @@ func (gw *BotGateway) steerActiveSessionDurable(ctx context.Context, adapter Ada
 		return sessioninbox.InboxReceipt{}, false
 	}
 	msg.Text = text
-	api, ok := state.ctrl.(control.SessionAPI)
+	api, ok := state.ctrl.(control.GatewayAPI)
 	if !ok {
 		// Legacy fallback.
 		if steerer, ok := state.ctrl.(interface{ TrySteer(string) bool }); ok && steerer.TrySteer(text) {

@@ -1205,7 +1205,7 @@ func (s *service) sessionSteer(_ context.Context, raw json.RawMessage) (any, err
 		return nil, &RPCError{Code: ErrInvalidParams, Message: sessionSteerMethod + ": empty prompt"}
 	}
 	ctrl := sess.currentCtrl()
-	if api, ok := ctrl.(control.SessionAPI); ok {
+	if api, ok := ctrl.(control.EditorAPI); ok {
 		if ensurer, ok := any(api).(interface{ EnsureSessionPath() }); ok {
 			ensurer.EnsureSessionPath()
 		}

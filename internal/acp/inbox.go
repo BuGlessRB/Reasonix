@@ -9,12 +9,12 @@ import (
 	"reasonix/internal/sessioninbox"
 )
 
-func (s *service) sessionAPI(sess *acpSession) (control.SessionAPI, error) {
+func (s *service) sessionAPI(sess *acpSession) (control.EditorAPI, error) {
 	if sess == nil {
 		return nil, &RPCError{Code: ErrInvalidParams, Message: "unknown session"}
 	}
 	ctrl := sess.currentCtrl()
-	api, ok := ctrl.(control.SessionAPI)
+	api, ok := ctrl.(control.EditorAPI)
 	if !ok {
 		return nil, &RPCError{Code: ErrInternal, Message: "session controller does not expose inbox"}
 	}

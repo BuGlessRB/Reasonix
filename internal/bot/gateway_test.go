@@ -1928,7 +1928,7 @@ func TestGatewayQueueInterruptCancelsAndKeepsNewestMessage(t *testing.T) {
 	}
 	if n := gw.nextInboxMessage(key); n == nil || n.Text != "newest request" {
 		// Controllers without SessionAPI cannot durable-queue; accept cancel-only.
-		if api, ok := any(ctrl).(control.SessionAPI); ok {
+		if api, ok := any(ctrl).(control.GatewayAPI); ok {
 			_ = api
 			t.Fatalf("durable inbox missing newest request")
 		}
