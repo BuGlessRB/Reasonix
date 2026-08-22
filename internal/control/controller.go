@@ -1336,7 +1336,7 @@ func (c *Controller) SubmitEditedDisplay(display, input, original string) {
 // SubmitUserTurn starts a normal model turn without interpreting shell or slash
 // commands. It still resolves references, so callers can submit trusted
 // user-authored prompt text without expanding the command surface.
-func (c *Controller) SubmitUserTurn(input, display string) {
+func (c *Controller) SubmitUserTurn(display, input string) {
 	c.runRefTurn(input, display)
 }
 

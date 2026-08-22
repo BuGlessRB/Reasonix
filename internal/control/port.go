@@ -47,14 +47,13 @@ type Lifecycle interface {
 // TurnControl covers driving a model turn and observing its run state: the
 // various submit/run entry points, cancellation, steering, and status reads.
 type TurnControl interface {
-	Submit(input string)
+	// One way in per shape of turn: the dropped-argument variants stay on
+	// *Controller for tests. All of them now take display before input — they
+	// are pairs of strings, and the odd one out was a swap no compiler catches.
 	SubmitDisplay(display, input string)
 	SubmitDeliveryRecovery(display, input string)
 	SubmitInvocationDisplay(display, input string, invocations []InvocationRequest)
-	SubmitEditedDisplay(display, input, original string)
-	SubmitHTTP(input string)
 	SubmitHTTPFormat(input, format string)
-	SubmitUserTurn(input, display string)
 	Send(input string)
 	SendWithRaw(input, raw string)
 	Run(ctx context.Context, input string) error
