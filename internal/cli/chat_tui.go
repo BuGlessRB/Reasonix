@@ -48,9 +48,10 @@ import (
 // normal buffer and commits finalized output to native scrollback via
 // tea.Println so taps can still focus the soft keyboard.
 type chatTUI struct {
-	ctrl    control.SessionAPI
-	label   string
-	missing string // missing-key warning surfaced once in the banner, "" when ready
+	ctrl        control.SessionAPI
+	shutdownErr error // final save's failure; drawn after the alt-screen is gone
+	label       string
+	missing     string // missing-key warning surfaced once in the banner, "" when ready
 	webHandoffState
 	// diagnostics is the process-owned TUI log/watchdog started before terminal
 	// takeover. Nil in unit tests that construct chatTUI without chatREPL.
@@ -1951,11 +1952,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tuiShutdownMsg:
-		if m.ctrl != nil {
-			_ = m.ctrl.Snapshot()
-			m.followSessionLease()
-		}
-		return m, tea.Quit
+		return m.shutdownAndQuit()
 
 	case modelSwitchMsg:
 		m.modelSwitchPending = false
