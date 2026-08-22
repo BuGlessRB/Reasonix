@@ -2611,15 +2611,6 @@ func (c *Controller) ReplayPendingPrompts() {
 	}
 }
 
-// ReplayPendingPromptsTo re-emits pending prompts to one frontend sink. Serve
-// uses this for a newly attached SSE client so existing browsers do not receive
-// duplicate approval/ask cards when another client reconnects.
-func (c *Controller) ReplayPendingPromptsTo(sink event.Sink) {
-	c.approval.promptEmitMu.Lock()
-	defer c.approval.promptEmitMu.Unlock()
-	c.replayPendingPromptsTo(sink)
-}
-
 // ReplayPendingPromptsWith performs an SSE connection handoff while prompt
 // registration and emission are paused. The factory must subscribe the new
 // client and return a sink that targets it; this closes the attach race where

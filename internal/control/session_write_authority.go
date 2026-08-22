@@ -41,15 +41,6 @@ func (c *Controller) BindSessionWriteAuthority(lease *agent.SessionLease) error 
 	return nil
 }
 
-// WriteAuthorityGeneration reports the generation currently bound on this
-// controller. Tests use it to prove old generations become stale after rebind.
-func (c *Controller) WriteAuthorityGeneration() uint64 {
-	if c == nil || c.executor == nil || c.executor.Session() == nil {
-		return 0
-	}
-	return c.executor.Session().WriteAuthority().Generation()
-}
-
 func (c *Controller) submitCommandOrTurn(trimmed, input, display string, scopedRefsOnly bool, editedOriginal, format string) {
 	if err := c.ensureWriteAuthorityReady(); err != nil {
 		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "input was not accepted: this session is no longer writable — reopen it and try again"})
@@ -64,13 +55,6 @@ func (c *Controller) Run(ctx context.Context, input string) error {
 		return err
 	}
 	return c.runReady(ctx, input)
-}
-
-// RebindSessionWriteAuthority is a convenience for keepers that already hold a
-// lease: it issues a fresh generation so any previous controller authority for
-// the same lease object is immediately stale.
-func (c *Controller) RebindSessionWriteAuthority(lease *agent.SessionLease) error {
-	return c.BindSessionWriteAuthority(lease)
 }
 
 // ensureWriteAuthorityReady refuses turn admission when the session path is
