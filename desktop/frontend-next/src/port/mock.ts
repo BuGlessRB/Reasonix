@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef } from "./port";
 import type { WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
 import { SCRIPT } from "./fixture";
@@ -180,6 +180,15 @@ export class MockPort extends MockTheme implements AgentPort {
       recallQuery: "缓存命中率为什么会掉",
       indexPath: "~/.reasonix/projects/reasonix/memory/MEMORY.md",
     };
+  }
+
+  async saveMemory(edit: MemoryEdit) {
+    const at = this.mem.findIndex((m) => m.name === edit.name);
+    if (at >= 0) {
+      this.mem[at] = { ...this.mem[at], title: edit.title, description: edit.description,
+        body: edit.body, activation: edit.activation, revision: (this.mem[at].revision ?? 1) + 1,
+        updatedAt: new Date().toISOString().slice(0, 10) };
+    }
   }
 
   async forgetMemory(name: string) {

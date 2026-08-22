@@ -4013,3 +4013,21 @@
 /* display:block — an <i> is inline, and an inline box ignores width/height. */
 .ufill { display: block; height: 100%; background: var(--chart); border-radius: var(--r-pill);
   transition: width .9s var(--ease-spring) }
+
+/* ── 记忆：就地编辑 ─────────────────────────────────────────────────
+   保存写成新的一版而不是覆盖，所以这里敢直接给一个可改的框。 */
+.memedit { display: flex; flex-direction: column; gap: 10px }
+.memedit label { display: flex; flex-direction: column; gap: 4px;
+  color: var(--muted); font: var(--w-med) 11px var(--ui); letter-spacing: .04em }
+.memedit input, .memedit textarea, .memedit select {
+  padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--raised); color: var(--fg); font: var(--w-reg) 12.5px var(--ui); outline: none;
+}
+.memedit textarea { resize: vertical; min-height: 120px; font-family: var(--mono); line-height: 1.6 }
+.memedit input:focus-visible, .memedit textarea:focus-visible, .memedit select:focus-visible {
+  border-color: var(--focus); box-shadow: 0 0 0 2px color-mix(in oklab, var(--focus) 26%, transparent);
+}
+.memedit .when { max-width: 220px }
+.memedit .row, .peek .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.peek .row { margin-top: 8px }
+.memedit .hint { color: var(--muted); font: var(--w-reg) 11px var(--ui) }

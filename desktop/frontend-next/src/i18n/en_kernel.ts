@@ -36,6 +36,7 @@ export const EN_KERNEL: Record<string, string> = {
   "这个会话还开着面板，先关掉那个": "This session still has a pane open — close it first",
   "这个路径不在任何已知的工作区里": "That path is not inside any known workspace",
   "还没有打开的会话": "No session is open yet",
+  "这个会话没有开启记忆": "Memory is not enabled for this session",
   "还没填服务地址": "No endpoint address yet",
   "这串 key 没被接受。看看是不是没复制全，或者到服务商控制台重新生成一个":
     "That key was refused. Check it copied in full, or generate a new one in the provider's console",

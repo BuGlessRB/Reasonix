@@ -26,3 +26,14 @@ export interface MemoryCatalog {
   recallQuery: string;
   indexPath?: string;
 }
+
+// What a person may change about a saved fact. Identity, revision and
+// timestamps are the store's — the panel never sends them back.
+export interface MemoryEdit {
+  name: string;
+  title: string;
+  description: string;
+  body: string;
+  activation: string;
+  keywords?: string;
+}

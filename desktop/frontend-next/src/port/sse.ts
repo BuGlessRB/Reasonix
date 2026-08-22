@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, UsageReport, McpDraft, PluginExport, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, UsageReport, McpDraft, PluginExport, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
@@ -103,6 +103,9 @@ export class SsePort extends SseTheme implements AgentPort {
     return this.get<MemoryCatalog>("/memory");
   }
 
+  saveMemory(edit: MemoryEdit) {
+    return this.post("/memory/save", edit);
+  }
   forgetMemory(name: string) {
     return this.post("/memory/forget", { name });
   }

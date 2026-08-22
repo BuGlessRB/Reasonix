@@ -6,8 +6,9 @@ export type { Attachment, DroppedRef };
 import type { AccountState, AccountUser, DeviceGrant } from "./account";
 import type { HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource } from "./hook";
 import type { CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpRisk, McpTool, ScopeLayer } from "./mcp";
-import type { MemoryCatalog, MemoryEntry } from "./memory";
+import type { MemoryCatalog, MemoryEdit, MemoryEntry } from "./memory";
 import type { UsageReport } from "./usage";
+export type { MemoryEdit } from "./memory";
 export type { Money, UsageDay, UsageModel, UsageProvider, UsageReport } from "./usage";
 import type { Completion, CompletionItem, ModelEntry, ModelPrice, RoleAssignments } from "./model";
 import type { NetworkProbe, NetworkSettings } from "./network";
@@ -102,6 +103,7 @@ export interface AgentPort {
   usage(days: number, source?: string): Promise<UsageReport>;
   // Archives rather than deletes: a fact dropped by mistake stays recoverable.
   forgetMemory(name: string): Promise<void>;
+  saveMemory(edit: MemoryEdit): Promise<void>;
   network(): Promise<NetworkSettings>;
   // password empty keeps whatever is stored; clearPassword removes it.
   saveNetwork(s: NetworkSettings, password: string, clearPassword: boolean): Promise<NetworkSettings>;

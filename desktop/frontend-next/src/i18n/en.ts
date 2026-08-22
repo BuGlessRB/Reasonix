@@ -705,6 +705,11 @@ export const EN: Record<string, string> = {
   "连上看看": "Connect",
 
   // ── 用量与成本 ───────────────────────────────────────────────
+  "一句话说明": "One-line summary",
+  "什么时候用上": "When it applies",
+  "相关时想起": "Recalled when relevant",
+  "每轮都在": "In every turn",
+  "保存会记成新的一版，旧的还在": "Saving records a new revision; the old one stays",
   "用量": "Usage",
   "用量与成本": "Usage & cost",
   "本机记录的 token 与花费 —— 只在这台机器上，不上传。命中缓存的输入按缓存价计费，所以命中率直接决定账单。": "Tokens and spend recorded on this machine — local only, never uploaded. Cached input bills at the cache rate, so the hit rate decides the bill.",

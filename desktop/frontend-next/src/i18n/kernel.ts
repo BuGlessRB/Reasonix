@@ -77,6 +77,8 @@ const SAID: Record<string, string> = {
   "provider.setup_done": "已经连上了，不用再配一次",
   "provider.setup_failed": "远端配置没做成，稍后再试",
 
+  "memory.unavailable": "这个会话没有开启记忆",
+
   // ── 来源：连不上时卡在哪一步 ─────────────────────────────────────
   // Each of these is a different next move, which is the whole reason the
   // kernel sends a code: "连接失败" would send everyone to the same dead end.

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { t } from "../i18n";
-import type { AgentPort, MemoryEntry } from "../port/port";
+import { reason } from "../i18n/kernel";
+import type { AgentPort, MemoryEdit, MemoryEntry } from "../port/port";
 
 // Memory is the only thing here that changes how the agent behaves without the
 // user ever configuring it — the agent writes it. So the grouping answers the
@@ -18,6 +19,7 @@ export function Memory({ port }: { port: AgentPort }) {
   const [open, setOpen] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [edit, setEdit] = useState<MemoryEdit | null>(null);
 
   const reload = () => {
     port
@@ -32,6 +34,21 @@ export function Memory({ port }: { port: AgentPort }) {
 
   if (!items) return <div className="empty">{t("读不到记忆。")}</div>;
   if (items.length === 0) return <div className="empty">{t("还没有记下任何东西。")}</div>;
+
+  const save = async () => {
+    if (!edit) return;
+    setBusy(edit.name);
+    setError("");
+    try {
+      await port.saveMemory(edit);
+      setEdit(null);
+      reload();
+    } catch (e) {
+      setError(reason(e));
+    } finally {
+      setBusy("");
+    }
+  };
 
   const forget = async (name: string) => {
     setBusy(name);
@@ -84,8 +101,52 @@ export function Memory({ port }: { port: AgentPort }) {
                 {m.usedLastTurn && m.why && <div className="why-used">{t("上一轮因为「{why}」被翻出来", { why: m.why })}</div>}
                 {open === m.name && (
                   <div className="peek">
-                    <pre>{m.body?.trim() || t("（没有正文）")}</pre>
-                    {m.path && <span className="path">{m.path}</span>}
+                    {edit?.name === m.name ? (
+                      <div className="memedit">
+                        <label>
+                          {t("标题")}
+                          <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} />
+                        </label>
+                        <label>
+                          {t("一句话说明")}
+                          <input value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
+                        </label>
+                        <label>
+                          {t("正文")}
+                          <textarea rows={8} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })} />
+                        </label>
+                        <label className="when">
+                          {t("什么时候用上")}
+                          <select value={edit.activation} onChange={(e) => setEdit({ ...edit, activation: e.target.value })}>
+                            <option value="relevant">{t("相关时想起")}</option>
+                            <option value="pinned">{t("每轮都在")}</option>
+                          </select>
+                        </label>
+                        <div className="row">
+                          <button className="act" disabled={busy === m.name} onClick={() => void save()}>
+                            {t(busy === m.name ? "正在保存…" : "保存")}
+                          </button>
+                          <button className="act ghost" onClick={() => setEdit(null)}>{t("取消")}</button>
+                          {/* Saving writes a new revision rather than overwriting, which is
+                              what makes offering an edit at all safe. */}
+                          <span className="hint">{t("保存会记成新的一版，旧的还在")}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <pre>{m.body?.trim() || t("（没有正文）")}</pre>
+                        <div className="row">
+                          <button
+                            className="act ghost"
+                            onClick={() => setEdit({ name: m.name, title: m.title ?? "", description: m.description ?? "",
+                              body: m.body ?? "", activation: m.activation })}
+                          >
+                            {t("编辑")}
+                          </button>
+                          {m.path && <span className="path">{m.path}</span>}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

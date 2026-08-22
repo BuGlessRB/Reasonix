@@ -91,3 +91,101 @@ func stamp(t time.Time) string {
 	}
 	return t.Format("2006-01-02")
 }
+
+// editable is what a person may change about a saved fact. Identity, revision
+// and timestamps are the store's to keep: taking them from the request would
+// let a stale panel rewrite an audit trail it never read.
+type editable struct {
+	Name        string `json:"name"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Body        string `json:"body"`
+	Activation  string `json:"activation"`
+	Keywords    string `json:"keywords"`
+}
+
+// saveMemory rewrites one fact in place. The store records it as a new audited
+// revision rather than overwriting, so an edit is recoverable the same way a
+// forget is.
+func (s *Server) saveMemory(w http.ResponseWriter, r *http.Request) {
+	var edit editable
+	if err := json.NewDecoder(r.Body).Decode(&edit); err != nil || strings.TrimSpace(edit.Name) == "" {
+		missingField(w, "name")
+		return
+	}
+	name := strings.TrimSpace(edit.Name)
+	activation := memory.Activation(strings.TrimSpace(edit.Activation))
+	if activation != "" && activation != memory.ActivationRelevant && activation != memory.ActivationPinned {
+		badValue(w, "activation", "relevant, pinned")
+		return
+	}
+	ctl := s.ctl()
+	set := ctl.Memory()
+	if set == nil {
+		refuse(w, http.StatusConflict, "memory.unavailable", "memory is not enabled for this session", nil)
+		return
+	}
+	current, found := memory.Memory{}, false
+	for _, m := range set.Store.ListAll() {
+		if m.Name == name {
+			current, found = m, true
+			break
+		}
+	}
+	if !found {
+		notFound(w, "memory", name)
+		return
+	}
+	current.Title = strings.TrimSpace(edit.Title)
+	current.Description = strings.TrimSpace(edit.Description)
+	current.Body = edit.Body
+	current.Keywords = strings.TrimSpace(edit.Keywords)
+	if activation != "" {
+		current.Activation = activation
+	}
+	path, err := ctl.SaveMemory(current)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, map[string]any{"path": path})
+}
+
+// memoryRevisions lists what this fact used to say. An edit is only safe to
+// offer once the previous wording is still reachable.
+func (s *Server) memoryRevisions(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	if name == "" {
+		missingField(w, "name")
+		return
+	}
+	out := []memoryEntry{}
+	for _, m := range s.ctl().MemoryRevisions(name) {
+		out = append(out, memoryEntry{
+			Name: m.Name, Title: m.Title, Description: m.Description, Body: m.Body,
+			Type: string(m.Type), Scope: string(m.Scope), Activation: string(memory.ResolveActivation(m)),
+			Revision: m.Revision, CreatedAt: stamp(m.CreatedAt), UpdatedAt: stamp(m.UpdatedAt),
+		})
+	}
+	writeJSON(w, map[string]any{"revisions": out})
+}
+
+// restoreMemory brings an older revision back as a new one, so the history a
+// reader just looked at stays intact.
+func (s *Server) restoreMemory(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name     string `json:"name"`
+		Revision int    `json:"revision"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
+		missingField(w, "name")
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	restored, err := s.ctl().RestoreMemory(name, body.Revision)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, map[string]any{"name": restored.Name, "revision": restored.Revision})
+}
