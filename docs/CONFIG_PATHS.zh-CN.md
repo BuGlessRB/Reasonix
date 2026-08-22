@@ -39,9 +39,8 @@ Legacy 迁移、OS home 约定目录扫描以及其他 fallback 路径都会跳�
 `<state root>` 默认等于 `<Reasonix home>`；只有设置 `REASONIX_STATE_HOME`
 时才会不同。
 
-会话 Catalog 是可重建的查询投影，不是用户数据；JSONL、event log、
-metadata sidecar 和 `desktop-projects.json` 仍是权威数据。详见
-[Session Catalog and Desktop Startup](./SESSION_CATALOG.zh-CN.md)。Task snapshot 和
+JSONL、event log、metadata sidecar 和 `desktop-projects.json` 是权威的会话数据，
+列出或打开一个会话不读其它任何东西。Task snapshot 和
 event log 也仍是权威数据；可重建的跨项目投影见
 [Task Catalog](./TASK_CATALOG.zh-CN.md)。
 

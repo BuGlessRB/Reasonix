@@ -468,20 +468,6 @@ same provider-visible tool surface (`use_capability` for optional tools).
 
 ## Session catalog diagnostics
 
-The desktop session catalog is a disposable SQLite query projection; transcript
-JSONL and sidecars remain authoritative. Inspect it read-only or replace only
-the projection:
-
-```sh
-reasonix doctor sessions [--json]
-reasonix sessions reindex [--json]
-reasonix sessions reindex --dir /path/to/sessions --dir /another/path
-```
-
-Without `--dir`, reindex includes global sessions and all projects saved by the
-desktop app. See [Session Catalog and Desktop Startup](./SESSION_CATALOG.md) for
-failure, migration, and data-safety guarantees.
-
 History search uses a separate disposable projection:
 
 ```sh

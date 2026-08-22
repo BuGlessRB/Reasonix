@@ -39,51 +39,6 @@ func TestRunDispatchesDoctor(t *testing.T) {
 	}
 }
 
-func TestDoctorSessionsIsReadOnly(t *testing.T) {
-	cache := t.TempDir()
-	t.Setenv("REASONIX_CACHE_HOME", cache)
-	out := captureStdout(t, func() {
-		if rc := doctorCommand([]string{"sessions", "--json"}, "test-version"); rc != 0 {
-			t.Fatalf("doctor sessions rc = %d, want 0", rc)
-		}
-	})
-	var decoded map[string]any
-	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
-		t.Fatalf("doctor sessions output: %v\n%s", err, out)
-	}
-	if _, err := os.Stat(filepath.Join(cache, "session-catalog", "v1.sqlite")); !os.IsNotExist(err) {
-		t.Fatalf("doctor sessions created or changed catalog: %v", err)
-	}
-}
-
-func TestSessionsReindexRebuildsOnlyCatalog(t *testing.T) {
-	cache := t.TempDir()
-	home := t.TempDir()
-	sessions := filepath.Join(home, "sessions")
-	t.Setenv("REASONIX_CACHE_HOME", cache)
-	t.Setenv("REASONIX_HOME", home)
-	if err := os.MkdirAll(sessions, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(sessions, "keep.jsonl")
-	body := []byte(`{"role":"user","content":"keep me"}` + "\n")
-	if err := os.WriteFile(path, body, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	out := captureStdout(t, func() {
-		if rc := sessionsCommand([]string{"reindex", "--dir", sessions, "--json"}); rc != 0 {
-			t.Fatalf("sessions reindex rc = %d, want 0", rc)
-		}
-	})
-	if !json.Valid([]byte(out)) {
-		t.Fatalf("sessions reindex output is not JSON: %s", out)
-	}
-	got, err := os.ReadFile(path)
-	if err != nil || string(got) != string(body) {
-		t.Fatalf("authoritative transcript changed: err=%v got=%q", err, got)
-	}
-}
-
 func TestDefaultSessionCatalogTargetsIncludeDesktopProjects(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("REASONIX_HOME", home)

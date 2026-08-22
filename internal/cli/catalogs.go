@@ -6,10 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"reasonix/internal/config"
 	"reasonix/internal/projectiondb"
-	"reasonix/internal/sessioncatalog"
 )
 
 type catalogInspection struct {
@@ -30,10 +32,59 @@ func registerCatalogCommand(command catalogCommand) {
 	catalogCommands = append(catalogCommands, command)
 }
 
+// sessionDirTarget names one directory of session transcripts. The catalogs
+// that index them (history, tasks) all start from the same list.
+type sessionDirTarget struct {
+	Path          string
+	Scope         string
+	WorkspaceRoot string
+}
+
+// defaultSessionCatalogTargets lists every session directory this install
+// writes to: the global one, the global workspace, and each desktop project.
+func defaultSessionCatalogTargets() []sessionDirTarget {
+	type project struct {
+		Root string `json:"root"`
+	}
+	type projectFile struct {
+		Projects []project `json:"projects"`
+	}
+	home := config.ReasonixHomeDir()
+	var saved projectFile
+	if data, err := os.ReadFile(filepath.Join(home, "desktop-projects.json")); err == nil {
+		_ = json.Unmarshal(data, &saved)
+	}
+	seen := map[string]bool{}
+	targets := make([]sessionDirTarget, 0, len(saved.Projects)+2)
+	add := func(target sessionDirTarget) {
+		target.Path = filepath.Clean(strings.TrimSpace(target.Path))
+		if target.Path == "." || target.Path == "" || seen[target.Path] {
+			return
+		}
+		seen[target.Path] = true
+		targets = append(targets, target)
+	}
+	add(sessionDirTarget{Path: config.SessionDir(), Scope: "global"})
+	add(sessionDirTarget{
+		Path:  config.ProjectSessionDir(filepath.Join(home, "global-workspace")),
+		Scope: "global",
+	})
+	for _, savedProject := range saved.Projects {
+		root := strings.TrimSpace(savedProject.Root)
+		if root == "" {
+			continue
+		}
+		add(sessionDirTarget{
+			Path: config.ProjectSessionDir(root), Scope: "project", WorkspaceRoot: root,
+		})
+	}
+	return targets
+}
+
 func runSessionOrCatalogCommand(command string, args []string) int {
 	configureCLIThemeFromConfig()
 	if command != "catalogs" {
-		return sessionOrSessionsCommand(command, args)
+		return sessionCommand(args)
 	}
 	return catalogsCommand(args)
 }
@@ -50,9 +101,7 @@ func doctorCatalogsCommand(args []string) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	items := []catalogInspection{
-		{Name: "sessions", Info: projectiondb.Inspect(ctx, sessioncatalog.DefaultPath())},
-	}
+	items := make([]catalogInspection, 0, len(catalogCommands))
 	for _, command := range catalogCommands {
 		items = append(items, catalogInspection{Name: command.name, Info: projectiondb.Inspect(ctx, command.path())})
 	}

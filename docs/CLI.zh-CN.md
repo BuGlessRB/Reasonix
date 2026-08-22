@@ -405,20 +405,6 @@ SSH 下远端进程无法读取本机剪贴板，请使用终端粘贴快捷键�
 Controller；三种执行设定共享同一套 provider 可见工具面（可选能力经
 `use_capability` 调度）。
 
-## 会话目录索引诊断
-
-桌面会话目录索引是可丢弃、可重建的 SQLite 查询投影；JSONL transcript 和 sidecar
-始终是权威数据。可只读检查，或仅替换投影：
-
-```sh
-reasonix doctor sessions [--json]
-reasonix sessions reindex [--json]
-reasonix sessions reindex --dir /path/to/sessions --dir /another/path
-```
-
-不传 `--dir` 时，reindex 会覆盖全局会话和桌面保存的全部项目。迁移、失败降级和数据安全
-契约见 [Session Catalog and Desktop Startup](./SESSION_CATALOG.md)。
-
 历史搜索使用独立的可丢弃投影：
 
 ```sh
@@ -461,7 +447,6 @@ connect` 或桌面的远程网页窗口）时，它们使用远程 memory catalo
 记忆。权限、自动召回、写入确认和迁移行为见
 [Context Engine v2](./SESSION_MEMORY_RETRIEVAL.zh-CN.md)。
 
-契约见 [Session Catalog and Desktop Startup](./SESSION_CATALOG.md)。
 
 用量统计使用独立的可丢弃 rollup 投影：
 

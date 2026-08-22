@@ -48,9 +48,9 @@ non-destructively when `<Reasonix home>/.env` is missing them.
 `<state root>` defaults to `<Reasonix home>`. It only differs when
 `REASONIX_STATE_HOME` is set.
 
-The session catalog is a rebuildable query projection, not user data. Session
-JSONL, event logs, metadata sidecars, and `desktop-projects.json` remain
-authoritative. See [Session Catalog and Desktop Startup](./SESSION_CATALOG.md).
+Session JSONL, event logs, metadata sidecars, and `desktop-projects.json` are
+the authoritative session data, and listing or opening a conversation reads
+nothing else.
 The history projection is documented in
 [History Search Catalog](./HISTORY_SEARCH_CATALOG.md).
 The usage rollup projection is documented in [Usage Catalog](./USAGE_CATALOG.md).
