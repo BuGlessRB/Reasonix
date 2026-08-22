@@ -376,7 +376,7 @@ export function App({ hub }: { hub: HubPort }) {
           if (session.runtimeId === rt.id) return session.title || session.name;
         }
       }
-      return at === 0 ? "新会话" : `新会话 ${at + 1}`;
+      return at === 0 ? t("新会话") : t("新会话 {n}", { n: at + 1 });
     },
     [tree],
   );
@@ -522,7 +522,7 @@ export function App({ hub }: { hub: HubPort }) {
                   key={`${rt.id}:${takeover[rt.id] ?? 0}`}
                   rt={rt}
                   port={port}
-                  title={tabs.find((t) => t.rt.id === rt.id)?.title ?? "新会话"}
+                  title={tabs.find((tab) => tab.rt.id === rt.id)?.title ?? t("新会话")}
                   active={rt.id === active}
                   sideHost={sideHost}
                   side={side}

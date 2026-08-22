@@ -127,6 +127,7 @@ export const EN: Record<string, string> = {
 
   // ── 会话树 ───────────────────────────────────────────────────────
   "新会话": "New session",
+  "新会话 {n}": "New session {n}",
   "从左边挑一个，或者在当前文件夹开一个新的": "Pick one on the left, or start a new one in this folder",
   "开一个新会话": "Start a new session",
   "空会话": "Empty session",
