@@ -45,6 +45,7 @@ export const EN: Record<string, string> = {
   "正在回答": "Answering",
   "已完成": "Done",
   "已中断": "Interrupted",
+  "移动 {id} 的界面": "Move {id}'s view",
   "等你批准": "Waiting for approval",
   "等你决定": "Waiting on you",
   "缓存": "Cache",

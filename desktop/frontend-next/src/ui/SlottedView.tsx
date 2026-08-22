@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { t } from "../i18n";
 import type { ExtensionSurface } from "../port/wire";
 import { ExtensionView } from "./cards/ExtensionView";
@@ -17,13 +17,18 @@ export function SlottedView({
   onMove: (slot: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const grip = useRef<HTMLButtonElement>(null);
   const here = placement(ext, assigned);
+  // Hiding the menu takes the row that had focus with it, and the caret drops
+  // to the document — so closing hands it back the way Menu does.
+  const close = (then: () => void) => { setOpen(false); grip.current?.focus(); then(); };
   return (
     <div className="slotted">
       <ExtensionView body={ext.view?.body ?? []} onAction={onAction} />
       <button
+        ref={grip}
         className="movegrip"
-        aria-label={`移动 ${ext.pluginId} 的界面`}
+        aria-label={t("移动 {id} 的界面", { id: ext.pluginId })}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
@@ -38,17 +43,14 @@ export function SlottedView({
             key={slot.id}
             role="menuitemradio"
             aria-checked={here === slot.id}
-            onClick={() => {
-              setOpen(false);
-              onMove(slot.id);
-            }}
+            onClick={() => close(() => onMove(slot.id))}
           >
             {slot.label}
           </button>
         ))}
         {/* Clearing hands the choice back to the extension rather than
             hiding the surface: it is a different act from moving it. */}
-        <button role="menuitem" onClick={() => { setOpen(false); onMove(""); }}>
+        <button role="menuitem" onClick={() => close(() => onMove(""))}>
           {t("交还给插件")}
         </button>
       </div>

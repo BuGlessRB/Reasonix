@@ -93,8 +93,14 @@ export function Picker({ label, items, current, onPick, place, className, title 
     all[to].focus();
   };
 
+  // Taking a value closes the menu the way Escape does, so the focus goes back
+  // the same way too. Without it the row that had focus is unmounted under the
+  // caret, which drops to the document — and the next Tab restarts at the top
+  // of the page, so choosing costs a keyboard user their place and cancelling
+  // does not.
   const take = (value: string) => {
     setOpen(false);
+    btn.current?.focus();
     onPick(value);
   };
 
