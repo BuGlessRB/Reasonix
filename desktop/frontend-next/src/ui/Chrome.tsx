@@ -57,9 +57,9 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
         <span className="isolab" hidden={!ws?.isolated}>
           {t("隔离")}
         </span>
-        <span className="sep">/</span>
+        <span className="crumbsep">/</span>
         <b title={status?.sessionPath}>{sessionName(title, status?.sessionPath)}</b>
-        <span className="sep">·</span>
+        <span className="crumbsep">·</span>
         <span className="goal">{status?.goal || t("交待一个任务")}</span>
       </div>
 
