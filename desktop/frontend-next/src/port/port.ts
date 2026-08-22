@@ -7,6 +7,8 @@ import type { AccountState, AccountUser, DeviceGrant } from "./account";
 import type { HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource } from "./hook";
 import type { CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpRisk, McpTool, ScopeLayer } from "./mcp";
 import type { MemoryCatalog, MemoryEntry } from "./memory";
+import type { UsageReport } from "./usage";
+export type { Money, UsageDay, UsageModel, UsageProvider, UsageReport } from "./usage";
 import type { Completion, CompletionItem, ModelEntry, ModelPrice, RoleAssignments } from "./model";
 import type { NetworkProbe, NetworkSettings } from "./network";
 import type { ApprovalMode, ApprovalVerdict, Checkpoint, HistoryMessage, JobEntry, Preset, RewindPlan, RewindResult, RewindScope, SessionEntry, SessionStatus } from "./session";
@@ -97,6 +99,7 @@ export interface AgentPort {
   saveHooks(scope: "user" | "project", hooks: HookEntry[]): Promise<void>;
   dryRunHook(h: HookEntry): Promise<HookDryRun>;
   memories(): Promise<MemoryCatalog>;
+  usage(days: number, source?: string): Promise<UsageReport>;
   // Archives rather than deletes: a fact dropped by mistake stays recoverable.
   forgetMemory(name: string): Promise<void>;
   network(): Promise<NetworkSettings>;

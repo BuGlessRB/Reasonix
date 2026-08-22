@@ -24,6 +24,7 @@ import { Roles } from "./Roles";
 import { Boundary } from "./Boundary";
 import { Versions } from "./Versions";
 import { Memory } from "./Memory";
+import { Usage } from "./Usage";
 import { Storage } from "./Storage";
 import { Appearance, SCHEMES } from "./Appearance";
 import { ScopeBar } from "./CapabilityScope";
@@ -40,7 +41,7 @@ const APPROVALS: [ApprovalMode, string, string][] = [
   ["yolo", "全放行", "不问了。只在你完全信任这个工作区时用"],
 ];
 
-type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "memory" | "storage" | "account" | "versions" | "appearance" | "advanced";
+type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "memory" | "usage" | "storage" | "account" | "versions" | "appearance" | "advanced";
 
 // What still lives in the old desktop app. Bots are not on the roadmap, so
 // they are not a promise to keep here either. Signing in and reading
@@ -59,6 +60,7 @@ const NAV: [Section, string][] = [
   ["ext", "扩展"],
   ["network", "网络"],
   ["memory", "记忆"],
+  ["usage", "用量"],
   ["storage", "存储"],
   ["account", "账号"],
   ["versions", "版本"],
@@ -242,6 +244,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
     ext: broken ? t("{n} 个异常", { n: broken }) : packages.length ? t("{n} 个包", { n: packages.length }) : `${looseMcp.length + looseOn}`,
     network: netMode,
     memory: memCount ? t("{n} 条", { n: memCount }) : "",
+    usage: "",
     storage: "",
     account: acct === null ? "" : acct.signedIn ? (acct.user?.label ?? t("已登录")) : t("未登录"),
     versions: "",
@@ -563,6 +566,15 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
               hint={t("它自己记下来的东西 —— 你没配置过，但它会照着做。所以这里按「什么时候会被想起」分，并且标出上一轮真正用上了哪几条。")}
             >
               <Memory port={port} />
+            </Group>
+          )}
+
+          {at === "usage" && (
+            <Group
+              title={t("用量与成本")}
+              hint={t("本机记录的 token 与花费 —— 只在这台机器上，不上传。命中缓存的输入按缓存价计费，所以命中率直接决定账单。")}
+            >
+              <Usage port={port} />
             </Group>
           )}
 

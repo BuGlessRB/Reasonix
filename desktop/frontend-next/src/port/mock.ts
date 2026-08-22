@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef } from "./port";
 import type { WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
 import { SCRIPT } from "./fixture";
@@ -129,6 +129,50 @@ export class MockPort extends MockTheme implements AgentPort {
       body: "构建时加 -tags legacy。",
     },
   ];
+
+  // A fortnight with the shape a real one has: a couple of heavy days, a
+  // quiet stretch, and an early span the recorder priced before cost was
+  // persisted — those days carry tokens and no cost, which the panel must not
+  // render as free.
+  async usage(days: number): Promise<UsageReport> {
+    const shape = [0, 34_429_281, 106_429_066, 45_257_473, 0, 178_805, 795_413,
+      5_910_837, 27_075_946, 8_447_084, 31_405_730, 1_672_731, 4_319_099];
+    const priced = [null, null, null, null, null, "0.028", "0.204", "1.107",
+      "1.778", "0.440", "5.749", "0.330", "0.853"];
+    const daily = shape.slice(-Math.min(days, shape.length)).map((total, i) => {
+      const at = new Date(Date.now() - (shape.length - 1 - i) * 864e5).toISOString().slice(0, 10);
+      const amount = priced[i];
+      return {
+        day: at, total,
+        byModel: (total ? { "deepseek/deepseek-v4-flash": total } : {}) as Record<string, number>,
+        byProvider: (total ? { deepseek: total } : {}) as Record<string, number>,
+        requests: Math.round(total / 20_000), turns: Math.round(total / 150_000),
+        cacheHit: Math.round(total * 0.92), cacheMiss: Math.round(total * 0.08),
+        cost: amount ? [{ amount, currency: "CNY" }] : undefined,
+      };
+    });
+    const tokens = daily.reduce((a, d) => a + d.total, 0);
+    return {
+      from: daily[0]?.day ?? "", to: daily.at(-1)?.day ?? "",
+      tokens, requests: daily.reduce((a, d) => a + d.requests, 0),
+      turns: daily.reduce((a, d) => a + d.turns, 0),
+      cache_hit: daily.reduce((a, d) => a + d.cacheHit, 0),
+      cache_miss: daily.reduce((a, d) => a + d.cacheMiss, 0),
+      cost: [{ amount: "10.4882", currency: "CNY" }],
+      active_days: daily.filter((d) => d.total > 0).length,
+      top_model: "deepseek/deepseek-v4-flash", top_provider: "deepseek",
+      daily,
+      models: [
+        { model: "deepseek/deepseek-v4-flash", provider: "deepseek", tokens: Math.round(tokens * 0.597), percent: 59.7 },
+        { model: "deepseek-flash/deepseek-v4-flash", provider: "deepseek-flash", tokens: Math.round(tokens * 0.401), percent: 40.1 },
+        { model: "deepseek/deepseek-v4-pro", provider: "deepseek", tokens: Math.round(tokens * 0.002), percent: 0.2 },
+      ],
+      providers: [
+        { provider: "deepseek", tokens: Math.round(tokens * 0.599), percent: 59.9 },
+        { provider: "deepseek-flash", tokens: Math.round(tokens * 0.401), percent: 40.1 },
+      ],
+    };
+  }
 
   async memories(): Promise<MemoryCatalog> {
     return {

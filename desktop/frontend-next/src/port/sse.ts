@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, McpDraft, PluginExport, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, UsageReport, McpDraft, PluginExport, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
@@ -94,6 +94,11 @@ export class SsePort extends SseTheme implements AgentPort {
     return body;
   }
 
+  usage(days: number, source?: string) {
+    const q = new URLSearchParams({ days: String(days) });
+    if (source && source !== "all") q.set("source", source);
+    return this.get<UsageReport>("/usage?" + q);
+  }
   memories() {
     return this.get<MemoryCatalog>("/memory");
   }

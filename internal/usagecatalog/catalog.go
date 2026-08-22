@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,11 +19,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"reasonix/internal/billing"
+
 	"reasonix/internal/config"
 	"reasonix/internal/projectiondb"
 )
 
-const SchemaVersion = 1
+// SchemaVersion names the projection file, so a bump retires the old one
+// rather than migrating it: every column here is replayable from the JSONL.
+const SchemaVersion = 2
 
 type AppendReceipt struct {
 	Path     string
@@ -45,21 +50,27 @@ type Entry struct {
 	Total      int
 	Requests   int
 	Turns      int
+	// Cost is billing.Amount fixed-point, never a float. CostCurrency is empty
+	// on rows written before cost was recorded, which is not the same as zero.
+	Cost         int64
+	CostCurrency string
 }
 
 type Rollup struct {
-	Day        string
-	Source     string
-	ModelRef   string
-	Provider   string
-	Prompt     int64
-	Completion int64
-	Reasoning  int64
-	CacheHit   int64
-	CacheMiss  int64
-	Total      int64
-	Requests   int64
-	Turns      int64
+	Day          string
+	Source       string
+	ModelRef     string
+	Provider     string
+	Prompt       int64
+	Completion   int64
+	Reasoning    int64
+	CacheHit     int64
+	CacheMiss    int64
+	Total        int64
+	Requests     int64
+	Turns        int64
+	Cost         int64
+	CostCurrency string
 }
 
 type Status struct {
@@ -105,7 +116,7 @@ func DefaultPath() string {
 	if cache == "" {
 		return ""
 	}
-	return filepath.Join(cache, "usage-catalog", "v1.sqlite")
+	return filepath.Join(cache, "usage-catalog", fmt.Sprintf("v%d.sqlite", SchemaVersion))
 }
 
 const schema = `
@@ -127,6 +138,7 @@ CREATE TABLE usage_rollups(
  day TEXT NOT NULL,source TEXT NOT NULL,model_ref TEXT NOT NULL,provider TEXT NOT NULL,
  prompt INTEGER NOT NULL,completion INTEGER NOT NULL,reasoning INTEGER NOT NULL,cache_hit INTEGER NOT NULL,
  cache_miss INTEGER NOT NULL,total INTEGER NOT NULL,requests INTEGER NOT NULL,turns INTEGER NOT NULL,
+ cost INTEGER NOT NULL DEFAULT 0,cost_currency TEXT NOT NULL DEFAULT '',
  PRIMARY KEY(day,source,model_ref)
 );
 CREATE INDEX idx_usage_rollups_range ON usage_rollups(day,source,model_ref);
@@ -324,11 +336,14 @@ func insertRecord(ctx context.Context, tx *sql.Tx, receipt AppendReceipt, entry 
 		return nil
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO usage_rollups(day,source,model_ref,provider,prompt,completion,reasoning,cache_hit,
-        cache_miss,total,requests,turns) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(day,source,model_ref) DO UPDATE SET
+        cache_miss,total,requests,turns,cost,cost_currency) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(day,source,model_ref) DO UPDATE SET
         prompt=prompt+excluded.prompt,completion=completion+excluded.completion,reasoning=reasoning+excluded.reasoning,
         cache_hit=cache_hit+excluded.cache_hit,cache_miss=cache_miss+excluded.cache_miss,total=total+excluded.total,
-        requests=requests+excluded.requests,turns=turns+excluded.turns`, entry.Day, entry.Source, entry.ModelRef, entry.Provider,
-		entry.Prompt, entry.Completion, entry.Reasoning, entry.CacheHit, entry.CacheMiss, entry.Total, entry.Requests, entry.Turns)
+        requests=requests+excluded.requests,turns=turns+excluded.turns,cost=cost+excluded.cost,
+        cost_currency=CASE WHEN excluded.cost_currency<>'' THEN excluded.cost_currency ELSE cost_currency END`,
+		entry.Day, entry.Source, entry.ModelRef, entry.Provider,
+		entry.Prompt, entry.Completion, entry.Reasoning, entry.CacheHit, entry.CacheMiss, entry.Total, entry.Requests, entry.Turns,
+		entry.Cost, entry.CostCurrency)
 	return err
 }
 
@@ -344,6 +359,22 @@ type rawRecord struct {
 	Total      int       `json:"total"`
 	Requests   int       `json:"requests"`
 	Turn       bool      `json:"turn"`
+	// The cost quote the row was written with; absent on older rows.
+	CostAmount   string `json:"cost_amount"`
+	CostCurrency string `json:"cost_currency"`
+}
+
+// costOf parses the row's quote into fixed-point. An unparseable amount is
+// dropped rather than guessed: a missing total beats a wrong one.
+func costOf(raw rawRecord) int64 {
+	if strings.TrimSpace(raw.CostAmount) == "" {
+		return 0
+	}
+	amount, err := billing.ParseAmount(raw.CostAmount)
+	if err != nil {
+		return 0
+	}
+	return int64(amount)
 }
 
 func providerOf(model string) string {
@@ -360,7 +391,7 @@ func entryFromRaw(day string, raw rawRecord) Entry {
 	}
 	return Entry{Day: day, Source: raw.Source, ModelRef: raw.ModelRef, Provider: providerOf(raw.ModelRef), Prompt: raw.Prompt,
 		Completion: raw.Completion, Reasoning: raw.Reasoning, CacheHit: raw.CacheHit, CacheMiss: raw.CacheMiss,
-		Total: raw.Total, Requests: raw.Requests, Turns: turns}
+		Total: raw.Total, Requests: raw.Requests, Turns: turns, Cost: costOf(raw), CostCurrency: raw.CostCurrency}
 }
 
 func (c *Catalog) ReconcileFile(ctx context.Context, path, day string) error {
@@ -491,7 +522,7 @@ func (c *Catalog) Query(ctx context.Context, fromDay, toDay, source string) ([]R
 		where += ` AND source=?`
 		args = append(args, source)
 	}
-	rows, err := c.db.QueryContext(ctx, `SELECT day,source,model_ref,provider,prompt,completion,reasoning,cache_hit,cache_miss,total,requests,turns
+	rows, err := c.db.QueryContext(ctx, `SELECT day,source,model_ref,provider,prompt,completion,reasoning,cache_hit,cache_miss,total,requests,turns,cost,cost_currency
         FROM usage_rollups WHERE `+where+` ORDER BY day,source,model_ref`, args...)
 	if err != nil {
 		return nil, err
@@ -501,7 +532,7 @@ func (c *Catalog) Query(ctx context.Context, fromDay, toDay, source string) ([]R
 	for rows.Next() {
 		var row Rollup
 		if err := rows.Scan(&row.Day, &row.Source, &row.ModelRef, &row.Provider, &row.Prompt, &row.Completion, &row.Reasoning,
-			&row.CacheHit, &row.CacheMiss, &row.Total, &row.Requests, &row.Turns); err != nil {
+			&row.CacheHit, &row.CacheMiss, &row.Total, &row.Requests, &row.Turns, &row.Cost, &row.CostCurrency); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
