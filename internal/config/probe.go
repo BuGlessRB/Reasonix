@@ -69,7 +69,7 @@ var probeShapes = []shape{
 func ProbeEndpoint(ctx context.Context, opts ProbeOptions) (Probe, error) {
 	base := strings.TrimSpace(opts.BaseURL)
 	if base == "" {
-		return Probe{}, fmt.Errorf("probe: an endpoint address is required")
+		return Probe{}, &ProbeError{Reason: ProbeAddressMissing, detail: "an endpoint address is required"}
 	}
 	p, err := probeThrough(ctx, base, opts.APIKey, opts.Client)
 	if err == nil || opts.Direct == nil {
@@ -89,23 +89,21 @@ func ProbeEndpoint(ctx context.Context, opts ProbeOptions) (Probe, error) {
 func probeThrough(ctx context.Context, base, apiKey string, client *http.Client) (Probe, error) {
 	answered := make(map[shape][]string)
 	var declared []string
-	var firstErr error
+	var worst *ProbeError
 	for _, s := range probeShapes {
 		chat, named, err := listChatModels(ctx, s, base, apiKey, client)
 		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
+			worst = keepWorseDiagnosis(worst, classifyProbe(err))
 			continue
 		}
 		answered[s] = chat
 		declared = mergeProtocolChoices(declared, named)
 	}
 	if len(answered) == 0 {
-		if firstErr == nil {
-			firstErr = fmt.Errorf("probe: %s did not answer as an OpenAI- or Anthropic-compatible endpoint", base)
+		if worst == nil {
+			worst = &ProbeError{Reason: ProbeNotCompatible, Params: map[string]any{"address": base}, detail: base + " answered as neither an OpenAI- nor an Anthropic-compatible endpoint"}
 		}
-		return Probe{}, firstErr
+		return Probe{}, worst
 	}
 	best := pick(base, answered)
 	p := describe(base, best, answered[best])
@@ -168,7 +166,11 @@ func listChatModels(ctx context.Context, s shape, baseURL, apiKey string, client
 	if len(chat) == 0 {
 		// The endpoint answered but offers nothing we can hold a conversation
 		// with — a rerank or embedding gateway.
-		return nil, nil, fmt.Errorf("probe: %s lists %d models but none of them are chat models", baseURL, len(models))
+		return nil, nil, &ProbeError{
+			Reason: ProbeNoChatModels,
+			Params: map[string]any{"count": len(models)},
+			detail: fmt.Sprintf("%s lists %d models, none of them chat models", baseURL, len(models)),
+		}
 	}
 	return chat, ProtocolsDeclaredBy(listed), nil
 }

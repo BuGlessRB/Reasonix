@@ -1901,10 +1901,25 @@
   }
   .onb-field > input::placeholder { color: rgb(255 255 255 / .26) }
   .onb-field > input:focus-visible, .onb-chip:focus-visible,
-  .onb-go:focus-visible, .onb-pick > .picker > button:focus-visible {
+  .onb-go:focus-visible, .onb-pick > .picker > button:focus-visible,
+  .onb-getkey:focus-visible, .onb-fix:focus-visible {
     outline: 2px solid #7391FF; outline-offset: 1px;
   }
+  /* 取 key 的入口贴在 label 右端。字距要归零：label 那 .06em 是给
+     latin 小标签的，套在中文上会把字拆散。 */
+  .onb-getkey {
+    margin-left: auto; padding: 0; cursor: pointer; letter-spacing: 0;
+    font: var(--w-reg) 10.5px var(--ui); color: rgb(255 255 255 / .5);
+    background: none; border: 0; border-bottom: 1px solid rgb(255 255 255 / .2);
+  }
+  .onb-getkey:hover { color: #FFE0A0; border-bottom-color: rgb(221 161 68 / .6) }
   .onb-err { font: var(--w-reg) 11.5px/1.6 var(--ui); color: #E4675D; overflow-wrap: anywhere }
+  .onb-fix {
+    display: block; margin-top: 6px; padding: 4px 10px; cursor: pointer;
+    font: var(--w-reg) 11.5px var(--ui); color: #FFE0A0; border-radius: var(--r-sm);
+    background: rgb(221 161 68 / .13); border: 1px solid rgb(221 161 68 / .4);
+  }
+  .onb-fix:hover { background: rgb(221 161 68 / .2) }
   .onb-go {
     justify-self: start; padding: 9px 20px; font: var(--w-med) 13px var(--ui);
     background: #DDA144; color: #171104; border: 1px solid #DDA144; border-radius: var(--r-sm);

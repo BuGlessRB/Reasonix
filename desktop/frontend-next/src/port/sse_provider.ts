@@ -11,35 +11,14 @@ export class SseProvider extends SseBoundary {
     return this.get<Protocol[]>("/providers/protocols");
   }
 
-  // The failure message is the answer here — a 401, a wrong path and "no chat
-  // models" send the user to three different fixes — so it is read out of the
-  // body rather than thrown away as a status code.
-  // The failure message is the answer here — a 401, a wrong path and "no chat
-  // models" send the user to three different fixes — so it is read out of the
-  // body rather than thrown away as a status code.
-  async probeProvider(baseUrl: string, apiKey: string): Promise<ProviderProbe> {
-    const res = await fetch(this.base + "/providers/probe", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ baseUrl, apiKey }),
-    });
-    const text = await res.text();
-    if (!res.ok) throw new Error(text.trim() || `/providers/probe: ${res.status}`);
-    return JSON.parse(text) as ProviderProbe;
+  // A refused key, a path the endpoint does not serve and an embedding-only
+  // gateway are three different fixes. post0 keeps the kernel's coded refusal
+  // on HttpError; a bare Error would flatten it back to one string.
+  probeProvider(baseUrl: string, apiKey: string): Promise<ProviderProbe> {
+    return this.post0<ProviderProbe>("/providers/probe", { baseUrl, apiKey });
   }
-  // Like the add-a-source probe, the interesting answer is in the body: a
-  // refused key and a moved endpoint are different fixes.
-  async checkProvider(name: string): Promise<ProviderCheck> {
-    const res = await fetch(this.base + "/providers/check", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ name }),
-    });
-    const text = await res.text();
-    if (!res.ok) throw new Error(text.trim() || `/providers/check: ${res.status}`);
-    return JSON.parse(text) as ProviderCheck;
+  checkProvider(name: string): Promise<ProviderCheck> {
+    return this.post0<ProviderCheck>("/providers/check", { name });
   }
   saveProvider(draft: ProviderDraft) {
     return this.post("/providers", draft);

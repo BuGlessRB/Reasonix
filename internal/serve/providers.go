@@ -184,9 +184,7 @@ func (s *Server) probeProvider(w http.ResponseWriter, r *http.Request) {
 		Direct:  direct,
 	})
 	if err != nil {
-		// The message is the answer here — "401" and "no chat models" send the
-		// user to different fixes — so it is the body, not a bare status.
-		writeErr(w, http.StatusBadGateway, err)
+		writeProbeFailure(w, err)
 		return
 	}
 	writeJSON(w, struct {
@@ -379,4 +377,51 @@ func nonNilStrings(in []string) []string {
 		return []string{}
 	}
 	return in
+}
+
+// Probing fails in ways that each send the user somewhere different: a refused
+// key to the console, a 404 to the address bar, an embedding-only gateway to a
+// different service entirely. The identity travels; the wording does not.
+const (
+	codeProbeAddressMissing  = "provider.probe.address_missing"
+	codeProbeUnauthorized    = "provider.probe.unauthorized"
+	codeProbePaymentRequired = "provider.probe.payment_required"
+	codeProbeRateLimited     = "provider.probe.rate_limited"
+	codeProbePathNotFound    = "provider.probe.path_not_found"
+	codeProbeNoChatModels    = "provider.probe.no_chat_models"
+	codeProbeUpstreamError   = "provider.probe.upstream_error"
+	codeProbeUnreachable     = "provider.probe.unreachable"
+	codeProbeNotCompatible   = "provider.probe.not_compatible"
+)
+
+// writeProbeFailure sends the diagnosis out under its own code. Spelled as a
+// switch rather than by building the code from the reason: the parity guard
+// reads these call sites, and a concatenated code is one it cannot check.
+func writeProbeFailure(w http.ResponseWriter, err error) {
+	var probe *config.ProbeError
+	if !errors.As(err, &probe) {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	msg, params := probe.Error(), probe.Params
+	switch probe.Reason {
+	case config.ProbeAddressMissing:
+		refuse(w, http.StatusBadRequest, codeProbeAddressMissing, msg, params)
+	case config.ProbeUnauthorized:
+		refuse(w, http.StatusUnauthorized, codeProbeUnauthorized, msg, params)
+	case config.ProbePaymentRequired:
+		refuse(w, http.StatusPaymentRequired, codeProbePaymentRequired, msg, params)
+	case config.ProbeRateLimited:
+		refuse(w, http.StatusTooManyRequests, codeProbeRateLimited, msg, params)
+	case config.ProbePathNotFound:
+		refuse(w, http.StatusNotFound, codeProbePathNotFound, msg, params)
+	case config.ProbeNoChatModels:
+		refuse(w, http.StatusUnprocessableEntity, codeProbeNoChatModels, msg, params)
+	case config.ProbeUpstreamError:
+		refuse(w, http.StatusBadGateway, codeProbeUpstreamError, msg, params)
+	case config.ProbeUnreachable:
+		refuse(w, http.StatusBadGateway, codeProbeUnreachable, msg, params)
+	default:
+		refuse(w, http.StatusBadGateway, codeProbeNotCompatible, msg, params)
+	}
 }

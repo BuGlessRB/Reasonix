@@ -5,10 +5,12 @@
 //
 // Grouped the way the interface is, not alphabetically: a translator reads a
 // screen at a time, and a term is only right relative to the ones beside it.
+import { EN_KERNEL } from "./en_kernel";
 import { EN_SETTINGS } from "./en_settings";
 
 export const EN: Record<string, string> = {
   ...EN_SETTINGS,
+  ...EN_KERNEL,
   // ── 转录：卡片与流 ───────────────────────────────────────────────
   "交待一件事，它自己往下做": "Give it one thing to do, and it runs with it",
   "读代码、联网查证、派子代理、改文件 —— 每一步都同时落进「轨迹」，那是机器记录，不是给人读的叙事。":
@@ -163,7 +165,6 @@ export const EN: Record<string, string> = {
   "在 {name} 下开一个新会话": "Start a new session in {name}",
   "最多同时开 {n} 个面板，先关掉一个": "At most {n} panes at once — close one first",
   "关闭这个会话面板": "Close this pane",
-  "这个文件夹还有 {n} 个打开的面板，先关掉再移除": "This folder still has {n} open panes — close them before removing it",
   "不会删除任何文件": "No files are deleted",
   "会先关掉 {n} 个面板；不会删除任何文件": "Closes {n} panes first; no files are deleted",
   "会先关掉 {n} 个面板，其中 {live} 个还在跑；不会删除任何文件":
@@ -247,18 +248,6 @@ export const EN: Record<string, string> = {
   "纵向焦点": "Vertical focus",
   "图片只铺在窗口的空白处，卡片和输入框始终不透明 —— 背景值一圈留白，不值一段读不清的正文。跑起来的时候它会自动退到更淡。":
     "The picture fills only the window's empty margins; cards and the composer stay opaque — a background is worth a margin, not an unreadable paragraph. It recedes further while a turn is running.",
-  "这种图片格式用不了，换 PNG、JPEG、WebP、AVIF 或 GIF":
-    "That image format will not work — use PNG, JPEG, WebP, AVIF or GIF",
-  "图片是空的": "The image is empty",
-  "有活儿在跑，先停下再换模型": "Something is running — stop it before switching models",
-  "有活儿在跑，先停下再改推理强度": "Something is running — stop it before changing the reasoning effort",
-  "{provider} 没说自己有哪些推理强度档位。要有，得在它的配置块里写 reasoning_protocol 或 supported_efforts":
-    "{provider} names no reasoning-effort levels. To give it some, set reasoning_protocol or supported_efforts in its config block",
-  "{provider} 没有「{level}」这一档，能选的是：{levels}": "{provider} has no \"{level}\" level. Available: {levels}",
-  "认不出现在用的是哪个来源，先切一次模型": "Cannot tell which source is in use — switch models once and try again",
-  "有活儿在跑，先停下再换工作区": "Something is running — stop it before changing the workspace",
-  "有活儿在跑，先停下再重载扩展": "Something is running — stop it before reloading extensions",
-  "这个来源正在用，先换一个模型再删": "This source is in use — switch models before deleting it",
   "图片太大了，先压到 {n} MB 以内": "That image is too large — bring it under {n} MB first",
   "语言": "Language",
   "跟随系统": "Follow the system",
@@ -361,7 +350,6 @@ export const EN: Record<string, string> = {
     "The proxy could not reach it and a direct connection could, so this source is now recorded as bypassing the proxy.",
   "{n} 个模型": "{n} models",
 
-  
   // ── 外部服务与插件 ───────────────────────────────────────────────
   "一段 JSON、一行命令，或者一个 https 地址": "A block of JSON, a command line, or an https address",
   "装到哪": "Where to install it",
@@ -634,30 +622,6 @@ export const EN: Record<string, string> = {
   "由 {name} 渲染": "Drawn by {name}",
   "{name} 做了 {n} 步": "{name} took {n} steps",
 
-  // ── 内核拒绝：来源 ───────────────────────────────────────────────
-  "给这个来源起个名字": "Give this source a name",
-  "名字只能用字母、数字、点、横线和下划线": "A name may use letters, digits, dot, dash and underscore only",
-  "填一个接口地址": "Enter an endpoint address",
-  "不认识「{kind}」这种接入方式": "“{kind}” is not a protocol this knows",
-  "至少挑一个模型": "Pick at least one model",
-  "默认模型「{model}」不在挑中的那几个里": "The default model “{model}” is not among the ones you picked",
-  "这个协议不发思考参数，开了也没用": "This protocol never sends thinking parameters — turning it on does nothing",
-  "这个协议没有让端点自己搜索的写法": "This protocol has no wire format for a search the endpoint runs itself",
-  "这台服务器不让改模型来源": "This server does not allow editing model sources",
-  "要填 API key": "An API key is required",
-  "这个 key 太长了，八成粘错了东西": "That key is too long — something else was probably pasted",
-  "已经连上了，不用再配一次": "Already connected — no need to set it up again",
-  "远端配置没做成，稍后再试": "The remote setup did not complete; try again shortly",
-
-  // ── 内核拒绝：会话 ───────────────────────────────────────────────
-  "这台服务器关掉了会话切换": "This server has session switching turned off",
-  "这个会话正在清理，等一下再打开": "This session is being cleaned up; open it again in a moment",
-  "这个会话被别处占着，先把那边关掉": "This session is held elsewhere — close it there first",
-  "接管这个会话失败了，重开一次窗口": "Could not take over this session; reopen the window",
-  "这个会话还开着面板，先关掉那个": "This session still has a pane open — close it first",
-  "这个路径不在任何已知的工作区里": "That path is not inside any known workspace",
-  "还没有打开的会话": "No session is open yet",
-
   // ── 通用动作 ─────────────────────────────────────────────────────
   "取消": "Cancel",
   "保存": "Save",
@@ -739,6 +703,12 @@ export const EN: Record<string, string> = {
   "正在连…": "Connecting…",
   "开始": "Start",
   "连上看看": "Connect",
-  
-  
+  "还没有？去拿一个": "Don't have one? Get one",
+  "打开 {name} 控制台": "Open the {name} console",
+  "打不开浏览器，手动访问 {at}": "Could not open a browser — visit {at} yourself",
+
+  // ── 连不上时卡在哪一步（kernel.ts 的 refusal 措辞）─────────────
+
+  // ── 内核其余的拒绝措辞 ─────────────────────────────────────────
+
 };

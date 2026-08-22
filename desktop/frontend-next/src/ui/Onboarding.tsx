@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
+import { reason } from "../i18n/kernel";
+import { HttpError } from "../port/port";
 import type { AgentPort, ProviderProbe, ProviderSetup } from "../port/port";
 import { KIND_LABEL, nameFrom } from "./vendors";
 import { Picker } from "./Menu";
@@ -14,13 +16,37 @@ interface Props {
 // not unsupported — what decides that is what the endpoint answers. 自建 is a
 // first-class entry rather than a fallback, because a relay is what many
 // people actually have.
-const SHORTCUTS: { label: string; url: string }[] = [
-  { label: "DeepSeek", url: "https://api.deepseek.com" },
-  { label: "硅基流动", url: "https://api.siliconflow.cn/v1" },
-  { label: "月之暗面", url: "https://api.moonshot.cn/v1" },
-  { label: "智谱", url: "https://open.bigmodel.cn/api/paas/v4" },
+//
+// console is where a person goes to get the key this screen is asking for —
+// the step nothing in the app can do for them. A vendor whose key page we
+// cannot name links to its platform root instead: sending someone to a 404 is
+// worse than sending them to a front door. These are addresses on someone
+// else's site and will rot; a dead one is a bug report, not a silent failure.
+const SHORTCUTS: { label: string; url: string; console?: string }[] = [
+  { label: "DeepSeek", url: "https://api.deepseek.com", console: "https://platform.deepseek.com/api_keys" },
+  { label: "硅基流动", url: "https://api.siliconflow.cn/v1", console: "https://cloud.siliconflow.cn" },
+  { label: "月之暗面", url: "https://api.moonshot.cn/v1", console: "https://platform.moonshot.cn" },
+  { label: "智谱", url: "https://open.bigmodel.cn/api/paas/v4", console: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys" },
+  { label: "MiMo", url: "https://api.xiaomimimo.com/v1", console: "https://platform.xiaomimimo.com" },
+  { label: "LongCat", url: "https://api.longcat.chat/openai", console: "https://longcat.chat/platform" },
   { label: "中转站 / 自建", url: "" },
 ];
+
+// The two failures nobody fixes in this window: the key is refused, or the
+// account behind it is out of credit. Both are settled on the vendor's site,
+// so the refusal carries a way to get there instead of only a sentence.
+const FIX_AT_VENDOR = new Set(["provider.probe.unauthorized", "provider.probe.payment_required"]);
+
+// Failed is a refusal kept whole: the sentence to read, and the code that says
+// whether reading it is enough.
+interface Failed {
+  text: string;
+  code?: string;
+}
+
+function failed(e: unknown): Failed {
+  return { text: reason(e), code: e instanceof HttpError ? e.reason?.code : undefined };
+}
 
 // The kernel blocks on one thing at first launch: a usable key. Which service
 // it belongs to is the user's business, so this asks where and with what, then
@@ -31,18 +57,24 @@ export function Onboarding({ port, setup, onDone }: Props) {
   const [url, setUrl] = useState(SHORTCUTS[0].url);
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(setup.error ?? "");
+  const [err, setErr] = useState<Failed | null>(setup.error ? { text: setup.error } : null);
   const [found, setFound] = useState<ProviderProbe | null>(null);
   const [model, setModel] = useState("");
   const first = useRef<HTMLInputElement>(null);
 
   useEffect(() => first.current?.focus(), []);
 
+  // Where this vendor hands out keys, and — for the refusals that are settled
+  // there rather than here — where this particular failure sends the reader.
+  const vendor = SHORTCUTS.find((s) => s.label === pick);
+  const fixAt = err?.code && FIX_AT_VENDOR.has(err.code) ? vendor?.console : undefined;
+  const open = (at: string) => void port.openExternal(at).catch(() => setErr({ text: t("打不开浏览器，手动访问 {at}", { at }) }));
+
   const choose = (label: string, next: string) => {
     setPick(label);
     setUrl(next);
     setFound(null);
-    setErr("");
+    setErr(null);
   };
 
   // The endpoint's own words are the answer: a 401, a wrong path and "no chat
@@ -53,13 +85,13 @@ export function Onboarding({ port, setup, onDone }: Props) {
     const k = key.trim();
     if (!at || !k || busy) return;
     setBusy(true);
-    setErr("");
+    setErr(null);
     try {
       const probe = await port.probeProvider(at, k);
       setFound(probe);
       setModel(probe.default || probe.models[0] || "");
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(failed(e));
     } finally {
       setBusy(false);
     }
@@ -68,7 +100,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
   const start = async () => {
     if (!found || !model || busy) return;
     setBusy(true);
-    setErr("");
+    setErr(null);
     const name = nameFrom(url.trim());
     try {
       await port.saveProvider({
@@ -86,7 +118,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
       await port.setModel(`${name}/${model}`);
       onDone();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(failed(e));
       setBusy(false);
     }
   };
@@ -132,6 +164,13 @@ export function Onboarding({ port, setup, onDone }: Props) {
           <label htmlFor="onb-key">
             API key
             {setup.keyEnv && <code>{setup.keyEnv}</code>}
+            {/* 这一步应用替不了：key 只能在服务商那边生成。不给入口，
+                没有 key 的人就卡死在这个框上，而界面什么都没说。 */}
+            {vendor?.console && (
+              <button type="button" className="onb-getkey" onClick={() => open(vendor.console!)}>
+                {t("还没有？去拿一个")}
+              </button>
+            )}
           </label>
           <input
             id="onb-key"
@@ -144,7 +183,16 @@ export function Onboarding({ port, setup, onDone }: Props) {
             onChange={(e) => { setKey(e.target.value); setFound(null); }}
             onKeyDown={(e) => e.key === "Enter" && (found ? start() : connect())}
           />
-          {err && <div className="onb-err">{err}</div>}
+          {err && (
+            <div className="onb-err">
+              {err.text}
+              {fixAt && (
+                <button type="button" className="onb-fix" onClick={() => open(fixAt)}>
+                  {t("打开 {name} 控制台", { name: t(pick) })}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {found && (

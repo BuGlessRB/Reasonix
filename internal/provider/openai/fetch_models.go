@@ -43,14 +43,23 @@ func (e modelFetchStatusError) Error() string {
 	return fmt.Sprintf("fetch models: status %d: %s", e.status, strings.TrimSpace(e.body))
 }
 
+// ModelFetchStatus reports the status a model-list request came back with. A
+// caller that must tell a refused key from a path the endpoint does not serve
+// reads it here rather than out of the message. false when the request never
+// reached a response at all.
+func ModelFetchStatus(err error) (int, bool) {
+	var statusErr modelFetchStatusError
+	if !errors.As(err, &statusErr) {
+		return 0, false
+	}
+	return statusErr.status, true
+}
+
 // IsModelFetchEndpointMiss reports whether a model-list request reached a
 // plausible endpoint path that the provider does not implement.
 func IsModelFetchEndpointMiss(err error) bool {
-	var statusErr modelFetchStatusError
-	if !errors.As(err, &statusErr) {
-		return false
-	}
-	return statusErr.status == http.StatusNotFound || statusErr.status == http.StatusMethodNotAllowed
+	status, ok := ModelFetchStatus(err)
+	return ok && (status == http.StatusNotFound || status == http.StatusMethodNotAllowed)
 }
 
 // FetchModels calls the OpenAI-compatible GET /models endpoint and returns the

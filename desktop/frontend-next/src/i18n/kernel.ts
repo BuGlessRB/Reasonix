@@ -77,6 +77,19 @@ const SAID: Record<string, string> = {
   "provider.setup_done": "已经连上了，不用再配一次",
   "provider.setup_failed": "远端配置没做成，稍后再试",
 
+  // ── 来源：连不上时卡在哪一步 ─────────────────────────────────────
+  // Each of these is a different next move, which is the whole reason the
+  // kernel sends a code: "连接失败" would send everyone to the same dead end.
+  "provider.probe.address_missing": "还没填服务地址",
+  "provider.probe.unauthorized": "这串 key 没被接受。看看是不是没复制全，或者到服务商控制台重新生成一个",
+  "provider.probe.payment_required": "key 是对的，但这个账户余额不足了，先去服务商那边充值",
+  "provider.probe.rate_limited": "服务商说请求太频繁，等一会儿再试",
+  "provider.probe.path_not_found": "地址连得上，但这个路径没有模型清单。多数服务的地址要以 /v1 结尾",
+  "provider.probe.no_chat_models": "这个服务列出了 {count} 个模型，但没有一个能对话 —— 它可能只做向量或重排",
+  "provider.probe.upstream_error": "服务商那边出错了（HTTP {status}），不是你填错了，等一会儿再试",
+  "provider.probe.unreachable": "连不上这个地址。看看网络通不通，或者地址有没有打错",
+  "provider.probe.not_compatible": "这个地址答了，但不是 OpenAI 或 Anthropic 那种接口。确认一下别是把网页地址复制过来了",
+
   // ── 推理强度：这个端点给不了 ─────────────────────────────────────
   "effort.not_configurable":
     "{provider} 没说自己有哪些推理强度档位。要有，得在它的配置块里写 reasoning_protocol 或 supported_efforts",

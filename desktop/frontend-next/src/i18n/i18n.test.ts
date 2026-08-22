@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EN } from "./en";
+import { codes } from "./kernel";
 
 // The catalogue degrades instead of breaking: a key it does not carry renders as
 // Chinese. That is the right failure at runtime and the wrong one to ship, so
@@ -80,6 +81,17 @@ describe("English catalogue", () => {
       for (const m of code.matchAll(ATTR)) raw.push(`${m[1]}=${JSON.stringify(m[2])} — ${file}`);
     }
     expect([...new Set(raw)], "rendered Chinese not passed to t()").toEqual([]);
+  });
+
+  // The kernel's refusals are worded in kernel.ts, which SOURCES excludes along
+  // with the rest of this directory — so every code added there reached English
+  // windows in Chinese and no check saw it. Its values are keys like any other:
+  // say() puts each through the same t().
+  it("carries the wording the kernel's refusals resolve to", () => {
+    const missing = Object.entries(codes)
+      .filter(([, zh]) => !(zh in EN))
+      .map(([code, zh]) => `${code} — ${JSON.stringify(zh)}`);
+    expect(missing, "refusal wording with no English").toEqual([]);
   });
 
   it("reads the sources it is meant to be guarding", () => {
