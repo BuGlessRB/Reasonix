@@ -244,7 +244,6 @@ type SessionPersistence interface {
 	SessionCache() (hit, miss int)
 	BeginDestroySession(sessionPath string) SessionDestroyHandle
 	CloseAfterDestroy()
-	IsDestroyingSession(sessionPath string) bool
 	ReleaseResources()
 }
 

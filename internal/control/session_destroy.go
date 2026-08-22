@@ -46,7 +46,3 @@ func (c *Controller) BeginDestroySession(sessionPath string) SessionDestroyHandl
 		Async:  teardown.Async(),
 	}
 }
-
-func (c *Controller) IsDestroyingSession(sessionPath string) bool {
-	return c.jobs != nil && c.jobs.IsDestroying(agent.BranchID(sessionPath))
-}
