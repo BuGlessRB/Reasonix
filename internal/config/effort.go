@@ -84,6 +84,32 @@ func gpt56Capability() modelReasoningCapability {
 	}
 }
 
+// effortCapabilityForProtocol is the one place a reasoning protocol names its
+// levels. Declaring the protocol and having it inferred used to read from two
+// separate switches, and the inferred one was missing MiMo — so an endpoint
+// that accepts none|low|medium|high reported having no levels at all.
+func effortCapabilityForProtocol(e *ProviderEntry, protocol string) (EffortCapability, bool) {
+	switch protocol {
+	case ReasoningProtocolDeepSeek:
+		if cap, ok := resolvedModelReasoningCapability(e); ok && cap.Protocol == ReasoningProtocolDeepSeek {
+			return effortCapabilityFromModel(cap), true
+		}
+		return deepSeekEffortCapability(), true
+	case ReasoningProtocolGLM:
+		return binaryThinkingEffortCapability("enabled"), true
+	case ReasoningProtocolKimiK3:
+		return kimiK3EffortCapability(), true
+	case ReasoningProtocolAnthropic:
+		return anthropicEffortCapability(), true
+	case ReasoningProtocolOpenAI:
+		if isMimoEntry(e) {
+			return mimoEffortCapability(), true
+		}
+		return openAIEffortCapability(), true
+	}
+	return EffortCapability{}, false
+}
+
 // EffortCapabilityForEntry returns the user-facing /effort levels for a resolved
 // provider entry. Provider implementations still decide how a stored effort is
 // serialized into requests.
@@ -109,38 +135,14 @@ func EffortCapabilityForEntry(e *ProviderEntry) EffortCapability {
 		}
 		return EffortCapability{Supported: true, Levels: levels, Default: def}
 	}
-	switch explicitProtocol {
-	case ReasoningProtocolDeepSeek:
-		if cap, ok := resolvedModelReasoningCapability(e); ok && cap.Protocol == ReasoningProtocolDeepSeek {
-			return effortCapabilityFromModel(cap)
-		}
-		return deepSeekEffortCapability()
-	case ReasoningProtocolGLM:
-		return binaryThinkingEffortCapability("enabled")
-	case ReasoningProtocolOpenAI:
-		if isMimoEntry(e) {
-			// MiMo's Responses API documents a binary thinking knob: "none"
-			// disables reasoning; every other legal value enables it. The
-			// vendor accepts the OpenAI depth vocabulary but exposes no real
-			// low/medium/high difference, so mirror the documented contract.
-			return mimoEffortCapability()
-		}
-		return openAIEffortCapability()
+	if cap, ok := effortCapabilityForProtocol(e, explicitProtocol); ok {
+		return cap
 	}
 	if cap, ok := resolvedModelReasoningCapability(e); ok {
 		return effortCapabilityFromModel(cap)
 	}
-	switch ReasoningProtocolForEntry(e) {
-	case ReasoningProtocolAnthropic:
-		return anthropicEffortCapability()
-	case ReasoningProtocolDeepSeek:
-		return deepSeekEffortCapability()
-	case ReasoningProtocolGLM:
-		return binaryThinkingEffortCapability("enabled")
-	case ReasoningProtocolKimiK3:
-		return kimiK3EffortCapability()
-	case ReasoningProtocolOpenAI:
-		return openAIEffortCapability()
+	if cap, ok := effortCapabilityForProtocol(e, ReasoningProtocolForEntry(e)); ok {
+		return cap
 	}
 	switch {
 	case isMiniMaxEntry(e):
@@ -374,6 +376,9 @@ func ReasoningProtocolForEntry(e *ProviderEntry) string {
 	}
 	if isDeepSeekEntry(e) {
 		return ReasoningProtocolDeepSeek
+	}
+	if isMimoEntry(e) {
+		return ReasoningProtocolOpenAI
 	}
 	return ""
 }

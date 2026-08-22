@@ -2935,26 +2935,30 @@ func TestUpsertProviderNormalizesCustomEffortFields(t *testing.T) {
 }
 
 func TestEffortCapabilityEmptySupportedEffortsNotConfigurable(t *testing.T) {
-	// mimo-pro without SupportedEfforts: no built-in heuristic, /effort must reject.
+	// Measured on api.xiaomimimo.com: none|low|medium|high answer 200, max|xhigh
+	// answer 400. Every *.xiaomimimo.com host is the same provider here.
 	e := &ProviderEntry{
 		Name:    "mimo-pro",
 		Kind:    "openai",
 		BaseURL: "https://token-plan-cn.xiaomimimo.com/v1",
 		Model:   "mimo-v2.5-pro",
 	}
-	if cap := EffortCapabilityForEntry(e); cap.Supported {
-		t.Fatalf("mimo-pro without SupportedEfforts should not be configurable, got %+v", cap)
+	if cap := EffortCapabilityForEntry(e); !cap.Supported {
+		t.Fatalf("mimo-pro reports no effort levels, but the endpoint has them: %+v", cap)
 	}
-	if _, err := NormalizeEffort(e, "high"); err == nil {
-		t.Fatal("NormalizeEffort should reject level for unsupported provider")
+	if _, err := NormalizeEffort(e, "high"); err != nil {
+		t.Fatalf("NormalizeEffort rejected a level the endpoint accepts: %v", err)
 	}
-	// `supported_efforts = []` (empty slice) is treated like nil — the v2 design
-	// has no way to opt out of the built-in heuristic; users either configure
-	// levels or leave the field unset.
+	if _, err := NormalizeEffort(e, "max"); err == nil {
+		t.Fatal("NormalizeEffort accepted max, which the endpoint answers 400 to")
+	}
+	// `supported_efforts = []` (empty slice) is treated like nil: there is no way
+	// to opt out of the built-in vocabulary, so this falls through to the same
+	// levels rather than to none.
 	e2 := *e
 	e2.SupportedEfforts = []string{}
-	if cap := EffortCapabilityForEntry(&e2); cap.Supported {
-		t.Fatalf("empty supported_efforts should also fall through to the heuristic, got %+v", cap)
+	if cap := EffortCapabilityForEntry(&e2); !cap.Supported {
+		t.Fatalf("empty supported_efforts should fall through to the built-in levels, got %+v", cap)
 	}
 }
 
