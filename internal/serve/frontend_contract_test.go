@@ -88,7 +88,7 @@ func servedRoutes(t *testing.T) [][]string {
 
 func segments(p string) []string {
 	var out []string
-	for _, s := range strings.Split(strings.Trim(p, "/"), "/") {
+	for s := range strings.SplitSeq(strings.Trim(p, "/"), "/") {
 		if s != "" {
 			out = append(out, s)
 		}
