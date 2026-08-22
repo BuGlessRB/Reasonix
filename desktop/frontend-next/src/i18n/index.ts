@@ -96,5 +96,3 @@ export function plural(n: number, one: string, many: string, vars?: Record<strin
   return t(n === 1 ? one : many, { n, ...vars });
 }
 
-/** keys is what the parity test reads: every string the app can ask for. */
-export const dictionaries = DICTS;
