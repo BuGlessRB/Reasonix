@@ -3,11 +3,22 @@ package boot
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"reasonix/internal/billing"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 )
+
+// offPeak pins these quotes to an hour DeepSeek bills at its base rate. Without
+// it the vendor's peak window decides the amounts, and this becomes a test that
+// fails every weekday morning for reasons that have nothing to do with sinks.
+func offPeak() time.Time { return time.Date(2026, 8, 19, 15, 0, 0, 0, time.UTC) }
+
+// onDeepSeeksOwnEndpoint stands in for what boot derives from the endpoint's
+// host. Without it a quote has no official table at all — which is exactly what
+// a relay serving the same model should get.
+func onDeepSeeksOwnEndpoint(string) string { return "deepseek" }
 
 // TestCostQuoteReachesInnerSinkBeforeRecording documents the required wrap
 // order: CostQuote fills e.CostQuote before the frontend (and any recorder
@@ -31,12 +42,12 @@ func TestCostQuoteReachesInnerSinkBeforeRecording(t *testing.T) {
 		}
 		mu.Unlock()
 	})
-	quoted := event.NewCostQuoteSink(inner, &event.QuoteContext{DisplayCurrency: "USD"})
+	quoted := event.NewCostQuoteSink(inner, &event.QuoteContext{DisplayCurrency: "USD", Now: offPeak, CatalogProviderForModel: onDeepSeeksOwnEndpoint})
 	quoted.Emit(event.Event{
 		Kind:     event.Usage,
 		ModelRef: "deepseek-flash/deepseek-v4-flash",
 		Usage:    &provider.Usage{PromptTokens: 1_000_000, CompletionTokens: 0, TotalTokens: 1_000_000},
-		Pricing:  &provider.Pricing{Input: 0.14, Output: 0.28, Currency: "$"},
+		Pricing:  &provider.Pricing{CacheHit: 0.007, Input: 0.22, Output: 0.66, Currency: "$"},
 	})
 	mu.Lock()
 	ok, amount := sawQuote, sawOriginal
@@ -44,8 +55,8 @@ func TestCostQuoteReachesInnerSinkBeforeRecording(t *testing.T) {
 	if !ok {
 		t.Fatal("inner sink did not receive CostQuote")
 	}
-	if amount != "0.14" {
-		t.Fatalf("original amount = %q, want 0.14", amount)
+	if amount != "0.22" {
+		t.Fatalf("original amount = %q, want 0.22", amount)
 	}
 
 	// Official dual-table path: CNY list price values USD without FX.
@@ -56,12 +67,12 @@ func TestCostQuoteReachesInnerSinkBeforeRecording(t *testing.T) {
 				basis = v.Basis
 			}
 		}
-	}), &event.QuoteContext{DisplayCurrency: "USD"})
+	}), &event.QuoteContext{DisplayCurrency: "USD", Now: offPeak, CatalogProviderForModel: onDeepSeeksOwnEndpoint})
 	quoted2.Emit(event.Event{
 		Kind:     event.Usage,
 		ModelRef: "deepseek-flash/deepseek-v4-flash",
 		Usage:    &provider.Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000, TotalTokens: 2_000_000},
-		Pricing:  &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 2, Currency: "¥"},
+		Pricing:  &provider.Pricing{CacheHit: 0.05, Input: 1.5, Output: 4.5, Currency: "¥"},
 	})
 	if basis != billing.BasisOfficialTable {
 		t.Fatalf("USD valuation basis = %q, want official_table", basis)
@@ -70,7 +81,9 @@ func TestCostQuoteReachesInnerSinkBeforeRecording(t *testing.T) {
 
 func TestCostQuoteUsesConfiguredBillingMode(t *testing.T) {
 	ctx := &event.QuoteContext{
-		DisplayCurrency: "CNY",
+		Now:                     offPeak,
+		DisplayCurrency:         "CNY",
+		CatalogProviderForModel: func(string) string { return "mimo" },
 		BillingModeForModel: func(modelRef string) string {
 			if modelRef == "custom/mimo-v2.5-pro" {
 				return billing.BillingModeSubscriptionEquivalent

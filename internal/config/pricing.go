@@ -7,12 +7,15 @@ import (
 	"reasonix/internal/provider"
 )
 
+// DeepSeek bills two rates a day. These templates carry the off-peak one — the
+// base card in billing's catalog — and the peak hours are applied when a turn
+// is quoted, because only the clock knows which one a call was billed at.
 func deepSeekV4FlashPriceCNY() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 2, Currency: "¥"}
+	return &provider.Pricing{CacheHit: 0.05, Input: 1.5, Output: 4.5, Currency: "¥"}
 }
 
 func deepSeekV4ProPriceCNY() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.025, Input: 3, Output: 6, Currency: "¥"}
+	return &provider.Pricing{CacheHit: 0.15, Input: 4.5, Output: 13.5, Currency: "¥"}
 }
 
 func deepSeekV4PricesCNY() map[string]*provider.Pricing {
@@ -26,11 +29,11 @@ func deepSeekV4PricesCNY() map[string]*provider.Pricing {
 }
 
 func deepSeekV4FlashPriceUSD() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.0028, Input: 0.14, Output: 0.28, Currency: "$"}
+	return &provider.Pricing{CacheHit: 0.007, Input: 0.22, Output: 0.66, Currency: "$"}
 }
 
 func deepSeekV4ProPriceUSD() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.003625, Input: 0.435, Output: 0.87, Currency: "$"}
+	return &provider.Pricing{CacheHit: 0.022, Input: 0.66, Output: 1.98, Currency: "$"}
 }
 
 func deepSeekV4PricesUSD() map[string]*provider.Pricing {

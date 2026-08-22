@@ -254,7 +254,30 @@ func newQuoteBuildState(in QuoteInput) *quoteBuildState {
 		state.markIncomplete("missing_price_or_usage")
 	}
 	state.matchOfficialCatalog()
+	state.applyOfficialSchedule()
 	return state
+}
+
+// applyOfficialSchedule re-prices the turn at the vendor's rate for the hour it
+// actually happened. Only a rate confirmed as the vendor's own earns this: a
+// custom price is the user's own arrangement, and projecting someone else's
+// peak schedule onto it would invent a number nobody published.
+func (s *quoteBuildState) applyOfficialSchedule() {
+	if !s.isOfficial || s.official.Peak == nil {
+		return
+	}
+	rates := s.official.RatesAt(s.occurred)
+	if rates.CacheHit == s.input.Rates.CacheHit && rates.Input == s.input.Rates.Input && rates.Output == s.input.Rates.Output {
+		return
+	}
+	s.amount = OriginalCostAmount(rates, s.input.Usage)
+	s.quote.Original = MoneyOf(s.amount, s.currency)
+	s.quote.PricingFingerprint = PricingFingerprint(rates)
+	s.quote.Valuations[s.currency] = Valuation{
+		Money: s.quote.Original, Basis: BasisOfficialTable,
+		Source: s.official.DocURL,
+		AsOf:   s.occurred.UTC().Format("2006-01-02"),
+	}
 }
 
 func quoteDisplayRequest(in QuoteInput) DisplayRequest {
@@ -312,7 +335,7 @@ func (s *quoteBuildState) addOfficialValuation(target string) bool {
 		return false
 	}
 	s.quote.Valuations[target] = Valuation{
-		Money: MoneyOf(OriginalCostAmount(RateCardFromCatalog(peer), s.input.Usage), target),
+		Money: MoneyOf(OriginalCostAmount(peer.RatesAt(s.occurred), s.input.Usage), target),
 		Basis: BasisOfficialTable, Source: peer.DocURL,
 		AsOf: s.occurred.UTC().Format("2006-01-02"),
 	}
@@ -682,6 +705,11 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+// resolveCatalogIdentity names which official table, if any, may price a quote.
+// The vendor comes only from ProviderKind, which the caller reads off the
+// endpoint's host; guessing it from the entry's name or the model id would bill
+// a relay as the vendor it resells. Unnamed means no official table — the user's
+// own rate card, which is right rather than merely plausible.
 func resolveCatalogIdentity(in QuoteInput) (provider, model string) {
 	provider = strings.ToLower(strings.TrimSpace(in.ProviderKind))
 	model = strings.TrimSpace(in.ModelID)
@@ -689,31 +717,8 @@ func resolveCatalogIdentity(in QuoteInput) (provider, model string) {
 		ref := strings.TrimSpace(in.ModelRef)
 		if i := strings.LastIndex(ref, "/"); i >= 0 && i+1 < len(ref) {
 			model = ref[i+1:]
-			if provider == "" {
-				provider = strings.ToLower(ref[:i])
-			}
 		} else {
 			model = ref
-		}
-	}
-	// Normalize common provider name prefixes.
-	switch {
-	case strings.Contains(provider, "deepseek"):
-		provider = "deepseek"
-	case strings.Contains(provider, "longcat"):
-		provider = "longcat"
-	case strings.Contains(provider, "mimo"):
-		provider = "mimo"
-	}
-	if provider == "" {
-		// Infer from model id family.
-		switch {
-		case strings.HasPrefix(model, "deepseek"):
-			provider = "deepseek"
-		case strings.HasPrefix(model, "LongCat") || strings.HasPrefix(model, "longcat"):
-			provider = "longcat"
-		case strings.HasPrefix(model, "mimo"):
-			provider = "mimo"
 		}
 	}
 	return provider, model

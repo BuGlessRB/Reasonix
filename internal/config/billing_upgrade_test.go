@@ -20,7 +20,7 @@ name = "deepseek-flash"
 kind = "openai"
 base_url = "https://api.deepseek.com"
 model = "deepseek-v4-flash"
-price = { cache_hit = 0.0028, input = 0.14, output = 0.28, currency = "$" }
+price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
 `
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)

@@ -21,6 +21,10 @@ type QuoteContext struct {
 	// immutable boot config. It keeps billing_mode authoritative even when a
 	// custom provider name does not contain a token-plan heuristic.
 	BillingModeForModel func(modelRef string) string
+	// CatalogProviderForModel names the vendor whose official price table
+	// applies, decided by the endpoint's host. Without it a quote has no
+	// official table — which is the right answer for a relay.
+	CatalogProviderForModel func(modelRef string) string
 }
 
 // SetDisplay updates the resolved display currency used for Selected.
@@ -87,6 +91,19 @@ func (c *QuoteContext) billingMode(modelRef string) string {
 	return strings.TrimSpace(resolve(modelRef))
 }
 
+func (c *QuoteContext) catalogProvider(modelRef string) string {
+	if c == nil {
+		return ""
+	}
+	c.mu.RLock()
+	resolve := c.CatalogProviderForModel
+	c.mu.RUnlock()
+	if resolve == nil {
+		return ""
+	}
+	return strings.TrimSpace(resolve(modelRef))
+}
+
 // CostQuoteSink fills CostQuote on Usage events before forwarding. Frontends
 // must consume e.CostQuote and must not call Pricing.Cost for aggregation.
 type CostQuoteSink struct {
@@ -139,13 +156,14 @@ func EnsureCostQuote(e Event, ctx *QuoteContext) *billing.CostQuote {
 	}
 	card := rateCardFromPricing(e.Pricing)
 	q := billing.BuildQuote(billing.QuoteInput{
-		Usage:       usageTokens(e.Usage),
-		Rates:       card,
-		OccurredAt:  now,
-		Display:     display,
-		BillingMode: mode,
-		ModelRef:    e.ModelRef,
-		UsageSource: firstUsageSource(e),
+		Usage:        usageTokens(e.Usage),
+		Rates:        card,
+		OccurredAt:   now,
+		Display:      display,
+		BillingMode:  mode,
+		ModelRef:     e.ModelRef,
+		UsageSource:  firstUsageSource(e),
+		ProviderKind: ctx.catalogProvider(e.ModelRef),
 	})
 	return &q
 }

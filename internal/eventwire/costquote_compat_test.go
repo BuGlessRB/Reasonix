@@ -15,11 +15,11 @@ func TestToWireUsageDualWritesCostQuoteAndLegacyAliases(t *testing.T) {
 		Kind:     event.Usage,
 		ModelRef: "deepseek-flash/deepseek-v4-flash",
 		Usage:    &provider.Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000, TotalTokens: 2_000_000},
-		Pricing:  &provider.Pricing{CacheHit: 0.02, Input: 1, Output: 2, Currency: "¥"},
+		Pricing:  &provider.Pricing{CacheHit: 0.05, Input: 1.5, Output: 4.5, Currency: "¥"},
 		CostQuote: func() *billing.CostQuote {
 			q := billing.BuildQuote(billing.QuoteInput{
 				Usage:           billing.UsageTokens{PromptTokens: 1_000_000, CompletionTokens: 1_000_000},
-				Rates:           billing.RateCard{CacheHit: 0.02, Input: 1, Output: 2, Currency: "CNY"},
+				Rates:           billing.RateCard{CacheHit: 0.05, Input: 1.5, Output: 4.5, Currency: "CNY"},
 				DisplayCurrency: "USD",
 				ProviderKind:    "deepseek",
 				ModelID:         "deepseek-v4-flash",

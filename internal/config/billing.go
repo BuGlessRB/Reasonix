@@ -208,6 +208,18 @@ func (c *Config) DeepSeekOfficialPricingCurrency() string {
 	return "USD"
 }
 
+// OfficialCatalogProvider names the vendor whose published prices apply to
+// modelRef, or "" when the endpoint is not that vendor's own. The host decides
+// it: a relay serving deepseek-v4-pro bills on its own terms, and an entry
+// named after a vendor is not evidence of one.
+func (c *Config) OfficialCatalogProvider(modelRef string) string {
+	entry, ok := c.ResolveModel(modelRef)
+	if !ok {
+		return ""
+	}
+	return officialProviderKind(entry)
+}
+
 // QuoteForUsage builds a CostQuote from a provider price and usage tokens.
 func QuoteForUsage(price *provider.Pricing, usage *provider.Usage, display string, modelRef, usageSource, billingMode, catalogSource string) billing.CostQuote {
 	if price == nil || usage == nil {

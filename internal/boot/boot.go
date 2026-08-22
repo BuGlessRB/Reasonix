@@ -54,7 +54,6 @@ import (
 	"reasonix/internal/secrets"
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/skill"
-	"reasonix/internal/stats"
 	"reasonix/internal/taskmonitor"
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
@@ -251,31 +250,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// later notice. The job manager is session-scoped — its jobs outlive a turn
 	// and are cancelled by Controller.Close.
 	//
-	// CostQuote must run before every host consumer (stats recorder, CLI
-	// metrics via opts.Sink, ACP/eventwire bridges, Desktop) so all see the
-	// same occurrence-time quote. Order from the agent:
-	//   Coalesce → GoalUsageTee → Sync → CostQuote → [Recorder] → frontend
-	quoteCtx := &event.QuoteContext{
-		DisplayRequest: billing.DisplayRequest{
-			Currency: cfg.ExplicitDisplayCurrency(),
-			Source:   billing.DisplaySourceExplicit,
-		},
-		BillingModeForModel: func(modelRef string) string {
-			entry, ok := cfg.ResolveModel(modelRef)
-			if !ok {
-				return ""
-			}
-			return entry.ProviderBillingMode()
-		},
-	}
-	// Innermost: frontend sink (CLI metrics/ACP/Desktop bridge live here).
-	quoted := opts.Sink
-	// Record billable usage after quoting so history JSONL can store CostQuote.
-	if source := strings.TrimSpace(opts.StatsSource); source != "" {
-		quoted = stats.NewRecorder(quoted, config.StatsDir(), source)
-	}
-	quoted = event.NewCostQuoteSink(quoted, quoteCtx)
-	sink := event.Sync(quoted)
+	sink := quotedSink(cfg, opts)
 
 	// Both sink wraps must complete BEFORE the extension UI hub closes over the
 	// sink variable: a sidecar publish during preflight lands on this closure
