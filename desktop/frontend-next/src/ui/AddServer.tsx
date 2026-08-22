@@ -127,7 +127,7 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
               one that has to say so out loud — and it is never the default. */}
           <div className="scope" role="radiogroup" aria-label={t("装到哪")}>
             <button role="radio" aria-checked={scope === "user"} onClick={() => setScope("user")}>
-              我的<i>{t("所有项目里都能用")}</i>
+              {t("我的")}<i>{t("所有项目里都能用")}</i>
             </button>
             <button
               role="radio"
@@ -135,7 +135,7 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
               disabled={!canProject}
               onClick={() => setScope("local")}
             >
-              只在这个项目<i>{t("不写进仓库，别人不会拿到")}</i>
+              {t("只在这个项目")}<i>{t("不写进仓库，别人不会拿到")}</i>
             </button>
             <button
               role="radio"
@@ -143,7 +143,7 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
               disabled={!canProject}
               onClick={() => setScope("project")}
             >
-              写进仓库<i>{t("clone 的人也会拿到")}</i>
+              {t("写进仓库")}<i>{t("clone 的人也会拿到")}</i>
             </button>
           </div>
           {scope === "project" && (

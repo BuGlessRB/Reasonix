@@ -158,8 +158,8 @@ export function PaneTabs({ tabs, active, showRoot, onFocus, onClose, onRename }:
           {showRoot && <span className="ptab-ws">{rt.name}</span>}
           <button
             className="ptab-x"
-            title="关闭这个面板"
-            aria-label="关闭这个面板"
+            title={t("关闭这个面板")}
+            aria-label={t("关闭这个面板")}
             onClick={(ev) => {
               ev.stopPropagation();
               close([rt.id]);
@@ -189,7 +189,7 @@ export function PaneTabs({ tabs, active, showRoot, onFocus, onClose, onRename }:
           onClick={(ev) => ev.stopPropagation()}
         >
           <button role="menuitem" onClick={() => { const id = menu.id; setMenu(null); setEditing(id); }}>
-            重命名
+            {t("重命名")}
           </button>
           <button role="menuitem" onClick={() => { const id = menu.id; setMenu(null); close([id]); }}>
             {t("关闭")}

@@ -1,4 +1,5 @@
 import type { Tool } from "../port/wire";
+import { t } from "../i18n";
 import { seconds, tokens } from "../i18n/format";
 
 // What a step cost, in the two units the kernel can state honestly per call:
@@ -12,7 +13,7 @@ export function Cost({ tools }: { tools: Tool[] }) {
   return (
     <span className="cost">
       {ms > 0 && <span>{seconds(ms)}</span>}
-      {left > 0 && <span title="这一步留在上下文里的估算 token">{tokens(left)}</span>}
+      {left > 0 && <span title={t("这一步留在上下文里的估算 token")}>{tokens(left)}</span>}
     </span>
   );
 }

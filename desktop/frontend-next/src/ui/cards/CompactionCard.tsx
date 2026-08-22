@@ -2,6 +2,7 @@ import type { Compaction } from "../../port/wire";
 import { Sym } from "../Sym";
 import { t } from "../../i18n";
 import { tokens } from "../../i18n/format";
+import { tx } from "../../i18n/rich";
 
 const TRIGGER: Record<string, string> = {
   auto: "上下文到阈值，自动触发",
@@ -23,22 +24,18 @@ function Coverage({ c }: { c: Compaction }) {
         <span className="k">✓</span>
         <span>
           {missing === 0 ? (
-            <>
-              这段做过的 <b>{required}</b> 处改动，简报都写到了
-            </>
+            <>{tx("这段做过的 {n} 处改动，简报都写到了", { n: <b>{required}</b> })}</>
           ) : (
-            <>
-              <b>{kept}</b>/{required} 处改动写进了简报
-            </>
+            <>{tx("{kept}/{required} 处改动写进了简报", { kept: <b>{kept}</b>, required })}</>
           )}
-          {c.coverageRepaired && "（补写过一次）"}
+          {c.coverageRepaired && t("（补写过一次）")}
         </span>
       </div>
       {missing > 0 && (
         <div className="row">
           <span className="x">✗</span>
           <span>
-            还有 <b>{missing}</b> 处只剩下索引地址，要用原文得 recall 取回
+            {tx("还有 {n} 处只剩下索引地址，要用原文得 recall 取回", { n: <b>{missing}</b> })}
           </span>
         </div>
       )}
@@ -82,11 +79,9 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
               {(c.messages || before > 0) && (
                 <div className="comp-n">
                   {c.messages ? (
-                    <>
-                      正在把 <b>{c.messages}</b> 条消息折成简报
-                    </>
+                    <>{tx("正在把 {n} 条消息折成简报", { n: <b>{c.messages}</b> })}</>
                   ) : (
-                    "正在折成简报"
+                    t("正在折成简报")
                   )}
                   {before > 0 && (
                     <>
@@ -113,11 +108,9 @@ export function CompactionCard({ c, done }: { c: Compaction; done: boolean }) {
               )}
               <div className="comp-n">
                 {c.messages ? (
-                  <>
-                    折叠了 <b>{c.messages}</b> 条消息
-                  </>
+                  <>{tx("折叠了 {n} 条消息", { n: <b>{c.messages}</b> })}</>
                 ) : (
-                  "这一趟没折叠掉什么"
+                  t("这一趟没折叠掉什么")
                 )}
                 {shrank && (
                   <>

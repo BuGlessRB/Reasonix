@@ -125,7 +125,7 @@ export function AskCard({ item, onAnswer }: Props) {
                   <input
                     value={freeShown(i)}
                     readOnly={sealed}
-                    placeholder="你想要的第几种做法，写在这儿"
+                    placeholder={t("你想要的第几种做法，写在这儿")}
                     onChange={(e) => setOther((prev) => at(prev, i, e.target.value))}
                   />
                 </div>
@@ -136,8 +136,8 @@ export function AskCard({ item, onAnswer }: Props) {
                 {qs.map((q, i) => (
                   <span key={q.id}>
                     {i > 0 && "　·　"}
-                    <b>{q.header || `问题 ${i + 1}`}：</b>
-                    {chosen[i]?.length ? chosen[i].join("、") : "未答"}
+                    <b>{q.header || t("问题 {n}", { n: i + 1 })}：</b>
+                    {chosen[i]?.length ? chosen[i].join("、") : t("未答")}
                   </span>
                 ))}
               </div>
@@ -145,13 +145,13 @@ export function AskCard({ item, onAnswer }: Props) {
             {!sealed && (
               <div className="ask-foot">
                 <button className="btn" data-primary disabled={left > 0} onClick={() => send(qs.map((_, i) => selected(i)))}>
-                  {left ? `确认（还有 ${left} 个没答）` : "确认"}
+                  {left ? t("确认（还有 {n} 个没答）", { n: left }) : t("确认")}
                 </button>
                 {/* An answer batch with nothing selected is the kernel's explicit
                     "don't decide for me" path: it ends the turn rather than
                     feeding a prose dismissal back to the model. */}
                 <button className="dismiss" onClick={() => send(qs.map(() => []))}>
-                  先不选择，直接回复
+                  {t("先不选择，直接回复")}
                 </button>
               </div>
             )}

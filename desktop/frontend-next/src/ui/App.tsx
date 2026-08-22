@@ -563,7 +563,7 @@ export function App({ hub }: { hub: HubPort }) {
           {error && (
             <div className="errbar" role="alert">
               <span>{error}</span>
-              <button onClick={() => setError("")}>知道了</button>
+              <button onClick={() => setError("")}>{t("知道了")}</button>
             </div>
           )}
         </div>

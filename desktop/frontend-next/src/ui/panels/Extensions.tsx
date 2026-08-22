@@ -1,4 +1,5 @@
 import type { ExtensionSurface } from "../../port/wire";
+import { t } from "../../i18n";
 import { SlottedView } from "../SlottedView";
 
 // Standing surfaces an extension published. They live here rather than in the
@@ -22,7 +23,7 @@ export function Extensions({
   return (
     <div className="block" data-b="extpanels">
       <div className="lbl">
-        扩展<span className="c">{panels.length + views.length}</span>
+        {t("扩展")}<span className="c">{panels.length + views.length}</span>
       </div>
       {views.map((v) => (
         <div className="extpanel" key={`${v.pluginId}:${v.surfaceId}`}>

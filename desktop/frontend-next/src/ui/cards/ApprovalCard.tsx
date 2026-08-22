@@ -33,24 +33,24 @@ export function ApprovalCard({ item, onApprove }: Props) {
             {!sealed && (
               <div className="apv-ft">
                 <button className="btn" data-primary onClick={() => onApprove(item.id, item.a.id, "once")}>
-                  允许这一次
+                  {t("允许这一次")}
                 </button>
                 <button className="btn" onClick={() => onApprove(item.id, item.a.id, "always")}>
-                  这一类不再问
+                  {t("这一类不再问")}
                 </button>
                 <button className="btn" onClick={() => onApprove(item.id, item.a.id, "deny")}>
-                  拒绝
+                  {t("拒绝")}
                 </button>
               </div>
             )}
             {sealed && (
               <div className="apv-done">
                 {item.verdict === "always" ? (
-                  <><b>{t("本会话不再问这一类。")}</b>核心把它记进会话授权，不落盘。</>
+                  <><b>{t("本会话不再问这一类。")}</b>{t("核心把它记进会话授权，不落盘。")}</>
                 ) : item.verdict === "deny" ? (
-                  <><b>{t("已拒绝。")}</b>agent 收到否决，会另想办法或停手。</>
+                  <><b>{t("已拒绝。")}</b>{t("agent 收到否决，会另想办法或停手。")}</>
                 ) : (
-                  <><b>{t("允许这一次。")}</b>下次同样的操作仍会问你。</>
+                  <><b>{t("允许这一次。")}</b>{t("下次同样的操作仍会问你。")}</>
                 )}
               </div>
             )}

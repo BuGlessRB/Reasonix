@@ -55,8 +55,8 @@ export function WindowControls() {
   }, []);
   if (document.documentElement.dataset.platform !== "windows") return null;
   return (
-    <div className="winctl" role="group" aria-label="窗口">
-      <button className="wc" onClick={() => void app()?.MinimiseWindow?.()} aria-label="最小化">
+    <div className="winctl" role="group" aria-label={t("窗口")}>
+      <button className="wc" onClick={() => void app()?.MinimiseWindow?.()} aria-label={t("最小化")}>
         <svg viewBox="0 0 12 12" aria-hidden="true">
           <path d="M2 6h8" />
         </svg>
@@ -77,7 +77,7 @@ export function WindowControls() {
           )}
         </svg>
       </button>
-      <button className="wc close" onClick={() => void app()?.CloseWindow?.()} aria-label="关闭">
+      <button className="wc close" onClick={() => void app()?.CloseWindow?.()} aria-label={t("关闭")}>
         <svg viewBox="0 0 12 12" aria-hidden="true">
           <path d="M2.6 2.6l6.8 6.8M9.4 2.6l-6.8 6.8" />
         </svg>

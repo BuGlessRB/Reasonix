@@ -370,7 +370,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
         </div>
         <p className="hint">{t("深色底上接近纯白的正文会起光晕，太淡的次要文字又读不清 —— 这一档同时管两头。看着累就往「柔和」调。")}</p>
         <div className="grp-items">
-          <div className="seg" data-text role="group" aria-label="文字对比度">
+          <div className="seg" data-text role="group" aria-label={t("文字对比度")}>
             {CONTRASTS.map(([id, name, why]) => (
               <button key={id || "auto"} aria-pressed={contrast === id} title={t(why)} onClick={() => onContrast(id)}>
                 {t(name)}

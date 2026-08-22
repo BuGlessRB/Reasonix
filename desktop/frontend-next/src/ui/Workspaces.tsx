@@ -152,7 +152,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
       )}
 
       <div className="scroll">
-        <div role="tree" aria-label="工作区与会话">
+        <div role="tree" aria-label={t("工作区与会话")}>
           {tree.map((ws) => {
             const shut = folded.has(ws.root);
             // Only while the question is on screen: panesOf walks every runtime.
