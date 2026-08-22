@@ -388,7 +388,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
                 title={t("连接")}
                 hint={t("模型从哪里来。添加只问地址和 key —— 协议、模型列表、能不能看图，都去问端点，问不出来的才让你填。")}
               >
-                <Providers port={port} onChanged={loadModels} protocol={protocol}
+                <Providers port={port} onChanged={loadModels} onFailed={setFailed} protocol={protocol}
                   activeKindFor={(a) => kindFor(a.key)}
                   onProtocol={(a, kind) => switchProtocol(a.key, kind)} />
               </Group>
@@ -446,6 +446,12 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
           {at === "ext" && (
             <>
               {scope && <ScopeBar scope={scope} scopes={scopes} onPick={setScopeAt} />}
+              {failed && (
+                <div className="find" data-lvl="warn" role="alert">
+                  <span className="t">{t("这一步没做成")}</span>
+                  <span className="why">{failed}</span>
+                </div>
+              )}
               {/* 装完、改完、删完都要过这一步才算数——把它放在包列表上面，
                   因为它管的是整个运行时，不是某一个包。 */}
               <Group
@@ -525,7 +531,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
                 )}
               >
                 {looseSkills.map((sk) => (
-                  <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} root={scopeAt} />
+                  <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} root={scopeAt} onFailed={setFailed} />
                 ))}
                 {looseSkills.length === 0 && <div className="empty">{t("这个工作目录下没有技能。")}</div>}
               </Group>
@@ -745,17 +751,21 @@ function triggerNote(sk: SkillEntry, implicit: boolean): string {
 }
 
 function SkillRow({
-  sk, implicit, port, onDone, root,
+  sk, implicit, port, onDone, root, onFailed,
 }: {
   sk: SkillEntry; implicit: boolean; port: AgentPort; onDone: () => void; root: string;
+  onFailed: (why: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const note = triggerNote(sk, implicit);
   const local = sk.switchScope === "project";
   const act = async (fn: () => Promise<void>) => {
     setBusy(true);
+    onFailed("");
     try {
       await fn();
+    } catch (e) {
+      onFailed(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
       onDone();

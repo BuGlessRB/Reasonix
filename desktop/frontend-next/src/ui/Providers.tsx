@@ -62,6 +62,9 @@ function groupAccounts(list: ProviderEntry[]): Account[] {
 interface ProvidersProps {
   port: Port;
   onChanged: () => void;
+  // A switch that was refused has to say so; silence reads as a click that
+  // missed, and the page above already has one place to say it.
+  onFailed: (why: string) => void;
   // Which protocol each account is showing, and how to change it. The model
   // list reads the same map, so switching here re-lists the models below.
   protocol: Record<string, string>;
@@ -81,7 +84,7 @@ const THINKING: [string, string][] = [
   ["none", "不发思考参数"],
 ];
 
-export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor }: ProvidersProps) {
+export function Providers({ port, onChanged, onFailed, protocol, onProtocol, activeKindFor }: ProvidersProps) {
   const [list, setList] = useState<ProviderEntry[] | null>(null);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState("");
@@ -93,10 +96,13 @@ export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor
 
   const remove = async (name: string) => {
     setBusy(name);
+    onFailed("");
     try {
       await port.removeProvider(name);
       reload();
       onChanged();
+    } catch (e) {
+      onFailed(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy("");
     }
@@ -112,7 +118,8 @@ export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor
             kind={protocol[a.key] ?? activeKindFor(a)}
             onProtocol={(k) => onProtocol(a, k)}
             onRemove={remove}
-            onEdited={() => { reload(); onChanged(); }} />
+            onEdited={() => { reload(); onChanged(); }}
+            onFailed={onFailed} />
         ))}
         {list.length === 0 && <div className="empty">{t("还没有配置任何模型来源。")}</div>}
       </div>
@@ -141,11 +148,11 @@ export function Providers({ port, onChanged, protocol, onProtocol, activeKindFor
 // because both entries are the same key at the same host; 测一下 is what turns
 // "which protocol did we record" back into a finding when the endpoint moved.
 function Conn({
-  a, port, busy, setBusy, kind, onProtocol, onRemove, onEdited,
+  a, port, busy, setBusy, kind, onProtocol, onRemove, onEdited, onFailed,
 }: {
   a: Account; port: Port; busy: string; setBusy: (b: string) => void;
   kind: string; onProtocol: (kind: string) => void; onRemove: (name: string) => void;
-  onEdited: () => void;
+  onEdited: () => void; onFailed: (why: string) => void;
 }) {
   const [found, setFound] = useState<ProviderCheck | null>(null);
   const [editing, setEditing] = useState(false);
@@ -155,9 +162,12 @@ function Conn({
 
   const setSearch = async (on: boolean) => {
     setBusy(`search:${entry.name}`);
+    onFailed("");
     try {
       await port.setProviderWebSearch(entry.name, on);
       onEdited();
+    } catch (e) {
+      onFailed(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy("");
     }
@@ -165,9 +175,12 @@ function Conn({
 
   const setThinking = async (on: boolean) => {
     setBusy(`thinking:${entry.name}`);
+    onFailed("");
     try {
       await port.setProviderThinking(entry.name, on);
       onEdited();
+    } catch (e) {
+      onFailed(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy("");
     }

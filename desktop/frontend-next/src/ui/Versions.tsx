@@ -46,6 +46,7 @@ export function Versions({ port }: { port: Port }) {
   const [hub, setHub] = useState<VersionHub | null>(null);
   const [busy, setBusy] = useState(false);
   const [going, setGoing] = useState("");
+  const [failed, setFailed] = useState("");
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
 
   const reload = useCallback(() => {
@@ -57,9 +58,12 @@ export function Versions({ port }: { port: Port }) {
 
   const pin = async (v: string) => {
     setBusy(true);
+    setFailed("");
     try {
       await port.pinVersion(v);
       reload();
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -102,12 +106,18 @@ export function Versions({ port }: { port: Port }) {
       {hub.err && (
         <div className="find" data-lvl="warn">
           <span className="t">{t("连不上版本目录")}</span>
-          <span className="why">{hub.err}　—— 本地功能不受影响，稍后再试。</span>
+          <span className="why">{t("{err}　—— 本地功能不受影响，稍后再试。", { err: hub.err })}</span>
+        </div>
+      )}
+      {failed && (
+        <div className="find" data-lvl="warn" role="alert">
+          <span className="t">{t("这一步没做成")}</span>
+          <span className="why">{failed}</span>
         </div>
       )}
       {hub.pinned && !hub.stalePin && (
         <div className="find" data-lvl="ok">
-          <span className="t">已固定在 {hub.pinned}，不会自动更新</span>
+          <span className="t">{t("已固定在 {v}，不会自动更新", { v: hub.pinned })}</span>
           <span className="why">
             {t("回退之后固定是有意的：否则下次更新会把你放回刚离开的那个版本。")}
             <button className="lnk" onClick={() => pin("")} disabled={locked}>

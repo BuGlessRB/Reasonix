@@ -329,6 +329,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "忘掉中…": "Forgetting…",
   "压缩完成": "Compaction done",
   "移除中…": "Removing…",
+  "{err}　—— 本地功能不受影响，稍后再试。": "{err} — nothing local is affected; try again later.",
+  "已固定在 {v}，不会自动更新": "Pinned to {v}; updates will not move it",
   "（没有正文）": "(no body)",
   "没有可用的贡献": "Nothing usable inside",
   "删掉 {name}？它带来的技能、命令和服务会一起消失。只是想暂时不用的话，关掉开关就够了。": "Delete {name}? The skills, commands and services it brought go with it. To just set it aside, the switch is enough.",
