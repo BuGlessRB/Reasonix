@@ -1,12 +1,10 @@
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, ScopeLayer, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, MemoryEntry, NetworkProbe, NetworkSettings, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, ThemePack } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef } from "./port";
 import type { WireEvent } from "./wire";
-import { MockProvider } from "./mock_provider";
+import { MockTheme } from "./mock_theme";
 import { SCRIPT } from "./fixture";
 import { mockStorage, mockStoragePlan } from "./mock_storage";
-import { risksOf, toEntry } from "./mock_mcp";
 
-
-export class MockPort extends MockProvider implements AgentPort {
+export class MockPort extends MockTheme implements AgentPort {
   private listeners = new Set<(ev: WireEvent) => void>();
   private log: WireEvent[] = [];
   // What the user has sent, so checkpoints() can mirror one per turn.
@@ -103,211 +101,6 @@ export class MockPort extends MockProvider implements AgentPort {
     ];
   }
 
-  // Mutable: the admin switches are the whole point of the extensions page, and
-  // a fixture that answers the same list either way cannot show them working.
-  private activeTheme = "";
-
-  private servers: McpEntry[] = [
-    {
-      name: "time",
-      state: "ready",
-      enabled: true,
-      transport: "stdio",
-      source: "built-in",
-      description: "Current time in any IANA zone, and conversion between two of them.",
-      tools: 2,
-      toolList: [
-        { name: "get_current_time", description: "Current time in a given IANA timezone.", readOnly: true },
-        { name: "convert_time", description: "Convert a wall-clock time between two zones.", readOnly: true },
-      ],
-    },
-    // 关着和连不上的那两个也有说明 —— 那是上次连上时它们自己给的答复，界面里
-    // 必须看得出这一点。
-    {
-      name: "context7", state: "idle", enabled: true, tools: 1, transport: "http", remembered: true,
-      description: "Up-to-date library documentation, pulled per package and version.",
-      toolList: [{ name: "get_library_docs", description: "Fetch docs for a resolved library ID.", readOnly: true }],
-    },
-    {
-      // 真实的连不上就是这个长度：端点把整句话都塞进 error，而它有多长不由我们
-      // 定 —— 右栏那一行必须扛得住，否则名字先被挤没。
-      name: "figma", state: "failed", enabled: true, transport: "http", tools: 1,
-      error: "401 unauthorized: figma-mcp needs a personal access token with file_read scope; set FIGMA_TOKEN and reconnect",
-      description: "Read Figma files, frames and comments.", remembered: true, stale: true,
-      toolList: [{ name: "get_file", description: "Read one Figma file's node tree." }],
-    },
-  ];
-
-  async mcp(): Promise<McpCatalog> {
-    return { servers: this.servers.map((s) => ({ ...s })), scope: await this.capabilityScope() };
-  }
-
-  // A repository with several worktrees is the case the scope bar exists for,
-  // so the fixture is one rather than a lone folder.
-  // Three projects, two of them sharing a name: the case the picker's labels
-  // and its override filter exist for.
-  async capabilityScopes(): Promise<CapabilityScope[]> {
-    const here = await this.capabilityScope();
-    return [
-      here,
-      { root: "F:\work\api\frontend", name: "frontend", label: "api/frontend",
-        key: "repo:1a2b3c4d5e6f7a8b", repo: true, trees: 1, branch: "main", overrides: 1 },
-      { root: "F:\side\shop\frontend", name: "frontend", label: "shop/frontend",
-        key: "repo:9f8e7d6c5b4a3928", repo: true, trees: 1, branch: "main", overrides: 0 },
-      { root: "D:\svn\tuyou_richman", name: "tuyou_richman",
-        key: "path:44556677aabbccdd", repo: false, trees: 1, overrides: 2 },
-    ];
-  }
-
-  async capabilityScope(): Promise<CapabilityScope> {
-    return {
-      root: "F:\Reasonix",
-      name: "Reasonix",
-      key: "repo:8f3c1a92d4e05b17",
-      repo: true,
-      trees: 3,
-      branch: "studio",
-      overrides: this.servers.filter((s) => s.localOverride).length + this.localSkills.size,
-      current: true,
-    };
-  }
-
-  async reconnectMcp(name: string) {
-    const s = this.servers.find((x) => x.name === name);
-    if (!s) return { state: "failed", error: "no configured MCP server named " + name };
-    // figma keeps failing: a retry that always works would hide the state the
-    // button exists for.
-    if (name === "figma") {
-      s.state = "failed";
-      s.error = "401 unauthorized";
-      return { state: "failed", error: s.error };
-    }
-    s.state = "ready";
-    s.error = undefined;
-    s.tools = s.tools || 1;
-    return { state: "ready", tools: s.tools };
-  }
-
-  async setMcpEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project") {
-    const s = this.servers.find((x) => x.name === name);
-    if (!s) return;
-    s.enabled = enabled;
-    s.state = enabled ? (s.error ? "failed" : "idle") : "disabled";
-    s.localOverride = scope === "project";
-  }
-
-  async clearMcpOverride(name: string) {
-    const s = this.servers.find((x) => x.name === name);
-    if (!s) return;
-    s.localOverride = false;
-    s.enabled = true;
-    s.state = s.error ? "failed" : "idle";
-  }
-
-  // A rough stand-in for internal/mcpsetup: enough shape for the confirmation
-  // card to be developed against, not a second implementation of the grammar.
-  async parseMcp(input: string): Promise<McpDraft> {
-    const text = input.trim();
-    if (!text) throw new Error("粘贴一段 JSON、一行命令，或者一个 https 地址");
-    if (text.startsWith("{")) {
-      const doc = JSON.parse(text) as { mcpServers?: Record<string, Record<string, unknown>> };
-      const servers = doc.mcpServers ?? (doc as Record<string, Record<string, unknown>>);
-      const out: McpDraftServer[] = Object.entries(servers).map(([name, spec]) => ({
-        name,
-        transport: typeof spec.url === "string" ? "http" : "stdio",
-        command: spec.command as string | undefined,
-        args: spec.args as string[] | undefined,
-        url: spec.url as string | undefined,
-        env: spec.env as Record<string, string> | undefined,
-      }));
-      if (out.length === 0) throw new Error("这段 JSON 里没有 MCP 服务");
-      return { servers: out, risks: risksOf(out) };
-    }
-    if (/^https?:\/\//.test(text)) {
-      const host = new URL(text).hostname.replace(/^www\./, "").split(".")[0];
-      const server: McpDraftServer = { name: host, transport: "http", url: text };
-      return { servers: [server], risks: risksOf([server]) };
-    }
-    const argv = text.replace(/^[$>%]\s+/, "").split(/\s+/);
-    const pkg = argv.slice(1).find((a) => !a.startsWith("-")) ?? argv[0];
-    const server: McpDraftServer = {
-      name: pkg.split("/").pop()!.split("@")[0] || "mcp-server",
-      transport: "stdio",
-      command: argv[0],
-      args: argv.slice(1),
-    };
-    return { servers: [server], risks: risksOf([server]) };
-  }
-
-  async installMcp(server: McpDraftServer, _scope: "user" | "project"): Promise<McpInstallResult> {
-    if (this.servers.some((s) => s.name === server.name)) {
-      return { name: server.name, state: "issue", toolCount: 0, action: "retry", message: `已经有一个叫 ${server.name} 的服务了` };
-    }
-    // A name with "auth" in it stands in for the OAuth path, so the
-    // action_required branch is reachable in dev.
-    if (/auth|figma/i.test(server.name)) {
-      this.servers.push({ ...toEntry(server), state: "failed", error: "401 unauthorized" });
-      return { name: server.name, state: "action_required", toolCount: 0, action: "authenticate", message: "需要先授权" };
-    }
-    this.servers.push({ ...toEntry(server), state: "ready", tools: 3, toolList: [{ name: "one", description: "第一个工具" }, { name: "two", description: "第二个工具", readOnly: true }, { name: "three", description: "第三个工具", destructive: true }] });
-    return { name: server.name, state: "ready", toolCount: 3, action: "none", message: "" };
-  }
-
-  async removeMcp(name: string) {
-    const before = this.servers.length;
-    this.servers = this.servers.filter((s) => s.name !== name);
-    return { disconnected: before !== this.servers.length, stillConfigured: false };
-  }
-
-  private hookList: HookEntry[] = [
-    { event: "PostToolUse", match: "edit_file|write_file", command: "gofmt -w .", scope: "global", usesMatch: true },
-    { event: "PreToolUse", match: "bash", command: "./scripts/guard.sh", scope: "global", blocking: true, usesMatch: true },
-  ];
-
-  async hooks(): Promise<HookCatalog> {
-    return {
-      hooks: this.hookList.map((h) => ({ ...h })),
-      sources: [{ scope: "global", path: "~/.reasonix/settings.json", status: "ok", hookCount: this.hookList.length }],
-      events: [
-        { name: "PreToolUse", blocking: true, usesMatch: true },
-        { name: "PostToolUse", blocking: false, usesMatch: true },
-        { name: "PostToolUseFailure", blocking: false, usesMatch: true },
-        { name: "PermissionRequest", blocking: false, usesMatch: true },
-        { name: "UserPromptSubmit", blocking: true, usesMatch: false },
-        { name: "Stop", blocking: false, usesMatch: false },
-        { name: "SessionStart", blocking: false, usesMatch: false },
-        { name: "Notification", blocking: false, usesMatch: false },
-      ],
-      projectPath: "~/projects/DeepSeek-Reasonix/.reasonix/settings.json",
-      globalPath: "~/.reasonix/settings.json",
-    };
-  }
-
-  async saveHooks(scope: "user" | "project", hooks: HookEntry[]) {
-    this.hookList = hooks.map((h) => ({ ...h, scope: scope === "user" ? "global" : "project" }));
-  }
-
-  // Stands in for a real execution: a command mentioning "guard" exits 2 so the
-  // blocking verdict is reachable in dev.
-  async dryRunHook(h: HookEntry): Promise<HookDryRun> {
-    const bad = /guard|exit 2/.test(h.command);
-    return {
-      decision: bad ? "block" : "pass",
-      exitCode: bad ? 2 : 0,
-      stdout: bad ? "" : "ok",
-      stderr: bad ? "refusing: .env is protected" : "",
-      durationMs: 120,
-      blocks: bad && !!h.blocking,
-    };
-  }
-
-  private net: NetworkSettings = {
-    mode: "auto",
-    effective: "环境变量 HTTPS_PROXY=http://127.0.0.1:7890",
-    direct: ["api.mimo.cn"],
-    endpoint: "https://api.deepseek.com/v1",
-  };
-
   private mem: MemoryEntry[] = [
     {
       name: "no-coauthored-by", title: "提交信息不带 Co-Authored-By",
@@ -349,54 +142,6 @@ export class MockPort extends MockProvider implements AgentPort {
     this.mem = this.mem.filter((m) => m.name !== name);
   }
 
-  async network(): Promise<NetworkSettings> {
-    return { ...this.net };
-  }
-
-  async saveNetwork(s: NetworkSettings, password: string, clearPassword: boolean) {
-    this.net = {
-      ...s,
-      hasPassword: clearPassword ? false : s.hasPassword || !!password,
-      effective:
-        s.mode === "off"
-          ? "不走代理（已关闭）"
-          : s.mode === "custom"
-            ? `${s.type || "http"}://${s.username ? s.username + ":••••@" : ""}${s.server || "?"}:${s.port || 0}`
-            : "环境变量 HTTPS_PROXY=http://127.0.0.1:7890",
-    };
-    return { ...this.net };
-  }
-
-  // Stands in for a real walk: a custom proxy pointing at a port nothing is
-  // listening on is the common misconfiguration, so it fails at connect.
-  async diagnoseNetwork(): Promise<NetworkProbe[]> {
-    const custom = this.net.mode === "custom";
-    const out: NetworkProbe[] = [
-      { step: "proxy", ok: true, detail: this.net.effective, durationMs: 0 },
-      { step: "dns", ok: true, detail: "proxy.corp → 10.0.0.9", durationMs: 21 },
-    ];
-    if (custom && (this.net.port ?? 0) === 0) {
-      out.push({
-        step: "connect",
-        ok: false,
-        detail: "连不上 proxy.corp:0：connection refused",
-        durationMs: 12,
-        advice: "解析得到地址但连不上代理，检查代理是不是没开、端口对不对",
-      });
-      return out;
-    }
-    out.push({ step: "connect", ok: true, detail: "通了", durationMs: 180 });
-    out.push({ step: "tls", ok: true, detail: "握手成功 · HTTP 200", durationMs: 240 });
-    out.push({
-      step: "auth",
-      ok: false,
-      detail: "key 被拒了 — HTTP 401",
-      durationMs: 310,
-      advice: "网络通了，是 key 的问题，去「模型」那页换一个",
-    });
-    return out;
-  }
-
   async versions(): Promise<VersionHub> {
     return { current: "dev", pinned: "", stalePin: false, latest: "", newer: false, versions: [] };
   }
@@ -404,7 +149,6 @@ export class MockPort extends MockProvider implements AgentPort {
   private welcomed = true;
   async welcomeSeen(): Promise<boolean> { return this.welcomed; }
   async markWelcomed(): Promise<void> { this.welcomed = true; }
-
 
   async pinVersion(): Promise<void> {}
 
@@ -702,43 +446,6 @@ export class MockPort extends MockProvider implements AgentPort {
     this.ungate();
   }
 
-  // Two packs so the picker has something to switch between; the fixture is
-  // where the mapping gets exercised without a Go process.
-  async themes(): Promise<ThemePack[]> {
-    return [
-      {
-        id: "dusk", name: "Dusk", author: "fixture", active: this.activeTheme === "dusk",
-        tokens: {
-          light: { bg: "#F6F3EE", bgSoft: "#FBF9F5", panel: "#FFFFFF", border: "#DDD5C8", fg: "#1B1814", fgDim: "#5F564A", accent: "#8A5A2B" },
-          dark: { bg: "#0F0D0B", bgSoft: "#141110", panel: "#1B1715", border: "#332C26", fg: "#EFE9E1", fgDim: "#9A8F82", accent: "#D89B5A" },
-        },
-      },
-      {
-        id: "tide", name: "Tide", author: "fixture", active: this.activeTheme === "tide",
-        tokens: {
-          light: { bg: "#F2F6F8", bgSoft: "#F9FCFD", panel: "#FFFFFF", border: "#CBD9E0", fg: "#12191C", fgDim: "#4E5D65", accent: "#0E6E82" },
-          dark: { bg: "#080D10", bgSoft: "#0C1316", panel: "#131C21", border: "#23333A", fg: "#E4EEF2", fgDim: "#8298A2", accent: "#4FB6CE" },
-        },
-      },
-    ];
-  }
-  private slots: Record<string, string> = {};
-
-  async surfaceSlots() {
-    return { ...this.slots };
-  }
-
-  async assignSurface(surface: string, slot: string) {
-    if (slot) this.slots[surface] = slot;
-    else delete this.slots[surface];
-  }
-
-  async activateTheme(id: string) {
-    this.activeTheme = id;
-  }
-
-  // No sidecar runs behind the fixture, so an invocation answers the way a
-  // connected extension would rather than pretending to have done work.
   async invokeExtensionAction(name: string) {
     return `${name} 在 mock 里没有真实扩展可执行`;
   }

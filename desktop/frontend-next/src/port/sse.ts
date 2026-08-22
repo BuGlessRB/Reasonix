@@ -1,7 +1,6 @@
-import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookCatalog, HookDryRun, HookEntry, MemoryCatalog, NetworkProbe, NetworkSettings, McpCatalog, McpDraft, McpDraftServer, McpInstallResult, McpInstallScope, CapabilityScope, ScopeLayer, PluginExport, WorkspaceInfo, ThemePack } from "./port";
+import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, McpDraft, PluginExport, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type DroppedRef, type WorkspaceChanges } from "./port";
-import { rootQuery } from "./sse_http";
-import { SseProvider } from "./sse_provider";
+import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
 import type { StoragePlan, StorageState } from "./storage";
 import type { WireEvent } from "./wire";
@@ -34,7 +33,7 @@ interface WailsFileDropBus {
 // Wails publishes bound methods at window.go.<package>.<Struct>.<Method>; the
 // shell's package is main and the struct is App. Absent in a browser tab.
 
-export class SsePort extends SseProvider implements AgentPort {
+export class SsePort extends SseTheme implements AgentPort {
   private readonly dropSubs = new Set<(paths: string[]) => void>();
   private dropWired = false;
 
@@ -83,16 +82,6 @@ export class SsePort extends SseProvider implements AgentPort {
     return { required };
   }
 
-  hooks() {
-    return this.get<HookCatalog>("/hooks");
-  }
-
-  saveHooks(scope: "user" | "project", hooks: HookEntry[]) {
-    return this.post("/hooks", { scope, hooks });
-  }
-
-  // The failure message is the answer here — "command not found" is exactly
-  // what the user is trying to learn — so it is read out of the body.
   async dryRunHook(h: HookEntry): Promise<HookDryRun> {
     const res = await fetch(this.base + "/hooks/dry-run", {
       method: "POST",
@@ -113,42 +102,6 @@ export class SsePort extends SseProvider implements AgentPort {
     return this.post("/memory/forget", { name });
   }
 
-  network() {
-    return this.get<NetworkSettings>("/network");
-  }
-
-  async saveNetwork(settings: NetworkSettings, password: string, clearPassword: boolean) {
-    const res = await fetch(this.base + "/network", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ ...settings, password, clearPassword }),
-    });
-    const body = (await res.json().catch(() => ({}))) as NetworkSettings & { error?: string };
-    if (!res.ok) throw new Error(body.error || `/network: ${res.status}`);
-    return body;
-  }
-
-  async diagnoseNetwork() {
-    const r = await this.post0<{ probes?: NetworkProbe[] }>("/network/diagnose");
-    return r.probes ?? [];
-  }
-
-  mcp(root?: string) {
-    return this.get<McpCatalog>("/mcp" + rootQuery(root));
-  }
-
-  capabilityScope() {
-    return this.get<CapabilityScope>("/capability-scope");
-  }
-
-  async capabilityScopes() {
-    const r = await this.get<{ scopes?: CapabilityScope[] }>("/capability-scope?all");
-    return r.scopes ?? [];
-  }
-
-  // 502 carries the diagnosis in the body — the reason the retry failed is the
-  // whole point of the button, so it is read rather than thrown away.
   async reconnectMcp(name: string) {
     const res = await fetch(this.base + "/mcp/reconnect", {
       method: "POST",
@@ -161,16 +114,6 @@ export class SsePort extends SseProvider implements AgentPort {
     return { state: body.state ?? (res.ok ? "ready" : "failed"), tools: body.tools, error: body.error };
   }
 
-  setMcpEnabled(name: string, enabled: boolean, scope: ScopeLayer = "project", root?: string) {
-    return this.post("/mcp/enabled", { name, enabled, scope, root });
-  }
-
-  clearMcpOverride(name: string, root?: string) {
-    return this.post("/mcp/enabled", { name, clear: true, scope: "project", root });
-  }
-
-  // A parse failure is the normal case while typing, and its message is the
-  // whole feedback — so it is thrown as text, not as a status code.
   async parseMcp(input: string): Promise<McpDraft> {
     const res = await fetch(this.base + "/mcp/parse", {
       method: "POST",
@@ -181,34 +124,6 @@ export class SsePort extends SseProvider implements AgentPort {
     const body = (await res.json().catch(() => ({}))) as McpDraft & { error?: string };
     if (!res.ok) throw new Error(body.error || `/mcp/parse: ${res.status}`);
     return { servers: body.servers ?? [], risks: body.risks ?? [] };
-  }
-
-  async installMcp(server: McpDraftServer, scope: McpInstallScope): Promise<McpInstallResult> {
-    const res = await fetch(this.base + "/mcp/install", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ server, scope }),
-    });
-    const body = (await res.json().catch(() => ({}))) as McpInstallResult & { error?: string };
-    if (!res.ok) throw new Error(body.error || `/mcp/install: ${res.status}`);
-    return body;
-  }
-
-  async removeMcp(name: string) {
-    const res = await fetch(this.base + "/mcp/remove", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ name }),
-    });
-    const body = (await res.json().catch(() => ({}))) as {
-      disconnected?: boolean;
-      stillConfigured?: boolean;
-      error?: string;
-    };
-    if (!res.ok) throw new Error(body.error || `/mcp/remove: ${res.status}`);
-    return { disconnected: !!body.disconnected, stillConfigured: !!body.stillConfigured };
   }
 
   async probeProvider(baseUrl: string, apiKey: string): Promise<ProviderProbe> {
@@ -559,10 +474,6 @@ export class SsePort extends SseProvider implements AgentPort {
       answers: answers.map((a) => ({ QuestionID: a.questionId, Selected: a.selected })),
     });
   }
-  themes() {
-    return this.get<ThemePack[]>("/themes");
-  }
-
   async uploadWallpaper(blob: Blob) {
     const buf = new Uint8Array(await blob.arrayBuffer());
     let bin = "";
@@ -578,20 +489,6 @@ export class SsePort extends SseProvider implements AgentPort {
     return body;
   }
 
-  async surfaceSlots() {
-    const r = await this.get<{ slots?: Record<string, string> }>("/surfaces");
-    return r.slots ?? {};
-  }
-
-  assignSurface(surface: string, slot: string) {
-    return this.post("/surfaces", { surface, slot });
-  }
-
-  activateTheme(id: string) {
-    return this.post("/themes", { id });
-  }
-  // The extension's own message is the result, so this reads the body rather
-  // than a status code. A refused action answers 422 with its reason.
   async invokeExtensionAction(name: string) {
     const out = await this.post0<{ message?: string }>("/extensions/action", { name });
     return out.message ?? "";
