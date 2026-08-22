@@ -122,6 +122,9 @@ export function say(reason: Reason | null | undefined, fallback = ""): string {
  *  site has to know which kind it caught. */
 export function reason(e: unknown): string {
   if (e instanceof HttpError && e.reason) return say(e.reason, e.message);
+  // Nothing came back but a status: printing message here would put a path and
+  // a number in front of the user. The status is the only identity there is.
+  if (e instanceof HttpError && !e.detailed) return t("这次请求没能送到内核（HTTP {status}）", { status: e.status });
   return e instanceof Error ? e.message : String(e);
 }
 

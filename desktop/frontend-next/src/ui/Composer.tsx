@@ -45,7 +45,9 @@ interface Props {
   port: AgentPort;
   status: SessionStatus | null;
   running: boolean;
-  onSubmit: (text: string) => void;
+  // Resolves false when the line never left, so what was typed comes back
+  // rather than being lost to a refusal the user could not have prevented.
+  onSubmit: (text: string) => Promise<boolean>;
   onChanged: () => void;
   onError: (e: unknown) => void;
 }
@@ -149,7 +151,11 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
     type("", 0);
     shots.forEach(releaseChip);
     setShots([]);
-    onSubmit(line);
+    void onSubmit(line).then((sent) => {
+      // The chips are gone with their object URLs, but line still carries their
+      // refs as text — putting it back returns everything the turn was made of.
+      if (!sent) type(line, line.length);
+    });
   };
 
   const insert = useCallback((snippet: string) => {

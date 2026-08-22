@@ -1,6 +1,6 @@
-// The status is the part callers branch on: a 409 from /resume means a turn owns
-// that session, which is a question to put to the user rather than a failure.
+import { HttpError } from "./http_error";
 import type { Attachment, DroppedRef } from "./attachment";
+export { HttpError };
 export type { Attachment, DroppedRef };
 
 export interface WorkspaceChange {
@@ -17,21 +17,6 @@ export interface WorkspaceChanges {
   changes: WorkspaceChange[];
 }
 
-export class HttpError extends Error {
-  // The kernel's machine-readable refusal, when it sent one. Callers show it
-  // through i18n/kernel.say() rather than printing message: the message is
-  // English fallback for logs, not what a reader should see.
-  readonly reason?: { code?: string; error?: string; params?: Record<string, string | number> };
-
-  constructor(
-    readonly status: number,
-    message: string,
-    reason?: { code?: string; error?: string; params?: Record<string, string | number> },
-  ) {
-    super(message);
-    this.reason = reason;
-  }
-}
 
 import type { WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";

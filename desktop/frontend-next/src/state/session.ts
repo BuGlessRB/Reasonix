@@ -1,103 +1,12 @@
-import type { Ask, Approval, Compaction, ExtensionSurface, Guardian, Receipt, Tool, WireEvent } from "../port/wire";
-import { estimateTokens, sample, type Sample } from "../port/tokens";
+import type { Receipt, Tool, WireEvent } from "../port/wire";
+import { estimateTokens, sample } from "../port/tokens";
 import type { HistoryMessage } from "../port/port";
 import { plural, t } from "../i18n";
+import type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, Waiting } from "./session_types";
 
-export type Item =
-  | { t: "user"; id: string; text: string; pending?: boolean }
-  | { t: "say"; id: string; text: string; reasoning?: string; done: boolean; thoughtMs?: number }
-  | { t: "tool"; id: string; tool: Tool; running: boolean; children: Tool[] }
-  | { t: "reads"; id: string; tools: Tool[] }
-  | { t: "guardian"; id: string; g: Guardian }
-  | { t: "approval"; id: string; a: Approval; verdict?: string }
-  | { t: "ask"; id: string; ask: Ask; answered?: string[][] }
-  | { t: "compaction"; id: string; c: Compaction; done: boolean }
-  | { t: "remember"; id: string; m: RememberedFact; forgotten?: boolean }
-  | { t: "receipt"; id: string; r: Receipt }
-  | { t: "extension"; id: string; ext: ExtensionSurface }
-  | { t: "notice"; id: string; level: string; text: string; detail?: string };
-
-// What a remember call wrote, read off its own arguments. Saving a fact changes
-// what the agent will do in later sessions, which no other tool call does — so it
-// gets a card of its own rather than scrolling past as one more step.
-export interface RememberedFact {
-  name: string;
-  title: string;
-  description: string;
-  scope: string;
-  activation: string;
-  body: string;
-}
-
-export interface Metrics {
-  hit: number;
-  miss: number;
-  out: number;
-  bySource: Record<string, number>;
-  cost: number;
-  currency: string;
-}
-
-export interface Waiting {
-  ttftSince?: number;
-  retry?: { attempt: number; max: number };
-}
-
-export interface PlanStep {
-  text: string;
-  done: boolean;
-}
-
-export interface RuntimeNotice {
-  id: string;
-  level: string;
-  // The stable id a window says this in its own language by; text is what the
-  // kernel wrote for a terminal, and the fallback when nothing maps the code.
-  code?: string;
-  text: string;
-  detail?: string;
-}
-
-export interface SessionState {
-  error: string;
-  // Notices about the machine running this conversation rather than about the
-  // conversation. They describe something that is still true — which model was
-  // resolved, which server failed to start — so, like a standing extension
-  // surface, they hold their own place instead of scrolling away in the
-  // transcript as if they had been said by someone.
-  runtime: RuntimeNotice[];
-  items: Item[];
-  // Bumped when the transcript's composition changes — a card added, settled,
-  // folded, answered — but NOT when a message still being written grows by a
-  // chunk. Everything derived from the tool and user cards (the rail's panels,
-  // the step count, the checkpoint pairing) can key off this and skip the
-  // hundreds of frames a single answer streams in. A derivation that reads the
-  // *text* of a card must key off items instead.
-  revision: number;
-  plan: PlanStep[];
-  // Recent streamed-output samples. The down-rate has to come from what arrived
-  // in the last few seconds; usage totals only land at round boundaries, and
-  // nothing at all arrives while a tool runs.
-  outWindow: Sample[];
-  metrics: Metrics;
-  waiting: Waiting;
-  running: boolean;
-  doing: string;
-  steerQueue: string[];
-  // Standing extension surfaces, keyed by plugin and surface id. They describe
-  // a state that is still true, so they hold a place in the side rail instead
-  // of scrolling away in the transcript.
-  panels: ExtensionSurface[];
-  // Composed views. A view is a standing surface by definition — it describes
-  // something that is still true — so it never joins the transcript, and where
-  // it is drawn is decided at render time rather than here. That is what lets
-  // the user move one without any of this having to be re-sorted.
-  views: ExtensionSurface[];
-  // Views that replace a card the host would have drawn, keyed by anchor. They
-  // are kept apart from `views` because they have no place of their own: they
-  // appear only where the thing they stand in for appears.
-  takeovers: Record<string, ExtensionSurface>;
-}
+// The types live next door; this stays their way in, so no reader of a
+// session has to know they were split off.
+export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, Waiting };
 
 export const initialState: SessionState = {
   error: "",
@@ -118,6 +27,10 @@ export const initialState: SessionState = {
 
 let seq = 0;
 const nextId = () => `i${++seq}`;
+
+// A caller that has to name the item it just added — to take it back when the
+// kernel refuses it — draws from the same sequence, so the two cannot collide.
+export const localId = nextId;
 
 // tool_dispatch and tool_result are two phases of one call; the UI shows one
 // row that flips from running to settled, so they fold onto the same item.
@@ -334,7 +247,8 @@ export type SessionEvent =
   | { kind: "__restore"; items: Item[]; plan: PlanStep[] }
   | { kind: "__totals"; hit: number; miss: number; cost?: number }
   | { kind: "__error"; text: string }
-  | { kind: "__user"; text: string; pending: boolean }
+  | { kind: "__user"; text: string; pending: boolean; id?: string }
+  | { kind: "__unsent"; id: string }
   | { kind: "__decided"; id: string; verdict?: string; answers?: string[][] }
   | { kind: "__forgot"; id: string }
   | { kind: "__runtime_seen"; id: string };
@@ -350,7 +264,16 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
     return {
       ...s,
       steerQueue: ev.pending ? [...s.steerQueue, ev.text] : s.steerQueue,
-      items: [...s.items, { t: "user", id: nextId(), text: ev.text, pending: ev.pending }],
+      items: [...s.items, { t: "user", id: ev.id ?? nextId(), text: ev.text, pending: ev.pending }],
+    };
+  }
+  // A line the kernel never took is not part of what happened, so it leaves the
+  // transcript rather than sitting there looking sent.
+  if (ev.kind === "__unsent") {
+    return {
+      ...s,
+      items: s.items.filter((i) => !(i.t === "user" && i.id === ev.id)),
+      steerQueue: s.steerQueue,
     };
   }
   // The card stays after the fact is dropped, marked: the transcript is the

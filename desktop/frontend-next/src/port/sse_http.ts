@@ -31,7 +31,7 @@ export class SseHttp {
       // Plain text, which is the whole message.
     }
     const detail = body?.error || raw.slice(0, 400);
-    throw new HttpError(res.status, detail || `${path}: ${res.status}`, body ?? undefined);
+    throw new HttpError(res.status, detail || `${path}: ${res.status}`, body ?? undefined, detail !== "");
   }
 
   protected async post(path: string, body?: unknown): Promise<void> {

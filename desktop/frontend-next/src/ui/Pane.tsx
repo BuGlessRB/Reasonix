@@ -5,7 +5,7 @@ import { t } from "../i18n";
 import { createPortal } from "react-dom";
 import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, RewindScope, SessionStatus, WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
-import { fromHistory, initialState, quoteAmount, reduce } from "../state/session";
+import { fromHistory, initialState, localId, quoteAmount, reduce } from "../state/session";
 import { pairCheckpoints } from "../state/checkpoints";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { Transcript } from "./Transcript";
@@ -291,16 +291,25 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     return [at, rail];
   }, [s.views, slots]);
 
+  // The wire never echoes what was typed, so the row is the client's to add —
+  // and its to take back when the line did not leave. Reporting the refusal is
+  // not enough on its own: the transcript would keep showing a turn that never
+  // happened, and the composer was emptied on the way in.
   const submit = useCallback(
-    (text: string) => {
+    async (text: string) => {
       const steering = s.running;
-      dispatch({ kind: "__user", text, pending: steering } as never);
+      const id = localId();
+      dispatch({ kind: "__user", text, pending: steering, id } as never);
       trajDispatch({ kind: "__user", text });
-      if (steering) {
-        port.steer(text).catch(fail);
-        return;
+      try {
+        if (steering) await port.steer(text);
+        else await port.submit(text).then(refreshStatus);
+        return true;
+      } catch (e) {
+        dispatch({ kind: "__unsent", id } as never);
+        fail(e);
+        return false;
       }
-      port.submit(text).then(refreshStatus).catch(fail);
     },
     [port, s.running, refreshStatus, fail],
   );

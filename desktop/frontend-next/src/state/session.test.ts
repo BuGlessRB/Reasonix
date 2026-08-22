@@ -214,3 +214,23 @@ describe("the turn's verification receipt", () => {
     expect(receipts(showingReceipts(() => run([done({ ...card, saysSomething: false })])))).toEqual([]);
   });
 });
+
+// Nothing on the wire echoes what the user typed, so the row is the client's
+// to add — and its to take back when the line never left. Reporting the
+// refusal alone would leave a turn on screen that never happened.
+describe("a line the kernel refused", () => {
+  const typed = (id: string, text: string): SessionEvent =>
+    ({ kind: "__user", text, pending: false, id }) as SessionEvent;
+  const users = (s: SessionState) =>
+    s.items.filter((i) => i.t === "user").map((i) => (i as Extract<Item, { t: "user" }>).text);
+
+  it("leaves the transcript", () => {
+    const s = run([typed("u1", "first"), typed("u2", "second"), { kind: "__unsent", id: "u2" } as SessionEvent]);
+    expect(users(s)).toEqual(["first"]);
+  });
+
+  it("takes back only its own row", () => {
+    const s = run([typed("u1", "kept"), { kind: "__unsent", id: "nothing-by-that-name" } as SessionEvent]);
+    expect(users(s)).toEqual(["kept"]);
+  });
+});

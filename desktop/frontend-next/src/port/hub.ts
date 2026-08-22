@@ -83,7 +83,7 @@ export class SseHub implements HubPort {
     const body = (await res.json().catch(() => null)) as
       | { code?: string; error?: string; params?: Record<string, string | number> }
       | null;
-    throw new HttpError(res.status, body?.error || `${path}: ${res.status}`, body ?? undefined);
+    throw new HttpError(res.status, body?.error || `${path}: ${res.status}`, body ?? undefined, !!body?.error);
   }
 
   private async get<T>(path: string): Promise<T> {
