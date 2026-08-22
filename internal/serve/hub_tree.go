@@ -149,10 +149,13 @@ func (h *Hub) workspaceSessions(root string, open map[string]string) []treeSessi
 	return out
 }
 
-// recoveryLineageRoot walks a recovery copy back to the conversation it forked
-// from, so every copy left by one conflict storm folds under the same key. A
-// parent that is gone (reclaimed, deleted) still keys its own surviving copies.
+// recoveryLineageRoot names the conversation a copy belongs to. The stamped
+// root is authoritative: walking parents instead splits one chain into a row
+// per reclaimed middle link, which is precisely what GC leaves behind.
 func recoveryLineageRoot(si agent.SessionInfo, byID map[string]agent.SessionInfo) string {
+	if root := strings.TrimSpace(si.RecoveryRootID); root != "" {
+		return root
+	}
 	id := agent.BranchID(si.Path)
 	for range maxRecoveryLineageWalk {
 		info, ok := byID[id]

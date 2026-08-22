@@ -46,10 +46,14 @@ type BranchMeta struct {
 	// refuses to fork past SessionRecoveryMaxDepth so a conflict loop cannot
 	// spawn unbounded nested recovery chains (#5993 reached 8 levels). Legacy
 	// recovery metas without the field are treated as depth 1.
-	RecoveryDepth int    `json:"recovery_depth,omitempty"`
-	Revision      int64  `json:"revision,omitempty"`
-	ContentDigest string `json:"content_digest,omitempty"`
-	WriterID      string `json:"writer_id,omitempty"`
+	RecoveryDepth int `json:"recovery_depth,omitempty"`
+	// RecoveryRootID is the conversation the whole chain of copies came from.
+	// Walking ParentID instead breaks the moment GC reclaims a middle link,
+	// which is exactly what GC does.
+	RecoveryRootID string `json:"recovery_root_id,omitempty"`
+	Revision       int64  `json:"revision,omitempty"`
+	ContentDigest  string `json:"content_digest,omitempty"`
+	WriterID       string `json:"writer_id,omitempty"`
 	// SchemaVersion records the BranchMeta version that last wrote the listing
 	// fields (Turns/Preview) FROM the session's content. It is stamped only by the
 	// writers that actually derive those counts — Controller.snapshot's

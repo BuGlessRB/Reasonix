@@ -121,3 +121,17 @@ func tryAcquireRecoverySuccessorGuard(path, dir string) (*SessionRemovalGuard, e
 	}
 	return guard, nil
 }
+
+// recoveryRootOf resolves the conversation a new copy belongs to: the parent's
+// own root when the parent is itself a copy, otherwise the parent.
+func recoveryRootOf(originalPath, parentID string) string {
+	if meta, ok, err := LoadBranchMeta(originalPath); err == nil && ok && meta.Recovered {
+		if root := strings.TrimSpace(meta.RecoveryRootID); root != "" {
+			return root
+		}
+		if parent := strings.TrimSpace(meta.ParentID); parent != "" {
+			return parent
+		}
+	}
+	return parentID
+}

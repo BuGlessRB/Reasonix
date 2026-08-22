@@ -722,6 +722,7 @@ func (s *Session) saveRecoveryBranchMeta(path string, opts RecoveryBranchOptions
 	if strings.TrimSpace(meta.ParentID) == "" {
 		meta.ParentID = BranchID(opts.OriginalPath)
 	}
+	meta.RecoveryRootID = recoveryRootOf(opts.OriginalPath, meta.ParentID)
 	meta.Preview = preview
 	meta.Turns = turns
 	meta.SchemaVersion = BranchMetaCountsVersion
@@ -1435,55 +1436,6 @@ func loadSessionUnlocked(path string) (*Session, error) {
 
 // SessionInfo summarises a saved session for the --resume picker: where it is on
 // disk, when it was created/last active, the first user message as a preview, and
-// a rough turn count.
-type SessionInfo struct {
-	Path           string
-	CreatedAt      time.Time
-	LastActivityAt time.Time
-	ModTime        time.Time // compatibility alias for LastActivityAt
-	Preview        string
-	Turns          int
-	CountsKnown    bool
-	Scope          string
-	WorkspaceRoot  string
-	TopicID        string
-	TopicTitle     string
-	CustomTitle    string
-	Recovered      bool
-	RecoveryReason string
-	RecoveryDigest string
-	ParentID       string
-}
-
-// SessionOrderInfo is the lightweight sidecar/mtime ordering record shared by
-// session pickers and prompt-history navigation. It intentionally avoids reading
-// JSONL content; callers that need previews can layer that on afterwards.
-type SessionOrderInfo struct {
-	Path           string
-	CreatedAt      time.Time
-	LastActivityAt time.Time
-	ModTime        time.Time // compatibility alias for LastActivityAt
-	Scope          string
-	WorkspaceRoot  string
-	TopicID        string
-	TopicTitle     string
-	CustomTitle    string
-	Recovered      bool
-	RecoveryReason string
-	RecoveryDigest string
-	ParentID       string
-	// Turns and Preview are the cached listing fields from the sidecar; SchemaVersion
-	// >= agent.BranchMetaCountsVersion means they were recorded from content and can
-	// be trusted (even Turns == 0). ListSessions uses them to skip the whole-file decode.
-	Turns         int
-	Preview       string
-	SchemaVersion int
-	// Revision and ContentDigest bind a listing backfill to the transcript
-	// generation it decoded. They are sidecar-only compare-and-apply guards and
-	// are not exposed through SessionInfo.
-	Revision      int64
-	ContentDigest string
-}
 
 // CleanupPendingMeta records that a session was logically removed but still has
 // artifacts waiting for a background job to unwind before physical cleanup.
@@ -2008,6 +1960,7 @@ func ListSessionOrder(dir string) ([]SessionOrderInfo, error) {
 		parentID := ""
 		turns := 0
 		preview := ""
+		recoveryRootID := ""
 		schemaVersion := 0
 		revision := int64(0)
 		contentDigest := ""
@@ -2027,6 +1980,7 @@ func ListSessionOrder(dir string) ([]SessionOrderInfo, error) {
 			recoveryReason = meta.RecoveryReason
 			recoveryDigest = meta.RecoveryDigest
 			parentID = meta.ParentID
+			recoveryRootID = meta.RecoveryRootID
 			turns = meta.Turns
 			preview = meta.Preview
 			schemaVersion = meta.SchemaVersion
@@ -2047,6 +2001,7 @@ func ListSessionOrder(dir string) ([]SessionOrderInfo, error) {
 			RecoveryReason: recoveryReason,
 			RecoveryDigest: recoveryDigest,
 			ParentID:       parentID,
+			RecoveryRootID: recoveryRootID,
 			Turns:          turns,
 			Preview:        preview,
 			SchemaVersion:  schemaVersion,
