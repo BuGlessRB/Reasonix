@@ -358,20 +358,7 @@ export const EN: Record<string, string> = {
     "The proxy could not reach it and a direct connection could, so this source is now recorded as bypassing the proxy.",
   "{n} 个模型": "{n} models",
 
-  // ── 首次连接 ─────────────────────────────────────────────────────
-  "先连一个模型服务": "Connect a model service first",
-  "填地址和 key，剩下的问它自己 —— 协议、模型清单、能不能读图，都是探得到的。":
-    "Give it an address and a key; the rest is asked of the endpoint — protocol, model list, whether it reads images.",
-  "key 存进本机配置，不上传任何第三方。模型、推理强度、执行设定都有默认值，随时能在输入框那排改。":
-    "The key goes into this machine's config and is uploaded nowhere. Model, reasoning effort and execution settings all have defaults you can change from the composer at any time.",
-  "常用服务": "Common services",
-  "服务地址": "Service address",
-  "https://你的地址/v1": "https://your-host/v1",
-  "先用哪个": "Which one to start with",
-  "选择默认模型": "Choose the default model",
-  "这个端点不止一种协议答应了，上面是偏好而不是事实。连上之后能在设置里换。":
-    "More than one protocol answered at this endpoint, so the choice above is a preference rather than a fact. You can change it in Settings once connected.",
-
+  
   // ── 外部服务与插件 ───────────────────────────────────────────────
   "一段 JSON、一行命令，或者一个 https 地址": "A block of JSON, a command line, or an https address",
   "装到哪": "Where to install it",
@@ -737,32 +724,18 @@ export const EN: Record<string, string> = {
   "设置和 API key，始终随用户配置文件走": "Settings and API keys; these always stay with your user profile",
   "进程锁": "Process locks",
   "多个实例互斥用，必须留在本机固定位置": "How instances exclude each other; these must stay in one place on this machine",
-  // ── 卡片与窗口控件 ───────────────────────────────────────────
-  "只在这个项目": "This project only",
-  "写进仓库": "Commit to the repo",
-  "设置　⌘,": "Settings　⌘,",
-  "这一步留在上下文里的估算 token": "Estimated tokens this step leaves in context",
-  "关闭这个面板": "Close this pane",
-  "窗口": "Window",
-  "最小化": "Minimize",
-  "工作区与会话": "Workspaces and sessions",
-  "允许这一次": "Allow once",
-  "这一类不再问": "Stop asking for this kind",
-  "核心把它记进会话授权，不落盘。": "The kernel records it for this session only; nothing is written to disk.",
-  "agent 收到否决，会另想办法或停手。": "The agent takes the refusal and either finds another way or stops.",
-  "下次同样的操作仍会问你。": "The same operation will ask again next time.",
-  "你想要的第几种做法，写在这儿": "Which one you want, or write your own here",
-  "问题 {n}": "Question {n}",
-  "未答": "Unanswered",
-  "确认（还有 {n} 个没答）": "Confirm ({n} left)",
-  "确认": "Confirm",
-  "先不选择，直接回复": "Skip the choice and reply instead",
-  "（补写过一次）": " (repaired once)",
-  "正在折成简报": "Folding into a digest",
-  "这一趟没折叠掉什么": "This pass folded nothing",
-  "这段做过的 {n} 处改动，简报都写到了": "All {n} changes made here are in the digest",
-  "{kept}/{required} 处改动写进了简报": "{kept}/{required} changes are in the digest",
-  "还有 {n} 处只剩下索引地址，要用原文得 recall 取回": "{n} more are index entries only; recall fetches the original",
-  "正在把 {n} 条消息折成简报": "Folding {n} messages into a digest",
-  "折叠了 {n} 条消息": "Folded {n} messages",
+  
+  // ── 首次连接 ─────────────────────────────────────────────────
+  "硅基流动": "SiliconFlow",
+  "月之暗面": "Moonshot",
+  "智谱": "Zhipu",
+  "中转站 / 自建": "Relay / self-hosted",
+  "{n} 个模型 · key 存本机": "{n} models · key stays on this machine",
+  "选一个": "Pick one",
+  "正在保存…": "Saving…",
+  "正在连…": "Connecting…",
+  "开始": "Start",
+  "连上看看": "Connect",
+  
+  
 };

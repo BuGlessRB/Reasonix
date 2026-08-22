@@ -109,7 +109,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
               disabled={busy}
               onClick={() => choose(s.label, s.url)}
             >
-              {s.label}
+              {t(s.label)}
             </button>
           ))}
         </div>
@@ -152,7 +152,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
             <div className="onb-found-hd">
               <span className="tick">✓</span>
               <span>{KIND_LABEL[found.kind] || found.kind}</span>
-              <span className="k">{found.models.length} 个模型 · key 存本机</span>
+              <span className="k">{t("{n} 个模型 · key 存本机", { n: found.models.length })}</span>
             </div>
             {/* More than one wire answered, or one listing several may be
                 driven with: either way the line above is a preference. */}
@@ -169,7 +169,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
                   system's colours on top of this scene. */}
               <div className="onb-pick" data-busy={busy ? "" : undefined}>
                 <Picker
-                  label={model || "选一个"}
+                  label={model || t("选一个")}
                   items={found.models.map((m) => ({ value: m, label: m }))}
                   current={model}
                   onPick={setModel}
@@ -187,7 +187,7 @@ export function Onboarding({ port, setup, onDone }: Props) {
           disabled={busy || !url.trim() || !key.trim() || (!!found && !model)}
           onClick={found ? start : connect}
         >
-          {busy ? (found ? "正在保存…" : "正在连…") : found ? "开始" : "连上看看"}
+          {t(busy ? (found ? "正在保存…" : "正在连…") : found ? "开始" : "连上看看")}
         </button>
 
         <div className="onb-note">

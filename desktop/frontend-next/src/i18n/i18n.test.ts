@@ -13,18 +13,49 @@ const SOURCES = import.meta.glob(["../**/*.{ts,tsx}", "!../i18n/**", "!../**/*.t
   eager: true,
 }) as Record<string, string>;
 
-// The first argument of t() or tx(), when it is a plain literal. A key built from a
-// conditional is looked up the same way at runtime but cannot be read here.
-const CALL = /\b(?:t|tx)\(\s*(["'])((?:\\.|(?!\1)[^\\])*)\1/g;
+// Every Chinese literal inside a t()/tx()/plural() argument list is a key,
+// including the arms of `t(cond ? "A" : "B")`. Matching only a literal that
+// follows the paren immediately left those arms unchecked, which is how three
+// of them reached the screen untranslated.
 const HAN = /[一-鿿]/;
+
+function keysIn(src: string): string[] {
+  const keys: string[] = [];
+  const call = /\b(?:t|tx|plural)\(/g;
+  let m: RegExpExecArray | null;
+  while ((m = call.exec(src)) !== null) {
+    let i = m.index + m[0].length - 1;
+    let depth = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "(" || c === "[" || c === "{") depth++;
+      else if (c === ")" || c === "]" || c === "}") {
+        depth--;
+        if (depth === 0) break;
+      } else if (c === '"' || c === "'") {
+        const quote = c;
+        let j = i + 1;
+        let text = "";
+        while (j < src.length && src[j] !== quote) {
+          if (src[j] === "\\") j++;
+          text += src[j];
+          j++;
+        }
+        if (HAN.test(text)) keys.push(text);
+        i = j;
+      }
+      i++;
+    }
+  }
+  return keys;
+}
 
 describe("English catalogue", () => {
   it("carries every Chinese key the interface asks for", () => {
     const missing: string[] = [];
     for (const [file, body] of Object.entries(SOURCES)) {
-      for (const m of body.matchAll(CALL)) {
-        const key = m[2];
-        if (HAN.test(key) && !(key in EN)) missing.push(`${JSON.stringify(key)} — ${file}`);
+      for (const key of keysIn(body)) {
+        if (!(key in EN)) missing.push(`${JSON.stringify(key)} — ${file}`);
       }
     }
     expect([...new Set(missing)], "untranslated keys").toEqual([]);

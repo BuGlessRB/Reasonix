@@ -143,7 +143,7 @@ export function Hooks({ port, onChanged }: Props) {
               className="sw"
               role="switch"
               aria-checked={has(r)}
-              aria-label={r.title}
+              aria-label={t(r.title)}
               disabled={!!busy}
               onClick={() => toggleRecipe(r)}
             >
