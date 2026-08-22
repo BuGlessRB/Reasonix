@@ -41,8 +41,7 @@ Legacy 迁移、OS home 约定目录扫描以及其他 fallback 路径都会跳�
 
 JSONL、event log、metadata sidecar 和 `desktop-projects.json` 是权威的会话数据，
 列出或打开一个会话不读其它任何东西。Task snapshot 和
-event log 也仍是权威数据；可重建的跨项目投影见
-[Task Catalog](./TASK_CATALOG.zh-CN.md)。
+event log 也是权威数据。
 
 全局用户配置文件名是 `config.toml`。项目本地配置文件仍叫 `reasonix.toml`。
 如果有人说“全局 reasonix.toml”，通常指的是 `<Reasonix home>/config.toml`。

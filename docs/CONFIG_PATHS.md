@@ -54,8 +54,7 @@ nothing else.
 The history projection is documented in
 [History Search Catalog](./HISTORY_SEARCH_CATALOG.md).
 The usage rollup projection is documented in [Usage Catalog](./USAGE_CATALOG.md).
-Task snapshots and event logs likewise remain authoritative; the rebuildable
-cross-project projection is documented in [Task Catalog](./TASK_CATALOG.md).
+Task snapshots and event logs are likewise authoritative.
 
 The global user config is named `config.toml`. Project-local config files keep
 the name `reasonix.toml`. If someone says "global reasonix.toml", they usually
