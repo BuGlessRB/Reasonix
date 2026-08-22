@@ -48,10 +48,17 @@
       inset 0 1px 0 rgb(255 255 255 / .9),
       0 16px 40px -14px rgb(23 30 45 / .2),
       0 4px 12px -8px rgb(23 30 45 / .14);
-    --accent: #A96A0C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
+    --accent: #A7690C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
     --net: #3555C4; --net-wash: #EBEFFC;
     --deleg: #0E7382; --deleg-wash: #E4F2F4;
-    --ok: #2C7A4B; --warn: #A96A0C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
+    --ok: #2C7A4B; --warn: #A7690C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
+    /* A hue used as a surface and as text on a tint of itself needs two values.
+       --accent at 4.55:1 on white had no headroom left: white text on it fell to
+       4.42, and the hue itself on its own 13% tint reached only 3.3–3.8. The ink
+       is the reading value — it clears 4.5:1 on that tint over any of our
+       surfaces — while the base stays the fill. In dark they coincide, because
+       there the tint is darker than the hue rather than lighter. */
+    --accent-ink: #8C580A; --ok-ink: #286F44; --err-ink: #AF362E;
     /* Terminal output and diffs carry Chinese, and none of the monospaced faces
        above has a Chinese glyph — the character fell through to whatever the OS
        picked, which on Windows is a serif. Naming the shipped face makes that
@@ -98,6 +105,7 @@
     --net: #7391FF; --net-wash: #111629;
     --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
     --ok: #52B87C; --warn: #DDA144; --err: #E4675D; --add: #52B87C; --del: #E4675D;
+    --accent-ink: #DDA144; --ok-ink: #52B87C; --err-ink: #E4675D;
     --float: #1F2530; --float-hi: #2A313D;
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .06),
@@ -113,6 +121,7 @@
     --net: #7391FF; --net-wash: #111629;
     --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
     --ok: #52B87C; --warn: #DDA144; --err: #E4675D; --add: #52B87C; --del: #E4675D;
+    --accent-ink: #DDA144; --ok-ink: #52B87C; --err-ink: #E4675D;
     --float: #1F2530; --float-hi: #2A313D;
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .06),
@@ -123,10 +132,11 @@
   :root[data-theme="light"] {
     --page: #F3F5F8; --surface: #FAFBFD; --raised: #FFFFFF; --overlay: #EDF0F4;
     --border: #DBE0E7; --hair: #E8ECF1;
-    --accent: #A96A0C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
+    --accent: #A7690C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
     --net: #3555C4; --net-wash: #EBEFFC;
     --deleg: #0E7382; --deleg-wash: #E4F2F4;
-    --ok: #2C7A4B; --warn: #A96A0C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
+    --ok: #2C7A4B; --warn: #A7690C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
+    --accent-ink: #8C580A; --ok-ink: #286F44; --err-ink: #AF362E;
     --float: #FFFFFF; --float-hi: #EDF0F4;
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .9),
@@ -152,7 +162,7 @@
      字上，而 AA 的大字豁免是给 18.66px 以上的。默认档从那条线起算，另外两档
      递增；正文一端不动 —— 深底上接近纯白会起光晕，收窄跨度才是柔和的意思。 */
   :root, :root[data-contrast="soft"] {
-  --text: #2C333E; --muted: #484F58; --faint: #5A616D; --ghost: #69778B;
+  --text: #2C333E; --muted: #484F58; --faint: #5A616D; --ghost: #677589;
   }
   :root[data-contrast="normal"] {
   --text: #272D36; --muted: #3F464D; --faint: #515762; --ghost: #5F6A7E;
@@ -183,7 +193,7 @@
   --text: #E6E9F0; --muted: #BEC4CC; --faint: #A3AAB6; --ghost: #929CAE;
   }
   :root[data-theme="light"], :root[data-theme="light"][data-contrast="soft"] {
-  --text: #2C333E; --muted: #484F58; --faint: #5A616D; --ghost: #69778B;
+  --text: #2C333E; --muted: #484F58; --faint: #5A616D; --ghost: #677589;
   }
   :root[data-theme="light"][data-contrast="normal"] {
   --text: #272D36; --muted: #3F464D; --faint: #515762; --ghost: #5F6A7E;

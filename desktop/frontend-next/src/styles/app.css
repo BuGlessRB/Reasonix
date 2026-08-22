@@ -277,7 +277,7 @@
   .sa {
     margin-left: 7px; padding: 1px 5px; border-radius: var(--r-pill);
     font: var(--w-med) 9.5px var(--ui); font-style: normal; vertical-align: 1px;
-    color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent);
+    color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 13%, transparent);
   }
 
   /* 模式是这一轮的能力，不是偏好开关 —— 所以它长在输入框上，不在设置里 */
@@ -2250,7 +2250,7 @@
      只有环=借来的。行本身沿用设置列表的发丝分隔，跟 .vrow/.skrow 是一家。 */
   .band { margin-top: 14px }
   .anchor { display: block; padding-bottom: 13px }
-  .anchor .cap { font: var(--w-med) 9.5px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--accent) }
+  .anchor .cap { font: var(--w-med) 9.5px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink) }
   .anchor .nm { display: block; margin-top: 5px; font: var(--w-med) 15px var(--mono); color: var(--text);
     overflow-wrap: anywhere }
   .anchor .meta { display: block; margin-top: 3px; font: var(--w-reg) 11px var(--ui); color: var(--faint) }
@@ -2889,7 +2889,7 @@
   .skrow .w.none { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent) }
   .skrow .ro {
     padding: 1px 5px; border-radius: var(--r-pill); font: var(--w-med) 9.5px var(--ui); font-style: normal;
-    color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent);
+    color: var(--ok-ink); background: color-mix(in srgb, var(--ok) 13%, transparent);
   }
   .skrow .sc { flex: none; min-width: 44px; text-align: right; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   .skrow .sw { margin-left: 4px; align-self: center }
@@ -3892,7 +3892,7 @@
   .storage .item .hint { font: var(--w-reg) 11px var(--ui); color: var(--muted) }
   .storage .item .p { font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); word-break: break-all }
   /* 被环境变量钉住、或本来就不可移动 —— 说明为什么这一行没有按钮 */
-  .storage .item .held { font: var(--w-reg) 10.5px var(--mono); color: var(--warn) }
+  .storage .item .held { font: var(--w-reg) 10.5px var(--mono); color: var(--accent-ink) }
 
   .storage .mover { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 4px }
   .storage .mover input { width: 100%; padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--r-xs);
