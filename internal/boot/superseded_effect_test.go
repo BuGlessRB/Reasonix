@@ -68,33 +68,40 @@ context_window = 32000
 	}
 
 	var counts []int
-	folded := false
+	var foldedBefore []int
 	for _, req := range rec.requests() {
 		if isSummarizerRequest(req) {
-			folded = true
+			foldedBefore = append(foldedBefore, len(counts))
 			continue
 		}
 		counts = append(counts, countUserTag(req, "<workspace>"))
 	}
-	if !folded {
+	if len(foldedBefore) == 0 {
 		t.Fatalf("the fixture never compacted; counts=%v", counts)
 	}
 	if len(counts) < 2 {
 		t.Fatalf("too few agent requests to observe a fold: %v", counts)
 	}
 
-	peak, final := 0, counts[len(counts)-1]
-	for _, n := range counts {
-		if n > peak {
-			peak = n
+	// Each fold is checked where it happened: last-request-against-peak asks
+	// whether the turns after the final fold out-number those before it, which
+	// moves with what the prefix costs rather than with this invariant.
+	dropped := 0
+	for _, at := range foldedBefore {
+		if at == 0 || at >= len(counts) {
+			continue
+		}
+		dropped++
+		if counts[at] >= counts[at-1] {
+			t.Fatalf("the fold before request %d kept every superseded copy (%d before, %d after): they ride every later fold forever.\ncounts=%v",
+				at, counts[at-1], counts[at], counts)
 		}
 	}
-	if final >= peak {
-		t.Fatalf("standing-state copies never fell across a fold (peak %d, final %d): superseded copies are riding every fold forever.\ncounts=%v",
-			peak, final, counts)
+	if dropped == 0 {
+		t.Fatalf("no fold landed between two observable requests; the fixture proves nothing.\ncounts=%v", counts)
 	}
 	// The live turn always restates it, so the model is never left without one.
-	if final == 0 {
+	if final := counts[len(counts)-1]; final == 0 {
 		t.Fatalf("the last request carried no standing state at all; the live turn lost its copy.\ncounts=%v", counts)
 	}
 }

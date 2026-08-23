@@ -12,9 +12,9 @@ import (
 // The largest single item in a first request — 3,995 of one measured run's
 // 5,577 prompt tokens — and nothing was watching it: a field here, a sentence
 // there, and the floor under every session rises unnoticed. The whole built-in
-// set rather than a preset's slice of it, so the number does not move when an
-// allow-list is edited.
-const builtinSchemaTokenBudget = 5700
+// set, so an allow-list edit does not move it; what a session is billed for is
+// the visible surface, which boot guards separately.
+const builtinSchemaTokenBudget = 5600
 
 func TestBuiltinSchemaSurfaceStaysWithinBudget(t *testing.T) {
 	r := tool.NewRegistry()
