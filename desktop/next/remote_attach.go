@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"os"
 	"time"
 
 	"reasonix/internal/config"
@@ -26,9 +25,11 @@ type attachPrompts = attach.Prompts
 
 func newRemoteLink(ctx context.Context, prompts attachPrompts) *remoteLink {
 	return &remoteLink{pool: attach.NewPool(ctx, attach.Options{
-		Prompts:     prompts,
-		LocalBinary: currentExecutable(),
-		Version:     version,
+		Prompts: prompts,
+		Version: version,
+		// No LocalBinary: this executable is the window, not the CLI, and
+		// uploading it would spend the transfer to have the far side reject a
+		// binary with no serve command. npm, then a verified release download.
 		FetchBinary: fetchRemoteBinary,
 	})}
 }
@@ -74,13 +75,6 @@ func (r *remoteLink) States() map[string]serve.RemoteLinkState {
 		}
 	}
 	return out
-}
-
-func currentExecutable() string {
-	if p, err := os.Executable(); err == nil {
-		return p
-	}
-	return ""
 }
 
 // fetchRemoteBinary downloads the release for a remote's platform when the host
