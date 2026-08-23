@@ -2299,7 +2299,7 @@ func TestNewSessionRefusesWhileTurnRunning(t *testing.T) {
 	c := New(Options{Executor: exec, SystemPrompt: "sys", SessionDir: dir, SessionPath: path, Label: "test"})
 
 	c.mu.Lock()
-	c.running = true
+	c.gate.running = true
 	c.mu.Unlock()
 
 	if err := c.NewSession(); err == nil {
@@ -2313,7 +2313,7 @@ func TestNewSessionRefusesWhileTurnRunning(t *testing.T) {
 	}
 
 	c.mu.Lock()
-	c.running = false
+	c.gate.running = false
 	c.mu.Unlock()
 	if err := c.NewSession(); err != nil {
 		t.Fatalf("NewSession after the turn stopped: %v", err)
@@ -2405,7 +2405,7 @@ func TestNewSessionRefusesTurnStartedDuringSnapshot(t *testing.T) {
 
 // TestSessionMutationsRefuseWhileRotating proves every session-mutating entry
 // point is wired to the same rotation gate: while a rotation is in progress
-// (c.rotating held), each refuses instead of swapping/rewriting the live
+// (c.gate.rotating held), each refuses instead of swapping/rewriting the live
 // session, and a turn cannot start either. This is the TOCTOU class the bare
 // Running() checks left open — a mutation slipping in mid-rotation.
 func TestSessionMutationsRefuseWhileRotating(t *testing.T) {
@@ -2461,7 +2461,7 @@ func TestSessionMutationsRefuseWhileRotating(t *testing.T) {
 	// Conversely: while a turn runs, every mutation is refused with its own
 	// message and the gate cannot be claimed.
 	c.mu.Lock()
-	c.running = true
+	c.gate.running = true
 	c.mu.Unlock()
 	if err := c.beginRotation(); !errors.Is(err, errTurnRunningRotation) {
 		t.Fatalf("beginRotation while running = %v, want errTurnRunningRotation", err)
@@ -4467,10 +4467,10 @@ func TestRunGuardedPanicEmitsTurnDone(t *testing.T) {
 	}
 
 	c.mu.Lock()
-	running := c.running
+	running := c.gate.running
 	c.mu.Unlock()
 	if running {
-		t.Fatal("c.running should be false after panic recovery")
+		t.Fatal("c.gate.running should be false after panic recovery")
 	}
 }
 

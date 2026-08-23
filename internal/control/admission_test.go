@@ -82,7 +82,7 @@ func TestSubmitDuringRotationEmitsNotice(t *testing.T) {
 	})})
 
 	c.mu.Lock()
-	c.rotating = true
+	c.gate.rotating = true
 	c.mu.Unlock()
 
 	bodyRan := make(chan struct{}, 1)
@@ -108,7 +108,7 @@ func TestSubmitDuringRotationEmitsNotice(t *testing.T) {
 	}
 
 	c.mu.Lock()
-	c.rotating = false
+	c.gate.rotating = false
 	c.mu.Unlock()
 }
 

@@ -20,7 +20,7 @@ const (
 // endRotation releases the admission gate and republishes durable queue work.
 func (c *Controller) endRotation() {
 	c.mu.Lock()
-	c.rotating = false
+	c.gate.rotating = false
 	c.mu.Unlock()
 	c.maybeDispatchInbox()
 }
@@ -67,7 +67,7 @@ func (c *Controller) dispatchInboxOnce() inboxDispatchResult {
 		return inboxDispatchIdle
 	}
 	c.mu.Lock()
-	busy := c.running || c.finishing || c.rotating || c.closed
+	busy := c.gate.busy()
 	c.mu.Unlock()
 	if busy {
 		return inboxDispatchIdle

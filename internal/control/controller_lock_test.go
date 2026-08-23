@@ -28,7 +28,7 @@ func TestCompactRefusedWhileRunning(t *testing.T) {
 	})
 
 	c.mu.Lock()
-	c.running = true
+	c.gate.running = true
 	c.mu.Unlock()
 
 	err := c.Compact(context.Background(), "")
@@ -98,7 +98,7 @@ func TestResumeRefusedWhileRunning(t *testing.T) {
 	c.SetSessionPath("/tmp/a.jsonl")
 
 	c.mu.Lock()
-	c.running = true
+	c.gate.running = true
 	c.mu.Unlock()
 
 	other := agent.NewSession("sys")
@@ -111,7 +111,7 @@ func TestResumeRefusedWhileRunning(t *testing.T) {
 	}
 
 	c.mu.Lock()
-	c.running = false
+	c.gate.running = false
 	c.mu.Unlock()
 	if err := c.Resume(other, "/tmp/b.jsonl"); err != nil {
 		t.Fatalf("Resume once idle = %v, want nil", err)

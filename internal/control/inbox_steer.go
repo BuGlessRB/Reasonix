@@ -81,8 +81,8 @@ func (c *Controller) TrySteerInboxItem(id string) (sessioninbox.InboxReceipt, er
 	}
 	cap := snapshot.Capacity
 	c.mu.Lock()
-	rotating := c.rotating
-	closed := c.closed
+	rotating := c.gate.rotating
+	closed := c.gate.closed
 	c.mu.Unlock()
 	if closed {
 		return sessioninbox.InboxReceipt{ItemID: id, Disposition: sessioninbox.DispositionRejectedClosed, Capacity: cap}, nil
@@ -129,7 +129,7 @@ func (c *Controller) TrySteerInboxItem(id string) (sessioninbox.InboxReceipt, er
 		}
 	}
 	c.mu.Lock()
-	accepted := !c.closed && !c.rotating && c.running && c.executor != nil && len(env.FrozenImages) == 0 && c.executor.SteerItem(id, loader)
+	accepted := !c.gate.closed && !c.gate.rotating && c.gate.running && c.executor != nil && len(env.FrozenImages) == 0 && c.executor.SteerItem(id, loader)
 	if accepted {
 		c.inbox.mu.Lock()
 		c.inbox.trackActive(id)

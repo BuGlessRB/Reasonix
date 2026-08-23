@@ -249,29 +249,17 @@ type Controller struct {
 
 	// mu guards the run state; every critical section under it is short and
 	// non-blocking.
-	mu        sync.Mutex
-	cancel    context.CancelFunc
-	running   bool
-	finishing bool // TurnDone is still being delivered; park a replacement turn
-	canceling bool
-	// closed marks the controller as terminally torn down (close() ran). It
-	// seals turn admission: without it, a submit arriving AFTER close cleared
-	// the parked queue — but while a still-running turn's TurnDone delivery
-	// was in flight — would park again and then start against freed resources
-	// when the window closed.
-	closed bool
+	mu     sync.Mutex
+	cancel context.CancelFunc
 	// parkedTurns holds turn bodies that arrived during the finishing window,
 	// FIFO. finishGuardedTurn starts the oldest one as it closes the window
 	// (see runGuarded/finishGuardedTurn); close() discards any remainder.
 	parkedTurns []func(ctx context.Context) error
-	// rotating is set under mu while NewSession/ClearSession swap the executor
-	// session out. Checking running once and then swapping later leaves a
-	// TOCTOU window: a turn can start (running=false at check time) during the
-	// intervening Snapshot() and then have its live session replaced. running
-	// and rotating are mutually exclusive gates — a turn refuses to start while
-	// a rotation is in progress, and a rotation refuses to start while a turn
-	// runs — so the run loop's session reference cannot change under it.
-	rotating    bool
+	// gate is turn admission: running, finishing, canceling, rotating, closed.
+	// Rotation matters here because checking running once and swapping later
+	// leaves a TOCTOU window — a turn can start during the intervening
+	// Snapshot() and then have its live session replaced. See turn_gate.go.
+	gate        turnGate
 	autosaveWG  sync.WaitGroup
 	planMode    bool
 	sessionPath string
@@ -944,20 +932,20 @@ func (c *Controller) spawnGuardedTurn(ctx context.Context, cancel context.Cancel
 func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnCompletion) {
 	c.memory.clearAutoRemember()
 	c.mu.Lock()
-	cancelRequested := c.canceling
-	c.running = false
+	cancelRequested := c.gate.canceling
+	c.gate.running = false
 	// A live controller keeps admission closed until TurnDone fan-out finishes.
 	// Close has already sealed admission permanently, so a late completion must
 	// not resurrect a finishing state after teardown.
-	c.finishing = !c.closed
+	c.gate.finishing = !c.gate.closed
 	c.cancel = nil
-	c.canceling = false
+	c.gate.canceling = false
 	c.mu.Unlock()
 
 	defer func() {
 		c.mu.Lock()
-		c.finishing = false
-		if c.closed {
+		c.gate.finishing = false
+		if c.gate.closed {
 			c.mu.Unlock()
 			return
 		}
@@ -971,8 +959,8 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 		c.parkedTurns = c.parkedTurns[1:]
 		ctx, cancel := context.WithCancel(extension.ContextWithRuntimeOwner(context.Background(), c.runtimeOwner))
 		c.cancel = cancel
-		c.running = true
-		c.canceling = false
+		c.gate.running = true
+		c.gate.canceling = false
 		c.mu.Unlock()
 		c.spawnGuardedTurn(ctx, cancel, next)
 	}()
@@ -2032,7 +2020,7 @@ func (c *Controller) Cancel() {
 	c.mu.Lock()
 	cancel := c.cancel
 	if cancel != nil {
-		c.canceling = true
+		c.gate.canceling = true
 	}
 	c.mu.Unlock()
 	if cancel != nil {
@@ -2049,25 +2037,25 @@ func (c *Controller) Cancel() {
 func (c *Controller) Running() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.running || c.finishing
+	return c.gate.active()
 }
 
 // beginRotation claims the session-rotation gate. It fails if a turn is running
 // or another rotation is already in progress, so the caller holds exclusive
 // rights to swap the executor session from the check here through endRotation.
-// This closes the TOCTOU window that a bare `if c.running` check left open:
+// This closes the TOCTOU window that a bare `if c.gate.running` check left open:
 // between that check and the actual SetSession, a turn could start and then be
 // yanked out from under the run loop.
 func (c *Controller) beginRotation() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.running || c.finishing {
+	if c.gate.active() {
 		return errTurnRunningRotation
 	}
-	if c.rotating {
+	if c.gate.rotating {
 		return errRotationInProgress
 	}
-	c.rotating = true
+	c.gate.rotating = true
 	return nil
 }
 
@@ -2075,7 +2063,7 @@ func (c *Controller) beginRotation() error {
 func (c *Controller) CancelRequested() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.canceling
+	return c.gate.canceling
 }
 
 // PendingPrompt reports whether the current turn is blocked waiting for a user
@@ -2087,9 +2075,9 @@ func (c *Controller) PendingPrompt() bool {
 // RuntimeStatus reports the active work owned by the foreground controller.
 func (c *Controller) RuntimeStatus() RuntimeStatus {
 	c.mu.Lock()
-	running := c.running
-	active := running || c.finishing
-	canceling := c.canceling
+	running := c.gate.running
+	active := running || c.gate.finishing
+	canceling := c.gate.canceling
 	c.mu.Unlock()
 	pending := c.approval.hasPending()
 	backgroundJobs := len(c.Jobs())
@@ -2410,7 +2398,7 @@ func (c *Controller) refreshInteractiveGate() {
 func (c *Controller) TrySteer(text string) bool {
 	c.mu.Lock()
 	exec := c.executor
-	running := c.running
+	running := c.gate.running
 	c.mu.Unlock()
 	return running && exec != nil && exec.Steer(text)
 }
@@ -2925,7 +2913,7 @@ func (c *Controller) NewSession() error {
 		return nil
 	}
 	// Claim the rotation gate for the whole snapshot-then-swap sequence. A bare
-	// `if c.running` check released before Snapshot() left a window where a turn
+	// `if c.gate.running` check released before Snapshot() left a window where a turn
 	// could start during the snapshot and then have its live session replaced by
 	// the SetSession below. Submit ("/new") and the bot gateway call this
 	// asynchronously, so the gate is load-bearing, not defensive.
@@ -5342,15 +5330,15 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 		// without the closed flag a submit landing after this critical
 		// section (while a running turn's TurnDone delivery is still in
 		// flight) would park again and start after teardown.
-		c.closed = true
+		c.gate.closed = true
 		c.parkedTurns = nil
 		// A finishing-only controller no longer needs the delivery gate because
 		// closed seals every admission path. Keep running truthful until the
 		// foreground goroutine actually exits; clearing it here would report idle
 		// while tools and prompt waiters were still live.
-		c.finishing = false
+		c.gate.finishing = false
 		if cancel != nil {
-			c.canceling = true
+			c.gate.canceling = true
 		}
 		c.mu.Unlock()
 		if cancel != nil {

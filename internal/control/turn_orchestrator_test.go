@@ -781,7 +781,7 @@ func TestTurnOrchestratorCancelPreservesVisibleUserPrompt(t *testing.T) {
 	c.SetPlanMode(true)
 	// Simulate a user-initiated cancel: set the cancelling flag.
 	c.mu.Lock()
-	c.canceling = true
+	c.gate.canceling = true
 	c.mu.Unlock()
 
 	// Pre-seed todoState as if a successful todo_write from the cancelled turn
@@ -876,7 +876,7 @@ func TestTurnOrchestratorInterruptedAfterCompactionRelocatesVisibleTurn(t *testi
 			c := New(Options{Runner: runner, Executor: agent.New(nil, nil, sess, agent.Options{}, event.Discard)})
 			if tc.cancel {
 				c.mu.Lock()
-				c.canceling = true
+				c.gate.canceling = true
 				c.mu.Unlock()
 			}
 
@@ -920,7 +920,7 @@ func TestTurnOrchestratorCancelClassifiesCancelledToolResultAsInterrupted(t *tes
 	}
 	c := New(Options{Runner: runner, Executor: agent.New(nil, nil, sess, agent.Options{}, event.Discard)})
 	c.mu.Lock()
-	c.canceling = true
+	c.gate.canceling = true
 	c.mu.Unlock()
 
 	err := newTurnOrchestrator(c).runTurnWithRawDisplay(context.Background(), "run tests", "run tests", "")
@@ -954,7 +954,7 @@ func TestTurnOrchestratorCancelBeforeRunnerAddsUserPreservesVisiblePrompt(t *tes
 	})
 	c.SetPlanMode(true)
 	c.mu.Lock()
-	c.canceling = true
+	c.gate.canceling = true
 	c.mu.Unlock()
 
 	err := newTurnOrchestrator(c).runTurnWithImageRefsRawDisplay(context.Background(), "Referenced context:\n\n<image path=\"diagram.png\">\n@diagram.png\n</image>\n\ninspect the diagnostic", "inspect the diagnostic", "@diagram.png", "")
@@ -1007,7 +1007,7 @@ func TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk(t *testing.T) {
 	})
 	c.SetPlanMode(true)
 	c.mu.Lock()
-	c.canceling = true
+	c.gate.canceling = true
 	c.mu.Unlock()
 
 	o := newTurnOrchestrator(c)

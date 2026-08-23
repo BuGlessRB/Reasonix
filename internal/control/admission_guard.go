@@ -47,7 +47,7 @@ func (c *Controller) admitGuardedTurn(body func(ctx context.Context) error, park
 		return turnDroppedWriteAuthority
 	}
 	c.mu.Lock()
-	if c.closed {
+	if c.gate.closed {
 		c.mu.Unlock()
 		return turnDroppedClosed
 	}
@@ -56,12 +56,12 @@ func (c *Controller) admitGuardedTurn(body func(ctx context.Context) error, park
 		c.emitDrainingNotice()
 		return turnDroppedDraining
 	}
-	if c.rotating {
+	if c.gate.rotating {
 		c.mu.Unlock()
 		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "input was not accepted: the session is being switched — please resend"})
 		return turnDroppedRotating
 	}
-	if c.running {
+	if c.gate.running {
 		if parkWhileRunning {
 			c.parkedTurns = append(c.parkedTurns, body)
 			c.mu.Unlock()
@@ -70,7 +70,7 @@ func (c *Controller) admitGuardedTurn(body func(ctx context.Context) error, park
 		c.mu.Unlock()
 		return turnDroppedRunning
 	}
-	if c.finishing {
+	if c.gate.finishing {
 		if !parkWhileFinishing {
 			c.mu.Unlock()
 			return turnDroppedRunning
@@ -81,8 +81,8 @@ func (c *Controller) admitGuardedTurn(body func(ctx context.Context) error, park
 	}
 	ctx, cancel := context.WithCancel(extension.ContextWithRuntimeOwner(context.Background(), c.runtimeOwner))
 	c.cancel = cancel
-	c.running = true
-	c.canceling = false
+	c.gate.running = true
+	c.gate.canceling = false
 	c.mu.Unlock()
 	if onStart != nil {
 		onStart()

@@ -228,7 +228,7 @@ func TestSubmitBranchEmitsErrorNoticeWhileRunning(t *testing.T) {
 	c.SetSessionPath(agent.NewSessionPath(c.sessionDir, "test"))
 
 	c.mu.Lock()
-	c.running = true
+	c.gate.running = true
 	c.mu.Unlock()
 
 	c.Submit("/branch experiment")
