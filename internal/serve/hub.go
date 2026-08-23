@@ -104,10 +104,9 @@ type HubOptions struct {
 	// capabilities. A window adds system notifications here; a networked server
 	// leaves it nil, or they fire on the kernel's machine, not the watcher's.
 	DecorateSink func(event.Sink) event.Sink
-	// AttachRemote makes a host's workspace reachable, returning the endpoint and
-	// the hold to give back when the pane closes. Nil refuses: a server that
-	// dials onward on a request's say-so is someone else's way into the network.
-	AttachRemote func(ctx context.Context, host, workspace string) (RemoteEndpoint, func(), error)
+	// Remote reaches workspaces on other machines. Nil refuses them: a server
+	// that dials onward on a request's say-so is someone else's way in.
+	Remote RemoteAttacher
 }
 
 // OpenRequest asks for a runtime. An empty SessionPath opens a fresh session in
@@ -382,6 +381,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("GET /runtimes", h.listRuntimes)
 	mux.HandleFunc("POST /runtimes", h.openRuntime)
 	mux.HandleFunc("POST /runtimes/{id}/close", h.closeRuntime)
+	mux.HandleFunc("GET /remotes", h.listRemoteHosts)
 	mux.HandleFunc("POST /remotes/open", h.openRemoteRuntime)
 	h.registerTreeRoutes(mux)
 	mux.HandleFunc(runtimePrefix+"{id}/", h.routeRuntime)

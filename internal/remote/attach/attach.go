@@ -105,6 +105,42 @@ type link struct {
 	install string // the host entry's own strategy, read once at dial
 	refs    int
 	spaces  map[string]*space
+	state   HostState
+}
+
+// HostState is what a frontend shows for one machine: where its link stands,
+// and — while a first connect is still running — which step it reached. The
+// pool records it whether or not a caller asked to watch, because the window
+// that displays it is not always the one that opened the connection.
+type HostState struct {
+	Status  remote.Status
+	Attempt int
+	Step    string
+	Detail  string
+	Err     string
+	Panes   int
+}
+
+// States reports every host this pool holds a link for.
+func (p *Pool) States() map[string]HostState {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make(map[string]HostState, len(p.links))
+	for host, l := range p.links {
+		state := l.state
+		for _, s := range l.spaces {
+			state.Panes += s.refs
+		}
+		out[host] = state
+	}
+	return out
+}
+
+// record folds one link's state change in under the pool's lock.
+func (p *Pool) record(l *link, apply func(*HostState)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	apply(&l.state)
 }
 
 type space struct {
@@ -221,6 +257,16 @@ func (p *Pool) dial(l *link, call Call) (unsubscribe func()) {
 		fail(err)
 		return nil
 	}
+	// The pool's own watcher, separate from the caller's: a window that opens a
+	// second pane an hour later reads this, having subscribed to nothing.
+	client.Subscribe(func(ev remote.StatusEvent) {
+		p.record(l, func(st *HostState) {
+			st.Status, st.Attempt, st.Err = ev.Status, ev.Attempt, ""
+			if ev.Err != nil {
+				st.Err = ev.Err.Error()
+			}
+		})
+	})
 	if call.OnStatus != nil {
 		unsubscribe = client.Subscribe(call.OnStatus)
 	}
@@ -289,7 +335,12 @@ func (p *Pool) serve(ctx context.Context, l *link, s *space, workspace string, c
 		ProductVersion: p.opts.Version,
 		FetchBinary:    p.opts.FetchBinary,
 		MinVersion:     bootstrap.MinServeVersion,
-		Progress:       call.Progress,
+		Progress: func(step, detail string) {
+			p.record(l, func(st *HostState) { st.Step, st.Detail = step, detail })
+			if call.Progress != nil {
+				call.Progress(step, detail)
+			}
+		},
 	})
 	if err != nil {
 		s.err = err
@@ -310,6 +361,7 @@ func (p *Pool) serve(ctx context.Context, l *link, s *space, workspace string, c
 		p.forgetSpace(l, s)
 		return
 	}
+	p.record(l, func(st *HostState) { st.Step, st.Detail = "", "" })
 	s.workspace, s.addr, s.token, s.forward = res.State.Workspace, bound, res.Token, name
 }
 

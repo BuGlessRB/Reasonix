@@ -7,10 +7,24 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+// stubAttacher stands in for the window's link layer.
+type stubAttacher struct {
+	attach func(host, workspace string) (RemoteEndpoint, func(), error)
+	states map[string]RemoteLinkState
+}
+
+func (s *stubAttacher) Attach(_ context.Context, host, workspace string) (RemoteEndpoint, func(), error) {
+	return s.attach(host, workspace)
+}
+
+func (s *stubAttacher) States() map[string]RemoteLinkState { return s.states }
 
 // remoteKernel stands in for a `reasonix serve` on another machine. It records
 // what the proxy presented so the tests can assert on the far side.
@@ -291,8 +305,8 @@ func TestOpenRemoteIsRefusedWhereNoAttacherIsWired(t *testing.T) {
 func TestOpenRemoteEndpointPublishesTheProxiedPane(t *testing.T) {
 	t.Setenv("REASONIX_HOME", t.TempDir())
 	rk := fakeRemoteKernel(t)
-	h := NewHub(HubOptions{
-		AttachRemote: func(_ context.Context, host, workspace string) (RemoteEndpoint, func(), error) {
+	h := NewHub(HubOptions{Remote: &stubAttacher{
+		attach: func(host, workspace string) (RemoteEndpoint, func(), error) {
 			return RemoteEndpoint{
 				Host:      host,
 				Workspace: workspace,
@@ -300,7 +314,7 @@ func TestOpenRemoteEndpointPublishesTheProxiedPane(t *testing.T) {
 				Token:     "remote-secret",
 			}, func() {}, nil
 		},
-	})
+	}})
 	front := httptest.NewServer(h.Handler())
 	defer front.Close()
 
@@ -331,13 +345,13 @@ func TestOpenRemoteGivesBackTheHoldWhenTheHubRefuses(t *testing.T) {
 	t.Setenv("REASONIX_HOME", t.TempDir())
 	rk := fakeRemoteKernel(t)
 	released := make(chan struct{}, 1)
-	h := NewHub(HubOptions{
-		AttachRemote: func(context.Context, string, string) (RemoteEndpoint, func(), error) {
+	h := NewHub(HubOptions{Remote: &stubAttacher{
+		attach: func(string, string) (RemoteEndpoint, func(), error) {
 			// No workspace: the hub validates the endpoint and turns it down.
 			return RemoteEndpoint{Host: "gpu-box", Addr: rk.Listener.Addr().String()},
 				func() { released <- struct{}{} }, nil
 		},
-	})
+	}})
 	front := httptest.NewServer(h.Handler())
 	defer front.Close()
 
@@ -353,5 +367,60 @@ func TestOpenRemoteGivesBackTheHoldWhenTheHubRefuses(t *testing.T) {
 	case <-released:
 	case <-time.After(time.Second):
 		t.Fatal("the refused pane never gave its connection hold back")
+	}
+}
+
+// The host book is configuration; what each link is doing is the attacher's.
+// The row the sidebar draws needs both, and a host nobody has connected to
+// still has to appear — that is where the connect button lives.
+func TestRemoteHostsJoinTheBookWithLiveLinkState(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	// Remote hosts are user-global, so the book lives in the home config, never
+	// in a project file — the same rule `reasonix remote add` writes under.
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(`
+[[remote.hosts]]
+name = "gpu-box"
+host = "10.0.0.4"
+user = "ada"
+port = 2222
+workspace = "/srv/training"
+
+[[remote.hosts]]
+name = "spare"
+host = "10.0.0.5"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := NewHub(HubOptions{Remote: &stubAttacher{states: map[string]RemoteLinkState{
+		"gpu-box": {Status: "degraded", Err: "forward 8080 未挂上", Panes: 2},
+	}}})
+	front := httptest.NewServer(h.Handler())
+	defer front.Close()
+
+	var rows []RemoteHostView
+	resp, err := http.Get(front.URL + "/remotes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("listed %d hosts, want 2", len(rows))
+	}
+	if rows[0].Target != "ada@10.0.0.4:2222" {
+		t.Fatalf("target = %q, want the address a user would type", rows[0].Target)
+	}
+	if rows[0].Status != "degraded" || rows[0].Panes != 2 {
+		t.Fatalf("live state was dropped: %+v", rows[0])
+	}
+	// A host with no link is idle, not missing: its row is where connecting starts.
+	if rows[1].Name != "spare" || rows[1].Status != "idle" {
+		t.Fatalf("unconnected host = %+v, want an idle row", rows[1])
+	}
+	if rows[1].Target != "10.0.0.5" {
+		t.Fatalf("target = %q, want no user or default port spelled out", rows[1].Target)
 	}
 }

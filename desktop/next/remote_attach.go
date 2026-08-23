@@ -12,28 +12,47 @@ import (
 	"reasonix/internal/serve"
 )
 
-// remoteAttacher gives the hub a way to reach a workspace on another machine.
-// Prompts are left unset for now: a first-seen host key and a typed passphrase
-// both need a dialog this window does not have yet, and refusing is the safe
+// remoteLink gives the hub what it needs for panes on other machines. Prompts
+// are left unset for now: a first-seen host key and a typed passphrase both
+// need a dialog this window does not have yet, and refusing is the safe
 // direction — a host already in known_hosts, reached by key or agent, connects.
-func remoteAttacher(ctx context.Context) func(context.Context, string, string) (serve.RemoteEndpoint, func(), error) {
-	pool := attach.NewPool(ctx, attach.Options{
+type remoteLink struct{ pool *attach.Pool }
+
+func newRemoteLink(ctx context.Context) *remoteLink {
+	return &remoteLink{pool: attach.NewPool(ctx, attach.Options{
 		LocalBinary: currentExecutable(),
 		Version:     version,
 		FetchBinary: fetchRemoteBinary,
-	})
-	return func(ctx context.Context, host, workspace string) (serve.RemoteEndpoint, func(), error) {
-		ep, err := pool.Attach(ctx, host, workspace, attach.Call{})
-		if err != nil {
-			return serve.RemoteEndpoint{}, nil, err
-		}
-		return serve.RemoteEndpoint{
-			Host:      ep.Host,
-			Workspace: ep.Workspace,
-			Addr:      ep.Addr,
-			Token:     ep.Token,
-		}, ep.Release, nil
+	})}
+}
+
+func (r *remoteLink) Attach(ctx context.Context, host, workspace string) (serve.RemoteEndpoint, func(), error) {
+	ep, err := r.pool.Attach(ctx, host, workspace, attach.Call{})
+	if err != nil {
+		return serve.RemoteEndpoint{}, nil, err
 	}
+	return serve.RemoteEndpoint{
+		Host:      ep.Host,
+		Workspace: ep.Workspace,
+		Addr:      ep.Addr,
+		Token:     ep.Token,
+	}, ep.Release, nil
+}
+
+func (r *remoteLink) States() map[string]serve.RemoteLinkState {
+	live := r.pool.States()
+	out := make(map[string]serve.RemoteLinkState, len(live))
+	for host, st := range live {
+		out[host] = serve.RemoteLinkState{
+			Status:  st.Status.String(),
+			Attempt: st.Attempt,
+			Step:    st.Step,
+			Detail:  st.Detail,
+			Err:     st.Err,
+			Panes:   st.Panes,
+		}
+	}
+	return out
 }
 
 func currentExecutable() string {
