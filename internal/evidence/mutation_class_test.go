@@ -82,7 +82,7 @@ func TestUnknownStillCountsAsMutation(t *testing.T) {
 	if !ToolCallMutates("bash", args, false) {
 		t.Fatal("unknown command must still count as a mutation")
 	}
-	r := ReceiptFromToolCall("bash", args, true, false)
+	r := ReceiptFromToolCall("bash", args, true, ToolFacts{})
 	if !r.Mutation {
 		t.Fatal("receipt must record the mutation")
 	}
@@ -104,8 +104,8 @@ func TestUngradedMutationDoesNotScoreOpaque(t *testing.T) {
 // prove read-only. The check must not become the change set the reviewer sees.
 func TestCheckAfterEditKeepsPathScoredRisk(t *testing.T) {
 	receipts := []Receipt{
-		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, false),
-		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"gofmt -l ."}`), true, false),
+		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, ToolFacts{WritesNamedPaths: true}),
+		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"gofmt -l ."}`), true, ToolFacts{}),
 	}
 	if got := ClassifyMutationRisk(receipts, 0, nil); got != RiskMedium {
 		t.Fatalf("risk after check = %s, want %s", got, RiskMedium)

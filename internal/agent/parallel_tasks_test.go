@@ -248,7 +248,7 @@ func TestParallelTasksInheritLanguagePreferencesFromContext(t *testing.T) {
 func TestParallelTasksDoesNotExposeWriterToolsToChildren(t *testing.T) {
 	var writerCalls int32
 	parentReg := tool.NewRegistry()
-	parentReg.Add(fakeTool{name: "write_file", readOnly: false, calls: &writerCalls})
+	parentReg.Add(fakeTool{name: "write_file", readOnly: false, calls: &writerCalls, writesPaths: true})
 	task := newTestTaskTool(t, writerCallingProvider{}, parentReg, "sys", "", "", nil)
 	parallel := NewParallelTasksTool(task, parentReg)
 	ctx := withCallContext(context.Background(), "parallel-call", event.Discard, nil, false)

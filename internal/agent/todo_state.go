@@ -62,7 +62,7 @@ func (a *Agent) recordTodoState(todos []evidence.TodoItem) {
 	if err != nil {
 		return
 	}
-	a.task.ledger.Record(evidence.ReceiptFromToolCall("todo_write", json.RawMessage(args), true, true))
+	a.task.ledger.Record(evidence.ReceiptFromToolCall("todo_write", json.RawMessage(args), true, evidence.ToolFacts{ReadOnly: true}))
 }
 
 func canonicalTodoStatus(s string) string {

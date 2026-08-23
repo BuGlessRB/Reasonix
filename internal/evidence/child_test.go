@@ -19,14 +19,14 @@ func TestMetaToolsDoNotMutate(t *testing.T) {
 
 func TestMergeChildPropagatesRealWrites(t *testing.T) {
 	parent := NewLedger()
-	parent.Record(ReceiptFromToolCall("task", json.RawMessage(`{"prompt":"edit"}`), true, false))
+	parent.Record(ReceiptFromToolCall("task", json.RawMessage(`{"prompt":"edit"}`), true, ToolFacts{}))
 	if _, ok := parent.LatestSuccessfulMutationIndex(); ok {
 		t.Fatal("task alone must not create a mutation index")
 	}
 
 	child := NewLedger()
-	child.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
-	child.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/a.go"}`), true, true))
+	child.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, ToolFacts{WritesNamedPaths: true}))
+	child.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/a.go"}`), true, ToolFacts{ReadOnly: true}))
 	parent.MergeChild(child.Summary())
 
 	idx, ok := parent.LatestSuccessfulMutationIndex()
@@ -45,14 +45,14 @@ func TestMergeChildPropagatesRealWrites(t *testing.T) {
 
 func TestClassifyMutationRisk(t *testing.T) {
 	low := []Receipt{
-		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"docs/GUIDE.md"}`), true, false),
+		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"docs/GUIDE.md"}`), true, ToolFacts{WritesNamedPaths: true}),
 	}
 	if got := ClassifyMutationRisk(low, 0, nil); got != RiskLow {
 		t.Fatalf("docs risk = %s, want low", got)
 	}
 
 	med := []Receipt{
-		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, false),
+		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, ToolFacts{WritesNamedPaths: true}),
 	}
 	if got := ClassifyMutationRisk(med, 0, nil); got != RiskMedium {
 		t.Fatalf("prod risk = %s, want medium", got)
@@ -61,7 +61,7 @@ func TestClassifyMutationRisk(t *testing.T) {
 	// Sensitivity is declared, never inferred from spelling. Undeclared, a
 	// permission file is ordinary production code; declared, it is High.
 	high := []Receipt{
-		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, false),
+		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, ToolFacts{WritesNamedPaths: true}),
 	}
 	if got := ClassifyMutationRisk(high, 0, nil); got != RiskMedium {
 		t.Fatalf("undeclared path risk = %s, want medium", got)
@@ -72,7 +72,7 @@ func TestClassifyMutationRisk(t *testing.T) {
 	// The retired table matched any path spelling these words. A trace file is
 	// not a data race and a blocked-outcome file is not a lock.
 	for _, p := range []string{"cmd/e2ebench/phasetrace.go", "internal/agent/conclude_blocked.go"} {
-		spurious := []Receipt{ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"`+p+`"}`), true, false)}
+		spurious := []Receipt{ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"`+p+`"}`), true, ToolFacts{WritesNamedPaths: true})}
 		if got := ClassifyMutationRisk(spurious, 0, []string{"internal/permission/**"}); got != RiskMedium {
 			t.Fatalf("%s risk = %s, want medium (spelling is not sensitivity)", p, got)
 		}
@@ -80,7 +80,7 @@ func TestClassifyMutationRisk(t *testing.T) {
 
 	// A proven path-less write cannot be scored by path, so it remains high risk.
 	opaque := []Receipt{
-		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"printf hi > out.log"}`), true, false),
+		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"printf hi > out.log"}`), true, ToolFacts{}),
 	}
 	if got := ClassifyMutationRisk(opaque, 0, nil); got != RiskHigh {
 		t.Fatalf("opaque risk = %s, want high", got)
@@ -89,7 +89,7 @@ func TestClassifyMutationRisk(t *testing.T) {
 	// A command the host merely failed to prove read-only names no change set,
 	// so it scores nothing rather than summoning a reviewer with no files.
 	unproven := []Receipt{
-		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"gofmt -l ."}`), true, false),
+		ReceiptFromToolCall("bash", json.RawMessage(`{"command":"gofmt -l ."}`), true, ToolFacts{}),
 	}
 	if got := ClassifyMutationRisk(unproven, 0, nil); got != RiskLow {
 		t.Fatalf("unproven risk = %s, want low", got)
@@ -106,7 +106,7 @@ func TestClassifyMutationRisk(t *testing.T) {
 	// An opaque write alongside a declared-sensitive path still classifies High.
 	opaqueHighPath := []Receipt{
 		{ToolName: "bash", Success: true, Mutation: true},
-		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, false),
+		ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, ToolFacts{WritesNamedPaths: true}),
 	}
 	if got := ClassifyMutationRisk(opaqueHighPath, 0, []string{"internal/permission/**"}); got != RiskHigh {
 		t.Fatalf("opaque+declared risk = %s, want high", got)
@@ -115,7 +115,7 @@ func TestClassifyMutationRisk(t *testing.T) {
 
 func TestStructuredReviewReportGate(t *testing.T) {
 	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 	mutation, ok := ledger.LatestSuccessfulMutationIndex()
 	if !ok {
 		t.Fatal("expected mutation")
@@ -158,7 +158,7 @@ func TestPrivilegedMutationMatchesIdentityNotFragments(t *testing.T) {
 	}
 	ordinary := []string{"plugin_lint", "list_plugins", "edit_file", "multi_edit", "install_sourcemap"}
 	for _, name := range ordinary {
-		r := ReceiptFromToolCall(name, json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, false)
+		r := ReceiptFromToolCall(name, json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, ToolFacts{})
 		if got := ClassifyMutationRisk([]Receipt{r}, 0, nil); got == RiskHigh {
 			t.Errorf("%s risk = high: a name fragment is not a privileged surface", name)
 		}

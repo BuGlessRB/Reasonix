@@ -22,7 +22,7 @@ func TestOutcomeTrackerSeparatesExplorationFromObjective(t *testing.T) {
 	}
 
 	// A mutation is churn, not objective progress — the legacy scorer disagrees.
-	write := ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"b.go","content":"x"}`), true, false)
+	write := ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"b.go","content":"x"}`), true, ToolFacts{WritesNamedPaths: true})
 	s = tr.ScoreRound([]Receipt{write})
 	if s.Churn != 1 || s.Objective != 0 || s.Exploration != 0 {
 		t.Fatalf("mutation = %+v, want churn 1 only", s)
@@ -47,7 +47,7 @@ func TestOutcomeTrackerSeparatesExplorationFromObjective(t *testing.T) {
 func TestOutcomeTrackerDelegationAndRepeatsAreExplorationAtBest(t *testing.T) {
 	tr := NewOutcomeTracker()
 
-	task := ReceiptFromToolCall("task", json.RawMessage(`{"prompt":"dig"}`), true, false)
+	task := ReceiptFromToolCall("task", json.RawMessage(`{"prompt":"dig"}`), true, ToolFacts{})
 	s := tr.ScoreRound([]Receipt{task})
 	if s.Exploration != 1 || s.Objective != 0 {
 		t.Fatalf("delegation = %+v, want exploration 1 objective 0", s)
@@ -65,7 +65,7 @@ func TestOutcomeTrackerDelegationAndRepeatsAreExplorationAtBest(t *testing.T) {
 
 	// A repeat delegation still returned content the host cannot judge — it
 	// stays exploration and can never move the objective dimension.
-	repeat := ReceiptFromToolCall("task", json.RawMessage(`{"prompt":"dig"}`), true, false)
+	repeat := ReceiptFromToolCall("task", json.RawMessage(`{"prompt":"dig"}`), true, ToolFacts{})
 	s = tr.ScoreRound([]Receipt{repeat})
 	if s.Exploration != 1 || s.Objective != 0 {
 		t.Fatalf("repeated delegation = %+v, want exploration 1 objective 0", s)
@@ -81,7 +81,7 @@ func TestOutcomeTrackerVerificationDebtLifecycle(t *testing.T) {
 	tr := NewOutcomeTracker()
 
 	// A mutation opens debt; silent rounds age it.
-	write := ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"pkg/repro.py","content":"x"}`), true, false)
+	write := ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"pkg/repro.py","content":"x"}`), true, ToolFacts{WritesNamedPaths: true})
 	if s := tr.ScoreRound([]Receipt{write}); s.DebtAge != 1 || s.Discriminating != 0 {
 		t.Fatalf("mutation round = %+v, want debt age 1", s)
 	}
@@ -100,7 +100,7 @@ func TestOutcomeTrackerVerificationDebtLifecycle(t *testing.T) {
 	}
 	// A second mutation raises the blind count; the counter tracks mutations,
 	// not rounds.
-	if s := tr.ScoreRound([]Receipt{ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"pkg/b.py","content":"y"}`), true, false)}); s.BlindMutations != 2 {
+	if s := tr.ScoreRound([]Receipt{ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"pkg/b.py","content":"y"}`), true, ToolFacts{WritesNamedPaths: true})}); s.BlindMutations != 2 {
 		t.Fatalf("second mutation = %+v, want blind 2", s)
 	}
 	// Running the mutated file is a discriminating observation even though it
@@ -150,7 +150,7 @@ func TestOutcomeObjectiveSurvivesOutputTrimming(t *testing.T) {
 func TestOutcomeTrackerCountsTheCheckATurnIsStuckOn(t *testing.T) {
 	tr := NewOutcomeTracker()
 	edit := func() Receipt {
-		return ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"game.js"}`), true, false)
+		return ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"game.js"}`), true, ToolFacts{WritesNamedPaths: true})
 	}
 	check := func(passed bool) Receipt { return bashReceipt("node --check game.js", passed) }
 

@@ -278,7 +278,7 @@ func (a *Agent) omitLowValueForSummary(fold []provider.Message, budget int) []pr
 // hard ceiling, where whatever it produces is forced through. Only a digest
 // carrying none of the fold's changes is refused.
 func (a *Agent) repairFoldCoverage(ctx context.Context, mustFree bool, fold []provider.Message, instructions string, res foldSummary) (foldSummary, error) {
-	cov := measureFoldCoverage(fold, a.toolIsReadOnly, res.Text)
+	cov := measureFoldCoverage(fold, a.toolFactsFor, res.Text)
 	res.Coverage = cov
 	if !cov.LostAChange() || mustFree {
 		return res, nil
@@ -286,7 +286,7 @@ func (a *Agent) repairFoldCoverage(ctx context.Context, mustFree bool, fold []pr
 	retryInstructions := strings.TrimSpace(instructions + "\n" + coverageRetryInstruction(cov))
 	retry, err := a.foldToSummary(ctx, fold, retryInstructions)
 	if err == nil {
-		if retryCov := measureFoldCoverage(fold, a.toolIsReadOnly, retry.Text); len(retryCov.MissingMut) < len(cov.MissingMut) {
+		if retryCov := measureFoldCoverage(fold, a.toolFactsFor, retry.Text); len(retryCov.MissingMut) < len(cov.MissingMut) {
 			retry.Coverage, retry.CoverageRepaired = retryCov, true
 			retry.Spans = res.Spans + retry.Spans
 			res, cov = retry, retryCov

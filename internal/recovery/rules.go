@@ -190,24 +190,17 @@ func ClassifyEmptySearch(tool string, success bool, readOnly bool, output string
 	return false
 }
 
-// IsDiagnosticSuccess reports a successful read-only diagnostic that must not
-// clear the active failure event (ls/rg/grep/read_file, etc.).
+// IsDiagnosticSuccess reports a read-only observation whose output is worth
+// keeping on the open failure as the investigation that led to a fix. Success
+// never clears a failure event — the caller returns before that either way.
 func IsDiagnosticSuccess(obs Observation) bool {
 	if !obs.Success || obs.Mutates || obs.Verification {
 		return false
 	}
 	switch strings.TrimSpace(obs.Tool) {
 	case "bash":
-		cmd := commandFromArgs(obs.Args)
-		base, _, readOnly := shellsafe.CommandIsReadOnly(cmd)
-		if !readOnly {
-			return false
-		}
-		switch strings.ToLower(filepath.Base(base)) {
-		case "ls", "rg", "grep", "find", "cat", "head", "tail", "wc", "file", "stat", "pwd", "which", "type":
-			return true
-		}
-		return true // other host-proven read-only bash diagnostics
+		_, _, readOnly := shellsafe.CommandIsReadOnly(commandFromArgs(obs.Args))
+		return readOnly
 	case "read_file", "grep", "glob", "ls", "code_index", "codeindex":
 		return obs.ReadOnly
 	default:

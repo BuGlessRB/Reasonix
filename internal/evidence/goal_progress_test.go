@@ -6,10 +6,10 @@ import (
 )
 
 func TestSuccessfulProgressSignaturesUseObservedReadResult(t *testing.T) {
-	first := ReceiptFromToolCall("grep", json.RawMessage(`{"path":"a.go","pattern":"TODO"}`), true, true)
+	first := ReceiptFromToolCall("grep", json.RawMessage(`{"path":"a.go","pattern":"TODO"}`), true, ToolFacts{ReadOnly: true})
 	first.ObserveOutput("a.go:10: TODO")
 	repeat := first
-	changed := ReceiptFromToolCall("grep", json.RawMessage(`{"pattern":"TODO","path":"a.go"}`), true, true)
+	changed := ReceiptFromToolCall("grep", json.RawMessage(`{"pattern":"TODO","path":"a.go"}`), true, ToolFacts{ReadOnly: true})
 	changed.ObserveOutput("a.go:10: TODO\na.go:20: TODO")
 
 	firstSig, ok := progressReceiptSignature(first)

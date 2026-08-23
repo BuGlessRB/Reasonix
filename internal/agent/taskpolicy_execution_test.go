@@ -32,7 +32,7 @@ func TestTaskPolicyLeavesExploreSubagentAlone(t *testing.T) {
 // under plan mode, and reaches for no reading of what the user wrote.
 func TestTaskPolicyBlocksWritersOnlyInPlanMode(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{}, event.Discard)
 	a.turn.policySet = true
 	call := provider.ToolCall{Name: "write_file", Arguments: `{"path":"notes.txt","content":"x"}`}

@@ -46,7 +46,7 @@ func TestTurnEmitsWorkingPhase(t *testing.T) {
 func TestCompletionSummaryEmittedOnMutationContract(t *testing.T) {
 	sink := &phaseSink{}
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{toolCallChunk("w1", "write_file", `{"path":"a.go","content":"package a"}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},

@@ -40,7 +40,7 @@ func TestCompleteSubtaskHostLowersUnbackedClaim(t *testing.T) {
 
 	// The agent host, not the tool, records the call; replay that receipt so the
 	// ledger lookup the report renderer uses is covered too.
-	led.Record(evidence.ReceiptFromToolCall("complete_subtask", json.RawMessage(args), true, true))
+	led.Record(evidence.ReceiptFromToolCall("complete_subtask", json.RawMessage(args), true, evidence.ToolFacts{ReadOnly: true}))
 	report, ok := led.LatestCompletionReport()
 	if !ok {
 		t.Fatal("a recorded complete_subtask call must be recoverable from the ledger")

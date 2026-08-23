@@ -150,7 +150,7 @@ func (a *Agent) mutationEscapesPlan(toolName string, args json.RawMessage) bool 
 	if len(allowed) == 0 {
 		return false
 	}
-	for _, p := range evidence.ReceiptFromToolCall(toolName, args, false, true).Paths {
+	for _, p := range evidence.ReceiptFromToolCall(toolName, args, false, evidence.ToolFacts{ReadOnly: true}).Paths {
 		clean := filepath.Clean(p)
 		if !allowed[clean] && !allowed[filepath.Dir(clean)] {
 			return true

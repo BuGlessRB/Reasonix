@@ -16,7 +16,7 @@ import (
 // other cases in this file construct.
 func TestDeliveryReviewGateHoldsUnderFrozenTaskPolicy(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, false))
+	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, evidence.ToolFacts{}))
 
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "review", readOnly: true})
@@ -88,7 +88,7 @@ func TestDeliveryReviewGateExplainsOpaqueMutationRecovery(t *testing.T) {
 
 func TestNonDeliveryProfileNeverRequiresStructuredReview(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, false))
+	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, evidence.ToolFacts{}))
 
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "review", readOnly: true})
@@ -102,7 +102,7 @@ func TestNonDeliveryProfileNeverRequiresStructuredReview(t *testing.T) {
 
 func TestDeliveryReviewGateHighRiskStillRequiresSecurityReview(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, false))
+	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, evidence.ToolFacts{}))
 
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "review", readOnly: true})
@@ -137,9 +137,9 @@ func TestDeliveryReviewGateHighRiskStillRequiresSecurityReview(t *testing.T) {
 
 func TestDeliveryReviewGateMediumAcceptsHostProvenVerificationAndCoverage(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/agent/parser.go"}`), true, false))
-	ledger.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"go test ./..."}`), true, true))
-	ledger.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/agent/parser.go"}`), true, true))
+	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/agent/parser.go"}`), true, evidence.ToolFacts{}))
+	ledger.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"go test ./..."}`), true, evidence.ToolFacts{ReadOnly: true}))
+	ledger.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/agent/parser.go"}`), true, evidence.ToolFacts{ReadOnly: true}))
 	ledger.Record(evidence.Receipt{ToolName: "complete_step", Success: true, Args: json.RawMessage(`{
 		"step":"fix parser",
 		"evidence":[{"kind":"verification","command":"go test ./..."}]
@@ -153,8 +153,8 @@ func TestDeliveryReviewGateMediumAcceptsHostProvenVerificationAndCoverage(t *tes
 	}
 
 	missingVerification := evidence.NewLedger()
-	missingVerification.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/agent/parser.go"}`), true, false))
-	missingVerification.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/agent/parser.go"}`), true, true))
+	missingVerification.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/agent/parser.go"}`), true, evidence.ToolFacts{}))
+	missingVerification.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/agent/parser.go"}`), true, evidence.ToolFacts{ReadOnly: true}))
 	a.task.ledger = missingVerification
 	if got := a.deliveryReviewGateFailure(); !strings.Contains(got, "host-proven verification") {
 		t.Fatalf("medium-risk review without verification = %q, want host-proof guidance", got)
@@ -163,7 +163,7 @@ func TestDeliveryReviewGateMediumAcceptsHostProvenVerificationAndCoverage(t *tes
 
 func TestDeliveryReviewGateDefersToParentInSubagents(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, false))
+	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/permission/gate.go"}`), true, evidence.ToolFacts{}))
 
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "review", readOnly: true})

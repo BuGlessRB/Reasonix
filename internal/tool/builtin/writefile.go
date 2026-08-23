@@ -49,6 +49,8 @@ func (writeFile) Schema() json.RawMessage {
 
 func (writeFile) ReadOnly() bool { return false }
 
+func (writeFile) WritesNamedPaths() bool { return true }
+
 func (w writeFile) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Path    string `json:"path"`

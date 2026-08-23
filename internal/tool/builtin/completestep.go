@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"reasonix/internal/evidence"
 	"reasonix/internal/instruction"
@@ -412,6 +413,25 @@ func verifyCommandFromSession(ctx context.Context, command string) bool {
 	return false
 }
 
+// builtinToolFacts answers for a name in the transcript out of the set this
+// binary ships, which is the same reach the writer name table it replaces had.
+// An unregistered name reads as a read, so a replay invents no writes.
+var builtinToolFacts = func() func(string) evidence.ToolFacts {
+	byName := sync.OnceValue(func() map[string]evidence.ToolFacts {
+		m := make(map[string]evidence.ToolFacts)
+		for _, t := range tool.Builtins() {
+			m[t.Name()] = evidence.ToolFacts{ReadOnly: t.ReadOnly(), WritesNamedPaths: tool.WritesNamedPaths(t)}
+		}
+		return m
+	})
+	return func(name string) evidence.ToolFacts {
+		if f, ok := byName()[name]; ok {
+			return f
+		}
+		return evidence.ToolFacts{ReadOnly: true}
+	}
+}()
+
 // verifyPathsFromSession is the diff/files analogue of verifyCommandFromSession:
 // it lets a completion cite a file written or read in an earlier turn (the
 // per-turn ledger only has this turn). wantWrite restricts to writer tools.
@@ -420,7 +440,7 @@ func verifyPathsFromSession(ctx context.Context, paths []string, wantWrite bool)
 	if !ok {
 		return false
 	}
-	return evidence.PathsProvenInSession(msgs, paths, wantWrite)
+	return evidence.PathsProvenInSession(msgs, paths, wantWrite, builtinToolFacts)
 }
 
 func failedCallIDs(msgs []provider.Message) map[string]bool {

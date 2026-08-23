@@ -93,7 +93,8 @@ func (fakeWriteFileTool) Description() string { return "Write a file." }
 func (fakeWriteFileTool) Schema() json.RawMessage {
 	return json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`)
 }
-func (fakeWriteFileTool) ReadOnly() bool { return false }
+func (fakeWriteFileTool) ReadOnly() bool         { return false }
+func (fakeWriteFileTool) WritesNamedPaths() bool { return true }
 func (fakeWriteFileTool) Execute(context.Context, json.RawMessage) (string, error) {
 	return "written", nil
 }

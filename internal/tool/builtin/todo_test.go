@@ -277,7 +277,7 @@ func TestTodoWriteRejectsFailedCompleteStepWithoutProof(t *testing.T) {
 		"step":"Run project script",
 		"result":"script ran",
 		"evidence":[]
-	}`), false, true))
+	}`), false, evidence.ToolFacts{ReadOnly: true}))
 	ctx := evidence.WithLedger(context.Background(), ledger)
 	args := json.RawMessage(`{"todos":[{"content":"Run project script","status":"completed"}]}`)
 
@@ -302,7 +302,7 @@ func TestTodoWriteRejectsFailedCompleteStepMissingResult(t *testing.T) {
 	ledger.Record(evidence.ReceiptFromToolCall("complete_step", json.RawMessage(`{
 		"step":"Run project script",
 		"evidence":[{"kind":"manual","summary":"checked manually"}]
-	}`), false, true))
+	}`), false, evidence.ToolFacts{ReadOnly: true}))
 	ctx := evidence.WithLedger(context.Background(), ledger)
 	args := json.RawMessage(`{"todos":[{"content":"Run project script","status":"completed"}]}`)
 
@@ -328,7 +328,7 @@ func TestTodoWriteRecoversAfterFailedCompleteStepWithProgressReceipt(t *testing.
 		"step":"Run project script",
 		"result":"script ran",
 		"evidence":[{"kind":"verification","summary":"script completed","command":"python script.py"}]
-	}`), false, true))
+	}`), false, evidence.ToolFacts{ReadOnly: true}))
 	ctx := evidence.WithLedger(context.Background(), ledger)
 	args := json.RawMessage(`{"todos":[{"content":"Run project script","status":"completed"}]}`)
 
@@ -348,7 +348,7 @@ func TestTodoWriteRejectsRecoveryWhenProgressIsAfterFailedCompleteStep(t *testin
 		"step":"Run project script",
 		"result":"script ran",
 		"evidence":[{"kind":"verification","summary":"script completed","command":"python other.py"}]
-	}`), false, true))
+	}`), false, evidence.ToolFacts{ReadOnly: true}))
 	ledger.Record(evidence.Receipt{
 		ToolName: "write_file",
 		Success:  true,

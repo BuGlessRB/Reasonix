@@ -83,7 +83,7 @@ func TestPlanModeRoutesOrdinaryToolsThroughPermissionGate(t *testing.T) {
 		args     string
 		readOnly bool
 	}{
-		{name: "built-in writer", tool: fakeTool{name: "write_file"}},
+		{name: "built-in writer", tool: fakeTool{name: "write_file", writesPaths: true}},
 		{name: "shell writer", tool: fakeTool{name: "bash"}, args: `{"command":"rm -rf build"}`},
 		{name: "reader", tool: fakeTool{name: "read_file", readOnly: true}, readOnly: true},
 		{
@@ -123,7 +123,7 @@ func TestPlanModeRoutesOrdinaryToolsThroughPermissionGate(t *testing.T) {
 func TestPlanModePermissionDenialStopsWriterBeforeExecution(t *testing.T) {
 	var executions int32
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", calls: &executions})
+	reg.Add(fakeTool{name: "write_file", calls: &executions, writesPaths: true})
 	gate := &recordingPermissionGate{reason: "denied by permission rule"}
 	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
 	a.SetPlanMode(true)
@@ -224,7 +224,7 @@ func TestPlanModeDoesNotInvokeLegacyBashTrustPrompt(t *testing.T) {
 
 func TestPlanModeLegacyOverridesDoNotBypassPermissions(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file"})
+	reg.Add(fakeTool{name: "write_file", writesPaths: true})
 	gate := &recordingPermissionGate{reason: "denied"}
 	a := New(nil, reg, NewSession(""), Options{
 		Gate:                     gate,
@@ -278,7 +278,7 @@ func TestPlanModeDoesNotMutateSystemOrTools(t *testing.T) {
 	}}
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	reg.Add(fakeTool{name: "write_file"})
+	reg.Add(fakeTool{name: "write_file", writesPaths: true})
 	a := New(prov, reg, NewSession("STABLE-SYS"), Options{}, event.Discard)
 
 	if err := a.Run(context.Background(), "explore"); err != nil {
@@ -415,7 +415,7 @@ func TestDestructiveMCPFailsClosedWithoutFreshApprovalGate(t *testing.T) {
 
 func TestPlanModeOffStillUsesSamePermissionGate(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file"})
+	reg.Add(fakeTool{name: "write_file", writesPaths: true})
 	gate := &recordingPermissionGate{allow: true}
 	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
 

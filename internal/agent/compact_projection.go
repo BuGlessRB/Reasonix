@@ -417,7 +417,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		return CompactionNoop, nil
 	}
 	fold, priorIndex := stripFoldIndexFromDigests(fold)
-	foldIndex := buildFoldIndex(msgs[head:start], policyKeep, a.toolIsReadOnly,
+	foldIndex := buildFoldIndex(msgs[head:start], policyKeep, a.toolFactsFor,
 		a.canonicalOriginFor(stateSnapshot, canonical, msgs, head))
 	fixedPrefixTokens := a.estimatedPromptTokens(a.providerProjectionMessages(msgs[:head]))
 	if a.effectiveContextWindow() > 0 && fixedPrefixTokens >= a.compactTrigger() {

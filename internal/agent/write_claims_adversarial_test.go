@@ -27,7 +27,7 @@ func boundWriterFixture(t *testing.T) (root string, writer tool.Tool, inner *rec
 	if err != nil {
 		t.Fatal(err)
 	}
-	inner = &recordingWriter{name: "write_file"}
+	inner = &recordingWriter{name: "write_file", writesPaths: true}
 	reg := tool.NewRegistry()
 	reg.Add(inner)
 	bound, _ := BindWritePaths(reg, claim, root, false)
@@ -75,7 +75,7 @@ func TestWriteClaimChecksMoveDestination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inner := &recordingWriter{name: "move_file"}
+	inner := &recordingWriter{name: "move_file", writesPaths: true}
 	reg := tool.NewRegistry()
 	reg.Add(inner)
 	bound, _ := BindWritePaths(reg, claim, root, false)

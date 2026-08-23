@@ -183,7 +183,7 @@ func TestCompleteStepAllowsManualAsUnverified(t *testing.T) {
 
 func TestCompleteStepExplainsRenewalAgainstCompletedTodoList(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("todo_write", json.RawMessage(`{"todos":[{"content":"Implement","status":"completed"},{"content":"Final review","status":"completed"}]}`), true, true))
+	ledger.Record(evidence.ReceiptFromToolCall("todo_write", json.RawMessage(`{"todos":[{"content":"Implement","status":"completed"},{"content":"Final review","status":"completed"}]}`), true, evidence.ToolFacts{ReadOnly: true}))
 	ctx := evidence.WithLedger(context.Background(), ledger)
 
 	_, err := (completeStep{}).Execute(ctx, json.RawMessage(`{
@@ -203,7 +203,7 @@ func TestCompleteStepExplainsRenewalAgainstCompletedTodoList(t *testing.T) {
 
 func TestCompleteStepDeliveryRejectsOpaqueEvalVerification(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"node -e 'console.log(1)'"}`), true, false))
+	ledger.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"node -e 'console.log(1)'"}`), true, evidence.ToolFacts{}))
 	ctx := evidence.WithDeliveryProfile(evidence.WithLedger(context.Background(), ledger))
 
 	_, err := completeStep{}.Execute(ctx, json.RawMessage(`{
@@ -226,8 +226,8 @@ func TestCompleteStepDeliveryRejectsOpaqueEvalVerification(t *testing.T) {
 
 func TestCompleteStepDeliveryAcceptsNodeSyntaxCheck(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"app.js"}`), true, false))
-	ledger.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"node --check app.js"}`), true, false))
+	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"app.js"}`), true, evidence.ToolFacts{WritesNamedPaths: true}))
+	ledger.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"node --check app.js"}`), true, evidence.ToolFacts{}))
 	ctx := evidence.WithDeliveryProfile(evidence.WithLedger(context.Background(), ledger))
 
 	if _, err := (completeStep{}).Execute(ctx, json.RawMessage(`{
@@ -241,7 +241,7 @@ func TestCompleteStepDeliveryAcceptsNodeSyntaxCheck(t *testing.T) {
 
 func TestCompleteStepDeliveryKeepsReadOnlyEvidenceCompatibility(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"grep -n TODO app.js"}`), true, false))
+	ledger.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"grep -n TODO app.js"}`), true, evidence.ToolFacts{}))
 	ctx := evidence.WithDeliveryProfile(evidence.WithLedger(context.Background(), ledger))
 
 	if _, err := (completeStep{}).Execute(ctx, json.RawMessage(`{
@@ -533,7 +533,7 @@ func TestCompleteStepMatchesParaphrasedCommands(t *testing.T) {
 
 func TestCompleteStepAcceptsSuccessfulReviewEvidence(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), true, true))
+	ledger.Record(evidence.ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), true, evidence.ToolFacts{ReadOnly: true}))
 	ctx := evidence.WithLedger(context.Background(), ledger)
 
 	if _, err := (completeStep{}).Execute(ctx, json.RawMessage(`{
@@ -545,7 +545,7 @@ func TestCompleteStepAcceptsSuccessfulReviewEvidence(t *testing.T) {
 
 func TestCompleteStepRejectsFailedReviewEvidence(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), false, true))
+	ledger.Record(evidence.ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), false, evidence.ToolFacts{ReadOnly: true}))
 	ctx := evidence.WithLedger(context.Background(), ledger)
 
 	if _, err := (completeStep{}).Execute(ctx, json.RawMessage(`{
@@ -557,8 +557,8 @@ func TestCompleteStepRejectsFailedReviewEvidence(t *testing.T) {
 
 func TestCompleteStepRejectsReviewEvidenceBeforeLatestMutation(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), true, true))
-	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, false))
+	ledger.Record(evidence.ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), true, evidence.ToolFacts{ReadOnly: true}))
+	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, evidence.ToolFacts{WritesNamedPaths: true}))
 	ctx := evidence.WithLedger(context.Background(), ledger)
 
 	_, err := (completeStep{}).Execute(ctx, json.RawMessage(`{
@@ -571,7 +571,7 @@ func TestCompleteStepRejectsReviewEvidenceBeforeLatestMutation(t *testing.T) {
 
 func TestCompleteStepAcceptsStructuredReviewWithBlockingFindings(t *testing.T) {
 	ledger := evidence.NewLedger()
-	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, false))
+	ledger.Record(evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, evidence.ToolFacts{WritesNamedPaths: true}))
 	ledger.Record(evidence.Receipt{ToolName: "review_report", Success: true, Args: json.RawMessage(`{
 		"kind":"review",
 		"verdict":"block",

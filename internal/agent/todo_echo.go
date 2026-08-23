@@ -50,6 +50,6 @@ func (a *Agent) todoWriteEchoes(c provider.ToolCall, before []evidence.TodoItem,
 	if c.Name != "todo_write" || errMsg != "" || len(before) == 0 {
 		return false
 	}
-	rec := evidence.ReceiptFromToolCall(c.Name, json.RawMessage(c.Arguments), true, true)
+	rec := evidence.ReceiptFromToolCall(c.Name, json.RawMessage(c.Arguments), true, evidence.ToolFacts{ReadOnly: true})
 	return evidence.SameTodos(before, rec.Todos)
 }

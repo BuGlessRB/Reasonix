@@ -20,6 +20,7 @@ func (previewingEdit) Name() string            { return "edit_file" }
 func (previewingEdit) Description() string     { return "" }
 func (previewingEdit) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
 func (previewingEdit) ReadOnly() bool          { return false }
+func (previewingEdit) WritesNamedPaths() bool  { return true }
 func (p previewingEdit) Preview(context.Context, json.RawMessage) (diff.Change, error) {
 	return p.change, nil
 }

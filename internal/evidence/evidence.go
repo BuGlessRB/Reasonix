@@ -1470,10 +1470,10 @@ func TodoStateFromContext(ctx context.Context) ([]TodoItem, bool) {
 
 // PathsProvenInSession reports whether every path is covered by a successful
 // (non-errored) tool call somewhere in msgs — the cross-turn fallback for diff
-// and files evidence, mirroring verifyCommandFromSession for the per-turn
-// ledger's path receipts (which reset each turn). wantWrite restricts to writer
-// tools (diff); false accepts a reader or writer (files).
-func PathsProvenInSession(msgs []provider.Message, paths []string, wantWrite bool) bool {
+// and files evidence, whose per-turn ledger resets each turn. wantWrite
+// restricts to writer tools (diff); false accepts either. A replay carries only
+// names, so facts resolves each to the contracts its tool declares.
+func PathsProvenInSession(msgs []provider.Message, paths []string, wantWrite bool, facts func(string) ToolFacts) bool {
 	wanted := pathSet(normalizePaths(paths))
 	if len(wanted) == 0 {
 		return false
@@ -1485,7 +1485,7 @@ func PathsProvenInSession(msgs []provider.Message, paths []string, wantWrite boo
 			if failed[tc.ID] {
 				continue
 			}
-			r := ReceiptFromToolCall(tc.Name, json.RawMessage(tc.Arguments), true, false)
+			r := ReceiptFromToolCall(tc.Name, json.RawMessage(tc.Arguments), true, facts(tc.Name))
 			if wantWrite && !r.Write {
 				continue
 			}
@@ -1515,8 +1515,8 @@ func failedSessionCallIDs(msgs []provider.Message) map[string]bool {
 	return failed
 }
 
-func ReceiptFromToolCall(toolName string, args json.RawMessage, success bool, readOnly bool) Receipt {
-	class := ToolCallMutationClass(toolName, args, readOnly)
+func ReceiptFromToolCall(toolName string, args json.RawMessage, success bool, facts ToolFacts) Receipt {
+	class := ToolCallMutationClass(toolName, args, facts.ReadOnly)
 	r := Receipt{
 		ToolName: toolName,
 		Args:     args,
@@ -1546,9 +1546,9 @@ func ReceiptFromToolCall(toolName string, args json.RawMessage, success bool, re
 		r.Paths = extractPaths(fields)
 	}
 
-	if isWriterTool(toolName) {
+	if facts.WritesNamedPaths {
 		r.Write = true
-	} else if isReadReceipt(toolName, readOnly) {
+	} else if isReadReceipt(toolName, facts.ReadOnly) {
 		r.Read = true
 	}
 	return r
@@ -2282,15 +2282,6 @@ func isReadReceipt(name string, readOnly bool) bool {
 		return false
 	default:
 		return isReaderTool(name) || readOnly
-	}
-}
-
-func isWriterTool(name string) bool {
-	switch name {
-	case "write_file", "edit_file", "multi_edit", "move_file", "notebook_edit", "delete_range", "delete_symbol":
-		return true
-	default:
-		return false
 	}
 }
 

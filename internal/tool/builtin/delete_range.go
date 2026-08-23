@@ -46,6 +46,8 @@ func (deleteRange) Schema() json.RawMessage {
 
 func (deleteRange) ReadOnly() bool { return false }
 
+func (deleteRange) WritesNamedPaths() bool { return true }
+
 func (d deleteRange) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	change, src, err := d.preview(ctx, args)
 	if err != nil {

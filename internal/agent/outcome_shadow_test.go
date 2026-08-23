@@ -25,10 +25,10 @@ func TestStalledCheckIsSaidOnceAndOnlyToTheUser(t *testing.T) {
 
 	failingCheck := func() evidence.Receipt {
 		args, _ := json.Marshal(map[string]string{"command": "node --check game.js"})
-		return evidence.ReceiptFromToolCall("bash", args, false, false)
+		return evidence.ReceiptFromToolCall("bash", args, false, evidence.ToolFacts{})
 	}
 	edit := func() evidence.Receipt {
-		return evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"game.js"}`), true, false)
+		return evidence.ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"game.js"}`), true, evidence.ToolFacts{})
 	}
 	round := func(r evidence.Receipt) {
 		mark := a.ledgerMark()
@@ -66,7 +66,7 @@ func TestStalledCheckIsSaidOnceAndOnlyToTheUser(t *testing.T) {
 	// earn its own warning rather than inherit this one's.
 	passing := func() evidence.Receipt {
 		args, _ := json.Marshal(map[string]string{"command": "node --check game.js"})
-		return evidence.ReceiptFromToolCall("bash", args, true, false)
+		return evidence.ReceiptFromToolCall("bash", args, true, evidence.ToolFacts{})
 	}
 	round(passing())
 	round(failingCheck())

@@ -33,14 +33,14 @@ func TestLedgerRecordsSuccessAndFailureReceipts(t *testing.T) {
 
 func TestLedgerDistinguishesWorkflowSpecificMutation(t *testing.T) {
 	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("remember", json.RawMessage(`{"body":"ORBIT-42"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("remember", json.RawMessage(`{"body":"ORBIT-42"}`), true, ToolFacts{}))
 	if !ledger.HasSuccessfulToolReceipt("remember") {
 		t.Fatal("successful remember receipt was not found")
 	}
 	if ledger.HasSuccessfulMutationOtherThan("remember") {
 		t.Fatal("remember-only mutation was treated as an unrelated workspace mutation")
 	}
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 	if !ledger.HasSuccessfulMutationOtherThan("remember") {
 		t.Fatal("workspace mutation was hidden by the remember allowance")
 	}
@@ -48,22 +48,22 @@ func TestLedgerDistinguishesWorkflowSpecificMutation(t *testing.T) {
 
 func TestLedgerMatchesFreshSuccessfulReviewReceipt(t *testing.T) {
 	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), true, true))
+	ledger.Record(ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), true, ToolFacts{ReadOnly: true}))
 	if !ledger.HasCompletedReview() {
 		t.Fatal("successful dedicated review tool should verify review evidence")
 	}
 	legacy := NewLedger()
-	legacy.Record(ReceiptFromToolCall("task", json.RawMessage(`{"profile":"review"}`), true, true))
+	legacy.Record(ReceiptFromToolCall("task", json.RawMessage(`{"profile":"review"}`), true, ToolFacts{ReadOnly: true}))
 	if !legacy.HasCompletedReview() {
 		t.Fatal("successful task(profile=review) should verify review evidence")
 	}
 	failed := NewLedger()
-	failed.Record(ReceiptFromToolCall("task", json.RawMessage(`{"profile":"review"}`), false, true))
+	failed.Record(ReceiptFromToolCall("task", json.RawMessage(`{"profile":"review"}`), false, ToolFacts{ReadOnly: true}))
 	if failed.HasCompletedReview() {
 		t.Fatal("failed review task must not verify review evidence")
 	}
 	background := NewLedger()
-	background.Record(ReceiptFromToolCall("task", json.RawMessage(`{"profile":"review","run_in_background":true}`), true, true))
+	background.Record(ReceiptFromToolCall("task", json.RawMessage(`{"profile":"review","run_in_background":true}`), true, ToolFacts{ReadOnly: true}))
 	if background.HasCompletedReview() {
 		t.Fatal("starting a background review must not count as a completed review")
 	}
@@ -71,8 +71,8 @@ func TestLedgerMatchesFreshSuccessfulReviewReceipt(t *testing.T) {
 
 func TestLedgerRejectsReviewBeforeLatestMutation(t *testing.T) {
 	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), true, true))
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), true, ToolFacts{ReadOnly: true}))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 	if ledger.HasCompletedReview() {
 		t.Fatal("review evidence before the latest mutation must be stale")
 	}
@@ -80,17 +80,17 @@ func TestLedgerRejectsReviewBeforeLatestMutation(t *testing.T) {
 
 func TestLedgerRequiresReviewCoverageAfterMutation(t *testing.T) {
 	fresh := NewLedger()
-	fresh.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, false))
-	fresh.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"changed.go"}`), true, true))
-	fresh.Record(ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), true, true))
+	fresh.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, ToolFacts{WritesNamedPaths: true}))
+	fresh.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"changed.go"}`), true, ToolFacts{ReadOnly: true}))
+	fresh.Record(ReceiptFromToolCall("review", json.RawMessage(`{"task":"review changes"}`), true, ToolFacts{ReadOnly: true}))
 	if !fresh.HasCompletedReview() {
 		t.Fatal("review after reading the latest changed path should count")
 	}
 
 	unrelated := NewLedger()
-	unrelated.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, false))
-	unrelated.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"other.go"}`), true, true))
-	unrelated.Record(ReceiptFromToolCall("review", json.RawMessage(`{"task":"review something else"}`), true, true))
+	unrelated.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, ToolFacts{WritesNamedPaths: true}))
+	unrelated.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"other.go"}`), true, ToolFacts{ReadOnly: true}))
+	unrelated.Record(ReceiptFromToolCall("review", json.RawMessage(`{"task":"review something else"}`), true, ToolFacts{ReadOnly: true}))
 	if unrelated.HasCompletedReview() {
 		t.Fatal("review that did not inspect the latest changed path must not count")
 	}
@@ -98,7 +98,7 @@ func TestLedgerRequiresReviewCoverageAfterMutation(t *testing.T) {
 
 func TestLedgerAcceptsCollectedStructuredReviewReport(t *testing.T) {
 	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"changed.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 	ledger.Record(Receipt{ToolName: "review_report", Success: true, Args: json.RawMessage(`{
 		"kind":"review",
 		"verdict":"block",
@@ -240,7 +240,7 @@ func TestContextCarriesLedger(t *testing.T) {
 }
 
 func TestReceiptFromToolCallExtractsEvidenceFields(t *testing.T) {
-	bash := ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git diff --check"}`), true, false)
+	bash := ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git diff --check"}`), true, ToolFacts{})
 	if bash.Command != "git diff --check" {
 		t.Fatalf("bash command = %q", bash.Command)
 	}
@@ -248,17 +248,17 @@ func TestReceiptFromToolCallExtractsEvidenceFields(t *testing.T) {
 		t.Fatal("bash should not be treated as a verified file writer")
 	}
 
-	write := ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"internal/evidence/evidence.go","content":"x"}`), true, false)
+	write := ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"internal/evidence/evidence.go","content":"x"}`), true, ToolFacts{WritesNamedPaths: true})
 	if !write.Write || len(write.Paths) != 1 || write.Paths[0] != `internal/evidence/evidence.go` {
 		t.Fatalf("write receipt not extracted: %+v", write)
 	}
 
-	read := ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/tool/builtin/completestep.go"}`), true, true)
+	read := ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/tool/builtin/completestep.go"}`), true, ToolFacts{ReadOnly: true})
 	if !read.Read || len(read.Paths) != 1 {
 		t.Fatalf("read receipt not extracted: %+v", read)
 	}
 
-	glob := ReceiptFromToolCall("glob", json.RawMessage(`{"pattern":"**/*.go"}`), true, true)
+	glob := ReceiptFromToolCall("glob", json.RawMessage(`{"pattern":"**/*.go"}`), true, ToolFacts{ReadOnly: true})
 	if !glob.Read {
 		t.Fatalf("generic read-only tool should be treated as read context: %+v", glob)
 	}
@@ -268,7 +268,7 @@ func TestReceiptFromToolCallExtractsTodoWriteItems(t *testing.T) {
 	receipt := ReceiptFromToolCall("todo_write", json.RawMessage(`{"todos":[
 		{"content":"Add parser","status":"in_progress","activeForm":"Adding parser"},
 		{"content":"Wire parser","status":"pending","level":1}
-	]}`), true, true)
+	]}`), true, ToolFacts{ReadOnly: true})
 
 	if len(receipt.Todos) != 2 {
 		t.Fatalf("todos not extracted: %+v", receipt)
@@ -286,7 +286,7 @@ func TestReceiptFromToolCallExtractsCompleteStep(t *testing.T) {
 		"step":"Add parser",
 		"result":"parser added",
 		"evidence":[{"kind":"manual","summary":"checked manually"}]
-	}`), true, true)
+	}`), true, ToolFacts{ReadOnly: true})
 
 	if receipt.Step != "Add parser" {
 		t.Fatalf("complete_step step = %q", receipt.Step)
@@ -301,7 +301,7 @@ func TestReceiptFromToolCallExtractsCompleteStep(t *testing.T) {
 	missingResult := ReceiptFromToolCall("complete_step", json.RawMessage(`{
 		"step":"Add parser",
 		"evidence":[{"kind":"manual","summary":"checked manually"}]
-	}`), false, true)
+	}`), false, ToolFacts{ReadOnly: true})
 	if missingResult.StepProof {
 		t.Fatalf("complete_step without result should not count as proof: %+v", missingResult)
 	}
@@ -310,7 +310,7 @@ func TestReceiptFromToolCallExtractsCompleteStep(t *testing.T) {
 		"step":"Add parser",
 		"result":"parser added",
 		"evidence":[{"kind":"verification","summary":"checked manually"}]
-	}`), false, true)
+	}`), false, ToolFacts{ReadOnly: true})
 	if missingCommand.StepProof {
 		t.Fatalf("verification evidence without command should not count as proof: %+v", missingCommand)
 	}
@@ -319,7 +319,7 @@ func TestReceiptFromToolCallExtractsCompleteStep(t *testing.T) {
 		"step":"Add parser",
 		"result":"parser added",
 		"evidence":[]
-	}`), false, true)
+	}`), false, ToolFacts{ReadOnly: true})
 	if emptyProof.StepProof {
 		t.Fatalf("empty complete_step evidence should not count as proof: %+v", emptyProof)
 	}
@@ -330,7 +330,7 @@ func TestReceiptFromToolCallExtractsCompleteStepIndex(t *testing.T) {
 		"step_index":2,
 		"result":"done",
 		"evidence":[{"kind":"manual","summary":"checked"}]
-	}`), true, true)
+	}`), true, ToolFacts{ReadOnly: true})
 
 	if receipt.Step != "2" {
 		t.Fatalf("step index not extracted as step identity: %+v", receipt)
@@ -860,13 +860,13 @@ func TestAdvanceSerialTodoAdvancesOrphanSubStep(t *testing.T) {
 
 func TestSuccessfulProgressSignaturesIgnoreExactRepeatsAndBookkeeping(t *testing.T) {
 	ledger := NewLedger()
-	read := ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"a.go"}`), true, true)
+	read := ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"a.go"}`), true, ToolFacts{ReadOnly: true})
 	read.OutputBytes = 10
 	ledger.Record(read)
 	ledger.Record(read)
-	ledger.Record(ReceiptFromToolCall("todo_write", json.RawMessage(`{"todos":[]}`), true, true))
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"a.go","old_string":"a","new_string":"b"}`), true, false))
-	ledger.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"go test ./..."}`), true, false))
+	ledger.Record(ReceiptFromToolCall("todo_write", json.RawMessage(`{"todos":[]}`), true, ToolFacts{ReadOnly: true}))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"a.go","old_string":"a","new_string":"b"}`), true, ToolFacts{WritesNamedPaths: true}))
+	ledger.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"go test ./..."}`), true, ToolFacts{}))
 
 	sigs := ledger.SuccessfulProgressSignaturesSince(0)
 	if len(sigs) != 4 {
@@ -1134,19 +1134,19 @@ func TestBashToolCallUsesOpaqueInlineInterpreter(t *testing.T) {
 
 func TestLedgerDeliverySignoffAcceptsNodeSyntaxCheckAfterMutation(t *testing.T) {
 	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"app.js"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"app.js"}`), true, ToolFacts{WritesNamedPaths: true}))
 	mutation, ok := ledger.LatestSuccessfulMutationIndex()
 	if !ok {
 		t.Fatal("expected mutation receipt")
 	}
-	ledger.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"app.js"}`), true, true))
+	ledger.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"app.js"}`), true, ToolFacts{ReadOnly: true}))
 	command := "node --check app.js"
-	ledger.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"node --check app.js"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"node --check app.js"}`), true, ToolFacts{}))
 	ledger.Record(ReceiptFromToolCall("complete_step", json.RawMessage(`{
 		"step":"Check JavaScript",
 		"result":"syntax valid",
 		"evidence":[{"kind":"verification","summary":"syntax valid","command":"node --check app.js"}]
-	}`), true, true))
+	}`), true, ToolFacts{ReadOnly: true}))
 
 	if !IsDeliveryVerificationCommand(command) {
 		t.Fatal("node --check should be recognized as a delivery verification")
@@ -1228,7 +1228,7 @@ func TestLedgerReviewAfterRestoredCheckpointBaseline(t *testing.T) {
 	}
 
 	read := NewLedger()
-	read.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/parser.go"}`), true, true))
+	read.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/parser.go"}`), true, ToolFacts{ReadOnly: true}))
 	if !read.HasSuccessfulReviewAfter(-1) {
 		t.Fatal("a successful read must satisfy review for a restored mutation baseline")
 	}
@@ -1237,19 +1237,19 @@ func TestLedgerReviewAfterRestoredCheckpointBaseline(t *testing.T) {
 	// name: with the change itself unknowable, the bar can only be that the turn
 	// looked at something.
 	diff := NewLedger()
-	diff.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git diff"}`), true, true))
+	diff.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git diff"}`), true, ToolFacts{ReadOnly: true}))
 	if !diff.HasSuccessfulReviewAfter(-1) {
 		t.Fatal("a git diff inspection must satisfy review for a restored mutation baseline")
 	}
 
 	failed := NewLedger()
-	failed.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/parser.go"}`), false, true))
+	failed.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/parser.go"}`), false, ToolFacts{ReadOnly: true}))
 	if failed.HasSuccessfulReviewAfter(-1) {
 		t.Fatal("a failed read must not satisfy the checkpoint-baseline review")
 	}
 
 	wrote := NewLedger()
-	wrote.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"rm -rf build"}`), true, false))
+	wrote.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"rm -rf build"}`), true, ToolFacts{}))
 	if wrote.HasSuccessfulReviewAfter(-1) {
 		t.Fatal("a command that changed something is not an inspection of anything")
 	}
@@ -1257,19 +1257,19 @@ func TestLedgerReviewAfterRestoredCheckpointBaseline(t *testing.T) {
 
 func TestLedgerDeliverySignoffRequiresPostMutationVerificationAndReview(t *testing.T) {
 	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("todo_write", json.RawMessage(`{"todos":[{"content":"Ship parser","status":"in_progress"}]}`), true, true))
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/parser.go"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("todo_write", json.RawMessage(`{"todos":[{"content":"Ship parser","status":"in_progress"}]}`), true, ToolFacts{ReadOnly: true}))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/parser.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 	mutation, ok := ledger.LatestSuccessfulMutationIndex()
 	if !ok {
 		t.Fatal("expected mutation receipt")
 	}
-	ledger.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/parser.go"}`), true, true))
-	ledger.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"go test ./internal/..."}`), true, false))
+	ledger.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/parser.go"}`), true, ToolFacts{ReadOnly: true}))
+	ledger.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"go test ./internal/..."}`), true, ToolFacts{}))
 	ledger.Record(ReceiptFromToolCall("complete_step", json.RawMessage(`{
 		"step":"Ship parser",
 		"result":"parser shipped",
 		"evidence":[{"kind":"verification","summary":"tests passed","command":"go test ./internal/..."}]
-	}`), true, true))
+	}`), true, ToolFacts{ReadOnly: true}))
 
 	if !ledger.HasSuccessfulAcceptanceCriteria() {
 		t.Fatal("expected non-empty todo_write to establish acceptance criteria")
@@ -1284,8 +1284,8 @@ func TestLedgerDeliverySignoffRequiresPostMutationVerificationAndReview(t *testi
 
 func TestLedgerDeliverySignoffRejectsPreMutationVerification(t *testing.T) {
 	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"go test ./..."}`), true, false))
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"main.go"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"go test ./..."}`), true, ToolFacts{}))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"main.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 	mutation, ok := ledger.LatestSuccessfulMutationIndex()
 	if !ok {
 		t.Fatal("expected mutation receipt")
@@ -1294,7 +1294,7 @@ func TestLedgerDeliverySignoffRejectsPreMutationVerification(t *testing.T) {
 		"step":"change",
 		"result":"changed",
 		"evidence":[{"kind":"verification","summary":"tests passed before edit","command":"go test ./..."}]
-	}`), true, true))
+	}`), true, ToolFacts{ReadOnly: true}))
 	if ledger.HasSuccessfulDeliverySignoffAfter(mutation) {
 		t.Fatal("pre-mutation verification must not sign off changed work")
 	}
@@ -1302,17 +1302,17 @@ func TestLedgerDeliverySignoffRejectsPreMutationVerification(t *testing.T) {
 
 func TestLedgerDeliverySignoffRejectsInspectionCommandMasqueradingAsVerification(t *testing.T) {
 	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"main.go"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"main.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 	mutation, ok := ledger.LatestSuccessfulMutationIndex()
 	if !ok {
 		t.Fatal("expected mutation receipt")
 	}
-	ledger.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git status --short"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git status --short"}`), true, ToolFacts{}))
 	ledger.Record(ReceiptFromToolCall("complete_step", json.RawMessage(`{
 		"step":"change",
 		"result":"changed",
 		"evidence":[{"kind":"verification","summary":"claimed verification","command":"git status --short"}]
-	}`), true, true))
+	}`), true, ToolFacts{ReadOnly: true}))
 	if ledger.HasSuccessfulDeliverySignoffAfter(mutation) {
 		t.Fatal("inspection-only git status must not count as delivery verification")
 	}

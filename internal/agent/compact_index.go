@@ -55,7 +55,7 @@ const (
 
 // buildFoldIndex reduces the fold region to index lines. origin maps a region
 // position to its canonical index, or -1 for a message already folded once.
-func buildFoldIndex(region []provider.Message, kept []bool, readOnly func(string) bool, origin func(int) int) []foldIndexEntry {
+func buildFoldIndex(region []provider.Message, kept []bool, facts func(string) evidence.ToolFacts, origin func(int) int) []foldIndexEntry {
 	var out []foldIndexEntry
 	calls := map[string]provider.ToolCall{}
 	callAt := map[string]int{}
@@ -79,7 +79,7 @@ func buildFoldIndex(region []provider.Message, kept []bool, readOnly func(string
 				continue
 			}
 			failed := isErrorMessage(m)
-			rec := evidence.ReceiptFromToolCall(call.Name, json.RawMessage(call.Arguments), !failed, readOnly(call.Name))
+			rec := evidence.ReceiptFromToolCall(call.Name, json.RawMessage(call.Arguments), !failed, facts(call.Name))
 			// Skip exactly what the digest is already on the hook for (see
 			// compact_coverage.go): a change with a path, or a failed command.
 			// Anything else falls to the index, so nothing lands between them.

@@ -38,6 +38,8 @@ func (editFile) Schema() json.RawMessage {
 
 func (editFile) ReadOnly() bool { return false }
 
+func (editFile) WritesNamedPaths() bool { return true }
+
 func (e editFile) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Path      string `json:"path"`

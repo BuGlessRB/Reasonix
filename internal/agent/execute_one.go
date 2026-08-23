@@ -339,7 +339,7 @@ func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (
 			if a.task.ledger != nil {
 				// inspect/decline are not mutations; unavailable call targets are not success.
 				success := !rc.Unavailable
-				rec := evidence.ReceiptFromToolCall(call.Name, json.RawMessage(call.Arguments), success, true)
+				rec := evidence.ReceiptFromToolCall(call.Name, json.RawMessage(call.Arguments), success, evidence.ToolFacts{ReadOnly: true})
 				a.task.ledger.Record(rec)
 			}
 			if rc.Unavailable {

@@ -238,7 +238,7 @@ func TestAgentReservesParentWriteBeforePreToolUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	hooks := &parentClaimProbeHooks{scheduler: sched, claim: claim}
-	writer := &recordingWriter{name: "write_file"}
+	writer := &recordingWriter{name: "write_file", writesPaths: true}
 	reg := tool.NewRegistry()
 	reg.Add(writer)
 	a := New(nil, reg, NewSession(""), Options{
@@ -288,7 +288,7 @@ func TestAgentReserveParentWriteSkipsSubagentDepth(t *testing.T) {
 	root := t.TempDir()
 	sched := NewSubagentScheduler(4, 2)
 	a := &Agent{agentConfig: agentConfig{writeWorkspaceRoot: root, subagentDepth: 1}, svc: agentServices{writeScheduler: sched}}
-	inner := &recordingWriter{name: "write_file"}
+	inner := &recordingWriter{name: "write_file", writesPaths: true}
 	release, err := a.reserveParentWrite(inner, mustJSON(t, map[string]string{
 		"path": filepath.Join(root, "a.md"), "content": "x",
 	}), false)
@@ -306,7 +306,7 @@ func TestAgentReserveParentWriteHoldsClaim(t *testing.T) {
 	root := t.TempDir()
 	sched := NewSubagentScheduler(4, 2)
 	a := &Agent{agentConfig: agentConfig{writeWorkspaceRoot: root, subagentDepth: 0}, svc: agentServices{writeScheduler: sched}}
-	inner := &recordingWriter{name: "write_file"}
+	inner := &recordingWriter{name: "write_file", writesPaths: true}
 	release, err := a.reserveParentWrite(inner, mustJSON(t, map[string]string{
 		"path": filepath.Join(root, "a.md"), "content": "x",
 	}), false)
@@ -341,9 +341,10 @@ func mustJSON(t *testing.T, v any) json.RawMessage {
 }
 
 type recordingWriter struct {
-	name     string
-	readOnly bool
-	calls    int
+	name        string
+	readOnly    bool
+	calls       int
+	writesPaths bool
 }
 
 type parentClaimProbeHooks struct {
@@ -377,7 +378,8 @@ func (r *recordingWriter) Description() string { return r.name }
 func (r *recordingWriter) Schema() json.RawMessage {
 	return json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}`)
 }
-func (r *recordingWriter) ReadOnly() bool { return r.readOnly }
+func (r *recordingWriter) ReadOnly() bool         { return r.readOnly }
+func (r *recordingWriter) WritesNamedPaths() bool { return r.writesPaths }
 func (r *recordingWriter) Execute(context.Context, json.RawMessage) (string, error) {
 	r.calls++
 	return "ok", nil

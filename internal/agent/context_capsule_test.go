@@ -77,7 +77,7 @@ func TestContextCapsuleHashDiscriminatesRealDifferences(t *testing.T) {
 // The tool surface is part of what a child saw, so it must move the hash.
 func TestContextCapsuleHashCoversToolScope(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(&recordingWriter{name: "write_file"})
+	reg.Add(&recordingWriter{name: "write_file", writesPaths: true})
 	base := SubagentSpec{Kind: "task", Name: "task", SystemPrompt: DefaultTaskSystemPrompt}
 	withTools := base
 	withTools.Registry = reg

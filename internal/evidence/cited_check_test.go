@@ -13,7 +13,7 @@ func completionCiting(command string) Receipt {
 			{"kind": "verification", "summary": "the suite passed", "command": command},
 		},
 	})
-	return ReceiptFromToolCall("complete_step", args, true, false)
+	return ReceiptFromToolCall("complete_step", args, true, ToolFacts{})
 }
 
 // The case the static table cannot answer: a project's own runner. The model
@@ -91,7 +91,7 @@ func TestOnlyVerificationCitationsNameACheck(t *testing.T) {
 	l := NewLedger()
 	l.Record(Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"a.go"}})
 	l.Record(Receipt{ToolName: "bash", Command: "./scripts/ci.sh", Success: true})
-	l.Record(ReceiptFromToolCall("complete_step", args, true, false))
+	l.Record(ReceiptFromToolCall("complete_step", args, true, ToolFacts{}))
 
 	if l.HasCorroboratedCitedCheckAfter(0) {
 		t.Fatal("a completion citing no verification was read as naming a check")

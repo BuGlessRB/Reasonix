@@ -97,17 +97,17 @@ func TestWitnessSamplesTheWholeChange(t *testing.T) {
 
 func TestLedgerHostReviewCoverageRequiresContentForEveryPath(t *testing.T) {
 	ledger := NewLedger()
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
-	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/b.go"}`), true, false))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, ToolFacts{WritesNamedPaths: true}))
+	ledger.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/b.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 	mutation, ok := ledger.LatestSuccessfulMutationIndex()
 	if !ok {
 		t.Fatal("missing mutation index")
 	}
-	ledger.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/a.go"}`), true, true))
+	ledger.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/a.go"}`), true, ToolFacts{ReadOnly: true}))
 	if ledger.HasHostReviewCoverageAfter(mutation, []string{"internal/a.go", "internal/b.go"}) {
 		t.Fatal("one path read must not cover a two-path change set")
 	}
-	ledger.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/b.go"}`), true, true))
+	ledger.Record(ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/b.go"}`), true, ToolFacts{ReadOnly: true}))
 	if !ledger.HasHostReviewCoverageAfter(mutation, []string{"internal/a.go", "internal/b.go"}) {
 		t.Fatal("fresh reads of every changed path should prove host review coverage")
 	}
@@ -115,8 +115,8 @@ func TestLedgerHostReviewCoverageRequiresContentForEveryPath(t *testing.T) {
 	// What the shell command looked like decides nothing: coverage is what the
 	// output carried, which is why a compound statement is no longer a wall.
 	diff := NewLedger()
-	diff.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
-	diff.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/b.go"}`), true, false))
+	diff.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, ToolFacts{WritesNamedPaths: true}))
+	diff.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/b.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 	diffMutation, ok := diff.LatestSuccessfulMutationIndex()
 	if !ok {
 		t.Fatal("missing diff mutation index")
@@ -131,7 +131,7 @@ func TestLedgerHostReviewCoverageRequiresContentForEveryPath(t *testing.T) {
 	}
 
 	summary := NewLedger()
-	summary.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
+	summary.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 	idx, ok := summary.LatestSuccessfulMutationIndex()
 	if !ok {
 		t.Fatal("missing summary mutation index")
@@ -148,7 +148,7 @@ func TestLedgerHostReviewCoverageRequiresContentForEveryPath(t *testing.T) {
 func TestReviewOfAKnownChangeNeedsItsContent(t *testing.T) {
 	changed := func() *Ledger {
 		l := NewLedger()
-		l.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, false))
+		l.Record(ReceiptFromToolCall("edit_file", json.RawMessage(`{"path":"internal/a.go"}`), true, ToolFacts{WritesNamedPaths: true}))
 		return l
 	}
 	named := changed()

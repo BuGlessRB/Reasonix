@@ -185,7 +185,7 @@ func TestTaskToolFiltersTools(t *testing.T) {
 	}}
 	parentReg := tool.NewRegistry()
 	parentReg.Add(fakeTool{name: "read_file", readOnly: true})
-	parentReg.Add(fakeTool{name: "write_file", readOnly: false})
+	parentReg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	parentReg.Add(fakeTool{name: "bash", readOnly: false})
 	task := newTestTaskTool(t, sub, parentReg, "sys", "", "", nil)
 	parentReg.Add(task) // simulate the wiring in cli.setup
@@ -394,7 +394,7 @@ func TestReadOnlyTaskToolRunsEphemerallyWithReadOnlyRegistry(t *testing.T) {
 	}}
 	parentReg := tool.NewRegistry()
 	parentReg.Add(fakeTool{name: "read_file", readOnly: true})
-	parentReg.Add(fakeTool{name: "write_file", readOnly: false})
+	parentReg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	parentReg.Add(fakeTool{name: "todo_write", readOnly: true})
 	parentReg.Add(fakeTool{name: "complete_step", readOnly: true})
 	parentReg.Add(fakeTool{name: "connect_tool_source", readOnly: true})

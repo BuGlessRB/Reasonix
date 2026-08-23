@@ -58,7 +58,7 @@ func TestGateBlocksDeniedCall(t *testing.T) {
 // writer call runs unimpeded (backward-compatible default).
 func TestNilGateRunsEverything(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 
 	a := New(nil, reg, NewSession(""), Options{}, event.Discard) // no Gate
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "write_file", Arguments: `{"path":"/a"}`})

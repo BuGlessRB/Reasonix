@@ -19,21 +19,21 @@ func (a *Agent) recordToolReceipts(plan *toolCallPlan, result string, execution 
 	args := json.RawMessage(call.Arguments)
 	switch {
 	case call.Name == "complete_step":
-		rec := evidence.ReceiptFromToolCall(call.Name, args, err == nil, plan.readOnly)
+		rec := evidence.ReceiptFromToolCall(call.Name, args, err == nil, plan.facts())
 		a.task.ledger.Record(rec)
 		if err == nil {
 			a.advanceCanonicalTodo(rec.Step)
 		}
 	case plan.evidenceName != call.Name:
-		a.task.ledger.Record(evidence.ReceiptFromToolCall(call.Name, args, err == nil, true))
-		rec := evidence.ReceiptFromToolCall(plan.evidenceName, plan.evidenceArgs, err == nil, plan.readOnly)
+		a.task.ledger.Record(evidence.ReceiptFromToolCall(call.Name, args, err == nil, evidence.ToolFacts{ReadOnly: true}))
+		rec := evidence.ReceiptFromToolCall(plan.evidenceName, plan.evidenceArgs, err == nil, plan.facts())
 		decorateExecutionReceipt(&rec, result, execution)
 		decorateObservedPaths(&rec, plan)
 		a.settleUnchangedWorkspace(&rec, plan)
 		a.reviewCoverageOf(&rec, plan, result)
 		a.task.ledger.Record(rec)
 	default:
-		rec := evidence.ReceiptFromToolCall(call.Name, args, err == nil, plan.tool.ReadOnly())
+		rec := evidence.ReceiptFromToolCall(call.Name, args, err == nil, plan.facts())
 		decorateExecutionReceipt(&rec, result, execution)
 		decorateObservedPaths(&rec, plan)
 		a.settleUnchangedWorkspace(&rec, plan)

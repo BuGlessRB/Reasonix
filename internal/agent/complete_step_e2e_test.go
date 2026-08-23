@@ -27,9 +27,10 @@ func (stubBash) Execute(context.Context, json.RawMessage) (string, error) { retu
 
 type stubWrite struct{}
 
-func (stubWrite) Name() string        { return "write_file" }
-func (stubWrite) Description() string { return "stub write" }
-func (stubWrite) ReadOnly() bool      { return false }
+func (stubWrite) Name() string           { return "write_file" }
+func (stubWrite) Description() string    { return "stub write" }
+func (stubWrite) ReadOnly() bool         { return false }
+func (stubWrite) WritesNamedPaths() bool { return true }
 func (stubWrite) Schema() json.RawMessage {
 	return json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`)
 }

@@ -123,9 +123,13 @@ func builtinToolRegistry() *tool.Registry {
 type fakeTool struct {
 	name     string
 	readOnly bool
-	delay    time.Duration
-	err      error
-	calls    *int32 // shared counter to assert all dispatched
+	// writesPaths mirrors the PathWriter contract of the tool being stood in
+	// for: a double named write_file counts as one only if it says so, the
+	// same way the shipped tool has to.
+	writesPaths bool
+	delay       time.Duration
+	err         error
+	calls       *int32 // shared counter to assert all dispatched
 }
 
 type blockingTool struct {
@@ -184,6 +188,7 @@ func (f fakeTool) Name() string            { return f.name }
 func (f fakeTool) Description() string     { return "" }
 func (f fakeTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
 func (f fakeTool) ReadOnly() bool          { return f.readOnly }
+func (f fakeTool) WritesNamedPaths() bool  { return f.writesPaths }
 func (f fakeTool) Execute(ctx context.Context, _ json.RawMessage) (string, error) {
 	if f.calls != nil {
 		atomic.AddInt32(f.calls, 1)
@@ -440,7 +445,7 @@ func TestExecuteBatchStampsToolResultTimestamps(t *testing.T) {
 
 func TestExecuteBatchMarksOnlyExecutedWritersForWorkspaceRefresh(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file"})
+	reg.Add(fakeTool{name: "write_file", writesPaths: true})
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	sink := &recordSink{}
 	a := New(nil, reg, NewSession(""), Options{}, sink)
@@ -462,7 +467,7 @@ func TestExecuteBatchMarksOnlyExecutedWritersForWorkspaceRefresh(t *testing.T) {
 
 func TestExecuteBatchMarksFailedWriterForWorkspaceRefresh(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", err: errors.New("partial write")})
+	reg.Add(fakeTool{name: "write_file", err: errors.New("partial write"), writesPaths: true})
 	sink := &recordSink{}
 	a := New(nil, reg, NewSession(""), Options{}, sink)
 	a.executeBatch(context.Background(), &a.turn, []provider.ToolCall{{Name: "write_file", Arguments: `{"path":"partial.go"}`}})
@@ -476,7 +481,7 @@ func TestExecuteBatchPublishesWorkspaceMutationBeforeLaterToolCompletes(t *testi
 	started := make(chan struct{})
 	release := make(chan struct{})
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file"})
+	reg.Add(fakeTool{name: "write_file", writesPaths: true})
 	reg.Add(blockingTool{name: "slow_read", started: started, release: release})
 	sink := newWorkspaceSignalSink()
 	a := New(nil, reg, NewSession(""), Options{}, sink)

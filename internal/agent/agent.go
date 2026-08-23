@@ -1482,7 +1482,7 @@ func (a *Agent) rebuildTodoState(msgs []provider.Message) {
 			if tc.Name != "todo_write" || !successful[tc.ID] {
 				continue
 			}
-			rec := evidence.ReceiptFromToolCall(tc.Name, json.RawMessage(tc.Arguments), true, true)
+			rec := evidence.ReceiptFromToolCall(tc.Name, json.RawMessage(tc.Arguments), true, evidence.ToolFacts{ReadOnly: true})
 			// A successful empty todo_write is an explicit clear. Preserve it as the
 			// latest base so history reloads do not resurrect an older non-empty list.
 			todos = evidence.NormalizeSerialTodos(rec.Todos)
@@ -1498,7 +1498,7 @@ func (a *Agent) rebuildTodoState(msgs []provider.Message) {
 			if tc.Name != "complete_step" || !successful[tc.ID] {
 				continue
 			}
-			rec := evidence.ReceiptFromToolCall(tc.Name, json.RawMessage(tc.Arguments), true, true)
+			rec := evidence.ReceiptFromToolCall(tc.Name, json.RawMessage(tc.Arguments), true, evidence.ToolFacts{ReadOnly: true})
 			if m, ok := evidence.MatchStep(rec.Step, todos); ok {
 				evidence.AdvanceSerialTodo(todos, m.Index-1)
 			}
@@ -2127,7 +2127,7 @@ func (a *Agent) recoveryPlanTransition(toolName string, args json.RawMessage) (b
 	if len(before) == 0 || len(evidence.IncompleteTodos(before)) == 0 {
 		return false, "", "", ""
 	}
-	after := evidence.ReceiptFromToolCall("todo_write", args, true, true).Todos
+	after := evidence.ReceiptFromToolCall("todo_write", args, true, evidence.ToolFacts{ReadOnly: true}).Todos
 	if len(after) == 0 || evidence.ValidateSerialTodos(after) != nil || !evidence.PreservesCompletedTodoPositions(before, after) {
 		// Let todo_write report malformed or invalid state directly; an invalid
 		// task list is not a meaningful plan proposal for the reviewer.
@@ -2371,7 +2371,7 @@ func (a *Agent) staleAnchorEditBlock(call provider.ToolCall) (string, bool) {
 	if a.task.ledger == nil || !anchorBasedEditTool(call.Name) {
 		return "", false
 	}
-	rec := evidence.ReceiptFromToolCall(call.Name, json.RawMessage(call.Arguments), true, false)
+	rec := evidence.ReceiptFromToolCall(call.Name, json.RawMessage(call.Arguments), true, a.toolFactsFor(call.Name))
 	if len(rec.Paths) == 0 {
 		return "", false
 	}

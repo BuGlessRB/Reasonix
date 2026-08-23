@@ -373,7 +373,7 @@ func TestEvidenceFlowEnforcesProjectChecksAfterWrite(t *testing.T) {
 		t.Fatal("complete_step builtin not registered")
 	}
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	reg.Add(fakeTool{name: "bash", readOnly: false})
 	reg.Add(completeStep)
 
@@ -422,7 +422,7 @@ func TestFinalReadinessAllowsFinalAnswerWithoutWriter(t *testing.T) {
 
 func TestFinalReadinessAllowsWriterWithoutChecksOrTodos(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{
 			toolCallChunk("c1", "write_file", `{"path":"changed.go","content":"package main"}`),
@@ -460,7 +460,7 @@ func TestFinalReadinessAuditSkipsWhenGateDoesNotApply(t *testing.T) {
 
 	t.Run("writer without checks or todo", func(t *testing.T) {
 		reg := tool.NewRegistry()
-		reg.Add(fakeTool{name: "write_file", readOnly: false})
+		reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 		prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 			{
 				toolCallChunk("c1", "write_file", `{"path":"changed.go","content":"package main"}`),
@@ -482,7 +482,7 @@ func TestFinalReadinessAuditSkipsWhenGateDoesNotApply(t *testing.T) {
 
 func TestFinalReadinessBlocksUntilProjectCheckRunsAfterWriter(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	reg.Add(fakeTool{name: "bash", readOnly: false})
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{
@@ -519,7 +519,7 @@ func TestFinalReadinessBlocksUntilProjectCheckRunsAfterWriter(t *testing.T) {
 
 func TestFinalReadinessAuditRecordsBlockAndRecovery(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	reg.Add(fakeTool{name: "bash", readOnly: false})
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{
@@ -561,7 +561,7 @@ func TestFinalReadinessAuditRecordsBlockAndRecovery(t *testing.T) {
 func TestFinalReadinessRejectsProjectCheckBeforeWriter(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "bash", readOnly: false})
-	reg.Add(fakeTool{name: "write_file", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{
 			toolCallChunk("c1", "bash", `{"command":"go test ./..."}`),
@@ -603,7 +603,7 @@ func TestFinalReadinessRequiresCompleteStepAfterWriterWhenTodoSeen(t *testing.T)
 		t.Fatal("complete_step builtin not registered")
 	}
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	reg.Add(todoWrite)
 	reg.Add(completeStep)
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
@@ -702,7 +702,7 @@ func TestFinalReadinessAuditRecordsTerminalError(t *testing.T) {
 		t.Fatal("todo_write builtin not registered")
 	}
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", readOnly: false})
+	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	reg.Add(todoWrite)
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{

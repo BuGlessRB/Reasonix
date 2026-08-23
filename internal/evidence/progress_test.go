@@ -6,12 +6,12 @@ import (
 )
 
 func readReceipt(path string) Receipt {
-	return ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"`+path+`"}`), true, true)
+	return ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"`+path+`"}`), true, ToolFacts{ReadOnly: true})
 }
 
 func bashReceipt(command string, success bool) Receipt {
 	args, _ := json.Marshal(map[string]string{"command": command})
-	return ReceiptFromToolCall("bash", args, success, false)
+	return ReceiptFromToolCall("bash", args, success, ToolFacts{})
 }
 
 func TestProgressTrackerScoresNewVsRepeatedEvidence(t *testing.T) {
@@ -41,7 +41,7 @@ func TestProgressTrackerScoresNewVsRepeatedEvidence(t *testing.T) {
 		t.Fatalf("repeated passing command gain = %d, want 0", got)
 	}
 
-	write := ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"b.go","content":"x"}`), true, false)
+	write := ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"b.go","content":"x"}`), true, ToolFacts{WritesNamedPaths: true})
 	if got := tr.ScoreRound([]Receipt{write}); got != gainMutation {
 		t.Fatalf("mutation gain = %d, want %d", got, gainMutation)
 	}

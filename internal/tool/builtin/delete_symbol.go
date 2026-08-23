@@ -60,6 +60,8 @@ func (deleteSymbol) Schema() json.RawMessage {
 
 func (deleteSymbol) ReadOnly() bool { return false }
 
+func (deleteSymbol) WritesNamedPaths() bool { return true }
+
 func (d deleteSymbol) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Path   string `json:"path"`

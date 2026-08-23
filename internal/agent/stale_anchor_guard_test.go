@@ -14,7 +14,7 @@ import (
 func TestDeleteRangeRequiresReadAfterSameTurnWrite(t *testing.T) {
 	var deleteCalls int32
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "delete_range", readOnly: false, calls: &deleteCalls})
+	reg.Add(fakeTool{name: "delete_range", readOnly: false, calls: &deleteCalls, writesPaths: true})
 
 	args := `{"path":"src/map.html","start_anchor":"before","end_anchor":"after"}`
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
@@ -48,7 +48,7 @@ func TestDeleteRangeRequiresReadAfterSameTurnWrite(t *testing.T) {
 func TestEditFileAllowedAfterSameTurnWriteWithoutFreshRead(t *testing.T) {
 	var editCalls int32
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "edit_file", readOnly: false, calls: &editCalls})
+	reg.Add(fakeTool{name: "edit_file", readOnly: false, calls: &editCalls, writesPaths: true})
 
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{
@@ -75,7 +75,7 @@ func TestDeleteRangeAllowedAfterFreshRead(t *testing.T) {
 	var deleteCalls int32
 	var readCalls int32
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "delete_range", readOnly: false, calls: &deleteCalls})
+	reg.Add(fakeTool{name: "delete_range", readOnly: false, calls: &deleteCalls, writesPaths: true})
 	reg.Add(fakeTool{name: "read_file", readOnly: true, calls: &readCalls})
 
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
@@ -107,7 +107,7 @@ func TestDeleteRangeStillRequiresReadAfterWindowedRead(t *testing.T) {
 	var deleteCalls int32
 	var readCalls int32
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "delete_range", readOnly: false, calls: &deleteCalls})
+	reg.Add(fakeTool{name: "delete_range", readOnly: false, calls: &deleteCalls, writesPaths: true})
 	reg.Add(fakeTool{name: "read_file", readOnly: true, calls: &readCalls})
 
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
@@ -139,8 +139,8 @@ func TestMultiEditAllowedAfterSameTurnWrite(t *testing.T) {
 	var editCalls int32
 	var multiCalls int32
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "edit_file", readOnly: false, calls: &editCalls})
-	reg.Add(fakeTool{name: "multi_edit", readOnly: false, calls: &multiCalls})
+	reg.Add(fakeTool{name: "edit_file", readOnly: false, calls: &editCalls, writesPaths: true})
+	reg.Add(fakeTool{name: "multi_edit", readOnly: false, calls: &multiCalls, writesPaths: true})
 
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{

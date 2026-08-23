@@ -718,7 +718,7 @@ func TestUseCapabilityProxyHonorsRealMCPPermissionDeny(t *testing.T) {
 func TestReviewReportToolValidatesSchema(t *testing.T) {
 	tl := NewReviewReportTool()
 	led := evidence.NewLedger()
-	led.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"a.go"}`), true, true))
+	led.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"a.go"}`), true, evidence.ToolFacts{ReadOnly: true}))
 	ctx := evidence.WithLedger(context.Background(), led)
 	if _, err := tl.Execute(ctx, json.RawMessage(`{"kind":"review","verdict":"pass","reviewed_paths":[]}`)); err == nil {
 		t.Fatal("empty reviewed_paths should fail")
@@ -743,13 +743,13 @@ func TestReviewReportRequiresHostReadEvidence(t *testing.T) {
 		t.Fatalf("expected fake-coverage rejection naming the path, got %v", err)
 	}
 	// A successful read receipt makes the same report acceptable.
-	led.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, true))
+	led.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, evidence.ToolFacts{ReadOnly: true}))
 	if _, err := tl.Execute(ctx, json.RawMessage(`{"kind":"review","verdict":"pass","reviewed_paths":["internal/agent/agent.go"]}`)); err != nil {
 		t.Fatalf("host-read path should be accepted: %v", err)
 	}
 	// A shell receipt whose output carried the change counts the same way.
 	led2 := evidence.NewLedger()
-	diffRec := evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git diff -- internal/boot/boot.go"}`), true, true)
+	diffRec := evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git diff -- internal/boot/boot.go"}`), true, evidence.ToolFacts{ReadOnly: true})
 	diffRec.OutputBytes = 512
 	diffRec.Showed = []string{"internal/boot/boot.go"}
 	led2.Record(diffRec)
@@ -765,25 +765,25 @@ func TestReviewReportRejectsNonContentEvidence(t *testing.T) {
 
 	// git status mentions the path but never shows content.
 	led := evidence.NewLedger()
-	led.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git status --short -- internal/agent/agent.go"}`), true, true))
+	led.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"git status --short -- internal/agent/agent.go"}`), true, evidence.ToolFacts{ReadOnly: true}))
 	if _, err := tl.Execute(evidence.WithLedger(context.Background(), led), report); err == nil {
 		t.Fatal("git status must not count as review evidence")
 	}
 	// echo output containing the path shows nothing either.
 	led = evidence.NewLedger()
-	led.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"echo internal/agent/agent.go"}`), true, true))
+	led.Record(evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":"echo internal/agent/agent.go"}`), true, evidence.ToolFacts{ReadOnly: true}))
 	if _, err := tl.Execute(evidence.WithLedger(context.Background(), led), report); err == nil {
 		t.Fatal("echo must not count as review evidence")
 	}
 	// Writing a file is not reviewing it.
 	led = evidence.NewLedger()
-	led.Record(evidence.ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, false))
+	led.Record(evidence.ReceiptFromToolCall("write_file", json.RawMessage(`{"path":"internal/agent/agent.go"}`), true, evidence.ToolFacts{}))
 	if _, err := tl.Execute(evidence.WithLedger(context.Background(), led), report); err == nil {
 		t.Fatal("a write receipt must not count as review evidence")
 	}
 	// A bare basename read must not satisfy a claim for a specific full path.
 	led = evidence.NewLedger()
-	led.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"agent.go"}`), true, true))
+	led.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"agent.go"}`), true, evidence.ToolFacts{ReadOnly: true}))
 	if _, err := tl.Execute(evidence.WithLedger(context.Background(), led), report); err == nil {
 		t.Fatal("reverse basename matching must not count as review evidence")
 	}
@@ -799,7 +799,7 @@ func TestReviewReportRejectsNonContentEvidence(t *testing.T) {
 		"cat internal/agent/agent.go.bak",
 	} {
 		led := evidence.NewLedger()
-		rec := evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":`+strconv.Quote(cmd)+`}`), true, true)
+		rec := evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":`+strconv.Quote(cmd)+`}`), true, evidence.ToolFacts{ReadOnly: true})
 		rec.OutputBytes = 512
 		led.Record(rec)
 		if _, err := tl.Execute(evidence.WithLedger(context.Background(), led), report); err == nil {
@@ -813,7 +813,7 @@ func TestReviewReportRejectsNonContentEvidence(t *testing.T) {
 		"git diff HEAD~1 -- internal/agent/agent.go && echo done",
 	} {
 		led := evidence.NewLedger()
-		rec := evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":`+strconv.Quote(cmd)+`}`), true, true)
+		rec := evidence.ReceiptFromToolCall("bash", json.RawMessage(`{"command":`+strconv.Quote(cmd)+`}`), true, evidence.ToolFacts{ReadOnly: true})
 		rec.OutputBytes = 512
 		rec.Showed = []string{"internal/agent/agent.go"}
 		led.Record(rec)
@@ -928,7 +928,7 @@ func TestCapabilityGateRecoveryIsAudited(t *testing.T) {
 	a.SeedCapabilityRoute(capability.RouteDecision{Candidates: []capability.RouteCandidate{
 		{Entry: capability.Entry{ID: "skill:review"}, Policy: capability.AutoUseRequire},
 	}})
-	a.task.ledger.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"a.go"}`), true, true))
+	a.task.ledger.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"a.go"}`), true, evidence.ToolFacts{ReadOnly: true}))
 	if check := a.finalReadinessCheckFor(); check.reason == "" {
 		t.Fatal("expected a require miss first")
 	}
@@ -1089,7 +1089,7 @@ func TestCapabilityGateAppliesToReadOnlyTasks(t *testing.T) {
 		{Entry: capability.Entry{ID: "skill:review"}, Policy: capability.AutoUseRequire},
 	}})
 	// Only ordinary reads happened — no writer. The require gate must still hold.
-	a.task.ledger.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"a.go"}`), true, true))
+	a.task.ledger.Record(evidence.ReceiptFromToolCall("read_file", json.RawMessage(`{"path":"a.go"}`), true, evidence.ToolFacts{ReadOnly: true}))
 	check := a.finalReadinessCheckFor()
 	if !strings.Contains(check.reason, "required capabilities") {
 		t.Fatalf("read-only answer must not skip the require gate; reason = %q", check.reason)
@@ -1424,7 +1424,7 @@ func TestUseCapabilityBatchingFollowsWhatItProxies(t *testing.T) {
 func TestPlannerToolRegistryExcludesDirectMCPKeepsProxy(t *testing.T) {
 	parent := tool.NewRegistry()
 	parent.Add(fakeTool{name: "read_file", readOnly: true})
-	parent.Add(fakeTool{name: "write_file", readOnly: false})
+	parent.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	parent.Add(annotatedMCPTool{
 		fakeTool:         fakeTool{name: "mcp__gh__search", readOnly: true},
 		server:           "gh",

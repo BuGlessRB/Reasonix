@@ -39,6 +39,8 @@ func (notebookEdit) Name() string { return "notebook_edit" }
 
 func (notebookEdit) ReadOnly() bool { return false }
 
+func (notebookEdit) WritesNamedPaths() bool { return true }
+
 func (notebookEdit) Description() string {
 	return "Edit one cell of a Jupyter notebook (.ipynb). Target a cell by 0-based " +
 		"cell_number (or cell_id). edit_mode: \"replace\" (default) swaps the cell's " +

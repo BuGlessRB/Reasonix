@@ -96,6 +96,22 @@ func RunsSequentially(ctx context.Context, t Tool, args json.RawMessage) bool {
 	return ok && s.Sequential(ctx, args)
 }
 
+// PathWriter is an optional contract for a tool whose effect is writing the
+// paths its own arguments name. It is what lets the host account for exactly
+// which files a call changed: bash and opaque plugin tools mutate without
+// naming anything, so they answer no and their effects stay unattributed.
+type PathWriter interface {
+	WritesNamedPaths() bool
+}
+
+// WritesNamedPaths reports whether this tool's writes can be read off its
+// arguments. ReadOnly==false alone does not say so — bash is the standing
+// counter-example.
+func WritesNamedPaths(t Tool) bool {
+	w, ok := t.(PathWriter)
+	return ok && w.WritesNamedPaths()
+}
+
 // ImageTool is an optional capability a Tool may implement when its results can
 // carry images alongside text (e.g. an MCP tool returning a screenshot).
 // ExecuteWithImages returns the same text Execute would — including a short

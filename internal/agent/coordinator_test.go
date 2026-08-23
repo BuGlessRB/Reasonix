@@ -523,9 +523,10 @@ func TestCoordinatorPlannerFailurePreservesExecutionBoundary(t *testing.T) {
 }
 
 type coordinatorTestTool struct {
-	name     string
-	readOnly bool
-	output   string
+	name        string
+	readOnly    bool
+	output      string
+	writesPaths bool
 }
 
 func (t coordinatorTestTool) Name() string        { return t.name }
@@ -536,7 +537,8 @@ func (t coordinatorTestTool) Schema() json.RawMessage {
 func (t coordinatorTestTool) Execute(context.Context, json.RawMessage) (string, error) {
 	return t.output, nil
 }
-func (t coordinatorTestTool) ReadOnly() bool { return t.readOnly }
+func (t coordinatorTestTool) ReadOnly() bool         { return t.readOnly }
+func (t coordinatorTestTool) WritesNamedPaths() bool { return t.writesPaths }
 
 func TestCoordinatorPlannerUsesReadOnlyResearchTools(t *testing.T) {
 	planner := &mockProvider{name: "planner", streams: [][]provider.Chunk{
@@ -556,7 +558,7 @@ func TestCoordinatorPlannerUsesReadOnlyResearchTools(t *testing.T) {
 
 	parentReg := tool.NewRegistry()
 	parentReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "Rule: keep changes narrow."})
-	parentReg.Add(coordinatorTestTool{name: "write_file", readOnly: false})
+	parentReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, writesPaths: true})
 	parentReg.Add(coordinatorTestTool{name: "todo_write", readOnly: true})
 
 	executor := New(exec, tool.NewRegistry(), NewSession("exec-sys"), Options{}, event.Discard)
@@ -765,7 +767,7 @@ func TestCoordinatorNudgesExecutorThatAnswersWithoutActing(t *testing.T) {
 	}}
 
 	execReg := tool.NewRegistry()
-	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file"})
+	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file", writesPaths: true})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
 	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
 
@@ -826,7 +828,7 @@ func TestCoordinatorAllowsGuidanceOnlyPlanWithExecutorToolContext(t *testing.T) 
 
 	execReg := tool.NewRegistry()
 	execReg.Add(coordinatorTestTool{name: "read_file", readOnly: true, output: "file"})
-	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file"})
+	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file", writesPaths: true})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
 	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
 
@@ -856,7 +858,7 @@ func TestCoordinatorNudgesWorkTaskEvenIfPlannerMentionsUserGuidance(t *testing.T
 	}}
 
 	execReg := tool.NewRegistry()
-	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file"})
+	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file", writesPaths: true})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
 	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
 
@@ -889,7 +891,7 @@ func TestCoordinatorNudgesMixedGuidanceAndWorkTask(t *testing.T) {
 	}}
 
 	execReg := tool.NewRegistry()
-	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file"})
+	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file", writesPaths: true})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
 	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, PlannerToolRegistry(tool.NewRegistry()), Options{}, executor, 0, event.Discard, nil)
 
@@ -1069,7 +1071,7 @@ func TestCoordinatorDoesNotNudgeExecutorThatActs(t *testing.T) {
 	}}
 
 	execReg := tool.NewRegistry()
-	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file"})
+	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "wrote file", writesPaths: true})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
 	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
 
@@ -1107,7 +1109,7 @@ func BenchmarkPlannerToolRegistry(b *testing.B) {
 		})
 	}
 	parentReg.Add(coordinatorTestTool{name: "todo_write", readOnly: true})
-	parentReg.Add(coordinatorTestTool{name: "write_file", readOnly: false})
+	parentReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, writesPaths: true})
 
 	b.ReportAllocs()
 	for range b.N {
@@ -1592,7 +1594,7 @@ func TestCoordinatorHandoffOmitsToolContextWithoutMCPTools(t *testing.T) {
 	}}
 
 	execReg := tool.NewRegistry()
-	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "ok"})
+	execReg.Add(coordinatorTestTool{name: "write_file", readOnly: false, output: "ok", writesPaths: true})
 	executor := New(exec, execReg, NewSession("exec-sys"), Options{}, event.Discard)
 	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, executor, 0, event.Discard, nil)
 

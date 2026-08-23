@@ -4,21 +4,25 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"reasonix/internal/event"
+	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
 
-// coverageTools answers the way the real registry does for these tools.
-func coverageTools(name string) bool {
-	switch name {
-	case "read_file", "grep", "glob", "ls":
-		return true
-	default:
-		return false
+// coverageTools answers from the shipped registry rather than a copy of it, so
+// this test reads the contracts the agent reads.
+var coverageRegistry = sync.OnceValue(builtinToolRegistry)
+
+func coverageTools(name string) evidence.ToolFacts {
+	t, ok := coverageRegistry().Get(name)
+	if !ok {
+		return readOnlyFacts
 	}
+	return toolFacts(t)
 }
 
 func coverageRegion() []provider.Message {
@@ -135,7 +139,7 @@ func TestCompactionDoneCarriesWhatTheDigestKept(t *testing.T) {
 		}
 	})
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file"})
+	reg.Add(fakeTool{name: "write_file", writesPaths: true})
 	a := New(&fakeProvider{reply: "## Files & code\n- internal/parser/lexer.go rewritten"}, reg, sess,
 		Options{ContextWindow: 60_000, CompactRatio: 0.5, RecentKeep: 2, ArchiveDir: t.TempDir()}, sink)
 

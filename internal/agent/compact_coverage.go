@@ -56,7 +56,7 @@ func (c foldCoverage) Reason() string {
 // foldFacts derives what a fold must carry forward, through the same pure
 // classifier the ledger uses — the live ledger is per-task and never spans a
 // fold. readOnly decides whether a call counts as a change.
-func foldFacts(region []provider.Message, readOnly func(string) bool) foldCoverage {
+func foldFacts(region []provider.Message, facts func(string) evidence.ToolFacts) foldCoverage {
 	var cov foldCoverage
 	seenMut, seenFail := map[string]bool{}, map[string]bool{}
 	calls := map[string]provider.ToolCall{}
@@ -72,7 +72,7 @@ func foldFacts(region []provider.Message, readOnly func(string) bool) foldCovera
 			continue
 		}
 		failed := isErrorMessage(m)
-		rec := evidence.ReceiptFromToolCall(call.Name, json.RawMessage(call.Arguments), !failed, readOnly(call.Name))
+		rec := evidence.ReceiptFromToolCall(call.Name, json.RawMessage(call.Arguments), !failed, facts(call.Name))
 		if !failed && rec.Mutation && len(rec.Paths) > 0 {
 			for _, p := range rec.Paths {
 				if p = strings.TrimSpace(p); p != "" && !seenMut[p] {
@@ -94,8 +94,8 @@ func foldFacts(region []provider.Message, readOnly func(string) bool) foldCovera
 }
 
 // measureFoldCoverage checks a digest against the facts its fold produced.
-func measureFoldCoverage(region []provider.Message, readOnly func(string) bool, digest string) foldCoverage {
-	cov := foldFacts(region, readOnly)
+func measureFoldCoverage(region []provider.Message, facts func(string) evidence.ToolFacts, digest string) foldCoverage {
+	cov := foldFacts(region, facts)
 	haystack := strings.ToLower(digest)
 	for _, p := range cov.Mutations {
 		if !mentionsPath(haystack, p) {
@@ -149,20 +149,6 @@ func coverageRetryInstruction(cov foldCoverage) string {
 		b.WriteString("- the failure of `" + c + "`: what failed and how it was resolved, or that it was not\n")
 	}
 	return b.String()
-}
-
-// toolIsReadOnly answers for this agent's registry. An unknown tool reads as
-// read-only: over-counting changes buys repair calls for facts no digest can
-// carry, and a check that only adds cost should ask for less.
-func (a *Agent) toolIsReadOnly(name string) bool {
-	if a == nil || a.svc.tools == nil {
-		return true
-	}
-	t, ok := a.svc.tools.Get(name)
-	if !ok {
-		return true
-	}
-	return t.ReadOnly()
 }
 
 // coverageDemands reports whether a call is one the digest must carry, so the
