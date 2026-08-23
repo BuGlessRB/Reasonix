@@ -362,7 +362,9 @@ func (p *Pool) serve(ctx context.Context, l *link, s *space, workspace string, c
 		return
 	}
 	p.record(l, func(st *HostState) { st.Step, st.Detail = "", "" })
-	s.workspace, s.addr, s.token, s.forward = res.State.Workspace, bound, res.Token, name
+	// The kernel's own spelling, not the file layer's: this is what goes back
+	// to that kernel when a pane opens a workspace on it.
+	s.workspace, s.addr, s.token, s.forward = res.Workspace, bound, res.Token, name
 }
 
 func (p *Pool) forgetSpace(l *link, s *space) {

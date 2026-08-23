@@ -24,6 +24,9 @@ type remoteOS interface {
 	Stop(pid int, p StatePaths) string
 	Logs(logFile string, n int) string
 	Locate(uploadedBin string) string
+	// NativePath turns a path the file layer addresses into the one that
+	// machine's own kernel spells it with. The same file, two strings.
+	NativePath(p string) string
 }
 
 // remoteFor resolves which machine this is and where its files live. Every

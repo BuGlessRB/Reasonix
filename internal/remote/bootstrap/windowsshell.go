@@ -159,6 +159,10 @@ func toSFTPPath(p string) string {
 	return p
 }
 
+// NativePath is what that machine's own kernel takes — the shell spelling,
+// which is not the one SFTP answers with.
+func (windowsShell) NativePath(p string) string { return toShellPath(p) }
+
 // toShellPath is the reverse, for a path going into a script.
 func toShellPath(p string) string {
 	return strings.ReplaceAll(strings.TrimPrefix(p, "/"), "/", `\`)

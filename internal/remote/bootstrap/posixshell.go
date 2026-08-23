@@ -40,3 +40,6 @@ func (posixShell) Logs(logFile string, n int) string {
 func (posixShell) Locate(uploadedBin string) string {
 	return LocateCommand(uploadedBin)
 }
+
+// NativePath is identity here: the file layer and the shell agree.
+func (posixShell) NativePath(p string) string { return p }

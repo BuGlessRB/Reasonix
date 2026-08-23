@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -301,19 +300,30 @@ func (rt *Runtime) closeFarRuntime() {
 	}
 }
 
-// remoteView labels a proxied pane. The workspace belongs to the remote
-// filesystem, so its name is cut with path and not filepath: which separator
-// applies is the remote kernel's to say, and V1 bootstraps POSIX hosts.
+// remoteView labels a proxied pane. The workspace belongs to another machine,
+// so neither this one's filepath rules nor a single separator can cut its name
+// — the remote spells it, and both separators reach us.
 func (rt *Runtime) remoteView() RuntimeView {
 	ep := rt.remote.ep
 	return RuntimeView{
 		ID:          rt.ID,
 		Base:        runtimePrefix + rt.ID,
 		Root:        ep.Workspace,
-		Name:        path.Base(strings.TrimRight(ep.Workspace, "/")),
+		Name:        remoteBaseName(ep.Workspace),
 		Host:        ep.Host,
 		SessionPath: ep.SessionPath,
 	}
+}
+
+// remoteBaseName is the last segment of a path spelled by whichever machine
+// owns it. Either separator may appear, and this machine's rules are not the
+// authority on a path it does not hold.
+func remoteBaseName(p string) string {
+	p = strings.TrimRight(p, `/\`)
+	if i := strings.LastIndexAny(p, `/\`); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
 
 // remoteProxy forwards a pane's requests to the remote kernel.

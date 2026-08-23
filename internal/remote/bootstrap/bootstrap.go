@@ -78,6 +78,10 @@ type Result struct {
 	State  ServeState
 	Token  string // the pre-shared auth token (read from or written to TokenFile)
 	Reused bool   // true when an already-running serve was reused
+	// Workspace as the remote kernel spells it. State.Workspace is the file
+	// layer's spelling, and on Windows the two are different strings — handing
+	// that one back to the kernel asks it to open C:\C:\Users\...
+	Workspace string
 }
 
 // EnsureServe returns a running serve for (host, workspace), starting one if
@@ -103,7 +107,7 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 	// 2. Reuse a live process if the recorded pid is still running.
 	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, workspace); ok {
 		opts.progress("reuse", st.Addr)
-		return Result{State: st, Token: tok, Reused: true}, nil
+		return Result{State: st, Token: tok, Reused: true, Workspace: target.NativePath(st.Workspace)}, nil
 	}
 
 	// 3. Locate or install a usable reasonix.
@@ -123,7 +127,7 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 	defer lock.release()
 	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, workspace); ok {
 		opts.progress("reuse", st.Addr)
-		return Result{State: st, Token: tok, Reused: true}, nil
+		return Result{State: st, Token: tok, Reused: true, Workspace: target.NativePath(st.Workspace)}, nil
 	}
 
 	// 5. Generate token, write it 0600, and launch detached serve.
@@ -180,7 +184,7 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 		return Result{}, fmt.Errorf("bootstrap: write state: %w", err)
 	}
 	opts.progress("ready", addr)
-	return Result{State: st, Token: token}, nil
+	return Result{State: st, Token: token, Workspace: target.NativePath(workspace)}, nil
 }
 
 // Status reads the recorded state and reports whether the process is alive.

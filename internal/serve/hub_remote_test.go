@@ -588,3 +588,19 @@ func TestClosingARemotePaneRetiresTheFarRuntime(t *testing.T) {
 		t.Fatalf("the far hub still holds %d runtimes after the pane closed", n)
 	}
 }
+
+// A Windows workspace reaches here spelled the way that machine spells it.
+// Cutting it with this machine's rules — or with one separator — returns the
+// whole string as the pane's name, which is what the tab would then show.
+func TestRemotePaneNameIsCutTheRemoteWay(t *testing.T) {
+	for spelled, want := range map[string]string{
+		`C:\Users\ada\training`: "training",
+		"/srv/data/training":    "training",
+		`C:\Users\ada\`:         "ada",
+		`C:\`:                   "C:",
+	} {
+		if got := remoteBaseName(spelled); got != want {
+			t.Fatalf("remoteBaseName(%q) = %q, want %q", spelled, got, want)
+		}
+	}
+}

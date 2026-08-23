@@ -46,7 +46,10 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
   <dict>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleName</key><string>Reasonix Studio</string>
+    <!-- Named apart from the released app on purpose: they have different
+         bundle identifiers, so macOS lists their privacy grants separately,
+         and two identical rows is how you grant one and test the other. -->
+    <key>CFBundleName</key><string>Reasonix Studio (dev)</string>
     <key>CFBundleExecutable</key><string>ReasonixStudio</string>
     <key>CFBundleIdentifier</key><string>io.reasonix.studio.dev</string>
     <key>CFBundleVersion</key><string>0.0.0</string>
