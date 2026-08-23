@@ -163,7 +163,7 @@ func newCoordinator(planner provider.Provider, plannerSession *Session, plannerP
 		plannerAgent = NewPlannerAgent(planner, plannerTools, plannerSession, plannerOptions, plannerSink(sink))
 	}
 	if executor != nil {
-		executor.executorHandoffGuard = true
+		executor.role.executorHandoff = true
 	}
 	return &Coordinator{
 		planner:         planner,

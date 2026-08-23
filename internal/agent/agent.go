@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -278,15 +277,13 @@ type Agent struct {
 	agentConfig
 	// svc are the collaborators this agent talks to; see services.go.
 	svc agentServices
+	// role is what this agent is; see agent_role.go.
+	role agentRole
 	// sess is the state one conversation owns; SetSession restarts it. See
 	// sessionstate.go.
-	sess sessionRuntime
-	// executorHandoffGuard is enabled by Coordinator only for the executor agent.
-	executorHandoffGuard bool
-	responseLanguage     atomic.Value // string: auto|zh|en
-	reasoningLanguage    atomic.Value // string: auto|zh|en
-
-	requireVisibleFinal bool // internal callers require final Content
+	sess              sessionRuntime
+	responseLanguage  atomic.Value // string: auto|zh|en
+	reasoningLanguage atomic.Value // string: auto|zh|en
 
 	// unwrittenResolve is the resolve watermark a failed state write still owes.
 	// It outlives the conversation, which is why it is not in sessionRuntime.
@@ -297,11 +294,6 @@ type Agent struct {
 	// tool list never change with the toggle, preserving the provider-cache prefix.
 	planMode atomic.Bool
 
-	// readOnlyExecution is a construction-time defense for planner/research
-	// agents. Unlike planMode it is not a collaboration toggle: it remains on
-	// for the agent's lifetime and validates proxy calls after resolution.
-	readOnlyExecution bool
-
 	// mutationDependencyBarrier is set for the remainder of a provider tool
 	// batch after any mutating call fails or is blocked. executeOne re-checks
 	// it after proxy resolution so use_capability cannot bypass the barrier by
@@ -309,31 +301,17 @@ type Agent struct {
 	// never set it. Cleared at the start of each executeBatch.
 	mutationDependencyBarrier atomic.Bool
 
-	// plannerMCPExecution relaxes the strict read-only MCP boundary for the
-	// two-model Planner only: authorized, non-destructive MCP targets may run
-	// through use_capability even without readOnlyHint. Ordinary writers, bash,
-	// and destructive MCP stay blocked. Strict read-only sub-agents leave this
-	// false and still require readOnlyHint.
-	plannerMCPExecution bool
-
 	// recovery is who this agent is to the shared gate above.
 	recovery recoveryIdentity
 
 	// writeWorkspaceRoot is the workspace used to normalize parent write
 	// reservations when writeScheduler is set.
 
-	// steerQueue holds mid-turn guidance admitted while the agent is running.
+	// steer holds mid-turn guidance admitted while the agent is running.
 	// Entries keep a durable inbox item ID plus a loader so full bodies are not
 	// retained in the agent heap beyond need. Cache miss for the next API call
 	// is unavoidable but limited to one call — the prefix stays stable otherwise.
-	steerMu       sync.Mutex
-	steerQueue    []steerEntry
-	steerConsumed bool
-	// steerRunActive is true while Run is executing. Steer only queues while
-	// it is set; once the turn's exit flush has drained the queue, later
-	// steers are rejected so the caller can deliver them as a regular turn
-	// instead of leaving them in a queue no loop will ever consume.
-	steerRunActive bool
+	steer steerInbox
 
 	// task is the state shared by every Run continuing one delivery scope: the
 	// receipt ledger complete_step validates citations against, the spend that
@@ -702,14 +680,6 @@ func trimLeadingSteerWrapper(content string) (string, bool) {
 // steerEntry is one mid-turn guidance admission. host marks the ones the
 // runtime queued for itself, which the model must not read as the user
 // speaking.
-type steerEntry struct {
-	itemID string
-	load   func() (string, error)
-	// text is a fallback when load is nil (legacy Steer(string) path).
-	text string
-	host bool
-}
-
 // Steer queues a message for mid-turn injection. It reports whether an active
 // turn accepted the text; on false nothing was queued and the caller must
 // deliver it another way (typically as a new turn). Without the active check,
@@ -733,21 +703,12 @@ func (a *Agent) SteerItem(itemID string, load func() (string, error)) bool {
 }
 
 func (a *Agent) queueSteer(e steerEntry) bool {
-	a.steerMu.Lock()
-	defer a.steerMu.Unlock()
-	if !a.steerRunActive {
-		return false
-	}
-	a.steerQueue = append(a.steerQueue, e)
-	a.steerConsumed = false
-	return true
+	return a.steer.admit(e)
 }
 
 // SteerConsumed returns true when the steer queue became empty after the last consume.
 func (a *Agent) SteerConsumed() bool {
-	a.steerMu.Lock()
-	defer a.steerMu.Unlock()
-	return a.steerConsumed
+	return a.steer.drained()
 }
 
 // SetSink replaces the agent's event sink. Controllers use this to wrap the
@@ -764,14 +725,10 @@ func (a *Agent) SetSink(sink event.Sink) {
 }
 
 func (a *Agent) consumeSteer() (text, itemID string, host, ok bool) {
-	a.steerMu.Lock()
-	defer a.steerMu.Unlock()
-	if len(a.steerQueue) == 0 {
+	e, ok := a.steer.take()
+	if !ok {
 		return "", "", false, false
 	}
-	e := a.steerQueue[0]
-	a.steerQueue = a.steerQueue[1:]
-	a.steerConsumed = len(a.steerQueue) == 0
 	if e.load != nil {
 		t, err := e.load()
 		if err != nil {
@@ -787,13 +744,7 @@ func (a *Agent) consumeSteer() (text, itemID string, host, ok bool) {
 // keeps the loop alive; one arriving after it is rejected so the host can keep
 // the user's draft and retry it as a regular follow-up.
 func (a *Agent) closeSteerIntakeIfIdle() bool {
-	a.steerMu.Lock()
-	defer a.steerMu.Unlock()
-	if len(a.steerQueue) > 0 {
-		return false
-	}
-	a.steerRunActive = false
-	return true
+	return a.steer.closeIfIdle()
 }
 
 // flushSteerQueue ends the turn's steer intake. Guidance that arrived too late
@@ -802,15 +753,7 @@ func (a *Agent) closeSteerIntakeIfIdle() bool {
 // historical task (#7045). An explicit warning keeps the transcript honest
 // without presenting the text as successfully applied guidance (#6238).
 func (a *Agent) flushSteerQueue() {
-	a.steerMu.Lock()
-	pending := a.steerQueue
-	a.steerQueue = nil
-	if len(pending) > 0 {
-		a.steerConsumed = true
-	}
-	a.steerRunActive = false
-	a.steerMu.Unlock()
-	for _, e := range pending {
+	for _, e := range a.steer.close() {
 		text := e.text
 		if e.load != nil {
 			if t, err := e.load(); err == nil {
@@ -857,9 +800,7 @@ func (a *Agent) RecordUnappliedSteer(text string, itemID ...string) {
 }
 
 func (a *Agent) steerQueueLen() int {
-	a.steerMu.Lock()
-	defer a.steerMu.Unlock()
-	return len(a.steerQueue)
+	return a.steer.pending()
 }
 
 // CompactRatio returns the fraction of the window at which auto-compaction
@@ -1132,13 +1073,15 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 			ledger: evidence.NewLedger(),
 			budget: runBudget{limit: normalizeTaskBudget(opts.TaskBudget)},
 		},
-		requireVisibleFinal: opts.RequireVisibleFinal,
+		role: agentRole{
+			requireVisibleFinal: opts.RequireVisibleFinal,
+			readOnlyExecution:   opts.ReadOnlyExecution,
+			plannerMCPExecution: opts.PlannerMCPExecution,
+		},
 		recovery: recoveryIdentity{
 			agentID: strings.TrimSpace(opts.RecoveryAgentID),
 			taskID:  strings.TrimSpace(opts.RecoveryTaskID),
 		},
-		readOnlyExecution:      opts.ReadOnlyExecution,
-		plannerMCPExecution:    opts.PlannerMCPExecution,
 		projectChecks:          append([]instruction.VerifyCheck(nil), opts.ProjectChecks...),
 		projectSensitivePaths:  append([]string(nil), opts.ProjectSensitivePaths...),
 		deliveryProfile:        opts.DeliveryProfile || agentpreset.Normalize(opts.AgentPreset) == agentpreset.Delivery,
@@ -1273,10 +1216,7 @@ func (a *Agent) Run(ctx context.Context, input string) (runErr error) {
 		return 1
 	}
 	defer a.flushSteerQueue()
-	a.steerMu.Lock()
-	a.steerConsumed = false
-	a.steerRunActive = true
-	a.steerMu.Unlock()
+	a.steer.open()
 
 	// Commit background-job evidence leases only after this turn delivers.
 	// wait/bash_output merge a finished background writer's receipts into the
@@ -2178,7 +2118,7 @@ func recoveryTaskScopeID(deliveryScopeID string, runSeq uint64) string {
 }
 
 func (a *Agent) readOnlyExecutionBlock(visible tool.Tool, resolved *tool.ResolvedCall) (toolOutcome, bool) {
-	if a == nil || !a.readOnlyExecution {
+	if a == nil || !a.role.readOnlyExecution {
 		return toolOutcome{}, false
 	}
 	block := func(reason string) (toolOutcome, bool) {
@@ -2199,7 +2139,7 @@ func (a *Agent) readOnlyExecutionBlock(visible tool.Tool, resolved *tool.Resolve
 		}, true
 	}
 	if resolved == nil {
-		if a.plannerMCPExecution && isMCPExecutionTarget(visible, "") {
+		if a.role.plannerMCPExecution && isMCPExecutionTarget(visible, "") {
 			if !mcpServerAuthorized(visible) {
 				return block("execute an MCP capability from an unauthorized server")
 			}
@@ -2236,14 +2176,14 @@ func (a *Agent) readOnlyExecutionBlock(visible tool.Tool, resolved *tool.Resolve
 		return block("decline a capability decision")
 	case "call":
 		if resolved.Target == nil {
-			if a.plannerMCPExecution && resolved.HostCompleted && resolved.SkipExecute && resolved.ReadOnly && !resolved.Unavailable {
+			if a.role.plannerMCPExecution && resolved.HostCompleted && resolved.SkipExecute && resolved.ReadOnly && !resolved.Unavailable {
 				if _, ok := parseMCPServerCapabilityID(resolved.CapabilityID); ok {
 					return toolOutcome{}, false
 				}
 			}
 			return block("execute an unresolved dynamic capability")
 		}
-		if a.plannerMCPExecution && plannerAllowsMCPTarget(resolved.Target, resolved.TargetName) {
+		if a.role.plannerMCPExecution && plannerAllowsMCPTarget(resolved.Target, resolved.TargetName) {
 			if isMCPLifecycleConnectTarget(resolved.Target) {
 				if !plannerMCPConnectAllowed(resolved.Target) {
 					return block("start an unauthorized MCP server")

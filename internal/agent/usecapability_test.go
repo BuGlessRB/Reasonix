@@ -1144,8 +1144,8 @@ func TestPlannerAllowsAuthorizedNonReadOnlyNonDestructiveMCP(t *testing.T) {
 	// Planner trusts authorized non-destructive MCP without readOnlyHint.
 	planner := NewPlannerAgent(nil, reg, NewSession("sys"), Options{}, event.Discard)
 	planner.SetPlanMode(true)
-	if !planner.plannerMCPExecution || !planner.readOnlyExecution {
-		t.Fatalf("planner flags = plannerMCP=%v readOnly=%v", planner.plannerMCPExecution, planner.readOnlyExecution)
+	if !planner.role.plannerMCPExecution || !planner.role.readOnlyExecution {
+		t.Fatalf("planner flags = plannerMCP=%v readOnly=%v", planner.role.plannerMCPExecution, planner.role.readOnlyExecution)
 	}
 	out := planner.executeOne(context.Background(), &planner.turn, provider.ToolCall{
 		ID: "p1", Name: "use_capability", Arguments: `{"action":"call","capability_id":"mcp-tool:db/query","arguments":{}}`,

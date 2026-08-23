@@ -224,7 +224,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	// opening a second object: one turn, one turnRuntime. The zero values the
 	// old literal spelled out are already there from the reset at the top.
 	state = &a.turn
-	state.executorHandoff = a.executorHandoffGuard && strings.Contains(input, executorHandoffMarker)
+	state.executorHandoff = a.role.executorHandoff && strings.Contains(input, executorHandoffMarker)
 	state.input = input
 	state.budget = runBudget{started: time.Now()}
 	return rawInput, state
@@ -539,7 +539,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		// "still thinking after the task is done" symptom), so honour the
 		// stop when reasoning carried the substance of the answer and treat
 		// the turn as a final answer instead of retrying.
-		if a.requireVisibleFinal || !reasoningOnlyFinishHonoured(a.svc.prov, usage, reasoning) {
+		if a.role.requireVisibleFinal || !reasoningOnlyFinishHonoured(a.svc.prov, usage, reasoning) {
 			state.emptyFinalBlocks++
 			if state.emptyFinalBlocks >= maxEmptyFinalBlocks {
 				return false, fmt.Errorf("model finished without a visible final answer %d times", state.emptyFinalBlocks)

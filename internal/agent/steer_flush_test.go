@@ -104,9 +104,7 @@ func TestRunFlushesUnconsumedSteersOnCancel(t *testing.T) {
 // later steer must be rejected rather than accepted and flushed as unapplied.
 func TestCloseSteerIntakeIfIdleMakesAdmissionLinearizable(t *testing.T) {
 	a := New(nil, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
-	a.steerMu.Lock()
-	a.steerRunActive = true
-	a.steerMu.Unlock()
+	a.steer.open()
 
 	if !a.closeSteerIntakeIfIdle() {
 		t.Fatal("empty steer intake should close")
