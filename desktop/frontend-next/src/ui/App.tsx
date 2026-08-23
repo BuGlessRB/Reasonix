@@ -192,10 +192,10 @@ export function App({ hub }: { hub: HubPort }) {
   );
 
   const openRemotePane = useCallback(
-    async (host: string, workspace?: string) => {
+    async (host: string, workspace?: string, sessionPath?: string) => {
       setOpening((n) => n + 1);
       try {
-        const view = await hub.openRemote({ host, workspace });
+        const view = await hub.openRemote({ host, workspace, sessionPath });
         await reloadPanes();
         setActive(view.id);
       } finally {
@@ -546,6 +546,7 @@ export function App({ hub }: { hub: HubPort }) {
           />
           {remotes ? (
             <RemoteHosts
+              hub={hub}
               hosts={remotes}
               runtimes={runtimes}
               active={active}

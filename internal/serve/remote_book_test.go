@@ -164,3 +164,68 @@ func TestEditingAHostKeepsForwardsThePageCannotSee(t *testing.T) {
 		t.Fatalf("the edit dropped the forwards: %+v", entry.Forwards)
 	}
 }
+
+// The far machine's own workspace list, read through a pane already open on
+// it. Without one there is no kernel over there to ask, and saying so beats an
+// empty list that reads as "this machine has nothing".
+func TestRemoteTreeIsReadThroughAnOpenPane(t *testing.T) {
+	writeOpenableConfig(t)
+	far := NewHub(HubOptions{})
+	defer far.Shutdown()
+	farSide := httptest.NewServer(far.Handler())
+	defer farSide.Close()
+
+	near := NewHub(HubOptions{Remote: &stubAttacher{
+		attach: func(host, workspace string) (RemoteEndpoint, func(), error) {
+			return RemoteEndpoint{
+				Host: host, Workspace: workspace,
+				Addr: farSide.Listener.Addr().String(), Token: "t",
+			}, func() {}, nil
+		},
+	}})
+	nearSide := httptest.NewServer(near.Handler())
+	defer nearSide.Close()
+
+	resp, err := http.Get(nearSide.URL + "/remotes/gpu-box/tree")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := struct {
+		Code string `json:"code"`
+	}{}
+	_ = json.NewDecoder(resp.Body).Decode(&body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict || body.Code != "remote.not_connected" {
+		t.Fatalf("unconnected host = %d/%q, want 409/remote.not_connected", resp.StatusCode, body.Code)
+	}
+
+	workspace := t.TempDir()
+	open := bookPost(t, nearSide, "/remotes/open", `{"host":"gpu-box","workspace":"`+workspace+`"}`)
+	if open.StatusCode != http.StatusOK {
+		t.Fatalf("open remote = %d", open.StatusCode)
+	}
+
+	resp, err = http.Get(nearSide.URL + "/remotes/gpu-box/tree")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("tree = %d, want 200", resp.StatusCode)
+	}
+	var tree []struct {
+		Root string `json:"root"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tree); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, ws := range tree {
+		if ws.Root == workspace {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the far machine's tree does not list the workspace a pane opened: %+v", tree)
+	}
+}

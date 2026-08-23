@@ -3833,6 +3833,18 @@
   .rmtsteps .lb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .rmtsteps .dt { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--faint) }
 
+  /* 连上之后，那台机器自己报得出有哪些文件夹和对话，缩进比本地深一级：
+     它属于上面那台主机，不是又一个本地项目。 */
+  .rmtws-node { padding-bottom: 1px }
+  .rmtwsrow {
+    display: flex; align-items: center; gap: 6px; padding: 4px 9px 4px 14px;
+    font: var(--w-med) 11.5px var(--ui); color: var(--faint);
+  }
+  .rmtwsrow:hover { background: var(--overlay) }
+  .rmtwsrow .wsname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .rmt .sessrow { padding-left: 32px }
+  .rmt .rmtws-node .rmtopen { padding-left: 32px }
+
   /* 工作区行本身就是连接按钮：没开面板的机器上没有别的可按，拆成两步等于让人
      先说「连接」再说「打开」，而那是一件事。 */
   .rmtopen {

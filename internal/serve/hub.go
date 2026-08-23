@@ -386,6 +386,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("GET /remotes", h.listRemoteHosts)
 	mux.HandleFunc("POST /remotes", h.saveRemoteHost)
 	mux.HandleFunc("GET /remotes/candidates", h.remoteCandidates)
+	mux.HandleFunc("GET /remotes/{host}/tree", h.remoteTree)
 	mux.HandleFunc("POST /remotes/remove", h.removeRemoteHost)
 	mux.HandleFunc("POST /remotes/open", h.openRemoteRuntime)
 	h.registerTreeRoutes(mux)

@@ -1,13 +1,14 @@
-import { memo, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
-import type { RuntimeView } from "../port/hub";
+import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { REMOTE_STEP_LABEL, REMOTE_STEPS, type RemoteHost } from "../port/remote";
 
 interface Props {
+  hub: HubPort;
   hosts: RemoteHost[];
   runtimes: RuntimeView[];
   active: string;
-  onOpen: (host: string, workspace?: string) => Promise<void>;
+  onOpen: (host: string, workspace?: string, sessionPath?: string) => Promise<void>;
   onFocus: (id: string) => void;
   onError: (e: unknown) => void;
 }
@@ -63,20 +64,54 @@ function note(host: RemoteHost): string {
   }
 }
 
-function RemoteHostsView({ hosts, runtimes, active, onOpen, onFocus, onError }: Props) {
+function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onError }: Props) {
   const [busy, setBusy] = useState("");
-  if (!hosts.length) return null;
+  // What each connected machine holds. Absent until asked; null while nothing
+  // is open on it, which is the state the connect button belongs to.
+  const [trees, setTrees] = useState<Record<string, TreeWorkspace[] | null>>({});
+  const [shut, setShut] = useState<Set<string>>(new Set());
 
-  const open = async (host: RemoteHost) => {
-    setBusy(host.name);
+  // Only a machine with a pane on it has a kernel to ask. Keyed by host so a
+  // second one connecting does not re-read the first.
+  const live = hosts
+    .filter((h) => h.status === "connected" || h.status === "degraded")
+    .map((h) => h.name)
+    .join("\u0000");
+  const readTrees = useCallback(async () => {
+    for (const host of live ? live.split("\u0000") : []) {
+      try {
+        const tree = await hub.remoteTree(host);
+        setTrees((held) => ({ ...held, [host]: tree }));
+      } catch {
+        setTrees((held) => ({ ...held, [host]: null }));
+      }
+    }
+  }, [hub, live]);
+
+  useEffect(() => {
+    void readTrees();
+  }, [readTrees]);
+
+  const open = async (host: RemoteHost, workspace?: string, sessionPath?: string) => {
+    setBusy(host.name + (sessionPath ?? workspace ?? ""));
     try {
-      await onOpen(host.name, host.workspace);
+      await onOpen(host.name, workspace ?? host.workspace, sessionPath);
+      await readTrees();
     } catch (e) {
       onError(e);
     } finally {
       setBusy("");
     }
   };
+
+  const fold = (key: string) =>
+    setShut((held) => {
+      const next = new Set(held);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+
+  if (!hosts.length) return null;
 
   return (
     <div className="rmts">
@@ -85,6 +120,7 @@ function RemoteHostsView({ hosts, runtimes, active, onOpen, onFocus, onError }: 
         // Panes on this machine, which is also what makes the connection worth
         // holding: the link goes down with the last of them.
         const panes = runtimes.filter((rt) => rt.host === host.name);
+        const tree = trees[host.name];
         const working = host.status === "connecting" || host.status === "reconnecting";
         const hint = note(host);
         return (
@@ -97,44 +133,103 @@ function RemoteHostsView({ hosts, runtimes, active, onOpen, onFocus, onError }: 
             {hint ? <div className="rmtnote">{hint}</div> : null}
             {working && host.step ? <Steps step={host.step} detail={host.detail} /> : null}
 
-            {panes.map((rt) => (
-              <div
-                key={rt.id}
-                className="sessrow"
-                role="treeitem"
-                aria-selected={rt.id === active}
-                data-on={rt.id === active ? "" : undefined}
-                data-live=""
-                onClick={() => onFocus(rt.id)}
-              >
-                <i className="pip" />
-                <span className="sesstitle">{rt.name}</span>
-              </div>
-            ))}
+            {/* Connected: the machine answers for itself, so its own folders
+                and conversations are what the reader picks from. Before that
+                there is only the one row, which is also the connect button —
+                asking someone to say "connect" and then "open" is one act. */}
+            {tree
+              ? tree.map((ws) => {
+                  const key = host.name + ":" + ws.root;
+                  const folded = shut.has(key);
+                  return (
+                    <div key={key} className="rmtws-node">
+                      <div className="rmtwsrow" role="treeitem" aria-expanded={!folded}>
+                        <button className="twist" onClick={() => fold(key)} aria-label={t(folded ? "展开" : "收起")}>
+                          {folded ? "▸" : "▾"}
+                        </button>
+                        <span className="wsname" title={ws.root} dir="ltr">
+                          {ws.name}
+                        </span>
+                        <span className="wscount">{ws.sessions.length}</span>
+                      </div>
+                      {!folded && (
+                        <>
+                          <button
+                            className="rmtopen"
+                            data-busy={busy === host.name + ws.root ? "" : undefined}
+                            disabled={!!busy}
+                            onClick={() => void open(host, ws.root)}
+                          >
+                            <span className="plus" aria-hidden="true">
+                              <svg viewBox="0 0 16 16">
+                                <path d="M8 3.7v8.6M3.7 8h8.6" />
+                              </svg>
+                            </span>
+                            <span className="rmtws">{t("新会话")}</span>
+                          </button>
+                          {ws.sessions.map((session) => {
+                            // A conversation this window already drives is a
+                            // pane to focus, never a second writer for one file.
+                            const held = panes.find((rt) => rt.sessionPath === session.path);
+                            return (
+                              <div
+                                key={session.path}
+                                className="sessrow"
+                                role="treeitem"
+                                aria-selected={held?.id === active}
+                                data-on={held?.id === active ? "" : undefined}
+                                data-live={held ? "" : undefined}
+                                data-busy={busy === host.name + session.path ? "" : undefined}
+                                onClick={() => (held ? onFocus(held.id) : void open(host, ws.root, session.path))}
+                              >
+                                <i className="pip" />
+                                <span className="sesstitle">{session.title || session.name}</span>
+                                {session.turns ? <span className="sessmeta">{session.turns}</span> : null}
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
+                  );
+                })
+              : panes.map((rt) => (
+                  <div
+                    key={rt.id}
+                    className="sessrow"
+                    role="treeitem"
+                    aria-selected={rt.id === active}
+                    data-on={rt.id === active ? "" : undefined}
+                    data-live=""
+                    onClick={() => onFocus(rt.id)}
+                  >
+                    <i className="pip" />
+                    <span className="sesstitle">{rt.name}</span>
+                  </div>
+                ))}
 
-            {/* The workspace row is also the connect button: on a machine with
-                no pane there is nothing else to press, and a separate control
-                would ask the user to say "connect" and then "open" for one act. */}
-            <button
-              className="rmtopen"
-              data-busy={busy === host.name ? "" : undefined}
-              disabled={!!busy}
-              title={host.workspace || t("这台主机还没有设默认工作区")}
-              onClick={() => void open(host)}
-            >
-              <span className="plus" aria-hidden="true">
-                <svg viewBox="0 0 16 16">
-                  <path d="M8 3.7v8.6M3.7 8h8.6" />
-                </svg>
-              </span>
-              {host.workspace ? (
-                <span className="rmtws" dir="ltr">
-                  {host.workspace}
+            {!tree && (
+              <button
+                className="rmtopen"
+                data-busy={busy.startsWith(host.name) ? "" : undefined}
+                disabled={!!busy}
+                title={host.workspace || t("这台主机还没有设默认工作区")}
+                onClick={() => void open(host)}
+              >
+                <span className="plus" aria-hidden="true">
+                  <svg viewBox="0 0 16 16">
+                    <path d="M8 3.7v8.6M3.7 8h8.6" />
+                  </svg>
                 </span>
-              ) : (
-                <span className="rmtws">{t("新会话")}</span>
-              )}
-            </button>
+                {host.workspace ? (
+                  <span className="rmtws" dir="ltr">
+                    {host.workspace}
+                  </span>
+                ) : (
+                  <span className="rmtws">{t("新会话")}</span>
+                )}
+              </button>
+            )}
           </div>
         );
       })}

@@ -34,6 +34,10 @@ type RemoteEndpoint struct {
 	Base string
 	// The same runtime, for the hub-level call that retires it.
 	RemoteID string
+	// The transcript this pane was opened onto, when it was opened onto one. A
+	// fresh session has none until its first turn, and asking the far kernel
+	// costs a round trip the pane list cannot wait on.
+	SessionPath string
 }
 
 func (ep RemoteEndpoint) validate() error {
@@ -180,6 +184,10 @@ type OpenRemoteRequest struct {
 // will drive, and retiring it afterwards. The pane's own traffic never comes
 // through here; it goes through the proxy, which is mounted below this.
 func farCall(ctx context.Context, ep RemoteEndpoint, path string, body, out any) error {
+	return farRequest(ctx, ep, http.MethodPost, path, body, out)
+}
+
+func farRequest(ctx context.Context, ep RemoteEndpoint, method, path string, body, out any) error {
 	var payload io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -188,7 +196,7 @@ func farCall(ctx context.Context, ep RemoteEndpoint, path string, body, out any)
 		}
 		payload = bytes.NewReader(raw)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+ep.Addr+path, payload)
+	req, err := http.NewRequestWithContext(ctx, method, "http://"+ep.Addr+path, payload)
 	if err != nil {
 		return err
 	}
@@ -235,7 +243,7 @@ func (h *Hub) openRemoteRuntime(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
-	ep.Base, ep.RemoteID = far.Base, far.ID
+	ep.Base, ep.RemoteID, ep.SessionPath = far.Base, far.ID, far.SessionPath
 	rt, err := h.OpenRemote(ep, release)
 	if err != nil {
 		release()
@@ -299,14 +307,12 @@ func (rt *Runtime) closeFarRuntime() {
 func (rt *Runtime) remoteView() RuntimeView {
 	ep := rt.remote.ep
 	return RuntimeView{
-		ID:   rt.ID,
-		Base: runtimePrefix + rt.ID,
-		Root: ep.Workspace,
-		Name: path.Base(strings.TrimRight(ep.Workspace, "/")),
-		Host: ep.Host,
-		// The transcript this pane drives is the remote controller's to name,
-		// and asking costs a round trip the list cannot wait on. The sidebar
-		// learns it from the pane's own status instead.
+		ID:          rt.ID,
+		Base:        runtimePrefix + rt.ID,
+		Root:        ep.Workspace,
+		Name:        path.Base(strings.TrimRight(ep.Workspace, "/")),
+		Host:        ep.Host,
+		SessionPath: ep.SessionPath,
 	}
 }
 

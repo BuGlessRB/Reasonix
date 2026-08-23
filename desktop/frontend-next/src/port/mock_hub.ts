@@ -48,7 +48,24 @@ export class MockHub implements HubPort {
     ]);
   }
 
-  openRemote(req: { host: string; workspace?: string }) {
+  // The fixture's own far machine: one workspace with a conversation in it, so
+  // the tree under a connected host can be designed without one.
+  remoteTree(host: string) {
+    if (host !== "gpu-box") return Promise.resolve(null);
+    return Promise.resolve<TreeWorkspace[]>([
+      {
+        root: "/srv/training",
+        name: "training",
+        sessions: [
+          { path: "/srv/sessions/pipeline.jsonl", name: "pipeline", title: "数据管线", turns: 7 },
+          { path: "/srv/sessions/eval.jsonl", name: "eval", title: "跑一遍评测", turns: 2 },
+        ],
+      },
+      { root: "/srv/scratch", name: "scratch", sessions: [] },
+    ]);
+  }
+
+  openRemote(req: { host: string; workspace?: string; sessionPath?: string }) {
     this.seq++;
     const workspace = req.workspace || "/srv/training";
     const view: RuntimeView = {
@@ -57,6 +74,7 @@ export class MockHub implements HubPort {
       root: workspace,
       name: workspace.split("/").pop() ?? workspace,
       host: req.host,
+      sessionPath: req.sessionPath,
     };
     this.views.push(view);
     return Promise.resolve(view);

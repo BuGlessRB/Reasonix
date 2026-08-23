@@ -16,6 +16,7 @@ export const EN_KERNEL: Record<string, string> = {
   "{host} 的主机密钥变了。可能是那台机器重装了，也可能有人在中间。记录在 {file} 第 {line} 行，核对清楚之前不要连。":
     "The host key for {host} changed. That machine may have been rebuilt \u2014 or someone may be in the middle. The record is at {file} line {line}; do not connect until you have checked.",
   "你没有接受它的指纹，所以没有连": "You did not accept its fingerprint, so nothing was connected",
+  "先在 {host} 上开一个工作区，才问得到它上面还有什么": "Open a workspace on {host} first — that is what puts a kernel there to ask",
   "{host} 不认这套凭据。换个密钥，或者在设置里填对环境变量名。":
     "{host} rejected these credentials. Try another key, or name the right environment variable in settings.",
   "有活儿在跑，先停下再换模型": "Something is running — stop it before switching models",

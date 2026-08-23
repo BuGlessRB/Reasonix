@@ -141,6 +141,43 @@ func (h *Hub) remoteCandidates(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, out)
 }
 
+// remoteTree is the far machine's own workspace list, read through a pane
+// already open on it. It needs no second connection: any of that host's panes
+// reaches the same hub, and that hub answers for the whole machine.
+func (h *Hub) remoteTree(w http.ResponseWriter, r *http.Request) {
+	if h.opts.Remote == nil {
+		refuseNoRemote(w)
+		return
+	}
+	host := r.PathValue("host")
+	ep, ok := h.anyRemotePane(host)
+	if !ok {
+		// Not an error to fix but a step to take: opening its default workspace
+		// is what puts a kernel over there to ask.
+		refuse(w, http.StatusConflict, "remote.not_connected",
+			"open a workspace on this machine first", map[string]any{"host": host})
+		return
+	}
+	var tree json.RawMessage
+	if err := farRequest(r.Context(), ep, http.MethodGet, "/tree", nil, &tree); err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(tree)
+}
+
+// anyRemotePane returns an endpoint on host, for a question about the machine
+// rather than about one pane.
+func (h *Hub) anyRemotePane(host string) (RemoteEndpoint, bool) {
+	for _, rt := range h.Runtimes() {
+		if ep, ok := rt.Remote(); ok && ep.Host == host {
+			return ep, true
+		}
+	}
+	return RemoteEndpoint{}, false
+}
+
 func (h *Hub) remotePanes(host string) int {
 	n := 0
 	for _, rt := range h.Runtimes() {

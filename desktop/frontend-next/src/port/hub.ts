@@ -63,7 +63,10 @@ export interface HubPort {
   remoteHosts(): Promise<RemoteHost[] | null>;
   // Opens a pane on another machine. Slow the first time — the kernel may be
   // installing itself over there — so the caller polls remoteHosts for the step.
-  openRemote(req: { host: string; workspace?: string }): Promise<RuntimeView>;
+  openRemote(req: { host: string; workspace?: string; sessionPath?: string }): Promise<RuntimeView>;
+  // The far machine's own workspaces, or null while nothing is open on it:
+  // there is no kernel over there to ask until a pane puts one there.
+  remoteTree(host: string): Promise<TreeWorkspace[] | null>;
   saveRemoteHost(entry: RemoteHostEdit): Promise<void>;
   removeRemoteHost(name: string): Promise<void>;
   // ssh_config aliases this machine can already reach and the book has not
@@ -177,8 +180,22 @@ export class SseHub implements HubPort {
     return (await res.json()) as RemoteHost[];
   }
 
-  openRemote(req: { host: string; workspace?: string }) {
-    return this.post<RuntimeView>("/remotes/open", { host: req.host, workspace: req.workspace ?? "" });
+  openRemote(req: { host: string; workspace?: string; sessionPath?: string }) {
+    return this.post<RuntimeView>("/remotes/open", {
+      host: req.host,
+      workspace: req.workspace ?? "",
+      sessionPath: req.sessionPath ?? "",
+    });
+  }
+
+  async remoteTree(host: string) {
+    const path = `/remotes/${encodeURIComponent(host)}/tree`;
+    const res = await fetch(path, { credentials: "same-origin" });
+    // Nothing open on that machine yet, which is a step to take rather than a
+    // failure to report.
+    if (res.status === 409) return null;
+    if (!res.ok) await SseHub.fail(path, res);
+    return (await res.json()) as TreeWorkspace[];
   }
 
   async saveRemoteHost(entry: RemoteHostEdit) {
