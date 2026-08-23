@@ -1,16 +1,20 @@
 package serve
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"reasonix/internal/config"
 )
@@ -24,6 +28,12 @@ type RemoteEndpoint struct {
 	Workspace string // remote workspace path, as the remote kernel spells it
 	Addr      string // local end of the forward, host:port
 	Token     string // what the remote serve's token gate expects
+	// Where the far hub publishes this pane's runtime. Without it the proxy
+	// lands on that hub's default runtime, and two panes on one workspace
+	// would drive a single conversation between them.
+	Base string
+	// The same runtime, for the hub-level call that retires it.
+	RemoteID string
 }
 
 func (ep RemoteEndpoint) validate() error {
@@ -47,6 +57,10 @@ type remoteBinding struct {
 	// Several panes share one, so the last one out closes it, not the first.
 	release func()
 }
+
+// farCloseTimeout bounds the retire call. A window shutting down closes every
+// pane in turn, so one unreachable machine must not hold up the rest.
+const farCloseTimeout = 10 * time.Second
 
 // RemoteAttacher is what a host offers the hub for panes on other machines: a
 // way to make one reachable, and what state each machine's link is in. The
@@ -157,8 +171,42 @@ func remoteTarget(entry config.RemoteHostEntry) string {
 // OpenRemoteRequest asks for a pane on another machine. An empty Workspace
 // takes the host entry's own default, which the attach layer resolves.
 type OpenRemoteRequest struct {
-	Host      string `json:"host"`
-	Workspace string `json:"workspace"`
+	Host        string `json:"host"`
+	Workspace   string `json:"workspace"`
+	SessionPath string `json:"sessionPath"`
+}
+
+// farCall reaches the hub surface above a pane — opening the runtime a pane
+// will drive, and retiring it afterwards. The pane's own traffic never comes
+// through here; it goes through the proxy, which is mounted below this.
+func farCall(ctx context.Context, ep RemoteEndpoint, path string, body, out any) error {
+	var payload io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		payload = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+ep.Addr+path, payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Cookie", cookieToken+"="+ep.Token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
+		return fmt.Errorf("remote %s: %s: %s", path, resp.Status, bytes.TrimSpace(detail))
+	}
+	if out == nil {
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
 }
 
 func (h *Hub) openRemoteRuntime(w http.ResponseWriter, r *http.Request) {
@@ -176,6 +224,18 @@ func (h *Hub) openRemoteRuntime(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
+	// The pane drives a runtime of its own over there. The one the far kernel
+	// started with belongs to whoever opens that port in a browser.
+	var far RuntimeView
+	if err := farCall(r.Context(), ep, "/runtimes", OpenRequest{
+		Root:        ep.Workspace,
+		SessionPath: strings.TrimSpace(req.SessionPath),
+	}, &far); err != nil {
+		release()
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	ep.Base, ep.RemoteID = far.Base, far.ID
 	rt, err := h.OpenRemote(ep, release)
 	if err != nil {
 		release()
@@ -218,6 +278,21 @@ func (rt *Runtime) Remote() (RemoteEndpoint, bool) {
 	return rt.remote.ep, true
 }
 
+// closeFarRuntime retires the runtime this pane was driving on the other
+// machine. Best effort: the link may already be down, and a pane that cannot
+// be closed locally is worse than one that leaked a runtime remotely.
+func (rt *Runtime) closeFarRuntime() {
+	id := rt.remote.ep.RemoteID
+	if id == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), farCloseTimeout)
+	defer cancel()
+	if err := farCall(ctx, rt.remote.ep, "/runtimes/"+url.PathEscape(id)+"/close", nil, nil); err != nil {
+		slog.Warn("serve: retire remote runtime", "host", rt.remote.ep.Host, "id", id, "err", err)
+	}
+}
+
 // remoteView labels a proxied pane. The workspace belongs to the remote
 // filesystem, so its name is cut with path and not filepath: which separator
 // applies is the remote kernel's to say, and V1 bootstraps POSIX hosts.
@@ -237,9 +312,11 @@ func (rt *Runtime) remoteView() RuntimeView {
 
 // remoteProxy forwards a pane's requests to the remote kernel.
 func remoteProxy(ep RemoteEndpoint) http.Handler {
-	target := &url.URL{Scheme: "http", Host: ep.Addr}
+	target := &url.URL{Scheme: "http", Host: ep.Addr, Path: ep.Base}
 	return &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
+			// SetURL appends the inbound path to the target's, so the pane's
+			// own runtime prefix on the far side rides here.
 			pr.SetURL(target)
 			pr.Out.Host = target.Host
 			// The window's own cookies mean nothing to the remote gate, and the

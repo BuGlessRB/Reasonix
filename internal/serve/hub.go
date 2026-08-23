@@ -282,8 +282,10 @@ func (h *Hub) Close(id string) error {
 		rt.stop()
 	}
 	if rt.remote != nil {
-		// Nothing here to persist: the transcript and its lease belong to the
-		// remote kernel, which outlives this pane by design.
+		// Retired before the forward that reaches it goes away: releasing first
+		// would strand a session lease over there, with nothing left that could
+		// reach the kernel holding it.
+		rt.closeFarRuntime()
 		if rt.remote.release != nil {
 			rt.remote.release()
 		}

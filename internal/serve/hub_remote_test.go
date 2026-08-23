@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/config"
 )
 
 // stubAttacher stands in for the window's link layer.
@@ -425,5 +428,163 @@ host = "10.0.0.5"
 	}
 	if rows[1].Target != "10.0.0.5" {
 		t.Fatalf("target = %q, want no user or default port spelled out", rows[1].Target)
+	}
+}
+
+// The proxy strips the pane's prefix, so what it presents to the far hub has
+// to name a runtime there. Without one it lands on that hub's default — and
+// two panes on one workspace would drive a single conversation between them.
+func TestTwoRemotePanesDriveTwoRuntimesOnTheFarSide(t *testing.T) {
+	// The far hub builds a real assembly for each pane, so it needs a source
+	// to build against — the same minimum the other Open-driven tests use.
+	writeOpenableConfig(t)
+	far := NewHub(HubOptions{})
+	defer far.Shutdown()
+	farSide := httptest.NewServer(far.Handler())
+	defer farSide.Close()
+
+	near := NewHub(HubOptions{Remote: &stubAttacher{
+		attach: func(host, workspace string) (RemoteEndpoint, func(), error) {
+			// One workspace, so both panes share an address: the whole point is
+			// that sharing the link must not mean sharing the conversation.
+			return RemoteEndpoint{
+				Host: host, Workspace: workspace,
+				Addr: farSide.Listener.Addr().String(), Token: "t",
+			}, func() {}, nil
+		},
+	}})
+	nearSide := httptest.NewServer(near.Handler())
+	defer nearSide.Close()
+
+	// One workspace for both, which is the case that was broken: they share a
+	// link and an address, and must still be two conversations.
+	shared := t.TempDir()
+	open := func() RuntimeView {
+		t.Helper()
+		resp, err := http.Post(nearSide.URL+"/remotes/open", "application/json",
+			strings.NewReader(`{"host":"gpu-box","workspace":"`+shared+`"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("open remote = %d: %s", resp.StatusCode, body)
+		}
+		var view RuntimeView
+		if err := json.NewDecoder(resp.Body).Decode(&view); err != nil {
+			t.Fatal(err)
+		}
+		return view
+	}
+
+	first, second := open(), open()
+	if n := len(far.List()); n != 2 {
+		t.Fatalf("the far hub holds %d runtimes for two panes, want 2", n)
+	}
+	// Bound to its own runtime over there, not to whichever answered first.
+	a, aok := near.Get(first.ID).Remote()
+	b, bok := near.Get(second.ID).Remote()
+	if !aok || !bok || a.RemoteID == "" || a.RemoteID == b.RemoteID {
+		t.Fatalf("panes bound to remote runtimes %q and %q", a.RemoteID, b.RemoteID)
+	}
+	// And the proxy actually reaches them: a path that missed would 404 rather
+	// than answer, which is what a prefix built wrong looks like.
+	if root := remotePaneRoot(t, nearSide, first); root != shared {
+		t.Fatalf("pane answered for %q, want the workspace it opened (%q)", root, shared)
+	}
+}
+
+// remotePaneRoot asks a pane which workspace its kernel is driving.
+func remotePaneRoot(t *testing.T, front *httptest.Server, view RuntimeView) string {
+	t.Helper()
+	resp, err := http.Get(front.URL + view.Base + "/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status via pane = %d: %s", resp.StatusCode, body)
+	}
+	var status struct {
+		WorkspaceRoot string `json:"workspaceRoot"`
+		Cwd           string `json:"cwd"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status.WorkspaceRoot != "" {
+		return status.WorkspaceRoot
+	}
+	return status.Cwd
+}
+
+// writeOpenableConfig gives a hub the one thing Open needs: a provider to
+// assemble against. Nothing dials it — the address is deliberately dead.
+func writeOpenableConfig(t *testing.T) {
+	t.Helper()
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	closeSharedCatalogsOnCleanup(t)
+	path := config.UserConfigPath()
+	if path == "" {
+		t.Fatal("user config path is empty")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `default_model = "default/shared-chat"
+
+[[providers]]
+name = "default"
+kind = "openai"
+base_url = "http://127.0.0.1:1/v1"
+models = ["shared-chat"]
+default = "shared-chat"
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A pane closed here has to close the one it was driving over there, or a
+// machine collects runtimes until its own ceiling refuses the next connect.
+func TestClosingARemotePaneRetiresTheFarRuntime(t *testing.T) {
+	writeOpenableConfig(t)
+	far := NewHub(HubOptions{})
+	defer far.Shutdown()
+	farSide := httptest.NewServer(far.Handler())
+	defer farSide.Close()
+
+	near := NewHub(HubOptions{Remote: &stubAttacher{
+		attach: func(host, workspace string) (RemoteEndpoint, func(), error) {
+			return RemoteEndpoint{
+				Host: host, Workspace: workspace,
+				Addr: farSide.Listener.Addr().String(), Token: "t",
+			}, func() {}, nil
+		},
+	}})
+	nearSide := httptest.NewServer(near.Handler())
+	defer nearSide.Close()
+
+	resp, err := http.Post(nearSide.URL+"/remotes/open", "application/json",
+		strings.NewReader(`{"host":"gpu-box","workspace":"`+t.TempDir()+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var view RuntimeView
+	if err := json.NewDecoder(resp.Body).Decode(&view); err != nil {
+		t.Fatal(err)
+	}
+	if len(far.List()) != 1 {
+		t.Fatalf("the far hub holds %d runtimes after one open, want 1", len(far.List()))
+	}
+
+	if err := near.Close(view.ID); err != nil {
+		t.Fatalf("close pane: %v", err)
+	}
+	if n := len(far.List()); n != 0 {
+		t.Fatalf("the far hub still holds %d runtimes after the pane closed", n)
 	}
 }
