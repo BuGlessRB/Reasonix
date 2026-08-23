@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/releaseasset"
 	"reasonix/internal/remote"
 	"reasonix/internal/remote/attach"
+	"reasonix/internal/remote/bootstrap"
 	"reasonix/internal/serve"
 )
 
@@ -35,7 +36,7 @@ func newRemoteLink(ctx context.Context, prompts attachPrompts) *remoteLink {
 func (r *remoteLink) Attach(ctx context.Context, host, workspace string) (serve.RemoteEndpoint, func(), error) {
 	ep, err := r.pool.Attach(ctx, host, workspace, attach.Call{})
 	if err != nil {
-		return serve.RemoteEndpoint{}, nil, identify(err)
+		return serve.RemoteEndpoint{}, nil, identify(host, err)
 	}
 	return serve.RemoteEndpoint{
 		Host:      ep.Host,
@@ -103,7 +104,7 @@ func fetchRemoteBinary(ctx context.Context, version, goos, goarch string) ([]byt
 // changed host key is the one that must never arrive as a network error: the
 // record it contradicts is what makes it checkable, and there is deliberately
 // no path from here to connecting anyway.
-func identify(err error) error {
+func identify(host string, err error) error {
 	var mismatch *remote.HostKeyMismatchError
 	if errors.As(err, &mismatch) {
 		params := map[string]any{"host": mismatch.Host, "fingerprint": mismatch.PresentedFingerprint}
@@ -118,6 +119,15 @@ func identify(err error) error {
 		return serve.Refusal(http.StatusForbidden, "remote.host_key_rejected", err, nil)
 	case errors.Is(err, remote.ErrAuthFailed):
 		return serve.Refusal(http.StatusUnauthorized, "remote.auth_failed", err, nil)
+	case errors.Is(err, bootstrap.ErrUnsupportedRemote):
+		// The machine answered; it just is not one a kernel can be installed
+		// onto. No detail: what it said is its own shell's complaint, in its
+		// own code page, and pasting that on screen explains nothing.
+		return serve.Refusal(http.StatusNotImplemented, "remote.unsupported_os", err, map[string]any{"host": host})
 	}
-	return err
+	// Everything else keeps its text, which without a code reaches the window
+	// as a bare status — and a bare 502 reads as "the request never arrived"
+	// when what actually happened is on the other end of the link.
+	return serve.Refusal(http.StatusBadGateway, "remote.attach_failed", err,
+		map[string]any{"host": host, "detail": err.Error()})
 }

@@ -301,7 +301,13 @@ export function App({ hub }: { hub: HubPort }) {
   // simply vanished on unmount. A view transition can animate out an element that
   // is absent from the new state, so the tree need not stay mounted.
   const showPrefs = useCallback((sec?: string) => swapping(() => setSettings(sec ?? true), "prefs"), []);
-  const hidePrefs = useCallback(() => swapping(() => setSettings(false), "prefs"), []);
+  // The host book is edited in settings and read by the sidebar, and nothing
+  // else would tell it a machine was added: an idle host reports no change to
+  // poll for, so a folder added there stayed invisible until the next launch.
+  const hidePrefs = useCallback(() => {
+    swapping(() => setSettings(false), "prefs");
+    void reloadRemotes();
+  }, [reloadRemotes]);
 
   const openPane = useCallback(
     async (req: { root?: string; sessionPath?: string }) => {

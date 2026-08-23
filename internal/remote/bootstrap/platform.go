@@ -1,16 +1,24 @@
 package bootstrap
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
 
 // ParseUname maps `uname -sm` output to Go GOOS/GOARCH. V1 supports Linux and
 // macOS remotes; anything else (including Windows shells) is an error.
+// ErrUnsupportedRemote is a machine nothing can be installed onto: not a POSIX
+// system, or an architecture with no release. A caller has to tell it apart
+// because there is nothing to retry — the answer is a different machine.
+var ErrUnsupportedRemote = errors.New("bootstrap: unsupported remote")
+
 func ParseUname(out string) (goos, goarch string, err error) {
 	fields := strings.Fields(strings.TrimSpace(out))
 	if len(fields) < 2 {
-		return "", "", fmt.Errorf("bootstrap: cannot parse `uname -sm` output %q", out)
+		// A machine with no uname answers with its own shell's complaint, which
+		// is exactly as unsupported as one that answered with the wrong OS.
+		return "", "", fmt.Errorf("%w: `uname -sm` answered %q", ErrUnsupportedRemote, out)
 	}
 	sys, machine := fields[0], fields[1]
 	switch strings.ToLower(sys) {
@@ -19,7 +27,7 @@ func ParseUname(out string) (goos, goarch string, err error) {
 	case "darwin":
 		goos = "darwin"
 	default:
-		return "", "", fmt.Errorf("bootstrap: unsupported remote OS %q (V1 supports Linux and macOS)", sys)
+		return "", "", fmt.Errorf("%w: OS %q (Linux and macOS only)", ErrUnsupportedRemote, sys)
 	}
 	switch strings.ToLower(machine) {
 	case "x86_64", "amd64":
@@ -29,7 +37,7 @@ func ParseUname(out string) (goos, goarch string, err error) {
 	case "armv7l", "armv6l", "arm":
 		goarch = "arm"
 	default:
-		return "", "", fmt.Errorf("bootstrap: unsupported remote architecture %q", machine)
+		return "", "", fmt.Errorf("%w: architecture %q", ErrUnsupportedRemote, machine)
 	}
 	return goos, goarch, nil
 }
