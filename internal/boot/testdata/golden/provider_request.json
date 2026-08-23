@@ -506,9 +506,13 @@
             "type": "array"
           },
           "timeout_seconds": {
-            "description": "Optional maximum seconds to block before returning current progress. Omit to wait until the jobs finish.",
+            "description": "Optional maximum seconds to block before returning current progress. Omit to wait until the jobs finish — one long wait costs one round, where polling in short steps costs one per step.",
             "minimum": 1,
             "type": "integer"
+          },
+          "until_output_matches": {
+            "description": "Optional regular expression (RE2). Return early as soon as a job writes something matching it. Use it to wait once for the line you actually care about — a completion marker, or an error — instead of polling to check.",
+            "type": "string"
           }
         },
         "type": "object"
