@@ -2757,7 +2757,9 @@ func TestEffortCapabilityUsesKnownModelRegistry(t *testing.T) {
 	if !cap.Supported {
 		t.Fatalf("deepseek model behind proxy should expose effort, got %+v", cap)
 	}
-	wantLevels := []string{"auto", "disabled", "low", "high", "max"}
+	// The ladder reaches the proxy — that is what the model table is for — minus
+	// the level only the vendor's endpoint is known to take.
+	wantLevels := []string{"auto", "disabled", "low", "high"}
 	if len(cap.Levels) != len(wantLevels) {
 		t.Fatalf("levels = %v, want %v", cap.Levels, wantLevels)
 	}
@@ -2772,8 +2774,10 @@ func TestEffortCapabilityUsesKnownModelRegistry(t *testing.T) {
 	if protocol := ReasoningProtocolForEntry(e); protocol != ReasoningProtocolDeepSeek {
 		t.Fatalf("protocol = %q, want deepseek", protocol)
 	}
-	if got, err := NormalizeEffort(e, "max"); err != nil || got != "max" {
-		t.Fatalf("NormalizeEffort(max) = %q/%v, want max/nil", got, err)
+	// max is the vendor's extension: on this proxy it degrades to the deepest
+	// standard level instead of being sent and answered with 400.
+	if got, err := NormalizeEffort(e, "max"); err != nil || got != "high" {
+		t.Fatalf("NormalizeEffort(max) = %q/%v, want high/nil", got, err)
 	}
 	if got, err := NormalizeEffort(e, "low"); err != nil || got != "low" {
 		t.Fatalf("NormalizeEffort(low) = %q/%v, want low/nil", got, err)

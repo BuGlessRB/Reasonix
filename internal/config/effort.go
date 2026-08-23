@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -18,6 +19,10 @@ const (
 	ReasoningProtocolNone      = "none"
 )
 
+// deepSeekVendorHost is the endpoint DeepSeek's own effort vocabulary was
+// measured against; a relay serving the same models speaks its own.
+const deepSeekVendorHost = "api.deepseek.com"
+
 // EffortCapability describes the abstract effort levels a provider/model can set
 // through the /effort command.
 type EffortCapability struct {
@@ -28,9 +33,14 @@ type EffortCapability struct {
 
 type modelReasoningCapability struct {
 	Protocol string
-	Levels   []string
-	Default  string
-	Aliases  map[string]string
+	// Levels is the other half of the ContextWindow rule: which levels a request
+	// may carry is a fact about who serves the model, and a relay commonly
+	// speaks a different vocabulary. VendorHost is the endpoint this ladder was
+	// measured against, and it is the only one that inherits it.
+	Levels     []string
+	Default    string
+	Aliases    map[string]string
+	VendorHost string
 	// ContextWindow is what the model holds, which is a fact about the model and
 	// not about who serves it — a relay passing it through has the same ceiling.
 	// Zero means nobody has established one; see ResolvedContextWindow.
@@ -43,6 +53,7 @@ var modelReasoningCapabilities = map[string]modelReasoningCapability{
 	// model inherit the ceiling instead of resolving to nothing.
 	"deepseek-v4-flash": {
 		Protocol:      ReasoningProtocolDeepSeek,
+		VendorHost:    "api.deepseek.com",
 		Levels:        []string{"disabled", "low", "high", "max"},
 		Default:       "high",
 		Aliases:       map[string]string{"xhigh": "high"},
@@ -50,6 +61,7 @@ var modelReasoningCapabilities = map[string]modelReasoningCapability{
 	},
 	"deepseek-v4-pro": {
 		Protocol:      ReasoningProtocolDeepSeek,
+		VendorHost:    "api.deepseek.com",
 		Levels:        []string{"disabled", "high", "max"},
 		Default:       "high",
 		ContextWindow: 1_000_000,
@@ -59,6 +71,7 @@ var modelReasoningCapabilities = map[string]modelReasoningCapability{
 	// same rejections, reasoning_content throughout. So it carries flash's ladder.
 	"deepseek-v4-flash-vision-exp": {
 		Protocol:      ReasoningProtocolDeepSeek,
+		VendorHost:    "api.deepseek.com",
 		Levels:        []string{"disabled", "low", "high", "max"},
 		Default:       "high",
 		Aliases:       map[string]string{"xhigh": "high"},
@@ -74,10 +87,11 @@ var modelReasoningCapabilities = map[string]modelReasoningCapability{
 
 func gpt56Capability() modelReasoningCapability {
 	return modelReasoningCapability{
-		Protocol: ReasoningProtocolOpenAI,
-		Levels:   []string{"none", "low", "medium", "high", "xhigh", "max"},
-		Default:  "medium",
-		Aliases:  map[string]string{"minimal": "low"},
+		Protocol:   ReasoningProtocolOpenAI,
+		Levels:     []string{"none", "low", "medium", "high", "xhigh", "max"},
+		Default:    "medium",
+		Aliases:    map[string]string{"minimal": "low"},
+		VendorHost: "api.openai.com",
 		// ContextWindow unset on purpose: the ladder was measured, a window here
 		// would only have been recalled, and a number nobody checked silently
 		// moves compaction.
@@ -91,10 +105,10 @@ func gpt56Capability() modelReasoningCapability {
 func effortCapabilityForProtocol(e *ProviderEntry, protocol string) (EffortCapability, bool) {
 	switch protocol {
 	case ReasoningProtocolDeepSeek:
-		if cap, ok := resolvedModelReasoningCapability(e); ok && cap.Protocol == ReasoningProtocolDeepSeek {
+		if cap, ok := resolvedModelEffortLadder(e); ok && cap.Protocol == ReasoningProtocolDeepSeek {
 			return effortCapabilityFromModel(cap), true
 		}
-		return deepSeekEffortCapability(), true
+		return deepSeekEffortCapability(e), true
 	case ReasoningProtocolGLM:
 		return binaryThinkingEffortCapability("enabled"), true
 	case ReasoningProtocolKimiK3:
@@ -138,7 +152,7 @@ func EffortCapabilityForEntry(e *ProviderEntry) EffortCapability {
 	if cap, ok := effortCapabilityForProtocol(e, explicitProtocol); ok {
 		return cap
 	}
-	if cap, ok := resolvedModelReasoningCapability(e); ok {
+	if cap, ok := resolvedModelEffortLadder(e); ok {
 		return effortCapabilityFromModel(cap)
 	}
 	if cap, ok := effortCapabilityForProtocol(e, ReasoningProtocolForEntry(e)); ok {
@@ -205,7 +219,7 @@ func NormalizeEffort(e *ProviderEntry, raw string) (string, error) {
 	// V4 Flash 0731 added a real low depth. Keep this model-scoped: Pro and
 	// generic DeepSeek-compatible endpoints still normalize low to high unless
 	// they explicitly advertise a different supported_efforts list.
-	if cap, ok := resolvedModelReasoningCapability(e); ok {
+	if cap, ok := resolvedModelEffortLadder(e); ok {
 		explicit := explicitReasoningProtocol(e)
 		if explicit == "" || explicit == cap.Protocol {
 			if containsString(cap.Levels, level) {
@@ -218,20 +232,7 @@ func NormalizeEffort(e *ProviderEntry, raw string) (string, error) {
 	}
 	switch ReasoningProtocolForEntry(e) {
 	case ReasoningProtocolDeepSeek:
-		switch level {
-		case "disabled":
-			return "disabled", nil
-		case "off": // retired DeepSeek "no thinking" → disabled
-			return "disabled", nil
-		case "high", "max":
-			return level, nil
-		case "low", "medium":
-			return "high", nil
-		case "xhigh":
-			return "max", nil
-		default:
-			return "", fmt.Errorf("usage: /effort auto|disabled|high|max")
-		}
+		return normalizeDeepSeekReasoningEffort(e, level)
 	case ReasoningProtocolOpenAI:
 		return normalizeOpenAIReasoningEffort(e, level)
 	case ReasoningProtocolKimiK3:
@@ -512,6 +513,82 @@ func mimoEffortCapability() EffortCapability {
 	return EffortCapability{Supported: true, Levels: []string{"auto", "none", "low", "medium", "high"}, Default: "auto"}
 }
 
+// resolvedModelEffortLadder is the model table's ladder. The endpoint it was
+// measured against gets all of it; anyone else serving the same model gets the
+// standard vocabulary of it, because the levels an API accepts belong to the
+// endpoint and a relay that never took "max" answers 400 for as long as the
+// setting stands.
+func resolvedModelEffortLadder(e *ProviderEntry) (modelReasoningCapability, bool) {
+	cap, ok := resolvedModelReasoningCapability(e)
+	if !ok {
+		return modelReasoningCapability{}, false
+	}
+	if servedByVendor(e, cap.VendorHost) {
+		return cap, true
+	}
+	return standardLadder(cap), true
+}
+
+// servedByVendor reports whether this entry points at the endpoint a ladder was
+// measured against. Host-only, matching isMimoEntry: a full-URL substring would
+// let an unrelated URL enable a vendor's extensions.
+func servedByVendor(e *ProviderEntry, host string) bool {
+	return e != nil && host != "" && officialProviderHost(e.BaseURL) == host
+}
+
+// standardLadder drops the levels only the vendor's own endpoint is known to
+// take. What is left is the API's documented depth vocabulary plus the switches
+// the host resolves locally and never sends, so the control stays on screen for
+// a relay instead of disappearing. supported_efforts restores the rest.
+func standardLadder(cap modelReasoningCapability) modelReasoningCapability {
+	out := cap
+	out.Levels = nil
+	var dropped []string
+	for _, level := range cap.Levels {
+		if standardEffortLevel(level) {
+			out.Levels = append(out.Levels, level)
+			continue
+		}
+		dropped = append(dropped, level)
+	}
+	// A dropped level degrades onto the deepest standard one rather than being
+	// refused: asking for more depth than the endpoint's vocabulary carries is
+	// answered with the most it does, the way "minimal" already degrades.
+	if deepest := deepestStandardLevel(out.Levels); deepest != "" && len(dropped) > 0 {
+		aliases := make(map[string]string, len(cap.Aliases)+len(dropped))
+		maps.Copy(aliases, cap.Aliases)
+		for _, level := range dropped {
+			aliases[level] = deepest
+		}
+		out.Aliases = aliases
+	}
+	if !containsString(out.Levels, out.Default) {
+		out.Default = ""
+	}
+	return out
+}
+
+// deepestStandardLevel is the most depth a standard vocabulary can ask for.
+func deepestStandardLevel(levels []string) string {
+	for _, level := range []string{"high", "medium", "low"} {
+		if containsString(levels, level) {
+			return level
+		}
+	}
+	return ""
+}
+
+// standardEffortLevel reports a level any OpenAI-compatible endpoint is
+// expected to take. "max" and "xhigh" are vendor extensions and are the ones an
+// unmeasured endpoint rejects.
+func standardEffortLevel(level string) bool {
+	switch level {
+	case "auto", "none", "disabled", "off", "low", "medium", "high":
+		return true
+	}
+	return false
+}
+
 func resolvedModelReasoningCapability(e *ProviderEntry) (modelReasoningCapability, bool) {
 	if e == nil || e.Kind != "openai" {
 		return modelReasoningCapability{}, false
@@ -531,8 +608,17 @@ func effortCapabilityFromModel(cap modelReasoningCapability) EffortCapability {
 	return EffortCapability{Supported: true, Levels: levels, Default: def}
 }
 
-func deepSeekEffortCapability() EffortCapability {
-	return EffortCapability{Supported: true, Levels: []string{"auto", "disabled", "high", "max"}, Default: "high"}
+// deepSeekEffortCapability is the ladder for a DeepSeek-protocol endpoint with
+// no model-table entry. "max" is the vendor's own extension, so only the
+// vendor's endpoint is offered it: a relay that never took it answers 400 for
+// as long as the setting stands, and one that does can say so with
+// supported_efforts.
+func deepSeekEffortCapability(e *ProviderEntry) EffortCapability {
+	levels := []string{"auto", "disabled", "high", "max"}
+	if !servedByVendor(e, deepSeekVendorHost) {
+		levels = levels[:len(levels)-1]
+	}
+	return EffortCapability{Supported: true, Levels: levels, Default: "high"}
 }
 
 func openAIEffortCapability() EffortCapability {
