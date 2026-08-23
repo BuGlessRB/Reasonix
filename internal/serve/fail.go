@@ -51,6 +51,14 @@ func refusal(status int, code string, err error, params map[string]any) error {
 	return &coded{reason: Reason{Code: code, Message: err.Error(), Params: params}, status: status, err: err}
 }
 
+// Refusal wraps err so it reaches the frontend as a dotted code rather than a
+// sentence. Exported for a host whose link layer can tell apart what this
+// package cannot see: a changed host key is not a network hiccup, and only the
+// side that verified the key knows which it was.
+func Refusal(status int, code string, err error, params map[string]any) error {
+	return refusal(status, code, err, params)
+}
+
 // busyErr is the "not while this is running" refusal in error form.
 func busyErr(code, message string) error {
 	return refusal(http.StatusConflict, code, errors.New(message), nil)

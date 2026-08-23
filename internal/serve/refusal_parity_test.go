@@ -13,7 +13,12 @@ import (
 
 // codeArg is where each helper carries the dotted code, so a new one is added
 // here rather than by teaching a regex another shape.
-var codeArg = map[string]int{"refuse": 2, "busy": 1, "coded": 0, "busyErr": 0, "refusal": 1}
+var codeArg = map[string]int{"refuse": 2, "busy": 1, "coded": 0, "busyErr": 0, "refusal": 1, "Refusal": 1}
+
+// Where a coded refusal can be built. The exported constructor put the second
+// one outside this package, and a guard that only watches its own directory
+// would have let the next one through untranslated.
+var refusalDirs = []string{".", filepath.Join("..", "..", "desktop", "next")}
 
 // serveRefusalCodes reads the codes this package can send, from the syntax
 // rather than from the text: a scan that matched on wording would be the very
@@ -21,15 +26,19 @@ var codeArg = map[string]int{"refuse": 2, "busy": 1, "coded": 0, "busyErr": 0, "
 func serveRefusalCodes(t *testing.T) map[string]string {
 	t.Helper()
 	out := map[string]string{}
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("read package dir: %v", err)
-	}
 	fset := token.NewFileSet()
-	sources := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if name := e.Name(); !e.IsDir() && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
-			sources = append(sources, name)
+	var sources []string
+	for _, dir := range refusalDirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			// The desktop tree is absent in some checkouts; its own package is
+			// where that would be a failure, not here.
+			continue
+		}
+		for _, e := range entries {
+			if name := e.Name(); !e.IsDir() && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
+				sources = append(sources, filepath.Join(dir, name))
+			}
 		}
 	}
 	consts := packageStringConsts(t, fset, sources)
@@ -43,11 +52,16 @@ func serveRefusalCodes(t *testing.T) map[string]string {
 			if !ok {
 				return true
 			}
-			id, ok := call.Fun.(*ast.Ident)
-			if !ok {
-				return true
+			// A host outside this package calls it qualified, and matching only
+			// bare identifiers is how the guard silently stopped watching one.
+			fn := ""
+			switch callee := call.Fun.(type) {
+			case *ast.Ident:
+				fn = callee.Name
+			case *ast.SelectorExpr:
+				fn = callee.Sel.Name
 			}
-			at, ok := codeArg[id.Name]
+			at, ok := codeArg[fn]
 			if !ok || at >= len(call.Args) {
 				return true
 			}

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"os"
 	"time"
 
@@ -33,7 +35,7 @@ func newRemoteLink(ctx context.Context, prompts attachPrompts) *remoteLink {
 func (r *remoteLink) Attach(ctx context.Context, host, workspace string) (serve.RemoteEndpoint, func(), error) {
 	ep, err := r.pool.Attach(ctx, host, workspace, attach.Call{})
 	if err != nil {
-		return serve.RemoteEndpoint{}, nil, err
+		return serve.RemoteEndpoint{}, nil, identify(err)
 	}
 	return serve.RemoteEndpoint{
 		Host:      ep.Host,
@@ -95,4 +97,27 @@ func fetchRemoteBinary(ctx context.Context, version, goos, goarch string) ([]byt
 	}
 	client.Timeout = 2 * time.Minute
 	return releaseasset.DownloadCLI(ctx, client, version, goos, goarch)
+}
+
+// identify gives the failures a person can act on an identity of their own. A
+// changed host key is the one that must never arrive as a network error: the
+// record it contradicts is what makes it checkable, and there is deliberately
+// no path from here to connecting anyway.
+func identify(err error) error {
+	var mismatch *remote.HostKeyMismatchError
+	if errors.As(err, &mismatch) {
+		params := map[string]any{"host": mismatch.Host, "fingerprint": mismatch.PresentedFingerprint}
+		if len(mismatch.Locations) > 0 {
+			params["file"] = mismatch.Locations[0].Filename
+			params["line"] = mismatch.Locations[0].Line
+		}
+		return serve.Refusal(http.StatusConflict, "remote.host_key_changed", err, params)
+	}
+	switch {
+	case errors.Is(err, remote.ErrHostKeyRejected):
+		return serve.Refusal(http.StatusForbidden, "remote.host_key_rejected", err, nil)
+	case errors.Is(err, remote.ErrAuthFailed):
+		return serve.Refusal(http.StatusUnauthorized, "remote.auth_failed", err, nil)
+	}
+	return err
 }

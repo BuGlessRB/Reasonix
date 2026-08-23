@@ -114,6 +114,10 @@ const SAID: Record<string, string> = {
   "remote.host_required": "说清楚连哪个地址",
   "remote.bad_port": "这不是一个端口号",
   "remote.has_open_panes": "这台机器还开着 {n} 个面板，先关掉再移除",
+  // 主机密钥变了没有「仍然连接」这条路：能绕过的警告等于没有警告。
+  "remote.host_key_changed": "{host} 的主机密钥变了。可能是那台机器重装了，也可能有人在中间。记录在 {file} 第 {line} 行，核对清楚之前不要连。",
+  "remote.host_key_rejected": "你没有接受它的指纹，所以没有连",
+  "remote.auth_failed": "{host} 不认这套凭据。换个密钥，或者在设置里填对环境变量名。",
 
   // ── 壁纸 ─────────────────────────────────────────────────────────
   "wallpaper.unsupported_type": "这种图片格式用不了，换 PNG、JPEG、WebP、AVIF 或 GIF",

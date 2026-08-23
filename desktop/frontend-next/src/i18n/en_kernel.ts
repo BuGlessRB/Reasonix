@@ -13,6 +13,11 @@ export const EN_KERNEL: Record<string, string> = {
   "说清楚连哪个地址": "Say which address to dial",
   "这不是一个端口号": "That is not a port number",
   "这台机器还开着 {n} 个面板，先关掉再移除": "This machine still has {n} open panes — close them before removing it",
+  "{host} 的主机密钥变了。可能是那台机器重装了，也可能有人在中间。记录在 {file} 第 {line} 行，核对清楚之前不要连。":
+    "The host key for {host} changed. That machine may have been rebuilt \u2014 or someone may be in the middle. The record is at {file} line {line}; do not connect until you have checked.",
+  "你没有接受它的指纹，所以没有连": "You did not accept its fingerprint, so nothing was connected",
+  "{host} 不认这套凭据。换个密钥，或者在设置里填对环境变量名。":
+    "{host} rejected these credentials. Try another key, or name the right environment variable in settings.",
   "有活儿在跑，先停下再换模型": "Something is running — stop it before switching models",
   "有活儿在跑，先停下再改推理强度": "Something is running — stop it before changing the reasoning effort",
   "{provider} 没说自己有哪些推理强度档位。要有，得在它的配置块里写 reasoning_protocol 或 supported_efforts":
