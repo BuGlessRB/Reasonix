@@ -507,11 +507,19 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
         if (s.runtime.some((n) => said(n) === said(fresh))) return s;
         return { ...s, runtime: [...s.runtime, fresh] };
       }
+      // A retry that repeats says the same thing each time. Three identical
+      // lines push whatever came before them off the screen and read as three
+      // problems, so a repeat folds into the one already there.
+      const last = s.items[s.items.length - 1];
+      if (last?.t === "notice" && last.code && last.code === ev.code && last.level === level) {
+        const folded: Item = { ...last, count: (last.count ?? 1) + 1, detail: ev.detail ?? last.detail };
+        return { ...s, items: [...s.items.slice(0, -1), folded] };
+      }
       return {
         ...s,
         items: [
           ...s.items,
-          { t: "notice", id: nextId(), level, text: ev.text ?? "", detail: ev.detail },
+          { t: "notice", id: nextId(), level, text: ev.text ?? "", detail: ev.detail, code: ev.code },
         ],
       };
     }

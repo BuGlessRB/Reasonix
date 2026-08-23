@@ -2,6 +2,7 @@
 package openai
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -10,12 +11,30 @@ import (
 	"reasonix/internal/provider"
 )
 
+// errEmptyStream: a stream that ended cleanly having carried nothing at all —
+// not even a usage record. That is the gateway saying nothing rather than the
+// model answering with nothing, and only one is worth another request.
+var errEmptyStream = errors.New("the upstream sent an empty stream")
+
+// streamOutcome names what a finished read means. Nothing carried at all is
+// the far side's failure; anything else keeps what the read loop decided.
+func streamOutcome(name string, emitted bool, err error) error {
+	if err == nil && !emitted {
+		return provider.StreamInterrupt(fmt.Errorf("%s: %w", name, errEmptyStream), provider.StreamInterruptUpstreamError)
+	}
+	return err
+}
+
 // streamFailure decides whether a stream that stopped can be attempted again.
 // A transport cut always can; a gateway reporting its own upstream failure can
 // too, but only before it has said anything, since replaying after output
 // would show it twice. The budget stays the Agent's — counting here too would
 // stack two.
 func streamFailure(emitted bool, err error) error {
+	// A caller gave up, or a deadline did. Neither is the stream's fault.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
 	// A cut the read loop named already carries its reason; re-wrapping would
 	// bury it under one this cannot infer as well.
 	var interrupted *provider.StreamInterruptedError

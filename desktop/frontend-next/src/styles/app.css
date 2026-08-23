@@ -3782,6 +3782,13 @@
   }
   .rmtadd:hover { border-color: var(--accent); color: var(--text) }
 
+  /* 重复的通知折成一行加计数，而不是堆三条一样的。 */
+  .find .ntimes {
+    margin-left: 6px; padding: 0 5px; border-radius: var(--r-pill);
+    background: var(--overlay); color: var(--faint);
+    font: var(--w-reg) 10px var(--mono);
+  }
+
   /* ── 左栏：远程主机 ───────────────────────────────────────────────
      一台主机一段。同一台机器上的工作区共用一条连接，所以状态长在段头上：
      链路断了，整段一起暗下去，这正是它们的真实关系。 */

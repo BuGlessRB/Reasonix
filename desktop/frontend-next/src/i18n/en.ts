@@ -755,6 +755,10 @@ export const EN: Record<string, string> = {
   "打开 {name} 控制台": "Open the {name} console",
   "打不开浏览器，手动访问 {at}": "Could not open a browser — visit {at} yourself",
 
+  // ── 回合中的通知（notices.ts 按 code 查表，扫描器看不到）──────
+  "这一轮模型没有给出回答，正在让它重说一次": "The model gave no answer this round; asking it again",
+  "模型直接给了答案却没动手，正在要求它先用工具": "The model answered without acting; asking it to use its tools first",
+
   // ── 连不上时卡在哪一步（kernel.ts 的 refusal 措辞）─────────────
 
   // ── 内核其余的拒绝措辞 ─────────────────────────────────────────

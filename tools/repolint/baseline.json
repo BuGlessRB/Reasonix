@@ -5,7 +5,7 @@
     "complexity": 1571,
     "error-text": 12,
     "essay": 3302,
-    "file-size": 43471,
+    "file-size": 43466,
     "function-size": 6794,
     "layering": 0,
     "marker": 0,
@@ -1103,7 +1103,7 @@
     "internal/provider/openai/openai.go": {
       "complexity": 67,
       "essay": 41,
-      "file-size": 542,
+      "file-size": 537,
       "function-size": 267,
       "struct-state": 9
     },

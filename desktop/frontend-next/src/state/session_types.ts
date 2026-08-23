@@ -15,7 +15,9 @@ export type Item =
   | { t: "remember"; id: string; m: RememberedFact; forgotten?: boolean }
   | { t: "receipt"; id: string; r: Receipt }
   | { t: "extension"; id: string; ext: ExtensionSurface }
-  | { t: "notice"; id: string; level: string; text: string; detail?: string };
+  // code identifies what the kernel is reporting. text is its own English,
+  // kept as the fallback for a code this build has no wording for.
+  | { t: "notice"; id: string; level: string; text: string; detail?: string; code?: string; count?: number };
 
 // What a remember call wrote, read off its own arguments. Saving a fact changes
 // what the agent will do in later sessions, which no other tool call does — so it

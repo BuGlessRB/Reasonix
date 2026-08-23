@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"net/http"
@@ -642,11 +641,7 @@ func usageRequestCount(usage *provider.Usage) int {
 func (c *client) streamOnce(ctx context.Context, resp *http.Response, out chan<- provider.Chunk) {
 	defer close(out)
 	emitted, err := c.readStream(ctx, resp, out)
-	if err == nil {
-		return
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err})
+	if err = streamOutcome(c.name, emitted, err); err == nil {
 		return
 	}
 	sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: streamFailure(emitted, err)})
