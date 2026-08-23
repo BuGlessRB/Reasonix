@@ -232,16 +232,24 @@ export function App({ hub }: { hub: HubPort }) {
   }, [activePort]);
   useEffect(reloadAccount, [reloadAccount]);
 
+  // Appearance is the window's, not the focused pane's. A remote kernel keeps
+  // its own copy, and adopting that one repaints this window because the
+  // reader changed tabs — so these three read and write the local pane only.
+  const lookPort = useMemo(() => {
+    const local = runtimes.find((rt) => !rt.host);
+    return local ? hub.portFor(local) : null;
+  }, [hub, runtimes]);
+
   const reloadThemes = useCallback(() => {
-    activePort
+    lookPort
       ?.themes()
       .then((list) => setPack(list.find((p) => p.active) ?? null))
       .catch(() => setPack(null));
-  }, [activePort]);
+  }, [lookPort]);
   useEffect(reloadThemes, [reloadThemes]);
 
   useEffect(() => {
-    activePort
+    lookPort
       ?.appearance()
       .then((look) => {
         // The kernel's copy is the authority across machines; adopt reloads if
@@ -250,7 +258,7 @@ export function App({ hub }: { hub: HubPort }) {
         setLook(look);
       })
       .catch(() => {});
-  }, [activePort]);
+  }, [lookPort]);
 
   // The control moves now and the config catches up: a size or a colour that
   // waits on a round trip reads as a dead click. The kernel's answer is what
@@ -258,9 +266,9 @@ export function App({ hub }: { hub: HubPort }) {
   const onLook = useCallback(
     (next: Look) => {
       setLook(next);
-      activePort?.saveAppearance(next).then(setLook).catch(fail);
+      lookPort?.saveAppearance(next).then(setLook).catch(fail);
     },
-    [activePort, fail],
+    [lookPort, fail],
   );
 
   const running = report.run === "running";

@@ -65,7 +65,10 @@ func pumpRemoteEvents(ctx context.Context, rt *serve.Runtime) {
 // streamRemoteEvents reads one connection's worth of frames and returns the
 // highest resumable id it saw.
 func streamRemoteEvents(ctx context.Context, client *http.Client, ep serve.RemoteEndpoint, name string, after int64) (int64, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+ep.Addr+"/events", nil)
+	// Base names this pane's runtime over there. Without it the request lands
+	// on that hub's default runtime — the pane would send its turns to one
+	// conversation and listen to another, which reads as nothing happening.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+ep.Addr+ep.Base+"/events", nil)
 	if err != nil {
 		return 0, err
 	}
