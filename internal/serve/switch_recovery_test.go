@@ -282,8 +282,7 @@ func TestSwitchModelRestoresSessionAuthorizations(t *testing.T) {
 		Sink:       bc,
 	})
 	old.RestoreSessionAuthorizations(control.SessionAuthorizations{
-		Grants:                   []string{"bash|go test ./..."},
-		PlanModeReadOnlyCommands: []string{"go test ./..."},
+		Grants: []string{"bash|go test ./..."},
 	})
 
 	s := &Server{ctrl: old, bc: bc}
@@ -307,9 +306,6 @@ func TestSwitchModelRestoresSessionAuthorizations(t *testing.T) {
 	got := newCtrl.SessionAuthorizations()
 	if len(got.Grants) != 1 || got.Grants[0] != "bash|go test ./..." {
 		t.Fatalf("restored grants = %+v, want [\"bash|go test ./...\"]", got.Grants)
-	}
-	if len(got.PlanModeReadOnlyCommands) != 1 || got.PlanModeReadOnlyCommands[0] != "go test ./..." {
-		t.Fatalf("restored plan-mode read-only commands = %+v, want [\"go test ./...\"]", got.PlanModeReadOnlyCommands)
 	}
 }
 

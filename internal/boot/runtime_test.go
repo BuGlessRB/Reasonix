@@ -227,8 +227,7 @@ func TestRebuildMigratesSessionState(t *testing.T) {
 	oldCtrl.SetPlanMode(true)
 	oldCtrl.SetGoal("ship the kernel")
 	oldCtrl.RestoreSessionAuthorizations(control.SessionAuthorizations{
-		Grants:                   []string{"bash(go test ./...)"},
-		PlanModeReadOnlyCommands: []string{"git status"},
+		Grants: []string{"bash(go test ./...)"},
 	})
 	oldHistory := oldCtrl.History()
 
@@ -274,9 +273,6 @@ func TestRebuildMigratesSessionState(t *testing.T) {
 	auth := res.Controller.SessionAuthorizations()
 	if !slices.Contains(auth.Grants, "bash(go test ./...)") {
 		t.Fatalf("session grants = %v, want the migrated grant", auth.Grants)
-	}
-	if !slices.Contains(auth.PlanModeReadOnlyCommands, "git status") {
-		t.Fatalf("plan-mode trust = %v, want the migrated prefix", auth.PlanModeReadOnlyCommands)
 	}
 
 	// old keeps working: history intact, runtime set untouched, close clean.

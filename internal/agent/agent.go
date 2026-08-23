@@ -218,25 +218,6 @@ type ExplicitDenyGate interface {
 	ExplicitlyDenies(toolName string, args json.RawMessage) bool
 }
 
-const PlanModeReadOnlyCommandApprovalTool = "plan_mode_read_only_command"
-
-// PlanModeReadOnlyTrustRequest describes a bash command that is safe enough to
-// ask the user to accept as read-only during planning. Command is the concrete
-// attempted command and Prefix is the reusable prefix to trust.
-type PlanModeReadOnlyTrustRequest struct {
-	ToolName string
-	Command  string
-	Prefix   string
-	Args     json.RawMessage
-}
-
-// PlanModeReadOnlyTrustGate is the legacy Plan bash trust bridge. It remains in
-// the internal API for controller compatibility, but ordinary Plan execution no
-// longer invokes it; bash calls use the normal permission gate.
-type PlanModeReadOnlyTrustGate interface {
-	CheckPlanModeReadOnlyTrust(ctx context.Context, req PlanModeReadOnlyTrustRequest) (allow bool, reason string, err error)
-}
-
 const DefaultMaxSubagentDepth = 2
 
 // NormalizeMaxSubagentDepth applies the public config contract: values below 1
@@ -475,15 +456,6 @@ func (a *Agent) RecoveryGate() RecoveryGate {
 		return nil
 	}
 	return a.svc.recoveryGate
-}
-
-// SetPlanModeReadOnlyTrustGate retains the legacy confirmation bridge for old
-// controller/session data. Main Plan execution no longer calls it.
-func (a *Agent) SetPlanModeReadOnlyTrustGate(g PlanModeReadOnlyTrustGate) {
-	if nilutil.IsNil(g) {
-		g = nil
-	}
-	a.svc.planTrust = g
 }
 
 // SetSandboxEscapeApprover installs the optional one-shot approval path used by
@@ -858,10 +830,6 @@ type Options struct {
 	// NewPlannerAgent sets this; strict read-only sub-agents must not.
 	PlannerMCPExecution bool
 
-	// PlanModeReadOnlyTrustGate is retained for legacy controller compatibility.
-	// The main Plan execution path no longer invokes it.
-	PlanModeReadOnlyTrustGate PlanModeReadOnlyTrustGate
-
 	// SandboxEscapeApprover confirms a one-shot unconfined shell rerun after an
 	// enforced OS sandbox fails. nil keeps fail-closed behavior.
 	SandboxEscapeApprover sandbox.EscapeApprover
@@ -962,10 +930,6 @@ type Options struct {
 	// user-turn context. Empty/auto keeps the stable same-as-user policy.
 	ResponseLanguage string
 
-	// PlanModeReadOnlyCommands is retained for old config/controller data. Main
-	// Plan execution classifies bash through Permissions instead.
-	PlanModeReadOnlyCommands []string
-
 	// RecoveryGate is the optional Auto Guard boundary. It checks deterministic
 	// high-risk mutations and failure recovery before permission approval and
 	// write-lock acquisition.
@@ -1011,10 +975,6 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 	if nilutil.IsNil(gate) {
 		gate = nil
 	}
-	planModeReadOnlyTrust := opts.PlanModeReadOnlyTrustGate
-	if nilutil.IsNil(planModeReadOnlyTrust) {
-		planModeReadOnlyTrust = nil
-	}
 	sandboxEscapeApprover := opts.SandboxEscapeApprover
 	if nilutil.IsNil(sandboxEscapeApprover) {
 		sandboxEscapeApprover = nil
@@ -1043,7 +1003,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 		reasoningByteLimit = defaultReasoningByteLimit
 	}
 	a := &Agent{
-		svc: newAgentServices(prov, tools, sink, gate, planModeReadOnlyTrust,
+		svc: newAgentServices(prov, tools, sink, gate,
 			sandboxEscapeApprover, configWriteApprover, hooks, opts),
 		agentConfig: agentConfig{
 			maxSteps:           opts.MaxSteps,

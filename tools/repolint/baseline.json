@@ -4,9 +4,9 @@
     "commented-code": 0,
     "complexity": 1571,
     "error-text": 12,
-    "essay": 3303,
-    "file-size": 43657,
-    "function-size": 6800,
+    "essay": 3302,
+    "file-size": 43471,
+    "function-size": 6794,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
@@ -100,7 +100,7 @@
     "internal/agent/agent.go": {
       "complexity": 37,
       "essay": 55,
-      "file-size": 1657,
+      "file-size": 1617,
       "function-size": 102
     },
     "internal/agent/ask.go": {
@@ -301,8 +301,8 @@
     "internal/boot/boot.go": {
       "complexity": 131,
       "essay": 91,
-      "file-size": 1180,
-      "function-size": 1045,
+      "file-size": 1118,
+      "function-size": 1040,
       "narrative": 3
     },
     "internal/boot/boot_test.go": {
@@ -436,7 +436,7 @@
     "internal/cli/chat_tui.go": {
       "complexity": 327,
       "essay": 109,
-      "file-size": 4683,
+      "file-size": 4677,
       "function-size": 1283
     },
     "internal/cli/chat_tui_paste.go": {
@@ -664,13 +664,13 @@
     "internal/control/controller.go": {
       "complexity": 5,
       "essay": 154,
-      "file-size": 5293,
-      "function-size": 49,
+      "file-size": 5215,
+      "function-size": 48,
       "narrative": 4,
       "struct-state": 5
     },
     "internal/control/controller_test.go": {
-      "essay": 10
+      "essay": 9
     },
     "internal/control/errmsg.go": {
       "essay": 2

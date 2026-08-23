@@ -138,14 +138,13 @@ type Controller struct {
 	// vendor-aware resolution from config.
 	testCacheColdAfter time.Duration
 
-	shell                             sandbox.Shell                    // interpreter for user-invoked "!" commands; zero = auto
-	startedOnce                       bool                             // guards the one-shot SessionStart hook on first turn
-	closeOnce                         sync.Once                        // makes close idempotent under racing teardown paths
-	onRemember                        func(rule string) RememberResult // set via Options; invoked when user picks "always allow"
-	onRememberPlanModeReadOnlyCommand func(prefix string) PlanModeReadOnlyCommandTrustResult
-	sessionRecoveryMeta               func(SessionRecoveryRequest) agent.BranchMeta
-	onSessionRecovered                func(SessionRecoveryInfo) error
-	onSessionPathChanged              func(path string)
+	shell                sandbox.Shell                    // interpreter for user-invoked "!" commands; zero = auto
+	startedOnce          bool                             // guards the one-shot SessionStart hook on first turn
+	closeOnce            sync.Once                        // makes close idempotent under racing teardown paths
+	onRemember           func(rule string) RememberResult // set via Options; invoked when user picks "always allow"
+	sessionRecoveryMeta  func(SessionRecoveryRequest) agent.BranchMeta
+	onSessionRecovered   func(SessionRecoveryInfo) error
+	onSessionPathChanged func(path string)
 
 	// balance is the active provider's optional wallet endpoint (nil-answering
 	// when the provider declares none). Captured at build so a model/key switch —
@@ -356,16 +355,6 @@ type RememberResult struct {
 	Err       error
 }
 
-// PlanModeReadOnlyCommandTrustResult describes what happened when a trusted bash
-// command prefix was persisted for plan-mode research.
-type PlanModeReadOnlyCommandTrustResult struct {
-	Prefix    string
-	Path      string
-	Saved     bool
-	CoveredBy string
-	Err       error
-}
-
 type SessionRecoveryRequest struct {
 	OriginalPath string
 	Reason       string
@@ -492,10 +481,6 @@ type Options struct {
 	// persist to disk (e.g. "Bash(go test:*)"). The callback is wired into the
 	// permission Gate on EnableInteractiveApproval.
 	OnRemember func(rule string) RememberResult
-	// OnRememberPlanModeReadOnlyCommand persists a bash command prefix as trusted
-	// read-only when the user chooses "always allow" from the plan-mode trust
-	// prompt.
-	OnRememberPlanModeReadOnlyCommand func(prefix string) PlanModeReadOnlyCommandTrustResult
 	// SessionRecoveryMeta lets a frontend attach scope/topic/profile metadata to
 	// an automatic recovery branch before it is written.
 	SessionRecoveryMeta func(SessionRecoveryRequest) agent.BranchMeta
@@ -559,52 +544,51 @@ func New(opts Options) *Controller {
 		opts.Hooks.SetSessionID(agent.BranchID(opts.SessionPath))
 	}
 	c := &Controller{
-		taskBudget:                        opts.TaskBudget,
-		goalTokenBudget:                   opts.GoalTokenBudget,
-		goals:                             goalMachine{tokenBudget: opts.GoalTokenBudget},
-		runner:                            opts.Runner,
-		executor:                          opts.Executor,
-		guardianSess:                      opts.Guardian,
-		guardianPath:                      guardian.PathFor(opts.SessionPath),
-		evaluator:                         opts.GoalEvaluator,
-		goalUsageTee:                      usageTee,
-		sink:                              sink,
-		policy:                            opts.Policy,
-		subagentGate:                      opts.SubagentGate,
-		label:                             opts.Label,
-		modelRef:                          opts.ModelRef,
-		systemPrompt:                      opts.SystemPrompt,
-		sessionDir:                        opts.SessionDir,
-		sessionPath:                       opts.SessionPath,
-		commands:                          atomic.Pointer[[]command.Command]{},
-		skills:                            newSkillSet(opts.Skills, opts.AllSkills, opts.SkillStore, opts.AllSkillStore, opts.DisableImplicitSkillInvocation),
-		skillRunner:                       opts.SkillRunner,
-		readOnlySkillRunner:               opts.ReadOnlySkillRunner,
-		skillProfile:                      opts.SkillProfile,
-		hooks:                             opts.Hooks,
-		memory:                            newMemoryManager(opts.Memory),
-		cleanup:                           opts.Cleanup,
-		display:                           displayPrefsFrom(opts),
-		disableColdResumePrune:            opts.DisableColdResumePrune,
-		shell:                             opts.Shell,
-		onRemember:                        opts.OnRemember,
-		onRememberPlanModeReadOnlyCommand: opts.OnRememberPlanModeReadOnlyCommand,
-		sessionRecoveryMeta:               opts.SessionRecoveryMeta,
-		onSessionRecovered:                opts.OnSessionRecovered,
-		balance:                           opts.Balance,
-		jobs:                              opts.Jobs,
-		workspaceLease:                    opts.WorkspaceLease,
-		mcp:                               newMcpManager(opts.Host, opts.Registry, pluginCtx, opts.MCPDefaultCallTimeout),
-		mcpConfigureSpec:                  opts.MCPConfigureSpec,
-		capabilityRuntime:                 opts.CapabilityRuntime,
-		runtimeProfile:                    runtimeProfile,
-		ablation:                          opts.Ablation,
-		workspaceRoot:                     opts.WorkspaceRoot,
-		externalFolderToolRefs:            opts.ExternalFolderToolRefs,
-		providerResolver:                  opts.ProviderResolver,
-		runtimeGeneration:                 opts.RuntimeGeneration,
-		runtimeOwner:                      runtimeOwner,
-		approval:                          newApprovalManager(opts.Policy, ToolApprovalAsk, opts.ApprovalTimeout),
+		taskBudget:             opts.TaskBudget,
+		goalTokenBudget:        opts.GoalTokenBudget,
+		goals:                  goalMachine{tokenBudget: opts.GoalTokenBudget},
+		runner:                 opts.Runner,
+		executor:               opts.Executor,
+		guardianSess:           opts.Guardian,
+		guardianPath:           guardian.PathFor(opts.SessionPath),
+		evaluator:              opts.GoalEvaluator,
+		goalUsageTee:           usageTee,
+		sink:                   sink,
+		policy:                 opts.Policy,
+		subagentGate:           opts.SubagentGate,
+		label:                  opts.Label,
+		modelRef:               opts.ModelRef,
+		systemPrompt:           opts.SystemPrompt,
+		sessionDir:             opts.SessionDir,
+		sessionPath:            opts.SessionPath,
+		commands:               atomic.Pointer[[]command.Command]{},
+		skills:                 newSkillSet(opts.Skills, opts.AllSkills, opts.SkillStore, opts.AllSkillStore, opts.DisableImplicitSkillInvocation),
+		skillRunner:            opts.SkillRunner,
+		readOnlySkillRunner:    opts.ReadOnlySkillRunner,
+		skillProfile:           opts.SkillProfile,
+		hooks:                  opts.Hooks,
+		memory:                 newMemoryManager(opts.Memory),
+		cleanup:                opts.Cleanup,
+		display:                displayPrefsFrom(opts),
+		disableColdResumePrune: opts.DisableColdResumePrune,
+		shell:                  opts.Shell,
+		onRemember:             opts.OnRemember,
+		sessionRecoveryMeta:    opts.SessionRecoveryMeta,
+		onSessionRecovered:     opts.OnSessionRecovered,
+		balance:                opts.Balance,
+		jobs:                   opts.Jobs,
+		workspaceLease:         opts.WorkspaceLease,
+		mcp:                    newMcpManager(opts.Host, opts.Registry, pluginCtx, opts.MCPDefaultCallTimeout),
+		mcpConfigureSpec:       opts.MCPConfigureSpec,
+		capabilityRuntime:      opts.CapabilityRuntime,
+		runtimeProfile:         runtimeProfile,
+		ablation:               opts.Ablation,
+		workspaceRoot:          opts.WorkspaceRoot,
+		externalFolderToolRefs: opts.ExternalFolderToolRefs,
+		providerResolver:       opts.ProviderResolver,
+		runtimeGeneration:      opts.RuntimeGeneration,
+		runtimeOwner:           runtimeOwner,
+		approval:               newApprovalManager(opts.Policy, ToolApprovalAsk, opts.ApprovalTimeout),
 	}
 	// Session-private temporary directory: reuse a shared Manager on hot
 	// rebuild, otherwise create one. Retain so ReleaseResources/Close drop the
@@ -2200,20 +2184,13 @@ func (c *Controller) recordDecisionReceipt(pending pendingApproval, outcome stri
 // Interactive frontends (chat, desktop) call this; the headless run keeps the
 // silent gate and a nil asker from setup.
 func (c *Controller) EnableInteractiveApproval() {
-	trustGate := planModeReadOnlyTrustApprover{c}
 	escapeApprover := sandboxEscapeApprover{c}
 	configApprover := managedConfigWriteApprover{c}
 	if c.executor != nil {
 		c.executor.SetGate(c.newInteractiveGate())
-		c.executor.SetPlanModeReadOnlyTrustGate(trustGate)
 		c.executor.SetSandboxEscapeApprover(escapeApprover)
 		c.executor.SetConfigWriteApprover(configApprover)
 		c.executor.SetAsker(c)
-	}
-	if setter, ok := c.runner.(interface {
-		SetPlanModeReadOnlyTrustGate(agent.PlanModeReadOnlyTrustGate)
-	}); ok {
-		setter.SetPlanModeReadOnlyTrustGate(trustGate)
 	}
 	if setter, ok := c.runner.(interface {
 		SetSandboxEscapeApprover(sandbox.EscapeApprover)
@@ -5669,8 +5646,6 @@ func (g gateApprover) approveWithPolicyReason(ctx context.Context, tool, subject
 	return allow, remember, "", err
 }
 
-type planModeReadOnlyTrustApprover struct{ c *Controller }
-
 type sandboxEscapeApprover struct{ c *Controller }
 
 func (s sandboxEscapeApprover) ApproveSandboxEscape(ctx context.Context, req sandbox.EscapeRequest) (bool, string, error) {
@@ -5738,41 +5713,6 @@ func (m managedConfigWriteApprover) ManagedConfigWriteSessionAllowed(_ context.C
 
 func managedConfigWriteApprovalSubject(path string) string {
 	return i18n.M.ConfigWriteSubjectPrefix + strings.TrimSpace(path)
-}
-
-func (p planModeReadOnlyTrustApprover) CheckPlanModeReadOnlyTrust(ctx context.Context, req agent.PlanModeReadOnlyTrustRequest) (bool, string, error) {
-	prefix := normalizePlanModeReadOnlyCommandPrefix(req.Prefix)
-	if prefix == "" {
-		return false, "missing plan-mode read-only command prefix", nil
-	}
-	return p.checkBashReadOnlyCommandTrust(ctx, req, prefix)
-}
-
-func (p planModeReadOnlyTrustApprover) checkBashReadOnlyCommandTrust(ctx context.Context, req agent.PlanModeReadOnlyTrustRequest, prefix string) (bool, string, error) {
-	if p.c.approval.planModeReadOnlyCommandTrusted(prefix) {
-		return true, "", nil
-	}
-	command := strings.TrimSpace(req.Command)
-	if command == "" {
-		command = strings.TrimSpace(string(req.Args))
-	}
-	subject := fmt.Sprintf(i18n.M.PlanModeBashTrustSubjectFmt, prefix, command)
-	reason := i18n.M.PlanModeBashTrustReason
-	reply, err := p.c.requestFreshApprovalDecision(ctx, agent.PlanModeReadOnlyCommandApprovalTool, subject, req.Args, reason)
-	if err != nil {
-		return false, "approval aborted", err
-	}
-	if !reply.allow {
-		return false, i18n.M.PlanModeBashTrustDeclined, nil
-	}
-	if reply.session {
-		p.c.approval.grantPlanModeReadOnlyCommand(prefix)
-	}
-	if reply.persist && p.c.onRememberPlanModeReadOnlyCommand != nil {
-		p.c.emitPlanModeReadOnlyCommandTrustResult(p.c.onRememberPlanModeReadOnlyCommand(prefix))
-		p.c.approval.grantPlanModeReadOnlyCommand(prefix)
-	}
-	return true, "", nil
 }
 
 func approvalDisplaySubject(tool, subject string, args json.RawMessage) string {
@@ -6071,23 +6011,5 @@ func (c *Controller) emitRememberResult(r RememberResult) {
 		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf(i18n.M.PermissionSavedFmt, r.Path, r.Rule)})
 	case strings.TrimSpace(r.CoveredBy) != "":
 		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf(i18n.M.PermissionAlreadyAllowedFmt, r.Path, r.CoveredBy)})
-	}
-}
-
-func (c *Controller) emitPlanModeReadOnlyCommandTrustResult(r PlanModeReadOnlyCommandTrustResult) {
-	prefix := strings.TrimSpace(r.Prefix)
-	if r.Err != nil {
-		c.sink.Emit(event.Event{
-			Kind:  event.Notice,
-			Level: event.LevelWarn,
-			Text:  fmt.Sprintf(i18n.M.PlanModeReadOnlyCommandTrustFailedFmt, prefix, r.Err),
-		})
-		return
-	}
-	switch {
-	case r.Saved:
-		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf(i18n.M.PlanModeReadOnlyCommandTrustSavedFmt, r.Path, prefix)})
-	case strings.TrimSpace(r.CoveredBy) != "":
-		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf(i18n.M.PlanModeReadOnlyCommandTrustAlreadyFmt, r.Path, r.CoveredBy)})
 	}
 }

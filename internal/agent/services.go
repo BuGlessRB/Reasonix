@@ -47,9 +47,6 @@ type agentServices struct {
 	// recoveryGate is the Auto Guard boundary, shared by root and sub-agents for
 	// one controller task. nil disables recovery checks.
 	recoveryGate RecoveryGate
-	// planTrust is retained for legacy controller wiring. The main Plan
-	// execution path no longer consults it.
-	planTrust PlanModeReadOnlyTrustGate
 	// sandboxEscape can ask the user whether one shell command may rerun
 	// unconfined after the OS sandbox failed to start.
 	sandboxEscape sandbox.EscapeApprover
@@ -89,7 +86,7 @@ type agentServices struct {
 // under the function-size limit and so adding a collaborator touches one place.
 func newAgentServices(
 	prov provider.Provider, tools *tool.Registry, sink event.Sink, gate Gate,
-	planTrust PlanModeReadOnlyTrustGate, sandboxEscape sandbox.EscapeApprover,
+	sandboxEscape sandbox.EscapeApprover,
 	configWrite tool.ConfigWriteApprover, hooks ToolHooks, opts Options,
 ) agentServices {
 	return agentServices{
@@ -103,7 +100,6 @@ func newAgentServices(
 		gate:             gate,
 		extensions:       opts.Extensions,
 		recoveryGate:     opts.RecoveryGate,
-		planTrust:        planTrust,
 		sandboxEscape:    sandboxEscape,
 		configWrite:      configWrite,
 		hooks:            hooks,

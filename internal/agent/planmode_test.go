@@ -43,13 +43,6 @@ func (g *recordingPermissionGate) Check(_ context.Context, name string, _ json.R
 	return g.allow, g.reason, nil
 }
 
-type legacyPlanTrustGate struct{ calls int }
-
-func (g *legacyPlanTrustGate) CheckPlanModeReadOnlyTrust(context.Context, PlanModeReadOnlyTrustRequest) (bool, string, error) {
-	g.calls++
-	return true, "", nil
-}
-
 type annotatedMCPTool struct {
 	fakeTool
 	server           string
@@ -196,15 +189,15 @@ func TestPlanModeSafeWriterStillUsesWriterPermission(t *testing.T) {
 	}
 }
 
-func TestPlanModeDoesNotInvokeLegacyBashTrustPrompt(t *testing.T) {
+// Plan-mode bash goes through the ordinary permission gate as the declared
+// writer it is. It used to have a trust bridge of its own that asked the user
+// to accept a command prefix as read-only; that path is gone, and this pins
+// what replaced it rather than that it is not called.
+func TestPlanModeBashReachesOrdinaryPermissionAsWriter(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "bash"})
 	gate := &recordingPermissionGate{allow: true}
-	legacy := &legacyPlanTrustGate{}
-	a := New(nil, reg, NewSession(""), Options{
-		Gate:                      gate,
-		PlanModeReadOnlyTrustGate: legacy,
-	}, event.Discard)
+	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
@@ -214,27 +207,21 @@ func TestPlanModeDoesNotInvokeLegacyBashTrustPrompt(t *testing.T) {
 	if out.blocked || out.errMsg != "" {
 		t.Fatalf("permission-approved bash outcome = %+v", out)
 	}
-	if legacy.calls != 0 {
-		t.Fatalf("obsolete Plan bash trust prompt was invoked %d times", legacy.calls)
-	}
 	if len(gate.calls) != 1 || gate.calls[0].readOnly {
 		t.Fatalf("bash must reach ordinary permission as declared writer, calls=%+v", gate.calls)
 	}
 }
 
-func TestPlanModeLegacyOverridesDoNotBypassPermissions(t *testing.T) {
+func TestPlanModeWriterStaysBehindPermissions(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "write_file", writesPaths: true})
 	gate := &recordingPermissionGate{reason: "denied"}
-	a := New(nil, reg, NewSession(""), Options{
-		Gate:                     gate,
-		PlanModeReadOnlyCommands: []string{"gh issue view"},
-	}, event.Discard)
+	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
 	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "write_file"})
 	if !out.blocked || len(gate.calls) != 1 {
-		t.Fatalf("legacy Plan config bypassed permissions: outcome=%+v calls=%+v", out, gate.calls)
+		t.Fatalf("plan-mode writer bypassed permissions: outcome=%+v calls=%+v", out, gate.calls)
 	}
 }
 
