@@ -8,6 +8,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/netclient"
 	"reasonix/internal/releaseasset"
+	"reasonix/internal/remote"
 	"reasonix/internal/remote/attach"
 	"reasonix/internal/serve"
 )
@@ -37,6 +38,20 @@ func (r *remoteLink) Attach(ctx context.Context, host, workspace string) (serve.
 		Addr:      ep.Addr,
 		Token:     ep.Token,
 	}, ep.Release, nil
+}
+
+// Candidates reads the machine's own ssh_config. Filling the book by hand when
+// the addresses are already written down next door is the step people skip.
+func (r *remoteLink) Candidates() []string {
+	src, err := remote.LoadUserSSHConfig()
+	if err != nil || src == nil {
+		return nil
+	}
+	out := make([]string, 0)
+	for _, cand := range src.Aliases() {
+		out = append(out, cand.Alias)
+	}
+	return out
 }
 
 func (r *remoteLink) States() map[string]serve.RemoteLinkState {

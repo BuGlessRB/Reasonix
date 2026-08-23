@@ -16,8 +16,9 @@ import (
 
 // stubAttacher stands in for the window's link layer.
 type stubAttacher struct {
-	attach func(host, workspace string) (RemoteEndpoint, func(), error)
-	states map[string]RemoteLinkState
+	attach     func(host, workspace string) (RemoteEndpoint, func(), error)
+	states     map[string]RemoteLinkState
+	candidates []string
 }
 
 func (s *stubAttacher) Attach(_ context.Context, host, workspace string) (RemoteEndpoint, func(), error) {
@@ -25,6 +26,8 @@ func (s *stubAttacher) Attach(_ context.Context, host, workspace string) (Remote
 }
 
 func (s *stubAttacher) States() map[string]RemoteLinkState { return s.states }
+
+func (s *stubAttacher) Candidates() []string { return s.candidates }
 
 // remoteKernel stands in for a `reasonix serve` on another machine. It records
 // what the proxy presented so the tests can assert on the far side.

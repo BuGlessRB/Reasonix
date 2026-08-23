@@ -648,6 +648,8 @@ export function App({ hub }: { hub: HubPort }) {
 
       {settings && activePort && (
         <Settings
+          hub={hub}
+          onError={fail}
           port={activePort}
           status={report.status}
           theme={theme}

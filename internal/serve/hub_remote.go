@@ -57,6 +57,10 @@ type RemoteAttacher interface {
 	// States is the live state per host name. A host with no link is absent
 	// rather than reported idle: only the caller knows which hosts exist.
 	States() map[string]RemoteLinkState
+	// Candidates are ssh_config aliases this machine already knows how to
+	// reach. Reading that file is the link layer's job, which is what keeps
+	// SSH out of here even for a listing.
+	Candidates() []string
 }
 
 // RemoteLinkState is one machine's link as the attacher sees it.
@@ -70,22 +74,38 @@ type RemoteLinkState struct {
 }
 
 // RemoteHostView is one row of the host book, with whatever its link is doing.
+// The stored fields come back in full, not just the ones a row displays: saving
+// replaces an entry, so a page that edited one field while holding a partial
+// copy would blank whatever it never saw.
 type RemoteHostView struct {
-	Name      string `json:"name"`
-	Target    string `json:"target"`
-	Workspace string `json:"workspace,omitempty"`
-	Status    string `json:"status"`
-	Attempt   int    `json:"attempt,omitempty"`
-	Step      string `json:"step,omitempty"`
-	Detail    string `json:"detail,omitempty"`
-	Error     string `json:"error,omitempty"`
-	Panes     int    `json:"panes,omitempty"`
+	Name   string `json:"name"`
+	Target string `json:"target"`
+	Status string `json:"status"`
+
+	Host          string `json:"host,omitempty"`
+	Port          int    `json:"port,omitempty"`
+	User          string `json:"user,omitempty"`
+	IdentityFile  string `json:"identityFile,omitempty"`
+	ProxyJump     string `json:"proxyJump,omitempty"`
+	Workspace     string `json:"workspace,omitempty"`
+	ServeInstall  string `json:"serveInstall,omitempty"`
+	UseSSHConfig  bool   `json:"useSSHConfig,omitempty"`
+	PassphraseEnv string `json:"passphraseEnv,omitempty"`
+	PasswordEnv   string `json:"passwordEnv,omitempty"`
+	// Forwards are set from the CLI and have no control here; the count is
+	// shown so an edit does not look like it silently dropped them.
+	Forwards int `json:"forwards,omitempty"`
+
+	Attempt int    `json:"attempt,omitempty"`
+	Step    string `json:"step,omitempty"`
+	Detail  string `json:"detail,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Panes   int    `json:"panes,omitempty"`
 }
 
 func (h *Hub) listRemoteHosts(w http.ResponseWriter, _ *http.Request) {
 	if h.opts.Remote == nil {
-		refuse(w, http.StatusNotImplemented, "remote.not_available",
-			"this kernel does not open panes on other machines", nil)
+		refuseNoRemote(w)
 		return
 	}
 	cfg, err := config.Load()
@@ -97,10 +117,20 @@ func (h *Hub) listRemoteHosts(w http.ResponseWriter, _ *http.Request) {
 	out := make([]RemoteHostView, 0, len(cfg.Remote.Hosts))
 	for _, entry := range cfg.Remote.Hosts {
 		view := RemoteHostView{
-			Name:      entry.Name,
-			Target:    remoteTarget(entry),
-			Workspace: entry.Workspace,
-			Status:    "idle",
+			Name:          entry.Name,
+			Target:        remoteTarget(entry),
+			Status:        "idle",
+			Host:          entry.Host,
+			Port:          entry.Port,
+			User:          entry.User,
+			IdentityFile:  entry.IdentityFile,
+			ProxyJump:     entry.ProxyJump,
+			Workspace:     entry.Workspace,
+			ServeInstall:  entry.ServeInstall,
+			UseSSHConfig:  entry.UseSSHConfig,
+			PassphraseEnv: entry.PassphraseEnv,
+			PasswordEnv:   entry.PasswordEnv,
+			Forwards:      len(entry.Forwards),
 		}
 		if state, ok := live[entry.Name]; ok {
 			view.Status, view.Attempt = state.Status, state.Attempt
@@ -138,8 +168,7 @@ func (h *Hub) openRemoteRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.opts.Remote == nil {
-		refuse(w, http.StatusNotImplemented, "remote.not_available",
-			"this kernel does not open panes on other machines", nil)
+		refuseNoRemote(w)
 		return
 	}
 	ep, release, err := h.opts.Remote.Attach(r.Context(), req.Host, req.Workspace)

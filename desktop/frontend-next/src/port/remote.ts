@@ -11,8 +11,24 @@ export interface RemoteHost {
   // How the user would type it for ssh, so a row is recognisable without
   // opening it: user@host, and a port only when it is not the assumed one.
   target: string;
-  workspace?: string;
   status: RemoteStatus;
+
+  // The stored row in full, not only what a row displays. Saving replaces an
+  // entry, so editing one field while holding a partial copy would blank
+  // whatever this page never received.
+  host?: string;
+  port?: number;
+  user?: string;
+  identityFile?: string;
+  proxyJump?: string;
+  workspace?: string;
+  serveInstall?: string;
+  useSSHConfig?: boolean;
+  passphraseEnv?: string;
+  passwordEnv?: string;
+  // Set from the CLI, with no control here — counted so an edit does not look
+  // like it dropped them.
+  forwards?: number;
   // Which reconnect this is, while reconnecting.
   attempt?: number;
   // The bootstrap step a first connect has reached. Present only while one is
@@ -38,3 +54,22 @@ export const REMOTE_STEP_LABEL: Record<string, string> = {
   ready: "挂载端口转发",
   reuse: "接上已在运行的",
 };
+
+// One row as the settings page writes it. Secrets are named, never carried:
+// the two Env fields hold the name of an environment variable, the same shape
+// a provider's key takes — so nothing here is a password in transit.
+export interface RemoteHostEdit {
+  name: string;
+  host?: string;
+  port?: number;
+  user?: string;
+  identityFile?: string;
+  proxyJump?: string;
+  workspace?: string;
+  serveInstall?: string;
+  // Layer ~/.ssh/config under whatever this row leaves unset. With it the alias
+  // is the address, which is what makes an imported row complete on its own.
+  useSSHConfig?: boolean;
+  passphraseEnv?: string;
+  passwordEnv?: string;
+}

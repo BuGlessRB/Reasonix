@@ -9,6 +9,10 @@ export const EN_KERNEL: Record<string, string> = {
   "图片是空的": "The image is empty",
   "{host} 上的内核没有应答，连接可能断了": "The kernel on {host} is not answering — the connection may be down",
   "这个内核不负责连别的机器": "This kernel does not open panes on other machines",
+  "给这台机器起个名字": "Give this machine a name",
+  "说清楚连哪个地址": "Say which address to dial",
+  "这不是一个端口号": "That is not a port number",
+  "这台机器还开着 {n} 个面板，先关掉再移除": "This machine still has {n} open panes — close them before removing it",
   "有活儿在跑，先停下再换模型": "Something is running — stop it before switching models",
   "有活儿在跑，先停下再改推理强度": "Something is running — stop it before changing the reasoning effort",
   "{provider} 没说自己有哪些推理强度档位。要有，得在它的配置块里写 reasoning_protocol 或 supported_efforts":

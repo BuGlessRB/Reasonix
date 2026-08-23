@@ -5,6 +5,9 @@ import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, Capabil
 import { arrowTabs } from "./tablist";
 import { WindowControls } from "./WindowControls";
 import { AddServer } from "./AddServer";
+import { Remotes } from "./Remotes";
+import type { HubPort } from "../port/hub";
+import type { RemoteHost } from "../port/remote";
 import { AddPlugin } from "./AddPlugin";
 import { Packages } from "./Packages";
 import { Switch } from "./Switch";
@@ -41,7 +44,7 @@ const APPROVALS: [ApprovalMode, string, string][] = [
   ["yolo", "全放行", "不问了。只在你完全信任这个工作区时用"],
 ];
 
-type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "memory" | "usage" | "storage" | "account" | "versions" | "appearance" | "advanced";
+type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "remote" | "memory" | "usage" | "storage" | "account" | "versions" | "appearance" | "advanced";
 
 // What still lives in the old desktop app. Bots are not on the roadmap, so
 // they are not a promise to keep here either. Signing in and reading
@@ -59,6 +62,7 @@ const NAV: [Section, string][] = [
   ["hooks", "自动化"],
   ["ext", "扩展"],
   ["network", "网络"],
+  ["remote", "远程"],
   ["memory", "记忆"],
   ["usage", "用量"],
   ["storage", "存储"],
@@ -73,6 +77,10 @@ const NAV: [Section, string][] = [
 const NET_MODE: Record<string, string> = { auto: "跟随系统", env: "环境变量", custom: "手动", off: "直连" };
 
 interface Props {
+  // The window's own port, not a pane's: remote machines belong to the window,
+  // and their endpoints sit above every pane's prefix.
+  hub: HubPort;
+  onError: (e: unknown) => void;
   port: AgentPort;
   status: SessionStatus | null;
   theme: string;
@@ -91,7 +99,7 @@ interface Props {
   reloadAccount: () => void;
 }
 
-export function Settings({ port, status, theme, onTheme, contrast, onContrast, weight, onWeight, look, onLook, onClose, onChanged, reloadThemes, at: opened, account: acct, reloadAccount }: Props) {
+export function Settings({ hub, onError, port, status, theme, onTheme, contrast, onContrast, weight, onWeight, look, onLook, onClose, onChanged, reloadThemes, at: opened, account: acct, reloadAccount }: Props) {
   const [at, setAt] = useState<Section>((opened as Section) || "session");
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [roles, setRoles] = useState<RoleAssignments | null>(null);
@@ -108,6 +116,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
   const [adding, setAdding] = useState(false);
+  const [remoteBook, setRemoteBook] = useState<RemoteHost[] | null>(null);
   const [packages, setPackages] = useState<PluginPackage[]>([]);
   const [addingPkg, setAddingPkg] = useState(false);
   const [updatingPkg, setUpdatingPkg] = useState("");
@@ -184,6 +193,15 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
     reloadExt();
   }, [loadModels, loadRoles, reloadExt]);
 
+  // Read once for the tab's own count. Remotes keeps its own copy: it also
+  // needs the ssh_config candidates, which a tab label has no use for.
+  useEffect(() => {
+    hub
+      .remoteHosts()
+      .then(setRemoteBook)
+      .catch(() => setRemoteBook(null));
+  }, [hub]);
+
   // A refused switch has to say so. The kernel turns one down while a turn or a
   // background job is running, and swallowing that leaves the click looking like
   // the row simply does not work.
@@ -234,6 +252,10 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
   const looseMcp = mcp.filter((m) => !owned.has(m.name));
   const looseSkills = skills.filter((s) => !s.plugin);
   const looseOn = looseSkills.filter((s) => s.enabled).length;
+  // Null means this kernel does not do remote panes at all, which is what
+  // takes the whole tab out rather than showing an empty one.
+  const online = (remoteBook ?? []).filter((h) => h.status === "connected" || h.status === "degraded").length;
+  const remoteTally = remoteBook === null ? "" : online ? t("{n} 台在线", { n: online }) : remoteBook.length ? `${remoteBook.length}` : "";
   // The table of contents is also the status board: the value that matters for
   // each section rides on its own row, so the risky one is legible from here.
   const nav: Record<Section, string> = {
@@ -243,6 +265,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
     hooks: hookCount ? t("{n} 条", { n: hookCount }) : t("关"),
     ext: broken ? t("{n} 个异常", { n: broken }) : packages.length ? t("{n} 个包", { n: packages.length }) : `${looseMcp.length + looseOn}`,
     network: netMode,
+    remote: remoteTally,
     memory: memCount ? t("{n} 条", { n: memCount }) : "",
     usage: "",
     storage: "",
@@ -267,7 +290,7 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
 
       <div className="prefs-body">
         <nav className="prefs-nav" role="tablist" aria-label={t("设置分类")} onKeyDown={arrowTabs}>
-          {NAV.map(([id, name]) => (
+          {NAV.filter(([id]) => id !== "remote" || remoteBook !== null).map(([id, name]) => (
             <button key={id} id={`prefs-${id}`} role="tab" aria-selected={at === id} onClick={() => setAt(id)}>
               {t(name)}
               <span className="nv" title={nav[id] || undefined} data-danger={danger(id) ? "" : undefined}>
@@ -539,6 +562,15 @@ export function Settings({ port, status, theme, onTheme, contrast, onContrast, w
               hint={t("模型请求、MCP 的远程服务、网页抓取都走这里。配错了通常表现为聊天时莫名其妙卡住 —— 所以先测一下，它会告诉你断在哪一段。")}
             >
               <Network port={port} />
+            </Group>
+          )}
+
+          {at === "remote" && (
+            <Group
+              title={t("远程")}
+              hint={t("把另一台机器上的工作区接过来：内核跑在那边，窗口还是这个。开的面板和本地的并排坐着，所以每处都写清楚它在哪台机器上。")}
+            >
+              <Remotes hub={hub} onError={onError} />
             </Group>
           )}
 

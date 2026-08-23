@@ -1,5 +1,5 @@
 import { HttpError, type AgentPort } from "./port";
-import type { RemoteHost } from "./remote";
+import type { RemoteHost, RemoteHostEdit } from "./remote";
 import { SsePort } from "./sse";
 
 // RuntimeView is one open pane. Base is the prefix every request of that pane
@@ -64,6 +64,12 @@ export interface HubPort {
   // Opens a pane on another machine. Slow the first time — the kernel may be
   // installing itself over there — so the caller polls remoteHosts for the step.
   openRemote(req: { host: string; workspace?: string }): Promise<RuntimeView>;
+  saveRemoteHost(entry: RemoteHostEdit): Promise<void>;
+  removeRemoteHost(name: string): Promise<void>;
+  // ssh_config aliases this machine can already reach and the book has not
+  // taken yet. Filling it by hand when the addresses are written down next
+  // door is the step people skip.
+  remoteCandidates(): Promise<string[]>;
   pickFolder(): Promise<string | null>;
   // Absolute paths of every file dropped anywhere on the window. It belongs
   // here rather than on a pane because the window has one of it: the shell
@@ -169,6 +175,18 @@ export class SseHub implements HubPort {
 
   openRemote(req: { host: string; workspace?: string }) {
     return this.post<RuntimeView>("/remotes/open", { host: req.host, workspace: req.workspace ?? "" });
+  }
+
+  async saveRemoteHost(entry: RemoteHostEdit) {
+    await this.post<void>("/remotes", entry);
+  }
+
+  async removeRemoteHost(name: string) {
+    await this.post<void>("/remotes/remove", { name });
+  }
+
+  remoteCandidates() {
+    return this.get<string[]>("/remotes/candidates");
   }
 
   pickFolder() {

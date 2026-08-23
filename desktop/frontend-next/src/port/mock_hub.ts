@@ -62,6 +62,18 @@ export class MockHub implements HubPort {
     return Promise.resolve(view);
   }
 
+  saveRemoteHost() {
+    return Promise.resolve();
+  }
+
+  removeRemoteHost() {
+    return Promise.resolve();
+  }
+
+  remoteCandidates() {
+    return Promise.resolve(["attic", "old-laptop"]);
+  }
+
   close(id: string) {
     const at = this.views.findIndex((v) => v.id === id);
     if (at >= 0) this.views.splice(at, 1);

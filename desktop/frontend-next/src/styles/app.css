@@ -3659,6 +3659,89 @@
   .newsess { padding: 5px 9px 7px 22px }
   .newsess:disabled { opacity: .38; cursor: default; background: none; color: var(--faint) }
 
+  /* ── 设置页：远程主机簿 ─────────────────────────────────────────── */
+  .rmtbook { display: grid; gap: 0 }
+  .rmtrow { border-top: 1px solid var(--hair); padding: 10px 2px }
+  .rmtrow:last-of-type { border-bottom: 1px solid var(--hair) }
+  .rmtrow .hd { display: flex; align-items: center; gap: 8px; font: var(--w-reg) 12.5px var(--ui) }
+  .rmtrow .hd b { font-weight: var(--w-med); color: var(--text) }
+  .rmtrow .tg { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: var(--w-reg) 11px var(--mono); color: var(--ghost) }
+  /* 占住中间那段空白，把两个动作推到右边：状态是一句话，不是第三个按钮。 */
+  .rmtrow .st { flex: 1; min-width: 0; font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
+  .rmtrow[data-state="connected"] .st { color: var(--net) }
+  .rmtrow[data-state="degraded"] .st { color: var(--warn) }
+  .rmtrow[data-state="stopped"] .st { color: var(--err) }
+  .rmtrow .sub {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 4px 0 0 14px; font: var(--w-reg) 11px var(--mono); color: var(--faint);
+  }
+  .rmtrow .sub .dim { color: var(--ghost) }
+  .rmtrow .sub .tag {
+    padding: 0 6px; border: 1px solid var(--border); border-radius: var(--r-pill);
+    font: var(--w-reg) 10px var(--mono); color: var(--ghost);
+  }
+  .rmtbook .lnk {
+    flex: none; border: 0; background: none; cursor: pointer; padding: 0 2px;
+    font: var(--w-reg) 11px var(--ui); color: var(--faint);
+  }
+  .rmtbook .lnk:hover { color: var(--accent) }
+  .rmtbook .lnk[data-danger]:hover { color: var(--err) }
+  .rmtconfirm {
+    display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; padding: 8px 10px;
+    border: 1px solid var(--warn); border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--warn) 8%, transparent);
+    font: var(--w-reg) 11.5px var(--ui); color: var(--text);
+  }
+  .rmtconfirm span { flex: 1; min-width: 0 }
+  .rmtconfirm button {
+    flex: none; padding: 4px 10px; border-radius: var(--r-xs);
+    border: 1px solid var(--border); background: var(--overlay); color: var(--text);
+    font: var(--w-med) 11px var(--ui); cursor: pointer;
+  }
+  .rmtconfirm button[data-danger] { border-color: var(--err); color: var(--err) }
+  .rmtempty { margin: 4px 0 10px; font: var(--w-reg) 12px/1.7 var(--ui); color: var(--faint); max-width: 46ch }
+
+  /* 这台机器已经会连了，地址就写在隔壁；照抄比重打一遍靠谱。 */
+  .rmtcands { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 10px 0 2px }
+  .rmtcands .cap { font: var(--w-reg) 11px var(--ui); color: var(--ghost) }
+  .rmtcands .cand {
+    padding: 2px 9px; border: 1px dashed var(--border); border-radius: var(--r-pill);
+    background: transparent; color: var(--faint); cursor: pointer;
+    font: var(--w-reg) 11px var(--mono);
+  }
+  .rmtcands .cand:hover { border-style: solid; border-color: var(--accent); color: var(--text) }
+
+  .rmtform {
+    display: grid; gap: 8px; margin-top: 12px; padding: 12px;
+    border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--overlay);
+  }
+  .rmtf { display: flex; align-items: center; gap: 10px; font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
+  .rmtf > span { flex: none; width: 13ch }
+  .rmtf input {
+    flex: 1; min-width: 0; padding: 5px 8px;
+    border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--bg); color: var(--text); font: var(--w-reg) 11.5px var(--mono);
+  }
+  .rmtf input:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
+  .rmtck { gap: 8px }
+  .rmtck input { flex: none; width: auto }
+  .rmtck > span { width: auto; flex: 1 }
+  .rmtform .act { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px }
+  .rmtform .act button {
+    padding: 5px 14px; border-radius: var(--r-xs);
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    font: var(--w-med) 11.5px var(--ui); cursor: pointer;
+  }
+  .rmtform .act button[data-go] { border-color: var(--accent); color: var(--accent) }
+  .rmtform .act button:disabled { opacity: .4; cursor: default }
+  .rmtadd {
+    margin-top: 12px; padding: 6px 12px; border-radius: var(--r-pill);
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    font: var(--w-med) 11.5px var(--ui); cursor: pointer;
+  }
+  .rmtadd:hover { border-color: var(--accent); color: var(--text) }
+
   /* ── 左栏：远程主机 ───────────────────────────────────────────────
      一台主机一段。同一台机器上的工作区共用一条连接，所以状态长在段头上：
      链路断了，整段一起暗下去，这正是它们的真实关系。 */
@@ -3680,11 +3763,13 @@
   /* 一台主机只有六种状态，别让它们挤成两种：连上和没连上之间，还有「在连」、
      「在重连」、以及连上了却有转发没挂上 —— 最后这种看起来最像正常。 */
   .rmtpip { width: 6px; height: 6px; border-radius: 50%; background: var(--ghost); flex: none }
-  .rmt[data-state="connected"] .rmtpip { background: var(--net) }
-  .rmt[data-state="connecting"] .rmtpip,
-  .rmt[data-state="reconnecting"] .rmtpip { background: var(--accent); animation: tick 1.6s ease-in-out infinite }
-  .rmt[data-state="degraded"] .rmtpip { background: var(--warn) }
-  .rmt[data-state="stopped"] .rmtpip { background: var(--err) }
+  .rmt[data-state="connected"] .rmtpip, .rmtrow[data-state="connected"] .rmtpip { background: var(--net) }
+  .rmt[data-state="connecting"] .rmtpip, .rmtrow[data-state="connecting"] .rmtpip,
+  .rmt[data-state="reconnecting"] .rmtpip, .rmtrow[data-state="reconnecting"] .rmtpip {
+    background: var(--accent); animation: tick 1.6s ease-in-out infinite;
+  }
+  .rmt[data-state="degraded"] .rmtpip, .rmtrow[data-state="degraded"] .rmtpip { background: var(--warn) }
+  .rmt[data-state="stopped"] .rmtpip, .rmtrow[data-state="stopped"] .rmtpip { background: var(--err) }
   .rmt[data-state="connected"] .rmtname,
   .rmt[data-state="degraded"] .rmtname { color: var(--text) }
   .rmtnote {
