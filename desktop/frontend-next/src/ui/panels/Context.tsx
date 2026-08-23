@@ -3,6 +3,7 @@ import { t } from "../../i18n";
 import { useTicker } from "../num";
 import type { ContextBreakdown } from "../../port/port";
 import { pct as percent, tokens } from "../../i18n/format";
+import { pinToViewport } from "../place";
 
 // The order is the order they arrive in a prompt, so the bar reads the way the
 // request is built rather than by size — a class that grows is easier to spot
@@ -30,8 +31,7 @@ function place(anchor: RefObject<HTMLElement | null>) {
     const to = anchor.current.getBoundingClientRect();
     const box = el.getBoundingClientRect();
     const above = to.top - box.height - GAP;
-    el.style.left = `${Math.max(6, Math.min(to.right - box.width, innerWidth - box.width - 6))}px`;
-    el.style.top = `${above >= 6 ? above : to.bottom + GAP}px`;
+    pinToViewport(el, to.right - box.width, above >= 6 ? above : to.bottom + GAP);
   };
 }
 

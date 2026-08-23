@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { RuntimeView } from "../port/hub";
 import { arrowTabs } from "./tablist";
+import { pinToViewport } from "./place";
 import { useMarker } from "./marker";
 
 export interface TabView {
@@ -181,10 +182,9 @@ export function PaneTabs({ tabs, active, showRoot, onFocus, onClose, onRename }:
             if (!el) return;
             // This used to clamp against innerWidth - 152, where 152 was the menu
             // width: a CSS fact copied into JS that drifts as labels grow, and it
-            // only clamped one edge. Measure the menu itself and clamp both.
-            const box = el.getBoundingClientRect();
-            el.style.left = `${Math.max(6, Math.min(menu.x, innerWidth - box.width - 6))}px`;
-            el.style.top = `${Math.max(6, Math.min(menu.y, innerHeight - box.height - 6))}px`;
+            // only clamped one edge. pinToViewport measures the menu and clamps
+            // both, in the one place that knows about the zoom.
+            pinToViewport(el, menu.x, menu.y);
           }}
           onClick={(ev) => ev.stopPropagation()}
         >
