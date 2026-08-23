@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
@@ -170,7 +171,7 @@ func TestBackgroundKill(t *testing.T) {
 	// process-tree teardown (up to ~bashWaitDelay) still fits, while a genuinely
 	// broken kill trips the 40s timeout. Pairing the sleep with the timeout (as
 	// 10/10 did) raced natural completion against the reap.
-	res := m.Wait(ctx, []string{id}, 40)
+	res, _ := m.Wait(ctx, []string{id}, jobs.WaitOptions{Timeout: 40 * time.Second})
 	if len(res) != 1 || res[0].Status != jobs.Killed {
 		t.Fatalf("want killed, got %+v", res)
 	}
@@ -229,7 +230,7 @@ func TestKilledJobBashOutputDoesNotNoteLeaseBeforeEvidenceIsReady(t *testing.T) 
 	}
 
 	close(release)
-	if res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 5); len(res) != 1 || res[0].Status != jobs.Killed {
+	if res, _ := m.WaitForSession(context.Background(), "session", []string{j.ID}, jobs.WaitOptions{Timeout: 5 * time.Second}); len(res) != 1 || res[0].Status != jobs.Killed {
 		t.Fatalf("post-unwind wait = %+v, want one killed result", res)
 	}
 

@@ -21,7 +21,7 @@ func TestNewManagerTreatsTypedNilSinkAsDiscard(t *testing.T) {
 	j := m.Start("bash", "typed nil sink", func(context.Context, io.Writer) (string, error) {
 		return "done", nil
 	})
-	res := m.Wait(context.Background(), []string{j.ID}, 1000)
+	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 1000 * time.Second})
 	if len(res) != 1 || res[0].Status != Done {
 		t.Fatalf("job result = %+v, want one done job", res)
 	}
@@ -38,7 +38,7 @@ func TestWaitTimeout(t *testing.T) {
 		return "", ctx.Err()
 	})
 	// Wait with a very short timeout — the job won't finish in time.
-	res := m.Wait(context.Background(), []string{j.ID}, 1)
+	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 {
 		t.Fatalf("want 1 result, got %d", len(res))
 	}
@@ -67,7 +67,7 @@ func TestWaitAllRunning(t *testing.T) {
 		<-ctx.Done()
 		return "", ctx.Err()
 	})
-	res := m.Wait(context.Background(), nil, 1)
+	res, _ := m.Wait(context.Background(), nil, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 2 {
 		t.Fatalf("want 2 results, got %d", len(res))
 	}
@@ -130,7 +130,7 @@ func TestDrainMultiple(t *testing.T) {
 	m.Start("task", "label", func(_ context.Context, _ io.Writer) (string, error) {
 		return "answer", nil
 	})
-	m.Wait(context.Background(), nil, 5)
+	m.Wait(context.Background(), nil, WaitOptions{Timeout: 5 * time.Second})
 	note := m.DrainCompletedNote()
 	if note == "" {
 		t.Fatal("drain should not be empty after 2 completions")
@@ -167,7 +167,7 @@ func TestJobFailed(t *testing.T) {
 	j := m.Start("bash", "", func(_ context.Context, _ io.Writer) (string, error) {
 		return "", io.ErrUnexpectedEOF
 	})
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 || res[0].Status != Failed {
 		t.Fatalf("want Failed, got %+v", res)
 	}
@@ -182,7 +182,7 @@ func TestJobWithResult(t *testing.T) {
 	j := m.Start("task", "", func(_ context.Context, _ io.Writer) (string, error) {
 		return "final answer", nil
 	})
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 || res[0].Status != Done {
 		t.Fatalf("want Done, got %+v", res)
 	}

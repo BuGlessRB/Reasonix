@@ -45,7 +45,7 @@ func TestCompletedJobPersistsOutputAndReleasesMemory(t *testing.T) {
 		t.Fatal("artifact path should be set")
 	}
 
-	res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
+	res, _ := m.WaitForSession(context.Background(), "session", []string{j.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 || len(res[0].Output) != defaultTailBytes+1024 {
 		t.Fatalf("wait output len = %d, want %d", len(res[0].Output), defaultTailBytes+1024)
 	}
@@ -64,7 +64,7 @@ func TestJobArtifactPreservesOutput(t *testing.T) {
 	})
 	<-j.done
 
-	res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
+	res, _ := m.WaitForSession(context.Background(), "session", []string{j.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 {
 		t.Fatalf("wait result = %+v", res)
 	}
@@ -242,11 +242,11 @@ func TestRestoreSessionArtifactsAndAdvanceSequence(t *testing.T) {
 	defer second.Close()
 	second.SetActiveSessionPath("session", sessionPath)
 
-	res := second.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
+	res, _ := second.WaitForSession(context.Background(), "session", []string{j.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 || !strings.Contains(res[0].Output, "persisted answer") {
 		t.Fatalf("restored wait = %+v, want persisted answer", res)
 	}
-	if got := second.WaitForSession(context.Background(), "session", nil, 1); len(got) != 0 {
+	if got, _ := second.WaitForSession(context.Background(), "session", nil, WaitOptions{Timeout: 1 * time.Second}); len(got) != 0 {
 		t.Fatalf("wait without ids should ignore restored completed artifacts, got %+v", got)
 	}
 	if got := second.LeaseEvidenceForSession("session", j.ID); len(got.Receipts) != 0 {
@@ -288,7 +288,7 @@ func TestRestoreRunningArtifactAsInterrupted(t *testing.T) {
 	if m.KillForSession("session", "task-1") {
 		t.Fatal("restored interrupted job must not be killable")
 	}
-	result := m.WaitForSession(context.Background(), "session", []string{"task-1"}, 1)
+	result, _ := m.WaitForSession(context.Background(), "session", []string{"task-1"}, WaitOptions{Timeout: 1 * time.Second})
 	if len(result) != 1 || result[0].Status != Interrupted {
 		t.Fatalf("restored result = %+v, want interrupted", result)
 	}
@@ -328,7 +328,7 @@ func TestRestoreRunningArtifactDefersTombstoneWhenRepairWriteFails(t *testing.T)
 	defer m.Close()
 	m.SetActiveSessionPath("session", sessionPath)
 
-	if result := m.WaitForSession(context.Background(), "session", []string{"task-1"}, 1); len(result) != 0 {
+	if result, _ := m.WaitForSession(context.Background(), "session", []string{"task-1"}, WaitOptions{Timeout: 1 * time.Second}); len(result) != 0 {
 		t.Fatalf("failed repair published an in-memory tombstone: %+v", result)
 	}
 	persisted, err := readMeta(metaPath)
@@ -355,7 +355,7 @@ func TestRestoreRunningArtifactDefersTombstoneWhenRepairWriteFails(t *testing.T)
 
 	repairArtifactMeta = originalRepair
 	m.SetActiveSessionPath("session", sessionPath)
-	result := m.WaitForSession(context.Background(), "session", []string{"task-1"}, 1)
+	result, _ := m.WaitForSession(context.Background(), "session", []string{"task-1"}, WaitOptions{Timeout: 1 * time.Second})
 	if len(result) != 1 || result[0].Status != Interrupted {
 		t.Fatalf("retried repair result = %+v, want interrupted", result)
 	}
@@ -396,7 +396,7 @@ func TestRestoreRunningArtifactFromClosedOwnerAsInterrupted(t *testing.T) {
 	}))
 	defer restored.Close()
 	restored.SetActiveSessionPath("session", sessionPath)
-	result := restored.WaitForSession(context.Background(), "session", []string{"task-1"}, 1)
+	result, _ := restored.WaitForSession(context.Background(), "session", []string{"task-1"}, WaitOptions{Timeout: 1 * time.Second})
 	if len(result) != 1 || result[0].Status != Interrupted {
 		t.Fatalf("restored result = %+v, want interrupted after the original owner closed", result)
 	}
@@ -416,7 +416,7 @@ func TestRestoreRunningArtifactWithoutSessionOwnershipDefersRepair(t *testing.T)
 
 	observer := NewManager(event.Discard)
 	observer.SetActiveSessionPath("session", sessionPath)
-	if result := observer.WaitForSession(context.Background(), "session", []string{"task-1"}, 1); len(result) != 0 {
+	if result, _ := observer.WaitForSession(context.Background(), "session", []string{"task-1"}, WaitOptions{Timeout: 1 * time.Second}); len(result) != 0 {
 		observer.Close()
 		t.Fatalf("unowned observer published a running artifact: %+v", result)
 	}
@@ -436,7 +436,7 @@ func TestRestoreRunningArtifactWithoutSessionOwnershipDefersRepair(t *testing.T)
 	}))
 	defer owner.Close()
 	owner.SetActiveSessionPath("session", sessionPath)
-	result := owner.WaitForSession(context.Background(), "session", []string{"task-1"}, 1)
+	result, _ := owner.WaitForSession(context.Background(), "session", []string{"task-1"}, WaitOptions{Timeout: 1 * time.Second})
 	if len(result) != 1 || result[0].Status != Interrupted {
 		t.Fatalf("owned reload = %+v, want interrupted", result)
 	}
@@ -476,7 +476,7 @@ func TestRestoreDoesNotInterruptJobOwnedByLiveManager(t *testing.T) {
 	close(release)
 	<-job.done
 	second.SetActiveSessionPath("session", sessionPath)
-	result := second.WaitForSession(context.Background(), "session", []string{job.ID}, 1)
+	result, _ := second.WaitForSession(context.Background(), "session", []string{job.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(result) != 1 || result[0].Status != Done {
 		t.Fatalf("replacement manager did not load the terminal artifact after owner completion: %+v", result)
 	}
@@ -790,7 +790,7 @@ func TestSetActiveSessionPathMigratesRunningJobArtifacts(t *testing.T) {
 	if !strings.HasPrefix(donePath, ArtifactDir(sessionPath)+string(filepath.Separator)) {
 		t.Fatalf("completed artifact path = %q, want under %q", donePath, ArtifactDir(sessionPath))
 	}
-	res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
+	res, _ := m.WaitForSession(context.Background(), "session", []string{j.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 || !strings.Contains(res[0].Output, "before\n") || !strings.Contains(res[0].Output, "after\n") {
 		t.Fatalf("wait after migration = %+v, want before and after output", res)
 	}
@@ -811,7 +811,7 @@ func TestArtifactFailureDoesNotFailSuccessfulJob(t *testing.T) {
 	})
 	<-j.done
 
-	res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
+	res, _ := m.WaitForSession(context.Background(), "session", []string{j.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 || res[0].Status != Done {
 		t.Fatalf("wait = %+v, want one done result", res)
 	}
@@ -866,7 +866,7 @@ func TestSetActiveSessionPathAdoptsUnscopedTemporaryJobs(t *testing.T) {
 	<-j.done
 
 	m.SetActiveSessionPath("session", sessionPath)
-	res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
+	res, _ := m.WaitForSession(context.Background(), "session", []string{j.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 || !strings.Contains(res[0].Output, "temporary answer") {
 		t.Fatalf("adopted wait = %+v, want temporary answer", res)
 	}
@@ -901,7 +901,7 @@ func TestSetActiveSessionPathAdoptsUnscopedJobsOnMigrationFailure(t *testing.T) 
 	if !strings.Contains(out, "temporary answer") || !strings.Contains(out, "job artifact incomplete: migration:") {
 		t.Fatalf("scoped output = %q, want answer and migration error", out)
 	}
-	res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
+	res, _ := m.WaitForSession(context.Background(), "session", []string{j.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 || !strings.Contains(res[0].Output, "job artifact incomplete: migration:") {
 		t.Fatalf("scoped wait = %+v, want migration error", res)
 	}
@@ -933,7 +933,7 @@ func TestSetActiveSessionPathReportsMigrationFailure(t *testing.T) {
 	m.SetActiveSessionPath("session", sessionPath)
 	<-j.done
 
-	res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
+	res, _ := m.WaitForSession(context.Background(), "session", []string{j.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 || !strings.Contains(res[0].Output, "job artifact incomplete: migration:") {
 		t.Fatalf("wait after migration failure = %+v, want artifact error", res)
 	}
@@ -1019,11 +1019,11 @@ func TestRestoredArtifactsAreScopedBySession(t *testing.T) {
 	m.SetActiveSessionPath("session-a", pathA)
 	m.SetActiveSessionPath("session-b", pathB)
 
-	resA := m.WaitForSession(context.Background(), "session-a", []string{"bash-1"}, 1)
+	resA, _ := m.WaitForSession(context.Background(), "session-a", []string{"bash-1"}, WaitOptions{Timeout: 1 * time.Second})
 	if len(resA) != 1 || resA[0].Output != "from-a" {
 		t.Fatalf("session-a wait = %+v, want from-a", resA)
 	}
-	resB := m.WaitForSession(context.Background(), "session-b", []string{"bash-1"}, 1)
+	resB, _ := m.WaitForSession(context.Background(), "session-b", []string{"bash-1"}, WaitOptions{Timeout: 1 * time.Second})
 	if len(resB) != 1 || resB[0].Output != "from-b" {
 		t.Fatalf("session-b wait = %+v, want from-b", resB)
 	}

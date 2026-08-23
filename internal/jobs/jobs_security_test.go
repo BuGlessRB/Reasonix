@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"reasonix/internal/event"
 	"reasonix/internal/store"
@@ -172,7 +173,7 @@ func TestStartForSession_AcceptsValidInput(t *testing.T) {
 
 	// Wait for run to finish and confirm cleanup paths still work.
 	close(release)
-	res := m.WaitForSession(context.Background(), "session-20260724-142525abc", []string{j.ID}, 5)
+	res, _ := m.WaitForSession(context.Background(), "session-20260724-142525abc", []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 {
 		t.Fatalf("WaitForSession returned %d results, want 1", len(res))
 	}

@@ -127,6 +127,7 @@ type Job struct {
 
 	mu          sync.Mutex
 	tail        []byte
+	written     int64 // everything the job has ever produced, for comparing two moments
 	readOffset  int64
 	status      Status
 	result      string
@@ -137,6 +138,7 @@ type Job struct {
 	done        chan struct{}
 	stalled     bool
 
+	watches  []*outputWatch
 	artifact jobArtifact
 
 	evidence          evidence.ChildEvidenceSummary
@@ -320,7 +322,9 @@ func (w jobWriter) Write(p []byte) (int, error) {
 	w.j.mu.Lock()
 	defer w.j.mu.Unlock()
 	w.j.times.touch()
+	w.j.written += int64(len(p))
 	w.j.tail = appendTail(w.j.tail, p, defaultTailBytes)
+	w.j.notifyWatches(p)
 	w.j.artifact.write(p)
 	return len(p), nil
 }
@@ -957,37 +961,9 @@ func (m *Manager) KillForSession(parentSession, id string) bool {
 	return true
 }
 
-// Wait blocks until the named jobs (or every currently-running job when ids is
-// empty) reach a terminal state, or ctx is cancelled, or timeoutSec elapses
-// (0 = no timeout). It returns each target's snapshot regardless of why it
-// returned, so a timeout still reports partial progress.
-func (m *Manager) Wait(ctx context.Context, ids []string, timeoutSec int) []Result {
-	return m.WaitForSession(ctx, "", ids, timeoutSec)
-}
-
-// WaitForSession waits only on jobs owned by parentSession. Empty parentSession
-// preserves the legacy unscoped behavior.
-func (m *Manager) WaitForSession(ctx context.Context, parentSession string, ids []string, timeoutSec int) []Result {
-	targets := m.resolve(parentSession, ids)
-	if len(targets) == 0 {
-		return nil
-	}
-	var timeout <-chan time.Time
-	if timeoutSec > 0 {
-		t := time.NewTimer(time.Duration(timeoutSec) * time.Second)
-		defer t.Stop()
-		timeout = t.C
-	}
-	for _, j := range targets {
-		select {
-		case <-j.done:
-		case <-ctx.Done():
-			return m.results(targets)
-		case <-timeout:
-			return m.results(targets)
-		}
-	}
-	return m.results(targets)
+// Wait is WaitForSession across every session, for a caller that owns them all.
+func (m *Manager) Wait(ctx context.Context, ids []string, opts WaitOptions) ([]Result, WaitOutcome) {
+	return m.WaitForSession(ctx, "", ids, opts)
 }
 
 // resolve maps requested ids to jobs; an empty list selects all running jobs.

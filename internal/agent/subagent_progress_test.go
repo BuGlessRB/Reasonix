@@ -805,7 +805,7 @@ func TestBackgroundTaskEmitsQueuedRunningCompleted(t *testing.T) {
 		t.Fatal("background job never started after slot release")
 	}
 	if jobID != "" {
-		result := jm.WaitForSession(context.Background(), "sess-bg", []string{jobID}, 5)
+		result, _ := jm.WaitForSession(context.Background(), "sess-bg", []string{jobID}, jobs.WaitOptions{Timeout: 5 * time.Second})
 		if len(result) != 1 || result[0].Status != jobs.Done {
 			t.Fatalf("background job result = %+v, want one completed job", result)
 		}

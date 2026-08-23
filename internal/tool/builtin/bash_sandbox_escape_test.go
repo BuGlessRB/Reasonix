@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"reasonix/internal/event"
 	"reasonix/internal/jobs"
@@ -168,7 +169,7 @@ func TestBashSandboxEscapeSessionGrantRunsBackgroundUnconfinedBeforeWrapper(t *t
 		t.Fatalf("Execute returned error starting background job with session escape: %v (out=%q)", err, out)
 	}
 	jobID := backgroundJobIDFromStartOutput(t, out)
-	results := jm.WaitForSession(context.Background(), "session-a", []string{jobID}, 5)
+	results, _ := jm.WaitForSession(context.Background(), "session-a", []string{jobID}, jobs.WaitOptions{Timeout: 5 * time.Second})
 	if len(results) != 1 {
 		t.Fatalf("wait results = %d, want 1", len(results))
 	}

@@ -163,7 +163,7 @@ func (waitJob) Description() string {
 }
 
 func (waitJob) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"job_ids":{"type":"array","items":{"type":"string"},"description":"Background job ids to wait for. Omit to wait for every currently-running job."},"timeout_seconds":{"type":"integer","description":"Optional maximum seconds to block before returning current progress. Omit to wait until the jobs finish.","minimum":1}}}`)
+	return json.RawMessage(`{"type":"object","properties":{"job_ids":{"type":"array","items":{"type":"string"},"description":"Background job ids to wait for. Omit to wait for every currently-running job."},"timeout_seconds":{"type":"integer","description":"Optional maximum seconds to block before returning current progress. Omit to wait until the jobs finish — one long wait costs one round, where polling in short steps costs one per step.","minimum":1},"until_output_matches":{"type":"string","description":"Optional regular expression (RE2). Return early as soon as a job writes something matching it. Use it to wait once for the line you actually care about — a completion marker, or an error — instead of polling to check."}}}`)
 }
 
 func (waitJob) ReadOnly() bool { return true }
@@ -181,6 +181,7 @@ func (waitJob) Execute(ctx context.Context, args json.RawMessage) (string, error
 	var p struct {
 		JobIDs         []string `json:"job_ids"`
 		TimeoutSeconds int      `json:"timeout_seconds"`
+		UntilMatches   string   `json:"until_output_matches"`
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &p); err != nil {
@@ -191,11 +192,22 @@ func (waitJob) Execute(ctx context.Context, args json.RawMessage) (string, error
 	if !ok {
 		return "", fmt.Errorf("background jobs are not available in this context")
 	}
-	results := jm.WaitForSession(ctx, jobs.SessionFromContext(ctx), p.JobIDs, p.TimeoutSeconds)
+	opts := jobs.WaitOptions{Timeout: time.Duration(p.TimeoutSeconds) * time.Second}
+	if pattern := strings.TrimSpace(p.UntilMatches); pattern != "" {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return "", fmt.Errorf("until_output_matches is not a valid regular expression: %w", err)
+		}
+		opts.Match = re
+	}
+	results, outcome := jm.WaitForSession(ctx, jobs.SessionFromContext(ctx), p.JobIDs, opts)
 	if len(results) == 0 {
 		return "No background jobs to wait for.", nil
 	}
 	var b strings.Builder
+	if outcome == jobs.WaitMatched {
+		b.WriteString("Returned early: a job wrote something matching until_output_matches.\n\n")
+	}
 	for i, r := range results {
 		if r.Status != jobs.Running {
 			collectBackgroundEvidence(ctx, jm, r.ID)
@@ -216,20 +228,34 @@ func (waitJob) Execute(ctx context.Context, args json.RawMessage) (string, error
 	return b.String(), nil
 }
 
-// stillRunning says what is known about a job that has not finished: how long
-// it has been going, and whether any of it reached this side. A task that
-// redirects into a file looks identical to a hung one from here, so the
-// difference is stated rather than left to be inferred from an empty output.
+// stillRunning states what happened while the caller waited. No thresholds and
+// no verdict: a task making slow progress and one that has stopped differ by
+// whether anything arrived, and the caller is the one who knows which of those
+// its own task should look like.
 func stillRunning(p *jobs.Progress) string {
 	if p == nil {
 		return ""
 	}
-	if !p.Spoke {
-		return fmt.Sprintf(" — %s so far, nothing on its own output; if it writes to a file, read that,"+
-			" and wait again with a longer timeout_seconds rather than in short steps",
-			p.Running.Round(time.Second))
+	produced := "nothing on its own output so far"
+	if p.Produced > 0 {
+		produced = fmt.Sprintf("%s produced", byteCount(p.Produced))
 	}
-	return fmt.Sprintf(" — %s so far, last wrote %s ago", p.Running.Round(time.Second), p.Silent.Round(time.Second))
+	arrived := "nothing arrived while waiting"
+	if p.Delta > 0 {
+		arrived = fmt.Sprintf("%s arrived while waiting", byteCount(p.Delta))
+	}
+	return fmt.Sprintf(" — running %s, %s, %s", p.Running.Round(time.Second), produced, arrived)
+}
+
+func byteCount(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }
 
 func collectBackgroundEvidence(ctx context.Context, jm *jobs.Manager, jobID string) {

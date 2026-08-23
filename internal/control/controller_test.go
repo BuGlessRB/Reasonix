@@ -601,7 +601,7 @@ func TestSetSessionPathAdoptsTemporaryBackgroundJobs(t *testing.T) {
 	close(release)
 
 	parentSession := agent.BranchID(path)
-	res := c.jobs.WaitForSession(context.Background(), parentSession, []string{jobID}, 1)
+	res, _ := c.jobs.WaitForSession(context.Background(), parentSession, []string{jobID}, jobs.WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 || !strings.Contains(res[0].Output, "before\n") || !strings.Contains(res[0].Output, "after\n") {
 		t.Fatalf("adopted controller job = %+v, want before/after output", res)
 	}

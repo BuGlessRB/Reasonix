@@ -45,7 +45,7 @@ func TestTaskRecorderHook_StartAndDone(t *testing.T) {
 	j := m.Start("task", "demo", func(ctx context.Context, out io.Writer) (string, error) {
 		return "answer", nil
 	})
-	if res := m.Wait(context.Background(), []string{j.ID}, 5); len(res) != 1 || res[0].Status != Done {
+	if res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second}); len(res) != 1 || res[0].Status != Done {
 		t.Fatalf("wait = %+v", res)
 	}
 
@@ -67,7 +67,7 @@ func TestTaskRecorderHook_Failed(t *testing.T) {
 	j := m.Start("bash", "", func(ctx context.Context, out io.Writer) (string, error) {
 		return "", context.DeadlineExceeded
 	})
-	if res := m.Wait(context.Background(), []string{j.ID}, 5); len(res) != 1 || res[0].Status != Failed {
+	if res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second}); len(res) != 1 || res[0].Status != Failed {
 		t.Fatalf("wait = %+v", res)
 	}
 
@@ -90,7 +90,7 @@ func TestTaskRecorderHook_Killed(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	m.Kill(j.ID)
 	close(block)
-	m.Wait(context.Background(), []string{j.ID}, 5)
+	m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 
 	_, dones, status := rec.snapshot()
 	if len(dones) != 1 || status[0] != Killed {
@@ -107,7 +107,7 @@ func TestTaskRecorderHook_SetAfterConstruction(t *testing.T) {
 	j := m.Start("bash", "echo", func(ctx context.Context, out io.Writer) (string, error) {
 		return "", nil
 	})
-	m.Wait(context.Background(), []string{j.ID}, 5)
+	m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 
 	starts, _, _ := rec.snapshot()
 	if len(starts) != 1 {
@@ -122,7 +122,7 @@ func TestTaskRecorderHook_NilRecorderIsNoop(t *testing.T) {
 	j := m.Start("bash", "echo", func(ctx context.Context, out io.Writer) (string, error) {
 		return "", nil
 	})
-	if res := m.Wait(context.Background(), []string{j.ID}, 5); len(res) != 1 {
+	if res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second}); len(res) != 1 {
 		t.Fatalf("wait = %+v", res)
 	}
 }

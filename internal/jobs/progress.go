@@ -13,6 +13,11 @@ type Progress struct {
 	// Spoke is false for a job that never wrote to them at all — the shape of
 	// one whose output went somewhere else entirely.
 	Spoke bool
+	// Produced is everything written so far; Delta is how much arrived while
+	// the caller waited. Readings, not thresholds — slow progress and a stop
+	// differ here, and which one matters is the caller's to know.
+	Produced int64
+	Delta    int64
 }
 
 func (m *Manager) results(targets []*Job) []Result {
@@ -35,9 +40,10 @@ func (m *Manager) results(targets []*Job) []Result {
 		r := Result{ID: j.ID, Kind: j.Kind, Label: j.Label, Status: j.status, Output: text}
 		if j.status == Running {
 			r.Progress = &Progress{
-				Running: sinceMs(j.times.started),
-				Silent:  sinceMs(j.times.activity),
-				Spoke:   len(j.tail) > 0 || j.result != "",
+				Running:  sinceMs(j.times.started),
+				Silent:   sinceMs(j.times.activity),
+				Spoke:    j.written > 0,
+				Produced: j.written,
 			}
 		}
 		out = append(out, r)

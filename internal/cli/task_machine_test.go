@@ -27,7 +27,7 @@ func TestTaskMachineListUsesContentFreePersistedMetadata(t *testing.T) {
 	job := manager.StartForSession("session", "task", "PRIVATE TASK LABEL", func(context.Context, io.Writer) (string, error) {
 		return "PRIVATE TASK OUTPUT", nil
 	})
-	manager.WaitForSession(context.Background(), "session", []string{job.ID}, 1)
+	manager.WaitForSession(context.Background(), "session", []string{job.ID}, jobs.WaitOptions{Timeout: 1 * time.Second})
 	manager.Close()
 
 	var out bytes.Buffer
@@ -139,7 +139,7 @@ func TestTaskMachineProjectRootUsesProjectStore(t *testing.T) {
 	job := manager.StartForSession("session", "task", "PRIVATE TASK LABEL", func(context.Context, io.Writer) (string, error) {
 		return "PRIVATE TASK OUTPUT", nil
 	})
-	manager.WaitForSession(context.Background(), "session", []string{job.ID}, 1)
+	manager.WaitForSession(context.Background(), "session", []string{job.ID}, jobs.WaitOptions{Timeout: 1 * time.Second})
 	manager.Close()
 
 	var out bytes.Buffer

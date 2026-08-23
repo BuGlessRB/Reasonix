@@ -1305,7 +1305,7 @@ func TestServeSessionConfigRejectsBackgroundJobsWhileIdle(t *testing.T) {
 	}
 
 	releaseOnce.Do(func() { close(release) })
-	_ = jm.WaitForSession(context.Background(), agent.BranchID(sessionPath), nil, 5)
+	_, _ = jm.WaitForSession(context.Background(), agent.BranchID(sessionPath), nil, jobs.WaitOptions{Timeout: 5 * time.Second})
 	if running := jm.RunningForSession(agent.BranchID(sessionPath)); len(running) != 0 {
 		t.Fatalf("running jobs after release = %+v, want none before retry", running)
 	}
@@ -1547,7 +1547,7 @@ func TestServeQueuedSessionConfigDiscardedWhenPromptLeavesBackgroundJob(t *testi
 
 	close(releaseJob)
 	jm := factory.managerAt(t, 0)
-	_ = jm.WaitForSession(context.Background(), agent.BranchID(transcriptPath(dir, nr.SessionID)), nil, 5)
+	_, _ = jm.WaitForSession(context.Background(), agent.BranchID(transcriptPath(dir, nr.SessionID)), nil, jobs.WaitOptions{Timeout: 5 * time.Second})
 	second := client.callAsync("session/prompt", SessionPromptParams{
 		SessionID: nr.SessionID,
 		Prompt:    []ContentBlock{{Type: "text", Text: "second"}},

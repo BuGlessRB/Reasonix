@@ -5,6 +5,7 @@ import (
 	"io"
 	"sync"
 	"testing"
+	"time"
 
 	"reasonix/internal/event"
 )
@@ -35,7 +36,7 @@ func TestManagerConcurrentAccess(t *testing.T) {
 				case 2:
 					_ = m.DrainCompletedNote()
 				case 3:
-					_ = m.Wait(context.Background(), nil, 0) // non-blocking-ish: returns running snapshot
+					_, _ = m.Wait(context.Background(), nil, WaitOptions{Timeout: time.Millisecond}) // returns a running snapshot
 				case 4:
 					m.Kill("bash-1")
 				case 5:

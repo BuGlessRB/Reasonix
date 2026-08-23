@@ -74,7 +74,7 @@ func TestStartForSessionStampsJobContext(t *testing.T) {
 	if got := <-seen; got != "session-a" {
 		t.Fatalf("job context session = %q, want session-a", got)
 	}
-	if res := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, 5); len(res) != 1 || res[0].Status != Done {
+	if res, _ := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, WaitOptions{Timeout: 5 * time.Second}); len(res) != 1 || res[0].Status != Done {
 		t.Fatalf("job result = %+v, want done", res)
 	}
 }
@@ -102,7 +102,7 @@ func TestJobStartObserverSeesLifetimeUntilTerminal(t *testing.T) {
 	default:
 	}
 	close(release)
-	if results := m.WaitForSession(context.Background(), "session-a", []string{job.ID}, 2); len(results) != 1 || results[0].Status != Done {
+	if results, _ := m.WaitForSession(context.Background(), "session-a", []string{job.ID}, WaitOptions{Timeout: 2 * time.Second}); len(results) != 1 || results[0].Status != Done {
 		t.Fatalf("wait results = %+v", results)
 	}
 	select {
@@ -171,7 +171,7 @@ func TestReserveStartForSessionCountsKilledJobUntilExit(t *testing.T) {
 		t.Fatalf("unwinding writer count = %d, want 1", running)
 	}
 	close(exit)
-	if res := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, 5); len(res) != 1 || res[0].Status != Killed {
+	if res, _ := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, WaitOptions{Timeout: 5 * time.Second}); len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("killed job result = %+v", res)
 	}
 	if got := m.RunningForSession("session-a"); len(got) != 0 {
@@ -202,7 +202,7 @@ func TestLeaseEvidenceWaitsForKilledJobExit(t *testing.T) {
 		t.Fatalf("collected evidence before killed job exited: %+v", early)
 	}
 	close(exit)
-	if res := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, 5); len(res) != 1 || res[0].Status != Killed {
+	if res, _ := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, WaitOptions{Timeout: 5 * time.Second}); len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("killed job result = %+v", res)
 	}
 	if got := m.LeaseEvidenceForSession("session-a", j.ID); !got.HasMutation() {
@@ -245,7 +245,7 @@ func TestTryLeaseEvidenceForSessionReportsReadiness(t *testing.T) {
 		t.Fatal("killed-but-unwinding job reported ready before its evidence was flushed")
 	}
 	close(exit)
-	if res := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, 5); len(res) != 1 || res[0].Status != Killed {
+	if res, _ := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, WaitOptions{Timeout: 5 * time.Second}); len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("killed job result = %+v", res)
 	}
 	summary, ready := m.TryLeaseEvidenceForSession("session-a", j.ID)
@@ -281,10 +281,10 @@ func TestPendingEvidenceJobIDsForSession(t *testing.T) {
 		}}})
 		return "done", nil
 	})
-	if res := m.WaitForSession(context.Background(), "session-a", []string{mutator.ID, readOnly.ID}, 5); len(res) != 2 {
+	if res, _ := m.WaitForSession(context.Background(), "session-a", []string{mutator.ID, readOnly.ID}, WaitOptions{Timeout: 5 * time.Second}); len(res) != 2 {
 		t.Fatalf("wait = %+v, want mutator and read-only jobs done", res)
 	}
-	if res := m.WaitForSession(context.Background(), "session-b", []string{otherSession.ID}, 5); len(res) != 1 {
+	if res, _ := m.WaitForSession(context.Background(), "session-b", []string{otherSession.ID}, WaitOptions{Timeout: 5 * time.Second}); len(res) != 1 {
 		t.Fatalf("wait = %+v, want other-session job done", res)
 	}
 
@@ -339,7 +339,7 @@ func TestStartWaitDoneAndDrain(t *testing.T) {
 		io.WriteString(out, "hello\n")
 		return "", nil
 	})
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 || res[0].Status != Done {
 		t.Fatalf("want one Done result, got %+v", res)
 	}
@@ -373,7 +373,7 @@ func TestOutputStreamsIncrementally(t *testing.T) {
 		return strings.Contains(txt, "first")
 	})
 	close(release)
-	m.Wait(context.Background(), []string{j.ID}, 5)
+	m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 
 	txt, st, ok := m.Output(j.ID)
 	if !ok || st != Done {
@@ -396,7 +396,7 @@ func TestKill(t *testing.T) {
 	if !m.Kill(j.ID) {
 		t.Fatal("Kill on a running job returned false")
 	}
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("want Killed, got %+v", res)
 	}
@@ -413,7 +413,7 @@ func TestJobPanicRecoveredAsFailed(t *testing.T) {
 	j := m.Start("task", "panic", func(context.Context, io.Writer) (string, error) {
 		panic("boom")
 	})
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 || res[0].Status != Failed {
 		t.Fatalf("want Failed result after panic, got %+v", res)
 	}
@@ -487,7 +487,7 @@ func TestKillStatusObservableBeforeGoroutineReturns(t *testing.T) {
 
 	// Short timeout: the goroutine is still blocked, so Wait can only know the
 	// status if Kill set it synchronously.
-	res := m.Wait(context.Background(), []string{j.ID}, 1)
+	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 1 * time.Second})
 	if len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("want Killed before the goroutine returns, got %+v", res)
 	}
@@ -496,7 +496,7 @@ func TestKillStatusObservableBeforeGoroutineReturns(t *testing.T) {
 	}
 
 	close(release)
-	m.Wait(context.Background(), []string{j.ID}, 5)
+	m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if n := len(m.Running()); n != 0 {
 		t.Fatalf("job remained operationally running after goroutine exit, got %d", n)
 	}
@@ -515,7 +515,7 @@ func TestCloseCancels(t *testing.T) {
 	<-started
 	m.Close()
 
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("want Killed after Close, got %+v", res)
 	}
@@ -536,7 +536,7 @@ func TestRunning(t *testing.T) {
 		t.Errorf("running view = %+v, want id=%s label=label", r, j.ID)
 	}
 	close(release)
-	m.Wait(context.Background(), []string{j.ID}, 5)
+	m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	waitFor(t, func() bool { return len(m.Running()) == 0 })
 }
 
@@ -567,7 +567,7 @@ func TestSessionScopedOperations(t *testing.T) {
 	if got := m.RunningForSession("session-a"); len(got) != 1 || got[0].ID != a.ID {
 		t.Fatalf("session-a running = %+v, want only %s", got, a.ID)
 	}
-	if got := m.WaitForSession(context.Background(), "session-a", []string{b.ID}, 1); len(got) != 0 {
+	if got, _ := m.WaitForSession(context.Background(), "session-a", []string{b.ID}, WaitOptions{Timeout: 1 * time.Second}); len(got) != 0 {
 		t.Fatalf("session-a wait on session-b job = %+v, want none", got)
 	}
 	if m.KillForSession("session-a", b.ID) {
@@ -575,7 +575,7 @@ func TestSessionScopedOperations(t *testing.T) {
 	}
 
 	close(releaseA)
-	res := m.WaitForSession(context.Background(), "session-a", []string{a.ID}, 5)
+	res, _ := m.WaitForSession(context.Background(), "session-a", []string{a.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 || res[0].ID != a.ID || res[0].Status != Done {
 		t.Fatalf("session-a wait all = %+v, want only done %s", res, a.ID)
 	}
@@ -587,7 +587,7 @@ func TestSessionScopedOperations(t *testing.T) {
 	}
 
 	close(releaseB)
-	m.WaitForSession(context.Background(), "session-b", []string{b.ID}, 5)
+	m.WaitForSession(context.Background(), "session-b", []string{b.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if note := m.DrainCompletedNoteForSession("session-b"); !strings.Contains(note, b.ID) {
 		t.Fatalf("session-b drain = %q, want %s", note, b.ID)
 	}
@@ -610,7 +610,7 @@ func TestSessionScopedNoticesUseActiveSession(t *testing.T) {
 		return "", nil
 	})
 	close(releaseB)
-	m.Wait(context.Background(), []string{b.ID}, 5)
+	m.Wait(context.Background(), []string{b.ID}, WaitOptions{Timeout: 5 * time.Second})
 	for _, text := range sink.texts() {
 		if strings.Contains(text, b.ID) {
 			t.Fatalf("inactive session job notice leaked: %q", text)
@@ -618,7 +618,7 @@ func TestSessionScopedNoticesUseActiveSession(t *testing.T) {
 	}
 
 	close(releaseA)
-	m.Wait(context.Background(), []string{a.ID}, 5)
+	m.Wait(context.Background(), []string{a.ID}, WaitOptions{Timeout: 5 * time.Second})
 	waitFor(t, func() bool {
 		for _, text := range sink.texts() {
 			if strings.Contains(text, a.ID) {
@@ -649,7 +649,7 @@ func TestDestroySessionCancelsOwnedJobsAndSuppressesCompletion(t *testing.T) {
 		t.Fatal("session-a should be marked destroying")
 	}
 	<-done[0]
-	res := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, 5)
+	res, _ := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("destroyed job result = %+v, want killed", res)
 	}
@@ -703,7 +703,7 @@ func TestDestroySessionWaitsForAlreadyKilledJobs(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for killed job to unwind")
 	}
-	res := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, 5)
+	res, _ := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("destroyed job result = %+v, want killed", res)
 	}
@@ -806,7 +806,7 @@ func TestCloseWithGraceTimesOutForNonCooperativeJob(t *testing.T) {
 	}
 
 	releaseJob()
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res, _ := m.Wait(context.Background(), []string{j.ID}, WaitOptions{Timeout: 5 * time.Second})
 	if len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("want killed after delayed close cleanup, got %+v", res)
 	}

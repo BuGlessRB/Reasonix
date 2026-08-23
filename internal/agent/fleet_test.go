@@ -58,7 +58,7 @@ func TestBackgroundFleetRegistersEveryWriterUntilCompletion(t *testing.T) {
 		t.Fatalf("running fleet jobs = %+v, want 1", running)
 	}
 	close(prov.release)
-	result := manager.WaitForSession(context.Background(), "parent-session", []string{running[0].ID}, 5)
+	result, _ := manager.WaitForSession(context.Background(), "parent-session", []string{running[0].ID}, jobs.WaitOptions{Timeout: 5 * time.Second})
 	if len(result) != 1 || result[0].Status != jobs.Done {
 		t.Fatalf("background fleet result = %+v", result)
 	}
@@ -106,7 +106,7 @@ func TestBackgroundFleetProgressLifecycleUsesStableIDs(t *testing.T) {
 	if len(running) != 1 {
 		t.Fatalf("running fleet jobs = %+v, want 1", running)
 	}
-	result := manager.WaitForSession(context.Background(), "progress-session", []string{running[0].ID}, 5)
+	result, _ := manager.WaitForSession(context.Background(), "progress-session", []string{running[0].ID}, jobs.WaitOptions{Timeout: 5 * time.Second})
 	if len(result) != 1 || result[0].Status != jobs.Done {
 		t.Fatalf("background fleet result = %+v, want one completed job", result)
 	}
@@ -197,7 +197,7 @@ func TestBackgroundFleetRegistersReservationWhileItemsAreQueued(t *testing.T) {
 	if len(running) != 1 {
 		t.Fatalf("running fleet jobs = %+v, want 1", running)
 	}
-	result := manager.WaitForSession(context.Background(), "queued-session", []string{running[0].ID}, 5)
+	result, _ := manager.WaitForSession(context.Background(), "queued-session", []string{running[0].ID}, jobs.WaitOptions{Timeout: 5 * time.Second})
 	if len(result) != 1 || result[0].Status != jobs.Done {
 		t.Fatalf("background fleet result = %+v, want one completed job", result)
 	}
