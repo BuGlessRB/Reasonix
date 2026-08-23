@@ -143,7 +143,7 @@ func TestBuildRequestScopesLegacyTupleMigrationToMiMo(t *testing.T) {
 	legacy := json.RawMessage(`{"type":"object","properties":{"pair":{"type":"array","items":[{"type":"string"},{"type":"number"}]}}}`)
 	req := provider.Request{Tools: []provider.ToolSchema{{Name: "tuple", Parameters: legacy}}}
 
-	mimo := (&client{mimo: true}).buildRequest(req)
+	mimo := (&client{draft202012Schemas: true}).buildRequest(req)
 	if got := string(mimo.Tools[0].Function.Parameters); !strings.Contains(got, `"prefixItems"`) || strings.Contains(got, `"items":[`) {
 		t.Fatalf("MiMo parameters = %s, want Draft 2020-12 tuple keywords", got)
 	}
@@ -648,7 +648,7 @@ func TestStreamUsesMiMoAPIKeyHeader(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	c := p.(*client)
-	if !c.mimo {
+	if !c.draft202012Schemas {
 		t.Fatal("official MiMo endpoint did not enable the Draft 2020-12 schema adapter")
 	}
 	c.chatURL = srv.URL
