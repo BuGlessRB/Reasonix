@@ -22,6 +22,7 @@ import (
 	"reasonix/internal/netclient"
 	"reasonix/internal/releaseasset"
 	"reasonix/internal/remote"
+	"reasonix/internal/remote/attach"
 	"reasonix/internal/remote/bootstrap"
 	"reasonix/internal/remote/forward"
 )
@@ -32,68 +33,20 @@ func newFlagSet(name string) *flag.FlagSet {
 }
 
 // buildRemoteClient resolves nameOrTarget against config + ~/.ssh/config and
-// returns a not-yet-started remote.Client with terminal-based secret and
-// host-key prompts. cleanup releases transient resources.
+// returns a connection whose prompts are this terminal's.
 func buildRemoteClient(nameOrTarget string) (*remote.Client, func(), error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, nil, err
 	}
-	sshCfg, err := remote.LoadUserSSHConfig()
-	if err != nil {
-		return nil, nil, fmt.Errorf("load SSH config: %w", err)
-	}
-	host, err := remote.ResolveHost(cfg, nameOrTarget, sshCfg)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	auth := remoteAuthForHost(host, terminalSecretPrompt)
-	resolvedJumps, err := remote.ResolveJumpHosts(cfg, host.ProxyJump, sshCfg)
-	if err != nil {
-		return nil, nil, err
-	}
-	jumpHosts := make([]remote.JumpHostOptions, 0, len(resolvedJumps))
-	for _, jump := range resolvedJumps {
-		jumpHosts = append(jumpHosts, remote.JumpHostOptions{
-			Host: jump,
-			Auth: remoteAuthForHost(jump, terminalSecretPrompt),
-		})
-	}
-
-	policy := &remote.HostKeyPolicy{Prompt: terminalHostKeyPrompt}
-
-	// A misconfigured proxy is surfaced, not silently bypassed: a proxy is often
-	// a policy requirement, and quietly dialing direct could exfiltrate the
-	// connection around it.
-	dialer, derr := netclient.NewStreamDialer(cfg.NetworkProxySpec())
-	if derr != nil {
-		return nil, nil, fmt.Errorf("remote: network proxy is misconfigured: %w", derr)
-	}
-	client, err := remote.New(remote.Options{
-		Host:      host,
-		Auth:      auth,
-		JumpHosts: jumpHosts,
-		HostKeys:  policy,
-		Dialer:    dialer,
+	client, err := attach.Dial(cfg, nameOrTarget, attach.Prompts{
+		Secret:  terminalSecretPrompt,
+		HostKey: terminalHostKeyPrompt,
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	return client, func() {}, nil
-}
-
-func remoteAuthForHost(host remote.ResolvedHost, prompt remote.SecretPrompt) remote.AuthOptions {
-	auth := remote.AuthOptions{SecretPrompt: prompt}
-	if host.PassphraseEnv != "" {
-		env := host.PassphraseEnv
-		auth.Passphrase = func() (string, error) { return config.ResolveCredential(env).Value, nil }
-	}
-	if host.PasswordEnv != "" {
-		env := host.PasswordEnv
-		auth.Password = func() (string, error) { return config.ResolveCredential(env).Value, nil }
-	}
-	return auth
 }
 
 func terminalSecretPrompt(_ context.Context, kind remote.SecretKind, host, identityFile string) (string, error) {
