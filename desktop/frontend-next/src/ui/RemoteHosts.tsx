@@ -128,11 +128,11 @@ function RemoteHostsView({ hosts, runtimes, active, onOpen, onFocus, onError }: 
                 </svg>
               </span>
               {host.workspace ? (
-                <span className="ws" dir="ltr">
+                <span className="rmtws" dir="ltr">
                   {host.workspace}
                 </span>
               ) : (
-                <span className="ws">{t("新会话")}</span>
+                <span className="rmtws">{t("新会话")}</span>
               )}
             </button>
           </div>

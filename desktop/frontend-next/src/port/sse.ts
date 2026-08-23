@@ -4,6 +4,7 @@ import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
 import type { StoragePlan, StorageState } from "./storage";
 import type { WireEvent } from "./wire";
+import type { RemoteAsk } from "./remote";
 
 // The running project is the default, so its requests stay the bare path they
 // have always been and only a cross-project read carries the folder.
@@ -12,6 +13,8 @@ const WAILS_EVENT = "rx:event";
 // Install progress rides its own channel: it is the shell reporting on itself,
 // not something the kernel emitted into the conversation.
 const WAILS_UPDATE_EVENT = "rx:update";
+// Must match wailsRemoteAsk in desktop/next.
+const WAILS_REMOTE_ASK = "reasonix:remote-ask";
 const WAILS_REPLAY = "/rx-replay";
 
 interface WailsBus {
@@ -22,6 +25,10 @@ interface WailsBus {
 // event stream's JSON string.
 interface WailsUpdateBus {
   EventsOn(name: string, cb: (data: UpdateProgress) => void): () => void;
+}
+
+interface WailsAskBus {
+  EventsOn(name: string, cb: (data: RemoteAsk) => void): () => void;
 }
 
 // Wails' own drop API: the only channel that reports where a dropped file
@@ -213,6 +220,19 @@ export class SsePort extends SseTheme implements AgentPort {
   // with CSS pixels the moment the interface is zoomed. The page routes the
   // drop against the DOM instead, where the element under the pointer is a
   // fact rather than an arithmetic result.
+  // A connect is blocked while one of these is on screen, so there is no
+  // polling to fall back on: no bus means no window, and no window means the
+  // kernel refused the question rather than asking it.
+  onRemoteAsk(cb: (ask: RemoteAsk) => void): () => void {
+    const bus = (window as unknown as { runtime?: WailsAskBus }).runtime;
+    if (!bus?.EventsOn) return () => {};
+    return bus.EventsOn(WAILS_REMOTE_ASK, cb);
+  }
+
+  answerRemote(id: string, ok: boolean, text: string) {
+    void (window as unknown as WailsBind).go?.main?.App?.AnswerRemote?.(id, ok, text);
+  }
+
   onDroppedPaths(cb: (paths: string[]) => void): () => void {
     const rt = (window as unknown as { runtime?: WailsFileDropBus }).runtime;
     if (!rt?.OnFileDrop) return () => {};

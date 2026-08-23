@@ -14,6 +14,9 @@ export interface WailsBind {
         GoToVersion?: (version: string) => Promise<void>;
         SavePluginExport?: (name: string) => Promise<{ path: string; required: string[] }>;
         SaveText?: (name: string, content: string) => Promise<string>;
+        // Replies to a question the link layer is blocked on — a first-seen
+        // host key, or a locked private key.
+        AnswerRemote?: (id: string, ok: boolean, text: string) => Promise<void>;
       };
     };
   };

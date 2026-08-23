@@ -45,4 +45,19 @@ export const EN_REMOTE: Record<string, string> = {
   "已连上": "Connected",
   "重连中": "Reconnecting",
   "有转发没挂上": "A forward did not attach",
+
+  // ── 连接时的两个问题 ─────────────────────────────────────────
+  "第一次连 {host}": "First connection to {host}",
+  "这台机器还没见过。下面是它出示的指纹 —— 跟你从别处拿到的那份对一下，一致才接受。":
+    "This machine has not been seen before. Below is the fingerprint it presented \u2014 compare it with the one you were given elsewhere, and accept only if they match.",
+  "算法": "Algorithm",
+  "指纹": "Fingerprint",
+  "对得上，记住它": "They match, remember it",
+  "私钥被口令锁着": "The private key is passphrase-locked",
+  "{host} 要密码": "{host} wants a password",
+  "解开 {file}。它只存在这次连接的内存里，不会写进任何文件。":
+    "To unlock {file}. It lives in memory for this connection only and is never written to any file.",
+  "只存在这次连接的内存里，不会写进任何文件。想让它记住，在设置里填一个环境变量名。":
+    "It lives in memory for this connection only and is never written to any file. To have it remembered, name an environment variable in settings.",
+  "继续": "Continue",
 };

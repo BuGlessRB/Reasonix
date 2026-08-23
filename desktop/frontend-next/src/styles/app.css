@@ -3659,6 +3659,46 @@
   .newsess { padding: 5px 9px 7px 22px }
   .newsess:disabled { opacity: .38; cursor: default; background: none; color: var(--faint) }
 
+  /* ── 连接时的两个问题 ─────────────────────────────────────────────
+     链路卡在这上面，所以它必须是模态：背后那台机器什么都不会做，直到有人
+     回答。指纹这一个刻意不好按 —— 它存在的全部理由就是拦住「没看就点」。 */
+  .askveil {
+    position: fixed; inset: 0; z-index: 95; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    animation: card var(--t-card) var(--ease-out) both;
+  }
+  .askcard {
+    width: min(440px, calc(100vw - 48px)); padding: 20px 22px;
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    background: var(--surface); box-shadow: var(--shadow-float);
+  }
+  .askcard h2 { margin: 0 0 8px; font: var(--w-med) 14px var(--ui); color: var(--text) }
+  .askcard .h { margin: 0 0 14px; font: var(--w-reg) 12px/1.7 var(--ui); color: var(--faint) }
+  .askcard input {
+    width: 100%; padding: 7px 10px; box-sizing: border-box;
+    border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--bg); color: var(--text); font: var(--w-reg) 12.5px var(--mono);
+  }
+  .askcard input:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
+  .askfacts {
+    display: grid; grid-template-columns: 5em 1fr; gap: 6px 12px; margin: 0 0 4px;
+    font: var(--w-reg) 11.5px var(--ui);
+  }
+  .askfacts dt { color: var(--ghost) }
+  .askfacts dd { margin: 0; color: var(--text); font-family: var(--mono); word-break: break-all }
+  /* 换行而不是截断：中间被省略号吃掉的指纹，没人能拿它跟任何东西核对。 */
+  .askfacts .fp { font-size: 11px; line-height: 1.6; color: var(--accent) }
+  .askcard .askact { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px }
+  .askcard .askact button {
+    padding: 6px 15px; border-radius: var(--r-xs);
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    font: var(--w-med) 12px var(--ui); cursor: pointer;
+  }
+  .askcard .askact button:hover { color: var(--text) }
+  .askcard .askact button[data-go] { border-color: var(--accent); color: var(--accent) }
+  .askcard .askact button[data-go]:hover { background: color-mix(in srgb, var(--accent) 12%, transparent) }
+
   /* ── 设置页：远程主机簿 ─────────────────────────────────────────── */
   .rmtbook { display: grid; gap: 0 }
   .rmtrow { border-top: 1px solid var(--hair); padding: 10px 2px }
@@ -3681,12 +3721,12 @@
     padding: 0 6px; border: 1px solid var(--border); border-radius: var(--r-pill);
     font: var(--w-reg) 10px var(--mono); color: var(--ghost);
   }
-  .rmtbook .lnk {
+  .rmtbook .rmtlnk {
     flex: none; border: 0; background: none; cursor: pointer; padding: 0 2px;
     font: var(--w-reg) 11px var(--ui); color: var(--faint);
   }
-  .rmtbook .lnk:hover { color: var(--accent) }
-  .rmtbook .lnk[data-danger]:hover { color: var(--err) }
+  .rmtbook .rmtlnk:hover { color: var(--accent) }
+  .rmtbook .rmtlnk[data-danger]:hover { color: var(--err) }
   .rmtconfirm {
     display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; padding: 8px 10px;
     border: 1px solid var(--warn); border-radius: var(--r-sm);
@@ -3705,12 +3745,12 @@
   /* 这台机器已经会连了，地址就写在隔壁；照抄比重打一遍靠谱。 */
   .rmtcands { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 10px 0 2px }
   .rmtcands .cap { font: var(--w-reg) 11px var(--ui); color: var(--ghost) }
-  .rmtcands .cand {
+  .rmtcands .rmtcand {
     padding: 2px 9px; border: 1px dashed var(--border); border-radius: var(--r-pill);
     background: transparent; color: var(--faint); cursor: pointer;
     font: var(--w-reg) 11px var(--mono);
   }
-  .rmtcands .cand:hover { border-style: solid; border-color: var(--accent); color: var(--text) }
+  .rmtcands .rmtcand:hover { border-style: solid; border-color: var(--accent); color: var(--text) }
 
   .rmtform {
     display: grid; gap: 8px; margin-top: 12px; padding: 12px;
@@ -3727,14 +3767,14 @@
   .rmtck { gap: 8px }
   .rmtck input { flex: none; width: auto }
   .rmtck > span { width: auto; flex: 1 }
-  .rmtform .act { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px }
-  .rmtform .act button {
+  .rmtform .rmtact { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px }
+  .rmtform .rmtact button {
     padding: 5px 14px; border-radius: var(--r-xs);
     border: 1px solid var(--border); background: transparent; color: var(--muted);
     font: var(--w-med) 11.5px var(--ui); cursor: pointer;
   }
-  .rmtform .act button[data-go] { border-color: var(--accent); color: var(--accent) }
-  .rmtform .act button:disabled { opacity: .4; cursor: default }
+  .rmtform .rmtact button[data-go] { border-color: var(--accent); color: var(--accent) }
+  .rmtform .rmtact button:disabled { opacity: .4; cursor: default }
   .rmtadd {
     margin-top: 12px; padding: 6px 12px; border-radius: var(--r-pill);
     border: 1px solid var(--border); background: transparent; color: var(--muted);
@@ -3806,7 +3846,7 @@
   .rmtopen .plus svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round }
   /* 不能用 direction:rtl 把省略号挪到左边：那会把路径的段也倒过来，
      /srv/training 会显示成 srv/training/。宁可从右边截。 */
-  .rmtopen .ws { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .rmtopen .rmtws { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .rmtopen:hover { color: var(--text); background: var(--overlay) }
   .rmtopen:hover .plus { color: var(--accent) }
   .rmtopen:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }

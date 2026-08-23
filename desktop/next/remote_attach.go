@@ -13,14 +13,17 @@ import (
 	"reasonix/internal/serve"
 )
 
-// remoteLink gives the hub what it needs for panes on other machines. Prompts
-// are left unset for now: a first-seen host key and a typed passphrase both
-// need a dialog this window does not have yet, and refusing is the safe
-// direction — a host already in known_hosts, reached by key or agent, connects.
+// remoteLink gives the hub what it needs for panes on other machines: a pool
+// that dials, and the prompts a first connect may have to stop for.
 type remoteLink struct{ pool *attach.Pool }
 
-func newRemoteLink(ctx context.Context) *remoteLink {
+// attachPrompts is what answers a credential or host-key question. Aliased so
+// the bridge that implements it does not import the link layer to name it.
+type attachPrompts = attach.Prompts
+
+func newRemoteLink(ctx context.Context, prompts attachPrompts) *remoteLink {
 	return &remoteLink{pool: attach.NewPool(ctx, attach.Options{
+		Prompts:     prompts,
 		LocalBinary: currentExecutable(),
 		Version:     version,
 		FetchBinary: fetchRemoteBinary,

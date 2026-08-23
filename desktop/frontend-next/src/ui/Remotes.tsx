@@ -107,7 +107,7 @@ export function Remotes({ hub, onError }: Props) {
             <span className="tg">{host.target}</span>
             <span className="st">{t(STATUS_LABEL[host.status] ?? host.status)}</span>
             <button
-              className="lnk"
+              className="rmtlnk"
               onClick={() => {
                 setEditing(host.name);
                 setDraft(draftOf(host));
@@ -115,7 +115,7 @@ export function Remotes({ hub, onError }: Props) {
             >
               {t("编辑")}
             </button>
-            <button className="lnk" data-danger="" disabled={!!busy} onClick={() => setConfirm(host.name)}>
+            <button className="rmtlnk" data-danger="" disabled={!!busy} onClick={() => setConfirm(host.name)}>
               {t("移除")}
             </button>
           </div>
@@ -147,7 +147,7 @@ export function Remotes({ hub, onError }: Props) {
           {candidates.map((alias) => (
             <button
               key={alias}
-              className="cand"
+              className="rmtcand"
               disabled={!!busy}
               title={t("按 ssh_config 里的设置加进来")}
               onClick={() => void save({ name: alias, useSSHConfig: true })}
@@ -185,7 +185,7 @@ export function Remotes({ hub, onError }: Props) {
             />
             <span>{t("空着的项去 ~/.ssh/config 里找")}</span>
           </label>
-          <div className="act">
+          <div className="rmtact">
             <button
               onClick={() => {
                 setDraft(null);

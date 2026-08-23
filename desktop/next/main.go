@@ -164,6 +164,9 @@ func run() error {
 	// catalogue cannot reach them. They follow the desktop interface language, a
 	// separate setting from the kernel's — hence a catalogue read, not the active one.
 	shell := &App{pumps: map[string]context.CancelFunc{}, say: i18n.Catalog(cfg.DesktopLanguage())}
+	// A first connect can stop for a host key nobody has seen or a locked key.
+	// Both are questions, and this window is the only thing that can ask one.
+	shell.asks = newAskBroker(shell)
 	// One hub, several panes: each session gets its own runtime, so a second
 	// conversation runs beside the first instead of rebuilding it.
 	hub := serve.NewHub(serve.HubOptions{
@@ -172,7 +175,7 @@ func run() error {
 		DecorateSink: notifySink,
 		OnOpen:       shell.startPump,
 		OnClose:      shell.stopPump,
-		Remote:       newRemoteLink(ctx),
+		Remote:       newRemoteLink(ctx, shell.asks.prompts()),
 	})
 	shell.hub = hub
 	srv := serve.New(ctrl, bc, cfg.Serve)
@@ -287,6 +290,9 @@ func appMenu() *menu.Menu {
 type App struct {
 	hub *serve.Hub
 	ctx context.Context
+	// Questions the link layer is blocked on. Nil in a build with no window to
+	// ask, which is what makes the strict host-key path the default.
+	asks *askBroker
 	// Text for the native panels this shell opens. Read once at launch from the
 	// desktop interface language; the kernel's own catalogue is a different
 	// setting and must not be swapped out for this.

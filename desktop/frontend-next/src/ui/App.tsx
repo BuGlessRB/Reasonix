@@ -11,8 +11,9 @@ import { adopt as adoptLang } from "../i18n";
 import { Pane, type PaneReport } from "./Pane";
 import { Gutter, RAIL, SIDE, widthOf } from "./Gutter";
 import { folded as roomGaveUp, onFolds } from "./viewport";
+import { RemoteAsk } from "./RemoteAsk";
 import { RemoteHosts } from "./RemoteHosts";
-import type { RemoteHost } from "../port/remote";
+import type { RemoteAsk as RemoteAskT, RemoteHost } from "../port/remote";
 import { Workspaces } from "./Workspaces";
 import { useAddWorkspace } from "./addws";
 import { PaneTabs } from "./PaneTabs";
@@ -78,6 +79,9 @@ export function App({ hub }: { hub: HubPort }) {
   // so without this the poll would look at an idle list and stand down exactly
   // when the step list is what the user is waiting on.
   const [opening, setOpening] = useState(0);
+  // A connect stopped for a question. One at a time by construction: the link
+  // that asked is blocked until it is answered.
+  const [ask, setAsk] = useState<RemoteAskT | null>(null);
   const [folded, setFolded] = useState<Set<string>>(new Set());
   // 窄到放不下工作区栏时它是收起的，而不是消失的：栏一旦从 DOM 里拿掉，把手也
   // 跟着没了，剩下的入口只有一个没人知道的快捷键。
@@ -176,6 +180,16 @@ export function App({ hub }: { hub: HubPort }) {
     const timer = setTimeout(() => void reloadRemotes(), working ? 400 : 5000);
     return () => clearTimeout(timer);
   }, [remotes, opening, reloadRemotes]);
+
+  useEffect(() => hub.onRemoteAsk(setAsk), [hub]);
+
+  const answerRemote = useCallback(
+    (id: string, ok: boolean, text: string) => {
+      setAsk(null);
+      hub.answerRemote(id, ok, text);
+    },
+    [hub],
+  );
 
   const openRemotePane = useCallback(
     async (host: string, workspace?: string) => {
@@ -497,6 +511,8 @@ export function App({ hub }: { hub: HubPort }) {
       data-tabs={runtimes.length > 1 ? "" : undefined}
       style={{ "--rail-open": `${railW}px`, "--side-open": `${sideW}px` } as CSSProperties}
     >
+      {ask && <RemoteAsk ask={ask} onAnswer={answerRemote} />}
+
       <Chrome
         host={runtimes.find((rt) => rt.id === active)?.host}
         port={activePort}

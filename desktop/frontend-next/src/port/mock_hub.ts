@@ -74,6 +74,14 @@ export class MockHub implements HubPort {
     return Promise.resolve(["attic", "old-laptop"]);
   }
 
+  // The fixture has no link to block, so nothing ever asks. The dialog is
+  // driven from a story instead of from a stub that would fire on load.
+  onRemoteAsk() {
+    return () => {};
+  }
+
+  answerRemote() {}
+
   close(id: string) {
     const at = this.views.findIndex((v) => v.id === id);
     if (at >= 0) this.views.splice(at, 1);

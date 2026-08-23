@@ -73,3 +73,20 @@ export interface RemoteHostEdit {
   passphraseEnv?: string;
   passwordEnv?: string;
 }
+
+// A question the link layer stopped for. It arrives on the shell's bus while a
+// connect is blocked, and is answered through a binding rather than a request:
+// nothing on the far side moves until somebody says.
+export interface RemoteAsk {
+  id: string;
+  kind: "hostkey" | "passphrase" | "password";
+  host: string;
+  // hostkey: what the machine presented, to compare against what the person
+  // was told it should be. Never pre-answered — accepting a fingerprint
+  // nobody read is the one thing this dialog exists to prevent.
+  address?: string;
+  keyType?: string;
+  fingerprint?: string;
+  // passphrase: which key file is locked.
+  identityFile?: string;
+}

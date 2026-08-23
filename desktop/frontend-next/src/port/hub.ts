@@ -1,5 +1,5 @@
 import { HttpError, type AgentPort } from "./port";
-import type { RemoteHost, RemoteHostEdit } from "./remote";
+import type { RemoteAsk, RemoteHost, RemoteHostEdit } from "./remote";
 import { SsePort } from "./sse";
 
 // RuntimeView is one open pane. Base is the prefix every request of that pane
@@ -70,6 +70,10 @@ export interface HubPort {
   // taken yet. Filling it by hand when the addresses are written down next
   // door is the step people skip.
   remoteCandidates(): Promise<string[]>;
+  // Questions a connect stopped for. Nothing arrives here in a browser: the
+  // kernel that would ask is the one this build cannot reach.
+  onRemoteAsk(cb: (ask: RemoteAsk) => void): () => void;
+  answerRemote(id: string, ok: boolean, text: string): void;
   pickFolder(): Promise<string | null>;
   // Absolute paths of every file dropped anywhere on the window. It belongs
   // here rather than on a pane because the window has one of it: the shell
@@ -187,6 +191,14 @@ export class SseHub implements HubPort {
 
   remoteCandidates() {
     return this.get<string[]>("/remotes/candidates");
+  }
+
+  onRemoteAsk(cb: (ask: RemoteAsk) => void) {
+    return this.shell.onRemoteAsk(cb);
+  }
+
+  answerRemote(id: string, ok: boolean, text: string) {
+    this.shell.answerRemote(id, ok, text);
   }
 
   pickFolder() {
