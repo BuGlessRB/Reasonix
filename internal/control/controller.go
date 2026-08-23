@@ -119,13 +119,11 @@ type Controller struct {
 	// skills owns the session's discovered skills (enabled subset, full set, and
 	// the reloadable stores) — the skills slice of the Capabilities concern. See
 	// skill.go.
-	skills                         skillSet
-	skillRunner                    skill.SubagentRunner
-	readOnlySkillRunner            skill.SubagentRunner
-	skillProfile                   skill.ProfileResolver
-	disableImplicitSkillInvocation bool
-	slashSkillSeq                  atomic.Uint64
-	hooks                          *hook.Runner // session hook runner; nil-safe (no hooks configured)
+	skills              skillSet
+	skillRunner         skill.SubagentRunner
+	readOnlySkillRunner skill.SubagentRunner
+	skillProfile        skill.ProfileResolver
+	hooks               *hook.Runner // session hook runner; nil-safe (no hooks configured)
 	// hookContexts carries one-shot lifecycle hook context into the next real
 	// user turn without changing the cache-stable system prompt.
 	hookContexts []string
@@ -168,10 +166,9 @@ type Controller struct {
 	// c.mu. The Controller keeps the config-facing orchestration (persisting
 	// MCP entries to their global/project source on add/remove, building specs
 	// from entries). See mcp.go.
-	mcp                   mcpManager
-	mcpDefaultCallTimeout time.Duration
-	mcpConfigureSpec      func(*plugin.Spec)
-	capabilityRuntime     *agent.MCPCapabilityRuntime
+	mcp               mcpManager
+	mcpConfigureSpec  func(*plugin.Spec)
+	capabilityRuntime *agent.MCPCapabilityRuntime
 
 	runtimeGeneration  uint64 // PublishGate gen; 0 disables
 	runtimeOwner       *extension.RuntimeOwner
@@ -580,8 +577,7 @@ func New(opts Options) *Controller {
 		sessionDir:                        opts.SessionDir,
 		sessionPath:                       opts.SessionPath,
 		commands:                          atomic.Pointer[[]command.Command]{},
-		skills:                            newSkillSet(opts.Skills, opts.AllSkills, opts.SkillStore, opts.AllSkillStore),
-		disableImplicitSkillInvocation:    opts.DisableImplicitSkillInvocation,
+		skills:                            newSkillSet(opts.Skills, opts.AllSkills, opts.SkillStore, opts.AllSkillStore, opts.DisableImplicitSkillInvocation),
 		skillRunner:                       opts.SkillRunner,
 		readOnlySkillRunner:               opts.ReadOnlySkillRunner,
 		skillProfile:                      opts.SkillProfile,
@@ -598,8 +594,7 @@ func New(opts Options) *Controller {
 		balance:                           opts.Balance,
 		jobs:                              opts.Jobs,
 		workspaceLease:                    opts.WorkspaceLease,
-		mcp:                               newMcpManager(opts.Host, opts.Registry, pluginCtx),
-		mcpDefaultCallTimeout:             opts.MCPDefaultCallTimeout,
+		mcp:                               newMcpManager(opts.Host, opts.Registry, pluginCtx, opts.MCPDefaultCallTimeout),
 		mcpConfigureSpec:                  opts.MCPConfigureSpec,
 		capabilityRuntime:                 opts.CapabilityRuntime,
 		runtimeProfile:                    runtimeProfile,
@@ -4741,7 +4736,7 @@ func (c *Controller) ReloadCommands(ctx context.Context) error {
 	}
 	cmds, loadErr := command.LoadRoots(config.CommandRootsForRoot(c.workspaceRoot)...)
 	var cmdSkills []skill.Skill
-	if !c.disableImplicitSkillInvocation {
+	if !c.skills.noImplicitInvocation {
 		cmdSkills = c.SlashSkills()
 	}
 
@@ -4791,7 +4786,7 @@ func (c *Controller) Skills() []skill.Skill {
 // model for automatic discovery and invocation. Explicit /skill handling is
 // independent of this model-facing capability.
 func (c *Controller) ImplicitSkillInvocationEnabled() bool {
-	return c != nil && !c.disableImplicitSkillInvocation
+	return c != nil && !c.skills.noImplicitInvocation
 }
 
 // SlashSkills returns the user-visible skill directory. Plugin skills use
@@ -4986,7 +4981,7 @@ func (c *Controller) mcpSpec(e config.PluginEntry) plugin.Spec {
 	exp := e.ExpandedPlugin()
 	spec := mcpIdentitySpec(e, c.WorkspaceRoot())
 	spec.StartupTimeout = controllerMCPTimeout(exp.StartupTimeoutSeconds)
-	spec.DefaultCallTimeout = c.mcpDefaultCallTimeout
+	spec.DefaultCallTimeout = c.mcp.defaultCallTimeout
 	spec.CallTimeout = controllerMCPTimeout(exp.CallTimeoutSeconds)
 	spec.ToolTimeouts = controllerMCPToolTimeouts(exp.ToolTimeoutSeconds)
 	spec.Authorized = exp.Source.UserAuthorized()

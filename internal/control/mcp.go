@@ -28,10 +28,13 @@ type mcpManager struct {
 	host      *plugin.Host
 	reg       *tool.Registry
 	pluginCtx context.Context
+	// defaultCallTimeout is what a spec gets when it declares none. Read once
+	// while building a spec, so it needs no lock.
+	defaultCallTimeout time.Duration
 }
 
-func newMcpManager(host *plugin.Host, reg *tool.Registry, pluginCtx context.Context) mcpManager {
-	return mcpManager{host: host, reg: reg, pluginCtx: pluginCtx}
+func newMcpManager(host *plugin.Host, reg *tool.Registry, pluginCtx context.Context, defaultCallTimeout time.Duration) mcpManager {
+	return mcpManager{host: host, reg: reg, pluginCtx: pluginCtx, defaultCallTimeout: defaultCallTimeout}
 }
 
 // hostRef returns the live plugin host (nil until one is injected or lazily

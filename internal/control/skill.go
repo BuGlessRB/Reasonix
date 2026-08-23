@@ -1,6 +1,10 @@
 package control
 
-import "reasonix/internal/skill"
+import (
+	"sync/atomic"
+
+	"reasonix/internal/skill"
+)
 
 // skillSet owns the session's discovered skills: the enabled subset surfaced to
 // the model, the full set (including config-disabled ones) for management
@@ -8,18 +12,20 @@ import "reasonix/internal/skill"
 // construction-time snapshots. It is the skills slice of the Capabilities concern
 // (alongside mcpManager).
 //
-// No lock: every field is set once at construction and only read thereafter.
-// Skills are discovered at boot and never mutated in place — SetSkillEnabled
-// persists a config preference and relies on a controller rebuild to take effect.
+// No lock: every field but slashSeq is set once at construction and read
+// thereafter — SetSkillEnabled persists a preference a rebuild picks up — and
+// slashSeq, the one counter, carries its own synchronisation.
 type skillSet struct {
-	enabled  []skill.Skill // discovered + enabled skills (the live store supersedes when set)
-	all      []skill.Skill // every discoverable skill, including config-disabled ones
-	store    *skill.Store  // reloadable enabled-skill store; nil falls back to enabled
-	allStore *skill.Store  // reloadable all-skill store; nil falls back to all/enabled
+	enabled              []skill.Skill // discovered + enabled skills (the live store supersedes when set)
+	all                  []skill.Skill // every discoverable skill, including config-disabled ones
+	store                *skill.Store  // reloadable enabled-skill store; nil falls back to enabled
+	allStore             *skill.Store  // reloadable all-skill store; nil falls back to all/enabled
+	noImplicitInvocation bool          // the model may not reach a skill on its own; slash still does
+	slashSeq             atomic.Uint64 // numbers the synthetic call a slash-invoked skill reports under
 }
 
-func newSkillSet(enabled, all []skill.Skill, store, allStore *skill.Store) skillSet {
-	return skillSet{enabled: enabled, all: all, store: store, allStore: allStore}
+func newSkillSet(enabled, all []skill.Skill, store, allStore *skill.Store, noImplicit bool) skillSet {
+	return skillSet{enabled: enabled, all: all, store: store, allStore: allStore, noImplicitInvocation: noImplicit}
 }
 
 // list returns the enabled skills, preferring the live store.

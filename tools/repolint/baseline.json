@@ -5,13 +5,13 @@
     "complexity": 1571,
     "error-text": 12,
     "essay": 3303,
-    "file-size": 43701,
-    "function-size": 6816,
+    "file-size": 43696,
+    "function-size": 6814,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
     "refusal-path": 0,
-    "struct-state": 61
+    "struct-state": 58
   },
   "files": {
     "cmd/e2ebench/main.go": {
@@ -664,10 +664,10 @@
     "internal/control/controller.go": {
       "complexity": 5,
       "essay": 154,
-      "file-size": 5298,
-      "function-size": 51,
+      "file-size": 5293,
+      "function-size": 49,
       "narrative": 4,
-      "struct-state": 8
+      "struct-state": 5
     },
     "internal/control/controller_test.go": {
       "essay": 10
