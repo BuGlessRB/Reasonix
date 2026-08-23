@@ -228,7 +228,7 @@ func run() error {
 			Assets: assets,
 			// In-process HTTP: no port, no CORS, no second transport to keep in
 			// sync with the browser build.
-			Middleware: hubMiddleware(hub, api),
+			Middleware: hubMiddleware(shell, hub, api),
 		},
 		// The window is held open across the shutdown rather than vanishing into
 		// one; see closing.go. OnShutdown stays as the backstop for exits that
@@ -238,15 +238,19 @@ func run() error {
 	})
 }
 
-func hubMiddleware(hub *serve.Hub, api http.Handler) func(http.Handler) http.Handler {
+func hubMiddleware(shell *App, hub *serve.Hub, api http.Handler) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			id, path := splitRuntimePath(r.URL.Path)
 			// The bus has no reconnect handshake, so a reloaded page asks for the
 			// replay resubscribing to /events would have given it.
 			if path == replayPath {
-				if rt := hub.Get(id); rt != nil {
+				// A remote pane has no local controller to ask: its kernel replays
+				// on subscribe, so restarting the pump is the same handover.
+				if rt := hub.Get(id); rt != nil && rt.Local() {
 					rt.Server.Controller().ReplayPendingPromptsWith(func() event.Sink { return rt.Events })
+				} else if rt != nil {
+					shell.restartPump(rt)
 				}
 				w.WriteHeader(http.StatusNoContent)
 				return
@@ -334,7 +338,18 @@ func (a *App) startPump(rt *serve.Runtime) {
 	}
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.pumps[rt.ID] = cancel
-	go pumpEvents(ctx, rt)
+	if rt.Local() {
+		go pumpEvents(ctx, rt)
+		return
+	}
+	go pumpRemoteEvents(ctx, rt)
+}
+
+// restartPump re-establishes a pane's stream. For a remote one this is also how
+// a reload replays: the far kernel sends what is pending when it is subscribed.
+func (a *App) restartPump(rt *serve.Runtime) {
+	a.stopPump(rt)
+	a.startPump(rt)
 }
 
 func (a *App) stopPump(rt *serve.Runtime) {
@@ -353,6 +368,11 @@ func (a *App) stopPump(rt *serve.Runtime) {
 // lists first. A window with no pane left has nothing to anchor to.
 func (a *App) currentRoot() string {
 	for _, rt := range a.hub.Runtimes() {
+		if !rt.Local() {
+			// A remote path names a folder on another machine — opening a picker
+			// there would resolve it against this one's filesystem.
+			continue
+		}
 		if root := rt.Server.Controller().WorkspaceRoot(); root != "" {
 			return root
 		}

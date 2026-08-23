@@ -156,6 +156,10 @@ func newAuthGate(cfg config.ServeConfig) *authGate {
 	return ag
 }
 
+// TokenCookie is where the token gate looks for a caller's token. Exported for
+// a host that must authenticate to another machine's kernel on a page's behalf.
+const TokenCookie = cookieToken
+
 // Token returns the shared token (empty if not in token mode).
 func (ag *authGate) Token() string { return ag.token }
 

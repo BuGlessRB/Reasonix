@@ -66,6 +66,16 @@ func (h *Hub) OpenRemote(ep RemoteEndpoint, release func()) (*Runtime, error) {
 	return rt, nil
 }
 
+// Remote reports the endpoint a proxied pane is bound to, so a host that has
+// to reach the far kernel itself — a shell pumping its stream onto a bus the
+// page can hear — can do so without a second way to address it.
+func (rt *Runtime) Remote() (RemoteEndpoint, bool) {
+	if rt.remote == nil {
+		return RemoteEndpoint{}, false
+	}
+	return rt.remote.ep, true
+}
+
 // remoteView labels a proxied pane. The workspace belongs to the remote
 // filesystem, so its name is cut with path and not filepath: which separator
 // applies is the remote kernel's to say, and V1 bootstraps POSIX hosts.
