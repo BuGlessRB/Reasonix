@@ -583,7 +583,6 @@ func TestTranscriptResizeKeepsScrolledReaderOnSameBlock(t *testing.T) {
 			raw:  fmt.Sprintf("ANCHOR-%d\n\n%s", i, strings.Repeat("content that wraps at the narrow width ", 4)),
 		})
 	}
-	m.transcriptDirty = true
 	m0, _ = m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
 	m = m0.(chatTUI)
 
@@ -3171,7 +3170,6 @@ func TestForceGotoBottomScrollsWithoutTranscriptChange(t *testing.T) {
 	}
 
 	cur.forceGotoBottom = true
-	cur.transcriptDirty = false
 	cur.legacyScrollClear = false
 	cur, cmd := adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
 
@@ -3208,7 +3206,6 @@ func TestSessionSwitchSuppressesOneWarpClearScreen(t *testing.T) {
 	cur.legacyScrollClear = true
 	cur.sessionSwitch = true
 	cur.forceGotoBottom = true
-	cur.transcriptDirty = false
 	cur, cmd := adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
 	if cmd != nil {
 		t.Fatal("session switch rebuild should suppress the Warp ClearScreen workaround once")

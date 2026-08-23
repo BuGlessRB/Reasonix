@@ -37,9 +37,6 @@ type toolOutcome struct {
 	// execution is local shell metadata (optional). Provider messages strip it
 	// via ModelMessages; UI/event sinks surface it on ToolResult cards.
 	execution *tool.ShellExecution
-	// recoveryGeneration is the gate generation captured before execution so
-	// ObserveResult can ignore stale results after a mode switch.
-	recoveryGeneration uint64
 	// todoEcho marks a todo_write that wrote the list the host already held.
 	todoEcho bool
 }

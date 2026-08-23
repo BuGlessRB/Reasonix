@@ -162,8 +162,8 @@ type chatTUI struct {
 	cfg           *config.Config
 	// reasoningLineIdx is the transcript index of the live "▎ thinking…" marker
 	// while a reasoning block streams; it's rewritten to "▎ thought for Ns" when
-	// the block closes. -1 when no block is open. transcriptDirty forces a
-	// viewport re-feed after that in-place rewrite (length is unchanged).
+	// the block closes. -1 when no block is open. setTranscriptBlock invalidates
+	// the wrap from that index, which is what re-feeds a same-length rewrite.
 	reasoningLineIdx int
 	// compactionLineIdx is the transcript index of the live "⋯ compacting…"
 	// line, so the digest streaming in can be shown on it. -1 when idle.
@@ -221,7 +221,6 @@ type chatTUI struct {
 	// the bounded live state (phase, elapsed, recent activity, verbose tails).
 	subagentProgressIdx map[string]int
 	subagentProgress    map[string]*cliSubagentProgress
-	transcriptDirty     bool
 	// forceGotoBottom is set by replayActiveBranch and resetFreshContextView to
 	// pin the viewport to the bottom after a session / branch / clear switch
 	// regardless of the previous wasAtBottom state (#4584).
@@ -982,8 +981,8 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cm.sel = selection{}
 	}
 	// Wrap sync: full rebuild only on width change or history shrink. Streaming
-	// answer/tool rewrites use invalidateWrapFrom → suffix-only re-wrap; the
-	// transcriptDirty flag alone must never force a full-history rebuild (#6978).
+	// answer/tool rewrites use invalidateWrapFrom → suffix-only re-wrap, which
+	// is what #6978 replaced a whole-history rebuild with.
 	forceFullWrap := widthChanged || len(cm.transcript) < prevLines
 	wrapBehind := cm.wrapWidth != contentW || cm.wrapBlockCount != len(cm.transcript)
 	if forceFullWrap || wrapBehind || len(cm.transcript) != prevLines {
@@ -1006,7 +1005,6 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cm.markFollowTail()
 		cm.forceGotoBottom = false
 	}
-	cm.transcriptDirty = false
 
 	// Rate-limited mouse re-enable after real resize, focus regain, or turn
 	// settle so Windows ConPTY keeps wheel → MouseWheelMsg (#7583). Trailing
@@ -1693,7 +1691,6 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.finalizeStreamed()
 				m.clearTranscriptDisplay()
 				m.commitTranscriptSource(transcriptSource{kind: transcriptSourceBanner})
-				m.transcriptDirty = true
 				m.forceGotoBottom = true
 				m.notice(i18n.M.SlashClsDone)
 			}
@@ -2883,7 +2880,6 @@ func (m *chatTUI) collapseToolOutput(id, resultOutput string) {
 // sources, in order: live streaming state, shellOutputs ("shell-" ids only),
 // the per-id count stashed by streamToolOutput, then the ToolResult's output.
 func (m *chatTUI) collapseShellSlot(id string, idx int, resultOutput string) {
-	m.transcriptDirty = true
 	n := -1
 	if id == m.toolStreamID {
 		// Prefer the larger of the live count and resultOutput: resultOutput
@@ -3051,8 +3047,8 @@ func (m *chatTUI) tickToolRunning() {
 
 // commitReasoning closes the live thinking block: the "▎ thinking…" marker is
 // rewritten to a dim "▎ thought for Ns" summary and the streamed text below it is
-// removed (collapsed) — kept only in verbose mode. The viewport re-wraps from
-// m.transcript, so the change is flagged via transcriptDirty.
+// removed (collapsed) — kept only in verbose mode. Each rewrite goes through
+// setTranscriptBlock, which invalidates the wrap from that block onward.
 func (m *chatTUI) commitReasoning() {
 	if m.reasoningNative {
 		if strings.TrimSpace(m.reasoning.String()) != "" || !m.thinkStart.IsZero() {
@@ -3084,7 +3080,6 @@ func (m *chatTUI) commitReasoning() {
 			m.removeTranscriptBlock(m.reasoningTextIdx)
 		}
 	}
-	m.transcriptDirty = true
 	m.reasoning.Reset()
 	m.reasoningView = m.reasoningView[:0]
 	m.reasoningLineIdx = -1
@@ -4348,7 +4343,6 @@ func (m *chatTUI) unsendPending() {
 	m.input.SetValue(m.pendingRestore)
 	m.growInputToFit()
 	m.truncateTranscriptBlocks(m.bubbleStartIdx)
-	m.transcriptDirty = true
 	m.bubblePending = false
 	m.pendingRestore = ""
 	m.pendingPastes = nil
@@ -4707,7 +4701,6 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 		m.clearTranscriptDisplay()
 		m.commitLine(strings.TrimRight(
 			renderTUIBanner(m.label, "", transcriptContentWidth(m.width, m.nativeScrollback)), "\n"))
-		m.transcriptDirty = true
 		m.forceGotoBottom = true
 		m.notice(i18n.M.SlashClsDone)
 	case "/resume":

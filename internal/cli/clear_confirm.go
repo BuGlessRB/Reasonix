@@ -62,7 +62,6 @@ func (m *chatTUI) resetFreshContextView(clearTranscript bool) {
 		m.commitLine("")
 	}
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceBanner})
-	m.transcriptDirty = true
 	m.forceGotoBottom = true
 }
 

@@ -12,7 +12,7 @@ import "strings"
 //   - invalidateWrapFrom(i) drops the cache from block i onward so the next
 //     sync only re-wraps the suffix (streaming answer rewrites, tool tails).
 //   - Full rebuild is reserved for width change, history shrink, or an empty
-//     cache — never for a routine transcriptDirty flag alone.
+//     cache — never for a routine in-place rewrite.
 func (m *chatTUI) clearWrapCache() {
 	m.wrappedLines = nil
 	m.wrapWidth = 0

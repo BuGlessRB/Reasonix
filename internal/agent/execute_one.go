@@ -451,10 +451,9 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 		}
 		if rerr != nil && !dec.Blocked {
 			return toolOutcome{
-				output:             fmt.Sprintf("blocked: Auto Guard error: %v", rerr),
-				blocked:            true,
-				errMsg:             "blocked: Auto Guard error",
-				recoveryGeneration: plan.recoveryGen,
+				output:  fmt.Sprintf("blocked: Auto Guard error: %v", rerr),
+				blocked: true,
+				errMsg:  "blocked: Auto Guard error",
 			}, true
 		}
 		if dec.Blocked || !dec.Allow {
@@ -470,8 +469,7 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 				blocked: true,
 				// Surface the concrete stopped operation and next step in the
 				// failed tool card instead of exposing only an internal guard name.
-				errMsg:             firstLine(msg),
-				recoveryGeneration: plan.recoveryGen,
+				errMsg: firstLine(msg),
 			}, true
 		}
 		plan.planReplacementAuthorized = plan.planTransition && dec.AuthorizePlanReplacement
@@ -721,7 +719,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		body, bound, truncMsg := a.boundToolOutput(rawErr, call.Name, call.ID, call.Arguments, true)
 		out := toolOutcome{
 			output: body, errMsg: firstLine(err.Error()), bound: bound, truncMsg: truncMsg,
-			execution: execution, recoveryGeneration: recoveryGen,
+			execution: execution,
 		}
 		if truncMsg != "" {
 			out.rawOutput = rawErr
@@ -737,7 +735,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	body, bound, truncMsg := a.boundToolOutput(result, call.Name, call.ID, call.Arguments, false)
 	out := toolOutcome{
 		output: body, images: images, bound: bound, truncMsg: truncMsg,
-		execution: execution, recoveryGeneration: recoveryGen,
+		execution: execution,
 	}
 	if truncMsg != "" {
 		out.rawOutput = result

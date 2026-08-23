@@ -5,8 +5,8 @@
     "complexity": 1571,
     "error-text": 12,
     "essay": 3303,
-    "file-size": 43664,
-    "function-size": 6802,
+    "file-size": 43657,
+    "function-size": 6800,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
@@ -436,8 +436,8 @@
     "internal/cli/chat_tui.go": {
       "complexity": 327,
       "essay": 109,
-      "file-size": 4690,
-      "function-size": 1285
+      "file-size": 4683,
+      "function-size": 1283
     },
     "internal/cli/chat_tui_paste.go": {
       "essay": 9
