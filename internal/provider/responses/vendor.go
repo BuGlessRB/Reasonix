@@ -60,11 +60,6 @@ type vendorCapabilities struct {
 	// answer survives long reasoning.
 	defaultMaxOutputTokens int
 
-	// compactionOutputTokens is the separate budget for native/summary
-	// compaction calls. Zero means "no dedicated compaction budget; fall
-	// back to ordinary summarize without inheriting a large default".
-	compactionOutputTokens int
-
 	// omitReasoningIdentity marks vendors that fold an input reasoning item
 	// into the adjacent assistant message, leaving `id`/`status` nothing to
 	// refer to (DeepSeek). OpenAI marks Reasoning.id required — zero sends it.
@@ -107,8 +102,6 @@ var vendorTable = map[string]vendorCapabilities{
 		singleSegmentReasoning: false,
 		ignoresTemperature:     false,
 		summary:                summaryEcho,
-		// No native compact endpoint yet; summarize fallback only.
-		compactionOutputTokens: 8192,
 	},
 	"deepseek": {
 		stateless:              true,
@@ -120,9 +113,6 @@ var vendorTable = map[string]vendorCapabilities{
 		// Auto ceiling for ordinary reasoning; high/max is applied via
 		// AutoOutputBudget at construction/request time (64K). Never 128K.
 		defaultMaxOutputTokens: provider.DefaultReasoningOutputTokens,
-		// Compaction summaries use a dedicated 16K-class budget, independent of
-		// ordinary answer output.
-		compactionOutputTokens: provider.DefaultOrdinaryOutputTokens,
 	},
 	"mimo": {
 		stateless:              true,
@@ -133,7 +123,6 @@ var vendorTable = map[string]vendorCapabilities{
 		summary:                summaryOmit,
 		// Coding-agent default 32K; users may raise explicitly. Not 128K auto.
 		defaultMaxOutputTokens: provider.DefaultReasoningOutputTokens,
-		compactionOutputTokens: provider.DefaultOrdinaryOutputTokens,
 	},
 	// "" (unknown OpenAI-compatible endpoint) → zero value = default behavior.
 	// Unknown gateways deliberately do NOT inherit a large max-output default.
