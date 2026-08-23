@@ -9,6 +9,8 @@
     <key>CFBundleShortVersionString</key><string>@VERSION@</string>
     <key>CFBundleVersion</key><string>@NUMVER@</string>
     <key>LSMinimumSystemVersion</key><string>@MACOSMIN@</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Reasonix opens workspaces on other machines over SSH, including ones on this network.</string>
     <key>NSHighResolutionCapable</key><string>true</string>
   </dict>
 </plist>

@@ -47,11 +47,28 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
     <key>CFBundleVersion</key><string>0.0.0</string>
     <key>CFBundleShortVersionString</key><string>0.0.0</string>
     <key>LSMinimumSystemVersion</key><string>10.13.0</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Reasonix opens workspaces on other machines over SSH, including ones on this network.</string>
     <key>NSHighResolutionCapable</key><string>true</string>
   </dict>
 </plist>
 PLIST
-codesign --force --sign - "$app/Contents/MacOS/ReasonixStudio" 2>/dev/null
+# Signed with a real identity where one exists, ad-hoc otherwise. This is not
+# about Gatekeeper — an ad-hoc signature's hash changes with every build, so
+# macOS treats each one as a new app and the Local Network grant a LAN host
+# needs is asked for again, or silently missing, every time. A development
+# certificate keeps the identity stable across rebuilds.
+identity=${STUDIO_SIGN_IDENTITY:-}
+if [ -z "$identity" ]; then
+  identity=$(security find-identity -v -p codesigning 2>/dev/null |
+    grep -o '"Apple Development: [^"]*"' | head -1 | tr -d '"')
+fi
+if [ -n "$identity" ]; then
+  codesign --force --sign "$identity" "$app" >/dev/null 2>&1 ||
+    codesign --force --sign - "$app" >/dev/null 2>&1
+else
+  codesign --force --sign - "$app" >/dev/null 2>&1
+fi
 
 pkill -f "$app/Contents/MacOS/ReasonixStudio" 2>/dev/null || true
 open "$app"
