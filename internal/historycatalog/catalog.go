@@ -106,6 +106,15 @@ func Open(ctx context.Context, opts Options) (*Catalog, error) {
 	return c, nil
 }
 
+// recordTokenizerVersion stamps the projection with the tokenizer that built
+// it. A freshly built one still carrying the schema's default is wiped by the
+// version check the moment it is opened, which is what a rebuild produced for
+// every bump this constant ever takes.
+func (c *Catalog) recordTokenizerVersion(ctx context.Context) error {
+	_, err := c.db.ExecContext(ctx, `UPDATE history_state SET tokenizer_version=? WHERE id=1`, TokenizerVersion)
+	return err
+}
+
 func (c *Catalog) ensureTokenizerVersion(ctx context.Context) error {
 	var version int
 	if err := c.db.QueryRowContext(ctx, `SELECT tokenizer_version FROM history_state WHERE id=1`).Scan(&version); err != nil {

@@ -105,18 +105,19 @@ func ContainsMemoryCompilerExecution(content string) bool {
 // sessions whose first turn was compiled would show a blank history/sidebar
 // preview (#5307).
 func StripTransientUserBlocks(content string) string {
-	s := dropLeadingTransientBlocks(unwrapMemoryCompilerExecution(content))
+	s := DropLeadingTransientBlocks(unwrapMemoryCompilerExecution(content))
 	s = stripTrailingDeliveryRuntime(s)
 	s = stripTrailingExecutionPolicy(s)
 	s = stripTrailingMemoryRecall(s)
 	return strings.TrimLeft(s, " \t\r\n")
 }
 
-// dropLeadingTransientBlocks removes the host-injected blocks that open s. The
+// DropLeadingTransientBlocks removes the host-injected blocks that open s. The
 // pattern is ^-anchored, so a ReplaceAll can only ever take the first one and
 // looping around it re-scans the whole string once per block; advancing past
-// each match reads the content once and allocates nothing.
-func dropLeadingTransientBlocks(s string) string {
+// each match reads the content once and allocates nothing. Exported because the
+// history index strips the same blocks from the same turns.
+func DropLeadingTransientBlocks(s string) string {
 	for {
 		loc := reTransientUserBlock.FindStringIndex(s)
 		if loc == nil || loc[0] != 0 {

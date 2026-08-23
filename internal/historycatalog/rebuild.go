@@ -38,7 +38,7 @@ func Rebuild(ctx context.Context, opts Options, roots []Root) (Status, error) {
 				return err
 			}
 		}
-		return nil
+		return catalog.recordTokenizerVersion(ctx)
 	})
 	if err != nil {
 		return Status{}, err
