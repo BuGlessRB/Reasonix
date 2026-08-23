@@ -19,6 +19,8 @@ const sessionName = (title?: string, p?: string) =>
   title?.trim() || (p ? base(p).replace(/\.jsonl$/, "") : t("新会话"));
 
 interface Props {
+  // Set when the focused pane is driven from another machine, naming it.
+  host?: string;
   // Null while the window has no pane: the chrome still draws, and the few
   // controls that need a session simply do nothing until one is focused.
   port: AgentPort | null;
@@ -32,7 +34,7 @@ interface Props {
   onChanged: () => void;
 }
 
-export function Chrome({ port, status, title, steer, theme, onTheme, onSettings, onChanged, account }: Props) {
+export function Chrome({ port, status, title, steer, theme, onTheme, onSettings, onChanged, account, host }: Props) {
   const root = status?.workspaceRoot || status?.cwd || "";
   const project = root ? base(root) : "—";
   // Only for the "隔离" tag: the folder list and the switch itself moved to the
@@ -56,6 +58,11 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
         </span>
         <span className="isolab" hidden={!ws?.isolated}>
           {t("隔离")}
+        </span>
+        {/* Same slot as the isolated tag: both answer "this workspace is not an
+            ordinary folder on this machine", so they read as one language. */}
+        <span className="isolab hostlab" hidden={!host}>
+          {host}
         </span>
         <span className="crumbsep">/</span>
         <b title={status?.sessionPath}>{sessionName(title, status?.sessionPath)}</b>

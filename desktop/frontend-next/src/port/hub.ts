@@ -1,4 +1,5 @@
 import { HttpError, type AgentPort } from "./port";
+import type { RemoteHost } from "./remote";
 import { SsePort } from "./sse";
 
 // RuntimeView is one open pane. Base is the prefix every request of that pane
@@ -55,6 +56,14 @@ export interface HubPort {
   removeWorkspace(path: string): Promise<void>;
   removeSession(path: string): Promise<void>;
   renameSession(path: string, title: string): Promise<void>;
+  // The host book with each link's state, or null where this kernel refuses
+  // remote panes outright — a page served to a browser, rather than the window.
+  // Null is what lets the sidebar leave the whole section out instead of
+  // drawing a header over a feature that cannot work here.
+  remoteHosts(): Promise<RemoteHost[] | null>;
+  // Opens a pane on another machine. Slow the first time — the kernel may be
+  // installing itself over there — so the caller polls remoteHosts for the step.
+  openRemote(req: { host: string; workspace?: string }): Promise<RuntimeView>;
   pickFolder(): Promise<string | null>;
   // Absolute paths of every file dropped anywhere on the window. It belongs
   // here rather than on a pane because the window has one of it: the shell
@@ -148,6 +157,18 @@ export class SseHub implements HubPort {
 
   async renameSession(path: string, title: string) {
     await this.post<void>("/tree/sessions/rename", { path, title });
+  }
+
+  async remoteHosts() {
+    const res = await fetch("/remotes", { credentials: "same-origin" });
+    // Not an error to report: this kernel simply does not do remote panes.
+    if (res.status === 501) return null;
+    if (!res.ok) await SseHub.fail("/remotes", res);
+    return (await res.json()) as RemoteHost[];
+  }
+
+  openRemote(req: { host: string; workspace?: string }) {
+    return this.post<RuntimeView>("/remotes/open", { host: req.host, workspace: req.workspace ?? "" });
   }
 
   pickFolder() {

@@ -11,6 +11,8 @@ import { adopt as adoptLang } from "../i18n";
 import { Pane, type PaneReport } from "./Pane";
 import { Gutter, RAIL, SIDE, widthOf } from "./Gutter";
 import { folded as roomGaveUp, onFolds } from "./viewport";
+import { RemoteHosts } from "./RemoteHosts";
+import type { RemoteHost } from "../port/remote";
 import { Workspaces } from "./Workspaces";
 import { useAddWorkspace } from "./addws";
 import { PaneTabs } from "./PaneTabs";
@@ -68,6 +70,14 @@ export function App({ hub }: { hub: HubPort }) {
   const [runtimes, setRuntimes] = useState<RuntimeView[]>([]);
   const [active, setActive] = useState("");
   const [tree, setTree] = useState<TreeWorkspace[]>([]);
+  // Null until asked, and null again where this kernel refuses remote panes —
+  // which is what keeps the section out of a browser rather than drawing a
+  // heading over a feature that cannot work there.
+  const [remotes, setRemotes] = useState<RemoteHost[] | null>(null);
+  // Connects in flight. A link reports "connecting" only once the dial starts,
+  // so without this the poll would look at an idle list and stand down exactly
+  // when the step list is what the user is waiting on.
+  const [opening, setOpening] = useState(0);
   const [folded, setFolded] = useState<Set<string>>(new Set());
   // 窄到放不下工作区栏时它是收起的，而不是消失的：栏一旦从 DOM 里拿掉，把手也
   // 跟着没了，剩下的入口只有一个没人知道的快捷键。
@@ -142,6 +152,45 @@ export function App({ hub }: { hub: HubPort }) {
   useEffect(() => {
     void reloadPanes();
   }, [reloadPanes]);
+
+  const reloadRemotes = useCallback(
+    () =>
+      hub
+        .remoteHosts()
+        .then(setRemotes)
+        .catch(() => setRemotes(null)),
+    [hub],
+  );
+
+  useEffect(() => {
+    void reloadRemotes();
+  }, [reloadRemotes]);
+
+  // One timer per answer, not one that runs regardless: a link mid-connect
+  // changes by the second, a settled one only when something breaks, and three
+  // idle hosts should cost nothing at all.
+  useEffect(() => {
+    if (!remotes?.length) return;
+    const working = opening > 0 || remotes.some((h) => h.status === "connecting" || h.status === "reconnecting");
+    if (!working && remotes.every((h) => h.status === "idle")) return;
+    const timer = setTimeout(() => void reloadRemotes(), working ? 400 : 5000);
+    return () => clearTimeout(timer);
+  }, [remotes, opening, reloadRemotes]);
+
+  const openRemotePane = useCallback(
+    async (host: string, workspace?: string) => {
+      setOpening((n) => n + 1);
+      try {
+        const view = await hub.openRemote({ host, workspace });
+        await reloadPanes();
+        setActive(view.id);
+      } finally {
+        setOpening((n) => n - 1);
+        void reloadRemotes();
+      }
+    },
+    [hub, reloadPanes, reloadRemotes],
+  );
 
   // One port per pane, held across renders — a fresh instance would resubscribe
   // the event stream and drop the frames in between.
@@ -449,6 +498,7 @@ export function App({ hub }: { hub: HubPort }) {
       style={{ "--rail-open": `${railW}px`, "--side-open": `${sideW}px` } as CSSProperties}
     >
       <Chrome
+        host={runtimes.find((rt) => rt.id === active)?.host}
         port={activePort}
         status={report.status}
         title={report.title}
@@ -478,6 +528,16 @@ export function App({ hub }: { hub: HubPort }) {
             onError={fail}
             adder={adder}
           />
+          {remotes ? (
+            <RemoteHosts
+              hosts={remotes}
+              runtimes={runtimes}
+              active={active}
+              onOpen={openRemotePane}
+              onFocus={focusPane}
+              onError={fail}
+            />
+          ) : null}
         </div>
 
         <div className="main">

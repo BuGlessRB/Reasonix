@@ -1,5 +1,6 @@
 import type { AgentPort } from "./port";
 import type { HubPort, RuntimeView, TreeWorkspace } from "./hub";
+import type { RemoteHost } from "./remote";
 import { MockPort } from "./mock";
 
 // MockHub is the fixture's answer to a window that drives several panes. Each
@@ -32,6 +33,30 @@ export class MockHub implements HubPort {
       root,
       name: root.split("/").pop() ?? root,
       sessionPath: req.sessionPath,
+    };
+    this.views.push(view);
+    return Promise.resolve(view);
+  }
+
+  // Two machines, one of them mid-connect: the fixture has to show the step
+  // list and the pip states without a kernel, or neither gets designed.
+  remoteHosts() {
+    return Promise.resolve<RemoteHost[]>([
+      { name: "gpu-box", target: "ada@10.0.0.4", workspace: "/srv/training", status: "connected", panes: 1 },
+      { name: "builder", target: "ada@build.internal", workspace: "~/work", status: "connecting", step: "install", detail: "npm" },
+      { name: "spare", target: "10.0.0.9", status: "idle" },
+    ]);
+  }
+
+  openRemote(req: { host: string; workspace?: string }) {
+    this.seq++;
+    const workspace = req.workspace || "/srv/training";
+    const view: RuntimeView = {
+      id: `r${this.seq}`,
+      base: `/rt/r${this.seq}`,
+      root: workspace,
+      name: workspace.split("/").pop() ?? workspace,
+      host: req.host,
     };
     this.views.push(view);
     return Promise.resolve(view);

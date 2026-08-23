@@ -157,6 +157,9 @@
   .crumb-btn .cv { font-size: 8px; color: var(--ghost); transition: transform .18s var(--ease) }
   .isolab { font: var(--w-med) 9.5px var(--mono); letter-spacing: .08em; color: var(--ok); padding: 1.5px 6px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--ok) 13%, transparent) }
   .isolab[hidden] { display: none }
+  /* 同一个槽位、同一种形状，换一种颜色：绿色说的是「这是隔离副本」，这个说的
+     是「这台机器不是本机」。两句话是一类，颜色分开它们。 */
+  .hostlab { color: var(--net); background: color-mix(in srgb, var(--net) 13%, transparent) }
   .crumb-btn[aria-expanded="true"] .cv { transform: rotate(180deg) }
 
   /* A picker is as long as the user's config: [[providers]] has no ceiling, so
@@ -3530,6 +3533,9 @@
   .ptab-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis }
   .ptab-x { margin-left: auto }
   .ptab-ws { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
+  /* 两台机器的面板并排坐着，命令落在哪台由当前页签决定 —— 页签上不写，就只能靠记。 */
+  .ptab-host { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--net) }
+  .ptab-host::before { content: "◦"; margin-right: 2px; opacity: .7 }
   .ptab .pip { flex: none; background: var(--ghost) }
   /* 后台那个也在跑，页签上得看得出来 */
   .ptab[data-run="running"] .pip { background: var(--net); animation: tick 1.6s ease-in-out infinite }
@@ -3652,6 +3658,75 @@
   /* 缩进对齐会话行，读起来就是「这个文件夹下面的一条」 */
   .newsess { padding: 5px 9px 7px 22px }
   .newsess:disabled { opacity: .38; cursor: default; background: none; color: var(--faint) }
+
+  /* ── 左栏：远程主机 ───────────────────────────────────────────────
+     一台主机一段。同一台机器上的工作区共用一条连接，所以状态长在段头上：
+     链路断了，整段一起暗下去，这正是它们的真实关系。 */
+  .rmts { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px }
+  .rmtcap {
+    padding: 0 9px 4px 9px; font: var(--w-med) 10px var(--mono);
+    letter-spacing: .06em; color: var(--ghost); text-transform: uppercase;
+  }
+  .rmt { padding-bottom: 2px }
+  .rmthead {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 9px 6px 9px; font: var(--w-med) 12px var(--ui); color: var(--muted);
+  }
+  .rmtname { flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .rmttarget {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: var(--w-reg) 10px var(--mono); color: var(--ghost); text-align: right;
+  }
+  /* 一台主机只有六种状态，别让它们挤成两种：连上和没连上之间，还有「在连」、
+     「在重连」、以及连上了却有转发没挂上 —— 最后这种看起来最像正常。 */
+  .rmtpip { width: 6px; height: 6px; border-radius: 50%; background: var(--ghost); flex: none }
+  .rmt[data-state="connected"] .rmtpip { background: var(--net) }
+  .rmt[data-state="connecting"] .rmtpip,
+  .rmt[data-state="reconnecting"] .rmtpip { background: var(--accent); animation: tick 1.6s ease-in-out infinite }
+  .rmt[data-state="degraded"] .rmtpip { background: var(--warn) }
+  .rmt[data-state="stopped"] .rmtpip { background: var(--err) }
+  .rmt[data-state="connected"] .rmtname,
+  .rmt[data-state="degraded"] .rmtname { color: var(--text) }
+  .rmtnote {
+    padding: 0 9px 4px 22px; font: var(--w-reg) 11px/1.5 var(--ui); color: var(--faint);
+  }
+  .rmt[data-state="degraded"] .rmtnote { color: var(--warn) }
+  .rmt[data-state="stopped"] .rmtnote { color: var(--err) }
+
+  /* 首连要在对面装一遍二进制，几十秒起步。转圈分不出「在下载」和「卡住了」，
+     所以内核逐步上报，这里就逐步显示。 */
+  .rmtsteps { list-style: none; margin: 0; padding: 0 9px 5px 22px }
+  .rmtsteps li {
+    display: flex; align-items: center; gap: 7px; padding: 1.5px 0;
+    font: var(--w-reg) 11px var(--ui); color: var(--ghost);
+  }
+  .rmtsteps li[data-at="done"] { color: var(--faint) }
+  .rmtsteps li[data-at="now"] { color: var(--text) }
+  .rmtsteps .mk { flex: none; width: 10px; text-align: center; font: var(--w-reg) 9px/1 var(--mono) }
+  .rmtsteps li[data-at="done"] .mk { color: var(--ok) }
+  .rmtsteps li[data-at="now"] .mk { color: var(--accent); animation: tick 1.6s ease-in-out infinite }
+  .rmtsteps .lb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .rmtsteps .dt { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--faint) }
+
+  /* 工作区行本身就是连接按钮：没开面板的机器上没有别的可按，拆成两步等于让人
+     先说「连接」再说「打开」，而那是一件事。 */
+  .rmtopen {
+    display: flex; align-items: center; gap: 7px; width: 100%;
+    padding: 5px 9px 7px 22px;
+    border: 0; background: none; cursor: pointer; text-align: left;
+    font: var(--w-med) 11.5px var(--ui); color: var(--faint);
+    transition: color .14s, background .14s;
+  }
+  .rmtopen .plus { display: grid; place-items: center; width: 13px; height: 13px; flex: none; color: var(--ghost) }
+  .rmtopen .plus svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round }
+  /* 不能用 direction:rtl 把省略号挪到左边：那会把路径的段也倒过来，
+     /srv/training 会显示成 srv/training/。宁可从右边截。 */
+  .rmtopen .ws { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .rmtopen:hover { color: var(--text); background: var(--overlay) }
+  .rmtopen:hover .plus { color: var(--accent) }
+  .rmtopen:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  .rmtopen[data-busy] { opacity: .5; pointer-events: none }
+  .rmtopen:disabled { opacity: .38; cursor: default; background: none; color: var(--faint) }
 
   /* ── 外观设置里的字体与壁纸控件 ─────────────────────────────────── */
   .fontrow { display: flex; flex-direction: column; gap: 6px; width: 100% }

@@ -753,6 +753,25 @@ export const EN: Record<string, string> = {
   "打开 {name} 控制台": "Open the {name} console",
   "打不开浏览器，手动访问 {at}": "Could not open a browser — visit {at} yourself",
 
+  // ── 远程主机 ─────────────────────────────────────────────────
+  "远程": "Remote",
+  "断了，第 {n} 次重连": "Dropped — reconnecting, attempt {n}",
+  "断了，正在重连": "Dropped — reconnecting",
+  "连上了，但有转发没挂上": "Connected, but a forward did not attach",
+  "已断开": "Disconnected",
+  "这台主机还没有设默认工作区": "This host has no default workspace set",
+  // The bootstrap's steps. Looked up by key rather than written out at a call
+  // site, so the scanner cannot see them — they are listed here by hand, and a
+  // missing one shows up as Chinese in an English window rather than as a test
+  // failure.
+  "探测平台": "Detecting the platform",
+  "安装 reasonix": "Installing reasonix",
+  "等待其他连接": "Waiting for another client",
+  "启动 serve": "Starting serve",
+  "等它就绪": "Waiting for it to come up",
+  "挂载端口转发": "Attaching the port forward",
+  "接上已在运行的": "Reusing the one already running",
+
   // ── 连不上时卡在哪一步（kernel.ts 的 refusal 措辞）─────────────
 
   // ── 内核其余的拒绝措辞 ─────────────────────────────────────────
