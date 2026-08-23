@@ -18,7 +18,7 @@ func (h *Hub) RunGraceful(ctx context.Context, addr string) error {
 // RunGracefulListener is RunGraceful over a caller-supplied listener, for hosts
 // that need the bound address before serving (--addr :0 with --port-file).
 func (h *Hub) RunGracefulListener(ctx context.Context, ln net.Listener) error {
-	for _, rt := range h.Runtimes() {
+	for _, rt := range h.localRuntimes() {
 		rt.Server.Controller().EnableInteractiveApproval()
 	}
 	return runGracefulListener(ctx, ln, h.Handler())
@@ -30,7 +30,7 @@ func (h *Hub) StartRecoveryGC(ctx context.Context) {
 	h.mu.Lock()
 	h.gcCtx = ctx
 	h.mu.Unlock()
-	for _, rt := range h.Runtimes() {
+	for _, rt := range h.localRuntimes() {
 		rt.Server.StartRecoveryGC(ctx)
 	}
 }
@@ -45,7 +45,7 @@ func (h *Hub) EnableProviderSetupForListener(addr string) bool {
 	h.mu.Lock()
 	h.setupAddr = addr
 	h.mu.Unlock()
-	for _, rt := range h.Runtimes() {
+	for _, rt := range h.localRuntimes() {
 		rt.Server.EnableProviderSetupForListener(addr)
 	}
 	return true

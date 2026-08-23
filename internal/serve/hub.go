@@ -81,6 +81,10 @@ type Runtime struct {
 	Server *Server
 	Events *Broadcaster
 
+	// Set when a kernel on another machine drives this pane: Server and Events
+	// are nil then, and the handler proxies rather than routes.
+	remote *remoteBinding
+
 	handler http.Handler
 	leases  *control.SessionLeaseKeeper
 	stop    context.CancelFunc
@@ -118,6 +122,9 @@ type RuntimeView struct {
 	Root        string `json:"root"`
 	Name        string `json:"name"`
 	SessionPath string `json:"sessionPath,omitempty"`
+	// Set only on a pane driven over SSH. Its absence is what tells the
+	// frontend the pane is this machine's own — the common case stays unmarked.
+	Host string `json:"host,omitempty"`
 }
 
 // NewHub returns an empty hub. Adopt or Open publishes the first runtime.
@@ -271,6 +278,14 @@ func (h *Hub) Close(id string) error {
 	if rt.stop != nil {
 		rt.stop()
 	}
+	if rt.remote != nil {
+		// Nothing here to persist: the transcript and its lease belong to the
+		// remote kernel, which outlives this pane by design.
+		if rt.remote.release != nil {
+			rt.remote.release()
+		}
+		return nil
+	}
 	if err := rt.Server.Controller().Snapshot(); err != nil {
 		slog.Warn("serve: snapshot before closing runtime", "id", id, "err", err)
 	}
@@ -310,6 +325,24 @@ func (h *Hub) List() []RuntimeView {
 	return out
 }
 
+// Local reports whether this pane's kernel runs in this process. A remote one
+// has no Server, Events or lease here — they belong to the machine it proxies
+// to, which also already made every decision a host would apply to a pane.
+func (rt *Runtime) Local() bool { return rt.remote == nil }
+
+// localRuntimes returns the panes this process drives itself. Host decisions —
+// the approval posture, the setup surface, the recovery sweep — reach those
+// only: the rest are another kernel's, and reaching into one would nil-panic.
+func (h *Hub) localRuntimes() []*Runtime {
+	out := make([]*Runtime, 0, len(h.order))
+	for _, rt := range h.Runtimes() {
+		if rt.Local() {
+			out = append(out, rt)
+		}
+	}
+	return out
+}
+
 // Runtimes returns the live runtimes, for a host that needs more than the view.
 func (h *Hub) Runtimes() []*Runtime {
 	h.mu.RLock()
@@ -324,6 +357,9 @@ func (h *Hub) Runtimes() []*Runtime {
 }
 
 func (rt *Runtime) view() RuntimeView {
+	if rt.remote != nil {
+		return rt.remoteView()
+	}
 	ctrl := rt.Server.Controller()
 	return RuntimeView{
 		ID:          rt.ID,
@@ -405,7 +441,11 @@ func (h *Hub) routeDefault(w http.ResponseWriter, r *http.Request) {
 // publish registers a runtime and freezes the handler that serves it. The
 // prefix is stripped here so the runtime's own routes stay unprefixed.
 func (h *Hub) publish(rt *Runtime) {
-	rt.handler = http.StripPrefix(runtimePrefix+rt.ID, rt.Server.routes())
+	if rt.remote != nil {
+		rt.handler = http.StripPrefix(runtimePrefix+rt.ID, remoteProxy(rt.remote.ep))
+	} else {
+		rt.handler = http.StripPrefix(runtimePrefix+rt.ID, rt.Server.routes())
+	}
 	h.mu.Lock()
 	h.runtimes[rt.ID] = rt
 	h.order = append(h.order, rt.ID)
@@ -427,7 +467,9 @@ func (h *Hub) findSession(path string) *Runtime {
 	defer h.mu.RUnlock()
 	for _, id := range h.order {
 		rt := h.runtimes[id]
-		if rt != nil && agent.CanonicalSessionPath(rt.Server.Controller().SessionPath()) == path {
+		// A remote transcript names a file on another machine: it cannot
+		// collide with a local one, and deduplicating it is that kernel's job.
+		if rt != nil && rt.remote == nil && agent.CanonicalSessionPath(rt.Server.Controller().SessionPath()) == path {
 			return rt
 		}
 	}

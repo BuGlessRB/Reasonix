@@ -107,6 +107,9 @@ const SAID: Record<string, string> = {
   "session.outside_workspace": "这个路径不在任何已知的工作区里",
   "hub.no_runtime_open": "还没有打开的会话",
 
+  // ── 远程 ─────────────────────────────────────────────────────────
+  "remote.unreachable": "{host} 上的内核没有应答，连接可能断了",
+
   // ── 壁纸 ─────────────────────────────────────────────────────────
   "wallpaper.unsupported_type": "这种图片格式用不了，换 PNG、JPEG、WebP、AVIF 或 GIF",
   "wallpaper.empty": "图片是空的",

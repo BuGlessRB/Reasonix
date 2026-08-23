@@ -328,7 +328,7 @@ func (h *Hub) roots() []rootRef {
 		seen[dir] = true
 		out = append(out, rootRef{dir: dir, remembered: saved[dir]})
 	}
-	for _, rt := range h.Runtimes() {
+	for _, rt := range h.localRuntimes() {
 		add(rt.Server.Controller().WorkspaceRoot())
 	}
 	for _, dir := range Workspaces() {
@@ -340,7 +340,7 @@ func (h *Hub) roots() []rootRef {
 // openSessions maps canonical session paths to the runtime driving them.
 func (h *Hub) openSessions() map[string]string {
 	out := map[string]string{}
-	for _, rt := range h.Runtimes() {
+	for _, rt := range h.localRuntimes() {
 		if path := agent.CanonicalSessionPath(rt.Server.Controller().SessionPath()); path != "" {
 			out[path] = rt.ID
 		}
@@ -350,7 +350,7 @@ func (h *Hub) openSessions() map[string]string {
 
 func (h *Hub) rootPanes(root string) int {
 	n := 0
-	for _, rt := range h.Runtimes() {
+	for _, rt := range h.localRuntimes() {
 		if rt.Server.Controller().WorkspaceRoot() == root {
 			n++
 		}

@@ -9,6 +9,9 @@ export interface RuntimeView {
   root: string;
   name: string;
   sessionPath?: string;
+  // Set only on a pane whose kernel runs on another machine, naming it. Absence
+  // is what marks a pane as this machine's own, so the common case stays plain.
+  host?: string;
 }
 
 export interface TreeSession {
