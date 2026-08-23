@@ -35,7 +35,12 @@ echo "==> bundle"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
 mv "$app.bin" "$app/Contents/MacOS/ReasonixStudio"
-ln -s "$desktop/frontend-next" "$app/Contents/MacOS/frontend-next"
+# Copied, not linked. A symlink pointing outside the bundle makes the whole
+# thing fail codesign --strict, and an app macOS cannot verify gets no stable
+# identity — which is what silently denied it Local Network access. Only
+# dist is needed (see frontendAssets), so this stays small.
+mkdir -p "$app/Contents/MacOS/frontend-next"
+cp -R "$desktop/frontend-next/dist" "$app/Contents/MacOS/frontend-next/dist"
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -63,12 +68,17 @@ if [ -z "$identity" ]; then
   identity=$(security find-identity -v -p codesigning 2>/dev/null |
     grep -o '"Apple Development: [^"]*"' | head -1 | tr -d '"')
 fi
+# --deep, the way scripts/studio-build.sh signs the released bundle: the
+# frontend sits beside the binary, and everything under Contents/MacOS is code
+# as far as codesign is concerned, so each file needs its own signature.
 if [ -n "$identity" ]; then
-  codesign --force --sign "$identity" "$app" >/dev/null 2>&1 ||
-    codesign --force --sign - "$app" >/dev/null 2>&1
+  codesign --force --deep --sign "$identity" "$app" >/dev/null 2>&1 ||
+    codesign --force --deep --sign - "$app" >/dev/null 2>&1
 else
-  codesign --force --sign - "$app" >/dev/null 2>&1
+  codesign --force --deep --sign - "$app" >/dev/null 2>&1
 fi
+codesign --verify --deep --strict "$app" >/dev/null 2>&1 ||
+  echo "warning: the bundle does not verify; macOS will treat it as unidentified" >&2
 
 pkill -f "$app/Contents/MacOS/ReasonixStudio" 2>/dev/null || true
 open "$app"
