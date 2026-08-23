@@ -86,35 +86,27 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	home, err := fs.RealPath(ctx, "~")
+	// 1. Which machine is this? Everything below names a path or runs a
+	// command, and both are spelled differently depending on the answer.
+	opts.progress("detect", "")
+	target, goos, goarch, home, err := remoteFor(ctx, conn, fs)
 	if err != nil {
-		return Result{}, fmt.Errorf("bootstrap: resolve remote home: %w", err)
+		return Result{}, err
 	}
 	workspace, err := resolveWorkspace(ctx, fs, opts.Workspace, home)
 	if err != nil {
 		return Result{}, err
 	}
-	paths := pathsFor(home, workspace)
+	paths := target.Paths(home, workspace)
 
-	// 1. Reuse a live process if the recorded pid is still running.
-	if st, tok, ok := tryReuse(ctx, conn, fs, paths, workspace); ok {
+	// 2. Reuse a live process if the recorded pid is still running.
+	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, workspace); ok {
 		opts.progress("reuse", st.Addr)
 		return Result{State: st, Token: tok, Reused: true}, nil
 	}
 
-	// 2. Detect remote platform.
-	opts.progress("detect", "")
-	unameRes, err := conn.Exec(ctx, "uname -sm")
-	if err != nil {
-		return Result{}, fmt.Errorf("bootstrap: uname: %w", err)
-	}
-	goos, goarch, err := ParseUname(string(unameRes.Stdout))
-	if err != nil {
-		return Result{}, err
-	}
-
 	// 3. Locate or install a usable reasonix.
-	bin, version, err := ensureBinary(ctx, conn, fs, opts, home, goos, goarch, paths)
+	bin, version, err := ensureBinary(ctx, conn, target, fs, opts, home, goos, goarch, paths)
 	if err != nil {
 		return Result{}, err
 	}
@@ -128,7 +120,7 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	defer lock.release()
-	if st, tok, ok := tryReuse(ctx, conn, fs, paths, workspace); ok {
+	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, workspace); ok {
 		opts.progress("reuse", st.Addr)
 		return Result{State: st, Token: tok, Reused: true}, nil
 	}
@@ -145,9 +137,9 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 		return Result{}, fmt.Errorf("bootstrap: write token: %w", err)
 	}
 	opts.progress("launch", "")
-	launchRes, err := conn.Exec(ctx, LaunchCommand(bin, workspace, paths))
+	launchRes, err := conn.Exec(ctx, target.Launch(bin, workspace, paths))
 	if err != nil {
-		cleanupFailedLaunch(conn, fs, paths, 0)
+		cleanupFailedLaunch(conn, target, fs, paths, 0)
 		return Result{}, fmt.Errorf("bootstrap: launch: %w", err)
 	}
 	pid, _ := strconv.Atoi(strings.TrimSpace(string(launchRes.Stdout)))
@@ -157,14 +149,14 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 	opts.progress("health_check", "")
 	addr, err := pollPortFile(ctx, fs, paths.PortFile, opts.clock())
 	if err != nil {
-		cleanupFailedLaunch(conn, fs, paths, pid)
+		cleanupFailedLaunch(conn, target, fs, paths, pid)
 		return Result{}, err
 	}
 	if filePID, perr := readPIDFile(ctx, fs, paths.PidFile); perr == nil {
 		pid = filePID // --pid-file is authoritative when available.
 	}
-	if pid <= 0 || !pidIsServe(ctx, conn, pid, paths) {
-		cleanupFailedLaunch(conn, fs, paths, pid)
+	if pid <= 0 || !pidIsServe(ctx, conn, target, pid, paths) {
+		cleanupFailedLaunch(conn, target, fs, paths, pid)
 		return Result{}, errors.New("bootstrap: launched process did not become the expected reasonix serve")
 	}
 
@@ -179,11 +171,11 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 	}
 	data, err := MarshalState(st)
 	if err != nil {
-		cleanupFailedLaunch(conn, fs, paths, pid)
+		cleanupFailedLaunch(conn, target, fs, paths, pid)
 		return Result{}, err
 	}
 	if err := fs.WriteFileAtomic(ctx, paths.StateJSON, data, 0o600); err != nil {
-		cleanupFailedLaunch(conn, fs, paths, pid)
+		cleanupFailedLaunch(conn, target, fs, paths, pid)
 		return Result{}, fmt.Errorf("bootstrap: write state: %w", err)
 	}
 	opts.progress("ready", addr)
@@ -196,7 +188,7 @@ func Status(ctx context.Context, conn Conn, workspace string) (ServeState, bool,
 	if err != nil {
 		return ServeState{}, false, err
 	}
-	home, err := fs.RealPath(ctx, "~")
+	target, _, _, home, err := remoteFor(ctx, conn, fs)
 	if err != nil {
 		return ServeState{}, false, err
 	}
@@ -204,12 +196,12 @@ func Status(ctx context.Context, conn Conn, workspace string) (ServeState, bool,
 	if err != nil {
 		return ServeState{}, false, err
 	}
-	paths := pathsFor(home, ws)
+	paths := target.Paths(home, ws)
 	st, err := readState(ctx, fs, paths.StateJSON)
 	if err != nil {
 		return ServeState{}, false, nil // no state => not running
 	}
-	alive := st.Workspace == ws && validServeAddr(st.Addr) && pidIsServe(ctx, conn, st.PID, paths)
+	alive := st.Workspace == ws && validServeAddr(st.Addr) && pidIsServe(ctx, conn, target, st.PID, paths)
 	return st, alive, nil
 }
 
@@ -219,7 +211,7 @@ func Stop(ctx context.Context, conn Conn, workspace string) error {
 	if err != nil {
 		return err
 	}
-	home, err := fs.RealPath(ctx, "~")
+	target, _, _, home, err := remoteFor(ctx, conn, fs)
 	if err != nil {
 		return err
 	}
@@ -227,7 +219,7 @@ func Stop(ctx context.Context, conn Conn, workspace string) error {
 	if err != nil {
 		return err
 	}
-	paths := pathsFor(home, ws)
+	paths := target.Paths(home, ws)
 	st, err := readState(ctx, fs, paths.StateJSON)
 	if err != nil {
 		return nil // nothing recorded
@@ -235,7 +227,7 @@ func Stop(ctx context.Context, conn Conn, workspace string) error {
 	// Only signal the pid if it is still OUR serve: a recycled PID now owned by
 	// an unrelated process must never be TERM/KILLed.
 	if st.PID > 0 {
-		if _, err := conn.Exec(ctx, StopCommand(st.PID, paths)); err != nil {
+		if _, err := conn.Exec(ctx, target.Stop(st.PID, paths)); err != nil {
 			return fmt.Errorf("bootstrap: stop pid %d: %w", st.PID, err)
 		}
 	}
@@ -252,7 +244,7 @@ func Logs(ctx context.Context, conn Conn, workspace string, n int, w io.Writer) 
 	if err != nil {
 		return err
 	}
-	home, err := fs.RealPath(ctx, "~")
+	target, _, _, home, err := remoteFor(ctx, conn, fs)
 	if err != nil {
 		return err
 	}
@@ -260,8 +252,8 @@ func Logs(ctx context.Context, conn Conn, workspace string, n int, w io.Writer) 
 	if err != nil {
 		return err
 	}
-	paths := pathsFor(home, ws)
-	res, err := conn.Exec(ctx, LogsCommand(paths.LogFile, n))
+	paths := target.Paths(home, ws)
+	res, err := conn.Exec(ctx, target.Logs(paths.LogFile, n))
 	if err != nil {
 		return err
 	}
@@ -269,7 +261,7 @@ func Logs(ctx context.Context, conn Conn, workspace string, n int, w io.Writer) 
 	return err
 }
 
-func tryReuse(ctx context.Context, conn Conn, fs *sftpfs.FS, paths StatePaths, workspace ...string) (ServeState, string, bool) {
+func tryReuse(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, paths StatePaths, workspace ...string) (ServeState, string, bool) {
 	st, err := readState(ctx, fs, paths.StateJSON)
 	if err != nil || st.PID <= 0 || st.Addr == "" {
 		return ServeState{}, "", false
@@ -277,7 +269,7 @@ func tryReuse(ctx context.Context, conn Conn, fs *sftpfs.FS, paths StatePaths, w
 	if len(workspace) > 0 && st.Workspace != workspace[0] {
 		return ServeState{}, "", false
 	}
-	if !validServeAddr(st.Addr) || !pidIsServe(ctx, conn, st.PID, paths) {
+	if !validServeAddr(st.Addr) || !pidIsServe(ctx, conn, target, st.PID, paths) {
 		return ServeState{}, "", false
 	}
 	// The state record is informational; the workspace-derived path is the
@@ -291,11 +283,11 @@ func tryReuse(ctx context.Context, conn Conn, fs *sftpfs.FS, paths StatePaths, w
 
 // pidIsServe reports whether pid is running AND is a reasonix serve process,
 // so PID reuse cannot make an unrelated process look like a live serve.
-func pidIsServe(ctx context.Context, conn Conn, pid int, paths StatePaths) bool {
+func pidIsServe(ctx context.Context, conn Conn, target remoteOS, pid int, paths StatePaths) bool {
 	if pid <= 0 {
 		return false
 	}
-	res, err := conn.Exec(ctx, ServeAliveCommand(pid, paths))
+	res, err := conn.Exec(ctx, target.Alive(pid, paths))
 	if err != nil {
 		return false
 	}
@@ -364,14 +356,14 @@ func readPIDFile(ctx context.Context, fs *sftpfs.FS, pidFile string) (int, error
 	return pid, nil
 }
 
-func cleanupFailedLaunch(conn Conn, fs *sftpfs.FS, paths StatePaths, pid int) {
+func cleanupFailedLaunch(conn Conn, target remoteOS, fs *sftpfs.FS, paths StatePaths, pid int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 	defer cancel()
 	if pid <= 0 {
 		pid, _ = readPIDFile(ctx, fs, paths.PidFile)
 	}
 	if pid > 0 {
-		_, _ = conn.Exec(ctx, StopCommand(pid, paths))
+		_, _ = conn.Exec(ctx, target.Stop(pid, paths))
 	}
 	_ = fs.Remove(ctx, paths.StateJSON, false)
 	_ = fs.Remove(ctx, paths.TokenFile, false)

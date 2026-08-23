@@ -178,8 +178,11 @@ func TestEnsureServeReusesLiveProcess(t *testing.T) {
 		if strings.Contains(cmd, "kill -0 777") {
 			return ok("1\n") // alive
 		}
-		if strings.Contains(cmd, "uname") || strings.Contains(cmd, "nohup") {
-			t.Errorf("reuse path should not detect/launch; ran: %s", cmd)
+		if strings.Contains(cmd, "uname") {
+			return ok("Linux x86_64\n")
+		}
+		if strings.Contains(cmd, "nohup") || strings.Contains(cmd, "command -v reasonix") {
+			t.Errorf("reuse path should not locate or launch; ran: %s", cmd)
 		}
 		return ok("")
 	})
@@ -284,6 +287,10 @@ func TestStopRemovesStateFiles(t *testing.T) {
 		// Stop verifies the pid is our serve (ServeAliveCommand) before signalling.
 		if strings.Contains(cmd, "ps -p 555") {
 			return ok("1\n")
+		}
+		// Which machine this is decides which of those commands to send.
+		if strings.Contains(cmd, "uname") {
+			return ok("Linux x86_64\n")
 		}
 		return ok("")
 	})

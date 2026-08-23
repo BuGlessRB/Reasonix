@@ -58,8 +58,10 @@ func pathsFor(home, workspace string) StatePaths {
 }
 
 // uploadedBinPath is the fallback location for an uploaded reasonix binary.
-func uploadedBinPath(home string) string {
-	return path.Join(remoteDir(home), store.RemoteBinDirName, "reasonix")
+// The name carries the platform's own suffix: a Windows machine will not run
+// a file it cannot see as an executable.
+func uploadedBinPath(home, executable string) string {
+	return path.Join(remoteDir(home), store.RemoteBinDirName, executable)
 }
 
 func nowUnix(clock func() time.Time) int64 {

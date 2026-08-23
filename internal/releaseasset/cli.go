@@ -6,6 +6,7 @@ package releaseasset
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -32,13 +33,12 @@ var cliReleaseVersionPattern = regexp.MustCompile(`^v(?:0|[1-9][0-9]*)\.(?:0|[1-
 
 // DownloadCLI downloads the exact official CLI release for version and target,
 // verifies it against SHA256SUMS from the same immutable release, and returns
-// the extracted executable bytes. Remote Serve provisioning supports Linux and
-// macOS hosts.
+// the extracted executable bytes.
 func DownloadCLI(ctx context.Context, client *http.Client, version, goos, goarch string) ([]byte, error) {
 	if !cliReleaseVersionPattern.MatchString(strings.TrimSpace(version)) {
 		return nil, fmt.Errorf("remote CLI download requires a released version, got %q", version)
 	}
-	if goos != "linux" && goos != "darwin" {
+	if goos != "linux" && goos != "darwin" && goos != "windows" {
 		return nil, fmt.Errorf("remote CLI download does not support OS %q", goos)
 	}
 	if goarch != "amd64" && goarch != "arm64" {
@@ -51,7 +51,7 @@ func downloadCLIFromBase(ctx context.Context, client *http.Client, base, version
 	if client == nil {
 		return nil, errors.New("remote CLI download requires an HTTP client")
 	}
-	assetName := fmt.Sprintf("reasonix-%s-%s.tar.gz", goos, goarch)
+	assetName, executable := cliAsset(goos, goarch)
 	releaseBase := strings.TrimRight(base, "/") + "/" + url.PathEscape(version) + "/"
 	archiveURL := releaseBase + assetName
 	checksumURL := releaseBase + "SHA256SUMS"
@@ -71,11 +71,22 @@ func downloadCLIFromBase(ctx context.Context, client *http.Client, base, version
 	if err := verifyChecksum(archive, assetName, checksums); err != nil {
 		return nil, err
 	}
-	binary, err := extractCLI(archive)
+	binary, err := extractCLI(archive, assetName, executable)
 	if err != nil {
 		return nil, fmt.Errorf("extract %s: %w", assetName, err)
 	}
 	return binary, nil
+}
+
+// cliAsset names the release artifact for a target and the executable inside
+// it. Windows ships a zip and an .exe; every other platform a tar.gz — the
+// release line has always been built this way, and assuming otherwise is what
+// made a Windows remote undownloadable.
+func cliAsset(goos, goarch string) (asset, executable string) {
+	if goos == "windows" {
+		return fmt.Sprintf("reasonix-%s-%s.zip", goos, goarch), "reasonix.exe"
+	}
+	return fmt.Sprintf("reasonix-%s-%s.tar.gz", goos, goarch), "reasonix"
 }
 
 func fetchBounded(ctx context.Context, client *http.Client, rawURL string, limit int64) ([]byte, error) {
@@ -131,7 +142,52 @@ func verifyChecksum(data []byte, assetName string, checksums []byte) error {
 	return nil
 }
 
-func extractCLI(archive []byte) ([]byte, error) {
+func extractCLI(archive []byte, assetName, executable string) ([]byte, error) {
+	if strings.HasSuffix(assetName, ".zip") {
+		return extractCLIZip(archive, executable)
+	}
+	return extractCLITarGz(archive, executable)
+}
+
+// extractCLIZip reads the one executable out of a Windows release. Bounded the
+// same way the tar path is: a declared size is the archive's claim, so the read
+// is limited rather than trusted.
+func extractCLIZip(archive []byte, executable string) ([]byte, error) {
+	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		return nil, err
+	}
+	var binary []byte
+	for _, entry := range zr.File {
+		if path.Base(path.Clean(entry.Name)) != executable {
+			continue
+		}
+		if entry.FileInfo().IsDir() || entry.UncompressedSize64 == 0 || entry.UncompressedSize64 > uint64(maxExtractedCLIBytes) {
+			return nil, errors.New("reasonix archive entry is not a bounded regular file")
+		}
+		if binary != nil {
+			return nil, errors.New("reasonix archive contains duplicate binaries")
+		}
+		rc, err := entry.Open()
+		if err != nil {
+			return nil, err
+		}
+		binary, err = io.ReadAll(io.LimitReader(rc, maxExtractedCLIBytes+1))
+		rc.Close()
+		if err != nil {
+			return nil, err
+		}
+		if int64(len(binary)) > maxExtractedCLIBytes {
+			return nil, errors.New("reasonix archive entry exceeds the size limit")
+		}
+	}
+	if binary == nil {
+		return nil, errors.New("reasonix archive does not contain the executable")
+	}
+	return binary, nil
+}
+
+func extractCLITarGz(archive []byte, executable string) ([]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(archive))
 	if err != nil {
 		return nil, err
@@ -147,7 +203,7 @@ func extractCLI(archive []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if path.Base(path.Clean(header.Name)) != "reasonix" {
+		if path.Base(path.Clean(header.Name)) != executable {
 			continue
 		}
 		if header.Typeflag != tar.TypeReg || header.Size <= 0 || header.Size > maxExtractedCLIBytes {

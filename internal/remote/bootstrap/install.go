@@ -13,9 +13,9 @@ import (
 // ensureBinary resolves a usable reasonix binary on the remote host per the
 // install strategy, returning its path and version. A located binary older
 // than MinVersion counts as missing (it lacks --port-file/--token-file).
-func ensureBinary(ctx context.Context, conn Conn, fs *sftpfs.FS, opts Options, home, goos, goarch string, paths StatePaths) (bin, version string, err error) {
-	uploaded := uploadedBinPath(home)
-	bin, version = locate(ctx, conn, uploaded, opts.MinVersion)
+func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch string, paths StatePaths) (bin, version string, err error) {
+	uploaded := uploadedBinPath(home, target.Executable())
+	bin, version = locate(ctx, conn, target, uploaded, opts.MinVersion)
 	if bin != "" {
 		return bin, version, nil
 	}
@@ -30,16 +30,16 @@ func ensureBinary(ctx context.Context, conn Conn, fs *sftpfs.FS, opts Options, h
 	case InstallNever:
 		return "", "", fmt.Errorf("bootstrap: reasonix not found on remote and serve_install = never")
 	case InstallNPM:
-		return installViaNPM(ctx, conn, opts.MinVersion)
+		return installViaNPM(ctx, conn, target, opts.MinVersion)
 	case InstallUpload:
-		return installViaUpload(ctx, conn, fs, opts, home, goos, goarch, uploaded)
+		return installViaUpload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded)
 	default: // auto: try npm, packaged same-platform upload, then verified release upload
-		if b, v, nerr := installViaNPM(ctx, conn, opts.MinVersion); nerr == nil {
+		if b, v, nerr := installViaNPM(ctx, conn, target, opts.MinVersion); nerr == nil {
 			return b, v, nil
 		} else {
 			attempts := []error{nerr}
 			if opts.LocalBinary != "" && opts.LocalGOOS == goos && opts.LocalGOARCH == goarch {
-				if b, v, uploadErr := installViaUpload(ctx, conn, fs, opts, home, goos, goarch, uploaded); uploadErr == nil {
+				if b, v, uploadErr := installViaUpload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded); uploadErr == nil {
 					return b, v, nil
 				} else {
 					attempts = append(attempts, uploadErr)
@@ -52,7 +52,7 @@ func ensureBinary(ctx context.Context, conn Conn, fs *sftpfs.FS, opts Options, h
 			if opts.FetchBinary != nil {
 				binary, fetchErr := opts.FetchBinary(ctx, opts.ProductVersion, goos, goarch)
 				if fetchErr == nil {
-					if b, v, uploadErr := installBinaryBytes(ctx, conn, fs, binary, opts.MinVersion, home, uploaded); uploadErr == nil {
+					if b, v, uploadErr := installBinaryBytes(ctx, conn, target, fs, binary, opts.MinVersion, home, uploaded); uploadErr == nil {
 						return b, v, nil
 					} else {
 						attempts = append(attempts, uploadErr)
@@ -71,9 +71,9 @@ func ensureBinary(ctx context.Context, conn Conn, fs *sftpfs.FS, opts Options, h
 // including every currently-released version — is reported as missing so the
 // install/upload path replaces it. minVersion is accepted for signature
 // stability but the flag probe is authoritative.
-func locate(ctx context.Context, conn Conn, uploaded, minVersion string) (bin, version string) {
+func locate(ctx context.Context, conn Conn, target remoteOS, uploaded, minVersion string) (bin, version string) {
 	_ = minVersion
-	res, err := conn.Exec(ctx, LocateCommand(uploaded))
+	res, err := conn.Exec(ctx, target.Locate(uploaded))
 	if err != nil {
 		return "", ""
 	}
@@ -100,7 +100,7 @@ func locate(ctx context.Context, conn Conn, uploaded, minVersion string) (bin, v
 	return path, version
 }
 
-func installViaNPM(ctx context.Context, conn Conn, minVersion string) (bin, version string, err error) {
+func installViaNPM(ctx context.Context, conn Conn, target remoteOS, minVersion string) (bin, version string, err error) {
 	res, err := conn.Exec(ctx, "npm i -g reasonix 2>&1")
 	if err != nil {
 		return "", "", fmt.Errorf("bootstrap: npm install: %w", err)
@@ -109,7 +109,7 @@ func installViaNPM(ctx context.Context, conn Conn, minVersion string) (bin, vers
 		return "", "", fmt.Errorf("bootstrap: npm install failed: %s", tail(res.Stdout, 400))
 	}
 	// npm may install outside the login PATH; probe npm prefix explicitly.
-	loc, ver := locate(ctx, conn, "", minVersion)
+	loc, ver := locate(ctx, conn, target, "", minVersion)
 	if loc == "" {
 		return "", "", fmt.Errorf("bootstrap: reasonix not found after npm install (check remote PATH / npm prefix)")
 	}
@@ -119,7 +119,7 @@ func installViaNPM(ctx context.Context, conn Conn, minVersion string) (bin, vers
 // installViaUpload uploads the local reasonix binary when the remote platform
 // matches the local one. Cross-platform release download is a documented V1
 // limitation: use serve_install = npm for a differing remote platform.
-func installViaUpload(ctx context.Context, conn Conn, fs *sftpfs.FS, opts Options, home, goos, goarch, uploaded string) (bin, version string, err error) {
+func installViaUpload(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch, uploaded string) (bin, version string, err error) {
 	if opts.LocalBinary == "" {
 		return "", "", fmt.Errorf("bootstrap: upload strategy needs the local reasonix binary path")
 	}
@@ -131,10 +131,10 @@ func installViaUpload(ctx context.Context, conn Conn, fs *sftpfs.FS, opts Option
 	if rerr != nil {
 		return "", "", fmt.Errorf("bootstrap: read local binary: %w", rerr)
 	}
-	return installBinaryBytes(ctx, conn, fs, data, opts.MinVersion, home, uploaded)
+	return installBinaryBytes(ctx, conn, target, fs, data, opts.MinVersion, home, uploaded)
 }
 
-func installBinaryBytes(ctx context.Context, conn Conn, fs *sftpfs.FS, data []byte, minVersion, home, uploaded string) (bin, version string, err error) {
+func installBinaryBytes(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, data []byte, minVersion, home, uploaded string) (bin, version string, err error) {
 	if len(data) == 0 {
 		return "", "", fmt.Errorf("bootstrap: downloaded binary is empty")
 	}
@@ -144,7 +144,7 @@ func installBinaryBytes(ctx context.Context, conn Conn, fs *sftpfs.FS, data []by
 	if err := fs.WriteFileAtomic(ctx, uploaded, data, 0o755); err != nil {
 		return "", "", fmt.Errorf("bootstrap: upload binary: %w", err)
 	}
-	loc, ver := locate(ctx, conn, uploaded, minVersion)
+	loc, ver := locate(ctx, conn, target, uploaded, minVersion)
 	if loc == "" {
 		return "", "", fmt.Errorf("bootstrap: uploaded binary not runnable on remote")
 	}
