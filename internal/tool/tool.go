@@ -79,6 +79,23 @@ func PreviewChange(ctx context.Context, t Tool, args json.RawMessage) (diff.Chan
 	return ch, true
 }
 
+// SequentialTool is an optional contract for a tool whose calls must keep
+// provider order inside one reply. ReadOnly answers approval, not batching: the
+// two part company for a tool that touches no file yet advances host state, or
+// reads what an earlier call in the same reply started. args is passed because
+// a proxy answers for whatever it proxies.
+type SequentialTool interface {
+	Sequential(ctx context.Context, args json.RawMessage) bool
+}
+
+// RunsSequentially reports whether this call has to run on its own. A tool that
+// does not implement SequentialTool is ordered by ReadOnly alone, which is what
+// the batch planner already assumed of every tool.
+func RunsSequentially(ctx context.Context, t Tool, args json.RawMessage) bool {
+	s, ok := t.(SequentialTool)
+	return ok && s.Sequential(ctx, args)
+}
+
 // ImageTool is an optional capability a Tool may implement when its results can
 // carry images alongside text (e.g. an MCP tool returning a screenshot).
 // ExecuteWithImages returns the same text Execute would — including a short

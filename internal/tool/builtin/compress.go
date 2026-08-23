@@ -42,6 +42,10 @@ func (compressContext) Schema() json.RawMessage {
 // into a serial lane because projection installation is stateful.
 func (compressContext) ReadOnly() bool { return true }
 
+// Sequential is true even though ReadOnly is: a fold rewrites the transcript
+// every other call in the batch is reading from.
+func (compressContext) Sequential(context.Context, json.RawMessage) bool { return true }
+
 func (compressContext) PlanModeSafe() bool { return true }
 
 func (compressContext) Execute(ctx context.Context, args json.RawMessage) (string, error) {

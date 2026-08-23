@@ -208,7 +208,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 		mutationBatchStop = true
 	}
 
-	for _, batch := range partitionToolCalls(a.svc.tools, calls) {
+	for _, batch := range partitionToolCalls(ctx, a.svc.tools, calls) {
 		if ctx.Err() != nil {
 			markCancelled(batch.start)
 			break
@@ -413,18 +413,16 @@ type toolCallBatch struct {
 	parallel bool
 }
 
-// partitionToolCalls keeps provider order while letting contiguous known
-// read-only tools run together; unknown and writer tools are single-call
-// serial batches. Evidence-ledger tools (complete_step, todo_write, wait,
-// bash_output) never join a parallel run so provider order stays receipt
-// order; use_capability is serial as it may resolve to a real MCP writer.
-func partitionToolCalls(r *tool.Registry, calls []provider.ToolCall) []toolCallBatch {
+// partitionToolCalls keeps provider order while letting contiguous read-only
+// tools run together. A writer, an unresolvable name, and a tool that declares
+// it needs its own place each get a single-call serial batch.
+func partitionToolCalls(ctx context.Context, r *tool.Registry, calls []provider.ToolCall) []toolCallBatch {
 	var batches []toolCallBatch
 	for i := 0; i < len(calls); {
-		if parallelisable(r, calls[i]) {
+		if parallelisable(ctx, r, calls[i]) {
 			start := i
 			i++
-			for i < len(calls) && parallelisable(r, calls[i]) {
+			for i < len(calls) && parallelisable(ctx, r, calls[i]) {
 				i++
 			}
 			batches = append(batches, toolCallBatch{start: start, end: i, parallel: true})
@@ -436,13 +434,16 @@ func partitionToolCalls(r *tool.Registry, calls []provider.ToolCall) []toolCallB
 	return batches
 }
 
-func parallelisable(r *tool.Registry, call provider.ToolCall) bool {
-	switch call.Name {
-	case "complete_step", "todo_write", "wait", "bash_output", "use_capability", "compress":
-		return false
-	}
+func parallelisable(ctx context.Context, r *tool.Registry, call provider.ToolCall) bool {
 	t, canonical, ambiguous := r.ResolveCall(call.Name)
 	if t == nil || len(ambiguous) > 0 {
+		return false
+	}
+	args := json.RawMessage(call.Arguments)
+	// ReadOnly says a call needs no approval; it does not say the call may share
+	// a batch. A tool that advances host state or reads what an earlier call in
+	// this reply started answers that second question itself.
+	if tool.RunsSequentially(ctx, t, args) {
 		return false
 	}
 	if t.ReadOnly() {
@@ -451,7 +452,7 @@ func parallelisable(r *tool.Registry, call provider.ToolCall) bool {
 	// Bash is writer-capable in its schema, so it never joined a parallel run
 	// even when its arguments read as read-only — the same fact permission,
 	// mutation accounting, and evidence already act on.
-	return canonical == "bash" && permission.BashCommandIsReadOnly(json.RawMessage(call.Arguments))
+	return canonical == "bash" && permission.BashCommandIsReadOnly(args)
 }
 
 func runParallel(ctx context.Context, start, end int, run func(int)) int {

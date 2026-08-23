@@ -82,6 +82,10 @@ func (completeStep) Schema() json.RawMessage {
 // effect), so it never needs approval and stays available alongside todo_write.
 func (completeStep) ReadOnly() bool { return true }
 
+// Sequential is true even though ReadOnly is: signing a step off advances the
+// task list, so two sign-offs in one reply have to land in the order sent.
+func (completeStep) Sequential(context.Context, json.RawMessage) bool { return true }
+
 // complete_step signs off execution work and is unavailable during planning.
 // The host Plan gate remains authoritative for stale or hallucinated calls.
 func (completeStep) ProviderVisible(ctx context.Context) bool {

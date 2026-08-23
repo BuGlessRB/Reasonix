@@ -50,6 +50,10 @@ func (bashOutput) Schema() json.RawMessage {
 
 func (bashOutput) ReadOnly() bool { return true }
 
+// Sequential is true even though ReadOnly is: it reads what a job started
+// earlier in this same reply has produced, so it runs after, not beside.
+func (bashOutput) Sequential(context.Context, json.RawMessage) bool { return true }
+
 func (bashOutput) ProviderVisible(ctx context.Context) bool {
 	_, ok := jobs.FromContext(ctx)
 	return ok
@@ -162,6 +166,10 @@ func (waitJob) Schema() json.RawMessage {
 }
 
 func (waitJob) ReadOnly() bool { return true }
+
+// Sequential is true even though ReadOnly is: a wait is for jobs started
+// earlier in this reply, and one that runs beside them waits for nothing.
+func (waitJob) Sequential(context.Context, json.RawMessage) bool { return true }
 
 func (waitJob) ProviderVisible(ctx context.Context) bool {
 	_, ok := jobs.FromContext(ctx)

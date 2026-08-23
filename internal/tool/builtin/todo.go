@@ -62,6 +62,10 @@ func (todoWrite) Schema() json.RawMessage {
 // laying out a plan as todos is exactly the point.
 func (todoWrite) ReadOnly() bool { return true }
 
+// Sequential is true even though ReadOnly is: each write replaces the whole
+// list, so order decides which of two writes in one reply survives.
+func (todoWrite) Sequential(context.Context, json.RawMessage) bool { return true }
+
 func (todoWrite) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Todos []todoItem `json:"todos"`

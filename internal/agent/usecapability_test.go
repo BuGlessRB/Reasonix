@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -1343,25 +1344,80 @@ func TestPlannerBlocksDestructiveMCPWithExecutorHandoff(t *testing.T) {
 	}
 }
 
-func TestUseCapabilityCallsAreAlwaysSerialized(t *testing.T) {
-	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	reg.Add(fakeTool{name: "use_capability", readOnly: true})
-	calls := []provider.ToolCall{
-		{ID: "1", Name: "use_capability", Arguments: `{"action":"list"}`},
-		{ID: "2", Name: "use_capability", Arguments: `{"action":"list"}`},
-		{ID: "3", Name: "read_file", Arguments: `{"path":"a.go"}`},
+func TestUseCapabilityBatchingFollowsWhatItProxies(t *testing.T) {
+	reg := builtinToolRegistry()
+	cat := capability.Catalog{Entries: []capability.Entry{
+		{ID: "mcp:srv/read", Kind: capability.KindTool, ReadOnly: true},
+		{ID: "mcp:srv/write", Kind: capability.KindTool, ReadOnly: false},
+	}}
+	proxy := NewUseCapabilityTool(context.Background(), nil, nil, reg, capability.NewLedger(), nil,
+		func() capability.Catalog { return cat })
+	reg.Add(proxy)
+
+	uc := func(args string) provider.ToolCall {
+		return provider.ToolCall{Name: "use_capability", Arguments: args}
 	}
-	got := partitionToolCalls(reg, calls)
-	if len(got) != 3 {
-		t.Fatalf("partition = %+v, want 3 batches (uc, uc, read)", got)
-	}
-	if got[0].parallel || got[1].parallel {
-		t.Fatalf("use_capability batches must be serial for every agent: %+v", got)
-	}
-	// A lone read_file may still be marked parallelisable; it is a single-call batch.
-	if got[2].start != 2 || got[2].end != 3 {
-		t.Fatalf("trailing read batch = %+v", got[2])
+	for _, tc := range []struct {
+		name  string
+		calls []provider.ToolCall
+		want  []toolCallBatch
+	}{
+		{
+			// Two directory reads and a file read are all reads: one batch.
+			name: "list shares a batch",
+			calls: []provider.ToolCall{
+				uc(`{"action":"list"}`), uc(`{"action":"list"}`),
+				{Name: "read_file", Arguments: `{"path":"a.go"}`},
+			},
+			want: []toolCallBatch{{start: 0, end: 3, parallel: true}},
+		},
+		{
+			// A read-only target is a read; the proxy is not what decides.
+			name: "call to a read-only capability shares a batch",
+			calls: []provider.ToolCall{
+				uc(`{"action":"call","capability_id":"mcp:srv/read"}`),
+				{Name: "read_file", Arguments: `{"path":"a.go"}`},
+			},
+			want: []toolCallBatch{{start: 0, end: 2, parallel: true}},
+		},
+		{
+			name: "call to a writer keeps its place",
+			calls: []provider.ToolCall{
+				{Name: "read_file", Arguments: `{"path":"a.go"}`},
+				uc(`{"action":"call","capability_id":"mcp:srv/write"}`),
+			},
+			want: []toolCallBatch{{start: 0, end: 1, parallel: true}, {start: 1, end: 2}},
+		},
+		{
+			// An id the catalog cannot resolve is the one whose effects are unknown.
+			name: "call to an unknown id keeps its place",
+			calls: []provider.ToolCall{
+				{Name: "read_file", Arguments: `{"path":"a.go"}`},
+				uc(`{"action":"call","capability_id":"mcp:srv/never-heard-of"}`),
+			},
+			want: []toolCallBatch{{start: 0, end: 1, parallel: true}, {start: 1, end: 2}},
+		},
+		{
+			// inspect can start a server and decline writes the ledger.
+			name: "inspect and decline keep their places",
+			calls: []provider.ToolCall{
+				uc(`{"action":"inspect","capability_id":"mcp:srv/read"}`),
+				uc(`{"action":"decline","capability_id":"mcp:srv/read","reason":"no"}`),
+			},
+			want: []toolCallBatch{{start: 0, end: 1}, {start: 1, end: 2}},
+		},
+		{
+			name:  "unparseable args keep their place",
+			calls: []provider.ToolCall{uc(`{`)},
+			want:  []toolCallBatch{{start: 0, end: 1}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := partitionToolCalls(context.Background(), reg, tc.calls)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("partition = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 

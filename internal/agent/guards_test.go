@@ -107,6 +107,16 @@ func TestEmptyFinalNotice(t *testing.T) {
 
 // parallel-dispatch tests
 
+// builtinToolRegistry is the real built-in set: a batch test built on fakes
+// asserts the fake's contract, which is how a name table survives replacement.
+func builtinToolRegistry() *tool.Registry {
+	reg := tool.NewRegistry()
+	for _, x := range tool.Builtins() {
+		reg.Add(x)
+	}
+	return reg
+}
+
 // fakeTool is a minimal Tool stand-in for dispatch tests; ReadOnly is
 // configurable and Execute sleeps a fixed duration so we can measure
 // serial vs parallel behaviour by wall-clock.
@@ -194,7 +204,7 @@ func TestPartitionToolCallsAllReadOnly(t *testing.T) {
 	reg.Add(fakeTool{name: "ro1", readOnly: true})
 	reg.Add(fakeTool{name: "ro2", readOnly: true})
 	calls := []provider.ToolCall{{Name: "ro1"}, {Name: "ro2"}}
-	got := partitionToolCalls(reg, calls)
+	got := partitionToolCalls(context.Background(), reg, calls)
 	want := []toolCallBatch{{start: 0, end: 2, parallel: true}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("partitionToolCalls = %+v, want %+v", got, want)
@@ -263,7 +273,7 @@ func TestPartitionToolCallsReadsBashArguments(t *testing.T) {
 		{Name: "bash", Arguments: `{"command":"grep -rn needle ."}`},
 		{Name: "bash", Arguments: `{"command":"rm -rf build"}`},
 	}
-	got := partitionToolCalls(reg, calls)
+	got := partitionToolCalls(context.Background(), reg, calls)
 	want := []toolCallBatch{
 		{start: 0, end: 2, parallel: true},
 		{start: 2, end: 3},
@@ -280,7 +290,7 @@ func TestPartitionToolCallsSegmentsAroundWriters(t *testing.T) {
 	reg.Add(fakeTool{name: "ro", readOnly: true})
 	reg.Add(fakeTool{name: "rw", readOnly: false})
 	calls := []provider.ToolCall{{Name: "ro"}, {Name: "rw"}, {Name: "ro"}}
-	got := partitionToolCalls(reg, calls)
+	got := partitionToolCalls(context.Background(), reg, calls)
 	want := []toolCallBatch{
 		{start: 0, end: 1, parallel: true},
 		{start: 1, end: 2},
@@ -297,7 +307,7 @@ func TestPartitionToolCallsUnknownToolSerial(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "ro", readOnly: true})
 	calls := []provider.ToolCall{{Name: "ro"}, {Name: "vanished"}, {Name: "ro"}}
-	got := partitionToolCalls(reg, calls)
+	got := partitionToolCalls(context.Background(), reg, calls)
 	want := []toolCallBatch{
 		{start: 0, end: 1, parallel: true},
 		{start: 1, end: 2},
@@ -312,12 +322,10 @@ func TestPartitionToolCallsUnknownToolSerial(t *testing.T) {
 // parallel read-only run: it reads the turn's receipts, so the prior reads must
 // finish (and record) in an earlier batch before it runs in its own serial one.
 func TestPartitionToolCallsCompleteStepSerial(t *testing.T) {
-	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	reg.Add(fakeTool{name: "complete_step", readOnly: true})
+	reg := builtinToolRegistry()
 
 	calls := []provider.ToolCall{{Name: "read_file"}, {Name: "complete_step"}}
-	got := partitionToolCalls(reg, calls)
+	got := partitionToolCalls(context.Background(), reg, calls)
 	want := []toolCallBatch{
 		{start: 0, end: 1, parallel: true},
 		{start: 1, end: 2},
@@ -328,12 +336,10 @@ func TestPartitionToolCallsCompleteStepSerial(t *testing.T) {
 }
 
 func TestPartitionToolCallsCompressSerial(t *testing.T) {
-	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	reg.Add(fakeTool{name: "compress", readOnly: true})
+	reg := builtinToolRegistry()
 
 	calls := []provider.ToolCall{{Name: "read_file"}, {Name: "compress"}, {Name: "read_file"}}
-	got := partitionToolCalls(reg, calls)
+	got := partitionToolCalls(context.Background(), reg, calls)
 	want := []toolCallBatch{
 		{start: 0, end: 1, parallel: true},
 		{start: 1, end: 2},
@@ -345,12 +351,10 @@ func TestPartitionToolCallsCompressSerial(t *testing.T) {
 }
 
 func TestPartitionToolCallsTodoWriteSerial(t *testing.T) {
-	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	reg.Add(fakeTool{name: "todo_write", readOnly: true})
+	reg := builtinToolRegistry()
 
 	calls := []provider.ToolCall{{Name: "read_file"}, {Name: "todo_write"}, {Name: "read_file"}}
-	got := partitionToolCalls(reg, calls)
+	got := partitionToolCalls(context.Background(), reg, calls)
 	want := []toolCallBatch{
 		{start: 0, end: 1, parallel: true},
 		{start: 1, end: 2},
@@ -362,13 +366,10 @@ func TestPartitionToolCallsTodoWriteSerial(t *testing.T) {
 }
 
 func TestPartitionToolCallsBackgroundCollectorsSerial(t *testing.T) {
-	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	reg.Add(fakeTool{name: "wait", readOnly: true})
-	reg.Add(fakeTool{name: "bash_output", readOnly: true})
+	reg := builtinToolRegistry()
 
 	calls := []provider.ToolCall{{Name: "read_file"}, {Name: "wait"}, {Name: "bash_output"}, {Name: "read_file"}}
-	got := partitionToolCalls(reg, calls)
+	got := partitionToolCalls(context.Background(), reg, calls)
 	want := []toolCallBatch{
 		{start: 0, end: 1, parallel: true},
 		{start: 1, end: 2},
