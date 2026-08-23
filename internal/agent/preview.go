@@ -51,10 +51,6 @@ var supersededUserBlock = func() map[string]bool {
 	return m
 }()
 
-// reTrailingExecutionPolicy matches the host-appended execution-policy block at
-// the end of a user turn (attributes allowed on the open tag).
-var reTrailingExecutionPolicy = regexp.MustCompile(`(?s)\n*<execution-policy(?:\s+[^>]*)?>.*?</execution-policy>\s*$`)
-
 var reTransientUserBlock = buildTransientUserBlockRE(TransientUserBlockTags)
 
 // buildTransientUserBlockRE matches one leading transient block: an open tag
@@ -109,20 +105,44 @@ func ContainsMemoryCompilerExecution(content string) bool {
 // sessions whose first turn was compiled would show a blank history/sidebar
 // preview (#5307).
 func StripTransientUserBlocks(content string) string {
-	s := unwrapMemoryCompilerExecution(content)
-	for {
-		next := reTransientUserBlock.ReplaceAllStringFunc(s, func(string) string {
-			return ""
-		})
-		if next == s {
-			break
-		}
-		s = next
-	}
+	s := dropLeadingTransientBlocks(unwrapMemoryCompilerExecution(content))
 	s = stripTrailingDeliveryRuntime(s)
-	s = reTrailingExecutionPolicy.ReplaceAllString(s, "")
+	s = stripTrailingExecutionPolicy(s)
 	s = stripTrailingMemoryRecall(s)
 	return strings.TrimLeft(s, " \t\r\n")
+}
+
+// dropLeadingTransientBlocks removes the host-injected blocks that open s. The
+// pattern is ^-anchored, so a ReplaceAll can only ever take the first one and
+// looping around it re-scans the whole string once per block; advancing past
+// each match reads the content once and allocates nothing.
+func dropLeadingTransientBlocks(s string) string {
+	for {
+		loc := reTransientUserBlock.FindStringIndex(s)
+		if loc == nil || loc[0] != 0 {
+			return s
+		}
+		s = s[loc[1]:]
+	}
+}
+
+// stripTrailingExecutionPolicy removes the host-appended execution-policy block
+// from the end of a user turn. Byte-exact for the reason the delivery-runtime
+// cut is: a lazy pattern anchored at $ swallows user prose between a literal
+// mention and the real block, and on a long turn it backtracks over the whole
+// string for every position it tries.
+func stripTrailingExecutionPolicy(s string) string {
+	trimmed := strings.TrimRight(s, " \t\r\n")
+	const close = "</execution-policy>"
+	if !strings.HasSuffix(trimmed, close) {
+		return s
+	}
+	// The opening tag carries attributes, so match its head rather than a
+	// literal, and take the last one: the block is the suffix.
+	if index := strings.LastIndex(trimmed, "<execution-policy"); index >= 0 {
+		return strings.TrimRight(trimmed[:index], " \t\r\n")
+	}
+	return s
 }
 
 func stripTrailingMemoryRecall(s string) string {
