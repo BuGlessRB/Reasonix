@@ -27,7 +27,9 @@ func ParseUname(out string) (goos, goarch string, err error) {
 	case "darwin":
 		goos = "darwin"
 	default:
-		return "", "", fmt.Errorf("%w: OS %q (Linux and macOS only)", ErrUnsupportedRemote, sys)
+		// A Windows machine never reaches here: it has no uname, so the caller
+		// asks it a question it can answer instead.
+		return "", "", fmt.Errorf("%w: OS %q", ErrUnsupportedRemote, sys)
 	}
 	switch strings.ToLower(machine) {
 	case "x86_64", "amd64":

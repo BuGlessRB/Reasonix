@@ -117,8 +117,8 @@ func installViaNPM(ctx context.Context, conn Conn, target remoteOS, minVersion s
 }
 
 // installViaUpload uploads the local reasonix binary when the remote platform
-// matches the local one. Cross-platform release download is a documented V1
-// limitation: use serve_install = npm for a differing remote platform.
+// matches the local one. A differing platform is served by the verified
+// release download instead, which carries every target the line publishes.
 func installViaUpload(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch, uploaded string) (bin, version string, err error) {
 	if opts.LocalBinary == "" {
 		return "", "", fmt.Errorf("bootstrap: upload strategy needs the local reasonix binary path")

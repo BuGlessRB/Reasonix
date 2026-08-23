@@ -118,7 +118,7 @@ const SAID: Record<string, string> = {
   "remote.host_key_changed": "{host} 的主机密钥变了。可能是那台机器重装了，也可能有人在中间。记录在 {file} 第 {line} 行，核对清楚之前不要连。",
   "remote.host_key_rejected": "你没有接受它的指纹，所以没有连",
   "remote.not_connected": "先在 {host} 上开一个工作区，才问得到它上面还有什么",
-  "remote.unsupported_os": "{host} 不是 Linux 或 macOS。远端内核目前只装得上这两种系统 —— SSH 是通的，装不上的是那一端。",
+  "remote.unsupported_os": "{host} 上跑不了内核 —— SSH 是通的，是那台机器的系统装不上。支持 Linux、macOS、Windows。",
   "remote.attach_failed": "连 {host} 没成功：{detail}",
   "remote.auth_failed": "{host} 不认这套凭据。换个密钥，或者在设置里填对环境变量名。",
 

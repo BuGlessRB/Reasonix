@@ -3,7 +3,8 @@
 // OS/arch, locates or installs reasonix, launches serve bound to a random
 // loopback port with a file-based token (never in argv), and records the
 // result under the remote ~/.reasonix/remote so a later reconnect can reuse
-// it. V1 targets Linux and macOS remotes.
+// it. Linux, macOS and Windows remotes are supported; which one a machine is
+// decides the shell every command below is written in.
 package bootstrap
 
 import (
