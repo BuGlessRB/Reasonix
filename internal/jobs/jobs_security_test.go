@@ -90,13 +90,13 @@ func TestStartForSession_RejectsPathTraversalParentSession(t *testing.T) {
 		t.Fatal("run goroutine executed for an invalid parentSession; the fix failed")
 	}
 	if j.status != Failed {
-		t.Fatalf("job status = %q, want %q (artifactErr=%q)", j.status, Failed, j.artifactErr)
+		t.Fatalf("job status = %q, want %q (artifactErr=%q)", j.status, Failed, j.artifact.err)
 	}
-	if !strings.Contains(j.artifactErr, "parentSession") {
-		t.Fatalf("artifactErr should reference parentSession, got %q", j.artifactErr)
+	if !strings.Contains(j.artifact.err, "parentSession") {
+		t.Fatalf("artifactErr should reference parentSession, got %q", j.artifact.err)
 	}
-	if j.artifactPath != "" {
-		t.Fatalf("artifactPath = %q, want empty (no file should be created)", j.artifactPath)
+	if j.artifact.path != "" {
+		t.Fatalf("artifactPath = %q, want empty (no file should be created)", j.artifact.path)
 	}
 
 	afterEntries, err := os.ReadDir(m.tempRoot)
@@ -128,13 +128,13 @@ func TestStartForSession_RejectsPathTraversalKind(t *testing.T) {
 		t.Fatal("run goroutine executed for an invalid kind; the fix failed")
 	}
 	if j.status != Failed {
-		t.Fatalf("job status = %q, want %q (artifactErr=%q)", j.status, Failed, j.artifactErr)
+		t.Fatalf("job status = %q, want %q (artifactErr=%q)", j.status, Failed, j.artifact.err)
 	}
-	if !strings.Contains(j.artifactErr, "kind") {
-		t.Fatalf("artifactErr should reference kind, got %q", j.artifactErr)
+	if !strings.Contains(j.artifact.err, "kind") {
+		t.Fatalf("artifactErr should reference kind, got %q", j.artifact.err)
 	}
-	if j.artifactPath != "" {
-		t.Fatalf("artifactPath = %q, want empty", j.artifactPath)
+	if j.artifact.path != "" {
+		t.Fatalf("artifactPath = %q, want empty", j.artifact.path)
 	}
 }
 
@@ -157,8 +157,8 @@ func TestStartForSession_AcceptsValidInput(t *testing.T) {
 	})
 	j.mu.Lock()
 	status := j.status
-	artifactErr := j.artifactErr
-	artifactPath := j.artifactPath
+	artifactErr := j.artifact.err
+	artifactPath := j.artifact.path
 	j.mu.Unlock()
 	if status != Running {
 		t.Fatalf("job status = %q, want Running (artifactErr=%q)", status, artifactErr)
@@ -204,15 +204,15 @@ func TestStartForSession_AcceptsSetActiveSessionPathDir(t *testing.T) {
 		return "ok", nil
 	})
 	<-j.done
-	if j.artifactErr != "" {
-		t.Fatalf("artifactErr = %q, want empty (SetActiveSessionPath dir must be accepted)", j.artifactErr)
+	if j.artifact.err != "" {
+		t.Fatalf("artifactErr = %q, want empty (SetActiveSessionPath dir must be accepted)", j.artifact.err)
 	}
-	if j.artifactPath == "" {
+	if j.artifact.path == "" {
 		t.Fatal("artifactPath empty; expected a path under the session dir")
 	}
 	// The log file must live next to the session transcript.
 	wantDir := store.SessionJobsDir(sessionPath)
-	if !strings.HasPrefix(j.artifactPath, wantDir) {
-		t.Fatalf("artifactPath = %q, want prefix %q", j.artifactPath, wantDir)
+	if !strings.HasPrefix(j.artifact.path, wantDir) {
+		t.Fatalf("artifactPath = %q, want prefix %q", j.artifact.path, wantDir)
 	}
 }

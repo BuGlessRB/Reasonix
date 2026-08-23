@@ -129,20 +129,13 @@ type Job struct {
 	status      Status
 	result      string
 	resultRead  bool // result already surfaced by Output (task jobs stream nothing to buf)
-	startedAt   int64
-	finishedAt  int64
-	activityAt  int64
+	times       jobTimes
 	runReturned bool
 	cancel      context.CancelFunc
 	done        chan struct{}
 	stalled     bool
 
-	artifactPath     string
-	artifactMetaPath string
-	artifactFile     *os.File
-	artifactComplete bool
-	artifactErr      string
-	tombstone        bool
+	artifact jobArtifact
 
 	evidence          evidence.ChildEvidenceSummary
 	evidenceCommitted bool
@@ -324,13 +317,9 @@ type jobWriter struct{ j *Job }
 func (w jobWriter) Write(p []byte) (int, error) {
 	w.j.mu.Lock()
 	defer w.j.mu.Unlock()
-	w.j.activityAt = nowMs()
+	w.j.times.touch()
 	w.j.tail = appendTail(w.j.tail, p, defaultTailBytes)
-	if w.j.artifactFile != nil {
-		if _, err := w.j.artifactFile.Write(p); err != nil {
-			w.j.artifactErr = err.Error()
-		}
-	}
+	w.j.artifact.write(p)
 	return len(p), nil
 }
 
@@ -384,19 +373,16 @@ func (m *Manager) startInvalid(parentSession, kind, label string, validationErr 
 	m.seq++
 	id := fmt.Sprintf("invalid-%d", m.seq)
 	j := &Job{
-		ID:               id,
-		Kind:             kind,
-		Label:            label,
-		SessionID:        parentSession,
-		status:           Failed,
-		startedAt:        finishedAt,
-		activityAt:       finishedAt,
-		finishedAt:       finishedAt,
-		runReturned:      true,
-		cancel:           func() {},
-		done:             make(chan struct{}),
-		artifactComplete: false,
-		artifactErr:      validationErr.Error(),
+		ID:          id,
+		Kind:        kind,
+		Label:       label,
+		SessionID:   parentSession,
+		status:      Failed,
+		times:       jobTimes{started: finishedAt, activity: finishedAt, finished: finishedAt},
+		runReturned: true,
+		cancel:      func() {},
+		done:        make(chan struct{}),
+		artifact:    jobArtifact{complete: false, err: validationErr.Error()},
 	}
 	key := jobKey(parentSession, id)
 	m.jobs[key] = j
@@ -425,20 +411,15 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 	startedAt := nowMs()
 	logPath, metaPath, file, artifactErr := m.openArtifactLocked(parentSession, id)
 	j := &Job{
-		ID:               id,
-		Kind:             kind,
-		Label:            label,
-		SessionID:        parentSession,
-		status:           Running,
-		startedAt:        startedAt,
-		activityAt:       startedAt,
-		cancel:           cancel,
-		done:             make(chan struct{}),
-		artifactPath:     logPath,
-		artifactMetaPath: metaPath,
-		artifactFile:     file,
-		artifactComplete: artifactErr == "",
-		artifactErr:      artifactErr,
+		ID:        id,
+		Kind:      kind,
+		Label:     label,
+		SessionID: parentSession,
+		status:    Running,
+		times:     jobTimes{started: startedAt, activity: startedAt},
+		cancel:    cancel,
+		done:      make(chan struct{}),
+		artifact:  jobArtifact{path: logPath, metaPath: metaPath, file: file, complete: artifactErr == "", err: artifactErr},
 	}
 	ctx = WithSession(ctx, parentSession)
 	ctx = context.WithValue(ctx, jobCtxKey{}, j)
@@ -448,8 +429,8 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 	m.mu.Unlock()
 	j.mu.Lock()
 	if err := m.writeJobMetaLocked(j, Running); err != nil {
-		j.artifactComplete = false
-		j.artifactErr = err.Error()
+		j.artifact.complete = false
+		j.artifact.err = err.Error()
 	}
 	j.mu.Unlock()
 	if m.onJobStart != nil {
@@ -489,10 +470,8 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		finishedAt := nowMs()
 		if result != "" {
 			j.mu.Lock()
-			if j.artifactFile != nil {
-				if _, writeErr := j.artifactFile.WriteString(result); writeErr != nil {
-					j.artifactErr = writeErr.Error()
-				}
+			if j.artifact.open() {
+				j.artifact.writeString(result)
 			} else {
 				j.result = result
 			}
@@ -501,16 +480,11 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		}
 		targetDir := m.artifactTargetDirForJob(j)
 		j.mu.Lock()
-		if j.artifactFile != nil {
-			if closeErr := j.artifactFile.Close(); closeErr != nil && j.artifactErr == "" {
-				j.artifactErr = closeErr.Error()
-			}
-			j.artifactFile = nil
+		j.artifact.close()
+		if j.artifact.err != "" {
+			j.artifact.complete = false
 		}
-		if j.artifactErr != "" {
-			j.artifactComplete = false
-		}
-		j.finishedAt = finishedAt
+		j.times.finished = finishedAt
 		if targetDir != "" {
 			if moveErr := j.moveArtifactToDirLocked(targetDir); moveErr != nil {
 				j.noteArtifactErr("migration: " + moveErr.Error())
@@ -533,7 +507,7 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		if j.status != Killed { // a concurrent Kill already published Killed — keep it
 			j.status = st
 		}
-		if j.artifactPath != "" && j.artifactComplete {
+		if j.artifact.path != "" && j.artifact.complete {
 			j.result = ""
 			j.tail = nil
 		}
@@ -601,7 +575,7 @@ func (m *Manager) artifactDirLocked(parentSession string) string {
 }
 
 func (m *Manager) writeJobMetaLocked(j *Job, st Status) error {
-	if j.artifactMetaPath == "" {
+	if j.artifact.metaPath == "" {
 		return nil
 	}
 	meta := artifactMeta{
@@ -611,17 +585,17 @@ func (m *Manager) writeJobMetaLocked(j *Job, st Status) error {
 		SessionID:        j.SessionID,
 		OwnerID:          m.ownerID,
 		Status:           st,
-		StartedAt:        j.startedAt,
-		FinishedAt:       j.finishedAt,
-		ArtifactComplete: st != Running && j.artifactComplete && j.artifactErr == "",
-		ArtifactError:    j.artifactErr,
-		LogPath:          filepath.Base(j.artifactPath),
+		StartedAt:        j.times.started,
+		FinishedAt:       j.times.finished,
+		ArtifactComplete: st != Running && j.artifact.complete && j.artifact.err == "",
+		ArtifactError:    j.artifact.err,
+		LogPath:          filepath.Base(j.artifact.path),
 	}
 	if j.Kind == "task" {
 		meta.MutationEvidenceVersion = mutationEvidenceVersion
 		meta.MutationEvidence = mutationEvidenceForArtifact(j.evidence)
 	}
-	return writeMeta(j.artifactMetaPath, meta)
+	return writeMeta(j.artifact.metaPath, meta)
 }
 
 func mutationEvidenceForArtifact(summary evidence.ChildEvidenceSummary) *artifactMutationEvidence {
@@ -701,32 +675,32 @@ func (j *Job) noteArtifactErr(msg string) {
 	if msg == "" {
 		return
 	}
-	if j.artifactErr == "" {
-		j.artifactErr = msg
+	if j.artifact.err == "" {
+		j.artifact.err = msg
 	} else {
-		j.artifactErr += "; " + msg
+		j.artifact.err += "; " + msg
 	}
-	j.artifactComplete = false
+	j.artifact.complete = false
 }
 
 func (j *Job) moveArtifactToDirLocked(dir string) error {
 	dir = strings.TrimSpace(dir)
-	if dir == "" || j.artifactPath == "" {
+	if dir == "" || j.artifact.path == "" {
 		return nil
 	}
-	if filepath.Clean(filepath.Dir(j.artifactPath)) == filepath.Clean(dir) {
+	if filepath.Clean(filepath.Dir(j.artifact.path)) == filepath.Clean(dir) {
 		return nil
 	}
 	if err := ensurePrivateArtifactDir(dir); err != nil {
 		return err
 	}
-	newLogPath := filepath.Join(dir, filepath.Base(j.artifactPath))
-	if err := moveArtifactFile(j.artifactPath, newLogPath); err != nil {
+	newLogPath := filepath.Join(dir, filepath.Base(j.artifact.path))
+	if err := moveArtifactFile(j.artifact.path, newLogPath); err != nil {
 		return err
 	}
-	j.artifactPath = newLogPath
-	if j.artifactMetaPath != "" {
-		j.artifactMetaPath = filepath.Join(dir, filepath.Base(j.artifactMetaPath))
+	j.artifact.path = newLogPath
+	if j.artifact.metaPath != "" {
+		j.artifact.metaPath = filepath.Join(dir, filepath.Base(j.artifact.metaPath))
 	}
 	return nil
 }
@@ -745,7 +719,7 @@ func (m *Manager) monitorStalled(parentSession string, j *Job) {
 				j.mu.Unlock()
 				return
 			}
-			idle := time.Since(time.UnixMilli(j.activityAt))
+			idle := time.Since(time.UnixMilli(j.times.activity))
 			if idle >= m.stalledWarning && !j.stalled {
 				j.stalled = true
 				j.mu.Unlock()
@@ -863,7 +837,7 @@ func (m *Manager) OutputForSession(parentSession, id string) (text string, statu
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	if j.artifactPath != "" {
+	if j.artifact.path != "" {
 		text = j.readArtifactSinceOffsetLocked()
 	} else {
 		full := string(j.tail)
@@ -879,28 +853,28 @@ func (m *Manager) OutputForSession(parentSession, id string) (text string, statu
 		text = j.result
 		j.resultRead = true
 	}
-	if j.artifactErr != "" {
+	if j.artifact.err != "" {
 		if text != "" {
 			text += "\n"
 		}
-		text += "job artifact incomplete: " + j.artifactErr
+		text += "job artifact incomplete: " + j.artifact.err
 	}
 	return text, j.status, true
 }
 
 func (j *Job) readArtifactSinceOffsetLocked() string {
-	f, err := os.Open(j.artifactPath)
+	f, err := os.Open(j.artifact.path)
 	if err != nil {
-		if j.artifactErr == "" {
-			j.artifactErr = err.Error()
+		if j.artifact.err == "" {
+			j.artifact.err = err.Error()
 		}
 		return ""
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		if j.artifactErr == "" {
-			j.artifactErr = err.Error()
+		if j.artifact.err == "" {
+			j.artifact.err = err.Error()
 		}
 		return ""
 	}
@@ -910,15 +884,15 @@ func (j *Job) readArtifactSinceOffsetLocked() string {
 		return ""
 	}
 	if _, err := f.Seek(j.readOffset, io.SeekStart); err != nil {
-		if j.artifactErr == "" {
-			j.artifactErr = err.Error()
+		if j.artifact.err == "" {
+			j.artifact.err = err.Error()
 		}
 		return ""
 	}
 	b, err := io.ReadAll(f)
 	if err != nil {
-		if j.artifactErr == "" {
-			j.artifactErr = err.Error()
+		if j.artifact.err == "" {
+			j.artifact.err = err.Error()
 		}
 		return ""
 	}
@@ -933,13 +907,13 @@ func (j *Job) readArtifactSinceOffsetLocked() string {
 // decoding only the whole-file path would render the same artifact in two
 // different encodings and could garble binary output via UTF-16 misdetection.
 func (j *Job) readArtifactAllLocked() string {
-	if j.artifactPath == "" {
+	if j.artifact.path == "" {
 		return ""
 	}
-	b, err := os.ReadFile(j.artifactPath)
+	b, err := os.ReadFile(j.artifact.path)
 	if err != nil {
-		if j.artifactErr == "" {
-			j.artifactErr = err.Error()
+		if j.artifact.err == "" {
+			j.artifact.err = err.Error()
 		}
 		return ""
 	}
@@ -1044,17 +1018,17 @@ func (m *Manager) results(targets []*Job) []Result {
 	for _, j := range targets {
 		j.mu.Lock()
 		text := j.result
-		if text == "" && j.artifactPath != "" {
+		if text == "" && j.artifact.path != "" {
 			text = j.readArtifactAllLocked()
 		}
 		if text == "" {
 			text = string(j.tail)
 		}
-		if j.artifactErr != "" {
+		if j.artifact.err != "" {
 			if text != "" {
 				text += "\n"
 			}
-			text += "job artifact incomplete: " + j.artifactErr
+			text += "job artifact incomplete: " + j.artifact.err
 		}
 		out = append(out, Result{ID: j.ID, Kind: j.Kind, Label: j.Label, Status: j.status, Output: text})
 		j.mu.Unlock()
@@ -1091,7 +1065,7 @@ func (m *Manager) RunningForSession(parentSession string) []View {
 		// runtime idle early. The public view remains "running" while a stop is
 		// in flight; clients may render a local "stopping" state after they
 		// request cancellation.
-		out = append(out, View{ID: j.ID, Kind: j.Kind, Label: j.Label, Status: string(Running), StartedAt: j.startedAt})
+		out = append(out, View{ID: j.ID, Kind: j.Kind, Label: j.Label, Status: string(Running), StartedAt: j.times.started})
 		j.mu.Unlock()
 	}
 	return out
@@ -1320,8 +1294,8 @@ func (m *Manager) adoptUnscopedJobsLocked(parentSession string) {
 		newKey := jobKey(parentSession, j.ID)
 		if existing := m.jobs[newKey]; existing != nil && existing != j {
 			j.mu.Lock()
-			j.artifactErr = "migration: job id collision while adopting temporary session"
-			j.artifactComplete = false
+			j.artifact.err = "migration: job id collision while adopting temporary session"
+			j.artifact.complete = false
 			j.mu.Unlock()
 			continue
 		}
@@ -1344,9 +1318,9 @@ func (m *Manager) recordArtifactMigrationError(parentSession string, err error) 
 			continue
 		}
 		j.mu.Lock()
-		if j.artifactErr == "" {
-			j.artifactErr = "migration: " + err.Error()
-			j.artifactComplete = false
+		if j.artifact.err == "" {
+			j.artifact.err = "migration: " + err.Error()
+			j.artifact.complete = false
 		}
 		j.mu.Unlock()
 	}
@@ -1391,11 +1365,11 @@ func (m *Manager) lockArtifactJobsForMigration(parentSession, dir string) []arti
 	locked := make([]artifactMigrationJob, 0, len(jobs))
 	for _, j := range jobs {
 		j.mu.Lock()
-		if !artifactPathInDir(j.artifactPath, dir) {
+		if !artifactPathInDir(j.artifact.path, dir) {
 			j.mu.Unlock()
 			continue
 		}
-		locked = append(locked, artifactMigrationJob{job: j, wasOpen: j.artifactFile != nil})
+		locked = append(locked, artifactMigrationJob{job: j, wasOpen: j.artifact.file != nil})
 	}
 	return locked
 }
@@ -1413,14 +1387,14 @@ func openArtifactMigrationFiles(jobs []artifactMigrationJob) map[string]bool {
 	skip := map[string]bool{}
 	for _, item := range jobs {
 		j := item.job
-		if j == nil || j.artifactFile == nil {
+		if j == nil || j.artifact.file == nil {
 			continue
 		}
-		if j.artifactPath != "" {
-			skip[filepath.Base(j.artifactPath)] = true
+		if j.artifact.path != "" {
+			skip[filepath.Base(j.artifact.path)] = true
 		}
-		if j.artifactMetaPath != "" {
-			skip[filepath.Base(j.artifactMetaPath)] = true
+		if j.artifact.metaPath != "" {
+			skip[filepath.Base(j.artifact.metaPath)] = true
 		}
 	}
 	return skip
@@ -1432,11 +1406,11 @@ func rebaseArtifactMigrationJobs(jobs []artifactMigrationJob, dir string) {
 		if j == nil || item.wasOpen {
 			continue
 		}
-		if j.artifactPath != "" {
-			j.artifactPath = filepath.Join(dir, filepath.Base(j.artifactPath))
+		if j.artifact.path != "" {
+			j.artifact.path = filepath.Join(dir, filepath.Base(j.artifact.path))
 		}
-		if j.artifactMetaPath != "" {
-			j.artifactMetaPath = filepath.Join(dir, filepath.Base(j.artifactMetaPath))
+		if j.artifact.metaPath != "" {
+			j.artifact.metaPath = filepath.Join(dir, filepath.Base(j.artifact.metaPath))
 		}
 	}
 }
@@ -1583,21 +1557,15 @@ func (m *Manager) loadSessionArtifacts(parentSession, sessionPath, dir string) {
 			logPath = filepath.Join(dir, filepath.Base(meta.LogPath))
 		}
 		loaded = append(loaded, &Job{
-			ID:               id,
-			Kind:             meta.Kind,
-			Label:            meta.Label,
-			SessionID:        parentSession,
-			status:           meta.Status,
-			startedAt:        meta.StartedAt,
-			finishedAt:       meta.FinishedAt,
-			activityAt:       meta.FinishedAt,
-			done:             done,
-			artifactPath:     logPath,
-			artifactMetaPath: filepath.Join(dir, id+jobMetaExt),
-			artifactComplete: meta.ArtifactComplete,
-			artifactErr:      meta.ArtifactError,
-			tombstone:        true,
-			evidence:         mutationEvidenceFromArtifact(meta),
+			ID:        id,
+			Kind:      meta.Kind,
+			Label:     meta.Label,
+			SessionID: parentSession,
+			status:    meta.Status,
+			times:     jobTimes{started: meta.StartedAt, activity: meta.FinishedAt, finished: meta.FinishedAt},
+			done:      done,
+			artifact:  jobArtifact{path: logPath, metaPath: filepath.Join(dir, id+jobMetaExt), complete: meta.ArtifactComplete, err: meta.ArtifactError},
+			evidence:  mutationEvidenceFromArtifact(meta),
 		})
 	}
 	if len(repairErrors) > 0 {

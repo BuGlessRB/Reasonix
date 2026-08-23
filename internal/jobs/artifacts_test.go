@@ -32,7 +32,7 @@ func TestCompletedJobPersistsOutputAndReleasesMemory(t *testing.T) {
 	j.mu.Lock()
 	tailLen := len(j.tail)
 	result := j.result
-	artifactPath := j.artifactPath
+	artifactPath := j.artifact.path
 	j.mu.Unlock()
 
 	if tailLen != 0 {
@@ -771,12 +771,12 @@ func TestSetActiveSessionPathMigratesRunningJobArtifacts(t *testing.T) {
 	})
 	<-wroteBefore
 	j.mu.Lock()
-	oldPath := j.artifactPath
+	oldPath := j.artifact.path
 	j.mu.Unlock()
 
 	m.SetActiveSessionPath("session", sessionPath)
 	j.mu.Lock()
-	gotPath := j.artifactPath
+	gotPath := j.artifact.path
 	j.mu.Unlock()
 	if gotPath != oldPath {
 		t.Fatalf("running artifact path = %q, want unchanged %q before completion", gotPath, oldPath)
@@ -785,7 +785,7 @@ func TestSetActiveSessionPathMigratesRunningJobArtifacts(t *testing.T) {
 	releaseOnce.Do(func() { close(release) })
 	<-j.done
 	j.mu.Lock()
-	donePath := j.artifactPath
+	donePath := j.artifact.path
 	j.mu.Unlock()
 	if !strings.HasPrefix(donePath, ArtifactDir(sessionPath)+string(filepath.Separator)) {
 		t.Fatalf("completed artifact path = %q, want under %q", donePath, ArtifactDir(sessionPath))
@@ -964,13 +964,13 @@ func TestOutputReadsArtifactFromOffset(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 	j := &Job{
-		ID:           "bash-1",
-		Kind:         "bash",
-		SessionID:    "session",
-		status:       Running,
-		readOffset:   int64(len(prefix)),
-		artifactPath: path,
-		done:         make(chan struct{}),
+		ID:         "bash-1",
+		Kind:       "bash",
+		SessionID:  "session",
+		status:     Running,
+		readOffset: int64(len(prefix)),
+		artifact:   jobArtifact{path: path},
+		done:       make(chan struct{}),
 	}
 	m.jobs[jobKey("session", j.ID)] = j
 	m.order = append(m.order, jobKey("session", j.ID))

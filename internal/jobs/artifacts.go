@@ -14,6 +14,69 @@ import (
 	"reasonix/internal/store"
 )
 
+// jobTimes is the job's timeline in epoch milliseconds. activity is what stall
+// detection reads and is not derivable from the other two: a job can run for an
+// hour while its output stopped moving in the first minute.
+type jobTimes struct {
+	started  int64
+	activity int64
+	finished int64
+}
+
+// touch records that the job's output just moved.
+func (t *jobTimes) touch() { t.activity = nowMs() }
+
+// jobArtifact is a job's durable output: the log file it streams into, the
+// metadata beside it, and whether that pair ended up complete. One lifetime —
+// opened when the job starts, closed when it ends — and one rule for the error.
+// Not itself locked: every method runs under the owning Job's mu.
+type jobArtifact struct {
+	path     string
+	metaPath string
+	file     *os.File
+	complete bool
+	err      string
+}
+
+// noteErr keeps the first failure. A later one is usually its consequence —
+// once the disk is full every write fails, and the last of those messages says
+// nothing the first did not.
+func (a *jobArtifact) noteErr(err error) {
+	if err != nil && a.err == "" {
+		a.err = err.Error()
+	}
+}
+
+// open reports whether there is a file to write to.
+func (a *jobArtifact) open() bool { return a.file != nil }
+
+// write streams to the file when the job has one.
+func (a *jobArtifact) write(p []byte) {
+	if a.file == nil {
+		return
+	}
+	_, err := a.file.Write(p)
+	a.noteErr(err)
+}
+
+// writeString is write for a job's terminal result text.
+func (a *jobArtifact) writeString(s string) {
+	if a.file == nil {
+		return
+	}
+	_, err := a.file.WriteString(s)
+	a.noteErr(err)
+}
+
+// close ends the file and keeps whatever going wrong told us.
+func (a *jobArtifact) close() {
+	if a.file == nil {
+		return
+	}
+	a.noteErr(a.file.Close())
+	a.file = nil
+}
+
 const (
 	jobLogExt                       = ".log"
 	jobMetaExt                      = ".json"

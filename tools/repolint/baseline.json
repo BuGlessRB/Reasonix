@@ -5,13 +5,13 @@
     "complexity": 1571,
     "error-text": 12,
     "essay": 3303,
-    "file-size": 43696,
-    "function-size": 6814,
+    "file-size": 43664,
+    "function-size": 6802,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
     "refusal-path": 0,
-    "struct-state": 58
+    "struct-state": 52
   },
   "files": {
     "cmd/e2ebench/main.go": {
@@ -978,9 +978,7 @@
     },
     "internal/jobs/jobs.go": {
       "essay": 42,
-      "file-size": 1260,
-      "function-size": 12,
-      "struct-state": 6
+      "file-size": 1228
     },
     "internal/jobs/jobs_extra_test.go": {
       "essay": 1

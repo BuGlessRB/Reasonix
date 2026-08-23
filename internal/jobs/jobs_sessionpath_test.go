@@ -128,10 +128,10 @@ func TestSetActiveSessionPath_AcceptsTrustedDotDotPath(t *testing.T) {
 		return "ok", nil
 	})
 	<-j.done
-	if j.artifactErr != "" {
-		t.Fatalf("artifactErr = %q, want empty", j.artifactErr)
+	if j.artifact.err != "" {
+		t.Fatalf("artifactErr = %q, want empty", j.artifact.err)
 	}
-	if got, want := filepath.Clean(filepath.Dir(j.artifactPath)), filepath.Join(root, "session.jobs"); got != want {
+	if got, want := filepath.Clean(filepath.Dir(j.artifact.path)), filepath.Join(root, "session.jobs"); got != want {
 		t.Fatalf("artifact dir = %q, want %q", got, want)
 	}
 }
@@ -226,8 +226,8 @@ func TestSetActiveSessionPath_AcceptsValidInput(t *testing.T) {
 		return "ok", nil
 	})
 	j.mu.Lock()
-	artifactErr := j.artifactErr
-	artifactPath := j.artifactPath
+	artifactErr := j.artifact.err
+	artifactPath := j.artifact.path
 	j.mu.Unlock()
 	if artifactErr != "" {
 		t.Fatalf("artifactErr = %q, want empty", artifactErr)
