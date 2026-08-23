@@ -5,7 +5,7 @@
     "complexity": 1571,
     "error-text": 12,
     "essay": 3302,
-    "file-size": 43466,
+    "file-size": 43448,
     "function-size": 6794,
     "layering": 0,
     "marker": 0,
@@ -978,7 +978,7 @@
     },
     "internal/jobs/jobs.go": {
       "essay": 42,
-      "file-size": 1228
+      "file-size": 1210
     },
     "internal/jobs/jobs_extra_test.go": {
       "essay": 1

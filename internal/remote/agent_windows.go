@@ -28,5 +28,13 @@ func agentAuth(identityFiles []string, identitiesOnly bool) (ssh.AuthMethod, fun
 		// which costs this method rather than the connection.
 		return os.OpenFile(pipe, os.O_RDWR, 0)
 	}
+	// The pipe name is fixed, so knocking is the only way to know an agent is
+	// listening — and a method that can only fail is worth neither the dial per
+	// handshake nor the caller's belief that something was offered.
+	probe, err := dial()
+	if err != nil {
+		return nil, func() {}
+	}
+	_ = probe.Close()
 	return agentAuthOver(dial, identityFiles, identitiesOnly)
 }

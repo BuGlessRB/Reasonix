@@ -73,6 +73,8 @@ type Result struct {
 	Label  string
 	Status Status
 	Output string // the terminal result text, or the streamed buffer when no result was set
+	// Set while a job is still running: see Progress.
+	Progress *Progress
 }
 
 // TeardownJob identifies a job that is still unwinding after teardown waited.
@@ -787,7 +789,10 @@ func (m *Manager) recordStalled(parentSession, id, kind, label string) {
 		m.mu.Unlock()
 		return
 	}
-	text := fmt.Sprintf("%s may be stalled — still running after %s with no visible output. Inspect it with wait or bash_output, or stop it with kill_shell.", tag, m.stalledWarning.Round(time.Second))
+	// What is true, not what it looks like: silence on a job's own streams is
+	// also what a task redirecting into a file looks like, and calling that
+	// stalled sends the reader after the wrong thing.
+	text := fmt.Sprintf("%s has written nothing to its own output for %s — it may be writing to a file instead, or it may be stuck. Check with wait or bash_output, or stop it with kill_shell.", tag, m.stalledWarning.Round(time.Second))
 	m.completed = append(m.completed, completion{sessionID: parentSession, text: text})
 	active := m.active
 	shouldEmit := active == "" || parentSession == "" || active == parentSession
@@ -796,7 +801,7 @@ func (m *Manager) recordStalled(parentSession, id, kind, label string) {
 		m.sink.Emit(event.Event{
 			Kind:  event.Notice,
 			Level: event.LevelWarn,
-			Text:  fmt.Sprintf("background %s may be stalled: %s — still running after %s with no visible output; inspect with wait/bash_output or stop with kill_shell", kind, id, m.stalledWarning.Round(time.Second)),
+			Text:  fmt.Sprintf("background %s %s has written nothing to its own output for %s — it may be writing to a file, or stuck; check with wait/bash_output or stop with kill_shell", kind, id, m.stalledWarning.Round(time.Second)),
 		})
 	}
 }
@@ -1009,29 +1014,6 @@ func (m *Manager) resolve(parentSession string, ids []string) []*Job {
 		if j := m.findJobLocked(parentSession, id); j != nil {
 			out = append(out, j)
 		}
-	}
-	return out
-}
-
-func (m *Manager) results(targets []*Job) []Result {
-	out := make([]Result, 0, len(targets))
-	for _, j := range targets {
-		j.mu.Lock()
-		text := j.result
-		if text == "" && j.artifact.path != "" {
-			text = j.readArtifactAllLocked()
-		}
-		if text == "" {
-			text = string(j.tail)
-		}
-		if j.artifact.err != "" {
-			if text != "" {
-				text += "\n"
-			}
-			text += "job artifact incomplete: " + j.artifact.err
-		}
-		out = append(out, Result{ID: j.ID, Kind: j.Kind, Label: j.Label, Status: j.status, Output: text})
-		j.mu.Unlock()
 	}
 	return out
 }

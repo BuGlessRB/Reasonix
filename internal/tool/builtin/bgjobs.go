@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
@@ -207,11 +208,28 @@ func (waitJob) Execute(ctx context.Context, args json.RawMessage) (string, error
 			label = fmt.Sprintf("%s (%s)", r.ID, r.Label)
 		}
 		fmt.Fprintf(&b, "[%s] %s", label, r.Status)
+		b.WriteString(stillRunning(r.Progress))
 		if strings.TrimSpace(r.Output) != "" {
 			b.WriteString("\n" + r.Output)
 		}
 	}
 	return b.String(), nil
+}
+
+// stillRunning says what is known about a job that has not finished: how long
+// it has been going, and whether any of it reached this side. A task that
+// redirects into a file looks identical to a hung one from here, so the
+// difference is stated rather than left to be inferred from an empty output.
+func stillRunning(p *jobs.Progress) string {
+	if p == nil {
+		return ""
+	}
+	if !p.Spoke {
+		return fmt.Sprintf(" — %s so far, nothing on its own output; if it writes to a file, read that,"+
+			" and wait again with a longer timeout_seconds rather than in short steps",
+			p.Running.Round(time.Second))
+	}
+	return fmt.Sprintf(" — %s so far, last wrote %s ago", p.Running.Round(time.Second), p.Silent.Round(time.Second))
 }
 
 func collectBackgroundEvidence(ctx context.Context, jm *jobs.Manager, jobID string) {

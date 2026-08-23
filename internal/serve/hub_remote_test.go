@@ -2,6 +2,7 @@ package serve
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -462,7 +463,7 @@ func TestTwoRemotePanesDriveTwoRuntimesOnTheFarSide(t *testing.T) {
 	open := func() RuntimeView {
 		t.Helper()
 		resp, err := http.Post(nearSide.URL+"/remotes/open", "application/json",
-			strings.NewReader(`{"host":"gpu-box","workspace":"`+shared+`"}`))
+			openRemoteBody(t, "gpu-box", shared))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -568,7 +569,7 @@ func TestClosingARemotePaneRetiresTheFarRuntime(t *testing.T) {
 	defer nearSide.Close()
 
 	resp, err := http.Post(nearSide.URL+"/remotes/open", "application/json",
-		strings.NewReader(`{"host":"gpu-box","workspace":"`+t.TempDir()+`"}`))
+		openRemoteBody(t, "gpu-box", t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -603,4 +604,16 @@ func TestRemotePaneNameIsCutTheRemoteWay(t *testing.T) {
 			t.Fatalf("remoteBaseName(%q) = %q, want %q", spelled, got, want)
 		}
 	}
+}
+
+// openRemoteBody encodes the request rather than building it by hand. A
+// workspace path is data, and on Windows it is full of backslashes — every one
+// of them an escape in a string literal, so a hand-built body never parses.
+func openRemoteBody(t *testing.T, host, workspace string) io.Reader {
+	t.Helper()
+	raw, err := json.Marshal(OpenRemoteRequest{Host: host, Workspace: workspace})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bytes.NewReader(raw)
 }

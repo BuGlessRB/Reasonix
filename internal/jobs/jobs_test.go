@@ -319,7 +319,9 @@ func TestStalledWarningIgnoresReturnedJobBeforeTerminalStatusPublished(t *testin
 
 	time.Sleep(50 * time.Millisecond)
 	note := m.DrainCompletedNote()
-	if strings.Contains(note, "may be stalled") {
+	// Negative, so it has to track the wording it is guarding against: matching
+	// a sentence nothing says any more passes for the wrong reason.
+	if strings.Contains(note, "nothing to its own output") {
 		t.Fatalf("got false stalled warning for already-returned job %s: %q", j.ID, note)
 	}
 	if !strings.Contains(note, j.ID) || !strings.Contains(note, string(Done)) {
@@ -443,7 +445,9 @@ func TestStalledWarningEmitsNoticeAndDrainNote(t *testing.T) {
 
 	waitFor(t, func() bool {
 		for _, text := range sink.texts() {
-			if strings.Contains(text, "may be stalled") && strings.Contains(text, j.ID) {
+			// The claim, not the sentence: a job that has said nothing on its
+			// own streams, named so the reader knows which one.
+			if strings.Contains(text, "nothing to its own output") && strings.Contains(text, j.ID) {
 				return true
 			}
 		}
@@ -453,7 +457,7 @@ func TestStalledWarningEmitsNoticeAndDrainNote(t *testing.T) {
 		t.Fatalf("stalled job output status = %q ok=%v, want running", st, ok)
 	}
 	note := m.DrainCompletedNote()
-	if !strings.Contains(note, "may be stalled") || !strings.Contains(note, j.ID) {
+	if !strings.Contains(note, "nothing to its own output") || !strings.Contains(note, j.ID) {
 		t.Fatalf("stalled drain note = %q, want stalled update for %s", note, j.ID)
 	}
 	// The warning is once per job.

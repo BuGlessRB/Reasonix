@@ -200,7 +200,11 @@ func TestRemoteTreeIsReadThroughAnOpenPane(t *testing.T) {
 	}
 
 	workspace := t.TempDir()
-	open := bookPost(t, nearSide, "/remotes/open", `{"host":"gpu-box","workspace":"`+workspace+`"}`)
+	open, err := http.Post(nearSide.URL+"/remotes/open", "application/json", openRemoteBody(t, "gpu-box", workspace))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer open.Body.Close()
 	if open.StatusCode != http.StatusOK {
 		t.Fatalf("open remote = %d", open.StatusCode)
 	}
