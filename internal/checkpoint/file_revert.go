@@ -2,6 +2,7 @@
 package checkpoint
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -24,13 +25,11 @@ func (s *Store) PrepareFileRevert(path string, sessionRev int64) (RewindPlan, er
 		Files:           []string{path},
 		FileCount:       1,
 	}
-	state, ok := s.FileState(path)
-	if !ok {
+	if _, ok := s.FileState(path); !ok {
 		plan.CanFiles = false
 		plan.DisabledReason = "file is not session-owned"
 		return plan, nil
 	}
-	_ = state
 	abs, err := safePath(s.root, path)
 	if err != nil {
 		plan.CanFiles = false
@@ -38,22 +37,13 @@ func (s *Store) PrepareFileRevert(path string, sessionRev int64) (RewindPlan, er
 		plan.Conflicts = []RewindConflict{{Path: path, Reason: ConflictPathUnsafe}}
 		return plan, nil
 	}
-	revs := s.earliestRevisions(0)
-	rev, has := revs[path]
-	if !has {
-		for p, r := range revs {
-			if ap, e := safePath(s.root, p); e == nil && ap == abs {
-				rev, has = r, true
-				plan.Path = p
-				break
-			}
-		}
-	}
+	rev, owned, has := s.earliestRevisionFor(path)
 	if !has {
 		plan.CanFiles = false
 		plan.DisabledReason = "file is not session-owned"
 		return plan, nil
 	}
+	plan.Path = owned
 	if rev.AfterExisted == nil && rev.AfterSHA256 == "" {
 		// A v1 or incomplete capture has a preimage but no evidence that the
 		// current file is still the session's last write. Do not turn the
@@ -104,76 +94,32 @@ func (s *Store) CommitFileRevert(planID string, resolution ConflictResolution) (
 	if s == nil {
 		return RewindResult{}, fmt.Errorf("checkpoints unavailable")
 	}
-	s.mu.Lock()
-	pp, ok := s.plans[planID]
-	if ok {
-		delete(s.plans, planID)
-	}
-	s.mu.Unlock()
+	pp, ok := s.takeFilePlan(planID)
 	if !ok {
-		return RewindResult{OK: false, Error: "unknown or expired plan"}, fmt.Errorf("unknown or expired plan")
-	}
-	plan := pp.plan
-	if plan.Path == "" {
-		return RewindResult{OK: false, Error: "not a file plan"}, fmt.Errorf("not a file plan")
-	}
-	if !plan.CanFiles {
-		return RewindResult{OK: false, Error: plan.DisabledReason, Conflicts: plan.Conflicts}, fmt.Errorf("%s", plan.DisabledReason)
-	}
-	if len(plan.Conflicts) > 0 && resolution != ResolveOverwriteCheckpoint {
-		if resolution == ResolveKeepCurrent {
-			return RewindResult{OK: true, UndoAvailable: false}, nil
-		}
-		return RewindResult{OK: false, Error: "conflict requires explicit resolution", Conflicts: plan.Conflicts}, fmt.Errorf("conflict requires explicit resolution")
-	}
-	if !s.barrier.TryEnterExclusive() {
-		err := fmt.Errorf("workspace mutation in progress")
-		return RewindResult{OK: false, Error: err.Error(), Conflicts: []RewindConflict{{Path: plan.Path, Reason: ConflictBusyWriter}}}, err
-	}
-	defer s.barrier.ExitExclusive()
-	if conflicts := s.activeWriterConflicts(); len(conflicts) > 0 {
-		err := fmt.Errorf("active background writer")
-		return RewindResult{OK: false, Error: err.Error(), Conflicts: conflicts}, err
-	}
-	if plan.WorkspaceToken != fmt.Sprintf("%d", s.barrier.Generation()) {
-		conflict := RewindConflict{Path: plan.Path, Reason: ConflictStalePlan}
-		return RewindResult{OK: false, Error: "workspace changed since preview", Conflicts: []RewindConflict{conflict}}, fmt.Errorf("workspace changed since preview")
-	}
-	absPreview, err := safePath(s.root, plan.Path)
-	if err != nil {
+		err := errors.New("unknown or expired plan")
 		return RewindResult{OK: false, Error: err.Error()}, err
 	}
-	current, err := FingerprintPath(s.root, absPreview)
-	if err != nil || pp.previewFingerprint == nil || !sameFingerprint(current, *pp.previewFingerprint) {
-		conflict := RewindConflict{Path: plan.Path, Reason: ConflictStalePlan, CurrentSHA: current.SHA256, CurrentExisted: current.Existed}
-		return RewindResult{OK: false, Error: "file changed since preview; preview again", Conflicts: []RewindConflict{conflict}}, fmt.Errorf("file changed since preview; preview again")
+	if res, err := filePlanVerdict(pp.plan, resolution); res != nil {
+		return *res, err
 	}
-
-	// Restore via restoreCodeLegacy for the single earliest path using turn 0.
-	// Build synthetic order of one path.
-	revs := s.earliestRevisions(0)
-	rev, has := revs[plan.Path]
+	if !s.barrier.TryEnterExclusive() {
+		err := errors.New("workspace mutation in progress")
+		return RewindResult{OK: false, Error: err.Error(),
+			Conflicts: []RewindConflict{{Path: pp.plan.Path, Reason: ConflictBusyWriter}}}, err
+	}
+	defer s.barrier.ExitExclusive()
+	if res, err := s.verifyWorkspaceUnchanged(pp); res != nil {
+		return *res, err
+	}
+	rev, _, has := s.earliestRevisionFor(pp.plan.Path)
 	if !has {
-		abs, _ := safePath(s.root, plan.Path)
-		for p, r := range revs {
-			if ap, e := safePath(s.root, p); e == nil && ap == abs {
-				rev, has = r, true
-				plan.Path = p
-				break
-			}
-		}
+		err := errors.New("file is not session-owned")
+		return RewindResult{OK: false, Error: err.Error()}, err
 	}
-	if !has {
-		return RewindResult{OK: false, Error: "file is not session-owned"}, fmt.Errorf("file is not session-owned")
-	}
-
-	// Find which turn first touched this path for RestoreCode semantics:
-	// restoring one file = write earliest preimage (not all files from a turn).
 	abs, err := safePath(s.root, rev.Path)
 	if err != nil {
 		return RewindResult{OK: false, Error: err.Error()}, err
 	}
-	fwd, _, _ := CapturePath(abs, CaptureOptions{WorkspaceRoot: s.root, ReadContent: true})
 	tx := &TransactionManifest{
 		SchemaVersion: SchemaV2,
 		ID:            newID("tx"),
@@ -185,60 +131,177 @@ func (s *Store) CommitFileRevert(planID string, resolution ConflictResolution) (
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
+	target, err := s.fileRevertTarget(rev, abs, tx.ID)
+	if err != nil {
+		return RewindResult{OK: false, Error: err.Error()}, err
+	}
+	tx.Targets = []TransactionTarget{target}
+	if err := s.persistTransaction(tx); err != nil {
+		return RewindResult{OK: false, Error: err.Error()}, err
+	}
+	return s.commitTransaction(tx, nil, nil)
+}
+
+// takeFilePlan removes a prepared plan from the store: one plan is good for one
+// commit, whether or not that commit goes through.
+func (s *Store) takeFilePlan(planID string) (preparedPlan, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pp, ok := s.plans[planID]
+	if ok {
+		delete(s.plans, planID)
+	}
+	return pp, ok
+}
+
+// filePlanVerdict answers whether the plan alone settles the commit. A non-nil
+// result is the caller's answer, reached without touching the workspace.
+func filePlanVerdict(plan RewindPlan, resolution ConflictResolution) (*RewindResult, error) {
+	if plan.Path == "" {
+		err := errors.New("not a file plan")
+		return &RewindResult{OK: false, Error: err.Error()}, err
+	}
+	if !plan.CanFiles {
+		return &RewindResult{OK: false, Error: plan.DisabledReason, Conflicts: plan.Conflicts},
+			errors.New(plan.DisabledReason)
+	}
+	if len(plan.Conflicts) == 0 || resolution == ResolveOverwriteCheckpoint {
+		return nil, nil
+	}
+	if resolution == ResolveKeepCurrent {
+		return &RewindResult{OK: true, UndoAvailable: false}, nil
+	}
+	err := errors.New("conflict requires explicit resolution")
+	return &RewindResult{OK: false, Error: err.Error(), Conflicts: plan.Conflicts}, err
+}
+
+// verifyWorkspaceUnchanged re-checks, under the barrier, what the preview
+// measured: no background writer, the same workspace generation, the same file.
+func (s *Store) verifyWorkspaceUnchanged(pp preparedPlan) (*RewindResult, error) {
+	plan := pp.plan
+	if conflicts := s.activeWriterConflicts(); len(conflicts) > 0 {
+		err := errors.New("active background writer")
+		return &RewindResult{OK: false, Error: err.Error(), Conflicts: conflicts}, err
+	}
+	if plan.WorkspaceToken != fmt.Sprintf("%d", s.barrier.Generation()) {
+		err := errors.New("workspace changed since preview")
+		return &RewindResult{OK: false, Error: err.Error(),
+			Conflicts: []RewindConflict{{Path: plan.Path, Reason: ConflictStalePlan}}}, err
+	}
+	abs, err := safePath(s.root, plan.Path)
+	if err != nil {
+		return &RewindResult{OK: false, Error: err.Error()}, err
+	}
+	current, fperr := FingerprintPath(s.root, abs)
+	if fperr != nil || pp.previewFingerprint == nil || !sameFingerprint(current, *pp.previewFingerprint) {
+		stale := errors.New("file changed since preview; preview again")
+		return &RewindResult{OK: false, Error: stale.Error(), Conflicts: []RewindConflict{{
+			Path: plan.Path, Reason: ConflictStalePlan,
+			CurrentSHA: current.SHA256, CurrentExisted: current.Existed,
+		}}}, stale
+	}
+	return nil, nil
+}
+
+// earliestRevisionFor finds the session's earliest preimage for a path —
+// reverting one file writes that preimage, not every file of the turn that
+// first touched it. The recorded spelling can differ from the caller's, so a
+// miss falls back to matching on the absolute path.
+func (s *Store) earliestRevisionFor(path string) (FileRevision, string, bool) {
+	revs := s.earliestRevisions(0)
+	if rev, ok := revs[path]; ok {
+		return rev, path, true
+	}
+	abs, err := safePath(s.root, path)
+	if err != nil {
+		return FileRevision{}, "", false
+	}
+	for p, r := range revs {
+		if ap, e := safePath(s.root, p); e == nil && ap == abs {
+			return r, p, true
+		}
+	}
+	return FileRevision{}, "", false
+}
+
+// fileRevertTarget builds the single target this transaction publishes: the
+// preimage to restore, and the bytes it replaces so undo has them.
+func (s *Store) fileRevertTarget(rev FileRevision, abs, txID string) (TransactionTarget, error) {
+	fwd, _, _ := CapturePath(abs, CaptureOptions{WorkspaceRoot: s.root, ReadContent: true})
 	t := TransactionTarget{
 		Path: rev.Path, AbsPath: abs,
 		RestoreExisted: rev.Existed, RestoreMode: rev.Mode, RestoreSHA: rev.SHA256, RestoreBlob: rev.BlobRef, RestoreEncoding: rev.Encoding,
 		ForwardExisted: fwd.Existed, ForwardMode: fwd.Mode, ForwardSHA: fwd.SHA256,
 	}
-	t.PublishTmp, t.BackupPath = transactionSiblingPaths(abs, tx.ID, 0)
+	t.PublishTmp, t.BackupPath = transactionSiblingPaths(abs, txID, 0)
 	if rev.Existed {
-		t.Action = "write"
-		data, lerr := s.loadRevisionBytes(rev)
-		if lerr != nil && rev.Content != nil {
-			enc := fileenc.UTF8
-			if rev.Encoding != nil {
-				enc = *rev.Encoding
-			} else if current := s.detectCurrentEncoding(abs); current != nil {
-				enc = *current
-			}
-			data = fileenc.Encode(*rev.Content, enc)
-			lerr = nil
-		}
-		if lerr != nil {
-			return RewindResult{OK: false, Error: lerr.Error()}, lerr
-		}
-		mode := os.FileMode(0o644)
-		if rev.Mode != 0 {
-			mode = os.FileMode(rev.Mode)
-		}
-		if t.RestoreBlob == "" && s.blobs != nil {
-			ref, perr := s.blobs.Put(data)
-			if perr != nil {
-				return RewindResult{OK: false, Error: perr.Error()}, perr
-			}
-			t.RestoreBlob = ref
-		} else if t.RestoreBlob == "" {
-			t.RestoreInline = clonePayload(data)
-		}
-		if err := s.writePublishTemp(t.PublishTmp, data, mode); err != nil {
-			return RewindResult{OK: false, Error: err.Error()}, err
+		if err := s.stageRestore(&t, rev, abs); err != nil {
+			return t, err
 		}
 	} else {
 		t.Action = "delete"
 		t.PublishTmp = ""
 	}
-	if fwd.Existed && s.blobs != nil {
-		ref, perr := s.blobs.Put(fwd.Content)
-		if perr != nil {
-			return RewindResult{OK: false, Error: perr.Error()}, perr
+	if err := s.stageForward(&t, fwd); err != nil {
+		return t, err
+	}
+	return t, nil
+}
+
+// stageRestore puts the preimage where the commit can publish it, re-encoding a
+// v1 text capture when the blob behind it is gone.
+func (s *Store) stageRestore(t *TransactionTarget, rev FileRevision, abs string) error {
+	t.Action = "write"
+	data, err := s.loadRevisionBytes(rev)
+	if err != nil {
+		if rev.Content == nil {
+			return err
 		}
-		t.ForwardBlob = ref
-	} else if fwd.Existed {
+		data = fileenc.Encode(*rev.Content, s.revisionEncoding(rev, abs))
+	}
+	mode := os.FileMode(0o644)
+	if rev.Mode != 0 {
+		mode = os.FileMode(rev.Mode)
+	}
+	if t.RestoreBlob == "" {
+		if s.blobs == nil {
+			t.RestoreInline = clonePayload(data)
+		} else {
+			ref, perr := s.blobs.Put(data)
+			if perr != nil {
+				return perr
+			}
+			t.RestoreBlob = ref
+		}
+	}
+	return s.writePublishTemp(t.PublishTmp, data, mode)
+}
+
+// revisionEncoding is what a v1 text preimage is written back in: the encoding
+// the capture recorded, else the one the file on disk uses today.
+func (s *Store) revisionEncoding(rev FileRevision, abs string) fileenc.Kind {
+	if rev.Encoding != nil {
+		return *rev.Encoding
+	}
+	if current := s.detectCurrentEncoding(abs); current != nil {
+		return *current
+	}
+	return fileenc.UTF8
+}
+
+// stageForward keeps the bytes the revert is about to replace.
+func (s *Store) stageForward(t *TransactionTarget, fwd Fingerprint) error {
+	if !fwd.Existed {
+		return nil
+	}
+	if s.blobs == nil {
 		t.ForwardInline = clonePayload(fwd.Content)
+		return nil
 	}
-	tx.Targets = []TransactionTarget{t}
-	if err := s.persistTransaction(tx); err != nil {
-		return RewindResult{OK: false, Error: err.Error()}, err
+	ref, err := s.blobs.Put(fwd.Content)
+	if err != nil {
+		return err
 	}
-	return s.commitTransaction(tx, nil, nil)
+	t.ForwardBlob = ref
+	return nil
 }
