@@ -69,7 +69,7 @@ var apiPaths = map[string]bool{
 	"/changes": true, "/attachments": true, "/drop": true, "/roles": true,
 	"/themes": true, "/extensions": true, "/plugins": true, "/surfaces": true,
 	"/welcome": true, "/appearance": true,
-	"/permissions": true, "/sandbox": true, "/storage": true,
+	"/permissions": true, "/sandbox": true, "/storage": true, "/usage": true,
 }
 
 // A sub-path belongs to the resource it hangs off: /mcp/reconnect is the same
