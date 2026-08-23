@@ -99,7 +99,8 @@ func splitRuntimePath(p string) (id, path string) {
 func isHubPath(p string) bool {
 	p = strings.TrimSuffix(p, "/")
 	return p == "/runtimes" || strings.HasPrefix(p, "/runtimes/") ||
-		p == "/tree" || strings.HasPrefix(p, "/tree/")
+		p == "/tree" || strings.HasPrefix(p, "/tree/") ||
+		strings.HasPrefix(p, "/remotes/")
 }
 
 func isAPIPath(p string) bool {
@@ -171,6 +172,7 @@ func run() error {
 		DecorateSink: notifySink,
 		OnOpen:       shell.startPump,
 		OnClose:      shell.stopPump,
+		AttachRemote: remoteAttacher(ctx),
 	})
 	shell.hub = hub
 	srv := serve.New(ctrl, bc, cfg.Serve)

@@ -257,3 +257,101 @@ func TestClosingARemotePaneReleasesItsHold(t *testing.T) {
 		t.Fatal("closing the pane never released its hold on the connection")
 	}
 }
+
+// A listening server must not dial onward because a request asked it to: that
+// turns the kernel into someone else's route into the network behind it.
+func TestOpenRemoteIsRefusedWhereNoAttacherIsWired(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	h := NewHub(HubOptions{})
+	front := httptest.NewServer(h.Handler())
+	defer front.Close()
+
+	resp, err := http.Post(front.URL+"/remotes/open", "application/json",
+		strings.NewReader(`{"host":"gpu-box","workspace":"/srv/data"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotImplemented)
+	}
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Code != "remote.not_available" {
+		t.Fatalf("code = %q, want %q", body.Code, "remote.not_available")
+	}
+}
+
+// The endpoint is where a host's attach becomes a pane. What it returns is what
+// the sidebar labels, so the host name has to survive the round trip.
+func TestOpenRemoteEndpointPublishesTheProxiedPane(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	rk := fakeRemoteKernel(t)
+	h := NewHub(HubOptions{
+		AttachRemote: func(_ context.Context, host, workspace string) (RemoteEndpoint, func(), error) {
+			return RemoteEndpoint{
+				Host:      host,
+				Workspace: workspace,
+				Addr:      rk.Listener.Addr().String(),
+				Token:     "remote-secret",
+			}, func() {}, nil
+		},
+	})
+	front := httptest.NewServer(h.Handler())
+	defer front.Close()
+
+	resp, err := http.Post(front.URL+"/remotes/open", "application/json",
+		strings.NewReader(`{"host":"gpu-box","workspace":"/srv/data/training"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var view RuntimeView
+	if err := json.NewDecoder(resp.Body).Decode(&view); err != nil {
+		t.Fatal(err)
+	}
+	if view.Host != "gpu-box" || view.Name != "training" {
+		t.Fatalf("view = %+v, want the remote host and workspace", view)
+	}
+	if rt := h.Get(view.ID); rt == nil || rt.Local() {
+		t.Fatal("the endpoint published a local pane")
+	}
+}
+
+// A hold taken by the attach and refused by the hub is a connection nobody will
+// ever close: the pane it was for does not exist to be closed.
+func TestOpenRemoteGivesBackTheHoldWhenTheHubRefuses(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	rk := fakeRemoteKernel(t)
+	released := make(chan struct{}, 1)
+	h := NewHub(HubOptions{
+		AttachRemote: func(context.Context, string, string) (RemoteEndpoint, func(), error) {
+			// No workspace: the hub validates the endpoint and turns it down.
+			return RemoteEndpoint{Host: "gpu-box", Addr: rk.Listener.Addr().String()},
+				func() { released <- struct{}{} }, nil
+		},
+	})
+	front := httptest.NewServer(h.Handler())
+	defer front.Close()
+
+	resp, err := http.Post(front.URL+"/remotes/open", "application/json", strings.NewReader(`{"host":"gpu-box"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("an endpoint with no workspace was accepted")
+	}
+	select {
+	case <-released:
+	case <-time.After(time.Second):
+		t.Fatal("the refused pane never gave its connection hold back")
+	}
+}

@@ -8,6 +8,7 @@ export const EN_KERNEL: Record<string, string> = {
     "That image format will not work — use PNG, JPEG, WebP, AVIF or GIF",
   "图片是空的": "The image is empty",
   "{host} 上的内核没有应答，连接可能断了": "The kernel on {host} is not answering — the connection may be down",
+  "这个内核不负责连别的机器": "This kernel does not open panes on other machines",
   "有活儿在跑，先停下再换模型": "Something is running — stop it before switching models",
   "有活儿在跑，先停下再改推理强度": "Something is running — stop it before changing the reasoning effort",
   "{provider} 没说自己有哪些推理强度档位。要有，得在它的配置块里写 reasoning_protocol 或 supported_efforts":

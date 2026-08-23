@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -41,6 +42,38 @@ type remoteBinding struct {
 	// release drops this pane's hold on the connection its endpoint rides.
 	// Several panes share one, so the last one out closes it, not the first.
 	release func()
+}
+
+// OpenRemoteRequest asks for a pane on another machine. An empty Workspace
+// takes the host entry's own default, which the attach layer resolves.
+type OpenRemoteRequest struct {
+	Host      string `json:"host"`
+	Workspace string `json:"workspace"`
+}
+
+func (h *Hub) openRemoteRuntime(w http.ResponseWriter, r *http.Request) {
+	var req OpenRemoteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		badBody(w)
+		return
+	}
+	if h.opts.AttachRemote == nil {
+		refuse(w, http.StatusNotImplemented, "remote.not_available",
+			"this kernel does not open panes on other machines", nil)
+		return
+	}
+	ep, release, err := h.opts.AttachRemote(r.Context(), req.Host, req.Workspace)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	rt, err := h.OpenRemote(ep, release)
+	if err != nil {
+		release()
+		writeErr(w, http.StatusConflict, err)
+		return
+	}
+	writeJSON(w, rt.view())
 }
 
 // OpenRemote publishes a pane driven by a kernel on another machine. release is

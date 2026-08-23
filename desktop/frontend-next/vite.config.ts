@@ -11,7 +11,7 @@ interface ProxyEvents {
 const ROUTES = [
   // The hub's own surface, plus /rt — every pane's requests carry that prefix,
   // so without it a second session's traffic answers with the SPA shell.
-  "/runtimes", "/tree", "/rt",
+  "/runtimes", "/tree", "/rt", "/remotes",
   "/appearance",
   "/events", "/history", "/status", "/submit", "/cancel", "/approve", "/answer",
   "/plan", "/goal", "/resume", "/models", "/tool-approval-mode", "/preset",

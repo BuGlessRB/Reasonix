@@ -109,6 +109,7 @@ const SAID: Record<string, string> = {
 
   // ── 远程 ─────────────────────────────────────────────────────────
   "remote.unreachable": "{host} 上的内核没有应答，连接可能断了",
+  "remote.not_available": "这个内核不负责连别的机器",
 
   // ── 壁纸 ─────────────────────────────────────────────────────────
   "wallpaper.unsupported_type": "这种图片格式用不了，换 PNG、JPEG、WebP、AVIF 或 GIF",
