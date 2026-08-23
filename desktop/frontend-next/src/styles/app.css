@@ -3845,6 +3845,14 @@
   .rmt .sessrow { padding-left: 32px }
   .rmt .rmtws-node .rmtopen { padding-left: 32px }
 
+  /* 和本地那列同一个上限，同一个出口。 */
+  .rmtmore {
+    display: block; width: 100%; padding: 4px 9px 6px 32px; text-align: left;
+    border: 0; background: none; cursor: pointer;
+    font: var(--w-reg) 11px var(--ui); color: var(--ghost);
+  }
+  .rmtmore:hover { color: var(--text); background: var(--overlay) }
+
   /* 工作区行本身就是连接按钮：没开面板的机器上没有别的可按，拆成两步等于让人
      先说「连接」再说「打开」，而那是一件事。 */
   .rmtopen {

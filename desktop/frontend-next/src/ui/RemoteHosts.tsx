@@ -3,6 +3,11 @@ import { t } from "../i18n";
 import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { REMOTE_STEP_LABEL, REMOTE_STEPS, type RemoteHost } from "../port/remote";
 
+// The same ceiling the local column uses. A machine worked on for months holds
+// thousands of conversations, and drawing them all is what put 98k nodes in a
+// sidebar — the reader is looking at the recent end either way.
+const SHOWN = 30;
+
 interface Props {
   hub: HubPort;
   hosts: RemoteHost[];
@@ -69,7 +74,11 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
   // What each connected machine holds. Absent until asked; null while nothing
   // is open on it, which is the state the connect button belongs to.
   const [trees, setTrees] = useState<Record<string, TreeWorkspace[] | null>>({});
+  // Folded rows. A host's key is its name; a workspace's carries the host, so
+  // one machine collapsing never takes a folder on another with it.
   const [shut, setShut] = useState<Set<string>>(new Set());
+  // Workspaces the reader asked to see in full.
+  const [whole, setWhole] = useState<Set<string>>(new Set());
 
   // Only a machine with a pane on it has a kernel to ask. Keyed by host so a
   // second one connecting does not re-read the first.
@@ -121,23 +130,27 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
         // holding: the link goes down with the last of them.
         const panes = runtimes.filter((rt) => rt.host === host.name);
         const tree = trees[host.name];
+        const folded = shut.has(host.name);
         const working = host.status === "connecting" || host.status === "reconnecting";
         const hint = note(host);
         return (
           <div className="rmt" key={host.name} data-state={host.status}>
-            <div className="rmthead" title={host.target}>
+            <div className="rmthead" title={host.target} role="treeitem" aria-expanded={!folded}>
+              <button className="twist" onClick={() => fold(host.name)} aria-label={t(folded ? "展开" : "收起")}>
+                {folded ? "▸" : "▾"}
+              </button>
               <i className="rmtpip" aria-hidden="true" />
               <span className="rmtname">{host.name}</span>
               <span className="rmttarget">{host.target}</span>
             </div>
-            {hint ? <div className="rmtnote">{hint}</div> : null}
-            {working && host.step ? <Steps step={host.step} detail={host.detail} /> : null}
+            {hint && !folded ? <div className="rmtnote">{hint}</div> : null}
+            {working && host.step && !folded ? <Steps step={host.step} detail={host.detail} /> : null}
 
             {/* Connected: the machine answers for itself, so its own folders
                 and conversations are what the reader picks from. Before that
                 there is only the one row, which is also the connect button —
                 asking someone to say "connect" and then "open" is one act. */}
-            {tree
+            {folded ? null : tree
               ? tree.map((ws) => {
                   const key = host.name + ":" + ws.root;
                   const folded = shut.has(key);
@@ -167,7 +180,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
                             </span>
                             <span className="rmtws">{t("新会话")}</span>
                           </button>
-                          {ws.sessions.map((session) => {
+                          {(whole.has(key) ? ws.sessions : ws.sessions.slice(0, SHOWN)).map((session) => {
                             // A conversation this window already drives is a
                             // pane to focus, never a second writer for one file.
                             const held = panes.find((rt) => rt.sessionPath === session.path);
@@ -188,6 +201,20 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
                               </div>
                             );
                           })}
+                          {ws.sessions.length > SHOWN && !whole.has(key) && (
+                            <button
+                              className="rmtmore"
+                              onClick={() =>
+                                setWhole((held) => {
+                                  const next = new Set(held);
+                                  next.add(key);
+                                  return next;
+                                })
+                              }
+                            >
+                              {t("还有 {n} 个 · 全部显示", { n: ws.sessions.length - SHOWN })}
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
@@ -208,7 +235,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
                   </div>
                 ))}
 
-            {!tree && (
+            {!tree && !folded && (
               <button
                 className="rmtopen"
                 data-busy={busy.startsWith(host.name) ? "" : undefined}
