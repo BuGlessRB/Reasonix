@@ -45,7 +45,10 @@ export interface Metrics {
 
 export interface Waiting {
   ttftSince?: number;
-  retry?: { attempt: number; max: number };
+  // scope is the kernel's own answer to which half of the request broke, and
+  // since is when the stall began rather than when this attempt did — the
+  // attempt counter already says how far into it the run is.
+  retry?: { attempt: number; max: number; scope?: "headers" | "stream"; since: number };
 }
 
 export interface PlanStep {

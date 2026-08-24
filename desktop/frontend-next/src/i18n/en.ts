@@ -26,6 +26,9 @@ export const EN: Record<string, string> = {
   "等待回包 {secs}s": "Waiting for a response · {secs}s",
   "连接在响应头前断了，重试 {attempt}/{max} · {secs}s":
     "Connection dropped before the headers · retry {attempt}/{max} · {secs}s",
+  "回包写到一半断了，重放 {attempt}/{max} · {secs}s":
+    "The response was cut mid-stream · replay {attempt}/{max} · {secs}s",
+  "连接断了，重试 {attempt}/{max} · {secs}s": "Connection dropped · retry {attempt}/{max} · {secs}s",
   "Agent": "Agent",
   "思考中…": "Thinking…",
   "复制": "Copy",

@@ -224,10 +224,22 @@ function appendText(items: Item[], text: string, field: "text" | "reasoning"): I
 // what the card renders, and putting it there would make every append rewrite it.
 const thoughtSince = new Map<string, number>();
 
-// Every delta clears the waiting state, and a fresh `{}` each time is a new
-// reference for a value that did not change — enough to defeat the memo on any
-// component holding one. Already-empty stays itself.
-const settle = (w: Waiting): Waiting => (w.ttftSince || w.retry ? {} : w);
+// The kernel's contract for a retry: the indicator is transient, and the next
+// stream event clears it. These kinds say nothing about the connection and
+// leave the wait standing; everything else is the provider having answered.
+const holdsWait = new Set<string>([
+  "turn_started",
+  "retrying",
+  "stream_attempt",
+  "notice",
+  "phase",
+  "turn_phase",
+  "mcp_surface_ready",
+  "workspace_changed",
+  "context_maintenance",
+  "extension_surface",
+  "extension_status",
+]);
 
 // A streamed chunk lands on the card being written and touches nothing else, so
 // it leaves the revision alone; every other event that moves the transcript
@@ -332,6 +344,12 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
   if (ev.kind === "__totals") {
     return { ...s, metrics: { ...s.metrics, hit: ev.hit, miss: ev.miss, cost: ev.cost ?? s.metrics.cost } };
   }
+  // A wait only text or reasoning could end outlived every turn whose first
+  // packet was a tool call: the retry line and its clock stayed up for the rest
+  // of the turn, over calls that were running fine.
+  if ((s.waiting.ttftSince || s.waiting.retry) && !holdsWait.has(ev.kind)) {
+    s = { ...s, waiting: {} };
+  }
   switch (ev.kind) {
     case "turn_started":
       return { ...s, running: true, doing: "运行中", waiting: { ttftSince: Date.now() } };
@@ -340,7 +358,6 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       return {
         ...s,
         doing: "思考中",
-        waiting: settle(s.waiting),
         outWindow: sample(s.outWindow, estimateTokens(ev.text ?? ""), Date.now()),
         items: appendText(s.items, ev.text ?? "", "reasoning"),
       };
@@ -349,7 +366,6 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       return {
         ...s,
         doing: "正在回答",
-        waiting: settle(s.waiting),
         outWindow: sample(s.outWindow, estimateTokens(ev.text ?? ""), Date.now()),
         items: appendText(s.items, ev.text ?? "", "text"),
       };
@@ -487,10 +503,21 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
     case "completion_summary":
       return s;
 
+    // A retry between two steps is the same stall as one before the first
+    // packet, so it arms the wait rather than only decorating one already up —
+    // a later step losing its connection used to show nothing at all.
     case "retrying":
       return {
         ...s,
-        waiting: { ...s.waiting, retry: { attempt: ev.retryAttempt ?? 0, max: ev.retryMax ?? 0 } },
+        waiting: {
+          ttftSince: s.waiting.ttftSince ?? Date.now(),
+          retry: {
+            attempt: ev.retryAttempt ?? 0,
+            max: ev.retryMax ?? 0,
+            scope: ev.retryScope,
+            since: s.waiting.retry?.since ?? Date.now(),
+          },
+        },
       };
 
     case "steer": {

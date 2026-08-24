@@ -405,7 +405,7 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
           />
         ))}
         {live && <Row it={live} {...rowProps} cp={checkpoints.get(live.id)} />}
-        {waiting.ttftSince && <Await retry={waiting.retry} />}
+        {waiting.ttftSince && <Await since={waiting.ttftSince} retry={waiting.retry} />}
         <div ref={end} className="flow-end" aria-hidden="true" />
       </div>
     </div>
@@ -544,20 +544,36 @@ const Row = memo(function Row({
   }
 });
 
-function Await({ retry }: { retry?: { attempt: number; max: number } }) {
-  const [secs, setSecs] = useState(0);
+// Counted from the stamp the wait carries rather than from this component's
+// mount: a retry landing in a wait already on screen has to restart the clock,
+// and a tick that only ever added 0.1 drifted from the time it claimed.
+function Await({ since, retry }: { since: number; retry?: Waiting["retry"] }) {
+  const start = retry?.since ?? since;
+  const [secs, setSecs] = useState(() => (Date.now() - start) / 1000);
   useEffect(() => {
-    const t = setInterval(() => setSecs((v) => v + 0.1), 100);
+    const tick = () => setSecs((Date.now() - start) / 1000);
+    tick();
+    const t = setInterval(tick, 100);
     return () => clearInterval(t);
-  }, []);
+  }, [start]);
   return (
     <div className="await" data-retry={retry ? "" : undefined}>
       <i />
       <i />
       <i />
       <span className="t">
+        {/* Which half broke is the kernel's to say, not this window's to guess:
+            never getting an answer and losing one already being written out
+            read nothing alike. */}
         {retry
-          ? t("连接在响应头前断了，重试 {attempt}/{max} · {secs}s", { attempt: retry.attempt, max: retry.max, secs: decimals(secs, 1) })
+          ? t(
+              retry.scope === "headers"
+                ? "连接在响应头前断了，重试 {attempt}/{max} · {secs}s"
+                : retry.scope === "stream"
+                  ? "回包写到一半断了，重放 {attempt}/{max} · {secs}s"
+                  : "连接断了，重试 {attempt}/{max} · {secs}s",
+              { attempt: retry.attempt, max: retry.max, secs: decimals(secs, 1) },
+            )
           : t("等待回包 {secs}s", { secs: decimals(secs, 1) })}
       </span>
     </div>

@@ -301,3 +301,46 @@ describe("a line the kernel refused", () => {
     expect(users(s)).toEqual(["kept"]);
   });
 });
+
+// The kernel emits Retrying before each backoff sleep and leaves it to the
+// window to take the line down again: whatever comes back next is the proof the
+// connection recovered, and it is far more often a tool call than a sentence.
+describe("the retry line", () => {
+  const started = (): SessionEvent => ({ kind: "turn_started" }) as SessionEvent;
+  const retrying = (attempt: number, scope?: string): SessionEvent =>
+    ({ kind: "retrying", retryAttempt: attempt, retryMax: 5, retryScope: scope }) as SessionEvent;
+
+  it("comes down on the first packet of any kind, not only on text", () => {
+    const s = run([started(), retrying(1, "stream"), partial("c1")]);
+    expect(s.waiting).toEqual({});
+  });
+
+  it("stays up while nothing has come back", () => {
+    const s = run([started(), retrying(1, "stream"), { kind: "notice", text: "x" } as SessionEvent]);
+    expect(s.waiting.retry).toMatchObject({ attempt: 1, max: 5, scope: "stream" });
+  });
+
+  // Only the kernel knows whether it never got a header or lost a body it was
+  // already writing out, and the two say different things to the reader.
+  it("carries the kernel's own answer for which half broke", () => {
+    const s = run([started(), retrying(2, "headers")]);
+    expect(s.waiting.retry?.scope).toBe("headers");
+  });
+
+  it("shows a stall that starts between two steps", () => {
+    const s = run([started(), { kind: "text", text: "hi" } as SessionEvent, retrying(1, "headers")]);
+    expect(s.waiting.ttftSince).toBeTruthy();
+    expect(s.waiting.retry?.attempt).toBe(1);
+  });
+
+  it("times the stall from its first attempt, not its latest", () => {
+    const first = run([started(), retrying(1, "stream")]);
+    const second = reduce(first, retrying(2, "stream"));
+    expect(second.waiting.retry?.since).toBe(first.waiting.retry?.since);
+  });
+
+  it("comes down when the turn ends", () => {
+    const s = run([started(), retrying(1, "headers"), done()]);
+    expect(s.waiting).toEqual({});
+  });
+});
