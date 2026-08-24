@@ -111,6 +111,7 @@ func (s fleetItemStatus) answered() bool {
 type fleetItemResult struct {
 	index   int
 	status  fleetItemStatus
+	failure fleetFailureClass
 	profile string
 	output  string
 	err     error
@@ -404,6 +405,7 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 				res.status = fleetItemCancelled
 			default:
 				res.status = fleetItemFailed
+				res.failure = classifyFleetFailure(err)
 			}
 			if err == nil {
 				sink.Emit(event.Event{
@@ -421,18 +423,20 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 	}
 
 	cancelled := driveFleet(ctx, plan, results, doneCh, wg.Wait, startOne)
+	// A skipped branch is a failure's consequence, not an interruption, and only
+	// a real cancellation may answer context.Canceled: that is what the turn loop
+	// reads to tell an interrupted call from one that ran and reported.
+	if ctx.Err() != nil {
+		cancelled = true
+	}
 	for _, r := range results {
-		if r.status == fleetItemCancelled || r.status == fleetItemSkipped {
+		if r.status == fleetItemCancelled {
 			cancelled = true
 			break
 		}
 	}
 	if cancelled {
-		err := ctx.Err()
-		if err == nil {
-			err = context.Canceled
-		}
-		return formatFleetAggregate(results, true), err
+		return formatFleetAggregate(results, true), firstNonNilErr(ctx.Err(), context.Canceled)
 	}
 	return formatFleetAggregate(results, false), nil
 }
@@ -449,16 +453,22 @@ func (f *FleetTool) upstreamFor(plan fleetPlan, idx int, results []fleetItemResu
 
 func formatFleetAggregate(results []fleetItemResult, cancelled bool) string {
 	n := len(results)
-	var prefix string
-	if cancelled {
-		completed := 0
-		for _, r := range results {
-			if r.status.answered() {
-				completed++
-			}
+	answered := 0
+	for _, r := range results {
+		if r.status.answered() {
+			answered++
 		}
-		prefix = fmt.Sprintf("Cancelled fleet after completing %d of %d tasks:\n", completed, n)
-	} else {
+	}
+	var prefix string
+	switch {
+	case cancelled:
+		prefix = fmt.Sprintf("Cancelled fleet after completing %d of %d tasks:\n", answered, n)
+	case answered < n:
+		// A run that reached its end with failures is neither cancelled nor
+		// clean. Saying which it was keeps the per-item reason codes from being
+		// read under a headline that contradicts them.
+		prefix = fmt.Sprintf("Fleet finished, %d of %d tasks answered:\n", answered, n)
+	default:
 		prefix = fmt.Sprintf("Completed fleet of %d tasks:\n", n)
 	}
 	items := make([]subagentAggregateItem, 0, n)
@@ -477,7 +487,7 @@ func formatFleetAggregate(results []fleetItemResult, cancelled bool) string {
 			item.status = "status: adopted (not run; the answer below is the reference's)\n"
 			item.answer = strings.TrimSpace(r.output)
 		case fleetItemFailed:
-			item.status = "status: failed\n"
+			item.status = fleetStatusLine("failed", r.failure)
 			if r.err != nil {
 				item.detail = fmt.Sprintf("[FAILED] %s\n", boundedInline(r.err.Error(), 256))
 			}
@@ -487,7 +497,7 @@ func formatFleetAggregate(results []fleetItemResult, cancelled bool) string {
 				item.detail = fmt.Sprintf("[CANCELLED] %s\n", boundedInline(r.err.Error(), 256))
 			}
 		case fleetItemSkipped:
-			item.status = "status: skipped\n"
+			item.status = fleetStatusLine("skipped", r.failure)
 			if r.err != nil {
 				item.detail = fmt.Sprintf("[SKIPPED] %s\n", boundedInline(r.err.Error(), 256))
 			}

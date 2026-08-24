@@ -207,6 +207,10 @@ func (p fleetPlan) skipDependents(results []fleetItemResult, failed int) {
 			continue
 		}
 		results[idx].status = fleetItemSkipped
+		// The branch is dead for the reason its head died, so the identity
+		// travels with it: a skipped item is re-issuable exactly when its
+		// cause was.
+		results[idx].failure = results[failed].failure
 		results[idx].err = fmt.Errorf("skipped: depends on %q, which did not complete", p.ids[failed])
 	}
 }

@@ -825,6 +825,24 @@ parent must discard. Independent branches keep going unless `fail_fast` is set,
 which stops *starting* new tasks; tasks already running are left to finish so a
 writer is never abandoned mid-write.
 
+A failure carries an identity, not only a message. A failed item reports
+`reason=` beside its status — `provider.transient` for a status a later attempt
+can clear, `provider.rejected` for one no retry fixes, `context.exhausted` for an
+input that outgrew its window — and the branch it killed inherits that reason,
+because a skipped item is worth re-issuing exactly when its cause was. The
+classification reads the identity the error already carries (a
+`*provider.APIError` status, `ErrCompactionRequired`, an interrupted stream) and
+never its message, so an error whose producer named nothing is reported
+unclassified rather than guessed at. Deciding *re-issue this graph with the
+finished nodes adopted* is then a judgement about a code, not about a sentence.
+
+A run that reached its end answers no error, however many of its items failed:
+the aggregate reports them, headed by how many of the tasks were answered.
+`context.Canceled` is reserved for a call that was actually interrupted, because
+that is what the turn loop reads to tell an interrupted call from one that ran
+and reported. A branch skipped behind a failure is that failure's consequence,
+not an interruption, and saying otherwise cost the caller the difference.
+
 A node may stand down to a reference instead of running. `adopt_ref` names an
 already-completed child whose answer takes that node's place: nothing executes,
 so the item claims no `write_paths` and cannot collide with a live writer, and
