@@ -736,14 +736,11 @@ func loadForEdit(path string, loadCredentials, persistMigrations bool) *Config {
 	if err == nil {
 		return cfg
 	}
-	slog.Warn("config: load for edit failed, using defaults", "path", path, "err", err)
+	slog.Warn("config: load for edit failed, recovering", "path", path, "err", err)
 	if loadCredentials {
 		loadDotEnvForEditPath(path)
 	}
-	cfg = Default()
-	normalizeConfigForEdit(cfg)
-	cfg.editLoadErr = err
-	return cfg
+	return recoveredForEdit(path, err)
 }
 
 func LoadForEditWithoutCredentials(path string) *Config {

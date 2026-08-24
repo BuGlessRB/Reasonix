@@ -350,4 +350,13 @@ export const EN_SETTINGS: Record<string, string> = {
   "正文没那么刺眼，长时间看更省力": "Softer body text, easier over a long sitting",
   "介于两者之间": "Between the two",
   "环境光很亮，或需要更清楚的边界": "Bright surroundings, or when edges need to be clearer",
+
+  // 配置文件读不了时顶在设置最上面那条
+  "配置文件第 {line} 行读不了": "Line {line} of the config file does not parse",
+  "配置文件读不了": "The config file does not parse",
+  "下面显示的是上一次能读通的那份设置。这个文件不会被覆盖，所以现在什么都存不进去。": "What is shown below is the last version that read cleanly. The file is never overwritten, so nothing can be saved until it is fixed.",
+  "下面显示的是内置默认值，不是你的设置。这个文件不会被覆盖，所以现在什么都存不进去。": "What is shown below is the built-in defaults, not your settings. The file is never overwritten, so nothing can be saved until it is fixed.",
+  "改成": "becomes",
+  "正在修…": "Repairing…",
+  "备份原文件并修好": "Keep a copy and repair it",
 };

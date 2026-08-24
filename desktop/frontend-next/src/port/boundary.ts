@@ -34,7 +34,30 @@ export interface SandboxSettings {
   // instead of pretending to work.
   available: boolean;
   why?: string;
+  // The same explanation's code, which is what has wording in this window.
+  whyCode?: string;
   platform: string;
   path: string;
   shadowedBy?: string;
+}
+
+// What a settings surface shows in place of a save it cannot perform. The
+// kernel refuses every write while the file will not parse, so this arrives
+// before anything is tried rather than as each panel's own error.
+export interface ConfigProblem {
+  path: string;
+  line?: number;
+  key?: string;
+  excerpt?: string;
+  // The offending line said the other way. Present only when the file parses
+  // after the change, so it is an offer rather than a guess.
+  repair?: string;
+  // Which values are on screen instead: "last-known-good" or "defaults".
+  recovered?: string;
+  detail?: string;
+}
+
+export interface ConfigRepair {
+  backup: string;
+  problem: ConfigProblem | null;
 }

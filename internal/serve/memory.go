@@ -79,7 +79,7 @@ func (s *Server) forgetMemory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().ForgetMemory(strings.TrimSpace(body.Name)); err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		saveFailed(w, http.StatusBadRequest, "memory.forget_failed", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

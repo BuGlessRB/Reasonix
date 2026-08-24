@@ -64,7 +64,7 @@ func (s *Server) activateTheme(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(req.ID)
 	if id != "" {
 		if _, err := theme.Load(id); err != nil {
-			writeJSONStatus(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			saveFailed(w, http.StatusUnprocessableEntity, "theme.unreadable", err)
 			return
 		}
 	}

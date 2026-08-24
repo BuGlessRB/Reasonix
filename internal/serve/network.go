@@ -27,7 +27,7 @@ func (s *Server) saveNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().SaveNetworkSettings(body.NetworkSettings, body.Password, body.ClearPassword); err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		saveFailed(w, http.StatusBadRequest, "network.rejected", err)
 		return
 	}
 	writeJSON(w, s.ctl().NetworkSettings())

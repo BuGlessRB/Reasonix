@@ -1172,6 +1172,12 @@
   .rrow .d { display: block; margin-top: 2px; font: var(--w-reg) 11px var(--mono); color: var(--muted); overflow-wrap: anywhere }
   .rgroup .more { padding-left: 12px; font: var(--w-reg) 11px var(--ui); color: var(--ghost) }
 
+  /* 配置文件读不了时顶在设置最上面的一条。它挡住的是每一个面板的保存，
+     不是某一个，所以它不长在任何一个面板里，也不跟着分类切换消失。 */
+  .cfgbad { margin: 10px 16px 0 }
+  .cfgbad .term { margin-top: 8px }
+  .cfgbad .acts { display: flex; gap: 8px; margin-top: 10px; align-items: center }
+
   /* review findings：严重度用左侧 2px 色条编码，不新增文字标签 */
   .finds { margin-top: 7px; display: flex; flex-direction: column; gap: 5px }
   .find { padding: 6px 0 6px 10px; border-left: 2px solid var(--ghost); animation: card var(--t-card) var(--ease-out) both }

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	"reasonix/internal/control"
 )
 
 // Reason is a machine-readable refusal: the kernel decides what happened, a
@@ -65,7 +67,8 @@ func busyErr(code, message string) error {
 }
 
 // writeErr turns an error into a response. One carrying a code reaches the
-// frontend as one; anything else keeps the old shape, so adoption is
+// frontend as one, a config file the kernel could not read keeps its own code
+// wherever it surfaces, and anything else keeps the old shape, so adoption is
 // incremental rather than a flag day.
 func writeErr(w http.ResponseWriter, fallback int, err error) {
 	var c *coded
@@ -73,5 +76,40 @@ func writeErr(w http.ResponseWriter, fallback int, err error) {
 		refuse(w, c.status, c.reason.Code, c.reason.Message, c.reason.Params)
 		return
 	}
+	if refuseUnparsedConfig(w, err) {
+		return
+	}
 	http.Error(w, err.Error(), fallback)
+}
+
+// refuseUnparsedConfig answers when the failure is the config file itself. It
+// is one condition with one code across every panel that writes settings, and
+// it carries where to look rather than a parser's sentence about columns.
+func refuseUnparsedConfig(w http.ResponseWriter, err error) bool {
+	problem := control.ConfigProblemFromError(err)
+	if problem == nil {
+		return false
+	}
+	refuse(w, http.StatusConflict, "config.unparsed", err.Error(), map[string]any{
+		"path": problem.Path, "line": problem.Line, "excerpt": problem.Excerpt,
+		"repair": problem.Repair, "recovered": problem.Recovered,
+	})
+	return true
+}
+
+// saveFailed refuses a settings write with an identity. A config file the
+// kernel could not read is that same condition wherever it surfaces, so it
+// keeps one code across every panel; anything else is that panel's own
+// rejection, carrying the kernel's words as the detail a reader acts on.
+func saveFailed(w http.ResponseWriter, status int, code string, err error) {
+	if refuseUnparsedConfig(w, err) {
+		return
+	}
+	refuse(w, status, code, err.Error(), map[string]any{"detail": err.Error()})
+}
+
+// rebuildFailed is the one answer to "the settings were written and the runtime
+// could not be rebuilt on them", which is not the same failure as the write.
+func rebuildFailed(w http.ResponseWriter, err error) {
+	refuse(w, http.StatusConflict, "runtime.rebuild_failed", err.Error(), map[string]any{"detail": err.Error()})
 }

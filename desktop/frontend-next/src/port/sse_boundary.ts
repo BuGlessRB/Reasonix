@@ -1,5 +1,5 @@
 import { SseShell } from "./sse_shell";
-import type { PermissionLists, PermissionRules, SandboxSettings } from "./port";
+import type { ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, SandboxSettings } from "./port";
 
 // Where the agent may reach: the permission rules a call is matched against and
 // the sandbox the shell runs in.
@@ -15,5 +15,11 @@ export class SseBoundary extends SseShell {
   }
   saveSandbox(s: SandboxSettings) {
     return this.post0<SandboxSettings>("/sandbox", s);
+  }
+  configProblem() {
+    return this.get<ConfigProblem | null>("/config/problem");
+  }
+  repairConfig() {
+    return this.post0<ConfigRepair>("/config/repair");
   }
 }

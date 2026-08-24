@@ -149,12 +149,14 @@ func TestInvokeExtensionActionSurfacesTheExtensionsRefusal(t *testing.T) {
 	if resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("declined action = %d, want 422", resp.StatusCode)
 	}
-	var got map[string]string
+	var got Reason
 	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	if got["error"] != "demo is not connected" {
-		t.Fatalf("error = %q, want the extension's reason", got["error"])
+	// The reason travels under a code this window has wording for, carrying the
+	// extension's own sentence as the detail that goes inside it.
+	if got.Code != "extension.action_failed" || got.Params["detail"] != "demo is not connected" {
+		t.Fatalf("refusal = %+v, want the extension's reason under its code", got)
 	}
 }
 

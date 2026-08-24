@@ -58,9 +58,9 @@ func (s *Server) assignSurfaceSlot(w http.ResponseWriter, r *http.Request) {
 		delete(edit.Desktop.SurfaceSlots, surface)
 	} else {
 		if _, known := edit.Desktop.SurfaceSlots[surface]; !known && len(edit.Desktop.SurfaceSlots) >= maxSurfaceSlots {
-			writeJSONStatus(w, http.StatusUnprocessableEntity, map[string]string{
-				"error": "too many surface placements are recorded; clear one first",
-			})
+			refuse(w, http.StatusUnprocessableEntity, "surface.too_many_slots",
+				"too many surface placements are recorded; clear one first",
+				map[string]any{"limit": maxSurfaceSlots})
 			return
 		}
 		edit.Desktop.SurfaceSlots[surface] = slot

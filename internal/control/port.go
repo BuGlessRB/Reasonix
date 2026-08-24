@@ -186,6 +186,8 @@ type Capabilities interface {
 	SavePermissionRules(in PermissionLists) error
 	SandboxSettings() SandboxSettings
 	SaveSandboxSettings(in SandboxSettings) error
+	ConfigProblem() *ConfigProblem
+	RepairConfigFile() (string, error)
 	CustomCommand(input string) (sent string, found bool)
 	MCPPrompt(ctx context.Context, input string) (sent string, found bool, err error)
 	RunSkill(input string) (sent string, found bool)

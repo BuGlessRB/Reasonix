@@ -5,7 +5,7 @@
     "complexity": 1571,
     "error-text": 12,
     "essay": 3302,
-    "file-size": 43412,
+    "file-size": 43409,
     "function-size": 6794,
     "layering": 0,
     "marker": 0,
@@ -613,7 +613,7 @@
     },
     "internal/config/load.go": {
       "essay": 24,
-      "file-size": 1696,
+      "file-size": 1693,
       "function-size": 57
     },
     "internal/config/main_test.go": {

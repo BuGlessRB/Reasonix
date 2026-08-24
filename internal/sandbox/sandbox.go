@@ -90,6 +90,22 @@ func UnavailableRemediation() string {
 	}
 }
 
+// UnavailableCode is that explanation's identity. A frontend says it in the
+// reader's language from this; matching the English sentence above would be a
+// second copy of this switch, in a place that cannot see when it changes.
+func UnavailableCode() string {
+	switch runtime.GOOS {
+	case "linux":
+		return "sandbox.no_bubblewrap"
+	case "darwin":
+		return "sandbox.no_sandbox_exec"
+	case "windows":
+		return "sandbox.unsupported_on_windows"
+	default:
+		return "sandbox.unsupported_platform"
+	}
+}
+
 // BackendUnavailableReason is safe diagnostic copy for subsystems such as MCP
 // that intentionally continue unconfined when the OS backend is missing.
 func BackendUnavailableReason() string {

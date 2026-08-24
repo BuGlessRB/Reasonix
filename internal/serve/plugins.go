@@ -92,7 +92,7 @@ func (s *Server) plugins(w http.ResponseWriter, r *http.Request) {
 	home := config.ReasonixHomeDir()
 	st, err := pluginpkg.LoadState(home)
 	if err != nil {
-		writeJSONStatus(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		saveFailed(w, http.StatusInternalServerError, "plugin.state_unreadable", err)
 		return
 	}
 	root := s.ctl().WorkspaceRoot()
@@ -237,7 +237,7 @@ func (s *Server) pluginEnabled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := pluginpkg.SetEnabled(config.ReasonixHomeDir(), name, req.Enabled); err != nil {
-		writeJSONStatus(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		saveFailed(w, http.StatusUnprocessableEntity, "plugin.toggle_failed", err)
 		return
 	}
 	out := map[string]any{"name": name, "enabled": req.Enabled}
@@ -260,7 +260,7 @@ func (s *Server) exportPlugin(w http.ResponseWriter, r *http.Request) {
 	home := config.ReasonixHomeDir()
 	st, err := pluginpkg.LoadState(home)
 	if err != nil {
-		writeJSONStatus(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		saveFailed(w, http.StatusInternalServerError, "plugin.state_unreadable", err)
 		return
 	}
 	root := ""
@@ -276,7 +276,7 @@ func (s *Server) exportPlugin(w http.ResponseWriter, r *http.Request) {
 	}
 	archive, required, err := pluginpkg.Export(name, root)
 	if err != nil {
-		writeJSONStatus(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		saveFailed(w, http.StatusUnprocessableEntity, "plugin.export_failed", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")
@@ -330,7 +330,7 @@ func pluginInstallBody(req pluginInstallRequest, apply bool) map[string]any {
 func (s *Server) answerInstallSource(ctx context.Context, w http.ResponseWriter, body map[string]any, mayWrite bool) {
 	raw, err := json.Marshal(body)
 	if err != nil {
-		writeJSONStatus(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		saveFailed(w, http.StatusInternalServerError, "install.request_unreadable", err)
 		return
 	}
 	tool := installsource.NewTool(installsource.Options{
@@ -341,12 +341,12 @@ func (s *Server) answerInstallSource(ctx context.Context, w http.ResponseWriter,
 	})
 	out, err := tool.Execute(ctx, raw)
 	if err != nil {
-		writeJSONStatus(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		saveFailed(w, http.StatusUnprocessableEntity, "install.failed", err)
 		return
 	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(out), &fields); err != nil {
-		writeJSONStatus(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		saveFailed(w, http.StatusInternalServerError, "install.bad_answer", err)
 		return
 	}
 	// A plan that wrote nothing has nothing to reload for, and a refused reload

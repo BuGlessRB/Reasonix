@@ -34,11 +34,11 @@ func (s *Server) saveShellSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().SaveShellSettings(body.Prefer, body.Path); err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		saveFailed(w, http.StatusBadRequest, "shell.rejected", err)
 		return
 	}
 	if err := s.rebuildInPlace(r.Context()); err != nil {
-		writeJSONStatus(w, http.StatusConflict, map[string]any{"error": err.Error()})
+		rebuildFailed(w, err)
 		return
 	}
 	writeJSON(w, s.ctl().ShellSettings())

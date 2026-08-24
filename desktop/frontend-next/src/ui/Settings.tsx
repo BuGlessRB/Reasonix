@@ -17,6 +17,7 @@ import { Hooks } from "./Hooks";
 import { Network } from "./Network";
 import { Shell as ShellPicker } from "./Shell";
 import { Rules } from "./Rules";
+import { ConfigTrouble } from "./ConfigTrouble";
 import { Sandbox } from "./Sandbox";
 import { Account } from "./Account";
 import { Providers } from "./Providers";
@@ -287,6 +288,8 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
         <span className="esc">esc</span>
         <WindowControls />
       </div>
+
+      <ConfigTrouble port={port} onRepaired={onChanged} />
 
       <div className="prefs-body">
         <nav className="prefs-nav" role="tablist" aria-label={t("设置分类")} onKeyDown={arrowTabs}>

@@ -57,7 +57,7 @@ func (s *Server) invokeExtensionAction(w http.ResponseWriter, r *http.Request) {
 	// server fault, and its message is already credential-redacted by the hub.
 	message, err := s.ctl().InvokeExtensionAction(r.Context(), name, req.Args)
 	if err != nil {
-		writeJSONStatus(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		saveFailed(w, http.StatusUnprocessableEntity, "extension.action_failed", err)
 		return
 	}
 	writeJSON(w, map[string]string{"message": message})
@@ -80,7 +80,7 @@ func (s *Server) submitExtensionForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().SubmitExtensionForm(r.Context(), pluginID, surfaceID, req.Values); err != nil {
-		writeJSONStatus(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		saveFailed(w, http.StatusUnprocessableEntity, "extension.form_rejected", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

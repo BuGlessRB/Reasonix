@@ -109,7 +109,7 @@ func (s *Server) saveHooks(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if err := s.ctl().SaveHooks(scope, settings); err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		saveFailed(w, http.StatusBadRequest, "hooks.rejected", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -132,7 +132,7 @@ func (s *Server) dryRunHook(w http.ResponseWriter, r *http.Request) {
 	cfg := hook.HookConfig{Match: body.Match, Command: body.Command, Timeout: body.Timeout, Cwd: body.Cwd}
 	res, err := s.ctl().DryRunHook(r.Context(), cfg, hook.Event(strings.TrimSpace(body.Event)))
 	if err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		saveFailed(w, http.StatusBadRequest, "hooks.dry_run_failed", err)
 		return
 	}
 	writeJSON(w, res)

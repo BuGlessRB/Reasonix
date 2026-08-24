@@ -446,7 +446,7 @@ func (s *Server) mcpParse(w http.ResponseWriter, r *http.Request) {
 	}
 	draft, err := mcpsetup.Parse(body.Input)
 	if err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		saveFailed(w, http.StatusBadRequest, "mcp.bad_declaration", err)
 		return
 	}
 	servers := make([]draftServer, 0, len(draft.Entries))
@@ -508,7 +508,7 @@ func (s *Server) mcpInstall(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.ctl().InstallMCPServer(entry, scope)
 	if err != nil {
-		writeJSONStatus(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		saveFailed(w, http.StatusInternalServerError, "mcp.install_failed", err)
 		return
 	}
 	writeJSON(w, result)
@@ -524,7 +524,7 @@ func (s *Server) mcpRemove(w http.ResponseWriter, r *http.Request) {
 	}
 	disconnected, err := s.ctl().RemoveMCPServer(name)
 	if err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		saveFailed(w, http.StatusBadRequest, "mcp.remove_failed", err)
 		return
 	}
 	remaining := false

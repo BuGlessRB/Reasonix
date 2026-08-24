@@ -3,6 +3,36 @@
 // code adds one here. i18n.test.ts is what stops one from being forgotten.
 
 export const EN_KERNEL: Record<string, string> = {
+  // 配置文件本身坏了，以及每一个写设置的面板被它挡住时
+  "配置文件读不了，所以这次没保存": "The config file does not parse, so nothing was saved",
+  "这台服务器没有开放配置编辑": "This server does not allow editing its config",
+  "这个文件得手动改：{detail}": "This file needs an edit by hand: {detail}",
+  "设置写进去了，但运行时没能照新设置重建：{detail}": "The settings were written, but the runtime could not be rebuilt on them: {detail}",
+  "这条权限没能保存：{detail}": "That permission was not saved: {detail}",
+  "沙箱设置没能保存：{detail}": "The sandbox settings were not saved: {detail}",
+  "这段服务器声明读不出来：{detail}": "That server declaration could not be read: {detail}",
+  "没能装上这个服务器：{detail}": "That server could not be installed: {detail}",
+  "没能移除这个服务器：{detail}": "That server could not be removed: {detail}",
+  "这条钩子没能保存：{detail}": "That hook was not saved: {detail}",
+  "这条钩子没跑起来：{detail}": "That hook did not run: {detail}",
+  "没能删掉这条记忆：{detail}": "That memory could not be removed: {detail}",
+  "网络设置没能保存：{detail}": "The network settings were not saved: {detail}",
+  "shell 设置没能保存：{detail}": "The shell settings were not saved: {detail}",
+  "扩展没有执行这个动作：{detail}": "The extension did not carry that action out: {detail}",
+  "扩展没有接受这次提交：{detail}": "The extension did not accept that submission: {detail}",
+  "插件清单读不出来：{detail}": "The plugin list could not be read: {detail}",
+  "没能改这个插件的开关：{detail}": "That plugin could not be switched: {detail}",
+  "没能导出这个插件：{detail}": "That plugin could not be exported: {detail}",
+  "这次安装请求读不出来：{detail}": "That install request could not be read: {detail}",
+  "没能装上：{detail}": "It could not be installed: {detail}",
+  "安装器的回答读不出来：{detail}": "The installer's own answer could not be read: {detail}",
+  "这套主题读不出来：{detail}": "That theme could not be read: {detail}",
+  "记下的面板位置太多了（最多 {limit} 个），先清掉一个": "Too many panel placements are recorded (at most {limit}); clear one first",
+  "这台机器上没有 bubblewrap（bwrap），命令只能不受限地跑": "This machine has no bubblewrap (bwrap), so commands run unconfined",
+  "这台机器上的 sandbox-exec 用不了，命令只能不受限地跑": "sandbox-exec is unusable on this machine, so commands run unconfined",
+  "Windows 上还没有 OS 级沙箱，命令只能不受限地跑": "Windows has no OS-level sandbox here yet, so commands run unconfined",
+  "这个平台还没有能用的沙箱后端，命令只能不受限地跑": "This platform has no usable sandbox backend yet, so commands run unconfined",
+
   "这个文件夹还有 {n} 个打开的面板，先关掉再移除": "This folder still has {n} open panes — close them before removing it",
   "这种图片格式用不了，换 PNG、JPEG、WebP、AVIF 或 GIF":
     "That image format will not work — use PNG, JPEG, WebP, AVIF or GIF",

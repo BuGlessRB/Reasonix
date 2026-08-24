@@ -48,6 +48,7 @@ type SandboxSettings struct {
 	// so the editor has to say so instead of offering a dead switch.
 	Available bool   `json:"available"`
 	Why       string `json:"why,omitempty"`
+	WhyCode   string `json:"whyCode,omitempty"`
 	Platform  string `json:"platform"`
 
 	Path       string `json:"path"`
@@ -119,7 +120,7 @@ func (c *Controller) SandboxSettings() SandboxSettings {
 		ShadowedBy:    shadowingConfig(path, c.WorkspaceRoot()),
 	}
 	if !out.Available {
-		out.Why = sandbox.UnavailableMessage()
+		out.Why, out.WhyCode = sandbox.UnavailableMessage(), sandbox.UnavailableCode()
 	}
 	effective := cfg
 	if merged, err := config.LoadForRootReadOnly(c.WorkspaceRoot()); err == nil {

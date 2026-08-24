@@ -1,4 +1,4 @@
-import type { PermissionLists, PermissionRules, SandboxSettings } from "./port";
+import type { ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, SandboxSettings } from "./port";
 import { MockShell } from "./mock_shell";
 
 // The boundary half of the fixture: what the agent is refused outright, and how
@@ -47,5 +47,27 @@ export class MockBoundary extends MockShell {
     const roots = [s.workspaceRoot || "/Users/you/code/site", ...s.allowWrite.filter(Boolean)];
     this.jail = { ...this.jail, ...s, effectiveWriteRoots: roots };
     return { ...this.jail };
+  }
+
+  // The fixture carries the broken file, because a banner nobody can reach is
+  // a banner nobody designs. Repairing it here clears it, so the whole
+  // interaction is reachable without a Go build.
+  private broken: ConfigProblem | null = {
+    path: "C:\\Users\\you\\AppData\\Roaming\\reasonix\\config.toml",
+    line: 263,
+    key: "plugins.command",
+    excerpt: 'command = "C:\\Scripts\\mcp.exe"',
+    repair: 'command = "C:\\\\Scripts\\\\mcp.exe"',
+    recovered: "last-known-good",
+  };
+
+  async configProblem(): Promise<ConfigProblem | null> {
+    return this.broken && { ...this.broken };
+  }
+
+  async repairConfig(): Promise<ConfigRepair> {
+    const backup = (this.broken?.path ?? "") + ".broken-20260823-181500";
+    this.broken = null;
+    return { backup, problem: null };
   }
 }

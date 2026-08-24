@@ -13,7 +13,7 @@ import (
 
 // codeArg is where each helper carries the dotted code, so a new one is added
 // here rather than by teaching a regex another shape.
-var codeArg = map[string]int{"refuse": 2, "busy": 1, "coded": 0, "busyErr": 0, "refusal": 1, "Refusal": 1}
+var codeArg = map[string]int{"refuse": 2, "busy": 1, "coded": 0, "busyErr": 0, "refusal": 1, "Refusal": 1, "saveFailed": 2}
 
 // Where a coded refusal can be built. The exported constructor put the second
 // one outside this package, and a guard that only watches its own directory

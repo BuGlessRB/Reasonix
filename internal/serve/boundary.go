@@ -14,6 +14,10 @@ func (s *Server) registerBoundaryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /permissions", s.savePermissions)
 	mux.HandleFunc("GET /sandbox", s.sandboxSettings)
 	mux.HandleFunc("POST /sandbox", s.saveSandboxSettings)
+	// The file every one of these is written to, for when it is the thing that
+	// is wrong: each save above refuses with the same code, and this is where a
+	// surface reads it before trying, and repairs it after.
+	s.registerConfigFileRoutes(mux)
 }
 
 func (s *Server) permissions(w http.ResponseWriter, _ *http.Request) {
@@ -35,11 +39,11 @@ func (s *Server) savePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().SavePermissionRules(body); err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		saveFailed(w, http.StatusBadRequest, "permissions.rejected", err)
 		return
 	}
 	if err := s.rebuildInPlace(r.Context()); err != nil {
-		writeJSONStatus(w, http.StatusConflict, map[string]any{"error": err.Error()})
+		rebuildFailed(w, err)
 		return
 	}
 	writeJSON(w, s.ctl().PermissionRules())
@@ -60,11 +64,11 @@ func (s *Server) saveSandboxSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().SaveSandboxSettings(body); err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		saveFailed(w, http.StatusBadRequest, "sandbox.rejected", err)
 		return
 	}
 	if err := s.rebuildInPlace(r.Context()); err != nil {
-		writeJSONStatus(w, http.StatusConflict, map[string]any{"error": err.Error()})
+		rebuildFailed(w, err)
 		return
 	}
 	writeJSON(w, s.ctl().SandboxSettings())

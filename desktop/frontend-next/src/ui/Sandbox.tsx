@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { t } from "../i18n";
+import { reason, say } from "../i18n/kernel";
 import type { AgentPort, SandboxSettings } from "../port/port";
 import { Switch } from "./Switch";
 
@@ -34,7 +35,7 @@ export function Sandbox({ port, onChanged }: { port: AgentPort; onChanged: () =>
       setRoot(saved.workspaceRoot);
       onChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(reason(e));
     } finally {
       setBusy("");
     }
@@ -139,7 +140,9 @@ export function Sandbox({ port, onChanged }: { port: AgentPort; onChanged: () =>
         ) : (
           <div className="find" data-lvl="warn" role="status">
             <span className="t">{t("这台机器没有可用的 OS 沙箱")}</span>
-            <span className="why">{box.why || t("命令只能不受限地运行；上面的可写范围仍然由工具自己执行。")}</span>
+            <span className="why">
+              {say({ code: box.whyCode, error: box.why }, t("命令只能不受限地运行；上面的可写范围仍然由工具自己执行。"))}
+            </span>
           </div>
         )}
         <div className="seg" data-text role="radiogroup" aria-label={t("命令怎么跑")}>
