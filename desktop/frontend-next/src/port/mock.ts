@@ -473,7 +473,7 @@ export class MockPort extends MockTheme implements AgentPort {
   // The real kernel holds a mid-turn line until the next tool boundary, and
   // that wait is the only window in which taking it back means anything. A
   // fixture that echoed it at once made the state undesignable.
-  async steer(text: string): Promise<QueuedSteer> {
+  async steer(text: string): Promise<Queued> {
     const itemId = `inbox-${this.queued.size + 1}-${Date.now()}`;
     const at = window.setTimeout(() => {
       this.queued.delete(itemId);

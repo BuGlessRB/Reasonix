@@ -72,10 +72,12 @@ func badValue(w http.ResponseWriter, field string, allowed ...string) {
 }
 
 // sessionBusy is the turn-in-flight conflict: the input was not refused because
-// it was wrong, but because this session is not taking it right now. detail
-// carries where to put it instead.
-func sessionBusy(w http.ResponseWriter, detail string) {
-	busy(w, codeSessionBusy, detail, map[string]any{"detail": detail})
+// it was wrong, but because this session is not taking it right now. The English
+// is for a log — a client that reads the code queues the words through the inbox
+// instead of showing anyone this sentence, which is why it no longer carries the
+// route to call. That was an instruction to a program, rendered at a person.
+func sessionBusy(w http.ResponseWriter) {
+	busy(w, codeSessionBusy, "a turn owns this session until it lands", nil)
 }
 
 // decodeBody reads a JSON body under a size cap and refuses as one kind when it

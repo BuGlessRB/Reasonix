@@ -105,7 +105,7 @@ export const EN_KERNEL: Record<string, string> = {
   "找不到叫「{name}」的{kind}": "No {kind} called “{name}”",
   "这个项目没有在当前窗口打开": "That project is not open in this window",
   "这个会话正被别处占用：{detail}": "That conversation is held elsewhere: {detail}",
-  "这个会话正在跑，{detail}": "That conversation is running — {detail}",
+  "这个会话正在跑，这句话排到它后面了": "That conversation is running; those words are queued behind it",
   "这就是当前打开的会话，先切走再删": "That is the conversation you have open — switch away before deleting it",
   "「{field}」只能是这几个之一：{allowed}": "“{field}” must be one of: {allowed}",
   "会话名不能是路径": "A conversation name cannot be a path",

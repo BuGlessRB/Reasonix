@@ -274,7 +274,11 @@ export interface AgentPort {
   // /submit 409s once a turn holds the session. Mid-turn input is durable and
   // goes through the inbox, which delivers it at the next tool boundary. The
   // receipt is what makes it cancellable while it waits there.
-  steer(text: string): Promise<QueuedSteer>;
+  steer(text: string): Promise<Queued>;
+  // A whole turn, queued because one is already running. The kernel
+  // refuses /submit with a code rather than a sentence, so this is what
+  // the client does about it instead of showing anyone the refusal.
+  queueFollowup(text: string): Promise<Queued>;
   // Takes a queued line back before the turn reads it, and refuses once it has.
   cancelQueued(itemId: string): Promise<void>;
   cancel(): Promise<void>;

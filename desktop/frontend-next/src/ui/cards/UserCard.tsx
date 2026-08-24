@@ -33,7 +33,11 @@ export function UserCard({
       <div className="c">
         <div className="hl">
           <span className="nm">{t("我")}</span>
-          {item.pending && <span className="pend">{t("排队中 · 下一个工具边界送达")}</span>}
+          {item.pending && (
+            <span className="pend">
+              {item.queued === "followup" ? t("排队中 · 这一轮跑完就发") : t("排队中 · 下一个工具边界送达")}
+            </span>
+          )}
           {queued && onCancelQueued && (
             <button className="pcancel" onClick={() => onCancelQueued(item.id, queued)}>
               {t("撤回")}

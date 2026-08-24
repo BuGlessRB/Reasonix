@@ -197,26 +197,37 @@ describe("a line that is still queued", () => {
   const typed = (id: string, text: string): SessionEvent =>
     ({ kind: "__user", text, pending: true, id }) as SessionEvent;
   const rows = (st: SessionState) => st.items.filter((i): i is Extract<Item, { t: "user" }> => i.t === "user");
+  const queued = (id: string, itemId: string, kind: "steer" | "followup"): SessionEvent =>
+    ({ kind: "__queued", id, itemId, queued: kind }) as SessionEvent;
 
   // The row is on screen before the kernel has answered. The receipt is what
   // gives it a name to be taken back by, and without it the card has a button
   // it cannot press.
   it("remembers the queue id the kernel answered with", () => {
-    const st = run([typed("row-1", "密码我告诉你"), { kind: "__queued", id: "row-1", itemId: "inbox-9" } as SessionEvent]);
+    const st = run([typed("row-1", "密码我告诉你"), queued("row-1", "inbox-9", "steer")]);
     expect(rows(st)[0].itemId).toBe("inbox-9");
     expect(rows(st)[0].pending).toBe(true);
   });
 
+  // A whole turn refused because one is already running is queued too, and the
+  // row has to say which wait it is in: the two land at different moments.
+  it("marks a follow-up queued even though it was sent as a turn", () => {
+    const sent = ({ kind: "__user", text: "x", pending: false, id: "row-2" }) as SessionEvent;
+    const st = run([sent, queued("row-2", "inbox-10", "followup")]);
+    expect(rows(st)[0].pending).toBe(true);
+    expect(rows(st)[0].queued).toBe("followup");
+  });
+
   it("takes the row away once the kernel drops it", () => {
-    const queued = run([typed("row-1", "x"), { kind: "__queued", id: "row-1", itemId: "inbox-9" } as SessionEvent]);
-    expect(rows(reduce(queued, { kind: "__unsent", id: "row-1" } as SessionEvent))).toEqual([]);
+    const waiting = run([typed("row-1", "x"), queued("row-1", "inbox-9", "steer")]);
+    expect(rows(reduce(waiting, { kind: "__unsent", id: "row-1" } as SessionEvent))).toEqual([]);
   });
 
   // Too late is not an error state on the row: the steer event that made it too
   // late is the same one that stops it calling itself queued.
   it("stops calling itself queued when the turn reads it", () => {
-    const queued = run([typed("row-1", "x"), { kind: "__queued", id: "row-1", itemId: "inbox-9" } as SessionEvent]);
-    const read = reduce(queued, { kind: "steer", text: "x" } as SessionEvent);
+    const waiting = run([typed("row-1", "x"), queued("row-1", "inbox-9", "steer")]);
+    const read = reduce(waiting, { kind: "steer", text: "x" } as SessionEvent);
     expect(rows(read)[0].pending).toBe(false);
   });
 });

@@ -497,7 +497,10 @@ export class SsePort extends SseTheme implements AgentPort {
     return this.post("/submit", { input: text });
   }
   steer(text: string) {
-    return this.post0<QueuedSteer>("/inbox/items", { input: text, intent: "steer" });
+    return this.post0<Queued>("/inbox/items", { input: text, intent: "steer" });
+  }
+  queueFollowup(text: string) {
+    return this.post0<Queued>("/inbox/items", { input: text, intent: "followup" });
   }
   async cancelQueued(itemId: string) {
     await this.del("/inbox/items/" + encodeURIComponent(itemId));

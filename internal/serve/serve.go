@@ -696,7 +696,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	// concurrent input. Clients must use POST /inbox/items for durable follow-up.
 	if ctrl.Running() {
 		s.bindMu.Unlock()
-		sessionBusy(w, "use POST /inbox/items for durable follow-up")
+		sessionBusy(w)
 		return
 	}
 	// A shell that pins no auto-save path at launch — so an opened window leaves
@@ -726,7 +726,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	// answered 409 while doing exactly what was asked.
 	if !control.IsNonTurnInput(body.Input) && !ctrl.Running() && !ctrl.RuntimeStatus().PendingPrompt {
 		s.bindMu.Unlock()
-		sessionBusy(w, "the session is rotating, closed, or finishing; use POST /inbox/items")
+		sessionBusy(w)
 		return
 	}
 	s.bindMu.Unlock()

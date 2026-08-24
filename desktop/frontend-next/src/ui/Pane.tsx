@@ -3,6 +3,7 @@ import { money } from "../i18n/format";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
 import { createPortal } from "react-dom";
+import { HttpError } from "../port/port";
 import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, RewindScope, SessionStatus, WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
 import { fromHistory, initialState, localId, quoteAmount, reduce } from "../state/session";
@@ -313,8 +314,10 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           // The row is already on screen; the receipt is what gives it a name
           // to be taken back by while it waits at the tool boundary.
           const queued = await port.steer(text);
-          if (queued?.itemId) dispatch({ kind: "__queued", id, itemId: queued.itemId } as never);
-        } else await port.submit(text).then(refreshStatus);
+          if (queued?.itemId) dispatch({ kind: "__queued", id, itemId: queued.itemId, queued: "steer" } as never);
+        } else {
+          await submitOrQueue(text, id);
+        }
         return true;
       } catch (e) {
         dispatch({ kind: "__unsent", id } as never);
@@ -336,6 +339,25 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         .catch(fail);
     },
     [port, fail],
+  );
+
+  // The kernel refuses a submit it cannot start with a code, not a sentence:
+  // the words are fine, the timing is not. Queueing them is what that code
+  // asks for, and showing anyone the refusal instead is how a race between
+  // "the turn is done" on screen and the turn actually landing became an error
+  // nobody could act on.
+  const submitOrQueue = useCallback(
+    async (text: string, id: string) => {
+      try {
+        await port.submit(text);
+        refreshStatus();
+      } catch (e) {
+        if (!(e instanceof HttpError) || e.reason?.code !== "busy.session_running") throw e;
+        const queued = await port.queueFollowup(text);
+        if (queued?.itemId) dispatch({ kind: "__queued", id, itemId: queued.itemId, queued: "followup" } as never);
+      }
+    },
+    [port, refreshStatus],
   );
 
   // Transcript rows are memoised on their item; a callback rebuilt every render
