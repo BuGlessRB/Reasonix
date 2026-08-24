@@ -74,11 +74,17 @@ const P = `(() => {
   // What the pixels resolve to, not what the token table promises: a colour is
   // checked against the surface it was designed for, then used on another one.
   const lum = (c) => { const [r,g,b] = c.map((v) => { v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); }); return 0.2126*r+0.7152*g+0.0722*b; };
-  const parseC = (x) => { const n = x.replace(/[^0-9.]+/g, " ").trim().split(" ").filter(Boolean).map(Number); if (x.indexOf("color(") === 0) { const [r,g,b,a] = n; return a === undefined ? [r*255,g*255,b*255] : [r*255,g*255,b*255,a]; } return n.slice(0, 4); };
+  // getComputedStyle now hands back oklch()/color-mix() verbatim, and digging the
+  // numbers out of that reads three components as if they were rgb — every
+  // judgement then compares two colours nobody painted. Paint one pixel and read
+  // it back instead: whatever the browser resolved is what gets measured.
+  const _cx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d", { willReadFrequently: true });
+  const parseC = (x) => { _cx.clearRect(0,0,1,1); _cx.fillStyle = "#000"; _cx.fillStyle = x; _cx.fillRect(0,0,1,1);
+    const d = _cx.getImageData(0,0,1,1).data; return [d[0], d[1], d[2], d[3]/255]; };
   const over = (f,b) => { const a = f.length>3?f[3]:1; return [0,1,2].map((i)=>f[i]*a+b[i]*(1-a)); };
   const bgOf = (el) => { const st=[]; let c=el;
     while (c && c !== document.documentElement) { const b=parseC(getComputedStyle(c).backgroundColor); if(b.length&&(b.length<4||b[3]>0)) st.push(b); c=c.parentElement; }
-    let acc=[255,255,255]; const rb=parseC(getComputedStyle(document.documentElement).backgroundColor); if(rb.length) acc=rb.slice(0,3);
+    let acc=[255,255,255]; const rb=parseC(getComputedStyle(document.documentElement).backgroundColor); if(rb[3]>0) acc=rb.slice(0,3);
     for (let i=st.length-1;i>=0;i--) acc=over(st[i],acc); return acc; };
   const hex = (c) => "#" + c.map((v)=>Math.round(v).toString(16).padStart(2,"0")).join("").toUpperCase();
   for (const el of document.querySelectorAll("*")) {
