@@ -1,9 +1,0 @@
-prompt = """Answer using the fleet tool with exactly three items, and do not read any project files yourself.
-
-Item one: id "scan", read_only true. Prompt it to list every module file under svc/.
-
-Item two: id "derive", depends_on ["scan"], read_only true. Prompt it to read every one of those module files, derive each module's effective timeout from the constants it declares, and report every module name with its effective value and nothing else.
-
-Item three: id "report", depends_on ["derive"], write_paths ["ANSWER.md"]. Prompt it to write ANSWER.md in the workspace root with exactly two lines, `module=<name>` then `effective=<N>`, naming the one module whose effective timeout is above the contract's cap of 30."""
-class = "delegation"
-timeout_sec = 900

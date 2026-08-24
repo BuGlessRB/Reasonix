@@ -788,7 +788,7 @@ context, which is what keeps delegation cheap and the child prefix cacheable.
 ### 3.14 Fleet is a small dependency graph
 
 A fleet item may declare `id` and `depends_on`. That is the whole graph
-vocabulary: no conditions, no expressions, no computed edges. It is enough for
+vocabulary: no conditions, no expressions, no dynamic fan-out. It is enough for
 
 ```
 research ──▶ implement backend ──┐
@@ -844,51 +844,24 @@ children: reuse the caller cannot see is reuse it cannot correct. With
 enumerate the children, re-issue the same graph with the finished nodes adopted,
 and pay only for what is left.
 
-A node's width may be dynamic; the graph's shape may not. `for_each` names the
-item whose submitted subjects this item maps over: its prompt becomes a template
-run once per subject, and it reports one bounded aggregate its dependents open
-with over the ordinary edge. The mapped children are never vertices — the node
-stays one — so the reachability, write claims, and skip rules preflight proved
-are the ones that ran.
+No dynamic fan-out is a measured exclusion, not only a taste. A `for_each` that
+mapped one item's prompt over the subjects another item submitted was built and
+shipped behind the surface, then measured against the call it replaces — the
+same graph with one task handling every subject, which is what it had to be
+without it. Across three fixtures and twenty-eight graded runs against a real
+provider, every run of both arms solved, and mapping spent 70% to 98% more
+tokens for it (exact permutation p ≤ 0.03 on each). The third fixture was built
+to be the case mapping should win: ten modules of near-identical code, an answer
+that is the sum of ten separate derivations, so a slip anywhere is a wrong
+answer. It did not win there either.
 
-Four things are fixed before anything starts, and that is what keeps `for_each`
-from being the first keyword of a workflow language: the template, the width
-ceiling (`max_items`, defaulted and hard-capped by the host), the read-only
-grant — which removes the write-claim analysis the host could not have done for
-an unknown number of writers — and the source. The source supplies only *which*
-subjects, through `submit_items` rather than prose, because reading a list out
-of an answer is the host guessing at a judgement it cannot see in the structure.
-The caller owns the topology, the worker owns the data: the same split the
-dependency edge makes.
-
-A source that finishes without submitting fails the mapped node rather than
-quietly mapping nothing, while an empty submission is a real answer that
-completes it. A source may not be adopted, having never run to submit anything,
-nor itself mapped, since it answers with an aggregate rather than a list.
-
-`for_each` is off the provider-visible surface. The field and the sentence
-describing it are dropped together, so the description never advertises a
-parameter the schema does not carry, and a call that names it is refused rather
-than half-honoured. There is no setting: a capability the host cannot recommend
-does not get a knob, and turning it on is a change at the wiring point in
-`internal/boot/delegation_tools.go`.
-
-It is off because it was measured and did not pay. What it costs is one full
-sub-agent per subject — prefix, reasoning, closing contract — against whatever
-that subject's own work is worth. `benchmarks/fleet-fanout` holds both arms of
-that comparison: the same call written with `for_each`, and written as one task
-handling every subject, which is what it had to be before. Across two fixtures
-and twenty graded runs against a real provider, every run of both arms solved,
-and mapping spent 85% (p=0.002) and 98% (p=0.029) more tokens for it. The second
-fixture was the one predicted to favour mapping — ten modules each needing a
-three-step derivation — and it did not. Raising `max_subagent_concurrency` past
-the mapped width cut the mapped arm's wall clock and cut the single task's by
-more.
-
-What has not been measured is the case the shape exists for: subjects whose
-combined content one child cannot hold at all. Until that is measured, a
-capability the model can see is one it will reach for at twice the price, so it
-stays behind a setting.
+The reason is that a mapped child pays a full sub-agent's fixed cost — prefix,
+reasoning, closing contract — once per subject, while a single child with a tool
+belt does not have to hold the subjects at all. It reads them one at a time, and
+when the facts are extractable it greps instead. "One context cannot hold N
+subjects" assumes an ingestion the agent never has to perform. The code and its
+suite were removed; the history holds them if a case that does need per-subject
+isolation ever turns up.
 
 ### 3.15 One child-construction primitive
 
