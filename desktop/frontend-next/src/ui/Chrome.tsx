@@ -8,7 +8,16 @@ const PRESETS: [Preset, string][] = [
   ["delivery", "交付"],
 ];
 
-const THEMES = ["auto", "light", "dark"];
+// 「跟随系统」和它当前解析出来的那一档，在屏幕上是同一个样子。按固定顺序循环
+// 就意味着在浅色系统上，默认的 auto 往下一档走到 light —— 点下去一个像素都不
+// 动，读起来就是这个开关坏了。下一档改从系统当前是什么推：第一下必定换掉屏幕
+// 上的配色。只有走回 auto 那一下没有重绘，那是这三档自身的定义决定的，图标和
+// 标题仍然在说它变了。
+function nextTheme(theme: string): string {
+  const sys = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  const other = sys === "dark" ? "light" : "dark";
+  return theme === "auto" ? other : theme === other ? sys : "auto";
+}
 const THEME_LB: Record<string, string> = { auto: "跟随系统", light: "浅色", dark: "深色" };
 
 const base = (p: string) => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || p;
@@ -120,7 +129,7 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
           data-th={theme}
           aria-label={t("主题")}
           title={t("主题：{name}", { name: t(THEME_LB[theme]) })}
-          onClick={() => onTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
+          onClick={() => onTheme(nextTheme(theme))}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path className="t-auto" d="M8 2.4a5.6 5.6 0 1 0 0 11.2 5.6 5.6 0 0 0 0-11.2" />
