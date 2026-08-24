@@ -99,7 +99,7 @@ its direct `mcp__*` tools, so its overall provider prefix may still change when
 those direct tools are installed, connected, or refreshed.
 
 `ask`, `docs`, `explore`, `fleet`, `forget`, `history`, `install_skill`, `install_source`,
-`list_sessions`, `lsp_definition`, `lsp_diagnostics`, `lsp_hover`,
+`list_sessions`, `list_subagents`, `lsp_definition`, `lsp_diagnostics`, `lsp_hover`,
 `lsp_references`, `memory`, `parallel_tasks`, `read_only_skill`,
 `read_only_task`, `read_session`, `read_skill`, `read_subagent_result`, `remember`, `research`,
 `review`, `run_skill`, `security_review`, `slash_command`, `task`.
@@ -108,8 +108,10 @@ those direct tools are installed, connected, or refreshed.
 output limit by returning a fair preview and a stable `Subagent reference` for
 every persisted child. `read_subagent_result` pages through one referenced
 final answer by UTF-8 byte offset, so long parallel research remains lossless
-without injecting every report into the parent context at once. References are
-restricted to the current conversation lineage and workspace.
+without injecting every report into the parent context at once. `list_subagents`
+recovers the references themselves when the aggregate that carried them never
+arrived, which is what an interrupted background fleet leaves behind. References
+are restricted to the current conversation lineage and workspace.
 
 `use_capability` (`action` = `list` | `inspect` | `call` | `decline`) is on the
 provider-visible surface for every execution setting (`light` | `balanced` |

@@ -102,10 +102,29 @@ func (p fleetPlan) pendingCounts() []int {
 	return out
 }
 
-func (p fleetPlan) roots() []int {
-	var out []int
+func (p fleetPlan) roots() []int { return ready(p.pendingCounts()) }
+
+// unresolvedDepCounts counts each item's dependencies that have not settled
+// yet. An adopted node enters already resolved, so its dependents are ready on
+// the first pass rather than waiting for a result that is never published.
+func (p fleetPlan) unresolvedDepCounts(results []fleetItemResult) []int {
+	out := make([]int, len(p.ids))
 	for i := range p.ids {
-		if len(p.deps[i]) == 0 {
+		for _, dep := range p.deps[i] {
+			if results[dep].status == fleetItemPending {
+				out[i]++
+			}
+		}
+	}
+	return out
+}
+
+// ready lists every item with nothing left to wait for. Whether such an item
+// needs a run at all is launch's question, not this one's.
+func ready(pending []int) []int {
+	var out []int
+	for i, count := range pending {
+		if count == 0 {
 			out = append(out, i)
 		}
 	}
@@ -181,6 +200,24 @@ func (p fleetPlan) skipDependents(results []fleetItemResult, failed int) {
 	}
 }
 
+// upstreamFor collects the answers of idx's dependencies in declaration order.
+// driveFleet launches an item only after every dependency has completed, and it
+// launches from the same goroutine that records results, so these read settled
+// values without a lock.
+func (p fleetPlan) upstreamFor(idx int, results []fleetItemResult) []UpstreamResult {
+	if len(p.deps[idx]) == 0 {
+		return nil
+	}
+	out := make([]UpstreamResult, 0, len(p.deps[idx]))
+	for _, dep := range p.deps[idx] {
+		if !results[dep].status.answered() {
+			continue
+		}
+		out = append(out, UpstreamResult{ID: p.ids[dep], Answer: results[dep].output})
+	}
+	return out
+}
+
 // errFleetBranchNotStarted marks a task whose branch was cut before it ran.
 var errFleetBranchNotStarted = fmt.Errorf("skipped: the fleet stopped starting new tasks")
 
@@ -198,7 +235,7 @@ func firstNonNilErr(errs ...error) error {
 // cancellation, so partial writer work is never reported as a task that never
 // ran. It returns whether the run ended without every item completing.
 func driveFleet(ctx context.Context, plan fleetPlan, results []fleetItemResult, doneCh <-chan fleetItemResult, wait func(), startOne func(int)) bool {
-	pending := plan.pendingCounts()
+	pending := plan.unresolvedDepCounts(results)
 	started, completed := 0, 0
 	stopStarting := false
 	launch := func(idx int) {
@@ -208,7 +245,7 @@ func driveFleet(ctx context.Context, plan fleetPlan, results []fleetItemResult, 
 		startOne(idx)
 		started++
 	}
-	for _, idx := range plan.roots() {
+	for _, idx := range ready(pending) {
 		launch(idx)
 	}
 

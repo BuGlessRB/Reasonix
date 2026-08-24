@@ -683,6 +683,13 @@ API on the same scheduler. In a persisted parent session, parallel/fleet
 children save independent transcripts; the aggregate carries bounded previews
 and stable refs, and `read_subagent_result` pages a referenced final answer by
 UTF-8 byte offset under the current conversation-lineage/workspace boundary.
+A ref is the only address a child answer has, so an aggregate that never
+arrived — a background task or fleet a restart repaired to `interrupted` —
+would strand every child it had already completed. `list_subagents` enumerates
+the children a conversation owns, newest first, under the same
+lineage/workspace boundary, so that work is recovered by reference instead of
+re-run. Both readers are parent-only: a child enumerating its siblings would be
+exactly the ambient channel §3.13 denies.
 Headless runs remain ephemeral and return fair bounded previews without refs.
 See [Subagent profiles](./SUBAGENT_PROFILES.md)
 for the user-facing command and file-format contract.
@@ -759,17 +766,20 @@ A child inherits nothing implicitly. What it receives is exactly this:
 | Delegation guidance | `<subagent-context>` on a nested child's fresh session |
 | Plan-mode marker, reasoning/response language | run options, when set |
 | A prior transcript | only via `continue_from` / `fork_from` |
+| A dependency's final answer | `<upstream-results>` on the first user turn, only for a fleet item that declared `depends_on` (§3.14) |
 
 Not inherited, by construction: `REASONIX.md`, `AGENTS.md`, `CLAUDE.md`, project
 and global memory (the memory queue is disabled, so a child cannot record memory
-either), the parent conversation, the current Goal, planner output, and sibling
-sub-agent results. A constraint that must reach a child today has to be in its
-profile body or in the task text — there is no ambient channel.
+either), the parent conversation, the current Goal, planner output, and the
+results of siblings it did not declare a dependency on. A constraint that must
+reach a child today has to be in its profile body, in the task text, or on a
+`depends_on` edge — there is no ambient channel.
 
 Every run records a `ContextCapsule` in its transcript sidecar: the workspace,
 the system-prompt source and hash, the resolved tool scope and schema hash, the
 model and effort, the parent session and tool-call id, any resumed transcript,
-and an `inherited` block whose fields are all false. `capsuleHash` is its stable
+and an `inherited` block whose fields are all false except `upstream` on an item
+a `depends_on` edge fed. `capsuleHash` is its stable
 identity, so *why did this reviewer not see that constraint* is answered from
 the record, and two runs that behaved differently can be diffed instead of
 guessed at. The capsule holds references and digests only — never copied parent
@@ -791,8 +801,18 @@ starts. Items run as soon as their dependencies complete; items with no ordering
 between them run in parallel under the same session scheduler as before.
 
 Dependencies are a property of the graph, never of a task: they live in the
-fleet plan and never reach `ProfileExecSpec`, which is what keeps `depends_on`
-from becoming the first keyword of a workflow language.
+fleet plan and never reach `TaskSpec`, which is what keeps `depends_on` from
+becoming the first keyword of a workflow language.
+
+The edge carries the dependency's answer, not only its order. A dependent opens
+with each completed dependency's final answer in an `<upstream-results>` block,
+in `depends_on` order, sharing one byte budget so a wide fan-in cannot flood the
+opening turn and no single dependency is starved out of it. An edge that ordered
+its endpoints and nothing else would leave a `research → implement` pair to pay
+for the same research twice. What the edge delivers is context rather than
+instruction, so it travels as `ContextRequest.Upstream` — never inside the task
+text, which has to stay the pristine objective that delivery classification
+judges (§3.11), and never on a profile, which describes a worker and not a run.
 
 The graph relaxes the write-claim preflight in the one place it should. Only
 items that can run at the same time need disjoint `write_paths`; an
@@ -804,6 +824,25 @@ downstream branch — running a dependent on a broken input only buys a result t
 parent must discard. Independent branches keep going unless `fail_fast` is set,
 which stops *starting* new tasks; tasks already running are left to finish so a
 writer is never abandoned mid-write.
+
+A node may stand down to a reference instead of running. `adopt_ref` names an
+already-completed child whose answer takes that node's place: nothing executes,
+so the item claims no `write_paths` and cannot collide with a live writer, and
+its dependents open with that answer over the ordinary dependency edge. It is
+proven in preflight through the same gate as `read_subagent_result` — completed,
+inside this conversation's lineage and workspace — so a reference that cannot be
+adopted starts nothing, and `prompt` and every execution field are refused on it
+rather than silently ignored.
+
+What the host will not do is decide whether an adopted answer is still valid.
+Nothing in the structure says whether the workspace moved on under it, and a
+judgement this kernel cannot read from structure is one it does not make, so
+that one stays with the caller that listed the reference while the host proves
+only ownership and completion. It is also why a plan fingerprint does not quietly reuse matching
+children: reuse the caller cannot see is reuse it cannot correct. With
+`list_subagents` this is the recovery path for a fleet a restart interrupted —
+enumerate the children, re-issue the same graph with the finished nodes adopted,
+and pay only for what is left.
 
 ### 3.15 One child-construction primitive
 

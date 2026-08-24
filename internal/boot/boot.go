@@ -809,14 +809,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	}
 	if !opts.Ablation.Off(ablation.Subagent) {
 		taskTool = newTaskTool()
-		// The registry exports schemas in stable name order. Keep this surface
-		// static: profile names and result refs never enter provider-visible
-		// schemas, and the result reader does not change between turns.
-		reg.Add(taskTool)
-		reg.Add(agent.NewParallelTasksTool(taskTool, reg))
-		reg.Add(agent.NewFleetTool(taskTool))
-		reg.Add(agent.NewSubagentResultTool(taskTool))
-		reg.Add(agent.NewReadOnlyTaskTool(taskTool))
+		addDelegationTools(reg, taskTool)
 	}
 
 	// Product documentation, session, and memory tools are always present on the

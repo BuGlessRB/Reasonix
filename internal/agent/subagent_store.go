@@ -85,9 +85,9 @@ type SubagentSpec struct {
 	ToolContext      context.Context
 	Model            string
 	Effort           string
-	// ResumedFrom feeds the context capsule; it does not change how the
-	// transcript itself is stored.
+	// ResumedFrom and Upstream feed the context capsule only.
 	ResumedFrom string
+	Upstream    bool
 }
 
 // SubagentRun is a prepared transcript run. Call Release exactly once.

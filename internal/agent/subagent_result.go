@@ -235,6 +235,17 @@ func formatBoundedSubagentAggregate(prefix string, items []subagentAggregateItem
 }
 
 func subagentAnswerPreview(answer, ref string, limit int) string {
+	marker := "\n…[preview truncated; full result unavailable in this ephemeral run]…\n"
+	if ref != "" {
+		marker = fmt.Sprintf("\n…[preview truncated; read the full result with read_subagent_result(ref=%q)]…\n", ref)
+	}
+	return boundedAnswerPreview(answer, marker, limit)
+}
+
+// boundedAnswerPreview keeps a head and a tail around marker so a clipped
+// answer still carries its conclusion, which is where a sub-agent puts what
+// the caller asked it for.
+func boundedAnswerPreview(answer, marker string, limit int) string {
 	answer = strings.TrimSpace(answer)
 	if len(answer) <= limit {
 		return answer
@@ -242,19 +253,13 @@ func subagentAnswerPreview(answer, ref string, limit int) string {
 	if limit <= 0 {
 		return ""
 	}
-	marker := "\n…[preview truncated; full result unavailable in this ephemeral run]…\n"
-	if ref != "" {
-		marker = fmt.Sprintf("\n…[preview truncated; read the full result with read_subagent_result(ref=%q)]…\n", ref)
-	}
 	if len(marker) >= limit {
 		return utf8Prefix(answer, limit)
 	}
 	keep := limit - len(marker)
 	headBytes := keep / 2
 	tailBytes := keep - headBytes
-	head := utf8Prefix(answer, headBytes)
-	tail := utf8Suffix(answer, tailBytes)
-	return head + marker + tail
+	return utf8Prefix(answer, headBytes) + marker + utf8Suffix(answer, tailBytes)
 }
 
 func utf8Prefix(s string, limit int) string {

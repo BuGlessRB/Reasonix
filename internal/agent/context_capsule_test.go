@@ -14,15 +14,32 @@ func capsuleForSpec(t *testing.T, spec SubagentSpec) ContextCapsule {
 	return metaFromSpec("sa_test", SubagentRunning, now, now, spec).Capsule
 }
 
-// Children are isolated by construction. This test states that as a fact so a
-// future change that starts inheriting something has to come here, flip the
-// flag, and update the SPEC table in the same commit.
+// Children are isolated by construction, and a run nobody fed inherits nothing
+// at all. This test states that as a fact so a future change that starts
+// inheriting something has to come here, flip the flag, and update the SPEC
+// table in the same commit.
 func TestContextCapsuleRecordsWhatIsNotInherited(t *testing.T) {
 	capsule := capsuleForSpec(t, SubagentSpec{
 		Kind: "task", Name: "task", SystemPrompt: DefaultTaskSystemPrompt,
 	})
 	if capsule.Inherited != (InheritedContext{}) {
 		t.Fatalf("Inherited = %+v, want every field false: a child receives no standing instructions, memory, parent conversation, goal, or planner output", capsule.Inherited)
+	}
+}
+
+// The one thing a child can inherit: a declared dependency's answer. Recording
+// it is what keeps the delivery a decision rather than an accident, and it is
+// what lets two runs that started from different context be told apart.
+func TestContextCapsuleRecordsDeliveredUpstream(t *testing.T) {
+	isolated := SubagentSpec{Kind: "task", Name: "task", SystemPrompt: DefaultTaskSystemPrompt}
+	fed := isolated
+	fed.Upstream = true
+
+	if got := capsuleForSpec(t, fed).Inherited; got != (InheritedContext{Upstream: true}) {
+		t.Fatalf("Inherited = %+v, want upstream alone recorded", got)
+	}
+	if capsuleForSpec(t, isolated).Hash() == capsuleForSpec(t, fed).Hash() {
+		t.Error("two runs that started from different context must not share a capsule hash")
 	}
 }
 

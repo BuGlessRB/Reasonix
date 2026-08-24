@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"reasonix/internal/ablation"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
@@ -36,7 +37,7 @@ func NewFleetTool(taskTool *TaskTool) *FleetTool {
 func (*FleetTool) Name() string { return "fleet" }
 
 func (*FleetTool) Description() string {
-	return "Dispatch 2–64 sub-agent tasks as a small dependency graph and return bounded previews plus stable Subagent references for full-result retrieval from completed persisted children with read_subagent_result. Each item may select a profile, model, effort, tools, write_paths, or read_only, and may declare depends_on to run after other items (research → implement → review). Tasks with no dependency between them run in parallel and must declare non-overlapping write_paths; ordered tasks may share paths. Omitted write_paths claim the whole workspace, so two or more concurrent writers without paths fail preflight before any task starts. A failed task's dependents are skipped; independent branches keep going unless fail_fast is set. Background mode returns a fleet job id collectable with wait."
+	return "Dispatch 2–64 sub-agent tasks as a small dependency graph and return bounded previews plus stable Subagent references for full-result retrieval from completed persisted children with read_subagent_result. Each item may select a profile, model, effort, tools, write_paths, or read_only, and may declare depends_on to run after other items and start from their final answers (research → implement → review). Tasks with no dependency between them run in parallel and must declare non-overlapping write_paths; ordered tasks may share paths. Omitted write_paths claim the whole workspace, so two or more concurrent writers without paths fail preflight before any task starts. A failed task's dependents are skipped; independent branches keep going unless fail_fast is set. An item may pass adopt_ref instead of a prompt to stand in for running it with an already-completed child's answer, which is how a fleet a restart interrupted is re-issued without paying twice for the items that finished. Background mode returns a fleet job id collectable with wait."
 }
 
 func (*FleetTool) Schema() json.RawMessage {
@@ -51,9 +52,10 @@ func (*FleetTool) Schema() json.RawMessage {
     "items":{
       "type":"object",
       "properties":{
-        "prompt":{"type":"string","description":"Task prompt for the sub-agent."},
+        "prompt":{"type":"string","description":"Task prompt for the sub-agent. Required unless adopt_ref stands in for running this item."},
+        "adopt_ref":{"type":"string","description":"A Subagent reference whose already-completed answer stands in for running this item, from list_subagents or an earlier aggregate. The item runs nothing: its answer becomes the dependency payload its dependents open with, exactly as if it had just produced it. Use it to re-issue a fleet a restart interrupted without paying again for the items that finished. Rejected unless the reference is completed and inside this conversation's lineage and workspace. Mutually exclusive with prompt and with every execution field (profile, model, effort, tools, max_steps, write_paths, read_only), since nothing executes. Whether that answer is still valid after what changed since is yours to judge — the host only proves the reference is yours and complete."},
         "id":{"type":"string","description":"Optional stable id for this task, referenced by other tasks' depends_on. Defaults to the 1-based position."},
-        "depends_on":{"type":"array","items":{"type":"string"},"description":"Ids of tasks that must complete before this one starts. Unknown ids, self-edges, and cycles fail preflight. A task whose dependency fails or is skipped is skipped too. Ordered tasks may share write_paths; only tasks that can run at the same time need disjoint claims."},
+        "depends_on":{"type":"array","items":{"type":"string"},"description":"Ids of tasks that must complete before this one starts. This task begins with each dependency's final answer in its context, bounded and split evenly across them, so it need not re-derive their work. Unknown ids, self-edges, and cycles fail preflight. A task whose dependency fails or is skipped is skipped too. Ordered tasks may share write_paths; only tasks that can run at the same time need disjoint claims."},
         "description":{"type":"string","description":"Optional short label shown in the job list."},
         "profile":{"type":"string","description":"Optional runAs=subagent profile name."},
         "write_paths":{"type":"array","items":{"type":"string"},"description":"Write targets for this item. Writers that can run at the same time must declare non-overlapping paths; writers ordered by depends_on may share them. Omitting write_paths claims the whole workspace; two concurrent whole-workspace claims (or any overlap between concurrent writers) fail preflight and start nothing."},
@@ -62,8 +64,7 @@ func (*FleetTool) Schema() json.RawMessage {
         "max_steps":{"type":"integer","description":"Optional max tool-call rounds.","minimum":1},
         "model":{"type":"string","description":"Optional model override."},
         "effort":{"type":"string","description":"Optional reasoning effort override."}
-      },
-      "required":["prompt"]
+      }
     }
   },
   "fail_fast":{"type":"boolean","description":"Stop starting new tasks after the first failure. Tasks already running are left to finish so partial writes are not abandoned mid-flight. Omitted (the default) means independent branches keep going; a failed task's dependents are skipped either way."},
@@ -77,6 +78,7 @@ func (*FleetTool) ReadOnly() bool { return false }
 
 type fleetTaskItem struct {
 	Prompt      string   `json:"prompt"`
+	AdoptRef    string   `json:"adopt_ref"`
 	ID          string   `json:"id"`
 	DependsOn   []string `json:"depends_on"`
 	Description string   `json:"description"`
@@ -94,10 +96,17 @@ type fleetItemStatus string
 const (
 	fleetItemPending   fleetItemStatus = "pending"
 	fleetItemCompleted fleetItemStatus = "completed"
+	fleetItemAdopted   fleetItemStatus = "adopted"
 	fleetItemFailed    fleetItemStatus = "failed"
 	fleetItemCancelled fleetItemStatus = "cancelled"
 	fleetItemSkipped   fleetItemStatus = "skipped"
 )
+
+// answered reports whether an item holds a final answer a dependent can start
+// from: one it produced, or one adopted in its place.
+func (s fleetItemStatus) answered() bool {
+	return s == fleetItemCompleted || s == fleetItemAdopted
+}
 
 type fleetItemResult struct {
 	index   int
@@ -174,41 +183,22 @@ func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result s
 		return "", fmt.Errorf("fleet requires between %d and %d tasks (got %d)", fleetMinTasks, fleetMaxTasks, n)
 	}
 
-	specs := make([]ProfileExecSpec, len(params.Tasks))
-	// Keep one claim slot per original task so preflight errors report the
-	// caller-visible task numbers even when read-only items are interleaved.
-	claims := make([]WritePathSet, len(params.Tasks))
 	for i, item := range params.Tasks {
-		if strings.TrimSpace(item.Prompt) == "" {
-			return "", fmt.Errorf("task %d: prompt is required", i+1)
-		}
-		// Fleet writers without write_paths claim the whole workspace so the
-		// preflight can detect multi-writer collisions before anything starts.
-		forceBackgroundClaim := !item.ReadOnly
-		spec, err := f.taskTool.buildTaskSpec(ctx, item.Prompt, item.Description, item.Profile, item.WritePaths, item.Tools, item.MaxSteps, item.Model, item.Effort, "", "", false, item.ReadOnly)
-		if err != nil {
-			return "", fmt.Errorf("task %d: %w", i+1, err)
-		}
-		if forceBackgroundClaim && !spec.Grant.ReadOnly && spec.Grant.WritePaths.Empty() {
-			whole, werr := WholeWorkspaceWriteClaim(f.taskTool.workspaceRoot)
-			if werr != nil {
-				return "", fmt.Errorf("task %d: %w", i+1, werr)
-			}
-			spec.Grant.WritePaths = whole
-		}
-		spec.Sched.Nested = SubagentDepth(ctx) > 0
-		spec.Sched.RunInBackground = false // fleet owns backgrounding
-		if spec.Task.Description == "" {
-			spec.Task.Description = fmt.Sprintf("fleet-%d", i+1)
-		}
-		specs[i] = spec
-		if !spec.Grant.ReadOnly {
-			claims[i] = spec.Grant.WritePaths
+		if err := validateFleetItemShape(i, item); err != nil {
+			return "", err
 		}
 	}
 	plan, err := newFleetPlan(params.Tasks, params.FailFast)
 	if err != nil {
 		return "", fmt.Errorf("fleet preflight: %w", err)
+	}
+	adopted, err := f.resolveAdoptions(ctx, params.Tasks)
+	if err != nil {
+		return "", fmt.Errorf("fleet preflight: %w", err)
+	}
+	specs, claims, err := f.buildItemSpecs(ctx, params.Tasks, adopted)
+	if err != nil {
+		return "", err
 	}
 	if err := plan.validateConcurrentWriteClaims(claims); err != nil {
 		return "", fmt.Errorf("fleet preflight: %w", err)
@@ -216,7 +206,8 @@ func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result s
 
 	if params.RunInBackground {
 		for i := range specs {
-			specs[i].Sched.BackgroundWriter = !specs[i].Grant.ReadOnly
+			_, isAdopted := adopted[i]
+			specs[i].Sched.BackgroundWriter = !isAdopted && !specs[i].Grant.ReadOnly
 		}
 		jm, ok := jobs.FromContext(ctx)
 		if !ok {
@@ -258,7 +249,7 @@ func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result s
 			// The job shares the Execute-level merger so the group lifecycle
 			// events and the child previews ride the same pacing budget.
 			jobCtx = withSubagentProgressMerger(jobCtx, merger)
-			return f.runFleet(jobCtx, groupSink, specs, plan, parentID)
+			return f.runFleet(jobCtx, groupSink, specs, plan, adopted, parentID)
 		})
 		// runFleet (inside the job) owns the terminal and merger close from
 		// here on. Foreground runFleet hands off only the terminal; Execute
@@ -269,10 +260,49 @@ func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result s
 	}
 
 	lifecycleHandoff = true
-	return f.runFleet(ctx, groupSink, specs, plan, groupParentID)
+	return f.runFleet(ctx, groupSink, specs, plan, adopted, groupParentID)
 }
 
-func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []ProfileExecSpec, plan fleetPlan, groupParentID string) (result string, err error) {
+// buildItemSpecs compiles one ProfileExecSpec per runnable item. An adopted item
+// gets none: nothing constructs a child for it, which is also why it holds no
+// write claim and cannot collide with a concurrent writer.
+func (f *FleetTool) buildItemSpecs(ctx context.Context, items []fleetTaskItem, adopted map[int]adoptedItem) ([]ProfileExecSpec, []WritePathSet, error) {
+	specs := make([]ProfileExecSpec, len(items))
+	// Keep one claim slot per original task so preflight errors report the
+	// caller-visible task numbers even when read-only items are interleaved.
+	claims := make([]WritePathSet, len(items))
+	for i, item := range items {
+		if _, isAdopted := adopted[i]; isAdopted {
+			continue
+		}
+		// Fleet writers without write_paths claim the whole workspace so the
+		// preflight can detect multi-writer collisions before anything starts.
+		forceBackgroundClaim := !item.ReadOnly
+		spec, err := f.taskTool.buildTaskSpec(ctx, item.Prompt, item.Description, item.Profile, item.WritePaths, item.Tools, item.MaxSteps, item.Model, item.Effort, "", "", false, item.ReadOnly)
+		if err != nil {
+			return nil, nil, fmt.Errorf("task %d: %w", i+1, err)
+		}
+		if forceBackgroundClaim && !spec.Grant.ReadOnly && spec.Grant.WritePaths.Empty() {
+			whole, werr := WholeWorkspaceWriteClaim(f.taskTool.workspaceRoot)
+			if werr != nil {
+				return nil, nil, fmt.Errorf("task %d: %w", i+1, werr)
+			}
+			spec.Grant.WritePaths = whole
+		}
+		spec.Sched.Nested = SubagentDepth(ctx) > 0
+		spec.Sched.RunInBackground = false // fleet owns backgrounding
+		if spec.Task.Description == "" {
+			spec.Task.Description = fmt.Sprintf("fleet-%d", i+1)
+		}
+		specs[i] = spec
+		if !spec.Grant.ReadOnly {
+			claims[i] = spec.Grant.WritePaths
+		}
+	}
+	return specs, claims, nil
+}
+
+func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []ProfileExecSpec, plan fleetPlan, adopted map[int]adoptedItem, groupParentID string) (result string, err error) {
 	if sink == nil {
 		sink = event.Discard
 	}
@@ -311,6 +341,11 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 	results = make([]fleetItemResult, n)
 	for i := range results {
 		results[i] = fleetItemResult{index: i, status: fleetItemPending, profile: specs[i].Worker.Profile}
+		// An adopted node enters already resolved, so the driver never launches
+		// it and its dependents are ready from the first pass.
+		if a, ok := adopted[i]; ok {
+			results[i] = fleetItemResult{index: i, status: fleetItemAdopted, output: a.answer, ref: a.ref}
+		}
 	}
 
 	var wg sync.WaitGroup
@@ -318,6 +353,7 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 
 	startOne := func(idx int) {
 		spec := specs[idx]
+		spec.Context.Upstream = f.upstreamFor(plan, idx, results)
 		label := spec.Task.Description
 		subID := fmt.Sprintf("%s/fleet-%d", parentID, idx+1)
 		dispatchArgs, _ := json.Marshal(map[string]any{
@@ -378,13 +414,23 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 	return formatFleetAggregate(results, false), nil
 }
 
+// upstreamFor is the plan's delivery with the measurement arm applied. The
+// no-upstream arm orders the endpoints and delivers nothing, so a benchmark can
+// attribute a result to the data the edge carries rather than to its order.
+func (f *FleetTool) upstreamFor(plan fleetPlan, idx int, results []fleetItemResult) []UpstreamResult {
+	if f.taskTool != nil && f.taskTool.ablation.Off(ablation.Upstream) {
+		return nil
+	}
+	return plan.upstreamFor(idx, results)
+}
+
 func formatFleetAggregate(results []fleetItemResult, cancelled bool) string {
 	n := len(results)
 	var prefix string
 	if cancelled {
 		completed := 0
 		for _, r := range results {
-			if r.status == fleetItemCompleted {
+			if r.status.answered() {
 				completed++
 			}
 		}
@@ -403,6 +449,9 @@ func formatFleetAggregate(results []fleetItemResult, cancelled bool) string {
 		switch r.status {
 		case fleetItemCompleted:
 			item.status = "status: completed\n"
+			item.answer = strings.TrimSpace(r.output)
+		case fleetItemAdopted:
+			item.status = "status: adopted (not run; the answer below is the reference's)\n"
 			item.answer = strings.TrimSpace(r.output)
 		case fleetItemFailed:
 			item.status = "status: failed\n"

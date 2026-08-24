@@ -19,11 +19,14 @@ const (
 	// FullFold off means a fold reads the previous projection instead of
 	// re-deriving its digest from the canonical transcript.
 	FullFold Module = "full-fold"
+	// Upstream off means a fleet dependency edge orders its endpoints without
+	// delivering the dependency's answer, so a dependent must re-derive it.
+	Upstream Module = "upstream"
 )
 
 // Modules returns every switchable module in the order arm names use.
 func Modules() []Module {
-	return []Module{Evidence, Planner, Subagent, Retrieval, Compaction, FullFold}
+	return []Module{Evidence, Planner, Subagent, Retrieval, Compaction, FullFold, Upstream}
 }
 
 // Set is the group of modules disabled for a run. The zero value is the
@@ -50,12 +53,16 @@ func Parse(spec string) (Set, error) {
 	for _, field := range strings.FieldsFunc(spec, func(r rune) bool { return r == ',' || r == ' ' }) {
 		m := Module(strings.ToLower(strings.TrimSpace(field)))
 		if !known[m] {
-			return Set{}, fmt.Errorf("unknown ablation module %q (want %s, or none/all)", field, joinModules(Modules(), ", "))
+			return Set{}, fmt.Errorf("unknown ablation module %q (want %s, or none/all)", field, ModuleList())
 		}
 		mods = append(mods, m)
 	}
 	return New(mods...), nil
 }
+
+// ModuleList names every switchable module for flag help and error text, so
+// those cannot drift from Modules() the way a hand-kept list does.
+func ModuleList() string { return joinModules(Modules(), ", ") }
 
 // New returns a Set with the given modules disabled.
 func New(mods ...Module) Set {

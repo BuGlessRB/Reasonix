@@ -146,9 +146,12 @@ and `--auto` / `-y` (an alias for `--permission-mode auto`).
 
 `--ablate` switches whole subsystems off so a benchmark can attribute a change
 in success rate to one of them. It accepts a comma-separated list of `evidence`,
-`planner`, `subagent`, `retrieval` and `compaction`, plus `none` (the default,
-everything on) and `all`. Sub-agents inherit the parent's arm, and the arm name
-is written to the `--metrics` file so a recorded run is self-describing.
+`planner`, `subagent`, `retrieval`, `compaction`, `full-fold` and `upstream`,
+plus `none` (the default, everything on) and `all`. Sub-agents inherit the
+parent's arm, and the arm name is written to the `--metrics` file so a recorded
+run is self-describing. `upstream` off leaves a fleet's `depends_on` edges
+ordering their endpoints while delivering nothing, which is how the value of
+what an edge carries is separated from the value of the order it imposes.
 
 ```sh
 reasonix run --ablate evidence,planner --metrics run.json "fix the failing test"

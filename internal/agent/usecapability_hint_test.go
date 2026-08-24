@@ -48,7 +48,9 @@ func TestContractHintStaysSilentWhenTheArgumentsFit(t *testing.T) {
 func TestContractHintDescendsIntoArrayItems(t *testing.T) {
 	schema := (&FleetTool{}).Schema()
 	got := contractHint(schema, json.RawMessage(`{"tasks":[{"name":"fix-alpha","prompt":"do it"}]}`))
-	for _, want := range []string{`"name" is not a parameter of a ` + "`tasks`" + ` item`, `accepts "depends_on"`, `"prompt"`} {
+	// Membership, not position: the accepted list is alphabetical, so anchoring
+	// on whichever key sorts first breaks every time one is added.
+	for _, want := range []string{`"name" is not a parameter of a ` + "`tasks`" + ` item`, ` accepts `, `"depends_on"`, `"prompt"`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("hint = %q, want it to contain %q", got, want)
 		}
@@ -59,9 +61,12 @@ func TestContractHintDescendsIntoArrayItems(t *testing.T) {
 }
 
 // An item that omits what its own schema requires is answered at the item's
-// level too, so the fix does not read as a missing top-level parameter.
+// level too, so the fix does not read as a missing top-level parameter. The
+// fixture is inline because a fleet item requires prompt or adopt_ref — an
+// alternation no single `required` entry states, so fleet declares neither and
+// refuses the pair at the host (validateFleetItemShape).
 func TestContractHintNamesWhatAnItemRequires(t *testing.T) {
-	schema := (&FleetTool{}).Schema()
+	schema := json.RawMessage(`{"type":"object","properties":{"tasks":{"type":"array","items":{"type":"object","properties":{"prompt":{},"description":{}},"required":["prompt"]}}},"required":["tasks"]}`)
 	got := contractHint(schema, json.RawMessage(`{"tasks":[{"description":"fix billing"}]}`))
 	if !strings.Contains(got, "`tasks`"+` item requires "prompt"`) {
 		t.Errorf("hint = %q, want the item's own required field named", got)

@@ -16,14 +16,17 @@ const (
 )
 
 // InheritedContext states, item by item, what a child received from its parent.
-// Every field is false today: children are isolated by construction, and this
-// record exists so that stays a decision rather than an accident.
+// Children are isolated by construction, so every field is false unless the
+// caller asked for it; this record exists so that stays a decision rather than
+// an accident.
 type InheritedContext struct {
 	StandingInstructions bool `json:"standingInstructions"`
 	Memory               bool `json:"memory"`
 	ParentConversation   bool `json:"parentConversation"`
 	Goal                 bool `json:"goal"`
 	PlannerOutput        bool `json:"plannerOutput"`
+	// Upstream is set when a declared dependency's answer opened this run.
+	Upstream bool `json:"upstream"`
 }
 
 // ContextCapsule is the immutable manifest of what one child run was actually
@@ -82,6 +85,7 @@ func metaFromSpec(ref string, status SubagentStatus, created, updated time.Time,
 		ParentSession:      strings.TrimSpace(spec.ParentSession),
 		ParentToolCallID:   strings.TrimSpace(spec.ParentToolCallID),
 		ResumedFrom:        strings.TrimSpace(spec.ResumedFrom),
+		Inherited:          InheritedContext{Upstream: spec.Upstream},
 	}
 	return SubagentMeta{
 		Ref:              ref,
