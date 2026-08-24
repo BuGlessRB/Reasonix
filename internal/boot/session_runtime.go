@@ -29,19 +29,12 @@ func startSessionRuntime(opts Options, cfg *config.Config, root string, sink eve
 		jobs.WithStalledWarningAfter(time.Duration(cfg.BackgroundJobStalledWarningSeconds()) * time.Second),
 		jobs.WithSessionOwnershipProbe(agent.SessionLeaseHeldByCurrentRuntime),
 	}
-	lease, err := workspacelease.New(root, config.WorkspaceLeaseDir(), func() {
-		sink.Emit(event.Event{
-			Kind:   event.Notice,
-			Level:  event.LevelInfo,
-			Code:   event.NoticeCodeWorkspaceLease,
-			Text:   "Another session is writing to this workspace; this session will continue automatically when it is safe.",
-			Detail: "workspace write lease is busy; read-only work remains concurrent",
-		})
+	lease, err := workspacelease.New(root, config.WorkspaceLeaseDir(), func(w workspacelease.Wait) {
+		sink.Emit(workspaceLeaseNotice(w))
 	})
 	if err != nil {
 		return sessionRuntime{}, fmt.Errorf("initialize workspace write lease: %w", err)
 	}
-	jobOptions = append(jobOptions, jobs.WithJobStartObserver(lease.RetainUntil))
 	manager := jobs.NewManager(sink, jobOptions...)
 
 	dir := opts.SessionDir
@@ -56,4 +49,35 @@ func startSessionRuntime(opts Options, cfg *config.Config, root string, sink eve
 		report(sink, event.Event{Level: event.LevelWarn, Text: "cleanup-pending reconciliation failed: " + err.Error()})
 	}
 	return sessionRuntime{lease: lease, jobs: manager, dir: dir}, nil
+}
+
+// workspaceLeaseNotice turns one reported wait into what a frontend can
+// resolve. The wait is a warning because the turn is stopped for the length of
+// it; its close is not, and carries the measured wait so nothing is left on
+// screen still claiming a wait that is over.
+func workspaceLeaseNotice(w workspacelease.Wait) event.Event {
+	waited := w.Elapsed.Round(100 * time.Millisecond)
+	switch w.Outcome {
+	case workspacelease.WaitAcquired:
+		return event.Event{
+			Kind: event.Notice, Level: event.LevelInfo,
+			Code:   event.NoticeCodeWorkspaceLeaseResumed,
+			Text:   "The workspace is free again; this session has continued.",
+			Detail: fmt.Sprintf("waited %s for the workspace write lease", waited),
+		}
+	case workspacelease.WaitAbandoned:
+		return event.Event{
+			Kind: event.Notice, Level: event.LevelInfo,
+			Code:   event.NoticeCodeWorkspaceLeaseAbandoned,
+			Text:   "The wait for the workspace ended before this session's turn to write came.",
+			Detail: fmt.Sprintf("waited %s; the turn was cancelled or timed out first", waited),
+		}
+	default:
+		return event.Event{
+			Kind: event.Notice, Level: event.LevelWarn,
+			Code:   event.NoticeCodeWorkspaceLease,
+			Text:   "Another session is writing to this workspace; this session will continue automatically when it is safe.",
+			Detail: "workspace write lease is busy; read-only work remains concurrent",
+		}
+	}
 }

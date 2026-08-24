@@ -52,6 +52,7 @@ export const EN: Record<string, string> = {
   "这次请求没能送到内核（HTTP {status}）": "That request never reached the kernel (HTTP {status})",
   "移动 {id} 的界面": "Move {id}'s view",
   "等你批准": "Waiting for approval",
+  "等待工作区": "Waiting for the workspace",
   "等你决定": "Waiting on you",
   "缓存": "Cache",
   "{n} 步 · {clock}": "{n} steps · {clock}",
@@ -758,6 +759,10 @@ export const EN: Record<string, string> = {
   // ── 回合中的通知（notices.ts 按 code 查表，扫描器看不到）──────
   "这一轮模型没有给出回答，正在让它重说一次": "The model gave no answer this round; asking it again",
   "模型直接给了答案却没动手，正在要求它先用工具": "The model answered without acting; asking it to use its tools first",
+  "另一个会话正在写这个工作区，等它写完会自动继续":
+    "Another session is writing to this workspace; this one continues on its own when it is safe",
+  "工作区空出来了，这个会话已经继续": "The workspace is free again; this session has continued",
+  "还没轮到这个会话写，这次等待就结束了": "The wait ended before this session's turn to write came",
 
   // ── 连不上时卡在哪一步（kernel.ts 的 refusal 措辞）─────────────
 

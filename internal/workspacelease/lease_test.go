@@ -7,10 +7,54 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 )
+
+// withWaitGrace shortens the silence a contended acquisition keeps, so a test
+// can watch both ends of a reported wait without waiting out the real one.
+func withWaitGrace(t *testing.T, d time.Duration) {
+	t.Helper()
+	previous := waitNoticeGrace
+	waitNoticeGrace = d
+	t.Cleanup(func() { waitNoticeGrace = previous })
+}
+
+// waitLog records what a session was told about one contended acquisition.
+type waitLog struct {
+	mu   sync.Mutex
+	seen []Wait
+}
+
+func (l *waitLog) note(w Wait) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.seen = append(l.seen, w)
+}
+
+func (l *waitLog) outcomes() []WaitOutcome {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	got := make([]WaitOutcome, 0, len(l.seen))
+	for _, w := range l.seen {
+		got = append(got, w.Outcome)
+	}
+	return got
+}
+
+func (l *waitLog) sameAs(want ...WaitOutcome) bool {
+	got := l.outcomes()
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
 
 func TestWorkspaceLeaseHelperProcess(t *testing.T) {
 	if os.Getenv("REASONIX_WORKSPACE_LEASE_HELPER") != "1" {
@@ -139,14 +183,15 @@ func TestRepositoryRootAndSubdirectoryOwnersSerialize(t *testing.T) {
 	subdirOwner.EndRun()
 }
 
-func TestOwnersSerializeSameWorkspaceAndNotifyOnce(t *testing.T) {
+func TestOwnersSerializeSameWorkspaceAndReportTheWaitAsAPair(t *testing.T) {
+	withWaitGrace(t, 20*time.Millisecond)
 	root, locks := t.TempDir(), t.TempDir()
 	first, err := New(root, locks, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var notices atomic.Int32
-	second, err := New(root, locks, func() { notices.Add(1) })
+	var log waitLog
+	second, err := New(root, locks, log.note)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,20 +217,72 @@ func TestOwnersSerializeSameWorkspaceAndNotifyOnce(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("second owner did not acquire after release")
 	}
-	if got := notices.Load(); got != 1 {
-		t.Fatalf("wait notices = %d, want 1", got)
+	if !log.sameAs(WaitBegan, WaitAcquired) {
+		t.Fatalf("wait reports = %v, want one began closed by one acquired", log.outcomes())
 	}
 	second.EndRun()
 }
 
+// A wait shorter than the grace is one nobody experienced as a wait, and a
+// permanent line about it outlives the condition it describes.
+func TestWaitUnderTheGraceIsNeverReported(t *testing.T) {
+	withWaitGrace(t, 5*time.Second)
+	root, locks := t.TempDir(), t.TempDir()
+	first, _ := New(root, locks, nil)
+	var log waitLog
+	second, _ := New(root, locks, log.note)
+	first.BeginRun()
+	second.BeginRun()
+	if err := first.AcquireWrite(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	acquired := make(chan error, 1)
+	go func() { acquired <- second.AcquireWrite(context.Background()) }()
+	time.Sleep(20 * time.Millisecond)
+	first.EndRun()
+	if err := <-acquired; err != nil {
+		t.Fatal(err)
+	}
+	if got := log.outcomes(); len(got) != 0 {
+		t.Fatalf("wait reports = %v, want none for a wait inside the grace", got)
+	}
+	second.EndRun()
+}
+
+// A wait the caller gives up on is still closed: the surface that was told the
+// session is waiting has to be told it no longer is.
+func TestAbandonedWaitIsClosedToo(t *testing.T) {
+	withWaitGrace(t, 20*time.Millisecond)
+	root, locks := t.TempDir(), t.TempDir()
+	first, _ := New(root, locks, nil)
+	var log waitLog
+	second, _ := New(root, locks, log.note)
+	first.BeginRun()
+	second.BeginRun()
+	defer first.EndRun()
+	defer second.EndRun()
+	if err := first.AcquireWrite(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if err := second.AcquireWrite(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("second owner acquired while first held: %v", err)
+	}
+	if !log.sameAs(WaitBegan, WaitAbandoned) {
+		t.Fatalf("wait reports = %v, want one began closed by one abandoned", log.outcomes())
+	}
+}
+
 func TestStateReportsWaitingAndAcquiredWithoutIdentity(t *testing.T) {
+	withWaitGrace(t, 20*time.Millisecond)
 	root, locks := t.TempDir(), t.TempDir()
 	first, err := New(root, locks, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	waiting := make(chan struct{}, 1)
-	second, err := New(root, locks, func() { waiting <- struct{}{} })
+	second, err := New(root, locks, func(Wait) { waiting <- struct{}{} })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,78 +424,6 @@ func TestLeaseWaitsForLastRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	second.EndRun()
-}
-
-func TestBackgroundRetentionOutlivesRun(t *testing.T) {
-	root, locks := t.TempDir(), t.TempDir()
-	first, _ := New(root, locks, nil)
-	second, _ := New(root, locks, nil)
-	first.BeginRun()
-	second.BeginRun()
-	if err := first.AcquireWrite(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	done := make(chan struct{})
-	first.RetainUntil(done)
-	first.EndRun()
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	if err := second.AcquireWrite(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		cancel()
-		t.Fatalf("second acquired while background job was running: %v", err)
-	}
-	cancel()
-	close(done)
-	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := second.AcquireWrite(ctx); err != nil {
-		t.Fatal(err)
-	}
-	second.EndRun()
-}
-
-func TestLeaseWaitsForEveryRetainedBackgroundJob(t *testing.T) {
-	root, locks := t.TempDir(), t.TempDir()
-	first, _ := New(root, locks, nil)
-	second, _ := New(root, locks, nil)
-	first.BeginRun()
-	second.BeginRun()
-	if err := first.AcquireWrite(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	one, two := make(chan struct{}), make(chan struct{})
-	first.RetainUntil(one)
-	first.RetainUntil(two)
-	first.EndRun()
-	close(one)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
-	if err := second.AcquireWrite(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		cancel()
-		t.Fatalf("lease released before final background job: %v", err)
-	}
-	cancel()
-	close(two)
-	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := second.AcquireWrite(ctx); err != nil {
-		t.Fatal(err)
-	}
-	second.EndRun()
-}
-
-func TestRetainWithoutWriteDoesNotBlockReaders(t *testing.T) {
-	root, locks := t.TempDir(), t.TempDir()
-	reader, _ := New(root, locks, nil)
-	writer, _ := New(root, locks, nil)
-	reader.BeginRun()
-	done := make(chan struct{})
-	reader.RetainUntil(done)
-	reader.EndRun()
-	writer.BeginRun()
-	if err := writer.AcquireWrite(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	writer.EndRun()
-	close(done)
 }
 
 func TestCrossProcessLeaseBlocksAndCrashReleases(t *testing.T) {

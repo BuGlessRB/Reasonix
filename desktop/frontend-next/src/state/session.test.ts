@@ -193,6 +193,34 @@ describe("a notice about the runtime rather than the conversation", () => {
   });
 });
 
+describe("waiting for another session to finish writing", () => {
+  const lease = (code: string, level: string, text: string): SessionEvent =>
+    ({ kind: "notice", code, level, text }) as SessionEvent;
+  const cards = (st: SessionState) => st.items.filter((i): i is Extract<Item, { t: "notice" }> => i.t === "notice");
+
+  // The open used to be the whole surface: one card saying the session would
+  // continue "when it is safe", still saying it long after it had.
+  it("rewrites the waiting card in place when the wait ends", () => {
+    const st = run([
+      lease("workspace_lease", "warn", "Another session is writing to this workspace."),
+      lease("workspace_lease_resumed", "info", "The workspace is free again; this session has continued."),
+    ]);
+    expect(cards(st)).toHaveLength(1);
+    expect(cards(st)[0].code).toBe("workspace_lease_resumed");
+    expect(cards(st)[0].level).toBe("info");
+  });
+
+  // A wait is a state, and the strip is where this interface says what a turn
+  // is stopped on — the same place 等你批准 goes.
+  it("says what the turn is waiting on, and stops saying it when it is not", () => {
+    const waiting = run([lease("workspace_lease", "warn", "Another session is writing to this workspace.")]);
+    expect(waiting.doing).toBe("等待工作区");
+    const gaveUp = reduce(waiting, lease("workspace_lease_abandoned", "info", "The wait ended."));
+    expect(gaveUp.doing).toBe("运行中");
+    expect(cards(gaveUp)).toHaveLength(1);
+  });
+});
+
 describe("the turn's verification receipt", () => {
   const done = (receipt: unknown): SessionEvent => ({ kind: "turn_done", receipt }) as SessionEvent;
   const card = { saysSomething: true, verdict: "unproven", gaps: [{ kind: "unverified_change" }] };

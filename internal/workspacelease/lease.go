@@ -1,8 +1,10 @@
 // Package workspacelease serializes Delivery writers that target the same
 // workspace. Readers never acquire a lease. A writer keeps its lease from the
-// first mutation until every participating agent run and background job has
-// finished, so review and verification cannot be invalidated by another
-// Delivery session changing the workspace mid-turn.
+// first mutation until every participating agent run has finished, so review
+// and verification cannot be invalidated by another Delivery session changing
+// the workspace mid-turn. It never outlives those runs: a process a session
+// leaves behind, a dev server or a watcher, is not a run, and an exclusion
+// another session cannot outwait is worse than no exclusion at all.
 package workspacelease
 
 import (
@@ -21,11 +23,37 @@ import (
 
 const retryInterval = 75 * time.Millisecond
 
+// waitNoticeGrace is how long a contended acquisition stays silent. Contention
+// is either milliseconds, another session between two writes, or the length of
+// a whole turn, and reporting the first kind leaves a permanent line about a
+// wait nobody waited through. Lowered by tests.
+var waitNoticeGrace = time.Second
+
 var errHeld = errors.New("workspace write lease is held")
 
-// WaitNotice is called once when an acquisition cannot complete immediately.
-// It must return quickly and must not call back into Owner.
-type WaitNotice func()
+// WaitOutcome says which end of a contended acquisition a Wait reports.
+type WaitOutcome int
+
+const (
+	// WaitBegan opens a wait that has already outlived waitNoticeGrace.
+	WaitBegan WaitOutcome = iota
+	// WaitAcquired closes one with the lease in hand.
+	WaitAcquired
+	// WaitAbandoned closes one without it: the caller's context ended first.
+	WaitAbandoned
+)
+
+// Wait reports one contended acquisition. A wait under the grace is never
+// reported at all, and a reported one always arrives as a pair, so nothing on
+// screen is left claiming a wait that is already over.
+type Wait struct {
+	Outcome WaitOutcome
+	Elapsed time.Duration
+}
+
+// WaitNotice receives both ends of a reported wait. It must return quickly and
+// must not call back into Owner.
+type WaitNotice func(Wait)
 
 // Owner is one Delivery session's re-entrant workspace lease. One Owner may be
 // shared by the root agent and all of its subagents. Different sessions must
@@ -37,7 +65,6 @@ type Owner struct {
 
 	mu            sync.Mutex
 	activeRuns    int
-	background    int
 	acquired      bool
 	acquiring     bool
 	waiting       bool
@@ -163,8 +190,7 @@ func (o *Owner) BeginRun() {
 	o.mu.Unlock()
 }
 
-// EndRun releases the lease after the final participating run and retained
-// background job finishes.
+// EndRun releases the lease once the final participating run finishes.
 func (o *Owner) EndRun() {
 	if o == nil {
 		return
@@ -228,36 +254,8 @@ func (o *Owner) AcquireWrite(ctx context.Context) error {
 	}
 }
 
-// RetainUntil keeps an already-acquired lease alive for a background job. It
-// is a no-op when this session has not acquired the workspace, which preserves
-// concurrency for background readers.
-func (o *Owner) RetainUntil(done <-chan struct{}) {
-	if o == nil || done == nil {
-		return
-	}
-	o.mu.Lock()
-	if !o.acquired {
-		o.mu.Unlock()
-		return
-	}
-	o.background++
-	o.mu.Unlock()
-	go func() {
-		<-done
-		o.mu.Lock()
-		if o.background > 0 {
-			o.background--
-		}
-		release := o.releaseIfIdleLocked()
-		o.mu.Unlock()
-		if release != nil {
-			release()
-		}
-	}()
-}
-
 func (o *Owner) releaseIfIdleLocked() func() {
-	if !o.acquired || o.acquiring || o.activeRuns != 0 || o.background != 0 {
+	if !o.acquired || o.acquiring || o.activeRuns != 0 {
 		return nil
 	}
 	release := o.releaseSystem
@@ -266,31 +264,85 @@ func (o *Owner) releaseIfIdleLocked() func() {
 	return release
 }
 
-func (o *Owner) acquire(ctx context.Context) (func(), error) {
-	waited := false
-	notifyWait := func() {
-		if waited {
-			return
-		}
-		waited = true
-		o.mu.Lock()
-		o.waiting = true
-		o.mu.Unlock()
-		if o.onWait != nil {
-			o.onWait()
+func (o *Owner) notify(w Wait) {
+	if o.onWait != nil {
+		o.onWait(w)
+	}
+}
+
+func (o *Owner) markWaiting() {
+	o.mu.Lock()
+	o.waiting = true
+	o.mu.Unlock()
+}
+
+// waitClock reports both ends of one contended acquisition, or neither: a wait
+// that clears inside the grace never becomes a line someone has to read, and
+// one that does not is always closed by the report that ends it.
+type waitClock struct {
+	owner   *Owner
+	started time.Time
+	began   bool
+}
+
+func (w *waitClock) contend() {
+	if w.started.IsZero() {
+		w.started = time.Now()
+		w.owner.markWaiting()
+	}
+}
+
+func (w *waitClock) report() {
+	if w.began || w.started.IsZero() || time.Since(w.started) < waitNoticeGrace {
+		return
+	}
+	w.began = true
+	w.owner.notify(Wait{Outcome: WaitBegan, Elapsed: time.Since(w.started)})
+}
+
+func (w *waitClock) close(outcome WaitOutcome) {
+	if w.began {
+		w.owner.notify(Wait{Outcome: outcome, Elapsed: time.Since(w.started)})
+	}
+}
+
+func (w *waitClock) remainingGrace() time.Duration {
+	if left := waitNoticeGrace - time.Since(w.started); left > 0 {
+		return left
+	}
+	return time.Nanosecond
+}
+
+// awaitToken waits for the in-process token. The grace timer is dropped once
+// the report is out, so a long wait stops waking to re-decide it.
+func (o *Owner) awaitToken(ctx context.Context, w *waitClock) error {
+	w.contend()
+	timer := time.NewTimer(w.remainingGrace())
+	defer timer.Stop()
+	grace := timer.C
+	for {
+		select {
+		case <-o.local.token:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-grace:
+			w.report()
+			grace = nil
 		}
 	}
+}
 
+func (o *Owner) acquire(ctx context.Context) (func(), error) {
+	w := &waitClock{owner: o}
 	select {
 	case <-o.local.token:
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		notifyWait()
-		select {
-		case <-o.local.token:
-		case <-ctx.Done():
-			return nil, ctx.Err()
+		if err := o.awaitToken(ctx, w); err != nil {
+			w.close(WaitAbandoned)
+			return nil, err
 		}
 	}
 
@@ -298,6 +350,7 @@ func (o *Owner) acquire(ctx context.Context) (func(), error) {
 	for {
 		releaseFile, err := tryLockFile(o.lockPath)
 		if err == nil {
+			w.close(WaitAcquired)
 			return func() {
 				releaseFile()
 				releaseLocal()
@@ -305,9 +358,11 @@ func (o *Owner) acquire(ctx context.Context) (func(), error) {
 		}
 		if !errors.Is(err, errHeld) {
 			releaseLocal()
+			w.close(WaitAbandoned)
 			return nil, fmt.Errorf("acquire workspace write lease: %w", err)
 		}
-		notifyWait()
+		w.contend()
+		w.report()
 		timer := time.NewTimer(retryInterval)
 		select {
 		case <-timer.C:
@@ -316,6 +371,7 @@ func (o *Owner) acquire(ctx context.Context) (func(), error) {
 				<-timer.C
 			}
 			releaseLocal()
+			w.close(WaitAbandoned)
 			return nil, ctx.Err()
 		}
 	}

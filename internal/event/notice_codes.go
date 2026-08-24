@@ -29,4 +29,7 @@ const (
 	NoticeCodeSessionShutdownRecoveryForked                     = "session_shutdown_recovery_forked"
 	NoticeCodeVerificationStalled                               = "verification_stalled"
 	NoticeCodeDecisionReceipt, NoticeCodeContextEditingFallback = "decision_receipt", "context_editing_fallback"
+	// A reported lease wait always arrives as a pair: one of the two below
+	// closes the one above, so no surface is left holding an open wait.
+	NoticeCodeWorkspaceLeaseResumed, NoticeCodeWorkspaceLeaseAbandoned = "workspace_lease_resumed", "workspace_lease_abandoned"
 )

@@ -507,6 +507,31 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
         if (s.runtime.some((n) => said(n) === said(fresh))) return s;
         return { ...s, runtime: [...s.runtime, fresh] };
       }
+      // A wait is not a fact about the turn, it is a state the turn is in.
+      // The strip carries it while it lasts, and the notice that closes it
+      // rewrites the card rather than stacking a second one under it — the
+      // pair used to be one line that stayed on screen saying "waiting" long
+      // after the wait was over.
+      if (ev.code === "workspace_lease") {
+        const waiting: Item = { t: "notice", id: nextId(), level, text: ev.text ?? "", detail: ev.detail, code: ev.code };
+        return { ...s, doing: "等待工作区", items: [...s.items, waiting] };
+      }
+      if (ev.code === "workspace_lease_resumed" || ev.code === "workspace_lease_abandoned") {
+        const items = s.items.slice();
+        let closed = false;
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i];
+          if (it.t === "notice" && it.code === "workspace_lease") {
+            items[i] = { t: "notice", id: it.id, level, text: ev.text ?? "", detail: ev.detail, code: ev.code };
+            closed = true;
+            break;
+          }
+        }
+        if (!closed) {
+          items.push({ t: "notice", id: nextId(), level, text: ev.text ?? "", detail: ev.detail, code: ev.code });
+        }
+        return { ...s, doing: s.doing === "等待工作区" ? "运行中" : s.doing, items };
+      }
       // A retry that repeats says the same thing each time. Three identical
       // lines push whatever came before them off the screen and read as three
       // problems, so a repeat folds into the one already there.

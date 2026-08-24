@@ -147,13 +147,12 @@ type Job struct {
 
 // Manager is the session's background-job table. It is safe for concurrent use.
 type Manager struct {
-	sink       event.Sink
-	root       context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	onJobStart func(done <-chan struct{})
-	ownerID    string
-	ownerDone  sync.Once
+	sink      event.Sink
+	root      context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	ownerID   string
+	ownerDone sync.Once
 	// sessionOwnershipProbe authorizes destructive repair of persisted running
 	// artifacts. A nil probe is conservative: an observer that cannot prove it
 	// owns the transcript must never publish an interrupted tombstone.
@@ -213,13 +212,6 @@ func WithTeardownGrace(d time.Duration) Option {
 			m.teardownGrace = d
 		}
 	}
-}
-
-// WithJobStartObserver observes every registered background job before its
-// goroutine starts. Delivery uses this to retain a workspace writer lease until
-// the job is truly terminal. The callback must return quickly.
-func WithJobStartObserver(observer func(done <-chan struct{})) Option {
-	return func(m *Manager) { m.onJobStart = observer }
 }
 
 // WithSessionOwnershipProbe supplies the runtime ownership check used when
@@ -439,10 +431,6 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		j.artifact.err = err.Error()
 	}
 	j.mu.Unlock()
-	if m.onJobStart != nil {
-		m.onJobStart(j.done)
-	}
-
 	m.emitIfActive(parentSession, event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: startedText(kind, id, label)})
 
 	if !nilutil.IsNil(m.taskRecorder) {

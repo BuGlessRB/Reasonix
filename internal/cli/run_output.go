@@ -229,7 +229,7 @@ func (s *runOutputSink) Emit(e event.Event) {
 	// stdout carries the answer alone, so a warning had nowhere to go and was
 	// dropped — a planner fallback, a folded user turn, an unread check. stderr
 	// already carries what the run says about itself and breaks no pipeline.
-	if s.format == runOutputText && e.Kind == event.Notice && e.Level == event.LevelWarn {
+	if s.format == runOutputText && e.Kind == event.Notice && (e.Level == event.LevelWarn || closesWarning(e.Code)) {
 		s.writeDiagnostic(e)
 	}
 	if s.format == runOutputStreamJSON && s.err == nil {
@@ -238,6 +238,13 @@ func (s *runOutputSink) Emit(e event.Event) {
 		s.sequence++
 		s.err = s.encoder.Encode(s.machineEventRecordFor(e, s.sequence))
 	}
+}
+
+// closesWarning names the info notices that end a warning already written to
+// the diagnostic stream. Without them a headless run reports that it is
+// blocked and never reports that it no longer is.
+func closesWarning(code string) bool {
+	return code == event.NoticeCodeWorkspaceLeaseResumed || code == event.NoticeCodeWorkspaceLeaseAbandoned
 }
 
 // writeDiagnostic reports one warning on the run's diagnostic stream, detail
