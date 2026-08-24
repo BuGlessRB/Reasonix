@@ -33,6 +33,16 @@ type Messages struct {
 
 	// desktop shell — native panels it opens on its own, outside the webview
 	PickWorkspaceTitle string // folder panel title; says a folder may be made here
+	// The status icon, the only surface a hidden window has left. Its status
+	// lines are whole strings because the count sits in a different place in
+	// each language, and one built from fragments reads well in none of them.
+	TrayOpen        string // menu: bring the window back
+	TrayCloseToTray string // menu checkbox: the close button hides instead of quitting
+	TrayQuit        string // menu: really quit, through the save-first sequence
+	TrayIdle        string // status line: nothing is running
+	TrayWorking     string // status line, one %d: panes with a turn in flight
+	TrayAttention   string // status line, one %d: panes waiting on the user
+	TrayJobs        string // status line, one %d: background jobs still running
 
 	// chat REPL
 	ChatTip             string // tip line under the chat banner

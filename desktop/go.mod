@@ -13,6 +13,7 @@ require reasonix v0.0.0
 
 require (
 	aead.dev/minisign v0.3.0
+	fyne.io/systray v1.12.2
 	github.com/tc-hib/winres v0.3.1
 	github.com/wailsapp/wails/v2 v2.13.0
 	golang.org/x/mod v0.38.0

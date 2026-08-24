@@ -1,6 +1,46 @@
 // desktop_config.go — the desktop-only preference block.
 package config
 
+import (
+	"fmt"
+	"strings"
+)
+
+// DesktopClosesToBackground answers the behavioural question, and answers no
+// for a config that never said. normalizeCloseBehavior has always defaulted to
+// "background" and nothing has ever read it, so honouring that default now
+// would hide the window of every user who never asked for it.
+func (c *Config) DesktopClosesToBackground() bool {
+	for _, set := range []string{c.Desktop.CloseBehavior, c.UI.CloseBehavior} {
+		if strings.TrimSpace(set) != "" {
+			return normalizeCloseBehavior(set) == "background"
+		}
+	}
+	return false
+}
+
+// DesktopTray normalizes the status-icon preference: auto shows one where the
+// platform has one, off keeps the taskbar entry as the only surface.
+func (c *Config) DesktopTray() string {
+	if strings.EqualFold(strings.TrimSpace(c.Desktop.Tray), "off") {
+		return "off"
+	}
+	return "auto"
+}
+
+// SetDesktopTray sets whether the desktop shell shows a status icon. UI-only.
+func (c *Config) SetDesktopTray(mode string) error {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "auto", "on":
+		c.Desktop.Tray = "auto"
+	case "off", "hidden":
+		c.Desktop.Tray = "off"
+	default:
+		return fmt.Errorf("tray %q: must be auto|off", mode)
+	}
+	return nil
+}
+
 // DesktopConfig controls desktop-only UI preferences. It is intentionally
 // separate from top-level language and [ui] so desktop choices do not affect CLI
 // language, terminal colours, or provider-visible prompt/request data.
@@ -17,23 +57,27 @@ type DesktopConfig struct {
 	Welcomed bool `toml:"welcomed"`
 	// SurfaceSlots is where the user put an extension's surface, keyed
 	// "<pluginId>:<surfaceId>". It outranks the extension's own suggestion.
-	SurfaceSlots            map[string]string `toml:"surface_slots"`
-	TerminalTheme           string            `toml:"terminal_theme"`             // auto|dark|light; auto follows the desktop app theme
-	ExternalOpener          string            `toml:"external_opener"`            // preferred installed app used by the desktop Open control
-	CloseBehavior           string            `toml:"close_behavior"`             // quit|background; desktop window close behavior
-	DisplayMode             string            `toml:"display_mode"`               // standard|compact (legacy "minimal" maps to compact); transcript display mode
-	StatusBarStyle          string            `toml:"status_bar_style"`           // icon|text; desktop status bar metric labels
-	StatusBarItems          []string          `toml:"status_bar_items"`           // ordered visible desktop status bar items
-	DefaultToolApprovalMode string            `toml:"default_tool_approval_mode"` // ask|auto|yolo; defaults to auto for newly-created desktop sessions
-	CheckUpdates            *bool             `toml:"check_updates"`              // startup update checks; nil keeps the default enabled
-	UpdateChannel           string            `toml:"update_channel"`             // legacy: read for compatibility, never written back
-	Telemetry               *bool             `toml:"telemetry"`                  // anonymous launch ping plus scrubbed next-launch native crash diagnostics; nil keeps the default enabled
-	Metrics                 *bool             `toml:"metrics"`                    // aggregate desktop metrics (anonymous signal/bucket counts, including lifecycle health; no content); nil keeps the default enabled
-	ProviderAccess          []string          `toml:"provider_access"`            // desktop-only list of provider entries shown in Settings > Model > Access
-	ExpandThinking          bool              `toml:"expand_thinking"`            // deprecated compatibility alias: true maps to auto
-	ReasoningDisplayMode    string            `toml:"reasoning_display_mode"`
-	ConversationWidth       string            `toml:"conversation_width"` // standard|full; max transcript width; empty = standard
-	PinnedVersion           string            `toml:"pinned_version"`     // release pinned by a rollback; empty follows the channel
+	SurfaceSlots   map[string]string `toml:"surface_slots"`
+	TerminalTheme  string            `toml:"terminal_theme"`  // auto|dark|light; auto follows the desktop app theme
+	ExternalOpener string            `toml:"external_opener"` // preferred installed app used by the desktop Open control
+	CloseBehavior  string            `toml:"close_behavior"`  // quit|background; desktop window close behavior
+	// Tray is auto|off. It is not a second close_behavior: with no status
+	// icon there is no way back to a hidden window, so off also means the
+	// close button quits whatever close_behavior says.
+	Tray                    string   `toml:"tray"`
+	DisplayMode             string   `toml:"display_mode"`               // standard|compact (legacy "minimal" maps to compact); transcript display mode
+	StatusBarStyle          string   `toml:"status_bar_style"`           // icon|text; desktop status bar metric labels
+	StatusBarItems          []string `toml:"status_bar_items"`           // ordered visible desktop status bar items
+	DefaultToolApprovalMode string   `toml:"default_tool_approval_mode"` // ask|auto|yolo; defaults to auto for newly-created desktop sessions
+	CheckUpdates            *bool    `toml:"check_updates"`              // startup update checks; nil keeps the default enabled
+	UpdateChannel           string   `toml:"update_channel"`             // legacy: read for compatibility, never written back
+	Telemetry               *bool    `toml:"telemetry"`                  // anonymous launch ping plus scrubbed next-launch native crash diagnostics; nil keeps the default enabled
+	Metrics                 *bool    `toml:"metrics"`                    // aggregate desktop metrics (anonymous signal/bucket counts, including lifecycle health; no content); nil keeps the default enabled
+	ProviderAccess          []string `toml:"provider_access"`            // desktop-only list of provider entries shown in Settings > Model > Access
+	ExpandThinking          bool     `toml:"expand_thinking"`            // deprecated compatibility alias: true maps to auto
+	ReasoningDisplayMode    string   `toml:"reasoning_display_mode"`
+	ConversationWidth       string   `toml:"conversation_width"` // standard|full; max transcript width; empty = standard
+	PinnedVersion           string   `toml:"pinned_version"`     // release pinned by a rollback; empty follows the channel
 	// MaxPanes caps concurrently driven sessions. Each pane owns plugin
 	// subprocesses, so the ceiling is real work; 0 keeps the default.
 	MaxPanes   int              `toml:"max_panes"`

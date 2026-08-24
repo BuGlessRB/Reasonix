@@ -17,6 +17,7 @@ import (
 	goruntime "runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -33,6 +34,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/notify"
 	"reasonix/internal/serve"
+	"reasonix/internal/traystate"
 
 	// Kinds register from init, so a binary builds only what it links. Without
 	// these the shell answers every Anthropic model with "unknown kind" at
@@ -140,6 +142,11 @@ func run() error {
 	// This window is the only client of its kernel, so a system notification
 	// reaches the person who asked for it. A networked server leaves this off.
 	notifySink := windowNotifications(cfg)
+	// One fold behind the status icon: every pane's events on the way through,
+	// plus what they leave running. Built before the first runtime so that
+	// pane's sink is decorated with the rest.
+	tracker := traystate.New(nil)
+	watch := func(sink event.Sink) event.Sink { return tracker.Watch(paneKey(sink), notifySink(sink)) }
 
 	bc := serve.NewBroadcaster()
 	// A window opens where it was left, not where its shortcut happened to point.
@@ -147,7 +154,7 @@ func run() error {
 	built, err := boot.BuildRuntime(ctx, boot.Options{
 		WorkspaceRoot: root,
 		SessionDir:    serve.SessionDirFor(root),
-		Sink:          notifySink(bc),
+		Sink:          watch(bc),
 		Stderr:        os.Stderr,
 	})
 	if err != nil {
@@ -173,10 +180,13 @@ func run() error {
 	hub := serve.NewHub(serve.HubOptions{
 		Serve:        cfg.Serve,
 		Grant:        grantWindowCapabilities,
-		DecorateSink: notifySink,
+		DecorateSink: watch,
 		OnOpen:       shell.startPump,
-		OnClose:      shell.stopPump,
-		Remote:       newRemoteLink(ctx, shell.asks.prompts()),
+		OnClose: func(rt *serve.Runtime) {
+			shell.stopPump(rt)
+			tracker.Drop(paneKey(rt.Events))
+		},
+		Remote: newRemoteLink(ctx, shell.asks.prompts()),
 	})
 	shell.hub = hub
 	srv := serve.New(ctrl, bc, cfg.Serve)
@@ -195,6 +205,16 @@ func run() error {
 		return err
 	}
 
+	return shell.runWindow(api, assets, cfg, tracker)
+}
+
+// runWindow is everything from here on: the window, and the two hooks that own
+// the status icon's life. Split from the assembly above because they fail for
+// different reasons and read as one long function otherwise.
+func (a *App) runWindow(api http.Handler, assets fs.FS, cfg *config.Config, tracker *traystate.Tracker) error {
+	shell, hub := a, a.hub
+	// Held across the two hooks that own it, which run in order on one thread.
+	var icon *tray
 	return wails.Run(&options.App{
 		Title:  "Reasonix Studio",
 		Width:  1440,
@@ -229,6 +249,12 @@ func run() error {
 			for _, rt := range hub.Runtimes() {
 				shell.startPump(rt)
 			}
+			// No icon, no backgrounding: a window that vanished with no
+			// way back to it would be the worst of both.
+			icon = startTray(shell, shell.say, tracker, cfg)
+			if icon != nil {
+				shell.background.Store(cfg.DesktopClosesToBackground())
+			}
 		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
@@ -240,7 +266,10 @@ func run() error {
 		// one; see closing.go. OnShutdown stays as the backstop for exits that
 		// never pass the close button (a signal, a quit from the dock menu).
 		OnBeforeClose: shell.beginClose,
-		OnShutdown:    func(context.Context) { hub.Shutdown() },
+		OnShutdown: func(context.Context) {
+			icon.close()
+			hub.Shutdown()
+		},
 	})
 }
 
@@ -298,6 +327,11 @@ type App struct {
 	// desktop interface language; the kernel's own catalogue is a different
 	// setting and must not be swapped out for this.
 	say i18n.Messages
+
+	// background is what the close button does: hide where an icon can bring the
+	// window back, quit where it cannot. Runtime state rather than a config read
+	// per close, because the tray toggles it and the answer must be immediate.
+	background atomic.Bool
 
 	mu    sync.Mutex
 	pumps map[string]context.CancelFunc
@@ -500,3 +534,8 @@ func frontendAssets() (fs.FS, error) {
 	}
 	return nil, fmt.Errorf("frontend-next/dist not found: run `pnpm build` in desktop/frontend-next first")
 }
+
+// paneKey names a pane by the broadcaster it emits through: the hub hands that
+// to the sink decorator before the pane has an id of its own, and hands the
+// same one back as rt.Events when the pane closes.
+func paneKey(sink any) string { return fmt.Sprintf("%p", sink) }

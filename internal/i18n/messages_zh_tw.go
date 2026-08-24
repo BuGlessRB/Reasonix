@@ -8,6 +8,13 @@ var ChineseTraditional = Messages{
 	NoConfigYet:     "還沒有設定 — 現在來設定一下吧。",
 
 	PickWorkspaceTitle: "選擇工作目錄 · 也可以在這裡新建一個",
+	TrayOpen:           "打開 Reasonix Studio",
+	TrayCloseToTray:    "關掉視窗也繼續跑",
+	TrayQuit:           "離開 Reasonix",
+	TrayIdle:           "沒有在跑的",
+	TrayWorking:        "%d 個在跑",
+	TrayAttention:      "%d 個在等你",
+	TrayJobs:           "%d 個背景工作在跑",
 	InitHint:           "專案記憶（AGENTS.md）在會話內由模型生成：執行 `reasonix`，然後 `/init` —— 模型會分析程式碼庫並寫入。設定請用 `reasonix setup`。",
 
 	ChatTip:                 "對話上下文將跨輪保留。輸入 'exit' 或按 Ctrl-D 退出。",
