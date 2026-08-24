@@ -171,7 +171,7 @@ func run() error {
 	// Native panels the shell opens are outside the webview, so the frontend's
 	// catalogue cannot reach them. They follow the desktop interface language, a
 	// separate setting from the kernel's — hence a catalogue read, not the active one.
-	shell := &App{pumps: map[string]context.CancelFunc{}, say: i18n.Catalog(cfg.DesktopLanguage())}
+	shell := &App{pumps: map[string]context.CancelFunc{}, say: i18n.CatalogFor(cfg.DesktopLanguage())}
 	// A first connect can stop for a host key nobody has seen or a locked key.
 	// Both are questions, and this window is the only thing that can ask one.
 	shell.asks = newAskBroker(shell)

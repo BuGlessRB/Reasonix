@@ -134,9 +134,26 @@ func TestDetectLanguagePriority(t *testing.T) {
 	t.Setenv("LANG", "")
 	defer DetectLanguage("") // restore default for other tests
 
+	// The machine is the last candidate, not the first: what someone set on
+	// purpose still wins over what the machine happens to be installed as.
+	restore := osLanguage
+	osLanguage = func() string { return "" }
+	t.Cleanup(func() { osLanguage = restore })
+
 	if got := DetectLanguage(""); got != "en" {
-		t.Errorf("clean env: got %q, want en", got)
+		t.Errorf("clean env, silent machine: got %q, want en", got)
 	}
+
+	osLanguage = func() string { return "zh-CN" }
+	if got := DetectLanguage(""); got != "zh" {
+		t.Errorf("clean env, Chinese machine: got %q, want zh", got)
+	}
+	t.Setenv("REASONIX_LANG", "en")
+	if got := DetectLanguage(""); got != "en" {
+		t.Errorf("REASONIX_LANG=en on a Chinese machine: got %q, want en", got)
+	}
+	t.Setenv("REASONIX_LANG", "")
+	osLanguage = func() string { return "" }
 
 	t.Setenv("LANG", "zh_CN.UTF-8")
 	if got := DetectLanguage(""); got != "zh" {
@@ -156,5 +173,29 @@ func TestDetectLanguagePriority(t *testing.T) {
 	}
 	if got := DetectLanguage("zh-TW"); got != "zh-TW" || CurrentLanguage() != "zh-TW" {
 		t.Errorf("traditional Chinese current language = %q/%q, want zh-TW", got, CurrentLanguage())
+	}
+}
+
+// The window's own words are a setting of their own, so it reads a catalogue
+// rather than installing one. Reading, it still has to follow the machine when
+// nobody chose — which is what Catalog("") could not do.
+func TestCatalogForFollowsTheMachineWithoutInstallingIt(t *testing.T) {
+	t.Setenv("REASONIX_LANG", "")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "")
+	restore := osLanguage
+	osLanguage = func() string { return "zh-CN" }
+	t.Cleanup(func() { osLanguage = restore })
+
+	before := CurrentLanguage()
+	if got := CatalogFor(""); got.TrayOpen != Chinese.TrayOpen {
+		t.Errorf("auto on a Chinese machine = %q, want the Chinese catalogue", got.TrayOpen)
+	}
+	if got := CatalogFor("en"); got.TrayOpen != English.TrayOpen {
+		t.Errorf("an explicit setting lost to the machine: %q", got.TrayOpen)
+	}
+	if CurrentLanguage() != before {
+		t.Error("reading a catalogue installed it as the process language")
 	}
 }

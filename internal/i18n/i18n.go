@@ -662,6 +662,20 @@ func Catalog(tag string) Messages {
 	return M
 }
 
+// CatalogFor resolves an interface-language preference the way DetectLanguage
+// does — the setting, then the environment, then the machine — and installs
+// nothing. Catalog alone cannot: an empty preference means "follow the
+// machine", and what it returned instead was whatever the process had already
+// installed, which for a window that never installs anything is English.
+func CatalogFor(pref string) Messages {
+	for _, candidate := range append([]string{pref}, envCandidates()...) {
+		if tag := normalize(candidate); tag != "" {
+			return Catalog(tag)
+		}
+	}
+	return English
+}
+
 // CurrentLanguage returns the language tag installed by the latest
 // DetectLanguage call. It lets frontends reuse the resolved locale without
 // re-reading the environment and accidentally ignoring an explicit override.
@@ -683,13 +697,19 @@ func DetectLanguage(override string) string {
 	return setLanguage("en")
 }
 
+// osLanguage is the machine probe behind a variable, so the priority between it
+// and the environment is testable on a machine that answers either way.
+var osLanguage = detectOSLanguage
+
 func envCandidates() []string {
 	keys := []string{"REASONIX_LANG", "LC_ALL", "LC_MESSAGES", "LANG"}
-	out := make([]string, len(keys))
-	for i, k := range keys {
-		out[i] = os.Getenv(k)
+	out := make([]string, 0, len(keys)+1)
+	for _, k := range keys {
+		out = append(out, os.Getenv(k))
 	}
-	return out
+	// Last, so an explicit variable still wins: it is what someone set on
+	// purpose, and this is only what the machine was installed as.
+	return append(out, osLanguage())
 }
 
 func setLanguage(tag string) string {
