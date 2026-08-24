@@ -47,16 +47,19 @@ func TestSubmitItemsRefusesOutsideAFanoutSource(t *testing.T) {
 
 func TestFanoutItemShapeRules(t *testing.T) {
 	for name, tc := range map[string]struct {
-		item fleetTaskItem
-		want string
+		item    fleetTaskItem
+		enabled bool
+		want    string
 	}{
-		"for_each with adopt_ref": {fleetTaskItem{ForEach: "a", AdoptRef: "sa_x"}, "mutually exclusive"},
-		"max_items alone":         {fleetTaskItem{Prompt: "go", MaxItems: 4}, "bounds nothing"},
-		"writer map":              {fleetTaskItem{ForEach: "a", Prompt: "go"}, "must set read_only"},
-		"read-only map is ok":     {fleetTaskItem{ForEach: "a", Prompt: "go", ReadOnly: true, MaxItems: 4}, ""},
-		"plain item is ok":        {fleetTaskItem{Prompt: "go"}, ""},
+		"for_each with adopt_ref": {fleetTaskItem{ForEach: "a", AdoptRef: "sa_x"}, true, "mutually exclusive"},
+		"max_items alone":         {fleetTaskItem{Prompt: "go", MaxItems: 4}, true, "bounds nothing"},
+		"writer map":              {fleetTaskItem{ForEach: "a", Prompt: "go"}, true, "must set read_only"},
+		"read-only map is ok":     {fleetTaskItem{ForEach: "a", Prompt: "go", ReadOnly: true, MaxItems: 4}, true, ""},
+		"plain item is ok":        {fleetTaskItem{Prompt: "go"}, true, ""},
+		"mapped while off":        {fleetTaskItem{ForEach: "a", Prompt: "go", ReadOnly: true}, false, "not enabled in this build"},
+		"plain item while off":    {fleetTaskItem{Prompt: "go"}, false, ""},
 	} {
-		err := validateFanoutItemShape(0, tc.item)
+		err := validateFanoutItemShape(0, tc.item, tc.enabled)
 		switch {
 		case tc.want == "" && err != nil:
 			t.Errorf("%s: unexpected err %v", name, err)
@@ -185,13 +188,46 @@ func TestFleetFanoutRefusesMoreSubjectsThanTheCeiling(t *testing.T) {
 	}
 }
 
+// Default off, and off means invisible: the field is not on the surface, the
+// description does not advertise it, and a call that names it is refused by the
+// setting rather than half-honoured. Mapping was measured at about twice the
+// tokens of the single-task form for no gain in solved rate, so a capability
+// the model can see is one it would reach for at that price.
+func TestFanoutIsOffTheSurfaceUntilEnabled(t *testing.T) {
+	off := &FleetTool{}
+	if strings.Contains(string(off.Schema()), "for_each") {
+		t.Error("for_each is on the default schema surface")
+	}
+	if strings.Contains(off.Description(), "for_each") {
+		t.Error("the default description advertises a field the schema does not carry")
+	}
+	on := (&FleetTool{}).WithFanout(true)
+	if !strings.Contains(string(on.Schema()), "for_each") || !strings.Contains(on.Description(), "for_each") {
+		t.Error("enabling fan-out must put the field on both the schema and the description")
+	}
+
+	prov := &fanoutScriptProvider{subjects: []string{"a.py"}}
+	fleet := newFanoutFleet(t, prov).WithFanout(false)
+	_, err := fleet.Execute(withCallContext(context.Background(), "fleet-call", event.Discard, nil, false),
+		json.RawMessage(`{"tasks":[
+			{"id":"scan","prompt":"SCAN find them","read_only":true},
+			{"id":"review","for_each":"scan","read_only":true,"prompt":"REVIEW this one"}
+		]}`))
+	if err == nil || !strings.Contains(err.Error(), "not enabled in this build") {
+		t.Errorf("err = %v, want a refusal saying it is not enabled", err)
+	}
+	if got := prov.subjectsSeen(); len(got) != 0 {
+		t.Errorf("a refused call started work: %v", got)
+	}
+}
+
 func newFanoutFleet(t *testing.T, prov provider.Provider) *FleetTool {
 	t.Helper()
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})
 	return NewFleetTool(NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), t.TempDir(), "base", "high").
-		WithScheduler(NewSubagentScheduler(6, 6)))
+		WithScheduler(NewSubagentScheduler(6, 6))).WithFanout(true)
 }
 
 // fanoutScriptProvider answers by what it is asked rather than by call order,

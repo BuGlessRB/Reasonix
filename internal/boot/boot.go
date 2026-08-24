@@ -809,7 +809,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	}
 	if !opts.Ablation.Off(ablation.Subagent) {
 		taskTool = newTaskTool()
-		addDelegationTools(reg, taskTool)
+		addDelegationTools(reg, taskTool, fleetFanoutEnabled)
 	}
 
 	// Product documentation, session, and memory tools are always present on the

@@ -866,15 +866,29 @@ quietly mapping nothing, while an empty submission is a real answer that
 completes it. A source may not be adopted, having never run to submit anything,
 nor itself mapped, since it answers with an aggregate rather than a list.
 
-What `for_each` costs is one full sub-agent per subject — its prefix, its
-reasoning, its closing contract — so it pays only where a subject needs work of
-its own. Measured against the same call written as one task handling every
-subject (`benchmarks/fleet-fanout`, n=6 per arm, both solving 6/6), mapping a
-one-file check over twelve subjects spent 85% more tokens (p=0.002) for no
-wall-clock gain, at both the default concurrency and a ceiling raised past the
-width. The gain it is for — a subject too large to share one child's context
-with eleven others — is not what that fixture measures, and the tool
-description says so.
+`for_each` is off the provider-visible surface. The field and the sentence
+describing it are dropped together, so the description never advertises a
+parameter the schema does not carry, and a call that names it is refused rather
+than half-honoured. There is no setting: a capability the host cannot recommend
+does not get a knob, and turning it on is a change at the wiring point in
+`internal/boot/delegation_tools.go`.
+
+It is off because it was measured and did not pay. What it costs is one full
+sub-agent per subject — prefix, reasoning, closing contract — against whatever
+that subject's own work is worth. `benchmarks/fleet-fanout` holds both arms of
+that comparison: the same call written with `for_each`, and written as one task
+handling every subject, which is what it had to be before. Across two fixtures
+and twenty graded runs against a real provider, every run of both arms solved,
+and mapping spent 85% (p=0.002) and 98% (p=0.029) more tokens for it. The second
+fixture was the one predicted to favour mapping — ten modules each needing a
+three-step derivation — and it did not. Raising `max_subagent_concurrency` past
+the mapped width cut the mapped arm's wall clock and cut the single task's by
+more.
+
+What has not been measured is the case the shape exists for: subjects whose
+combined content one child cannot hold at all. Until that is measured, a
+capability the model can see is one it will reach for at twice the price, so it
+stays behind a setting.
 
 ### 3.15 One child-construction primitive
 

@@ -62,9 +62,11 @@ func validateFleetItemShape(index int, item fleetTaskItem) error {
 // validateFanoutItemShape settles what a mapped item may say about itself.
 // max_items without for_each is the case worth refusing loudest: it reads as a
 // ceiling and would bound nothing at all.
-func validateFanoutItemShape(index int, item fleetTaskItem) error {
+func validateFanoutItemShape(index int, item fleetTaskItem, enabled bool) error {
 	forEach := strings.TrimSpace(item.ForEach)
 	switch {
+	case forEach != "" && !enabled:
+		return fmt.Errorf("task %d: for_each is not enabled in this build; mapping a task over submitted subjects measured at about twice the tokens of one task doing all of them, so it ships off", index+1)
 	case forEach != "" && strings.TrimSpace(item.AdoptRef) != "":
 		return fmt.Errorf("task %d: for_each and adopt_ref are mutually exclusive; an adopted item runs nothing to map", index+1)
 	case forEach == "" && item.MaxItems != 0:

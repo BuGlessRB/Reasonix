@@ -27,6 +27,18 @@ const (
 // write_paths; preflight failure starts nothing.
 type FleetTool struct {
 	taskTool *TaskTool
+	// fanout gates the mapped-task fields. The host ships it off: measured
+	// against the call it replaces it cost about twice the tokens and never once
+	// bought a correct answer the single-task form did not also get.
+	fanout bool
+}
+
+// WithFanout enables for_each for this session.
+func (f *FleetTool) WithFanout(enabled bool) *FleetTool {
+	if f != nil {
+		f.fanout = enabled
+	}
+	return f
 }
 
 // NewFleetTool creates a fleet dispatcher that reuses TaskTool infrastructure.
@@ -36,12 +48,29 @@ func NewFleetTool(taskTool *TaskTool) *FleetTool {
 
 func (*FleetTool) Name() string { return "fleet" }
 
-func (*FleetTool) Description() string {
-	return "Dispatch 2–64 sub-agent tasks as a small dependency graph and return bounded previews plus stable Subagent references for full-result retrieval from completed persisted children with read_subagent_result. Each item may select a profile, model, effort, tools, write_paths, or read_only, and may declare depends_on to run after other items and start from their final answers (research → implement → review). Tasks with no dependency between them run in parallel and must declare non-overlapping write_paths; ordered tasks may share paths. Omitted write_paths claim the whole workspace, so two or more concurrent writers without paths fail preflight before any task starts. A failed task's dependents are skipped; independent branches keep going unless fail_fast is set. An item may pass adopt_ref instead of a prompt to stand in for running it with an already-completed child's answer, which is how a fleet a restart interrupted is re-issued without paying twice for the items that finished. A read_only item may pass for_each to map its prompt over the subjects another item submits, running one child per subject and reporting one bounded aggregate, so a width nobody could name at call time still runs under one node. Background mode returns a fleet job id collectable with wait."
+// The mapped-task sentence is dropped with the fields it describes, so the
+// description never advertises a parameter the schema does not carry.
+func (f *FleetTool) Description() string {
+	mapped := ""
+	if f != nil && f.fanout {
+		mapped = " A read_only item may pass for_each to map its prompt over the subjects another item submits, running one child per subject and reporting one bounded aggregate, so a width nobody could name at call time still runs under one node."
+	}
+	return "Dispatch 2–64 sub-agent tasks as a small dependency graph and return bounded previews plus stable Subagent references for full-result retrieval from completed persisted children with read_subagent_result. Each item may select a profile, model, effort, tools, write_paths, or read_only, and may declare depends_on to run after other items and start from their final answers (research → implement → review). Tasks with no dependency between them run in parallel and must declare non-overlapping write_paths; ordered tasks may share paths. Omitted write_paths claim the whole workspace, so two or more concurrent writers without paths fail preflight before any task starts. A failed task's dependents are skipped; independent branches keep going unless fail_fast is set. An item may pass adopt_ref instead of a prompt to stand in for running it with an already-completed child's answer, which is how a fleet a restart interrupted is re-issued without paying twice for the items that finished." + mapped + " Background mode returns a fleet job id collectable with wait."
 }
 
-func (*FleetTool) Schema() json.RawMessage {
-	return json.RawMessage(`{
+// The mapped-task fields are left off the surface unless this session
+// enables them: a capability the model can see is one it will reach for,
+// and mapping is measured at roughly twice the tokens for no accuracy
+// (benchmarks/fleet-fanout).
+func (f *FleetTool) Schema() json.RawMessage {
+	props := ""
+	if f != nil && f.fanout {
+		props = fleetFanoutSchemaProps
+	}
+	return json.RawMessage(fleetSchemaHead + props + fleetSchemaTail)
+}
+
+const fleetSchemaHead = `{
 "type":"object",
 "properties":{
   "tasks":{
@@ -54,9 +83,13 @@ func (*FleetTool) Schema() json.RawMessage {
       "properties":{
         "prompt":{"type":"string","description":"Task prompt for the sub-agent. Required unless adopt_ref stands in for running this item."},
         "adopt_ref":{"type":"string","description":"A Subagent reference whose already-completed answer stands in for running this item, from list_subagents or an earlier aggregate. The item runs nothing: its answer becomes the dependency payload its dependents open with, exactly as if it had just produced it. Use it to re-issue a fleet a restart interrupted without paying again for the items that finished. Rejected unless the reference is completed and inside this conversation's lineage and workspace. Mutually exclusive with prompt and with every execution field (profile, model, effort, tools, max_steps, write_paths, read_only), since nothing executes. Whether that answer is still valid after what changed since is yours to judge — the host only proves the reference is yours and complete."},
-        "for_each":{"type":"string","description":"Id of a task whose submitted subjects this task maps over. This task's prompt is a template run once per subject, with the subject appended to it, and the task reports one bounded aggregate of those runs. The named source is given submit_items and must call it; its prose is never parsed for a list. A mapped task must be read_only and may not name a source that is itself mapped or adopted. Its width is bounded by max_items and by a host ceiling, and the graph is unchanged: this stays one task, so what preflight proved about ordering and write claims still holds. Map only work that genuinely needs its own run: every mapped child pays a full sub-agent's fixed cost, so a per-subject check one task could make in a single pass costs substantially more mapped than not, and gains no wall-clock for it."},
+`
+
+const fleetFanoutSchemaProps = `        "for_each":{"type":"string","description":"Id of a task whose submitted subjects this task maps over. This task's prompt is a template run once per subject, with the subject appended to it, and the task reports one bounded aggregate of those runs. The named source is given submit_items and must call it; its prose is never parsed for a list. A mapped task must be read_only and may not name a source that is itself mapped or adopted. Its width is bounded by max_items and by a host ceiling, and the graph is unchanged: this stays one task, so what preflight proved about ordering and write claims still holds. Map only work that genuinely needs its own run: every mapped child pays a full sub-agent's fixed cost, so a per-subject check one task could make in a single pass costs substantially more mapped than not, and gains no wall-clock for it."},
         "max_items":{"type":"integer","description":"Ceiling on how many subjects a for_each task maps over. Defaults to 8 and is capped at 32; a source submitting more fails the task rather than spending past what the call asked for.","minimum":1},
-        "id":{"type":"string","description":"Optional stable id for this task, referenced by other tasks' depends_on. Defaults to the 1-based position."},
+`
+
+const fleetSchemaTail = `        "id":{"type":"string","description":"Optional stable id for this task, referenced by other tasks' depends_on. Defaults to the 1-based position."},
         "depends_on":{"type":"array","items":{"type":"string"},"description":"Ids of tasks that must complete before this one starts. This task begins with each dependency's final answer in its context, bounded and split evenly across them, so it need not re-derive their work. Unknown ids, self-edges, and cycles fail preflight. A task whose dependency fails or is skipped is skipped too. Ordered tasks may share write_paths; only tasks that can run at the same time need disjoint claims."},
         "description":{"type":"string","description":"Optional short label shown in the job list."},
         "profile":{"type":"string","description":"Optional runAs=subagent profile name."},
@@ -73,8 +106,7 @@ func (*FleetTool) Schema() json.RawMessage {
   "run_in_background":{"type":"boolean","description":"Run the whole fleet asynchronously and return a job id collectable with wait. Items queue for concurrency/write slots inside the job."}
 },
 "required":["tasks"]
-}`)
-}
+}`
 
 func (*FleetTool) ReadOnly() bool { return false }
 
@@ -269,7 +301,7 @@ func (f *FleetTool) preflight(ctx context.Context, tasks []fleetTaskItem, failFa
 		if err := validateFleetItemShape(i, item); err != nil {
 			return fleetCall{}, err
 		}
-		if err := validateFanoutItemShape(i, item); err != nil {
+		if err := validateFanoutItemShape(i, item, f.fanout); err != nil {
 			return fleetCall{}, err
 		}
 	}
