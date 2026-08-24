@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 
 	"reasonix/internal/proc"
 	"reasonix/internal/secrets"
+	"reasonix/internal/visionimage"
 )
 
 const maxImageAttachmentBytes = 10 * 1024 * 1024
@@ -85,14 +85,14 @@ func SaveImageBytesInRoot(root, declaredMime string, raw []byte) (string, error)
 	if len(raw) == 0 || len(raw) > maxImageAttachmentBytes {
 		return "", fmt.Errorf("pasted image must be between 1 byte and 10 MB")
 	}
-	mime := detectedImageMime(raw)
+	mime := visionimage.DetectMime(raw)
 	if mime == "" {
 		return "", fmt.Errorf("pasted data is not a supported image")
 	}
-	if declaredMime != "" && imageExt(declaredMime) == "" {
+	if declaredMime != "" && visionimage.Ext(declaredMime) == "" {
 		return "", fmt.Errorf("unsupported image type: %s", declaredMime)
 	}
-	ext := imageExt(mime)
+	ext := visionimage.Ext(mime)
 	return saveAttachmentBytesInRoot(root, ext, raw)
 }
 
@@ -294,13 +294,16 @@ func ImageDataURLInRoot(root, path string) (string, error) {
 // visionImageDataURL reads an attachment and, unlike ImageDataURL (which feeds
 // the desktop preview at full resolution), downscales/recompresses it before
 // base64 so an oversized photo doesn't balloon the request bytes and image
-// tokens. Best-effort: an undecodable format passes through at original size.
+// tokens. An attachment that cannot be fitted is refused, never forwarded.
 func visionImageDataURL(base, path string) (string, error) {
 	raw, mime, err := readAttachmentImage(base, path)
 	if err != nil {
 		return "", err
 	}
-	raw, mime = compressForVision(raw, mime)
+	raw, mime, err = visionimage.Fit(raw, mime)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", path, err)
+	}
 	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(raw), nil
 }
 
@@ -343,7 +346,7 @@ func readAttachmentImage(base, path string) (raw []byte, mime string, err error)
 	} else if !os.SameFile(opened, after) || after.Size() != opened.Size() {
 		return nil, "", fmt.Errorf("attachment changed while reading")
 	}
-	mime = detectedImageMime(raw)
+	mime = visionimage.DetectMime(raw)
 	if mime == "" {
 		return nil, "", fmt.Errorf("attachment is not an image")
 	}
@@ -513,29 +516,4 @@ func attachmentPath(ext string) string {
 	seq := attachmentPathSeq.Add(1)
 	name := fmt.Sprintf("clipboard-%s-%06d%s", attachmentNow().Format("20060102-150405.000000"), seq, ext)
 	return filepath.Join(".reasonix", "attachments", name)
-}
-
-func detectedImageMime(raw []byte) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	mime := http.DetectContentType(raw[:min(len(raw), 512)])
-	if imageExt(mime) == "" {
-		return ""
-	}
-	return mime
-}
-
-func imageExt(mime string) string {
-	switch strings.ToLower(strings.TrimSpace(mime)) {
-	case "image/png":
-		return ".png"
-	case "image/jpeg":
-		return ".jpg"
-	case "image/gif":
-		return ".gif"
-	case "image/webp":
-		return ".webp"
-	}
-	return ""
 }

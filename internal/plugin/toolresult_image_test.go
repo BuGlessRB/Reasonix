@@ -7,13 +7,17 @@ import (
 	"testing"
 )
 
+// tinyPNGB64 is a decodable 1x1 PNG: an image whose bytes do not decode is
+// dropped before the wire, so a placeholder payload tests nothing.
+const tinyPNGB64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
 func imageItem(mime, data string) string {
 	b, _ := json.Marshal(map[string]string{"type": "image", "data": data, "mimeType": mime})
 	return string(b)
 }
 
 func TestParseToolResultImageItem(t *testing.T) {
-	payload := base64.StdEncoding.EncodeToString([]byte("png-bytes"))
+	payload := tinyPNGB64
 	res := `{"content":[{"type":"text","text":"before "},` + imageItem("image/png", payload) + `,{"type":"text","text":" after"}]}`
 	text, images, err := parseToolResult(json.RawMessage(res))
 	if err != nil {
@@ -28,7 +32,7 @@ func TestParseToolResultImageItem(t *testing.T) {
 }
 
 func TestParseToolResultImageDefaultsToPNG(t *testing.T) {
-	payload := base64.StdEncoding.EncodeToString([]byte("x"))
+	payload := tinyPNGB64
 	res := `{"content":[{"type":"image","data":"` + payload + `"}]}`
 	text, images, err := parseToolResult(json.RawMessage(res))
 	if err != nil {
@@ -43,7 +47,7 @@ func TestParseToolResultImageDefaultsToPNG(t *testing.T) {
 }
 
 func TestParseToolResultImageNormalizesWrappedBase64(t *testing.T) {
-	payload := base64.StdEncoding.EncodeToString([]byte("png-bytes"))
+	payload := tinyPNGB64
 	wrapped := payload[:4] + "\n" + payload[4:8] + " " + payload[8:]
 	res := `{"content":[` + imageItem("image/png", wrapped) + `]}`
 	_, images, err := parseToolResult(json.RawMessage(res))
@@ -101,7 +105,7 @@ func TestParseToolResultImageOversizedOmitted(t *testing.T) {
 }
 
 func TestParseToolResultImageCountCapped(t *testing.T) {
-	payload := base64.StdEncoding.EncodeToString([]byte("x"))
+	payload := tinyPNGB64
 	items := make([]string, 0, maxToolResultImages+1)
 	for range maxToolResultImages + 1 {
 		items = append(items, imageItem("image/png", payload))
@@ -120,7 +124,7 @@ func TestParseToolResultImageCountCapped(t *testing.T) {
 }
 
 func TestParseToolResultErrorStillReturnsImages(t *testing.T) {
-	payload := base64.StdEncoding.EncodeToString([]byte("x"))
+	payload := tinyPNGB64
 	res := `{"content":[{"type":"text","text":"boom "},` + imageItem("image/png", payload) + `],"isError":true}`
 	text, images, err := parseToolResult(json.RawMessage(res))
 	if err == nil {

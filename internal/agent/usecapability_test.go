@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -335,7 +334,9 @@ func imageMCPServer(t *testing.T, toolCalls *atomic.Int32, payload string) *http
 
 func TestPlannerFirstOnDemandMCPCallPreservesImages(t *testing.T) {
 	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
-	payload := base64.StdEncoding.EncodeToString([]byte("png-bytes"))
+	// A decodable 1x1 PNG: an image whose bytes do not decode never reaches the
+	// provider, so a placeholder payload would assert nothing.
+	payload := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 	var toolCalls atomic.Int32
 	server := imageMCPServer(t, &toolCalls, payload)
 	defer server.Close()

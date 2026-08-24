@@ -7,16 +7,15 @@ import (
 	"testing"
 )
 
-// pngBytes is the smallest thing detectedImageMime accepts as a PNG.
+// writeAttachment stages a decodable PNG: an attachment whose dimensions cannot
+// be read is refused before the wire, so a header-only fixture tests nothing.
 func writeAttachment(t *testing.T, root, name string) string {
 	t.Helper()
 	dir := filepath.Join(root, ".reasonix", "attachments")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	png := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 'I', 'H', 'D', 'R'}
-	png = append(png, make([]byte, 64)...)
-	if err := os.WriteFile(filepath.Join(dir, name), png, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return filepath.ToSlash(filepath.Join(".reasonix", "attachments", name))
@@ -61,11 +60,11 @@ func TestTurnCarriesImageCandidatesForWorkspaceAttachment(t *testing.T) {
 
 	c := New(Options{WorkspaceRoot: workspace})
 	defer c.Close()
-	candidates := c.resolveInputImageCandidates("@" + rel + " 这是什么？")
-	if len(candidates) != 1 {
-		t.Fatalf("resolved %d image candidates, want the attachment", len(candidates))
+	candidates, skipped := c.resolveInputImageCandidates("@" + rel + " 这是什么？")
+	if len(candidates) != 1 || len(skipped) != 0 {
+		t.Fatalf("resolved %d image candidates (%d skipped), want the attachment", len(candidates), len(skipped))
 	}
-	if unreadableImages(nil, candidates) == 0 {
+	if (&turnImages{candidates: candidates}).unreadable() == 0 {
 		t.Fatal("a text-only model must be told the turn carries an image it cannot read")
 	}
 }

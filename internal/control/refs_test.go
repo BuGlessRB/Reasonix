@@ -214,7 +214,7 @@ func TestResolveRefsAttachmentKinds(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(temp, filepath.FromSlash(zipRef)), []byte{'P', 'K', 0x03, 0x04, 0x00}, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(temp, filepath.FromSlash(pngRef)), []byte("\x89PNG\r\n\x1a\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(temp, filepath.FromSlash(pngRef)), mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -266,7 +266,7 @@ func TestReadFileRef(t *testing.T) {
 		t.Fatal(err)
 	}
 	imagePath := filepath.Join(dir, "shot.png")
-	if err := os.WriteFile(imagePath, []byte("\x89PNG\r\n\x1a\n"), 0o644); err != nil {
+	if err := os.WriteFile(imagePath, mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -846,14 +846,14 @@ func TestWorkspaceImageRefsAlsoAttachAsModelImages(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(diagram), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(diagram, []byte("\x89PNG\r\n\x1a\n"), 0o644); err != nil {
+	if err := os.WriteFile(diagram, mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	attachment := filepath.Join(workspace, ".reasonix", "attachments", "shot.png")
 	if err := os.MkdirAll(filepath.Dir(attachment), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(attachment, []byte("\x89PNG\r\n\x1a\n"), 0o644); err != nil {
+	if err := os.WriteFile(attachment, mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -885,7 +885,7 @@ func TestWorkspaceImageRefsAlsoAttachAsModelImages(t *testing.T) {
 func TestResolveRefsWithoutWorkspaceDoesNotClaimImageAttachment(t *testing.T) {
 	dir := t.TempDir()
 	imagePath := filepath.Join(dir, "shot.png")
-	if err := os.WriteFile(imagePath, []byte("\x89PNG\r\n\x1a\n"), 0o644); err != nil {
+	if err := os.WriteFile(imagePath, mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

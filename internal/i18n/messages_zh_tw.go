@@ -582,6 +582,7 @@ var ChineseTraditional = Messages{
 	ImagesNotReadable:          "當前模型不讀圖 — 已附 %d 張，改由委派的子代理去看",
 	ImagesNeedVisionRole:       "當前模型不讀圖 — 已附 %d 張，現在沒人讀得了。%s 能讀圖：到 設定 › 模型 › 分工 裡把「看圖」指給它。",
 	ImagesDropped:              "當前模型不讀圖 — 已附 %d 張，會在送出去之前被丟掉。設定裡沒有任何模型能讀圖。",
+	ImagesUnfit:                "有 %d 張附件沒有送出去，因為任何模型都不會接收它：%s",
 	GoalPausedReason:           "使用者手動暫停",
 	GoalPausedFmt:              "目標已暫停（%s）— 使用 /goal resume 繼續",
 	GoalRuntimeFmt:             "執行狀態：輪次 %d · 請求 %d · token %d · 工作時間 %s",

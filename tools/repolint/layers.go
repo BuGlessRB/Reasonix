@@ -46,6 +46,7 @@ var leaves = []string{
 	"internal/sysproxy",
 	"internal/textutil",
 	"internal/tokencount",
+	"internal/visionimage",
 	"internal/workspaceid",
 	"internal/workspacelease",
 }

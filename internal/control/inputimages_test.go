@@ -153,7 +153,7 @@ func TestControllerResolvesSubagentImageCandidatesForTextParent(t *testing.T) {
 	if urls := c.inputImages("look at @diagram.png"); len(urls) != 0 {
 		t.Fatalf("text-only parent should suppress its own image payload, got %v", urls)
 	}
-	if urls := c.resolveInputImageCandidates("look at @diagram.png"); len(urls) != 1 {
+	if urls, _ := c.resolveInputImageCandidates("look at @diagram.png"); len(urls) != 1 {
 		t.Fatalf("subagent image candidates = %v, want one image for a vision child", urls)
 	}
 }
@@ -167,18 +167,18 @@ func TestControllerResolveTurnImagesReusesCandidatesForVisionParent(t *testing.T
 	}
 
 	c := &Controller{workspaceRoot: workspace, modelRef: "custom/vision-pro"}
-	userImages, candidates := c.resolveTurnImages("inspect @diagram.png")
-	if len(userImages) != 1 || len(candidates) != 1 {
-		t.Fatalf("turn images = %v, candidates = %v; want one image in both paths", userImages, candidates)
+	images := c.resolveTurnImages("inspect @diagram.png")
+	if len(images.userImages) != 1 || len(images.candidates) != 1 {
+		t.Fatalf("turn images = %v, candidates = %v; want one image in both paths", images.userImages, images.candidates)
 	}
-	if &userImages[0] != &candidates[0] || userImages[0] != candidates[0] {
+	if &images.userImages[0] != &images.candidates[0] || images.userImages[0] != images.candidates[0] {
 		t.Fatal("vision parent and subagent candidates should reuse the same resolved image slice")
 	}
 
 	c.modelRef = "custom/text-only"
-	userImages, candidates = c.resolveTurnImages("inspect @diagram.png")
-	if len(userImages) != 0 || len(candidates) != 1 {
-		t.Fatalf("text parent turn images = %v, candidates = %v; want candidates only", userImages, candidates)
+	images = c.resolveTurnImages("inspect @diagram.png")
+	if len(images.userImages) != 0 || len(images.candidates) != 1 {
+		t.Fatalf("text parent turn images = %v, candidates = %v; want candidates only", images.userImages, images.candidates)
 	}
 }
 
@@ -195,22 +195,22 @@ func TestGoalContinuationKeepsCurrentTurnImageCandidatesWithoutCrossTurnLeak(t *
 		raw:       "inspect the diagnostic",
 		imageRefs: "@diagram.png",
 	})
-	if len(initial.userImages) != 0 || len(initial.imageCandidates) != 1 {
-		t.Fatalf("initial turn images = %v, candidates = %v; want child-only candidate", initial.userImages, initial.imageCandidates)
+	if len(initial.images.userImages) != 0 || len(initial.images.candidates) != 1 {
+		t.Fatalf("initial turn images = %v, candidates = %v; want child-only candidate", initial.images.userImages, initial.images.candidates)
 	}
 
-	ctx := agent.WithSubagentImageCandidates(context.Background(), initial.imageCandidates)
+	ctx := agent.WithSubagentImageCandidates(context.Background(), initial.images.candidates)
 	continuation := orchestratedTurn{goalContinuation: &goalContinuationSnapshot{}, synthetic: true, raw: goalContinueTurn}
-	userImages, candidates := c.imagesForOrchestratedTurn(ctx, continuation)
-	if len(userImages) != 0 || len(candidates) != 1 || candidates[0] != initial.imageCandidates[0] {
-		t.Fatalf("Goal continuation images = %v, candidates = %v; want original child candidate only", userImages, candidates)
+	carried := c.imagesForOrchestratedTurn(ctx, continuation)
+	if len(carried.userImages) != 0 || len(carried.candidates) != 1 || carried.candidates[0] != initial.images.candidates[0] {
+		t.Fatalf("Goal continuation images = %v, candidates = %v; want original child candidate only", carried.userImages, carried.candidates)
 	}
 
 	next := c.prepareOrchestratedTurnImages(orchestratedTurn{raw: "plain next user turn"})
-	ctx = agent.WithSubagentImageCandidates(ctx, next.imageCandidates)
-	userImages, candidates = c.imagesForOrchestratedTurn(ctx, continuation)
-	if len(userImages) != 0 || len(candidates) != 0 {
-		t.Fatalf("next user turn leaked prior image: images = %v, candidates = %v", userImages, candidates)
+	ctx = agent.WithSubagentImageCandidates(ctx, next.images.candidates)
+	carried = c.imagesForOrchestratedTurn(ctx, continuation)
+	if len(carried.userImages) != 0 || len(carried.candidates) != 0 {
+		t.Fatalf("next user turn leaked prior image: images = %v, candidates = %v", carried.userImages, carried.candidates)
 	}
 }
 

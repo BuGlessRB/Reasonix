@@ -345,6 +345,7 @@ var English = Messages{
 	ImagesNotReadable:            "this model cannot read images — %d attached, handed to a delegated read instead",
 	ImagesNeedVisionRole:         "this model cannot read images — %d attached and going nowhere. %s can read them: assign it to the vision role in Settings › Models › Roles.",
 	ImagesDropped:                "this model cannot read images — %d attached and dropped before the request. No configured model reads images.",
+	ImagesUnfit:                  "%d attached image(s) were not sent, because no model would accept them: %s",
 	GoalPausedReason:             "paused by the user",
 	GoalPausedFmt:                "goal is paused (%s) — use /goal resume to continue",
 	GoalRuntimeFmt:               "runtime: turns %d · requests %d · tokens %d · work time %s",

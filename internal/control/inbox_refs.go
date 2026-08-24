@@ -22,7 +22,10 @@ func (c *Controller) freezeInboxReferences(ctx context.Context, submit string, e
 		return "", nil, nil
 	}
 	block, errs := c.ResolveRefs(ctx, input)
-	images := c.resolveInputImageCandidates(input)
+	images, skipped := c.resolveInputImageCandidates(input)
+	for _, err := range skipped {
+		errs = append(errs, err.Error())
+	}
 	return block, images, errs
 }
 

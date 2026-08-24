@@ -1915,9 +1915,9 @@ func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 	ctx = agent.WithParentSession(ctx, parentSession)
 	ctx = jobs.WithSession(ctx, parentSession)
 	rawInput := input
-	ctx = c.withTurnImages(ctx, rawInput)
+	ctx, turnImgs := c.withTurnImages(ctx, rawInput)
 	ctx = agent.WithRawUserInput(ctx, rawInput)
-	input = c.Compose(input)
+	input = c.imageRoutingPrefix(turnImgs) + c.Compose(input)
 	// input.receive: same interception seam as the orchestrated turn — the
 	// composed headless input crosses the extension chain before it enters
 	// the session.
@@ -1982,11 +1982,11 @@ func (c *Controller) RunSubagentProfile(ctx context.Context, name, task string, 
 	parentSession := c.parentSessionID()
 	ctx = agent.WithParentSession(ctx, parentSession)
 	ctx = jobs.WithSession(ctx, parentSession)
-	ctx = c.withTurnImages(ctx, task)
+	ctx, turnImgs := c.withTurnImages(ctx, task)
 	ctx = agent.WithResponseLanguagePreference(ctx, c.display.responseLanguage)
 	ctx = agent.WithReasoningLanguagePreference(ctx, c.display.reasoningLanguage)
 	ctx = agent.WithSubagentDepth(ctx, 0)
-	answer, err := runner(ctx, sk, task, skill.SubagentRunOptions{HostInitiated: true})
+	answer, err := runner(ctx, sk, c.imageRoutingPrefix(turnImgs)+task, skill.SubagentRunOptions{HostInitiated: true})
 	if err != nil {
 		return "", err
 	}

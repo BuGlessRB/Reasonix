@@ -10,40 +10,68 @@ import (
 	"reasonix/internal/i18n"
 )
 
+// turnImages is what became of this turn's attachments: what the model gets,
+// what a delegate could get, and what nothing gets. One value answers all three,
+// so a resolved turn is a non-nil pointer rather than a separate flag.
+type turnImages struct {
+	userImages []string
+	candidates []string
+	skipped    []error
+}
+
+// unreadable counts what the user attached and this turn's own model cannot see.
+func (t *turnImages) unreadable() int {
+	if t == nil || len(t.userImages) > 0 {
+		return 0
+	}
+	return len(t.candidates)
+}
+
+func (t *turnImages) reasons() string {
+	parts := make([]string, 0, len(t.skipped))
+	for _, err := range t.skipped {
+		parts = append(parts, err.Error())
+	}
+	return strings.Join(parts, "; ")
+}
+
 // resolveTurnImages resolves each user attachment once. Text-only parents keep
 // the data only as candidates for a vision-capable child; vision-capable
 // parents reuse the same data URLs for their own provider request.
-func (c *Controller) resolveTurnImages(line string) (userImages, imageCandidates []string) {
-	imageCandidates = c.resolveInputImageCandidates(line)
+func (c *Controller) resolveTurnImages(line string) *turnImages {
+	candidates, skipped := c.resolveInputImageCandidates(line)
+	images := &turnImages{candidates: candidates, skipped: skipped}
 	if c.imageInputEnabled() {
-		userImages = imageCandidates
+		images.userImages = candidates
 	}
-	return userImages, imageCandidates
+	return images
 }
 
 func (c *Controller) prepareOrchestratedTurnImages(turn orchestratedTurn) orchestratedTurn {
-	turn.userImages, turn.imageCandidates = c.resolveTurnImages(turn.imageReferenceInput())
-	turn.imagesResolved = true
+	turn.images = c.resolveTurnImages(turn.imageReferenceInput())
 	return turn
 }
 
-func (c *Controller) imagesForOrchestratedTurn(ctx context.Context, turn orchestratedTurn) (userImages, imageCandidates []string) {
-	if turn.imagesResolved {
-		return turn.userImages, turn.imageCandidates
+func (c *Controller) imagesForOrchestratedTurn(ctx context.Context, turn orchestratedTurn) *turnImages {
+	if turn.images != nil {
+		return turn.images
 	}
 	if turn.goalContinuation != nil {
 		// A Goal continuation belongs to the same visible user turn, so keep its
 		// child-only image candidates. Do not add them to the synthetic parent
 		// message: a vision parent already has the image in its earlier history.
-		return nil, agent.SubagentImageCandidates(ctx)
+		return &turnImages{candidates: agent.SubagentImageCandidates(ctx)}
 	}
 	return c.resolveTurnImages(turn.imageReferenceInput())
 }
 
-func (c *Controller) withTurnImages(ctx context.Context, line string) context.Context {
-	userImages, imageCandidates := c.resolveTurnImages(line)
-	ctx = agent.WithUserImages(ctx, userImages)
-	return c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, imageCandidates))
+// withTurnImages binds this turn's attachments and hands back what became of
+// them, so every entry point composes its input through imageRoutingPrefix
+// rather than each deciding on its own what the model is told.
+func (c *Controller) withTurnImages(ctx context.Context, line string) (context.Context, *turnImages) {
+	images := c.resolveTurnImages(line)
+	ctx = agent.WithUserImages(ctx, images.userImages)
+	return c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, images.candidates)), images
 }
 
 // withVisionRouting names the model that reads an attachment this turn's own
@@ -127,30 +155,47 @@ func (c *Controller) visionModelRef() string {
 // bindOrchestratedTurnImages resolves the turn's attachments, binds them both
 // for the model and for any delegate, and reports how many the model itself
 // cannot read.
-func (c *Controller) bindOrchestratedTurnImages(ctx context.Context, turn orchestratedTurn) (context.Context, []string, int) {
-	userImages, candidates := c.imagesForOrchestratedTurn(ctx, turn)
-	ctx = agent.WithUserImages(ctx, userImages)
-	ctx = agent.WithSubagentImageCandidates(ctx, candidates)
-	return ctx, userImages, unreadableImages(userImages, candidates)
-}
-
-// unreadableImages counts what the user attached and this model cannot see.
-func unreadableImages(userImages, candidates []string) int {
-	if len(userImages) > 0 {
-		return 0
-	}
-	return len(candidates)
+func (c *Controller) bindOrchestratedTurnImages(ctx context.Context, turn orchestratedTurn) (context.Context, *turnImages) {
+	images := c.imagesForOrchestratedTurn(ctx, turn)
+	ctx = agent.WithUserImages(ctx, images.userImages)
+	ctx = agent.WithSubagentImageCandidates(ctx, images.candidates)
+	return ctx, images
 }
 
 // imageRoutingPrefix also tells the user where their attachment went. Silence is
 // the failure that matters: a pasted screenshot that reaches nothing reads as
 // the product ignoring it.
-func (c *Controller) imageRoutingPrefix(unreadable int) string {
-	if unreadable <= 0 {
+func (c *Controller) imageRoutingPrefix(images *turnImages) string {
+	c.noticeUnfitImages(images)
+	note := c.unfitImagesNote(images)
+	if unreadable := images.unreadable(); unreadable > 0 {
+		c.notice(c.imagesNotReadableNotice(unreadable))
+		note += c.imageRoutingNote(unreadable)
+	}
+	return note
+}
+
+// noticeUnfitImages names an attachment that never left the machine. A host
+// rejects an oversized image as an unsupported *format*, and the rejected
+// message then fails every later turn — so the reason is said here instead.
+func (c *Controller) noticeUnfitImages(images *turnImages) {
+	if images == nil || len(images.skipped) == 0 {
+		return
+	}
+	c.notice(fmt.Sprintf(i18n.M.ImagesUnfit, len(images.skipped), images.reasons()))
+}
+
+// unfitImagesNote tells the model an attachment exists that it will never see,
+// so it does not answer as though nothing was attached.
+func (c *Controller) unfitImagesNote(images *turnImages) string {
+	if images == nil || len(images.skipped) == 0 {
 		return ""
 	}
-	c.notice(c.imagesNotReadableNotice(unreadable))
-	return c.imageRoutingNote(unreadable)
+	return fmt.Sprintf(
+		"<%s>\nThe user attached %d image(s) that could not be sent to any model: %s\n"+
+			"Say so plainly and name what would fix it. Never answer as if nothing was attached, "+
+			"and never guess what the image shows.\n</%s>\n\n",
+		ImageRoutingTag, len(images.skipped), images.reasons(), ImageRoutingTag)
 }
 
 // imagesNotReadableNotice says where the attachment actually went. Announcing a

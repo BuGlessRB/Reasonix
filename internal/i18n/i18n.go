@@ -341,6 +341,7 @@ type Messages struct {
 	ImagesNotReadable            string
 	ImagesNeedVisionRole         string
 	ImagesDropped                string
+	ImagesUnfit                  string
 	GoalPausedReason             string
 	GoalPausedFmt                string // %s = stop cause
 	GoalRuntimeFmt               string // turns, requests, tokens, work duration

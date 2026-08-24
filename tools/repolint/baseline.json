@@ -3,15 +3,16 @@
     "banner": 0,
     "claude-dialect": 1,
     "commented-code": 0,
-    "complexity": 1572,
+    "complexity": 1571,
     "error-text": 12,
-    "essay": 3303,
-    "file-size": 43219,
-    "function-size": 6795,
+    "essay": 3301,
+    "file-size": 42782,
+    "function-size": 6772,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
     "refusal-path": 0,
+    "spec-parity": 0,
     "struct-state": 52
   },
   "files": {
@@ -168,8 +169,7 @@
       "function-size": 8
     },
     "internal/agent/fleet.go": {
-      "essay": 3,
-      "function-size": 24
+      "essay": 3
     },
     "internal/agent/listsessions_bench_test.go": {
       "essay": 4
@@ -279,7 +279,7 @@
     "internal/agent/task.go": {
       "complexity": 25,
       "essay": 54,
-      "file-size": 1201,
+      "file-size": 1199,
       "function-size": 114
     },
     "internal/agent/task_test.go": {
@@ -730,7 +730,7 @@
     },
     "internal/control/refs.go": {
       "essay": 5,
-      "file-size": 525
+      "file-size": 425
     },
     "internal/control/session_lease_keeper.go": {
       "essay": 5
@@ -1038,8 +1038,8 @@
       "essay": 19
     },
     "internal/plugin/plugin.go": {
-      "essay": 29,
-      "file-size": 1025,
+      "essay": 28,
+      "file-size": 972,
       "function-size": 12
     },
     "internal/plugin/plugin_test.go": {
@@ -1444,10 +1444,10 @@
       "essay": 1
     },
     "workers/crash-report/src/index.ts": {
-      "file-size": 899
+      "file-size": 686
     },
     "workers/crash-report/src/stats.ts": {
-      "file-size": 76
+      "file-size": 17
     }
   }
 }

@@ -1,12 +1,14 @@
 package control
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"reasonix/internal/event"
+	"reasonix/internal/visionimage"
 )
 
 // A pasted screenshot that reaches a text-only model must not vanish. The data
@@ -14,7 +16,7 @@ import (
 // it — so the model answered as though nothing had been attached.
 func TestUnreadableImagesRideTheTurnTail(t *testing.T) {
 	c := New(Options{Sink: event.Discard})
-	got := c.imageRoutingPrefix(unreadableImages(nil, []string{"data:image/png;base64,AAA", "data:image/png;base64,BBB"})) + "look at this"
+	got := c.imageRoutingPrefix(&turnImages{candidates: []string{"data:image/png;base64,AAA", "data:image/png;base64,BBB"}}) + "look at this"
 	if !strings.HasSuffix(got, "look at this") {
 		t.Fatalf("the user's text must stay last in the turn: %q", got)
 	}
@@ -55,14 +57,69 @@ func TestConfiguredVisionModelIsNamedInTheNote(t *testing.T) {
 func TestReadableImagesGetNoNote(t *testing.T) {
 	c := New(Options{Sink: event.Discard})
 	imgs := []string{"data:image/png;base64,AAA"}
-	if got := c.imageRoutingPrefix(unreadableImages(imgs, imgs)) + "look"; got != "look" {
+	if got := c.imageRoutingPrefix(&turnImages{userImages: imgs, candidates: imgs}) + "look"; got != "look" {
 		t.Fatalf("got %q, want the input untouched when the model reads images", got)
 	}
 }
 
 func TestNoAttachmentsChangeNothing(t *testing.T) {
 	c := New(Options{Sink: event.Discard})
-	if got := c.imageRoutingPrefix(unreadableImages(nil, nil)) + "plain"; got != "plain" {
+	if got := c.imageRoutingPrefix(&turnImages{}) + "plain"; got != "plain" {
 		t.Fatalf("got %q, want the input untouched with no attachments", got)
+	}
+}
+
+// An attachment no host would accept must not leave silently. The rejection
+// comes back as a complaint about the image *format*, and the message that
+// carried it then fails every later turn in the session — so the reason is said
+// here, to the user and to the model, and the bytes never leave the machine.
+func TestUnfitImageIsNamedToUserAndModel(t *testing.T) {
+	workspace := t.TempDir()
+	writeVisionTestConfig(t, workspace)
+	broken := filepath.Join(workspace, "docs", "diagram.png")
+	if err := os.MkdirAll(filepath.Dir(broken), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A PNG signature over bytes that do not decode: the shape a truncated or
+	// half-synced attachment arrives in.
+	if err := os.WriteFile(broken, append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 64)...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &Controller{workspaceRoot: workspace, modelRef: "custom/vision-pro"}
+	images := c.resolveTurnImages("look at @docs/diagram.png")
+	if len(images.userImages) != 0 || len(images.candidates) != 0 {
+		t.Fatalf("an unfit image must not be carried: %v / %v", images.userImages, images.candidates)
+	}
+	if len(images.skipped) != 1 {
+		t.Fatalf("skipped = %v, want the unfit attachment reported", images.skipped)
+	}
+	if !errors.Is(images.skipped[0], visionimage.ErrUnfit) {
+		t.Fatalf("skipped[0] = %v, want it to carry the ErrUnfit identity", images.skipped[0])
+	}
+	if !strings.Contains(images.skipped[0].Error(), "docs/diagram.png") {
+		t.Fatalf("reason = %q, want it to name which attachment", images.skipped[0])
+	}
+
+	note := (&Controller{workspaceRoot: workspace, sink: event.Discard}).unfitImagesNote(images)
+	if !strings.Contains(note, "<"+ImageRoutingTag+">") || !strings.Contains(note, "1 image(s)") {
+		t.Fatalf("note = %q, want an attached-images block naming the count", note)
+	}
+	if !strings.Contains(note, "never guess what the image shows") {
+		t.Fatalf("note = %q, want guessing ruled out", note)
+	}
+}
+
+// A reference that was never an image stays silent: detectRefs returns every
+// @ref, and reporting the non-images would bury the one that matters.
+func TestNonImageRefIsNotReportedAsSkipped(t *testing.T) {
+	workspace := t.TempDir()
+	writeVisionTestConfig(t, workspace)
+	if err := os.WriteFile(filepath.Join(workspace, "notes.txt"), []byte("plain"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Controller{workspaceRoot: workspace, modelRef: "custom/vision-pro"}
+	if images := c.resolveTurnImages("read @notes.txt"); len(images.skipped) != 0 {
+		t.Fatalf("skipped = %v, want silence for a reference that is not an image", images.skipped)
 	}
 }

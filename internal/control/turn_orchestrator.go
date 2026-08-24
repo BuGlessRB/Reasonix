@@ -27,9 +27,7 @@ type orchestratedTurn struct {
 	input            string
 	raw              string
 	imageRefs        string
-	userImages       []string
-	imageCandidates  []string
-	imagesResolved   bool
+	images           *turnImages
 	display          string
 	editedOriginal   string
 	synthetic        bool
@@ -87,8 +85,8 @@ func (o *turnOrchestrator) runSubagentSkillGoalLoop(ctx context.Context, sk skil
 
 func (o *turnOrchestrator) runSubagentSkillTurnsGoalLoop(ctx context.Context, skills []skill.Skill, task, raw, display string, runner skill.SubagentRunner, planMode bool) error {
 	expectedContinuationEpoch := o.c.goals.continuationToken()
-	userImages, imageCandidates := o.c.resolveTurnImages(raw)
-	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, imageCandidates))
+	images := o.c.resolveTurnImages(raw)
+	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, images.candidates))
 	// The skill turn's model requests count against the active goal's token
 	// budget, so bind a recorder for the span even though the sub-agent cannot
 	// call update_goal itself.
@@ -98,7 +96,7 @@ func (o *turnOrchestrator) runSubagentSkillTurnsGoalLoop(ctx context.Context, sk
 		o.c.goalUsageTee.setActiveRecorder(recorder)
 	}
 	startMessages := o.c.sessionMessageCount()
-	err := o.runSubagentSkillTurns(ctx, skills, task, raw, display, runner, planMode, userImages, imageCandidates)
+	err := o.runSubagentSkillTurns(ctx, skills, task, raw, display, runner, planMode, images)
 	o.c.captureGoalRunWorkDuration(startMessages)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -118,19 +116,19 @@ func (o *turnOrchestrator) runSubagentSkillTurnsGoalLoop(ctx context.Context, sk
 // answers only. Child reasoning and tool chatter stay out of the
 // provider-visible parent context while their UI events nest under synthetic
 // top-level run_skill cards.
-func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []skill.Skill, task, raw, display string, runner skill.SubagentRunner, planMode bool, images, imageCandidates []string) (err error) {
+func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []skill.Skill, task, raw, display string, runner skill.SubagentRunner, planMode bool, images *turnImages) (err error) {
 	c := o.c
 	turnStartedAt := time.Now()
 	c.maybeSessionStart(ctx)
 	parentSession := c.parentSessionID()
 	ctx = agent.WithParentSession(ctx, parentSession)
 	ctx = jobs.WithSession(ctx, parentSession)
-	ctx = agent.WithUserImages(ctx, images)
-	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, imageCandidates))
+	ctx = agent.WithUserImages(ctx, images.userImages)
+	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, images.candidates))
 	ctx = agent.WithResponseLanguagePreference(ctx, c.display.responseLanguage)
 	ctx = agent.WithReasoningLanguagePreference(ctx, c.display.reasoningLanguage)
 
-	input := c.imageRoutingPrefix(unreadableImages(images, imageCandidates)) + c.compose(task, raw, true)
+	input := c.imageRoutingPrefix(images) + c.compose(task, raw, true)
 	startMessages := c.messageCount()
 	var marker agent.InFlightTurnMeta
 	defer func() { c.finishInFlightTurn(startMessages, marker) }()
@@ -156,7 +154,7 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	if c.executor == nil {
 		return fmt.Errorf("subagent slash invocation requires an active session")
 	}
-	c.executor.Session().Add(provider.Message{Role: provider.RoleUser, Content: input, Images: images, CreatedAt: time.Now().UnixMilli()})
+	c.executor.Session().Add(provider.Message{Role: provider.RoleUser, Content: input, Images: images.userImages, CreatedAt: time.Now().UnixMilli()})
 
 	for _, sk := range skills {
 		sk = c.skills.prepare(sk)
@@ -199,7 +197,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	parentSession := c.parentSessionID()
 	ctx = agent.WithParentSession(ctx, parentSession)
 	ctx = jobs.WithSession(ctx, parentSession)
-	ctx, userImages, unreadable := c.bindOrchestratedTurnImages(ctx, turn)
+	ctx, images := c.bindOrchestratedTurnImages(ctx, turn)
 	ctx = agent.WithRawUserInput(ctx, turn.raw)
 	continuation := turn.goalContinuation
 	var input string
@@ -214,7 +212,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	} else {
 		input = c.compose(turn.input, turn.raw, !turn.synthetic)
 	}
-	input = c.imageRoutingPrefix(unreadable) + input
+	input = c.imageRoutingPrefix(images) + input
 	// input.receive: the composed text crosses the extension chain before it
 	// enters the session (checkpoint, hooks, and the model all see the final
 	// text). A block ruling aborts the turn with the redacted reason surfaced,
@@ -296,7 +294,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 				c.stripCancelledVisibleTurnMessagesAfterWithFallback(startMessages, provider.Message{
 					Role:      provider.RoleUser,
 					Content:   input,
-					Images:    append([]string(nil), userImages...),
+					Images:    append([]string(nil), images.userImages...),
 					CreatedAt: time.Now().UnixMilli(),
 				})
 			}
@@ -309,7 +307,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 			c.stripCancelledVisibleTurnMessagesAfterWithFallback(startMessages, provider.Message{
 				Role:      provider.RoleUser,
 				Content:   input,
-				Images:    append([]string(nil), userImages...),
+				Images:    append([]string(nil), images.userImages...),
 				CreatedAt: time.Now().UnixMilli(),
 			})
 		}
@@ -401,17 +399,13 @@ func (o *turnOrchestrator) runTurnLoopWithImageRefsRawDisplay(ctx context.Contex
 }
 
 func (o *turnOrchestrator) runTurnLoopWithFrozenImagesRawDisplay(ctx context.Context, input, raw, display string, images []string) error {
-	turn := orchestratedTurn{
-		input:           input,
-		raw:             raw,
-		display:         display,
-		imageCandidates: append([]string(nil), images...),
-		imagesResolved:  true,
-	}
+	frozen := &turnImages{candidates: append([]string(nil), images...)}
 	if o.c.imageInputEnabled() {
-		turn.userImages = append([]string(nil), images...)
+		frozen.userImages = append([]string(nil), images...)
 	}
-	return o.runTurnLoopWithPreparedTurn(ctx, turn)
+	return o.runTurnLoopWithPreparedTurn(ctx, orchestratedTurn{
+		input: input, raw: raw, display: display, images: frozen,
+	})
 }
 
 // runTurnLoopWithPreparedTurn runs the turn, then hands the outcome to the Goal
@@ -419,7 +413,7 @@ func (o *turnOrchestrator) runTurnLoopWithFrozenImagesRawDisplay(ctx context.Con
 // is one turn; with one it is the loop that keeps pursuing it.
 func (o *turnOrchestrator) runTurnLoopWithPreparedTurn(ctx context.Context, turn orchestratedTurn) error {
 	expectedContinuationEpoch := o.c.goals.continuationToken()
-	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, turn.imageCandidates))
+	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, turn.images.candidates))
 	err := o.runOrchestratedTurn(ctx, turn)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -453,7 +447,7 @@ func (o *turnOrchestrator) runEditedGoalLoopWithImageRefsRawDisplay(ctx context.
 	turn := o.c.prepareOrchestratedTurnImages(orchestratedTurn{
 		input: input, raw: raw, imageRefs: imageRefs, display: display, editedOriginal: original,
 	})
-	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, turn.imageCandidates))
+	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, turn.images.candidates))
 	err := o.runOrchestratedTurn(ctx, turn)
 	if err != nil {
 		if ctx.Err() != nil {
