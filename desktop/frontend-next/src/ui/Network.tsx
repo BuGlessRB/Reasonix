@@ -165,7 +165,7 @@ export function Network({ port }: { port: AgentPort }) {
         <div className="probes">
           {probes.map((p, i) => (
             <div className="probe" key={i} data-ok={p.ok ? "" : undefined}>
-              <i className="mk">{p.ok ? "✓" : "✗"}</i>
+              <i className="mk">{p.ok ? "✓" : "×"}</i>
               <span className="lb">{STEP_LABEL[p.step] ?? p.step}</span>
               <span className="dt">{p.detail}</span>
               <span className="ms">{p.durationMs ? `${p.durationMs}ms` : ""}</span>

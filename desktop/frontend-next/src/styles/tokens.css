@@ -28,6 +28,17 @@
   unicode-range: U+2E80-9FFF, U+3000-303F, U+FF00-FFEF, U+2010-2027, U+00B7;
 }
 
+/* 这份字体没有几何图形区(U+25xx)也没有 ✗:那些形状会落到下面已经装好的
+   思源黑体,所以跨平台仍然是同一个长相,但 advance 不是等宽格。要和 ✓ 并排
+   站进同一列的记号得用 ×,它在这份字体里,和 ✓ 同宽。 */
+@font-face {
+  font-family: "IBM Plex Mono var";
+  src: url("/fonts/IBMPlexMonoVariable.woff2") format("woff2");
+  font-weight: 100 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 @property --rail-w { syntax: "<length>"; inherits: true; initial-value: 214px }
 @property --side-w { syntax: "<length>"; inherits: true; initial-value: 296px }
 
@@ -38,39 +49,49 @@
     interpolate-size: allow-keywords;
 
     --rail-open: 214px; --side-open: 296px;
-    --page: #F3F5F8; --surface: #FAFBFD; --raised: #FFFFFF; --overlay: #EDF0F4;
-    --border: #DBE0E7; --hair: #E8ECF1;
+    --page: oklch(94.8% .005 75); --surface: oklch(98.8% .003 75);
+    --raised: oklch(100% 0 75); --overlay: oklch(93.9% .006 75);
+    --border: oklch(89.9% .009 75); --hair: oklch(93.6% .006 75);
     /* 浮在内容之上的层用这一组，不用 --raised：深色下 raised 和它压着的东西
        几乎同亮，黑影落在近黑的底上又等于没画，菜单于是看着像透明的。抬面比
        底色亮一档、顶一条内高光、影子更深更散，三样一起才让它离开背景。 */
-    --float: #FFFFFF; --float-hi: #EDF0F4;
+    --float: oklch(100% 0 75); --float-hi: oklch(94.2% .006 75);
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .9),
       0 16px 40px -14px rgb(23 30 45 / .2),
       0 4px 12px -8px rgb(23 30 45 / .14);
     --accent: #A7690C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
-    --net: #3555C4; --net-wash: #EBEFFC;
-    --deleg: #0E7382; --deleg-wash: #E4F2F4;
-    --ok: #2C7A4B; --warn: #A7690C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
+    --net: oklch(49.3% .155 267); --net-wash: oklch(94.4% .017 262);
+    --deleg: oklch(51.1% .086 211); --deleg-wash: oklch(94.6% .016 210);
+    --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28);
+    --warn: oklch(57.5% .118 45); --add: var(--ok); --del: var(--err);
     /* A hue used as a surface and as text on a tint of itself needs two values.
        --accent at 4.55:1 on white had no headroom left: white text on it fell to
        4.42, and the hue itself on its own 13% tint reached only 3.3–3.8. The ink
        is the reading value — it clears 4.5:1 on that tint over any of our
        surfaces — while the base stays the fill. In dark they coincide, because
        there the tint is darker than the hue rather than lighter. */
-    --accent-ink: #8C580A; --warn-ink: #8C580A; --ok-ink: #286F44; --err-ink: #AF362E;
+    --accent-ink: #8C580A; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
     /* Terminal output and diffs carry Chinese, and none of the monospaced faces
        above has a Chinese glyph — the character fell through to whatever the OS
        picked, which on Windows is a serif. Naming the shipped face makes that
        choice ours. Alignment is unchanged: a Han glyph is 1em against a 0.6em
        Latin cell either way, so it was never a 2:1 grid to break. */
-    --mono: ui-monospace, "Cascadia Code", "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, "Noto Sans SC var", monospace;
+    --mono: "IBM Plex Mono var", ui-monospace, "Cascadia Code", "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, "Noto Sans SC var", monospace;
     --ui: "Inter var", "Noto Sans SC var", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", Arial, sans-serif;
+    /* accent 和 warn 一直是同一个 hex，于是下面这句话对它们俩不成立：
+       「需要你介入」和「有风险但放行」在屏幕上根本分不开。warn 现在挪到偏橙
+       的 H45 —— 琥珀是「该你了」，橙是「这一步有代价」。明度与彩度按 accent
+       那一档配：深色 8.14:1、浅色 ink 5.83:1，与 accent 的 8.35 / 5.77 齐平。 */
     /* 每个色只担一件事：
        accent=需要你介入 · net=系统在自主跑 · deleg=委派出去的 · ok=成
        warn=有风险但放行 · err=坏了或会毁东西 · ghost=中性事实（比如未命中）
        focus 单独立一个 token：焦点环不该跟「运行中」共用一个颜色的语义。 */
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+    --grain-a: .026;
     --focus: var(--net);
+    --lit: inset 0 1px 0 rgb(255 255 255 / .055);
+    --sunk: inset 0 1px 2px rgb(0 0 0 / .16);
     --ease: cubic-bezier(.22, .68, .26, 1);
     --ease-out: cubic-bezier(.16, 1, .3, 1);
     --ease-in: cubic-bezier(.55, 0, 1, .45);
@@ -83,7 +104,26 @@
 
     /* 三档时长对应三档份量：一行 / 一张卡 / 一整块面板 */
     --t-line: .14s; --t-card: .22s; --t-panel: .34s;
-    --r-xs: 3px; --r-sm: 5px; --r-md: 8px; --r-pill: 999px;
+    /* 一档份量把时长和缓动一起说完。分开放着的时候，同一档的两处动画可以各
+       配各的缓动，而「这是一张卡」本来就同时决定了这两件事。--m-step 是编排：
+       一批元素彼此错开多久 —— 过去每个调用点自己定一个数。 */
+    --m-line: var(--t-line) var(--ease-out);
+    --m-card: var(--t-card) var(--ease-out);
+    --m-panel: var(--t-panel) var(--ease-out);
+    --m-exit: var(--t-line) var(--ease-in);
+    --m-step: 36ms;
+
+    /* 同样三档，这次是空间。份量决定入场怎么走，也该决定它占多少地方 ——
+       只有时长分了档，间距没有，于是一次只读了个文件的调用和一次带二十行
+       输出的调用一样重，长回合下来分不出哪里是一段。 */
+    --y-line: 5px; --y-card: 11px; --y-panel: 17px;
+
+    /* 字距随字号变，不是常数：字号一大，字之间的空气跟着放大，要收回来；
+       小型大写反过来要放开，否则挤成一个词。中文那一档由 app.css 顶部的
+       :lang(zh) 统一归零 —— 负字距压的是汉字的字面框，不是字母间的空气。 */
+    --track-display: -.018em;
+    --track-tight: -.02em; --track-lead: .06em; --track-cap: .12em;
+    --r-xs: 1px; --r-sm: 2px; --r-md: 3px; --r-lg: 4px; --r-pill: 999px;
 
     /* 对话正文的字号。单独立一个令牌，是因为「看不清」要调的是这一处，而
        不是整套界面 —— 整体缩放走 zoom，两件事各调各的。这里只是首帧兜底，
@@ -99,14 +139,18 @@
 
   @media (prefers-color-scheme: dark) {
     :root {
-    --page: #090B0F; --surface: #0C0E13; --raised: #151920; --overlay: #1D222B;
-    --border: #292F39; --hair: #1A1F27;
+    --grain-a: .045;
+    --page: oklch(13.3% .004 75); --surface: oklch(17.7% .005 75);
+    --raised: oklch(22.1% .006 75); --overlay: oklch(26.8% .008 75);
+    --border: oklch(31.6% .010 75); --hair: oklch(23.8% .007 75);
     --accent: #DDA144; --accent-fg: #171104; --accent-wash: #201907;
-    --net: #7391FF; --net-wash: #111629;
-    --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
-    --ok: #52B87C; --warn: #DDA144; --err: #E4675D; --add: #52B87C; --del: #E4675D;
-    --accent-ink: #DDA144; --warn-ink: #DDA144; --ok-ink: #52B87C; --err-ink: #E4675D;
-    --float: #1F2530; --float-hi: #2A313D;
+    --net: oklch(68.5% .118 262); --net-wash: oklch(21% .028 262);
+    --deleg: oklch(68.1% .105 210); --deleg-wash: oklch(21% .024 210);
+    --ok: oklch(70.6% .120 155); --err: oklch(66.5% .150 27);
+    --warn: oklch(75% .135 48); --add: var(--ok); --del: var(--err);
+    --accent-ink: var(--accent); --warn-ink: var(--warn);
+    --ok-ink: var(--ok); --err-ink: var(--err);
+    --float: oklch(25.5% .008 75); --float-hi: oklch(31% .009 75);
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .06),
       0 0 0 1px rgb(0 0 0 / .55),
@@ -115,14 +159,18 @@
     }
   }
   :root[data-theme="dark"] {
-    --page: #090B0F; --surface: #0C0E13; --raised: #151920; --overlay: #1D222B;
-    --border: #292F39; --hair: #1A1F27;
+    --grain-a: .045;
+    --page: oklch(13.3% .004 75); --surface: oklch(17.7% .005 75);
+    --raised: oklch(22.1% .006 75); --overlay: oklch(26.8% .008 75);
+    --border: oklch(31.6% .010 75); --hair: oklch(23.8% .007 75);
     --accent: #DDA144; --accent-fg: #171104; --accent-wash: #201907;
-    --net: #7391FF; --net-wash: #111629;
-    --deleg: #3EA9BA; --deleg-wash: #0A1a1e;
-    --ok: #52B87C; --warn: #DDA144; --err: #E4675D; --add: #52B87C; --del: #E4675D;
-    --accent-ink: #DDA144; --warn-ink: #DDA144; --ok-ink: #52B87C; --err-ink: #E4675D;
-    --float: #1F2530; --float-hi: #2A313D;
+    --net: oklch(68.5% .118 262); --net-wash: oklch(21% .028 262);
+    --deleg: oklch(68.1% .105 210); --deleg-wash: oklch(21% .024 210);
+    --ok: oklch(70.6% .120 155); --err: oklch(66.5% .150 27);
+    --warn: oklch(75% .135 48); --add: var(--ok); --del: var(--err);
+    --accent-ink: var(--accent); --warn-ink: var(--warn);
+    --ok-ink: var(--ok); --err-ink: var(--err);
+    --float: oklch(25.5% .008 75); --float-hi: oklch(31% .009 75);
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .06),
       0 0 0 1px rgb(0 0 0 / .55),
@@ -130,14 +178,16 @@
       0 6px 18px -10px rgb(0 0 0 / .62);
   }
   :root[data-theme="light"] {
-    --page: #F3F5F8; --surface: #FAFBFD; --raised: #FFFFFF; --overlay: #EDF0F4;
-    --border: #DBE0E7; --hair: #E8ECF1;
+    --page: oklch(94.8% .005 75); --surface: oklch(98.8% .003 75);
+    --raised: oklch(100% 0 75); --overlay: oklch(93.9% .006 75);
+    --border: oklch(89.9% .009 75); --hair: oklch(93.6% .006 75);
     --accent: #A7690C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
-    --net: #3555C4; --net-wash: #EBEFFC;
-    --deleg: #0E7382; --deleg-wash: #E4F2F4;
-    --ok: #2C7A4B; --warn: #A7690C; --err: #BE3A32; --add: #2C7A4B; --del: #BE3A32;
-    --accent-ink: #8C580A; --warn-ink: #8C580A; --ok-ink: #286F44; --err-ink: #AF362E;
-    --float: #FFFFFF; --float-hi: #EDF0F4;
+    --net: oklch(49.3% .155 267); --net-wash: oklch(94.4% .017 262);
+    --deleg: oklch(51.1% .086 211); --deleg-wash: oklch(94.6% .016 210);
+    --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28);
+    --warn: oklch(57.5% .118 45); --add: var(--ok); --del: var(--err);
+    --accent-ink: #8C580A; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
+    --float: oklch(100% 0 75); --float-hi: oklch(94.2% .006 75);
     --shadow-float:
       inset 0 1px 0 rgb(255 255 255 / .9),
       0 16px 40px -14px rgb(23 30 45 / .2),
@@ -149,6 +199,7 @@
      medium 起步 —— 这两件事以前只有「整体放大」一个旋钮去凑。 */
   :root { --w-reg: 400; --w-med: 500; --w-semi: 600 }
   :root:lang(zh) { --w-reg: 500; --w-med: 600; --w-semi: 700 }
+  :root:lang(zh) { --track-display: -.006em }
   :root[data-weight="light"], :root[data-weight="light"]:lang(zh) {
   --w-reg: 400; --w-med: 500; --w-semi: 600;
   }
@@ -162,44 +213,44 @@
      字上，而 AA 的大字豁免是给 18.66px 以上的。默认档从那条线起算，另外两档
      递增；正文一端不动 —— 深底上接近纯白会起光晕，收窄跨度才是柔和的意思。 */
   :root, :root[data-contrast="soft"] {
-  --text: #2C333E; --muted: #484F58; --faint: #5A616D; --ghost: #677589;
+  --text: oklch(31.9% .011 75); --muted: oklch(42.5% .011 75); --faint: oklch(49.1% .012 75); --ghost: oklch(55.8% .015 75);
   }
   :root[data-contrast="normal"] {
-  --text: #272D36; --muted: #3F464D; --faint: #515762; --ghost: #5F6A7E;
+  --text: oklch(29.5% .010 75); --muted: oklch(39% .010 75); --faint: oklch(45.5% .011 75); --ghost: oklch(52.2% .013 75);
   }
   :root[data-contrast="strong"] {
-  --text: #14171D; --muted: #353A41; --faint: #474D56; --ghost: #545F70;
+  --text: oklch(20.4% .009 75); --muted: oklch(34.6% .009 75); --faint: oklch(41.8% .010 75); --ghost: oklch(48.2% .012 75);
   }
 
   @media (prefers-color-scheme: dark) {
     :root, :root[data-contrast="soft"] {
-    --text: #C6CEDE; --muted: #9FA7B3; --faint: #888F9F; --ghost: #76829A;
+    --text: oklch(85% .010 75); --muted: oklch(72.6% .010 75); --faint: oklch(65% .011 75); --ghost: oklch(60.5% .014 75);
     }
     :root[data-contrast="normal"] {
-    --text: #D1D8E5; --muted: #ADB4BE; --faint: #949DAA; --ghost: #8290A3;
+    --text: oklch(88.1% .010 75); --muted: oklch(76.7% .010 75); --faint: oklch(69.3% .011 75); --ghost: oklch(64.9% .014 75);
     }
     :root[data-contrast="strong"] {
-    --text: #E6E9F0; --muted: #BEC4CC; --faint: #A3AAB6; --ghost: #929CAE;
+    --text: oklch(93.4% .008 75); --muted: oklch(81.8% .009 75); --faint: oklch(73.6% .010 75); --ghost: oklch(69.1% .012 75);
     }
   }
 
   :root[data-theme="dark"], :root[data-theme="dark"][data-contrast="soft"] {
-  --text: #C6CEDE; --muted: #9FA7B3; --faint: #888F9F; --ghost: #76829A;
+  --text: oklch(85% .010 75); --muted: oklch(72.6% .010 75); --faint: oklch(65% .011 75); --ghost: oklch(60.5% .014 75);
   }
   :root[data-theme="dark"][data-contrast="normal"] {
-  --text: #D1D8E5; --muted: #ADB4BE; --faint: #949DAA; --ghost: #8290A3;
+  --text: oklch(88.1% .010 75); --muted: oklch(76.7% .010 75); --faint: oklch(69.3% .011 75); --ghost: oklch(64.9% .014 75);
   }
   :root[data-theme="dark"][data-contrast="strong"] {
-  --text: #E6E9F0; --muted: #BEC4CC; --faint: #A3AAB6; --ghost: #929CAE;
+  --text: oklch(93.4% .008 75); --muted: oklch(81.8% .009 75); --faint: oklch(73.6% .010 75); --ghost: oklch(69.1% .012 75);
   }
   :root[data-theme="light"], :root[data-theme="light"][data-contrast="soft"] {
-  --text: #2C333E; --muted: #484F58; --faint: #5A616D; --ghost: #677589;
+  --text: oklch(31.9% .011 75); --muted: oklch(42.5% .011 75); --faint: oklch(49.1% .012 75); --ghost: oklch(55.8% .015 75);
   }
   :root[data-theme="light"][data-contrast="normal"] {
-  --text: #272D36; --muted: #3F464D; --faint: #515762; --ghost: #5F6A7E;
+  --text: oklch(29.5% .010 75); --muted: oklch(39% .010 75); --faint: oklch(45.5% .011 75); --ghost: oklch(52.2% .013 75);
   }
   :root[data-theme="light"][data-contrast="strong"] {
-  --text: #14171D; --muted: #353A41; --faint: #474D56; --ghost: #545F70;
+  --text: oklch(20.4% .009 75); --muted: oklch(34.6% .009 75); --faint: oklch(41.8% .010 75); --ghost: oklch(48.2% .012 75);
   }
 
   /* 系统开了「增强对比度」而用户没自己选过档，就按它来。明暗要单独判：手动
@@ -207,17 +258,17 @@
      正文刷到深背景上。 */
   @media (prefers-contrast: more) {
     :root:not([data-contrast]) {
-    --text: #14171D; --muted: #353A41; --faint: #474D56; --ghost: #545F70;
+    --text: oklch(20.4% .009 75); --muted: oklch(34.6% .009 75); --faint: oklch(41.8% .010 75); --ghost: oklch(48.2% .012 75);
     }
     :root[data-theme="dark"]:not([data-contrast]) {
-    --text: #E6E9F0; --muted: #BEC4CC; --faint: #A3AAB6; --ghost: #929CAE;
+    --text: oklch(93.4% .008 75); --muted: oklch(81.8% .009 75); --faint: oklch(73.6% .010 75); --ghost: oklch(69.1% .012 75);
     }
   }
   @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
     :root:not([data-contrast]) {
-    --text: #E6E9F0; --muted: #BEC4CC; --faint: #A3AAB6; --ghost: #929CAE;
+    --text: oklch(93.4% .008 75); --muted: oklch(81.8% .009 75); --faint: oklch(73.6% .010 75); --ghost: oklch(69.1% .012 75);
     }
     :root[data-theme="light"]:not([data-contrast]) {
-    --text: #14171D; --muted: #353A41; --faint: #474D56; --ghost: #545F70;
+    --text: oklch(20.4% .009 75); --muted: oklch(34.6% .009 75); --faint: oklch(41.8% .010 75); --ghost: oklch(48.2% .012 75);
     }
   }

@@ -17,6 +17,7 @@ import { SlottedView } from "./SlottedView";
 import { key as slotKey, placement } from "./slots";
 import { Metrics } from "./Metrics";
 import { arrowTabs } from "./tablist";
+import { swapping } from "./swap";
 import { useMarker } from "./marker";
 import { tokensPerSecond } from "../port/tokens";
 
@@ -436,10 +437,10 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       onFocusCapture={active ? undefined : onFocus}
     >
       <div className="tabs" role="tablist" ref={tabs} onKeyDown={arrowTabs}>
-        <button className="tab" role="tab" aria-selected={tab === "flow"} onClick={() => setTab("flow")}>
+        <button className="tab" role="tab" aria-selected={tab === "flow"} onClick={() => swapping(() => setTab("flow"), "tab")}>
           {t("活动")}<span className="n">{s.items.length}</span>
         </button>
-        <button className="tab" role="tab" aria-selected={tab === "traj"} onClick={() => setTab("traj")}>
+        <button className="tab" role="tab" aria-selected={tab === "traj"} onClick={() => swapping(() => setTab("traj"), "tab")}>
           {t("轨迹")}<span className="n">{traj.rows.length}</span>
         </button>
         {tabMark && <i className="tabmark" style={{ width: tabMark.len, transform: `translateX(${tabMark.at}px)` }} />}

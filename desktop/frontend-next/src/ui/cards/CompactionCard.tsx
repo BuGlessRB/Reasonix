@@ -33,7 +33,7 @@ function Coverage({ c }: { c: Compaction }) {
       </div>
       {missing > 0 && (
         <div className="row">
-          <span className="x">✗</span>
+          <span className="x">×</span>
           <span>
             {tx("还有 {n} 处只剩下索引地址，要用原文得 recall 取回", { n: <b>{missing}</b> })}
           </span>

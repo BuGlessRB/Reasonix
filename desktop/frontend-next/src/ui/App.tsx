@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
-import { flushSync } from "react-dom";
 import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
 import type { AccountState, AgentPort, Appearance as Look, ProviderSetup, ThemePack } from "../port/port";
 import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { Chrome } from "./Chrome";
+import { swapping } from "./swap";
 import { apply as applyThemePack } from "./theme";
 import { apply as applyLook } from "./look";
 import { adopt as adoptLang } from "../i18n";
@@ -22,27 +22,6 @@ import { Onboarding } from "./Onboarding";
 import { Welcome } from "./Welcome";
 
 const NO_REPORT: PaneReport = { status: null, title: "", steer: 0, run: "idle", live: false, cost: "" };
-
-// Swapping a pane was a hard replace: the old one gone, the new one there, with
-// nothing expressing the relation. Only the current pane carries a
-// view-transition-name, and handing that name over lets the browser join the two
-// frames into one action. flushSync is required — the callback has to finish
-// mutating the DOM before it returns, or the transition captures the old frame.
-function swapping(apply: () => void, kind: string) {
-  if (!document.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    apply();
-    return;
-  }
-  // Which switch this is has to reach the root: a named element is lifted out of
-  // every transition regardless of what triggered it, so without the mark opening
-  // settings would slide the pane too. An attribute predates view-transition
-  // types by a long way, and this only needs that much of it.
-  const root = document.documentElement;
-  root.dataset.vt = kind;
-  document.startViewTransition(() => flushSync(apply)).finished.finally(() => {
-    if (root.dataset.vt === kind) delete root.dataset.vt;
-  });
-}
 
 // 两栏共用一条规则：窄到放不下就收起，缝和把手留在原处。宽档下的那个选择要留
 // 着 —— 拖窄一下再拖回来，不该把用户自己收起或展开的决定抹掉。
