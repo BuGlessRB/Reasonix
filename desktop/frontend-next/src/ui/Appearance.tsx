@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { AgentPort, Appearance as Look, ThemePack } from "../port/port";
+import type { TrayPrefs, AgentPort, Appearance as Look, ThemePack } from "../port/port";
 import { MONO_FAMILIES, UI_FAMILIES, installed, readDefault, readSteps } from "./look";
 import { STORAGE as LANG_KEY, t } from "../i18n";
 import { pct } from "../i18n/format";
 import { reason } from "../i18n/kernel";
+import { Switch } from "./Switch";
 
 // "" follows the machine; the rest are explicit, the same shape the light/dark
 // control uses.
@@ -74,6 +75,32 @@ const at = (v: number, min: number, max: number) =>
 
 export function Appearance({ port, theme, onTheme, contrast, onContrast, weight, onWeight, reloadThemes, look, onLook }: Props) {
   const [packs, setPacks] = useState<ThemePack[]>([]);
+  // null in a browser tab, where there is no window to keep running and no
+  // icon to bring one back. The whole section goes with it.
+  const [tray, setTray] = useState<TrayPrefs | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    port.trayPrefs().then((p) => live && setTray(p)).catch(() => live && setTray(null));
+    return () => {
+      live = false;
+    };
+  }, [port]);
+
+  // The window answers with what is true afterwards rather than what was
+  // asked: turning the icon off turns backgrounding off with it, and the
+  // switch has to show that rather than the request.
+  const flipTray = useCallback(
+    (patch: Partial<TrayPrefs>) => {
+      if (!tray) return;
+      const next = { ...tray, ...patch };
+      port
+        .setTrayPrefs(next.icon, next.closeToTray)
+        .then((got) => got && setTray(got))
+        .catch(() => {});
+    },
+    [port, tray],
+  );
 
   const load = useCallback(() => {
     port.themes().then(setPacks).catch(() => setPacks([]));
@@ -168,6 +195,47 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
           <p className="note">{t("改语言要重开窗口才生效")}</p>
         </div>
       </section>
+
+      {tray && (
+        <section className="grp">
+          <div className="grp-hd">
+            <h2>{t("窗口")}</h2>
+          </div>
+          <p className="hint">
+            {t("托盘图标是关掉窗口之后唯一能把它叫回来的地方，所以下面那条挂在它下面。")}
+          </p>
+          <div className="grp-items">
+            <div className="lrow">
+              <span className="tx">
+                <span className="lb">{t("在托盘显示图标")}</span>
+                <span className="ds">
+                  {tray.icon === tray.live
+                    ? t("在跑、还是在等你批准，扫一眼图标就知道")
+                    : tray.icon
+                      ? t("下次启动时出现")
+                      : t("下次启动时不再出现，这次还在")}
+                </span>
+              </span>
+              <Switch on={tray.icon} label={t("在托盘显示图标")} onClick={() => flipTray({ icon: !tray.icon })} />
+            </div>
+            {/* The second switch only means anything while there is an icon,
+                so it is drawn as a branch of the first rather than as a rule
+                you have to discover by watching it grey out. */}
+            <div className="lrow subrow" data-off={tray.icon && tray.live ? undefined : ""}>
+              <span className="tx">
+                <span className="lb">{t("关掉窗口后继续在托盘里跑")}</span>
+                <span className="ds">{t("会话和后台任务都不会停 —— 从托盘菜单里退出才是真的退出")}</span>
+              </span>
+              <Switch
+                on={tray.closeToTray}
+                busy={!tray.icon || !tray.live}
+                label={t("关掉窗口后继续在托盘里跑")}
+                onClick={() => flipTray({ closeToTray: !tray.closeToTray })}
+              />
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="grp">
         <div className="grp-hd">

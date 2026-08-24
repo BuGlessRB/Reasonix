@@ -213,8 +213,6 @@ func run() error {
 // different reasons and read as one long function otherwise.
 func (a *App) runWindow(api http.Handler, assets fs.FS, cfg *config.Config, tracker *traystate.Tracker) error {
 	shell, hub := a, a.hub
-	// Held across the two hooks that own it, which run in order on one thread.
-	var icon *tray
 	return wails.Run(&options.App{
 		Title:  "Reasonix Studio",
 		Width:  1440,
@@ -251,8 +249,8 @@ func (a *App) runWindow(api http.Handler, assets fs.FS, cfg *config.Config, trac
 			}
 			// No icon, no backgrounding: a window that vanished with no
 			// way back to it would be the worst of both.
-			icon = startTray(shell, shell.say, tracker, cfg)
-			if icon != nil {
+			if icon := startTray(shell, shell.say, tracker, cfg); icon != nil {
+				shell.adoptIcon(icon)
 				shell.background.Store(cfg.DesktopClosesToBackground())
 			}
 		},
@@ -267,7 +265,7 @@ func (a *App) runWindow(api http.Handler, assets fs.FS, cfg *config.Config, trac
 		// never pass the close button (a signal, a quit from the dock menu).
 		OnBeforeClose: shell.beginClose,
 		OnShutdown: func(context.Context) {
-			icon.close()
+			shell.closeIcon()
 			hub.Shutdown()
 		},
 	})
@@ -335,6 +333,9 @@ type App struct {
 
 	mu    sync.Mutex
 	pumps map[string]context.CancelFunc
+	// The status icon this launch got, if the platform gave one. It comes down
+	// only at shutdown — see tray_prefs.go.
+	icon *tray
 	// See closing.go: the window outlives the close button by however long the
 	// session takes to reach disk.
 	closing closeState

@@ -19,6 +19,7 @@ var (
 	markIdle       = color.NRGBA{R: 0x6B, G: 0x5A, B: 0x38, A: 0xFF}
 	markActive     = color.NRGBA{R: 0xDD, G: 0xA1, B: 0x44, A: 0xFF}
 	badgeAttention = color.NRGBA{R: 0xE4, G: 0x67, B: 0x5D, A: 0xFF}
+	transparent    = color.NRGBA{}
 )
 
 // iconSize is drawn well above the 16px the trays ask for: every platform
@@ -51,11 +52,12 @@ func drawMark(mood traystate.Mood) image.Image {
 		fill = markIdle
 	}
 	roundedSquare(img, image.Rect(6, 6, iconSize-6, iconSize-6), iconSize/5, fill)
-	// The notch is what makes the mark a mark rather than a coloured blob at
-	// this size: one bite out of the middle, in the page colour behind it.
-	roundedSquare(img, image.Rect(iconSize/2-4, 18, iconSize/2+4, iconSize-18), 4, color.NRGBA{R: 0x09, G: 0x0B, B: 0x0F, A: 0xFF})
+	// The notch and the badge's ring are cut out, not painted over. Filling
+	// them with the window's own dark page colour assumed a dark taskbar, and
+	// on a light one the mark read as a brown blob with a black slit in it.
+	roundedSquare(img, image.Rect(iconSize/2-4, 18, iconSize/2+4, iconSize-18), 4, transparent)
 	if mood == traystate.MoodAttention {
-		disc(img, image.Pt(iconSize-16, 16), 13, color.NRGBA{R: 0x09, G: 0x0B, B: 0x0F, A: 0xFF})
+		disc(img, image.Pt(iconSize-16, 16), 13, transparent)
 		disc(img, image.Pt(iconSize-16, 16), 10, badgeAttention)
 	}
 	return img
@@ -86,7 +88,9 @@ func disc(dst *image.NRGBA, at image.Point, radius int, fill color.NRGBA) {
 				dst.SetNRGBA(x, y, fill)
 			case d <= r*r:
 				edge := fill
-				edge.A = 0x9A
+				if edge.A > 0 {
+					edge.A = 0x9A
+				}
 				dst.SetNRGBA(x, y, edge)
 			}
 		}

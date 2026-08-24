@@ -1,5 +1,5 @@
 import { HttpError } from "./port";
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, QueuedSteer } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queued, TrayPrefs } from "./port";
 import type { WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
 import { SCRIPT } from "./fixture";
@@ -481,6 +481,28 @@ export class MockPort extends MockTheme implements AgentPort {
     }, 4000);
     this.queued.set(itemId, at);
     return { itemId, disposition: "steer_accepted" };
+  }
+
+  // The fixture has a window with an icon, because the state worth designing
+  // is the one where both switches mean something.
+  private tray: TrayPrefs = { icon: true, live: true, closeToTray: false };
+
+  async trayPrefs(): Promise<TrayPrefs | null> {
+    return { ...this.tray };
+  }
+
+  // live never follows icon down: the icon this launch got stays until the
+  // launch ends, which is the state the panel has to be able to describe.
+  async setTrayPrefs(icon: boolean, closeToTray: boolean): Promise<TrayPrefs | null> {
+    this.tray = { icon, live: this.tray.live, closeToTray: closeToTray && icon && this.tray.live };
+    return { ...this.tray };
+  }
+
+  // The fixture never refuses /submit, so this is only reachable from a test —
+  // but the port is a contract and half of one is not a contract.
+  async queueFollowup(text: string): Promise<Queued> {
+    void text;
+    return { itemId: `inbox-followup-${Date.now()}`, disposition: "queued_followup" };
   }
 
   async cancelQueued(itemId: string) {

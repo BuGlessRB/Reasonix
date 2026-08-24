@@ -100,3 +100,25 @@ func TestQuittingFromTheIconStillLandsTheSession(t *testing.T) {
 		t.Fatalf("phase = %d, want the shutdown finished", a.closing.Load())
 	}
 }
+
+// The icon read as dead because the window was already open, just buried:
+// show and unminimise both do nothing to a window in that state, so the click
+// has to ask for the raise as well.
+func TestClickingTheIconRaisesAWindowThatIsMerelyBuried(t *testing.T) {
+	raised := make(chan struct{}, 1)
+	restore := restoreWindow
+	restoreWindow = func(context.Context) { raised <- struct{}{} }
+	t.Cleanup(func() { restoreWindow = restore })
+
+	a := &App{hub: serve.NewHub(serve.HubOptions{})}
+	a.mu.Lock()
+	a.ctx = context.Background()
+	a.mu.Unlock()
+
+	a.showWindow()
+	select {
+	case <-raised:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the click showed the window without raising it, which is what it looked like")
+	}
+}

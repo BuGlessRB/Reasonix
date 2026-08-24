@@ -42,9 +42,7 @@ func startTray(shell *App, say i18n.Messages, tracker *traystate.Tracker, cfg *c
 		return nil
 	}
 	t := &tray{shell: shell, say: say, done: make(chan struct{})}
-	start, stop := systray.RunWithExternalLoop(t.ready, func() {})
-	t.stop = stop
-	start()
+	t.stop = runTray(t.ready, func() {})
 	tracker.SetOnChange(t.show)
 	go t.pollJobs(tracker)
 	return t

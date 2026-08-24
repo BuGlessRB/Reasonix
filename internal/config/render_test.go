@@ -1557,3 +1557,33 @@ func TestRenderTOMLPersistsSecretsSection(t *testing.T) {
 		t.Fatalf("user-scope render still exposes removed live-redaction setting:\n%s", out)
 	}
 }
+
+// A setting the renderer drops is a setting that does not exist: the field
+// took the value, the accessor read it back within the process, and the next
+// save wrote a file without it — so the switch in the settings pane turned
+// itself back on every time. Every [desktop] key has to be written to be real.
+func TestEveryDesktopKeyThatCanBeSetSurvivesASave(t *testing.T) {
+	c := Default()
+	if err := c.SetDesktopTray("off"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetDesktopCloseBehavior("quit"); err != nil {
+		t.Fatal(err)
+	}
+	rendered := RenderTOMLForScope(c, RenderScopeUser)
+	for _, want := range []string{`tray = "off"`, `close_behavior = "quit"`} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("saved config has no %s", want)
+		}
+	}
+
+	// And it has to come back the same way, or the round trip is only half of
+	// one: written and never read is the same defect wearing the other shoe.
+	reloaded := Default()
+	if _, err := decodeTOMLBytes([]byte(rendered), reloaded); err != nil {
+		t.Fatalf("the config it just wrote does not parse: %v", err)
+	}
+	if reloaded.DesktopTray() != "off" || reloaded.DesktopClosesToBackground() {
+		t.Fatalf("round trip = tray %q, background %v", reloaded.DesktopTray(), reloaded.DesktopClosesToBackground())
+	}
+}

@@ -49,6 +49,7 @@ func renderDesktopSection(b *strings.Builder, c *Config) {
 		b.WriteString("# external_opener = \"vscode\"   # desktop Open control: installed application id\n")
 	}
 	fmt.Fprintf(b, "close_behavior = %q   # desktop: quit|background when the window close button is clicked\n", c.DesktopCloseBehavior())
+	fmt.Fprintf(b, "tray = %q   # desktop: auto|off status icon; with no icon the close button quits whatever the line above says\n", c.DesktopTray())
 	fmt.Fprintf(b, "status_bar_style = %q   # desktop: icon|text metric labels in the bottom status bar\n", c.DesktopStatusBarStyle())
 	fmt.Fprintf(b, "status_bar_items = %s   # desktop: ordered visible bottom status bar items\n", renderStringArray(c.DesktopStatusBarItems()))
 	fmt.Fprintf(b, "default_tool_approval_mode = %q   # desktop: Ask/Auto/YOLO default for newly-created sessions\n", c.DesktopDefaultToolApprovalMode())

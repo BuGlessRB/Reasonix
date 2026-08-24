@@ -62,16 +62,22 @@ func (a *App) finishClose(ctx context.Context) {
 	quitWindow(ctx)
 }
 
-// showWindow brings a hidden window back. Unminimise first: a window that was
-// minimised and then hidden needs both, and asking for one it does not need is
-// free.
+// showWindow brings the window back from wherever it went.
 func (a *App) showWindow() {
-	ctx := a.context()
-	if ctx == nil {
-		return
+	if ctx := a.context(); ctx != nil {
+		restoreWindow(ctx)
 	}
+}
+
+// restoreWindow is the platform half behind a variable, the way quitWindow is.
+// Show and unminimise are both no-ops on a window that is merely buried behind
+// other apps — the common case, and the one that read as a dead icon — so the
+// always-on-top flip is what actually raises it. Wails v2 offers no other ask.
+var restoreWindow = func(ctx context.Context) {
 	runtime.WindowUnminimise(ctx)
 	runtime.WindowShow(ctx)
+	runtime.WindowSetAlwaysOnTop(ctx, true)
+	runtime.WindowSetAlwaysOnTop(ctx, false)
 }
 
 // quitFromTray is the close the window's own button takes when nothing is

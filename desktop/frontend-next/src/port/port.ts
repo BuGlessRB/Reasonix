@@ -55,12 +55,24 @@ export type * from "./boundary";
 
 export type * from "./provider";
 
-/** What the kernel answers when a mid-turn line is queued. itemId is the
- *  durable queue entry, and it is the whole reason the line can be taken back:
- *  without it the row on screen has no name to cancel by. */
-export interface QueuedSteer {
+/** What the kernel answers when a line is queued — mid-turn guidance or a whole
+ *  turn waiting its go. itemId is the durable entry, and it is the whole reason
+ *  the line can be taken back: without it the row on screen has no name to
+ *  cancel by. */
+export interface Queued {
   itemId: string;
   disposition?: string;
+}
+
+/** What the window says about its own status icon. null where there is no
+ *  window under the page — the same build runs in a browser tab. */
+export interface TrayPrefs {
+  // What the setting asks for.
+  icon: boolean;
+  // Whether there is one right now. It can only differ from icon until the
+  // next launch: an icon cannot be put back on a process that took one down.
+  live: boolean;
+  closeToTray: boolean;
 }
 
 export interface AgentPort {
@@ -132,6 +144,9 @@ export interface AgentPort {
   savePermissions(lists: PermissionLists): Promise<PermissionRules>;
   sandbox(): Promise<SandboxSettings>;
   saveSandbox(s: SandboxSettings): Promise<SandboxSettings>;
+  // null in a browser tab: there is no window to keep running.
+  trayPrefs(): Promise<TrayPrefs | null>;
+  setTrayPrefs(icon: boolean, closeToTray: boolean): Promise<TrayPrefs | null>;
   // null when the config file reads. Everything else here writes to it.
   configProblem(): Promise<ConfigProblem | null>;
   repairConfig(): Promise<ConfigRepair>;

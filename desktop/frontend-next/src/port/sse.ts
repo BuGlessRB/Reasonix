@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, UsageReport, McpDraft, PluginExport, QueuedSteer, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, UsageReport, McpDraft, PluginExport, Queued, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
@@ -194,6 +194,16 @@ export class SsePort extends SseTheme implements AgentPort {
     const bind = (window as unknown as WailsBind).go?.main?.App?.Versions;
     if (!bind) return { current: "", pinned: "", stalePin: false, latest: "", newer: false, versions: [] };
     return (await bind()) as VersionHub;
+  }
+
+  async trayPrefs(): Promise<TrayPrefs | null> {
+    const bind = (window as unknown as WailsBind).go?.main?.App?.TrayPrefs;
+    return bind ? await bind() : null;
+  }
+
+  async setTrayPrefs(icon: boolean, closeToTray: boolean): Promise<TrayPrefs | null> {
+    const bind = (window as unknown as WailsBind).go?.main?.App?.SetTrayPrefs;
+    return bind ? await bind(icon, closeToTray) : null;
   }
 
   async pinVersion(version: string): Promise<void> {

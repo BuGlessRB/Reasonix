@@ -359,4 +359,13 @@ export const EN_SETTINGS: Record<string, string> = {
   "改成": "becomes",
   "正在修…": "Repairing…",
   "备份原文件并修好": "Keep a copy and repair it",
+
+  // 托盘：关窗之后还在不在
+  "托盘图标是关掉窗口之后唯一能把它叫回来的地方，所以下面那条挂在它下面。": "The status icon is the only way back to a closed window, which is why the switch below hangs off it.",
+  "在托盘显示图标": "Show a status icon in the tray",
+  "下次启动时出现": "Appears on the next launch",
+  "下次启动时不再出现，这次还在": "Gone from the next launch on; still here for this one",
+  "在跑、还是在等你批准，扫一眼图标就知道": "Running, or waiting on you — one glance at the icon says which",
+  "关掉窗口后继续在托盘里跑": "Keep running in the tray when the window is closed",
+  "会话和后台任务都不会停 —— 从托盘菜单里退出才是真的退出": "Neither the session nor its background jobs stop — quitting from the tray menu is the real quit",
 };
