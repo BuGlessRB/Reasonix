@@ -270,7 +270,7 @@
      Not --accent-wash — it is mixed against --page and lands darker than
      --float, so on a dark theme the selected row would read as a hole. */
   .slashmenu .mi[data-on] {
-    background: color-mix(in srgb, var(--accent) 12%, var(--float-hi));
+    background: color-mix(in srgb, var(--accent) 9%, var(--float-hi));
     box-shadow: inset 2px 0 var(--accent);
   }
   /* 选中行本来就该更重，说明文字跟着提一档，正好也把它从 AA 线下拿回来。 */
@@ -322,7 +322,7 @@
   /* 默认值该安静，调离默认才该被看见 —— 分量跟着它真实的代价走 */
   .mode .vl[data-lv="1"], .mode .vl[data-lv="2"], .mode .vl[data-g="0"] { color: var(--text) }
   .mode .vl[data-lv="3"] { color: var(--net) }
-  .mode .vl[data-lv="4"], .mode .vl[data-lv="5"] { color: var(--accent) }
+  .mode .vl[data-lv="4"], .mode .vl[data-lv="5"] { color: var(--accent-ink) }
   .mode .vl[data-g="2"] { color: var(--net) }
   @keyframes modeval { from { opacity: 0; transform: translateY(2.5px) } to { opacity: 1; transform: none } }
 
@@ -452,7 +452,7 @@
     100% { stroke-dashoffset: -100; opacity: .2 }
   }
   /* 停下就凝在原地不擦 —— 推理停在半途，本来就是这个意思 */
-  .pane[data-run="halt"] .rmark { color: var(--accent); animation: breathe 1.8s ease-in-out infinite }
+  .pane[data-run="halt"] .rmark { color: var(--accent-ink); animation: breathe 1.8s ease-in-out infinite }
   @keyframes breathe { 0%, 100% { opacity: .45 } 50% { opacity: 1 } }
   .pane[data-run="done"] .rmark { color: var(--ok); animation: donemark 1.2s var(--ease-out) 1 both }
   @keyframes donemark {
@@ -505,11 +505,11 @@
   /* 度量全部下沉到输入框上沿了：顶栏只留身份（项目/位置/目标） */
   .chrome .goal { flex: 1; font: var(--w-reg) 12px var(--ui); color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .chrome .crumb > .picker, .chrome .crumb > b, .chrome .crumb > .crumbsep { flex: none }
-  .chrome .badge { font: var(--w-reg) 10.5px var(--mono); color: var(--accent); padding: 2.5px 8px; border-radius: var(--r-pill); background: var(--accent-wash); white-space: nowrap; flex: none }
+  .chrome .badge { font: var(--w-reg) 10.5px var(--mono); color: var(--accent-ink); padding: 2.5px 8px; border-radius: var(--r-pill); background: var(--accent-wash); white-space: nowrap; flex: none }
   .chrome .badge[hidden] { display: none }
 
   /* 插话在流里，但还没生效 —— 这两件事得分得开 */
-  .pend { margin-left: auto; flex: none; font: var(--w-reg) 10px var(--mono); color: var(--accent); padding: 1.5px 7px; border-radius: var(--r-pill); background: var(--accent-wash) }
+  .pend { margin-left: auto; flex: none; font: var(--w-reg) 10px var(--mono); color: var(--accent-ink); padding: 1.5px 7px; border-radius: var(--r-pill); background: var(--accent-wash) }
   .pend[data-sent] { color: var(--ok); background: transparent; padding-inline: 0 }
   .call[data-pending] > .c { opacity: .7 }
   /* 排队中的那条还没发生，是屏幕上唯一还能撤回的东西。按钮就长在「排队中」
@@ -700,7 +700,7 @@
   .ws[data-s="running"] .pip { background: var(--net); animation: tick 1.6s ease-in-out infinite }
   .ws[data-s="done"] .pip { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ok) }
   .ws .meta { margin-top: 3px; padding-left: 13px; display: flex; gap: 8px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint); white-space: nowrap; overflow: hidden }
-  .ws[data-s="awaiting"] .meta .st { color: var(--accent) }
+  .ws[data-s="awaiting"] .meta .st { color: var(--accent-ink) }
   .ws .meta .cost { margin-left: auto; font-variant-numeric: tabular-nums }
   .ws .meta .loc { color: var(--ok) }   /* 这条会话跑在隔离副本里 */
   .ws { position: relative }
@@ -715,7 +715,7 @@
   .ws[data-confirm] .wsdel { opacity: 1; width: auto; padding: 0 6px; font: var(--w-med) 10px var(--mono); color: var(--err); background: color-mix(in srgb, var(--err) 15%, transparent) }
   /* 切走要先停下那一轮 —— 用和删除同一套「再点一次」的确认语言 */
   .ws[data-stop] { background: var(--accent-wash) }
-  .ws[data-stop] .meta .st { color: var(--accent) }
+  .ws[data-stop] .meta .st { color: var(--accent-ink) }
   .ws[data-gone] {
     height: 0 !important; opacity: 0; padding-block: 0; overflow: hidden;
     transition: height .22s var(--ease-in), opacity .15s, padding .22s var(--ease-in);
@@ -737,7 +737,7 @@
   .ws .where .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none }
   .ws[data-iso="on"] .where .dot { background: var(--ok) }
   .ws .where .p { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .ws .where .tag { flex: none; color: var(--accent) }
+  .ws .where .tag { flex: none; color: var(--accent-ink) }
   .ws[data-iso="on"] .where .tag { color: var(--ok) }
 
   .railfoot { flex: none; display: flex; gap: 14px; padding: 9px 13px 11px; border-top: 1px solid var(--hair) }
@@ -897,7 +897,7 @@
   }
   @keyframes peekin { from { opacity: 0; transform: translate(8px, -50%) } to { opacity: 1; transform: translateY(-50%) } }
   .srail-peek .hd { display: flex; align-items: baseline; gap: 8px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
-  .srail-peek .hd .n { color: var(--accent) }
+  .srail-peek .hd .n { color: var(--accent-ink) }
   .srail-peek .tx {
     margin-top: 5px; font: var(--w-reg) 13px/1.55 var(--ui); color: var(--text);
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
@@ -973,8 +973,8 @@
   /* 记录类型着色：只给那些揭示内部决策的类型上色，普通 event 保持中性 */
   .traj tr[data-k="memory_recall"]        .kind { color: var(--deleg) }
   .traj tr[data-k="delegation_admission"] .kind { color: var(--net) }
-  .traj tr[data-k="protocol_recovery"]    .kind { color: var(--warn) }
-  .traj tr[data-k="readiness_audit"]      .kind { color: var(--accent) }
+  .traj tr[data-k="protocol_recovery"]    .kind { color: var(--warn-ink) }
+  .traj tr[data-k="readiness_audit"]      .kind { color: var(--accent-ink) }
   .traj tr[data-k="outcome_progress"]     .kind { color: var(--ok) }
   .traj tr[data-k="completion_report"]    .kind { color: var(--ok) }
 
@@ -991,19 +991,28 @@
   .traj-note code { color: var(--faint) }
 
   /* 一次调用 */
-  .call { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 11px; }
+  .call { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; }
   .call > .g { display: flex; flex-direction: column; align-items: center }
   .call > .g .sym {
-    width: 20px; height: 20px; margin-top: 8px; display: grid; place-items: center;
-    border-radius: var(--r-xs); font: var(--w-med) 10px/1 var(--mono); color: var(--faint);
+    width: 28px; height: 28px; margin-top: 5px; display: grid; place-items: center;
+    border-radius: var(--r-lg); font: var(--w-med) 11px/1 var(--mono); color: var(--faint);
     background: var(--overlay); flex: none;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent), var(--lit);
   }
   .call > .g .sym svg {
-    width: 12px; height: 12px; display: block; fill: none; stroke: currentColor;
+    width: 14px; height: 14px; display: block; fill: none; stroke: currentColor;
     stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
   }
+  /* 子代理面板里的一步是子步，沟槽不跟着主流程加宽 —— 两级同宽就分不出层。 */
+  .nest-bd .call { grid-template-columns: 20px minmax(0, 1fr); gap: 11px }
+  .nest-bd .call > .g .sym { width: 20px; height: 20px; margin-top: 8px; border-radius: var(--r-xs); box-shadow: none }
   .nest-bd .call > .g .sym svg { width: 10.5px; height: 10.5px }
-  .call > .g .line { flex: 1; width: 1px; background: var(--hair); min-height: 6px }
+  /* 1px 的 hair 在屏幕上等于不存在，时间线的结构于是只活在代码里。加到 2px
+     并按类别染色，扫一眼就知道这一段在读、在写还是在联网。 */
+  .call > .g .line {
+    flex: 1; width: 2px; border-radius: 1px; min-height: 6px;
+    background: color-mix(in srgb, var(--border) 88%, transparent);
+  }
   .call > .c { min-width: 0; padding: var(--y-card) 0 }
   .call:has(> .c > .out:empty) > .c { padding: var(--y-line) 0 }
   .call:has(.nest, .ask) > .c { padding: var(--y-panel) 0 }
@@ -1012,12 +1021,22 @@
 
   .call[data-k="net"]   > .g .sym { color: var(--net); background: var(--net-wash) }
   .call[data-k="deleg"] > .g .sym { color: var(--deleg); background: var(--deleg-wash) }
-  .call[data-k="write"] > .g .sym { color: var(--accent); background: var(--accent-wash) }
+  .call[data-k="write"] > .g .sym { color: var(--accent-ink); background: var(--accent-wash) }
   .call[data-k="ask"]   > .g .sym { color: var(--accent-fg); background: var(--accent) }
   .call[data-k="mcp"]   > .g .sym { color: var(--net); background: var(--net-wash) }
   .call[data-k="mem"]   > .g .sym { color: var(--deleg) }
   .call[data-k="say"]   > .g .sym { background: transparent; color: var(--ghost) }
   .call[data-k="me"]    > .g .sym { background: var(--text); color: var(--surface) }
+  /* 一轮从这里开始。滚回去找东西时这张卡是唯一的锚点，而它原来跟一次工具调用
+     的头部一样轻。轮号刻意不写 —— 回退入口就在卡上，没有编号要用眼睛去对。 */
+  .call[data-k="me"] { margin-top: 20px }
+  .call[data-k="me"]::before {
+    content: ""; grid-column: 1 / -1; height: 1px; margin-bottom: 12px; background: var(--hair);
+  }
+  .call[data-k="net"]   > .g .line { background: color-mix(in srgb, var(--net) 30%, transparent) }
+  .call[data-k="deleg"] > .g .line { background: color-mix(in srgb, var(--deleg) 30%, transparent) }
+  .call[data-k="write"] > .g .line { background: color-mix(in srgb, var(--accent) 34%, transparent) }
+  .call[data-k="ask"]   > .g .line { background: color-mix(in srgb, var(--accent) 55%, transparent) }
 
   /* 份量不同，入场就不该相同：一行只淡入，一张卡带位移，一整块面板从上沿展开 */
   .term-l, .dl, .plan .s { animation: line var(--m-line) both }
@@ -1082,6 +1101,12 @@
 
   .cost { margin-left: auto; display: inline-flex; align-items: baseline; gap: 7px; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none }
   .cost .hit { color: var(--ok) }
+  /* 墙钟也画成一段：数字要一个个读，长短是扫出来的。条右端贴着数字，所以一
+     列卡的条右对齐，左端参差就是这一轮的耗时分布。 */
+  .cost .took {
+    height: 3px; border-radius: var(--r-xs); flex: none; align-self: center;
+    background: color-mix(in srgb, var(--faint) 58%, transparent);
+  }
 
   /* 运行态在文字本身上扫一道微光,不在旁边加脉动的点 */
   .shim {
@@ -1120,7 +1145,7 @@
   .await i:nth-child(2) { animation-delay: .15s }
   .await i:nth-child(3) { animation-delay: .3s }
   .await .t { margin-left: 5px }
-  .await[data-retry] { color: var(--warn) }
+  .await[data-retry] { color: var(--warn-ink) }
   .await[data-retry] i { background: var(--warn) }
   @keyframes bob { 0%, 100% { opacity: .22; transform: translateY(0) } 50% { opacity: 1; transform: translateY(-3px) } }
 
@@ -1167,7 +1192,7 @@
   .copy:hover { background: var(--overlay); color: var(--text) }
   .copy:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .copy[data-state="done"] { color: var(--ok) }
-  .copy[data-state="failed"] { color: var(--warn) }
+  .copy[data-state="failed"] { color: var(--warn-ink) }
   /* 一步没成，读起来不能和正常输出一样。挡下来和跑失败在事件里分不开，所以
      用告警而不是错误 —— 说「这一步有问题」，不替它断定是哪一种。 */
   .out .txt.bad { padding-left: 10px; border-left: 2px solid var(--warn) }
@@ -1198,7 +1223,7 @@
   /* 干净那行落在展开卡里时不再吃一次左边距 */
   .rcpt-open .rcpt { padding: 0 }
   .rgroup { display: flex; flex-direction: column; gap: 4px }
-  .rgroup .hd { font: var(--w-med) 10px var(--mono); letter-spacing: var(--track-cap); color: var(--warn) }
+  .rgroup .hd { font: var(--w-med) 10px var(--mono); letter-spacing: var(--track-cap); color: var(--warn-ink) }
   .rgroup[data-declared] .hd { color: var(--faint) }
   /* 逐行错开 40ms：五行一起弹出来是一坨，错开才读得出这是一份清单 */
   .rrow {
@@ -1238,7 +1263,14 @@
     white-space: pre-wrap; overflow-wrap: anywhere;
   }
 
-  .term { margin-top: 6px; padding: 7px 0 7px 12px; border-left: 1px solid var(--border); background: none; font: var(--w-reg) 11.5px/19px var(--mono); color: var(--muted); overflow-x: auto }
+  /* 凹进去一档：中栏底是 --raised，这一块掺进 --page 就自然低半档，深浅两套
+     共用一个配方，因为 page 本来就在 surface 下面。 */
+  .term {
+    margin-top: 8px; padding: 11px 13px 12px; border-radius: var(--r-lg);
+    background: color-mix(in srgb, var(--page) 72%, var(--surface));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 52%, transparent);
+    font: var(--w-reg) 11.5px/19px var(--mono); color: var(--muted); overflow-x: auto;
+  }
   .term-l { white-space: pre }
   .term .ok { color: var(--ok) } .term .er { color: var(--err) } .term .dim { color: var(--ghost) }
 
@@ -1382,6 +1414,15 @@
   .steps .s[data-now] .b { color: var(--net) }
 
   /* ── 批准：不是「你想怎么做」，是「准不准动手」。run 在这里真的阻塞。 ── */
+  /* 阻塞着的那一张抬出流外。琥珀在这套语言里只说「需要你介入」，而它原来只
+     落在按钮上，卡片本身跟普通工具卡同权重。答复过就撤掉。 */
+  .call[data-k="ask"] > .c:has(.apv:not([data-sealed])) {
+    margin: 3px -14px; padding: 13px 14px; border-radius: var(--r-lg);
+    background: linear-gradient(102deg,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      color-mix(in srgb, var(--accent) 2.5%, transparent) 62%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+  }
   .apv {
     margin-top: 8px; overflow: hidden; background: none;
     border-left: 2px solid var(--warn);
@@ -1419,8 +1460,8 @@
     font: var(--w-med) 11.5px var(--ui); color: color-mix(in srgb, var(--accent) 62%, var(--muted));
     border-bottom: 2px solid transparent; margin-bottom: -1px;
   }
-  .ask-tab:hover { color: var(--accent) }
-  .ask-tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent) }
+  .ask-tab:hover { color: var(--accent-ink) }
+  .ask-tab[aria-selected="true"] { color: var(--accent-ink); border-bottom-color: var(--accent) }
   .ask-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .ask-tab .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); display: inline-block; margin-left: 5px; opacity: 0 }
   .ask-tab[data-answered] .dot { opacity: 1 }
@@ -1463,7 +1504,7 @@
 
   .opt .txt, .prow .tx { min-width: 0 }
   .opt .lb, .prow .lb { display: flex; align-items: baseline; gap: 8px; font: var(--w-med) 12.5px var(--ui); color: var(--text) }
-  .opt .rec { font: var(--w-med) 9px var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--accent); flex: none }
+  .opt .rec { font: var(--w-med) 9px var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase; color: var(--accent-ink); flex: none }
   .opt .ds, .prow .ds { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.55; color: var(--muted) }
   .opt .ds code, .prow .ds code { font: var(--w-reg) 11px var(--mono); color: var(--deleg) }
 
@@ -1539,7 +1580,7 @@
     margin: 0 0 7px; padding: 0 2px; font: var(--w-med) 11.5px var(--ui);
     animation: intakein .12s var(--ease-out) both;
   }
-  .intake[data-tone="attach"] { color: var(--accent) }
+  .intake[data-tone="attach"] { color: var(--accent-ink) }
   .intake[data-tone="ref"] { color: var(--net) }
   .intake[data-tone="insert"] { color: var(--ok) }
   .intake[data-tone="reject"] { color: var(--faint) }
@@ -1573,7 +1614,7 @@
     font: var(--w-reg) 10px var(--mono); color: var(--faint); text-decoration: underline;
     text-decoration-style: dotted; text-underline-offset: 2px;
   }
-  .shot .undo:hover { color: var(--accent) }
+  .shot .undo:hover { color: var(--accent-ink) }
   .shot .x {
     width: 22px; height: 22px; flex: none; border: 0; border-radius: var(--r-sm); cursor: pointer;
     background: transparent; color: var(--ghost); font: var(--w-reg) 13px/1 var(--mono);
@@ -1581,7 +1622,7 @@
   }
   .shot .x:hover { color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent) }
   .shot button:focus-visible, .intake:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
-  .shots .warn { font: var(--w-reg) 11px var(--ui); color: var(--accent) }
+  .shots .warn { font: var(--w-reg) 11px var(--ui); color: var(--accent-ink) }
 
   .compose {
     position: relative; flex: none; margin: 0 auto 16px;
@@ -1703,8 +1744,13 @@
   .side { border-left: 1px solid var(--hair); display: flex; flex-direction: column; min-height: 0 }
   .side .scroll { padding: 10px 13px 22px; display: flex; flex-direction: column; gap: 10px }
   .block { display: flex; flex-direction: column; gap: 10px }
-  .side .block { padding: 12px 2px 0; gap: 9px; border-top: 1px solid var(--hair) }
-  .side .block:first-child { border-top: 0; padding-top: 4px }
+  /* 九块等距堆叠、每块一条等宽分隔，读起来是一份没填完的表单。分隔只留在组
+     边界上 —— 成本 · 进度 · 环境 · 产出 —— 组首由块自己的身份认出来。 */
+  .side .block { padding: 9px 2px 0; gap: 9px }
+  .side .block[data-b="ctx"], .side .block[data-b="mcp"], .side .block[data-b="plan"] {
+    margin-top: 7px; padding-top: 16px; border-top: 1px solid var(--border);
+  }
+  .side .block:first-child { padding-top: 4px }
   .block:has(.empty) { gap: 4px }   /* 空块压一行 */
 
   .big { display: flex; align-items: flex-end; gap: 12px }
@@ -2131,7 +2177,7 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .srv .peek .trow[data-bad] .nm { color: var(--ghost); text-decoration: line-through }
-  .srv .peek .trow[data-bad] .ds { color: var(--warn) }
+  .srv .peek .trow[data-bad] .ds { color: var(--warn-ink) }
   .srv .peek .trow .face { margin-left: auto; flex: none; display: flex; gap: 5px }
   .srv .peek .trow .face i {
     padding: 1px 5px; border-radius: var(--r-xs); font: var(--w-reg) 10px var(--mono); font-style: normal;
@@ -2266,7 +2312,7 @@
   .scopebar .who .cv { font-style: normal; font-size: 9px; color: var(--faint) }
   /* 正在看别的项目：整条带上强调边，因为这一页此刻不代表当前会话 */
   .scopebar[data-away] { border-color: color-mix(in srgb, var(--accent) 45%, var(--hair)) }
-  .scopebar .away { flex-basis: 100%; font: var(--w-reg) 10.5px var(--ui); color: var(--accent) }
+  .scopebar .away { flex-basis: 100%; font: var(--w-reg) 10.5px var(--ui); color: var(--accent-ink) }
 
   .scope-pick {
     position: absolute; z-index: 3; top: calc(100% + 4px); left: 8px; min-width: 320px; max-width: 460px;
@@ -2285,7 +2331,7 @@
     font: var(--w-reg) 10.5px var(--ui); color: var(--faint);
   }
   .scope-pick .fl[aria-pressed="true"] {
-    color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
     background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
   .scope-pick .pk {
@@ -2304,7 +2350,7 @@
   .scope-pick .pk .ct {
     grid-row: 1 / span 2; align-self: center; font-style: normal; white-space: nowrap;
     padding: 1px 7px; border-radius: var(--r-pill);
-    font: var(--w-reg) 10px var(--ui); color: var(--accent);
+    font: var(--w-reg) 10px var(--ui); color: var(--accent-ink);
     background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
   .scope-pick .empty { padding: 10px 8px; font: var(--w-reg) 11.5px var(--ui); color: var(--faint) }
@@ -2313,7 +2359,7 @@
      所以带例外的行自己说出来，并且给出回去的路。 */
   .exc {
     flex: none; padding: 1px 7px; border-radius: var(--r-pill); cursor: pointer;
-    font: var(--w-reg) 10px var(--ui); color: var(--accent);
+    font: var(--w-reg) 10px var(--ui); color: var(--accent-ink);
     border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
     background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
@@ -2530,7 +2576,7 @@
   }
   .mline .vtag[aria-pressed="true"] { color: var(--deleg); background: var(--deleg-wash);
     border-color: color-mix(in srgb, var(--deleg) 32%, transparent) }
-  .mline .dtag[aria-pressed="true"] { color: var(--accent); background: var(--accent-wash);
+  .mline .dtag[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-wash);
     border-color: color-mix(in srgb, var(--accent) 32%, transparent) }
   .mline .vtag:disabled, .mline .dtag:disabled { opacity: .35; cursor: default }
   /* 探测答出来的能力,不是一个开关 —— 添加来源时读图是既成事实。 */
@@ -2554,7 +2600,7 @@
   }
   .mnew:hover { background: color-mix(in srgb, var(--accent) 13%, transparent) }
   .mnew:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
-  .mnew .k { flex: none; font: var(--w-med) 13px/1.2 var(--mono); color: var(--accent) }
+  .mnew .k { flex: none; font: var(--w-med) 13px/1.2 var(--mono); color: var(--accent-ink) }
   .mnew .tx { min-width: 0 }
   .mnew .lb { display: block; font: var(--w-med) 12px var(--mono); color: var(--text); overflow-wrap: anywhere }
   .mnew .ds { display: block; margin-top: 2px; font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
@@ -2632,7 +2678,7 @@
   /* 只有「写进仓库」会动被跟踪的文件，所以只有它带警告，并且不是默认项 */
   .addsrv > .warn {
     margin-top: 9px; padding: 7px 10px; border-radius: var(--r-sm);
-    font: var(--w-reg) 11.5px/1.5 var(--ui); color: var(--warn);
+    font: var(--w-reg) 11.5px/1.5 var(--ui); color: var(--warn-ink);
     background: color-mix(in srgb, var(--warn) 10%, transparent);
   }
   .scope button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
@@ -2681,7 +2727,7 @@
   .rule .cmd { display: block; width: 100%; margin-top: 8px }
   .rule .warn {
     padding: 1px 6px; border-radius: var(--r-pill); font: var(--w-med) 10px var(--ui); font-style: normal;
-    color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent);
+    color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 14%, transparent);
   }
   .rule .note { font: var(--w-reg) 10.5px var(--ui); color: var(--ghost) }
   .rule .why { margin-top: 6px; font: var(--w-reg) 11px/1.5 var(--ui); color: var(--err) }
@@ -3035,7 +3081,7 @@
   .rtbar[data-lvl="warn"] {
     border-color: color-mix(in srgb, var(--warn) 38%, var(--border));
     background: color-mix(in srgb, var(--warn) 8%, transparent);
-    color: var(--warn);
+    color: var(--warn-ink);
   }
   .rtbar .t { flex: none; font-weight: var(--w-med) }
   .rtbar .why { flex: 1; min-width: 0; color: var(--ghost); word-break: break-word }
@@ -3287,9 +3333,9 @@
   .xv-t[data-tone="dim"] { color: var(--faint) }
   .xv-t[data-tone="strong"] { font-weight: var(--w-med) }
   .xv-t[data-tone="ok"] { color: var(--ok) }
-  .xv-t[data-tone="warn"] { color: var(--warn) }
+  .xv-t[data-tone="warn"] { color: var(--warn-ink) }
   .xv-t[data-tone="err"] { color: var(--err) }
-  .xv-t[data-tone="accent"] { color: var(--accent) }
+  .xv-t[data-tone="accent"] { color: var(--accent-ink) }
   /* 扩展递来的 markdown 按纯文本画：抄本的渲染器假定内容可信，视图不是。 */
   .xv-md { margin: 0; font: var(--w-reg) 12px/1.6 var(--ui); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere }
   .xv-kv { display: flex; align-items: baseline; gap: 9px; font: var(--w-reg) 11.5px var(--ui) }
@@ -3672,8 +3718,8 @@
     background: transparent; color: var(--ghost); cursor: pointer;
     font: var(--w-reg) 9px var(--mono);
   }
-  .sesscopies:hover { border-color: var(--warn); color: var(--warn) }
-  .sesscopies[aria-expanded="true"] { border-color: var(--warn); color: var(--warn) }
+  .sesscopies:hover { border-color: var(--warn); color: var(--warn-ink) }
+  .sesscopies[aria-expanded="true"] { border-color: var(--warn); color: var(--warn-ink) }
   .sessrow.sesscopy { padding-left: 34px }
   .sessrow.sesscopy .sesstitle { color: var(--ghost); font-style: italic }
   .sessrow .wsdel, .sessrow .sessedit-btn { opacity: 0 }
@@ -3684,7 +3730,7 @@
     border: 0; border-radius: var(--r-xs); background: transparent; color: var(--ghost);
     font: var(--w-reg) 10px/1 var(--mono); cursor: pointer; transition: opacity .14s, color .14s;
   }
-  .sessedit-btn:hover { color: var(--accent) }
+  .sessedit-btn:hover { color: var(--accent-ink) }
   .sessedit {
     flex: 1; min-width: 0; padding: 1px 5px; border-radius: var(--r-xs);
     border: 1px solid var(--accent); background: var(--page); color: var(--text);
@@ -3708,7 +3754,7 @@
     stroke-width: 1.5; stroke-linecap: round;
   }
   .newsess:hover { color: var(--text); background: var(--overlay) }
-  .newsess:hover .plus { color: var(--accent) }
+  .newsess:hover .plus { color: var(--accent-ink) }
   .newsess:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .newsess[data-busy] { opacity: .5; pointer-events: none }
 
@@ -3745,7 +3791,7 @@
   .askfacts dt { color: var(--ghost) }
   .askfacts dd { margin: 0; color: var(--text); font-family: var(--mono); word-break: break-all }
   /* 换行而不是截断：中间被省略号吃掉的指纹，没人能拿它跟任何东西核对。 */
-  .askfacts .fp { font-size: 11px; line-height: 1.6; color: var(--accent) }
+  .askfacts .fp { font-size: 11px; line-height: 1.6; color: var(--accent-ink) }
   .askcard .askact { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px }
   .askcard .askact button {
     padding: 6px 15px; border-radius: var(--r-xs);
@@ -3753,7 +3799,7 @@
     font: var(--w-med) 12px var(--ui); cursor: pointer;
   }
   .askcard .askact button:hover { color: var(--text) }
-  .askcard .askact button[data-go] { border-color: var(--accent); color: var(--accent) }
+  .askcard .askact button[data-go] { border-color: var(--accent); color: var(--accent-ink) }
   .askcard .askact button[data-go]:hover { background: color-mix(in srgb, var(--accent) 12%, transparent) }
 
   /* ── 设置页：远程主机簿 ─────────────────────────────────────────── */
@@ -3767,7 +3813,7 @@
   /* 占住中间那段空白，把两个动作推到右边：状态是一句话，不是第三个按钮。 */
   .rmtrow .st { flex: 1; min-width: 0; font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
   .rmtrow[data-state="connected"] .st { color: var(--net) }
-  .rmtrow[data-state="degraded"] .st { color: var(--warn) }
+  .rmtrow[data-state="degraded"] .st { color: var(--warn-ink) }
   .rmtrow[data-state="stopped"] .st { color: var(--err) }
   .rmtrow .sub {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -3782,7 +3828,7 @@
     flex: none; border: 0; background: none; cursor: pointer; padding: 0 2px;
     font: var(--w-reg) 11px var(--ui); color: var(--faint);
   }
-  .rmtbook .rmtlnk:hover { color: var(--accent) }
+  .rmtbook .rmtlnk:hover { color: var(--accent-ink) }
   .rmtbook .rmtlnk[data-danger]:hover { color: var(--err) }
   .rmtconfirm {
     display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; padding: 8px 10px;
@@ -3830,7 +3876,7 @@
     border: 1px solid var(--border); background: transparent; color: var(--muted);
     font: var(--w-med) 11.5px var(--ui); cursor: pointer;
   }
-  .rmtform .rmtact button[data-go] { border-color: var(--accent); color: var(--accent) }
+  .rmtform .rmtact button[data-go] { border-color: var(--accent); color: var(--accent-ink) }
   .rmtform .rmtact button:disabled { opacity: .4; cursor: default }
   .rmtadd {
     margin-top: 12px; padding: 6px 12px; border-radius: var(--r-pill);
@@ -3879,7 +3925,7 @@
   .rmtnote {
     padding: 0 9px 4px 22px; font: var(--w-reg) 11px/1.5 var(--ui); color: var(--faint);
   }
-  .rmt[data-state="degraded"] .rmtnote { color: var(--warn) }
+  .rmt[data-state="degraded"] .rmtnote { color: var(--warn-ink) }
   .rmt[data-state="stopped"] .rmtnote { color: var(--err) }
 
   /* 首连要在对面装一遍二进制，几十秒起步。转圈分不出「在下载」和「卡住了」，
@@ -3893,7 +3939,7 @@
   .rmtsteps li[data-at="now"] { color: var(--text) }
   .rmtsteps .mk { flex: none; width: 10px; text-align: center; font: var(--w-reg) 9px/1 var(--mono) }
   .rmtsteps li[data-at="done"] .mk { color: var(--ok) }
-  .rmtsteps li[data-at="now"] .mk { color: var(--accent); animation: tick 1.6s ease-in-out infinite }
+  .rmtsteps li[data-at="now"] .mk { color: var(--accent-ink); animation: tick 1.6s ease-in-out infinite }
   .rmtsteps .lb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .rmtsteps .dt { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--faint) }
 
@@ -3932,7 +3978,7 @@
      /srv/training 会显示成 srv/training/。宁可从右边截。 */
   .rmtopen .rmtws { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
   .rmtopen:hover { color: var(--text); background: var(--overlay) }
-  .rmtopen:hover .plus { color: var(--accent) }
+  .rmtopen:hover .plus { color: var(--accent-ink) }
   .rmtopen:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .rmtopen[data-busy] { opacity: .5; pointer-events: none }
   .rmtopen:disabled { opacity: .38; cursor: default; background: none; color: var(--faint) }
@@ -4134,7 +4180,7 @@
 
   /* 图片入口跟其它控件同一套外形，只是把字号提上来让「＋」有分量 */
   .mode.attach { padding-inline: 8px; color: var(--faint) }
-  .mode.attach:hover { color: var(--accent) }
+  .mode.attach:hover { color: var(--accent-ink) }
 
   /* 设置这一层也让壁纸透过来。它是全屏覆盖层，图在 body 上（z-index -2），
      所以只要这层不再是实心的就看得见。正文密集，透得比主界面克制：读设置

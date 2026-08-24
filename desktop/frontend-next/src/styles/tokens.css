@@ -60,7 +60,7 @@
       inset 0 1px 0 rgb(255 255 255 / .9),
       0 16px 40px -14px rgb(23 30 45 / .2),
       0 4px 12px -8px rgb(23 30 45 / .14);
-    --accent: #A7690C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
+    --accent: #A6680C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
     --net: oklch(49.3% .155 267); --net-wash: oklch(94.4% .017 262);
     --deleg: oklch(51.1% .086 211); --deleg-wash: oklch(94.6% .016 210);
     --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28);
@@ -68,9 +68,10 @@
     /* A hue used as a surface and as text on a tint of itself needs two values.
        --accent at 4.55:1 on white had no headroom left: white text on it fell to
        4.42, and the hue itself on its own 13% tint reached only 3.3–3.8. The ink
-       is the reading value — it clears 4.5:1 on that tint over any of our
-       surfaces — while the base stays the fill. In dark they coincide, because
-       there the tint is darker than the hue rather than lighter. */
+       is the reading value on a tint of the hue, while the base stays the fill.
+       In dark they coincide, because there the tint is darker than the hue
+       rather than lighter. The base carries --accent-fg, so it is pinned from
+       that side too: white on it sat at 4.4977, which is not 4.5. */
     --accent-ink: #8C580A; --warn-ink: oklch(51% .120 45); --ok-ink: #286F44; --err-ink: #AF362E;
     /* Terminal output and diffs carry Chinese, and none of the monospaced faces
        above has a Chinese glyph — the character fell through to whatever the OS
@@ -181,7 +182,7 @@
     --page: oklch(94.8% .005 75); --surface: oklch(98.8% .003 75);
     --raised: oklch(100% 0 75); --overlay: oklch(93.9% .006 75);
     --border: oklch(89.9% .009 75); --hair: oklch(93.6% .006 75);
-    --accent: #A7690C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
+    --accent: #A6680C; --accent-fg: #FFF; --accent-wash: #FBF1DF;
     --net: oklch(49.3% .155 267); --net-wash: oklch(94.4% .017 262);
     --deleg: oklch(51.1% .086 211); --deleg-wash: oklch(94.6% .016 210);
     --ok: oklch(51.9% .107 154); --err: oklch(54.2% .165 28);
@@ -209,11 +210,13 @@
   :root[data-weight="heavy"]:lang(zh) { --w-reg: 600; --w-med: 700; --w-semi: 700 }
 
   /* 文字对比度分三档，背景与语义色不参与。四档文字色的下限按 AA 正文定：最弱
-     的 ghost 在它实际出现的 --raised 上也要够 4.5:1，因为它落在 10-11px 的
-     字上，而 AA 的大字豁免是给 18.66px 以上的。默认档从那条线起算，另外两档
-     递增；正文一端不动 —— 深底上接近纯白会起光晕，收窄跨度才是柔和的意思。 */
+     的 ghost 要在它实际落到的最暗那一档底上够 4.5:1，因为它落在 10-11px 的
+     字上，而 AA 的大字豁免是给 18.66px 以上的。那一档底是 --page —— rail、
+     side、chrome 都铺它，ghost 出现在那里的次数比在 --raised 上多两个量级。
+     默认档从那条线起算，另外两档递增；正文一端不动 —— 深底上接近纯白会起
+     光晕，收窄跨度才是柔和的意思。 */
   :root, :root[data-contrast="soft"] {
-  --text: oklch(31.9% .011 75); --muted: oklch(42.5% .011 75); --faint: oklch(49.1% .012 75); --ghost: oklch(55.8% .015 75);
+  --text: oklch(31.9% .011 75); --muted: oklch(42.5% .011 75); --faint: oklch(49.1% .012 75); --ghost: oklch(53% .015 75);
   }
   :root[data-contrast="normal"] {
   --text: oklch(29.5% .010 75); --muted: oklch(39% .010 75); --faint: oklch(45.5% .011 75); --ghost: oklch(52.2% .013 75);
@@ -244,7 +247,7 @@
   --text: oklch(93.4% .008 75); --muted: oklch(81.8% .009 75); --faint: oklch(73.6% .010 75); --ghost: oklch(69.1% .012 75);
   }
   :root[data-theme="light"], :root[data-theme="light"][data-contrast="soft"] {
-  --text: oklch(31.9% .011 75); --muted: oklch(42.5% .011 75); --faint: oklch(49.1% .012 75); --ghost: oklch(55.8% .015 75);
+  --text: oklch(31.9% .011 75); --muted: oklch(42.5% .011 75); --faint: oklch(49.1% .012 75); --ghost: oklch(53% .015 75);
   }
   :root[data-theme="light"][data-contrast="normal"] {
   --text: oklch(29.5% .010 75); --muted: oklch(39% .010 75); --faint: oklch(45.5% .011 75); --ghost: oklch(52.2% .013 75);
