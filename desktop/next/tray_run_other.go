@@ -1,14 +1,13 @@
-//go:build !windows
+//go:build !windows && !darwin
 
 package main
 
 import "fyne.io/systray"
 
-// runTray keeps the documented embedding path here. macOS puts its status item
-// on the main thread and Wails already owns that one, so handing the icon a
-// thread of its own — the Windows fix — would be a crash rather than a dead
-// icon. Neither platform has been run from the machine this was written on;
-// this is the shape to check first if the icon misbehaves there.
+// runTray keeps the documented embedding path here. Giving the icon a thread of
+// its own — the Windows fix — is not it: on the platforms left here the icon
+// rides the caller's goroutine. macOS needs the main thread and has its own
+// file.
 func runTray(ready, exit func()) (stop func()) {
 	start, end := systray.RunWithExternalLoop(ready, exit)
 	start()
