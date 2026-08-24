@@ -34,6 +34,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/notify"
 	"reasonix/internal/serve"
+	"reasonix/internal/surface"
 	"reasonix/internal/traystate"
 
 	// Kinds register from init, so a binary builds only what it links. Without
@@ -146,7 +147,8 @@ func run() error {
 	// plus what they leave running. Built before the first runtime so that
 	// pane's sink is decorated with the rest.
 	tracker := traystate.New(nil)
-	watch := func(sink event.Sink) event.Sink { return tracker.Watch(paneKey(sink), notifySink(sink)) }
+	count := windowTelemetry(cfg)
+	watch := func(sink event.Sink) event.Sink { return count(tracker.Watch(paneKey(sink), notifySink(sink))) }
 
 	bc := serve.NewBroadcaster()
 	// A window opens where it was left, not where its shortcut happened to point.
@@ -179,6 +181,7 @@ func run() error {
 	// conversation runs beside the first instead of rebuilding it.
 	hub := serve.NewHub(serve.HubOptions{
 		Serve:        cfg.Serve,
+		Surface:      surface.Desktop,
 		Grant:        grantWindowCapabilities,
 		DecorateSink: watch,
 		OnOpen:       shell.startPump,

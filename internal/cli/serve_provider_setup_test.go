@@ -32,7 +32,7 @@ func TestServeStartsWithMissingProviderKey(t *testing.T) {
 			"--port-file", os.Getenv("REASONIX_TEST_SERVE_PORT_FILE"),
 			"--auth", "token",
 			"--token", "serve-setup-test-token",
-		})
+		}, "v1.20.0")
 		os.Exit(code)
 	}
 

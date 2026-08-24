@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
+	"reasonix/internal/surface"
 )
 
 func hubRuntime(t *testing.T, h *Hub, root string) *Runtime {
@@ -319,5 +320,46 @@ func TestHubTreeFoldsRecoveryCopiesIntoTheirConversation(t *testing.T) {
 		if copy.Turns == 0 || copy.Path == "" {
 			t.Fatalf("folded copy %+v needs a path and turn count to be openable", copy)
 		}
+	}
+}
+
+// A window's turns must not be filed under the frontend it happens to be built
+// on. The hub stamps its surface where a server enters it, so neither of the
+// two doors can be the one that forgets.
+func TestHubStampsItsSurfaceOnEveryServerItAdopts(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opts HubOptions
+		want surface.Surface
+	}{
+		{"a hub nobody claimed is the bare server", HubOptions{}, surface.Serve},
+		{"a window says which frontend it is", HubOptions{Surface: surface.Desktop}, surface.Desktop},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			h := NewHub(tc.opts)
+			t.Cleanup(h.Shutdown)
+			ctrl := control.New(control.Options{WorkspaceRoot: root, SessionDir: SessionDirFor(root)})
+			t.Cleanup(ctrl.Close)
+			bc := NewBroadcaster()
+			srv := New(ctrl, bc, config.ServeConfig{})
+			if _, err := h.Adopt(srv, bc); err != nil {
+				t.Fatalf("adopt: %v", err)
+			}
+			if got := srv.statsSurface(); got != tc.want {
+				t.Fatalf("adopted server records as %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// A server no hub ever claimed still has to label the records its own rebuilds
+// write, and the bare frontend is the only thing it can be.
+func TestUnclaimedServerRecordsAsServe(t *testing.T) {
+	root := t.TempDir()
+	ctrl := control.New(control.Options{WorkspaceRoot: root, SessionDir: SessionDirFor(root)})
+	t.Cleanup(ctrl.Close)
+	if got := New(ctrl, NewBroadcaster(), config.ServeConfig{}).statsSurface(); got != surface.Serve {
+		t.Fatalf("unclaimed server records as %q, want %q", got, surface.Serve)
 	}
 }

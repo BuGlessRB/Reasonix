@@ -42,6 +42,7 @@ var leaves = []string{
 	"internal/retrieval",
 	"internal/shellparse",
 	"internal/store",
+	"internal/surface",
 	"internal/sysproxy",
 	"internal/textutil",
 	"internal/tokencount",

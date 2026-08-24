@@ -20,7 +20,12 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/surface"
 )
+
+// surface is the frontend this hub serves. Every server it adopts and every
+// runtime it opens is labelled with it, so the answer lives in one place.
+func (h *Hub) surface() surface.Surface { return h.opts.Surface.Or(surface.Serve) }
 
 // decorateSink applies the host's sink wrapper, if it asked for one.
 func (h *Hub) decorateSink(sink event.Sink) event.Sink {
@@ -104,6 +109,10 @@ type HubOptions struct {
 	// capabilities. A window adds system notifications here; a networked server
 	// leaves it nil, or they fire on the kernel's machine, not the watcher's.
 	DecorateSink func(event.Sink) event.Sink
+	// Surface labels the usage records of every session this hub opens or
+	// adopts. Unset is Serve; a window sets Desktop, or its turns are filed
+	// under a frontend the person never ran.
+	Surface surface.Surface
 	// Remote reaches workspaces on other machines. Nil refuses them: a server
 	// that dials onward on a request's say-so is someone else's way in.
 	Remote RemoteAttacher
@@ -154,6 +163,7 @@ func (h *Hub) Adopt(srv *Server, bc *Broadcaster) (*Runtime, error) {
 		return nil, nil
 	}
 	srv.auth = h.auth
+	srv.surface = h.surface()
 	if h.opts.Grant != nil {
 		h.opts.Grant(srv)
 	}
@@ -220,7 +230,7 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 		SessionDir:    SessionDirFor(root),
 		Sink:          h.decorateSink(bc),
 		Stderr:        os.Stderr,
-		StatsSource:   "serve",
+		StatsSource:   h.surface(),
 		BalanceStore:  h.wallets,
 	})
 	if err != nil {
@@ -229,6 +239,7 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 	srv := New(built.Controller, bc, h.opts.Serve)
 	srv.AdoptRuntime(built)
 	srv.auth = h.auth
+	srv.surface = h.surface()
 	if h.opts.Grant != nil {
 		h.opts.Grant(srv)
 	}

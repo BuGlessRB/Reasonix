@@ -19,6 +19,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/secrets"
 	"reasonix/internal/sessioninbox"
+	"reasonix/internal/surface"
 )
 
 // GatewayConfig 是 BotGateway 的配置。
@@ -2310,7 +2311,7 @@ func (gw *BotGateway) getOrCreateSession(ctx context.Context, key string, msg In
 		MaxStepsKey:        "bot.max_steps",
 		RequireKey:         true,
 		Sink:               sessionSink,
-		StatsSource:        "bot",
+		StatsSource:        surface.Bot,
 		WorkspaceRoot:      profile.workspaceRoot,
 		SessionDir:         botSessionDir(profile.workspaceRoot),
 		ApprovalTimeout:    gw.approvalTimeout(),

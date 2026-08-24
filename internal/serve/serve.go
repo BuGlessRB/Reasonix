@@ -29,6 +29,7 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/stats"
 	"reasonix/internal/store"
+	"reasonix/internal/surface"
 )
 
 //go:embed index.html
@@ -72,7 +73,8 @@ type Server struct {
 	titles                   *titleCache
 	fill                     *titleFiller
 	wire                     *wireLog
-	auth                     *authGate // nil when auth is disabled
+	auth                     *authGate       // nil when auth is disabled
+	surface                  surface.Surface // stamped by the hub on adopt; see statsSurface
 	providerSetupMu          sync.RWMutex
 	providerSetup            providerSetupState
 	// leases guards the active session file against other runtimes (a desktop

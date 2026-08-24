@@ -14,11 +14,19 @@ import (
 	"reasonix/internal/netclient"
 	"reasonix/internal/provider"
 	"reasonix/internal/recovery"
+	"reasonix/internal/surface"
 )
 
 type Options struct {
-	Mode           string
-	Version        string
+	Mode    string
+	Version string
+	// Surface is empty for the CLI, the only surface that reported before the
+	// field existed.
+	Surface surface.Surface
+	// SuppressPing withholds the daily launch ping while still reporting
+	// counters. Zero sends it, which is what every surface did before the
+	// consents were separable.
+	SuppressPing   bool
 	HomeDir        string
 	Interactive    bool
 	Proxy          netclient.ProxySpec
@@ -32,6 +40,7 @@ type Options struct {
 type Reporter struct {
 	client  *Client
 	version string
+	surface surface.Surface
 	home    string
 	static  []Counter
 }
@@ -43,16 +52,18 @@ func Start(opts Options) *Reporter {
 		}
 		return nil
 	}
-	client, err := newClient(opts.HomeDir, opts.Version, opts.Proxy)
+	from := opts.Surface.Or(surface.CLI)
+	client, err := newClient(opts.HomeDir, opts.Version, from, opts.Proxy)
 	if err != nil {
 		return nil
 	}
 	r := &Reporter{
 		client:  client,
 		version: opts.Version,
+		surface: from,
 		home:    opts.HomeDir,
 		static: []Counter{
-			{Signal: "client_surface", Bucket: "cli", Count: 1},
+			{Signal: "client_surface", Bucket: from.String(), Count: 1},
 			{Signal: "client_version", Bucket: safeBucket(opts.Version, "other"), Count: 1},
 			{Signal: "cli_mode", Bucket: enumBucket(opts.CLIMode, "run", "tui"), Count: 1},
 			{Signal: "cli_profile", Bucket: enumBucket(opts.Profile, "economy", "balanced", "delivery"), Count: 1},
@@ -61,7 +72,7 @@ func Start(opts Options) *Reporter {
 			{Signal: "settings_language", Bucket: languageBucket(opts.Language), Count: 1},
 		},
 	}
-	go client.backgroundFlush()
+	go client.backgroundFlush(!opts.SuppressPing)
 	return r
 }
 
@@ -109,17 +120,26 @@ func (r *Reporter) append(counts map[string]int) {
 		}
 		counters = append(counters, Counter{Signal: signal, Bucket: bucket, Count: count})
 	}
-	_ = appendPending(r.home, pendingPayload{Version: r.version, OS: runtime.GOOS, Counters: counters})
+	_ = appendPending(r.home, pendingPayload{Version: r.version, OS: runtime.GOOS, Surface: r.surface.String(), Counters: counters})
+}
+
+// turnCounts is the sink state that lives for exactly one turn. Both boundaries
+// reset it by whole-struct assignment, so a field added here starts clean
+// without a second edit — the declaration is the reset. Embedded, not nested,
+// so access stays flat.
+type turnCounts struct {
+	started                    time.Time
+	prompt, completion, cached int
+	hasText                    bool
+	emptyFinalSeen             bool
 }
 
 type sink struct {
 	event.AuditForwarder
-	inner          event.Sink
-	reporter       *Reporter
-	counts         map[string]int
-	started        time.Time
-	hasText        bool
-	emptyFinalSeen bool
+	inner    event.Sink
+	reporter *Reporter
+	counts   map[string]int
+	turnCounts
 }
 
 func (s *sink) Emit(e event.Event) {
@@ -135,9 +155,7 @@ func (s *sink) RecordProtocolRecovery(a event.ProtocolRecoveryAudit) {
 func (s *sink) observe(e event.Event) {
 	switch e.Kind {
 	case event.TurnStarted:
-		s.started = time.Now()
-		s.hasText = false
-		s.emptyFinalSeen = false
+		s.turnCounts = turnCounts{started: time.Now()}
 		add(s.counts, "turns", "count", 1)
 	case event.Text:
 		if e.Text != "" {
@@ -151,6 +169,9 @@ func (s *sink) observe(e event.Event) {
 		if e.Usage != nil {
 			add(s.counts, "finish_reason", finishReasonBucket(e.Usage.FinishReason), 1)
 			add(s.counts, "cache_hit", cacheBucket(e.Usage.CacheHitTokens, e.Usage.CacheMissTokens), 1)
+			s.prompt += e.Usage.PromptTokens
+			s.completion += e.Usage.CompletionTokens
+			s.cached += e.Usage.CacheHitTokens
 		}
 	case event.ToolResult:
 		if e.Tool.Err != "" {
@@ -174,11 +195,12 @@ func (s *sink) observe(e event.Event) {
 		if !s.started.IsZero() {
 			add(s.counts, "cli_turn_latency", latencyBucket(time.Since(s.started)), 1)
 		}
+		add(s.counts, "turn_prompt_tokens", tokenBucket(s.prompt), 1)
+		add(s.counts, "turn_output_tokens", tokenBucket(s.completion), 1)
+		add(s.counts, "turn_cached_tokens", tokenBucket(s.cached), 1)
 		s.reporter.append(s.counts)
 		s.counts = map[string]int{}
-		s.started = time.Time{}
-		s.hasText = false
-		s.emptyFinalSeen = false
+		s.turnCounts = turnCounts{}
 	}
 }
 
@@ -259,6 +281,33 @@ func finishReasonBucket(value string) string {
 		return "unknown"
 	default:
 		return "other"
+	}
+}
+
+// tokenBucket bins one turn's token volume by magnitude. A flat-rate plan is
+// priced by the tail, not the mean, so the shape is what has to survive the
+// wire — and a bucket is the coarsest thing that still carries it. Bounds are
+// spaced around the measured per-turn median near 300k.
+func tokenBucket(n int) string {
+	switch {
+	case n <= 0:
+		return "0"
+	case n < 1_000:
+		return "0_1k"
+	case n < 4_000:
+		return "1k_4k"
+	case n < 16_000:
+		return "4k_16k"
+	case n < 64_000:
+		return "16k_64k"
+	case n < 256_000:
+		return "64k_256k"
+	case n < 1_000_000:
+		return "256k_1m"
+	case n < 4_000_000:
+		return "1m_4m"
+	default:
+		return "4m_plus"
 	}
 }
 

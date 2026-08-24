@@ -9,18 +9,19 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/event"
+	"reasonix/internal/surface"
 )
 
 func TestBuildScopesMalformedConfigDeepSeekMigrationWarningToNonDesktopFrontends(t *testing.T) {
 	tests := []struct {
 		name           string
-		statsSource    string
+		statsSource    surface.Surface
 		handleWarnings bool
 		wantNotice     bool
 	}{
-		{name: "desktop accepts persistent config warning", statsSource: "desktop", handleWarnings: true},
-		{name: "desktop without warning handler keeps boot warning", statsSource: "desktop", wantNotice: true},
-		{name: "CLI keeps boot warning", statsSource: "cli", wantNotice: true},
+		{name: "desktop accepts persistent config warning", statsSource: surface.Desktop, handleWarnings: true},
+		{name: "desktop without warning handler keeps boot warning", statsSource: surface.Desktop, wantNotice: true},
+		{name: "CLI keeps boot warning", statsSource: surface.CLI, wantNotice: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -110,7 +111,7 @@ command = "C:\Users\reasonix\mcp.exe"
 	var notices []event.Event
 	ctrl, err := Build(context.Background(), Options{
 		WorkspaceRoot: workspace,
-		StatsSource:   "desktop",
+		StatsSource:   surface.Desktop,
 		Sink: event.FuncSink(func(e event.Event) {
 			if e.Kind == event.Notice {
 				notices = append(notices, e)

@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/fileutil"
+	"reasonix/internal/surface"
 	"reasonix/internal/worktree"
 )
 
@@ -263,12 +264,17 @@ func (s *Server) switchWorkspaceLocked(ctx context.Context, dir string) error {
 	return nil
 }
 
+// statsSurface labels the usage records this server's rebuilds write. Zero is
+// Serve: a server no hub claimed is the bare frontend, and a rebuild that
+// guessed would file a window's turns under a frontend nobody ran.
+func (s *Server) statsSurface() surface.Surface { return s.surface.Or(surface.Serve) }
+
 // rebuildOptions carries the live controller's workspace into a model, effort
 // or extension rebuild. Left to boot's defaults the root re-resolves from the
 // process working directory and sessions fall back to the global dir, so the
 // switch would quietly serve another project's conversations.
 func (s *Server) rebuildOptions(cur control.SessionAPI, ref string) boot.Options {
-	opts := boot.Options{Model: ref, Sink: s.bc, Stderr: os.Stderr, StatsSource: "serve"}
+	opts := boot.Options{Model: ref, Sink: s.bc, Stderr: os.Stderr, StatsSource: s.statsSurface()}
 	if cur == nil {
 		return opts
 	}
@@ -340,6 +346,6 @@ func (s *Server) buildForWorkspace(ctx context.Context, dir, ref string) (*contr
 		SessionDir:    SessionDirFor(dir),
 		Sink:          s.bc,
 		Stderr:        os.Stderr,
-		StatsSource:   "serve",
+		StatsSource:   s.statsSurface(),
 	})
 }

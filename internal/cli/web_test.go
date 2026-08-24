@@ -18,12 +18,19 @@ func TestRunDispatchesWebCommand(t *testing.T) {
 	t.Cleanup(func() { runWebCommand = previous })
 
 	var got []string
-	runWebCommand = func(args []string) int {
+	var gotVersion string
+	runWebCommand = func(args []string, version string) int {
 		got = append([]string(nil), args...)
+		gotVersion = version
 		return 29
 	}
 	if code := Run([]string{"web", "--addr", "127.0.0.1:0"}, "test-version"); code != 29 {
 		t.Fatalf("reasonix web exit code = %d, want 29", code)
+	}
+	// The version is what telemetry.Enabled checks for a release build, so a
+	// command that never receives it reports nothing and no test would notice.
+	if gotVersion != "test-version" {
+		t.Fatalf("version reaching the web command = %q, want %q", gotVersion, "test-version")
 	}
 	if strings.Join(got, " ") != "--addr 127.0.0.1:0" {
 		t.Fatalf("reasonix web args = %q", got)
@@ -133,7 +140,7 @@ func TestRunWebHelpDoesNotOpenBrowser(t *testing.T) {
 		t.Fatal("reasonix web --help must not open a browser")
 		return nil
 	}
-	if code := runWeb([]string{"--help"}); code != 0 {
+	if code := runWeb([]string{"--help"}, "v1.20.0"); code != 0 {
 		t.Fatalf("runWeb(--help) = %d, want 0", code)
 	}
 }

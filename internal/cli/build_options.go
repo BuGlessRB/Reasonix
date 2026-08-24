@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/sessiontemp"
+	"reasonix/internal/surface"
 )
 
 type cliBuildOverrides struct {
@@ -59,7 +60,7 @@ func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey b
 		AdditionalDirs:       overrides.AdditionalDirs,
 		HeadlessApprovalMode: overrides.HeadlessApprovalMode,
 		GoalTurnsUnreachable: overrides.GoalTurnsUnreachable,
-		StatsSource:          "cli",
+		StatsSource:          surface.CLI,
 		Stderr:               overrides.Stderr,
 		OnSessionRecovered:   overrides.OnSessionRecovered,
 		Ablation:             overrides.Ablation,

@@ -17,6 +17,7 @@ import (
 
 	"reasonix/internal/fileutil"
 	"reasonix/internal/netclient"
+	"reasonix/internal/surface"
 )
 
 var endpoint = "https://crash.reasonix.io/v1"
@@ -32,16 +33,24 @@ var uploadSignals = map[string]bool{
 	"client_version": true, "settings_language": true, "cli_mode": true,
 	"cli_profile": true, "cli_permission_mode": true, "cli_session_mode": true,
 	"cli_turn_latency": true, "cli_exit": true,
+	"turn_prompt_tokens": true, "turn_output_tokens": true, "turn_cached_tokens": true,
+}
+
+// queuedSurface reads a payload's surface. A queue predating the field can only
+// have come from the CLI, which is the sole surface that reported then.
+func queuedSurface(p pendingPayload) surface.Surface {
+	return surface.Surface(strings.TrimSpace(p.Surface)).Or(surface.CLI)
 }
 
 type Client struct {
 	home      string
 	version   string
+	surface   surface.Surface
 	installID string
 	http      *http.Client
 }
 
-func newClient(home, version string, proxy netclient.ProxySpec) (*Client, error) {
+func newClient(home, version string, from surface.Surface, proxy netclient.ProxySpec) (*Client, error) {
 	if strings.TrimSpace(home) == "" {
 		return nil, fmt.Errorf("telemetry: empty home")
 	}
@@ -58,7 +67,7 @@ func newClient(home, version string, proxy netclient.ProxySpec) (*Client, error)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{home: home, version: version, installID: id, http: client}, nil
+	return &Client{home: home, version: version, surface: from.Or(surface.CLI), installID: id, http: client}, nil
 }
 
 func installID(home string) (string, error) {
@@ -112,16 +121,21 @@ func validInstallID(id string) bool {
 	return err == nil
 }
 
-func (c *Client) backgroundFlush() {
+// backgroundFlush sends the launch ping and drains the queue. ping is separate
+// because the surfaces expose them as separate consents: a host may report
+// counters while the launch ping is declined, or the reverse.
+func (c *Client) backgroundFlush(ping bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_ = c.sendDailyPing(ctx)
+	if ping {
+		_ = c.sendDailyPing(ctx)
+	}
 	_ = c.flushPending(ctx)
 }
 
 func (c *Client) sendDailyPing(ctx context.Context) error {
 	day := time.Now().UTC().Format("2006-01-02")
-	claim := filepath.Join(c.home, "cli-telemetry-ping-"+day)
+	claim := filepath.Join(c.home, c.pingPrefix()+day)
 	f, err := os.OpenFile(claim, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		if os.IsExist(err) {
@@ -148,7 +162,7 @@ func (c *Client) sendDailyPing(ctx context.Context) error {
 		return err
 	}
 	err = c.post(ctx, "/ping", pingPayload{
-		InstallID: c.installID, Version: c.version, OS: runtime.GOOS, Arch: runtime.GOARCH, Surface: "cli",
+		InstallID: c.installID, Version: c.version, OS: runtime.GOOS, Arch: runtime.GOARCH, Surface: c.reportedSurface().String(),
 	})
 	if err != nil {
 		_ = os.Remove(claim)
@@ -160,10 +174,23 @@ func (c *Client) sendDailyPing(ctx context.Context) error {
 	return err
 }
 
+// reportedSurface is what reaches the wire. Normalizing here and not only in
+// newClient means an empty field can never be posted as unattributable data.
+func (c *Client) reportedSurface() surface.Surface { return c.surface.Or(surface.CLI) }
+
+// pingPrefix keeps one surface's daily claim from silencing another's: the
+// queue directory is shared by every surface running on the machine.
+func (c *Client) pingPrefix() string {
+	if c.reportedSurface() == surface.CLI {
+		return "cli-telemetry-ping-" // unchanged, so an installed claim still counts
+	}
+	return "cli-telemetry-ping-" + c.reportedSurface().String() + "-"
+}
+
 func (c *Client) prunePingClaims(current string) {
 	entries, _ := os.ReadDir(c.home)
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "cli-telemetry-ping-") && entry.Name() != "cli-telemetry-ping-"+current {
+		if strings.HasPrefix(entry.Name(), c.pingPrefix()) && entry.Name() != c.pingPrefix()+current {
 			_ = os.Remove(filepath.Join(c.home, entry.Name()))
 		}
 	}
@@ -205,10 +232,10 @@ func (c *Client) flushPending(ctx context.Context) error {
 			removeClaim(path, claimed)
 			continue
 		}
-		key := p.Version + "\x00" + p.OS
+		key := p.Version + "\x00" + p.OS + "\x00" + queuedSurface(p).String()
 		g := groups[key]
 		if g == nil {
-			g = &group{payload: pendingPayload{Version: p.Version, OS: p.OS}, counts: map[string]int{}}
+			g = &group{payload: pendingPayload{Version: p.Version, OS: p.OS, Surface: queuedSurface(p).String()}, counts: map[string]int{}}
 			groups[key] = g
 		}
 		g.paths = append(g.paths, path)
@@ -240,7 +267,7 @@ func (c *Client) flushPending(ctx context.Context) error {
 			continue
 		}
 		if err := c.post(ctx, "/metrics", metricsPayload{
-			InstallID: c.installID, Version: g.payload.Version, OS: g.payload.OS, Surface: "cli", Counters: counters,
+			InstallID: c.installID, Version: g.payload.Version, OS: g.payload.OS, Surface: g.payload.Surface, Counters: counters,
 		}); err != nil {
 			return err
 		}
@@ -298,6 +325,9 @@ func validPendingPayload(p pendingPayload) bool {
 	switch p.OS {
 	case "android", "darwin", "freebsd", "linux", "windows":
 	default:
+		return false
+	}
+	if !queuedSurface(p).Valid() {
 		return false
 	}
 	return len(p.Counters) > 0 && len(p.Counters) <= 128

@@ -21,6 +21,7 @@ import (
 	"reasonix/internal/netclient"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/surface"
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
 )
@@ -170,7 +171,7 @@ func (f *acpFactory) sessionBootOptions(p acp.SessionParams) (boot.Options, erro
 		AgentPreset:              boot.NormalizeAgentPreset(firstNonEmpty(p.RuntimeProfile, f.profile)),
 		RequireKey:               true,
 		Sink:                     p.Sink,
-		StatsSource:              "cli",
+		StatsSource:              surface.CLI,
 		EffortOverride:           p.EffortOverride,
 		Stderr:                   os.Stderr,
 		WorkspaceRoot:            root,

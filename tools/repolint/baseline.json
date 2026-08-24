@@ -2,11 +2,11 @@
   "limits": {
     "banner": 0,
     "commented-code": 0,
-    "complexity": 1571,
+    "complexity": 1572,
     "error-text": 12,
-    "essay": 3302,
-    "file-size": 43409,
-    "function-size": 6794,
+    "essay": 3303,
+    "file-size": 43219,
+    "function-size": 6795,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
@@ -301,8 +301,8 @@
     "internal/boot/boot.go": {
       "complexity": 131,
       "essay": 91,
-      "file-size": 1118,
-      "function-size": 1040,
+      "file-size": 1113,
+      "function-size": 1033,
       "narrative": 3
     },
     "internal/boot/boot_test.go": {
@@ -371,7 +371,7 @@
     "internal/bot/gateway.go": {
       "complexity": 59,
       "essay": 23,
-      "file-size": 2172,
+      "file-size": 2173,
       "function-size": 274
     },
     "internal/bot/gateway_lock_test.go": {
@@ -446,10 +446,10 @@
       "essay": 8
     },
     "internal/cli/cli.go": {
-      "complexity": 75,
+      "complexity": 68,
       "essay": 58,
-      "file-size": 1786,
-      "function-size": 511
+      "file-size": 1588,
+      "function-size": 436
     },
     "internal/cli/cli_test.go": {
       "essay": 9
@@ -533,6 +533,10 @@
       "complexity": 60,
       "essay": 1,
       "function-size": 153
+    },
+    "internal/cli/serve_frontend.go": {
+      "complexity": 7,
+      "function-size": 84
     },
     "internal/cli/session_lease.go": {
       "essay": 4
@@ -1261,7 +1265,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 22,
-      "file-size": 690
+      "file-size": 692
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3

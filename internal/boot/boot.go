@@ -54,6 +54,7 @@ import (
 	"reasonix/internal/secrets"
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/skill"
+	"reasonix/internal/surface"
 	"reasonix/internal/taskmonitor"
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
@@ -114,9 +115,10 @@ type Options struct {
 	// so each tab loads its own config/skills/hooks without changing the process
 	// cwd — enabling concurrent multi-project sessions.
 	WorkspaceRoot string
-	// StatsSource labels this frontend's usage records (desktop/cli/serve).
-	// Empty disables usage recording for this controller.
-	StatsSource string
+	// StatsSource labels this frontend's usage records. Unset — or a value this
+	// build does not know — disables usage recording rather than filing turns
+	// under a label nothing can read back.
+	StatsSource surface.Surface
 	// BalanceStore lets a host that builds several runtimes — a window with more
 	// than one pane — read one wallet through one cache. Nil gives each runtime
 	// a private one.

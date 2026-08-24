@@ -2,8 +2,6 @@
 package boot
 
 import (
-	"strings"
-
 	"reasonix/internal/billing"
 	"reasonix/internal/config"
 	"reasonix/internal/event"
@@ -36,8 +34,8 @@ func quotedSink(cfg *config.Config, opts Options) event.Sink {
 	// Innermost is the frontend sink; the recorder sits after quoting so history
 	// JSONL stores the CostQuote.
 	quoted := opts.Sink
-	if source := strings.TrimSpace(opts.StatsSource); source != "" {
-		quoted = stats.NewRecorder(quoted, config.StatsDir(), source)
+	if opts.StatsSource.Valid() {
+		quoted = stats.NewRecorder(quoted, config.StatsDir(), opts.StatsSource.String())
 	}
 	return event.Sync(event.NewCostQuoteSink(quoted, ctx))
 }

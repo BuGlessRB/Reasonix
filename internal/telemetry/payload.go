@@ -7,8 +7,11 @@ type Counter struct {
 }
 
 type pendingPayload struct {
-	Version  string    `json:"version"`
-	OS       string    `json:"os"`
+	Version string `json:"version"`
+	OS      string `json:"os"`
+	// Surface is empty in payloads queued before it existed; readers default it
+	// to cli rather than dropping a queue an upgrade inherited.
+	Surface  string    `json:"surface,omitempty"`
 	Counters []Counter `json:"counters"`
 }
 

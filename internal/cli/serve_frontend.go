@@ -2,12 +2,15 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"reasonix/internal/agent"
@@ -15,6 +18,8 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/i18n"
 	"reasonix/internal/serve"
+	"reasonix/internal/surface"
+	"reasonix/internal/telemetry"
 )
 
 // serveHost is what the frontend loop needs from whatever is serving: a single
@@ -31,17 +36,18 @@ type serveHost interface {
 }
 
 // runServe exposes the controller's HTTP and SSE frontend.
-func runServe(args []string) int {
-	return runServeWithOptions(args, serveRunOptions{command: "serve"})
+func runServe(args []string, version string) int {
+	return runServeWithOptions(args, serveRunOptions{command: "serve", version: version})
 }
 
 // runWeb adds local browser lifecycle behavior to the Serve frontend.
-func runWeb(args []string) int {
-	return runServeWithOptions(args, serveRunOptions{command: "web", openBrowser: true})
+func runWeb(args []string, version string) int {
+	return runServeWithOptions(args, serveRunOptions{command: "web", openBrowser: true, version: version})
 }
 
 type serveRunOptions struct {
 	command     string
+	version     string
 	openBrowser bool
 }
 
@@ -194,4 +200,210 @@ func serveFrontendLoop(ctrl *control.Controller, srv serveHost, resources *serve
 		return 1
 	}
 	return 0
+}
+
+func runServeWithOptions(args []string, opts serveRunOptions) int {
+	if opts.command == "" {
+		opts.command = "serve"
+	}
+	fs := flag.NewFlagSet(opts.command, flag.ContinueOnError)
+	model := fs.String("model", "", "provider name (default: config default_model)")
+	profileFlag := fs.String("profile", "", "deprecated: use --preset (economy|balanced|delivery)")
+	presetFlag := fs.String("preset", "balanced", "agent execution setting: light | balanced | delivery")
+	maxSteps := fs.Int("max-steps", 0, "one-off max tool-call rounds (0 = automatic)")
+	addr := fs.String("addr", "127.0.0.1:8787", "listen address")
+	resume := fs.String("resume", "", "resume a saved session file")
+	sessionIDValue := ""
+	sessionID := &sessionIDValue
+	if opts.command == "web" {
+		sessionID = fs.String("session-id", "", "bind a fresh Web session identity (used by /web handoff)")
+	}
+	authHelp := "auth mode: none, token, or password (default: config/none)"
+	if opts.command == "web" {
+		authHelp = "auth mode: none, token, or password (default: generated token)"
+	}
+	auth := fs.String("auth", "", authHelp)
+	token := fs.String("token", "", "pre-shared token for auth=token (auto-generated if empty)")
+	password := fs.String("password", "", "password for auth=password (use --hash-password to store a hash instead)")
+	hashPassword := fs.Bool("hash-password", false, "print a bcrypt hash of --password and exit")
+	behindProxy := fs.Bool("behind-proxy", false, "trust X-Forwarded-For / X-Forwarded-Proto headers from a reverse proxy")
+	portFile := fs.String("port-file", "", "write the actual bound listen address (host:port) to this file after binding")
+	tokenFile := fs.String("token-file", "", "read the auth=token pre-shared token from this file (overrides --token; keeps the secret out of argv)")
+	pidFile := fs.String("pid-file", "", "write the server process id to this file")
+	openBrowser := fs.Bool("open", opts.openBrowser, "open the Web UI in the default browser")
+	noOpen := fs.Bool("no-open", false, "do not open the Web UI in the default browser")
+	if code, ok := parseCommandFlags(fs, args); !ok {
+		return code
+	}
+	authExplicit := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "auth" {
+			authExplicit = true
+		}
+	})
+	if *resume != "" && *sessionID != "" {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--resume and --session-id cannot be used together")
+		return 2
+	}
+	if *sessionID != "" {
+		if err := validateWebSessionID(*sessionID); err != nil {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+			return 2
+		}
+	}
+	profileRaw := strings.TrimSpace(*profileFlag)
+	if profileRaw != "" {
+		fmt.Fprintln(os.Stderr, "warning: --profile is deprecated; use --preset light|balanced|delivery")
+	} else {
+		profileRaw = strings.TrimSpace(*presetFlag)
+	}
+	profile, err := parseRuntimeProfile(profileRaw)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 2
+	}
+
+	// --hash-password: generate a bcrypt hash and exit.
+	if *hashPassword {
+		if *password == "" {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--hash-password requires --password")
+			return 1
+		}
+		h, err := serve.HashPassword(*password)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+			return 1
+		}
+		fmt.Println(h)
+		return 0
+	}
+
+	ctx := context.Background()
+	bc := serve.NewBroadcaster()
+	cfg, _ := config.Load()
+
+	// Counters for this surface. Enabled() is fail-closed and this frontend is
+	// not interactive, so "auto" reports nothing — a headless server counts only
+	// where telemetry was turned on deliberately. Wrap is nil-safe.
+	reporter := startCLITelemetryReporter(telemetry.Options{
+		Mode: cfg.CLITelemetryMode(), Version: opts.version, Surface: surface.Serve,
+		HomeDir: config.ReasonixHomeDir(), Proxy: cfg.NetworkProxySpec(),
+		Language: cfg.Language,
+	})
+
+	// Build serve config, merging CLI flags over config file.
+	serveCfg := serveConfigWithCommandDefaults(opts.command, authExplicit, cfg.Serve)
+	// `reasonix web` is a local browser entry point and defaults to a freshly
+	// generated token. `reasonix serve` keeps its existing config-driven default,
+	// and an explicit --auth always wins for both commands.
+	if *auth != "" {
+		serveCfg.AuthMode = *auth
+	}
+	if *token != "" {
+		serveCfg.Token = *token
+	}
+	if *tokenFile != "" {
+		tok, err := readServeTokenFile(*tokenFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+			return 1
+		}
+		serveCfg.Token = tok
+	}
+	if *behindProxy {
+		serveCfg.BehindProxy = true
+	}
+	mode, err := serve.NormalizeAuthMode(serveCfg.AuthMode)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 1
+	}
+	serveCfg.AuthMode = mode
+	if *password != "" && serveCfg.AuthMode == "password" {
+		// Hash the password at startup so the config never stores plaintext.
+		// If a PasswordHash is already set in config, the CLI password overrides it.
+		h, err := serve.HashPassword(*password)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "failed to hash password:", err)
+			return 1
+		}
+		serveCfg.PasswordHash = h
+	}
+	if serveCfg.AuthMode == "password" && strings.TrimSpace(serveCfg.PasswordHash) == "" {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "auth mode password requires --password or serve.password_hash")
+		return 1
+	}
+
+	// Own the active session file for the server's lifetime; the serve
+	// handlers that rebind sessions (/resume, /new, /fork) move the lease
+	// through the same keeper. Released after the controller closes.
+	leases := control.NewSessionLeaseKeeper()
+	defer leases.Release()
+	var resumeSession *agent.Session
+	if *resume != "" {
+		if err := leases.Rebind(*resume); err != nil {
+			if errors.Is(err, agent.ErrSessionLeaseHeld) {
+				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, control.SessionInUseMessage(err)+"; "+control.SessionLeaseCloseHint)
+			} else {
+				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+			}
+			return 1
+		}
+		var err error
+		resumeSession, err = loadResumableSession(*resume)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+			return 1
+		}
+	}
+	*model = modelForResumePath(*model, *resume, cfg)
+	// Serve always resolves an implicit model from the user-global config,
+	// ignoring project-level default_model overrides. Explicit flags and
+	// resumable session models remain strict and are preserved verbatim.
+	*model = resolveServeModel(*model)
+	// Keep the browser reachable when the selected provider has no saved key.
+	// The loopback-only provider setup surface stores the missing credential and
+	// rebuilds this controller in place before the normal web UI is exposed.
+	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, false, reporter.Wrap(bc), profile, cliBuildOverrides{
+		OnSessionRecovered: cliSessionRecoveredHandler(leases),
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 1
+	}
+	defer ctrl.Close()
+	SetTaskJobKiller(ctrlKillerAdapter{ctrl})
+
+	// Auto-save target: reuse the resumed file, else a fresh one — same as chat.
+	if *resume != "" {
+		_ = ctrl.Resume(resumeSession, *resume)
+	} else if *sessionID != "" {
+		freshPath, err := freshWebSessionPath(ctrl.SessionDir(), *sessionID)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+			return 1
+		}
+		ctrl.SetFreshSessionPath(freshPath)
+	}
+	ctrl.EnsureSessionPath()
+	// Fresh sessions take the lease too (defensive: the path is brand new); a
+	// resumed path is already held, making this a no-op.
+	if err := rebindCLIControllerAuthority(leases, ctrl); err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, control.SessionInUseMessage(err)+"; "+control.SessionLeaseCloseHint)
+		return 1
+	}
+
+	srv := serve.New(ctrl, bc, serveCfg)
+	_ = srv.SetSessionLeases(leases) // same live keeper was bound above
+	// A hub around it, so this frontend drives several sessions at once the way
+	// the studio window does. The session this command was started for is the
+	// first pane — already leased above, so adopting it cannot be refused.
+	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg, DecorateSink: reporter.Wrap})
+	_, _ = hub.Adopt(srv, bc)
+	return runServeFrontend(ctrl, hub, serveCfg, serveFrontendOptions{
+		command: opts.command, address: *addr,
+		portFile: *portFile, tokenFile: *tokenFile, pidFile: *pidFile,
+		openBrowser: *openBrowser && !*noOpen,
+		hasSession:  *resume != "" || *sessionID != "",
+	})
 }

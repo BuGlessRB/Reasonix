@@ -8,10 +8,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/event"
+	"reasonix/internal/provider"
+	"reasonix/internal/surface"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -266,4 +271,99 @@ func TestPendingQueueCountsActiveAndRecoversStaleClaims(t *testing.T) {
 	if _, err := os.Stat(strings.TrimSuffix(staleClaim, ".uploading")); err != nil {
 		t.Fatalf("stale claim was not recovered: %v", err)
 	}
+}
+
+// uploadSignals is the real boundary. A counter the sink records but the
+// allow-list omits is written to the queue and then dropped in silence, which
+// from every local test looks exactly like a feature that works.
+func TestTurnTokenCountersSurviveTheUploadAllowList(t *testing.T) {
+	home := t.TempDir()
+	sink := (&Reporter{home: home, version: "v1.20.0", surface: surface.Desktop}).Wrap(&readinessSink{})
+	sink.Emit(event.Event{Kind: event.TurnStarted})
+	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{
+		PromptTokens: 120_000, CompletionTokens: 2_100, CacheHitTokens: 96_000,
+	}})
+	sink.Emit(event.Event{Kind: event.TurnDone})
+
+	posted := flushCollecting(t, home)
+	if len(posted) != 1 {
+		t.Fatalf("posted %d payloads, want 1", len(posted))
+	}
+	if posted[0].Surface != surface.Desktop.String() {
+		t.Errorf("surface = %q, want %q", posted[0].Surface, surface.Desktop)
+	}
+	got := map[string]string{}
+	for _, counter := range posted[0].Counters {
+		got[counter.Signal] = counter.Bucket
+	}
+	for signal, want := range map[string]string{
+		"turn_prompt_tokens": "64k_256k",
+		"turn_output_tokens": "1k_4k",
+		"turn_cached_tokens": "64k_256k",
+	} {
+		if got[signal] != want {
+			t.Errorf("%s reached /metrics as %q, want %q", signal, got[signal], want)
+		}
+	}
+}
+
+// One machine's queue is shared by every surface that runs on it. Grouping that
+// ignored surface would post a desktop turn as part of a cli payload — the
+// exact attribution error this histogram exists to avoid.
+func TestFlushDoesNotFoldOneSurfaceIntoAnother(t *testing.T) {
+	home := t.TempDir()
+	for _, from := range []surface.Surface{surface.CLI, surface.Desktop, surface.Serve} {
+		sink := (&Reporter{home: home, version: "v1.20.0", surface: from}).Wrap(&readinessSink{})
+		sink.Emit(event.Event{Kind: event.TurnStarted})
+		sink.Emit(event.Event{Kind: event.TurnDone})
+	}
+
+	seen := map[string]int{}
+	for _, payload := range flushCollecting(t, home) {
+		seen[payload.Surface]++
+	}
+	for _, from := range []surface.Surface{surface.CLI, surface.Desktop, surface.Serve} {
+		if seen[from.String()] != 1 {
+			t.Errorf("surface %q posted %d times, want 1 (all: %v)", from, seen[from.String()], seen)
+		}
+	}
+}
+
+// A queue inherited from a version that predates the field still uploads, as
+// the surface it could only have come from.
+func TestFlushTreatsAQueueWithoutSurfaceAsCLI(t *testing.T) {
+	home := t.TempDir()
+	if err := appendPending(home, pendingPayload{
+		Version: "v1.20.0", OS: runtime.GOOS,
+		Counters: []Counter{{Signal: "turns", Bucket: "count", Count: 1}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	posted := flushCollecting(t, home)
+	if len(posted) != 1 || posted[0].Surface != surface.CLI.String() {
+		t.Fatalf("posted = %+v, want one payload with surface cli", posted)
+	}
+}
+
+func flushCollecting(t *testing.T, home string) []metricsPayload {
+	t.Helper()
+	var mu sync.Mutex
+	var posted []metricsPayload
+	client := testClient(home, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.String() != endpoint+"/metrics" {
+			t.Errorf("request URL = %q", req.URL)
+		}
+		var payload metricsPayload
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+			t.Fatal(err)
+		}
+		mu.Lock()
+		posted = append(posted, payload)
+		mu.Unlock()
+		return telemetryResponse(http.StatusAccepted), nil
+	}))
+	if err := client.flushPending(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return posted
 }
