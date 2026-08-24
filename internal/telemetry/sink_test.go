@@ -243,3 +243,91 @@ func onlyBucket(t *testing.T, home, signal string) string {
 	}
 	return got[0]
 }
+
+// The prefix is what prompt caching pays for, and one changed byte re-bills all
+// of it. The kernel already says which part changed, so the counter carries
+// that verdict rather than a second guess at it.
+func TestSinkRecordsWhatBrokeTheCachedPrefix(t *testing.T) {
+	home := t.TempDir()
+	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
+	sink.Emit(event.Event{Kind: event.TurnStarted})
+	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 90_000},
+		CacheDiagnostics: &event.CacheDiagnostics{
+			PrefixChanged: true, PrefixChangeReasons: []string{"system", "tools"},
+		}})
+	sink.Emit(event.Event{Kind: event.TurnDone})
+
+	got := pendingBuckets(t, home, "cache_miss_reason")
+	slices.Sort(got)
+	if !slices.Equal(got, []string{"system", "tools"}) {
+		t.Fatalf("cache_miss_reason buckets = %v, want [system tools]", got)
+	}
+}
+
+// Rewrite takes an open string, so a reason a later build invents must not open
+// the wire's bucket space on its own.
+func TestSinkBucketsAnUnknownPrefixReasonAsOther(t *testing.T) {
+	home := t.TempDir()
+	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
+	sink.Emit(event.Event{Kind: event.TurnStarted})
+	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1},
+		CacheDiagnostics: &event.CacheDiagnostics{
+			PrefixChanged: true, PrefixChangeReasons: []string{"a_reason_from_2027"},
+		}})
+	sink.Emit(event.Event{Kind: event.TurnDone})
+
+	if got := pendingBuckets(t, home, "cache_miss_reason"); !slices.Equal(got, []string{"other"}) {
+		t.Fatalf("cache_miss_reason buckets = %v, want [other]", got)
+	}
+}
+
+// A prefix that held is the common case and the one that must stay silent: a
+// counter that fired every turn would report churn where there is none.
+func TestSinkSaysNothingWhenThePrefixHeld(t *testing.T) {
+	home := t.TempDir()
+	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
+	sink.Emit(event.Event{Kind: event.TurnStarted})
+	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 90_000, CacheHitTokens: 89_000},
+		CacheDiagnostics: &event.CacheDiagnostics{PrefixChanged: false}})
+	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 90_000}})
+	sink.Emit(event.Event{Kind: event.TurnDone})
+
+	if got := pendingBuckets(t, home, "cache_miss_reason"); len(got) != 0 {
+		t.Fatalf("cache_miss_reason recorded %v on a turn whose prefix never changed", got)
+	}
+}
+
+// The route this bucket exists for looked exactly like this: the prefix held,
+// every prompt token billed at full rate, and nothing anywhere said so. A miss
+// the kernel cannot attribute is the finding, not the absence of one — the
+// cause is downstream (a gateway dropping cache_control, an expired entry, an
+// endpoint that never cached) and only the count can point at it.
+func TestSinkNamesAMissItCannotAttribute(t *testing.T) {
+	home := t.TempDir()
+	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
+	sink.Emit(event.Event{Kind: event.TurnStarted})
+	sink.Emit(event.Event{Kind: event.Usage,
+		Usage:            &provider.Usage{PromptTokens: 53_569, CacheMissTokens: 53_569},
+		CacheDiagnostics: &event.CacheDiagnostics{PrefixChanged: false}})
+	sink.Emit(event.Event{Kind: event.TurnDone})
+
+	if got := pendingBuckets(t, home, "cache_miss_reason"); !slices.Equal(got, []string{"unexplained"}) {
+		t.Fatalf("buckets = %v, want [unexplained]", got)
+	}
+}
+
+// Under the smallest prefix any vendor here caches, a miss is the rule and
+// reporting it would bury the finding in turns that were never cacheable.
+func TestSinkLeavesATooSmallPromptAlone(t *testing.T) {
+	home := t.TempDir()
+	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
+	sink.Emit(event.Event{Kind: event.TurnStarted})
+	sink.Emit(event.Event{Kind: event.Usage,
+		Usage:            &provider.Usage{PromptTokens: minCacheablePrompt - 1},
+		CacheDiagnostics: &event.CacheDiagnostics{PrefixChanged: false}})
+	sink.Emit(event.Event{Kind: event.TurnDone})
+
+	if got := pendingBuckets(t, home, "cache_miss_reason"); len(got) != 0 {
+		t.Fatalf("a prompt too small to cache was reported as %v", got)
+	}
+}

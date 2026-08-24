@@ -173,6 +173,19 @@ func (s *sink) observe(e event.Event) {
 			s.completion += e.Usage.CompletionTokens
 			s.cached += e.Usage.CacheHitTokens
 		}
+		// One changed byte re-bills the whole prefix at full rate. The kernel
+		// already attributes a prefix change; this carries that verdict and
+		// names the case it cannot see.
+		if d := e.CacheDiagnostics; d != nil {
+			switch {
+			case d.PrefixChanged:
+				for _, reason := range d.PrefixChangeReasons {
+					add(s.counts, "cache_miss_reason", enumBucket(reason, prefixChangeReasons...), 1)
+				}
+			case e.Usage != nil && e.Usage.CacheHitTokens == 0 && e.Usage.PromptTokens >= minCacheablePrompt:
+				add(s.counts, "cache_miss_reason", "unexplained", 1)
+			}
+		}
 	case event.ToolResult:
 		if e.Tool.Err != "" {
 			add(s.counts, "tool_error", toolErrorBucket(e.Tool.Err), 1)
@@ -309,6 +322,19 @@ func tokenBucket(n int) string {
 	default:
 		return "4m_plus"
 	}
+}
+
+// minCacheablePrompt is under the smallest prefix any vendor here will cache,
+// so a miss below it is the rule rather than a finding.
+const minCacheablePrompt = 1024
+
+// prefixChangeReasons is what CompareShape derives from the shape hashes and
+// Session.Rewrite queues beside it. Rewrite takes an open string, so a reason
+// this build has not seen buckets as other rather than letting a caller widen
+// the wire's bucket space.
+var prefixChangeReasons = []string{
+	"system", "tools", "compact", "guardian_merge",
+	"rewind", "rewind_restore", "rewind_truncate",
 }
 
 func cacheBucket(hit, miss int) string {

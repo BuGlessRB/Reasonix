@@ -16,6 +16,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/recovery"
 	"reasonix/internal/surface"
 )
 
@@ -366,4 +367,63 @@ func flushCollecting(t *testing.T, home string) []metricsPayload {
 		t.Fatal(err)
 	}
 	return posted
+}
+
+// The allow-list is the silent one. A counter the sink records but uploadSignals
+// omits is written to the queue and dropped without a word, which from every
+// local test looks exactly like a feature that works. This drives a turn through
+// each branch that records and asserts the wire accepts everything that came out
+// — so a new signal fails here rather than in production telemetry nobody reads.
+func TestEverySignalTheSinkRecordsSurvivesTheUploadAllowList(t *testing.T) {
+	home := t.TempDir()
+	reporter := &Reporter{home: home, version: "v1.20.0", surface: surface.CLI, static: []Counter{
+		{Signal: "client_surface", Bucket: "cli", Count: 1},
+		{Signal: "client_version", Bucket: "v1_20_0", Count: 1},
+		{Signal: "cli_mode", Bucket: "run", Count: 1},
+		{Signal: "cli_profile", Bucket: "balanced", Count: 1},
+		{Signal: "cli_permission_mode", Bucket: "ask", Count: 1},
+		{Signal: "cli_session_mode", Bucket: "fresh", Count: 1},
+		{Signal: "settings_language", Bucket: "en", Count: 1},
+	}}
+	sink := reporter.Wrap(&readinessSink{})
+	sink.Emit(event.Event{Kind: event.TurnStarted})
+	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{
+		FinishReason: "stop", PromptTokens: 90_000, CompletionTokens: 800, CacheHitTokens: 80_000, CacheMissTokens: 10_000,
+	}, CacheDiagnostics: &event.CacheDiagnostics{
+		PrefixChanged: true, PrefixChangeReasons: []string{"system", "tools", "compact"},
+	}})
+	sink.Emit(event.Event{Kind: event.ToolResult, Tool: event.Tool{Err: "permission denied"}})
+	sink.Emit(event.Event{Kind: event.Notice, Code: event.NoticeCodeEmptyFinal})
+	sink.Emit(event.Event{Kind: event.CompactionStarted, Compaction: event.Compaction{Trigger: "auto"}})
+	event.RecordProtocolRecovery(sink, event.ProtocolRecoveryAudit{Kind: event.ProtocolRecoveryMissingReasoningRetryReplaced})
+	sink.Emit(event.Event{Kind: event.TurnDone})
+	reporter.RecordRecovery(recovery.Metrics{FailureEvents: 1, ReviewLatencyMsSum: 400, ReviewLatencyCount: 1})
+
+	entries, err := os.ReadDir(filepath.Join(home, pendingDirName))
+	if err != nil || len(entries) == 0 {
+		t.Fatalf("pending files = %d, err = %v", len(entries), err)
+	}
+	recorded, dropped := 0, []string{}
+	for _, entry := range entries {
+		b, err := os.ReadFile(filepath.Join(home, pendingDirName, entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var payload pendingPayload
+		if err := json.Unmarshal(b, &payload); err != nil {
+			t.Fatal(err)
+		}
+		for _, counter := range payload.Counters {
+			recorded++
+			if !validCounter(counter) {
+				dropped = append(dropped, counter.Signal+"/"+counter.Bucket)
+			}
+		}
+	}
+	if len(dropped) > 0 {
+		t.Fatalf("the sink records %d counters and the wire drops %d of them: %v", recorded, len(dropped), dropped)
+	}
+	if recorded < 12 {
+		t.Fatalf("only %d counters recorded — the stream stopped exercising the branches this guards", recorded)
+	}
 }

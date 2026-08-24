@@ -34,6 +34,10 @@ var uploadSignals = map[string]bool{
 	"cli_profile": true, "cli_permission_mode": true, "cli_session_mode": true,
 	"cli_turn_latency": true, "cli_exit": true,
 	"turn_prompt_tokens": true, "turn_output_tokens": true, "turn_cached_tokens": true,
+	"cache_miss_reason": true,
+	// Recorded by RecordProtocolRecovery since it shipped and dropped here ever
+	// since: the bucket is a ProtocolRecoveryKind, a closed enum, never content.
+	"tool_call_reasoning_recovery": true,
 }
 
 // queuedSurface reads a payload's surface. A queue predating the field can only
