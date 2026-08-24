@@ -1,0 +1,9 @@
+prompt = """Answer using the fleet tool with exactly three items, and do not read any project files yourself.
+
+Item one: id "scan", read_only true. Prompt it to list every handler module file under handlers/ that defines a handle_ function.
+
+Item two: id "check", depends_on ["scan"], read_only true. Prompt it to report, for every one of those handler files, whether that file calls validate_payload, naming each file either way.
+
+Item three: id "report", depends_on ["check"], write_paths ["ANSWER.md"]. Prompt it to write ANSWER.md in the workspace root with exactly one line, `missing=<file>`, naming the one handler that does not call validate_payload."""
+class = "delegation"
+timeout_sec = 900

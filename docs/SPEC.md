@@ -866,6 +866,16 @@ quietly mapping nothing, while an empty submission is a real answer that
 completes it. A source may not be adopted, having never run to submit anything,
 nor itself mapped, since it answers with an aggregate rather than a list.
 
+What `for_each` costs is one full sub-agent per subject — its prefix, its
+reasoning, its closing contract — so it pays only where a subject needs work of
+its own. Measured against the same call written as one task handling every
+subject (`benchmarks/fleet-fanout`, n=6 per arm, both solving 6/6), mapping a
+one-file check over twelve subjects spent 85% more tokens (p=0.002) for no
+wall-clock gain, at both the default concurrency and a ceiling raised past the
+width. The gain it is for — a subject too large to share one child's context
+with eleven others — is not what that fixture measures, and the tool
+description says so.
+
 ### 3.15 One child-construction primitive
 
 The APIs that spawn a child are many — `task`, `read_only_task`, `fleet`,
