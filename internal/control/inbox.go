@@ -444,12 +444,30 @@ func (c *Controller) AppendInboxItem(id, text, idempotency string, extra map[str
 	return updated, nil
 }
 
+// DeleteInboxItem removes one queued item. Guidance a running turn accepted is
+// removed the same way and by the same verb - it is queued too, and a frontend
+// that has to name a second one is a frontend that has to know which half of
+// the queue a line landed in.
 func (c *Controller) DeleteInboxItem(id string) error {
 	st, err := c.ensureInbox()
 	if err != nil {
 		return err
 	}
-	return st.DeleteItem(id)
+	switch dropped, dropErr := c.DropQueuedSteer(id); {
+	case dropErr != nil:
+		return dropErr
+	case dropped:
+		return nil
+	}
+	if err := st.DeleteItem(id); !errors.Is(err, sessioninbox.ErrInvalidState) {
+		return err
+	}
+	// Not in the queue and not pending: for a steer that means the turn read it
+	// already, which is a different answer than "wrong state for a delete".
+	if meta, _, readErr := st.ReadItem(id); readErr == nil && steerAlreadyAdmitted(meta.State) {
+		return ErrSteerApplied
+	}
+	return sessioninbox.ErrInvalidState
 }
 
 // CancelWithInboxItems stops the active turn and discards only the durable

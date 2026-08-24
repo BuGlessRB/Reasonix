@@ -6,16 +6,22 @@ import { t } from "../../i18n";
 export function UserCard({
   item,
   cp,
+  onCancelQueued,
   onPrepareRewind,
   onCommitRewind,
   onUndoRewind,
 }: {
   item: Extract<Item, { t: "user" }>;
   cp?: Checkpoint;
+  onCancelQueued?: (rowId: string, itemId: string) => void;
   onPrepareRewind?: (turn: number, scope: RewindScope) => Promise<RewindPlan>;
   onCommitRewind?: (planId: string) => Promise<RewindResult>;
   onUndoRewind?: (transactionId: string) => Promise<void>;
 }) {
+  // A queued line is the only thing on screen that has not happened yet, which
+  // makes it the only thing that can still be taken back. The id is the
+  // kernel's, and it goes away the moment the turn reads the line.
+  const queued = item.pending ? item.itemId : undefined;
   return (
     // data-item is the rail's anchor: it jumps by block first, then finds the
     // message itself once that block has mounted.
@@ -28,6 +34,11 @@ export function UserCard({
         <div className="hl">
           <span className="nm">{t("我")}</span>
           {item.pending && <span className="pend">{t("排队中 · 下一个工具边界送达")}</span>}
+          {queued && onCancelQueued && (
+            <button className="pcancel" onClick={() => onCancelQueued(item.id, queued)}>
+              {t("撤回")}
+            </button>
+          )}
           {/* The entry point lives on the turn it returns to, so there is no
               list to read and no turn number to match up by eye. */}
           {cp && onPrepareRewind && onCommitRewind && onUndoRewind && (

@@ -29,6 +29,10 @@ func (s *Server) inboxAPI() control.SessionAPI {
 
 func writeInboxError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, control.ErrSteerApplied):
+		// Not a fault: the answer is "you were a moment late", and the panel
+		// showing the line has to say that rather than a state name.
+		refuse(w, http.StatusConflict, "steer.already_applied", err.Error(), nil)
 	case errors.Is(err, sessioninbox.ErrItemTooLarge):
 		writeErr(w, http.StatusRequestEntityTooLarge, err) // 413
 	case errors.Is(err, sessioninbox.ErrCapacityItems), errors.Is(err, sessioninbox.ErrCapacityBytes),

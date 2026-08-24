@@ -33,7 +33,7 @@ export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, Capabili
 import type { WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
 import type { Appearance, ThemePack } from "./look";
-import type { PermissionLists, PermissionRules, SandboxSettings } from "./boundary";
+import type { ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, SandboxSettings } from "./boundary";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderProbe, ProviderSetup } from "./provider";
 import type { StoragePlan, StorageState } from "./storage";
 
@@ -54,6 +54,14 @@ export type * from "./look";
 export type * from "./boundary";
 
 export type * from "./provider";
+
+/** What the kernel answers when a mid-turn line is queued. itemId is the
+ *  durable queue entry, and it is the whole reason the line can be taken back:
+ *  without it the row on screen has no name to cancel by. */
+export interface QueuedSteer {
+  itemId: string;
+  disposition?: string;
+}
 
 export interface AgentPort {
   providerSetup(): Promise<ProviderSetup | null>;
@@ -124,6 +132,9 @@ export interface AgentPort {
   savePermissions(lists: PermissionLists): Promise<PermissionRules>;
   sandbox(): Promise<SandboxSettings>;
   saveSandbox(s: SandboxSettings): Promise<SandboxSettings>;
+  // null when the config file reads. Everything else here writes to it.
+  configProblem(): Promise<ConfigProblem | null>;
+  repairConfig(): Promise<ConfigRepair>;
   mcp(root?: string): Promise<McpCatalog>;
   // Retries a failed or disconnected server and answers with its new state, so
   // the caller never has to race a follow-up GET against the connect.
@@ -246,8 +257,11 @@ export interface AgentPort {
 
   submit(text: string): Promise<void>;
   // /submit 409s once a turn holds the session. Mid-turn input is durable and
-  // goes through the inbox, which delivers it at the next tool boundary.
-  steer(text: string): Promise<void>;
+  // goes through the inbox, which delivers it at the next tool boundary. The
+  // receipt is what makes it cancellable while it waits there.
+  steer(text: string): Promise<QueuedSteer>;
+  // Takes a queued line back before the turn reads it, and refuses once it has.
+  cancelQueued(itemId: string): Promise<void>;
   cancel(): Promise<void>;
   approve(id: string, verdict: ApprovalVerdict): Promise<void>;
   answer(id: string, answers: { questionId: string; selected: string[] }[]): Promise<void>;

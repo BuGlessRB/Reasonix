@@ -1,4 +1,5 @@
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef } from "./port";
+import { HttpError } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, QueuedSteer } from "./port";
 import type { WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
 import { SCRIPT } from "./fixture";
@@ -15,6 +16,8 @@ export class MockPort extends MockTheme implements AgentPort {
   // The script pauses on approval_request/ask_request the same way the real
   // run blocks on Approve()/AnswerQuestion(); nothing advances until answered.
   private gated = false;
+  // Queued mid-turn lines, by the id the kernel would have given them.
+  private queued = new Map<string, number>();
   private state: SessionStatus = {
     label: "deepseek-v4-pro",
     running: false,
@@ -467,8 +470,26 @@ export class MockPort extends MockTheme implements AgentPort {
     if (next) this.timer = window.setTimeout(this.step, next.wait);
   }
 
-  async steer(text: string) {
-    this.emit({ kind: "steer", text });
+  // The real kernel holds a mid-turn line until the next tool boundary, and
+  // that wait is the only window in which taking it back means anything. A
+  // fixture that echoed it at once made the state undesignable.
+  async steer(text: string): Promise<QueuedSteer> {
+    const itemId = `inbox-${this.queued.size + 1}-${Date.now()}`;
+    const at = window.setTimeout(() => {
+      this.queued.delete(itemId);
+      this.emit({ kind: "steer", text });
+    }, 4000);
+    this.queued.set(itemId, at);
+    return { itemId, disposition: "steer_accepted" };
+  }
+
+  async cancelQueued(itemId: string) {
+    const at = this.queued.get(itemId);
+    // Refused the way the kernel refuses it: by then the turn has read it, and
+    // there is nothing left to take back.
+    if (at === undefined) throw new HttpError(409, "already applied", { code: "steer.already_applied" });
+    window.clearTimeout(at);
+    this.queued.delete(itemId);
   }
 
   async submit(text: string) {

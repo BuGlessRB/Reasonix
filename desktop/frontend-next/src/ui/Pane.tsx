@@ -309,8 +309,12 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       dispatch({ kind: "__user", text, pending: steering, id } as never);
       trajDispatch({ kind: "__user", text });
       try {
-        if (steering) await port.steer(text);
-        else await port.submit(text).then(refreshStatus);
+        if (steering) {
+          // The row is already on screen; the receipt is what gives it a name
+          // to be taken back by while it waits at the tool boundary.
+          const queued = await port.steer(text);
+          if (queued?.itemId) dispatch({ kind: "__queued", id, itemId: queued.itemId } as never);
+        } else await port.submit(text).then(refreshStatus);
         return true;
       } catch (e) {
         dispatch({ kind: "__unsent", id } as never);
@@ -319,6 +323,19 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       }
     },
     [port, s.running, refreshStatus, fail],
+  );
+
+  // Cancelling is only meaningful before the turn reads the line. After that
+  // the kernel refuses and says so, and the row stops calling itself queued on
+  // its own — the steer event that made it too late is also what clears it.
+  const onCancelQueued = useCallback(
+    (rowId: string, itemId: string) => {
+      port
+        .cancelQueued(itemId)
+        .then(() => dispatch({ kind: "__unsent", id: rowId } as never))
+        .catch(fail);
+    },
+    [port, fail],
   );
 
   // Transcript rows are memoised on their item; a callback rebuilt every render
@@ -419,6 +436,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         onApprove={onApprove}
         onAnswer={onAnswer}
         onForget={onForget}
+        onCancelQueued={onCancelQueued}
         onExtInvoke={onExtInvoke}
         onExtSubmit={onExtSubmit}
         checkpoints={paired}

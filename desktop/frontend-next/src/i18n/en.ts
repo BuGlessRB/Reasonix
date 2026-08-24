@@ -413,6 +413,7 @@ export const EN: Record<string, string> = {
   "你": "You",
   "我": "Me",
   "排队中 · 下一个工具边界送达": "Queued · delivered at the next tool boundary",
+  "撤回": "Take it back",
   "改动": "Changes",
   "独立上下文 · 不进主轨迹": "Its own context · stays out of the main trajectory",
   "计划已进右栏": "The plan is in the right rail",

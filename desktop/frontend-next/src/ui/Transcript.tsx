@@ -33,6 +33,9 @@ interface Props {
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => void;
   onSuggest: (text: string) => void;
   onForget: (itemId: string, name: string) => void;
+  // Takes a still-queued line back. Only rows the kernel has given an
+  // item id can offer it, and only until the turn reads them.
+  onCancelQueued: (rowId: string, itemId: string) => void;
   onExtInvoke: (name: string) => void;
   // Views published against a tool call, keyed by anchor. A card looks itself
   // up here rather than being handed one, so an arriving takeover repaints the
@@ -85,7 +88,7 @@ function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
   return blocks;
 }
 
-export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, onApprove, onAnswer, onSuggest, onForget, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
+export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, onApprove, onAnswer, onSuggest, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
   // A block the selection touches must not leave the DOM. Unmounting the node a
   // selection is anchored to makes the browser remap that selection onto
   // whatever is still mounted — which reads as "I selected up there and the
@@ -352,7 +355,7 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
   const live = last?.t === "say" && !last.done ? last : undefined;
   const blocks = useBlocks(items, live ? items.length - 1 : items.length, revision);
 
-  const rowProps = { onApprove, onAnswer, onForget, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
+  const rowProps = { onApprove, onAnswer, onForget, onCancelQueued, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
 
   // What you said, and where it sits. Derived from the same blocks the
   // transcript renders, so a mark always knows which block holds it — that is
@@ -456,6 +459,7 @@ interface RowHandlers {
   onApprove: Props["onApprove"];
   onAnswer: Props["onAnswer"];
   onForget: Props["onForget"];
+  onCancelQueued: Props["onCancelQueued"];
   onExtInvoke: Props["onExtInvoke"];
   takeovers: Record<string, ExtensionSurface>;
   onExtSubmit: Props["onExtSubmit"];
@@ -473,6 +477,7 @@ const Row = memo(function Row({
   it,
   onApprove,
   onForget,
+  onCancelQueued,
   onAnswer,
   onExtInvoke,
   takeovers,
@@ -486,7 +491,16 @@ const Row = memo(function Row({
 }: RowHandlers & { it: Item; cp?: Checkpoint }) {
   switch (it.t) {
     case "user":
-      return <UserCard item={it} cp={cp} onPrepareRewind={onPrepareRewind} onCommitRewind={onCommitRewind} onUndoRewind={onUndoRewind} />;
+      return (
+        <UserCard
+          item={it}
+          cp={cp}
+          onCancelQueued={onCancelQueued}
+          onPrepareRewind={onPrepareRewind}
+          onCommitRewind={onCommitRewind}
+          onUndoRewind={onUndoRewind}
+        />
+      );
     case "say":
       // Reasoning arrives long before the first answer token on a thinking
       // model. Gating the card on text meant all of it stayed invisible and

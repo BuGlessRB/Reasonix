@@ -127,6 +127,9 @@ const SAID: Record<string, string> = {
   "wallpaper.empty": "图片是空的",
   "wallpaper.too_large": "图片太大了，先压到 {limit} MB 以内",
 
+  // ── 来不及了 ──────────────────────────────────────
+  "steer.already_applied": "这条已经送给模型了，收不回来了",
+
   // ── 配置文件本身坏了，以及每一个写设置的面板被它挡住时 ─────────
   "config.unparsed": "配置文件读不了，所以这次没保存",
   "config.editing_disabled": "这台服务器没有开放配置编辑",

@@ -1,11 +1,36 @@
 package control
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"reasonix/internal/sessioninbox"
 )
+
+// ErrSteerApplied is the identity of "too late": the running turn has already
+// read this guidance, so there is nothing left to take back. A caller has to
+// tell it from an ordinary rejected delete, because the answer to the person
+// is different - one is "removed", the other is "it is already on its way".
+var ErrSteerApplied = errors.New("that guidance has already reached the model")
+
+// DropQueuedSteer takes back guidance a running turn accepted but has not read
+// yet. The executor's queue is the only place that can tell that from "already
+// on its way", so its answer is what authorizes removing the durable half.
+func (c *Controller) DropQueuedSteer(id string) (bool, error) {
+	st, err := c.ensureInbox()
+	if err != nil {
+		return false, err
+	}
+	c.mu.Lock()
+	exec := c.executor
+	c.mu.Unlock()
+	if exec == nil || !exec.DropSteer(id) {
+		return false, nil
+	}
+	c.inbox.untrackActive(id)
+	return true, st.CancelAcceptedSteer(id)
+}
 
 func steerAlreadyAdmitted(state sessioninbox.InboxState) bool {
 	switch state {

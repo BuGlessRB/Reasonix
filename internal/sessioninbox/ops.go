@@ -7,6 +7,18 @@ import (
 
 // DeleteItem removes metadata first, then the blob (crash may leave orphan).
 func (s *Store) DeleteItem(id string) error {
+	return s.removeItemInState(id, isPendingState, DispositionDeleted)
+}
+
+// CancelAcceptedSteer removes guidance a running turn accepted and has not read
+// yet. The caller drops it from the executor's queue first: that drop is what
+// proves nothing was ever on its way to the model, and this is the durable half
+// of the same act.
+func (s *Store) CancelAcceptedSteer(id string) error {
+	return s.removeItemInState(id, func(st InboxState) bool { return st == StateSteerAccepted }, DispositionCancelled)
+}
+
+func (s *Store) removeItemInState(id string, allowed func(InboxState) bool, why Disposition) error {
 	if s == nil {
 		return ErrClosed
 	}
@@ -25,12 +37,12 @@ func (s *Store) DeleteItem(id string) error {
 	if !ok {
 		return ErrNotFound
 	}
-	if !isPendingState(meta.State) {
+	if !allowed(meta.State) {
 		return ErrInvalidState
 	}
 	next := s.man.clone()
 	keys := next.idempotencyKeysFor(id)
-	next.rememberReceipt(keys, id, Disposition("deleted"), time.Now().UTC())
+	next.rememberReceipt(keys, id, why, time.Now().UTC())
 	removed, _ := next.removeItem(id)
 	if err := s.commitManifestLocked(next); err != nil {
 		return err

@@ -49,6 +49,8 @@ const (
 	DispositionRejectedClosed   Disposition = "rejected_closed"
 	DispositionRejectedCapacity Disposition = "rejected_capacity"
 	DispositionIdempotentHit    Disposition = "idempotent_hit"
+	DispositionDeleted          Disposition = "deleted"
+	DispositionCancelled        Disposition = "cancelled"
 )
 
 // Sentinel errors for capacity and validation.

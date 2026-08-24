@@ -60,6 +60,33 @@ func (s *steerInbox) take() (steerEntry, bool) {
 	return e, true
 }
 
+// remove drops the entry for itemID before anything reads it, reporting
+// whether it was still queued. This lock is the only place that can tell "not
+// read yet" from "already on its way to the model" without racing take, which
+// is what makes a cancel safe to act on rather than a guess.
+func (s *steerInbox) remove(itemID string) bool {
+	if itemID == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, e := range s.queue {
+		if e.itemID != itemID {
+			continue
+		}
+		s.queue = append(s.queue[:i], s.queue[i+1:]...)
+		return true
+	}
+	return false
+}
+
+// DropSteer takes back guidance this turn accepted but has not read yet. It
+// reports false once the run loop has taken the entry, which is the moment the
+// text stops being the user's to withdraw.
+func (a *Agent) DropSteer(itemID string) bool {
+	return a.steer.remove(itemID)
+}
+
 // drained reports that the queue emptied on the last take.
 func (s *steerInbox) drained() bool {
 	s.mu.Lock()

@@ -3,6 +3,7 @@
 // code adds one here. i18n.test.ts is what stops one from being forgotten.
 
 export const EN_KERNEL: Record<string, string> = {
+  "这条已经送给模型了，收不回来了": "That line already reached the model - it cannot be taken back",
   // 配置文件本身坏了，以及每一个写设置的面板被它挡住时
   "配置文件读不了，所以这次没保存": "The config file does not parse, so nothing was saved",
   "这台服务器没有开放配置编辑": "This server does not allow editing its config",

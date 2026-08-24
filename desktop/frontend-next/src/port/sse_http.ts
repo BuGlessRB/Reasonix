@@ -56,6 +56,11 @@ export class SseHttp {
     return (await res.json()) as T;
   }
 
+  protected async del(path: string): Promise<void> {
+    const res = await fetch(this.base + path, { method: "DELETE", credentials: "same-origin" });
+    if (!res.ok) await SseHttp.fail(path, res);
+  }
+
   protected async get<T>(path: string): Promise<T> {
     const res = await fetch(this.base + path, { credentials: "same-origin" });
     if (!res.ok) throw new Error(`${path}: ${res.status}`);

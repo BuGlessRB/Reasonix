@@ -493,6 +493,15 @@
   .pend { margin-left: auto; flex: none; font: var(--w-reg) 10px var(--mono); color: var(--accent); padding: 1.5px 7px; border-radius: var(--r-pill); background: var(--accent-wash) }
   .pend[data-sent] { color: var(--ok); background: transparent; padding-inline: 0 }
   .call[data-pending] > .c { opacity: .7 }
+  /* 排队中的那条还没发生，是屏幕上唯一还能撤回的东西。按钮就长在「排队中」
+     旁边，常驻可见：只在 hover 时才露出来的撤回，等于没有。 */
+  .pcancel {
+    flex: none; padding: 1.5px 7px; border-radius: var(--r-pill);
+    border: 1px solid var(--hair); background: transparent; cursor: pointer;
+    font: var(--w-reg) 10px var(--mono); color: var(--muted);
+  }
+  .pcancel:hover { color: var(--text); border-color: var(--muted) }
+  .pcancel:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
   /* 栏宽在 .app 上换值，补间也就归它 —— .cols 只是把结果读进列宽。拖动期间
      必须断掉：一条 .34s 的补间会让栏追着指针跑，手感是黏的。 */

@@ -4,7 +4,9 @@ import type { Ask, Approval, Compaction, ExtensionSurface, Guardian, Receipt, To
 import type { Sample } from "../port/tokens";
 
 export type Item =
-  | { t: "user"; id: string; text: string; pending?: boolean }
+  // itemId names the durable queue entry while pending, which is what a
+  // cancel asks the kernel to drop. Absent once the turn has read it.
+  | { t: "user"; id: string; text: string; pending?: boolean; itemId?: string }
   | { t: "say"; id: string; text: string; reasoning?: string; done: boolean; thoughtMs?: number }
   | { t: "tool"; id: string; tool: Tool; running: boolean; children: Tool[] }
   | { t: "reads"; id: string; tools: Tool[] }

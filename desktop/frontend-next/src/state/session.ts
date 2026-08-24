@@ -249,6 +249,7 @@ export type SessionEvent =
   | { kind: "__error"; text: string }
   | { kind: "__user"; text: string; pending: boolean; id?: string }
   | { kind: "__unsent"; id: string }
+  | { kind: "__queued"; id: string; itemId: string }
   | { kind: "__decided"; id: string; verdict?: string; answers?: string[][] }
   | { kind: "__forgot"; id: string }
   | { kind: "__runtime_seen"; id: string };
@@ -265,6 +266,15 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       ...s,
       steerQueue: ev.pending ? [...s.steerQueue, ev.text] : s.steerQueue,
       items: [...s.items, { t: "user", id: ev.id ?? nextId(), text: ev.text, pending: ev.pending }],
+    };
+  }
+  // The kernel answers a queued line with the id it queued it under. The row
+  // is already on screen by then — this is what gives it a name to be taken
+  // back by, and losing that name is the same as losing the button.
+  if (ev.kind === "__queued") {
+    return {
+      ...s,
+      items: s.items.map((i) => (i.t === "user" && i.id === ev.id ? { ...i, itemId: ev.itemId } : i)),
     };
   }
   // A line the kernel never took is not part of what happened, so it leaves the

@@ -193,6 +193,34 @@ describe("a notice about the runtime rather than the conversation", () => {
   });
 });
 
+describe("a line that is still queued", () => {
+  const typed = (id: string, text: string): SessionEvent =>
+    ({ kind: "__user", text, pending: true, id }) as SessionEvent;
+  const rows = (st: SessionState) => st.items.filter((i): i is Extract<Item, { t: "user" }> => i.t === "user");
+
+  // The row is on screen before the kernel has answered. The receipt is what
+  // gives it a name to be taken back by, and without it the card has a button
+  // it cannot press.
+  it("remembers the queue id the kernel answered with", () => {
+    const st = run([typed("row-1", "密码我告诉你"), { kind: "__queued", id: "row-1", itemId: "inbox-9" } as SessionEvent]);
+    expect(rows(st)[0].itemId).toBe("inbox-9");
+    expect(rows(st)[0].pending).toBe(true);
+  });
+
+  it("takes the row away once the kernel drops it", () => {
+    const queued = run([typed("row-1", "x"), { kind: "__queued", id: "row-1", itemId: "inbox-9" } as SessionEvent]);
+    expect(rows(reduce(queued, { kind: "__unsent", id: "row-1" } as SessionEvent))).toEqual([]);
+  });
+
+  // Too late is not an error state on the row: the steer event that made it too
+  // late is the same one that stops it calling itself queued.
+  it("stops calling itself queued when the turn reads it", () => {
+    const queued = run([typed("row-1", "x"), { kind: "__queued", id: "row-1", itemId: "inbox-9" } as SessionEvent]);
+    const read = reduce(queued, { kind: "steer", text: "x" } as SessionEvent);
+    expect(rows(read)[0].pending).toBe(false);
+  });
+});
+
 describe("waiting for another session to finish writing", () => {
   const lease = (code: string, level: string, text: string): SessionEvent =>
     ({ kind: "notice", code, level, text }) as SessionEvent;
