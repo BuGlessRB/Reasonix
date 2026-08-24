@@ -36,13 +36,14 @@ const (
 	ruleRefusalPath   = "refusal-path"
 	ruleErrorText     = "error-text"
 	ruleClaudeDialect = "claude-dialect"
+	ruleSpecParity    = "spec-parity"
 )
 
 var allRules = []string{
 	ruleEssay, ruleBanner, ruleMarker, ruleDeadCode,
 	ruleNarrative, ruleFileSize, ruleLayering,
 	ruleFuncSize, ruleComplexity, ruleStructState, ruleRefusalPath, ruleErrorText,
-	ruleClaudeDialect,
+	ruleClaudeDialect, ruleSpecParity,
 }
 
 func main() {
@@ -164,6 +165,7 @@ func run(root string) ([]Finding, error) {
 		imports[rel] = src.importRefs()
 	}
 	findings = append(findings, checkLayering(imports)...)
+	findings = append(findings, checkSpecParity(root)...)
 	return append(findings, checkClaudeDialect(dialects, modelVars)...), nil
 }
 
