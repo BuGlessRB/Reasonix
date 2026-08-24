@@ -18,7 +18,11 @@ type fleetPlan struct {
 	// reachable[i] holds every index that transitively depends on i, so the
 	// preflight can tell ordered items from genuinely concurrent ones.
 	reachable []map[int]bool
-	failFast  bool
+	// fanoutSource[i] is the item whose submitted subjects i maps over, or -1.
+	// The mapped children are never vertices here: a node's width is dynamic,
+	// its shape is not, which is what keeps this plan the one preflight proved.
+	fanoutSource []int
+	failFast     bool
 }
 
 // newFleetPlan validates ids and edges before anything runs. An unknown id, a
@@ -27,11 +31,15 @@ type fleetPlan struct {
 func newFleetPlan(items []fleetTaskItem, failFast bool) (fleetPlan, error) {
 	n := len(items)
 	plan := fleetPlan{
-		ids:        make([]string, n),
-		deps:       make([][]int, n),
-		dependents: make([][]int, n),
-		reachable:  make([]map[int]bool, n),
-		failFast:   failFast,
+		ids:          make([]string, n),
+		deps:         make([][]int, n),
+		dependents:   make([][]int, n),
+		reachable:    make([]map[int]bool, n),
+		fanoutSource: make([]int, n),
+		failFast:     failFast,
+	}
+	for i := range plan.fanoutSource {
+		plan.fanoutSource[i] = -1
 	}
 	index := make(map[string]int, n)
 	for i, item := range items {
@@ -46,6 +54,18 @@ func newFleetPlan(items []fleetTaskItem, failFast bool) (fleetPlan, error) {
 		plan.ids[i] = id
 	}
 	for i, item := range items {
+		// One edge per pair: depends_on and for_each naming the same task would
+		// otherwise be counted twice, and the item would wait for a second
+		// result that never comes.
+		seen := make(map[int]bool, len(item.DependsOn)+1)
+		addEdge := func(target int) {
+			if seen[target] {
+				return
+			}
+			seen[target] = true
+			plan.deps[i] = append(plan.deps[i], target)
+			plan.dependents[target] = append(plan.dependents[target], i)
+		}
 		for _, raw := range item.DependsOn {
 			dep := strings.TrimSpace(raw)
 			target, ok := index[dep]
@@ -55,8 +75,21 @@ func newFleetPlan(items []fleetTaskItem, failFast bool) (fleetPlan, error) {
 			if target == i {
 				return fleetPlan{}, fmt.Errorf("task %d (%q): depends_on itself", i+1, plan.ids[i])
 			}
-			plan.deps[i] = append(plan.deps[i], target)
-			plan.dependents[target] = append(plan.dependents[target], i)
+			addEdge(target)
+		}
+		// for_each orders like any other edge: a mapped node cannot start before
+		// the node naming its subjects has finished. Recording it here is what
+		// keeps cycle detection and the skip rules complete.
+		if src := strings.TrimSpace(item.ForEach); src != "" {
+			target, ok := index[src]
+			if !ok {
+				return fleetPlan{}, fmt.Errorf("task %d (%q): for_each %q matches no task id", i+1, plan.ids[i], src)
+			}
+			if target == i {
+				return fleetPlan{}, fmt.Errorf("task %d (%q): for_each itself", i+1, plan.ids[i])
+			}
+			plan.fanoutSource[i] = target
+			addEdge(target)
 		}
 	}
 	if err := plan.rejectCycles(); err != nil {

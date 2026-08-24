@@ -59,6 +59,22 @@ func validateFleetItemShape(index int, item fleetTaskItem) error {
 	return nil
 }
 
+// validateFanoutItemShape settles what a mapped item may say about itself.
+// max_items without for_each is the case worth refusing loudest: it reads as a
+// ceiling and would bound nothing at all.
+func validateFanoutItemShape(index int, item fleetTaskItem) error {
+	forEach := strings.TrimSpace(item.ForEach)
+	switch {
+	case forEach != "" && strings.TrimSpace(item.AdoptRef) != "":
+		return fmt.Errorf("task %d: for_each and adopt_ref are mutually exclusive; an adopted item runs nothing to map", index+1)
+	case forEach == "" && item.MaxItems != 0:
+		return fmt.Errorf("task %d: max_items bounds a for_each task's width and bounds nothing without one", index+1)
+	case forEach != "" && !item.ReadOnly:
+		return fmt.Errorf("task %d: a for_each task must set read_only; its width is not known at preflight, so its writers could not be checked against each other", index+1)
+	}
+	return nil
+}
+
 // resolveAdoptions verifies every adopt_ref before anything starts, matching the
 // rest of the preflight: a fleet that discovers halfway through that it cannot
 // finish has already spent tokens. ReadFinalAnswer is the single gate, so what

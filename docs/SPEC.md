@@ -788,7 +788,7 @@ context, which is what keeps delegation cheap and the child prefix cacheable.
 ### 3.14 Fleet is a small dependency graph
 
 A fleet item may declare `id` and `depends_on`. That is the whole graph
-vocabulary: no conditions, no expressions, no dynamic fan-out. It is enough for
+vocabulary: no conditions, no expressions, no computed edges. It is enough for
 
 ```
 research ──▶ implement backend ──┐
@@ -843,6 +843,28 @@ children: reuse the caller cannot see is reuse it cannot correct. With
 `list_subagents` this is the recovery path for a fleet a restart interrupted —
 enumerate the children, re-issue the same graph with the finished nodes adopted,
 and pay only for what is left.
+
+A node's width may be dynamic; the graph's shape may not. `for_each` names the
+item whose submitted subjects this item maps over: its prompt becomes a template
+run once per subject, and it reports one bounded aggregate its dependents open
+with over the ordinary edge. The mapped children are never vertices — the node
+stays one — so the reachability, write claims, and skip rules preflight proved
+are the ones that ran.
+
+Four things are fixed before anything starts, and that is what keeps `for_each`
+from being the first keyword of a workflow language: the template, the width
+ceiling (`max_items`, defaulted and hard-capped by the host), the read-only
+grant — which removes the write-claim analysis the host could not have done for
+an unknown number of writers — and the source. The source supplies only *which*
+subjects, through `submit_items` rather than prose, because reading a list out
+of an answer is the host guessing at a judgement it cannot see in the structure.
+The caller owns the topology, the worker owns the data: the same split the
+dependency edge makes.
+
+A source that finishes without submitting fails the mapped node rather than
+quietly mapping nothing, while an empty submission is a real answer that
+completes it. A source may not be adopted, having never run to submit anything,
+nor itself mapped, since it answers with an aggregate rather than a list.
 
 ### 3.15 One child-construction primitive
 

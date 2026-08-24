@@ -37,7 +37,7 @@ func NewFleetTool(taskTool *TaskTool) *FleetTool {
 func (*FleetTool) Name() string { return "fleet" }
 
 func (*FleetTool) Description() string {
-	return "Dispatch 2–64 sub-agent tasks as a small dependency graph and return bounded previews plus stable Subagent references for full-result retrieval from completed persisted children with read_subagent_result. Each item may select a profile, model, effort, tools, write_paths, or read_only, and may declare depends_on to run after other items and start from their final answers (research → implement → review). Tasks with no dependency between them run in parallel and must declare non-overlapping write_paths; ordered tasks may share paths. Omitted write_paths claim the whole workspace, so two or more concurrent writers without paths fail preflight before any task starts. A failed task's dependents are skipped; independent branches keep going unless fail_fast is set. An item may pass adopt_ref instead of a prompt to stand in for running it with an already-completed child's answer, which is how a fleet a restart interrupted is re-issued without paying twice for the items that finished. Background mode returns a fleet job id collectable with wait."
+	return "Dispatch 2–64 sub-agent tasks as a small dependency graph and return bounded previews plus stable Subagent references for full-result retrieval from completed persisted children with read_subagent_result. Each item may select a profile, model, effort, tools, write_paths, or read_only, and may declare depends_on to run after other items and start from their final answers (research → implement → review). Tasks with no dependency between them run in parallel and must declare non-overlapping write_paths; ordered tasks may share paths. Omitted write_paths claim the whole workspace, so two or more concurrent writers without paths fail preflight before any task starts. A failed task's dependents are skipped; independent branches keep going unless fail_fast is set. An item may pass adopt_ref instead of a prompt to stand in for running it with an already-completed child's answer, which is how a fleet a restart interrupted is re-issued without paying twice for the items that finished. A read_only item may pass for_each to map its prompt over the subjects another item submits, running one child per subject and reporting one bounded aggregate, so a width nobody could name at call time still runs under one node. Background mode returns a fleet job id collectable with wait."
 }
 
 func (*FleetTool) Schema() json.RawMessage {
@@ -54,6 +54,8 @@ func (*FleetTool) Schema() json.RawMessage {
       "properties":{
         "prompt":{"type":"string","description":"Task prompt for the sub-agent. Required unless adopt_ref stands in for running this item."},
         "adopt_ref":{"type":"string","description":"A Subagent reference whose already-completed answer stands in for running this item, from list_subagents or an earlier aggregate. The item runs nothing: its answer becomes the dependency payload its dependents open with, exactly as if it had just produced it. Use it to re-issue a fleet a restart interrupted without paying again for the items that finished. Rejected unless the reference is completed and inside this conversation's lineage and workspace. Mutually exclusive with prompt and with every execution field (profile, model, effort, tools, max_steps, write_paths, read_only), since nothing executes. Whether that answer is still valid after what changed since is yours to judge — the host only proves the reference is yours and complete."},
+        "for_each":{"type":"string","description":"Id of a task whose submitted subjects this task maps over. This task's prompt is a template run once per subject, with the subject appended to it, and the task reports one bounded aggregate of those runs. The named source is given submit_items and must call it; its prose is never parsed for a list. A mapped task must be read_only and may not name a source that is itself mapped or adopted. Its width is bounded by max_items and by a host ceiling, and the graph is unchanged: this stays one task, so what preflight proved about ordering and write claims still holds."},
+        "max_items":{"type":"integer","description":"Ceiling on how many subjects a for_each task maps over. Defaults to 8 and is capped at 32; a source submitting more fails the task rather than spending past what the call asked for.","minimum":1},
         "id":{"type":"string","description":"Optional stable id for this task, referenced by other tasks' depends_on. Defaults to the 1-based position."},
         "depends_on":{"type":"array","items":{"type":"string"},"description":"Ids of tasks that must complete before this one starts. This task begins with each dependency's final answer in its context, bounded and split evenly across them, so it need not re-derive their work. Unknown ids, self-edges, and cycles fail preflight. A task whose dependency fails or is skipped is skipped too. Ordered tasks may share write_paths; only tasks that can run at the same time need disjoint claims."},
         "description":{"type":"string","description":"Optional short label shown in the job list."},
@@ -79,6 +81,8 @@ func (*FleetTool) ReadOnly() bool { return false }
 type fleetTaskItem struct {
 	Prompt      string   `json:"prompt"`
 	AdoptRef    string   `json:"adopt_ref"`
+	ForEach     string   `json:"for_each"`
+	MaxItems    int      `json:"max_items"`
 	ID          string   `json:"id"`
 	DependsOn   []string `json:"depends_on"`
 	Description string   `json:"description"`
@@ -183,30 +187,15 @@ func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result s
 		return "", fmt.Errorf("fleet requires between %d and %d tasks (got %d)", fleetMinTasks, fleetMaxTasks, n)
 	}
 
-	for i, item := range params.Tasks {
-		if err := validateFleetItemShape(i, item); err != nil {
-			return "", err
-		}
-	}
-	plan, err := newFleetPlan(params.Tasks, params.FailFast)
-	if err != nil {
-		return "", fmt.Errorf("fleet preflight: %w", err)
-	}
-	adopted, err := f.resolveAdoptions(ctx, params.Tasks)
-	if err != nil {
-		return "", fmt.Errorf("fleet preflight: %w", err)
-	}
-	specs, claims, err := f.buildItemSpecs(ctx, params.Tasks, adopted)
+	call, err := f.preflight(ctx, params.Tasks, params.FailFast)
 	if err != nil {
 		return "", err
 	}
-	if err := plan.validateConcurrentWriteClaims(claims); err != nil {
-		return "", fmt.Errorf("fleet preflight: %w", err)
-	}
+	plan, specs, dispatch := call.plan, call.specs, call.dispatch
 
 	if params.RunInBackground {
 		for i := range specs {
-			_, isAdopted := adopted[i]
+			_, isAdopted := dispatch.adopted[i]
 			specs[i].Sched.BackgroundWriter = !isAdopted && !specs[i].Grant.ReadOnly
 		}
 		jm, ok := jobs.FromContext(ctx)
@@ -249,7 +238,7 @@ func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result s
 			// The job shares the Execute-level merger so the group lifecycle
 			// events and the child previews ride the same pacing budget.
 			jobCtx = withSubagentProgressMerger(jobCtx, merger)
-			return f.runFleet(jobCtx, groupSink, specs, plan, adopted, parentID)
+			return f.runFleet(jobCtx, groupSink, specs, plan, dispatch, parentID)
 		})
 		// runFleet (inside the job) owns the terminal and merger close from
 		// here on. Foreground runFleet hands off only the terminal; Execute
@@ -260,7 +249,53 @@ func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result s
 	}
 
 	lifecycleHandoff = true
-	return f.runFleet(ctx, groupSink, specs, plan, adopted, groupParentID)
+	return f.runFleet(ctx, groupSink, specs, plan, dispatch, groupParentID)
+}
+
+// fleetCall is one proven call: the graph, the spec per runnable item, and what
+// the driver needs beyond them. Nothing here has run; everything here holds.
+type fleetCall struct {
+	plan     fleetPlan
+	specs    []ProfileExecSpec
+	dispatch fleetDispatch
+}
+
+// preflight proves the whole call before any of it runs — every item's shape,
+// the graph, the adoptions, the fan-out sources, and the write claims — because
+// a fleet that starts and then finds it cannot finish has already spent tokens.
+func (f *FleetTool) preflight(ctx context.Context, tasks []fleetTaskItem, failFast bool) (fleetCall, error) {
+	fail := func(err error) (fleetCall, error) { return fleetCall{}, fmt.Errorf("fleet preflight: %w", err) }
+	for i, item := range tasks {
+		if err := validateFleetItemShape(i, item); err != nil {
+			return fleetCall{}, err
+		}
+		if err := validateFanoutItemShape(i, item); err != nil {
+			return fleetCall{}, err
+		}
+	}
+	plan, err := newFleetPlan(tasks, failFast)
+	if err != nil {
+		return fail(err)
+	}
+	adopted, err := f.resolveAdoptions(ctx, tasks)
+	if err != nil {
+		return fail(err)
+	}
+	if err := validateFanoutSources(tasks, plan, adopted); err != nil {
+		return fail(err)
+	}
+	specs, claims, err := f.buildItemSpecs(ctx, tasks, adopted)
+	if err != nil {
+		return fleetCall{}, err
+	}
+	if err := plan.validateConcurrentWriteClaims(claims); err != nil {
+		return fail(err)
+	}
+	dispatch := fleetDispatch{adopted: adopted, widths: make([]int, len(tasks))}
+	for i, item := range tasks {
+		dispatch.widths[i] = resolvedFanoutWidth(item.MaxItems)
+	}
+	return fleetCall{plan: plan, specs: specs, dispatch: dispatch}, nil
 }
 
 // buildItemSpecs compiles one ProfileExecSpec per runnable item. An adopted item
@@ -302,7 +337,7 @@ func (f *FleetTool) buildItemSpecs(ctx context.Context, items []fleetTaskItem, a
 	return specs, claims, nil
 }
 
-func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []ProfileExecSpec, plan fleetPlan, adopted map[int]adoptedItem, groupParentID string) (result string, err error) {
+func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []ProfileExecSpec, plan fleetPlan, dispatch fleetDispatch, groupParentID string) (result string, err error) {
 	if sink == nil {
 		sink = event.Discard
 	}
@@ -343,17 +378,34 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 		results[i] = fleetItemResult{index: i, status: fleetItemPending, profile: specs[i].Worker.Profile}
 		// An adopted node enters already resolved, so the driver never launches
 		// it and its dependents are ready from the first pass.
-		if a, ok := adopted[i]; ok {
+		if a, ok := dispatch.adopted[i]; ok {
 			results[i] = fleetItemResult{index: i, status: fleetItemAdopted, output: a.answer, ref: a.ref}
 		}
 	}
 
 	var wg sync.WaitGroup
 	doneCh := make(chan fleetItemResult, n)
+	// One sink per node another node maps over. It is created before anything
+	// starts so the source's own run can write into it.
+	sinks := make([]*fanoutSink, n)
+	for i := range plan.fanoutSource {
+		if src := plan.fanoutSource[i]; src >= 0 && sinks[src] == nil {
+			sinks[src] = &fanoutSink{}
+		}
+	}
 
 	startOne := func(idx int) {
 		spec := specs[idx]
+		source := plan.fanoutSource[idx]
 		spec.Context.Upstream = f.upstreamFor(plan, idx, results)
+		if source >= 0 {
+			// The source reaches a mapped child as its subject, not as prose;
+			// delivering both would say the same thing twice.
+			spec.Context.Upstream = withoutUpstreamFrom(spec.Context.Upstream, plan.ids[source])
+		}
+		if sinks[idx] != nil {
+			spec.Task.Objective += "\n\n" + fanoutSourceContract
+		}
 		label := spec.Task.Description
 		subID := fmt.Sprintf("%s/fleet-%d", parentID, idx+1)
 		dispatchArgs, _ := json.Marshal(map[string]any{
@@ -373,21 +425,32 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 			// Each fleet item runs as its own task-shaped execution so
 			// transcripts, evidence, and scheduler claims stay independent.
 			itemCtx := withCallContext(ctx, subID, subSinkFor(subID, sink), nil, false)
-			out, err := f.taskTool.RunProfileSpec(itemCtx, spec)
-			answer, ref := splitSubagentRunResult(out)
-			res := fleetItemResult{index: idx, profile: spec.Worker.Profile, output: answer, ref: ref, err: err}
+			itemCtx = withFanoutSink(itemCtx, sinks[idx])
+			var res fleetItemResult
+			var out string
+			var err error
+			if source >= 0 {
+				res = f.runFanout(itemCtx, sink, parentID, idx, spec, dispatch.widths[idx], sinks[source])
+				out, err = res.output, res.err
+			} else {
+				out, err = f.taskTool.RunProfileSpec(itemCtx, spec)
+				answer, ref := splitSubagentRunResult(out)
+				res = fleetItemResult{index: idx, profile: spec.Worker.Profile, output: answer, ref: ref, err: err}
+				switch {
+				case err == nil:
+					res.status = fleetItemCompleted
+				case errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
+					res.status = fleetItemCancelled
+				default:
+					res.status = fleetItemFailed
+				}
+			}
 			if err == nil {
-				res.status = fleetItemCompleted
 				sink.Emit(event.Event{
 					Kind: event.ToolResult,
 					Tool: event.Tool{ID: subID, ParentID: parentID, Name: "task", Output: out},
 				})
 			} else {
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					res.status = fleetItemCancelled
-				} else {
-					res.status = fleetItemFailed
-				}
 				sink.Emit(event.Event{
 					Kind: event.ToolResult,
 					Tool: event.Tool{ID: subID, ParentID: parentID, Name: "task", Err: err.Error()},

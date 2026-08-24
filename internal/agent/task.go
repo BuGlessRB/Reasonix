@@ -1510,6 +1510,7 @@ func (t *TaskTool) runSubSession(ctx context.Context, prompt string, subReg *too
 	// Capture the pristine task before host framing is prepended: delivery
 	// intent classification must judge the task, not the wrapper.
 	opts.ClassifierTaskText = prompt
+	attachFanoutTool(ctx, subReg)
 	prompt = subagentImageNote(ctx) + t.withWorkspaceContext(upstreamNote(ctx)+prompt) + "\n\n" + completeSubtaskContract
 	// The child provider owns the final vision decision. Text-only providers
 	// retain the attachment metadata but omit image parts during serialization.
@@ -1523,6 +1524,7 @@ func (t *TaskTool) runReadOnlySubSession(ctx context.Context, prompt string, sub
 	// Capture the pristine task before host framing is prepended: delivery
 	// intent classification must judge the task, not the wrapper.
 	opts.ClassifierTaskText = prompt
+	attachFanoutTool(ctx, subReg)
 	prompt = subagentImageNote(ctx) + t.withWorkspaceContext(upstreamNote(ctx)+prompt)
 	ctx = WithUserImages(ctx, SubagentImageCandidates(ctx))
 	return RunReadOnlySubAgentWithSession(ctx, prov, subReg, sess, prompt, opts, sink)
