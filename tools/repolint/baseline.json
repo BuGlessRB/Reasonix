@@ -1,6 +1,7 @@
 {
   "limits": {
     "banner": 0,
+    "claude-dialect": 1,
     "commented-code": 0,
     "complexity": 1572,
     "error-text": 12,
@@ -648,6 +649,7 @@
       "essay": 3
     },
     "internal/config/provider_presets.go": {
+      "claude-dialect": 1,
       "file-size": 267
     },
     "internal/config/render.go": {

@@ -23,24 +23,26 @@ type Finding struct {
 }
 
 const (
-	ruleEssay       = "essay"
-	ruleBanner      = "banner"
-	ruleMarker      = "marker"
-	ruleDeadCode    = "commented-code"
-	ruleNarrative   = "narrative"
-	ruleFileSize    = "file-size"
-	ruleLayering    = "layering"
-	ruleFuncSize    = "function-size"
-	ruleComplexity  = "complexity"
-	ruleStructState = "struct-state"
-	ruleRefusalPath = "refusal-path"
-	ruleErrorText   = "error-text"
+	ruleEssay         = "essay"
+	ruleBanner        = "banner"
+	ruleMarker        = "marker"
+	ruleDeadCode      = "commented-code"
+	ruleNarrative     = "narrative"
+	ruleFileSize      = "file-size"
+	ruleLayering      = "layering"
+	ruleFuncSize      = "function-size"
+	ruleComplexity    = "complexity"
+	ruleStructState   = "struct-state"
+	ruleRefusalPath   = "refusal-path"
+	ruleErrorText     = "error-text"
+	ruleClaudeDialect = "claude-dialect"
 )
 
 var allRules = []string{
 	ruleEssay, ruleBanner, ruleMarker, ruleDeadCode,
 	ruleNarrative, ruleFileSize, ruleLayering,
 	ruleFuncSize, ruleComplexity, ruleStructState, ruleRefusalPath, ruleErrorText,
+	ruleClaudeDialect,
 }
 
 func main() {
@@ -137,6 +139,8 @@ func run(root string) ([]Finding, error) {
 	}
 	var findings []Finding
 	imports := map[string][]importRef{}
+	var dialects []providerDialect
+	modelVars := map[string][]string{}
 	for _, rel := range paths {
 		src, err := parseSource(root, rel)
 		if err != nil {
@@ -154,9 +158,13 @@ func run(root string) ([]Finding, error) {
 		findings = append(findings, checkStructState(src)...)
 		findings = append(findings, checkRefusalPath(src)...)
 		findings = append(findings, checkErrorText(src)...)
+		entries, vars := dialectRefs(src)
+		dialects = append(dialects, entries...)
+		maps.Copy(modelVars, vars)
 		imports[rel] = src.importRefs()
 	}
-	return append(findings, checkLayering(imports)...), nil
+	findings = append(findings, checkLayering(imports)...)
+	return append(findings, checkClaudeDialect(dialects, modelVars)...), nil
 }
 
 func report(findings []Finding) {
