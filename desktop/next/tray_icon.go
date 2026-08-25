@@ -1,30 +1,49 @@
-// tray_icon.go — the status icon's three faces, drawn rather than shipped.
+// tray_icon.go — the status icon: the composer's R, in one of three colours.
 package main
 
 import (
 	"image"
 	"image/color"
-	"image/draw"
+	"math"
 	"sync"
 
 	"reasonix/internal/traystate"
 )
 
-// The palette the window itself uses (styles/tokens.css). A status icon that
-// invented its own gold would be the one place the product is a different
-// colour, and the mood has to survive a 16-pixel render: idle is the same mark
-// dimmed, and attention adds a badge, because a hue change alone is not
-// something everyone can see.
-var (
-	markIdle       = color.NRGBA{R: 0x6B, G: 0x5A, B: 0x38, A: 0xFF}
-	markActive     = color.NRGBA{R: 0xDD, G: 0xA1, B: 0x44, A: 0xFF}
-	badgeAttention = color.NRGBA{R: 0xE4, G: 0x67, B: 0x5D, A: 0xFF}
-	transparent    = color.NRGBA{}
-)
+// One hue per mood and nothing else: the window's palette already gives each of
+// the three a single meaning — accent is "needs you", net is "running on its
+// own", ghost is neutral. The lightness belongs to neither theme, because a
+// notification area is a background this process cannot ask about: these clear
+// 3:1 against both white and near-black.
+var moodInk = map[traystate.Mood]color.NRGBA{
+	traystate.MoodIdle:      {R: 0x82, G: 0x7C, B: 0x74, A: 0xFF},
+	traystate.MoodWorking:   {R: 0x50, G: 0x79, B: 0xD3, A: 0xFF},
+	traystate.MoodAttention: {R: 0xAD, G: 0x72, B: 0x27, A: 0xFF},
+}
 
 // iconSize is drawn well above the 16px the trays ask for: every platform
-// downscales, and none of them upscale kindly.
-const iconSize = 64
+// downscales, and none of them upscale kindly. markMargin is what stays clear
+// on the tight side, since a menu bar scales the image to its own height.
+const (
+	iconSize   = 64
+	markMargin = 6
+)
+
+// The mark is the composer's, kept in the 16-unit space RMark.tsx draws it in so
+// the two can be read side by side rather than compared by eye.
+const markStroke = 1.7
+
+var markStrokes = [...][4]float64{
+	{4.7, 2.9, 4.7, 13.1}, // stem
+	{4.7, 2.9, 8.9, 2.9},  // the bowl's top
+	{8.9, 8.7, 4.7, 8.7},  // and its bottom
+	{9, 8.7, 12.3, 13.1},  // leg
+}
+
+// markBowl is the SVG's `a 2.9 2.9 0 0 1 0 5.8` resolved: the endpoints are one
+// diameter apart, so the arc is the half circle between them, and sweep 1 puts
+// that half to the right of the stem.
+var markBowl = struct{ cx, cy, r float64 }{8.9, 5.8, 2.9}
 
 var (
 	iconOnce  sync.Once
@@ -42,57 +61,82 @@ func moodIcon(mood traystate.Mood) []byte {
 	return iconBytes[mood]
 }
 
-// drawMark paints the mark: a rounded square, dim when nothing is happening,
-// with a corner badge when a turn is waiting on the person who cannot see the
-// window it is waiting in.
+// drawMark paints the R at one mood's colour.
 func drawMark(mood traystate.Mood) image.Image {
 	img := image.NewNRGBA(image.Rect(0, 0, iconSize, iconSize))
-	fill := markActive
-	if mood == traystate.MoodIdle {
-		fill = markIdle
-	}
-	roundedSquare(img, image.Rect(6, 6, iconSize-6, iconSize-6), iconSize/5, fill)
-	// The notch and the badge's ring are cut out, not painted over. Filling
-	// them with the window's own dark page colour assumed a dark taskbar, and
-	// on a light one the mark read as a brown blob with a black slit in it.
-	roundedSquare(img, image.Rect(iconSize/2-4, 18, iconSize/2+4, iconSize-18), 4, transparent)
-	if mood == traystate.MoodAttention {
-		disc(img, image.Pt(iconSize-16, 16), 13, transparent)
-		disc(img, image.Pt(iconSize-16, 16), 10, badgeAttention)
+	ink := moodInk[mood]
+	scale, offX, offY := markFit()
+	half := markStroke / 2 * scale
+	for y := range iconSize {
+		for x := range iconSize {
+			away := markDistance((float64(x)+0.5-offX)/scale, (float64(y)+0.5-offY)/scale) * scale
+			// One pixel of falloff across the edge is all the antialiasing a
+			// shape of four strokes and an arc needs.
+			cover := math.Max(0, math.Min(1, half-away+0.5))
+			if cover == 0 {
+				continue
+			}
+			lit := ink
+			lit.A = uint8(cover * 255)
+			img.SetNRGBA(x, y, lit)
+		}
 	}
 	return img
 }
 
-func roundedSquare(dst *image.NRGBA, box image.Rectangle, radius int, fill color.NRGBA) {
-	draw.Draw(dst, image.Rect(box.Min.X+radius, box.Min.Y, box.Max.X-radius, box.Max.Y), &image.Uniform{fill}, image.Point{}, draw.Src)
-	draw.Draw(dst, image.Rect(box.Min.X, box.Min.Y+radius, box.Max.X, box.Max.Y-radius), &image.Uniform{fill}, image.Point{}, draw.Src)
-	for _, at := range []image.Point{
-		{X: box.Min.X + radius, Y: box.Min.Y + radius},
-		{X: box.Max.X - radius, Y: box.Min.Y + radius},
-		{X: box.Min.X + radius, Y: box.Max.Y - radius},
-		{X: box.Max.X - radius, Y: box.Max.Y - radius},
-	} {
-		disc(dst, at, radius, fill)
-	}
+// markFit maps glyph units onto icon pixels: the ink centred, scaled until the
+// tight side reaches the margin, aspect kept.
+func markFit() (scale, offX, offY float64) {
+	minX, minY, maxX, maxY := markInk()
+	w, h := maxX-minX, maxY-minY
+	scale = math.Min((iconSize-2*markMargin)/w, (iconSize-2*markMargin)/h)
+	return scale, (iconSize-w*scale)/2 - minX*scale, (iconSize-h*scale)/2 - minY*scale
 }
 
-// disc fills a circle with one row of alpha at the edge, which is all the
-// antialiasing a mark this simple needs.
-func disc(dst *image.NRGBA, at image.Point, radius int, fill color.NRGBA) {
-	for y := at.Y - radius; y <= at.Y+radius; y++ {
-		for x := at.X - radius; x <= at.X+radius; x++ {
-			dx, dy := float64(x-at.X), float64(y-at.Y)
-			d := dx*dx + dy*dy
-			switch r := float64(radius); {
-			case d <= (r-1)*(r-1):
-				dst.SetNRGBA(x, y, fill)
-			case d <= r*r:
-				edge := fill
-				if edge.A > 0 {
-					edge.A = 0x9A
-				}
-				dst.SetNRGBA(x, y, edge)
-			}
-		}
+// markInk is the box the painted glyph occupies — the skeleton grown by half a
+// stroke, which is where the round caps end.
+func markInk() (minX, minY, maxX, maxY float64) {
+	half := markStroke / 2
+	minX, minY = math.Inf(1), math.Inf(1)
+	maxX, maxY = math.Inf(-1), math.Inf(-1)
+	grow := func(x, y float64) {
+		minX, minY = math.Min(minX, x-half), math.Min(minY, y-half)
+		maxX, maxY = math.Max(maxX, x+half), math.Max(maxY, y+half)
 	}
+	for _, s := range markStrokes {
+		grow(s[0], s[1])
+		grow(s[2], s[3])
+	}
+	grow(markBowl.cx+markBowl.r, markBowl.cy)
+	return minX, minY, maxX, maxY
+}
+
+// markDistance measures a point in glyph units against the skeleton. Reading a
+// stroke as a capsule is what gives the round caps and round joins the SVG asks
+// for without drawing either.
+func markDistance(x, y float64) float64 {
+	best := bowlDistance(x, y)
+	for _, s := range markStrokes {
+		best = math.Min(best, segmentDistance(x, y, s[0], s[1], s[2], s[3]))
+	}
+	return best
+}
+
+func segmentDistance(x, y, ax, ay, bx, by float64) float64 {
+	dx, dy := bx-ax, by-ay
+	t := 0.0
+	if span := dx*dx + dy*dy; span > 0 {
+		t = math.Max(0, math.Min(1, ((x-ax)*dx+(y-ay)*dy)/span))
+	}
+	return math.Hypot(x-(ax+t*dx), y-(ay+t*dy))
+}
+
+// bowlDistance answers for the half circle only where that half is. Left of the
+// centre the nearest ink is one of its two ends, and the strokes that meet the
+// arc there already own those.
+func bowlDistance(x, y float64) float64 {
+	if x < markBowl.cx {
+		return math.Inf(1)
+	}
+	return math.Abs(math.Hypot(x-markBowl.cx, y-markBowl.cy) - markBowl.r)
 }
