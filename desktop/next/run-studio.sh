@@ -83,6 +83,15 @@ fi
 codesign --verify --deep --strict "$app" >/dev/null 2>&1 ||
   echo "warning: the bundle does not verify; macOS will treat it as unidentified" >&2
 
-pkill -f "$app/Contents/MacOS/ReasonixStudio" 2>/dev/null || true
+# The window process does not act on SIGTERM: pkill matched it and left it
+# running, so every rebuild opened a second copy on top of the one before, and
+# they accumulated for as long as the machine stayed up. Ask first, then insist.
+pat="$app/Contents/MacOS/ReasonixStudio"
+pkill -f "$pat" 2>/dev/null || true
+for _ in 1 2 3 4; do
+  pgrep -f "$pat" >/dev/null 2>&1 || break
+  sleep 0.25
+done
+pkill -9 -f "$pat" 2>/dev/null || true
 open "$app"
 echo "==> $app"
