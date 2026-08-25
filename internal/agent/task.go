@@ -1723,7 +1723,7 @@ func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *to
 	// Nested reasoning stays isolated; the parent consumes only final Content.
 	// Require it so a reasoning-only stop cannot fall back to older tool text.
 	opts.RequireVisibleFinal = true
-	sub := New(prov, reg, sess, opts, sink)
+	sub := newDelegatedAgent(ctx, prov, reg, sess, opts, sink)
 	sub.SetPlanMode(planWorkflow)
 	if err := sub.Run(ctx, prompt); err != nil {
 		// Still merge any partial child evidence so parent gates see real writes.
