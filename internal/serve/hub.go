@@ -76,6 +76,37 @@ type Hub struct {
 	// wallets is shared by every pane: opening a conversation builds a runtime,
 	// and a per-runtime cache would be cold on exactly the read a switch waits on.
 	wallets *billing.Store
+	// stance is the Ask/Auto/YOLO posture every pane this hub opens starts in.
+	stance *approvalStance
+}
+
+// approvalStance is the Ask/Auto/YOLO posture the frontend is in, held by the
+// hub rather than read off whichever pane happens to be first. It is one
+// setting for the window: a pane opened later starts where the user left the
+// others, and closing the pane they set it on does not take it with them.
+type approvalStance struct {
+	mu   sync.RWMutex
+	mode string
+}
+
+// set records a posture. A nil stance is a Server outside any hub, which has
+// only itself to answer for.
+func (a *approvalStance) set(mode string) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.mode = mode
+}
+
+func (a *approvalStance) get() string {
+	if a == nil {
+		return ""
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.mode
 }
 
 // Runtime is one open session: the server driving it, the stream it emits, and
@@ -146,6 +177,7 @@ func NewHub(opts HubOptions) *Hub {
 		opts:     opts,
 		auth:     newAuthGate(opts.Serve),
 		wallets:  &billing.Store{},
+		stance:   &approvalStance{},
 	}
 }
 
@@ -164,6 +196,10 @@ func (h *Hub) Adopt(srv *Server, bc *Broadcaster) (*Runtime, error) {
 	}
 	srv.auth = h.auth
 	srv.surface = h.surface()
+	srv.stance = h.stance
+	// The posture the host launched in, which is the one every later pane
+	// inherits until someone changes it on the composer.
+	h.stance.set(srv.Controller().ToolApprovalMode())
 	if h.opts.Grant != nil {
 		h.opts.Grant(srv)
 	}
@@ -243,10 +279,11 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 	if h.opts.Grant != nil {
 		h.opts.Grant(srv)
 	}
+	srv.stance = h.stance
 	built.Controller.EnableInteractiveApproval()
 	// Ask/Auto/YOLO is a posture the user set on the window, not a per-session
 	// default, so a pane opened later starts where the others already are.
-	if mode := h.approvalPosture(); mode != "" {
+	if mode := h.stance.get(); mode != "" {
 		built.Controller.SetToolApprovalMode(mode)
 	}
 	// Own the session file for as long as this pane lives, so a second pane —
@@ -529,20 +566,6 @@ func (h *Hub) resolveRoot(req OpenRequest) (string, error) {
 		}
 	}
 	return "", errors.New("no workspace to open in — add a folder first")
-}
-
-// approvalPosture reports the stance the window's first pane is running under.
-func (h *Hub) approvalPosture() string {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	if len(h.order) == 0 {
-		return ""
-	}
-	rt := h.runtimes[h.order[0]]
-	if rt == nil {
-		return ""
-	}
-	return rt.Server.Controller().ToolApprovalMode()
 }
 
 func (h *Hub) nextID() string {

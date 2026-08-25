@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/agentpreset"
 	"reasonix/internal/config"
+	"reasonix/internal/control"
 	"reasonix/internal/provider"
 )
 
@@ -71,11 +72,50 @@ func persistDefaultModel(ref string, catalog []provider.Descriptor) {
 	}
 }
 
-// applyApprovalMode switches the live posture and records it. The two belong
-// together: a switch that only lands at runtime reads, one launch later, as a
-// choice that was never made.
+// autoApproveTools toggles YOLO/full-access tool auto-approval.
+func (s *Server) autoApproveTools(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		On bool `json:"on"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		badBody(w)
+		return
+	}
+	s.ctl().SetAutoApproveTools(body.On)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// toolApprovalMode selects ask, auto, or yolo approval behavior for interactive
+// frontends. Plan remains a separate workflow governed by the selected mode.
+func (s *Server) toolApprovalMode(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Mode string `json:"mode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		badBody(w)
+		return
+	}
+	mode, ok := control.ParseToolApprovalMode(body.Mode)
+	if !ok {
+		badValue(w, "mode", "ask", "auto", "dontAsk", "yolo")
+		return
+	}
+	s.applyApprovalMode(mode)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// bypass is the legacy HTTP endpoint for YOLO/full-access tool auto-approval.
+func (s *Server) bypass(w http.ResponseWriter, r *http.Request) {
+	s.autoApproveTools(w, r)
+}
+
+// applyApprovalMode switches the live posture and records it in both places it
+// has to outlive this pane: the hub, so the next conversation opens in it, and
+// the config, so the next launch does. A switch that only lands on the running
+// controller reads, either way round, as a choice that was never made.
 func (s *Server) applyApprovalMode(mode string) {
 	s.ctl().SetToolApprovalMode(mode)
+	s.stance.set(mode)
 	persistDesktopApprovalMode(mode)
 }
 

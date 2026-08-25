@@ -82,6 +82,9 @@ type Server struct {
 	// already holds the startup session's lease; nil (tests, embedded use)
 	// disables lease gating.
 	leases *control.SessionLeaseKeeper
+	// stance is the hub's Ask/Auto/YOLO posture, shared by every pane it drives.
+	// Nil for a server outside a hub, which speaks only for itself.
+	stance *approvalStance
 }
 
 // New builds a Server. bc must be the controller's event sink.
@@ -999,43 +1002,6 @@ func (s *Server) summarize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// autoApproveTools toggles YOLO/full-access tool auto-approval.
-func (s *Server) autoApproveTools(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		On bool `json:"on"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		badBody(w)
-		return
-	}
-	s.ctl().SetAutoApproveTools(body.On)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// toolApprovalMode selects ask, auto, or yolo approval behavior for interactive
-// frontends. Plan remains a separate workflow governed by the selected mode.
-func (s *Server) toolApprovalMode(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Mode string `json:"mode"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		badBody(w)
-		return
-	}
-	mode, ok := control.ParseToolApprovalMode(body.Mode)
-	if !ok {
-		badValue(w, "mode", "ask", "auto", "dontAsk", "yolo")
-		return
-	}
-	s.applyApprovalMode(mode)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// bypass is the legacy HTTP endpoint for YOLO/full-access tool auto-approval.
-func (s *Server) bypass(w http.ResponseWriter, r *http.Request) {
-	s.autoApproveTools(w, r)
 }
 
 // goal sets or clears the active goal. An empty goal string clears it.
