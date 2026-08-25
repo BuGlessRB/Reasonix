@@ -199,6 +199,7 @@ func renderBody(results []result) string {
 		comma(s.tools), comma(s.toolFails), s.compacts, currencySym(s.currency), s.cost)
 	b.WriteString(perSolvedLine(s))
 	b.WriteString(requestsBySourceLine(s.bySource))
+	b.WriteString(renderAuxiliarySpend(s.bySource, s.currency))
 	b.WriteString(renderMeterAccounting(results))
 	b.WriteString(renderFaultRecovery(results))
 	b.WriteString(renderTimeAttribution(results))
