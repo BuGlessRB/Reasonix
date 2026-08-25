@@ -53,6 +53,9 @@ type armStats struct {
 	Damaged, WithCorrect                int
 	TTCS, TTFT                          []int64
 	ByClass                             map[string]classStats
+	// Fanout covers every run in the arm, no-solution tasks included: work the
+	// agent delegated is work it paid for whether or not the task was solvable.
+	Fanout fanoutMetrics
 }
 
 type classStats struct {
@@ -62,7 +65,7 @@ type classStats struct {
 }
 
 func aggregateArm(results []result) armStats {
-	s := armStats{ByClass: map[string]classStats{}}
+	s := armStats{ByClass: map[string]classStats{}, Fanout: fanoutTotals(results)}
 	for _, r := range results {
 		// No-solution tasks never enter an accuracy comparison; see
 		// gatherSuiteStats.
@@ -208,6 +211,7 @@ func multiCompareReport(paths []string) (string, error) {
 	}
 	b.WriteString("\n" + paretoSection(points))
 	b.WriteString(perClassWinners(paths, arms))
+	b.WriteString(fanoutComparison(paths, arms))
 	b.WriteString("<sub>Per-solved figures divide each arm's accounted totals (failures included) by its accounted solves; TTCS charges a retried solve with its failed attempts' wall.</sub>\n")
 	return b.String(), nil
 }

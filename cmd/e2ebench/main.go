@@ -84,6 +84,9 @@ type runMetrics struct {
 	ParentNamedFiles     int `json:"parent_named_files,omitempty"`
 	ChildEvidencePaths   int `json:"child_evidence_paths,omitempty"`
 	ChildDiscoveredPaths int `json:"child_discovered_paths,omitempty"`
+	// Fanout mirrors internal/cli.RunMetrics: fan-out timing folded from the run
+	// graph, which is where a scheduling wait is recorded and nowhere else.
+	Fanout *fanoutMetrics `json:"fanout,omitempty"`
 	// Optional Delivery capability counters (omitempty for baseline/old metrics).
 	ReadinessChecks            int     `json:"readiness_checks,omitempty"`
 	ReadinessRecoveries        int     `json:"readiness_recoveries,omitempty"`

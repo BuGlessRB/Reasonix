@@ -126,6 +126,17 @@ func TestEffectRunGraphReachesTheFrontendWithItsEdges(t *testing.T) {
 		if node.State != agentgraph.StateCompleted {
 			t.Fatalf("node %q finished %q, want completed; a clean run must not read as unfinished", id, node.State)
 		}
+		// Every figure that prices a fan-out is a subtraction of these two. A
+		// node that settles without them reports the shape and none of its cost,
+		// and a metric folded from it reads as a fan-out that took no time.
+		if node.StartedAt == 0 || node.EndedAt < node.StartedAt {
+			t.Fatalf("node %q settled unstamped (started %d, ended %d); nothing downstream can time it", id, node.StartedAt, node.EndedAt)
+		}
+	}
+	for _, id := range workers {
+		if node, _ := g.Node(id); node.QueuedAt == 0 {
+			t.Fatalf("worker %q never reported reaching the queue; the wait a slot cost it is unrecoverable", id)
+		}
 	}
 	// The unification: a node is the call it names. A frontend joins timing and
 	// output to the graph by id instead of matching two naming schemes.

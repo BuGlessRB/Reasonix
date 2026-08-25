@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"reasonix/internal/agentgraph"
 	"reasonix/internal/billing"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
@@ -91,6 +92,9 @@ type RunMetrics struct {
 	MissingReasoningReplaced   int `json:"missing_reasoning_retry_replaced_response,omitempty"`
 	MissingReasoningSuppressed int `json:"missing_reasoning_retry_suppressed,omitempty"`
 	MissingReasoningFallbacks  int `json:"missing_reasoning_fallbacks,omitempty"`
+	// Fanout times what the delegation counters only count: what the run waited
+	// on its fan-outs, against what the same work costs one at a time.
+	Fanout *FanoutMetrics `json:"fanout,omitempty"`
 	// Capability / Delivery routing counters (optional; zero for older readers).
 	CapabilityRoutes               int     `json:"capability_routes,omitempty"`
 	CapabilityRoutedCandidates     int     `json:"capability_routed_candidates,omitempty"`
@@ -151,6 +155,9 @@ type metricsSink struct {
 	// childMutations counts how many distinct children mutated each path, so
 	// two children racing on one file is measurable rather than anecdotal.
 	childMutations map[string]int
+	// graph folds the run-graph deltas the kernel publishes: a structure, not a
+	// counter, so the scalars are derived from it when a record is assembled.
+	graph agentgraph.Graph
 
 	// partialPath receives throttled in-flight snapshots, so a run killed by a
 	// timeout still leaves accounting behind instead of nothing. Empty disables
@@ -172,7 +179,15 @@ func (s *metricsSink) now() time.Time {
 func (s *metricsSink) Snapshot() RunMetrics {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.m.clone()
+	return s.snapshotLocked()
+}
+
+// snapshotLocked assembles one record: the counters, and the fan-out scalars
+// folded from the graph. Callers hold mu.
+func (s *metricsSink) snapshotLocked() RunMetrics {
+	out := s.m.clone()
+	out.Fanout = fanoutMetricsOf(s.graph)
+	return out
 }
 
 func (m RunMetrics) clone() RunMetrics {
@@ -253,7 +268,7 @@ func (s *metricsSink) writeSnapshot() {
 		return
 	}
 	s.lastSnapshot = now
-	snap := s.m.clone()
+	snap := s.snapshotLocked()
 	snap.Complete = false
 	if data, err := json.MarshalIndent(snap, "", "  "); err == nil {
 		_ = fileutil.AtomicWriteFile(s.partialPath, data, 0o644)
@@ -342,6 +357,9 @@ func (s *metricsSink) record(e event.Event) {
 	}
 	if e.Kind == event.Retrying {
 		s.m.Retries++
+	}
+	if e.Kind == event.GraphDelta && e.Graph != nil {
+		s.graph.Apply(*e.Graph)
 	}
 }
 
