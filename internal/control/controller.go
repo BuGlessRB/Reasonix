@@ -491,7 +491,7 @@ func New(opts Options) *Controller {
 	// Observe Steer / unapplied-steer for durable inbox state transitions.
 	// Must wrap both the controller sink and the executor sink: agent.Steer
 	// emits on the executor path, TurnDone on the controller path.
-	c.sink = &inboxEventSink{inner: c.sink, c: c}
+	c.sink = &inboxEventSink{AuditForwarder: event.AuditForwarder{Inner: c.sink}, c: c}
 	if c.executor != nil {
 		c.executor.SetSink(c.sink)
 	}
@@ -567,17 +567,17 @@ func (c *Controller) installExtensionsLocked(d *dispatch.Dispatcher) {
 	// frontendEventSink wrapper underneath for extension rulings.
 	switch sink := c.sink.(type) {
 	case *inboxEventSink:
-		if existing, ok := sink.inner.(*frontendEventSink); ok {
+		if existing, ok := sink.Inner.(*frontendEventSink); ok {
 			existing.setDispatcher(d)
 		} else {
-			sink.inner = newFrontendEventSink(sink.inner, d)
+			sink.Inner = newFrontendEventSink(sink.Inner, d)
 		}
 	case *frontendEventSink:
 		sink.setDispatcher(d)
 		// Ensure inbox observer stays outer.
-		c.sink = &inboxEventSink{inner: sink, c: c}
+		c.sink = &inboxEventSink{AuditForwarder: event.AuditForwarder{Inner: sink}, c: c}
 	default:
-		c.sink = &inboxEventSink{inner: newFrontendEventSink(c.sink, d), c: c}
+		c.sink = &inboxEventSink{AuditForwarder: event.AuditForwarder{Inner: newFrontendEventSink(c.sink, d)}, c: c}
 	}
 	if c.executor != nil {
 		c.executor.SetExtensions(d)
