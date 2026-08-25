@@ -205,6 +205,7 @@ type Capabilities interface {
 	RemoveMCPServer(name string) (disconnected bool, err error)
 	ConfiguredMCPNames() []string
 	ConfiguredMCPServers() []MCPServerState
+	MCPCatalogTools() map[string]int
 	DisconnectedMCPNames() []string
 	UnregisterMCPServerTools(name string) bool
 	ImportMCPEntries(entries []config.PluginEntry) (total, added, updated, connected, failed, skipped int, err error)

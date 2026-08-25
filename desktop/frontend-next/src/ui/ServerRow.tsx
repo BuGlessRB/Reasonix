@@ -6,11 +6,15 @@ import { Switch } from "./Switch";
 
 // One external service: whether it is answering, what it brought, and the two
 // acts that change that — switching it off and letting it try again.
+// standby is the ordinary state of a working server, not a lesser kind of
+// connected: its tools are in the catalog and the process starts on the first
+// call. Calling that "not connected" beside a Reconnect button reads as broken.
 const MCP_STATE: Record<string, string> = {
   ready: "已连接",
   connecting: "连接中",
   failed: "连不上",
   disabled: "已关闭",
+  standby: "待命 · 首次调用时启动",
   idle: "未连接",
 };
 
@@ -47,7 +51,7 @@ export function ServerRow({
     <span className="acts">
       {live && m.enabled && m.state !== "ready" && (
         <button className="act" disabled={!!busy} onClick={() => void run("retry", () => port.reconnectMcp(m.name))}>
-          {t(busy === "retry" ? "连接中…" : auth ? "重新授权" : "重连")}
+          {t(busy === "retry" ? "连接中…" : auth ? "重新授权" : m.state === "standby" ? "立即连接" : "重连")}
         </button>
       )}
       {/* Removal is the one action here that cannot be undone by clicking again,

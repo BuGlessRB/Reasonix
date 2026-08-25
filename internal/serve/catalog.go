@@ -313,23 +313,37 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 			}))
 		}
 	}
-	// Configured but not live: switched off, or lazy and not needed yet. Saying
-	// which one beats leaving them out of a list the user reads to check that
-	// what they configured is actually there.
+	// Configured with no process running, which is three different things —
+	// the catalog tells the last two apart, not the host. configuredState below
+	// carries the reasoning.
+	inCatalog := ctl.MCPCatalogTools()
 	for _, st := range configured {
 		if seen[st.Entry.Name] {
 			continue
 		}
-		state := "idle"
-		if !st.Enabled {
-			state = "disabled"
-		}
 		out = append(out, remembered(st, mcpEntry{
-			Name: st.Entry.Name, State: state, Enabled: st.Enabled, LocalOverride: st.LocalOverride,
+			Name: st.Entry.Name, State: configuredState(st, inCatalog[st.Entry.Name]),
+			Enabled: st.Enabled, LocalOverride: st.LocalOverride,
 			Transport: st.Entry.Type, Source: string(st.Entry.Source),
 		}))
 	}
 	writeJSON(w, map[string]any{"servers": out, "scope": scopeView(ctl)})
+}
+
+// configuredState is what a server with no process running is. Three answers,
+// not two: switched off, standing by with its tools already in the catalog and
+// the process due to start on the first call, or holding nothing to offer yet.
+// The middle one is the steady state of every working cache-hit server, and
+// reporting it as a failed connection is what sent people looking for a fault.
+func configuredState(st control.MCPServerState, inCatalog int) string {
+	switch {
+	case !st.Enabled:
+		return "disabled"
+	case inCatalog == 0:
+		return "idle"
+	default:
+		return "standby"
+	}
 }
 
 // remembered fills a row that has no live connection to ask with what the last

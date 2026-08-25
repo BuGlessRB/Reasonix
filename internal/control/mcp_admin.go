@@ -167,6 +167,13 @@ func (c *Controller) ConfiguredMCPServers() []MCPServerState {
 	return out
 }
 
+// MCPCatalogTools counts, per server name, the tools that server currently has
+// in this session's catalog. It answers the question a status row is really
+// asking — can the model call this now — which "is a process running" does not:
+// a cache-hit server stays process-idle until its first call with every one of
+// its tools already callable.
+func (c *Controller) MCPCatalogTools() map[string]int { return c.mcp.catalogTools() }
+
 // ReconnectMCPServer retries one configured server and re-registers its tools.
 // The recorded failure is cleared first: a failed name is absent from Servers()
 // until the record goes, so a successful retry would still read as broken.

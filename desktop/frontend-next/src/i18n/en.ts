@@ -341,6 +341,7 @@ export const EN: Record<string, string> = {
   "{n} 条规则": "{n} rules",
   "忘掉": "Forget",
   "重连": "Reconnect",
+  "立即连接": "Connect now",
   "重新授权": "Re-authorise",
   "记的是 {had}，但它答的是 {got}。": "Recorded as {had}, but it answers as {got}.",
   // 收工回执
@@ -569,6 +570,7 @@ export const EN: Record<string, string> = {
   "连接中": "Connecting",
   "已关闭": "Disabled",
   "未连接": "Not connected",
+  "待命 · 首次调用时启动": "Standby · starts on first call",
   "本地构建": "Local build",
   "只在这台机器上": "This machine only",
   "这个项目": "This project",

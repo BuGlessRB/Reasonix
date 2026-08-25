@@ -51,10 +51,10 @@ export class MockMcp extends MockProvider {
         { name: "convert_time", description: "Convert a wall-clock time between two zones.", readOnly: true },
       ],
     },
-    // 关着和连不上的那两个也有说明 —— 那是上次连上时它们自己给的答复，界面里
-    // 必须看得出这一点。
+    // 待命和连不上的那两个也有说明 —— 那是上次连上时它们自己给的答复，界面里
+    // 必须看得出这一点。待命是缓存命中的常态：工具在目录里，进程等第一次调用。
     {
-      name: "context7", state: "idle", enabled: true, tools: 1, transport: "http", remembered: true,
+      name: "context7", state: "standby", enabled: true, tools: 1, transport: "http", remembered: true,
       description: "Up-to-date library documentation, pulled per package and version.",
       toolList: [{ name: "get_library_docs", description: "Fetch docs for a resolved library ID.", readOnly: true }],
     },
@@ -127,7 +127,7 @@ export class MockMcp extends MockProvider {
     const s = this.servers.find((x) => x.name === name);
     if (!s) return;
     s.enabled = enabled;
-    s.state = enabled ? (s.error ? "failed" : "idle") : "disabled";
+    s.state = enabled ? (s.error ? "failed" : s.tools ? "standby" : "idle") : "disabled";
     s.localOverride = scope === "project";
   }
 
@@ -136,7 +136,7 @@ export class MockMcp extends MockProvider {
     if (!s) return;
     s.localOverride = false;
     s.enabled = true;
-    s.state = s.error ? "failed" : "idle";
+    s.state = s.error ? "failed" : s.tools ? "standby" : "idle";
   }
 
   // A rough stand-in for internal/mcpsetup: enough shape for the confirmation

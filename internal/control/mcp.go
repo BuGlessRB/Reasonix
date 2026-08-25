@@ -167,6 +167,23 @@ func (m *mcpManager) registry() *tool.Registry {
 	return m.reg
 }
 
+// catalogTools counts, per server, the tools that server has in this session's
+// registry. A lazily registered server has its whole cached toolset there while
+// its process is not running, which is the difference between a server waiting
+// to be called and one that is simply not there. One pass, because a caller
+// listing every configured server would otherwise walk the registry per row.
+func (m *mcpManager) catalogTools() map[string]int {
+	reg := m.registry()
+	if reg == nil {
+		return nil
+	}
+	out := map[string]int{}
+	for _, b := range reg.MCPBindings() {
+		out[b.Server]++
+	}
+	return out
+}
+
 // serverNames lists the live server names (nil when no host is connected).
 func (m *mcpManager) serverNames() []string {
 	if h := m.hostRef(); h != nil {
