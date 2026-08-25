@@ -35,8 +35,7 @@ func shortHash(v any) string {
 
 // CaptureShape takes a snapshot of the current prefix state.
 func CaptureShape(systemPrompt string, schemas []provider.ToolSchema, rewriteVersion int) PrefixShape {
-	normalizedSchemas := normalizeToolSchemas(schemas)
-	toolsJSON, _ := json.Marshal(normalizedSchemas)
+	toolsJSON := NormalizedToolSchemas(schemas)
 	return PrefixShape{
 		SystemHash: shortHash(systemPrompt),
 		ToolsHash:  shortHash(string(toolsJSON)),
@@ -47,6 +46,14 @@ func CaptureShape(systemPrompt string, schemas []provider.ToolSchema, rewriteVer
 		LogRewriteVersion: rewriteVersion,
 		ToolSchemaTokens:  tokencount.Text(string(toolsJSON)),
 	}
+}
+
+// NormalizedToolSchemas returns the exact JSON ToolsHash covers, so a recorder
+// can persist the schema set a run sampled against and a reader can recompute
+// the hash from it rather than trusting a second serialization.
+func NormalizedToolSchemas(schemas []provider.ToolSchema) []byte {
+	b, _ := json.Marshal(normalizeToolSchemas(schemas))
+	return b
 }
 
 func normalizeToolSchemas(schemas []provider.ToolSchema) []provider.ToolSchema {

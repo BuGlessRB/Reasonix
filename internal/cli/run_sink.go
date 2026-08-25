@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
+	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/telemetry"
 	"reasonix/internal/trajectory"
@@ -64,4 +65,26 @@ func buildRunSink(format runOutputFormat, printOnly, showThinking bool, metricsP
 	chain.sink = withNotifications(chain.sink, cfg)
 	chain.sink = reporter.Wrap(chain.sink)
 	return chain, nil
+}
+
+// recordTrajectoryHeader persists the request-side prefix the event stream
+// cannot carry. The hashes come from the same capture the cache diagnostics
+// report, so a reader can prove the header belongs to the rounds it precedes
+// instead of assuming the run it was found next to.
+func recordTrajectoryHeader(rec *trajectory.Recorder, ctrl *control.Controller) {
+	if rec == nil || ctrl == nil {
+		return
+	}
+	schemas := ctrl.ToolSchemas()
+	prompt := ctrl.SystemPrompt()
+	shape := agent.CaptureShape(prompt, schemas, 0)
+	rec.RecordRunHeader(trajectory.RunHeader{
+		ModelRef:      ctrl.ModelRef(),
+		WorkspaceRoot: ctrl.WorkspaceRoot(),
+		System:        prompt,
+		SystemHash:    shape.SystemHash,
+		Tools:         agent.NormalizedToolSchemas(schemas),
+		ToolsHash:     shape.ToolsHash,
+		PrefixHash:    shape.PrefixHash,
+	})
 }

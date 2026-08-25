@@ -171,3 +171,39 @@ func TestNewFailsOnUnwritablePath(t *testing.T) {
 		t.Fatal("New must fail when the parent directory does not exist")
 	}
 }
+
+func TestRecordRunHeaderPersistsRequestSidePrefix(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	rec, err := New(&capabilitySink{}, path, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	rec.RecordRunHeader(RunHeader{
+		ModelRef: "deepseek/v4", System: "you are a coding agent",
+		SystemHash: "aaaa", Tools: json.RawMessage(`[{"name":"bash"}]`),
+		ToolsHash: "bbbb", PrefixHash: "cccc",
+	})
+	rec.Emit(event.Event{Kind: event.TurnStarted})
+	if err := rec.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	got := readRecords(t, path)
+	if len(got) != 2 {
+		t.Fatalf("records = %d, want 2", len(got))
+	}
+	// The header must precede the rounds it describes; a reader keys on that.
+	h := got[0].RunHeader
+	if h == nil {
+		t.Fatalf("first record carries no run header: %+v", got[0])
+	}
+	if h.ModelRef != "deepseek/v4" || h.SystemHash != "aaaa" || h.ToolsHash != "bbbb" || h.PrefixHash != "cccc" {
+		t.Errorf("header round-tripped wrong: %+v", h)
+	}
+	if string(h.Tools) != `[{"name":"bash"}]` {
+		t.Errorf("tools = %s", h.Tools)
+	}
+	if got[1].RunHeader != nil || got[1].Event == nil {
+		t.Errorf("second record should be the event, got %+v", got[1])
+	}
+}

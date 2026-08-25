@@ -649,24 +649,12 @@ func runAgent(args []string, version string) int {
 	SetTaskJobKiller(ctrlKillerAdapter{ctrl})
 	ctrl.ApplyHeadlessApprovalMode(permissions.approval)
 
-	// --resume: load a specific session file (non-interactive, meant for
-	// MCP/API callers that manage their own per-project session). Takes
-	// precedence over --continue.
-	// --continue: resume the most recent saved session.
-	if resumePath != "" {
-		_ = ctrl.Resume(resumeSession, resumePath) // startup: nothing can be running
-	}
-	if ctrl.SessionPath() == "" && ctrl.SessionDir() != "" {
-		ctrl.SetFreshSessionPath(agent.NewSessionPath(ctrl.SessionDir(), ctrl.Label()))
-	}
-	// Fresh sessions take the lease too (defensive: the path is brand new); a
-	// resumed path is already held, making this a no-op.
-	if err := rebindCLIControllerAuthority(leases, ctrl); err != nil {
+	if err := bindRunSession(ctrl, leases, resumeSession, resumePath); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, control.SessionInUseMessage(err)+"; "+control.SessionLeaseCloseHint)
 		return 1
 	}
-	reclaimCLIRecoveryBranches(ctrl.SessionDir())
 
+	recordTrajectoryHeader(chain.trajectory, ctrl)
 	runErr := ctrl.Run(ctx, prompt)
 	reporter.RecordRecovery(ctrl.DrainRecoveryMetrics())
 	completion := classifyRunCompletion(runErr)

@@ -151,3 +151,21 @@ func copySessionForWriting(src string) (string, error) {
 	}
 	return newPath, nil
 }
+
+// bindRunSession attaches a headless run to its session file — an explicit
+// --resume path, otherwise a fresh one — and takes the write lease a turn
+// needs. A fresh path is defensively rebound too; a resumed one already holds
+// the lease, making that a no-op.
+func bindRunSession(ctrl *control.Controller, leases *control.SessionLeaseKeeper, resumed *agent.Session, resumePath string) error {
+	if resumePath != "" {
+		_ = ctrl.Resume(resumed, resumePath) // startup: nothing can be running
+	}
+	if ctrl.SessionPath() == "" && ctrl.SessionDir() != "" {
+		ctrl.SetFreshSessionPath(agent.NewSessionPath(ctrl.SessionDir(), ctrl.Label()))
+	}
+	if err := rebindCLIControllerAuthority(leases, ctrl); err != nil {
+		return err
+	}
+	reclaimCLIRecoveryBranches(ctrl.SessionDir())
+	return nil
+}

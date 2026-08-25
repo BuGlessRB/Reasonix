@@ -26,6 +26,7 @@ type Record struct {
 	SchemaVersion    int                  `json:"schema_version"`
 	Seq              uint64               `json:"seq"`
 	TS               int64                `json:"ts"`
+	RunHeader        *RunHeader           `json:"run_header,omitempty"`
 	Event            *eventwire.Event     `json:"event,omitempty"`
 	ReadinessAudit   *ReadinessAudit      `json:"readiness_audit,omitempty"`
 	ProtocolRecovery string               `json:"protocol_recovery,omitempty"`
@@ -39,6 +40,23 @@ type Record struct {
 	// time-to-first-token readers key on — and EndTS carries the last's.
 	Deltas int   `json:"deltas,omitempty"`
 	EndTS  int64 `json:"end_ts,omitempty"`
+}
+
+// RunHeader is the request-side prefix the event stream alone cannot carry:
+// the system prompt and tool schemas the run's rounds were sampled against.
+// The hashes are the ones usage events already report, so a reader can prove
+// a header belongs to the rounds that follow instead of assuming it.
+type RunHeader struct {
+	ModelRef string `json:"model_ref,omitempty"`
+	// WorkspaceRoot is the run's workspace path. Tool output quotes it
+	// verbatim, so a reader that wants portable text needs the exact string to
+	// replace rather than a guess at what a temporary path looks like.
+	WorkspaceRoot string          `json:"workspace_root,omitempty"`
+	System        string          `json:"system"`
+	SystemHash    string          `json:"system_hash"`
+	Tools         json.RawMessage `json:"tools,omitempty"`
+	ToolsHash     string          `json:"tools_hash"`
+	PrefixHash    string          `json:"prefix_hash"`
 }
 
 // MemoryRecall mirrors event.MemoryRecallAudit with stable snake_case keys.
@@ -347,6 +365,13 @@ func (r *Recorder) RecordMemoryRecall(a event.MemoryRecallAudit) {
 	}
 	r.append(Record{MemoryRecall: rec})
 	event.RecordMemoryRecall(r.inner, a)
+}
+
+// RecordRunHeader persists the run's request-side prefix. It is written by the
+// frontend that owns the recorder, not forwarded through the sink chain, so it
+// adds no optional-capability contract for every wrapper to carry.
+func (r *Recorder) RecordRunHeader(h RunHeader) {
+	r.append(Record{RunHeader: &h})
 }
 
 func (r *Recorder) RecordProtocolRecovery(a event.ProtocolRecoveryAudit) {
