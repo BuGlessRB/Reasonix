@@ -23,10 +23,14 @@ import { Welcome } from "./Welcome";
 
 const NO_REPORT: PaneReport = { status: null, title: "", steer: 0, run: "idle", live: false, cost: "" };
 
+// 度量栏默认展开，收起是用户的选择 —— 那个选择跟主题一样留在盘上，不然拖一下
+// 窗口或者重开一次就被顶回展开。
+const sideWanted = () => localStorage.getItem("rx-side") !== "0";
+
 // 两栏共用一条规则：窄到放不下就收起，缝和把手留在原处。宽档下的那个选择要留
 // 着 —— 拖窄一下再拖回来，不该把用户自己收起或展开的决定抹掉。
-function useFoldAway(name: string, set: Dispatch<SetStateAction<boolean>>) {
-  const wide = useRef(true);
+function useFoldAway(name: string, set: Dispatch<SetStateAction<boolean>>, wideDefault = true) {
+  const wide = useRef(wideDefault);
   useEffect(() => {
     let tight = roomGaveUp(name);
     return onFolds((f) => {
@@ -65,7 +69,14 @@ export function App({ hub }: { hub: HubPort }) {
   // 窄到放不下工作区栏时它是收起的，而不是消失的：栏一旦从 DOM 里拿掉，把手也
   // 跟着没了，剩下的入口只有一个没人知道的快捷键。
   const [rail, setRail] = useState(() => !roomGaveUp("rail"));
-  const [side, setSide] = useState(() => !roomGaveUp("side"));
+  const [side, setSide] = useState(() => sideWanted() && !roomGaveUp("side"));
+  const chooseSide = useCallback((v: boolean | ((p: boolean) => boolean)) => {
+    setSide((cur) => {
+      const next = typeof v === "function" ? v(cur) : v;
+      localStorage.setItem("rx-side", next ? "1" : "0");
+      return next;
+    });
+  }, []);
   const [railW, setRailW] = useState(() => widthOf(RAIL));
   const [sideW, setSideW] = useState(() => widthOf(SIDE));
   const [report, setReport] = useState<PaneReport>(NO_REPORT);
@@ -357,7 +368,7 @@ export function App({ hub }: { hub: HubPort }) {
   const needsProject = !claimed && tree.every((ws) => !ws.remembered);
 
   useFoldAway("rail", setRail);
-  useFoldAway("side", setSide);
+  useFoldAway("side", setSide, sideWanted());
 
   const onRailW = useCallback((w: number) => {
     setRailW(w);
@@ -389,7 +400,7 @@ export function App({ hub }: { hub: HubPort }) {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
         e.preventDefault();
-        if (e.shiftKey) setSide((v) => !v);
+        if (e.shiftKey) chooseSide((v) => !v);
         else setRail((v) => !v);
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
@@ -403,7 +414,7 @@ export function App({ hub }: { hub: HubPort }) {
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [activePort, running, settings, showPrefs]);
+  }, [activePort, running, settings, showPrefs, chooseSide]);
 
   // A setting changed in the pane is a fact about the session behind it, and
   // the pane is what holds that fact. Without a nudge it keeps polling only
@@ -567,7 +578,7 @@ export function App({ hub }: { hub: HubPort }) {
             label={t("调整度量栏宽度")}
             open={side}
             onWidth={onSideW}
-            onOpen={setSide}
+            onOpen={chooseSide}
           />
 
           {/* One conversation on screen at a time. Side by side, two panes
@@ -645,7 +656,7 @@ export function App({ hub }: { hub: HubPort }) {
           data-shut={side ? undefined : ""}
           title={side ? t("收起") : t("展开")}
           aria-label={side ? t("收起度量栏") : t("展开度量栏")}
-          onClick={() => setSide(!side)}
+          onClick={() => chooseSide(!side)}
         >
           <i className="knurl" aria-hidden="true" />
           <span className="dir" aria-hidden="true">
