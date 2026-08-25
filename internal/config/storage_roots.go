@@ -168,6 +168,12 @@ func RootPinnedBy(id RootID) string {
 // than write to a relative path.
 func RootDir(id RootID) string { return storageRootDir(id) }
 
+// RootConfiguredDir reports the location the configuration chose for a root, ""
+// when it chose none. A caller that has to tell a deliberate relocation from a
+// default reads this rather than comparing RootDir against a default it works
+// out for itself — and the two differ, because the environment outranks both.
+func RootConfiguredDir(id RootID) string { return configuredRootDir(id) }
+
 // joinRoot appends sub to the first base that resolves, and answers "" when
 // none does. The guard matters: filepath.Join("", "x") is the relative path
 // "x", which would land runtime state in the working directory.

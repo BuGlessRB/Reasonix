@@ -30,8 +30,16 @@ type Plan struct {
 	Files int64
 	// Need and Free are the same units the refusal below is decided on, so a
 	// surface can show the shortfall without recomputing it.
-	Need     int64
-	Free     int64
+	Need int64
+	Free int64
+	// Adopt reports that the target already holds this root's own data, so the
+	// move is the pointer alone: nothing is copied, verified or reclaimed, and
+	// Bytes then describes what is being adopted rather than what is copied.
+	Adopt bool
+	// Stays is what an adopt leaves at the current location. Anything written
+	// there since is not carried across, and a surface says so rather than
+	// letting it go quietly missing.
+	Stays    int64
 	Refusals []Refusal
 }
 
@@ -96,7 +104,9 @@ func PlanMove(ctx context.Context, root config.RootID, target string) Plan {
 		})
 	}
 
-	plan.Bytes, plan.Files, _, _ = measure(ctx, plan.From)
+	// What the move would copy, which for a root sharing its directory is its
+	// declared entries rather than everything under them.
+	plan.Bytes, plan.Files, _, _ = measureRoot(ctx, plan.Root, plan.From)
 	plan.Need = plan.Bytes + headroom
 
 	if err := probeWritable(plan.To); err != nil {
@@ -105,13 +115,22 @@ func PlanMove(ctx context.Context, root config.RootID, target string) Plan {
 		})
 		return plan
 	}
-	// A folder with something already in it is refused, unless an interrupted
-	// move of this very root put it there — that is what the journal records,
-	// and continuing it is the whole reason the copy is restartable.
-	if entries, err := os.ReadDir(plan.To); err == nil && len(entries) > 0 && !resumes(plan) {
-		plan.Refusals = append(plan.Refusals, Refusal{
-			Code: "target.not_empty", Detail: "choose an empty folder, so nothing already there is mixed in",
-		})
+	// A folder with something in it is refused, unless that something is this
+	// root's own: an interrupted move claimed it, which the journal records, or
+	// a finished one did, which the folder itself says.
+	if entries, err := os.ReadDir(plan.To); err == nil && occupied(entries) && !resumes(plan) {
+		if holdsRoot(plan.Root, plan.To, entries) {
+			plan.Adopt = true
+			plan.Stays = plan.Bytes
+			plan.Bytes, plan.Files, _, _ = measureRoot(ctx, plan.Root, plan.To)
+			plan.Need = headroom
+		} else {
+			plan.Refusals = append(plan.Refusals, Refusal{
+				Code: "target.not_empty",
+				Detail: "that folder holds something else; choose an empty one, " +
+					"or one that already holds this data and it will be pointed at as it is",
+			})
+		}
 	}
 	vol := readVolume(plan.To)
 	plan.Free = vol.Free
@@ -123,6 +142,18 @@ func PlanMove(ctx context.Context, root config.RootID, target string) Plan {
 		})
 	}
 	return plan
+}
+
+// occupied reports whether a directory holds anything but a marker. A folder
+// left with only the marker of a root that has since moved away holds no data,
+// so it is an empty target rather than one to be adopted or refused.
+func occupied(entries []os.DirEntry) bool {
+	for _, entry := range entries {
+		if entry.Name() != markerName {
+			return true
+		}
+	}
+	return false
 }
 
 // resumes reports whether an unfinished move already claimed this exact

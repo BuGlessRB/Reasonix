@@ -70,6 +70,12 @@ export interface StoragePlan {
   files: number;
   need: number;
   free: number;
+  // The target already holds this root's own data, so accepting the plan is the
+  // pointer alone: nothing is copied, and nothing at either end is deleted.
+  adopt?: boolean;
+  // What the current location keeps when an adopt is accepted. Anything written
+  // there since is not carried across, which is the one thing to say out loud.
+  stays?: number;
   ok: boolean;
   refusals?: StorageRefusal[];
 }

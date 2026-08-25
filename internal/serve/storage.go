@@ -50,13 +50,18 @@ type storageRefusal struct {
 }
 
 type storagePlan struct {
-	Root     string           `json:"root"`
-	From     string           `json:"from"`
-	To       string           `json:"to"`
-	Bytes    int64            `json:"bytes"`
-	Files    int64            `json:"files"`
-	Need     int64            `json:"need"`
-	Free     int64            `json:"free"`
+	Root  string `json:"root"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Bytes int64  `json:"bytes"`
+	Files int64  `json:"files"`
+	Need  int64  `json:"need"`
+	Free  int64  `json:"free"`
+	// Adopt says the target already holds this root's data, so accepting the
+	// plan records the location and copies nothing; Stays is what the current
+	// location keeps, which an adopt does not carry across.
+	Adopt    bool             `json:"adopt,omitempty"`
+	Stays    int64            `json:"stays,omitempty"`
 	OK       bool             `json:"ok"`
 	Refusals []storageRefusal `json:"refusals,omitempty"`
 }
@@ -165,7 +170,7 @@ func (s *Server) storageMove(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, planPayload(plan))
 		return
 	}
-	if !s.moves.begin(storageMove{Root: string(plan.Root), To: plan.To, Phase: string(storage.PhaseCopying), Total: plan.Bytes}) {
+	if !s.moves.begin(storageMove{Root: string(plan.Root), To: plan.To, Phase: string(openingPhase(plan)), Total: plan.Bytes}) {
 		busy(w, "storage.move_running", "a move is already running", nil)
 		return
 	}
@@ -192,10 +197,20 @@ func (s *Server) storageMove(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, planPayload(plan))
 }
 
+// openingPhase is what the tracker starts on, so a panel polling it is never
+// told a pointer change is a copy.
+func openingPhase(plan storage.Plan) storage.Phase {
+	if plan.Adopt {
+		return storage.PhaseAdopting
+	}
+	return storage.PhaseCopying
+}
+
 func planPayload(plan storage.Plan) storagePlan {
 	out := storagePlan{
 		Root: string(plan.Root), From: plan.From, To: plan.To,
-		Bytes: plan.Bytes, Files: plan.Files, Need: plan.Need, Free: plan.Free, OK: plan.OK(),
+		Bytes: plan.Bytes, Files: plan.Files, Need: plan.Need, Free: plan.Free,
+		Adopt: plan.Adopt, Stays: plan.Stays, OK: plan.OK(),
 	}
 	for _, refusal := range plan.Refusals {
 		out.Refusals = append(out.Refusals, storageRefusal{Code: refusal.Code, Detail: refusal.Detail})

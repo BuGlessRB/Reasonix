@@ -90,18 +90,18 @@ func TestCancelBeforeCommitChangesNothing(t *testing.T) {
 	}
 }
 
-// A target with files in it is refused — unless the journal says an
+// A target holding a stranger's files is refused — unless the journal says an
 // interrupted move of this very root put them there, which is what makes the
-// copy restartable without letting it merge into a stranger's folder.
-func TestOnlyAJournalledMoveMayResumeIntoANonEmptyTarget(t *testing.T) {
+// copy restartable without letting it merge into somebody's documents.
+func TestOnlyAJournalledMoveMayResumeIntoAStrangersFolder(t *testing.T) {
 	home := stateHome(t)
 	seedState(t, home)
 	target := filepath.Join(t.TempDir(), "moved")
-	write(t, filepath.Join(target, "sessions", "a.jsonl"), 4096)
+	write(t, filepath.Join(target, "tax-returns", "2025.pdf"), 4096)
 
 	plan := PlanMove(t.Context(), config.RootState, target)
 	if plan.OK() {
-		t.Fatal("a target with files already in it was accepted without a journal")
+		t.Fatal("a target with someone else's files in it was accepted without a journal")
 	}
 	if !slices.Contains(refusalCodes(plan), "target.not_empty") {
 		t.Fatalf("refusals = %v, want target.not_empty", refusalCodes(plan))

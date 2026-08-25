@@ -52,7 +52,25 @@ VIAddVersionKey "LegalCopyright" "Copyright © 2026 ${PUBLISHER}"
 !define MUI_ABORTWARNING
 !define MUI_ICON "${PAYLOAD}\appicon.ico"
 !define MUI_UNICON "${PAYLOAD}\appicon.ico"
+
+; The finish page must not start Studio itself. This installer runs elevated, a
+; process it launches inherits that token, and on an account that elevated by
+; entering someone else's credentials %APPDATA% then resolves to the
+; administrator's profile — so the first launch after an update reads a config
+; file that knows nothing about the user's own settings, and reports their
+; relocated storage as gone. explorer.exe is already running as the signed-in
+; user, so handing it the path drops back to that token; Exec straight to the
+; binary is the fallback for a session whose shell is not explorer, where the
+; wrong token still beats no launch at all.
+Function LaunchAsSignedInUser
+  ClearErrors
+  Exec '"$WINDIR\explorer.exe" "$INSTDIR\${BINNAME}"'
+  IfErrors 0 +2
+  Exec '"$INSTDIR\${BINNAME}"'
+FunctionEnd
+
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${BINNAME}"
+!define MUI_FINISHPAGE_RUN_FUNCTION LaunchAsSignedInUser
 !define MUI_FINISHPAGE_RUN_TEXT "Launch ${APPNAME}"
 
 !insertmacro MUI_PAGE_DIRECTORY

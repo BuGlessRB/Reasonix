@@ -254,7 +254,7 @@ function Row({
             ref={inputRef}
             value={target}
             spellCheck={false}
-            placeholder={t("目标文件夹的完整路径，例如 D:/reasonix/sessions")}
+            placeholder={t("目标文件夹的完整路径，空文件夹，或本来就存着这块数据的那个")}
             onChange={(e) => onTarget(e.target.value)}
           />
           {plan && <Verdict plan={plan} />}
@@ -263,7 +263,7 @@ function Row({
               {t("取消")}
             </button>
             <button className="btn pri" disabled={!plan?.ok} onClick={onStart}>
-              {t("开始搬迁")}
+              {t(plan?.adopt ? "指向这里" : "开始搬迁")}
             </button>
           </div>
         </div>
@@ -284,6 +284,22 @@ function Verdict({ plan }: { plan: StoragePlan }) {
       </ul>
     );
   }
+  // Adopting is not a small move, it is a different operation: the data is
+  // already there, so what a person needs to know is that nothing gets copied
+  // and nothing at the old location gets deleted.
+  if (plan.adopt) {
+    return (
+      <p className="ready">
+        {t("这个文件夹里已经存着这块数据（{size}，{n} 个文件）。直接指过去就行，不复制、也不删。重启后生效。", {
+          size: bytes(plan.bytes),
+          n: plan.files,
+        })}
+        {(plan.stays ?? 0) > 0
+          ? " " + t("当前位置还留着 {size}，不会一起带过去。", { size: bytes(plan.stays ?? 0) })
+          : null}
+      </p>
+    );
+  }
   return (
     <p className="ready">
       {t("将搬走 {size}（{n} 个文件），目标盘剩余 {free}。完成后需要重启才会生效。", {
@@ -296,6 +312,7 @@ function Verdict({ plan }: { plan: StoragePlan }) {
 }
 
 const PHASES: Record<string, string> = {
+  adopting: "正在指向新位置",
   copying: "正在复制",
   verifying: "正在校验",
   committed: "已提交，正在清理原位置",

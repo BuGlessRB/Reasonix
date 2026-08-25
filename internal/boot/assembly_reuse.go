@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/memory"
 	"reasonix/internal/migration"
 	"reasonix/internal/skill"
+	"reasonix/internal/storage"
 	"reasonix/internal/tool"
 )
 
@@ -58,10 +59,11 @@ func continuesGeneration(opts Options) bool {
 	return opts.PreviousSnapshot != nil
 }
 
-// migrateLegacySources moves pre-v2 memory and session files into place, and
-// collects what an older relocation left in the previous root. A continued
-// generation already did it, and rescanning on every rebuild would charge a
-// window with several panes for the same disk walk once per pane.
+// migrateLegacySources moves pre-v2 memory and session files into place,
+// collects what an older relocation left in the previous root, and marks the
+// locations an older relocation moved data to without recording anything there.
+// A continued generation already did it, and rescanning on every rebuild would
+// charge a window with several panes for the same disk walk once per pane.
 func migrateLegacySources(opts Options, sink event.Sink) {
 	if continuesGeneration(opts) {
 		return
@@ -69,6 +71,7 @@ func migrateLegacySources(opts Options, sink event.Sink) {
 	migration.MigrateLegacyMemorySources(sink)
 	migration.MigrateLegacySessionSources(sink)
 	migration.AdoptRelocatedStateEntries(sink)
+	storage.RecordRelocatedRoots()
 }
 
 // changesModel reports a build targeting a different model than the live

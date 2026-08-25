@@ -29,6 +29,8 @@ const (
 	PhaseVerifying Phase = "verifying"
 	PhaseCommitted Phase = "committed"
 	PhaseDone      Phase = "done"
+	// PhaseAdopting is the whole of a move whose target already holds the data.
+	PhaseAdopting Phase = "adopting"
 )
 
 // Journal is the record a move leaves behind so an interrupted one can be
@@ -72,6 +74,9 @@ func Move(ctx context.Context, plan Plan, report func(Progress)) error {
 			report(p)
 		}
 	}
+	if plan.Adopt {
+		return adopt(plan, notify)
+	}
 	journal := Journal{Root: plan.Root, From: plan.From, To: plan.To, Phase: PhaseCopying, Started: time.Now()}
 	if err := writeJournal(journal); err != nil {
 		return err
@@ -92,6 +97,13 @@ func Move(ctx context.Context, plan Plan, report func(Progress)) error {
 		if err := verifyTree(ctx, filepath.Join(plan.From, entry), filepath.Join(plan.To, entry)); err != nil {
 			return err
 		}
+	}
+
+	// Recorded once the copy is proved and before the configuration is: a
+	// marker means this folder is complete, which is what lets a later run
+	// point at it when the configuration naming it is gone.
+	if err := WriteMarker(plan.To, plan.Root, plan.From); err != nil {
+		return fmt.Errorf("storage: %s cannot record what it holds: %w", plan.To, err)
 	}
 
 	// The point of no return, and the only write that changes what the next
@@ -119,6 +131,23 @@ func Move(ctx context.Context, plan Plan, report func(Progress)) error {
 	_ = writeJournal(journal)
 	notify(Progress{Phase: PhaseDone, Bytes: copied, Total: plan.Bytes})
 	return clearJournal()
+}
+
+// adopt points a root at data already sitting in the target. There is nothing
+// to copy, verify or reclaim, and so nothing to journal either: an interrupted
+// adopt has changed nothing, and the single write it does is the write an
+// ordinary move ends with. What the old location still holds stays there —
+// deleting it would be the one destructive act this operation does not need.
+func adopt(plan Plan, notify func(Progress)) error {
+	notify(Progress{Phase: PhaseAdopting, Total: plan.Bytes})
+	if err := WriteMarker(plan.To, plan.Root, plan.From); err != nil {
+		return fmt.Errorf("storage: %s cannot record what it holds: %w", plan.To, err)
+	}
+	if err := commitLocation(plan.Root, plan.To); err != nil {
+		return fmt.Errorf("storage: the location could not be recorded: %w", err)
+	}
+	notify(Progress{Phase: PhaseDone, Bytes: plan.Bytes, Total: plan.Bytes})
+	return nil
 }
 
 // movedEntries is what this move may touch: the root's declared entries, or a
@@ -159,12 +188,16 @@ func copyOwned(ctx context.Context, owned []string, plan Plan, notify func(Progr
 }
 
 // reclaimOwned removes only what was copied. A root sharing its directory
-// leaves the neighbour's files exactly where they were.
+// leaves the neighbour's files exactly where they were. The marker goes with
+// them: a location this root has left must stop claiming to hold it.
 func reclaimOwned(from string, owned []string) error {
 	for _, entry := range owned {
 		if err := os.RemoveAll(filepath.Join(from, entry)); err != nil {
 			return err
 		}
+	}
+	if err := os.Remove(filepath.Join(from, markerName)); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	return nil
 }
@@ -185,6 +218,11 @@ func copyTree(ctx context.Context, from, to string, total, already int64, notify
 		rel, relErr := filepath.Rel(from, path)
 		if relErr != nil {
 			return relErr
+		}
+		// A marker names a location, so it never travels: one at the target
+		// has to mean the copy that landed there finished.
+		if rel == markerName {
+			return nil
 		}
 		dest := filepath.Join(to, rel)
 		if entry.IsDir() {
@@ -268,6 +306,9 @@ func verifyTree(ctx context.Context, from, to string) error {
 		rel, relErr := filepath.Rel(from, path)
 		if relErr != nil {
 			return relErr
+		}
+		if rel == markerName {
+			return nil
 		}
 		srcSum, err := fileDigest(path)
 		if err != nil {
