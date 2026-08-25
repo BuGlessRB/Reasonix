@@ -22,6 +22,7 @@ func TestWireLogKeepsTheFramesTheTimelineDrawsRowsFor(t *testing.T) {
 		`{"kind":"text","text":"one chunk of many"}`,
 		`{"kind":"tool_dispatch","tool":{"id":"t1","name":"bash"}}`,
 		`{"kind":"tool_result","tool":{"id":"t1","name":"bash","durationMs":420}}`,
+		`{"kind":"graph_delta","graph":{"nodes":[{"id":"t1/fleet-1","state":"running"}]}}`,
 		`{"kind":"stream_attempt","streamAttempt":{"id":"sa-1-7","action":"commit"}}`,
 		`{"kind":"usage","usage":{"attemptId":"sa-1-7","totalTokens":7}}`,
 		`{"kind":"turn_done","cancelled":true}`,
@@ -45,9 +46,10 @@ func TestWireLogKeepsTheFramesTheTimelineDrawsRowsFor(t *testing.T) {
 	}
 
 	// Streamed text and reasoning arrive one frame per chunk and draw no row of
-	// their own; everything else here is a row a reader expects to find.
+	// their own; everything else here is a row a reader expects to find, plus the
+	// graph delta, which carries the shape those rows happened inside.
 	want := []string{
-		"turn_started", "stream_attempt", "tool_dispatch", "tool_result",
+		"turn_started", "stream_attempt", "tool_dispatch", "tool_result", "graph_delta",
 		"stream_attempt", "usage", "turn_done",
 	}
 	if strings.Join(kept, ",") != strings.Join(want, ",") {

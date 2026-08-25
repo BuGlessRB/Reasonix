@@ -30,6 +30,10 @@ var wireLogKinds = map[string]bool{
 	"compaction_started": true, "compaction_done": true, "retrying": true,
 	"steer": true, "context_maintenance": true, "completion_summary": true,
 	"notice": true,
+	// The run graph is the one shape a replay cannot re-derive: a dependency and
+	// an adopted answer exist nowhere else in the stream, so without these frames
+	// a reopened window draws a run that never waited on anything.
+	"graph_delta": true,
 }
 
 type wireLog struct {
