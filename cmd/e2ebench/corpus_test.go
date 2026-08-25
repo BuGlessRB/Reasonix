@@ -15,6 +15,11 @@ const corpusDir = "../../benchmarks/e2e"
 // already passes reports 100% whether the agent solved it or never ran.
 const verificationStressDir = "../../benchmarks/verification-stress"
 
+// trainCorpusDir holds generated tasks. They are kept out of the e2e suite so
+// the benchmark stays the same instrument across versions; every task here
+// must ship a solution/ proving its grader can be satisfied.
+const trainCorpusDir = "../../benchmarks/train"
+
 // protectedFiles reads the manifest embedded in a no-solution grader. The
 // manifest lives inside verify.sh precisely because e2ebench drops that file
 // in only after the run, so the agent never sees which files are watched.
@@ -167,7 +172,10 @@ func TestSolvableCorpusSeedsMustNotGradeClean(t *testing.T) {
 			t.Skipf("%s unavailable; the graders need a POSIX shell and python3", bin)
 		}
 	}
-	for _, dir := range []string{corpusDir, verificationStressDir} {
+	for _, dir := range []string{corpusDir, verificationStressDir, trainCorpusDir} {
+		if !dirExists(dir) {
+			continue
+		}
 		t.Run(filepath.Base(dir), func(t *testing.T) {
 			tasks, err := loadTasks(dir)
 			if err != nil {
@@ -188,6 +196,61 @@ func TestSolvableCorpusSeedsMustNotGradeClean(t *testing.T) {
 			}
 			if seen == 0 {
 				t.Fatal("no solvable tasks found; the corpus is missing")
+			}
+		})
+	}
+}
+
+// stageSolved lays a task's reference solution over an already-staged seed,
+// reporting false when the task carries none.
+func stageSolved(t *testing.T, taskDir, work string) bool {
+	t.Helper()
+	solution := filepath.Join(taskDir, "solution")
+	if !dirExists(solution) {
+		return false
+	}
+	if err := copyDir(solution, work); err != nil {
+		t.Fatalf("copy solution: %v", err)
+	}
+	return true
+}
+
+// Failing the pristine seed is only half of an authored grader. One that can
+// never pass is indistinguishable from a task with no solution: every attempt
+// scores zero, and a corpus of those teaches that nothing is ever accepted.
+// Tasks shipping a reference solution are held to the other half.
+func TestCorpusGradersPassTheReferenceSolution(t *testing.T) {
+	for _, bin := range []string{"bash", "python3"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			t.Skipf("%s unavailable; the graders need a POSIX shell and python3", bin)
+		}
+	}
+	for _, dir := range []string{corpusDir, verificationStressDir, trainCorpusDir} {
+		if !dirExists(dir) {
+			continue
+		}
+		t.Run(filepath.Base(dir), func(t *testing.T) {
+			tasks, err := loadTasks(dir)
+			if err != nil {
+				t.Fatalf("load corpus: %v", err)
+			}
+			for _, task := range tasks {
+				if task.NoSolution {
+					continue
+				}
+				t.Run(task.ID, func(t *testing.T) {
+					t.Parallel()
+					work := stageSeed(t, task.dir)
+					if !stageSolved(t, task.dir, work) {
+						if dir == trainCorpusDir {
+							t.Fatal("no solution/: a generated task must prove its grader can pass")
+						}
+						t.Skip("no solution/ to check this grader against")
+					}
+					if err := gradeSeed(t, work); err != nil {
+						t.Fatalf("the reference solution does not grade clean, so no attempt can: %v", err)
+					}
+				})
 			}
 		})
 	}
