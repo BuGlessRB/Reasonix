@@ -232,6 +232,9 @@ func (a *App) runWindow(api http.Handler, assets fs.FS, cfg *config.Config, trac
 		MinWidth:    760,
 		MinHeight:   480,
 		Menu:        appMenu(),
+		// Double-clicking the launcher again focuses this window instead of
+		// starting a second one over the same sessions; see single_instance.go.
+		SingleInstanceLock: singleInstanceLock(shell),
 		// Production builds ship without one, so the window had no copy, paste,
 		// or select-all on right-click — in a text editor that reads as broken.
 		EnableDefaultContextMenu: true,

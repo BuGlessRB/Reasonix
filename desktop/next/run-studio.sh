@@ -93,5 +93,9 @@ for _ in 1 2 3 4; do
   sleep 0.25
 done
 pkill -9 -f "$pat" 2>/dev/null || true
-open "$app"
+# REASONIX_DEV waives the single-instance lock, which is keyed to the data home
+# rather than the bundle: without it this launch would be handed to an installed
+# Studio window instead of opening the one just built. `open` does not pass the
+# shell's environment on, hence --env.
+open --env REASONIX_DEV=1 "$app"
 echo "==> $app"
