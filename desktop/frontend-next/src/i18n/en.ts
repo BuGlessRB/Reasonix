@@ -7,12 +7,14 @@
 // screen at a time, and a term is only right relative to the ones beside it.
 import { EN_KERNEL } from "./en_kernel";
 import { EN_REMOTE } from "./en_remote";
+import { EN_GRAPH } from "./en_graph";
 import { EN_SETTINGS } from "./en_settings";
 
 export const EN: Record<string, string> = {
   ...EN_SETTINGS,
   ...EN_KERNEL,
   ...EN_REMOTE,
+  ...EN_GRAPH,
   // ── 转录：卡片与流 ───────────────────────────────────────────────
   "交待一件事，它自己往下做": "Give it one thing to do, and it runs with it",
   "读代码、联网查证、派子代理、改文件 —— 每一步都同时落进「轨迹」，那是机器记录，不是给人读的叙事。":

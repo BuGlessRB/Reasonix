@@ -1033,6 +1033,116 @@
   .traj-note { padding: 12px; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
   .traj-note code { color: var(--faint) }
 
+  /* ── 图：这一轮的执行结构。列 = 一批同时能跑的活，往右是等出来的顺序。 ── */
+  /* gsum, not gbar: app.css already spends that name on a progress bar. */
+  .gsum {
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    padding: 12px 14px 2px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint);
+  }
+  .gsum .gb-n { color: var(--muted) }
+  .gsum .gb-n em { margin-left: 6px; font-style: normal; color: var(--ghost) }
+  .gsum .gb-n em.on { color: var(--accent-ink) }
+  /* 图例说的是线型，不是颜色：区分「排了序」和「答案真的交过去了」的是虚实，
+     颜色只是跟着走 —— 分不出色的人也要能读出这张图。 */
+  .gkey { display: flex; align-items: center; gap: 15px; margin-left: auto; color: var(--ghost) }
+  .gkey .gk { display: flex; align-items: center; gap: 6px; white-space: nowrap }
+  .gkey .gk-line { width: 22px; height: 0; flex: none; border-top: 1.5px dashed var(--ghost) }
+  .gkey .gk-line[data-carried] { border-top: 2px solid var(--deleg) }
+  .gkey .gk-re { color: var(--ok); font-weight: var(--w-med) }
+
+  .glanes { display: flex; flex-direction: column; gap: 18px; padding: 14px }
+  .glane {
+    border: 1px solid var(--hair); border-radius: var(--r-lg);
+    background: var(--surface); overflow: hidden;
+  }
+  .gl-hd {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 13px; border-bottom: 1px solid var(--hair); background: var(--overlay);
+    font: var(--w-reg) 11px var(--mono); color: var(--faint);
+  }
+  .gl-hd b { color: var(--text); font-weight: var(--w-med) }
+  .gl-hd .gl-st { color: var(--muted) }
+  .gl-hd .gl-n { margin-left: auto; color: var(--ghost); font-variant-numeric: tabular-nums }
+  .gl-hd .gl-n em { margin-left: 5px; font-style: normal; color: var(--ok) }
+  .gl-hd .pip[data-s="running"] { background: var(--net); animation: tick 1.6s ease-in-out infinite }
+  .gl-hd .pip[data-s="completed"] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ok) }
+  .gl-hd .pip[data-s="failed"] { background: var(--err) }
+  .gl-hd .pip[data-s="cancelled"] { background: var(--warn) }
+
+  /* 图比面板宽是常事 —— 让它自己横滚，别把窗口撑开，也别把表头一起拖走。 */
+  .gl-scroll { overflow-x: auto; overflow-y: hidden }
+  .gl-plot { position: relative; margin: 16px 18px 18px; min-width: min-content }
+  .gl-wire { position: absolute; inset: 0; overflow: visible; pointer-events: none }
+  .gl-edge {
+    fill: none; stroke: var(--ghost); stroke-width: 1.5; stroke-dasharray: 4 3;
+  }
+  /* 实线 = 上游的答案真的进了下游的上下文；虚线 = 只排了先后，什么都没带过去。
+     这两件事在内核里就是两条不同的边，画成一种线会把它们说成一回事。 */
+  .gl-edge[data-carried] { stroke: var(--deleg); stroke-width: 2; stroke-dasharray: none }
+
+  .gnode {
+    position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 4px;
+    padding: 0 11px 0 12px; margin: 0; text-align: left; cursor: pointer;
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    background: var(--raised); box-shadow: var(--lit);
+    font: var(--w-reg) 11px var(--mono); color: var(--muted);
+    transition: border-color var(--m-line), box-shadow var(--m-line), transform var(--m-line);
+  }
+  .gnode:hover { border-color: var(--faint) }
+  .gnode[aria-pressed="true"] { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus) }
+  .gnode:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
+  .gn-hd { display: flex; align-items: center; gap: 7px; min-width: 0 }
+  .gn-nm {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: var(--w-med) 12px var(--ui); color: var(--text);
+  }
+  .gn-re { color: var(--ok); font-size: 12px; font-weight: var(--w-med); flex: none }
+  /* 一行就是一行：状态那个词绝不折行，挤不下的是它后面的画像和模型。 */
+  .gn-meta { display: flex; align-items: baseline; gap: 7px; padding-left: 13px; min-width: 0; color: var(--ghost) }
+  .gn-st { flex: none; white-space: nowrap }
+  .gn-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  /* 「在等谁」是这张图唯一能回答而列表答不出的问题，所以它顶掉常规元信息。 */
+  .gn-wait { color: var(--accent-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+
+  /* 状态既是颜色也是这张卡上的那个词 —— 颜色不单独承载意思。 */
+  .gnode[data-s="running"] .pip { background: var(--net); animation: tick 1.6s ease-in-out infinite }
+  .gnode[data-s="running"] .gn-st { color: var(--net) }
+  .gnode[data-s="completed"] .pip { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ok) }
+  .gnode[data-s="adopted"] .pip { background: var(--ok) }
+  .gnode[data-s="adopted"] .gn-st { color: var(--ok) }
+  .gnode[data-s="failed"] .pip { background: var(--err) }
+  .gnode[data-s="failed"] { border-color: color-mix(in srgb, var(--err) 42%, var(--border)) }
+  .gnode[data-s="failed"] .gn-st { color: var(--err-ink) }
+  .gnode[data-s="cancelled"] .pip { background: var(--warn) }
+  .gnode[data-s="cancelled"] .gn-st { color: var(--warn-ink) }
+  /* 跳过和待运行都是「没跑」：边框画成虚的，跟真的跑过的卡一眼分开。 */
+  .gnode:is([data-s="skipped"], [data-s="pending"]) { border-style: dashed; background: var(--overlay) }
+  .gnode[data-s="skipped"] .gn-nm { color: var(--faint) }
+  /* 能写工作区的那几个 —— warn 是「有代价但放行」，正是这件事。 */
+  .gnode[data-w]::before {
+    content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px;
+    border-radius: 0 var(--r-xs) var(--r-xs) 0; background: var(--warn);
+  }
+
+  .gdetail {
+    position: sticky; bottom: 0; margin: 0 14px 14px;
+    border: 1px solid var(--border); border-radius: var(--r-lg);
+    background: var(--float); box-shadow: var(--shadow-float);
+    padding: 11px 14px; font: var(--w-reg) 11px var(--mono);
+  }
+  .gdetail > header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
+    font: var(--w-med) 12px var(--ui); color: var(--text);
+  }
+  .gdetail > header .btn { margin-left: auto; flex: none }
+  .gdetail dl { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 0 }
+  .gdetail dl > div { display: flex; gap: 7px; min-width: 0 }
+  .gdetail dt { color: var(--ghost); flex: none }
+  .gdetail dd { margin: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .gd-id { margin: 9px 0 0; color: var(--ghost); font-size: 10px; overflow-wrap: anywhere }
+
+  .gempty { padding: 24px 20px; max-width: 60ch; font: var(--w-reg) 12px/1.75 var(--ui); color: var(--ghost) }
+
   /* 一次调用 */
   .call { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; }
   .call > .g { display: flex; flex-direction: column; align-items: center }
