@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"reasonix/internal/i18n"
 	goruntime "runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,6 +33,7 @@ import (
 	"reasonix/desktop/internal/update"
 	"reasonix/internal/boot"
 	"reasonix/internal/config"
+	"reasonix/internal/crashreport"
 	"reasonix/internal/event"
 	"reasonix/internal/notify"
 	"reasonix/internal/serve"
@@ -127,13 +130,36 @@ func main() {
 	if handled, code := update.MaybeRunMacHandoff(os.Args[1:]); handled {
 		os.Exit(code)
 	}
-	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "reasonix-next:", err)
-		os.Exit(1)
-	}
+	os.Exit(start())
 }
 
-func run() error {
+// start owns the two things that have to outlive run: the log stderr now points
+// at, and the recover that turns a Go panic into a report. A fatal signal
+// reaches neither — it reaches the log, which is why the log is here.
+func start() int {
+	home := config.ReasonixHomeDir()
+	logs, flush, err := openCrashLog(home)
+	defer flush()
+	if err != nil {
+		fmt.Fprintln(logs, "reasonix-next: crash log:", err)
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			_ = crashreport.CaptureStudioPanic(home, version, recovered, debug.Stack())
+			// The re-panic below ends the process, and its trace is written to
+			// the descriptor this flush is about to stop holding open.
+			flush()
+			panic(recovered)
+		}
+	}()
+	if err := run(logs); err != nil {
+		fmt.Fprintln(logs, "reasonix-next:", err)
+		return 1
+	}
+	return 0
+}
+
+func run(logs io.Writer) error {
 	ctx := context.Background()
 
 	cfg, err := config.Load()
@@ -158,7 +184,7 @@ func run() error {
 		WorkspaceRoot: root,
 		SessionDir:    serve.SessionDirFor(root),
 		Sink:          watch(bc),
-		Stderr:        os.Stderr,
+		Stderr:        logs,
 	})
 	if err != nil {
 		return err

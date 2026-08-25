@@ -1,4 +1,6 @@
-// Package crashreport owns local, user-reviewed CLI crash reports.
+// Package crashreport owns local, user-reviewed crash reports. The on-disk
+// directory is still cli-crash-reports: renaming it would orphan every report
+// a person has not sent yet.
 package crashreport
 
 import (
@@ -79,25 +81,53 @@ type Pending struct {
 
 var ErrNoReports = errors.New("no pending CLI crash reports")
 
-// CapturePanic records a sanitized panic report locally. The panic value itself
-// is deliberately never serialized because it can contain prompts, commands,
-// paths, or provider response content.
+// hostSources are the processes allowed to name themselves in a report. A set
+// rather than a pass-through: the value reaches an ingest that groups on it,
+// and a crashing process is not what to trust for a free-form field. Anything
+// unknown keeps the CLI's name, which is what every report said before there
+// was a second host.
+var hostSources = map[string]bool{"cli.go": true, "studio.go": true}
+
+func sanitizeSource(source string) string {
+	if hostSources[source] {
+		return source
+	}
+	return "cli.go"
+}
+
+// CapturePanic records a sanitized CLI panic report locally. The panic value
+// itself is deliberately never serialized because it can contain prompts,
+// commands, paths, or provider response content.
 func CapturePanic(home, version string, recovered any, stack []byte) error {
+	return capturePanic(home, version, "cli.go", "CLI", recovered, stack)
+}
+
+// CaptureStudioPanic is CapturePanic for the desktop window, named apart so a
+// report says which process died. It sees Go panics only: every Studio crash
+// reported so far has been a fatal signal inside GTK or WebKit, which no
+// recover can reach, and those survive in the stderr log the window redirects
+// instead.
+func CaptureStudioPanic(home, version string, recovered any, stack []byte) error {
+	return capturePanic(home, version, "studio.go", "Studio", recovered, stack)
+}
+
+func capturePanic(home, version, source, host string, recovered any, stack []byte) error {
 	if strings.TrimSpace(home) == "" {
 		return errors.New("crash report: empty Reasonix home")
 	}
 	cleanStack := sanitizeStack(string(stack))
+	summary := fmt.Sprintf("Unhandled %s panic.", host)
 	report := Report{
 		Kind:          "crash",
 		Version:       sanitizeField(defaultString(version, "unknown"), 64),
 		OS:            runtime.GOOS,
 		Arch:          runtime.GOARCH,
-		Message:       "[cli panic]\n\nUnhandled CLI panic.",
+		Message:       fmt.Sprintf("[%s panic]\n\n%s", strings.ToLower(host), summary),
 		SchemaVersion: currentSchemaVersion,
-		Source:        "cli.go",
+		Source:        source,
 		Label:         "panic",
 		ErrorType:     sanitizeField(fmt.Sprintf("%T", recovered), 128),
-		ErrorMessage:  "Unhandled CLI panic.",
+		ErrorMessage:  summary,
 		Stack:         cleanStack,
 		TopFrame:      topFrame(cleanStack),
 		OccurredAt:    time.Now().UTC().Format(time.RFC3339Nano),
@@ -287,7 +317,7 @@ func sanitizeReport(report Report) Report {
 	report.Arch = sanitizeField(report.Arch, 32)
 	report.Message = sanitizeText(report.Message, maxMessageBytes)
 	report.SchemaVersion = currentSchemaVersion
-	report.Source = "cli.go"
+	report.Source = sanitizeSource(report.Source)
 	report.Label = "panic"
 	report.ErrorType = sanitizeField(report.ErrorType, 128)
 	report.ErrorMessage = sanitizeText(report.ErrorMessage, maxFieldBytes)
