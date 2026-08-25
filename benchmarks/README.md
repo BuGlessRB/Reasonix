@@ -1,6 +1,6 @@
 # Reasonix Benchmarks
 
-Three harnesses live under `benchmarks/`; `cmd/e2ebench` also exposes a
+Five harnesses live under `benchmarks/`; `cmd/e2ebench` also exposes a
 SWE-bench Verified mode:
 
 - `e2e/` — the committed end-to-end task suite, driven by
@@ -13,6 +13,12 @@ SWE-bench Verified mode:
 - `compaction/` — CompactionBench: grows a session one generation at a time and
   folds it after each, measuring what repeated compaction costs and what it
   loses. See [CompactionBench](#compactionbench) below.
+- `upstream-edge/` — a shape-instructed pair of fleet tasks for pricing what a
+  `depends_on` edge carries, against the arm where it only orders. See
+  [Pricing the run graph](#pricing-the-run-graph) below.
+- `fanout-width/` — a shape-instructed fleet whose members share nothing, for
+  pricing what running them at the same time is worth. See
+  [Pricing the run graph](#pricing-the-run-graph) below.
 
 ## Directory layout
 
@@ -416,6 +422,34 @@ planner requests, model rounds, tool calls, tokens, wall, cost), an overall
 marginal-utility line (`accuracy +X.Xpp · wall/task +Y.Ys`), and — when tasks
 carry `class` labels — a per-class breakdown, so a subsystem's uplift and
 latency cost can be judged per task class instead of globally.
+
+## Pricing the run graph
+
+Delegation makes three separate claims, and one number cannot settle them. Each
+has its own arm, and all three read the same **Fan-out** section of the report —
+folded from the run graph, which is the only record of a scheduling wait:
+
+| Claim | Arm |
+| --- | --- |
+| Delegating at all beats one agent | `-ablate subagent` |
+| A `depends_on` edge is worth its payload, not only its order | `-ablate upstream` over `benchmarks/upstream-edge` |
+| Running members side by side beats running them in turn | `max_subagent_concurrency = 1` over `benchmarks/fanout-width` |
+
+```sh
+go run ./cmd/e2ebench -suite benchmarks/upstream-edge -json control.json
+go run ./cmd/e2ebench -suite benchmarks/upstream-edge -ablate upstream -json ablated.json
+go run ./cmd/e2ebench -mode compare control.json ablated.json
+```
+
+The section reports work against wall (the speed-up the shape bought), the
+critical path (the floor the declared dependencies impose — wall above it is
+scheduling loss, not shape), and slot wait (what the concurrency ceiling cost
+members that had nothing left to wait for).
+
+Read all three axes before calling an arm better: a fan-out that halves wall
+clock while doubling tokens wins one and loses another. The arm passes when its
+solve rate is no worse, its wall clock is strictly lower, and its tokens stay
+inside the budget the comparison declares.
 
 ## SWE-bench Verified mode
 
