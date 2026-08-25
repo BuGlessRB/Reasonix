@@ -206,6 +206,54 @@ func TestRemotePaneRefusesWithACodeWhenTheLinkIsDown(t *testing.T) {
 	}
 }
 
+// Opening a pane over there is two hops, and the second one used to lose its
+// account: a far kernel that answered with a refusal reached this window as a
+// bare 502, which reads as a request that never arrived. It arrives with a code
+// and the far side's own words now.
+func TestAFarKernelThatRefusesSaysSoRatherThanLookingLikeADeadLink(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	far := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "workspace /srv/data/training is not a directory", http.StatusBadRequest)
+	}))
+	defer far.Close()
+
+	h := NewHub(HubOptions{Remote: &stubAttacher{attach: func(host, workspace string) (RemoteEndpoint, func(), error) {
+		return RemoteEndpoint{
+			Host: host, Workspace: "/srv/data/training",
+			Addr: far.Listener.Addr().String(), Token: "remote-secret",
+		}, func() {}, nil
+	}}})
+	front := httptest.NewServer(h.Handler())
+	defer front.Close()
+
+	resp, err := http.Post(front.URL+"/remotes/open", "application/json",
+		strings.NewReader(`{"host":"gpu-box","workspace":"/srv/data/training"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadGateway)
+	}
+	var body struct {
+		Code   string            `json:"code"`
+		Error  string            `json:"error"`
+		Params map[string]string `json:"params"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("the refusal is not an envelope the window can read: %v", err)
+	}
+	if body.Code != "remote.kernel_refused" {
+		t.Fatalf("code = %q, want remote.kernel_refused: a kernel that answered is not a link that died", body.Code)
+	}
+	if !strings.Contains(body.Params["detail"], "not a directory") {
+		t.Fatalf("params.detail = %q, want what the far kernel actually said", body.Params["detail"])
+	}
+	if body.Params["host"] != "gpu-box" {
+		t.Fatalf("params.host = %q, want gpu-box", body.Params["host"])
+	}
+}
+
 // The pane list is what the sidebar and the tab strip label themselves from.
 // A remote workspace is spelled by the remote OS, so its name is a slash path
 // no matter which separator this machine uses.

@@ -203,17 +203,34 @@ func farRequest(ctx context.Context, ep RemoteEndpoint, method, path string, bod
 	req.Header.Set("Cookie", cookieToken+"="+ep.Token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		// The same condition the proxy below reports, reached through a
+		// different door: the link died before an answer came back.
+		return refusal(http.StatusBadGateway, "remote.unreachable", err, map[string]any{"host": ep.Host})
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		return fmt.Errorf("remote %s: %s: %s", path, resp.Status, bytes.TrimSpace(detail))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
+		return farRefusal(ep.Host, path, resp.Status, body)
 	}
 	if out == nil {
 		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// farRefusal is a kernel on the other machine answering, and refusing. It is
+// not the link being down, which is why it carries its own code: one is fixed
+// by looking at the network and the other by reading what that kernel said.
+// Without a code the whole account reaches the window as a status line, and a
+// bare 502 there reads as a request that never arrived.
+func farRefusal(host, path, status string, body []byte) error {
+	detail := strings.TrimSpace(string(body))
+	if detail == "" {
+		detail = status
+	}
+	return refusal(http.StatusBadGateway, "remote.kernel_refused",
+		fmt.Errorf("remote %s: %s: %s", path, status, detail),
+		map[string]any{"host": host, "detail": detail})
 }
 
 func (h *Hub) openRemoteRuntime(w http.ResponseWriter, r *http.Request) {

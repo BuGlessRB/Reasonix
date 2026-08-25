@@ -90,6 +90,8 @@ export interface HubPort {
   portFor(rt: RuntimeView): AgentPort;
 }
 
+type HubRefusal = { code?: string; error?: string; params?: Record<string, string | number> };
+
 export class SseHub implements HubPort {
   // One port per pane, kept across renders: a fresh instance would resubscribe
   // the event stream on every parent render and drop frames in between.
@@ -104,11 +106,22 @@ export class SseHub implements HubPort {
   // A refusal carries a code, and it is the code that has words in the reader's
   // language. Flattening the body into the message threw that away: what
   // reached the screen was the raw JSON, or a filesystem error naming a path.
+  //
+  // Read once as text, the way SseHttp does: not every answer is an envelope —
+  // http.Error writes its reason as plain text, and asking for JSON first threw
+  // that account away and left "the request never reached the kernel" in front
+  // of a user whose kernel had just explained itself at length.
   private static async fail(path: string, res: Response): Promise<never> {
-    const body = (await res.json().catch(() => null)) as
-      | { code?: string; error?: string; params?: Record<string, string | number> }
-      | null;
-    throw new HttpError(res.status, body?.error || `${path}: ${res.status}`, body ?? undefined, !!body?.error);
+    const raw = (await res.text().catch(() => "")).trim();
+    let body: HubRefusal | null = null;
+    try {
+      const parsed: unknown = raw === "" ? null : JSON.parse(raw);
+      if (parsed && typeof parsed === "object") body = parsed as HubRefusal;
+    } catch {
+      // Plain text, which is the whole message.
+    }
+    const detail = body?.error || raw.slice(0, 400);
+    throw new HttpError(res.status, detail || `${path}: ${res.status}`, body ?? undefined, detail !== "");
   }
 
   private async get<T>(path: string): Promise<T> {

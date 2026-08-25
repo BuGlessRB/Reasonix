@@ -109,6 +109,8 @@ const SAID: Record<string, string> = {
 
   // ── 远程 ─────────────────────────────────────────────────────────
   "remote.unreachable": "{host} 上的内核没有应答，连接可能断了",
+  // 连得上、也答了，答的是拒绝 —— 和链路断掉是两件事，下一步也不一样。
+  "remote.kernel_refused": "{host} 上的内核没有接受这次请求：{detail}",
   "remote.not_available": "这个内核不负责连别的机器",
   "remote.name_required": "给这台机器起个名字",
   "remote.host_required": "说清楚连哪个地址",

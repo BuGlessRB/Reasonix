@@ -39,6 +39,7 @@ export const EN_KERNEL: Record<string, string> = {
     "That image format will not work — use PNG, JPEG, WebP, AVIF or GIF",
   "图片是空的": "The image is empty",
   "{host} 上的内核没有应答，连接可能断了": "The kernel on {host} is not answering — the connection may be down",
+  "{host} 上的内核没有接受这次请求：{detail}": "The kernel on {host} did not accept this request: {detail}",
   "这个内核不负责连别的机器": "This kernel does not open panes on other machines",
   "给这台机器起个名字": "Give this machine a name",
   "说清楚连哪个地址": "Say which address to dial",
