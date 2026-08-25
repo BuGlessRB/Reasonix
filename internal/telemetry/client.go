@@ -271,7 +271,7 @@ func (c *Client) flushPending(ctx context.Context) error {
 			continue
 		}
 		if err := c.post(ctx, "/metrics", metricsPayload{
-			InstallID: c.installID, Version: g.payload.Version, OS: g.payload.OS, Surface: g.payload.Surface, Counters: counters,
+			Version: g.payload.Version, OS: g.payload.OS, Surface: g.payload.Surface, Counters: counters,
 		}); err != nil {
 			return err
 		}
