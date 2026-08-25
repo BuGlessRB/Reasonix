@@ -681,6 +681,7 @@ var kindNames = map[event.Kind]string{
 	event.WorkspaceChanged:        "workspace_changed",
 	event.TurnPhase:               "turn_phase",
 	event.CompletionSummary:       "completion_summary",
+	event.InboxChanged:            "inbox_changed",
 }
 
 // ContextMaintenance is the JSON form of event.ContextMaintenance.

@@ -1,5 +1,5 @@
 import { HttpError } from "./port";
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queued, TrayPrefs } from "./port";
+import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
 import type { WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
 import { SCRIPT } from "./fixture";
@@ -18,6 +18,12 @@ export class MockPort extends MockTheme implements AgentPort {
   private gated = false;
   // Queued mid-turn lines, by the id the kernel would have given them.
   private queued = new Map<string, number>();
+  // The rows behind those timers. Kept apart because a paused queue still
+  // holds its entries — stopping delivery is not dropping the line.
+  private queueItems: QueueItem[] = [];
+  private queueBodies = new Map<string, string>();
+  private queuePaused = false;
+  private queueRevision = 1;
   private state: SessionStatus = {
     label: "deepseek-v4-pro",
     running: false,
@@ -476,11 +482,37 @@ export class MockPort extends MockTheme implements AgentPort {
   async steer(text: string): Promise<Queued> {
     const itemId = `inbox-${this.queued.size + 1}-${Date.now()}`;
     const at = window.setTimeout(() => {
-      this.queued.delete(itemId);
+      this.dropQueued(itemId);
       this.emit({ kind: "steer", text });
     }, 4000);
     this.queued.set(itemId, at);
+    this.addQueued(itemId, "steer", text);
     return { itemId, disposition: "steer_accepted" };
+  }
+
+  private addQueued(itemId: string, intent: QueueItem["intent"], text: string) {
+    this.queueBodies.set(itemId, text);
+    this.queueItems.push({
+      id: itemId,
+      intent,
+      state: this.queuePaused ? "queued" : "steer_accepted",
+      preview: text.slice(0, 120),
+      createdAt: new Date().toISOString(),
+    });
+    this.bumpQueue();
+  }
+
+  private dropQueued(itemId: string) {
+    this.queueItems = this.queueItems.filter((i) => i.id !== itemId);
+    this.queueBodies.delete(itemId);
+    this.bumpQueue();
+  }
+
+  // Every queue mutation announces itself the way the kernel does, so the panel
+  // is exercised by the same one-way path in the fixture and against a kernel.
+  private bumpQueue() {
+    this.queueRevision++;
+    this.emit({ kind: "inbox_changed" });
   }
 
   // The fixture has a window with an icon, because the state worth designing
@@ -501,8 +533,59 @@ export class MockPort extends MockTheme implements AgentPort {
   // The fixture never refuses /submit, so this is only reachable from a test —
   // but the port is a contract and half of one is not a contract.
   async queueFollowup(text: string): Promise<Queued> {
-    void text;
-    return { itemId: `inbox-followup-${Date.now()}`, disposition: "queued_followup" };
+    const itemId = `inbox-followup-${Date.now()}`;
+    this.addQueued(itemId, "followup", text);
+    return { itemId, disposition: "queued_followup" };
+  }
+
+  async queue(): Promise<Queue> {
+    return {
+      revision: this.queueRevision,
+      paused: this.queuePaused,
+      items: this.queueItems.map((i) => ({ ...i })),
+      capacity: { items: this.queueItems.length, maxItems: 64, bytes: 0, maxBytes: 64 << 20 },
+    };
+  }
+
+  // The fixture keeps the whole line, so what comes back is what went in —
+  // which is the point being modelled: a preview is not the text.
+  async readQueued(itemId: string) {
+    return this.queueBodies.get(itemId) ?? "";
+  }
+
+  async editQueued(itemId: string, text: string) {
+    const item = this.queueItems.find((i) => i.id === itemId);
+    if (!item) throw new HttpError(404, "no such entry", { code: "inbox.not_found" });
+    item.preview = text.slice(0, 120);
+    this.queueBodies.set(itemId, text);
+    this.bumpQueue();
+  }
+
+  async moveQueued(itemId: string, toIndex: number) {
+    const from = this.queueItems.findIndex((i) => i.id === itemId);
+    if (from < 0) throw new HttpError(404, "no such entry", { code: "inbox.not_found" });
+    const [item] = this.queueItems.splice(from, 1);
+    this.queueItems.splice(Math.max(0, Math.min(toIndex, this.queueItems.length)), 0, item);
+    this.bumpQueue();
+  }
+
+  // Nothing in the fixture blocks, so nothing can be retried out of it. The
+  // port is still a contract, and half of one is not a contract.
+  async retryQueued(itemId: string) {
+    void itemId;
+  }
+
+  async refreshQueued(itemId: string) {
+    void itemId;
+  }
+
+  // Pausing holds the timers rather than cancelling them: what was said still
+  // waits, which is the state worth designing against.
+  async setQueuePaused(paused: boolean) {
+    this.queuePaused = paused;
+    for (const at of this.queued.values()) window.clearTimeout(at);
+    if (paused) this.queued.clear();
+    this.bumpQueue();
   }
 
   async cancelQueued(itemId: string) {

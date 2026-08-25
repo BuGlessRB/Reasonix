@@ -2,7 +2,7 @@ import { HttpError } from "./port";
 
 type Refusal = { code?: string; error?: string; params?: Record<string, string | number> };
 
-// The transport half of SsePort: where the kernel is, and the four shapes every
+// The transport half of SsePort: where the kernel is, and the five shapes every
 // call to it takes. Split out because the port itself is the whole AgentPort
 // surface — a hundred endpoint methods — and none of them should have to be
 // read past to find how a request is actually made.
@@ -54,6 +54,18 @@ export class SseHttp {
     });
     if (!res.ok) await SseHttp.fail(path, res);
     return (await res.json()) as T;
+  }
+
+  // A partial update of one resource. Distinct from post because the kernel
+  // reads the verb: the same path answers a different question under each.
+  protected async patch(path: string, body?: unknown): Promise<void> {
+    const res = await fetch(this.base + path, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) await SseHttp.fail(path, res);
   }
 
   protected async del(path: string): Promise<void> {

@@ -4,7 +4,7 @@ import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
 import { createPortal } from "react-dom";
 import { HttpError } from "../port/port";
-import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, RewindScope, SessionStatus, WorkspaceChanges } from "../port/port";
+import type { AgentPort, ApprovalVerdict, Checkpoint, ContextBreakdown, JobEntry, McpEntry, Queue as QueueSnapshot, RewindScope, SessionStatus, WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
 import { fromHistory, initialState, localId, quoteAmount, reduce } from "../state/session";
 import { pairCheckpoints } from "../state/checkpoints";
@@ -12,6 +12,7 @@ import { initialTraj, reduceTraj } from "../state/trajectory";
 import { Transcript } from "./Transcript";
 import { Trajectory } from "./Trajectory";
 import { Composer } from "./Composer";
+import { Queue } from "./Queue";
 import { RunStrip } from "./RunStrip";
 import { SlottedView } from "./SlottedView";
 import { key as slotKey, placement } from "./slots";
@@ -80,6 +81,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [tree, setTree] = useState<WorkspaceChanges | null>(null);
   const [ctx, setCtx] = useState<ContextBreakdown | null>(null);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
+  const [queue, setQueue] = useState<QueueSnapshot | null>(null);
   const [slots, setSlots] = useState<Record<string, string>>({});
   const flow = useRef<HTMLDivElement>(null);
   const tabs = useRef<HTMLDivElement>(null);
@@ -329,6 +331,32 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     [port, s.running, refreshStatus, fail],
   );
 
+  // The queue as the kernel holds it. The frame says only that it moved, so the
+  // answer is read back whole — which is also what puts another window's lines,
+  // and the CLI's, in front of this one. The optimistic rows say only what was
+  // sent from here, and they do not survive a reload.
+  useEffect(() => {
+    port.queue().then(setQueue).catch(() => setQueue(null));
+  }, [port, s.queueMoved, status?.sessionPath]);
+
+  const onQueueEdit = useCallback((id: string, text: string) => void port.editQueued(id, text).catch(fail), [port, fail]);
+  const onQueueMove = useCallback((id: string, to: number) => void port.moveQueued(id, to).catch(fail), [port, fail]);
+  const onQueueRetry = useCallback((id: string) => void port.retryQueued(id).catch(fail), [port, fail]);
+  const onQueueRefresh = useCallback((id: string) => void port.refreshQueued(id).catch(fail), [port, fail]);
+  const onQueuePause = useCallback((on: boolean) => void port.setQueuePaused(on).catch(fail), [port, fail]);
+  const onQueueRead = useCallback((id: string) => port.readQueued(id), [port]);
+  // The panel knows the entry, never the row the composer minted for it, so
+  // taking one back here has to name it the way the kernel does.
+  const onQueueCancel = useCallback(
+    (itemId: string) => {
+      port
+        .cancelQueued(itemId)
+        .then(() => dispatch({ kind: "__unsent", id: itemId } as never))
+        .catch(fail);
+    },
+    [port, fail],
+  );
+
   // Cancelling is only meaningful before the turn reads the line. After that
   // the kernel refuses and says so, and the row stops calling itself queued on
   // its own — the steer event that made it too late is also what clears it.
@@ -488,6 +516,19 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           <i />
         </span>
         <RunStrip doing={s.doing} metrics={s.metrics} steps={counts.steps} elapsed={elapsed} />
+        {/* What was said and not yet read. It sits above the composer for the
+            same reason the extension rail does: the input box is the one thing
+            nothing else may push off the screen. */}
+        <Queue
+          queue={queue}
+          onRead={onQueueRead}
+          onEdit={onQueueEdit}
+          onMove={onQueueMove}
+          onCancel={onQueueCancel}
+          onRetry={onQueueRetry}
+          onRefresh={onQueueRefresh}
+          onPause={onQueuePause}
+        />
         {/* Views the user (or the extension) put next to the composer. They sit
             above it rather than inside it: the input box is the one thing an
             extension must never be able to crowd out. */}

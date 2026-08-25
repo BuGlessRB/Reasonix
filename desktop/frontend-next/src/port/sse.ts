@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, UsageReport, McpDraft, PluginExport, Queued, TrayPrefs, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
@@ -504,6 +504,32 @@ export class SsePort extends SseTheme implements AgentPort {
   }
   async cancelQueued(itemId: string) {
     await this.del("/inbox/items/" + encodeURIComponent(itemId));
+  }
+  async queue() {
+    const q = await this.get<Queue>("/inbox");
+    // An empty queue arrives as null, not []: that is what a Go nil slice
+    // encodes to. Normalising here is what keeps every reader from having to
+    // know it — and one that forgets only fails when the queue runs dry.
+    return { ...q, items: q.items ?? [] };
+  }
+  async readQueued(itemId: string) {
+    const r = await this.get<{ envelope?: { displayText?: string } }>("/inbox/items/" + encodeURIComponent(itemId));
+    return r.envelope?.displayText ?? "";
+  }
+  editQueued(itemId: string, text: string) {
+    return this.patch("/inbox/items/" + encodeURIComponent(itemId), { input: text });
+  }
+  moveQueued(itemId: string, toIndex: number) {
+    return this.post("/inbox/move", { id: itemId, toIndex });
+  }
+  retryQueued(itemId: string) {
+    return this.post("/inbox/items/" + encodeURIComponent(itemId) + "/retry");
+  }
+  refreshQueued(itemId: string) {
+    return this.post("/inbox/items/" + encodeURIComponent(itemId) + "/refresh");
+  }
+  setQueuePaused(paused: boolean) {
+    return this.post(paused ? "/inbox/pause" : "/inbox/resume");
   }
   cancel() {
     return this.post("/cancel");

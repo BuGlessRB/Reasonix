@@ -92,6 +92,11 @@ export interface SessionState {
   running: boolean;
   doing: string;
   steerQueue: string[];
+  // How many times the kernel has said the durable queue moved. The frame
+  // carries nothing else on purpose — one authority answers what is in there,
+  // and this is what asks it again. Counting, not the kernel's own revision:
+  // the point is that it changed, and a counter cannot arrive out of order.
+  queueMoved: number;
   // Standing extension surfaces, keyed by plugin and surface id. They describe
   // a state that is still true, so they hold a place in the side rail instead
   // of scrolling away in the transcript.

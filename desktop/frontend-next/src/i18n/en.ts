@@ -220,6 +220,27 @@ export const EN: Record<string, string> = {
   "登录（社区与崩溃跟进，不影响使用）": "Sign in (community and crash follow-up; not required to use it)",
   "账号：{name}": "Account: {name}",
 
+  // ── 待发队列 ─────────────────────────────────────────────────────
+  "待发队列": "Queue",
+  "待发 {n} 条": "{n} waiting",
+  "已暂停": "Held",
+  "只读": "Read-only",
+  "恢复了 {n} 条": "{n} recovered",
+  "已满": "Full",
+  "暂停派发": "Hold",
+  "继续派发": "Release",
+  "等待中": "waiting",
+  "下个工具边界送入": "goes in at the next tool boundary",
+  "已送入": "delivered",
+  "进行中": "running",
+  "受阻": "blocked",
+  "状态不明": "uncertain",
+  "上移": "Move up",
+  "下移": "Move down",
+  "改": "Edit",
+  "刷新": "Re-freeze",
+  "重新冻结引用的文件": "Re-freeze the files it quotes",
+
   // ── 外观设置 ─────────────────────────────────────────────────────
   "外观": "Appearance",
   "大小": "Size",

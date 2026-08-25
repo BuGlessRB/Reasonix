@@ -29,6 +29,7 @@ export type Kind =
   | "context_maintenance"
   | "workspace_changed"
   | "completion_summary"
+  | "inbox_changed"
   // Transport frames, not kernel events: the stream describing itself. Handled
   // in the port and never reaching the reducer.
   | "stream_gap"

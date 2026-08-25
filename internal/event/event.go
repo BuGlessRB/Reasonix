@@ -126,6 +126,10 @@ const (
 	// take a minute, and a placeholder that says nothing for a minute is
 	// indistinguishable from one that has hung.
 	CompactionProgress
+	// InboxChanged reports that the durable session inbox moved. Content-free:
+	// the queue is read back from the kernel, so one authority answers every
+	// client instead of each rebuilding it from the frames it happened to see.
+	InboxChanged
 	// KindCount is a sentinel one past the last real Kind. New event kinds must
 	// be inserted above it so completeness tests cover them automatically.
 	KindCount

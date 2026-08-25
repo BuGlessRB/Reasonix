@@ -22,7 +22,7 @@ func TestFrontendCallsOnlyPathsThisPackageServes(t *testing.T) {
 	}
 
 	served := servedRoutes(t)
-	call := regexp.MustCompile(`(?:\.(?:get|post|post0|del)(?:<[^>]*>)?\(\s*|fetch\(\s*)(?:this\.base \+ )?"(/[^"]*)"`)
+	call := regexp.MustCompile(`(?:\.(?:get|post|post0|del|patch)(?:<[^>]*>)?\(\s*|fetch\(\s*)(?:this\.base \+ )?"(/[^"]*)"`)
 
 	var checked int
 	var missing []string

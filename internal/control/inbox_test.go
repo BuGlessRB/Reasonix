@@ -19,6 +19,59 @@ import (
 	"reasonix/internal/tool"
 )
 
+// Frontends rebuild the queue from the kernel on this frame and on nothing
+// else, so a mutation that moves the queue without reporting it leaves every
+// client showing a queue that has already changed. The listener runs on the
+// store's own goroutine, which is why this waits rather than reads once.
+func TestInboxMutationsReachTheEventStream(t *testing.T) {
+	dir := t.TempDir()
+	session := filepath.Join(dir, "s.jsonl")
+	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sink := &noticeSink{}
+	c := New(Options{SessionPath: session, SessionDir: dir, Sink: sink})
+	rec, err := c.EnqueueInbox(InboxRequest{
+		Intent:  sessioninbox.IntentFollowup,
+		Display: "queued line",
+		Submit:  "queued line",
+		Source:  "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForKind(t, sink, event.InboxChanged, 1)
+	if err := c.DeleteInboxItem(rec.ItemID); err != nil {
+		t.Fatal(err)
+	}
+	// Taking one back is the other half: a panel that only heard about arrivals
+	// would keep offering to cancel a line that is no longer there.
+	waitForKind(t, sink, event.InboxChanged, 2)
+}
+
+func waitForKind(t *testing.T, sink *noticeSink, kind event.Kind, want int) {
+	t.Helper()
+	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+		if countKind(sink, kind) >= want {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("saw %d %v events, wanted %d", countKind(sink, kind), kind, want)
+}
+
+func countKind(sink *noticeSink, kind event.Kind) int {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	n := 0
+	for _, e := range sink.events {
+		if e.Kind == kind {
+			n++
+		}
+	}
+	return n
+}
+
 func TestEnqueueInboxDurableAndSnapshot(t *testing.T) {
 	dir := t.TempDir()
 	session := filepath.Join(dir, "s.jsonl")

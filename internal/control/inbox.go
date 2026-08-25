@@ -182,6 +182,21 @@ func (s *inboxState) activeIDs() []string {
 	return out
 }
 
+// adoptInboxLocked opens the queue at path and wires its change listener, so
+// every path that binds a store reports movement. Callers hold c.inbox.mu.
+func (c *Controller) adoptInboxLocked(path string) (*sessioninbox.Store, error) {
+	st, err := sessioninbox.Open(path, sessioninbox.Limits{})
+	if err != nil {
+		return nil, err
+	}
+	// Store notifies from its own goroutine, so this holds no lock of ours.
+	st.OnChange(func(sessioninbox.InboxSnapshot) {
+		c.sink.Emit(event.Event{Kind: event.InboxChanged})
+	})
+	c.inbox.store = st
+	return st, nil
+}
+
 func (c *Controller) ensureInbox() (*sessioninbox.Store, error) {
 	path := c.SessionPath()
 	if path == "" {
@@ -196,11 +211,10 @@ func (c *Controller) ensureInbox() (*sessioninbox.Store, error) {
 		c.inbox.store.Close()
 		c.inbox.store = nil
 	}
-	st, err := sessioninbox.Open(path, sessioninbox.Limits{})
+	st, err := c.adoptInboxLocked(path)
 	if err != nil {
 		return nil, err
 	}
-	c.inbox.store = st
 	snap := st.Snapshot()
 	if snap.Recovered && snap.RecoveredN > 0 {
 		c.sink.Emit(event.Event{
@@ -233,12 +247,11 @@ func (c *Controller) rebindInbox() {
 	if path == "" {
 		return
 	}
-	st, err := sessioninbox.Open(path, sessioninbox.Limits{})
+	st, err := c.adoptInboxLocked(path)
 	if err != nil {
 		slog.Warn("controller: open session inbox", "err", err, "path", path)
 		return
 	}
-	c.inbox.store = st
 	snap := st.Snapshot()
 	if snap.Recovered && snap.RecoveredN > 0 {
 		// Emit after unlock via deferred sink call would race; emit here.

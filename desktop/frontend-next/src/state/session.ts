@@ -20,6 +20,7 @@ export const initialState: SessionState = {
   running: false,
   doing: "空闲",
   steerQueue: [],
+  queueMoved: 0,
   panels: [],
   views: [],
   takeovers: {},
@@ -236,6 +237,7 @@ const holdsWait = new Set<string>([
   "turn_phase",
   "mcp_surface_ready",
   "workspace_changed",
+  "inbox_changed",
   "context_maintenance",
   "extension_surface",
   "extension_status",
@@ -269,6 +271,7 @@ export type SessionEvent =
 function apply(s: SessionState, ev: SessionEvent): SessionState {
   if (ev.kind === "__error") return { ...s, error: ev.text };
   if (ev.kind === "__runtime_seen") return { ...s, runtime: s.runtime.filter((n) => n.id !== ev.id) };
+  if (ev.kind === "inbox_changed") return { ...s, queueMoved: s.queueMoved + 1 };
   // Both event.Message emitters carry assistant text, so nothing on the wire
   // echoes what you typed — only /history has it, and only after a reload. The
   // client owns its own turn. Mid-turn input stays pending until the steer
@@ -292,11 +295,13 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
     };
   }
   // A line the kernel never took is not part of what happened, so it leaves the
-  // transcript rather than sitting there looking sent.
+  // transcript rather than sitting there looking sent. Either name identifies
+  // it: the row the composer minted, or the entry the kernel queued it as —
+  // the queue panel only ever knows the second.
   if (ev.kind === "__unsent") {
     return {
       ...s,
-      items: s.items.filter((i) => !(i.t === "user" && i.id === ev.id)),
+      items: s.items.filter((i) => !(i.t === "user" && (i.id === ev.id || i.itemId === ev.id))),
       steerQueue: s.steerQueue,
     };
   }

@@ -64,6 +64,46 @@ export interface Queued {
   disposition?: string;
 }
 
+/** GET /inbox. What is actually waiting, kernel-side. The optimistic rows this
+ *  window adds say only what it sent itself: they do not survive a reload, and
+ *  they never show what the CLI or another window put in the same queue. */
+export interface Queue {
+  revision: number;
+  paused: boolean;
+  // A newer on-disk format loads read-only and never auto-runs, so the panel
+  // has to offer looking rather than editing.
+  readonly?: boolean;
+  // Entries a crash left behind. The kernel pauses itself when it finds any,
+  // because re-running an instruction nobody re-confirmed is the worse error.
+  recoveredCount?: number;
+  items: QueueItem[];
+  capacity: QueueCapacity;
+}
+
+/** One waiting line — metadata only. preview is all the manifest keeps; the
+ *  body is a separate read, which is why editing takes the text back. */
+export interface QueueItem {
+  id: string;
+  intent: "followup" | "steer";
+  state: "queued" | "steer_accepted" | "steer_consumed" | "running" | "blocked" | "uncertain";
+  preview: string;
+  createdAt: string;
+  // Why a blocked entry stopped, from the kernel that stopped it.
+  blockReason?: string;
+  // Files this entry froze at the moment it was queued. Their presence is what
+  // makes re-freezing meaningful; the entry quotes them as they were.
+  refs?: { path?: string }[];
+}
+
+/** Both limits bite: the queue refuses on count and on total bytes, and a
+ *  panel that showed one of them would be wrong about the other. */
+export interface QueueCapacity {
+  items: number;
+  maxItems: number;
+  bytes: number;
+  maxBytes: number;
+}
+
 /** What the window says about its own status icon. null where there is no
  *  window under the page — the same build runs in a browser tab. */
 export interface TrayPrefs {
@@ -281,6 +321,26 @@ export interface AgentPort {
   queueFollowup(text: string): Promise<Queued>;
   // Takes a queued line back before the turn reads it, and refuses once it has.
   cancelQueued(itemId: string): Promise<void>;
+  // The queue as the kernel holds it. Read on every inbox_changed frame: the
+  // event says it moved and nothing more, so that one answer serves every
+  // client instead of each rebuilding the queue from the frames it saw.
+  queue(): Promise<Queue>;
+  // The entry's full text. preview is cut to a manifest-sized line, so editing
+  // against it would silently shorten what the user actually said.
+  readQueued(itemId: string): Promise<string>;
+  // Rewrites a waiting line. The turn reads the stored body, not what was on
+  // screen when it was typed, so this is how second thoughts reach it.
+  editQueued(itemId: string, text: string): Promise<void>;
+  moveQueued(itemId: string, toIndex: number): Promise<void>;
+  // Puts a blocked entry back in line. What blocked it is the kernel's to say
+  // and the panel's to show; retrying is the user deciding it is worth another.
+  retryQueued(itemId: string): Promise<void>;
+  // Re-freezes the files an entry references. A line that waited through the
+  // work that changed them would otherwise arrive quoting what is no longer.
+  refreshQueued(itemId: string): Promise<void>;
+  // Holds delivery without dropping anything. The queue keeps filling; nothing
+  // leaves it until this is turned back off.
+  setQueuePaused(paused: boolean): Promise<void>;
   cancel(): Promise<void>;
   approve(id: string, verdict: ApprovalVerdict): Promise<void>;
   answer(id: string, answers: { questionId: string; selected: string[] }[]): Promise<void>;

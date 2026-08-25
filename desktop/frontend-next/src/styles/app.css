@@ -494,6 +494,49 @@
   .runstrip .mt:empty { display: none }
   .runstrip .hit { color: var(--ok) }
   /* 数字长出来的时候顶一下：这样「上传/下载」是看得见在动的，不是两个静止的数 */
+  /* 待发队列：说出去了、还没被读到的话。队列空且没暂停时整块不渲染 */
+  .queue {
+    display: flex; flex-direction: column; gap: 3px; margin-bottom: 9px;
+    font: var(--w-reg) 11px var(--mono);
+    animation: qin .22s var(--ease-out) both;
+  }
+  @keyframes qin { from { opacity: 0; transform: translateY(3px) } to { opacity: 1; transform: none } }
+  .qhead { display: flex; align-items: center; gap: 7px; color: var(--faint) }
+  .qflag { padding: 0 5px; border-radius: var(--r-xs); background: var(--sunk); color: var(--muted) }
+  .qflag[data-warn] { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 16%, transparent) }
+  .qhold {
+    margin-left: auto; padding: 1px 7px; border: 1px solid var(--hair); border-radius: var(--r-xs);
+    background: none; color: var(--muted); font: inherit; cursor: pointer;
+    transition: color .15s var(--ease-out), border-color .15s var(--ease-out);
+  }
+  .qhold:hover:not(:disabled) { color: var(--text); border-color: var(--border) }
+  .qhold:disabled { opacity: .45; cursor: default }
+  .qrow {
+    display: flex; align-items: center; gap: 7px; min-height: 21px; padding: 1px 7px;
+    border-radius: var(--r-sm); background: var(--sunk);
+  }
+  /* 插话和跟进是两件事：一个插进正在跑的回合，一个等下一个回合 */
+  .qmark { flex: none; color: var(--deleg) }
+  .qrow[data-intent="steer"] .qmark { color: var(--accent-ink) }
+  .qtext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text) }
+  .qedit {
+    flex: 1; min-width: 0; padding: 2px 5px; border: 1px solid var(--focus); border-radius: var(--r-xs);
+    background: var(--surface); color: var(--text); font: inherit; resize: none;
+  }
+  .qstate, .qwhy { flex: none; color: var(--faint) }
+  .qrow[data-state="blocked"] .qstate, .qwhy { color: var(--warn-ink) }
+  .qrow[data-state="steer_consumed"], .qrow[data-state="running"] { opacity: .55 }
+  /* 操作只在指到这一行时出现：队列平时是读的，不是一排按钮 */
+  .qacts { display: flex; gap: 1px; flex: none; opacity: 0; transition: opacity .15s var(--ease-out) }
+  .qrow:hover .qacts, .qrow:focus-within .qacts { opacity: 1 }
+  .qacts button {
+    min-width: 17px; padding: 0 3px; border: none; border-radius: var(--r-xs);
+    background: none; color: var(--muted); font: inherit; cursor: pointer;
+  }
+  .qacts button:hover:not(:disabled) { background: var(--raised); color: var(--text) }
+  .qacts button:disabled { opacity: .3; cursor: default }
+  .qacts .qdel:hover { color: var(--err-ink) }
+
   .runstrip .up[data-bump] { animation: bumpup .5s var(--ease-out) }
   .runstrip .dn[data-bump] { animation: bumpdn .5s var(--ease-out) }
   @keyframes bumpup { 0% { transform: translateY(2px); opacity: .5 } 100% { transform: none; opacity: 1 } }
