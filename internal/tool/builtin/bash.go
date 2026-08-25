@@ -92,6 +92,9 @@ type bash struct {
 	// and never for background jobs, which need the local job manager.
 	terminal    TerminalRunner
 	sessionTemp *sessiontemp.Manager
+	// paths is the read tools' resolver, held here only to recognise a token
+	// bash cannot reach — see refuseExternalRef.
+	paths *PathResolver
 }
 
 type bashParams struct {
@@ -193,29 +196,20 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 
 	var p bashParams
 	if err := json.Unmarshal(args, &p); err != nil {
-		ex.State = tool.ShellStateNotRun
-		ex.FailurePhase = tool.ShellPhasePreflight
-		ex.MutationRisk = tool.ShellMutationNotStarted
-		ex.DurationMs = time.Since(start).Milliseconds()
-		return tool.DetailedResult{Execution: ex}, fmt.Errorf("invalid args: %w", err)
+		return notRun(ex, start, fmt.Errorf("invalid args: %w", err))
 	}
 	if p.Command == "" {
-		ex.State = tool.ShellStateNotRun
-		ex.FailurePhase = tool.ShellPhasePreflight
-		ex.MutationRisk = tool.ShellMutationNotStarted
-		ex.DurationMs = time.Since(start).Milliseconds()
-		return tool.DetailedResult{Execution: ex}, fmt.Errorf("command is required")
+		return notRun(ex, start, fmt.Errorf("command is required"))
+	}
+	if err := b.refuseExternalRef(p.Command); err != nil {
+		return notRun(ex, start, err)
 	}
 
 	sh := b.resolved()
 	if !sh.SupportsChaining() && (hasUnquotedSeq(p.Command, "&&") || hasUnquotedSeq(p.Command, "||")) {
-		ex.State = tool.ShellStateNotRun
-		ex.FailurePhase = tool.ShellPhasePreflight
-		ex.MutationRisk = tool.ShellMutationNotStarted
-		ex.DurationMs = time.Since(start).Milliseconds()
-		return tool.DetailedResult{Execution: ex}, fmt.Errorf("this shell is Windows PowerShell, which does not parse '&&' or '||'. " +
-			"Sequence with ';' (both run regardless of the first's result), use 'if ($?) { ... }' for " +
-			"conditional chaining, or issue the commands as separate calls")
+		return notRun(ex, start, fmt.Errorf("this shell is Windows PowerShell, which does not parse '&&' or '||'. "+
+			"Sequence with ';' (both run regardless of the first's result), use 'if ($?) { ... }' for "+
+			"conditional chaining, or issue the commands as separate calls"))
 	}
 
 	// Pin the session-private temporary generation before any launch path so

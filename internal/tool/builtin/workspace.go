@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -79,7 +80,7 @@ func (w Workspace) Tools(enabled ...string) []tool.Tool {
 		"delete_range":  deleteRange{workDir: w.Dir, roots: roots, guard: w.SessionGuard, managed: w.ManagedConfig, sessionTemp: w.SessionTemp, overlay: w.FileOverlay},
 		"delete_symbol": deleteSymbol{workDir: w.Dir, roots: roots, guard: w.SessionGuard, managed: w.ManagedConfig, sessionTemp: w.SessionTemp, overlay: w.FileOverlay},
 		"code_index":    codeIndex{workDir: w.Dir, forbidRoots: forbidRoots},
-		"bash":          bash{workDir: w.Dir, sb: w.Bash, timeout: w.BashTimeout, guard: w.SessionGuard, terminal: w.Terminal, sessionTemp: w.SessionTemp},
+		"bash":          bash{workDir: w.Dir, sb: w.Bash, timeout: w.BashTimeout, guard: w.SessionGuard, terminal: w.Terminal, sessionTemp: w.SessionTemp, paths: w.ReadPaths},
 		"ls":            listDir{workDir: w.Dir, paths: w.ReadPaths, forbidRoots: forbidRoots},
 		"glob":          globTool{workDir: w.Dir, paths: w.ReadPaths, forbidRoots: forbidRoots},
 		"grep":          grepTool{workDir: w.Dir, paths: w.ReadPaths, rg: w.Search.RgPath, forbidRoots: forbidRoots, sb: w.Bash, sessionTemp: w.SessionTemp},
@@ -231,6 +232,25 @@ func (r *PathResolver) Resolve(path string) (ResolvedPath, bool) {
 		}, true
 	}
 	return ResolvedPath{}, false
+}
+
+// TokensIn names the registered tokens a command mentions. The registry is the
+// authority: these keys were minted by the host, so finding one is recognition
+// rather than a guess about what a word might mean.
+func (r *PathResolver) TokensIn(command string) []string {
+	if r == nil || command == "" {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var found []string
+	for token := range r.roots {
+		if strings.Contains(command, token) {
+			found = append(found, token)
+		}
+	}
+	sort.Strings(found)
+	return found
 }
 
 // ResolvedPath carries both the local path used for I/O and the token path that
