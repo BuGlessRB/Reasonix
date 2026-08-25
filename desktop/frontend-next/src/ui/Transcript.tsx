@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { decimals } from "../i18n/format";
 import { t } from "../i18n";
 import type { Item, Waiting } from "../state/session";
@@ -29,6 +29,10 @@ interface Props {
   onPinned: (v: boolean) => void;
   // Bumped to ask for the bottom back — see the effect that consumes it.
   jump: number;
+  // A request from outside to show one tool call — the run graph asking for the
+  // node you clicked. The nonce, not the id, is what makes asking twice land
+  // twice; null while nothing has been asked for.
+  focus: { call: string; n: number } | null;
   onApprove: (itemId: string, id: string, v: ApprovalVerdict) => void;
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => void;
   onSuggest: (text: string) => void;
@@ -88,7 +92,7 @@ function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
   return blocks;
 }
 
-export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, onApprove, onAnswer, onSuggest, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
+export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, focus, onApprove, onAnswer, onSuggest, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
   // A block the selection touches must not leave the DOM. Unmounting the node a
   // selection is anchored to makes the browser remap that selection onto
   // whatever is still mounted — which reads as "I selected up there and the
@@ -294,8 +298,8 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
   // pass then puts the message itself under the reader. Marked as a gesture,
   // or the follow would read this scroll as the transcript moving and stay
   // pinned to the bottom the reader just left.
-  const jumpTo = useCallback(
-    (mark: RailMark) => {
+  const land = useCallback(
+    (block: number, into: number, selector: string) => {
       const root = scroll.current;
       const inner = flow.current;
       if (!root || !inner) return;
@@ -307,10 +311,10 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
       // ancestor is .pane, which does not scroll, so offsetTop answers "where
       // in the window" — writing that back as scrollTop barely moves anything.
       const topOf = (el: HTMLElement) => el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
-      const chunk = inner.querySelectorAll<HTMLElement>(".chunk")[mark.block];
-      if (chunk) root.scrollTop = topOf(chunk) + (mark.of > 1 ? (mark.within / mark.of) * chunk.offsetHeight : 0) - 12;
+      const chunk = inner.querySelectorAll<HTMLElement>(".chunk")[block];
+      if (chunk) root.scrollTop = topOf(chunk) + into * chunk.offsetHeight - 12;
       const settle = (tries: number) => {
-        const el = inner.querySelector<HTMLElement>(`[data-item="${CSS.escape(mark.id)}"]`);
+        const el = inner.querySelector<HTMLElement>(selector);
         if (el) {
           root.scrollTop = topOf(el) - 12;
           el.setAttribute("data-hit", "");
@@ -322,6 +326,11 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
       requestAnimationFrame(() => settle(6));
     },
     [scroll, flow, onPinned],
+  );
+
+  const jumpTo = useCallback(
+    (mark: RailMark) => land(mark.block, mark.of > 1 ? mark.within / mark.of : 0, `[data-item="${CSS.escape(mark.id)}"]`),
+    [land],
   );
 
   // "Back to latest" cannot just write scrollTop once: where the bottom is
@@ -354,6 +363,32 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
   const last = items.length > 0 ? items[items.length - 1] : undefined;
   const live = last?.t === "say" && !last.done ? last : undefined;
   const blocks = useBlocks(items, live ? items.length - 1 : items.length, revision);
+
+  // Which block holds a given call, so the graph can land on one the way the
+  // rail lands on a message: the card may sit in a block that is not mounted
+  // and therefore has no node to scroll to yet.
+  const callBlock = useMemo(() => {
+    const at = new Map<string, { block: number; into: number }>();
+    blocks.forEach((block, b) =>
+      block.forEach((it, i) => {
+        if (it.t !== "tool") return;
+        const into = block.length > 1 ? i / block.length : 0;
+        for (const id of [it.tool.id, ...it.children.map((c) => c.id)]) if (id) at.set(id, { block: b, into });
+      }),
+    );
+    return at;
+  }, [blocks]);
+
+  // A hidden pane has no geometry: every rect reads zero and the scroll lands
+  // nowhere. So the request is held, not spent, until this tab is the one on
+  // screen — which is also what makes the caller's ordering not matter.
+  const landed = useRef(0);
+  useEffect(() => {
+    if (hidden || !focus || landed.current === focus.n) return;
+    landed.current = focus.n;
+    const where = callBlock.get(focus.call);
+    if (where) land(where.block, where.into, `[data-call="${CSS.escape(focus.call)}"]`);
+  }, [hidden, focus, callBlock, land]);
 
   const rowProps = { onApprove, onAnswer, onForget, onCancelQueued, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
 

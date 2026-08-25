@@ -9,8 +9,10 @@ import type { RuntimeView } from "../port/hub";
 import { fromHistory, initialState, localId, quoteAmount, reduce } from "../state/session";
 import { pairCheckpoints } from "../state/checkpoints";
 import { initialTraj, reduceTraj } from "../state/trajectory";
+import { initialGraph, reduceGraph } from "../state/graph";
 import { Transcript } from "./Transcript";
 import { Trajectory } from "./Trajectory";
+import { Graph } from "./Graph";
 import { Composer } from "./Composer";
 import { Queue } from "./Queue";
 import { RunStrip } from "./RunStrip";
@@ -71,10 +73,14 @@ interface Props {
 function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, onReport, onSessionChanged, pulse, onSettings, needsProject, onOpenProject, onKeepHere }: Props) {
   const [s, dispatch] = useReducer(reduce, initialState);
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
+  const [graph, graphDispatch] = useReducer(reduceGraph, initialGraph);
   const [status, setStatus] = useState<SessionStatus | null>(null);
-  const [tab, setTab] = useState<"flow" | "traj">("flow");
+  const [tab, setTab] = useState<"flow" | "traj" | "graph">("flow");
   const [pinned, setPinned] = useState(true);
   const [jump, setJump] = useState(0);
+  // What the run graph asked to be shown. The counter is the request, not the
+  // id: clicking the same node twice has to land twice.
+  const [focus, setFocus] = useState<{ call: string; n: number } | null>(null);
   const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [tps, setTps] = useState(0);
@@ -114,6 +120,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       port.subscribe((ev) => {
         dispatch(ev);
         trajDispatch(ev);
+        graphDispatch(ev);
         // A server finishing its handshake changes what /mcp answers, and this
         // is the only precise signal for it — the turn boundary below is the
         // fallback for changes that arrive without an event.
@@ -124,7 +131,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
 
   useEffect(() => {
     let alive = true;
-    port.trajectory().then((evs) => alive && evs.forEach((e) => trajDispatch(e))).catch(() => {});
+    port.trajectory().then((evs) => alive && evs.forEach((e) => { trajDispatch(e); graphDispatch(e); })).catch(() => {});
     port.checkpoints().then((cps) => alive && setCheckpoints(cps)).catch(() => {});
     // The record and the numbers over it are two reads, not one. /status can go
     // to the network — the provider's wallet endpoint rides it — and pairing the
@@ -171,7 +178,8 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // be re-read rather than patched.
   const reloadSession = useCallback(() => {
     trajDispatch({ kind: "__clear" } as never);
-    port.trajectory().then((evs) => evs.forEach((e) => trajDispatch(e))).catch(() => {});
+    graphDispatch({ kind: "__clear" });
+    port.trajectory().then((evs) => evs.forEach((e) => { trajDispatch(e); graphDispatch(e); })).catch(() => {});
     port.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([]));
     // Two reads, the same way the first mount takes them: the record does not
     // wait behind the numbers over it.
@@ -471,6 +479,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         <button className="tab" role="tab" aria-selected={tab === "traj"} onClick={() => swapping(() => setTab("traj"), "tab")}>
           {t("轨迹")}<span className="n">{traj.rows.length}</span>
         </button>
+        <button className="tab" role="tab" aria-selected={tab === "graph"} onClick={() => swapping(() => setTab("graph"), "tab")}>
+          {t("图")}{graph.nodes.length > 0 && <span className="n">{graph.nodes.length}</span>}
+        </button>
         {tabMark && <i className="tabmark" style={{ width: tabMark.len, transform: `translateX(${tabMark.at}px)` }} />}
       </div>
 
@@ -483,6 +494,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         hidden={tab !== "flow"}
         onPinned={setPinned}
         jump={jump}
+        focus={focus}
         onSuggest={submit}
         onApprove={onApprove}
         onAnswer={onAnswer}
@@ -506,6 +518,24 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           delta — a second transcript's worth of work, drawn for nobody. */}
       <div className="scroll" data-pane="traj" hidden={tab !== "traj"}>
         {tab === "traj" && <Trajectory rows={traj.rows} onSave={(n, c) => port.saveText(n, c)} />}
+      </div>
+
+      <div className="scroll" data-pane="graph" hidden={tab !== "graph"}>
+        {tab === "graph" && (
+          <Graph
+            graph={graph}
+            items={s.items}
+            // Both in one commit: the view transition defers what it is given,
+            // so asking for the call before the tab switch would spend the
+            // request on a pane that is still off screen.
+            onOpen={(call) =>
+              swapping(() => {
+                setTab("flow");
+                setFocus((was) => ({ call, n: (was?.n ?? 0) + 1 }));
+              }, "tab")
+            }
+          />
+        )}
       </div>
 
       <div className="compose">

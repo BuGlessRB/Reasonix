@@ -91,7 +91,15 @@ export function ToolCard({
   // than the object carrying it.
   const goal = tool.name === "update_goal" ? goalUpdate(tool.args) : null;
   return (
-    <div className="call" data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined} data-running={running ? "" : undefined}>
+    // data-call is the anchor the run graph lands on. The rail could already
+    // find a user message; a tool call had no id in the DOM at all, so nothing
+    // outside the transcript could point at one.
+    <div
+      className="call"
+      data-call={tool.id || undefined}
+      data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined}
+      data-running={running ? "" : undefined}
+    >
       <div className="g">
         <Sym glyph={glyphFor(shown)} done={settling.pop} />
         <span className="line" />
@@ -176,7 +184,7 @@ export function ToolCard({
 function NestedCall({ tool }: { tool: Tool }) {
   const shown = tool.resolvedName || tool.name;
   return (
-    <div className="call" data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined}>
+    <div className="call" data-call={tool.id || undefined} data-k={KINDED.has(categoryOf(shown)) ? categoryOf(shown) : undefined}>
       <div className="g">
         <Sym glyph={glyphFor(shown)} />
         <span className="line" />
