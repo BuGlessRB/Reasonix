@@ -9,6 +9,8 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/tool"
+
+	"reasonix/internal/agentgraph"
 )
 
 func TestFleetItemShapeRequiresExactlyOneOfPromptAndAdoptRef(t *testing.T) {
@@ -50,9 +52,9 @@ func TestUnresolvedDepCountsTreatsAdoptedAsSettled(t *testing.T) {
 		t.Fatal(err)
 	}
 	results := []fleetItemResult{
-		{index: 0, status: fleetItemAdopted, output: "prior research"},
-		{index: 1, status: fleetItemPending},
-		{index: 2, status: fleetItemPending},
+		{index: 0, status: agentgraph.StateAdopted, output: "prior research"},
+		{index: 1, status: agentgraph.StatePending},
+		{index: 2, status: agentgraph.StatePending},
 	}
 	pending := plan.unresolvedDepCounts(results)
 	if pending[1] != 0 {

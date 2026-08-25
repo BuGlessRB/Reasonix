@@ -13,8 +13,8 @@ package event
 
 import (
 	"encoding/json"
-	"strings"
 
+	"reasonix/internal/agentgraph"
 	"reasonix/internal/billing"
 	"reasonix/internal/evidence"
 	"reasonix/internal/nilutil"
@@ -130,6 +130,12 @@ const (
 	// the queue is read back from the kernel, so one authority answers every
 	// client instead of each rebuilding it from the frames it happened to see.
 	InboxChanged
+	// GraphDelta publishes what a producer has just proven about the run's
+	// execution graph (Graph): the nodes it declared or settled and the typed
+	// edges between them. Structure only the producer knows — a dependency, an
+	// adopted answer — arrives here instead of being re-derived from id
+	// prefixes. Appended last to keep earlier Kind values wire-stable.
+	GraphDelta
 	// KindCount is a sentinel one past the last real Kind. New event kinds must
 	// be inserted above it so completeness tests cover them automatically.
 	KindCount
@@ -144,50 +150,6 @@ const (
 	TurnPhaseVerifying TurnPhaseName = "verifying"
 	TurnPhaseReviewing TurnPhaseName = "reviewing"
 )
-
-// CompletionSummaryInfo is the content-free quality summary on CompletionSummary
-// events. It never carries user prompts, file contents, command args, or
-// reviewer reasoning.
-type CompletionSummaryInfo struct {
-	Preset           string // light | balanced | delivery
-	Verdict          string // complete | partial | blocked | continue
-	Mutations        int
-	ChecksPassed     int
-	ChecksFailed     int
-	ChecksSuppressed int
-	Review           string // none | passed | warned | failed | unavailable
-	GapKinds         []string
-	// CriteriaRewritten names existing tests the turn rewrote or removed.
-	// A suite green after its checks moved is not the suite that was green
-	// before, so this is reported rather than folded into the pass count.
-	CriteriaRewritten []string
-}
-
-// NeedsAttention reports whether this turn ended with something the user should
-// know about. It lives here so every frontend answers it the same way: a turn
-// the headless runner reports as finished while the chat TUI would have flagged
-// it is the same turn described two ways.
-func (c *CompletionSummaryInfo) NeedsAttention() bool {
-	if c == nil {
-		return false
-	}
-	switch strings.ToLower(strings.TrimSpace(c.Verdict)) {
-	case "partial", "blocked":
-		return true
-	}
-	switch strings.ToLower(strings.TrimSpace(c.Review)) {
-	case "warned", "failed", "unavailable":
-		return true
-	}
-	return c.ChecksFailed > 0 || c.ChecksSuppressed > 0 || len(c.GapKinds) > 0 ||
-		len(c.CriteriaRewritten) > 0
-}
-
-// Blocked distinguishes the turn that could not finish from the one that
-// finished with gaps, which frontends word differently.
-func (c *CompletionSummaryInfo) Blocked() bool {
-	return c != nil && strings.EqualFold(strings.TrimSpace(c.Verdict), "blocked")
-}
 
 // StreamAttemptAction is the lifecycle phase of a local sampling attempt.
 type StreamAttemptAction string
@@ -539,6 +501,8 @@ type Event struct {
 	PhaseName TurnPhaseName
 	// Completion is set on CompletionSummary events.
 	Completion *CompletionSummaryInfo
+	// Graph is set on GraphDelta events: the run-graph facts this event adds.
+	Graph *agentgraph.Delta
 }
 
 type WorkspaceWatchState string

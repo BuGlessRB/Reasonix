@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -22,8 +24,11 @@ func TestContextCapsuleRecordsWhatIsNotInherited(t *testing.T) {
 	capsule := capsuleForSpec(t, SubagentSpec{
 		Kind: "task", Name: "task", SystemPrompt: DefaultTaskSystemPrompt,
 	})
-	if capsule.Inherited != (InheritedContext{}) {
-		t.Fatalf("Inherited = %+v, want every field false: a child receives no standing instructions, memory, parent conversation, goal, or planner output", capsule.Inherited)
+	if !reflect.DeepEqual(capsule.Inherited, InheritedContext{}) {
+		t.Fatalf("Inherited = %+v, want nothing recorded: a child receives no standing instructions, memory, parent conversation, goal, or planner output", capsule.Inherited)
+	}
+	if capsule.Inherited.HasUpstream() {
+		t.Fatal("a run nobody fed must not report an upstream source")
 	}
 }
 
@@ -33,13 +38,52 @@ func TestContextCapsuleRecordsWhatIsNotInherited(t *testing.T) {
 func TestContextCapsuleRecordsDeliveredUpstream(t *testing.T) {
 	isolated := SubagentSpec{Kind: "task", Name: "task", SystemPrompt: DefaultTaskSystemPrompt}
 	fed := isolated
-	fed.Upstream = true
+	fed.UpstreamFrom = []string{"research"}
+	other := isolated
+	other.UpstreamFrom = []string{"survey"}
 
-	if got := capsuleForSpec(t, fed).Inherited; got != (InheritedContext{Upstream: true}) {
-		t.Fatalf("Inherited = %+v, want upstream alone recorded", got)
+	if got := capsuleForSpec(t, fed).Inherited; !reflect.DeepEqual(got, InheritedContext{UpstreamFrom: []string{"research"}}) {
+		t.Fatalf("Inherited = %+v, want the delivering dependency named and nothing else", got)
 	}
 	if capsuleForSpec(t, isolated).Hash() == capsuleForSpec(t, fed).Hash() {
 		t.Error("two runs that started from different context must not share a capsule hash")
+	}
+	// The reason the flag became a list: these two runs read different work and
+	// a bool called them identical.
+	if capsuleForSpec(t, other).Hash() == capsuleForSpec(t, fed).Hash() {
+		t.Error("two runs fed by different dependencies must not share a capsule hash")
+	}
+}
+
+// Sidecars written while the field was a flag still say that something upstream
+// opened the run. Reading one as though it had no upstream would rewrite what
+// the record claims; naming a source it never held would be worse.
+func TestInheritedContextReadsLegacyUpstreamFlag(t *testing.T) {
+	var legacy InheritedContext
+	if err := json.Unmarshal([]byte(`{"upstream":true}`), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if !legacy.HasUpstream() {
+		t.Fatal("a legacy record that recorded an upstream must still report one")
+	}
+	if len(legacy.UpstreamFrom) != 0 {
+		t.Fatalf("UpstreamFrom = %v, want no invented source", legacy.UpstreamFrom)
+	}
+
+	var none InheritedContext
+	if err := json.Unmarshal([]byte(`{"upstream":false}`), &none); err != nil {
+		t.Fatal(err)
+	}
+	if none.HasUpstream() {
+		t.Fatal("a legacy record with no upstream must not report one")
+	}
+
+	var named InheritedContext
+	if err := json.Unmarshal([]byte(`{"upstreamFrom":["research"]}`), &named); err != nil {
+		t.Fatal(err)
+	}
+	if !named.HasUpstream() || named.UpstreamFrom[0] != "research" {
+		t.Fatalf("UpstreamFrom = %v, want the named source", named.UpstreamFrom)
 	}
 }
 

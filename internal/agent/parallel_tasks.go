@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"sync"
 
+	"reasonix/internal/agentgraph"
 	"reasonix/internal/event"
 	"reasonix/internal/tool"
 )
@@ -73,21 +73,11 @@ type parallelTaskItem struct {
 	Effort      string   `json:"effort"`
 }
 
-type parallelTaskStatus string
-
 // parallelTasksMaxTasks bounds the request before any task-sized slices,
 // channels, or goroutines are allocated. The scheduler limits how many
 // children run simultaneously, but without an input cap a single model call
 // could still reserve unbounded memory and queue unbounded API work (#6933).
 const parallelTasksMaxTasks = 64
-
-const (
-	parallelTaskPending   parallelTaskStatus = "pending"
-	parallelTaskCompleted parallelTaskStatus = "completed"
-	parallelTaskFailed    parallelTaskStatus = "failed"
-	parallelTaskCancelled parallelTaskStatus = "cancelled"
-	parallelTaskSkipped   parallelTaskStatus = "skipped"
-)
 
 func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (result string, err error) {
 	// Group lifecycle: the group card's terminal is an explicit event from
@@ -103,30 +93,18 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 	}
 	merger := newSubagentProgressMerger(realProgressClock{}, sink, parentID)
 	defer merger.Close()
-	var statuses []parallelTaskStatus
+	var statuses []agentgraph.NodeState
+	var refs []string
+	var taskErrs []error
 	defer func() {
-		merger.directStatus(parentID, parallelGroupTerminalPhase(ctx, err, statuses))
+		state := groupTerminalState(ctx, err, statuses)
+		merger.directStatus(parentID, terminalProgressPhase(state))
+		publishGraph(sink, parallelOutcomeDelta(parentID, state, statuses, refs, taskErrs))
 	}()
 	ctx = withSubagentProgressMerger(ctx, merger)
 
-	var params struct {
-		Tasks []parallelTaskItem `json:"tasks"`
-	}
-	dec := json.NewDecoder(bytes.NewReader(args))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&params); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
-	}
-	if len(params.Tasks) == 0 {
-		return "", fmt.Errorf("at least one task is required")
-	}
-	if len(params.Tasks) == 1 {
-		return "", fmt.Errorf("parallel_tasks with a single task is equivalent to task; use task instead")
-	}
-	if len(params.Tasks) > parallelTasksMaxTasks {
-		return "", fmt.Errorf("parallel_tasks accepts at most %d tasks; got %d", parallelTasksMaxTasks, len(params.Tasks))
-	}
-	if err := validateParallelTaskItems(params.Tasks); err != nil {
+	tasks, err := parseParallelTasks(args)
+	if err != nil {
 		return "", err
 	}
 	if p.taskTool == nil {
@@ -143,16 +121,16 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		err    error
 	}
 
-	n := len(params.Tasks)
+	n := len(tasks)
 
 	running := make([]bool, n)
 	done := make([]bool, n)
 	outputs := make([]string, n)
-	refs := make([]string, n)
-	taskErrs := make([]error, n)
-	statuses = make([]parallelTaskStatus, n)
-	for i := range params.Tasks {
-		statuses[i] = parallelTaskPending
+	refs = make([]string, n)
+	taskErrs = make([]error, n)
+	statuses = make([]agentgraph.NodeState, n)
+	for i := range tasks {
+		statuses[i] = agentgraph.StatePending
 	}
 
 	doneCh := make(chan subResult, n)
@@ -164,11 +142,17 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		}
 		return fmt.Sprintf("task-%d", idx+1)
 	}
+	labels := make([]string, n)
+	for i, t := range tasks {
+		labels[i] = makeLabel(t, i)
+	}
+	publishGraph(sink, parallelOpeningDelta(parentID, labels))
+
 	startTask := func(idx int) {
-		t := params.Tasks[idx]
+		t := tasks[idx]
 		running[idx] = true
-		label := makeLabel(t, idx)
-		subID := fmt.Sprintf("%s/sub-%d", parentID, idx+1)
+		label := labels[idx]
+		subID := parallelNodeID(parentID, idx)
 		dispatchArgs, _ := json.Marshal(map[string]string{"prompt": t.Prompt, "description": label})
 		sink.Emit(event.Event{
 			Kind: event.ToolDispatch,
@@ -177,6 +161,9 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 				Args: string(dispatchArgs), ReadOnly: true,
 			},
 		})
+		publishGraph(sink, agentgraph.Delta{Nodes: []agentgraph.Node{
+			{ID: subID, State: agentgraph.StateRunning},
+		}})
 
 		wg.Go(func() {
 			modelRef, effortRef := p.taskTool.effectiveProfile(t.Model, t.Effort)
@@ -216,23 +203,23 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 	}
 
 	markCancelled := func(err error) {
-		for i := range params.Tasks {
+		for i := range tasks {
 			if done[i] {
 				continue
 			}
 			done[i] = true
 			if running[i] {
-				statuses[i] = parallelTaskCancelled
+				statuses[i] = agentgraph.StateCancelled
 				taskErrs[i] = err
 				continue
 			}
-			statuses[i] = parallelTaskSkipped
+			statuses[i] = agentgraph.StateSkipped
 			taskErrs[i] = err
 		}
 	}
 
 	completed := 0
-	for i := range params.Tasks {
+	for i := range tasks {
 		startTask(i)
 	}
 	processResult := func(r subResult) {
@@ -246,11 +233,11 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		taskErrs[r.index] = r.err
 		switch {
 		case r.err == nil:
-			statuses[r.index] = parallelTaskCompleted
+			statuses[r.index] = agentgraph.StateCompleted
 		case errors.Is(r.err, context.Canceled), errors.Is(r.err, context.DeadlineExceeded):
-			statuses[r.index] = parallelTaskCancelled
+			statuses[r.index] = agentgraph.StateCancelled
 		default:
-			statuses[r.index] = parallelTaskFailed
+			statuses[r.index] = agentgraph.StateFailed
 		}
 	}
 	for completed < n {
@@ -284,38 +271,22 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 	return formatParallelTasksAggregate(outputs, refs, taskErrs, statuses, false), nil
 }
 
-// parallelGroupTerminalPhase classifies a parallel_tasks group's single
-// terminal status: cancellation/deadline wins, then any failed child, then
-// any error (including validation failures), then completed.
-func parallelGroupTerminalPhase(ctx context.Context, err error, statuses []parallelTaskStatus) subagentProgressPhase {
-	if ctx.Err() != nil {
-		return subagentPhaseCancelled
-	}
-	if slices.Contains(statuses, parallelTaskFailed) {
-		return subagentPhaseFailed
-	}
-	if err != nil {
-		return subagentPhaseFailed
-	}
-	return subagentPhaseCompleted
-}
-
-func parallelTasksWereCancelled(statuses []parallelTaskStatus) bool {
+func parallelTasksWereCancelled(statuses []agentgraph.NodeState) bool {
 	for _, st := range statuses {
-		if st == parallelTaskCancelled || st == parallelTaskSkipped {
+		if st == agentgraph.StateCancelled || st == agentgraph.StateSkipped {
 			return true
 		}
 	}
 	return false
 }
 
-func formatParallelTasksAggregate(outputs, refs []string, errs []error, statuses []parallelTaskStatus, cancelled bool) string {
+func formatParallelTasksAggregate(outputs, refs []string, errs []error, statuses []agentgraph.NodeState, cancelled bool) string {
 	n := len(statuses)
 	var prefix string
 	if cancelled {
 		completed := 0
 		for _, st := range statuses {
-			if st == parallelTaskCompleted {
+			if st == agentgraph.StateCompleted {
 				completed++
 			}
 		}
@@ -327,27 +298,27 @@ func formatParallelTasksAggregate(outputs, refs []string, errs []error, statuses
 	for i, st := range statuses {
 		item := subagentAggregateItem{header: fmt.Sprintf("── task-%d ──\n", i+1)}
 		switch st {
-		case parallelTaskCompleted:
+		case agentgraph.StateCompleted:
 			item.status = "status: completed\n"
 			item.answer = strings.TrimSpace(outputs[i])
 			if i < len(refs) {
 				item.ref = refs[i]
 			}
-		case parallelTaskCancelled:
+		case agentgraph.StateCancelled:
 			item.status = "status: cancelled\n"
 			if errs[i] != nil {
 				item.detail = fmt.Sprintf("[CANCELLED] %s\n", boundedInline(errs[i].Error(), 256))
 			} else {
 				item.detail = "[CANCELLED]\n"
 			}
-		case parallelTaskSkipped:
+		case agentgraph.StateSkipped:
 			item.status = "status: skipped\n"
 			if errs[i] != nil {
 				item.detail = fmt.Sprintf("[SKIPPED] cancelled before start: %s\n", boundedInline(errs[i].Error(), 256))
 			} else {
 				item.detail = "[SKIPPED] cancelled before start\n"
 			}
-		case parallelTaskFailed:
+		case agentgraph.StateFailed:
 			item.status = "status: failed\n"
 			if errs[i] != nil {
 				item.detail = fmt.Sprintf("[FAILED] %s\n", boundedInline(errs[i].Error(), 256))
@@ -360,6 +331,32 @@ func formatParallelTasksAggregate(outputs, refs []string, errs []error, statuses
 		items = append(items, item)
 	}
 	return formatBoundedSubagentAggregate(prefix, items)
+}
+
+// parseParallelTasks proves the whole request before anything runs, the same
+// order fleet's preflight uses: shape, then batch bounds, then each item. The
+// cap is enforced before any per-task slice, channel, or goroutine is sized.
+func parseParallelTasks(args json.RawMessage) ([]parallelTaskItem, error) {
+	var params struct {
+		Tasks []parallelTaskItem `json:"tasks"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(args))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&params); err != nil {
+		return nil, fmt.Errorf("invalid args: %w", err)
+	}
+	switch n := len(params.Tasks); {
+	case n == 0:
+		return nil, fmt.Errorf("at least one task is required")
+	case n == 1:
+		return nil, fmt.Errorf("parallel_tasks with a single task is equivalent to task; use task instead")
+	case n > parallelTasksMaxTasks:
+		return nil, fmt.Errorf("parallel_tasks accepts at most %d tasks; got %d", parallelTasksMaxTasks, n)
+	}
+	if err := validateParallelTaskItems(params.Tasks); err != nil {
+		return nil, err
+	}
+	return params.Tasks, nil
 }
 
 func validateParallelTaskItems(tasks []parallelTaskItem) error {

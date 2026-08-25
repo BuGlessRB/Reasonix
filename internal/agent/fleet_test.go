@@ -16,6 +16,8 @@ import (
 	"reasonix/internal/jobs"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
+
+	"reasonix/internal/agentgraph"
 )
 
 func TestBackgroundFleetRegistersEveryWriterUntilCompletion(t *testing.T) {
@@ -383,7 +385,7 @@ func TestFleetAggregatePreservesEveryReferenceUnderToolLimit(t *testing.T) {
 	for i := range results {
 		results[i] = fleetItemResult{
 			index:  i,
-			status: fleetItemCompleted,
+			status: agentgraph.StateCompleted,
 			output: fmt.Sprintf("BEGIN-%d\n%s\nEND-%d", i+1, strings.Repeat(string(rune('a'+i)), 20*1024), i+1),
 			ref:    fmt.Sprintf("sa_result_%d", i+1),
 		}

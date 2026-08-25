@@ -2,6 +2,7 @@
 package eventwire
 
 import (
+	"reasonix/internal/agentgraph"
 	"reasonix/internal/billing"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
@@ -48,6 +49,10 @@ type Event struct {
 	Phase string `json:"phase,omitempty"`
 	// Completion is set on completion_summary events (content-free quality summary).
 	Completion *CompletionSummary `json:"completion,omitempty"`
+	// Graph is set on graph_delta events. The leaf type is the contract on both
+	// sides of the wire, so re-declaring its shape here would reintroduce the
+	// second description of the graph this package exists to remove.
+	Graph *agentgraph.Delta `json:"graph,omitempty"`
 	// Seq numbers frames a client must not miss, so a resume can ask for what it
 	// missed. Streaming deltas carry none — the same reason SSE omits `id:` on a
 	// frame that should not move Last-Event-ID. Set by the transport.
@@ -119,19 +124,10 @@ func ToWire(e event.Event) Event {
 		}
 	case event.ToolDispatch, event.ToolResult, event.ToolProgress:
 		w.Tool = toWireTool(e.Tool)
+	case event.GraphDelta:
+		w.Graph = e.Graph
 	case event.WorkspaceChanged:
-		ws := e.Workspace
-		if ws == nil {
-			ws = &event.WorkspaceChangedPayload{}
-		}
-		changes := make([]WorkspacePathChange, 0, len(ws.Changes))
-		for _, c := range ws.Changes {
-			changes = append(changes, WorkspacePathChange{Path: c.Path, OldPath: c.OldPath, Op: c.Op})
-		}
-		w.Workspace = &WorkspaceChanged{
-			Revisions: WorkspaceRevision{Content: ws.Revisions.Content, Tree: ws.Revisions.Tree, WorkingTree: ws.Revisions.WorkingTree, GitMeta: ws.Revisions.GitMeta, Session: ws.Revisions.Session},
-			Changes:   changes, AllPaths: ws.AllPaths, Source: ws.Source, WatchState: string(ws.WatchState),
-		}
+		w.Workspace = toWireWorkspace(e.Workspace)
 	case event.Usage:
 		w.Usage = toWireUsage(e)
 	case event.ApprovalRequest:
@@ -413,6 +409,23 @@ func toWireTool(t event.Tool) *Tool {
 	return wt
 }
 
+// toWireWorkspace renders a workspace mutation. A nil payload still renders,
+// so a frontend reading the field never has to tell "no changes" apart from
+// "the event arrived without one".
+func toWireWorkspace(ws *event.WorkspaceChangedPayload) *WorkspaceChanged {
+	if ws == nil {
+		ws = &event.WorkspaceChangedPayload{}
+	}
+	changes := make([]WorkspacePathChange, 0, len(ws.Changes))
+	for _, c := range ws.Changes {
+		changes = append(changes, WorkspacePathChange{Path: c.Path, OldPath: c.OldPath, Op: c.Op})
+	}
+	return &WorkspaceChanged{
+		Revisions: WorkspaceRevision{Content: ws.Revisions.Content, Tree: ws.Revisions.Tree, WorkingTree: ws.Revisions.WorkingTree, GitMeta: ws.Revisions.GitMeta, Session: ws.Revisions.Session},
+		Changes:   changes, AllPaths: ws.AllPaths, Source: ws.Source, WatchState: string(ws.WatchState),
+	}
+}
+
 // Tool is the JSON form of an event.Tool.
 type Tool struct {
 	ID           string `json:"id,omitempty"`
@@ -682,6 +695,7 @@ var kindNames = map[event.Kind]string{
 	event.TurnPhase:               "turn_phase",
 	event.CompletionSummary:       "completion_summary",
 	event.InboxChanged:            "inbox_changed",
+	event.GraphDelta:              "graph_delta",
 }
 
 // ContextMaintenance is the JSON form of event.ContextMaintenance.

@@ -940,7 +940,7 @@ func (t *TaskTool) prepareTranscriptRunWithPrompt(ctx context.Context, subReg *t
 		Model:            identityModel,
 		Effort:           identityEffort,
 		ResumedFrom:      firstNonEmpty(continueFrom, legacyForkFrom),
-		Upstream:         len(upstreamFromContext(ctx)) > 0,
+		UpstreamFrom:     upstreamSources(upstreamFromContext(ctx)),
 	}
 	if continueFrom != "" {
 		return t.transcripts.PrepareContinue(continueFrom, spec)

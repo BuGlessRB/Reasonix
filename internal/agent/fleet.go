@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"reasonix/internal/ablation"
+	"reasonix/internal/agentgraph"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
@@ -91,49 +92,14 @@ type fleetTaskItem struct {
 	Effort      string   `json:"effort"`
 }
 
-type fleetItemStatus string
-
-const (
-	fleetItemPending   fleetItemStatus = "pending"
-	fleetItemCompleted fleetItemStatus = "completed"
-	fleetItemAdopted   fleetItemStatus = "adopted"
-	fleetItemFailed    fleetItemStatus = "failed"
-	fleetItemCancelled fleetItemStatus = "cancelled"
-	fleetItemSkipped   fleetItemStatus = "skipped"
-)
-
-// answered reports whether an item holds a final answer a dependent can start
-// from: one it produced, or one adopted in its place.
-func (s fleetItemStatus) answered() bool {
-	return s == fleetItemCompleted || s == fleetItemAdopted
-}
-
 type fleetItemResult struct {
 	index   int
-	status  fleetItemStatus
+	status  agentgraph.NodeState
 	failure fleetFailureClass
 	profile string
 	output  string
 	err     error
 	ref     string
-}
-
-// fleetGroupTerminalPhase classifies a fleet group's single terminal status:
-// cancellation/deadline wins, then any failed child, then any error
-// (including validation failures), then completed.
-func fleetGroupTerminalPhase(ctx context.Context, err error, results []fleetItemResult) subagentProgressPhase {
-	if ctx.Err() != nil {
-		return subagentPhaseCancelled
-	}
-	for _, r := range results {
-		if r.status == fleetItemFailed {
-			return subagentPhaseFailed
-		}
-	}
-	if err != nil {
-		return subagentPhaseFailed
-	}
-	return subagentPhaseCompleted
 }
 
 func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result string, err error) {
@@ -166,7 +132,7 @@ func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result s
 		if lifecycleHandoff {
 			return
 		}
-		merger.directStatus(groupParentID, fleetGroupTerminalPhase(ctx, err, nil))
+		merger.directStatus(groupParentID, terminalProgressPhase(groupTerminalState(ctx, err, nil)))
 	}()
 	ctx = withSubagentProgressMerger(ctx, merger)
 
@@ -356,19 +322,23 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 	merger.directStatus(groupParentID, subagentPhaseRunning)
 	var results []fleetItemResult
 	defer func() {
-		merger.directStatus(groupParentID, fleetGroupTerminalPhase(ctx, err, results))
+		state := groupTerminalState(ctx, err, fleetItemStates(results))
+		merger.directStatus(groupParentID, terminalProgressPhase(state))
+		publishGraph(sink, fleetOutcomeDelta(groupParentID, state, results))
 	}()
 
 	n := len(specs)
 	results = make([]fleetItemResult, n)
 	for i := range results {
-		results[i] = fleetItemResult{index: i, status: fleetItemPending, profile: specs[i].Worker.Profile}
+		results[i] = fleetItemResult{index: i, status: agentgraph.StatePending, profile: specs[i].Worker.Profile}
 		// An adopted node enters already resolved, so the driver never launches
 		// it and its dependents are ready from the first pass.
 		if a, ok := adopted[i]; ok {
-			results[i] = fleetItemResult{index: i, status: fleetItemAdopted, output: a.answer, ref: a.ref}
+			results[i] = fleetItemResult{index: i, status: agentgraph.StateAdopted, output: a.answer, ref: a.ref}
 		}
 	}
+
+	publishGraph(sink, fleetOpeningDelta(groupParentID, plan, specs, adopted, results))
 
 	var wg sync.WaitGroup
 	doneCh := make(chan fleetItemResult, n)
@@ -377,7 +347,7 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 		spec := specs[idx]
 		spec.Context.Upstream = f.upstreamFor(plan, idx, results)
 		label := spec.Task.Description
-		subID := fmt.Sprintf("%s/fleet-%d", parentID, idx+1)
+		subID := fleetNodeID(parentID, idx)
 		dispatchArgs, _ := json.Marshal(map[string]any{
 			"prompt":      spec.Task.Objective,
 			"description": label,
@@ -390,6 +360,7 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 				Args: string(dispatchArgs), ReadOnly: spec.Grant.ReadOnly,
 			},
 		})
+		publishGraph(sink, fleetStartDelta(parentID, plan, idx, spec.Context.Upstream))
 
 		wg.Go(func() {
 			// Each fleet item runs as its own task-shaped execution so
@@ -400,11 +371,11 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 			res := fleetItemResult{index: idx, profile: spec.Worker.Profile, output: answer, ref: ref, err: err}
 			switch {
 			case err == nil:
-				res.status = fleetItemCompleted
+				res.status = agentgraph.StateCompleted
 			case errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
-				res.status = fleetItemCancelled
+				res.status = agentgraph.StateCancelled
 			default:
-				res.status = fleetItemFailed
+				res.status = agentgraph.StateFailed
 				res.failure = classifyFleetFailure(err)
 			}
 			if err == nil {
@@ -430,7 +401,7 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 		cancelled = true
 	}
 	for _, r := range results {
-		if r.status == fleetItemCancelled {
+		if r.status == agentgraph.StateCancelled {
 			cancelled = true
 			break
 		}
@@ -455,7 +426,7 @@ func formatFleetAggregate(results []fleetItemResult, cancelled bool) string {
 	n := len(results)
 	answered := 0
 	for _, r := range results {
-		if r.status.answered() {
+		if r.status.Answered() {
 			answered++
 		}
 	}
@@ -480,23 +451,23 @@ func formatFleetAggregate(results []fleetItemResult, cancelled bool) string {
 		header += " ──\n"
 		item := subagentAggregateItem{header: header, ref: r.ref}
 		switch r.status {
-		case fleetItemCompleted:
+		case agentgraph.StateCompleted:
 			item.status = "status: completed\n"
 			item.answer = strings.TrimSpace(r.output)
-		case fleetItemAdopted:
+		case agentgraph.StateAdopted:
 			item.status = "status: adopted (not run; the answer below is the reference's)\n"
 			item.answer = strings.TrimSpace(r.output)
-		case fleetItemFailed:
+		case agentgraph.StateFailed:
 			item.status = fleetStatusLine("failed", r.failure)
 			if r.err != nil {
 				item.detail = fmt.Sprintf("[FAILED] %s\n", boundedInline(r.err.Error(), 256))
 			}
-		case fleetItemCancelled:
+		case agentgraph.StateCancelled:
 			item.status = "status: cancelled\n"
 			if r.err != nil {
 				item.detail = fmt.Sprintf("[CANCELLED] %s\n", boundedInline(r.err.Error(), 256))
 			}
-		case fleetItemSkipped:
+		case agentgraph.StateSkipped:
 			item.status = fleetStatusLine("skipped", r.failure)
 			if r.err != nil {
 				item.detail = fmt.Sprintf("[SKIPPED] %s\n", boundedInline(r.err.Error(), 256))

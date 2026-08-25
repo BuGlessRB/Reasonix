@@ -3,8 +3,11 @@ package agent
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
+
+	"reasonix/internal/agentgraph"
 )
 
 // fleetPlan is the validated dependency graph for one fleet call. Dependencies
@@ -115,6 +118,11 @@ func (p fleetPlan) pendingCounts() []int {
 
 func (p fleetPlan) roots() []int { return ready(p.pendingCounts()) }
 
+// indexOf resolves a caller-visible id to its position. Preflight built the
+// index and rejected every reference that matched no task, so a miss here is a
+// producer naming a node the plan never held.
+func (p fleetPlan) indexOf(id string) int { return slices.Index(p.ids, id) }
+
 // unresolvedDepCounts counts each item's dependencies that have not settled
 // yet. An adopted node enters already resolved, so its dependents are ready on
 // the first pass rather than waiting for a result that is never published.
@@ -122,7 +130,7 @@ func (p fleetPlan) unresolvedDepCounts(results []fleetItemResult) []int {
 	out := make([]int, len(p.ids))
 	for i := range p.ids {
 		for _, dep := range p.deps[i] {
-			if results[dep].status == fleetItemPending {
+			if results[dep].status == agentgraph.StatePending {
 				out[i]++
 			}
 		}
@@ -203,10 +211,10 @@ func (p fleetPlan) validateConcurrentWriteClaims(claims []WritePathSet) error {
 // result the parent must discard.
 func (p fleetPlan) skipDependents(results []fleetItemResult, failed int) {
 	for idx := range p.reachable[failed] {
-		if results[idx].status != fleetItemPending {
+		if results[idx].status != agentgraph.StatePending {
 			continue
 		}
-		results[idx].status = fleetItemSkipped
+		results[idx].status = agentgraph.StateSkipped
 		// The branch is dead for the reason its head died, so the identity
 		// travels with it: a skipped item is re-issuable exactly when its
 		// cause was.
@@ -225,7 +233,7 @@ func (p fleetPlan) upstreamFor(idx int, results []fleetItemResult) []UpstreamRes
 	}
 	out := make([]UpstreamResult, 0, len(p.deps[idx]))
 	for _, dep := range p.deps[idx] {
-		if !results[dep].status.answered() {
+		if !results[dep].status.Answered() {
 			continue
 		}
 		out = append(out, UpstreamResult{ID: p.ids[dep], Answer: results[dep].output})
@@ -254,7 +262,7 @@ func driveFleet(ctx context.Context, plan fleetPlan, results []fleetItemResult, 
 	started, completed := 0, 0
 	stopStarting := false
 	launch := func(idx int) {
-		if stopStarting || ctx.Err() != nil || results[idx].status != fleetItemPending {
+		if stopStarting || ctx.Err() != nil || results[idx].status != agentgraph.StatePending {
 			return
 		}
 		startOne(idx)
@@ -270,7 +278,7 @@ func driveFleet(ctx context.Context, plan fleetPlan, results []fleetItemResult, 
 		case r := <-doneCh:
 			results[r.index] = r
 			completed++
-			if r.status != fleetItemCompleted {
+			if r.status != agentgraph.StateCompleted {
 				plan.skipDependents(results, r.index)
 				if plan.failFast {
 					stopStarting = true
@@ -296,10 +304,10 @@ func driveFleet(ctx context.Context, plan fleetPlan, results []fleetItemResult, 
 		completed++
 	}
 	for i := range results {
-		if results[i].status != fleetItemPending {
+		if results[i].status != agentgraph.StatePending {
 			continue
 		}
-		results[i].status = fleetItemSkipped
+		results[i].status = agentgraph.StateSkipped
 		if results[i].err == nil {
 			results[i].err = firstNonNilErr(ctx.Err(), errFleetBranchNotStarted)
 		}

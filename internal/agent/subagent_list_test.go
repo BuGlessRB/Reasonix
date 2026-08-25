@@ -86,7 +86,7 @@ func TestSubagentListingReportsStateAndRetrievalRoute(t *testing.T) {
 	artifacts := []SubagentArtifact{
 		{Ref: "sa_one", Meta: SubagentMeta{Status: SubagentCompleted, Name: "research", ParentToolCallID: "call_a/fleet-1", UpdatedAt: now}},
 		{Ref: "sa_two", Meta: SubagentMeta{Status: SubagentInterrupted, Name: "task", ParentToolCallID: "call_a/fleet-2", UpdatedAt: now,
-			Capsule: ContextCapsule{Inherited: InheritedContext{Upstream: true}}}},
+			Capsule: ContextCapsule{Inherited: InheritedContext{UpstreamFrom: []string{"research"}}}}},
 	}
 
 	all := formatSubagentListing(artifacts, "")

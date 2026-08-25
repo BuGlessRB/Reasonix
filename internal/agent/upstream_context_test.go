@@ -11,6 +11,10 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
+
+	"reasonix/internal/agentgraph"
+
+	"slices"
 )
 
 func TestUpstreamNoteOmitsTheBlockWhenNothingWasDelivered(t *testing.T) {
@@ -73,9 +77,9 @@ func TestUpstreamForReadsDependenciesInDeclarationOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	results := []fleetItemResult{
-		{index: 0, status: fleetItemCompleted, output: "R"},
-		{index: 1, status: fleetItemCompleted, output: "S"},
-		{index: 2, status: fleetItemPending},
+		{index: 0, status: agentgraph.StateCompleted, output: "R"},
+		{index: 1, status: agentgraph.StateCompleted, output: "S"},
+		{index: 2, status: agentgraph.StatePending},
 	}
 	got := plan.upstreamFor(2, results)
 	want := []UpstreamResult{{ID: "survey", Answer: "S"}, {ID: "research", Answer: "R"}}
@@ -127,22 +131,24 @@ func TestFleetDeliversUpstreamAnswerToTheDependentChild(t *testing.T) {
 
 	// The record, not just the turn: a reader asking why this writer knew about
 	// ARTIFACT-42 gets the answer from the sidecar.
-	inherited := map[string]bool{}
+	inherited := map[string][]string{}
 	for _, ref := range subagentRefsIn(out) {
 		meta, err := store.LoadMeta(ref)
 		if err != nil {
 			t.Fatalf("load meta %q: %v", ref, err)
 		}
-		inherited[meta.ParentToolCallID] = meta.Capsule.Inherited.Upstream
+		inherited[meta.ParentToolCallID] = meta.Capsule.Inherited.UpstreamFrom
 	}
-	want := map[string]bool{"fleet-call/fleet-1": false, "fleet-call/fleet-2": true}
-	for id, wantUpstream := range want {
+	// Which dependency, not whether one: the sidecar names the run this writer
+	// read, which is what a bool in its place could never answer.
+	want := map[string][]string{"fleet-call/fleet-1": nil, "fleet-call/fleet-2": {"research"}}
+	for id, wantSources := range want {
 		got, ok := inherited[id]
 		if !ok {
 			t.Fatalf("no persisted capsule for %s; recorded %+v", id, inherited)
 		}
-		if got != wantUpstream {
-			t.Errorf("%s capsule inherited.upstream = %v, want %v", id, got, wantUpstream)
+		if !slices.Equal(got, wantSources) {
+			t.Errorf("%s capsule inherited.upstreamFrom = %v, want %v", id, got, wantSources)
 		}
 	}
 }

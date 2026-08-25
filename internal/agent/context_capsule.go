@@ -25,8 +25,34 @@ type InheritedContext struct {
 	ParentConversation   bool `json:"parentConversation"`
 	Goal                 bool `json:"goal"`
 	PlannerOutput        bool `json:"plannerOutput"`
-	// Upstream is set when a declared dependency's answer opened this run.
-	Upstream bool `json:"upstream"`
+	// UpstreamFrom names the dependencies whose answers opened this run, which
+	// a bool in its place could not. Nil means none; empty means a legacy
+	// record that knew there were sources without naming them.
+	UpstreamFrom []string `json:"upstreamFrom"`
+}
+
+// HasUpstream reports whether a dependency's answer opened this run.
+func (c InheritedContext) HasUpstream() bool { return c.UpstreamFrom != nil }
+
+// UnmarshalJSON reads sidecars written while the field was a flag. Such a
+// record proves a dependency opened the run without saying which, so it decodes
+// to a named-nothing slice rather than to nil: dropping it would silently
+// rewrite what the record says the run was given, and inventing a source would
+// be worse.
+func (c *InheritedContext) UnmarshalJSON(data []byte) error {
+	type plain InheritedContext
+	var raw struct {
+		plain
+		Legacy bool `json:"upstream"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*c = InheritedContext(raw.plain)
+	if raw.Legacy && c.UpstreamFrom == nil {
+		c.UpstreamFrom = []string{}
+	}
+	return nil
 }
 
 // ContextCapsule is the immutable manifest of what one child run was actually
@@ -85,7 +111,7 @@ func metaFromSpec(ref string, status SubagentStatus, created, updated time.Time,
 		ParentSession:      strings.TrimSpace(spec.ParentSession),
 		ParentToolCallID:   strings.TrimSpace(spec.ParentToolCallID),
 		ResumedFrom:        strings.TrimSpace(spec.ResumedFrom),
-		Inherited:          InheritedContext{Upstream: spec.Upstream},
+		Inherited:          InheritedContext{UpstreamFrom: spec.UpstreamFrom},
 	}
 	return SubagentMeta{
 		Ref:              ref,

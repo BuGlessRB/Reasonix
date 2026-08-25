@@ -107,7 +107,7 @@ func formatSubagentListing(artifacts []SubagentArtifact, want SubagentStatus) st
 		if id := strings.TrimSpace(a.Meta.ParentToolCallID); id != "" {
 			fmt.Fprintf(&b, "  from=%s", boundedInline(id, 80))
 		}
-		if a.Meta.Capsule.Inherited.Upstream {
+		if a.Meta.Capsule.Inherited.HasUpstream() {
 			b.WriteString("  started-from=upstream")
 		}
 		fmt.Fprintf(&b, "  updated=%s\n", a.Meta.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"))

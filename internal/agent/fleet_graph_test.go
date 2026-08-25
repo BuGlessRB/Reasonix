@@ -11,6 +11,8 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
+
+	"reasonix/internal/agentgraph"
 )
 
 func planFor(t *testing.T, items ...fleetTaskItem) (fleetPlan, error) {
@@ -111,18 +113,18 @@ func TestFleetPlanSkipsWholeDownstreamBranch(t *testing.T) {
 	}
 	results := make([]fleetItemResult, 4)
 	for i := range results {
-		results[i] = fleetItemResult{index: i, status: fleetItemPending}
+		results[i] = fleetItemResult{index: i, status: agentgraph.StatePending}
 	}
-	results[0].status = fleetItemFailed
+	results[0].status = agentgraph.StateFailed
 	plan.skipDependents(results, 0)
 
-	if results[1].status != fleetItemSkipped || results[2].status != fleetItemSkipped {
+	if results[1].status != agentgraph.StateSkipped || results[2].status != agentgraph.StateSkipped {
 		t.Fatalf("statuses = %q/%q, want the whole downstream branch skipped", results[1].status, results[2].status)
 	}
 	if !strings.Contains(results[2].err.Error(), `depends on "research"`) {
 		t.Fatalf("skip reason = %v, want it to name the broken dependency", results[2].err)
 	}
-	if results[3].status != fleetItemPending {
+	if results[3].status != agentgraph.StatePending {
 		t.Error("an unrelated branch must not be skipped by another branch's failure")
 	}
 }

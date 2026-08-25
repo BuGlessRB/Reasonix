@@ -30,6 +30,7 @@ export type Kind =
   | "workspace_changed"
   | "completion_summary"
   | "inbox_changed"
+  | "graph_delta"
   // Transport frames, not kernel events: the stream describing itself. Handled
   // in the port and never reaching the reducer.
   | "stream_gap"
@@ -382,6 +383,54 @@ export interface ReceiptGap {
   detail?: string;
 }
 
+// The run's execution graph, published as facts rather than drawn from id
+// prefixes. Mirrors internal/agentgraph: a node named again updates the one
+// already there, and an edge kind is what tells "waited for this" apart from
+// "started from this answer".
+export type GraphNodeKind = "group" | "worker" | "external";
+
+export type GraphNodeState =
+  | "pending"
+  | "running"
+  | "completed"
+  | "adopted"
+  | "failed"
+  | "cancelled"
+  | "skipped";
+
+export type GraphEdgeKind = "spawn" | "depends" | "context" | "adopt";
+
+// Absent means the question does not apply: a group is not a run, and an
+// adopted node never got a grant. A bool could not say that apart from "writes".
+export type GraphGrant = "read" | "write";
+
+export interface GraphNode {
+  id: string;
+  parentId?: string;
+  kind?: GraphNodeKind;
+  state?: GraphNodeState;
+  label?: string;
+  profile?: string;
+  model?: string;
+  effort?: string;
+  grant?: GraphGrant;
+  ref?: string;
+  startedAt?: number;
+  endedAt?: number;
+  err?: string;
+}
+
+export interface GraphEdge {
+  from: string;
+  to: string;
+  kind: GraphEdgeKind;
+}
+
+export interface GraphDelta {
+  nodes?: GraphNode[];
+  edges?: GraphEdge[];
+}
+
 export interface WireEvent {
   kind: Kind;
   text?: string;
@@ -401,6 +450,7 @@ export interface WireEvent {
   compaction?: Compaction;
   streamAttempt?: StreamAttempt;
   completion?: CompletionSummary;
+  graph?: GraphDelta;
   receipt?: Receipt;
   err?: string;
   // turn_done: the user asked to stop. A cancelled turn and a dropped

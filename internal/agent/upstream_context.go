@@ -42,6 +42,21 @@ func upstreamFromContext(ctx context.Context) []UpstreamResult {
 	return results
 }
 
+// upstreamSources names the dependencies whose answers opened this run, for the
+// capsule to record. Nil when none did, which is the distinction the record
+// keeps: a run that started from nothing and one whose sources went unrecorded
+// are not the same run.
+func upstreamSources(results []UpstreamResult) []string {
+	if len(results) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(results))
+	for _, r := range results {
+		ids = append(ids, r.ID)
+	}
+	return ids
+}
+
 func upstreamNote(ctx context.Context) string {
 	return renderUpstreamNote(upstreamFromContext(ctx), upstreamBudgetBytes)
 }
