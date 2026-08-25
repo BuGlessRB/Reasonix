@@ -60,18 +60,41 @@
      .app 一透明，图就一路透到它们的文字底下。面就该自己是面。 */
   .rail, .side { background: var(--page) }
   .panes, .tabs { background: var(--surface) }
+  /* 但那三条把窗口铺满了，图就没有一寸露得出来 —— .app 让出来的路没人接，
+     下面 .flow 那条「有内容自己接住」也就从没生效过。有图的时候每个面都退成
+     磨砂：空页看得见图，一有内容正文自己接住，图退到栏和边距上。 */
+  /* 中栏整个让路：图在空白处就该是图。正文由下面 .flow 那条接住，所以让开
+     这一层不会把字撂在照片上。 */
+  :root[data-bg] .panes { background: transparent }
+  /* 栏和标签条上有字，所以它们退成磨砂而不是让开 —— 图透得过来，字仍站得住。 */
+  /* 厚遮罩和大模糊是两种糊掉图的方式，两样都收：图要看得清，字靠自己的影子
+     站住 —— 那只花掉字周围几个像素，不花掉整条栏。 */
+  :root[data-bg] .rail, :root[data-bg] .side {
+    background: color-mix(in srgb, var(--page) 20%, transparent);
+    -webkit-backdrop-filter: blur(8px) saturate(1.35); backdrop-filter: blur(8px) saturate(1.35);
+    text-shadow: 0 1px 2px color-mix(in srgb, var(--page) 88%, transparent),
+                 0 0 6px color-mix(in srgb, var(--page) 70%, transparent);
+  }
+  :root[data-bg] .tabs {
+    background: color-mix(in srgb, var(--surface) 22%, transparent);
+    -webkit-backdrop-filter: blur(8px) saturate(1.35); backdrop-filter: blur(8px) saturate(1.35);
+    text-shadow: 0 1px 2px color-mix(in srgb, var(--page) 88%, transparent);
+  }
   /* 转录里的一条不是卡片，是无边框的一行，所以图会一路透到正文底下。图值一个
      窗口的边距，不值它的内容 —— 一有内容，这一层就自己接住，图退到栏和边距上。 */
+  /* 正文不再给自己垫底：图铺到哪里就是哪里，字靠自己的影子站住 —— 那只花掉
+     字周围几个像素。原来这层是 88% 的面，等于把整条转录从图上抠掉。 */
   :root[data-bg] .flow:not([data-empty]) {
-    background: color-mix(in srgb, var(--surface) 88%, transparent);
-    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    text-shadow: 0 1px 2px color-mix(in srgb, var(--page) 90%, transparent),
+                 0 0 7px color-mix(in srgb, var(--page) 72%, transparent);
   }
 
   /* 空白页上的字是唯一还站在图上的：给它垫一层从中心散开的底，边缘仍是透的 ——
      图还在，字也还在。方框会把「空白」本身消掉，所以是渐变不是卡片。 */
   :root[data-bg] .hero {
-    background: radial-gradient(58% 62% at 50% 42%,
-      color-mix(in srgb, var(--surface) 88%, transparent) 38%, transparent 78%);
+    background: radial-gradient(46% 50% at 50% 42%,
+      color-mix(in srgb, var(--surface) 34%, transparent) 22%, transparent 70%);
+    text-shadow: 0 1px 3px color-mix(in srgb, var(--page) 82%, transparent);
   }
 
   /* ── app：占满视口，没有别的东西 ─────────────────────────────────── */
@@ -900,7 +923,7 @@
   /* 宿主高度为零（它不能占布局），所以百分比高度在这里等于零 —— 轨道的高度
      由测量时写进来，它本来就在读滚动容器的几何。 */
   .srail {
-    position: absolute; top: 0; right: 0; width: 54px; pointer-events: auto;
+    position: absolute; top: 0; right: 0; width: var(--srail-w); pointer-events: auto;
     height: var(--rail-h, 0px);
   }
   /* 它接替了滚动条，所以常驻 —— 只是平时很淡；也接替了滚动条的手感：能拖 */
@@ -952,7 +975,12 @@
     100% { background: transparent }
   }
 
-  .flow { margin-top: auto; margin-inline: auto; width: 100%; max-width: var(--doc); padding: 8px 18px 14px }
+  /* 定位条是一整条 pointer-events:auto 的命中框，靠右排的控件（撤回入口就在
+     那里）落进去就点不到。让内容退到它左边 —— 层级对抗只会换成轨道点不到。 */
+  .flow {
+    margin-top: auto; margin-left: auto; margin-right: var(--srail-w);
+    width: calc(100% - var(--srail-w)); max-width: var(--doc); padding: 8px 18px 14px;
+  }
   /* 长会话里排版成本是按卡片数线性涨的，而屏外的那几百张没人看。让浏览器
      跳过它们的排版与绘制；记住的高度让滚动条不跳，查找仍能命中并展开。
      最后一张排除在外：正在写的那张高度每帧在变。 */
