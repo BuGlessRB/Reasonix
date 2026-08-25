@@ -18,9 +18,10 @@ const maxDroppedPaths = 64
 type droppedRef struct {
 	Ref  string `json:"ref,omitempty"`
 	Path string `json:"path,omitempty"`
-	// Image says a text-only model will not see this one, which is the whole
-	// reason the composer says so before the turn is sent.
-	Image bool   `json:"image,omitempty"`
+	// Image says a text-only model will not see this one. No omitempty: false is
+	// the answer for every file that is not a picture, and dropping it leaves
+	// "not an image" indistinguishable from "nobody said".
+	Image bool   `json:"image"`
 	Error string `json:"error,omitempty"`
 }
 

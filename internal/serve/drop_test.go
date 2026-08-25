@@ -111,3 +111,39 @@ func TestAttachmentStoresNamedBytesThatAreNotAnImage(t *testing.T) {
 		t.Fatalf("stored attachment is not on disk: %v", err)
 	}
 }
+
+// The composer picks a thumbnail or a file glyph on this one field, so "not a
+// picture" has to arrive as false rather than as nothing: omitempty drops a
+// bool at exactly the value that matters, and the page then reads the missing
+// field as an image. Decoding into the struct would restore the false and hide
+// that, so this reads the raw object.
+func TestDropSaysNotAnImageInsteadOfSayingNothing(t *testing.T) {
+	dir := t.TempDir()
+	doc := filepath.Join(dir, "design.md")
+	if err := os.WriteFile(doc, []byte("# title"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bc := NewBroadcaster()
+	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
+	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	defer srv.Close()
+
+	resp := postJSON(t, srv.URL+"/drop", map[string][]string{"paths": {doc}})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /drop = %d", resp.StatusCode)
+	}
+	var raw []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 1 {
+		t.Fatalf("drop answer = %+v, want one entry", raw)
+	}
+	image, ok := raw[0]["image"]
+	if !ok {
+		t.Fatalf("no \"image\" key in %+v: a document reads as a picture when the field is absent", raw[0])
+	}
+	if image != false {
+		t.Fatalf("image = %v for a .md file, want false", image)
+	}
+}

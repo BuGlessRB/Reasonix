@@ -291,18 +291,18 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
             <li className="shot" key={c.id} style={{ "--i": i } as React.CSSProperties}>
               {c.k === "image" ? (
                 <>
-                  {c.a.image === false ? (
-                    <span className="glyph" aria-hidden="true">{kindOf(c.a.path)}</span>
-                  ) : (
+                  {c.a.image ? (
                     <span
                       className="thumb"
                       aria-hidden="true"
                       style={c.url ? { backgroundImage: `url(${c.url})` } : undefined}
                     />
+                  ) : (
+                    <span className="glyph" aria-hidden="true">{kindOf(c.a.path)}</span>
                   )}
                   <span className="meta">
                     <span className="nm" title={c.a.path}>{c.a.path.split("/").pop()}</span>
-                    <span className="sz">{c.a.image === false ? t("文件") : t("图片")}</span>
+                    <span className="sz">{c.a.image ? t("图片") : t("文件")}</span>
                   </span>
                 </>
               ) : (
