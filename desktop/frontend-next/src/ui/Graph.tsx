@@ -5,120 +5,13 @@ import type { Item } from "../state/session";
 import type { GraphState, Lane } from "../state/graph";
 import { lanesOf } from "../state/graph";
 import type { GraphNode } from "../port/wire";
+import { callsIn, slotWaitOf, spanOf, stateWord } from "./gnode";
+import { H, W, layout, pairKey, wirePath, type PlacedNode } from "./glayout";
 
-// Node boxes are a fixed size, so a lane's geometry follows from its ranks with
-// nothing measured. That is what lets the edge layer and the cards agree: both
-// read the same numbers instead of one of them reading the DOM after paint.
-const W = 190;
-const H = 58;
-const COLGAP = 64;
-const ROWGAP = 12;
-
-const at = (rank: number, row: number) => ({
-  x: rank * (W + COLGAP),
-  y: row * (H + ROWGAP),
-});
-
-interface Placed {
-  node: GraphNode;
-  x: number;
-  y: number;
-}
-
-// One link between two nodes, folded from the two facts the kernel publishes
-// about them. Ordering and delivery share a line because they share a pair;
-// drawing them as two lines would say there are two relationships.
-interface Link {
-  from: Placed;
-  to: Placed;
-  carried: boolean;
-}
-
-// One key per ordered pair. A node id may hold a slash or a space, so joining
-// two of them with either is ambiguous; encoding the pair is not.
-const pairKey = (from: string, to: string) => JSON.stringify([from, to]);
-
-function place(lane: Lane): {
-  placed: Placed[];
-  links: Link[];
-  w: number;
-  h: number;
-} {
-  const placed: Placed[] = [];
-  lane.ranks.forEach((rank, i) => rank.forEach((node, row) => placed.push({ node, ...at(i, row) })));
-  const by = new Map(placed.map((p) => [p.node.id, p]));
-
-  const pairs = new Map<string, { from: Placed; to: Placed; ordered: boolean; carried: boolean }>();
-  for (const e of lane.edges) {
-    const from = by.get(e.from);
-    const to = by.get(e.to);
-    if (!from || !to) continue;
-    const key = pairKey(e.from, e.to);
-    const held = pairs.get(key) ?? { from, to, ordered: false, carried: false };
-    if (e.kind === "depends") held.ordered = true;
-    if (e.kind === "context") held.carried = true;
-    pairs.set(key, held);
-  }
-
-  const rows = Math.max(1, ...lane.ranks.map((r) => r.length));
-  return {
-    placed,
-    links: [...pairs.values()].map(({ from, to, carried }) => ({
-      from,
-      to,
-      carried,
-    })),
-    w: lane.ranks.length * W + Math.max(0, lane.ranks.length - 1) * COLGAP,
-    h: rows * H + Math.max(0, rows - 1) * ROWGAP,
-  };
-}
-
-function path(link: Link): string {
-  const x1 = link.from.x + W;
-  const y1 = link.from.y + H / 2;
-  const x2 = link.to.x;
-  const y2 = link.to.y + H / 2;
-  const bend = Math.max(22, (x2 - x1) / 2);
-  return `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
-}
-
-// The calls this transcript holds, by the id a node names. Timing lives on the
-// tool stream rather than being published a second time — the node is the call,
-// so one id answers both — and membership is what says a node can be shown in
-// the activity stream at all: an adopted answer came from a run that is not in
-// this transcript.
-function callsIn(items: Item[]): Map<string, number | undefined> {
-  const out = new Map<string, number | undefined>();
-  for (const i of items) {
-    if (i.t !== "tool") continue;
-    for (const call of [i.tool, ...i.children]) if (call.id) out.set(call.id, call.durationMs ?? undefined);
-  }
-  return out;
-}
-
-// Spelled as literals rather than looked up in a table: the catalogue gate
-// reads what sits inside a t() call, and a word laundered through a lookup is
-// one it cannot see is missing.
-function stateWord(state: string): string {
-  switch (state) {
-    case "running":
-      return t("运行中");
-    case "completed":
-      return t("完成");
-    case "adopted":
-      return t("复用");
-    case "failed":
-      return t("失败");
-    case "cancelled":
-      return t("已取消");
-    case "skipped":
-      return t("跳过");
-    default:
-      return t("待运行");
-  }
-}
-
-function Node({ p, lane, ms, on, chosen }: { p: Placed; lane: Lane; ms?: number; on: () => void; chosen: boolean }) {
+// Geometry, ordering and edge routing live in glayout: a lane's arrangement is
+// arithmetic over what the kernel published, and keeping it out of the view is
+// what lets it be checked without rendering anything.
+function Node({ p, lane, ms, on, chosen }: { p: PlacedNode; lane: Lane; ms?: number; on: () => void; chosen: boolean }) {
   const { node } = p;
   const state = node.state ?? "pending";
   const waiting = lane.blocked[node.id];
@@ -185,7 +78,7 @@ function LaneView({
   chosen: string | null;
   onChoose: (id: string) => void;
 }) {
-  const { placed, links, w, h } = useMemo(() => place(lane), [lane]);
+  const { nodes, wires, w, h } = useMemo(() => layout(lane), [lane]);
   const state = lane.group.state ?? "running";
   return (
     <section className="glane">
@@ -209,22 +102,22 @@ function LaneView({
                 <path d="M0.5 0.5 L7 4 L0.5 7.5" fill="none" stroke="context-stroke" strokeWidth="1.2" />
               </marker>
             </defs>
-            {links.map((l) => (
+            {wires.map((wire) => (
               <path
-                key={pairKey(l.from.node.id, l.to.node.id)}
+                key={pairKey(wire.from, wire.to)}
                 className="gl-edge"
-                data-carried={l.carried ? "" : undefined}
-                d={path(l)}
-                markerEnd={`url(#${l.carried ? "gm-full" : "gm-open"})`}
+                data-carried={wire.carried ? "" : undefined}
+                d={wirePath(wire.points)}
+                markerEnd={`url(#${wire.carried ? "gm-full" : "gm-open"})`}
               />
             ))}
           </svg>
-          {placed.map((p) => (
+          {nodes.map((p) => (
             <Node
               key={p.node.id}
               p={p}
               lane={lane}
-              ms={calls.get(p.node.id)}
+              ms={spanOf(p.node, calls)}
               chosen={chosen === p.node.id}
               on={() => onChoose(p.node.id)}
             />
@@ -237,12 +130,16 @@ function LaneView({
 
 function Detail({ node, lane, ms, onOpen }: { node: GraphNode; lane: Lane; ms?: number; onOpen?: () => void }) {
   const waiting = lane.blocked[node.id];
+  // Slot wait is time the run spent ready and not running, so it belongs beside
+  // the time it spent working: together they say where the node's span went.
+  const wait = slotWaitOf(node);
   const rows: [string, string | undefined][] = [
     [t("状态"), stateWord(node.state ?? "pending")],
     [t("画像"), node.profile],
     [t("模型"), [node.model, node.effort].filter(Boolean).join(" · ")],
     [t("权限"), node.grant === "write" ? t("可写") : node.grant === "read" ? t("只读") : undefined],
     [t("耗时"), ms != null ? seconds(ms, 2) : undefined],
+    [t("等空位"), wait != null ? seconds(wait, 2) : undefined],
     [t("等待"), waiting && namesOf(lane, waiting)],
     [t("复用自"), lane.reuse[node.id]],
     [t("记录"), node.ref],
@@ -300,6 +197,9 @@ export function Graph({ graph, items, onOpen }: { graph: GraphState; items: Item
   const ran = lanes.reduce((n, l) => n + l.ran, 0);
   const reused = lanes.reduce((n, l) => n + l.reused, 0);
   const waiting = lanes.reduce((n, l) => n + Object.keys(l.blocked).length, 0);
+  // Told apart from waiting on purpose: one is answered by finishing upstream
+  // work, the other only by raising the session's concurrency ceiling.
+  const queued = lanes.reduce((n, l) => n + l.queued, 0);
 
   return (
     <>
@@ -308,6 +208,7 @@ export function Graph({ graph, items, onOpen }: { graph: GraphState; items: Item
           {t("{n} 个子代理", { n: ran + reused })}
           {reused > 0 && <em>{t("· {n} 个没有重跑", { n: reused })}</em>}
           {waiting > 0 && <em className="on">{t("· {n} 个在等上游", { n: waiting })}</em>}
+          {queued > 0 && <em className="on">{t("· {n} 个在等空位", { n: queued })}</em>}
         </span>
         {/* 边有两种,靠线型分,不靠颜色分 —— 排了序和真把答案交过去是两件事。 */}
         <span className="gkey">
@@ -340,7 +241,7 @@ export function Graph({ graph, items, onOpen }: { graph: GraphState; items: Item
         <Detail
           node={picked.node}
           lane={picked.lane}
-          ms={calls.get(picked.node.id)}
+          ms={spanOf(picked.node, calls)}
           // Only a node this transcript actually holds can be shown in it: an
           // adopted answer was produced by a run that is not in this one.
           onOpen={calls.has(picked.node.id) ? () => onOpen(picked.node.id) : undefined}

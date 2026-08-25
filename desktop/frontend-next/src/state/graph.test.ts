@@ -124,6 +124,34 @@ describe("arranging a fan-out for reading", () => {
     expect(lane.ranks.flat().map((n) => n.id)).toEqual(["g/1", "g/2"]);
   });
 
+  it("counts what the concurrency ceiling is holding back, apart from what the graph is", () => {
+    const s = run([
+      {
+        nodes: [group("g", "fleet(3)"), worker("g/1", "g", "survey"), worker("g/2", "g", "rewrite"), worker("g/3", "g", "aside")],
+        edges: [depends("g/1", "g/2")],
+      },
+      // g/1 got a slot, g/3 did not, g/2 is still waiting on its dependency.
+      { nodes: [{ id: "g/1", state: "queued", queuedAt: 100 }, { id: "g/3", state: "queued", queuedAt: 100 }] },
+      { nodes: [{ id: "g/1", state: "running", startedAt: 140 }] },
+    ]);
+    const [lane] = lanesOf(s);
+    // Two different waits, and only one of them is answered by raising the cap.
+    expect(lane.queued).toBe(1);
+    expect(lane.blocked).toEqual({ "g/2": ["g/1"] });
+  });
+
+  it("keeps a stamp an update is silent about", () => {
+    const s = run([
+      { nodes: [worker("g/1", "g", "survey")] },
+      { nodes: [{ id: "g/1", state: "queued", queuedAt: 100 }] },
+      { nodes: [{ id: "g/1", state: "running", startedAt: 140 }] },
+      { nodes: [{ id: "g/1", state: "completed", endedAt: 900 }] },
+    ]);
+    // Each delta carries one stamp. Folding them must leave all three standing,
+    // or the span the graph draws is only ever the last one published.
+    expect(s.nodes[0]).toMatchObject({ state: "completed", queuedAt: 100, startedAt: 140, endedAt: 900 });
+  });
+
   it("keeps two fan-outs in separate lanes", () => {
     const s = run([
       { nodes: [group("a"), worker("a/1", "a", "one"), group("b"), worker("b/1", "b", "two")] },

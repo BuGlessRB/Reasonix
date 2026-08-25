@@ -391,6 +391,9 @@ export type GraphNodeKind = "group" | "worker" | "external";
 
 export type GraphNodeState =
   | "pending"
+  // Ready and waiting for a session concurrency slot. Apart from "pending" on
+  // purpose: nothing upstream is missing, only the ceiling stands in the way.
+  | "queued"
   | "running"
   | "completed"
   | "adopted"
@@ -415,6 +418,7 @@ export interface GraphNode {
   effort?: string;
   grant?: GraphGrant;
   ref?: string;
+  queuedAt?: number;
   startedAt?: number;
   endedAt?: number;
   err?: string;

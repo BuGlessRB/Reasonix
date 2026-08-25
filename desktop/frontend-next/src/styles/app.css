@@ -1105,6 +1105,10 @@
   .gn-wait { color: var(--accent-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 
   /* 状态既是颜色也是这张卡上的那个词 —— 颜色不单独承载意思。 */
+  /* 排队中不是待运行:它想跑,拦着它的是并发上限。所以 pip 是活的(慢一档的呼吸),
+     边框仍是虚的(还没跑),那个词用强调色 —— 这一屏唯一能看出上限在咬人的地方。 */
+  .gnode[data-s="queued"] .pip { background: var(--faint); animation: tick 2.6s ease-in-out infinite }
+  .gnode[data-s="queued"] .gn-st { color: var(--accent-ink) }
   .gnode[data-s="running"] .pip { background: var(--net); animation: tick 1.6s ease-in-out infinite }
   .gnode[data-s="running"] .gn-st { color: var(--net) }
   .gnode[data-s="completed"] .pip { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ok) }
@@ -1116,7 +1120,7 @@
   .gnode[data-s="cancelled"] .pip { background: var(--warn) }
   .gnode[data-s="cancelled"] .gn-st { color: var(--warn-ink) }
   /* 跳过和待运行都是「没跑」：边框画成虚的，跟真的跑过的卡一眼分开。 */
-  .gnode:is([data-s="skipped"], [data-s="pending"]) { border-style: dashed; background: var(--overlay) }
+  .gnode:is([data-s="skipped"], [data-s="pending"], [data-s="queued"]) { border-style: dashed; background: var(--overlay) }
   .gnode[data-s="skipped"] .gn-nm { color: var(--faint) }
   /* 能写工作区的那几个 —— warn 是「有代价但放行」，正是这件事。 */
   .gnode[data-w]::before {

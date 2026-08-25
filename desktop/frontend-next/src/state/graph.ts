@@ -7,9 +7,15 @@ import type { GraphEdge, GraphNode, WireEvent } from "../port/wire";
 export interface GraphState {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  // Where each node sits in `nodes`, and every edge already held. Carried with
+  // the arrays rather than rebuilt on each fold: the graph is the one piece of
+  // session state that only ever grows, so scanning it per delta made the cost
+  // of a delta the size of the whole run — the thing perf/README forbids.
+  at: Map<string, number>;
+  seen: Set<string>;
 }
 
-export const initialGraph: GraphState = { nodes: [], edges: [] };
+export const initialGraph: GraphState = { nodes: [], edges: [], at: new Map(), seen: new Set() };
 
 // A later record of the same node updates the one already there. Producers send
 // an outcome once a node settles, not the whole node, so anything the update is
@@ -28,33 +34,42 @@ function merge(old: GraphNode, update: GraphNode): GraphNode {
     ref: update.ref || old.ref,
     err: update.err || old.err,
     grant: update.grant || old.grant,
+    queuedAt: update.queuedAt || old.queuedAt,
     startedAt: update.startedAt || old.startedAt,
     endedAt: update.endedAt || old.endedAt,
   };
 }
 
-const sameEdge = (a: GraphEdge, b: GraphEdge) => a.from === b.from && a.to === b.to && a.kind === b.kind;
+const edgeKey = (e: GraphEdge) => JSON.stringify([e.from, e.to, e.kind]);
 
 export function reduceGraph(s: GraphState, ev: WireEvent | { kind: "__clear" }): GraphState {
   if (ev.kind === "__clear") return initialGraph;
   if (ev.kind !== "graph_delta" || !ev.graph) return s;
-  const nodes = s.nodes.slice();
-  const edges = s.edges.slice();
-  let touched = false;
+  // Copied on the first record worth keeping, so a delta that says nothing new
+  // returns the state it was given and every memo downstream holds.
+  let next: GraphState | null = null;
+  const open = () =>
+    (next ??= { nodes: s.nodes.slice(), edges: s.edges.slice(), at: new Map(s.at), seen: new Set(s.seen) });
+
   for (const incoming of ev.graph.nodes ?? []) {
     if (!incoming.id) continue;
-    touched = true;
-    const at = nodes.findIndex((n) => n.id === incoming.id);
-    if (at >= 0) nodes[at] = merge(nodes[at], incoming);
-    else nodes.push(incoming);
+    const g = open();
+    const at = g.at.get(incoming.id);
+    if (at !== undefined) g.nodes[at] = merge(g.nodes[at], incoming);
+    else {
+      g.at.set(incoming.id, g.nodes.length);
+      g.nodes.push(incoming);
+    }
   }
   for (const edge of ev.graph.edges ?? []) {
     if (!edge.from || !edge.to || !edge.kind || edge.from === edge.to) continue;
-    if (edges.some((e) => sameEdge(e, edge))) continue;
-    touched = true;
-    edges.push(edge);
+    const key = edgeKey(edge);
+    if ((next ?? s).seen.has(key)) continue;
+    const g = open();
+    g.seen.add(key);
+    g.edges.push(edge);
   }
-  return touched ? { nodes, edges } : s;
+  return next ?? s;
 }
 
 // One fan-out, arranged for reading. A rank is a column: everything in it was
@@ -72,6 +87,9 @@ export interface Lane {
   blocked: Record<string, string[]>;
   ran: number;
   reused: number;
+  // Members holding no slot yet. This is the fan-out the concurrency ceiling is
+  // throttling right now, which no edge on the picture can say.
+  queued: number;
 }
 
 const ANSWERED = new Set(["completed", "adopted"]);
@@ -119,6 +137,7 @@ function lane(group: GraphNode, s: GraphState, byID: Map<string, GraphNode>): La
     blocked,
     ran: members.filter((n) => n.state !== "adopted").length,
     reused: members.filter((n) => n.state === "adopted").length,
+    queued: members.filter((n) => n.state === "queued").length,
   };
 }
 
@@ -142,4 +161,57 @@ function ranker(deps: Map<string, string[]>, ids: Set<string>): (id: string) => 
     return at;
   };
   return rank;
+}
+
+// One step of the run, read along time rather than along dependency. lanesOf
+// answers "what waited on what"; this answers "what happened, then what" — the
+// same fact the kernel published, read on the other axis. A fan-out's members
+// hang under the step that spawned them, because that is what the step turned
+// out to be, not five steps standing beside it.
+export interface Step {
+  node: GraphNode;
+  members: GraphNode[];
+  // Upstreams that have not answered yet, named. Empty when nothing blocks it.
+  blocked: string[];
+}
+
+/** stepsOf lists the run's top-level nodes in the order they started. */
+export function stepsOf(s: GraphState): Step[] {
+  const byID = new Map(s.nodes.map((n) => [n.id, n]));
+  const deps = new Map<string, string[]>();
+  for (const e of s.edges) {
+    if (e.kind !== "depends") continue;
+    deps.set(e.to, [...(deps.get(e.to) ?? []), e.from]);
+  }
+  const kids = new Map<string, GraphNode[]>();
+  for (const n of s.nodes) {
+    if (n.parentId) kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
+  }
+  // A node whose parent is not on the page is a top-level step here: the
+  // alternative is dropping it, and a truncated stream would silently shorten
+  // the run rather than showing what it does hold.
+  const top = s.nodes.filter((n) => !n.parentId || !byID.has(n.parentId));
+  return ordered(top).map((node) => ({
+    node,
+    members: ordered(kids.get(node.id) ?? []),
+    blocked: (deps.get(node.id) ?? [])
+      .filter((id) => !ANSWERED.has(byID.get(id)?.state ?? ""))
+      .map((id) => byID.get(id)?.label || id),
+  }));
+}
+
+// Publication order is the tiebreak, not a fallback to zero: a node the kernel
+// has not started carries no startedAt, and treating that as time zero would
+// sort the run's future above its past.
+function ordered(nodes: GraphNode[]): GraphNode[] {
+  return nodes
+    .map((node, i) => ({ node, i }))
+    .sort((a, b) => {
+      const x = a.node.startedAt ?? 0;
+      const y = b.node.startedAt ?? 0;
+      if (x && y) return x === y ? a.i - b.i : x - y;
+      if (x !== y) return x ? -1 : 1;
+      return a.i - b.i;
+    })
+    .map((p) => p.node);
 }
