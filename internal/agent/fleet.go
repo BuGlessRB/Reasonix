@@ -348,6 +348,7 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 		spec.Context.Upstream = f.upstreamFor(plan, idx, results)
 		label := spec.Task.Description
 		subID := fleetNodeID(parentID, idx)
+		spec.Sched.OnStart = func() { publishGraph(sink, fanOutItemRunningDelta(subID)) }
 		dispatchArgs, _ := json.Marshal(map[string]any{
 			"prompt":      spec.Task.Objective,
 			"description": label,
@@ -360,7 +361,7 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 				Args: string(dispatchArgs), ReadOnly: spec.Grant.ReadOnly,
 			},
 		})
-		publishGraph(sink, fleetStartDelta(parentID, plan, idx, spec.Context.Upstream))
+		publishGraph(sink, fleetQueuedDelta(parentID, plan, idx, spec.Context.Upstream))
 
 		wg.Go(func() {
 			// Each fleet item runs as its own task-shaped execution so
@@ -378,17 +379,12 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 				res.status = agentgraph.StateFailed
 				res.failure = classifyFleetFailure(err)
 			}
-			if err == nil {
-				sink.Emit(event.Event{
-					Kind: event.ToolResult,
-					Tool: event.Tool{ID: subID, ParentID: parentID, Name: "task", Output: out},
-				})
-			} else {
-				sink.Emit(event.Event{
-					Kind: event.ToolResult,
-					Tool: event.Tool{ID: subID, ParentID: parentID, Name: "task", Err: err.Error()},
-				})
+			report := event.Tool{ID: subID, ParentID: parentID, Name: "task", Output: out}
+			if err != nil {
+				report.Output, report.Err = "", err.Error()
 			}
+			sink.Emit(event.Event{Kind: event.ToolResult, Tool: report})
+			publishGraph(sink, fanOutItemSettledDelta(subID, res.status, res.ref, res.err))
 			doneCh <- res
 		})
 	}

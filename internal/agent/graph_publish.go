@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"reasonix/internal/agentgraph"
 	"reasonix/internal/event"
@@ -43,6 +44,7 @@ func fanOutOpeningDelta(parentID, label string, workers []agentgraph.Node) agent
 	delta := agentgraph.Delta{Nodes: make([]agentgraph.Node, 0, len(workers)+1)}
 	delta.Nodes = append(delta.Nodes, agentgraph.Node{
 		ID: parentID, Kind: agentgraph.KindGroup, State: agentgraph.StateRunning, Label: label,
+		StartedAt: nowMilli(),
 	})
 	for _, worker := range workers {
 		delta.Nodes = append(delta.Nodes, worker)
@@ -56,8 +58,41 @@ func fanOutOpeningDelta(parentID, label string, workers []agentgraph.Node) agent
 // keeps what an update says nothing about.
 func fanOutOutcomeDelta(parentID string, state agentgraph.NodeState, items []agentgraph.Node) agentgraph.Delta {
 	nodes := make([]agentgraph.Node, 0, len(items)+1)
-	nodes = append(nodes, agentgraph.Node{ID: parentID, State: state})
+	nodes = append(nodes, agentgraph.Node{ID: parentID, State: state, EndedAt: nowMilli()})
 	return agentgraph.Delta{Nodes: append(nodes, items...)}
+}
+
+func nowMilli() int64 { return time.Now().UnixMilli() }
+
+// fanOutItemQueuedDelta reports an item handed to the session scheduler. Its
+// dependencies are answered and it is still not running, so the only thing left
+// between it and its first step is a free slot — the one wait that is invisible
+// on the graph, because unlike a dependency it has no edge to draw it as.
+func fanOutItemQueuedDelta(id string) agentgraph.Delta {
+	return agentgraph.Delta{Nodes: []agentgraph.Node{
+		{ID: id, State: agentgraph.StateQueued, QueuedAt: nowMilli()},
+	}}
+}
+
+// fanOutItemRunningDelta reports the slot being granted. The gap back to
+// QueuedAt is what the concurrency ceiling cost this item.
+func fanOutItemRunningDelta(id string) agentgraph.Delta {
+	return agentgraph.Delta{Nodes: []agentgraph.Node{
+		{ID: id, State: agentgraph.StateRunning, StartedAt: nowMilli()},
+	}}
+}
+
+// fanOutItemSettledDelta reports one item settling, at the moment it settles.
+// The group publishes every item's outcome again when it ends, but waiting for
+// that leaves a finished item drawn as still running for as long as its slowest
+// sibling takes — on a long fan-out, the whole picture stays wrong until it is
+// no longer worth looking at.
+func fanOutItemSettledDelta(id string, state agentgraph.NodeState, ref string, err error) agentgraph.Delta {
+	node := agentgraph.Node{ID: id, State: state, Ref: ref, EndedAt: nowMilli()}
+	if err != nil {
+		node.Err = boundedInline(err.Error(), graphErrBudget)
+	}
+	return agentgraph.Delta{Nodes: []agentgraph.Node{node}}
 }
 
 // groupTerminalState classifies a fan-out's single terminal outcome:
@@ -146,15 +181,13 @@ func grantOf(readOnly bool) agentgraph.Grant {
 	return agentgraph.GrantWrite
 }
 
-// fleetStartDelta reports an item entering its run and the answers it opened
-// with. A context edge is a separate fact from the depends edge that ordered
-// the pair: the measurement arm delivers no upstream at all, and a reader has
-// to be able to see a fleet that ordered its items while carrying nothing
-// between them.
-func fleetStartDelta(parentID string, plan fleetPlan, idx int, upstream []UpstreamResult) agentgraph.Delta {
-	delta := agentgraph.Delta{Nodes: []agentgraph.Node{
-		{ID: fleetNodeID(parentID, idx), State: agentgraph.StateRunning},
-	}}
+// fleetQueuedDelta reports an item leaving the dependency graph for the
+// scheduler queue, and the answers it will open with. A context edge is a
+// separate fact from the depends edge that ordered the pair: the measurement arm
+// delivers no upstream at all, and a reader has to be able to see a fleet that
+// ordered its items while carrying nothing between them.
+func fleetQueuedDelta(parentID string, plan fleetPlan, idx int, upstream []UpstreamResult) agentgraph.Delta {
+	delta := fanOutItemQueuedDelta(fleetNodeID(parentID, idx))
 	for _, up := range upstream {
 		from := plan.indexOf(up.ID)
 		if from < 0 {

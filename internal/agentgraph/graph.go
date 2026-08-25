@@ -19,7 +19,11 @@ const (
 type NodeState string
 
 const (
-	StatePending   NodeState = "pending"
+	StatePending NodeState = "pending"
+	// StateQueued is ready and waiting for a session concurrency slot. It is
+	// not StatePending: nothing upstream is missing, and the only thing between
+	// this node and its first step is the scheduler's ceiling.
+	StateQueued    NodeState = "queued"
 	StateRunning   NodeState = "running"
 	StateCompleted NodeState = "completed"
 	StateAdopted   NodeState = "adopted"
@@ -33,7 +37,9 @@ const (
 func (s NodeState) Answered() bool { return s == StateCompleted || s == StateAdopted }
 
 // Terminal reports whether the node will not change state again.
-func (s NodeState) Terminal() bool { return s != StatePending && s != StateRunning }
+func (s NodeState) Terminal() bool {
+	return s != StatePending && s != StateQueued && s != StateRunning
+}
 
 // Grant is what a node was allowed to touch while it ran. Empty means the
 // question does not apply — a group is not a run, and an adopted node never got
@@ -78,7 +84,9 @@ type Node struct {
 	Grant    Grant     `json:"grant,omitempty"`
 	// Ref is the persisted transcript this node's answer reads back from.
 	Ref string `json:"ref,omitempty"`
-	// StartedAt and EndedAt are unix milliseconds, zero while unknown.
+	// QueuedAt, StartedAt and EndedAt are unix milliseconds, zero while unknown.
+	// QueuedAt to StartedAt is slot wait, which only the scheduler can measure.
+	QueuedAt  int64  `json:"queuedAt,omitempty"`
 	StartedAt int64  `json:"startedAt,omitempty"`
 	EndedAt   int64  `json:"endedAt,omitempty"`
 	Err       string `json:"err,omitempty"`
@@ -159,6 +167,7 @@ func merge(old, update Node) Node {
 	out.Ref = orText(update.Ref, old.Ref)
 	out.Err = orText(update.Err, old.Err)
 	out.Grant = Grant(orText(string(update.Grant), string(old.Grant)))
+	out.QueuedAt = orStamp(update.QueuedAt, old.QueuedAt)
 	out.StartedAt = orStamp(update.StartedAt, old.StartedAt)
 	out.EndedAt = orStamp(update.EndedAt, old.EndedAt)
 	return out

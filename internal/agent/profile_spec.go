@@ -136,6 +136,8 @@ type SchedulerPolicy struct {
 	BackgroundWriter bool
 	// Nested marks nested sub-agent acquires (fail-fast on concurrency limits).
 	Nested bool
+	// OnStart fires once this run holds a slot: the wait before it is the cap.
+	OnStart func()
 }
 
 // ResolveProfileDefinition looks up a profile and enforces the runAs=subagent

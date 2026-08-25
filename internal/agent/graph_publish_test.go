@@ -244,6 +244,149 @@ func TestParallelTasksPublishesAnUnorderedGroup(t *testing.T) {
 	}
 }
 
+// graphStep is one state a delta declared, in publication order. The folded
+// graph keeps only the last one per node, so a lifecycle can be asserted only
+// against the stream that built it.
+type graphStep struct {
+	id    string
+	state agentgraph.NodeState
+}
+
+func stateStream(t *testing.T, sink *recordSink) []graphStep {
+	t.Helper()
+	var out []graphStep
+	for _, e := range sink.kinds(event.GraphDelta) {
+		if e.Graph == nil {
+			t.Fatal("a graph_delta event carried no delta")
+		}
+		for _, n := range e.Graph.Nodes {
+			if n.State != "" {
+				out = append(out, graphStep{id: n.ID, state: n.State})
+			}
+		}
+	}
+	return out
+}
+
+func firstAt(stream []graphStep, id string, state agentgraph.NodeState) int {
+	return slices.IndexFunc(stream, func(s graphStep) bool { return s.id == id && s.state == state })
+}
+
+func lifecycleOf(stream []graphStep, id string) []agentgraph.NodeState {
+	var out []agentgraph.NodeState
+	for _, s := range stream {
+		if s.id == id {
+			out = append(out, s.state)
+		}
+	}
+	return out
+}
+
+func fleetWorkerIDs() []string {
+	return []string{"fleet-call/fleet-1", "fleet-call/fleet-2", "fleet-call/fleet-3"}
+}
+
+func runProbeFleet(t *testing.T, session string) *recordSink {
+	t.Helper()
+	rec := &recordSink{}
+	fleet := newProbeFleet(t, &upstreamProbeProvider{answer: "done"}, ablation.New())
+	ctx := WithParentSession(withCallContext(context.Background(), "fleet-call", rec, nil, false), session)
+	if out, err := fleet.Execute(ctx, json.RawMessage(fleetGraphTasks)); err != nil {
+		t.Fatalf("fleet: %v\n%s", err, out)
+	}
+	return rec
+}
+
+// The graph declared three timestamps and no producer ever filled one, so every
+// consumer's timing fallback was dead code and a run's own order survived only
+// as the order its deltas happened to be published in.
+func TestFleetGraphTimesTheRunItDraws(t *testing.T) {
+	g := foldGraph(t, runProbeFleet(t, "clock-parent"))
+	for _, id := range fleetWorkerIDs() {
+		n, ok := g.Node(id)
+		if !ok {
+			t.Fatalf("no node %q in %+v", id, g.Nodes)
+		}
+		if n.QueuedAt == 0 || n.StartedAt == 0 || n.EndedAt == 0 {
+			t.Fatalf("node %q = %+v, want every stamp of a run that actually happened", id, n)
+		}
+		if n.QueuedAt > n.StartedAt || n.StartedAt > n.EndedAt {
+			t.Fatalf("node %q runs backwards: queued %d, started %d, ended %d", id, n.QueuedAt, n.StartedAt, n.EndedAt)
+		}
+	}
+	group, ok := g.Node("fleet-call")
+	if !ok || group.StartedAt == 0 || group.EndedAt < group.StartedAt {
+		t.Fatalf("group node = %+v, want the span the whole fan-out sits inside", group)
+	}
+}
+
+// Waiting for a slot and holding one were the same word, so a fan-out the
+// session concurrency ceiling was throttling drew identically to one where every
+// item started at once. Which of the two it is decides whether raising the
+// ceiling would buy anything, and nothing else in the run can answer it.
+func TestFleetGraphSaysQueuedBeforeItSaysRunning(t *testing.T) {
+	stream := stateStream(t, runProbeFleet(t, "queue-parent"))
+	for _, id := range fleetWorkerIDs() {
+		queued := firstAt(stream, id, agentgraph.StateQueued)
+		running := firstAt(stream, id, agentgraph.StateRunning)
+		if queued < 0 || running < 0 {
+			t.Fatalf("node %q lifecycle = %v, want queued then running", id, lifecycleOf(stream, id))
+		}
+		if queued > running {
+			t.Fatalf("node %q held a slot before it asked for one: %v", id, lifecycleOf(stream, id))
+		}
+	}
+}
+
+// An item's outcome used to reach the graph only when its group ended, so a
+// fleet drew every finished worker as still running until its slowest sibling
+// returned — which on a long fan-out is the whole time anyone is watching it.
+func TestFleetGraphSettlesAnItemBeforeTheGroupDoes(t *testing.T) {
+	stream := stateStream(t, runProbeFleet(t, "settle-parent"))
+	groupEnd := firstAt(stream, "fleet-call", agentgraph.StateCompleted)
+	if groupEnd < 0 {
+		t.Fatalf("the group never settled: %v", lifecycleOf(stream, "fleet-call"))
+	}
+	for _, id := range fleetWorkerIDs() {
+		at := firstAt(stream, id, agentgraph.StateCompleted)
+		if at < 0 || at > groupEnd {
+			t.Fatalf("item %q reached the graph at step %d and the group ended at %d; a finished item must not wait for its siblings", id, at, groupEnd)
+		}
+	}
+}
+
+// parallel_tasks has no dependencies at all, so a slot is the only thing one of
+// its items can ever be waiting for. That makes it the case where saying
+// "running" from the moment of dispatch is furthest from true.
+func TestParallelTasksGraphSeparatesQueuedFromRunning(t *testing.T) {
+	rec := &recordSink{}
+	task := newTestTaskTool(t, parallelStaticProvider{}, tool.NewRegistry(), "sys", "", "", nil)
+	parallel := NewParallelTasksTool(task, tool.NewRegistry())
+	ctx := withCallContext(context.Background(), "parallel-call", rec, nil, false)
+	if _, err := parallel.Execute(ctx, json.RawMessage(parallelGraphTasks)); err != nil {
+		t.Fatalf("parallel_tasks: %v", err)
+	}
+
+	stream := stateStream(t, rec)
+	groupEnd := firstAt(stream, "parallel-call", agentgraph.StateCompleted)
+	g := foldGraph(t, rec)
+	for _, id := range []string{"parallel-call/sub-1", "parallel-call/sub-2"} {
+		queued := firstAt(stream, id, agentgraph.StateQueued)
+		running := firstAt(stream, id, agentgraph.StateRunning)
+		settled := firstAt(stream, id, agentgraph.StateCompleted)
+		if queued < 0 || running < 0 || queued > running {
+			t.Fatalf("node %q lifecycle = %v, want queued then running", id, lifecycleOf(stream, id))
+		}
+		if settled < 0 || groupEnd < 0 || settled > groupEnd {
+			t.Fatalf("node %q settled at %d and the group ended at %d", id, settled, groupEnd)
+		}
+		n, _ := g.Node(id)
+		if n.QueuedAt == 0 || n.StartedAt < n.QueuedAt || n.EndedAt < n.StartedAt {
+			t.Fatalf("node %q = %+v, want a queued/started/ended span in order", id, n)
+		}
+	}
+}
+
 const parallelGraphTasks = `{"tasks":[
 	{"prompt":"first","description":"survey"},
 	{"prompt":"second","description":"measure"}

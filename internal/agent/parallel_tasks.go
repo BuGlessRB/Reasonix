@@ -153,6 +153,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		running[idx] = true
 		label := labels[idx]
 		subID := parallelNodeID(parentID, idx)
+		onSlot := func() { publishGraph(sink, fanOutItemRunningDelta(subID)) }
 		dispatchArgs, _ := json.Marshal(map[string]string{"prompt": t.Prompt, "description": label})
 		sink.Emit(event.Event{
 			Kind: event.ToolDispatch,
@@ -161,9 +162,8 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 				Args: string(dispatchArgs), ReadOnly: true,
 			},
 		})
-		publishGraph(sink, agentgraph.Delta{Nodes: []agentgraph.Node{
-			{ID: subID, State: agentgraph.StateRunning},
-		}})
+		// Nothing orders these, so a slot is the only thing one can wait for.
+		publishGraph(sink, fanOutItemQueuedDelta(subID))
 
 		wg.Go(func() {
 			modelRef, effortRef := p.taskTool.effectiveProfile(t.Model, t.Effort)
@@ -175,7 +175,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 				Task:   TaskSpec{Objective: t.Prompt, Description: label},
 				Worker: WorkerSpec{Kind: "task", Name: "task", SystemPrompt: DefaultReadOnlyTaskSystemPrompt, Model: modelRef, Effort: effortRef},
 				Grant:  CapabilityGrant{ReadOnly: true, AllowNoTools: true, CallTools: t.Tools},
-				Sched:  SchedulerPolicy{MaxSteps: t.MaxSteps, Nested: SubagentDepth(ctx) > 0},
+				Sched:  SchedulerPolicy{MaxSteps: t.MaxSteps, Nested: SubagentDepth(ctx) > 0, OnStart: onSlot},
 			})
 
 			if ctx.Err() != nil && runErr == nil {
@@ -239,6 +239,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		default:
 			statuses[r.index] = agentgraph.StateFailed
 		}
+		publishGraph(sink, fanOutItemSettledDelta(parallelNodeID(parentID, r.index), statuses[r.index], r.ref, r.err))
 	}
 	for completed < n {
 		select {

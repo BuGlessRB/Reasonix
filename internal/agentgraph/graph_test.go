@@ -101,6 +101,9 @@ func TestStateVocabulary(t *testing.T) {
 		terminal bool
 	}{
 		{StatePending, false, false},
+		// Queued is not terminal: the node has not run, and a reader that treats
+		// it as settled stops waiting for the answer it is still going to get.
+		{StateQueued, false, false},
 		{StateRunning, false, false},
 		{StateCompleted, true, true},
 		{StateAdopted, true, true},

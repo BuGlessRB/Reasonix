@@ -841,7 +841,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 			}()
 			// Queue for a concurrency/write slot here — not before Start —
 			// so the parent tool call returns a job id immediately.
-			releaseSlot, slotErr := t.acquireSlot(jobCtx, slotReq)
+			releaseSlot, slotErr := t.acquireSlot(jobCtx, slotReq, spec.Sched)
 			if slotErr != nil {
 				return FormatSubagentRunResult("", run, true), errors.Join(slotErr, t.transcripts.SaveFailed(run))
 			}
@@ -871,7 +871,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 	}
 
 	// Foreground: acquire a slot (queue if needed), then run synchronously.
-	releaseSlot, err := t.acquireSlot(ctx, acquireReq)
+	releaseSlot, err := t.acquireSlot(ctx, acquireReq, spec.Sched)
 	if err != nil {
 		run.Release()
 		return "", err
@@ -889,14 +889,6 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 		return FormatSubagentRunResult(answer, run, false), nil
 	}
 	return GuardSubagentHostDecisionText(answer), nil
-}
-
-func (t *TaskTool) acquireSlot(ctx context.Context, req AcquireRequest) (func(), error) {
-	noop := func() {}
-	if t.scheduler == nil {
-		return noop, nil
-	}
-	return t.scheduler.Acquire(ctx, req)
 }
 
 func (t *TaskTool) bashCanEnforceWriteRoots() bool {
