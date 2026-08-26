@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
@@ -121,6 +121,13 @@ export class SsePort extends SseTheme implements AgentPort {
   }
   forgetMemory(name: string) {
     return this.post("/memory/forget", { name });
+  }
+  async memoryRevisions(name: string) {
+    const r = await this.get<{ revisions: MemoryEntry[] }>("/memory/revisions?name=" + encodeURIComponent(name));
+    return r.revisions ?? [];
+  }
+  restoreMemory(name: string, revision: number) {
+    return this.post("/memory/restore", { name, revision });
   }
 
   async reconnectMcp(name: string) {

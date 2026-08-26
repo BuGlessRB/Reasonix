@@ -20,6 +20,8 @@ export function Memory({ port }: { port: AgentPort }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [edit, setEdit] = useState<MemoryEdit | null>(null);
+  const [past, setPast] = useState<Record<string, MemoryEntry[]>>({});
+  const [showPast, setShowPast] = useState("");
 
   const reload = () => {
     port
@@ -42,6 +44,41 @@ export function Memory({ port }: { port: AgentPort }) {
     try {
       await port.saveMemory(edit);
       setEdit(null);
+      reload();
+    } catch (e) {
+      setError(reason(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const openHistory = async (name: string) => {
+    if (showPast === name) return setShowPast("");
+    setShowPast(name);
+    setError("");
+    if (past[name]) return;
+    try {
+      const list = await port.memoryRevisions(name);
+      setPast((p) => ({ ...p, [name]: list }));
+    } catch (e) {
+      setError(reason(e));
+      setShowPast("");
+    }
+  };
+
+  const restore = async (name: string, revision: number) => {
+    setBusy(name);
+    setError("");
+    try {
+      await port.restoreMemory(name, revision);
+      // The restore wrote a new revision, so the cached list is now one short.
+      // Drop the key rather than emptying it — an empty array reads as cached.
+      setPast((p) => {
+        const next = { ...p };
+        delete next[name];
+        return next;
+      });
+      setShowPast("");
       reload();
     } catch (e) {
       setError(reason(e));
@@ -143,8 +180,19 @@ export function Memory({ port }: { port: AgentPort }) {
                           >
                             {t("编辑")}
                           </button>
+                          {(m.revision ?? 1) > 1 && (
+                            <button className="act ghost" onClick={() => void openHistory(m.name)}>
+                              {t(showPast === m.name ? "收起旧版本" : "第 {n} 版，看旧的", { n: m.revision ?? 1 })}
+                            </button>
+                          )}
                           {m.path && <span className="path">{m.path}</span>}
                         </div>
+                        {showPast === m.name && <History
+                          list={past[m.name]}
+                          current={m.revision ?? 1}
+                          busy={busy === m.name}
+                          onRestore={(rev) => void restore(m.name, rev)}
+                        />}
                       </>
                     )}
                   </div>
@@ -157,6 +205,43 @@ export function Memory({ port }: { port: AgentPort }) {
       {error && <div className="why">{error}</div>}
     </div>
   );
+}
+
+// The panel already promised that saving keeps the old version. This is where
+// that promise becomes reachable: the revisions behind the current one, and a
+// way back into any of them. Restoring appends a revision rather than rewinding
+// to one, so nothing a reader is looking at disappears when they use it.
+function History({ list, current, busy, onRestore }: {
+  list: MemoryEntry[] | undefined;
+  current: number;
+  busy: boolean;
+  onRestore: (revision: number) => void;
+}) {
+  if (!list) return <div className="memhist"><span className="ds">{t("正在读旧版本…")}</span></div>;
+  const older = list.filter((m) => (m.revision ?? 1) !== current);
+  if (older.length === 0) return <div className="memhist"><span className="ds">{t("只有当前这一版。")}</span></div>;
+  return (
+    <div className="memhist">
+      {older.map((m) => (
+        <div className="histrow" key={m.revision}>
+          <span className="rev">{t("第 {n} 版", { n: m.revision ?? 1 })}</span>
+          <span className="at">{m.updatedAt || m.createdAt}</span>
+          <span className="ds" title={m.title}>{m.title}</span>
+          <button className="act ghost" disabled={busy} onClick={() => onRestore(m.revision ?? 1)}>
+            {t(busy ? "…" : "恢复这版")}
+          </button>
+          <pre>{clip2(m.body)}</pre>
+        </div>
+      ))}
+      <span className="hint">{t("恢复也会记成新的一版，这些都还在")}</span>
+    </div>
+  );
+}
+
+function clip2(s: string | undefined): string {
+  const body = (s ?? "").trim();
+  if (!body) return "（没有正文）";
+  return body.length > 200 ? body.slice(0, 200) + "…" : body;
 }
 
 function clip(s: string): string {

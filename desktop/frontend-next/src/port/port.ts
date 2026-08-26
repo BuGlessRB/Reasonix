@@ -164,6 +164,11 @@ export interface AgentPort {
   // Archives rather than deletes: a fact dropped by mistake stays recoverable.
   forgetMemory(name: string): Promise<void>;
   saveMemory(edit: MemoryEdit): Promise<void>;
+  // Every save keeps the version it replaced. These are what let a reader see
+  // that history and step back into it; restoring appends rather than rewinds,
+  // so the history stays intact either way.
+  memoryRevisions(name: string): Promise<MemoryEntry[]>;
+  restoreMemory(name: string, revision: number): Promise<void>;
   prepareFileRevert(path: string): Promise<RewindPlan>;
   commitFileRevert(planId: string, resolution?: string): Promise<RewindResult>;
   network(): Promise<NetworkSettings>;

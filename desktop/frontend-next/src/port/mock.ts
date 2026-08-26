@@ -214,10 +214,38 @@ export class MockPort extends MockTheme implements AgentPort {
   async saveMemory(edit: MemoryEdit) {
     const at = this.mem.findIndex((m) => m.name === edit.name);
     if (at >= 0) {
+      // Keep what it replaced, the way the store does: a history panel driven
+      // by a fixture that overwrites would show one entry and prove nothing.
+      this.memPast[edit.name] = [...(this.memPast[edit.name] ?? [this.mem[at]]), this.mem[at]];
       this.mem[at] = { ...this.mem[at], title: edit.title, description: edit.description,
         body: edit.body, activation: edit.activation, revision: (this.mem[at].revision ?? 1) + 1,
         updatedAt: new Date().toISOString().slice(0, 10) };
     }
+  }
+
+  private memPast: Record<string, MemoryEntry[]> = {};
+
+  async memoryRevisions(name: string): Promise<MemoryEntry[]> {
+    const current = this.mem.find((m) => m.name === name);
+    const past = this.memPast[name] ?? [];
+    const all = current ? [...past, current] : past;
+    const seen = new Set<number>();
+    return all
+      .filter((m) => !seen.has(m.revision ?? 1) && seen.add(m.revision ?? 1) !== undefined)
+      .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))
+      .map((m) => ({ ...m }));
+  }
+
+  // Restoring appends a revision rather than rewinding to one, so the entry a
+  // reader was just looking at is still there afterwards.
+  async restoreMemory(name: string, revision: number) {
+    const at = this.mem.findIndex((m) => m.name === name);
+    const old = (await this.memoryRevisions(name)).find((m) => (m.revision ?? 1) === revision);
+    if (at < 0 || !old) return;
+    this.memPast[name] = [...(this.memPast[name] ?? []), this.mem[at]];
+    this.mem[at] = { ...this.mem[at], title: old.title, description: old.description,
+      body: old.body, activation: old.activation, revision: (this.mem[at].revision ?? 1) + 1,
+      updatedAt: new Date().toISOString().slice(0, 10) };
   }
 
   async forgetMemory(name: string) {

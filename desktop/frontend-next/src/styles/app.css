@@ -3150,6 +3150,22 @@
   .memrow .peek .path { display: block; margin-top: 5px; font: var(--w-reg) 10px var(--mono); color: var(--ghost); word-break: break-all }
   .mem > .why { margin-top: 10px; font: var(--w-reg) 11.5px var(--ui); color: var(--err) }
 
+  /* 旧版本列表。缩进并压暗一档，是为了让它读起来像"当前这版背后的东西"，
+     而不是又一批并列的记忆条目。 */
+  .memhist { margin: 7px 0 0 12px; padding-left: 10px; border-left: 1px solid var(--hair);
+    display: flex; flex-direction: column; gap: 8px }
+  .memhist > .ds { font: var(--w-reg) 11px var(--ui); color: var(--faint) }
+  .memhist .histrow { display: grid; grid-template-columns: auto auto 1fr auto; align-items: baseline; gap: 9px }
+  .memhist .rev { font: var(--w-med) 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums }
+  .memhist .at { font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
+  .memhist .histrow > .ds { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
+  .memhist .histrow pre {
+    grid-column: 1 / -1; margin: 0; padding: 8px 10px; border-radius: var(--r-sm); background: var(--overlay);
+    font: var(--w-reg) 10.5px/1.7 var(--mono); color: var(--faint); white-space: pre-wrap; word-break: break-word;
+  }
+  .memhist .hint { font: var(--w-reg) 10.5px var(--ui); color: var(--ghost) }
+
   /* 记忆写入卡：用记忆色（mem）而不是工具色 —— 这一步改的不是文件，是它以后
      的行为。撤销只在当下便宜，所以按钮就在卡上，不藏进设置里。 */
   .remember {
