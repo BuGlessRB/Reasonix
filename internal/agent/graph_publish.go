@@ -220,18 +220,24 @@ func fleetItemStates(results []fleetItemResult) []agentgraph.NodeState {
 	return states
 }
 
+// parallelItem is a parallel_tasks member as the graph sees it: what to call it
+// and what it will run as. The tool takes a model and an effort per task, so two
+// members of one group are not necessarily the same worker.
+type parallelItem struct{ Label, Model, Effort string }
+
 // parallelOpeningDelta declares a parallel_tasks group. Nothing orders these
 // items, and the absence of an edge between two of them is the fact a reader
 // needs: they ran at the same time.
-func parallelOpeningDelta(parentID string, labels []string) agentgraph.Delta {
-	workers := make([]agentgraph.Node, 0, len(labels))
-	for i, label := range labels {
+func parallelOpeningDelta(parentID string, items []parallelItem) agentgraph.Delta {
+	workers := make([]agentgraph.Node, 0, len(items))
+	for i, item := range items {
 		workers = append(workers, agentgraph.Node{
 			ID: parallelNodeID(parentID, i), ParentID: parentID, Kind: agentgraph.KindWorker,
-			State: agentgraph.StatePending, Label: label, Grant: agentgraph.GrantRead,
+			State: agentgraph.StatePending, Label: item.Label, Grant: agentgraph.GrantRead,
+			Model: item.Model, Effort: item.Effort,
 		})
 	}
-	return fanOutOpeningDelta(parentID, fmt.Sprintf("parallel_tasks(%d)", len(labels)), workers)
+	return fanOutOpeningDelta(parentID, fmt.Sprintf("parallel_tasks(%d)", len(items)), workers)
 }
 
 func parallelOutcomeDelta(parentID string, state agentgraph.NodeState, states []agentgraph.NodeState, refs []string, errs []error) agentgraph.Delta {

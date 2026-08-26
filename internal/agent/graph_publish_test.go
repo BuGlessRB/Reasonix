@@ -486,3 +486,37 @@ const fleetIndependentTasks = `{"tasks":[
 	{"id":"beta","description":"survey beta","prompt":"TASK-BETA survey","read_only":true},
 	{"id":"gamma","description":"survey gamma","prompt":"TASK-GAMMA survey","read_only":true}
 ]}`
+
+// parallel_tasks takes a model and an effort per task, so two members of one
+// group are not necessarily the same worker. The graph drew them as if they
+// were: a fleet node carried the identity its item ran as and these carried
+// none, so a reader asking why one arm of a fan-out cost more than another had
+// nothing on the picture to answer with.
+func TestParallelTasksGraphNamesWhatEachItemRunsAs(t *testing.T) {
+	rec := &recordSink{}
+	task := newTestTaskTool(t, parallelStaticProvider{}, tool.NewRegistry(), "sys", "session-model", "session-effort", nil)
+	parallel := NewParallelTasksTool(task, tool.NewRegistry())
+	ctx := withCallContext(context.Background(), "parallel-call", rec, nil, false)
+	if _, err := parallel.Execute(ctx, json.RawMessage(parallelPerItemModelTasks)); err != nil {
+		t.Fatalf("parallel_tasks: %v", err)
+	}
+
+	g := foldGraph(t, rec)
+	for id, want := range map[string][2]string{
+		"parallel-call/sub-1": {"session-model", "session-effort"},
+		"parallel-call/sub-2": {"careful", "high"},
+	} {
+		node, ok := g.Node(id)
+		if !ok {
+			t.Fatalf("no node %q in %+v", id, g.Nodes)
+		}
+		if node.Model != want[0] || node.Effort != want[1] {
+			t.Errorf("node %q runs as %q/%q, want %q/%q", id, node.Model, node.Effort, want[0], want[1])
+		}
+	}
+}
+
+const parallelPerItemModelTasks = `{"tasks":[
+	{"prompt":"first","description":"survey"},
+	{"prompt":"second","description":"measure","model":"careful","effort":"high"}
+]}`

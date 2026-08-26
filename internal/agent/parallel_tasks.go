@@ -142,16 +142,17 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		}
 		return fmt.Sprintf("task-%d", idx+1)
 	}
-	labels := make([]string, n)
+	items := make([]parallelItem, n)
 	for i, t := range tasks {
-		labels[i] = makeLabel(t, i)
+		model, effort := p.taskTool.effectiveProfile(t.Model, t.Effort)
+		items[i] = parallelItem{Label: makeLabel(t, i), Model: model, Effort: effort}
 	}
-	publishGraph(sink, parallelOpeningDelta(parentID, labels))
+	publishGraph(sink, parallelOpeningDelta(parentID, items))
 
 	startTask := func(idx int) {
 		t := tasks[idx]
 		running[idx] = true
-		label := labels[idx]
+		label := items[idx].Label
 		subID := parallelNodeID(parentID, idx)
 		onSlot := func() { publishGraph(sink, fanOutItemRunningDelta(subID)) }
 		dispatchArgs, _ := json.Marshal(map[string]string{"prompt": t.Prompt, "description": label})
@@ -166,14 +167,13 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		publishGraph(sink, fanOutItemQueuedDelta(subID))
 
 		wg.Go(func() {
-			modelRef, effortRef := p.taskTool.effectiveProfile(t.Model, t.Effort)
 			itemCtx := withCallContext(ctx, subID, subSinkFor(subID, sink), nil, PlanModeFromContext(ctx))
 			// Route through TaskTool's unified runner so persisted parent sessions
 			// retain one independently readable transcript per child. Headless runs
 			// remain ephemeral and still receive fair bounded previews.
 			output, runErr := p.taskTool.RunProfileSpec(itemCtx, ProfileExecSpec{
 				Task:   TaskSpec{Objective: t.Prompt, Description: label},
-				Worker: WorkerSpec{Kind: "task", Name: "task", SystemPrompt: DefaultReadOnlyTaskSystemPrompt, Model: modelRef, Effort: effortRef},
+				Worker: WorkerSpec{Kind: "task", Name: "task", SystemPrompt: DefaultReadOnlyTaskSystemPrompt, Model: items[idx].Model, Effort: items[idx].Effort},
 				Grant:  CapabilityGrant{ReadOnly: true, AllowNoTools: true, CallTools: t.Tools},
 				Sched:  SchedulerPolicy{MaxSteps: t.MaxSteps, Nested: SubagentDepth(ctx) > 0, OnStart: onSlot},
 			})
