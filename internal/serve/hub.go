@@ -260,11 +260,12 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 		return nil, err
 	}
 	bc := NewBroadcaster()
+	paneSink := h.decorateSink(bc)
 	built, err := boot.BuildRuntime(ctx, boot.Options{
 		Model:         strings.TrimSpace(req.Model),
 		WorkspaceRoot: root,
 		SessionDir:    SessionDirFor(root),
-		Sink:          h.decorateSink(bc),
+		Sink:          paneSink,
 		Stderr:        os.Stderr,
 		StatsSource:   h.surface(),
 		BalanceStore:  h.wallets,
@@ -273,6 +274,7 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 		return nil, fmt.Errorf("open %s: %w", root, err)
 	}
 	srv := New(built.Controller, bc, h.opts.Serve)
+	srv.SetPaneSink(paneSink)
 	srv.AdoptRuntime(built)
 	srv.auth = h.auth
 	srv.surface = h.surface()

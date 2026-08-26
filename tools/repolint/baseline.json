@@ -3,18 +3,19 @@
     "banner": 0,
     "claude-dialect": 1,
     "commented-code": 0,
-    "complexity": 1568,
+    "complexity": 1562,
     "error-text": 12,
-    "essay": 3277,
-    "file-size": 42302,
-    "function-size": 6746,
+    "essay": 3276,
+    "file-size": 42270,
+    "function-size": 6728,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
     "orphan": 124,
     "refusal-path": 0,
     "spec-parity": 0,
-    "struct-state": 47
+    "struct-state": 47,
+    "wire-parity": 0
   },
   "files": {
     "cmd/e2ebench/main.go": {
@@ -120,7 +121,6 @@
       "essay": 1
     },
     "internal/agent/capability_gate.go": {
-      "complexity": 2,
       "essay": 7
     },
     "internal/agent/capability_gate_test.go": {
@@ -168,8 +168,8 @@
       "narrative": 1
     },
     "internal/agent/final_readiness.go": {
-      "complexity": 11,
-      "function-size": 8
+      "complexity": 9,
+      "function-size": 4
     },
     "internal/agent/fleet.go": {
       "essay": 3
@@ -294,10 +294,10 @@
       "file-size": 149
     },
     "internal/agent/task.go": {
-      "complexity": 25,
-      "essay": 51,
-      "file-size": 1170,
-      "function-size": 114,
+      "complexity": 23,
+      "essay": 50,
+      "file-size": 1169,
+      "function-size": 102,
       "orphan": 1
     },
     "internal/agent/task_test.go": {
@@ -573,7 +573,7 @@
     },
     "internal/cli/serve_frontend.go": {
       "complexity": 7,
-      "function-size": 84
+      "function-size": 82
     },
     "internal/cli/session_lease.go": {
       "essay": 4
@@ -1397,7 +1397,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 22,
-      "file-size": 658
+      "file-size": 627
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3

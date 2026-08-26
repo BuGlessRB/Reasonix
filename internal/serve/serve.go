@@ -38,10 +38,10 @@ var indexHTML []byte
 //go:embed logo-wordmark.svg
 var logoWordmarkSVG []byte
 
-// Server wires a controller to its HTTP surface. The Broadcaster must be the
-// same sink the controller was constructed with, so events reach SSE clients.
+// Server wires a controller to its HTTP surface. The controller's events must
+// reach the Broadcaster — directly, or through the host's SetPaneSink wrapper.
 type Server struct {
-	mu sync.RWMutex // guards ctrl, which rebuild paths swap at runtime
+	mu sync.RWMutex // guards ctrl and paneSink, which rebuild paths swap and read
 	// bindMu serializes every entry point that changes the active session
 	// path or controller generation — /resume, /new, /fork, switchModel, and
 	// extension reload. net/http runs handlers
@@ -50,9 +50,10 @@ type Server struct {
 	// while the lease keeper guards another (the exact split this feature
 	// exists to prevent). It also keeps switchModel's Snapshot/Build/Close
 	// off s.mu, as the narrower switchMu did before it was widened.
-	bindMu sync.Mutex
-	ctrl   control.SessionAPI
-	bc     *Broadcaster
+	bindMu   sync.Mutex
+	ctrl     control.SessionAPI
+	bc       *Broadcaster
+	paneSink event.Sink // what the controller emits into; see SetPaneSink
 	// buildController builds the replacement controller during a model switch.
 	// Nil in production (switchModel falls back to boot.Build); tests inject a
 	// fake so switchModel can be exercised without real provider IO.
@@ -87,8 +88,8 @@ type Server struct {
 	stance *approvalStance
 }
 
-// New builds a Server. bc must be the controller's event sink.
-// serveCfg controls authentication (none, token, or password).
+// New builds a Server. bc must be what the controller's events reach; a host
+// that wraps it says so with SetPaneSink. serveCfg controls authentication.
 func New(ctrl control.SessionAPI, bc *Broadcaster, serveCfg config.ServeConfig) *Server {
 	if bc == nil {
 		bc = NewBroadcaster()
@@ -303,20 +304,6 @@ func (s *Server) switchModelLocked(ctx context.Context, ref string) error {
 	return nil
 }
 
-// build returns the replacement controller for a model switch, using the
-// injected builder in tests and boot.Build in production.
-func (s *Server) build(ctx context.Context, ref string) (*control.Controller, error) {
-	if s.buildController != nil {
-		return s.buildController(ctx, ref)
-	}
-	res, err := boot.BuildRuntime(ctx, s.rebuildOptions(s.ctl(), ref))
-	if err != nil {
-		return nil, err
-	}
-	s.lastBuild = res
-	return res.Controller, nil
-}
-
 // reloadExtensions fail-atomically rebuilds the active controller generation
 // so extension package/config changes take effect. The old controller remains
 // live until the replacement has inherited state, snapshotted successfully,
@@ -383,24 +370,6 @@ func (s *Server) reloadExtensions(ctx context.Context) error {
 
 	cur.Close()
 	return nil
-}
-
-// rebuildWith runs one rebuild. adopt records the new generation as the base
-// for later reuse: a reload must, because it replaced the sidecars and the old
-// manager is about to be closed, and reusing a closed one later would serve a
-// generation that no longer exists.
-func (s *Server) rebuildWith(ctx context.Context, old *control.Controller, ref string, opts boot.Options, adopt bool) (*control.Controller, error) {
-	if s.rebuildController != nil {
-		return s.rebuildController(ctx, old, ref)
-	}
-	res, err := boot.Rebuild(ctx, old, opts)
-	if err != nil {
-		return nil, err
-	}
-	if adopt {
-		s.lastBuild = res
-	}
-	return res.Controller, nil
 }
 
 // switchEffort persists a new reasoning-effort level for the active provider and

@@ -177,13 +177,14 @@ func run(logs io.Writer) error {
 	watch := func(sink event.Sink) event.Sink { return count(tracker.Watch(paneKey(sink), notifySink(sink))) }
 
 	bc := serve.NewBroadcaster()
+	paneSink := watch(bc)
 	// A window opens where it was left, not where its shortcut happened to point.
 	root := boot.ResolveWorkspaceRoot(lastWorkspace())
 	built, err := boot.BuildRuntime(ctx, boot.Options{
 		Version:       version,
 		WorkspaceRoot: root,
 		SessionDir:    serve.SessionDirFor(root),
-		Sink:          watch(bc),
+		Sink:          paneSink,
 		Stderr:        logs,
 	})
 	if err != nil {
@@ -220,6 +221,7 @@ func run(logs io.Writer) error {
 	})
 	shell.hub = hub
 	srv := serve.New(ctrl, bc, cfg.Serve)
+	srv.SetPaneSink(paneSink)
 	srv.AdoptRuntime(built)
 	// Without this a past save-conflict loop's forks stay on disk forever: the
 	// CLI and the old shell each sweep them, this window is the third host.

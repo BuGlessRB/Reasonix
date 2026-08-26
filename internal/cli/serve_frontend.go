@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/event"
 	"reasonix/internal/i18n"
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
@@ -364,7 +365,8 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	// Keep the browser reachable when the selected provider has no saved key.
 	// The loopback-only provider setup surface stores the missing credential and
 	// rebuilds this controller in place before the normal web UI is exposed.
-	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, false, reporter.Wrap(bc), profile, cliBuildOverrides{
+	paneSink := reporter.Wrap(bc)
+	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, false, paneSink, profile, cliBuildOverrides{
 		Version: opts.version, OnSessionRecovered: cliSessionRecoveredHandler(leases),
 	})
 	if err != nil {
@@ -393,17 +395,26 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 		return 1
 	}
 
-	srv := serve.New(ctrl, bc, serveCfg)
-	_ = srv.SetSessionLeases(leases) // same live keeper was bound above
-	// A hub around it, so this frontend drives several sessions at once the way
-	// the studio window does. The session this command was started for is the
-	// first pane — already leased above, so adopting it cannot be refused.
+	// A hub, so this frontend drives several sessions at once the way the studio
+	// window does. The session this command was started for is the first pane.
 	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg, DecorateSink: reporter.Wrap})
-	_, _ = hub.Adopt(srv, bc)
+	adoptFirstPane(hub, ctrl, bc, paneSink, serveCfg, leases)
 	return runServeFrontend(ctrl, hub, serveCfg, serveFrontendOptions{
 		command: opts.command, address: *addr,
 		portFile: *portFile, tokenFile: *tokenFile, pidFile: *pidFile,
 		openBrowser: *openBrowser && !*noOpen,
 		hasSession:  *resume != "" || *sessionID != "",
 	})
+}
+
+// adoptFirstPane publishes the session this command was started for as the
+// hub's first pane. paneSink is what its controller emits into: the hub
+// decorates the panes it opens itself, and this one was built before the hub
+// existed, so it hands its own decoration over or loses it on the first
+// rebuild. Already leased above, so adopting cannot be refused.
+func adoptFirstPane(hub *serve.Hub, ctrl *control.Controller, bc *serve.Broadcaster, paneSink event.Sink, serveCfg config.ServeConfig, leases *control.SessionLeaseKeeper) {
+	srv := serve.New(ctrl, bc, serveCfg)
+	srv.SetPaneSink(paneSink)
+	_ = srv.SetSessionLeases(leases) // same live keeper was bound above
+	_, _ = hub.Adopt(srv, bc)
 }

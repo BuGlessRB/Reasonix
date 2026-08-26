@@ -274,7 +274,7 @@ func (s *Server) statsSurface() surface.Surface { return s.surface.Or(surface.Se
 // process working directory and sessions fall back to the global dir, so the
 // switch would quietly serve another project's conversations.
 func (s *Server) rebuildOptions(cur control.SessionAPI, ref string) boot.Options {
-	opts := boot.Options{Model: ref, Sink: s.bc, Stderr: os.Stderr, StatsSource: s.statsSurface()}
+	opts := boot.Options{Model: ref, Sink: s.rebuildSink(), Stderr: os.Stderr, StatsSource: s.statsSurface()}
 	if cur == nil {
 		return opts
 	}
@@ -336,16 +336,55 @@ func (s *Server) reuseFromLastBuild() boot.RuntimeReload {
 	return reload
 }
 
+// build returns the replacement controller for a model switch, using the
+// injected builder in tests and boot.Build in production.
+func (s *Server) build(ctx context.Context, ref string) (*control.Controller, error) {
+	if s.buildController != nil {
+		return s.buildController(ctx, ref)
+	}
+	res, err := boot.BuildRuntime(ctx, s.rebuildOptions(s.ctl(), ref))
+	if err != nil {
+		return nil, err
+	}
+	s.lastBuild = res
+	return res.Controller, nil
+}
+
+// rebuildWith runs one rebuild. adopt records the new generation as the base
+// for later reuse: a reload must, because it replaced the sidecars and the old
+// manager is about to be closed, and reusing a closed one later would serve a
+// generation that no longer exists.
+func (s *Server) rebuildWith(ctx context.Context, old *control.Controller, ref string, opts boot.Options, adopt bool) (*control.Controller, error) {
+	if s.rebuildController != nil {
+		return s.rebuildController(ctx, old, ref)
+	}
+	res, err := boot.Rebuild(ctx, old, opts)
+	if err != nil {
+		return nil, err
+	}
+	if adopt {
+		s.lastBuild = res
+	}
+	return res.Controller, nil
+}
+
 func (s *Server) buildForWorkspace(ctx context.Context, dir, ref string) (*control.Controller, error) {
 	if s.buildWorkspaceController != nil {
 		return s.buildWorkspaceController(ctx, dir, ref)
 	}
-	return boot.Build(ctx, boot.Options{
+	return boot.Build(ctx, s.workspaceOptions(dir, ref))
+}
+
+// workspaceOptions builds the runtime that moves this pane to another root.
+// Nothing is inherited — the outgoing conversation stays in its own project —
+// so the pane's sink is the only thing that has to survive the move.
+func (s *Server) workspaceOptions(dir, ref string) boot.Options {
+	return boot.Options{
 		Model:         ref,
 		WorkspaceRoot: dir,
 		SessionDir:    SessionDirFor(dir),
-		Sink:          s.bc,
+		Sink:          s.rebuildSink(),
 		Stderr:        os.Stderr,
 		StatsSource:   s.statsSurface(),
-	})
+	}
 }
