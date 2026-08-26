@@ -161,6 +161,9 @@ func start() int {
 
 func run(logs io.Writer) error {
 	ctx := context.Background()
+	// Before the first window: Windows reads this when the taskbar button is
+	// created, and a notification sent under an unclaimed identity is dropped.
+	applyAppIdentity(logs)
 
 	cfg, err := config.Load()
 	if err != nil {
