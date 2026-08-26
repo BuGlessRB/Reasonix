@@ -13,6 +13,10 @@ import (
 )
 
 type cliBuildOverrides struct {
+	// Version marks a top-level session of a real installation, which is what
+	// lets the assembly record a last-known-good config snapshot. Nested and
+	// rebuild paths leave it empty; the snapshot is recorded once per process.
+	Version              string
 	Effort               *string
 	PermissionAllow      []string
 	AdditionalDirs       []string
@@ -46,6 +50,7 @@ func setupProfileWithOverrides(ctx context.Context, modelName string, maxStepsOv
 func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, profile string, overrides cliBuildOverrides) boot.Options {
 	// profile is dual-write TokenMode; also set AgentPreset for the new path.
 	return boot.Options{
+		Version:              overrides.Version,
 		Model:                modelName,
 		MaxSteps:             maxStepsOverride,
 		MaxStepsKey:          "--max-steps",

@@ -106,8 +106,8 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 			if lkgErr := loadLastKnownGoodUserConfig(lkgCfg); lkgErr == nil {
 				*cfg = *lkgCfg
 				cfg.addLoadWarning(fmt.Sprintf(
-					"user config %s is invalid (%v); using last-known-good snapshot in memory without modifying the original file",
-					uc, err,
+					"user config %s is invalid (%v); using %s in memory without modifying the original file",
+					uc, err, describeLastKnownGood(),
 				))
 			} else {
 				cfg.addLoadWarning(fmt.Sprintf(

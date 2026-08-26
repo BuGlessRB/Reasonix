@@ -18,6 +18,11 @@ type ConfigCheck struct {
 	Valid        bool   `json:"valid"`
 	Error        string `json:"error,omitempty"`
 	SnapshotPath string `json:"snapshotPath,omitempty"`
+	// SnapshotRecordedAt dates the snapshot --apply would restore. A repair
+	// that silently reinstates a months-old config is worse than the broken
+	// file it replaces, so the age is reported before the decision, not after.
+	SnapshotRecordedAt string `json:"snapshotRecordedAt,omitempty"`
+	SnapshotAge        string `json:"snapshotAge,omitempty"`
 }
 
 type ConfigReport struct {
@@ -101,6 +106,7 @@ func inspectAndRepairConfigUnlocked(opts ConfigOptions) (ConfigReport, error) {
 		check := inspectConfig(item.scope, item.path)
 		if item.scope == "global" {
 			check.SnapshotPath = lastKnownGoodConfigPath()
+			check.SnapshotRecordedAt, check.SnapshotAge = lastKnownGoodProvenance(opts.Now())
 		}
 		report.Checks = append(report.Checks, check)
 		if !opts.Apply || !check.Exists || check.Valid || (opts.OnlyScope != "" && item.scope != opts.OnlyScope) || (item.scope == "project" && !opts.IncludeProject) {
@@ -179,6 +185,7 @@ func inspectAndRepairConfigUnlocked(opts ConfigOptions) (ConfigReport, error) {
 		report.Checks[len(report.Checks)-1] = inspectConfig(item.scope, item.path)
 		if item.scope == "global" {
 			report.Checks[len(report.Checks)-1].SnapshotPath = lastKnownGoodConfigPath()
+			report.Checks[len(report.Checks)-1].SnapshotRecordedAt, report.Checks[len(report.Checks)-1].SnapshotAge = lastKnownGoodProvenance(opts.Now())
 		}
 	}
 	if len(tx.Changes) > 0 {

@@ -122,12 +122,22 @@ func doctorRepairCommand(args []string) int {
 				status = "invalid: " + check.Error
 			}
 			fmt.Printf("  %-8s %s\n             %s\n", check.Scope, status, check.Path)
+			if check.SnapshotAge != "" {
+				fmt.Printf("             snapshot %s (%s old)\n", check.SnapshotRecordedAt, check.SnapshotAge)
+			}
 		}
 		for _, action := range report.Applied {
 			fmt.Println("  applied:", action)
 		}
 		if !*apply {
+			// Name the age here: --apply reinstates the snapshot over the
+			// user's file, reverting every setting changed since it was taken.
 			fmt.Println("  dry run; pass --apply to repair the global config")
+			for _, check := range report.Checks {
+				if check.Scope == "global" && check.Exists && !check.Valid && check.SnapshotAge != "" {
+					fmt.Printf("  --apply would restore a snapshot %s old, discarding config changes made since\n", check.SnapshotAge)
+				}
+			}
 		}
 	}
 	for _, check := range report.Checks {

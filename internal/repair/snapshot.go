@@ -557,3 +557,57 @@ func minimum(a, b int) int {
 	}
 	return b
 }
+
+// lastKnownGoodProvenance dates the fixed snapshot a repair would restore.
+// The recorded time comes from the metadata written beside it and falls back
+// to the content file's mtime, which is exact because every write is atomic.
+// Empty strings mean no usable snapshot — callers say that rather than
+// presenting an undated one as current.
+func lastKnownGoodProvenance(now time.Time) (recordedAt, age string) {
+	path := lastKnownGoodConfigPath()
+	if path == "" {
+		return "", ""
+	}
+	recorded, ok := lastKnownGoodRecordedAt(path)
+	if !ok {
+		return "", ""
+	}
+	elapsed := max(now.Sub(recorded), 0)
+	return recorded.UTC().Format(time.RFC3339), humanizeSnapshotAge(elapsed)
+}
+
+func lastKnownGoodRecordedAt(path string) (time.Time, bool) {
+	if b, err := os.ReadFile(path + ".json"); err == nil {
+		var meta snapshotMeta
+		if json.Unmarshal(b, &meta) == nil {
+			if t, err := time.Parse(time.RFC3339Nano, meta.RecordedAt); err == nil {
+				return t, true
+			}
+		}
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return info.ModTime(), true
+}
+
+func humanizeSnapshotAge(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "moments"
+	case d < time.Hour:
+		return pluralUnit(int(d.Minutes()), "minute")
+	case d < 24*time.Hour:
+		return pluralUnit(int(d.Hours()), "hour")
+	default:
+		return pluralUnit(int(d.Hours()/24), "day")
+	}
+}
+
+func pluralUnit(n int, unit string) string {
+	if n == 1 {
+		return "1 " + unit
+	}
+	return fmt.Sprintf("%d %ss", n, unit)
+}

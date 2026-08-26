@@ -3,11 +3,11 @@
     "banner": 0,
     "claude-dialect": 1,
     "commented-code": 0,
-    "complexity": 1571,
+    "complexity": 1568,
     "error-text": 12,
-    "essay": 3301,
-    "file-size": 42782,
-    "function-size": 6772,
+    "essay": 3286,
+    "file-size": 42606,
+    "function-size": 6751,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
@@ -185,7 +185,7 @@
     },
     "internal/agent/parallel_tasks.go": {
       "essay": 3,
-      "function-size": 73
+      "function-size": 71
     },
     "internal/agent/parallel_tasks_test.go": {
       "essay": 2
@@ -279,7 +279,7 @@
     "internal/agent/task.go": {
       "complexity": 25,
       "essay": 54,
-      "file-size": 1199,
+      "file-size": 1191,
       "function-size": 114
     },
     "internal/agent/task_test.go": {
@@ -301,8 +301,8 @@
     },
     "internal/boot/boot.go": {
       "complexity": 131,
-      "essay": 91,
-      "file-size": 1113,
+      "essay": 77,
+      "file-size": 989,
       "function-size": 1033,
       "narrative": 3
     },
@@ -447,10 +447,10 @@
       "essay": 8
     },
     "internal/cli/cli.go": {
-      "complexity": 68,
-      "essay": 58,
-      "file-size": 1588,
-      "function-size": 436
+      "complexity": 65,
+      "essay": 57,
+      "file-size": 1578,
+      "function-size": 426
     },
     "internal/cli/cli_test.go": {
       "essay": 9
@@ -784,9 +784,6 @@
     },
     "internal/event/sync.go": {
       "essay": 2
-    },
-    "internal/eventwire/wire.go": {
-      "function-size": 2
     },
     "internal/evidence/evidence.go": {
       "complexity": 6,
@@ -1267,7 +1264,7 @@
     },
     "internal/serve/serve.go": {
       "essay": 22,
-      "file-size": 692
+      "file-size": 658
     },
     "internal/serve/serve_lease_test.go": {
       "essay": 3
@@ -1345,8 +1342,7 @@
       "essay": 8
     },
     "internal/tool/builtin/bash.go": {
-      "essay": 11,
-      "function-size": 7
+      "essay": 11
     },
     "internal/tool/builtin/bash_env_test.go": {
       "essay": 4

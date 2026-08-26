@@ -98,7 +98,11 @@ func nextRuntimeGeneration() uint64 { return runtimeGeneration.Add(1) }
 // otherwise-successful build fail: an assembly error degrades to a nil
 // Snapshot with a logged warning.
 func BuildRuntime(ctx context.Context, opts Options) (*BuildResult, error) {
-	return build(ctx, opts)
+	res, err := build(ctx, opts)
+	if err == nil {
+		noteHealthyConfig(opts.Version)
+	}
+	return res, err
 }
 
 // Build loads config, resolves the model(s), and returns a Controller wrapping a

@@ -365,7 +365,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	// The loopback-only provider setup surface stores the missing credential and
 	// rebuilds this controller in place before the normal web UI is exposed.
 	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, false, reporter.Wrap(bc), profile, cliBuildOverrides{
-		OnSessionRecovered: cliSessionRecoveredHandler(leases),
+		Version: opts.version, OnSessionRecovered: cliSessionRecoveredHandler(leases),
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

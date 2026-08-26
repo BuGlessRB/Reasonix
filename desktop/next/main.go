@@ -154,6 +154,7 @@ func run() error {
 	// A window opens where it was left, not where its shortcut happened to point.
 	root := boot.ResolveWorkspaceRoot(lastWorkspace())
 	built, err := boot.BuildRuntime(ctx, boot.Options{
+		Version:       version,
 		WorkspaceRoot: root,
 		SessionDir:    serve.SessionDirFor(root),
 		Sink:          watch(bc),

@@ -634,6 +634,7 @@ func runAgent(args []string, version string) int {
 	// --permission-mode auto, or yolo.
 	overrides := runBuildOverrides(effortOverride, allowedTools, additionalDirs, workspaceRoot,
 		permissions.approval, cliSessionRecoveredHandler(leases), ablated)
+	overrides.Version = version
 	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, true, sink, profile, overrides)
 	if err != nil {
 		if resultOutput != nil && format != runOutputText {
@@ -867,6 +868,7 @@ func chatREPL(args []string, version string) int {
 		effortOverride = effort
 	}
 	overrides := cliBuildOverrides{
+		Version:            version,
 		Effort:             effortOverride,
 		PermissionAllow:    allowedTools,
 		AdditionalDirs:     additionalDirs,

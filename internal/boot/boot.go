@@ -24,7 +24,6 @@ import (
 
 	"reasonix/internal/ablation"
 	"reasonix/internal/agent"
-	"reasonix/internal/billing"
 	"reasonix/internal/capability"
 	"reasonix/internal/command"
 	"reasonix/internal/config"
@@ -54,8 +53,6 @@ import (
 	"reasonix/internal/secrets"
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/skill"
-	"reasonix/internal/surface"
-	"reasonix/internal/taskmonitor"
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
 	"reasonix/internal/tool/sessiontool"
@@ -80,127 +77,6 @@ func agentKeepPolicy(keep []string) agent.KeepPolicy {
 		}
 	}
 	return p
-}
-
-// Options carries the per-run knobs a frontend chooses; everything else is read
-// from configuration. Model "" falls back to the configured default_model;
-// MaxSteps 0 uses automatic execution. RequireKey forces the executor's API key to
-// be present (run/serve pass true so a missing key fails fast; chat/desktop pass
-// false so the UI is reachable before a key is set). Sink receives the agent's
-// typed event stream.
-type Options struct {
-	Model       string
-	MaxSteps    int
-	MaxStepsKey string
-	RequireKey  bool
-	Sink        event.Sink
-	// EffortOverride is a session-local reasoning effort override. Nil means use
-	// the resolved provider config; a non-nil empty string means provider default.
-	EffortOverride *string
-	// PermissionAllow adds process-local allow rules (for example CLI
-	// --allowed-tools). They override configured ask rules but never deny rules
-	// and are not persisted.
-	PermissionAllow []string
-	// AdditionalDirs grants this session's file writers and sandboxed shell
-	// access to extra directories without changing persisted sandbox config.
-	AdditionalDirs []string
-	// Stderr is the writer for diagnostic warnings and plugin subprocess
-	// stderr output. When nil, defaults to os.Stderr. Interactive terminal
-	// frontends must provide a private diagnostic writer (or io.Discard) so
-	// background output cannot corrupt the TUI's terminal raw mode.
-	Stderr io.Writer
-	// WorkspaceRoot is the project root directory for config, skills, memory,
-	// commands, hooks, and tool confinement. When empty, the current working
-	// directory is used (CLI default). Desktop tabs pass their project root here
-	// so each tab loads its own config/skills/hooks without changing the process
-	// cwd — enabling concurrent multi-project sessions.
-	WorkspaceRoot string
-	// StatsSource labels this frontend's usage records. Unset — or a value this
-	// build does not know — disables usage recording rather than filing turns
-	// under a label nothing can read back.
-	StatsSource surface.Surface
-	// BalanceStore lets a host that builds several runtimes — a window with more
-	// than one pane — read one wallet through one cache. Nil gives each runtime
-	// a private one.
-	BalanceStore *billing.Store
-	TaskStore    taskmonitor.WriteStore // Authoritative store, never a SQLite catalog.
-	// OnConfigLoadWarnings accepts resilient-loader warnings. Returning true
-	// lets boot suppress the duplicate migration diagnostic.
-	OnConfigLoadWarnings func([]string) bool
-	// ExtraPlugins are session-scoped MCP servers supplied by a host transport
-	// (for example ACP session/new). They are connected eagerly for this
-	// controller but are not persisted to reasonix.toml.
-	ExtraPlugins []plugin.Spec
-	// AgentPreset selects the session role setting (balanced|delivery). Empty
-	// falls back to balanced. It controls verification breadth without changing
-	// the provider-visible tool schema or base system prompt.
-	AgentPreset string
-	// TokenMode is the deprecated one-version fallback for AgentPreset.
-	// When AgentPreset is empty, TokenMode is normalized through the legacy
-	// economy/full/delivery mapping. Prefer AgentPreset.
-	TokenMode string
-	// SessionDir overrides where persisted chat transcripts are written. When
-	// empty, the shared CLI/global session directory is used.
-	SessionDir string
-	// SharedHost is an optional plugin.Host shared across controllers for the
-	// same workspace root. When set, boot.Build reuses its running clients
-	// instead of creating new subprocesses, and the caller manages the host's
-	// lifecycle. When nil, Build creates and owns a new host as before.
-	SharedHost *plugin.Host
-	// CleanupPendingReconciler retries delayed physical cleanup for session
-	// artifacts left by a previous process. Nil uses the core physical-delete
-	// reconciler; frontends with different deletion semantics can override it.
-	CleanupPendingReconciler func(sessionDir string) error
-	// ApprovalTimeout bounds how long a tool-approval or ask prompt blocks for a
-	// user decision. Zero (default) waits forever — correct for an interactive
-	// terminal. Headless/bot frontends pass a positive value so an unanswered
-	// prompt can't wedge the session indefinitely (#4626, #4402).
-	ApprovalTimeout time.Duration
-	// HeadlessApprovalMode selects the non-interactive tool-approval contract
-	// (control.ToolApprovalAuto/DontAsk/Yolo) applied to every headless-only gate
-	// this boot constructs: the top-level executor, task/read_only_task,
-	// writer-capable skill sub-agents, and the planner runner. Empty (or "ask")
-	// keeps the default fail-closed headless gate. Callers that later call
-	// Controller.ApplyHeadlessApprovalMode with a
-	// different mode than they passed here should also pass it here, or
-	// sub-agent gates will not match the parent executor's mode.
-	HeadlessApprovalMode string
-
-	GoalTurnsUnreachable bool // this assembly never arms a Goal turn; see GoalOnlyToolNames
-	// SessionRecoveryMeta and OnSessionRecovered let richer frontends attach
-	// local UI metadata to automatic transcript recovery branches.
-	SessionRecoveryMeta func(control.SessionRecoveryRequest) agent.BranchMeta
-	OnSessionRecovered  func(control.SessionRecoveryInfo) error
-	// SubagentParentLive reports whether this process currently owns or is
-	// building the parent session. Desktop uses it to avoid probing a live tab's
-	// lease during stale-subagent cleanup. Nil preserves lease-only cleanup.
-	SubagentParentLive func(sessionPath string) bool
-	// FileOverlay and TerminalRunner let a host transport (ACP) serve file
-	// content from editor buffers and run foreground bash in a host terminal.
-	// Both only change where tool I/O happens — tool names, descriptions, and
-	// schemas stay byte-identical, so the provider-visible surface is unchanged.
-	FileOverlay    builtin.FileOverlay
-	TerminalRunner builtin.TerminalRunner
-	// ProviderResolver routes every model role through a caller-owned provider
-	// catalog. Nil preserves local behavior.
-	ProviderResolver provider.Resolver
-	// Ablation switches subsystems off for a benchmark arm, and is also the
-	// process-local hard override supervised ACP workers use to force the planner
-	// off. It wins over user/project configuration without mutating config or
-	// changing the provider-visible prompt/tool surface. The zero value runs
-	// everything.
-	Ablation ablation.Set
-	// SandboxNetworkOverride and WorkspaceOnly are process-local hard bounds for
-	// supervised ACP workers. Nil/false preserve normal Reasonix config.
-	SandboxNetworkOverride *bool
-	SandboxBashOverride    string
-	WorkspaceOnly          bool
-	// SessionTemp is the session-private temp manager; Rebuild reuses old's.
-	SessionTemp *sessiontemp.Manager
-	RuntimeReload
-	// deferPublish keeps a replacement generation private until migration and
-	// commit succeed. Cold BuildRuntime leaves this false and publishes at boot.
-	deferPublish bool
 }
 
 func recoveryHeadlessMode(opts Options) bool {
