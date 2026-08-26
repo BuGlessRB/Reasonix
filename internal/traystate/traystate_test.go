@@ -1,6 +1,7 @@
 package traystate
 
 import (
+	"runtime"
 	"sync"
 	"testing"
 
@@ -123,5 +124,41 @@ func TestConcurrentPanesFoldSafely(t *testing.T) {
 	wg.Wait()
 	if got := tracker.State(); got.Panes != 8 || got.Working != 0 || got.Attention != 0 {
 		t.Fatalf("state = %+v, want eight quiet panes", got)
+	}
+}
+
+// The icon has to end up describing the fold the tracker holds. Folds are taken
+// under the lock and painted outside it, so two panes changing at once can
+// reach the callback in the opposite order, and the loser strands the icon on a
+// state already moved past — with nothing to correct it, since the fold reports
+// only what changed.
+func TestTheLastPaintDescribesTheCurrentFold(t *testing.T) {
+	for attempt := range 200 {
+		var mu sync.Mutex
+		var last State
+		tracker := New(func(s State) {
+			// The real callback paints through a platform call: not fast, and
+			// that is what opens the window between fold and paint.
+			runtime.Gosched()
+			mu.Lock()
+			last = s
+			mu.Unlock()
+		})
+		a := tracker.Watch("a", event.Discard)
+		b := tracker.Watch("b", event.Discard)
+		emit(a, event.TurnStarted)
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); emit(a, event.TurnDone) }()
+		go func() { defer wg.Done(); emit(b, event.TurnStarted) }()
+		wg.Wait()
+
+		mu.Lock()
+		painted := last
+		mu.Unlock()
+		if got := tracker.State(); painted != got {
+			t.Fatalf("attempt %d: icon shows %+v, tracker holds %+v", attempt, painted, got)
+		}
 	}
 }

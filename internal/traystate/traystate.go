@@ -48,13 +48,16 @@ func (s State) Mood() Mood {
 func (s State) Busy() bool { return s.Working > 0 || s.Attention > 0 || s.Jobs > 0 }
 
 // Tracker folds what it is shown. Panes emit from their own goroutines, so it
-// is safe for concurrent use, and it never calls back while holding its lock.
+// is safe for concurrent use, and it never calls back while holding the fold's
+// lock — a callback is free to ask it anything except to publish.
 type Tracker struct {
 	mu      sync.Mutex
 	panes   map[string]*pane
 	jobs    int
 	last    State
 	changed func(State)
+	// paint serialises reports. A callback must not publish from inside itself.
+	paint sync.Mutex
 }
 
 type pane struct {
@@ -79,11 +82,8 @@ func (t *Tracker) SetOnChange(changed func(State)) {
 	}
 	t.mu.Lock()
 	t.changed = changed
-	state := t.stateLocked()
 	t.mu.Unlock()
-	if changed != nil {
-		changed(state)
-	}
+	t.report(changed)
 }
 
 // Watch returns inner wrapped so this pane's events reach the fold on the way
@@ -151,8 +151,8 @@ func (t *Tracker) stateLocked() State {
 	return out
 }
 
-// publish reports a change once, outside the lock: a callback that paints an
-// icon has no business running inside the fold every pane emits into.
+// publish reports a change once, outside the fold's lock: a callback that
+// paints an icon has no business running inside the fold every pane emits into.
 func (t *Tracker) publish() {
 	t.mu.Lock()
 	next := t.stateLocked()
@@ -160,9 +160,27 @@ func (t *Tracker) publish() {
 	t.last = next
 	report := t.changed
 	t.mu.Unlock()
-	if changed && report != nil {
-		report(next)
+	if !changed {
+		return
 	}
+	t.report(report)
+}
+
+// report paints, serialised and always describing the fold as it stands now.
+// Two panes changing at once take their folds under the lock and report outside
+// it, so the reports can arrive in the opposite order; the one that lost would
+// leave the icon on a state the tracker has already moved past, and nothing
+// would correct it, because the fold reports only what changed.
+func (t *Tracker) report(changed func(State)) {
+	if changed == nil {
+		return
+	}
+	t.paint.Lock()
+	defer t.paint.Unlock()
+	t.mu.Lock()
+	now := t.stateLocked()
+	t.mu.Unlock()
+	changed(now)
 }
 
 type paneSink struct {
