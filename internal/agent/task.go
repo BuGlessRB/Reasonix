@@ -711,33 +711,27 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 	modelRef, effortRef := visionRefFor(ctx, spec.Worker.Model), spec.Worker.Effort
 	usageModelRef := t.usageModelRef(modelRef, effortRef)
 	parentID, _, _, _ := CallContext(ctx)
-	run, err := t.prepareTranscriptRunWithPrompt(withUpstream(ctx, spec.Context.Upstream), subReg, modelRef, effortRef, spec.Context.parentSession(ctx), parentID, spec.Context.ContinueFrom, spec.Context.ForkFrom, spec.Worker.SystemPrompt, spec.Worker.Kind, spec.Worker.Name)
+	prov, pricing, ctxWin, err := t.resolveSubSessionRuntime(modelRef, effortRef)
+	if err != nil {
+		return "", fmt.Errorf("sub-agent profile: %w", err)
+	}
+	acquireReq, err := t.acquireRequestFor(&spec)
 	if err != nil {
 		return "", err
 	}
-	prov, pricing, ctxWin, err := t.resolveSubSessionRuntime(modelRef, effortRef)
-	if err != nil {
-		run.Release()
-		return "", fmt.Errorf("sub-agent profile: %w", err)
-	}
-
-	isWriter := !spec.Grant.ReadOnly
-	acquireReq := AcquireRequest{
-		Writer:     isWriter,
-		WritePaths: spec.Grant.WritePaths,
-		Nested:     spec.Sched.Nested,
-		Label:      firstNonEmpty(spec.Task.Description, spec.Worker.Name, "task"),
-	}
-	// Defensive fallback for callers that manually construct a background spec
-	// instead of going through buildTaskSpec.
-	if isWriter && spec.Grant.WritePaths.Empty() && spec.Sched.RunInBackground {
-		whole, werr := WholeWorkspaceWriteClaim(t.workspaceRoot)
-		if werr != nil {
-			run.Release()
-			return "", werr
+	// Prove, admit, allocate: a foreground run holds its slot from here because
+	// the transcript below is the first thing it reserves, and a fan-out with
+	// sixty queued items must not hold sixty of them open.
+	if !spec.Sched.RunInBackground {
+		releaseSlot, slotErr := t.acquireSlot(ctx, acquireReq, spec.Sched)
+		if slotErr != nil {
+			return "", slotErr
 		}
-		acquireReq.WritePaths = whole
-		spec.Grant.WritePaths = whole
+		defer releaseSlot()
+	}
+	run, err := t.prepareTranscriptRunWithPrompt(withUpstream(ctx, spec.Context.Upstream), subReg, modelRef, effortRef, spec.Context.parentSession(ctx), parentID, spec.Context.ContinueFrom, spec.Context.ForkFrom, spec.Worker.SystemPrompt, spec.Worker.Kind, spec.Worker.Name)
+	if err != nil {
+		return "", err
 	}
 
 	recoveryTaskID := subagentRecoveryTaskID(ctx, run.Ref)
@@ -857,13 +851,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 		return fmt.Sprintf("Started background task %q (%s).%s It runs across turns; collect its final answer with wait (or wait will return it once done), and you'll be notified when it finishes.", job.ID, label, queuedNote), nil
 	}
 
-	// Foreground: acquire a slot (queue if needed), then run synchronously.
-	releaseSlot, err := t.acquireSlot(ctx, acquireReq, spec.Sched)
-	if err != nil {
-		run.Release()
-		return "", err
-	}
-	defer releaseSlot()
+	// Foreground: the slot has been held since before the transcript existed.
 	defer run.Release()
 	answer, err := runSession(ctx, trk.wrap(), false)
 	if err != nil {

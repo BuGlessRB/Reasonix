@@ -21,7 +21,10 @@ type fleetPlan struct {
 	// reachable[i] holds every index that transitively depends on i, so the
 	// preflight can tell ordered items from genuinely concurrent ones.
 	reachable []map[int]bool
-	failFast  bool
+	// rank[i] is the longest chain of dependents below i, so the scheduler can
+	// be told which ready item is holding up the most work.
+	rank     []int
+	failFast bool
 }
 
 // newFleetPlan validates ids and edges before anything runs. An unknown id, a
@@ -34,6 +37,7 @@ func newFleetPlan(items []fleetTaskItem, failFast bool) (fleetPlan, error) {
 		deps:       make([][]int, n),
 		dependents: make([][]int, n),
 		reachable:  make([]map[int]bool, n),
+		rank:       make([]int, n),
 		failFast:   failFast,
 	}
 	index := make(map[string]int, n)
@@ -77,6 +81,7 @@ func newFleetPlan(items []fleetTaskItem, failFast bool) (fleetPlan, error) {
 		return fleetPlan{}, err
 	}
 	plan.computeReachability()
+	plan.computeRanks()
 	return plan, nil
 }
 
@@ -148,6 +153,27 @@ func ready(pending []int) []int {
 		}
 	}
 	return out
+}
+
+// computeRanks measures how much work waits on each item: the length of the
+// longest chain of dependents below it, zero for one nothing is waiting on.
+// It runs after rejectCycles, which is what makes the walk terminate.
+func (p *fleetPlan) computeRanks() {
+	done := make([]bool, len(p.ids))
+	var of func(int) int
+	of = func(i int) int {
+		if done[i] {
+			return p.rank[i]
+		}
+		done[i] = true
+		for _, next := range p.dependents[i] {
+			p.rank[i] = max(p.rank[i], of(next)+1)
+		}
+		return p.rank[i]
+	}
+	for i := range p.ids {
+		of(i)
+	}
 }
 
 func (p *fleetPlan) computeReachability() {
@@ -268,6 +294,9 @@ func driveFleet(ctx context.Context, plan fleetPlan, results []fleetItemResult, 
 		startOne(idx)
 		started++
 	}
+	// Launched in declaration order: sorting here buys nothing, because which of
+	// these goroutines reaches the scheduler first is the Go runtime's decision
+	// and not this loop's. Rank decides the queue, which is where it holds.
 	for _, idx := range ready(pending) {
 		launch(idx)
 	}

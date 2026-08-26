@@ -136,6 +136,10 @@ type SchedulerPolicy struct {
 	BackgroundWriter bool
 	// Nested marks nested sub-agent acquires (fail-fast on concurrency limits).
 	Nested bool
+	// Priority is this run's weight in the caller's work graph: how much work
+	// waits on it. It decides who gets a slot first when more runs are ready
+	// than the session has slots. Zero means nothing waits.
+	Priority int
 	// OnStart fires once this run holds a slot: the wait before it is the cap.
 	OnStart func()
 }

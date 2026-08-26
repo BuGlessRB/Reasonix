@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 )
 
@@ -29,6 +31,10 @@ type AcquireRequest struct {
 	// Nested fails immediately when no capacity is free instead of queueing.
 	// Nested sub-agents must not block waiting for a parent-held slot.
 	Nested bool
+	// Priority is how much work waits on this run in its caller's graph. It
+	// orders the queue, never the ceiling, and a caller holding no graph
+	// leaves it zero.
+	Priority int
 	// Label is optional diagnostics text.
 	Label string
 }
@@ -49,7 +55,8 @@ type SubagentScheduler struct {
 	// subagent concurrency slot (parent is not a subagent).
 	parentClaims []WritePathSet
 
-	// waiters are FIFO waiters for non-nested acquires.
+	// waiters hold non-nested acquires, drained heaviest first (arrival order
+	// within equal priority).
 	waiters []*schedulerWaiter
 }
 
@@ -254,10 +261,18 @@ func (s *SubagentScheduler) deactivateLocked(req AcquireRequest) {
 	}
 }
 
+// pumpWaitersLocked hands freed capacity to the waiters that can use it,
+// heaviest first. Arrival order alone puts the head of the longest chain
+// behind leaves that unblock nothing, and that wait lands on the run's
+// makespan one for one. Sorting in place is stable across pumps because a
+// waiter's priority never changes, so equal weights keep arrival order.
 func (s *SubagentScheduler) pumpWaitersLocked() {
 	if len(s.waiters) == 0 {
 		return
 	}
+	slices.SortStableFunc(s.waiters, func(a, b *schedulerWaiter) int {
+		return cmp.Compare(b.req.Priority, a.req.Priority)
+	})
 	remaining := s.waiters[:0]
 	for _, w := range s.waiters {
 		if ok, _ := s.canStartLocked(w.req); ok {

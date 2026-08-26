@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -109,5 +110,62 @@ func TestSchedulerTryClaimWritePaths(t *testing.T) {
 	other, _ := NormalizeWritePaths(root, []string{"b.md"})
 	if err := s.TryClaimWritePaths(other); err != nil {
 		t.Fatalf("disjoint claim should be free: %v", err)
+	}
+}
+
+// waitForQueuedAcquires blocks until exactly want acquires are parked in the
+// queue, so a test can prove which one a freed slot goes to instead of racing
+// the goroutines that ask for it.
+func waitForQueuedAcquires(t *testing.T, s *SubagentScheduler, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		s.mu.Lock()
+		got := len(s.waiters)
+		s.mu.Unlock()
+		if got == want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("waited for %d queued acquires and never saw them", want)
+}
+
+// A slot used to go to whoever asked first, which on a dependency graph is how
+// the head of the longest chain ends up behind leaves that unblock nothing. The
+// wait lands on the run's makespan one for one, and no edge on the graph can
+// draw it.
+func TestSchedulerGivesAFreedSlotToTheHeaviestWaiter(t *testing.T) {
+	s := NewSubagentScheduler(1, 1)
+	held, err := s.Acquire(context.Background(), AcquireRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	granted := make(chan int, 2)
+	var wg sync.WaitGroup
+	// Queue the leaf first so arrival order and weight disagree.
+	for i, priority := range []int{0, 4} {
+		wg.Go(func() {
+			release, err := s.Acquire(context.Background(), AcquireRequest{Priority: priority})
+			if err != nil {
+				t.Errorf("acquire priority %d: %v", priority, err)
+				return
+			}
+			granted <- priority
+			release()
+		})
+		waitForQueuedAcquires(t, s, i+1)
+	}
+
+	held()
+	wg.Wait()
+	close(granted)
+	var order []int
+	for p := range granted {
+		order = append(order, p)
+	}
+	if want := []int{4, 0}; !slices.Equal(order, want) {
+		t.Fatalf("slots went out in priority order %v, want %v", order, want)
 	}
 }

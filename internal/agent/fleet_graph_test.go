@@ -197,3 +197,23 @@ func (p *fleetScriptedFailureProvider) Stream(_ context.Context, req provider.Re
 	close(ch)
 	return ch, nil
 }
+
+// Declaration order says nothing about which ready item the run is waiting for,
+// and until the plan measured it the scheduler had no other order to use.
+func TestFleetPlanRanksItemsByWhatWaitsOnThem(t *testing.T) {
+	plan, err := planFor(t,
+		fleetTaskItem{ID: "aside"},
+		fleetTaskItem{ID: "survey"},
+		fleetTaskItem{ID: "draft", DependsOn: []string{"survey"}},
+		fleetTaskItem{ID: "review", DependsOn: []string{"draft"}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{"aside": 0, "survey": 2, "draft": 1, "review": 0}
+	for id, rank := range want {
+		if got := plan.rank[plan.indexOf(id)]; got != rank {
+			t.Errorf("rank of %q = %d, want %d", id, got, rank)
+		}
+	}
+}

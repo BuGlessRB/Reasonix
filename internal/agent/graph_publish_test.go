@@ -47,12 +47,24 @@ func requireState(t *testing.T, g agentgraph.Graph, id string, want agentgraph.N
 
 func newProbeFleet(t *testing.T, prov *upstreamProbeProvider, arm ablation.Set) *FleetTool {
 	t.Helper()
+	return newProbeFleetOn(t, prov, arm, NewSubagentScheduler(4, 4), mustSubagentStore(t))
+}
+
+func newProbeFleetOn(t *testing.T, prov *upstreamProbeProvider, arm ablation.Set, sched *SubagentScheduler, store *SubagentStore) *FleetTool {
+	t.Helper()
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})
 	return NewFleetTool(NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(mustSubagentStore(t), t.TempDir(), "base", "high").
-		WithScheduler(NewSubagentScheduler(4, 4)).
+		WithTranscripts(store, t.TempDir(), "base", "high").
+		WithScheduler(sched).
 		WithAblation(arm))
+}
+
+// preparedRuns counts the transcripts the store is holding open.
+func preparedRuns(store *SubagentStore) int {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return len(store.locked)
 }
 
 // The dependency graph preflight proved used to die with the call that built
@@ -390,4 +402,87 @@ func TestParallelTasksGraphSeparatesQueuedFromRunning(t *testing.T) {
 const parallelGraphTasks = `{"tasks":[
 	{"prompt":"first","description":"survey"},
 	{"prompt":"second","description":"measure"}
+]}`
+
+// The weight the plan measured has to survive to the acquire or the scheduler is
+// back to handing slots out in arrival order. Holding the session's only slot
+// until both roots have queued is what makes the winner the pump's decision
+// rather than a race between the goroutines that ask for one.
+func TestFleetGivesAContendedSlotToTheItemHoldingUpTheChain(t *testing.T) {
+	sched := NewSubagentScheduler(1, 1)
+	held, err := sched.Acquire(context.Background(), AcquireRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := &recordSink{}
+	fleet := newProbeFleetOn(t, &upstreamProbeProvider{answer: "done"}, ablation.New(), sched, mustSubagentStore(t))
+	ctx := WithParentSession(withCallContext(context.Background(), "fleet-call", rec, nil, false), "rank-parent")
+
+	done := make(chan error, 1)
+	go func() {
+		_, execErr := fleet.Execute(ctx, json.RawMessage(fleetRankTasks))
+		done <- execErr
+	}()
+	waitForQueuedAcquires(t, sched, 2)
+	held()
+	if err := <-done; err != nil {
+		t.Fatalf("fleet: %v", err)
+	}
+
+	stream := stateStream(t, rec)
+	const aside, survey = "fleet-call/fleet-1", "fleet-call/fleet-2"
+	head := firstAt(stream, survey, agentgraph.StateRunning)
+	leaf := firstAt(stream, aside, agentgraph.StateRunning)
+	if head < 0 || leaf < 0 {
+		t.Fatalf("both roots must run: survey %v, aside %v", lifecycleOf(stream, survey), lifecycleOf(stream, aside))
+	}
+	if head > leaf {
+		t.Fatalf("the one slot went to the leaf first; survey started at step %d and aside at %d", head, leaf)
+	}
+}
+
+const fleetRankTasks = `{"tasks":[
+	{"id":"aside","description":"unrelated","prompt":"TASK-GAMMA aside","read_only":true},
+	{"id":"survey","description":"survey the parser","prompt":"TASK-ALPHA survey","read_only":true},
+	{"id":"report","description":"write it up","prompt":"TASK-BETA report","depends_on":["survey"],"read_only":true}
+]}`
+
+// A run used to build its whole child — registry, runtime, and the transcript
+// that holds a store lease — and only then join the queue, so a fan-out wider
+// than the session ceiling held one open per item it had not started. The queue
+// is also what the slot-wait figure prices, and every millisecond of that setup
+// was being billed to a concurrency ceiling that had not caused it.
+func TestQueuedFleetItemsReserveNoTranscript(t *testing.T) {
+	sched := NewSubagentScheduler(1, 1)
+	store := mustSubagentStore(t)
+	held, err := sched.Acquire(context.Background(), AcquireRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fleet := newProbeFleetOn(t, &upstreamProbeProvider{answer: "done"}, ablation.New(), sched, store)
+	ctx := WithParentSession(withCallContext(context.Background(), "fleet-call", &recordSink{}, nil, false), "admit-parent")
+
+	done := make(chan error, 1)
+	go func() {
+		_, execErr := fleet.Execute(ctx, json.RawMessage(fleetIndependentTasks))
+		done <- execErr
+	}()
+	waitForQueuedAcquires(t, sched, 3)
+	if got := preparedRuns(store); got != 0 {
+		t.Fatalf("%d transcripts open while every item is still queued, want 0", got)
+	}
+
+	held()
+	if err := <-done; err != nil {
+		t.Fatalf("fleet: %v", err)
+	}
+	if got := preparedRuns(store); got != 0 {
+		t.Fatalf("%d transcripts still open after the fleet finished, want 0", got)
+	}
+}
+
+const fleetIndependentTasks = `{"tasks":[
+	{"id":"alpha","description":"survey alpha","prompt":"TASK-ALPHA survey","read_only":true},
+	{"id":"beta","description":"survey beta","prompt":"TASK-BETA survey","read_only":true},
+	{"id":"gamma","description":"survey gamma","prompt":"TASK-GAMMA survey","read_only":true}
 ]}`

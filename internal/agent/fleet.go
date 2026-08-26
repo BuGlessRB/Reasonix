@@ -348,6 +348,7 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 		spec.Context.Upstream = f.upstreamFor(plan, idx, results)
 		label := spec.Task.Description
 		subID := fleetNodeID(parentID, idx)
+		spec.Sched.Priority = plan.rank[idx]
 		spec.Sched.OnStart = func() { publishGraph(sink, fanOutItemRunningDelta(subID)) }
 		dispatchArgs, _ := json.Marshal(map[string]any{
 			"prompt":      spec.Task.Objective,
