@@ -163,3 +163,11 @@ out of how a path is spelled, which cannot tell `internal/auth` from
 - sensitive: internal/plugin/**
 - sensitive: internal/pluginpkg/**
 - sensitive: internal/netclient/**
+
+One declaration, two effects: the same list is also the coverage gate's subject.
+`make coverage-gate` holds each path to the coverage it already has, because
+when this was written these paths sat *below* the tree's median rather than
+above it — the code deciding what the agent may execute was its least-tested
+part. Floors ratchet like repolint's budgets: raising one is free, lowering one
+needs `-allow-drop` and a reason in the PR. Adding a `sensitive:` path gets both
+effects; there is no second list to keep in sync.
