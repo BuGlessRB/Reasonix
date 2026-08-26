@@ -29,10 +29,6 @@ type indexedCatalogManager struct {
 
 var processHistoryCatalog indexedCatalogManager
 
-// RegisterCatalogRoots lets a host such as Desktop seed every saved project
-// without constructing a controller. Opening and scanning remain asynchronous.
-func RegisterCatalogRoots(roots []historycatalog.Root) { processHistoryCatalog.register(roots) }
-
 // RegisterCatalogObserver subscribes a host to revision/progress changes. The
 // callback payload contains roots and counters only, never query or content.
 func RegisterCatalogObserver(observer func(historycatalog.Status, []string, string)) {

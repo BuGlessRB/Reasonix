@@ -103,23 +103,6 @@ func Collect(opts Options) Report {
 	return report
 }
 
-// CollectWithRuntimeUnavailable adds mcp.runtime_unavailable when desktop
-// requested session runtime but no Host is available.
-func CollectWithRuntimeUnavailable(opts Options) Report {
-	r := Collect(opts)
-	if opts.RuntimeHost == nil && !opts.Live {
-		r.Issues = append(r.Issues, Issue{
-			Severity: "info", Code: "mcp.runtime_unavailable", Subsystem: "mcp",
-			Message:     "no active session Host; showing static configuration only",
-			Remediation: "Open or select a workspace chat tab, then refresh with session runtime enabled",
-			SettingsTab: "mcp",
-		})
-		sortIssues(r.Issues)
-		r.Summary = buildSummary(r)
-	}
-	return r
-}
-
 func buildSummary(r Report) Summary {
 	s := Summary{
 		Instructions: len(r.Instructions.Docs),

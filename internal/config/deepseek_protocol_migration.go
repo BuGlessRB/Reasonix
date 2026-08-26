@@ -48,12 +48,6 @@ func UpgradeDeepSeekProviderProtocol(path, name string) (bool, error) {
 	return editLegacyDeepSeekProtocolFile(path, name, false)
 }
 
-// UpgradeDeepSeekProviderProtocolUserConfig applies the explicit upgrade to
-// the active user-global source, including a legacy config location.
-func UpgradeDeepSeekProviderProtocolUserConfig(name string) (bool, error) {
-	return UpgradeDeepSeekProviderProtocol(userConfigLoadPath(), name)
-}
-
 // CanUpgradeDeepSeekProviderProtocolUserConfig reports whether the active
 // user-global source contains a safely mappable provider in the requested
 // DeepSeek family. Settings uses the same rewrite parser as the mutation path,

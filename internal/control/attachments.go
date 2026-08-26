@@ -27,27 +27,6 @@ var attachmentPathSeq atomic.Uint64
 var attachmentNow = time.Now
 var safeAttachmentExt = regexp.MustCompile(`^\.[a-z0-9]{1,12}$`)
 
-// SaveAttachmentDataURL stores a non-image file (dropped/pasted in the desktop
-// app, where the browser exposes bytes but not a real path) under
-// .reasonix/attachments and returns its repo-relative path for @referencing.
-// origName supplies only the extension; the stored name is generated.
-func SaveAttachmentDataURL(origName, dataURL string) (string, error) {
-	const marker = ";base64,"
-	_, after, ok := strings.Cut(dataURL, marker)
-	if !strings.HasPrefix(dataURL, "data:") || !ok {
-		return "", fmt.Errorf("unsupported pasted file")
-	}
-	raw, err := base64.StdEncoding.DecodeString(after)
-	if err != nil {
-		return "", fmt.Errorf("decode pasted file: %w", err)
-	}
-	return SaveAttachmentBytes(origName, raw)
-}
-
-func SaveAttachmentBytes(origName string, raw []byte) (string, error) {
-	return SaveAttachmentBytesInRoot(".", origName, raw)
-}
-
 func SaveAttachmentBytesInRoot(root, origName string, raw []byte) (string, error) {
 	if len(raw) == 0 || len(raw) > maxFileAttachmentBytes {
 		return "", fmt.Errorf("attachment must be between 1 byte and 25 MB")

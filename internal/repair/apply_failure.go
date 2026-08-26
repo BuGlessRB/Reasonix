@@ -63,25 +63,6 @@ func MarkUpdateApplyFailed(toVersion, reason string) error {
 	return markUpdateApplyFailed(toVersion, "", "", reason)
 }
 
-// MarkUpdateApplyFailedMatching binds the marker to the exact transaction held
-// by an updater claim. The additive creation identity keeps a same-version
-// marker from authorizing rollback of a later retry.
-func MarkUpdateApplyFailedMatching(toVersion, updateCreatedAt, reason string) error {
-	updateCreatedAt = strings.TrimSpace(updateCreatedAt)
-	if updateCreatedAt == "" {
-		return fmt.Errorf("update apply failure: transaction identity is incomplete")
-	}
-	tx, err := ReadPendingUpdate()
-	if err != nil {
-		return fmt.Errorf("update apply failure: read pending transaction: %w", err)
-	}
-	if strings.TrimSpace(tx.ToVersion) != strings.TrimSpace(toVersion) ||
-		strings.TrimSpace(tx.CreatedAt) != updateCreatedAt {
-		return fmt.Errorf("update apply failure: pending transaction does not match")
-	}
-	return markUpdateApplyFailedInvocation(tx, reason)
-}
-
 func markUpdateApplyFailedInvocation(invocation *UpdateTransaction, reason string) error {
 	if invocation == nil {
 		return fmt.Errorf("update apply failure: transaction identity is incomplete")
@@ -159,15 +140,6 @@ func ReadUpdateApplyFailure() (*UpdateApplyFailure, bool) {
 		return nil, false
 	}
 	return &failure, true
-}
-
-// ClearUpdateApplyFailure removes the marker; a missing marker is not an error.
-func ClearUpdateApplyFailure() error {
-	failure, ok := ReadUpdateApplyFailure()
-	if !ok {
-		return nil
-	}
-	return clearUpdateApplyFailureExact(failure)
 }
 
 // ClearUpdateApplyFailureExact removes only the marker created for tx. Platform

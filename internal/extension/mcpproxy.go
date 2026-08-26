@@ -93,11 +93,6 @@ type MCPProxySet struct {
 	byName map[string]*MCPProxy
 }
 
-// NewMCPProxySet returns an empty set.
-func NewMCPProxySet() *MCPProxySet {
-	return &MCPProxySet{byName: make(map[string]*MCPProxy)}
-}
-
 // Get returns the stable proxy for name, creating it if needed.
 func (s *MCPProxySet) Get(name string) *MCPProxy {
 	if s == nil {

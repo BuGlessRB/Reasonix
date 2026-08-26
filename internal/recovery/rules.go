@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/evidence"
 	"reasonix/internal/shellparse"
 	"reasonix/internal/shellsafe"
 )
@@ -66,22 +65,6 @@ func transientFailureText(text string) bool {
 			return true
 		}
 	}
-	return false
-}
-
-// IsVerificationCall reports whether the host recognizes the call as a
-// verification command (test/lint/build/typecheck/compile).
-func IsVerificationCall(tool string, args json.RawMessage, readOnly bool) bool {
-	tool = strings.TrimSpace(tool)
-	if tool == "bash" {
-		return evidence.IsDeliveryVerificationCommand(commandFromArgs(args))
-	}
-	// Project-check style tools are verification even when not bash.
-	switch tool {
-	case "complete_step":
-		return false
-	}
-	_ = readOnly
 	return false
 }
 
@@ -157,37 +140,6 @@ func riskBoundaryForProposal(proposal Proposal) riskBoundary {
 	// still own writes outside the workspace; this layer only adds hard-boundary
 	// confirmation for commands the host can classify deterministically.
 	return riskBoundary{}
-}
-
-// ClassifyEmptySearch reports whether a successful read-only search produced
-// no matches. Callers set Observation.EmptySearch from this.
-func ClassifyEmptySearch(tool string, success bool, readOnly bool, output string) bool {
-	if !success || !readOnly {
-		return false
-	}
-	switch strings.TrimSpace(tool) {
-	case "grep", "glob", "ls", "code_index", "codeindex":
-		// fall through
-	default:
-		return false
-	}
-	out := strings.TrimSpace(output)
-	if out == "" {
-		return true
-	}
-	lower := strings.ToLower(out)
-	for _, marker := range []string{
-		"no matches",
-		"no files found",
-		"0 matches",
-		"not found",
-		"no results",
-	} {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 // IsDiagnosticSuccess reports a read-only observation whose output is worth

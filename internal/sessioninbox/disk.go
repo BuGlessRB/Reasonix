@@ -416,16 +416,3 @@ func RemoveDir(sessionPath string) error {
 	}
 	return nil
 }
-
-// MigrateDir renames the inbox directory with a session path change.
-func MigrateDir(oldPath, newPath string) error {
-	oldDir := store.SessionInboxDir(oldPath)
-	newDir := store.SessionInboxDir(newPath)
-	if oldDir == "" || newDir == "" {
-		return nil
-	}
-	if err := os.Rename(oldDir, newDir); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
-}

@@ -127,9 +127,6 @@ func looksLikeRemoteURL(raw string) bool {
 	return strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://")
 }
 
-// LooksLikeRemoteURL reports whether raw addresses a hosted MCP server.
-func LooksLikeRemoteURL(raw string) bool { return looksLikeRemoteURL(raw) }
-
 // NameFromURL derives a server name from a hosted MCP endpoint.
 func NameFromURL(raw string) string {
 	u, err := url.Parse(strings.TrimSpace(raw))
@@ -223,9 +220,6 @@ func firstCommandOperand(args []string) string {
 	}
 	return ""
 }
-
-// FirstCommandOperand returns the first non-flag operand of a runner's argv.
-func FirstCommandOperand(args []string) string { return firstCommandOperand(args) }
 
 // SanitizeName reduces a derived name to the lowercase-and-dashes form config
 // and tool prefixes accept.

@@ -8,12 +8,6 @@ import (
 	"reasonix/internal/historycatalog"
 )
 
-// RebuildSharedCatalog closes the process-local reader, atomically replaces the
-// disposable FTS database, and starts a fresh reader over the same roots.
-func RebuildSharedCatalog(ctx context.Context, roots []historycatalog.Root) error {
-	return processHistoryCatalog.rebuildShared(ctx, roots)
-}
-
 func (m *indexedCatalogManager) rebuildShared(ctx context.Context, roots []historycatalog.Root) error {
 	m.lifecycleMu.Lock()
 	defer m.lifecycleMu.Unlock()

@@ -102,19 +102,6 @@ const subagentToolBoundarySummary = "Recursive agent/skill tools are exposed onl
 // inject MaxParallelWriters via SubagentScheduler.
 const maxConcurrentBackgroundTasks = DefaultMaxParallelWriters
 
-// AlwaysHiddenSubagentTools returns the tool names excluded from every
-// subagent's registry regardless of an explicit allowlist or delegation
-// depth (unlike subagentRecursiveTools, which depends on remaining depth).
-// That covers both subagentAlwaysHiddenTools and subagentJobTools —
-// SubagentToolRegistryForDepth and its read-only variant strip the job tools
-// unconditionally too. Host UIs offering a tool picker for a subagent
-// profile's allowed-tools should exclude these from the offered choices —
-// selecting them would be silently ignored at runtime.
-func AlwaysHiddenSubagentTools() []string {
-	names := append([]string(nil), subagentAlwaysHiddenTools...)
-	return append(names, subagentJobTools...)
-}
-
 // SubagentMetaTools returns the tool names that spawned agents should not inherit
 // from the parent registry unless a future call site deliberately opts into a
 // different boundary. They can spawn or author more agent work, so excluding them
@@ -1772,14 +1759,6 @@ func readOnlyAgentConstruction(reg *tool.Registry, opts Options) (*tool.Registry
 	opts.ReadOnlyExecution = true
 	opts.PlannerMCPExecution = false
 	return strictReadOnlyExecutionRegistry(reg), opts
-}
-
-// NewReadOnlyAgent constructs a long-lived, strictly read-only agent through
-// the shared construction boundary. Prefer NewPlannerAgent for the two-model
-// planner so authorized non-destructive MCP can run via use_capability.
-func NewReadOnlyAgent(prov provider.Provider, reg *tool.Registry, sess *Session, opts Options, sink event.Sink) *Agent {
-	reg, opts = readOnlyAgentConstruction(reg, opts)
-	return New(prov, reg, sess, opts, sink)
 }
 
 // NewPlannerAgent constructs the interactive two-model planner: permanent

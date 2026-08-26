@@ -9,13 +9,6 @@ import (
 	"reasonix/internal/productdocs"
 )
 
-// DocsCommandOverview returns local help and build identity for the embedded
-// documentation corpus. Frontends use it for a bare /docs command without
-// starting a provider turn.
-func DocsCommandOverview() (string, error) {
-	return productdocs.CommandOverview(i18n.CurrentLanguage())
-}
-
 // DocsCommandOverviewFor keeps local help aligned with the invocation selected
 // by slash-command conflict resolution.
 func DocsCommandOverviewFor(commandName string) (string, error) {

@@ -91,11 +91,32 @@ func TestOrphanSkipsTestSupportPackages(t *testing.T) {
 	}
 }
 
-func TestOrphanExemptsStandardInterfaceMethods(t *testing.T) {
+// A method is reachable through any interface that describes it, including one
+// a third-party package owns and calls, and no file here need name it. Proving
+// that needs type information this pass does not have, so methods are out of
+// scope: guessing wrong here deletes live code.
+func TestOrphanSkipsMethods(t *testing.T) {
 	got := orphanFindings(t, map[string]string{
-		"internal/x/e.go": "package x\ntype E struct{}\nfunc (E) Error() string { return \"\" }\nfunc (E) Close() error { return nil }\n",
+		"internal/cli/tui.go": "package cli\ntype chatTUI struct{}\nfunc (chatTUI) Init() int { return 0 }\nfunc (chatTUI) NeverCalled() {}\n",
 	})
 	if n := names(got); n != "" {
-		t.Fatalf("reported a standard interface method: %q", n)
+		t.Fatalf("reported a method: %q", n)
+	}
+}
+
+// The two orphan shapes need different fixes, so the finding has to tell them
+// apart: a cross-package test fixture must move, a corpse must go. Deleting the
+// first breaks real tests, which is why the message carries the distinction.
+func TestOrphanDistinguishesTestFixturesFromCorpses(t *testing.T) {
+	got := orphanFindings(t, map[string]string{
+		"internal/repair/update.go":      "package repair\nfunc PrepareFileUpdate() {}\nfunc NeverUsed() {}\n",
+		"internal/repair/update_test.go": "package repair\nfunc TestX(t *T) { PrepareFileUpdate() }\n",
+	})
+	msg := names(got)
+	if !strings.Contains(msg, "PrepareFileUpdate is referenced only by tests") {
+		t.Errorf("a test-referenced orphan was not marked as such: %q", msg)
+	}
+	if !strings.Contains(msg, "NeverUsed is referenced nowhere, including tests") {
+		t.Errorf("an unreferenced orphan was not marked as such: %q", msg)
 	}
 }

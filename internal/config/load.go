@@ -47,25 +47,6 @@ func LoadForRootReadOnly(root string) (*Config, error) {
 	return loadForRoot(root, false)
 }
 
-// LoadUserConfigReadOnly loads only the trusted user-global config. It never
-// reads project reasonix.toml files and never performs on-disk migrations.
-// Host-owned features that may execute a configured binary should use this
-// instead of LoadForRoot so an untrusted checkout cannot choose the process.
-func LoadUserConfigReadOnly() (*Config, error) {
-	cfg := Default()
-	if path := userConfigLoadPath(); path != "" {
-		meta, err := mergeFileSnapshot(cfg, path)
-		if err != nil {
-			return nil, err
-		}
-		if meta.IsDefined("agent", "system_prompt_file") {
-			cfg.systemPromptFileSource = promptFileSourceUser
-		}
-	}
-	normalizeConfigForEdit(cfg)
-	return cfg, nil
-}
-
 func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	root = resolveRoot(root)
 	expansionEnv := loadDotEnvForRoot(root)
@@ -338,19 +319,6 @@ func tomlFileDefinesKey(path string, key ...string) bool {
 // current project.
 func ConfigFileDefinesCompactRatio(path string) bool {
 	return tomlFileDefinesKey(path, "agent", "compact_ratio")
-}
-
-// ConfigFileDefinesSkillKey reports whether a project or user TOML file
-// explicitly owns one of the supported [skills] settings. Desktop settings use
-// this narrow provenance check to edit the file that wins at runtime instead
-// of persisting a shadowed value to the global config.
-func ConfigFileDefinesSkillKey(path, key string) bool {
-	switch strings.TrimSpace(key) {
-	case "paths", "excluded_paths", "disabled_skills", "disable_implicit_invocation", "max_depth":
-		return tomlFileDefinesKey(path, "skills", key)
-	default:
-		return false
-	}
 }
 
 // backfillDeepSeekPro restores deepseek-pro for configs the pre-fix setup wizard
@@ -691,13 +659,6 @@ func LoadForEdit(path string) *Config {
 // saving that fallback would overwrite the user's recoverable file.
 func LoadForEditReadOnlyStrict(path string) (*Config, error) {
 	return loadForEditStrict(path, true, false)
-}
-
-// LoadForEditWithoutCredentialsReadOnlyStrict is the credential-free strict
-// edit loader. It never writes migrations and never substitutes defaults for a
-// malformed file.
-func LoadForEditWithoutCredentialsReadOnlyStrict(path string) (*Config, error) {
-	return loadForEditStrict(path, false, false)
 }
 
 // ValidateFile parses one TOML config in isolation without loading credentials,

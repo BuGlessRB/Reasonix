@@ -632,10 +632,6 @@ func ManifestPath(kind string) string {
 	}
 }
 
-func ManifestPaths() []string {
-	return []string{NativeManifest, CodexManifest, ClaudeManifest}
-}
-
 func claudeTimeoutMillis(seconds int) int {
 	if seconds <= 0 {
 		return 0

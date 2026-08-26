@@ -85,15 +85,6 @@ func (c *Controller) ensureWriteAuthorityReady() error {
 	return agent.ErrSessionWriteAuthorityStale
 }
 
-// IssueAndBindWriteAuthority is used by SessionLeaseKeeper and desktop tabs
-// after a successful lease acquire/rebind.
-func IssueAndBindWriteAuthority(c *Controller, lease *agent.SessionLease) error {
-	if c == nil {
-		return nil
-	}
-	return c.BindSessionWriteAuthority(lease)
-}
-
 // authoritySaveError classifies authority failures so recovery does not fire.
 func authoritySaveError(err error) bool {
 	return errors.Is(err, agent.ErrSessionWriteAuthorityMissing) ||

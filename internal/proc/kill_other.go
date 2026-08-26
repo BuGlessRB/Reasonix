@@ -43,9 +43,6 @@ func StartTracked(cmd *exec.Cmd) (uintptr, error) {
 	return 0, cmd.Start()
 }
 
-// StartTrackedRequired uses the same process-group guarantee off Windows.
-func StartTrackedRequired(cmd *exec.Cmd) (uintptr, error) { return StartTracked(cmd) }
-
 // KillTracked terminates cmd's process tree; the handle is unused off Windows.
 func KillTracked(cmd *exec.Cmd, _ uintptr) { KillTree(cmd) }
 

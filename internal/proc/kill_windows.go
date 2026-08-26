@@ -48,13 +48,6 @@ func StartTracked(cmd *exec.Cmd) (uintptr, error) {
 	return startTracked(cmd, false)
 }
 
-// StartTrackedRequired is the fail-closed form used when orphaned descendants
-// would violate the caller's lifecycle contract. The child remains suspended
-// until Job Object assignment succeeds.
-func StartTrackedRequired(cmd *exec.Cmd) (uintptr, error) {
-	return startTracked(cmd, true)
-}
-
 func startTracked(cmd *exec.Cmd, requireJob bool) (uintptr, error) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}

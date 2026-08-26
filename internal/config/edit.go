@@ -1117,25 +1117,6 @@ func InstallUserPluginForRoot(root string, entry PluginEntry, forceEnable bool) 
 	return path, errors.Join(activationErr, restoreErr)
 }
 
-// RemovePluginFromSourceForRoot removes exactly the declaration represented by
-// entry. Lower-priority same-name declarations are intentionally preserved so
-// they can become effective after a project override is removed.
-func RemovePluginFromSourceForRoot(root string, entry PluginEntry) (bool, string, error) {
-	path := MCPConfigPathForEntry(root, entry)
-	if entry.Source == MCPSourcePluginPackage {
-		return false, "", fmt.Errorf("MCP server %q is managed by an installed plugin package", entry.Name)
-	}
-	if strings.TrimSpace(path) == "" {
-		return false, "", nil
-	}
-	unlock, err := LockConfigFileEdits(path)
-	if err != nil {
-		return false, path, err
-	}
-	defer unlock()
-	return removePluginFromSourceForRootLocked(entry, path)
-}
-
 // removePluginFromSourceForRootLocked removes exactly one source declaration
 // while the caller holds that source's config edit lock.
 func removePluginFromSourceForRootLocked(entry PluginEntry, path string) (bool, string, error) {

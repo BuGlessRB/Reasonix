@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"go/ast"
-	"slices"
 	"strings"
 )
 
@@ -13,8 +12,11 @@ import (
 // That is what left config recovery reading a snapshot nothing wrote. Tests do
 // not count as callers — they are exactly what keeps such a corpse warm.
 type orphanScan struct {
-	decls map[string][]orphanDecl
-	uses  map[string]int
+	decls    map[string][]orphanDecl
+	uses     map[string]int
+	testUses map[string]int
+	// into redirects identifier counting while a test file is walked.
+	into map[string]int
 }
 
 type orphanDecl struct {
@@ -24,7 +26,7 @@ type orphanDecl struct {
 }
 
 func newOrphanScan() *orphanScan {
-	return &orphanScan{decls: map[string][]orphanDecl{}, uses: map[string]int{}}
+	return &orphanScan{decls: map[string][]orphanDecl{}, uses: map[string]int{}, testUses: map[string]int{}}
 }
 
 // observe records one file's exported kernel declarations and, separately, every
@@ -32,7 +34,13 @@ func newOrphanScan() *orphanScan {
 // a caller of internal/, so a scan that stopped at one module would call its
 // APIs dead.
 func (o *orphanScan) observe(src *sourceFile) {
-	if src.file == nil || strings.HasSuffix(src.rel, "_test.go") {
+	if src.file == nil {
+		return
+	}
+	if strings.HasSuffix(src.rel, "_test.go") {
+		o.into = o.testUses
+		defer func() { o.into = nil }()
+		ast.Inspect(src.file, func(n ast.Node) bool { o.countIdent(n); return true })
 		return
 	}
 	kernel := strings.HasPrefix(src.rel, "internal/") && !testSupportPkg(src.rel)
@@ -42,13 +50,14 @@ func (o *orphanScan) observe(src *sourceFile) {
 			continue
 		}
 		name := fn.Name.Name
-		if kernel && ast.IsExported(name) && !orphanExempt(name) {
-			kind := "func"
-			if fn.Recv != nil {
-				kind = "method"
-			}
+		// Functions only. A method can be reached through any interface that
+		// happens to describe it, including one a third-party package owns and
+		// calls — chatTUI.Init is bubbletea's, and no file here names it. Proving
+		// that needs the type information an AST pass does not have, and the cost
+		// of guessing wrong is deleting live code.
+		if kernel && fn.Recv == nil && ast.IsExported(name) && !orphanExempt(name) {
 			o.decls[name] = append(o.decls[name], orphanDecl{
-				file: src.rel, line: src.fset.Position(fn.Pos()).Line, kind: kind,
+				file: src.rel, line: src.fset.Position(fn.Pos()).Line, kind: "func",
 			})
 		}
 	}
@@ -74,9 +83,15 @@ func (o *orphanScan) observe(src *sourceFile) {
 }
 
 func (o *orphanScan) countIdent(n ast.Node) {
-	if id, ok := n.(*ast.Ident); ok {
-		o.uses[id.Name]++
+	id, ok := n.(*ast.Ident)
+	if !ok {
+		return
 	}
+	if o.into != nil {
+		o.into[id.Name]++
+		return
+	}
+	o.uses[id.Name]++
 }
 
 // testSupportPkg marks packages that exist to serve tests across package
@@ -94,18 +109,10 @@ func testSupportPkg(rel string) bool {
 	return strings.HasPrefix(base, "test") || strings.HasSuffix(base, "test") || strings.HasSuffix(base, "testutil")
 }
 
-// orphanExempt skips names the language or a runtime calls for us, where no
-// source reference proves anything.
+// orphanExempt skips names a runtime calls for us, where no source reference
+// proves anything either way.
 func orphanExempt(name string) bool {
-	switch name {
-	case "Main", "TestMain":
-		return true
-	}
-	// Go calls these through interfaces the standard library owns.
-	return slices.Contains([]string{
-		"Error", "String", "Read", "Write", "Close", "Unwrap", "Is", "As",
-		"MarshalJSON", "UnmarshalJSON", "ServeHTTP",
-	}, name)
+	return name == "Main" || name == "TestMain"
 }
 
 // findings reports every exported kernel function whose only appearances in
@@ -116,10 +123,17 @@ func (o *orphanScan) findings() []Finding {
 		if o.uses[name] > 0 {
 			continue
 		}
+		// Tests referencing it means it is either a cross-package fixture or a
+		// corpse its own tests keep warm, and only a reader can tell those
+		// apart. Nothing referencing it at all is unambiguous.
+		what := "is referenced only by tests; wire it, move it to a test-support package, or delete it"
+		if o.testUses[name] == 0 {
+			what = "is referenced nowhere, including tests; delete it"
+		}
 		for _, d := range decls {
 			out = append(out, Finding{
 				File: d.file, Line: d.line, Rule: ruleOrphan, Weight: 1,
-				Msg: fmt.Sprintf("exported %s %s has no caller outside tests; wire it or delete it", d.kind, name),
+				Msg: fmt.Sprintf("exported %s %s %s", d.kind, name, what),
 			})
 		}
 	}

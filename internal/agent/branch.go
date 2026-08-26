@@ -413,11 +413,6 @@ func SetSessionInFlightTurn(sessionPath string, marker InFlightTurnMeta) error {
 	return saveBranchMeta(sessionPath, m, false)
 }
 
-func ClearSessionInFlightTurn(sessionPath string) error {
-	_, err := ClearSessionInFlightTurnIfMatch(sessionPath, InFlightTurnMeta{})
-	return err
-}
-
 // ClearSessionInFlightTurnIfMatch clears a marker only when it still matches
 // expected. A non-empty ID is authoritative; legacy markers without IDs fall
 // back to the complete persisted marker shape for compatibility.

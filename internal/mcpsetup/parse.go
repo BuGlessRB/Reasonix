@@ -1,7 +1,6 @@
 package mcpsetup
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -140,31 +139,4 @@ func envVarName(key string) string {
 		return "SECRET"
 	}
 	return name
-}
-
-// MarshalDraft renders entries back to the mcpServers JSON the user pasted, so a
-// frontend can show the normalized form it is about to install.
-func MarshalDraft(entries []config.PluginEntry) ([]byte, error) {
-	servers := map[string]any{}
-	for _, e := range entries {
-		one := map[string]any{}
-		if e.Command != "" {
-			one["command"] = e.Command
-			if len(e.Args) > 0 {
-				one["args"] = e.Args
-			}
-		}
-		if e.URL != "" {
-			one["type"] = e.Type
-			one["url"] = e.URL
-		}
-		if len(e.Env) > 0 {
-			one["env"] = e.Env
-		}
-		if len(e.Headers) > 0 {
-			one["headers"] = e.Headers
-		}
-		servers[e.Name] = one
-	}
-	return json.MarshalIndent(map[string]any{"mcpServers": servers}, "", "  ")
 }

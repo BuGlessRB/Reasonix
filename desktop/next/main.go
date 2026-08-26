@@ -274,6 +274,7 @@ func (a *App) runWindow(api http.Handler, assets fs.FS, cfg *config.Config, trac
 		OnShutdown: func(context.Context) {
 			shell.closeIcon()
 			hub.Shutdown()
+			closeProcessCatalogs()
 		},
 	})
 }

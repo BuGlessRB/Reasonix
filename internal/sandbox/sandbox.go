@@ -105,18 +105,3 @@ func UnavailableCode() string {
 		return "sandbox.unsupported_platform"
 	}
 }
-
-// BackendUnavailableReason is safe diagnostic copy for subsystems such as MCP
-// that intentionally continue unconfined when the OS backend is missing.
-func BackendUnavailableReason() string {
-	switch runtime.GOOS {
-	case "linux":
-		return "bubblewrap (bwrap) is unavailable on PATH"
-	case "darwin":
-		return "sandbox-exec is missing from PATH or unusable (sandbox_apply is restricted)"
-	case "windows":
-		return "the AppContainer helper or required Windows sandbox APIs are unavailable"
-	default:
-		return "this platform has no supported Reasonix sandbox backend"
-	}
-}

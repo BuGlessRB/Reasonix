@@ -148,59 +148,6 @@ type loadedShortcut struct {
 	path    string
 }
 
-func ApplyToCurrentProcess() error {
-	id, err := windows.UTF16PtrFromString(AppUserModelID)
-	if err != nil {
-		return err
-	}
-	hr, _, _ := procSetCurrentProcessExplicitAppUserModelID.Call(uintptr(unsafe.Pointer(id)))
-	return checkHRESULT("SetCurrentProcessExplicitAppUserModelID", hr)
-}
-
-func RepairOwnedShortcuts(installRoot string) error {
-	installRoot = filepath.Clean(strings.TrimSpace(installRoot))
-	if installRoot == "." || installRoot == "" {
-		return nil
-	}
-	paths, discoveryErr := shortcutCandidates(installRoot)
-	if len(paths) == 0 {
-		return discoveryErr
-	}
-
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	uninitialize, err := initializeCOM()
-	if err != nil {
-		return errors.Join(discoveryErr, err)
-	}
-	defer uninitialize()
-
-	var repairErr error
-	for _, path := range paths {
-		info, err := os.Lstat(path)
-		if err != nil {
-			if !os.IsNotExist(err) && reasonixShortcutName(path) {
-				repairErr = errors.Join(repairErr, err)
-			}
-			continue
-		}
-		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			continue
-		}
-		changed, err := repairOwnedShortcut(path, installRoot)
-		if err != nil {
-			if reasonixShortcutName(path) {
-				repairErr = errors.Join(repairErr, fmt.Errorf("%s: %w", path, err))
-			}
-			continue
-		}
-		if changed {
-			notifyShortcutChanged(path)
-		}
-	}
-	return errors.Join(discoveryErr, repairErr)
-}
-
 func shortcutCandidates(installRoot string) ([]string, error) {
 	seen := make(map[string]struct{})
 	paths := make([]string, 0, 8)

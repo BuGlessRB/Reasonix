@@ -54,15 +54,6 @@ func DeepSeekV4PricesForCurrency(currency string) map[string]*provider.Pricing {
 	return deepSeekV4PricesUSD()
 }
 
-// DeepSeekV4PricesForLanguage is retained for compatibility with older call
-// sites. New desktop code should pass an explicit pricing currency.
-func DeepSeekV4PricesForLanguage(lang string) map[string]*provider.Pricing {
-	if normalizeDeepSeekPricingLanguage(lang) == "zh" {
-		return DeepSeekV4PricesForCurrency("CNY")
-	}
-	return DeepSeekV4PricesForCurrency("USD")
-}
-
 func deepSeekV4PricesForConfig(c *Config) map[string]*provider.Pricing {
 	return DeepSeekV4PricesForCurrency(c.DeepSeekOfficialPricingCurrency())
 }
@@ -87,17 +78,6 @@ func normalizeDeepSeekPricingCurrency(currency string) string {
 		return "CNY"
 	case "USD", "$", "US$":
 		return "USD"
-	default:
-		return ""
-	}
-}
-
-func normalizeDeepSeekPricingLanguage(lang string) string {
-	switch strings.ToLower(strings.TrimSpace(lang)) {
-	case "zh", "zh-cn", "zh-hans", "cn", "chinese", "中文", "zh-tw", "zh-hant", "zh-hk", "zh-mo":
-		return "zh"
-	case "en", "en-us", "en-gb", "english":
-		return "en"
 	default:
 		return ""
 	}
@@ -382,13 +362,6 @@ func isKnownDeepSeekOfficialPricing(model string, price *provider.Pricing) bool 
 		}
 	}
 	return false
-}
-
-// IsOfficialDeepSeekProvider reports whether an entry targets DeepSeek's
-// official API endpoint. Desktop telemetry uses this after a regional-currency
-// change so custom endpoints and rates stay untouched.
-func IsOfficialDeepSeekProvider(p *ProviderEntry) bool {
-	return officialProviderKind(p) == "deepseek"
 }
 
 // IsKnownDeepSeekOfficialPricing reports whether price is one of Reasonix's

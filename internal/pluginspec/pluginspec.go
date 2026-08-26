@@ -32,11 +32,6 @@ type Options struct {
 	OAuthHTTPClient       *http.Client
 }
 
-// For maps entries with no workspace root and no runtime policy.
-func For(entries []config.PluginEntry) []plugin.Spec {
-	return ForRoot(entries, "")
-}
-
 // ForRoot maps entries against a workspace root without runtime policy.
 func ForRoot(entries []config.PluginEntry, workspaceRoot string) []plugin.Spec {
 	return ForRootWithOptions(entries, workspaceRoot, Options{})

@@ -286,24 +286,6 @@ func ActiveDesktopPath(installRoot string) (string, error) {
 	return path, nil
 }
 
-// ActiveCLIPath resolves the active CLI executable from current.json.
-func ActiveCLIPath(installRoot string) (string, error) {
-	ptr, err := ReadCurrent(installRoot)
-	if err != nil {
-		return "", err
-	}
-	dir := filepath.Join(installRoot, filepath.FromSlash(ptr.ActiveDir))
-	path := filepath.Join(dir, CLIBinaryName())
-	info, err := os.Lstat(path)
-	if err != nil {
-		return "", fmt.Errorf("installlayout: active CLI binary: %w", err)
-	}
-	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("installlayout: active CLI binary is not a regular file")
-	}
-	return path, nil
-}
-
 // HasCurrent reports whether installRoot already uses the versioned layout.
 func HasCurrent(installRoot string) bool {
 	_, err := ReadCurrent(installRoot)
@@ -378,12 +360,4 @@ func LauncherBinaryName() string {
 		return "reasonix-launcher.exe"
 	}
 	return "reasonix-launcher"
-}
-
-// PortableAliasName is the Windows portable entry (Reasonix.exe).
-func PortableAliasName() string {
-	if runtime.GOOS == "windows" {
-		return "Reasonix.exe"
-	}
-	return ""
 }

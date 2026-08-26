@@ -19,22 +19,6 @@ type Prepared struct {
 	LinuxSandboxed bool
 }
 
-// PrepareShell builds argv for a shell command string. When sessionTemp is
-// non-empty it is attached to a copy of spec so the platform wrapper can bind
-// or allow that directory.
-func PrepareShell(spec Spec, sh Shell, command, sessionTemp string) Prepared {
-	spec = withSessionTemp(spec, sessionTemp)
-	argv, wrapped := Command(spec, sh, command)
-	linuxSB := wrapped && sessionTemp != "" && isLinux()
-	return Prepared{
-		Argv:           argv,
-		Wrapped:        wrapped,
-		SessionTemp:    sessionTemp,
-		EnvOverrides:   SessionTempEnv(sessionTemp, linuxSB),
-		LinuxSandboxed: linuxSB,
-	}
-}
-
 // PrepareArgs builds argv for a raw argument vector (e.g. ripgrep).
 func PrepareArgs(spec Spec, args []string, sessionTemp string) Prepared {
 	spec = withSessionTemp(spec, sessionTemp)

@@ -394,10 +394,6 @@ func AllowlistUserCount(a config.BotAllowlist) int {
 		len(a.QQAdmins) + len(a.FeishuAdmins) + len(a.WeixinAdmins)
 }
 
-func BotAccessUserCount(access config.BotAccessConfig) int {
-	return len(access.Users) + len(access.Groups) + len(access.Approvers) + len(access.Admins)
-}
-
 func BotConfigHasAccessControl(bc config.BotConfig) bool {
 	if bc.Allowlist.AllowAll || bc.Pairing.Enabled || (bc.Allowlist.Enabled && AllowlistUserCount(bc.Allowlist) > 0) {
 		return true
@@ -441,10 +437,6 @@ func NewRemoteRememberer(logger *slog.Logger) func(bot.InboundMessage) {
 			logger.Warn("remember bot remote failed", "platform", msg.Platform, "err", err)
 		}
 	}
-}
-
-func NewSessionRememberer(logger *slog.Logger) func(bot.InboundMessage, string) error {
-	return NewSessionRemembererWithWorkspace(logger, "")
 }
 
 func NewSessionRemembererWithWorkspace(logger *slog.Logger, workspaceRoot string) func(bot.InboundMessage, string) error {

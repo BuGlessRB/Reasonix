@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"reasonix/internal/config"
@@ -155,14 +154,6 @@ func volumeKey(dir string) string {
 		return strings.ToLower(vol)
 	}
 	return "/"
-}
-
-// SortedByBytes orders a survey largest first, which is the order a reader
-// deciding what to move or delete wants to read it in.
-func SortedByBytes(roots []Root) []Root {
-	out := append([]Root(nil), roots...)
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Bytes > out[j].Bytes })
-	return out
 }
 
 // LeftBehind names the entries an earlier relocation left in the previous root,
