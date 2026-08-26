@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -16,6 +17,14 @@ func TestPackagesForMapsGlobsOntoPackages(t *testing.T) {
 	want := []string{"./internal/control/...", "./internal/permission/..."}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("packagesFor = %v, want %v", got, want)
+	}
+	// A go package pattern is slash-separated on every host. Only Windows ever
+	// said otherwise, and it said it twice: an unmatchable pattern, and an order
+	// that changed with it because a backslash outranks a slash.
+	for _, pkg := range got {
+		if strings.ContainsRune(pkg, '\\') {
+			t.Errorf("package pattern %q carries a host separator", pkg)
+		}
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -100,9 +101,12 @@ func packagesFor(globs []string) []string {
 	seen := map[string]bool{}
 	var pkgs []string
 	for _, glob := range globs {
+		// path, not filepath: a glob and a package pattern are slash-separated
+		// on every host. filepath.Dir answered `internal\control` on Windows,
+		// which go test cannot match and which sorted after a sibling.
 		dir := strings.TrimSuffix(strings.TrimSuffix(glob, "**"), "/")
-		if filepath.Ext(dir) != "" {
-			dir = filepath.Dir(dir)
+		if path.Ext(dir) != "" {
+			dir = path.Dir(dir)
 		}
 		if dir == "" || seen[dir] {
 			continue
