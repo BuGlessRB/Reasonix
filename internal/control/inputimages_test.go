@@ -35,7 +35,7 @@ func TestControllerInputImagesResolvesAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveImageDataURL: %v", err)
 	}
-	urls := (&Controller{modelRef: "custom/vision-pro"}).inputImages("look at @" + ref)
+	urls := (&Controller{controllerDeps: controllerDeps{modelRef: "custom/vision-pro"}}).inputImages("look at @" + ref)
 	if len(urls) != 1 {
 		t.Fatalf("inputImages = %v, want one resolved data URL", urls)
 	}
@@ -62,7 +62,7 @@ func TestControllerInputImagesResolvesWorkspaceImage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	urls := (&Controller{workspaceRoot: workspace, modelRef: "custom/vision-pro"}).inputImages("look at @docs/diagram.png")
+	urls := (&Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "custom/vision-pro"}}).inputImages("look at @docs/diagram.png")
 	if len(urls) != 1 {
 		t.Fatalf("inputImages = %v, want one resolved data URL", urls)
 	}
@@ -79,7 +79,7 @@ func TestControllerInputImagesResolvesAbsoluteWorkspaceImage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	urls := (&Controller{workspaceRoot: workspace, modelRef: "custom/vision-pro"}).inputImages("look at @" + path)
+	urls := (&Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "custom/vision-pro"}}).inputImages("look at @" + path)
 	if len(urls) != 1 {
 		t.Fatalf("inputImages = %v, want one resolved data URL", urls)
 	}
@@ -120,7 +120,7 @@ func TestControllerInputImagesSkipsModelImagesWhenSelectedModelIsTextOnly(t *tes
 		t.Fatal(err)
 	}
 
-	c := &Controller{workspaceRoot: workspace, modelRef: "custom/text-only"}
+	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "custom/text-only"}}
 	if urls := c.inputImages("look at @diagram.png"); len(urls) != 0 {
 		t.Fatalf("text-only model should suppress image payloads, got %v", urls)
 	}
@@ -149,7 +149,7 @@ func TestControllerResolvesSubagentImageCandidatesForTextParent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := &Controller{workspaceRoot: workspace, modelRef: "custom/text-only"}
+	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "custom/text-only"}}
 	if urls := c.inputImages("look at @diagram.png"); len(urls) != 0 {
 		t.Fatalf("text-only parent should suppress its own image payload, got %v", urls)
 	}
@@ -166,7 +166,7 @@ func TestControllerResolveTurnImagesReusesCandidatesForVisionParent(t *testing.T
 		t.Fatal(err)
 	}
 
-	c := &Controller{workspaceRoot: workspace, modelRef: "custom/vision-pro"}
+	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "custom/vision-pro"}}
 	images := c.resolveTurnImages("inspect @diagram.png")
 	if len(images.userImages) != 1 || len(images.candidates) != 1 {
 		t.Fatalf("turn images = %v, candidates = %v; want one image in both paths", images.userImages, images.candidates)
@@ -190,7 +190,7 @@ func TestGoalContinuationKeepsCurrentTurnImageCandidatesWithoutCrossTurnLeak(t *
 		t.Fatal(err)
 	}
 
-	c := &Controller{workspaceRoot: workspace, modelRef: "custom/text-only"}
+	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "custom/text-only"}}
 	initial := c.prepareOrchestratedTurnImages(orchestratedTurn{
 		raw:       "inspect the diagnostic",
 		imageRefs: "@diagram.png",
@@ -218,7 +218,7 @@ func TestControllerImageInputEnabledDoesNotFallbackFromUnknownRef(t *testing.T) 
 	workspace := t.TempDir()
 	writeVisionTestConfig(t, workspace)
 
-	c := &Controller{workspaceRoot: workspace, modelRef: "deleted/model"}
+	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "deleted/model"}}
 	if c.imageInputEnabled() {
 		t.Fatal("unknown ref should not inherit image input from the default fallback model")
 	}

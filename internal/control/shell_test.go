@@ -57,7 +57,7 @@ func waitForDoneWithin(t *testing.T, done chan event.Event, d time.Duration) eve
 
 func TestRunShell_EmitsEvents(t *testing.T) {
 	sink, done, events := collectSink()
-	ctrl := &Controller{sink: sink}
+	ctrl := &Controller{controllerDeps: controllerDeps{sink: sink}}
 
 	ctrl.RunShell("echo hello")
 	waitForDone(t, done)
@@ -99,7 +99,7 @@ func TestRunShell_EmitsEvents(t *testing.T) {
 
 func TestSubmit_BangPrefix(t *testing.T) {
 	sink, done, events := collectSink()
-	ctrl := &Controller{sink: sink}
+	ctrl := &Controller{controllerDeps: controllerDeps{sink: sink}}
 
 	ctrl.Submit("!echo test")
 	waitForDone(t, done)
@@ -121,7 +121,7 @@ func TestSubmit_BangEmpty(t *testing.T) {
 		}
 	})
 
-	ctrl := &Controller{sink: sink}
+	ctrl := &Controller{controllerDeps: controllerDeps{sink: sink}}
 	ctrl.Submit("!")
 
 	if len(notices) == 0 {
@@ -145,7 +145,7 @@ func TestSubmit_BangNotFirstChar(t *testing.T) {
 
 func TestRunShell_FailingCommand(t *testing.T) {
 	sink, done, events := collectSink()
-	ctrl := &Controller{sink: sink}
+	ctrl := &Controller{controllerDeps: controllerDeps{sink: sink}}
 
 	ctrl.RunShell("false") // exits 1
 	waitForDone(t, done)
@@ -168,7 +168,7 @@ func TestRunShell_FailingCommand(t *testing.T) {
 
 func TestRunShell_CancelStopsCommand(t *testing.T) {
 	sink, done, events := collectSink()
-	ctrl := &Controller{sink: sink}
+	ctrl := &Controller{controllerDeps: controllerDeps{sink: sink}}
 
 	command := "sleep 30"
 	if sandbox.ResolveShell("", "", nil).Kind == sandbox.ShellPowerShell {
@@ -211,7 +211,7 @@ func TestRunShell_HeredocCancelReleasesTurn(t *testing.T) {
 	sink, done, events := collectSink()
 	root := t.TempDir()
 	target := filepath.Join(root, "test_redact.go")
-	ctrl := &Controller{sink: sink, shell: sh, workspaceRoot: root}
+	ctrl := &Controller{controllerDeps: controllerDeps{sink: sink, shell: sh, workspaceRoot: root}}
 
 	command := strings.Join([]string{
 		"cat > " + controlShellQuote(filepath.ToSlash(target)) + " <<'EOF'",

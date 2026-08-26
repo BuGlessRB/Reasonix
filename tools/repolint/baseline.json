@@ -5,16 +5,16 @@
     "commented-code": 0,
     "complexity": 1568,
     "error-text": 12,
-    "essay": 3283,
-    "file-size": 42425,
-    "function-size": 6751,
+    "essay": 3277,
+    "file-size": 42302,
+    "function-size": 6746,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
     "orphan": 124,
     "refusal-path": 0,
     "spec-parity": 0,
-    "struct-state": 52
+    "struct-state": 47
   },
   "files": {
     "cmd/e2ebench/main.go": {
@@ -725,11 +725,10 @@
     },
     "internal/control/controller.go": {
       "complexity": 5,
-      "essay": 154,
-      "file-size": 5215,
-      "function-size": 48,
-      "narrative": 4,
-      "struct-state": 5
+      "essay": 148,
+      "file-size": 5092,
+      "function-size": 43,
+      "narrative": 4
     },
     "internal/control/controller_test.go": {
       "essay": 9

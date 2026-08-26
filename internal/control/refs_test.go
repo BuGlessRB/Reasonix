@@ -109,7 +109,7 @@ func TestDetectRefsEscapedSpacePath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "my file.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	refs := (&Controller{workspaceRoot: workspace}).detectRefs(`see @my\ file.txt after`)
+	refs := (&Controller{controllerDeps: controllerDeps{workspaceRoot: workspace}}).detectRefs(`see @my\ file.txt after`)
 	if len(refs) != 1 || refs[0].kind != refFile || refs[0].path != "my file.txt" {
 		t.Fatalf("refs = %+v, want one file ref for \"my file.txt\"", refs)
 	}
@@ -657,12 +657,12 @@ func TestDetectRefsUsesWorkspaceRootNotProcessCWD(t *testing.T) {
 		}
 	})
 
-	refs := (&Controller{workspaceRoot: workspace}).detectRefs("see @cwd-only.txt and @workspace.txt")
+	refs := (&Controller{controllerDeps: controllerDeps{workspaceRoot: workspace}}).detectRefs("see @cwd-only.txt and @workspace.txt")
 	if len(refs) != 1 || refs[0].raw != "workspace.txt" {
 		t.Fatalf("detectRefs should only see workspace files, got %+v", refs)
 	}
 
-	block, errs := (&Controller{workspaceRoot: workspace}).ResolveRefs(context.Background(), "see @cwd-only.txt")
+	block, errs := (&Controller{controllerDeps: controllerDeps{workspaceRoot: workspace}}).ResolveRefs(context.Background(), "see @cwd-only.txt")
 	if block != "" || len(errs) != 0 {
 		t.Fatalf("cwd-only file should not be treated as a ref, block=%q errs=%v", block, errs)
 	}
@@ -675,7 +675,7 @@ func TestScopedRefsRequireExternalFolderRegistration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := &Controller{workspaceRoot: workspace}
+	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	block, errs := c.ResolveScopedRefs(context.Background(), "see @"+external)
 	if block != "" || len(errs) != 0 {
 		t.Fatalf("unregistered external dir should not resolve, block=%q errs=%v", block, errs)
@@ -699,7 +699,7 @@ func TestDroppedRefResolvesScopedDirOutsideTheWorkspace(t *testing.T) {
 	expectedDisplayPath := filepath.ToSlash(expectedExternal)
 
 	registrar := &recordingExternalFolderToolRefs{}
-	c := &Controller{workspaceRoot: workspace, externalFolderToolRefs: registrar}
+	c := &Controller{externalFolderToolRefs: registrar, controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	token, displayPath, err := c.DroppedRef(external)
 	if err != nil {
 		t.Fatalf("DroppedRef: %v", err)
@@ -823,7 +823,7 @@ func TestResolveRefsWithWorkspaceRootStoresRelativePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := &Controller{workspaceRoot: workspace}
+	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	refs := c.detectRefs("see @" + absPath)
 	if len(refs) != 1 {
 		t.Fatalf("detectRefs absolute workspace path = %+v, want 1 ref", refs)
@@ -858,7 +858,7 @@ func TestWorkspaceImageRefsAlsoAttachAsModelImages(t *testing.T) {
 	}
 
 	writeVisionTestConfig(t, workspace)
-	c := &Controller{workspaceRoot: workspace, modelRef: "custom/vision-pro"}
+	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "custom/vision-pro"}}
 	refs := c.detectRefs("see @" + diagram + " @" + attachment)
 	if len(refs) != 2 {
 		t.Fatalf("detectRefs = %+v, want two refs", refs)
@@ -954,7 +954,7 @@ func TestDroppedRefInsideTheWorkspaceStaysAWorkspacePath(t *testing.T) {
 	}
 
 	registrar := &recordingExternalFolderToolRefs{}
-	c := &Controller{workspaceRoot: workspace, externalFolderToolRefs: registrar}
+	c := &Controller{externalFolderToolRefs: registrar, controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	token, displayPath, err := c.DroppedRef(file)
 	if err != nil {
 		t.Fatalf("DroppedRef: %v", err)
@@ -998,7 +998,7 @@ func TestDroppedRefOutsideTheWorkspaceResolvesTheFileItself(t *testing.T) {
 	}
 
 	registrar := &recordingExternalFolderToolRefs{}
-	c := &Controller{workspaceRoot: workspace, externalFolderToolRefs: registrar}
+	c := &Controller{externalFolderToolRefs: registrar, controllerDeps: controllerDeps{workspaceRoot: workspace}}
 	token, displayPath, err := c.DroppedRef(file)
 	if err != nil {
 		t.Fatalf("DroppedRef: %v", err)

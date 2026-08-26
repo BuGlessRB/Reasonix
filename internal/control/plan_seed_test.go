@@ -182,10 +182,7 @@ func TestSeedPlanTodosSeedsAgentState(t *testing.T) {
 	var events []event.Event
 	sink := event.FuncSink(func(e event.Event) { events = append(events, e) })
 	executor := &agent.Agent{}
-	c := &Controller{
-		sink:     sink,
-		executor: executor,
-	}
+	c := &Controller{controllerDeps: controllerDeps{sink: sink, executor: executor}}
 	plan := "1. Add the parser\n2. Wire it up\n3. Add tests"
 	args := c.seedPlanTodos(plan)
 	if args == "" {
@@ -209,10 +206,7 @@ func TestSeedPlanTodosSeedsAgentState(t *testing.T) {
 }
 
 func TestSeedPlanTodosEmptyPlanNoOp(t *testing.T) {
-	c := &Controller{
-		sink:     event.Discard,
-		executor: &agent.Agent{},
-	}
+	c := &Controller{controllerDeps: controllerDeps{sink: event.Discard, executor: &agent.Agent{}}}
 	args := c.seedPlanTodos("no list items here")
 	if args != "" {
 		t.Fatalf("empty plan returned args = %q, want empty", args)
@@ -223,10 +217,7 @@ func TestCompletePlanTodosMirrorsAgentState(t *testing.T) {
 	var events []event.Event
 	sink := event.FuncSink(func(e event.Event) { events = append(events, e) })
 	executor := &agent.Agent{}
-	c := &Controller{
-		sink:     sink,
-		executor: executor,
-	}
+	c := &Controller{controllerDeps: controllerDeps{sink: sink, executor: executor}}
 
 	args := c.seedPlanTodos("1. Add the parser\n2. Wire it up")
 	c.completePlanTodos(args)

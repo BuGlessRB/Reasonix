@@ -86,7 +86,7 @@ func TestUnfitImageIsNamedToUserAndModel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := &Controller{workspaceRoot: workspace, modelRef: "custom/vision-pro"}
+	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "custom/vision-pro"}}
 	images := c.resolveTurnImages("look at @docs/diagram.png")
 	if len(images.userImages) != 0 || len(images.candidates) != 0 {
 		t.Fatalf("an unfit image must not be carried: %v / %v", images.userImages, images.candidates)
@@ -101,7 +101,7 @@ func TestUnfitImageIsNamedToUserAndModel(t *testing.T) {
 		t.Fatalf("reason = %q, want it to name which attachment", images.skipped[0])
 	}
 
-	note := (&Controller{workspaceRoot: workspace, sink: event.Discard}).unfitImagesNote(images)
+	note := (&Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, sink: event.Discard}}).unfitImagesNote(images)
 	if !strings.Contains(note, "<"+ImageRoutingTag+">") || !strings.Contains(note, "1 image(s)") {
 		t.Fatalf("note = %q, want an attached-images block naming the count", note)
 	}
@@ -118,7 +118,7 @@ func TestNonImageRefIsNotReportedAsSkipped(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "notes.txt"), []byte("plain"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	c := &Controller{workspaceRoot: workspace, modelRef: "custom/vision-pro"}
+	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "custom/vision-pro"}}
 	if images := c.resolveTurnImages("read @notes.txt"); len(images.skipped) != 0 {
 		t.Fatalf("skipped = %v, want silence for a reference that is not an image", images.skipped)
 	}

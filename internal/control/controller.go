@@ -85,92 +85,23 @@ var errNoSessionPath = errors.New("session has content but no session path; conv
 // Controller drives one chat session. Construct with New; drive with the command
 // methods; observe through the Sink passed in Options.
 type Controller struct {
-	runner       agent.Runner
-	executor     *agent.Agent
-	guardianSess *guardian.Session // nil when guardian is disabled
-	guardianPath string            // persisted guardian session file ("" when disabled)
-	// recoveryGate is the shared Auto Guard state for this controller.
-	// nil when the feature is not wired for this controller.
-	recoveryGate *recovery.Gate
+	controllerDeps
 
-	// taskBudget is the configured spend gate, as passed at construction.
-	taskBudget agent.TaskBudget
-	// goalTokenBudget bounds an unattended Goal loop; 0 leaves it unbounded.
-	goalTokenBudget int
-	// evaluator is the bounded Goal completion evaluator consulted when the
-	// working model submits no update_goal report. nil fails closed: the goal
-	// pauses instead of defaulting to continue.
-	evaluator goaleval.Evaluator
-	// goalUsageTee accounts billable usage events into the active goal turn's
-	// observational token total. It wraps the public sink when the caller didn't provide one.
-	goalUsageTee *goalUsageTee
-	sink         event.Sink
-	policy       permission.Policy
-	// subagentGate is the shared gate every headless-only sub-agent surface
-	// reads from (see Options.SubagentGate). Nil when the caller didn't build
-	// one — sub-agents then keep whatever gate they were constructed with.
-	subagentGate *SharedHeadlessGate
-
-	label        string
-	modelRef     string
+	guardianPath string // persisted guardian session file ("" when disabled)
 	systemPrompt string
-	sessionDir   string
 	commands     atomic.Pointer[[]command.Command]
-	// skills owns the session's discovered skills (enabled subset, full set, and
-	// the reloadable stores) — the skills slice of the Capabilities concern. See
-	// skill.go.
-	skills              skillSet
-	skillRunner         skill.SubagentRunner
-	readOnlySkillRunner skill.SubagentRunner
-	skillProfile        skill.ProfileResolver
-	hooks               *hook.Runner // session hook runner; nil-safe (no hooks configured)
 	// hookContexts carries one-shot lifecycle hook context into the next real
 	// user turn without changing the cache-stable system prompt.
 	hookContexts []string
-	// memory owns the loaded memory snapshot, the pending turn-tail notes queue,
-	// and write serialization behind its own locks, off c.mu — so a memory-panel
-	// save never stalls an approval or status poll. See memory.go.
-	memory                 memoryManager
-	cleanup                func()
-	display                displayPrefs // what this session shows; see display_prefs.go
-	disableColdResumePrune bool         // legacy; rewrite elision removed, still gates cold notice
 	// testCacheColdAfter overrides cacheColdAfter() in tests. Zero uses the
 	// vendor-aware resolution from config.
-	testCacheColdAfter time.Duration
-
-	shell                sandbox.Shell                    // interpreter for user-invoked "!" commands; zero = auto
-	startedOnce          bool                             // guards the one-shot SessionStart hook on first turn
-	closeOnce            sync.Once                        // makes close idempotent under racing teardown paths
-	onRemember           func(rule string) RememberResult // set via Options; invoked when user picks "always allow"
-	sessionRecoveryMeta  func(SessionRecoveryRequest) agent.BranchMeta
+	testCacheColdAfter   time.Duration
+	startedOnce          bool      // guards the one-shot SessionStart hook on first turn
+	closeOnce            sync.Once // makes close idempotent under racing teardown paths
 	onSessionRecovered   func(SessionRecoveryInfo) error
 	onSessionPathChanged func(path string)
 
-	// balance is the active provider's optional wallet endpoint (nil-answering
-	// when the provider declares none). Captured at build so a model/key switch —
-	// which rebuilds the controller — refreshes it.
-	balance *billing.Cache
-
-	// jobs is the session-scoped background-job manager. The agent's background
-	// tools spawn into it; Compose drains its completion notes into the next turn;
-	// Close cancels its still-running jobs.
-	jobs *jobs.Manager
-	// workspaceLease is the Delivery writer owner shared with the executor.
-	// It is exposed only through a sanitized state snapshot for Desktop recovery.
-	workspaceLease *workspacelease.Owner
-
-	// mcp owns the session's live tool/plugin surface — the MCP plugin Host, the
-	// tool registry the executor reads each turn, and the session-scoped context a
-	// hot-added stdio server binds its subprocess to — behind its own lock, off
-	// c.mu. The Controller keeps the config-facing orchestration (persisting
-	// MCP entries to their global/project source on add/remove, building specs
-	// from entries). See mcp.go.
-	mcp               mcpManager
-	mcpConfigureSpec  func(*plugin.Spec)
-	capabilityRuntime *agent.MCPCapabilityRuntime
-
 	runtimeGeneration  uint64 // PublishGate gen; 0 disables
-	runtimeOwner       *extension.RuntimeOwner
 	lastResumeDecision extension.ResumeDecision
 	// extensions is the frozen extension dispatcher for this controller
 	// generation, or nil when no v2 runtime packages are installed (the
@@ -202,18 +133,6 @@ type Controller struct {
 	// entering the provider-visible registry (Balanced dual-model Planner).
 	proxyToolsFn   func() map[string][]plugin.CachedTool
 	runtimeProfile capability.Profile
-	ablation       ablation.Set
-
-	// goals owns the active goal's FSM (status, intercepts, idle/turn counters)
-	// and its persistence, behind its own mutex so a per-turn goal save never
-	// stalls an approval or status poll on c.mu. See goal.go.
-	goals goalMachine
-
-	// workspaceRoot is the workspace root: the base for resolving @-refs and slash
-	// path refs, the working directory for user "!" shell commands and custom
-	// command discovery, and the guard root for checkpoint restore writes. It is
-	// surfaced to frontends via WorkspaceRoot().
-	workspaceRoot string
 
 	// externalFolderRefs maps session-generated @ tokens to user-dropped
 	// directories outside workspaceRoot. It is intentionally per-controller:
@@ -235,13 +154,6 @@ type Controller struct {
 	// sessionRevision increments on successful rewind/undo and is used as a
 	// prepare/commit freshness token.
 	sessionRevision int64
-
-	// approval owns the approval/ask prompt bookkeeping and the runtime approval
-	// posture (ask/auto/yolo, session grants, the just-approved-plan window)
-	// behind its own locks, off c.mu. The Controller keeps the I/O orchestration
-	// (requestApproval/Ask emit events + fire hooks + rebuild the executor gate).
-	// See approval.go.
-	approval approvalManager
 
 	// mu guards the run state; every critical section under it is short and
 	// non-blocking.
@@ -544,51 +456,16 @@ func New(opts Options) *Controller {
 		opts.Hooks.SetSessionID(agent.BranchID(opts.SessionPath))
 	}
 	c := &Controller{
-		taskBudget:             opts.TaskBudget,
-		goalTokenBudget:        opts.GoalTokenBudget,
-		goals:                  goalMachine{tokenBudget: opts.GoalTokenBudget},
-		runner:                 opts.Runner,
-		executor:               opts.Executor,
-		guardianSess:           opts.Guardian,
+		controllerDeps:         newControllerDeps(opts, sink, usageTee, runtimeOwner, pluginCtx),
 		guardianPath:           guardian.PathFor(opts.SessionPath),
-		evaluator:              opts.GoalEvaluator,
-		goalUsageTee:           usageTee,
-		sink:                   sink,
-		policy:                 opts.Policy,
-		subagentGate:           opts.SubagentGate,
-		label:                  opts.Label,
-		modelRef:               opts.ModelRef,
 		systemPrompt:           opts.SystemPrompt,
-		sessionDir:             opts.SessionDir,
 		sessionPath:            opts.SessionPath,
 		commands:               atomic.Pointer[[]command.Command]{},
-		skills:                 newSkillSet(opts.Skills, opts.AllSkills, opts.SkillStore, opts.AllSkillStore, opts.DisableImplicitSkillInvocation),
-		skillRunner:            opts.SkillRunner,
-		readOnlySkillRunner:    opts.ReadOnlySkillRunner,
-		skillProfile:           opts.SkillProfile,
-		hooks:                  opts.Hooks,
-		memory:                 newMemoryManager(opts.Memory),
-		cleanup:                opts.Cleanup,
-		display:                displayPrefsFrom(opts),
-		disableColdResumePrune: opts.DisableColdResumePrune,
-		shell:                  opts.Shell,
-		onRemember:             opts.OnRemember,
-		sessionRecoveryMeta:    opts.SessionRecoveryMeta,
 		onSessionRecovered:     opts.OnSessionRecovered,
-		balance:                opts.Balance,
-		jobs:                   opts.Jobs,
-		workspaceLease:         opts.WorkspaceLease,
-		mcp:                    newMcpManager(opts.Host, opts.Registry, pluginCtx, opts.MCPDefaultCallTimeout),
-		mcpConfigureSpec:       opts.MCPConfigureSpec,
-		capabilityRuntime:      opts.CapabilityRuntime,
 		runtimeProfile:         runtimeProfile,
-		ablation:               opts.Ablation,
-		workspaceRoot:          opts.WorkspaceRoot,
 		externalFolderToolRefs: opts.ExternalFolderToolRefs,
 		providerResolver:       opts.ProviderResolver,
 		runtimeGeneration:      opts.RuntimeGeneration,
-		runtimeOwner:           runtimeOwner,
-		approval:               newApprovalManager(opts.Policy, ToolApprovalAsk, opts.ApprovalTimeout),
 	}
 	// Session-private temporary directory: reuse a shared Manager on hot
 	// rebuild, otherwise create one. Retain so ReleaseResources/Close drop the

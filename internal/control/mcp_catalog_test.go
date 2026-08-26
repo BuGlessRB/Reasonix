@@ -37,7 +37,7 @@ func TestCatalogToolsCountsWhatIsCallableRatherThanWhatIsRunning(t *testing.T) {
 	reg.Add(catalogTool{name: "mcp__atlas__rewrite", server: "atlas", raw: "rewrite"})
 	reg.Add(catalogTool{name: "mcp__ledger__post", server: "ledger", raw: "post"})
 
-	c := &Controller{mcp: newMcpManager(nil, reg, t.Context(), 0)}
+	c := &Controller{controllerDeps: controllerDeps{mcp: newMcpManager(nil, reg, t.Context(), 0)}}
 	got := c.MCPCatalogTools()
 
 	if got["atlas"] != 2 {
@@ -54,7 +54,7 @@ func TestCatalogToolsCountsWhatIsCallableRatherThanWhatIsRunning(t *testing.T) {
 // No registry is not an empty registry: a caller that cannot tell them apart
 // would report every configured server as having nothing to offer.
 func TestCatalogToolsAnswersNothingWithoutARegistry(t *testing.T) {
-	c := &Controller{mcp: newMcpManager(nil, nil, t.Context(), 0)}
+	c := &Controller{controllerDeps: controllerDeps{mcp: newMcpManager(nil, nil, t.Context(), 0)}}
 	if got := c.MCPCatalogTools(); got != nil {
 		t.Fatalf("catalog = %v with no registry, want nil", got)
 	}
