@@ -16,6 +16,17 @@ type argumentContract struct {
 	Accepts []string // every property the schema defines
 	Unknown []string // supplied fields the schema does not define
 	Missing []string // required fields the call omits
+	// Mistyped are supplied fields the schema defines and the call filled with
+	// the wrong kind of value. Neither unknown nor missing: the name is right
+	// and it is there, so only the value can be.
+	Mistyped []mistypedField
+}
+
+// mistypedField is one field whose value is not a kind its schema admits.
+type mistypedField struct {
+	Field string
+	Want  []string
+	Got   string
 }
 
 // schemaLevel is one object level of a JSON Schema: what it defines and what
@@ -53,9 +64,14 @@ func readArgumentContract(schema, arguments json.RawMessage) (argumentContract, 
 
 func (s schemaLevel) compare(got map[string]json.RawMessage, level string) argumentContract {
 	contract := argumentContract{Level: level, Accepts: slices.Sorted(maps.Keys(s.Properties))}
-	for field := range got {
-		if _, defined := s.Properties[field]; !defined {
+	for _, field := range slices.Sorted(maps.Keys(got)) {
+		property, defined := s.Properties[field]
+		if !defined {
 			contract.Unknown = append(contract.Unknown, field)
+			continue
+		}
+		if want, actual, bad := kindMismatch(property, got[field]); bad {
+			contract.Mistyped = append(contract.Mistyped, mistypedField{Field: field, Want: want, Got: actual})
 		}
 	}
 	for _, field := range s.Required {
@@ -68,7 +84,69 @@ func (s schemaLevel) compare(got map[string]json.RawMessage, level string) argum
 	return contract
 }
 
-func (c argumentContract) broken() bool { return len(c.Unknown) > 0 || len(c.Missing) > 0 }
+func (c argumentContract) broken() bool {
+	return len(c.Unknown) > 0 || len(c.Missing) > 0 || len(c.Mistyped) > 0
+}
+
+// kindMismatch reports whether value is a kind this property does not admit. A
+// property that declares no type, and a null, leave the question unanswered:
+// the contract may only report what the schema actually said.
+func kindMismatch(property, value json.RawMessage) (want []string, got string, bad bool) {
+	want = declaredTypes(property)
+	got = jsonKind(value)
+	if len(want) == 0 || got == "" || got == "null" {
+		return nil, "", false
+	}
+	for _, kind := range want {
+		if kind == got || (got == "number" && (kind == "number" || kind == "integer")) {
+			return nil, "", false
+		}
+	}
+	return want, got, true
+}
+
+// declaredTypes reads a property's "type", which JSON Schema allows to be one
+// name or several.
+func declaredTypes(property json.RawMessage) []string {
+	var one struct {
+		Type json.RawMessage `json:"type"`
+	}
+	if len(property) == 0 || json.Unmarshal(property, &one) != nil || len(one.Type) == 0 {
+		return nil
+	}
+	var single string
+	if json.Unmarshal(one.Type, &single) == nil {
+		return []string{single}
+	}
+	var several []string
+	if json.Unmarshal(one.Type, &several) == nil {
+		return several
+	}
+	return nil
+}
+
+// jsonKind names the kind of an encoded value by its first token, which is what
+// a JSON Schema type names too.
+func jsonKind(value json.RawMessage) string {
+	trimmed := strings.TrimSpace(string(value))
+	if trimmed == "" {
+		return ""
+	}
+	switch trimmed[0] {
+	case '{':
+		return "object"
+	case '[':
+		return "array"
+	case '"':
+		return "string"
+	case 't', 'f':
+		return "boolean"
+	case 'n':
+		return "null"
+	default:
+		return "number"
+	}
+}
 
 // itemContract compares the supplied elements of an array property against that
 // property's item schema and returns the first element that breaks it.
@@ -99,13 +177,14 @@ func itemContract(property, value json.RawMessage, field string) (argumentContra
 // broke the contract. Staying silent on a well-formed call keeps the contract
 // out of failures it cannot explain, such as one the target itself reported.
 func (c argumentContract) hint() string {
-	if len(c.Unknown) == 0 && len(c.Missing) == 0 {
+	if !c.broken() {
 		return ""
 	}
 	subject, owner := "this capability", "it"
+	where := ""
 	if c.Level != "" {
 		subject = "a `" + c.Level + "` item"
-		owner = subject
+		owner, where = subject, " in "+subject
 	}
 	var b strings.Builder
 	if len(c.Unknown) > 0 {
@@ -114,19 +193,42 @@ func (c argumentContract) hint() string {
 	if len(c.Missing) > 0 {
 		fmt.Fprintf(&b, "; %s requires %s", owner, strings.Join(quoted(c.Missing), ", "))
 	}
-	fmt.Fprintf(&b, "; %s accepts %s", owner, strings.Join(quoted(c.Accepts), ", "))
+	for _, m := range c.Mistyped {
+		fmt.Fprintf(&b, "; %q%s must be %s, not %s", m.Field, where, kindPhrase(m.Want), kindPhrase([]string{m.Got}))
+	}
+	// A mistyped field is one the target accepts, so listing what it accepts
+	// answers a question nobody asked.
+	if len(c.Unknown) > 0 || len(c.Missing) > 0 {
+		fmt.Fprintf(&b, "; %s accepts %s", owner, strings.Join(quoted(c.Accepts), ", "))
+	}
 	return b.String()
 }
 
-// applyCallContract refuses a call that omits a field its target's schema
-// requires. Execution was never possible, and running before permission keeps a
-// user approval from being spent on a call that can only fail after it.
+// kindPhrase reads a JSON Schema type list the way a sentence needs it.
+func kindPhrase(kinds []string) string {
+	articled := make([]string, 0, len(kinds))
+	for _, kind := range kinds {
+		switch kind {
+		case "array", "object", "integer":
+			articled = append(articled, "an "+kind)
+		default:
+			articled = append(articled, "a "+kind)
+		}
+	}
+	return strings.Join(articled, " or ")
+}
+
+// applyCallContract refuses a call the target's own schema already rules out: a
+// required field omitted, or one filled with a kind the schema does not admit.
+// Execution was never possible, so this keeps a user approval from being spent
+// on a call that can only fail after it, and keeps the answer from being an
+// unmarshal error written in the host language's vocabulary.
 func (a *Agent) applyCallContract(plan *toolCallPlan) (toolOutcome, bool) {
 	if plan.execTool == nil {
 		return toolOutcome{}, false
 	}
 	contract, ok := readArgumentContract(plan.execTool.Schema(), plan.execArgs)
-	if !ok || len(contract.Missing) == 0 {
+	if !ok || (len(contract.Missing) == 0 && len(contract.Mistyped) == 0) {
 		return toolOutcome{}, false
 	}
 	msg := fmt.Sprintf("invalid arguments for %s%s", plan.permName, contract.hint())

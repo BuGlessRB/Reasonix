@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"reasonix/internal/capability"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
@@ -84,5 +85,116 @@ func TestMalformedArgumentsSeparateTruncationFromTypos(t *testing.T) {
 	}
 	if strings.Contains(typo, "cut off") {
 		t.Errorf("mistyped args detail = %q, must not blame length", typo)
+	}
+}
+
+// evidenceTool mirrors conclude_blocked's shape: an array of objects, which is
+// the shape a model most often gets wrong by sending one of something else.
+type evidenceTool struct{ ran *bool }
+
+func (evidenceTool) Name() string        { return "conclude_blocked" }
+func (evidenceTool) Description() string { return "" }
+func (evidenceTool) Schema() json.RawMessage {
+	return json.RawMessage(`{"type":"object","properties":{"blocker":{"type":"string"},"evidence":{"type":"array","items":{"type":"object","properties":{"command":{"type":"string"},"paths":{"type":"array","items":{"type":"string"}}}}}},"required":["blocker","evidence"]}`)
+}
+func (evidenceTool) ReadOnly() bool { return true }
+func (t evidenceTool) Execute(context.Context, json.RawMessage) (string, error) {
+	*t.ran = true
+	return "recorded", nil
+}
+
+// The contract read which fields a call supplied and never what it put in them,
+// so a field of the right name and the wrong kind passed every check. The answer
+// then came from the host's unmarshaler — "cannot unmarshal string into Go
+// struct field .evidence of type []agent.blockedEvidence" — which names Go's
+// types rather than the caller's mistake, and costs the round trip that finds it.
+func TestMistypedArgumentIsRefusedBeforeItRuns(t *testing.T) {
+	for name, tc := range map[string]struct {
+		args string
+		want string
+	}{
+		"array sent as a string": {
+			args: `{"blocker":"the API is down","evidence":"I ran curl"}`,
+			want: `"evidence" must be an array, not a string`,
+		},
+		"string sent as an object": {
+			args: `{"blocker":{"why":"the API is down"},"evidence":[{"command":"curl"}]}`,
+			want: `"blocker" must be a string, not an object`,
+		},
+		"item field sent as a number": {
+			args: `{"blocker":"down","evidence":[{"command":7}]}`,
+			want: "`evidence` item must be a string, not a number",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ran := false
+			reg := tool.NewRegistry()
+			reg.Add(evidenceTool{ran: &ran})
+			g := &stubGate{}
+			a := New(nil, reg, NewSession(""), Options{Gate: g}, event.Discard)
+
+			out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
+				Name: "conclude_blocked", Arguments: tc.args,
+			})
+			if !strings.Contains(out.output, tc.want) {
+				t.Fatalf("refusal does not say what kind was wanted:\n  got:  %s\n  want: %s", out.output, tc.want)
+			}
+			if strings.Contains(out.output, "Go struct field") {
+				t.Fatalf("the host's unmarshaler answered the model: %q", out.output)
+			}
+			if ran {
+				t.Fatal("tool executed despite an argument of the wrong kind")
+			}
+			if len(g.checked) != 0 {
+				t.Fatalf("permission was consulted for a call that cannot run: %v", g.checked)
+			}
+		})
+	}
+}
+
+// A null is not a kind mismatch: the schema said what the field holds when it
+// holds something, and every unmarshaler reads null as absent.
+func TestNullArgumentIsNotAMistype(t *testing.T) {
+	ran := false
+	reg := tool.NewRegistry()
+	reg.Add(evidenceTool{ran: &ran})
+	a := New(nil, reg, NewSession(""), Options{Gate: &stubGate{}}, event.Discard)
+
+	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
+		Name: "conclude_blocked", Arguments: `{"blocker":"down","evidence":[{"command":"curl","paths":null}]}`,
+	})
+	if !ran {
+		t.Fatalf("a null optional field was treated as the wrong kind: %q", out.output)
+	}
+}
+
+// The contract is read after proxy resolution, so what it compares is the
+// target's schema against the target's arguments — not use_capability's own. A
+// model that reaches a tool through the capability proxy, which is how most of
+// them are reached, gets the refusal it would get calling the tool directly.
+func TestMistypedArgumentIsRefusedThroughTheCapabilityProxy(t *testing.T) {
+	ran := false
+	targets := tool.NewRegistry()
+	targets.Add(evidenceTool{ran: &ran})
+	proxy := NewUseCapabilityTool(context.Background(), nil, nil, targets,
+		capability.NewLedger(), &capability.Audit{},
+		func() capability.Catalog { return capability.Catalog{} })
+	reg := tool.NewRegistry()
+	reg.Add(proxy)
+	g := &stubGate{}
+	a := New(nil, reg, NewSession(""), Options{Gate: g}, event.Discard)
+
+	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
+		Name:      "use_capability",
+		Arguments: `{"action":"call","capability_id":"tool:conclude_blocked","arguments":{"blocker":"down","evidence":"I ran curl"}}`,
+	})
+	if !strings.Contains(out.output, `"evidence" must be an array, not a string`) {
+		t.Fatalf("the proxied refusal does not name the kind the target wanted:\n%s", out.output)
+	}
+	if strings.Contains(out.output, "Go struct field") {
+		t.Fatalf("the host's unmarshaler answered the model through the proxy: %q", out.output)
+	}
+	if ran {
+		t.Fatal("target ran despite an argument of the wrong kind")
 	}
 }
