@@ -166,13 +166,12 @@ func tsInterfaceFields(body, typeName string) ([]string, int, bool) {
 		if body[m[2]:m[3]] != typeName {
 			continue
 		}
-		rest := body[m[1]:]
-		end := strings.Index(rest, "\n}")
-		if end < 0 {
+		fields, _, ok := strings.Cut(body[m[1]:], "\n}")
+		if !ok {
 			return nil, 0, false
 		}
 		var out []string
-		for _, line := range strings.Split(rest[:end], "\n") {
+		for line := range strings.SplitSeq(fields, "\n") {
 			if strings.HasPrefix(strings.TrimSpace(line), "//") {
 				continue
 			}
