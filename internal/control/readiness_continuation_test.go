@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -189,5 +190,23 @@ func TestContinuationEndsEvenWhenTheGapKeepsChanging(t *testing.T) {
 
 	if prov.call > 2*(readinessMaxRounds+2) {
 		t.Fatalf("provider calls = %d: the continuation kept running on a gap that only ever changed shape", prov.call)
+	}
+}
+
+// ask and conclude_blocked are the two ways a turn ends on the model's terms
+// rather than the host's, and the host's own account of the ways out named only
+// the second. The unnamed one is exactly the exit for a decision the user has to
+// make, so a turn that stopped to put a question to them was continued straight
+// past it and the run answered the question itself.
+func TestContinuationNamesBothTurnExits(t *testing.T) {
+	prompt := readinessContinuationPrompt([]evidence.TodoItem{
+		{Content: "Write the spec once the shape is confirmed", Status: "in_progress"},
+	}, "")
+	// \bask\b, because "tasks" contains the tool's name and proves nothing.
+	if !regexp.MustCompile(`\bask\b`).MatchString(prompt) {
+		t.Errorf("continuation never names the ask exit, so a turn waiting on the user can only guess:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "conclude_blocked") {
+		t.Errorf("continuation never names the conclude_blocked exit:\n%s", prompt)
 	}
 }

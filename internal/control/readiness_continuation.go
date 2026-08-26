@@ -89,11 +89,12 @@ func readinessContinuationPrompt(todos []evidence.TodoItem, reason string) strin
 	for _, p := range parts {
 		b.WriteString("- " + p + "\n")
 	}
-	// "Finish it" alone deadlocked: the completion guard rejects a todo_write
-	// that marks an item done, so the demand named an action that cannot land.
-	// Every way out below is one the guard lets through.
+	// "Finish it" alone deadlocked: the guard rejects a todo_write that marks an
+	// item done. Every way out below is one it lets through, and both turn exits
+	// are named — omitting ask left a turn waiting on the user no way but to guess.
 	b.WriteString("Do the remaining work, then verify it. Mark each finished item with complete_step — that is what advances the list; a todo_write that flips an item to completed is rejected. " +
 		"If an item should no longer be done — the request changed, or it was superseded — send a todo_write without it. " +
+		"If one turns on a decision only the user can make, put it to them with ask; not having heard back is not an answer to assume one from. " +
 		"If one cannot be done as specified, call conclude_blocked with the evidence for why.")
 	return b.String()
 }
