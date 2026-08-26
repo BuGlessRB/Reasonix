@@ -47,6 +47,18 @@ describe("folding the published graph", () => {
     expect(s).toBe(initialGraph);
   });
 
+  // The kernel keeps the wait cause once a node starts running, the way it keeps
+  // the stamps, and this fold has to agree: a reader who arrives after the run
+  // started must still find what held it back.
+  it("keeps what a node waited on after it starts running", () => {
+    const s = run([
+      { nodes: [worker("a", "g", "survey")] },
+      { nodes: [{ id: "a", state: "queued", wait: "claim", queuedAt: 1000 }] },
+      { nodes: [{ id: "a", state: "running", startedAt: 1500 }] },
+    ]);
+    expect(s.nodes[0]).toMatchObject({ state: "running", wait: "claim", queuedAt: 1000, startedAt: 1500 });
+  });
+
   it("clears on a new conversation", () => {
     const s = reduceGraph(run([{ nodes: [group("g")] }]), { kind: "__clear" });
     expect(s.nodes).toHaveLength(0);

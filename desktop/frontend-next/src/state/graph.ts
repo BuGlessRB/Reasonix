@@ -34,6 +34,7 @@ function merge(old: GraphNode, update: GraphNode): GraphNode {
     ref: update.ref || old.ref,
     err: update.err || old.err,
     grant: update.grant || old.grant,
+    wait: update.wait || old.wait,
     queuedAt: update.queuedAt || old.queuedAt,
     startedAt: update.startedAt || old.startedAt,
     endedAt: update.endedAt || old.endedAt,

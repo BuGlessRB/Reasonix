@@ -407,6 +407,11 @@ export type GraphEdgeKind = "spawn" | "depends" | "context" | "adopt";
 // adopted node never got a grant. A bool could not say that apart from "writes".
 export type GraphGrant = "read" | "write";
 
+// Why a queued node is not running. "queued" is one word for constraints with
+// different answers: the first two are session ceilings, and a claim is a write
+// path someone else holds, which no ceiling releases.
+export type GraphWait = "slots" | "writers" | "claim";
+
 export interface GraphNode {
   id: string;
   parentId?: string;
@@ -417,6 +422,7 @@ export interface GraphNode {
   model?: string;
   effort?: string;
   grant?: GraphGrant;
+  wait?: GraphWait;
   ref?: string;
   queuedAt?: number;
   startedAt?: number;
