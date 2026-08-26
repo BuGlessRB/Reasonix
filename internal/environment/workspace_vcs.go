@@ -3,12 +3,15 @@ package environment
 import (
 	"os"
 	"path/filepath"
+
+	"reasonix/internal/fileutil"
 )
 
 // WorkspaceVCS names the version control the workspace is under, or "" for
-// none — a fact about the directory, not the tooling the probes already cover.
-// It reads the filesystem instead of asking git, so it costs nothing at boot
-// and cannot flap on a slow subprocess; the answer sits in the cached prefix.
+// none — a fact about the directory, not the tooling the probes cover. It reads
+// the filesystem rather than asking any of them, so it cannot flap on a slow
+// subprocess and the answer sits in the cached prefix. Which markers count is
+// fileutil's declared table, never a test for `.git` written out here.
 func WorkspaceVCS(root string) string {
 	dir := filepath.Clean(root)
 	if dir == "" || dir == "." {
@@ -19,10 +22,12 @@ func WorkspaceVCS(root string) string {
 		dir = wd
 	}
 	for {
-		// A worktree's .git is a file pointing at the real directory, so the
-		// kind does not matter — only that the marker is there.
-		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
-			return "git"
+		for _, store := range fileutil.VCSStores() {
+			// A worktree's .git is a file pointing at the real directory, so
+			// the kind does not matter — only that the marker is there.
+			if _, err := os.Lstat(filepath.Join(dir, store.Dir)); err == nil {
+				return store.Name
+			}
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {

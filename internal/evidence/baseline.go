@@ -3,7 +3,11 @@
 // "what still counts as changed" has one place to be answered.
 package evidence
 
-import "slices"
+import (
+	"path/filepath"
+	"slices"
+	"strings"
+)
 
 // CreatedInTurn reports whether this turn is what brought path into existence.
 // It is what separates a cleanup from a deletion: removing a file the turn made
@@ -113,4 +117,95 @@ func (l *Ledger) snapshotReceipts() []Receipt {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return append([]Receipt(nil), l.receipts...)
+}
+
+// UnreviewedMutationBaseline answers what the change set is; how fresh a review
+// of it must be is still the latest mutation's to say. One index answering both
+// let a later harmless write shrink the set an earlier sensitive one put in
+// scope. It is the widest of the per-kind windows, since risk — read from this
+// set — is itself what decides which kinds are owed.
+func (l *Ledger) UnreviewedMutationBaseline() (int, bool) {
+	if l == nil {
+		return 0, false
+	}
+	receipts := l.snapshotReceipts()
+	widest, found := 0, false
+	for _, kind := range ReviewKinds() {
+		at, ok := firstMutationAfter(receipts, latestAcceptedReview(receipts, kind))
+		if !ok {
+			continue
+		}
+		if !found || at < widest {
+			widest, found = at, true
+		}
+	}
+	return widest, found
+}
+
+// latestAcceptedReview returns the index of the last review of this kind the
+// host accepted, or -1. A blocking one is not accepted: it leaves the change
+// set exactly where it was.
+func latestAcceptedReview(receipts []Receipt, kind ReviewKind) int {
+	accepted := -1
+	for i, r := range receipts {
+		if !r.Success || r.ToolName != reviewReportTool {
+			continue
+		}
+		report, err := ParseReviewReport(r.Args)
+		if err != nil || report.Kind != kind || report.HasBlockingFinding() {
+			continue
+		}
+		accepted = i
+	}
+	return accepted
+}
+
+func firstMutationAfter(receipts []Receipt, after int) (int, bool) {
+	for i := max(after+1, 0); i < len(receipts); i++ {
+		if receipts[i].Success && receipts[i].Mutation {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// UninspectedWritePaths returns the paths this turn wrote and never looked at
+// again. Freshness is per path — a read counts when it came after that path's
+// own last write — so a turn that edits and inspects file by file is not sent
+// back to re-read four of them because it went on to touch a fifth.
+func (l *Ledger) UninspectedWritePaths(paths []string) []string {
+	if l == nil || len(paths) == 0 {
+		return nil
+	}
+	receipts := l.snapshotReceipts()
+	var out []string
+	for _, path := range normalizePaths(paths) {
+		needle := strings.ToLower(filepath.ToSlash(path))
+		if needle == "" {
+			continue
+		}
+		written := -1
+		for i, r := range receipts {
+			if r.Success && (r.Write || r.Mutation) && pathsAnswerFor(r.Paths, needle) {
+				written = i
+			}
+		}
+		if written < 0 {
+			continue
+		}
+		seen := false
+		for i := written + 1; i < len(receipts) && !seen; i++ {
+			r := receipts[i]
+			if !r.Success {
+				continue
+			}
+			if (r.Read && pathsAnswerFor(r.Paths, needle)) || pathsAnswerFor(r.Showed, needle) {
+				seen = true
+			}
+		}
+		if !seen {
+			out = append(out, path)
+		}
+	}
+	return out
 }

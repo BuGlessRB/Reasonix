@@ -530,6 +530,9 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		a.emitTurnShadows(a.turn.turnInput, true)
 		return false, &FinalReadinessError{Attempts: 1, Reason: readiness.reason, Missing: readiness.missingIDs(), Signature: readiness.progressSignature()}
 	}
+	// The turn has earned its stop. What the gate let through on a warn verdict
+	// is reported here, where it is still the outcome of this turn.
+	a.reportReviewWarnings()
 	if !hasVisibleFinalAnswer(text) {
 		// DeepSeek thinking mode can stream a long reasoning_content and
 		// then finish with finish_reason="stop" but an empty content

@@ -2,6 +2,7 @@ package boot
 
 import (
 	"encoding/json"
+	"reasonix/internal/ablation"
 	"sort"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestProviderVisibleSchemaSurfaceStaysWithinBudget(t *testing.T) {
 	for _, x := range tool.Builtins() {
 		reg.Add(x)
 	}
-	applyUnifiedProviderToolSurface(reg, false)
+	applyUnifiedProviderToolSurface(reg, false, ablation.Set{})
 
 	type row struct {
 		name string

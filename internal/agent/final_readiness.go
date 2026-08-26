@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"reasonix/internal/ablation"
@@ -196,6 +197,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	// exactly why the check does not pass. Nothing else about the turn is waived.
 	verified, blockedWithCheck := a.postWriteVerification(writer)
 	missing = a.appendVerificationGap(&out, missing, writer, blockedWithCheck, verified)
+	missing = a.appendReviewGap(&out, missing)
 	hasProjectChecks := len(a.projectChecks) > 0
 	hasTodoReceipt := a.task.ledger.HasSuccessfulTodoWrite()
 	if !a.deliveryProfile && !hasProjectChecks && !hasTodoReceipt && len(missing) == 0 {
@@ -222,13 +224,8 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 			out.missingVerification++
 			missing = append(missing, "run relevant verification after the latest mutation and cite that successful command in complete_step")
 		}
-		if deliveryMutation && !a.task.ledger.HasSuccessfulReviewAfter(writer) {
-			out.missingReview++
-			missing = append(missing, "inspect the changed result after the latest mutation (read the touched file or run git diff/status)")
-		}
-		if msg := a.deliveryReviewGateFailure(); msg != "" {
-			out.missingReview++
-			missing = append(missing, msg)
+		if deliveryMutation {
+			missing = a.appendSelfInspectionGap(&out, missing, writer)
 		}
 		// The capability gate already ran before the no-writer fast path above.
 	}
@@ -246,6 +243,46 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	}
 	out.reason = strings.Join(missing, "; ")
 	return out
+}
+
+// appendSelfInspectionGap requires the turn to have looked at every file it
+// changed. Reading one of them was the old floor, and it is the floor that let
+// a five-file change ship on one file's worth of attention.
+func (a *Agent) appendSelfInspectionGap(out *finalReadinessCheck, missing []string, writer int) []string {
+	paths := productionPaths(a.task.ledger.PathsSince(writer))
+	if len(paths) == 0 {
+		// An opaque change names nothing to require, so the most that can
+		// honestly be asked is that the turn looked at something.
+		if a.task.ledger.HasSuccessfulReviewAfter(writer) {
+			return missing
+		}
+		out.missingReview++
+		return append(missing, "inspect the changed result after the latest mutation — read the touched file, or diff it with whatever version control this workspace has")
+	}
+	gaps := a.task.ledger.UninspectedWritePaths(paths)
+	if len(gaps) == 0 {
+		return missing
+	}
+	out.missingReview++
+	slash := make([]string, 0, len(gaps))
+	for _, p := range gaps {
+		slash = append(slash, filepath.ToSlash(p))
+	}
+	return append(missing, "inspect every file this turn changed; not looked at since it was written: "+strings.Join(slash, ", "))
+}
+
+// appendReviewGap records what this turn owes for structured review. It runs
+// ahead of the role-setting split: how much review a change owes is the
+// delivery contract's to demand, but one that ran and refused is honored
+// wherever it happened. reviewGateFailure keeps those two apart.
+func (a *Agent) appendReviewGap(out *finalReadinessCheck, missing []string) []string {
+	msg := a.reviewGateFailure()
+	if msg == "" {
+		return missing
+	}
+	out.applies = true
+	out.missingReview++
+	return append(missing, msg)
 }
 
 // checkEstablished reports that something after the latest write stands as its
@@ -270,60 +307,48 @@ func (a *Agent) postWriteVerification(writer int) (verified, blockedWithCheck bo
 	return verified, blockedWithCheck
 }
 
-// appendVerificationGap records what this turn owes for verification. A gap the
-// host cannot read lands in advisory and never in missing: it is reported, and
-// only what the turn itself failed to do fails the turn.
+// appendVerificationGap records what this turn owes for verification. Only what
+// the turn itself failed to do fails the turn: where the host cannot read what
+// ran, it declines to judge rather than guessing.
 func (a *Agent) appendVerificationGap(out *finalReadinessCheck, missing []string, writer int, blockedWithCheck, verified bool) []string {
 	if a.deliveryProfile || !a.turn.policySet || a.turn.policy.Verification < taskpolicy.VerifyTargeted ||
 		!toolPresent(a.svc.tools, "bash") || blockedWithCheck || a.checkEstablished(writer, verified) {
 		return missing
 	}
-	gap := a.verificationGap(writer)
-	// The host's own blind spot is not the turn's miss: a project whose checks
-	// run through a script the table cannot read did verify itself, and failing
-	// it here collects nothing the gate could use next turn.
-	if gap.advisory {
+	gap, owed := a.verificationGap(writer)
+	if !owed {
 		return missing
 	}
-	detail := gap.text
 	out.applies = true
 	out.missingVerification++
-	return append(missing, detail)
+	return append(missing, gap)
 }
 
-// verificationGap says what is actually missing, and whether the miss is the
-// host's own blind spot rather than the turn's. A check whose exit status
-// belonged to a later stage of the same command did run, so asking for "a
-// verification command" reads as false to the model that just ran one; what it
-// needs is the command named and a shape whose status answers for the check.
-func (a *Agent) verificationGap(writer int) verificationGapResult {
+// verificationGap says what the turn owes for verification, and whether it owes
+// anything at all. A check whose exit status belonged to a later stage of the
+// same command did run, so asking for "a verification command" reads as false
+// to the model that just ran one; what it needs is the command named and a
+// shape whose status answers for the check.
+func (a *Agent) verificationGap(writer int) (string, bool) {
 	const ask = "run a relevant verification command after the latest write for the current role setting"
 	if unreadable, ok := a.task.ledger.LatestUnreadableVerificationAfter(writer); ok && strings.TrimSpace(unreadable.Command) != "" {
-		return verificationGapResult{text: fmt.Sprintf("%s — %q ran, but its exit status is the last stage's, not the check's, "+
-			"so it proves nothing either way; re-run the check on its own", ask, strings.TrimSpace(unreadable.Command))}
+		return fmt.Sprintf("%s — %q ran, but its exit status is the last stage's, not the check's, "+
+			"so it proves nothing either way; re-run the check on its own", ask, strings.TrimSpace(unreadable.Command)), true
 	}
 	// A check that ran and failed leaves two honest ways out, and a model told
 	// only to "run a verification command" can see neither: it already ran one.
 	if a.task.ledger.HasVerificationCommandAfter(writer) && toolPresent(a.svc.tools, "conclude_blocked") {
-		return verificationGapResult{text: "the check you ran after the latest write did not pass: either make it pass, or — if it cannot pass as specified — call conclude_blocked with the evidence for why"}
+		return "the check you ran after the latest write did not pass: either make it pass, or — if it cannot pass as specified — call conclude_blocked with the evidence for why", true
 	}
-	// Commands ran and the table read none as a check. That is the host's blind
-	// spot — it cannot tell a runner from a deploy — so it reports what it could
-	// not read instead of failing a turn that may well have verified itself.
+	// Commands ran and the table read none as a check. The host cannot tell a
+	// runner from a deploy, so it owes nothing and says nothing: it has no
+	// honest sentence, and failing on the guess is the gate over-reaching.
 	if len(a.projectChecks) == 0 {
 		if _, ok := a.task.ledger.LatestUnrecognizedCommandAfter(writer); ok {
-			return verificationGapResult{advisory: true}
+			return "", false
 		}
 	}
-	return verificationGapResult{text: ask}
-}
-
-// verificationGapResult separates what the turn is missing from what the host
-// could not read about it. advisory means the second: it reaches the user and
-// never fails the run.
-type verificationGapResult struct {
-	text     string
-	advisory bool
+	return ask, true
 }
 
 func finalReadinessCheckSource(check instruction.VerifyCheck) string {

@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+// reviewReportTool is the tool name a structured review is recorded under.
+const reviewReportTool = "review_report"
+
 // ReviewKind distinguishes ordinary review from security review reports.
 type ReviewKind string
 
@@ -23,6 +26,11 @@ const (
 	ReviewVerdictWarn  ReviewVerdict = "warn"
 	ReviewVerdictBlock ReviewVerdict = "block"
 )
+
+// ReviewKinds returns the declared review kinds, in the order a change set
+// owes them. Callers that must ask "has every kind had its say" iterate this
+// rather than restating the pair.
+func ReviewKinds() []ReviewKind { return []ReviewKind{ReviewKindReview, ReviewKindSecurity} }
 
 // ReviewFinding is one structured finding inside a review_report.
 type ReviewFinding struct {
@@ -166,7 +174,7 @@ func (l *Ledger) HasStructuredReviewAfter(kind ReviewKind, after int, requiredPa
 	defer l.mu.Unlock()
 	for i := start; i < len(l.receipts); i++ {
 		r := l.receipts[i]
-		if !r.Success || r.ToolName != "review_report" {
+		if !r.Success || r.ToolName != reviewReportTool {
 			continue
 		}
 		parsed, err := ParseReviewReport(r.Args)
@@ -205,7 +213,7 @@ func (l *Ledger) HasSuccessfulReviewReportOfKind(kind ReviewKind) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, r := range l.receipts {
-		if !r.Success || r.ToolName != "review_report" {
+		if !r.Success || r.ToolName != reviewReportTool {
 			continue
 		}
 		parsed, err := ParseReviewReport(r.Args)
@@ -251,4 +259,42 @@ func (l *Ledger) HasReadEvidenceForPath(path string) bool {
 		}
 	}
 	return false
+}
+
+// ReviewReportsAfter returns the structured reviews recorded after the given
+// index, in order. Coverage does not filter them: a finding the reviewer did
+// make is worth reading whether or not the report covered everything a gate
+// wanted, and whether or not that gate asked for the review at all.
+func (l *Ledger) ReviewReportsAfter(after int) []ReviewReport {
+	if l == nil {
+		return nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []ReviewReport
+	for i := max(after+1, 0); i < len(l.receipts); i++ {
+		r := l.receipts[i]
+		if !r.Success || r.ToolName != reviewReportTool {
+			continue
+		}
+		parsed, err := ParseReviewReport(r.Args)
+		if err != nil {
+			continue
+		}
+		out = append(out, parsed)
+	}
+	return out
+}
+
+// BlockingReviewAfter returns the first blocking structured review recorded
+// after the given index, whatever paths it covered. Coverage excuses a review
+// that is missing; it cannot excuse one that ran and said no, because a block
+// is a verdict about what the reviewer did look at.
+func (l *Ledger) BlockingReviewAfter(after int) (ReviewReport, bool) {
+	for _, report := range l.ReviewReportsAfter(after) {
+		if report.HasBlockingFinding() {
+			return report, true
+		}
+	}
+	return ReviewReport{}, false
 }

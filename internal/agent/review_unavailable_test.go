@@ -36,7 +36,7 @@ func TestRequireReviewReportRetriesOnceThenUnavailable(t *testing.T) {
 	AttachReviewReportTool(reg)
 	sess := NewSession("sys")
 	out, err := RunSubAgentWithSession(context.Background(), scripted, reg, sess, "review a.go",
-		Options{RequireReviewReportKind: evidence.ReviewKindReview, MaxSteps: 2}, event.Discard)
+		Options{RequireReviewReportKind: evidence.ReviewKindReview, MaxSteps: 2, DeliveryProfile: true}, event.Discard)
 	if err == nil {
 		t.Fatalf("expected reviewer unavailable, got out=%q", out)
 	}

@@ -1625,9 +1625,15 @@ func GuardSubagentHostDecisionText(answer string) string {
 // review subagent that finished without submitting review_report. Each nudge is
 // one cheap continuation request on the same (cached) subagent session — far
 // cheaper than discarding the run and re-reviewing from scratch.
-// maxReviewReportNudges is the single in-session retry after the first failed
-// review run (plan: fail once, retry once). A second failure becomes Partial.
+// maxReviewReportNudges is the single in-session retry after a review run that
+// produced no typed report. One is the useful number: the nudge asks only for
+// the submission, and a second refusal means the tool is unreachable rather
+// than forgotten, which no further asking fixes.
 const maxReviewReportNudges = 1
+
+// reviewWithoutVerdictNote marks a review the host has no typed verdict for, so
+// the prose is not read as one the gate weighed and let through.
+const reviewWithoutVerdictNote = "[no recorded verdict] The reviewer did not submit a review_report, so the host holds no verdict for this run: nothing below was checked against its receipts, and a blocking finding here will not stop delivery on its own.\n\n"
 
 // reviewReportTaskContract is appended to the task prompt of a review subagent
 // whose run must end with a typed report. The skill body describes how to
@@ -1700,12 +1706,9 @@ func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *to
 		}
 		return "", fmt.Errorf("sub-agent: %w", err)
 	}
-	// Review/security subagents must hand back a typed report the parent's
-	// delivery gate can verify; prose alone would leave the gate demanding a
-	// review forever with no way to tell why it never arrives. A run that
-	// finished without the report gets bounded completion nudges on the same
-	// session (evidence preserved, so review_report can still cite the reads it
-	// already earned) before the whole run is declared failed.
+	// Review subagents hand back a typed report the parent's gate can verify.
+	// A run that finished without one is nudged on the same session, evidence
+	// preserved so review_report can cite the reads it already earned.
 	if kind := opts.RequireReviewReportKind; kind != "" {
 		nudges := 0
 		for !sub.HasSuccessfulReviewReport(kind) && nudges < maxReviewReportNudges {
@@ -1720,6 +1723,14 @@ func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *to
 		}
 		if !sub.HasSuccessfulReviewReport(kind) {
 			mergeChildEvidence(ctx, sub)
+			// Nudging pays at every role setting: a verdict the host can read is
+			// how a block reaches the gate. Failing over its absence does not —
+			// no report is no block, the state a killed run leaves anyway.
+			if !opts.DeliveryProfile {
+				if answer := latestAssistantAnswer(sess); answer != "" {
+					return composeSubagentAnswer(ctx, reviewWithoutVerdictNote+answer, sub, SubagentWriteClaim(ctx), opts.ClassifierTaskText), nil
+				}
+			}
 			dumpRef := dumpFailedSubagentSession(opts.ArchiveDir, string(kind), sess)
 			// Partial path: local changes are retained; the parent readiness
 			// layer treats missing review as Partial/Unverified (not rollback).

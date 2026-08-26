@@ -98,9 +98,9 @@ func TestFinalReadinessIgnoresLoopGuardQuotedInToolOutput(t *testing.T) {
 
 // The table will never enumerate every project's own runner, so a project
 // driven by its own scripts runs its check, passes it, and is told it verified
-// nothing. That miss is the host's, so it is reported and not charged: failing
-// the turn punishes work that did verify itself, and the gate lapses next turn
-// regardless, so the failure collects nothing later either.
+// nothing. That miss is the host's, so the turn is not charged for it: failing
+// work that did verify itself punishes the gate's blind spot, and the gate
+// lapses next turn regardless, so the failure collects nothing later either.
 func TestVerificationGapSeparatesTheHostsBlindSpotFromTheTurns(t *testing.T) {
 	const ran = "./check.sh"
 	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"wordcount.sh"}}
@@ -108,40 +108,40 @@ func TestVerificationGapSeparatesTheHostsBlindSpotFromTheTurns(t *testing.T) {
 	declared := instruction.VerifyCheck{Command: "make check", SourcePath: "AGENTS.md", Line: 3}
 
 	cases := []struct {
-		name         string
-		checks       []instruction.VerifyCheck
-		ledger       *evidence.Ledger
-		wantAdvisory bool
+		name     string
+		checks   []instruction.VerifyCheck
+		ledger   *evidence.Ledger
+		wantOwed bool
 	}{
-		{"a command the table could not read is advisory", nil, readinessLedger(writer, command), true},
-		{"nothing ran at all is the turn's own miss", nil, readinessLedger(writer), false},
-		{"a project that declared checks owes those", []instruction.VerifyCheck{declared}, readinessLedger(writer, command), false},
+		{"a command the table could not read is owed by nobody", nil, readinessLedger(writer, command), false},
+		{"nothing ran at all is the turn's own miss", nil, readinessLedger(writer), true},
+		{"a project that declared checks owes those", []instruction.VerifyCheck{declared}, readinessLedger(writer, command), true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			a := &Agent{task: taskRuntime{ledger: tc.ledger}, projectChecks: tc.checks}
-			got := a.verificationGap(0)
-			if got.advisory != tc.wantAdvisory {
-				t.Fatalf("advisory = %v, want %v: %q", got.advisory, tc.wantAdvisory, got.text)
+			gap, owed := a.verificationGap(0)
+			if owed != tc.wantOwed {
+				t.Fatalf("owed = %v, want %v: %q", owed, tc.wantOwed, gap)
 			}
-			// An advisory says nothing at all now: it exists to keep the host's
-			// blind spot from failing the turn, and the receipt already reports
-			// that the turn went unverified.
-			if got.advisory && got.text != "" {
-				t.Errorf("an advisory still carries a message: %q", got.text)
+			// Nothing owed means nothing said. The host has no honest sentence
+			// for a command it could not read, and a gap with no ask in it was
+			// only ever a flag wearing a message's type.
+			if !owed && gap != "" {
+				t.Errorf("a waived gap still carries a message: %q", gap)
 			}
-			if strings.Contains(got.text, ran) {
-				t.Errorf("a gap carries the command verbatim: %q", got.text)
+			if strings.Contains(gap, ran) {
+				t.Errorf("a gap carries the command verbatim: %q", gap)
 			}
-			if !got.advisory && !strings.Contains(got.text, "run a relevant verification command") {
-				t.Errorf("a blocking gap must still carry the ask: %q", got.text)
+			if owed && !strings.Contains(gap, "run a relevant verification command") {
+				t.Errorf("an owed gap must still carry the ask: %q", gap)
 			}
 		})
 	}
 }
 
-// An advisory reports; it must never be what fails a run.
-func TestAdvisoryDoesNotFailTheTurn(t *testing.T) {
+// The host's blind spot must never be what fails a run.
+func TestUnreadableCommandDoesNotFailTheTurn(t *testing.T) {
 	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"wordcount.sh"}}
 	command := evidence.Receipt{ToolName: "bash", Success: true, Command: "./check.sh"}
 	reg := tool.NewRegistry()
@@ -184,5 +184,46 @@ func TestHostChecksHeadingIsWhatTheParserReads(t *testing.T) {
 	checks := instruction.ExtractHostChecks([]instruction.Document{{Path: "AGENTS.md", Body: body}})
 	if len(checks) != 1 || checks[0].Command != "python -m pytest" {
 		t.Fatalf("ExtractHostChecks under the exported heading = %+v, want the declared check", checks)
+	}
+}
+
+// Self-inspection is per file, and fresh per file. Reading one of five was the
+// old floor and it is what let a five-file change ship on one file's attention;
+// reading them in edit-then-read order must still count, or a turn that
+// inspected everything gets sent back because it went on to touch a fifth.
+func TestSelfInspectionCoversEveryChangedFile(t *testing.T) {
+	write := func(path string) evidence.Receipt {
+		return evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Mutation: true,
+			MutationEvidence: evidence.MutationProven, Paths: []string{path}}
+	}
+	read := func(path string) evidence.Receipt {
+		return evidence.Receipt{ToolName: "read_file", Success: true, Read: true, Paths: []string{path}}
+	}
+
+	partial := &Agent{deliveryProfile: true, task: taskRuntime{ledger: readinessLedger(
+		write("a.go"), write("b.go"), read("a.go"),
+	)}}
+	got := partial.finalReadinessCheckFor()
+	if !strings.Contains(got.reason, "b.go") {
+		t.Fatalf("reason = %q, want the uninspected file named", got.reason)
+	}
+	if strings.Contains(got.reason, "a.go, b.go") {
+		t.Fatalf("reason = %q, must not ask again for the file it did read", got.reason)
+	}
+
+	// Edit-then-read, file by file: every read follows its own file's write.
+	interleaved := &Agent{deliveryProfile: true, task: taskRuntime{ledger: readinessLedger(
+		write("a.go"), read("a.go"), write("b.go"), read("b.go"),
+	)}}
+	if reason := interleaved.finalReadinessCheckFor().reason; strings.Contains(reason, "inspect every file") {
+		t.Fatalf("reason = %q, want file-by-file inspection accepted", reason)
+	}
+
+	// A read that predates its own file's next write is stale, not coverage.
+	stale := &Agent{deliveryProfile: true, task: taskRuntime{ledger: readinessLedger(
+		write("a.go"), read("a.go"), write("a.go"),
+	)}}
+	if reason := stale.finalReadinessCheckFor().reason; !strings.Contains(reason, "a.go") {
+		t.Fatalf("reason = %q, want the re-written file asked for again", reason)
 	}
 }

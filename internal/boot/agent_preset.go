@@ -1,6 +1,7 @@
 package boot
 
 import (
+	"reasonix/internal/ablation"
 	"reasonix/internal/agentpreset"
 	"reasonix/internal/tool"
 )
@@ -79,6 +80,14 @@ func GoalOnlyToolNames() []string {
 	return []string{"update_goal"}
 }
 
+// EvidenceToolNames are the tools whose whole purpose is the evidence
+// contract, which the evidence arm drops from the schema. todo_write is not
+// one: a task list is not an evidence claim, and an arm removing both would
+// measure two things at once.
+func EvidenceToolNames() []string {
+	return []string{"complete_step"}
+}
+
 // UnifiedProviderToolNames returns the provider-visible allowlist for a boot
 // with host-control tools enabled.
 func UnifiedProviderToolNames() []string {
@@ -93,13 +102,21 @@ func UnifiedProviderToolNames() []string {
 // applyUnifiedProviderToolSurface restricts Schemas/ContractEntries to the
 // shared core + host-control tools. use_capability can still Get every
 // registered tool, including those hidden from the provider schema.
-func applyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bool) {
+func applyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bool, arm ablation.Set) {
 	if reg == nil {
 		return
 	}
 	unreachable := map[string]bool{}
 	if goalTurnsUnreachable {
 		for _, name := range GoalOnlyToolNames() {
+			unreachable[name] = true
+		}
+	}
+	// The arm has to reach the schema, not only the gate: left visible, both
+	// runs pay the same prompt and the same evidence arguments, and the
+	// comparison answers for the gate when the question was the contract.
+	if arm.Off(ablation.Evidence) {
+		for _, name := range EvidenceToolNames() {
 			unreachable[name] = true
 		}
 	}

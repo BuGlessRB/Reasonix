@@ -1309,7 +1309,7 @@ func (a *Agent) deliveryMutationCheckpointReady() bool {
 	return a.task.ledger.HasSuccessfulCompleteStepAfter(mutation) &&
 		a.task.ledger.HasSuccessfulDeliverySignoffAfter(mutation) &&
 		a.task.ledger.HasSuccessfulReviewAfter(mutation) &&
-		a.deliveryReviewGateFailure() == ""
+		a.reviewGateFailure() == ""
 }
 
 func (a *Agent) setTodoState(todos []evidence.TodoItem) {

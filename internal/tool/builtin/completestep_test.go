@@ -181,6 +181,42 @@ func TestCompleteStepAllowsManualAsUnverified(t *testing.T) {
 	}
 }
 
+// The carve-out above is for a step that left no receipt. Once the turn has
+// one, a manual note may not stand in for the evidence the host can read.
+func TestCompleteStepRejectsManualAloneOnceTheTurnHasReceipts(t *testing.T) {
+	ledger := evidence.NewLedger()
+	ledger.Record(evidence.Receipt{
+		ToolName: "write_file",
+		Success:  true,
+		Mutation: true,
+		Write:    true,
+		Paths:    []string{"internal/agent/agent.go"},
+	})
+	ctx := evidence.WithLedger(context.Background(), ledger)
+
+	_, err := completeStep{}.Execute(ctx, json.RawMessage(`{
+		"step":"Manual check",
+		"result":"operator confirmed behavior",
+		"evidence":[{"kind":"manual","summary":"checked the visible output"}]}`))
+	if err == nil {
+		t.Fatal("manual evidence alone should be rejected once the turn wrote something")
+	}
+	if !strings.Contains(err.Error(), "cannot stand alone") {
+		t.Fatalf("error = %v, want the manual-alone refusal", err)
+	}
+
+	// Paired with a receipt the host can read, the same manual note is fine.
+	_, err = completeStep{}.Execute(ctx, json.RawMessage(`{
+		"step":"Manual check",
+		"result":"operator confirmed behavior",
+		"evidence":[
+			{"kind":"diff","summary":"rewrote the gate","paths":["internal/agent/agent.go"]},
+			{"kind":"manual","summary":"checked the visible output"}]}`))
+	if err != nil {
+		t.Fatalf("manual alongside a cited write should be accepted: %v", err)
+	}
+}
+
 func TestCompleteStepExplainsRenewalAgainstCompletedTodoList(t *testing.T) {
 	ledger := evidence.NewLedger()
 	ledger.Record(evidence.ReceiptFromToolCall("todo_write", json.RawMessage(`{"todos":[{"content":"Implement","status":"completed"},{"content":"Final review","status":"completed"}]}`), true, evidence.ToolFacts{ReadOnly: true}))

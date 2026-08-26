@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
+	"reasonix/internal/environment"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/skill"
@@ -34,6 +35,29 @@ type skillSubagents struct {
 	resolveProvider func(modelRef, effort string) (provider.Provider, *provider.Pricing, int, error)
 	identity        func(modelRef, effort string) (string, string)
 	runOptions      func(ctx context.Context, steps int, price *provider.Pricing, ctxWin, childDepth int) agent.Options
+}
+
+// systemPrompt is the child's whole prefix: its body, then the workspace facts
+// every child needs and none can discover for free. One accessor, so a fresh
+// run and a continued one hash the same prompt.
+func (r *skillSubagents) systemPrompt(sk skill.Skill) string {
+	body := strings.TrimSpace(sk.Body)
+	if body == "" {
+		body = agent.DefaultReadOnlyTaskSystemPrompt
+	}
+	return body + r.workspaceFacts()
+}
+
+// workspaceFacts is the slice of the parent's Environment section a child must
+// be told rather than left to find out: unsaid, it reaches for `git diff` in a
+// workspace that is no repository and burns a round finding out. Filesystem-
+// derived and stable, so it stays in the child's cached prefix.
+func (r *skillSubagents) workspaceFacts() string {
+	vcs := environment.WorkspaceVCS(r.root)
+	if vcs == "" {
+		vcs = "none (not a repository)"
+	}
+	return "\n\n## Workspace\n\n- Version control: " + vcs + "\n"
 }
 
 // halfSteps gives a child half the parent's step budget, never below five:
@@ -96,18 +120,14 @@ func (r *skillSubagents) runReadOnly(sctx context.Context, sk skill.Skill, task 
 	}
 	// Custom and named built-in profiles fully control their system prompt
 	// (no implicit concise/DefaultReadOnlyTaskSystemPrompt overlay).
-	sysPrompt := strings.TrimSpace(sk.Body)
-	if sysPrompt == "" {
-		sysPrompt = agent.DefaultReadOnlyTaskSystemPrompt
-	}
+	sysPrompt := r.systemPrompt(sk)
 	runOptions := r.runOptions(sctx, r.halfSteps(), price, ctxWin, childDepth)
 	usageModelRef, _ := r.identity(modelRef, effortRef)
 	runOptions.ModelRef = usageModelRef
-	// Delivery risk gates consume typed reports; outside Delivery a casual
-	// /review run may finish with prose only.
-	if runOptions.DeliveryProfile {
-		runOptions.RequireReviewReportKind = agent.ReviewReportKindForSkill(sk.Name)
-	}
+	// A verdict the parent must act on carries an identity, never a sentence,
+	// so the typed report is required at every role setting. How much review a
+	// change set owes is still the delivery contract's separate call.
+	runOptions.RequireReviewReportKind = agent.ReviewReportKindForSkill(sk.Name)
 	// Provider serializers decide whether these images are wire-visible from
 	// the child model's own vision capability. Text-only children retain the
 	// attachment metadata locally but never receive image parts on the wire.
@@ -170,11 +190,10 @@ func (r *skillSubagents) run(sctx context.Context, sk skill.Skill, task string, 
 	runOptions := r.runOptions(sctx, r.halfSteps(), price, ctxWin, childDepth)
 	usageModelRef, _ := r.identity(modelRef, effortRef)
 	runOptions.ModelRef = usageModelRef
-	// Delivery risk gates consume typed reports; outside Delivery a casual
-	// /review run may finish with prose only.
-	if runOptions.DeliveryProfile {
-		runOptions.RequireReviewReportKind = agent.ReviewReportKindForSkill(sk.Name)
-	}
+	// A verdict the parent must act on carries an identity, never a sentence,
+	// so the typed report is required at every role setting. How much review a
+	// change set owes is still the delivery contract's separate call.
+	runOptions.RequireReviewReportKind = agent.ReviewReportKindForSkill(sk.Name)
 	var answer string
 	// See runReadOnly: the child provider, not the parent model, owns the
 	// final vision decision.
@@ -213,7 +232,7 @@ func (r *skillSubagents) prepareRun(sctx context.Context, sk skill.Skill, subReg
 		if continueFrom != "" || legacyForkFrom != "" {
 			return nil, fmt.Errorf("subagent continuation requires a persisted session; none is active in this run")
 		}
-		return agent.EphemeralSubagentRun(sk.Body), nil
+		return agent.EphemeralSubagentRun(r.systemPrompt(sk)), nil
 	}
 	identityModel, identityEffort := r.identity(modelRef, effortRef)
 	spec := agent.SubagentSpec{
@@ -222,7 +241,7 @@ func (r *skillSubagents) prepareRun(sctx context.Context, sk skill.Skill, subReg
 		WorkspaceRoot:    r.root,
 		ParentSession:    parentSession,
 		ParentToolCallID: parentID,
-		SystemPrompt:     sk.Body,
+		SystemPrompt:     r.systemPrompt(sk),
 		Registry:         subReg,
 		Model:            identityModel,
 		Effort:           identityEffort,

@@ -809,8 +809,9 @@ func TestBuildReviewSubagentSkillEnforcesReadOnlyBash(t *testing.T) {
 	t.Chdir(dir)
 
 	registerBootSubagentTestProvider()
-	prov := &bootSubagentTestProvider{}
+	prov := &bootSubagentTestProvider{reviewReport: true}
 	setBootSubagentTestProvider(t, prov)
+	writeFile(t, dir, "target.go", "package p\n")
 	writeFile(t, dir, "reasonix.toml", `
 default_model = "test-model"
 
@@ -997,6 +998,7 @@ type bootSubagentTestProvider struct {
 	continueRef    string
 	requests       []provider.Request
 	combinedVision bool
+	reviewReport   bool
 }
 
 func (p *bootSubagentTestProvider) Name() string { return "boot-subagent-test" }
@@ -1026,7 +1028,7 @@ func (p *bootSubagentTestProvider) Stream(_ context.Context, req provider.Reques
 			}}}
 		case 1:
 			chunks = []provider.Chunk{{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{
-				ID: "vision-review-1", Name: "review", Arguments: `{"task":"inspect the attached image"}`,
+				ID: "vision-explore-1", Name: "explore", Arguments: `{"task":"inspect the attached image"}`,
 			}}}
 		case 2:
 			chunks = []provider.Chunk{{Type: provider.ChunkText, Text: "vision child answer"}, {Type: provider.ChunkDone}}
@@ -1042,16 +1044,41 @@ func (p *bootSubagentTestProvider) Stream(_ context.Context, req provider.Reques
 		close(ch)
 		return ch, nil
 	}
+	if p.reviewReport {
+		// The review contract end to end at the default role setting: the child
+		// reads a file, submits the typed report the host verifies against that
+		// read, and only then may finish.
+		switch call {
+		case 0:
+			chunks = []provider.Chunk{{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "review-1", Name: "review", Arguments: `{"task":"review the change"}`}}}
+		case 1:
+			chunks = []provider.Chunk{{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "read-1", Name: "read_file", Arguments: `{"path":"target.go"}`}}}
+		case 2:
+			chunks = []provider.Chunk{{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "report-1", Name: "review_report", Arguments: `{"kind":"review","verdict":"pass","reviewed_paths":["target.go"],"findings":[]}`}}}
+		case 3:
+			chunks = []provider.Chunk{{Type: provider.ChunkText, Text: "review child answer"}, {Type: provider.ChunkDone}}
+		case 4:
+			chunks = []provider.Chunk{{Type: provider.ChunkText, Text: "parent done"}, {Type: provider.ChunkDone}}
+		default:
+			chunks = []provider.Chunk{{Type: provider.ChunkError, Err: fmt.Errorf("unexpected review provider call %d", call)}}
+		}
+		ch := make(chan provider.Chunk, len(chunks))
+		for _, chunk := range chunks {
+			ch <- chunk
+		}
+		close(ch)
+		return ch, nil
+	}
 	switch call {
 	case 0:
-		chunks = []provider.Chunk{{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "review-1", Name: "review", Arguments: `{"task":"first skill task"}`}}}
+		chunks = []provider.Chunk{{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "explore-1", Name: "explore", Arguments: `{"task":"first skill task"}`}}}
 	case 1:
 		chunks = []provider.Chunk{{Type: provider.ChunkText, Text: "first skill answer"}, {Type: provider.ChunkDone}}
 	case 2:
 		chunks = []provider.Chunk{{Type: provider.ChunkText, Text: "parent first done"}, {Type: provider.ChunkDone}}
 	case 3:
 		args, _ := json.Marshal(map[string]string{"task": "second skill task", "continue_from": ref})
-		chunks = []provider.Chunk{{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "review-2", Name: "review", Arguments: string(args)}}}
+		chunks = []provider.Chunk{{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "explore-2", Name: "explore", Arguments: string(args)}}}
 	case 4:
 		chunks = []provider.Chunk{{Type: provider.ChunkError, Err: errors.New("subagent skill failed")}}
 	case 5:

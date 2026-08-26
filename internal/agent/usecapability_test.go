@@ -948,7 +948,7 @@ func TestRunSubAgentRequiresReviewReport(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "looks fine"}, {Type: provider.ChunkDone}},
 	}}
 	_, err := RunSubAgentWithSession(context.Background(), prov, tool.NewRegistry(), NewSession("sys"), "review it",
-		Options{RequireReviewReportKind: evidence.ReviewKindReview}, event.Discard)
+		Options{RequireReviewReportKind: evidence.ReviewKindReview, DeliveryProfile: true}, event.Discard)
 	if err == nil {
 		t.Fatal("expected missing-report failure")
 	}

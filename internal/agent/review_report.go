@@ -12,8 +12,8 @@ import (
 )
 
 // ReviewReportTool is visible only inside review/security_review subagent
-// registries. It submits a structured review result the host uses for
-// Delivery risk gates. It is never registered on the parent agent tool surface.
+// registries. It submits the structured result the parent's review gate reads.
+// It is never registered on the parent agent tool surface.
 type ReviewReportTool struct{}
 
 func NewReviewReportTool() *ReviewReportTool { return &ReviewReportTool{} }
@@ -21,7 +21,7 @@ func NewReviewReportTool() *ReviewReportTool { return &ReviewReportTool{} }
 func (*ReviewReportTool) Name() string { return "review_report" }
 
 func (*ReviewReportTool) Description() string {
-	return "Submit a structured review result for the parent delivery gate. Call once when the review is complete. kind is review or security; verdict is pass, warn, or block; reviewed_paths must cover the production paths you inspected; findings list severity/summary/path/line."
+	return "Submit a structured review result for the parent's gate. Call once when the review is complete. kind is review or security. verdict is pass, warn, or block: pass asserts no problem is there and carries the same burden as any negative claim, warn is what you owe when you could not establish that — including a change set you did not finish reading — and block stops delivery until the turn changes something. reviewed_paths lists only files you actually read this run; the host checks each one against its own read receipts. findings list severity/summary/path/line."
 }
 
 func (*ReviewReportTool) ReadOnly() bool { return true }
@@ -32,7 +32,7 @@ func (*ReviewReportTool) Schema() json.RawMessage {
 		"type":"object",
 		"properties":{
 			"kind":{"type":"string","description":"review | security"},
-			"verdict":{"type":"string","description":"pass | warn | block"},
+			"verdict":{"type":"string","description":"pass = no problem found and you can say what you read that would have surfaced one; warn = you could not establish that, or did not finish the change set; block = do not ship"},
 			"reviewed_paths":{"type":"array","items":{"type":"string"},"description":"Production paths covered by this review"},
 			"findings":{"type":"array","items":{"type":"object","properties":{
 				"severity":{"type":"string"},
@@ -69,7 +69,7 @@ func (*ReviewReportTool) Execute(ctx context.Context, args json.RawMessage) (str
 		unread = append(unread, filepath.ToSlash(p))
 	}
 	if len(unread) > 0 {
-		return "", fmt.Errorf("review_report rejected: no host-observed read evidence for: %s — read these files (or run git diff on them) before reporting them as reviewed", strings.Join(unread, ", "))
+		return "", fmt.Errorf("review_report rejected: no host-observed read evidence for: %s — open these files, or diff them with whatever version control this workspace has, before reporting them as reviewed", strings.Join(unread, ", "))
 	}
 	// Evidence is recorded by the agent host from the tool call args; this
 	// result is a human-readable confirmation for the subagent transcript.

@@ -146,3 +146,20 @@ func TestWithCodeGraphToolsIsIdempotent(t *testing.T) {
 		t.Fatalf("codegraph tool count = %d, want 1; allowed=%v", count, sk.AllowedTools)
 	}
 }
+
+// The bodies name a version control only through the Workspace fact the host
+// supplies. An unconditional `git status` here is the review telling a
+// Perforce or jj workspace to run a command that cannot work there.
+func TestReviewBodiesDeferDiscoveryToTheWorkspaceFact(t *testing.T) {
+	for name, body := range map[string]string{
+		"review":          builtinReviewBody,
+		"security-review": builtinSecurityReviewBody,
+	} {
+		if !strings.Contains(body, "Workspace section") {
+			t.Errorf("%s body does not defer to the Workspace fact", name)
+		}
+		if !strings.Contains(body, `Under "none"`) {
+			t.Errorf("%s body has no answer for a workspace with no version control", name)
+		}
+	}
+}

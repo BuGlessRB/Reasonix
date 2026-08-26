@@ -242,7 +242,7 @@ func TestRunSubAgentReviewReportExhaustionNamesRecovery(t *testing.T) {
 	}}
 	sess := NewSession("sys")
 	_, err := RunSubAgentWithSession(context.Background(), prov, reg, sess, "review it",
-		Options{RequireReviewReportKind: evidence.ReviewKindReview, ArchiveDir: dir}, event.Discard)
+		Options{RequireReviewReportKind: evidence.ReviewKindReview, ArchiveDir: dir, DeliveryProfile: true}, event.Discard)
 	if err == nil {
 		t.Fatal("expected failure when the report never arrives")
 	}
@@ -459,5 +459,34 @@ func TestDeliveryDiagnosticConversationCompletes(t *testing.T) {
 				t.Fatalf("diagnostic conversation had %d provider calls, want 1 (no readiness retries)", prov.call)
 			}
 		})
+	}
+}
+
+// Outside Delivery nothing consumes a verdict but the block check, and no
+// report is no block — the same state a killed run leaves behind, minus the
+// review the user asked for. So the nudge still runs and the failure does not.
+func TestRunSubAgentReviewWithoutVerdictDegradesOutsideDelivery(t *testing.T) {
+	reg := tool.NewRegistry()
+	reg.Add(fakeReadFileTool{})
+	AttachReviewReportTool(reg)
+	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
+		{{Type: provider.ChunkText, Text: "verdict: pass, nothing to fix"}, {Type: provider.ChunkDone}},
+		{{Type: provider.ChunkText, Text: "verdict: pass, nothing to fix"}, {Type: provider.ChunkDone}},
+	}}
+	sess := NewSession("sys")
+	answer, err := RunSubAgentWithSession(context.Background(), prov, reg, sess, "review it",
+		Options{RequireReviewReportKind: evidence.ReviewKindReview, ArchiveDir: t.TempDir()}, event.Discard)
+	if err != nil {
+		t.Fatalf("a missing verdict must not kill a non-Delivery review: %v", err)
+	}
+	if !strings.Contains(answer, "nothing to fix") {
+		t.Fatalf("answer = %q, want the review preserved", answer)
+	}
+	if !strings.Contains(answer, "no recorded verdict") {
+		t.Fatalf("answer = %q, want it marked as carrying no host-held verdict", answer)
+	}
+	// The nudge is worth running either way: it is how a block reaches the gate.
+	if !sessionHasUserMessageContaining(sess, "Call review_report now") {
+		t.Fatal("the host nudge must still run outside Delivery")
 	}
 }

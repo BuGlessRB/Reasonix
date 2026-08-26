@@ -243,6 +243,15 @@ func verifyStepEvidence(ctx context.Context, items []stepEvidence) (hostVerified
 			manualUnverified++
 		}
 	}
+	// A manual note stands alone only where the turn has nothing else to cite.
+	// Once the ledger holds a write or a command, the proof is in the receipts,
+	// and prose may not stand in for the one the host can actually read.
+	if hostVerified == 0 && manualUnverified > 0 {
+		_, mutated := ledger.LatestSuccessfulMutationIndex()
+		if mutated || ledger.HasSuccessfulVerificationCommand() {
+			return 0, 0, fmt.Errorf("manual evidence cannot stand alone in a turn that already has receipts — cite what the host observed: the command you ran (kind verification), or the files you changed or read (kind diff/files)%s", receiptHint("touched this turn", ledger.TouchedPaths(8, false)))
+		}
+	}
 	return hostVerified, manualUnverified, nil
 }
 
