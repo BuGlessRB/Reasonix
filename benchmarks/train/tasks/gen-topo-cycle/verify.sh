@@ -5,8 +5,8 @@ set -e
 cd "$(dirname "$0")"
 
 python3 - <<'PYEOF'
-import signal
 import sys
+import threading
 
 import topo
 
@@ -15,19 +15,26 @@ class _Timeout(Exception):
     pass
 
 
-def _alarm_handler(signum, frame):
-    raise _Timeout("topological_sort did not return within the time budget")
-
-
-signal.signal(signal.SIGALRM, _alarm_handler)
-
-
+# A worker thread rather than signal.alarm: Windows has no SIGALRM, and this
+# grader has to reach the same verdict on every host. The thread is a daemon so
+# a solution that never returns cannot hold the interpreter open at exit.
 def run_with_timeout(fn, *args, **kwargs):
-    signal.alarm(5)
-    try:
-        return fn(*args, **kwargs)
-    finally:
-        signal.alarm(0)
+    outcome = {}
+
+    def call():
+        try:
+            outcome["value"] = fn(*args, **kwargs)
+        except BaseException as exc:
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=call, daemon=True)
+    worker.start()
+    worker.join(5)
+    if worker.is_alive():
+        raise _Timeout("topological_sort did not return within the time budget")
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["value"]
 
 
 def is_topo_order(n, edges, order):

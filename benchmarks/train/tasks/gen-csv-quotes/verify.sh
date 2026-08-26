@@ -4,7 +4,7 @@
 # so it references csv_reader.py and cli.py directly.
 set -e
 
-tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/csv-verify.XXXXXX")"
+tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
 # 1. Behavioural checks against the public API (python3 stdlib only).
@@ -46,7 +46,9 @@ name,note
 EOF
 
 expected=$'name|note\nAda, Countess of Lovelace|wrote "notes"'
-got="$(python3 cli.py "$tmpdir/sample.csv")"
+# Windows' python writes CRLF in text mode, so strip the carriage returns
+# before comparing: the grader checks the fields, not the host's line endings.
+got="$(python3 cli.py "$tmpdir/sample.csv" | tr -d '\r')"
 if [ "$got" != "$expected" ]; then
     printf 'FAIL: cli.py printed:\n%s\n\nexpected:\n%s\n' "$got" "$expected" >&2
     exit 1
