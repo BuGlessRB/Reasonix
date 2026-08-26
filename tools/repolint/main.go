@@ -38,13 +38,14 @@ const (
 	ruleErrorText     = "error-text"
 	ruleClaudeDialect = "claude-dialect"
 	ruleSpecParity    = "spec-parity"
+	ruleWireParity    = "wire-parity"
 )
 
 var allRules = []string{
 	ruleEssay, ruleBanner, ruleMarker, ruleDeadCode,
 	ruleNarrative, ruleFileSize, ruleLayering,
 	ruleFuncSize, ruleComplexity, ruleStructState, ruleRefusalPath, ruleErrorText,
-	ruleClaudeDialect, ruleSpecParity, ruleOrphan,
+	ruleClaudeDialect, ruleSpecParity, ruleWireParity, ruleOrphan,
 }
 
 func main() {
@@ -144,6 +145,7 @@ func run(root string) ([]Finding, error) {
 	var dialects []providerDialect
 	modelVars := map[string][]string{}
 	orphans := newOrphanScan()
+	wires := newWireScan()
 	for _, rel := range paths {
 		src, err := parseSource(root, rel)
 		if err != nil {
@@ -162,6 +164,7 @@ func run(root string) ([]Finding, error) {
 		findings = append(findings, checkRefusalPath(src)...)
 		findings = append(findings, checkErrorText(src)...)
 		orphans.observe(src)
+		wires.observe(src)
 		entries, vars := dialectRefs(src)
 		dialects = append(dialects, entries...)
 		maps.Copy(modelVars, vars)
@@ -170,6 +173,7 @@ func run(root string) ([]Finding, error) {
 	findings = append(findings, orphans.findings()...)
 	findings = append(findings, checkLayering(imports)...)
 	findings = append(findings, checkSpecParity(root)...)
+	findings = append(findings, wires.findings(root)...)
 	return append(findings, checkClaudeDialect(dialects, modelVars)...), nil
 }
 

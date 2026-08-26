@@ -50,6 +50,13 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   sentinel the wrapping preserves; `error-text` fails a new match against an
   error message, following it one hop into a local because storing the text
   first is what the direct form turns into.
+- A wire type the desktop re-declares by hand is held to the kernel's by
+  `wire-parity`, both directions: a field one side sends and the other cannot
+  read fails, and so does one it reads that nothing sends. The two are compiled
+  by different toolchains and meet only over JSON, so nothing else in the tree
+  notices when one of them grows a field. The pairs are declared in
+  `tools/repolint/wireparity.go`, never inferred — no spelling tells a mirrored
+  contract from a struct that merely carries json tags.
 
 ## Comments
 
