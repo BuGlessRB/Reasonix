@@ -210,3 +210,38 @@ func TestContinuationNamesBothTurnExits(t *testing.T) {
 		t.Errorf("continuation never names the conclude_blocked exit:\n%s", prompt)
 	}
 }
+
+// Two host prompts tell a run how to close out its list, and only one of them
+// was taught which doors the completion guard leaves open. The Goal path went on
+// saying "use todo_write/complete_step to mark done" — the one action the guard
+// refuses — so a run reading both was handed the open door and the shut one in
+// the same message.
+func TestBothHostPromptsNameTheSameWaysOut(t *testing.T) {
+	todos := []evidence.TodoItem{{Content: "ship it", Status: "in_progress"}}
+	for name, prompt := range map[string]string{
+		"continuation": readinessContinuationPrompt(todos, ""),
+		"goal":         formatIncompleteTodos(todos, ""),
+	} {
+		if !strings.Contains(prompt, completionWaysOut) {
+			t.Errorf("%s prompt does not state the ways out:\n%s", name, prompt)
+		}
+		if strings.Contains(prompt, "to mark done") {
+			t.Errorf("%s prompt still names the action the guard refuses:\n%s", name, prompt)
+		}
+	}
+}
+
+// The requirement carried the ways out and so did the prompt that embeds it, so
+// the run read them twice, in two wordings, inside one message. The requirement
+// reports what is missing; the host that decided to continue says how.
+func TestContinuationStatesTheWaysOutOnce(t *testing.T) {
+	prompt := readinessContinuationPrompt(
+		[]evidence.TodoItem{{Content: "ship it", Status: "in_progress"}},
+		"latest successful todo_write still has incomplete items: ship it: in_progress",
+	)
+	for _, exit := range []string{"complete_step", "conclude_blocked"} {
+		if n := strings.Count(prompt, exit); n != 1 {
+			t.Errorf("%s is named %d times, want 1:\n%s", exit, n, prompt)
+		}
+	}
+}

@@ -808,7 +808,7 @@ func formatIncompleteTodos(todos []evidence.TodoItem, readiness string) string {
 		b.WriteString(p)
 		b.WriteString("\n")
 	}
-	b.WriteString("Fix or use todo_write/complete_step to mark done, then report complete again via update_goal.")
+	b.WriteString(completionWaysOut + " Then report complete again via update_goal.")
 	return b.String()
 }
 

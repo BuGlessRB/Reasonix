@@ -22,6 +22,14 @@ const (
 	readinessMaxRounds = 8
 )
 
+// completionWaysOut is every action the completion guard lets through. It is one
+// string because two host prompts state it, and a run told two different things
+// about which door is open walks into the one that is shut.
+const completionWaysOut = "Mark each finished item with complete_step — that is what advances the list; a todo_write that flips an item to completed is rejected. " +
+	"If an item should no longer be done — the request changed, or it was superseded — send a todo_write without it. " +
+	"If one turns on a decision only the user can make, put it to them with ask; not having heard back is not an answer to assume one from. " +
+	"If one cannot be done as specified, call conclude_blocked with the evidence for why."
+
 // continueUntilReady runs the missing requirements as further turns. turnErr is
 // the outcome of the turn just finished; the returned error is the outcome of
 // the last one run, so a caller cannot tell whether one turn or four produced it.
@@ -89,12 +97,6 @@ func readinessContinuationPrompt(todos []evidence.TodoItem, reason string) strin
 	for _, p := range parts {
 		b.WriteString("- " + p + "\n")
 	}
-	// "Finish it" alone deadlocked: the guard rejects a todo_write that marks an
-	// item done. Every way out below is one it lets through, and both turn exits
-	// are named — omitting ask left a turn waiting on the user no way but to guess.
-	b.WriteString("Do the remaining work, then verify it. Mark each finished item with complete_step — that is what advances the list; a todo_write that flips an item to completed is rejected. " +
-		"If an item should no longer be done — the request changed, or it was superseded — send a todo_write without it. " +
-		"If one turns on a decision only the user can make, put it to them with ask; not having heard back is not an answer to assume one from. " +
-		"If one cannot be done as specified, call conclude_blocked with the evidence for why.")
+	b.WriteString("Do the remaining work, then verify it. " + completionWaysOut)
 	return b.String()
 }

@@ -346,11 +346,7 @@ func finalReadinessIncompleteTodos(items []evidence.TodoStepMatch) string {
 		}
 		parts = append(parts, fmt.Sprintf("%s: %s", label, item.Status))
 	}
-	return "latest successful todo_write still has incomplete items: " + strings.Join(parts, ", ") +
-		". Sign each finished item off with complete_step — that advances the list for you, and a todo_write that flips an item to completed on its own is rejected. " +
-		"If an item should no longer be done, send a todo_write without it. " +
-		"If one turns on a decision only the user can make, put it to them with ask instead of assuming an answer. " +
-		"If one cannot be done as specified, call conclude_blocked with the evidence for why"
+	return "latest successful todo_write still has incomplete items: " + strings.Join(parts, ", ")
 }
 
 // PrepareReadinessContinuation is the same authorization for a continuation the
