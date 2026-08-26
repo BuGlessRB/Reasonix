@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,19 +15,28 @@ import (
 	"reasonix/internal/sandbox"
 )
 
-// collectSink returns a Sink that collects events and a channel that receives
-// the TurnDone event when the turn finishes. The channel lets tests wait for
-// the runGuarded goroutine to complete.
-func collectSink() (event.Sink, chan event.Event, *[]event.Event) {
+// collectSink returns a Sink that collects events, a channel carrying TurnDone
+// so a test can wait for runGuarded, and a snapshot of what has arrived. The
+// snapshot copies under the lock the sink appends under: a turn is not the only
+// emitter — the inbox notifies from its own goroutine — so handing back the
+// slice itself raced with whoever wrote to it next.
+func collectSink() (event.Sink, chan event.Event, func() []event.Event) {
+	var mu sync.Mutex
 	var events []event.Event
 	done := make(chan event.Event, 1)
 	sink := event.FuncSink(func(e event.Event) {
+		mu.Lock()
 		events = append(events, e)
+		mu.Unlock()
 		if e.Kind == event.TurnDone {
 			done <- e
 		}
 	})
-	return sink, done, &events
+	return sink, done, func() []event.Event {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]event.Event(nil), events...)
+	}
 }
 
 func waitForDone(t *testing.T, done chan event.Event) event.Event {
@@ -52,20 +62,21 @@ func TestRunShell_EmitsEvents(t *testing.T) {
 	ctrl.RunShell("echo hello")
 	waitForDone(t, done)
 
-	if len(*events) < 3 {
-		t.Fatalf("expected at least 3 events, got %d: %v", len(*events), *events)
+	evs := events()
+	if len(evs) < 3 {
+		t.Fatalf("expected at least 3 events, got %d: %v", len(evs), evs)
 	}
 
 	// First event: ToolDispatch
-	if (*events)[0].Kind != event.ToolDispatch {
-		t.Errorf("first event: want ToolDispatch, got %v", (*events)[0].Kind)
+	if evs[0].Kind != event.ToolDispatch {
+		t.Errorf("first event: want ToolDispatch, got %v", evs[0].Kind)
 	}
-	if (*events)[0].Tool.Name != "bash" {
-		t.Errorf("tool name: want bash, got %s", (*events)[0].Tool.Name)
+	if evs[0].Tool.Name != "bash" {
+		t.Errorf("tool name: want bash, got %s", evs[0].Tool.Name)
 	}
 
 	// Last event: TurnDone
-	td := (*events)[len(*events)-1]
+	td := evs[len(evs)-1]
 	if td.Kind != event.TurnDone {
 		t.Errorf("last event: want TurnDone, got %v", td.Kind)
 	}
@@ -74,7 +85,7 @@ func TestRunShell_EmitsEvents(t *testing.T) {
 	}
 
 	// Penultimate event: ToolResult
-	last := (*events)[len(*events)-2]
+	last := evs[len(evs)-2]
 	if last.Kind != event.ToolResult {
 		t.Errorf("penultimate event: want ToolResult, got %v", last.Kind)
 	}
@@ -93,11 +104,12 @@ func TestSubmit_BangPrefix(t *testing.T) {
 	ctrl.Submit("!echo test")
 	waitForDone(t, done)
 
-	if len(*events) == 0 {
+	evs := events()
+	if len(evs) == 0 {
 		t.Fatal("expected events from !echo, got none")
 	}
-	if (*events)[0].Kind != event.ToolDispatch {
-		t.Errorf("first event: want ToolDispatch, got %v", (*events)[0].Kind)
+	if evs[0].Kind != event.ToolDispatch {
+		t.Errorf("first event: want ToolDispatch, got %v", evs[0].Kind)
 	}
 }
 
@@ -139,10 +151,11 @@ func TestRunShell_FailingCommand(t *testing.T) {
 	waitForDone(t, done)
 
 	// Find the ToolResult
+	evs := events()
 	var result *event.Event
-	for i := range *events {
-		if (*events)[i].Kind == event.ToolResult {
-			result = &(*events)[i]
+	for i := range evs {
+		if evs[i].Kind == event.ToolResult {
+			result = &evs[i]
 			break
 		}
 	}
@@ -177,10 +190,11 @@ func TestRunShell_CancelStopsCommand(t *testing.T) {
 	if e.Err != nil {
 		t.Fatalf("cancelled shell TurnDone err = %v, want nil", e.Err)
 	}
+	evs := events()
 	var result *event.Event
-	for i := range *events {
-		if (*events)[i].Kind == event.ToolResult {
-			result = &(*events)[i]
+	for i := range evs {
+		if evs[i].Kind == event.ToolResult {
+			result = &evs[i]
 			break
 		}
 	}
@@ -233,10 +247,11 @@ func TestRunShell_HeredocCancelReleasesTurn(t *testing.T) {
 	if e.Err != nil {
 		t.Fatalf("cancelled heredoc shell TurnDone err = %v, want nil", e.Err)
 	}
+	evs := events()
 	var result *event.Event
-	for i := range *events {
-		if (*events)[i].Kind == event.ToolResult {
-			result = &(*events)[i]
+	for i := range evs {
+		if evs[i].Kind == event.ToolResult {
+			result = &evs[i]
 			break
 		}
 	}
