@@ -19,9 +19,14 @@ type FanoutMetrics struct {
 	// CriticalPathMs is the heaviest depends-ordered chain of member run times:
 	// the floor this shape allows. WallMs above it is scheduling loss.
 	CriticalPathMs int64 `json:"fanout_critical_path_ms,omitempty"`
-	// SlotWaitMs sums started − queued: what the concurrency ceiling cost items
-	// with nothing left to wait for. It is the wait no edge can draw.
+	// SlotWaitMs sums started − queued for members a session ceiling held back:
+	// the wait that raising max_subagent_concurrency or max_parallel_writers
+	// would have shortened. Each node names which of the two it was.
 	SlotWaitMs int64 `json:"fanout_slot_wait_ms,omitempty"`
+	// ClaimWaitMs is that same wait for members a write path someone else held
+	// kept out. No ceiling releases it — only disjoint paths, or an edge that
+	// orders the pair — so adding it to the figure above would misdirect.
+	ClaimWaitMs int64 `json:"fanout_claim_wait_ms,omitempty"`
 }
 
 // fanoutMetricsOf folds a run graph into the scalars. A run that held no
@@ -48,7 +53,11 @@ func fanoutMetricsOf(g agentgraph.Graph) *FanoutMetrics {
 				out.Adopted++
 			}
 			out.WorkMs += nodeSpan(m)
-			out.SlotWaitMs += slotWaitMs(m)
+			if m.Wait == agentgraph.WaitClaim {
+				out.ClaimWaitMs += slotWaitMs(m)
+			} else {
+				out.SlotWaitMs += slotWaitMs(m)
+			}
 		}
 	}
 	if out.Groups == 0 {

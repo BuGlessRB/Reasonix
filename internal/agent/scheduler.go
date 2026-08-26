@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+
+	"reasonix/internal/agentgraph"
 )
 
 // SubagentSlotStatus is the queue lifecycle shown for background task/fleet
@@ -35,6 +37,10 @@ type AcquireRequest struct {
 	// orders the queue, never the ceiling, and a caller holding no graph
 	// leaves it zero.
 	Priority int
+	// OnQueued fires once, with what held this request back, when it has to
+	// wait. Nothing else can answer it: by the time the caller is running, the
+	// constraint that stopped it is gone.
+	OnQueued func(agentgraph.WaitCause)
 	// Label is optional diagnostics text.
 	Label string
 }
@@ -96,18 +102,26 @@ func (s *SubagentScheduler) Acquire(ctx context.Context, req AcquireRequest) (re
 	}
 
 	s.mu.Lock()
-	if ok, reason := s.canStartLocked(req); ok {
+	ok, cause := s.canStartLocked(req)
+	if ok {
 		s.activateLocked(req)
 		s.mu.Unlock()
 		return s.makeRelease(req), nil
-	} else if req.Nested {
+	}
+	if req.Nested {
+		detail := s.waitDetailLocked(cause)
 		s.mu.Unlock()
-		return noop, fmt.Errorf("subagent concurrency limit reached (%s); nested subagents fail fast to avoid parent/child slot deadlock", reason)
+		return noop, fmt.Errorf("subagent concurrency limit reached (%s); nested subagents fail fast to avoid parent/child slot deadlock", detail)
 	}
 
 	w := &schedulerWaiter{req: req, ready: make(chan struct{})}
 	s.waiters = append(s.waiters, w)
 	s.mu.Unlock()
+	// Reported after the unlock: the cause was read under it, and the callback
+	// reaches a sink this must not be holding the scheduler's mutex for.
+	if req.OnQueued != nil {
+		req.OnQueued(cause)
+	}
 
 	select {
 	case <-w.ready:
@@ -214,27 +228,44 @@ func (s *SubagentScheduler) makeRelease(req AcquireRequest) func() {
 	}
 }
 
-func (s *SubagentScheduler) canStartLocked(req AcquireRequest) (bool, string) {
+// canStartLocked answers whether the request may run, and when it may not, which
+// constraint said so. The cause is a value rather than a sentence because two of
+// them are answered by a setting and the third only by a path or an edge, and a
+// reader cannot tell those apart from "queued".
+func (s *SubagentScheduler) canStartLocked(req AcquireRequest) (bool, agentgraph.WaitCause) {
 	if s.activeTotal >= s.maxTotal {
-		return false, fmt.Sprintf("total concurrency %d/%d", s.activeTotal, s.maxTotal)
+		return false, agentgraph.WaitSlots
 	}
 	if !req.Writer {
 		return true, ""
 	}
 	if s.activeWriters >= s.maxWriters {
-		return false, fmt.Sprintf("writer concurrency %d/%d", s.activeWriters, s.maxWriters)
+		return false, agentgraph.WaitWriters
 	}
 	for _, active := range s.activeClaims {
 		if active.Overlaps(req.WritePaths) {
-			return false, "write path conflict with a running subagent"
+			return false, agentgraph.WaitClaim
 		}
 	}
 	for _, active := range s.parentClaims {
 		if active.Overlaps(req.WritePaths) {
-			return false, "write path conflict with a parent write in progress"
+			return false, agentgraph.WaitClaim
 		}
 	}
 	return true, ""
+}
+
+// waitDetailLocked renders a cause with the counts that produced it, for the one
+// caller that reports rather than records: a nested acquire that failed fast.
+func (s *SubagentScheduler) waitDetailLocked(cause agentgraph.WaitCause) string {
+	switch cause {
+	case agentgraph.WaitSlots:
+		return fmt.Sprintf("total concurrency %d/%d", s.activeTotal, s.maxTotal)
+	case agentgraph.WaitWriters:
+		return fmt.Sprintf("writer concurrency %d/%d", s.activeWriters, s.maxWriters)
+	default:
+		return "write path conflict with a claim already held"
+	}
 }
 
 func (s *SubagentScheduler) activateLocked(req AcquireRequest) {

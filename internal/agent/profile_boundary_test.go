@@ -66,7 +66,7 @@ func TestDelegationSpecMembersStaySeparate(t *testing.T) {
 	})
 	assertFieldSet(t, "ContextRequest", ContextRequest{}, []string{"ContinueFrom", "ForkFrom", "Ephemeral", "Upstream"})
 	assertFieldSet(t, "SchedulerPolicy", SchedulerPolicy{}, []string{
-		"MaxSteps", "RunInBackground", "BackgroundWriter", "Nested", "Priority", "OnStart",
+		"MaxSteps", "RunInBackground", "BackgroundWriter", "Nested", "Priority", "OnStart", "OnQueued",
 	})
 }
 

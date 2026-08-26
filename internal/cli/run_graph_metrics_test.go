@@ -78,3 +78,35 @@ func TestFanoutMetricsRefuseToPriceWorkNoStampCovers(t *testing.T) {
 		t.Fatalf("counted %d groups / %d workers, want the one that ran", got.Groups, got.Workers)
 	}
 }
+
+// One figure counted every wait between ready and running, and its name said
+// the concurrency ceiling caused it. A member kept out by a write path someone
+// else holds waits the same way and no ceiling releases it, so the number that
+// drives "raise max_subagent_concurrency" was quoting waits that would not move.
+func TestClaimWaitIsNotPricedAsCeilingWait(t *testing.T) {
+	s := &metricsSink{inner: event.Discard}
+	group := "t1"
+	s.Emit(graphEvent([]agentgraph.Node{
+		{ID: group, Kind: agentgraph.KindGroup, State: agentgraph.StateRunning, StartedAt: 1000},
+		{ID: "t1/fleet-1", ParentID: group, Kind: agentgraph.KindWorker,
+			Wait: agentgraph.WaitSlots, QueuedAt: 1000, StartedAt: 1100},
+		{ID: "t1/fleet-2", ParentID: group, Kind: agentgraph.KindWorker,
+			Wait: agentgraph.WaitClaim, QueuedAt: 1000, StartedAt: 1500},
+	}, nil))
+	s.Emit(graphEvent([]agentgraph.Node{
+		{ID: "t1/fleet-1", State: agentgraph.StateCompleted, EndedAt: 1400},
+		{ID: "t1/fleet-2", State: agentgraph.StateCompleted, EndedAt: 1900},
+		{ID: group, State: agentgraph.StateCompleted, EndedAt: 1900},
+	}, nil))
+
+	got := s.Snapshot().Fanout
+	if got == nil {
+		t.Fatal("a run that fanned out priced nothing")
+	}
+	if got.SlotWaitMs != 100 {
+		t.Errorf("ceiling wait = %d, want 100 — only the member a ceiling held", got.SlotWaitMs)
+	}
+	if got.ClaimWaitMs != 500 {
+		t.Errorf("claim wait = %d, want 500 — the member a held path kept out", got.ClaimWaitMs)
+	}
+}

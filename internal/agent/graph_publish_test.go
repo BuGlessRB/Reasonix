@@ -520,3 +520,41 @@ const parallelPerItemModelTasks = `{"tasks":[
 	{"prompt":"first","description":"survey"},
 	{"prompt":"second","description":"measure","model":"careful","effort":"high"}
 ]}`
+
+// A queued node said "queued" and stopped there. Whether raising the session
+// ceiling would have bought anything, or whether a write path someone already
+// holds was the only thing in the way, are opposite answers that reached the
+// picture as the same word — and only the scheduler is in a position to tell
+// them apart.
+func TestFleetGraphSaysWhatHeldAQueuedItemBack(t *testing.T) {
+	sched := NewSubagentScheduler(1, 1)
+	held, err := sched.Acquire(context.Background(), AcquireRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := &recordSink{}
+	fleet := newProbeFleetOn(t, &upstreamProbeProvider{answer: "done"}, ablation.New(), sched, mustSubagentStore(t))
+	ctx := WithParentSession(withCallContext(context.Background(), "fleet-call", rec, nil, false), "wait-parent")
+
+	done := make(chan error, 1)
+	go func() {
+		_, execErr := fleet.Execute(ctx, json.RawMessage(fleetIndependentTasks))
+		done <- execErr
+	}()
+	waitForQueuedAcquires(t, sched, 3)
+	held()
+	if err := <-done; err != nil {
+		t.Fatalf("fleet: %v", err)
+	}
+
+	g := foldGraph(t, rec)
+	for _, id := range []string{"fleet-call/fleet-1", "fleet-call/fleet-2", "fleet-call/fleet-3"} {
+		node, ok := g.Node(id)
+		if !ok {
+			t.Fatalf("no node %q in %+v", id, g.Nodes)
+		}
+		if node.Wait != agentgraph.WaitSlots {
+			t.Errorf("node %q waited on %q, want %q", id, node.Wait, agentgraph.WaitSlots)
+		}
+	}
+}

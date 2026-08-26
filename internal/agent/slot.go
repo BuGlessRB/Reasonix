@@ -28,6 +28,7 @@ func (t *TaskTool) acquireRequestFor(spec *ProfileExecSpec) (AcquireRequest, err
 		WritePaths: spec.Grant.WritePaths,
 		Nested:     spec.Sched.Nested,
 		Priority:   spec.Sched.Priority,
+		OnQueued:   spec.Sched.OnQueued,
 		Label:      firstNonEmpty(spec.Task.Description, spec.Worker.Name, "task"),
 	}
 	if !req.Writer || !spec.Grant.WritePaths.Empty() || !spec.Sched.RunInBackground {

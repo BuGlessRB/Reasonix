@@ -154,7 +154,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		running[idx] = true
 		label := items[idx].Label
 		subID := parallelNodeID(parentID, idx)
-		onSlot := func() { publishGraph(sink, fanOutItemRunningDelta(subID)) }
+		onWait, onSlot := fanOutItemHooks(sink, subID)
 		dispatchArgs, _ := json.Marshal(map[string]string{"prompt": t.Prompt, "description": label})
 		sink.Emit(event.Event{
 			Kind: event.ToolDispatch,
@@ -175,7 +175,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 				Task:   TaskSpec{Objective: t.Prompt, Description: label},
 				Worker: WorkerSpec{Kind: "task", Name: "task", SystemPrompt: DefaultReadOnlyTaskSystemPrompt, Model: items[idx].Model, Effort: items[idx].Effort},
 				Grant:  CapabilityGrant{ReadOnly: true, AllowNoTools: true, CallTools: t.Tools},
-				Sched:  SchedulerPolicy{MaxSteps: t.MaxSteps, Nested: SubagentDepth(ctx) > 0, OnStart: onSlot},
+				Sched:  SchedulerPolicy{MaxSteps: t.MaxSteps, Nested: SubagentDepth(ctx) > 0, OnStart: onSlot, OnQueued: onWait},
 			})
 
 			if ctx.Err() != nil && runErr == nil {

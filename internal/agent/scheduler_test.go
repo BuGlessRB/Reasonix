@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"reasonix/internal/agentgraph"
 )
 
 func TestSchedulerTotalConcurrencyQueues(t *testing.T) {
@@ -167,5 +169,73 @@ func TestSchedulerGivesAFreedSlotToTheHeaviestWaiter(t *testing.T) {
 	}
 	if want := []int{4, 0}; !slices.Equal(order, want) {
 		t.Fatalf("slots went out in priority order %v, want %v", order, want)
+	}
+}
+
+// "Queued" is one word for three constraints with two different remedies: a
+// ceiling is a session setting, a claim is a path or an edge. The scheduler was
+// the only thing that could tell them apart and it answered in a sentence, so
+// nothing downstream could — a run waiting on a claim was priced as one waiting
+// on a ceiling nobody needed to raise.
+func TestQueuedAcquireSaysWhichConstraintHeldIt(t *testing.T) {
+	root := t.TempDir()
+	mine, err := NormalizeWritePaths(root, []string{"a.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := NormalizeWritePaths(root, []string{"b.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		total, writers int
+		holder, queued AcquireRequest
+		want           agentgraph.WaitCause
+	}{
+		"the session ran out of slots": {
+			total: 1, writers: 1,
+			holder: AcquireRequest{}, queued: AcquireRequest{},
+			want: agentgraph.WaitSlots,
+		},
+		"a writer waits on the writer ceiling": {
+			total: 4, writers: 1,
+			holder: AcquireRequest{Writer: true, WritePaths: mine},
+			queued: AcquireRequest{Writer: true, WritePaths: theirs},
+			want:   agentgraph.WaitWriters,
+		},
+		"a writer waits on a path someone holds": {
+			total: 4, writers: 4,
+			holder: AcquireRequest{Writer: true, WritePaths: mine},
+			queued: AcquireRequest{Writer: true, WritePaths: mine},
+			want:   agentgraph.WaitClaim,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := NewSubagentScheduler(tc.total, tc.writers)
+			held, err := s.Acquire(context.Background(), tc.holder)
+			if err != nil {
+				t.Fatal(err)
+			}
+			causes := make(chan agentgraph.WaitCause, 1)
+			req := tc.queued
+			req.OnQueued = func(c agentgraph.WaitCause) { causes <- c }
+			var wg sync.WaitGroup
+			wg.Go(func() {
+				release, aerr := s.Acquire(context.Background(), req)
+				if aerr == nil {
+					release()
+				}
+			})
+			select {
+			case got := <-causes:
+				if got != tc.want {
+					t.Errorf("queued on %q, want %q", got, tc.want)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("the acquire queued without saying what held it")
+			}
+			held()
+			wg.Wait()
+		})
 	}
 }

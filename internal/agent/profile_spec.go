@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"reasonix/internal/agentgraph"
 	"reasonix/internal/skill"
 	"reasonix/internal/tool"
 )
@@ -142,6 +143,8 @@ type SchedulerPolicy struct {
 	Priority int
 	// OnStart fires once this run holds a slot: the wait before it is the cap.
 	OnStart func()
+	// OnQueued fires with what held this run out of a slot, when something did.
+	OnQueued func(agentgraph.WaitCause)
 }
 
 // ResolveProfileDefinition looks up a profile and enforces the runAs=subagent

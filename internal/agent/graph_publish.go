@@ -74,6 +74,23 @@ func fanOutItemQueuedDelta(id string) agentgraph.Delta {
 	}}
 }
 
+// fanOutItemWaitDelta names what is holding a queued item out of a slot. The
+// state already says queued; which constraint said so is what decides whether
+// raising a session ceiling would buy anything, and only the scheduler sees it.
+func fanOutItemWaitDelta(id string, cause agentgraph.WaitCause) agentgraph.Delta {
+	if cause == "" {
+		return agentgraph.Delta{}
+	}
+	return agentgraph.Delta{Nodes: []agentgraph.Node{{ID: id, Wait: cause}}}
+}
+
+// fanOutItemHooks are the two moments of an item's wait that only the scheduler
+// can report: what held it out of a slot, and the grant that ended that.
+func fanOutItemHooks(sink event.Sink, id string) (func(agentgraph.WaitCause), func()) {
+	return func(cause agentgraph.WaitCause) { publishGraph(sink, fanOutItemWaitDelta(id, cause)) },
+		func() { publishGraph(sink, fanOutItemRunningDelta(id)) }
+}
+
 // fanOutItemRunningDelta reports the slot being granted. The gap back to
 // QueuedAt is what the concurrency ceiling cost this item.
 func fanOutItemRunningDelta(id string) agentgraph.Delta {

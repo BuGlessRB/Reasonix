@@ -17,6 +17,7 @@ type fanoutMetrics struct {
 	WorkMs         int64 `json:"fanout_work_ms,omitempty"`
 	CriticalPathMs int64 `json:"fanout_critical_path_ms,omitempty"`
 	SlotWaitMs     int64 `json:"fanout_slot_wait_ms,omitempty"`
+	ClaimWaitMs    int64 `json:"fanout_claim_wait_ms,omitempty"`
 }
 
 // fanoutTotals sums an arm's fan-out pricing. A run that never fanned out adds
@@ -35,6 +36,7 @@ func fanoutTotals(results []result) fanoutMetrics {
 		out.WorkMs += r.Fanout.WorkMs
 		out.CriticalPathMs += r.Fanout.CriticalPathMs
 		out.SlotWaitMs += r.Fanout.SlotWaitMs
+		out.ClaimWaitMs += r.Fanout.ClaimWaitMs
 	}
 	return out
 }
@@ -55,6 +57,9 @@ func renderFanout(results []result) string {
 		dur(t.WorkMs), dur(t.WallMs), speedup(t.WorkMs, t.WallMs))
 	b += fmt.Sprintf("- floor: critical path **%s** · scheduling loss **%s**\n",
 		dur(t.CriticalPathMs), dur(t.WallMs-t.CriticalPathMs))
+	if t.ClaimWaitMs > 0 {
+		b += fmt.Sprintf("- claim wait: **%s** held ready behind a write path already claimed; no ceiling releases it\n", dur(t.ClaimWaitMs))
+	}
 	if t.SlotWaitMs > 0 {
 		b += fmt.Sprintf("- slot wait: **%s** held ready at the concurrency ceiling\n", dur(t.SlotWaitMs))
 	}

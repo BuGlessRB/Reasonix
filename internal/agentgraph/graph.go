@@ -51,6 +51,22 @@ const (
 	GrantWrite Grant = "write"
 )
 
+// WaitCause is why a queued node is not running. Queued says a node is ready and
+// held back; it does not say by what, and the answers have different remedies —
+// two are session settings and the third is a path or an edge.
+type WaitCause string
+
+const (
+	// WaitSlots is the session's total sub-agent ceiling.
+	WaitSlots WaitCause = "slots"
+	// WaitWriters is the session's concurrent-writer ceiling, which binds a
+	// writer while total capacity is still free.
+	WaitWriters WaitCause = "writers"
+	// WaitClaim is a write path someone else already holds. No ceiling change
+	// releases it: only disjoint paths, or an edge that orders the two.
+	WaitClaim WaitCause = "claim"
+)
+
 // EdgeKind is what one edge means. The node pair alone says nothing: waiting
 // for an answer and receiving one are separate facts, and an arm that orders
 // two nodes while delivering nothing between them is the case a single edge
@@ -82,6 +98,9 @@ type Node struct {
 	Model    string    `json:"model,omitempty"`
 	Effort   string    `json:"effort,omitempty"`
 	Grant    Grant     `json:"grant,omitempty"`
+	// Wait is what held this node out of a slot. Like the stamps it survives the
+	// run starting: the state says it is running now, this says what it waited on.
+	Wait WaitCause `json:"wait,omitempty"`
 	// Ref is the persisted transcript this node's answer reads back from.
 	Ref string `json:"ref,omitempty"`
 	// QueuedAt, StartedAt and EndedAt are unix milliseconds, zero while unknown.
@@ -167,6 +186,7 @@ func merge(old, update Node) Node {
 	out.Ref = orText(update.Ref, old.Ref)
 	out.Err = orText(update.Err, old.Err)
 	out.Grant = Grant(orText(string(update.Grant), string(old.Grant)))
+	out.Wait = WaitCause(orText(string(update.Wait), string(old.Wait)))
 	out.QueuedAt = orStamp(update.QueuedAt, old.QueuedAt)
 	out.StartedAt = orStamp(update.StartedAt, old.StartedAt)
 	out.EndedAt = orStamp(update.EndedAt, old.EndedAt)
