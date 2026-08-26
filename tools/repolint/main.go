@@ -23,6 +23,7 @@ type Finding struct {
 }
 
 const (
+	ruleOrphan        = "orphan"
 	ruleEssay         = "essay"
 	ruleBanner        = "banner"
 	ruleMarker        = "marker"
@@ -43,7 +44,7 @@ var allRules = []string{
 	ruleEssay, ruleBanner, ruleMarker, ruleDeadCode,
 	ruleNarrative, ruleFileSize, ruleLayering,
 	ruleFuncSize, ruleComplexity, ruleStructState, ruleRefusalPath, ruleErrorText,
-	ruleClaudeDialect, ruleSpecParity,
+	ruleClaudeDialect, ruleSpecParity, ruleOrphan,
 }
 
 func main() {
@@ -142,6 +143,7 @@ func run(root string) ([]Finding, error) {
 	imports := map[string][]importRef{}
 	var dialects []providerDialect
 	modelVars := map[string][]string{}
+	orphans := newOrphanScan()
 	for _, rel := range paths {
 		src, err := parseSource(root, rel)
 		if err != nil {
@@ -159,11 +161,13 @@ func run(root string) ([]Finding, error) {
 		findings = append(findings, checkStructState(src)...)
 		findings = append(findings, checkRefusalPath(src)...)
 		findings = append(findings, checkErrorText(src)...)
+		orphans.observe(src)
 		entries, vars := dialectRefs(src)
 		dialects = append(dialects, entries...)
 		maps.Copy(modelVars, vars)
 		imports[rel] = src.importRefs()
 	}
+	findings = append(findings, orphans.findings()...)
 	findings = append(findings, checkLayering(imports)...)
 	findings = append(findings, checkSpecParity(root)...)
 	return append(findings, checkClaudeDialect(dialects, modelVars)...), nil
