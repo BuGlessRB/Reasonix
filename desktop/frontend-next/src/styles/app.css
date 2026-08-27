@@ -3909,12 +3909,18 @@
     white-space: nowrap; cursor: pointer;
     transition: background .14s, color .14s, box-shadow .14s, transform .13s var(--ease-spring);
   }
-  .seg button:hover { color: var(--text) }
-  .seg button:active { transform: scale(.96) }
+  .seg button:hover:not(:disabled) { color: var(--text) }
+  .seg button:active:not(:disabled) { transform: scale(.96) }
   .seg button[aria-pressed="true"], .seg button[aria-checked="true"] {
     background: var(--raised); color: var(--accent-ink); font-weight: var(--w-med);
     box-shadow: var(--lit), 0 1px 2px rgb(0 0 0 / .07);
   }
+  /* Two kinds of "does not click" that must not look alike: a save in flight is
+     this instant, a host with no OS sandbox is forever. :hover still matches a
+     disabled button, so without this the dead option lights up under the
+     pointer — which is what read as broken rather than as unavailable. */
+  .seg button:disabled { cursor: default }
+  .seg button[data-locked] { color: var(--ghost); cursor: not-allowed }
   .seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
 
@@ -4818,8 +4824,6 @@
   }
   .rmtf input:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
   .rmtck { gap: 8px }
-  .rmtck input { flex: none; width: auto }
-  .rmtck > span { width: auto; flex: 1 }
   .rmtform .rmtact { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px }
   .rmtform .rmtact button {
     padding: 5px 14px; border-radius: var(--r-xs);

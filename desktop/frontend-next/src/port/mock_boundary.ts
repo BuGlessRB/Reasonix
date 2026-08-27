@@ -5,6 +5,14 @@ import { MockShell } from "./mock_shell";
 // far an approved write reaches. It carries one rule of each kind already, so
 // the pane renders the three lists populated rather than as three empty boxes —
 // an empty editor cannot show what a rule looks like.
+// The kernel's platform resolution, so flipping the fixture's platform to
+// "windows" shows the pane what that machine shows rather than what this file
+// happens to store. Unset is not "off" anywhere but Windows.
+function effectiveBash(s: SandboxSettings): string {
+  if (s.platform === "windows") return "off";
+  return s.bash.trim() === "off" ? "off" : "enforce";
+}
+
 export class MockBoundary extends MockShell {
   private rules: PermissionRules = {
     mode: "ask",
@@ -20,6 +28,7 @@ export class MockBoundary extends MockShell {
     workspaceRoot: "",
     allowWrite: ["/tmp/scratch"],
     effectiveWriteRoots: ["/Users/you/code/site", "/tmp/scratch"],
+    effectiveBash: "enforce",
     available: true,
     platform: "darwin",
     path: "/Users/you/.reasonix/config.toml",
@@ -45,7 +54,7 @@ export class MockBoundary extends MockShell {
 
   async saveSandbox(s: SandboxSettings): Promise<SandboxSettings> {
     const roots = [s.workspaceRoot || "/Users/you/code/site", ...s.allowWrite.filter(Boolean)];
-    this.jail = { ...this.jail, ...s, effectiveWriteRoots: roots };
+    this.jail = { ...this.jail, ...s, effectiveWriteRoots: roots, effectiveBash: effectiveBash(s) };
     return { ...this.jail };
   }
 

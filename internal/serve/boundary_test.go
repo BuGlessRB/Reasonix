@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"testing"
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/sandbox"
 )
 
 func readJSON[T any](t *testing.T, base, path string) T {
@@ -159,6 +161,65 @@ func TestSandboxSettingsReportWhatTheConfinerWillUse(t *testing.T) {
 		if root == "" {
 			t.Fatalf("effective roots contain a blank: %v", got.EffectiveWriteRoots)
 		}
+	}
+}
+
+// The editor draws the posture from this, so it has to be the mode that will
+// run rather than the word in the file: an unset value enforces everywhere but
+// Windows, which forces off however the file reads. A pane fed the file's word
+// would report the wrong half of a security boundary on both.
+func TestSandboxSettingsReportTheModeThatWillRun(t *testing.T) {
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	want := "enforce"
+	if runtime.GOOS == "windows" {
+		want = "off"
+	}
+	if got := readJSON[control.SandboxSettings](t, srv.URL, "/sandbox"); got.EffectiveBash != want {
+		t.Fatalf("effectiveBash with nothing configured = %q, want %q", got.EffectiveBash, want)
+	}
+
+	resp := postProvider(t, srv.URL, "/sandbox", `{"bash":"off","network":true}`)
+	resp.Body.Close()
+	if got := readJSON[control.SandboxSettings](t, srv.URL, "/sandbox"); got.EffectiveBash != "off" {
+		t.Fatalf("effectiveBash after saving off = %q", got.EffectiveBash)
+	}
+}
+
+// A host with no OS backend refusing "enforce" is not a malformed request and
+// not an unwritable file, and a client that cannot tell the three apart can
+// only guess. The code is what carries that; the sentence is for logs.
+func TestSaveSandboxRefusesEnforceWithoutABackendByCode(t *testing.T) {
+	if sandbox.Available() {
+		t.Skip("this host has an OS sandbox, so enforce is not refused here")
+	}
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	resp := postProvider(t, srv.URL, "/sandbox", `{"bash":"enforce"}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("POST /sandbox enforce = %d, want 409", resp.StatusCode)
+	}
+	var out struct {
+		Code  string `json:"code"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Code != "sandbox.unavailable" {
+		t.Fatalf("refusal code = %q, want sandbox.unavailable", out.Code)
+	}
+	if cfg, err := config.Load(); err != nil {
+		t.Fatal(err)
+	} else if cfg.Sandbox.Bash == "enforce" {
+		t.Fatal("a refused mode was written to the config anyway")
 	}
 }
 

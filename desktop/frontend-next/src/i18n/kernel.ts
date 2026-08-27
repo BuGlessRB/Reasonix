@@ -166,6 +166,7 @@ const SAID: Record<string, string> = {
   "sandbox.no_sandbox_exec": "这台机器上的 sandbox-exec 用不了，命令只能不受限地跑",
   "sandbox.unsupported_on_windows": "Windows 上还没有 OS 级沙箱，命令只能不受限地跑",
   "sandbox.unsupported_platform": "这个平台还没有能用的沙箱后端，命令只能不受限地跑",
+  "sandbox.unavailable": "这台机器上没有 OS 沙箱，「关进沙箱」这一档存不上",
 };
 
 /** Reason is what a refused request answers with. `error` is English fallback

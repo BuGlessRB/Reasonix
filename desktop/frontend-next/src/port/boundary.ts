@@ -20,15 +20,19 @@ export interface PermissionRules extends PermissionLists {
   effective?: PermissionLists;
 }
 
-// Where an approved write may land, and whether bash runs jailed.
-// effectiveWriteRoots is the expansion the confiner will use: an empty
-// workspaceRoot is not "anywhere", it is "the session directory".
+// Where an approved write may land, and whether bash runs jailed. The
+// effective* fields are what the confiner will use: an empty workspaceRoot is
+// not "anywhere", it is "the session directory", and an empty bash is not "off".
 export interface SandboxSettings {
   bash: string;
   network: boolean;
   workspaceRoot: string;
   allowWrite: string[];
   effectiveWriteRoots: string[];
+  // The mode that will actually run, which the configured one does not always
+  // survive to: Windows has no OS backend and forces off, an unset value
+  // enforces elsewhere, and a project file outranks this one.
+  effectiveBash: string;
   // False where this host has no OS sandbox at all — enforce would then refuse
   // every bash call rather than run it unconfined, so the switch says so
   // instead of pretending to work.

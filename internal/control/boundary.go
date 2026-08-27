@@ -3,6 +3,7 @@
 package control
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -43,6 +44,10 @@ type SandboxSettings struct {
 	AllowWrite    []string `json:"allowWrite"`
 
 	EffectiveWriteRoots []string `json:"effectiveWriteRoots"`
+	// EffectiveBash is the mode the confiner will use. Windows forces off, an
+	// unset value enforces elsewhere, and a project file outranks this one — so
+	// Bash above is what was written and this is what will run.
+	EffectiveBash string `json:"effectiveBash"`
 	// Available reports whether this host has an OS sandbox at all. Where it is
 	// false, enforce refuses every bash call rather than running it unconfined,
 	// so the editor has to say so instead of offering a dead switch.
@@ -105,6 +110,11 @@ func (c *Controller) SavePermissionRules(in PermissionLists) error {
 	return cfg.SaveTo(path)
 }
 
+// ErrSandboxUnavailable is the one refusal this editor makes on its own. A
+// caller has to tell "this host cannot enforce" apart from "the config file
+// would not write", and only the producer of the refusal knows which it was.
+var ErrSandboxUnavailable = errors.New("bash sandbox requested but unavailable on this host")
+
 // SandboxSettings reads the configured jail beside what it expands to here.
 func (c *Controller) SandboxSettings() SandboxSettings {
 	path := config.UserConfigPath()
@@ -127,6 +137,7 @@ func (c *Controller) SandboxSettings() SandboxSettings {
 		effective = merged
 	}
 	out.EffectiveWriteRoots = effective.WriteRootsForRoot(c.WorkspaceRoot())
+	out.EffectiveBash = effective.BashMode()
 	return out
 }
 
@@ -141,7 +152,7 @@ func (c *Controller) SaveSandboxSettings(in SandboxSettings) error {
 		return fmt.Errorf("sandbox bash %q: must be enforce|off", in.Bash)
 	}
 	if bash == "enforce" && !sandbox.Available() {
-		return fmt.Errorf("这台机器没有可用的 OS 沙箱：%s", sandbox.UnavailableMessage())
+		return fmt.Errorf("%w: %s", ErrSandboxUnavailable, sandbox.UnavailableRemediation())
 	}
 	unlock := config.LockUserConfigEdits()
 	defer unlock()

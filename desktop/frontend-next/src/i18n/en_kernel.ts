@@ -33,6 +33,7 @@ export const EN_KERNEL: Record<string, string> = {
   "这台机器上的 sandbox-exec 用不了，命令只能不受限地跑": "sandbox-exec is unusable on this machine, so commands run unconfined",
   "Windows 上还没有 OS 级沙箱，命令只能不受限地跑": "Windows has no OS-level sandbox here yet, so commands run unconfined",
   "这个平台还没有能用的沙箱后端，命令只能不受限地跑": "This platform has no usable sandbox backend yet, so commands run unconfined",
+  "这台机器上没有 OS 沙箱，「关进沙箱」这一档存不上": "This machine has no OS sandbox, so the jailed mode cannot be saved",
 
   "这个文件夹还有 {n} 个打开的面板，先关掉再移除": "This folder still has {n} open panes — close them before removing it",
   "这种图片格式用不了，换 PNG、JPEG、WebP、AVIF 或 GIF":

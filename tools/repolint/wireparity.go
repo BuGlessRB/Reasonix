@@ -11,22 +11,26 @@ import (
 	"strings"
 )
 
-// tsWireFile is where the desktop re-declares the kernel's wire types by hand.
-const tsWireFile = "desktop/frontend-next/src/port/wire.ts"
+// Where the desktop re-declares the kernel's wire types by hand.
+const (
+	tsWireFile     = "desktop/frontend-next/src/port/wire.ts"
+	tsBoundaryFile = "desktop/frontend-next/src/port/boundary.ts"
+)
 
 // mirroredWireTypes are the Go types the desktop keeps a second, hand-written
-// copy of. Only the graph is here, because only agentgraph claims every
-// consumer folds the same deltas. Declared and not inferred, for the reason the
-// sensitive paths are: no spelling tells a mirrored contract from a struct that
-// merely carries json tags.
+// copy of: the graph, whose consumers all fold the same deltas, and the sandbox
+// editor, which draws a security posture a field it cannot read would get
+// wrong. Declared and not inferred, for the reason the sensitive paths are: no
+// spelling tells a mirrored contract from a struct with json tags.
 var mirroredWireTypes = []wireMirror{
-	{"internal/agentgraph/graph.go", "Node", "GraphNode"},
-	{"internal/agentgraph/graph.go", "Edge", "GraphEdge"},
-	{"internal/agentgraph/graph.go", "Delta", "GraphDelta"},
+	{"internal/agentgraph/graph.go", "Node", tsWireFile, "GraphNode"},
+	{"internal/agentgraph/graph.go", "Edge", tsWireFile, "GraphEdge"},
+	{"internal/agentgraph/graph.go", "Delta", tsWireFile, "GraphDelta"},
+	{"internal/control/boundary.go", "SandboxSettings", tsBoundaryFile, "SandboxSettings"},
 }
 
 type wireMirror struct {
-	goFile, goType, tsType string
+	goFile, goType, tsFile, tsType string
 }
 
 // wireScan collects the declared types' wire field names while the tree is
@@ -53,16 +57,23 @@ func (w *wireScan) observe(src *sourceFile) {
 // a picture cannot show what it was never told, and it cannot expect what
 // nothing sends.
 func (w *wireScan) findings(root string) []Finding {
-	raw, err := os.ReadFile(filepath.Join(root, tsWireFile))
-	if err != nil {
-		return nil
+	bodies := map[string]string{}
+	for _, m := range mirroredWireTypes {
+		if _, read := bodies[m.tsFile]; read {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(root, m.tsFile))
+		if err != nil {
+			return nil
+		}
+		bodies[m.tsFile] = string(raw)
 	}
-	return wireParityFindings(mirroredWireTypes, w.fields, string(raw))
+	return wireParityFindings(mirroredWireTypes, w.fields, bodies)
 }
 
 // wireParityFindings is the comparison itself, so a fixture can carry the one
 // pair a case is about rather than the tree's real ones.
-func wireParityFindings(mirrors []wireMirror, goFields map[string][]string, body string) []Finding {
+func wireParityFindings(mirrors []wireMirror, goFields map[string][]string, bodies map[string]string) []Finding {
 	var out []Finding
 	for _, m := range mirrors {
 		fields, declared := goFields[m.goFile+"."+m.goType]
@@ -71,18 +82,18 @@ func wireParityFindings(mirrors []wireMirror, goFields map[string][]string, body
 				fmt.Sprintf("%s is declared a mirrored wire type and is not a struct here", m.goType), 1})
 			continue
 		}
-		tsFields, line, found := tsInterfaceFields(body, m.tsType)
+		tsFields, line, found := tsInterfaceFields(bodies[m.tsFile], m.tsType)
 		if !found {
-			out = append(out, Finding{tsWireFile, 1, ruleWireParity,
+			out = append(out, Finding{m.tsFile, 1, ruleWireParity,
 				fmt.Sprintf("%s mirrors %s.%s and is not declared here", m.tsType, m.goFile, m.goType), 1})
 			continue
 		}
 		for _, name := range missingFrom(fields, tsFields) {
-			out = append(out, Finding{tsWireFile, line, ruleWireParity,
+			out = append(out, Finding{m.tsFile, line, ruleWireParity,
 				fmt.Sprintf("%s sends %q and %s cannot read it", m.goType, name, m.tsType), 1})
 		}
 		for _, name := range missingFrom(tsFields, fields) {
-			out = append(out, Finding{tsWireFile, line, ruleWireParity,
+			out = append(out, Finding{m.tsFile, line, ruleWireParity,
 				fmt.Sprintf("%s reads %q and %s never sends it", m.tsType, name, m.goType), 1})
 		}
 	}

@@ -156,6 +156,9 @@ export const EN_SETTINGS: Record<string, string> = {
     "Commands can only run unconfined; the write range above is still enforced by the tools themselves.",
   "关进沙箱": "Jailed",
   "不受限": "Unconfined",
+  "实际生效": "Actually in force",
+  "配置里写的是「{want}」，这台机器上按「{now}」跑。":
+    "The config asks for “{want}”; this machine runs “{now}”.",
   "沙箱里允许联网": "Allow network inside the sandbox",
   "关掉之后装依赖、拉仓库都会失败 —— 这正是它的用途":
     "With this off, installing dependencies and cloning repos fail — which is the point",

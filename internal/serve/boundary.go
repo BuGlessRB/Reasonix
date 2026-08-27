@@ -4,6 +4,7 @@ package serve
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"reasonix/internal/control"
@@ -64,6 +65,13 @@ func (s *Server) saveSandboxSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.ctl().SaveSandboxSettings(body); err != nil {
+		// Not a bad request and not an unwritable file: the mode is real and this
+		// host cannot run it. GET /sandbox already says which backend is missing,
+		// so this only has to carry that the write did not happen.
+		if errors.Is(err, control.ErrSandboxUnavailable) {
+			refuse(w, http.StatusConflict, "sandbox.unavailable", err.Error(), nil)
+			return
+		}
 		saveFailed(w, http.StatusBadRequest, "sandbox.rejected", err)
 		return
 	}

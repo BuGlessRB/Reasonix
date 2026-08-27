@@ -27,7 +27,7 @@ const wireTS = `export interface GraphNode {
 }
 `
 
-var wirePair = []wireMirror{{"t.go", "Node", "GraphNode"}}
+var wirePair = []wireMirror{{"t.go", "Node", tsWireFile, "GraphNode"}}
 
 func wireFindingsFor(t *testing.T, goSrc, ts string) []Finding {
 	t.Helper()
@@ -36,7 +36,7 @@ func wireFindingsFor(t *testing.T, goSrc, ts string) []Finding {
 	if !ok {
 		t.Fatal("the fixture declares no Node struct")
 	}
-	return wireParityFindings(wirePair, map[string][]string{"t.go.Node": names}, ts)
+	return wireParityFindings(wirePair, map[string][]string{"t.go.Node": names}, map[string]string{tsWireFile: ts})
 }
 
 // A field the encoder skips is not on the wire, so demanding the mirror carry it
@@ -69,7 +69,7 @@ func TestWireParityCatchesAFieldNothingSends(t *testing.T) {
 // A pair is declared, so a declaration that no longer resolves has to say so
 // rather than pass by being unreadable.
 func TestWireParityReportsAPairItCannotRead(t *testing.T) {
-	got := wireParityFindings(wirePair, map[string][]string{}, wireTS)
+	got := wireParityFindings(wirePair, map[string][]string{}, map[string]string{tsWireFile: wireTS})
 	if len(got) != 1 || !strings.Contains(got[0].Msg, "not a struct here") {
 		t.Fatalf("a declared pair with no Go side was not reported: %+v", got)
 	}
