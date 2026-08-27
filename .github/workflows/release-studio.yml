@@ -341,7 +341,8 @@ jobs:
         run: |
           ./scripts/verify-windows-authenticode.ps1 `
             -PayloadDirectory signed-payload `
-            -InstallerPath "dist/ReasonixStudio-windows-amd64-installer.exe"
+            -InstallerPath "dist/ReasonixStudio-windows-amd64-installer.exe" `
+            -PortableArchivePath "dist/ReasonixStudio-windows-amd64.zip"
 
       - uses: actions/upload-artifact@v5
         with:
