@@ -116,3 +116,26 @@ export interface RemoteAsk {
   // passphrase: which key file is locked.
   identityFile?: string;
 }
+
+/** One way a kernel could reach a machine. A closed route carries the same
+ *  dotted code a failed connect would refuse with, so say() words a foreseen
+ *  failure exactly like the failure itself. */
+export interface RemoteRoute {
+  name: string;
+  ok: boolean;
+  code?: string;
+}
+
+/** What a machine can do, read before anything is attempted on it. `ready`
+ *  means a route to a kernel exists — never that taking it will succeed. */
+export interface RemoteProbe {
+  os: string;
+  arch: string;
+  home: string;
+  kernel?: string;
+  version?: string;
+  outdated?: string;
+  npm?: string;
+  ready: boolean;
+  routes: RemoteRoute[];
+}

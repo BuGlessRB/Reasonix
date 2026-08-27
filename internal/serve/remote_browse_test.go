@@ -3,9 +3,11 @@ package serve
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -116,5 +118,75 @@ func TestBrowsingIsNotOfferedWhereRemotePanesAreNot(t *testing.T) {
 	resp, _, why := browseGet(t, front, "/remotes/box/dirs")
 	if resp.StatusCode != http.StatusNotImplemented || why.Code != "remote.not_available" {
 		t.Fatalf("no-remote kernel = %d/%q, want 501/remote.not_available", resp.StatusCode, why.Code)
+	}
+}
+
+// A probe answers without a pane for the same reason browsing does: it rides
+// the connection alone. Its value is that one call reports every closed route,
+// where a connect would have failed on the first and said nothing about the
+// rest.
+func TestProbeReportsEveryRouteInOneAnswer(t *testing.T) {
+	front := bookServer(t, &stubAttacher{probe: &RemoteProbe{
+		OS: "linux", Arch: "amd64", Home: "/home/ada", Ready: false,
+		Routes: []RemoteProbeRoute{
+			{Name: "npm", Code: "remote.npm_unavailable"},
+			{Name: "upload", Code: "remote.platform_mismatch"},
+			{Name: "download", OK: true},
+		},
+	}})
+	resp, err := http.Get(front.URL + "/remotes/gpu-box/probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var out RemoteProbe
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Routes) != 3 || out.Ready {
+		t.Fatalf("probe = %+v", out)
+	}
+	// A closed route carries the code, not a sentence: the window words it the
+	// same way it words the failure itself.
+	if out.Routes[0].Code != "remote.npm_unavailable" || out.Routes[2].Code != "" {
+		t.Errorf("codes = %+v", out.Routes)
+	}
+}
+
+// A machine with every route open still has to send an array. A nil slice
+// encodes as null, and a frontend mapping over it throws where it should have
+// drawn nothing.
+func TestProbeSendsRoutesAsAnArray(t *testing.T) {
+	front := bookServer(t, &stubAttacher{probe: &RemoteProbe{OS: "linux", Arch: "amd64", Ready: true}})
+	resp, err := http.Get(front.URL + "/remotes/gpu-box/probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), `"routes":[]`) {
+		t.Fatalf("routes did not encode as an array: %s", body)
+	}
+}
+
+// Without a link layer the window is a browser tab talking to a bare serve,
+// and a probe there would be this process SSH-ing somewhere on its own say-so.
+func TestProbeRefusesWithoutALinkLayer(t *testing.T) {
+	front := bookServer(t, nil)
+	resp, err := http.Get(front.URL + "/remotes/gpu-box/probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a hub with no attacher answered a probe")
+	}
+	var why Reason
+	_ = json.NewDecoder(resp.Body).Decode(&why)
+	if why.Code == "" {
+		t.Fatal("the refusal carried no code")
 	}
 }

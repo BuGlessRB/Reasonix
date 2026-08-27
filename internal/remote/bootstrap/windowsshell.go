@@ -95,6 +95,10 @@ func (windowsShell) Logs(logFile string, n int) string {
 		" -Tail " + fmt.Sprint(n) + " -ErrorAction SilentlyContinue }")
 }
 
+func (windowsShell) NPMVersion() string {
+	return psCommand("(& npm --version 2>$null | Select-Object -First 1) -join ''")
+}
+
 // Locate reports the same records the POSIX probe does, one block per candidate:
 // `bin`, `ver`, `flag`. Every candidate for the same reason as there — the
 // caller is the side that knows which of them is usable for what it wants.

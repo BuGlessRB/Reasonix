@@ -95,6 +95,27 @@ func (r *remoteLink) Candidates() []string {
 	return out
 }
 
+// Probe answers what that machine can do before anything is attempted on it.
+// A closed route carries the code identify would have refused with, so the
+// window has one wording for a failure and for the same failure foreseen.
+func (r *remoteLink) Probe(ctx context.Context, host string) (serve.RemoteProbe, error) {
+	rep, err := r.pool.Probe(ctx, host)
+	if err != nil {
+		return serve.RemoteProbe{}, identify(host, err)
+	}
+	out := serve.RemoteProbe{
+		OS: rep.OS, Arch: rep.Arch, Home: rep.Home,
+		Kernel: rep.Kernel, Version: rep.Version, Outdated: rep.Outdated,
+		NPM: rep.NPM, Ready: rep.Ready(),
+	}
+	for _, route := range rep.Routes {
+		out.Routes = append(out.Routes, serve.RemoteProbeRoute{
+			Name: route.Name, OK: route.OK(), Code: installFailureCode(route.Err),
+		})
+	}
+	return out, nil
+}
+
 func (r *remoteLink) States() map[string]serve.RemoteLinkState {
 	live := r.pool.States()
 	out := make(map[string]serve.RemoteLinkState, len(live))
@@ -128,6 +149,31 @@ func fetchRemoteBinary(ctx context.Context, version, goos, goarch string) ([]byt
 	return releaseasset.DownloadCLI(ctx, client, version, goos, goarch)
 }
 
+// installFailureCode names which way putting a kernel over there failed. One
+// table for two readers: identify refuses with it, and a probe reports it for
+// a route already visibly closed, so one wording covers both. Order matters —
+// the auto strategy joins every attempt, so specific routes are matched before
+// the "nothing left" that wraps them.
+func installFailureCode(err error) string {
+	switch {
+	case errors.Is(err, bootstrap.ErrInstallDisabled):
+		return "remote.install_disabled"
+	case errors.Is(err, bootstrap.ErrNPMOutsidePath):
+		return "remote.npm_outside_path"
+	case errors.Is(err, bootstrap.ErrBinaryNotRunnable):
+		return "remote.binary_not_runnable"
+	case errors.Is(err, bootstrap.ErrServeDidNotStart):
+		return "remote.serve_did_not_start"
+	case errors.Is(err, bootstrap.ErrNoInstallPath):
+		return "remote.no_install_path"
+	case errors.Is(err, bootstrap.ErrNPMUnavailable):
+		return "remote.npm_unavailable"
+	case errors.Is(err, bootstrap.ErrPlatformMismatch):
+		return "remote.platform_mismatch"
+	}
+	return ""
+}
+
 // identify gives the failures a person can act on an identity of their own. A
 // changed host key is the one that must never arrive as a network error: the
 // record it contradicts is what makes it checkable, and there is deliberately
@@ -158,6 +204,14 @@ func identify(host string, err error) error {
 		// onto. No detail: what it said is its own shell's complaint, in its
 		// own code page, and pasting that on screen explains nothing.
 		return serve.Refusal(http.StatusNotImplemented, "remote.unsupported_os", err, map[string]any{"host": host})
+	}
+	if code := installFailureCode(err); code != "" {
+		status := http.StatusBadGateway
+		if code == "remote.install_disabled" {
+			// Nothing is broken; this machine is set not to install one.
+			status = http.StatusConflict
+		}
+		return serve.Refusal(status, code, err, map[string]any{"host": host})
 	}
 	// Everything else keeps its text, which without a code reaches the window
 	// as a bare status — and a bare 502 reads as "the request never arrived"

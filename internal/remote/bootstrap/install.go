@@ -40,7 +40,7 @@ func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS
 
 	switch strategy {
 	case InstallNever:
-		return fail(errors.New("bootstrap: reasonix not found on remote and serve_install = never"))
+		return fail(ErrInstallDisabled)
 	case InstallNPM:
 		b, v, nerr := installViaNPM(ctx, conn, target, opts.MinVersion)
 		if nerr != nil {
@@ -65,9 +65,9 @@ func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS
 					attempts = append(attempts, uploadErr)
 				}
 			} else if opts.LocalBinary == "" {
-				attempts = append(attempts, errors.New("bootstrap: no local Reasonix CLI is available for upload"))
+				attempts = append(attempts, fmt.Errorf("%w: no local Reasonix CLI to upload", ErrPlatformMismatch))
 			} else {
-				attempts = append(attempts, fmt.Errorf("bootstrap: local binary is %s/%s but remote is %s/%s", opts.LocalGOOS, opts.LocalGOARCH, goos, goarch))
+				attempts = append(attempts, fmt.Errorf("%w: local is %s/%s, remote is %s/%s", ErrPlatformMismatch, opts.LocalGOOS, opts.LocalGOARCH, goos, goarch))
 			}
 			if opts.FetchBinary != nil {
 				binary, fetchErr := opts.FetchBinary(ctx, opts.ProductVersion, goos, goarch)
@@ -81,7 +81,9 @@ func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS
 					attempts = append(attempts, fmt.Errorf("bootstrap: fetch official %s/%s CLI: %w", goos, goarch, fetchErr))
 				}
 			}
-			return fail(fmt.Errorf("bootstrap: automatic install failed: %w", errors.Join(attempts...)))
+			// Every route was tried. Which one the reader could still take by hand is
+			// in the joined text; that there is no automatic one left is the fact.
+			return fail(fmt.Errorf("%w: %w", ErrNoInstallPath, errors.Join(attempts...)))
 		}
 	}
 }
@@ -167,15 +169,15 @@ func outdated(found []candidate, minVersion string) string {
 func installViaNPM(ctx context.Context, conn Conn, target remoteOS, minVersion string) (bin, version string, err error) {
 	res, err := conn.Exec(ctx, "npm i -g reasonix 2>&1")
 	if err != nil {
-		return "", "", fmt.Errorf("bootstrap: npm install: %w", err)
+		return "", "", fmt.Errorf("%w: %w", ErrNPMUnavailable, err)
 	}
 	if res.ExitCode != 0 {
-		return "", "", fmt.Errorf("bootstrap: npm install failed: %s", tail(res.Stdout, 400))
+		return "", "", fmt.Errorf("%w: %s", ErrNPMUnavailable, tail(res.Stdout, 400))
 	}
 	// npm may install outside the login PATH; probe npm prefix explicitly.
 	loc, ver := locate(ctx, conn, target, "", minVersion)
 	if loc == "" {
-		return "", "", fmt.Errorf("bootstrap: reasonix not found after npm install (check remote PATH / npm prefix)")
+		return "", "", ErrNPMOutsidePath
 	}
 	return loc, ver, nil
 }
@@ -185,11 +187,11 @@ func installViaNPM(ctx context.Context, conn Conn, target remoteOS, minVersion s
 // release download instead, which carries every target the line publishes.
 func installViaUpload(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch, uploaded string) (bin, version string, err error) {
 	if opts.LocalBinary == "" {
-		return "", "", fmt.Errorf("bootstrap: upload strategy needs the local reasonix binary path")
+		return "", "", fmt.Errorf("%w: no local Reasonix CLI to upload", ErrPlatformMismatch)
 	}
 	if opts.LocalGOOS != goos || opts.LocalGOARCH != goarch {
-		return "", "", fmt.Errorf("bootstrap: cannot upload: local binary is %s/%s but remote is %s/%s; use serve_install = npm",
-			opts.LocalGOOS, opts.LocalGOARCH, goos, goarch)
+		return "", "", fmt.Errorf("%w: local is %s/%s, remote is %s/%s",
+			ErrPlatformMismatch, opts.LocalGOOS, opts.LocalGOARCH, goos, goarch)
 	}
 	data, rerr := os.ReadFile(opts.LocalBinary)
 	if rerr != nil {
@@ -200,7 +202,7 @@ func installViaUpload(ctx context.Context, conn Conn, target remoteOS, fs *sftpf
 
 func installBinaryBytes(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, data []byte, minVersion, home, uploaded string) (bin, version string, err error) {
 	if len(data) == 0 {
-		return "", "", fmt.Errorf("bootstrap: downloaded binary is empty")
+		return "", "", fmt.Errorf("%w: the download was empty", ErrBinaryNotRunnable)
 	}
 	if err := fs.MkdirAll(ctx, dirOf(uploaded)); err != nil {
 		return "", "", err
@@ -210,7 +212,7 @@ func installBinaryBytes(ctx context.Context, conn Conn, target remoteOS, fs *sft
 	}
 	loc, ver := locate(ctx, conn, target, uploaded, minVersion)
 	if loc == "" {
-		return "", "", fmt.Errorf("bootstrap: uploaded binary not runnable on remote")
+		return "", "", ErrBinaryNotRunnable
 	}
 	return loc, ver, nil
 }

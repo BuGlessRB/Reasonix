@@ -24,6 +24,9 @@ type remoteOS interface {
 	Stop(pid int, p StatePaths) string
 	Logs(logFile string, n int) string
 	Locate(uploadedBin string) string
+	// NPMVersion asks npm what it is. Empty output means no npm, which is the
+	// first fork in whether a kernel can be installed here at all.
+	NPMVersion() string
 	// NativePath turns a path the file layer addresses into the one that
 	// machine's own kernel spells it with. The same file, two strings.
 	NativePath(p string) string

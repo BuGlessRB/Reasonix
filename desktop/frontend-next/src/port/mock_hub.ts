@@ -1,6 +1,6 @@
 import type { AgentPort } from "./port";
 import type { HubPort, RuntimeView, TreeWorkspace } from "./hub";
-import type { RemoteHost, RemoteListing } from "./remote";
+import type { RemoteHost, RemoteListing, RemoteProbe } from "./remote";
 import { MockPort } from "./mock";
 
 // MockHub is the fixture's answer to a window that drives several panes. Each
@@ -92,6 +92,22 @@ export class MockHub implements HubPort {
   // A far machine's filesystem, deep enough that walking down and back up can
   // be designed: the picker's two hard states are a folder with nothing in it
   // and one with more than fits.
+  // A machine with no npm and nothing uploadable: the interesting shape, since
+  // a ready one has nothing to show.
+  async probeRemote(_host: string): Promise<RemoteProbe> {
+    return {
+      os: "linux",
+      arch: "amd64",
+      home: "/home/ada",
+      ready: false,
+      routes: [
+        { name: "npm", ok: false, code: "remote.npm_unavailable" },
+        { name: "upload", ok: false, code: "remote.platform_mismatch" },
+        { name: "download", ok: true },
+      ],
+    };
+  }
+
   remoteDirs(_host: string, path?: string) {
     const at = path || "/home/ada";
     const kids: Record<string, string[]> = {

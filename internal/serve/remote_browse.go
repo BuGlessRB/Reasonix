@@ -45,3 +45,20 @@ func (h *Hub) remoteDirs(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, listing)
 }
+
+// remoteProbe answers what that machine can do, without changing it.
+func (h *Hub) remoteProbe(w http.ResponseWriter, r *http.Request) {
+	if h.opts.Remote == nil {
+		refuseNoRemote(w)
+		return
+	}
+	report, err := h.opts.Remote.Probe(r.Context(), r.PathValue("host"))
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	if report.Routes == nil {
+		report.Routes = []RemoteProbeRoute{}
+	}
+	writeJSON(w, report)
+}

@@ -25,6 +25,7 @@ type stubAttacher struct {
 	browse     func(host, dir string) (RemoteListing, error)
 	states     map[string]RemoteLinkState
 	candidates []string
+	probe      *RemoteProbe
 }
 
 func (s *stubAttacher) Attach(_ context.Context, host, workspace string) (RemoteEndpoint, func(), error) {
@@ -41,6 +42,15 @@ func (s *stubAttacher) Browse(_ context.Context, host, dir string) (RemoteListin
 func (s *stubAttacher) States() map[string]RemoteLinkState { return s.states }
 
 func (s *stubAttacher) Candidates() []string { return s.candidates }
+
+// A machine that answers everything and needs nothing installed, so a test
+// that is not about probing does not have to say what it would report.
+func (s *stubAttacher) Probe(context.Context, string) (RemoteProbe, error) {
+	if s.probe != nil {
+		return *s.probe, nil
+	}
+	return RemoteProbe{OS: "linux", Arch: "amd64", Home: "/home/t", Kernel: "/usr/bin/reasonix", Version: "2.9.0", Ready: true}, nil
+}
 
 // remoteKernel stands in for a `reasonix serve` on another machine. It records
 // what the proxy presented so the tests can assert on the far side.

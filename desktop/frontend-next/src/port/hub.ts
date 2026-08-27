@@ -1,5 +1,5 @@
 import { HttpError, type AgentPort } from "./port";
-import type { RemoteAsk, RemoteHost, RemoteHostEdit, RemoteListing } from "./remote";
+import type { RemoteAsk, RemoteHost, RemoteHostEdit, RemoteListing, RemoteProbe } from "./remote";
 import { SsePort } from "./sse";
 
 // RuntimeView is one open pane. Base is the prefix every request of that pane
@@ -71,6 +71,9 @@ export interface HubPort {
   // installed over there to answer it, which is why picking one works on a
   // machine nothing is open on. An empty path is that machine's login home.
   remoteDirs(host: string, path?: string): Promise<RemoteListing>;
+  /** What that machine can do, without changing anything on it. A cold connect
+   *  stops at the first missing piece; this asks for all of them at once. */
+  probeRemote(host: string): Promise<RemoteProbe>;
   // The host book's folder list, written one entry at a time. The settings page
   // replaces a whole row; a control that knows one folder must not, or it sends
   // back blanks for every field it never displayed.
@@ -218,6 +221,10 @@ export class SseHub implements HubPort {
     if (res.status === 409) return null;
     if (!res.ok) await SseHub.fail(path, res);
     return (await res.json()) as TreeWorkspace[];
+  }
+
+  probeRemote(host: string) {
+    return this.get<RemoteProbe>(`/remotes/${encodeURIComponent(host)}/probe`);
   }
 
   remoteDirs(host: string, path?: string) {

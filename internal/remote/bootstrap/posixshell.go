@@ -42,4 +42,6 @@ func (posixShell) Locate(uploadedBin string) string {
 }
 
 // NativePath is identity here: the file layer and the shell agree.
+func (posixShell) NPMVersion() string { return "npm --version 2>/dev/null" }
+
 func (posixShell) NativePath(p string) string { return p }

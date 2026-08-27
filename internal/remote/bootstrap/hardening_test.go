@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -110,9 +111,18 @@ func TestAutoInstallPreservesNPMFailureWhenNoUploadBinaryExists(t *testing.T) {
 	if err == nil {
 		t.Fatal("auto install unexpectedly succeeded")
 	}
-	message := err.Error()
-	if !strings.Contains(message, "npm install failed: permission denied") || !strings.Contains(message, "no local Reasonix CLI") {
-		t.Fatalf("auto install hid the actionable failures: %v", err)
+	if !errors.Is(err, ErrNoInstallPath) {
+		t.Fatalf("auto install did not say that no route is left: %v", err)
+	}
+	// Which routes failed survives the join: "there is no Node.js over there"
+	// and "your binary is for another platform" are different next moves, and
+	// a reader who only learns that both failed has been told nothing.
+	if !errors.Is(err, ErrNPMUnavailable) || !errors.Is(err, ErrPlatformMismatch) {
+		t.Fatalf("auto install lost which routes failed: %v", err)
+	}
+	// The remote's own complaint still rides along, for the log.
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("the remote's own words were dropped: %v", err)
 	}
 }
 

@@ -262,7 +262,7 @@ func TestEnsureServeInstallNeverErrorsWhenAbsent(t *testing.T) {
 		}
 	})
 	_, err := EnsureServe(context.Background(), conn, Options{Workspace: "~", Install: InstallNever})
-	if err == nil || !strings.Contains(err.Error(), "serve_install = never") {
+	if !errors.Is(err, ErrInstallDisabled) {
 		t.Fatalf("expected install-never error, got %v", err)
 	}
 }

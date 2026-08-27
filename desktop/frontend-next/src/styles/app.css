@@ -4857,6 +4857,23 @@
   .rmtbook { display: grid; gap: 0 }
   .rmtrow { border-top: 1px solid var(--hair); padding: 10px 2px }
   .rmtrow:last-of-type { border-bottom: 1px solid var(--hair) }
+
+  /* 体检结果挂在它问的那台机器底下，一条竖线把两者分开：这不是行的一部分，
+     是一次提问的回答。线的颜色就是结论，不必再加一个徽标。 */
+  .rmtprobe {
+    margin: 8px 0 2px 15px; padding: 7px 0 7px 11px;
+    display: flex; flex-direction: column; gap: 4px;
+    border-left: 2px solid var(--warn);
+    animation: panel var(--t-panel) var(--ease-out) both;
+  }
+  .rmtprobe[data-ok] { border-left-color: var(--ok) }
+  .rmtprobe-r { display: flex; gap: 10px; font: var(--w-reg) 11.5px var(--mono) }
+  .rmtprobe-r .k { flex: none; width: 9ch; color: var(--ghost) }
+  .rmtprobe-r .v { min-width: 0; color: var(--muted); word-break: break-all }
+  /* 关掉的每条路各占一段：它们是要读的句子，不是读数，挤成一行就没人读了。 */
+  .rmtprobe-why { margin: 3px 0 0; font: var(--w-reg) 11.5px/1.6 var(--ui); color: var(--warn-ink) }
+  .rmtprobe-end { margin-top: 5px; font: var(--w-med) 11.5px var(--ui); color: var(--faint) }
+  .rmtprobe[data-ok] .rmtprobe-end { color: var(--ok) }
   .rmtrow .hd { display: flex; align-items: center; gap: 8px; font: var(--w-reg) 12.5px var(--ui) }
   .rmtrow .hd b { font-weight: var(--w-med); color: var(--text) }
   .rmtrow .tg { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -4912,12 +4929,17 @@
   }
   .rmtf { display: flex; align-items: center; gap: 10px; font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
   .rmtf > span { flex: none; width: 13ch }
+  .rmtf select {
+    flex: 1; min-width: 0; padding: 5px 8px; color: var(--text);
+    background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-sm);
+    font: var(--w-reg) 11.5px var(--ui);
+  }
   .rmtf input {
     flex: 1; min-width: 0; padding: 5px 8px;
     border: 1px solid var(--border); border-radius: var(--r-xs);
     background: var(--bg); color: var(--text); font: var(--w-reg) 11.5px var(--mono);
   }
-  .rmtf input:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
+  .rmtf input:focus-visible, .rmtf select:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
   .rmtck { gap: 8px }
   /* The project list is the one field here that is a list, so it takes the
      whole width instead of a 13ch label column: a remote path is long and

@@ -166,7 +166,7 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 	}
 	if pid <= 0 || !pidIsServe(ctx, conn, target, pid, paths) {
 		cleanupFailedLaunch(conn, target, fs, paths, pid)
-		return Result{}, errors.New("bootstrap: launched process did not become the expected reasonix serve")
+		return Result{}, fmt.Errorf("%w: the launched process is not a reasonix serve", ErrServeDidNotStart)
 	}
 
 	st := ServeState{
@@ -355,7 +355,7 @@ func pollPortFile(ctx context.Context, fs *sftpfs.FS, portFile string, clock fun
 			}
 		}
 		if clock().After(deadline) {
-			return "", errors.New("bootstrap: timed out waiting for serve to report its port")
+			return "", fmt.Errorf("%w: it did not within 20s", ErrServeDidNotStart)
 		}
 		select {
 		case <-ctx.Done():

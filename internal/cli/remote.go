@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/i18n"
 	"reasonix/internal/remote"
+	"reasonix/internal/remote/bootstrap"
 )
 
 // remoteCommand dispatches `reasonix remote <sub>`, mirroring mcpCommand.
@@ -311,13 +313,79 @@ func remoteTestCLI(args []string) int {
 		return 1
 	}
 	defer client.Close()
-	res, err := client.Exec(ctx, "uname -sm && whoami")
+	fmt.Println("connection OK")
+	// Reaching the machine is the first gate and the one that rarely fails. A
+	// cold connect then installs a kernel over there, and that is where it
+	// stops — one missing piece per attempt. Ask for all of them here.
+	rep, err := bootstrap.Probe(ctx, client, bootstrap.Options{
+		Install:     remoteInstallMode(args[0]),
+		LocalBinary: currentExecutable(),
+		LocalGOOS:   runtime.GOOS,
+		LocalGOARCH: runtime.GOARCH,
+		FetchBinary: fetchRemoteCLIBinary,
+		MinVersion:  bootstrap.MinPaneVersion,
+	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 1
 	}
-	fmt.Printf("connection OK\n%s", res.Stdout)
+	printRemoteReport(rep)
+	if !rep.Ready() {
+		return 1
+	}
 	return 0
+}
+
+// remoteInstallMode is the configured strategy when the argument named a host
+// in the book; a bare user@host was never configured and takes the default.
+func remoteInstallMode(name string) string {
+	cfg, err := config.Load()
+	if err != nil {
+		return ""
+	}
+	entry, ok := cfg.RemoteHost(name)
+	if !ok {
+		return ""
+	}
+	return entry.ServeInstallMode()
+}
+
+func printRemoteReport(rep bootstrap.Report) {
+	fmt.Printf("  machine   %s/%s, home %s\n", rep.OS, rep.Arch, rep.Home)
+	switch {
+	case rep.Kernel != "" && rep.Version != "":
+		fmt.Printf("  reasonix  %s %s\n", rep.Kernel, rep.Version)
+	case rep.Kernel != "":
+		// It answered the flag probe and not the version one. Saying so beats
+		// printing a path with a blank after it.
+		fmt.Printf("  reasonix  %s (it did not report a version)\n", rep.Kernel)
+	case rep.Outdated != "":
+		fmt.Printf("  reasonix  %s — older than %s, a connect would replace it\n", rep.Outdated, bootstrap.MinPaneVersion)
+	default:
+		fmt.Println("  reasonix  none yet")
+	}
+	if rep.NPM != "" {
+		fmt.Printf("  npm       %s\n", rep.NPM)
+	} else {
+		fmt.Println("  npm       not available")
+	}
+	// Indented under one heading: the rows above are what the machine has, and
+	// these are ways to put a kernel on it. Flat, "npm" appeared twice meaning
+	// two different things.
+	label := "  install "
+	for _, route := range rep.Routes {
+		if route.OK() {
+			fmt.Printf("%s %-9s open\n", label, route.Name)
+		} else {
+			fmt.Printf("%s %-9s %v\n", label, route.Name, route.Err)
+		}
+		label = "          "
+	}
+	if rep.Ready() {
+		fmt.Println("ready — a connect would find or install a kernel here")
+		return
+	}
+	fmt.Println("not ready — install reasonix on that machine, or open one of the routes above")
 }
 
 func remoteUsage() {
@@ -330,7 +398,7 @@ Usage:
   reasonix remote list
   reasonix remote remove <name>
   reasonix remote import [alias...|--all]      # from ~/.ssh/config
-  reasonix remote test <name|user@host>        # dial + auth + host-key check
+  reasonix remote test <name|user@host>        # dial, auth, host key, and whether a kernel can run there
   reasonix remote connect <name> [--workspace PATH] [--local-port N] [--no-serve] [--open] [--forward-only]
   reasonix remote open <name>                  # connect --open
   reasonix remote status [<name>]

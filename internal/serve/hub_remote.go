@@ -82,6 +82,33 @@ type RemoteAttacher interface {
 	// reach. Reading that file is the link layer's job, which is what keeps
 	// SSH out of here even for a listing.
 	Candidates() []string
+	// Probe reads what a first connect would depend on, changing nothing over
+	// there. A cold connect stops at the first missing piece, so without this
+	// a reader learns them one failed attempt at a time.
+	Probe(ctx context.Context, host string) (RemoteProbe, error)
+}
+
+// RemoteProbe is one machine's readiness. Ready says a route to a kernel
+// exists, never that taking it will succeed — only trying finds that out.
+type RemoteProbe struct {
+	OS       string             `json:"os"`
+	Arch     string             `json:"arch"`
+	Home     string             `json:"home"`
+	Kernel   string             `json:"kernel,omitempty"`
+	Version  string             `json:"version,omitempty"`
+	Outdated string             `json:"outdated,omitempty"`
+	NPM      string             `json:"npm,omitempty"`
+	Ready    bool               `json:"ready"`
+	Routes   []RemoteProbeRoute `json:"routes"`
+}
+
+// RemoteProbeRoute is one way a kernel could get there. A closed one carries
+// the same dotted code a failed connect would have refused with, so the window
+// says the same sentence either way.
+type RemoteProbeRoute struct {
+	Name string `json:"name"`
+	OK   bool   `json:"ok"`
+	Code string `json:"code,omitempty"`
 }
 
 // RemoteLinkState is one machine's link as the attacher sees it.

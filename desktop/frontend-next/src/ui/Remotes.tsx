@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
 import type { HubPort } from "../port/hub";
-import type { RemoteHost, RemoteHostEdit } from "../port/remote";
+import type { RemoteHost, RemoteHostEdit, RemoteProbe } from "../port/remote";
+import { say } from "../i18n/kernel";
 import { RemoteDirs } from "./RemoteDirs";
 
 interface Props {
@@ -56,6 +57,10 @@ export function Remotes({ hub, onError }: Props) {
   const [editing, setEditing] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState("");
+  // What each machine answered when asked. Kept per host so a second probe
+  // does not blank the first one's answer while it runs.
+  const [probes, setProbes] = useState<Record<string, RemoteProbe>>({});
+  const [probing, setProbing] = useState("");
   // Browsing dials, and only a row already in the book has an address to dial.
   // A draft being typed has nowhere to go yet, so it types the path instead.
   const [picking, setPicking] = useState(false);
@@ -134,6 +139,20 @@ export function Remotes({ hub, onError }: Props) {
             <span className="st">{t(STATUS_LABEL[host.status] ?? host.status)}</span>
             <button
               className="rmtlnk"
+              disabled={probing === host.name}
+              onClick={() => {
+                setProbing(host.name);
+                hub
+                  .probeRemote(host.name)
+                  .then((rep) => setProbes((p) => ({ ...p, [host.name]: rep })))
+                  .catch(onError)
+                  .finally(() => setProbing(""));
+              }}
+            >
+              {t(probing === host.name ? "问着…" : "测一下")}
+            </button>
+            <button
+              className="rmtlnk"
               onClick={() => {
                 setEditing(host.name);
                 setDraft(draftOf(host));
@@ -154,6 +173,7 @@ export function Remotes({ hub, onError }: Props) {
             {host.forwards ? <span className="tag">{t("{n} 条转发", { n: host.forwards })}</span> : null}
             {host.panes ? <span className="tag">{t("{n} 个面板", { n: host.panes })}</span> : null}
           </div>
+          {probes[host.name] ? <ProbeCard probe={probes[host.name]} host={host.name} /> : null}
           {confirm === host.name && (
             <div className="rmtconfirm" role="alertdialog">
               <span>{t("从列表移除「{name}」？远端什么都不会删。", { name: host.name })}</span>
@@ -214,6 +234,7 @@ export function Remotes({ hub, onError }: Props) {
               onChange={(ev) => setDraft((d) => (d ? { ...d, port: Number(ev.target.value.replace(/\D/g, "")) || 0 } : d))}
             />
           </label>
+          {field("proxyJump", "跳板机", "bastion.example.com")}
           {/* Same shape the sandbox's writable list uses: one row per thing,
               then what you can do to it. The head carries the default badge
               rather than a separate field, because it is the same folder. */}
@@ -263,6 +284,22 @@ export function Remotes({ hub, onError }: Props) {
           {/* Named, not carried: this is the variable to read, never the secret
               itself, so nothing typed here is a password on its way anywhere. */}
           {field("passphraseEnv", "私钥口令的环境变量名", "GPU_BOX_PASSPHRASE")}
+          {field("passwordEnv", "登录密码的环境变量名", "GPU_BOX_PASSWORD")}
+          {/* 装不上时内核会点名让人改这一项，所以它必须在这里 —— 一条说「改成
+              npm 装」的错误，配上一个改不了的设置，等于没说。 */}
+          <label className="rmtf">
+            <span>{t("安装方式")}</span>
+            <select
+              value={draft.serveInstall || "auto"}
+              title={t("第一次连接要在那台机器上装一个 reasonix")}
+              onChange={(ev) => setDraft((d) => (d ? { ...d, serveInstall: ev.target.value } : d))}
+            >
+              <option value="auto">{t("自动挑一种")}</option>
+              <option value="npm">{t("用远端的 npm")}</option>
+              <option value="upload">{t("传本机这个过去")}</option>
+              <option value="never">{t("不装，我自己装好了")}</option>
+            </select>
+          </label>
           <label className="rmtf rmtck">
             <input
               type="checkbox"
@@ -291,6 +328,46 @@ export function Remotes({ hub, onError }: Props) {
           + {t("加一台机器")}
         </button>
       )}
+    </div>
+  );
+}
+
+const ROUTE_LABEL: Record<string, string> = { npm: "npm", upload: "传过去", download: "下载" };
+
+/** What one machine answered. A connect stops at the first missing piece, so
+ *  the value here is seeing all of them together — and each closed route is
+ *  worded by the code a real failure would have carried, not by a second set
+ *  of sentences that could drift from it. */
+function ProbeCard({ probe, host }: { probe: RemoteProbe; host: string }) {
+  const closed = probe.routes.filter((r) => !r.ok);
+  return (
+    <div className="rmtprobe" data-ok={probe.ready ? "" : undefined}>
+      <div className="rmtprobe-r">
+        <span className="k">{t("机器")}</span>
+        <span className="v">{probe.os}/{probe.arch} · {probe.home}</span>
+      </div>
+      <div className="rmtprobe-r">
+        <span className="k">reasonix</span>
+        <span className="v">
+          {probe.kernel
+            ? `${probe.kernel}${probe.version ? " " + probe.version : ""}`
+            : probe.outdated
+              ? t("那边是 {v}，太旧了，连的时候会换掉", { v: probe.outdated })
+              : t("还没有")}
+        </span>
+      </div>
+      <div className="rmtprobe-r">
+        <span className="k">npm</span>
+        <span className="v">{probe.npm || t("跑不了")}</span>
+      </div>
+      {closed.map((r) => (
+        <p className="rmtprobe-why" key={r.name}>
+          {say({ code: r.code, params: { host } }, t("{name} 这条路走不通", { name: t(ROUTE_LABEL[r.name] ?? r.name) }))}
+        </p>
+      ))}
+      <div className="rmtprobe-end">
+        {probe.ready ? t("能连上 —— 那边有内核，或者装得上一个") : t("连不上 —— 上面任意一条解决掉就行")}
+      </div>
     </div>
   );
 }
