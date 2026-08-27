@@ -2615,10 +2615,12 @@
      原因一行、状态用左色条说。它曾经借 .job 的样式，于是一个失败被画成「做完
      了」的灰，而 .job 是给 div 写的，这里的 button 就带着系统那圈按钮边框。 */
   .srvs { display: flex; flex-direction: column; gap: 7px; min-height: 18px }
+  /* 红点说明这一条坏了，标题上的计数说明有几条 —— 再加一道红竖条就是第三次
+     说同一件事，而右栏别的块一道都没有。 */
   .srvrow {
     display: flex; flex-direction: column; gap: 3px; width: 100%;
     padding: 4px 7px 5px; border: 0; border-radius: var(--r-sm);
-    box-shadow: inset 2px 0 var(--err); background: transparent;
+    background: transparent;
     color: inherit; font: inherit; text-align: left; cursor: pointer;
     animation: card var(--t-card) var(--ease-out) both;
     transition: background var(--t-line) var(--ease-out);
@@ -2633,10 +2635,12 @@
     font: var(--w-reg) 11.5px var(--mono); color: var(--text);
   }
   /* 端点自己写的一句话：长度不由我们定，所以它只能换行、只能截，绝不能参与
-     决定这一栏有多宽。界面字而不是等宽 —— 等宽栈里没有汉字，中文报错会散。 */
+     决定这一栏有多宽。界面字而不是等宽 —— 等宽栈里没有汉字，中文报错会散。
+     不上红：右栏的规矩是只有承载「坏了」的那个记号染色（见 .drow 的 tone），
+     描述照常规色走，否则一整块红字读起来是弹窗而不是仪表。 */
   .srvrow .why {
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-    font: var(--w-reg) 11px/1.5 var(--ui); color: var(--err); overflow-wrap: anywhere;
+    font: var(--w-reg) 10.5px/1.5 var(--ui); color: var(--muted); overflow-wrap: anywhere;
   }
   .srvs .more { font: var(--w-reg) 11px var(--ui); color: var(--faint) }
 
