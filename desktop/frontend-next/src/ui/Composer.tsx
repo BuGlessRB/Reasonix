@@ -467,16 +467,21 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
             </svg>
           </span>
         </button>
+        {/* The one control on this shelf with no width of its own: a gateway
+            can publish an id longer than the shelf is wide. It gives up
+            characters before the shelf gives up a line, and the ref it was
+            shortened from stays readable on hover. */}
         <Picker
           className="mode"
           place="bottom"
+          title={status?.modelRef ?? modelLb}
           current={status?.modelRef}
           items={modelMenu(models)}
           onPick={(ref) => change(port.setModel(ref))}
           label={
             <>
               <span className="dot" aria-hidden="true" />
-              <span>{modelLb}</span>
+              <span className="nm">{modelLb}</span>
             </>
           }
         />

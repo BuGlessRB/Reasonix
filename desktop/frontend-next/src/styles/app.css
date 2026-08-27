@@ -401,6 +401,12 @@
   /* 模式是这一轮的能力，不是偏好开关 —— 所以它长在输入框上，不在设置里 */
   .mode {
     position: relative; isolation: isolate;
+    /* A pill is its label's width or it is nothing: shrinking one squeezed the
+       shelf's own controls, and Chinese breaks between any two characters, so
+       计划 came apart into two lines and took the row's baseline with it. The
+       shelf wraps instead — .row already allows it, and the send button's
+       auto margin keeps it at the right end of whichever line it lands on. */
+    flex: none; white-space: nowrap;
     display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px;
     border: 1px solid var(--border); border-radius: var(--r-pill); background: transparent;
     color: var(--muted); font: var(--w-med) 11.5px var(--ui); cursor: pointer;
@@ -415,6 +421,7 @@
   .mode[aria-expanded="true"] { color: var(--text); border-color: var(--faint); background: var(--overlay) }
   .mode .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--ok); transition: background .2s }
   .mode.plain { padding-inline: 9px 10px; gap: 5px; font-weight: var(--w-reg) }
+  .mode .nm { overflow: hidden; text-overflow: ellipsis; max-width: 22ch }
   /* The value is what this pill says, not a second plate stuck onto it: weight
      and colour separate it from the name. Only the effort ladder is the API's
      own word, so only it is set in mono — an approval mode is human wording. */
