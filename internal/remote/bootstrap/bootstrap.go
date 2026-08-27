@@ -39,12 +39,12 @@ const (
 	InstallNever  = "never"
 )
 
-// MinServeVersion is retained for display/informational use only. Usability is
-// decided by probing `serve --help` for the --port-file flag (see locate), not
-// by a version number: --port-file/--token-file ship in this change, so no
-// released version satisfies a numeric gate, and the release number this change
-// lands in is unknown at authoring time.
-const MinServeVersion = "flag:port-file"
+// MinPaneVersion is the oldest kernel a pane can be driven by: a pane drives
+// the hub surface under /runtimes, which landed in the 2.x line, and a 1.x
+// kernel routes those calls to its page and answers them 405. The floor is the
+// pane's, not the bootstrap's — forwarding a kernel's own page to a browser
+// asks nothing a 1.x kernel cannot do, so those callers pass none.
+const MinPaneVersion = "2.0.0"
 
 // Options configures EnsureServe.
 type Options struct {
@@ -55,7 +55,7 @@ type Options struct {
 	LocalGOARCH    string                                                        // GOARCH of LocalBinary
 	ProductVersion string                                                        // exact local release used for a cross-platform official download
 	FetchBinary    func(context.Context, string, string, string) ([]byte, error) // local verified release fetcher
-	MinVersion     string                                                        // minimum acceptable remote version
+	MinVersion     string                                                        // version floor; empty leaves the flag probe as the only gate
 	Progress       func(step, detail string)                                     // optional progress callback
 	Clock          func() time.Time                                              // nil => time.Now
 }
@@ -105,7 +105,7 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 	paths := target.Paths(home, workspace)
 
 	// 2. Reuse a live process if the recorded pid is still running.
-	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, workspace); ok {
+	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, opts.MinVersion, workspace); ok {
 		opts.progress("reuse", st.Addr)
 		return Result{State: st, Token: tok, Reused: true, Workspace: target.NativePath(st.Workspace)}, nil
 	}
@@ -125,10 +125,14 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	defer lock.release()
-	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, workspace); ok {
+	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, opts.MinVersion, workspace); ok {
 		opts.progress("reuse", st.Addr)
 		return Result{State: st, Token: tok, Reused: true, Workspace: target.NativePath(st.Workspace)}, nil
 	}
+	// A recorded kernel below the floor was just declined, and the record that
+	// points at it is about to be replaced. Stop it here or nothing ever will:
+	// the pid would outlive the only note this side keeps of it.
+	retireOutdated(ctx, conn, target, fs, paths, opts.MinVersion)
 
 	// 5. Generate token, write it 0600, and launch detached serve.
 	token, err := generateToken()
@@ -266,12 +270,18 @@ func Logs(ctx context.Context, conn Conn, workspace string, n int, w io.Writer) 
 	return err
 }
 
-func tryReuse(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, paths StatePaths, workspace ...string) (ServeState, string, bool) {
+func tryReuse(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, paths StatePaths, minVersion string, workspace ...string) (ServeState, string, bool) {
 	st, err := readState(ctx, fs, paths.StateJSON)
 	if err != nil || st.PID <= 0 || st.Addr == "" {
 		return ServeState{}, "", false
 	}
 	if len(workspace) > 0 && st.Workspace != workspace[0] {
+		return ServeState{}, "", false
+	}
+	// Alive is not the same question as usable. Handing back a kernel from a
+	// line that has no pane hub is how a remote workspace opened onto one that
+	// answered every call a pane made with 405.
+	if !meetsMinVersion(st.Version, minVersion) {
 		return ServeState{}, "", false
 	}
 	if !validServeAddr(st.Addr) || !pidIsServe(ctx, conn, target, st.PID, paths) {
@@ -284,6 +294,21 @@ func tryReuse(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, pa
 		return ServeState{}, "", false
 	}
 	return st, tok, true
+}
+
+// retireOutdated stops a recorded kernel that no longer clears the floor, so
+// the launch about to replace its record does not leave it running unnamed.
+// Best effort by design: a machine that will not answer is not a reason to
+// refuse the pane the caller asked for.
+func retireOutdated(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, paths StatePaths, minVersion string) {
+	st, err := readState(ctx, fs, paths.StateJSON)
+	if err != nil || st.PID <= 0 || meetsMinVersion(st.Version, minVersion) {
+		return
+	}
+	if !pidIsServe(ctx, conn, target, st.PID, paths) {
+		return
+	}
+	_, _ = conn.Exec(ctx, target.Stop(st.PID, paths))
 }
 
 // pidIsServe reports whether pid is running AND is a reasonix serve process,

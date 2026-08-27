@@ -44,6 +44,37 @@ func ParseUname(out string) (goos, goarch string, err error) {
 	return goos, goarch, nil
 }
 
+// KernelTooOldError is a machine that has a reasonix, of a line too old to be
+// what was asked of it. A caller has to tell it apart from a machine that has
+// none: one is answered by upgrading over there, the other by installing, and a
+// sentence saying "install failed" sends the reader to the wrong one of the two.
+type KernelTooOldError struct {
+	Found string // what that machine's reasonix reports as its version
+	Need  string // the floor it did not clear
+	Err   error  // what the install that could have replaced it ran into
+}
+
+func (e *KernelTooOldError) Error() string {
+	msg := fmt.Sprintf("bootstrap: remote reasonix %s is older than %s", e.Found, e.Need)
+	if e.Err != nil {
+		return msg + ": " + e.Err.Error()
+	}
+	return msg
+}
+
+func (e *KernelTooOldError) Unwrap() error { return e.Err }
+
+// meetsMinVersion reports whether found clears the floor. A version nothing
+// could read clears it: a source build calls itself "dev", and refusing those
+// would take the bootstrap away from everyone developing against it. What such
+// a build cannot do is still caught where it is asked to do it.
+func meetsMinVersion(found, min string) bool {
+	if min == "" || found == "" {
+		return true
+	}
+	return CompareVersions(found, min) >= 0
+}
+
 // ParseVersion extracts a semver-ish string from `reasonix --version` output
 // like "reasonix v1.9.0" or "1.9.0".
 func ParseVersion(out string) (string, error) {

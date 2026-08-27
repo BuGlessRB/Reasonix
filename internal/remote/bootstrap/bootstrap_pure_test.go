@@ -1,8 +1,13 @@
 package bootstrap
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
+
+	"reasonix/internal/remote"
+	"reasonix/internal/remote/sftpfs"
 )
 
 func TestParseUname(t *testing.T) {
@@ -158,9 +163,107 @@ func TestLaunchCommandDetachAndLogHardening(t *testing.T) {
 
 func TestLocateCommandProbesPortFileFlag(t *testing.T) {
 	cmd := LocateCommand("/home/x/.reasonix/remote/bin/reasonix")
-	for _, want := range []string{"serve --help", "port-file", "portfile:yes", "portfile:no"} {
+	for _, want := range []string{"serve --help", "port-file", "flag yes", "flag no", "--version"} {
 		if !strings.Contains(cmd, want) {
 			t.Errorf("LocateCommand missing %q:\n%s", want, cmd)
 		}
+	}
+}
+
+// One place is not every place. A machine can hold an old reasonix on PATH and
+// a current one this bootstrap uploaded beside it, and a probe that stopped at
+// the first path it found reported only the one that cannot be used.
+func TestLocateCommandReportsEveryCandidateItFinds(t *testing.T) {
+	cmd := LocateCommand("/home/x/.reasonix/remote/bin/reasonix")
+	for _, want := range []string{"command -v reasonix", "/home/x/.reasonix/remote/bin/reasonix", "npm prefix -g"} {
+		if !strings.Contains(cmd, want) {
+			t.Errorf("LocateCommand does not look in %q:\n%s", want, cmd)
+		}
+	}
+}
+
+// The probe's records, read back. Order is the order it looked, because that
+// is what decides which usable one wins.
+func TestParseCandidatesReadsOneRecordPerBinary(t *testing.T) {
+	got := parseCandidates("bin /usr/bin/reasonix\nver reasonix 1.31.4\nflag yes\n" +
+		"bin /home/x/.reasonix/remote/bin/reasonix\nver reasonix v2.7.0\nflag yes\n" +
+		"bin /opt/old/reasonix\nver reasonix dev\nflag no\n")
+	want := []candidate{
+		{path: "/usr/bin/reasonix", version: "1.31.4", portFile: true},
+		{path: "/home/x/.reasonix/remote/bin/reasonix", version: "2.7.0", portFile: true},
+		{path: "/opt/old/reasonix", portFile: false},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("parsed %d candidates, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("candidate %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+// A version below the floor is not a usable binary, and a version nothing
+// could read is: a source build calls itself "dev", and refusing those would
+// take the bootstrap away from everyone developing against it.
+func TestUsableTakesTheFloorAndForgivesAnUnreadableVersion(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		c    candidate
+		want bool
+	}{
+		{"old line", candidate{path: "/usr/bin/reasonix", version: "1.31.4", portFile: true}, false},
+		{"this line", candidate{path: "/usr/bin/reasonix", version: "2.7.0", portFile: true}, true},
+		{"the floor itself", candidate{path: "/usr/bin/reasonix", version: "2.0.0", portFile: true}, true},
+		{"source build", candidate{path: "/usr/bin/reasonix", portFile: true}, true},
+		{"no port-file flag", candidate{path: "/usr/bin/reasonix", version: "2.7.0"}, false},
+	} {
+		if got := tc.c.usable(MinPaneVersion); got != tc.want {
+			t.Errorf("%s: usable = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// probeConn answers the locate probe and nothing else: choosing between the
+// binaries a machine holds needs no file layer.
+type probeConn struct{ out string }
+
+func (c probeConn) Exec(context.Context, string) (remote.ExecResult, error) {
+	return remote.ExecResult{Stdout: []byte(c.out)}, nil
+}
+
+func (probeConn) SFTP() (*sftpfs.FS, error) { return nil, errors.New("no file layer here") }
+
+// A machine can hold both, and it usually does after this bootstrap has
+// uploaded one: the old install stays on PATH and answers `command -v` first.
+// Taking the first path found is how the upload was spent and then ignored.
+func TestLocateTakesTheUsableBinaryNotTheFirstOne(t *testing.T) {
+	uploaded := "/home/x/.reasonix/remote/bin/reasonix"
+	conn := probeConn{out: "bin /usr/bin/reasonix\nver reasonix 1.31.4\nflag yes\n" +
+		"bin " + uploaded + "\nver reasonix v2.7.0\nflag yes\n"}
+	bin, version := locate(context.Background(), conn, posixShell{}, uploaded, MinPaneVersion)
+	if bin != uploaded || version != "2.7.0" {
+		t.Fatalf("locate = %q %q, want the uploaded 2.7.0 over the 1.31.4 on PATH", bin, version)
+	}
+	// Without a floor the caller wants whatever is there, and PATH comes first.
+	if bin, _ := locate(context.Background(), conn, posixShell{}, uploaded, ""); bin != "/usr/bin/reasonix" {
+		t.Fatalf("locate without a floor = %q, want the one on PATH", bin)
+	}
+}
+
+// "Has none" and "has one from the older line" are different next moves, so
+// they are different answers. The version of the newest one turned down is
+// what a reader needs to act.
+func TestOutdatedNamesTheNewestOneTurnedDown(t *testing.T) {
+	found := []candidate{
+		{path: "/usr/bin/reasonix", version: "1.29.0", portFile: true},
+		{path: "/opt/reasonix", version: "1.31.4", portFile: true},
+		{path: "/src/reasonix", portFile: true},
+	}
+	if got := outdated(found, MinPaneVersion); got != "1.31.4" {
+		t.Fatalf("outdated = %q, want 1.31.4", got)
+	}
+	if got := outdated([]candidate{{path: "/usr/bin/reasonix", version: "2.7.0", portFile: true}}, MinPaneVersion); got != "" {
+		t.Fatalf("outdated = %q, want nothing: this machine has no old kernel", got)
 	}
 }

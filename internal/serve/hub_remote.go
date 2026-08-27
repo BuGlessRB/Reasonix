@@ -210,7 +210,7 @@ func farRequest(ctx context.Context, ep RemoteEndpoint, method, path string, bod
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		return farRefusal(ep.Host, path, resp.Status, body)
+		return farRefusal(ep.Host, path, resp.StatusCode, resp.Status, body)
 	}
 	if out == nil {
 		return nil
@@ -223,13 +223,19 @@ func farRequest(ctx context.Context, ep RemoteEndpoint, method, path string, bod
 // by looking at the network and the other by reading what that kernel said.
 // Without a code the whole account reaches the window as a status line, and a
 // bare 502 there reads as a request that never arrived.
-func farRefusal(host, path, status string, body []byte) error {
+func farRefusal(host, path string, code int, status string, body []byte) error {
 	detail := strings.TrimSpace(string(body))
 	if detail == "" {
 		detail = status
 	}
-	return refusal(http.StatusBadGateway, "remote.kernel_refused",
-		fmt.Errorf("remote %s: %s: %s", path, status, detail),
+	err := fmt.Errorf("remote %s: %s: %s", path, status, detail)
+	// Every path called here is registered over there for the method it is
+	// called with, so "not that method" means the path belongs to that kernel's
+	// page — where a kernel with no pane hub routes everything.
+	if code == http.StatusMethodNotAllowed {
+		return refusal(http.StatusBadGateway, "remote.kernel_too_old", err, map[string]any{"host": host})
+	}
+	return refusal(http.StatusBadGateway, "remote.kernel_refused", err,
 		map[string]any{"host": host, "detail": detail})
 }
 

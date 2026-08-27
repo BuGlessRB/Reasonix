@@ -10,14 +10,26 @@ import (
 	"reasonix/internal/remote/sftpfs"
 )
 
-// ensureBinary resolves a usable reasonix binary on the remote host per the
-// install strategy, returning its path and version. A located binary older
-// than MinVersion counts as missing (it lacks --port-file/--token-file).
+// ensureBinary resolves a reasonix on the remote host that this caller can
+// drive, installing one per the strategy when what is there will not do.
+// Present-but-below-the-floor is not the same answer as absent, and the one it
+// returns says which: an upgrade over there and an install are different moves.
 func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch string, paths StatePaths) (bin, version string, err error) {
 	uploaded := uploadedBinPath(home, target.Executable())
-	bin, version = locate(ctx, conn, target, uploaded, opts.MinVersion)
-	if bin != "" {
-		return bin, version, nil
+	found := probeBinaries(ctx, conn, target, uploaded)
+	for _, c := range found {
+		if c.usable(opts.MinVersion) {
+			return c.path, c.version, nil
+		}
+	}
+	// What the machine already had, if an install cannot better it. Held now
+	// because the probe below runs against a tree the install may have changed.
+	stale := outdated(found, opts.MinVersion)
+	fail := func(err error) (string, string, error) {
+		if stale != "" {
+			return "", "", &KernelTooOldError{Found: stale, Need: opts.MinVersion, Err: err}
+		}
+		return "", "", err
 	}
 
 	strategy := opts.Install
@@ -28,11 +40,19 @@ func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS
 
 	switch strategy {
 	case InstallNever:
-		return "", "", fmt.Errorf("bootstrap: reasonix not found on remote and serve_install = never")
+		return fail(errors.New("bootstrap: reasonix not found on remote and serve_install = never"))
 	case InstallNPM:
-		return installViaNPM(ctx, conn, target, opts.MinVersion)
+		b, v, nerr := installViaNPM(ctx, conn, target, opts.MinVersion)
+		if nerr != nil {
+			return fail(nerr)
+		}
+		return b, v, nil
 	case InstallUpload:
-		return installViaUpload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded)
+		b, v, uerr := installViaUpload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded)
+		if uerr != nil {
+			return fail(uerr)
+		}
+		return b, v, nil
 	default: // auto: try npm, packaged same-platform upload, then verified release upload
 		if b, v, nerr := installViaNPM(ctx, conn, target, opts.MinVersion); nerr == nil {
 			return b, v, nil
@@ -61,43 +81,87 @@ func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS
 					attempts = append(attempts, fmt.Errorf("bootstrap: fetch official %s/%s CLI: %w", goos, goarch, fetchErr))
 				}
 			}
-			return "", "", fmt.Errorf("bootstrap: automatic install failed: %w", errors.Join(attempts...))
+			return fail(fmt.Errorf("bootstrap: automatic install failed: %w", errors.Join(attempts...)))
 		}
 	}
 }
 
-// locate finds an existing reasonix and returns it only if its serve command
-// supports --port-file (the bootstrap contract). A binary that lacks the flag —
-// including every currently-released version — is reported as missing so the
-// install/upload path replaces it. minVersion is accepted for signature
-// stability but the flag probe is authoritative.
+// candidate is one reasonix the probe found, with what it answered about
+// itself. Two things make one usable: the --port-file flag the launch is
+// written against, and a version at or above the caller's floor.
+type candidate struct {
+	path     string
+	version  string
+	portFile bool
+}
+
+func (c candidate) usable(minVersion string) bool {
+	return c.path != "" && c.portFile && meetsMinVersion(c.version, minVersion)
+}
+
+// locate returns the first reasonix on the remote that this caller can drive.
+// A binary that is present but below the floor is not one of them: it would
+// launch, answer, and then refuse the only calls the caller had for it.
 func locate(ctx context.Context, conn Conn, target remoteOS, uploaded, minVersion string) (bin, version string) {
-	_ = minVersion
-	res, err := conn.Exec(ctx, target.Locate(uploaded))
-	if err != nil {
-		return "", ""
-	}
-	lines := strings.Split(strings.TrimRight(string(res.Stdout), "\n"), "\n")
-	path := strings.TrimSpace(lines[0])
-	if path == "" {
-		return "", ""
-	}
-	supportsPortFile := false
-	for _, ln := range lines[1:] {
-		ln = strings.TrimSpace(ln)
-		if ln == "portfile:yes" {
-			supportsPortFile = true
-		} else if ln == "portfile:no" {
-			supportsPortFile = false
-		} else if v, verr := ParseVersion(ln); verr == nil {
-			version = v
+	for _, c := range probeBinaries(ctx, conn, target, uploaded) {
+		if c.usable(minVersion) {
+			return c.path, c.version
 		}
 	}
-	if !supportsPortFile {
-		// Missing the --port-file flag: treat as unusable so it is upgraded.
-		return "", ""
+	return "", ""
+}
+
+func probeBinaries(ctx context.Context, conn Conn, target remoteOS, uploaded string) []candidate {
+	res, err := conn.Exec(ctx, target.Locate(uploaded))
+	if err != nil {
+		return nil
 	}
-	return path, version
+	return parseCandidates(string(res.Stdout))
+}
+
+// parseCandidates reads the probe's records. `bin` opens one and the lines
+// after it fill it, so a machine with several reasonix installs comes back as
+// several candidates in the order the probe looked.
+func parseCandidates(out string) []candidate {
+	var found []candidate
+	for line := range strings.SplitSeq(out, "\n") {
+		key, val, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if val = strings.TrimSpace(val); !ok || val == "" {
+			continue
+		}
+		if key == "bin" {
+			found = append(found, candidate{path: val})
+			continue
+		}
+		if len(found) == 0 {
+			continue
+		}
+		switch key {
+		case "ver":
+			if v, verr := ParseVersion(val); verr == nil {
+				found[len(found)-1].version = v
+			}
+		case "flag":
+			found[len(found)-1].portFile = val == "yes"
+		}
+	}
+	return found
+}
+
+// outdated is the version of the newest reasonix that was found and turned
+// down for its age. It is what separates "this machine has none" from "this
+// machine has one from another line", which are different next moves.
+func outdated(found []candidate, minVersion string) string {
+	newest := ""
+	for _, c := range found {
+		if c.version == "" || meetsMinVersion(c.version, minVersion) {
+			continue
+		}
+		if newest == "" || CompareVersions(c.version, newest) > 0 {
+			newest = c.version
+		}
+	}
+	return newest
 }
 
 func installViaNPM(ctx context.Context, conn Conn, target remoteOS, minVersion string) (bin, version string, err error) {

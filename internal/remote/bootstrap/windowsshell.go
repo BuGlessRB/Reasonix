@@ -95,19 +95,20 @@ func (windowsShell) Logs(logFile string, n int) string {
 		" -Tail " + fmt.Sprint(n) + " -ErrorAction SilentlyContinue }")
 }
 
-// Locate prints the same three lines the POSIX probe does: the resolved path,
-// the version, and whether serve advertises --port-file. The flag is what
-// decides usability, here for the same reason it does there.
+// Locate reports the same records the POSIX probe does, one block per candidate:
+// `bin`, `ver`, `flag`. Every candidate for the same reason as there — the
+// caller is the side that knows which of them is usable for what it wants.
 func (windowsShell) Locate(uploadedBin string) string {
 	uploaded := psQuote(toShellPath(uploadedBin))
 	return psCommand(strings.Join([]string{
-		"$bin = ''",
+		"function probe($p) { if (-not $p -or -not (Test-Path -LiteralPath $p)) { return }; " +
+			"'bin ' + $p; " +
+			"'ver ' + ((& $p --version 2>$null | Select-Object -First 1) -join ''); " +
+			"$h = (& $p serve --help 2>&1 | Out-String); " +
+			"if ($h.Contains(" + psQuote(servePortFileMarker) + ")) { 'flag yes' } else { 'flag no' } }",
 		"$c = Get-Command 'reasonix.exe' -ErrorAction SilentlyContinue",
-		"if ($c) { $bin = $c.Source }",
-		"if (-not $bin -and (Test-Path -LiteralPath " + uploaded + ")) { $bin = " + uploaded + " }",
-		"$bin",
-		"if ($bin) { & $bin --version 2>$null; $h = (& $bin serve --help 2>&1 | Out-String); " +
-			"if ($h.Contains(" + psQuote(servePortFileMarker) + ")) { 'portfile:yes' } else { 'portfile:no' } }",
+		"if ($c) { probe $c.Source }",
+		"probe " + uploaded,
 	}, "; "))
 }
 

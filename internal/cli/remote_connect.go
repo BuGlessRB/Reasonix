@@ -212,7 +212,8 @@ func remoteConnectCLI(args []string, version string) int {
 			LocalGOARCH:    runtime.GOARCH,
 			ProductVersion: version,
 			FetchBinary:    fetchRemoteCLIBinary,
-			MinVersion:     bootstrap.MinServeVersion,
+			// No version floor: what this forwards is that kernel's own page,
+			// which every line of it serves for itself.
 			Progress: func(step, detail string) {
 				fmt.Fprintf(os.Stderr, i18n.M.RemoteBootstrapStepFmt+"\n", step, detail)
 			},
@@ -352,7 +353,7 @@ func remoteServeCLI(args []string, version string) int {
 		res, err := bootstrap.EnsureServe(ctx, client, bootstrap.Options{
 			Workspace: ws, Install: entry.ServeInstallMode(),
 			LocalBinary: currentExecutable(), LocalGOOS: runtime.GOOS, LocalGOARCH: runtime.GOARCH,
-			ProductVersion: version, FetchBinary: fetchRemoteCLIBinary, MinVersion: bootstrap.MinServeVersion,
+			ProductVersion: version, FetchBinary: fetchRemoteCLIBinary,
 		})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

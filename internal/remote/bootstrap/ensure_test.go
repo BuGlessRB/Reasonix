@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -101,7 +102,7 @@ func TestEnsureServeLaunchesWhenAbsent(t *testing.T) {
 			return ok("Linux x86_64\n")
 		case strings.Contains(cmd, "command -v reasonix"):
 			// LocateCommand: report a path and a fresh version.
-			return ok("/usr/bin/reasonix\nreasonix v9.9.0\nportfile:yes\n")
+			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.0\nflag yes\n")
 		case strings.Contains(cmd, "nohup"):
 			// Simulate serve writing the port file, then echo the pid.
 			if portFile != "" {
@@ -223,7 +224,7 @@ func TestEnsureServeRelaunchesDeadProcess(t *testing.T) {
 		case strings.Contains(cmd, "uname"):
 			return ok("Linux aarch64\n")
 		case strings.Contains(cmd, "command -v reasonix"):
-			return ok("/usr/bin/reasonix\nreasonix v9.9.0\nportfile:yes\n")
+			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.0\nflag yes\n")
 		case strings.Contains(cmd, "nohup"):
 			_ = os.WriteFile(paths.PortFile, []byte("127.0.0.1:6001\n"), 0o600)
 			return ok("999\n")
@@ -309,3 +310,100 @@ func TestStopRemovesStateFiles(t *testing.T) {
 }
 
 var _ = filepath.Join
+
+// The failure this floor exists for. A machine still on the 1.x line answers
+// every call a pane makes with 405 — that line routes /runtimes to its page —
+// and the window showed "Method Not Allowed", which names no next move.
+// Alive is not the same question as usable.
+func TestEnsureServeWillNotReuseAKernelBelowTheFloor(t *testing.T) {
+	skipOnWindows(t)
+	root := t.TempDir()
+	paths := pathsFor(root, root)
+	if err := os.MkdirAll(paths.Dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st := ServeState{PID: 777, Addr: "127.0.0.1:5000", Workspace: root, Version: "1.31.4", TokenFile: paths.TokenFile}
+	data, _ := MarshalState(st)
+	if err := os.WriteFile(paths.StateJSON, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.TokenFile, []byte("existing-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
+		switch {
+		case strings.Contains(cmd, "kill -0 777"):
+			return ok("1\n") // running, and from the wrong line
+		case strings.Contains(cmd, "uname"):
+			return ok("Linux x86_64\n")
+		case strings.Contains(cmd, "command -v reasonix"):
+			return ok("bin /usr/bin/reasonix\nver reasonix 1.31.4\nflag yes\n")
+		default:
+			return ok("")
+		}
+	})
+
+	_, err := EnsureServe(context.Background(), conn, Options{
+		Workspace: "~", Install: InstallNever, MinVersion: MinPaneVersion,
+	})
+	var tooOld *KernelTooOldError
+	if !errors.As(err, &tooOld) {
+		t.Fatalf("err = %v, want a KernelTooOldError: upgrading over there and installing are different moves", err)
+	}
+	if tooOld.Found != "1.31.4" || tooOld.Need != MinPaneVersion {
+		t.Fatalf("too-old error = %+v, want the version it found and the floor it missed", tooOld)
+	}
+	if conn.ranContaining("nohup") {
+		t.Fatal("a kernel below the floor must not be launched either")
+	}
+}
+
+// Declining to reuse one replaces the record that points at it, and a pid with
+// no record left is a pid nothing will ever stop. The replacement stops it.
+func TestEnsureServeStopsTheOutdatedKernelItReplaces(t *testing.T) {
+	skipOnWindows(t)
+	root := t.TempDir()
+	paths := pathsFor(root, root)
+	if err := os.MkdirAll(paths.Dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st := ServeState{PID: 777, Addr: "127.0.0.1:5000", Workspace: root, Version: "1.31.4", TokenFile: paths.TokenFile}
+	data, _ := MarshalState(st)
+	if err := os.WriteFile(paths.StateJSON, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.TokenFile, []byte("stale\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
+		switch {
+		case strings.Contains(cmd, "kill -0 777"):
+			return ok("1\n")
+		case strings.Contains(cmd, "uname"):
+			return ok("Linux x86_64\n")
+		case strings.Contains(cmd, "command -v reasonix"):
+			return ok("bin /usr/bin/reasonix\nver reasonix v2.7.0\nflag yes\n")
+		case strings.Contains(cmd, "nohup"):
+			_ = os.WriteFile(paths.PortFile, []byte("127.0.0.1:6002\n"), 0o600)
+			return ok("999\n")
+		case strings.Contains(cmd, "ps -p 999"):
+			return ok("1\n")
+		default:
+			return ok("")
+		}
+	})
+
+	res, err := EnsureServe(context.Background(), conn, Options{Workspace: "~", MinVersion: MinPaneVersion})
+	if err != nil {
+		t.Fatalf("EnsureServe: %v", err)
+	}
+	if res.Reused || res.State.PID != 999 {
+		t.Fatalf("state = %+v reused=%v, want the freshly launched 999", res.State, res.Reused)
+	}
+	if res.State.Version != "2.7.0" {
+		t.Fatalf("recorded version = %q, want the one that was launched", res.State.Version)
+	}
+	if !conn.ranContaining("kill -TERM 777") {
+		t.Fatal("the kernel being replaced was left running with nothing pointing at it")
+	}
+}

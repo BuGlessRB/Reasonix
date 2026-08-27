@@ -254,6 +254,49 @@ func TestAFarKernelThatRefusesSaysSoRatherThanLookingLikeADeadLink(t *testing.T)
 	}
 }
 
+// A kernel from the line before this one has no pane hub: it routes /runtimes
+// to its page, and Go's mux answers the POST from there with 405. That reached
+// the window as "the kernel did not accept this request: Method Not Allowed",
+// which is true of the request and useless to the reader — nothing in it says
+// the machine over there is a version behind. #9428.
+func TestAFarKernelWithNoPaneHubReadsAsAVersionBehind(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	// What a 1.x kernel is: every path is its page, and its page is a GET.
+	old := http.NewServeMux()
+	old.HandleFunc("GET /", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("<html>")) })
+	far := httptest.NewServer(old)
+	defer far.Close()
+
+	h := NewHub(HubOptions{Remote: &stubAttacher{attach: func(host, workspace string) (RemoteEndpoint, func(), error) {
+		return RemoteEndpoint{
+			Host: host, Workspace: "/srv/data/training",
+			Addr: far.Listener.Addr().String(), Token: "remote-secret",
+		}, func() {}, nil
+	}}})
+	front := httptest.NewServer(h.Handler())
+	defer front.Close()
+
+	resp, err := http.Post(front.URL+"/remotes/open", "application/json",
+		strings.NewReader(`{"host":"gpu-box","workspace":"/srv/data/training"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Code   string            `json:"code"`
+		Params map[string]string `json:"params"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("the refusal is not an envelope the window can read: %v", err)
+	}
+	if body.Code != "remote.kernel_too_old" {
+		t.Fatalf("code = %q, want remote.kernel_too_old: a method that does not exist there is a generation, not a refusal", body.Code)
+	}
+	if body.Params["host"] != "gpu-box" {
+		t.Fatalf("params.host = %q, want gpu-box", body.Params["host"])
+	}
+}
+
 // The pane list is what the sidebar and the tab strip label themselves from.
 // A remote workspace is spelled by the remote OS, so its name is a slash path
 // no matter which separator this machine uses.

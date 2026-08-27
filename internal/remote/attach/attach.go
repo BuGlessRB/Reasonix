@@ -334,7 +334,7 @@ func (p *Pool) serve(ctx context.Context, l *link, s *space, workspace string, c
 		LocalGOARCH:    runtime.GOARCH,
 		ProductVersion: p.opts.Version,
 		FetchBinary:    p.opts.FetchBinary,
-		MinVersion:     bootstrap.MinServeVersion,
+		MinVersion:     bootstrap.MinPaneVersion,
 		Progress: func(step, detail string) {
 			p.record(l, func(st *HostState) { st.Step, st.Detail = step, detail })
 			if call.Progress != nil {

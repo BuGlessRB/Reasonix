@@ -97,20 +97,21 @@ func LogsCommand(logFile string, n int) string {
 // the flag name registered in runServe.
 const servePortFileMarker = "port-file"
 
-// LocateCommand probes for a usable reasonix binary. It prints three lines:
-// the resolved path (or empty), the `--version` output, and "portfile:yes" when
-// `serve --help` advertises the --port-file flag. The bootstrap gates on the
-// flag, not the version number, because --port-file/--token-file ship in this
-// change: a version gate cannot know its own future release number, and any
-// already-released binary would pass a numeric gate yet still lack the flags.
+// LocateCommand reports every reasonix it finds as three lines: `bin <path>`,
+// `ver <what --version said>`, `flag yes|no` for the --port-file the launch
+// needs. Every candidate, not the first path that exists: a machine can hold an
+// old reasonix on PATH and a current one this bootstrap uploaded beside it, and
+// only the caller knows which of the two counts.
 func LocateCommand(uploadedBin string) string {
 	return fmt.Sprintf(
-		"BIN=\"$(command -v reasonix 2>/dev/null)\"; "+
-			"if [ -z \"$BIN\" ] && [ -x %s ]; then BIN=%s; fi; "+
-			"if [ -z \"$BIN\" ]; then P=\"$(npm prefix -g 2>/dev/null)\"; if [ -n \"$P\" ] && [ -x \"$P/bin/reasonix\" ]; then BIN=\"$P/bin/reasonix\"; fi; fi; "+
-			"echo \"$BIN\"; "+
-			"if [ -n \"$BIN\" ]; then \"$BIN\" --version 2>/dev/null; "+
-			"if \"$BIN\" serve --help 2>&1 | grep -q -- %s; then echo portfile:yes; else echo portfile:no; fi; fi",
-		shellQuote(uploadedBin), shellQuote(uploadedBin), shellQuote(servePortFileMarker),
+		"probe() { [ -n \"$1\" ] && [ -x \"$1\" ] || return 0; "+
+			"echo \"bin $1\"; echo \"ver $(\"$1\" --version 2>/dev/null | head -n 1)\"; "+
+			"if \"$1\" serve --help 2>&1 | grep -q -- %s; then echo 'flag yes'; else echo 'flag no'; fi; }; "+
+			"probe \"$(command -v reasonix 2>/dev/null)\"; "+
+			"probe %s; "+
+			"P=\"$(npm prefix -g 2>/dev/null)\"; "+
+			"if [ -n \"$P\" ]; then probe \"$P/bin/reasonix\"; fi; "+
+			"exit 0",
+		shellQuote(servePortFileMarker), shellQuote(uploadedBin),
 	)
 }
