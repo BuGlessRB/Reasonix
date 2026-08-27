@@ -28,18 +28,10 @@ export function Plan({ steps }: { steps: PlanStep[] }) {
     setCursor(el ? { y: el.offsetTop + 6, h: Math.max(0, el.offsetHeight - 11) } : null);
   }, [steps, now]);
 
-  if (steps.length === 0) {
-    return (
-      <div className="block" data-b="plan">
-        <div className="lbl">
-          {t("计划")}<span className="c">0 / 0</span>
-        </div>
-        <div className="plan">
-          <span className="empty">{t("尚未制定")}</span>
-        </div>
-      </div>
-    );
-  }
+  // No plan is not an empty plan: a block reading "0 / 0 · 尚未制定" is a wall
+  // to skip on every glance. The task tab is where "there is no plan yet" is
+  // an answer worth a line.
+  if (steps.length === 0) return null;
 
   const id = keys(steps);
   return (

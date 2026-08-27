@@ -69,12 +69,6 @@ export const EN_WINDOW: Record<string, string> = {
   "子代理数量": "Sub-agents",
   "工具调用次数": "Tool calls",
   "外部请求": "External requests",
-  "任务概览": "Task overview",
-  "计划步数": "Planned steps",
-  "完成步数": "Completed",
   "失败步数": "Failed",
   "待确认": "Awaiting you",
-  "改动状态": "Changes",
-  "待审 {n}": "{n} for review",
-  "已放行 {n}": "{n} applied",
 };

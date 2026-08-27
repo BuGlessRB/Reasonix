@@ -781,5 +781,18 @@ export const EN: Record<string, string> = {
   // ── 连不上时卡在哪一步（kernel.ts 的 refusal 措辞）─────────────
 
   // ── 内核其余的拒绝措辞 ─────────────────────────────────────────
+  "这个供应商拒绝了当前密钥，余额读不到": "The provider refused this key, so the balance cannot be read",
+  "这个供应商的余额接口没有应答": "The provider's balance endpoint did not answer",
+  "这个供应商的余额接口回的内容读不懂": "The provider's balance endpoint answered in a shape this build cannot read",
 
+  // ── 钱包 ───────────────────────────────────────────────────────
+  "钱包": "Wallet",
+  "钱包 · {name}": "Wallet · {name}",
+  "重新读一次余额": "Read the balance again",
+  "已停用": "Suspended",
+  "两种币不合计": "Two currencies, not summed",
+  "含赠金 {amount}": "incl. {amount} credit",
+  "刚刚": "just now",
+  "{n} 分钟前": "{n} min ago",
+  "{n} 小时前": "{n} h ago",
 };

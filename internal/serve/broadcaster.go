@@ -57,6 +57,18 @@ func (b *Broadcaster) SetDisplayCurrency(currency string) {
 	b.mu.Unlock()
 }
 
+// DisplayCurrency is the valuation this session reads costs in. Empty is
+// automatic mode — which is also what a wallet wants: no preference means show
+// it in the currency the provider keeps it in.
+func (b *Broadcaster) DisplayCurrency() string {
+	if b == nil {
+		return ""
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.displayCurrency
+}
+
 // ResetSession clears the usage ledger for /new, /resume and /fork, and drops
 // the replay tail with it: those frames describe a conversation no client is
 // looking at any more. The sequence keeps counting, so a client resuming across

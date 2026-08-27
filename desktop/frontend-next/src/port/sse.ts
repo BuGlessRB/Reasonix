@@ -1,4 +1,4 @@
-import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type ChangeDiff, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
@@ -46,6 +46,15 @@ export class SsePort extends SseTheme implements AgentPort {
 
   status() {
     return this.get<SessionStatus>("/status");
+  }
+
+  async balance(): Promise<WalletReading | null> {
+    const res = await fetch(this.base + "/balance", { credentials: "same-origin" });
+    // 204 is a provider that has no wallet at all. Nothing to show, nothing
+    // wrong — the failures come back coded instead.
+    if (res.status === 204) return null;
+    if (!res.ok) await SsePort.fail("/balance", res);
+    return (await res.json()) as WalletReading;
   }
 
   async providerSetup(): Promise<ProviderSetup | null> {

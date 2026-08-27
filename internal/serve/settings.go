@@ -180,20 +180,6 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	if u := s.ctl().LastUsage(); u != nil {
 		sess["lastUsage"] = u
 	}
-	if b, err := s.ctl().Balance(r.Context()); err == nil && b != nil {
-		if cfg, loadErr := config.Load(); loadErr == nil && cfg.DisplayCurrencyPref() == "" {
-			// Runtime-only hint: a single wallet currency may select an existing
-			// valuation, but is never persisted as configuration or history.
-			s.bc.SetDisplayCurrency(b.PrimaryCurrency())
-		}
-		sess["balance"] = map[string]any{
-			"display":   b.Display(),
-			"available": b.Available,
-			"infos":     b.Infos,
-		}
-	} else if err != nil {
-		slog.Warn("serve: balance fetch failed", "err", err)
-	}
 	if cfg, err := config.Load(); err == nil {
 		if entry, ok := cfg.ResolveModel(currentModelRef(s.ctl())); ok {
 			sess["effort"] = entry.Effort

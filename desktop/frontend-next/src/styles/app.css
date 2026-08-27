@@ -2471,7 +2471,20 @@
     letter-spacing: var(--track-tight);
   }
   .drow[data-tone="err"] .v { color: var(--err-ink) }
+  .drow[data-tone="warn"] .v { color: var(--warn-ink) }
   .drow[data-tone="accent"] .v { color: var(--accent-ink) }
+
+  /* 钱包是账户的数，上面那些是这一趟的 —— 同一张卡里，一条线把两种量分开。 */
+  .wallet { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--hair) }
+  /* 读数本身就是重读按钮：一个额外的图标要在这行里再争一次注意力。 */
+  .wallet .walletk {
+    all: unset; cursor: pointer; color: var(--faint); white-space: nowrap;
+    font: var(--w-reg) 12px var(--ui);
+  }
+  /* 标签、停用徽标、取数时间是三样东西,不加间距就读成一个词。 */
+  .wallet .drow .k { display: flex; align-items: baseline; gap: 6px }
+  .wallet .walletk:hover { color: var(--text) }
+  .wallet .walletk:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px }
   .drow .v .up, .drow .v .dn { color: var(--faint); font-weight: var(--w-reg) }
   .lk { color: var(--net) }
   /* 曲线要占得下才画得出形状；它在这一行里是读数的一部分，不是装饰 */

@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from "react";
 import type { AgentPort, ContextBreakdown, JobEntry, McpEntry, WorkspaceChanges } from "../port/port";
 import type { ExtensionSurface } from "../port/wire";
-import type { Metrics as M } from "../state/session";
+import type { Metrics as M, PlanStep } from "../state/session";
 import { Agents } from "./panels/Agents";
 import { Cache } from "./panels/Cache";
 import { Context } from "./panels/Context";
@@ -11,7 +11,9 @@ import { Mcp } from "./panels/Mcp";
 import { Extensions } from "./panels/Extensions";
 import { Runtime } from "./panels/Runtime";
 import { Cost } from "./panels/Cost";
+import { Plan } from "./Plan";
 import type { Rail } from "./panels/derive";
+import type { Wallet } from "./wallet";
 import { swapping } from "./swap";
 import { ChangePreview } from "./ChangePreview";
 
@@ -22,6 +24,10 @@ interface Props extends Rail {
   mcp: McpEntry[];
   rate: number;
   done: boolean;
+  plan: PlanStep[];
+  wallet: Wallet;
+  account: string;
+  onRefreshWallet: () => void;
   tree: WorkspaceChanges | null;
   ctx: ContextBreakdown | null;
   yolo: boolean;
@@ -49,6 +55,10 @@ export const Metrics = memo(function Metrics({
   mcp,
   rate,
   done,
+  plan,
+  wallet,
+  account,
+  onRefreshWallet,
   tree,
   ctx,
   yolo,
@@ -72,14 +82,16 @@ export const Metrics = memo(function Metrics({
         {/* 顺序照设计稿：花了多少、省下多少、窗口装了什么、动过哪些文件 ——
             四个“这一趟在付什么代价”的问题排在一起，子代理和运行详情接在后面。 */}
         <Cache metrics={metrics} done={done} />
-        <Cost metrics={metrics} />
+        <Cost metrics={metrics} wallet={wallet} account={account} onRefreshWallet={onRefreshWallet} />
         <Context ctx={ctx} row={false} legend />
         <Agents tasks={tasks} />
         <Runtime rate={rate} done={done} stats={stats} files={visible(changes, tree).length} />
         <Mcp servers={mcp} onOpen={onSettings} />
         <Extensions panels={panels} views={views} onInvoke={onExtInvoke} onMove={onMoveSurface} />
-        {/* 最后两块，和设计稿一样：前面那些回答“这一趟在怎么跑”，这两块
-            回答“它在外面动了什么” —— 后者是跑完了回头看的东西，不是盯着看的。 */}
+        {/* 最后三块，和设计稿一样：前面那些回答“这一趟在怎么跑”，这三块回答
+            “它在外面做了什么” —— 打算动的、已经动过的、还在后台跑的。这些是
+            跑完了回头看的东西，不是盯着看的。 */}
+        <Plan steps={plan} />
         <Files changes={changes} yolo={yolo} tree={tree} open={openPath} onOpen={tree?.repo ? openPreview : undefined} />
         <Jobs jobs={jobs} />
       </div>

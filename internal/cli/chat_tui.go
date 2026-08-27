@@ -581,15 +581,15 @@ type modelSwitchMsg struct {
 // attempted when more than one currency is returned.
 func fetchBalance(ctrl control.Status) tea.Cmd {
 	return func() tea.Msg {
-		b, err := ctrl.Balance(context.Background())
-		if err != nil || b == nil {
+		r := ctrl.Balance(context.Background())
+		if r.Balance == nil {
 			return balanceMsg{}
 		}
 		displayCurrency := ""
 		if cfg, err := config.LoadForRootReadOnly("."); err == nil && cfg != nil {
 			displayCurrency = cfg.ExplicitDisplayCurrency()
 		}
-		return balanceMsg{text: b.DisplayForCurrency(displayCurrency)}
+		return balanceMsg{text: r.Balance.DisplayForCurrency(displayCurrency)}
 	}
 }
 

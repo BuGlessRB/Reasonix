@@ -22,6 +22,7 @@ import type { PlanAction } from "./cards/ApprovalCard";
 import { key as slotKey, placement } from "./slots";
 import { Metrics } from "./Metrics";
 import { railOf } from "./panels/derive";
+import { ABSENT, accountOf, type Wallet } from "./wallet";
 import { arrowTabs } from "./tablist";
 import { swapping } from "./swap";
 import { useMarker } from "./marker";
@@ -167,6 +168,21 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     port.status().then(applyStatus).catch(() => {});
   }, [port, applyStatus]);
 
+  // The wallet only moves when a turn spends, so its clock is the turn — not
+  // /status's 250ms poll, which is what it used to ride. A provider with no
+  // wallet endpoint answers absent, which renders as nothing.
+  const [wallet, setWallet] = useState<Wallet>(ABSENT);
+  const refreshWallet = useCallback(() => {
+    port
+      .balance()
+      .then((reading) => setWallet(reading ? { kind: "read", reading } : ABSENT))
+      .catch((e) => setWallet({ kind: "unread", why: reason(e) }));
+  }, [port]);
+
+  useEffect(() => {
+    if (!s.running) refreshWallet();
+  }, [s.running, refreshWallet]);
+
   useEffect(() => {
     if (pulse) refreshStatus();
   }, [pulse, refreshStatus]);
@@ -195,8 +211,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       applyStatus(st);
       dispatch({ kind: "__totals", hit: st.cacheHit, miss: st.cacheMiss, cost: quoteAmount(st.sessionCostQuote) } as never);
     });
+    refreshWallet();
     onSessionChanged();
-  }, [port, applyStatus, onSessionChanged]);
+  }, [port, applyStatus, refreshWallet, onSessionChanged]);
 
   // A rewind rewrites the transcript and the files under it, so the whole
   // session is re-read rather than patched — the same treatment a session
@@ -688,6 +705,10 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             mcp={mcp}
             rate={tps}
             done={!s.running}
+            plan={s.plan}
+            wallet={wallet}
+            account={accountOf(status?.modelRef)}
+            onRefreshWallet={refreshWallet}
             tree={tree}
             ctx={ctx}
             yolo={status?.toolApprovalMode === "yolo"}

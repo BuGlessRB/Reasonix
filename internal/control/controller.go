@@ -4559,13 +4559,13 @@ func (c *Controller) ToolResult(toolID string) *ToolResultData {
 	return nil
 }
 
-// Balance queries the active provider's wallet balance, or (nil, nil) when the
-// provider declares no balance_url — so a caller treats "not configured" and
-// "fetched" the same and just omits the readout when nil.
-func (c *Controller) Balance(ctx context.Context) (*billing.Balance, error) {
+// Balance reads the active provider's wallet. One declaring no balance_url
+// reads back unconfigured rather than failed: "there is no wallet here" and
+// "the wallet did not answer" are opposite answers to why there is no number.
+func (c *Controller) Balance(ctx context.Context) billing.Reading {
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
-	return c.balance.Get(ctx)
+	return c.balance.Read(ctx)
 }
 
 // Host returns the running MCP host (nil when no plugins), for frontends that

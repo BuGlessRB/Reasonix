@@ -74,20 +74,35 @@ func (s *Store) Cache(client *http.Client, url, key string) *Cache {
 	return made
 }
 
-// Get answers from memory while the last answer is fresh, and lets exactly one
+// Reading is one wallet read as a reader has to see it: what the wallet said,
+// when that was obtained, and which failure it was when it could not be.
+// Configured separates "this provider has no wallet" from "the wallet could not
+// be read" — opposite answers to why there is no number on screen.
+type Reading struct {
+	Configured bool
+	Balance    *Balance
+	At         time.Time
+	Err        error
+}
+
+// Stale reports a value standing in past its freshness: still the last thing
+// the wallet said, no longer what it says now.
+func (r Reading) Stale() bool { return r.Balance != nil && time.Since(r.At) > freshFor }
+
+// Read answers from memory while the last answer is fresh, and lets exactly one
 // caller refresh it when it is not. A failure does not blank a readout that was
 // good a moment ago — the endpoint being briefly unreachable is not the wallet
 // being empty.
-func (c *Cache) Get(ctx context.Context) (*Balance, error) {
+func (c *Cache) Read(ctx context.Context) Reading {
 	if c == nil || c.url == "" {
-		return nil, nil
+		return Reading{}
 	}
 	for {
 		c.mu.Lock()
 		if time.Since(c.state.tried) < freshFor {
-			answer, err := c.state.answer()
+			answer := c.state.answer()
 			c.mu.Unlock()
-			return answer, err
+			return answer
 		}
 		if wait := c.inflight; wait != nil {
 			c.mu.Unlock()
@@ -95,7 +110,7 @@ func (c *Cache) Get(ctx context.Context) (*Balance, error) {
 			case <-wait:
 				continue
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return Reading{Configured: true, Err: ctx.Err()}
 			}
 		}
 		done := make(chan struct{})
@@ -111,18 +126,24 @@ func (c *Cache) Get(ctx context.Context) (*Balance, error) {
 		} else {
 			c.state.err = err
 		}
-		answer, answerErr := c.state.answer()
+		answer := c.state.answer()
 		c.inflight = nil
 		close(done)
 		c.mu.Unlock()
-		return answer, answerErr
+		return answer
 	}
 }
 
 // answer picks between the last good balance and the last error. Caller holds mu.
-func (s *cacheState) answer() (*Balance, error) {
+func (s *cacheState) answer() Reading {
 	if s.balance != nil && time.Since(s.got) <= standsIn {
-		return s.balance, nil
+		return Reading{Configured: true, Balance: s.balance, At: s.got}
 	}
-	return nil, s.err
+	err := s.err
+	// A caller that sees no balance is owed a reason it can act on, and only the
+	// producer knows which one; leaving it nil moves that job to the reader.
+	if err == nil {
+		err = ErrUnreachable
+	}
+	return Reading{Configured: true, Err: err}
 }

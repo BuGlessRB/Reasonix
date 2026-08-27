@@ -8,13 +8,24 @@ package billing
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+)
+
+// A wallet read fails in ways the reader must tell apart: a rejected credential
+// is the user's to fix, an unreachable endpoint fixes itself, and a response in
+// nobody's shape must never render as a zero balance. Callers match with
+// errors.Is; the wrapped text is for logs.
+var (
+	ErrUnauthorized = errors.New("wallet credential rejected")
+	ErrUnreachable  = errors.New("wallet endpoint unreachable")
+	ErrUnreadable   = errors.New("wallet response not in this endpoint's shape")
 )
 
 // Balance is a wallet balance normalized for display.
@@ -70,15 +81,25 @@ type Info struct {
 	ToppedUpBalance string // paid-in credit
 }
 
-// deepseekResp mirrors the GET /user/balance response shape.
-type deepseekResp struct {
-	IsAvailable  bool `json:"is_available"`
-	BalanceInfos []struct {
-		Currency        string `json:"currency"`
-		TotalBalance    string `json:"total_balance"`
-		GrantedBalance  string `json:"granted_balance"`
-		ToppedUpBalance string `json:"topped_up_balance"`
-	} `json:"balance_infos"`
+// Render is this currency's total wearing the symbol Display already picks, so
+// a surface laying two currencies side by side never re-derives "¥".
+func (i Info) Render() string { return symbol(i.Currency) + strings.TrimSpace(i.TotalBalance) }
+
+// RenderGranted is the promotional part, empty when there is none. Unexpired
+// credit is worth naming because it expires; a zero is not worth a line.
+func (i Info) RenderGranted() string {
+	if !positive(i.GrantedBalance) {
+		return ""
+	}
+	return symbol(i.Currency) + strings.TrimSpace(i.GrantedBalance)
+}
+
+// positive reads an amount only to decide whether it is worth showing. Wallet
+// amounts stay strings everywhere else: they are the provider's own rendering,
+// and parsing them to combine currencies is what must never happen.
+func positive(amount string) bool {
+	v, err := strconv.ParseFloat(strings.TrimSpace(amount), 64)
+	return err == nil && v > 0
 }
 
 // httpClient bounds the balance query so a slow endpoint can't hang the status
@@ -112,27 +133,24 @@ func FetchWithClient(ctx context.Context, client *http.Client, url, apiKey strin
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrUnreachable, err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("balance: status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, statusError(resp.StatusCode, body)
 	}
-	var dr deepseekResp
-	if err := json.Unmarshal(body, &dr); err != nil {
-		return nil, fmt.Errorf("balance: decode: %w", err)
+	return decodeWallet(url, body)
+}
+
+// statusError names which side has to act. A rejected credential is the user's
+// to fix and says so; every other status is the endpoint having a bad moment.
+func statusError(code int, body []byte) error {
+	kind := ErrUnreachable
+	if code == http.StatusUnauthorized || code == http.StatusForbidden {
+		kind = ErrUnauthorized
 	}
-	b := &Balance{Available: dr.IsAvailable}
-	for _, bi := range dr.BalanceInfos {
-		b.Infos = append(b.Infos, Info{
-			Currency:        bi.Currency,
-			TotalBalance:    bi.TotalBalance,
-			GrantedBalance:  bi.GrantedBalance,
-			ToppedUpBalance: bi.ToppedUpBalance,
-		})
-	}
-	return b, nil
+	return fmt.Errorf("%w: status %d: %s", kind, code, strings.TrimSpace(string(body)))
 }
 
 // symbol maps an ISO currency code to a compact symbol; an unknown code passes

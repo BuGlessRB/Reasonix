@@ -228,7 +228,7 @@ type Status interface {
 	ContextBreakdown() agent.ContextBreakdown
 	ContextMaintenanceSnapshot() agent.ContextMaintenanceSnapshot
 	LastUsage() *provider.Usage
-	Balance(ctx context.Context) (*billing.Balance, error)
+	Balance(ctx context.Context) billing.Reading
 	Jobs() []jobs.View
 	Todos() []evidence.TodoItem
 }

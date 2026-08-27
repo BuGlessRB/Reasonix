@@ -50,7 +50,7 @@ func TestHubPanesShareOneWalletRead(t *testing.T) {
 	wallet := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hits.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, walletBody)
+		_, _ = io.WriteString(w, walletJSON)
 	}))
 	defer wallet.Close()
 	writeWalletConfig(t, wallet.URL)
@@ -66,8 +66,8 @@ func TestHubPanesShareOneWalletRead(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := hubGet[map[string]any](t, srv, "/rt/"+rt.ID+"/status")
-		if _, ok := got["balance"]; !ok {
+		got := hubGet[walletBody](t, srv, "/rt/"+rt.ID+"/balance")
+		if got.Display == "" {
 			t.Fatalf("pane %s carried no balance", rt.ID)
 		}
 	}

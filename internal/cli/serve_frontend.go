@@ -158,12 +158,13 @@ func reportServeFrontend(ctrl *control.Controller, srv serveHost, cfg config.Ser
 
 func startServeBalanceDiagnostics(ctrl *control.Controller) {
 	go func() {
-		if balance, err := ctrl.Balance(context.Background()); err != nil {
-			fmt.Fprintf(os.Stderr, "  balance: error — %v\n", err)
-		} else if balance == nil {
+		switch r := ctrl.Balance(context.Background()); {
+		case !r.Configured:
 			fmt.Fprintln(os.Stderr, "  balance: not configured (no balance_url for this provider)")
-		} else {
-			fmt.Printf("  balance: %s\n", balance.Display())
+		case r.Err != nil:
+			fmt.Fprintf(os.Stderr, "  balance: error — %v\n", r.Err)
+		default:
+			fmt.Printf("  balance: %s\n", r.Balance.Display())
 		}
 	}()
 }

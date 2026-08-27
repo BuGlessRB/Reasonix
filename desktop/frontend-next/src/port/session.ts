@@ -96,9 +96,28 @@ export interface SessionStatus {
   window: number;
   cacheHit: number;
   cacheMiss: number;
-  balance?: { display: string; available: boolean };
   sessionCostQuote?: import("./wire").CostQuote;
   jobs?: JobEntry[];
+}
+
+/** One currency of a wallet, rendered where the symbol rules live. Two
+ *  currencies are two lines and never a sum — combining them would mean
+ *  inventing an exchange rate — so the only thing done here is stack them. */
+export interface WalletLine {
+  currency: string;
+  total: string;
+  granted?: string;
+}
+
+/** What the provider's wallet says, and when it said it. A value standing in
+ *  past its freshness says so rather than looking current — the endpoint being
+ *  briefly unreachable is not the account being empty. */
+export interface WalletReading {
+  display: string;
+  available: boolean;
+  stale: boolean;
+  fetchedAt: string;
+  lines?: WalletLine[];
 }
 
 export interface JobEntry {

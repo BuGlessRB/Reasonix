@@ -2,9 +2,9 @@ package billing
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -107,8 +107,8 @@ func TestFetchMalformedJSON(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for malformed JSON")
 	}
-	if !strings.Contains(err.Error(), "decode") {
-		t.Errorf("error should mention decode: %v", err)
+	if !errors.Is(err, ErrUnreadable) {
+		t.Errorf("a response in nobody's shape must carry that identity: %v", err)
 	}
 }
 
@@ -117,7 +117,7 @@ func TestFetchNoAPIKey(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"is_available":true,"balance_infos":[]}`))
+		_, _ = w.Write([]byte(`{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"1.00"}]}`))
 	}))
 	defer srv.Close()
 	_, err := Fetch(context.Background(), srv.URL, "")
