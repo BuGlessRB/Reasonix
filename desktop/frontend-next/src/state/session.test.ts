@@ -344,3 +344,61 @@ describe("the retry line", () => {
     expect(s.waiting).toEqual({});
   });
 });
+
+// The kernel holds the run open on an unanswered question and re-emits it to
+// every client that attaches, precisely so a reconnected window can answer it.
+// The transcript rebuild then overwrote the items wholesale — and a question is
+// not in the transcript, it is the run stopped waiting on one. The session sat
+// at 等你决定 with nothing on screen to decide, and the queued turn behind it
+// never dispatched.
+describe("a question the run is still blocked on", () => {
+  const asking = (id: string): SessionEvent =>
+    ({
+      kind: "ask_request",
+      ask: { id, questions: [{ id: "q1", prompt: "GUI 框架？", options: [{ label: "egui 0.27" }] }] },
+    }) as SessionEvent;
+  const approving = (id: string): SessionEvent =>
+    ({ kind: "approval_request", approval: { id, tool: "write_file", subject: "src/main.rs" } }) as SessionEvent;
+  const rebuild = (items: Item[] = []): SessionEvent => ({ kind: "__restore", items, plan: [] }) as SessionEvent;
+  const asks = (s: SessionState) => s.items.filter((i): i is Extract<Item, { t: "ask" }> => i.t === "ask");
+  const said = (text: string): Item => ({ t: "say", id: "h1", text, reasoning: undefined, done: true }) as Item;
+
+  it("survives the rebuild that follows a reconnect", () => {
+    const s = run([asking("ask-1"), rebuild([said("有一个技术决策需要确认：")])]);
+    expect(s.doing, "the header says the run is waiting on you").toBe("等你决定");
+    expect(asks(s), "so the question has to still be answerable").toHaveLength(1);
+    expect(asks(s)[0].ask.id).toBe("ask-1");
+  });
+
+  it("keeps an approval the same way, for the same reason", () => {
+    const s = run([approving("apv-1"), rebuild([said("先写文件")])]);
+    expect(s.items.filter((i) => i.t === "approval")).toHaveLength(1);
+  });
+
+  // The record is what a rebuild is for: what the rebuild brought back stays
+  // where the kernel put it, and the open prompt lands after it.
+  it("puts the rebuilt record back, with the question after it", () => {
+    const s = run([asking("ask-1"), rebuild([said("一"), said("二")])]);
+    expect(s.items.map((i) => i.t)).toEqual(["say", "say", "ask"]);
+  });
+
+  it("does not resurrect one that was already answered", () => {
+    const first = run([asking("ask-1")]);
+    const answered = reduce(first, { kind: "__decided", id: asks(first)[0].id, answers: [["egui 0.27"]] } as SessionEvent);
+    const s = reduce(answered, rebuild([said("决定了")]));
+    expect(asks(s), "an answered question belongs to the record, not to the wait").toHaveLength(0);
+  });
+
+  // EventSource reconnects on its own and the kernel replays the pending prompt
+  // to whoever attaches, so the same question arrives more than once. Two cards
+  // for one question are two answers the kernel will not both accept.
+  it("shows one card per question however many times it is replayed", () => {
+    const s = run([asking("ask-1"), asking("ask-1")]);
+    expect(asks(s)).toHaveLength(1);
+  });
+
+  it("tells two different questions apart", () => {
+    const s = run([asking("ask-1"), asking("ask-2")]);
+    expect(asks(s)).toHaveLength(2);
+  });
+});

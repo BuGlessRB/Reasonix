@@ -9,6 +9,7 @@ import { showsReceipt } from "./prefs";
 // The types live next door; this stays their way in, so no reader of a
 // session has to know they were split off.
 export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, Waiting };
+import { promptOpen, prompted } from "./prompts";
 export { quoteAmount };
 export { showsReceipt };
 
@@ -345,8 +346,11 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       ),
     };
   }
+  // A rebuild re-reads the record, and an open prompt is not in it: it is the
+  // run stopped, waiting on an answer only this window can give. Overwriting it
+  // left the session reading 等你决定 with nothing on screen to decide.
   if (ev.kind === "__restore") {
-    return { ...s, items: ev.items, plan: ev.plan };
+    return { ...s, items: [...ev.items, ...s.items.filter(promptOpen)], plan: ev.plan };
   }
   // The session's own running totals, read back from the kernel rather than
   // restarted here: a count that begins at zero makes the next request the whole
@@ -484,14 +488,10 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
     }
 
     case "approval_request":
-      return ev.approval
-        ? { ...s, doing: "等你批准", items: [...s.items, { t: "approval", id: nextId(), a: ev.approval }] }
-        : s;
+      return ev.approval ? prompted(s, "等你批准", { t: "approval", id: nextId(), a: ev.approval }) : s;
 
     case "ask_request":
-      return ev.ask
-        ? { ...s, doing: "等你决定", items: [...s.items, { t: "ask", id: nextId(), ask: ev.ask }] }
-        : s;
+      return ev.ask ? prompted(s, "等你决定", { t: "ask", id: nextId(), ask: ev.ask }) : s;
 
     case "compaction_started":
       return { ...s, items: [...s.items, { t: "compaction", id: nextId(), c: ev.compaction ?? {}, done: false }] };
