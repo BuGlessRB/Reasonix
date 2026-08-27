@@ -84,7 +84,7 @@ var apiPaths = map[string]bool{
 // endpoint from silently answering with index.html instead of JSON — and
 // TestEveryPathTheFrontendCallsIsRouted is what keeps this list honest, because
 // the comment alone did not.
-var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/", "/appearance/", "/storage/"}
+var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/", "/appearance/", "/storage/", "/changes/"}
 
 // splitRuntimePath separates a pane's address from the route it is asking for:
 // /rt/r2/status is runtime r2 asking for /status. An unprefixed path belongs to

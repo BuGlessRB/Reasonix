@@ -2,6 +2,7 @@ package serve
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"reasonix/internal/gitstatus"
@@ -26,4 +27,29 @@ func (s *Server) changes(w http.ResponseWriter, r *http.Request) {
 		Repo    bool               `json:"repo"`
 		Changes []gitstatus.Change `json:"changes"`
 	}{Repo: ok, Changes: list})
+}
+
+// changeDiff answers with one path's working-tree diff, so a reader can see a
+// change without leaving the window for an editor. The path is a query
+// parameter a client supplies, and gitstatus.Diff is what keeps it inside the
+// tree — a refusal here is a bad request, not a broken repository, and the two
+// carry different codes because a frontend has to say different things.
+func (s *Server) changeDiff(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	text, truncated, err := gitstatus.Diff(r.Context(), s.ctl().WorkspaceRoot(), path)
+	if errors.Is(err, gitstatus.ErrPathOutsideTree) {
+		refuse(w, http.StatusBadRequest, "changes.path_outside_tree",
+			"that path is not inside the working tree", map[string]any{"path": path})
+		return
+	}
+	if err != nil {
+		refuse(w, http.StatusInternalServerError, "changes.diff_failed", err.Error(), nil)
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		Path      string `json:"path"`
+		Diff      string `json:"diff"`
+		Truncated bool   `json:"truncated"`
+	}{Path: path, Diff: text, Truncated: truncated})
 }

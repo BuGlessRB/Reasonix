@@ -7,6 +7,8 @@ package gitstatus
 import (
 	"bytes"
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -111,4 +113,73 @@ func relFromPrefix(base, prefix, path string) string {
 		path = strings.TrimPrefix(path, prefix)
 	}
 	return RelPath(base, filepath.FromSlash(path))
+}
+
+// MaxDiffBytes caps one path's diff. A generated file can differ by megabytes,
+// and a panel holding all of it is not being read — the cap is reported on the
+// answer rather than applied behind the reader's back.
+const MaxDiffBytes = 512 << 10
+
+// ErrPathOutsideTree rejects a path that does not name something inside the
+// tree. It is a sentinel because the caller has to tell it apart from git
+// failing: one is a bad request, the other is a broken repository.
+var ErrPathOutsideTree = errors.New("gitstatus: path is outside the working tree")
+
+// safeRel constrains a caller-supplied path to the tree. Three things are being
+// kept out: an absolute path, a traversal, and a leading dash — git reads that
+// last one as an option however the argument list is built, which is why every
+// invocation below also puts it after "--".
+func safeRel(root, rel string) (string, error) {
+	rel = strings.TrimSpace(rel)
+	if rel == "" || strings.HasPrefix(rel, "-") || filepath.IsAbs(rel) {
+		return "", ErrPathOutsideTree
+	}
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	inside, err := filepath.Rel(root, filepath.Join(root, clean))
+	if err != nil || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
+		return "", ErrPathOutsideTree
+	}
+	return filepath.ToSlash(clean), nil
+}
+
+// Diff returns the unified diff for one path in root's working tree, measured
+// against HEAD so a staged change is included with an unstaged one. Untracked
+// files are diffed against the null device instead: they have nothing in HEAD,
+// and that is the only way git prints them without first writing to the index.
+func Diff(ctx context.Context, root, path string) (text string, truncated bool, err error) {
+	rel, err := safeRel(root, path)
+	if err != nil {
+		return "", false, err
+	}
+	// root goes through the dir parameter, not an "-C" argument: gitcmd hardens
+	// only a subcommand it can see at args[0], and a diff against someone else's
+	// repository is exactly the invocation those flags are for.
+	var raw []byte
+	if tracked(ctx, root, rel) {
+		raw, err = gitcmd.Command(ctx, root, "diff", "--no-color", "HEAD", "--", rel).Output()
+		if err != nil {
+			// A repository with no commits has no HEAD to name; everything in
+			// it is either staged or untracked.
+			raw, err = gitcmd.Command(ctx, root, "diff", "--no-color", "--", rel).Output()
+			if err != nil {
+				return "", false, err
+			}
+		}
+	} else {
+		// --no-index exits 1 when the two sides differ, which is the whole
+		// point of asking. Only the output matters here.
+		raw, _ = gitcmd.Command(ctx, root, "diff", "--no-color", "--no-index", "--", os.DevNull, rel).Output()
+	}
+	if len(raw) > MaxDiffBytes {
+		return string(raw[:MaxDiffBytes]), true, nil
+	}
+	return string(raw), false, nil
+}
+
+// tracked reports whether git already knows the path. The answer decides which
+// of the two diffs above can say anything at all, so it is asked rather than
+// inferred from an empty result — an unchanged tracked file and an untracked
+// one both diff to nothing against HEAD.
+func tracked(ctx context.Context, root, rel string) bool {
+	return gitcmd.Command(ctx, root, "ls-files", "--error-unmatch", "--", rel).Run() == nil
 }

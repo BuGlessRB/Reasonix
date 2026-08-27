@@ -2,9 +2,11 @@ package gitstatus
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,5 +70,95 @@ func TestCreatedThenDeletedIsNotAChange(t *testing.T) {
 func TestNonRepoReportsFallbackNotFailure(t *testing.T) {
 	if _, ok, err := Status(context.Background(), t.TempDir()); ok || err != nil {
 		t.Fatalf("Status(non-repo) = ok=%v err=%v, want ok=false with no error", ok, err)
+	}
+}
+
+func repoWithCommit(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	git(t, dir, "init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a\n\nfunc A() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-qm", "base")
+	return dir
+}
+
+func TestDiffReportsATrackedEdit(t *testing.T) {
+	dir := repoWithCommit(t)
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a\n\nfunc B() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	text, truncated, err := Diff(context.Background(), dir, "a.go")
+	if err != nil || truncated {
+		t.Fatalf("Diff: %v truncated=%v", err, truncated)
+	}
+	if !strings.Contains(text, "-func A() {}") || !strings.Contains(text, "+func B() {}") {
+		t.Fatalf("both sides of the edit should be in the diff:\n%s", text)
+	}
+}
+
+// Staged and unstaged are one change to a reader, so the comparison is against
+// HEAD rather than the index.
+func TestDiffIncludesAStagedEdit(t *testing.T) {
+	dir := repoWithCommit(t)
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a\n\nfunc C() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "a.go")
+	text, _, err := Diff(context.Background(), dir, "a.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "+func C() {}") {
+		t.Fatalf("a staged edit should still show:\n%s", text)
+	}
+}
+
+// An untracked file has nothing in HEAD to compare with. Diffing it against the
+// null device is the only way to print it without first writing to the index.
+func TestDiffShowsAnUntrackedFileAsAnAddition(t *testing.T) {
+	dir := repoWithCommit(t)
+	if err := os.WriteFile(filepath.Join(dir, "new.go"), []byte("package a\n\nfunc N() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	text, _, err := Diff(context.Background(), dir, "new.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "+func N() {}") {
+		t.Fatalf("an untracked file should read as an addition:\n%s", text)
+	}
+}
+
+// The path arrives from a client, so these are the three shapes that must not
+// reach git: outside the tree, absolute, and readable as an option.
+func TestDiffRefusesAPathThatIsNotInTheTree(t *testing.T) {
+	dir := repoWithCommit(t)
+	outside := filepath.Join(dir, "..", "secret.txt")
+	if err := os.WriteFile(outside, []byte("private\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"../secret.txt", "a/../../secret.txt", outside, "--output=/tmp/x", ""} {
+		text, _, err := Diff(context.Background(), dir, path)
+		if !errors.Is(err, ErrPathOutsideTree) {
+			t.Fatalf("%q: want ErrPathOutsideTree, got %v (%q)", path, err, text)
+		}
+	}
+}
+
+func TestDiffCapsWhatItReturns(t *testing.T) {
+	dir := repoWithCommit(t)
+	big := make([]byte, 0, MaxDiffBytes*2)
+	for len(big) < MaxDiffBytes*2 {
+		big = append(big, []byte("a line that is long enough to add up quickly\n")...)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "big.txt"), big, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	text, truncated, err := Diff(context.Background(), dir, "big.txt")
+	if err != nil || !truncated || len(text) != MaxDiffBytes {
+		t.Fatalf("want a truncated %d-byte answer, got %d truncated=%v err=%v", MaxDiffBytes, len(text), truncated, err)
 	}
 }
