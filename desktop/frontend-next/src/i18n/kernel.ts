@@ -123,6 +123,10 @@ const SAID: Record<string, string> = {
   "remote.host_key_changed": "{host} 的主机密钥变了。可能是那台机器重装了，也可能有人在中间。记录在 {file} 第 {line} 行，核对清楚之前不要连。",
   "remote.host_key_rejected": "你没有接受它的指纹，所以没有连",
   "remote.not_connected": "先在 {host} 上开一个工作区，才问得到它上面还有什么",
+  // 挑目录走的是文件协议，不用那台机器上有内核 —— 所以路径打错和连不上是两件
+  // 事，一件改地址栏就好，一件得去看链路。
+  "remote.no_such_folder": "{host} 上没有 {path} 这个目录",
+  "remote.folder_unreadable": "{host} 上的 {path} 这个账号看不了",
   "remote.unsupported_os": "{host} 上跑不了内核 —— SSH 是通的，是那台机器的系统装不上。支持 Linux、macOS、Windows。",
   "remote.attach_failed": "连 {host} 没成功：{detail}",
   "remote.auth_failed": "{host} 不认这套凭据。换个密钥，或者在设置里填对环境变量名。",

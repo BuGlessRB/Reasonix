@@ -4726,7 +4726,7 @@
   /* ── 连接时的两个问题 ─────────────────────────────────────────────
      链路卡在这上面，所以它必须是模态：背后那台机器什么都不会做，直到有人
      回答。指纹这一个刻意不好按 —— 它存在的全部理由就是拦住「没看就点」。 */
-  .askveil {
+  .askveil, .pickveil {
     position: fixed; inset: 0; z-index: 95; display: grid; place-items: center;
     /* --page, not --bg: there has never been a --bg, so this whole declaration
        was invalid and the card floated over an undimmed window. */
@@ -4734,6 +4734,10 @@
     -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     animation: card var(--t-card) var(--ease-out) both;
   }
+  /* The picker sits under the ask: browsing an unconnected machine is what
+     raises the host-key question, and that one has to be answerable on top of
+     the dialog that provoked it. */
+  .pickveil { z-index: 92 }
   .askcard {
     width: min(440px, calc(100vw - 48px)); padding: 20px 22px;
     border: 1px solid var(--border); border-radius: var(--r-md);
@@ -4764,6 +4768,73 @@
   .askcard .askact button:hover { color: var(--text) }
   .askcard .askact button[data-go] { border-color: var(--accent); color: var(--accent-ink) }
   .askcard .askact button[data-go]:hover { background: color-mix(in srgb, var(--accent) 12%, transparent) }
+
+  /* ── Picking a folder on another machine ──────────────────────────
+     It runs over the file protocol, so it opens on a machine that has never
+     had a kernel installed — which is why the card can be reached from a host
+     row that is still idle, and why the list is folders and nothing else. */
+  .pickcard {
+    display: flex; flex-direction: column;
+    width: min(520px, calc(100vw - 48px)); max-height: min(560px, calc(100vh - 96px));
+    padding: 18px 20px; border: 1px solid var(--border); border-radius: var(--r-md);
+    background: var(--surface); box-shadow: var(--shadow-float);
+  }
+  .pickcard h2 { margin: 0 0 12px; font: var(--w-med) 14px var(--ui); color: var(--text) }
+  /* The path field is the breadcrumb and the way in by hand at once. A folder
+     too deep to walk to is typed, and that is the same control. */
+  .pickpath { display: flex; align-items: center; gap: 6px }
+  .pickpath input {
+    flex: 1; min-width: 0; padding: 6px 9px;
+    border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--bg); color: var(--text); font: var(--w-reg) 12px var(--mono);
+  }
+  .pickpath input:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
+  .pickup, .pickgo {
+    flex: none; padding: 6px 10px; border-radius: var(--r-xs);
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    font: var(--w-med) 12px var(--ui); cursor: pointer;
+    transition: color .14s, border-color .14s;
+  }
+  .pickup { display: grid; place-items: center; width: 30px; height: 30px; padding: 0 }
+  .pickup svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round }
+  .pickup:hover:not(:disabled), .pickgo:hover:not(:disabled) { border-color: var(--accent); color: var(--text) }
+  .pickup:disabled, .pickgo:disabled { opacity: .38; cursor: default }
+  .pickerr { margin: 10px 0 0; font: var(--w-reg) 11.5px/1.6 var(--ui); color: var(--err) }
+
+  .picklist {
+    flex: 1; min-height: 96px; margin-top: 12px; padding: 4px;
+    overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r-sm);
+    background: var(--bg);
+  }
+  /* Dimmed rather than emptied while the far side answers: clearing the rows
+     takes away the only account of where the reader is. */
+  .picklist[data-busy] { opacity: .55 }
+  .pickrow {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 5px 8px; border: 0; border-radius: var(--r-xs);
+    background: none; color: var(--muted); cursor: pointer; text-align: left;
+    font: var(--w-reg) 12.5px var(--ui);
+    transition: background .14s, color .14s;
+  }
+  .pickrow svg { flex: none; width: 14px; height: 14px; fill: none; stroke: var(--ghost); stroke-width: 1.3; stroke-linejoin: round }
+  .pickrow span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .pickrow:hover { background: var(--overlay); color: var(--text) }
+  .pickrow:hover svg { stroke: var(--accent-ink) }
+  .pickrow:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  .pickempty, .picknote {
+    margin: 0; padding: 10px 8px; font: var(--w-reg) 11.5px/1.6 var(--ui); color: var(--ghost);
+  }
+  .picknote { padding: 8px 0 0; color: var(--faint) }
+  .pickact { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px }
+  .pickact button {
+    padding: 6px 15px; border-radius: var(--r-xs);
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    font: var(--w-med) 12px var(--ui); cursor: pointer;
+  }
+  .pickact button:hover:not(:disabled) { color: var(--text) }
+  .pickact button[data-go] { border-color: var(--accent); color: var(--accent-ink) }
+  .pickact button[data-go]:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 12%, transparent) }
+  .pickact button:disabled { opacity: .38; cursor: default }
 
   /* ── 设置页：远程主机簿 ─────────────────────────────────────────── */
   .rmtbook { display: grid; gap: 0 }
@@ -4914,6 +4985,18 @@
   .rmt[data-state="stopped"] .rmtpip, .rmtrow[data-state="stopped"] .rmtpip { background: var(--err) }
   .rmt[data-state="connected"] .rmtname,
   .rmt[data-state="degraded"] .rmtname { color: var(--text) }
+  /* Row 1, column 4 — above the status line, where the local column keeps its
+     own add button. Always drawn: an entry revealed on hover reads as absent. */
+  .rmtpick {
+    grid-area: 1 / 4; flex: none; display: grid; place-items: center;
+    width: 18px; height: 18px; padding: 0; border: 0; border-radius: var(--r-xs);
+    background: transparent; color: var(--ghost); cursor: pointer;
+    transition: background .14s, color .14s;
+  }
+  .rmtpick svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round }
+  .rmtpick:hover:not(:disabled) { background: var(--raised); color: var(--text) }
+  .rmtpick:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
+  .rmtpick:disabled { opacity: .4; cursor: default }
   .rmtnote {
     padding: 0 9px 4px 22px; font: var(--w-reg) 11px/1.5 var(--ui); color: var(--faint);
   }

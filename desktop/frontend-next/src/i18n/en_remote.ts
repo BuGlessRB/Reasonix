@@ -22,6 +22,21 @@ export const EN_REMOTE: Record<string, string> = {
   "挂载端口转发": "Attaching the port forward",
   "接上已在运行的": "Reusing the one already running",
 
+  // ── 远程：挑一个目录 ─────────────────────────────────────────
+  "在 {name} 上挑一个目录打开": "Pick a folder on {name} to open",
+  "在 {host} 上选一个目录": "Pick a folder on {host}",
+  "浏览…": "Browse…",
+  "那台机器上的路径": "A path on that machine",
+  "上一级": "Up one level",
+  "转到": "Go",
+  "子目录": "Subfolders",
+  "正在连上去…": "Connecting…",
+  "就用这里": "Use this folder",
+  "这个目录下面没有子目录了 —— 它自己就可以是工作区":
+    "Nothing below this folder — it can be the workspace itself",
+  "这个目录太大，只列了前面一部分。要找的在后面的话，直接把路径打上去。":
+    "This folder is too big to list whole, so only the first entries are here. If what you want is further down, type its path.",
+
   // ── 远程：设置页 ─────────────────────────────────────────────
   "把另一台机器上的工作区接过来：内核跑在那边，窗口还是这个。开的面板和本地的并排坐着，所以每处都写清楚它在哪台机器上。":
     "Bring a workspace on another machine here: the kernel runs over there, the window stays this one. Its panes sit beside your local ones, so every one of them says which machine it is on.",

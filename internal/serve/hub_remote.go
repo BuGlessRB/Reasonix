@@ -71,6 +71,10 @@ const farCloseTimeout = 10 * time.Second
 // attacher to the link is what keeps SSH out of the hub.
 type RemoteAttacher interface {
 	Attach(ctx context.Context, host, workspace string) (RemoteEndpoint, func(), error)
+	// Browse lists the folders under dir on host, an empty dir meaning the
+	// login home. It rides the connection alone — nothing is installed over
+	// there — so a folder is pickable on a machine with no kernel to ask.
+	Browse(ctx context.Context, host, dir string) (RemoteListing, error)
 	// States is the live state per host name. A host with no link is absent
 	// rather than reported idle: only the caller knows which hosts exist.
 	States() map[string]RemoteLinkState
@@ -277,6 +281,10 @@ func (h *Hub) openRemoteRuntime(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, err)
 		return
 	}
+	// What the far side resolved, not what was asked for: ~ is expanded over
+	// there, and a Windows host answers in its own spelling — record the other
+	// one and the book would list a second row for the folder already open.
+	rememberRemoteWorkspace(req.Host, ep.Workspace)
 	writeJSON(w, rt.view())
 }
 

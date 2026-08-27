@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
 import type { HubPort } from "../port/hub";
 import type { RemoteHost, RemoteHostEdit } from "../port/remote";
+import { RemoteDirs } from "./RemoteDirs";
 
 interface Props {
   hub: HubPort;
@@ -55,6 +56,9 @@ export function Remotes({ hub, onError }: Props) {
   const [editing, setEditing] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState("");
+  // Browsing dials, and only a row already in the book has an address to dial.
+  // A draft being typed has nowhere to go yet, so it types the path instead.
+  const [picking, setPicking] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -183,6 +187,19 @@ export function Remotes({ hub, onError }: Props) {
         </div>
       )}
 
+      {picking && editing ? (
+        <RemoteDirs
+          hub={hub}
+          host={editing}
+          start={(draft?.workspaces ?? [])[0]}
+          onClose={() => setPicking(false)}
+          onPick={(path) => {
+            setPicking(false);
+            if (!(draft?.workspaces ?? []).includes(path)) setDirs([...(draft?.workspaces ?? []), path]);
+          }}
+        />
+      ) : null}
+
       {draft ? (
         <div className="rmtform">
           {field("name", "名字", "gpu-box")}
@@ -235,6 +252,11 @@ export function Remotes({ hub, onError }: Props) {
               <button className="act" disabled={!dir.trim()} onClick={addDir}>
                 {t("加上")}
               </button>
+              {editing ? (
+                <button className="act ghost" onClick={() => setPicking(true)}>
+                  {t("浏览…")}
+                </button>
+              ) : null}
             </div>
           </div>
           {field("identityFile", "私钥文件", "~/.ssh/id_ed25519")}

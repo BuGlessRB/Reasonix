@@ -52,6 +52,8 @@ export const EN_KERNEL: Record<string, string> = {
     "The host key for {host} changed. That machine may have been rebuilt \u2014 or someone may be in the middle. The record is at {file} line {line}; do not connect until you have checked.",
   "你没有接受它的指纹，所以没有连": "You did not accept its fingerprint, so nothing was connected",
   "先在 {host} 上开一个工作区，才问得到它上面还有什么": "Open a workspace on {host} first — that is what puts a kernel there to ask",
+  "{host} 上没有 {path} 这个目录": "{host} has no directory at {path}",
+  "{host} 上的 {path} 这个账号看不了": "{path} on {host} is not readable by this account",
   "{host} 上跑不了内核 —— SSH 是通的，是那台机器的系统装不上。支持 Linux、macOS、Windows。":
     "No kernel can run on {host} \u2014 the SSH link is fine, that machine's system is what it cannot install onto. Linux, macOS and Windows are supported.",
   "连 {host} 没成功：{detail}": "Could not reach {host}: {detail}",

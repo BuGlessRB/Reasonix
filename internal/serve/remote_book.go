@@ -2,7 +2,10 @@ package serve
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 
 	"reasonix/internal/config"
@@ -121,6 +124,95 @@ func (h *Hub) removeRemoteHost(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// The folder list has endpoints of its own because the sidebar writes one field
+// of a row where the settings page replaces all of it: a control that knows
+// only a folder would blank every field it never displayed.
+
+// addRemoteWorkspace records a folder on a machine in the near book. The far
+// machine's own list would be the better home, but it is only readable while
+// something is open over there, and cold is the state a folder is picked in.
+func (h *Hub) addRemoteWorkspace(w http.ResponseWriter, r *http.Request) {
+	host, dir, ok := h.remoteWorkspaceTarget(w, r)
+	if !ok {
+		return
+	}
+	h.commitRemoteWorkspace(w, host, func(c *config.Config) { c.AddRemoteWorkspace(host, dir) })
+}
+
+// removeRemoteWorkspace drops a folder from a machine's row. Nothing over there
+// is touched: the folder stays, and adding it back costs one pick.
+func (h *Hub) removeRemoteWorkspace(w http.ResponseWriter, r *http.Request) {
+	host, dir, ok := h.remoteWorkspaceTarget(w, r)
+	if !ok {
+		return
+	}
+	if n := h.remotePanesIn(host, dir); n > 0 {
+		busy(w, "workspace.has_open_panes", "close this folder's panes first", map[string]any{"n": n})
+		return
+	}
+	h.commitRemoteWorkspace(w, host, func(c *config.Config) { c.RemoveRemoteWorkspace(host, dir) })
+}
+
+// remoteWorkspaceTarget reads the machine and folder both writes are about.
+func (h *Hub) remoteWorkspaceTarget(w http.ResponseWriter, r *http.Request) (host, dir string, ok bool) {
+	if h.opts.Remote == nil {
+		refuseNoRemote(w)
+		return "", "", false
+	}
+	var body struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		badBody(w)
+		return "", "", false
+	}
+	if dir = strings.TrimSpace(body.Path); dir == "" {
+		missingField(w, "path")
+		return "", "", false
+	}
+	return r.PathValue("host"), dir, true
+}
+
+func (h *Hub) commitRemoteWorkspace(w http.ResponseWriter, host string, apply func(*config.Config)) {
+	err := config.EditUserConfigWithCredentials(func(c *config.Config) ([]config.CredentialChange, error) {
+		if _, ok := c.RemoteHost(host); !ok {
+			return nil, fmt.Errorf("no machine named %q in the book", host)
+		}
+		apply(c)
+		return nil, nil
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// rememberRemoteWorkspace records a folder that was just opened, so the row it
+// was reached through is still there next launch. Best effort: a pane already
+// driving the far kernel must not be undone by a book that would not take a
+// note about it.
+func rememberRemoteWorkspace(host, dir string) {
+	if strings.TrimSpace(host) == "" || strings.TrimSpace(dir) == "" {
+		return
+	}
+	// Read before write. Every pane opened on a machine comes through here, and
+	// nearly all of them land on a folder the book already has — rewriting the
+	// user's config file for each one is a file touched for nothing.
+	if cfg, err := config.Load(); err == nil {
+		if entry, ok := cfg.RemoteHost(host); !ok || slices.Contains(entry.WorkspaceList(), dir) {
+			return
+		}
+	}
+	err := config.EditUserConfigWithCredentials(func(c *config.Config) ([]config.CredentialChange, error) {
+		c.AddRemoteWorkspace(host, dir)
+		return nil, nil
+	})
+	if err != nil {
+		slog.Warn("serve: remember remote workspace", "host", host, "dir", dir, "err", err)
+	}
+}
+
 // remoteCandidates are aliases in the user's ~/.ssh/config that the book does
 // not have yet — the cheapest way to fill it on a machine already set up.
 func (h *Hub) remoteCandidates(w http.ResponseWriter, _ *http.Request) {
@@ -178,6 +270,18 @@ func (h *Hub) anyRemotePane(host string) (RemoteEndpoint, bool) {
 		}
 	}
 	return RemoteEndpoint{}, false
+}
+
+// remotePanesIn counts panes driving one folder on one machine, which is what
+// makes dropping that folder's row a question rather than a write.
+func (h *Hub) remotePanesIn(host, workspace string) int {
+	n := 0
+	for _, rt := range h.Runtimes() {
+		if ep, ok := rt.Remote(); ok && ep.Host == host && ep.Workspace == workspace {
+			n++
+		}
+	}
+	return n
 }
 
 func (h *Hub) remotePanes(host string) int {

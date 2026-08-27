@@ -1,6 +1,6 @@
 import type { AgentPort } from "./port";
 import type { HubPort, RuntimeView, TreeWorkspace } from "./hub";
-import type { RemoteHost } from "./remote";
+import type { RemoteHost, RemoteListing } from "./remote";
 import { MockPort } from "./mock";
 
 // MockHub is the fixture's answer to a window that drives several panes. Each
@@ -87,6 +87,34 @@ export class MockHub implements HubPort {
     };
     this.views.push(view);
     return Promise.resolve(view);
+  }
+
+  // A far machine's filesystem, deep enough that walking down and back up can
+  // be designed: the picker's two hard states are a folder with nothing in it
+  // and one with more than fits.
+  remoteDirs(_host: string, path?: string) {
+    const at = path || "/home/ada";
+    const kids: Record<string, string[]> = {
+      "/": ["home", "srv", "var"],
+      "/home": ["ada"],
+      "/home/ada": [".config", "notes", "projects"],
+      "/home/ada/projects": ["pipeline", "site"],
+      "/srv": ["eval", "training"],
+    };
+    const folders = (kids[at] ?? []).map((name) => ({ name, path: at === "/" ? "/" + name : at + "/" + name }));
+    return Promise.resolve<RemoteListing>({
+      path: at,
+      parent: at === "/" ? undefined : at.slice(0, at.lastIndexOf("/")) || "/",
+      folders,
+    });
+  }
+
+  addRemoteWorkspace() {
+    return Promise.resolve();
+  }
+
+  removeRemoteWorkspace() {
+    return Promise.resolve();
   }
 
   saveRemoteHost() {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"net/http"
 	"time"
 
@@ -45,6 +46,39 @@ func (r *remoteLink) Attach(ctx context.Context, host, workspace string) (serve.
 		Addr:      ep.Addr,
 		Token:     ep.Token,
 	}, ep.Release, nil
+}
+
+// Browse lists folders over the connection alone. The pool holds the link for
+// a moment afterwards, so walking down a tree is one login rather than one per
+// step — and nothing is installed on the far side to answer it, which is what
+// lets a folder be chosen before that machine has ever run a kernel.
+func (r *remoteLink) Browse(ctx context.Context, host, dir string) (serve.RemoteListing, error) {
+	listing, err := r.pool.Browse(ctx, host, dir)
+	if err != nil {
+		return serve.RemoteListing{}, identifyBrowse(host, dir, err)
+	}
+	out := serve.RemoteListing{Path: listing.Path, Parent: listing.Parent, Truncated: listing.Truncated}
+	out.Folders = make([]serve.RemoteFolder, 0, len(listing.Folders))
+	for _, f := range listing.Folders {
+		out.Folders = append(out.Folders, serve.RemoteFolder{Name: f.Name, Path: f.Path})
+	}
+	return out, nil
+}
+
+// identifyBrowse separates what the reader fixes by typing a different path
+// from what they fix by looking at the connection. Only this side sees the file
+// protocol's answer, and a mistyped folder arriving as a bad gateway sends
+// someone to check a link that is up.
+func identifyBrowse(host, dir string, err error) error {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return serve.Refusal(http.StatusNotFound, "remote.no_such_folder", err,
+			map[string]any{"host": host, "path": dir})
+	case errors.Is(err, fs.ErrPermission):
+		return serve.Refusal(http.StatusForbidden, "remote.folder_unreadable", err,
+			map[string]any{"host": host, "path": dir})
+	}
+	return identify(host, err)
 }
 
 // Candidates reads the machine's own ssh_config. Filling the book by hand when

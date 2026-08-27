@@ -1,5 +1,5 @@
 import { HttpError, type AgentPort } from "./port";
-import type { RemoteAsk, RemoteHost, RemoteHostEdit } from "./remote";
+import type { RemoteAsk, RemoteHost, RemoteHostEdit, RemoteListing } from "./remote";
 import { SsePort } from "./sse";
 
 // RuntimeView is one open pane. Base is the prefix every request of that pane
@@ -67,6 +67,15 @@ export interface HubPort {
   // The far machine's own workspaces, or null while nothing is open on it:
   // there is no kernel over there to ask until a pane puts one there.
   remoteTree(host: string): Promise<TreeWorkspace[] | null>;
+  // Folders on the far machine, read over the link alone — no kernel has to be
+  // installed over there to answer it, which is why picking one works on a
+  // machine nothing is open on. An empty path is that machine's login home.
+  remoteDirs(host: string, path?: string): Promise<RemoteListing>;
+  // The host book's folder list, written one entry at a time. The settings page
+  // replaces a whole row; a control that knows one folder must not, or it sends
+  // back blanks for every field it never displayed.
+  addRemoteWorkspace(host: string, path: string): Promise<void>;
+  removeRemoteWorkspace(host: string, path: string): Promise<void>;
   saveRemoteHost(entry: RemoteHostEdit): Promise<void>;
   removeRemoteHost(name: string): Promise<void>;
   // ssh_config aliases this machine can already reach and the book has not
@@ -209,6 +218,19 @@ export class SseHub implements HubPort {
     if (res.status === 409) return null;
     if (!res.ok) await SseHub.fail(path, res);
     return (await res.json()) as TreeWorkspace[];
+  }
+
+  remoteDirs(host: string, path?: string) {
+    const at = path ? `?path=${encodeURIComponent(path)}` : "";
+    return this.get<RemoteListing>(`/remotes/${encodeURIComponent(host)}/dirs${at}`);
+  }
+
+  async addRemoteWorkspace(host: string, path: string) {
+    await this.post<void>(`/remotes/${encodeURIComponent(host)}/workspaces`, { path });
+  }
+
+  async removeRemoteWorkspace(host: string, path: string) {
+    await this.post<void>(`/remotes/${encodeURIComponent(host)}/workspaces/remove`, { path });
   }
 
   async saveRemoteHost(entry: RemoteHostEdit) {

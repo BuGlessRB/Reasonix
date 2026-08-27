@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
 import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { REMOTE_STEP_LABEL, REMOTE_STEPS, type RemoteHost } from "../port/remote";
+import { RemoteDirs } from "./RemoteDirs";
 import { workspacesOf } from "./Remotes";
 
 // The same ceiling the local column uses. A machine worked on for months holds
@@ -16,6 +17,9 @@ interface Props {
   active: string;
   onOpen: (host: string, workspace?: string, sessionPath?: string) => Promise<void>;
   onFocus: (id: string) => void;
+  // Re-reads the host book. Dropping a folder edits it, and the list this
+  // column draws from is held one level up.
+  reload: () => Promise<void>;
   onError: (e: unknown) => void;
 }
 
@@ -59,15 +63,23 @@ function Steps({ step, detail }: { step: string; detail?: string }) {
 // not this one's: a Windows host answers with backslashes to a mac.
 const leaf = (dir: string) => dir.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || dir;
 
+// A folder under one machine, and where its row came from. Only what this
+// window's book holds can be dropped from here: a folder the far kernel
+// reports is that machine's own note, and removing it here would take away a
+// row that comes straight back on the next read.
+export interface RemoteWorkspace extends TreeWorkspace {
+  booked?: boolean;
+}
+
 // What the sidebar lists under one machine. The far kernel answers for what it
 // remembers, and the book is what this window can offer before there is a link
 // to ask through — so a folder added but never opened is still reachable, and
 // one opened over there still appears without having been written down here.
-export function remoteWorkspaces(host: RemoteHost, tree: TreeWorkspace[] | null | undefined): TreeWorkspace[] {
+export function remoteWorkspaces(host: RemoteHost, tree: TreeWorkspace[] | null | undefined): RemoteWorkspace[] {
   const known = workspacesOf(host);
-  const out = tree ? [...tree] : [];
+  const out: RemoteWorkspace[] = tree ? tree.map((ws) => ({ ...ws, booked: known.includes(ws.root) })) : [];
   for (const dir of known) {
-    if (!out.some((ws) => ws.root === dir)) out.push({ root: dir, name: leaf(dir), sessions: [] });
+    if (!out.some((ws) => ws.root === dir)) out.push({ root: dir, name: leaf(dir), sessions: [], booked: true });
   }
   return out;
 }
@@ -87,8 +99,11 @@ function note(host: RemoteHost): string {
   }
 }
 
-function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onError }: Props) {
+function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload, onError }: Props) {
   const [busy, setBusy] = useState("");
+  // The machine whose folder picker is open, empty for none. One at a time:
+  // it is a dialog over the window, not a panel inside a row.
+  const [picking, setPicking] = useState<RemoteHost | null>(null);
   // What each connected machine holds. Absent until asked; null while nothing
   // is open on it, which is the state the connect button belongs to.
   const [trees, setTrees] = useState<Record<string, TreeWorkspace[] | null>>({});
@@ -131,6 +146,20 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
     }
   };
 
+  // Dropping a folder from this window's book. Nothing on the far machine is
+  // touched, which is what makes it a one-click action rather than a question.
+  const drop = async (host: string, dir: string) => {
+    setBusy(host + dir);
+    try {
+      await hub.removeRemoteWorkspace(host, dir);
+      await reload();
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy("");
+    }
+  };
+
   const fold = (key: string) =>
     setShut((held) => {
       const next = new Set(held);
@@ -142,6 +171,22 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
 
   return (
     <div className="rmts">
+      {picking ? (
+        <RemoteDirs
+          hub={hub}
+          host={picking.name}
+          start={picking.workspace}
+          onClose={() => setPicking(null)}
+          onPick={(dir) => {
+            const host = picking;
+            setPicking(null);
+            // The kernel writes the folder into the book as it opens it, and
+            // the caller re-reads the book once that answer is in — so nothing
+            // here has to make a second call that could half-fail.
+            void open(host, dir);
+          }}
+        />
+      ) : null}
       <div className="rmtcap">
         {t("远程")}
         <span className="c">{hosts.length}</span>
@@ -173,6 +218,22 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
               <span className="rmtname">{host.name}</span>
               <span className="rmttarget" dir="ltr">{host.target}</span>
               <span className="rmtsub">{note(host) || t("{n} 会话", { n: panes.length })}</span>
+              {/* Always drawn, never only on hover: an entry nobody can see is
+                  read as a feature this build does not have. */}
+              <button
+                className="rmtpick"
+                disabled={!!busy}
+                title={t("在 {name} 上挑一个目录打开", { name: host.name })}
+                aria-label={t("在 {name} 上挑一个目录打开", { name: host.name })}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  setPicking(host);
+                }}
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 3.7v8.6M3.7 8h8.6" />
+                </svg>
+              </button>
             </div>
             {hint && !folded ? <div className="rmtnote">{hint}</div> : null}
             {working && host.step && !folded ? <Steps step={host.step} detail={host.detail} /> : null}
@@ -222,6 +283,23 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
                               <path d="M8 3.7v8.6M3.7 8h8.6" />
                             </svg>
                           </button>
+                          {/* Only a folder this window wrote down: one the far
+                              kernel reports is that machine's own note, and it
+                              would come straight back on the next read. */}
+                          {ws.booked ? (
+                            <button
+                              className="wsdel"
+                              disabled={!!busy}
+                              title={t("不再列出 {path}", { path: ws.root })}
+                              aria-label={t("不再列出 {path}", { path: ws.root })}
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                void drop(host.name, ws.root);
+                              }}
+                            >
+                              ×
+                            </button>
+                          ) : null}
                         </span>
                       </div>
                       {!folded && (

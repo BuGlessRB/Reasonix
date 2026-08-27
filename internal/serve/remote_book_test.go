@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"reasonix/internal/config"
 )
@@ -286,5 +288,218 @@ func TestAHostSavedWithOnlyTheOldFieldIsAListOfOne(t *testing.T) {
 	}
 	if len(out) != 1 || len(out[0].Workspaces) != 1 || out[0].Workspaces[0] != "/srv/training" {
 		t.Fatalf("workspaces = %+v", out)
+	}
+}
+
+// The sidebar writes one field of a row. Sending the whole row from a control
+// that only knows a folder is what would blank the address beside it.
+func TestAddingAFolderKeepsTheRestOfTheRow(t *testing.T) {
+	front := bookServer(t, &stubAttacher{})
+	if got := bookPost(t, front, "/remotes",
+		`{"name":"gpu-box","host":"10.0.0.4","user":"ada","workspaces":["/srv/training"]}`).StatusCode; got != http.StatusNoContent {
+		t.Fatalf("save = %d", got)
+	}
+	if got := bookPost(t, front, "/remotes/gpu-box/workspaces", `{"path":"/srv/eval"}`).StatusCode; got != http.StatusNoContent {
+		t.Fatalf("add folder = %d, want 204", got)
+	}
+	entry := bookEntry(t, "gpu-box")
+	if entry.Host != "10.0.0.4" || entry.User != "ada" {
+		t.Fatalf("the row lost fields the sidebar never saw: %+v", entry)
+	}
+	// Head is the default, and adding is not promoting: a folder picked once
+	// must not take over where a bare connect lands.
+	if got := entry.WorkspaceList(); len(got) != 2 || got[0] != "/srv/training" || got[1] != "/srv/eval" {
+		t.Fatalf("folders = %v, want the new one after the default", got)
+	}
+}
+
+func TestAddingAFolderTwiceLeavesOneRow(t *testing.T) {
+	front := bookServer(t, &stubAttacher{})
+	bookPost(t, front, "/remotes", `{"name":"gpu-box","host":"10.0.0.4"}`)
+	bookPost(t, front, "/remotes/gpu-box/workspaces", `{"path":"/srv/training"}`)
+	bookPost(t, front, "/remotes/gpu-box/workspaces", `{"path":"/srv/training"}`)
+	if got := bookEntry(t, "gpu-box").WorkspaceList(); len(got) != 1 {
+		t.Fatalf("folders = %v, want one", got)
+	}
+}
+
+// Dropping the default promotes the next: a list with no head is a machine
+// that forgot where a bare connect lands.
+func TestRemovingTheDefaultFolderPromotesTheNext(t *testing.T) {
+	front := bookServer(t, &stubAttacher{})
+	bookPost(t, front, "/remotes", `{"name":"gpu-box","host":"10.0.0.4","workspaces":["/srv/training","/srv/eval"]}`)
+	if got := bookPost(t, front, "/remotes/gpu-box/workspaces/remove", `{"path":"/srv/training"}`).StatusCode; got != http.StatusNoContent {
+		t.Fatalf("remove = %d, want 204", got)
+	}
+	entry := bookEntry(t, "gpu-box")
+	if entry.Workspace != "/srv/eval" || len(entry.Workspaces) != 0 {
+		t.Fatalf("entry = %+v, want /srv/eval as the only folder and the default", entry)
+	}
+}
+
+func TestWritingAFolderOntoAMachineTheBookDoesNotHaveIsRefused(t *testing.T) {
+	front := bookServer(t, &stubAttacher{})
+	if got := bookPost(t, front, "/remotes/absent/workspaces", `{"path":"/srv/x"}`).StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", got)
+	}
+}
+
+func TestAFolderWriteNeedsAPath(t *testing.T) {
+	front := bookServer(t, &stubAttacher{})
+	bookPost(t, front, "/remotes", `{"name":"gpu-box","host":"10.0.0.4"}`)
+	if got := bookPost(t, front, "/remotes/gpu-box/workspaces", `{"path":"  "}`).StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", got)
+	}
+}
+
+// A folder opened once is a folder the sidebar can offer next launch. Nothing
+// else survives a cold start: the far machine's own list needs a kernel over
+// there, and there is none until something is open.
+func TestOpeningARemoteFolderWritesItIntoTheBook(t *testing.T) {
+	writeOpenableConfig(t)
+	far := NewHub(HubOptions{})
+	defer far.Shutdown()
+	farSide := httptest.NewServer(far.Handler())
+	defer farSide.Close()
+
+	workspace := t.TempDir()
+	near := NewHub(HubOptions{Remote: &stubAttacher{
+		attach: func(host, _ string) (RemoteEndpoint, func(), error) {
+			// What the far side resolved, which is not always what was asked
+			// for: ~ is expanded over there.
+			return RemoteEndpoint{
+				Host: host, Workspace: workspace,
+				Addr: farSide.Listener.Addr().String(), Token: "t",
+			}, func() {}, nil
+		},
+	}})
+	defer near.Shutdown()
+	nearSide := httptest.NewServer(near.Handler())
+	defer nearSide.Close()
+	if got := bookPost(t, nearSide, "/remotes", `{"name":"gpu-box","host":"10.0.0.4"}`).StatusCode; got != http.StatusNoContent {
+		t.Fatalf("save host = %d", got)
+	}
+
+	open, err := http.Post(nearSide.URL+"/remotes/open", "application/json", openRemoteBody(t, "gpu-box", "~/scratch"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer open.Body.Close()
+	if open.StatusCode != http.StatusOK {
+		t.Fatalf("open remote = %d", open.StatusCode)
+	}
+	if got := bookEntry(t, "gpu-box").WorkspaceList(); len(got) != 1 || got[0] != workspace {
+		t.Fatalf("folders = %v, want the path the far side answered with (%q)", got, workspace)
+	}
+}
+
+func bookEntry(t *testing.T, name string) config.RemoteHostEntry {
+	t.Helper()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := cfg.RemoteHost(name)
+	if !ok {
+		t.Fatalf("no %q in the book", name)
+	}
+	return entry
+}
+
+// Dropping a folder's row out from under the pane driving it is the same
+// question the local tree already refuses, and the same answer.
+func TestAFolderWithAPaneOnItIsNotDropped(t *testing.T) {
+	writeOpenableConfig(t)
+	far := NewHub(HubOptions{})
+	defer far.Shutdown()
+	farSide := httptest.NewServer(far.Handler())
+	defer farSide.Close()
+
+	workspace := t.TempDir()
+	near := NewHub(HubOptions{Remote: &stubAttacher{
+		attach: func(host, _ string) (RemoteEndpoint, func(), error) {
+			return RemoteEndpoint{
+				Host: host, Workspace: workspace,
+				Addr: farSide.Listener.Addr().String(), Token: "t",
+			}, func() {}, nil
+		},
+	}})
+	defer near.Shutdown()
+	nearSide := httptest.NewServer(near.Handler())
+	defer nearSide.Close()
+	bookPost(t, nearSide, "/remotes", `{"name":"gpu-box","host":"10.0.0.4"}`)
+
+	open, err := http.Post(nearSide.URL+"/remotes/open", "application/json", openRemoteBody(t, "gpu-box", workspace))
+	if err != nil {
+		t.Fatal(err)
+	}
+	open.Body.Close()
+
+	drop, err := json.Marshal(map[string]string{"path": workspace})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := bookPost(t, nearSide, "/remotes/gpu-box/workspaces/remove", string(drop))
+	var why struct {
+		Code string `json:"code"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&why)
+	if resp.StatusCode != http.StatusConflict || why.Code != "workspace.has_open_panes" {
+		t.Fatalf("remove = %d/%q, want 409/workspace.has_open_panes", resp.StatusCode, why.Code)
+	}
+	if got := bookEntry(t, "gpu-box").WorkspaceList(); len(got) != 1 {
+		t.Fatalf("the refused remove still edited the book: %v", got)
+	}
+}
+
+// Every pane on a machine passes through the remembering step, and nearly all
+// of them land on a folder the book already has. Rewriting the user's config
+// for each one is a file touched for nothing — and one that Studio holding it
+// open makes other readers' problem.
+func TestReopeningAKnownFolderLeavesTheConfigAlone(t *testing.T) {
+	writeOpenableConfig(t)
+	far := NewHub(HubOptions{})
+	defer far.Shutdown()
+	farSide := httptest.NewServer(far.Handler())
+	defer farSide.Close()
+
+	workspace := t.TempDir()
+	near := NewHub(HubOptions{Remote: &stubAttacher{
+		attach: func(host, _ string) (RemoteEndpoint, func(), error) {
+			return RemoteEndpoint{
+				Host: host, Workspace: workspace,
+				Addr: farSide.Listener.Addr().String(), Token: "t",
+			}, func() {}, nil
+		},
+	}})
+	defer near.Shutdown()
+	nearSide := httptest.NewServer(near.Handler())
+	defer nearSide.Close()
+	bookPost(t, nearSide, "/remotes", `{"name":"gpu-box","host":"10.0.0.4"}`)
+
+	open := func() {
+		resp, err := http.Post(nearSide.URL+"/remotes/open", "application/json", openRemoteBody(t, "gpu-box", workspace))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	open()
+
+	// Stamped rather than slept on: a second write is what this is about, not
+	// how long one takes.
+	path := config.UserConfigPath()
+	then := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(path, then, then); err != nil {
+		t.Fatal(err)
+	}
+	open()
+
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.ModTime().Equal(then) {
+		t.Fatal("opening a folder the book already holds rewrote the config file")
 	}
 }

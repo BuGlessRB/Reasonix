@@ -573,6 +573,7 @@ export function App({ hub }: { hub: HubPort }) {
               active={active}
               onOpen={openRemotePane}
               onFocus={focusPane}
+              reload={reloadRemotes}
               onError={fail}
             />
           ) : null}

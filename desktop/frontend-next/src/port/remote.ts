@@ -81,6 +81,25 @@ export interface RemoteHostEdit {
   passwordEnv?: string;
 }
 
+// One folder on another machine. The name is carried beside the path because
+// only that machine's rules can cut it: a Windows host answers with a drive
+// letter and backslashes, and this one's split() would keep the whole string.
+export interface RemoteFolder {
+  name: string;
+  path: string;
+}
+
+// One directory of that machine, as it spells it. An absent parent is the top —
+// which is the far side saying so, not this side reasoning about a path syntax
+// that is not its own. Truncated marks a folder too big to send whole; the rows
+// left out are said so rather than silently missing.
+export interface RemoteListing {
+  path: string;
+  parent?: string;
+  folders: RemoteFolder[];
+  truncated?: boolean;
+}
+
 // A question the link layer stopped for. It arrives on the shell's bus while a
 // connect is blocked, and is answered through a binding rather than a request:
 // nothing on the far side moves until somebody says.

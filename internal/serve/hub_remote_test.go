@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,12 +22,20 @@ import (
 // stubAttacher stands in for the window's link layer.
 type stubAttacher struct {
 	attach     func(host, workspace string) (RemoteEndpoint, func(), error)
+	browse     func(host, dir string) (RemoteListing, error)
 	states     map[string]RemoteLinkState
 	candidates []string
 }
 
 func (s *stubAttacher) Attach(_ context.Context, host, workspace string) (RemoteEndpoint, func(), error) {
 	return s.attach(host, workspace)
+}
+
+func (s *stubAttacher) Browse(_ context.Context, host, dir string) (RemoteListing, error) {
+	if s.browse == nil {
+		return RemoteListing{}, errors.New("this machine cannot be browsed")
+	}
+	return s.browse(host, dir)
 }
 
 func (s *stubAttacher) States() map[string]RemoteLinkState { return s.states }

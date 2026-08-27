@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -209,6 +210,42 @@ func (c *Config) UpsertRemoteHost(e RemoteHostEntry) error {
 	}
 	c.Remote.Hosts = append(c.Remote.Hosts, e)
 	return nil
+}
+
+// AddRemoteWorkspace records dir among the folders host is worked in, keeping
+// whichever one is already the default at the head. A machine with no folder
+// written down yet takes this one as its default. Reports whether the book
+// changed, so a caller recording a folder it just opened writes nothing when it
+// was already there.
+func (c *Config) AddRemoteWorkspace(name, dir string) bool {
+	dir = strings.TrimSpace(dir)
+	entry, ok := c.RemoteHost(name)
+	if !ok || dir == "" {
+		return false
+	}
+	list := entry.WorkspaceList()
+	if slices.Contains(list, dir) {
+		return false
+	}
+	return c.UpsertRemoteHost(entry.withWorkspaceList(append(list, dir))) == nil
+}
+
+// RemoveRemoteWorkspace drops dir from host's folders. Nothing on the far
+// machine is touched — the folder stays where it is and can be added back.
+// Dropping the head promotes the next one, because a list with no head is a
+// machine that forgot where a bare connect lands.
+func (c *Config) RemoveRemoteWorkspace(name, dir string) bool {
+	dir = strings.TrimSpace(dir)
+	entry, ok := c.RemoteHost(name)
+	if !ok || dir == "" {
+		return false
+	}
+	list := entry.WorkspaceList()
+	kept := slices.DeleteFunc(slices.Clone(list), func(x string) bool { return x == dir })
+	if len(kept) == len(list) {
+		return false
+	}
+	return c.UpsertRemoteHost(entry.withWorkspaceList(kept)) == nil
 }
 
 // RemoveRemoteHost deletes the named host, reporting whether it was present.

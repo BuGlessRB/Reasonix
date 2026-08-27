@@ -73,3 +73,18 @@ describe("a host row that predates the list", () => {
     ]);
   });
 });
+
+// Only what this window wrote down can be dropped from the sidebar. A folder
+// the far kernel reports is that machine's own note: removing it here would
+// take away a row that comes straight back on the next read.
+describe("which of a machine's folders this window may drop", () => {
+  it("marks the ones its own book holds", () => {
+    const warm = remoteWorkspaces(host({ workspaces: ["/srv/train"] }), [far("/srv/train"), far("/srv/ad-hoc")]);
+    expect(warm.map((ws) => ws.booked)).toEqual([true, false]);
+  });
+
+  it("marks every row while nothing is connected, because they all came from the book", () => {
+    const cold = remoteWorkspaces(host({ workspaces: ["/srv/train", "/srv/eval"] }), undefined);
+    expect(cold.every((ws) => ws.booked)).toBe(true);
+  });
+});

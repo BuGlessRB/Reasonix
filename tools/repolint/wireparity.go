@@ -15,6 +15,7 @@ import (
 const (
 	tsWireFile     = "desktop/frontend-next/src/port/wire.ts"
 	tsBoundaryFile = "desktop/frontend-next/src/port/boundary.ts"
+	tsRemoteFile   = "desktop/frontend-next/src/port/remote.ts"
 )
 
 // mirroredWireTypes are the Go types the desktop keeps a second, hand-written
@@ -27,6 +28,12 @@ var mirroredWireTypes = []wireMirror{
 	{"internal/agentgraph/graph.go", "Edge", tsWireFile, "GraphEdge"},
 	{"internal/agentgraph/graph.go", "Delta", tsWireFile, "GraphDelta"},
 	{"internal/control/boundary.go", "SandboxSettings", tsBoundaryFile, "SandboxSettings"},
+	// RemoteHostEdit is left out on purpose: the kernel still takes the single
+	// `workspace` an old row was saved with, which the page deliberately does
+	// not send. An under-filled request is not a picture that cannot be read.
+	{"internal/serve/hub_remote.go", "RemoteHostView", tsRemoteFile, "RemoteHost"},
+	{"internal/serve/remote_browse.go", "RemoteListing", tsRemoteFile, "RemoteListing"},
+	{"internal/serve/remote_browse.go", "RemoteFolder", tsRemoteFile, "RemoteFolder"},
 }
 
 type wireMirror struct {
