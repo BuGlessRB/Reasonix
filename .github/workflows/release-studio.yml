@@ -246,7 +246,7 @@ jobs:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
           project-slug: DeepSeek-Reasonix
-          signing-policy-slug: release-signing
+          signing-policy-slug: test-signing-ci-approval
           artifact-configuration-slug: studio-windows-payload
           github-artifact-id: ${{ steps.unsigned-payload.outputs.artifact-id }}
           github-token: ${{ github.token }}
@@ -264,7 +264,7 @@ jobs:
           ./scripts/complete-signpath-request.ps1 `
             -OrganizationId "${{ secrets.SIGNPATH_ORGANIZATION_ID }}" `
             -SigningRequestId "${{ steps.submit-payload.outputs.signing-request-id }}" `
-            -ExpectedSigningPolicySlug "release-signing" `
+            -ExpectedSigningPolicySlug "test-signing-ci-approval" `
             -OutputArtifactDirectory "signed-payload" `
             -TimeoutSeconds 1800
 
@@ -308,7 +308,7 @@ jobs:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
           project-slug: DeepSeek-Reasonix
-          signing-policy-slug: release-signing
+          signing-policy-slug: test-signing-ci-approval
           artifact-configuration-slug: studio-windows-installer
           github-artifact-id: ${{ steps.installer-artifact.outputs.artifact-id }}
           github-token: ${{ github.token }}
@@ -323,7 +323,7 @@ jobs:
           ./scripts/complete-signpath-request.ps1 `
             -OrganizationId "${{ secrets.SIGNPATH_ORGANIZATION_ID }}" `
             -SigningRequestId "${{ steps.submit-installer.outputs.signing-request-id }}" `
-            -ExpectedSigningPolicySlug "release-signing" `
+            -ExpectedSigningPolicySlug "test-signing-ci-approval" `
             -OutputArtifactDirectory "signed-installer" `
             -TimeoutSeconds 1800
 
