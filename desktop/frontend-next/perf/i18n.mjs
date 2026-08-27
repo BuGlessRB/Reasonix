@@ -42,12 +42,30 @@ for (const f of files) {
   for (const m of src.matchAll(LITERAL)) if (CJK.test(m[2])) loose.add(m[2]);
 }
 
-const KEY = /^\s{2}"((?:[^"\\]|\\.)*)":/gm;
-const have = new Set(
-  readdirSync(join(SRC, "i18n"))
-    .filter((f) => /^en(_[a-z]+)?\.ts$/.test(f))
-    .flatMap((f) => [...readFileSync(join(SRC, "i18n", f), "utf8").matchAll(KEY)].map((m) => m[1])),
-);
+// 中文是合法的 JS 标识符，词表里两种写法都有：`"占用": "…"` 和 `占用: "…"`。
+// 只认带引号的那种，另一种就成了「源码在用、词表没有」——存储面板那六条一直被
+// 这么误报，而一条永远红的守卫和一条永远绿的一样没用：它不再是在说源码的事。
+// 行首两格、且不是注释：值的续行缩四格，注释以 // 开头，两者都不是键。
+const KEY = /^ {2}(?!\/\/)(?:"((?:[^"\\]|\\.)*)"|([^\s:"'`,{}()[\]]+))\s*:/gm;
+// 一行看着是键、却没被上面那条读出来，就是这个守卫看不懂自己的输入——它会安静
+// 地把那一条报成「缺翻译」。读不出来的行要自己说出来，而不是等下一个人去比对。
+// 两格开头而不是键的，只有两种：文件之间的展开（...EN_X），和注释。
+const UNREAD = /^ {2}(?!\/\/|\.\.\.|[}\]])\S.*$/gm;
+const have = new Set();
+const opaque = [];
+for (const f of readdirSync(join(SRC, "i18n")).filter((n) => /^en(_[a-z]+)?\.ts$/.test(n))) {
+  const body = readFileSync(join(SRC, "i18n", f), "utf8");
+  // 按起始位置比对，不按文本：一条键的文本可能是另一行的前缀，那样比会把没读
+  // 出来的行算成读出来了，正好放过这个守卫要抓的东西。
+  const read = new Set();
+  for (const m of body.matchAll(KEY)) {
+    have.add(m[1] ?? m[2]);
+    read.add(m.index);
+  }
+  for (const m of body.matchAll(UNREAD)) {
+    if (!read.has(m.index)) opaque.push(`${f}: ${m[0].trim().slice(0, 60)}`);
+  }
+}
 
 const missing = [...used.keys()].filter((k) => !have.has(k)).sort();
 const unused = [...have].filter((k) => CJK.test(k) && !used.has(k) && !loose.has(k)).sort();
@@ -68,5 +86,9 @@ if (unused.length) {
   console.log(`\n词表里源码已不用的 ${unused.length} 条（既没 t() 引用，也不在任何中文字面量里）：`);
   for (const k of unused.slice(0, 20)) console.log(`  ${k}`);
 }
-if (!missing.length && !unused.length) console.log("\n词表与源码一致");
-process.exit(missing.length ? 1 : 0);
+if (opaque.length) {
+  console.log(`\n词表里这 ${opaque.length} 行读不出键来——它们会被当成「没这条翻译」：`);
+  for (const l of opaque.slice(0, 20)) console.log(`  ${l}`);
+}
+if (!missing.length && !unused.length && !opaque.length) console.log("\n词表与源码一致");
+process.exit(missing.length || opaque.length ? 1 : 0);
