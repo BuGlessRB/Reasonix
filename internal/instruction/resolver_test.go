@@ -127,6 +127,34 @@ func TestResolveImportsAreProvenancedDeduplicatedAndConfined(t *testing.T) {
 	}
 }
 
+// The convention trio is the shipped layout: REASONIX.md holds the rules and
+// AGENTS.md/CLAUDE.md import it so Codex and Claude Code read the same file.
+// Expanding it once per importer put three copies of one body in the
+// cache-stable prefix, which is paid on every request of every session.
+func TestResolveExpandsAFileSharedBySeveralDocumentsOnce(t *testing.T) {
+	root := t.TempDir()
+	const rule = "SINGLE SOURCE OF TRUTH"
+	mustWriteInstruction(t, filepath.Join(root, "REASONIX.md"), rule)
+	mustWriteInstruction(t, filepath.Join(root, "AGENTS.md"), "AGENTS HEADER\n@REASONIX.md")
+	mustWriteInstruction(t, filepath.Join(root, "CLAUDE.md"), "CLAUDE HEADER\n@REASONIX.md")
+
+	got := Resolve(ResolveOptions{WorkspaceRoot: root, TargetDir: root})
+	bodies := documentBodies(got.Documents)
+	if n := strings.Count(bodies, rule); n != 1 {
+		t.Fatalf("the shared rule body appears %d times across the loaded documents, want 1:\n%s", n, bodies)
+	}
+	// Each importer must still say what it pulled in, so a reader can tell the
+	// rules reached this document rather than being silently absent.
+	for _, want := range []string{"AGENTS HEADER", "CLAUDE HEADER", "already loaded above"} {
+		if !strings.Contains(bodies, want) {
+			t.Fatalf("resolution is missing %q:\n%s", want, bodies)
+		}
+	}
+	if len(got.Diagnostics) != 0 {
+		t.Fatalf("a file shared by two documents is not a defect, got %+v", got.Diagnostics)
+	}
+}
+
 func TestResolveUserInstructionsImportTrustedConventionRoots(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

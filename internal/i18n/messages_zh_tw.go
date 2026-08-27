@@ -470,6 +470,7 @@ var ChineseTraditional = Messages{
 	WriteEnvErr:               "寫入 .env 失敗：",
 
 	ProviderErrBadRequest:          "請求格式錯誤 (HTTP 400)：請求體被拒絕，通常是程式缺陷。若持續出現請回報。",
+	ProviderErrDroppedReasoning:    "端點拒絕了請求體：它要求把助手的思考內容隨工具呼叫一併回傳，而這個連線沒有宣告思考協定，於是這部分沒有送出去。把連線的思考參數設成它後面那個模型所用的協定，再重試。",
 	ProviderErrAuth:                "認證失敗 (HTTP 401)：未讀到 API key（缺失或未設定）。請在 .env 中設定金鑰，或執行 `reasonix setup`。",
 	ProviderErrInsufficientBalance: "餘額不足 (HTTP 402)：帳戶餘額不足，請前往儲值後重試。",
 	ProviderErrUnprocessable:       "參數錯誤 (HTTP 422)：某個請求參數被拒絕，通常是程式缺陷。若持續出現請回報。",

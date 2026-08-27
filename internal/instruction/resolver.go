@@ -93,6 +93,10 @@ func Resolve(opts ResolveOptions) Resolution {
 	}
 
 	var candidates []candidate
+	// expanded spans every document this resolution loads, so a file two of them
+	// import (@REASONIX.md from both AGENTS.md and CLAUDE.md) contributes its
+	// body once rather than once per importer.
+	expanded := map[string]bool{}
 	appendDir := func(dir, boundary string, importBoundaries []string, names []string, scope Scope, depth, priority int) {
 		for _, name := range names {
 			path := filepath.Join(dir, name)
@@ -109,8 +113,11 @@ func Resolve(opts ResolveOptions) Resolution {
 			}
 			identity := physicalIdentity(path, info)
 			imports := []Import{}
-			state := importState{active: map[string]bool{identity: true}, expanded: map[string]bool{}}
+			state := importState{active: map[string]bool{identity: true}, expanded: expanded}
 			body = resolveDocumentImports(body, path, importBoundaries, 0, state, &imports, &result.Diagnostics)
+			// A document loaded in its own right has already contributed its body,
+			// so a later document importing it names it instead of repeating it.
+			expanded[identity] = true
 			candidates = append(candidates, candidate{
 				doc:      Document{Path: path, Scope: scope, Directory: dir, Body: body, Imports: imports, Depth: depth},
 				priority: priority,
@@ -250,7 +257,7 @@ func resolveDocumentImports(body, sourcePath string, boundaries []string, depth 
 			continue
 		}
 		if state.expanded[identity] {
-			lines[i] = line + "  <!-- skipped: duplicate import -->"
+			lines[i] = line + "  <!-- skipped: already loaded above -->"
 			continue
 		}
 		state.active[identity] = true

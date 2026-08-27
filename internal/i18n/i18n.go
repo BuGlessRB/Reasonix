@@ -546,7 +546,10 @@ type Messages struct {
 	WriteEnvErr               string // "write .env:" — prefix for env-write failure
 
 	// provider HTTP error explanations — actionable, reason + fix per status code
-	ProviderErrBadRequest          string // 400
+	ProviderErrBadRequest string // 400
+	// ProviderErrDroppedReasoning explains a refused body whose
+	// assistant thinking this host left out for want of a declared protocol.
+	ProviderErrDroppedReasoning    string
 	ProviderErrAuth                string // 401 — no key configured / sent
 	ProviderErrAuthRejected        string // 401 — a key was sent but the server rejected it
 	ProviderErrInsufficientBalance string // 402
@@ -636,6 +639,18 @@ func (m Messages) ProviderStatusMessage(status int) string {
 		return m.ProviderErrServer
 	case 503:
 		return m.ProviderErrServerBusy
+	}
+	return ""
+}
+
+// ProviderHintMessage returns the next step for a refusal the requesting client
+// identified, or "" when it named none this catalogue answers. The hint arrives
+// as its bare identity: this package sits below the provider layer and must not
+// import it.
+func (m Messages) ProviderHintMessage(hint string) string {
+	switch hint {
+	case "dropped_tool_call_reasoning":
+		return m.ProviderErrDroppedReasoning
 	}
 	return ""
 }
