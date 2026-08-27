@@ -2145,7 +2145,11 @@
     offset-path: border-box;
     offset-distance: 0%;
     animation: trace 3.4s linear infinite;
+    /* 熄灭必须真的停下。opacity:0 只藏起它，动画照跑：一个 150px 的径向渐变
+       每帧在这层 mask 里重新光栅化，闲置的窗口为此烧掉三成主线程（#9481）。 */
+    animation-play-state: paused;
   }
+  .pane[data-run="running"] .glowring i { animation-play-state: running }
   @keyframes trace { to { offset-distance: 100% } }
 
   /* 没有 offset-path 就别用不匀速的替代品，退回静态描边 */
