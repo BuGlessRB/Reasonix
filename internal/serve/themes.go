@@ -24,6 +24,7 @@ type themeView struct {
 	Active      bool                         `json:"active,omitempty"`
 	Tokens      map[string]map[string]string `json:"tokens"`
 	Background  *theme.Background            `json:"background,omitempty"`
+	Sky         *theme.Sky                   `json:"sky,omitempty"`
 	HasPreview  bool                         `json:"hasPreview,omitempty"`
 	// What the pack asked for and did not get. It rides on the listing so the
 	// author sees it in the picker rather than only in a log they never read.
@@ -44,7 +45,7 @@ func (s *Server) themes(w http.ResponseWriter, r *http.Request) {
 		out = append(out, themeView{
 			ID: p.ID, Name: p.Name, Author: p.Author, Description: p.Description,
 			Active: p.ID == active, Tokens: p.Tokens,
-			Background: p.Background, HasPreview: p.HasPreview,
+			Background: p.Background, Sky: p.Sky, HasPreview: p.HasPreview,
 			Warnings: p.Warnings,
 		})
 	}

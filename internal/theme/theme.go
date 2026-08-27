@@ -41,6 +41,7 @@ type Pack struct {
 	Description string                       `json:"description,omitempty"`
 	Tokens      map[string]map[string]string `json:"tokens"`
 	Background  *Background                  `json:"background,omitempty"`
+	Sky         *Sky                         `json:"sky,omitempty"`
 	HasPreview  bool                         `json:"hasPreview,omitempty"`
 	// Warnings names the tokens that were dropped and why. The pack still
 	// loads: one bad value must not cost the author every good one.
@@ -67,6 +68,22 @@ type Background struct {
 	OverlayStrength float64 `json:"overlayStrength"`
 }
 
+// Sky is a live backdrop rather than a picture: drifting cloud, a sun, and a
+// few light shafts, drawn by the window. Its colours ride here rather than in
+// Tokens because a pack without a sky has no use for them, and a token every
+// pack must ignore reads as broken. Values are checked the same way tokens are.
+type Sky struct {
+	// Ray tints the sun and the shafts; Cloud and CloudLit are the two cloud
+	// tones, the second used for the third of puffs that catch the light.
+	Ray      string  `json:"ray,omitempty"`
+	Cloud    string  `json:"cloud,omitempty"`
+	CloudLit string  `json:"cloudLit,omitempty"`
+	RayAlpha float64 `json:"rayAlpha"`
+	// CloudAlpha is the whole cloud layer's weight, kept low: it sits under a
+	// transcript and must never compete with text.
+	CloudAlpha float64 `json:"cloudAlpha"`
+}
+
 type manifest struct {
 	SchemaVersion int                          `json:"schemaVersion"`
 	ID            string                       `json:"id"`
@@ -75,6 +92,15 @@ type manifest struct {
 	Description   string                       `json:"description"`
 	Tokens        map[string]map[string]string `json:"tokens"`
 	Background    *manifestBackground          `json:"background"`
+	Sky           *manifestSky                 `json:"sky"`
+}
+
+type manifestSky struct {
+	Ray        string   `json:"ray"`
+	Cloud      string   `json:"cloud"`
+	CloudLit   string   `json:"cloudLit"`
+	RayAlpha   *float64 `json:"rayAlpha"`
+	CloudAlpha *float64 `json:"cloudAlpha"`
 }
 
 type manifestBackground struct {
@@ -211,8 +237,39 @@ func decode(raw []byte, dirID string) (Pack, error) {
 	sort.Strings(warnings)
 	pack := Pack{ID: id, Name: name, Author: strings.TrimSpace(m.Author), Description: strings.TrimSpace(m.Description), Tokens: tokens, Warnings: warnings}
 	pack.Background = backgroundOf(m.Background, hasAsset(id, assetBackground))
+	pack.Sky = skyOf(m.Sky)
 	pack.HasPreview = hasAsset(id, assetPreview)
 	return pack, nil
+}
+
+// colourOr passes a value through the same check a token colour gets: every
+// one of these is interpolated into a stylesheet, so none of them may be
+// trusted because it arrived in a different section of the manifest.
+func colourOr(v, fallback string) string {
+	v = strings.TrimSpace(v)
+	if v != "" && isColour(v) {
+		return v
+	}
+	return fallback
+}
+
+// skyOf drops a colour the validator refuses rather than the whole sky: an
+// author who mistyped one tint still gets the layer, in the default tone.
+func skyOf(m *manifestSky) *Sky {
+	if m == nil {
+		return nil
+	}
+	out := &Sky{RayAlpha: 0.85, CloudAlpha: 0.4}
+	out.Ray = colourOr(m.Ray, "")
+	out.Cloud = colourOr(m.Cloud, "")
+	out.CloudLit = colourOr(m.CloudLit, "")
+	if m.RayAlpha != nil {
+		out.RayAlpha = clamp01(*m.RayAlpha)
+	}
+	if m.CloudAlpha != nil {
+		out.CloudAlpha = clamp01(*m.CloudAlpha)
+	}
+	return out
 }
 
 // backgroundOf keeps the placement even when the image is missing: a pack that

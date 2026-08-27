@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "official-cloudsea-gilt",
+  "name": "云海鎏金",
+  "author": "Reasonix Contributors",
+  "description": "云海之上的一线鎏金：冷蓝的石面与暖金的强调色，明处是晴日云顶，暗处是夜航舷窗。",
+  "license": "MIT",
+  "baseStyle": "cloudsea",
+  "tokens": {
+    "light": {
+      "bg": "#E6EBF3",
+      "bgSoft": "#F2F5FA",
+      "bgElev": "#FFFFFF",
+      "panel": "#FFFFFF",
+      "border": "#BFC9D9",
+      "borderSoft": "#D7DFEA",
+      "fg": "#151B24",
+      "fgDim": "#4E5766",
+      "fgFaint": "#8B94A1",
+      "accent": "#9C6D0C",
+      "accentFg": "#FFFFFF"
+    },
+    "dark": {
+      "bg": "#080B12",
+      "bgSoft": "#111620",
+      "bgElev": "#171D28",
+      "panel": "#1B2230",
+      "border": "#333D4D",
+      "borderSoft": "#252E3C",
+      "fg": "#E8EEF6",
+      "fgDim": "#9BA6B6",
+      "fgFaint": "#5E6875",
+      "accent": "#E5BA72",
+      "accentFg": "#241A08"
+    }
+  },
+  "sky": {
+    "ray": "rgba(255,216,142,.55)",
+    "cloud": "255,240,212",
+    "cloudLit": "242,206,140",
+    "rayAlpha": 0.85,
+    "cloudAlpha": 0.4
+  }
+}
