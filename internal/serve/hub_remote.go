@@ -99,16 +99,20 @@ type RemoteHostView struct {
 	Target string `json:"target"`
 	Status string `json:"status"`
 
-	Host          string `json:"host,omitempty"`
-	Port          int    `json:"port,omitempty"`
-	User          string `json:"user,omitempty"`
-	IdentityFile  string `json:"identityFile,omitempty"`
-	ProxyJump     string `json:"proxyJump,omitempty"`
-	Workspace     string `json:"workspace,omitempty"`
-	ServeInstall  string `json:"serveInstall,omitempty"`
-	UseSSHConfig  bool   `json:"useSSHConfig,omitempty"`
-	PassphraseEnv string `json:"passphraseEnv,omitempty"`
-	PasswordEnv   string `json:"passwordEnv,omitempty"`
+	Host         string `json:"host,omitempty"`
+	Port         int    `json:"port,omitempty"`
+	User         string `json:"user,omitempty"`
+	IdentityFile string `json:"identityFile,omitempty"`
+	ProxyJump    string `json:"proxyJump,omitempty"`
+	// Workspace is the default; Workspaces is every folder this machine is
+	// worked in, default first — the sidebar lists them before a link exists,
+	// which is the only moment the far kernel cannot answer for itself.
+	Workspace     string   `json:"workspace,omitempty"`
+	Workspaces    []string `json:"workspaces,omitempty"`
+	ServeInstall  string   `json:"serveInstall,omitempty"`
+	UseSSHConfig  bool     `json:"useSSHConfig,omitempty"`
+	PassphraseEnv string   `json:"passphraseEnv,omitempty"`
+	PasswordEnv   string   `json:"passwordEnv,omitempty"`
 	// Forwards are set from the CLI and have no control here; the count is
 	// shown so an edit does not look like it silently dropped them.
 	Forwards int `json:"forwards,omitempty"`
@@ -143,6 +147,7 @@ func (h *Hub) listRemoteHosts(w http.ResponseWriter, _ *http.Request) {
 			IdentityFile:  entry.IdentityFile,
 			ProxyJump:     entry.ProxyJump,
 			Workspace:     entry.Workspace,
+			Workspaces:    entry.WorkspaceList(),
 			ServeInstall:  entry.ServeInstall,
 			UseSSHConfig:  entry.UseSSHConfig,
 			PassphraseEnv: entry.PassphraseEnv,

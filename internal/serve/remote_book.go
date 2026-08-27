@@ -16,17 +16,18 @@ import (
 // are named, never carried: the two Env fields hold the name of a variable, the
 // same shape a provider's key takes.
 type RemoteHostEdit struct {
-	Name          string `json:"name"`
-	Host          string `json:"host"`
-	Port          int    `json:"port"`
-	User          string `json:"user"`
-	IdentityFile  string `json:"identityFile"`
-	ProxyJump     string `json:"proxyJump"`
-	Workspace     string `json:"workspace"`
-	ServeInstall  string `json:"serveInstall"`
-	UseSSHConfig  bool   `json:"useSSHConfig"`
-	PassphraseEnv string `json:"passphraseEnv"`
-	PasswordEnv   string `json:"passwordEnv"`
+	Name          string   `json:"name"`
+	Host          string   `json:"host"`
+	Port          int      `json:"port"`
+	User          string   `json:"user"`
+	IdentityFile  string   `json:"identityFile"`
+	ProxyJump     string   `json:"proxyJump"`
+	Workspace     string   `json:"workspace"`
+	Workspaces    []string `json:"workspaces"`
+	ServeInstall  string   `json:"serveInstall"`
+	UseSSHConfig  bool     `json:"useSSHConfig"`
+	PassphraseEnv string   `json:"passphraseEnv"`
+	PasswordEnv   string   `json:"passwordEnv"`
 }
 
 func (h *Hub) saveRemoteHost(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +64,7 @@ func (h *Hub) saveRemoteHost(w http.ResponseWriter, r *http.Request) {
 		IdentityFile:  strings.TrimSpace(body.IdentityFile),
 		ProxyJump:     strings.TrimSpace(body.ProxyJump),
 		Workspace:     strings.TrimSpace(body.Workspace),
+		Workspaces:    body.Workspaces,
 		ServeInstall:  strings.TrimSpace(body.ServeInstall),
 		UseSSHConfig:  body.UseSSHConfig,
 		PassphraseEnv: strings.TrimSpace(body.PassphraseEnv),

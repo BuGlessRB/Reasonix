@@ -17,6 +17,14 @@ const STATUS_LABEL: Record<string, string> = {
   stopped: "已断开",
 };
 
+// One machine holds several projects. The kernel folds the two stored fields
+// into one default-first list, so a row that only ever set the single workspace
+// arrives here as a list of one rather than as a case to handle.
+export function workspacesOf(host: RemoteHost | null): string[] {
+  if (host?.workspaces?.length) return host.workspaces;
+  return host?.workspace ? [host.workspace] : [];
+}
+
 // A saved row goes back in full: the endpoint replaces the entry, so a form
 // that sent only what it displays would blank the rest.
 function draftOf(host: RemoteHost | null): RemoteHostEdit {
@@ -27,7 +35,7 @@ function draftOf(host: RemoteHost | null): RemoteHostEdit {
     user: host?.user ?? "",
     identityFile: host?.identityFile ?? "",
     proxyJump: host?.proxyJump ?? "",
-    workspace: host?.workspace ?? "",
+    workspaces: workspacesOf(host),
     serveInstall: host?.serveInstall ?? "",
     useSSHConfig: host?.useSSHConfig ?? false,
     passphraseEnv: host?.passphraseEnv ?? "",
@@ -39,6 +47,9 @@ export function Remotes({ hub, onError }: Props) {
   const [hosts, setHosts] = useState<RemoteHost[]>([]);
   const [candidates, setCandidates] = useState<string[]>([]);
   const [draft, setDraft] = useState<RemoteHostEdit | null>(null);
+  // The folder being typed, kept out of the draft: it is not part of the row
+  // until it is added, and a save must not smuggle a half-typed path in.
+  const [dir, setDir] = useState("");
   // The name a draft is editing, empty for a new one. Kept apart from the
   // draft's own name so renaming stays possible later without losing the row.
   const [editing, setEditing] = useState("");
@@ -65,6 +76,7 @@ export function Remotes({ hub, onError }: Props) {
       await hub.saveRemoteHost(entry);
       setDraft(null);
       setEditing("");
+      setDir("");
       await reload();
     } catch (e) {
       onError(e);
@@ -84,6 +96,16 @@ export function Remotes({ hub, onError }: Props) {
     } finally {
       setBusy("");
     }
+  };
+
+  // The list is edited whole and saved with the row. Head = default, so
+  // promoting one is a move rather than a second field that can disagree.
+  const setDirs = (next: string[]) => setDraft((d) => (d ? { ...d, workspaces: next } : d));
+  const addDir = () => {
+    const path = dir.trim();
+    if (!path || !draft) return;
+    if (!(draft.workspaces ?? []).includes(path)) setDirs([...(draft.workspaces ?? []), path]);
+    setDir("");
   };
 
   const field = (key: keyof RemoteHostEdit, label: string, placeholder?: string) => (
@@ -121,6 +143,9 @@ export function Remotes({ hub, onError }: Props) {
           </div>
           <div className="sub">
             {host.workspace ? <span dir="ltr">{host.workspace}</span> : <span className="dim">{t("没设默认工作区")}</span>}
+            {workspacesOf(host).length > 1 ? (
+              <span className="tag">{t("还有 {n} 个项目", { n: workspacesOf(host).length - 1 })}</span>
+            ) : null}
             {host.useSSHConfig ? <span className="tag">{t("跟随 ssh_config")}</span> : null}
             {host.forwards ? <span className="tag">{t("{n} 条转发", { n: host.forwards })}</span> : null}
             {host.panes ? <span className="tag">{t("{n} 个面板", { n: host.panes })}</span> : null}
@@ -172,7 +197,46 @@ export function Remotes({ hub, onError }: Props) {
               onChange={(ev) => setDraft((d) => (d ? { ...d, port: Number(ev.target.value.replace(/\D/g, "")) || 0 } : d))}
             />
           </label>
-          {field("workspace", "默认工作区", "/srv/training")}
+          {/* Same shape the sandbox's writable list uses: one row per thing,
+              then what you can do to it. The head carries the default badge
+              rather than a separate field, because it is the same folder. */}
+          <div className="rmtdirs">
+            <div className="sublb">{t("这台机器上的项目")}</div>
+            {(draft.workspaces ?? []).map((path, i) => (
+              <div className="prule" key={path}>
+                <code dir="ltr">{path}</code>
+                {i === 0 ? (
+                  <span className="tag">{t("默认")}</span>
+                ) : (
+                  <button
+                    className="act ghost"
+                    aria-label={t("把 {path} 设成默认", { path })}
+                    onClick={() => setDirs([path, ...(draft.workspaces ?? []).filter((x) => x !== path)])}
+                  >
+                    {t("设为默认")}
+                  </button>
+                )}
+                <button
+                  className="act ghost"
+                  aria-label={t("不再列出 {path}", { path })}
+                  onClick={() => setDirs((draft.workspaces ?? []).filter((x) => x !== path))}
+                >
+                  {t("删掉")}
+                </button>
+              </div>
+            ))}
+            <div className="prule" data-add="">
+              <input
+                value={dir}
+                placeholder={t("远端的项目目录，例如 /srv/training")}
+                onChange={(ev) => setDir(ev.target.value)}
+                onKeyDown={(ev) => ev.key === "Enter" && addDir()}
+              />
+              <button className="act" disabled={!dir.trim()} onClick={addDir}>
+                {t("加上")}
+              </button>
+            </div>
+          </div>
           {field("identityFile", "私钥文件", "~/.ssh/id_ed25519")}
           {/* Named, not carried: this is the variable to read, never the secret
               itself, so nothing typed here is a password on its way anywhere. */}
@@ -190,6 +254,7 @@ export function Remotes({ hub, onError }: Props) {
               onClick={() => {
                 setDraft(null);
                 setEditing("");
+                setDir("");
               }}
             >
               {t("取消")}

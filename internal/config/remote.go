@@ -23,18 +23,22 @@ type RemoteConfig struct {
 // values live in Reasonix's global .env, never in TOML. identity_file is a
 // path — private key material itself is never stored by Reasonix.
 type RemoteHostEntry struct {
-	Name          string               `toml:"name"`
-	Host          string               `toml:"host"`
-	Port          int                  `toml:"port"` // 0 => 22 (or ssh_config value)
-	User          string               `toml:"user"`
-	IdentityFile  string               `toml:"identity_file"`
-	PassphraseEnv string               `toml:"passphrase_env"`
-	PasswordEnv   string               `toml:"password_env"`
-	ProxyJump     string               `toml:"proxy_jump"`     // OpenSSH ProxyJump syntax, comma-separated chain
-	Workspace     string               `toml:"workspace"`      // default remote workspace dir
-	ServeInstall  string               `toml:"serve_install"`  // remote CLI: auto|npm|upload|never
-	UseSSHConfig  bool                 `toml:"use_ssh_config"` // layer ~/.ssh/config values under unset fields
-	Forwards      []RemoteForwardEntry `toml:"forwards"`
+	Name          string `toml:"name"`
+	Host          string `toml:"host"`
+	Port          int    `toml:"port"` // 0 => 22 (or ssh_config value)
+	User          string `toml:"user"`
+	IdentityFile  string `toml:"identity_file"`
+	PassphraseEnv string `toml:"passphrase_env"`
+	PasswordEnv   string `toml:"password_env"`
+	ProxyJump     string `toml:"proxy_jump"` // OpenSSH ProxyJump syntax, comma-separated chain
+	Workspace     string `toml:"workspace"`  // default remote workspace dir
+	// Workspaces are the other folders worked in on this machine. One machine
+	// holds several projects, and the default is only the one a bare connect
+	// lands in — read them together through WorkspaceList.
+	Workspaces   []string             `toml:"workspaces,omitempty"`
+	ServeInstall string               `toml:"serve_install"`  // remote CLI: auto|npm|upload|never
+	UseSSHConfig bool                 `toml:"use_ssh_config"` // layer ~/.ssh/config values under unset fields
+	Forwards     []RemoteForwardEntry `toml:"forwards"`
 }
 
 // RemoteForwardEntry is a persisted port-forward rule applied on connect.
@@ -58,6 +62,7 @@ func (r RemoteConfig) Clone() RemoteConfig {
 		out.Hosts = make([]RemoteHostEntry, len(r.Hosts))
 		for i, h := range r.Hosts {
 			h.Forwards = append([]RemoteForwardEntry(nil), h.Forwards...)
+			h.Workspaces = append([]string(nil), h.Workspaces...)
 			out.Hosts[i] = h
 		}
 	}
@@ -71,6 +76,40 @@ func (e RemoteHostEntry) ServeInstallMode() string {
 		return "auto"
 	}
 	return m
+}
+
+// WorkspaceList is every folder this host is worked in, default first and no
+// duplicates. A config that only ever set workspace is a one-element list, so
+// no reader has to know which of the two fields a folder came from.
+func (e RemoteHostEntry) WorkspaceList() []string {
+	out := make([]string, 0, len(e.Workspaces)+1)
+	seen := map[string]bool{}
+	for _, dir := range append([]string{e.Workspace}, e.Workspaces...) {
+		dir = strings.TrimSpace(dir)
+		if dir == "" || seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		out = append(out, dir)
+	}
+	return out
+}
+
+// withWorkspaceList rewrites both fields from one list, so the pair can never
+// disagree about which folder a bare connect lands in: the head is the default,
+// and the rest is what is left.
+func (e RemoteHostEntry) withWorkspaceList(dirs []string) RemoteHostEntry {
+	e.Workspace, e.Workspaces = "", nil
+	e.Workspaces = dirs
+	normalized := e.WorkspaceList()
+	e.Workspaces = nil
+	if len(normalized) > 0 {
+		e.Workspace, e.Workspaces = normalized[0], normalized[1:]
+	}
+	if len(e.Workspaces) == 0 {
+		e.Workspaces = nil
+	}
+	return e
 }
 
 // PortOrDefault returns the configured port, defaulting to 22.
@@ -158,6 +197,7 @@ func (c *Config) RemoteHost(name string) (RemoteHostEntry, bool) {
 // UpsertRemoteHost adds e, or replaces the host with the same name
 // (preserving position). Mirrors UpsertPlugin.
 func (c *Config) UpsertRemoteHost(e RemoteHostEntry) error {
+	e = e.withWorkspaceList(e.WorkspaceList())
 	if err := validateRemoteHost(e); err != nil {
 		return err
 	}

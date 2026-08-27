@@ -179,9 +179,14 @@ func remoteListCLI() int {
 		if h.Port != 0 && h.Port != 22 {
 			target = fmt.Sprintf("%s:%d", target, h.Port)
 		}
+		// One machine holds several projects; the column names the default and
+		// says how many more are listed, the same way FORWARDS is a count.
 		ws := h.Workspace
 		if ws == "" {
 			ws = "-"
+		}
+		if extra := len(h.WorkspaceList()) - 1; extra > 0 {
+			ws = fmt.Sprintf("%s (+%d)", ws, extra)
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%v\n", h.Name, target, ws, len(h.Forwards), h.UseSSHConfig)
 	}
@@ -257,6 +262,7 @@ func remoteImportCLI(args []string) int {
 				entry.PassphraseEnv = existing.PassphraseEnv
 				entry.PasswordEnv = existing.PasswordEnv
 				entry.Workspace = existing.Workspace
+				entry.Workspaces = append([]string(nil), existing.Workspaces...)
 				entry.ServeInstall = existing.ServeInstall
 				entry.Forwards = append([]config.RemoteForwardEntry(nil), existing.Forwards...)
 			}

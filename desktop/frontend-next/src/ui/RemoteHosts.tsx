@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
 import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { REMOTE_STEP_LABEL, REMOTE_STEPS, type RemoteHost } from "../port/remote";
+import { workspacesOf } from "./Remotes";
 
 // The same ceiling the local column uses. A machine worked on for months holds
 // thousands of conversations, and drawing them all is what put 98k nodes in a
@@ -52,6 +53,23 @@ function Steps({ step, detail }: { step: string; detail?: string }) {
       })}
     </ul>
   );
+}
+
+// The last segment of a path written for the other machine's rules, which are
+// not this one's: a Windows host answers with backslashes to a mac.
+const leaf = (dir: string) => dir.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || dir;
+
+// What the sidebar lists under one machine. The far kernel answers for what it
+// remembers, and the book is what this window can offer before there is a link
+// to ask through — so a folder added but never opened is still reachable, and
+// one opened over there still appears without having been written down here.
+export function remoteWorkspaces(host: RemoteHost, tree: TreeWorkspace[] | null | undefined): TreeWorkspace[] {
+  const known = workspacesOf(host);
+  const out = tree ? [...tree] : [];
+  for (const dir of known) {
+    if (!out.some((ws) => ws.root === dir)) out.push({ root: dir, name: leaf(dir), sessions: [] });
+  }
+  return out;
 }
 
 // What the pip alone cannot say. Degraded is the one that matters: the link is
@@ -133,6 +151,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
         // holding: the link goes down with the last of them.
         const panes = runtimes.filter((rt) => rt.host === host.name);
         const tree = trees[host.name];
+        const spaces = remoteWorkspaces(host, tree);
         const folded = shut.has(host.name);
         const working = host.status === "connecting" || host.status === "reconnecting";
         const hint = note(host);
@@ -159,11 +178,11 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
             {working && host.step && !folded ? <Steps step={host.step} detail={host.detail} /> : null}
 
             {/* Connected: the machine answers for itself, so its own folders
-                and conversations are what the reader picks from. Before that
-                there is only the one row, which is also the connect button —
-                asking someone to say "connect" and then "open" is one act. */}
-            {folded ? null : tree
-              ? tree.map((ws) => {
+                and conversations are what the reader picks from. Cold, the same
+                rows come from the book — a project is a row you click either
+                way, and connecting is what clicking one does. */}
+            {folded ? null : spaces.length
+              ? spaces.map((ws) => {
                   const key = host.name + ":" + ws.root;
                   const folded = shut.has(key);
                   return (
@@ -183,7 +202,10 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
                         <span className="wsname" title={ws.root} dir="ltr">
                           {ws.name}
                         </span>
-                        <span className="wsmeta">{t("{n} 会话", { n: ws.sessions.length })}</span>
+                        {/* Only the far kernel knows what it holds. Cold, "0
+                            会话" would be this window guessing, and guessing
+                            zero about a project worked in for months. */}
+                        {tree ? <span className="wsmeta">{t("{n} 会话", { n: ws.sessions.length })}</span> : null}
                         <span className="wsacts">
                           <button
                             className="wsadd"
@@ -259,12 +281,15 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
                   </div>
                 ))}
 
-            {!tree && !folded && (
+            {/* Only a machine with no folder written down at all. Once one is,
+                its row is the connect button, and a second one beside it would
+                be a different way to do the same thing. */}
+            {!spaces.length && !folded && (
               <button
                 className="rmtopen"
                 data-busy={busy.startsWith(host.name) ? "" : undefined}
                 disabled={!!busy}
-                title={host.workspace || t("这台主机还没有设默认工作区")}
+                title={t("这台主机还没有设默认工作区")}
                 onClick={() => void open(host)}
               >
                 <span className="plus" aria-hidden="true">

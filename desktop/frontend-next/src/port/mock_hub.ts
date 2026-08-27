@@ -42,8 +42,17 @@ export class MockHub implements HubPort {
   // list and the pip states without a kernel, or neither gets designed.
   remoteHosts() {
     return Promise.resolve<RemoteHost[]>([
-      { name: "gpu-box", target: "ada@10.0.0.4", workspace: "/srv/training", status: "connected", panes: 1 },
-      { name: "builder", target: "ada@build.internal", workspace: "~/work", status: "connecting", step: "install", detail: "npm" },
+      {
+        name: "gpu-box",
+        target: "ada@10.0.0.4",
+        workspace: "/srv/training",
+        // A machine with more than one project on it, which is the shape the
+        // sidebar has to draw and the one a single field could not.
+        workspaces: ["/srv/training", "/srv/eval", "/home/ada/notes"],
+        status: "connected",
+        panes: 1,
+      },
+      { name: "builder", target: "ada@build.internal", workspace: "~/work", workspaces: ["~/work"], status: "connecting", step: "install", detail: "npm" },
       { name: "spare", target: "10.0.0.9", status: "idle" },
     ]);
   }

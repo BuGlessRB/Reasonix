@@ -233,3 +233,58 @@ func TestRemoteTreeIsReadThroughAnOpenPane(t *testing.T) {
 		t.Fatalf("the far machine's tree does not list the workspace a pane opened: %+v", tree)
 	}
 }
+
+// The complaint this answers: one machine, several projects, and a book that
+// could only name one of them. The list goes out default-first so the sidebar
+// can draw every folder before a link exists to ask the far kernel through.
+func TestAHostCarriesEveryProjectOnIt(t *testing.T) {
+	front := bookServer(t, &stubAttacher{})
+	resp := bookPost(t, front, "/remotes",
+		`{"name":"gpu-box","host":"10.0.0.4","workspaces":["/srv/train","/srv/eval","/srv/train"]}`)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", resp.StatusCode)
+	}
+
+	listed, err := http.Get(front.URL + "/remotes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listed.Body.Close()
+	var out []RemoteHostView
+	if err := json.NewDecoder(listed.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("hosts = %+v", out)
+	}
+	if got := out[0].Workspaces; len(got) != 2 || got[0] != "/srv/train" || got[1] != "/srv/eval" {
+		t.Fatalf("workspaces = %v, want both folders once each, default first", got)
+	}
+	// The single field keeps meaning what it always did, so a CLI connect and
+	// an older window still land in the same place.
+	if out[0].Workspace != "/srv/train" {
+		t.Fatalf("default workspace = %q, want the head of the list", out[0].Workspace)
+	}
+}
+
+// A row saved by a window that predates the list still names its one folder,
+// and that folder is the whole list rather than a case every reader repeats.
+func TestAHostSavedWithOnlyTheOldFieldIsAListOfOne(t *testing.T) {
+	front := bookServer(t, &stubAttacher{})
+	if resp := bookPost(t, front, "/remotes",
+		`{"name":"gpu-box","host":"10.0.0.4","workspace":"/srv/training"}`); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	listed, err := http.Get(front.URL + "/remotes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listed.Body.Close()
+	var out []RemoteHostView
+	if err := json.NewDecoder(listed.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 || len(out[0].Workspaces) != 1 || out[0].Workspaces[0] != "/srv/training" {
+		t.Fatalf("workspaces = %+v", out)
+	}
+}

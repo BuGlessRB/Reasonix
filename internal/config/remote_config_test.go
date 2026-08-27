@@ -226,3 +226,98 @@ func TestRemotePathHelpers(t *testing.T) {
 		t.Fatalf("RemoteKnownHostsPath = %q", got)
 	}
 }
+
+// One machine holds several projects, and which one a bare connect lands in is
+// still a single answer. The pair is stored so an older config that only ever
+// wrote `workspace` is a list of one, and so nothing can leave the two of them
+// disagreeing about which folder is the default.
+func TestRemoteHostWorkspacesAreOneDefaultFirstList(t *testing.T) {
+	cases := []struct {
+		name  string
+		entry RemoteHostEntry
+		want  []string
+	}{
+		{"nothing set", RemoteHostEntry{}, nil},
+		{"only the old field", RemoteHostEntry{Workspace: "/srv/a"}, []string{"/srv/a"}},
+		{"default first, then the rest", RemoteHostEntry{
+			Workspace: "/srv/a", Workspaces: []string{"/srv/b", "/srv/c"},
+		}, []string{"/srv/a", "/srv/b", "/srv/c"}},
+		{"the default repeated in the list is one folder", RemoteHostEntry{
+			Workspace: "/srv/a", Workspaces: []string{"/srv/a", "/srv/b"},
+		}, []string{"/srv/a", "/srv/b"}},
+		{"blanks and padding are not folders", RemoteHostEntry{
+			Workspace: "  ", Workspaces: []string{" /srv/b ", "", "/srv/b"},
+		}, []string{"/srv/b"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.entry.WorkspaceList()
+			if len(got) != len(tc.want) {
+				t.Fatalf("WorkspaceList() = %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("WorkspaceList() = %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// A save is where the two fields are made to agree: whatever list came in, the
+// head of it is the default a bare `reasonix remote connect` uses.
+func TestUpsertRemoteHostMakesTheHeadOfTheListTheDefault(t *testing.T) {
+	cfg := Default()
+	err := cfg.UpsertRemoteHost(RemoteHostEntry{
+		Name: "box", Host: "198.51.100.4",
+		Workspaces: []string{"/srv/eval", "/srv/train", "/srv/eval"},
+	})
+	if err != nil {
+		t.Fatalf("UpsertRemoteHost: %v", err)
+	}
+	got, _ := cfg.RemoteHost("box")
+	if got.Workspace != "/srv/eval" {
+		t.Fatalf("default workspace = %q, want the head of the list", got.Workspace)
+	}
+	if len(got.Workspaces) != 1 || got.Workspaces[0] != "/srv/train" {
+		t.Fatalf("workspaces = %v, want the default not repeated in the rest", got.Workspaces)
+	}
+	if list := got.WorkspaceList(); len(list) != 2 {
+		t.Fatalf("WorkspaceList() = %v, want both folders once each", list)
+	}
+}
+
+// The list has to survive the file the same way the forwards beside it do.
+func TestRemoteWorkspacesSurviveSaveAndReload(t *testing.T) {
+	isolateUserConfigHome(t)
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	path := filepath.Join(home, "config.toml")
+	if err := os.WriteFile(path, []byte("default_model = \"deepseek\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := LoadForEdit(path)
+	if err := cfg.UpsertRemoteHost(RemoteHostEntry{
+		Name: "box", Host: "198.51.100.4",
+		Workspaces: []string{"/srv/train", "/srv/eval"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SaveTo(path); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "workspaces = ") {
+		t.Fatalf("saved config never wrote the extra projects:\n%s", raw)
+	}
+	got, ok := LoadForEdit(path).RemoteHost("box")
+	if !ok {
+		t.Fatal("host lost after save/reload")
+	}
+	if list := got.WorkspaceList(); len(list) != 2 || list[0] != "/srv/train" || list[1] != "/srv/eval" {
+		t.Fatalf("WorkspaceList() after reload = %v", list)
+	}
+}

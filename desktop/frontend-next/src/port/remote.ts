@@ -21,7 +21,12 @@ export interface RemoteHost {
   user?: string;
   identityFile?: string;
   proxyJump?: string;
+  // The default folder a bare connect lands in, and every folder this machine
+  // is worked in with that default first. The far kernel remembers what has
+  // been opened over there; this is what the window can offer before there is
+  // a link to ask through.
   workspace?: string;
+  workspaces?: string[];
   serveInstall?: string;
   useSSHConfig?: boolean;
   passphraseEnv?: string;
@@ -65,7 +70,9 @@ export interface RemoteHostEdit {
   user?: string;
   identityFile?: string;
   proxyJump?: string;
-  workspace?: string;
+  // The list is what this page writes; the head of it is the default. Sending
+  // the two apart is how they would come to disagree about which one that is.
+  workspaces?: string[];
   serveInstall?: string;
   // Layer ~/.ssh/config under whatever this row leaves unset. With it the alias
   // is the address, which is what makes an imported row complete on its own.

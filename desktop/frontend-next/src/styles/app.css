@@ -4824,6 +4824,20 @@
   }
   .rmtf input:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
   .rmtck { gap: 8px }
+  /* The project list is the one field here that is a list, so it takes the
+     whole width instead of a 13ch label column: a remote path is long and
+     wrapping it into a third of the row is what made one unreadable. Rows are
+     .prule, the same shape the sandbox's writable list uses. */
+  .rmtdirs { display: grid; gap: 2px }
+  .rmtdirs .sublb { font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
+  .rmtdirs .prule input { background: var(--bg) }
+  .rmtdirs .tag {
+    flex: none; padding: 1px 6px; border-radius: var(--r-pill);
+    font: var(--w-med) 10px var(--ui); color: var(--accent-ink);
+    background: color-mix(in srgb, var(--accent) 13%, transparent);
+  }
+  .rmtck input { flex: none; width: auto }
+  .rmtck > span { width: auto; flex: 1 }
   .rmtform .rmtact { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px }
   .rmtform .rmtact button {
     padding: 5px 14px; border-radius: var(--r-xs);
