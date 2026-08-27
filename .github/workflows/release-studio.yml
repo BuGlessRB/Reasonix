@@ -103,10 +103,14 @@ jobs:
       contents: read
       actions: read # SignPath reads run details and downloads the unsigned artifact
     env:
-      # Signing engages only when the token is set, mirroring the APPLE_* gate:
-      # a fork still builds, unsigned, instead of failing on a secret it cannot
-      # have.
-      HAS_SIGNPATH: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+      # Two conditions, because they answer different questions. The token says
+      # a fork cannot try — that is the APPLE_* gate's shape. The variable says
+      # SignPath's console has been told to trust this line's origin, which no
+      # secret can express: SIGNPATH_API_TOKEN is a repository secret, so it is
+      # already set here, and without the second gate merging this file would
+      # make the next release request a signature the policy still refuses.
+      # Set STUDIO_SIGNING_ENABLED=true once the studio origin is provisioned.
+      HAS_SIGNPATH: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.STUDIO_SIGNING_ENABLED == 'true' }}
     strategy:
       fail-fast: false
       matrix:
