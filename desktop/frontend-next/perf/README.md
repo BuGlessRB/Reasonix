@@ -7,8 +7,16 @@
 必须按**生产构建**量：React 的开发期检查（`jsxDEV`、`validateProperty`）比
 被测代码本身还贵，dev 下的数字会把结论带偏。
 
+带 `--sourcemap` 构建：两个采样脚本会把热点还原成源码位置（`sourcemap.mjs`）。
+不带的话表里只有 `h`、`Gv` 这样的压缩名，读不出是谁。
+
+`PERF_CPU=4`（或 6）给 `bench` / `profile` / `switch` / `switchprof` / `rail` /
+`panes` / `scale` 降频，量的是低端机。开发机上什么都是 60fps —— 报上来的卡顿
+从来不在这一档，而且降频前后热点排序并不一样：真正贵的是**在提交阶段读布局**，
+它在快机器上便宜到看不见。
+
 ```bash
-npx vite build --config vite.perf.config.ts     # 产出 dist-perf/
+npx vite build --config vite.perf.config.ts --sourcemap   # 产出 dist-perf/
 npx http-server dist-perf -p 4399 -s            # 或任意静态服务器
 pnpm exec playwright install chromium           # 首次:npx 会另装一份版本对不上的
 
@@ -16,18 +24,22 @@ node perf/bench.mjs      # 规模基准：0/40/150/400 轮下的帧时间与脚�
 node perf/scale.mjs      # 极长会话：400/2000/8000/20000 轮的节点数、堆内存、帧时间
 node perf/switch.mjs     # 切会话：点开一份已经很长的记录，到它出现在眼前要多久
 node perf/rail.mjs       # 左栏会话树：2×8 / 10×50 / 20×200 / 40×500 的节点数与响应
-node perf/profile.mjs    # CPU 采样，按自耗时列热点
+node perf/profile.mjs    # CPU 采样，按自耗时列热点（流式那一段）
+node perf/switchprof.mjs # CPU 采样，量点开一份长会话的那一下
 node perf/panes.mjs      # 并行窗格的代价：两个会话同时流式
 node perf/verify.mjs     # 行为验证：跟随、块的装卸、切页往返、大会话树
 node perf/panels.mjs     # 两侧栏：收起补间、拖动改宽、上下限、窄屏退场
-node perf/look.mjs       # 外观验证：字号、界面缩放、自定义字体、壁纸上传与调节
+node perf/look.mjs       # 外观验证：字号、界面缩放、自定义字体、壁纸上传与调节（含焦点）
 node perf/pick.mjs       # 补全菜单：/ 和 @ 的选中态，深浅两色下各走一遍
 node perf/models.mjs     # 连接面板：网关报出一百多个模型时，这一屏还能不能用
 node perf/side.mjs       # 右栏：端点自己写的一句话有多长，都不该改变栏宽
 node perf/lang.mjs       # 双语验证：英文启动、界面译文到位、切回中文
 node perf/locale.mjs     # 跟随系统语言：中文各写法都归中文，其余归英文
 node perf/i18n.mjs       # 词表守卫：源码用到的中文 key 与英文词表是否对得上
+node perf/selfcheck.mjs  # 守卫的守卫：往每个断言脚本塞一条必假断言，看它是否真的会红
 node perf/codes.mjs      # 码的守卫：内核发的每个拒绝码，前端都要有话说
+node perf/tokens.mjs     # 变量的守卫：样式里不带兜底的 var(--x)，都得真有人赋过值
+node perf/shipped.mjs    # 产物的守卫：dist 里的东西必须比源码新（构建可以成功而编的是别的树）
 node perf/reason.mjs     # 内核拒绝的双语落地：同一个码，中英各说各的
 ```
 
@@ -101,3 +113,10 @@ node perf/reason.mjs     # 内核拒绝的双语落地：同一个码，中英�
   里有。这条对应 internal/i18n 的 catalog 测试，理由一样。
 - **跟随只由用户手势解除。** 用「底部标记离开视口」来解除是错的：块挂载会把
   底部推走，那样视口会被永久留在半空。
+- **预览是窗口的形状，不是随手给的一条。** `cover` 只在图溢出的那条轴上给焦点
+  留余量，所以长宽比一换，能动的就是另一条轴。壁纸预览曾经是固定 116px 高的
+  一条（约 5:1），窗口是 16:10——横向焦点在预览里一个像素都不动，报上来就是
+  「焦点滑动失效」（#9432）。`look.mjs` 量三件事：预览与窗口的长宽比、有余量
+  那一档拉满时预览真的变了几个色阶、没余量那一档是不是停用并说得出为什么。
+  拉了不动的控件比没有这个控件更糟，所以余量是量出来的（图的自然尺寸对预览
+  的实际尺寸），不是按平台或图片类型猜的。
