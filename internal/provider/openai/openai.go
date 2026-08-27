@@ -353,13 +353,14 @@ func (c *client) MissingToolCallReasoningWarningIdentity() string {
 	}, "\x00")
 }
 
-func (c *client) sendOpts() provider.SendOptions {
+func (c *client) sendOpts(hint provider.RequestHint) provider.SendOptions {
 	return provider.SendOptions{
-		Provider:   c.name,
-		KeyEnv:     c.keyEnv,
-		KeySource:  c.keySource,
-		KeyPresent: c.apiKey() != "",
-		RetryAuth:  c.authed.Load(),
+		Provider:       c.name,
+		KeyEnv:         c.keyEnv,
+		KeySource:      c.keySource,
+		KeyPresent:     c.apiKey() != "",
+		RetryAuth:      c.authed.Load(),
+		BadRequestHint: hint,
 	}
 }
 
@@ -497,7 +498,7 @@ func (c *client) openStream(ctx context.Context, targetURL string, wireReq chatR
 		applyCustomHeaders(httpReq.Header, c.headers)
 		return httpReq, nil
 	}
-	resp, err := provider.SendWithRetry(requestCtx, c.http, c.sendOpts(), newReq)
+	resp, err := provider.SendWithRetry(requestCtx, c.http, c.sendOpts(wireReq.reasoningHint), newReq)
 	if err != nil {
 		return nil, provider.AnnotateToolSchemaError(err, tools)
 	}
@@ -673,6 +674,7 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 	// tool results, before the next non-tool message (splitting a tool-result
 	// run would break the API's tool-call pairing validation).
 	var pendingToolImages []string
+	var reasoningHint provider.RequestHint
 	flushToolImages := func() {
 		if len(pendingToolImages) == 0 {
 			return
@@ -697,34 +699,10 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 			name := m.Name
 			cm.Name = &name
 		}
-		// DeepSeek thinking mode 400s an assistant tool_calls turn whose
-		// reasoning_content KEY is absent from the request JSON ("reasoning_content
-		// … must be passed back"). The API accepts an empty string, and only
-		// validates turns after the last user message, but emitting the field on
-		// every tool_calls turn is uniform and verified accepted — so always send
-		// it (empty included) rather than fail the request when reasoning was lost
-		// upstream (e.g. a gateway renamed the field). With thinking disabled the
-		// API tolerates every shape, so keep the exact pre-fix bytes there: send
-		// the key only when a thinking-mode round left reasoning in the history
-		// (dropping it would invalidate the prompt-cache prefix of mixed
-		// thinking-on→off sessions for no gain).
-		if m.Role == provider.RoleAssistant {
-			switch {
-			case c.kimiK3 && (m.ReasoningContent != "" || len(m.ToolCalls) > 0):
-				// Kimi K3 requires the complete assistant message on multi-turn
-				// and tool-call requests, including provider-issued reasoning.
-				cm.ReasoningContent = &m.ReasoningContent
-			case c.deepseek && len(m.ToolCalls) > 0:
-				if c.RequiresToolCallReasoning() || m.ReasoningContent != "" {
-					cm.ReasoningContent = &m.ReasoningContent
-				}
-			case c.zhipu && m.ReasoningContent != "":
-				// GLM interleaved and preserved thinking require provider-issued
-				// reasoning content to be returned unchanged in later history. Keep
-				// an existing value even after thinking is turned off so an
-				// enabled→disabled session retains its valid history bytes.
-				cm.ReasoningContent = &m.ReasoningContent
-			}
+		value, dropped := c.toolCallReasoning(m)
+		cm.ReasoningContent = value
+		if dropped {
+			reasoningHint = provider.HintDroppedToolCallReasoning
 		}
 		for _, tc := range m.ToolCalls {
 			wire := chatToolCall{ID: tc.ID, Type: "function"}
@@ -794,6 +772,7 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 		MaxTokens:       maxOutputTokens,
 		ReasoningEffort: kimiK3ReasoningEffort(c.kimiK3, c.requestEffort(req)),
 		ExtraBody:       c.extraBody,
+		reasoningHint:   reasoningHint,
 	}
 	switch {
 	case c.kimiK3:
@@ -1061,7 +1040,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		return emitted, stallCut(c.name, idleTimeout)
 	}
 	if err := scanner.Err(); err != nil {
-		return emitted, fmt.Errorf("%s: read stream: %w", c.name, err)
+		return emitted, provider.ReadCut(c.name, err)
 	}
 	// A proxy that idle-closes with a clean FIN ends the scan with no error. Without
 	// this check the turn would be committed as complete — including half-streamed
@@ -1161,17 +1140,18 @@ func normaliseUsage(u *wireUsage) *provider.Usage {
 // OpenAI-compatible wire protocol
 
 type chatRequest struct {
-	Model               string         `json:"model"`
-	Messages            []chatMessage  `json:"messages"`
-	Tools               []chatTool     `json:"tools,omitempty"`
-	Stream              bool           `json:"stream"`
-	StreamOptions       *streamOptions `json:"stream_options,omitempty"`
-	Temperature         *float64       `json:"temperature,omitempty"`
-	MaxTokens           int            `json:"max_tokens,omitempty"`
-	MaxCompletionTokens int            `json:"max_completion_tokens,omitempty"`
-	ReasoningEffort     string         `json:"reasoning_effort,omitempty"`
-	Thinking            *thinkingMode  `json:"thinking,omitempty"`
-	ExtraBody           map[string]any `json:"-"`
+	Model               string               `json:"model"`
+	Messages            []chatMessage        `json:"messages"`
+	Tools               []chatTool           `json:"tools,omitempty"`
+	Stream              bool                 `json:"stream"`
+	StreamOptions       *streamOptions       `json:"stream_options,omitempty"`
+	Temperature         *float64             `json:"temperature,omitempty"`
+	MaxTokens           int                  `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int                  `json:"max_completion_tokens,omitempty"`
+	ReasoningEffort     string               `json:"reasoning_effort,omitempty"`
+	Thinking            *thinkingMode        `json:"thinking,omitempty"`
+	ExtraBody           map[string]any       `json:"-"`
+	reasoningHint       provider.RequestHint // host-side, never serialized: what this body left out
 }
 
 func omitExtraBodyFields(in map[string]any, names ...string) map[string]any {

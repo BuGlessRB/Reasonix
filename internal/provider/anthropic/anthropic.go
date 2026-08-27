@@ -138,7 +138,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		requestURL:       requestURL,
 		model:            cfg.Model,
 		nativeAnthropic:  provider.IsNativeAnthropic(root),
-		deepseek:         officialDeepSeek,
+		deepseek:         speaksDeepSeekContract(root, cfg.Extra),
 		thinking:         thinking,
 		effort:           effort,
 		vision:           vision,
@@ -233,13 +233,14 @@ func (c *client) MissingToolCallReasoningWarningIdentity() string {
 	}, "\x00")
 }
 
-func (c *client) sendOpts() provider.SendOptions {
+func (c *client) sendOpts(hint provider.RequestHint) provider.SendOptions {
 	return provider.SendOptions{
-		Provider:   c.name,
-		KeyEnv:     c.keyEnv,
-		KeySource:  c.keySource,
-		KeyPresent: c.apiKey() != "",
-		RetryAuth:  c.authed.Load(),
+		BadRequestHint: hint,
+		Provider:       c.name,
+		KeyEnv:         c.keyEnv,
+		KeySource:      c.keySource,
+		KeyPresent:     c.apiKey() != "",
+		RetryAuth:      c.authed.Load(),
 	}
 }
 
@@ -286,7 +287,8 @@ func (c *client) Stream(ctx context.Context, req provider.Request) (<-chan provi
 	requestCtx := provider.WithRequestAttemptCounter(ctx)
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	if err := json.NewEncoder(buf).Encode(c.buildRequest(requestCtx, req)); err != nil {
+	wireReq := c.buildRequest(requestCtx, req)
+	if err := json.NewEncoder(buf).Encode(wireReq); err != nil {
 		bufPool.Put(buf)
 		return nil, fmt.Errorf("%s: marshal request: %w", c.name, err)
 	}
@@ -310,7 +312,7 @@ func (c *client) Stream(ctx context.Context, req provider.Request) (<-chan provi
 		applyCustomHeaders(httpReq.Header, c.headers)
 		return httpReq, nil
 	}
-	resp, err := provider.SendWithRetry(requestCtx, c.http, c.sendOpts(), newReq)
+	resp, err := provider.SendWithRetry(requestCtx, c.http, c.sendOpts(wireReq.reasoningHint), newReq)
 	if err != nil {
 		return nil, provider.AnnotateToolSchemaError(err, req.Tools)
 	}
@@ -329,6 +331,7 @@ func (c *client) Stream(ctx context.Context, req provider.Request) (<-chan provi
 func (c *client) buildRequest(_ context.Context, req provider.Request) anthRequest {
 	var system []textBlock
 	var msgs []anthMessage
+	var reasoningHint provider.RequestHint
 
 	// appendBlocks adds blocks under role, merging into the previous message when
 	// it shares the role (keeps user/assistant strictly alternating).
@@ -374,15 +377,10 @@ func (c *client) buildRequest(_ context.Context, req provider.Request) anthReque
 			appendBlocks("user", block)
 		case provider.RoleAssistant:
 			var blocks []contentBlock
-			// Replay provider reasoning before the tool_use it led to. DeepSeek uses
-			// unsigned thinking blocks and requires the reasoning from a tool-call
-			// turn in every subsequent request, even if the current request no longer
-			// declares tools or has since disabled thinking. Anthropic proper requires
-			// a signature, so reasoning without one cannot be replayed on that endpoint.
-			if c.deepseek && len(m.ToolCalls) > 0 && m.ReasoningContent != "" {
-				blocks = append(blocks, contentBlock{Type: "thinking", Thinking: m.ReasoningContent})
-			} else if c.thinking == "adaptive" && m.ReasoningContent != "" && m.ReasoningSignature != "" {
-				blocks = append(blocks, contentBlock{Type: "thinking", Thinking: m.ReasoningContent, Signature: m.ReasoningSignature})
+			if block, dropped := c.replayThinking(m); block != nil {
+				blocks = append(blocks, *block)
+			} else if dropped {
+				reasoningHint = provider.HintDroppedToolCallReasoning
 			}
 			if m.Content != "" {
 				blocks = append(blocks, contentBlock{Type: "text", Text: m.Content})
@@ -444,12 +442,13 @@ func (c *client) buildRequest(_ context.Context, req provider.Request) anthReque
 		}
 	}
 	r := anthRequest{
-		Model:     c.model,
-		MaxTokens: maxTokens,
-		System:    system,
-		Messages:  msgs,
-		Tools:     tools,
-		Stream:    true,
+		Model:         c.model,
+		MaxTokens:     maxTokens,
+		System:        system,
+		Messages:      msgs,
+		Tools:         tools,
+		Stream:        true,
+		reasoningHint: reasoningHint,
 	}
 	// Extended thinking is provider-specific. DeepSeek defaults to enabled and
 	// accepts output_config.effort alongside its binary toggle. Adaptive reaches
@@ -688,12 +687,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		return
 	}
 	if err := scanner.Err(); err != nil {
-		wrapped := fmt.Errorf("%s: read stream: %w", c.name, err)
-		if provider.IsConnReset(err) {
-			send(provider.Chunk{Type: provider.ChunkError, Err: provider.StreamInterrupt(wrapped, provider.ClassifyStreamInterrupt(err))})
-			return
-		}
-		send(provider.Chunk{Type: provider.ChunkError, Err: wrapped})
+		send(provider.Chunk{Type: provider.ChunkError, Err: provider.ReadCut(c.name, err)})
 		return
 	}
 	// EOF / clean close before message_stop is an uncommitted attempt. Complete
@@ -769,15 +763,16 @@ type cacheControl struct {
 }
 
 type anthRequest struct {
-	Model        string          `json:"model"`
-	MaxTokens    int             `json:"max_tokens"`
-	System       []textBlock     `json:"system,omitempty"`
-	Messages     []anthMessage   `json:"messages"`
-	Tools        []anthTool      `json:"tools,omitempty"`
-	Temperature  *float64        `json:"temperature,omitempty"`
-	Thinking     *thinkingConfig `json:"thinking,omitempty"`
-	OutputConfig *outputConfig   `json:"output_config,omitempty"`
-	Stream       bool            `json:"stream"`
+	Model         string               `json:"model"`
+	MaxTokens     int                  `json:"max_tokens"`
+	System        []textBlock          `json:"system,omitempty"`
+	Messages      []anthMessage        `json:"messages"`
+	Tools         []anthTool           `json:"tools,omitempty"`
+	Temperature   *float64             `json:"temperature,omitempty"`
+	Thinking      *thinkingConfig      `json:"thinking,omitempty"`
+	OutputConfig  *outputConfig        `json:"output_config,omitempty"`
+	Stream        bool                 `json:"stream"`
+	reasoningHint provider.RequestHint // host-side, never serialized: what this body left out
 }
 
 type thinkingConfig struct {

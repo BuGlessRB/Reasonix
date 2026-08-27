@@ -63,6 +63,12 @@ type ProviderReport struct {
 	KeyPresent    bool     `json:"key_present"`
 	IsDefault     bool     `json:"is_default"`
 	ContextWindow int      `json:"context_window,omitempty"`
+	// The three knobs that decide a request's thinking shape. None carries a
+	// credential, and their absence is what a relay refusing replayed reasoning
+	// reports as — so a bundle without them cannot answer that question at all.
+	ReasoningProtocol string `json:"reasoning_protocol,omitempty"`
+	Effort            string `json:"effort,omitempty"`
+	Thinking          string `json:"thinking,omitempty"`
 }
 
 type PluginReport struct {
@@ -213,21 +219,7 @@ func Collect(opts Options) Report {
 		})...)
 	}
 	report.Sessions.Dir = redactHome(report.Sessions.Dir)
-	for i := range cfg.Providers {
-		p := cfg.Providers[i]
-		models := p.ModelList()
-		report.Providers = append(report.Providers, ProviderReport{
-			Name:          p.Name,
-			Kind:          p.Kind,
-			BaseURLHost:   hostOnly(p.BaseURL),
-			Model:         p.Model,
-			Models:        models,
-			APIKeyEnv:     p.APIKeyEnv,
-			KeyPresent:    p.Configured(),
-			IsDefault:     p.Name == cfg.DefaultModel,
-			ContextWindow: p.ContextWindow,
-		})
-	}
+	report.Providers = providerReports(cfg)
 	for _, p := range cfg.Plugins {
 		transport := p.Type
 		if transport == "" {
@@ -270,7 +262,7 @@ func RenderText(r Report) string {
 		if p.IsDefault {
 			marker = " default"
 		}
-		fmt.Fprintf(&b, "  %-16s %-8s %-24s key:%s%s\n", p.Name, p.Kind, valueOr(p.BaseURLHost, "(no host)"), key, marker)
+		fmt.Fprintf(&b, "  %-16s %-8s %-24s key:%-7s think:%s%s\n", p.Name, p.Kind, valueOr(p.BaseURLHost, "(no host)"), key, reasoningSummary(p), marker)
 	}
 
 	fmt.Fprintf(&b, "\nplugins\n")
@@ -397,6 +389,44 @@ func hostOnly(raw string) string {
 		return u.Hostname() + ":" + port
 	}
 	return u.Hostname()
+}
+
+// providerReports maps the configured providers to their reportable facts. No
+// field here carries a credential: a key is named by the variable it is read
+// from and reported only as present or missing.
+func providerReports(cfg *config.Config) []ProviderReport {
+	var reports []ProviderReport
+	for i := range cfg.Providers {
+		p := cfg.Providers[i]
+		reports = append(reports, ProviderReport{
+			Name:              p.Name,
+			Kind:              p.Kind,
+			BaseURLHost:       hostOnly(p.BaseURL),
+			Model:             p.Model,
+			Models:            p.ModelList(),
+			APIKeyEnv:         p.APIKeyEnv,
+			KeyPresent:        p.Configured(),
+			IsDefault:         p.Name == cfg.DefaultModel,
+			ContextWindow:     p.ContextWindow,
+			ReasoningProtocol: p.ReasoningProtocol,
+			Effort:            p.Effort,
+			Thinking:          p.Thinking,
+		})
+	}
+	return reports
+}
+
+// reasoningSummary renders how this provider was told to control thinking.
+// "auto" is the absence of a declaration, which is the answer itself when an
+// endpoint refuses a request for reasoning this host never sent.
+func reasoningSummary(p ProviderReport) string {
+	parts := []string{valueOr(p.ReasoningProtocol, "auto")}
+	for _, knob := range []string{p.Effort, p.Thinking} {
+		if knob != "" {
+			parts = append(parts, knob)
+		}
+	}
+	return strings.Join(parts, "/")
 }
 
 func valueOr(s, fallback string) string {

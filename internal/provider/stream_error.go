@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -25,4 +27,17 @@ func streamPayloadSnippet(payload string) string {
 		return strconv.Quote(payload[:streamPayloadExcerpt]) + "…"
 	}
 	return strconv.Quote(payload)
+}
+
+// ReadCut reports a read that failed after the response headers succeeded.
+// Nothing but transport can fail there — auth, 4xx, and schema rejections are
+// all decided before the body opens — so the round never reached a terminal and
+// the Agent may replay it. Which transport error it was is deliberately not
+// asked; cancellation is, because only it means the caller wanted this stopped.
+func ReadCut(provider string, err error) error {
+	wrapped := fmt.Errorf("%s: read stream: %w", provider, err)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return wrapped
+	}
+	return StreamInterrupt(wrapped, ClassifyStreamInterrupt(err))
 }
