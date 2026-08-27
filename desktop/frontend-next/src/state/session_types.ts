@@ -41,6 +41,25 @@ export interface Metrics {
   bySource: Record<string, number>;
   cost: number;
   currency: string;
+  // The prefix the last round was sampled against, and whether it moved. A
+  // cache that stops hitting is almost always a prefix that changed, and the
+  // hash is what tells "changed" from "the endpoint dropped it".
+  prefixHash: string;
+  prefixChanged: boolean;
+  prefixReasons: string[];
+  // Tool schemas are the third thing filling a prefix and the one nobody
+  // counts, so it is reported rather than inferred from the context breakdown.
+  toolSchema: number;
+  // The quote's own confidence. A number billed at a published price and one
+  // estimated from a fallback table are different claims.
+  estimated: boolean;
+  // The converted amount, when the host quoted in a second currency. Kept
+  // apart rather than summed: adding them would require inventing a rate.
+  alt: { amount: number; currency: string } | null;
+  // What this turn added, and the per-round series behind the trend. Bounded:
+  // a long session must not grow an unbounded array in the reducer.
+  turn: number;
+  rounds: number[];
 }
 
 export interface Waiting {

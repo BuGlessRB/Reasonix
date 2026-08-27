@@ -40,6 +40,8 @@ export const EN_KERNEL: Record<string, string> = {
   "图片是空的": "The image is empty",
   "{host} 上的内核没有应答，连接可能断了": "The kernel on {host} is not answering — the connection may be down",
   "{host} 上的内核没有接受这次请求：{detail}": "The kernel on {host} did not accept this request: {detail}",
+  "{host} 上的 reasonix 太旧了，开不出面板 —— 先把那台机器上的 reasonix 升到和这边同一代":
+    "The reasonix on {host} is too old to open a pane — upgrade that machine's reasonix to the same line as this one first",
   "这个内核不负责连别的机器": "This kernel does not open panes on other machines",
   "给这台机器起个名字": "Give this machine a name",
   "说清楚连哪个地址": "Say which address to dial",
@@ -137,4 +139,6 @@ export const EN_KERNEL: Record<string, string> = {
   "不认识「{protocol}」这种思考协议": "Unrecognised reasoning protocol “{protocol}”",
   "额外设置里「{path}」不能是空值（null）": "“{path}” in the extra settings cannot be null",
   "图片太大了，先压到 {limit} MB 以内": "That image is too large — bring it under {limit} MB",
+  "{path} 不在这个工作树里，看不了它的改动": "{path} is not inside this working tree, so its changes cannot be shown",
+  "读不出这个文件的改动 —— git 那边没给出结果": "Could not read this file's changes — git returned nothing usable",
 };

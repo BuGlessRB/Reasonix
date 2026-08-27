@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { useRuntimeReload } from "./RuntimeReload";
 import type { AccountState, AgentPort, Appearance as Look, ApprovalMode, CapabilityScope, McpEntry, ModelEntry, PluginPackage, Preset, RoleAssignments, SessionStatus, SkillEntry } from "../port/port";
 import { arrowTabs } from "./tablist";
-import { WindowControls } from "./WindowControls";
+import { bytes, tokens as fmtTokens } from "../i18n/format";
+import { ICON, NAV } from "./prefsnav";
+import type { Section } from "./prefsnav";
 import { AddServer } from "./AddServer";
 import { Remotes } from "./Remotes";
 import type { HubPort } from "../port/hub";
@@ -28,7 +30,7 @@ import { Roles } from "./Roles";
 import { Boundary } from "./Boundary";
 import { Versions } from "./Versions";
 import { Memory } from "./Memory";
-import { Usage } from "./Usage";
+import { DEFAULT_DAYS, Usage } from "./Usage";
 import { Storage } from "./Storage";
 import { Appearance, SCHEMES } from "./Appearance";
 import { ScopeBar } from "./CapabilityScope";
@@ -45,8 +47,6 @@ const APPROVALS: [ApprovalMode, string, string][] = [
   ["yolo", "全放行", "不问了。只在你完全信任这个工作区时用"],
 ];
 
-type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "remote" | "memory" | "usage" | "storage" | "account" | "versions" | "appearance" | "advanced";
-
 // What still lives in the old desktop app. Bots are not on the roadmap, so
 // they are not a promise to keep here either. Signing in and reading
 // versions landed here; downloading and applying an update did not, and naming
@@ -55,23 +55,6 @@ type Section = "session" | "model" | "tools" | "hooks" | "ext" | "network" | "re
 // itself out below. Keep the list rather than the tab: the next thing that is
 // real but not built yet belongs in one line here, not in a half-made panel.
 const ELSEWHERE: string[] = [];
-
-const NAV: [Section, string][] = [
-  ["session", "会话"],
-  ["model", "模型"],
-  ["tools", "工具与权限"],
-  ["hooks", "自动化"],
-  ["ext", "扩展"],
-  ["network", "网络"],
-  ["remote", "远程"],
-  ["memory", "记忆"],
-  ["usage", "用量"],
-  ["storage", "存储"],
-  ["account", "账号"],
-  ["versions", "版本"],
-  ["appearance", "外观"],
-  ["advanced", "高级"],
-].filter(([id]) => id !== "advanced" || ELSEWHERE.length > 0) as [Section, string][];
 
 // The user's question is "is it there and does it work", so the state is the
 // label. A failed server keeps its error on the row that names it.
@@ -126,6 +109,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
   const [memCount, setMemCount] = useState(0);
   const [ruleCount, setRuleCount] = useState(0);
   const root = useRef<HTMLDivElement>(null);
+  const veiled = useRef(false);
 
   const reloadExt = useCallback(() => {
     const where = scopeAt || undefined;
@@ -172,6 +156,20 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
 
   const loadRoles = useCallback(() => {
     port.roles().then(setRoles).catch(() => setRoles(null));
+  }, [port]);
+
+  // Three sections whose row used to report nothing. Loaded here rather than in
+  // reloadExt because none of them moves with the scope the extension lists are
+  // read at, and dropped on failure: a table of contents that says "—" where a
+  // number failed to arrive has invented a fact about the section.
+  const [tally, setTally] = useState<Partial<Record<Section, string>>>({});
+  useEffect(() => {
+    const put = (k: Section, v: string) => setTally((prev) => ({ ...prev, [k]: v }));
+    port.storage().then((st) => put("storage", bytes(st.roots.reduce((n, r) => n + (r.bytes || 0), 0)))).catch(() => {});
+    // The same window Usage itself opens on, or the list and the page it opens
+    // would report two different totals for one word.
+    port.usage(DEFAULT_DAYS).then((u) => put("usage", fmtTokens(u.tokens))).catch(() => {});
+    port.versions().then((v) => put("versions", v.current || "dev")).catch(() => {});
   }, [port]);
 
   // Focus lands once, when the pane opens. onClose is a fresh arrow on every
@@ -268,39 +266,64 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
     network: netMode,
     remote: remoteTally,
     memory: memCount ? t("{n} 条", { n: memCount }) : "",
-    usage: "",
-    storage: "",
+    usage: tally.usage ?? "",
+    storage: tally.storage ?? "",
     account: acct === null ? "" : acct.signedIn ? (acct.user?.label ?? t("已登录")) : t("未登录"),
-    versions: "",
+    versions: tally.versions ?? "",
     appearance: t(SCHEMES.find(([id]) => id === theme)?.[1] ?? ""),
     advanced: ELSEWHERE.length ? `${ELSEWHERE.length}` : "",
   };
   const danger = (id: Section) =>
     (id === "tools" && status?.toolApprovalMode === "yolo") || (id === "ext" && broken > 0);
+  // Null remote means this kernel does not do remote panes; advanced holds
+  // whatever has moved out of the config file and has not moved in yet.
+  const shown = (id: Section) =>
+    (id !== "remote" || remoteBook !== null) && (id !== "advanced" || ELSEWHERE.length > 0);
 
   return (
-    <div className="prefs" ref={root} tabIndex={-1}>
+    <div
+      className="prefs"
+      ref={root}
+      tabIndex={-1}
+      onMouseDown={(e) => { veiled.current = e.target === e.currentTarget; }}
+      // Both ends of the press have to land on the veil. A drag that started
+      // inside the sheet and let go outside is a selection, not a dismissal.
+      onMouseUp={(e) => { if (veiled.current && e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="prefs-sheet" role="dialog" aria-modal="true" aria-label={t("设置")}>
       <div className="prefs-hd">
-        <button className="back" onClick={onClose}>
-          ‹ {t("返回工作台")}
+        <h2>{t("设置")}</h2>
+        <p>{t("改动立刻生效；要重建运行时的那几项，有活儿在跑的时候换不了")}</p>
+        <button className="btn sm" onClick={onClose}>
+          {t("关闭")} <span className="esc">Esc</span>
         </button>
-        <span className="ttl">{t("设置")}</span>
-        <span className="esc">esc</span>
-        <WindowControls />
       </div>
 
       <ConfigTrouble port={port} onRepaired={onChanged} />
 
       <div className="prefs-body">
         <nav className="prefs-nav" role="tablist" aria-label={t("设置分类")} onKeyDown={arrowTabs}>
-          {NAV.filter(([id]) => id !== "remote" || remoteBook !== null).map(([id, name]) => (
-            <button key={id} id={`prefs-${id}`} role="tab" aria-selected={at === id} onClick={() => setAt(id)}>
-              {t(name)}
-              <span className="nv" title={nav[id] || undefined} data-danger={danger(id) ? "" : undefined}>
-                {nav[id]}
-              </span>
-            </button>
-          ))}
+          {NAV.map(([group, items]) => {
+            const rows = items.filter(([id]) => shown(id));
+            // A heading over nothing is worse than no heading: remote is absent
+            // on a kernel without it, advanced until something moves in.
+            if (rows.length === 0) return null;
+            return (
+              <Fragment key={group}>
+                <div className="navsec">{t(group)}</div>
+                {rows.map(([id, name]) => (
+                  <button key={id} id={`prefs-${id}`} role="tab" title={t(name)}
+                    aria-selected={at === id} onClick={() => setAt(id)}>
+                    <svg viewBox="0 0 16 16" aria-hidden="true">{ICON[id]}</svg>
+                    <span className="nm">{t(name)}</span>
+                    <span className="nv" title={nav[id] || undefined} data-danger={danger(id) ? "" : undefined}>
+                      {nav[id]}
+                    </span>
+                  </button>
+                ))}
+              </Fragment>
+            );
+          })}
         </nav>
 
         <div className="prefs-main" role="tabpanel" aria-labelledby={`prefs-${at}`} data-sec={at}>
@@ -634,6 +657,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           </div>
         </Boundary>
         </div>
+      </div>
       </div>
     </div>
   );

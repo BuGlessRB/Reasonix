@@ -1,9 +1,11 @@
 import { HttpError } from "./port";
-import type { AccountState, AgentPort, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
+import type { AccountState, AgentPort, ChangeDiff, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
 import type { WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
 import { SCRIPT } from "./fixture";
 import { mockStorage, mockStoragePlan } from "./mock_storage";
+
+
 
 export class MockPort extends MockTheme implements AgentPort {
   private listeners = new Set<(ev: WireEvent) => void>();
@@ -415,10 +417,42 @@ export class MockPort extends MockTheme implements AgentPort {
     return paths.map((path) => ({ ref: "@" + path, path }));
   }
 
-  // The fixture has no working tree behind it, so the panel falls back to what
-  // the transcript says rather than claiming git reported nothing changed.
+  // The tree the scripted transcript is written against. It used to answer
+  // repo:false, which made the panel fall back to the transcript — and left
+  // every row unopenable, because only git can say what a path differs by.
   async changes(): Promise<WorkspaceChanges> {
-    return { repo: false, changes: [] };
+    return {
+      repo: true,
+      changes: [
+        { path: "internal/provider/retry.go", status: "M" },
+        { path: "internal/config/credentials.go", status: "M" },
+        { path: "internal/provider/openai/streaming/chunk_decoder.go", status: "A" },
+      ],
+    };
+  }
+
+  // Scripted, because there is no tree to read: enough of a diff for the
+  // preview to be worked on without a kernel behind the window.
+  async changeDiff(path: string): Promise<ChangeDiff> {
+    return {
+      path,
+      diff: [
+        `--- a/${path}`,
+        `+++ b/${path}`,
+        "@@ -1,6 +1,7 @@",
+        " package permission",
+        " ",
+        "-func allows(cmd string) bool {",
+        "-	return strings.Contains(cmd, \"rm -rf\")",
+        "+func allows(cmd string) bool {",
+        "+	ast, err := shellparse.Parse(cmd)",
+        "+	if err != nil {",
+        "+		return false",
+        "+	}",
+        " }",
+      ].join("\n"),
+      truncated: false,
+    };
   }
 
   async trajectory(): Promise<WireEvent[]> {
@@ -510,12 +544,21 @@ export class MockPort extends MockTheme implements AgentPort {
   async steer(text: string): Promise<Queued> {
     const itemId = `inbox-${this.queued.size + 1}-${Date.now()}`;
     const at = window.setTimeout(() => {
-      this.dropQueued(itemId);
+      // Three states, not two. The kernel marks the line consumed when the turn
+      // reads it and only sweeps it at AckDequeue, one turn boundary later —
+      // a fixture that dropped it here left that whole window undesignable.
+      this.markQueued(itemId, "steer_consumed");
       this.emit({ kind: "steer", text });
+      this.queued.set(itemId, window.setTimeout(() => this.dropQueued(itemId), 4000));
     }, 4000);
     this.queued.set(itemId, at);
     this.addQueued(itemId, "steer", text);
     return { itemId, disposition: "steer_accepted" };
+  }
+
+  private markQueued(itemId: string, state: QueueItem["state"]) {
+    this.queueItems = this.queueItems.map((i) => (i.id === itemId ? { ...i, state } : i));
+    this.bumpQueue();
   }
 
   private addQueued(itemId: string, intent: QueueItem["intent"], text: string) {

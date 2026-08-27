@@ -111,6 +111,9 @@ const SAID: Record<string, string> = {
   "remote.unreachable": "{host} 上的内核没有应答，连接可能断了",
   // 连得上、也答了，答的是拒绝 —— 和链路断掉是两件事，下一步也不一样。
   "remote.kernel_refused": "{host} 上的内核没有接受这次请求：{detail}",
+  // 答了，但答的是「这条路我不认」—— 那台机器上的内核是上一代，没有面板这套
+  // 接口。和「被拒绝」分开写：一个是那次请求的事，一个是那台机器该升级了。
+  "remote.kernel_too_old": "{host} 上的 reasonix 太旧了，开不出面板 —— 先把那台机器上的 reasonix 升到和这边同一代",
   "remote.not_available": "这个内核不负责连别的机器",
   "remote.name_required": "给这台机器起个名字",
   "remote.host_required": "说清楚连哪个地址",
@@ -134,6 +137,8 @@ const SAID: Record<string, string> = {
 
   // ── 配置文件本身坏了，以及每一个写设置的面板被它挡住时 ─────────
   "config.unparsed": "配置文件读不了，所以这次没保存",
+  "changes.path_outside_tree": "{path} 不在这个工作树里，看不了它的改动",
+  "changes.diff_failed": "读不出这个文件的改动 —— git 那边没给出结果",
   "config.editing_disabled": "这台服务器没有开放配置编辑",
   "config.not_repairable": "这个文件得手动改：{detail}",
   "runtime.rebuild_failed": "设置写进去了，但运行时没能照新设置重建：{detail}",

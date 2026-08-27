@@ -1,0 +1,31 @@
+// The metrics rail: what a turn is costing, what filled the window, and what it
+// touched outside the transcript. Split out for the same reason en_settings and
+// en_kernel were — one screen's worth of wording, read together.
+export const EN_METRICS: Record<string, string> = {
+  "{n} 在跑": "{n} running",
+  "前缀缓存": "Prefix cache",
+  "工作树改动": "Worktree changes",
+  "没有在跑的后台任务": "No background jobs running",
+  "已放行": "auto-approved",
+  "待审": "for review",
+  "前缀变了": "prefix changed",
+  "前缀未变": "prefix held",
+  "前缀哈希": "Prefix hash",
+  "按兜底价估": "fallback price",
+  "已结算": "settled",
+  "本回合": "this turn ",
+  "原币种": "as quoted",
+  "两种结算币不相加 —— 合成一个总数就得凭空发明一个汇率。": "Two settlement currencies do not add up — one total would mean inventing a rate.",
+  "工具 schema": "Tool schema",
+  "远程主机": "Remote hosts",
+  "还没有请求": "no requests yet",
+  "越高越省": "higher is cheaper",
+  "{n} 会话": "{n} sessions",
+  "每回合用量": "Tokens per round",
+  "峰值 {peak} · 均 {avg}": "peak {peak} · avg {avg}",
+  "正在读这个文件的改动…": "Reading this file's changes…",
+  "这个文件现在和上一次提交一样": "This file now matches the last commit",
+  "改动太长，只显示了前面一段": "Too long to show in full — this is the start of it",
+  "改了 {n} 次": "edited {n} times",
+  "改过": "Modified",
+};

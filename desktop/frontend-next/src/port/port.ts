@@ -16,7 +16,7 @@ import type { ApprovalMode, ApprovalVerdict, Checkpoint, HistoryMessage, JobEntr
 import type { ContextBreakdown, ShellOption, ShellSettings } from "./shell";
 import type { SkillCatalog, SkillEntry } from "./skill";
 import type { UpdateProgress, VersionEntry, VersionHub } from "./version";
-import type { WorkspaceChange, WorkspaceChanges, WorkspaceEntry, WorkspaceInfo } from "./workspace";
+import type { ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, WorkspaceInfo } from "./workspace";
 
 // The port is one contract; its subjects each keep their own file, the way the
 // wire and the layers below already do. This is where a reader still finds
@@ -28,7 +28,7 @@ export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, Capabili
   MemoryEntry, ModelEntry, ModelPrice, NetworkProbe, NetworkSettings, Preset, RewindPlan,
   RewindResult, RewindScope, RoleAssignments, ScopeLayer, SessionEntry, SessionStatus,
   ShellOption, ShellSettings, SkillCatalog, SkillEntry, UpdateProgress, VersionEntry,
-  VersionHub, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, WorkspaceInfo };
+  VersionHub, ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, WorkspaceInfo };
 
 import type { WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
@@ -301,6 +301,10 @@ export interface AgentPort {
   // file created and then removed by a shell command leaves both events behind
   // and nothing on disk.
   changes(): Promise<WorkspaceChanges>;
+  // What one of those paths actually differs by. The list says a file moved;
+  // only this says how, and asking per path is what keeps a session that
+  // touched two hundred files from shipping two hundred diffs nobody opened.
+  changeDiff(path: string): Promise<ChangeDiff>;
   // Saves bytes into the workspace's attachment directory and returns the
   // "@path" token a turn references it by. This is the door for what has no
   // path to offer — the clipboard, and a browser tab's dropped File. A window

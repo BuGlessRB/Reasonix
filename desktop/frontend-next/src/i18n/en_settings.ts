@@ -368,4 +368,10 @@ export const EN_SETTINGS: Record<string, string> = {
   "在跑、还是在等你批准，扫一眼图标就知道": "Running, or waiting on you — one glance at the icon says which",
   "关掉窗口后继续在托盘里跑": "Keep running in the tray when the window is closed",
   "会话和后台任务都不会停 —— 从托盘菜单里退出才是真的退出": "Neither the session nor its background jobs stop — quitting from the tray menu is the real quit",
+  "这一轮": "This turn",
+  "在哪里跑": "Where it runs",
+  "它记得什么": "What it remembers",
+  "这台机器": "This machine",
+  "改动立刻生效；要重建运行时的那几项，有活儿在跑的时候换不了":
+    "Changes apply at once; the few that rebuild the runtime can't be changed while something is running",
 };

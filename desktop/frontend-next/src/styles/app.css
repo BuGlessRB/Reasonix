@@ -28,7 +28,7 @@
      接住 —— 同一个类，两种文字，本来就该是两套排版。 */
   :lang(zh) :is(.lbl, .isolab, .traj th, .hl .tag, .copy, .rgroup .hd, .par,
     .apv-hd .tool, .opt .rec, .money .col .k, .anchor .cap, .menu .mi.head .lb,
-    .remember .tag, .rc-hd, .vnow .pin) {
+    .remember .tag, .rc-hd, .vnow .pin, .runhead .tile dt, .tl-badge) {
     font-family: var(--ui); font-size: 11px;
     letter-spacing: 0; text-transform: none;
   }
@@ -53,6 +53,42 @@
     opacity: calc(var(--bg-overlay, 0) * min(var(--bg-alpha, 0) * 4, 1));
     transition: opacity var(--t-panel) var(--ease);
   }
+  /* 天光：主题包画出来的活背景，不是它摆的一张图。整层被一个椭圆遮罩收在右上，
+     不参与命中测试，也不参与滚动 —— 它是窗后面的深度，不是窗里的内容。
+     减少动态时下面的动画全部停住，云也只画一帧（见 Sky.tsx）。 */
+  .sky {
+    position: fixed; inset: 0; z-index: -3; pointer-events: none; overflow: hidden;
+    width: calc(100vw / var(--zoom, 1)); height: calc(100vh / var(--zoom, 1));
+    -webkit-mask-image: radial-gradient(ellipse 118% 82% at 72% -14%, #000 0%, rgb(0 0 0 / .5) 34%, rgb(0 0 0 / .14) 62%, transparent 88%);
+    mask-image: radial-gradient(ellipse 118% 82% at 72% -14%, #000 0%, rgb(0 0 0 / .5) 34%, rgb(0 0 0 / .14) 62%, transparent 88%);
+  }
+  .sky canvas { position: absolute; inset: -6%; width: 112%; height: 112%; filter: blur(17px); opacity: var(--cloud-a, .4) }
+  .sky .sun {
+    position: absolute; top: -32%; left: 54%; width: 54vw; aspect-ratio: 1;
+    border-radius: 50%; filter: blur(84px);
+    background: radial-gradient(circle, var(--ray, rgb(255 216 142 / .55)), transparent 68%);
+    animation: sunpulse 28s ease-in-out infinite;
+  }
+  .sky .shafts {
+    position: absolute; left: -20%; right: -20%; top: -30%; height: 150%;
+    opacity: var(--ray-a, .85); filter: blur(32px);
+  }
+  .sky .shaft {
+    position: absolute; top: 0; left: var(--x); width: var(--w); height: 100%;
+    background: linear-gradient(180deg, var(--ray, rgb(255 216 142 / .55)) 0%, transparent 70%);
+    transform: rotate(var(--r)); transform-origin: 50% 0%;
+    -webkit-mask-image: linear-gradient(180deg, #000 0 30%, transparent 92%);
+    mask-image: linear-gradient(180deg, #000 0 30%, transparent 92%);
+    animation: breathe var(--dur) ease-in-out var(--del) infinite;
+  }
+  @keyframes sunpulse { 0%, 100% { opacity: .8 } 50% { opacity: 1 } }
+  @keyframes breathe { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
+  @media (prefers-reduced-motion: reduce) {
+    .sky .sun, .sky .shaft { animation: none }
+  }
+  /* 有天光时页面自己要让开，和有壁纸时同一个道理。 */
+  :root[data-sky] .app { background: transparent }
+
   /* Only the empty page lets it through. Cards, panels, and the composer stay
      opaque: a background is worth a window's margins, not its content. */
   :root[data-bg] .app { background: transparent }
@@ -69,7 +105,8 @@
   /* 栏和标签条上有字，所以它们退成磨砂而不是让开 —— 图透得过来，字仍站得住。 */
   /* 厚遮罩和大模糊是两种糊掉图的方式，两样都收：图要看得清，字靠自己的影子
      站住 —— 那只花掉字周围几个像素，不花掉整条栏。 */
-  :root[data-bg] .rail, :root[data-bg] .side {
+  :root[data-bg] .rail, :root[data-bg] .side,
+  :root[data-bg] .nav, :root[data-bg] .chrome {
     background: color-mix(in srgb, var(--page) 20%, transparent);
     -webkit-backdrop-filter: blur(8px) saturate(1.35); backdrop-filter: blur(8px) saturate(1.35);
     text-shadow: 0 1px 2px color-mix(in srgb, var(--page) 88%, transparent),
@@ -89,6 +126,17 @@
                  0 0 7px color-mix(in srgb, var(--page) 72%, transparent);
   }
 
+  /* 中栏上下两端各有一块自己的面：顶上的运行头卡、底下的输入框。它们不透，
+     图就只剩中间一条 —— 而那一条正是正文压着的地方。两块都跟着 .flow 走。 */
+  :root[data-bg] .runhead {
+    background: color-mix(in srgb, var(--raised) 76%, transparent);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  }
+  :root[data-bg] .compose {
+    background: color-mix(in srgb, var(--raised) 80%, transparent);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  }
+
   /* 空白页上的字是唯一还站在图上的：给它垫一层从中心散开的底，边缘仍是透的 ——
      图还在，字也还在。方框会把「空白」本身消掉，所以是渐变不是卡片。 */
   :root[data-bg] .hero {
@@ -105,12 +153,39 @@
     background-image: var(--grain); opacity: var(--grain-a); mix-blend-mode: overlay;
   }
   .app {
+    --chrome-h: 39px;
     background: var(--page); border: 0; border-radius: 0; box-shadow: none;
     overflow: hidden; display: flex; flex-direction: column; height: calc(100vh / var(--zoom, 1));
   }
 
+  /* The window opens on the boot screen in index.html; this is the other half
+     of that handover. main.tsx sets data-boot as it dissolves, so the app fades
+     up underneath it rather than being cut to — and drops the attribute after,
+     because a .app that remounts later is not the window opening again. */
+  :root[data-boot] .app { animation: appin .8s var(--ease-out) both }
+  @keyframes appin { from { opacity: 0; transform: scale(.995) } to { opacity: 1; transform: none } }
+  /* One pass of light along the title bar, the same gilt the mark was written
+     in. It is the last thing the opening does, and it never runs again. */
+  :root[data-boot] .chrome::after {
+    content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    background: linear-gradient(105deg, transparent 34%,
+      color-mix(in srgb, var(--accent) 30%, transparent) 50%, transparent 66%);
+    background-size: 220% 100%; background-repeat: no-repeat;
+    animation: chromesweep 1.15s var(--ease-out) both;
+  }
+  @keyframes chromesweep {
+    0% { opacity: 0; background-position: 210% 0 }
+    16% { opacity: 1 }
+    100% { opacity: 0; background-position: -60% 0 }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :root[data-boot] .app { animation: none }
+    :root[data-boot] .chrome::after { display: none }
+  }
+
   .chrome {
-    display: flex; align-items: center; gap: 12px; height: 39px; padding: 0 12px;
+    position: relative;
+    display: flex; align-items: center; gap: 12px; height: var(--chrome-h); padding: 0 12px;
     flex: none; background: var(--page); border-bottom: 1px solid var(--hair);
   }
   /* Inside the shell this row *is* the title bar, so it has to be the drag
@@ -125,7 +200,8 @@
      wordmark they are meant to line up with. The third light ends at 72px, so
      78 cleared them by six — technically clear, and close enough to read as
      part of the same group. 96 puts a gap there that looks deliberate. */
-  [data-shell="wails"][data-platform="darwin"] .chrome { height: 51px; padding-left: 96px; position: relative }
+  [data-shell="wails"][data-platform="darwin"] .app { --chrome-h: 51px }
+  [data-shell="wails"][data-platform="darwin"] .chrome { padding-left: 96px }
   /* Absolute inside that reserved 78px, so the swap is opacity alone and the
      breadcrumb after it never moves. */
   [data-shell="wails"][data-platform="darwin"] .brand {
@@ -136,7 +212,6 @@
   /* Windows puts its controls on the other end, hard against the corner, and
      they are the only ones here that are not the app's own affordances. */
   .winctl { display: flex; margin-left: 6px; margin-right: -12px; align-self: stretch }
-  .prefs-hd .winctl { margin-right: -16px }
   .winctl .wc {
     display: grid; place-items: center; width: 44px; border: 0; background: transparent;
     color: var(--faint); cursor: pointer; transition: background .14s, color .14s;
@@ -230,8 +305,14 @@
   @supports (position-try-fallbacks: flip-block) {
     .picker > button[aria-expanded="true"] { anchor-name: --pick }
     .projmenu, .modemenu { position-anchor: --pick; position-try-fallbacks: flip-block }
-    .projmenu { top: calc(anchor(bottom) + 7px); bottom: auto }
-    .modemenu { bottom: calc(anchor(top) + 9px); top: auto }
+    /* The fallback is load-bearing, not belt and braces. anchor-name hangs on
+       [aria-expanded="true"], and that flips the instant the menu is asked to
+       close — while the menu is still on screen fading out. With no anchor left
+       to resolve, an anchor() without a fallback invalidates the whole
+       declaration, and the menu drops to the bottom of the window before it
+       disappears. 100% is what the non-anchored rules above already use. */
+    .projmenu { top: calc(anchor(bottom, 100%) + 7px); bottom: auto }
+    .modemenu { bottom: calc(anchor(top, 100%) + 9px); top: auto }
   }
   .modemenu .mi .lb, .modemenu .mi.head .lb { white-space: nowrap }
   .modemenu .mi .rt { margin-left: auto; padding-left: 14px; white-space: nowrap }
@@ -334,12 +415,15 @@
   .mode[aria-expanded="true"] { color: var(--text); border-color: var(--faint); background: var(--overlay) }
   .mode .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--ok); transition: background .2s }
   .mode.plain { padding-inline: 9px 10px; gap: 5px; font-weight: var(--w-reg) }
-  /* 名字是人话，值是机器的字 —— 两种字体的对比就是这排里的层级 */
+  /* The value is what this pill says, not a second plate stuck onto it: weight
+     and colour separate it from the name. Only the effort ladder is the API's
+     own word, so only it is set in mono — an approval mode is human wording. */
   .mode .lb { color: var(--faint); font: var(--w-reg) 11px var(--ui); transition: color .15s }
   .mode .vl {
-    color: var(--muted); font: var(--w-reg) 11px var(--mono);
-    animation: modeval .34s var(--ease-spring);
+    color: var(--muted); font: var(--w-med) 11.5px var(--mono);
+    transition: color .15s; animation: modeval .34s var(--ease-spring);
   }
+  .mode .vl[data-g] { font-size: 11px; font-family: var(--ui) }
   .mode:hover .lb, .mode[aria-expanded="true"] .lb { color: var(--muted) }
   .mode:hover .vl, .mode[aria-expanded="true"] .vl { color: var(--text) }
   /* 默认值该安静，调离默认才该被看见 —— 分量跟着它真实的代价走 */
@@ -488,88 +572,97 @@
   .pane[data-run="done"] .rmark path:nth-child(3) { animation-delay: .2s }
   @keyframes drawin { from { stroke-dashoffset: 100 } to { stroke-dashoffset: 0 } }
 
-  /* 状态条：只在跑起来之后才占空间，空闲时高度归零 */
-  .runstrip {
-    display: flex; align-items: center; gap: 9px;
-    height: 0; margin-bottom: 0; opacity: 0; overflow: hidden;
-    font: var(--w-reg) 11px var(--mono); color: var(--faint);
-    transition: height .26s var(--ease-out), opacity .2s var(--ease-out), margin-bottom .26s var(--ease-out);
-  }
-  .pane:not([data-run="idle"]) .runstrip { height: 19px; margin-bottom: 10px; opacity: 1 }
-  .pane[data-run="done"] .runstrip { position: relative; overflow: hidden }
-  .pane[data-run="done"] .runstrip::after {
-    content: ""; position: absolute; inset: 0; pointer-events: none;
-    background: linear-gradient(100deg, transparent 34%,
-      color-mix(in srgb, var(--ok) 52%, transparent) 50%, transparent 66%);
-    background-size: 230% 100%;
-    animation: donesweep 1.05s var(--ease-out) 1 both;
-  }
-  @keyframes donesweep { from { background-position: 150% 0 } to { background-position: -60% 0 } }
-  .runstrip .doing { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .pane[data-run="running"] .runstrip .doing { color: var(--muted) }
-  .pane[data-run="halt"] .runstrip .doing { color: var(--accent-ink) }
-  .pane[data-run="done"] .runstrip .doing { color: var(--ok) }
-  .runstrip .io { display: flex; gap: 9px; flex: none; font-variant-numeric: tabular-nums }
-  .runstrip .up { color: var(--net) }
-  .runstrip .dn { color: var(--deleg) }
-  .runstrip .yen { color: var(--text); flex: none; font-variant-numeric: tabular-nums }
-  .runstrip .mt { flex: none; color: var(--faint); font-variant-numeric: tabular-nums }
-  .runstrip .mt:empty { display: none }
-  .runstrip .hit { color: var(--ok) }
-  /* 数字长出来的时候顶一下：这样「上传/下载」是看得见在动的，不是两个静止的数 */
-  /* 待发队列：说出去了、还没被读到的话。队列空且没暂停时整块不渲染 */
+  /* Said and not yet read. What a person needs from this strip is the answer
+     to "did that land" — so the state is a chip on the row, not a word at the
+     end of it. Empty and unheld renders nothing at all. */
   .queue {
-    display: flex; flex-direction: column; gap: 3px; margin-bottom: 9px;
+    display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px;
     font: var(--w-reg) 11px var(--mono);
     animation: qin .22s var(--ease-out) both;
   }
   @keyframes qin { from { opacity: 0; transform: translateY(3px) } to { opacity: 1; transform: none } }
-  .qhead { display: flex; align-items: center; gap: 7px; color: var(--faint) }
-  .qflag { padding: 0 5px; border-radius: var(--r-xs); background: var(--sunk); color: var(--muted) }
+  .qhd { display: flex; align-items: center; gap: 8px }
+  .qhd .lb {
+    flex: none; font: var(--w-med) 9.5px var(--ui); letter-spacing: var(--track-cap);
+    text-transform: uppercase; color: var(--faint);
+  }
+  .qflag { padding: 0 5px; border-radius: var(--r-xs); background: var(--overlay); color: var(--muted) }
   .qflag[data-warn] { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 16%, transparent) }
+  /* Count and bytes both refuse on their own. A header that showed one of them
+     would be wrong about the other exactly when it bites. */
+  .qcap {
+    margin-left: auto; display: flex; align-items: center; gap: 10px;
+    color: var(--faint); font-variant-numeric: tabular-nums;
+  }
+  .qcap > span { display: flex; align-items: center; gap: 5px }
+  .qcap > span[data-full] { color: var(--warn-ink) }
+  .qcap .mtr { width: 40px; height: 3px; border-radius: 2px; background: var(--overlay); overflow: hidden }
+  .qcap .mtr i { display: block; height: 100%; border-radius: 2px; background: var(--faint); transition: width var(--t-card) var(--ease) }
+  .qcap > span[data-full] .mtr i { background: var(--warn-ink) }
   .qhold {
-    margin-left: auto; padding: 1px 7px; border: 1px solid var(--hair); border-radius: var(--r-xs);
+    flex: none; padding: 1px 7px; border: 1px solid var(--hair); border-radius: var(--r-xs);
     background: none; color: var(--muted); font: inherit; cursor: pointer;
     transition: color .15s var(--ease-out), border-color .15s var(--ease-out);
   }
   .qhold:hover:not(:disabled) { color: var(--text); border-color: var(--border) }
   .qhold:disabled { opacity: .45; cursor: default }
-  .qrow {
-    display: flex; align-items: center; gap: 7px; min-height: 21px; padding: 1px 7px;
-    border-radius: var(--r-sm); background: var(--sunk);
+
+  .qitems { display: grid; gap: 4px }
+  .qi {
+    display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 8px;
+    border: 1px solid var(--hair); border-radius: var(--r-sm); background: var(--raised);
+    color: var(--text); animation: qstep var(--t-card) var(--ease-out) both;
+    transition:
+      padding var(--t-card) var(--ease-out), font-size var(--t-card) var(--ease-out),
+      opacity var(--t-card) var(--ease-out), border-color var(--t-card) var(--ease-out),
+      background var(--t-card) var(--ease-out);
   }
-  /* 插话和跟进是两件事：一个插进正在跑的回合，一个等下一个回合 */
-  .qmark { flex: none; color: var(--deleg) }
-  .qrow[data-intent="steer"] .qmark { color: var(--accent-ink) }
-  .qtext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text) }
+  @keyframes qstep { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+  /* Scoped down from the card pill, which is sized to sit alone at the end of
+     a header row — here it leads one. */
+  .qi .pill {
+    margin-left: 0; padding: 2px 7px; border-radius: var(--r-xs);
+    font: var(--w-med) 10px var(--mono); letter-spacing: .03em;
+  }
+  .qi[data-state="running"] { opacity: .55 }
+  /* 已送入 = 这一轮已经把它读进上下文：收不回来了，而且轮次一结束就会被
+     AckDequeue 摘掉。所以它不再是一张卡片，是一条记录 —— 留着是因为落盘前崩溃
+     时它得看得见，但它不该再占一行卡片的高度。边框只是透明，不是去掉：去掉
+     它整列行会横向跳一下。 */
+  .qi[data-state="steer_consumed"] {
+    padding-top: 0; padding-bottom: 0; opacity: .5;
+    border-color: transparent; background: none; font-size: 11px;
+  }
+  .qi[data-state="steer_consumed"] .pill {
+    padding: 0; background: none; font-size: 9.5px; letter-spacing: .02em;
+  }
+  .pv { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .rf { flex: none; color: var(--faint) }
+  .qwhy { flex: none; color: var(--warn-ink) }
   .qedit {
     flex: 1; min-width: 0; padding: 2px 5px; border: 1px solid var(--focus); border-radius: var(--r-xs);
     background: var(--surface); color: var(--text); font: inherit; resize: none;
   }
-  .qstate, .qwhy { flex: none; color: var(--faint) }
-  .qrow[data-state="blocked"] .qstate, .qwhy { color: var(--warn-ink) }
-  .qrow[data-state="steer_consumed"], .qrow[data-state="running"] { opacity: .55 }
-  /* 操作只在指到这一行时出现：队列平时是读的，不是一排按钮 */
-  .qacts { display: flex; gap: 1px; flex: none; opacity: 0; transition: opacity .15s var(--ease-out) }
-  .qrow:hover .qacts, .qrow:focus-within .qacts { opacity: 1 }
+  /* Quiet but present. A row of controls that exists only under the pointer
+     reads as a row that does nothing. */
+  .qacts { display: flex; gap: 1px; flex: none }
   .qacts button {
     min-width: 17px; padding: 0 3px; border: none; border-radius: var(--r-xs);
-    background: none; color: var(--muted); font: inherit; cursor: pointer;
+    background: none; color: var(--faint); font: inherit; cursor: pointer;
+    transition: color .15s var(--ease-out), background .15s var(--ease-out);
   }
-  .qacts button:hover:not(:disabled) { background: var(--raised); color: var(--text) }
+  .qacts button:hover:not(:disabled) { background: var(--overlay); color: var(--text) }
   .qacts button:disabled { opacity: .3; cursor: default }
-  .qacts .qdel:hover { color: var(--err-ink) }
+  .qi .x {
+    flex: none; padding: 0 3px; border: none; border-radius: var(--r-xs); background: none;
+    color: var(--faint); font: inherit; font-size: 14px; line-height: 1; cursor: pointer;
+    transition: color .15s var(--ease-out), background .15s var(--ease-out);
+  }
+  .qi .x:hover { color: var(--err-ink); background: color-mix(in srgb, var(--err) 12%, transparent) }
 
-  .runstrip .up[data-bump] { animation: bumpup .5s var(--ease-out) }
-  .runstrip .dn[data-bump] { animation: bumpdn .5s var(--ease-out) }
   @keyframes bumpup { 0% { transform: translateY(2px); opacity: .5 } 100% { transform: none; opacity: 1 } }
-  @keyframes bumpdn { 0% { transform: translateY(-2px); opacity: .5 } 100% { transform: none; opacity: 1 } }
-  /* 正在收字的时候下行标记一直在呼吸 */
-  .runstrip[data-rx] .dn { animation: rx 1s ease-in-out infinite }
-  @keyframes rx { 0%, 100% { opacity: .45 } 50% { opacity: 1 } }
 
-  /* 度量全部下沉到输入框上沿了：顶栏只留身份（项目/位置/目标） */
-  .chrome .goal { flex: 1; font: var(--w-reg) 12px var(--ui); color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  /* 目标和度量都归了运行头卡，顶栏只剩身份：哪个项目、哪一份会话。 */
   .chrome .crumb > .picker, .chrome .crumb > b, .chrome .crumb > .crumbsep { flex: none }
   .chrome .badge { font: var(--w-reg) 10.5px var(--mono); color: var(--accent-ink); padding: 2.5px 8px; border-radius: var(--r-pill); background: var(--accent-wash); white-space: nowrap; flex: none }
   .chrome .badge[hidden] { display: none }
@@ -581,7 +674,7 @@
   /* 排队中的那条还没发生，是屏幕上唯一还能撤回的东西。按钮就长在「排队中」
      旁边，常驻可见：只在 hover 时才露出来的撤回，等于没有。 */
   .pcancel {
-    flex: none; padding: 1.5px 7px; border-radius: var(--r-pill);
+    position: relative; flex: none; padding: 3.5px 10px; border-radius: var(--r-pill);
     border: 1px solid var(--hair); background: transparent; cursor: pointer;
     font: var(--w-reg) 10px var(--mono); color: var(--muted);
   }
@@ -591,7 +684,7 @@
   /* 栏宽在 .app 上换值，补间也就归它 —— .cols 只是把结果读进列宽。拖动期间
      必须断掉：一条 .34s 的补间会让栏追着指针跑，手感是黏的。 */
   .app {
-    --rail-w: var(--rail-open); --side-w: var(--side-open);
+    --nav-w: 46px; --rail-w: var(--rail-open); --side-w: var(--side-open);
     transition: --rail-w var(--t-panel) cubic-bezier(.32, .72, 0, 1), --side-w var(--t-panel) cubic-bezier(.32, .72, 0, 1);
   }
   .app[data-rail="off"] { --rail-w: 0px }
@@ -600,7 +693,7 @@
   .app[data-drag="pointer"] { user-select: none; cursor: col-resize }
   .app[data-drag="pointer"] * { cursor: col-resize }
 
-  .cols { flex: 1; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--side-w); min-height: 0 }
+  .cols { flex: 1; display: grid; grid-template-columns: var(--nav-w) var(--rail-w) minmax(0, 1fr) var(--side-w); min-height: 0 }
   .rail, .side { overflow: hidden }
   [data-rail="off"] .rail { border-right: 0 }
   [data-side="off"] .side { border-left: 0 }
@@ -741,9 +834,12 @@
 
   /* ── 左：工作区 ────────────────────────────────────────────────────── */
   .rail { border-right: 1px solid var(--hair); display: flex; flex-direction: column; min-height: 0 }
+  /* 滚的那半和钉住的那半。一个跑了二十个项目的栏会把账号行推出底部，
+     而那正是有人去找它的时候。 */
+  .railscroll { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden }
+  .railfoot { flex: none; border-top: 1px solid var(--border); padding: 6px 7px }
   .rail-hd { display: flex; align-items: center; gap: 8px; padding: 14px 13px 7px; flex: none }
-  .rail-hd .lbl, .side-hd .lbl { flex: 1 }
-  .side-hd { display: flex; align-items: center; gap: 8px; padding: 14px 14px 2px; flex: none }
+  .rail-hd .lbl { flex: 1 }
   .ws {
     display: block; width: 100%; text-align: left; background: none; border: 0;
     border-left: 2px solid transparent; padding: 8px 12px 9px 11px; cursor: pointer;
@@ -857,6 +953,62 @@
   .tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   .tab .n { font: var(--w-reg) 10px var(--mono); color: var(--ghost); margin-left: 5px; font-variant-numeric: tabular-nums }
 
+  /* ── 中栏顶：运行头卡 ─────────────────────────────────────────────── */
+  /* 「这个会话在干什么」以前要看四个地方：面包屑尾巴上的目标、输入框上方的运行
+     条、右栏的进度环和成本块。一块说完，视线落点只有一个。左右缩进跟标签条同一
+     条式子，三者边缘对得齐。 */
+  .runhead {
+    flex: none; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 13px;
+    margin: 12px max(16px, calc((100% - var(--doc)) / 2 + 18px)) 0;
+    padding: 13px 15px 14px;
+    border: 1px solid var(--border); border-radius: var(--r-lg);
+    background: var(--raised); box-shadow: var(--lit);
+    animation: card var(--t-card) var(--ease-out) both;
+  }
+  .runhead .ic {
+    flex: none; display: grid; place-items: center; width: 30px; height: 30px;
+    border: 1px solid var(--hair); border-radius: var(--r-md);
+    background: var(--surface); color: var(--faint);
+    transition: color .25s var(--ease), border-color .25s var(--ease);
+  }
+  .runhead .ic .rmark { width: 17px; height: 17px }
+  .runhead[data-run="running"] .ic { color: var(--net); border-color: color-mix(in srgb, var(--net) 40%, var(--border)) }
+  .runhead[data-run="halt"] .ic { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)) }
+  .runhead[data-run="done"] .ic { color: var(--ok-ink) }
+
+  /* 240px 是三枚数字砖并排放不下时换行的那一档 —— 窄窗口下砖整体掉到下一行，
+     而不是把标题挤成一列竖着的字。 */
+  .runhead .body { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 4px }
+  .runhead .ttl {
+    margin: 0; font: var(--w-semi) 15px/1.4 var(--ui); letter-spacing: var(--track-tight);
+    color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* 还没有目标时,标题位上站着的是一句邀请,不是这次运行的名字 —— 别让它读起来
+     像已经有了。状态由左边那枚记号说,不刷在整句话上:一句被染色的话在长会话里
+     一直亮着,而它本来只是在陈述。 */
+  .runhead .ttl[data-ask] { font-weight: var(--w-reg); color: var(--faint) }
+  .runhead .sub { margin: 0; font: var(--w-reg) 12px/1.55 var(--ui); color: var(--faint) }
+  .runhead .at {
+    margin: 3px 0 0; font: var(--w-reg) 11px var(--mono); color: var(--ghost);
+    font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .runhead .gbar { margin-top: 6px }
+
+  .runhead .tiles { flex: none; margin: 0 0 0 auto; display: flex; gap: 7px }
+  .runhead .tile {
+    min-width: 78px; padding: 6px 11px 7px;
+    border: 1px solid var(--hair); border-radius: var(--r-md); background: var(--surface);
+  }
+  .runhead .tile dt {
+    font: var(--w-med) 9.5px var(--mono); letter-spacing: var(--track-cap);
+    text-transform: uppercase; color: var(--ghost);
+  }
+  .runhead .tile dd {
+    margin: 3px 0 0; font: var(--w-med) 14px var(--ui); color: var(--text);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .runhead .tile dd i { font-style: normal; font-size: 11px; color: var(--ghost) }
+
   /* 空流时压到底部。用 margin-top:auto 而不是 justify-content:flex-end ——
      后者在滚动容器上会把溢出的内容锁在视口外，滚不到。 */
   #flowScroll { display: flex; flex-direction: column }
@@ -915,6 +1067,11 @@
      宿主高度为零、sticky 在滚动容器顶部，所以它既不占布局宽度也不跟着内容滚。
      命中框是整条轨道那么宽的固定块，会动的只有里面那条线 —— 让刻度自己在
      hover 时挪位置，指针一脱离就掉 hover、线挪回去、再进 hover，来回抖。 */
+  /* 轨道的车道宽度，声明在 .pane 上因为读它的有三处：轨道自己多宽，活动流右边
+     让开多少，输入框右边让开多少。分开写死的时候是 54 和 18 —— 中间那 36px 里，
+     轨道在收指针而内容以为自己还能被点到，右对齐的控件（排队消息的「撤回」、
+     回滚入口、审批卡的「不用了」）整个落在里面，看得见、按不到。 */
+  .pane { --srail-w: 54px }
   .railhost { position: sticky; top: 0; height: 0; z-index: 4; pointer-events: none }
   /* 转录不画原生滚动条：视窗框和滚动条的滑块说的是同一件事（你在哪），
      并排出现就是两条一模一样的东西。留下能被标记的那一条。 */
@@ -993,6 +1150,7 @@
     content-visibility: auto;
     contain-intrinsic-size: auto 96px;
   }
+
   /* 贴底与否由观察它来回答，省掉每次滚动对整条记录的测量 */
   .flow-end { height: 1px; margin-top: -1px }
 
@@ -1063,6 +1221,105 @@
 
   /* ── 图：这一轮的执行结构。列 = 一批同时能跑的活，往右是等出来的顺序。 ── */
   /* gsum, not gbar: app.css already spends that name on a progress bar. */
+  /* ── 时间线：一行一次调用，默认折叠 ─────────────────────────────────── */
+  /* 「活动」是说过的话，「轨迹」是机器记录，两个都不回答「谁做了什么，然后是
+     谁」。这一页读的是内核发布的同一张运行图，只是沿时间那根轴读；「图」读的
+     是另一根轴 —— 谁在等谁。 */
+  .tl { list-style: none; margin: 0; padding: 16px max(16px, calc((100% - var(--doc)) / 2 + 18px)) 30px }
+  .tl-step { position: relative; padding-left: 27px }
+  /* 脊柱从这一步的点画到下一步的点。首尾两节各自收在自己的点上，否则线会在
+     两端悬空垂出去。 */
+  .tl-step::before {
+    content: ""; position: absolute; left: 6.5px; top: 0; bottom: 0; width: 1px; background: var(--border);
+  }
+  .tl-step:first-child::before { top: 17px }
+  .tl-step:last-child::before { bottom: auto; height: 17px }
+  .tl-dot {
+    position: absolute; left: 0; top: 12px; z-index: 1; width: 14px; height: 14px;
+    border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--border);
+  }
+  .tl-step[data-s="running"] .tl-dot {
+    background: var(--net); box-shadow: inset 0 0 0 1.5px var(--net),
+      0 0 0 3px color-mix(in srgb, var(--net) 20%, transparent);
+    animation: tick 1.6s ease-in-out infinite;
+  }
+  .tl-step[data-s="completed"] .tl-dot { background: var(--ok); box-shadow: inset 0 0 0 1.5px var(--ok) }
+  .tl-step[data-s="adopted"] .tl-dot { box-shadow: inset 0 0 0 1.5px var(--ok) }
+  .tl-step[data-s="failed"] .tl-dot { background: var(--err); box-shadow: inset 0 0 0 1.5px var(--err) }
+  .tl-step[data-s="cancelled"] .tl-dot { background: var(--warn); box-shadow: inset 0 0 0 1.5px var(--warn) }
+
+  .tl-hd {
+    display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left;
+    padding: 8px 10px 9px; border: 1px solid transparent; border-radius: var(--r-md);
+    background: none; color: inherit; font: inherit; cursor: pointer;
+    transition: background .14s, border-color .14s;
+  }
+  .tl-hd:hover { background: var(--overlay) }
+  .tl-hd:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  /* 跑着的那一步框起来:一整页折叠行里，此刻在动的是哪一条不该靠读才知道。 */
+  .tl-step[data-s="running"] .tl-hd {
+    border-color: color-mix(in srgb, var(--net) 42%, var(--border));
+    background: color-mix(in srgb, var(--net) 6%, transparent);
+  }
+  .tl-step[data-s="failed"] .tl-hd { border-color: color-mix(in srgb, var(--err) 38%, var(--border)) }
+
+  .tl-top { display: flex; align-items: baseline; gap: 9px; min-width: 0 }
+  .tl-nm { font: var(--w-semi) 13px var(--ui); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .tl-at { flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
+  .tl-badge {
+    flex: none; margin-left: auto; padding: 2px 8px; border-radius: var(--r-pill);
+    font: var(--w-med) 9.5px var(--mono); letter-spacing: var(--track-cap); text-transform: uppercase;
+    color: var(--ghost); background: var(--overlay);
+  }
+  .tl-step[data-s="running"] .tl-badge { color: var(--net); background: var(--net-wash) }
+  .tl-step[data-s="completed"] .tl-badge, .tl-step[data-s="adopted"] .tl-badge { color: var(--ok-ink) }
+  .tl-step[data-s="failed"] .tl-badge { color: var(--err-ink) }
+  /* 画出来的角，不是打出来的字:等宽子集里没有 U+203A。 */
+  .tl-chev {
+    flex: none; width: 5px; height: 5px; margin: 0 3px 0 2px; align-self: center;
+    border-right: 1.5px solid var(--ghost); border-bottom: 1.5px solid var(--ghost);
+    transform: rotate(-45deg); transition: transform .2s var(--ease-out);
+  }
+  .tl-step[data-open] .tl-chev { transform: rotate(45deg) }
+  .tl-sub { font: var(--w-reg) 11.5px/1.5 var(--ui); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+
+  /* 改了哪些文件，挂在改它的那一步下 —— 折叠着也看得见,因为「这一步产出了
+     什么」正是不展开也该回答的那个问题。右栏那张全局清单说的是整趟,说不了谁。 */
+  .tl-files { list-style: none; display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 1px 10px 5px }
+  .tl-file {
+    display: flex; align-items: baseline; gap: 6px; min-width: 0; padding: 2.5px 8px;
+    border: 1px solid var(--hair); border-radius: var(--r-sm); background: var(--surface);
+    font: var(--w-reg) 11px var(--mono); color: var(--muted);
+  }
+  .tl-file .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .tl-file .add { color: var(--add); font-weight: var(--w-reg); font-variant-numeric: tabular-nums }
+  .tl-file .del { color: var(--del); font-weight: var(--w-reg); font-variant-numeric: tabular-nums }
+  .tl-file.more { color: var(--ghost) }
+
+  .tl-body { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 4px 10px 14px }
+  .tl-facts { display: flex; flex-wrap: wrap; gap: 3px 18px; margin: 0 }
+  .tl-facts > div { display: flex; align-items: baseline; gap: 7px }
+  .tl-facts dt { font: var(--w-reg) 11px var(--ui); color: var(--ghost) }
+  .tl-facts dd { margin: 0; font: var(--w-reg) 11px var(--mono); color: var(--muted) }
+
+  .tl-mems { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 1px }
+  .tl-mem {
+    display: flex; align-items: baseline; gap: 9px; padding: 4px 8px;
+    border-radius: var(--r-xs); font: var(--w-reg) 11.5px var(--ui);
+  }
+  .tl-mem:hover { background: var(--overlay) }
+  .tl-mem .pip { align-self: center }
+  .tl-mem[data-s="queued"] .pip { background: var(--faint); animation: tick 2.6s ease-in-out infinite }
+  .tl-mem[data-s="running"] .pip { background: var(--net); animation: tick 1.6s ease-in-out infinite }
+  .tl-mem[data-s="completed"] .pip { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ok) }
+  .tl-mem[data-s="adopted"] .pip { background: var(--ok) }
+  .tl-mem[data-s="failed"] .pip { background: var(--err) }
+  .tl-mem .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text) }
+  .tl-mem .st { flex: none; margin-left: auto; color: var(--faint) }
+  .tl-mem .rt { flex: none; min-width: 42px; text-align: right; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
+  .tl-mem .lk { flex: none; padding: 0 2px; border: 0; background: none; color: var(--net); font: inherit; cursor: pointer }
+  .tl-mem .lk:hover { text-decoration: underline }
+
   .gsum {
     display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
     padding: 12px 14px 2px; font: var(--w-reg) 10.5px var(--mono); color: var(--faint);
@@ -1312,17 +1569,29 @@
   .stepctl { display: flex; gap: 5px; opacity: 0; transition: opacity .16s; flex: none }
   .call > .c:hover .stepctl, .call > .c:focus-within .stepctl { opacity: 1 }
   .stepctl button {
-    border: 0; background: var(--overlay); color: var(--faint); cursor: pointer;
-    font: var(--w-med) 10px var(--mono); padding: 2px 6px; border-radius: var(--r-xs); white-space: nowrap;
+    position: relative; border: 0; background: var(--overlay); color: var(--faint); cursor: pointer;
+    font: var(--w-med) 10px var(--mono); padding: 4px 9px; border-radius: var(--r-sm); white-space: nowrap;
   }
+  /* 这几个都是 10px 字号的小片，画得再大就压过它们标注的那一行了。所以长相不
+     变，命中框自己往外让 5px —— 横向只让 2px，因为 .stepctl 的间隙是 5px，让多
+     了两个按钮的命中框就叠在一起，点左边那个会落到右边那个上。 */
+  .stepctl button::after, .pcancel::after { content: ""; position: absolute; inset: -5px -2px }
   .stepctl button:hover { background: var(--border); color: var(--text) }
   .stepctl button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
   /* 回滚入口：坐在它要回到的那条消息上，靠右，hover 才浮现（同 .stepctl）。
      菜单右对齐按钮，否则在流的右缘会向外溢出。开着的时候得留在原地。 */
   .rewind { margin-left: auto }
-  .rewind .menu { left: auto; right: 0; min-width: 208px }
-  .call > .c:has(.rewind .menu:not([hidden])) .stepctl { opacity: 1 }
+  /* 菜单开着的时候按钮得留在原地。它现在 portal 到了 body，卡片里再没有 .menu
+     可以 :has()，所以由控件自己说 —— 这也让「按钮显形」不再依赖菜单挂在哪。 */
+  .stepctl[data-open] { opacity: 1 }
+
+  /* 回滚菜单：唯一从转录里弹出来的浮层，因此是唯一被卡片和滚动容器两层裁到的。
+     portal 到 body 之后位置由测量写进来（left/top 是行内样式），这里只管长相。 */
+  .rewindmenu {
+    position: fixed; z-index: 60; min-width: 208px;
+    animation: card .14s var(--ease-out) both;
+  }
 
   /* 首字节之前那段空白是真实存在的，别装作一问就有回应 */
   .await { display: flex; align-items: center; gap: 5px; padding: 4px 0; font: var(--w-reg) 11px var(--mono); color: var(--ghost) }
@@ -1622,6 +1891,10 @@
   .apv-dt { padding: 9px 12px 0; font: var(--w-reg) 11.5px/1.6 var(--mono); color: var(--muted) }
   .apv-ft { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 11px 12px }
   .apv-ft .hint { margin-left: auto; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
+  /* 计划卡上那句「修改计划会留在计划模式里」。它不是提示性的补充，是这张卡
+     的一半：过去只有「拒绝」，而它其实就是继续规划 —— 想改计划的人以为自己
+     把计划扔了。所以它常驻，不跟着 hover 走。 */
+  .apv-note { margin-top: 9px; font: var(--w-reg) 11.5px/1.7 var(--ui); color: var(--faint) }
   .apv-ft .hint b { color: var(--faint); font-weight: var(--w-reg) }
   .apv-done { padding: 10px 12px; font-size: 12px; line-height: 1.65; color: var(--muted); border-top: 1px solid var(--hair) }
   .apv-done b { color: var(--text); font-weight: var(--w-med) }
@@ -1666,6 +1939,9 @@
     cursor: pointer; font: inherit; color: inherit;
     transition: background .14s, box-shadow .14s;
   }
+  /* Not on .opt: its mark rides the first line of text, which is what the
+     default stretch gives it. */
+  .prow { align-items: center; margin-top: 6px }
   .opt:last-of-type, .prow:last-of-type { border-bottom: 1px solid var(--hair) }
   .opt:hover, .prow:hover { background: var(--overlay) }
   .opt:focus-visible, .prow:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
@@ -1809,9 +2085,11 @@
   .shot button:focus-visible, .intake:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
   .shots .warn { font: var(--w-reg) 11px var(--ui); color: var(--accent-ink) }
 
+  /* 左 18、右让开轨道那一条：活动流、运行条、输入框共用中栏这一个宽度，右缘
+     因此仍然是同一条线 —— 只是这条线现在落在轨道的左边，而不是它的下面。 */
   .compose {
-    position: relative; flex: none; margin: 0 auto 16px;
-    width: min(100% - 36px, calc(var(--doc) - 36px));
+    position: relative; flex: none; margin: 0 var(--srail-w) 16px 18px;
+    max-width: calc(var(--doc) - 18px - var(--srail-w));
     border-radius: var(--r-md); padding: 12px 14px 10px;
     background: linear-gradient(180deg,
       color-mix(in srgb, var(--raised) 94%, var(--text) 6%), var(--raised));
@@ -1825,10 +2103,15 @@
     border: 1px solid var(--border); pointer-events: none;
     transition: border-color .22s;
   }
-  .compose:focus-within::after { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)) }
+  .compose:hover::after { border-color: color-mix(in srgb, var(--accent) 22%, var(--border)) }
+  .compose:focus-within::after { border-color: color-mix(in srgb, var(--accent) 52%, var(--border)) }
+  /* Focus lifts the whole card off the page rather than only ringing it: the
+     cast is what separates "the box is outlined" from "the box is where you
+     are". */
   .compose:focus-within {
     box-shadow: 0 1px 2px rgba(0, 0, 0, .13),
-                0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
+                0 0 0 3px color-mix(in srgb, var(--accent) 11%, transparent),
+                0 14px 34px -22px color-mix(in srgb, var(--accent) 50%, transparent);
   }
 
   /* 跑起来时一道光沿边框走。用 offset-path 沿路径匀速，而不是 conic-gradient
@@ -1879,9 +2162,33 @@
     overflow-x: hidden; overflow-y: auto;
   }
   .compose textarea::placeholder { color: var(--ghost) }
+  /* Glyph, box, count. Three columns so the text keeps starting at one place
+     however many lines it grows to, and so neither marginal thing can be
+     dragged into a selection of what was typed. */
+  .fmain { display: grid; grid-template-columns: 13px minmax(0, 1fr) auto; gap: 0 9px; align-items: start }
+  .prompt {
+    justify-self: center; line-height: 1.6; color: var(--ghost);
+    font: var(--w-semi) 14px var(--mono);
+    -webkit-user-select: none; user-select: none;
+    transition: color .2s var(--ease), transform .2s var(--ease-out);
+  }
+  .compose:focus-within .prompt { color: var(--accent-ink); transform: translateX(2px) }
+  /* Only ever asked about while typing, so it is not there the rest of the time. */
+  .fcount {
+    align-self: end; padding-bottom: 2px; color: var(--ghost);
+    font: var(--w-reg) 10px var(--mono); font-variant-numeric: tabular-nums;
+    opacity: 0; transition: opacity .2s var(--ease);
+  }
+  .compose:focus-within .fcount { opacity: 1 }
   /* 这一排是控件不是文字：能被拖选的标签会在按下拖出一点点时选中一片蓝，
      而这里唯一值得复制的是你打的字和上面的正文。 */
-  .compose .row { position: relative; display: flex; align-items: center; gap: 10px; margin-top: 10px;
+  /* The controls are a shelf under the box, not a line of content inside it.
+     Negative margins take it back out to the card's edge, which is what makes
+     the hairline read as a floor rather than as a rule someone drew. */
+  .compose .row { position: relative; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 11px -14px -10px; padding: 8px 12px;
+    background: var(--page);
+    border-top: 1px solid var(--hair); border-radius: 0 0 var(--r-md) var(--r-md);
     -webkit-user-select: none; user-select: none }
   .compose .row .go { margin-left: auto }
   /* 一排东西同时出现是一堵墙，依次出现是一句话。只在挂载时走一次。
@@ -1902,7 +2209,18 @@
   }
   @keyframes rowsweep { from { background-position: -34% 0 } to { background-position: 134% 0 } }
   /* 两个图标叠在同一格里交叉旋入，按钮不跳宽 */
-  .btn.send { display: inline-flex; align-items: center; gap: 6px }
+  .btn.send { display: inline-flex; align-items: center; gap: 6px; position: relative; overflow: hidden }
+  /* One sweep across the primary button on hover. It is the end of a sentence,
+     and the only control in the row that should feel like one. */
+  .btn.send::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: linear-gradient(105deg, transparent 34%, rgb(255 255 255 / .36) 50%, transparent 66%);
+    background-size: 250% 100%; background-position: 200% 0;
+  }
+  .btn.send:hover::before { animation: sendsheen .7s var(--ease-out) }
+  @keyframes sendsheen { from { opacity: 1; background-position: 200% 0 } to { opacity: 1; background-position: -60% 0 } }
+  /* Stopping is not a flourish. */
+  .pane[data-run="running"] .btn.send::before { display: none }
   .btn.send .ic { display: grid; width: 13px; height: 13px; flex: none }
   .btn.send .ic > svg {
     grid-area: 1 / 1; width: 13px; height: 13px; fill: none; stroke: currentColor;
@@ -1925,18 +2243,243 @@
   .sug:hover { color: var(--text); background: var(--border) }
   .sug:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
+  /* ── 任务看板 ─────────────────────────────────────────────────────── */
+  /* 活动流刻意不是一叠卡片：一条流读的是先后。看板读的是「此刻站在哪」——
+     四个互不相干的问题同屏，卡片正是把它们分开的东西。两种读法，两套版式。 */
+  .tkv { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 28px; max-width: 1080px; margin: 0 auto; width: 100% }
+  .tkcard {
+    display: flex; flex-direction: column; gap: 10px; padding: 15px 17px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    animation: card var(--t-card) var(--ease-out) both;
+  }
+  .tk-h { display: flex; align-items: center; gap: 10px; font: var(--w-semi) 12px var(--ui); color: var(--text) }
+  .tk-h .c { margin-left: auto; font: var(--w-med) 11.5px var(--mono); color: var(--faint); font-variant-numeric: tabular-nums }
+  .tk-empty { margin: 0; font: var(--w-reg) 12px var(--ui); color: var(--ghost) }
+
+  .pill {
+    margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none;
+    padding: 3px 10px; border-radius: var(--r-pill); background: var(--overlay);
+    font: var(--w-med) 11px var(--ui); color: var(--faint);
+  }
+  .pill i { width: 5px; height: 5px; border-radius: var(--r-pill); background: currentColor }
+  .pill[data-tone="net"] { background: var(--net-wash); color: var(--net) }
+  .pill[data-tone="ok"] { color: var(--ok-ink) }
+  .pill[data-tone="accent"] { background: var(--accent-wash); color: var(--accent-ink) }
+  .pill[data-tone="warn"] { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn-ink) }
+  .pill[data-tone="net"] i { animation: tick 1.6s ease-in-out infinite }
+
+  .tk-now h2 { margin: 0; font: var(--w-semi) 17px/1.45 var(--ui); color: var(--text); letter-spacing: var(--track-display) }
+  .tk-now p { margin: 0; max-width: 68ch; font: var(--w-reg) 12.5px/1.75 var(--ui); color: var(--muted) }
+  .tk-meta { display: flex; gap: 18px; font: var(--w-reg) 11px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
+
+  .tk-plan ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column }
+  .tk-plan li {
+    display: flex; align-items: baseline; gap: 11px; padding: 8px 2px;
+    font: var(--w-reg) 12.5px/1.6 var(--ui); color: var(--muted);
+    border-bottom: 1px solid var(--hair); animation: line var(--m-line) both;
+  }
+  .tk-plan li:last-child { border-bottom: 0 }
+  .tk-plan li .mk {
+    width: 13px; height: 13px; flex: none; align-self: center; border-radius: var(--r-pill);
+    border: 1.5px solid var(--border); transition: border-color .2s, background .2s;
+  }
+  .tk-plan li[data-done] { color: var(--faint) }
+  .tk-plan li[data-done] .mk { border-color: var(--ok); background: var(--ok) }
+  .tk-plan li[data-now] { color: var(--text) }
+  .tk-plan li[data-now] .mk { border-color: var(--net); border-width: 3.5px }
+  .tk-plan li .tx { flex: 1; min-width: 0 }
+  .tk-plan li .st { flex: none; font: var(--w-med) 11px var(--mono); color: var(--net) }
+
+  /* 轨迹占两栏、操作占一栏：一条实时的流比三个按钮更该拿到宽度 */
+  .tk-cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; align-items: start }
+  @media (max-width: 1080px) { .tk-cols { grid-template-columns: minmax(0, 1fr) } }
+
+  .tk-lk { margin-left: auto; border: 0; background: none; cursor: pointer; padding: 0;
+    font: var(--w-reg) 11.5px var(--ui); color: var(--net) }
+  .tk-lk:hover { text-decoration: underline }
+  .tk-lk:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs) }
+
+  .tk-rows { display: flex; flex-direction: column; gap: 1px }
+  .tk-row { display: grid; grid-template-columns: 9px 62px minmax(0, 1fr); align-items: baseline; gap: 10px;
+    padding: 5px 2px; font: var(--w-reg) 12px/1.6 var(--ui); color: var(--muted) }
+  .tk-row .dot { width: 5px; height: 5px; margin-left: 2px; align-self: center; border-radius: var(--r-pill); background: var(--ghost) }
+  .tk-row[data-c="write"] .dot { background: var(--accent) }
+  .tk-row[data-c="net"] .dot { background: var(--net) }
+  .tk-row[data-c="deleg"] .dot { background: var(--deleg) }
+  .tk-row[data-c="round"] .dot { background: var(--faint) }
+  .tk-row .at { font: var(--w-reg) 11px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
+  .tk-row .tx { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .tk-row .tx b { font-weight: var(--w-med); color: var(--text) }
+  .tk-row .tx .num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--faint) }
+
+  .tk-acts button {
+    display: flex; flex-direction: column; gap: 3px; text-align: left; width: 100%;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md);
+    background: var(--raised); cursor: pointer;
+    transition: border-color var(--t-line) var(--ease), background var(--t-line) var(--ease);
+  }
+  .tk-acts button:hover { border-color: var(--faint); background: var(--overlay) }
+  .tk-acts button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .tk-acts button .n { font: var(--w-med) 12px var(--ui); color: var(--text) }
+  .tk-acts button .d { font: var(--w-reg) 11px var(--ui); color: var(--ghost) }
+
+  /* 搜索与账号：一栏的两端。中间那段是会话树，它自己滚。 */
+  /* .rail > * 把每个直接子元素钉在展开宽度上，好让收起的补间不重排内容 ——
+     外边距于是加在那个宽度之外，右边的 ⌘K 被推出栏外。宽度自己减掉。 */
+  .rail > .wsfind { width: calc(var(--rail-open) - 20px) }
+  .wsfind {
+    display: flex; align-items: center; gap: 7px; margin: 2px 10px 6px; padding: 5px 8px;
+    border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface);
+    transition: border-color var(--t-line) var(--ease);
+  }
+  .wsfind:focus-within { border-color: var(--focus) }
+  .wsfind svg { width: 13px; height: 13px; flex: none; fill: none; stroke: var(--ghost); stroke-width: 1.5; stroke-linecap: round }
+  /* width:0 与 flex:1 一起用：光靠 min-width:0，长 placeholder 仍会把右边的
+     ⌘K 和清空按钮顶出这一栏。 */
+  .wsfind input {
+    flex: 1; width: 0; min-width: 0; border: 0; background: none; outline: 0; color: var(--text);
+    font: var(--w-reg) 12px var(--ui);
+  }
+  .wsfind input::placeholder { color: var(--ghost) }
+  .wsfind kbd { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
+  .wsfind .clr { flex: none; border: 0; background: none; cursor: pointer; color: var(--ghost); font-size: 13px; line-height: 1; padding: 0 2px }
+  .wsfind .clr:hover { color: var(--text) }
+
+  .acctrow {
+    display: flex; align-items: center; gap: 9px; width: 100%; flex: none; text-align: left;
+    margin-top: auto; padding: 9px 11px; border: 0; border-top: 1px solid var(--hair);
+    background: none; cursor: pointer; transition: background var(--t-line) var(--ease);
+  }
+  .acctrow:hover { background: var(--overlay) }
+  .acctrow:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  .acctrow .ini {
+    width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: var(--r-pill);
+    background: var(--accent-wash); color: var(--accent-ink); font: var(--w-semi) 11.5px var(--ui);
+  }
+  .acctrow .ini[data-off] { background: var(--overlay); color: var(--ghost) }
+  .acctrow .who { display: flex; flex-direction: column; gap: 1px; min-width: 0 }
+  .acctrow .who .n { font: var(--w-med) 12px var(--ui); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .acctrow .who .d { font: var(--w-reg) 10.5px var(--ui); color: var(--ghost); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+
+  /* 顶栏里唯一一直在说话的东西。窗口里判断「它还在跑吗」此前要去看输入框上
+     那条运行条，而那条在设置页盖住中栏时是看不见的。 */
+  .runpill {
+    display: flex; align-items: center; gap: 6px; flex: none; padding: 4px 11px;
+    border-radius: var(--r-pill); background: var(--overlay); color: var(--faint);
+    font: var(--w-med) 11.5px var(--ui); transition: color .3s, background .3s;
+  }
+  .runpill i { width: 5px; height: 5px; border-radius: var(--r-pill); background: currentColor }
+  .runpill[data-run="running"] { background: var(--net-wash); color: var(--net) }
+  .runpill[data-run="running"] i { animation: tick 1.6s ease-in-out infinite }
+  .runpill[data-run="halt"] { background: var(--accent-wash); color: var(--accent-ink) }
+  .runpill[data-run="done"] { color: var(--ok-ink) }
+
+  /* ── 图标栏 ───────────────────────────────────────────────────────── */
+  /* 一列只放去处。宽度是常数而不是可拖的：它不承载内容，拖宽它没有任何东西
+     会因此多显示出来。 */
+  .nav {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 8px 0 10px; border-right: 1px solid var(--hair); background: var(--page);
+  }
+  .navgrp { display: flex; flex-direction: column; gap: 2px }
+  .navgrp.foot { margin-top: auto }
+  .navbtn {
+    width: 34px; height: 34px; display: grid; place-items: center;
+    border: 0; border-radius: var(--r-md); background: none; cursor: pointer; color: var(--ghost);
+    transition: color var(--t-line) var(--ease), background var(--t-line) var(--ease);
+  }
+  .navbtn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
+  .navbtn:hover { color: var(--text); background: var(--overlay) }
+  .navbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  .navbtn[aria-current] { color: var(--accent-ink); background: var(--accent-wash) }
+
   /* ── 右 ───────────────────────────────────────────────────────────── */
   .side { border-left: 1px solid var(--hair); display: flex; flex-direction: column; min-height: 0 }
   .side .scroll { padding: 10px 13px 22px; display: flex; flex-direction: column; gap: 10px }
   .block { display: flex; flex-direction: column; gap: 10px }
-  /* 九块等距堆叠、每块一条等宽分隔，读起来是一份没填完的表单。分隔只留在组
-     边界上 —— 成本 · 进度 · 环境 · 产出 —— 组首由块自己的身份认出来。 */
   .side .block { padding: 9px 2px 0; gap: 9px }
-  .side .block[data-b="ctx"], .side .block[data-b="mcp"], .side .block[data-b="plan"] {
-    margin-top: 7px; padding-top: 16px; border-top: 1px solid var(--border);
-  }
-  .side .block:first-child { padding-top: 4px }
   .block:has(.empty) { gap: 4px }   /* 空块压一行 */
+
+  /* 六组仪表。此前是九块等距堆叠、字号字重全同，读起来是一份没填完的表单：
+     没有一处说明哪几行回答同一个问题，于是每次都要从头读到尾。组头是能读的
+     一行字而不是一枚 10px 全大写标签 —— 「跳过五组只看这一组」得先认得出组名。 */
+  .dgrp { display: flex; flex-direction: column; gap: 7px; padding: 11px 2px 0 }
+  .side .scroll > * + * { border-top: 1px solid var(--border) }
+  .side .scroll > *:first-child { padding-top: 4px }
+
+  /* 折叠起来的那一半。栏回答「这一趟健康吗」，诊断退到一跳之外 —— 常驻九块
+     等于没有一块被读。summary 自带的三角在两个引擎里长得不一样，关掉自己画。 */
+  .side .more > summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    padding: 10px 0 9px; font: var(--w-med) 11.5px var(--ui); color: var(--faint);
+    transition: color .14s;
+  }
+  .side .more > summary::-webkit-details-marker { display: none }
+  /* 画出来的，不是打出来的:U+203A 不在随包的等宽子集里,打出来是一个豆腐块。 */
+  .side .more > summary::after {
+    content: ""; margin-left: auto; width: 5px; height: 5px; margin-right: 3px;
+    border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg); transition: transform .2s var(--ease-out);
+  }
+  .side .more[open] > summary::after { transform: rotate(45deg) }
+  .side .more > summary:hover { color: var(--text) }
+  .side .more > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs) }
+  /* 展开出来的要接着栏往下读，不是另起一个盒子：同样的间距、同样的分隔线。
+     栏那条 > * + * 够不到 details 里面，所以在这儿照抄一份。 */
+  .side .more[open] { display: flex; flex-direction: column; gap: 10px }
+  .side .more > * + * { border-top: 1px solid var(--border) }
+  .dgrp-h {
+    margin: 0 0 3px; display: flex; align-items: baseline; gap: 8px;
+    font: var(--w-semi) 12px/1.5 var(--ui); color: var(--text); letter-spacing: var(--track-tight);
+  }
+  .dgrp-h .a { margin-left: auto; font: var(--w-reg) 9.5px var(--mono); color: var(--ghost) }
+
+  /* 两栏的段标题和块标题是同一个记号：小号、半粗、大字距、全大写、低对比，
+     字体是 --ui；mono 留给右边那个限定词。此前右栏并存两套 —— Jobs/MCP 用小标签，
+     子代理/运行详情用 12px 深色大标题 —— 一个面板里两种写法，扫下去就不像
+     同一张表。只接管字形，布局还是各自的。 */
+  .rail-hd .lbl, .rmtcap, .side .lbl, .dgrp-h {
+    font: var(--w-semi) 9.5px var(--ui); letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ghost);
+  }
+  /* 计数和限定词回到 mono，否则它们跟着标题一起变成了 --ui 大写。 */
+  .rail-hd .lbl .c, .rmtcap .c, .side .lbl .c {
+    font: var(--w-reg) 9.5px var(--mono); letter-spacing: 0; text-transform: none;
+  }
+  /* 设计稿给块标题下面 9px 的空，我们只给了 3px——标题一矮下来就贴到了正文。 */
+  .dgrp-h { margin-bottom: 8px }
+
+  /* 滚动条出现时不让整栏横向跳一下。 */
+  .rail .scroll, .side .scroll { scrollbar-gutter: stable }
+
+  .drow { display: flex; align-items: baseline; gap: 10px; min-height: 21px }
+  .drow .k { color: var(--faint); font: var(--w-reg) 12px var(--ui) }
+  .drow .v {
+    margin-left: auto; display: flex; align-items: baseline; gap: 9px; color: var(--text);
+    font: var(--w-med) 12px var(--mono); font-variant-numeric: tabular-nums;
+    letter-spacing: var(--track-tight);
+  }
+  .drow[data-tone="err"] .v { color: var(--err-ink) }
+  .drow[data-tone="accent"] .v { color: var(--accent-ink) }
+  .drow .v .up, .drow .v .dn { color: var(--faint); font-weight: var(--w-reg) }
+  .lk { color: var(--net) }
+  /* 曲线要占得下才画得出形状；它在这一行里是读数的一部分，不是装饰 */
+  .drow .v .rate { min-width: 112px }
+
+  /* 有真分母才画条 —— 见 kit.tsx 的 Bar */
+  .gbar { height: 3px; background: var(--hair); border-radius: var(--r-pill); overflow: hidden }
+  .gbar i { display: block; height: 100%; background: var(--faint); border-radius: inherit; transition: width .6s var(--ease) }
+  .gbar[data-tone="ok"] i { background: var(--ok) }
+  .gbar[data-tone="net"] i { background: var(--net) }
+  .gbar[data-tone="accent"] i { background: var(--accent) }
+
+  .cost-hero {
+    padding: 1px 0 3px; font: var(--w-med) 21px/1 var(--mono); color: var(--text);
+    font-variant-numeric: tabular-nums; letter-spacing: var(--track-tight);
+  }
+  .msub { font: var(--w-reg) 10.5px var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
+  /* 名单跟在计数行后面，是同一组里的两档：数是结论，名单是它的明细 */
+  .dgrp .agents { margin-top: 4px }
 
   .big { display: flex; align-items: flex-end; gap: 12px }
   .big .v { font: var(--w-med) 21px/1 var(--mono); letter-spacing: var(--track-tight); color: var(--ghost); font-variant-numeric: tabular-nums; transition: color .3s }
@@ -1979,10 +2522,13 @@
   .rate[data-live] .v { color: var(--text) }
   .rate .u { color: var(--ghost); font-size: 10px }
   /* 曲线占中间那段弹性空白，数字仍旧右对齐 —— 加了图不该把读数挤走 */
+  /* Colour belongs to the mark, not to one of its two callers. Scoped under
+     .rate, none of it reached the cost panel's copy — and an SVG with no fill
+     declared is filled black, which is what that panel was showing. */
+  .spark .line { fill: none; stroke: var(--ghost); stroke-width: 1.2; stroke-linejoin: round; transition: stroke .3s }
+  .spark .fill { fill: color-mix(in srgb, var(--ghost) 10%, transparent); transition: fill .3s }
+  .spark .tip { fill: var(--ghost); transition: fill .3s }
   .rate .spark { flex: 1; min-width: 34px; height: 18px; margin-inline: 2px; align-self: center; overflow: visible }
-  .rate .spark .line { fill: none; stroke: var(--ghost); stroke-width: 1.2; stroke-linejoin: round; transition: stroke .3s }
-  .rate .spark .fill { fill: color-mix(in srgb, var(--ghost) 10%, transparent); transition: fill .3s }
-  .rate .spark .tip { fill: var(--ghost); transition: fill .3s }
   .rate[data-live] .spark .line, .rate[data-live] .spark .tip { stroke: var(--net); fill: var(--net) }
   .rate[data-live] .spark .line { fill: none }
   .rate[data-live] .spark .fill { fill: color-mix(in srgb, var(--net) 11%, transparent) }
@@ -2070,8 +2616,41 @@
   }
   .srvs .more { font: var(--w-reg) 11px var(--ui); color: var(--faint) }
 
+  /* Not .spark: the component's own root already carries that, so a wrapper
+     under the same name hands its layout to the drawing inside it. */
+  .sparkbox { display: grid; gap: 4px; margin-top: 2px }
+  .sparkbox .sphd { display: flex; align-items: baseline; font: var(--w-reg) 10.5px var(--ui); color: var(--faint) }
+  .sparkbox .sphd .m { margin-left: auto; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
+  /* A viewBox with no width or height falls back to 300×150, which is a chart
+     several times the height of the panel it sits in. */
+  .sparkbox .spark { width: 100%; height: 30px; overflow: visible }
+
   .files { display: flex; flex-direction: column; min-height: 18px }
-  .file { display: flex; gap: 9px; padding: 6px 0; font: var(--w-reg) 11.5px var(--mono); color: var(--muted); animation: card var(--t-card) var(--ease-out) both }
+  /* A row is a button when there is a diff behind it. Everything a button
+     brings of its own — border, background, its own font — is taken back off,
+     because what changed is that it can be pressed, not how it reads. */
+  .file {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    padding: 5px 6px; margin-inline: -6px; border: 0; border-radius: var(--r-xs);
+    background: transparent; font: var(--w-reg) 11.5px var(--mono); color: var(--muted);
+    animation: card var(--t-card) var(--ease-out) both;
+    transition: background .14s, color .14s;
+  }
+  button.file { cursor: pointer }
+  button.file:hover { background: var(--overlay); color: var(--text) }
+  button.file[data-on] { background: var(--accent-wash); color: var(--accent-ink) }
+  button.file:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
+  /* git's own letter, coloured by what it means. A word would say the same
+     thing four times as wide, in a column that has a path to fit. */
+  .file .st {
+    flex: none; width: 15px; padding: 1px 0; border-radius: var(--r-xs);
+    font: var(--w-med) 10px var(--mono); font-style: normal; text-align: center;
+    background: var(--overlay); color: var(--faint);
+  }
+  .file .st[data-s="M"] { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn-ink) }
+  .file .st[data-s="A"] { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok-ink) }
+  .file .st[data-s="D"] { background: color-mix(in srgb, var(--err) 16%, transparent); color: var(--err-ink) }
+  .file .st[data-s="R"] { background: color-mix(in srgb, var(--net) 16%, transparent); color: var(--net) }
   /* 目录可以被裁，文件名不行 —— 之前整条 .p 一起省略号，先没的恰好是文件名 */
   .file .p { min-width: 0; display: flex; white-space: nowrap }
   .file .p .d { color: var(--ghost); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto }
@@ -2103,18 +2682,14 @@
     .rmark path { stroke-dashoffset: 0 !important }
     /* 三个状态本来就靠颜色和那行字说话，停掉动画不丢任何信息 */
     .reload, .reload .rdot, .rnote { animation: none !important }
-    .pane[data-run="done"] .runstrip::after { display: none }
     .pane[data-run="done"] .rmark { animation: none !important; filter: none !important }
     .bar .c::after { display: none }
     .bars i, .mode .vl, .mode.danger::before, .mode.tog .ic path,
     .compose .row > *, .call[data-running] > .g .sym,
-    .call[data-running] > .g .line, .runstrip[data-rx] .dn,
     .app[data-run="running"] .sessrow[data-on][data-live] .pip { animation: none !important }
     /* The down marker says "receiving" through that breath alone, so stopping the
        animation leaves the two states identical. Two static levels instead — the
        sentence still gets said. */
-    .runstrip[data-rx] .dn { opacity: 1 }
-    .runstrip:not([data-rx]) .dn { opacity: .55 }
     /* The limit nudge is a displacement, and displacement is the thing motion
        sensitivity is about. A still dip in the line says "this is the edge"
        without moving anything. */
@@ -2136,7 +2711,7 @@
 
   /* 右栏是这套东西的卖点，窄了别整块丢掉 —— 落到流下方，仍可滚 */
   [data-fold~="side"] .cols {
-    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+    grid-template-columns: var(--nav-w) var(--rail-w) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto auto;
   }
   [data-fold~="side"] .side, [data-fold~="side"] .sidepeek { grid-column: 1 / -1 }
@@ -2150,6 +2725,9 @@
   /* 栏横过来占满一行，拖出来的那个宽度在这儿没有意义，也没地方去拖 */
   [data-fold~="side"] .side > * { width: 100% }
   [data-fold~="side"] .gutter-r { display: none }
+  /* 左边同理，而这一条一直是缺的：宽度不够时左栏整块让开了，它的拖动条却还留
+     在原地 —— 一个不存在的栏的把手，拖它什么也不会动。 */
+  [data-fold~="rail"] .gutter-l { display: none }
   /* 收起时整块让开，别在流底下留一条一像素的空行 */
   [data-fold~="side"] [data-side="off"] .side { display: none }
 
@@ -2210,72 +2788,159 @@
   .onb-go[disabled] { opacity: .45 }
   .onb-note { font: var(--w-reg) 11px/1.6 var(--ui); color: rgb(255 255 255 / .34) }
 
-  /* ── 设置：一个专门的界面。它承载的东西只会越来越多，塞不进侧栏。 ── */
+  /* ── 设置：浮在工作台之上的一层，不是第二个窗口 ──────────────────────
+     标题栏只有一条，就是 .chrome：窗口按钮、拖动区、红绿灯的留白都在它身上，
+     从前这里还有第二份。这一层从它下面起算，所以设置开着的时候窗口照样能拖、
+     能最小化、能关 —— 一个把窗口按钮扣在模态背后的设置页不是模态，是死锁。 */
   .prefs {
-    position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
-    width: calc(100vw / var(--zoom, 1)); height: calc(100vh / var(--zoom, 1));
-    background: var(--surface); outline: none;
-    animation: prefsin .34s cubic-bezier(.32, .72, 0, 1) both;
+    position: fixed; inset: var(--chrome-h, 39px) 0 0; z-index: 50;
+    display: grid; place-items: center; padding: 24px; outline: none;
+    /* Dims and softens, but stays thin: the sheet over it is glass, and what
+       shows through glass has to be light rather than a paragraph — sharpen
+       this and the transcript behind reads straight through the settings. */
+    background: color-mix(in srgb, var(--page) 40%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(.92); backdrop-filter: blur(14px) saturate(.92);
+    animation: prefsin var(--t-card) var(--ease-out) both;
   }
-  /* 从右推入：进入的是「下一层」，不是浮在上面的一张卡 */
-  @keyframes prefsin { from { transform: translateX(3%); opacity: 0 } to { transform: none; opacity: 1 } }
-  /* The sheet is conditionally rendered, so it had a push-in and no way out — it
-     just stopped existing. A view transition can animate an element that is
+  .prefs-sheet {
+    width: min(1080px, 100%); height: min(760px, 100%);
+    display: flex; flex-direction: column; overflow: hidden;
+    border: 1px solid var(--border); border-radius: var(--r-lg);
+    background: var(--float); box-shadow: var(--shadow-float);
+    animation: sheetin .42s var(--ease-spring) both;
+  }
+  /* 一层浮起来的东西是淡进来的，不是推进来的：整幅铺满的模糊背板一挪就露边。 */
+  @keyframes prefsin { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes sheetin { from { transform: translateY(14px) scale(.985) } to { transform: none } }
+  /* The sheet is conditionally rendered, so it had an entrance and no way out —
+     it just stopped existing. A view transition can animate an element that is
      absent from one of the two states, which is what buys the exit without
-     keeping the whole settings tree mounted. */
+     keeping the whole settings tree mounted. It snapshots veil and sheet as one
+     image, so the lift belongs to the other path — this one only fades. */
   @supports (view-transition-name: none) {
+    /* Only the named element takes part. Without this the root keeps its own
+       default name, so every swap also cross-fades a snapshot of the entire
+       document against the next one — the whole window dipping and coming back
+       is the flinch you see when settings closes, not the sheet leaving. */
+    :root { view-transition-name: none }
     .prefs { view-transition-name: prefs; animation: none }
-    [data-vt="prefs"]::view-transition-new(prefs) { animation: prefsin .34s cubic-bezier(.32, .72, 0, 1) both }
-    [data-vt="prefs"]::view-transition-old(prefs) { animation: prefsout .26s var(--ease-in) both }
-    @keyframes prefsout { to { transform: translateX(3%); opacity: 0 } }
+    .prefs-sheet { animation: none }
+    [data-vt="prefs"]::view-transition-new(prefs) { animation: prefsin var(--t-card) var(--ease-out) both }
+    [data-vt="prefs"]::view-transition-old(prefs) { animation: prefsout .24s var(--ease-in) both }
+    @keyframes prefsout { to { opacity: 0 } }
   }
-  .app[data-prefs] > .chrome, .app[data-prefs] > .cols {
-    transform: translateX(-1.2%); opacity: .55; filter: saturate(.7);
-    transition: transform .34s cubic-bezier(.32, .72, 0, 1), opacity .3s, filter .3s;
+
+  /* 看一处改动：和设置同一套 —— 一层压暗+糊开的背板，上面一块浮起来的面。
+     它从标题栏下面起算，所以窗口按钮在它开着的时候仍然能按。 */
+  .cpv {
+    position: fixed; inset: var(--chrome-h, 39px) 0 0; z-index: 60;
+    display: grid; place-items: center; padding: 24px;
+    background: color-mix(in srgb, var(--page) 40%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(.92); backdrop-filter: blur(14px) saturate(.92);
+    animation: prefsin var(--t-card) var(--ease-out) both;
   }
-  .app > .chrome, .app > .cols { transition: transform .34s cubic-bezier(.32, .72, 0, 1), opacity .3s, filter .3s }
+  .cpv-sheet {
+    width: min(980px, 100%); max-height: min(720px, 100%);
+    display: flex; flex-direction: column; overflow: hidden;
+    border: 1px solid var(--border); border-radius: var(--r-lg);
+    background: var(--float); box-shadow: var(--shadow-float);
+    animation: sheetin .42s var(--ease-spring) both;
+  }
+  .cpv-hd {
+    flex: none; display: flex; align-items: center; gap: 12px; padding: 11px 12px 11px 16px;
+    border-bottom: 1px solid var(--hair); background: var(--surface);
+  }
+  .cpv-hd .p {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: var(--w-reg) 12px var(--mono); color: var(--text);
+  }
+  .cpv-hd .esc { margin-left: 5px; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
+  .cpv-body { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 20px }
+  /* Same handover as the settings sheet, for the same reason: this one is
+     conditionally rendered too, and a view transition is what animates an
+     element that is absent from one of the two states. */
+  @supports (view-transition-name: none) {
+    .cpv { view-transition-name: cpv; animation: none }
+    .cpv-sheet { animation: none }
+    [data-vt="cpv"]::view-transition-new(cpv) { animation: prefsin var(--t-card) var(--ease-out) both }
+    [data-vt="cpv"]::view-transition-old(cpv) { animation: prefsout .24s var(--ease-in) both }
+  }
+  /* 面板里那张 diff 自带上边距，是给卡片里用的；这里它是唯一的内容。 */
+  .cpv-body .dif { margin-top: 0 }
 
   .prefs-hd {
-    display: flex; align-items: center; gap: 12px; flex: none; height: 46px; padding: 0 16px;
-    border-bottom: 1px solid var(--hair); background: var(--raised);
+    position: relative; flex: none;
+    display: flex; align-items: baseline; gap: 12px; padding: 13px 13px 13px 18px;
+    border-bottom: 1px solid var(--hair); background: var(--surface);
   }
-  /* 设置是整屏的下一层，顶到窗口边，所以它自己的头也得让开红绿灯、也得能拖动 ——
-     和主页顶栏用同一组数字，两个界面才对得上。 */
-  [data-shell="wails"] .prefs-hd { --wails-draggable: drag }
-  [data-shell="wails"] .prefs-hd button { --wails-draggable: no-drag }
-  [data-shell="wails"][data-platform="darwin"] .prefs-hd { height: 51px; padding-left: 78px }
-  .prefs-hd .ttl { font: var(--w-med) 12.5px var(--ui); color: var(--text) }
-  .prefs-hd .esc { margin-left: auto; margin-right: 4px; font: var(--w-reg) 10px var(--mono); color: var(--ghost); border: 1px solid var(--border); border-radius: var(--r-xs); padding: 1px 5px }
-  .back {
-    border: 0; background: transparent; cursor: pointer; padding: 4px 8px 4px 4px; border-radius: var(--r-xs);
-    color: var(--muted); font: var(--w-reg) 12px var(--ui); transition: color .14s, background .14s;
+  /* 一道很淡的金线压在头栏底下：设置是这扇窗自己的东西，不是内容。 */
+  .prefs-hd::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+    background: linear-gradient(90deg, transparent 4%,
+      color-mix(in srgb, var(--accent) 34%, transparent) 50%, transparent 96%);
   }
-  .back:hover { color: var(--text); background: var(--overlay) }
-  .back:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
+  .prefs-hd h2 { margin: 0; flex: none; font: var(--w-semi) 14px var(--ui); color: var(--text); letter-spacing: .01em }
+  .prefs-hd p {
+    margin: 0; flex: 1; min-width: 0; font: var(--w-reg) 11.5px var(--ui); color: var(--faint);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .prefs-hd .btn { flex: none; align-self: center }
+  .prefs-hd .esc { margin-left: 5px; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
 
   .prefs-body { flex: 1; display: grid; grid-template-columns: 208px minmax(0, 1fr); min-height: 0 }
   .prefs-nav {
-    display: flex; flex-direction: column; gap: 1px; padding: 18px 10px;
-    border-right: 1px solid var(--hair); overflow: auto;
+    display: grid; align-content: start; gap: 1px; padding: 9px 8px;
+    border-right: 1px solid var(--hair); overflow: auto; background: var(--surface);
   }
+  /* Named .navsec, not .navgrp: the rail already owns that name for its columns
+     of buttons, and an unscoped display:flex would land on these headings. */
+  .prefs-nav .navsec {
+    padding: 13px 9px 4px; font: var(--w-semi) 9.5px var(--ui);
+    letter-spacing: .14em; text-transform: uppercase; color: var(--faint);
+  }
+  .prefs-nav .navsec:first-child { padding-top: 2px }
   /* 目录顺便报数：右边挂当前值，打开设置第一眼就知道现在跑在什么设定下，
      不用逐个分类点过去 —— 这也是原来那条独立状态条存在的唯一理由。 */
   .prefs-nav button {
-    display: flex; align-items: baseline; gap: 10px;
-    text-align: left; padding: 8px 11px; border: 0; border-radius: var(--r-sm); cursor: pointer;
+    position: relative; overflow: hidden;
+    display: flex; align-items: center; gap: 9px;
+    text-align: left; padding: 6.5px 9px; border: 0; border-radius: var(--r-sm); cursor: pointer;
     background: transparent; color: var(--muted); font: var(--w-reg) 12.5px var(--ui);
     transition: background .14s, color .14s;
   }
+  .prefs-nav button svg {
+    width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
+    stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round;
+    color: var(--faint); transition: color .14s, transform .5s var(--ease-out);
+  }
+  /* The value gives up its width first. Chinese names fit in this column and
+     English ones do not, and a row that truncates the section's own name to
+     keep four characters of its value has traded the label for the footnote. */
+  .prefs-nav .nm { flex: 1; min-width: 6.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  /* A bar props up the selected row from the left. In a column of equal pills
+     the wash alone carries it in dark and gives out in light, where the accent
+     tint is only a few percent off the page it sits on. */
+  .prefs-nav button::before {
+    content: ""; position: absolute; left: 0; top: 50%; width: 2px; height: 0;
+    border-radius: 0 2px 2px 0; background: var(--accent); transform: translateY(-50%);
+    transition: height .24s var(--ease-spring);
+  }
   .prefs-nav button:hover { background: var(--overlay); color: var(--text) }
-  .prefs-nav button[aria-selected="true"] { background: var(--overlay); color: var(--text); font-weight: var(--w-med) }
+  .prefs-nav button:hover svg { color: var(--accent-ink) }
+  .prefs-nav button[aria-selected="true"] { background: var(--accent-wash); color: var(--accent-ink); font-weight: var(--w-med) }
+  .prefs-nav button[aria-selected="true"]::before { height: 17px }
+  .prefs-nav button[aria-selected="true"] svg { color: var(--accent-ink); transform: scale(1.06) }
   .prefs-nav button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px }
   /* 这一列是真信息不是装饰：ghost 在 10.5px 上对比度只有 2:1，读不出来 */
   .prefs-nav .nv {
-    margin-left: auto; flex: none; max-width: 88px; overflow: hidden; text-overflow: ellipsis;
+    flex: 0 1 auto; min-width: 0; max-width: 74px; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; font: var(--w-reg) 10.5px var(--mono); color: var(--faint);
   }
-  .prefs-nav button[aria-selected="true"] .nv { color: var(--muted) }
+  .prefs-nav button[aria-selected="true"] .nv { color: color-mix(in srgb, var(--accent-ink) 76%, transparent) }
   .prefs-nav .nv[data-danger] { color: var(--err) }
+  @media (prefers-reduced-motion: reduce) {
+    .prefs-nav button::before, .prefs-nav button svg { transition: none }
+  }
 
   .prefs-main { overflow: auto; padding: 34px 44px 64px }
   /* 贴着目录往下读，不居中：只有左边一条栏时，居中会把内容悬成一座孤岛 */
@@ -2283,10 +2948,17 @@
   /* 660 是给读的段落定的行宽。扩展页是表：名字、说明、触发方式、归属、开关
      五列挤在同一个上限里会把说明截掉，所以只有这一页放宽。 */
   .prefs-main[data-sec="ext"] .prefs-col { max-width: 980px }
-  .grp { margin-bottom: 40px; animation: card var(--t-card) var(--ease-out) both }
+  .grp { margin-bottom: 30px; animation: card var(--t-card) var(--ease-out) both }
   .grp:last-child { margin-bottom: 0 }
   .grp-hd { display: flex; align-items: baseline; gap: 12px }
-  .grp h2 { margin: 0; font: var(--w-semi) 14.5px var(--ui); color: var(--text) }
+  /* An overline, not a headline: the rows under it carry the weight, and a page
+     of 14.5px titles reads as a stack of documents rather than one list. 10px
+     rather than the 9.5 this is drawn at elsewhere — CJK has no small caps to
+     fall back on, so the tracking is doing all of the work. */
+  .grp h2 {
+    margin: 0; font: var(--w-semi) 10px var(--ui); color: var(--faint);
+    letter-spacing: .14em; text-transform: uppercase;
+  }
   .grp .now { margin-left: auto; flex: none; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
   .grp-hd .act { margin-left: 12px; align-self: center }
   .grp-hd .now + .act { margin-left: 0 }
@@ -2309,10 +2981,10 @@
   .prow[data-danger][data-on] .mark { border-color: var(--err); background: var(--err) }
   /* 风险在你点之前就在：全放行选中时，整条分段条带上红边和红字，
      而不是等选中之后才补一个提示。 */
-  .seg[data-danger] { border-bottom-color: color-mix(in srgb, var(--err) 55%, var(--border)) }
+  .seg[data-danger] { background: color-mix(in srgb, var(--err) 13%, var(--overlay)) }
   .seg[data-danger] button[aria-checked="true"] {
-    border-bottom-color: var(--err); color: var(--err);
-    background: color-mix(in srgb, var(--err) 8%, transparent);
+    color: var(--err); background: var(--raised);
+    box-shadow: var(--lit), 0 0 0 1px color-mix(in srgb, var(--err) 42%, transparent);
   }
 
   .kv { display: flex; gap: 12px; align-items: baseline; padding: 10px 12px; border-top: 1px solid var(--hair) }
@@ -2931,11 +3603,11 @@
 
   .fromplugin { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--hair) }
   .fromplugin .lb { font: var(--w-reg) 11px var(--ui); color: var(--faint) }
-  .prow { display: flex; align-items: baseline; gap: 10px; margin-top: 6px }
-  .prow .ev { flex: none; min-width: 128px; font: var(--w-reg) 11px var(--mono); color: var(--muted) }
-  .prow .cm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  .hookrow { display: flex; align-items: baseline; gap: 10px; margin-top: 6px }
+  .hookrow .ev { flex: none; min-width: 128px; font: var(--w-reg) 11px var(--mono); color: var(--muted) }
+  .hookrow .cm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font: var(--w-reg) 11px var(--mono); color: var(--faint) }
-  .prow .sc { flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
+  .hookrow .sc { flex: none; font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
 
   /* 权限规则读起来是一张判定表，不是三个箱子。工具名在组头上说一次，行里只
      留真正有区别的那一段；强度是行上的一个属性，就地改 —— 二十条规矩堆成三个
@@ -3223,20 +3895,25 @@
   .skrow .sc { flex: none; min-width: 44px; text-align: right; font: var(--w-reg) 10.5px var(--mono); color: var(--faint) }
   .skrow .sw { margin-left: 4px; align-self: center }
 
-  .seg { display: flex; flex-wrap: wrap; padding: 0; background: none; border-bottom: 1px solid var(--border) }
-  /* 中文标签在 mono 栈里会掉到回退字体，跟旁边的界面字对不齐 */
-  .seg[data-text] button { font: var(--w-reg) 12px var(--ui) }
-  .seg button {
-    flex: 1; min-width: 60px; padding: 7px 10px; border: 0; border-radius: 0;
-    border-bottom: 2px solid transparent; margin-bottom: -1px;
-    background: transparent; color: var(--faint); font: var(--w-reg) 11.5px var(--mono); cursor: pointer;
-    transition: color .14s, border-color .14s, background .14s;
+  /* 一条压进去的槽，选中的那格浮起来。铺满整行的下划线式把「二选一」画成了
+     导航条 —— 它跟着内容宽，才读得出是个控件而不是一排页签。 */
+  .seg {
+    display: inline-flex; flex: none; align-self: start; flex-wrap: wrap;
+    padding: 2px; gap: 2px; border-radius: var(--r-sm); background: var(--overlay);
   }
-  .seg button + button { box-shadow: inset 1px 0 var(--hair) }
+  /* 中文标签在 mono 栈里会掉到回退字体，跟旁边的界面字对不齐 */
+  .seg[data-text] button { font: var(--w-reg) 11.5px var(--ui) }
+  .seg button {
+    flex: none; min-width: 0; padding: 4px 11px; border: 0; border-radius: var(--r-xs);
+    background: transparent; color: var(--muted); font: var(--w-reg) 11.5px var(--mono);
+    white-space: nowrap; cursor: pointer;
+    transition: background .14s, color .14s, box-shadow .14s, transform .13s var(--ease-spring);
+  }
   .seg button:hover { color: var(--text) }
+  .seg button:active { transform: scale(.96) }
   .seg button[aria-pressed="true"], .seg button[aria-checked="true"] {
-    color: var(--text); border-bottom-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 7%, transparent);
+    background: var(--raised); color: var(--accent-ink); font-weight: var(--w-med);
+    box-shadow: var(--lit), 0 1px 2px rgb(0 0 0 / .07);
   }
   .seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
@@ -3874,32 +4551,102 @@
   /* ── 左栏：工作区 → 会话 ─────────────────────────────────────────── */
   .wsnode { padding-bottom: 2px }
   .wsnode[data-missing] .wsname { color: var(--err); text-decoration: line-through }
+  /* 一个项目占两行：名字一行，它是什么一行。名字于是拿到整行宽度 —— 在 214px
+     的栏里，名字、标签、计数、删除挤在一行时被截掉的永远是名字，而那正是这一
+     行唯一无法从别处读到的东西。「+」跨两行，因为它属于整个节点。 */
   .wsrow {
-    position: relative; display: flex; align-items: center; gap: 6px;
-    padding: 6px 9px 6px 4px; font: var(--w-med) 12px var(--ui); color: var(--muted);
+    position: relative; display: grid; gap: 0 7px; align-items: center;
+    grid-template-columns: 10px 5px minmax(0, 1fr) auto;
+    padding: 6px 6px 7px 6px; border-radius: var(--r-sm); cursor: pointer;
+    font: var(--w-med) 12.5px var(--ui); color: var(--muted);
+    transition: background .14s, color .14s;
   }
-  .wsrow:hover { background: var(--overlay) }
-  .wsrow[data-open] { color: var(--text) }
+  .wsrow .twist { grid-area: 1 / 1 }
+  .wsdot { grid-area: 1 / 2 }
+  .wsname { grid-area: 1 / 3 }
+  .wsmeta { grid-area: 2 / 3; justify-self: start; margin-top: 1px }
+  /* 跟名字对齐，不是跟两行的中点对齐。转角、圆点、名字的中心在同一条线上，
+     芯片跨两行居中就比它们低 8px —— 胉下来就是一排东西里只有它歪。 */
+  .wsacts { grid-area: 1 / 4; align-self: center }
+  .wsrow:hover { background: var(--overlay); color: var(--text) }
+  /* 选中的是项目节点，不是会话行：金色底 + 左边一条带辉的竖条，两行一起
+     包在里面。会话行只给中性底，没有竖条 —— 两个层级各自有自己的记号，
+     否则一列里两条金色竖条说不清到底选中的是哪一个。 */
+  .wsrow[data-open] { background: var(--accent-wash); color: var(--text) }
+  .wsrow[data-open]::before {
+    content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 2px;
+    border-radius: 2px; background: var(--accent);
+    box-shadow: 0 0 8px color-mix(in oklab, var(--accent) 60%, transparent);
+  }
+  .wsrow[data-open] .wsadd { background: var(--raised) }
   .twist {
-    flex: none; width: 17px; height: 17px; display: grid; place-items: center;
-    border: 0; background: none; color: var(--ghost); cursor: pointer;
-    font: var(--w-reg) 9px/1 var(--mono);
+    flex: none; width: 10px; height: 10px; display: grid; place-items: center;
+    border: 0; background: none; padding: 0; color: var(--ghost); cursor: pointer;
   }
+  .twist svg {
+    width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round; transition: transform .24s var(--ease, ease);
+  }
+  .wsrow[aria-expanded="true"] .twist svg, .rmthead[aria-expanded="true"] .twist svg,
+  .rmtwsrow[aria-expanded="true"] .twist svg { transform: rotate(90deg) }
   .twist:hover { color: var(--text) }
-  .wsname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  /* 这个点说的是「这个项目此刻有面板开着」——它是 .wsrow[data-open] 唯一看得见
+     的地方，此前那个状态只改了一档文字颜色，等于没说。 */
+  .wsdot { width: 5px; height: 5px; border-radius: 50%; background: var(--ghost); opacity: .45 }
+  .wsrow[data-open] .wsdot { background: var(--accent); opacity: 1 }
+  .wsname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  /* 行高跟着正文的 1.6 走时，一行 10px 的标注占掉 15.2px —— 比它自己高一半。
+     正文需要那个行距是因为要换行，这一行不会。 */
+  .wsmeta {
+    display: flex; align-items: center; gap: 5px; min-width: 0;
+    font: var(--w-reg) 10px/1.25 var(--mono); color: var(--ghost);
+  }
+  .wstag {
+    font-style: normal; flex: none; padding: 0 4px; border-radius: var(--r-xs);
+    background: var(--overlay); color: var(--faint);
+  }
+  .wsacts { display: flex; align-items: center; gap: 2px }
+  /* 常驻，不是 hover 才出现：一个看不见的入口读起来就是没有这个功能。删除比
+     新建安静一档，靠的是对比度，不是可见性。 */
+  /* 和栏顶那个加号（.addws）同一套：透明底、描边图标、悬停才上底。
+     之前那个填色芯片 + 内环是另一套语言，放进来就是一块外来的东西。
+     图标用 SVG 而不是字符：place-items 对齐的是行盒，一个“+”字形在行盒里靠
+     基线坐，看上去永远偏下——那就是“图标没居中”。 */
+  .wsadd, .wsdel {
+    flex: none; width: 20px; height: 20px; display: grid; place-items: center;
+    border: 0; padding: 0; border-radius: var(--r-xs); cursor: pointer;
+    background: transparent; color: var(--faint);
+    transition: background .14s, color .14s;
+  }
+  .wsadd svg {
+    width: 13px; height: 13px; fill: none; stroke: currentColor;
+    stroke-width: 1.5; stroke-linecap: round;
+  }
+  .wsadd:hover:not(:disabled) { background: var(--overlay); color: var(--text) }
+  .wsadd:focus-visible, .wsdel:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
+  .wsadd:disabled { opacity: .4; cursor: default }
+  .wsadd[data-busy] { opacity: .5; pointer-events: none }
+  .wsdel { color: var(--ghost); font: var(--w-reg) 14px/1 var(--ui) }
+  .wsdel:hover { background: var(--overlay); color: var(--err) }
   .wscount { flex: none; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
-  .wsrow .mkbtn, .wsrow .wsdel { opacity: 0; transition: opacity .16s }
-  .wsrow:hover .mkbtn, .wsrow:hover .wsdel, .wsrow :focus-visible { opacity: 1 }
+
+  /* 子项自己成一块，才拿得到那条层级引导线。缩进单独说不清层级：两级差 18px，
+     扫一眼只读得出「有点错位」。 */
+  .kids { margin: 1px 0 3px 15px; padding-left: 9px; border-left: 1px solid var(--border) }
 
   .sessrow {
     position: relative; display: flex; align-items: center; gap: 7px;
-    padding: 5px 9px 5px 22px; cursor: pointer;
+    padding: 5px 8px; cursor: pointer; border-radius: var(--r-sm);
     border-left: 2px solid transparent;
     font: var(--w-reg) 12px var(--ui); color: var(--faint);
   }
   .sessrow:hover { background: var(--overlay); color: var(--muted) }
   .sessrow[data-live] { color: var(--muted) }
-  .sessrow[data-on] { background: var(--overlay); border-left-color: var(--net); color: var(--text) }
+  /* 选中不能和悬停同色：两边都是 --overlay 时，鼠标扫过一条未选中的行，它看
+     起来就是选中的那一条。色相也换掉了：--net 已经是“这条会话有活的运行时”
+     （圆点就是它），拿它再说一遍“你在看这条”，两个意思就分不开了。 */
+  .sessrow[data-on] { background: var(--overlay); color: var(--text); font-weight: var(--w-med) }
+  .sessrow[data-on] .sesstitle { font-weight: var(--w-med) }
   .sessrow[data-busy] { opacity: .55; pointer-events: none }
   .sessrow .pip { flex: none; opacity: .35 }
   .sessrow[data-live] .pip { opacity: 1; background: var(--net) }
@@ -3968,7 +4715,9 @@
      回答。指纹这一个刻意不好按 —— 它存在的全部理由就是拦住「没看就点」。 */
   .askveil {
     position: fixed; inset: 0; z-index: 95; display: grid; place-items: center;
-    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    /* --page, not --bg: there has never been a --bg, so this whole declaration
+       was invalid and the card floated over an undimmed window. */
+    background: color-mix(in srgb, var(--page) 72%, transparent);
     -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     animation: card var(--t-card) var(--ease-out) both;
   }
@@ -4098,18 +4847,35 @@
      链路断了，整段一起暗下去，这正是它们的真实关系。 */
   .rmts { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px }
   .rmtcap {
+    display: flex; align-items: center; gap: 7px;
     padding: 0 9px 4px 9px; font: var(--w-med) 10px var(--mono);
     letter-spacing: var(--track-cap); color: var(--ghost); text-transform: uppercase;
   }
+  .rmtcap .c { margin-left: auto; letter-spacing: 0; font: var(--w-reg) 10px var(--mono) }
   .rmt { padding-bottom: 2px }
+  /* 同一个节点形状：名字一行，它是哪台机器一行。此前 target 挤在名字右边争同
+     一行宽度，而 ada@build.internal 这种长度一来，被截的是主机名。 */
   .rmthead {
-    display: flex; align-items: center; gap: 6px;
-    padding: 6px 9px 6px 9px; font: var(--w-med) 12px var(--ui); color: var(--muted);
+    display: grid; gap: 0 7px; align-items: center;
+    grid-template-columns: 10px 6px minmax(0, 1fr) auto;
+    padding: 6px 6px 7px 6px; border-radius: var(--r-sm); cursor: pointer;
+    font: var(--w-med) 12.5px var(--ui); color: var(--muted);
+    transition: background .14s, color .14s;
   }
-  .rmtname { flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .rmthead:hover { background: var(--overlay); color: var(--text) }
+  .rmthead .twist { grid-area: 1 / 1 }
+  .rmtpip { grid-area: 1 / 2 }
+  .rmtname { grid-area: 1 / 3; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  /* 第二行是“这台机器是谁、此刻怎么样”：地址在左，状态在右。 */
   .rmttarget {
-    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: var(--w-reg) 10px var(--mono); color: var(--ghost); text-align: right;
+    grid-area: 2 / 3; justify-self: start; margin-top: 1px; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: var(--w-reg) 10px/1.25 var(--mono); color: var(--ghost);
+  }
+  .rmtsub {
+    grid-area: 2 / 4; justify-self: end; margin-top: 1px; flex: none;
+    font: var(--w-reg) 10px/1.25 var(--mono); color: var(--ghost);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px;
   }
   /* 一台主机只有六种状态，别让它们挤成两种：连上和没连上之间，还有「在连」、
      「在重连」、以及连上了却有转发没挂上 —— 最后这种看起来最像正常。 */
@@ -4147,14 +4913,8 @@
   /* 连上之后，那台机器自己报得出有哪些文件夹和对话，缩进比本地深一级：
      它属于上面那台主机，不是又一个本地项目。 */
   .rmtws-node { padding-bottom: 1px }
-  .rmtwsrow {
-    display: flex; align-items: center; gap: 6px; padding: 4px 9px 4px 14px;
-    font: var(--w-med) 11.5px var(--ui); color: var(--faint);
-  }
-  .rmtwsrow:hover { background: var(--overlay) }
-  .rmtwsrow .wsname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-  .rmt .sessrow { padding-left: 32px }
-  .rmt .rmtws-node .rmtopen { padding-left: 32px }
+  /* .wsrow 已经带来了整个节点的排版；这里只把它移进主机底下那一级。 */
+  .rmtwsrow { margin-left: 14px; font-size: 12px }
 
   /* 和本地那列同一个上限，同一个出口。 */
   .rmtmore {
@@ -4239,10 +4999,17 @@
   .slider:hover::-webkit-slider-thumb { transform: scale(1.12) }
   .slider:active::-webkit-slider-thumb { transform: scale(1.02); background: var(--accent) }
   .slider:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs) }
+  .slider:disabled { opacity: .4; cursor: default }
+  .slider:disabled:hover::-webkit-slider-thumb { transform: none }
+  .prow[data-idle] .tx, .prow[data-idle] .now { color: var(--ghost) }
 
-  /* 预览按主界面同一套合成：底图、浓度、压暗、焦点，一眼看到调的是什么 */
+  /* The window's shape, not a strip: `cover` only leaves a focal point room on
+     the axis it overflows on, so at any other ratio the preview moves along a
+     different axis than the window it is standing in for. */
   .paperview {
-    position: relative; height: 116px; border-radius: var(--r-sm); overflow: hidden;
+    position: relative; width: min(100%, calc(220px * var(--win-ar, 1.6)));
+    aspect-ratio: var(--win-ar, 1.6); margin-inline: auto;
+    border-radius: var(--r-sm); overflow: hidden;
     background-size: cover; background-repeat: no-repeat;
     border: 1px solid var(--border);
   }
@@ -4372,6 +5139,7 @@
     position: static; top: auto; right: auto; flex: none;
     background: transparent;
   }
+  .wsrow .wsdel { opacity: 1 }
   .sessrow .wsdel:hover, .wsrow .wsdel:hover { background: var(--border); color: var(--err) }
 
   /* 页签是控件不是正文：能选中文字的话，右键出来的永远是系统菜单，自己的
@@ -4388,11 +5156,19 @@
      的时候图是背景，不是内容。 */
   /* 半透明是想让图还在场，但透过去的是原图 —— 一张高对比的照片直接顶在正文
      后面。模糊掉它：层次留住，字底下就只剩一片色。 */
-  :root[data-bg] .prefs {
-    background: color-mix(in srgb, var(--surface) 86%, transparent);
-    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  /* 浮起来的面板在图上就是这一组数：.compose 和 .runhead 也是 80% + blur(16)。
+     里面的栏和头不再各自磨一次砂 —— 一块玻璃上再糊一块，图就没了。 */
+  :root[data-bg] .prefs-sheet {
+    background: color-mix(in srgb, var(--float) 80%, transparent);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   }
-  :root[data-bg] .prefs-nav { background: color-mix(in srgb, var(--surface) 66%, transparent) }
+  :root[data-bg] .cpv-sheet {
+    background: color-mix(in srgb, var(--float) 80%, transparent);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  }
+  :root[data-bg] .cpv-hd { background: color-mix(in srgb, var(--surface) 34%, transparent) }
+  :root[data-bg] .prefs-hd,
+  :root[data-bg] .prefs-nav { background: color-mix(in srgb, var(--surface) 34%, transparent) }
 
   /* 上下文构成：常驻只有一条分段细条 —— 在这么窄的栏里，五行数字的代价高过
      它对大多数人的价值。真要查是什么把窗口填满了，hover 再摊开。 */
@@ -4416,6 +5192,38 @@
   .ctxbar > i[data-p="user"]   { background: var(--accent) }
   .ctxbar > i[data-p="reply"]  { background: var(--ok) }
   .ctxbar > i[data-p="output"] { background: var(--faint) }
+
+  /* 常驻图例：这一块就是为构成而存在的，把构成藏到 hover 后面等于这块只剩一根条。 */
+  .ctxlg { display: grid; gap: 4px }
+  .ctxlg .r { display: flex; align-items: center; gap: 8px; font: var(--w-reg) 11.5px var(--ui); color: var(--muted) }
+  .ctxlg .r i { width: 8px; height: 8px; border-radius: 2px; flex: none }
+  .ctxlg .r i[data-p="system"] { background: var(--deleg) }
+  .ctxlg .r i[data-p="tools"]  { background: var(--net) }
+  .ctxlg .r i[data-p="user"]   { background: var(--accent) }
+  .ctxlg .r i[data-p="reply"]  { background: var(--ok) }
+  .ctxlg .r i[data-p="output"] { background: var(--faint) }
+  .ctxlg .r em { font: var(--w-reg) 10px var(--mono); font-style: normal; color: var(--ghost) }
+  .ctxlg .r b { margin-left: auto; font: var(--w-med) 11px var(--mono); color: var(--text) }
+
+  /* 领栏的那一个数字比其它块大一截 —— 它是不看也会被看见的那个。 */
+  [data-b="cache"] .big .v { font-size: 28px }
+
+  /* 成本先报数，再拆构成。一列小行表里的总额和它的分项长得一样，
+     扫一眼读不出哪个是总数。 */
+  .mrow { display: flex; align-items: baseline; gap: 8px; min-height: 26px }
+  .mrow .amt {
+    font: var(--w-med) 21px/1 var(--mono); color: var(--text);
+    letter-spacing: var(--track-tight); font-variant-numeric: tabular-nums;
+  }
+  .mrow .msub { font: var(--w-reg) 10.5px var(--mono); color: var(--ghost) }
+  .mrow .delta { margin-left: auto; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
+  /* 第二币种矮一档：它是同一笔钱的另一种说法，不是另一笔支出。 */
+  .mrow[data-alt] .amt { font-size: 15px; color: var(--muted) }
+  .mnote { margin: 2px 0 0; font: var(--w-reg) 10.5px/1.5 var(--ui); color: var(--ghost) }
+
+  /* 设计稿那一行行内数字：名字弱、值强，横着排而不是堆成行表。 */
+  .nums { display: flex; flex-wrap: wrap; gap: 4px 12px; font: var(--w-reg) 10px var(--mono); color: var(--ghost) }
+  .nums b { margin-left: 4px; font-weight: var(--w-med); color: var(--muted) }
 
   /* 度量栏会滚动，滚动容器就会裁：这颗气泡定在视口上，位置由 Context 量出来
      写在行内，栏拖窄时才不会先被削掉左边一条。 */
@@ -4490,8 +5298,8 @@
   font: var(--w-med) 12px var(--ui); color: var(--muted);
   transition: color var(--t-line) var(--ease), background var(--t-line) var(--ease);
 }
-.uranges button:hover { color: var(--fg) }
-.uranges button[aria-pressed="true"] { background: var(--raised); color: var(--fg) }
+.uranges button:hover { color: var(--text) }
+.uranges button[aria-pressed="true"] { background: var(--raised); color: var(--text) }
 .uspan { color: var(--muted); font: var(--w-reg) 11.5px var(--mono) }
 
 .uhero { padding: 22px 24px; background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-md) }
@@ -4552,7 +5360,7 @@
   color: var(--muted); font: var(--w-med) 11px var(--ui); letter-spacing: var(--track-lead) }
 .memedit input, .memedit textarea, .memedit select {
   padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--r-sm);
-  background: var(--raised); color: var(--fg); font: var(--w-reg) 12.5px var(--ui); outline: none;
+  background: var(--raised); color: var(--text); font: var(--w-reg) 12.5px var(--ui); outline: none;
 }
 .memedit textarea { resize: vertical; min-height: 120px; font-family: var(--mono); line-height: 1.6 }
 .memedit input:focus-visible, .memedit textarea:focus-visible, .memedit select:focus-visible {
@@ -4567,19 +5375,19 @@
    两步：先问文件还是不是检查点里那份，只有不是时才需要读者作答。 */
 .dif-act {
   padding: 3px 9px; cursor: pointer; border-radius: var(--r-sm);
-  border: 1px solid var(--border); background: var(--raised); color: var(--fg);
+  border: 1px solid var(--border); background: var(--raised); color: var(--text);
   font: var(--w-med) 11px var(--ui);
   transition: border-color var(--t-line) var(--ease), color var(--t-line) var(--ease);
 }
 .dif-act:hover { border-color: var(--focus); color: var(--focus) }
 .dif-act.ghost { background: none; border-color: transparent; color: var(--muted) }
-.dif-act.ghost:hover { color: var(--fg) }
+.dif-act.ghost:hover { color: var(--text) }
 .dif-act[disabled] { opacity: .5; cursor: default }
 .dif-act:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 .dif-ask {
   display: flex; flex-direction: column; gap: 7px;
   padding: 9px 11px; border-bottom: 1px solid var(--hair); background: var(--overlay);
-  color: var(--fg); font: var(--w-reg) 11.5px/1.5 var(--ui);
+  color: var(--text); font: var(--w-reg) 11.5px/1.5 var(--ui);
 }
 /* A file changed since the checkpoint is the case that needs a decision, so it
    reads as one rather than as another confirmation. */

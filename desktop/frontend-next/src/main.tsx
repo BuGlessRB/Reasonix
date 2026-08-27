@@ -58,6 +58,51 @@ focus();
 bootLang();
 trackWidth();
 
+// The boot screen is markup in index.html, so it is on screen before this
+// bundle is parsed. Handing the window over is this file's job: nothing below
+// it has to know the window was ever empty.
+const BOOT_HOLD_MS = 260;
+const BOOT_CAP_MS = 2600;
+const BOOT_OUT_MS = 900;
+
+/** settled resolves when the boot screen has finished introducing itself: the
+ *  mark written out, the line under it up. Read off the running animations
+ *  rather than counted in milliseconds here, or every retune of that CSS
+ *  silently starts cutting it off again. The sun and the shafts loop forever
+ *  and are filtered out; the cap is for an animation that never finishes. */
+function settled(boot: Element): Promise<unknown> {
+  const intro = boot
+    .getAnimations({ subtree: true })
+    .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+    .map((a) => a.finished.catch(() => undefined));
+  return Promise.race([
+    Promise.all(intro),
+    new Promise((done) => setTimeout(done, BOOT_CAP_MS)),
+  ]);
+}
+
+function arrive() {
+  const root = document.documentElement;
+  // Arms the app's own entrance, then lets go of it: a .app that remounts later
+  // — the welcome screen giving way to a session — must not replay the window
+  // opening. Set before the render lands so the animation starts on mount.
+  root.dataset.boot = "in";
+  setTimeout(() => delete root.dataset.boot, 2200);
+  const boot = document.getElementById("boot");
+  if (!boot) return;
+  const dismiss = () => {
+    boot.dataset.done = "";
+    setTimeout(() => boot.remove(), BOOT_OUT_MS);
+  };
+  // Two frames: the first commits the tree, the second is the one it is
+  // painted in. Dissolving before that uncovers the empty page underneath.
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      void settled(boot).then(() => setTimeout(dismiss, BOOT_HOLD_MS));
+    }),
+  );
+}
+
 const root = createRoot(document.getElementById("root")!);
 pick().then(
   (hub) => {
@@ -70,13 +115,17 @@ pick().then(
         <App hub={hub} />
       </StrictMode>,
     );
+    arrive();
   },
-  (e: unknown) =>
+  (e: unknown) => {
     root.render(
       <div className="app" data-run="idle">
         <div className="errbar" role="alert">
           <span>{e instanceof Error ? e.message : String(e)}</span>
         </div>
-      </div>
-    ),
+      </div>,
+    );
+    // The failure is the one thing that must not stay behind the boot screen.
+    arrive();
+  },
 );

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
+import { bytes } from "../i18n/format";
 import type { AgentPort } from "../port/port";
 import type { StoragePlan, StorageRoot, StorageState } from "../port/storage";
 
@@ -17,18 +18,6 @@ const NAMED: Record<string, [string, string]> = {
   home: ["配置与凭据", "设置和 API key，始终随用户配置文件走"],
   locks: ["进程锁", "多个实例互斥用，必须留在本机固定位置"],
 };
-
-function bytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = n / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return `${value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
-}
 
 export function Storage({ port }: { port: AgentPort }) {
   const [state, setState] = useState<StorageState | null>(null);

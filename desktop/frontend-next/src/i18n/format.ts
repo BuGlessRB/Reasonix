@@ -46,9 +46,15 @@ export const seconds = (ms: number, digits = 1) => `${decimals(ms / 1000, digits
 
 const KB = 1 << 10;
 const MB = 1 << 20;
+const GB = 2 ** 30;
+const TB = 2 ** 40;
 
-/** bytes spells a size. Binary steps, because that is what the kernel counts. */
+/** bytes spells a size. Binary steps, because that is what the kernel counts.
+ *  It runs to TB because storage roots and the volumes under them are measured
+ *  there: capping at MB is how a 9 GB total came out as "9318.4 MB". */
 export function bytes(n: number): string {
+  if (n >= TB) return `${decimals(n / TB, 1)} TB`;
+  if (n >= GB) return `${decimals(n / GB, 1)} GB`;
   if (n >= MB) return `${decimals(n / MB, 1)} MB`;
   if (n >= KB) return `${nf({ maximumFractionDigits: 0 }).format(n / KB)} KB`;
   return `${count(n)} B`;

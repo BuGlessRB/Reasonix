@@ -1,5 +1,5 @@
 import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
-import { HttpError, type Attachment, type DroppedRef, type WorkspaceChanges } from "./port";
+import { HttpError, type Attachment, type ChangeDiff, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
 import type { StoragePlan, StorageState } from "./storage";
@@ -353,6 +353,10 @@ export class SsePort extends SseTheme implements AgentPort {
 
   changes() {
     return this.get<WorkspaceChanges>("/changes");
+  }
+
+  changeDiff(path: string) {
+    return this.get<ChangeDiff>(`/changes/diff?path=${encodeURIComponent(path)}`);
   }
 
   trajectory() {

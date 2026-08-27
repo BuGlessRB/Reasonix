@@ -3,10 +3,14 @@ import { estimateTokens, sample } from "../port/tokens";
 import type { HistoryMessage } from "../port/port";
 import { plural, t } from "../i18n";
 import type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, Waiting } from "./session_types";
+import { altAmount, quoteAmount, sampleRound } from "./usage";
+import { showsReceipt } from "./prefs";
 
 // The types live next door; this stays their way in, so no reader of a
 // session has to know they were split off.
 export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, Waiting };
+export { quoteAmount };
+export { showsReceipt };
 
 export const initialState: SessionState = {
   error: "",
@@ -15,7 +19,9 @@ export const initialState: SessionState = {
   revision: 0,
   plan: [],
   outWindow: [],
-  metrics: { hit: 0, miss: 0, out: 0, bySource: {}, cost: 0, currency: "¥" },
+  metrics: { hit: 0, miss: 0, out: 0, bySource: {}, cost: 0, currency: "¥",
+    prefixHash: "", prefixChanged: false, prefixReasons: [], toolSchema: 0,
+    estimated: false, alt: null, turn: 0, rounds: [] },
   waiting: {},
   running: false,
   doing: "空闲",
@@ -321,8 +327,10 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
     // minute. Leaving the label on 等你批准 says the opposite of what is
     // happening, and it is the one line the user watches to know anything is.
     const decided = s.items.find((i) => i.id === ev.id);
-    const resumed =
-      decided?.t === "approval" && ev.verdict !== "deny" ? decided.a.tool || "运行中" : s.doing;
+    // 计划卡的三个结局里只有一个是「放行」：改计划和暂不执行都在门口否决，
+    // 区别只在离不离开计划模式 —— 两个都不该把标签写成某个工具正在跑。
+    const halted = ev.verdict === "deny" || ev.verdict === "revise" || ev.verdict === "exit";
+    const resumed = decided?.t === "approval" && !halted ? decided.a.tool || "运行中" : s.doing;
     return {
       ...s,
       doing: decided?.t === "ask" ? "运行中" : resumed,
@@ -408,9 +416,11 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       if (!u) return s;
       const src = u.source || "executor";
       const spent = quoteAmount(u.costQuote) ?? u.cost ?? 0;
+      const d = u.cacheDiagnostics;
       return {
         ...s,
         metrics: {
+          ...s.metrics,
           hit: s.metrics.hit + u.cacheHitTokens,
           miss: s.metrics.miss + u.cacheMissTokens,
           out: s.metrics.out + u.completionTokens,
@@ -420,6 +430,17 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
           // tell CN¥ from ¥ in an English window. The symbol stays as the
           // fallback for a quote that carries one instead.
           currency: u.currencyCode || u.costQuote?.original.currency || u.currency || s.metrics.currency,
+          // Diagnostics describe the round that just billed, so they replace
+          // rather than accumulate. A round that carried none leaves the last
+          // answer standing instead of blanking the block mid-turn.
+          prefixHash: d?.prefixHash || s.metrics.prefixHash,
+          prefixChanged: d ? d.prefixChanged : s.metrics.prefixChanged,
+          prefixReasons: d?.prefixChangeReasons ?? (d ? [] : s.metrics.prefixReasons),
+          toolSchema: d?.toolSchemaTokens ?? s.metrics.toolSchema,
+          estimated: u.costQuote?.estimated ?? u.estimated ?? s.metrics.estimated,
+          alt: altAmount(u.costQuote) ?? s.metrics.alt,
+          turn: s.metrics.turn + spent,
+          rounds: sampleRound(s.metrics.rounds, u.totalTokens),
         },
       };
     }
@@ -630,31 +651,11 @@ function withReceipt(items: Item[], r?: Receipt): Item[] {
   return [...items, { t: "receipt", id: nextId(), r }];
 }
 
-// Off unless this machine asked for it: the card reports what went unverified,
-// which is worth reading and easy to tire of seeing after every turn.
-const RECEIPT_KEY = "rx-turn-receipt";
-export function showsReceipt(): boolean {
-  try {
-    return localStorage.getItem(RECEIPT_KEY) === "on";
-  } catch {
-    return false;
-  }
-}
-
 // The kernel wraps each user turn in control-plane blocks (language policy,
 // execution policy). They are instructions to the model, not something the
 // user said, so they never reach the transcript.
 const CONTROL = /<(reasoning-language|response-language|execution-policy)[\s\S]*?<\/\1>\s*/g;
 const stripControl = (s: string) => s.replace(CONTROL, "").trim();
-
-// The quote is the authoritative amount: it carries currency and an estimated
-// flag, while usage.cost is only a legacy alias.
-export function quoteAmount(q?: { selected?: { amount: string }; original: { amount: string } }): number | undefined {
-  const raw = q?.selected?.amount ?? q?.original.amount;
-  if (raw === undefined) return undefined;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : undefined;
-}
 
 // todo_write carries the plan as its payload; the panel needs it as state, not
 // as one more line that scrolls away.

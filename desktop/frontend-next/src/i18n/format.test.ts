@@ -69,6 +69,8 @@ describe("bytes", () => {
     expect(bytes(2048)).toBe("2 KB");
     expect(bytes(300_000)).toBe("293 KB");
     expect(bytes(5 << 20)).toBe("5.0 MB");
+    expect(bytes(9.1 * 2 ** 30)).toBe("9.1 GB");
+    expect(bytes(2 ** 41)).toBe("2.0 TB");
   });
 });
 

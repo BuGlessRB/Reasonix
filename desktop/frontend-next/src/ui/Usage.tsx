@@ -6,6 +6,10 @@ import type { AgentPort, Money, UsageDay, UsageReport } from "../port/port";
 
 const RANGES: [number, string][] = [[7, "7 天"], [30, "30 天"], [365, "全部"]];
 
+/** The window this panel opens on. Exported because the settings contents list
+ *  reports the same total beside "用量", and two windows would be two numbers. */
+export const DEFAULT_DAYS = 30;
+
 // Money and token counts go through i18n/format: its whole reason for existing
 // is that five files each grew their own rule. Intl also spells CNY as CN¥ in
 // an English window, where a bare ¥ reads as yen.
@@ -124,7 +128,7 @@ function Bars({ rows }: { rows: [string, number, string][] }) {
 }
 
 export function Usage({ port }: { port: AgentPort }) {
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState(DEFAULT_DAYS);
   const [report, setReport] = useState<UsageReport | null>(null);
   const [err, setErr] = useState("");
 
