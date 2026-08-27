@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stage one: sign the executable a user actually runs, before anything is
+     packaged around it. Signing only the finished NSIS container would leave
+     reasonix-studio.exe unsigned on disk after installation, which is what
+     reputation and ML heuristics quarantine.
+
+     Studio ships one executable of its own. MicrosoftEdgeWebview2Setup.exe is
+     Microsoft's and arrives already signed, so it is not listed here — this
+     configuration must not re-sign somebody else's binary. GitHub Actions wraps
+     the flat payload directory in a zip before SignPath receives it. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="reasonix-studio.exe">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

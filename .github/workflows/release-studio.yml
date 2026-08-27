@@ -10,9 +10,11 @@ run-name: Release Studio ${{ inputs.tag || github.ref_name }}
 # the desktop line's catalog. Studio artifacts land under the tag prefix, which
 # cannot collide because the tag name itself differs.
 #
-# Windows artifacts are unsigned. The production SignPath policy allows exactly
-# one origin (protected main-v2), so a build from this branch cannot request it
-# and users will see a SmartScreen warning.
+# Windows artifacts are Authenticode-signed through SignPath in two stages: the
+# executable a user runs, then the installer built around it. Signing only the
+# container leaves reasonix-studio.exe unsigned on disk after installation,
+# which is what reputation heuristics quarantine. Signing engages only when
+# SIGNPATH_API_TOKEN is set, so forks and token-less runs still build unsigned.
 on:
   push:
     tags: ['studio-v*']
@@ -69,12 +71,42 @@ jobs:
           { echo "tag=$tag"; echo "version=$version"; echo "sha=$sha"; } >> "$GITHUB_OUTPUT"
           echo "resolved $tag -> $version at $sha"
 
+  # The contract is this repository's mirror of what SignPath's console trusts:
+  # which branch and which workflow may request the release certificate. It is
+  # checked before anything is built so a widened origin fails here rather than
+  # at the signing request, and fingerprinted so the protected files cannot move
+  # under an attestation that was recorded against different bytes.
+  signing-contract:
+    name: validate SignPath release contract
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate and fingerprint the contract
+        run: |
+          go run ./cmd/signpath-contract validate
+          echo "fingerprint=$(go run ./cmd/signpath-contract fingerprint)" >> "$GITHUB_STEP_SUMMARY"
+
   build:
     name: build (${{ matrix.platform }})
-    needs: resolve
+    needs: [resolve, signing-contract]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
+      actions: read # SignPath reads run details and downloads the unsigned artifact
+    env:
+      # Signing engages only when the token is set, mirroring the APPLE_* gate:
+      # a fork still builds, unsigned, instead of failing on a secret it cannot
+      # have.
+      HAS_SIGNPATH: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -179,7 +211,133 @@ jobs:
           APPLE_API_KEY_PATH: ${{ runner.temp }}/notary.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-        run: bash scripts/studio-build.sh "${{ matrix.platform }}" "${{ needs.resolve.outputs.version }}"
+        run: |
+          # Windows splits so a signature can be taken between the executable
+          # and the packages built around it; every other platform is one shot.
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            bash scripts/studio-build.sh --windows-payload amd64 "${{ needs.resolve.outputs.version }}"
+          else
+            bash scripts/studio-build.sh "${{ matrix.platform }}" "${{ needs.resolve.outputs.version }}"
+          fi
+
+      # Stage one: the executable a user actually runs, signed while it is still
+      # a loose file. MicrosoftEdgeWebview2Setup.exe is fetched by the packaging
+      # stage, after this — it is Microsoft's and already signed, and this
+      # request must not re-sign somebody else's binary.
+      - name: Upload unsigned Windows payload for SignPath
+        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+        id: unsigned-payload
+        uses: actions/upload-artifact@v5
+        with:
+          name: unsigned-studio-payload-amd64
+          path: dist/windows-payload-amd64/reasonix-studio.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Submit Windows payload for Authenticode signing
+        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+        id: submit-payload
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: DeepSeek-Reasonix
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: studio-windows-payload
+          github-artifact-id: ${{ steps.unsigned-payload.outputs.artifact-id }}
+          github-token: ${{ github.token }}
+          wait-for-completion: false
+
+      # The release certificate requires an approval per request. The publish
+      # job's environment gate is the human one; the SignPath CI identity records
+      # the request approval so this does not become a second prompt.
+      - name: Approve and download signed payload
+        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+        run: |
+          ./scripts/complete-signpath-request.ps1 `
+            -OrganizationId "${{ secrets.SIGNPATH_ORGANIZATION_ID }}" `
+            -SigningRequestId "${{ steps.submit-payload.outputs.signing-request-id }}" `
+            -ExpectedSigningPolicySlug "release-signing" `
+            -OutputArtifactDirectory "signed-payload" `
+            -TimeoutSeconds 1800
+
+      - name: Put the signed executable back in the payload
+        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+        shell: bash
+        run: cp signed-payload/reasonix-studio.exe dist/windows-payload-amd64/reasonix-studio.exe
+
+      - name: Package Windows from the payload
+        if: runner.os == 'Windows'
+        shell: bash
+        run: bash scripts/studio-build.sh --windows-package amd64 "${{ needs.resolve.outputs.version }}"
+
+      # Stage two: the finished NSIS container, signed only once the payload it
+      # was built from is present and already signed — the artifact
+      # configuration verifies that rather than trusting this job's ordering.
+      - name: Upload unsigned installer for SignPath
+        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+        id: unsigned-installer
+        shell: bash
+        run: |
+          mkdir -p installer-bundle
+          cp dist/ReasonixStudio-windows-amd64-installer.exe installer-bundle/
+          cp dist/windows-payload-amd64/reasonix-studio.exe installer-bundle/
+
+      - name: Upload installer bundle
+        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+        id: installer-artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: unsigned-studio-installer-amd64
+          path: installer-bundle/*.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Submit installer for Authenticode signing
+        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+        id: submit-installer
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: DeepSeek-Reasonix
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: studio-windows-installer
+          github-artifact-id: ${{ steps.installer-artifact.outputs.artifact-id }}
+          github-token: ${{ github.token }}
+          wait-for-completion: false
+
+      - name: Approve and download signed installer
+        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+        run: |
+          ./scripts/complete-signpath-request.ps1 `
+            -OrganizationId "${{ secrets.SIGNPATH_ORGANIZATION_ID }}" `
+            -SigningRequestId "${{ steps.submit-installer.outputs.signing-request-id }}" `
+            -ExpectedSigningPolicySlug "release-signing" `
+            -OutputArtifactDirectory "signed-installer" `
+            -TimeoutSeconds 1800
+
+      - name: Replace the installer with the signed build
+        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+        shell: bash
+        run: cp signed-installer/*installer*.exe dist/
+
+      # Both stages are read back off the artifacts that will actually ship. A
+      # signature this job believes it applied but that is not on the bytes in
+      # dist/ is the one failure the two requests above cannot catch themselves.
+      - name: Verify the Windows Authenticode chain
+        if: runner.os == 'Windows' && env.HAS_SIGNPATH == 'true'
+        shell: pwsh
+        run: |
+          ./scripts/verify-windows-authenticode.ps1 `
+            -PayloadDirectory signed-payload `
+            -InstallerPath "dist/ReasonixStudio-windows-amd64-installer.exe"
 
       - uses: actions/upload-artifact@v5
         with:

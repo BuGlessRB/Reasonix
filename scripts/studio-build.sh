@@ -112,16 +112,11 @@ build_nsis() {
 		echo "==> skipping installer: makensis is not installed" >&2
 		return 0
 	}
-	# The payload sits under the repo rather than /tmp: MSYS maps /tmp through the
-	# user profile and hands makensis an 8.3 short path it cannot open, while a
-	# path under $ROOT converts to a plain drive path.
-	local payload="$ROOT/dist/nsis-payload-$arch"
-	rm -rf "$payload"
-	mkdir -p "$payload"
-	cp "$src/$BINNAME.exe" "$payload/$BINNAME.exe"
-	cp -R "$src/frontend-next" "$payload/frontend-next"
-	cp "$ROOT/desktop/next/build/windows/appicon.ico" "$payload/appicon.ico"
-
+	# src is the payload directory itself, already assembled by windows_payload.
+	# Signing happens between the two, so this must package the bytes it is
+	# handed rather than re-copying from a build tree that holds the unsigned
+	# binary.
+	local payload="$src"
 	local webview2="$payload/MicrosoftEdgeWebview2Setup.exe" webview2_def=()
 	if curl --fail --location --silent --show-error --connect-timeout 30 --max-time 120 \
 		--output "$webview2" "https://go.microsoft.com/fwlink/p/?LinkId=2124703" &&
@@ -148,11 +143,63 @@ build_nsis() {
 		"-DOUTFILE=$ROOT/dist/${APPNAME}-windows-${arch}-installer.exe" \
 		"${webview2_def[@]}" \
 		"$ROOT/desktop/next/build/windows/installer/studio.nsi"
-	rm -rf "$payload"
 	[ -s "$ROOT/dist/${APPNAME}-windows-${arch}-installer.exe" ] || {
 		echo "makensis produced no installer" >&2
 		return 1
 	}
+}
+
+# The SPA every platform packages. Named because the split Windows stages build
+# it once, in the payload stage: packaging from an already-signed payload must
+# not rebuild the assets underneath it.
+build_frontend() {
+	echo "==> frontend"
+	(cd "$ROOT/desktop/frontend-next" && pnpm install --frozen-lockfile && pnpm build)
+	[ -f "$ROOT/desktop/frontend-next/dist/index.html" ] || {
+		echo "frontend build produced no dist/index.html" >&2
+		return 1
+	}
+}
+
+# The Windows release is packaged twice around a signature. windows_payload
+# builds what a user runs and stops; the executable is Authenticode-signed while
+# it is still a loose file; windows_package then builds the zip and the installer
+# from those exact bytes. Signing only the finished installer would leave
+# reasonix-studio.exe unsigned on disk after installation, which is what
+# reputation heuristics quarantine.
+#
+# The directory sits under the repo rather than /tmp: MSYS maps /tmp through the
+# user profile and hands makensis an 8.3 short path it cannot open, while a path
+# under $ROOT converts to a plain drive path.
+windows_payload_dir() { echo "$ROOT/dist/windows-payload-$1"; }
+
+windows_payload() {
+	local arch="$1" version="$2"
+	local payload
+	payload=$(windows_payload_dir "$arch")
+	rm -rf "$payload"
+	mkdir -p "$payload/frontend-next"
+	build_shell windows "$arch" "$version" "$payload/$BINNAME.exe"
+	cp -R "$ROOT/desktop/frontend-next/dist" "$payload/frontend-next/dist"
+	cp "$ROOT/desktop/next/build/windows/appicon.ico" "$payload/appicon.ico"
+	echo "==> payload $payload"
+}
+
+# The zip carries no appicon.ico: it is an installer resource, and a portable
+# archive that unpacks a stray icon beside the binary reads as a broken build.
+windows_package() {
+	local arch="$1" version="$2" payload="$3"
+	[ -s "$payload/$BINNAME.exe" ] || {
+		echo "no $BINNAME.exe in $payload" >&2
+		return 1
+	}
+	local staging
+	staging=$(mktemp -d)
+	cp "$payload/$BINNAME.exe" "$staging/$BINNAME.exe"
+	cp -R "$payload/frontend-next" "$staging/frontend-next"
+	make_zip "$ROOT/dist/${APPNAME}-windows-${arch}.zip" "$staging"
+	rm -rf "$staging"
+	build_nsis "$arch" "$version" "$payload"
 }
 
 # build_deb packages the Linux payload for dpkg. The .deb is what makes Studio
@@ -289,17 +336,30 @@ if [ "${1:-}" = "--shell-only" ]; then
 	exit 0
 fi
 
-PLATFORM="${1:?usage: studio-build.sh <os/arch> <version> | --shell-only}"
+PLATFORM="${1:?usage: studio-build.sh <os/arch> <version> | --shell-only | --windows-payload <arch> <version> | --windows-package <arch> <version> <payload-dir>}"
+
+# The two halves of the Windows release, exposed so a signature can be taken
+# between them. Running the whole platform in one go still works and is what a
+# maintainer and every unsigned build do; these exist for the release workflow.
+if [ "$PLATFORM" = "--windows-payload" ] || [ "$PLATFORM" = "--windows-package" ]; then
+	stage="$PLATFORM"
+	arch="${2:?usage: studio-build.sh $stage <arch> <version> [payload-dir]}"
+	VERSION="${3:?usage: studio-build.sh $stage <arch> <version> [payload-dir]}"
+	mkdir -p "$ROOT/dist"
+	if [ "$stage" = "--windows-payload" ]; then
+		build_frontend
+		windows_payload "$arch" "$VERSION"
+	else
+		windows_package "$arch" "$VERSION" "${4:-$(windows_payload_dir "$arch")}"
+	fi
+	exit 0
+fi
+
 VERSION="${2:?usage: studio-build.sh <os/arch> <version> | --shell-only}"
 os="${PLATFORM%/*}"
 arch="${PLATFORM#*/}"
 
-echo "==> frontend"
-(cd "$ROOT/desktop/frontend-next" && pnpm install --frozen-lockfile && pnpm build)
-[ -f "$ROOT/desktop/frontend-next/dist/index.html" ] || {
-	echo "frontend build produced no dist/index.html" >&2
-	exit 1
-}
+build_frontend
 
 staging=$(mktemp -d)
 trap 'rm -rf "$staging"' EXIT
@@ -307,11 +367,8 @@ mkdir -p "$ROOT/dist"
 
 case "$os" in
 windows)
-	build_shell windows "$arch" "$VERSION" "$staging/$BINNAME.exe"
-	mkdir -p "$staging/frontend-next"
-	cp -R "$ROOT/desktop/frontend-next/dist" "$staging/frontend-next/dist"
-	make_zip "$ROOT/dist/${APPNAME}-windows-${arch}.zip" "$staging"
-	build_nsis "$arch" "$VERSION" "$staging"
+	windows_payload "$arch" "$VERSION"
+	windows_package "$arch" "$VERSION" "$(windows_payload_dir "$arch")"
 	;;
 darwin)
 	# LaunchServices only treats a process as a GUI app inside a bundle with an
