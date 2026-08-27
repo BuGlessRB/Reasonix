@@ -41,6 +41,9 @@
 
 @property --rail-w { syntax: "<length>"; inherits: true; initial-value: 214px }
 @property --side-w { syntax: "<length>"; inherits: true; initial-value: 296px }
+/* Registered so a bad write falls back to 16:10 rather than making aspect-ratio
+   invalid, which would collapse every box using it to zero height. */
+@property --win-ar { syntax: "<number>"; inherits: true; initial-value: 1.6 }
 
 :root {
     /* height:auto has never been interpolable, so expanding a section could only
@@ -124,7 +127,9 @@
        :lang(zh) 统一归零 —— 负字距压的是汉字的字面框，不是字母间的空气。 */
     --track-display: -.018em;
     --track-tight: -.02em; --track-lead: .06em; --track-cap: .12em;
-    --r-xs: 1px; --r-sm: 2px; --r-md: 3px; --r-lg: 4px; --r-pill: 999px;
+    /* 这一档此前是 1/2/3/4：几乎等于直角，而窗口里每一处容器都描了边，直角
+       让它们读起来像表格的格子而不是可操作的面。整档抬高，比例不变。 */
+    --r-xs: 3px; --r-sm: 5px; --r-md: 7px; --r-lg: 10px; --r-pill: 999px;
 
     /* 对话正文的字号。单独立一个令牌，是因为「看不清」要调的是这一处，而
        不是整套界面 —— 整体缩放走 zoom，两件事各调各的。这里只是首帧兜底，

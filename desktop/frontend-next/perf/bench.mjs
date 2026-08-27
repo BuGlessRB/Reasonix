@@ -4,6 +4,9 @@ import { chromium } from "playwright";
 const URL = process.env.PERF_URL ?? "http://localhost:4399/perf.html";
 const DELTAS = Number(process.env.PERF_DELTAS ?? 240);
 const SCALES = (process.env.PERF_SCALES ?? "0,40,150,400").split(",").map(Number);
+// 低端机这一档：开发机的读数说明不了用户机上的卡顿，而报上来的正是后者。
+// 1 是不降频；4~6 大致是这台机器降到入门级笔记本的量级。
+const CPU = Number(process.env.PERF_CPU ?? 1);
 
 const page_init = async (page) => {
   await page.goto(URL, { waitUntil: "networkidle" });
@@ -91,6 +94,7 @@ for (const n of SCALES) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Performance.enable");
+  if (CPU > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: CPU });
   await page_init(page);
   if (n > 0) await build(page, n);
 
@@ -118,4 +122,5 @@ for (const n of SCALES) {
 }
 await browser.close();
 console.table(rows);
-console.log(`\n每个场景灌入 ${DELTAS} 个流式增量，逐帧对齐。`);
+console.log(`
+每个场景灌入 ${DELTAS} 个流式增量，逐帧对齐。CPU 降频 ${CPU}x。`);

@@ -263,7 +263,7 @@ function Expert({
         <div className="fromplugin">
           <span className="lb">{t("插件带来的 {n} 条", { n: plugin.length })}</span>
           {plugin.map((h, i) => (
-            <div className="prow" key={i}>
+            <div className="hookrow" key={i}>
               <span className="ev">{h.event}</span>
               <span className="cm">{h.command}</span>
               <span className="sc">{t("只读")}</span>

@@ -23,8 +23,15 @@ await page.waitForSelector(".app", { timeout: 15000 });
 await page.waitForTimeout(700);
 
 const widthOf = (sel) => page.evaluate((s) => Math.round(document.querySelector(s).getBoundingClientRect().width), sel);
-// 栏收起时列宽归零，量正文的左边界比量面板自己的盒子更直接。
-const colOf = () => page.evaluate(() => Math.round(document.querySelector(".main").getBoundingClientRect().x));
+// 左栏此刻多宽。此前量的是正文的左边界 —— 它等于栏宽，但只在左栏是第一列的
+// 时候；图标栏排在它前面之后，每个读数都多出图标栏那一截。量这一栏自己。
+const colOf = () =>
+  page.evaluate(() => {
+    const main = document.querySelector(".main").getBoundingClientRect();
+    const cols = document.querySelector(".cols").getBoundingClientRect();
+    const nav = document.querySelector(".nav");
+    return Math.round(main.x - cols.x - (nav ? nav.getBoundingClientRect().width : 0));
+  });
 const railState = () => page.evaluate(() => document.querySelector(".app").dataset.rail);
 const fold = (which) =>
   page.evaluate(
@@ -33,15 +40,17 @@ const fold = (which) =>
   );
 
 // 1) 收起与展开都补间：连着采一段帧，看落在两头之间的值有多少。
-// 收起之后面板是退到屏外，不再被压成零宽 —— 所以要量的是它让出的那一列，
-// 也就是正文的边界。判据没变（收得要看得见），变的是这件事现在做在哪里。
+// 收起之后面板是退到屏外，不再被压成零宽 —— 所以要量的是它让出的那一列。
+// 左边那一列的起点不是屏幕左缘：图标栏排在它前面，得先把那一截刨掉。
 const sweep = (which) =>
   page.evaluate(async (w) => {
     const main = document.querySelector(".main");
+    const nav = document.querySelector(".nav");
+    const left = (nav?.getBoundingClientRect().width ?? 0) + document.querySelector(".cols").getBoundingClientRect().x;
     const out = [];
     const tick = () => {
       const m = main.getBoundingClientRect();
-      out.push(w === "rail" ? m.x : innerWidth - m.right);
+      out.push(w === "rail" ? m.x - left : innerWidth - m.right);
     };
     tick();
     dispatchEvent(new KeyboardEvent("keydown", { key: "\\", metaKey: true, shiftKey: w === "side", bubbles: true }));

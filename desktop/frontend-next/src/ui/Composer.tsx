@@ -47,6 +47,9 @@ interface Props {
   running: boolean;
   // Resolves false when the line never left, so what was typed comes back
   // rather than being lost to a refusal the user could not have prevented.
+  // Bumped when something outside asks for the cursor — answering a plan card
+  // with "revise" is a request to say what to change, and the saying happens here.
+  focus?: number;
   onSubmit: (text: string) => Promise<boolean>;
   onChanged: () => void;
   onError: (e: unknown) => void;
@@ -86,7 +89,7 @@ function releaseChip(c: Chip) {
 let chipSeq = 0;
 const chipId = () => `c${++chipSeq}`;
 
-export function Composer({ port, status, running, onSubmit, onChanged, onError }: Props) {
+export function Composer({ port, status, running, focus, onSubmit, onChanged, onError }: Props) {
   const [text, setText] = useState("");
   // The caret decides which token is being completed, so it is state here
   // rather than something read off the element when a menu happens to open.
@@ -119,6 +122,11 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
     box.current?.focus();
   });
   const ime = useIme();
+
+  // A counter, not a boolean: asking twice in a row has to move the cursor twice.
+  useEffect(() => {
+    if (focus) box.current?.focus();
+  }, [focus]);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -342,85 +350,96 @@ export function Composer({ port, status, running, onSubmit, onChanged, onError }
           )}
         </ul>
       )}
-      <textarea
-        ref={box}
-        rows={1}
-        value={text}
-        placeholder={t("交待一个任务，回车发送…　/ 调用命令与技能，@ 引用文件")}
-        role="combobox"
-        aria-expanded={menu.open}
-        aria-controls="slashmenu"
-        aria-autocomplete="list"
-        aria-activedescendant={menu.open ? `slash-${menu.active}` : undefined}
-        onChange={(e) => type(e.target.value, e.target.selectionStart)}
-        // Arrow keys and clicks move the caret without changing the text, and
-        // the caret is what decides which token the menu is completing.
-        onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
-        onClick={(e) => setCaret(e.currentTarget.selectionStart)}
-        // Dropping is the pane's job — a one-row box is 40px to aim at, and the
-        // handler that used to live here prevented the default and then did
-        // nothing with text, which is worse than not handling it at all.
-        onPaste={(e) => {
-          const images = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
-          if (images.length > 0) {
+      {/* The prompt glyph and the count sit beside the box rather than in it:
+          both answer something about the text, and neither may be dragged into
+          a selection of it. */}
+      <div className="fmain">
+        <span className="prompt" aria-hidden="true">
+          ›
+        </span>
+        <textarea
+          ref={box}
+          rows={1}
+          value={text}
+          placeholder={t("交待一个任务，回车发送…　/ 调用命令与技能，@ 引用文件")}
+          role="combobox"
+          aria-expanded={menu.open}
+          aria-controls="slashmenu"
+          aria-autocomplete="list"
+          aria-activedescendant={menu.open ? `slash-${menu.active}` : undefined}
+          onChange={(e) => type(e.target.value, e.target.selectionStart)}
+          // Arrow keys and clicks move the caret without changing the text, and
+          // the caret is what decides which token the menu is completing.
+          onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+          onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+          // Dropping is the pane's job — a one-row box is 40px to aim at, and the
+          // handler that used to live here prevented the default and then did
+          // nothing with text, which is worse than not handling it at all.
+          onPaste={(e) => {
+            const images = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+            if (images.length > 0) {
+              e.preventDefault();
+              attach(images);
+              return;
+            }
+            const body = e.clipboardData.getData("text/plain");
+            if (!pasteIsLong(body)) return;
+            // Long enough to bury the composer. It still goes with the turn — it
+            // is just held beside the box instead of becoming it.
             e.preventDefault();
-            attach(images);
-            return;
-          }
-          const body = e.clipboardData.getData("text/plain");
-          if (!pasteIsLong(body)) return;
-          // Long enough to bury the composer. It still goes with the turn — it
-          // is just held beside the box instead of becoming it.
-          e.preventDefault();
-          setShots((prev) => [...prev, { k: "paste", id: chipId(), body, lines: countLines(body) }]);
-        }}
-        {...ime.handlers}
-        onKeyDown={(e) => {
-          // Picking a word from an input method is not typing in this box: its
-          // Enter confirms a candidate, and acting on it would send a
-          // half-written message or accept a completion nobody asked for.
-          if (ime.isIme(e.nativeEvent)) {
-            // Esc dismisses the candidate window; letting it through would
-            // cancel the running turn as a side effect of closing an IME.
-            if (e.key === "Escape") e.stopPropagation();
-            // That Enter belongs to the input method, so it must do nothing —
-            // returning without stopping it left the textarea to insert a
-            // newline, which is why the first Enter after a word broke the line
-            // and only the second one sent.
-            if (e.key === "Enter") e.preventDefault();
-            return;
-          }
-          if (menu.open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-            e.preventDefault();
-            menu.move(e.key === "ArrowDown" ? 1 : -1);
-            return;
-          }
-          // Tab completes, always. Enter belongs to the menu only where the
-          // line is not yet a message — a half-typed command — or where the
-          // user went looking through the list themselves.
-          if (menu.open && (e.key === "Tab" || (e.key === "Enter" && menu.ownsEnter)) && !e.shiftKey) {
-            e.preventDefault();
-            menu.accept();
-            return;
-          }
-          // Esc closes the menu and stops there: reaching the app would cancel
-          // the running turn, which is not what dismissing a menu means.
-          if (menu.open && e.key === "Escape") {
-            e.preventDefault();
-            e.stopPropagation();
-            menu.dismiss();
-            return;
-          }
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            send();
-          }
-          if (e.key === "Tab" && e.shiftKey) {
-            e.preventDefault();
-            change(port.setPlanMode(!status?.plan));
-          }
-        }}
-      />
+            setShots((prev) => [...prev, { k: "paste", id: chipId(), body, lines: countLines(body) }]);
+          }}
+          {...ime.handlers}
+          onKeyDown={(e) => {
+            // Picking a word from an input method is not typing in this box: its
+            // Enter confirms a candidate, and acting on it would send a
+            // half-written message or accept a completion nobody asked for.
+            if (ime.isIme(e.nativeEvent)) {
+              // Esc dismisses the candidate window; letting it through would
+              // cancel the running turn as a side effect of closing an IME.
+              if (e.key === "Escape") e.stopPropagation();
+              // That Enter belongs to the input method, so it must do nothing —
+              // returning without stopping it left the textarea to insert a
+              // newline, which is why the first Enter after a word broke the line
+              // and only the second one sent.
+              if (e.key === "Enter") e.preventDefault();
+              return;
+            }
+            if (menu.open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+              e.preventDefault();
+              menu.move(e.key === "ArrowDown" ? 1 : -1);
+              return;
+            }
+            // Tab completes, always. Enter belongs to the menu only where the
+            // line is not yet a message — a half-typed command — or where the
+            // user went looking through the list themselves.
+            if (menu.open && (e.key === "Tab" || (e.key === "Enter" && menu.ownsEnter)) && !e.shiftKey) {
+              e.preventDefault();
+              menu.accept();
+              return;
+            }
+            // Esc closes the menu and stops there: reaching the app would cancel
+            // the running turn, which is not what dismissing a menu means.
+            if (menu.open && e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              menu.dismiss();
+              return;
+            }
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+            if (e.key === "Tab" && e.shiftKey) {
+              e.preventDefault();
+              change(port.setPlanMode(!status?.plan));
+            }
+          }}
+        />
+        <span className="fcount" aria-hidden="true">
+          {text.length || ""}
+        </span>
+      </div>
       <div className="row" data-busy={switching ? "" : undefined}>
         {/* 拖进来和粘贴都走同一条路，但那两个都得先有一张图在手边。点开系统
             选择器是唯一不需要预备动作的入口。 */}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { t } from "../i18n";
 
 export interface RailMark {
@@ -72,7 +72,14 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound }: Prop
     });
   }, [marks, total, scroll, flow]);
 
-  useLayoutEffect(measure, [measure]);
+  // Deferred for the same reason the size observer below is: measure() reads
+  // clientHeight and scrollHeight, and running that inside the commit that just
+  // mounted a transcript forces a whole-document layout. One frame later the
+  // browser has done it anyway.
+  useEffect(() => {
+    const raf = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(raf);
+  }, [measure]);
 
   useEffect(() => {
     const root = scroll.current;
@@ -85,11 +92,23 @@ export function Rail({ marks, total, scroll, flow, onJump, onGrab, bound }: Prop
       setView((v) => ({ ...v, top: (root.scrollTop / content) * rail }));
     };
     root.addEventListener("scroll", onScroll, { passive: true });
-    const ro = new ResizeObserver(measure);
+    // One measurement per frame, not one per mutation. Mounting a long
+    // transcript resizes the content once per block, and measure() reads
+    // clientHeight and scrollHeight — a forced layout apiece, then a state
+    // update that renders the rail again.
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        measure();
+      });
+    });
     ro.observe(inner);
     ro.observe(root);
     return () => {
       root.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
       ro.disconnect();
     };
   }, [scroll, flow, measure]);

@@ -108,7 +108,13 @@ func identify(host string, err error) error {
 		}
 		return serve.Refusal(http.StatusConflict, "remote.host_key_changed", err, params)
 	}
+	var tooOld *bootstrap.KernelTooOldError
 	switch {
+	case errors.As(err, &tooOld):
+		// The machine has a reasonix; it is from a line with no pane hub, so it
+		// would answer everything a pane asked with 405. Caught here rather
+		// than there: this is the side that read its version.
+		return serve.Refusal(http.StatusBadGateway, "remote.kernel_too_old", err, map[string]any{"host": host})
 	case errors.Is(err, remote.ErrHostKeyRejected):
 		return serve.Refusal(http.StatusForbidden, "remote.host_key_rejected", err, nil)
 	case errors.Is(err, remote.ErrAuthFailed):

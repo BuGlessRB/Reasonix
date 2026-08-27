@@ -7,7 +7,7 @@ import type { ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope
 import { RMark } from "./RMark";
 import { ToolCard } from "./cards/ToolCard";
 import { GuardianCard } from "./cards/GuardianCard";
-import { ApprovalCard } from "./cards/ApprovalCard";
+import { ApprovalCard, type PlanAction } from "./cards/ApprovalCard";
 import { AskCard } from "./cards/AskCard";
 import { SayCard } from "./cards/SayCard";
 import { CompactionCard } from "./cards/CompactionCard";
@@ -34,6 +34,7 @@ interface Props {
   // twice; null while nothing has been asked for.
   focus: { call: string; n: number } | null;
   onApprove: (itemId: string, id: string, v: ApprovalVerdict) => void;
+  onPlan: (itemId: string, id: string, action: PlanAction) => void;
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => void;
   onSuggest: (text: string) => void;
   onForget: (itemId: string, name: string) => void;
@@ -92,7 +93,7 @@ function useBlocks(items: Item[], cut: number, revision: number): Item[][] {
   return blocks;
 }
 
-export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, focus, onApprove, onAnswer, onSuggest, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
+export function Transcript({ items, revision, waiting, scroll, hidden, onPinned, jump, focus, onApprove, onPlan, onAnswer, onSuggest, onForget, onCancelQueued, onExtInvoke, onExtSubmit, takeovers = {}, checkpoints, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert, needsProject, onOpenProject, onKeepHere }: Props) {
   // A block the selection touches must not leave the DOM. Unmounting the node a
   // selection is anchored to makes the browser remap that selection onto
   // whatever is still mounted — which reads as "I selected up there and the
@@ -124,13 +125,20 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
   // reveal clock — which appends characters on its own rAF — kept reopening it:
   // two loops chasing each other, measured as the distance to the bottom
   // swinging 0→142px through the whole stream. That swing is the jitter.
+  // Writing the scroller's own scrollTop rather than asking an element to bring
+  // itself into view: scrollIntoView resolves alignment against every scrollable
+  // ancestor, and a throttled CPU spent 13% of its self time in it — this runs
+  // twice per streamed delta, from the layout effect and from the size observer.
+  // The scroller is right here and "the bottom" is one assignment against it.
   const follow = useCallback(() => {
+    const root = scroll.current;
+    if (!root) return;
     self.current = true;
-    end.current?.scrollIntoView({ block: "end" });
+    root.scrollTop = root.scrollHeight;
     requestAnimationFrame(() => {
       self.current = false;
     });
-  }, []);
+  }, [scroll]);
 
   useEffect(() => {
     const onSelect = () => {
@@ -390,7 +398,7 @@ export function Transcript({ items, revision, waiting, scroll, hidden, onPinned,
     if (where) land(where.block, where.into, `[data-call="${CSS.escape(focus.call)}"]`);
   }, [hidden, focus, callBlock, land]);
 
-  const rowProps = { onApprove, onAnswer, onForget, onCancelQueued, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
+  const rowProps = { onApprove, onPlan, onAnswer, onForget, onCancelQueued, onExtInvoke, takeovers, onExtSubmit, onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert };
 
   // What you said, and where it sits. Derived from the same blocks the
   // transcript renders, so a mark always knows which block holds it — that is
@@ -492,6 +500,7 @@ const Block = memo(function Block({
 
 interface RowHandlers {
   onApprove: Props["onApprove"];
+  onPlan: Props["onPlan"];
   onAnswer: Props["onAnswer"];
   onForget: Props["onForget"];
   onCancelQueued: Props["onCancelQueued"];
@@ -511,6 +520,7 @@ interface RowHandlers {
 const Row = memo(function Row({
   it,
   onApprove,
+  onPlan,
   onForget,
   onCancelQueued,
   onAnswer,
@@ -562,7 +572,7 @@ const Row = memo(function Row({
     case "guardian":
       return <GuardianCard g={it.g} />;
     case "approval":
-      return <ApprovalCard item={it} onApprove={onApprove} />;
+      return <ApprovalCard item={it} onApprove={onApprove} onPlan={onPlan} />;
     case "ask":
       return <AskCard item={it} onAnswer={onAnswer} />;
     case "compaction":

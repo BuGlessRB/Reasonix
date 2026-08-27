@@ -1,91 +1,61 @@
-import type { Metrics } from "../../state/session";
-import { decimals, money, pct } from "../../i18n/format";
-import { useTicker, useTrail } from "../num";
-import { Spark } from "../Spark";
 import { t } from "../../i18n";
+import { pct, tokens } from "../../i18n/format";
+import type { Metrics } from "../../state/session";
+import { useTicker } from "../num";
 
-const SRC: Record<string, string> = {
-  executor: "主循环",
-  subagent: "子代理",
-  compaction: "压缩",
-  planner: "规划",
-  classifier: "分类",
-  title: "标题",
-};
-
-const fmt = (n: number) => n.toLocaleString("en-US");
-
-export function Cache({ metrics, rate: tps, done }: { metrics: Metrics; rate: number; done?: boolean }) {
+/** The one figure worth reading first: how much of the prompt the endpoint did
+ *  not have to re-read. It leads the rail at full size because a session that
+ *  stops hitting its prefix costs several times more per turn, and a number
+ *  that size is noticed without being looked for. */
+export function Cache({ metrics, done }: { metrics: Metrics; done?: boolean }) {
   const up = metrics.hit + metrics.miss;
   const rate = up ? (metrics.hit / up) * 100 : 0;
-  const sources = Object.entries(metrics.bySource).filter(([, v]) => v > 0);
-  // The rail's numbers are the same story the run strip tells, so they move the
-  // same way: eased to the round's new figure rather than cutting to it.
   const shown = useTicker(rate);
   const hit = useTicker(metrics.hit);
   const miss = useTicker(metrics.miss);
-  const out = useTicker(metrics.out);
-  const cost = useTicker(metrics.cost);
-  // 速度的形状只有攒下来才有 —— 这一栏里唯一每秒都在变的数
-  const trail = useTrail(tps, !done);
 
   return (
     <div className="block" data-b="cache">
-      <div className="lbl">{t("缓存")}</div>
+      <h3 className="lbl">
+        {t("前缀缓存")}
+        <span className="c">{up ? t("本会话") : t("还没有请求")}</span>
+      </h3>
       <div className="big">
         <span className="v" data-live={up ? "" : undefined} data-flash={done && up ? "" : undefined}>
-          {pct(shown / 100, 1)}
+          {up ? pct(shown / 100, 1) : "—"}
         </span>
         <span className="k">
           {t("前缀命中")}
           <br />
-          {t("本会话")}
+          {t("越高越省")}
         </span>
+        {/* 前缀没变是命中率能保住的前提；变了就说变在哪儿。 */}
+        {up > 0 && (
+          <span
+            className="pill"
+            data-tone={metrics.prefixChanged ? "warn" : "ok"}
+            title={metrics.prefixReasons.join(" · ") || undefined}
+          >
+            {metrics.prefixChanged ? t("前缀变了") : t("前缀未变")}
+          </span>
+        )}
       </div>
       <div className="bar">
         <i className="c" style={{ flexGrow: Math.max(shown, 0.4) }} />
         <i className="f" style={{ flexGrow: Math.max(100 - shown, 0.4) }} />
       </div>
-      <div className="legend">
-        <div className="r">
-          <i style={{ background: "var(--ok)" }} />
-          {t("命中")}<span className="n">{fmt(Math.round(hit))}</span>
-        </div>
-        <div className="r">
-          <i style={{ background: "var(--ghost)" }} />
-          {t("未命中")}<span className="n">{fmt(Math.round(miss))}</span>
-        </div>
-        <div className="r aside">
-          <i />
-          {t("输出")}<span className="n">{fmt(Math.round(out))}</span>
-        </div>
+      <div className="nums">
+        <span>{t("命中")}<b>{tokens(Math.round(hit))}</b></span>
+        <span>{t("未命中")}<b>{tokens(Math.round(miss))}</b></span>
+        {!!metrics.toolSchema && <span>{t("工具 schema")}<b>{tokens(metrics.toolSchema)}</b></span>}
       </div>
-      <div className="rate" data-live={tps >= 1 ? "" : undefined}>
-        <span>{t("下行")}</span>
-        <Spark points={trail} />
-        <span className="v">{tps >= 1 ? Math.round(tps) : "—"}</span>
-        <span className="u">tok/s</span>
-      </div>
-      <div className="money">
-        <div className="col">
-          <span className="k">{t("本会话")}</span>
-          <span className="v">{money(cost, metrics.currency)}</span>
-          <span className="note">{up ? t("命中 {rate}%", { rate: decimals(rate, 1) }) : "—"}</span>
+      {!!metrics.prefixHash && (
+        <div className="nums" style={{ justifyContent: "space-between" }}>
+          <span title={metrics.prefixHash}>
+            {t("前缀哈希")}<b>{metrics.prefixHash.slice(0, 4)}…{metrics.prefixHash.slice(-4)}</b>
+          </span>
         </div>
-        <div className="col">
-          <span className="k">{t("若不命中")}</span>
-          <span className="v sm">—</span>
-          <span className="note">{t("价目未上报")}</span>
-        </div>
-      </div>
-      <div className="srcs">
-        {sources.map(([k, v]) => (
-          <div className="r" key={k}>
-            <span>{t(SRC[k] ?? k)}</span>
-            <span className="n">{money(v, metrics.currency)}</span>
-          </div>
-        ))}
-      </div>
+      )}
     </div>
   );
 }

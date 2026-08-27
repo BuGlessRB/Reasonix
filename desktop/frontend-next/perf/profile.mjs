@@ -1,13 +1,19 @@
 // 对长会话的流式帧做 CPU 采样，按自耗时列出热点。
 import { chromium } from "playwright";
+import { loadMap } from "./sourcemap.mjs";
+import { readdirSync } from "node:fs";
 
 const URL = process.env.PERF_URL ?? "http://localhost:4399/perf.html";
 const ROUNDS = Number(process.env.PERF_ROUNDS ?? 400);
 const DELTAS = Number(process.env.PERF_DELTAS ?? 240);
+const CPU = Number(process.env.PERF_CPU ?? 1);
+const MAPFILE = readdirSync("dist-perf/assets").find((f) => f.startsWith("perf-") && f.endsWith(".js.map"));
+const MAP = MAPFILE ? loadMap(`dist-perf/assets/${MAPFILE}`) : null;
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const cdp = await page.context().newCDPSession(page);
+if (CPU > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: CPU });
 await page.goto(URL, { waitUntil: "networkidle" });
 await page.waitForSelector(".app", { timeout: 15000 });
 await page.waitForTimeout(600);
@@ -55,8 +61,14 @@ for (const id of profile.samples) {
   const n = byId.get(id);
   if (!n) continue;
   const f = n.callFrame;
-  const file = (f.url || "").split("/").pop()?.split("?")[0] || "(native)";
-  const key = `${f.functionName || "(anonymous)"}  ${file}:${f.lineNumber + 1}`;
+  let where = `${(f.url || "").split("/").pop()?.split("?")[0] || "(native)"}:${f.lineNumber + 1}`;
+  // Minified names say nothing: the first read of this table listed `h` and
+  // `Gv`. Resolve through the bundle's own map when the build carries one.
+  if (MAP && f.url?.includes("/assets/")) {
+    const src = MAP.at(f.lineNumber, f.columnNumber);
+    if (src) where = `${src.src.replace(/^.*\/src\//, "src/")}:${src.line}${src.name ? " " + src.name : ""}`;
+  }
+  const key = `${f.functionName || "(anonymous)"}  ${where}`;
   self.set(key, (self.get(key) ?? 0) + 1);
 }
 const ms = (profile.endTime - profile.startTime) / 1000;

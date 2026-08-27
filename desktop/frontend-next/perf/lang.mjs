@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 import { fileURLToPath } from "node:url";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 const PAGE = process.env.PERF_URL ?? "http://localhost:4399/perf.html";
 const SHOTS = fileURLToPath(new URL("shots", import.meta.url));
@@ -35,11 +35,13 @@ await page.evaluate(async () => {
 await page.waitForTimeout(500);
 
 const seen = (s) => page.locator(`text=${s}`).first().isVisible().catch(() => false);
-// 固件替用户造的数据不该翻：技能描述、钩子名、记忆条目、会话标题，真机上
-// 都是用户自己写的内容。豁免表直接从固件源码里读，而不是手写一串正则 ——
-// 固件改了，豁免自动跟着改。语言名同理：英文界面里「中文」就该是「中文」。
-const fixtureSrc = ["port/fixture.ts", "port/mock.ts", "port/mock_ext.ts", "port/mock_shell.ts", "port/mock_hub.ts"]
-  .map((p) => { try { return readFileSync(join(SRC, p), "utf8"); } catch { return ""; } })
+// 固件替用户造的数据不该翻：技能描述、钩子名、记忆条目、代理地址、会话标题，
+// 真机上都是用户自己写的内容。语言名同理：英文界面里「中文」就该是「中文」。
+// 豁免表连内容带清单都从固件目录读出来 —— 曾经只有内容是读的、文件名是手写的
+// 五个，固件后来拆成十二个 mock_*.ts，没列到的那几个造的数据就全被当成漏译。
+const fixtureSrc = readdirSync(join(SRC, "port"))
+  .filter((f) => f === "fixture.ts" || /^mock(_[a-z]+)?\.ts$/.test(f))
+  .map((f) => { try { return readFileSync(join(SRC, "port", f), "utf8"); } catch { return ""; } })
   .join("\n");
 const FIXTURE_TEXT = new Set(
   [...fixtureSrc.matchAll(/(["'`])((?:[^"'`\\]|\\.)*?)\1/g)].map((m) => m[2]).filter((x) => /[一-鿿]/.test(x)),
@@ -49,13 +51,19 @@ check("侧栏译成英文", await seen("Metrics"));
 check("标签页译成英文", await seen("Activity"));
 check("会话树译成英文", await seen("Workspaces"));
 check("面板译成英文", await seen("Pending changes"));
-check("子代理面板译成英文", await seen("Subagents"));
+check("代理面板译成英文", await seen("Agents and tools"));
 await page.screenshot({ path: `${SHOTS}/lang-en.png` });
 
 // 设置页：逐个分区看有没有漏译
 await page.keyboard.press("Meta+Comma");
 await page.waitForTimeout(500);
-const sections = ["session", "model", "tools", "hooks", "ext", "network", "memory", "account", "versions", "appearance"];
+// 分区从导航栏自己数出来，不手写：手写的那份停在十个，而设置页早就有十三个 ——
+// 远程、用量、存储三整块面板的译文从来没有被看过一眼。
+const sections = await page.evaluate(() =>
+  [...document.querySelectorAll('.prefs-nav [id^="prefs-"]')].map((e) => e.id.slice("prefs-".length)),
+);
+// 数不出分区同样是坏了：清单空着，下面那个循环一次都不跑，而断言照样成立。
+if (sections.length < 8) fails.push(`只数出 ${sections.length} 个设置分区，导航栏没读到`);
 const leftover = {};
 for (const sec of sections) {
   await page.evaluate((id) => document.getElementById(`prefs-${id}`)?.click(), sec);
@@ -82,7 +90,15 @@ for (const sec of sections) {
 }
 await page.screenshot({ path: `${SHOTS}/lang-en-settings.png` });
 const secBad = Object.keys(leftover).length;
-check("设置各分区已译", secBad === 0, secBad ? Object.entries(leftover).map(([k, v]) => `${k}: ${v.slice(0,3).join("/")}`).join("  |  ") : "10 个分区都干净");
+// 数目由扫到的分区数说，不写死：写死的那个「10」和写死的分区清单互相印证，
+// 于是清单少了三个的时候，读数看着仍然是自洽的。
+check(
+  "设置各分区已译",
+  secBad === 0,
+  secBad
+    ? Object.entries(leftover).map(([k, v]) => `${k}: ${v.slice(0, 3).join("/")}`).join("  |  ")
+    : `${sections.length} 个分区都干净`,
+);
 await page.keyboard.press("Escape");
 await page.waitForTimeout(300);
 
@@ -108,9 +124,12 @@ await zh.addInitScript(() => localStorage.setItem("rx-lang", "zh"));
 await zh.goto(`${PAGE}?pref=zh`, { waitUntil: "networkidle" });
 await zh.waitForSelector(".app", { timeout: 20000 });
 await zh.waitForTimeout(700);
-check("切回中文", await zh.locator("text=度量").first().isVisible().catch(() => false));
+check("切回中文", await zh.locator("text=运行指标").first().isVisible().catch(() => false));
 check("<html lang> 回到 zh-CN", (await zh.evaluate(() => document.documentElement.lang)) === "zh-CN");
 await zh.screenshot({ path: `${SHOTS}/lang-zh.png` });
 
 await browser.close();
 console.log(fails.length ? `\n失败 ${fails.length} 项：\n- ${fails.join("\n- ")}` : "\n全部通过");
+// 退出码是这个脚本唯一被机器读的部分。少了这一行，它印着「失败 3 项」而
+// 退出 0 —— 任何按返回码判断的地方都会当它通过。
+process.exit(fails.length ? 1 : 0);

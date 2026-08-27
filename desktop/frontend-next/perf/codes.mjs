@@ -34,6 +34,12 @@ const missing = [...emitted.keys()].filter((c) => !known.has(c)).sort();
 const stale = [...known].filter((c) => !emitted.has(c)).sort();
 
 console.log(`内核发出的码 ${emitted.size} 个   前端有话说的 ${known.size} 个`);
+// 一边扫成空，说明路径挪了，不是「两侧对齐」。少了这一句，目录一改这份守卫
+// 就永远安静地绿着 —— 它比没有守卫更糟，因为它替你担保了它其实没看的事。
+if (!emitted.size || !known.size) {
+  console.log("\n没扫到源码：至少一边是空的，先确认 PERF_KERNEL / src 的位置。");
+  process.exit(1);
+}
 if (missing.length) {
   console.log(`\n前端没有对应说法的 ${missing.length} 个（会退回英文）：`);
   for (const c of missing) console.log(`  ${c}    ← ${emitted.get(c)}`);

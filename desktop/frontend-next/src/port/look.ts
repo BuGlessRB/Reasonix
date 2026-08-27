@@ -15,6 +15,16 @@ export interface ThemeBackground {
   overlayStrength: number;
 }
 
+// A live backdrop the window draws, rather than a picture it places. Absent on
+// a pack that does not want one; the whole layer is then never mounted.
+export interface ThemeSky {
+  ray?: string;
+  cloud?: string;
+  cloudLit?: string;
+  rayAlpha: number;
+  cloudAlpha: number;
+}
+
 export interface ThemePack {
   id: string;
   name: string;
@@ -23,6 +33,7 @@ export interface ThemePack {
   active?: boolean;
   tokens: { light?: Record<string, string>; dark?: Record<string, string> };
   background?: ThemeBackground;
+  sky?: ThemeSky;
   hasPreview?: boolean;
   // Tokens the kernel dropped and why: an unknown name, or a value that could
   // not be let into a stylesheet. The pack still loads without them.

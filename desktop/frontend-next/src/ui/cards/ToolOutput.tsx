@@ -4,7 +4,7 @@
 // cleanly falls back to the terminal block rather than being forced into a
 // list — a wrong list reads as authoritative, a raw block only reads as raw.
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { bytes } from "../../i18n/format";
 import type { Bound } from "../../port/wire";
@@ -290,16 +290,25 @@ function Clip({ id, deps, children }: { id?: string; deps?: unknown; children: R
   const body = useRef<HTMLDivElement>(null);
   // Measuring reads scrollHeight, which forces layout — so it keys off the
   // content and the clip state, not every render the turn above it causes.
-  useLayoutEffect(() => {
+  useEffect(() => {
     const el = body.current;
     if (!el) return;
     const measure = () => setOver(el.scrollHeight > el.clientHeight + 1);
-    // Collapsing now takes time, and mid-transition this measures an intermediate
-    // height — at that instant the test flips to "not overflowing" and pulls the
-    // expand button. While one is running, wait for it to settle.
-    if (!el.getAnimations().length) measure();
+    // Off the commit, onto the next frame. Opening a long transcript mounts
+    // hundreds of these at once, and reading scrollHeight inside the commit
+    // makes each card force a layout of the whole document — the single
+    // largest cost in switching to a long session on a slow machine.
+    const raf = requestAnimationFrame(() => {
+      // Collapsing now takes time, and mid-transition this measures an intermediate
+      // height — at that instant the test flips to "not overflowing" and pulls the
+      // expand button. While one is running, wait for it to settle.
+      if (!el.getAnimations().length) measure();
+    });
     el.addEventListener("transitionend", measure);
-    return () => el.removeEventListener("transitionend", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener("transitionend", measure);
+    };
   }, [deps, open]);
   const toggle = () => {
     const next = !open;

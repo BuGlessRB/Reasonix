@@ -1,4 +1,4 @@
-import type { WireEvent } from "./wire";
+import type { GraphEdge, GraphNode, WireEvent } from "./wire";
 
 // The scripted turn MockPort replays. It lives apart from the port because it is
 // content, not transport: every card the UI can draw needs a beat here, or that
@@ -38,6 +38,14 @@ const usage = (hit: number, miss: number, out: number, source = "executor"): Wir
     currency: "¥",
   },
 });
+
+// The run graph the kernel publishes alongside the stream. Timestamps are
+// fabricated off one base rather than read from a clock: the timeline draws
+// offsets from the earliest node, so what matters is the spacing, and a fixture
+// that moved with the wall clock could never be compared against itself.
+const T0 = 1_756_000_000_000;
+const node = (id: string, over: Partial<GraphNode> = {}): GraphNode => ({ id, kind: "worker", ...over });
+const graph = (nodes: GraphNode[], edges: GraphEdge[] = []): WireEvent => ({ kind: "graph_delta", graph: { nodes, edges } });
 
 export const SCRIPT: Beat[] = [
   { wait: 300, ev: { kind: "turn_started" } },
@@ -199,11 +207,26 @@ export const SCRIPT: Beat[] = [
     },
   },
   {
+    wait: 200,
+    ev: graph([
+      node("plan1", { label: "读历史与现场", profile: "planner", model: "deepseek-v4", state: "completed",
+        startedAt: T0, endedAt: T0 + 12_000 }),
+    ]),
+  },
+  {
     wait: 400,
     ev: {
       kind: "tool_dispatch",
       tool: tool("use_capability", { id: "tk1", resolvedName: "task", profile: { name: "security-review" } }),
     },
+  },
+  {
+    wait: 100,
+    ev: graph(
+      [node("tk1", { label: "只读地过一遍安全面", profile: "security-review", model: "deepseek-v4-pro",
+        grant: "read", state: "running", startedAt: T0 + 12_400 })],
+      [{ from: "plan1", to: "tk1", kind: "depends" }],
+    ),
   },
   {
     wait: 500,
@@ -250,6 +273,81 @@ export const SCRIPT: Beat[] = [
       }),
     },
   },
+  {
+    wait: 100,
+    ev: graph([
+      node("tk1", { state: "completed", endedAt: T0 + 20_800, ref: "sessions/2026-08-25-security.jsonl" }),
+      node("fleet1", { kind: "group", label: "复核这一轮改动", state: "running", startedAt: T0 + 21_000 }),
+      node("w-retry", { parentId: "fleet1", label: "retry.go 退避面", profile: "review", grant: "read",
+        state: "completed", startedAt: T0 + 21_100, endedAt: T0 + 27_400 }),
+      node("w-cred", { parentId: "fleet1", label: "credentials.go 读写面", profile: "review", grant: "read",
+        state: "running", startedAt: T0 + 21_100 }),
+      node("w-tests", { parentId: "fleet1", label: "测试是否覆盖 401", profile: "review", grant: "read",
+        state: "pending" }),
+      node("w-lint", { parentId: "fleet1", label: "风格与命名", profile: "review", state: "adopted",
+        ref: "sessions/2026-08-24-lint.jsonl" }),
+    ], [
+      { from: "fleet1", to: "w-retry", kind: "spawn" },
+      { from: "fleet1", to: "w-cred", kind: "spawn" },
+      { from: "fleet1", to: "w-tests", kind: "spawn" },
+      { from: "fleet1", to: "w-lint", kind: "spawn" },
+      { from: "w-retry", to: "w-tests", kind: "depends" },
+      { from: "w-cred", to: "w-tests", kind: "depends" },
+      { from: "w-retry", to: "w-tests", kind: "context" },
+    ]),
+  },
+  {
+    wait: 400,
+    ev: {
+      kind: "tool_dispatch",
+      tool: tool("use_capability", { id: "fx1", resolvedName: "task", readOnly: false, profile: { name: "patch" } }),
+    },
+  },
+  {
+    wait: 100,
+    ev: graph(
+      [node("fx1", { label: "落地退避补丁", profile: "patch", model: "deepseek-v4-pro", grant: "write",
+        state: "running", startedAt: T0 + 28_000 })],
+      [{ from: "tk1", to: "fx1", kind: "context" }],
+    ),
+  },
+  {
+    wait: 500,
+    ev: {
+      kind: "tool_result",
+      tool: tool("edit_file", {
+        id: "fx1-a", parentId: "fx1", readOnly: false,
+        args: JSON.stringify({ path: "internal/provider/retry.go" }),
+        added: 9, removed: 2,
+        diff: "@@ -61,2 +61,9 @@\n+\tif code == 401 && attempt < max {",
+      }),
+    },
+  },
+  {
+    wait: 300,
+    ev: {
+      kind: "tool_result",
+      tool: tool("edit_file", {
+        id: "fx1-b", parentId: "fx1", readOnly: false,
+        args: JSON.stringify({ path: "internal/provider/openai/streaming/chunk_decoder.go" }),
+        added: 4, removed: 0,
+        diff: "@@ -22,0 +22,4 @@\n+\t// 401 在这里也要走退避",
+      }),
+    },
+  },
+  {
+    wait: 400,
+    ev: {
+      kind: "tool_result",
+      tool: tool("use_capability", {
+        id: "fx1", resolvedName: "task", readOnly: false, profile: { name: "patch" },
+        args: JSON.stringify({ description: "把 401 退避补上" }),
+        output: "retry.go 加了一次 401 退避，解码器那处跟上；没碰凭据存储。",
+        durationMs: 5200,
+      }),
+    },
+  },
+  { wait: 100, ev: graph([node("fx1", { state: "completed", endedAt: T0 + 33_200 })]) },
   // The agent teaching itself something, which no other tool call does — and the
   // card for it had no fixture, so it was never seen in dev.
   {

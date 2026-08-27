@@ -22,6 +22,10 @@ export class MockTheme extends MockNetwork {
       },
       {
         id: "tide", name: "Tide", author: "fixture", active: this.activeTheme === "tide",
+        // One of the two carries a sky, because a live backdrop is a state the
+        // picker has to be able to reach: a fixture where no pack has one
+        // leaves the whole layer undesignable outside a real kernel.
+        sky: { ray: "rgba(255,216,142,.55)", cloud: "255,240,212", cloudLit: "242,206,140", rayAlpha: 0.85, cloudAlpha: 0.4 },
         tokens: {
           light: { bg: "#F2F6F8", bgSoft: "#F9FCFD", panel: "#FFFFFF", border: "#CBD9E0", fg: "#12191C", fgDim: "#4E5D65", accent: "#0E6E82" },
           dark: { bg: "#080D10", bgSoft: "#0C1316", panel: "#131C21", border: "#23333A", fg: "#E4EEF2", fgDim: "#8298A2", accent: "#4FB6CE" },

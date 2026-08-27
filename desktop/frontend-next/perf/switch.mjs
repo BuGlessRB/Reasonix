@@ -4,6 +4,7 @@
 import { chromium } from "playwright";
 
 const BASE = process.env.PERF_URL ?? "http://localhost:4399/perf.html";
+const CPU = Number(process.env.PERF_CPU ?? 1);
 const TURNS = (process.env.PERF_TURNS ?? "0,100,400,1000,2000").split(",").map(Number);
 // 内核那边 /status 声明了钱包端点时是一次网络往返；这里把那笔账摆进来。
 const STATUS_MS = Number(process.env.PERF_STATUS_MS ?? 0);
@@ -14,6 +15,7 @@ const rows = [];
 for (const turns of TURNS) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const cdp = await page.context().newCDPSession(page);
+  if (CPU > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: CPU });
   await cdp.send("Performance.enable");
   await page.goto(`${BASE}?ws=2&sess=8&turns=${turns}&statusms=${STATUS_MS}`, { waitUntil: "networkidle" });
   await page.waitForSelector(".app", { timeout: 30000 });

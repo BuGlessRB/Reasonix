@@ -1,7 +1,13 @@
-import { useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { t } from "../../i18n";
 import type { Checkpoint, RewindPlan, RewindResult, RewindScope } from "../../port/port";
 import { useDismiss } from "../dismiss";
+import { pinToViewport } from "../place";
+
+// Gap between the trigger and the menu. It lives here rather than in CSS because
+// a portaled menu is placed by measurement, so no rule owns the offset any more.
+const GAP = 7;
 
 // Only edit-tool writes are snapshotted. A turn that also ran shell commands
 // therefore has gaps the restore cannot reach, and the kernel refuses such a
@@ -40,7 +46,35 @@ export function RewindControl({
 }) {
   const [stage, setStage] = useState<Stage>({ at: "closed" });
   const wrap = useRef<HTMLDivElement>(null);
-  useDismiss(stage.at !== "closed", wrap, () => setStage({ at: "closed" }));
+  const btn = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const open = stage.at !== "closed";
+  useDismiss(open, wrap, () => setStage({ at: "closed" }), menu);
+
+  // Below the trigger, right edges flush, and above it when the bottom of the
+  // window is closer than the menu is tall.
+  const place = useCallback(() => {
+    const el = menu.current;
+    const anchor = btn.current;
+    if (!el || !anchor) return;
+    const to = anchor.getBoundingClientRect();
+    const box = el.getBoundingClientRect();
+    const above = to.top - box.height - GAP;
+    const fits = to.bottom + GAP + box.height <= innerHeight - 6;
+    pinToViewport(el, to.right - box.width, fits || above < 6 ? to.bottom + GAP : above);
+  }, []);
+
+  // The menu is fixed, so anything that moves the trigger leaves it behind.
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    addEventListener("scroll", place, true);
+    addEventListener("resize", place);
+    return () => {
+      removeEventListener("scroll", place, true);
+      removeEventListener("resize", place);
+    };
+  }, [open, stage, place]);
 
   const fail = (e: unknown) => setStage({ at: "failed", why: e instanceof Error ? e.message : String(e) });
 
@@ -77,99 +111,110 @@ export function RewindControl({
   };
 
   return (
-    <div className="stepctl rewind" ref={wrap}>
+    <div className="stepctl rewind" ref={wrap} data-open={open ? "" : undefined}>
       <div className="picker">
         <button
+          ref={btn}
           aria-haspopup="menu"
-          aria-expanded={stage.at !== "closed"}
+          aria-expanded={open}
           title={t("把工作区和对话退回这条消息之前")}
           onClick={() => setStage(stage.at === "closed" ? { at: "menu" } : { at: "closed" })}
         >
           {t("↩ 回到这里")}
         </button>
-        <div className="menu projmenu" role="menu" hidden={stage.at === "closed"}>
-          {stage.at === "menu" &&
-            SCOPES.filter((s) => cp.files > 0 || !s.files).map((s) => (
-              <button className="mi" role="menuitem" key={s.value} onClick={() => pick(s.value)}>
-                <span className="dot" />
-                <span className="tx">
-                  <span className="lb">{s.label}</span>
-                </span>
-                {s.files && <span className="rt">{cp.files} 个文件</span>}
-              </button>
-            ))}
-          {stage.at === "menu" && cp.files === 0 && (
-            <div className="mi plain">
-              <span className="dot" />
-              <span className="tx">
-                <span className="lb">{t("这一轮没有改动文件")}</span>
-              </span>
-            </div>
-          )}
-          {stage.at === "working" && (
-            <div className="mi plain">
-              <span className="dot" />
-              <span className="tx">
-                <span className="lb">{t("正在还原…")}</span>
-              </span>
-            </div>
-          )}
-          {stage.at === "confirm" && (
-            <>
-              <div className="mi plain">
-                <span className="dot" />
-                <span className="tx">
-                  <span className="lb">{t("这一轮有改动还原不了")}</span>
-                  <span className="ds">
-                    {(stage.plan.coverageGaps ?? [])
-                      .map((g) => GAP_REASONS[g.reason] ?? g.detail)
-                      .join("；") || "部分改动不在快照内"}
+        {open &&
+          createPortal(
+            // Out of the transcript entirely. The card it sits on carries
+            // content-visibility:auto and, from its entrance animation's fill,
+            // a transform — either one makes the card both a clip and the
+            // containing block for a fixed child, so the menu was cut off at
+            // the card's edge and then again at the scroller's. Nothing
+            // inside the flow can escape both; a portal does not have to.
+            <div className="menu rewindmenu" role="menu" ref={menu}>
+              {stage.at === "menu" &&
+                SCOPES.filter((s) => cp.files > 0 || !s.files).map((s) => (
+                  <button className="mi" role="menuitem" key={s.value} onClick={() => pick(s.value)}>
+                    <span className="dot" />
+                    <span className="tx">
+                      <span className="lb">{s.label}</span>
+                    </span>
+                    {s.files && <span className="rt">{cp.files} 个文件</span>}
+                  </button>
+                ))}
+              {stage.at === "menu" && cp.files === 0 && (
+                <div className="mi plain">
+                  <span className="dot" />
+                  <span className="tx">
+                    <span className="lb">{t("这一轮没有改动文件")}</span>
                   </span>
-                </span>
-              </div>
-              <div className="div" />
-              <button className="mi" role="menuitem" onClick={() => commit(stage.plan)}>
-                <span className="dot" />
-                <span className="tx">
-                  <span className="lb">{t("仍然还原剩下的")}</span>
-                </span>
-                <span className="rt">{stage.plan.fileCount} 个文件</span>
-              </button>
-              <button className="mi plain" role="menuitem" onClick={() => setStage({ at: "closed" })}>
-                <span className="dot" />
-                <span className="tx">
-                  <span className="lb">{t("取消")}</span>
-                </span>
-              </button>
-            </>
+                </div>
+              )}
+              {stage.at === "working" && (
+                <div className="mi plain">
+                  <span className="dot" />
+                  <span className="tx">
+                    <span className="lb">{t("正在还原…")}</span>
+                  </span>
+                </div>
+              )}
+              {stage.at === "confirm" && (
+                <>
+                  <div className="mi plain">
+                    <span className="dot" />
+                    <span className="tx">
+                      <span className="lb">{t("这一轮有改动还原不了")}</span>
+                      <span className="ds">
+                        {(stage.plan.coverageGaps ?? [])
+                          .map((g) => GAP_REASONS[g.reason] ?? g.detail)
+                          .join("；") || "部分改动不在快照内"}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="div" />
+                  <button className="mi" role="menuitem" onClick={() => commit(stage.plan)}>
+                    <span className="dot" />
+                    <span className="tx">
+                      <span className="lb">{t("仍然还原剩下的")}</span>
+                    </span>
+                    <span className="rt">{stage.plan.fileCount} 个文件</span>
+                  </button>
+                  <button className="mi plain" role="menuitem" onClick={() => setStage({ at: "closed" })}>
+                    <span className="dot" />
+                    <span className="tx">
+                      <span className="lb">{t("取消")}</span>
+                    </span>
+                  </button>
+                </>
+              )}
+              {stage.at === "done" && (
+                <>
+                  <div className="mi plain">
+                    <span className="dot" />
+                    <span className="tx">
+                      <span className="lb">已还原 {stage.files} 个文件</span>
+                    </span>
+                  </div>
+                  <div className="div" />
+                  <button className="mi" role="menuitem" onClick={() => undo(stage.tx)}>
+                    <span className="dot" />
+                    <span className="tx">
+                      <span className="lb">{t("撤销这次还原")}</span>
+                    </span>
+                  </button>
+                </>
+              )}
+              {stage.at === "failed" && (
+                <div className="mi plain">
+                  <span className="dot" />
+                  <span className="tx">
+                    <span className="lb">{t("没能还原")}</span>
+                    <span className="ds">{stage.why}</span>
+                  </span>
+                </div>
+              )}
+            </div>,
+            document.body,
           )}
-          {stage.at === "done" && (
-            <>
-              <div className="mi plain">
-                <span className="dot" />
-                <span className="tx">
-                  <span className="lb">已还原 {stage.files} 个文件</span>
-                </span>
-              </div>
-              <div className="div" />
-              <button className="mi" role="menuitem" onClick={() => undo(stage.tx)}>
-                <span className="dot" />
-                <span className="tx">
-                  <span className="lb">{t("撤销这次还原")}</span>
-                </span>
-              </button>
-            </>
-          )}
-          {stage.at === "failed" && (
-            <div className="mi plain">
-              <span className="dot" />
-              <span className="tx">
-                <span className="lb">{t("没能还原")}</span>
-                <span className="ds">{stage.why}</span>
-              </span>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

@@ -33,9 +33,15 @@ export function PaneTabs({ tabs, active, showRoot, onFocus, onClose, onRename }:
   // Which close is waiting on an answer, and what it would take with it.
   const [confirm, setConfirm] = useState<{ ids: string[]; live: string[] } | null>(null);
 
-  // A tab scrolled out of the strip is a tab you cannot see you are on.
+  // A tab scrolled out of the strip is a tab you cannot see you are on. On the
+  // next frame: this fires exactly when a second pane opens, which is also when
+  // a whole transcript is mounting, and scrollIntoView inside that commit pays
+  // for a layout of all of it.
   useEffect(() => {
-    bar.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const raf = requestAnimationFrame(() => {
+      bar.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+    return () => cancelAnimationFrame(raf);
   }, [active, tabs.length]);
 
   // A trackpad only ever sends deltaY here, so without this the strip scrolls

@@ -31,7 +31,7 @@ function serialise(rows: TrajRow[]) {
   );
 }
 
-function Spans({ of }: { of: Span[] }) {
+export function Spans({ of }: { of: Span[] }) {
   return (
     <>
       {of.map((s, i) => (

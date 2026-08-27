@@ -17,9 +17,12 @@ function walk(dir) {
   return out;
 }
 
-// en.ts 是词表本身，扫它等于自问自答；kernel.ts 不是——码的说法是中文原文，
-// 靠 t(变量) 消费，和常量表一样属于弱引用，漏掉会被误判成多余。
-const files = walk(SRC).filter((f) => !f.endsWith("i18n/en.ts") && !f.endsWith("i18n/index.ts"));
+// 词表本身是答案，扫它等于自问自答。词表不止 en.ts：en_kernel / en_remote /
+// en_settings / en_window 都是它的一部分，而这里过去只排除了 en.ts —— 于是那三
+// 张表里的每一条中文都被当成「源码在用、词表没有」，「缺译」那份名单里绝大多数
+// 一直是这么来的。kernel.ts 不同，它的中文是码的原文，靠 t(变量) 消费。
+const isTable = (f) => /[\\/]i18n[\\/]en(_[a-z]+)?\.ts$/.test(f);
+const files = walk(SRC).filter((f) => !isTable(f) && !f.endsWith("i18n/index.ts"));
 const CJK = /[一-鿿]/;
 
 // 两类引用，判据不同：
@@ -39,15 +42,23 @@ for (const f of files) {
   for (const m of src.matchAll(LITERAL)) if (CJK.test(m[2])) loose.add(m[2]);
 }
 
-const en = readFileSync(join(SRC, "i18n", "en.ts"), "utf8");
 const KEY = /^\s{2}"((?:[^"\\]|\\.)*)":/gm;
-const have = new Set([...en.matchAll(KEY)].map((m) => m[1]));
+const have = new Set(
+  readdirSync(join(SRC, "i18n"))
+    .filter((f) => /^en(_[a-z]+)?\.ts$/.test(f))
+    .flatMap((f) => [...readFileSync(join(SRC, "i18n", f), "utf8").matchAll(KEY)].map((m) => m[1])),
+);
 
 const missing = [...used.keys()].filter((k) => !have.has(k)).sort();
 const unused = [...have].filter((k) => CJK.test(k) && !used.has(k) && !loose.has(k)).sort();
 
 // fixture 与开发用文案不进界面，不必翻。
 console.log(`t() 直接用的中文 key: ${used.size}   常量表等间接引用: ${loose.size}   英文词表: ${have.size}`);
+// 同上：扫空了不是「全都翻好了」。
+if (!used.size || !have.size) {
+  console.log("\n没扫到源码或词表：先确认 PERF_SRC 指对了地方。");
+  process.exit(1);
+}
 if (missing.length) {
   console.log(`\n缺英文翻译 ${missing.length} 条：`);
   for (const k of missing.slice(0, 40)) console.log(`  ${k}    ← ${[...used.get(k)][0]}`);

@@ -7,15 +7,19 @@
 // screen at a time, and a term is only right relative to the ones beside it.
 import { EN_KERNEL } from "./en_kernel";
 import { EN_REMOTE } from "./en_remote";
+import { EN_WINDOW } from "./en_window";
 import { EN_GRAPH } from "./en_graph";
 import { EN_SETTINGS } from "./en_settings";
+import { EN_METRICS } from "./en_metrics";
 import { EN_STORAGE } from "./en_storage";
 
 export const EN: Record<string, string> = {
   ...EN_SETTINGS,
+  ...EN_METRICS,
   ...EN_STORAGE,
   ...EN_KERNEL,
   ...EN_REMOTE,
+  ...EN_WINDOW,
   ...EN_GRAPH,
   // ── 转录：卡片与流 ───────────────────────────────────────────────
   "交待一件事，它自己往下做": "Give it one thing to do, and it runs with it",
@@ -75,7 +79,6 @@ export const EN: Record<string, string> = {
   "{n} 个文件": "{n} files",
   "存到 {path}": "Saved to {path}",
   "已下载 {name}": "Downloaded {name}",
-  "度量": "Metrics",
   "工作区": "Workspaces",
   "收起工作区栏": "Collapse the workspace rail",
   "收起度量栏": "Collapse the metrics rail",
@@ -95,7 +98,6 @@ export const EN: Record<string, string> = {
   "改动 · 已放行": "Changes · auto-approved",
   "尚无改动": "No changes yet",
   "更早的 {n} 个未列出": "{n} earlier files not listed",
-  "上下文": "Context",
   "上下文构成": "What fills the context",
   "系统提示": "System prompt",
   "基础指令、记忆、技能清单": "Base instructions, memory, the skill list",
@@ -225,25 +227,29 @@ export const EN: Record<string, string> = {
   "账号：{name}": "Account: {name}",
 
   // ── 待发队列 ─────────────────────────────────────────────────────
-  "待发队列": "Queue",
-  "待发 {n} 条": "{n} waiting",
+  "待送达": "Pending",
+  "条目": "Items",
+  "字节": "Bytes",
   "已暂停": "Held",
   "只读": "Read-only",
   "恢复了 {n} 条": "{n} recovered",
-  "已满": "Full",
   "暂停派发": "Hold",
   "继续派发": "Release",
-  "等待中": "waiting",
+  "排队": "Queued",
+  "插话排队": "Steer queued",
+  "插话已收": "Steer accepted",
   "下个工具边界送入": "goes in at the next tool boundary",
   "已送入": "delivered",
   "进行中": "running",
   "受阻": "blocked",
   "状态不明": "uncertain",
+  "冻结 {n} 文件": "{n} frozen",
   "上移": "Move up",
   "下移": "Move down",
   "改": "Edit",
   "刷新": "Re-freeze",
   "重新冻结引用的文件": "Re-freeze the files it quotes",
+  "取回": "Take it back",
 
   // ── 外观设置 ─────────────────────────────────────────────────────
   "外观": "Appearance",
@@ -274,9 +280,14 @@ export const EN: Record<string, string> = {
   "换一张…": "Choose another…",
   "浓度": "Strength",
   "压暗": "Dim",
-  "焦点": "Focus",
   "横向焦点": "Horizontal focus",
   "纵向焦点": "Vertical focus",
+  "这张图在这个窗口里只有左右会被裁掉，上下正好填满 —— 纵向那一档没有余量可移。":
+    "In a window this shape the picture is cropped left and right only; top and bottom already fit — so the vertical control has nowhere to move.",
+  "这张图在这个窗口里只有上下会被裁掉，左右正好填满 —— 横向那一档没有余量可移。":
+    "In a window this shape the picture is cropped top and bottom only; the sides already fit — so the horizontal control has nowhere to move.",
+  "这张图和窗口是一样的宽高比，四边都没有裁掉 —— 窗口换个形状，焦点才有得移。":
+    "The picture is the same shape as the window, so nothing is cropped on any side — focus has somewhere to move once the window changes shape.",
   "图片只铺在窗口的空白处，卡片和输入框始终不透明 —— 背景值一圈留白，不值一段读不清的正文。跑起来的时候它会自动退到更淡。":
     "The picture fills only the window's empty margins; cards and the composer stay opaque — a background is worth a margin, not an unreadable paragraph. It recedes further while a turn is running.",
   "图片太大了，先压到 {n} MB 以内": "That image is too large — bring it under {n} MB first",

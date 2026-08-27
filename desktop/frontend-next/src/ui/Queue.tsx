@@ -20,10 +20,10 @@ const settled = (s: QueueItem["state"]) => s === "steer_consumed" || s === "runn
 // Each arm calls t() with its own literal: the catalogue is built by reading
 // these call sites, and a table of strings looked up later is invisible to it —
 // which is how a row would render Chinese inside an English window.
-function label(state: QueueItem["state"]): string {
-  switch (state) {
+function label(it: QueueItem): string {
+  switch (it.state) {
     case "steer_accepted":
-      return t("下个工具边界送入");
+      return t("插话已收");
     case "steer_consumed":
       return t("已送入");
     case "running":
@@ -33,9 +33,37 @@ function label(state: QueueItem["state"]): string {
     case "uncertain":
       return t("状态不明");
     default:
-      return t("等待中");
+      // A steer the kernel could not admit is converted to a follow-up, so an
+      // entry still calling itself one is waiting on a held queue, not refused.
+      return it.intent === "steer" ? t("插话排队") : t("排队");
   }
 }
+
+function tone(state: QueueItem["state"]): string | undefined {
+  switch (state) {
+    case "steer_accepted":
+    case "running":
+      return "accent";
+    case "steer_consumed":
+      return "ok";
+    case "blocked":
+    case "uncertain":
+      return "warn";
+    default:
+      return undefined;
+  }
+}
+
+// Each side of the ratio picks its own unit. The ceiling is 64 MiB and what a
+// queue actually holds is a few typed lines, so a shared unit would print every
+// real queue as 0 — the bar is what carries the proportion.
+function size(n: number): string {
+  if (n < 1024) return `${n}B`;
+  if (n < 1 << 20) return `${n < 10240 ? (n / 1024).toFixed(1) : Math.round(n / 1024)}k`;
+  const m = n / (1 << 20);
+  return `${m < 10 ? m.toFixed(1) : Math.round(m)}M`;
+}
+const fill = (n: number, max: number) => (max > 0 ? `${Math.min(100, Math.round((n / max) * 100))}%` : "0%");
 
 export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefresh, onPause }: Props) {
   const [editing, setEditing] = useState("");
@@ -66,82 +94,108 @@ export function Queue({ queue, onRead, onEdit, onMove, onCancel, onRetry, onRefr
 
   if (!queue || (queue.items.length === 0 && !queue.paused)) return null;
   const items = queue.items;
-  const full = queue.capacity.maxItems > 0 && queue.capacity.items >= queue.capacity.maxItems;
+  const cap = queue.capacity;
+  const fullItems = cap.maxItems > 0 && cap.items >= cap.maxItems;
+  const fullBytes = cap.maxBytes > 0 && cap.bytes >= cap.maxBytes;
 
   return (
-    <div className="queue" role="group" aria-label={t("待发队列")}>
-      <div className="qhead">
-        <span className="qn">{t("待发 {n} 条", { n: items.length })}</span>
+    <div className="queue" role="group" aria-label={t("待送达")}>
+      <div className="qhd">
+        <span className="lb">{t("待送达")}</span>
         {queue.paused && <span className="qflag" data-hold="">{t("已暂停")}</span>}
         {queue.readonly && <span className="qflag" data-ro="">{t("只读")}</span>}
         {/* The kernel pauses itself when it recovers entries: something was
             said that no one has since re-confirmed. */}
         {!!queue.recoveredCount && <span className="qflag" data-warn="">{t("恢复了 {n} 条", { n: queue.recoveredCount })}</span>}
-        {full && <span className="qflag" data-warn="">{t("已满")}</span>}
+        {/* Both limits refuse on their own, so a header that showed one of them
+            would be wrong about the other exactly when it bites. */}
+        <span className="qcap">
+          <span data-full={fullItems || undefined}>
+            {t("条目")} {cap.items}/{cap.maxItems}
+            <span className="mtr">
+              <i style={{ width: fill(cap.items, cap.maxItems) }} />
+            </span>
+          </span>
+          <span data-full={fullBytes || undefined}>
+            {t("字节")} {size(cap.bytes)}/{size(cap.maxBytes)}
+            <span className="mtr">
+              <i style={{ width: fill(cap.bytes, cap.maxBytes) }} />
+            </span>
+          </span>
+        </span>
         <button className="qhold" onClick={() => onPause(!queue.paused)} disabled={queue.readonly}>
           {queue.paused ? t("继续派发") : t("暂停派发")}
         </button>
       </div>
 
-      {items.map((it, i) => (
-        <div key={it.id} className="qrow" data-state={it.state} data-intent={it.intent}>
-          <span className="qmark" aria-hidden="true">
-            {it.intent === "steer" ? "↪" : "→"}
-          </span>
-          {editing === it.id ? (
-            <textarea
-              ref={box}
-              className="qedit"
-              value={draft}
-              rows={Math.min(6, draft.split("\n").length)}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commit}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setEditing("");
-                // Enter commits; the line is one instruction, and a queue row
-                // is not where a paragraph gets composed.
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  commit();
-                }
-              }}
-            />
-          ) : (
-            <span className="qtext" title={it.preview}>
-              {it.preview}
-            </span>
-          )}
-          <span className="qstate">{label(it.state)}</span>
-          {it.blockReason && <span className="qwhy">{it.blockReason}</span>}
-          {!settled(it.state) && !queue.readonly && editing !== it.id && (
-            <span className="qacts">
-              <button onClick={() => onMove(it.id, i - 1)} disabled={i === 0} title={t("上移")}>
-                ↑
-              </button>
-              <button onClick={() => onMove(it.id, i + 1)} disabled={i === items.length - 1} title={t("下移")}>
-                ↓
-              </button>
-              <button onClick={() => void open(it.id)} title={t("编辑")}>
-                {t("改")}
-              </button>
-              {it.state === "blocked" && (
-                <button onClick={() => onRetry(it.id)} title={t("重试")}>
-                  {t("重试")}
+      <div className="qitems">
+        {items.map((it, i) => {
+          const live = !settled(it.state) && !queue.readonly && editing !== it.id;
+          return (
+            <div key={it.id} className="qi" data-state={it.state}>
+              {/* The chip is the answer to "did that land". Its wording says
+                  which turn the line goes into; the title says when. */}
+              <span className="pill" data-tone={tone(it.state)} title={it.state === "steer_accepted" ? t("下个工具边界送入") : undefined}>
+                {label(it)}
+              </span>
+              {editing === it.id ? (
+                <textarea
+                  ref={box}
+                  className="qedit"
+                  value={draft}
+                  rows={Math.min(6, draft.split("\n").length)}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={commit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setEditing("");
+                    // Enter commits; the line is one instruction, and a queue
+                    // row is not where a paragraph gets composed.
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      commit();
+                    }
+                  }}
+                />
+              ) : (
+                <span className="pv" title={it.preview}>
+                  {it.preview}
+                </span>
+              )}
+              {!!it.refs?.length && <span className="rf">{t("冻结 {n} 文件", { n: it.refs.length })}</span>}
+              {it.blockReason && <span className="qwhy">{it.blockReason}</span>}
+              {live && (
+                <span className="qacts">
+                  <button onClick={() => onMove(it.id, i - 1)} disabled={i === 0} title={t("上移")}>
+                    ↑
+                  </button>
+                  <button onClick={() => onMove(it.id, i + 1)} disabled={i === items.length - 1} title={t("下移")}>
+                    ↓
+                  </button>
+                  <button onClick={() => void open(it.id)} title={t("编辑")}>
+                    {t("改")}
+                  </button>
+                  {it.state === "blocked" && (
+                    <button onClick={() => onRetry(it.id)} title={t("重试")}>
+                      {t("重试")}
+                    </button>
+                  )}
+                  {/* Only an entry that quoted files has anything to re-freeze. */}
+                  {!!it.refs?.length && (
+                    <button onClick={() => onRefresh(it.id)} title={t("重新冻结引用的文件")}>
+                      {t("刷新")}
+                    </button>
+                  )}
+                </span>
+              )}
+              {live && (
+                <button className="x" onClick={() => onCancel(it.id)} title={t("取回")}>
+                  ×
                 </button>
               )}
-              {/* Only an entry that quoted files has anything to re-freeze. */}
-              {!!it.refs?.length && (
-                <button onClick={() => onRefresh(it.id)} title={t("重新冻结引用的文件")}>
-                  {t("刷新")}
-                </button>
-              )}
-              <button className="qdel" onClick={() => onCancel(it.id)} title={t("撤回")}>
-                ×
-              </button>
-            </span>
-          )}
-        </div>
-      ))}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

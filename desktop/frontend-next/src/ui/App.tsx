@@ -4,6 +4,8 @@ import { t } from "../i18n";
 import type { AccountState, AgentPort, Appearance as Look, ProviderSetup, ThemePack } from "../port/port";
 import type { HubPort, RuntimeView, TreeWorkspace } from "../port/hub";
 import { Chrome } from "./Chrome";
+import { Nav } from "./Nav";
+import { AccountRow } from "./AccountRow";
 import { swapping } from "./swap";
 import { apply as applyThemePack } from "./theme";
 import { apply as applyLook } from "./look";
@@ -11,10 +13,12 @@ import { adopt as adoptLang } from "../i18n";
 import { Pane, type PaneReport } from "./Pane";
 import { Gutter, RAIL, SIDE, widthOf } from "./Gutter";
 import { folded as roomGaveUp, onFolds } from "./viewport";
+import { trailing } from "./trailing";
 import { RemoteAsk } from "./RemoteAsk";
 import { RemoteHosts } from "./RemoteHosts";
 import type { RemoteAsk as RemoteAskT, RemoteHost } from "../port/remote";
 import { Workspaces } from "./Workspaces";
+import { Sky } from "./Sky";
 import { useAddWorkspace } from "./addws";
 import { PaneTabs } from "./PaneTabs";
 import { Settings } from "./Settings";
@@ -251,14 +255,18 @@ export function App({ hub }: { hub: HubPort }) {
   }, [lookPort]);
 
   // The control moves now and the config catches up: a size or a colour that
-  // waits on a round trip reads as a dead click. The kernel's answer is what
-  // is kept, since it clamps what the slider sent.
+  // waits on a round trip reads as a dead click. The kernel's answer is still
+  // what is kept, since it clamps what the slider sent.
+  const saveLook = useMemo(
+    () => (lookPort ? trailing((next: Look) => lookPort.saveAppearance(next), setLook, fail) : null),
+    [lookPort, fail],
+  );
   const onLook = useCallback(
     (next: Look) => {
       setLook(next);
-      lookPort?.saveAppearance(next).then(setLook).catch(fail);
+      saveLook?.(next);
     },
-    [lookPort, fail],
+    [saveLook],
   );
 
   const running = report.run === "running";
@@ -523,6 +531,7 @@ export function App({ hub }: { hub: HubPort }) {
         status={report.status}
         title={report.title}
         steer={report.steer}
+        run={report.run}
         theme={theme}
         onTheme={setTheme}
         onSettings={showPrefs}
@@ -530,8 +539,16 @@ export function App({ hub }: { hub: HubPort }) {
         account={account}
       />
 
+      {pack?.sky && <Sky />}
+
       <div className="cols">
+        <Nav
+          at={settings === false ? null : settings === true ? "" : settings}
+          onGo={showPrefs}
+          onHome={hidePrefs}
+        />
         <div className="rail">
+          <div className="railscroll">
           <Workspaces
             hub={hub}
             tree={tree}
@@ -559,6 +576,10 @@ export function App({ hub }: { hub: HubPort }) {
               onError={fail}
             />
           ) : null}
+          </div>
+          <div className="railfoot">
+            <AccountRow account={account} onOpen={() => showPrefs("account")} />
+          </div>
         </div>
 
         <div className="main">

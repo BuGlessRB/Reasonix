@@ -2,6 +2,7 @@
 import { chromium } from "playwright";
 
 const BASE = process.env.PERF_URL ?? "http://localhost:4399/perf.html";
+const CPU = Number(process.env.PERF_CPU ?? 1);
 // 工作区数 × 每个工作区的会话数
 const SHAPES = (process.env.PERF_TREE ?? "2x8,10x50,20x200,40x500").split(",").map((s) => s.split("x").map(Number));
 const DELTAS = Number(process.env.PERF_DELTAS ?? 120);
@@ -12,6 +13,7 @@ const rows = [];
 for (const [ws, sess] of SHAPES) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const cdp = await page.context().newCDPSession(page);
+  if (CPU > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: CPU });
   await cdp.send("Performance.enable");
 
   const t0 = Date.now();

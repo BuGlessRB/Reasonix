@@ -4,6 +4,7 @@ import { useTicker } from "../num";
 import type { ContextBreakdown } from "../../port/port";
 import { pct as percent, tokens } from "../../i18n/format";
 import { pinToViewport } from "../place";
+import { Row } from "./kit";
 
 // The order is the order they arrive in a prompt, so the bar reads the way the
 // request is built rather than by size — a class that grows is easier to spot
@@ -38,8 +39,10 @@ function place(anchor: RefObject<HTMLElement | null>) {
 /** Context is the gauge plus what fills it. The gauge alone says a session is
  *  at 70% without saying whether that is a tool catalogue, a memory file, or
  *  one enormous output — and those are fixed in completely different ways. The
- *  breakdown stays folded because it is a diagnosis, not a running number. */
-export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
+ *  breakdown stays folded because it is a diagnosis, not a running number.
+ *  row=false leaves the figure to the head card and captions the gauge with
+ *  what it is instead — a share of the window, not the same number again. */
+export function Context({ ctx, row = true, legend = false }: { ctx: ContextBreakdown | null; row?: boolean; legend?: boolean }) {
   // Every hook runs before the first return: ctx arrives one render after the
   // rail mounts, and a guard above them made that render ask for hooks the
   // previous one never did.
@@ -66,31 +69,25 @@ export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
   // what turns automatic compaction off. Vanishing said neither.
   if (!ctx.window) {
     return (
-      <div className="block" data-b="ctx">
-        <div className="lbl">
-          {t("上下文")}
-          <span className="n">{tokens(Math.round(used))}</span>
-        </div>
+      <>
+        {row && <Row k={t("上下文窗口")} v={tokens(Math.round(used))} />}
         <p className="ctxnote">
           {t("没人说过这个来源的窗口有多大，所以画不出用了多少 —— 也不会自动压缩。去「连接」里给它填一个上下文窗口。")}
         </p>
-      </div>
+      </>
     );
   }
   const pct = Math.min((used / ctx.window) * 100, 100);
   const parts = PARTS.map(([k, label, why]) => ({ k, label, why, n: ctx[k] || 0 })).filter((p) => p.n > 0);
   const sum = parts.reduce((a, p) => a + p.n, 0) || 1;
 
-  return (
-    <div className="block" data-b="ctx">
-      <div className="lbl">
-        {t("上下文")}
-        <span className="n">
-          {tokens(Math.round(used))} / {tokens(ctx.window)}
-        </span>
-      </div>
-      {/* Hover, not a permanent list: five more rows of numbers in a rail this
-          narrow costs more than it tells anyone who is not debugging. */}
+  const body = (
+    <>
+      {row ? (
+        <Row k={t("上下文窗口")} v={`${tokens(Math.round(used))} / ${tokens(ctx.window)}`} />
+      ) : (
+        <Row k={t("上下文构成")} v={`${tokens(Math.round(used))} / ${tokens(ctx.window)}`} />
+      )}
       <div
         className="ctxbar"
         ref={bar}
@@ -106,7 +103,19 @@ export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
           <i key={p.k} data-p={p.k} style={{ width: `${(p.n / sum) * pct}%` }} />
         ))}
       </div>
-      {open && (
+      {legend && (
+        <div className="ctxlg">
+          {parts.map((p) => (
+            <div className="r" key={p.k} title={p.why}>
+              <i data-p={p.k} />
+              <span className="t">{p.label}</span>
+              <em>{percent(p.n / sum)}</em>
+              <b>{tokens(p.n)}</b>
+            </div>
+          ))}
+        </div>
+      )}
+      {open && !legend && (
         <div className="ctxpop" role="tooltip" ref={place(bar)}>
           <div className="hd">
             <span>{t("上下文构成")}</span>
@@ -123,6 +132,7 @@ export function Context({ ctx }: { ctx: ContextBreakdown | null }) {
           <p className="foot">{t("估算值，和触发压缩用的是同一把尺子")}</p>
         </div>
       )}
-    </div>
+    </>
   );
+  return legend ? <div className="block" data-b="ctx">{body}</div> : body;
 }

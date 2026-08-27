@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { t } from "../i18n";
 import type { AccountState, AgentPort, Preset, SessionStatus, WorkspaceInfo } from "../port/port";
 import { WindowControls, zoomOnTitleBar } from "./WindowControls";
+import { chord } from "./keys";
 
 const PRESETS: [Preset, string][] = [
   ["balanced", "均衡"],
@@ -19,6 +20,7 @@ function nextTheme(theme: string): string {
   return theme === "auto" ? other : theme === other ? sys : "auto";
 }
 const THEME_LB: Record<string, string> = { auto: "跟随系统", light: "浅色", dark: "深色" };
+const RUN_LB: Record<string, string> = { running: "运行中", halt: "等你", done: "已完成", idle: "待命" };
 
 const base = (p: string) => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || p;
 // The filename is a timestamp and a model ref — true, and useless to read. The
@@ -36,6 +38,9 @@ interface Props {
   status: SessionStatus | null;
   title?: string;
   steer: number;
+  // What the focused pane is doing, as the pane already reports it upward. The
+  // chrome names it because that is the one line always on screen.
+  run: string;
   theme: string;
   onTheme: (t: string) => void;
   onSettings: (section?: string) => void;
@@ -43,7 +48,7 @@ interface Props {
   onChanged: () => void;
 }
 
-export function Chrome({ port, status, title, steer, theme, onTheme, onSettings, onChanged, account, host }: Props) {
+export function Chrome({ port, status, title, steer, run, theme, onTheme, onSettings, onChanged, account, host }: Props) {
   const root = status?.workspaceRoot || status?.cwd || "";
   const project = root ? base(root) : "—";
   // Only for the "隔离" tag: the folder list and the switch itself moved to the
@@ -75,8 +80,6 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
         </span>
         <span className="crumbsep">/</span>
         <b title={status?.sessionPath}>{sessionName(title, status?.sessionPath)}</b>
-        <span className="crumbsep">·</span>
-        <span className="goal">{status?.goal || t("交待一个任务")}</span>
       </div>
 
       <span className="badge" hidden={steer === 0}>
@@ -84,6 +87,10 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
       </span>
 
       <div className="r">
+        <span className="runpill" data-run={run}>
+          <i />
+          {t(RUN_LB[run] ?? "待命")}
+        </span>
         <div className="themer" role="group" aria-label={t("执行设定")}>
           {PRESETS.map(([id, lb]) => (
             <button
@@ -118,7 +125,7 @@ export function Chrome({ port, status, title, steer, theme, onTheme, onSettings,
         </button>
         {/* Same class as the theme toggle on purpose: settings belongs in the
             icon cluster's weight class, not competing with the preset control. */}
-        <button className="thbtn" onClick={() => onSettings()} aria-label={t("设置")} title={t("设置　⌘,")}>
+        <button className="thbtn" onClick={() => onSettings()} aria-label={t("设置")} title={`${t("设置")}　${chord(",")}`}>
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d="M8 5.9a2.1 2.1 0 1 0 0 4.2 2.1 2.1 0 0 0 0-4.2" />
             <path d="M12.7 9.8a1 1 0 0 0 .2 1.1l.04.04a1.2 1.2 0 1 1-1.7 1.7l-.04-.04a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9v.11a1.2 1.2 0 1 1-2.4 0v-.06a1 1 0 0 0-.65-.9 1 1 0 0 0-1.1.2l-.04.04a1.2 1.2 0 1 1-1.7-1.7l.04-.04a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6h-.11a1.2 1.2 0 0 1 0-2.4h.06a1 1 0 0 0 .9-.65 1 1 0 0 0-.2-1.1l-.04-.04a1.2 1.2 0 1 1 1.7-1.7l.04.04a1 1 0 0 0 1.1.2h.05a1 1 0 0 0 .6-.9v-.11a1.2 1.2 0 1 1 2.4 0v.06a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.04-.04a1.2 1.2 0 1 1 1.7 1.7l-.04.04a1 1 0 0 0-.2 1.1v.05a1 1 0 0 0 .9.6h.11a1.2 1.2 0 0 1 0 2.4h-.06a1 1 0 0 0-.9.6" />

@@ -2,6 +2,7 @@
 import { chromium } from "playwright";
 
 const URL = process.env.PERF_URL ?? "http://localhost:4399/perf.html";
+const CPU = Number(process.env.PERF_CPU ?? 1);
 const ROUNDS = 150;
 const DELTAS = 240;
 
@@ -11,6 +12,7 @@ const rows = [];
 for (const panes of [1, 2]) {
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   const cdp = await page.context().newCDPSession(page);
+  if (CPU > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: CPU });
   await cdp.send("Performance.enable");
   await page.goto(URL, { waitUntil: "networkidle" });
   await page.waitForSelector(".app", { timeout: 15000 });

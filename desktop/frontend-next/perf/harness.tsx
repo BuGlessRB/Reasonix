@@ -1,19 +1,40 @@
 import { createRoot } from "react-dom/client";
 import { boot as bootLang } from "../src/i18n";
+import { track as trackWidth } from "../src/ui/viewport";
 import "../src/styles/tokens.css";
 import "../src/styles/app.css";
 import { App } from "../src/ui/App";
 import { MockHub } from "../src/port/mock_hub";
 import { MockPort } from "../src/port/mock";
 import { fromHistory } from "../src/state/session";
-import type { AgentPort, HistoryMessage } from "../src/port/port";
+import type { AgentPort, Appearance, HistoryMessage } from "../src/port/port";
 import type { RuntimeView } from "../src/port/hub";
 import type { WireEvent } from "../src/port/wire";
+
+// Saves are coalesced (src/ui/trailing.ts), and a fixture answers too fast for
+// that to show: coalesced and not look identical at zero latency. Counting the
+// writes needs a round trip with some length to it.
+const saves: Appearance[] = [];
+let saveLag = 0;
+let inFlight = 0;
+let peakInFlight = 0;
 
 // A port whose event stream the driver owns outright: the fixture's scripted
 // beats never reach the UI, so a measurement times exactly the frames it fed.
 class BenchPort extends MockPort {
   private readonly subs = new Set<(e: WireEvent) => void>();
+
+  async saveAppearance(look: Appearance) {
+    saves.push(look);
+    inFlight++;
+    peakInFlight = Math.max(peakInFlight, inFlight);
+    try {
+      if (saveLag) await new Promise((r) => setTimeout(r, saveLag));
+      return await super.saveAppearance(look);
+    } finally {
+      inFlight--;
+    }
+  }
 
   // The opening sequence and the key prompt are scenes, not the session: a
   // measurement has to start on the workbench itself.
@@ -112,6 +133,10 @@ class BenchHub extends MockHub {
 
 // 与 main.tsx 同一条路：语言在第一帧之前定下来。
 bootLang();
+// main.tsx 在挂 App 之前也调这一句。台架挂的是 App，却漏了 App 依赖的这段入口
+// 接线，于是 data-fold 永远是空的：窄屏收拢从来没在这里发生过，而 panels 那两条
+// 断言量的正是它 —— 守卫红了两年，红的是台架缺一行。
+trackWidth();
 
 const hub = new BenchHub();
 // No StrictMode: its double render is the thing under measurement here.
@@ -126,10 +151,19 @@ declare global {
     // What folding a stored transcript into cards costs on its own, with no
     // frame in it: the step between the read answering and the first paint.
     __foldCost: () => number;
+    // Give each save a round trip and reset the tally. 0 turns it off.
+    __saveLag: (ms: number) => void;
+    __saves: () => { count: number; peak: number; last: Appearance | null };
   }
 }
 window.__feed = (ev) => hub.feeds.forEach((p) => p.feed(ev));
 window.__panes = () => hub.feeds.size;
+window.__saveLag = (ms) => {
+  saveLag = ms;
+  saves.length = 0;
+  peakInFlight = 0;
+};
+window.__saves = () => ({ count: saves.length, peak: peakInFlight, last: saves[saves.length - 1] ?? null });
 window.__foldCost = () => {
   const msgs = storedHistory();
   fromHistory(msgs.slice(0, 60));

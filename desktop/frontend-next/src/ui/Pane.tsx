@@ -13,12 +13,15 @@ import { initialGraph, reduceGraph } from "../state/graph";
 import { Transcript } from "./Transcript";
 import { Trajectory } from "./Trajectory";
 import { Graph } from "./Graph";
+import { Timeline } from "./Timeline";
 import { Composer } from "./Composer";
 import { Queue } from "./Queue";
-import { RunStrip } from "./RunStrip";
 import { SlottedView } from "./SlottedView";
+import { Task } from "./Task";
+import type { PlanAction } from "./cards/ApprovalCard";
 import { key as slotKey, placement } from "./slots";
 import { Metrics } from "./Metrics";
+import { railOf } from "./panels/derive";
 import { arrowTabs } from "./tablist";
 import { swapping } from "./swap";
 import { useMarker } from "./marker";
@@ -75,7 +78,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [traj, trajDispatch] = useReducer(reduceTraj, initialTraj);
   const [graph, graphDispatch] = useReducer(reduceGraph, initialGraph);
   const [status, setStatus] = useState<SessionStatus | null>(null);
-  const [tab, setTab] = useState<"flow" | "traj" | "graph">("flow");
+  const [tab, setTab] = useState<"flow" | "line" | "traj" | "graph" | "task">("flow");
   const [pinned, setPinned] = useState(true);
   const [jump, setJump] = useState(0);
   // What the run graph asked to be shown. The counter is the request, not the
@@ -83,6 +86,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const [focus, setFocus] = useState<{ call: string; n: number } | null>(null);
   const [mcp, setMcp] = useState<McpEntry[]>([]);
   const [elapsed, setElapsed] = useState(0);
+  const [askFocus, setAskFocus] = useState(0);
   const [tps, setTps] = useState(0);
   const [tree, setTree] = useState<WorkspaceChanges | null>(null);
   const [ctx, setCtx] = useState<ContextBreakdown | null>(null);
@@ -222,6 +226,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // `s.revision` is the narrower truth. Same for the rail's two panels below.
   /* eslint-disable react-hooks/exhaustive-deps */
   const paired = useMemo(() => pairCheckpoints(s.items, checkpoints), [s.revision, checkpoints]);
+  const rail = useMemo(() => railOf(s.items), [s.revision]);
   const counts = useMemo(() => {
     let steps = 0;
     let steer = 0;
@@ -230,6 +235,15 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       else if (i.t === "user" && i.pending) steer++;
     }
     return { steps, steer };
+  }, [s.revision]);
+  // The ask the task view heads itself with: the latest thing you actually sent,
+  // not a queued line the kernel has not been given yet.
+  const ask = useMemo(() => {
+    for (let i = s.items.length - 1; i >= 0; i--) {
+      const it = s.items[i];
+      if (it.t === "user" && !it.pending) return it.text;
+    }
+    return "";
   }, [s.revision]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
@@ -407,6 +421,27 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     [port, refreshStatus, fail],
   );
 
+  // The plan gate has three outcomes the kernel keeps apart, and only one of
+  // them is "allow". The other two both deny at the gate and differ in where
+  // they leave you: revise stays in plan mode so the next thing you type is
+  // feedback on the plan, exit leaves it. Leaving plan mode is the frontend's
+  // job — the kernel does not clear the flag when a plan is approved, which is
+  // why the chat TUI clears it here too. Studio never did, so approving a plan
+  // executed it and then planned the next turn all over again.
+  const onPlan = useCallback(
+    (itemId: string, id: string, action: PlanAction) => {
+      dispatch({ kind: "__decided", id: itemId, verdict: action } as never);
+      port
+        .approve(id, action === "start" ? "once" : "deny")
+        .then(() => (action === "revise" ? undefined : port.setPlanMode(false)))
+        .then(refreshStatus)
+        .catch(fail);
+      // Revising is done by talking, so put the cursor where the talking happens.
+      if (action === "revise") setAskFocus((n) => n + 1);
+    },
+    [port, refreshStatus, fail],
+  );
+
   // Taking it back is only cheap while the conversation that caused it is still
   // on screen; the card stays, marked, so the record of what happened survives.
   const onForget = useCallback(
@@ -445,6 +480,26 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     [port, fail],
   );
 
+  // Both graph views hand back the same gesture — show me the call behind this
+  // node — and it is two commits' worth of work in one: the view transition
+  // defers what it is given, so asking for the call before the tab switch would
+  // spend the request on a pane that is still off screen.
+  const toCall = useCallback(
+    (call: string) =>
+      swapping(() => {
+        setTab("flow");
+        setFocus((was) => ({ call, n: (was?.n ?? 0) + 1 }));
+      }, "tab"),
+    [],
+  );
+
+  // The timeline's tab is drawn only while the run has a graph, so a session
+  // that delegated nothing is not offered an empty page. Leaving someone parked
+  // on a tab that just lost its button is the other half of that.
+  useEffect(() => {
+    if (tab === "line" && graph.nodes.length === 0) setTab("flow");
+  }, [tab, graph.nodes.length]);
+
   // Where the bottom is moves as blocks mount under it, so this only asks the
   // transcript to follow again and lets it scroll itself into place.
   const toLatest = () => setJump((n) => n + 1);
@@ -476,11 +531,19 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         <button className="tab" role="tab" aria-selected={tab === "flow"} onClick={() => swapping(() => setTab("flow"), "tab")}>
           {t("活动")}<span className="n">{s.items.length}</span>
         </button>
+        {graph.nodes.length > 0 && (
+          <button className="tab" role="tab" aria-selected={tab === "line"} onClick={() => swapping(() => setTab("line"), "tab")}>
+            {t("时间线")}<span className="n">{graph.nodes.length}</span>
+          </button>
+        )}
         <button className="tab" role="tab" aria-selected={tab === "traj"} onClick={() => swapping(() => setTab("traj"), "tab")}>
           {t("轨迹")}<span className="n">{traj.rows.length}</span>
         </button>
         <button className="tab" role="tab" aria-selected={tab === "graph"} onClick={() => swapping(() => setTab("graph"), "tab")}>
           {t("图")}{graph.nodes.length > 0 && <span className="n">{graph.nodes.length}</span>}
+        </button>
+                <button className="tab" role="tab" aria-selected={tab === "task"} onClick={() => swapping(() => setTab("task"), "tab")}>
+          {t("任务")}{s.plan.length > 0 && <span className="n">{s.plan.filter((x) => x.done).length}/{s.plan.length}</span>}
         </button>
         {tabMark && <i className="tabmark" style={{ width: tabMark.len, transform: `translateX(${tabMark.at}px)` }} />}
       </div>
@@ -497,6 +560,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         focus={focus}
         onSuggest={submit}
         onApprove={onApprove}
+        onPlan={onPlan}
         onAnswer={onAnswer}
         onForget={onForget}
         onCancelQueued={onCancelQueued}
@@ -516,6 +580,10 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       {/* Mounted only while it is the tab on screen. Hiding it with an
           attribute left every row of it being rebuilt on each streamed
           delta — a second transcript's worth of work, drawn for nobody. */}
+      <div className="scroll" data-pane="line" hidden={tab !== "line"}>
+        {tab === "line" && <Timeline graph={graph} items={s.items} onOpen={toCall} />}
+      </div>
+
       <div className="scroll" data-pane="traj" hidden={tab !== "traj"}>
         {tab === "traj" && <Trajectory rows={traj.rows} onSave={(n, c) => port.saveText(n, c)} />}
       </div>
@@ -525,15 +593,28 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           <Graph
             graph={graph}
             items={s.items}
-            // Both in one commit: the view transition defers what it is given,
-            // so asking for the call before the tab switch would spend the
-            // request on a pane that is still off screen.
-            onOpen={(call) =>
-              swapping(() => {
-                setTab("flow");
-                setFocus((was) => ({ call, n: (was?.n ?? 0) + 1 }));
-              }, "tab")
-            }
+            onOpen={toCall}
+          />
+        )}
+      </div>
+
+      <div className="scroll" data-pane="task" hidden={tab !== "task"}>
+        {tab === "task" && (
+          <Task
+            goal={status?.goal ?? ""}
+            ask={ask}
+            plan={s.plan}
+            rows={traj.rows}
+            t0={traj.t0}
+            running={s.running}
+            blocked={blocked}
+            elapsed={elapsed}
+            onTrajectory={() => swapping(() => setTab("traj"), "tab")}
+            onLatest={() => {
+              swapping(() => setTab("flow"), "tab");
+              toLatest();
+            }}
+            onSummary={() => submit(t("汇总当前进度与潜在风险，并列出接下来三步"))}
           />
         )}
       </div>
@@ -545,7 +626,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         <span className="glowring" aria-hidden="true">
           <i />
         </span>
-        <RunStrip doing={s.doing} metrics={s.metrics} steps={counts.steps} elapsed={elapsed} />
         {/* What was said and not yet read. It sits above the composer for the
             same reason the extension rail does: the input box is the one thing
             nothing else may push off the screen. */}
@@ -575,7 +655,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             ))}
           </div>
         )}
-        <Composer port={port} status={status} running={s.running && !blocked} onSubmit={submit} onChanged={refreshStatus} onError={fail} />
+        <Composer port={port} status={status} running={s.running && !blocked} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} />
         {s.error && (
           <div className="errbar" role="alert">
             <span>{s.error}</span>
@@ -599,10 +679,11 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         sideHost &&
         createPortal(
           <Metrics
+            port={port}
             metrics={s.metrics}
-            plan={s.plan}
-            items={s.items}
-            revision={s.revision}
+            tasks={rail.tasks}
+            changes={rail.changes}
+            stats={rail.stats}
             jobs={status?.jobs ?? NO_JOBS}
             mcp={mcp}
             rate={tps}

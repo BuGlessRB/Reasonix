@@ -124,7 +124,10 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
 
   return (
     <div className="rmts">
-      <div className="rmtcap">{t("远程")}</div>
+      <div className="rmtcap">
+        {t("远程")}
+        <span className="c">{hosts.length}</span>
+      </div>
       {hosts.map((host) => {
         // Panes on this machine, which is also what makes the connection worth
         // holding: the link goes down with the last of them.
@@ -135,13 +138,22 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
         const hint = note(host);
         return (
           <div className="rmt" key={host.name} data-state={host.status}>
-            <div className="rmthead" title={host.target} role="treeitem" aria-expanded={!folded}>
-              <button className="twist" onClick={() => fold(host.name)} aria-label={t(folded ? "展开" : "收起")}>
-                {folded ? "▸" : "▾"}
+            <div
+              className="rmthead"
+              title={host.target}
+              role="treeitem"
+              aria-expanded={!folded}
+              onClick={() => fold(host.name)}
+            >
+              <button className="twist" tabIndex={-1} aria-hidden="true">
+                <svg viewBox="0 0 10 10">
+                  <path d="M3.4 1.6 6.8 5 3.4 8.4" />
+                </svg>
               </button>
               <i className="rmtpip" aria-hidden="true" />
               <span className="rmtname">{host.name}</span>
-              <span className="rmttarget">{host.target}</span>
+              <span className="rmttarget" dir="ltr">{host.target}</span>
+              <span className="rmtsub">{note(host) || t("{n} 会话", { n: panes.length })}</span>
             </div>
             {hint && !folded ? <div className="rmtnote">{hint}</div> : null}
             {working && host.step && !folded ? <Steps step={host.step} detail={host.detail} /> : null}
@@ -156,30 +168,42 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
                   const folded = shut.has(key);
                   return (
                     <div key={key} className="rmtws-node">
-                      <div className="rmtwsrow" role="treeitem" aria-expanded={!folded}>
-                        <button className="twist" onClick={() => fold(key)} aria-label={t(folded ? "展开" : "收起")}>
-                          {folded ? "▸" : "▾"}
+                      <div
+                        className="wsrow rmtwsrow"
+                        role="treeitem"
+                        aria-expanded={!folded}
+                        onClick={() => fold(key)}
+                      >
+                        <button className="twist" tabIndex={-1} aria-hidden="true">
+                          <svg viewBox="0 0 10 10">
+                            <path d="M3.4 1.6 6.8 5 3.4 8.4" />
+                          </svg>
                         </button>
+                        <i className="wsdot" aria-hidden="true" />
                         <span className="wsname" title={ws.root} dir="ltr">
                           {ws.name}
                         </span>
-                        <span className="wscount">{ws.sessions.length}</span>
-                      </div>
-                      {!folded && (
-                        <>
+                        <span className="wsmeta">{t("{n} 会话", { n: ws.sessions.length })}</span>
+                        <span className="wsacts">
                           <button
-                            className="rmtopen"
+                            className="wsadd"
                             data-busy={busy === host.name + ws.root ? "" : undefined}
                             disabled={!!busy}
-                            onClick={() => void open(host, ws.root)}
+                            title={t("在 {name} 下开一个新会话", { name: ws.name })}
+                            aria-label={t("在 {name} 下开一个新会话", { name: ws.name })}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              void open(host, ws.root);
+                            }}
                           >
-                            <span className="plus" aria-hidden="true">
-                              <svg viewBox="0 0 16 16">
-                                <path d="M8 3.7v8.6M3.7 8h8.6" />
-                              </svg>
-                            </span>
-                            <span className="rmtws">{t("新会话")}</span>
+                            <svg viewBox="0 0 16 16" aria-hidden="true">
+                              <path d="M8 3.7v8.6M3.7 8h8.6" />
+                            </svg>
                           </button>
+                        </span>
+                      </div>
+                      {!folded && (
+                        <div className="kids">
                           {(whole.has(key) ? ws.sessions : ws.sessions.slice(0, SHOWN)).map((session) => {
                             // A conversation this window already drives is a
                             // pane to focus, never a second writer for one file.
@@ -197,7 +221,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
                               >
                                 <i className="pip" />
                                 <span className="sesstitle">{session.title || session.name}</span>
-                                {session.turns ? <span className="sessmeta">{session.turns}</span> : null}
+                                <span className="sessmeta">{session.turns ? t("{n} 轮", { n: session.turns }) : t("空会话")}</span>
                               </div>
                             );
                           })}
@@ -215,7 +239,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, onErro
                               {t("还有 {n} 个 · 全部显示", { n: ws.sessions.length - SHOWN })}
                             </button>
                           )}
-                        </>
+                        </div>
                       )}
                     </div>
                   );

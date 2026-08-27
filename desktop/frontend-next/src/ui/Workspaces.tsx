@@ -1,7 +1,8 @@
-import { Fragment, memo, useState } from "react";
+import { Fragment, memo, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { HubPort, RuntimeView, TreeSession, TreeWorkspace } from "../port/hub";
 import type { Adder } from "./addws";
+import { chord } from "./keys";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
 
@@ -36,6 +37,19 @@ const SHOWN = 30;
 function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, onOpen, onFocus, onClose, liveIds, onRename, onError, adder }: Props) {
   const [busy, setBusy] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [q, setQ] = useState("");
+  const find = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "k" || !(ev.metaKey || ev.ctrlKey)) return;
+      ev.preventDefault();
+      find.current?.focus();
+      find.current?.select();
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, []);
   // Renaming is a pencil, not a double-click: a single click already opens the
   // session, so a double one would open it twice on the way to the edit.
   const [editing, setEditing] = useState("");
@@ -118,6 +132,19 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
     }
   };
 
+  // Filtering is client-side because the tree is already here: the kernel has no
+  // search route, and a round trip to re-derive what the window is holding would
+  // be slower than the typing. A hit on the folder keeps all of its sessions.
+  const hit = (ws: TreeWorkspace) => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return ws;
+    const named = (x: TreeSession) => (x.title || x.name || "").toLowerCase().includes(needle);
+    if (ws.name.toLowerCase().includes(needle)) return ws;
+    const sessions = ws.sessions.filter(named);
+    return sessions.length ? { ...ws, sessions } : null;
+  };
+  const shownTree = q.trim() ? (tree.map(hit).filter(Boolean) as TreeWorkspace[]) : tree;
+
   return (
     <>
       <div className="rail-hd">
@@ -137,6 +164,24 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
         </button>
       </div>
 
+      <div className="wsfind">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M7.2 3.1a4.1 4.1 0 1 0 0 8.2 4.1 4.1 0 0 0 0-8.2M10.3 10.3 13 13" />
+        </svg>
+        <input
+          ref={find}
+          value={q}
+          onChange={(ev) => setQ(ev.target.value)}
+          onKeyDown={(ev) => ev.key === "Escape" && setQ("")}
+          placeholder={t("搜索会话 / 项目")}
+          aria-label={t("搜索会话 / 项目")}
+        />
+        <kbd hidden={!!q}>{chord("K")}</kbd>
+        <button className="clr" hidden={!q} onClick={() => setQ("")} aria-label={t("清空")}>
+          ×
+        </button>
+      </div>
+
       {adder.typing === "rail" && (
         <form
           className="addpath"
@@ -153,8 +198,10 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
 
       <div className="scroll">
         <div role="tree" aria-label={t("工作区与会话")}>
-          {tree.map((ws) => {
-            const shut = folded.has(ws.root);
+          {shownTree.map((ws) => {
+            // A fold is a resting-state preference; while a query is on it would hide
+            // the very rows the query just found.
+            const shut = q.trim() ? false : folded.has(ws.root);
             // Only while the question is on screen: panesOf walks every runtime.
             const doomed = confirm === ws.root ? panesOf(ws.root) : [];
             const busyPanes = liveIds(doomed).length;
@@ -170,50 +217,66 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                     onCancel={() => setConfirm("")}
                   />
                 ) : (
-                  <div className="wsrow" role="treeitem" aria-expanded={!shut} data-open={ws.open ? "" : undefined}>
-                    <button className="twist" onClick={() => onFold(ws.root, !shut)} aria-label={t(shut ? "展开" : "收起")}>
-                      {shut ? "▸" : "▾"}
+                  <div
+                    className="wsrow"
+                    role="treeitem"
+                    aria-expanded={!shut}
+                    data-open={ws.open ? "" : undefined}
+                    onClick={() => onFold(ws.root, !shut)}
+                  >
+                    <button className="twist" tabIndex={-1} aria-hidden="true">
+                      <svg viewBox="0 0 10 10">
+                        <path d="M3.4 1.6 6.8 5 3.4 8.4" />
+                      </svg>
                     </button>
+                    <i className="wsdot" aria-hidden="true" />
                     <span className="wsname" title={ws.root}>
                       {ws.name}
                     </span>
-                    {(ws.isolated || twice.has(ws.name)) && (
-                      <span className="wstag">{ws.isolated ? t("隔离") : parentOf(ws.root)}</span>
-                    )}
-                    <span className="wscount">{ws.sessions.length}</span>
-                    <button
-                      className="wsdel"
-                      title={t("从列表移除（不删除任何文件）")}
-                      aria-label={t("从列表移除")}
-                      onClick={() => setConfirm(ws.root)}
-                    >
-                      ×
-                    </button>
+                    {/* 第二行是这个项目的身份，不是它的动作。名字于是拿到整行宽——
+                        在 214px 的栏里，名字、标签、计数、删除挤在一行，被截的总是名字。 */}
+                    <span className="wsmeta">
+                      {(ws.isolated || twice.has(ws.name)) && (
+                        <em className="wstag">{ws.isolated ? t("隔离") : parentOf(ws.root)}</em>
+                      )}
+                      {t("{n} 会话", { n: ws.sessions.length })}
+                    </span>
+                    <span className="wsacts">
+                      <button
+                        className="wsadd"
+                        data-busy={busy === "new:" + ws.root ? "" : undefined}
+                        disabled={full || ws.missing}
+                        title={full ? t("最多同时开 {n} 个面板，先关掉一个", { n: maxPanes }) : t("在 {name} 下开一个新会话", { name: ws.name })}
+                        aria-label={t("在 {name} 下开一个新会话", { name: ws.name })}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          void startSession(ws);
+                        }}
+                      >
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                          <path d="M8 3.7v8.6M3.7 8h8.6" />
+                        </svg>
+                      </button>
+                      <button
+                        className="wsdel"
+                        title={t("从列表移除（不删除任何文件）")}
+                        aria-label={t("从列表移除")}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          setConfirm(ws.root);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
                   </div>
                 )}
 
-                {/* First inside the branch, not last: a folder with thirty
-                    conversations would otherwise hide this below a scroll, and
-                    it reads with the list, which is newest-first anyway. */}
+                {/* 子项自己成一块，才能拿到那条层级引导线。缩进单独说不清楚层级：
+                    两级差 18px，扫一眼只读得出“有点错位”。 */}
                 {!shut && (
-                  <button
-                    className="newsess"
-                    data-busy={busy === "new:" + ws.root ? "" : undefined}
-                    disabled={full || ws.missing}
-                    title={full ? t("最多同时开 {n} 个面板，先关掉一个", { n: maxPanes }) : t("在 {name} 下开一个新会话", { name: ws.name })}
-                    onClick={() => void startSession(ws)}
-                  >
-                    <span className="plus" aria-hidden="true">
-                      <svg viewBox="0 0 16 16">
-                        <path d="M8 3.7v8.6M3.7 8h8.6" />
-                      </svg>
-                    </span>
-                    {t("新会话")}
-                  </button>
-                )}
-
-                {!shut &&
-                  (whole.has(ws.root) ? ws.sessions : ws.sessions.slice(0, SHOWN)).map((session) => {
+                  <div className="kids">
+                {(whole.has(ws.root) ? ws.sessions : ws.sessions.slice(0, SHOWN)).map((session) => {
                     const on = session.runtimeId === active;
                     if (confirm === session.path) {
                       return (
@@ -350,7 +413,7 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                     );
                   })}
 
-                {!shut && !whole.has(ws.root) && ws.sessions.length > SHOWN && (
+                {!whole.has(ws.root) && ws.sessions.length > SHOWN && (
                   <button
                     className="sessmore"
                     onClick={() => setWhole((prev) => new Set(prev).add(ws.root))}
@@ -358,9 +421,12 @@ function WorkspacesView({ hub, tree, runtimes, active, folded, reload, onFold, o
                     {t("还有 {n} 个 · 全部显示", { n: ws.sessions.length - SHOWN })}
                   </button>
                 )}
+                  </div>
+                )}
               </div>
             );
           })}
+          {tree.length > 0 && shownTree.length === 0 && <div className="ws-empty">{t("没有匹配的会话")}</div>}
           {tree.length === 0 && <div className="ws-empty">{t("还没有文件夹")}</div>}
         </div>
       </div>

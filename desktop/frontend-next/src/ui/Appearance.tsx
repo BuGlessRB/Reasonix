@@ -73,6 +73,40 @@ const CONTRASTS: [string, string, string][] = [
 const at = (v: number, min: number, max: number) =>
   ({ "--at": `${Math.round(((v - min) / (max - min)) * 100)}%` }) as React.CSSProperties;
 
+/** useCrop answers which focal axis has room to move. A `cover` picture wider
+ *  than its box is cropped left and right and nowhere else, so the other axis
+ *  cannot move a pixel however far its slider is dragged. It measures the
+ *  preview, which is drawn at the window's shape, rather than assuming one.
+ *  Both axes count as free until the image decodes: never disable on a guess. */
+function useCrop(url: string | undefined, box: HTMLElement | null) {
+  const [image, setImage] = useState(0);
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    setImage(0);
+    if (!url) return;
+    const img = new Image();
+    img.onload = () => setImage(img.naturalHeight ? img.naturalWidth / img.naturalHeight : 0);
+    img.src = url;
+    return () => {
+      img.onload = null;
+    };
+  }, [url]);
+
+  useEffect(() => {
+    if (!box) return;
+    const read = () => setFrame(box.clientHeight ? box.clientWidth / box.clientHeight : 0);
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [box]);
+
+  // Ratios a pixel apart leave no room either way, hence the 1% of slack.
+  const known = image > 0 && frame > 0;
+  return { known, x: !known || image > frame * 1.01, y: !known || image < frame / 1.01 };
+}
+
 export function Appearance({ port, theme, onTheme, contrast, onContrast, weight, onWeight, reloadThemes, look, onLook }: Props) {
   const [packs, setPacks] = useState<ThemePack[]>([]);
   // null in a browser tab, where there is no window to keep running and no
@@ -156,6 +190,9 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
   const dropPaper = useCallback(() => {
     void port.clearWallpaper().then(() => onLook({ ...look, wallpaper: undefined })).catch(() => {});
   }, [port, look, onLook]);
+
+  const [view, setView] = useState<HTMLDivElement | null>(null);
+  const crop = useCrop(look.wallpaper?.url, view);
 
   // Only families this machine can really draw with, asked of the font system
   // rather than assumed per platform.
@@ -340,12 +377,13 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
               <span className="t">{failed}</span>
             </div>
           )}
-          {/* 设置这一层是不透明的（正文密集，透出图就读不清了），所以调浓度、
-              压暗、焦点时看不见效果。预览按主界面同一套合成：图片一层，页面色
-              一层压在上面，浓度不到位时压暗也跟着弱下去。 */}
+          {/* Composited the way the window is: the picture, then page colour
+              over it. The scrim fades out with the strength, or a picture
+              turned down to nothing would still be sitting under a dark wash. */}
           {look.wallpaper && (
             <div
               className="paperview"
+              ref={setView}
               style={{
                 backgroundImage: `url("${look.wallpaper.url}")`,
                 backgroundPosition: `${Math.round(look.wallpaper.focusX * 100)}% ${Math.round(look.wallpaper.focusY * 100)}%`,
@@ -357,7 +395,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
           )}
           {look.wallpaper && (
             <>
-              <div className="prow">
+              <label className="prow">
                 <span className="tx">{t("浓度")}</span>
                 <input
                   className="slider"
@@ -369,9 +407,9 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
                   value={look.wallpaper.opacity}
                   onChange={(e) => setPaper({ opacity: Number(e.target.value) })}
                 />
-                <span className="now">{Math.round(look.wallpaper.opacity * 100)}%</span>
-              </div>
-              <div className="prow">
+                <span className="now">{pct(look.wallpaper.opacity)}</span>
+              </label>
+              <label className="prow">
                 <span className="tx">{t("压暗")}</span>
                 <input
                   className="slider"
@@ -383,11 +421,10 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
                   value={look.wallpaper.dim}
                   onChange={(e) => setPaper({ dim: Number(e.target.value) })}
                 />
-                <span className="now">{Math.round(look.wallpaper.dim * 100)}%</span>
-              </div>
-              {/* 竖构图在宽窗口里会被裁掉主体，所以焦点是图片自己的，不是窗口的 */}
-              <div className="prow">
-                <span className="tx">{t("焦点")}</span>
+                <span className="now">{pct(look.wallpaper.dim)}</span>
+              </label>
+              <label className="prow" data-idle={crop.x ? undefined : ""}>
+                <span className="tx">{t("横向焦点")}</span>
                 <input
                   className="slider"
                   style={at(look.wallpaper.focusX, 0, 1)}
@@ -396,9 +433,13 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
                   max={1}
                   step={0.05}
                   value={look.wallpaper.focusX}
+                  disabled={!crop.x}
                   onChange={(e) => setPaper({ focusX: Number(e.target.value) })}
-                  aria-label={t("横向焦点")}
                 />
+                <span className="now">{pct(look.wallpaper.focusX)}</span>
+              </label>
+              <label className="prow" data-idle={crop.y ? undefined : ""}>
+                <span className="tx">{t("纵向焦点")}</span>
                 <input
                   className="slider"
                   style={at(look.wallpaper.focusY, 0, 1)}
@@ -407,10 +448,20 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
                   max={1}
                   step={0.05}
                   value={look.wallpaper.focusY}
+                  disabled={!crop.y}
                   onChange={(e) => setPaper({ focusY: Number(e.target.value) })}
-                  aria-label={t("纵向焦点")}
                 />
-              </div>
+                <span className="now">{pct(look.wallpaper.focusY)}</span>
+              </label>
+              {crop.known && !(crop.x && crop.y) && (
+                <p className="note">
+                  {crop.x
+                    ? t("这张图在这个窗口里只有左右会被裁掉，上下正好填满 —— 纵向那一档没有余量可移。")
+                    : crop.y
+                      ? t("这张图在这个窗口里只有上下会被裁掉，左右正好填满 —— 横向那一档没有余量可移。")
+                      : t("这张图和窗口是一样的宽高比，四边都没有裁掉 —— 窗口换个形状，焦点才有得移。")}
+                </p>
+              )}
             </>
           )}
         </div>

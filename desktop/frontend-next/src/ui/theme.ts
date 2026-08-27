@@ -37,15 +37,20 @@ const RESERVED = ["--ok", "--warn", "--err", "--net", "--deleg", "--add", "--del
 // pack never lands half-applied — an image over the previous palette.
 const IMAGE_VARS = ["--bg-image", "--bg-x", "--bg-y", "--bg-alpha", "--bg-overlay"];
 
+// The live backdrop's tints. Cleared with the image vars for the same reason:
+// a pack must never land half-applied.
+const SKY_VARS = ["--ray", "--ray-a", "--cloud-a", "--cloud-hi", "--cloud-gilt"];
+
 /** apply paints a pack onto the document, or clears back to the stylesheet.
  *  `busy` dims the picture while a turn runs: a photo that is right behind an
  *  idle window is in the way of a transcript being read. */
 export function apply(pack: ThemePack | null, scheme: "light" | "dark", busy = false) {
   const root = document.documentElement;
-  for (const v of IMAGE_VARS) root.style.removeProperty(v);
+  for (const v of [...IMAGE_VARS, ...SKY_VARS]) root.style.removeProperty(v);
   // The flag is what lets the page surface go transparent. It is removed first
   // so a pack without a picture never leaves the previous one's window open.
   delete root.dataset.bg;
+  delete root.dataset.sky;
   for (const vars of Object.values(SURFACE)) {
     for (const v of vars) root.style.removeProperty(v);
   }
@@ -61,6 +66,24 @@ export function apply(pack: ThemePack | null, scheme: "light" | "dark", busy = f
   // move them too or the tinted backgrounds keep pointing at the old hue.
   if (tokens.accent) {
     root.style.setProperty("--accent-wash", `color-mix(in srgb, ${tokens.accent} 12%, ${tokens.bg ?? "transparent"})`);
+  }
+
+  // The sky is drawn rather than placed, so it is independent of the picture:
+  // a pack can have either, both, or neither.
+  const sky = pack.sky;
+  if (sky) {
+    if (sky.ray) root.style.setProperty("--ray", sky.ray);
+    if (sky.cloud) root.style.setProperty("--cloud-hi", sky.cloud);
+    if (sky.cloudLit) root.style.setProperty("--cloud-gilt", sky.cloudLit);
+    root.style.setProperty("--ray-a", String(sky.rayAlpha));
+    root.style.setProperty("--cloud-a", String(sky.cloudAlpha));
+    root.dataset.sky = "on";
+    // data-bg is what every "let it through" rule is keyed on — the panels
+    // frost, the middle column steps aside, the text starts carrying its own
+    // shadow. Those rules are about there being something behind the window,
+    // not about it being a photograph, and a sky needs every one of them: the
+    // rail, the side and the panes together cover the whole window otherwise.
+    root.dataset.bg = "on";
   }
 
   const bg = pack.background;

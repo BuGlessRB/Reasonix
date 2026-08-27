@@ -27,12 +27,26 @@ const subs = new Set<(folds: string) => void>();
  *  window resizing and the zoom setting — and each calls this rather than
  *  keeping its own copy of the thresholds. */
 export function refresh() {
+  publishShape();
   const now = foldsAt(document.body.clientWidth);
   // Only on a real change: writing the attribute is a style invalidation, and an
   // unconditional write inside the observer is how a resize loop starts.
   if (document.documentElement.dataset.fold === now) return;
   document.documentElement.dataset.fold = now;
   subs.forEach((fn) => fn(now));
+}
+
+// The window's shape, not its size: anything drawn *in* the window rather than
+// beside it has to be laid out at this ratio or it shows something else. A
+// `cover` background only leaves a focal point room on the axis that overflows,
+// so a preview at any other ratio moves along the wrong axis — see .paperview.
+// Zoom cancels out of a ratio, which is why this reads the viewport directly.
+function publishShape() {
+  if (!innerHeight) return;
+  const ar = String(Math.round((innerWidth / innerHeight) * 1000) / 1000);
+  const style = document.documentElement.style;
+  if (style.getPropertyValue("--win-ar") === ar) return;
+  style.setProperty("--win-ar", ar);
 }
 
 /** onFolds reports a change in what the layout has given up. A column that folds
