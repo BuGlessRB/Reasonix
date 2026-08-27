@@ -78,5 +78,8 @@ site/.generated/
 # Committed pointer at REASONIX.md; overrides a global CLAUDE.md ignore rule.
 !/CLAUDE.md
 
-# Go build output left in the tree by `go build ./tools/...`.
+# Go build output left in the tree by `go build ./tools/...`. The ~ form is
+# what a linker leaves behind when it cannot replace a binary that is still
+# running, which on Windows is every rebuild while Studio is open.
 *.exe
+*.exe~

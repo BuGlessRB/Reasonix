@@ -66,6 +66,19 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
+// requireSymlinks skips unless this machine lets an ordinary process create a
+// symlink. Only the filesystem knows: on Windows the answer turns on Developer
+// Mode and elevation, which runtime.GOOS cannot see. The cases that build their
+// own link skip on the error from creating it; this is the same read for a case
+// whose link is made inside the product.
+func requireSymlinks(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Symlink(filepath.Join(dir, "target"), filepath.Join(dir, "link")); err != nil {
+		t.Skipf("symlinks unavailable on this machine: %v", err)
+	}
+}
+
 func registeredRoots(actions []action) []string {
 	var roots []string
 	for _, a := range actions {
@@ -401,6 +414,10 @@ func TestApplyLocalSKILLFileCopiesSiblingResources(t *testing.T) {
 }
 
 func TestApplyLocalSkillLinkMode(t *testing.T) {
+	// Asked before the product is called, not after. The check used to sit
+	// below the assertion on resp.OK, so a machine that cannot make the link
+	// failed on the refusal the tool correctly reported instead of skipping.
+	requireSymlinks(t)
 	project := t.TempDir()
 	home := t.TempDir()
 	src := filepath.Join(project, "local-skills", "gamma.md")
@@ -417,9 +434,6 @@ func TestApplyLocalSkillLinkMode(t *testing.T) {
 
 	if !resp.OK {
 		t.Fatalf("response = %+v", resp)
-	}
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink semantics differ on Windows")
 	}
 	if resp.Actions[0].Action != "link_skill" {
 		t.Fatalf("action = %q, want link_skill", resp.Actions[0].Action)
