@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net"
 	"testing"
+
+	"reasonix/internal/testenv"
 	"time"
 )
 
@@ -75,6 +77,11 @@ func (noDeadlineConn) SetDeadline(time.Time) error      { return errors.New("uns
 func (noDeadlineConn) SetReadDeadline(time.Time) error  { return errors.New("unsupported") }
 func (noDeadlineConn) SetWriteDeadline(time.Time) error { return errors.New("unsupported") }
 
+// The 40ms context is the subject — the handshake must honour a deadline it
+// cannot install on the socket — so only the watchdog scales with the runner.
+// A race stands: a slow enough runner expires that context before the
+// SetDeadline branch is reached. Closing it needs noDeadlineConn to report
+// that call, and a context still carrying a real deadline production reads.
 func TestSSHHandshakeHonorsContextWhenDeadlinesUnsupported(t *testing.T) {
 	client, server := net.Pipe()
 	defer client.Close()
@@ -93,7 +100,7 @@ func TestSSHHandshakeHonorsContextWhenDeadlinesUnsupported(t *testing.T) {
 		if err == nil {
 			t.Fatal("banner-less handshake unexpectedly succeeded")
 		}
-	case <-time.After(500 * time.Millisecond):
+	case <-time.After(testenv.Budget(t)):
 		t.Fatal("handshake outlived its context on a ProxyJump-style connection")
 	}
 }

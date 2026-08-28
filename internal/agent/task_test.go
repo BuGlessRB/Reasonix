@@ -92,7 +92,8 @@ func TestTaskToolInjectsWorkspaceContextIntoSubagentPrompt(t *testing.T) {
 }
 
 func TestTaskToolCancelDuringStuckProviderReturnsPromptly(t *testing.T) {
-	task := newTestTaskTool(t, stuckStreamProvider{}, tool.NewRegistry(), "sys", "", "", nil)
+	prov := newConsumingStreamProvider()
+	task := newTestTaskTool(t, prov, tool.NewRegistry(), "sys", "", "", nil)
 
 	ctx, cancel := context.WithCancel(testTaskContext())
 	done := make(chan error, 1)
@@ -101,7 +102,14 @@ func TestTaskToolCancelDuringStuckProviderReturnsPromptly(t *testing.T) {
 		done <- err
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	// Cancel once the run has actually consumed a chunk, not once a sleep has
+	// elapsed: the subject is a cancellation that arrives while the run waits
+	// on the next message, and only this ordering guarantees it does.
+	select {
+	case <-prov.consumed:
+	case <-time.After(testenv.Budget(t)):
+		t.Fatal("the run never consumed the first chunk, so cancellation was never put to the stream loop")
+	}
 	cancel()
 
 	select {
@@ -112,7 +120,7 @@ func TestTaskToolCancelDuringStuckProviderReturnsPromptly(t *testing.T) {
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("Execute error = %v, want context cancellation", err)
 		}
-	case <-time.After(500 * time.Millisecond):
+	case <-time.After(testenv.Budget(t)):
 		t.Fatal("TaskTool.Execute did not return promptly after cancellation")
 	}
 }

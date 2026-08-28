@@ -399,22 +399,11 @@ func (c *rpcClient) call(t *testing.T, method string, params any) frame {
 	}
 }
 
-// rpcCallBudget bounds one RPC so a hung server fails instead of hanging. It is
-// a hang detector, not a latency assertion: session/new runs a full boot, which
-// takes seconds cold and longer on a loaded runner, so the previous two seconds
-// failed whenever the tree was tested at once. Half of the binary's remaining
-// deadline keeps -timeout the only knob and still leaves room to report.
-func rpcCallBudget(t *testing.T) time.Duration {
-	const ceiling = 30 * time.Second
-	deadline, ok := t.Deadline()
-	if !ok {
-		return ceiling
-	}
-	if half := time.Until(deadline) / 2; half > 0 && half < ceiling {
-		return half
-	}
-	return ceiling
-}
+// rpcCallBudget bounds one RPC so a hung server fails instead of hanging.
+// session/new runs a full boot, which takes seconds cold and longer on a loaded
+// runner. The reasoning and the numbers live in testenv.Budget, which the other
+// packages with the same kind of wait read too.
+func rpcCallBudget(t *testing.T) time.Duration { return testenv.Budget(t) }
 
 func (c *rpcClient) notify(method string, params any) {
 	c.send(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})

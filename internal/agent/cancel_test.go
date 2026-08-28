@@ -119,6 +119,30 @@ func (stuckStreamProvider) Stream(context.Context, provider.Request) (<-chan pro
 	return make(chan provider.Chunk), nil
 }
 
+// consumingStreamProvider hands over one harmless chunk and then nothing, ever.
+// The channel is unbuffered, so the send returning is proof the run took that
+// chunk: a waiter on `consumed` knows the run is inside the stream loop. A
+// sleep only guesses, and on a loaded runner guesses short — cancelling before
+// the loop is entered, which is not the path this test names.
+type consumingStreamProvider struct{ consumed chan struct{} }
+
+func newConsumingStreamProvider() *consumingStreamProvider {
+	return &consumingStreamProvider{consumed: make(chan struct{})}
+}
+
+func (*consumingStreamProvider) Name() string { return "consuming-stream" }
+
+func (p *consumingStreamProvider) Stream(context.Context, provider.Request) (<-chan provider.Chunk, error) {
+	ch := make(chan provider.Chunk)
+	go func() {
+		ch <- provider.Chunk{Type: provider.ChunkText, Text: "working"}
+		close(p.consumed)
+		// The channel is never closed and never written again: from here the
+		// run is blocked on a read only cancellation can end.
+	}()
+	return ch, nil
+}
+
 type closedStreamProvider struct{}
 
 func (closedStreamProvider) Name() string { return "closed-stream" }
