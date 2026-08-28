@@ -351,6 +351,10 @@ type DeliveryCheckpoint struct {
 	WorkObserved        bool   `json:"workObserved,omitempty"`
 	MutationObserved    bool   `json:"mutationObserved,omitempty"`
 	PendingMutation     bool   `json:"pendingMutation,omitempty"`
+	// BaselineChecks are the criterion identities the task began requiring. They
+	// ride the checkpoint because a controller rebuild re-reads the project's
+	// declaration, which is exactly when a rewritten one would otherwise win.
+	BaselineChecks []string `json:"baselineChecks,omitempty"`
 }
 
 // Ledger stores the receipts available to complete_step for the current turn.
@@ -1681,22 +1685,6 @@ func BashToolCallMasksVerificationExit(args json.RawMessage) bool {
 	return false
 }
 
-// BashToolCallUsesOpaqueInlineInterpreter reports whether a bash call executes
-// source supplied directly on an interpreter's command line. Delivery mode
-// cannot prove whether snippets such as node -e or python -c only inspect state
-// or also write files. Letting them run and then treating them as opaque
-// mutations invalidates otherwise valid review/verification receipts, while
-// treating them as read-only would create a delivery bypass. The agent blocks
-// this shape before execution and directs callers to auditable file tools,
-// script files, or conventional verifier commands instead.
-func BashToolCallUsesOpaqueInlineInterpreter(args json.RawMessage) bool {
-	command, ok := bashCommandFromArgs(args)
-	if !ok {
-		return false
-	}
-	return bashCommandUsesOpaqueInlineInterpreter(command)
-}
-
 // BashToolCallUsesNonTerminalInlineInterpreter reports whether an opaque
 // inline interpreter (python -c, node -e, …) is not the last top-level segment
 // *and* a later segment can overwrite its exit status. Ordinary mode blocks that
@@ -1727,13 +1715,6 @@ func BashToolCallUsesNonTerminalInlineInterpreter(args json.RawMessage) bool {
 	return false
 }
 
-// BashCommandMayBeOpaqueMutation reports whether a sole opaque inline
-// interpreter call is allowed to run but cannot be proven read-only for
-// mutation-risk labeling.
-func BashCommandMayBeOpaqueMutation(args json.RawMessage) bool {
-	return BashToolCallUsesOpaqueInlineInterpreter(args)
-}
-
 func bashCommandFromArgs(args json.RawMessage) (string, bool) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(args, &fields); err != nil {
@@ -1741,23 +1722,6 @@ func bashCommandFromArgs(args json.RawMessage) (string, bool) {
 	}
 	command := strings.TrimSpace(stringField(fields, "command"))
 	return command, command != ""
-}
-
-func bashCommandUsesOpaqueInlineInterpreter(command string) bool {
-	segments, _, ok := shellparse.SplitTopLevel(command)
-	if !ok {
-		return false
-	}
-	return slices.ContainsFunc(segments, bashSegmentUsesOpaqueInlineInterpreter)
-}
-
-func bashSegmentUsesOpaqueInlineInterpreter(segment string) bool {
-	normalized, _ := shellsafe.NormalizeBashSafeRedirectsForMatch(segment)
-	argv, malformed := shellparse.StaticFields(normalized)
-	if malformed != "" {
-		return false
-	}
-	return shellsafe.ArgvCarriesInlineCode(argv)
 }
 
 // ShellContractPreflightMessage is the model-facing recovery text when a
@@ -1793,7 +1757,7 @@ func bashContainsVerificationSegment(command string) bool {
 	if command == "" {
 		return false
 	}
-	segments, _, ok := shellparse.SplitTopLevel(command)
+	segments, ok := verifierSearchSegments(command)
 	if !ok {
 		return false
 	}

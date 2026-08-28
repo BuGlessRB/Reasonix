@@ -111,6 +111,23 @@ func (l *Ledger) LatestProvenMutationIndexFunc(keep func(Receipt) bool) (int, bo
 	return unproven, unproven >= 0
 }
 
+// LatestUnprovenMutationIndex returns the most recent successful mutation whose
+// scope the host could not establish. Such a change invalidates every earlier
+// check without saying which, so the debt it leaves is settled by a check that
+// ran after it, never by one that ran before.
+func (l *Ledger) LatestUnprovenMutationIndex() (int, bool) {
+	if l == nil {
+		return 0, false
+	}
+	latest := -1
+	for i, r := range l.snapshotReceipts() {
+		if r.Success && r.Mutation && r.MutationEvidence == MutationUnknown {
+			latest = i
+		}
+	}
+	return latest, latest >= 0
+}
+
 // snapshotReceipts copies the ledger so a caller's predicate can run without
 // the lock — and so it can ask the ledger further questions while deciding.
 func (l *Ledger) snapshotReceipts() []Receipt {

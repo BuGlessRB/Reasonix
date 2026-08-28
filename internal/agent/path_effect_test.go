@@ -248,15 +248,18 @@ func TestUnprovenCallSettlesAgainstTheWorkspace(t *testing.T) {
 		t.Errorf("receipt = %+v, want a call that changed nothing settled as no mutation", looked)
 	}
 
-	// The same call, against a workspace that did change: still a mutation, and
-	// the host still cannot say which path — that is what unknown means.
+	// The same call, against a workspace that did change: the walk answered what
+	// the command would not, so the change is proven and names the file.
 	if err := os.WriteFile(filepath.Join(root, "tally.go"), []byte("package tally\n\nvar x = 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	wrote := unproven()
 	a.settleUnchangedWorkspace(&wrote, plan)
-	if !wrote.Mutation || wrote.MutationEvidence != evidence.MutationUnknown {
-		t.Errorf("receipt = %+v, want a changed workspace to leave the mutation standing", wrote)
+	if !wrote.Mutation || wrote.MutationEvidence != evidence.MutationProven {
+		t.Errorf("receipt = %+v, want the observed change to establish the mutation's scope", wrote)
+	}
+	if !holdsPath(wrote.Paths, filepath.Join(root, "tally.go")) {
+		t.Errorf("paths = %q, want the file the walk saw change", wrote.Paths)
 	}
 
 	// A file created where nothing was watched counts too.

@@ -512,27 +512,6 @@ func compactSegments(in []string) []string {
 	return out
 }
 
-// HasHereDoc reports whether file contains a here-document. Here-doc bodies are
-// arbitrary text, so callers that analyze shell syntax should usually fail
-// closed when this returns true.
-func HasHereDoc(file *syntax.File) bool {
-	if file == nil {
-		return false
-	}
-	has := false
-	syntax.Walk(file, func(node syntax.Node) bool {
-		if node == nil || has {
-			return false
-		}
-		if redir, ok := node.(*syntax.Redirect); ok && redir.Hdoc != nil {
-			has = true
-			return false
-		}
-		return true
-	})
-	return has
-}
-
 // StaticWord returns word's static value, accepting literal and quoted literal
 // parts while rejecting runtime expansions.
 func StaticWord(word *syntax.Word) (string, bool) {
@@ -710,11 +689,22 @@ const dynamicArgPlaceholder = "__reasonix_dynamic_arg__"
 // statement whose standard input comes from a here-document, at any nesting.
 // The caller decides which programs treat that input as source code.
 func StdinHereDocPrograms(command string) []string {
+	var programs []string
+	for _, argv := range StdinHereDocArgv(command) {
+		programs = append(programs, argv[0])
+	}
+	return programs
+}
+
+// StdinHereDocArgv is StdinHereDocPrograms with the arguments kept, so a caller
+// can tell an interpreter handed a program from one handed a script to run and
+// data to feed it. The body is never returned; only what was pointed at it.
+func StdinHereDocArgv(command string) [][]string {
 	file, err := ParseBash(command)
 	if err != nil {
 		return nil
 	}
-	var programs []string
+	var argvs [][]string
 	syntax.Walk(file, func(node syntax.Node) bool {
 		stmt, ok := node.(*syntax.Stmt)
 		if !ok || stmt == nil {
@@ -736,10 +726,20 @@ func StdinHereDocPrograms(command string) []string {
 		if !ok || len(call.Args) == 0 {
 			return true
 		}
-		if program, static := StaticWord(call.Args[0]); static {
-			programs = append(programs, program)
+		program, static := StaticWord(call.Args[0])
+		if !static {
+			return true
 		}
+		argv := []string{program}
+		for _, arg := range call.Args[1:] {
+			word, static := StaticWord(arg)
+			if !static {
+				word = dynamicArgPlaceholder
+			}
+			argv = append(argv, word)
+		}
+		argvs = append(argvs, argv)
 		return true
 	})
-	return programs
+	return argvs
 }

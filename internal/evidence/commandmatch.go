@@ -66,6 +66,12 @@ func commandSegments(s string) []string {
 	if segs, _, ok := shellparse.SplitTopLevel(s); ok {
 		return segs
 	}
+	// A here-doc body is a file being written, never commands that ran. The
+	// separator split below cannot tell the two apart, so it let a declared
+	// check be satisfied by a line the agent had just written into a file.
+	if segs, ok := shellparse.SplitOutsideHereDoc(s); ok {
+		return segs
+	}
 	parts := []string{s}
 	for _, sep := range segmentSeparators {
 		var next []string

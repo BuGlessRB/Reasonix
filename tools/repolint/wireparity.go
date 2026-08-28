@@ -28,6 +28,9 @@ var mirroredWireTypes = []wireMirror{
 	{"internal/agentgraph/graph.go", "Edge", tsWireFile, "GraphEdge"},
 	{"internal/agentgraph/graph.go", "Delta", tsWireFile, "GraphDelta"},
 	{"internal/control/boundary.go", "SandboxSettings", tsBoundaryFile, "SandboxSettings"},
+	// The completion summary is the turn's own verdict on itself; a gap kind the
+	// desktop cannot read is a turn it shows as clean.
+	{"internal/eventwire/wire.go", "CompletionSummary", tsWireFile, "CompletionSummary"},
 	// RemoteHostEdit is left out on purpose: the kernel still takes the single
 	// `workspace` an old row was saved with, which the page deliberately does
 	// not send. An under-filled request is not a picture that cannot be read.
@@ -38,6 +41,19 @@ var mirroredWireTypes = []wireMirror{
 
 type wireMirror struct {
 	goFile, goType, tsFile, tsType string
+}
+
+// readMirrors are Go types that read another Go type's JSON by hand. Unlike the
+// desktop's pictures these are read-only and deliberately partial — a harness
+// charts the few numbers it compares — so only one direction is a defect: a
+// name the reader declares and the writer never sends reads as zero forever,
+// which is what a rename on the writing side looks like from here.
+var readMirrors = []readMirror{
+	{"cmd/e2ebench/main.go", "runMetrics", "internal/cli/run_metrics.go", "RunMetrics"},
+}
+
+type readMirror struct {
+	readerFile, readerType, writerFile, writerType string
 }
 
 // wireScan collects the declared types' wire field names while the tree is
@@ -58,6 +74,16 @@ func (w *wireScan) observe(src *sourceFile) {
 			w.fields[m.goFile+"."+m.goType] = names
 		}
 	}
+	for _, m := range readMirrors {
+		for _, side := range [][2]string{{m.readerFile, m.readerType}, {m.writerFile, m.writerType}} {
+			if side[0] != src.rel {
+				continue
+			}
+			if names, ok := wireFieldNames(src.file, side[1]); ok {
+				w.fields[side[0]+"."+side[1]] = names
+			}
+		}
+	}
 }
 
 // findings compares each declared pair both ways. Either direction is a defect:
@@ -75,7 +101,34 @@ func (w *wireScan) findings(root string) []Finding {
 		}
 		bodies[m.tsFile] = string(raw)
 	}
-	return wireParityFindings(mirroredWireTypes, w.fields, bodies)
+	return append(wireParityFindings(mirroredWireTypes, w.fields, bodies),
+		readParityFindings(readMirrors, w.fields)...)
+}
+
+// readParityFindings checks the one direction a hand-written reader owes: every
+// name it declares must be one the writer actually sends. What the writer sends
+// and this reader ignores is the point of a partial mirror, so it is not a
+// finding.
+func readParityFindings(mirrors []readMirror, goFields map[string][]string) []Finding {
+	var out []Finding
+	for _, m := range mirrors {
+		reader, declared := goFields[m.readerFile+"."+m.readerType]
+		writer, sends := goFields[m.writerFile+"."+m.writerType]
+		if !declared || !sends {
+			missing, at := m.writerType, m.writerFile
+			if !declared {
+				missing, at = m.readerType, m.readerFile
+			}
+			out = append(out, Finding{at, 1, ruleWireParity,
+				fmt.Sprintf("%s is declared a mirrored read contract and is not a struct here", missing), 1})
+			continue
+		}
+		for _, name := range missingFrom(reader, writer) {
+			out = append(out, Finding{m.readerFile, 1, ruleWireParity,
+				fmt.Sprintf("%s reads %q and %s.%s never sends it", m.readerType, name, m.writerFile, m.writerType), 1})
+		}
+	}
+	return out
 }
 
 // wireParityFindings is the comparison itself, so a fixture can carry the one

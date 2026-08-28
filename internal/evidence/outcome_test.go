@@ -130,7 +130,11 @@ func TestOutcomeObjectiveSurvivesOutputTrimming(t *testing.T) {
 		t.Fatalf("first failing verify = %+v, want verification 1 objective 0", s)
 	}
 
-	s = tr.ScoreRound([]Receipt{bashReceipt(`go test ./... 2>&1 | grep -E 'FAIL|ok ' | head -12`, true)})
+	// The re-run is piped too, so its success is head's as much as the first
+	// one's was. What says the suite passed is the same host classification.
+	passing := bashReceipt(`go test ./... 2>&1 | grep -E 'FAIL|ok ' | head -12`, true)
+	passing.Verification = VerificationPassed
+	s = tr.ScoreRound([]Receipt{passing})
 	if s.Objective != 1 {
 		t.Fatalf("same check re-run through a different filter = %+v, want objective 1", s)
 	}

@@ -358,6 +358,17 @@ func UserCredentialsPath() string {
 	return filepath.Join(dir, ".env")
 }
 
+// credentialsLocationForError names the file a missing key is missing from.
+// Resolution reads only this file, never the process environment, so an error
+// naming the env var alone sends a caller who exported it hunting for a
+// mechanism that was never consulted.
+func credentialsLocationForError() string {
+	if p := UserCredentialsPath(); p != "" {
+		return p
+	}
+	return "Reasonix's credentials file (.env under the state home)"
+}
+
 // ArchiveDir is where compacted conversation history is archived for
 // traceability (one timestamped .jsonl per compaction). Empty if the user state
 // directory cannot be resolved, in which case archiving is skipped.

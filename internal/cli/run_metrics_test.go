@@ -201,3 +201,33 @@ func TestWriteMetricsIncludesReadinessFields(t *testing.T) {
 		}
 	}
 }
+
+// Outcome answers only whether the run errored. A reader that stops there is
+// told "success" by the same run that warned its human about open gaps, so the
+// turn's own verdict has to reach the file too.
+func TestMetricsSinkCarriesTheTurnsOwnVerdict(t *testing.T) {
+	s := &metricsSink{inner: event.Discard}
+	s.Emit(event.Event{Kind: event.CompletionSummary, Completion: &event.CompletionSummaryInfo{
+		Verdict: "partial", GapKinds: []string{"stale_verification", "unreviewed_change"},
+	}})
+	got := s.Snapshot()
+	if got.CompletionVerdict != "partial" {
+		t.Fatalf("completion verdict = %q, want partial", got.CompletionVerdict)
+	}
+	if len(got.CompletionGapKinds) != 2 {
+		t.Fatalf("gap kinds = %v, want both", got.CompletionGapKinds)
+	}
+}
+
+// A turn that reopened and finished supersedes what the one before concluded.
+func TestMetricsSinkKeepsTheLastVerdict(t *testing.T) {
+	s := &metricsSink{inner: event.Discard}
+	s.Emit(event.Event{Kind: event.CompletionSummary, Completion: &event.CompletionSummaryInfo{
+		Verdict: "partial", GapKinds: []string{"stale_verification"},
+	}})
+	s.Emit(event.Event{Kind: event.CompletionSummary, Completion: &event.CompletionSummaryInfo{Verdict: "done"}})
+	got := s.Snapshot()
+	if got.CompletionVerdict != "done" || len(got.CompletionGapKinds) != 0 {
+		t.Fatalf("verdict = %q gaps = %v, want done with no gaps", got.CompletionVerdict, got.CompletionGapKinds)
+	}
+}

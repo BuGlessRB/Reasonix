@@ -16,10 +16,17 @@ func ExitZeroImplies(command string) ([]string, bool) {
 		return nil, false
 	}
 	file, err := ParseBash(command)
-	if err != nil || HasHereDoc(file) || len(file.Stmts) == 0 {
+	if err != nil || len(file.Stmts) == 0 {
 		return nil, false
 	}
-	return exitZeroImpliesStmt(command, file.Stmts[len(file.Stmts)-1])
+	// Only the last statement's status survives, so only its own here-doc can
+	// make the status unreadable. One earlier in the line is text this never
+	// reads and cannot change which statement the shell reports.
+	last := file.Stmts[len(file.Stmts)-1]
+	if hereDocWithin(last) {
+		return nil, false
+	}
+	return exitZeroImpliesStmt(command, last)
 }
 
 func exitZeroImpliesStmt(source string, stmt *syntax.Stmt) ([]string, bool) {

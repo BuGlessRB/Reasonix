@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"reasonix/internal/ablation"
@@ -198,9 +199,8 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	verified, blockedWithCheck := a.postWriteVerification(writer)
 	missing = a.appendVerificationGap(&out, missing, writer, blockedWithCheck, verified)
 	missing = a.appendReviewGap(&out, missing)
-	hasProjectChecks := len(a.projectChecks) > 0
-	hasTodoReceipt := a.task.ledger.HasSuccessfulTodoWrite()
-	if !a.deliveryProfile && !hasProjectChecks && !hasTodoReceipt && len(missing) == 0 {
+	missing = a.appendUnprovenMutationGap(&out, missing)
+	if a.turnHasNothingToAnswerFor(out, missing) {
 		return finalReadinessCheck{}
 	}
 	out.applies = true
@@ -305,6 +305,72 @@ func (a *Agent) postWriteVerification(writer int) (verified, blockedWithCheck bo
 	blockedWithCheck = ledger.HasBlockedConclusionAfter(writer) &&
 		ledger.HasVerificationCommandAfter(writer)
 	return verified, blockedWithCheck
+}
+
+// obligations asks the ledger what it owes. Readiness and the delta the model
+// is handed after each call both read this one derivation, so what blocks a
+// turn is what the model was already told it was carrying.
+func (a *Agent) obligations() []evidence.Obligation {
+	owed := a.task.ledger.Obligations(a.checkContract())
+	return append(owed, evidence.BaselineTestObligations(a.baselineFacts(), a.mutationEpoch())...)
+}
+
+// mutationEpoch is what a baseline result is bound to: the host's count of the
+// mutations it observed, the same epoch ordinary verification answers under.
+func (a *Agent) mutationEpoch() uint64 {
+	if a.task.ledger == nil {
+		return 0
+	}
+	at, ok := a.task.ledger.LatestSuccessfulMutationIndex()
+	if !ok {
+		return 0
+	}
+	return uint64(at) + 1
+}
+
+// checkContract pairs what the task began requiring with what the workspace
+// declares now. The baseline comes from the checkpoint, never from the files:
+// re-reading them is how a rewritten declaration would come to speak for the
+// requirement it replaced.
+func (a *Agent) checkContract() evidence.CheckContract {
+	current := make([]string, 0, len(a.projectChecks))
+	for _, check := range a.projectChecks {
+		current = append(current, check.Command)
+	}
+	if len(a.task.checkpoint.BaselineChecks) == 0 {
+		// Captured the first time the task is asked what it owes, and never
+		// recaptured: after this the project may declare what it likes, and what
+		// it declared here is still what the task is held to.
+		a.task.checkpoint.BaselineChecks = evidence.CaptureCheckContract(current, nil).Baseline()
+	}
+	return evidence.CaptureCheckContract(a.task.checkpoint.BaselineChecks, current)
+}
+
+// turnHasNothingToAnswerFor reports the turn no gate has a subject in: nothing
+// the project declared, no list left open, nothing owed. Outside Delivery that
+// is a turn to let go, since every remaining requirement is one nobody asked for.
+func (a *Agent) turnHasNothingToAnswerFor(out finalReadinessCheck, missing []string) bool {
+	return !a.deliveryProfile && len(a.projectChecks) == 0 &&
+		!a.task.ledger.HasSuccessfulTodoWrite() && len(missing) == 0 && out.missingMutation == 0
+}
+
+// appendUnprovenMutationGap records the debt an unprovable change leaves. The
+// host cannot say what it touched, so every check from before it is spent and
+// only one that ran after can answer. The debt is recorded for every preset —
+// it is the host's, not the model's — but only Delivery may not finish owing it.
+func (a *Agent) appendUnprovenMutationGap(out *finalReadinessCheck, missing []string) []string {
+	if !slices.ContainsFunc(a.obligations(), func(o evidence.Obligation) bool {
+		return o.Kind == evidence.ObligationUnprovenMutation
+	}) {
+		return missing
+	}
+	out.applies = true
+	out.missingMutation++
+	if !a.deliveryProfile {
+		return missing
+	}
+	return append(missing, "a change ran whose extent the host could not establish, and no check can establish it: "+
+		"make the change again through a tool that reports what it touched, or call conclude_blocked with what cannot be established")
 }
 
 // appendVerificationGap records what this turn owes for verification. Only what

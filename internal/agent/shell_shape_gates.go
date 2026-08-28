@@ -9,22 +9,12 @@ import (
 // applyShellShapeGates holds the deterministic command-shape contract: shapes a
 // later segment could use to hide an earlier failure, and the shape a declared
 // check needs for its exit status to mean anything. Ordinary mode blocks only
-// the hiding shapes; Delivery blocks the wider class because a mutation voids
-// the verification receipt even when the exit status is honest.
+// the hiding shapes; Delivery blocks the wider class. What the host merely
+// cannot audit is not blocked at all — it is recorded unproven and owed.
 func (a *Agent) applyShellShapeGates(ctx context.Context, plan *toolCallPlan) (toolOutcome, bool) {
 	// PowerShell 5.1 &&/|| is enforced inside the bash tool itself, so descriptor
 	// and error text stay shell-accurate; only command shape is decided here.
 	if plan.evidenceName == "bash" {
-		// Delivery-only, and first: no rearrangement is acceptable here, so every
-		// shape block below would send the run to a form this one refuses anyway.
-		if a.deliveryProfile && evidence.BashToolCallUsesOpaqueInlineInterpreter(plan.evidenceArgs) {
-			return toolOutcome{
-				output:    "blocked: delivery mode cannot audit inline interpreter source such as node -e or python -c, so executing it would become an opaque mutation and invalidate prior verification. For inspection, use read_file/grep or another host-proven read-only command. For validation, use a conventional verifier such as node --check, a project test/check/lint command, or a read-only extraction pipeline into the verifier. For an intentional state change, use a file tool or a script file under the current in_progress todo. " + evidence.VerificationCommandSummary(),
-				blocked:   true,
-				errMsg:    "blocked: opaque inline interpreter command",
-				execution: shellPreflightExecution(plan, false),
-			}, true
-		}
 		// A declared check is read off its exit status, so something has to
 		// answer for it: the whole line, or the pipe-status probe the mixed-shape
 		// gate below also takes. Neither records a verdict the shell never gave.

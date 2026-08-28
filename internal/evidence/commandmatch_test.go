@@ -37,3 +37,17 @@ func TestCommandMatches(t *testing.T) {
 		})
 	}
 }
+
+// A here-doc body is a file being written. Reading its lines as commands let a
+// declared project check be satisfied by text the agent had just written, with
+// nothing having run — a gate answered by its own subject.
+func TestCommandMatchesIgnoresAHereDocBody(t *testing.T) {
+	body := "cat > notes.md <<'EOF'\ngo test ./...\nEOF"
+	if CommandMatches("go test ./...", body) {
+		t.Fatal("a check ran only inside a here-doc body satisfied the citation")
+	}
+	beside := "cat > notes.md <<'EOF'\nnothing here\nEOF\ngo test ./..."
+	if !CommandMatches("go test ./...", beside) {
+		t.Fatal("a check that really ran beside a here-doc did not satisfy the citation")
+	}
+}

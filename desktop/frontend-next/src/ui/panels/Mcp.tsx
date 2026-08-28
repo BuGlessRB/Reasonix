@@ -4,8 +4,10 @@ import { t } from "../../i18n";
 // Only the servers that need a decision get a row. A healthy MCP fleet is the
 // least interesting thing on this rail: it is all green and never changes, and
 // where its tools came from is already stamped on the tool card that used them.
-// The row is a button because reading "connect failed" and being able to do
-// something about it should not be two separate discoveries.
+// The endpoint's own error text stays out: it is written for a terminal, and
+// nothing here can act on it. Settings prints it beside the switch and the
+// retry, so the row carries the way there instead — named, not hover-revealed,
+// because a row that can be pressed and does not say so reads as a dead status.
 
 // The rail reports, it does not enumerate — the same cap the delegate and file
 // panels take, at the count two-line rows stop fitting beside everything else.
@@ -23,14 +25,12 @@ export function Mcp({ servers, onOpen }: { servers: McpEntry[]; onOpen: () => vo
       </div>
       <div className="srvs">
         {shown.map((s) => (
-          <button className="srvrow" key={s.name} onClick={onOpen} title={t("到设置里重连")}>
+          <button className="srvrow" key={s.name} onClick={onOpen} title={t("到设置的 MCP 面板里修复")}>
             <span className="hd">
               <i className="pip" />
               <span className="nm">{s.name}</span>
             </span>
-            {/* The endpoint's own words, so its length is not ours to decide.
-                Clamped here and whole in the tooltip. */}
-            <span className="why" title={s.error}>{s.error || t("失败")}</span>
+            <span className="fix">{t("去修复")}</span>
           </button>
         ))}
         {broken.length > shown.length && (

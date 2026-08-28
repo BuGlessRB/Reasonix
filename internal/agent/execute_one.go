@@ -605,6 +605,15 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 	}
 	plan.cctx = a.toolCallContext(ctx, plan)
 	if plan.mutates {
+		// Before the write, not after: a criterion's old bytes exist nowhere else
+		// once this runs, and no later evidence can reconstruct what it said.
+		if err := a.captureCriteriaBefore(plan); err != nil {
+			return toolOutcome{
+				output:  "blocked: the host could not keep what this call may overwrite — " + err.Error(),
+				blocked: true,
+				errMsg:  "blocked: baseline criteria could not be held",
+			}, true
+		}
 		plan.pathsBefore = snapshotPaths(a.task.ledger, a.writeWorkspaceRoot, evidence.ToolCallPaths(plan.evidenceArgs))
 		plan.scanBefore = a.scanBeforeUnprovenCall(plan)
 	}
@@ -695,7 +704,9 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		return a.blockedToolOutcome(plan, msg)
 	}
 	err = withContractHint(err, runTool, runArgs)
+	owedBefore := a.obligations()
 	a.recordToolReceipts(plan, result, execution, err)
+	result = withObligationDelta(result, evidence.DiffObligations(owedBefore, a.obligations()))
 	// Track skill/capability outcomes for Delivery gates.
 	a.noteCapabilityInvocation(call.Name, json.RawMessage(call.Arguments), err)
 	a.notifyToolHooks(ctx, permName, permArgs, result, err)

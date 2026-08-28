@@ -52,24 +52,31 @@ type RunMetrics struct {
 	OriginalTotals  []billing.Money `json:"original_totals,omitempty"`
 	// OriginalCosts is per-ISO original currency totals (never cross-added).
 	OriginalCosts map[string]float64 `json:"original_costs,omitempty"`
-	// CostQuotes retains occurrence-time quotes for audit (capped).
-	CostQuotes                     []billing.CostQuote `json:"cost_quotes,omitempty"`
-	Estimated                      bool                `json:"estimated,omitempty"`
-	Compactions                    int                 `json:"compactions"`
-	ReadinessChecks                int                 `json:"readiness_checks"`
-	ReadinessAllowed               int                 `json:"readiness_allowed"`
-	ReadinessBlocks                int                 `json:"readiness_blocks"`
-	ReadinessRecoveries            int                 `json:"readiness_recoveries"`
-	ReadinessErrors                int                 `json:"readiness_errors"`
-	ReadinessMissingProjectChecks  int                 `json:"readiness_missing_project_checks"`
-	ReadinessIncompleteTodos       int                 `json:"readiness_incomplete_todos"`
-	ReadinessCommandMismatches     int                 `json:"readiness_command_mismatches"`
-	ReadinessMissingAcceptance     int                 `json:"readiness_missing_acceptance_criteria"`
-	ReadinessMissingVerification   int                 `json:"readiness_missing_verification"`
-	ReadinessMissingReview         int                 `json:"readiness_missing_review"`
-	ReadinessMissingSignoff        int                 `json:"readiness_missing_signoff"`
-	ReadinessMissingActionEvidence int                 `json:"readiness_missing_action_evidence"`
-	ReadinessMissingMutation       int                 `json:"readiness_missing_mutation"`
+	// CostQuotes retains occurrence-time quotes for audit (capped). It is folded
+	// into CostAudit for the file: the quotes repeat one price book n times.
+	CostQuotes []billing.CostQuote `json:"-"`
+	CostAudit  *costAudit          `json:"cost_audit,omitempty"`
+	// CompletionVerdict and CompletionGapKinds are the turn's own verdict on
+	// itself. Outcome answers only whether the run errored, so without these a
+	// reader is told "success" by a file the same run warned a human about.
+	CompletionVerdict              string   `json:"completion_verdict,omitempty"`
+	CompletionGapKinds             []string `json:"completion_gap_kinds,omitempty"`
+	Estimated                      bool     `json:"estimated,omitempty"`
+	Compactions                    int      `json:"compactions"`
+	ReadinessChecks                int      `json:"readiness_checks"`
+	ReadinessAllowed               int      `json:"readiness_allowed"`
+	ReadinessBlocks                int      `json:"readiness_blocks"`
+	ReadinessRecoveries            int      `json:"readiness_recoveries"`
+	ReadinessErrors                int      `json:"readiness_errors"`
+	ReadinessMissingProjectChecks  int      `json:"readiness_missing_project_checks"`
+	ReadinessIncompleteTodos       int      `json:"readiness_incomplete_todos"`
+	ReadinessCommandMismatches     int      `json:"readiness_command_mismatches"`
+	ReadinessMissingAcceptance     int      `json:"readiness_missing_acceptance_criteria"`
+	ReadinessMissingVerification   int      `json:"readiness_missing_verification"`
+	ReadinessMissingReview         int      `json:"readiness_missing_review"`
+	ReadinessMissingSignoff        int      `json:"readiness_missing_signoff"`
+	ReadinessMissingActionEvidence int      `json:"readiness_missing_action_evidence"`
+	ReadinessMissingMutation       int      `json:"readiness_missing_mutation"`
 	// Delegation counters let one model be compared across orchestration arms
 	// without scraping prose. Child tool calls are already split out as
 	// SubagentToolCalls below; parent calls are ToolCalls minus that.
@@ -198,16 +205,11 @@ func (m RunMetrics) clone() RunMetrics {
 	out.ToolFailuresByName = cloneCounts(m.ToolFailuresByName)
 	out.OriginalCosts = cloneFloatMap(m.OriginalCosts)
 	out.OriginalTotals = append([]billing.Money(nil), m.OriginalTotals...)
-	if len(m.CostQuotes) > 0 {
-		out.CostQuotes = append([]billing.CostQuote(nil), m.CostQuotes...)
-		for i := range out.CostQuotes {
-			out.CostQuotes[i].Valuations = cloneQuoteValuations(m.CostQuotes[i].Valuations)
-			if m.CostQuotes[i].Selected != nil {
-				sel := *m.CostQuotes[i].Selected
-				out.CostQuotes[i].Selected = &sel
-			}
-		}
-	}
+	// The fold builds its own structures, so the snapshot carries it instead of
+	// a second copy of the quotes nothing downstream reads.
+	out.CostAudit = foldCostQuotes(m.CostQuotes)
+	out.CostQuotes = nil
+	out.CompletionGapKinds = append([]string(nil), m.CompletionGapKinds...)
 	return out
 }
 
@@ -217,21 +219,6 @@ func cloneFloatMap(in map[string]float64) map[string]float64 {
 	}
 	out := make(map[string]float64, len(in))
 	maps.Copy(out, in)
-	return out
-}
-
-func cloneQuoteValuations(in map[string]billing.Valuation) map[string]billing.Valuation {
-	if in == nil {
-		return nil
-	}
-	out := make(map[string]billing.Valuation, len(in))
-	for k, v := range in {
-		if v.Rate != nil {
-			snap := *v.Rate
-			v.Rate = &snap
-		}
-		out[k] = v
-	}
 	return out
 }
 
@@ -360,6 +347,12 @@ func (s *metricsSink) record(e event.Event) {
 	}
 	if e.Kind == event.GraphDelta && e.Graph != nil {
 		s.graph.Apply(*e.Graph)
+	}
+	// The last summary is the run's: a turn that reopened supersedes what the
+	// one before it concluded about the same work.
+	if e.Kind == event.CompletionSummary && e.Completion != nil {
+		s.m.CompletionVerdict = e.Completion.Verdict
+		s.m.CompletionGapKinds = append([]string(nil), e.Completion.GapKinds...)
 	}
 }
 

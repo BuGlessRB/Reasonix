@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/remote"
+	"reasonix/internal/testenv"
 )
 
 // answers is one machine's replies, keyed by what the probe looks for.
@@ -44,7 +45,7 @@ func probeOf(t *testing.T, conn *fakeConn, opts Options) Report {
 // The point of probing: one session says every missing piece, where a cold
 // connect would have reported one per attempt.
 func TestProbeReportsEveryClosedRouteAtOnce(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	rep := probeOf(t, answers(t, root, "", false), Options{})
 	if rep.Ready() {
 		t.Fatalf("a machine with no npm, no binary and nothing to upload read as ready: %+v", rep)
@@ -61,7 +62,7 @@ func TestProbeReportsEveryClosedRouteAtOnce(t *testing.T) {
 }
 
 func TestProbeReadsTheMachine(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	rep := probeOf(t, answers(t, root, "10.8.1", false), Options{})
 	if rep.OS != "linux" || rep.Arch != "amd64" {
 		t.Errorf("platform = %s/%s", rep.OS, rep.Arch)
@@ -76,7 +77,7 @@ func TestProbeReadsTheMachine(t *testing.T) {
 
 // A kernel already there needs no route at all.
 func TestProbeFindsAnInstalledKernel(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	rep := probeOf(t, answers(t, root, "", true), Options{MinVersion: "2.0.0"})
 	if rep.Kernel == "" || rep.Version != "2.9.0" {
 		t.Fatalf("kernel = %q %q", rep.Kernel, rep.Version)
@@ -89,7 +90,7 @@ func TestProbeFindsAnInstalledKernel(t *testing.T) {
 // The same binary on the same platform is uploadable; a different one is the
 // mismatch a connect would have failed on halfway through.
 func TestProbeUploadRouteFollowsThePlatform(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	same := probeOf(t, answers(t, root, "", false), Options{LocalBinary: "/x/reasonix", LocalGOOS: "linux", LocalGOARCH: "amd64"})
 	if !same.Routes[1].OK() {
 		t.Errorf("same platform should upload: %v", same.Routes[1].Err)
@@ -103,7 +104,7 @@ func TestProbeUploadRouteFollowsThePlatform(t *testing.T) {
 // serve_install = never is one closed route, not three — the reader is not
 // owed a report on npm when nothing may be installed anyway.
 func TestProbeHonoursInstallNever(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	rep := probeOf(t, answers(t, root, "10.8.1", false), Options{Install: InstallNever})
 	if len(rep.Routes) != 1 || !errors.Is(rep.Routes[0].Err, ErrInstallDisabled) {
 		t.Fatalf("routes = %+v", rep.Routes)

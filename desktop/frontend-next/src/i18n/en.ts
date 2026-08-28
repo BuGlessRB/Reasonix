@@ -134,6 +134,8 @@ export const EN: Record<string, string> = {
     "This endpoint serves {n} models this connection does not list: {names}. Add them under Edit.",
   "还有 {n} 个，都在设置里": "{n} more, all in Settings",
   "到设置里重连": "Reconnect from Settings",
+  "到设置的 MCP 面板里修复": "Fix it in the MCP panel under Settings",
+  "去修复": "Fix",
   "失败": "Failed",
   "OpenAI 兼容": "OpenAI-compatible",
   "Anthropic 兼容": "Anthropic-compatible",

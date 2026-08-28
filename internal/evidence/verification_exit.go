@@ -246,6 +246,12 @@ func VerificationOutcome(r Receipt) string {
 	case VerificationInconclusive, VerificationNotRun:
 		return ""
 	}
+	// Unclassified leaves only the shell's status, which answers for the check
+	// only when no later stage could have taken it over: `go test ./... | tail`
+	// exits 0 on a red suite, and would clear the failure it is hiding.
+	if !VerificationExitConclusive(r.Command) {
+		return ""
+	}
 	if r.Success {
 		return VerificationPassed
 	}
@@ -258,31 +264,37 @@ func verificationPassed(r Receipt) bool {
 
 // VerificationIdentity reduces command to the verification it runs, so the same
 // check re-run inside a different wrapper stays one item whose latest outcome
-// supersedes the earlier one, instead of becoming a second item that the fresh
-// run never clears. Commands whose segments cannot be isolated keep their own
-// text as identity.
+// supersedes the earlier one. It drops spelling and plumbing, never context: a
+// segment before the check decides where and under what it runs. Commands whose
+// segments cannot be isolated keep their own text.
 func VerificationIdentity(command string) string {
 	command = strings.TrimSpace(command)
-	segments, _, ok := shellparse.SplitTopLevel(command)
+	segments, ok := verifierSearchSegments(command)
 	if !ok {
 		return command
 	}
-	var verifiers []string
+	var kept []string
+	lastVerifier := -1
 	for _, segment := range segments {
 		normalized, safeRedirects := shellsafe.NormalizeBashSafeRedirectsForMatch(segment)
 		if !safeRedirects {
-			continue
+			return command
 		}
 		fields, malformed := shellparse.StaticFields(normalized)
-		if malformed != "" || !bashSegmentIsVerification(fields) {
-			continue
+		if malformed != "" {
+			return command
 		}
-		verifiers = append(verifiers, strings.Join(fields, " "))
+		if bashSegmentIsVerification(fields) {
+			lastVerifier = len(kept)
+		}
+		kept = append(kept, strings.Join(fields, " "))
 	}
-	if len(verifiers) == 0 {
+	if lastVerifier < 0 {
 		return command
 	}
-	return strings.Join(verifiers, " && ")
+	// Everything after the last check is where its output went, which cannot
+	// change what it already proved.
+	return strings.Join(kept[:lastVerifier+1], " && ")
 }
 
 // IsVerificationToolCall reports whether a persisted tool call is a bash
@@ -298,4 +310,14 @@ func IsVerificationToolCall(toolName string, args json.RawMessage) bool {
 		return false
 	}
 	return bashCommandIsVerification(command)
+}
+
+// verifierSearchSegments decomposes command for verifier matching. A here-doc
+// costs SplitTopLevel the whole command, which used to take the checks standing
+// beside the body down with it; the body itself is unread either way.
+func verifierSearchSegments(command string) ([]string, bool) {
+	if segments, _, ok := shellparse.SplitTopLevel(command); ok {
+		return segments, true
+	}
+	return shellparse.SplitOutsideHereDoc(command)
 }

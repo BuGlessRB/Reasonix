@@ -57,6 +57,9 @@ var taskRestarted = map[string]bool{
 	"outcome": true,
 	"budget":  true,
 	"witness": true,
+	// A new task begins under whatever the tree says then, so what an earlier
+	// one was held to is not carried into it.
+	"baselineCriteria": true,
 }
 
 // restartLedger is one assignment, so an unlisted field resets by default —

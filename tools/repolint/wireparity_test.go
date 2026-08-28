@@ -78,3 +78,40 @@ func TestWireParityReportsAPairItCannotRead(t *testing.T) {
 		t.Fatalf("a declared pair with no TS side was not reported: %+v", got)
 	}
 }
+
+var readPair = []readMirror{{"reader.go", "Reader", "writer.go", "Writer"}}
+
+func readFindingsFor(reader, writer []string) []Finding {
+	return readParityFindings(readPair, map[string][]string{
+		"reader.go.Reader": reader,
+		"writer.go.Writer": writer,
+	})
+}
+
+// The writer is the whole record and the reader charts part of it. Ignoring the
+// rest is the point of a partial mirror, not a defect.
+func TestReadParityAcceptsAReaderThatChartsPartOfTheRecord(t *testing.T) {
+	got := readFindingsFor([]string{"steps", "cost"}, []string{"steps", "cost", "currency", "compactions"})
+	if len(got) != 0 {
+		t.Fatalf("findings = %v, want none", got)
+	}
+}
+
+// A rename on the writing side reads as zero forever from here, and nothing
+// else in the tree notices: the two are compiled together and never compared.
+func TestReadParityFailsANameNothingSends(t *testing.T) {
+	got := readFindingsFor([]string{"steps", "readiness_check"}, []string{"steps", "readiness_checks"})
+	if len(got) != 1 {
+		t.Fatalf("findings = %v, want exactly one", got)
+	}
+	if !strings.Contains(got[0].Msg, "readiness_check") || got[0].File != "reader.go" {
+		t.Fatalf("finding = %+v, want it to name the reader's own field", got[0])
+	}
+}
+
+func TestReadParityFailsAPairThatIsNotAStruct(t *testing.T) {
+	got := readParityFindings(readPair, map[string][]string{"writer.go.Writer": {"steps"}})
+	if len(got) != 1 || got[0].File != "reader.go" {
+		t.Fatalf("findings = %v, want one against the missing reader", got)
+	}
+}

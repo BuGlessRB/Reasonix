@@ -506,6 +506,9 @@ func sleepStreamRetryBackoff(ctx context.Context, attempt int) bool {
 // final compaction. cont=true continues the tool loop; cont=false returns err
 // from Run (err may be nil for a clean final answer).
 func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, text, reasoning string, usage *provider.Usage) (cont bool, err error) {
+	// A captured criterion is owed until it has run. The run costs a build, so
+	// it happens where the turn asks whether it may stop, not per tool call.
+	a.evaluateBaselineCriteriaOnce(ctx)
 	readiness := a.finalReadinessCheckFor()
 	if state.graceRound && (readiness.reason != "" || !hasVisibleFinalAnswer(text)) {
 		return false, a.gracePause(state)

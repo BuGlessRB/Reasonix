@@ -10,9 +10,12 @@ import "reasonix/internal/evidence"
 type taskRuntime struct {
 	scopeID    string
 	checkpoint evidence.DeliveryCheckpoint
-	ledger     *evidence.Ledger
-	outcome    *evidence.OutcomeTracker
-	budget     runBudget
+	// baselineCriteria names what each rewritten file's criteria said first,
+	// keyed by path. The first capture of a path wins.
+	baselineCriteria map[string]evidence.TestCriterion
+	ledger           *evidence.Ledger
+	outcome          *evidence.OutcomeTracker
+	budget           runBudget
 	// witness holds, per changed path, the lines a later output has to carry to
 	// have shown that change. It is working state, not evidence: the verdict
 	// lands on the receipt, so the ledger never holds file content.

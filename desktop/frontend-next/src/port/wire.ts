@@ -333,6 +333,9 @@ export interface CompletionSummary {
   checks_suppressed: number;
   review: string;
   gap_kinds?: string[];
+  // Existing tests the turn rewrote or removed, which is why the pass count
+  // above may not mean what it did last turn.
+  criteria_rewritten?: string[];
 }
 
 // MemoryCitation is one local memory the turn drew on, so an answer can show

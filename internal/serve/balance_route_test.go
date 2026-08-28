@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/billing"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 const walletJSON = `{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"10.00","granted_balance":"0","topped_up_balance":"10.00"}]}`
@@ -36,7 +37,7 @@ func walletStub(t *testing.T, hits *atomic.Int64, status *atomic.Int64) *httptes
 
 func walletServer(t *testing.T, balanceURL string) *httptest.Server {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := filepath.Join(dir, "20260101-000000.000000000-status.jsonl")
 	if err := os.WriteFile(active, []byte(`{"role":"user","content":"hi"}`+"\n"), 0o600); err != nil {
 		t.Fatal(err)

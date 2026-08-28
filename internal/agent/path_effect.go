@@ -234,6 +234,7 @@ func (a *Agent) observeBeforeMutation(ctx context.Context, plan *toolCallPlan) {
 		if c, perr := pv.Preview(ctx, plan.execArgs); perr == nil {
 			change = c
 			plan.criteriaRewritten = evidence.RewrittenTestCriteria(c.Path, c.OldText, c.NewText)
+			a.captureRewrittenCriteria(c, plan.criteriaRewritten)
 		}
 	}
 	obs := a.svc.mutationObserver
@@ -341,6 +342,27 @@ func (before workspaceScan) unchanged(after workspaceScan) bool {
 	return true
 }
 
+// changed names every file that differs between the two scans. ok is false when
+// either scan fell short, because a walk that stopped cannot say what it missed
+// — and a partial answer here would be scope the host never established.
+func (before workspaceScan) changed(after workspaceScan) (paths []string, ok bool) {
+	if !before.complete || !after.complete {
+		return nil, false
+	}
+	for path, was := range before.state {
+		if now, seen := after.state[path]; !seen || now != was {
+			paths = append(paths, path)
+		}
+	}
+	for path := range after.state {
+		if _, seen := before.state[path]; !seen {
+			paths = append(paths, path)
+		}
+	}
+	slices.Sort(paths)
+	return paths, true
+}
+
 // settleUnchangedWorkspace answers by observation what no reading of a command
 // can: whether it changed anything. A call the host could not classify — sed
 // through its own script language, a wrapper, a path built from a variable —
@@ -349,11 +371,25 @@ func (a *Agent) settleUnchangedWorkspace(rec *evidence.Receipt, plan *toolCallPl
 	if rec == nil || plan == nil || !rec.Success || rec.MutationEvidence != evidence.MutationUnknown {
 		return
 	}
-	if !plan.scanBefore.complete || !plan.scanBefore.unchanged(scanWorkspace(a.writeWorkspaceRoot)) {
+	after := scanWorkspace(a.writeWorkspaceRoot)
+	changed, ok := plan.scanBefore.changed(after)
+	if !ok {
 		return
 	}
-	rec.Mutation = false
-	rec.MutationEvidence = ""
+	if len(changed) == 0 {
+		rec.Mutation = false
+		rec.MutationEvidence = ""
+		return
+	}
+	// The walk answered what the command would not: these files and no others.
+	// That is scope established by observation, which is the only thing that
+	// can establish it — a check run afterwards speaks for state, not effect.
+	rec.MutationEvidence = evidence.MutationProven
+	for _, path := range changed[:min(len(changed), observedPathLimit)] {
+		if !holdsPath(rec.Paths, path) {
+			rec.Paths = append(rec.Paths, path)
+		}
+	}
 }
 
 // scanBeforeUnprovenCall takes the whole-workspace scan only for a call the

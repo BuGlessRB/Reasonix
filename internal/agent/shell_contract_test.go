@@ -179,12 +179,9 @@ func TestOrdinaryModeBlocksMaskedVerifierExit(t *testing.T) {
 	}
 }
 
-// Delivery refuses an inline interpreter in every arrangement, so the shape
-// blocks must not answer first: their ways out — "run that segment on its own",
-// "make it the final command" — all name a call this gate rejects, which turns
-// one refusal into two. The probe for this walked exactly that path: the mixed
-// block sent the run to a bare `python3 -c`, which the next gate refused.
-func TestDeliveryRefusesInlineInterpreterBeforeTheShapeBlocks(t *testing.T) {
+// Handing source over is no longer a refusal. The shape rules that remain are
+// about a status that cannot answer for the check, which is a different fact.
+func TestDeliveryNoLongerRefusesAnInlineInterpreter(t *testing.T) {
 	for _, command := range []string{
 		"python3 -c 'print(1)' && go test ./...",
 		"go test ./... && python3 -c 'print(1)'",
@@ -203,12 +200,9 @@ func TestDeliveryRefusesInlineInterpreterBeforeTheShapeBlocks(t *testing.T) {
 				{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
 			}}
 			a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
-			if err := a.Run(context.Background(), "check"); err != nil {
-				t.Fatal(err)
-			}
-			got := toolResultByID(a.sess.conversation, "m1")
-			if !strings.Contains(got, "cannot audit inline interpreter source") {
-				t.Fatalf("result = %q, want the interpreter refusal rather than a shape block", got)
+			_ = a.Run(context.Background(), "check")
+			if got := toolResultByID(a.sess.conversation, "m1"); strings.Contains(got, "cannot audit inline interpreter source") {
+				t.Fatalf("result = %q, want no refusal for handing over source", got)
 			}
 		})
 	}

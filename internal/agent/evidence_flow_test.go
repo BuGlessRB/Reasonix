@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -304,24 +306,48 @@ func TestDeliveryProfileExplainsMaskedVerifierExitBeforeExecution(t *testing.T) 
 	}
 }
 
-func TestDeliveryProfileBlocksOpaqueInlineInterpreterBeforeItBecomesMutation(t *testing.T) {
+// Handing source to an interpreter is a debt, not a refusal. Running it was
+// never the problem; what a later check cannot do is say what it changed, so a
+// green suite leaves the debt exactly where it was.
+func TestOpaqueInterpreterRunsButACheckDoesNotProveItsUnknownEffects(t *testing.T) {
 	reg := evidenceRegistry()
+	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	prov := &scriptedProvider{name: "delivery", turns: [][]provider.Chunk{
 		{toolCallChunk("criteria", "todo_write", `{"todos":[{"content":"Check snake","status":"in_progress"}]}`), {Type: provider.ChunkDone}},
-		{toolCallChunk("opaque", "bash", `{"command":"node -e 'require(\"fs\").readFileSync(\"snake.html\")'"}`), {Type: provider.ChunkDone}},
-		{toolCallChunk("safe", "bash", `{"command":"tail -n +2 snake.js | head -n 20 | node --check -"}`), {Type: provider.ChunkDone}},
-		{toolCallChunk("signoff", "complete_step", `{"step":"Check snake","result":"syntax valid","evidence":[{"kind":"verification","summary":"syntax valid","command":"tail -n +2 snake.js | head -n 20 | node --check -"}]}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("opaque", "bash", `{"command":"node -e 'require(\"fs\").writeFileSync(\"snake.html\",\"x\")'"}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("review", "read_file", `{"path":"snake.js"}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("safe", "bash", `{"command":"go test ./..."}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "checked"}, {Type: provider.ChunkDone}},
 	}}
 	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
-	if err := a.Run(context.Background(), "check the snake game"); err != nil {
-		t.Fatalf("Run: %v", err)
+	err := a.Run(context.Background(), "check the snake game")
+
+	if got := toolResultByID(a.sess.conversation, "opaque"); strings.Contains(got, "cannot audit inline interpreter source") {
+		t.Fatalf("opaque command result = %q, want it to have run", got)
 	}
-	if got := toolResultByID(a.sess.conversation, "opaque"); !strings.Contains(got, "cannot audit inline interpreter source") {
-		t.Fatalf("opaque command result = %q, want pre-execution audit guidance", got)
+	var readiness *FinalReadinessError
+	if !errors.As(err, &readiness) || !slices.Contains(readiness.Missing, "mutation") {
+		t.Fatalf("Run err = %v, want the mutation debt to survive the check", err)
 	}
-	if _, ok := a.task.ledger.LatestSuccessfulMutationIndex(); ok {
-		t.Fatal("blocked inline interpreter must not become a successful mutation")
+}
+
+// The same call with nothing checking after it: Delivery may not report done
+// while the debt stands, and the reason has to name it rather than the shape.
+func TestDeliveryWillNotFinishOwingAnOpaqueMutation(t *testing.T) {
+	reg := evidenceRegistry()
+	prov := &scriptedProvider{name: "delivery", turns: [][]provider.Chunk{
+		{toolCallChunk("criteria", "todo_write", `{"todos":[{"content":"Check snake","status":"in_progress"}]}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("opaque", "bash", `{"command":"node -e 'require(\"fs\").writeFileSync(\"snake.html\",\"x\")'"}`), {Type: provider.ChunkDone}},
+		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
+	}}
+	a := New(prov, reg, NewSession(""), Options{DeliveryProfile: true}, event.Discard)
+	err := a.Run(context.Background(), "write the snake game")
+	var readiness *FinalReadinessError
+	if !errors.As(err, &readiness) {
+		t.Fatalf("Run err = %v, want a readiness refusal while the debt stands", err)
+	}
+	if !slices.Contains(readiness.Missing, "mutation") {
+		t.Fatalf("missing = %v, want the mutation debt named", readiness.Missing)
 	}
 }
 
@@ -1160,5 +1186,32 @@ func TestEvidenceFlowRejectsReorderedTodoAndRecoversSerially(t *testing.T) {
 		if todo.Status != "completed" {
 			t.Fatalf("canonical todo %d = %+v, want completed after serial recovery", i+1, todo)
 		}
+	}
+}
+
+// The debt has to reach the model while it can still act on it. The host owns
+// the state either way — this only makes sure the model is not deciding its
+// next action against a ledger it has not been shown.
+func TestObligationDeltaReachesTheModelWithTheResultThatCausedIt(t *testing.T) {
+	reg := evidenceRegistry()
+	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
+		{toolCallChunk("criteria", "todo_write", `{"todos":[{"content":"Ship","status":"in_progress"}]}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("opaque", "bash", `{"command":"node -e 'require(\"fs\").writeFileSync(\"a.txt\",\"x\")'"}`), {Type: provider.ChunkDone}},
+		{{Type: provider.ChunkText, Text: "ok"}, {Type: provider.ChunkDone}},
+	}}
+	a := New(prov, reg, NewSession(""), Options{}, event.Discard)
+	// How the turn ends is another gate's business; what matters here is what
+	// the model was holding when it chose its next action.
+	_ = a.Run(context.Background(), "write it")
+	got := toolResultByID(a.sess.conversation, "opaque")
+	if !strings.Contains(got, "host obligations changed") {
+		t.Fatalf("result = %q, want the debt reported with the call that made it", got)
+	}
+	if !strings.Contains(got, string(evidence.ObligationUnprovenMutation)) {
+		t.Fatalf("result = %q, want the unproven mutation named", got)
+	}
+	// The turn before it changed nothing, so nothing was owed to report.
+	if plain := toolResultByID(a.sess.conversation, "criteria"); strings.Contains(plain, "host obligations changed") {
+		t.Fatalf("todo_write result = %q, want no debt reported for a call that owed nothing", plain)
 	}
 }

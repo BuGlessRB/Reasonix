@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -860,7 +861,7 @@ func TestGoalSidecarRoundTripPreservesBlockedDeliveryCheckpoint(t *testing.T) {
 	if fresh.Goal() != "finish the delivery" || fresh.GoalStatus() != GoalStatusBlocked {
 		t.Fatalf("restored Goal = (%q, %q), want blocked Goal", fresh.Goal(), fresh.GoalStatus())
 	}
-	if got := freshExec.DeliveryCheckpoint(); got != cp {
+	if got := freshExec.DeliveryCheckpoint(); !reflect.DeepEqual(got, cp) {
 		t.Fatalf("restored checkpoint = %+v, want %+v", got, cp)
 	}
 	if !fresh.ResumeGoal() {

@@ -585,8 +585,10 @@ func TestExecuteBatchSegmentsAroundWrites(t *testing.T) {
 	if len(results) != len(want) {
 		t.Fatalf("got %d results, want %d: %v", len(results), len(want), results)
 	}
+	// A result carries the host's own notices after the tool's output, so what
+	// this asserts is which tool answered and in what order.
 	for i := range want {
-		if results[i] != want[i] {
+		if !strings.HasPrefix(results[i], want[i]) {
 			t.Fatalf("results out of order or wrong: got %v want %v", results, want)
 		}
 	}

@@ -227,3 +227,78 @@ func TestSelfInspectionCoversEveryChangedFile(t *testing.T) {
 		t.Fatalf("reason = %q, want the re-written file asked for again", reason)
 	}
 }
+
+// The declared-check gate reads the ledger's commands, so what counts as one
+// having "run" is decided by the same split. A here-doc body is a file being
+// written: a project check quoted inside one is text, not a run.
+func TestReadinessDoesNotAcceptACheckQuotedInsideAHereDoc(t *testing.T) {
+	check := instruction.VerifyCheck{Command: "go test ./...", SourcePath: "AGENTS.md", Line: 3}
+	writer := evidence.Receipt{ToolName: "write_file", Success: true, Write: true, Paths: []string{"a.go"}}
+
+	cases := []struct {
+		name      string
+		command   string
+		wantReady bool
+	}{
+		{
+			name:      "quoted in the body only",
+			command:   "cat > notes.md <<'EOF'\ngo test ./...\nEOF",
+			wantReady: false,
+		},
+		{
+			name:      "really run beside a written file",
+			command:   "cat > notes.md <<'EOF'\nnothing here\nEOF\ngo test ./...",
+			wantReady: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ran := evidence.Receipt{ToolName: "bash", Success: true, Command: tc.command}
+			a := &Agent{task: taskRuntime{ledger: readinessLedger(writer, ran)}, projectChecks: []instruction.VerifyCheck{check}}
+			got := a.ReadinessResult()
+			if got.Ready != tc.wantReady {
+				t.Fatalf("ReadinessResult().Ready = %v, want %v (%+v)", got.Ready, tc.wantReady, got)
+			}
+		})
+	}
+}
+
+// Observation proves effects; verification proves the state they left. A check
+// that runs afterwards answers the second question and is not evidence for the
+// first, so it never settles a change whose extent was never established.
+func TestACheckNeverSettlesAnUnprovenMutation(t *testing.T) {
+	unproven := evidence.Receipt{
+		ToolName: "bash", Success: true, Write: true, Mutation: true,
+		MutationEvidence: evidence.MutationUnknown,
+		Command:          `python3 -c 'open("a.txt","w").write("x")'`,
+	}
+	observed := unproven
+	observed.MutationEvidence = evidence.MutationProven
+	observed.Paths = []string{"a.txt"}
+	check := evidence.Receipt{ToolName: "bash", Success: true, Command: "go test ./..."}
+
+	cases := []struct {
+		name      string
+		delivery  bool
+		receipts  []evidence.Receipt
+		wantOwed  int
+		wantFatal bool
+	}{
+		{"balanced owes it and may still end", false, []evidence.Receipt{unproven}, 1, false},
+		{"delivery may not end owing it", true, []evidence.Receipt{unproven}, 1, true},
+		{"a green check afterwards changes nothing", true, []evidence.Receipt{unproven, check}, 1, true},
+		{"scope established by observation settles it", true, []evidence.Receipt{observed, check}, 0, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &Agent{task: taskRuntime{ledger: readinessLedger(tc.receipts...)}, deliveryProfile: tc.delivery}
+			got := a.finalReadinessCheckFor()
+			if got.missingMutation != tc.wantOwed {
+				t.Fatalf("missingMutation = %d, want %d", got.missingMutation, tc.wantOwed)
+			}
+			if fatal := strings.Contains(got.reason, "could not establish"); fatal != tc.wantFatal {
+				t.Fatalf("fatal = %v (reason %q), want %v", fatal, got.reason, tc.wantFatal)
+			}
+		})
+	}
+}

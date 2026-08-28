@@ -9,6 +9,17 @@ import (
 	"strings"
 )
 
+// HoldsTestCriteria reports whether a file carries criteria the host must
+// already hold before anything may overwrite it. It reads the same contract
+// RewrittenTestCriteria compares against: go test's own idea of what a test is.
+func HoldsTestCriteria(path string, src []byte) bool {
+	if !strings.HasSuffix(strings.ToLower(path), "_test.go") {
+		return false
+	}
+	bodies, ok := testFunctionBodies(string(src))
+	return ok && len(bodies) > 0
+}
+
 // RewrittenTestCriteria names the tests an edit changed the meaning of: one
 // that existed before and now asserts something else, or one that is gone. A
 // suite green afterwards is not the suite that was green before, so a run that

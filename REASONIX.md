@@ -178,3 +178,49 @@ above it — the code deciding what the agent may execute was its least-tested
 part. Floors ratchet like repolint's budgets: raising one is free, lowering one
 needs `-allow-drop` and a reason in the PR. Adding a `sensitive:` path gets both
 effects; there is no second list to keep in sync.
+
+## Trust domain
+
+Three sets, kept apart because conflating them turns a performance number into a
+security claim: **VerificationRelevant** (state that can change whether a
+delivery claim holds), **Observable** (state the host can reconcile after an
+action, so it can say what that action did), **HostProtected** (state a
+capability/sandbox boundary makes unwritable). The invariant is
+`Writable ∩ VerificationRelevant ⊆ Observable ∪ HostProtected`:
+
+> Any state that can both be modified by an action and influence the delivery
+> claim must either be observable by the host or protected from modification by
+> host-enforced boundaries. An incomplete observation never establishes scope.
+
+Effects and state answer different questions and never stand in for each other —
+observation proves what an action did, verification proves what the resulting
+state satisfies — which is why `unproven_mutation` is settled only by
+observation, never by a check that ran afterwards.
+
+What follows bounds Observable today. It is not a restatement of the invariant:
+moving a number here must not move the promise.
+
+- `scanWorkspace` walks the workspace recursively, skips VCS store dirs, and is
+  `complete` only below 50k files. Over that, or past a walk error, it
+  establishes nothing and the mutation stays unproven.
+- Symlinks are recorded by `Lstat`, so a write through one lands outside what
+  the walk compares. Confining the resolved target is the sandbox's job.
+- `internal/sandbox` confines writes to the workspace, configured extras, temp
+  and toolchain caches — on macOS and Linux. Windows has no OS-level bash
+  sandbox, so there nothing the host enforces bounds `Writable`.
+
+`stateEpoch` tracks host-observed mutations, not an exact filesystem snapshot;
+unobserved external writers are a gap shared by the whole verification model. Go
+baseline test criteria use the toolchain's build overlay and therefore share
+ordinary verification's epoch semantics; the overlay is not a general filesystem
+view.
+
+A captured criterion may be superseded only by authority outside
+execution-mutable state; the current workspace, its tests, and the agent itself
+cannot authorize supersession.
+
+Two gaps follow and are open, not decided: a build that reads `.git` makes VCS
+state VerificationRelevant while the scan skips it, and on Windows a symlink out
+of the workspace is neither observed nor protected. Closing either means
+widening observation or narrowing writability — never widening what a check is
+taken to prove.

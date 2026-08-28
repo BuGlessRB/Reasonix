@@ -2611,14 +2611,15 @@
   .job[data-done] { color: var(--faint) }
   .bgnote { margin-top: 6px; font: var(--w-reg) 11px var(--mono); color: var(--faint) }
 
-  /* 外部服务连不上：和设置页的 .srv 是同一件东西，所以读法也一样 —— 名字一行、
-     原因一行、状态用左色条说。它曾经借 .job 的样式，于是一个失败被画成「做完
-     了」的灰，而 .job 是给 div 写的，这里的 button 就带着系统那圈按钮边框。 */
+  /* 外部服务连不上：一行一个 —— 名字在左，去处在右，坏了这件事由红点说。
+     原因不在这里读，它在设置页 .srv 的旁边，那儿才动得了手。它曾经借 .job 的
+     样式，于是一个失败被画成「做完了」的灰，而 .job 是给 div 写的，这里的
+     button 就带着系统那圈按钮边框。 */
   .srvs { display: flex; flex-direction: column; gap: 7px; min-height: 18px }
   /* 红点说明这一条坏了，标题上的计数说明有几条 —— 再加一道红竖条就是第三次
      说同一件事，而右栏别的块一道都没有。 */
   .srvrow {
-    display: flex; flex-direction: column; gap: 3px; width: 100%;
+    display: flex; align-items: center; gap: 8px; width: 100%;
     padding: 4px 7px 5px; border: 0; border-radius: var(--r-sm);
     background: transparent;
     color: inherit; font: inherit; text-align: left; cursor: pointer;
@@ -2634,14 +2635,16 @@
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font: var(--w-reg) 11.5px var(--mono); color: var(--text);
   }
-  /* 端点自己写的一句话：长度不由我们定，所以它只能换行、只能截，绝不能参与
-     决定这一栏有多宽。界面字而不是等宽 —— 等宽栈里没有汉字，中文报错会散。
-     不上红：右栏的规矩是只有承载「坏了」的那个记号染色（见 .drow 的 tone），
-     描述照常规色走，否则一整块红字读起来是弹窗而不是仪表。 */
-  .srvrow .why {
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-    font: var(--w-reg) 10.5px/1.5 var(--ui); color: var(--muted); overflow-wrap: anywhere;
+  /* The way out, and the only thing on the row that is not a status. It stays
+     printed rather than appearing on hover: the pip already says "broken", and
+     a row that can be pressed without saying so reads as a dead status line.
+     Not red — the rail colours only the mark that carries the fault (see .drow's
+     tone), and an accent here reads as the link it is. */
+  .srvrow .fix {
+    margin-left: auto; flex: none;
+    font: var(--w-reg) 10.5px var(--ui); color: var(--accent-ink);
   }
+  .srvrow:hover .fix { text-decoration: underline; text-underline-offset: 2px }
   .srvs .more { font: var(--w-reg) 11px var(--ui); color: var(--faint) }
 
   /* Not .spark: the component's own root already carries that, so a wrapper
