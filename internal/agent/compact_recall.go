@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"reasonix/internal/ablation"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
@@ -31,6 +32,9 @@ func (a *Agent) recallBudget() int {
 // what a read was refused.
 func (a *Agent) RecallContext(_ context.Context, req tool.RecallRequest) (tool.RecallResult, error) {
 	query := strings.TrimSpace(req.Query)
+	if query != "" && a.ablation.Off(ablation.RecallSearch) {
+		return tool.RecallResult{}, fmt.Errorf("recall: searching the folded region is not available in this configuration; read a #n address from the folded work index")
+	}
 	switch {
 	case query != "" && len(req.Positions) > 0:
 		return tool.RecallResult{}, fmt.Errorf("recall: give positions to read or a query to search, not both")

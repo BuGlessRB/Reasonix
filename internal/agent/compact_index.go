@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"reasonix/internal/ablation"
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
 )
@@ -187,7 +188,7 @@ func (a *Agent) mergeFoldIndex(previous, fresh string, budgetTokens int) string 
 	var b strings.Builder
 	b.WriteString(indexSectionHeading + "\n")
 	if first > 0 {
-		fmt.Fprintf(&b, "- (%d older entries dropped; recall with a query still finds them)\n", first)
+		fmt.Fprintf(&b, "- (%d older entries dropped; %s)\n", first, a.droppedIndexHint())
 	}
 	for _, l := range lines[first:] {
 		b.WriteString(l + "\n")
@@ -227,11 +228,17 @@ func quotedOpening(content string) string {
 // line says, and only a line can be recalled.
 func (a *Agent) foldIndexBudget() int {
 	const floor = 256
+	// The bench axis scales the whole allowance, floor included: a floor that
+	// survived would make the off arm a small index rather than none.
+	scale := a.ablation.FoldIndex().Ratio()
+	if scale <= 0 {
+		return 0
+	}
 	window := a.effectiveContextWindow()
 	if window <= 0 {
-		return floor
+		return int(floor * scale)
 	}
-	return max(floor, window/100)
+	return int(float64(max(floor, window/100)) * scale)
 }
 
 // stripFoldIndexFromDigests pulls the host-written index out of any prior
@@ -294,4 +301,13 @@ func (a *Agent) canonicalOriginFor(state CompactionState, canonical, msgs []prov
 		}
 		return -1
 	}
+}
+
+// droppedIndexHint names what can still reach a trimmed line. With search
+// ablated the arm must not be told about a capability it does not have.
+func (a *Agent) droppedIndexHint() string {
+	if a.ablation.Off(ablation.RecallSearch) {
+		return "the full transcript still holds them"
+	}
+	return "recall with a query still finds them"
 }

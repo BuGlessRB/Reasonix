@@ -270,6 +270,7 @@ func main() {
 	model := flag.String("model", "", "provider/model name (default: config default)")
 	profileFlag := flag.String("profile", benchmarkProfileBaseline, "prompt profile: baseline | delivery")
 	ablateFlag := flag.String("ablate", "", "ablation arm: subsystems to switch off ("+ablation.ModuleList()+"; none|all)")
+	foldIndexFlag := flag.String("fold-index", "", "fold-index arm: how much of the model-visible address list to keep (default|half|quarter|off)")
 	outMD := flag.String("out", "", "write the markdown report here (default: stdout)")
 	trajDir := flag.String("trajectories", "", "suite mode: write one <task-id>.trajectory.jsonl per task into this directory")
 	forcePlanner := flag.Bool("force-planner", false, "suite mode: prefix each prompt with a plan-first directive so the two-model turn engages regardless of the planner gate")
@@ -284,7 +285,7 @@ func main() {
 	timeoutSec := flag.Int("timeout", 1200, "agent timeout in seconds (diff mode)")
 	attempts := flag.Int("attempts", 1, "suite/diff modes: retry a task up to N times until an attempt passes (stochastic agent); enables Pass@≤N")
 	flag.Parse()
-	axes, err := resolveExperimentAxes(*profileFlag, *ablateFlag, *cacheArm, *anchorFlag)
+	axes, err := resolveExperimentAxes(*profileFlag, *ablateFlag, *cacheArm, *anchorFlag, *foldIndexFlag)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -666,9 +667,7 @@ func buildRunTaskArgs(cfg suiteConfig, metricsPath, trajectoryPath string, maxSt
 	}
 	// The control arm must produce a byte-identical command line to the one the
 	// suite ran before ablation existed, so its numbers stay comparable.
-	if !cfg.arm.Empty() {
-		args = append(args, "--ablate", cfg.arm.String())
-	}
+	args = appendArmArgs(args, cfg.arm)
 	return append(args, prompt)
 }
 
@@ -700,9 +699,7 @@ func warmPrefix(cfg suiteConfig, work string, env []string) {
 	if cfg.effort != "" {
 		args = append(args, "--effort", cfg.effort)
 	}
-	if !cfg.arm.Empty() {
-		args = append(args, "--ablate", cfg.arm.String())
-	}
+	args = appendArmArgs(args, cfg.arm)
 	args = append(args, "Reply with exactly: ok")
 	cmd := exec.CommandContext(ctx, cfg.bin, args...)
 	cmd.Dir = work

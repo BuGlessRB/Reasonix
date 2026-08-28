@@ -4,6 +4,7 @@ import (
 	"reasonix/internal/ablation"
 	"reasonix/internal/agentpreset"
 	"reasonix/internal/tool"
+	"reasonix/internal/tool/builtin"
 )
 
 // Canonical Agent role-setting identifiers re-exported for frontends that
@@ -119,6 +120,11 @@ func applyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bo
 		for _, name := range EvidenceToolNames() {
 			unreachable[name] = true
 		}
+	}
+	// recall keeps its read half, so the arm swaps the tool rather than hiding
+	// it: an address the fold index still carries stays readable either way.
+	if arm.Off(ablation.RecallSearch) {
+		reg.Add(builtin.RecallWithoutSearch())
 	}
 	allow := make([]string, 0, 16)
 	for _, name := range UnifiedProviderToolNames() {

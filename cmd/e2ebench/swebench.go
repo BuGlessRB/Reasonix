@@ -72,9 +72,7 @@ func swebenchAgentArgs(metricsPath, model, profile, permission string, arm ablat
 		args = append(args, "--max-steps", fmt.Sprint(maxSteps))
 	}
 	args = appendBenchmarkProfileArgs(args, profile)
-	if !arm.Empty() {
-		args = append(args, "--ablate", arm.String())
-	}
+	args = appendArmArgs(args, arm)
 	return append(args, prompt)
 }
 

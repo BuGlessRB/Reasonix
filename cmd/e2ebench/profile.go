@@ -16,9 +16,9 @@ type experimentAxes struct {
 	arm                    ablation.Set
 }
 
-func resolveExperimentAxes(profile, ablate, cache, anchor string) (experimentAxes, error) {
+func resolveExperimentAxes(profile, ablate, cache, anchor, foldIndex string) (experimentAxes, error) {
 	p, perr := normalizeBenchmarkProfile(profile)
-	a, aerr := ablation.Parse(ablate)
+	a, aerr := ablation.ParseArm(ablate, foldIndex)
 	c, cerr := normalizeCacheArm(cache)
 	an, anerr := normalizeAnchorArm(anchor)
 	return experimentAxes{profile: p, cache: c, anchor: an, arm: a}, errors.Join(perr, aerr, cerr, anerr)
@@ -70,4 +70,17 @@ func normalizeCacheArm(arm string) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown cache arm %q (want cold or warm)", arm)
 	}
+}
+
+// appendArmArgs passes both axes of an arm to the child binary. The control arm
+// adds nothing, so its command line stays byte-identical to the one older
+// comparisons were recorded with.
+func appendArmArgs(args []string, arm ablation.Set) []string {
+	if spec := arm.String(); spec != "none" {
+		args = append(args, "--ablate", spec)
+	}
+	if scale := arm.FoldIndex(); scale != ablation.FoldIndexDefault {
+		args = append(args, "--fold-index", string(scale))
+	}
+	return args
 }

@@ -14,7 +14,7 @@ func TestParseAcceptsSpecFormsAndRejectsUnknownModules(t *testing.T) {
 		{"planner,evidence", "no-evidence+no-planner"},
 		{"planner evidence", "no-evidence+no-planner"},
 		{" Evidence , Retrieval ", "no-evidence+no-retrieval"},
-		{"all", "no-evidence+no-planner+no-subagent+no-retrieval+no-compaction+no-full-fold+no-upstream"},
+		{"all", "no-evidence+no-planner+no-subagent+no-retrieval+no-compaction+no-full-fold+no-upstream+no-recall-search"},
 	} {
 		set, err := Parse(tc.spec)
 		if err != nil {
@@ -51,6 +51,47 @@ func TestStringRoundTripsThroughParse(t *testing.T) {
 		if again.Arm() != set.Arm() {
 			t.Errorf("%q round-tripped to %q", set.Arm(), again.Arm())
 		}
+	}
+}
+
+// The index axis is not a module, but a run that moved it is not the control
+// arm either: results keyed by arm name would otherwise merge with it.
+func TestFoldIndexScaleNamesItsOwnArm(t *testing.T) {
+	var s Set
+	if got := s.WithFoldIndex(FoldIndexQuarter).Arm(); got != "index-quarter" {
+		t.Errorf("Arm() = %q, want index-quarter", got)
+	}
+	if got := New(Evidence).WithFoldIndex(FoldIndexOff).Arm(); got != "no-evidence+index-off" {
+		t.Errorf("Arm() = %q, want no-evidence+index-off", got)
+	}
+	if s.WithFoldIndex(FoldIndexQuarter).Empty() {
+		t.Error("a quartered index reported itself as the control arm")
+	}
+	if !s.WithFoldIndex(FoldIndexDefault).Empty() {
+		t.Error("the default scale is the control arm")
+	}
+}
+
+func TestFoldIndexScaleRatios(t *testing.T) {
+	for _, tc := range []struct {
+		spec  string
+		scale FoldIndexScale
+		ratio float64
+	}{
+		{"", FoldIndexDefault, 1}, {"default", FoldIndexDefault, 1},
+		{"half", FoldIndexHalf, 0.5}, {"QUARTER", FoldIndexQuarter, 0.25},
+		{"off", FoldIndexOff, 0}, {"0", FoldIndexOff, 0},
+	} {
+		got, err := ParseFoldIndexScale(tc.spec)
+		if err != nil {
+			t.Fatalf("ParseFoldIndexScale(%q): %v", tc.spec, err)
+		}
+		if got != tc.scale || got.Ratio() != tc.ratio {
+			t.Errorf("ParseFoldIndexScale(%q) = %q (ratio %v), want %q (%v)", tc.spec, got, got.Ratio(), tc.scale, tc.ratio)
+		}
+	}
+	if _, err := ParseFoldIndexScale("0.37"); err == nil {
+		t.Fatal("a free-form fraction was accepted; the axis is four steps on purpose")
 	}
 }
 

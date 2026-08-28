@@ -87,9 +87,7 @@ func runOnce(o diffOpts, srcFiles, pkgs []string, prompt string) diffReport {
 		args = append(args, "--model", o.model)
 	}
 	args = appendBenchmarkProfileArgs(args, o.profile)
-	if !o.ablate.Empty() {
-		args = append(args, "--ablate", o.ablate.String())
-	}
+	args = appendArmArgs(args, o.ablate)
 	args = append(args, prompt)
 	cmd := exec.CommandContext(ctx, o.bin, args...)
 	cmd.Dir = o.repo

@@ -13,15 +13,35 @@ const maxRecallPositions = 8
 
 func init() { tool.RegisterBuiltin(recallContext{}) }
 
-type recallContext struct{}
+// searchOff is the pre-search tool: it reads an address it was given and cannot
+// look one up. A benchmark arm that ablates search installs this variant, so
+// the arm is not shown a parameter its runtime refuses.
+type recallContext struct{ searchOff bool }
+
+// RecallWithoutSearch is the recall tool with its search half removed, for the
+// no-recall-search arm.
+func RecallWithoutSearch() tool.Tool { return recallContext{searchOff: true} }
 
 func (recallContext) Name() string { return "recall" }
 
-func (recallContext) Description() string {
+func (r recallContext) Description() string {
+	if r.searchOff {
+		return "Bring a folded part of this conversation back, addressed by the #n positions listed under \"Folded work index\" in a compaction summary. Prefer re-reading a file over recalling it — a current copy beats a folded one. Each compaction grants a fresh budget; a request past it is refused whole, not truncated."
+	}
 	return "Bring folded conversation back: read the #n positions listed under \"Folded work index\" in a compaction summary, or search the whole folded region by query when no index line names what you need. Prefer re-reading a file over recalling it — a current copy beats a folded one. One budget per compaction covers both, and a request past it is refused whole, not truncated."
 }
 
-func (recallContext) Schema() json.RawMessage {
+func (r recallContext) Schema() json.RawMessage {
+	if r.searchOff {
+		return json.RawMessage(`{
+"type":"object",
+"additionalProperties":false,
+"properties":{
+  "positions":{"type":"array","minItems":1,"maxItems":8,"items":{"type":"integer","minimum":0},"description":"The #n addresses from a folded-work index line, without the '#'."}
+},
+"required":["positions"]
+}`)
+	}
 	return json.RawMessage(`{
 "type":"object",
 "additionalProperties":false,
@@ -39,7 +59,7 @@ func (recallContext) ReadOnly() bool { return true }
 
 func (recallContext) PlanModeSafe() bool { return true }
 
-func (recallContext) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+func (r recallContext) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var request struct {
 		Positions []int  `json:"positions"`
 		Query     string `json:"query"`
@@ -52,6 +72,14 @@ func (recallContext) Execute(ctx context.Context, args json.RawMessage) (string,
 	// searches. Both together is refused rather than resolved, because either
 	// reading has the tool doing something the caller did not ask for.
 	query := strings.TrimSpace(request.Query)
+	if r.searchOff {
+		if query != "" {
+			return "", fmt.Errorf("recall: this configuration reads addresses only")
+		}
+		if len(request.Positions) == 0 {
+			return "", fmt.Errorf("recall: positions must name at least one #n address")
+		}
+	}
 	if query == "" && len(request.Positions) == 0 {
 		return "", fmt.Errorf("recall: give positions to read, or a query to search for them")
 	}

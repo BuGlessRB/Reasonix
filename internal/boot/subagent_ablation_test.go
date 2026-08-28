@@ -2,6 +2,7 @@ package boot
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,5 +111,44 @@ func TestSkillSubagentPromptCarriesTheWorkspaceVCS(t *testing.T) {
 	}
 	if got := r.systemPrompt(sk); !strings.Contains(got, "Version control: git") {
 		t.Fatalf("prompt = %q, want the detected version control named", got)
+	}
+}
+
+// recall keeps its read half under the search arm, so the check is on the
+// schema's shape rather than the tool's presence: an arm shown a query
+// parameter its runtime refuses is being asked a question it cannot answer.
+func TestRecallSearchArmRemovesTheQueryParameter(t *testing.T) {
+	schemaOf := func(arm ablation.Set) string {
+		reg := tool.NewRegistry()
+		for _, x := range tool.Builtins() {
+			reg.Add(x)
+		}
+		applyUnifiedProviderToolSurface(reg, false, arm)
+		for _, s := range reg.Schemas() {
+			if s.Name == "recall" {
+				b, err := json.Marshal(s)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return string(b)
+			}
+		}
+		t.Fatal("recall is not provider-visible; the arm would measure nothing")
+		return ""
+	}
+
+	control := schemaOf(ablation.Set{})
+	if !strings.Contains(control, `"query"`) {
+		t.Fatalf("control recall schema has no query parameter:\n%s", control)
+	}
+	arm := schemaOf(ablation.New(ablation.RecallSearch))
+	if strings.Contains(arm, `"query"`) {
+		t.Errorf("the no-recall-search arm is still shown a query parameter:\n%s", arm)
+	}
+	if !strings.Contains(arm, `"positions"`) {
+		t.Errorf("the arm lost the read half too:\n%s", arm)
+	}
+	if strings.Contains(arm, "search") {
+		t.Errorf("the arm's description still offers search:\n%s", arm)
 	}
 }
