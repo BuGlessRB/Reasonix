@@ -333,17 +333,27 @@ func (a *Agent) mutationEpoch() uint64 {
 // re-reading them is how a rewritten declaration would come to speak for the
 // requirement it replaced.
 func (a *Agent) checkContract() evidence.CheckContract {
+	return evidence.CaptureCheckContract(a.task.checkpoint.BaselineChecks, a.declaredChecks())
+}
+
+// declaredChecks is what the project asks for right now, which the contract
+// pairs against the baseline rather than trusting on its own.
+func (a *Agent) declaredChecks() []string {
 	current := make([]string, 0, len(a.projectChecks))
 	for _, check := range a.projectChecks {
 		current = append(current, check.Command)
 	}
+	return current
+}
+
+// captureBaselineChecks fixes what this task is held to, and never recaptures:
+// after it the project may declare what it likes. It runs once at the turn's
+// start, where nothing else is running — asking for it lazily made the capture
+// a write that every parallel tool call reached at the moment it finished.
+func (a *Agent) captureBaselineChecks() {
 	if len(a.task.checkpoint.BaselineChecks) == 0 {
-		// Captured the first time the task is asked what it owes, and never
-		// recaptured: after this the project may declare what it likes, and what
-		// it declared here is still what the task is held to.
-		a.task.checkpoint.BaselineChecks = evidence.CaptureCheckContract(current, nil).Baseline()
+		a.task.checkpoint.BaselineChecks = evidence.CaptureCheckContract(a.declaredChecks(), nil).Baseline()
 	}
-	return evidence.CaptureCheckContract(a.task.checkpoint.BaselineChecks, current)
 }
 
 // turnHasNothingToAnswerFor reports the turn no gate has a subject in: nothing

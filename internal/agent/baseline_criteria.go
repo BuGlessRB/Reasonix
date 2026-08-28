@@ -113,10 +113,9 @@ func (a *Agent) captureCriteriaUnder(store *evidence.BaselineStore, root string)
 
 // captureCriterionAt files one path if it carries criteria the host does not
 // hold. Already held comes first: a criterion captured earlier is safe whatever
-// the store can do now, so a backend that has gone unwritable never re-blocks a
-// change to something already kept. The map records a durable write, not a
-// handle — a store that later loses its contents surfaces at evaluation as
-// unavailable rather than here.
+// the store can do now, so a backend gone unwritable never re-blocks a change
+// to something already kept. The map records a durable write, not a handle — a
+// store that later loses its contents surfaces at evaluation, not here.
 func (a *Agent) captureCriterionAt(store *evidence.BaselineStore, path string) error {
 	if _, held := a.task.baselineCriteria[path]; held {
 		return nil

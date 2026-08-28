@@ -145,6 +145,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	if scoped && a.task.checkpoint.ScopeID != scope.ID {
 		a.task.checkpoint = evidence.DeliveryCheckpoint{ScopeID: scope.ID}
 	}
+	a.captureBaselineChecks()
 	// Re-lease this session's background-job mutations that no turn has
 	// committed yet. The Reset above just wiped any lease a failed or
 	// cancelled turn held (its ledger is gone), and a process restart starts
