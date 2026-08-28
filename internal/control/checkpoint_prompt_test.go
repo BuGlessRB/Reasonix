@@ -33,7 +33,7 @@ func TestCheckpointsReturnUserPromptWithoutComposedPrefixes(t *testing.T) {
 		PlanModeMarker + "\n\n" +
 		typed
 	o := newTurnOrchestrator(c)
-	if err := o.runTurnWithRawDisplay(context.Background(), composed, typed, ""); err != nil {
+	if err := o.runOrchestratedTurn(context.Background(), orchestratedTurn{input: composed, raw: typed}); err != nil {
 		t.Fatal(err)
 	}
 

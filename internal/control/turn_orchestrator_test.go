@@ -65,7 +65,7 @@ func TestTurnOrchestratorAttachesTrustedPlannerMetadata(t *testing.T) {
 
 	const raw = "fix typo in README"
 	const expanded = "Referenced context:\n\nprivate injected details\n\nfix typo in README"
-	if err := newTurnOrchestrator(c).runTurnWithRawDisplay(context.Background(), expanded, raw, ""); err != nil {
+	if err := newTurnOrchestrator(c).runOrchestratedTurn(context.Background(), orchestratedTurn{input: expanded, raw: raw}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -86,7 +86,7 @@ func TestTurnOrchestratorRunsForegroundUnit(t *testing.T) {
 	c.SetPlanMode(true)
 
 	o := newTurnOrchestrator(c)
-	if err := o.runTurnWithRawDisplay(context.Background(), "draft the plan", "draft the plan", ""); err != nil {
+	if err := o.runOrchestratedTurn(context.Background(), orchestratedTurn{input: "draft the plan", raw: "draft the plan"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -106,13 +106,13 @@ func TestNonGoalTurnDoesNotInvokeGoalEvaluator(t *testing.T) {
 		{
 			name: "ordinary",
 			run: func(o *turnOrchestrator) error {
-				return o.runTurnLoopWithRawDisplay(context.Background(), "answer", "answer", "")
+				return o.runTurnLoop(context.Background(), orchestratedTurn{input: "answer", raw: "answer"})
 			},
 		},
 		{
 			name: "edited",
 			run: func(o *turnOrchestrator) error {
-				return o.runEditedGoalLoopWithRawDisplay(context.Background(), "answer", "answer", "", "old answer")
+				return o.runTurnLoop(context.Background(), orchestratedTurn{input: "answer", raw: "answer", editedOriginal: "old answer"})
 			},
 		},
 	}
@@ -144,7 +144,7 @@ func TestTurnOrchestratorTypedSyntheticTurnDoesNotDependOnPrefix(t *testing.T) {
 	if IsSyntheticUserMessage(turn) {
 		t.Fatalf("test setup: %q unexpectedly matched the legacy synthetic prefix list", turn)
 	}
-	if err := o.runSyntheticTurnWithRawDisplay(context.Background(), turn, turn, ""); err != nil {
+	if err := o.runOrchestratedTurn(context.Background(), orchestratedTurn{input: turn, raw: turn, synthetic: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -169,12 +169,7 @@ func TestGoalTurnOutputCannotAdvanceReplacementGoal(t *testing.T) {
 	runner.c = c
 	c.SetGoal("old goal")
 
-	if err := newTurnOrchestrator(c).runTurnLoopWithRawDisplay(
-		context.Background(),
-		"work on the old goal",
-		"work on the old goal",
-		"",
-	); err != nil {
+	if err := newTurnOrchestrator(c).runTurnLoop(context.Background(), orchestratedTurn{input: "work on the old goal", raw: "work on the old goal"}); err != nil {
 		t.Fatal(err)
 	}
 	if runner.calls != 1 {
@@ -308,7 +303,7 @@ func TestTurnOrchestratorStopHookIgnoresCanceledTurnContext(t *testing.T) {
 	})
 
 	o := newTurnOrchestrator(c)
-	if err := o.runTurnWithRawDisplay(runCtx, "hello", "hello", ""); err != nil {
+	if err := o.runOrchestratedTurn(runCtx, orchestratedTurn{input: "hello", raw: "hello"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -357,7 +352,7 @@ func TestGoalReadinessFailureContinuesUntilExternalStop(t *testing.T) {
 	c := New(Options{Runner: runner, Executor: executor})
 	c.SetGoal("ship the integration")
 
-	err := newTurnOrchestrator(c).runTurnLoopWithRawDisplay(context.Background(), "start", "start", "")
+	err := newTurnOrchestrator(c).runTurnLoop(context.Background(), orchestratedTurn{input: "start", raw: "start"})
 	if err == nil || err.Error() != "external provider stop" {
 		t.Fatalf("run err = %v, want external provider stop after continuations", err)
 	}
@@ -409,7 +404,7 @@ func TestTurnOrchestratorGoalContinuationRunsStopPerUnit(t *testing.T) {
 	c.SetGoal("ship the refactor")
 
 	o := newTurnOrchestrator(c)
-	if err := o.runTurnLoopWithRawDisplay(context.Background(), "Start pursuing the active goal now.", "ship the refactor", ""); err != nil {
+	if err := o.runTurnLoop(context.Background(), orchestratedTurn{input: "Start pursuing the active goal now.", raw: "ship the refactor"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -467,7 +462,7 @@ func TestTurnOrchestratorApprovedPlanSharesOneStopHook(t *testing.T) {
 	go func() { c.Approve(<-approvalID, true, false, false) }()
 
 	o := newTurnOrchestrator(c)
-	if err := o.runTurnWithRawDisplay(context.Background(), "plan this change", "plan this change", ""); err != nil {
+	if err := o.runOrchestratedTurn(context.Background(), orchestratedTurn{input: "plan this change", raw: "plan this change"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -506,7 +501,7 @@ func TestTurnOrchestratorRefTurnRecordsVisibleDisplay(t *testing.T) {
 	})
 
 	const visible = "explain @notes.txt"
-	c.runRefTurn(visible, visible)
+	c.runRefTurn(refTurn{input: visible, display: visible})
 	waitForTurnDone(t, events)
 
 	if len(runner.inputs) != 1 {
@@ -548,7 +543,7 @@ func TestTurnOrchestratorRefTurnPreservesExpandedPasteForRouting(t *testing.T) {
 		return "<file path=\"notes.txt\">\nreference\n</file>", nil
 	}
 
-	if err := c.runRefTurnWithResolverSync(context.Background(), expanded, expanded, display, "", resolve); err != nil {
+	if err := c.runRefTurnSync(context.Background(), refTurn{input: expanded, display: display, resolve: resolve}); err != nil {
 		t.Fatal(err)
 	}
 	if len(runner.inputs) != 1 || !strings.Contains(runner.inputs[0], "Referenced context:") || !strings.Contains(runner.inputs[0], expanded) {
@@ -578,7 +573,7 @@ func TestTurnOrchestratorAutoReasoningLanguageUsesRawPromptForRefTurns(t *testin
 	})
 
 	const visible = "解释 @auth.go 的报错"
-	c.runRefTurn(visible, visible)
+	c.runRefTurn(refTurn{input: visible, display: visible})
 	waitForTurnDone(t, events)
 
 	if len(runner.inputs) != 1 {
@@ -611,7 +606,7 @@ func TestTurnOrchestratorCheckpointBoundaryPrecedesUserMessage(t *testing.T) {
 	})
 
 	o := newTurnOrchestrator(c)
-	if err := o.runTurnWithRawDisplay(context.Background(), "write the test", "write the test", ""); err != nil {
+	if err := o.runOrchestratedTurn(context.Background(), orchestratedTurn{input: "write the test", raw: "write the test"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -666,7 +661,7 @@ func TestTurnOrchestratorCheckpointPromptIsRawUserInput(t *testing.T) {
 	})
 	o := newTurnOrchestrator(c)
 	const raw = "fix the parser"
-	if err := o.runTurnWithRawDisplay(context.Background(), raw, raw, ""); err != nil {
+	if err := o.runOrchestratedTurn(context.Background(), orchestratedTurn{input: raw, raw: raw}); err != nil {
 		t.Fatal(err)
 	}
 	cps := c.Checkpoints()
@@ -697,10 +692,10 @@ func TestTurnOrchestratorSyntheticTurnDoesNotCreateCheckpoint(t *testing.T) {
 		Label:       "test",
 	})
 	o := newTurnOrchestrator(c)
-	if err := o.runTurnWithRawDisplay(context.Background(), "real prompt", "real prompt", ""); err != nil {
+	if err := o.runOrchestratedTurn(context.Background(), orchestratedTurn{input: "real prompt", raw: "real prompt"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := o.runSyntheticTurnWithRawDisplay(context.Background(), "hidden follow-up", "hidden follow-up", ""); err != nil {
+	if err := o.runOrchestratedTurn(context.Background(), orchestratedTurn{input: "hidden follow-up", raw: "hidden follow-up", synthetic: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -743,7 +738,7 @@ func TestTurnOrchestratorStopFailureHookCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	o := newTurnOrchestrator(c)
-	if err := o.runTurnWithRawDisplay(ctx, "test", "test", ""); err != nil && !errors.Is(err, context.Canceled) {
+	if err := o.runOrchestratedTurn(ctx, orchestratedTurn{input: "test", raw: "test"}); err != nil && !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if stopCalls != 1 {
@@ -790,7 +785,7 @@ func TestTurnOrchestratorCancelPreservesVisibleUserPrompt(t *testing.T) {
 	ex.ReplaceTodoState([]evidence.TodoItem{{Content: "add abc", Status: "in_progress"}})
 
 	o := newTurnOrchestrator(c)
-	err := o.runTurnWithRawDisplay(context.Background(), "add config file abc", "add config file abc", "")
+	err := o.runOrchestratedTurn(context.Background(), orchestratedTurn{input: "add config file abc", raw: "add config file abc"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
@@ -839,7 +834,7 @@ func TestTurnOrchestratorProviderErrorPreservesCompletedPairAndLocalPartial(t *t
 	ex := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Runner: runner, Executor: ex})
 
-	err := newTurnOrchestrator(c).runTurnWithRawDisplay(context.Background(), "update a.txt", "update a.txt", "")
+	err := newTurnOrchestrator(c).runOrchestratedTurn(context.Background(), orchestratedTurn{input: "update a.txt", raw: "update a.txt"})
 	if !errors.Is(err, apiErr) {
 		t.Fatalf("run error = %v, want %v", err, apiErr)
 	}
@@ -880,7 +875,7 @@ func TestTurnOrchestratorInterruptedAfterCompactionRelocatesVisibleTurn(t *testi
 				c.mu.Unlock()
 			}
 
-			err := newTurnOrchestrator(c).runTurnWithRawDisplay(context.Background(), "update a.txt", "update a.txt", "")
+			err := newTurnOrchestrator(c).runOrchestratedTurn(context.Background(), orchestratedTurn{input: "update a.txt", raw: "update a.txt"})
 			if !errors.Is(err, tc.err) {
 				t.Fatalf("run error = %v, want %v", err, tc.err)
 			}
@@ -923,7 +918,7 @@ func TestTurnOrchestratorCancelClassifiesCancelledToolResultAsInterrupted(t *tes
 	c.gate.canceling = true
 	c.mu.Unlock()
 
-	err := newTurnOrchestrator(c).runTurnWithRawDisplay(context.Background(), "run tests", "run tests", "")
+	err := newTurnOrchestrator(c).runOrchestratedTurn(context.Background(), orchestratedTurn{input: "run tests", raw: "run tests"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("run error = %v, want cancellation", err)
 	}
@@ -957,7 +952,7 @@ func TestTurnOrchestratorCancelBeforeRunnerAddsUserPreservesVisiblePrompt(t *tes
 	c.gate.canceling = true
 	c.mu.Unlock()
 
-	err := newTurnOrchestrator(c).runTurnWithImageRefsRawDisplay(context.Background(), "Referenced context:\n\n<image path=\"diagram.png\">\n@diagram.png\n</image>\n\ninspect the diagnostic", "inspect the diagnostic", "@diagram.png", "")
+	err := newTurnOrchestrator(c).runOrchestratedTurn(context.Background(), orchestratedTurn{input: "Referenced context:\n\n<image path=\"diagram.png\">\n@diagram.png\n</image>\n\ninspect the diagnostic", raw: "inspect the diagnostic", imageRefs: "@diagram.png"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
@@ -1011,7 +1006,7 @@ func TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk(t *testing.T) {
 	c.mu.Unlock()
 
 	o := newTurnOrchestrator(c)
-	if err := o.runTurnWithRawDisplay(context.Background(), "do something", "do something", ""); !errors.Is(err, context.Canceled) {
+	if err := o.runOrchestratedTurn(context.Background(), orchestratedTurn{input: "do something", raw: "do something"}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 

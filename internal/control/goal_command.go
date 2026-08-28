@@ -14,7 +14,9 @@ func (c *Controller) startGoalCommandTurn(cmd GoalCommand, display string) {
 	c.notice(fmt.Sprintf(i18n.M.GoalSetFmt, ShortGoalForNotice(c.Goal())))
 	if c.runner != nil {
 		c.runGuarded(func(ctx context.Context) error {
-			return c.runTurnLoopWithRawDisplay(ctx, "Start pursuing the active goal now.", cmd.Text, display)
+			return c.runTurnLoop(ctx, orchestratedTurn{
+				input: "Start pursuing the active goal now.", raw: cmd.Text, display: display,
+			})
 		})
 	}
 }

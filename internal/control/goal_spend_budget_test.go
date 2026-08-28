@@ -77,7 +77,7 @@ func TestGoalReadinessFailurePausesOnExplicitSpendBudget(t *testing.T) {
 	runner.usage = c.goalUsageTee
 	c.SetGoal("ship the integration")
 
-	if err := newTurnOrchestrator(c).runTurnLoopWithRawDisplay(context.Background(), "start", "start", ""); err != nil {
+	if err := newTurnOrchestrator(c).runTurnLoop(context.Background(), orchestratedTurn{input: "start", raw: "start"}); err != nil {
 		t.Fatalf("run err = %v, want the explicit budget pause absorbed by the Goal FSM", err)
 	}
 	if got := c.GoalStatus(); got != GoalStatusBlocked {

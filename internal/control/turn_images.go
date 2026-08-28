@@ -47,9 +47,23 @@ func (c *Controller) resolveTurnImages(line string) *turnImages {
 	return images
 }
 
+// prepareOrchestratedTurnImages resolves the turn's image references, leaving an
+// already-pinned set alone: a replay pins its images so paths that changed since
+// are not read a second time.
 func (c *Controller) prepareOrchestratedTurnImages(turn orchestratedTurn) orchestratedTurn {
-	turn.images = c.resolveTurnImages(turn.imageReferenceInput())
+	if turn.images == nil {
+		turn.images = c.resolveTurnImages(turn.imageReferenceInput())
+	}
 	return turn
+}
+
+// frozenTurnImages pins an already-resolved image set to a turn.
+func (c *Controller) frozenTurnImages(images []string) *turnImages {
+	frozen := &turnImages{candidates: append([]string(nil), images...)}
+	if c.imageInputEnabled() {
+		frozen.userImages = append([]string(nil), images...)
+	}
+	return frozen
 }
 
 func (c *Controller) imagesForOrchestratedTurn(ctx context.Context, turn orchestratedTurn) *turnImages {
@@ -96,18 +110,6 @@ func (turn orchestratedTurn) imageReferenceInput() string {
 		return turn.imageRefs
 	}
 	return turn.raw
-}
-
-func (c *Controller) runTurnLoopWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display string) error {
-	return newTurnOrchestrator(c).runTurnLoopWithImageRefsRawDisplay(ctx, input, raw, imageRefs, display)
-}
-
-func (c *Controller) runTurnLoopWithFrozenImagesRawDisplay(ctx context.Context, input, raw, display string, images []string) error {
-	return newTurnOrchestrator(c).runTurnLoopWithFrozenImagesRawDisplay(ctx, input, raw, display, images)
-}
-
-func (c *Controller) runEditedGoalLoopWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display, original string) error {
-	return newTurnOrchestrator(c).runEditedGoalLoopWithImageRefsRawDisplay(ctx, input, raw, imageRefs, display, original)
 }
 
 // ImageRoutingTag wraps the note telling the model about images it cannot read;

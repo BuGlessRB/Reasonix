@@ -82,7 +82,7 @@ func TestPlanGateEndToEnd(t *testing.T) {
 	go func() { c.Approve(<-approvalID, true, false, false) }()
 
 	input := "实现 issue #2395：新增配置项、自动判断复杂任务、补测试和文档"
-	if err := c.runTurnWithRaw(context.Background(), input, input); err != nil {
+	if err := c.runOneTurn(context.Background(), orchestratedTurn{input: input, raw: input}); err != nil {
 		t.Fatalf("runTurnWithRaw: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestApprovedPlanSeedClearsAfterExecutionWithoutModelTodoWrite(t *testing.T)
 	go func() { c.Approve(<-approvalID, true, false, false) }()
 
 	input := "Implement issue #2395: add config, wire boot, add tests and docs"
-	if err := c.runTurnWithRaw(context.Background(), input, input); err != nil {
+	if err := c.runOneTurn(context.Background(), orchestratedTurn{input: input, raw: input}); err != nil {
 		t.Fatalf("runTurnWithRaw: %v", err)
 	}
 
@@ -177,7 +177,7 @@ func TestPlanGateRejectionStaysInPlan(t *testing.T) {
 	go func() { c.Approve(<-approvalID, false, false, false) }()
 
 	input := "实现 issue #2395：新增配置项、自动判断复杂任务、补测试和文档"
-	if err := c.runTurnWithRaw(context.Background(), input, input); err != nil {
+	if err := c.runOneTurn(context.Background(), orchestratedTurn{input: input, raw: input}); err != nil {
 		t.Fatalf("runTurnWithRaw: %v", err)
 	}
 

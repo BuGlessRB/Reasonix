@@ -865,7 +865,9 @@ func (c *Controller) Send(input string) {
 
 // SendWithRaw starts a turn with separate model input and raw prompt text.
 func (c *Controller) SendWithRaw(input, raw string) {
-	c.runGuarded(func(ctx context.Context) error { return c.runTurnLoopWithRaw(ctx, input, raw) })
+	c.runGuarded(func(ctx context.Context) error {
+		return c.runTurnLoop(ctx, orchestratedTurn{input: input, raw: raw})
+	})
 }
 
 // planApprovalTool is the Tool name on the ApprovalRequest the controller emits
@@ -899,18 +901,18 @@ const ManagedConfigWriteApprovalTool = "config_write"
 // the in-context nudge to execute and keep the (already-seeded) task list honest.
 const planApprovedMessage = "Plan approved — plan mode is off. Implement the plan now. The ordinary writer fallback is approved for this execution turn; explicit ask/deny rules and forced fresh reviews still apply. Use this serial workflow: 1) mark the first sub-step in_progress with todo_write (this establishes the task list); 2) execute the sub-step; 3) call complete_step with evidence — the host then marks that sub-step completed and moves the next one to in_progress for you. Repeat 2–3 for each remaining sub-step. You don’t need another todo_write to mark steps completed; each complete_step advances the list. Sign off one sub-step at a time — never batch multiple completions."
 
-// runTurn runs one model turn, then applies the plan-approval gate. This is the
-// single, frontend-agnostic plan flow: in Plan the model is instructed to
-// research and write its plan as a normal answer, while any tool calls still use
-// the active Permissions/Sandbox path.
-// When the turn ends with a text proposal, the controller asks the user to
-// approve (reusing the ApprovalRequest channel both frontends already render);
-// on approval it exits plan mode, seeds the task list from the plan, and
-// continues straight into execution; on rejection it stays in plan mode so the
-// next turn can revise. Plan mode is only ever set interactively, so the headless
-// `Run` path (which doesn't call this) never blocks on a prompt.
-func (c *Controller) runTurn(ctx context.Context, input string) error {
-	return c.runTurnLoopWithRaw(ctx, input, input)
+// runTurnLoop runs one model turn under the plan-approval gate, then keeps
+// pursuing an active Goal with it — with no goal the loop is what a single turn
+// looks like, plus whatever that turn still owes. In Plan the model writes its
+// plan as an ordinary answer; approving it exits plan mode and continues into
+// execution, rejecting it leaves the next turn free to revise.
+func (c *Controller) runTurnLoop(ctx context.Context, turn orchestratedTurn) error {
+	return newTurnOrchestrator(c).runTurnLoop(ctx, turn)
+}
+
+// runOneTurn runs a single model turn with no Goal loop behind it.
+func (c *Controller) runOneTurn(ctx context.Context, turn orchestratedTurn) error {
+	return newTurnOrchestrator(c).runOrchestratedTurn(ctx, turn)
 }
 
 // RunTurn executes one foreground turn synchronously through the same lifecycle
@@ -919,19 +921,8 @@ func (c *Controller) runTurn(ctx context.Context, input string) error {
 // need a blocking request/response boundary, such as ACP session/prompt.
 func (c *Controller) RunTurn(ctx context.Context, input string) error {
 	return c.runSynchronousTurn(ctx, nil, func(runCtx context.Context) error {
-		return c.runTurn(runCtx, input)
+		return c.runTurnLoop(runCtx, orchestratedTurn{input: input, raw: input})
 	})
-}
-
-func (c *Controller) runTurnWithRaw(ctx context.Context, input, raw string) error {
-	return c.runTurnWithRawDisplay(ctx, input, raw, "")
-}
-
-// runTurnLoopWithRaw is the path every ordinary message takes. It runs one
-// turn and then asks the Goal FSM whether to run another: with no active goal
-// the answer is always no, so the loop is what a single turn looks like.
-func (c *Controller) runTurnLoopWithRaw(ctx context.Context, input, raw string) error {
-	return c.runTurnLoopWithRawDisplay(ctx, input, raw, "")
 }
 
 // withTurnFormat binds a structured-output format to the turn context
@@ -942,21 +933,6 @@ func (c *Controller) withTurnFormat(ctx context.Context, format string) context.
 		return ctx
 	}
 	return agent.WithResponseFormat(ctx, format)
-}
-
-func (c *Controller) runTurnLoopWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	// Structured-output format is bound to the submitted turn (passed via
-	// submitHTTPWithFormat → submitCommandOrTurn → runTurnLoop closure);
-	// no global one-shot slot to race across concurrent requests.
-	return newTurnOrchestrator(c).runTurnLoopWithRawDisplay(ctx, input, raw, display)
-}
-
-func (c *Controller) runEditedGoalLoopWithRawDisplay(ctx context.Context, input, raw, display, original string) error {
-	return newTurnOrchestrator(c).runEditedGoalLoopWithRawDisplay(ctx, input, raw, display, original)
-}
-
-func (c *Controller) runTurnWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	return newTurnOrchestrator(c).runTurnWithRawDisplay(ctx, input, raw, display)
 }
 
 func (c *Controller) runSubagentSkillSlash(sk skill.Skill, task, raw, display string) {
@@ -1075,7 +1051,7 @@ func (c *Controller) SubmitDeliveryRecovery(display, input string) {
 		if c.executor != nil {
 			c.executor.PrepareDeliveryRecovery()
 		}
-		return c.runTurnLoopWithRawDisplay(ctx, input, input, display)
+		return c.runTurnLoop(ctx, orchestratedTurn{input: input, raw: input, display: display})
 	})
 }
 
@@ -1153,7 +1129,9 @@ func (c *Controller) runPreparedInvocationTurn(
 	frozenImages []string,
 ) error {
 	if len(prepared.subagents) == 0 {
-		return c.runTurnLoopWithFrozenImagesRawDisplay(ctx, prepared.composed, raw, display, frozenImages)
+		return c.runTurnLoop(ctx, orchestratedTurn{
+			input: prepared.composed, raw: raw, display: display, images: c.frozenTurnImages(frozenImages),
+		})
 	}
 	runner := c.skillRunner
 	if runner == nil {
@@ -1181,7 +1159,7 @@ func (c *Controller) SubmitEditedDisplay(display, input, original string) {
 // commands. It still resolves references, so callers can submit trusted
 // user-authored prompt text without expanding the command surface.
 func (c *Controller) SubmitUserTurn(display, input string) {
-	c.runRefTurn(input, display)
+	c.runRefTurn(refTurn{input: input, display: display})
 }
 
 func (c *Controller) submit(input, display, editedOriginal string) {
@@ -1246,35 +1224,46 @@ func (c *Controller) compactAndReport(focus string) {
 	}
 }
 
+// refTurnBase is the shape every ref turn from one submitted line shares. An
+// edited resubmit resolves against the whole workspace and rides the
+// edited-goal loop, so it overrides scopedRefsOnly rather than combining with
+// it.
+func (c *Controller) refTurnBase(display, editedOriginal, format string, scopedRefsOnly bool) refTurn {
+	base := refTurn{display: display, original: editedOriginal, format: format}
+	if scopedRefsOnly && strings.TrimSpace(editedOriginal) == "" {
+		base.resolve = c.ResolveScopedRefs
+	}
+	return base
+}
+
+// turnLoopRunner is the loop that same line runs in: an edited resubmit rides
+// the edited-goal loop, everything else the plain one with its format bound.
+func (c *Controller) turnLoopRunner(editedOriginal, format string) func(context.Context, string, string, string) error {
+	if strings.TrimSpace(editedOriginal) != "" {
+		return func(ctx context.Context, input, raw, display string) error {
+			return c.runTurnLoop(ctx, orchestratedTurn{
+				input: input, raw: raw, display: display, editedOriginal: editedOriginal,
+			})
+		}
+	}
+	return func(ctx context.Context, input, raw, display string) error {
+		return c.runTurnLoop(c.withTurnFormat(ctx, format), orchestratedTurn{input: input, raw: raw, display: display})
+	}
+}
+
 func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, scopedRefsOnly bool, editedOriginal, format string) {
+	base := c.refTurnBase(display, editedOriginal, format, scopedRefsOnly)
 	runRefTurn := func(input, display string) {
-		c.runRefTurnWithFormat(input, display, format)
+		r := base
+		r.input, r.display = input, display
+		c.runRefTurn(r)
 	}
 	runRefTurnWithRefs := func(input, refLine, display string) {
-		c.runRefTurnWithRefsFormat(input, refLine, display, format)
+		r := base
+		r.input, r.refLine, r.display = input, refLine, display
+		c.runRefTurn(r)
 	}
-	runTurnLoop := func(ctx context.Context, input, raw, display string) error {
-		return c.runTurnLoopWithRawDisplay(c.withTurnFormat(ctx, format), input, raw, display)
-	}
-	if scopedRefsOnly {
-		runRefTurn = func(input, display string) {
-			c.runScopedRefTurnWithFormat(input, display, format)
-		}
-		runRefTurnWithRefs = func(input, refLine, display string) {
-			c.runScopedRefTurnWithRefsFormat(input, refLine, display, format)
-		}
-	}
-	if strings.TrimSpace(editedOriginal) != "" {
-		runRefTurn = func(input, display string) {
-			c.runEditedRefTurnWithFormat(input, display, editedOriginal, format)
-		}
-		runRefTurnWithRefs = func(input, refLine, display string) {
-			c.runEditedRefTurnWithRefsFormat(input, refLine, display, editedOriginal, format)
-		}
-		runTurnLoop = func(ctx context.Context, input, raw, display string) error {
-			return c.runEditedGoalLoopWithRawDisplay(ctx, input, raw, display, editedOriginal)
-		}
-	}
+	runTurnLoop := c.turnLoopRunner(editedOriginal, format)
 	switch {
 	case trimmed == "/compact" || strings.HasPrefix(trimmed, "/compact "):
 		go c.compactAndReport(strings.TrimSpace(strings.TrimPrefix(trimmed, "/compact")))
@@ -1535,7 +1524,7 @@ func (c *Controller) applyPlanExec(input, display string) {
 	c.notice(fmt.Sprintf("plan-exec: dispatching %d plan steps (strict=%v)", total, strict))
 	if c.runner != nil {
 		c.runGuarded(func(ctx context.Context) error {
-			return c.runTurnLoopWithRawDisplay(ctx, prompt, prompt, display)
+			return c.runTurnLoop(ctx, orchestratedTurn{input: prompt, raw: prompt, display: display})
 		})
 	}
 }
@@ -1563,7 +1552,7 @@ func (c *Controller) applyPrometheus(input, display string) {
 	c.notice("prometheus: starting planning interview")
 	if c.runner != nil {
 		c.runGuarded(func(ctx context.Context) error {
-			return c.runTurnLoopWithRawDisplay(ctx, prompt, prompt, display)
+			return c.runTurnLoop(ctx, orchestratedTurn{input: prompt, raw: prompt, display: display})
 		})
 	}
 }
@@ -1694,78 +1683,56 @@ func (c *Controller) RunShell(command string) {
 	})
 }
 
-// runRefTurn resolves a line's @references into a context block and starts a
-// turn with it prepended (or the raw line when nothing resolved).
-func (c *Controller) runRefTurn(input, display string) {
-	c.runRefTurnWithRefs(input, input, display)
+// refTurn is one @-ref-resolving turn: what to send, which line carries the
+// refs, what the transcript shows, and how the refs resolve. The zero value
+// resolves input against the workspace with no structured-output format.
+type refTurn struct {
+	input string
+	// refLine carries the refs when they are not in input, so a compiler
+	// diagnostic like "/path/File.kt:12: error" attaches @/path/File.kt without
+	// rewriting the error text the user sees. Empty reads them from input.
+	refLine string
+	display string
+	// original is a resubmitted turn's pre-edit text; non-empty routes it
+	// through the edited-goal loop.
+	original string
+	format   string
+	// resolve reads the refs out of refLine. nil resolves against the whole
+	// workspace; a frontend that must not widen a ref to an arbitrary absolute
+	// path passes ResolveScopedRefs.
+	resolve func(context.Context, string) (string, []string)
 }
 
-// runRefTurnWithFormat runs a reference turn with a structured-output
-// format bound to its context (symmetric with runTurnLoop's withTurnFormat
-// injection — format is a property of every accepted turn, not just the
-// plain-goal path; review #7234 binds format to the accepted turn).
-func (c *Controller) runRefTurnWithFormat(input, display, format string) {
-	c.runGuarded(func(ctx context.Context) error {
-		return c.runRefTurnWithResolverSync(c.withTurnFormat(ctx, format), input, input, display, "", c.ResolveRefs)
-	})
+// runRefTurn resolves the turn's @references into a context block and starts a
+// turn with it prepended (or the raw line when nothing resolved), under turn
+// admission.
+func (c *Controller) runRefTurn(r refTurn) {
+	c.runGuarded(func(ctx context.Context) error { return c.runRefTurnSync(ctx, r) })
 }
 
-func (c *Controller) runScopedRefTurnWithFormat(input, display, format string) {
-	c.runGuarded(func(ctx context.Context) error {
-		return c.runRefTurnWithResolverSync(c.withTurnFormat(ctx, format), input, input, display, "", c.ResolveScopedRefs)
-	})
-}
-
-func (c *Controller) runRefTurnWithRefsFormat(input, refLine, display, format string) {
-	c.runGuarded(func(ctx context.Context) error {
-		return c.runRefTurnWithResolverSync(c.withTurnFormat(ctx, format), input, refLine, display, "", c.ResolveRefs)
-	})
-}
-
-func (c *Controller) runScopedRefTurnWithRefsFormat(input, refLine, display, format string) {
-	c.runGuarded(func(ctx context.Context) error {
-		return c.runRefTurnWithResolverSync(c.withTurnFormat(ctx, format), input, refLine, display, "", c.ResolveScopedRefs)
-	})
-}
-
-func (c *Controller) runEditedRefTurnWithFormat(input, display, original, format string) {
-	c.runGuarded(func(ctx context.Context) error {
-		return c.runRefTurnWithResolverSync(c.withTurnFormat(ctx, format), input, input, display, original, c.ResolveRefs)
-	})
-}
-
-func (c *Controller) runEditedRefTurnWithRefsFormat(input, refLine, display, original, format string) {
-	c.runGuarded(func(ctx context.Context) error {
-		return c.runRefTurnWithResolverSync(c.withTurnFormat(ctx, format), input, refLine, display, original, c.ResolveRefs)
-	})
-}
-
-// runRefTurnWithRefs resolves references from refLine while preserving input as
-// the user's actual prompt text. This lets compiler diagnostics such as
-// "/path/File.kt:12: error" attach @/path/File.kt without rewriting the error.
-func (c *Controller) runRefTurnWithRefs(input, refLine, display string) {
-	c.runRefTurnWithResolver(input, refLine, display, c.ResolveRefs)
-}
-
-func (c *Controller) runRefTurnWithResolver(input, refLine, display string, resolve func(context.Context, string) (string, []string)) {
-	c.runGuarded(func(ctx context.Context) error {
-		return c.runRefTurnWithResolverSync(ctx, input, refLine, display, "", resolve)
-	})
-}
-
-func (c *Controller) runRefTurnWithResolverSync(ctx context.Context, input, refLine, display, original string, resolve func(context.Context, string) (string, []string)) error {
+// runRefTurnSync is runRefTurn on the caller's goroutine, for a caller that
+// already holds turn admission.
+func (c *Controller) runRefTurnSync(ctx context.Context, r refTurn) error {
+	ctx = c.withTurnFormat(ctx, r.format)
+	resolve := r.resolve
+	if resolve == nil {
+		resolve = c.ResolveRefs
+	}
+	refLine := r.refLine
+	if refLine == "" {
+		refLine = r.input
+	}
 	block, errs := resolve(ctx, refLine)
 	for _, e := range errs {
 		c.notice(e)
 	}
-	sent := input
+	sent := r.input
 	if block != "" {
-		sent = "Referenced context:\n\n" + block + "\n\n" + input
+		sent = "Referenced context:\n\n" + block + "\n\n" + r.input
 	}
-	if strings.TrimSpace(original) != "" {
-		return c.runEditedGoalLoopWithImageRefsRawDisplay(ctx, sent, input, refLine, display, original)
-	}
-	return c.runTurnLoopWithImageRefsRawDisplay(ctx, sent, input, refLine, display)
+	return c.runTurnLoop(ctx, orchestratedTurn{
+		input: sent, raw: r.input, imageRefs: refLine, display: r.display, editedOriginal: r.original,
+	})
 }
 
 // notice emits an informational Notice event.
@@ -2097,7 +2064,7 @@ type plannerPlanApprover struct {
 
 func (p plannerPlanApprover) RunWithPlannerApproval(ctx context.Context, plan string, run func(context.Context) error) error {
 	c := p.c
-	allow, _, err := c.requestApprovalWithReason(ctx, planApprovalTool, "", nil, "Planner requested host approval before execution.")
+	allow, _, err := c.requestApproval(ctx, approvalRequest{tool: planApprovalTool, reason: "Planner requested host approval before execution."})
 	if err != nil {
 		return err
 	}
@@ -5505,7 +5472,7 @@ func (g gateApprover) approveWithPolicyReason(ctx context.Context, tool, subject
 			return true, false, "", nil
 		}
 		reason = combineApprovalReasons(policyReason, reason)
-		humanAllow, remember, err := g.c.requestApprovalWithReason(ctx, tool, subject, args, reason)
+		humanAllow, remember, err := g.c.requestApproval(ctx, approvalRequest{tool: tool, subject: subject, args: args, reason: reason})
 		if err != nil {
 			return false, false, reason, err
 		}
@@ -5516,10 +5483,10 @@ func (g gateApprover) approveWithPolicyReason(ctx context.Context, tool, subject
 	}
 	if requireHuman {
 		reason := combineApprovalReasons(policyReason, dynamicBashApprovalReason)
-		allow, remember, err := g.c.requestApprovalWithReasonOptions(ctx, tool, subject, args, reason, approvalDecisionOptions{requireHuman: true})
+		allow, remember, err := g.c.requestApproval(ctx, approvalRequest{tool: tool, subject: subject, args: args, reason: reason, requireHuman: true})
 		return allow, remember, "", err
 	}
-	allow, remember, err := g.c.requestApprovalWithReason(ctx, tool, subject, args, policyReason)
+	allow, remember, err := g.c.requestApproval(ctx, approvalRequest{tool: tool, subject: subject, args: args, reason: policyReason})
 	return allow, remember, "", err
 }
 
@@ -5528,7 +5495,7 @@ type sandboxEscapeApprover struct{ c *Controller }
 func (s sandboxEscapeApprover) ApproveSandboxEscape(ctx context.Context, req sandbox.EscapeRequest) (bool, string, error) {
 	subject := sandboxEscapeApprovalSubject(req.Command)
 	reason := sandboxEscapeApprovalReason(req.Reason)
-	reply, err := s.c.requestFreshApprovalDecision(ctx, SandboxEscapeApprovalTool, subject, req.Args, reason)
+	reply, err := s.c.requestApprovalDecision(ctx, approvalRequest{tool: SandboxEscapeApprovalTool, subject: subject, args: req.Args, reason: reason, fresh: true})
 	if err != nil {
 		return false, "approval aborted", err
 	}
@@ -5571,7 +5538,7 @@ type managedConfigWriteApprover struct{ c *Controller }
 func (m managedConfigWriteApprover) ApproveManagedConfigWrite(ctx context.Context, req tool.ConfigWriteRequest) (bool, string, error) {
 	subject := managedConfigWriteApprovalSubject(req.Path)
 	args, _ := json.Marshal(map[string]string{"path": req.Path})
-	reply, err := m.c.requestFreshApprovalDecision(ctx, ManagedConfigWriteApprovalTool, subject, args, i18n.M.ConfigWriteReason)
+	reply, err := m.c.requestApprovalDecision(ctx, approvalRequest{tool: ManagedConfigWriteApprovalTool, subject: subject, args: args, reason: i18n.M.ConfigWriteReason, fresh: true})
 	if err != nil {
 		return false, "approval aborted", err
 	}
@@ -5753,40 +5720,14 @@ func parseRewind(args string, cps []checkpoint.Meta) (int, RewindScope, error) {
 	return turn, scope, nil
 }
 
-// requestApproval emits an ApprovalRequest and blocks until Approve(ID, …)
-// answers or ctx is cancelled. A prior session grant (or a bypass posture) for
-// the same approval scope short-circuits. The approvalManager's promptMu
-// serialises outstanding prompts; this method keeps the I/O (events, hooks,
-// remember) that the manager deliberately stays out of.
-func (c *Controller) requestApproval(ctx context.Context, tool, subject string, args json.RawMessage) (bool, bool, error) {
-	return c.requestApprovalWithReason(ctx, tool, subject, args, "")
-}
-
-func (c *Controller) requestApprovalWithReason(ctx context.Context, tool, subject string, args json.RawMessage, reason string) (bool, bool, error) {
-	return c.requestApprovalWithReasonOptions(ctx, tool, subject, args, reason, approvalDecisionOptions{})
-}
-
-func (c *Controller) requestApprovalWithReasonOptions(ctx context.Context, tool, subject string, args json.RawMessage, reason string, opts approvalDecisionOptions) (bool, bool, error) {
-	r, err := c.requestApprovalDecisionWithOptions(ctx, tool, subject, args, reason, opts)
-	if err != nil {
-		return false, false, err
-	}
-	// Plan approvals are one-shot — never persist a session grant for them, or
-	// every future plan would auto-approve.
-	if r.allow && r.session && !requiresFreshApprovalTool(tool) {
-		c.approval.grantSession(tool, subject)
-	}
-	if r.allow && r.persist && !requiresFreshApprovalTool(tool) && c.onRemember != nil {
-		c.emitRememberResult(c.onRemember(permission.RememberRuleForScope(tool, subject)))
-	}
-	return r.allow, false, nil
-}
-
-func (c *Controller) requestFreshApprovalDecision(ctx context.Context, tool, subject string, args json.RawMessage, reason string) (approvalReply, error) {
-	return c.requestApprovalDecisionWithOptions(ctx, tool, subject, args, reason, approvalDecisionOptions{fresh: true})
-}
-
-type approvalDecisionOptions struct {
+// approvalRequest is one ask: what is being approved, why, and which postures
+// may answer it instead of a human. The zero value is an ordinary tool
+// permission with no stated reason.
+type approvalRequest struct {
+	tool    string
+	subject string
+	args    json.RawMessage
+	reason  string
 	// fresh marks a user trust/business decision rather than an ordinary tool
 	// permission. It may reuse an explicit session grant, but YOLO/auto approval
 	// must not answer or drain the prompt.
@@ -5797,11 +5738,34 @@ type approvalDecisionOptions struct {
 	requireHuman bool
 }
 
-func (c *Controller) requestApprovalDecisionWithOptions(ctx context.Context, tool, subject string, args json.RawMessage, reason string, opts approvalDecisionOptions) (approvalReply, error) {
+// requestApproval asks, then applies what the answer authorises — a session
+// grant, a remembered rule — before reporting whether the tool may run.
+func (c *Controller) requestApproval(ctx context.Context, req approvalRequest) (bool, bool, error) {
+	r, err := c.requestApprovalDecision(ctx, req)
+	if err != nil {
+		return false, false, err
+	}
+	// Plan approvals are one-shot — never persist a session grant for them, or
+	// every future plan would auto-approve.
+	if r.allow && r.session && !requiresFreshApprovalTool(req.tool) {
+		c.approval.grantSession(req.tool, req.subject)
+	}
+	if r.allow && r.persist && !requiresFreshApprovalTool(req.tool) && c.onRemember != nil {
+		c.emitRememberResult(c.onRemember(permission.RememberRuleForScope(req.tool, req.subject)))
+	}
+	return r.allow, false, nil
+}
+
+// requestApprovalDecision emits an ApprovalRequest and blocks until
+// Approve(ID, …) answers or ctx is cancelled. A prior session grant (or bypass
+// posture) for the same scope short-circuits; the approvalManager's promptMu
+// serialises outstanding prompts. It authorises nothing on its own — that is
+// requestApproval's half.
+func (c *Controller) requestApprovalDecision(ctx context.Context, req approvalRequest) (approvalReply, error) {
 	// YOLO/full access and the just-approved-plan execution window auto-allow
 	// approval-gated tools without prompting. Plan approval is a user decision,
 	// not a tool permission, so it deliberately stays interactive.
-	if c.approval.preApprovedForDecisionOptions(tool, subject, args, opts.fresh, opts.requireHuman) {
+	if c.approval.preApprovedForDecisionOptions(req.tool, req.subject, req.args, req.fresh, req.requireHuman) {
 		return approvalReply{allow: true}, nil
 	}
 
@@ -5810,7 +5774,7 @@ func (c *Controller) requestApprovalDecisionWithOptions(ctx context.Context, too
 
 	// Re-check: a session grant may have landed while we queued behind another
 	// prompt for the same subject.
-	if c.approval.preApprovedForDecisionOptions(tool, subject, args, opts.fresh, opts.requireHuman) {
+	if c.approval.preApprovedForDecisionOptions(req.tool, req.subject, req.args, req.fresh, req.requireHuman) {
 		return approvalReply{allow: true}, nil
 	}
 
@@ -5826,12 +5790,12 @@ func (c *Controller) requestApprovalDecisionWithOptions(ctx context.Context, too
 	// from YOLO/auto-approval and Guardian too, so a broadly-matched plugin
 	// hook returning "allow" can't silently rubber-stamp them. A deny still
 	// applies universally — refusing is always safe to honor automatically.
-	if hookSubject, hookArgs, ok := permissionRequestHookPayload(tool, subject, args); ok {
-		if decision, _ := c.hooks.PermissionRequest(ctx, tool, hookSubject, hookArgs); decision != nil {
+	if hookSubject, hookArgs, ok := permissionRequestHookPayload(req.tool, req.subject, req.args); ok {
+		if decision, _ := c.hooks.PermissionRequest(ctx, req.tool, hookSubject, hookArgs); decision != nil {
 			switch {
 			case !*decision:
 				return approvalReply{}, nil
-			case !opts.fresh && !opts.requireHuman && !requiresFreshApprovalTool(tool):
+			case !req.fresh && !req.requireHuman && !requiresFreshApprovalTool(req.tool):
 				return approvalReply{allow: true}, nil
 			}
 			// An "allow" opinion on a fresh-human-required decision is
@@ -5842,21 +5806,21 @@ func (c *Controller) requestApprovalDecisionWithOptions(ctx context.Context, too
 	c.approval.promptEmitMu.Lock()
 	var id string
 	var reply chan approvalReply
-	if opts.fresh || opts.requireHuman || tool == planApprovalTool {
+	if req.fresh || req.requireHuman || req.tool == planApprovalTool {
 		kind := ""
-		if tool == planApprovalTool {
+		if req.tool == planApprovalTool {
 			kind = "plan"
 		}
-		id, reply = c.approval.registerDecisionKindWithInput(tool, subject, reason, args, opts.fresh, opts.requireHuman, kind, nil)
+		id, reply = c.approval.registerDecisionKindWithInput(req.tool, req.subject, req.reason, req.args, req.fresh, req.requireHuman, kind, nil)
 	} else {
-		id, reply = c.approval.registerWithInput(tool, subject, reason, args)
+		id, reply = c.approval.registerWithInput(req.tool, req.subject, req.reason, req.args)
 	}
 
-	c.sink.Emit(c.approvalRequestEvent(event.Approval{ID: id, Tool: tool, Subject: subject, Reason: reason, RawInput: append(json.RawMessage(nil), args...), Fresh: opts.fresh}))
+	c.sink.Emit(c.approvalRequestEvent(event.Approval{ID: id, Tool: req.tool, Subject: req.subject, Reason: req.reason, RawInput: append(json.RawMessage(nil), req.args...), Fresh: req.fresh}))
 	c.approval.promptEmitMu.Unlock()
 	// The agent now needs the user's attention; a Notification hook can ping an
 	// external channel (desktop notice, phone) while the run blocks on the reply.
-	go c.hooks.Notification(ctx, approvalNotificationText(tool, subject), "permission_prompt")
+	go c.hooks.Notification(ctx, approvalNotificationText(req.tool, req.subject), "permission_prompt")
 
 	waitCtx, cancelWait := c.approval.waitContext(ctx)
 	defer cancelWait()

@@ -38,18 +38,6 @@ func newTurnOrchestrator(c *Controller) *turnOrchestrator {
 	return &turnOrchestrator{c: c}
 }
 
-func (o *turnOrchestrator) runTurnWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	return o.runOrchestratedTurn(ctx, orchestratedTurn{input: input, raw: raw, display: display})
-}
-
-func (o *turnOrchestrator) runTurnWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display string) error {
-	return o.runOrchestratedTurn(ctx, orchestratedTurn{input: input, raw: raw, imageRefs: imageRefs, display: display})
-}
-
-func (o *turnOrchestrator) runSyntheticTurnWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	return o.runOrchestratedTurn(ctx, orchestratedTurn{input: input, raw: raw, display: display, synthetic: true})
-}
-
 func (o *turnOrchestrator) runGoalContinuationTurnWithRawDisplay(
 	ctx context.Context,
 	input, raw, display string,
@@ -325,7 +313,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	}
 	// The plan is already visible as the assistant's answer, so the request
 	// carries no subject — it's purely the gate.
-	allow, _, err := c.requestApproval(ctx, planApprovalTool, "", nil)
+	allow, _, err := c.requestApproval(ctx, approvalRequest{tool: planApprovalTool})
 	if err != nil {
 		return err
 	}
@@ -389,23 +377,11 @@ func maxRunWorkDuration(messages []provider.Message, start int) int64 {
 	return maxDuration
 }
 
-func (o *turnOrchestrator) runTurnLoopWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	return o.runTurnLoopWithImageRefsRawDisplay(ctx, input, raw, "", display)
-}
-
-func (o *turnOrchestrator) runTurnLoopWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display string) error {
-	turn := o.c.prepareOrchestratedTurnImages(orchestratedTurn{input: input, raw: raw, imageRefs: imageRefs, display: display})
-	return o.runTurnLoopWithPreparedTurn(ctx, turn)
-}
-
-func (o *turnOrchestrator) runTurnLoopWithFrozenImagesRawDisplay(ctx context.Context, input, raw, display string, images []string) error {
-	frozen := &turnImages{candidates: append([]string(nil), images...)}
-	if o.c.imageInputEnabled() {
-		frozen.userImages = append([]string(nil), images...)
-	}
-	return o.runTurnLoopWithPreparedTurn(ctx, orchestratedTurn{
-		input: input, raw: raw, display: display, images: frozen,
-	})
+// runTurnLoop resolves the turn's image references, runs it, then keeps
+// pursuing an active Goal with it. A turn that already carries a pinned image
+// set keeps it.
+func (o *turnOrchestrator) runTurnLoop(ctx context.Context, turn orchestratedTurn) error {
+	return o.runTurnLoopWithPreparedTurn(ctx, o.c.prepareOrchestratedTurnImages(turn))
 }
 
 // runTurnLoopWithPreparedTurn runs the turn, then hands the outcome to the Goal
@@ -434,31 +410,6 @@ func (o *turnOrchestrator) runTurnLoopWithPreparedTurn(ctx context.Context, turn
 		}
 		// FinalReadinessError is absorbed below: the Goal FSM continues with
 		// the missing requirements as the next turn's prompt.
-	}
-	return o.continueGoal(ctx, expectedContinuationEpoch, err)
-}
-
-func (o *turnOrchestrator) runEditedGoalLoopWithRawDisplay(ctx context.Context, input, raw, display, original string) error {
-	return o.runEditedGoalLoopWithImageRefsRawDisplay(ctx, input, raw, "", display, original)
-}
-
-func (o *turnOrchestrator) runEditedGoalLoopWithImageRefsRawDisplay(ctx context.Context, input, raw, imageRefs, display, original string) error {
-	expectedContinuationEpoch := o.c.goals.continuationToken()
-	turn := o.c.prepareOrchestratedTurnImages(orchestratedTurn{
-		input: input, raw: raw, imageRefs: imageRefs, display: display, editedOriginal: original,
-	})
-	ctx = o.c.withVisionRouting(agent.WithSubagentImageCandidates(ctx, turn.images.candidates))
-	err := o.runOrchestratedTurn(ctx, turn)
-	if err != nil {
-		if ctx.Err() != nil {
-			o.c.goalUsageTee.setActiveRecorder(nil)
-			o.c.stopGoal(GoalStatusStopped)
-			return err
-		}
-		if !goalTurnErrorAbsorbable(err) || !o.c.goals.active() {
-			o.c.goalUsageTee.setActiveRecorder(nil)
-			return err
-		}
 	}
 	return o.continueGoal(ctx, expectedContinuationEpoch, err)
 }

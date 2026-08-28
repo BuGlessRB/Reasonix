@@ -90,7 +90,7 @@ func TestApprovalToolWideEndToEnd(t *testing.T) {
 	// Answer the first prompt with "allow for this session" (allow, session, !persist).
 	go func() { c.Approve(<-approvalID, true, true, false) }()
 
-	if err := c.runTurnWithRaw(context.Background(), "edit the files", "edit the files"); err != nil {
+	if err := c.runOneTurn(context.Background(), orchestratedTurn{input: "edit the files", raw: "edit the files"}); err != nil {
 		t.Fatalf("runTurnWithRaw: %v", err)
 	}
 

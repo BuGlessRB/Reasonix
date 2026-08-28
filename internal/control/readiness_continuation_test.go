@@ -72,6 +72,32 @@ func TestOrdinaryTurnFinishesWhatItOwes(t *testing.T) {
 	}
 }
 
+// A resubmitted edit owes what any other turn owes. It reached the loop through
+// a second copy that was never taught to continue, so an edit ending short of
+// verification handed back the card the ordinary path had stopped showing.
+func TestEditedResubmitFinishesWhatItOwes(t *testing.T) {
+	prov := &scriptedTurns{turns: [][]provider.Chunk{
+		{toolCallChunk("t0", "todo_write", `{"todos":[{"content":"Ship main","status":"in_progress"}]}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("w1", "write_file", `{"path":"main.go"}`), {Type: provider.ChunkDone}},
+		textTurn("premature final"),
+		{toolCallChunk("b1", "bash", `{"command":"go test ./..."}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("t1", "todo_write", `{"todos":[{"content":"Ship main","status":"completed"}]}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("c1", "complete_step", `{"step":"Ship main","result":"shipped","evidence":[{"kind":"verification","summary":"go test","command":"go test ./..."}]}`), {Type: provider.ChunkDone}},
+		textTurn("done and verified"),
+	}}
+	c, done := readinessDeliveryController(t, prov)
+
+	c.SubmitEditedDisplay("implement main", "implement main", "implement man")
+	ev := <-done
+
+	if prov.call <= 3 {
+		t.Fatalf("provider calls = %d, want the resubmitted edit to continue past its own premature final", prov.call)
+	}
+	if ev.Readiness != nil && len(ev.Readiness.Missing) == 0 {
+		t.Fatal("the continuation reported an empty gap, which is what a dropped ledger looks like")
+	}
+}
+
 // A round that owes what the last one owed is not progress. Two of those hand
 // the turn back rather than repeating forever.
 func TestStalledReadinessStopsInsteadOfLooping(t *testing.T) {

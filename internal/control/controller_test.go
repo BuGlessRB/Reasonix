@@ -414,7 +414,7 @@ func TestRunTurnSnapshotsActivityWhenTranscriptChanges(t *testing.T) {
 	path := filepath.Join(dir, "session.jsonl")
 	c := New(Options{Runner: appendingRunner{session: sess}, Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
 
-	if err := c.runTurn(context.Background(), "hello"); err != nil {
+	if err := c.runTurnLoop(context.Background(), orchestratedTurn{input: "hello", raw: "hello"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -768,7 +768,7 @@ func TestRunTurnRecordsDisplayForPersistedUserMessage(t *testing.T) {
 		gotDisplay = display
 	})
 
-	if err := c.runTurnWithRawDisplay(context.Background(), "expanded prompt", "raw prompt", "visible prompt"); err != nil {
+	if err := c.runOneTurn(context.Background(), orchestratedTurn{input: "expanded prompt", raw: "raw prompt", display: "visible prompt"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3528,7 +3528,7 @@ func TestPermissionRequestClaudeHookAutoDeniesFreshHumanApproval(t *testing.T) {
 }
 
 // TestPermissionRequestClaudeHookCannotAutoAllowOptsFreshOnlyDecision covers
-// the fresh-human protection's other branch: a tool that requestFreshApprovalDecision
+// the fresh-human protection's other branch: a tool that a fresh approvalRequest
 // marks fresh (opts.fresh=true) without being one of
 // RequiresFreshHumanApprovalTool's fixed cases. PlanModeReadOnlyCommandApprovalTool
 // is exactly that — the earlier tests only exercised tools protected via
@@ -3541,9 +3541,9 @@ func TestPermissionRequestClaudeHookCannotAutoAllowOptsFreshOnlyDecision(t *test
 	c, ids := wildcardClaudePermissionHookController(t, 0, allowJSON)
 	done := make(chan bool, 1)
 	go func() {
-		reply, err := c.requestFreshApprovalDecision(context.Background(), "bash", "ls", nil, "trust this read-only command prefix?")
+		reply, err := c.requestApprovalDecision(context.Background(), approvalRequest{tool: "bash", subject: "ls", reason: "trust this read-only command prefix?", fresh: true})
 		if err != nil {
-			t.Errorf("requestFreshApprovalDecision error = %v", err)
+			t.Errorf("requestApprovalDecision error = %v", err)
 			return
 		}
 		done <- reply.allow
@@ -3906,7 +3906,7 @@ func TestPermissionRequestHookDoesNotFireForSessionGrant(t *testing.T) {
 	c, _, payloads := permissionHookController(t, "bash")
 	c.approval.grantSession("bash", "go test ./...")
 
-	allow, _, err := c.requestApproval(context.Background(), "bash", "go test ./...", nil)
+	allow, _, err := c.requestApproval(context.Background(), approvalRequest{tool: "bash", subject: "go test ./..."})
 	if err != nil || !allow {
 		t.Fatalf("session-granted approval = (%v,%v), want allowed", allow, err)
 	}
@@ -3925,7 +3925,7 @@ func TestSessionAuthorizationsCarryAcrossRebuild(t *testing.T) {
 	fresh := New(Options{})
 	fresh.RestoreSessionAuthorizations(old.SessionAuthorizations())
 
-	allow, _, err := fresh.requestApproval(context.Background(), "bash", "go test ./...", nil)
+	allow, _, err := fresh.requestApproval(context.Background(), approvalRequest{tool: "bash", subject: "go test ./..."})
 	if err != nil || !allow {
 		t.Fatalf("session-granted approval after restore = (%v,%v), want allowed", allow, err)
 	}
@@ -3935,7 +3935,7 @@ func TestPermissionRequestHookDoesNotFireForYolo(t *testing.T) {
 	c, _, payloads := permissionHookController(t, "bash")
 	c.SetToolApprovalMode(ToolApprovalYolo)
 
-	allow, _, err := c.requestApproval(context.Background(), "bash", "go test ./...", nil)
+	allow, _, err := c.requestApproval(context.Background(), approvalRequest{tool: "bash", subject: "go test ./..."})
 	if err != nil || !allow {
 		t.Fatalf("YOLO approval = (%v,%v), want allowed", allow, err)
 	}
@@ -3947,7 +3947,7 @@ func TestPermissionRequestHookDoesNotFireForPlanApproval(t *testing.T) {
 	done := make(chan bool, 1)
 	errs := make(chan error, 1)
 	go func() {
-		allow, _, err := c.requestApproval(context.Background(), planApprovalTool, "", nil)
+		allow, _, err := c.requestApproval(context.Background(), approvalRequest{tool: planApprovalTool, subject: ""})
 		if err != nil {
 			errs <- err
 			return
@@ -4565,7 +4565,7 @@ func TestApprovedPlanAutoApproveEndsWithExecutionTurn(t *testing.T) {
 		},
 	)
 
-	if err := c.runTurn(context.Background(), "plan this"); err != nil {
+	if err := c.runTurnLoop(context.Background(), orchestratedTurn{input: "plan this", raw: "plan this"}); err != nil {
 		t.Fatal(err)
 	}
 	if approvalPrompts != 1 {
@@ -4621,7 +4621,7 @@ func TestApprovedPlanDoesNotAutoApproveNonContinuationTurn(t *testing.T) {
 		},
 	)
 
-	if err := c.runTurn(context.Background(), "plan this"); err != nil {
+	if err := c.runTurnLoop(context.Background(), orchestratedTurn{input: "plan this", raw: "plan this"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := c.Compose("先别继续"); StripComposePrefixes(got) != "先别继续" {

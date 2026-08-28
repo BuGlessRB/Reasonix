@@ -83,7 +83,7 @@ func TestGoalEvaluatorUsageCommitsBeforeFSMCompletion(t *testing.T) {
 	evaluator := goaleval.NewSessionWithSink(evalProv, nil, "test/evaluator", sink)
 	c := New(Options{Runner: executor, Executor: executor, GoalEvaluator: evaluator, Sink: sink})
 	c.SetGoal("answer once")
-	if err := newTurnOrchestrator(c).runTurnLoopWithRawDisplay(context.Background(), "answer", "answer", ""); err != nil {
+	if err := newTurnOrchestrator(c).runTurnLoop(context.Background(), orchestratedTurn{input: "answer", raw: "answer"}); err != nil {
 		t.Fatal(err)
 	}
 	if c.GoalStatus() != GoalStatusComplete {

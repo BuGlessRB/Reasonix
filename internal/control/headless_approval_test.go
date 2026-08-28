@@ -46,7 +46,7 @@ func runHeadlessWriteOnce(t *testing.T, mode string, askRules []string) (prompts
 	c.ApplyHeadlessApprovalMode(mode)
 
 	done := make(chan error, 1)
-	go func() { done <- c.runTurnWithRaw(context.Background(), "edit", "edit") }()
+	go func() { done <- c.runOneTurn(context.Background(), orchestratedTurn{input: "edit", raw: "edit"}) }()
 	select {
 	case err := <-done:
 		if err != nil {
@@ -137,7 +137,7 @@ func TestApplyHeadlessApprovalModeDontAskDeniesWithoutPrompting(t *testing.T) {
 	c.ApplyHeadlessApprovalMode(ToolApprovalDontAsk)
 
 	done := make(chan error, 1)
-	go func() { done <- c.runTurnWithRaw(context.Background(), "edit", "edit") }()
+	go func() { done <- c.runOneTurn(context.Background(), orchestratedTurn{input: "edit", raw: "edit"}) }()
 	select {
 	case err := <-done:
 		if err != nil {
@@ -191,7 +191,7 @@ func TestApplyHeadlessApprovalModeAllowsOnlyLowRiskProjectMemoryCreate(t *testin
 				}),
 			})
 			c.ApplyHeadlessApprovalMode(ToolApprovalAsk)
-			if err := c.runTurnWithRaw(context.Background(), "remember", "remember"); err != nil {
+			if err := c.runOneTurn(context.Background(), orchestratedTurn{input: "remember", raw: "remember"}); err != nil {
 				t.Fatalf("runTurnWithRaw: %v", err)
 			}
 			if prompts != 0 {

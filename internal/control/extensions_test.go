@@ -123,7 +123,7 @@ func (s *recordingSink) all() []event.Event {
 }
 
 func runTestTurn(c *Controller, input string) error {
-	return newTurnOrchestrator(c).runTurnWithRawDisplay(context.Background(), input, input, "")
+	return newTurnOrchestrator(c).runOrchestratedTurn(context.Background(), orchestratedTurn{input: input, raw: input})
 }
 
 func TestInputReceiveContinue(t *testing.T) {

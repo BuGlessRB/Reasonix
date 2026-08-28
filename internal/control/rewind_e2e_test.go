@@ -194,10 +194,10 @@ func runTwoTurns(t *testing.T) (*Controller, *agent.Agent, *[]event.Event) {
 		Sink:       event.FuncSink(func(e event.Event) { events = append(events, e) }),
 	})
 	c.SetSessionPath(agent.NewSessionPath(dir, "test"))
-	if err := c.runTurnWithRaw(context.Background(), "first prompt", "first prompt"); err != nil {
+	if err := c.runOneTurn(context.Background(), orchestratedTurn{input: "first prompt", raw: "first prompt"}); err != nil {
 		t.Fatalf("turn 1: %v", err)
 	}
-	if err := c.runTurnWithRaw(context.Background(), "second prompt", "second prompt"); err != nil {
+	if err := c.runOneTurn(context.Background(), orchestratedTurn{input: "second prompt", raw: "second prompt"}); err != nil {
 		t.Fatalf("turn 2: %v", err)
 	}
 	return c, ag, &events
