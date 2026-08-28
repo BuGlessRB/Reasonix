@@ -11,8 +11,14 @@ name: Diagnose ssh -G on Windows
 # read as "OpenSSH unavailable" until there is evidence some class of it safely
 # can be, because a silent fallback to the embedded parser is exactly the path
 # that could resolve an alias to a different host than the user's own ssh would.
+# workflow_dispatch would need this file on the default branch to be
+# dispatchable, and it only exists on studio; a path-scoped push runs it here
+# without putting a throwaway probe in front of main-v2.
 on:
   workflow_dispatch:
+  push:
+    branches: [studio]
+    paths: ['.github/workflows/diag-ssh-windows.yml']
 
 permissions:
   contents: read
