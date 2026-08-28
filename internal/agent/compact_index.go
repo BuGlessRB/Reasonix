@@ -187,7 +187,7 @@ func (a *Agent) mergeFoldIndex(previous, fresh string, budgetTokens int) string 
 	var b strings.Builder
 	b.WriteString(indexSectionHeading + "\n")
 	if first > 0 {
-		fmt.Fprintf(&b, "- (%d older entries dropped; the full transcript still holds them)\n", first)
+		fmt.Fprintf(&b, "- (%d older entries dropped; recall with a query still finds them)\n", first)
 	}
 	for _, l := range lines[first:] {
 		b.WriteString(l + "\n")

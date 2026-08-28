@@ -334,12 +334,18 @@
     },
     {
       "name": "recall",
-      "description": "Bring a folded part of this conversation back, addressed by the #n positions listed under \"Folded work index\" in a compaction summary. Re-run a read or a search instead when the file or the code is what you want — a current copy beats a folded one. Recall is for what you cannot re-derive: what the user said in their own words, and the output of work you should not repeat. Each compaction grants a fresh budget; a request past it is refused whole, not truncated.",
+      "description": "Bring folded conversation back: read the #n positions listed under \"Folded work index\" in a compaction summary, or search the whole folded region by query when no index line names what you need. Prefer re-reading a file over recalling it — a current copy beats a folded one. One budget per compaction covers both, and a request past it is refused whole, not truncated.",
       "parameters": {
         "additionalProperties": false,
         "properties": {
+          "limit": {
+            "description": "Search hits (default 8).",
+            "maximum": 20,
+            "minimum": 1,
+            "type": "integer"
+          },
           "positions": {
-            "description": "The #n addresses from a folded-work index line, without the '#'.",
+            "description": "Read these #n addresses, from an index line or a search hit, without the '#'.",
             "items": {
               "minimum": 0,
               "type": "integer"
@@ -347,11 +353,12 @@
             "maxItems": 8,
             "minItems": 1,
             "type": "array"
+          },
+          "query": {
+            "description": "Search for these words instead. A tool result matches on its output and is addressed by its call.",
+            "type": "string"
           }
         },
-        "required": [
-          "positions"
-        ],
         "type": "object"
       }
     },

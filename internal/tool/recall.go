@@ -6,6 +6,22 @@ import "context"
 // addresses a compaction digest's folded-work index carries.
 type RecallRequest struct {
 	Positions []int
+	// Query searches the folded region instead of reading it, against the
+	// canonical transcript rather than the projection, so the addresses it
+	// returns outlive the generations that lost them.
+	Query string
+	Limit int
+}
+
+// RecallHit is one search result: what matched, and the canonical position to
+// read it at. Position always addresses the message a read should ask for —
+// for a tool result that is the assistant call that produced it, so one read
+// returns the call and its output together.
+type RecallHit struct {
+	Position int
+	Kind     string
+	Tool     string
+	Snippet  string
 }
 
 // RecallResult is one recall's content plus what it cost. Text is what the
@@ -14,6 +30,8 @@ type RecallResult struct {
 	Text       string
 	Recalled   []int
 	Missing    []int
+	Hits       []RecallHit
+	Searched   int // messages the query ran against
 	Tokens     int
 	BudgetLeft int
 }

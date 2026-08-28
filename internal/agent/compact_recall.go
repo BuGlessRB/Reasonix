@@ -25,11 +25,16 @@ func (a *Agent) recallBudget() int {
 	return max(minRecallBudgetTokens, int(float64(window)*recallBudgetRatio))
 }
 
-// RecallContext returns folded canonical positions as text the caller can read.
-// It never installs a projection: the recalled content re-enters context as an
-// ordinary tool result, which puts it in the recent tail like any other work.
+// RecallContext reads folded canonical positions, or searches for them. What
+// comes back re-enters context as an ordinary tool result, never a projection.
+// Both operations spend one generation budget: two would let a search refill
+// what a read was refused.
 func (a *Agent) RecallContext(_ context.Context, req tool.RecallRequest) (tool.RecallResult, error) {
-	if len(req.Positions) == 0 {
+	query := strings.TrimSpace(req.Query)
+	switch {
+	case query != "" && len(req.Positions) > 0:
+		return tool.RecallResult{}, fmt.Errorf("recall: give positions to read or a query to search, not both")
+	case query == "" && len(req.Positions) == 0:
 		return tool.RecallResult{}, fmt.Errorf("recall: no positions given")
 	}
 	canonical, _ := a.sess.conversation.snapshotMessagesVersion()
@@ -37,7 +42,7 @@ func (a *Agent) RecallContext(_ context.Context, req tool.RecallRequest) (tool.R
 	a.sess.compactionMu.Lock()
 	defer a.sess.compactionMu.Unlock()
 	state := &a.sess.compactionState
-	covered := state.Projection.CoveredCount
+	covered := min(state.Projection.CoveredCount, len(canonical))
 	if covered <= 0 {
 		return tool.RecallResult{}, fmt.Errorf("recall: nothing has been folded in this session yet, so every position is still in your context")
 	}
@@ -46,6 +51,9 @@ func (a *Agent) RecallContext(_ context.Context, req tool.RecallRequest) (tool.R
 	}
 	budget := a.recallBudget()
 	left := budget - state.Recall.SpentTokens
+	if query != "" {
+		return a.searchRecallLocked(canonical[:covered], query, req, budget, left)
+	}
 
 	var body strings.Builder
 	var recalled, missing []int
