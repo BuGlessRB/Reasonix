@@ -18,10 +18,11 @@ import (
 	"reasonix/internal/tool"
 
 	"reasonix/internal/agentgraph"
+	"reasonix/internal/testenv"
 )
 
 func TestBackgroundFleetRegistersEveryWriterUntilCompletion(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	prov := &fleetHoldProvider{started: make(chan struct{}, 2), release: make(chan struct{})}
 	store := checkpoint.New("", root)
 	observer := checkpoint.NewMutationObserver(checkpoint.ObserverOptions{Store: store})
@@ -74,7 +75,7 @@ func TestBackgroundFleetRegistersEveryWriterUntilCompletion(t *testing.T) {
 // and group/child progress must be emitted through the raw parent sink so IDs
 // are namespaced exactly once and match the cards already dispatched.
 func TestBackgroundFleetProgressLifecycleUsesStableIDs(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	rec := &recordSink{}
 	prov := &fleetHoldProvider{started: make(chan struct{}, 2), release: make(chan struct{})}
 	task := NewTaskTool(prov, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
@@ -162,7 +163,7 @@ func TestBackgroundFleetProgressLifecycleUsesStableIDs(t *testing.T) {
 }
 
 func TestBackgroundFleetRegistersReservationWhileItemsAreQueued(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := checkpoint.New("", root)
 	observer := checkpoint.NewMutationObserver(checkpoint.ObserverOptions{Store: store})
 	scheduler := NewSubagentScheduler(1, 1)
@@ -226,7 +227,7 @@ func TestFleetSchemaStableAndBounds(t *testing.T) {
 }
 
 func TestFleetRejectsSingleTaskAndPathConflict(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	task := newTestTaskTool(t, &mockProvider{name: "sub"}, tool.NewRegistry(), "sys", "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
 		WithScheduler(NewSubagentScheduler(6, 3))
@@ -264,7 +265,7 @@ func TestFleetRejectsSingleTaskAndPathConflict(t *testing.T) {
 }
 
 func TestFleetCancellationPreservesStartedItemStatus(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	prov := &fleetCancelProvider{
 		started:  make(chan struct{}, 2),
 		observed: make(chan struct{}, 2),
@@ -334,7 +335,7 @@ func TestFleetCancellationPreservesStartedItemStatus(t *testing.T) {
 }
 
 func TestFleetParallelDisjointWriters(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	var concurrent atomic.Int32
 	var maxConcurrent atomic.Int32
 	prov := &fleetBarrierProvider{
@@ -454,5 +455,5 @@ func (p *fleetBarrierProvider) Stream(_ context.Context, req provider.Request) (
 
 func mustSubagentStore(t *testing.T) *SubagentStore {
 	t.Helper()
-	return NewSubagentStore(t.TempDir())
+	return NewSubagentStore(testenv.TempDir(t))
 }

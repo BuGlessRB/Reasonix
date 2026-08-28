@@ -7,13 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // grepGlobTree is one nested tree both engines search, so their answers can be
 // compared rather than asserted separately.
 func grepGlobTree(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	files := map[string]string{
 		"top.go": "needle at the top\n",
 		"top.md": "needle in markdown\n",

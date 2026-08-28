@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestBranchMetaCrossProcessReadModifyWrite(t *testing.T) {
@@ -42,7 +43,7 @@ func TestBranchMetaCrossProcessReadModifyWrite(t *testing.T) {
 		return
 	}
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	if err := SaveBranchMeta(path, BranchMeta{ID: "session"}); err != nil {
 		t.Fatal(err)
@@ -94,7 +95,7 @@ func TestBranchMetaCrossProcessReadModifyWrite(t *testing.T) {
 }
 
 func TestBranchMetaIgnoresRetiredAutoRecoveryField(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "legacy.jsonl")
 	metaPath := BranchMetaPath(sessionPath)
 	legacy := `{"id":"legacy","name":"kept","recovery_checkpoint_enabled":false}`
@@ -122,7 +123,7 @@ func TestBranchMetaIgnoresRetiredAutoRecoveryField(t *testing.T) {
 }
 
 func TestBranchMetaRoundTripAndList(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	rootPath := filepath.Join(dir, "root.jsonl")
 	childPath := filepath.Join(dir, "child.jsonl")
 
@@ -169,7 +170,7 @@ func TestBranchMetaRoundTripAndList(t *testing.T) {
 }
 
 func TestListBranchesSkipsCleanupPending(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	visiblePath := filepath.Join(dir, "visible.jsonl")
 	pendingPath := filepath.Join(dir, "pending.jsonl")
 
@@ -207,7 +208,7 @@ func TestListBranchesSkipsCleanupPending(t *testing.T) {
 }
 
 func TestSessionInFlightTurnMetaRoundTrip(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "in-flight.jsonl")
 	sess := NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "work"})
@@ -291,7 +292,7 @@ func TestSessionInFlightTurnMetaRoundTrip(t *testing.T) {
 }
 
 func TestSessionModelRoundTripPreservesActivity(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	session := NewSession("sys")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})

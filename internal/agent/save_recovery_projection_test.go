@@ -7,10 +7,11 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func TestSaveRecoveryBranchInheritsValidProjection(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	parent := NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -65,7 +66,7 @@ func TestSaveRecoveryBranchInheritsValidProjection(t *testing.T) {
 }
 
 func TestSaveRecoveryBranchSkipsInvalidProjection(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	parent := NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -111,7 +112,7 @@ func TestSaveRecoveryBranchSkipsInvalidProjection(t *testing.T) {
 }
 
 func TestSnapshotUpToDateFastPathSkipsWALProbe(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	if err := s.SaveSnapshot(path); err != nil {

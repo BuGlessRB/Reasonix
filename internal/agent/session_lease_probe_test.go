@@ -3,13 +3,15 @@ package agent
 import (
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // The store-P2 write-authority probe must record an unleased save once per
 // path and stay silent for the lease holder — it is evidence collection, not
 // enforcement.
 func TestUnleasedWriteProbe(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 
 	unleased := filepath.Join(dir, "unleased.jsonl")
 	observeUnleasedSessionWrite(unleased, sessionSaveSnapshot)

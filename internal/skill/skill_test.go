@@ -12,6 +12,7 @@ import (
 
 	"reasonix/internal/config"
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 func writeSkill(t *testing.T, base, rel, content string) string {
@@ -61,9 +62,9 @@ func find(skills []Skill, name string) (Skill, bool) {
 }
 
 func TestDisableDiscoveryReturnsEmptyStore(t *testing.T) {
-	home := t.TempDir()
-	project := t.TempDir()
-	custom := t.TempDir()
+	home := testenv.TempDir(t)
+	project := testenv.TempDir(t)
+	custom := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/global.md", "---\ndescription: global\n---\nbody")
 	writeSkill(t, project, ".reasonix/skills/project.md", "---\ndescription: project\n---\nbody")
 	writeSkill(t, custom, "custom.md", "---\ndescription: custom\n---\nbody")
@@ -93,8 +94,8 @@ func TestDisableDiscoveryReturnsEmptyStore(t *testing.T) {
 }
 
 func TestListPrecedenceProjectOverGlobal(t *testing.T) {
-	home := t.TempDir()
-	proj := t.TempDir()
+	home := testenv.TempDir(t)
+	proj := testenv.TempDir(t)
 	writeSkill(t, proj, ".reasonix/skills/greet.md", "---\nname: greet\ndescription: project greet\n---\nproject body")
 	writeSkill(t, home, ".reasonix/skills/greet.md", "---\ndescription: global greet\n---\nglobal body")
 	writeSkill(t, home, ".reasonix/skills/onlyglobal.md", "---\ndescription: only global\n---\nbody")
@@ -115,8 +116,8 @@ func TestListPrecedenceProjectOverGlobal(t *testing.T) {
 }
 
 func TestPluginClaudeAgentLoadsAsManualSubagent(t *testing.T) {
-	home := t.TempDir()
-	agentRoot := filepath.Join(t.TempDir(), "agents")
+	home := testenv.TempDir(t)
+	agentRoot := filepath.Join(testenv.TempDir(t), "agents")
 	writeSkill(t, agentRoot, "reviewer.md", "---\ndescription: Review changes\nmodel: sonnet\ntools: [Read, Grep, \"mcp__*__search\"]\n---\nReview carefully.")
 	key := config.CanonicalSkillPath(agentRoot)
 	st := New(Options{HomeDir: home, CustomPaths: []string{agentRoot}, PluginPaths: map[string][]string{key: {"legal"}}, PluginAgentPaths: map[string][]string{key: {"legal"}}, DisableBuiltins: true})
@@ -137,9 +138,9 @@ func TestPluginClaudeAgentLoadsAsManualSubagent(t *testing.T) {
 }
 
 func TestPluginAgentAndSkillWithSameNameHaveDistinctQualifiedInvocations(t *testing.T) {
-	home := t.TempDir()
-	skillRoot := filepath.Join(t.TempDir(), "skills")
-	agentRoot := filepath.Join(t.TempDir(), "agents")
+	home := testenv.TempDir(t)
+	skillRoot := filepath.Join(testenv.TempDir(t), "skills")
+	agentRoot := filepath.Join(testenv.TempDir(t), "agents")
 	writeSkill(t, skillRoot, "leave-tracker/SKILL.md", "---\ndescription: Track leave\n---\nSkill body")
 	writeSkill(t, agentRoot, "leave-tracker.md", "---\ndescription: Monitor leave\n---\nAgent body")
 	skillKey := config.CanonicalSkillPath(skillRoot)
@@ -161,9 +162,9 @@ func TestPluginAgentAndSkillWithSameNameHaveDistinctQualifiedInvocations(t *test
 }
 
 func TestPluginSkillsUseQualifiedSlashNamesWithoutChangingModelIndex(t *testing.T) {
-	home := t.TempDir()
-	alpha := t.TempDir()
-	beta := t.TempDir()
+	home := testenv.TempDir(t)
+	alpha := testenv.TempDir(t)
+	beta := testenv.TempDir(t)
 	writeSkill(t, alpha, "plan/SKILL.md", "---\ndescription: alpha plan\n---\nALPHA")
 	writeSkill(t, beta, "plan/SKILL.md", "---\ndescription: beta plan\n---\nBETA")
 	writeSkill(t, beta, "review/SKILL.md", "---\ndescription: beta review\n---\nREVIEW")
@@ -211,9 +212,9 @@ func TestPluginSkillsUseQualifiedSlashNamesWithoutChangingModelIndex(t *testing.
 }
 
 func TestPluginSkillShortAliasIsHiddenAndProjectSkillKeepsShortName(t *testing.T) {
-	home := t.TempDir()
-	project := t.TempDir()
-	pluginRoot := t.TempDir()
+	home := testenv.TempDir(t)
+	project := testenv.TempDir(t)
+	pluginRoot := testenv.TempDir(t)
 	writeSkill(t, pluginRoot, "plan/SKILL.md", "---\ndescription: plugin plan\n---\nPLUGIN")
 
 	st := New(Options{
@@ -240,8 +241,8 @@ func TestPluginSkillShortAliasIsHiddenAndProjectSkillKeepsShortName(t *testing.T
 }
 
 func TestListDecodesGB18030SkillFile(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	body := "---\ndescription: 中文技能\n---\n用中文处理任务。"
 	writeSkillBytes(t, root, filepath.Join("cn", SkillFile), fileencoding.Encode(body, fileencoding.GB18030))
 
@@ -253,7 +254,7 @@ func TestListDecodesGB18030SkillFile(t *testing.T) {
 }
 
 func TestFlatAndDirLayout(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/flat.md", "---\ndescription: flat\n---\nflat body")
 	writeSkill(t, home, ".reasonix/skills/dir/SKILL.md", "---\ndescription: dir\n---\ndir body")
 
@@ -268,7 +269,7 @@ func TestFlatAndDirLayout(t *testing.T) {
 }
 
 func TestNestedSkillsDiscoveredByDefault(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/superpower/skill-a.md", "---\ndescription: nested flat\n---\nflat body")
 	writeSkill(t, home, ".reasonix/skills/superpower/tool-a/SKILL.md", "---\ndescription: nested dir\n---\ndir body")
 	writeSkill(t, home, ".reasonix/skills/superpower/references/notes.md", "---\ndescription: not a skill\n---\nnotes")
@@ -290,7 +291,7 @@ func TestNestedSkillsDiscoveredByDefault(t *testing.T) {
 }
 
 func TestMaxDepthOnePreservesRootOnlyDiscovery(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/superpower/skill-a.md", "---\ndescription: nested flat\n---\nflat body")
 	writeSkill(t, home, ".reasonix/skills/superpower/tool-a/SKILL.md", "---\ndescription: nested dir\n---\ndir body")
 
@@ -304,7 +305,7 @@ func TestMaxDepthOnePreservesRootOnlyDiscovery(t *testing.T) {
 }
 
 func TestNestedSkillsRequireDescription(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/root.md", "---\n---\nroot body")
 	writeSkill(t, home, ".reasonix/skills/superpower/draft.md", "---\n---\ndraft body")
 	writeSkill(t, home, ".reasonix/skills/superpower/tool/SKILL.md", "---\n---\ntool body")
@@ -326,7 +327,7 @@ func TestNestedSkillsRequireDescription(t *testing.T) {
 }
 
 func TestNestedDirectorySkillStopsTraversal(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/pack/SKILL.md", "---\ndescription: pack\n---\npack body")
 	writeSkill(t, home, ".reasonix/skills/pack/child.md", "---\ndescription: child\n---\nchild body")
 
@@ -340,11 +341,11 @@ func TestNestedDirectorySkillStopsTraversal(t *testing.T) {
 }
 
 func TestConventionDirsDiscovered(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	writeSkill(t, proj, ".claude/skills/fromclaude.md", "---\ndescription: c\n---\nb")
 	writeSkill(t, proj, ".agents/skills/fromagents.md", "---\ndescription: a\n---\nb")
 	writeSkill(t, proj, ".agent/skills/fromagent.md", "---\ndescription: s\n---\nb")
-	st := New(Options{HomeDir: t.TempDir(), ProjectRoot: proj, DisableBuiltins: true})
+	st := New(Options{HomeDir: testenv.TempDir(t), ProjectRoot: proj, DisableBuiltins: true})
 	list := st.List()
 	for _, name := range []string{"fromclaude", "fromagents", "fromagent"} {
 		if _, ok := find(list, name); !ok {
@@ -354,8 +355,8 @@ func TestConventionDirsDiscovered(t *testing.T) {
 }
 
 func TestReasonixHomeDirOverridesGlobalReasonixSkills(t *testing.T) {
-	home := t.TempDir()
-	reasonixHome := filepath.Join(t.TempDir(), "rx-home")
+	home := testenv.TempDir(t)
+	reasonixHome := filepath.Join(testenv.TempDir(t), "rx-home")
 	writeSkill(t, home, ".reasonix/skills/old.md", "---\ndescription: old\n---\nold")
 	writeSkill(t, home, ".reasonix/skills/current.md", "---\ndescription: old current\n---\nold current")
 	currentPath := writeSkill(t, reasonixHome, "skills/current.md", "---\ndescription: current\n---\ncurrent")
@@ -384,13 +385,13 @@ func TestReasonixHomeDirOverridesGlobalReasonixSkills(t *testing.T) {
 }
 
 func TestNonSkillMarkdownInClaudeSkillRootsIgnored(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	writeSkill(t, proj, ".claude/skills/guide.md", "# Skill notes\n\nThis is documentation, not a skill.")
 	writeSkill(t, proj, ".claude/skills/notes.md", "---\ntitle: Notes\n---\n# Notes")
 	writeSkill(t, proj, ".claude/skills/real.md", "---\ndescription: real skill\n---\nbody")
 
 	var stderr bytes.Buffer
-	st := New(Options{HomeDir: t.TempDir(), ProjectRoot: proj, DisableBuiltins: true, Stderr: &stderr})
+	st := New(Options{HomeDir: testenv.TempDir(t), ProjectRoot: proj, DisableBuiltins: true, Stderr: &stderr})
 	list := st.List()
 	if _, ok := find(list, "real"); !ok {
 		t.Fatal("real skill should be discovered")
@@ -416,7 +417,7 @@ func TestNonSkillMarkdownInClaudeSkillRootsIgnored(t *testing.T) {
 }
 
 func TestSkillLikeFlatClaudeMarkdownWithoutDescriptionWarns(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".claude/skills/named.md", "---\nname: renamed\n---\nbody")
 
 	var stderr bytes.Buffer
@@ -439,7 +440,7 @@ func TestBlankDescriptionFlatClaudeMarkdownIsSkillLike(t *testing.T) {
 		{name: "quoted", content: "---\ndescription: \"\"\n---\nbody"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			home := t.TempDir()
+			home := testenv.TempDir(t)
 			writeSkill(t, home, ".claude/skills/"+tc.name+".md", tc.content)
 
 			var stderr bytes.Buffer
@@ -467,7 +468,7 @@ func TestBlankDescriptionFlatClaudeMarkdownIsSkillLike(t *testing.T) {
 }
 
 func TestRunAsOnlyFlatClaudeMarkdownIsSkillLike(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".claude/skills/sub.md", "---\nrunAs: subagent\n---\nbody")
 
 	var stderr bytes.Buffer
@@ -485,7 +486,7 @@ func TestRunAsOnlyFlatClaudeMarkdownIsSkillLike(t *testing.T) {
 }
 
 func TestExcludedPathsHideConventionRoots(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/keep.md", "---\ndescription: keep\n---\nb")
 	writeSkill(t, home, ".agents/skills/noisy.md", "---\ndescription: noisy\n---\nb")
 	excluded := filepath.Join(home, ".agents", "skills")
@@ -505,7 +506,7 @@ func TestExcludedPathsHideConventionRoots(t *testing.T) {
 }
 
 func TestFrontmatterFields(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/sub.md",
 		"---\ndescription: a sub\nrunAs: subagent\nallowed-tools: read_file, grep\nmodel: deepseek-pro\nread-only: true\n---\nbody")
 	writeSkill(t, home, ".reasonix/skills/fork.md", "---\ndescription: f\ncontext: fork\n---\nbody")
@@ -537,7 +538,7 @@ func TestFrontmatterFields(t *testing.T) {
 }
 
 func TestReferencesInlined(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/withrefs/SKILL.md", "---\ndescription: r\n---\nmain body")
 	writeSkill(t, home, ".reasonix/skills/withrefs/references/b.md", "second ref")
 	writeSkill(t, home, ".reasonix/skills/withrefs/references/a.md", "first ref")
@@ -562,7 +563,7 @@ func TestReferencesInlined(t *testing.T) {
 }
 
 func TestScriptsAppended(t *testing.T) {
-	home := filepath.Join(t.TempDir(), "home with spaces")
+	home := filepath.Join(testenv.TempDir(t), "home with spaces")
 	writeSkill(t, home, ".reasonix/skills/withscripts/SKILL.md", "---\ndescription: r\n---\nmain body")
 	writeScript(t, home, ".reasonix/skills/withscripts/scripts/lint.py", "#!/usr/bin/env python3\nprint('ok')")
 	writeScript(t, home, ".reasonix/skills/withscripts/scripts/deploy.sh", "#!/usr/bin/env bash\necho ok")
@@ -590,7 +591,7 @@ func TestScriptsAppended(t *testing.T) {
 }
 
 func TestScriptsStayOutOfSkillIndex(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/withscripts/SKILL.md", "---\ndescription: cache-safe script skill\n---\nmain body")
 	writeScript(t, home, ".reasonix/skills/withscripts/scripts/lint.py", "#!/usr/bin/env python3\nprint('ok')")
 
@@ -615,7 +616,7 @@ func TestScriptsStayOutOfSkillIndex(t *testing.T) {
 }
 
 func TestNoScriptsWhenDirAbsent(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/noscripts/SKILL.md", "---\ndescription: r\n---\nmain body")
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	sk, ok := st.Read("noscripts")
@@ -628,7 +629,7 @@ func TestNoScriptsWhenDirAbsent(t *testing.T) {
 }
 
 func TestFlatSkillNoScripts(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/flat.md", "---\ndescription: r\n---\nmain body")
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	sk, ok := st.Read("flat")
@@ -641,7 +642,7 @@ func TestFlatSkillNoScripts(t *testing.T) {
 }
 
 func TestScriptsFilteredByExt(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/scriptscheck/SKILL.md", "---\ndescription: t\n---\nbody")
 	writeScript(t, home, ".reasonix/skills/scriptscheck/scripts/lint.py", "#!/usr/bin/env python3\nprint('ok')\n")
 	writeScript(t, home, ".reasonix/skills/scriptscheck/scripts/.hidden.py", "")
@@ -684,7 +685,7 @@ func TestScriptsFilteredByExt(t *testing.T) {
 func TestBuiltinInitIsInlineSkill(t *testing.T) {
 	// /init must resolve to a built-in inline skill (the model-driven AGENTS.md
 	// bootstrap), present even with no project/user skills on disk.
-	st := New(Options{HomeDir: t.TempDir()})
+	st := New(Options{HomeDir: testenv.TempDir(t)})
 	sk, ok := st.Read("init")
 	if !ok {
 		t.Fatal("built-in init skill not found")
@@ -698,7 +699,7 @@ func TestBuiltinInitIsInlineSkill(t *testing.T) {
 }
 
 func TestBuiltinSubagentSkillsDeclareAllowedTools(t *testing.T) {
-	st := New(Options{HomeDir: t.TempDir()})
+	st := New(Options{HomeDir: testenv.TempDir(t)})
 	cases := map[string][]string{
 		"explore":         {"read_file", "ls", "glob", "grep", "code_index"},
 		"research":        {"read_file", "ls", "glob", "grep", "code_index", "web_fetch"},
@@ -725,12 +726,12 @@ func TestBuiltinSubagentSkillsDeclareAllowedTools(t *testing.T) {
 }
 
 func TestBuiltinsPresentAndOverridable(t *testing.T) {
-	st := New(Options{HomeDir: t.TempDir()})
+	st := New(Options{HomeDir: testenv.TempDir(t)})
 	if _, ok := find(st.List(), "explore"); !ok {
 		t.Error("built-in explore should be present")
 	}
 	// A user file named after a built-in overrides it.
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/explore.md", "---\ndescription: mine\nrunAs: inline\n---\nbody")
 	st2 := New(Options{HomeDir: home})
 	ex, _ := st2.Read("explore")
@@ -740,7 +741,7 @@ func TestBuiltinsPresentAndOverridable(t *testing.T) {
 }
 
 func TestInstallCapabilityBuiltinIsInlineWithExpectedMetadata(t *testing.T) {
-	st := New(Options{HomeDir: t.TempDir()})
+	st := New(Options{HomeDir: testenv.TempDir(t)})
 	sk, ok := st.Read("install-capability")
 	if !ok {
 		t.Fatal("install-capability builtin skill must be registered")
@@ -766,7 +767,7 @@ func TestInstallCapabilityBuiltinIsInlineWithExpectedMetadata(t *testing.T) {
 }
 
 func TestAutoResearchIsNotSeparateBuiltinSkill(t *testing.T) {
-	st := New(Options{HomeDir: t.TempDir()})
+	st := New(Options{HomeDir: testenv.TempDir(t)})
 	if _, listed := find(st.List(), "auto-research"); listed {
 		t.Error("auto-research should be a Goal strategy, not a separate builtin skill")
 	}
@@ -776,7 +777,7 @@ func TestAutoResearchIsNotSeparateBuiltinSkill(t *testing.T) {
 }
 
 func TestDisabledSkillsAreFilteredFromListAndRead(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/active.md", "---\ndescription: active\n---\nbody")
 	writeSkill(t, home, ".reasonix/skills/hidden.md", "---\ndescription: hidden\n---\nbody")
 
@@ -815,7 +816,7 @@ func containsString(ss []string, want string) bool {
 }
 
 func TestInvalidNamesSkipped(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/bad name.md", "---\ndescription: x\n---\nb") // space → invalid
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	if len(st.List()) != 0 {
@@ -827,8 +828,8 @@ func TestSymlinkedDirAndFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation needs privilege on Windows")
 	}
-	home := t.TempDir()
-	target := t.TempDir()
+	home := testenv.TempDir(t)
+	target := testenv.TempDir(t)
 	// real skill dir + flat file living outside the skills root
 	writeSkill(t, target, "realdir/SKILL.md", "---\ndescription: linked dir\n---\nb")
 	writeSkill(t, target, "realflat.md", "---\ndescription: linked flat\n---\nb")
@@ -887,7 +888,7 @@ func (f fakeFileInfo) IsDir() bool        { return f.mode.IsDir() }
 func (f fakeFileInfo) Sys() any           { return nil }
 
 func TestIrregularDirectoryEntryFollowsTarget(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	root := filepath.Join(home, ".agents", "skills")
 	writeSkill(t, root, "linkedpack/SKILL.md", "---\ndescription: linked pack\n---\nbody")
 	writeSkill(t, root, "collection/nested.md", "---\ndescription: nested\n---\nbody")
@@ -946,7 +947,7 @@ func TestReadOnlyIndexBlockPointsAtReadOnlySkill(t *testing.T) {
 }
 
 func TestSkillRoutingMetadataParsesButStaysOutOfIndex(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/router.md", "---\ndescription: route me\ntriggers: code review, 检查代码\nnegative-triggers: explain only\nauto-use: prefer\nneeds-fresh-data: true\ncost: low\nrequires: mcp-server:github, mcp-tool:github/search_issues\nprofiles: delivery, balanced, economy, invalid\n---\nbody")
 	sk, ok := New(Options{HomeDir: home, DisableBuiltins: true}).Read("router")
 	if !ok {
@@ -979,7 +980,7 @@ func TestSkillRoutingMetadataParsesButStaysOutOfIndex(t *testing.T) {
 }
 
 func TestColorFrontmatterParses(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/tagged.md", "---\ndescription: has a color\ncolor: amber\n---\nbody")
 	sk, ok := New(Options{HomeDir: home, DisableBuiltins: true}).Read("tagged")
 	if !ok {
@@ -991,7 +992,7 @@ func TestColorFrontmatterParses(t *testing.T) {
 }
 
 func TestInvocationDefaultsToAutoForExistingSkills(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/plain.md", "---\ndescription: no invocation field\n---\nbody")
 	sk, ok := New(Options{HomeDir: home, DisableBuiltins: true}).Read("plain")
 	if !ok {
@@ -1006,7 +1007,7 @@ func TestInvocationDefaultsToAutoForExistingSkills(t *testing.T) {
 }
 
 func TestManualInvocationSkillExcludedFromIndex(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/private-agent.md", "---\ndescription: my private subagent\nrunAs: subagent\ninvocation: manual\n---\nbody")
 	writeSkill(t, home, ".reasonix/skills/public-agent.md", "---\ndescription: a discoverable subagent\nrunAs: subagent\n---\nbody")
 	store := New(Options{HomeDir: home, DisableBuiltins: true})
@@ -1058,7 +1059,7 @@ func TestIndexLineClipsGraphemeClusters(t *testing.T) {
 }
 
 func TestCreateRefusesOverwrite(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	path, err := st.Create("mine", ScopeGlobal)
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"reasonix/internal/agent/testutil"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -91,7 +92,7 @@ func TestMissingReasoningRetryAggregateDoesNotTriggerEarlyCompaction(t *testing.
 	sink := &recordSink{}
 	a := New(toolCallReasoningRequiredProvider{mp}, echoRegistry(), sess, Options{
 		ContextWindow: 10_000,
-		ArchiveDir:    t.TempDir(),
+		ArchiveDir:    testenv.TempDir(t),
 	}, sink)
 
 	if err := a.Run(context.Background(), "go"); err != nil {

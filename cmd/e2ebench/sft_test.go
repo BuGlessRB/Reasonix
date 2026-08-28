@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // writeTraj lays down a trajectory whose rounds all report prefix hash "p1".
@@ -24,7 +26,7 @@ const (
 )
 
 func TestBuildSFTSampleJoinsPrefixToConversation(t *testing.T) {
-	path := writeTraj(t, t.TempDir(), "demo",
+	path := writeTraj(t, testenv.TempDir(t), "demo",
 		trajHeader,
 		`{"seq":2,"event":{"kind":"tool_dispatch","tool":{"id":"c1","name":"bash","partial":true}}}`,
 		`{"seq":3,"event":{"kind":"message","text":"","reasoning":"look first"}}`,
@@ -68,7 +70,7 @@ func TestBuildSFTSampleJoinsPrefixToConversation(t *testing.T) {
 }
 
 func TestBuildSFTSampleRejectsRunWithoutHeader(t *testing.T) {
-	path := writeTraj(t, t.TempDir(), "bare", trajUsage)
+	path := writeTraj(t, testenv.TempDir(t), "bare", trajUsage)
 	if got, why := buildSFTSample("bare", "p", path); got != nil || why != "no run header" {
 		t.Errorf("got (%v, %q), want a refusal naming the missing header", got, why)
 	}
@@ -77,7 +79,7 @@ func TestBuildSFTSampleRejectsRunWithoutHeader(t *testing.T) {
 // A header from another build describes a different request than the rounds it
 // sits next to; exporting it would train against a prefix that never ran.
 func TestBuildSFTSampleRejectsPrefixMismatch(t *testing.T) {
-	path := writeTraj(t, t.TempDir(), "drift",
+	path := writeTraj(t, testenv.TempDir(t), "drift",
 		trajHeader,
 		`{"seq":9,"event":{"kind":"usage","usage":{"cacheDiagnostics":{"prefixHash":"OTHER"}}}}`,
 		`{"seq":10,"event":{"kind":"message","text":"hi"}}`,
@@ -91,7 +93,7 @@ func TestBuildSFTSampleRejectsPrefixMismatch(t *testing.T) {
 // Sub-agent calls were sampled against their own prefix, so they must not be
 // attributed to this sample's header.
 func TestConvertSFTSkipsSubagentCalls(t *testing.T) {
-	path := writeTraj(t, t.TempDir(), "deleg",
+	path := writeTraj(t, testenv.TempDir(t), "deleg",
 		trajHeader,
 		`{"seq":2,"event":{"kind":"tool_dispatch","tool":{"id":"child","name":"bash","args":"{}","parentId":"c1"}}}`,
 		`{"seq":3,"event":{"kind":"tool_result","tool":{"id":"child","name":"bash","output":"x","parentId":"c1"}}}`,
@@ -110,7 +112,7 @@ func TestConvertSFTSkipsSubagentCalls(t *testing.T) {
 }
 
 func TestRunSFTModeKeepsOnlyGradedPasses(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	traj := filepath.Join(dir, "traj")
 	if err := os.Mkdir(traj, 0o755); err != nil {
 		t.Fatal(err)
@@ -153,7 +155,7 @@ func TestRunSFTModeKeepsOnlyGradedPasses(t *testing.T) {
 }
 
 func TestRunSFTModeRequiresAReport(t *testing.T) {
-	if err := runSFTMode(t.TempDir(), "../../benchmarks/e2e", "", "out.jsonl"); err == nil {
+	if err := runSFTMode(testenv.TempDir(t), "../../benchmarks/e2e", "", "out.jsonl"); err == nil {
 		t.Error("want an error naming the missing report")
 	}
 }

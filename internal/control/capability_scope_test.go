@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 // Two folders named alike are the common case in a picker, and the whole path
 // is unreadable at a glance — so only the collision pays, and only as much as
 // it takes to tell them apart.
 func TestDescribeScopesLabelsOnlyWhatCollides(t *testing.T) {
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	alone := mkdirs(t, base, "solo")
 	one := mkdirs(t, base, "work", "api", "frontend")
 	two := mkdirs(t, base, "side", "shop", "frontend")
@@ -37,7 +38,7 @@ func TestDescribeScopesLabelsOnlyWhatCollides(t *testing.T) {
 // Worktrees of one repository are one project. Listing every tree separately is
 // exactly the crowding the picker exists to avoid.
 func TestDescribeScopesCollapsesWorktreesOfOneRepository(t *testing.T) {
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	repo := mkdirs(t, base, "repo")
 	gitDir := mkdirs(t, repo, ".git")
 	mkdirs(t, gitDir, "worktrees", "studio")
@@ -58,8 +59,8 @@ func TestDescribeScopesCollapsesWorktreesOfOneRepository(t *testing.T) {
 
 // Managing another project must not need the session to move there.
 func TestInspectProjectReadsAnotherFolderWithoutRepointing(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	other := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	other := testenv.TempDir(t)
 	mustWriteFile(t, filepath.Join(other, ".mcp.json"),
 		`{"mcpServers":{"codegraph":{"command":"codegraph","args":["serve"]}}}`)
 

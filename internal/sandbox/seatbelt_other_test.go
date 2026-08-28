@@ -8,10 +8,12 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestLinuxWriteDirsSkipsMissingDirs(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	if err := os.Mkdir(filepath.Join(home, ".cache"), 0o755); err != nil {
 		t.Fatal(err)
@@ -47,7 +49,7 @@ func TestBwrapExecutableMountArgsLeavesVisibleExecutableAlone(t *testing.T) {
 }
 
 func TestBwrapArgsForArgsMountsTemporaryExecutableAfterMasks(t *testing.T) {
-	secretDir := t.TempDir()
+	secretDir := testenv.TempDir(t)
 	argv := bwrapArgsForArgs(Spec{
 		ForbidReadRoots: []string{secretDir},
 	}, []string{"/tmp/go-build123/b456/plugin.test", "-test.run=Helper"})
@@ -59,11 +61,11 @@ func TestBwrapArgsForArgsMountsTemporaryExecutableAfterMasks(t *testing.T) {
 }
 
 func TestBwrapArgsBindsSessionTempAtTmp(t *testing.T) {
-	private := t.TempDir()
+	private := testenv.TempDir(t)
 	argv := bwrapArgs(Spec{
 		Mode:        "enforce",
 		SessionTemp: private,
-		WriteRoots:  []string{t.TempDir()},
+		WriteRoots:  []string{testenv.TempDir(t)},
 	}, Shell{Kind: ShellBash, Path: "bash"}, "true")
 	bind := indexArgs(argv, "--bind", private, "/tmp")
 	if bind < 0 {
@@ -88,12 +90,12 @@ func TestBwrapArgsWithoutSessionTempKeepsTmpfs(t *testing.T) {
 }
 
 func TestBwrapForbidReadArgsMasksFilesAndDirectories(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	nested := filepath.Join(dir, "nested")
 	if err := os.Mkdir(nested, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	file := filepath.Join(t.TempDir(), "credentials.env")
+	file := filepath.Join(testenv.TempDir(t), "credentials.env")
 	if err := os.WriteFile(file, []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}

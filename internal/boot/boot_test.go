@@ -123,7 +123,7 @@ base_url = "https://example.invalid"
 model = "x"
 api_key_env = "REASONIX_TEST_KEY_UNSET"
 `)
-	sessionDir := filepath.Join(t.TempDir(), "sessions")
+	sessionDir := filepath.Join(robustTempDir(t), "sessions")
 	called := false
 	ctrl, err := Build(context.Background(), Options{
 		SessionDir: sessionDir,
@@ -153,7 +153,7 @@ func TestBuildRunsCleanupPendingDespiteSafeModeEnv(t *testing.T) {
 
 	called := false
 	ctrl, err := Build(context.Background(), Options{
-		SessionDir: filepath.Join(t.TempDir(), "sessions"),
+		SessionDir: filepath.Join(robustTempDir(t), "sessions"),
 		CleanupPendingReconciler: func(string) error {
 			called = true
 			return nil
@@ -186,7 +186,7 @@ kind = "boot-retrieval-tool-test"
 model = "x"
 `)
 
-	sessionDir := filepath.Join(t.TempDir(), "sessions")
+	sessionDir := filepath.Join(robustTempDir(t), "sessions")
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -395,10 +395,24 @@ func toolSchemaNames(tools []provider.ToolSchema) []string {
 	return names
 }
 
+// agentRequests keeps only the executor's own sampling calls. Under the
+// delivery role setting the capability router samples first, and it is offered
+// no tool surface — so carrying one identifies the agent without the caller
+// having to know how many other components sampled.
+func agentRequests(reqs []provider.Request) []provider.Request {
+	out := make([]provider.Request, 0, len(reqs))
+	for _, req := range reqs {
+		if len(req.Tools) > 0 {
+			out = append(out, req)
+		}
+	}
+	return out
+}
+
 func firstTokenProfileRequest(t *testing.T, tokenMode string) provider.Request {
 	t.Helper()
 	registerBootTokenProfileTestProvider()
-	prov := testutil.NewMock("token-profile", testutil.Turn{Text: "done"})
+	prov := testutil.NewMock("token-profile", testutil.Turn{Text: "[]"}, testutil.Turn{Text: "done"})
 	setBootTokenProfileTestProvider(t, prov)
 
 	opts := Options{Sink: event.Discard}
@@ -413,9 +427,9 @@ func firstTokenProfileRequest(t *testing.T, tokenMode string) provider.Request {
 	if err := ctrl.Run(context.Background(), "capture request prefix"); err != nil {
 		t.Fatalf("Run(%q): %v", tokenMode, err)
 	}
-	reqs := prov.Requests()
+	reqs := agentRequests(prov.Requests())
 	if len(reqs) != 1 {
-		t.Fatalf("requests(%q) = %d, want 1", tokenMode, len(reqs))
+		t.Fatalf("agent requests(%q) = %d, want 1", tokenMode, len(reqs))
 	}
 	return reqs[0]
 }
@@ -524,7 +538,7 @@ kind = "boot-subagent-test"
 model = "x"
 `)
 
-	sessionDir := filepath.Join(t.TempDir(), "desktop-workspace-sessions")
+	sessionDir := filepath.Join(robustTempDir(t), "desktop-workspace-sessions")
 	ctrl, err := Build(context.Background(), Options{Sink: event.Discard, SessionDir: sessionDir})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
@@ -1777,8 +1791,8 @@ func TestNewProviderRejectsExplicitOfficialDeepSeekVisionModel(t *testing.T) {
 }
 
 func TestBuildHonorsSessionDirOverride(t *testing.T) {
-	dir := t.TempDir()
-	home := t.TempDir()
+	dir := robustTempDir(t)
+	home := robustTempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
@@ -1795,7 +1809,7 @@ model = "x"
 api_key_env = "REASONIX_TEST_KEY_UNSET"
 `)
 
-	sessionDir := filepath.Join(t.TempDir(), "desktop-workspace-sessions")
+	sessionDir := filepath.Join(robustTempDir(t), "desktop-workspace-sessions")
 	ctrl, err := Build(context.Background(), Options{SessionDir: sessionDir})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
@@ -1870,7 +1884,7 @@ func TestBuildDiscoversSkillsDespiteSafeModeEnv(t *testing.T) {
 	writeFile(t, dir, ".reasonix/skills/project-skill.md", "---\ndescription: project skill\n---\nplaybook")
 	writeFile(t, home, ".reasonix/skills/global-skill.md", "---\ndescription: global skill\n---\nplaybook")
 
-	ctrl, err := Build(context.Background(), Options{SessionDir: filepath.Join(t.TempDir(), "sessions")})
+	ctrl, err := Build(context.Background(), Options{SessionDir: filepath.Join(robustTempDir(t), "sessions")})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -2486,7 +2500,7 @@ model = "x"
 	registerBootTokenProfileTestProvider()
 	var base []string
 	for _, mode := range []string{TokenModeEconomy, TokenModeFull, TokenModeDelivery, "light", "balanced"} {
-		prov := testutil.NewMock("stable-"+mode, testutil.Turn{Text: "done"})
+		prov := testutil.NewMock("stable-"+mode, testutil.Turn{Text: "[]"}, testutil.Turn{Text: "done"})
 		setBootTokenProfileTestProvider(t, prov)
 		ctrl, err := Build(context.Background(), Options{Sink: event.Discard, TokenMode: mode, AgentPreset: mode})
 		if err != nil {
@@ -2496,12 +2510,12 @@ model = "x"
 			ctrl.Close()
 			t.Fatalf("Run(%q): %v", mode, err)
 		}
-		names := toolSchemaNames(prov.Requests()[0].Tools)
-		if requestHasTool(prov.Requests()[0], "connect_tool_source") {
+		names := toolSchemaNames(agentRequests(prov.Requests())[0].Tools)
+		if requestHasTool(agentRequests(prov.Requests())[0], "connect_tool_source") {
 			ctrl.Close()
 			t.Fatalf("%q still exposes connect_tool_source", mode)
 		}
-		if !requestHasTool(prov.Requests()[0], "use_capability") {
+		if !requestHasTool(agentRequests(prov.Requests())[0], "use_capability") {
 			ctrl.Close()
 			t.Fatalf("%q missing use_capability: %v", mode, names)
 		}
@@ -3414,7 +3428,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 	})
 	build := func() {
 		t.Helper()
-		ctrl, err := Build(context.Background(), Options{Sink: sink, WorkspaceRoot: t.TempDir()})
+		ctrl, err := Build(context.Background(), Options{Sink: sink, WorkspaceRoot: robustTempDir(t)})
 		if err != nil {
 			t.Fatalf("Build: %v", err)
 		}
@@ -3859,7 +3873,7 @@ api_key_env = "REASONIX_TEST_KEY_UNSET"
 }
 
 func TestNormalizeAdditionalDirs(t *testing.T) {
-	root := t.TempDir()
+	root := robustTempDir(t)
 	extra := filepath.Join(root, "extra")
 	if err := os.Mkdir(extra, 0o755); err != nil {
 		t.Fatal(err)
@@ -3883,8 +3897,8 @@ func TestNormalizeAdditionalDirs(t *testing.T) {
 }
 
 func TestAppendUniquePathsDeduplicatesSymlinkEquivalentRoots(t *testing.T) {
-	real := t.TempDir()
-	link := filepath.Join(t.TempDir(), "root-link")
+	real := robustTempDir(t)
+	link := filepath.Join(robustTempDir(t), "root-link")
 	if err := os.Symlink(real, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
@@ -3897,8 +3911,8 @@ func TestAppendUniquePathsDeduplicatesSymlinkEquivalentRoots(t *testing.T) {
 func TestRuntimeForbidReadRootsAddsOnlyGlobalCredentialFile(t *testing.T) {
 	home := isolateConfigHome(t)
 	t.Setenv("REASONIX_HOME", filepath.Join(home, "reasonix-home"))
-	configured := filepath.Join(t.TempDir(), "configured-secret")
-	projectEnv := filepath.Join(t.TempDir(), ".env")
+	configured := filepath.Join(robustTempDir(t), "configured-secret")
+	projectEnv := filepath.Join(robustTempDir(t), ".env")
 	for _, path := range []string{configured, projectEnv} {
 		if err := os.WriteFile(path, []byte("secret"), 0o600); err != nil {
 			t.Fatal(err)
@@ -3960,7 +3974,7 @@ func pathListContains(paths []string, want string) bool {
 }
 
 func TestNormalizeAdditionalDirsRejectsInvalidPaths(t *testing.T) {
-	root := t.TempDir()
+	root := robustTempDir(t)
 	file := filepath.Join(root, "file.txt")
 	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
@@ -3977,7 +3991,7 @@ func TestNormalizeAdditionalDirsRejectsInvalidPaths(t *testing.T) {
 func TestBuildAdditionalDirsAllowWriterAndPreserveToolSchemas(t *testing.T) {
 	isolateConfigHome(t)
 	root := robustTempDir(t)
-	extra := t.TempDir()
+	extra := robustTempDir(t)
 	t.Chdir(root)
 	writeFile(t, root, "reasonix.toml", `
 default_model = "test-model"
@@ -4054,7 +4068,7 @@ func TestBuildAdditionalDirsReachSandboxedBashWriteRoots(t *testing.T) {
 	}
 	isolateConfigHome(t)
 	root := robustTempDir(t)
-	extra := t.TempDir()
+	extra := robustTempDir(t)
 	t.Chdir(root)
 	writeFile(t, root, "reasonix.toml", `
 default_model = "test-model"
@@ -4188,7 +4202,7 @@ func TestBuildExtraPluginProbeKeepsSessionProcessAlive(t *testing.T) {
 
 	sessionCtx := t.Context()
 	ctrl, err := Build(sessionCtx, Options{
-		SessionDir: filepath.Join(t.TempDir(), "sessions"),
+		SessionDir: filepath.Join(robustTempDir(t), "sessions"),
 		Sink:       event.Discard,
 		ExtraPlugins: []plugin.Spec{{
 			Name:    "acp-extra",
@@ -4312,7 +4326,7 @@ func TestBuildKeepsSourceConnectorAndSkillToolsDespiteSafeModeEnv(t *testing.T) 
 	t.Setenv("REASONIX_SAFE_MODE", "1")
 
 	ctrl, err := Build(context.Background(), Options{
-		SessionDir: filepath.Join(t.TempDir(), "sessions"),
+		SessionDir: filepath.Join(robustTempDir(t), "sessions"),
 		TokenMode:  TokenModeFull,
 		Sink:       event.Discard,
 	})

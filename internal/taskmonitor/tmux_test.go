@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 type tmuxMock struct {
@@ -64,7 +66,7 @@ func seedTmuxTaskID(t *testing.T, s *InMemoryStore, projectDir, taskID string) {
 
 func TestTmuxAdapterAttachIdempotent(t *testing.T) {
 	s := NewInMemoryStore()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	seedTmuxTask(t, s, root)
 	mock := &tmuxMock{}
 	a := NewTmuxAdapterWithRunner(s, ".reasonix/tasks", mock)
@@ -83,7 +85,7 @@ func TestTmuxAdapterAttachIdempotent(t *testing.T) {
 
 func TestTmuxAdapterBoundsGeneratedSessionName(t *testing.T) {
 	s := NewInMemoryStore()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	taskID := strings.Repeat("a", 60)
 	seedTmuxTaskID(t, s, root, taskID)
 	a := NewTmuxAdapterWithRunner(s, ".reasonix/tasks", &tmuxMock{})
@@ -101,7 +103,7 @@ func TestTmuxAdapterBoundsGeneratedSessionName(t *testing.T) {
 
 func TestTmuxAdapterUnavailableDoesNotChangeTask(t *testing.T) {
 	s := NewInMemoryStore()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	seedTmuxTask(t, s, root)
 	a := NewTmuxAdapterWithRunner(s, ".reasonix/tasks", nil)
 	r := a.Attach(context.Background(), root, "t1", "")
@@ -128,7 +130,7 @@ func TestTmuxAdapterRejectsUnsafeNames(t *testing.T) {
 
 func TestTmuxAdapterStaleAndDetach(t *testing.T) {
 	s := NewInMemoryStore()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	seedTmuxTask(t, s, root)
 	mock := &tmuxMock{}
 	a := NewTmuxAdapterWithRunner(s, ".reasonix/tasks", mock)
@@ -151,14 +153,14 @@ func TestTmuxAdapterStaleAndDetach(t *testing.T) {
 
 func TestTmuxAdapterRejectsTaskPathTraversal(t *testing.T) {
 	a := NewTmuxAdapterWithRunner(NewInMemoryStore(), ".reasonix/tasks", &tmuxMock{})
-	r := a.Status(context.Background(), t.TempDir(), "../secret")
+	r := a.Status(context.Background(), testenv.TempDir(t), "../secret")
 	if r.Error == nil {
 		t.Fatal("expected invalid task id error")
 	}
 }
 
 func TestTmuxAdapterAcceptsCleanableProjectDir(t *testing.T) {
-	parent := t.TempDir()
+	parent := testenv.TempDir(t)
 	for _, projectDir := range []string{
 		filepath.Join(parent, "nested", "..", "project"),
 		filepath.Join(parent, "project..archive"),
@@ -176,8 +178,8 @@ func TestTmuxAdapterAcceptsCleanableProjectDir(t *testing.T) {
 }
 
 func TestTmuxAdapterRejectsSymlinkMappingDirectory(t *testing.T) {
-	project := t.TempDir()
-	outside := t.TempDir()
+	project := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	root := filepath.Join(project, ".reasonix", "tasks")
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
@@ -221,7 +223,7 @@ func TestTmuxAdapterRejectsSymlinkMappingDirectory(t *testing.T) {
 }
 
 func TestTmuxAdapterRejectsForgedMappingIdentityWithoutTmuxCalls(t *testing.T) {
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	s := NewInMemoryStore()
 	seedTmuxTask(t, s, project)
 	mock := &tmuxMock{}
@@ -264,7 +266,7 @@ func TestTmuxAdapterRejectsForgedMappingIdentityWithoutTmuxCalls(t *testing.T) {
 }
 
 func TestTmuxAdapterDoesNotKillSessionWithWrongOwnerToken(t *testing.T) {
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	s := NewInMemoryStore()
 	seedTmuxTask(t, s, project)
 	mock := &tmuxMock{}
@@ -288,7 +290,7 @@ func TestTmuxAdapterDoesNotKillSessionWithWrongOwnerToken(t *testing.T) {
 }
 
 func TestTmuxAdapterDetachUsesAtomicOwnedKill(t *testing.T) {
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	s := NewInMemoryStore()
 	seedTmuxTask(t, s, project)
 	mock := &tmuxMock{}
@@ -318,7 +320,7 @@ func TestTmuxAdapterDetachUsesAtomicOwnedKill(t *testing.T) {
 }
 
 func TestTmuxAdapterReplacesLegacyMappingWithoutTrustingIt(t *testing.T) {
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	s := NewInMemoryStore()
 	seedTmuxTask(t, s, project)
 	path := filepath.Join(project, ".reasonix", "tasks", ".tmux", "t1.json")
@@ -347,7 +349,7 @@ func TestTmuxAdapterReplacesLegacyMappingWithoutTrustingIt(t *testing.T) {
 }
 
 func TestTmuxAdapterWritesPrivateMappingFiles(t *testing.T) {
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	s := NewInMemoryStore()
 	seedTmuxTask(t, s, project)
 	a := NewTmuxAdapterWithRunner(s, ".reasonix/tasks", &tmuxMock{})

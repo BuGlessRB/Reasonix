@@ -7,12 +7,14 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestProbeSnapshotServesAcrossRestartsWithoutReprobing(t *testing.T) {
 	resetProbeCacheForTest(t, time.Unix(1000, 0))
-	dir := t.TempDir()
-	snapDir := t.TempDir()
+	dir := testenv.TempDir(t)
+	snapDir := testenv.TempDir(t)
 	toolPath := writeProbeTool(t, filepath.Join(dir, "snaptool"), "snaptool 1.0")
 	opts := ProbeOptions{Overrides: map[string]string{"snaptool": toolPath}, SnapshotDir: snapDir}
 	commands := []string{"snaptool --version"}
@@ -41,8 +43,8 @@ func TestProbeSnapshotServesAcrossRestartsWithoutReprobing(t *testing.T) {
 
 func TestProbeSnapshotExpiresAndAdoptsDefinitiveChanges(t *testing.T) {
 	resetProbeCacheForTest(t, time.Unix(1000, 0))
-	dir := t.TempDir()
-	snapDir := t.TempDir()
+	dir := testenv.TempDir(t)
+	snapDir := testenv.TempDir(t)
 	toolPath := writeProbeTool(t, filepath.Join(dir, "exptool"), "exptool 1.0")
 	opts := ProbeOptions{Overrides: map[string]string{"exptool": toolPath}, SnapshotDir: snapDir}
 	commands := []string{"exptool --version"}
@@ -73,8 +75,8 @@ func TestProbeSnapshotExpiresAndAdoptsDefinitiveChanges(t *testing.T) {
 
 func TestProbeSnapshotKeepsFoundOverTransientFailure(t *testing.T) {
 	resetProbeCacheForTest(t, time.Unix(1000, 0))
-	dir := t.TempDir()
-	snapDir := t.TempDir()
+	dir := testenv.TempDir(t)
+	snapDir := testenv.TempDir(t)
 	toolPath := writeProbeTool(t, filepath.Join(dir, "flaptool"), "flaptool 1.0")
 	opts := ProbeOptions{Overrides: map[string]string{"flaptool": toolPath}, SnapshotDir: snapDir}
 	commands := []string{"flaptool --version"}

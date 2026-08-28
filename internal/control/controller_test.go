@@ -34,6 +34,7 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/skill"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -84,13 +85,13 @@ func TestResolvePlanDecisionRecordsDistinctOutcomes(t *testing.T) {
 
 func isolateControlConfigHome(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	return home
 }
 
@@ -185,8 +186,8 @@ type startBackgroundJobTool struct {
 func TestCancelJobCannotCrossSessionBoundary(t *testing.T) {
 	manager := jobs.NewManager(event.Discard)
 	t.Cleanup(manager.Close)
-	pathA := filepath.Join(t.TempDir(), "session-a.jsonl")
-	pathB := filepath.Join(t.TempDir(), "session-b.jsonl")
+	pathA := filepath.Join(testenv.TempDir(t), "session-a.jsonl")
+	pathB := filepath.Join(testenv.TempDir(t), "session-b.jsonl")
 	controllerA := New(Options{Jobs: manager})
 	controllerB := New(Options{Jobs: manager})
 	controllerA.sessionPath = pathA
@@ -289,7 +290,7 @@ func TestNewTreatsTypedNilSinkAsDiscard(t *testing.T) {
 }
 
 func TestClearSessionMarksCleanupPendingBeforeReturningForRunningJobs(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	oldPath := filepath.Join(dir, "old.jsonl")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -339,7 +340,7 @@ func TestClearSessionMarksCleanupPendingBeforeReturningForRunningJobs(t *testing
 }
 
 func TestClearSessionQueuesSessionStartHookContext(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	oldPath := filepath.Join(dir, "old.jsonl")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -366,7 +367,7 @@ func TestClearSessionQueuesSessionStartHookContext(t *testing.T) {
 }
 
 func TestReconcileCleanupPendingRemovesOrphanedArtifacts(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "orphan.jsonl")
 	if err := os.WriteFile(path, []byte(`{"role":"user","content":"orphan"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -408,7 +409,7 @@ func TestTurnOutcomeClassifiesFinalReadiness(t *testing.T) {
 }
 
 func TestRunTurnSnapshotsActivityWhenTranscriptChanges(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "session.jsonl")
@@ -435,7 +436,7 @@ func TestRunTurnSnapshotsActivityWhenTranscriptChanges(t *testing.T) {
 }
 
 func TestFinishInFlightTurnKeepsMarkerUntilSnapshotSucceeds(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -481,7 +482,7 @@ func TestFinishInFlightTurnKeepsMarkerUntilSnapshotSucceeds(t *testing.T) {
 }
 
 func TestResumePreservesTranscriptWhenCrashFollowsFinalSnapshot(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "post-snapshot-crash.jsonl")
 	sess := agent.NewSession("sys")
 	if err := sess.Save(path); err != nil {
@@ -525,7 +526,7 @@ func TestResumePreservesTranscriptWhenCrashFollowsFinalSnapshot(t *testing.T) {
 }
 
 func TestRunInjectsParentSessionForJobs(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	runner := &sessionContextRunner{}
 	sess := agent.NewSession("sys")
@@ -578,7 +579,7 @@ func TestRunStopHookIgnoresCanceledCallerContext(t *testing.T) {
 }
 
 func TestSetSessionPathAdoptsTemporaryBackgroundJobs(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	started := make(chan string, 1)
 	release := make(chan struct{})
@@ -611,7 +612,7 @@ func TestSetSessionPathAdoptsTemporaryBackgroundJobs(t *testing.T) {
 }
 
 func TestGoalStatePersistsNextToSessionPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -634,7 +635,7 @@ func TestGoalStatePersistsNextToSessionPath(t *testing.T) {
 }
 
 func TestSetGoalDurableRestoresInMemoryStateWhenSidecarWriteFails(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -660,7 +661,7 @@ func TestSetGoalDurableRestoresInMemoryStateWhenSidecarWriteFails(t *testing.T) 
 }
 
 func TestSetGoalDurableNeverCreatesLegacyArchive(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "session.jsonl")
 	sink := &noticeSink{}
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
@@ -695,7 +696,7 @@ func TestSetGoalDurableNeverCreatesLegacyArchive(t *testing.T) {
 }
 
 func TestResumeRestoresTerminalGoalTodosFromSidecar(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	loaded := agent.NewSession("sys")
 	loaded.Add(provider.Message{
@@ -727,7 +728,7 @@ func TestResumeRestoresTerminalGoalTodosFromSidecar(t *testing.T) {
 }
 
 func TestResumeKeepsTranscriptTodosForRunningGoalSidecar(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	loaded := agent.NewSession("sys")
 	loaded.Add(provider.Message{
@@ -781,7 +782,7 @@ func TestRunTurnRecordsDisplayForPersistedUserMessage(t *testing.T) {
 }
 
 func TestSnapshotDoesNotRefreshSessionActivity(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -814,7 +815,7 @@ func TestSnapshotDoesNotRefreshSessionActivity(t *testing.T) {
 }
 
 func TestSnapshotAdoptsNewerDiskForPureStalePrefix(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	staleSess := agent.NewSession("sys")
@@ -859,7 +860,7 @@ func TestSnapshotAdoptsNewerDiskForPureStalePrefix(t *testing.T) {
 }
 
 func TestSnapshotRecoversDivergedControllerTranscript(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	staleSess := agent.NewSession("sys")
@@ -908,7 +909,7 @@ func TestSnapshotRecoversDivergedControllerTranscript(t *testing.T) {
 // makes the next open of that branch strip messages from a turn that in fact
 // kept running (and completed) on the recovery branch.
 func TestSnapshotConflictRecoveryTransplantsInFlightTurnMarker(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	staleSess := agent.NewSession("sys")
@@ -974,7 +975,7 @@ func TestSnapshotConflictRecoveryTransplantsInFlightTurnMarker(t *testing.T) {
 // branch. Opening the original must clear the stale marker without stripping
 // a turn that in fact kept running on the recovery branch.
 func TestRecoverInterruptedTurnSparesTurnContinuedOnRecoveryBranch(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	orig := agent.NewSession("sys")
@@ -1020,7 +1021,7 @@ func TestRecoverInterruptedTurnSparesTurnContinuedOnRecoveryBranch(t *testing.T)
 // in sight, an in-flight marker means the runtime died mid-turn and the
 // partial tail becomes provider-excluded display history.
 func TestRecoverInterruptedTurnPreservesGenuineCrashDisplay(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	orig := agent.NewSession("sys")
@@ -1058,7 +1059,7 @@ func TestRecoverInterruptedTurnPreservesGenuineCrashDisplay(t *testing.T) {
 }
 
 func TestRecoverInterruptedTurnAfterCompactionRelocatesVisibleTurn(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "compacted-crash.jsonl")
 
 	orig := agent.NewSession("sys")
@@ -1139,7 +1140,7 @@ func TestRecoverInterruptedTurnAfterCompactionRelocatesVisibleTurn(t *testing.T)
 // anchor boundary. Recovery must keep the WAL state and clear only the stale
 // marker instead of writing a backwards replace event.
 func TestResumePreservesNewerWALAfterStaleMarker(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "wal-newer-than-anchor.jsonl")
 
 	sess := agent.NewSession("sys")
@@ -1213,7 +1214,7 @@ func TestResumePreservesNewerWALAfterStaleMarker(t *testing.T) {
 }
 
 func TestSnapshotRewriteRecoversStaleControllerTranscript(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	staleSess := agent.NewSession("sys")
@@ -1272,7 +1273,7 @@ func TestSnapshotRewriteRecoversStaleControllerTranscript(t *testing.T) {
 }
 
 func TestSnapshotActivityPersistsOwnedCompactionRewrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	sess := agent.NewSession("sys")
@@ -1325,7 +1326,7 @@ func TestSnapshotActivityPersistsOwnedCompactionRewrite(t *testing.T) {
 }
 
 func TestEditedPromptMetadataAfterMidTurnSnapshotStaysOnOwnedSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "edited-mid-turn.jsonl")
 
 	sess := agent.NewSession("sys")
@@ -1364,7 +1365,7 @@ func TestEditedPromptMetadataAfterMidTurnSnapshotStaysOnOwnedSession(t *testing.
 }
 
 func TestRecoveryBranchPersistsLaterOwnedCompactionRewrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	currentSess := agent.NewSession("sys")
@@ -1433,7 +1434,7 @@ func TestRecoveryBranchPersistsLaterOwnedCompactionRewrite(t *testing.T) {
 }
 
 func TestConcurrentSnapshotsShareSingleRecoveryHandoff(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	currentSess := agent.NewSession("sys")
@@ -1515,7 +1516,7 @@ func TestConcurrentSnapshotsShareSingleRecoveryHandoff(t *testing.T) {
 }
 
 func TestRecoverShutdownSnapshotPersistsAndReanchorsSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	base := agent.NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "persisted"})
@@ -1600,7 +1601,7 @@ type blockedRecoveryHandoff struct {
 
 func startBlockedRecoveryHandoff(t *testing.T) *blockedRecoveryHandoff {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	currentSess := agent.NewSession("sys")
@@ -1762,7 +1763,7 @@ func TestSessionSwapWaitsForRecoveryHandoff(t *testing.T) {
 // own compactions look already persisted, so the next autosave would take the
 // snapshot path, conflict, and fork a spurious recovery branch.
 func TestSnapshotConflictAdoptionResetsRewriteBaseline(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	base := agent.NewSession("sys")
@@ -1834,7 +1835,7 @@ func TestSnapshotConflictAdoptionResetsRewriteBaseline(t *testing.T) {
 // the rewrite version it actually persisted, and retry as an owned rewrite
 // when a compaction slips in between.
 func TestConcurrentCompactionAndAutosaveNeverBranch(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "turn-0"})
@@ -1888,7 +1889,7 @@ func TestConcurrentCompactionAndAutosaveNeverBranch(t *testing.T) {
 }
 
 func TestAdoptHistoryPreservesRewriteBaseline(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	s := agent.NewSession("old sys")
@@ -1936,7 +1937,7 @@ func TestAdoptHistoryPreservesRewriteBaseline(t *testing.T) {
 }
 
 func TestAdoptEmptyHistoryRestoresPersistedGoalState(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "empty-session.jsonl")
 	if err := agent.NewSession("").Save(path); err != nil {
 		t.Fatalf("Save empty session: %v", err)
@@ -1960,7 +1961,7 @@ func TestAdoptEmptyHistoryRestoresPersistedGoalState(t *testing.T) {
 }
 
 func TestAdoptHistoryRejectsStaleCarriedHistoryBaseline(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	current := agent.NewSession("sys")
@@ -2000,7 +2001,7 @@ func TestAdoptHistoryRejectsStaleCarriedHistoryBaseline(t *testing.T) {
 }
 
 func TestCancelFlushRejectsStaleControllerOverwrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	staleSess := agent.NewSession("sys")
@@ -2039,7 +2040,7 @@ func TestCancelFlushRejectsStaleControllerOverwrite(t *testing.T) {
 }
 
 func TestSnapshotActivityRefreshesSessionActivity(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -2069,7 +2070,7 @@ func TestSnapshotActivityRefreshesSessionActivity(t *testing.T) {
 }
 
 func TestSnapshotActivitySavesTranscriptBeforeModelMeta(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "must persist"})
@@ -2095,7 +2096,7 @@ func TestSnapshotActivitySavesTranscriptBeforeModelMeta(t *testing.T) {
 }
 
 func TestNewSessionStartsFreshContextAndSavesTranscript(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "old context"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -2207,7 +2208,7 @@ func (s *noticeSink) lastNotice() (event.Event, bool) {
 }
 
 func TestSnapshotConflictAtRecoveryDepthCapIsolatesCurrentBranch(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	disk := agent.NewSession("sys")
 	disk.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -2291,7 +2292,7 @@ func TestSnapshotConflictAtRecoveryDepthCapIsolatesCurrentBranch(t *testing.T) {
 }
 
 func TestNewSessionRefusesWhileTurnRunning(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "old context"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -2328,7 +2329,7 @@ func TestNewSessionRefusesWhileTurnRunning(t *testing.T) {
 // (running was false at the entry check), and must be refused so the executor
 // session is not swapped out from under a live run loop.
 func TestNewSessionRefusesTurnStartedDuringSnapshot(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	// A diverged on-disk transcript makes Snapshot enter the recovery callback,
@@ -2409,7 +2410,7 @@ func TestNewSessionRefusesTurnStartedDuringSnapshot(t *testing.T) {
 // session, and a turn cannot start either. This is the TOCTOU class the bare
 // Running() checks left open — a mutation slipping in mid-rotation.
 func TestSessionMutationsRefuseWhileRotating(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
@@ -2478,7 +2479,7 @@ func TestSessionMutationsRefuseWhileRotating(t *testing.T) {
 }
 
 func TestNewSessionQueuesSessionStartHookContext(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "session.jsonl")
 	hooks := hook.NewRunner([]hook.ResolvedHook{{
@@ -2499,7 +2500,7 @@ func TestNewSessionQueuesSessionStartHookContext(t *testing.T) {
 }
 
 func TestNewSessionResetsTwoModelPlannerContext(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	planner := &recordingProvider{name: "planner", streams: [][]provider.Chunk{
 		textTurn("OLD PLAN: inspect alpha.go"),
 		textTurn("NEW PLAN: inspect beta.go"),
@@ -2537,7 +2538,7 @@ func TestNewSessionResetsTwoModelPlannerContext(t *testing.T) {
 }
 
 func TestTwoModelPlannerApprovalUsesHostGate(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	planner := &recordingProvider{name: "planner", streams: [][]provider.Chunk{
 		toolCallTurn("plan-1", "submit_plan",
 			`{"objective":"fix the planner approval bug","steps":[{"title":"Edit main.go"}],"requires_approval":true}`),
@@ -2604,7 +2605,7 @@ func TestTwoModelPlannerApprovalUsesHostGate(t *testing.T) {
 }
 
 func TestResumeResetsTwoModelPlannerContext(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	planner := &recordingProvider{name: "planner", streams: [][]provider.Chunk{
 		textTurn("OLD PLAN: inspect alpha.go"),
 		textTurn("RESUMED PLAN: inspect gamma.go"),
@@ -2641,7 +2642,7 @@ func TestResumeResetsTwoModelPlannerContext(t *testing.T) {
 }
 
 func TestResetPlannerSessionClearsPlannerHistory(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	planner := &recordingProvider{name: "planner", streams: [][]provider.Chunk{
 		textTurn("FIRST PLAN: inspect alpha.go"),
 		textTurn("SECOND PLAN: inspect beta.go"),
@@ -2678,7 +2679,7 @@ func TestResetPlannerSessionClearsPlannerHistory(t *testing.T) {
 }
 
 func TestTwoModelShortChoiceReplySkipsPlanner(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	planner := &recordingProvider{name: "planner", streams: [][]provider.Chunk{
 		textTurn("planner should not run for a context-dependent choice reply"),
 	}}
@@ -2715,7 +2716,7 @@ func TestTwoModelShortChoiceReplySkipsPlanner(t *testing.T) {
 }
 
 func TestSubmitClearDiscardsCurrentContextWithoutSavingTranscript(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "old context"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -2775,7 +2776,7 @@ func TestDisconnectMCPServerRemovesLazyPlaceholder(t *testing.T) {
 }
 
 func TestRegisterMCPServerOnDemandDefersConnectionUntilFirstUse(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	var requests atomic.Int32
 	var initializes atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2849,7 +2850,7 @@ func TestRegisterMCPServerOnDemandDefersConnectionUntilFirstUse(t *testing.T) {
 }
 
 func TestControllerMCPHotLifecycleUpdatesCapabilityRuntime(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	host := plugin.NewHost()
 	defer host.Close()
 	reg := tool.NewRegistry()
@@ -2908,7 +2909,7 @@ func TestAddMCPServerAuthorizesExplicitUserAddBeforeConnecting(t *testing.T) {
 
 func TestAddMCPServerWritesGlobalConfigWithoutShadowingProject(t *testing.T) {
 	isolateControlConfigHome(t)
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	projectPath := filepath.Join(workspace, "reasonix.toml")
 	if err := os.WriteFile(projectPath, []byte(`
 [[plugins]]
@@ -2971,7 +2972,7 @@ command = "project-only"
 
 func TestAddMCPServerRejectsProjectNameCollision(t *testing.T) {
 	isolateControlConfigHome(t)
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(workspace, "reasonix.toml"), []byte(`
 [[plugins]]
 name = "shared"
@@ -2991,7 +2992,7 @@ command = "project-shared"
 
 func TestConnectConfiguredProjectMCPIsTrustedByDefault(t *testing.T) {
 	isolateControlConfigHome(t)
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
@@ -3198,8 +3199,8 @@ func TestUnregisterMCPServerToolsBlocksLateSharedHostSwap(t *testing.T) {
 
 func TestRemoveMCPServerRemovesUnconnectedLazyPlaceholder(t *testing.T) {
 	isolateControlConfigHome(t)
-	dir := t.TempDir()
-	home := t.TempDir()
+	dir := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
@@ -3245,8 +3246,8 @@ tier = "lazy"
 
 func TestConfiguredMCPNamesUseControllerWorkspaceInsteadOfProcessCWD(t *testing.T) {
 	isolateControlConfigHome(t)
-	workspace := t.TempDir()
-	other := t.TempDir()
+	workspace := testenv.TempDir(t)
+	other := testenv.TempDir(t)
 	t.Chdir(other)
 	if err := os.WriteFile(filepath.Join(workspace, "reasonix.toml"), []byte(`
 [[plugins]]
@@ -3725,7 +3726,7 @@ func TestGuardianCannotAutoAllowFreshHumanApprovalTools(t *testing.T) {
 }
 
 func TestLowRiskProjectMemoryCreateSkipsApprovalPrompt(t *testing.T) {
-	store := memory.Store{Dir: t.TempDir()}
+	store := memory.Store{Dir: testenv.TempDir(t)}
 	approvals := 0
 	c := New(Options{
 		Memory: &memory.Set{Store: store},
@@ -3751,7 +3752,7 @@ func TestLowRiskProjectMemoryCreateSkipsApprovalPrompt(t *testing.T) {
 }
 
 func TestExistingMemoryRevokesAbandonedAutomaticCreateClaim(t *testing.T) {
-	store := memory.Store{Dir: t.TempDir()}
+	store := memory.Store{Dir: testenv.TempDir(t)}
 	c := New(Options{Memory: &memory.Set{Store: store}})
 	args := json.RawMessage(`{"name":"release-target","description":"Project release target","type":"project","body":"Release from main-v2."}`)
 
@@ -4493,7 +4494,7 @@ func TestMidTurnAutosavePersistsDuringLongTurn(t *testing.T) {
 	midTurnSnapshotInterval.Store(int64(10 * time.Millisecond))
 	defer midTurnSnapshotInterval.Store(old)
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	path := filepath.Join(dir, "session.jsonl")
@@ -4696,13 +4697,13 @@ func TestCommandsAtomicPointer(t *testing.T) {
 // preserved across the reload.
 func TestReloadCommandsFromFilesystem(t *testing.T) {
 	// Isolate HOME so CommandDirsForRoot does not pick up global .md command files.
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 
-	wsRoot := t.TempDir()
+	wsRoot := testenv.TempDir(t)
 	cmdDir := filepath.Join(wsRoot, ".reasonix", "commands")
 	writeCmdFile(t, cmdDir, "review", "Review code", "Review $1")
 	writeCmdFile(t, cmdDir, "test", "Run tests", "Test $1")
@@ -4794,13 +4795,13 @@ func TestReloadCommandsFromFilesystem(t *testing.T) {
 // reloading causes the command to disappear from both Commands() and
 // CustomCommand(), while other commands remain intact.
 func TestReloadCommandsDeleteFile(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 
-	wsRoot := t.TempDir()
+	wsRoot := testenv.TempDir(t)
 	cmdDir := filepath.Join(wsRoot, ".reasonix", "commands")
 	writeCmdFile(t, cmdDir, "alpha", "Alpha cmd", "Alpha $1")
 	writeCmdFile(t, cmdDir, "beta", "Beta cmd", "Beta $1")
@@ -4849,13 +4850,13 @@ func TestReloadCommandsDeleteFile(t *testing.T) {
 // ReloadCommands to return an error but does not prevent other valid commands
 // from loading.
 func TestReloadCommandsMalformedFile(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 
-	wsRoot := t.TempDir()
+	wsRoot := testenv.TempDir(t)
 	cmdDir := filepath.Join(wsRoot, ".reasonix", "commands")
 	writeCmdFile(t, cmdDir, "good", "Good cmd", "Good $1")
 
@@ -4901,13 +4902,13 @@ func TestReloadCommandsMalformedFile(t *testing.T) {
 // (higher priority) wins. ConventionDirs = [".reasonix", ".agents", ".agent",
 // ".claude"], scanned in reverse, so .reasonix is highest priority.
 func TestReloadCommandsSameNameAcrossDirs(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 
-	wsRoot := t.TempDir()
+	wsRoot := testenv.TempDir(t)
 
 	// Lower priority: .claude/commands
 	claudeDir := filepath.Join(wsRoot, ".claude", "commands")
@@ -4951,7 +4952,7 @@ func TestReloadCommandsSameNameAcrossDirs(t *testing.T) {
 }
 
 func TestReloadCommandsUsesCanonicalPluginNameAlongsideProjectShortName(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
@@ -4972,7 +4973,7 @@ func TestReloadCommandsUsesCanonicalPluginNameAlongsideProjectShortName(t *testi
 		t.Fatal(err)
 	}
 
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeCmdFile(t, filepath.Join(workspace, ".reasonix", "commands"), "plan", "Project plan", "PROJECT $1")
 	c := New(Options{Sink: &typedNilControllerSink{}, Registry: tool.NewRegistry(), WorkspaceRoot: workspace})
 	if err := c.ReloadCommands(context.Background()); err != nil {
@@ -5011,13 +5012,13 @@ func TestReloadCommandsUsesCanonicalPluginNameAlongsideProjectShortName(t *testi
 // reloading results in an empty Commands() slice, while the slash_command tool
 // still exists in the Registry (containing only Skills).
 func TestReloadCommandsEmptySet(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 
-	wsRoot := t.TempDir()
+	wsRoot := testenv.TempDir(t)
 	cmdDir := filepath.Join(wsRoot, ".reasonix", "commands")
 	writeCmdFile(t, cmdDir, "temp", "Temp cmd", "Temp $1")
 
@@ -5074,13 +5075,13 @@ func TestReloadCommandsEmptySet(t *testing.T) {
 // when the frontend submits "/reload-cmd" as raw input, Submit → managementNotice
 // handles it and emits a Notice event with the correct count.
 func TestReloadCommandsDesktopManagementNotice(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 
-	wsRoot := t.TempDir()
+	wsRoot := testenv.TempDir(t)
 	cmdDir := filepath.Join(wsRoot, ".reasonix", "commands")
 	writeCmdFile(t, cmdDir, "hello", "Greet", "Hello $1")
 	writeCmdFile(t, cmdDir, "review", "Review code", "Review $1")

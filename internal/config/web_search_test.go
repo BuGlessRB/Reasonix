@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
+	"reasonix/internal/testenv"
 )
 
 func TestEffectiveWebSearchDefaultsOnlySupportedOfficialDeepSeekAPIs(t *testing.T) {
@@ -166,8 +167,8 @@ kind = "responses"
 base_url = "https://api.deepseek.com"
 model = "deepseek-v4-flash"
 `
-	home := t.TempDir()
-	workspace := t.TempDir()
+	home := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {

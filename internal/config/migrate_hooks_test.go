@@ -5,11 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestMigrateSupportDataCarriesGlobalHooks(t *testing.T) {
-	legacy := t.TempDir()
-	fresh := t.TempDir()
+	legacy := testenv.TempDir(t)
+	fresh := testenv.TempDir(t)
 	hooks := `{"hooks":{"Stop":[{"command":"echo done"}]}}`
 	if err := os.WriteFile(filepath.Join(legacy, "settings.json"), []byte(hooks), 0o600); err != nil {
 		t.Fatal(err)
@@ -27,8 +29,8 @@ func TestMigrateSupportDataCarriesGlobalHooks(t *testing.T) {
 }
 
 func TestMigrateSupportDataKeepsExistingFiles(t *testing.T) {
-	legacy := t.TempDir()
-	fresh := t.TempDir()
+	legacy := testenv.TempDir(t)
+	fresh := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(legacy, "settings.json"), []byte(`{"hooks":{"Stop":[]}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}

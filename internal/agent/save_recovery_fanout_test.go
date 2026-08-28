@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // staleSessionOver returns a session holding the parent transcript plus one
@@ -31,7 +32,7 @@ func staleSessionOver(parent []provider.Message, extra string) *Session {
 // reopened pane brings a new Session. The report that prompted this test was a
 // sidebar holding dozens of rows with one title and one turn count.
 func TestRepeatedConflictsFromFreshSessionsDoNotFanOut(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	parent := NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "你好"})
@@ -61,7 +62,7 @@ func TestRepeatedConflictsFromFreshSessionsDoNotFanOut(t *testing.T) {
 // exists to keep turns that are nowhere else, and two conflicts carrying
 // different unsaved work are two things to keep.
 func TestDistinctConflictContentStillGetsItsOwnBranch(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	parent := NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "你好"})
@@ -89,7 +90,7 @@ func TestDistinctConflictContentStillGetsItsOwnBranch(t *testing.T) {
 // reloads and conflicts again on an unchanged transcript is the common case,
 // and it is the one that fills a sidebar fastest.
 func TestIdenticalConflictContentReusesOneBranch(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	parent := NewSession("sys")
 	parent.Add(provider.Message{Role: provider.RoleUser, Content: "你好"})
@@ -136,7 +137,7 @@ func conflictRecoveryTick(t *testing.T, s *Session, path string) RecoveryBranchI
 // each tick runs on a new Session. One writer, one lineage, one file. The
 // report behind this test gained a sidebar row every 30s for 25 minutes.
 func TestGrowingConflictsFromOneWriterStayInOneLane(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	canonical := filepath.Join(dir, "session.jsonl")
 	seed := []provider.Message{
 		{Role: provider.RoleUser, Content: "你好"},

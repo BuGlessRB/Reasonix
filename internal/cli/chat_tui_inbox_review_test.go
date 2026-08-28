@@ -8,10 +8,11 @@ import (
 
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 )
 
 func TestManualNewlineDuringRunningTurnDoesNotSteerOrClearDraft(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	ctrl := control.New(control.Options{SessionPath: filepath.Join(dir, "session.jsonl"), SessionDir: dir})
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 40)
 	m.state = tuiRunning

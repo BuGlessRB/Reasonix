@@ -13,10 +13,11 @@ import (
 	"testing"
 
 	"reasonix/internal/mcplaunch"
+	"reasonix/internal/testenv"
 )
 
 func TestStoredNPXLauncherLockUsesExactOfflinePackage(t *testing.T) {
-	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), "/workspace")
+	manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), "/workspace")
 	lock := mcplaunch.LauncherLock{
 		Server: "search", Locator: digestText("@scope/server"), ResolvedVersion: "@scope/server@1.2.3", ContentSHA256: digestText("integrity"),
 	}
@@ -66,7 +67,7 @@ func TestStoredLauncherEnforcementFlagPreservesAuthorizedIdentity(t *testing.T) 
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := testenv.TempDir(t)
 			command := filepath.Join(dir, tc.command)
 			if runtime.GOOS == "windows" {
 				command += ".exe"
@@ -74,7 +75,7 @@ func TestStoredLauncherEnforcementFlagPreservesAuthorizedIdentity(t *testing.T) 
 			if err := os.WriteFile(command, []byte("test launcher"), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), dir)
+			manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), dir)
 			lock := mcplaunch.LauncherLock{
 				Server: tc.server, Locator: digestText(tc.locator),
 				ResolvedVersion: tc.resolved, ContentSHA256: digestText("integrity"),
@@ -122,7 +123,7 @@ func TestStoredLauncherEnforcementFlagPreservesAuthorizedIdentity(t *testing.T) 
 }
 
 func TestStoredUVXFromLauncherLockKeepsFromValueAdjacent(t *testing.T) {
-	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), "/workspace")
+	manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), "/workspace")
 	lock := mcplaunch.LauncherLock{
 		Server: "python-tools", Locator: digestText("python-tools"),
 		ResolvedVersion: "python-tools==3.2.1", ContentSHA256: digestText("integrity"),
@@ -193,7 +194,7 @@ func TestResolveExactGitLocatorDoesNotNeedNetwork(t *testing.T) {
 }
 
 func TestGitLauncherLockDoesNotPersistCredentialedLocator(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	manager := mcplaunch.NewManager(filepath.Join(home, mcplaunch.StateFilename), "/workspace")
 	locator := "git+https://user:secret-token@example.test/server.git@main"
 	commit := "0123456789abcdef0123456789abcdef01234567"

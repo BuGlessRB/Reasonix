@@ -7,6 +7,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func saveMessages(t *testing.T, path string, messages ...provider.Message) {
@@ -23,12 +24,12 @@ func saveMessages(t *testing.T, path string, messages ...provider.Message) {
 func TestReconcileAndSearchFTSWithoutStoredBody(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "decision.jsonl")
 	saveMessages(t, path,
 		provider.Message{Role: provider.RoleUser, Content: "Should we use vector embeddings?"},
 		provider.Message{Role: provider.RoleAssistant, Content: "Keep lightweight BM25 retrieval for history."})
-	catalog, err := Open(ctx, Options{Path: filepath.Join(t.TempDir(), "history.sqlite")})
+	catalog, err := Open(ctx, Options{Path: filepath.Join(testenv.TempDir(t), "history.sqlite")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,10 +54,10 @@ func TestReconcileAndSearchFTSWithoutStoredBody(t *testing.T) {
 func TestRewriteRemovesOldTerms(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "rewrite.jsonl")
 	saveMessages(t, path, provider.Message{Role: provider.RoleUser, Content: "obsolete unicorn marker"})
-	catalog, err := Open(ctx, Options{Path: filepath.Join(t.TempDir(), "history.sqlite")})
+	catalog, err := Open(ctx, Options{Path: filepath.Join(testenv.TempDir(t), "history.sqlite")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,10 +93,10 @@ func TestRewriteRemovesOldTerms(t *testing.T) {
 func TestAppendIndexesOnlyDisplayTail(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "append.jsonl")
 	saveMessages(t, path, provider.Message{Role: provider.RoleUser, Content: "stable prefix marker"})
-	catalog, err := Open(ctx, Options{Path: filepath.Join(t.TempDir(), "history.sqlite")})
+	catalog, err := Open(ctx, Options{Path: filepath.Join(testenv.TempDir(t), "history.sqlite")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,14 +136,14 @@ func TestAppendIndexesOnlyDisplayTail(t *testing.T) {
 func TestSearchKeysetContinuesPastCatalogLimit(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "many.jsonl")
 	messages := make([]provider.Message, 0, 5)
 	for range 5 {
 		messages = append(messages, provider.Message{Role: provider.RoleUser, Content: "shared pagination marker"})
 	}
 	saveMessages(t, path, messages...)
-	catalog, err := Open(ctx, Options{Path: filepath.Join(t.TempDir(), "history.sqlite")})
+	catalog, err := Open(ctx, Options{Path: filepath.Join(testenv.TempDir(t), "history.sqlite")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,14 +179,14 @@ func TestSearchKeysetContinuesPastCatalogLimit(t *testing.T) {
 func TestToolOutputIsIndexedAndSearchableByExplicitKind(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "tools.jsonl")
 	saveMessages(t, path,
 		provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "1", Name: "bash", Arguments: `{"cmd":"echo hello"}`}}},
 		provider.Message{Role: provider.RoleTool, ToolCallID: "1", Name: "bash", Content: "zephyroutputtokenxyz hello"},
 		provider.Message{Role: provider.RoleTool, ToolCallID: "2", Name: "bash", Content: "error: permission denied on quasarerrortokenabc"},
 	)
-	catalog, err := Open(ctx, Options{Path: filepath.Join(t.TempDir(), "history.sqlite")})
+	catalog, err := Open(ctx, Options{Path: filepath.Join(testenv.TempDir(t), "history.sqlite")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,9 +224,9 @@ func TestToolOutputIsIndexedAndSearchableByExplicitKind(t *testing.T) {
 func TestTokenizerVersionMismatchClearsMixedProjection(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "old-tokenizer.jsonl")
-	databasePath := filepath.Join(t.TempDir(), "history.sqlite")
+	databasePath := filepath.Join(testenv.TempDir(t), "history.sqlite")
 	saveMessages(t, path, provider.Message{Role: provider.RoleUser, Content: "tokenizer migration marker"})
 	catalog, err := Open(ctx, Options{Path: databasePath})
 	if err != nil {

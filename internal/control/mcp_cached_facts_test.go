@@ -6,6 +6,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/plugin"
+	"reasonix/internal/testenv"
 )
 
 func factsSpec() plugin.Spec {
@@ -32,7 +33,7 @@ func saveFacts(t *testing.T, key string) {
 // connection to ask — and the settings row that lists it still has to say what
 // it is. The last handshake wrote that answer down; this is it being read back.
 func TestCachedFactsAnswerForAServerThatIsNotConnected(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	spec := factsSpec()
 	saveFacts(t, plugin.SchemaCacheKey(spec))
 
@@ -55,7 +56,7 @@ func TestCachedFactsAnswerForAServerThatIsNotConnected(t *testing.T) {
 // answer worthless, only unproven. Hiding it would leave the row blank; showing
 // it unmarked would claim it is current.
 func TestChangedDeclarationMarksTheCachedAnswerStale(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	saveFacts(t, plugin.SchemaCacheKey(factsSpec()))
 
 	moved := factsSpec()
@@ -70,7 +71,7 @@ func TestChangedDeclarationMarksTheCachedAnswerStale(t *testing.T) {
 }
 
 func TestNoCacheMeansNoInventedDescription(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	desc, tools, stale := mcpCachedFacts(factsSpec())
 	if desc != "" || tools != nil || stale {
 		t.Fatalf("mcpCachedFacts on an empty cache = %q %+v %v, want nothing", desc, tools, stale)

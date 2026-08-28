@@ -18,6 +18,7 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/recovery"
 	"reasonix/internal/surface"
+	"reasonix/internal/testenv"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -47,7 +48,7 @@ func testClient(home string, transport http.RoundTripper) *Client {
 }
 
 func TestInstallIDRepairsMalformedOwnedFile(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	path := filepath.Join(home, "cli-telemetry-install-id")
 	if err := os.WriteFile(path, []byte("truncated\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -70,7 +71,7 @@ func TestInstallIDRepairsMalformedOwnedFile(t *testing.T) {
 }
 
 func TestDailyPingSendsOnceWithCLISurface(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	var mu sync.Mutex
 	var payloads []pingPayload
 	client := testClient(home, roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -104,7 +105,7 @@ func TestDailyPingSendsOnceWithCLISurface(t *testing.T) {
 }
 
 func TestFailedDailyPingRemovesClaimAndRetries(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	calls := 0
 	client := testClient(home, roundTripFunc(func(*http.Request) (*http.Response, error) {
 		calls++
@@ -130,7 +131,7 @@ func TestFailedDailyPingRemovesClaimAndRetries(t *testing.T) {
 }
 
 func TestFlushPendingAggregatesAndDeletesOnlyAfterSuccess(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	for _, counters := range [][]Counter{
 		{{Signal: "turns", Bucket: "count", Count: 2}},
 		{{Signal: "turns", Bucket: "count", Count: 3}, {Signal: "cli_exit", Bucket: "success", Count: 1}},
@@ -172,7 +173,7 @@ func TestFlushPendingAggregatesAndDeletesOnlyAfterSuccess(t *testing.T) {
 }
 
 func TestFailedFlushRestoresClaimsForRetry(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	if err := appendPending(home, pendingPayload{
 		Version: "v1.20.0", OS: "linux", Counters: []Counter{{Signal: "turns", Bucket: "count", Count: 1}},
 	}); err != nil {
@@ -204,7 +205,7 @@ func TestFailedFlushRestoresClaimsForRetry(t *testing.T) {
 }
 
 func TestPendingClaimsAreExclusiveAcrossFlushers(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	if err := appendPending(home, pendingPayload{
 		Version: "v1.20.0", OS: "linux", Counters: []Counter{{Signal: "turns", Bucket: "count", Count: 1}},
 	}); err != nil {
@@ -233,7 +234,7 @@ func TestPendingValidationAcceptsAndroid(t *testing.T) {
 }
 
 func TestPendingQueueCountsActiveAndRecoversStaleClaims(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), pendingDirName)
+	dir := filepath.Join(testenv.TempDir(t), pendingDirName)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +254,7 @@ func TestPendingQueueCountsActiveAndRecoversStaleClaims(t *testing.T) {
 		t.Fatalf("bounded queue entries = %d, err = %v", len(entries), err)
 	}
 
-	staleDir := filepath.Join(t.TempDir(), pendingDirName)
+	staleDir := filepath.Join(testenv.TempDir(t), pendingDirName)
 	if err := os.MkdirAll(staleDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +278,7 @@ func TestPendingQueueCountsActiveAndRecoversStaleClaims(t *testing.T) {
 // allow-list omits is written to the queue and then dropped in silence, which
 // from every local test looks exactly like a feature that works.
 func TestTurnTokenCountersSurviveTheUploadAllowList(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	sink := (&Reporter{home: home, version: "v1.20.0", surface: surface.Desktop}).Wrap(&readinessSink{})
 	sink.Emit(event.Event{Kind: event.TurnStarted})
 	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{
@@ -311,7 +312,7 @@ func TestTurnTokenCountersSurviveTheUploadAllowList(t *testing.T) {
 // ignored surface would post a desktop turn as part of a cli payload — the
 // exact attribution error this histogram exists to avoid.
 func TestFlushDoesNotFoldOneSurfaceIntoAnother(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	for _, from := range []surface.Surface{surface.CLI, surface.Desktop, surface.Serve} {
 		sink := (&Reporter{home: home, version: "v1.20.0", surface: from}).Wrap(&readinessSink{})
 		sink.Emit(event.Event{Kind: event.TurnStarted})
@@ -332,7 +333,7 @@ func TestFlushDoesNotFoldOneSurfaceIntoAnother(t *testing.T) {
 // A queue inherited from a version that predates the field still uploads, as
 // the surface it could only have come from.
 func TestFlushTreatsAQueueWithoutSurfaceAsCLI(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	if err := appendPending(home, pendingPayload{
 		Version: "v1.20.0", OS: runtime.GOOS,
 		Counters: []Counter{{Signal: "turns", Bucket: "count", Count: 1}},
@@ -374,7 +375,7 @@ func flushCollecting(t *testing.T, home string) []metricsPayload {
 // each branch that records and asserts the wire accepts everything that came out
 // — so a new signal fails here rather than in production telemetry nobody reads.
 func TestEverySignalTheSinkRecordsSurvivesTheUploadAllowList(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	reporter := &Reporter{home: home, version: "v1.20.0", surface: surface.CLI, static: []Counter{
 		{Signal: "client_surface", Bucket: "cli", Count: 1},
 		{Signal: "client_version", Bucket: "v1_20_0", Count: 1},

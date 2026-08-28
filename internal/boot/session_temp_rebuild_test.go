@@ -13,13 +13,13 @@ import (
 
 func TestRebuildReusesSessionTempManager(t *testing.T) {
 	// Isolate config/home so boot.Build does not touch the developer home.
-	home := t.TempDir()
+	home := robustTempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_HOME", filepath.Join(home, ".reasonix"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
 
-	workspace := t.TempDir()
+	workspace := robustTempDir(t)
 	fenceBootTestHistoryCatalog(t)
 	m := sessiontemp.New()
 	old := control.New(control.Options{

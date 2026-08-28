@@ -5,13 +5,15 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 // Older builds persisted display fields polluted with internal wrappers.
 // LoadBranchMeta is the single read boundary, so it must return the
 // user-authored text instead (#5666).
 func TestLoadBranchMetaSanitizesPollutedDisplayFields(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(path, []byte(`{"role":"user","content":"hi"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)

@@ -15,6 +15,7 @@ import (
 
 	"reasonix/internal/proc"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 )
 
 // TestReapTreeKillsGroupStragglers covers #3702: a foreground command that
@@ -23,7 +24,7 @@ import (
 // kill it so such processes don't accumulate into an OOM. The child redirects its
 // fds and the pid is passed via a file so the inherited stdout can't block Wait.
 func TestReapTreeKillsGroupStragglers(t *testing.T) {
-	pidFile := filepath.Join(t.TempDir(), "pid")
+	pidFile := filepath.Join(testenv.TempDir(t), "pid")
 	cmd := exec.CommandContext(context.Background(), "sh", "-c",
 		"sleep 60 >/dev/null 2>&1 & echo $! > "+pidFile)
 	proc.SetCancelKillsTree(cmd) // new session — the shell leads its own group
@@ -65,7 +66,7 @@ func TestBashPreservesExplicitNoHupDisown(t *testing.T) {
 		t.Skip("bash not found")
 	}
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	pidFile := filepath.Join(dir, "pid")
 	command := "nohup sleep 60 >/dev/null 2>&1 & echo $! > " + shellQuote(pidFile) + "; disown"
 	out, err := (bash{

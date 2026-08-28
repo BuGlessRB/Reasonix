@@ -19,6 +19,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/mcplaunch"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -136,9 +137,9 @@ func assertDeadlineNear(t *testing.T, got, want time.Duration) {
 }
 
 func TestMCPRuntimeSpecMatchesExactHostIdentity(t *testing.T) {
-	workspace := filepath.Join(t.TempDir(), "workspace")
-	managerA := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), workspace)
-	managerB := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), workspace)
+	workspace := filepath.Join(testenv.TempDir(t), "workspace")
+	managerA := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), workspace)
+	managerB := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), workspace)
 	base := Spec{
 		Name: "database", Package: "trusted-package", Type: "http",
 		Command: "launcher", Args: []string{"--serve"}, Env: map[string]string{"TOKEN": "secret-a"},
@@ -595,7 +596,7 @@ func TestInstalledServerAuthorizationSkipsProjectIdentityDigest(t *testing.T) {
 
 	project := Spec{
 		Name: "project", RequireLaunchApproval: true,
-		LaunchManager: mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), t.TempDir()),
+		LaunchManager: mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), testenv.TempDir(t)),
 	}
 	if _, err := resolveProjectLaunchAuthorization(context.Background(), project); err == nil || !strings.Contains(err.Error(), "command is required") {
 		t.Fatalf("project authorization did not resolve its exact launch identity: %v", err)
@@ -984,7 +985,7 @@ func TestStdioCommandNotFoundSuggestsPATHFix(t *testing.T) {
 }
 
 func TestStdioIgnoresRelativePATHEntries(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	bin := filepath.Join(dir, "bin")
 	if err := os.Mkdir(bin, 0o755); err != nil {
 		t.Fatalf("mkdir bin: %v", err)
@@ -1011,7 +1012,7 @@ func helperLauncher(t *testing.T, name string) (dir, command string) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell launcher fixture is POSIX-only")
 	}
-	dir = t.TempDir()
+	dir = testenv.TempDir(t)
 	command = name
 	target := filepath.Join(dir, name)
 	script := "#!/bin/sh\nexec " + shellQuote(os.Args[0]) + " \"$@\"\n"
@@ -1415,9 +1416,9 @@ func findToolByName(tools []tool.Tool, name string) tool.Tool {
 }
 
 func TestStdioWriterPreservesPersistentProcessByDefault(t *testing.T) {
-	stateDir := t.TempDir()
-	startCount := filepath.Join(t.TempDir(), "starts")
-	callCount := filepath.Join(t.TempDir(), "calls")
+	stateDir := testenv.TempDir(t)
+	startCount := filepath.Join(testenv.TempDir(t), "starts")
+	callCount := filepath.Join(testenv.TempDir(t), "calls")
 	spec := Spec{
 		Name: "stateful-writer", Command: os.Args[0], Args: []string{"-test.run=TestHelperProcess", "--"},
 		Env: map[string]string{
@@ -1498,8 +1499,8 @@ func TestWorkspaceIdentityIgnoresHostPolicyChanges(t *testing.T) {
 
 func TestProjectLaunchApprovalBlocksBeforeProcessStart(t *testing.T) {
 	redirectCache(t)
-	startCount := filepath.Join(t.TempDir(), "starts")
-	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), "/workspace")
+	startCount := filepath.Join(testenv.TempDir(t), "starts")
+	manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), "/workspace")
 	spec := Spec{
 		Name: "project-server", Command: os.Args[0], Args: []string{"-test.run=TestHelperProcess", "--"},
 		Env: map[string]string{
@@ -1538,8 +1539,8 @@ func TestProjectLaunchApprovalBlocksBeforeProcessStart(t *testing.T) {
 
 func TestAuthorizeSpecLaunchRecordsInstallConsentWithoutStartingServer(t *testing.T) {
 	redirectCache(t)
-	startCount := filepath.Join(t.TempDir(), "starts")
-	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), "/workspace")
+	startCount := filepath.Join(testenv.TempDir(t), "starts")
+	manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), "/workspace")
 	spec := Spec{
 		Name: "installed-project-server", Command: os.Args[0], Args: []string{"-test.run=TestHelperProcess", "--"},
 		Env: map[string]string{
@@ -1579,7 +1580,7 @@ func TestAuthorizeSpecLaunchRecordsInstallConsentWithoutStartingServer(t *testin
 }
 
 func TestAuthorizeSpecLaunchDoesNotAddPersistentTransportRestrictions(t *testing.T) {
-	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), "/workspace")
+	manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), "/workspace")
 	spec := Spec{
 		Name: "installed-local-http", Type: "http", URL: "http://127.0.0.1:8080/mcp",
 		LaunchManager: manager, ConfigSource: "project_config", RequireLaunchApproval: true,
@@ -1599,8 +1600,8 @@ func TestAuthorizeSpecLaunchDoesNotAddPersistentTransportRestrictions(t *testing
 }
 
 func TestAuthorizeProjectSpecLaunchLocksMutableLauncherWithoutStartingServer(t *testing.T) {
-	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), "/workspace")
-	launcher := filepath.Join(t.TempDir(), "npx")
+	manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), "/workspace")
+	launcher := filepath.Join(testenv.TempDir(t), "npx")
 	if runtime.GOOS == "windows" {
 		launcher += ".exe"
 	}
@@ -1635,9 +1636,9 @@ func TestAuthorizeProjectSpecLaunchLocksMutableLauncherWithoutStartingServer(t *
 }
 
 func TestReaderIntentRefusesDispatchAfterSafetyDrift(t *testing.T) {
-	stateDir := t.TempDir()
-	startCount := filepath.Join(t.TempDir(), "starts")
-	callCount := filepath.Join(t.TempDir(), "calls")
+	stateDir := testenv.TempDir(t)
+	startCount := filepath.Join(testenv.TempDir(t), "starts")
+	callCount := filepath.Join(testenv.TempDir(t), "calls")
 	spec := Spec{
 		Name: "reader-revoked", Command: os.Args[0], Args: []string{"-test.run=TestHelperProcess", "--"},
 		Env: map[string]string{
@@ -1646,7 +1647,7 @@ func TestReaderIntentRefusesDispatchAfterSafetyDrift(t *testing.T) {
 			"GO_WANT_HELPER_CALL_COUNT":  callCount,
 		},
 		StateDir: stateDir, Authorized: true,
-		LaunchManager: mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), t.TempDir()),
+		LaunchManager: mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), testenv.TempDir(t)),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestTaskScopePersistenceIsBackwardCompatible(t *testing.T) {
@@ -86,7 +88,7 @@ func TestFailureClassPersistenceIsBackwardCompatible(t *testing.T) {
 }
 
 func TestSaveSnapshotIsAtomicAndOwnerOnly(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	const writers = 24
 	var wg sync.WaitGroup
 	for i := range writers {

@@ -8,11 +8,12 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/plugin"
+	"reasonix/internal/testenv"
 )
 
 func TestMCPRemoveCLIClearsReasonixOAuthState(t *testing.T) {
 	isolateCLIConfigHome(t)
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	t.Chdir(workspace)
 	entry := config.PluginEntry{
 		Name: "figma", Type: "http", URL: "https://mcp.figma.com/mcp", Source: config.MCPSourceUserConfig,
@@ -32,7 +33,7 @@ func TestMCPRemoveCLIClearsReasonixOAuthState(t *testing.T) {
 
 func TestMCPRemoveCLIPreservesOAuthStateForMatchingFallback(t *testing.T) {
 	isolateCLIConfigHome(t)
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	t.Chdir(workspace)
 	const resource = "https://mcp.example.test/mcp"
 	global := config.PluginEntry{

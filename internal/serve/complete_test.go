@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func completeAt(t *testing.T, ctrl *control.Controller, line string, cursor int) control.Completion {
@@ -42,11 +43,11 @@ func completeAt(t *testing.T, ctrl *control.Controller, line string, cursor int)
 // Chinese has to come back with offsets that splice where the caret is — byte
 // offsets would land mid-character and rewrite the wrong text.
 func TestCompleteOffsetsAreUTF16(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, "notes.md"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ctrl := control.New(control.Options{SessionDir: t.TempDir(), WorkspaceRoot: root})
+	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t), WorkspaceRoot: root})
 	defer ctrl.Close()
 
 	line := "看一下 @no"
@@ -69,7 +70,7 @@ func TestCompleteOffsetsAreUTF16(t *testing.T) {
 // The built-in verbs Submit dispatches are the ones a windowed frontend can
 // offer: a menu that lists only skills hides most of what typing already does.
 func TestCompleteOffersBuiltinCommands(t *testing.T) {
-	ctrl := control.New(control.Options{SessionDir: t.TempDir(), WorkspaceRoot: t.TempDir()})
+	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t), WorkspaceRoot: testenv.TempDir(t)})
 	defer ctrl.Close()
 
 	got := completeAt(t, ctrl, "/comp", 5)
@@ -90,7 +91,7 @@ func TestCompleteOffersBuiltinCommands(t *testing.T) {
 // A client of this server completes inside the workspace and nowhere else —
 // the same boundary SubmitHTTP resolves its references within.
 func TestCompleteRefusesPathsOutsideWorkspace(t *testing.T) {
-	parent := t.TempDir()
+	parent := testenv.TempDir(t)
 	root := filepath.Join(parent, "work")
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
@@ -98,7 +99,7 @@ func TestCompleteRefusesPathsOutsideWorkspace(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(parent, "secret.md"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ctrl := control.New(control.Options{SessionDir: t.TempDir(), WorkspaceRoot: root})
+	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t), WorkspaceRoot: root})
 	defer ctrl.Close()
 
 	if got := completeAt(t, ctrl, "@../", 4); len(got.Items) != 0 {
@@ -110,7 +111,7 @@ func TestCompleteRefusesPathsOutsideWorkspace(t *testing.T) {
 // turn, so judging the submission by whether one began drew an error over
 // every /compact and /clear the composer sent.
 func TestSubmitAcceptsAVerbThatStartsNoTurn(t *testing.T) {
-	ctrl := control.New(control.Options{SessionDir: t.TempDir(), WorkspaceRoot: t.TempDir()})
+	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t), WorkspaceRoot: testenv.TempDir(t)})
 	defer ctrl.Close()
 	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
 	defer srv.Close()

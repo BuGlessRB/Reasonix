@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // sampleNotebook is a minimal but realistic .ipynb: a markdown cell and a code
@@ -24,7 +26,7 @@ const sampleNotebook = `{
 
 func writeNotebook(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	p := filepath.Join(dir, "nb.ipynb")
 	if err := os.WriteFile(p, []byte(sampleNotebook), 0o644); err != nil {
 		t.Fatal(err)
@@ -209,7 +211,7 @@ func TestNotebookPreviewMatchesExecute(t *testing.T) {
 // alias for new_source, and defaults to the only cell when no target is given —
 // the near-miss shape a model reaches for, which should succeed not loop.
 func TestNotebookContentAlias(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	p := filepath.Join(dir, "one.ipynb")
 	one := `{"cells":[{"cell_type":"code","id":"a","metadata":{},"execution_count":null,"outputs":[],"source":["print('hi')\n"]}],"metadata":{},"nbformat":4,"nbformat_minor":5}`
 	if err := os.WriteFile(p, []byte(one), 0o644); err != nil {

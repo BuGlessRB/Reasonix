@@ -6,10 +6,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestLastKnownGoodProvenancePrefersRecordedMetadata(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	path := lastKnownGoodConfigPath()
 	if path == "" {
 		t.Fatal("no snapshot path under an isolated home")
@@ -36,7 +38,7 @@ func TestLastKnownGoodProvenancePrefersRecordedMetadata(t *testing.T) {
 }
 
 func TestLastKnownGoodProvenanceEmptyWithoutSnapshot(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	if at, age := lastKnownGoodProvenance(time.Now()); at != "" || age != "" {
 		t.Fatalf("dated a snapshot that does not exist: %q %q", at, age)
 	}

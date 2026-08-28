@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // Reconnecting rebuilds the trajectory pane from this log, so every frame the
@@ -13,7 +15,7 @@ import (
 // actually goes; dropping their frames left a replayed pane with tool marks and
 // no trunk to hang them on, and no anchor for the usage that names them.
 func TestWireLogKeepsTheFramesTheTimelineDrawsRowsFor(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.wire.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.wire.jsonl")
 	var w wireLog
 	for _, frame := range []string{
 		`{"kind":"turn_started"}`,

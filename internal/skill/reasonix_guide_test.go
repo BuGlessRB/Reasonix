@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 )
 
 func TestReasonixGuideBuiltinRegistered(t *testing.T) {
-	store := skill.New(skill.Options{HomeDir: t.TempDir(), DisableBuiltins: false})
+	store := skill.New(skill.Options{HomeDir: testenv.TempDir(t), DisableBuiltins: false})
 	sk, ok := store.Read("reasonix-guide")
 	if !ok {
 		t.Fatal("reasonix-guide must be registered as a builtin")
@@ -28,7 +29,7 @@ func TestReasonixGuideBuiltinRegistered(t *testing.T) {
 }
 
 func TestReasonixGuideIndexLineOnly(t *testing.T) {
-	store := skill.New(skill.Options{HomeDir: t.TempDir()})
+	store := skill.New(skill.Options{HomeDir: testenv.TempDir(t)})
 	list := store.List()
 	var guide skill.Skill
 	found := false
@@ -65,8 +66,8 @@ func skBodySnippet(sk skill.Skill) string {
 }
 
 func TestReasonixGuideOverriddenByProject(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	store := skill.New(skill.Options{HomeDir: home, ProjectRoot: root})
 	// Create project override.
 	path, err := store.CreateWithContent("reasonix-guide", skill.ScopeProject, "---\ndescription: override\nrunAs: inline\n---\nproject body\n")
@@ -89,7 +90,7 @@ func TestReasonixGuideOverriddenByProject(t *testing.T) {
 
 func TestReasonixGuideDisabled(t *testing.T) {
 	store := skill.New(skill.Options{
-		HomeDir:       t.TempDir(),
+		HomeDir:       testenv.TempDir(t),
 		DisabledNames: []string{"reasonix-guide"},
 	})
 	if _, ok := store.Read("reasonix-guide"); ok {
@@ -103,7 +104,7 @@ func TestReasonixGuideDisabled(t *testing.T) {
 }
 
 func TestReasonixGuideIndexStableAcrossCalls(t *testing.T) {
-	store := skill.New(skill.Options{HomeDir: t.TempDir()})
+	store := skill.New(skill.Options{HomeDir: testenv.TempDir(t)})
 	a := skill.IndexBlock(store.List())
 	b := skill.IndexBlock(store.List())
 	if a != b {

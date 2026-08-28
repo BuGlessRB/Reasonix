@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestBillingSplitUpgradeV5ToV6FreezesProviderCurrency(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.toml")
 	body := `config_version = 5
 [desktop]

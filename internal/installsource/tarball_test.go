@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 type tarEntry struct {
@@ -69,7 +71,7 @@ func buildTarball(t *testing.T, entries []tarEntry) []byte {
 // The unpacked tree has to match what a clone leaves behind: the archive's own
 // root directory is dropped, and a symlink is left out rather than recreated.
 func TestUnpackTarballStripsRootAndOmitsSymlinks(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	archive := buildTarball(t, []tarEntry{
 		{name: "bar-abc/", typeflag: tar.TypeDir},
 		{name: "bar-abc/plugin.json", body: `{"name":"bar"}`},
@@ -106,7 +108,7 @@ func TestUnpackTarballStripsRootAndOmitsSymlinks(t *testing.T) {
 // A path that climbs out of the extraction directory is refused outright rather
 // than silently skipped: it means the archive is not what it claims to be.
 func TestUnpackTarballRejectsEscapingPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	archive := buildTarball(t, []tarEntry{
 		{name: "bar-abc/", typeflag: tar.TypeDir},
 		{name: "bar-abc/../../evil.sh", body: "payload"},
@@ -135,7 +137,7 @@ func TestUnpackTarballBoundsALyingHeader(t *testing.T) {
 	_ = tw.Close()
 	_ = gz.Close()
 
-	if _, err := unpackTarball(bytes.NewReader(buf.Bytes()), t.TempDir()); err == nil {
+	if _, err := unpackTarball(bytes.NewReader(buf.Bytes()), testenv.TempDir(t)); err == nil {
 		t.Fatal("oversized entry accepted")
 	} else if !strings.Contains(err.Error(), "larger than") {
 		t.Fatalf("error = %v, want the size cap", err)
@@ -169,7 +171,7 @@ func TestFetchGitHubTarballReadsCommitFromRoot(t *testing.T) {
 			defer func() { githubAPIBaseURL = old }()
 
 			tl := &installSourceTool{httpClient: srv.Client()}
-			dir := t.TempDir()
+			dir := testenv.TempDir(t)
 			commit, err := tl.fetchGitHubTarball(context.Background(), githubRepoSource{Owner: "foo", Repo: "bar"}, dir)
 			if err != nil {
 				t.Fatalf("fetchGitHubTarball: %v", err)
@@ -199,7 +201,7 @@ func TestFetchGitHubTarballRequestsTheBranch(t *testing.T) {
 	defer func() { githubAPIBaseURL = old }()
 
 	tl := &installSourceTool{httpClient: srv.Client()}
-	if _, err := tl.fetchGitHubTarball(context.Background(), githubRepoSource{Owner: "foo", Repo: "bar", Branch: "next"}, t.TempDir()); err != nil {
+	if _, err := tl.fetchGitHubTarball(context.Background(), githubRepoSource{Owner: "foo", Repo: "bar", Branch: "next"}, testenv.TempDir(t)); err != nil {
 		t.Fatalf("fetchGitHubTarball: %v", err)
 	}
 	if want := "/repos/foo/bar/tarball/next"; got != want {
@@ -219,7 +221,7 @@ func TestFetchGitHubTarballClassifiesFailures(t *testing.T) {
 	defer func() { githubAPIBaseURL = old }()
 
 	tl := &installSourceTool{httpClient: srv.Client()}
-	_, err := tl.fetchGitHubTarball(context.Background(), githubRepoSource{Owner: "foo", Repo: "bar"}, t.TempDir())
+	_, err := tl.fetchGitHubTarball(context.Background(), githubRepoSource{Owner: "foo", Repo: "bar"}, testenv.TempDir(t))
 	if err == nil {
 		t.Fatal("missing archive accepted")
 	}
@@ -231,7 +233,7 @@ func TestFetchGitHubTarballClassifiesFailures(t *testing.T) {
 // GitHub puts a pax_global_header entry first. It is not the archive root, and
 // treating it as one strips every real path down to nothing.
 func TestUnpackTarballIgnoresPaxGlobalHeader(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	archive := buildTarball(t, []tarEntry{
 		{name: "pax_global_header", body: "52 comment=abc\n", typeflag: tar.TypeXGlobalHeader},
 		{name: "bar-abc/", typeflag: tar.TypeDir},

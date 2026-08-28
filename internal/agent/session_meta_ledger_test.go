@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // shrinkMetaReadBackoffs keeps corrupt-sidecar tests fast. Only the pacing of
@@ -40,7 +41,7 @@ func assertNoRecoveryBranches(t *testing.T, sessionPath string) {
 // so a healed read can pick up the real revision.
 func TestSaveFailsClosedOnCorruptMetaLedger(t *testing.T) {
 	shrinkMetaReadBackoffs(t)
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	metaPath := BranchMetaPath(path)
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -97,7 +98,7 @@ func TestSaveFailsClosedOnCorruptMetaLedger(t *testing.T) {
 // the sidecar reads cleanly again, appends save without a bogus conflict.
 func TestLoadSessionWithUnreadableMetaStillOpensAndAppends(t *testing.T) {
 	shrinkMetaReadBackoffs(t)
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	metaPath := BranchMetaPath(path)
 	seed := NewSession("sys")
 	seed.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -160,7 +161,7 @@ func TestLoadSessionWithUnreadableMetaStillOpensAndAppends(t *testing.T) {
 // digest+version ownership instead of failing the revision equality check.
 func TestSaveRewriteWithUnreadableMetaBaselineOwnsByDigest(t *testing.T) {
 	shrinkMetaReadBackoffs(t)
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	metaPath := BranchMetaPath(path)
 	seed := NewSession("sys")
 	seed.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -209,7 +210,7 @@ func TestSaveRewriteWithUnreadableMetaBaselineOwnsByDigest(t *testing.T) {
 // A missing sidecar is not damage: it is the legitimate revision-0 state of a
 // session that never recorded one, and must keep arming the CAS baseline.
 func TestMissingMetaRemainsKnownZeroRevisionBaseline(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -244,7 +245,7 @@ func TestMissingMetaRemainsKnownZeroRevisionBaseline(t *testing.T) {
 // must not fail a save whose transcript and revision already landed, and must
 // not leave the baseline behind disk where the next save reads as a conflict.
 func TestSaveSnapshotToleratesEventIndexWriteFailure(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	// Squat a directory on the index path so every index write must fail.
 	if err := os.MkdirAll(SessionEventIndexPath(path), 0o755); err != nil {
 		t.Fatalf("pre-create index dir: %v", err)
@@ -289,7 +290,7 @@ func TestSaveSnapshotToleratesEventIndexWriteFailure(t *testing.T) {
 // Meta-only writers (rename, model stamp) racing content saves must never
 // roll the revision ledger backwards or manufacture conflicts.
 func TestSessionMetaConcurrentWritersKeepRevisionMonotonic(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "turn 0"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -397,7 +398,7 @@ func TestSessionMetaConcurrentWritersKeepRevisionMonotonic(t *testing.T) {
 // "session changed on disk" adoptions between the turn-end snapshot, periodic
 // autosave, and shutdown snapshot.
 func TestSaveSnapshotCapturesContentUnderSaveLock(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "turn 0"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -430,7 +431,7 @@ func TestSaveSnapshotCapturesContentUnderSaveLock(t *testing.T) {
 // snapshot is captured under the save lock, so a stale pre-lock capture can
 // no longer land after a newer one.
 func TestConcurrentSnapshotSaversNeverConflict(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "turn 0"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -491,7 +492,7 @@ func TestConcurrentSnapshotSaversNeverConflict(t *testing.T) {
 // the up-to-date path and must heal the ledger — record the revision and
 // digest the interrupted save deferred — instead of skipping it forever.
 func TestSameContentSaveHealsStaleLedgerDigest(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	metaPath := BranchMetaPath(path)
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -557,7 +558,7 @@ func TestSameContentSaveHealsStaleLedgerDigest(t *testing.T) {
 // failed save returned before markPersisted — heals through the same
 // up-to-date path on its autosave retry of the identical snapshot.
 func TestSameContentRetryHealsLedgerForSurvivingSaver(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	metaPath := BranchMetaPath(path)
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -598,7 +599,7 @@ func TestSameContentRetryHealsLedgerForSurvivingSaver(t *testing.T) {
 // up-to-date path must leave it untouched rather than bump a revision other
 // runtimes still hold as their baseline.
 func TestUpToDateSaveLeavesDigestlessLegacyMetaAlone(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	metaPath := BranchMetaPath(path)
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})

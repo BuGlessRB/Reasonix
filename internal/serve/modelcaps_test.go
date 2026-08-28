@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // One host reached under both protocols, holding a mixed vision/text model set,
@@ -42,7 +43,7 @@ api_key_env = "MIXED_API_KEY"
 
 func modelsByRef(t *testing.T, cfgBody string) map[string]modelEntry {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	if _, err := config.SetCredential("MIXED_API_KEY", "sk-test"); err != nil {
 		t.Fatal(err)
@@ -56,7 +57,7 @@ func modelsByRef(t *testing.T, cfgBody string) map[string]modelEntry {
 	}
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{
-		Sink: bc, Label: "text-only", ModelRef: "mixed/text-only", SessionDir: t.TempDir(),
+		Sink: bc, Label: "text-only", ModelRef: "mixed/text-only", SessionDir: testenv.TempDir(t),
 	})
 	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
 	defer srv.Close()
@@ -159,7 +160,7 @@ func TestModelsCarryPriceAndWindowWhereDeclared(t *testing.T) {
 // Without persistence the next launch boots from default_model and lands back
 // on the previous choice, which reads as the picker not having worked.
 func TestSwitchingModelSurvivesARestart(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	if _, err := config.SetCredential("MIXED_API_KEY", "sk-test"); err != nil {
 		t.Fatal(err)
@@ -186,7 +187,7 @@ func TestSwitchingModelSurvivesARestart(t *testing.T) {
 
 // A ref nothing resolves must not overwrite a working default.
 func TestPersistingAnUnknownModelLeavesTheDefaultAlone(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	if _, err := config.SetCredential("MIXED_API_KEY", "sk-test"); err != nil {
 		t.Fatal(err)

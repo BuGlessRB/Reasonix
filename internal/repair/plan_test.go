@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"reasonix/internal/fileutil"
+	"reasonix/internal/testenv"
 )
 
 func repairMutationTestKey(path string) string {
@@ -18,7 +19,7 @@ func repairMutationTestKey(path string) string {
 }
 
 func TestCanonicalRepairPathUsesFilesystemCaseSemantics(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	upper := filepath.Join(root, "Project")
 	lower := filepath.Join(root, "project")
 
@@ -91,7 +92,7 @@ func TestRepairPlanIDsBindPlanAndPreviewContent(t *testing.T) {
 }
 
 func TestApplyRepairPlanRejectsUnboundPreview(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	if err := os.WriteFile(tabs, []byte("first-state"), 0o600); err != nil {
@@ -116,7 +117,7 @@ func TestApplyRepairPlanRejectsUnboundPreview(t *testing.T) {
 }
 
 func TestApplyRepairPlanRechecksPreviewBeforeEachAction(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	if err := os.WriteFile(tabs, []byte("bad-tabs"), 0o600); err != nil {
@@ -143,9 +144,9 @@ func TestApplyRepairPlanRechecksPreviewBeforeEachAction(t *testing.T) {
 }
 
 func TestApplyRepairPlanBindsPendingUpdateTransactionIdentity(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,9 +183,9 @@ func TestApplyRepairPlanBindsPendingUpdateTransactionIdentity(t *testing.T) {
 }
 
 func TestApplyRepairPlanRollsBackCurrentConfirmedUpdateOnce(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,9 +223,9 @@ func TestApplyRepairPlanRollsBackCurrentConfirmedUpdateOnce(t *testing.T) {
 }
 
 func TestApplyRepairPlanRejectsBackupChangedDuringRollbackStaging(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,9 +273,9 @@ func TestApplyRepairPlanRejectsBackupChangedDuringRollbackStaging(t *testing.T) 
 }
 
 func TestRollbackPendingUpdateStateBindsCompleteTransaction(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,7 +314,7 @@ func TestRollbackPendingUpdateStateBindsCompleteTransaction(t *testing.T) {
 }
 
 func TestApplyRepairPlanRejectsUncooperativeWriteBeforeRename(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	if err := os.WriteFile(tabs, []byte("confirmed"), 0o600); err != nil {
@@ -346,7 +347,7 @@ func TestApplyRepairPlanRejectsUncooperativeWriteBeforeRename(t *testing.T) {
 }
 
 func TestApplyRepairPlanPreservesUncooperativeWriteAfterRename(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	if err := os.WriteFile(tabs, []byte("confirmed"), 0o600); err != nil {
@@ -401,7 +402,7 @@ func TestApplyRepairPlanPreservesUncooperativeWriteAfterRename(t *testing.T) {
 }
 
 func TestRepairMutationLockRechecksAfterWaiting(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	if err := os.WriteFile(tabs, []byte("confirmed"), 0o600); err != nil {
@@ -460,7 +461,7 @@ func TestRepairMutationLockRechecksAfterWaiting(t *testing.T) {
 }
 
 func TestApplyRepairPlanDirectCallerRejectsDriftAfterInvocationPreview(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	if err := os.WriteFile(tabs, []byte("initial"), 0o600); err != nil {
@@ -504,7 +505,7 @@ func TestApplyRepairPlanDirectCallerRejectsDriftAfterInvocationPreview(t *testin
 }
 
 func TestRepairTransactionLockSerializesDisjointTargets(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	projects := filepath.Join(home, "desktop-projects.json")
@@ -589,7 +590,7 @@ func TestRepairTransactionLockSerializesDisjointTargets(t *testing.T) {
 }
 
 func TestRepairPlanPreviewDiffMatchesBoundState(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(global, []byte("[broken\n"), 0o600); err != nil {
@@ -613,7 +614,7 @@ func TestRepairPlanPreviewDiffMatchesBoundState(t *testing.T) {
 }
 
 func TestApplyRepairPlanRestoresCurrentConfirmedSnapshot(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(global, []byte("default_model = \"known-good\"\n"), 0o600); err != nil {
@@ -654,7 +655,7 @@ func TestApplyRepairPlanRestoresCurrentConfirmedSnapshot(t *testing.T) {
 }
 
 func TestApplyRepairPlanRejectsSnapshotMetadataDrift(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(global, []byte("default_model = \"known-good\"\n"), 0o600); err != nil {
@@ -696,7 +697,7 @@ func TestApplyRepairPlanRejectsSnapshotMetadataDrift(t *testing.T) {
 }
 
 func TestApplyRepairPlanReportsConfirmedLastKnownGoodRestoreFailure(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(global, []byte("[broken\n"), 0o600); err != nil {
@@ -734,7 +735,7 @@ func TestApplyRepairPlanReportsConfirmedLastKnownGoodRestoreFailure(t *testing.T
 }
 
 func TestApplyRepairPlanDoesNotRestoreUnreadableLastKnownGoodNode(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(global, []byte("[broken\n"), 0o600); err != nil {
@@ -764,13 +765,13 @@ func TestApplyRepairPlanDoesNotRestoreUnreadableLastKnownGoodNode(t *testing.T) 
 
 func TestProjectRepairPlanRequiresExplicitPermission(t *testing.T) {
 	plan := RepairPlan{SchemaVersion: 1, Summary: "project", Actions: []RepairPlanAction{{Type: "repair_config", Scope: "project", Reason: "bad toml"}}}
-	if _, err := PreviewRepairPlan(plan, ApplyPlanOptions{Root: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "--allow-project") {
+	if _, err := PreviewRepairPlan(plan, ApplyPlanOptions{Root: testenv.TempDir(t)}); err == nil || !strings.Contains(err.Error(), "--allow-project") {
 		t.Fatalf("preview error = %v", err)
 	}
 }
 
 func TestApplyRepairPlanMultiActionUndoRevertsWholePlan(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	tabs := filepath.Join(home, "desktop-tabs.json")
@@ -784,7 +785,7 @@ func TestApplyRepairPlanMultiActionUndoRevertsWholePlan(t *testing.T) {
 		{Type: "repair_config", Scope: "global", Reason: "bad toml"},
 		{Type: "rebuild_derived_state", Target: "tabs", Reason: "bad tabs"},
 	}}
-	if _, err := ApplyRepairPlan(plan, ApplyPlanOptions{Root: t.TempDir()}); err != nil {
+	if _, err := ApplyRepairPlan(plan, ApplyPlanOptions{Root: testenv.TempDir(t)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(tabs); !os.IsNotExist(err) {
@@ -804,7 +805,7 @@ func TestApplyRepairPlanMultiActionUndoRevertsWholePlan(t *testing.T) {
 }
 
 func TestApplyRepairPlanPersistsWholePrefixBeforeReturningFromAction(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	tabs := filepath.Join(home, "desktop-tabs.json")
@@ -864,7 +865,7 @@ func TestApplyRepairPlanPersistsWholePrefixBeforeReturningFromAction(t *testing.
 }
 
 func TestApplyRepairPlanPersistsMissingSnapshotTargetBeforeCreate(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	tabs := filepath.Join(home, "desktop-tabs.json")
@@ -952,7 +953,7 @@ func TestApplyRepairPlanPersistsMissingSnapshotTargetBeforeCreate(t *testing.T) 
 }
 
 func TestPreparedCreateStateIDMatchesAtomicCreate(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.toml")
 	content := []byte("default_model = \"known-good\"\n")
 	predicted := repairPlanPreparedCreateStateID(path, content, 0o600)
@@ -965,7 +966,7 @@ func TestPreparedCreateStateIDMatchesAtomicCreate(t *testing.T) {
 }
 
 func TestApplyRepairPlanPreparedIntentSurvivesCrashBeforeRename(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	projects := filepath.Join(home, "desktop-projects.json")
@@ -1030,7 +1031,7 @@ func TestApplyRepairPlanPreparedIntentSurvivesCrashBeforeRename(t *testing.T) {
 }
 
 func TestApplyRepairPlanPreparedIntentSurvivesCrashAfterRename(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	tabs := filepath.Join(home, "desktop-tabs.json")
@@ -1089,7 +1090,7 @@ func TestApplyRepairPlanPreparedIntentSurvivesCrashAfterRename(t *testing.T) {
 }
 
 func TestApplyRepairPlanRetainsDurableRenameWhenPendingCleanupFails(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	if err := os.WriteFile(tabs, []byte("confirmed-tabs"), 0o600); err != nil {
@@ -1147,7 +1148,7 @@ func TestApplyRepairPlanRetainsDurableRenameWhenPendingCleanupFails(t *testing.T
 }
 
 func TestPendingRepairCleanupNeverDeletesConcurrentReplacement(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	if err := os.WriteFile(tabs, []byte("confirmed-tabs"), 0o600); err != nil {
@@ -1198,7 +1199,7 @@ func TestPendingRepairCleanupNeverDeletesConcurrentReplacement(t *testing.T) {
 }
 
 func TestReconcilePreparedRepairRechecksSourceAfterTargetLock(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	tabs := filepath.Join(home, "desktop-tabs.json")
 	if err := os.WriteFile(tabs, []byte("confirmed-tabs"), 0o600); err != nil {
@@ -1245,7 +1246,7 @@ func TestReconcilePreparedRepairRechecksSourceAfterTargetLock(t *testing.T) {
 }
 
 func TestUndoPreparedSnapshotCreatePreservesConcurrentReplacement(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	snapshot := []byte("default_model = \"known-good\"\n")
@@ -1292,7 +1293,7 @@ func TestUndoPreparedSnapshotCreatePreservesConcurrentReplacement(t *testing.T) 
 }
 
 func TestSnapshotCreateDoesNotClaimConcurrentReplacementBeforeOwnershipCheck(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	global := filepath.Join(home, "config.toml")
 	snapshot := []byte("default_model = \"known-good\"\n")
@@ -1340,9 +1341,9 @@ func TestSnapshotCreateDoesNotClaimConcurrentReplacementBeforeOwnershipCheck(t *
 }
 
 func TestProjectRepairPlanDoesNotRepairGlobalConfig(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	global := filepath.Join(home, "config.toml")
 	project := filepath.Join(root, "reasonix.toml")
 	for _, path := range []string{global, project} {
@@ -1363,10 +1364,10 @@ func TestProjectRepairPlanDoesNotRepairGlobalConfig(t *testing.T) {
 }
 
 func TestRepairPlanPreviewIDRejectsSameContentDifferentTargets(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	rootA := t.TempDir()
-	rootB := t.TempDir()
+	rootA := testenv.TempDir(t)
+	rootB := testenv.TempDir(t)
 	content := []byte("[broken\n")
 	for _, root := range []string{rootA, rootB} {
 		if err := os.WriteFile(filepath.Join(root, "reasonix.toml"), content, 0o600); err != nil {
@@ -1399,7 +1400,7 @@ func TestRepairPlanPreviewIDRejectsSameContentDifferentTargets(t *testing.T) {
 }
 
 func TestRepairMutationLockConvergesSymlinkAliases(t *testing.T) {
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	realDir := filepath.Join(base, "real", "project")
 	if err := os.MkdirAll(realDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -1471,9 +1472,9 @@ func TestRepairMutationLockConvergesSymlinkAliases(t *testing.T) {
 }
 
 func TestApplyRepairPlanRejectsReleaseUnitDriftWithStablePendingUpdate(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1509,9 +1510,9 @@ func TestApplyRepairPlanRejectsReleaseUnitDriftWithStablePendingUpdate(t *testin
 }
 
 func TestRepairMutationLockSerializesUpdateRollbackAndPrepare(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1574,9 +1575,9 @@ func TestRepairMutationLockSerializesUpdateRollbackAndPrepare(t *testing.T) {
 }
 
 func TestRepairPlanPreviewIDDistinguishesLeafSymlinkTargets(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	shared := filepath.Join(base, "shared.toml")
 	if err := os.WriteFile(shared, []byte("[broken\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -1620,9 +1621,9 @@ func TestRepairPlanPreviewIDDistinguishesLeafSymlinkTargets(t *testing.T) {
 }
 
 func TestApplyRepairPlanRejectsAppBundleInteriorDrift(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	base, err := filepath.EvalSymlinks(t.TempDir())
+	base, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}

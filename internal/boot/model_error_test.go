@@ -19,7 +19,7 @@ import (
 // the project file is the only config, so isolate REASONIX_HOME: a user-global
 // config with an explicit default_model would instead rescue the boot (#4218).
 func TestBuildUnknownModelErrorIsActionable(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", robustTempDir(t))
 	dir := robustTempDir(t)
 	fenceBootTestHistoryCatalog(t)
 	t.Chdir(dir)
@@ -47,7 +47,7 @@ api_key_env = "REASONIX_TEST_KEY_UNSET"
 }
 
 func TestBuildNoticesProjectDefaultModelFallback(t *testing.T) {
-	home := t.TempDir()
+	home := robustTempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	writeFile(t, home, "config.toml", `
 default_model = "deepseek-pro"
@@ -206,7 +206,7 @@ func TestBuildKeylessDefaultFallsBackToConfiguredProvider(t *testing.T) {
 	const keylessEnv = "REASONIX_KEYLESS_DEFAULT_FALLBACK_KEYLESS"
 	const configuredEnv = "REASONIX_KEYLESS_DEFAULT_FALLBACK_CONFIGURED"
 
-	home := t.TempDir()
+	home := robustTempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	if _, err := config.SetCredential(configuredEnv, "sk-test"); err != nil {
@@ -259,7 +259,7 @@ func TestBuildExplicitKeylessModelStillFails(t *testing.T) {
 	const keylessEnv = "REASONIX_EXPLICIT_KEYLESS_KEY"
 	const configuredEnv = "REASONIX_EXPLICIT_KEYLESS_CONFIGURED"
 
-	home := t.TempDir()
+	home := robustTempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	if _, err := config.SetCredential(configuredEnv, "sk-test"); err != nil {

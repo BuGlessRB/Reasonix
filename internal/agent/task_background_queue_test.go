@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/jobs"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -19,7 +20,7 @@ import (
 // job id even when the session concurrency pool is full, instead of blocking
 // the parent tool call on Acquire.
 func TestBackgroundTaskReturnsBeforeSlotFrees(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := checkpoint.New("", root)
 	observer := checkpoint.NewMutationObserver(checkpoint.ObserverOptions{Store: store})
 	sched := NewSubagentScheduler(1, 1)

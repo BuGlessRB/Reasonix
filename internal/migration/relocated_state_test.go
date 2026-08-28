@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 )
 
 func seed(t *testing.T, dir, name, file string) {
@@ -24,7 +25,7 @@ func seed(t *testing.T, dir, name, file string) {
 // so what runs is the path a real install takes.
 func defaultRoots(t *testing.T) string {
 	t.Helper()
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	t.Setenv("HOME", base)
 	t.Setenv("USERPROFILE", base)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(base, ".config"))
@@ -38,7 +39,7 @@ func defaultRoots(t *testing.T) string {
 // pull the production install across, which is the rule the legacy importers
 // already follow.
 func TestAdoptSkipsWhenTheRootsAreRedirectedForThisRun(t *testing.T) {
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	home := filepath.Join(base, "home")
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_STATE_HOME", filepath.Join(base, "state"))

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 )
 
 func TestBashHereDocIssue5624CommandsReturnPromptly(t *testing.T) {
@@ -18,7 +19,7 @@ func TestBashHereDocIssue5624CommandsReturnPromptly(t *testing.T) {
 	bashShellPATH = func(context.Context) string { return "" }
 	t.Cleanup(func() { bashShellPATH = prevBashShellPATH })
 
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Join(root, "app", "platform", "github"), 0o755); err != nil {
 		t.Fatalf("mkdir fixture: %v", err)
 	}

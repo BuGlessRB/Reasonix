@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestReadLastRepairAcceptsLegacyTransactionWithoutJournalFields(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	target := filepath.Join(home, "desktop-window.json")
 	previous := target + ".reasonix-rebuild-20260729T000000Z"
@@ -44,7 +45,7 @@ func TestReadLastRepairAcceptsLegacyTransactionWithoutJournalFields(t *testing.T
 }
 
 func TestReadLastRepairRejectsPendingOnlyJournalFields(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	target := filepath.Join(home, "desktop-window.json")
 	tx := newRepairTransaction(time.Now())
@@ -78,7 +79,7 @@ func TestReadLastRepairRejectsPendingOnlyJournalFields(t *testing.T) {
 // the backup) must remain retryable, and backups are only removed after the
 // per-change progress is persisted.
 func TestUndoLastRepairKeepsBackupUntilProgressPersisted(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	windowPath := filepath.Join(home, "desktop-window.json")
 	quarantine := windowPath + ".reasonix-rebuild-20260714T000000Z"
@@ -114,7 +115,7 @@ func TestUndoLastRepairKeepsBackupUntilProgressPersisted(t *testing.T) {
 }
 
 func TestUndoLastRepairRejectsTransactionReplacedWhileWaitingForLock(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	windowPath := filepath.Join(home, "desktop-window.json")
 	windowBackup := windowPath + ".reasonix-rebuild-20260729T000000Z"
@@ -171,7 +172,7 @@ func TestUndoLastRepairRejectsTransactionReplacedWhileWaitingForLock(t *testing.
 }
 
 func TestUndoLastRepairRejectsLegacyBackupWithoutStateIdentity(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	windowPath := filepath.Join(home, "desktop-window.json")
 	backup := windowPath + ".reasonix-rebuild-20260729T000000Z"
@@ -204,7 +205,7 @@ func TestUndoLastRepairRejectsLegacyBackupWithoutStateIdentity(t *testing.T) {
 }
 
 func TestUndoLastRepairRejectsBytesDifferentFromVerifiedBackup(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	windowPath := filepath.Join(home, "desktop-window.json")
 	quarantine := windowPath + ".reasonix-rebuild-20260714T000000Z"
@@ -246,10 +247,10 @@ func TestUndoLastRepairRejectsBytesDifferentFromVerifiedBackup(t *testing.T) {
 }
 
 func TestUndoLastRepairRejectsLinkDifferentFromVerifiedBackup(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	configPath := config.UserConfigPath()
-	linkTarget := filepath.Join(t.TempDir(), "confirmed-config.toml")
+	linkTarget := filepath.Join(testenv.TempDir(t), "confirmed-config.toml")
 	if err := os.WriteFile(linkTarget, []byte("confirmed"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +270,7 @@ func TestUndoLastRepairRejectsLinkDifferentFromVerifiedBackup(t *testing.T) {
 	originalReadlink := readRepairPreviousLink
 	readRepairPreviousLink = func(path string) (string, error) {
 		if path == quarantine {
-			return filepath.Join(t.TempDir(), "transient-config.toml"), nil
+			return filepath.Join(testenv.TempDir(t), "transient-config.toml"), nil
 		}
 		return os.Readlink(path)
 	}
@@ -288,13 +289,13 @@ func TestUndoLastRepairRejectsLinkDifferentFromVerifiedBackup(t *testing.T) {
 }
 
 func TestReadLastRepairRejectsRestoreBackupParentSymlinkEscape(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	restoreRoot := filepath.Join(home, "repair", "restore-backups")
 	if err := os.MkdirAll(filepath.Dir(restoreRoot), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	outside := t.TempDir()
+	outside := testenv.TempDir(t)
 	if err := os.Symlink(outside, restoreRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -326,10 +327,10 @@ func TestReadLastRepairRejectsRestoreBackupParentSymlinkEscape(t *testing.T) {
 // quarantine rename moved the link, so undo must recreate a link, not
 // materialize the followed content as a regular file.
 func TestUndoLastRepairRestoresSymlink(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	configPath := config.UserConfigPath()
-	linkTarget := filepath.Join(t.TempDir(), "dotfiles-config.toml")
+	linkTarget := filepath.Join(testenv.TempDir(t), "dotfiles-config.toml")
 	if err := os.WriteFile(linkTarget, []byte("linked"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -371,10 +372,10 @@ func TestUndoLastRepairRestoresSymlink(t *testing.T) {
 // A dangling quarantined symlink must still be restorable: preflight and
 // restore must not follow the link when judging its presence.
 func TestUndoLastRepairRestoresDanglingSymlink(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	configPath := config.UserConfigPath()
-	linkTarget := filepath.Join(t.TempDir(), "missing-config.toml")
+	linkTarget := filepath.Join(testenv.TempDir(t), "missing-config.toml")
 	quarantine := configPath + ".reasonix-quarantine-20260714T000000Z"
 	if err := os.Symlink(linkTarget, quarantine); err != nil {
 		t.Fatal(err)
@@ -396,7 +397,7 @@ func TestUndoLastRepairRestoresDanglingSymlink(t *testing.T) {
 // touching the same target twice (quarantine + snapshot restore) retains a
 // separate redo copy per change instead of silently overwriting the first.
 func TestUndoLastRepairKeepsDistinctRedoCopiesForSharedTarget(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	configPath := config.UserConfigPath()
 	quarantine := configPath + ".reasonix-quarantine-20260714T000000Z"
@@ -441,7 +442,7 @@ func TestUndoLastRepairKeepsDistinctRedoCopiesForSharedTarget(t *testing.T) {
 // progress, and a retry finishes the remaining changes instead of failing the
 // preflight on the consumed backups of the changes already restored.
 func TestUndoLastRepairResumesAfterPartialFailure(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	configPath := config.UserConfigPath()
 	windowPath := filepath.Join(home, "desktop-window.json")

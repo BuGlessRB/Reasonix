@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestForgetToolDeletes drives the tool with raw JSON args and verifies the fact
 // is removed from the store.
 func TestForgetToolDeletes(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	if _, err := store.Save(Memory{Name: "stale-fact", Description: "d", Type: TypeProject, Body: "b"}); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +41,7 @@ func TestForgetToolDeletes(t *testing.T) {
 }
 
 func TestForgetToolArchivesOnlyQualifiedScope(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: root + "/project", GlobalDir: root + "/global"}
 	if _, err := store.SaveWithOptions(Memory{Name: "project/shared.md", Description: "project", Body: "project body"}, SaveOptions{}); err != nil {
 		t.Fatal(err)
@@ -66,7 +68,7 @@ func TestForgetToolArchivesOnlyQualifiedScope(t *testing.T) {
 // TestForgetToolValidates rejects an empty name rather than deleting nothing
 // silently.
 func TestForgetToolValidates(t *testing.T) {
-	tl := NewForgetTool(Store{Dir: t.TempDir()})
+	tl := NewForgetTool(Store{Dir: testenv.TempDir(t)})
 	if _, err := tl.Execute(context.Background(), []byte(`{}`)); err == nil {
 		t.Fatal("expected error when name is missing")
 	}
@@ -80,7 +82,7 @@ func (f *fakeQueue) QueueMemory(note string) { f.notes = append(f.notes, note) }
 // TestForgetToolQueuesDisregardNote verifies a forget injects a turn-tail note so
 // the model stops trusting the still-cached index line this session.
 func TestForgetToolQueuesDisregardNote(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	if _, err := store.Save(Memory{Name: "old-fact", Description: "d", Type: TypeProject, Body: "b"}); err != nil {
 		t.Fatal(err)
 	}

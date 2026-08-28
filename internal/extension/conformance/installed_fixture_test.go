@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/extension/protocol"
 	"reasonix/internal/extension/sidecar"
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 func copyFixtureFile(t *testing.T, src, dst string, mode os.FileMode) {
@@ -32,7 +33,7 @@ func copyFixtureFile(t *testing.T, src, dst string, mode os.FileMode) {
 // through pluginpkg's v2 parser and installed-package inventory.
 func installExamplePackage(t *testing.T) (string, pluginpkg.InstalledPackage) {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	root := pluginpkg.InstallRoot(home, testPluginID)
 	copyFixtureFile(t, filepath.Join(exampleRoot, pluginpkg.NativeManifest), filepath.Join(root, pluginpkg.NativeManifest), 0o644)
 	binaryName := "full-sidecar"

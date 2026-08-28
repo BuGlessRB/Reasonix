@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -37,8 +38,8 @@ func TestSplitSubagentRunResultDoesNotRewriteEphemeralAnswer(t *testing.T) {
 }
 
 func TestSubagentResultToolPagesOnUTF8Boundaries(t *testing.T) {
-	workspace := t.TempDir()
-	store := NewSubagentStore(t.TempDir())
+	workspace := testenv.TempDir(t)
+	store := NewSubagentStore(testenv.TempDir(t))
 	run, err := store.PrepareFresh(SubagentSpec{
 		Kind:          "task",
 		Name:          "task",

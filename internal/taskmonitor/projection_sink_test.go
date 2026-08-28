@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 type reentrantProjectionSink struct {
@@ -36,7 +38,7 @@ func (*reentrantProjectionSink) EventsChanged(string, string) {}
 
 func TestProjectionSinkRunsAfterTaskLockRelease(t *testing.T) {
 	t.Parallel()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sink := &reentrantProjectionSink{done: make(chan error, 1)}
 	sink.store = NewObservedFileStore(filepath.Join(".reasonix", "tasks"), sink)
 	now := time.Now()

@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -141,7 +142,7 @@ func TestCompactionDoneCarriesWhatTheDigestKept(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "write_file", writesPaths: true})
 	a := New(&fakeProvider{reply: "## Files & code\n- internal/parser/lexer.go rewritten"}, reg, sess,
-		Options{ContextWindow: 60_000, CompactRatio: 0.5, RecentKeep: 2, ArchiveDir: t.TempDir()}, sink)
+		Options{ContextWindow: 60_000, CompactRatio: 0.5, RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, sink)
 
 	if _, err := a.compactToProjection(context.Background(), CompactionTriggerManual, "", true, false); err != nil {
 		t.Fatalf("compactToProjection: %v", err)

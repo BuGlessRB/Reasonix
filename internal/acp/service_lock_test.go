@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 type snapshotLockProbeController struct {
@@ -34,7 +35,7 @@ func TestACPRebuildSerializesCollaborationAndApprovalChanges(t *testing.T) {
 		id:               "sess-axis-race",
 		ctrl:             control.New(control.Options{}),
 		sink:             sink,
-		cwd:              t.TempDir(),
+		cwd:              testenv.TempDir(t),
 		model:            "fast",
 		runtimeProfile:   "balanced",
 		toolApprovalMode: control.ToolApprovalAsk,
@@ -157,7 +158,7 @@ func TestACPRebuildSessionSnapshotsWithoutSessionLock(t *testing.T) {
 	sess := &acpSession{
 		id:    "sess-lock",
 		sink:  sink,
-		cwd:   t.TempDir(),
+		cwd:   testenv.TempDir(t),
 		model: "fast",
 	}
 	checks := make(chan struct{}, 1)
@@ -265,7 +266,7 @@ func TestACPRebuildSessionAppliesPendingConfigAfterMaintenance(t *testing.T) {
 	sess := &acpSession{
 		id:    "sess-lock",
 		sink:  sink,
-		cwd:   t.TempDir(),
+		cwd:   testenv.TempDir(t),
 		model: "fast",
 		ctrl:  control.New(control.Options{}),
 	}
@@ -323,7 +324,7 @@ func TestACPRebuildSessionQueuedCrossAxisChangeDoesNotRollbackCompletedAxis(t *t
 	sess := &acpSession{
 		id:             "sess-cross-axis",
 		sink:           sink,
-		cwd:            t.TempDir(),
+		cwd:            testenv.TempDir(t),
 		model:          "fast",
 		runtimeProfile: "balanced",
 		ctrl:           control.New(control.Options{}),
@@ -402,7 +403,7 @@ func TestACPCtrlReadPathsDoNotRaceWithRebuild(t *testing.T) {
 	sess := &acpSession{
 		id:    "sess-race",
 		sink:  sink,
-		cwd:   t.TempDir(),
+		cwd:   testenv.TempDir(t),
 		model: "fast",
 		ctrl:  control.New(control.Options{}),
 	}
@@ -484,7 +485,7 @@ func TestACPBeginRefusesDuringPendingConfigApplyWindow(t *testing.T) {
 	sess := &acpSession{
 		id:    "sess-window",
 		sink:  sink,
-		cwd:   t.TempDir(),
+		cwd:   testenv.TempDir(t),
 		model: "fast",
 		ctrl:  control.New(control.Options{}),
 	}
@@ -599,7 +600,7 @@ func TestACPFinishTurnReconcilesModeDriftBeforeExposingIdle(t *testing.T) {
 		id:     "sess-drift-race",
 		ctrl:   probe,
 		sink:   sink,
-		cwd:    t.TempDir(),
+		cwd:    testenv.TempDir(t),
 		model:  "fast",
 		modeID: sessionModePlan, // stale: not yet reconciled to the controller's actual state
 	}
@@ -674,7 +675,7 @@ func TestACPPendingConfigMergesAxesQueuedDuringActiveTurn(t *testing.T) {
 		id:             "sess-pending-merge",
 		ctrl:           control.New(control.Options{}),
 		sink:           sink,
-		cwd:            t.TempDir(),
+		cwd:            testenv.TempDir(t),
 		model:          "pro",
 		runtimeProfile: "balanced",
 	}
@@ -730,7 +731,7 @@ func TestACPApplyPendingClaimsStateBeforeResolving(t *testing.T) {
 		id:             "sess-pending-order",
 		ctrl:           control.New(control.Options{}),
 		sink:           newUpdateSink(&fakeNotifier{}, "sess-pending-order"),
-		cwd:            t.TempDir(),
+		cwd:            testenv.TempDir(t),
 		model:          "fast",
 		runtimeProfile: "balanced",
 		pendingConfig: []sessionConfigDelta{
@@ -806,7 +807,7 @@ func TestACPFailedRebuildStillDrainsNewerPendingConfig(t *testing.T) {
 		id:             "sess-failed-drain",
 		ctrl:           control.New(control.Options{}),
 		sink:           newUpdateSink(&fakeNotifier{}, "sess-failed-drain"),
-		cwd:            t.TempDir(),
+		cwd:            testenv.TempDir(t),
 		model:          "fast",
 		runtimeProfile: "balanced",
 	}
@@ -862,7 +863,7 @@ func TestACPReportPendingConfigFailureRestoresClientState(t *testing.T) {
 		id:               "sess-pending-failure-update",
 		ctrl:             control.New(control.Options{}),
 		sink:             newUpdateSink(notifier, "sess-pending-failure-update"),
-		cwd:              t.TempDir(),
+		cwd:              testenv.TempDir(t),
 		model:            "fast",
 		runtimeProfile:   "balanced",
 		toolApprovalMode: control.ToolApprovalAsk,
@@ -949,7 +950,7 @@ func TestACPFinishTurnModeDriftDoesNotRevertConcurrentSetMode(t *testing.T) {
 		id:             "sess-setmode-race",
 		ctrl:           probe,
 		sink:           sink,
-		cwd:            t.TempDir(),
+		cwd:            testenv.TempDir(t),
 		model:          "fast",
 		runtimeProfile: "balanced",
 		modeID:         sessionModeNormal,
@@ -1028,7 +1029,7 @@ func TestACPDriftEmittersSerializeWithStateChanges(t *testing.T) {
 		id:     "sess-drift-lock",
 		ctrl:   control.New(control.Options{}),
 		sink:   newUpdateSink(&fakeNotifier{}, "sess-drift-lock"),
-		cwd:    t.TempDir(),
+		cwd:    testenv.TempDir(t),
 		model:  "fast",
 		modeID: sessionModeNormal,
 	}

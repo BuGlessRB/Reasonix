@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/agent/testutil"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -132,7 +133,7 @@ func TestRunPersistsResponsesItemsAcrossSessionReload(t *testing.T) {
 		t.Fatalf("assistant Responses items = %#v, want persisted search item", assistant.ResponsesItems)
 	}
 
-	path := filepath.Join(t.TempDir(), "responses-items.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "responses-items.jsonl")
 	if err := session.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -871,7 +872,7 @@ func TestSetSessionRearmsInMemoryMissingReasoningRecovery(t *testing.T) {
 // circuit breaker. The first process retries once; a fresh process immediately
 // uses the empty-key fallback without doubling the request.
 func TestMissingReasoningRecoveryRateLimitsAcrossProcesses(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	mp := testutil.NewMock("deepseek-proxy",
 		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
 		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1r", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
@@ -904,7 +905,7 @@ func TestMissingReasoningRecoveryRateLimitsAcrossProcesses(t *testing.T) {
 }
 
 func TestMissingReasoningRecoverySeparatesProviderConfigurations(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	retryCount := func(identity string) int {
 		mp := testutil.NewMock("deepseek-proxy",
 			testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}, Usage: &provider.Usage{ReasoningTokens: billedThinkingTokens}},
@@ -933,7 +934,7 @@ func TestMissingReasoningRecoverySeparatesProviderConfigurations(t *testing.T) {
 }
 
 func TestThreeHealthyToolCallReasoningTurnsRearmFutureRegression(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	run := func(turns ...testutil.Turn) int {
 		mp := testutil.NewMock("deepseek-proxy", turns...)
 		sink := &recordSink{}
@@ -959,7 +960,7 @@ func TestThreeHealthyToolCallReasoningTurnsRearmFutureRegression(t *testing.T) {
 }
 
 func TestHealthyToolCallReasoningStreakWorksWithinOneAgentAndResetsOnMissing(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	prov := toolCallReasoningRequiredProvider{testutil.NewMock("deepseek-proxy")}
 	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, event.Discard)
 	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}
@@ -982,7 +983,7 @@ func TestHealthyToolCallReasoningStreakWorksWithinOneAgentAndResetsOnMissing(t *
 }
 
 func TestMissingReasoningRecoveryIOFailureStillSuppressesLocally(t *testing.T) {
-	statePath := filepath.Join(t.TempDir(), "not-a-directory")
+	statePath := filepath.Join(testenv.TempDir(t), "not-a-directory")
 	if err := os.WriteFile(statePath, []byte("occupied"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -1002,7 +1003,7 @@ func TestHealthyToolCallReasoningRetriesTransientStateWriteFailure(t *testing.T)
 	if runtime.GOOS == "windows" {
 		t.Skip("chmod permissions are not portable to Windows")
 	}
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	prov := toolCallReasoningRequiredProvider{testutil.NewMock("deepseek-proxy")}
 	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, event.Discard)
 	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}

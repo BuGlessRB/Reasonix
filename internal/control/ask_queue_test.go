@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 )
 
 func askProbeQuestions() []event.AskQuestion {
@@ -55,7 +56,7 @@ func shortenPromptQueueNotice(t *testing.T) {
 func TestAskQueuedBehindAnotherPromptIsVisibleAndAnnounced(t *testing.T) {
 	shortenPromptQueueNotice(t)
 	sink := &askProbeSink{}
-	c := New(Options{Sink: sink, SessionDir: t.TempDir()})
+	c := New(Options{Sink: sink, SessionDir: testenv.TempDir(t)})
 
 	// Stand in for an earlier prompt still awaiting the user.
 	c.approval.promptMu.Lock()
@@ -131,7 +132,7 @@ func TestAskQueuedBehindAnotherPromptIsVisibleAndAnnounced(t *testing.T) {
 func TestPromptQueueNoticeStaysQuietWhenNothingWaits(t *testing.T) {
 	shortenPromptQueueNotice(t)
 	sink := &askProbeSink{}
-	c := New(Options{Sink: sink, SessionDir: t.TempDir()})
+	c := New(Options{Sink: sink, SessionDir: testenv.TempDir(t)})
 
 	go func() { _, _ = c.Ask(t.Context(), askProbeQuestions()) }()
 
@@ -155,7 +156,7 @@ func TestPromptQueueNoticeStaysQuietWhenNothingWaits(t *testing.T) {
 func TestAskCancelledWhileQueuedLeavesNothingBehind(t *testing.T) {
 	shortenPromptQueueNotice(t)
 	sink := &askProbeSink{}
-	c := New(Options{Sink: sink, SessionDir: t.TempDir()})
+	c := New(Options{Sink: sink, SessionDir: testenv.TempDir(t)})
 	c.approval.promptMu.Lock()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -207,7 +208,7 @@ func TestAskCancelledWhileQueuedLeavesNothingBehind(t *testing.T) {
 // Ask has no timeout of its own: approvalTimeout defaults to zero, so a
 // question nobody answers blocks its turn until the user cancels.
 func TestAskWithoutTimeoutBlocksUntilCancelled(t *testing.T) {
-	c := New(Options{Sink: event.Discard, SessionDir: t.TempDir()})
+	c := New(Options{Sink: event.Discard, SessionDir: testenv.TempDir(t)})
 	if c.approval.approvalTimeout != 0 {
 		t.Skipf("approvalTimeout is %v; this test pins the unbounded default", c.approval.approvalTimeout)
 	}

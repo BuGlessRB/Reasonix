@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 func TestRender(t *testing.T) {
@@ -34,7 +35,7 @@ func write(t *testing.T, dir, rel, content string) {
 }
 
 func TestLoad(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	write(t, dir, "review.md", "---\ndescription: Review the diff\nargument-hint: [area]\n---\nReview, focus on $ARGUMENTS.")
 	write(t, dir, "plain.md", "No frontmatter, just $1.")
 	write(t, dir, "git/commit.md", "---\ndescription: Commit\n---\nWrite a commit message.")
@@ -69,7 +70,7 @@ func TestLoad(t *testing.T) {
 }
 
 func TestLoadDecodesGB18030CommandFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	body := "---\ndescription: 中文命令\nargument-hint: [主题]\n---\n请总结 $ARGUMENTS。"
 	path := filepath.Join(dir, "summary.md")
 	if err := os.WriteFile(path, fileencoding.Encode(body, fileencoding.GB18030), 0o644); err != nil {
@@ -86,8 +87,8 @@ func TestLoadDecodesGB18030CommandFile(t *testing.T) {
 }
 
 func TestLoadOverrideAndMissingDir(t *testing.T) {
-	user := t.TempDir()
-	project := t.TempDir()
+	user := testenv.TempDir(t)
+	project := testenv.TempDir(t)
 	write(t, user, "review.md", "USER version")
 	write(t, project, "review.md", "PROJECT version")
 
@@ -102,8 +103,8 @@ func TestLoadOverrideAndMissingDir(t *testing.T) {
 }
 
 func TestLoadRootsUsesCanonicalPluginNamesAndHiddenCompatibleShortName(t *testing.T) {
-	pluginDir := t.TempDir()
-	projectDir := t.TempDir()
+	pluginDir := testenv.TempDir(t)
+	projectDir := testenv.TempDir(t)
 	write(t, pluginDir, "plan.md", "---\ndescription: Plugin plan\n---\nPLUGIN $ARGUMENTS")
 	write(t, pluginDir, "status.md", "PLUGIN STATUS")
 	write(t, projectDir, "plan.md", "---\ndescription: Project plan\n---\nPROJECT $ARGUMENTS")
@@ -138,8 +139,8 @@ func TestLoadRootsUsesCanonicalPluginNamesAndHiddenCompatibleShortName(t *testin
 }
 
 func TestLoadRootsDoesNotReplaceAnExplicitQualifiedCommand(t *testing.T) {
-	pluginDir := t.TempDir()
-	projectDir := t.TempDir()
+	pluginDir := testenv.TempDir(t)
+	projectDir := testenv.TempDir(t)
 	write(t, pluginDir, "plan.md", "PLUGIN")
 	write(t, projectDir, "plan.md", "PROJECT")
 	write(t, projectDir, "planning-with-files/plan.md", "EXPLICIT QUALIFIED")
@@ -163,8 +164,8 @@ func TestLoadRootsDoesNotReplaceAnExplicitQualifiedCommand(t *testing.T) {
 }
 
 func TestLoadRootsOmitsAmbiguousShortPluginName(t *testing.T) {
-	alpha := t.TempDir()
-	beta := t.TempDir()
+	alpha := testenv.TempDir(t)
+	beta := testenv.TempDir(t)
 	write(t, alpha, "plan.md", "ALPHA")
 	write(t, beta, "plan.md", "BETA")
 	cmds, err := LoadRoots(Root{Path: alpha, Plugin: "alpha"}, Root{Path: beta, Plugin: "beta"})

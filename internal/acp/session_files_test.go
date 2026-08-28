@@ -8,10 +8,11 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func TestDeleteSessionFilesSweepsEventLogAndSidecars(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := agent.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "to delete"})

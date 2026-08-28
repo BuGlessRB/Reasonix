@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 func TestResolveBuiltin(t *testing.T) {
@@ -58,7 +59,7 @@ func TestListIncludesBuiltinsSorted(t *testing.T) {
 }
 
 func TestCustomFileOverridesBuiltinAndParses(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	// Override the built-in "explanatory" with a custom replace-style file.
 	md := "---\ndescription: my persona\nkeep-coding-instructions: false\n---\nYou are a pirate. Answer in pirate speak.\n"
 	if err := os.WriteFile(filepath.Join(dir, "explanatory.md"), []byte(md), 0o644); err != nil {
@@ -84,7 +85,7 @@ func TestCustomFileOverridesBuiltinAndParses(t *testing.T) {
 }
 
 func TestResolveDecodesGB18030CustomFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	body := "---\nname: concise-cn\ndescription: 中文风格\n---\n请用中文简洁回答。"
 	if err := os.WriteFile(filepath.Join(dir, "concise-cn.md"), fileencoding.Encode(body, fileencoding.GB18030), 0o644); err != nil {
 		t.Fatal(err)
@@ -100,7 +101,7 @@ func TestResolveDecodesGB18030CustomFile(t *testing.T) {
 }
 
 func TestParseFileNameFromFilename(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(dir, "snappy.md"), []byte("Be snappy."), 0o644); err != nil {
 		t.Fatal(err)
 	}

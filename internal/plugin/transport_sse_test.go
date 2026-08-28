@@ -12,11 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
 func TestLegacySSETransportSupportsRootsToolsAndProgress(t *testing.T) {
-	workspaceRoot := t.TempDir()
+	workspaceRoot := testenv.TempDir(t)
 	events := make(chan string, 16)
 	serverErr := make(chan error, 4)
 	var state struct {

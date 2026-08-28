@@ -10,12 +10,13 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/sessioninbox"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
 func steeringTurn(t *testing.T) (*Controller, *agent.Agent, *agent.Session, *inboxSteerProvider, chan event.Event) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	prov := &inboxSteerProvider{started: make(chan struct{}), release: make(chan struct{})}
 	sess := agent.NewSession("sys")
 	exec := agent.New(prov, tool.NewRegistry(), sess, agent.Options{}, event.Discard)

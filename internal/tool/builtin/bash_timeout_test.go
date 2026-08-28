@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 )
 
 func TestBashForegroundTimeoutConfig(t *testing.T) {
@@ -55,7 +56,7 @@ func TestBashExplicitZeroTimeoutDoesNotCapForeground(t *testing.T) {
 
 func TestWorkspacePassesBashTimeout(t *testing.T) {
 	sh := sandbox.ResolveShell("", "", nil)
-	b := byName(Workspace{Dir: t.TempDir(), BashTimeout: 150 * time.Millisecond}.Tools())["bash"]
+	b := byName(Workspace{Dir: testenv.TempDir(t), BashTimeout: 150 * time.Millisecond}.Tools())["bash"]
 
 	out, err := b.Execute(context.Background(), argsJSON(t, map[string]any{"command": longSleepCommand(sh)}))
 	if err == nil {

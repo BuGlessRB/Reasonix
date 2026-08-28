@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func TestDeleteSubagentsByParentSweepsEventLogLeftovers(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	subDir := filepath.Join(sessionDir, "subagents")
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -50,7 +51,7 @@ func TestDeleteSubagentsByParentSweepsEventLogLeftovers(t *testing.T) {
 }
 
 func TestSubagentSaveUsesDurableEventLog(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	subDir := filepath.Join(sessionDir, "subagents")
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
 		t.Fatal(err)

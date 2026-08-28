@@ -7,13 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestLegacyNativeManifestRejected pins the v2 one-shot switch: native
 // manifests without apiVersion are refused at ParseDir. Migration still
 // accepts them via ParseNativeForMigrate.
 func TestLegacyNativeManifestRejected(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	manifest := `{
   "name": "legacy-demo",
   "version": "0.3.1",
@@ -38,7 +40,7 @@ func TestLegacyNativeManifestRejected(t *testing.T) {
 
 // TestV1NativeManifestRejected ensures every native parser refuses v1.
 func TestV1NativeManifestRejected(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	manifest := `{
   "apiVersion": "reasonix.io/plugin/v1",
   "name": "old",
@@ -57,7 +59,7 @@ func TestV1NativeManifestRejected(t *testing.T) {
 }
 
 func TestLoadInstalledAutoMigratesManagedLegacyManifest(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	root := InstallRoot(home, "legacy-demo")
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
@@ -84,8 +86,8 @@ func TestLoadInstalledAutoMigratesManagedLegacyManifest(t *testing.T) {
 }
 
 func TestLoadInstalledQuarantinesExternalLegacyManifestWithoutModifyingIt(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	legacy := `{"name":"dev-demo","version":"1.0.0"}`
 	manifestPath := filepath.Join(root, NativeManifest)
 	if err := os.WriteFile(manifestPath, []byte(legacy), 0o644); err != nil {
@@ -120,7 +122,7 @@ func TestLoadInstalledQuarantinesExternalLegacyManifestWithoutModifyingIt(t *tes
 // message sent this manifest down the migration path and reported that failure
 // instead of the real defect.
 func TestQuotingTheWordsDoesNotTriggerManagedMigration(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	root := InstallRoot(home, "quoter")
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)

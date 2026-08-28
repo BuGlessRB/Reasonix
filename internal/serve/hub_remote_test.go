@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 // stubAttacher stands in for the window's link layer.
@@ -105,7 +106,7 @@ func remotePane(t *testing.T, h *Hub, addr string) *Runtime {
 // anywhere between the two kernels turns a live transcript into a page that
 // arrives when the turn is already over.
 func TestRemotePaneStreamsEventsUnbuffered(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{})
 	rt := remotePane(t, h, rk.Listener.Addr().String())
@@ -161,7 +162,7 @@ func TestRemotePaneStreamsEventsUnbuffered(t *testing.T) {
 // The remote gate only knows its own token, and the window's cookies are for
 // this machine. Forwarding the window's would authenticate nothing.
 func TestRemotePaneCarriesTheRemoteToken(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{})
 	rt := remotePane(t, h, rk.Listener.Addr().String())
@@ -192,7 +193,7 @@ func TestRemotePaneCarriesTheRemoteToken(t *testing.T) {
 // A dead link and a refusing kernel are different problems with different
 // fixes, and only a code can tell the window which one it has.
 func TestRemotePaneRefusesWithACodeWhenTheLinkIsDown(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	rk := fakeRemoteKernel(t)
 	addr := rk.Listener.Addr().String()
 	rk.Close()
@@ -230,7 +231,7 @@ func TestRemotePaneRefusesWithACodeWhenTheLinkIsDown(t *testing.T) {
 // bare 502, which reads as a request that never arrived. It arrives with a code
 // and the far side's own words now.
 func TestAFarKernelThatRefusesSaysSoRatherThanLookingLikeADeadLink(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	far := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "workspace /srv/data/training is not a directory", http.StatusBadRequest)
 	}))
@@ -279,7 +280,7 @@ func TestAFarKernelThatRefusesSaysSoRatherThanLookingLikeADeadLink(t *testing.T)
 // which is true of the request and useless to the reader — nothing in it says
 // the machine over there is a version behind. #9428.
 func TestAFarKernelWithNoPaneHubReadsAsAVersionBehind(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	// What a 1.x kernel is: every path is its page, and its page is a GET.
 	old := http.NewServeMux()
 	old.HandleFunc("GET /", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("<html>")) })
@@ -320,7 +321,7 @@ func TestAFarKernelWithNoPaneHubReadsAsAVersionBehind(t *testing.T) {
 // A remote workspace is spelled by the remote OS, so its name is a slash path
 // no matter which separator this machine uses.
 func TestRemotePaneViewNamesItsHostAndWorkspace(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{})
 	rt := remotePane(t, h, rk.Listener.Addr().String())
@@ -344,10 +345,10 @@ func TestRemotePaneViewNamesItsHostAndWorkspace(t *testing.T) {
 // pane has none, so a window holding one must not crash on the sweep that
 // walks them all.
 func TestHostDecisionsSkipRemotePanes(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{})
-	local := hubRuntime(t, h, t.TempDir())
+	local := hubRuntime(t, h, testenv.TempDir(t))
 	remotePane(t, h, rk.Listener.Addr().String())
 
 	h.StartRecoveryGC(context.Background())
@@ -366,7 +367,7 @@ func TestHostDecisionsSkipRemotePanes(t *testing.T) {
 // Closing a proxied pane has nothing local to persist, but the connection it
 // rode is shared: the hold has to come off, or the last pane never frees it.
 func TestClosingARemotePaneReleasesItsHold(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{})
 	released := make(chan struct{})
@@ -392,7 +393,7 @@ func TestClosingARemotePaneReleasesItsHold(t *testing.T) {
 // A listening server must not dial onward because a request asked it to: that
 // turns the kernel into someone else's route into the network behind it.
 func TestOpenRemoteIsRefusedWhereNoAttacherIsWired(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	h := NewHub(HubOptions{})
 	front := httptest.NewServer(h.Handler())
 	defer front.Close()
@@ -420,7 +421,7 @@ func TestOpenRemoteIsRefusedWhereNoAttacherIsWired(t *testing.T) {
 // The endpoint is where a host's attach becomes a pane. What it returns is what
 // the sidebar labels, so the host name has to survive the round trip.
 func TestOpenRemoteEndpointPublishesTheProxiedPane(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{Remote: &stubAttacher{
 		attach: func(host, workspace string) (RemoteEndpoint, func(), error) {
@@ -459,7 +460,7 @@ func TestOpenRemoteEndpointPublishesTheProxiedPane(t *testing.T) {
 // A hold taken by the attach and refused by the hub is a connection nobody will
 // ever close: the pane it was for does not exist to be closed.
 func TestOpenRemoteGivesBackTheHoldWhenTheHubRefuses(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	rk := fakeRemoteKernel(t)
 	released := make(chan struct{}, 1)
 	h := NewHub(HubOptions{Remote: &stubAttacher{
@@ -491,7 +492,7 @@ func TestOpenRemoteGivesBackTheHoldWhenTheHubRefuses(t *testing.T) {
 // The row the sidebar draws needs both, and a host nobody has connected to
 // still has to appear — that is where the connect button lives.
 func TestRemoteHostsJoinTheBookWithLiveLinkState(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	// Remote hosts are user-global, so the book lives in the home config, never
 	// in a project file — the same rule `reasonix remote add` writes under.
@@ -569,7 +570,7 @@ func TestTwoRemotePanesDriveTwoRuntimesOnTheFarSide(t *testing.T) {
 
 	// One workspace for both, which is the case that was broken: they share a
 	// link and an address, and must still be two conversations.
-	shared := t.TempDir()
+	shared := testenv.TempDir(t)
 	open := func() RuntimeView {
 		t.Helper()
 		resp, err := http.Post(nearSide.URL+"/remotes/open", "application/json",
@@ -635,7 +636,7 @@ func remotePaneRoot(t *testing.T, front *httptest.Server, view RuntimeView) stri
 // assemble against. Nothing dials it — the address is deliberately dead.
 func writeOpenableConfig(t *testing.T) {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	closeSharedCatalogsOnCleanup(t)
 	path := config.UserConfigPath()
 	if path == "" {
@@ -679,7 +680,7 @@ func TestClosingARemotePaneRetiresTheFarRuntime(t *testing.T) {
 	defer nearSide.Close()
 
 	resp, err := http.Post(nearSide.URL+"/remotes/open", "application/json",
-		openRemoteBody(t, "gpu-box", t.TempDir()))
+		openRemoteBody(t, "gpu-box", testenv.TempDir(t)))
 	if err != nil {
 		t.Fatal(err)
 	}

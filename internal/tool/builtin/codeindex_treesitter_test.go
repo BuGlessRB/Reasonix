@@ -6,13 +6,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestCodeIndexTreeSitterTypeScriptMethods(t *testing.T) {
 	if !codeIndexTreeSitterEnabled() {
 		t.Fatal("tree-sitter code_index is not enabled")
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mkfile(t, filepath.Join(root, "src", "client.ts"), `export abstract class Client {
   async loadUser(id: string) {
     return id
@@ -38,7 +40,7 @@ export const makeClient = () => new Client()
 }
 
 func TestCodeIndexTreeSitterPythonAndRust(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mkfile(t, filepath.Join(root, "pkg", "worker.py"), `class Worker:
     async def run(self):
         pass

@@ -10,10 +10,11 @@ import (
 	"testing"
 
 	"reasonix/internal/capdiag"
+	"reasonix/internal/testenv"
 )
 
 func TestDoctorCapabilitiesStaticJSON(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	_ = os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte("# a\n"), 0o644)
 
 	stdout, stderr := captureStd(t, func() int {
@@ -57,7 +58,7 @@ func TestDoctorCapabilitiesUnknownArg(t *testing.T) {
 }
 
 func TestDoctorCapabilitiesTextOutput(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	stdout, _ := captureStd(t, func() int {
 		return doctorCapabilitiesCommand([]string{"--root", root})
 	})

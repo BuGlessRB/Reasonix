@@ -7,18 +7,19 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestReconcileRootDetectsMetaOnlyChange(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "meta.jsonl")
 	saveMessages(t, path, provider.Message{Role: provider.RoleUser, Content: "stable content"})
 	if err := agent.SaveBranchMeta(path, agent.BranchMeta{CustomTitle: "old"}); err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := Open(ctx, Options{Path: filepath.Join(t.TempDir(), "history.sqlite")})
+	catalog, err := Open(ctx, Options{Path: filepath.Join(testenv.TempDir(t), "history.sqlite")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,9 +46,9 @@ func TestReconcileRootDetectsMetaOnlyChange(t *testing.T) {
 func TestRebuildReplacesStaleHistoryProjection(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	databasePath := filepath.Join(t.TempDir(), "history.sqlite")
-	staleRoot := t.TempDir()
-	currentRoot := t.TempDir()
+	databasePath := filepath.Join(testenv.TempDir(t), "history.sqlite")
+	staleRoot := testenv.TempDir(t)
+	currentRoot := testenv.TempDir(t)
 	saveMessages(t, filepath.Join(staleRoot, "stale.jsonl"), provider.Message{Role: provider.RoleUser, Content: "obsolete unicorn marker"})
 	saveMessages(t, filepath.Join(currentRoot, "current.jsonl"), provider.Message{Role: provider.RoleUser, Content: "current phoenix marker"})
 	seed, err := Open(ctx, Options{Path: databasePath})

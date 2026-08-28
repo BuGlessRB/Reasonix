@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"reasonix/internal/taskmonitor"
+	"reasonix/internal/testenv"
 )
 
 const legacySensitiveSummary = `command "deploy --token secret" failed in /Users/alice/private`
@@ -510,7 +511,7 @@ func writeTaskData(t *testing.T, dir string) {
 }
 
 func TestFileStoreIntegration_ListTasks(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeTaskData(t, dir)
 
 	exit, out := captureOut(func() int {
@@ -531,7 +532,7 @@ func TestFileStoreIntegration_ListTasks(t *testing.T) {
 }
 
 func TestFileStoreIntegration_Status(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeTaskData(t, dir)
 
 	exit, out := captureOut(func() int {
@@ -549,7 +550,7 @@ func TestFileStoreIntegration_Status(t *testing.T) {
 }
 
 func TestFileStoreIntegration_Status_NotFound(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 
 	exit, out := captureOut(func() int {
 		return taskCommand([]string{"monitor", "status", "--json", "--dir", dir, "ghost"})
@@ -563,7 +564,7 @@ func TestFileStoreIntegration_Status_NotFound(t *testing.T) {
 }
 
 func TestFileStoreIntegration_Events_JSON(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeTaskData(t, dir)
 
 	exit, out := captureOut(func() int {
@@ -587,7 +588,7 @@ func TestFileStoreIntegration_Events_JSON(t *testing.T) {
 }
 
 func TestFileStoreIntegration_Events_JSONL(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeTaskData(t, dir)
 
 	exit, out := captureOut(func() int {
@@ -609,7 +610,7 @@ func TestFileStoreIntegration_Events_JSONL(t *testing.T) {
 }
 
 func TestFileStoreIntegration_Events_AfterCursor(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeTaskData(t, dir)
 
 	exit, out := captureOut(func() int {
@@ -628,7 +629,7 @@ func TestFileStoreIntegration_Events_AfterCursor(t *testing.T) {
 }
 
 func TestFileStoreIntegration_ListTasks_Empty(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	taskStore = nil
 
 	exit, out := captureOut(func() int {

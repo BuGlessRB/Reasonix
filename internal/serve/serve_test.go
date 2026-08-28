@@ -22,6 +22,7 @@ import (
 	"reasonix/internal/jobs"
 	"reasonix/internal/permission"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -317,7 +318,7 @@ func TestHistoryMessagesCountAttachmentsOnATextlessTurn(t *testing.T) {
 }
 
 func TestSessionsListPreviewStripsTransientReasoningLanguageBlock(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := agent.NewSession("system")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "<reasoning-language>\nVisible reasoning/thinking text preference: use English.\n</reasoning-language>\n\nExplain this module"})
@@ -335,7 +336,7 @@ func TestSessionsListPreviewStripsTransientReasoningLanguageBlock(t *testing.T) 
 }
 
 func TestSessionsListPreviewSeesEventLogTurns(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := agent.NewSession("system")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -541,7 +542,7 @@ func TestServeIndexRendersAndReloadsExtensions(t *testing.T) {
 }
 
 func TestServeIndexPagePassesLanguagePreferenceToClient(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
@@ -721,7 +722,7 @@ func TestServeSwitchEffortUsesModelRefForDuplicateModelNames(t *testing.T) {
 		Sink:       bc,
 		Label:      "shared-chat",
 		ModelRef:   "alternate/shared-chat",
-		SessionDir: t.TempDir(),
+		SessionDir: testenv.TempDir(t),
 	})
 	server := New(ctrl, bc, config.ServeConfig{})
 	var builtRef string
@@ -731,7 +732,7 @@ func TestServeSwitchEffortUsesModelRefForDuplicateModelNames(t *testing.T) {
 			Sink:       bc,
 			Label:      "shared-chat",
 			ModelRef:   ref,
-			SessionDir: t.TempDir(),
+			SessionDir: testenv.TempDir(t),
 		}), nil
 	}
 
@@ -754,7 +755,7 @@ func TestServeSwitchEffortUsesModelRefForDuplicateModelNames(t *testing.T) {
 
 func writeServeModelConfig(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	cfgPath := config.UserConfigPath()
 	if cfgPath == "" {
@@ -787,10 +788,10 @@ supported_efforts = ["low", "high"]
 }
 
 func TestResumeRequiresSessionPathInsideSessionDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := filepath.Join(dir, "active.jsonl")
 	inside := filepath.Join(dir, "inside.jsonl")
-	outsideDir := t.TempDir()
+	outsideDir := testenv.TempDir(t)
 	outside := filepath.Join(outsideDir, "outside.jsonl")
 	for _, path := range []string{active, inside, outside} {
 		if err := os.WriteFile(path, []byte(`{"role":"user","content":"hi"}`+"\n"), 0o644); err != nil {
@@ -831,7 +832,7 @@ func TestResumeRequiresSessionPathInsideSessionDir(t *testing.T) {
 }
 
 func TestResumeRejectsCleanupPendingSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := filepath.Join(dir, "active.jsonl")
 	pending := filepath.Join(dir, "pending.jsonl")
 	for _, path := range []string{active, pending} {
@@ -866,7 +867,7 @@ func TestResumeRejectsCleanupPendingSession(t *testing.T) {
 }
 
 func TestSessionsSkipsCleanupPending(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := filepath.Join(dir, "active.jsonl")
 	pending := filepath.Join(dir, "pending.jsonl")
 	for _, path := range []string{active, pending} {
@@ -901,7 +902,7 @@ func TestSessionsSkipsCleanupPending(t *testing.T) {
 }
 
 func TestDeleteSessionRequiresSessionNameInsideSessionDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := filepath.Join(dir, "active.jsonl")
 	old := filepath.Join(dir, "old.jsonl")
 	for _, path := range []string{active, old} {

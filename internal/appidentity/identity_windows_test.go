@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"reasonix/internal/testenv"
 )
 
 func TestOwnedShortcutTargetCoversStableAndVersionedEntries(t *testing.T) {
@@ -53,7 +54,7 @@ func TestReasonixShortcutName(t *testing.T) {
 }
 
 func TestOwnedShortcutTargetAcceptsVersionedDesktopThroughJunction(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	versionDir := filepath.Join(root, "versions", "v1.20.0")
 	if err := os.MkdirAll(versionDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -61,7 +62,7 @@ func TestOwnedShortcutTargetAcceptsVersionedDesktopThroughJunction(t *testing.T)
 	if err := os.WriteFile(filepath.Join(versionDir, "reasonix-desktop.exe"), []byte("desktop"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	junction := filepath.Join(t.TempDir(), "current")
+	junction := filepath.Join(testenv.TempDir(t), "current")
 	if output, err := exec.Command("cmd", "/c", "mklink", "/J", junction, root).CombinedOutput(); err != nil {
 		t.Fatalf("create directory junction: %v: %s", err, output)
 	}
@@ -72,7 +73,7 @@ func TestOwnedShortcutTargetAcceptsVersionedDesktopThroughJunction(t *testing.T)
 }
 
 func TestRepairOwnedShortcutPersistsAppUserModelID(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	target := filepath.Join(root, "Reasonix.exe")
 	if err := os.WriteFile(target, []byte("launcher"), 0o600); err != nil {
 		t.Fatal(err)
@@ -117,13 +118,13 @@ func TestRepairOwnedShortcutPersistsAppUserModelID(t *testing.T) {
 }
 
 func TestRepairOwnedShortcutLeavesSeparateReasonix053InstallUntouched(t *testing.T) {
-	currentRoot := t.TempDir()
-	legacyRoot := t.TempDir()
+	currentRoot := testenv.TempDir(t)
+	legacyRoot := testenv.TempDir(t)
 	legacyTarget := filepath.Join(legacyRoot, "reasonix-desktop.exe")
 	if err := os.WriteFile(legacyTarget, []byte("legacy tauri desktop"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	shortcutPath := filepath.Join(t.TempDir(), "Reasonix.lnk")
+	shortcutPath := filepath.Join(testenv.TempDir(t), "Reasonix.lnk")
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()

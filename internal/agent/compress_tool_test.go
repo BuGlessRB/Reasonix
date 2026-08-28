@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -29,7 +30,7 @@ func TestCompressContextBeforePreservesCanonicalAndTail(t *testing.T) {
 	}}
 	before := sess.Snapshot()
 	prov := &fakeProvider{reply: "old work summarized"}
-	a := New(prov, tool.NewRegistry(), sess, Options{ArchiveDir: t.TempDir()}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sess, Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
 
 	got, err := a.CompressContext(context.Background(), tool.CompressRequest{
 		Direction: "before", Anchor: "unique boundary", Focus: "keep file decisions",
@@ -222,7 +223,7 @@ func TestCompressContextNoSavingsIsNoop(t *testing.T) {
 }
 
 func TestCompressContextFailureDoesNotArchiveUncommittedRange(t *testing.T) {
-	archiveDir := t.TempDir()
+	archiveDir := testenv.TempDir(t)
 	sess := &Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "old unique"},
@@ -329,7 +330,7 @@ func TestRangeCompressionSharesSummarySingleflight(t *testing.T) {
 		{Role: provider.RoleUser, Content: "keep unique"},
 		{Role: provider.RoleAssistant, Content: "tail"},
 	}}
-	a := New(prov, tool.NewRegistry(), sess, Options{RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sess, Options{RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	autoErr := make(chan error, 1)
 	go func() {
 		_, err := a.compactToProjection(context.Background(), CompactionTriggerPressure, "", true, false)

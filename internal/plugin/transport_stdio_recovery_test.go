@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -21,7 +22,7 @@ func TestStdioServerRecoversAfterChildDies(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	startCount := filepath.Join(t.TempDir(), "starts")
+	startCount := filepath.Join(testenv.TempDir(t), "starts")
 	const startupLine = "[DuckDB] connect local database: data/processed/duckdb_data.db"
 	host, echo := startDyingHelperServer(t, ctx, startCount, startupLine)
 	defer host.Close()
@@ -72,7 +73,7 @@ func TestStdioReconnectIsSingleFlight(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	startCount := filepath.Join(t.TempDir(), "starts")
+	startCount := filepath.Join(testenv.TempDir(t), "starts")
 	host, echo := startDyingHelperServer(t, ctx, startCount, "")
 	defer host.Close()
 

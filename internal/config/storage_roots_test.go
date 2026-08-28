@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func writeStorageSection(t *testing.T, home, body string) {
@@ -24,7 +26,7 @@ func writeStorageSection(t *testing.T, home, body string) {
 // configuration outranks the default, and every root runs the same order. A
 // root that resolved by its own rules is how the old resolvers drifted apart.
 func TestRootChainPrefersEnvironmentThenConfigurationThenDefault(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_STATE_HOME", "")
 	t.Setenv("REASONIX_CACHE_HOME", "")
@@ -33,13 +35,13 @@ func TestRootChainPrefersEnvironmentThenConfigurationThenDefault(t *testing.T) {
 		t.Fatalf("default state = %q, want the home root %q", got, home)
 	}
 
-	configured := filepath.Join(t.TempDir(), "moved-state")
+	configured := filepath.Join(testenv.TempDir(t), "moved-state")
 	writeStorageSection(t, home, "[storage]\nstate = "+quote(configured)+"\n")
 	if got := RootDir(RootState); got != configured {
 		t.Fatalf("configured state = %q, want %q", got, configured)
 	}
 
-	pinned := t.TempDir()
+	pinned := testenv.TempDir(t)
 	t.Setenv("REASONIX_STATE_HOME", pinned)
 	if got := RootDir(RootState); got != pinned {
 		t.Fatalf("state = %q, want the environment to outrank configuration (%q)", got, pinned)
@@ -50,9 +52,9 @@ func TestRootChainPrefersEnvironmentThenConfigurationThenDefault(t *testing.T) {
 // than documented: two isolated runtimes opening one workspace have to find the
 // same lock, and nothing may name the location of the file that names locations.
 func TestConfigurationCannotMoveAnImmovableRoot(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	elsewhere := t.TempDir()
+	elsewhere := testenv.TempDir(t)
 	writeStorageSection(t, home,
 		"[storage]\nhome = "+quote(elsewhere)+"\nlocks = "+quote(elsewhere)+"\n")
 
@@ -77,12 +79,12 @@ func TestConfigurationCannotMoveAnImmovableRoot(t *testing.T) {
 // A surface offering to move a root has to say when the environment already
 // holds it, instead of accepting an edit that resolution would ignore.
 func TestPinnedRootNamesTheVariableHoldingIt(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_STATE_HOME", "")
 	if got := RootPinnedBy(RootState); got != "" {
 		t.Fatalf("unpinned state reported %q", got)
 	}
-	t.Setenv("REASONIX_STATE_HOME", t.TempDir())
+	t.Setenv("REASONIX_STATE_HOME", testenv.TempDir(t))
 	if got := RootPinnedBy(RootState); got != "REASONIX_STATE_HOME" {
 		t.Fatalf("pinned state reported %q", got)
 	}
@@ -94,10 +96,10 @@ func TestPinnedRootNamesTheVariableHoldingIt(t *testing.T) {
 // Both layers accept the same spellings, or a location would mean one thing in
 // the environment and another in the file.
 func TestConfiguredRootExpandsLikeAnEnvironmentOverride(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CACHE_HOME", "")
-	target := t.TempDir()
+	target := testenv.TempDir(t)
 	t.Setenv("STORAGE_TEST_TARGET", target)
 
 	writeStorageSection(t, home, "[storage]\ncache = \"${STORAGE_TEST_TARGET}/derived\"\n")
@@ -110,7 +112,7 @@ func TestConfiguredRootExpandsLikeAnEnvironmentOverride(t *testing.T) {
 // A broken config must not take the paths down with it: a user whose file
 // cannot be parsed still has to reach the tooling that repairs it.
 func TestUnreadableStorageSectionFallsBackInsteadOfFailing(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_STATE_HOME", "")
 	writeStorageSection(t, home, "[storage\nstate = broken")
@@ -135,13 +137,13 @@ func quote(s string) string {
 // A relocation has to survive the save: the renderer rewrites the whole file
 // from the struct, so a section it has no line for is silently dropped.
 func TestStorageSectionSurvivesASaveAndReload(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_STATE_HOME", "")
 	t.Setenv("REASONIX_CACHE_HOME", "")
 	t.Cleanup(InvalidateStorageDirs)
 
-	target := filepath.Join(t.TempDir(), "moved")
+	target := filepath.Join(testenv.TempDir(t), "moved")
 	c := Default()
 	if err := c.SetStorageDir(RootState, target); err != nil {
 		t.Fatalf("set storage: %v", err)
@@ -167,13 +169,13 @@ func TestStorageSectionSurvivesASaveAndReload(t *testing.T) {
 // Clearing a root returns it to its default rather than writing an empty
 // location nothing can resolve.
 func TestClearingAStorageDirRestoresTheDefault(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_STATE_HOME", "")
 	t.Cleanup(InvalidateStorageDirs)
 
 	c := Default()
-	if err := c.SetStorageDir(RootState, filepath.Join(t.TempDir(), "moved")); err != nil {
+	if err := c.SetStorageDir(RootState, filepath.Join(testenv.TempDir(t), "moved")); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.SetStorageDir(RootState, ""); err != nil {
@@ -194,19 +196,19 @@ func TestClearingAStorageDirRestoresTheDefault(t *testing.T) {
 // The setter rules on what configuration can rule on, and refuses the rest
 // with a reason rather than writing a line resolution would ignore.
 func TestSetStorageDirRefusesWhatItCannotHonour(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	c := Default()
-	if err := c.SetStorageDir(RootLocks, t.TempDir()); err == nil {
+	if err := c.SetStorageDir(RootLocks, testenv.TempDir(t)); err == nil {
 		t.Fatal("locks accepted a relocation")
 	}
-	if err := c.SetStorageDir(RootHome, t.TempDir()); err == nil {
+	if err := c.SetStorageDir(RootHome, testenv.TempDir(t)); err == nil {
 		t.Fatal("home accepted a relocation")
 	}
-	if err := c.SetStorageDir(RootID("nowhere"), t.TempDir()); err == nil {
+	if err := c.SetStorageDir(RootID("nowhere"), testenv.TempDir(t)); err == nil {
 		t.Fatal("an undeclared root accepted a relocation")
 	}
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
-	if err := c.SetStorageDir(RootCache, t.TempDir()); err == nil {
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
+	if err := c.SetStorageDir(RootCache, testenv.TempDir(t)); err == nil {
 		t.Fatal("a root the environment pins accepted a relocation the environment would override")
 	}
 }
@@ -246,7 +248,7 @@ func TestDefaultRootDirectoriesAreWhereTheyAlwaysWere(t *testing.T) {
 		t.Errorf("state = %q, want the home root %q", got, want)
 	}
 	// A pinned home is the one case that takes the cache along, one level down.
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if got, want := RootDir(RootCache), filepath.Join(home, "cache"); got != want {
 		t.Errorf("cache under a pinned home = %q, want %q", got, want)

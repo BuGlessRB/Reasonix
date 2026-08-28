@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestLookupLegacyKeyringBatchInProcessFourState(t *testing.T) {
@@ -44,7 +46,7 @@ func TestLookupLegacyKeyringBatchInProcessFourState(t *testing.T) {
 }
 
 func TestLegacyKeyringErrorDoesNotWriteMarker(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 
@@ -103,7 +105,7 @@ func TestLookupLegacyKeyringBatchSharedContextTimeout(t *testing.T) {
 // probe→store window: the batch has already decided the key needs import
 // (probe returns found), then the user writes a new value before store-if-absent.
 func TestLookupLegacyKeyringBatchDoesNotClobberUserWrite(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 
@@ -154,7 +156,7 @@ func TestLookupLegacyKeyringBatchDoesNotClobberUserWrite(t *testing.T) {
 // TestLookupLegacyKeyringBatchDoesNotReviveTombstone forces the same production
 // probe→store window against a cleared tombstone written after the probe starts.
 func TestLookupLegacyKeyringBatchDoesNotReviveTombstone(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 
@@ -214,7 +216,7 @@ func TestLookupLegacyKeyringBatchDoesNotReviveTombstone(t *testing.T) {
 }
 
 func TestLegacyKeyringMarkerUsesRawURLBase64(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	key := "A/B+C="
 	path := legacyKeyringMigrationMarkerPath(key)

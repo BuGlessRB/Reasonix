@@ -10,11 +10,12 @@ import (
 
 	"reasonix/internal/capdiag"
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 func TestCollectStaticNoNetworkSideEffects(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("REASONIX_HOME", filepath.Join(home, ".reasonix"))
@@ -123,8 +124,8 @@ auto_start = false
 }
 
 func TestCollectUsesExactReasonixHomeForGlobalHooks(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, "AppData", "Roaming", "reasonix")
 	write(t, filepath.Join(reasonixHome, "settings.json"), `{
   "hooks": {
@@ -158,8 +159,8 @@ func TestCollectUsesExactReasonixHomeForGlobalHooks(t *testing.T) {
 }
 
 func TestMissingConventionDirsNoWarning(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_HOME", filepath.Join(home, ".reasonix"))
 	r := capdiag.Collect(capdiag.Options{
@@ -185,8 +186,8 @@ func TestMissingConventionDirsNoWarning(t *testing.T) {
 }
 
 func TestProjectHooksEnabledByDefault(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_HOME", filepath.Join(home, ".reasonix"))
 	write(t, filepath.Join(root, ".reasonix", "settings.json"), `{
@@ -216,8 +217,8 @@ func TestHasErrorSeverity(t *testing.T) {
 }
 
 func TestLoadForRootReadOnlyDoesNotRewriteTier(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_HOME", filepath.Join(home, ".reasonix"))
 	userCfg := filepath.Join(home, ".reasonix", "config.toml")
@@ -241,8 +242,8 @@ func TestLoadForRootReadOnlyDoesNotRewriteTier(t *testing.T) {
 }
 
 func TestUnknownHookEventIsReported(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_HOME", filepath.Join(home, ".reasonix"))
 	write(t, filepath.Join(root, ".reasonix", "settings.json"), `{
@@ -266,8 +267,8 @@ func TestUnknownHookEventIsReported(t *testing.T) {
 }
 
 func TestCollectIgnoresMatchersOnNonToolHookEvents(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, ".reasonix")
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_HOME", reasonixHome)
@@ -291,8 +292,8 @@ func TestCollectIgnoresMatchersOnNonToolHookEvents(t *testing.T) {
 }
 
 func TestCollectRejectsNonRegularPluginContextFile(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, ".reasonix")
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_HOME", reasonixHome)
@@ -326,8 +327,8 @@ func TestCollectRejectsNonRegularPluginContextFile(t *testing.T) {
 }
 
 func TestPluginPackageCommandsAreReported(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, ".reasonix")
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_HOME", reasonixHome)
@@ -361,9 +362,9 @@ func TestPluginPackageCommandsAreReported(t *testing.T) {
 
 func TestDisplayPathExternal(t *testing.T) {
 	// External absolute path should not include user components in JSON.
-	root := t.TempDir()
-	home := t.TempDir()
-	ext := filepath.Join(t.TempDir(), "secret-user-bin", "tool")
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	ext := filepath.Join(testenv.TempDir(t), "secret-user-bin", "tool")
 	write(t, filepath.Join(root, "reasonix.toml"), `
 [[plugins]]
 name = "ext"

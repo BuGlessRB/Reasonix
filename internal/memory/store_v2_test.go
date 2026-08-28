@@ -6,10 +6,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestStoreV2StableIDSurvivesRenameAndRevisionIncrements(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	first, err := store.SaveWithOptions(Memory{Name: "alpha", Description: "first", Body: "v1"}, SaveOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +38,7 @@ func TestStoreV2StableIDSurvivesRenameAndRevisionIncrements(t *testing.T) {
 }
 
 func TestStoreV2IndexIsDerivedFromFacts(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	if _, err := store.Save(Memory{Name: "source-of-truth", Title: "Source of truth", Description: "active fact", Body: "body"}); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +53,7 @@ func TestStoreV2IndexIsDerivedFromFacts(t *testing.T) {
 }
 
 func TestStoreV2ExpectedRevisionRejectsLostUpdate(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	first, err := store.SaveWithOptions(Memory{Name: "fact", Description: "one", Body: "v1"}, SaveOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +74,7 @@ func TestStoreV2ExpectedRevisionRejectsLostUpdate(t *testing.T) {
 }
 
 func TestStoreV2RestoreRevisionCreatesAuditedRevision(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	first, err := store.SaveWithOptions(Memory{Name: "fact", Description: "one", Body: "v1"}, SaveOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +95,7 @@ func TestStoreV2RestoreRevisionCreatesAuditedRevision(t *testing.T) {
 }
 
 func TestStoreV2LegacyMemoryGetsDeterministicIdentity(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	legacy := "---\nname: legacy-fact\ndescription: old file\nmetadata:\n  type: project\n  scope: project\n---\n\nlegacy body\n"
 	if err := os.WriteFile(filepath.Join(dir, "legacy-fact.md"), []byte(legacy), 0o644); err != nil {
 		t.Fatal(err)
@@ -110,7 +112,7 @@ func TestStoreV2LegacyMemoryGetsDeterministicIdentity(t *testing.T) {
 }
 
 func TestStoreV2MigrationPersistsLegacyIdentity(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "legacy-fact.md")
 	legacy := "---\nname: legacy-fact\ndescription: old file\nmetadata:\n  type: project\n  scope: project\n---\n\nlegacy body\n"
 	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
@@ -135,7 +137,7 @@ func TestStoreV2MigrationPersistsLegacyIdentity(t *testing.T) {
 }
 
 func TestStoreV2LegacyIdentityIncludesScope(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: filepath.Join(root, "project"), GlobalDir: filepath.Join(root, "global")}
 	for _, fixture := range []struct {
 		dir   string
@@ -167,7 +169,7 @@ func TestStoreV2LegacyIdentityIncludesScope(t *testing.T) {
 }
 
 func TestStoreV2ArchiveByIDOnlyArchivesMatchingIdentity(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: filepath.Join(root, "project"), GlobalDir: filepath.Join(root, "global")}
 	for _, fixture := range []struct {
 		dir   string
@@ -198,7 +200,7 @@ func TestStoreV2ArchiveByIDOnlyArchivesMatchingIdentity(t *testing.T) {
 }
 
 func TestStoreV2ScopeQualifiedReferencesRoundTrip(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: filepath.Join(root, "project"), GlobalDir: filepath.Join(root, "global")}
 	global, err := store.SaveWithOptions(Memory{
 		Name: "global/shared.md", Description: "global", Body: "global body",
@@ -259,7 +261,7 @@ func TestStoreV2ScopeQualifiedReferencesRoundTrip(t *testing.T) {
 }
 
 func TestStoreV2RejectsConflictingQualifiedReferenceScope(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: filepath.Join(root, "project"), GlobalDir: filepath.Join(root, "global")}
 	_, err := store.SaveWithOptions(Memory{
 		Name: "global/fact.md", Scope: FactScopeProject, Description: "conflict", Body: "body",
@@ -273,7 +275,7 @@ func TestStoreV2RejectsConflictingQualifiedReferenceScope(t *testing.T) {
 }
 
 func TestStoreV2RestoreArchivedPreservesIdentityAndCreatesRevision(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	first, err := store.SaveWithOptions(Memory{Name: "fact", Description: "first", Body: "v1"}, SaveOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -300,7 +302,7 @@ func TestStoreV2RestoreArchivedPreservesIdentityAndCreatesRevision(t *testing.T)
 }
 
 func TestStoreV2RestoreArchivedRejectsActiveCollisions(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	first, err := store.SaveWithOptions(Memory{Name: "fact", Description: "first", Body: "archived"}, SaveOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -326,7 +328,7 @@ func TestStoreV2RestoreArchivedRejectsActiveCollisions(t *testing.T) {
 }
 
 func TestStoreV2RestoreArchivedIsConcurrencySafe(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	first, err := store.SaveWithOptions(Memory{Name: "fact", Description: "first", Body: "v1"}, SaveOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -363,8 +365,8 @@ func TestStoreV2RestoreArchivedIsConcurrencySafe(t *testing.T) {
 }
 
 func TestStoreV2RestoreArchivedRejectsPathsOutsideStore(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
-	outside := filepath.Join(t.TempDir(), "fact.md")
+	store := Store{Dir: testenv.TempDir(t)}
+	outside := filepath.Join(testenv.TempDir(t), "fact.md")
 	if err := os.WriteFile(outside, []byte("not an archive"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -374,12 +376,12 @@ func TestStoreV2RestoreArchivedRejectsPathsOutsideStore(t *testing.T) {
 }
 
 func TestStoreV2RestoreArchivedRejectsSymlinkEntry(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	archiveDir := filepath.Join(store.Dir, ".archive")
 	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	outside := filepath.Join(t.TempDir(), "fact.md")
+	outside := filepath.Join(testenv.TempDir(t), "fact.md")
 	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -396,8 +398,8 @@ func TestStoreV2RestoreArchivedRejectsSymlinkEntry(t *testing.T) {
 }
 
 func TestStoreV2RestoreArchivedRejectsSymlinkDirectory(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
-	outsideDir := t.TempDir()
+	store := Store{Dir: testenv.TempDir(t)}
+	outsideDir := testenv.TempDir(t)
 	outside := filepath.Join(outsideDir, "fact.md")
 	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
 		t.Fatal(err)

@@ -11,10 +11,11 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/filelock"
 	"reasonix/internal/sessioninbox"
+	"reasonix/internal/testenv"
 )
 
 func TestInboxSnapshotRecoversUnownedInFlightItem(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -45,7 +46,7 @@ func TestInboxSnapshotRecoversUnownedInFlightItem(t *testing.T) {
 }
 
 func TestInboxSnapshotPreservesActivelyOwnedSteer(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -81,7 +82,7 @@ func TestInboxSnapshotPreservesActivelyOwnedSteer(t *testing.T) {
 }
 
 func TestTrySteerOrphanRequiresReviewBeforeExplicitRetry(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -134,7 +135,7 @@ func TestTrySteerOrphanRequiresReviewBeforeExplicitRetry(t *testing.T) {
 }
 
 func TestRetryThenStaleSteerTreatsAlreadyRunningItemAsIdempotent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -179,7 +180,7 @@ func TestRetryThenStaleSteerTreatsAlreadyRunningItemAsIdempotent(t *testing.T) {
 }
 
 func TestInboxAdmissionOwnsClaimBeforeSnapshotRecovery(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -242,7 +243,7 @@ func TestInboxAdmissionOwnsClaimBeforeSnapshotRecovery(t *testing.T) {
 }
 
 func TestInboxSnapshotDoesNotHoldAdmissionWhileDiskLocked(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -283,7 +284,7 @@ func TestInboxSnapshotDoesNotHoldAdmissionWhileDiskLocked(t *testing.T) {
 }
 
 func TestInboxCompletionKeepsOwnershipWithoutHoldingAdmissionDuringSnapshot(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -332,7 +333,7 @@ func TestInboxCompletionKeepsOwnershipWithoutHoldingAdmissionDuringSnapshot(t *t
 }
 
 func TestInboxCompletionOwnsItemWithoutHoldingAdmissionDuringDurableAck(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)

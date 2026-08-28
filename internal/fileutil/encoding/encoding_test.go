@@ -10,6 +10,7 @@ import (
 	"unicode/utf16"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
+	"reasonix/internal/testenv"
 )
 
 // Detect
@@ -82,7 +83,7 @@ func TestDecodeUTF8(t *testing.T) {
 }
 
 func TestReadFileUTF8DecodesGB18030(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "settings.json")
+	path := filepath.Join(testenv.TempDir(t), "settings.json")
 	if err := os.WriteFile(path, Encode(`{"label":"中文"}`, GB18030), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // writeFile is a tiny helper that creates a regular file with placeholder
@@ -55,7 +57,7 @@ func containsDirHit(got []SearchResult, wantPath string) bool {
 // surface files under that directory, even when the basename does not
 // contain the query.
 func TestSearchMatchesPathSegment(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeFile(t, filepath.Join(root, "src", "planind", "index.tsx"))
 
 	got := Search(root, "planind", 50)
@@ -67,7 +69,7 @@ func TestSearchMatchesPathSegment(t *testing.T) {
 // TestSearchMatchesDirectories verifies that a query matching a directory
 // name returns the directory itself with IsDir=true, not just its contents.
 func TestSearchMatchesDirectories(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeFile(t, filepath.Join(root, "docs", "assets", "readme.md"))
 	writeFile(t, filepath.Join(root, "docs", "assets", "image.png"))
 
@@ -87,7 +89,7 @@ func TestSearchMatchesDirectories(t *testing.T) {
 // hits so the most relevant matches surface at the top of the completion
 // menu.
 func TestSearchKeepsBasenameMatch(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeFile(t, filepath.Join(root, "planind.go"))
 	writeFile(t, filepath.Join(root, "src", "planind", "index.tsx")) // also a segment hit
 
@@ -119,7 +121,7 @@ func equalSlices(a, b []string) bool {
 // TestSearchHandlesBasenamePathQuery verifies that searching for the basename
 // part of a nested file still surfaces the file (regression guard).
 func TestSearchHandlesBasenamePathQuery(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeFile(t, filepath.Join(root, "src", "planind", "index.tsx"))
 
 	got := Search(root, "index", 50)
@@ -132,7 +134,7 @@ func TestSearchHandlesBasenamePathQuery(t *testing.T) {
 // applies to path-segment matches. Files under node_modules must not surface
 // even when an intermediate segment matches the query.
 func TestSearchSkipsNoiseStillWorks(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeFile(t, filepath.Join(root, "src", "planind", "index.tsx"))          // legitimate hit
 	writeFile(t, filepath.Join(root, "node_modules", "planind", "index.tsx")) // must be skipped
 	writeFile(t, filepath.Join(root, "build", "planind", "index.tsx"))        // skipDirNames

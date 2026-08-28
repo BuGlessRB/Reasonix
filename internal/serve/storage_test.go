@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func readStorage(t *testing.T, base string) map[string]any {
@@ -106,7 +107,7 @@ func TestStorageMoveIsRefusedUntilTheHostGrantsIt(t *testing.T) {
 	srv := httptest.NewServer(s.Handler())
 	defer srv.Close()
 
-	resp := postProvider(t, srv.URL, "/storage/move", `{"root":"state","dir":"`+storagePathLiteral(t.TempDir())+`"}`)
+	resp := postProvider(t, srv.URL, "/storage/move", `{"root":"state","dir":"`+storagePathLiteral(testenv.TempDir(t))+`"}`)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("POST /storage/move without the grant = %d, want 403", resp.StatusCode)
@@ -128,7 +129,7 @@ func TestStorageMoveRunsAndReportsThroughTheListing(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "sessions", "a.jsonl"), make([]byte, 512), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	target := filepath.Join(t.TempDir(), "moved")
+	target := filepath.Join(testenv.TempDir(t), "moved")
 	t.Cleanup(config.InvalidateStorageDirs)
 
 	resp := postProvider(t, srv.URL, "/storage/move", `{"root":"state","dir":"`+storagePathLiteral(target)+`"}`)

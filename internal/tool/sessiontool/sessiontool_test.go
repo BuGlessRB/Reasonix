@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // writeSessionJSONL writes provider.Messages as JSONL to a file, matching
@@ -44,7 +45,7 @@ func runTool(t *testing.T, tl interface {
 // list_sessions tests
 
 func TestListSessions_EmptyDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	tool := NewListSessionsTool(dir)
 	out, err := tool.Execute(context.Background(), json.RawMessage(`{}`))
 	if err != nil {
@@ -56,7 +57,7 @@ func TestListSessions_EmptyDir(t *testing.T) {
 }
 
 func TestToolSchemasAreValidJSON(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	for _, tool := range []struct {
 		name   string
 		schema json.RawMessage
@@ -71,7 +72,7 @@ func TestToolSchemasAreValidJSON(t *testing.T) {
 }
 
 func TestListSessions_OnlyCleanupPending(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "20260618-120000.000000000-test-model.jsonl")
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "hello"},
@@ -91,7 +92,7 @@ func TestListSessions_OnlyCleanupPending(t *testing.T) {
 }
 
 func TestListSessions_SingleSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "20260618-120000.000000000-test-model.jsonl")
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "hello"},
@@ -112,7 +113,7 @@ func TestListSessions_SingleSession(t *testing.T) {
 // read_session tests
 
 func TestReadSession_ValidSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "user hello"},
@@ -131,7 +132,7 @@ func TestReadSession_ValidSession(t *testing.T) {
 }
 
 func TestReadSession_ExcludesSystemPrompt(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleSystem, Content: "SECRET_SYSTEM_PROMPT"},
@@ -148,7 +149,7 @@ func TestReadSession_ExcludesSystemPrompt(t *testing.T) {
 }
 
 func TestReadSession_ExcludesReasoningContent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "hello"},
@@ -164,7 +165,7 @@ func TestReadSession_ExcludesReasoningContent(t *testing.T) {
 }
 
 func TestReadSession_TruncatesLongContent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	longContent := strings.Repeat("a", 5000)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	writeSessionJSONL(t, sessionPath, []provider.Message{
@@ -184,7 +185,7 @@ func TestReadSession_TruncatesLongContent(t *testing.T) {
 }
 
 func TestReadSession_RespectsMaxTurns(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	var msgs []provider.Message
 	for range 10 {
@@ -207,7 +208,7 @@ func TestReadSession_RespectsMaxTurns(t *testing.T) {
 }
 
 func TestReadSession_MaxTurnsZeroNoLimit(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	var msgs []provider.Message
 	for range 60 {
@@ -230,7 +231,7 @@ func TestReadSession_MaxTurnsZeroNoLimit(t *testing.T) {
 }
 
 func TestReadSession_RejectsCleanupPending(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "data"},
@@ -250,7 +251,7 @@ func TestReadSession_RejectsCleanupPending(t *testing.T) {
 }
 
 func TestReadSession_RejectsPathTraversal(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	tool := NewReadSessionTool(dir)
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"session":"../../etc/passwd"}`))
 	if err == nil {
@@ -262,7 +263,7 @@ func TestReadSession_RejectsPathTraversal(t *testing.T) {
 }
 
 func TestReadSession_ToolResultsOmittedByDefault(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "list files"},
@@ -288,7 +289,7 @@ func TestReadSession_ToolResultsOmittedByDefault(t *testing.T) {
 }
 
 func TestReadSession_ToolResultsWithOptIn(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "list files"},
@@ -351,7 +352,7 @@ func TestTruncateRunes(t *testing.T) {
 // TestCleanupPendingContract verifies that our tools use the SAME marker
 // contract as agent.MarkCleanupPending / agent.IsCleanupPending.
 func TestCleanupPendingContract(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	writeSessionJSONL(t, sessionPath, []provider.Message{
 		{Role: provider.RoleUser, Content: "data"},

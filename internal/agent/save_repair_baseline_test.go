@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func seedTwoTurnSession(t *testing.T, path string) {
@@ -22,7 +23,7 @@ func seedTwoTurnSession(t *testing.T, path string) {
 // actually is: neither snapshot contains the other. This pins the mechanism the
 // recovery fork exists for, so a change that stops detecting it fails here.
 func TestTwoWritersOnOneTranscriptDiverge(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	seedTwoTurnSession(t, path)
 
@@ -56,7 +57,7 @@ func TestTwoWritersOnOneTranscriptDiverge(t *testing.T) {
 // unsaved turn arriving again from another Session belongs in the branch that
 // already holds it.
 func TestDivergedWritersShareOneRecoveryBranch(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	seedTwoTurnSession(t, path)
 

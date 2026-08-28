@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/serve"
+	"reasonix/internal/testenv"
 )
 
 func TestRunDispatchesWebCommand(t *testing.T) {
@@ -62,7 +63,7 @@ func TestWebBrowserURLUsesReachableLoopbackAndAuthEntry(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := control.New(control.Options{SessionDir: t.TempDir()})
+			ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t)})
 			t.Cleanup(ctrl.Close)
 			srv := serve.New(ctrl, serve.NewBroadcaster(), tt.cfg)
 			if got := webBrowserURL(srv, tt.addr, ""); got != tt.want {
@@ -89,7 +90,7 @@ func (l *acceptGateListener) Accept() (net.Conn, error) {
 }
 
 func TestRunServeListenerOpensOnlyAfterHTTPResponse(t *testing.T) {
-	ctrl := control.New(control.Options{SessionDir: t.TempDir()})
+	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t)})
 	t.Cleanup(ctrl.Close)
 	srv := serve.New(ctrl, serve.NewBroadcaster(), config.ServeConfig{})
 	raw, err := net.Listen("tcp", "127.0.0.1:0")
@@ -153,7 +154,7 @@ func TestLaunchWebBrowserInvokesOpenerWithResolvedURL(t *testing.T) {
 		opened = raw
 		return nil
 	}
-	ctrl := control.New(control.Options{SessionDir: t.TempDir()})
+	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t)})
 	t.Cleanup(ctrl.Close)
 	srv := serve.New(ctrl, serve.NewBroadcaster(), config.ServeConfig{})
 	got, err := launchWebBrowser(srv, "0.0.0.0:8787", "")
@@ -174,7 +175,7 @@ func TestWebHandoffArgsResumeSameSessionOnDeterministicPort(t *testing.T) {
 }
 
 func TestWebBrowserURLUsesSessionDeepLinkBeforeTokenFragment(t *testing.T) {
-	ctrl := control.New(control.Options{SessionDir: t.TempDir()})
+	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t)})
 	t.Cleanup(ctrl.Close)
 	srv := serve.New(ctrl, serve.NewBroadcaster(), config.ServeConfig{AuthMode: "token", Token: "secret"})
 	got := webBrowserURL(srv, "127.0.0.1:8787", "session with space")

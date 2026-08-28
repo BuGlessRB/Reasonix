@@ -10,7 +10,7 @@ import (
 // an explicit workspace root is honored even inside a git repository, while an
 // empty root still falls back to the nearest git root from the working directory.
 func TestResolveWorkspaceRootExplicitAndGitFallback(t *testing.T) {
-	repo := t.TempDir()
+	repo := robustTempDir(t)
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}

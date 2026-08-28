@@ -6,12 +6,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func prepareTestFileUpdateClaim(t *testing.T) (*UpdateTransaction, string, []string) {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,8 +123,8 @@ func TestClaimPendingFileUpdateRejectsRollbackBackupDrift(t *testing.T) {
 }
 
 func TestClaimPendingFileUpdateRejectsPreparedMissingFileAppearing(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,11 +10,12 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
+	"reasonix/internal/testenv"
 )
 
 func isolateUserConfigHome(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	for _, key := range []string{"REASONIX_HOME", "REASONIX_STATE_HOME", "REASONIX_CACHE_HOME"} {
 		t.Setenv(key, "")
@@ -126,8 +127,8 @@ func TestUserConfigPathHonorsReasonixHome(t *testing.T) {
 }
 
 func TestLoadForRootUsesWindowsHomeFallbackWhenConfigDirUnavailable(t *testing.T) {
-	home := t.TempDir()
-	project := t.TempDir()
+	home := testenv.TempDir(t)
+	project := testenv.TempDir(t)
 
 	oldGOOS := runtimeGOOS
 	oldConfigDir := osUserConfigDir
@@ -171,7 +172,7 @@ func TestRenderTOMLHeaderShowsResolvedConfigPath(t *testing.T) {
 
 func TestWriteRootsForRootExcludesUserConfigDirByDefault(t *testing.T) {
 	isolateUserConfigHome(t)
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	cfg := Default()
 
 	roots := cfg.WriteRootsForRoot(project)
@@ -1372,7 +1373,7 @@ func TestIsolatedHomeDirEmptyByDefault(t *testing.T) {
 }
 
 func TestIsolatedHomeDirReturnsCleanPath(t *testing.T) {
-	raw := filepath.Join(t.TempDir(), "isolated-reasonix")
+	raw := filepath.Join(testenv.TempDir(t), "isolated-reasonix")
 	t.Setenv("REASONIX_HOME", raw)
 	got := IsolatedHomeDir()
 	if filepath.Clean(got) != filepath.Clean(raw) {
@@ -1382,7 +1383,7 @@ func TestIsolatedHomeDirReturnsCleanPath(t *testing.T) {
 
 func TestLegacyOSSupportDirEmptyWhenIsolated(t *testing.T) {
 	isolateUserConfigHome(t)
-	t.Setenv("REASONIX_HOME", filepath.Join(t.TempDir(), "isolated-home"))
+	t.Setenv("REASONIX_HOME", filepath.Join(testenv.TempDir(t), "isolated-home"))
 	if got := legacyOSSupportDir(); got != "" {
 		t.Fatalf("legacyOSSupportDir() = %q, want empty when isolated", got)
 	}
@@ -1390,14 +1391,14 @@ func TestLegacyOSSupportDirEmptyWhenIsolated(t *testing.T) {
 
 func TestLegacyXDGConfigPathsEmptyWhenIsolated(t *testing.T) {
 	isolateUserConfigHome(t)
-	t.Setenv("REASONIX_HOME", filepath.Join(t.TempDir(), "isolated-home"))
+	t.Setenv("REASONIX_HOME", filepath.Join(testenv.TempDir(t), "isolated-home"))
 	if got := legacyXDGConfigPaths(); got != nil {
 		t.Fatalf("legacyXDGConfigPaths() = %v, want nil when isolated", got)
 	}
 }
 
 func TestCacheDirHonorsReasonixHome(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	isolated := filepath.Join(home, "isolated-home")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -1411,7 +1412,7 @@ func TestCacheDirHonorsReasonixHome(t *testing.T) {
 }
 
 func TestCacheDirHonorsReasonixCacheHomeOverReasonixHome(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	cacheHome := filepath.Join(home, "custom-cache")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -1449,7 +1450,7 @@ func TestUserConfigLoadPathNoLegacyFallbackWhenIsolated(t *testing.T) {
 
 func TestCredentialSourceCandidatesSkipHomeEnvWhenIsolated(t *testing.T) {
 	isolateUserConfigHome(t)
-	t.Setenv("REASONIX_HOME", filepath.Join(t.TempDir(), "isolated-home"))
+	t.Setenv("REASONIX_HOME", filepath.Join(testenv.TempDir(t), "isolated-home"))
 
 	// Write a key into the production home .env — it must not appear as a source.
 	if home, err := os.UserHomeDir(); err == nil {
@@ -1504,7 +1505,7 @@ func TestProjectConfigCannotOverrideSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	projectTOML := "[secrets]\nfilter_subprocess_env = true\nprotect_sensitive_files = true\n"
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(projectTOML), 0o644); err != nil {
 		t.Fatal(err)
@@ -1537,7 +1538,7 @@ func TestRenderTOMLPersistsSecretsSection(t *testing.T) {
 		}
 	}
 
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
 		t.Fatal(err)
 	}

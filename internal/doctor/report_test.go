@@ -9,10 +9,11 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestRedactHome(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)        // os.UserHomeDir on unix
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on windows
 	sep := string(os.PathSeparator)
@@ -24,7 +25,7 @@ func TestRedactHome(t *testing.T) {
 	if got, want := redactHome(under), "~"+sep+"projects"+sep+"x"; got != want {
 		t.Fatalf("under home: got %q, want %q", got, want)
 	}
-	outside := filepath.Join(t.TempDir(), "elsewhere") // sibling temp, not under home
+	outside := filepath.Join(testenv.TempDir(t), "elsewhere") // sibling temp, not under home
 	if got := redactHome(outside); got != outside {
 		t.Fatalf("outside home must be unchanged: got %q", got)
 	}
@@ -81,7 +82,7 @@ func TestCollectReportRedactsSecrets(t *testing.T) {
 }
 
 func TestCollectReportDoesNotRequireAPIKey(t *testing.T) {
-	t.Setenv("REASONIX_HOME", filepath.Join(t.TempDir(), "reasonix"))
+	t.Setenv("REASONIX_HOME", filepath.Join(testenv.TempDir(t), "reasonix"))
 	t.Setenv("DEEPSEEK_API_KEY", "")
 
 	cfg := config.Default()
@@ -136,7 +137,7 @@ func TestRenderTextFlagsUnavailableSandboxAsFailClosed(t *testing.T) {
 // resolves to off (Windows), doctor must say so in both the warnings list and
 // the sandbox bash line instead of silently reporting "off".
 func TestCollectFlagsIgnoredEnforceConfig(t *testing.T) {
-	t.Setenv("REASONIX_HOME", filepath.Join(t.TempDir(), "reasonix"))
+	t.Setenv("REASONIX_HOME", filepath.Join(testenv.TempDir(t), "reasonix"))
 
 	cfg := config.Default()
 	cfg.Sandbox.Bash = "enforce"
@@ -164,7 +165,7 @@ func TestHomeIsolationWarningDetectsMismatch(t *testing.T) {
 		t.Skip("account home unavailable")
 	}
 	t.Setenv("REASONIX_HOME", "")
-	serviceHome := filepath.Join(t.TempDir(), "service-home")
+	serviceHome := filepath.Join(testenv.TempDir(t), "service-home")
 	t.Setenv("HOME", serviceHome)
 	t.Setenv("USERPROFILE", serviceHome)
 	got := homeIsolationWarning()
@@ -178,7 +179,7 @@ func TestHomeIsolationWarningDetectsMismatch(t *testing.T) {
 	if strings.Contains(got, serviceHome) || strings.Contains(got, acct.HomeDir) {
 		t.Fatalf("warning leaked a home path: %q", got)
 	}
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	if got := homeIsolationWarning(); got != "" {
 		t.Fatalf("REASONIX_HOME set should silence warning, got %q", got)
 	}

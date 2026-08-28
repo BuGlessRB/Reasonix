@@ -12,10 +12,11 @@ import (
 	"github.com/BurntSushi/toml"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 func TestMigrateLegacyDeepSeekProtocolUserConfigPreservesTOMLAndIsIdempotent(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	raw := `# keep this user comment
@@ -115,7 +116,7 @@ future_provider_field = "untouched"
 }
 
 func TestAutomaticDeepSeekProtocolMigrationReportsMalformedConfigWithoutRewriting(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	raw := `[[providers]]
@@ -151,7 +152,7 @@ command = "C:\Users\reasonix\mcp.exe"
 		t.Fatalf("automatic migration rewrote malformed config:\n%s", next)
 	}
 
-	cfg, err := LoadForRootReadOnly(t.TempDir())
+	cfg, err := LoadForRootReadOnly(testenv.TempDir(t))
 	if err != nil {
 		t.Fatalf("resilient config load: %v", err)
 	}
@@ -165,7 +166,7 @@ command = "C:\Users\reasonix\mcp.exe"
 }
 
 func TestUpgradeDeepSeekProviderProtocolWritesThroughSymlinkAndPreservesMode(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "shared-config.toml")
 	link := filepath.Join(dir, "config.toml")
 	raw := `[[providers]]
@@ -212,7 +213,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 }
 
 func TestMigrateLegacyDeepSeekProtocolUserConfigSerializesConcurrentUpgrades(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	raw := `[[providers]]
@@ -260,7 +261,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 }
 
 func TestDeepSeekProtocolUpgradeAvailabilityUsesUserConfigSource(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(path, []byte("# unrelated user settings\n"), 0o600); err != nil {
@@ -289,7 +290,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 }
 
 func TestMigrateLegacyDeepSeekProtocolPreservesConfigEncoding(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	raw := `# preserve UTF-16 configuration

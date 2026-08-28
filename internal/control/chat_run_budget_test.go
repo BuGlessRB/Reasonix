@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -47,7 +48,7 @@ func (p *wanderingChatProvider) Stream(context.Context, provider.Request) (<-cha
 
 func newChatBudgetController(t *testing.T, exec *agent.Agent) (*Controller, chan event.Event) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sink, done, _ := collectSink()
 	c := New(Options{
 		Runner:      exec,

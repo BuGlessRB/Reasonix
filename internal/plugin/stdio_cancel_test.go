@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -109,7 +110,7 @@ func TestStdioCallCancelReturnsContextCanceled(t *testing.T) {
 // before it can finish the handshake; dropping server requests deadlocks both
 // sides even though notifications themselves are harmless.
 func TestStdioInitializeHandlesNotificationsAndServerPing(t *testing.T) {
-	workspaceRoot := t.TempDir()
+	workspaceRoot := testenv.TempDir(t)
 	serverReads, clientWrites := io.Pipe()
 	clientReads, serverWrites := io.Pipe()
 	t.Cleanup(func() {

@@ -93,7 +93,7 @@ func TestEvidenceArmRemovesTheEvidenceToolSchema(t *testing.T) {
 // A child gets its body as its whole prefix, so a fact the parent was told and
 // it was not is a fact it will spend a round rediscovering — or guess wrong.
 func TestSkillSubagentPromptCarriesTheWorkspaceVCS(t *testing.T) {
-	root := t.TempDir()
+	root := robustTempDir(t)
 	r := &skillSubagents{root: root}
 	sk := skill.Skill{Name: "review", Body: "REVIEW BODY"}
 

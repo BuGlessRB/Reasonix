@@ -12,6 +12,7 @@ import (
 
 	"reasonix/internal/sandbox"
 	"reasonix/internal/sessiontemp"
+	"reasonix/internal/testenv"
 )
 
 func TestBashSharesSessionTempAcrossCalls(t *testing.T) {
@@ -35,14 +36,14 @@ func TestBashSharesSessionTempAcrossCalls(t *testing.T) {
 
 	for _, tc := range shells {
 		t.Run(tc.name, func(t *testing.T) {
-			m := sessiontemp.NewWithRoot(t.TempDir())
+			m := sessiontemp.NewWithRoot(testenv.TempDir(t))
 			m.Retain()
 			defer m.Release()
 
 			b := bash{
 				sb:          sandbox.Spec{Mode: "off"},
 				shell:       tc.shell,
-				workDir:     t.TempDir(),
+				workDir:     testenv.TempDir(t),
 				sessionTemp: m,
 			}
 			// Pin the lazily resolved default so command syntax follows the shell
@@ -99,7 +100,7 @@ func TestBashSchemaUnchangedWithSessionTemp(t *testing.T) {
 
 func TestBashFailsWhenSessionTempUnavailable(t *testing.T) {
 	// Create-failure path: manager is owned but cannot create the directory.
-	m := sessiontemp.NewWithRoot(t.TempDir())
+	m := sessiontemp.NewWithRoot(testenv.TempDir(t))
 	m.Retain()
 	defer m.Release()
 	m.SetMkDirForTest(func(string) (string, error) {
@@ -107,7 +108,7 @@ func TestBashFailsWhenSessionTempUnavailable(t *testing.T) {
 	})
 	b := bash{
 		sb:          sandbox.Spec{Mode: "off"},
-		workDir:     t.TempDir(),
+		workDir:     testenv.TempDir(t),
 		sessionTemp: m,
 	}
 	_, err := b.Execute(context.Background(), argsJSON(t, map[string]any{"command": "true"}))
@@ -119,12 +120,12 @@ func TestBashFailsWhenSessionTempUnavailable(t *testing.T) {
 	}
 
 	// Sealed manager (last owner released) must fail closed, not fall back.
-	sealed := sessiontemp.NewWithRoot(t.TempDir())
+	sealed := sessiontemp.NewWithRoot(testenv.TempDir(t))
 	sealed.Retain()
 	sealed.Release()
 	b2 := bash{
 		sb:          sandbox.Spec{Mode: "off"},
-		workDir:     t.TempDir(),
+		workDir:     testenv.TempDir(t),
 		sessionTemp: sealed,
 	}
 	_, err = b2.Execute(context.Background(), argsJSON(t, map[string]any{"command": "true"}))
@@ -134,7 +135,7 @@ func TestBashFailsWhenSessionTempUnavailable(t *testing.T) {
 }
 
 func TestBashBackgroundLeaseSurvivesRotate(t *testing.T) {
-	m := sessiontemp.NewWithRoot(t.TempDir())
+	m := sessiontemp.NewWithRoot(testenv.TempDir(t))
 	m.Retain()
 	defer m.Release()
 

@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 )
 
 // TestGoalStateWritesAreConcurrencySafe hammers goal-state persistence from many
@@ -17,7 +18,7 @@ import (
 // the new build-under-lock / write-off-lock split has no data race, and that
 // goalWriteMu keeps the on-disk file from being torn by interleaved writes.
 func TestGoalStateWritesAreConcurrencySafe(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)

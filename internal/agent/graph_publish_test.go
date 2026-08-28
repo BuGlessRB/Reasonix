@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/ablation"
 	"reasonix/internal/agentgraph"
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -55,7 +56,7 @@ func newProbeFleetOn(t *testing.T, prov *upstreamProbeProvider, arm ablation.Set
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})
 	return NewFleetTool(NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(store, t.TempDir(), "base", "high").
+		WithTranscripts(store, testenv.TempDir(t), "base", "high").
 		WithScheduler(sched).
 		WithAblation(arm))
 }
@@ -143,7 +144,7 @@ func TestFleetGraphRecordsTheBranchAFailureKilled(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})
 	task := NewTaskTool(&fleetAPIErrorProvider{status: 429}, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(mustSubagentStore(t), t.TempDir(), "base", "high").
+		WithTranscripts(mustSubagentStore(t), testenv.TempDir(t), "base", "high").
 		WithScheduler(NewSubagentScheduler(3, 3))
 	ctx := WithParentSession(withCallContext(context.Background(), "fleet-call", rec, nil, false), "skip-parent")
 
@@ -165,7 +166,7 @@ func TestFleetGraphRecordsTheBranchAFailureKilled(t *testing.T) {
 // item runs nothing and emits no tool events at all, so the external node and
 // its edge are the only record that the work was not paid for twice.
 func TestFleetGraphShowsAdoptedWorkAsExternal(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := mustSubagentStore(t)
 	first := newAdoptionFleet(t, store, root, &upstreamProbeProvider{answer: "ARTIFACT-42"})
 	out, err := first.Execute(adoptionCtx(event.Discard), json.RawMessage(fleetGraphSeedTasks))

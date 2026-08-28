@@ -12,7 +12,7 @@ import (
 func builtToolNames(t *testing.T, set ablation.Set) map[string]bool {
 	t.Helper()
 	ctrl, err := Build(context.Background(), Options{
-		SessionDir: filepath.Join(t.TempDir(), "sessions"),
+		SessionDir: filepath.Join(robustTempDir(t), "sessions"),
 		TokenMode:  TokenModeFull,
 		Sink:       event.Discard,
 		Ablation:   set,

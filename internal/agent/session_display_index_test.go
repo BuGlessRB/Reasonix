@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // displayIndexTestMessages builds a multi-turn transcript exercising every
@@ -66,7 +67,7 @@ func TestBuildSessionDisplayIndexRoundTrip(t *testing.T) {
 		t.Fatalf("transcript_size = %d, want %d", idx.TranscriptSize, displayIndexTranscriptSize(t, msgs))
 	}
 
-	path := filepath.Join(t.TempDir(), "session.display-index.json")
+	path := filepath.Join(testenv.TempDir(t), "session.display-index.json")
 	if err := WriteSessionDisplayIndex(path, idx); err != nil {
 		t.Fatalf("WriteSessionDisplayIndex: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestBuildSessionDisplayIndexRoundTrip(t *testing.T) {
 
 func TestSessionDisplayIndexOffsetsMatchTranscript(t *testing.T) {
 	msgs := displayIndexTestMessages()
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	if err := writeSessionMessages(path, msgs); err != nil {
 		t.Fatalf("writeSessionMessages: %v", err)
 	}
@@ -146,7 +147,7 @@ func TestSessionDisplayIndexOffsetsMatchTranscript(t *testing.T) {
 }
 
 func TestSessionDisplayIndexIncrementalAppend(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := base.SaveSnapshot(path); err != nil {
@@ -200,7 +201,7 @@ func TestSessionDisplayIndexIncrementalAppend(t *testing.T) {
 }
 
 func TestSessionDisplayIndexRewriteInvalidates(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -243,7 +244,7 @@ func TestSessionDisplayIndexRewriteInvalidates(t *testing.T) {
 
 func TestScanSessionDisplayIndexParity(t *testing.T) {
 	msgs := displayIndexTestMessages()
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	if err := writeSessionMessages(path, msgs); err != nil {
 		t.Fatalf("writeSessionMessages: %v", err)
 	}
@@ -280,7 +281,7 @@ func TestScanSessionDisplayIndexParity(t *testing.T) {
 }
 
 func TestScanSessionDisplayIndexRejectsUnboundedLine(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "oversized.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "oversized.jsonl")
 	// Keep the payload syntactically irrelevant: the scanner must reject the
 	// record before json.Unmarshal gets a chance to materialize it.
 	if err := os.WriteFile(path, append(make([]byte, sessionDisplayIndexMaxLineBytes+1), '\n'), 0o600); err != nil {
@@ -292,7 +293,7 @@ func TestScanSessionDisplayIndexRejectsUnboundedLine(t *testing.T) {
 }
 
 func TestLoadSessionDisplayIndexCorrupt(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	truncated := filepath.Join(dir, "truncated.display-index.json")
 	if err := os.WriteFile(truncated, []byte(`{"schema_version":1,"revision":`), 0o600); err != nil {
 		t.Fatalf("WriteFile truncated: %v", err)
@@ -324,7 +325,7 @@ func TestLoadSessionDisplayIndexCorrupt(t *testing.T) {
 }
 
 func TestRepairSessionDisplayReadModelFromAuthoritativeEventLog(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "repair.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "repair.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -422,7 +423,7 @@ func TestWriteSessionDisplayIndexPermissions(t *testing.T) {
 	if idx == nil {
 		t.Fatal("BuildSessionDisplayIndex returned nil")
 	}
-	path := filepath.Join(t.TempDir(), "session.display-index.json")
+	path := filepath.Join(testenv.TempDir(t), "session.display-index.json")
 	if err := WriteSessionDisplayIndex(path, idx); err != nil {
 		t.Fatalf("WriteSessionDisplayIndex: %v", err)
 	}

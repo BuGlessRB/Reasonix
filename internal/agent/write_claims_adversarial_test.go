@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"reasonix/internal/evidence"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -16,7 +17,7 @@ import (
 // out-of-claim file at the root, plus a write_file bound to the claim.
 func boundWriterFixture(t *testing.T) (root string, writer tool.Tool, inner *recordingWriter) {
 	t.Helper()
-	root = t.TempDir()
+	root = testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Join(root, "auth"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +68,7 @@ func TestWriteClaimBlocksParentTraversal(t *testing.T) {
 // move_file has two path arguments; a destination outside the claim is still an
 // escape even when the source is legitimately inside it.
 func TestWriteClaimChecksMoveDestination(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Join(root, "auth"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func TestWriteClaimChecksMoveDestination(t *testing.T) {
 
 // A writer the host cannot path-scope is dropped, never silently trusted.
 func TestWriteClaimDropsUnbindableWriters(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, err := NormalizeWritePaths(root, []string{"."})
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +117,7 @@ func TestWriteClaimDropsUnbindableWriters(t *testing.T) {
 // Layer 5: even if a write reaches the workspace through a surface the claim
 // could not bind, the host reports it to the parent rather than staying silent.
 func TestClaimViolationsSurfaceOutOfClaimMutations(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, err := NormalizeWritePaths(root, []string{"auth"})
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +140,7 @@ func TestClaimViolationsSurfaceOutOfClaimMutations(t *testing.T) {
 // deliberately enforces nothing inside the workspace for it. This test pins the
 // real semantics so the SPEC claim stays honest.
 func TestUndeclaredWriterHasNoIntraWorkspaceEnforcement(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	whole, err := WholeWorkspaceWriteClaim(root)
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +156,7 @@ func TestUndeclaredWriterHasNoIntraWorkspaceEnforcement(t *testing.T) {
 	}
 	// It still catches an escape out of the workspace entirely.
 	outside := evidence.ChildEvidenceSummary{Receipts: []evidence.Receipt{
-		{ToolName: "write_file", Success: true, Mutation: true, Paths: []string{filepath.Join(t.TempDir(), "elsewhere.go")}},
+		{ToolName: "write_file", Success: true, Mutation: true, Paths: []string{filepath.Join(testenv.TempDir(t), "elsewhere.go")}},
 	}}
 	if got := claimViolations(outside, whole); len(got) != 1 {
 		t.Fatalf("violations = %v, want the out-of-workspace write flagged", got)

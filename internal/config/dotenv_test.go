@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 func TestLoadDotEnvDoesNotImportProjectOrHomeEnv(t *testing.T) {
-	cwd := t.TempDir()
-	home := t.TempDir()
+	cwd := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 
 	if err := os.WriteFile(filepath.Join(cwd, ".env"), []byte("KEY_CWD=from_cwd\nKEY_SHARED=cwd_wins\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -50,8 +51,8 @@ func TestLoadDotEnvDoesNotImportProjectOrHomeEnv(t *testing.T) {
 // reasonix-owned credentials file under Reasonix home — is loaded from any
 // working directory and wins over a project ./.env on a shared key.
 func TestLoadDotEnvReadsGlobalCredentials(t *testing.T) {
-	cwd := t.TempDir()
-	cfgHome := t.TempDir()
+	cwd := testenv.TempDir(t)
+	cfgHome := testenv.TempDir(t)
 
 	t.Chdir(cwd)
 	t.Setenv("HOME", cfgHome)
@@ -90,7 +91,7 @@ func TestLoadDotEnvReadsGlobalCredentials(t *testing.T) {
 }
 
 func TestCredentialEnvNamesIncludesUnconfiguredStoredKeys(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", filepath.Join(home, "reasonix-home"))
 
 	credentialPath := UserCredentialsPath()
@@ -111,7 +112,7 @@ func TestCredentialEnvNamesIncludesUnconfiguredStoredKeys(t *testing.T) {
 }
 
 func TestLoadDotEnvDecodesGB18030Credentials(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("REASONIX_HOME", filepath.Join(home, "reasonix-home"))
@@ -134,8 +135,8 @@ func TestLoadDotEnvDecodesGB18030Credentials(t *testing.T) {
 }
 
 func TestLoadForRootExpandsPluginAuthFromProjectDotEnv(t *testing.T) {
-	project := t.TempDir()
-	cfgHome := t.TempDir()
+	project := testenv.TempDir(t)
+	cfgHome := testenv.TempDir(t)
 
 	t.Setenv("HOME", cfgHome)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
@@ -177,8 +178,8 @@ func TestLoadForRootExpandsPluginAuthFromProjectDotEnv(t *testing.T) {
 }
 
 func TestProjectDotEnvUsesDotenvSyntax(t *testing.T) {
-	project := t.TempDir()
-	cfgHome := t.TempDir()
+	project := testenv.TempDir(t)
+	cfgHome := testenv.TempDir(t)
 
 	t.Setenv("HOME", cfgHome)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
@@ -217,7 +218,7 @@ func TestProjectDotEnvUsesDotenvSyntax(t *testing.T) {
 }
 
 func TestDotEnvFileWarningsReportDuplicateKeysWithoutValues(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".env")
+	path := filepath.Join(testenv.TempDir(t), ".env")
 	if err := os.WriteFile(path, []byte("TOKEN=secret-one\nOTHER=ok\nexport TOKEN='secret two'\nOTHER=last\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +243,7 @@ func TestDotEnvFileWarningsReportDuplicateKeysWithoutValues(t *testing.T) {
 }
 
 func TestDotEnvFileFilteredPreservesProjectScopeRules(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".env")
+	path := filepath.Join(testenv.TempDir(t), ".env")
 	if err := os.WriteFile(path, []byte("PLUGIN_TOKEN=project\nREASONIX_HOME=blocked\nHOME=blocked\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -263,9 +264,9 @@ func TestDotEnvFileFilteredPreservesProjectScopeRules(t *testing.T) {
 }
 
 func TestLoadForRootScopesProjectDotEnvPerWorkspace(t *testing.T) {
-	home := t.TempDir()
-	projectA := t.TempDir()
-	projectB := t.TempDir()
+	home := testenv.TempDir(t)
+	projectA := testenv.TempDir(t)
+	projectB := testenv.TempDir(t)
 
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
@@ -318,8 +319,8 @@ func TestLoadForRootScopesProjectDotEnvPerWorkspace(t *testing.T) {
 }
 
 func TestLoadForRootFiltersProjectDotEnvControlVars(t *testing.T) {
-	home := t.TempDir()
-	project := t.TempDir()
+	home := testenv.TempDir(t)
+	project := testenv.TempDir(t)
 	redirect := filepath.Join(project, "state")
 
 	t.Setenv("HOME", home)
@@ -372,8 +373,8 @@ func TestLoadForRootFiltersProjectDotEnvControlVars(t *testing.T) {
 }
 
 func TestLoadForRootResolvesProviderCredentialsOverInheritedEnv(t *testing.T) {
-	project := t.TempDir()
-	cfgHome := t.TempDir()
+	project := testenv.TempDir(t)
+	cfgHome := testenv.TempDir(t)
 	key := "KEY_PROVIDER_GLOBAL_PRIORITY"
 
 	t.Setenv("HOME", cfgHome)
@@ -422,8 +423,8 @@ api_key_env = "`+key+`"
 }
 
 func TestLoadForRootIgnoresProjectProviderEnvAndInheritedEnv(t *testing.T) {
-	project := t.TempDir()
-	cfgHome := t.TempDir()
+	project := testenv.TempDir(t)
+	cfgHome := testenv.TempDir(t)
 	key := "KEY_PROVIDER_PROJECT_PRIORITY"
 
 	t.Setenv("HOME", cfgHome)
@@ -465,8 +466,8 @@ api_key_env = "`+key+`"
 }
 
 func TestResolveCredentialGlobalFirstDoesNotMutateProjectEnv(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
@@ -501,7 +502,7 @@ func TestResolveCredentialGlobalFirstDoesNotMutateProjectEnv(t *testing.T) {
 }
 
 func TestCredentialResolverCachesGlobalFirstLookups(t *testing.T) {
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	key := "KEY_SETTINGS_CACHE"
 	calls := 0
 	stubStoredCredentialValueForTest(t, func(got string) (string, CredentialSource, bool) {
@@ -537,8 +538,8 @@ func stubStoredCredentialValueForTest(t *testing.T, fn func(string) (string, Cre
 }
 
 func TestResolveCredentialSourceShowsCredentialsShadowingProjectEnv(t *testing.T) {
-	cwd := t.TempDir()
-	cfgHome := t.TempDir()
+	cwd := testenv.TempDir(t)
+	cfgHome := testenv.TempDir(t)
 
 	t.Chdir(cwd)
 	t.Setenv("HOME", cfgHome)
@@ -582,8 +583,8 @@ func TestResolveCredentialSourceShowsCredentialsShadowingProjectEnv(t *testing.T
 }
 
 func TestResolveCredentialSourceShowsCredentialsShadowingEmptyProjectEnv(t *testing.T) {
-	cwd := t.TempDir()
-	cfgHome := t.TempDir()
+	cwd := testenv.TempDir(t)
+	cfgHome := testenv.TempDir(t)
 
 	t.Chdir(cwd)
 	t.Setenv("HOME", cfgHome)
@@ -626,8 +627,8 @@ func TestResolveCredentialSourceShowsCredentialsShadowingEmptyProjectEnv(t *test
 }
 
 func TestResolveCredentialSourceShowsCredentialsBeforeHomeEnv(t *testing.T) {
-	cwd := t.TempDir()
-	cfgHome := t.TempDir()
+	cwd := testenv.TempDir(t)
+	cfgHome := testenv.TempDir(t)
 
 	t.Chdir(cwd)
 	t.Setenv("HOME", cfgHome)
@@ -665,7 +666,7 @@ func TestResolveCredentialSourceShowsCredentialsBeforeHomeEnv(t *testing.T) {
 }
 
 func TestStoreCredentialLinesFileMode(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -693,8 +694,8 @@ func TestStoreCredentialLinesFileMode(t *testing.T) {
 }
 
 func TestUserCredentialsPathIgnoresReasonixStateHome(t *testing.T) {
-	home := t.TempDir()
-	state := t.TempDir()
+	home := testenv.TempDir(t)
+	state := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -711,7 +712,7 @@ func TestUserCredentialsPathIgnoresReasonixStateHome(t *testing.T) {
 }
 
 func TestRemoveCredentialMarksClearedAndSetRemovesMarker(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -742,7 +743,7 @@ func TestRemoveCredentialMarksClearedAndSetRemovesMarker(t *testing.T) {
 }
 
 func TestCredentialStoreRevisionChangesForSameLengthReplacement(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -765,7 +766,7 @@ func TestCredentialStoreRevisionChangesForSameLengthReplacement(t *testing.T) {
 }
 
 func TestSetCredentialIfRevisionRejectsStaleWriter(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -787,7 +788,7 @@ func TestSetCredentialIfRevisionRejectsStaleWriter(t *testing.T) {
 }
 
 func TestSetCredentialIfRevisionAppliesCurrentWriter(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -806,7 +807,7 @@ func TestSetCredentialIfRevisionAppliesCurrentWriter(t *testing.T) {
 }
 
 func TestStoreCredentialLinesRejectsUnsafeFileLines(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -833,7 +834,7 @@ func TestStoreCredentialLinesRejectsUnsafeFileLines(t *testing.T) {
 }
 
 func TestStoreCredentialLinesParsesDotenvQuotes(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -856,7 +857,7 @@ func TestStoreCredentialLinesParsesDotenvQuotes(t *testing.T) {
 }
 
 func TestSetCredentialRejectsInvalidInput(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -875,7 +876,7 @@ func TestSetCredentialRejectsInvalidInput(t *testing.T) {
 
 func TestProjectConfigCannotOverrideCredentialStoreMode(t *testing.T) {
 	home := isolateUserConfigHome(t)
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "")
 	os.Unsetenv("REASONIX_CREDENTIALS_STORE")
 	requireTestPathWithin(t, home, UserConfigPath())
@@ -901,7 +902,7 @@ func TestProjectConfigCannotOverrideCredentialStoreMode(t *testing.T) {
 // TestLoadDotEnvGlobalCredentialsOverrideEnv confirms Reasonix-owned global
 // credentials beat inherited environment variables.
 func TestLoadDotEnvGlobalCredentialsOverrideEnv(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)

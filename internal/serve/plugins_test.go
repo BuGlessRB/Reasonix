@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 // pluginCtl is the controller half these routes touch: where a source path is
@@ -38,9 +39,9 @@ func (c *pluginCtl) DisconnectMCPServer(name string) bool {
 // bound to a controller whose workspace is a throwaway directory.
 func pluginHome(t *testing.T) (string, *pluginCtl, string) {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	ctl := &pluginCtl{root: t.TempDir()}
+	ctl := &pluginCtl{root: testenv.TempDir(t)}
 	srv := httptest.NewServer(New(ctl, NewBroadcaster(), config.ServeConfig{}).Handler())
 	t.Cleanup(srv.Close)
 	return home, ctl, srv.URL
@@ -102,7 +103,7 @@ func decodeInstallSource(t *testing.T, resp *http.Response) map[string]any {
 
 func TestPluginPlanWritesNothing(t *testing.T) {
 	home, _, base := pluginHome(t)
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writePluginSource(t, src)
 
 	resp := postJSON(t, base+"/plugins/plan", map[string]any{"source": src})
@@ -136,7 +137,7 @@ func TestPluginPlanWritesNothing(t *testing.T) {
 
 func TestPluginInstallListsItsContributions(t *testing.T) {
 	_, _, base := pluginHome(t)
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writePluginSource(t, src)
 
 	resp := postJSON(t, base+"/plugins/install", map[string]any{"source": src})
@@ -172,7 +173,7 @@ func TestPluginInstallListsItsContributions(t *testing.T) {
 // is why there is no third endpoint. What it must not do is leave two rows.
 func TestPluginUpdateReplacesInPlace(t *testing.T) {
 	_, _, base := pluginHome(t)
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writePluginSource(t, src)
 	postJSON(t, base+"/plugins/install", map[string]any{"source": src})
 
@@ -204,7 +205,7 @@ func TestPluginUpdateReplacesInPlace(t *testing.T) {
 
 func TestPluginEnabledPersists(t *testing.T) {
 	home, _, base := pluginHome(t)
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writePluginSource(t, src)
 	postJSON(t, base+"/plugins/install", map[string]any{"source": src})
 
@@ -234,7 +235,7 @@ func TestPluginEnabledRefusesUnknownName(t *testing.T) {
 
 func TestPluginRemove(t *testing.T) {
 	home, ctl, base := pluginHome(t)
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writePluginSource(t, src)
 	postJSON(t, base+"/plugins/install", map[string]any{"source": src})
 
@@ -268,7 +269,7 @@ func TestPluginRemove(t *testing.T) {
 
 func TestPluginExportStripsCredentials(t *testing.T) {
 	_, _, base := pluginHome(t)
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writePluginSource(t, src)
 	writePluginFile(t, filepath.Join(src, ".mcp.json"),
 		`{"mcpServers":{"docs":{"command":"docs","env":{"TOKEN":"sk-live-1"}}}}`)

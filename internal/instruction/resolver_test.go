@@ -5,11 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestResolveKeepsMostSpecificSourceForExactDuplicate(t *testing.T) {
-	root := t.TempDir()
-	user := t.TempDir()
+	root := testenv.TempDir(t)
+	user := testenv.TempDir(t)
 	mustWriteInstruction(t, filepath.Join(user, "AGENTS.md"), "Always run tests.")
 	mustWriteInstruction(t, filepath.Join(root, "AGENTS.md"), "Always run tests.")
 
@@ -23,8 +25,8 @@ func TestResolveKeepsMostSpecificSourceForExactDuplicate(t *testing.T) {
 }
 
 func TestResolveDuplicateReplacementPreservesPrecedenceOrder(t *testing.T) {
-	root := t.TempDir()
-	user := t.TempDir()
+	root := testenv.TempDir(t)
+	user := testenv.TempDir(t)
 	mustWriteInstruction(t, filepath.Join(user, "REASONIX.md"), "duplicate")
 	mustWriteInstruction(t, filepath.Join(user, "AGENTS.md"), "unique global")
 	mustWriteInstruction(t, filepath.Join(root, "AGENTS.md"), "duplicate")
@@ -45,7 +47,7 @@ func TestResolveDuplicateReplacementPreservesPrecedenceOrder(t *testing.T) {
 }
 
 func TestResolveKeepsDistinctConventionFilesInDeterministicOrder(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mustWriteInstruction(t, filepath.Join(root, "REASONIX.md"), "Reasonix rule")
 	mustWriteInstruction(t, filepath.Join(root, "AGENTS.md"), "Portable rule")
 	mustWriteInstruction(t, filepath.Join(root, "CLAUDE.md"), "Claude-compatible rule")
@@ -62,7 +64,7 @@ func TestResolveKeepsDistinctConventionFilesInDeterministicOrder(t *testing.T) {
 }
 
 func TestResolveAppliesOnlyWorkspaceToTargetAncestorChain(t *testing.T) {
-	parent := t.TempDir()
+	parent := testenv.TempDir(t)
 	root := filepath.Join(parent, "repo")
 	target := filepath.Join(root, "services", "api")
 	sibling := filepath.Join(root, "services", "web")
@@ -95,8 +97,8 @@ func TestResolveAppliesOnlyWorkspaceToTargetAncestorChain(t *testing.T) {
 }
 
 func TestResolveImportsAreProvenancedDeduplicatedAndConfined(t *testing.T) {
-	root := t.TempDir()
-	outside := t.TempDir()
+	root := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	mustWriteInstruction(t, filepath.Join(root, "shared.md"), "SHARED RULE")
 	mustWriteInstruction(t, filepath.Join(root, "a.md"), "A\n@shared.md")
 	mustWriteInstruction(t, filepath.Join(root, "b.md"), "B\n@shared.md")
@@ -132,7 +134,7 @@ func TestResolveImportsAreProvenancedDeduplicatedAndConfined(t *testing.T) {
 // Expanding it once per importer put three copies of one body in the
 // cache-stable prefix, which is paid on every request of every session.
 func TestResolveExpandsAFileSharedBySeveralDocumentsOnce(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	const rule = "SINGLE SOURCE OF TRUTH"
 	mustWriteInstruction(t, filepath.Join(root, "REASONIX.md"), rule)
 	mustWriteInstruction(t, filepath.Join(root, "AGENTS.md"), "AGENTS HEADER\n@REASONIX.md")
@@ -156,7 +158,7 @@ func TestResolveExpandsAFileSharedBySeveralDocumentsOnce(t *testing.T) {
 }
 
 func TestResolveUserInstructionsImportTrustedConventionRoots(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows.
 	userDir := filepath.Join(home, ".reasonix")
@@ -180,7 +182,7 @@ func TestResolveUserInstructionsImportTrustedConventionRoots(t *testing.T) {
 }
 
 func TestResolveProjectInstructionsCannotImportUserConventionRoots(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows.
 	root := filepath.Join(home, "repo")
@@ -197,7 +199,7 @@ func TestResolveProjectInstructionsCannotImportUserConventionRoots(t *testing.T)
 }
 
 func TestResolveUserInstructionsRejectArbitraryHomeAndConventionSymlinkEscape(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows.
 	userDir := filepath.Join(home, ".reasonix")
@@ -211,7 +213,7 @@ func TestResolveUserInstructionsRejectArbitraryHomeAndConventionSymlinkEscape(t 
 	}
 	mustWriteInstruction(t, filepath.Join(userDir, "REASONIX.md"), "@~/secret.md\n@~/.agents/linked.md")
 
-	got := Resolve(ResolveOptions{WorkspaceRoot: t.TempDir(), TargetDir: t.TempDir(), UserDir: userDir})
+	got := Resolve(ResolveOptions{WorkspaceRoot: testenv.TempDir(t), TargetDir: testenv.TempDir(t), UserDir: userDir})
 	if strings.Contains(documentBodies(got.Documents), "HOME SECRET") {
 		t.Fatalf("arbitrary home content entered instructions: %+v", got)
 	}
@@ -225,8 +227,8 @@ func TestResolveUserInstructionsRejectArbitraryHomeAndConventionSymlinkEscape(t 
 }
 
 func TestResolveRejectsDirectInstructionSymlinkOutsideBoundary(t *testing.T) {
-	root := t.TempDir()
-	outside := t.TempDir()
+	root := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	mustWriteInstruction(t, filepath.Join(outside, "private.md"), "MACHINE-LOCAL SECRET")
 	if err := os.Symlink(filepath.Join(outside, "private.md"), filepath.Join(root, "AGENTS.md")); err != nil {
 		t.Skipf("symlink unsupported: %v", err)
@@ -245,7 +247,7 @@ func TestResolveRejectsDirectInstructionSymlinkOutsideBoundary(t *testing.T) {
 }
 
 func TestResolveAllowsDirectInstructionSymlinkWithinBoundary(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	target := filepath.Join(root, "docs", "agent-rules.md")
 	mustWriteInstruction(t, target, "Run the focused tests.")
 	if err := os.Symlink(target, filepath.Join(root, "AGENTS.md")); err != nil {
@@ -272,8 +274,8 @@ func TestInstructionBlockIsStableAcrossWorkspaceRoots(t *testing.T) {
 		return Block(Resolve(ResolveOptions{WorkspaceRoot: root, TargetDir: target, UserDir: user}).Documents)
 	}
 
-	firstRoot := t.TempDir()
-	secondRoot := t.TempDir()
+	firstRoot := testenv.TempDir(t)
+	secondRoot := testenv.TempDir(t)
 	first := resolve(firstRoot)
 	second := resolve(secondRoot)
 	if first != second {
@@ -292,7 +294,7 @@ func TestInstructionBlockIsStableAcrossWorkspaceRoots(t *testing.T) {
 }
 
 func TestInstructionBlockDerivesWorkspaceRootFromNestedDocument(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	target := filepath.Join(root, "services", "api")
 	mustWriteInstruction(t, filepath.Join(target, "AGENTS.md"), "Run API tests first.")
 

@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // TestValidatePathSegment exhaustively covers the segment validator that guards
@@ -194,7 +195,7 @@ func TestStartForSession_AcceptsValidInput(t *testing.T) {
 // directories come from the trusted transcript path bound by the store layer.
 // See #6932.
 func TestStartForSession_AcceptsSetActiveSessionPathDir(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sessionPath := filepath.Join(root, "a.jsonl")
 
 	m := NewManager(event.Discard)

@@ -9,10 +9,11 @@ import (
 	"testing"
 
 	"reasonix/internal/evidence"
+	"reasonix/internal/testenv"
 )
 
 func TestObservationNamesWhatAnOpaqueCommandTouched(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	edited := filepath.Join(dir, "parse.go")
 	scratch := filepath.Join(dir, "probe.go")
 	if err := os.WriteFile(edited, []byte("before\n"), 0o644); err != nil {
@@ -49,7 +50,7 @@ func TestObservationNamesWhatAnOpaqueCommandTouched(t *testing.T) {
 // A call that changed nothing among the watched paths may still have changed
 // something outside them, so it must not be downgraded to "changed nothing".
 func TestObservationNeverDowngradesAnUnknownCall(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	quiet := filepath.Join(dir, "untouched.go")
 	if err := os.WriteFile(quiet, []byte("x\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
@@ -68,7 +69,7 @@ func TestObservationNeverDowngradesAnUnknownCall(t *testing.T) {
 // The investigation shape: a scratch file written, used, and removed leaves
 // nothing to verify, while an edit that is still on disk does.
 func TestBaselineIgnoresScratchFilesTheTurnCleanedUp(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	scratch := filepath.Join(dir, "zz_probe.go")
 	kept := filepath.Join(dir, "stats.go")
 
@@ -100,7 +101,7 @@ func TestBaselineIgnoresScratchFilesTheTurnCleanedUp(t *testing.T) {
 // path later becomes unreadable: the host only vouches for what it watched
 // appear.
 func TestBaselineKeepsWritesItDidNotWatchCreate(t *testing.T) {
-	gone := filepath.Join(t.TempDir(), "never-existed.go")
+	gone := filepath.Join(testenv.TempDir(t), "never-existed.go")
 	edit := evidence.Receipt{
 		ToolName: "edit_file", Success: true, Write: true, Mutation: true,
 		MutationEvidence: evidence.MutationProven,
@@ -130,7 +131,7 @@ func TestObservedPathsSurviveReceiptRoundTrip(t *testing.T) {
 // used, and is removed. Watching the top level is what lets the host see both
 // halves, so the cleanup does not read as an unverified change.
 func TestBuildArtifactCreatedAndRemovedLeavesNothingBehind(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	artifact := filepath.Join(dir, "tally-bin")
 	ledger := evidence.NewLedger()
 
@@ -163,7 +164,7 @@ func TestBuildArtifactCreatedAndRemovedLeavesNothingBehind(t *testing.T) {
 
 // Removing a file the turn did not create is the change, not a cleanup.
 func TestRemovingAPreexistingFileStillCounts(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	victim := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(victim, []byte("k: v\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
@@ -186,14 +187,14 @@ func TestRemovingAPreexistingFileStillCounts(t *testing.T) {
 // the turn owes a verification for. A relative path is the workspace by
 // construction — every file tool resolves it there — and must still count.
 func TestBaselineIgnoresWritesOutsideTheWorkspace(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := &Agent{}
 	a.writeWorkspaceRoot = root
 
 	scratch := evidence.Receipt{
 		ToolName: "write_file", Success: true, Write: true, Mutation: true,
 		MutationEvidence: evidence.MutationProven,
-		Paths:            []string{filepath.Join(t.TempDir(), "probe", "main.go")},
+		Paths:            []string{filepath.Join(testenv.TempDir(t), "probe", "main.go")},
 	}
 	if a.touchedTheWorkspace(scratch) {
 		t.Error("a write outside the workspace was counted as a change to it")
@@ -222,7 +223,7 @@ func TestBaselineIgnoresWritesOutsideTheWorkspace(t *testing.T) {
 // built from a variable — is a mutation until the workspace says otherwise.
 // Asking after the fact is the one question no reading of the command answers.
 func TestUnprovenCallSettlesAgainstTheWorkspace(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, "tally.go"), []byte("package tally\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +275,7 @@ func TestUnprovenCallSettlesAgainstTheWorkspace(t *testing.T) {
 // "nothing changed" cannot be read off a tree that was only half walked.
 func TestAPartialScanSettlesNothing(t *testing.T) {
 	a := &Agent{}
-	a.writeWorkspaceRoot = t.TempDir()
+	a.writeWorkspaceRoot = testenv.TempDir(t)
 	rec := evidence.Receipt{
 		ToolName: "bash", Success: true, Mutation: true,
 		MutationEvidence: evidence.MutationUnknown, Command: "make",
@@ -294,7 +295,7 @@ func TestAPartialScanSettlesNothing(t *testing.T) {
 // The VCS store is not the work product: `git status` alone rewrites the index,
 // and a run that only asked about the tree did not change it.
 func TestTheVCSStoreIsNotTheWorkspace(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := filepath.Join(root, ".git")
 	if err := os.MkdirAll(store, 0o755); err != nil {
 		t.Fatal(err)
@@ -315,7 +316,7 @@ func TestTheVCSStoreIsNotTheWorkspace(t *testing.T) {
 // is about to write to still looks untouched. It must never settle.
 func TestABackgroundJobNeverSettles(t *testing.T) {
 	a := &Agent{}
-	a.writeWorkspaceRoot = t.TempDir()
+	a.writeWorkspaceRoot = testenv.TempDir(t)
 	plan := &toolCallPlan{
 		evidenceName: "bash",
 		evidenceArgs: []byte(`{"command":"make build","run_in_background":true}`),
@@ -336,7 +337,7 @@ func TestOneFileIsWatchedOnceAcrossSpellings(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("only Windows folds path case, so the two spellings are two files elsewhere")
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "Parse.go")
 	if err := os.WriteFile(path, []byte("before\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)

@@ -73,7 +73,7 @@ func writeFile(t *testing.T, path, content string) {
 // whose link is made inside the product.
 func requireSymlinks(t *testing.T) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := os.Symlink(filepath.Join(dir, "target"), filepath.Join(dir, "link")); err != nil {
 		t.Skipf("symlinks unavailable on this machine: %v", err)
 	}
@@ -119,9 +119,9 @@ func (s *stubConnector) connector() MCPConnector {
 // apply: skill paths
 
 func TestApplyLocalSkillRootRegistersPath(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	root := filepath.Join(t.TempDir(), "shared-skills")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	root := filepath.Join(testenv.TempDir(t), "shared-skills")
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -155,9 +155,9 @@ func TestApplyLocalSkillRootRegistersPath(t *testing.T) {
 }
 
 func TestApplyLocalCodexPluginPackage(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	src := filepath.Join(t.TempDir(), "superpowers")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	src := filepath.Join(testenv.TempDir(t), "superpowers")
 	writeFile(t, filepath.Join(src, ".codex-plugin", "plugin.json"), `{
   "name": "superpowers",
   "version": "6.1.0",
@@ -201,9 +201,9 @@ func TestApplyLocalCodexPluginPackage(t *testing.T) {
 }
 
 func TestApplyLocalClaudePluginPackage(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	src := filepath.Join(t.TempDir(), "ui-ux-pro-max")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	src := filepath.Join(testenv.TempDir(t), "ui-ux-pro-max")
 	writeFile(t, filepath.Join(src, ".claude-plugin", "plugin.json"), `{
   "name": "ui-ux-pro-max",
   "version": "2.6.2",
@@ -250,9 +250,9 @@ func TestApplyCopiedPluginPreservesExecutableHookCommand(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX executable bits are not available on Windows")
 	}
-	project := t.TempDir()
-	home := t.TempDir()
-	src := filepath.Join(t.TempDir(), "executable-plugin")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	src := filepath.Join(testenv.TempDir(t), "executable-plugin")
 	writeFile(t, filepath.Join(src, ".claude-plugin", "plugin.json"), `{"name":"executable-plugin"}`)
 	writeFile(t, filepath.Join(src, "hooks", "hooks.json"), `{
   "hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/bin/hook","args":["--hook"]}]}]}
@@ -280,9 +280,9 @@ func TestApplyCopiedPluginPreservesExecutableHookCommand(t *testing.T) {
 }
 
 func TestPlanClaudeCompatibilityReportsAgentsHooksAndMCP(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	src := filepath.Join(t.TempDir(), "claude-compat")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	src := filepath.Join(testenv.TempDir(t), "claude-compat")
 	writeFile(t, filepath.Join(src, ".claude-plugin", "plugin.json"), `{"name":"claude-compat"}`)
 	writeFile(t, filepath.Join(src, "agents", "reviewer.md"), "---\ndescription: Review work\ntools: [Read, Grep]\n---\nReview carefully.")
 	writeFile(t, filepath.Join(src, "hooks", "hooks.json"), `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/bin/critter","args":["--hook"],"async":true}]}]}}`)
@@ -313,18 +313,18 @@ func TestPlanClaudeCompatibilityReportsAgentsHooksAndMCP(t *testing.T) {
 }
 
 func TestPlanClaudePluginWithNoMappedCapabilitiesIsBlocked(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeFile(t, filepath.Join(src, ".claude-plugin", "plugin.json"), `{"name":"empty-claude"}`)
-	resp := execInstall(t, NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: t.TempDir()}), map[string]any{"source": src, "kind": "plugin"})
+	resp := execInstall(t, NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)}), map[string]any{"source": src, "kind": "plugin"})
 	if resp.OK || resp.Status != "blocked" || !strings.Contains(resp.Error, "no compatible capabilities") {
 		t.Fatalf("response = %+v", resp)
 	}
 }
 
 func TestApplyLocalSkillFileCopiesToProject(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	src := filepath.Join(t.TempDir(), "beta.md")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	src := filepath.Join(testenv.TempDir(t), "beta.md")
 	writeFile(t, src, "---\nname: beta\ndescription: Beta helper\n---\nDo beta work.")
 
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
@@ -351,11 +351,11 @@ func TestApplyLocalSkillFileCopiesToProject(t *testing.T) {
 }
 
 func TestApplyLocalSkillFileDoesNotShadowFlatCompatInstall(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	existing := filepath.Join(project, ".reasonix", "skills", "beta.md")
 	writeFile(t, existing, "---\nname: beta\ndescription: Existing beta\n---\nold")
-	src := filepath.Join(t.TempDir(), "beta.md")
+	src := filepath.Join(testenv.TempDir(t), "beta.md")
 	writeFile(t, src, "---\nname: beta\ndescription: New beta\n---\nnew")
 
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
@@ -375,9 +375,9 @@ func TestApplyLocalSkillFileDoesNotShadowFlatCompatInstall(t *testing.T) {
 }
 
 func TestApplyLocalSKILLFileCopiesSiblingResources(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	srcDir := filepath.Join(t.TempDir(), "frontend-design")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	srcDir := filepath.Join(testenv.TempDir(t), "frontend-design")
 	writeFile(t, filepath.Join(srcDir, "SKILL.md"), "---\nname: frontend-design\ndescription: Frontend helper\n---\nSee references/style.md")
 	writeFile(t, filepath.Join(srcDir, "references", "style.md"), "# Style\n\nUse crisp layouts.")
 	writeFile(t, filepath.Join(srcDir, "scripts", "lint.sh"), "#!/bin/sh\nexit 0\n")
@@ -418,8 +418,8 @@ func TestApplyLocalSkillLinkMode(t *testing.T) {
 	// below the assertion on resp.OK, so a machine that cannot make the link
 	// failed on the refusal the tool correctly reported instead of skipping.
 	requireSymlinks(t)
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	src := filepath.Join(project, "local-skills", "gamma.md")
 	writeFile(t, src, "---\nname: gamma\ndescription: Gamma helper\n---\nDo gamma work.")
 
@@ -448,9 +448,9 @@ func TestApplyLocalSkillLinkMode(t *testing.T) {
 }
 
 func TestPlanNestedSkillRootRegistersContainingRoots(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	root := filepath.Join(t.TempDir(), "skill-pack")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	root := filepath.Join(testenv.TempDir(t), "skill-pack")
 	writeFile(t, filepath.Join(root, "top.md"), "---\nname: top\ndescription: Top helper\n---\nbody")
 	writeFile(t, filepath.Join(root, "superpower", "tool-a", "SKILL.md"), "---\nname: tool-a\ndescription: Tool A\n---\nbody")
 	writeFile(t, filepath.Join(root, "superpower", "tool-b", "SKILL.md"), "---\nname: tool-b\ndescription: Tool B\n---\nbody")
@@ -491,9 +491,9 @@ func TestPlanNestedSkillRootRegistersContainingRoots(t *testing.T) {
 }
 
 func TestPlanNestedSkillRootRespectsDepthLimit(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	root := filepath.Join(t.TempDir(), "deep-pack")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	root := filepath.Join(testenv.TempDir(t), "deep-pack")
 	writeFile(t, filepath.Join(root, "one", "two", "three", "deep", "SKILL.md"), "---\nname: deep\ndescription: Deep helper\n---\nbody")
 
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
@@ -514,8 +514,8 @@ func TestApplyLinkSkillRejectsEscape(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("absolute path semantics differ on Windows")
 	}
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 
 	// Synthesize a candidate that points at /etc/passwd by calling the
 	// private helper directly. The link check runs before any disk write.
@@ -529,7 +529,7 @@ func TestApplyLinkSkillRejectsEscape(t *testing.T) {
 		t.Fatal("link under project root should be safe")
 	}
 
-	src := filepath.Join(t.TempDir(), "escape.md")
+	src := filepath.Join(testenv.TempDir(t), "escape.md")
 	writeFile(t, src, "---\nname: escape\ndescription: Escape helper\n---\nbody")
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	resp := execInstall(t, tl, map[string]any{
@@ -577,9 +577,9 @@ func TestParseSkillContentRejectsMalformedFrontmatter(t *testing.T) {
 }
 
 func TestApplyStrictFalseWarnsWhenDescriptionMissing(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	src := filepath.Join(t.TempDir(), "raw.md")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	src := filepath.Join(testenv.TempDir(t), "raw.md")
 	writeFile(t, src, "---\nname: raw\n---\nBody without desc")
 
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
@@ -611,9 +611,9 @@ func TestApplyStrictFalseWarnsWhenDescriptionMissing(t *testing.T) {
 // plan / apply: MCP paths
 
 func TestPlanLocalMCPJSON(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	mcpPath := filepath.Join(t.TempDir(), ".mcp.json")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	mcpPath := filepath.Join(testenv.TempDir(t), ".mcp.json")
 	writeFile(t, mcpPath, `{
   "mcpServers": {
     "fs": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."] },
@@ -657,8 +657,8 @@ func TestPlanLocalMCPJSON(t *testing.T) {
 }
 
 func TestPlanProjectMCPJSONDefaultsProject(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	mcpPath := filepath.Join(project, ".mcp.json")
 	writeFile(t, mcpPath, `{
   "mcpServers": {
@@ -755,9 +755,9 @@ func TestNormalizeTierDefaultBackgroundUnknownBackground(t *testing.T) {
 }
 
 func TestPlanMCPJSONSplitsPastedCommandLine(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	mcpPath := filepath.Join(t.TempDir(), ".mcp.json")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	mcpPath := filepath.Join(testenv.TempDir(t), ".mcp.json")
 	writeFile(t, mcpPath, `{
   "mcpServers": {
     "playwright": { "command": "npx -y @playwright/mcp" }
@@ -809,8 +809,8 @@ func TestPlanMCPJSONRejectsInvalid(t *testing.T) {
 }
 
 func TestApplyRemoteMCPURLConnectsAndPersists(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	stub := &stubConnector{toolCount: 3}
 	tl := NewTool(Options{
 		ProjectRoot: project,
@@ -846,8 +846,8 @@ func TestApplyRemoteMCPURLConnectsAndPersists(t *testing.T) {
 }
 
 func TestApplyRemoteMCPURLDefaultsGlobal(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	stub := &stubConnector{toolCount: 1}
 	tl := NewTool(Options{
 		ProjectRoot: project,
@@ -879,8 +879,8 @@ func TestApplyRemoteMCPURLDefaultsGlobal(t *testing.T) {
 }
 
 func TestApplyMCPRejectsDuplicateByDefault(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	// Seed an existing entry the same way the first install would have.
 	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "dup", Command: "x"}); err != nil {
@@ -910,8 +910,8 @@ func TestApplyMCPRejectsDuplicateByDefault(t *testing.T) {
 }
 
 func TestApplyMCPReplaceOverwritesExisting(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "editable", Command: "old"}); err != nil {
 		t.Fatal(err)
@@ -942,8 +942,8 @@ func TestApplyMCPReplaceOverwritesExisting(t *testing.T) {
 }
 
 func TestApplyMCPReplaceDisconnectsLiveServerBeforeConnect(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "live", Command: "old"}); err != nil {
 		t.Fatal(err)
@@ -995,8 +995,8 @@ func TestApplyMCPReplaceDisconnectsLiveServerBeforeConnect(t *testing.T) {
 }
 
 func TestApplyMCPRollsBackOnSaveFailure(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	configPath := filepath.Join(project, "reasonix.toml")
 	if err := os.WriteFile(configPath, []byte("# valid before connect\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -1046,8 +1046,8 @@ func TestApplyMCPRollsBackOnSaveFailure(t *testing.T) {
 }
 
 func TestApplyConnectFailureDoesNotPersist(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	stub := &stubConnector{failOnName: "broken"}
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home, ConnectMCP: stub.connector()})
 
@@ -1069,8 +1069,8 @@ func TestApplyConnectFailureDoesNotPersist(t *testing.T) {
 }
 
 func TestPackageActionUsesNpx(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	resp := execInstall(t, tl, map[string]any{
 		"source": "@example/mcp-pkg",
@@ -1100,8 +1100,8 @@ func TestPlanURLBlobRewritesToRaw(t *testing.T) {
 }
 
 func TestPlanURLRemoteEndpointAuto(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	resp := execInstall(t, tl, map[string]any{
 		"source": "https://mcp.example.com/mcp",
@@ -1118,8 +1118,8 @@ func TestPlanURLRemoteEndpointAuto(t *testing.T) {
 }
 
 func TestPlanURLRemoteMCPHostAuto(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	resp := execInstall(t, tl, map[string]any{
 		"source": "https://mcp.stripe.com",
@@ -1133,8 +1133,8 @@ func TestPlanURLRemoteMCPHostAuto(t *testing.T) {
 }
 
 func TestPlanURLSSEDefault(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	resp := execInstall(t, tl, map[string]any{
 		"source": "https://example.com/sse/stream",
@@ -1148,8 +1148,8 @@ func TestPlanURLSSEDefault(t *testing.T) {
 }
 
 func TestPlanUnsupportedKindReturnsTypedError(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	raw, _ := json.Marshal(map[string]any{
 		"source": "https://example.com/sse/stream",
@@ -1224,7 +1224,7 @@ func TestParseGitHubRepoSourceRejectsPagesAndUnsafePaths(t *testing.T) {
 }
 
 func TestPluginRootFromCloneRejectsEscapes(t *testing.T) {
-	cloneRoot := t.TempDir()
+	cloneRoot := testenv.TempDir(t)
 	safeRoot := filepath.Join(cloneRoot, "plugins", "demo")
 	if err := os.MkdirAll(safeRoot, 0o755); err != nil {
 		t.Fatal(err)
@@ -1244,7 +1244,7 @@ func TestPluginRootFromCloneRejectsEscapes(t *testing.T) {
 	}
 
 	if runtime.GOOS != "windows" {
-		outside := t.TempDir()
+		outside := testenv.TempDir(t)
 		if err := os.Symlink(outside, filepath.Join(cloneRoot, "linked")); err != nil {
 			t.Fatal(err)
 		}
@@ -1255,8 +1255,8 @@ func TestPluginRootFromCloneRejectsEscapes(t *testing.T) {
 }
 
 func TestPlanGitHubRepoDiscoversMultipleSkills(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1321,8 +1321,8 @@ func TestFetchTextAppliesTimeoutAndUA(t *testing.T) {
 	// Use a context with a tiny deadline to assert timeout behavior. We
 	// can't easily test the UA from inside a HandlerFunc, so we just check
 	// that a cancelled context propagates as ErrSourceUnreadable.
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home}).(*installSourceTool)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -1333,8 +1333,8 @@ func TestFetchTextAppliesTimeoutAndUA(t *testing.T) {
 }
 
 func TestGlobalSkillInstallRootUsesReasonixHome(t *testing.T) {
-	home := t.TempDir()
-	reasonixHome := filepath.Join(t.TempDir(), "rx-home")
+	home := testenv.TempDir(t)
+	reasonixHome := filepath.Join(testenv.TempDir(t), "rx-home")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("REASONIX_HOME", reasonixHome)
@@ -1342,7 +1342,7 @@ func TestGlobalSkillInstallRootUsesReasonixHome(t *testing.T) {
 	userHomeDir = func() (string, error) { return home, nil }
 	t.Cleanup(func() { userHomeDir = oldUserHomeDir })
 
-	tl := NewTool(Options{ProjectRoot: t.TempDir()}).(*installSourceTool)
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t)}).(*installSourceTool)
 	root, err := tl.skillInstallRoot("global")
 	if err != nil {
 		t.Fatalf("skillInstallRoot: %v", err)
@@ -1358,8 +1358,8 @@ func TestFetchTextAuthMapsToErrAuthRequired(t *testing.T) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer srv.Close()
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home, HTTPClient: srv.Client()}).(*installSourceTool)
 	_, err := tl.fetchText(context.Background(), srv.URL)
 	if !errors.Is(err, ErrAuthRequired) {
@@ -1371,7 +1371,7 @@ func TestFetchTextRefusesInternalAddress(t *testing.T) {
 	// SSRF guard: an install source pointed at cloud-metadata / internal IPs must
 	// be refused at dial time, not fetched. These are IP literals so no real
 	// network or DNS is involved — the guard blocks before connecting.
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: t.TempDir()}).(*installSourceTool)
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)}).(*installSourceTool)
 	for _, target := range []string{
 		"http://169.254.169.254/latest/meta-data/", // cloud metadata
 		"http://10.0.0.1/",                         // RFC1918 internal
@@ -1383,8 +1383,8 @@ func TestFetchTextRefusesInternalAddress(t *testing.T) {
 }
 
 func TestPlanMarkdownSkillURL(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("---\nname: remote-skill\ndescription: Remote helper\n---\nUse the remote helper."))
 	}))
@@ -1406,8 +1406,8 @@ func TestPlanMarkdownSkillURL(t *testing.T) {
 // uninstall
 
 func TestUninstallRemovesSkillByName(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	target := filepath.Join(project, ".reasonix", "skills", "doomed.md")
 	writeFile(t, target, "---\nname: doomed\ndescription: Doomed\n---\nbody")
 
@@ -1427,9 +1427,9 @@ func TestUninstallRemovesSkillByName(t *testing.T) {
 }
 
 func TestUninstallRemovesRegisteredSkillRootByContainedSkillName(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	root := filepath.Join(t.TempDir(), "shared-skills")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	root := filepath.Join(testenv.TempDir(t), "shared-skills")
 	writeFile(t, filepath.Join(root, "alpha.md"), "---\nname: alpha\ndescription: Alpha helper\n---\nbody")
 	writeFile(t, filepath.Join(root, "beta.md"), "---\nname: beta\ndescription: Beta helper\n---\nbody")
 
@@ -1462,8 +1462,8 @@ func TestUninstallRemovesRegisteredSkillRootByContainedSkillName(t *testing.T) {
 }
 
 func TestUninstallRemovesMCPAndDisconnects(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "ed", Type: "http", URL: "https://mcp.example.com/mcp"}); err != nil {
 		t.Fatal(err)
@@ -1500,8 +1500,8 @@ func TestUninstallRemovesMCPAndDisconnects(t *testing.T) {
 }
 
 func TestUninstallWithoutScopePrefersProjectSkill(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	projectTarget := filepath.Join(project, ".reasonix", "skills", "dupe.md")
 	globalTarget := filepath.Join(home, ".reasonix", "skills", "dupe.md")
 	writeFile(t, projectTarget, "---\nname: dupe\ndescription: Project\n---\nbody")
@@ -1525,8 +1525,8 @@ func TestUninstallWithoutScopePrefersProjectSkill(t *testing.T) {
 }
 
 func TestUninstallWithoutScopeFallsBackToGlobalMCP(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	name := "global-fallback"
 	cfg := config.LoadForEdit(config.UserConfigPath())
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: name, Type: "http", URL: "https://global.example.com/mcp"}); err != nil {
@@ -1569,8 +1569,8 @@ func TestUninstallWithoutScopeFallsBackToGlobalMCP(t *testing.T) {
 }
 
 func TestUninstallUnknownNameIsBlocked(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	resp := execInstall(t, tl, map[string]any{
 		"op":   "uninstall",
@@ -1582,8 +1582,8 @@ func TestUninstallUnknownNameIsBlocked(t *testing.T) {
 }
 
 func TestUninstallRequiresName(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	raw, _ := json.Marshal(map[string]any{"op": "uninstall"})
 	if _, err := tl.Execute(context.Background(), raw); err == nil {
@@ -1594,9 +1594,9 @@ func TestUninstallRequiresName(t *testing.T) {
 // approval hook
 
 func TestApprovalHookDeniesApply(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	src := filepath.Join(t.TempDir(), "zeta.md")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	src := filepath.Join(testenv.TempDir(t), "zeta.md")
 	writeFile(t, src, "---\nname: zeta\ndescription: Zeta helper\n---\nbody")
 
 	var seen []action
@@ -1626,9 +1626,9 @@ func TestApprovalHookDeniesApply(t *testing.T) {
 }
 
 func TestPlanIDMismatchRefusesApply(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	src := filepath.Join(t.TempDir(), "eta.md")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	src := filepath.Join(testenv.TempDir(t), "eta.md")
 	writeFile(t, src, "---\nname: eta\ndescription: Eta helper\n---\nbody")
 
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
@@ -1752,9 +1752,9 @@ func TestPlanIDUsesResolvedActionScope(t *testing.T) {
 // local executable
 
 func TestPlanLocalExecutableDetected(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	bin := filepath.Join(t.TempDir(), "bin")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	bin := filepath.Join(testenv.TempDir(t), "bin")
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1773,9 +1773,9 @@ func TestPlanLocalExecutableDetected(t *testing.T) {
 }
 
 func TestApplyLocalExecutableHonorsCommandOverride(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	bin := filepath.Join(t.TempDir(), "bin")
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	bin := filepath.Join(testenv.TempDir(t), "bin")
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1876,14 +1876,14 @@ func ExampleNewTool() {
 // capabilities (skills/, commands/ — including nested namespaces) appear in
 // the plan, not only after installation.
 func TestGitHubPluginPlanMatchesApply(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeFile(t, filepath.Join(src, ".claude-plugin", "plugin.json"), `{"name": "pwf", "version": "1.0.0"}`)
 	writeFile(t, filepath.Join(src, "skills", "planner", "SKILL.md"), "---\ndescription: planner\n---\nbody")
 	writeFile(t, filepath.Join(src, "commands", "plan.md"), "---\ndescription: plan\n---\nPlan: $ARGUMENTS")
 	writeFile(t, filepath.Join(src, "commands", "git", "commit.md"), "---\ndescription: commit\n---\nCommit")
 
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	tool := tl.(*installSourceTool)
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
@@ -1923,7 +1923,7 @@ func TestGitHubPluginPlanMatchesApply(t *testing.T) {
 // workflow reported by users: entering a GitHub marketplace root should plan
 // each relative-path plugin, then install all approved entries from one clone.
 func TestGitHubClaudeMarketplacePlansAndAppliesRelativePlugins(t *testing.T) {
-	marketplaceRoot := t.TempDir()
+	marketplaceRoot := testenv.TempDir(t)
 	writeFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), `{
   "name": "legal-tools",
   "owner": {"name": "Legal Team"},
@@ -1937,8 +1937,8 @@ func TestGitHubClaudeMarketplacePlansAndAppliesRelativePlugins(t *testing.T) {
 	writeFile(t, filepath.Join(marketplaceRoot, "plugins", "beta", ".claude-plugin", "plugin.json"), `{"name":"beta-legal","version":"2.0.0"}`)
 	writeFile(t, filepath.Join(marketplaceRoot, "plugins", "beta", "commands", "review.md"), "---\ndescription: review\n---\nReview")
 
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	tool := tl.(*installSourceTool)
 	cloneCalls := 0
@@ -1988,7 +1988,7 @@ func TestGitHubClaudeMarketplacePlansAndAppliesRelativePlugins(t *testing.T) {
 }
 
 func TestGitHubClaudeMarketplaceNameSelectsOnePlugin(t *testing.T) {
-	marketplaceRoot := t.TempDir()
+	marketplaceRoot := testenv.TempDir(t)
 	writeFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), `{
   "name": "legal-tools",
   "plugins": [
@@ -2002,7 +2002,7 @@ func TestGitHubClaudeMarketplaceNameSelectsOnePlugin(t *testing.T) {
 		writeFile(t, filepath.Join(marketplaceRoot, dir, "skills", name, "SKILL.md"), fmt.Sprintf("---\nname: %s\ndescription: Plugin context\n---\nPlugin context", name))
 	}
 
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: t.TempDir()})
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
 	tool := tl.(*installSourceTool)
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() {}, nil
@@ -2018,13 +2018,13 @@ func TestGitHubClaudeMarketplaceNameSelectsOnePlugin(t *testing.T) {
 }
 
 func TestGitHubClaudeMarketplaceRejectsEscapingRelativeSource(t *testing.T) {
-	marketplaceRoot := t.TempDir()
+	marketplaceRoot := testenv.TempDir(t)
 	writeFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), `{
   "name": "unsafe-tools",
   "plugins": [{"name": "escape", "source": "./../escape"}]
 }`)
 
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: t.TempDir()})
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
 	tool := tl.(*installSourceTool)
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() {}, nil
@@ -2040,7 +2040,7 @@ func TestGitHubClaudeMarketplaceRejectsEscapingRelativeSource(t *testing.T) {
 }
 
 func TestGitHubClaudeMarketplaceCleansCloneWhenApprovalIsDenied(t *testing.T) {
-	marketplaceRoot := t.TempDir()
+	marketplaceRoot := testenv.TempDir(t)
 	writeFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), `{
   "name": "one-tool",
   "plugins": [{"name": "alpha", "source": "./alpha"}]
@@ -2050,8 +2050,8 @@ func TestGitHubClaudeMarketplaceCleansCloneWhenApprovalIsDenied(t *testing.T) {
 
 	cleanupCalls := 0
 	tl := NewTool(Options{
-		ProjectRoot: t.TempDir(),
-		HomeDir:     t.TempDir(),
+		ProjectRoot: testenv.TempDir(t),
+		HomeDir:     testenv.TempDir(t),
 		Approval: func(actions []action) error {
 			return errors.New("not approved")
 		},
@@ -2071,8 +2071,8 @@ func TestGitHubClaudeMarketplaceCleansCloneWhenApprovalIsDenied(t *testing.T) {
 }
 
 func TestGitHubClaudeMarketplaceCleansPreparedPinnedEntryWhenLaterEntryFails(t *testing.T) {
-	marketplaceRoot := t.TempDir()
-	externalRoot := t.TempDir()
+	marketplaceRoot := testenv.TempDir(t)
+	externalRoot := testenv.TempDir(t)
 	pinnedSHA := strings.Repeat("a", 40)
 	writeFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), `{
   "name":"mixed-tools",
@@ -2085,7 +2085,7 @@ func TestGitHubClaudeMarketplaceCleansPreparedPinnedEntryWhenLaterEntryFails(t *
 	writeFile(t, filepath.Join(externalRoot, "skills", "external", "SKILL.md"), "---\nname: external\ndescription: Plugin context\n---\nPlugin context")
 
 	mainCleanup, pinnedCleanup := 0, 0
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: t.TempDir()})
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
 	tool := tl.(*installSourceTool)
 	tool.preparePlugin = func(_ context.Context, source, _ string) (string, string, func(), error) {
 		if strings.Contains(source, "acme/external") {
@@ -2109,7 +2109,7 @@ func TestGitHubClaudeMarketplaceCleansPreparedPinnedEntryWhenLaterEntryFails(t *
 // "./"-prefixed ones, while object sources, external URLs, and invalid names
 // skip with a warning instead of failing the whole plan.
 func TestGitHubClaudeMarketplaceAcceptsBarePathsAndSkipsUnsupported(t *testing.T) {
-	marketplaceRoot := t.TempDir()
+	marketplaceRoot := testenv.TempDir(t)
 	writeFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), `{
   "name": "legal-tools",
   "metadata": {"pluginRoot": "plugins"},
@@ -2126,7 +2126,7 @@ func TestGitHubClaudeMarketplaceAcceptsBarePathsAndSkipsUnsupported(t *testing.T
 	writeFile(t, filepath.Join(marketplaceRoot, "plugins", "alpha", "skills", "alpha-legal", "SKILL.md"), "---\nname: alpha-legal\ndescription: Plugin context\n---\nPlugin context")
 	writeFile(t, filepath.Join(marketplaceRoot, "plugins", "beta", "skills", "beta-legal", "SKILL.md"), "---\nname: beta-legal\ndescription: Plugin context\n---\nPlugin context")
 
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: t.TempDir()})
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
 	tool := tl.(*installSourceTool)
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() {}, nil
@@ -2161,7 +2161,7 @@ func TestGitHubClaudeMarketplaceAcceptsBarePathsAndSkipsUnsupported(t *testing.T
 // contract: skipping is only for bulk installs — when the user names exactly
 // one plugin and its source shape is unsupported, the plan must fail loudly.
 func TestGitHubClaudeMarketplaceSelectedUnsupportedSourceFails(t *testing.T) {
-	marketplaceRoot := t.TempDir()
+	marketplaceRoot := testenv.TempDir(t)
 	writeFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), `{
   "name": "legal-tools",
   "plugins": [
@@ -2171,7 +2171,7 @@ func TestGitHubClaudeMarketplaceSelectedUnsupportedSourceFails(t *testing.T) {
 }`)
 	writeFile(t, filepath.Join(marketplaceRoot, "alpha", ".claude-plugin", "plugin.json"), `{"name":"alpha-legal"}`)
 
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: t.TempDir()})
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
 	tool := tl.(*installSourceTool)
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() {}, nil
@@ -2188,8 +2188,8 @@ func TestGitHubClaudeMarketplaceSelectedUnsupportedSourceFails(t *testing.T) {
 }
 
 func TestGitHubClaudeMarketplaceAcceptsPinnedGitHubURLObject(t *testing.T) {
-	marketplaceRoot := t.TempDir()
-	pluginRoot := t.TempDir()
+	marketplaceRoot := testenv.TempDir(t)
+	pluginRoot := testenv.TempDir(t)
 	sha := strings.Repeat("a", 40)
 	writeFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), fmt.Sprintf(`{
   "name":"critter-marketplace",
@@ -2199,7 +2199,7 @@ func TestGitHubClaudeMarketplaceAcceptsPinnedGitHubURLObject(t *testing.T) {
 	writeFile(t, filepath.Join(pluginRoot, "hooks", "hooks.json"), `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/bin/agent-critter","args":["--hook"],"async":true}]}]}}`)
 
 	cleanupCalls := 0
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: t.TempDir()})
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
 	tool := tl.(*installSourceTool)
 	tool.preparePlugin = func(_ context.Context, source, _ string) (string, string, func(), error) {
 		if source == "https://github.com/acme/critter-marketplace" {
@@ -2224,7 +2224,7 @@ func TestGitHubClaudeMarketplaceAcceptsPinnedGitHubURLObject(t *testing.T) {
 // match the planId recomputed by the apply call, or every marketplace apply
 // with an echoed planId would be refused.
 func TestGitHubClaudeMarketplacePlanIDStableAcrossPlanAndApply(t *testing.T) {
-	marketplaceRoot := t.TempDir()
+	marketplaceRoot := testenv.TempDir(t)
 	writeFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), `{
   "name": "legal-tools",
   "metadata": {"pluginRoot": "plugins"},
@@ -2238,8 +2238,8 @@ func TestGitHubClaudeMarketplacePlanIDStableAcrossPlanAndApply(t *testing.T) {
 	writeFile(t, filepath.Join(marketplaceRoot, "plugins", "alpha", "skills", "alpha-legal", "SKILL.md"), "---\nname: alpha-legal\ndescription: Plugin context\n---\nPlugin context")
 	writeFile(t, filepath.Join(marketplaceRoot, "plugins", "beta", "skills", "beta-legal", "SKILL.md"), "---\nname: beta-legal\ndescription: Plugin context\n---\nPlugin context")
 
-	home := t.TempDir()
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: home})
+	home := testenv.TempDir(t)
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: home})
 	tool := tl.(*installSourceTool)
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() {}, nil
@@ -2275,16 +2275,16 @@ func TestGitHubClaudeMarketplacePlanIDStableAcrossPlanAndApply(t *testing.T) {
 // approved snapshot cannot be restored, apply must refuse instead of
 // installing content the approval never covered.
 func TestGitHubPluginApplyRefusesUnpinnableDrift(t *testing.T) {
-	tree1 := t.TempDir()
+	tree1 := testenv.TempDir(t)
 	writeFile(t, filepath.Join(tree1, ".claude-plugin", "plugin.json"), `{"name": "pwf", "version": "1.0.0"}`)
 	writeFile(t, filepath.Join(tree1, "commands", "plan.md"), "---\ndescription: plan\n---\nPlan")
-	tree2 := t.TempDir()
+	tree2 := testenv.TempDir(t)
 	writeFile(t, filepath.Join(tree2, ".claude-plugin", "plugin.json"), `{"name": "pwf", "version": "1.0.1"}`)
 	writeFile(t, filepath.Join(tree2, "commands", "plan.md"), "---\ndescription: plan\n---\nPlan")
 	writeFile(t, filepath.Join(tree2, "commands", "extra.md"), "---\ndescription: extra\n---\nExtra")
 
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	tool := tl.(*installSourceTool)
 	calls := 0
@@ -2319,7 +2319,7 @@ func TestGitHubPluginApplyRefusesUnpinnableDrift(t *testing.T) {
 // symlinked to a file inside the package survives copy-mode installs: the
 // installed tree must resolve to the same capability set the plan counted.
 func TestCopyMaterializesInRootSymlinkedCommands(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeFile(t, filepath.Join(src, ".claude-plugin", "plugin.json"), `{"name": "aliases"}`)
 	writeFile(t, filepath.Join(src, "skills", "s", "SKILL.md"), "---\ndescription: s\n---\nbody")
 	writeFile(t, filepath.Join(src, "commands", "plan.md"), "---\ndescription: plan\n---\nPlan")
@@ -2327,8 +2327,8 @@ func TestCopyMaterializesInRootSymlinkedCommands(t *testing.T) {
 		t.Skipf("symlinks unavailable on this platform: %v", err)
 	}
 
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	tool := tl.(*installSourceTool)
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
@@ -2361,17 +2361,17 @@ func TestCopyMaterializesInRootSymlinkedCommands(t *testing.T) {
 // cannot be materialized by copy mode, so apply must refuse (and clean up)
 // rather than silently install fewer commands than approved.
 func TestCopyRefusesUnmaterializableSymlinkCommands(t *testing.T) {
-	outside := t.TempDir()
+	outside := testenv.TempDir(t)
 	writeFile(t, filepath.Join(outside, "evil.md"), "---\ndescription: evil\n---\nEvil")
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeFile(t, filepath.Join(src, ".claude-plugin", "plugin.json"), `{"name": "escapes"}`)
 	writeFile(t, filepath.Join(src, "commands", "plan.md"), "---\ndescription: plan\n---\nPlan")
 	if err := os.Symlink(filepath.Join(outside, "evil.md"), filepath.Join(src, "commands", "evil.md")); err != nil {
 		t.Skipf("symlinks unavailable on this platform: %v", err)
 	}
 
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	tool := tl.(*installSourceTool)
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
@@ -2403,20 +2403,20 @@ func TestCopyRefusesUnmaterializableSymlinkCommands(t *testing.T) {
 // version must survive on disk and stay registered — a failed update may
 // never leave an enabled plugin pointing at a missing or gutted root.
 func TestFailedReplaceKeepsExistingPluginInstall(t *testing.T) {
-	v1 := t.TempDir()
+	v1 := testenv.TempDir(t)
 	writeFile(t, filepath.Join(v1, ".claude-plugin", "plugin.json"), `{"name": "pwf", "version": "1.0.0"}`)
 	writeFile(t, filepath.Join(v1, "commands", "plan.md"), "---\ndescription: plan\n---\nPlan")
-	outside := t.TempDir()
+	outside := testenv.TempDir(t)
 	writeFile(t, filepath.Join(outside, "evil.md"), "---\ndescription: evil\n---\nEvil")
-	v2 := t.TempDir()
+	v2 := testenv.TempDir(t)
 	writeFile(t, filepath.Join(v2, ".claude-plugin", "plugin.json"), `{"name": "pwf", "version": "2.0.0"}`)
 	writeFile(t, filepath.Join(v2, "commands", "plan.md"), "---\ndescription: plan\n---\nPlan")
 	if err := os.Symlink(filepath.Join(outside, "evil.md"), filepath.Join(v2, "commands", "evil.md")); err != nil {
 		t.Skipf("symlinks unavailable on this platform: %v", err)
 	}
 
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	tool := tl.(*installSourceTool)
 	current, commit := v1, "cafe0001"
@@ -2477,18 +2477,18 @@ func TestFailedReplaceKeepsExistingPluginInstall(t *testing.T) {
 // named "foo.pre-replace" must survive an update of plugin "foo" — the swap
 // backup must use a name no valid plugin can occupy.
 func TestBackupPathCannotCollideWithSiblingPlugin(t *testing.T) {
-	fooV1 := t.TempDir()
+	fooV1 := testenv.TempDir(t)
 	writeFile(t, filepath.Join(fooV1, ".claude-plugin", "plugin.json"), `{"name": "foo", "version": "1.0.0"}`)
 	writeFile(t, filepath.Join(fooV1, "commands", "plan.md"), "---\ndescription: plan\n---\nPlan")
-	fooV2 := t.TempDir()
+	fooV2 := testenv.TempDir(t)
 	writeFile(t, filepath.Join(fooV2, ".claude-plugin", "plugin.json"), `{"name": "foo", "version": "2.0.0"}`)
 	writeFile(t, filepath.Join(fooV2, "commands", "plan.md"), "---\ndescription: plan\n---\nPlan v2")
-	sibling := t.TempDir()
+	sibling := testenv.TempDir(t)
 	writeFile(t, filepath.Join(sibling, ".claude-plugin", "plugin.json"), `{"name": "foo.pre-replace", "version": "1.0.0"}`)
 	writeFile(t, filepath.Join(sibling, "commands", "keep.md"), "---\ndescription: keep\n---\nKeep")
 
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	tool := tl.(*installSourceTool)
 	sources := map[string]string{

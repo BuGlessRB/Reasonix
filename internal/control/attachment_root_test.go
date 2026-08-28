@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // writeAttachment stages a decodable PNG: an attachment whose dimensions cannot
@@ -27,10 +29,10 @@ func writeAttachment(t *testing.T, root, name string) string {
 // turn then carried no image candidates, the vision role was never consulted,
 // and the model was left with the prompt's suggestion to OCR the path itself.
 func TestAttachmentResolvesAgainstWorkspaceNotProcessDir(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	rel := writeAttachment(t, workspace, "pasted.png")
 
-	elsewhere := t.TempDir()
+	elsewhere := testenv.TempDir(t)
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +57,7 @@ func TestAttachmentResolvesAgainstWorkspaceNotProcessDir(t *testing.T) {
 // A turn whose attachment resolves has image candidates, which is what makes
 // the routing note appear and hands the bytes to the vision role.
 func TestTurnCarriesImageCandidatesForWorkspaceAttachment(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	rel := writeAttachment(t, workspace, "shot.png")
 
 	c := New(Options{WorkspaceRoot: workspace})
@@ -87,7 +89,7 @@ func TestImageReferenceBlockProposesNothing(t *testing.T) {
 // With a vision model configured the note names it and forbids self-OCR;
 // without one it says so instead of promising a delegate that cannot read.
 func TestRoutingNoteDependsOnConfiguredVisionModel(t *testing.T) {
-	c := New(Options{WorkspaceRoot: t.TempDir()})
+	c := New(Options{WorkspaceRoot: testenv.TempDir(t)})
 	defer c.Close()
 	bare := c.imageRoutingNote(1)
 	if !strings.Contains(bare, "no vision model is configured") {

@@ -7,6 +7,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -322,7 +323,7 @@ func TestCompactSkipsSingleSmallMessage(t *testing.T) {
 		{Role: provider.RoleUser, Content: "next"},
 		{Role: provider.RoleAssistant, Content: "ok"},
 	}}
-	a := New(prov, tool.NewRegistry(), sess, Options{RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sess, Options{RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 
 	if err := a.compact(context.Background(), "auto", "", false); err != nil {
 		t.Fatalf("compact: %v", err)
@@ -680,7 +681,7 @@ func TestCompactRollsOldDigestsIntoNew(t *testing.T) {
 		{Role: provider.RoleAssistant, Content: "ok"},
 	}}
 	a := New(&fakeProvider{reply: "merged digest"}, tool.NewRegistry(), sess,
-		Options{RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+		Options{RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 
 	if err := a.compact(context.Background(), "manual", "", true); err != nil {
 		t.Fatalf("compact: %v", err)

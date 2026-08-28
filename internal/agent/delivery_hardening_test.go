@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -236,7 +237,7 @@ func TestRunSubAgentReviewReportExhaustionNamesRecovery(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})
 	AttachReviewReportTool(reg)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{{Type: provider.ChunkText, Text: "looks fine"}, {Type: provider.ChunkDone}},
 	}}
@@ -475,7 +476,7 @@ func TestRunSubAgentReviewWithoutVerdictDegradesOutsideDelivery(t *testing.T) {
 	}}
 	sess := NewSession("sys")
 	answer, err := RunSubAgentWithSession(context.Background(), prov, reg, sess, "review it",
-		Options{RequireReviewReportKind: evidence.ReviewKindReview, ArchiveDir: t.TempDir()}, event.Discard)
+		Options{RequireReviewReportKind: evidence.ReviewKindReview, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	if err != nil {
 		t.Fatalf("a missing verdict must not kill a non-Delivery review: %v", err)
 	}

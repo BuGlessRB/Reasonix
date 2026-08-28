@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestScanMemoryRecallCountsAndPointOfUse(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "run.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"event":{"kind":"tool_result","tool":{"args":"{\"command\":\"make check-fast --tag=MEMKEY-EARLY\"}"}}}`,
@@ -32,7 +34,7 @@ func TestScanMemoryRecallCountsAndPointOfUse(t *testing.T) {
 }
 
 func TestMemoryUtilitySectionPairsArms(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	on := []result{
 		{task: task{ID: "helped"}, Passed: true, MemoryRecallEvents: 1, MemoryRecallChars: 300},
 		{task: task{ID: "hurt"}, Passed: false, MemoryRecallEvents: 1, MemoryRecallChars: 500},
@@ -59,8 +61,8 @@ func TestMemoryUtilitySectionPairsArms(t *testing.T) {
 }
 
 func TestSeedTaskMemoryBuildsIsolatedStateRoot(t *testing.T) {
-	taskDir := t.TempDir()
-	work := t.TempDir()
+	taskDir := testenv.TempDir(t)
+	work := testenv.TempDir(t)
 	for _, seed := range []string{"project/fact.md", "global/pref.md"} {
 		p := filepath.Join(taskDir, "memory", seed)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -70,7 +72,7 @@ func TestSeedTaskMemoryBuildsIsolatedStateRoot(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	stateHome := t.TempDir()
+	stateHome := testenv.TempDir(t)
 	if err := seedTaskMemory(taskDir, work, stateHome); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -82,7 +84,7 @@ func TestSeedTaskMemoryBuildsIsolatedStateRoot(t *testing.T) {
 		t.Fatalf("project seed not under the work dir's slug: %v", matches)
 	}
 
-	if err := seedTaskMemory(t.TempDir(), work, t.TempDir()); err != nil {
+	if err := seedTaskMemory(testenv.TempDir(t), work, testenv.TempDir(t)); err != nil {
 		t.Fatalf("task without seeds must be a no-op, got %v", err)
 	}
 }
@@ -94,7 +96,7 @@ func TestSeedTaskMemoryBuildsIsolatedStateRoot(t *testing.T) {
 func TestTaskExperimentEnvIsolatesEveryRun(t *testing.T) {
 	roots := map[string]bool{}
 	for _, id := range []string{"nosol-absent-oracle", "fix-add-bug"} {
-		env, drop, note := taskExperimentEnv(suiteConfig{}, task{ID: id, dir: t.TempDir()}, t.TempDir())
+		env, drop, note := taskExperimentEnv(suiteConfig{}, task{ID: id, dir: testenv.TempDir(t)}, testenv.TempDir(t))
 		defer drop()
 		if note != "" {
 			t.Fatalf("%s: %s", id, note)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"reasonix/internal/jobs"
+	"reasonix/internal/testenv"
 )
 
 func newRecorderForTest(t *testing.T, projectDir string) (*TaskRecorder, *FileStore) {
@@ -18,7 +19,7 @@ func newRecorderForTest(t *testing.T, projectDir string) (*TaskRecorder, *FileSt
 }
 
 func TestTaskRecorder_Lifecycle(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	r, store := newRecorderForTest(t, dir)
 	ctx := context.Background()
 
@@ -53,7 +54,7 @@ func TestTaskRecorder_Lifecycle(t *testing.T) {
 }
 
 func TestTaskRecorder_HeartbeatRenewsExpiredOwnedLease(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	r, store := newRecorderForTest(t, dir)
 	ctx := context.Background()
 	monitorID := monitorTaskID("sess-1", "task-1")
@@ -90,7 +91,7 @@ func TestTaskRecorder_HeartbeatRenewsExpiredOwnedLease(t *testing.T) {
 }
 
 func TestTaskRecorder_OldOwnerCannotRenewNewRuntimeGeneration(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	r, store := newRecorderForTest(t, dir)
 	ctx := context.Background()
 	monitorID := monitorTaskID("sess-1", "task-1")
@@ -120,7 +121,7 @@ func TestTaskRecorder_OldOwnerCannotRenewNewRuntimeGeneration(t *testing.T) {
 }
 
 func TestTaskRecorder_FailedUsesContentFreeErrorCode(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	r, store := newRecorderForTest(t, dir)
 	ctx := context.Background()
 
@@ -140,7 +141,7 @@ func TestTaskRecorder_FailedUsesContentFreeErrorCode(t *testing.T) {
 }
 
 func TestTaskRecorder_KilledAndInterruptedMapToCancelled(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	r, store := newRecorderForTest(t, dir)
 	ctx := context.Background()
 
@@ -160,7 +161,7 @@ func TestTaskRecorder_KilledAndInterruptedMapToCancelled(t *testing.T) {
 }
 
 func TestTaskRecorder_RestartUsesDistinctMonitorID(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	r, store := newRecorderForTest(t, dir)
 	ctx := context.Background()
 
@@ -185,7 +186,7 @@ func TestTaskRecorder_RestartUsesDistinctMonitorID(t *testing.T) {
 }
 
 func TestTaskRecorder_NonTerminalStatusDoesNotUpdate(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	r, store := newRecorderForTest(t, dir)
 	ctx := context.Background()
 
@@ -290,7 +291,7 @@ func TestControlAcceptsRecorderCompletionThatWinsPostKillCAS(t *testing.T) {
 }
 
 func TestTaskRecorder_UnknownTaskDoneIsNoop(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	r, store := newRecorderForTest(t, dir)
 	ctx := context.Background()
 
@@ -302,7 +303,7 @@ func TestTaskRecorder_UnknownTaskDoneIsNoop(t *testing.T) {
 }
 
 func TestTaskRecorder_EmptySessionIDAllowed(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 	r := NewTaskRecorder(store, dir, func() string { return "" })
 	ctx := context.Background()
@@ -324,7 +325,7 @@ func TestTaskRecorder_EmptySessionIDAllowed(t *testing.T) {
 
 func TestTaskRecorder_SameJobIDAcrossSessionsUsesDistinctMonitorIDs(t *testing.T) {
 	store := NewFileStore(".reasonix/tasks")
-	projectDir := t.TempDir()
+	projectDir := testenv.TempDir(t)
 	r1 := NewTaskRecorder(store, projectDir, func() string { return "session-a" })
 	r2 := NewTaskRecorder(store, projectDir, func() string { return "session-b" })
 

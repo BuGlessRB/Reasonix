@@ -1,6 +1,10 @@
 package memory
 
-import "testing"
+import (
+	"testing"
+
+	"reasonix/internal/testenv"
+)
 
 // The index and the direct store scan must be indistinguishable: same hits,
 // same shadow, same suppression reasons.
@@ -33,7 +37,7 @@ func TestSetAutoRecallMatchesStoreScan(t *testing.T) {
 // Writes rebuild the snapshot (and with it the index) through memory.Load —
 // the invalidation contract that keeps Markdown the source of truth.
 func TestLoadRebuildsIndexAfterWrite(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	user, proj := root+"/user", root+"/project"
 	mustMkdir(t, proj+"/.git")
 	set := Load(Options{CWD: proj, UserDir: user})

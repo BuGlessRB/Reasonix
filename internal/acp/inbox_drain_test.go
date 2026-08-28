@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 )
 
 type durableQueueFactory struct {
@@ -27,7 +28,7 @@ func TestSessionPromptDrainsDurableFollowupBeforeResponding(t *testing.T) {
 	release := make(chan struct{})
 	inputs := make(chan string, 2)
 	factory := &durableQueueFactory{
-		dir: t.TempDir(),
+		dir: testenv.TempDir(t),
 		behavior: func(ctx context.Context, _ event.Sink, input string) error {
 			inputs <- input
 			if input == "start" {

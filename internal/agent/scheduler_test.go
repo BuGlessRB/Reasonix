@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"reasonix/internal/agentgraph"
+	"reasonix/internal/testenv"
 )
 
 func TestSchedulerTotalConcurrencyQueues(t *testing.T) {
 	s := NewSubagentScheduler(2, 2)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	var started atomic.Int32
 	var max atomic.Int32
 	var wg sync.WaitGroup
@@ -70,7 +71,7 @@ func TestSchedulerNestedFailsFast(t *testing.T) {
 
 func TestSchedulerWriterPathConflictQueues(t *testing.T) {
 	s := NewSubagentScheduler(4, 2)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, err := NormalizeWritePaths(root, []string{"a.md"})
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +100,7 @@ func TestSchedulerWriterPathConflictQueues(t *testing.T) {
 
 func TestSchedulerTryClaimWritePaths(t *testing.T) {
 	s := NewSubagentScheduler(4, 2)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, _ := NormalizeWritePaths(root, []string{"a.md"})
 	release, err := s.Acquire(context.Background(), AcquireRequest{Writer: true, WritePaths: claim})
 	if err != nil {
@@ -178,7 +179,7 @@ func TestSchedulerGivesAFreedSlotToTheHeaviestWaiter(t *testing.T) {
 // nothing downstream could — a run waiting on a claim was priced as one waiting
 // on a ceiling nobody needed to raise.
 func TestQueuedAcquireSaysWhichConstraintHeldIt(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mine, err := NormalizeWritePaths(root, []string{"a.md"})
 	if err != nil {
 		t.Fatal(err)

@@ -15,11 +15,12 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/event"
 	"reasonix/internal/jobs"
+	"reasonix/internal/testenv"
 )
 
 func TestTaskMachineListUsesContentFreePersistedMetadata(t *testing.T) {
 	identityKey := installMachineTestIdentity(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saveMachineTestSession(t, dir, "session", time.Date(2026, 7, 23, 13, 0, 0, 0, time.UTC))
 	path := filepath.Join(dir, "session.jsonl")
 	manager := jobs.NewManager(event.Discard)
@@ -69,7 +70,7 @@ func TestTaskMachineListUsesContentFreePersistedMetadata(t *testing.T) {
 
 func TestTaskMachineProjectsSubagentLifecycleAndArtifactCompleteness(t *testing.T) {
 	identityKey := installMachineTestIdentity(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saveMachineTestSession(t, dir, "session", time.Now())
 	subDir := filepath.Join(dir, "subagents")
 	if err := os.MkdirAll(subDir, 0o700); err != nil {
@@ -130,7 +131,7 @@ func TestTaskMachineProjectsSubagentLifecycleAndArtifactCompleteness(t *testing.
 
 func TestTaskMachineProjectRootUsesProjectStore(t *testing.T) {
 	identityKey := installMachineTestIdentity(t)
-	projectRoot := t.TempDir()
+	projectRoot := testenv.TempDir(t)
 	sessionDir := config.ProjectSessionDir(projectRoot)
 	saveMachineTestSession(t, sessionDir, "session", time.Date(2026, 7, 23, 13, 30, 0, 0, time.UTC))
 	path := filepath.Join(sessionDir, "session.jsonl")
@@ -157,7 +158,7 @@ func TestTaskMachineProjectRootUsesProjectStore(t *testing.T) {
 
 func TestTaskMachineShowRequiresNonZeroForMissingTask(t *testing.T) {
 	installMachineTestIdentity(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	var out bytes.Buffer
 	if code := runTaskCommand([]string{"show", "--json", "missing", "--dir", dir}, &out); code != 1 {
 		t.Fatalf("exit code = %d, output = %s", code, out.String())
@@ -174,7 +175,7 @@ func TestTaskMachineShowRequiresNonZeroForMissingTask(t *testing.T) {
 func TestTaskMachineEmptyListUsesAnArray(t *testing.T) {
 	installMachineTestIdentity(t)
 	var out bytes.Buffer
-	if code := runTaskCommand([]string{"list", "--json", "--dir", t.TempDir()}, &out); code != 0 {
+	if code := runTaskCommand([]string{"list", "--json", "--dir", testenv.TempDir(t)}, &out); code != 0 {
 		t.Fatalf("task list exit code = %d, output = %s", code, out.String())
 	}
 	var response machineTaskList
@@ -188,7 +189,7 @@ func TestTaskMachineEmptyListUsesAnArray(t *testing.T) {
 
 func TestTaskMachineRejectsConflictingSessionSources(t *testing.T) {
 	installMachineTestIdentity(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	var out bytes.Buffer
 	if code := runTaskCommand([]string{"list", "--json", "--dir", dir, "--project-root", dir}, &out); code != 2 {
 		t.Fatalf("exit code = %d, output = %s", code, out.String())

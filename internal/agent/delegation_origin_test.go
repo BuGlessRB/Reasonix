@@ -8,6 +8,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -31,7 +32,7 @@ func runDelegationForOrigin(t *testing.T, prompt string) evidence.DelegationAudi
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(mustSubagentStore(t), t.TempDir(), "base", "high").
+		WithTranscripts(mustSubagentStore(t), testenv.TempDir(t), "base", "high").
 		WithScheduler(NewSubagentScheduler(4, 4))
 	ctx := withCallContext(context.Background(), "call-1", probe, nil, false)
 	args, err := json.Marshal(map[string]string{"prompt": prompt})

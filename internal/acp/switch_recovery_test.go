@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // divergedACPSession writes a transcript to path whose on-disk content has
@@ -93,7 +94,7 @@ func assertACPSessionOnRecoveryPath(t *testing.T, sess *acpSession, originalPath
 // just-recovered transcript back to the original file, so every later save
 // re-conflicted and derived yet another recovery branch.
 func TestACPRebuildSessionContinuesRecoveryPathAfterSnapshotConflict(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	originalPath := filepath.Join(dir, "acp-switch-conflict.jsonl")
 	stale := divergedACPSession(t, originalPath)
 
@@ -151,7 +152,7 @@ func TestACPRebuildSessionContinuesRecoveryPathAfterSnapshotConflict(t *testing.
 // so session/prompt reports the live file, session/delete destroys it, and the
 // recovery transcript stays lease-guarded against other runtimes.
 func TestACPPersistAfterTurnMovesBookkeepingToRecoveryPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	originalPath := filepath.Join(dir, "acp-autosave-conflict.jsonl")
 	stale := divergedACPSession(t, originalPath)
 
@@ -258,7 +259,7 @@ func recoverACPSessionAndRestart(t *testing.T, dir, id string) (originalPath, re
 // a restart reopened the pre-recovery file and the user's recovered work
 // silently vanished from ACP's view.
 func TestACPLoadAfterRestartFollowsRecoveryTranscript(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	id := "sess-restart"
 	originalPath, recoveryPath, svc := recoverACPSessionAndRestart(t, dir, id)
 
@@ -298,7 +299,7 @@ func TestACPLoadAfterRestartFollowsRecoveryTranscript(t *testing.T) {
 // session's live file) and the id-keyed original, or the survivor resurfaces
 // in session/list as a ghost that can never be deleted by id.
 func TestACPDeleteAfterRestartRemovesRecoveryAndIDKeyedFiles(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	id := "sess-del"
 	originalPath, recoveryPath, svc := recoverACPSessionAndRestart(t, dir, id)
 
@@ -328,7 +329,7 @@ func TestACPDeleteAfterRestartRemovesRecoveryAndIDKeyedFiles(t *testing.T) {
 // one entry for the id, backed by the active recovery transcript's metadata
 // (the live title), never the stale pre-recovery sidecar.
 func TestACPSessionListAfterRecoveryShowsSingleActiveEntry(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	id := "sess-list"
 	_, _, svc := recoverACPSessionAndRestart(t, dir, id)
 
@@ -373,7 +374,7 @@ func (f *profileSystemPromptFactory) SessionDir() string { return f.dir }
 // symptom was that the model kept following the previous profile's
 // instructions after every switch.
 func TestACPRebuildSessionRefreshesLeadingSystemPromptForNewProfile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "acp-profile-switch.jsonl")
 
 	oldSession := agent.NewSession("system prompt for profile balanced")
@@ -435,7 +436,7 @@ func TestACPRebuildSessionRefreshesLeadingSystemPromptForNewProfile(t *testing.T
 // switch → close → load sequence revived the outgoing profile's contract even
 // though the session metadata already claimed the new profile.
 func TestACPWorkModeSwitchPersistsRefreshedSystemPromptAcrossReload(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	id := "sess-profile-persist"
 	path := transcriptPath(dir, id)
 
@@ -523,7 +524,7 @@ func TestACPWorkModeSwitchPersistsRefreshedSystemPromptAcrossReload(t *testing.T
 // cannot be written, the service must return an error and leave the outgoing
 // controller/config active instead of publishing an in-memory-only switch.
 func TestACPWorkModeSwitchSnapshotFailureKeepsOutgoingController(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	invalidPath := filepath.Join(dir, "transcript-is-a-directory")
 	if err := os.Mkdir(invalidPath, 0o755); err != nil {
 		t.Fatalf("mkdir invalid transcript path: %v", err)

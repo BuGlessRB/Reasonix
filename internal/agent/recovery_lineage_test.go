@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // forkChain builds root ← A ← B ← C: the pile a lane-per-Session build left
@@ -61,7 +62,7 @@ func forkChain(t *testing.T, dir string) (root string, branches []string) {
 // parent coverage used to count, and the parent is the older file — so a
 // conflict chain piled up in the sidebar untouched.
 func TestSupersededRecoveryBranchIsReclaimable(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	_, branches := forkChain(t, dir)
 	if len(branches) != 3 {
 		t.Fatalf("branches = %d, want 3", len(branches))
@@ -104,7 +105,7 @@ func TestSupersededRecoveryBranchIsReclaimable(t *testing.T) {
 // continued on — or that an outside writer appended to — has turns of its own,
 // whatever its parent_id says.
 func TestContinuedRecoveryBranchIsNotSuperseded(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	_, branches := forkChain(t, dir)
 	continued := branches[0]
 
@@ -131,7 +132,7 @@ func TestContinuedRecoveryBranchIsNotSuperseded(t *testing.T) {
 // Two copies of one transcript each hold everything the other does. Coverage
 // alone would let them prove each other redundant and remove both.
 func TestIdenticalRecoveryCopiesKeepOne(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	root := filepath.Join(dir, "session.jsonl")
 	seed := NewSession("sys")
 	seed.Add(provider.Message{Role: provider.RoleUser, Content: "root only"})

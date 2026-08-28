@@ -6,10 +6,12 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestReadServeTokenFileTrimsSingleLine(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "token")
+	p := filepath.Join(testenv.TempDir(t), "token")
 	if err := os.WriteFile(p, []byte("  s3cret-token \n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +25,7 @@ func TestReadServeTokenFileTrimsSingleLine(t *testing.T) {
 }
 
 func TestReadServeTokenFileRejectsEmptyAndMultiline(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	empty := filepath.Join(dir, "empty")
 	if err := os.WriteFile(empty, []byte("  \n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -44,7 +46,7 @@ func TestReadServeTokenFileRejectsLoosePermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX permission check")
 	}
-	p := filepath.Join(t.TempDir(), "token")
+	p := filepath.Join(testenv.TempDir(t), "token")
 	if err := os.WriteFile(p, []byte("tok\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +56,7 @@ func TestReadServeTokenFileRejectsLoosePermissions(t *testing.T) {
 }
 
 func TestWriteServeAddrAndPidFiles(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	addrPath := filepath.Join(dir, "port")
 	if err := writeServeAddrFile(addrPath, "127.0.0.1:43210"); err != nil {
 		t.Fatalf("writeServeAddrFile: %v", err)

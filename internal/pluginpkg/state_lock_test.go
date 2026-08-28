@@ -7,13 +7,15 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestStateConcurrentUpsertAndSetEnabled pins that concurrent load-modify-save
 // cycles on the state file don't clobber each other: every plugin upserted by a
 // racing goroutine must survive, with the enabled flag it was last given.
 func TestStateConcurrentUpsertAndSetEnabled(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	const n = 16
 
 	var wg sync.WaitGroup
@@ -48,7 +50,7 @@ func TestStateConcurrentUpsertAndSetEnabled(t *testing.T) {
 // TestStateConcurrentRemove pins that racing removals each observe their own
 // plugin exactly once and leave nothing behind.
 func TestStateConcurrentRemove(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	const n = 8
 	for i := range n {
 		name := fmt.Sprintf("plugin-%02d", i)
@@ -89,7 +91,7 @@ func TestStateConcurrentRemove(t *testing.T) {
 // with a transient sharing violation — that is the platform's locking
 // behavior, not a torn file, so such reads are retried instead of failed.
 func TestStateLoadDuringSaveNeverSeesTornFile(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	if err := Upsert(home, InstalledPlugin{Name: "seed", Root: "plugins/seed", Enabled: true}); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}

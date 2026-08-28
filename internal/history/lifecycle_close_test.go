@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"reasonix/internal/historycatalog"
+	"reasonix/internal/testenv"
 )
 
 // The process catalog outlives any one controller, so its close belongs at the
@@ -17,7 +18,7 @@ func TestCloseSharedCatalogReleasesTheProcessProjection(t *testing.T) {
 		processHistoryCatalog = indexedCatalogManager{open: prevOpen}
 	})
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	processHistoryCatalog.register([]historycatalog.Root{{Path: dir, Source: "global", Scope: "global"}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

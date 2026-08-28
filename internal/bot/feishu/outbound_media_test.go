@@ -7,14 +7,15 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestReadOutboundFileConfinement(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, "ok.txt"), []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	outside := filepath.Join(t.TempDir(), "secret.txt")
+	outside := filepath.Join(testenv.TempDir(t), "secret.txt")
 	if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -58,8 +59,8 @@ func TestReadOutboundFileConfinement(t *testing.T) {
 }
 
 func TestReadOutboundFileRejectsAmbiguousName(t *testing.T) {
-	first := t.TempDir()
-	second := t.TempDir()
+	first := testenv.TempDir(t)
+	second := testenv.TempDir(t)
 	for _, root := range []string{first, second} {
 		if err := os.WriteFile(filepath.Join(root, "report.pdf"), []byte(root), 0o600); err != nil {
 			t.Fatal(err)
@@ -79,7 +80,7 @@ func TestReadOutboundFileRequiresAbsoluteRoots(t *testing.T) {
 }
 
 func TestReadOutboundFileEnforcesActualReadLimit(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "large.bin")
 	if err := os.WriteFile(path, []byte{1}, 0o600); err != nil {
 		t.Fatal(err)
@@ -94,7 +95,7 @@ func TestReadOutboundFileEnforcesActualReadLimit(t *testing.T) {
 }
 
 func TestLoadOutboundMediaEnforcesAggregateLimit(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	for _, name := range []string{"first.bin", "second.bin"} {
 		path := filepath.Join(root, name)
 		if err := os.WriteFile(path, []byte{1}, 0o600); err != nil {
@@ -114,8 +115,8 @@ func TestReadOutboundFileRejectsSymlinkEscape(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation is unreliable on Windows CI")
 	}
-	root := t.TempDir()
-	secret := filepath.Join(t.TempDir(), "secret.txt")
+	root := testenv.TempDir(t)
+	secret := filepath.Join(testenv.TempDir(t), "secret.txt")
 	if err := os.WriteFile(secret, []byte("top secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +135,7 @@ func TestReadOutboundFileAcceptsSymlinkWithinRoot(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation is unreliable on Windows CI")
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	real := filepath.Join(root, "real.txt")
 	if err := os.WriteFile(real, []byte("ok"), 0o600); err != nil {
 		t.Fatal(err)

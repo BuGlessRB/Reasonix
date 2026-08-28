@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 )
 
 // TestWorkspaceRootForDir covers the --dir plumbing: no --dir yields no override
@@ -20,7 +21,7 @@ func TestWorkspaceRootForDir(t *testing.T) {
 	}
 
 	// With --dir: chdirTo has already switched in, so the root is the CWD.
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	t.Chdir(dir)
 	got, err := workspaceRootForDir(dir)
 	if err != nil {
@@ -59,7 +60,7 @@ api_key_env = "REASONIX_TEST_KEY_UNSET"
 func TestSetupProfilePinsExplicitDirOverGitRoot(t *testing.T) {
 	isolateCLIConfigHome(t)
 
-	repo := t.TempDir()
+	repo := testenv.TempDir(t)
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}

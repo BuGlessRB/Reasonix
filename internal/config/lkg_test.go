@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestLoadForRootUsesLastKnownGoodWhenUserConfigBroken(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	// Broken live config.
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[broken\n"), 0o600); err != nil {
@@ -24,7 +26,7 @@ func TestLoadForRootUsesLastKnownGoodWhenUserConfigBroken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := LoadForRoot(t.TempDir())
+	cfg, err := LoadForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatalf("LoadForRoot: %v", err)
 	}
@@ -42,12 +44,12 @@ func TestLoadForRootUsesLastKnownGoodWhenUserConfigBroken(t *testing.T) {
 }
 
 func TestLoadForRootUsesDefaultsWhenNoLKG(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[broken\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := LoadForRoot(t.TempDir())
+	cfg, err := LoadForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,14 +68,14 @@ func TestLoadForRootUsesDefaultsWhenNoLKG(t *testing.T) {
 }
 
 func TestLoadForRootTypeErrorDoesNotPartiallyApplyUserConfig(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	body := "default_model = \"must-not-survive\"\n[ui]\nshow_reasoning = \"not-a-bool\"\n"
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	want := Default().DefaultModel
-	cfg, err := LoadForRoot(t.TempDir())
+	cfg, err := LoadForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,12 +88,12 @@ func TestLoadForRootTypeErrorDoesNotPartiallyApplyUserConfig(t *testing.T) {
 }
 
 func TestLoadForRootIsolatesBrokenProjectConfig(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("default_model = \"user-model\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte("[broken\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -108,12 +110,12 @@ func TestLoadForRootIsolatesBrokenProjectConfig(t *testing.T) {
 }
 
 func TestLoadForRootTypeErrorDoesNotPartiallyApplyProjectConfig(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("default_model = \"user-model\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	body := "default_model = \"project-model\"\n[ui]\nshow_reasoning = \"not-a-bool\"\n"
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)

@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/extension"
 	"reasonix/internal/extension/protocol"
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 // installFakePlugin writes a v1 manifest for a fake sidecar package and
@@ -51,7 +52,7 @@ func installFakePlugin(t *testing.T, home, name string, configure func(rt *plugi
 }
 
 func TestManagerStartsEnabledRuntimePackages(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	installFakePlugin(t, home, "alpha", func(rt *pluginpkg.RuntimeSpec) {
 		rt.Intercepts = []string{"input.receive"}
 		rt.Replaces = []string{"compaction"}
@@ -119,7 +120,7 @@ func TestManagerStartsEnabledRuntimePackages(t *testing.T) {
 }
 
 func TestManagerRequiredFailureFailsEverything(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	installFakePlugin(t, home, "good-optional", nil)
 	installFakePlugin(t, home, "bad-required", func(rt *pluginpkg.RuntimeSpec) {
 		rt.Required = true
@@ -143,7 +144,7 @@ func TestManagerRequiredFailureFailsEverything(t *testing.T) {
 }
 
 func TestManagerOptionalFailureWarnsAndContinues(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	installFakePlugin(t, home, "bad-optional", func(rt *pluginpkg.RuntimeSpec) {
 		rt.Env[fakeEnvInitResult] = `{"protocolVersion":"1","name":"bad","version":"1","stateSchemaVersion":0}`
 	})
@@ -254,7 +255,7 @@ func TestStartLoadedPackagesBoundsParallelismAndSharesCancellation(t *testing.T)
 }
 
 func TestManagerDisabledPackageNeverLaunches(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	installFakePlugin(t, home, "disabled-one", nil)
 	if err := pluginpkg.SetEnabled(home, "disabled-one", false); err != nil {
 		t.Fatalf("SetEnabled: %v", err)
@@ -273,7 +274,7 @@ func TestManagerDisabledPackageNeverLaunches(t *testing.T) {
 }
 
 func TestManagerCloseShutsEverythingDown(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	installFakePlugin(t, home, "one", nil)
 	installFakePlugin(t, home, "two", func(rt *pluginpkg.RuntimeSpec) {
 		rt.Env[fakeEnvMode] = "ignore_shutdown" // force the kill path
@@ -363,7 +364,7 @@ func (bindingStub) Request(context.Context, protocol.UIRequestParams) (protocol.
 // client (never the shared unbound handler), and a sidecar crash is reported
 // through ClientCrashed.
 func TestStartPackagesBindsUIHandlerPerPlugin(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	installFakePlugin(t, home, "live", nil)
 	installFakePlugin(t, home, "doomed", func(rt *pluginpkg.RuntimeSpec) {
 		rt.Env[fakeEnvMode] = "crash_after_init"

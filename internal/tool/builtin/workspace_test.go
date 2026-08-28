@@ -9,12 +9,13 @@ import (
 	"testing"
 
 	"reasonix/internal/sessiontemp"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
 func TestResolveIn(t *testing.T) {
-	workDir := filepath.Join(t.TempDir(), "proj")
-	absolute := filepath.Join(t.TempDir(), "etc", "passwd")
+	workDir := filepath.Join(testenv.TempDir(t), "proj")
+	absolute := filepath.Join(testenv.TempDir(t), "etc", "passwd")
 	cases := []struct {
 		workDir, p, want string
 	}{
@@ -38,7 +39,7 @@ func TestResolveIn(t *testing.T) {
 // workspace directory rather than the process cwd, for both a reader and a
 // writer, and that write confinement defaults to the workspace.
 func TestWorkspaceBindsReadAndWrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	ws := Workspace{Dir: dir}
 	tools := byName(ws.Tools())
 
@@ -62,8 +63,8 @@ func TestWorkspaceBindsReadAndWrite(t *testing.T) {
 // TestWorkspaceWriteConfinement confirms the default write root is the workspace
 // dir: a relative write succeeds, an absolute write outside it is refused.
 func TestWorkspaceWriteConfinement(t *testing.T) {
-	dir := t.TempDir()
-	outside := filepath.Join(t.TempDir(), "evil.txt")
+	dir := testenv.TempDir(t)
+	outside := filepath.Join(testenv.TempDir(t), "evil.txt")
 	wf := byName(Workspace{Dir: dir}.Tools())["write_file"]
 
 	// Inside the workspace: allowed.
@@ -77,8 +78,8 @@ func TestWorkspaceWriteConfinement(t *testing.T) {
 }
 
 func TestWorkspaceMoveFileBindsAndConfines(t *testing.T) {
-	dir := t.TempDir()
-	outside := filepath.Join(t.TempDir(), "evil.txt")
+	dir := testenv.TempDir(t)
+	outside := filepath.Join(testenv.TempDir(t), "evil.txt")
 	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("hello"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +101,7 @@ func TestWorkspaceMoveFileBindsAndConfines(t *testing.T) {
 
 // TestWorkspaceBashDir checks bash runs in the workspace directory.
 func TestWorkspaceBashDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	b := byName(Workspace{Dir: dir}.Tools())["bash"]
 	out, err := b.Execute(context.Background(), argsJSON(t, map[string]any{"command": "pwd"}))
 	if err != nil {
@@ -115,7 +116,7 @@ func TestWorkspaceBashDir(t *testing.T) {
 // TestWorkspacePreviewBinds confirms a workspace-bound writer previews the file
 // inside its directory when given a relative path.
 func TestWorkspacePreviewBinds(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	wf := byName(Workspace{Dir: dir}.Tools())["write_file"]
 	p, ok := wf.(tool.Previewer)
 	if !ok {
@@ -132,14 +133,14 @@ func TestWorkspacePreviewBinds(t *testing.T) {
 
 // TestWorkspaceEnabledFilter checks the enabled whitelist.
 func TestWorkspaceEnabledFilter(t *testing.T) {
-	got := byName(Workspace{Dir: t.TempDir()}.Tools("read_file", "bash", "todo_write", "wait"))
+	got := byName(Workspace{Dir: testenv.TempDir(t)}.Tools("read_file", "bash", "todo_write", "wait"))
 	if len(got) != 4 || got["read_file"] == nil || got["bash"] == nil || got["todo_write"] == nil || got["wait"] == nil {
 		t.Fatalf("enabled filter returned %d tools: %v", len(got), keys(got))
 	}
 }
 
 func TestWorkspacePreservesSessionLevelBuiltins(t *testing.T) {
-	got := byName(Workspace{Dir: t.TempDir()}.Tools())
+	got := byName(Workspace{Dir: testenv.TempDir(t)}.Tools())
 	for _, name := range []string{
 		"todo_write",
 		"complete_step",
@@ -156,8 +157,8 @@ func TestWorkspacePreservesSessionLevelBuiltins(t *testing.T) {
 }
 
 func TestWorkspaceToolSchemasStableAcrossRoots(t *testing.T) {
-	firstRoot := t.TempDir()
-	secondRoot := t.TempDir()
+	firstRoot := testenv.TempDir(t)
+	secondRoot := testenv.TempDir(t)
 
 	first := workspaceSchemasJSON(t, firstRoot)
 	second := workspaceSchemasJSON(t, secondRoot)
@@ -170,7 +171,7 @@ func TestWorkspaceToolSchemasStableAcrossRoots(t *testing.T) {
 	}
 
 	resolver := NewPathResolver()
-	resolver.RegisterReadRoot("__reasonix_external_folder/schema/root", t.TempDir())
+	resolver.RegisterReadRoot("__reasonix_external_folder/schema/root", testenv.TempDir(t))
 	withResolver := workspaceSchemasJSONWithResolver(t, firstRoot, resolver)
 	if first != withResolver {
 		t.Fatalf("workspace tool schemas should not depend on external read roots:\nfirst=%s\nwith=%s", first, withResolver)
@@ -192,8 +193,8 @@ func TestWorkspaceEmptyDirUnchanged(t *testing.T) {
 }
 
 func TestWorkspaceReadToolsResolveExternalReadRoots(t *testing.T) {
-	workspace := t.TempDir()
-	external := t.TempDir()
+	workspace := testenv.TempDir(t)
+	external := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Join(external, "src"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +291,7 @@ func assertExternalToolError(t *testing.T, tl tool.Tool, args map[string]any, wa
 }
 
 func TestResolveSessionTempExpandsTheVariableTheHostExports(t *testing.T) {
-	m := sessiontemp.NewWithRoot(t.TempDir())
+	m := sessiontemp.NewWithRoot(testenv.TempDir(t))
 	m.Retain()
 	defer m.Release()
 	lease, err := m.Acquire()
@@ -322,10 +323,10 @@ func TestResolveSessionTempExpandsTheVariableTheHostExports(t *testing.T) {
 }
 
 func TestWriteFileUnderSessionTempVariableLeavesTheWorkspaceClean(t *testing.T) {
-	m := sessiontemp.NewWithRoot(t.TempDir())
+	m := sessiontemp.NewWithRoot(testenv.TempDir(t))
 	m.Retain()
 	defer m.Release()
-	work := t.TempDir()
+	work := testenv.TempDir(t)
 
 	w := writeFile{workDir: work, roots: []string{work}, sessionTemp: m}
 	out, err := w.Execute(context.Background(), json.RawMessage(`{"path":"$TMPDIR/check.py","content":"print(1)\n"}`))

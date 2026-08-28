@@ -146,8 +146,8 @@ func TestStartPackagesWithPlanEmptyHome(t *testing.T) {
 	plan := &extension.RuntimePlan{
 		Unchanged: []extension.ComponentID{"plugin/demo"},
 	}
-	session := protocol.SessionContext{SessionID: "s", WorkspaceRoot: t.TempDir(), Generation: 1}
-	m, warnings, err := sidecar.StartPackagesWithPlan(context.Background(), t.TempDir(), session, nil, nil, plan)
+	session := protocol.SessionContext{SessionID: "s", WorkspaceRoot: robustTempDir(t), Generation: 1}
+	m, warnings, err := sidecar.StartPackagesWithPlan(context.Background(), robustTempDir(t), session, nil, nil, plan)
 	if err != nil {
 		t.Fatal(err)
 	}

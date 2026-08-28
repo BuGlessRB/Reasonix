@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
+	"reasonix/internal/testenv"
 )
 
 const twoProviderConfig = `
@@ -27,7 +28,7 @@ api_key_env = "MOONSHOT_API_KEY"
 
 func writeConfig(t *testing.T, body string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func TestMeterUpstreamFallsBackToTheFirstProvider(t *testing.T) {
 // Rewriting every endpoint would send one vendor's traffic to another's host.
 func TestWriteMeteredConfigRedirectsOnlyTheBenchmarkedProvider(t *testing.T) {
 	path := writeConfig(t, twoProviderConfig)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := writeMeteredConfig(path, dir, "kimi-k2", "http://127.0.0.1:9999"); err != nil {
 		t.Fatalf("writeMeteredConfig: %v", err)
 	}
@@ -121,7 +122,7 @@ func TestWriteMeteredConfigRedirectsOnlyTheBenchmarkedProvider(t *testing.T) {
 // to read, copy, or rewrite a credential.
 func TestWriteMeteredConfigKeepsCredentialsUntouched(t *testing.T) {
 	path := writeConfig(t, twoProviderConfig)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := writeMeteredConfig(path, dir, "deepseek-v4-flash", "http://127.0.0.1:1"); err != nil {
 		t.Fatalf("writeMeteredConfig: %v", err)
 	}

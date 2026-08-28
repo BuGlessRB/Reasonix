@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // rewriteTranscriptOutsideReasonix replaces what is on disk the way anything
@@ -41,7 +42,7 @@ func rewriteTranscriptOutsideReasonix(t *testing.T, path string, msgs ...provide
 // the turns in memory can only stop being prefixes of each other when something
 // outside wrote the file.
 func TestExternallyRewrittenTranscriptDiverges(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	live := NewSession("sys")
 	live.Add(provider.Message{Role: provider.RoleUser, Content: "你好"})
@@ -68,7 +69,7 @@ func TestExternallyRewrittenTranscriptDiverges(t *testing.T) {
 // outside, the runtime keeps holding the same unsaved turn, and every incident
 // used to leave its own branch.
 func TestRepeatedExternalRewritesShareOneBranch(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	seed := []provider.Message{
 		{Role: provider.RoleUser, Content: "你好"},
@@ -109,7 +110,7 @@ func TestRepeatedExternalRewritesShareOneBranch(t *testing.T) {
 // is another writer. The error carries the position and the two roles — never
 // the content, which a diagnostic must not carry off the machine.
 func TestSnapshotConflictNamesWhereTheTranscriptsParted(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	seed := []provider.Message{
 		{Role: provider.RoleUser, Content: "你好"},

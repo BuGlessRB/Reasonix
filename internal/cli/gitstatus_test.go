@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"reasonix/internal/testenv"
 )
 
 func TestParseGitNumstat(t *testing.T) {
@@ -92,7 +93,7 @@ func TestLoadGitStatus(t *testing.T) {
 		t.Skip("git not found")
 	}
 
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	runGitForTest(t, root, "init")
 	runGitForTest(t, root, "config", "user.email", "reasonix@example.invalid")
 	runGitForTest(t, root, "config", "user.name", "Reasonix Test")
@@ -129,7 +130,7 @@ func TestRunGitDisablesOptionalLocks(t *testing.T) {
 		t.Skip("uses a POSIX shell script fake git")
 	}
 
-	bin := filepath.Join(t.TempDir(), "bin")
+	bin := filepath.Join(testenv.TempDir(t), "bin")
 	if err := os.Mkdir(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -11,10 +11,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestFileStore_ListTasks_EmptyDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 
 	tasks, err := store.ListTasks(context.Background(), dir)
@@ -27,7 +29,7 @@ func TestFileStore_ListTasks_EmptyDir(t *testing.T) {
 }
 
 func TestFileStore_RoundTrip(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 
 	// Write a task snapshot
@@ -60,7 +62,7 @@ func TestFileStore_RoundTrip(t *testing.T) {
 }
 
 func TestFileStore_ListEvents_RoundTrip(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 
 	taskDir := filepath.Join(dir, ".reasonix", "tasks", "t1")
@@ -89,7 +91,7 @@ func TestFileStore_ListEvents_RoundTrip(t *testing.T) {
 }
 
 func TestFileStore_ListEvents_AfterCursor(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 	taskDir := filepath.Join(dir, ".reasonix", "tasks", "t1")
 	os.MkdirAll(taskDir, 0o755)
@@ -105,7 +107,7 @@ func TestFileStore_ListEvents_AfterCursor(t *testing.T) {
 }
 
 func TestFileStore_RejectsPathTraversal_TaskID(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 
 	_, err := store.GetTask(context.Background(), dir, "../escape")
@@ -115,7 +117,7 @@ func TestFileStore_RejectsPathTraversal_TaskID(t *testing.T) {
 }
 
 func TestFileStore_AcceptsCleanableProjectDir(t *testing.T) {
-	parent := t.TempDir()
+	parent := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 	now := time.Now()
 
@@ -141,7 +143,7 @@ func TestFileStore_AcceptsCleanableProjectDir(t *testing.T) {
 }
 
 func TestFileStore_RejectsEmptyTaskID(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 
 	_, err := store.GetTask(context.Background(), dir, "")
@@ -151,7 +153,7 @@ func TestFileStore_RejectsEmptyTaskID(t *testing.T) {
 }
 
 func TestFileStore_RejectsDotTaskID(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 
 	_, err := store.GetTask(context.Background(), dir, ".")
@@ -161,7 +163,7 @@ func TestFileStore_RejectsDotTaskID(t *testing.T) {
 }
 
 func TestFileStore_RejectsDotDotTaskID(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 
 	_, err := store.GetTask(context.Background(), dir, "..")
@@ -171,8 +173,8 @@ func TestFileStore_RejectsDotDotTaskID(t *testing.T) {
 }
 
 func TestFileStore_RejectsSymlinkTaskDirectory(t *testing.T) {
-	project := t.TempDir()
-	outside := t.TempDir()
+	project := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	root := filepath.Join(project, ".reasonix", "tasks")
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
@@ -190,8 +192,8 @@ func TestFileStore_RejectsSymlinkTaskDirectory(t *testing.T) {
 }
 
 func TestFileStore_RejectsSymlinkStoreParent(t *testing.T) {
-	project := t.TempDir()
-	outside := t.TempDir()
+	project := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	if err := os.Symlink(outside, filepath.Join(project, ".reasonix")); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
@@ -205,8 +207,8 @@ func TestFileStore_RejectsSymlinkStoreParent(t *testing.T) {
 }
 
 func TestFileStore_DefaultProjectRejectsSymlinkStoreParent(t *testing.T) {
-	project := t.TempDir()
-	outside := t.TempDir()
+	project := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	oldWorkingDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -233,8 +235,8 @@ func TestFileStore_DefaultProjectRejectsSymlinkStoreParent(t *testing.T) {
 }
 
 func TestFileStore_RejectsSymlinkSnapshotAndEvents(t *testing.T) {
-	project := t.TempDir()
-	outside := t.TempDir()
+	project := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	root := filepath.Join(project, ".reasonix", "tasks", "t1")
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
@@ -254,7 +256,7 @@ func TestFileStore_RejectsSymlinkSnapshotAndEvents(t *testing.T) {
 }
 
 func TestFileStore_WritablePathsUsePrivateModes(t *testing.T) {
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 	now := time.Now()
 	snap := TaskSnapshot{SchemaVersion: 1, TaskID: "t1", SessionID: "s", Version: 1, State: TaskStateRunning, CreatedAt: now, UpdatedAt: now}
@@ -286,7 +288,7 @@ func TestFileStore_WritablePathsUsePrivateModes(t *testing.T) {
 }
 
 func TestFileStore_SaveTask_VersionConflict(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 	ctx := context.Background()
 	now := time.Now().Truncate(time.Second)
@@ -320,7 +322,7 @@ func TestFileStore_SaveTask_VersionConflict(t *testing.T) {
 // winner; the loser observes the version conflict instead of silently
 // overwriting (the pre-fix TOCTOU).
 func TestFileStore_SaveTask_ConcurrentCAS(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	ctx := context.Background()
 	now := time.Now().Truncate(time.Second)
 	seed := NewFileStore(".reasonix/tasks")
@@ -377,7 +379,7 @@ func TestFileStore_SaveTask_ConcurrentCAS(t *testing.T) {
 // corrupt snapshot.json must fail loudly instead of silently bypassing the
 // version check and being overwritten.
 func TestFileStore_SaveTask_CorruptSnapshotRejected(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 	ctx := context.Background()
 	taskDir := filepath.Join(dir, ".reasonix", "tasks", "t1")

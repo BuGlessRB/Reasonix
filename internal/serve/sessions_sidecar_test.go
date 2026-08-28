@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // GET /sessions must answer from the session sidecars. Decoding each transcript
@@ -20,7 +21,7 @@ import (
 // the transcript bodies is how the test tells the two apart: a reader that
 // still parses them cannot report these turn counts.
 func TestSessionsListReadsSidecarsNotTranscripts(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	paths := []string{
 		filepath.Join(dir, "20260101-000001-model.jsonl"),
 		filepath.Join(dir, "20260101-000002-model.jsonl"),

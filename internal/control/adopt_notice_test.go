@@ -7,11 +7,12 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func coldNoticeController(t *testing.T, sink event.Sink) (*Controller, string) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saved := agent.NewSession("sys")
 	saved.Add(provider.Message{Role: provider.RoleUser, Content: "task"})
 	saved.Add(provider.Message{Role: provider.RoleAssistant, Content: "ok"})

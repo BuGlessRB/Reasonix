@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 func TestPluginInstallReturnsFailureExitForFailedJSON(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 
-	source := filepath.Join(t.TempDir(), "superpowers")
+	source := filepath.Join(testenv.TempDir(t), "superpowers")
 	writePluginTestFile(t, filepath.Join(source, pluginpkg.CodexManifest), `{
 	  "name": "superpowers",
 	  "version": "6.1.1",

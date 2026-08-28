@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 // TestPendingUpdateRollbackExcludesConcurrentCommit pins the pending-update
@@ -14,9 +16,9 @@ import (
 // The two operations run on separate file descriptors, so this exercises the
 // same exclusion two processes would see.
 func TestPendingUpdateRollbackExcludesConcurrentCommit(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(dir, "reasonix-guard"), nil }
@@ -77,9 +79,9 @@ func TestPendingUpdateRollbackExcludesConcurrentCommit(t *testing.T) {
 }
 
 func TestAppBundleRollbackLocksBackupPath(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}

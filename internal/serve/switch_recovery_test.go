@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -40,8 +41,8 @@ func (p *switchAskProvider) Stream(context.Context, provider.Request) (<-chan pr
 }
 
 func TestSwitchModelKeepsAskInteractive(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir := testenv.TempDir(t)
 
 	bc := NewBroadcaster()
 	old := control.New(control.Options{
@@ -120,8 +121,8 @@ func primarySessionFiles(paths []string) []string {
 // kept beside it under a name no session listing globs, so the bytes survive
 // without becoming a conversation.
 func TestSwitchModelStaysOnOneSessionThroughASnapshotConflict(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir := testenv.TempDir(t)
 	originalPath := filepath.Join(dir, "switch-conflict.jsonl")
 
 	disk := agent.NewSession("sys prompt")
@@ -226,8 +227,8 @@ func assertNoRecoveryBranch(t *testing.T, dir, when string) {
 // prompt. The user-visible symptom was that the model kept following the
 // previous system prompt after every /model switch.
 func TestSwitchModelRefreshesLeadingSystemPrompt(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir := testenv.TempDir(t)
 
 	oldSession := agent.NewSession("old system prompt")
 	oldSession.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
@@ -271,8 +272,8 @@ func TestSwitchModelRefreshesLeadingSystemPrompt(t *testing.T) {
 // read-only command trust on every /model switch, forcing the user to
 // re-approve something already granted this session.
 func TestSwitchModelRestoresSessionAuthorizations(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir := testenv.TempDir(t)
 
 	bc := NewBroadcaster()
 	old := control.New(control.Options{
@@ -315,8 +316,8 @@ func TestSwitchModelRestoresSessionAuthorizations(t *testing.T) {
 // the switch itself must persist the adopted history or a restart + /resume
 // revives the outgoing controller's contract from disk.
 func TestSwitchModelPersistsRefreshedSystemPromptToDisk(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "switch-persist.jsonl")
 
 	oldSession := agent.NewSession("old system prompt")
@@ -362,8 +363,8 @@ func TestSwitchModelPersistsRefreshedSystemPromptToDisk(t *testing.T) {
 }
 
 func TestSwitchModelSnapshotFailureKeepsOldController(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	invalidSessionDir := filepath.Join(t.TempDir(), "session-dir-is-a-file")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	invalidSessionDir := filepath.Join(testenv.TempDir(t), "session-dir-is-a-file")
 	if err := os.WriteFile(invalidSessionDir, []byte("not a directory"), 0o644); err != nil {
 		t.Fatalf("write invalid session dir: %v", err)
 	}

@@ -7,13 +7,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestPendingUpdateRejectsTargetOutsideGuardInstall(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	guardDir := t.TempDir()
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	guardDir := testenv.TempDir(t)
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	backup := filepath.Join(home, "repair", "updates", "reasonix-desktop.previous")
 	if err := os.MkdirAll(filepath.Dir(backup), 0o700); err != nil {
 		t.Fatal(err)
@@ -45,9 +47,9 @@ func TestInstalledUpdateStateRejectsSymlinkedParentEscape(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating symlinks requires elevated privileges on Windows CI")
 	}
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -69,7 +71,7 @@ func TestInstalledUpdateStateRejectsSymlinkedParentEscape(t *testing.T) {
 	}
 
 	updatesDir := filepath.Dir(tx.BackupPath)
-	outside := filepath.Join(t.TempDir(), "moved-updates")
+	outside := filepath.Join(testenv.TempDir(t), "moved-updates")
 	if err := os.Rename(updatesDir, outside); err != nil {
 		t.Fatal(err)
 	}
@@ -97,9 +99,9 @@ func TestInstalledUpdateStateRejectsSymlinkedParentEscape(t *testing.T) {
 }
 
 func TestPendingUpdateRejectsUnexpectedReleaseFile(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	backup := filepath.Join(home, "repair", "updates", "reasonix-desktop.previous")
 	if err := os.MkdirAll(filepath.Dir(backup), 0o700); err != nil {
@@ -114,8 +116,8 @@ func TestPendingUpdateRejectsUnexpectedReleaseFile(t *testing.T) {
 	const hash = "deadbeef"
 	bad := []UpdateTransactionFile{
 		{TargetPath: filepath.Join(dir, "evil.exe"), BackupPath: backup, SHA256: hash},
-		{TargetPath: filepath.Join(t.TempDir(), "reasonix-guard"), BackupPath: backup, SHA256: hash},
-		{TargetPath: filepath.Join(dir, "reasonix-guard"), BackupPath: filepath.Join(t.TempDir(), "loose.previous"), SHA256: hash},
+		{TargetPath: filepath.Join(testenv.TempDir(t), "reasonix-guard"), BackupPath: backup, SHA256: hash},
+		{TargetPath: filepath.Join(dir, "reasonix-guard"), BackupPath: filepath.Join(testenv.TempDir(t), "loose.previous"), SHA256: hash},
 		{TargetPath: filepath.Join(dir, "reasonix-guard"), BackupPath: backup}, // missing hash
 		{TargetPath: filepath.Join(dir, "reasonix-guard"), BackupPath: backup, SHA256: hash, MissingBefore: true},
 		{TargetPath: target, MissingBefore: true},
@@ -145,9 +147,9 @@ func TestPendingUpdateRejectsBackupSymlinkEscape(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating symlinks requires elevated privileges on Windows CI")
 	}
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +163,7 @@ func TestPendingUpdateRejectsBackupSymlinkEscape(t *testing.T) {
 	if err := os.MkdirAll(repairDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	outside := t.TempDir()
+	outside := testenv.TempDir(t)
 	if err := os.Symlink(outside, filepath.Join(repairDir, "updates")); err != nil {
 		t.Fatal(err)
 	}
@@ -197,12 +199,12 @@ func TestPrepareFileUpdateRejectsSymlinkReleaseFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating symlinks requires elevated privileges on Windows CI")
 	}
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	outside := filepath.Join(t.TempDir(), "outside-binary")
+	outside := filepath.Join(testenv.TempDir(t), "outside-binary")
 	if err := os.WriteFile(outside, []byte("outside"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -225,8 +227,8 @@ func TestCopyFileWithHashRejectsSymlinkSource(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating symlinks requires elevated privileges on Windows CI")
 	}
-	dir := t.TempDir()
-	outside := filepath.Join(t.TempDir(), "outside")
+	dir := testenv.TempDir(t)
+	outside := filepath.Join(testenv.TempDir(t), "outside")
 	if err := os.WriteFile(outside, []byte("outside"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +245,7 @@ func TestCopyFileWithHashRejectsSymlinkSource(t *testing.T) {
 }
 
 func TestRenameRepairNodeNoReplacePreservesDestination(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	source := filepath.Join(dir, "source")
 	destination := filepath.Join(dir, "destination")
 	if err := os.WriteFile(source, []byte("source"), 0o600); err != nil {
@@ -264,9 +266,9 @@ func TestRenameRepairNodeNoReplacePreservesDestination(t *testing.T) {
 }
 
 func TestPendingUpdateAcceptsMissingReleaseSibling(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,9 +306,9 @@ func TestPendingUpdateAcceptsMissingReleaseSibling(t *testing.T) {
 }
 
 func TestPendingUpdateAcceptsWindowsReleaseUnit(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,9 +350,9 @@ func TestPendingUpdateAcceptsWindowsReleaseUnit(t *testing.T) {
 }
 
 func TestPendingUpdateAcceptsLinuxReleaseUnit(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,9 +382,9 @@ func TestPendingUpdateAcceptsLinuxReleaseUnit(t *testing.T) {
 }
 
 func TestPendingUpdateRejectsHashlessOrPrimaryLessTransactions(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,9 +424,9 @@ func TestPendingUpdateRejectsHashlessOrPrimaryLessTransactions(t *testing.T) {
 }
 
 func TestPendingUpdateRejectsPortableAliasAsPrimaryTarget(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "Reasonix.exe")
 	guard := filepath.Join(dir, "reasonix-guard.exe")
 	backup := filepath.Join(home, "repair", "updates", "Reasonix.exe.previous")
@@ -504,8 +506,8 @@ func TestPendingUpdateRejectsIncompleteOrInconsistentIdentity(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("REASONIX_HOME", t.TempDir())
-			dir, err := filepath.EvalSymlinks(t.TempDir())
+			t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+			dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 			if err != nil {
 				t.Fatal(err)
 			}

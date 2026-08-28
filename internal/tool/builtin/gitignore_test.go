@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 func writeFileT(t *testing.T, path, body string) {
@@ -21,7 +22,7 @@ func writeFileT(t *testing.T, path, body string) {
 
 func mkRepo(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := os.Mkdir(filepath.Join(dir, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func TestGrepExplicitHiddenRootSearched(t *testing.T) {
 // kept and ignored — enough for the native grep walk to exercise .gitignore.
 func gitignoreRepo(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := os.Mkdir(filepath.Join(dir, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +139,7 @@ func TestGrepDecodesGB18030Gitignore(t *testing.T) {
 }
 
 func TestScanGitConfigExcludesDecodesGB18030Path(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, ".gitconfig")
 	want := filepath.Join(dir, "中文忽略规则.txt")
 	body := "[core]\n\texcludesFile = " + want + "\n"
@@ -164,7 +165,7 @@ func TestGrepExplicitIgnoredRootStillSearched(t *testing.T) {
 func TestGrepNoRepoIgnoresNothing(t *testing.T) {
 	// Same layout but without a .git marker: there is no repository, so
 	// .gitignore is not consulted and every file is searched.
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeFileT(t, filepath.Join(dir, ".gitignore"), "ignored.txt\n")
 	writeFileT(t, filepath.Join(dir, "ignored.txt"), "NEEDLE here\n")
 
@@ -175,7 +176,7 @@ func TestGrepNoRepoIgnoresNothing(t *testing.T) {
 }
 
 func TestFindRepoRoot(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := os.Mkdir(filepath.Join(dir, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +192,7 @@ func TestFindRepoRoot(t *testing.T) {
 	if got != want {
 		t.Fatalf("findRepoRoot(%q) = %q, want %q", sub, got, want)
 	}
-	if rr := findRepoRoot(t.TempDir()); rr != "" {
+	if rr := findRepoRoot(testenv.TempDir(t)); rr != "" {
 		t.Fatalf("a dir with no .git ancestor should return \"\", got %q", rr)
 	}
 }

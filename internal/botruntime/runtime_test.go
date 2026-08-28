@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/bot"
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestAllowlistUserCountIncludesRoles(t *testing.T) {
@@ -230,7 +231,7 @@ func TestRememberInboundSessionPreservesBareExplicitMappingTarget(t *testing.T) 
 
 func TestRememberInboundSessionUsesActualWorkspaceWhenConnectionIsGlobal(t *testing.T) {
 	isolateUserConfig(t)
-	workspace := filepath.Join(t.TempDir(), "workspace")
+	workspace := filepath.Join(testenv.TempDir(t), "workspace")
 	cfg := config.Default()
 	cfg.Bot.Connections = []config.BotConnectionConfig{
 		{ID: "weixin-weixin", Provider: "weixin", Domain: "weixin", Label: "微信", Enabled: true, Status: "connected"},
@@ -253,8 +254,8 @@ func TestRememberInboundSessionUsesActualWorkspaceWhenConnectionIsGlobal(t *test
 
 func TestRememberInboundSessionKeepsConfiguredWorkspaceOverActualWorkspace(t *testing.T) {
 	isolateUserConfig(t)
-	configured := filepath.Join(t.TempDir(), "configured")
-	actual := filepath.Join(t.TempDir(), "actual")
+	configured := filepath.Join(testenv.TempDir(t), "configured")
+	actual := filepath.Join(testenv.TempDir(t), "actual")
 	cfg := config.Default()
 	cfg.Bot.Connections = []config.BotConnectionConfig{{
 		ID: "weixin-weixin", Provider: "weixin", Domain: "weixin", Label: "微信", Enabled: true, Status: "connected", WorkspaceRoot: configured,
@@ -300,8 +301,8 @@ func TestRememberInboundSessionUpdatesAutoMappingTarget(t *testing.T) {
 
 func TestForgetAutoSessionMappingsForPathRemovesOnlyAutoPathTargets(t *testing.T) {
 	isolateUserConfig(t)
-	target := filepath.Join(t.TempDir(), "bot-channel.jsonl")
-	other := filepath.Join(t.TempDir(), "other-channel.jsonl")
+	target := filepath.Join(testenv.TempDir(t), "bot-channel.jsonl")
+	other := filepath.Join(testenv.TempDir(t), "other-channel.jsonl")
 	cfg := config.Default()
 	cfg.Bot.Connections = []config.BotConnectionConfig{{
 		ID: "weixin-weixin", Provider: "weixin", Domain: "weixin", Label: "微信", Enabled: true, Status: "connected",
@@ -423,10 +424,10 @@ func TestRouteConfigsPreserveRemoteOverrides(t *testing.T) {
 
 func isolateUserConfig(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 }

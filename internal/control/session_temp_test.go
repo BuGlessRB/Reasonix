@@ -8,6 +8,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/sessiontemp"
+	"reasonix/internal/testenv"
 )
 
 func TestSessionTempSurvivesHotRebuildStyleRetain(t *testing.T) {
@@ -43,7 +44,7 @@ func TestSessionTempSurvivesHotRebuildStyleRetain(t *testing.T) {
 }
 
 func TestNewSessionRotatesSessionTemp(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{
 		Executor:   exec,
@@ -80,7 +81,7 @@ func TestNewSessionRotatesSessionTemp(t *testing.T) {
 }
 
 func TestSetSessionPathDoesNotRotateSessionTemp(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{
 		Executor:   exec,
@@ -109,7 +110,7 @@ func TestSetSessionPathDoesNotRotateSessionTemp(t *testing.T) {
 }
 
 func TestResumeOtherSessionRotatesSessionTemp(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 	pathA := agent.NewSessionPath(dir, "a")
 	pathB := agent.NewSessionPath(dir, "b")

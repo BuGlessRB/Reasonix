@@ -6,6 +6,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // A model or effort switch rebuilds the runtime. Before this, the replacement
@@ -13,7 +14,7 @@ import (
 // global session dir, so flipping effort swapped the sidebar for another
 // project's conversations and continued the transcript into the global dir.
 func TestRebuildOptionsKeepsWorkspace(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sessions := filepath.Join(root, "sessions")
 	ctrl := control.New(control.Options{WorkspaceRoot: root, SessionDir: sessions})
 	defer ctrl.Close()

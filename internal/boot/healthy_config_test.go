@@ -79,7 +79,7 @@ func TestBuildRuntimeRecordsHealthyConfig(t *testing.T) {
 	// A build that cannot resolve a model still fails before recording; use the
 	// declared version to prove the wiring reaches the recorder on success.
 	if _, err := BuildRuntime(context.Background(), Options{
-		Version: "7.7.7", WorkspaceRoot: t.TempDir(), Sink: event.Discard, Stderr: io.Discard,
+		Version: "7.7.7", WorkspaceRoot: robustTempDir(t), Sink: event.Discard, Stderr: io.Discard,
 	}); err != nil {
 		t.Skipf("assembly unavailable in this environment: %v", err)
 	}

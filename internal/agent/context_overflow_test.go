@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/agent/testutil"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -76,7 +77,7 @@ func TestContextOverflowRejectionFoldsAndReplays(t *testing.T) {
 	a := New(prov, tool.NewRegistry(), session, Options{
 		ContextWindow: 40_000,
 		RecentKeep:    2,
-		ArchiveDir:    t.TempDir(),
+		ArchiveDir:    testenv.TempDir(t),
 	}, event.Discard)
 
 	if err := a.Run(context.Background(), "continue"); err != nil {
@@ -107,7 +108,7 @@ func TestContextOverflowProbesAnUndeclaredWindow(t *testing.T) {
 	session := foldableSessionOverForce(60)
 	a := New(prov, tool.NewRegistry(), session, Options{
 		RecentKeep: 2,
-		ArchiveDir: t.TempDir(),
+		ArchiveDir: testenv.TempDir(t),
 	}, event.Discard)
 	if got := a.effectiveContextWindow(); got != 0 {
 		t.Fatalf("window before the refusal = %d, want none", got)
@@ -135,7 +136,7 @@ func TestContextOverflowWithNothingToFoldFailsTheTurn(t *testing.T) {
 	prov := testutil.NewMock("mock", testutil.Turn{StreamError: contextOverflowRejection()})
 	a := New(prov, tool.NewRegistry(), NewSession("system"), Options{
 		ContextWindow: 40_000,
-		ArchiveDir:    t.TempDir(),
+		ArchiveDir:    testenv.TempDir(t),
 	}, event.Discard)
 
 	err := a.Run(context.Background(), "hello")
@@ -159,7 +160,7 @@ func TestContextOverflowRecoveryIsOneShotPerRound(t *testing.T) {
 	a := New(prov, tool.NewRegistry(), session, Options{
 		ContextWindow: 40_000,
 		RecentKeep:    2,
-		ArchiveDir:    t.TempDir(),
+		ArchiveDir:    testenv.TempDir(t),
 	}, event.Discard)
 
 	err := a.Run(context.Background(), "continue")

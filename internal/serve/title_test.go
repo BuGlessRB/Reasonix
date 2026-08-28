@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // Generation runs on the filler's goroutines, so the recorder is shared.
@@ -86,7 +87,7 @@ func TestGenerateTitleStripsPasteLabelAndUsesShortBudget(t *testing.T) {
 }
 
 func TestSessionTitleCachesByFirstMessageAcrossMtimeChanges(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	prov := &recordingTitleProvider{}
 	s := &Server{titleProv: prov, titles: newTitleCache(dir), fill: newTitleFiller()}
 
@@ -125,7 +126,7 @@ func TestSessionTitleCachesByFirstMessageAcrossMtimeChanges(t *testing.T) {
 func TestSessionTitleDoesNotBlockOnGeneration(t *testing.T) {
 	release := make(chan struct{})
 	prov := &blockingTitleProvider{release: release}
-	s := &Server{titleProv: prov, titles: newTitleCache(t.TempDir()), fill: newTitleFiller()}
+	s := &Server{titleProv: prov, titles: newTitleCache(testenv.TempDir(t)), fill: newTitleFiller()}
 
 	done := make(chan string, 1)
 	go func() { done <- s.sessionTitle("a.jsonl", "slow prompt", 100) }()

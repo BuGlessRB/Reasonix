@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func writeSessionAt(t *testing.T, path string) {
@@ -44,8 +45,8 @@ func postRemoveSession(t *testing.T, srv *httptest.Server, path string) *http.Re
 // and a session mid-rotation are both held without being anyone's current path.
 // The pane map cannot see either, so the lease is what has to answer.
 func TestRemoveSessionRefusesALeasedTranscript(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	root := testenv.TempDir(t)
 	h := NewHub(HubOptions{})
 	hubRuntime(t, h, root)
 	srv := httptest.NewServer(h.Handler())
@@ -90,8 +91,8 @@ func TestRemoveSessionRefusesALeasedTranscript(t *testing.T) {
 // The same session deletes normally once nothing holds it, so the guard cannot
 // be a session that can never be removed.
 func TestRemoveSessionSucceedsOnceTheLeaseIsReleased(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	root := testenv.TempDir(t)
 	h := NewHub(HubOptions{})
 	hubRuntime(t, h, root)
 	srv := httptest.NewServer(h.Handler())

@@ -14,12 +14,13 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // TestResumeDispatchOpensPicker proves bare "/resume" opens the interactive
 // picker without duplicating the same list in transcript scrollback.
 func TestResumeDispatchOpensPicker(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saveTestSession(t, filepath.Join(dir, "a.jsonl"), "alpha prompt")
 	saveTestSession(t, filepath.Join(dir, "b.jsonl"), "beta prompt")
 
@@ -69,7 +70,7 @@ func TestOrderResumeSessionsGroupsRecoveryCopiesAndPrefersNewestLeaf(t *testing.
 }
 
 func TestMostRecentSessionIgnoresRecoveryPickerLeafPreference(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	rootPath := filepath.Join(dir, "root.jsonl")
 	recoveryPath := filepath.Join(dir, "recovery.jsonl")
 	saveTestSession(t, rootPath, "latest parent prompt")
@@ -104,7 +105,7 @@ func TestMostRecentSessionIgnoresRecoveryPickerLeafPreference(t *testing.T) {
 }
 
 func TestRunResumeKeepsCompletedIndexStableAcrossRecoveryGC(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	parentPath := filepath.Join(dir, "recovery-parent.jsonl")
 	disk := agent.NewSession("sys")
 	disk.Add(provider.Message{Role: provider.RoleUser, Content: "shared prompt"})
@@ -222,7 +223,7 @@ func TestSessionPickerLabelIdentifiesRecoveryParent(t *testing.T) {
 // TestResumePickerNavigateAndSelect proves the picker's up/down navigation and
 // Enter to resume the selected session.
 func TestResumePickerNavigateAndSelect(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 	ctrl := control.New(control.Options{Executor: exec, SessionDir: dir, Label: "test"})
 
@@ -274,7 +275,7 @@ func TestResumePickerNavigateAndSelect(t *testing.T) {
 // TestResumePickerEscDismisses proves pressing Esc closes the picker without
 // switching sessions.
 func TestResumePickerEscDismisses(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saveTestSession(t, filepath.Join(dir, "a.jsonl"), "alpha prompt")
 
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
@@ -297,7 +298,7 @@ func TestResumePickerEscDismisses(t *testing.T) {
 // dispatcher and asserts the controller switched session AND the resumed
 // transcript was replayed into the scrollback.
 func TestResumeDispatchSwitchesAndReplays(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := agent.NewSession("sys")
 	active.Add(provider.Message{Role: provider.RoleUser, Content: "active prompt"})
 	exec := agent.New(nil, nil, active, agent.Options{}, event.Discard)
@@ -338,7 +339,7 @@ func TestResumeDispatchSwitchesAndReplays(t *testing.T) {
 // regression where a stale scroll offset was preserved if the user had read
 // back in the old transcript before resuming another session.
 func TestResumeWhileScrolledUpPinsViewportToBottom(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := agent.NewSession("sys")
 	for i := range 18 {
 		active.Add(provider.Message{Role: provider.RoleUser, Content: "active prompt " + strconv.Itoa(i)})
@@ -409,7 +410,7 @@ func saveTestSession(t *testing.T, path, prompt string) {
 // TestResumeArgCompletionListsSessions proves "/resume " opens an indexed menu
 // of the saved sessions, mirroring the /switch branch completion.
 func TestResumeArgCompletionListsSessions(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saveTestSession(t, filepath.Join(dir, "a.jsonl"), "first")
 	saveTestSession(t, filepath.Join(dir, "b.jsonl"), "second")
 
@@ -431,7 +432,7 @@ func TestResumeArgCompletionListsSessions(t *testing.T) {
 // non-descend command that still takes arguments) immediately opens the session
 // menu, rather than waiting for the next keystroke.
 func TestResumeAcceptChainsIntoSessionMenu(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saveTestSession(t, filepath.Join(dir, "a.jsonl"), "first")
 
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
@@ -452,7 +453,7 @@ func TestResumeAcceptChainsIntoSessionMenu(t *testing.T) {
 // TestRunResumeSwitchesSession proves "/resume <n>" repoints the running
 // controller to the chosen saved session and loads its history.
 func TestRunResumeSwitchesSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 
 	active := agent.NewSession("sys")
 	active.Add(provider.Message{Role: provider.RoleUser, Content: "active prompt"})

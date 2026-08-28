@@ -196,7 +196,7 @@ func reclaimOwned(from string, owned []string) error {
 			return err
 		}
 	}
-	if err := os.Remove(filepath.Join(from, markerName)); err != nil && !os.IsNotExist(err) {
+	if err := fileutil.Remove(filepath.Join(from, markerName)); err != nil {
 		return err
 	}
 	return nil
@@ -386,7 +386,7 @@ func clearJournal() error {
 	if path == "" {
 		return nil
 	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	if err := fileutil.Remove(path); err != nil {
 		return err
 	}
 	return nil

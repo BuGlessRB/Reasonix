@@ -12,10 +12,11 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func TestSessionLeaseKeeperRebindMovesLease(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	a := filepath.Join(dir, "a.jsonl")
 	b := filepath.Join(dir, "b.jsonl")
 
@@ -54,7 +55,7 @@ func TestSessionLeaseKeeperRebindMovesLease(t *testing.T) {
 }
 
 func TestSessionLeaseKeeperRebindSamePathIsNoop(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	a := filepath.Join(dir, "a.jsonl")
 
 	k := NewSessionLeaseKeeper()
@@ -72,7 +73,7 @@ func TestSessionLeaseKeeperRebindSamePathIsNoop(t *testing.T) {
 }
 
 func TestSessionLeaseKeeperRefusesHeldPathAndKeepsCurrent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	a := filepath.Join(dir, "a.jsonl")
 	b := filepath.Join(dir, "b.jsonl")
 
@@ -98,7 +99,7 @@ func TestSessionLeaseKeeperRefusesHeldPathAndKeepsCurrent(t *testing.T) {
 }
 
 func TestSessionLeaseKeeperEmptyPathReleases(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	a := filepath.Join(dir, "a.jsonl")
 
 	k := NewSessionLeaseKeeper()
@@ -120,7 +121,7 @@ func TestSessionLeaseKeeperEmptyPathReleases(t *testing.T) {
 }
 
 func TestSessionLeaseKeeperReleaseRemovesLeaseInfo(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	a := filepath.Join(dir, "a.jsonl")
 
 	k := NewSessionLeaseKeeper()
@@ -138,7 +139,7 @@ func TestSessionLeaseKeeperReleaseRemovesLeaseInfo(t *testing.T) {
 }
 
 func TestSessionLeaseKeeperRecoveryRebindsControllerBeforeReturning(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	a := filepath.Join(dir, "a.jsonl")
 	b := filepath.Join(dir, "b.jsonl")
 	sess := agent.NewSession("sys")

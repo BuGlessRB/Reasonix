@@ -13,10 +13,11 @@ import (
 
 	"reasonix/internal/fileutil"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func TestEnqueueSnapshotAndRead(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -69,7 +70,7 @@ func TestEnqueueSnapshotAndRead(t *testing.T) {
 }
 
 func TestIdempotentEnqueue(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{})
@@ -102,7 +103,7 @@ func TestIdempotentEnqueue(t *testing.T) {
 }
 
 func TestIdempotencyConflictRejectsDifferentInput(t *testing.T) {
-	session := filepath.Join(t.TempDir(), "s.jsonl")
+	session := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	s, err := Open(session, Limits{})
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +136,7 @@ func TestIdempotencyHashTreatsLegacyAndModernInvocationAsEquivalent(t *testing.T
 }
 
 func TestIdempotencyReceiptSurvivesAckAndReopen(t *testing.T) {
-	session := filepath.Join(t.TempDir(), "s.jsonl")
+	session := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	s, err := Open(session, Limits{})
 	if err != nil {
 		t.Fatal(err)
@@ -170,7 +171,7 @@ func TestIdempotencyReceiptSurvivesAckAndReopen(t *testing.T) {
 }
 
 func TestCollectAliasReceiptSurvivesAck(t *testing.T) {
-	session := filepath.Join(t.TempDir(), "s.jsonl")
+	session := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	s, err := Open(session, Limits{})
 	if err != nil {
 		t.Fatal(err)
@@ -207,7 +208,7 @@ func TestCollectAliasReceiptSurvivesAck(t *testing.T) {
 }
 
 func TestV1ManifestMigratesIdempotencyFingerprint(t *testing.T) {
-	session := filepath.Join(t.TempDir(), "s.jsonl")
+	session := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	s, err := Open(session, Limits{})
 	if err != nil {
 		t.Fatal(err)
@@ -260,7 +261,7 @@ func TestV1ManifestMigratesIdempotencyFingerprint(t *testing.T) {
 }
 
 func TestManifestBlobPathEscapeIsQuarantinedWithoutTouchingTarget(t *testing.T) {
-	session := filepath.Join(t.TempDir(), "s.jsonl")
+	session := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	inboxDir := store.SessionInboxDir(session)
 	if err := os.MkdirAll(filepath.Join(inboxDir, blobsDirName), 0o700); err != nil {
 		t.Fatal(err)
@@ -333,7 +334,7 @@ func TestValidateManifestRejectsSemanticCorruption(t *testing.T) {
 }
 
 func TestStoreInstancesReloadManifestBeforeMutation(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	first, err := Open(session, Limits{})
@@ -362,7 +363,7 @@ func TestStoreInstancesReloadManifestBeforeMutation(t *testing.T) {
 }
 
 func TestCapacityLimits(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{MaxItems: 2, MaxItemBytes: 200, MaxTotalBytes: 1 << 20})
@@ -385,7 +386,7 @@ func TestCapacityLimits(t *testing.T) {
 }
 
 func TestDeleteThenBlobGone(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{})
@@ -403,7 +404,7 @@ func TestDeleteThenBlobGone(t *testing.T) {
 }
 
 func TestCrashAfterBlobBeforeManifestLeavesNoValidItem(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{})
@@ -445,7 +446,7 @@ func TestUpdateCrashPointsPreserveCompleteRevision(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.crashOp, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := testenv.TempDir(t)
 			session := filepath.Join(dir, "s.jsonl")
 			s, err := Open(session, Limits{})
 			if err != nil {
@@ -485,7 +486,7 @@ func TestUpdateCrashPointsPreserveCompleteRevision(t *testing.T) {
 }
 
 func TestCrossProcessRecoveryPauses(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{})
@@ -534,7 +535,7 @@ func TestPreviewDoesNotMaterializeHugeBody(t *testing.T) {
 }
 
 func TestUpdateUsesImmutableBlobRevision(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{})
@@ -572,7 +573,7 @@ func TestUpdateUsesImmutableBlobRevision(t *testing.T) {
 }
 
 func TestCorruptManifestSalvagesBlobs(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{})
@@ -607,13 +608,13 @@ func TestCorruptManifestSalvageRefusesSymlinkBlob(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation may require elevated privileges")
 	}
-	session := filepath.Join(t.TempDir(), "s.jsonl")
+	session := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	inboxDir := store.SessionInboxDir(session)
 	blobsDir := filepath.Join(inboxDir, blobsDirName)
 	if err := os.MkdirAll(blobsDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	target := filepath.Join(t.TempDir(), "external.json")
+	target := filepath.Join(testenv.TempDir(t), "external.json")
 	if err := os.WriteFile(target, []byte(`{"submitText":"external secret"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -641,12 +642,12 @@ func TestEnqueueRefusesSymlinkBlobsDirectory(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation may require elevated privileges")
 	}
-	session := filepath.Join(t.TempDir(), "s.jsonl")
+	session := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	s, err := Open(session, Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	target := t.TempDir()
+	target := testenv.TempDir(t)
 	if err := os.Symlink(target, filepath.Join(store.SessionInboxDir(session), blobsDirName)); err != nil {
 		t.Fatal(err)
 	}
@@ -663,7 +664,7 @@ func TestEnqueueRefusesSymlinkBlobsDirectory(t *testing.T) {
 }
 
 func TestFreezeRefsRejectsWorkspaceEscape(t *testing.T) {
-	ws := t.TempDir()
+	ws := testenv.TempDir(t)
 	refs, err := FreezeRefs(context.Background(), ws, []string{"/etc/passwd"})
 	if err != nil {
 		t.Fatal(err)
@@ -677,8 +678,8 @@ func TestFreezeRefsRejectsWorkspaceEscape(t *testing.T) {
 }
 
 func TestFreezeRefsRejectsSymlinkEscape(t *testing.T) {
-	ws := t.TempDir()
-	external := t.TempDir()
+	ws := testenv.TempDir(t)
+	external := testenv.TempDir(t)
 	secret := filepath.Join(external, "secret.txt")
 	if err := os.WriteFile(secret, []byte("outside-secret"), 0o600); err != nil {
 		t.Fatal(err)
@@ -719,7 +720,7 @@ func TestApplyFrozenRefsIsDeterministic(t *testing.T) {
 }
 
 func TestMoveAndPause(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{})
@@ -745,7 +746,7 @@ func TestMoveAndPause(t *testing.T) {
 }
 
 func TestDiscardPendingItemsIsScopedAndAtomic(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{})
@@ -777,7 +778,7 @@ func TestDiscardPendingItemsIsScopedAndAtomic(t *testing.T) {
 }
 
 func TestDiscardPendingItemsEnforcesSourceOwnership(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{})

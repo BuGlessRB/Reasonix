@@ -22,6 +22,7 @@ import (
 	"reasonix/internal/jobs"
 	"reasonix/internal/provider"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -681,7 +682,7 @@ func TestServeLifecycle(t *testing.T) {
 		t.Fatalf("bad authenticate = %+v, want invalid params", badAuthResp.Error)
 	}
 
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil || nr.SessionID == "" {
 		t.Fatalf("session/new result: %v (%q)", err, nr.SessionID)
@@ -735,7 +736,7 @@ func TestServeAdvertisesAndExpandsCustomCommands(t *testing.T) {
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil || nr.SessionID == "" {
 		t.Fatalf("session/new result: %v (%q)", err, nr.SessionID)
@@ -837,7 +838,7 @@ func TestServeRequestRunsAfterResponseHookAfterWritingResult(t *testing.T) {
 }
 
 func TestServeAdvertisesCommandsAfterEverySessionOpenResponse(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	factory := &commandFactory{
 		dir:      sessionDir,
 		commands: []command.Command{{Name: "review", Description: "Review the target"}},
@@ -848,7 +849,7 @@ func TestServeAdvertisesCommandsAfterEverySessionOpenResponse(t *testing.T) {
 	client.send(t, 1, "initialize", InitializeParams{ProtocolVersion: 1})
 	requireResponseFrame(t, client.next(t), 1)
 
-	client.send(t, 2, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	client.send(t, 2, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	newResponse := client.next(t)
 	requireResponseFrame(t, newResponse, 2)
 	requireAvailableCommandsFrame(t, client.next(t))
@@ -893,7 +894,7 @@ func TestServeSessionConfigSwitchesModelAndEffort(t *testing.T) {
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil {
 		t.Fatalf("session/new result: %v", err)
@@ -987,7 +988,7 @@ func TestServeSessionAxesStayIndependent(t *testing.T) {
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil {
 		t.Fatalf("session/new result: %v", err)
@@ -1082,7 +1083,7 @@ func TestServeLegacyModeAliasesRemainCompatible(t *testing.T) {
 	client, stop := startServer(t, factory)
 	defer stop()
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil {
 		t.Fatalf("session/new result: %v", err)
@@ -1113,7 +1114,7 @@ func TestServeLegacyModeAliasesRemainCompatible(t *testing.T) {
 }
 
 func TestServeSessionAxesRestoreFromMetadata(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionID := "axes-restore"
 	path := transcriptPath(dir, sessionID)
 	saved := agent.NewSession("")
@@ -1202,7 +1203,7 @@ func TestServeSessionConfigQueuesDuringActivePrompt(t *testing.T) {
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil {
 		t.Fatalf("session/new result: %v", err)
@@ -1249,13 +1250,13 @@ func TestServeSessionConfigQueuesDuringActivePrompt(t *testing.T) {
 }
 
 func TestServeSessionConfigRejectsBackgroundJobsWhileIdle(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	factory := &configurableFactory{dir: dir, managers: []*jobs.Manager{}}
 	client, stop := startServer(t, factory)
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil {
 		t.Fatalf("session/new result: %v", err)
@@ -1392,7 +1393,7 @@ func TestQueuedRebuildPreservesControllerSideAxisDrift(t *testing.T) {
 	client, stop := startServer(t, factory)
 	defer stop()
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil {
 		t.Fatalf("session/new result: %v", err)
@@ -1455,7 +1456,7 @@ func TestQueuedRebuildPreservesControllerSideAxisDrift(t *testing.T) {
 }
 
 func TestServeQueuedSessionConfigDiscardedWhenPromptLeavesBackgroundJob(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	releaseJob := make(chan struct{})
 	releaseTurn := make(chan struct{})
 	startedJob := make(chan struct{})
@@ -1495,7 +1496,7 @@ func TestServeQueuedSessionConfigDiscardedWhenPromptLeavesBackgroundJob(t *testi
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil {
 		t.Fatalf("session/new result: %v", err)
@@ -1576,7 +1577,7 @@ func TestServeSessionConfigRejectsPendingAsk(t *testing.T) {
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil {
 		t.Fatalf("session/new result: %v", err)
@@ -1623,7 +1624,7 @@ func TestServeSessionConfigRebuildPreservesLifecycleHooks(t *testing.T) {
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil {
 		t.Fatalf("session/new result: %v", err)
@@ -1675,8 +1676,8 @@ func TestServeSessionConfigRebuildPreservesLifecycleHooks(t *testing.T) {
 }
 
 func TestServeSessionLoadFallsBackFromStaleSavedModel(t *testing.T) {
-	dir := t.TempDir()
-	cwd := t.TempDir()
+	dir := testenv.TempDir(t)
+	cwd := testenv.TempDir(t)
 	sessionID := "stale-model"
 	path := transcriptPath(dir, sessionID)
 	saved := agent.NewSession("")
@@ -1729,8 +1730,8 @@ func TestServeSessionLoadFallsBackFromStaleSavedModel(t *testing.T) {
 }
 
 func TestServeSessionLoadRejectsCleanupPending(t *testing.T) {
-	dir := t.TempDir()
-	cwd := t.TempDir()
+	dir := testenv.TempDir(t)
+	cwd := testenv.TempDir(t)
 	sessionID := "pending-load"
 	path := transcriptPath(dir, sessionID)
 	saved := agent.NewSession("")
@@ -1977,7 +1978,7 @@ func TestServeSessionClose(t *testing.T) {
 }
 
 func TestSessionDeleteWithStuckJobReturnsAfterSingleGrace(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	grace := time.Second
 	maxElapsed := grace + 750*time.Millisecond
 	factory := &teardownFactory{dir: dir, grace: grace}
@@ -1985,7 +1986,7 @@ func TestSessionDeleteWithStuckJobReturnsAfterSingleGrace(t *testing.T) {
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	newResp := client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	newResp := client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(newResp.Result, &nr); err != nil || nr.SessionID == "" {
 		t.Fatalf("session/new: %v (%q)", err, nr.SessionID)
@@ -2037,7 +2038,7 @@ func TestServeRejectsPathLikeSessionID(t *testing.T) {
 }
 
 func TestListACPMetasSkipsCleanupPending(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	visibleID := "visible"
 	pendingID := "pending"
 	for _, id := range []string{visibleID, pendingID} {
@@ -2047,7 +2048,7 @@ func TestListACPMetasSkipsCleanupPending(t *testing.T) {
 		}
 		if err := saveACPMeta(path, acpSessionMeta{
 			SessionID: id,
-			Cwd:       t.TempDir(),
+			Cwd:       testenv.TempDir(t),
 			Title:     id,
 			CreatedAt: time.Now().UTC(),
 			UpdatedAt: time.Now().UTC(),
@@ -2069,7 +2070,7 @@ func TestListACPMetasSkipsCleanupPending(t *testing.T) {
 }
 
 func TestDeleteSessionFilesDeletesOwnedSubagents(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	if err := os.WriteFile(sessionPath, []byte(`{"role":"user","content":"hi"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -2099,12 +2100,12 @@ func TestDeleteSessionFilesDeletesOwnedSubagents(t *testing.T) {
 }
 
 func TestReconcileCleanupPendingDeletesACPMeta(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := transcriptPath(dir, "pending-acp")
 	if err := os.WriteFile(sessionPath, []byte(`{"role":"user","content":"hi"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := saveACPMeta(sessionPath, acpSessionMeta{Cwd: t.TempDir(), Model: "test-model"}); err != nil {
+	if err := saveACPMeta(sessionPath, acpSessionMeta{Cwd: testenv.TempDir(t), Model: "test-model"}); err != nil {
 		t.Fatal(err)
 	}
 	jobsDir := jobs.ArtifactDir(sessionPath)

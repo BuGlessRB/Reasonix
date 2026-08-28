@@ -4,12 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // Telling a model to hexdump a screenshot is telling it to spend a megabyte of
 // context on nothing. An image has somewhere to go — say where.
 func TestReadFileSendsImagesToTheVisionPathNotHexdump(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	png := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 64)...)
 	if err := os.WriteFile(filepath.Join(dir, "shot.png"), png, 0o644); err != nil {
 		t.Fatal(err)

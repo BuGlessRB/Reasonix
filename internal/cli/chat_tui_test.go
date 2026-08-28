@@ -163,7 +163,7 @@ func saveTestImageAttachment(t *testing.T, root string) string {
 // cancel branch, while Ctrl+C — not in the completion switch — fell through.
 func TestEscCancelsRunningTurnWithCompletionOpen(t *testing.T) {
 	r := &blockingTurnRunner{started: make(chan struct{})}
-	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
+	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: testenv.TempDir(t), Label: "test"})
 	ctrl.Send("hi")
 	<-r.started // the turn is in flight and cancellable
 
@@ -698,7 +698,7 @@ func TestMCPManagerHidesComposerBox(t *testing.T) {
 }
 
 func TestClearCommandRequiresConfirmationAndDiscardsSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "old context"})
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -2360,7 +2360,7 @@ func TestEchoLocalCommandAddsTranscriptMarker(t *testing.T) {
 
 func isolateUserConfig(t *testing.T) {
 	t.Helper()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("HOME", root)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
@@ -2842,7 +2842,7 @@ func TestQueueNewMessageOnEnterDuringRunning(t *testing.T) {
 func TestQueuedFoldedPasteExpandsBeforeInterjectSend(t *testing.T) {
 	runner := &recordingTurnRunner{}
 	events := make(chan event.Event, 8)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	ctrl := control.New(control.Options{
 		Runner:     runner,
 		Sink:       event.FuncSink(func(e event.Event) { events <- e }),
@@ -3327,7 +3327,7 @@ func TestFoldedPasteUsesPlaceholderAndExpandsOnSend(t *testing.T) {
 }
 
 func TestTextOnlyModelSendsPastedImageRefsForToolUse(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeTUIImageCapabilityConfig(t, workspace)
 	path := saveTestImageAttachment(t, workspace)
 
@@ -3376,7 +3376,7 @@ func TestTextOnlyModelSendsPastedImageRefsForToolUse(t *testing.T) {
 }
 
 func TestVisionModelAllowsSendingPastedImageRefs(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeTUIImageCapabilityConfig(t, workspace)
 	path := saveTestImageAttachment(t, workspace)
 
@@ -3427,7 +3427,7 @@ func TestPasteFoldExpandOnSubmit(t *testing.T) {
 	ctrl := control.New(control.Options{
 		Runner:     r,
 		Sink:       event.FuncSink(func(e event.Event) { events <- e }),
-		SessionDir: t.TempDir(),
+		SessionDir: testenv.TempDir(t),
 		Label:      "test",
 	})
 
@@ -3873,7 +3873,7 @@ func TestDoubleCtrlCQuit(t *testing.T) {
 
 func TestSecondCtrlCQuitsAfterCancelIsAlreadyRequested(t *testing.T) {
 	r := &stubbornTurnRunner{started: make(chan struct{}), release: make(chan struct{})}
-	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
+	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: testenv.TempDir(t), Label: "test"})
 	ctrl.Send("hi")
 	<-r.started
 	defer close(r.release)
@@ -3902,7 +3902,7 @@ func TestSecondCtrlCQuitsAfterCancelIsAlreadyRequested(t *testing.T) {
 
 func TestRunningStatusShowsCancelRequested(t *testing.T) {
 	r := &stubbornTurnRunner{started: make(chan struct{}), release: make(chan struct{})}
-	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
+	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: testenv.TempDir(t), Label: "test"})
 	ctrl.Send("hi")
 	<-r.started
 	defer close(r.release)

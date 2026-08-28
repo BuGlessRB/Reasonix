@@ -3,6 +3,8 @@ package config
 import (
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestExpandVars(t *testing.T) {
@@ -52,7 +54,7 @@ func TestExpandedPlugin(t *testing.T) {
 }
 
 func TestForbidReadRootsForRootResolvesRelativePathsAndScopedEnv(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	cfg := Default()
 	cfg.setExpansionEnv(map[string]string{"REASONIX_TEST_SECRET_DIR": "from-dotenv"})
 	cfg.Sandbox.ForbidRead = []string{
@@ -78,8 +80,8 @@ func TestForbidReadRootsForRootResolvesRelativePathsAndScopedEnv(t *testing.T) {
 }
 
 func TestWriteRootsForRootExpandsMavenAllowWrite(t *testing.T) {
-	home := t.TempDir()
-	project := t.TempDir()
+	home := testenv.TempDir(t)
+	project := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 
 	cfg := Default()

@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/extension"
 	"reasonix/internal/extension/protocol"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -40,7 +41,7 @@ func TestContextManagerPersistsAndRestoresBlockedFailureFingerprint(t *testing.T
 		{Role: provider.RoleUser, Content: "current"},
 		{Role: provider.RoleAssistant, Content: "tail"},
 	}
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	newAgent := func(p *failingSummaryProvider) *Agent {
 		a := New(p, tool.NewRegistry(), &Session{Messages: append([]provider.Message(nil), messages...)}, Options{
 			ContextWindow: window, CompactRatio: 0.85, RecentKeep: 2,

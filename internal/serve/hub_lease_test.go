@@ -7,6 +7,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // studioPane builds a runtime the way the desktop shell does: a controller with
@@ -33,7 +34,7 @@ func studioPane(t *testing.T, dir string) (*Hub, *control.Controller, *Runtime) 
 // conflict instead of refusing the write. That pair is what turned "the window
 // did not shut down before I reopened it" into an endless run of backups.
 func TestAnAdoptedPaneOwnsTheSessionItMints(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	_, ctrl, _ := studioPane(t, dir)
 
 	if ctrl.SessionPath() != "" {
@@ -54,7 +55,7 @@ func TestAnAdoptedPaneOwnsTheSessionItMints(t *testing.T) {
 // Adopting is where a host learns the session it inherited is still being
 // written, which is the moment it can still choose another one.
 func TestAdoptRefusesASessionAnotherWriterHolds(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	held := filepath.Join(dir, "held.jsonl")
 	saveServeTestSession(t, held)
 	holder, err := agent.TryAcquireSessionLease(held)
@@ -85,7 +86,7 @@ func TestAdoptRefusesASessionAnotherWriterHolds(t *testing.T) {
 // The host that arranged ownership itself keeps it — the hub must not take a
 // second lease on the same file and must not release what it did not acquire.
 func TestAdoptLeavesAHostArrangedLeaseAlone(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "own.jsonl")
 	saveServeTestSession(t, path)
 

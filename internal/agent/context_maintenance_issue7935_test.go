@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -39,7 +40,7 @@ func TestIssue7935Maintains206ToolResultsOnceAndOnlyProcessesNewTail(t *testing.
 		ContextWindow: 8_000,
 		CompactRatio:  0.80,
 		RecentKeep:    2,
-		ArchiveDir:    t.TempDir(),
+		ArchiveDir:    testenv.TempDir(t),
 	}, sink)
 
 	// Below the fold trigger nothing may be rewritten.

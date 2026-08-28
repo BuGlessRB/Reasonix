@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/command"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // reloadFactory wraps configurableFactory with the SessionRebuilder seam the
@@ -39,7 +40,7 @@ func reloadExtensionsSession(t *testing.T, id string, ctrl acpController, notifi
 		id:               id,
 		ctrl:             ctrl,
 		sink:             newUpdateSink(notifier, id),
-		cwd:              t.TempDir(),
+		cwd:              testenv.TempDir(t),
 		model:            "fast",
 		runtimeProfile:   "balanced",
 		toolApprovalMode: control.ToolApprovalAsk,

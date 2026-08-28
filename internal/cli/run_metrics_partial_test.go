@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func usageEvent(source string, prompt, completion int) event.Event {
@@ -45,7 +46,7 @@ func TestSnapshotDeepCopiesPrefixChangeReasons(t *testing.T) {
 // A killed agent writes no final record. Everything it did before the kill is
 // only recoverable if snapshots landed on disk while it ran.
 func TestSnapshotSurvivesWithoutAFinalWrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	final := filepath.Join(dir, "metrics.json")
 	now := time.Unix(0, 0)
 	s := &metricsSink{
@@ -81,7 +82,7 @@ func TestSnapshotSurvivesWithoutAFinalWrite(t *testing.T) {
 // Snapshots are throttled: a run makes thousands of events and must not make
 // thousands of disk writes.
 func TestSnapshotsAreThrottled(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	now := time.Unix(0, 0)
 	s := &metricsSink{
 		inner:         event.Discard,
@@ -108,7 +109,7 @@ func TestSnapshotsAreThrottled(t *testing.T) {
 // A completed run must leave exactly one readable record, or a reader could
 // count the run twice.
 func TestFinalWriteRetiresTheSnapshot(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	final := filepath.Join(dir, "metrics.json")
 	now := time.Unix(0, 0)
 	s := &metricsSink{
@@ -180,7 +181,7 @@ func TestUsageBySourceReconcilesWithTheTotal(t *testing.T) {
 // Background jobs emit while the run command assembles the final record.
 // Run with -race.
 func TestConcurrentEmitAndSnapshotAreRaceFree(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	s := &metricsSink{
 		inner:         event.Discard,
 		partialPath:   filepath.Join(dir, "m.json.partial"),

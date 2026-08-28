@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 // An expired fact is already refused by automatic recall. Leaving its line in
@@ -38,7 +40,7 @@ func TestIndexDropsExpiredFacts(t *testing.T) {
 // would bound it are off by default: a cost nobody can see is not a decision
 // anyone can make.
 func TestPrefixCostCountsIndexAndPinnedBodies(t *testing.T) {
-	dir, global := t.TempDir(), t.TempDir()
+	dir, global := testenv.TempDir(t), testenv.TempDir(t)
 	store := StoreFor("", "")
 	store.Dir, store.GlobalDir = dir, global
 	const body = "always run repolint before pushing"
@@ -86,7 +88,7 @@ func TestConfiguredRecallBudgetsAreNotClamped(t *testing.T) {
 
 // A reload must not silently revert the user's budgets to the defaults.
 func TestLoadOptionsSurviveForReload(t *testing.T) {
-	set := Load(Options{CWD: t.TempDir(), UserDir: t.TempDir(),
+	set := Load(Options{CWD: testenv.TempDir(t), UserDir: testenv.TempDir(t),
 		PinnedBudgetChars: 4000, RecallLimit: 12, RecallMaxChars: 9000})
 	opts := set.LoadOptions()
 	if opts.PinnedBudgetChars != 4000 || opts.RecallLimit != 12 || opts.RecallMaxChars != 9000 {

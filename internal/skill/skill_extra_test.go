@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // IsValidName
@@ -153,7 +155,7 @@ func TestParseRunAsDefault(t *testing.T) {
 // resolveCustomPaths
 
 func TestResolveCustomPathsTilde(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	got := resolveCustomPaths([]string{"~/skills"}, "/base", home)
 	if len(got) != 1 || got[0] != filepath.Join(home, "skills") {
 		t.Errorf("tilde expansion = %v", got)
@@ -161,7 +163,7 @@ func TestResolveCustomPathsTilde(t *testing.T) {
 }
 
 func TestResolveCustomPathsRelative(t *testing.T) {
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	got := resolveCustomPaths([]string{"./my-skills"}, base, "/home")
 	if len(got) != 1 || got[0] != filepath.Join(base, "my-skills") {
 		t.Errorf("relative = %v", got)
@@ -169,7 +171,7 @@ func TestResolveCustomPathsRelative(t *testing.T) {
 }
 
 func TestResolveCustomPathsAbsolute(t *testing.T) {
-	abs := filepath.Join(t.TempDir(), "absolute", "path")
+	abs := filepath.Join(testenv.TempDir(t), "absolute", "path")
 	got := resolveCustomPaths([]string{abs}, "/base", "/home")
 	if len(got) != 1 || got[0] != abs {
 		t.Errorf("absolute = %v", got)
@@ -217,7 +219,7 @@ func TestStubBody(t *testing.T) {
 // Read edge cases
 
 func TestReadInvalidName(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	_, ok := st.Read("invalid name!")
 	if ok {
@@ -226,7 +228,7 @@ func TestReadInvalidName(t *testing.T) {
 }
 
 func TestReadNotFound(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	_, ok := st.Read("nonexistent")
 	if ok {
@@ -237,7 +239,7 @@ func TestReadNotFound(t *testing.T) {
 // Create edge cases
 
 func TestCreateInvalidName(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	_, err := st.Create("invalid name!", ScopeGlobal)
 	if err == nil {
@@ -246,7 +248,7 @@ func TestCreateInvalidName(t *testing.T) {
 }
 
 func TestCreateProjectScopeRequiresRoot(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	_, err := st.Create("test", ScopeProject)
 	if err == nil {
@@ -255,7 +257,7 @@ func TestCreateProjectScopeRequiresRoot(t *testing.T) {
 }
 
 func TestCreateDirectoryLayoutSkill(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	skillsRoot := filepath.Join(home, ".reasonix", "skills", "existing", "SKILL.md")
 	os.MkdirAll(filepath.Dir(skillsRoot), 0o755)
 	os.WriteFile(skillsRoot, []byte("---\ndescription: exists\n---\nbody"), 0o644)
@@ -267,7 +269,7 @@ func TestCreateDirectoryLayoutSkill(t *testing.T) {
 }
 
 func TestUpdateContentOverwritesExistingSkill(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	if _, err := st.CreateWithContent("editable", ScopeGlobal, "---\ndescription: v1\n---\nold body"); err != nil {
 		t.Fatalf("CreateWithContent: %v", err)
@@ -285,21 +287,21 @@ func TestUpdateContentOverwritesExistingSkill(t *testing.T) {
 }
 
 func TestUpdateContentRefusesBuiltin(t *testing.T) {
-	st := New(Options{HomeDir: t.TempDir()})
+	st := New(Options{HomeDir: testenv.TempDir(t)})
 	if err := st.UpdateContent("explore", ScopeBuiltin, "---\ndescription: x\n---\nbody"); err == nil {
 		t.Error("updating a builtin should error")
 	}
 }
 
 func TestUpdateContentRefusesMissingSkill(t *testing.T) {
-	st := New(Options{HomeDir: t.TempDir(), DisableBuiltins: true})
+	st := New(Options{HomeDir: testenv.TempDir(t), DisableBuiltins: true})
 	if err := st.UpdateContent("does-not-exist", ScopeGlobal, "---\ndescription: x\n---\nbody"); err == nil {
 		t.Error("updating a nonexistent skill should error")
 	}
 }
 
 func TestUpdateContentRefusesScopeMismatch(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	if _, err := st.CreateWithContent("scoped2", ScopeGlobal, "---\ndescription: v1\n---\nbody"); err != nil {
 		t.Fatalf("CreateWithContent: %v", err)
@@ -314,8 +316,8 @@ func TestUpdateContentRefusesScopeMismatch(t *testing.T) {
 }
 
 func TestUpdateContentRefusesSymlinkedFlatSkill(t *testing.T) {
-	home := t.TempDir()
-	outside := filepath.Join(t.TempDir(), "outside.md")
+	home := testenv.TempDir(t)
+	outside := filepath.Join(testenv.TempDir(t), "outside.md")
 	original := "---\ndescription: outside\nrunAs: subagent\ninvocation: manual\n---\noriginal"
 	if err := os.WriteFile(outside, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
@@ -341,8 +343,8 @@ func TestUpdateContentRefusesSymlinkedFlatSkill(t *testing.T) {
 }
 
 func TestUpdateContentRefusesSymlinkedDirectorySkill(t *testing.T) {
-	home := t.TempDir()
-	outsideDir := t.TempDir()
+	home := testenv.TempDir(t)
+	outsideDir := testenv.TempDir(t)
 	outside := filepath.Join(outsideDir, SkillFile)
 	original := "---\ndescription: outside\nrunAs: subagent\ninvocation: manual\n---\noriginal"
 	if err := os.WriteFile(outside, []byte(original), 0o644); err != nil {
@@ -369,12 +371,12 @@ func TestUpdateContentRefusesSymlinkedDirectorySkill(t *testing.T) {
 }
 
 func TestDeleteSymlinkedSkillsRemovesLinksNotTargets(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	root := filepath.Join(home, ".reasonix", SkillsDirname)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	outsideDir := t.TempDir()
+	outsideDir := testenv.TempDir(t)
 	flatTarget := filepath.Join(outsideDir, "flat-target.md")
 	dirTarget := filepath.Join(outsideDir, "directory-target")
 	if err := os.MkdirAll(dirTarget, 0o755); err != nil {
@@ -416,7 +418,7 @@ func TestDeleteSymlinkedSkillsRemovesLinksNotTargets(t *testing.T) {
 }
 
 func TestDeleteRemovesDirectoryLayoutSkill(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	path, err := st.CreateWithContent("throwaway", ScopeGlobal, "---\ndescription: x\n---\nbody")
 	if err != nil {
@@ -434,21 +436,21 @@ func TestDeleteRemovesDirectoryLayoutSkill(t *testing.T) {
 }
 
 func TestDeleteRefusesBuiltin(t *testing.T) {
-	st := New(Options{HomeDir: t.TempDir()})
+	st := New(Options{HomeDir: testenv.TempDir(t)})
 	if err := st.Delete("explore", ScopeBuiltin); err == nil {
 		t.Error("deleting a builtin should error")
 	}
 }
 
 func TestDeleteRefusesMissingSkill(t *testing.T) {
-	st := New(Options{HomeDir: t.TempDir(), DisableBuiltins: true})
+	st := New(Options{HomeDir: testenv.TempDir(t), DisableBuiltins: true})
 	if err := st.Delete("does-not-exist", ScopeGlobal); err == nil {
 		t.Error("deleting a nonexistent skill should error")
 	}
 }
 
 func TestDeleteRefusesScopeMismatch(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	if _, err := st.CreateWithContent("scoped", ScopeGlobal, "---\ndescription: x\n---\nbody"); err != nil {
 		t.Fatalf("CreateWithContent: %v", err)
@@ -467,8 +469,8 @@ func TestDeleteRefusesScopeMismatch(t *testing.T) {
 // New edge cases
 
 func TestNewWithCustomPaths(t *testing.T) {
-	custom := t.TempDir()
-	st := New(Options{HomeDir: t.TempDir(), CustomPaths: []string{custom}, DisableBuiltins: true})
+	custom := testenv.TempDir(t)
+	st := New(Options{HomeDir: testenv.TempDir(t), CustomPaths: []string{custom}, DisableBuiltins: true})
 	roots := st.Roots()
 	found := false
 	for _, r := range roots {
@@ -483,11 +485,11 @@ func TestNewWithCustomPaths(t *testing.T) {
 }
 
 func TestHasProjectScope(t *testing.T) {
-	st1 := New(Options{HomeDir: t.TempDir(), ProjectRoot: "/some/project"})
+	st1 := New(Options{HomeDir: testenv.TempDir(t), ProjectRoot: "/some/project"})
 	if !st1.HasProjectScope() {
 		t.Error("with project root should return true")
 	}
-	st2 := New(Options{HomeDir: t.TempDir()})
+	st2 := New(Options{HomeDir: testenv.TempDir(t)})
 	if st2.HasProjectScope() {
 		t.Error("without project root should return false")
 	}

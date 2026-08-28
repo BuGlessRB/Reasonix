@@ -19,14 +19,14 @@ import (
 // going to end. The lease ends with the run that took it, and this asserts it
 // through the real session assembly rather than the lease alone.
 func TestBackgroundJobDoesNotPinTheWorkspaceForTheNextSession(t *testing.T) {
-	home := t.TempDir()
+	home := robustTempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	root := t.TempDir()
+	root := robustTempDir(t)
 
-	session, err := startSessionRuntime(Options{SessionDir: t.TempDir()}, config.Default(), root, event.Discard)
+	session, err := startSessionRuntime(Options{SessionDir: robustTempDir(t)}, config.Default(), root, event.Discard)
 	if err != nil {
 		t.Fatalf("startSessionRuntime: %v", err)
 	}

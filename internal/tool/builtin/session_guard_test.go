@@ -9,13 +9,14 @@ import (
 	"testing"
 
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 )
 
 // stateRootFor builds a fake Reasonix state root with the two guarded session
 // trees populated, returning the root and one file path in each tree.
 func stateRootFor(t *testing.T) (root, cliSession, projectSession string) {
 	t.Helper()
-	root = t.TempDir()
+	root = testenv.TempDir(t)
 	cliSession = filepath.Join(root, "sessions", "20260707-abc.jsonl")
 	projectSession = filepath.Join(root, "projects", "-Users-me-proj", "sessions", "20260707-def.jsonl")
 	for _, p := range []string{cliSession, projectSession} {
@@ -98,7 +99,7 @@ func TestConfineReadCaseVariantOnFoldingSystems(t *testing.T) {
 	if !foldPaths {
 		t.Skip("case-sensitive default filesystem: a case variant is a genuinely different path")
 	}
-	forbidDir := t.TempDir()
+	forbidDir := testenv.TempDir(t)
 	secret := filepath.Join(forbidDir, "secret.txt")
 	if err := os.WriteFile(secret, []byte("classified"), 0o644); err != nil {
 		t.Fatal(err)
@@ -118,7 +119,7 @@ func TestSessionDataGuardAllowsOrdinaryStatePaths(t *testing.T) {
 		filepath.Join(root, "config.toml"),                        // config is confine()'s job, not this guard's
 		filepath.Join(root, "projects", "slug", "memory", "a.md"), // memory files are not session data
 		filepath.Join(root, "skills", "demo", "SKILL.md"),
-		filepath.Join(t.TempDir(), "unrelated.txt"),
+		filepath.Join(testenv.TempDir(t), "unrelated.txt"),
 	} {
 		if err := g.Check(target); err != nil {
 			t.Errorf("Check(%q) = %v, want nil", target, err)
@@ -257,7 +258,7 @@ func TestSessionDataGuardCommandHint(t *testing.T) {
 	}
 	for _, cmd := range []string{
 		"go test ./...",
-		"ls " + filepath.Join(t.TempDir(), "sessions"), // "sessions" under an unrelated root
+		"ls " + filepath.Join(testenv.TempDir(t), "sessions"), // "sessions" under an unrelated root
 		"",
 	} {
 		if hint := g.CommandHint("", cmd); hint != "" {
@@ -267,7 +268,7 @@ func TestSessionDataGuardCommandHint(t *testing.T) {
 }
 
 func TestSessionDataGuardCommandHintEnvVarForm(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	state := filepath.Join(home, ".reasonix")
@@ -310,7 +311,7 @@ func TestSessionDataGuardCommandHintRelativeFromStateRoot(t *testing.T) {
 		t.Error("workDir inside a session store should warn unconditionally")
 	}
 	// An unrelated workDir does not fabricate warnings.
-	if hint := g.CommandHint(t.TempDir(), "cat ../sessions/x.jsonl"); hint != "" {
+	if hint := g.CommandHint(testenv.TempDir(t), "cat ../sessions/x.jsonl"); hint != "" {
 		t.Errorf("relative form outside the state root should stay clean, got %q", hint)
 	}
 }

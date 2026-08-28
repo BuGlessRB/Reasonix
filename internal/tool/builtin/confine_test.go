@@ -56,7 +56,7 @@ func TestConfineUnconfinedWhenNoRoots(t *testing.T) {
 }
 
 func TestRebindBashWriteRootsUsesMinimalWriteSurface(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim := filepath.Join(root, "claimed")
 	tool, ok := RebindBashWriteRoots(ConfineBash(sandbox.Spec{
 		Mode:       "enforce",
@@ -85,7 +85,7 @@ func TestReboundBashCannotWriteOutsideClaim(t *testing.T) {
 	if !sandbox.Available() {
 		t.Skip("OS sandbox unavailable")
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim := filepath.Join(root, "claimed")
 	if err := os.MkdirAll(claim, 0o755); err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestReboundBashCannotWriteOutsideClaim(t *testing.T) {
 		t.Fatalf("write inside claim did not land: %v", err)
 	}
 
-	outside := filepath.Join(t.TempDir(), "escaped.txt")
+	outside := filepath.Join(testenv.TempDir(t), "escaped.txt")
 	args, _ = json.Marshal(map[string]string{"command": fmt.Sprintf("printf escaped > %q", outside)})
 	_, _ = rebound.Execute(context.Background(), args)
 	if _, err := os.Stat(outside); !os.IsNotExist(err) {
@@ -116,7 +116,7 @@ func TestReboundBashCannotWriteOutsideClaim(t *testing.T) {
 }
 
 func TestConfineInsideAndOutside(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	roots := realRoots([]string{root})
 
 	if err := confine(roots, filepath.Join(root, "src", "main.go")); err != nil {
@@ -132,8 +132,8 @@ func TestConfineInsideAndOutside(t *testing.T) {
 }
 
 func TestConfineRejectsSymlinkEscape(t *testing.T) {
-	root := t.TempDir()
-	outside := t.TempDir()
+	root := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	// A symlinked directory inside the root pointing outside must not become a
 	// tunnel: a write "within" the link still resolves outside the root.
 	link := filepath.Join(root, "out")
@@ -151,7 +151,7 @@ func TestConfineRejectsSymlinkEscape(t *testing.T) {
 }
 
 func TestWriteFileConfinement(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	w := writeFile{roots: realRoots([]string{root})}
 
 	// Inside: written.
@@ -165,7 +165,7 @@ func TestWriteFileConfinement(t *testing.T) {
 	}
 
 	// Outside: refused, and the file must not be created.
-	out := filepath.Join(t.TempDir(), "out.txt")
+	out := filepath.Join(testenv.TempDir(t), "out.txt")
 	args, _ = json.Marshal(map[string]string{"path": out, "content": "nope"})
 	if _, err := w.Execute(context.Background(), args); err == nil {
 		t.Error("write outside root should error")
@@ -353,7 +353,7 @@ func TestBashSandboxConfinement(t *testing.T) {
 }
 
 func TestBashEnforceRejectsWhenSandboxUnavailable(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
+	t.Setenv("PATH", testenv.TempDir(t))
 
 	exe, err := os.Executable()
 	if err != nil {
@@ -362,7 +362,7 @@ func TestBashEnforceRejectsWhenSandboxUnavailable(t *testing.T) {
 	b := bash{
 		sb: sandbox.Spec{
 			Mode:       "enforce",
-			WriteRoots: []string{t.TempDir()},
+			WriteRoots: []string{testenv.TempDir(t)},
 		},
 		shell: sandbox.Shell{Kind: sandbox.ShellBash, Path: exe},
 	}
@@ -382,7 +382,7 @@ func TestBashEnforceRejectsWhenSandboxUnavailable(t *testing.T) {
 
 func TestUnconfinedWriterWritesAnywhere(t *testing.T) {
 	// A zero-value writer (roots nil, as registered at init) is unconfined.
-	out := filepath.Join(t.TempDir(), "free.txt")
+	out := filepath.Join(testenv.TempDir(t), "free.txt")
 	args, _ := json.Marshal(map[string]string{"path": out, "content": "ok"})
 	if _, err := (writeFile{}).Execute(context.Background(), args); err != nil {
 		t.Fatalf("unconfined write failed: %v", err)
@@ -401,20 +401,20 @@ func TestConfineReadEmpty(t *testing.T) {
 }
 
 func TestConfineReadInsideAndOutside(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	forbidRoots := realRoots([]string{root})
 
 	if !confineRead(forbidRoots, filepath.Join(root, "secret", "key.pem")) {
 		t.Error("path inside forbid root should be forbidden")
 	}
 	// A path outside must pass.
-	if confineRead(forbidRoots, filepath.Join(t.TempDir(), "ok.txt")) {
+	if confineRead(forbidRoots, filepath.Join(testenv.TempDir(t), "ok.txt")) {
 		t.Error("path outside forbid root should not be forbidden")
 	}
 }
 
 func TestConfineReadExactFileRoot(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	secret := filepath.Join(dir, "credentials.env")
 	visible := filepath.Join(dir, "project.env")
 	for _, path := range []string{secret, visible} {
@@ -432,7 +432,7 @@ func TestConfineReadExactFileRoot(t *testing.T) {
 }
 
 func TestConfineReadBlocksReadFile(t *testing.T) {
-	forbidDir := t.TempDir()
+	forbidDir := testenv.TempDir(t)
 	secretPath := filepath.Join(forbidDir, "secret.txt")
 	if err := os.WriteFile(secretPath, []byte("classified"), 0o644); err != nil {
 		t.Fatal(err)
@@ -465,7 +465,7 @@ func withProtectSensitiveFiles(t *testing.T, enabled bool) {
 
 func TestSensitiveReadPathsAreBlockedWhenProtected(t *testing.T) {
 	withProtectSensitiveFiles(t, true)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	envPath := filepath.Join(dir, ".env")
 	if err := os.WriteFile(envPath, []byte("DEEPSEEK_API_KEY=sk-real-secret-value-123456\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -496,7 +496,7 @@ func TestSensitiveReadPathsAreBlockedWhenProtected(t *testing.T) {
 }
 
 func TestSensitiveReadPathsAllowedByDefault(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	envPath := filepath.Join(dir, ".env")
 	if err := os.WriteFile(envPath, []byte("PORT=8080\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -516,7 +516,7 @@ func TestSensitiveReadPathsAllowedByDefault(t *testing.T) {
 
 func TestGlobFiltersSensitiveMatchesWhenProtected(t *testing.T) {
 	withProtectSensitiveFiles(t, true)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("SECRET_TOKEN=abc\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -540,7 +540,7 @@ func TestGlobFiltersSensitiveMatchesWhenProtected(t *testing.T) {
 // grep forbid-read
 
 func TestConfineReadBlocksGrepFile(t *testing.T) {
-	forbidDir := t.TempDir()
+	forbidDir := testenv.TempDir(t)
 	secretPath := filepath.Join(forbidDir, "secret.txt")
 	if err := os.WriteFile(secretPath, []byte("needle in a haystack"), 0o644); err != nil {
 		t.Fatal(err)
@@ -566,7 +566,7 @@ func TestConfineReadBlocksGrepFile(t *testing.T) {
 }
 
 func TestConfineReadBlocksNativeGrepDirectoryRoot(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	forbidDir := filepath.Join(root, "secret")
 	secretPath := filepath.Join(forbidDir, "secret.txt")
 	if err := os.MkdirAll(forbidDir, 0o755); err != nil {
@@ -587,7 +587,7 @@ func TestConfineReadBlocksNativeGrepDirectoryRoot(t *testing.T) {
 }
 
 func TestConfineReadFiltersPlainGlobMatches(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	forbidDir := filepath.Join(root, "secret")
 	if err := os.MkdirAll(forbidDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -610,8 +610,8 @@ func TestConfineReadFiltersPlainGlobMatches(t *testing.T) {
 // already writes there. A writer that refuses it sends a run told to keep
 // scratch out of the repository straight back into the repository.
 func TestWriteFileAcceptsTheSessionTemporaryDirectory(t *testing.T) {
-	root := t.TempDir()
-	temp := sessiontemp.NewWithRoot(t.TempDir())
+	root := testenv.TempDir(t)
+	temp := sessiontemp.NewWithRoot(testenv.TempDir(t))
 	temp.Retain()
 	defer temp.Release()
 	lease, err := temp.Acquire()
@@ -632,7 +632,7 @@ func TestWriteFileAcceptsTheSessionTemporaryDirectory(t *testing.T) {
 	}
 
 	// Everywhere else outside the roots stays refused.
-	out := filepath.Join(t.TempDir(), "out.txt")
+	out := filepath.Join(testenv.TempDir(t), "out.txt")
 	args, _ = json.Marshal(map[string]string{"path": out, "content": "nope"})
 	if _, err := w.Execute(context.Background(), args); err == nil {
 		t.Error("a path outside both the roots and the session temp should error")

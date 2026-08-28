@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestAcquireHonorsDeadlineAndRecoversAfterRelease(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state.lock")
+	path := filepath.Join(testenv.TempDir(t), "state.lock")
 	release, err := Acquire(context.Background(), path)
 	if err != nil {
 		t.Fatalf("first acquire: %v", err)
@@ -30,7 +32,7 @@ func TestAcquireHonorsDeadlineAndRecoversAfterRelease(t *testing.T) {
 }
 
 func TestAcquireWithExternalTimeoutBoundsOnlyFileLockRetries(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state.lock")
+	path := filepath.Join(testenv.TempDir(t), "state.lock")
 	releaseExternal, err := tryLockFile(path)
 	if err != nil {
 		t.Fatalf("hold external file lock: %v", err)
@@ -51,7 +53,7 @@ func TestAcquireWithExternalTimeoutBoundsOnlyFileLockRetries(t *testing.T) {
 }
 
 func TestAcquireWithExternalTimeoutRejectsInvalidBudget(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state.lock")
+	path := filepath.Join(testenv.TempDir(t), "state.lock")
 	if _, err := AcquireWithExternalTimeout(context.Background(), path, 0); err == nil {
 		t.Fatal("zero external timeout should be rejected")
 	}
@@ -59,7 +61,7 @@ func TestAcquireWithExternalTimeoutRejectsInvalidBudget(t *testing.T) {
 
 func TestLocalRegistryReclaimsReleasedEntries(t *testing.T) {
 	before := RegistrySizeForTest()
-	path := filepath.Join(t.TempDir(), "ephemeral.lock")
+	path := filepath.Join(testenv.TempDir(t), "ephemeral.lock")
 	release, err := Acquire(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)

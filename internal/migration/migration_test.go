@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 )
 
 const legacyMessageLog = `{"role":"user","content":"hello from v0.x"}
@@ -16,7 +17,7 @@ const legacyMessageLog = `{"role":"user","content":"hello from v0.x"}
 
 func migrationRescueHome(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
@@ -24,7 +25,7 @@ func migrationRescueHome(t *testing.T) string {
 	t.Setenv("REASONIX_HOME", "")
 	t.Setenv("REASONIX_STATE_HOME", filepath.Join(home, "new-state"))
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	return home
 }
 
@@ -239,7 +240,7 @@ func TestRunLegacyRescueCommandImportsFromExplicitInstallDir(t *testing.T) {
 }
 
 func TestMigrateLegacySessionSourcesSkipsCurrentProjectTree(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
@@ -289,7 +290,7 @@ func totalMemoryImported(imports []MemoryImport) int {
 // REASONIX_STATE_HOME at a scratch directory copied every project's history
 // into it — 460 sessions on the machine that found this, once per process.
 func TestAutomaticImportSkipsProductionWhenStateRootRedirected(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))

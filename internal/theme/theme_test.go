@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func writePack(t *testing.T, root, id, body string) {
@@ -24,7 +26,7 @@ const minimal = `{"schemaVersion":1,"id":"x","name":"Dusk","author":"me",
 // The pack directory is the address a user activates by, so it is what the
 // reader reports — a manifest claiming someone else's id cannot shadow them.
 func TestLoadUsesTheDirectoryNameAsID(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	writePack(t, Dir(), "dusk", minimal)
 
 	pack, err := Load("dusk")
@@ -43,7 +45,7 @@ func TestLoadUsesTheDirectoryNameAsID(t *testing.T) {
 // anything that is not a plain hex colour is dropped here rather than escaped
 // downstream — a pack cannot smuggle a url(), an expression, or a brace.
 func TestLoadKeepsOnlyPlainHexColours(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	writePack(t, Dir(), "sneaky", `{"schemaVersion":1,"name":"Sneaky","tokens":{
 	  "light":{"bg":"#FFFFFF","evil":"url(http://x/y.png)","brace":"#fff}body{display:none","expr":"var(--x)"},
 	  "dark":{"bg":"#000000"}}}`)
@@ -65,7 +67,7 @@ func TestLoadKeepsOnlyPlainHexColours(t *testing.T) {
 // A cosmetic file is not worth guessing at: a pack from a newer schema is
 // skipped, and one bad pack must not hide the ones that are fine.
 func TestListSkipsUnreadablePacksWithoutHidingTheRest(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	writePack(t, Dir(), "good", minimal)
 	writePack(t, Dir(), "future", `{"schemaVersion":99,"name":"Future","tokens":{"light":{"bg":"#fff"},"dark":{"bg":"#000"}}}`)
 	writePack(t, Dir(), "broken", `not json`)
@@ -89,7 +91,7 @@ func TestListSkipsUnreadablePacksWithoutHidingTheRest(t *testing.T) {
 // With nothing installed the list is the shipped set, not an error and not
 // empty: a fresh install has palettes to choose from.
 func TestListWithNothingInstalledIsTheShippedSet(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	packs := List()
 	if len(packs) == 0 {
 		t.Fatal("List = empty, want the shipped packs")
@@ -102,7 +104,7 @@ func TestListWithNothingInstalledIsTheShippedSet(t *testing.T) {
 }
 
 func TestLoadRejectsAPathInsteadOfAnID(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	for _, id := range []string{"../escape", "a/b", ""} {
 		if _, err := Load(id); err == nil {
 			t.Fatalf("Load(%q) succeeded, want a rejection", id)
@@ -114,7 +116,7 @@ func TestLoadRejectsAPathInsteadOfAnID(t *testing.T) {
 // an agent copies when it authors one, so they have to decode with the same
 // reader everything else goes through.
 func TestShippedPacksAreReadable(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	packs := List()
 	if len(packs) < 8 {
 		t.Fatalf("List = %d packs, want the shipped set", len(packs))
@@ -139,7 +141,7 @@ func TestShippedPacksAreReadable(t *testing.T) {
 // A user's own copy of a palette is the one they meant, so it shadows the
 // shipped pack of the same id rather than appearing twice.
 func TestInstalledPackShadowsTheShippedOne(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	shipped := List()
 	if len(shipped) == 0 {
 		t.Fatal("no shipped packs")

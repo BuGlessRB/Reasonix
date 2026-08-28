@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestSearchNormalizesOfficialRegistryEntries(t *testing.T) {
@@ -39,7 +41,7 @@ func TestSearchNormalizesOfficialRegistryEntries(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(filepath.Join(t.TempDir(), "registry.json"))
+	client := New(filepath.Join(testenv.TempDir(t), "registry.json"))
 	client.BaseURL = server.URL
 	result, err := client.Search(context.Background(), "demo", 10)
 	if err != nil {
@@ -71,7 +73,7 @@ func TestSearchFallsBackToMatchingCache(t *testing.T) {
 			"name": "io.example/cached", "version": "1", "remotes": []any{map[string]any{"type": "sse", "url": "https://mcp.example/sse"}},
 		}}}})
 	}))
-	cachePath := filepath.Join(t.TempDir(), "registry.json")
+	cachePath := filepath.Join(testenv.TempDir(t), "registry.json")
 	client := New(cachePath)
 	client.BaseURL = server.URL
 	client.Now = func() time.Time { return time.Unix(1_000_000, 0) }
@@ -98,7 +100,7 @@ func TestSearchExpiresEachCachedQueryIndependently(t *testing.T) {
 			"remotes": []any{map[string]any{"type": "sse", "url": "https://mcp.example/" + query}},
 		}}}})
 	}))
-	cachePath := filepath.Join(t.TempDir(), "registry.json")
+	cachePath := filepath.Join(testenv.TempDir(t), "registry.json")
 	client := New(cachePath)
 	client.BaseURL = server.URL
 	client.Now = func() time.Time { return now }
@@ -136,7 +138,7 @@ func TestSearchReadsLegacyGlobalTimestampCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cachePath := filepath.Join(t.TempDir(), "registry.json")
+	cachePath := filepath.Join(testenv.TempDir(t), "registry.json")
 	if err := os.WriteFile(cachePath, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +162,7 @@ func TestResolveRequiresLiveRegistryMetadata(t *testing.T) {
 			"remotes": []any{map[string]any{"type": "streamable-http", "url": "https://mcp.example/demo"}},
 		}}}})
 	}))
-	client := New(filepath.Join(t.TempDir(), "registry.json"))
+	client := New(filepath.Join(testenv.TempDir(t), "registry.json"))
 	client.BaseURL = server.URL
 	if _, err := client.Search(context.Background(), "io.example/demo", maxLimit); err != nil {
 		t.Fatal(err)

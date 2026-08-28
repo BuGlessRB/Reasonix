@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -52,7 +53,7 @@ func TestBuildReviewSubagentRegistryUsesForegroundOnlyBash(t *testing.T) {
 		"bash_output",
 		"kill_shell",
 		"task",
-	}}, config.Default(), t.TempDir())
+	}}, config.Default(), testenv.TempDir(t))
 
 	for _, hidden := range []string{"wait", "bash_output", "kill_shell", "task"} {
 		if _, ok := reg.Get(hidden); ok {
@@ -77,7 +78,7 @@ func TestBuildReviewSubagentRegistryUsesForegroundOnlyBash(t *testing.T) {
 // init are unconfined, so before this the review subagent could read paths a
 // normal session refuses.
 func TestBuildReviewSubagentRegistryConfinesReaders(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	secret := filepath.Join(root, "secrets")
 	if err := os.MkdirAll(secret, 0o755); err != nil {
 		t.Fatal(err)
@@ -114,7 +115,7 @@ func TestBuildReviewSubagentRegistryEnforcesReadOnlySkill(t *testing.T) {
 	reg := buildReviewSubagentRegistry(skill.Skill{
 		ReadOnly:     true,
 		AllowedTools: []string{"bash", "read_file", "task"},
-	}, config.Default(), t.TempDir())
+	}, config.Default(), testenv.TempDir(t))
 
 	if _, ok := reg.Get("task"); ok {
 		t.Fatalf("read-only review registry should hide task; got %v", reg.Names())

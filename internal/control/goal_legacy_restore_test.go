@@ -5,10 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestUnknownPersistedBudgetClassFallsBackToGoalClassification(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	raw, err := json.Marshal(goalState{Goal: "fix the crash in settings", Status: GoalStatusRunning, BudgetClass: "future-budget-class", TurnsLimit: 99})
 	if err != nil {
@@ -26,7 +28,7 @@ func TestUnknownPersistedBudgetClassFallsBackToGoalClassification(t *testing.T) 
 }
 
 func TestGoalSetIdempotencyUsesEffectiveBudgetClass(t *testing.T) {
-	g := &goalMachine{statePath: filepath.Join(t.TempDir(), "goal.json")}
+	g := &goalMachine{statePath: filepath.Join(testenv.TempDir(t), "goal.json")}
 	if _, _, ok := g.set("same goal", budgetClassSimple, nil); !ok {
 		t.Fatal("initial set did not persist")
 	}

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func writeAgedSession(t *testing.T, dir, name, body string, age time.Duration) string {
@@ -26,7 +28,7 @@ const (
 )
 
 func TestReclaimableEmptySessions(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	week := 7 * 24 * time.Hour
 
 	// The v1 /new rotation and aborted forks: no user message ever reached them.
@@ -55,7 +57,7 @@ func TestReclaimableEmptySessions(t *testing.T) {
 // A sidecar count may spare a transcript but never authorizes deleting one, so
 // a stale "0 turns" must still be re-proven against the content.
 func TestReclaimableEmptySessionsHonorsMetaTurns(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := writeAgedSession(t, dir, "counted.jsonl", toolOnlyTranscript, 7*24*time.Hour)
 	if err := saveBranchMeta(path, BranchMeta{Turns: 3}, false); err != nil {
 		t.Fatal(err)
@@ -70,7 +72,7 @@ func TestReclaimableEmptySessionsHonorsMetaTurns(t *testing.T) {
 }
 
 func TestReconcileCleanupPendingReclaimsEmptySessions(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	empty := writeAgedSession(t, dir, "empty.jsonl", toolOnlyTranscript, 7*24*time.Hour)
 	writeAgedSession(t, dir, "kept.jsonl", userTranscript, 7*24*time.Hour)
 

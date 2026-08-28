@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/plugin"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 )
 
 func fetchSlash(t *testing.T, ctrl *control.Controller) []slashEntry {
@@ -176,8 +177,8 @@ func TestSkillEnabledPersists(t *testing.T) {
 // asymmetry the skill surface used to have against MCP: a bare name in the
 // user config disabled every same-named skill in every project at once.
 func TestSkillSwitchIsScopedToItsProject(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	here, there := t.TempDir(), t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	here, there := testenv.TempDir(t), testenv.TempDir(t)
 	skills := []skill.Skill{{Name: "deploy", Scope: skill.ScopeProject}}
 
 	mine := control.New(control.Options{Skills: skills, WorkspaceRoot: here})
@@ -329,9 +330,9 @@ func TestSlashOmitsHiddenCommands(t *testing.T) {
 // The runtime must not move, and the other project's switch must land under
 // its own identity rather than the running one's.
 func TestCapabilitySwitchReachesAnotherProject(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	here, there := t.TempDir(), t.TempDir()
+	here, there := testenv.TempDir(t), testenv.TempDir(t)
 	rememberWorkspace(there)
 	t.Cleanup(func() { forgetWorkspace(there) })
 
@@ -370,17 +371,17 @@ func TestCapabilitySwitchReachesAnotherProject(t *testing.T) {
 // A folder the shell never opened is not addressable: the request would
 // otherwise be a way to read or edit any directory's config.
 func TestCapabilitySwitchRefusesAnUnknownProject(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	ctrl := control.New(control.Options{
 		Skills:        []skill.Skill{{Name: "deploy"}},
-		WorkspaceRoot: t.TempDir(),
+		WorkspaceRoot: testenv.TempDir(t),
 	})
 	defer ctrl.Close()
 	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/skills/enabled", "application/json",
-		strings.NewReader(`{"name":"deploy","enabled":false,"root":`+mustJSON(t, t.TempDir())+`}`))
+		strings.NewReader(`{"name":"deploy","enabled":false,"root":`+mustJSON(t, testenv.TempDir(t))+`}`))
 	if err != nil {
 		t.Fatal(err)
 	}

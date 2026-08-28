@@ -6,13 +6,15 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestAppendDocCreatesAndAppends verifies the "#" quick-add path: a fresh file
 // gets a Notes section, and a second note joins the same section rather than
 // scattering.
 func TestAppendDocCreatesAndAppends(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "REASONIX.md")
+	path := filepath.Join(testenv.TempDir(t), "REASONIX.md")
 
 	if err := AppendDoc(path, "first note"); err != nil {
 		t.Fatal(err)
@@ -41,7 +43,7 @@ func TestAppendDocCreatesAndAppends(t *testing.T) {
 // TestAppendDocPreservesExistingContent verifies a hand-written file keeps its
 // content and the note lands under a Notes section appended to the end.
 func TestAppendDocPreservesExistingContent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "REASONIX.md")
+	path := filepath.Join(testenv.TempDir(t), "REASONIX.md")
 	original := "# My project\n\nSome existing guidance the user wrote.\n"
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
@@ -63,7 +65,7 @@ func TestAppendDocPreservesExistingContent(t *testing.T) {
 // TestAppendDocNormalizesNote ensures a multi-line note can't corrupt the
 // single-line bullet format.
 func TestAppendDocNormalizesNote(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "REASONIX.md")
+	path := filepath.Join(testenv.TempDir(t), "REASONIX.md")
 	if err := AppendDoc(path, "line one\nline two\t with   spaces"); err != nil {
 		t.Fatal(err)
 	}
@@ -78,11 +80,11 @@ func TestAppendDocRejectsSymlinkDestination(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation requires elevated privileges on common Windows setups")
 	}
-	outside := filepath.Join(t.TempDir(), "outside.md")
+	outside := filepath.Join(testenv.TempDir(t), "outside.md")
 	if err := os.WriteFile(outside, []byte("keep me"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	link := filepath.Join(t.TempDir(), "AGENTS.md")
+	link := filepath.Join(testenv.TempDir(t), "AGENTS.md")
 	if err := os.Symlink(outside, link); err != nil {
 		t.Fatal(err)
 	}

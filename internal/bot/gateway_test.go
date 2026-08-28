@@ -20,6 +20,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -846,7 +847,7 @@ func TestGatewayNewSessionRemembersRotatedSessionPath(t *testing.T) {
 		Text:         "/new",
 	}
 	key := BuildSessionKey(msg.Session())
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	oldPath := agent.NewSessionPath(sessionDir, "old-model")
 	exec := agent.New(gatewayFakeProvider{}, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
 	ctrl := control.New(control.Options{Executor: exec, SessionDir: sessionDir, SessionPath: oldPath, Label: "fake-model"})
@@ -884,7 +885,7 @@ func TestGatewayNewSessionRemembersRotatedSessionPath(t *testing.T) {
 // second conversation for the user to wonder about.
 func TestGatewayOwnedDivergenceSupersedesWithoutForking(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	originalPath := filepath.Join(dir, "session.jsonl")
 
 	disk := agent.NewSession("sys")
@@ -995,7 +996,7 @@ func TestGatewayOwnedDivergenceSupersedesWithoutForking(t *testing.T) {
 
 func TestGatewayRecoveryLeaseFailureKeepsOriginalGeneration(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	originalPath := filepath.Join(dir, "original.jsonl")
 	recoveryPath := filepath.Join(dir, "recovery.jsonl")
 	readyCalls := 0
@@ -1045,7 +1046,7 @@ func TestGatewayRecoveryLeaseFailureKeepsOriginalGeneration(t *testing.T) {
 
 func TestGatewayLateRecoveryCannotReplaceCurrentSessionMapping(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	oldPath := filepath.Join(dir, "old.jsonl")
 	oldRecoveryPath := filepath.Join(dir, "old-recovery.jsonl")
 	currentPath := filepath.Join(dir, "current.jsonl")
@@ -1091,7 +1092,7 @@ func TestGatewayLateRecoveryCannotReplaceCurrentSessionMapping(t *testing.T) {
 
 func TestGatewayLateRecoveryAfterRetirementDoesNotReacquireLease(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	originalPath := filepath.Join(dir, "original.jsonl")
 	recoveryPath := filepath.Join(dir, "recovery.jsonl")
 	gw := NewGateway(GatewayConfig{}, nil, logger)
@@ -1148,7 +1149,7 @@ func TestGatewayNewSessionLeaseFailureRetiresSession(t *testing.T) {
 		Text:         "/new",
 	}
 	key := BuildSessionKey(msg.Session())
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	oldPath := filepath.Join(sessionDir, "old.jsonl")
 	newPath := filepath.Join(sessionDir, "new.jsonl")
 	ctrl := &rotatingBotController{path: oldPath, newPath: newPath}
@@ -1194,7 +1195,7 @@ func TestGatewayNewSessionLeaseFailureRetiresSession(t *testing.T) {
 func TestGatewayCloseSessionStateReleasesSessionLease(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	gw := NewGateway(GatewayConfig{}, nil, logger)
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	leases := control.NewSessionLeaseKeeper()
 	if err := leases.Rebind(path); err != nil {
 		t.Fatalf("bind session lease: %v", err)
@@ -1503,7 +1504,7 @@ func TestGatewayHelpMentionsYoloCommands(t *testing.T) {
 
 func TestGatewayProjectCommandsListAndUseProjectOverride(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	alpha := filepath.Join(base, "alpha-project")
 	beta := filepath.Join(base, "beta-project")
 	if err := os.MkdirAll(alpha, 0o755); err != nil {
@@ -1551,9 +1552,9 @@ func TestGatewayProjectCommandsListAndUseProjectOverride(t *testing.T) {
 }
 
 func TestGatewaySessionsSearchAndAttachSessionOverride(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	projectRoot := filepath.Join(t.TempDir(), "attach-project")
+	projectRoot := filepath.Join(testenv.TempDir(t), "attach-project")
 	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1639,12 +1640,12 @@ func TestGatewayRuntimeOverridePreservesControllersWithActiveWork(t *testing.T) 
 
 func TestGatewayDefersProfileMismatchWhileBackgroundWorkIsActive(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	newRoot := t.TempDir()
+	newRoot := testenv.TempDir(t)
 	gw := NewGateway(GatewayConfig{WorkspaceRoot: newRoot}, nil, logger)
 	msg := InboundMessage{Platform: PlatformFeishu, ChatType: ChatDM, ChatID: "chat", UserID: "user"}
 	key := BuildSessionKey(msg.Session())
 	ctrl := &runtimeStatusBotController{
-		status: control.RuntimeStatus{BackgroundJobs: 1}, workspaceRoot: t.TempDir(),
+		status: control.RuntimeStatus{BackgroundJobs: 1}, workspaceRoot: testenv.TempDir(t),
 	}
 	state := &sessionState{ctrl: ctrl, workspaceRoot: ctrl.workspaceRoot}
 	gw.controllers[key] = state
@@ -1660,7 +1661,7 @@ func TestGatewayDefersProfileMismatchWhileBackgroundWorkIsActive(t *testing.T) {
 
 func TestGatewaySearchAllSearchesIndexedProjects(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	projectRoot := t.TempDir()
+	projectRoot := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(projectRoot, "needle.txt"), []byte("alpha\nunique-cross-project-needle\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1673,7 +1674,7 @@ func TestGatewaySearchAllSearchesIndexedProjects(t *testing.T) {
 }
 
 func TestSearchBotProjectsFallbackStopsAtLimit(t *testing.T) {
-	projectRoot := t.TempDir()
+	projectRoot := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(projectRoot, "one.txt"), []byte("first fallback needle\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1700,7 +1701,7 @@ func TestSearchBotProjectsFallbackStopsAtLimit(t *testing.T) {
 }
 
 func TestSearchBotProjectsFallbackHonorsContextCancel(t *testing.T) {
-	projectRoot := t.TempDir()
+	projectRoot := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(projectRoot, "needle.txt"), []byte("fallback needle\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1829,7 +1830,7 @@ func TestGatewayDefaultQueueSteersMediaOnlyActiveTurn(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	gw := NewGateway(GatewayConfig{
 		Allowlist:     AllowlistConfig{AllowAll: true},
-		WorkspaceRoot: t.TempDir(),
+		WorkspaceRoot: testenv.TempDir(t),
 	}, nil, logger)
 	adapter := newFakeAdapter(PlatformFeishu, "fake-feishu")
 	msg := InboundMessage{
@@ -1940,7 +1941,7 @@ func TestGatewayQueueInterruptCancelsAndKeepsNewestMessage(t *testing.T) {
 }
 
 func TestGatewayUnknownDMGetsPairingCode(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	gw := NewGateway(GatewayConfig{
 		PairingEnabled: true,
@@ -2390,7 +2391,7 @@ func TestSessionStateMatchesRuntimeRejectsWorkspaceOrModelMismatch(t *testing.T)
 }
 
 func TestSessionStateMatchesRuntimeRejectsAttachedSessionPathMismatch(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	pathA := filepath.Join(root, "a.jsonl")
 	pathB := filepath.Join(root, "b.jsonl")
 	ctrl := control.New(control.Options{WorkspaceRoot: root, SessionPath: pathA})
@@ -2436,7 +2437,7 @@ func TestGatewaySessionOptionsPreferRemoteRouteOverride(t *testing.T) {
 }
 
 func TestBotSessionDirUsesProjectWorkspaceRoot(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	got := botSessionDir(root)
 	if got == "" || got == botSessionDir("") {
 		t.Fatalf("project session dir = %q, want project-specific dir", got)
@@ -2447,7 +2448,7 @@ func TestBotSessionDirUsesProjectWorkspaceRoot(t *testing.T) {
 // at session-profile time — before this, the binding was display-only and every
 // gateway restart opened a fresh session for the chat (#6917, #6934).
 func TestSessionProfileConsumesPersistedMapping(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	mapped := filepath.Join(dir, "chat.jsonl")
 	if err := os.WriteFile(mapped, []byte(`{"role":"user","content":"hi"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)

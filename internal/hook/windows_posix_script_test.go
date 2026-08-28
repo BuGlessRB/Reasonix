@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 func TestWindowsExtensionlessPOSIXPluginHookUsesBash(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "plugin root")
+	root := filepath.Join(testenv.TempDir(t), "plugin root")
 	script := filepath.Join(root, "hooks", "session-start-codex")
 	writeHookTestFile(t, script, "#!/usr/bin/env bash\necho ok\n")
 
@@ -25,7 +26,7 @@ func TestWindowsExtensionlessPOSIXPluginHookUsesBash(t *testing.T) {
 }
 
 func TestWindowsPluginHookDoesNotGuessBashForNativeOrNonShellFiles(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "plugin root")
+	root := filepath.Join(testenv.TempDir(t), "plugin root")
 	writeHookTestFile(t, filepath.Join(root, "hooks", "native-tool"), "MZ\x00not a shell script\n")
 	writeHookTestFile(t, filepath.Join(root, "hooks", "run-hook.cmd"), "@echo off\r\n")
 
@@ -38,7 +39,7 @@ func TestWindowsPluginHookDoesNotGuessBashForNativeOrNonShellFiles(t *testing.T)
 }
 
 func TestWindowsImplicitPluginPOSIXScriptUsesBashPath(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "plugin root")
+	root := filepath.Join(testenv.TempDir(t), "plugin root")
 	script := filepath.Join(root, "hooks", "start.sh")
 	writeHookTestFile(t, script, "#!/usr/bin/env bash\necho ok\n")
 	config := pluginHookExecutionConfigForPlatform(pluginpkg.Hook{
@@ -54,7 +55,7 @@ func TestWindowsImplicitPluginPOSIXScriptUsesBashPath(t *testing.T) {
 }
 
 func TestWindowsLegacyPOSIXScriptSpawnInputUsesBash(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "workspace root")
+	root := filepath.Join(testenv.TempDir(t), "workspace root")
 	script := filepath.Join(root, "hooks", "session-start")
 	writeHookTestFile(t, script, "#!/usr/bin/env bash\necho ok\n")
 
@@ -72,7 +73,7 @@ func TestWindowsLegacyPOSIXScriptSpawnInputUsesBash(t *testing.T) {
 }
 
 func TestWindowsLegacyPOSIXScriptRuntimeRequiresBash(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "workspace root")
+	root := filepath.Join(testenv.TempDir(t), "workspace root")
 	script := filepath.Join(root, "hooks", "session-start")
 	writeHookTestFile(t, script, "#!/usr/bin/env bash\necho ok\n")
 

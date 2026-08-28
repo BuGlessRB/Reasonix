@@ -11,6 +11,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func hasModel(c *Config, model string) *ProviderEntry {
@@ -157,7 +158,7 @@ func TestNormalizeLegacyStepFunBaseURLsPreservesRegionalProviders(t *testing.T) 
 }
 
 func TestLoadAndSavePreserveStepFunRegionalBaseURLs(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	cfg := Default()
 	stepfun, ok := CuratedProviderPreset("stepfun")
 	if !ok || len(stepfun.Entries) != 1 {
@@ -299,7 +300,7 @@ func TestNormalizeLegacyLongCatContextWindowsMigratesOnlyUntouchedOfficialPreset
 }
 
 func TestLoadForEditAppliesLegacyLongCatContextWindowMigration(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	cfg := Default()
 	for _, id := range []string{"longcat-openai", "longcat-anthropic"} {
 		preset, ok := CuratedProviderPreset(id)
@@ -411,7 +412,7 @@ func TestNormalizeLegacyQwenContextWindowsMigratesOnlyOfficialPresets(t *testing
 }
 
 func TestLoadForEditAppliesLegacyQwenContextWindowMigration(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	cfg := Default()
 	preset, ok := CuratedProviderPreset("qwen-cn")
 	if !ok || len(preset.Entries) != 1 {
@@ -646,7 +647,7 @@ func TestNormalizeLegacyKimiK3CatalogPreservesVisionChoices(t *testing.T) {
 }
 
 func TestLoadForEditKeepsLegacyKimiK3CatalogMigrationInMemoryUntilSave(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	cfg := Default()
 	preset, ok := CuratedProviderPreset("kimi-cn")
 	if !ok || len(preset.Entries) != 1 {
@@ -688,7 +689,7 @@ func TestLoadForEditKeepsLegacyKimiK3CatalogMigrationInMemoryUntilSave(t *testin
 }
 
 func TestLoadForEditKeepsLegacyOpenCodeGoKimiK3CatalogMigrationInMemoryUntilSave(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	cfg := Default()
 	preset, ok := CuratedProviderPreset("opencode-go")
 	if !ok || len(preset.Entries) != 1 {
@@ -1242,7 +1243,7 @@ func TestApplyDeepSeekOfficialDefaultPricingKeepsCustomPrice(t *testing.T) {
 }
 
 func TestLoadForEditAutoCurrencyKeepsPersistedOfficialUSDPrice(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	body := `language = "zh"
 
 [[providers]]
@@ -1278,7 +1279,7 @@ price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
 }
 
 func TestLoadForRootAutoCurrencyKeepsPersistedOfficialUSDPrice(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	body := `language = "zh"
@@ -1294,7 +1295,7 @@ price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
 		t.Fatal(err)
 	}
 
-	c, err := LoadForRoot(t.TempDir())
+	c, err := LoadForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatalf("LoadForRoot: %v", err)
 	}
@@ -1308,7 +1309,7 @@ price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
 }
 
 func TestRuntimeAutoCurrencyKeepsPersistedOfficialUSDPrice(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	body := `[[providers]]
 name = "deepseek-flash"
 kind = "openai"
@@ -1331,7 +1332,7 @@ price = { cache_hit = 0.007, input = 0.22, output = 0.66, currency = "$" }
 }
 
 func TestLoadForRootAutoCurrencyDoesNotMixPartialOfficialPrices(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	body := `language = "zh"
@@ -1350,7 +1351,7 @@ deepseek-v4-flash = { cache_hit = 0.007, input = 0.22, output = 0.66, currency =
 		t.Fatal(err)
 	}
 
-	c, err := LoadForRoot(t.TempDir())
+	c, err := LoadForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatalf("LoadForRoot: %v", err)
 	}
@@ -1398,8 +1399,8 @@ func TestDeepSeekOfficialPricingCurrencyResolution(t *testing.T) {
 }
 
 func TestLoadForRootKeepsPricingRegionUserGlobal(t *testing.T) {
-	home := t.TempDir()
-	project := t.TempDir()
+	home := testenv.TempDir(t)
+	project := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[desktop]\nlanguage = \"en\"\ncurrency = \"USD\"\n"), 0o644); err != nil {
@@ -1446,7 +1447,7 @@ func TestApplyDeepSeekOfficialDefaultPricingExplicitCurrencyWins(t *testing.T) {
 }
 
 func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(testenv.TempDir(t), "reasonix.toml")
 	c := &Config{
 		ConfigVersion: 2,
 		Providers: []ProviderEntry{
@@ -1532,7 +1533,7 @@ func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
 }
 
 func TestApplyUserConfigUpgradesOnStartupVersion3NonWindowsAdvancesToV5(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	setRuntimeGOOS(t, "darwin")
 
 	c := &Config{
@@ -1572,7 +1573,7 @@ func TestApplyUserConfigUpgradesOnStartupVersion3NonWindowsAdvancesToV5(t *testi
 }
 
 func TestApplyUserConfigUpgradesOnStartupWindowsBashEnforceDefaultsOffOnce(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	setRuntimeGOOS(t, "windows")
 
 	c := Default()
@@ -1618,7 +1619,7 @@ func TestApplyUserConfigUpgradesOnStartupWindowsBashEnforceDefaultsOffOnce(t *te
 }
 
 func TestApplyUserConfigUpgradesOnStartupWindowsBashOffOnlyMarksVersion(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	setRuntimeGOOS(t, "windows")
 
 	c := Default()
@@ -1645,7 +1646,7 @@ func TestApplyUserConfigUpgradesOnStartupWindowsBashOffOnlyMarksVersion(t *testi
 }
 
 func TestApplyUserConfigUpgradesOnStartupRetiresAutoPlan(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	setRuntimeGOOS(t, "darwin")
 	original := `config_version = 4
 default_model = "deepseek-flash"

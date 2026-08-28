@@ -17,6 +17,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func saveServeTestSession(t *testing.T, path string) {
@@ -32,7 +33,7 @@ func saveServeTestSession(t *testing.T, path string) {
 // session another runtime holds, keeps the server on its current session, and
 // reports the shared holder wording.
 func TestResumeRefusedWhenSessionLeaseHeld(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := filepath.Join(dir, "active.jsonl")
 	held := filepath.Join(dir, "held.jsonl")
 	saveServeTestSession(t, active)
@@ -90,7 +91,7 @@ func TestResumeRefusedWhenSessionLeaseHeld(t *testing.T) {
 // TestResumeMovesSessionLease proves a successful POST /resume releases the old
 // session's lease and holds the new one.
 func TestResumeMovesSessionLease(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := filepath.Join(dir, "active.jsonl")
 	next := filepath.Join(dir, "next.jsonl")
 	saveServeTestSession(t, active)
@@ -186,7 +187,7 @@ func waitServeLeaseResult(t *testing.T, ch <-chan error, what string, timeout ti
 // controller on one path, the lease on another), leaving the written session
 // unprotected and a foreign one wrongly occupied.
 func TestConcurrentResumesKeepControllerAndLeaseAligned(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := filepath.Join(dir, "active.jsonl")
 	targetB := filepath.Join(dir, "target-b.jsonl")
 	targetC := filepath.Join(dir, "target-c.jsonl")
@@ -258,7 +259,7 @@ func TestConcurrentResumesKeepControllerAndLeaseAligned(t *testing.T) {
 // the two handlers rotate the active path through different code paths — and
 // asserts the same controller/lease alignment invariant.
 func TestConcurrentResumeAndForkKeepAlignment(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := filepath.Join(dir, "active.jsonl")
 	target := filepath.Join(dir, "target.jsonl")
 	saveServeTestSession(t, active)
@@ -333,7 +334,7 @@ func TestConcurrentResumeAndForkKeepAlignment(t *testing.T) {
 // without it, request 2 completes inside request 1's window and request 1
 // then rebinds the controller to a session the lease no longer guards.
 func TestInterleavedResumesForcedThroughBindWindow(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active := filepath.Join(dir, "active.jsonl")
 	targetB := filepath.Join(dir, "target-b.jsonl")
 	targetC := filepath.Join(dir, "target-c.jsonl")

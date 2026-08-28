@@ -8,10 +8,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestAcquireSharesGeneration(t *testing.T) {
-	m := newForTest(t.TempDir())
+	m := newForTest(testenv.TempDir(t))
 	m.Retain()
 	defer m.Release()
 
@@ -46,7 +48,7 @@ func TestAcquireSharesGeneration(t *testing.T) {
 }
 
 func TestRotateIsolatesNewCommands(t *testing.T) {
-	m := newForTest(t.TempDir())
+	m := newForTest(testenv.TempDir(t))
 	m.Retain()
 	defer m.Release()
 
@@ -82,7 +84,7 @@ func TestRotateIsolatesNewCommands(t *testing.T) {
 }
 
 func TestLastLeaseDeletesRetiredGeneration(t *testing.T) {
-	m := newForTest(t.TempDir())
+	m := newForTest(testenv.TempDir(t))
 	m.Retain()
 
 	lease, err := m.Acquire()
@@ -101,7 +103,7 @@ func TestLastLeaseDeletesRetiredGeneration(t *testing.T) {
 }
 
 func TestHotRebuildRetainRelease(t *testing.T) {
-	m := newForTest(t.TempDir())
+	m := newForTest(testenv.TempDir(t))
 	m.Retain() // old controller
 	lease, err := m.Acquire()
 	if err != nil {
@@ -131,7 +133,7 @@ func TestHotRebuildRetainRelease(t *testing.T) {
 }
 
 func TestAcquireCreateFailureDoesNotFallback(t *testing.T) {
-	m := newForTest(t.TempDir())
+	m := newForTest(testenv.TempDir(t))
 	m.Retain()
 	defer m.Release()
 	m.mkDir = func(string) (string, error) {
@@ -143,7 +145,7 @@ func TestAcquireCreateFailureDoesNotFallback(t *testing.T) {
 }
 
 func TestAcquireAfterLastOwnerReleaseIsSealed(t *testing.T) {
-	m := newForTest(t.TempDir())
+	m := newForTest(testenv.TempDir(t))
 	m.Retain()
 	lease, err := m.Acquire()
 	if err != nil {
@@ -190,7 +192,7 @@ func TestAcquireAfterLastOwnerReleaseIsSealed(t *testing.T) {
 }
 
 func TestAcquireWithoutOwnerFailsClosed(t *testing.T) {
-	m := newForTest(t.TempDir())
+	m := newForTest(testenv.TempDir(t))
 	if _, err := m.Acquire(); err == nil {
 		t.Fatal("Acquire with zero owners must fail")
 	}
@@ -198,7 +200,7 @@ func TestAcquireWithoutOwnerFailsClosed(t *testing.T) {
 
 func TestProcessCleanupRunsOncePerRoot(t *testing.T) {
 	resetProcessCleanupForTest()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	// Plant a stale dir that would be eligible if cleanup ran with an old now.
 	// We only count whether cleanupStaleOnce marks the root done.
 	cleanupStaleOnce(root, time.Now)
@@ -221,7 +223,7 @@ func TestProcessCleanupRunsOncePerRoot(t *testing.T) {
 }
 
 func TestConcurrentAcquireRotateReleaseRace(t *testing.T) {
-	m := newForTest(t.TempDir())
+	m := newForTest(testenv.TempDir(t))
 	m.Retain()
 	defer m.Release()
 
@@ -246,7 +248,7 @@ func TestConcurrentAcquireRotateReleaseRace(t *testing.T) {
 }
 
 func TestStaleCleanup(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	now := time.Now()
 
 	// Fresh dir — skip.
@@ -296,7 +298,7 @@ func TestStaleCleanup(t *testing.T) {
 	}
 
 	// Symlink to a foreign target — remove only the symlink entry, not the target.
-	foreign := filepath.Join(t.TempDir(), "foreign-target")
+	foreign := filepath.Join(testenv.TempDir(t), "foreign-target")
 	if err := os.Mkdir(foreign, 0o700); err != nil {
 		t.Fatal(err)
 	}

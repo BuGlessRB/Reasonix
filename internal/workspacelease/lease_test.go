@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 // withWaitGrace shortens the silence a contended acquisition keeps, so a test
@@ -83,8 +85,8 @@ func TestCanonicalWorkspaceResolvesSymlink(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation requires privileges on some Windows builders")
 	}
-	real := t.TempDir()
-	link := filepath.Join(t.TempDir(), "workspace-link")
+	real := testenv.TempDir(t)
+	link := filepath.Join(testenv.TempDir(t), "workspace-link")
 	if err := os.Symlink(real, link); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +104,7 @@ func TestCanonicalWorkspaceResolvesSymlink(t *testing.T) {
 }
 
 func TestCanonicalWorkspaceFoldsRepositorySubdirectoriesWithoutGitBinary(t *testing.T) {
-	repo := t.TempDir()
+	repo := testenv.TempDir(t)
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +126,7 @@ func TestCanonicalWorkspaceFoldsRepositorySubdirectoriesWithoutGitBinary(t *test
 }
 
 func TestCanonicalWorkspaceKeepsLinkedWorktreesIndependent(t *testing.T) {
-	parent := t.TempDir()
+	parent := testenv.TempDir(t)
 	first := filepath.Join(parent, "worktree-one")
 	second := filepath.Join(parent, "worktree-two")
 	for _, root := range []string{first, second} {
@@ -149,7 +151,7 @@ func TestCanonicalWorkspaceKeepsLinkedWorktreesIndependent(t *testing.T) {
 }
 
 func TestRepositoryRootAndSubdirectoryOwnersSerialize(t *testing.T) {
-	repo, locks := t.TempDir(), t.TempDir()
+	repo, locks := testenv.TempDir(t), testenv.TempDir(t)
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +187,7 @@ func TestRepositoryRootAndSubdirectoryOwnersSerialize(t *testing.T) {
 
 func TestOwnersSerializeSameWorkspaceAndReportTheWaitAsAPair(t *testing.T) {
 	withWaitGrace(t, 20*time.Millisecond)
-	root, locks := t.TempDir(), t.TempDir()
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
 	first, err := New(root, locks, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -227,7 +229,7 @@ func TestOwnersSerializeSameWorkspaceAndReportTheWaitAsAPair(t *testing.T) {
 // permanent line about it outlives the condition it describes.
 func TestWaitUnderTheGraceIsNeverReported(t *testing.T) {
 	withWaitGrace(t, 5*time.Second)
-	root, locks := t.TempDir(), t.TempDir()
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
 	first, _ := New(root, locks, nil)
 	var log waitLog
 	second, _ := New(root, locks, log.note)
@@ -253,7 +255,7 @@ func TestWaitUnderTheGraceIsNeverReported(t *testing.T) {
 // session is waiting has to be told it no longer is.
 func TestAbandonedWaitIsClosedToo(t *testing.T) {
 	withWaitGrace(t, 20*time.Millisecond)
-	root, locks := t.TempDir(), t.TempDir()
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
 	first, _ := New(root, locks, nil)
 	var log waitLog
 	second, _ := New(root, locks, log.note)
@@ -276,7 +278,7 @@ func TestAbandonedWaitIsClosedToo(t *testing.T) {
 
 func TestStateReportsWaitingAndAcquiredWithoutIdentity(t *testing.T) {
 	withWaitGrace(t, 20*time.Millisecond)
-	root, locks := t.TempDir(), t.TempDir()
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
 	first, err := New(root, locks, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -315,12 +317,12 @@ func TestStateReportsWaitingAndAcquiredWithoutIdentity(t *testing.T) {
 }
 
 func TestIndependentWorkspacesDoNotBlockEachOther(t *testing.T) {
-	locks := t.TempDir()
-	first, err := New(t.TempDir(), locks, nil)
+	locks := testenv.TempDir(t)
+	first, err := New(testenv.TempDir(t), locks, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := New(t.TempDir(), locks, nil)
+	second, err := New(testenv.TempDir(t), locks, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +341,7 @@ func TestIndependentWorkspacesDoNotBlockEachOther(t *testing.T) {
 }
 
 func TestLeaseMetadataNeverDirtiesWorkspace(t *testing.T) {
-	root, locks := t.TempDir(), t.TempDir()
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
 	before, err := os.ReadDir(root)
 	if err != nil {
 		t.Fatal(err)
@@ -363,7 +365,7 @@ func TestLeaseMetadataNeverDirtiesWorkspace(t *testing.T) {
 }
 
 func TestAcquireIsReentrantWithinOwner(t *testing.T) {
-	o, err := New(t.TempDir(), t.TempDir(), nil)
+	o, err := New(testenv.TempDir(t), testenv.TempDir(t), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +382,7 @@ func TestAcquireIsReentrantWithinOwner(t *testing.T) {
 }
 
 func TestCancelledWaitDoesNotLeakLocalLease(t *testing.T) {
-	root, locks := t.TempDir(), t.TempDir()
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
 	first, _ := New(root, locks, nil)
 	second, _ := New(root, locks, nil)
 	third, _ := New(root, locks, nil)
@@ -404,7 +406,7 @@ func TestCancelledWaitDoesNotLeakLocalLease(t *testing.T) {
 }
 
 func TestLeaseWaitsForLastRun(t *testing.T) {
-	root, locks := t.TempDir(), t.TempDir()
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
 	first, _ := New(root, locks, nil)
 	second, _ := New(root, locks, nil)
 	first.BeginRun()
@@ -427,8 +429,8 @@ func TestLeaseWaitsForLastRun(t *testing.T) {
 }
 
 func TestCrossProcessLeaseBlocksAndCrashReleases(t *testing.T) {
-	root, locks := t.TempDir(), t.TempDir()
-	ready := filepath.Join(t.TempDir(), "ready")
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
+	ready := filepath.Join(testenv.TempDir(t), "ready")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestWorkspaceLeaseHelperProcess$")
 	cmd.Env = append(os.Environ(),
 		"REASONIX_WORKSPACE_LEASE_HELPER=1",

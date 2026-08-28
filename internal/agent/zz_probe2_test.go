@@ -7,6 +7,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -18,7 +19,7 @@ type auditProbe2 struct {
 func (p *auditProbe2) RecordDelegationAudit(a evidence.DelegationAudit) { p.got = append(p.got, a) }
 
 func TestZZProbeThroughTaskTool(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	probe := &auditProbe2{Sink: event.Discard}
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})

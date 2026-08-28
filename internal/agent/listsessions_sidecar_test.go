@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func writeSessionFile(t *testing.T, path string, msgs []provider.Message) {
@@ -29,7 +30,7 @@ func writeSessionFile(t *testing.T, path string, msgs []provider.Message) {
 // SessionPreviewFromMessages must match a from-disk decode byte-for-byte, since
 // Session.Save persists exactly the messages it is handed.
 func TestSessionPreviewFromMessagesMatchesDecode(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "20260101-000000-deepseek-chat.jsonl")
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "you are helpful"},
@@ -54,7 +55,7 @@ func TestSessionPreviewFromMessagesMatchesDecode(t *testing.T) {
 // re-derive from the .jsonl. We prove that by planting counts that disagree with
 // the file: if ListSessions returns the planted values, it used the sidecar.
 func TestListSessionsUsesSidecarWithoutDecoding(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "20260101-000000-deepseek-chat.jsonl")
 	writeSessionFile(t, path, []provider.Message{
 		{Role: provider.RoleUser, Content: "real content in the file"},
@@ -78,7 +79,7 @@ func TestListSessionsUsesSidecarWithoutDecoding(t *testing.T) {
 }
 
 func TestListSessionsLeavesLegacyCountsUnknownWithoutDecodingOrWriting(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "legacy.jsonl")
 	if err := os.WriteFile(path, []byte("not valid jsonl\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -110,7 +111,7 @@ func TestListSessionsLeavesLegacyCountsUnknownWithoutDecodingOrWriting(t *testin
 // without a synchronous transcript decode. The catalog repair worker owns the
 // eventual backfill.
 func TestListSessionsLeavesLegacySessionForBackgroundRepair(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "20260101-000000-deepseek-chat.jsonl")
 	writeSessionFile(t, path, []provider.Message{
 		{Role: provider.RoleUser, Content: "legacy question"},
@@ -152,7 +153,7 @@ func TestListSessionsLeavesLegacySessionForBackgroundRepair(t *testing.T) {
 // it is empty: if the session is decoded it would be listed; trusting the meta
 // skips it.
 func TestListSessionsTrustsRecordedEmptyWithoutDecoding(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "20260101-000000-deepseek-chat.jsonl")
 	writeSessionFile(t, path, []provider.Message{
 		{Role: provider.RoleUser, Content: "real content the meta will lie about"},
@@ -174,7 +175,7 @@ func TestListSessionsTrustsRecordedEmptyWithoutDecoding(t *testing.T) {
 // A legacy artifact that might be empty is shown as unknown until the catalog
 // repair worker validates it; listing cannot know without decoding.
 func TestListSessionsShowsPotentiallyEmptyLegacySessionAsUnknown(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "20260101-000000-deepseek-chat.jsonl")
 	writeSessionFile(t, path, []provider.Message{
 		{Role: provider.RoleSystem, Content: "system prompt"},
@@ -195,7 +196,7 @@ func TestListSessionsShowsPotentiallyEmptyLegacySessionAsUnknown(t *testing.T) {
 }
 
 func TestListSessionsDefersPreviouslyCachedZeroRepair(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "20260101-000000-deepseek-chat.jsonl")
 	writeSessionFile(t, path, []provider.Message{
 		{Role: provider.RoleUser, Content: "recovered question"},
@@ -226,7 +227,7 @@ func TestListSessionsDefersPreviouslyCachedZeroRepair(t *testing.T) {
 }
 
 func TestListSessionsDefersOldRecordedEmptyValidation(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "20260101-000000-deepseek-chat.jsonl")
 	writeSessionFile(t, path, []provider.Message{
 		{Role: provider.RoleSystem, Content: "system prompt"},
@@ -278,7 +279,7 @@ func TestListSessionsKeepsUnreadableNonEmptySessionsVisible(t *testing.T) {
 		{name: "previously cached as empty", cachedZero: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := testenv.TempDir(t)
 			path := filepath.Join(dir, "20260101-000000-deepseek-chat.jsonl")
 			if err := os.WriteFile(path, []byte("not valid json\n"), 0o600); err != nil {
 				t.Fatalf("write corrupt session: %v", err)

@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // Lineage walks build paths from session identifiers — the caller-provided
@@ -11,7 +13,7 @@ import (
 // must be validated as bare filename stems so a "../"-shaped id can never
 // escape the session directory (#5551).
 func TestSessionLineageRejectsTraversalIdentifiers(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 
 	for _, id := range []string{"../evil", "..", ".", "nested/evil", "/abs"} {
@@ -25,7 +27,7 @@ func TestSessionLineageRejectsTraversalIdentifiers(t *testing.T) {
 }
 
 func TestSessionLineageRejectsTraversalParentFromMetadata(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 
 	// A well-formed child whose stored metadata declares a traversal parent:

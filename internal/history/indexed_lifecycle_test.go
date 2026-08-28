@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"reasonix/internal/historycatalog"
+	"reasonix/internal/testenv"
 )
 
 func TestIndexedCatalogManagerCloseFencesOpenAndAllowsRestart(t *testing.T) {
@@ -18,7 +19,7 @@ func TestIndexedCatalogManagerCloseFencesOpenAndAllowsRestart(t *testing.T) {
 		opts.Path, opts.InMemory = "", true
 		return historycatalog.Open(ctx, opts)
 	}
-	manager.register([]historycatalog.Root{{Path: t.TempDir(), Scope: "global"}})
+	manager.register([]historycatalog.Root{{Path: testenv.TempDir(t), Scope: "global"}})
 	<-started
 
 	closed := make(chan error, 1)
@@ -44,7 +45,7 @@ func TestIndexedCatalogManagerCloseFencesOpenAndAllowsRestart(t *testing.T) {
 		return historycatalog.Open(ctx, opts)
 	}
 	manager.mu.Unlock()
-	manager.register([]historycatalog.Root{{Path: t.TempDir(), Scope: "global"}})
+	manager.register([]historycatalog.Root{{Path: testenv.TempDir(t), Scope: "global"}})
 	manager.mu.RLock()
 	var reopened chan struct{}
 	for _, done := range manager.opening {

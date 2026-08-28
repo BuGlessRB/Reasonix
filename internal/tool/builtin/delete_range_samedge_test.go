@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestDeleteRangeSameAnchorNonInclusiveNoDup probes the degenerate but valid
@@ -14,7 +16,7 @@ import (
 // "delete nothing between a line and itself" must not corrupt the file; the
 // overlap in the keep slices would otherwise duplicate that line.
 func TestDeleteRangeSameAnchorNonInclusiveNoDup(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "f.txt")
 	if err := os.WriteFile(path, []byte("A\nB\nC\n"), 0o644); err != nil {
 		t.Fatal(err)

@@ -6,11 +6,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func writeLKGSnapshot(t *testing.T, body string) string {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	path := LastKnownGoodConfigPath()
 	if path == "" {
 		t.Fatal("no last-known-good path under an isolated home")
@@ -41,7 +43,7 @@ func TestLastKnownGoodProvenanceDatesTheSnapshot(t *testing.T) {
 }
 
 func TestLastKnownGoodProvenanceEmptyWithoutSnapshot(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	if got := lastKnownGoodProvenance(); got != "" {
 		t.Fatalf("dated a snapshot that does not exist: %q", got)
 	}
@@ -58,7 +60,7 @@ func TestInvalidUserConfigWarningDatesTheSnapshot(t *testing.T) {
 	lkgClock = func() time.Time { return time.Now().Add(48 * time.Hour) }
 	t.Cleanup(func() { lkgClock = prev })
 
-	cfg, err := LoadForRoot(t.TempDir())
+	cfg, err := LoadForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}

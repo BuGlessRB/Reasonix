@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
 	"reasonix/internal/surface"
+	"reasonix/internal/testenv"
 )
 
 func hubRuntime(t *testing.T, h *Hub, root string) *Runtime {
@@ -50,8 +51,8 @@ func hubGet[T any](t *testing.T, srv *httptest.Server, path string) T {
 // Two panes must answer for their own session. Sharing one server is what made
 // a second conversation rebuild the first instead of running beside it.
 func TestHubRoutesEachRuntimeToItsOwnWorkspace(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	first, second := t.TempDir(), t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	first, second := testenv.TempDir(t), testenv.TempDir(t)
 	h := NewHub(HubOptions{})
 	a := hubRuntime(t, h, first)
 	b := hubRuntime(t, h, second)
@@ -77,8 +78,8 @@ func TestHubRoutesEachRuntimeToItsOwnWorkspace(t *testing.T) {
 // One transcript, one writer. Opening a session a pane already drives has to
 // focus that pane — two runtimes on one file fork a recovery branch per save.
 func TestHubOpenFocusesTheRuntimeAlreadyDrivingTheSession(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	root := testenv.TempDir(t)
 	h := NewHub(HubOptions{})
 	rt := hubRuntime(t, h, root)
 	path := filepath.Join(SessionDirFor(root), "20260815-161507-deepseek-v4-flash.jsonl")
@@ -99,8 +100,8 @@ func TestHubOpenFocusesTheRuntimeAlreadyDrivingTheSession(t *testing.T) {
 // The sidebar is one request: every workspace, its saved conversations, and
 // which of them a pane already has open.
 func TestHubTreeListsWorkspaceSessionsAndMarksOpenOnes(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	root := testenv.TempDir(t)
 	h := NewHub(HubOptions{})
 	rt := hubRuntime(t, h, root)
 
@@ -141,9 +142,9 @@ func TestHubTreeListsWorkspaceSessionsAndMarksOpenOnes(t *testing.T) {
 // Closing a pane retires its runtime: the address stops answering and the
 // session is free for another window to open.
 func TestHubCloseRetiresTheRuntime(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	h := NewHub(HubOptions{})
-	rt := hubRuntime(t, h, t.TempDir())
+	rt := hubRuntime(t, h, testenv.TempDir(t))
 	srv := httptest.NewServer(h.Handler())
 	defer srv.Close()
 
@@ -166,8 +167,8 @@ func TestHubCloseRetiresTheRuntime(t *testing.T) {
 // A client that knows nothing about runtimes — a browser opened straight at the
 // port — still reaches the first one.
 func TestHubServesTheFirstRuntimeUnprefixed(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	root := testenv.TempDir(t)
 	h := NewHub(HubOptions{})
 	hubRuntime(t, h, root)
 	srv := httptest.NewServer(h.Handler())
@@ -186,9 +187,9 @@ func TestHubServesTheFirstRuntimeUnprefixed(t *testing.T) {
 // open there is no runtime to infer the folder from, and the request used to
 // come back "missing root".
 func TestHubOpensInARememberedWorkspaceWithNoPanesLeft(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	rememberWorkspace(root)
 
 	h := NewHub(HubOptions{})
@@ -203,7 +204,7 @@ func TestHubOpensInARememberedWorkspaceWithNoPanesLeft(t *testing.T) {
 
 // With nothing remembered either, the refusal has to say what is missing.
 func TestHubRefusalNamesTheMissingFolder(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	h := NewHub(HubOptions{})
 	_, err := h.resolveRoot(OpenRequest{})
 	if err == nil || !strings.Contains(err.Error(), "add a folder") {
@@ -216,7 +217,7 @@ func TestHubRefusalNamesTheMissingFolder(t *testing.T) {
 // carries it. A client that hardcoded 8 would grey out its control at the wrong
 // count the moment the config differs.
 func TestPaneCeilingComesFromConfig(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	path := config.UserConfigPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -247,8 +248,8 @@ func TestPaneCeilingComesFromConfig(t *testing.T) {
 // carrying the first message as its title. They fold into the conversation they
 // came from, or the sidebar fills with rows the user never made.
 func TestHubTreeFoldsRecoveryCopiesIntoTheirConversation(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	root := testenv.TempDir(t)
 	h := NewHub(HubOptions{})
 	hubRuntime(t, h, root)
 	dir := SessionDirFor(root)
@@ -336,7 +337,7 @@ func TestHubStampsItsSurfaceOnEveryServerItAdopts(t *testing.T) {
 		{"a window says which frontend it is", HubOptions{Surface: surface.Desktop}, surface.Desktop},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := testenv.TempDir(t)
 			h := NewHub(tc.opts)
 			t.Cleanup(h.Shutdown)
 			ctrl := control.New(control.Options{WorkspaceRoot: root, SessionDir: SessionDirFor(root)})
@@ -356,7 +357,7 @@ func TestHubStampsItsSurfaceOnEveryServerItAdopts(t *testing.T) {
 // A server no hub ever claimed still has to label the records its own rebuilds
 // write, and the bare frontend is the only thing it can be.
 func TestUnclaimedServerRecordsAsServe(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	ctrl := control.New(control.Options{WorkspaceRoot: root, SessionDir: SessionDirFor(root)})
 	t.Cleanup(ctrl.Close)
 	if got := New(ctrl, NewBroadcaster(), config.ServeConfig{}).statsSurface(); got != surface.Serve {

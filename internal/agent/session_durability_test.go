@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/fileutil"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // Crash-consistency model suite: a crash is injected at every durable
@@ -27,7 +28,7 @@ type durabilityRun struct {
 
 func newDurabilityRun(t *testing.T) *durabilityRun {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	return &durabilityRun{t: t, dir: dir, path: filepath.Join(dir, "session.jsonl")}
 }
 

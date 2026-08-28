@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // settings.json is shared with unrelated configuration. A hooks editor that
 // rewrites the file must not be the reason someone's other settings vanish.
 func TestSaveKeepsUnrelatedSettings(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := ProjectSettingsPath(root)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -39,7 +41,7 @@ func TestSaveKeepsUnrelatedSettings(t *testing.T) {
 	if string(doc["theme"]) != `"dark"` {
 		t.Errorf("an unrelated setting was dropped: theme = %s", doc["theme"])
 	}
-	loaded := Load(LoadOptions{ProjectRoot: root, HomeDir: t.TempDir()})
+	loaded := Load(LoadOptions{ProjectRoot: root, HomeDir: testenv.TempDir(t)})
 	var events []Event
 	for _, h := range loaded {
 		if h.Scope == ScopeProject {
@@ -65,7 +67,7 @@ func TestDryRunTranslatesExitCodeByEvent(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses a POSIX shell exit")
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	blocking, err := DryRun(context.Background(), HookConfig{Command: "exit 2"}, PreToolUse, root, NewDefaultSpawner(RuntimeOptions{}))
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +99,7 @@ func TestDryRunTranslatesExitCodeByEvent(t *testing.T) {
 // A rule that cannot run is rejected before it is executed, so the message names
 // the mistake instead of surfacing whatever the shell said about it.
 func TestDryRunRejectsUnrunnableRules(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	for _, tc := range []struct {
 		name  string
 		cfg   HookConfig

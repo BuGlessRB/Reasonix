@@ -6,13 +6,14 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/plugin"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
 func boolPtr(b bool) *bool { return &b }
 
 func TestLoadCachedToolsForSpecsHonorsSchemaCacheKey(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	fresh := plugin.Spec{Name: "gh", Type: "stdio", Command: "gh-mcp"}
 	if err := plugin.SaveCachedSchema("gh", plugin.CachedSchema{
 		CacheKey: plugin.SchemaCacheKey(fresh),
@@ -81,14 +82,14 @@ func TestRecordRouterUsageAccumulates(t *testing.T) {
 	a.RecordRouterUsage(100, 20, 0.005, 340)
 	a.RecordRouterUsage(50, 10, 0.002, 160)
 	snap := a.Snapshot()
-	if snap.RouterPromptTokens != 150 || snap.RouterCompletionTokens != 30 {
-		t.Fatalf("token counters: prompt=%d completion=%d", snap.RouterPromptTokens, snap.RouterCompletionTokens)
+	if snap.Router.PromptTokens != 150 || snap.Router.CompletionTokens != 30 {
+		t.Fatalf("token counters: prompt=%d completion=%d", snap.Router.PromptTokens, snap.Router.CompletionTokens)
 	}
-	if snap.RouterCost < 0.0069 || snap.RouterCost > 0.0071 {
-		t.Fatalf("cost = %v", snap.RouterCost)
+	if snap.Router.Cost < 0.0069 || snap.Router.Cost > 0.0071 {
+		t.Fatalf("cost = %v", snap.Router.Cost)
 	}
-	if snap.RouterLatencyMs != 500 {
-		t.Fatalf("latency = %v", snap.RouterLatencyMs)
+	if snap.Router.LatencyMs != 500 {
+		t.Fatalf("latency = %v", snap.Router.LatencyMs)
 	}
 }
 

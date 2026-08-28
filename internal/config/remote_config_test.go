@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestProjectConfigCannotOverrideRemote pins [remote] as a user-global
@@ -22,7 +24,7 @@ func TestProjectConfigCannotOverrideRemote(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	projectTOML := "[remote]\n[[remote.hosts]]\nname = \"evil\"\nhost = \"attacker.example\"\nproxy_jump = \"attacker-jump\"\n"
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(projectTOML), 0o644); err != nil {
 		t.Fatal(err)
@@ -42,7 +44,7 @@ func TestProjectConfigCannotOverrideRemote(t *testing.T) {
 
 func TestRemoteConfigDecodeAndDefaults(t *testing.T) {
 	isolateUserConfigHome(t)
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	toml := `
 [remote]
@@ -110,7 +112,7 @@ host = "10.0.0.1"
 // every saved host on the next unrelated settings save).
 func TestUpsertRemoteHostRoundTripsThroughSave(t *testing.T) {
 	isolateUserConfigHome(t)
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(path, []byte("default_model = \"deepseek\"\n"), 0o644); err != nil {
@@ -217,7 +219,7 @@ func TestRemoteCredentialEnvNamesCollected(t *testing.T) {
 }
 
 func TestRemotePathHelpers(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if got := RemoteStateDir(); got != filepath.Join(home, "remote") {
 		t.Fatalf("RemoteStateDir = %q", got)
@@ -290,7 +292,7 @@ func TestUpsertRemoteHostMakesTheHeadOfTheListTheDefault(t *testing.T) {
 // The list has to survive the file the same way the forwards beside it do.
 func TestRemoteWorkspacesSurviveSaveAndReload(t *testing.T) {
 	isolateUserConfigHome(t)
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(path, []byte("default_model = \"deepseek\"\n"), 0o644); err != nil {

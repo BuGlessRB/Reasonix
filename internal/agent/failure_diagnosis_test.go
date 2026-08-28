@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/plancontract"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -242,7 +243,7 @@ func TestHandoffNudgeReadsThePlanContract(t *testing.T) {
 // a sub-agent.
 func TestOversizeOutputSpillsRatherThanTruncates(t *testing.T) {
 	big := strings.Repeat("a line of tool output padded out a bit\n", 2000)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 
 	withRoot := New(nil, tool.NewRegistry(), NewSession("sys"), Options{ArchiveDir: root}, event.Discard)
 	out, _, notice := withRoot.boundToolOutput(big, "bash", "call-1", "", false)

@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestResolveStdioExecutableWindowsPathAndPATHEXT(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	npx := filepath.Join(dir, "npx.cmd")
 	if err := os.WriteFile(npx, []byte("@echo off\r\n"), 0o644); err != nil {
 		t.Fatalf("write fake npx.cmd: %v", err)
@@ -33,7 +35,7 @@ func TestResolveStdioExecutableWindowsPathAndPATHEXT(t *testing.T) {
 }
 
 func TestResolveStdioExecutableWindowsUsesCommonNodeFallback(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	localAppData := filepath.Join(root, "Local")
 	nodeDir := filepath.Join(localAppData, "Programs", "nodejs")
 	if err := os.MkdirAll(nodeDir, 0o755); err != nil {

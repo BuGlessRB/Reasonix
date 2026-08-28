@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // holdSessionLease simulates another runtime owning path for the duration of
@@ -31,7 +32,7 @@ func holdSessionLease(t *testing.T, path string) *agent.SessionLease {
 func TestRunResumeRefusedWhenSessionLeaseHeld(t *testing.T) {
 	isolateCLIConfigHome(t)
 
-	path := filepath.Join(t.TempDir(), "held-run.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "held-run.jsonl")
 	saveTestSession(t, path, "held prompt")
 	holdSessionLease(t, path)
 
@@ -71,7 +72,7 @@ func TestRunResumeCopyJSONKeepsStdoutClean(t *testing.T) {
 	isolateCLIConfigHome(t)
 	pinProviderOffline(t)
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := filepath.Join(dir, "held-src.jsonl")
 	saveTestSession(t, src, "copy me")
 	holdSessionLease(t, src)
@@ -104,7 +105,7 @@ func TestRunResumeCopyContinuesInDuplicate(t *testing.T) {
 	isolateCLIConfigHome(t)
 	pinProviderOffline(t)
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := filepath.Join(dir, "held-src.jsonl")
 	saveTestSession(t, src, "copy me")
 	srcBytes, err := os.ReadFile(src)
@@ -171,7 +172,7 @@ func TestRunResumeReleasesLeaseOnExit(t *testing.T) {
 	isolateCLIConfigHome(t)
 	pinProviderOffline(t)
 
-	path := filepath.Join(t.TempDir(), "release-run.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "release-run.jsonl")
 	saveTestSession(t, path, "resume me")
 
 	// No provider config in the isolated home: the run fails after the lease
@@ -192,7 +193,7 @@ func TestRunResumeReleasesLeaseOnExit(t *testing.T) {
 }
 
 func TestCopySessionForWritingDuplicatesTranscript(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := filepath.Join(dir, "src.jsonl")
 	s := agent.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "question"})
@@ -272,7 +273,7 @@ func TestCopySessionForWritingDuplicatesTranscript(t *testing.T) {
 // sessions: older (the active one) and newer (the /resume 1 target).
 func chatLeaseFixture(t *testing.T) (m chatTUI, active, target string) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	active = filepath.Join(dir, "a-active.jsonl")
 	target = filepath.Join(dir, "b-target.jsonl")
 	saveTestSession(t, active, "active session")

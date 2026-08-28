@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -64,7 +65,7 @@ func appliedMaintenanceEvents(sink *recordSink) int {
 // and did so again after reopening. compact_ratio=80% must be the sole trigger.
 func TestContextMaintenanceWaitsForCompactRatioAcrossRestart(t *testing.T) {
 	messages := largeRestartToolHistory(80)
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 
 	firstSink := &recordSink{}
 	first := newRestartMaintenanceAgent(path, messages, firstSink)
@@ -99,7 +100,7 @@ func TestContextMaintenanceWaitsForCompactRatioAcrossRestart(t *testing.T) {
 // Reopening must restore that sidecar without re-summarizing or replaying events.
 func TestContextMaintenanceRestoresAppliedProjectionWithoutReapplying(t *testing.T) {
 	messages := largeRestartToolHistory(110)
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 
 	// A deterministic fake provider so the single summary transaction can land.
 	firstSink := &recordSink{}

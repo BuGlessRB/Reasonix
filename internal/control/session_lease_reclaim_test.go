@@ -8,11 +8,12 @@ import (
 	"testing"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/testenv"
 )
 
 func leasePath(t *testing.T, name string) string {
 	t.Helper()
-	return filepath.Join(t.TempDir(), name+".jsonl")
+	return filepath.Join(testenv.TempDir(t), name+".jsonl")
 }
 
 // The refusal a stranded lease produces names this very process, so telling

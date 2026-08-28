@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 func TestLoadForEdit(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "reasonix.toml")
 	custom := `default_model = "custom"
 [[providers]]
@@ -63,7 +64,7 @@ func TestMergeTOMLProviderAccessIgnoresProjectOnlyList(t *testing.T) {
 	if err := os.WriteFile(userPath, []byte("default_model = \"deepseek/deepseek-v4-flash\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(testenv.TempDir(t), "reasonix.toml")
 	if err := os.WriteFile(projectPath, []byte("[desktop]\nprovider_access = [\"deepseek\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +80,7 @@ func TestMergeTOMLProviderAccessIgnoresProjectOnlyList(t *testing.T) {
 
 func TestMergeTOMLProviderAccessUnionsWhenUserDeclares(t *testing.T) {
 	userPath := writeUserProviderAccess(t, "[desktop]\nprovider_access = [\"deepseek\"]\n")
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(testenv.TempDir(t), "reasonix.toml")
 	if err := os.WriteFile(projectPath, []byte("[desktop]\nprovider_access = [\"project-b\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func writeUserProviderAccess(t *testing.T, body string) string {
 }
 
 func TestLoadForEditDecodesGB18030TOML(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.toml")
 	body := `default_model = "local/中文模型"
 
@@ -132,7 +133,7 @@ api_key_env = "LOCAL_KEY"
 }
 
 func TestLoadForEditNormalizesLegacyMCPTiersWithoutWriting(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "reasonix.toml")
 	body := `
 [[plugins]]
@@ -164,7 +165,7 @@ model = "m"
 }
 
 func TestLoadForEditReadOnlyStrictDoesNotMigrateDisk(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(testenv.TempDir(t), "reasonix.toml")
 	body := []byte(`
 [[plugins]]
 name = "playwright"
@@ -191,9 +192,9 @@ tier = "lazy"
 }
 
 func TestLoadForEditIgnoresProjectDotEnvForProviderCredentials(t *testing.T) {
-	project := t.TempDir()
-	launch := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	launch := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	path := filepath.Join(project, "reasonix.toml")
 	body := `default_model = "custom/m"
 [[providers]]

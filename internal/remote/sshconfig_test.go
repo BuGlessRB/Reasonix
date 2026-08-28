@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 const sampleSSHConfig = `
@@ -32,7 +33,7 @@ Match host somehost
 
 func writeSampleConfig(t *testing.T) string {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "config")
+	p := filepath.Join(testenv.TempDir(t), "config")
 	if err := os.WriteFile(p, []byte(sampleSSHConfig), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func TestEffectiveSSHConfigUsesOpenSSHOutputAndKeepsAllIdentities(t *testing.T) 
 }
 
 func TestSSHConfigMatchExecUsesOpenSSHEvenWhenFallbackRejectsIt(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config")
+	path := filepath.Join(testenv.TempDir(t), "config")
 	contents := "Host matched-box\n  HostName 192.0.2.10\nMatch exec \"true\"\n  User matched-user\n"
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
@@ -101,7 +102,7 @@ func TestSSHConfigMatchExecRealOpenSSH(t *testing.T) {
 	if _, err := exec.LookPath("ssh"); err != nil {
 		t.Skip("OpenSSH client is not installed")
 	}
-	path := filepath.Join(t.TempDir(), "config")
+	path := filepath.Join(testenv.TempDir(t), "config")
 	contents := "Host real-match-box\n  HostName 192.0.2.11\nMatch exec \"true\"\n  User real-match-user\n"
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
@@ -154,7 +155,7 @@ func TestSSHConfigAliasesSkipWildcards(t *testing.T) {
 }
 
 func TestSSHConfigAliasesIncludeImportedFiles(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	included := filepath.Join(dir, "hosts.conf")
 	if err := os.WriteFile(included, []byte("Host included-box\n  HostName 192.0.2.10\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -168,7 +169,7 @@ func TestSSHConfigAliasesIncludeImportedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Installed OpenSSH rejects config files whose ACL is wider than the owner,
-	// which t.TempDir() cannot guarantee on Windows. Include handling is the
+	// which testenv.TempDir(t) cannot guarantee on Windows. Include handling is the
 	// parser's contract here; the ssh -G path has its own stubbed tests.
 	src.resolveOpenSSH = nil
 	aliases := src.Aliases()
@@ -220,7 +221,7 @@ func TestEffectiveSSHConfigPreservesIdentityFileNone(t *testing.T) {
 }
 
 func TestEmbeddedSSHConfigPreservesIdentityFileNone(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config")
+	path := filepath.Join(testenv.TempDir(t), "config")
 	if err := os.WriteFile(path, []byte("Host none-box\n  IdentityFile none\n  IdentitiesOnly yes\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +283,7 @@ func TestEffectiveSSHConfigFallsBackOnlyWhenOpenSSHUnavailable(t *testing.T) {
 }
 
 func TestMissingOpenSSHExecutableIsDetectable(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
+	t.Setenv("PATH", testenv.TempDir(t))
 	_, err := runOpenSSHEffectiveConfig(context.Background(), "", "missing-ssh-box")
 	if !errors.Is(err, exec.ErrNotFound) {
 		t.Fatalf("missing ssh error = %v, want exec.ErrNotFound", err)
@@ -290,7 +291,7 @@ func TestMissingOpenSSHExecutableIsDetectable(t *testing.T) {
 }
 
 func TestLoadUserSSHConfigUsesNormalOpenSSHConfigStack(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	if runtime.GOOS == "windows" {
 		t.Setenv("USERPROFILE", home)
@@ -318,7 +319,7 @@ func TestLoadUserSSHConfigUsesNormalOpenSSHConfigStack(t *testing.T) {
 }
 
 func TestSSHConfigMissingFileIsEmpty(t *testing.T) {
-	src, err := LoadSSHConfig(filepath.Join(t.TempDir(), "does-not-exist"))
+	src, err := LoadSSHConfig(filepath.Join(testenv.TempDir(t), "does-not-exist"))
 	if err != nil {
 		t.Fatalf("missing file should not error: %v", err)
 	}

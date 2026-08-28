@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // Keys the loader deliberately drops: retired knobs kept only so an old TOML
@@ -54,7 +56,7 @@ func probe(f reflect.Value, key string) bool {
 // by the API, saved without error, and gone on the next read — which is exactly
 // how guardian_model became a setting that could not be set.
 func TestEveryLiveAgentSettingSurvivesARoundTrip(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", dir)
 	path := filepath.Join(dir, "config.toml")
 

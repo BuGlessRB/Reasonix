@@ -1,6 +1,10 @@
 package capability
 
-import "testing"
+import (
+	"fmt"
+	"slices"
+	"testing"
+)
 
 func TestLedgerRequireAndPreferGates(t *testing.T) {
 	l := NewLedger()
@@ -50,27 +54,75 @@ func TestLedgerDeclineCannotSkipRequire(t *testing.T) {
 	}
 }
 
-func TestSemanticPoolRequiresLexicalOverlap(t *testing.T) {
+// The pool is the router's input, not a second router. Nothing in it may turn
+// on how the request is worded — an entry whose description shares no word with
+// the task still reaches the model that is supposed to judge it.
+func TestSemanticPoolFiltersOnlyOnStructure(t *testing.T) {
 	entries := []Entry{
 		{ID: "skill:review", Kind: KindSkill, Name: "review", Description: "code review", AutoUse: AutoUsePrefer},
 		{ID: "skill:quiet", Kind: KindSkill, Name: "quiet", Description: "unrelated", AutoUse: AutoUseSuggest},
+		{ID: "skill:off", Kind: KindSkill, Name: "off", Description: "code review", AutoUse: AutoUseOff},
+		{ID: "skill:broken", Kind: KindSkill, Name: "broken", Description: "code review", Status: StatusFailed, AutoUse: AutoUseSuggest},
+		{ID: "tool:builtin", Kind: KindTool, Name: "read", Description: "code review", AutoUse: AutoUseSuggest},
+		{ID: "skill:declined", Kind: KindSkill, Name: "declined", Description: "code review", AutoUse: AutoUseSuggest, NegativeTriggers: []string{"prefix"}},
 	}
-	pool := semanticPool("please review this change", entries)
-	if len(pool) != 1 || pool[0].ID != "skill:review" {
-		t.Fatalf("pool = %+v, want only review", pool)
+	pool, dropped := semanticPool("capture request prefix", entries)
+	if dropped != 0 {
+		t.Fatalf("dropped = %d, want 0 under the cap", dropped)
 	}
-	if pool2 := semanticPool("capture request prefix", entries); len(pool2) != 0 {
-		t.Fatalf("unrelated text should not open semantic pool: %+v", pool2)
+	got := poolIDs(pool)
+	want := []string{"skill:review", "skill:quiet"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("pool = %v, want %v (structural filters only, strongest policy first)", got, want)
 	}
 }
 
-func TestSemanticPoolAllowsBoundedChineseBuiltinFallback(t *testing.T) {
+// Whitespace tokenization made the pool depend on the script the user writes
+// in: a Han-script request is one token no description contains, so every
+// candidate was filtered out before the router saw it. The same catalog must
+// now offer the same candidates whatever the request is written in.
+func TestSemanticPoolDoesNotDependOnTheRequestsScript(t *testing.T) {
 	entries := []Entry{
 		{ID: "skill:explore", Kind: KindSkill, Name: "explore", Source: "builtin", Description: "inspect architecture", AutoUse: AutoUseSuggest},
 		{ID: "skill:custom", Kind: KindSkill, Name: "custom", Source: "project", Description: "unrelated custom workflow", AutoUse: AutoUseSuggest},
 	}
-	pool := semanticPool("帮我梳理一下这个功能", entries)
-	if len(pool) != 1 || pool[0].ID != "skill:explore" {
-		t.Fatalf("Chinese fallback pool = %+v, want only the bounded built-in candidate", pool)
+	zh, _ := semanticPool("帮我梳理一下这个功能", entries)
+	en, _ := semanticPool("help me map out this feature", entries)
+	if !slices.Equal(poolIDs(zh), poolIDs(en)) {
+		t.Fatalf("Han-script pool %v differs from Latin-script pool %v", poolIDs(zh), poolIDs(en))
 	}
+	if len(poolIDs(zh)) != 2 {
+		t.Fatalf("pool = %v, want both eligible entries", poolIDs(zh))
+	}
+}
+
+// A pool the model judged in full and a slice of one are different answers, so
+// the cap has to say how much it kept back — and drop the weakest declared
+// policy rather than the alphabetically last ID.
+func TestSemanticPoolCapDropsWeakestPolicyAndReportsIt(t *testing.T) {
+	var entries []Entry
+	for i := range semanticMaxCandidates + 5 {
+		e := Entry{ID: fmt.Sprintf("skill:s%03d", i), Kind: KindSkill, Name: "s", Description: "d", AutoUse: AutoUseSuggest}
+		if i >= semanticMaxCandidates {
+			e.AutoUse = AutoUseRequire // last by ID, strongest by policy
+		}
+		entries = append(entries, e)
+	}
+	pool, dropped := semanticPool("anything", entries)
+	if len(pool) != semanticMaxCandidates || dropped != 5 {
+		t.Fatalf("pool %d dropped %d, want %d and 5", len(pool), dropped, semanticMaxCandidates)
+	}
+	for _, e := range pool[:5] {
+		if e.AutoUse != AutoUseRequire {
+			t.Fatalf("cap kept %s (%s) over a required entry", e.ID, e.AutoUse)
+		}
+	}
+}
+
+func poolIDs(pool []Entry) []string {
+	out := make([]string, 0, len(pool))
+	for _, e := range pool {
+		out = append(out, e.ID)
+	}
+	return out
 }

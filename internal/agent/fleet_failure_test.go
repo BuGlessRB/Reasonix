@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -107,7 +108,7 @@ func (p *fleetAPIErrorProvider) started(name string) bool {
 // change: the code has to reach the caller through the real aggregate, on the
 // failed item and on the branch its failure killed.
 func TestFleetAggregateCarriesTheFailureIdentity(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	prov := &fleetAPIErrorProvider{status: 429}
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})
@@ -149,7 +150,7 @@ func TestFleetAggregateCarriesTheFailureIdentity(t *testing.T) {
 // boundary: a real interruption must keep answering context.Canceled, which is
 // what the turn loop reads to tell it from a run that finished and reported.
 func TestFleetCancellationStillAnswersCanceled(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	prov := &fleetAPIErrorProvider{status: 429}
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})
@@ -175,7 +176,7 @@ func TestFleetCancellationStillAnswersCanceled(t *testing.T) {
 // the contract visible: a provider error with no identity is reported without a
 // reason rather than given a guessed one.
 func TestFleetAggregateLeavesAnUnnamedFailureUnclassified(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	prov := &fleetScriptedFailureProvider{}
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})

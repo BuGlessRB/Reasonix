@@ -5,10 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestDiagnoseFindsProviderPluginAndPermissionProblems(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	configText := `default_model = "custom/missing"
 
@@ -30,7 +32,7 @@ deny = ["bash"]
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(configText), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	report, err := Diagnose(context.Background(), DiagnoseOptions{Root: t.TempDir()})
+	report, err := Diagnose(context.Background(), DiagnoseOptions{Root: testenv.TempDir(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,14 +48,14 @@ deny = ["bash"]
 }
 
 func TestDiagnoseDoesNotRewriteLegacyMCPTierConfig(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	configText := "[[plugins]]\nname = \"srv\"\ncommand = \"echo\"\ntier = \"eager\"\n"
 	path := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(path, []byte(configText), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Diagnose(context.Background(), DiagnoseOptions{Root: t.TempDir()}); err != nil {
+	if _, err := Diagnose(context.Background(), DiagnoseOptions{Root: testenv.TempDir(t)}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(path)
@@ -66,7 +68,7 @@ func TestDiagnoseDoesNotRewriteLegacyMCPTierConfig(t *testing.T) {
 }
 
 func TestRebuildDerivedStateQuarantinesWithoutDeleting(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "desktop-tabs.json")
 	if err := os.WriteFile(path, []byte("bad"), 0o600); err != nil {
@@ -88,7 +90,7 @@ func TestRebuildDerivedStateQuarantinesWithoutDeleting(t *testing.T) {
 }
 
 func TestRebuildDerivedStateCommitsWhenAuditLogFails(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "desktop-tabs.json")
 	original := []byte("bad")

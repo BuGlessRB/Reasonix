@@ -12,6 +12,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // A source the panel cannot fully describe: per-model prices and effort
@@ -42,7 +43,7 @@ default_effort = "high"
 
 func newRichProviderServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	if _, err := config.SetCredential("RICH_API_KEY", "sk-rich"); err != nil {
 		t.Fatal(err)
@@ -56,7 +57,7 @@ func newRichProviderServer(t *testing.T) *httptest.Server {
 	}
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{
-		Sink: bc, Label: "alpha", ModelRef: "rich/alpha", SessionDir: t.TempDir(),
+		Sink: bc, Label: "alpha", ModelRef: "rich/alpha", SessionDir: testenv.TempDir(t),
 	})
 	s := New(ctrl, bc, config.ServeConfig{})
 	s.AllowProviderEdit()
@@ -177,7 +178,7 @@ func TestEditProviderRefusesWhatItCannotApply(t *testing.T) {
 // same account answers differently through each of its doors. Recording that
 // against a door that cannot run one would be a setting with no effect.
 func TestWebSearchIsPerDoorNotPerAccount(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	if _, err := config.SetCredential("DEEPSEEK_API_KEY", "sk-ds"); err != nil {
 		t.Fatal(err)

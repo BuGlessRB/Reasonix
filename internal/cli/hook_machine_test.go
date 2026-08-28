@@ -9,11 +9,12 @@ import (
 	"testing"
 
 	"reasonix/internal/hook"
+	"reasonix/internal/testenv"
 )
 
 func TestHookMachineListRedactsCommandsAndEnablesProjectHooks(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	projectSettings := filepath.Join(root, ".reasonix", "settings.json")
 	if err := os.MkdirAll(filepath.Dir(projectSettings), 0o755); err != nil {
 		t.Fatal(err)
@@ -52,8 +53,8 @@ func TestHookMachineListRedactsCommandsAndEnablesProjectHooks(t *testing.T) {
 }
 
 func TestHookMachineListReportsExecutability(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	globalSettings := filepath.Join(home, ".reasonix", "settings.json")
 	if err := os.MkdirAll(filepath.Dir(globalSettings), 0o755); err != nil {
 		t.Fatal(err)
@@ -99,7 +100,7 @@ func TestHookMachineListReportsExecutability(t *testing.T) {
 }
 
 func TestHookMachineEntryStatusRejectsNonRegularContextFile(t *testing.T) {
-	contextDir := t.TempDir()
+	contextDir := testenv.TempDir(t)
 	entry := hook.Entry{
 		Event:       hook.SessionStart,
 		Scope:       hook.ScopePlugin,
@@ -120,8 +121,8 @@ func TestHookMachineEntryStatusRejectsNonRegularContextFile(t *testing.T) {
 }
 
 func TestHookMachineStatusHasStableRedactedSources(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	var out bytes.Buffer
 	if code := runHookCommand([]string{"status", "--json", "--project-root", root, "--home-dir", home}, &out); code != 0 {
 		t.Fatalf("hook status exit code = %d, output = %s", code, out.String())
@@ -147,7 +148,7 @@ func TestHookMachineStatusHasStableRedactedSources(t *testing.T) {
 // (#7420). REASONIX_HOME is set explicitly so the resolved path is
 // deterministic regardless of the OS user-config lookup.
 func TestHookMachineListFindsGlobalHooksWithoutHomeDir(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	settingsPath := filepath.Join(home, "settings.json")
 	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
@@ -158,7 +159,7 @@ func TestHookMachineListFindsGlobalHooksWithoutHomeDir(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if code := runHookCommand([]string{"list", "--json", "--project-root", t.TempDir()}, &out); code != 0 {
+	if code := runHookCommand([]string{"list", "--json", "--project-root", testenv.TempDir(t)}, &out); code != 0 {
 		t.Fatalf("hook list exit code = %d, output = %s", code, out.String())
 	}
 	var response machineHookList

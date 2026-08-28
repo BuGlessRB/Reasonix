@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func git(t *testing.T, dir string, args ...string) {
@@ -23,7 +25,7 @@ func git(t *testing.T, dir string, args ...string) {
 // The case the panel got wrong: a file created and then removed leaves two tool
 // events behind and nothing on disk, so it must not stay pending.
 func TestCreatedThenDeletedIsNotAChange(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	git(t, dir, "init", "-q")
 	if err := os.WriteFile(filepath.Join(dir, "keep.go"), []byte("package a\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -68,14 +70,14 @@ func TestCreatedThenDeletedIsNotAChange(t *testing.T) {
 }
 
 func TestNonRepoReportsFallbackNotFailure(t *testing.T) {
-	if _, ok, err := Status(context.Background(), t.TempDir()); ok || err != nil {
+	if _, ok, err := Status(context.Background(), testenv.TempDir(t)); ok || err != nil {
 		t.Fatalf("Status(non-repo) = ok=%v err=%v, want ok=false with no error", ok, err)
 	}
 }
 
 func repoWithCommit(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	git(t, dir, "init", "-q")
 	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a\n\nfunc A() {}\n"), 0o600); err != nil {
 		t.Fatal(err)

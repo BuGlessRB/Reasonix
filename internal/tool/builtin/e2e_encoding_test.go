@@ -12,6 +12,7 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -25,7 +26,7 @@ func gbkBytes(t *testing.T, s string) []byte {
 }
 
 func TestE2EGBKRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test_gbk.txt")
+	path := filepath.Join(testenv.TempDir(t), "test_gbk.txt")
 	if err := os.WriteFile(path, gbkBytes(t, "你好世界\n这是第二行\n包含函数的测试\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +97,7 @@ func e2eArgs(m map[string]any) json.RawMessage {
 // write_file must preserve the encoding of a file it overwrites rather than
 // always writing UTF-8, which would silently corrupt a GBK file.
 func TestE2EWriteFilePreservesGBKOnOverwrite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "gbk.txt")
+	path := filepath.Join(testenv.TempDir(t), "gbk.txt")
 	if err := os.WriteFile(path, gbkBytes(t, "原始内容\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +120,7 @@ func TestE2EWriteFilePreservesGBKOnOverwrite(t *testing.T) {
 
 // A newly created file (no existing encoding to preserve) defaults to UTF-8.
 func TestE2EWriteFileNewFileIsUTF8(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "new.txt")
+	path := filepath.Join(testenv.TempDir(t), "new.txt")
 	writeTL, _ := tool.LookupBuiltin("write_file")
 	if _, err := writeTL.Execute(context.Background(), e2eArgs(map[string]any{
 		"path":    path,
@@ -139,7 +140,7 @@ func TestE2EWriteFileNewFileIsUTF8(t *testing.T) {
 // delete_range must decode a GBK file before matching anchors (a UTF-8 anchor
 // would never match the GBK bytes otherwise) and re-encode it on write.
 func TestE2EDeleteRangePreservesGBK(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "gbk.txt")
+	path := filepath.Join(testenv.TempDir(t), "gbk.txt")
 	if err := os.WriteFile(path, gbkBytes(t, "第一行\n第二行\n第三行\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

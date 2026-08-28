@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // Spec.Enforce
@@ -342,7 +344,7 @@ func TestInstalledButUnusableBwrapIsUnavailable(t *testing.T) {
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		t.Skip("bubblewrap-only test")
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	bwrap := filepath.Join(dir, "bwrap")
 	if err := os.WriteFile(bwrap, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)

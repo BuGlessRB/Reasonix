@@ -17,11 +17,12 @@ import (
 	"go.uber.org/goleak"
 	"golang.org/x/text/encoding/simplifiedchinese"
 
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
 // argsJSON marshals m into the JSON form a tool expects. Tests must not build
-// the JSON by concatenating Go strings: on Windows, t.TempDir() returns a path
+// the JSON by concatenating Go strings: on Windows, testenv.TempDir(t) returns a path
 // like C:\Users\… and the embedded backslashes are interpreted as JSON string
 // escapes (\U triggers a parse error). json.Marshal handles the escaping.
 func argsJSON(t *testing.T, m map[string]any) json.RawMessage {
@@ -141,7 +142,7 @@ func TestCompressToolRequiresActiveAgent(t *testing.T) {
 }
 
 func TestReadFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "src.go")
 	body := "package main\n\nfunc main() {}\n"
 	os.WriteFile(f, []byte(body), 0o644)
@@ -156,7 +157,7 @@ func TestReadFile(t *testing.T) {
 }
 
 func TestReadFileDirectory(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	_, err := readFile{}.Execute(context.Background(), argsJSON(t, map[string]any{"path": dir}))
 	if err == nil {
 		t.Fatal("read_file on a directory should error, not return contents")
@@ -172,7 +173,7 @@ func TestReadFileDirectory(t *testing.T) {
 }
 
 func TestReadFileOffsetLimit(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "many.txt")
 	var b strings.Builder
 	for i := 1; i <= 50; i++ {
@@ -199,7 +200,7 @@ func TestReadFileOffsetLimit(t *testing.T) {
 }
 
 func TestReadFileBinary(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "blob")
+	f := filepath.Join(testenv.TempDir(t), "blob")
 	os.WriteFile(f, []byte{0x7f, 'E', 'L', 'F', 0, 0, 0}, 0o644)
 
 	_, err := readFile{}.Execute(context.Background(), argsJSON(t, map[string]any{"path": f}))
@@ -227,7 +228,7 @@ func TestReadFileBOM(t *testing.T) {
 		"utf8bom.txt": append([]byte{0xEF, 0xBB, 0xBF}, []byte("hello world\nsecond line")...),
 	}
 	for name, content := range cases {
-		f := filepath.Join(t.TempDir(), name)
+		f := filepath.Join(testenv.TempDir(t), name)
 		os.WriteFile(f, content, 0o644)
 		out := runTool(t, readFile{}, map[string]any{"path": f})
 		if !strings.Contains(out, "hello world") || !strings.Contains(out, "second line") {
@@ -240,7 +241,7 @@ func TestReadFileBOM(t *testing.T) {
 }
 
 func TestReadFileEmpty(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "empty.txt")
+	f := filepath.Join(testenv.TempDir(t), "empty.txt")
 	os.WriteFile(f, nil, 0o644)
 	if out := runTool(t, readFile{}, map[string]any{"path": f}); !strings.Contains(out, "empty") {
 		t.Errorf("empty file should report empty, got %q", out)
@@ -248,7 +249,7 @@ func TestReadFileEmpty(t *testing.T) {
 }
 
 func TestEditFile(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	os.WriteFile(f, []byte("hello world\n"), 0o644)
 
 	out := runTool(t, editFile{}, map[string]any{"path": f, "old_string": "world", "new_string": "reasonix"})
@@ -278,7 +279,7 @@ func TestEditFile(t *testing.T) {
 }
 
 func TestMultiEdit(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "src.go")
+	f := filepath.Join(testenv.TempDir(t), "src.go")
 	body := "package old\n\nfunc old() {\n\told()\n}\n"
 	os.WriteFile(f, []byte(body), 0o644)
 
@@ -312,7 +313,7 @@ func TestMultiEdit(t *testing.T) {
 // stays exactly as it was. A chained sequence of single edit_file calls would
 // have left a half-written intermediate state.
 func TestMultiEditAtomicity(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	original := "alpha\nbeta\ngamma\n"
 	os.WriteFile(f, []byte(original), 0o644)
 
@@ -334,7 +335,7 @@ func TestMultiEditAtomicity(t *testing.T) {
 }
 
 func TestGrep(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(dir, "a.go"), []byte("package main\nfunc Foo() {}\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "b.go"), []byte("var x = 1\n"), 0o644)
 
@@ -449,7 +450,7 @@ func TestWebFetchSchemeRejected(t *testing.T) {
 }
 
 func TestLsAndGlob(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(dir, "x.txt"), []byte("hi"), 0o644)
 	os.Mkdir(filepath.Join(dir, "sub"), 0o755)
 
@@ -465,7 +466,7 @@ func TestLsAndGlob(t *testing.T) {
 }
 
 func TestGlobRecursive(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	// Create a nested structure:
 	// dir/a.go
 	// dir/sub/b.go
@@ -512,7 +513,7 @@ func TestGlobRecursive(t *testing.T) {
 }
 
 func TestGlobForwardSlashPattern(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.MkdirAll(filepath.Join(dir, "sub", "deep"), 0o755)
 	os.WriteFile(filepath.Join(dir, "top.txt"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, "sub", "deep", "nested.txt"), []byte("y"), 0o644)
@@ -525,7 +526,7 @@ func TestGlobForwardSlashPattern(t *testing.T) {
 }
 
 func TestGlobRecursiveDoublestarBracePattern(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(dir, "a.go"), []byte("go"), 0o644)
 	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("txt"), 0o644)
 	os.WriteFile(filepath.Join(dir, "c.md"), []byte("md"), 0o644)
@@ -540,7 +541,7 @@ func TestGlobRecursiveDoublestarBracePattern(t *testing.T) {
 }
 
 func TestGlobRecursiveNoMatches(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.MkdirAll(filepath.Join(dir, "sub"), 0o755)
 	os.WriteFile(filepath.Join(dir, "sub", "a.go"), []byte("package a"), 0o644)
 
@@ -551,7 +552,7 @@ func TestGlobRecursiveNoMatches(t *testing.T) {
 }
 
 func TestGlobNoMatches(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	out := runTool(t, globTool{}, map[string]any{"pattern": filepath.Join(dir, "*.xyz")})
 	if !strings.Contains(out, "(no matches)") {
 		t.Errorf("expected (no matches), got:\n%s", out)
@@ -561,7 +562,7 @@ func TestGlobNoMatches(t *testing.T) {
 // GB18030 encoding integration tests (issue #2637)
 
 func TestReadFileGB18030(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "gbk.txt")
+	f := filepath.Join(testenv.TempDir(t), "gbk.txt")
 	gb, err := simplifiedchinese.GB18030.NewEncoder().String("你好世界\n第二行")
 	if err != nil {
 		t.Fatalf("encode: %v", err)
@@ -575,7 +576,7 @@ func TestReadFileGB18030(t *testing.T) {
 }
 
 func TestEditFileGB18030RoundTrip(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "gbk.txt")
+	f := filepath.Join(testenv.TempDir(t), "gbk.txt")
 	original, _ := simplifiedchinese.GB18030.NewEncoder().String("你好世界\n第二行\n")
 	os.WriteFile(f, []byte(original), 0o644)
 
@@ -594,7 +595,7 @@ func TestEditFileGB18030RoundTrip(t *testing.T) {
 }
 
 func TestMultiEditGB18030RoundTrip(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "gbk.txt")
+	f := filepath.Join(testenv.TempDir(t), "gbk.txt")
 	original, _ := simplifiedchinese.GB18030.NewEncoder().String("package old\n\nfunc old() {\n\told()\n}\n")
 	os.WriteFile(f, []byte(original), 0o644)
 
@@ -615,7 +616,7 @@ func TestMultiEditGB18030RoundTrip(t *testing.T) {
 }
 
 func TestGrepGB18030(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	gb, _ := simplifiedchinese.GB18030.NewEncoder().String("你好世界\n包含函数的行\n")
 	os.WriteFile(filepath.Join(dir, "gbk.txt"), []byte(gb), 0o644)
 
@@ -638,7 +639,7 @@ func TestGrepGB18030TruncationDoesNotLeakGoroutine(t *testing.T) {
 		t.Fatalf("encode GB18030: %v", err)
 	}
 
-	path := filepath.Join(t.TempDir(), "many-matches.gbk")
+	path := filepath.Join(testenv.TempDir(t), "many-matches.gbk")
 	if err := os.WriteFile(path, []byte(gb), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}

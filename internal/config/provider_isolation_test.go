@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // customProviderTOML declares a single self-hosted OpenAI-compatible provider
@@ -42,7 +44,7 @@ func assertNoOfficialDeepSeekFields(t *testing.T, tag string, p *ProviderEntry) 
 // user file used to be unified onto the DeepSeek entry already occupying index
 // 0 and silently inherit every field the user had not set.
 func TestLoadForEditKeepsCustomProviderFreeOfOfficialDefaults(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.toml")
 	if err := os.WriteFile(path, []byte(customProviderTOML), 0o600); err != nil {
 		t.Fatal(err)
@@ -63,7 +65,7 @@ func TestLoadForEditKeepsCustomProviderFreeOfOfficialDefaults(t *testing.T) {
 // of #7357: the leaked fields were persisted into the user's own file on the
 // next rewrite, so they outlived the process that invented them.
 func TestSaveAfterLoadForEditDoesNotWriteForeignProviderFields(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.toml")
 	if err := os.WriteFile(path, []byte(customProviderTOML), 0o600); err != nil {
 		t.Fatal(err)
@@ -87,8 +89,8 @@ func TestSaveAfterLoadForEditDoesNotWriteForeignProviderFields(t *testing.T) {
 // TestLoadForRootKeepsCustomProviderFreeOfOfficialDefaults exercises the same
 // leak through the runtime loader, which is what the agent and compaction read.
 func TestLoadForRootKeepsCustomProviderFreeOfOfficialDefaults(t *testing.T) {
-	home := t.TempDir()
-	ws := t.TempDir()
+	home := testenv.TempDir(t)
+	ws := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(customProviderTOML), 0o600); err != nil {
 		t.Fatal(err)
@@ -109,8 +111,8 @@ func TestLoadForRootKeepsCustomProviderFreeOfOfficialDefaults(t *testing.T) {
 // recovery path, which decodes a snapshot onto a freshly seeded Config and so
 // leaked through the same positional overlay.
 func TestLastKnownGoodRecoveryKeepsCustomProviderFreeOfOfficialDefaults(t *testing.T) {
-	home := t.TempDir()
-	ws := t.TempDir()
+	home := testenv.TempDir(t)
+	ws := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 
 	// Malformed live config forces the last-known-good branch.
@@ -143,7 +145,7 @@ func TestLastKnownGoodRecoveryKeepsCustomProviderFreeOfOfficialDefaults(t *testi
 // Default() ships two DeepSeek entries, so the second declared provider used to
 // inherit the Pro SKU's price table and model.
 func TestSecondCustomProviderKeepsNoOfficialDefaults(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.toml")
 	raw := customProviderTOML + `
 [[providers]]
@@ -205,8 +207,8 @@ func assertOfficialDeepSeekDefaults(t *testing.T, tag string, p *ProviderEntry) 
 func TestOfficialDeepSeekProviderStillGetsItsDefaults(t *testing.T) {
 	for _, name := range []string{"deepseek", "deepseek-flash"} {
 		t.Run(name, func(t *testing.T) {
-			home := t.TempDir()
-			ws := t.TempDir()
+			home := testenv.TempDir(t)
+			ws := testenv.TempDir(t)
 			t.Setenv("REASONIX_HOME", home)
 			path := filepath.Join(home, "config.toml")
 			if err := os.WriteFile(path, []byte(officialDeepSeekTOML(name)), 0o600); err != nil {
@@ -248,8 +250,8 @@ func TestMissingCanonicalDeepSeekUsesAnthropicDefault(t *testing.T) {
 }
 
 func TestExplicitOpenAIDeepSeekProviderIsNotMigrated(t *testing.T) {
-	home := t.TempDir()
-	ws := t.TempDir()
+	home := testenv.TempDir(t)
+	ws := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	raw := `config_version = 1
@@ -284,8 +286,8 @@ api_key_env = "DEEPSEEK_API_KEY"
 // overriding a user who deliberately narrowed the window or disabled the
 // balance readout for the official endpoint.
 func TestOfficialDeepSeekBackfillRespectsDeclaredValues(t *testing.T) {
-	home := t.TempDir()
-	ws := t.TempDir()
+	home := testenv.TempDir(t)
+	ws := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	declared := `config_version = 1
 default_model = "deepseek-flash/deepseek-v4-flash"

@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/i18n"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 )
 
 // collectSink returns a Sink that collects events, a channel carrying TurnDone
@@ -209,7 +210,7 @@ func TestRunShell_CancelStopsCommand(t *testing.T) {
 func TestRunShell_HeredocCancelReleasesTurn(t *testing.T) {
 	sh := requireRunShellHereDocBash(t)
 	sink, done, events := collectSink()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	target := filepath.Join(root, "test_redact.go")
 	ctrl := &Controller{controllerDeps: controllerDeps{sink: sink, shell: sh, workspaceRoot: root}}
 

@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestProjectLaunchIdentityDigestCanonicalizesStableIdentity(t *testing.T) {
@@ -58,7 +60,7 @@ func TestProjectLaunchIdentityDigestCanonicalizesStableIdentity(t *testing.T) {
 }
 
 func TestLaunchGrantIsExactDurableAndWorkspaceScoped(t *testing.T) {
-	path := filepath.Join(t.TempDir(), StateFilename)
+	path := filepath.Join(testenv.TempDir(t), StateFilename)
 	a := NewManager(path, "/workspace/a")
 	if err := a.Authorize("project", "project_config", "identity-a"); err != nil {
 		t.Fatal(err)
@@ -87,7 +89,7 @@ func TestLaunchGrantIsExactDurableAndWorkspaceScoped(t *testing.T) {
 }
 
 func TestRevokeOnlyRemovesCurrentWorkspaceServerGrant(t *testing.T) {
-	path := filepath.Join(t.TempDir(), StateFilename)
+	path := filepath.Join(testenv.TempDir(t), StateFilename)
 	a := NewManager(path, "/workspace/a")
 	b := NewManager(path, "/workspace/b")
 	for _, item := range []struct {
@@ -115,7 +117,7 @@ func TestRevokeOnlyRemovesCurrentWorkspaceServerGrant(t *testing.T) {
 }
 
 func TestLauncherLockRoundTrip(t *testing.T) {
-	manager := NewManager(filepath.Join(t.TempDir(), StateFilename), "/workspace")
+	manager := NewManager(filepath.Join(testenv.TempDir(t), StateFilename), "/workspace")
 	lock := LauncherLock{Server: "project", Locator: "pkg@latest", ResolvedVersion: "1.2.3", ContentSHA256: "abc"}
 	if err := manager.PutLauncherLock(lock); err != nil {
 		t.Fatal(err)
@@ -133,7 +135,7 @@ func TestLauncherLockRoundTrip(t *testing.T) {
 }
 
 func TestRetiredToolTrustStateIsDropped(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, StateFilename)
 	workspaceFP := WorkspaceFingerprint("/workspace")
 	body := `{
@@ -175,7 +177,7 @@ func TestRetiredToolTrustStateIsDropped(t *testing.T) {
 }
 
 func TestStateFilePermissions(t *testing.T) {
-	path := filepath.Join(t.TempDir(), StateFilename)
+	path := filepath.Join(testenv.TempDir(t), StateFilename)
 	manager := NewManager(path, "/workspace")
 	if err := manager.Authorize("project", "project_config", "identity"); err != nil {
 		t.Fatal(err)

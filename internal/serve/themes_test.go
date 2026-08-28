@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 	"reasonix/internal/theme"
 )
 
@@ -63,7 +64,7 @@ func listThemes(t *testing.T, base string) []themeRow {
 // The listing carries each pack's whole token set so a picker can preview on
 // hover without a second request.
 func TestThemesListCarriesTokensForPreview(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	installPack(t, "dusk", "Dusk")
 
 	got := find(t, listThemes(t, themeServer(t).URL), "dusk")
@@ -79,7 +80,7 @@ func TestThemesListCarriesTokensForPreview(t *testing.T) {
 }
 
 func TestActivateThemeMarksItActiveAndPersists(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	installPack(t, "dusk", "Dusk")
 	srv := themeServer(t)
@@ -99,7 +100,7 @@ func TestActivateThemeMarksItActiveAndPersists(t *testing.T) {
 
 // Turning a pack off is a real choice, not a missing one.
 func TestActivateEmptyIDRestoresTheDefaultAppearance(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	installPack(t, "dusk", "Dusk")
 	srv := themeServer(t)
 
@@ -113,7 +114,7 @@ func TestActivateEmptyIDRestoresTheDefaultAppearance(t *testing.T) {
 }
 
 func TestActivateUnknownThemeIsRejectedAndChangesNothing(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	srv := themeServer(t)
 
 	if resp := postJSON(t, srv.URL+"/themes", map[string]string{"id": "nope"}); resp.StatusCode != http.StatusUnprocessableEntity {
@@ -139,7 +140,7 @@ func find(t *testing.T, packs []themeRow, id string) themeRow {
 // The window draws the background straight from this URL, so it has to answer
 // with the image bytes and its own type — not JSON, and not the SPA shell.
 func TestThemeAssetServesTheShippedImage(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	srv := themeServer(t)
 
 	resp, err := http.Get(srv.URL + "/themes/official-noir-gold/background")
@@ -162,7 +163,7 @@ func TestThemeAssetServesTheShippedImage(t *testing.T) {
 // A pack id is a path segment here, so the traversal has to die at the router
 // or in the reader — never as a file read outside the pack directory.
 func TestThemeAssetRefusesTraversalAndUnknownKinds(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	srv := themeServer(t)
 
 	for _, path := range []string{
@@ -185,7 +186,7 @@ func TestThemeAssetRefusesTraversalAndUnknownKinds(t *testing.T) {
 // The listing says whether a pack has a picture and how it wants it placed, so
 // a picker can show the two opacities before anything is activated.
 func TestThemesListCarriesBackgroundPlacement(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	got := find(t, listThemes(t, themeServer(t).URL), "official-noir-gold")
 	if got.Background == nil || !got.Background.Image {
 		t.Fatalf("background = %+v, want the shipped image", got.Background)

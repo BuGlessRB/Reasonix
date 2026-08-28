@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"reasonix/internal/filelock"
+	"reasonix/internal/testenv"
 )
 
 func warningFingerprint(label string) string {
@@ -28,7 +29,7 @@ func missingReasoningTestNow() time.Time {
 }
 
 func TestMissingReasoningWarnStatePersistsCurrentIncidentAcrossInstances(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	fingerprint := warningFingerprint("openai\x00deepseek\x00v4-pro")
 	observedAt := missingReasoningTestNow()
 	if !newMissingReasoningWarnState(dir).claimAt(fingerprint, observedAt) {
@@ -54,7 +55,7 @@ func TestMissingReasoningWarnStatePersistsCurrentIncidentAcrossInstances(t *test
 }
 
 func TestMissingReasoningWarnStateSeparatesConfigurationFingerprints(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	s := newMissingReasoningWarnState(dir)
 	now := missingReasoningTestNow()
 	if !s.claimAt(warningFingerprint("endpoint-a\x00model-a"), now) {
@@ -69,7 +70,7 @@ func TestMissingReasoningWarnStateSeparatesConfigurationFingerprints(t *testing.
 }
 
 func TestMissingReasoningWarnStateExpiresCooldown(t *testing.T) {
-	s := newMissingReasoningWarnState(t.TempDir())
+	s := newMissingReasoningWarnState(testenv.TempDir(t))
 	fingerprint := warningFingerprint("config")
 	now := missingReasoningTestNow()
 	if !s.claimAt(fingerprint, now) {
@@ -84,7 +85,7 @@ func TestMissingReasoningWarnStateExpiresCooldown(t *testing.T) {
 }
 
 func TestMissingReasoningWarnStateHealthyTurnRearmsRegression(t *testing.T) {
-	s := newMissingReasoningWarnState(t.TempDir())
+	s := newMissingReasoningWarnState(testenv.TempDir(t))
 	fingerprint := warningFingerprint("config")
 	now := missingReasoningTestNow()
 	if !s.claimAt(fingerprint, now) {
@@ -105,7 +106,7 @@ func TestMissingReasoningWarnStateHealthyTurnRearmsRegression(t *testing.T) {
 }
 
 func TestMissingReasoningWarnStateMissingTurnResetsHealthyStreak(t *testing.T) {
-	s := newMissingReasoningWarnState(t.TempDir())
+	s := newMissingReasoningWarnState(testenv.TempDir(t))
 	fingerprint := warningFingerprint("config")
 	now := missingReasoningTestNow()
 	if !s.claimAt(fingerprint, now) {
@@ -131,7 +132,7 @@ func TestMissingReasoningWarnStateMissingTurnResetsHealthyStreak(t *testing.T) {
 }
 
 func TestMissingReasoningWarnStateStaleHealthCannotClearNewerFailure(t *testing.T) {
-	s := newMissingReasoningWarnState(t.TempDir())
+	s := newMissingReasoningWarnState(testenv.TempDir(t))
 	fingerprint := warningFingerprint("config")
 	now := missingReasoningTestNow()
 	if !s.claimAt(fingerprint, now) {
@@ -149,7 +150,7 @@ func TestMissingReasoningWarnStateStaleHealthCannotClearNewerFailure(t *testing.
 }
 
 func TestMissingReasoningWarnStateDuplicateHealthAndDelayedFailureDoNotChangeStreak(t *testing.T) {
-	s := newMissingReasoningWarnState(t.TempDir())
+	s := newMissingReasoningWarnState(testenv.TempDir(t))
 	fingerprint := warningFingerprint("config")
 	now := missingReasoningTestNow()
 	if !s.persistClaimAt(fingerprint, now) {
@@ -174,7 +175,7 @@ func TestMissingReasoningWarnStateDuplicateHealthAndDelayedFailureDoNotChangeStr
 }
 
 func TestMissingReasoningWarnStateDelayedFailureCannotReviveResolvedIncident(t *testing.T) {
-	s := newMissingReasoningWarnState(t.TempDir())
+	s := newMissingReasoningWarnState(testenv.TempDir(t))
 	fingerprint := warningFingerprint("config")
 	now := time.Now()
 	firstMissingAt := now.Add(-10 * time.Millisecond)
@@ -205,7 +206,7 @@ func TestMissingReasoningWarnStateDelayedFailureCannotReviveResolvedIncident(t *
 }
 
 func TestMissingReasoningWarnStateV2OptionalStreakFieldsResume(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, missingReasoningWarnStateFilename)
 	fingerprint := warningFingerprint("config")
 	now := missingReasoningTestNow()
@@ -233,7 +234,7 @@ func TestMissingReasoningWarnStateV2OptionalStreakFieldsResume(t *testing.T) {
 }
 
 func TestMissingReasoningWarnStateFutureLastMissingSelfHeals(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, missingReasoningWarnStateFilename)
 	fingerprint := warningFingerprint("config")
 	now := time.Now().Truncate(time.Millisecond)
@@ -261,7 +262,7 @@ func TestMissingReasoningWarnStateFutureLastMissingSelfHeals(t *testing.T) {
 }
 
 func TestMissingReasoningWarnStateLegacyPreviewRearmsAndMigrates(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, missingReasoningWarnStateFilename)
 	if err := os.WriteFile(path, []byte(`{"providers":["deepseek"]}`), 0o600); err != nil {
 		t.Fatalf("seed legacy state: %v", err)
@@ -280,7 +281,7 @@ func TestMissingReasoningWarnStateLegacyPreviewRearmsAndMigrates(t *testing.T) {
 }
 
 func TestMissingReasoningWarnStateLoadsV2IncidentWithoutNanosecondField(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, missingReasoningWarnStateFilename)
 	fingerprint := warningFingerprint("config")
 	now := missingReasoningTestNow()
@@ -297,7 +298,7 @@ func TestMissingReasoningWarnStateLoadsV2IncidentWithoutNanosecondField(t *testi
 }
 
 func TestMissingReasoningWarnStateCorruptFileSelfHeals(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, missingReasoningWarnStateFilename)
 	if err := os.WriteFile(path, []byte("{not json"), 0o644); err != nil {
 		t.Fatalf("seed corrupt file: %v", err)
@@ -314,7 +315,7 @@ func TestMissingReasoningWarnStateCorruptFileSelfHeals(t *testing.T) {
 }
 
 func TestMissingReasoningWarnStateUsesOwnerOnlyPermissions(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "state")
+	dir := filepath.Join(testenv.TempDir(t), "state")
 	s := newMissingReasoningWarnState(dir)
 	if !s.claimAt(warningFingerprint("config"), missingReasoningTestNow()) {
 		t.Fatal("fresh incident must warn")
@@ -336,7 +337,7 @@ func TestMissingReasoningWarnStateUsesOwnerOnlyPermissions(t *testing.T) {
 }
 
 func TestMissingReasoningWarnStateIOFailureFallsBackVisible(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "not-a-directory")
+	path := filepath.Join(testenv.TempDir(t), "not-a-directory")
 	if err := os.WriteFile(path, []byte("occupied"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +350,7 @@ func TestMissingReasoningWarnStateReadFailureDoesNotOverwriteExistingIncidents(t
 	if runtime.GOOS == "windows" {
 		t.Skip("chmod permissions are not portable to Windows")
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, missingReasoningWarnStateFilename)
 	s := newMissingReasoningWarnState(dir)
 	now := missingReasoningTestNow()
@@ -399,7 +400,7 @@ func TestMissingReasoningWarnStateEmptyDirFallsBackVisible(t *testing.T) {
 }
 
 func TestMissingReasoningWarnStateConcurrentSameIncidentWarnsOnce(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	fingerprint := warningFingerprint("shared-config")
 	now := missingReasoningTestNow()
 	start := make(chan struct{})
@@ -421,7 +422,7 @@ func TestMissingReasoningWarnStateConcurrentSameIncidentWarnsOnce(t *testing.T) 
 }
 
 func TestMissingReasoningWarnStateConcurrentFollowerPersistsLatestObservation(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	s := newMissingReasoningWarnState(dir)
 	fingerprint := warningFingerprint("shared-config")
 	firstObservedAt := missingReasoningTestNow()
@@ -481,7 +482,7 @@ func TestMissingReasoningWarnStateConcurrentFollowerPersistsLatestObservation(t 
 }
 
 func TestMissingReasoningWarnStateConcurrentClaimsKeepEveryConfiguration(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	now := missingReasoningTestNow()
 	labels := []string{"alpha", "bravo", "charlie", "delta"}
 	start := make(chan struct{})

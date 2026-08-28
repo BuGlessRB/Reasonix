@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/mcplaunch"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -19,7 +20,7 @@ import (
 // Returns the temp dir so a test can also poke into it (e.g. write a corrupted file).
 func redirectCache(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	t.Setenv("REASONIX_CACHE_HOME", dir)
 	return dir
 }
@@ -278,7 +279,7 @@ func TestSchemaCacheKeyStable(t *testing.T) {
 func TestSchemaCacheKeyIgnoresHostLocalAuthorizationAndIsolation(t *testing.T) {
 	base := sampleSpec()
 	changed := base
-	changed.LaunchManager = mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), "/workspace")
+	changed.LaunchManager = mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), "/workspace")
 	changed.ConfigSource = "project:.mcp.json"
 	changed.Package = "figma"
 	changed.Sandbox = sandbox.Spec{Mode: "enforce", Network: true, WriteRoots: []string{"/workspace"}, MinimalWrites: true}
@@ -370,7 +371,7 @@ func TestSlugSafeForFilesystem(t *testing.T) {
 }
 
 func TestMCPStateDirSeparatesConfusableServerNames(t *testing.T) {
-	home, workspace := t.TempDir(), t.TempDir()
+	home, workspace := testenv.TempDir(t), testenv.TempDir(t)
 	names := []string{"foo", "Foo", "foo bar", "foo-bar", "foo/bar", "foo\\bar"}
 	seen := map[string]string{}
 	for _, name := range names {

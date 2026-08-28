@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestEditFileFuzzyTrailingWhitespace(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "main.go")
 	seed := "func main() {   \n\tfmt.Println(\"hello\")  \n}\n"
 	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
@@ -38,7 +40,7 @@ func TestEditFileFuzzyTrailingWhitespace(t *testing.T) {
 }
 
 func TestEditFileFuzzyReadFileLinePrefixes(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "notes.txt")
 	seed := "alpha\nbeta\ngamma\n"
 	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
@@ -64,7 +66,7 @@ func TestEditFileFuzzyReadFileLinePrefixes(t *testing.T) {
 }
 
 func TestEditFileFuzzyCRLFPreservesLineEndings(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "win.txt")
 	seed := "one   \r\ntwo   \r\nthree\r\n"
 	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
@@ -90,7 +92,7 @@ func TestEditFileFuzzyCRLFPreservesLineEndings(t *testing.T) {
 }
 
 func TestEditFileCRLFNotFoundHintAvoidsMisattribution(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "win.txt")
 	seed := "one\r\ntwo\r\nthree\r\n"
 	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
@@ -119,7 +121,7 @@ func TestEditFileCRLFNotFoundHintAvoidsMisattribution(t *testing.T) {
 }
 
 func TestEditFileFuzzyAmbiguousDoesNotWrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "dup.txt")
 	seed := "target   \ntarget   \n"
 	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
@@ -144,7 +146,7 @@ func TestEditFileFuzzyAmbiguousDoesNotWrite(t *testing.T) {
 }
 
 func TestEditFileFuzzyLeadingIndentDriftDoesNotWrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "indent.go")
 	seed := "func f() {\n    if ok {\n        return nil\n    }\n}\n"
 	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
@@ -169,7 +171,7 @@ func TestEditFileFuzzyLeadingIndentDriftDoesNotWrite(t *testing.T) {
 }
 
 func TestMultiEditFuzzyReplaceAll(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "list.txt")
 	seed := "item   \nitem\t\n"
 	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {

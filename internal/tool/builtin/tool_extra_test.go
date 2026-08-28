@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // read_file extended tests
@@ -30,7 +32,7 @@ func TestReadFileMissingPath(t *testing.T) {
 }
 
 func TestReadFileLargeFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "large.txt")
 	var b strings.Builder
 	for i := 1; i <= 100; i++ {
@@ -57,7 +59,7 @@ func TestReadFileLargeFile(t *testing.T) {
 }
 
 func TestReadFileOffsetPastEOF(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "short.txt")
 	os.WriteFile(f, []byte("one\ntwo\n"), 0o644)
 
@@ -77,7 +79,7 @@ func TestReadFileInvalidArgs(t *testing.T) {
 // ls extended tests
 
 func TestLsEmptyDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	out := runTool(t, listDir{}, map[string]any{"path": dir})
 	if !strings.Contains(out, "(empty directory)") {
 		t.Errorf("empty dir should report (empty directory): %s", out)
@@ -109,7 +111,7 @@ func TestLsInvalidArgs(t *testing.T) {
 // grep extended tests
 
 func TestGrepSingleFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "code.go")
 	os.WriteFile(f, []byte("func Foo() {}\nfunc Bar() {}\nvar x = 1\n"), 0o644)
 
@@ -123,7 +125,7 @@ func TestGrepSingleFile(t *testing.T) {
 }
 
 func TestGrepNoMatches(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("hello world\n"), 0o644)
 
 	out := runTool(t, grepTool{}, map[string]any{"pattern": "xyzzy", "path": dir})
@@ -133,7 +135,7 @@ func TestGrepNoMatches(t *testing.T) {
 }
 
 func TestGrepInvalidPattern(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("test\n"), 0o644)
 
 	_, err := grepTool{}.Execute(context.Background(), argsJSON(t, map[string]any{"pattern": "[invalid", "path": dir}))
@@ -157,7 +159,7 @@ func TestGrepMissingPattern(t *testing.T) {
 }
 
 func TestGrepSkipsGitDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("secret = true\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644)
@@ -169,7 +171,7 @@ func TestGrepSkipsGitDir(t *testing.T) {
 }
 
 func TestGrepTruncation(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	// Create a file with many matching lines.
 	var b strings.Builder
 	for i := range 300 {
@@ -200,7 +202,7 @@ func TestGlobInvalidArgs(t *testing.T) {
 }
 
 func TestGlobCharClass(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o644)
 	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0o644)
 	os.WriteFile(filepath.Join(dir, "c.log"), []byte("c"), 0o644)
@@ -215,7 +217,7 @@ func TestGlobCharClass(t *testing.T) {
 }
 
 func TestGlobQuestionMark(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o644)
 	os.WriteFile(filepath.Join(dir, "ab.txt"), []byte("ab"), 0o644)
 

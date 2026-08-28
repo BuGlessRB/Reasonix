@@ -12,10 +12,11 @@ import (
 
 	"reasonix/internal/pluginpkg"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 )
 
 func TestDefaultSpawnerRunsQuotedPluginBatchHook(t *testing.T) {
-	pluginRoot := filepath.Join(t.TempDir(), "plugin root")
+	pluginRoot := filepath.Join(testenv.TempDir(t), "plugin root")
 	hooksDir := filepath.Join(pluginRoot, "hooks")
 	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -57,7 +58,7 @@ func TestDefaultSpawnerRunsQuotedPluginBatchHook(t *testing.T) {
 }
 
 func TestSuperpowersV611SessionStartHookEndToEnd(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	installSuperpowersV611HookFixture(t, home)
 	workspace := filepath.Join(home, "workspace")
 	hooks := Load(LoadOptions{HomeDir: home, ProjectRoot: workspace})
@@ -90,7 +91,7 @@ func TestExtensionlessSessionStartHookUsesAutoResolvedBash(t *testing.T) {
 		t.Skip("Git Bash is not available on this Windows test host")
 	}
 
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, ".reasonix")
 	root := filepath.Join(reasonixHome, "plugins", "superpowers")
 	writeHookTestFile(t, filepath.Join(root, pluginpkg.CodexManifest), `{
@@ -143,7 +144,7 @@ func TestProjectAndGlobalExtensionlessHooksUseAutoResolvedBash(t *testing.T) {
 		t.Skip("Git Bash is not available on this Windows test host")
 	}
 
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	workspace := filepath.Join(home, "workspace")
 	projectScript := filepath.Join(workspace, "hooks", "project-start")
 	globalScript := filepath.Join(workspace, "hooks", "global-start")
@@ -184,7 +185,7 @@ func TestProjectAndGlobalExtensionlessHooksUseAutoResolvedBash(t *testing.T) {
 }
 
 func TestDefaultSpawnerRunsCompoundCmdShellHook(t *testing.T) {
-	pluginRoot := filepath.Join(t.TempDir(), "plugin root")
+	pluginRoot := filepath.Join(testenv.TempDir(t), "plugin root")
 	if err := os.MkdirAll(pluginRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}

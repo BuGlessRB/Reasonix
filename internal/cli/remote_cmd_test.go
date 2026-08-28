@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestRemoteCommandUsageExit(t *testing.T) {
@@ -41,7 +42,7 @@ func TestRemovedRemoteWorkbenchCommandsFailWithMigrationHint(t *testing.T) {
 }
 
 func TestRemoteAddListRemoveRoundTrip(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("HOME", home)
 
@@ -73,7 +74,7 @@ func TestRemoteAddListRemoveRoundTrip(t *testing.T) {
 }
 
 func TestRemoteRemoveCleansGeneratedCredentialsButKeepsUserManagedOnes(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -120,7 +121,7 @@ func TestRemoteRemoveCleansGeneratedCredentialsButKeepsUserManagedOnes(t *testin
 }
 
 func TestRemoteAddReplacementCleansDroppedGeneratedCredentials(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -143,7 +144,7 @@ func TestRemoteAddReplacementCleansDroppedGeneratedCredentials(t *testing.T) {
 }
 
 func TestRemoteImportPreservesReasonixSettings(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -180,7 +181,7 @@ func TestRemoteImportPreservesReasonixSettings(t *testing.T) {
 }
 
 func TestRemoteForwardAddPersists(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("HOME", home)
 	if got := remoteAddCLI([]string{"box", "dev@10.0.0.9"}); got != 0 {

@@ -10,10 +10,11 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func TestRedactSessionsScrubsHistoricalSessionArtifacts(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	const secret = "sk-real-secret-value-123456"
 	sessionPath := filepath.Join(dir, "abc.jsonl")
 	files := map[string]string{
@@ -67,7 +68,7 @@ func TestRedactSessionsScrubsHistoricalSessionArtifacts(t *testing.T) {
 // truncate the JSON string, and leave the transcript undecodable — while the
 // secret itself stayed in the clear.
 func TestRedactSessionsHandlesQuotedSecretsWithoutCorruption(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	const secret = "hunter2-longer-secret-value"
 	sessionPath := filepath.Join(dir, "abc.jsonl")
 	line, err := json.Marshal(provider.Message{
@@ -103,7 +104,7 @@ func TestRedactSessionsHandlesQuotedSecretsWithoutCorruption(t *testing.T) {
 // TestRedactSessionsIsNoOpOnHealthyStore pins idempotence: after an explicit
 // cleanup, rerunning the command must not rewrite or corrupt the clean store.
 func TestRedactSessionsIsNoOpOnHealthyStore(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "abc.jsonl")
 	s := agent.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "inspect"})
@@ -145,7 +146,7 @@ func TestRedactSessionsIsNoOpOnHealthyStore(t *testing.T) {
 }
 
 func TestRedactSessionsDryRunDoesNotWrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	const secret = "sk-real-secret-value-123456"
 	path := filepath.Join(dir, "abc.jsonl")
 	body := `{"role":"tool","content":"DEEPSEEK_API_KEY=` + secret + `"}` + "\n"
@@ -167,7 +168,7 @@ func TestRedactSessionsDryRunDoesNotWrite(t *testing.T) {
 }
 
 func TestRedactSessionsSkipsLeasedSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	const secret = "sk-real-secret-value-123456"
 	path := filepath.Join(dir, "abc.jsonl")
 	if err := os.WriteFile(path, []byte(`{"role":"tool","content":"DEEPSEEK_API_KEY=`+secret+`"}`+"\n"), 0o644); err != nil {
@@ -198,7 +199,7 @@ func TestRedactSessionsSkipsLeasedSession(t *testing.T) {
 // undecodable by definition, so no format-aware masking can prove them clean —
 // the scrub must delete the file so no secret survives.
 func TestRedactSessionsRemovesDamagedSalvageSidecar(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	const secret = "sk-real-secret-value-123456"
 	sessionPath := filepath.Join(dir, "abc.jsonl")
 	if err := os.WriteFile(sessionPath, []byte(`{"role":"user","content":"clean"}`+"\n"), 0o644); err != nil {
@@ -238,7 +239,7 @@ func TestRedactSessionsRemovesDamagedSalvageSidecar(t *testing.T) {
 // salvage sidecar of a session another process is actively running must not
 // be touched.
 func TestRedactSessionsSkipsLeasedDamagedSalvage(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "abc.jsonl")
 	if err := os.WriteFile(sessionPath, []byte(`{"role":"user","content":"clean"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -268,7 +269,7 @@ func TestRedactSessionsSkipsLeasedDamagedSalvage(t *testing.T) {
 // clean. Cleanup must compact the log anyway, and the replayed transcript
 // (the clean current view) must be what survives.
 func TestRedactSessionsScrubsStaleEventLogRecords(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	const secret = "sk-real-secret-value-123456"
 	sessionPath := filepath.Join(dir, "abc.jsonl")
 	events := `{"schema_version":1,"type":"replace","messages":[{"role":"tool","content":"DEEPSEEK_API_KEY=` + secret + `"}]}` + "\n" +

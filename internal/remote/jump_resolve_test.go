@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestResolveJumpHostsUsesConfiguredAliasesAndSSHConfig(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	sshDir := filepath.Join(home, ".ssh")

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestCCSwitchRowsToPlugins(t *testing.T) {
@@ -61,7 +63,7 @@ func TestCCSwitchImportClassifiesRiskyServers(t *testing.T) {
 }
 
 func TestLoadCCSwitchLegacyConfig(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.json.migrated")
 	body := `{
 		"mcp": {
@@ -95,7 +97,7 @@ func TestLoadCCSwitchLegacyConfig(t *testing.T) {
 }
 
 func TestLoadCCSwitchLegacyConfigPrefersReasonixFlag(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.json")
 	body := `{
 		"mcp": {
@@ -134,7 +136,7 @@ func TestLoadCCSwitchMCPDBPrefersReasonixColumn(t *testing.T) {
 	if _, err := exec.LookPath("sqlite3"); err != nil {
 		t.Skip("sqlite3 not available")
 	}
-	dbPath := filepath.Join(t.TempDir(), "cc-switch.db")
+	dbPath := filepath.Join(testenv.TempDir(t), "cc-switch.db")
 	setup := `CREATE TABLE mcp_servers (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL,
@@ -160,7 +162,7 @@ func TestLoadCCSwitchMCPDBFallsBackToCodexWithoutReasonixColumn(t *testing.T) {
 	if _, err := exec.LookPath("sqlite3"); err != nil {
 		t.Skip("sqlite3 not available")
 	}
-	dbPath := filepath.Join(t.TempDir(), "cc-switch.db")
+	dbPath := filepath.Join(testenv.TempDir(t), "cc-switch.db")
 	setup := `CREATE TABLE mcp_servers (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL,
@@ -185,7 +187,7 @@ func TestLoadCCSwitchMCPEmptyDBDoesNotReadLegacyBackups(t *testing.T) {
 	if _, err := exec.LookPath("sqlite3"); err != nil {
 		t.Skip("sqlite3 not available")
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	dbPath := filepath.Join(root, "cc-switch.db")
 	if out, err := exec.Command("sqlite3", dbPath, `CREATE TABLE mcp_servers (
 		id TEXT PRIMARY KEY,

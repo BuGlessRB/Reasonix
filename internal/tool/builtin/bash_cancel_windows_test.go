@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 )
 
 func TestBashCancelKillsWindowsChildProcessTree(t *testing.T) {
@@ -22,7 +23,7 @@ func TestBashCancelKillsWindowsChildProcessTree(t *testing.T) {
 	if err != nil {
 		t.Skip("powershell not found")
 	}
-	tmp := t.TempDir()
+	tmp := testenv.TempDir(t)
 	pidFile := filepath.Join(tmp, "child.pid")
 	quotedPIDFile := strings.ReplaceAll(pidFile, "'", "''")
 	command := fmt.Sprintf(
@@ -69,7 +70,7 @@ func TestBashWindowsReapsChildAfterForegroundShellExit(t *testing.T) {
 	if err != nil {
 		t.Skip("powershell not found")
 	}
-	tmp := t.TempDir()
+	tmp := testenv.TempDir(t)
 	pidFile := filepath.Join(tmp, "child.pid")
 	quotedPIDFile := strings.ReplaceAll(pidFile, "'", "''")
 	command := fmt.Sprintf(
@@ -103,7 +104,7 @@ func TestBashCancelKillsGitBashHereDocPython(t *testing.T) {
 		t.Skip("Git Bash not found")
 	}
 	python := gitBashPython(t, sh.Path)
-	tmp := t.TempDir()
+	tmp := testenv.TempDir(t)
 	pidFile := filepath.Join(tmp, "python.pid")
 	pythonPIDFile := filepath.ToSlash(pidFile)
 	command := fmt.Sprintf("%s - <<'PYEOF'\nimport os, time\nwith open(%q, 'w') as f:\n    f.write(str(os.getpid()))\n    f.flush()\ntime.sleep(120)\nPYEOF\n", shellQuote(python), pythonPIDFile)

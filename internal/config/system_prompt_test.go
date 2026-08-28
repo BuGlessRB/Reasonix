@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 func TestDefaultSystemPromptStaysLean(t *testing.T) {
@@ -27,15 +28,15 @@ func TestDefaultSystemPromptStaysLean(t *testing.T) {
 }
 
 func TestResolveSystemPromptForRootRelativePath(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	root := testenv.TempDir(t)
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	if err := os.MkdirAll(filepath.Join(root, "prompts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "prompts", "session.md"), []byte(" project session prompt \n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 
 	cfg := Default()
 	cfg.Agent.SystemPromptFile = filepath.Join("prompts", "session.md")
@@ -50,17 +51,17 @@ func TestResolveSystemPromptForRootRelativePath(t *testing.T) {
 }
 
 func TestResolveSystemPromptForRootAbsolutePath(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "session.md")
 	if err := os.WriteFile(path, []byte(" absolute session prompt \n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 
 	cfg := Default()
 	cfg.Agent.SystemPromptFile = path
 
-	got, err := cfg.ResolveSystemPromptForRoot(t.TempDir())
+	got, err := cfg.ResolveSystemPromptForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatalf("ResolveSystemPromptForRoot: %v", err)
 	}
@@ -70,8 +71,8 @@ func TestResolveSystemPromptForRootAbsolutePath(t *testing.T) {
 }
 
 func TestResolveSystemPromptForRootMissingFile(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 
 	cfg := Default()
@@ -96,8 +97,8 @@ func TestResolveSystemPromptForRootMissingFile(t *testing.T) {
 }
 
 func TestResolveSystemPromptProjectCannotReadReasonixHome(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	secret := "OTHER_PROVIDER_SECRET=must-not-enter-prompt"
 	if err := os.WriteFile(filepath.Join(home, ".env"), []byte(secret), 0o600); err != nil {
@@ -124,8 +125,8 @@ func TestResolveSystemPromptProjectCannotReadReasonixHome(t *testing.T) {
 }
 
 func TestMergeFileSnapshotKeepsProjectPromptSourceAtomic(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	const secret = "PROVIDER_SECRET=must-not-enter-system-prompt"
 	if err := os.WriteFile(filepath.Join(home, ".env"), []byte(secret), 0o600); err != nil {
@@ -172,8 +173,8 @@ func TestMergeFileSnapshotKeepsProjectPromptSourceAtomic(t *testing.T) {
 }
 
 func TestResolveSystemPromptUserConfigCanFallBackToReasonixHome(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.MkdirAll(filepath.Join(home, "prompts"), 0o755); err != nil {
 		t.Fatal(err)
@@ -199,8 +200,8 @@ func TestResolveSystemPromptUserConfigCanFallBackToReasonixHome(t *testing.T) {
 }
 
 func TestResolveSystemPromptProjectPathStaysInWorkspace(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	for _, dir := range []string{filepath.Join(home, "prompts"), filepath.Join(root, "prompts")} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -234,7 +235,7 @@ func TestResolveSystemPromptProjectPathStaysInWorkspace(t *testing.T) {
 }
 
 func TestResolveSystemPromptRejectsProjectPathEscapes(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	for _, test := range []struct {
 		name string
@@ -244,7 +245,7 @@ func TestResolveSystemPromptRejectsProjectPathEscapes(t *testing.T) {
 		{name: "absolute", path: func(root string) string { return filepath.Join(filepath.Dir(root), "outside.md") }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := testenv.TempDir(t)
 			outside := test.path(root)
 			if err := os.WriteFile(filepath.Join(root, "reasonix.toml"), fmt.Appendf(nil, "[agent]\nsystem_prompt_file = %q\n", outside), 0o600); err != nil {
 				t.Fatal(err)
@@ -261,9 +262,9 @@ func TestResolveSystemPromptRejectsProjectPathEscapes(t *testing.T) {
 }
 
 func TestResolveSystemPromptRejectsProjectSymlinkEscape(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
-	outside := filepath.Join(t.TempDir(), "outside.md")
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
+	outside := filepath.Join(testenv.TempDir(t), "outside.md")
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.WriteFile(outside, []byte("outside secret"), 0o600); err != nil {
 		t.Fatal(err)
@@ -287,8 +288,8 @@ func TestResolveSystemPromptRejectsProjectSymlinkEscape(t *testing.T) {
 }
 
 func TestResolveSystemPromptMixedReadErrorsAreNotMissing(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.MkdirAll(filepath.Join(home, "prompts", "system.md"), 0o755); err != nil {
 		t.Fatal(err)
@@ -301,7 +302,7 @@ func TestResolveSystemPromptMixedReadErrorsAreNotMissing(t *testing.T) {
 }
 
 func TestResolveSystemPromptForRootFallsBackToReasonixHome(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.MkdirAll(filepath.Join(home, "prompts"), 0o755); err != nil {
 		t.Fatal(err)
@@ -314,7 +315,7 @@ func TestResolveSystemPromptForRootFallsBackToReasonixHome(t *testing.T) {
 	cfg.Agent.SystemPromptFile = filepath.Join("prompts", "system.md")
 
 	// Workspace root has no such file; the Reasonix-home copy must win the probe.
-	got, err := cfg.ResolveSystemPromptForRoot(t.TempDir())
+	got, err := cfg.ResolveSystemPromptForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatalf("ResolveSystemPromptForRoot: %v", err)
 	}
@@ -324,8 +325,8 @@ func TestResolveSystemPromptForRootFallsBackToReasonixHome(t *testing.T) {
 }
 
 func TestResolveSystemPromptForRootWorkspaceWins(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	for dir, content := range map[string]string{home: "home prompt", root: "workspace prompt"} {
 		if err := os.MkdirAll(filepath.Join(dir, "prompts"), 0o755); err != nil {
@@ -349,8 +350,8 @@ func TestResolveSystemPromptForRootWorkspaceWins(t *testing.T) {
 }
 
 func TestResolveSystemPromptForRootDecodesGB18030(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	root := testenv.TempDir(t)
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	if err := os.MkdirAll(filepath.Join(root, "prompts"), 0o755); err != nil {
 		t.Fatal(err)
 	}

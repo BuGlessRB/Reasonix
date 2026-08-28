@@ -10,11 +10,12 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestSearchRanksSavedSessionHistory(t *testing.T) {
-	sessionDir := t.TempDir()
-	archiveDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
+	archiveDir := testenv.TempDir(t)
 
 	writeSession(t, filepath.Join(sessionDir, "first.jsonl"), []provider.Message{
 		{Role: provider.RoleUser, Content: "We need a cache-first implementation."},
@@ -42,8 +43,8 @@ func TestSearchRanksSavedSessionHistory(t *testing.T) {
 }
 
 func TestSearchGlobalIncludesArchives(t *testing.T) {
-	sessionDir := t.TempDir()
-	archiveDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
+	archiveDir := testenv.TempDir(t)
 	writeSession(t, filepath.Join(archiveDir, "archive.jsonl"), []provider.Message{
 		{Role: provider.RoleUser, Content: "Old decision: Obelisk retrieval query runtime stays code-driven."},
 	})
@@ -69,8 +70,8 @@ func TestSearchGlobalIncludesArchives(t *testing.T) {
 }
 
 func TestSearchGlobalIncludesGlobalSessionDir(t *testing.T) {
-	projectDir := t.TempDir()
-	globalDir := t.TempDir()
+	projectDir := testenv.TempDir(t)
+	globalDir := testenv.TempDir(t)
 	writeSession(t, filepath.Join(projectDir, "project.jsonl"), []provider.Message{
 		{Role: provider.RoleUser, Content: "Project-only decision about local UI spacing."},
 	})
@@ -103,7 +104,7 @@ func TestSearchGlobalIncludesGlobalSessionDir(t *testing.T) {
 }
 
 func TestSearchIndexesToolInputsAndErrors(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	writeSession(t, filepath.Join(sessionDir, "tools.jsonl"), []provider.Message{
 		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "1", Name: "bash", Arguments: `{"cmd":"go test ./internal/history"}`}}},
 		{Role: provider.RoleTool, ToolCallID: "1", Name: "bash", Content: "error: command exited: exit status 1\nFAIL"},
@@ -127,7 +128,7 @@ func TestSearchIndexesToolInputsAndErrors(t *testing.T) {
 }
 
 func TestSearchDropsCommonWordNoise(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	writeSession(t, filepath.Join(sessionDir, "rare.jsonl"), []provider.Message{
 		{Role: provider.RoleUser, Content: "rareterm common common common"},
 	})
@@ -151,7 +152,7 @@ func TestSearchDropsCommonWordNoise(t *testing.T) {
 }
 
 func TestSearchSkipsCleanupPending(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	visiblePath := filepath.Join(sessionDir, "visible.jsonl")
 	pendingPath := filepath.Join(sessionDir, "pending.jsonl")
 	writeSession(t, visiblePath, []provider.Message{
@@ -182,7 +183,7 @@ func TestSearchSkipsCleanupPending(t *testing.T) {
 }
 
 func TestAroundRejectsCleanupPending(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	path := filepath.Join(sessionDir, "pending.jsonl")
 	writeSession(t, path, []provider.Message{{Role: provider.RoleUser, Content: "pending secret"}})
 	if err := agent.MarkCleanupPending(path, "delete"); err != nil {
@@ -196,7 +197,7 @@ func TestAroundRejectsCleanupPending(t *testing.T) {
 }
 
 func TestHistorySkipsSubagentsOwnedByCleanupPendingParent(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	parentPath := filepath.Join(sessionDir, "parent.jsonl")
 	writeSession(t, parentPath, []provider.Message{{Role: provider.RoleUser, Content: "parent prompt"}})
 	visibleParentPath := filepath.Join(sessionDir, "visible-parent.jsonl")
@@ -225,8 +226,8 @@ func TestHistorySkipsSubagentsOwnedByCleanupPendingParent(t *testing.T) {
 }
 
 func TestAroundRequiresPathUnderHistoryRoots(t *testing.T) {
-	sessionDir := t.TempDir()
-	outside := t.TempDir()
+	sessionDir := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	path := filepath.Join(outside, "outside.jsonl")
 	writeSession(t, path, []provider.Message{{Role: provider.RoleUser, Content: "secret"}})
 
@@ -237,7 +238,7 @@ func TestAroundRequiresPathUnderHistoryRoots(t *testing.T) {
 }
 
 func TestAroundRendersNearbyMessages(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	path := filepath.Join(sessionDir, "nearby.jsonl")
 	writeSession(t, path, []provider.Message{
 		{Role: provider.RoleUser, Content: "first"},
@@ -262,7 +263,7 @@ func TestAroundRendersNearbyMessages(t *testing.T) {
 }
 
 func TestAroundClampsLargeAfterWithoutOverflow(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	path := filepath.Join(sessionDir, "nearby.jsonl")
 	writeSession(t, path, []provider.Message{
 		{Role: provider.RoleUser, Content: "first"},

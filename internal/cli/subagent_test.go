@@ -12,11 +12,12 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/pluginpkg"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 )
 
 func TestSubagentProfileCLIManageRoundTrip(t *testing.T) {
 	isolateCLIConfigHome(t)
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	original, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -87,9 +88,9 @@ func TestSubagentProfileCLIManageRoundTrip(t *testing.T) {
 }
 
 func TestSubagentListIncludesQualifiedPluginAgents(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	t.Chdir(project)
 	root := filepath.Join(home, "plugins", "commercial-legal")
 	writePluginTestFile(t, filepath.Join(root, pluginpkg.ClaudeManifest), `{"name":"commercial-legal"}`)
@@ -125,7 +126,7 @@ Debrief the deal.`)
 
 func TestSubagentProfileCLIRejectsBuiltinCollisionAndRichSkillEdit(t *testing.T) {
 	isolateCLIConfigHome(t)
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	original, _ := os.Getwd()
 	if err := os.Chdir(project); err != nil {
 		t.Fatal(err)
@@ -183,7 +184,7 @@ func TestSubagentProfileCLIRejectsBuiltinCollisionAndRichSkillEdit(t *testing.T)
 
 func TestSubagentProfileCLIRejectsReservedAndCustomCommandNames(t *testing.T) {
 	isolateCLIConfigHome(t)
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	original, _ := os.Getwd()
 	if err := os.Chdir(project); err != nil {
 		t.Fatal(err)
@@ -311,7 +312,7 @@ func TestSubagentRunTryDirPinsExplicitWorkspaceRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repo := t.TempDir()
+	repo := testenv.TempDir(t)
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +321,7 @@ func TestSubagentRunTryDirPinsExplicitWorkspaceRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Register the cwd restore after repo's t.TempDir() cleanup so it runs
+	// Register the cwd restore after repo's testenv.TempDir(t) cleanup so it runs
 	// first (LIFO): on Windows, RemoveAll fails while cwd sits inside repo.
 	t.Cleanup(func() { _ = os.Chdir(origWD) })
 	if err := os.Chdir(repo); err != nil {

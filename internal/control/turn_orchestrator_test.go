@@ -17,6 +17,7 @@ import (
 	"reasonix/internal/hook"
 	"reasonix/internal/provider"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -164,7 +165,7 @@ func TestGoalTurnOutputCannotAdvanceReplacementGoal(t *testing.T) {
 		Runner:        runner,
 		Executor:      executor,
 		GoalEvaluator: evaluator,
-		SessionDir:    t.TempDir(),
+		SessionDir:    testenv.TempDir(t),
 	})
 	runner.c = c
 	c.SetGoal("old goal")
@@ -255,7 +256,7 @@ func TestGoalContinuationOutputCannotAdvanceReplacementGoal(t *testing.T) {
 	c := New(Options{
 		Runner:     runner,
 		Executor:   executor,
-		SessionDir: t.TempDir(),
+		SessionDir: testenv.TempDir(t),
 	})
 	runner.c = c
 	c.SetGoal("old goal")
@@ -478,7 +479,7 @@ func TestTurnOrchestratorApprovedPlanSharesOneStopHook(t *testing.T) {
 }
 
 func TestTurnOrchestratorRefTurnRecordsVisibleDisplay(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, "notes.txt"), []byte("referenced evidence"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +559,7 @@ func TestTurnOrchestratorRefTurnPreservesExpandedPasteForRouting(t *testing.T) {
 }
 
 func TestTurnOrchestratorAutoReasoningLanguageUsesRawPromptForRefTurns(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, "auth.go"), []byte("package main\nfunc AuthHandler() error { return errors.New(\"not authorized\") }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -592,7 +593,7 @@ func TestTurnOrchestratorAutoReasoningLanguageUsesRawPromptForRefTurns(t *testin
 }
 
 func TestTurnOrchestratorCheckpointBoundaryPrecedesUserMessage(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -645,7 +646,7 @@ func TestTurnOrchestratorCheckpointBoundaryPrecedesUserMessage(t *testing.T) {
 // string as checkpoint.Prompt made the Esc-Esc picker show a wall of prefab
 // prompt text instead of the user's messages.
 func TestTurnOrchestratorCheckpointPromptIsRawUserInput(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -679,7 +680,7 @@ func TestTurnOrchestratorCheckpointPromptIsRawUserInput(t *testing.T) {
 }
 
 func TestTurnOrchestratorSyntheticTurnDoesNotCreateCheckpoint(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -933,7 +934,7 @@ func TestTurnOrchestratorCancelClassifiesCancelledToolResultAsInterrupted(t *tes
 }
 
 func TestTurnOrchestratorCancelBeforeRunnerAddsUserPreservesVisiblePrompt(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeVisionTestConfig(t, workspace)
 	imagePath := filepath.Join(workspace, "diagram.png")
 	if err := os.WriteFile(imagePath, mustBase64(t, tinyPNG), 0o644); err != nil {
@@ -994,7 +995,7 @@ func TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk(t *testing.T) {
 		err: context.Canceled,
 	}
 
-	sessionPath := agent.NewSessionPath(t.TempDir(), "test-model")
+	sessionPath := agent.NewSessionPath(testenv.TempDir(t), "test-model")
 	c := New(Options{
 		Runner:      runner,
 		Executor:    agent.New(nil, nil, sess, agent.Options{}, event.Discard),
@@ -1033,7 +1034,7 @@ func TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk(t *testing.T) {
 }
 
 func TestResumeRecoversStaleVisibleInFlightTurn(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "stale-visible.jsonl")
 	sess := agent.NewSession("system")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "previous work"})
@@ -1087,7 +1088,7 @@ func TestResumeRecoversStaleVisibleInFlightTurn(t *testing.T) {
 }
 
 func TestResumeClearsStaleSyntheticInFlightTurn(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "stale-synthetic.jsonl")
 	sess := agent.NewSession("system")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "ship it"})

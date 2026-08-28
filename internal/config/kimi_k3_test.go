@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestKimiK3ReasoningProtocolControlsEffortCapability(t *testing.T) {
@@ -49,7 +51,7 @@ func TestKimiK3ReasoningProtocolControlsEffortCapability(t *testing.T) {
 }
 
 func TestKimiK3ReasoningProtocolPreservesDormantCustomEfforts(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	c := &Config{}
 	wantSupported := []string{"medium", "ultra"}
 	if err := c.UpsertProvider(ProviderEntry{
@@ -76,7 +78,7 @@ func TestKimiK3ReasoningProtocolPreservesDormantCustomEfforts(t *testing.T) {
 }
 
 func TestKimiK3ReasoningProtocolRoundTripsConfig(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	c := &Config{}
 	if err := c.UpsertProvider(ProviderEntry{
 		Name: "custom-kimi-gateway", Kind: "openai", BaseURL: "https://gateway.example.com/v1", Model: "kimi-k3",

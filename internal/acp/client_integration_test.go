@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/permission"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // scriptedRequester answers agent → client requests from a per-method script
@@ -141,7 +142,7 @@ func io2str(calls []string) string { return strings.Join(calls, ",") }
 
 func TestUpdateSinkToolLocations(t *testing.T) {
 	s := newUpdateSink(&fakeNotifier{}, "sess")
-	cwd := t.TempDir()
+	cwd := testenv.TempDir(t)
 	s.bindCwd(cwd)
 
 	locs := s.toolLocations("read_file", `{"path":"pkg/a.go","offset":41}`)
@@ -152,7 +153,7 @@ func TestUpdateSinkToolLocations(t *testing.T) {
 		t.Fatalf("read_file line = %v, want 42 (offset is 0-based)", locs[0].Line)
 	}
 	// A platform-absolute path passes through untouched.
-	abs := filepath.Join(t.TempDir(), "b.go")
+	abs := filepath.Join(testenv.TempDir(t), "b.go")
 	absArgs, _ := json.Marshal(map[string]string{"path": abs})
 	if locs := s.toolLocations("edit_file", string(absArgs)); len(locs) != 1 || locs[0].Path != abs || locs[0].Line != nil {
 		t.Fatalf("edit_file locations = %+v, want %s", locs, abs)
@@ -241,7 +242,7 @@ func (f *recordingFactory) last() SessionParams {
 }
 
 func TestSessionParamsCarryClientIOFromInitializeCaps(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	prov := &scriptedProvider{name: "fake", responses: [][]provider.Chunk{
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
@@ -261,7 +262,7 @@ func TestSessionParamsCarryClientIOFromInitializeCaps(t *testing.T) {
 			Terminal: true,
 		},
 	})
-	client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	p := factory.last()
 	if p.FileOverlay == nil {
 		t.Fatal("SessionParams.FileOverlay should be bound when the client declares fs capabilities")
@@ -272,7 +273,7 @@ func TestSessionParamsCarryClientIOFromInitializeCaps(t *testing.T) {
 }
 
 func TestSessionParamsNilClientIOWithoutCaps(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	prov := &scriptedProvider{name: "fake", responses: [][]provider.Chunk{
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
@@ -286,7 +287,7 @@ func TestSessionParamsNilClientIOWithoutCaps(t *testing.T) {
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	client.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	client.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	p := factory.last()
 	if p.FileOverlay != nil || p.Terminal != nil {
 		t.Fatalf("SessionParams overlay/terminal must stay nil without client capabilities; got %v / %v", p.FileOverlay, p.Terminal)
@@ -294,7 +295,7 @@ func TestSessionParamsNilClientIOWithoutCaps(t *testing.T) {
 }
 
 func TestE2ESessionModes(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	prov := &scriptedProvider{name: "fake", responses: [][]provider.Chunk{
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
@@ -308,7 +309,7 @@ func TestE2ESessionModes(t *testing.T) {
 	defer stop()
 
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	cwd := t.TempDir()
+	cwd := testenv.TempDir(t)
 	resp := client.call(t, "session/new", SessionNewParams{Cwd: cwd})
 	var nr SessionNewResult
 	if err := json.Unmarshal(resp.Result, &nr); err != nil {
@@ -370,7 +371,7 @@ unknownMode:
 // re-apply the session's ACP mode — a fresh controller boots with normal
 // switches, which would silently drop a user-selected plan mode.
 func TestRebuildSessionKeepsClientIOAndMode(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "sess-rebuild.jsonl")
 	base := agent.NewSession("sys prompt")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})

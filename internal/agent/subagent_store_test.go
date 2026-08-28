@@ -13,11 +13,12 @@ import (
 	"time"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
 func TestSubagentStoreContinueLoadsSavedTranscript(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "review")
 	run, err := store.PrepareFresh(spec)
 	if err != nil {
@@ -55,7 +56,7 @@ func TestSubagentStoreTerminalSaveKeepsBranchStartAndActivityTimes(t *testing.T)
 		{name: "failed", save: (*SubagentStore).SaveFailed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			store := NewSubagentStore(t.TempDir())
+			store := NewSubagentStore(testenv.TempDir(t))
 			run, err := store.PrepareFresh(testSubagentSpec(t, "explore"))
 			if err != nil {
 				t.Fatalf("PrepareFresh: %v", err)
@@ -112,7 +113,7 @@ func TestSubagentStoreTerminalSaveKeepsBranchStartAndActivityTimes(t *testing.T)
 }
 
 func TestSubagentStoreSaveFailedPersistsTerminalMetaWhenBranchMetaIsCorrupt(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	run, err := store.PrepareFresh(testSubagentSpec(t, "explore"))
 	if err != nil {
 		t.Fatalf("PrepareFresh: %v", err)
@@ -138,7 +139,7 @@ func TestSubagentStoreSaveFailedPersistsTerminalMetaWhenBranchMetaIsCorrupt(t *t
 }
 
 func TestSubagentStoreForkCreatesIndependentReference(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "review")
 	run, err := store.PrepareFresh(spec)
 	if err != nil {
@@ -167,7 +168,7 @@ func TestSubagentStoreForkCreatesIndependentReference(t *testing.T) {
 }
 
 func TestSubagentStoreRejectsContinueFromSiblingSession(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "left"
@@ -191,7 +192,7 @@ func TestSubagentStoreRejectsContinueFromSiblingSession(t *testing.T) {
 }
 
 func TestSubagentStoreContinueFromAncestorCopiesIntoCurrentSession(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "root"
@@ -236,7 +237,7 @@ func TestSubagentStoreContinueFromAncestorCopiesIntoCurrentSession(t *testing.T)
 }
 
 func TestSubagentStoreLegacyForkFromAncestorConvertsToContinueCopy(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "root"
@@ -274,7 +275,7 @@ func TestSubagentStoreLegacyForkFromAncestorConvertsToContinueCopy(t *testing.T)
 }
 
 func TestSubagentStoreRejectsLegacyForkFromCurrentSession(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "review")
 	run, err := store.PrepareFresh(spec)
 	if err != nil {
@@ -291,7 +292,7 @@ func TestSubagentStoreRejectsLegacyForkFromCurrentSession(t *testing.T) {
 }
 
 func TestSubagentStoreContinueFromAncestorReusesCurrentSessionCopy(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "root"
@@ -330,7 +331,7 @@ func TestSubagentStoreContinueFromAncestorReusesCurrentSessionCopy(t *testing.T)
 }
 
 func TestSubagentStoreContinueFromOlderAncestorUsesNearestLineageCopy(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "root"
@@ -390,7 +391,7 @@ func TestSubagentStoreContinueFromOlderAncestorUsesNearestLineageCopy(t *testing
 }
 
 func TestSubagentStoreRejectsAncestorContinuationWhenCurrentCopyFailed(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "root"
@@ -422,7 +423,7 @@ func TestSubagentStoreRejectsAncestorContinuationWhenCurrentCopyFailed(t *testin
 }
 
 func TestSubagentStoreRejectsAncestorContinuationWithMultipleCurrentCopies(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "root"
@@ -464,7 +465,7 @@ func TestSubagentStoreRejectsAncestorContinuationWithMultipleCurrentCopies(t *te
 }
 
 func TestSubagentStoreForkFromAncestorSessionCreatesCurrentOwner(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "root"
@@ -542,7 +543,7 @@ func TestSubagentStoreRejectsForkWhenSourceOwnerMetaIDDiffers(t *testing.T) {
 }
 
 func TestSubagentStoreRejectsForkFromSiblingSession(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "left"
@@ -566,7 +567,7 @@ func TestSubagentStoreRejectsForkFromSiblingSession(t *testing.T) {
 }
 
 func TestSubagentStoreRejectsForkFromUnrelatedSession(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "source"
@@ -589,7 +590,7 @@ func TestSubagentStoreRejectsForkFromUnrelatedSession(t *testing.T) {
 }
 
 func TestSubagentStoreRejectsForkWhenLineageCannotBeProven(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "root"
@@ -610,7 +611,7 @@ func TestSubagentStoreRejectsForkWhenLineageCannotBeProven(t *testing.T) {
 }
 
 func TestSubagentStoreForkReleasesSourceLockAfterCopy(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "review")
 	run, err := store.PrepareFresh(spec)
 	if err != nil {
@@ -635,7 +636,7 @@ func TestSubagentStoreForkReleasesSourceLockAfterCopy(t *testing.T) {
 }
 
 func TestSubagentStoreRejectsIncompatibleTranscript(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "review")
 	run, err := store.PrepareFresh(spec)
 	if err != nil {
@@ -654,7 +655,7 @@ func TestSubagentStoreRejectsIncompatibleTranscript(t *testing.T) {
 }
 
 func TestSubagentStoreRejectsConcurrentContinue(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "review")
 	run, err := store.PrepareFresh(spec)
 	if err != nil {
@@ -676,7 +677,7 @@ func TestSubagentStoreRejectsConcurrentContinue(t *testing.T) {
 }
 
 func TestSubagentStoreSaveFailedPersistsTranscriptAndRejectsReuse(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "review")
 	run, err := store.PrepareFresh(spec)
 	if err != nil {
@@ -711,7 +712,7 @@ func TestSubagentStoreSaveFailedPersistsTranscriptAndRejectsReuse(t *testing.T) 
 }
 
 func TestSubagentStoreCleanupStaleRunningMarksInterrupted(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "review")
 	run, err := store.PrepareFresh(spec)
 	if err != nil {
@@ -747,7 +748,7 @@ func TestSubagentStoreCleanupStaleRunningMarksInterrupted(t *testing.T) {
 }
 
 func TestSubagentStoreCleanupStaleRunningSkipsMissingParentProof(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "review")
 	run, err := store.PrepareFresh(spec)
 	if err != nil {
@@ -784,7 +785,7 @@ func TestSubagentStoreCleanupStaleRunningSkipsMissingParentProof(t *testing.T) {
 }
 
 func TestSubagentStoreCleanupStaleRunningSkipsCorruptMeta(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "review")
 	run, err := store.PrepareFresh(spec)
 	if err != nil {
@@ -826,7 +827,7 @@ func TestSubagentStoreCleanupStaleRunningSkipsCorruptMeta(t *testing.T) {
 }
 
 func TestSubagentStoreCleanupStaleRunningKeepsParentLeaseAfterCorruptReread(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "lease-parent"
@@ -881,7 +882,7 @@ func TestSubagentStoreCleanupStaleRunningKeepsParentLeaseAfterCorruptReread(t *t
 }
 
 func TestSubagentStoreCleanupStaleRunningSkipsForeignLiveParent(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = "live-parent"
@@ -982,7 +983,7 @@ func TestSubagentStoreForeignLeaseHelper(t *testing.T) {
 }
 
 func TestSubagentStoreSkipsSaveForDestroyedParent(t *testing.T) {
-	store := NewSubagentStore(t.TempDir()).WithDestroyedChecker(func(parentSession string) bool {
+	store := NewSubagentStore(testenv.TempDir(t)).WithDestroyedChecker(func(parentSession string) bool {
 		return parentSession == "parent-session"
 	})
 	spec := testSubagentSpec(t, "review")
@@ -1016,7 +1017,7 @@ func testSubagentSpec(t *testing.T, name string) SubagentSpec {
 	return SubagentSpec{
 		Kind:          "skill",
 		Name:          name,
-		WorkspaceRoot: t.TempDir(),
+		WorkspaceRoot: testenv.TempDir(t),
 		ParentSession: "parent-session",
 		SystemPrompt:  "review persona",
 		Registry:      reg,
@@ -1034,7 +1035,7 @@ func saveTestBranchMeta(t *testing.T, sessionDir, id, parent string) {
 
 func prepareCompletedSubagentForLineageTest(t *testing.T, parentSession string) (string, *SubagentStore, string, SubagentSpec) {
 	t.Helper()
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := testSubagentSpec(t, "review")
 	spec.ParentSession = parentSession

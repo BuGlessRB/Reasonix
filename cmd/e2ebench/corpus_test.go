@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 const corpusDir = "../../benchmarks/e2e"
@@ -45,7 +47,7 @@ func protectedFiles(t *testing.T, verifyPath string) []string {
 
 func stageSeed(t *testing.T, taskDir string) string {
 	t.Helper()
-	work := t.TempDir()
+	work := testenv.TempDir(t)
 	// workdir is optional: a task that asks for a file to be written from
 	// scratch seeds nothing, and starts in an empty directory.
 	if seed := filepath.Join(taskDir, "workdir"); dirExists(seed) {

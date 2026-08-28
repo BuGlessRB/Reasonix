@@ -9,11 +9,13 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func installMachineTestIdentity(t *testing.T) []byte {
 	t.Helper()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", root)
 	t.Setenv("REASONIX_STATE_HOME", "")
 	key := bytes.Repeat([]byte{0x5a}, machineIdentityKeyBytes)
@@ -24,7 +26,7 @@ func installMachineTestIdentity(t *testing.T) []byte {
 }
 
 func TestMachineIdentityKeyInitializesOnceAcrossConcurrentReaders(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", root)
 	t.Setenv("REASONIX_STATE_HOME", "")
 
@@ -70,7 +72,7 @@ func TestMachineIdentityKeyInitializesOnceAcrossConcurrentReaders(t *testing.T) 
 }
 
 func TestMachineIdentityKeyCorruptionFailsClosed(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", root)
 	t.Setenv("REASONIX_STATE_HOME", "")
 	path := filepath.Join(root, machineIdentityKeyFile)
@@ -82,7 +84,7 @@ func TestMachineIdentityKeyCorruptionFailsClosed(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if code := runSessionCommand([]string{"list", "--json", "--dir", t.TempDir()}, &out); code != 1 {
+	if code := runSessionCommand([]string{"list", "--json", "--dir", testenv.TempDir(t)}, &out); code != 1 {
 		t.Fatalf("exit code = %d, output = %s", code, out.String())
 	}
 	var response machineErrorResponse
@@ -102,7 +104,7 @@ func TestMachineIdentityKeyCorruptionFailsClosed(t *testing.T) {
 }
 
 func TestEventsJSONLRejectsCorruptIdentityBeforeRuntimeSetup(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", root)
 	t.Setenv("REASONIX_STATE_HOME", "")
 	if err := os.WriteFile(filepath.Join(root, machineIdentityKeyFile), []byte("corrupt"), 0o600); err != nil {

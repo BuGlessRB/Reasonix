@@ -11,13 +11,14 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // The panel behind this endpoint used to infer pending changes from tool events,
 // which cannot see a file a shell command removed. /changes answers from the
 // tree, and says repo=false rather than "nothing changed" when there is no git.
 func TestChangesReportsTheTreeNotTheTranscript(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
 	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())

@@ -18,6 +18,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/pluginpkg"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // ACP-level coverage for extension-hosted providers: a plugin/... model in
@@ -195,7 +196,7 @@ func TestACPSessionWithPluginModelStreamsAndSwitches(t *testing.T) {
 	if _, err := config.SetCredential("REASONIX_TEST_KEY", "test-key"); err != nil {
 		t.Fatalf("SetCredential: %v", err)
 	}
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	writeACPFixture(t, project)
 	name := "acpdemo"
 	ref := "plugin/" + name + "/fake/x"

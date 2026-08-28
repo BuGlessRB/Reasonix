@@ -4,13 +4,15 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // No git is a supported configuration, so the report states it as a fact and
 // names what degrades. An empty Degraded list would leave the user guessing
 // which half of the product just stopped working.
 func TestCollectGitNamesWhatDegradesWhenAbsent(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
+	t.Setenv("PATH", testenv.TempDir(t))
 
 	got := collectGit()
 	if got.Available || got.Version != "" {

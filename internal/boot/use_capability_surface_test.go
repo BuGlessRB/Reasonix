@@ -31,7 +31,10 @@ model = "x"
 
 	var surfaces [][]string
 	for _, mode := range []string{"", TokenModeEconomy, TokenModeFull, TokenModeDelivery, "light", "balanced"} {
-		prov := testutil.NewMock("ucap-"+mode, testutil.Turn{Text: "done"})
+		// Delivery routes through the semantic router before the agent samples,
+		// so it draws a turn of its own. The first turn answers the router with
+		// an empty selection; the surface under test is the agent's request.
+		prov := testutil.NewMock("ucap-"+mode, testutil.Turn{Text: "[]"}, testutil.Turn{Text: "done"})
 		setBootTokenProfileTestProvider(t, prov)
 		ctrl, err := Build(context.Background(), Options{Sink: event.Discard, TokenMode: mode, AgentPreset: mode})
 		if err != nil {
@@ -41,17 +44,18 @@ model = "x"
 			ctrl.Close()
 			t.Fatalf("Run(%q): %v", mode, err)
 		}
-		reqs := prov.Requests()
-		if len(reqs) != 1 {
+		agentReqs := agentRequests(prov.Requests())
+		if len(agentReqs) != 1 {
 			ctrl.Close()
-			t.Fatalf("requests(%q)=%d", mode, len(reqs))
+			t.Fatalf("agent requests(%q)=%d, want 1", mode, len(agentReqs))
 		}
-		surfaces = append(surfaces, toolSchemaNames(reqs[0].Tools))
-		if !requestHasTool(reqs[0], "use_capability") {
+		agentReq := agentReqs[0]
+		surfaces = append(surfaces, toolSchemaNames(agentReq.Tools))
+		if !requestHasTool(agentReq, "use_capability") {
 			ctrl.Close()
-			t.Fatalf("%q missing use_capability: %v", mode, toolSchemaNames(reqs[0].Tools))
+			t.Fatalf("%q missing use_capability: %v", mode, toolSchemaNames(agentReq.Tools))
 		}
-		if requestHasTool(reqs[0], "connect_tool_source") {
+		if requestHasTool(agentReq, "connect_tool_source") {
 			ctrl.Close()
 			t.Fatalf("%q still exposes connect_tool_source", mode)
 		}

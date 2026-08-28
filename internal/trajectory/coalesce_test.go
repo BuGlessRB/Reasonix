@@ -8,11 +8,12 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/eventwire"
+	"reasonix/internal/testenv"
 )
 
 func recorderAt(t *testing.T, name string, sink event.Sink) (*Recorder, string) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), name)
+	path := filepath.Join(testenv.TempDir(t), name)
 	tick := int64(0)
 	clock := func() time.Time {
 		tick++

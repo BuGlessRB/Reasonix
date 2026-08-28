@@ -9,10 +9,11 @@ import (
 	"testing"
 
 	"reasonix/internal/memory"
+	"reasonix/internal/testenv"
 )
 
 func TestResolveRefsInjectsOnlyNewNestedInstructionsOnce(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	service := filepath.Join(root, "services", "api")
 	sibling := filepath.Join(root, "services", "web")
 	for _, dir := range []string{service, sibling} {
@@ -54,7 +55,7 @@ func TestResolveRefsInjectsOnlyNewNestedInstructionsOnce(t *testing.T) {
 }
 
 func TestFileRefLine(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	pdf := filepath.Join(dir, "report.pdf")
 	if err := os.WriteFile(pdf, []byte("%PDF-1.4 fake"), 0o644); err != nil {
 		t.Fatal(err)
@@ -105,7 +106,7 @@ func TestEscapeRefPathRoundTrip(t *testing.T) {
 // TestDetectRefsEscapedSpacePath closes the loop pastedFileRef and completion
 // rely on: an @token with escaped spaces resolves to the real workspace file.
 func TestDetectRefsEscapedSpacePath(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(workspace, "my file.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +201,7 @@ func TestClassifyRef(t *testing.T) {
 }
 
 func TestResolveRefsAttachmentKinds(t *testing.T) {
-	temp := t.TempDir()
+	temp := testenv.TempDir(t)
 	attachmentsDir := filepath.Join(temp, ".reasonix", "attachments")
 	if err := os.MkdirAll(attachmentsDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -251,7 +252,7 @@ func TestResolveRefsAttachmentKinds(t *testing.T) {
 }
 
 func TestReadFileRef(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 
 	textPath := filepath.Join(dir, "hello.txt")
 	if err := os.WriteFile(textPath, []byte("line one\nline two\n"), 0o644); err != nil {
@@ -327,7 +328,7 @@ func TestReadFileRef(t *testing.T) {
 }
 
 func TestReadFileRefPDFExtraction(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	pdfPath := filepath.Join(dir, "report.pdf")
 	if err := os.WriteFile(pdfPath, []byte("%PDF-1.4 fake"), 0o644); err != nil {
 		t.Fatal(err)
@@ -398,7 +399,7 @@ func TestPDFStderrHelperProcess(t *testing.T) {
 }
 
 func TestResolveBareNamesDuplicates(t *testing.T) {
-	temp := t.TempDir()
+	temp := testenv.TempDir(t)
 
 	if err := os.MkdirAll(filepath.Join(temp, "a"), 0o755); err != nil {
 		t.Fatal(err)
@@ -456,7 +457,7 @@ func TestResolveBareNamesDuplicates(t *testing.T) {
 }
 
 func TestReadFileRefWithBaseDir(t *testing.T) {
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	sub := filepath.Join(base, "proj")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
@@ -511,7 +512,7 @@ func TestReadFileRefWithBaseDir(t *testing.T) {
 }
 
 func TestResolveBareNamesWithWorkspaceRoot(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Join(root, "src"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +534,7 @@ func TestResolveBareNamesWithWorkspaceRoot(t *testing.T) {
 func TestResolveBareNamesSkipsAlreadyResolvedRefs(t *testing.T) {
 	refs := []ref{{kind: refFile, raw: "main.go", path: "main.go"}}
 
-	resolved := resolveBareNames(refs, t.TempDir())
+	resolved := resolveBareNames(refs, testenv.TempDir(t))
 
 	if len(resolved) != 1 {
 		t.Fatalf("expected 1 ref, got %d", len(resolved))
@@ -544,7 +545,7 @@ func TestResolveBareNamesSkipsAlreadyResolvedRefs(t *testing.T) {
 }
 
 func TestResolveBareNamesWithWorkspaceRootStoresRootFilePath(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -561,7 +562,7 @@ func TestResolveBareNamesWithWorkspaceRootStoresRootFilePath(t *testing.T) {
 }
 
 func TestResolveBareNamesRejectsUnsafeBareNames(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, "safe.txt"), []byte("safe"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -588,7 +589,7 @@ func TestResolveBareNamesRejectsUnsafeBareNames(t *testing.T) {
 }
 
 func TestResolveAbsRef(t *testing.T) {
-	temp := t.TempDir()
+	temp := testenv.TempDir(t)
 
 	_, _, ok := resolveAbsRef("foo.txt", "")
 	if !ok {
@@ -620,7 +621,7 @@ func TestResolveAbsRef(t *testing.T) {
 }
 
 func TestReadFileRefBlocksPathTraversal(t *testing.T) {
-	temp := t.TempDir()
+	temp := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(temp, "safe.txt"), []byte("safe"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -635,8 +636,8 @@ func TestReadFileRefBlocksPathTraversal(t *testing.T) {
 }
 
 func TestDetectRefsUsesWorkspaceRootNotProcessCWD(t *testing.T) {
-	cwd := t.TempDir()
-	workspace := t.TempDir()
+	cwd := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(cwd, "cwd-only.txt"), []byte("wrong"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -669,8 +670,8 @@ func TestDetectRefsUsesWorkspaceRootNotProcessCWD(t *testing.T) {
 }
 
 func TestScopedRefsRequireExternalFolderRegistration(t *testing.T) {
-	workspace := t.TempDir()
-	external := t.TempDir()
+	workspace := testenv.TempDir(t)
+	external := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(external, "outside.txt"), []byte("outside"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -683,8 +684,8 @@ func TestScopedRefsRequireExternalFolderRegistration(t *testing.T) {
 }
 
 func TestDroppedRefResolvesScopedDirOutsideTheWorkspace(t *testing.T) {
-	workspace := t.TempDir()
-	parent := t.TempDir()
+	workspace := testenv.TempDir(t)
+	parent := testenv.TempDir(t)
 	external := filepath.Join(parent, "Folder With Spaces")
 	if err := os.MkdirAll(filepath.Join(external, "sub"), 0o755); err != nil {
 		t.Fatal(err)
@@ -759,7 +760,7 @@ func (r *recordingExternalFolderToolRefs) RegisterReadRoot(token, root string) {
 }
 
 func TestExternalFolderRefListAndSearch(t *testing.T) {
-	parent := t.TempDir()
+	parent := testenv.TempDir(t)
 	external := filepath.Join(parent, "Folder With Spaces")
 	if err := os.MkdirAll(filepath.Join(external, "src"), 0o755); err != nil {
 		t.Fatal(err)
@@ -814,7 +815,7 @@ func TestExternalFolderRefListAndSearch(t *testing.T) {
 }
 
 func TestResolveRefsWithWorkspaceRootStoresRelativePath(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	absPath := filepath.Join(workspace, "docs", "note.txt")
 	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -841,7 +842,7 @@ func TestResolveRefsWithWorkspaceRootStoresRelativePath(t *testing.T) {
 }
 
 func TestWorkspaceImageRefsAlsoAttachAsModelImages(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	diagram := filepath.Join(workspace, "docs", "diagram.png")
 	if err := os.MkdirAll(filepath.Dir(diagram), 0o755); err != nil {
 		t.Fatal(err)
@@ -883,7 +884,7 @@ func TestWorkspaceImageRefsAlsoAttachAsModelImages(t *testing.T) {
 }
 
 func TestResolveRefsWithoutWorkspaceDoesNotClaimImageAttachment(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	imagePath := filepath.Join(dir, "shot.png")
 	if err := os.WriteFile(imagePath, mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
@@ -899,7 +900,7 @@ func TestResolveRefsWithoutWorkspaceDoesNotClaimImageAttachment(t *testing.T) {
 }
 
 func TestReadFileRefPDFExtractionWithBaseDirUsesAbsPath(t *testing.T) {
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	pdfPath := filepath.Join(base, "docs", "report.pdf")
 	if err := os.MkdirAll(filepath.Dir(pdfPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -908,7 +909,7 @@ func TestReadFileRefPDFExtractionWithBaseDirUsesAbsPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	outside := t.TempDir()
+	outside := testenv.TempDir(t)
 	oldCwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -944,7 +945,7 @@ func TestReadFileRefPDFExtractionWithBaseDirUsesAbsPath(t *testing.T) {
 // every other surface shows, and registering a read root for it would widen
 // what the session may read to the whole folder the file happened to sit in.
 func TestDroppedRefInsideTheWorkspaceStaysAWorkspacePath(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Join(workspace, "src dir"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -982,8 +983,8 @@ func TestDroppedRefInsideTheWorkspaceStaysAWorkspacePath(t *testing.T) {
 // spelling — a drive letter reads as an MCP server and a space ends the token —
 // so it is registered under the directory holding it and referenced from there.
 func TestDroppedRefOutsideTheWorkspaceResolvesTheFileItself(t *testing.T) {
-	workspace := t.TempDir()
-	parent := t.TempDir()
+	workspace := testenv.TempDir(t)
+	parent := testenv.TempDir(t)
 	external := filepath.Join(parent, "Notes Folder")
 	if err := os.MkdirAll(external, 0o755); err != nil {
 		t.Fatal(err)

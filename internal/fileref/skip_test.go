@@ -3,6 +3,8 @@ package fileref
 import (
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestSkipEntryHidesBuildOutputDirectories(t *testing.T) {
@@ -28,7 +30,7 @@ func TestSkipEntryIgnoresBuildNamesOnFiles(t *testing.T) {
 }
 
 func TestSearchSkipsGeneratedClassFiles(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeFile(t, filepath.Join(root, "src", "main", "java", "App.java"))
 	writeFile(t, filepath.Join(root, "target", "classes", "App.class"))
 

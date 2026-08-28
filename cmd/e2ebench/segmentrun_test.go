@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // requireShellStub skips where a #!/usr/bin/env bash stub cannot be executed.
@@ -26,7 +28,7 @@ func requireShellStub(t *testing.T) {
 func fakeAgent(t *testing.T, promptTokens, completionTokens int) (bin, argvLog string) {
 	t.Helper()
 	requireShellStub(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	argvLog = filepath.Join(dir, "argv.log")
 	bin = filepath.Join(dir, "fake-agent")
 	script := `#!/usr/bin/env bash
@@ -54,7 +56,7 @@ func TestSegmentedRunAddsEveryLegsSpend(t *testing.T) {
 	cfg := suiteConfig{bin: bin, segments: 3}
 	task := task{ID: "seg", Prompt: "fix it", MaxSteps: 9, TimeoutSec: 60}
 	var r result
-	if err := runSegments(t.Context(), cfg, task, t.TempDir(), "", nil, &r); err != nil {
+	if err := runSegments(t.Context(), cfg, task, testenv.TempDir(t), "", nil, &r); err != nil {
 		t.Fatalf("runSegments: %v", err)
 	}
 
@@ -98,7 +100,7 @@ func TestSegmentedRunAddsEveryLegsSpend(t *testing.T) {
 
 func TestSegmentedRunKeepsPerLegMetricsApart(t *testing.T) {
 	bin, _ := fakeAgent(t, 10, 1)
-	work := t.TempDir()
+	work := testenv.TempDir(t)
 	var r result
 	if err := runSegments(t.Context(), suiteConfig{bin: bin, segments: 2}, task{ID: "x", Prompt: "p", MaxSteps: 4, TimeoutSec: 60}, work, "", nil, &r); err != nil {
 		t.Fatalf("runSegments: %v", err)
@@ -116,7 +118,7 @@ func TestSegmentedRunKeepsPerLegMetricsApart(t *testing.T) {
 // benchmark's token counts back out of the work dir.
 func TestHarnessMetricsStayOutOfTheWorkDir(t *testing.T) {
 	bin, _ := fakeAgent(t, 10, 1)
-	work := t.TempDir()
+	work := testenv.TempDir(t)
 	var r result
 	if err := runSegments(t.Context(), suiteConfig{bin: bin, segments: 2}, task{ID: "x", Prompt: "p", MaxSteps: 4, TimeoutSec: 60}, work, "", nil, &r); err != nil {
 		t.Fatalf("runSegments: %v", err)
@@ -134,7 +136,7 @@ func TestHarnessMetricsStayOutOfTheWorkDir(t *testing.T) {
 
 func TestSegmentedRunStopsAtTheFirstFailedLeg(t *testing.T) {
 	requireShellStub(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	bin := filepath.Join(dir, "failing-agent")
 	log := filepath.Join(dir, "calls.log")
 	script := "#!/usr/bin/env bash\necho x >> " + log + "\nexit 3\n"
@@ -142,7 +144,7 @@ func TestSegmentedRunStopsAtTheFirstFailedLeg(t *testing.T) {
 		t.Fatal(err)
 	}
 	var r result
-	err := runSegments(t.Context(), suiteConfig{bin: bin, segments: 3}, task{ID: "x", Prompt: "p", MaxSteps: 6, TimeoutSec: 60}, t.TempDir(), "", nil, &r)
+	err := runSegments(t.Context(), suiteConfig{bin: bin, segments: 3}, task{ID: "x", Prompt: "p", MaxSteps: 6, TimeoutSec: 60}, testenv.TempDir(t), "", nil, &r)
 	if err == nil {
 		t.Fatal("a failed leg must surface as the run's error")
 	}

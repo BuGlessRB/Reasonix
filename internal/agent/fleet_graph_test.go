@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/tool"
 
 	"reasonix/internal/agentgraph"
+	"reasonix/internal/testenv"
 )
 
 func planFor(t *testing.T, items ...fleetTaskItem) (fleetPlan, error) {
@@ -76,7 +77,7 @@ func TestFleetPlanOrdersTransitiveDependents(t *testing.T) {
 // The unlock: implement → review legitimately touch the same files, which a
 // flat fleet could never express.
 func TestFleetOrderedWritersMayShareWritePaths(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, err := NormalizeWritePaths(root, []string{"api"})
 	if err != nil {
 		t.Fatal(err)
@@ -131,7 +132,7 @@ func TestFleetPlanSkipsWholeDownstreamBranch(t *testing.T) {
 
 // End to end: a dependent never runs when its dependency failed.
 func TestFleetSkipsDependentsOfFailedTask(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	prov := &fleetScriptedFailureProvider{}
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})

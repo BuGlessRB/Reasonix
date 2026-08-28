@@ -12,6 +12,7 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 
 	"reasonix/internal/remote/sshtest"
+	"reasonix/internal/testenv"
 )
 
 // keyringDialer serves an in-memory agent over a pipe. Where the real agent
@@ -83,7 +84,7 @@ func TestIdentitiesOnlyOffersOnlyTheConfiguredKey(t *testing.T) {
 	other, _, _ := agentKey(t)
 	srv := sshtest.Start(t, sshtest.Options{AuthorizedKey: wantedPub})
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "id_ed25519")
 	if err := os.WriteFile(path, wantedPEM, 0o600); err != nil {
 		t.Fatal(err)

@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/permission"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -105,7 +106,7 @@ func toolCallChunk(id, name, args string) provider.Chunk {
 func openSession(t *testing.T, c *rpcClient) string {
 	t.Helper()
 	c.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	resp := c.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	resp := c.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(resp.Result, &nr); err != nil || nr.SessionID == "" {
 		t.Fatalf("session/new: %v (%q)", err, nr.SessionID)
@@ -118,7 +119,7 @@ func openSession(t *testing.T, c *rpcClient) string {
 // checks the session/update stream, the stopReason, and that the turn was
 // persisted to the transcript path returned to the client.
 func TestE2EToolTurnAndPersistence(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	prov := &scriptedProvider{name: "fake", responses: [][]provider.Chunk{
 		{
 			{Type: provider.ChunkText, Text: "Reading the file."},
@@ -214,7 +215,7 @@ func TestE2EToolTurnAndPersistence(t *testing.T) {
 // — simulating a restart — and checks the conversation is replayed to the client
 // as session/update notifications.
 func TestE2ESessionLoad(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	mkFactory := func() *e2eFactory {
 		return &e2eFactory{
 			prov: &scriptedProvider{name: "fake", responses: [][]provider.Chunk{
@@ -282,8 +283,8 @@ func TestE2ESessionLoad(t *testing.T) {
 }
 
 func TestE2ESessionListResumeAndDelete(t *testing.T) {
-	dir := t.TempDir()
-	cwd := t.TempDir()
+	dir := testenv.TempDir(t)
+	cwd := testenv.TempDir(t)
 	mkFactory := func() *e2eFactory {
 		return &e2eFactory{
 			prov: &scriptedProvider{name: "fake", responses: [][]provider.Chunk{
@@ -366,7 +367,7 @@ func TestE2ESessionListResumeAndDelete(t *testing.T) {
 }
 
 func TestE2ESessionListSkipsUnpromptedSessionAfterRestart(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	factory := &e2eFactory{
 		prov: &scriptedProvider{name: "fake", responses: [][]provider.Chunk{
 			{{Type: provider.ChunkText, Text: "unused"}, {Type: provider.ChunkDone}},
@@ -378,7 +379,7 @@ func TestE2ESessionListSkipsUnpromptedSessionAfterRestart(t *testing.T) {
 
 	client1, stop1 := startServer(t, factory)
 	client1.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	resp := client1.call(t, "session/new", SessionNewParams{Cwd: t.TempDir()})
+	resp := client1.call(t, "session/new", SessionNewParams{Cwd: testenv.TempDir(t)})
 	var nr SessionNewResult
 	if err := json.Unmarshal(resp.Result, &nr); err != nil || nr.SessionID == "" {
 		t.Fatalf("session/new: %v (%q)", err, nr.SessionID)
@@ -399,7 +400,7 @@ func TestE2ESessionListSkipsUnpromptedSessionAfterRestart(t *testing.T) {
 }
 
 func TestE2EDeleteActiveSessionDoesNotRecreateFiles(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	releaseTool := make(chan struct{})
 	started := make(chan struct{})
 	prov := &scriptedProvider{name: "fake", responses: [][]provider.Chunk{
@@ -486,7 +487,7 @@ func TestE2EApprovalRoundTrip(t *testing.T) {
 		prov:       prov,
 		tool:       fakeTool{name: "writeit", ro: false, out: "written ok"},
 		policy:     permission.New("ask", nil, nil, nil),
-		sessionDir: t.TempDir(),
+		sessionDir: testenv.TempDir(t),
 	}
 	client, stop := startServer(t, factory)
 	defer stop()
@@ -581,7 +582,7 @@ func TestE2ECancelMidTurn(t *testing.T) {
 		prov:       prov,
 		tool:       blockingTool{started: started, release: releaseTool},
 		policy:     permission.New("ask", nil, nil, nil),
-		sessionDir: t.TempDir(),
+		sessionDir: testenv.TempDir(t),
 	}
 	client, stop := startServer(t, factory)
 	defer stop()

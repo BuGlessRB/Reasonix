@@ -12,13 +12,14 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 // writeWalletConfig points the default provider at a wallet endpoint the test
 // owns, so the runtimes a hub builds really do query it.
 func writeWalletConfig(t *testing.T, walletURL string) {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	closeSharedCatalogsOnCleanup(t)
 	cfgPath := config.UserConfigPath()
 	if cfgPath == "" {
@@ -62,7 +63,7 @@ func TestHubPanesShareOneWalletRead(t *testing.T) {
 
 	// Three panes, the way switching between conversations opens them.
 	for range 3 {
-		rt, err := h.Open(context.Background(), OpenRequest{Root: t.TempDir()})
+		rt, err := h.Open(context.Background(), OpenRequest{Root: testenv.TempDir(t)})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/sandbox"
 	"reasonix/internal/secrets"
+	"reasonix/internal/testenv"
 )
 
 func TestStdioShellPATHProbeFiltersEnvWhenEnabled(t *testing.T) {
@@ -27,7 +28,7 @@ func TestStdioShellPATHProbeFiltersEnvWhenEnabled(t *testing.T) {
 }
 
 func TestPrepareMCPPrivateStateWindowsPreservesHostTemp(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "mcp-state", "0123456789abcdef", "matlab")
+	root := filepath.Join(testenv.TempDir(t), "mcp-state", "0123456789abcdef", "matlab")
 	hostTemp := `C:\Users\user\AppData\Local\Temp`
 	env := []string{"TMP=" + hostTemp, "TEMP=" + hostTemp, "TMPDIR=" + hostTemp}
 
@@ -54,7 +55,7 @@ func TestPrepareMCPPrivateStateWindowsPreservesHostTemp(t *testing.T) {
 }
 
 func TestPrepareMCPPrivateStateUnixIsolatesTemp(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "mcp-state", "matlab")
+	root := filepath.Join(testenv.TempDir(t), "mcp-state", "matlab")
 	hostTemp := "/tmp/host"
 	env := []string{"TMP=" + hostTemp, "TEMP=" + hostTemp, "TMPDIR=" + hostTemp}
 

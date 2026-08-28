@@ -8,10 +8,11 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func TestSessionRemovalGuardBlocksWhileLeaseHeld(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "work"})
@@ -64,7 +65,7 @@ func TestSessionRemovalGuardBlocksWhileLeaseHeld(t *testing.T) {
 }
 
 func TestSessionRemovalGuardReleaseKeepsSidecars(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	guard, err := TryAcquireSessionRemovalGuard(path)
 	if err != nil {
@@ -83,7 +84,7 @@ func TestSessionRemovalGuardReleaseKeepsSidecars(t *testing.T) {
 }
 
 func TestSessionLeaseConvertsToRemovalGuardWithoutOwnershipGap(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	lease, err := TryAcquireSessionLease(path)
 	if err != nil {
@@ -116,7 +117,7 @@ func TestSessionLeaseConvertsToRemovalGuardWithoutOwnershipGap(t *testing.T) {
 }
 
 func TestConvertedRemovalGuardRestoresSessionLease(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	lease, err := TryAcquireSessionLease(path)
 	if err != nil {
@@ -151,7 +152,7 @@ func TestConvertedRemovalGuardRestoresSessionLease(t *testing.T) {
 }
 
 func TestSessionLeaseConversionFailureKeepsLeaseActive(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	lease, err := TryAcquireSessionLease(path)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 const legacyEventLog = `{"type":"model.turn.started","id":1,"ts":"t","turn":0,"model":"deepseek"}
@@ -21,8 +22,8 @@ const legacyEventLog = `{"type":"model.turn.started","id":1,"ts":"t","turn":0,"m
 `
 
 func TestMigrateLegacySessionsReconstructsConversation(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(src, "chat-1.events.jsonl"), []byte(legacyEventLog), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -61,8 +62,8 @@ func TestMigrateLegacySessionsReconstructsConversation(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsReplaysNativeEventLog(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	path := filepath.Join(src, "native.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "checkpoint prompt"})
@@ -95,8 +96,8 @@ func TestMigrateLegacySessionsReplaysNativeEventLog(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsBackfillsAlongsideExisting(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(src, "chat-1.events.jsonl"), []byte(legacyEventLog), 0o644)
 	os.WriteFile(filepath.Join(dest, "existing.jsonl"), []byte(`{"role":"user","content":"hi"}`+"\n"), 0o644)
 
@@ -116,8 +117,8 @@ func TestMigrateLegacySessionsBackfillsAlongsideExisting(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsRunsOnce(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(src, "chat-1.events.jsonl"), []byte(legacyEventLog), 0o644)
 
 	if n, err := MigrateLegacySessions(src, dest, nil); err != nil || n != 1 {
@@ -142,8 +143,8 @@ func TestMigrateLegacySessionsRunsOnce(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsFromExplicitDirIgnoresDefaultMarkers(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(src, "custom-install.jsonl"), []byte(legacyMessageLog), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -168,8 +169,8 @@ func TestMigrateLegacySessionsFromExplicitDirIgnoresDefaultMarkers(t *testing.T)
 }
 
 func TestMigrateLegacySessionsRoutedPassIgnoresFlatMarkers(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(src, "chat-1.events.jsonl"), []byte(legacyEventLog), 0o644)
 	for _, m := range []string{legacyImportMarker, legacyEventsHomeImportMarker} {
 		if err := os.WriteFile(filepath.Join(dest, m), nil, 0o644); err != nil {
@@ -192,8 +193,8 @@ func TestMigrateLegacySessionsRoutedPassIgnoresFlatMarkers(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsSourceMarkersAreIndependent(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(src, "appdata-chat.events.jsonl"), []byte(legacyEventLog), 0o644)
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		t.Fatal(err)
@@ -219,9 +220,9 @@ func TestMigrateLegacySessionsSourceMarkersAreIndependent(t *testing.T) {
 }
 
 func TestMigrateLegacyConfigSourceDoesNotBlockHomeSource(t *testing.T) {
-	configSrc := t.TempDir()
-	homeSrc := t.TempDir()
-	dest := t.TempDir()
+	configSrc := testenv.TempDir(t)
+	homeSrc := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(homeSrc, "home-chat.events.jsonl"), []byte(legacyEventLog), 0o644)
 
 	if n, err := MigrateLegacySessionsFromConfigDir(configSrc, dest, nil); err != nil || n != 0 {
@@ -240,8 +241,8 @@ func TestMigrateLegacyConfigSourceDoesNotBlockHomeSource(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsSkipsAlreadyImported(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(src, "chat-1.events.jsonl"), []byte(legacyEventLog), 0o644)
 	os.WriteFile(filepath.Join(dest, "chat-1.jsonl"), []byte(`{"role":"user","content":"edited"}`+"\n"), 0o644)
 
@@ -262,7 +263,7 @@ func TestMigrateLegacySessionsSkipsAlreadyImported(t *testing.T) {
 }
 
 func TestSessionSaveIfAbsentNeverReplacesExistingTranscript(t *testing.T) {
-	dest := filepath.Join(t.TempDir(), "imported.jsonl")
+	dest := filepath.Join(testenv.TempDir(t), "imported.jsonl")
 	first := NewSession("sys")
 	first.Add(provider.Message{Role: provider.RoleUser, Content: "first import"})
 	if err := first.SaveIfAbsent(dest); err != nil {
@@ -283,7 +284,7 @@ func TestSessionSaveIfAbsentNeverReplacesExistingTranscript(t *testing.T) {
 }
 
 func TestMigrateLegacyEventLogCanShareDestinationDirectory(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	legacy := filepath.Join(dir, "chat-1.events.jsonl")
 	if err := os.WriteFile(legacy, []byte(legacyEventLog), 0o644); err != nil {
 		t.Fatal(err)
@@ -305,7 +306,7 @@ func TestMigrateLegacyEventLogCanShareDestinationDirectory(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsNoSrcIsNoop(t *testing.T) {
-	n, err := MigrateLegacySessions(filepath.Join(t.TempDir(), "nope"), t.TempDir(), nil)
+	n, err := MigrateLegacySessions(filepath.Join(testenv.TempDir(t), "nope"), testenv.TempDir(t), nil)
 	if err != nil || n != 0 {
 		t.Errorf("missing legacy session dir should be a silent no-op, got n=%d err=%v", n, err)
 	}
@@ -327,8 +328,8 @@ const v1MessageSession = `{"role":"user","content":"recovered after downgrade"}
 `
 
 func TestMigratedJsonlSessionPersistsNewTurns(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(src, "desktop-legacy.jsonl"), []byte(v1MessageSession), 0o644); err != nil {
 		t.Fatalf("write legacy session: %v", err)
 	}
@@ -377,10 +378,10 @@ func stampMigrated(t *testing.T, dest string, at time.Time) {
 // the flat dir. The next upgrade must re-home it into its workspace dir even
 // though the routing marker is present.
 func TestRehomeStrandedSessionAfterDowngrade(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
-	workspace := t.TempDir()
-	projectDest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	projectDest := testenv.TempDir(t)
 	projectDir := func(root string) string {
 		if root == workspace {
 			return projectDest
@@ -431,10 +432,10 @@ func TestRehomeStrandedSessionAfterDowngrade(t *testing.T) {
 }
 
 func TestJsonlPassRoutesBranchMetaWhenJsonlMarkerMissing(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
-	workspace := t.TempDir()
-	projectDest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	projectDest := testenv.TempDir(t)
 	projectDir := func(root string) string {
 		if root == workspace {
 			return projectDest
@@ -492,9 +493,9 @@ func TestJsonlPassRoutesBranchMetaWhenJsonlMarkerMissing(t *testing.T) {
 // TestRehomeLeavesGlobalSessionsAlone guards the main risk: the flat dir is also
 // where CLI/global sessions live. A session with no project scope must stay put.
 func TestRehomeLeavesGlobalSessionsAlone(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
-	projectDir := func(string) string { return t.TempDir() }
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
+	projectDir := func(string) string { return testenv.TempDir(t) }
 
 	stampMigrated(t, dest, time.Now().Add(-24*time.Hour))
 
@@ -517,10 +518,10 @@ func TestRehomeLeavesGlobalSessionsAlone(t *testing.T) {
 // imported and then deleted is not resurrected: only files newer than the
 // migration watermark are candidates.
 func TestRehomeIgnoresSessionsOlderThanWatermark(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
-	workspace := t.TempDir()
-	projectDest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	projectDest := testenv.TempDir(t)
 	projectDir := func(root string) string {
 		if root == workspace {
 			return projectDest
@@ -558,10 +559,10 @@ func TestRehomeIgnoresSessionsOlderThanWatermark(t *testing.T) {
 // TestRehomeIsIdempotent verifies the second boot does not re-import: the
 // destination check skips already-routed sessions and the watermark advances.
 func TestRehomeIsIdempotent(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
-	workspace := t.TempDir()
-	projectDest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	projectDest := testenv.TempDir(t)
 	projectDir := func(root string) string {
 		if root == workspace {
 			return projectDest
@@ -586,10 +587,10 @@ func TestRehomeIsIdempotent(t *testing.T) {
 }
 
 func TestRehomeKeepsWatermarkWhenProjectCopyFails(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
-	workspace := t.TempDir()
-	blocker := filepath.Join(t.TempDir(), "not-a-directory")
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	blocker := filepath.Join(testenv.TempDir(t), "not-a-directory")
 	if err := os.WriteFile(blocker, []byte("block"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -624,10 +625,10 @@ func TestRehomeKeepsWatermarkWhenProjectCopyFails(t *testing.T) {
 }
 
 func TestRehomeKeepsWatermarkWhenSubagentCopyFails(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
-	workspace := t.TempDir()
-	projectDest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	projectDest := testenv.TempDir(t)
 	projectDir := func(root string) string {
 		if root == workspace {
 			return projectDest
@@ -691,10 +692,10 @@ func writeMigratedSubagentArtifact(t *testing.T, sessionDir, ref, parentSession 
 }
 
 func TestMigrateLegacySessionsRoutesByWorkspaceMeta(t *testing.T) {
-	src := t.TempDir()
-	global := t.TempDir()
-	workspace := t.TempDir()
-	projRoot := t.TempDir()
+	src := testenv.TempDir(t)
+	global := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	projRoot := testenv.TempDir(t)
 	router := func(ws string) string { return filepath.Join(projRoot, filepath.Base(ws), "sessions") }
 	os.WriteFile(filepath.Join(src, "chat-1.events.jsonl"), []byte(legacyEventLog), 0o644)
 	writeLegacyMeta(t, src, "chat-1", workspace, "fix the retry test")
@@ -721,9 +722,9 @@ func TestMigrateLegacySessionsRoutesByWorkspaceMeta(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsDeadWorkspaceFallsBackToGlobal(t *testing.T) {
-	src := t.TempDir()
-	global := t.TempDir()
-	projRoot := t.TempDir()
+	src := testenv.TempDir(t)
+	global := testenv.TempDir(t)
+	projRoot := testenv.TempDir(t)
 	router := func(ws string) string { return filepath.Join(projRoot, filepath.Base(ws), "sessions") }
 	os.WriteFile(filepath.Join(src, "chat-1.events.jsonl"), []byte(legacyEventLog), 0o644)
 	writeLegacyMeta(t, src, "chat-1", filepath.Join(src, "no-such-workspace"), "")
@@ -738,10 +739,10 @@ func TestMigrateLegacySessionsDeadWorkspaceFallsBackToGlobal(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsRehomesFlatImport(t *testing.T) {
-	src := t.TempDir()
-	global := t.TempDir()
-	workspace := t.TempDir()
-	projRoot := t.TempDir()
+	src := testenv.TempDir(t)
+	global := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	projRoot := testenv.TempDir(t)
 	router := func(ws string) string { return filepath.Join(projRoot, filepath.Base(ws), "sessions") }
 	srcLog := filepath.Join(src, "chat-1.events.jsonl")
 	os.WriteFile(srcLog, []byte(legacyEventLog), 0o644)
@@ -777,10 +778,10 @@ func TestMigrateLegacySessionsRehomesFlatImport(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsKeepsNativeSameNameSession(t *testing.T) {
-	src := t.TempDir()
-	global := t.TempDir()
-	workspace := t.TempDir()
-	projRoot := t.TempDir()
+	src := testenv.TempDir(t)
+	global := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	projRoot := testenv.TempDir(t)
 	router := func(ws string) string { return filepath.Join(projRoot, filepath.Base(ws), "sessions") }
 	srcLog := filepath.Join(src, "chat-1.events.jsonl")
 	os.WriteFile(srcLog, []byte(legacyEventLog), 0o644)
@@ -808,8 +809,8 @@ func TestMigrateLegacySessionsKeepsNativeSameNameSession(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsSkipsEmptyLog(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(src, "empty.events.jsonl"), []byte(`{"type":"model.turn.started","id":1,"ts":"t","turn":0}`+"\n"), 0o644)
 
 	n, err := MigrateLegacySessions(src, dest, nil)
@@ -828,8 +829,8 @@ const legacyMessageLog = `{"role":"user","content":"hello from v0.x"}
 `
 
 func TestMigrateLegacySessionsImportsJsonlOnly(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(src, "acp-chat.jsonl"), []byte(legacyMessageLog), 0o644)
 	writeLegacyMeta(t, src, "acp-chat", "", "ACP session about main.go")
 
@@ -867,8 +868,8 @@ func TestMigrateLegacySessionsImportsJsonlOnly(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsPrefersJsonlWhenNewer(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 
 	eventsPath := filepath.Join(src, "chat-1.events.jsonl")
 	jsonlPath := filepath.Join(src, "chat-1.jsonl")
@@ -900,8 +901,8 @@ func TestMigrateLegacySessionsPrefersJsonlWhenNewer(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsFallsBackToEventsWhenJsonlOlder(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 
 	jsonlPath := filepath.Join(src, "chat-1.jsonl")
 	eventsPath := filepath.Join(src, "chat-1.events.jsonl")
@@ -933,8 +934,8 @@ func TestMigrateLegacySessionsFallsBackToEventsWhenJsonlOlder(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsImportsJsonlBakFallback(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 
 	// Only a .jsonl.bak — no .jsonl, no .events.jsonl. Should recover from bak.
 	os.WriteFile(filepath.Join(src, "recovered.jsonl.bak"), []byte(legacyMessageLog), 0o644)
@@ -958,8 +959,8 @@ func TestMigrateLegacySessionsImportsJsonlBakFallback(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsSkipsBakWhenJsonlExists(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 
 	// Both .jsonl and .jsonl.bak exist — prefer .jsonl.
 	os.WriteFile(filepath.Join(src, "chat.jsonl"), []byte(legacyMessageLog), 0o644)
@@ -984,8 +985,8 @@ func TestMigrateLegacySessionsSkipsBakWhenJsonlExists(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsSkipsNonMessageJsonl(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 
 	// A .jsonl file that is NOT in message format (starts with event-log "id").
 	os.WriteFile(filepath.Join(src, "bad.jsonl"), []byte(`{"id":1,"type":"model.turn.started"}`+"\n"), 0o644)
@@ -1000,10 +1001,10 @@ func TestMigrateLegacySessionsSkipsNonMessageJsonl(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsRecursesIntoSubdirectories(t *testing.T) {
-	src := t.TempDir()
-	global := t.TempDir()
-	workspace := t.TempDir()
-	projRoot := t.TempDir()
+	src := testenv.TempDir(t)
+	global := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	projRoot := testenv.TempDir(t)
 	router := func(ws string) string { return filepath.Join(projRoot, filepath.Base(ws), "sessions") }
 
 	// Set up a project-scoped subdirectory with sessions.
@@ -1037,8 +1038,8 @@ func TestMigrateLegacySessionsRecursesIntoSubdirectories(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsJsonlPassIsIdempotent(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 
 	os.WriteFile(filepath.Join(src, "desktop-session.jsonl"), []byte(legacyMessageLog), 0o644)
 
@@ -1061,8 +1062,8 @@ func TestMigrateLegacySessionsJsonlPassIsIdempotent(t *testing.T) {
 }
 
 func TestMigrateLegacySessionsJsonlPassRunsForExistingUpgrader(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 
 	os.WriteFile(filepath.Join(src, "acp-chat.jsonl"), []byte(legacyMessageLog), 0o644)
 
@@ -1091,8 +1092,8 @@ const legacyNestedFunctionLog = `{"role":"user","content":"read the file"}
 `
 
 func TestTransformAndCopyJsonlFlattensNestedToolCalls(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
+	src := testenv.TempDir(t)
+	dest := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(src, "chat.jsonl"), []byte(legacyNestedFunctionLog), 0o644)
 	writeLegacyMeta(t, src, "chat", "", "nested tool calls test")
 

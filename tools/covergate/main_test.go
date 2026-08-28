@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestPackagesForMapsGlobsOntoPackages(t *testing.T) {
@@ -47,7 +49,7 @@ func TestMatchesGlobHandlesSubtreesAndExactFiles(t *testing.T) {
 // A file-level declaration must be measured as that file, not as its package:
 // approval.go sits in a package the project did not call sensitive.
 func TestFromProfileAggregatesPerDeclaredPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	profile := filepath.Join(dir, "c.out")
 	body := "mode: set\n" +
 		"reasonix/internal/control/approval.go:1.1,2.2 4 1\n" +
@@ -72,7 +74,7 @@ func TestFromProfileAggregatesPerDeclaredPath(t *testing.T) {
 // The recorded floor and the value compared against it must be the same number,
 // or a freshly written baseline fails against itself.
 func TestMeasuredValuesAreRoundedOnce(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	profile := filepath.Join(dir, "c.out")
 	if err := os.WriteFile(profile, []byte("mode: set\nreasonix/internal/x/a.go:1.1,2.2 3 1\n"), 0o600); err != nil {
 		t.Fatal(err)

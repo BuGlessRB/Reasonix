@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/instruction"
 	"reasonix/internal/memory"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 )
 
 func labelsOf(items []SlashItem) []string {
@@ -207,7 +208,7 @@ func TestSlashArgItems(t *testing.T) {
 }
 
 func TestMemoryListTextIncludesSavedMemories(t *testing.T) {
-	store := memory.Store{Dir: t.TempDir()}
+	store := memory.Store{Dir: testenv.TempDir(t)}
 	if _, err := store.Save(memory.Memory{
 		Name:        "cache-first",
 		Title:       "Cache first",
@@ -227,7 +228,7 @@ func TestMemoryListTextIncludesSavedMemories(t *testing.T) {
 }
 
 func TestMemoryListTextIncludesArchivedMemories(t *testing.T) {
-	store := memory.Store{Dir: t.TempDir()}
+	store := memory.Store{Dir: testenv.TempDir(t)}
 	if _, err := store.Save(memory.Memory{
 		Name:        "stale-plan",
 		Title:       "Stale plan",
@@ -254,7 +255,7 @@ func TestMemoryListTextIncludesArchivedMemories(t *testing.T) {
 }
 
 func TestMemoryListTextIncludesEveryScopeAndObservableMetadata(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	projectDir := filepath.Join(root, "project")
 	globalDir := filepath.Join(root, "global")
 	globalStore := memory.Store{Dir: globalDir}
@@ -356,8 +357,8 @@ func TestManagementMemoryRecallAndInstructionDiagnostics(t *testing.T) {
 }
 
 func TestManagementMemoryRevisionRestore(t *testing.T) {
-	userDir := t.TempDir()
-	cwd := filepath.Join(t.TempDir(), "project")
+	userDir := testenv.TempDir(t)
+	cwd := filepath.Join(testenv.TempDir(t), "project")
 	store := memory.StoreFor(userDir, cwd)
 	first, err := store.SaveWithOptions(memory.Memory{
 		Name: "provider-policy", Title: "Provider policy", Description: "first version",
@@ -407,8 +408,8 @@ func TestManagementMemoryRevisionRestore(t *testing.T) {
 }
 
 func TestManagementMemoryArchiveRecoveryAcceptsQuotedPathWithSpaces(t *testing.T) {
-	userDir := filepath.Join(t.TempDir(), "reasonix home with spaces")
-	cwd := filepath.Join(t.TempDir(), "project")
+	userDir := filepath.Join(testenv.TempDir(t), "reasonix home with spaces")
+	cwd := filepath.Join(testenv.TempDir(t), "project")
 	store := memory.StoreFor(userDir, cwd)
 	saved, err := store.SaveWithOptions(memory.Memory{
 		Name: "archived-policy", Title: "Archived policy", Description: "recover me",

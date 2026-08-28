@@ -10,12 +10,13 @@ import (
 	"testing"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
+	"reasonix/internal/testenv"
 )
 
 // TestReadFileStreamsLargeGB18030 proves GB18030 content far past the 256KB
 // detection sample still decodes correctly via the streaming read path.
 func TestReadFileStreamsLargeGB18030(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "big.gbk")
 	var sb strings.Builder
 	for range 20000 {
@@ -42,7 +43,7 @@ func TestReadFileStreamsLargeGB18030(t *testing.T) {
 // TestReadFileLargeBoundedMemory guards against re-slurping the whole file: a
 // small read of a large file must allocate far less than the file size.
 func TestReadFileLargeBoundedMemory(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "big.txt")
 	var sb strings.Builder
 	for range 130000 { // ~8 MB, no NUL

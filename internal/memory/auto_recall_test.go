@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestAutoRecallRejectsGenericAndWeakMatches(t *testing.T) {
@@ -179,7 +181,7 @@ func TestAutoRecallLabelsStaleFactsAndBoundsProviderBlock(t *testing.T) {
 
 func recallTestStore(t *testing.T) Store {
 	t.Helper()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	return Store{Dir: filepath.Join(root, "project"), GlobalDir: filepath.Join(root, "global")}
 }
 

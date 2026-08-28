@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func fileUpdateInstallReceiptsForTest(t *testing.T, tx *UpdateTransaction) []FileUpdateInstallReceipt {
@@ -33,9 +35,9 @@ func fileUpdateInstallReceiptsForTest(t *testing.T, tx *UpdateTransaction) []Fil
 }
 
 func TestFileUpdateRollbackRestoresPreviousBinary(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -65,8 +67,8 @@ func TestFileUpdateRollbackRestoresPreviousBinary(t *testing.T) {
 }
 
 func TestReconcilePendingFileUpdateCancelsPreparedReleaseUnit(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -106,8 +108,8 @@ func TestReconcilePendingFileUpdateCancelsPreparedReleaseUnit(t *testing.T) {
 // same way preparation does, without touching the target or rollback material
 // (#7391, #7416).
 func TestReconcilePendingFileUpdateQuarantinesForeignTarget(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -121,7 +123,7 @@ func TestReconcilePendingFileUpdateQuarantinesForeignTarget(t *testing.T) {
 
 	// The install layout moved: the current launcher now lives in a different
 	// directory from the transaction target.
-	repairExecutable = func() (string, error) { return filepath.Join(t.TempDir(), "reasonix-guard"), nil }
+	repairExecutable = func() (string, error) { return filepath.Join(testenv.TempDir(t), "reasonix-guard"), nil }
 
 	result, err := ReconcilePendingUpdate("v2")
 	if err != nil {
@@ -154,8 +156,8 @@ func TestReconcilePendingFileUpdateQuarantinesForeignTarget(t *testing.T) {
 // for this installation, so callers that skip reconciliation (or reach prepare
 // first) do not dead-end forever on the marker (#7391, #7416).
 func TestPrepareFileUpdateQuarantinesForeignTarget(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -168,7 +170,7 @@ func TestPrepareFileUpdateQuarantinesForeignTarget(t *testing.T) {
 
 	// The install layout moved: the launcher now lives in a different
 	// directory from the first transaction's target.
-	newLauncherDir := t.TempDir()
+	newLauncherDir := testenv.TempDir(t)
 	repairExecutable = func() (string, error) { return filepath.Join(newLauncherDir, "reasonix-guard"), nil }
 	newTarget := filepath.Join(newLauncherDir, "reasonix-desktop")
 	if err := os.WriteFile(newTarget, []byte("old2"), 0o700); err != nil {
@@ -184,8 +186,8 @@ func TestPrepareFileUpdateQuarantinesForeignTarget(t *testing.T) {
 }
 
 func TestReconcileForeignQuarantineRejectsMarkerReplacement(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -195,7 +197,7 @@ func TestReconcileForeignQuarantineRejectsMarkerReplacement(t *testing.T) {
 	if _, err := PrepareFileUpdate("v1", "v2", target); err != nil {
 		t.Fatal(err)
 	}
-	repairExecutable = func() (string, error) { return filepath.Join(t.TempDir(), "reasonix-guard"), nil }
+	repairExecutable = func() (string, error) { return filepath.Join(testenv.TempDir(t), "reasonix-guard"), nil }
 	digest, err := pendingUpdateMarkerDigest(PendingUpdatePath())
 	if err != nil {
 		t.Fatal(err)
@@ -224,8 +226,8 @@ func TestReconcileForeignQuarantineRejectsMarkerReplacement(t *testing.T) {
 }
 
 func TestSelfDescribingInvalidTransactionRemainsBlocked(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -255,8 +257,8 @@ func TestSelfDescribingInvalidTransactionRemainsBlocked(t *testing.T) {
 }
 
 func TestReconcilePendingFileUpdateLeavesBoundProbationaryReleaseUnit(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -306,8 +308,8 @@ func TestUpdateVersionsEqualNormalizesLeadingV(t *testing.T) {
 }
 
 func TestReconcilePendingFileUpdateCommitsStaleProbationaryReleaseUnit(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -348,8 +350,8 @@ func TestReconcilePendingFileUpdateCommitsStaleProbationaryReleaseUnit(t *testin
 }
 
 func TestAbandonPendingUpdateCommitsProbationaryReleaseUnit(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -384,8 +386,8 @@ func TestAbandonPendingUpdateCommitsProbationaryReleaseUnit(t *testing.T) {
 }
 
 func TestAbandonPendingUpdateForceRetiresWhenBackupDigestBroken(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -434,8 +436,8 @@ func TestAbandonPendingUpdateForceRetiresWhenBackupDigestBroken(t *testing.T) {
 }
 
 func TestReconcilePendingFileUpdateRollsBackPublishedReleaseUnit(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -465,9 +467,9 @@ func TestReconcilePendingFileUpdateRollsBackPublishedReleaseUnit(t *testing.T) {
 }
 
 func TestAppBundleRollbackRestoresWhenLiveBundleIsMissing(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -510,9 +512,9 @@ func TestAppBundleRollbackRestoresWhenLiveBundleIsMissing(t *testing.T) {
 }
 
 func TestAppBundleRollbackRecognizesAlreadyRestoredBundle(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -548,9 +550,9 @@ func TestAppBundleRollbackRecognizesAlreadyRestoredBundle(t *testing.T) {
 }
 
 func TestMarkUpdateHealthyRejectsAppBundleDrift(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -612,9 +614,9 @@ func TestMarkUpdateHealthyRejectsAppBundleDrift(t *testing.T) {
 }
 
 func TestMarkUpdateHealthyRejectsLegacyAppBundleWithoutInstalledDigest(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -661,9 +663,9 @@ func TestMarkUpdateHealthyRejectsLegacyAppBundleWithoutInstalledDigest(t *testin
 }
 
 func TestAppBundleRollbackRejectsChangedBackupTree(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -701,9 +703,9 @@ func TestAppBundleRollbackRejectsChangedBackupTree(t *testing.T) {
 }
 
 func TestAppBundleRollbackCompensatesBackupChangedDuringPublish(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -769,9 +771,9 @@ func TestAppBundleRollbackCompensatesBackupChangedDuringPublish(t *testing.T) {
 }
 
 func TestLegacyAppBundleRollbackWithoutTreeDigest(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -817,9 +819,9 @@ func TestLegacyAppBundleRollbackWithoutTreeDigest(t *testing.T) {
 }
 
 func TestRepairPlanCanConfirmLegacyAppBundleRollbackWithoutTreeDigest(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -880,8 +882,8 @@ func TestRepairPlanCanConfirmLegacyAppBundleRollbackWithoutTreeDigest(t *testing
 }
 
 func TestRepairPlanRejectsLegacyAppBundleSymlinkBackupBeforeMutation(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -946,9 +948,9 @@ func TestRepairPlanRejectsLegacyAppBundleSymlinkBackupBeforeMutation(t *testing.
 }
 
 func TestRollbackPendingUpdateRejectsUnexpectedVersion(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -979,9 +981,9 @@ func TestRollbackPendingUpdateRejectsUnexpectedVersion(t *testing.T) {
 }
 
 func TestRollbackPendingUpdateFailsClosedWhenStateLockIsUnavailable(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1019,11 +1021,11 @@ func TestRollbackPendingUpdateFailsClosedWhenStateLockIsUnavailable(t *testing.T
 }
 
 func TestFileUpdateRollbackRestoresReleaseUnit(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	// Resolve symlinks up front (macOS /var -> /private/var) so the recorded
 	// target dir matches the resolved launcher dir in validation.
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1077,9 +1079,9 @@ func TestFileUpdateRollbackRestoresReleaseUnit(t *testing.T) {
 }
 
 func TestCancelPendingUpdateRemovesReleaseUnitBackups(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1111,9 +1113,9 @@ func TestCancelPendingUpdateRemovesReleaseUnitBackups(t *testing.T) {
 }
 
 func TestPrepareFileUpdatePreservesExistingPendingTransaction(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1163,9 +1165,9 @@ func TestPrepareFileUpdatePreservesExistingPendingTransaction(t *testing.T) {
 
 func TestExactUpdateTransitionsIgnoreLaterSameVersionTransaction(t *testing.T) {
 	t.Run("cancel", func(t *testing.T) {
-		home := t.TempDir()
+		home := testenv.TempDir(t)
 		t.Setenv("REASONIX_HOME", home)
-		dir, err := filepath.EvalSymlinks(t.TempDir())
+		dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1196,9 +1198,9 @@ func TestExactUpdateTransitionsIgnoreLaterSameVersionTransaction(t *testing.T) {
 	})
 
 	t.Run("healthy", func(t *testing.T) {
-		home := t.TempDir()
+		home := testenv.TempDir(t)
 		t.Setenv("REASONIX_HOME", home)
-		dir, err := filepath.EvalSymlinks(t.TempDir())
+		dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1238,9 +1240,9 @@ func TestExactUpdateTransitionsIgnoreLaterSameVersionTransaction(t *testing.T) {
 	})
 
 	t.Run("rollback", func(t *testing.T) {
-		home := t.TempDir()
+		home := testenv.TempDir(t)
 		t.Setenv("REASONIX_HOME", home)
-		dir, err := filepath.EvalSymlinks(t.TempDir())
+		dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1280,9 +1282,9 @@ func TestExactUpdateTransitionsIgnoreLaterSameVersionTransaction(t *testing.T) {
 
 func TestUpdateTransitionsRecheckPendingAfterTargetLock(t *testing.T) {
 	t.Run("rollback", func(t *testing.T) {
-		home := t.TempDir()
+		home := testenv.TempDir(t)
 		t.Setenv("REASONIX_HOME", home)
-		dir, err := filepath.EvalSymlinks(t.TempDir())
+		dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1328,9 +1330,9 @@ func TestUpdateTransitionsRecheckPendingAfterTargetLock(t *testing.T) {
 	})
 
 	t.Run("healthy", func(t *testing.T) {
-		home := t.TempDir()
+		home := testenv.TempDir(t)
 		t.Setenv("REASONIX_HOME", home)
-		dir, err := filepath.EvalSymlinks(t.TempDir())
+		dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1377,8 +1379,8 @@ func TestUpdateTransitionsRecheckPendingAfterTargetLock(t *testing.T) {
 
 func TestGenericUpdateTransitionsBindPendingBeforeWaitingForLock(t *testing.T) {
 	t.Run("rollback", func(t *testing.T) {
-		t.Setenv("REASONIX_HOME", t.TempDir())
-		dir := t.TempDir()
+		t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+		dir := testenv.TempDir(t)
 		target := filepath.Join(dir, "reasonix-desktop")
 		guard := filepath.Join(dir, "reasonix-guard")
 		originalExecutable := repairExecutable
@@ -1416,8 +1418,8 @@ func TestGenericUpdateTransitionsBindPendingBeforeWaitingForLock(t *testing.T) {
 	})
 
 	t.Run("healthy", func(t *testing.T) {
-		t.Setenv("REASONIX_HOME", t.TempDir())
-		dir := t.TempDir()
+		t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+		dir := testenv.TempDir(t)
 		target := filepath.Join(dir, "reasonix-desktop")
 		guard := filepath.Join(dir, "reasonix-guard")
 		originalExecutable := repairExecutable
@@ -1457,8 +1459,8 @@ func TestGenericUpdateTransitionsBindPendingBeforeWaitingForLock(t *testing.T) {
 	})
 
 	t.Run("cancel", func(t *testing.T) {
-		t.Setenv("REASONIX_HOME", t.TempDir())
-		dir := t.TempDir()
+		t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+		dir := testenv.TempDir(t)
 		target := filepath.Join(dir, "reasonix-desktop")
 		guard := filepath.Join(dir, "reasonix-guard")
 		originalExecutable := repairExecutable
@@ -1493,9 +1495,9 @@ func TestGenericUpdateTransitionsBindPendingBeforeWaitingForLock(t *testing.T) {
 }
 
 func TestCancelPendingFileUpdateRejectsLiveDrift(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1530,9 +1532,9 @@ func TestCancelPendingFileUpdateRejectsLiveDrift(t *testing.T) {
 }
 
 func TestRecoverFailedInstallRejectsStaleSameVersionIdentity(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1581,8 +1583,8 @@ func TestRecoverFailedInstallRejectsStaleSameVersionIdentity(t *testing.T) {
 }
 
 func TestMarkUpdateHealthyExactRejectsRewrittenTransaction(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1618,8 +1620,8 @@ func TestMarkUpdateHealthyExactRejectsRewrittenTransaction(t *testing.T) {
 }
 
 func TestRecoverFailedInstallRejectsRewrittenExactTransaction(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1664,13 +1666,13 @@ func TestRecoverFailedInstallRejectsRewrittenExactTransaction(t *testing.T) {
 }
 
 func TestClearUpdateApplyFailureExactPreservesDifferentTransactionMarker(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	first := &UpdateTransaction{
 		SchemaVersion: 1,
 		ToVersion:     "v2",
 		Platform:      "windows/amd64",
 		TargetKind:    "file",
-		TargetPath:    filepath.Join(t.TempDir(), "reasonix-desktop"),
+		TargetPath:    filepath.Join(testenv.TempDir(t), "reasonix-desktop"),
 		CreatedAt:     "2026-07-29T00:00:00Z",
 	}
 	second := *first
@@ -1698,9 +1700,9 @@ func TestClearUpdateApplyFailureExactPreservesDifferentTransactionMarker(t *test
 // Guard restore the release unit on its next launch, clearing both the marker
 // and the pending transaction.
 func TestRecoverFailedInstallRollsBackAndClearsMarker(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1750,8 +1752,8 @@ func TestRecoverFailedInstallRollsBackAndClearsMarker(t *testing.T) {
 }
 
 func TestRecoverFailedInstallAfterInstalledSidecarCommit(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1819,7 +1821,7 @@ func TestRecoverFailedInstallAfterInstalledSidecarCommit(t *testing.T) {
 // A stale marker with nothing to roll back must be cleared, not retried
 // forever.
 func TestRecoverFailedInstallClearsStaleMarker(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := MarkUpdateApplyFailed("v2", "installer exited with 1"); err != nil {
 		t.Fatal(err)
@@ -1834,7 +1836,7 @@ func TestRecoverFailedInstallClearsStaleMarker(t *testing.T) {
 }
 
 func TestRecoverFailedInstallPreservesMarkerRecreatedDuringCleanup(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	if err := MarkUpdateApplyFailed("v2", "old failure"); err != nil {
 		t.Fatal(err)
 	}
@@ -1860,9 +1862,9 @@ func TestRecoverFailedInstallPreservesMarkerRecreatedDuringCleanup(t *testing.T)
 }
 
 func TestRecoverFailedInstallIgnoresMarkerForAnotherVersion(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1900,8 +1902,8 @@ func TestRecoverFailedInstallIgnoresMarkerForAnotherVersion(t *testing.T) {
 }
 
 func TestMarkUpdateApplyFailedPreservesNewMarkerAfterPendingReplacement(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -1960,9 +1962,9 @@ func TestRecoverFailedInstallRejectsLegacyMarkerRegardlessVersionAndTime(t *test
 		{name: "older same-version marker is stale", markerOlder: true, wantContents: "v3", fromVersion: "v2", targetVersion: "v3", markerVersion: "v3"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			home := t.TempDir()
+			home := testenv.TempDir(t)
 			t.Setenv("REASONIX_HOME", home)
-			dir, err := filepath.EvalSymlinks(t.TempDir())
+			dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -2017,9 +2019,9 @@ func TestRecoverFailedInstallRejectsLegacyMarkerRegardlessVersionAndTime(t *test
 }
 
 func TestHealthyUpdateRemovesBackup(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -2051,8 +2053,8 @@ func TestHealthyUpdateRemovesBackup(t *testing.T) {
 }
 
 func TestMarkUpdateHealthyRejectsFileTransactionWithoutInstalledBinding(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -2082,9 +2084,9 @@ func TestMarkUpdateHealthyRejectsFileTransactionWithoutInstalledBinding(t *testi
 }
 
 func TestRecordClaimedFileUpdateInstalledBindsCompleteReleaseUnit(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2160,8 +2162,8 @@ func TestRecordClaimedFileUpdateInstalledBindsCompleteReleaseUnit(t *testing.T) 
 }
 
 func TestRecordClaimedFileUpdateInstalledBindsOptionalMissingSibling(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2203,8 +2205,8 @@ func TestRecordClaimedFileUpdateInstalledBindsOptionalMissingSibling(t *testing.
 }
 
 func TestReadPendingUpdateRejectsPartialInstalledReleaseUnitState(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2233,9 +2235,9 @@ func TestReadPendingUpdateRejectsPartialInstalledReleaseUnitState(t *testing.T) 
 }
 
 func TestHealthyFileUpdateRejectsBackupDrift(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	target := filepath.Join(t.TempDir(), "reasonix-desktop")
+	target := filepath.Join(testenv.TempDir(t), "reasonix-desktop")
 	originalExecutable := repairExecutable
 	repairExecutable = func() (string, error) { return filepath.Join(filepath.Dir(target), "reasonix-guard"), nil }
 	t.Cleanup(func() { repairExecutable = originalExecutable })
@@ -2268,9 +2270,9 @@ func TestHealthyFileUpdateRejectsBackupDrift(t *testing.T) {
 }
 
 func TestHealthyAppUpdateRejectsBackupDrift(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2316,8 +2318,8 @@ func TestHealthyAppUpdateRejectsBackupDrift(t *testing.T) {
 }
 
 func TestMarkUpdateHealthyPreservesPendingRecreatedDuringCleanup(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2361,8 +2363,8 @@ func TestMarkUpdateHealthyPreservesPendingRecreatedDuringCleanup(t *testing.T) {
 }
 
 func TestMarkUpdateHealthyPreservesBackupRecreatedDuringCleanup(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2407,9 +2409,9 @@ func TestMarkUpdateHealthyPreservesBackupRecreatedDuringCleanup(t *testing.T) {
 // renamed back so the install stays a coherent new-version unit (never mixed),
 // the pending transaction survives, and a later rollback attempt succeeds.
 func TestFileUpdateRollbackCompensatesOnPartialFailure(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2492,8 +2494,8 @@ func TestFileUpdateRollbackCompensatesOnPartialFailure(t *testing.T) {
 }
 
 func TestFileUpdateRollbackRejectsStageChangedDuringPublish(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2534,8 +2536,8 @@ func TestFileUpdateRollbackRejectsStageChangedDuringPublish(t *testing.T) {
 }
 
 func TestFileUpdateRollbackPreservesAsideReplacedBeforeCleanup(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2577,8 +2579,8 @@ func TestFileUpdateRollbackPreservesAsideReplacedBeforeCleanup(t *testing.T) {
 }
 
 func TestFileUpdateRollbackCompensationPreservesRecreatedTarget(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2630,9 +2632,9 @@ func TestFileUpdateRollbackCompensationPreservesRecreatedTarget(t *testing.T) {
 }
 
 func TestFileUpdateRollbackRetryPreservesRetainedNewBinary(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2706,9 +2708,9 @@ func TestFileUpdateRollbackRetryPreservesRetainedNewBinary(t *testing.T) {
 }
 
 func TestFileUpdateRollbackRechecksWholeReleaseUnitBeforeCommit(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2769,9 +2771,9 @@ func TestFileUpdateRollbackRechecksWholeReleaseUnitBeforeCommit(t *testing.T) {
 }
 
 func TestRollbackPendingUpdateStateRechecksLiveUnitAfterStaging(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2817,9 +2819,9 @@ func TestRollbackPendingUpdateStateRechecksLiveUnitAfterStaging(t *testing.T) {
 }
 
 func TestRollbackPendingUpdateStateRejectsDriftInsideRetainRename(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2866,9 +2868,9 @@ func TestRollbackPendingUpdateStateRejectsDriftInsideRetainRename(t *testing.T) 
 }
 
 func TestRollbackPendingUpdateStatePreservesRecreateBeforeStagePublish(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2919,9 +2921,9 @@ func TestRollbackPendingUpdateStatePreservesRecreateBeforeStagePublish(t *testin
 }
 
 func TestRollbackPendingAppBundleStateRejectsDriftInsideRetainRename(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2982,9 +2984,9 @@ func TestRollbackPendingAppBundleStateRejectsDriftInsideRetainRename(t *testing.
 }
 
 func TestRollbackReportsPendingCleanupFailureAndRemainsRetryable(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3031,9 +3033,9 @@ func TestRollbackReportsPendingCleanupFailureAndRemainsRetryable(t *testing.T) {
 // while staging (before any binary is swapped) leaves the live release unit
 // exactly as it was.
 func TestFileUpdateRollbackStageFailureLeavesInstallUntouched(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3088,9 +3090,9 @@ func TestFileUpdateRollbackStageFailureLeavesInstallUntouched(t *testing.T) {
 }
 
 func TestPrepareFileUpdateDoesNotOverwriteLegacyBackupName(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3124,9 +3126,9 @@ func TestPrepareFileUpdateDoesNotOverwriteLegacyBackupName(t *testing.T) {
 }
 
 func TestFileUpdateRollbackBypassesAndPreservesCrashedStage(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3162,9 +3164,9 @@ func TestFileUpdateRollbackBypassesAndPreservesCrashedStage(t *testing.T) {
 }
 
 func TestRecordClaimedFileUpdateInstalledKeepsPendingPublicDuringSidecarCommit(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3215,9 +3217,9 @@ func TestRecordClaimedFileUpdateInstalledKeepsPendingPublicDuringSidecarCommit(t
 }
 
 func TestMarkUpdateHealthyRechecksReleaseUnitAfterPendingDisplacement(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3268,8 +3270,8 @@ func TestMarkUpdateHealthyRechecksReleaseUnitAfterPendingDisplacement(t *testing
 }
 
 func TestMarkUpdateHealthyFailsClosedWhenPendingDisappearsBeforeCommit(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3306,9 +3308,9 @@ func TestMarkUpdateHealthyFailsClosedWhenPendingDisappearsBeforeCommit(t *testin
 }
 
 func TestFileUpdateRollbackRechecksReleaseUnitAfterPendingDisplacement(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3348,8 +3350,8 @@ func TestFileUpdateRollbackRechecksReleaseUnitAfterPendingDisplacement(t *testin
 }
 
 func TestRollbackPendingUpdateDirectRejectsDriftWhileWaitingForTargetLock(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	dir := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3409,7 +3411,7 @@ func TestRollbackPendingUpdateDirectRejectsDriftWhileWaitingForTargetLock(t *tes
 }
 
 func TestRetainUpdateRollbackNodeRetriesNameCollision(t *testing.T) {
-	target := filepath.Join(t.TempDir(), "Reasonix.app")
+	target := filepath.Join(testenv.TempDir(t), "Reasonix.app")
 	if err := os.Mkdir(target, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -3437,9 +3439,9 @@ func TestRetainUpdateRollbackNodeRetriesNameCollision(t *testing.T) {
 }
 
 func TestFileUpdateRollbackPreservesLiveNodeWithoutInstalledOwnership(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3469,9 +3471,9 @@ func TestFileUpdateRollbackPreservesLiveNodeWithoutInstalledOwnership(t *testing
 }
 
 func TestPublishClaimedFileUpdateMemberUsesCompareAndPublish(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3505,9 +3507,9 @@ func TestPublishClaimedFileUpdateMemberUsesCompareAndPublish(t *testing.T) {
 }
 
 func TestRecordClaimedFileUpdateInstalledRejectsDriftAfterPublish(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3541,9 +3543,9 @@ func TestRecordClaimedFileUpdateInstalledRejectsDriftAfterPublish(t *testing.T) 
 }
 
 func TestRecordClaimedFileUpdateInstalledRequiresCompletePublishReceipts(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3578,9 +3580,9 @@ func TestRecordClaimedFileUpdateInstalledRequiresCompletePublishReceipts(t *test
 }
 
 func TestPublishClaimedFileUpdateMemberPreservesConcurrentRecreate(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3619,9 +3621,9 @@ func TestPublishClaimedFileUpdateMemberPreservesConcurrentRecreate(t *testing.T)
 }
 
 func TestPublishClaimedFileUpdateMemberRestoresPreparedFileWhenStageSwapped(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3685,9 +3687,9 @@ func TestPublishClaimedFileUpdateMemberRestoresPreparedFileWhenStageSwapped(t *t
 }
 
 func TestPublishClaimedFileUpdateMemberRejectsSameContentStageSymlink(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3700,7 +3702,7 @@ func TestPublishClaimedFileUpdateMemberRejectsSameContentStageSymlink(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	external := filepath.Join(t.TempDir(), "external-new")
+	external := filepath.Join(testenv.TempDir(t), "external-new")
 	if err := os.WriteFile(external, []byte("new"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -3751,9 +3753,9 @@ func TestPublishClaimedFileUpdateMemberRejectsSameContentStageSymlink(t *testing
 }
 
 func TestFileUpdateRollbackCleansInstalledNodeBoundToTransaction(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "reasonix-desktop")
 	guard := filepath.Join(dir, "reasonix-guard")
 	originalExecutable := repairExecutable
@@ -3786,9 +3788,9 @@ func TestFileUpdateRollbackCleansInstalledNodeBoundToTransaction(t *testing.T) {
 }
 
 func TestAppBundleRollbackPreservesLiveBundleWithoutReplacementOwnership(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3834,9 +3836,9 @@ func TestAppBundleRollbackPreservesLiveBundleWithoutReplacementOwnership(t *test
 }
 
 func TestAppBundleRollbackCleansReplacementBoundToStagingTree(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}

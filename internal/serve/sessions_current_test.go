@@ -12,6 +12,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // The same session file reaches the two endpoints spelled differently: the
@@ -23,7 +24,7 @@ func TestSessionsMarksCurrentAcrossPathSpelling(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("session paths are case-folded on Windows only")
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	name := "20260813-120000.000000000-model.jsonl"
 	if err := os.WriteFile(filepath.Join(dir, name), []byte("{\"role\":\"user\",\"content\":\"hi\"}\n"), 0o644); err != nil {
 		t.Fatal(err)

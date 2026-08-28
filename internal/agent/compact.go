@@ -427,12 +427,8 @@ func (a *Agent) planCompaction(msgs []provider.Message, min int, force bool) (he
 		// Remeasure when force or non-strict roles; strict-alternating otherwise
 		// keeps a cheap tokPerChar overestimate of the tail under force.
 		floor := max(head, len(msgs)-a.tailFloor())
-		remeasure := force || !a.strictAlternatingRoles
-		for remeasure && start < floor && a.estimatedPromptTokens(provider.ModelMessages(msgs[start:])) > budget {
-			start++
-			for start < floor && start < len(msgs) && msgs[start].Role == provider.RoleTool {
-				start++
-			}
+		if force || !a.strictAlternatingRoles {
+			start = a.remeasuredTailStart(msgs, start, floor, budget)
 		}
 	} else {
 		// No window: keep a fixed recent count, aligned off tool results.
@@ -446,6 +442,30 @@ func (a *Agent) planCompaction(msgs []provider.Message, min int, force bool) (he
 		return head, start, false
 	}
 	return head, start, true
+}
+
+// remeasuredTailStart walks the cheap tokPerChar boundary forward until the
+// verbatim tail fits budget under the calibrated estimate. A request's shape is
+// the sum of its messages', so the measurement is carried and decremented per
+// message dropped; measuring each candidate whole instead re-scanned the whole
+// remaining transcript per step, and copied it whenever a receipt was present.
+func (a *Agent) remeasuredTailStart(msgs []provider.Message, start, floor, budget int) int {
+	policy := sharedWindowInputPolicyOf(a.svc.prov)
+	tail := requestCalibrationShape{}
+	for i := len(msgs) - 1; i >= start; i-- {
+		tail = tail.plus(projectedMessageCalibrationShape(msgs[i], policy))
+	}
+	drop := func() {
+		tail = tail.minus(projectedMessageCalibrationShape(msgs[start], policy))
+		start++
+	}
+	for start < floor && a.estimatedShapeTokens(tail) > budget {
+		drop()
+		for start < floor && start < len(msgs) && msgs[start].Role == provider.RoleTool {
+			drop()
+		}
+	}
+	return start
 }
 
 func (a *Agent) tailFloor() int {

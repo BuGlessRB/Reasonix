@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 func TestPluginsSlashShowsInstalledPluginDetails(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	root := filepath.Join(home, "plugins", "superpowers")
 	writePluginTestFile(t, filepath.Join(root, pluginpkg.CodexManifest), `{

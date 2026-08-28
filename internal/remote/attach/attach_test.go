@@ -17,6 +17,7 @@ import (
 
 	"reasonix/internal/remote"
 	"reasonix/internal/remote/sshtest"
+	"reasonix/internal/testenv"
 )
 
 var portFileArg = regexp.MustCompile(`--port-file '([^']*)'`)
@@ -37,7 +38,7 @@ func fakeMachine(t *testing.T) *machine {
 	if runtime.GOOS == "windows" {
 		t.Skip("the bootstrap harness models a POSIX remote; exercised on Linux/macOS")
 	}
-	m := &machine{home: t.TempDir()}
+	m := &machine{home: testenv.TempDir(t)}
 	m.kernel = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "remote kernel: %s", r.URL.Path)
 	}))
@@ -69,7 +70,7 @@ func fakeMachine(t *testing.T) *machine {
 		},
 	})
 
-	known := t.TempDir()
+	known := testenv.TempDir(t)
 	m.dial = func(string, Prompts) (*remote.Client, error) {
 		host, err := remote.ResolveHost(nil, "test@"+srv.Addr, nil)
 		if err != nil {
@@ -96,7 +97,7 @@ func (m *machine) launches() int {
 
 func testPool(t *testing.T, m *machine) *Pool {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	p := NewPool(ctx, Options{Dial: m.dial})
@@ -245,7 +246,7 @@ func TestReleaseIsIdempotent(t *testing.T) {
 // never be reached without restarting the app.
 func TestAFailedDialIsNotCached(t *testing.T) {
 	m := fakeMachine(t)
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	ctx := t.Context()
 
 	refuse := true

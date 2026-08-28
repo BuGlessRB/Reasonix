@@ -9,13 +9,14 @@ import (
 	"testing"
 
 	"reasonix/internal/memory"
+	"reasonix/internal/testenv"
 )
 
 // TestMemoryWriteReflectsInSnapshot verifies that a memory write lands on disk
 // and that Memory() returns a freshly reloaded snapshot afterwards — the behavior
 // the memoryManager (off-c.mu) extraction must preserve.
 func TestMemoryWriteReflectsInSnapshot(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	c := New(Options{Memory: memory.Load(memory.Options{CWD: dir})})
 
 	before := c.Memory()
@@ -46,7 +47,7 @@ func TestMemoryWriteReflectsInSnapshot(t *testing.T) {
 }
 
 func TestSaveMemoryQueuesFullBodyForCurrentSession(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	userDir := filepath.Join(root, "user")
 	cwd := filepath.Join(root, "project")
 	if err := os.MkdirAll(cwd, 0o755); err != nil {
@@ -75,7 +76,7 @@ func TestSaveMemoryQueuesFullBodyForCurrentSession(t *testing.T) {
 }
 
 func TestForgetMemoryRevokesLoadedGlobalGuidanceForCurrentSession(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	userDir := filepath.Join(root, "user")
 	cwd := filepath.Join(root, "project")
 	if err := os.MkdirAll(cwd, 0o755); err != nil {
@@ -112,7 +113,7 @@ func TestForgetMemoryRevokesLoadedGlobalGuidanceForCurrentSession(t *testing.T) 
 }
 
 func TestRestoreArchivedMemoryQueuesFullBodyForCurrentSession(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	userDir := filepath.Join(root, "user")
 	cwd := filepath.Join(root, "project")
 	if err := os.MkdirAll(cwd, 0o755); err != nil {
@@ -152,7 +153,7 @@ func TestRestoreArchivedMemoryQueuesFullBodyForCurrentSession(t *testing.T) {
 // holding writeMu (off c.mu) across the disk I/O still serializes writes so every
 // note lands.
 func TestMemoryWritesConcurrencySafe(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	c := New(Options{Memory: memory.Load(memory.Options{CWD: dir})})
 
 	const writers = 8
@@ -204,8 +205,8 @@ func TestMemoryWritesConcurrencySafe(t *testing.T) {
 }
 
 func TestRestoreMemoryQueuesAuditedRevisionForNextTurn(t *testing.T) {
-	dir := t.TempDir()
-	c := New(Options{Memory: memory.Load(memory.Options{CWD: dir, UserDir: t.TempDir()})})
+	dir := testenv.TempDir(t)
+	c := New(Options{Memory: memory.Load(memory.Options{CWD: dir, UserDir: testenv.TempDir(t)})})
 	store := c.Memory().Store
 	first, err := store.SaveWithOptions(memory.Memory{Name: "release-target", Description: "v1", Body: "main-v2"}, memory.SaveOptions{})
 	if err != nil {

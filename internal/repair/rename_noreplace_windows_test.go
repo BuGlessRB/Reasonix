@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestRenameRepairNodeNoReplaceWindowsPreservesExistingDestination(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	source := filepath.Join(dir, "source")
 	destination := filepath.Join(dir, "destination")
 	if err := os.WriteFile(source, []byte("source"), 0o600); err != nil {

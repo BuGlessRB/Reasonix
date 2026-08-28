@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestCloseCanBeAwaitedAfterCanceledCaller(t *testing.T) {
-	catalog, err := Open(context.Background(), filepath.Join(t.TempDir(), "usage.sqlite"))
+	catalog, err := Open(context.Background(), filepath.Join(testenv.TempDir(t), "usage.sqlite"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

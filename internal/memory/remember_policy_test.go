@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestAssessRememberWriteAutoAllowsOnlyLowRiskProjectCreates(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	safe := json.RawMessage(`{"name":"release-target","description":"Release target for this project","type":"project","body":"Release artifacts are published from main-v2."}`)
 	assessment := AssessRememberWrite(store, safe)
 	if !assessment.AutoAllow || assessment.Name != "release-target" || assessment.Reason == "" {
@@ -35,7 +37,7 @@ func TestAssessRememberWriteAutoAllowsOnlyLowRiskProjectCreates(t *testing.T) {
 }
 
 func TestAssessRememberWriteRejectsConflictingReferenceScope(t *testing.T) {
-	store := Store{Dir: t.TempDir(), GlobalDir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t), GlobalDir: testenv.TempDir(t)}
 	args := json.RawMessage(`{"name":"global/release-target.md","description":"Release target","type":"project","scope":"project","body":"Use main-v2."}`)
 	got := AssessRememberWrite(store, args)
 	if got.AutoAllow || !strings.Contains(got.Reason, "conflicts") {
@@ -44,7 +46,7 @@ func TestAssessRememberWriteRejectsConflictingReferenceScope(t *testing.T) {
 }
 
 func TestAssessRememberWriteRequiresApprovalForExistingOrSemanticDuplicate(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	if _, err := store.Save(Memory{
 		Name: "release-target", Title: "Release target", Description: "Current release branch",
 		Type: TypeProject, Scope: FactScopeProject, Body: "Use main-v2.",
@@ -63,7 +65,7 @@ func TestAssessRememberWriteRequiresApprovalForExistingOrSemanticDuplicate(t *te
 }
 
 func TestRememberAutoWriteClaimRemainsCreateOnlyAtExecution(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	args := json.RawMessage(`{"name":"release-target","description":"Release target","type":"project","body":"Use main-v2."}`)
 	claim := &fakeAutoWriteQueue{claim: true}
 	ctx := WithQueue(context.Background(), claim)

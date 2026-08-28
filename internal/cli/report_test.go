@@ -10,16 +10,17 @@ import (
 	"reasonix/internal/crashreport"
 	"reasonix/internal/i18n"
 	"reasonix/internal/netclient"
+	"reasonix/internal/testenv"
 )
 
 func isolateCLIReports(t *testing.T) string {
 	t.Helper()
 	i18n.DetectLanguage("en")
 	t.Cleanup(func() { i18n.DetectLanguage("en") })
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_SAFE_MODE", "")
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	return home
 }
 

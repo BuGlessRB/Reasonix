@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -20,7 +21,7 @@ import (
 // import path regardless of the test's working directory.
 func buildExamplePlugin(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "reasonix-plugin-example")
+	bin := filepath.Join(testenv.TempDir(t), "reasonix-plugin-example")
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}

@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/memory"
 	"reasonix/internal/permission"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -170,7 +171,7 @@ func TestApplyHeadlessApprovalModeAllowsOnlyLowRiskProjectMemoryCreate(t *testin
 		{name: "user preference", args: `{"name":"preferred-editor","description":"Preferred editor","type":"user","scope":"project","body":"Use Vim."}`, policy: permission.New("ask", nil, nil, nil)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			store := memory.Store{Dir: t.TempDir(), GlobalDir: t.TempDir()}
+			store := memory.Store{Dir: testenv.TempDir(t), GlobalDir: testenv.TempDir(t)}
 			reg := tool.NewRegistry()
 			reg.Add(memory.NewRememberTool(store))
 			prov := &scriptedTurns{turns: [][]provider.Chunk{

@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/bot"
 	"reasonix/internal/botruntime"
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestRememberBotRemoteStoresIncomingChatID(t *testing.T) {
@@ -68,7 +69,7 @@ func TestRememberBotRemoteStoresIncomingChatID(t *testing.T) {
 
 func TestRememberBotRemoteKeepsProjectScopedConnection(t *testing.T) {
 	isolateBotUserConfig(t)
-	workspace := filepath.Join(t.TempDir(), "project")
+	workspace := filepath.Join(testenv.TempDir(t), "project")
 	cfg := config.Default()
 	cfg.Bot.Connections = []config.BotConnectionConfig{{
 		ID:            "feishu-project",
@@ -299,7 +300,7 @@ func TestBotDoctorPrefersUserBotSettingsOverProjectBotConfig(t *testing.T) {
 		t.Fatalf("save user config: %v", err)
 	}
 
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(`
 [bot]
 enabled = false
@@ -484,12 +485,12 @@ func TestRememberBotInboundUsesConnectionID(t *testing.T) {
 
 func isolateBotUserConfig(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 }
 
 func hasTestString(values []string, want string) bool {

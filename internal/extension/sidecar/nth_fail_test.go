@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 // TestNthRequiredFailureClosesEarlierSuccesses: Nth required fail → nil manager.
 func TestNthRequiredFailureClosesEarlierSuccesses(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	installFakePlugin(t, home, "p1", func(rt *pluginpkg.RuntimeSpec) { rt.Required = true })
 	installFakePlugin(t, home, "p2", func(rt *pluginpkg.RuntimeSpec) { rt.Required = true })
 	installFakePlugin(t, home, "p3-bad", func(rt *pluginpkg.RuntimeSpec) {

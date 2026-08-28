@@ -20,6 +20,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/provider/openai"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -116,7 +117,7 @@ func runLiveDeepSeekRecoveryScenario(t *testing.T, key string, stripResponses in
 	sink := &recordSink{}
 	a := New(prov, registry, NewSession("You are a concise tool-using assistant."), Options{
 		MaxSteps:                     4,
-		MissingReasoningWarnStateDir: t.TempDir(),
+		MissingReasoningWarnStateDir: testenv.TempDir(t),
 	}, sink)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()

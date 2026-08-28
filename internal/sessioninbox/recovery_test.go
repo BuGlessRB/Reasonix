@@ -3,10 +3,12 @@ package sessioninbox
 import (
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestRecoverOrphanedInFlightPreservesOwnedAndPendingItems(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "s.jsonl"), Limits{})
+	s, err := Open(filepath.Join(testenv.TempDir(t), "s.jsonl"), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}

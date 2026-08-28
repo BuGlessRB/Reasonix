@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 )
 
 func TestResolvedProcessModeDefaultsToHost(t *testing.T) {
@@ -23,8 +24,8 @@ func TestHostModeEnsureConnectedSkipsCommandSandboxAndSharesProcess(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	startCount := filepath.Join(t.TempDir(), "starts")
-	stateDir := t.TempDir()
+	startCount := filepath.Join(testenv.TempDir(t), "starts")
+	stateDir := testenv.TempDir(t)
 	spec := Spec{
 		Name:        "hostmode",
 		Command:     os.Args[0],
@@ -80,13 +81,13 @@ func TestEnsureConnectedCancelWaitDoesNotKillSharedProcess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	startCount := filepath.Join(t.TempDir(), "starts")
+	startCount := filepath.Join(testenv.TempDir(t), "starts")
 	spec := Spec{
 		Name:        "shared-cancel",
 		Command:     os.Args[0],
 		Args:        []string{"-test.run=TestHelperProcess", "--"},
 		ProcessMode: MCPProcessHost,
-		StateDir:    t.TempDir(),
+		StateDir:    testenv.TempDir(t),
 		Env: map[string]string{
 			"GO_WANT_HELPER_PROCESS":     "1",
 			"GO_WANT_HELPER_START_COUNT": startCount,

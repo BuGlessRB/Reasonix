@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // TestListSessionsScalingManual reproduces the sidebar "project list loads
@@ -37,7 +38,7 @@ func TestListSessionsScalingManual(t *testing.T) {
 	for _, s := range shapes {
 		name := fmt.Sprintf("%dsessions_%dturns", s.sessions, s.turns)
 		t.Run(name, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := testenv.TempDir(t)
 			totalBytes := writeSyntheticSessions(t, dir, s.sessions, s.turns)
 
 			// Metadata-only pass: ReadDir + Stat + LoadBranchMeta sidecar.
@@ -135,7 +136,7 @@ func TestColdStartProjectTreeManual(t *testing.T) {
 		perDir     = 200
 		turns      = 25
 	)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	dirs := make([]string, workspaces)
 	var onDisk int64
 	for w := range workspaces {

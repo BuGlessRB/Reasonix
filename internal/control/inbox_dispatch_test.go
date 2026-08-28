@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/sessioninbox"
+	"reasonix/internal/testenv"
 )
 
 type inboxDispatchRunner struct {
@@ -23,7 +24,7 @@ func (r *inboxDispatchRunner) Run(_ context.Context, input string) error {
 
 func newInboxDispatchController(t *testing.T) (*Controller, *inboxDispatchRunner, <-chan struct{}) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	runner := &inboxDispatchRunner{inputs: make(chan string, 8)}
 	done := make(chan struct{}, 8)
 	c := New(Options{
@@ -216,7 +217,7 @@ func (r *gatedInboxDispatchRunner) Run(ctx context.Context, input string) error 
 }
 
 func TestNaturalCompletionAutoDispatchesDurableFIFO(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	runner := &gatedInboxDispatchRunner{
 		inputs:       make(chan string, 8),
 		firstStarted: make(chan struct{}),

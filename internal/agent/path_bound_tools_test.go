@@ -10,12 +10,13 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
 )
 
 func TestBindWritePathsRebindsBashWriteRoots(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, err := NormalizeWritePaths(root, []string{"docs"})
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +43,7 @@ func TestBindWritePathsRebindsBashWriteRoots(t *testing.T) {
 }
 
 func TestBindWritePathsKeepsCapabilitySchemaButBlocksResolvedWriter(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, err := NormalizeWritePaths(root, []string{"frontend"})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +84,7 @@ func TestBindWritePathsKeepsCapabilitySchemaButBlocksResolvedWriter(t *testing.T
 }
 
 func TestBindWritePathsAllowsResolvedReadOnlyCapability(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, err := NormalizeWritePaths(root, []string{"frontend"})
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +111,7 @@ func TestBindWritePathsAllowsResolvedReadOnlyCapability(t *testing.T) {
 }
 
 func TestTaskExplicitWritePathsCannotBypassBoundaryThroughCapabilityProxy(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	var writerCalls int32
 	target := parallelResolvedWriterTarget{calls: &writerCalls}
 	parent := tool.NewRegistry()
@@ -122,7 +123,7 @@ func TestTaskExplicitWritePathsCannotBypassBoundaryThroughCapabilityProxy(t *tes
 		Args:        json.RawMessage(`{}`),
 	}})
 	task := newTestTaskTool(t, proxyWriterCallingProvider{}, parent, "sys", "", "", nil).
-		WithTranscripts(NewSubagentStore(t.TempDir()), root, "base-model", "base-effort")
+		WithTranscripts(NewSubagentStore(testenv.TempDir(t)), root, "base-model", "base-effort")
 	out, err := task.Execute(testTaskContext(), json.RawMessage(`{
 		"prompt":"attempt dynamic writer",
 		"write_paths":["frontend"]
@@ -139,7 +140,7 @@ func TestTaskExplicitWritePathsCannotBypassBoundaryThroughCapabilityProxy(t *tes
 }
 
 func TestParentWriteReservationBlocksOverlappingSubagentAcquire(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sched := NewSubagentScheduler(4, 2)
 	claim, err := parentWriteReservation(root, "write_file", mustJSON(t, map[string]string{
 		"path":    filepath.Join(root, "a.md"),
@@ -180,7 +181,7 @@ func TestParentWriteReservationBlocksOverlappingSubagentAcquire(t *testing.T) {
 // the whole Execute window prevents a concurrent subagent from claiming the
 // same path after a check-but-before-write window would have opened.
 func TestParentWriteReservationClosesTOCTOU(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sched := NewSubagentScheduler(4, 2)
 	path := filepath.Join(root, "race.md")
 	args := mustJSON(t, map[string]string{"path": path, "content": "parent"})
@@ -231,7 +232,7 @@ func TestParentWriteReservationClosesTOCTOU(t *testing.T) {
 }
 
 func TestAgentReservesParentWriteBeforePreToolUse(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sched := NewSubagentScheduler(4, 2)
 	claim, err := NormalizeWritePaths(root, []string{"hook-race.md"})
 	if err != nil {
@@ -267,7 +268,7 @@ func TestAgentReservesParentWriteBeforePreToolUse(t *testing.T) {
 }
 
 func TestParentWriteReservationBashClaimsWholeWorkspace(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, err := parentWriteReservation(root, "bash", json.RawMessage(`{"command":"echo hi"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -285,7 +286,7 @@ func TestParentWriteReservationBashClaimsWholeWorkspace(t *testing.T) {
 }
 
 func TestAgentReserveParentWriteSkipsSubagentDepth(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sched := NewSubagentScheduler(4, 2)
 	a := &Agent{agentConfig: agentConfig{writeWorkspaceRoot: root, subagentDepth: 1}, svc: agentServices{writeScheduler: sched}}
 	inner := &recordingWriter{name: "write_file", writesPaths: true}
@@ -303,7 +304,7 @@ func TestAgentReserveParentWriteSkipsSubagentDepth(t *testing.T) {
 }
 
 func TestAgentReserveParentWriteHoldsClaim(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sched := NewSubagentScheduler(4, 2)
 	a := &Agent{agentConfig: agentConfig{writeWorkspaceRoot: root, subagentDepth: 0}, svc: agentServices{writeScheduler: sched}}
 	inner := &recordingWriter{name: "write_file", writesPaths: true}

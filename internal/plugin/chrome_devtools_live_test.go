@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"reasonix/internal/secrets"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -39,14 +40,14 @@ func TestChromeDevtoolsMCPLive(t *testing.T) {
 	callCtx, callCancel := context.WithTimeout(lifeCtx, 2*time.Minute)
 	defer callCancel()
 
-	workspaceRoot := t.TempDir()
+	workspaceRoot := testenv.TempDir(t)
 	spec := Spec{
 		Name:          "chrome-devtools-live",
 		Command:       "npx",
 		Args:          []string{"-y", "chrome-devtools-mcp@latest", "--isolated=true"},
 		Authorized:    true,
 		ProcessMode:   MCPProcessHost,
-		StateDir:      t.TempDir(),
+		StateDir:      testenv.TempDir(t),
 		WorkspaceRoot: workspaceRoot,
 	}
 	host := NewHost()

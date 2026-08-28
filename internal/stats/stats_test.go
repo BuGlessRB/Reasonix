@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/filelock"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func flushRecorder(t *testing.T, recorder *Recorder) {
@@ -26,7 +27,7 @@ func flushRecorder(t *testing.T, recorder *Recorder) {
 }
 
 func TestRecorderWritesDailyFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	inner := &spySink{}
 	r := NewRecorder(inner, dir, "desktop")
 
@@ -60,7 +61,7 @@ func TestRecorderWritesDailyFile(t *testing.T) {
 }
 
 func TestRecorderCountsMergedProviderRequests(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	r := NewRecorder(&spySink{}, dir, "desktop")
 	e := usageEvent("deepseek/deepseek-v4-pro", 100, 50, 10, 0, 100, 150)
 	e.Usage.RequestCount = 2
@@ -78,7 +79,7 @@ func TestRecorderCountsMergedProviderRequests(t *testing.T) {
 }
 
 func TestRecorderCapturesGuardianUsageAndPreservesProtocolAudit(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	inner := &auditSpySink{}
 	r := NewRecorder(inner, dir, "desktop")
 	r.Emit(event.Event{
@@ -103,7 +104,7 @@ func TestRecorderCapturesGuardianUsageAndPreservesProtocolAudit(t *testing.T) {
 }
 
 func TestRecorderSkipsZeroUsage(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	r := NewRecorder(&spySink{}, dir, "desktop")
 	r.Emit(usageEvent("m", 0, 0, 0, 0, 0, 0)) // TotalTokens <= 0 -> skipped
 	r.Emit(turnEvent())
@@ -115,7 +116,7 @@ func TestRecorderSkipsZeroUsage(t *testing.T) {
 }
 
 func TestRecorderPersistsRequestOnlyFailureWithoutForwardingReceipt(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	inner := &spySink{}
 	r := NewRecorder(inner, dir, "desktop")
 	r.Emit(event.Event{
@@ -142,7 +143,7 @@ func TestRecorderPersistsRequestOnlyFailureWithoutForwardingReceipt(t *testing.T
 }
 
 func TestRecorderNeverWaitsForStatsFileLock(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	release, err := filelock.Acquire(context.Background(), filepath.Join(dir, ".append.lock"))
 	if err != nil {
 		t.Fatalf("hold stats lock: %v", err)
@@ -198,7 +199,7 @@ func TestRecorderDisabledOnEmptyDir(t *testing.T) {
 }
 
 func TestQueryAggregates(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	w := NewWriter(dir)
 	now := time.Now()
 	day := dayStart(now)
@@ -260,7 +261,7 @@ func TestQueryAggregates(t *testing.T) {
 }
 
 func TestQuerySourceFilter(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	w := NewWriter(dir)
 	now := time.Now()
 	day := dayStart(now)
@@ -281,7 +282,7 @@ func TestQuerySourceFilter(t *testing.T) {
 }
 
 func TestQueryEmptyRange(t *testing.T) {
-	w := NewWriter(t.TempDir())
+	w := NewWriter(testenv.TempDir(t))
 	now := time.Now()
 	got, err := w.Query(SourceFilter{From: now, To: now.Add(-24 * time.Hour)})
 	if err != nil {
@@ -319,7 +320,7 @@ func TestQueryDisabledWriterReturnsArrayContract(t *testing.T) {
 }
 
 func TestQueryTopProviderAggregatesAcrossModels(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	w := NewWriter(dir)
 	day := dayStart(time.Now())
 	for _, rec := range []record{
@@ -363,7 +364,7 @@ func TestDecodeRecordsSkipsMalformed(t *testing.T) {
 }
 
 func TestAppendRepairsTornTrailingRecord(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	w := NewWriter(dir)
 	now := time.Now()
 	path := filepath.Join(dir, now.Format(dayLayout)+".jsonl")
@@ -383,7 +384,7 @@ func TestAppendRepairsTornTrailingRecord(t *testing.T) {
 }
 
 func TestConcurrentWritersAppendWholeRecords(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	now := time.Now()
 	const writers = 8
 	const perWriter = 40

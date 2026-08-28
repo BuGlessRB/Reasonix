@@ -47,14 +47,14 @@ func TestSemanticRouterRecordsPricedUsage(t *testing.T) {
 		t.Fatalf("semantic route produced no candidates: %+v", decision)
 	}
 	snap := audit.Snapshot()
-	if snap.RouterPromptTokens != 1000 || snap.RouterCompletionTokens != 10 {
-		t.Fatalf("router token counters not recorded: prompt=%d completion=%d", snap.RouterPromptTokens, snap.RouterCompletionTokens)
+	if snap.Router.PromptTokens != 1000 || snap.Router.CompletionTokens != 10 {
+		t.Fatalf("router token counters not recorded: prompt=%d completion=%d", snap.Router.PromptTokens, snap.Router.CompletionTokens)
 	}
-	if snap.RouterCost <= 0 {
-		t.Fatalf("router cost must be priced, got %v", snap.RouterCost)
+	if snap.Router.Cost <= 0 {
+		t.Fatalf("router cost must be priced, got %v", snap.Router.Cost)
 	}
-	if snap.RouterLatencyMs < 0 {
-		t.Fatalf("router latency negative: %v", snap.RouterLatencyMs)
+	if snap.Router.LatencyMs < 0 {
+		t.Fatalf("router latency negative: %v", snap.Router.LatencyMs)
 	}
 	var usageEvent *event.Event
 	for _, e := range sink.events {

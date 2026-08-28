@@ -128,59 +128,90 @@ func (a *Agent) requestCalibrationShape(req provider.Request) requestCalibration
 }
 
 func requestCalibrationShapeWithPolicy(req provider.Request, policy provider.SharedWindowInputPolicy) requestCalibrationShape {
-	requestChars, cjkRunes, cjkBytes := requestCalibrationTextShape(req, policy)
-	return requestCalibrationShape{
-		requestChars: requestChars,
-		compactChars: int64(charsOfMessages(req.Messages)),
-		cjkRunes:     cjkRunes,
-		cjkBytes:     cjkBytes,
+	var shape requestCalibrationShape
+	for _, msg := range req.Messages {
+		shape = shape.plus(messageCalibrationShape(msg, policy))
+	}
+	for _, schema := range req.Tools {
+		shape.requestChars += 8
+		shape.addText(schema.Name)
+		shape.addText(schema.Description)
+		shape.addText(string(schema.Parameters))
+	}
+	return shape
+}
+
+// addText accumulates one wire string's length and CJK composition.
+func (s *requestCalibrationShape) addText(str string) {
+	s.requestChars += int64(len(str))
+	for _, r := range str {
+		if isCJKRune(r) {
+			s.cjkRunes++
+			s.cjkBytes += int64(utf8.RuneLen(r))
+		}
 	}
 }
 
-// requestCalibrationTextShape counts common shared-window text plus only the
-// adapter-specific replay fields declared by the active provider. This keeps
-// omitted bytes out of the ratio without missing newly appended wire content.
-func requestCalibrationTextShape(req provider.Request, policy provider.SharedWindowInputPolicy) (chars, cjkRunes, cjkBytes int64) {
-	add := func(s string) {
-		chars += int64(len(s))
-		for _, r := range s {
-			if isCJKRune(r) {
-				cjkRunes++
-				cjkBytes += int64(utf8.RuneLen(r))
-			}
+func (s requestCalibrationShape) plus(o requestCalibrationShape) requestCalibrationShape {
+	return requestCalibrationShape{
+		requestChars: s.requestChars + o.requestChars,
+		compactChars: s.compactChars + o.compactChars,
+		cjkRunes:     s.cjkRunes + o.cjkRunes,
+		cjkBytes:     s.cjkBytes + o.cjkBytes,
+	}
+}
+
+func (s requestCalibrationShape) minus(o requestCalibrationShape) requestCalibrationShape {
+	return requestCalibrationShape{
+		requestChars: s.requestChars - o.requestChars,
+		compactChars: s.compactChars - o.compactChars,
+		cjkRunes:     s.cjkRunes - o.cjkRunes,
+		cjkBytes:     s.cjkBytes - o.cjkBytes,
+	}
+}
+
+// messageCalibrationShape counts one message's shared-window text plus only the
+// replay fields the active provider declares, keeping omitted bytes out of the
+// ratio. It is additive: requestCalibrationShapeWithPolicy is this sum over a
+// request, which is what lets a caller size many suffixes of one transcript
+// without rescanning the text once per candidate.
+func messageCalibrationShape(msg provider.Message, policy provider.SharedWindowInputPolicy) requestCalibrationShape {
+	var shape requestCalibrationShape
+	if msg.LocalOnly {
+		return shape
+	}
+	shape.compactChars = int64(msgChars(msg))
+	shape.requestChars = 4
+	shape.addText(string(msg.Role))
+	shape.addText(msg.Content)
+	if msg.Role == provider.RoleAssistant && (len(msg.ToolCalls) > 0 || policy.ReplaysOrdinaryReasoning) {
+		shape.addText(msg.ReasoningContent)
+	}
+	shape.addText(msg.Name)
+	shape.addText(msg.ToolCallID)
+	for _, call := range msg.ToolCalls {
+		shape.requestChars += 8
+		shape.addText(call.ID)
+		shape.addText(call.Name)
+		shape.addText(call.Arguments)
+	}
+	if policy.ReplaysResponsesItems {
+		for _, item := range msg.ResponsesItems {
+			shape.addText(string(item))
 		}
 	}
-	for _, msg := range req.Messages {
-		if msg.LocalOnly {
-			continue
-		}
-		chars += 4
-		add(string(msg.Role))
-		add(msg.Content)
-		if msg.Role == provider.RoleAssistant && (len(msg.ToolCalls) > 0 || policy.ReplaysOrdinaryReasoning) {
-			add(msg.ReasoningContent)
-		}
-		add(msg.Name)
-		add(msg.ToolCallID)
-		for _, call := range msg.ToolCalls {
-			chars += 8
-			add(call.ID)
-			add(call.Name)
-			add(call.Arguments)
-		}
-		if policy.ReplaysResponsesItems {
-			for _, item := range msg.ResponsesItems {
-				add(string(item))
-			}
-		}
+	return shape
+}
+
+// projectedMessageCalibrationShape is the shape of the message
+// provider.ModelMessages would hand a provider. Only the ProviderContent swap
+// and the LocalOnly drop reach the shape, so applying them per message matches
+// projecting the whole slice while keeping the caller's indices aligned.
+func projectedMessageCalibrationShape(msg provider.Message, policy provider.SharedWindowInputPolicy) requestCalibrationShape {
+	if msg.ProviderContent != "" {
+		msg.Content = msg.ProviderContent
 	}
-	for _, schema := range req.Tools {
-		chars += 8
-		add(schema.Name)
-		add(schema.Description)
-		add(string(schema.Parameters))
-	}
-	return chars, cjkRunes, cjkBytes
+	return messageCalibrationShape(msg, policy)
 }
 
 func (a *Agent) calibratedPromptTokens(shape requestCalibrationShape) (int, bool) {

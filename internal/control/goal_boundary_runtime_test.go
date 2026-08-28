@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/evidence"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -79,7 +80,7 @@ func TestRemovedNumericPauseSidecarsMigrateToRunning(t *testing.T) {
 	causes := []string{stopCauseBudgetTurns, stopCauseBudgetTokens, stopCauseGoalRunBudget, stopCauseGoalStuck, stopCauseNoProgress}
 	for _, cause := range causes {
 		t.Run(cause, func(t *testing.T) {
-			sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+			sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 			state := goalState{
 				Goal: "finish", Status: GoalStatusBlocked, StopCause: cause, Block: "numeric pause",
 				BudgetClass: budgetClassWrite, TurnsUsed: 57, TurnsLimit: 20, TokensUsed: 2800,
@@ -113,7 +114,7 @@ func TestRemovedNumericPauseSidecarsMigrateToRunning(t *testing.T) {
 }
 
 func TestGoalSidecarUnlimitedSentinelIsSafeForOldReader(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	raw := []byte(`{"goal":"ship","status":"running","turnsUsed":57,"turnsLimit":10,"requestsUsed":7,"futurePolicy":{"mode":"adaptive"}}`)
 	if err := os.WriteFile(store.SessionGoalState(path), raw, 0o600); err != nil {
 		t.Fatal(err)
@@ -143,7 +144,7 @@ func TestGoalSidecarUnlimitedSentinelIsSafeForOldReader(t *testing.T) {
 }
 
 func TestGoalNumericPauseMigrationWriteFailureRollsBackMemory(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	raw := []byte(`{"goal":"ship","status":"blocked","stopCause":"goal_stuck","block":"old numeric pause","turnsUsed":12,"turnsLimit":20}`)
 	if err := os.WriteFile(goalStatePath(sessionPath), raw, 0o600); err != nil {
@@ -185,7 +186,7 @@ func TestGoalCompletionAndRealBlockedStillTerminate(t *testing.T) {
 }
 
 func TestGoalProgressEvidenceRestoresAsBoundedNoveltyState(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	state := goalState{Goal: "research", Status: GoalStatusRunning, BudgetClass: budgetClassResearch,
 		TurnsLimit: 40, NoProgressTurns: 2, NoProgressLimit: 10,
 		ProgressEvidence: []string{"read-a", "read-a", "read-b", strings.Repeat("x", 129)}}

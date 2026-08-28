@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -247,7 +248,7 @@ func TestGuardianSaveLoadRestoresCursorForDeltaTranscript(t *testing.T) {
 	if allow, _, err := gs.Review(context.Background(), "write_file", json.RawMessage(`{"file_path":"a.txt"}`), parent); err != nil || !allow {
 		t.Fatalf("first Review = allow %v err %v, want allow nil", allow, err)
 	}
-	path := filepath.Join(t.TempDir(), "session.guardian.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.guardian.jsonl")
 	if err := gs.Save(path); err != nil {
 		t.Fatalf("Save error: %v", err)
 	}
@@ -439,7 +440,7 @@ func TestGuardianLoadResetsLegacyConsecutiveUserSessions(t *testing.T) {
 	legacy.Add(provider.Message{Role: provider.RoleUser, Content: "transcript evidence"})
 	legacy.Add(provider.Message{Role: provider.RoleUser, Content: "action request"})
 	legacy.Add(provider.Message{Role: provider.RoleAssistant, Content: `{"risk_level":"low","user_authorization":"high","outcome":"allow","rationale":"ok"}`})
-	path := filepath.Join(t.TempDir(), "session.guardian.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.guardian.jsonl")
 	if err := legacy.Save(path); err != nil {
 		t.Fatalf("Save legacy session: %v", err)
 	}

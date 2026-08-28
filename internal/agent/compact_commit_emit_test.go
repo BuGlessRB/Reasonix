@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/fileutil"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -47,7 +48,7 @@ func TestCommitSummaryEmitsOutsideCompactionLock(t *testing.T) {
 		{Role: provider.RoleUser, Content: "tail"},
 		{Role: provider.RoleAssistant, Content: "ok"},
 	}}
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	sink := &reentrantSnapshotSink{}
 	a := New(prov, tool.NewRegistry(), sess, Options{
 		ContextWindow: 20_000, CompactRatio: 0.5, RecentKeep: 2,
@@ -87,7 +88,7 @@ func TestCommitSurvivesPostPublishDirSyncFailure(t *testing.T) {
 		{Role: provider.RoleUser, Content: "tail"},
 		{Role: provider.RoleAssistant, Content: "ok"},
 	}}
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	a := New(prov, tool.NewRegistry(), sess, Options{
 		ContextWindow: 20_000, CompactRatio: 0.5, RecentKeep: 2,
 		SessionPath: path, WorkspaceID: "ws", ModelRef: "p/m",
@@ -128,7 +129,7 @@ func TestBlockedReceiptSurvivesPostPublishDirSyncFailure(t *testing.T) {
 		{Role: provider.RoleUser, Content: "current"},
 		{Role: provider.RoleAssistant, Content: "tail"},
 	}
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	prov := &failingSummaryProvider{}
 	a := New(prov, tool.NewRegistry(), &Session{Messages: append([]provider.Message(nil), messages...)}, Options{
 		ContextWindow: window, CompactRatio: 0.85, RecentKeep: 2,
@@ -165,7 +166,7 @@ func TestBlockedReceiptSurvivesPostPublishDirSyncFailure(t *testing.T) {
 }
 
 func TestLoadProjectionSidecarDoesNotRewriteExactKey(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "u"},
@@ -206,7 +207,7 @@ func TestLoadProjectionSidecarDoesNotRewriteExactKey(t *testing.T) {
 }
 
 func TestSaveCompactionStateStripsLegacyWriterFields(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	st := CompactionState{
 		SchemaVersion:     compactionStateSchemaCurrent,
 		TranscriptVersion: 1,
@@ -250,7 +251,7 @@ func TestSaveCompactionStateStripsLegacyWriterFields(t *testing.T) {
 }
 
 func TestLoadProjectionSidecarNormalizesNativeKeyOnce(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "u"},

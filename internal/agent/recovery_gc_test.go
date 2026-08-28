@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // forkRecoveryBranch builds a real conflict-recovery branch: a diverged disk
@@ -52,7 +53,7 @@ func coverBranchInParent(t *testing.T, parentPath string, branchMsgs []provider.
 }
 
 func TestReclaimableRecoveryBranchesCollectsOnlyCoveredIdleForks(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	later := time.Now().Add(48 * time.Hour)
 
 	// Covered + idle + unleased: reclaimable.
@@ -84,7 +85,7 @@ func TestReclaimableRecoveryBranchesCollectsOnlyCoveredIdleForks(t *testing.T) {
 }
 
 func TestReclaimableRecoveryBranchesRespectsGraceLeaseAndMissingParent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	later := time.Now().Add(48 * time.Hour)
 
 	parentPath, branchPath, branchMsgs := forkRecoveryBranch(t, dir, "guarded")
@@ -128,7 +129,7 @@ func TestReclaimableRecoveryBranchesRespectsGraceLeaseAndMissingParent(t *testin
 }
 
 func TestRecoveryBranchCoveredByParentReadsActualContent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 
 	_, divergedBranch, _ := forkRecoveryBranch(t, dir, "diverged-proof")
 	if RecoveryBranchCoveredByParent(divergedBranch, dir) {
@@ -179,7 +180,7 @@ func TestRecoveryBranchCoveredByParentReadsActualContent(t *testing.T) {
 }
 
 func TestRecoveryParentGuardBlocksRewindAfterValidation(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	parentPath, branchPath, branchMsgs := forkRecoveryBranch(t, dir, "rewind-race")
 	coverBranchInParent(t, parentPath, branchMsgs)
 
@@ -214,7 +215,7 @@ func TestRecoveryParentGuardBlocksRewindAfterValidation(t *testing.T) {
 }
 
 func TestRecoveryParentGuardRefusesInFlightParentRewrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	parentPath, branchPath, branchMsgs := forkRecoveryBranch(t, dir, "rewrite-busy")
 	coverBranchInParent(t, parentPath, branchMsgs)
 
@@ -244,7 +245,7 @@ func ageRecoveryBranchForGC(t *testing.T, path string) {
 }
 
 func TestTrashReclaimableRecoveryBranchUsesRecoverableDesktopLayout(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	parentPath, branchPath, branchMsgs := forkRecoveryBranch(t, dir, "trash-covered")
 	coverBranchInParent(t, parentPath, branchMsgs)
 	ageRecoveryBranchForGC(t, branchPath)
@@ -278,7 +279,7 @@ func TestTrashReclaimableRecoveryBranchUsesRecoverableDesktopLayout(t *testing.T
 }
 
 func TestTrashReclaimableRecoveryBranchEnforcesGraceAtFinalGuard(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	parentPath, branchPath, branchMsgs := forkRecoveryBranch(t, dir, "trash-fresh")
 	coverBranchInParent(t, parentPath, branchMsgs)
 
@@ -291,7 +292,7 @@ func TestTrashReclaimableRecoveryBranchEnforcesGraceAtFinalGuard(t *testing.T) {
 }
 
 func TestInterruptedRecoveryTrashStageReconcilesBeforePublication(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	_, branchPath, _ := forkRecoveryBranch(t, dir, "staged-crash")
 	key := filepath.Base(branchPath)
 	stageDir, err := reserveRecoveryTrashStage(dir)
@@ -355,7 +356,7 @@ func TestInterruptedRecoveryTrashStageReconcilesBeforePublication(t *testing.T) 
 }
 
 func TestReconcileCleanupPendingFinishesRecoveryTrashWithoutHardDeleteCallback(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	_, branchPath, _ := forkRecoveryBranch(t, dir, "trash-interrupted")
 	key := filepath.Base(branchPath)
 	itemName, itemDir, err := reserveRecoveryTrashItemDir(dir, key)

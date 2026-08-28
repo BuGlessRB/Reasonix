@@ -20,6 +20,7 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 
 	"reasonix/internal/remote/sshtest"
+	"reasonix/internal/testenv"
 )
 
 func TestNewSSHClientPrefersRecordedHostKeyAlgorithm(t *testing.T) {
@@ -28,8 +29,8 @@ func TestNewSSHClientPrefersRecordedHostKeyAlgorithm(t *testing.T) {
 	server := sshtest.Start(t, sshtest.Options{
 		HostKeys: []ssh.Signer{otherECDSA, knownED25519},
 	})
-	systemPath := filepath.Join(t.TempDir(), "known_hosts")
-	managedPath := filepath.Join(t.TempDir(), "known_hosts")
+	systemPath := filepath.Join(testenv.TempDir(t), "known_hosts")
+	managedPath := filepath.Join(testenv.TempDir(t), "known_hosts")
 	writeKnownHost(t, systemPath, server.Addr, knownED25519.PublicKey())
 
 	policy := &HostKeyPolicy{
@@ -61,8 +62,8 @@ func TestNewSSHClientReconnectsToRecordedLegacyRSAHost(t *testing.T) {
 	server := sshtest.Start(t, sshtest.Options{HostKeys: []ssh.Signer{restricted}})
 	prompted := 0
 	policy := &HostKeyPolicy{
-		SystemKnownHosts: []string{filepath.Join(t.TempDir(), "missing")},
-		ManagedPath:      filepath.Join(t.TempDir(), "known_hosts"),
+		SystemKnownHosts: []string{filepath.Join(testenv.TempDir(t), "missing")},
+		ManagedPath:      filepath.Join(testenv.TempDir(t), "known_hosts"),
 		Prompt: func(context.Context, HostKeyQuestion) (bool, error) {
 			prompted++
 			return true, nil
@@ -98,11 +99,11 @@ func TestNewSSHClientPrefersTrustedHostCertificate(t *testing.T) {
 	server := sshtest.Start(t, sshtest.Options{
 		HostKeys: []ssh.Signer{otherED25519, certificateSigner},
 	})
-	systemPath := filepath.Join(t.TempDir(), "known_hosts")
+	systemPath := filepath.Join(testenv.TempDir(t), "known_hosts")
 	writeKnownHostAuthority(t, systemPath, server.Addr, caSigner.PublicKey())
 	policy := &HostKeyPolicy{
 		SystemKnownHosts: []string{systemPath},
-		ManagedPath:      filepath.Join(t.TempDir(), "known_hosts"),
+		ManagedPath:      filepath.Join(testenv.TempDir(t), "known_hosts"),
 		Prompt: func(context.Context, HostKeyQuestion) (bool, error) {
 			t.Fatal("certified host must not prompt")
 			return false, nil
@@ -117,8 +118,8 @@ func TestHostKeyPolicyRejectsChangedKeyAcrossAlgorithms(t *testing.T) {
 	hostname := "example.test:2222"
 	knownED25519 := generateED25519Signer(t)
 	presentedECDSA := generateECDSASigner(t)
-	systemPath := filepath.Join(t.TempDir(), "known_hosts")
-	managedPath := filepath.Join(t.TempDir(), "known_hosts")
+	systemPath := filepath.Join(testenv.TempDir(t), "known_hosts")
+	managedPath := filepath.Join(testenv.TempDir(t), "known_hosts")
 	writeKnownHost(t, systemPath, hostname, knownED25519.PublicKey())
 
 	prompted := false
@@ -147,8 +148,8 @@ func TestHostKeyPolicyRejectsChangedKeyOfSameAlgorithm(t *testing.T) {
 	hostname := "example.test:2222"
 	knownKey := generateED25519Signer(t)
 	presentedKey := generateED25519Signer(t)
-	systemPath := filepath.Join(t.TempDir(), "known_hosts")
-	managedPath := filepath.Join(t.TempDir(), "known_hosts")
+	systemPath := filepath.Join(testenv.TempDir(t), "known_hosts")
+	managedPath := filepath.Join(testenv.TempDir(t), "known_hosts")
 	writeKnownHost(t, systemPath, hostname, knownKey.PublicKey())
 
 	prompted := false
@@ -177,12 +178,12 @@ func TestHostKeyPolicyObservesOnlyVerifiedPeer(t *testing.T) {
 	hostname := "example.test:2222"
 	knownKey := generateED25519Signer(t)
 	changedKey := generateED25519Signer(t)
-	systemPath := filepath.Join(t.TempDir(), "known_hosts")
+	systemPath := filepath.Join(testenv.TempDir(t), "known_hosts")
 	writeKnownHost(t, systemPath, hostname, knownKey.PublicKey())
 	var verified []HostKeyQuestion
 	policy := &HostKeyPolicy{
 		SystemKnownHosts: []string{systemPath},
-		ManagedPath:      filepath.Join(t.TempDir(), "managed_known_hosts"),
+		ManagedPath:      filepath.Join(testenv.TempDir(t), "managed_known_hosts"),
 		Verified: func(q HostKeyQuestion) {
 			verified = append(verified, q)
 		},

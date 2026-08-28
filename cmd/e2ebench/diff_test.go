@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestRunTestsAllowsStaticEnvAssignment(t *testing.T) {
-	repo := t.TempDir()
+	repo := testenv.TempDir(t)
 	writeE2EFile(t, filepath.Join(repo, "go.mod"), "module example.com/e2ebenchtest\n\ngo 1.23\n")
 	writeE2EFile(t, filepath.Join(repo, "env_test.go"), `package e2ebenchtest
 
@@ -31,7 +33,7 @@ func TestEnv(t *testing.T) {
 }
 
 func TestRunTestsRejectsDynamicEnvAssignment(t *testing.T) {
-	ok, out := runTests(t.TempDir(), "REASONIX_E2E_ENV=$(echo ok) go test", []string{"./..."})
+	ok, out := runTests(testenv.TempDir(t), "REASONIX_E2E_ENV=$(echo ok) go test", []string{"./..."})
 	if ok {
 		t.Fatal("runTests accepted dynamic env assignment")
 	}

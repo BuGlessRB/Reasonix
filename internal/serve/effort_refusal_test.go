@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // An endpoint with no effort vocabulary refusing a level is an answer about the
@@ -19,7 +20,7 @@ import (
 // no vocabulary at all (TestModelsOfferOnlyTheEffortLevelsTheEndpointHas), so
 // this was every effort switch such a user made.
 func TestEffortRefusalIsNotAnInternalError(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	seed := `config_version = 6
 default_model = "relay/claude-sonnet-4-5"

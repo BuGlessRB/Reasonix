@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/permission"
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 // writeHookedPlugin lays out a package whose hooks execute during sessions,
@@ -42,9 +43,9 @@ func applyArgs(t *testing.T, source, planID string) json.RawMessage {
 // tool is what writes that grade into the ticket. The two live in packages that
 // cannot import each other, so the agreement is only real here.
 func TestHighRiskPlanAsksEvenUnderBlanketAllow(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeHookedPlugin(t, src)
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: t.TempDir(), RequireApprovedPlan: true})
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t), RequireApprovedPlan: true})
 
 	resp := execInstall(t, tl, map[string]any{"source": src, "kind": "plugin"})
 	if !resp.OK || resp.Status != "planned" {
@@ -69,7 +70,7 @@ func TestHighRiskPlanAsksEvenUnderBlanketAllow(t *testing.T) {
 
 // Previewing is a read: it reports what a source contains and writes nothing.
 func TestPlanOnlyCallIsAReadEvenInAskMode(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeHookedPlugin(t, src)
 	raw, err := json.Marshal(map[string]any{"source": src, "kind": "plugin"})
 	if err != nil {
@@ -88,10 +89,10 @@ func TestPlanOnlyCallIsAReadEvenInAskMode(t *testing.T) {
 // Without a ticket the apply is answered with the plan it should have read.
 // Nothing reaches disk, and the caller gets exactly what it was missing.
 func TestApplyWithoutTicketInstallsNothing(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeHookedPlugin(t, src)
-	home := t.TempDir()
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: home, RequireApprovedPlan: true})
+	home := testenv.TempDir(t)
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: home, RequireApprovedPlan: true})
 
 	resp := execInstall(t, tl, map[string]any{"source": src, "kind": "plugin", "apply": true})
 	if resp.Applied || resp.Status != "planned" {
@@ -118,10 +119,10 @@ func TestApplyWithoutTicketInstallsNothing(t *testing.T) {
 // lower one is a different string than the plan hashes to, and the apply is
 // refused before anything is written.
 func TestDowngradedTicketIsRefused(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeHookedPlugin(t, src)
-	home := t.TempDir()
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: home, RequireApprovedPlan: true})
+	home := testenv.TempDir(t)
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: home, RequireApprovedPlan: true})
 
 	resp := execInstall(t, tl, map[string]any{"source": src, "kind": "plugin"})
 	forged := strings.Replace(resp.PlanID, "high:", "low:", 1)
@@ -145,9 +146,9 @@ func TestDowngradedTicketIsRefused(t *testing.T) {
 // Hosts install on the user's own click, so they never gained a second phase
 // they would have had to invent a ticket for.
 func TestHostToolAppliesWithoutATicket(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeHookedPlugin(t, src)
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: t.TempDir()})
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
 	resp := execInstall(t, tl, map[string]any{"source": src, "kind": "plugin", "apply": true})
 	if !resp.OK || resp.Status != "done" {
 		t.Fatalf("host apply = %+v", resp)

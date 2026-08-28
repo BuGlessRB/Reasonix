@@ -17,12 +17,13 @@ import (
 	"reasonix/internal/checkpoint"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
 func TestCompatibilityRewindRequiresConfirmationForPartialCoverage(t *testing.T) {
-	dir := t.TempDir()
-	root := t.TempDir()
+	dir := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "partial.txt")
 	if err := os.WriteFile(path, []byte("before"), 0o644); err != nil {
 		t.Fatal(err)
@@ -69,8 +70,8 @@ func TestCompatibilityRewindRequiresConfirmationForPartialCoverage(t *testing.T)
 }
 
 func TestResumeRecoversCommittingCombinedRewind(t *testing.T) {
-	dir := t.TempDir()
-	root := t.TempDir()
+	dir := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	filePath := filepath.Join(root, "a.txt")
 	if err := os.WriteFile(filePath, []byte("before"), 0o644); err != nil {
@@ -178,7 +179,7 @@ func mustReadFile(t *testing.T, path string) []byte {
 
 func runTwoTurns(t *testing.T) (*Controller, *agent.Agent, *[]event.Event) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	prov := &scriptedTurns{turns: [][]provider.Chunk{
 		textTurn("first answer"),
 		textTurn("second answer"),

@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -72,7 +73,7 @@ func TestChildConstructionForksStayEnumerated(t *testing.T) {
 // Converging read_only_task onto the unified runner must not quietly give it
 // durable side effects: its contract is that the call leaves nothing behind.
 func TestReadOnlyTaskStaysEphemeralOnTheUnifiedRunner(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{

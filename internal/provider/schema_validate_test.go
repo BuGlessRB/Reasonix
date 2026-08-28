@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestValidateToolSchemaAcceptsValidDrafts(t *testing.T) {
@@ -63,7 +65,7 @@ func TestValidateToolSchemaRejectsNonObjectRootType(t *testing.T) {
 func TestValidateToolSchemaRejectsFileRefsEvenWhenResolvable(t *testing.T) {
 	// A resolvable local file proves rejection comes from the disabled loader,
 	// not from the file happening to be missing or malformed.
-	path := filepath.Join(t.TempDir(), "args.json")
+	path := filepath.Join(testenv.TempDir(t), "args.json")
 	if err := os.WriteFile(path, []byte(`{"type":"string"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}

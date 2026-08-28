@@ -7,13 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // The disk copy is the last saved version; the overlay holds the user's unsaved
 // buffer. An edit must read and write the buffer, never round-trip through the
 // stale disk copy and overwrite what the user has not saved yet.
 func TestEditFileOverlayEditsUnsavedBuffer(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "a.go")
 	if err := os.WriteFile(path, []byte("saved\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -41,7 +43,7 @@ func TestEditFileOverlayEditsUnsavedBuffer(t *testing.T) {
 // Preview must resolve the file exactly as Execute will, or the diff a user
 // approves is not the change that runs.
 func TestEditFilePreviewMatchesOverlayExecute(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "a.go")
 	if err := os.WriteFile(path, []byte("saved\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -71,7 +73,7 @@ func TestEditFilePreviewMatchesOverlayExecute(t *testing.T) {
 }
 
 func TestMultiEditOverlayEditsUnsavedBuffer(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "m.go")
 	if err := os.WriteFile(path, []byte("saved\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -103,7 +105,7 @@ func TestMultiEditOverlayEditsUnsavedBuffer(t *testing.T) {
 // A non-UTF-8 file must stay entirely on the disk route. Routing it through the
 // text-only overlay would rewrite it as UTF-8 and destroy the original encoding.
 func TestEditFileOverlaySkipsNonUTF8(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "utf16.txt")
 	if err := os.WriteFile(path, []byte{0xFF, 0xFE, 'h', 0, 'i', 0}, 0o644); err != nil {
 		t.Fatal(err)
@@ -131,7 +133,7 @@ func TestEditFileOverlaySkipsNonUTF8(t *testing.T) {
 }
 
 func TestEditFileOverlayMissFallsBackToDisk(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "d.go")
 	if err := os.WriteFile(path, []byte("disk only\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -155,7 +157,7 @@ func TestEditFileOverlayMissFallsBackToDisk(t *testing.T) {
 }
 
 func TestDeleteRangeOverlayEditsUnsavedBuffer(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "r.txt")
 	if err := os.WriteFile(path, []byte("saved\n"), 0o644); err != nil {
 		t.Fatal(err)

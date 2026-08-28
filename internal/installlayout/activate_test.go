@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func writeTempMember(t *testing.T, dir, name, body string) string {
@@ -18,8 +20,8 @@ func writeTempMember(t *testing.T, dir, name, body string) string {
 }
 
 func TestActivateVersionAtomicPointerSwap(t *testing.T) {
-	root := t.TempDir()
-	src := t.TempDir()
+	root := testenv.TempDir(t)
+	src := testenv.TempDir(t)
 	version := "v1.20.0"
 	members := make([]Member, 0, 3)
 	for _, name := range AllowedVersionMembers() {
@@ -57,9 +59,9 @@ func TestActivateVersionAtomicPointerSwap(t *testing.T) {
 }
 
 func TestActivateVersionKeepsOldPointerOnMissingMember(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	// Seed an existing active version.
-	oldSrc := t.TempDir()
+	oldSrc := testenv.TempDir(t)
 	oldMembers := make([]Member, 0, 3)
 	for _, name := range AllowedVersionMembers() {
 		oldMembers = append(oldMembers, Member{Name: name, Path: writeTempMember(t, oldSrc, name, "old")})
@@ -73,7 +75,7 @@ func TestActivateVersionKeepsOldPointerOnMissingMember(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	// Omit update helper — activation must fail and leave v1.19.1 active.
 	bad := []Member{
 		{Name: DesktopBinaryName(), Path: writeTempMember(t, src, DesktopBinaryName(), "new")},
@@ -97,8 +99,8 @@ func TestActivateVersionKeepsOldPointerOnMissingMember(t *testing.T) {
 }
 
 func TestActivateVersionRollsBackVersionAndRootEntriesBeforePointerCommit(t *testing.T) {
-	root := t.TempDir()
-	src := t.TempDir()
+	root := testenv.TempDir(t)
+	src := testenv.TempDir(t)
 	seedMembers := make([]Member, 0, len(AllowedVersionMembers()))
 	for _, name := range AllowedVersionMembers() {
 		seedMembers = append(seedMembers, Member{Name: name, Path: writeTempMember(t, src, "old-"+name, "old-"+name)})
@@ -153,8 +155,8 @@ func TestActivateVersionRollsBackVersionAndRootEntriesBeforePointerCommit(t *tes
 }
 
 func TestActivateVersionRejectsExtraAndPathTraversalNames(t *testing.T) {
-	root := t.TempDir()
-	src := t.TempDir()
+	root := testenv.TempDir(t)
+	src := testenv.TempDir(t)
 	members := []Member{
 		{Name: DesktopBinaryName(), Path: writeTempMember(t, src, DesktopBinaryName(), "x")},
 		{Name: CLIBinaryName(), Path: writeTempMember(t, src, CLIBinaryName(), "x")},
@@ -189,8 +191,8 @@ func TestActivateVersionRejectsSymlinkSource(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink privilege varies on Windows CI")
 	}
-	root := t.TempDir()
-	src := t.TempDir()
+	root := testenv.TempDir(t)
+	src := testenv.TempDir(t)
 	real := writeTempMember(t, src, "real", "body")
 	link := filepath.Join(src, DesktopBinaryName())
 	if err := os.Symlink(real, link); err != nil {
@@ -215,7 +217,7 @@ func TestActivateVersionRejectsSymlinkSource(t *testing.T) {
 }
 
 func TestCleanupStaleStaging(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	versions := filepath.Join(root, VersionsDirName)
 	if err := os.MkdirAll(versions, 0o755); err != nil {
 		t.Fatal(err)
@@ -244,8 +246,8 @@ func TestCleanupStaleStaging(t *testing.T) {
 }
 
 func TestRetainPreviousVersionsKeepsOneRecent(t *testing.T) {
-	root := t.TempDir()
-	src := t.TempDir()
+	root := testenv.TempDir(t)
+	src := testenv.TempDir(t)
 	makeVersion := func(v, body string) {
 		members := make([]Member, 0, 3)
 		for _, name := range AllowedVersionMembers() {

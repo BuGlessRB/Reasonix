@@ -5,19 +5,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // A failed task is only actionable if the record says what the agent actually
 // produced. For an exploration task the grader's "want X, got Y" line is the
 // entire finding — a bare false would leave every failure indistinguishable.
 func TestGradeVerboseKeepsWhatTheGraderSaid(t *testing.T) {
-	taskDir := t.TempDir()
+	taskDir := testenv.TempDir(t)
 	verify := "#!/usr/bin/env bash\necho \"answer.txt normalized to 'askrigg', want 'gorsefen'\" >&2\nexit 1\n"
 	if err := os.WriteFile(filepath.Join(taskDir, "verify.sh"), []byte(verify), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	passed, said := gradeVerbose(t.TempDir(), taskDir)
+	passed, said := gradeVerbose(testenv.TempDir(t), taskDir)
 	if passed {
 		t.Fatal("a grader exiting non-zero must not pass")
 	}
@@ -27,11 +29,11 @@ func TestGradeVerboseKeepsWhatTheGraderSaid(t *testing.T) {
 }
 
 func TestGradeVerboseStaysQuietWhenTheTaskPasses(t *testing.T) {
-	taskDir := t.TempDir()
+	taskDir := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(taskDir, "verify.sh"), []byte("#!/usr/bin/env bash\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if passed, said := gradeVerbose(t.TempDir(), taskDir); !passed || said != "" {
+	if passed, said := gradeVerbose(testenv.TempDir(t), taskDir); !passed || said != "" {
 		t.Fatalf("clean grade = %v, %q", passed, said)
 	}
 }

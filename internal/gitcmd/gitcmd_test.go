@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func hasConfig(args []string, want string) bool {
@@ -123,7 +125,7 @@ func TestRepositoryConfigCannotRunCommandsDuringInspection(t *testing.T) {
 		t.Skip("git not installed")
 	}
 
-	repo := t.TempDir()
+	repo := testenv.TempDir(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -144,8 +146,8 @@ func TestRepositoryConfigCannotRunCommandsDuringInspection(t *testing.T) {
 
 	// A repository whose config points fsmonitor at a command. Writing the
 	// marker is what an attacker's payload would do first.
-	marker := filepath.Join(t.TempDir(), "executed")
-	payload := filepath.Join(t.TempDir(), "payload.sh")
+	marker := filepath.Join(testenv.TempDir(t), "executed")
+	payload := filepath.Join(testenv.TempDir(t), "payload.sh")
 	script := "#!/bin/sh\ntouch " + marker + "\nexit 1\n"
 	if err := os.WriteFile(payload, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
@@ -175,7 +177,7 @@ func TestAvailableRunsGitRatherThanFindingIt(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell stub is POSIX; the Windows stub would need its own launcher")
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	stub := filepath.Join(dir, "git")
 	body := "#!/bin/sh\necho 'xcrun: error: invalid active developer path' >&2\nexit 1\n"
 	if err := os.WriteFile(stub, []byte(body), 0o755); err != nil {

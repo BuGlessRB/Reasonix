@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 const serveMissingKeyHelperEnv = "REASONIX_TEST_SERVE_MISSING_KEY_HELPER"
@@ -36,7 +38,7 @@ func TestServeStartsWithMissingProviderKey(t *testing.T) {
 		os.Exit(code)
 	}
 
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	balanceStarted := make(chan struct{})
 	releaseBalance := make(chan struct{})
 	balanceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

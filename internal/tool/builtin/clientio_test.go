@@ -12,6 +12,7 @@ import (
 
 	"reasonix/internal/sandbox"
 	"reasonix/internal/secrets"
+	"reasonix/internal/testenv"
 )
 
 // fakeOverlay serves a fixed path→content map and records writes.
@@ -38,7 +39,7 @@ func (f *fakeOverlay) WriteTextFile(_ context.Context, path, content string) (bo
 }
 
 func TestReadFileOverlayServesBufferContent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "a.go")
 	if err := os.WriteFile(path, []byte("disk line\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -59,7 +60,7 @@ func TestReadFileOverlayServesBufferContent(t *testing.T) {
 }
 
 func TestReadFileOverlayFallsBackToDisk(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "b.go")
 	if err := os.WriteFile(path, []byte("disk only\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -72,7 +73,7 @@ func TestReadFileOverlayFallsBackToDisk(t *testing.T) {
 }
 
 func TestWriteFileOverlayAppliesWrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "c.go")
 	overlay := &fakeOverlay{writes: map[string]string{}}
 	receipts := 0
@@ -112,7 +113,7 @@ func TestWriteFileOverlayAppliesWrite(t *testing.T) {
 }
 
 func TestWriteFileOverlaySkipsNonUTF8(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "utf16.txt")
 	// UTF-16LE BOM + "hi" — the overlay is text-only, so this file must stay on
 	// the local encoding-preserving path.
@@ -149,7 +150,7 @@ func (f *fakeTerminal) RunCommand(_ context.Context, command, _ string, _ time.D
 
 func TestBashRoutesToClientTerminal(t *testing.T) {
 	term := &fakeTerminal{out: "client says hi", ok: true}
-	b := bash{workDir: t.TempDir(), terminal: term}
+	b := bash{workDir: testenv.TempDir(t), terminal: term}
 	out, err := b.Execute(context.Background(), json.RawMessage(`{"command":"echo hi"}`))
 	if err != nil || out != "client says hi" {
 		t.Fatalf("Execute = %q, %v", out, err)
@@ -161,7 +162,7 @@ func TestBashRoutesToClientTerminal(t *testing.T) {
 
 func TestBashTerminalFallsBackWhenUnhandled(t *testing.T) {
 	term := &fakeTerminal{ok: false}
-	b := bash{workDir: t.TempDir(), terminal: term}
+	b := bash{workDir: testenv.TempDir(t), terminal: term}
 	out, err := b.Execute(context.Background(), json.RawMessage(`{"command":"printf local"}`))
 	if err != nil || !strings.Contains(out, "local") {
 		t.Fatalf("unhandled terminal must fall back to local execution; got %q, %v", out, err)
@@ -170,7 +171,7 @@ func TestBashTerminalFallsBackWhenUnhandled(t *testing.T) {
 
 func TestBashTerminalSkippedWhenSandboxEnforced(t *testing.T) {
 	term := &fakeTerminal{out: "must not run", ok: true}
-	b := bash{workDir: t.TempDir(), sb: sandbox.Spec{Mode: "enforce"}, terminal: term}
+	b := bash{workDir: testenv.TempDir(t), sb: sandbox.Spec{Mode: "enforce"}, terminal: term}
 	// The command itself may fail (no sandbox binary in the test env); the
 	// assertion is only that the client terminal was never consulted.
 	_, _ = b.Execute(context.Background(), json.RawMessage(`{"command":"echo hi"}`))
@@ -183,7 +184,7 @@ func TestBashTerminalSkippedWhenEnvFilteringEnabled(t *testing.T) {
 	secrets.SetFilterSubprocessEnv(true)
 	t.Cleanup(func() { secrets.SetFilterSubprocessEnv(false) })
 	term := &fakeTerminal{out: "must not run", ok: true}
-	b := bash{workDir: t.TempDir(), terminal: term}
+	b := bash{workDir: testenv.TempDir(t), terminal: term}
 	// The client terminal spawns with its own unfiltered environment, so an
 	// enabled [secrets].filter_subprocess_env must force local execution.
 	out, err := b.Execute(context.Background(), json.RawMessage(`{"command":"printf local"}`))

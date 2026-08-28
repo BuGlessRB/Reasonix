@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"reasonix/internal/mcplaunch"
+	"reasonix/internal/testenv"
 )
 
 // TestNewStdioTransportDirExplicit verifies that explicit Spec.Dir takes
@@ -17,11 +18,11 @@ func TestNewStdioTransportDirExplicit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	explicitDir := filepath.Join(t.TempDir(), "explicit")
+	explicitDir := filepath.Join(testenv.TempDir(t), "explicit")
 	if err := os.MkdirAll(explicitDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	workspaceRoot := filepath.Join(t.TempDir(), "workspace")
+	workspaceRoot := filepath.Join(testenv.TempDir(t), "workspace")
 	if err := os.MkdirAll(workspaceRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +54,7 @@ func TestNewStdioTransportProjectDirFallbackWorkspaceRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspaceRoot := filepath.Join(t.TempDir(), "workspace")
+	workspaceRoot := filepath.Join(testenv.TempDir(t), "workspace")
 	if err := os.MkdirAll(workspaceRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +89,7 @@ func TestNewStdioTransportUserScopesKeepInheritedDir(t *testing.T) {
 				Name:          "test-user-scope",
 				Command:       exe,
 				Args:          []string{"-test.run=TestHelperProcess", "--"},
-				WorkspaceRoot: t.TempDir(),
+				WorkspaceRoot: testenv.TempDir(t),
 				ConfigSource:  source,
 				Env:           map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
 			}
@@ -105,8 +106,8 @@ func TestNewStdioTransportUserScopesKeepInheritedDir(t *testing.T) {
 }
 
 func TestProjectRelativeExecutableResolutionMatchesLaunchIdentity(t *testing.T) {
-	processRoot := t.TempDir()
-	workspaceRoot := t.TempDir()
+	processRoot := testenv.TempDir(t)
+	workspaceRoot := testenv.TempDir(t)
 	t.Chdir(processRoot)
 
 	name := "server"
@@ -206,7 +207,7 @@ func TestNewStdioTransportDirDoesNotOverwriteForCodeGraph(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projectRoot := filepath.Join(t.TempDir(), "project")
+	projectRoot := filepath.Join(testenv.TempDir(t), "project")
 	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}

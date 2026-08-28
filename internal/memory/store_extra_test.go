@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // splitFrontmatter
@@ -106,7 +108,7 @@ func TestSlug(t *testing.T) {
 }
 
 func TestStoreSaveUnicodeAndRejectsEmptySlug(t *testing.T) {
-	s := Store{Dir: t.TempDir()}
+	s := Store{Dir: testenv.TempDir(t)}
 	path, err := s.Save(Memory{Name: "中文标题", Description: "d", Type: TypeProject, Body: "body"})
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +179,7 @@ func TestRenderNormalizesType(t *testing.T) {
 // loadMemory
 
 func TestLoadMemoryNoFrontmatter(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "no-fm.md")
 	os.WriteFile(f, []byte("just a body\nno frontmatter"), 0o644)
 	m, ok := loadMemory(f)
@@ -201,7 +203,7 @@ func TestLoadMemoryMissingFile(t *testing.T) {
 }
 
 func TestLoadMemoryEmptyFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "empty.md")
 	os.WriteFile(f, nil, 0o644)
 	m, ok := loadMemory(f)
@@ -216,7 +218,7 @@ func TestLoadMemoryEmptyFile(t *testing.T) {
 // Store.List edge cases
 
 func TestListSkipsNonMdFiles(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(dir, "fact.md"), []byte("---\nname: fact\n---\nbody"), 0o644)
 	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("not a memory"), 0o644)
 	os.WriteFile(filepath.Join(dir, "MEMORY.md"), []byte("# Memory\n"), 0o644)
@@ -231,14 +233,14 @@ func TestListSkipsNonMdFiles(t *testing.T) {
 }
 
 func TestListEmptyDir(t *testing.T) {
-	s := Store{Dir: t.TempDir()}
+	s := Store{Dir: testenv.TempDir(t)}
 	if list := s.List(); len(list) != 0 {
 		t.Errorf("empty dir should return empty list, got %d", len(list))
 	}
 }
 
 func TestListSortedByName(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	for _, name := range []string{"zebra", "alpha", "middle"} {
 		os.WriteFile(filepath.Join(dir, name+".md"), []byte("---\nname: "+name+"\n---\nbody"), 0o644)
 	}
@@ -255,7 +257,7 @@ func TestListSortedByName(t *testing.T) {
 // Store.Save edge cases
 
 func TestSaveEmptyName(t *testing.T) {
-	s := Store{Dir: t.TempDir()}
+	s := Store{Dir: testenv.TempDir(t)}
 	_, err := s.Save(Memory{Name: "", Description: "d", Body: "b"})
 	if err == nil {
 		t.Fatal("expected error for empty name")
@@ -263,7 +265,7 @@ func TestSaveEmptyName(t *testing.T) {
 }
 
 func TestSaveCreatesDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	s := Store{Dir: filepath.Join(dir, "deep", "nested", "memory")}
 	_, err := s.Save(Memory{Name: "test", Description: "d", Body: "b"})
 	if err != nil {
@@ -277,7 +279,7 @@ func TestSaveCreatesDir(t *testing.T) {
 // Store.Path
 
 func TestStorePath(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "memory")
+	dir := filepath.Join(testenv.TempDir(t), "memory")
 	s := Store{Dir: dir}
 	got := s.Path("My Fact")
 	if want := filepath.Join(dir, "my-fact.md"); got != want {

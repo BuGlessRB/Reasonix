@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"reasonix/internal/fileutil"
+	"reasonix/internal/testenv"
 )
 
 func TestWorkspaceVCSFindsRepositoryFromSubdirectory(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -25,7 +26,7 @@ func TestWorkspaceVCSFindsRepositoryFromSubdirectory(t *testing.T) {
 
 // A worktree's .git is a file, not a directory, and it is still a repository.
 func TestWorkspaceVCSAcceptsWorktreeMarkerFile(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, ".git"), []byte("gitdir: /elsewhere\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -36,7 +37,7 @@ func TestWorkspaceVCSAcceptsWorktreeMarkerFile(t *testing.T) {
 
 func TestWorkspaceVCSReportsNoneOutsideARepository(t *testing.T) {
 	// t.TempDir sits under the OS temp root, which is not itself a repository.
-	if got := WorkspaceVCS(t.TempDir()); got != "" {
+	if got := WorkspaceVCS(testenv.TempDir(t)); got != "" {
 		t.Fatalf("WorkspaceVCS = %q, want none", got)
 	}
 }
@@ -54,7 +55,7 @@ func TestFormatSectionStatesVersionControlEitherWay(t *testing.T) {
 // workspace can be found under — not git alone.
 func TestWorkspaceVCSNamesEveryDeclaredStore(t *testing.T) {
 	for _, store := range fileutil.VCSStores() {
-		root := t.TempDir()
+		root := testenv.TempDir(t)
 		if err := os.MkdirAll(filepath.Join(root, store.Dir), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
@@ -67,7 +68,7 @@ func TestWorkspaceVCSNamesEveryDeclaredStore(t *testing.T) {
 // A jj repo colocated with git keeps both stores. Probe order settles it, and
 // the one the user drives is the one a plain git checkout does not have.
 func TestWorkspaceVCSPrefersJJInAColocatedRepository(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	for _, dir := range []string{".git", ".jj"} {
 		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)

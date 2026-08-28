@@ -10,10 +10,11 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/serve"
+	"reasonix/internal/testenv"
 )
 
 func TestRemoteServeBrowserURLUsesFragmentForCurrentServe(t *testing.T) {
-	ctrl := control.New(control.Options{SessionDir: t.TempDir()})
+	ctrl := control.New(control.Options{SessionDir: testenv.TempDir(t)})
 	t.Cleanup(ctrl.Close)
 	srv := serve.New(ctrl, serve.NewBroadcaster(), config.ServeConfig{AuthMode: "token", Token: "current secret/+"})
 	ts := httptest.NewServer(srv.Handler())

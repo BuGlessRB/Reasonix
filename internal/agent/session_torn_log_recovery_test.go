@@ -7,6 +7,7 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // tearEventLogTail is what an unclean exit leaves behind: the last record never
@@ -43,7 +44,7 @@ func sessionUserTexts(msgs []provider.Message) []string {
 func TestTornEventLogKeepsTheTurnsTheCheckpointStillHolds(t *testing.T) {
 	for _, tear := range []int{5, 20, 100} {
 		t.Run("", func(t *testing.T) {
-			dir := t.TempDir()
+			dir := testenv.TempDir(t)
 			path := filepath.Join(dir, "session.jsonl")
 			live := NewSession("sys")
 			live.Add(provider.Message{Role: provider.RoleUser, Content: "第一句话", RawContent: "第一句话"})
@@ -76,7 +77,7 @@ func TestTornEventLogKeepsTheTurnsTheCheckpointStillHolds(t *testing.T) {
 // contradicts it — another writer's file, a restored backup — is not a longer
 // version of this transcript and must not be adopted as one.
 func TestTornEventLogRefusesACheckpointThatContradictsIt(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	live := NewSession("sys")
 	live.Add(provider.Message{Role: provider.RoleUser, Content: "第一句话", RawContent: "第一句话"})
@@ -113,7 +114,7 @@ func TestTornEventLogRefusesACheckpointThatContradictsIt(t *testing.T) {
 // A shorter checkpoint is a read model that has not caught up, never a longer
 // history: adopting it would drop the turns the log still replays.
 func TestTornEventLogRefusesAShorterCheckpoint(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	live := NewSession("sys")
 	live.Add(provider.Message{Role: provider.RoleUser, Content: "第一句话", RawContent: "第一句话"})
@@ -144,7 +145,7 @@ func TestTornEventLogRefusesAShorterCheckpoint(t *testing.T) {
 // that on open is only half the job: the turn has to survive the next save,
 // which rewrites the log from what was opened.
 func TestHealedTornLogSurvivesTheNextSave(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	live := NewSession("sys")
 	live.Add(provider.Message{Role: provider.RoleUser, Content: "第一句话", RawContent: "第一句话"})

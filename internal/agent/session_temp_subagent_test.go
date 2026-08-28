@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"reasonix/internal/sessiontemp"
+	"reasonix/internal/testenv"
 )
 
 func TestWithSubagentSessionTempIsIndependent(t *testing.T) {
-	parent := sessiontemp.NewWithRoot(t.TempDir())
+	parent := sessiontemp.NewWithRoot(testenv.TempDir(t))
 	parent.Retain()
 	defer parent.Release()
 	parentLease, err := parent.Acquire()

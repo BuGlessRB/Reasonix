@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestExpandPastedBlocksImage(t *testing.T) {
@@ -217,7 +218,7 @@ func TestDisplayLineForImageRefs(t *testing.T) {
 }
 
 func TestPastedFileRef(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	pdf := filepath.Join(dir, "report.pdf")
 	if err := os.WriteFile(pdf, []byte("%PDF-1.4 fake"), 0o644); err != nil {
 		t.Fatal(err)
@@ -244,7 +245,7 @@ func TestPastedFileRefShellEscapedSpaces(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX shell-escaped paths are not decoded on Windows")
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "Application Support", "report 2026.pdf")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -346,7 +347,7 @@ func TestPasteShellEscapedImagePathInsertsImageToken(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX shell-escaped paths are not decoded on Windows")
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Chdir(root)
 	path := filepath.Join(root, "Library", "Application Support", "CleanShot", "CleanShot 2026-07-06 at 11.33.14@2x.png")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -379,7 +380,7 @@ func TestPasteShellEscapedImagePathWithoutWhitespaceInsertsImageToken(t *testing
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX shell-escaped paths are not decoded on Windows")
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Chdir(root)
 	path := filepath.Join(root, "capture^(1),x.png")
 	raw, err := base64.StdEncoding.DecodeString(tinyPNGBase64)
@@ -407,7 +408,7 @@ func TestPasteMultipleShellEscapedImagePathsInsertsImageTokens(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX shell-escaped paths are not decoded on Windows")
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Chdir(root)
 	raw, err := base64.StdEncoding.DecodeString(tinyPNGBase64)
 	if err != nil {

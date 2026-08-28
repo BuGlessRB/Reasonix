@@ -10,11 +10,12 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func stateHome(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_STATE_HOME", "")
 	t.Setenv("REASONIX_CACHE_HOME", "")
@@ -35,7 +36,7 @@ func seedState(t *testing.T, home string) {
 func TestMoveCopiesVerifiesCommitsAndReclaims(t *testing.T) {
 	home := stateHome(t)
 	seedState(t, home)
-	target := filepath.Join(t.TempDir(), "moved")
+	target := filepath.Join(testenv.TempDir(t), "moved")
 
 	plan := PlanMove(t.Context(), config.RootState, target)
 	if !plan.OK() {
@@ -69,7 +70,7 @@ func TestMoveCopiesVerifiesCommitsAndReclaims(t *testing.T) {
 func TestCancelBeforeCommitChangesNothing(t *testing.T) {
 	home := stateHome(t)
 	seedState(t, home)
-	target := filepath.Join(t.TempDir(), "moved")
+	target := filepath.Join(testenv.TempDir(t), "moved")
 
 	plan := PlanMove(t.Context(), config.RootState, target)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -96,7 +97,7 @@ func TestCancelBeforeCommitChangesNothing(t *testing.T) {
 func TestOnlyAJournalledMoveMayResumeIntoAStrangersFolder(t *testing.T) {
 	home := stateHome(t)
 	seedState(t, home)
-	target := filepath.Join(t.TempDir(), "moved")
+	target := filepath.Join(testenv.TempDir(t), "moved")
 	write(t, filepath.Join(target, "tax-returns", "2025.pdf"), 4096)
 
 	plan := PlanMove(t.Context(), config.RootState, target)
@@ -137,7 +138,7 @@ func TestMovingASharedRootLeavesItsNeighbourAlone(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".env"), []byte("KEY=secret\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	target := filepath.Join(t.TempDir(), "moved")
+	target := filepath.Join(testenv.TempDir(t), "moved")
 
 	plan := PlanMove(t.Context(), config.RootState, target)
 	if err := Move(t.Context(), plan, nil); err != nil {
@@ -190,7 +191,7 @@ func TestPreflightReportsEveryReasonItCanSee(t *testing.T) {
 func TestPreflightRefusesTheImmovableRoots(t *testing.T) {
 	stateHome(t)
 	for _, id := range []config.RootID{config.RootHome, config.RootLocks} {
-		plan := PlanMove(t.Context(), id, t.TempDir())
+		plan := PlanMove(t.Context(), id, testenv.TempDir(t))
 		if plan.OK() {
 			t.Fatalf("%s was allowed to move", id)
 		}
@@ -204,8 +205,8 @@ func TestPreflightRefusesTheImmovableRoots(t *testing.T) {
 // accepted into a configuration the environment would then override.
 func TestPreflightNamesTheVariableThatPinsARoot(t *testing.T) {
 	stateHome(t)
-	t.Setenv("REASONIX_STATE_HOME", t.TempDir())
-	plan := PlanMove(t.Context(), config.RootState, t.TempDir())
+	t.Setenv("REASONIX_STATE_HOME", testenv.TempDir(t))
+	plan := PlanMove(t.Context(), config.RootState, testenv.TempDir(t))
 	if plan.OK() {
 		t.Fatal("a pinned root was allowed to move")
 	}
@@ -220,7 +221,7 @@ func TestPreflightNamesTheVariableThatPinsARoot(t *testing.T) {
 func TestJournalIsClearedOnlyWhenTheMoveIsDone(t *testing.T) {
 	home := stateHome(t)
 	seedState(t, home)
-	target := filepath.Join(t.TempDir(), "moved")
+	target := filepath.Join(testenv.TempDir(t), "moved")
 
 	if _, pending := PendingMove(); pending {
 		t.Fatal("a fresh home reports a pending move")

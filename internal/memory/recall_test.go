@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestRecallToolSearchesSavedMemories(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	saveMemory(t, store, Memory{
 		Name:        "cache-first-history",
 		Title:       "Cache first history",
@@ -44,7 +46,7 @@ func TestRecallToolSearchesSavedMemories(t *testing.T) {
 }
 
 func TestRecallToolSchemaIsCacheStable(t *testing.T) {
-	tl := NewRecallTool(Store{Dir: t.TempDir()})
+	tl := NewRecallTool(Store{Dir: testenv.TempDir(t)})
 	if got, want := tl.Description(), "Search, list, and read saved background memories for this project, including explicitly global facts. Use this before saving a new memory to avoid duplicates, and when a saved memory from the index looks relevant but needs its full body. This tool is read-only; use remember to save or update a memory, and forget to archive one."; got != want {
 		t.Fatalf("memory description changed; this is provider-visible and affects prompt-cache shape.\nwant: %q\n got: %q", want, got)
 	}
@@ -66,7 +68,7 @@ func TestRecallToolSchemaIsCacheStable(t *testing.T) {
 }
 
 func TestRecallToolDropsCommonWordNoise(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	saveMemory(t, store, Memory{
 		Name:        "rare-cache-rule",
 		Description: "Rare synthesis-cache rule",
@@ -95,7 +97,7 @@ func TestRecallToolDropsCommonWordNoise(t *testing.T) {
 }
 
 func TestRecallToolNoResultsGuidesFallbackSearches(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	out, err := NewRecallTool(store).Execute(context.Background(), []byte(`{"operation":"search","query":"postgres://host:5433"}`))
 	if err != nil {
 		t.Fatalf("Execute search: %v", err)
@@ -108,7 +110,7 @@ func TestRecallToolNoResultsGuidesFallbackSearches(t *testing.T) {
 }
 
 func TestRecallToolExcludesArchivedMemories(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	saveMemory(t, store, Memory{
 		Name:        "stale-synthesis-cache",
 		Description: "Stale synthesis-cache conclusion",
@@ -138,7 +140,7 @@ func TestRecallToolExcludesArchivedMemories(t *testing.T) {
 }
 
 func TestRecallToolReadsMemoryByName(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	saveMemory(t, store, Memory{
 		Name:        "user-prefers-tabs",
 		Title:       "Prefers tabs",
@@ -159,7 +161,7 @@ func TestRecallToolReadsMemoryByName(t *testing.T) {
 }
 
 func TestRecallToolReadsMemoryByListedMarkdownName(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	saveMemory(t, store, Memory{
 		Name:        "listed-memory",
 		Description: "Listed memory reference",
@@ -177,7 +179,7 @@ func TestRecallToolReadsMemoryByListedMarkdownName(t *testing.T) {
 }
 
 func TestRecallToolOutputsUseStableReferences(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: root + "/project", GlobalDir: root + "/global"}
 	saveMemory(t, store, Memory{
 		Name:        "private-store-path",
@@ -207,7 +209,7 @@ func TestRecallToolOutputsUseStableReferences(t *testing.T) {
 }
 
 func TestRecallToolStableReferencesDisambiguateSameNameAcrossScopes(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: root + "/project", GlobalDir: root + "/global"}
 	for _, fixture := range []struct {
 		ref  string
@@ -256,7 +258,7 @@ func TestRecallToolStableReferencesDisambiguateSameNameAcrossScopes(t *testing.T
 }
 
 func TestRecallToolListsAndFiltersByType(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	saveMemory(t, store, Memory{Name: "one", Description: "project fact", Type: TypeProject, Body: "body"})
 	saveMemory(t, store, Memory{Name: "two", Description: "user fact", Type: TypeUser, Body: "body"})
 
@@ -270,7 +272,7 @@ func TestRecallToolListsAndFiltersByType(t *testing.T) {
 }
 
 func TestRecallToolReadsMemoryByStableID(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	result, err := store.SaveWithOptions(Memory{Name: "rename-safe", Description: "stable identity", Body: "body"}, SaveOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -285,7 +287,7 @@ func TestRecallToolReadsMemoryByStableID(t *testing.T) {
 }
 
 func TestRecallToolListsAndFiltersByScope(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: root + "/project", GlobalDir: root + "/global"}
 	saveMemory(t, store, Memory{Name: "local-user", Description: "project user fact", Type: TypeUser, Scope: FactScopeProject, Body: "body"})
 	saveMemory(t, store, Memory{Name: "global-user", Description: "global user fact", Type: TypeUser, Scope: FactScopeGlobal, Body: "body"})
@@ -300,7 +302,7 @@ func TestRecallToolListsAndFiltersByScope(t *testing.T) {
 }
 
 func TestRecallToolValidatesInputs(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	tl := NewRecallTool(store)
 	if _, err := tl.Execute(context.Background(), []byte(`{"operation":"search"}`)); err == nil {
 		t.Fatal("search without query should fail")

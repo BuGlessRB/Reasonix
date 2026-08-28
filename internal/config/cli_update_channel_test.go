@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestCLIUpdateChannelDefaultsAndValidation(t *testing.T) {
@@ -28,8 +30,8 @@ func TestCLIUpdateChannelDefaultsAndValidation(t *testing.T) {
 }
 
 func TestCLIUpdateChannelIsUserGlobal(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[cli]\nupdate_channel = \"preview\"\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -47,8 +49,8 @@ func TestCLIUpdateChannelIsUserGlobal(t *testing.T) {
 }
 
 func TestProjectCannotOptOldConfigIntoCLIPreview(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[ui]\ntheme = \"auto\"\n"), 0o600); err != nil {
 		t.Fatal(err)

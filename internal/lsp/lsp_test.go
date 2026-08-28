@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestDefaultSpecsInvariants(t *testing.T) {
@@ -31,7 +33,7 @@ func TestDefaultSpecsInvariants(t *testing.T) {
 }
 
 func TestExtensionRouting(t *testing.T) {
-	m := NewManager(t.TempDir(), map[string]ServerSpec{
+	m := NewManager(testenv.TempDir(t), map[string]ServerSpec{
 		"elixir": {Command: "no-such-elixir-ls-xyz", LanguageID: "elixir", Extensions: []string{".ex", ".exs"}, InstallHint: "mix archive.install"},
 	})
 	defer m.Close()

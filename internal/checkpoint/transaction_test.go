@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"reasonix/internal/diff"
+	"reasonix/internal/testenv"
 )
 
 type recordingConversationApplier struct {
@@ -38,7 +39,7 @@ func (a *recordingConversationApplier) RestoreCheckpoints(backup []byte) error {
 }
 
 func TestRestoreCodeAllOrNothingOnMidPublishFailure(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := filepath.Join(root, "a.txt")
 	b := filepath.Join(root, "b.txt")
 	write(t, a, "a0")
@@ -79,8 +80,8 @@ func TestRestoreCodeAllOrNothingOnMidPublishFailure(t *testing.T) {
 }
 
 func TestRecoverCommittingTransaction(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "v0")
 
@@ -128,8 +129,8 @@ func TestRecoverCommittingTransaction(t *testing.T) {
 }
 
 func TestRecoverCrashAfterPublishBeforeProgressPersistence(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "before")
 	s := New(dir, root)
@@ -156,8 +157,8 @@ func TestRecoverCrashAfterPublishBeforeProgressPersistence(t *testing.T) {
 }
 
 func TestRecoverCrashAfterConversationRestoresBothSidesBeforeFileCompensation(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "before")
 	s := New(dir, root)
@@ -222,7 +223,7 @@ func planTransactionID(t *testing.T, dir string) string {
 }
 
 func TestBackgroundWriterStartingAfterPreviewBlocksCommit(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "before")
 	s := New("", root)
@@ -256,8 +257,8 @@ func TestBackgroundWriterStartingAfterPreviewBlocksCommit(t *testing.T) {
 }
 
 func TestCaptureRejectsAncestorSymlink(t *testing.T) {
-	root := t.TempDir()
-	outside := t.TempDir()
+	root := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	write(t, filepath.Join(outside, "secret.txt"), "secret")
 	if err := os.Symlink(outside, filepath.Join(root, "link")); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
@@ -269,8 +270,8 @@ func TestCaptureRejectsAncestorSymlink(t *testing.T) {
 }
 
 func TestPublishRejectsAncestorSwappedToSymlink(t *testing.T) {
-	root := t.TempDir()
-	out := t.TempDir()
+	root := testenv.TempDir(t)
+	out := testenv.TempDir(t)
 	dir := filepath.Join(root, "dir")
 	target := filepath.Join(dir, "a.txt")
 	write(t, target, "inside")
@@ -300,7 +301,7 @@ func TestPublishRejectsAncestorSwappedToSymlink(t *testing.T) {
 }
 
 func TestFileRevertRejectsStalePreviewEvenWithOldOverwriteApproval(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "before")
 	s := New("", root)
@@ -335,7 +336,7 @@ func TestFileRevertRejectsStalePreviewEvenWithOldOverwriteApproval(t *testing.T)
 }
 
 func TestUndoRestoresEmptyForwardFile(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "before")
 	s := New("", root)
@@ -361,7 +362,7 @@ func TestUndoRestoresEmptyForwardFile(t *testing.T) {
 }
 
 func TestPrecheckDetectsManualEdit(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "v0")
 	s := New("", root)
@@ -390,8 +391,8 @@ func TestPrecheckDetectsManualEdit(t *testing.T) {
 }
 
 func TestTransactionCrashRecoveryPreparedIsAbandoned(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	s := New(dir, root)
 	tx := &TransactionManifest{
 		SchemaVersion: SchemaV2,
@@ -414,7 +415,7 @@ func TestTransactionCrashRecoveryPreparedIsAbandoned(t *testing.T) {
 }
 
 func TestCompensationRecoversCrashBetweenBackupAndPublishRenames(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	target := filepath.Join(root, "a.txt")
 	write(t, target, "forward")
 	info, err := os.Stat(target)
@@ -447,8 +448,8 @@ func TestCompensationRecoversCrashBetweenBackupAndPublishRenames(t *testing.T) {
 }
 
 func TestLegacyFileRevertIsRefusedWithoutOwnershipFingerprint(t *testing.T) {
-	root := t.TempDir()
-	dir := t.TempDir()
+	root := testenv.TempDir(t)
+	dir := testenv.TempDir(t)
 	path := filepath.Join(root, "a.txt")
 	write(t, path, "manual")
 	before := "before"
@@ -478,7 +479,7 @@ func TestLegacyFileRevertIsRefusedWithoutOwnershipFingerprint(t *testing.T) {
 }
 
 func TestFileRevertRequiresLatestOwnershipFingerprint(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "a.txt")
 	write(t, path, "before")
 	store := New("", root)
@@ -510,7 +511,7 @@ func TestFileRevertRequiresLatestOwnershipFingerprint(t *testing.T) {
 }
 
 func TestUndoRejectsPermissionOnlyChange(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "a.txt")
 	write(t, path, "before")
 	store := New("", root)
@@ -558,7 +559,7 @@ func TestUndoRejectsPermissionOnlyChange(t *testing.T) {
 }
 
 func TestRewindDeduplicatesEquivalentPathForms(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "a.txt")
 	write(t, path, "before")
 	store := New("", root)
@@ -606,7 +607,7 @@ func (a *failCheckpointRestoreApplier) RestoreCheckpoints(_ []byte) error {
 }
 
 func TestUndoCheckpointRestoreFailureRestoresOriginalRewind(t *testing.T) {
-	store := New("", t.TempDir())
+	store := New("", testenv.TempDir(t))
 	applier := &failCheckpointRestoreApplier{conversation: "rewound"}
 	original := &TransactionManifest{
 		ID: "original", State: TxCommitted, Kind: "rewind", Scope: RewindBoth,
@@ -627,7 +628,7 @@ func TestUndoCheckpointRestoreFailureRestoresOriginalRewind(t *testing.T) {
 }
 
 func TestFailedFileCompensationRemainsRecoverable(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	target := filepath.Join(root, "a.txt")
 	write(t, target, "external")
 	tx := &TransactionManifest{

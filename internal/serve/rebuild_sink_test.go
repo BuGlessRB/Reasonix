@@ -8,6 +8,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 )
 
 type countingSink struct {
@@ -22,7 +23,7 @@ func (c *countingSink) Emit(e event.Event) {
 
 func serverWithDecoratedPane(t *testing.T) (*Server, *countingSink) {
 	t.Helper()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	ctrl := control.New(control.Options{WorkspaceRoot: root, SessionDir: filepath.Join(root, "sessions")})
 	t.Cleanup(ctrl.Close)
 	bc := NewBroadcaster()
@@ -46,7 +47,7 @@ func TestRebuiltRuntimesKeepThePaneDecoration(t *testing.T) {
 			return s.rebuildOptions(s.Controller(), "deepseek/deepseek-v4")
 		}},
 		{"workspace switch", func(t *testing.T, s *Server) boot.Options {
-			return s.workspaceOptions(t.TempDir(), "deepseek/deepseek-v4")
+			return s.workspaceOptions(testenv.TempDir(t), "deepseek/deepseek-v4")
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -61,7 +62,7 @@ func TestRebuiltRuntimesKeepThePaneDecoration(t *testing.T) {
 
 // A host that decorated nothing is served by the broadcaster itself.
 func TestRebuildFallsBackToTheBroadcaster(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	ctrl := control.New(control.Options{WorkspaceRoot: root, SessionDir: filepath.Join(root, "sessions")})
 	defer ctrl.Close()
 	bc := NewBroadcaster()

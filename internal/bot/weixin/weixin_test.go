@@ -14,6 +14,7 @@ import (
 
 	"reasonix/internal/bot"
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestStartReturnsMissingToken(t *testing.T) {
@@ -87,7 +88,7 @@ func TestSendTextPostsIlinkMessage(t *testing.T) {
 
 func isolateWeixinUserConfig(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))

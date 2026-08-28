@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestDoctorCommandPrintsJSON(t *testing.T) {
@@ -40,9 +41,9 @@ func TestRunDispatchesDoctor(t *testing.T) {
 }
 
 func TestDefaultSessionCatalogTargetsIncludeDesktopProjects(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	projectRoot := filepath.Join(t.TempDir(), "project")
+	projectRoot := filepath.Join(testenv.TempDir(t), "project")
 	projects := `{"projects":[{"root":` + strconv.Quote(projectRoot) + `}]}`
 	if err := os.WriteFile(filepath.Join(home, "desktop-projects.json"), []byte(projects), 0o600); err != nil {
 		t.Fatal(err)
@@ -67,7 +68,7 @@ func TestDefaultSessionCatalogTargetsIncludeDesktopProjects(t *testing.T) {
 }
 
 func TestDoctorSessionCommandWritesBundle(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	sessionDir := filepath.Join(home, "sessions")
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
@@ -76,7 +77,7 @@ func TestDoctorSessionCommandWritesBundle(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(sessionDir, "abc.jsonl"), []byte(`{"role":"user","content":"hi"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	outPath := filepath.Join(t.TempDir(), "abc-diag.zip")
+	outPath := filepath.Join(testenv.TempDir(t), "abc-diag.zip")
 	out := captureStdout(t, func() {
 		if rc := doctorCommand([]string{"session", "abc", "--zip", "--out", outPath}, "test-version"); rc != 0 {
 			t.Fatalf("doctor session rc = %d, want 0", rc)
@@ -91,7 +92,7 @@ func TestDoctorSessionCommandWritesBundle(t *testing.T) {
 }
 
 func TestDoctorQualityCommandPrintsPublicSafeJSON(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	sessionDir := filepath.Join(home, "sessions")
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
@@ -141,7 +142,7 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 func TestDoctorSessionCommandOutEqualsForm(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	sessionDir := filepath.Join(home, "sessions")
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
@@ -150,7 +151,7 @@ func TestDoctorSessionCommandOutEqualsForm(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(sessionDir, "abc.jsonl"), []byte(`{"role":"user","content":"hi"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	outPath := filepath.Join(t.TempDir(), "abc-diag.zip")
+	outPath := filepath.Join(testenv.TempDir(t), "abc-diag.zip")
 	out := captureStdout(t, func() {
 		if rc := doctorCommand([]string{"session", "abc", "--out=" + outPath}, "test-version"); rc != 0 {
 			t.Fatalf("doctor session rc = %d, want 0", rc)
@@ -165,7 +166,7 @@ func TestDoctorSessionCommandOutEqualsForm(t *testing.T) {
 }
 
 func TestDoctorRedactSessionsCommand(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	const secret = "sensitive-value-that-must-not-leak"
 	path := filepath.Join(dir, "abc.jsonl")
 	if err := os.WriteFile(path, []byte(`{"role":"tool","content":"DEEPSEEK_API_KEY=`+secret+`"}`+"\n"), 0o644); err != nil {

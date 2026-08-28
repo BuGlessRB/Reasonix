@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 const extensionModelRef = "plugin/demo/cloud/extension-chat"
@@ -19,7 +20,7 @@ const extensionModelRef = "plugin/demo/cloud/extension-chat"
 // extension-hosted one, which is the pairing every plugin install produces.
 func newRoleServerWithExtensionModel(t *testing.T) *Server {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	configPath := config.UserConfigPath()
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
@@ -40,7 +41,7 @@ api_key = "k"
 	}
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{
-		Sink: bc, Label: "model-a", ModelRef: "existing/model-a", SessionDir: t.TempDir(),
+		Sink: bc, Label: "model-a", ModelRef: "existing/model-a", SessionDir: testenv.TempDir(t),
 		ProviderResolver: &provider.StaticResolver{Descriptors: []provider.Descriptor{{
 			Ref: extensionModelRef, Model: "extension-chat", DisplayName: "Extension Chat",
 		}}},

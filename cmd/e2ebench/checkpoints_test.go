@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func writeTaskVerify(t *testing.T, taskDir, script string) {
@@ -20,10 +22,10 @@ func writeTaskVerify(t *testing.T, taskDir, script string) {
 }
 
 func TestGradeCheckpointsFindsEarliestCorrectState(t *testing.T) {
-	taskDir := filepath.Join(t.TempDir(), "task")
+	taskDir := filepath.Join(testenv.TempDir(t), "task")
 	writeTaskVerify(t, taskDir, "#!/usr/bin/env bash\ngrep -q done answer.txt\n")
 
-	snaps := t.TempDir()
+	snaps := testenv.TempDir(t)
 	mk := func(seq int, elapsed int64, content string) checkpoint {
 		dir := filepath.Join(snaps, filepath.Base(strings.ReplaceAll(content, " ", "-"))+"-cp")
 		dir = filepath.Join(snaps, filepath.Base(dir)+"-"+strings.ReplaceAll(content, " ", "_"))
@@ -62,8 +64,8 @@ func TestGradeCheckpointsFindsEarliestCorrectState(t *testing.T) {
 }
 
 func TestSnapshotterCapturesWorkspaceChanges(t *testing.T) {
-	work := t.TempDir()
-	dst := t.TempDir()
+	work := testenv.TempDir(t)
+	dst := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(work, "code.py"), []byte("v1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +176,7 @@ func TestCorrectBoundaryMetrics(t *testing.T) {
 }
 
 func TestRoundsSplitAt(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "split.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "split.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		`{"seq":2,"ts":2000,"event":{"kind":"tool_dispatch","tool":{"id":"a","name":"write_file"}}}`,
@@ -254,9 +256,9 @@ func TestOverthinkingDamageRateInKPIAndCompare(t *testing.T) {
 }
 
 func TestFirstUsefulMutationApproximatesTTFUM(t *testing.T) {
-	seed := t.TempDir()
-	final := t.TempDir()
-	snaps := t.TempDir()
+	seed := testenv.TempDir(t)
+	final := testenv.TempDir(t)
+	snaps := testenv.TempDir(t)
 	write := func(dir, name, content string) {
 		t.Helper()
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {

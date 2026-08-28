@@ -24,6 +24,7 @@ import (
 	"reasonix/internal/notify"
 	"reasonix/internal/provider"
 	"reasonix/internal/telemetry"
+	"reasonix/internal/testenv"
 )
 
 func TestChdirTo(t *testing.T) {
@@ -39,7 +40,7 @@ func TestChdirTo(t *testing.T) {
 		t.Fatalf(`chdirTo("") moved cwd to %q`, cwd)
 	}
 
-	tmp := t.TempDir()
+	tmp := testenv.TempDir(t)
 	// Restore CWD before TempDir's RemoveAll runs (LIFO ordering): Windows can't
 	// delete a directory that is still the process working directory.
 	t.Cleanup(func() { _ = os.Chdir(orig) })
@@ -58,7 +59,7 @@ func TestChdirTo(t *testing.T) {
 }
 
 func TestModelForResumePathUsesStoredModelWhenAvailable(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	session := agent.NewSession("sys")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
@@ -92,7 +93,7 @@ func TestModelForResumePathUsesStoredModelWhenAvailable(t *testing.T) {
 }
 
 func TestLoadResumableSessionRejectsCleanupPending(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "pending.jsonl")
 	saveTestSession(t, path, "pending prompt")
 	if err := agent.MarkCleanupPending(path, "delete"); err != nil {
@@ -107,7 +108,7 @@ func TestLoadResumableSessionRejectsCleanupPending(t *testing.T) {
 func TestRunResumeRejectsCleanupPending(t *testing.T) {
 	isolateCLIConfigHome(t)
 
-	path := filepath.Join(t.TempDir(), "pending-run.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "pending-run.jsonl")
 	saveTestSession(t, path, "pending prompt")
 	if err := agent.MarkCleanupPending(path, "delete"); err != nil {
 		t.Fatal(err)
@@ -126,7 +127,7 @@ func TestRunResumeRejectsCleanupPending(t *testing.T) {
 func TestServeResumeRejectsCleanupPending(t *testing.T) {
 	isolateCLIConfigHome(t)
 
-	path := filepath.Join(t.TempDir(), "pending-serve.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "pending-serve.jsonl")
 	saveTestSession(t, path, "pending prompt")
 	if err := agent.MarkCleanupPending(path, "delete"); err != nil {
 		t.Fatal(err)
@@ -200,7 +201,7 @@ func mustGetwd(t *testing.T) string {
 
 func isolateCLIConfigHome(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	// Keep tests on the default-path code path while preventing a caller's
 	// higher-priority REASONIX_HOME from escaping this temporary home.
@@ -212,12 +213,12 @@ func isolateCLIConfigHome(t *testing.T) string {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	return home
 }
 
 func TestIsolateCLIConfigHomeOverridesExistingReasonixHome(t *testing.T) {
-	externalHome := t.TempDir()
+	externalHome := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", externalHome)
 
 	home := isolateCLIConfigHome(t)
@@ -1490,7 +1491,7 @@ func TestConfigureKeysAllSetDefaultsToReusingInput(t *testing.T) {
 // assignment wins, leaving stale keys hard to diagnose.
 func TestAppendEnvUpsertReplacesExistingKey(t *testing.T) {
 	t.Setenv("DEEPSEEK_API_KEY", "") // also covers the os.Setenv pin path
-	p := filepath.Join(t.TempDir(), ".env")
+	p := filepath.Join(testenv.TempDir(t), ".env")
 	os.WriteFile(p, []byte("# initial\nDEEPSEEK_API_KEY=stale\nMIMO_API_KEY=keepme\n"), 0o600)
 
 	if err := appendEnv(p, []string{"DEEPSEEK_API_KEY=fresh"}); err != nil {
@@ -1510,7 +1511,7 @@ func TestAppendEnvUpsertReplacesExistingKey(t *testing.T) {
 // also get replaced, since users might hand-edit .env in shell-friendly form.
 func TestAppendEnvUpsertHandlesExportPrefix(t *testing.T) {
 	t.Setenv("FOO", "")
-	p := filepath.Join(t.TempDir(), ".env")
+	p := filepath.Join(testenv.TempDir(t), ".env")
 	os.WriteFile(p, []byte("export FOO=old\nKEEP=yes\n"), 0o600)
 	if err := appendEnv(p, []string{"FOO=new"}); err != nil {
 		t.Fatalf("appendEnv: %v", err)
@@ -2151,7 +2152,7 @@ func groupByFamilyKeys(ps []config.ProviderEntry, key string) []int {
 }
 
 func TestWriteDefaultConfigOmitsLegacyInternalMCPSections(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(testenv.TempDir(t), "reasonix.toml")
 	if rc := writeDefaultConfig(path); rc != 0 {
 		t.Fatalf("writeDefaultConfig rc = %d", rc)
 	}

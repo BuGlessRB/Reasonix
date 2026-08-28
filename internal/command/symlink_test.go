@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestLoadFollowsSymlinks verifies command discovery follows symlinked
@@ -13,8 +15,8 @@ func TestLoadFollowsSymlinks(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation needs privilege on Windows")
 	}
-	cmdDir := t.TempDir()
-	target := t.TempDir()
+	cmdDir := testenv.TempDir(t)
+	target := testenv.TempDir(t)
 
 	// Real command files living outside the commands dir.
 	mustWrite(t, filepath.Join(target, "pkg", "deploy.md"), "---\ndescription: d\n---\nrun deploy")

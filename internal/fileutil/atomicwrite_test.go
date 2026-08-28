@@ -8,6 +8,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestReplaceFileNoRetryWhenTmpMissing(t *testing.T) {
@@ -15,7 +17,7 @@ func TestReplaceFileNoRetryWhenTmpMissing(t *testing.T) {
 	replaceRetryBase = 10 * time.Second
 	t.Cleanup(func() { replaceRetryBase = oldBase })
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	start := time.Now()
 	err := ReplaceFile(filepath.Join(dir, "missing.tmp"), filepath.Join(dir, "x.txt"))
 	if err == nil {
@@ -31,7 +33,7 @@ func TestReplaceFileRetriesThenReturnsError(t *testing.T) {
 	replaceRetryBase, maxReplaceRetries = 0, 3
 	t.Cleanup(func() { replaceRetryBase, maxReplaceRetries = oldBase, oldMax })
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	tmp := filepath.Join(dir, "x.tmp")
 	if err := os.WriteFile(tmp, []byte("payload"), 0o644); err != nil {
 		t.Fatal(err)
@@ -49,7 +51,7 @@ func TestReplaceFileRetriesThenReturnsError(t *testing.T) {
 }
 
 func TestReplaceFileRenamesInPlace(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	tmp := filepath.Join(dir, "x.tmp")
 	dest := filepath.Join(dir, "x.txt")
 	if err := os.WriteFile(tmp, []byte("hello"), 0o644); err != nil {
@@ -81,7 +83,7 @@ func TestReplaceFileTransientFailureNeverTruncatesDest(t *testing.T) {
 	}
 	t.Cleanup(func() { replaceRetryBase, maxReplaceRetries, renameFile = oldBase, oldMax, oldRename })
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	tmp := filepath.Join(dir, "x.tmp")
 	dest := filepath.Join(dir, "x.txt")
 	if err := os.WriteFile(tmp, []byte("new"), 0o644); err != nil {
@@ -118,7 +120,7 @@ func TestReplaceFileCrossDeviceCopiesImmediately(t *testing.T) {
 	}
 	t.Cleanup(func() { replaceRetryBase, maxReplaceRetries, renameFile = oldBase, oldMax, oldRename })
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	tmp := filepath.Join(dir, "x.tmp")
 	dest := filepath.Join(dir, "x.txt")
 	if err := os.WriteFile(tmp, []byte("new"), 0o644); err != nil {
@@ -153,7 +155,7 @@ func TestAtomicWriteFileStrictSyncsParentDir(t *testing.T) {
 	})
 	t.Cleanup(restore)
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	dest := filepath.Join(dir, "pointer.json")
 	if err := AtomicWriteFileStrict(dest, []byte(`{"ok":true}`), 0o644); err != nil {
 		t.Fatalf("AtomicWriteFileStrict: %v", err)
@@ -174,7 +176,7 @@ func TestAtomicWriteFileStrictDirSyncFailureStillPublishes(t *testing.T) {
 	})
 	t.Cleanup(restore)
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	dest := filepath.Join(dir, "pointer.json")
 	if err := os.WriteFile(dest, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
@@ -193,7 +195,7 @@ func TestAtomicWriteFileStrictSyncsRelativeParentDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +227,7 @@ func TestAtomicWriteFileDoesNotRequireParentDirSync(t *testing.T) {
 	})
 	t.Cleanup(restore)
 
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	if err := AtomicWriteFile(path, []byte("ok"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +240,7 @@ func TestAtomicWriteFileStrictCrossDeviceKeepsExistingDestination(t *testing.T) 
 	}
 	t.Cleanup(func() { renameFile = oldRename })
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	dest := filepath.Join(dir, "current.json")
 	if err := os.WriteFile(dest, []byte("old-pointer"), 0o644); err != nil {
 		t.Fatal(err)
@@ -259,7 +261,7 @@ func TestAtomicWriteFileStrictCrossDeviceKeepsExistingDestination(t *testing.T) 
 }
 
 func TestCopyOntoOverwritesAndPreservesMode(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	tmp := filepath.Join(dir, "x.tmp")
 	dest := filepath.Join(dir, "x.txt")
 	if err := os.WriteFile(tmp, []byte("new"), 0o600); err != nil {
@@ -284,7 +286,7 @@ func TestCopyOntoOverwritesAndPreservesMode(t *testing.T) {
 }
 
 func TestAtomicWriteFileReplacesExisting(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.toml")
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
@@ -316,7 +318,7 @@ func TestAtomicWriteFileReplacesExisting(t *testing.T) {
 }
 
 func TestAtomicWriteFileCreatesParentDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "nested", "deep", "creds")
 	if err := AtomicWriteFile(path, []byte("x"), 0o600); err != nil {
 		t.Fatalf("AtomicWriteFile into missing dir: %v", err)
@@ -327,7 +329,7 @@ func TestAtomicWriteFileCreatesParentDir(t *testing.T) {
 }
 
 func TestAtomicCreateFileNeverOverwritesExisting(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.toml")
 	if err := os.WriteFile(path, []byte("concurrent"), 0o600); err != nil {
 		t.Fatal(err)
@@ -348,7 +350,7 @@ func TestAtomicCreateFileNeverOverwritesExisting(t *testing.T) {
 }
 
 func TestAtomicCreateFilePublishesCompleteContent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "nested", "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "nested", "config.toml")
 	if err := AtomicCreateFile(path, []byte("confirmed"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +363,7 @@ func TestAtomicOverwriteFileKeepsExecutableBit(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("windows does not carry a POSIX executable bit")
 	}
-	path := filepath.Join(t.TempDir(), "build.sh")
+	path := filepath.Join(testenv.TempDir(t), "build.sh")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nold\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -378,7 +380,7 @@ func TestAtomicOverwriteFileKeepsExecutableBit(t *testing.T) {
 }
 
 func TestAtomicOverwriteFileWritesThroughSymlink(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "real.txt")
 	link := filepath.Join(dir, "link.txt")
 	if err := os.WriteFile(target, []byte("old"), 0o644); err != nil {
@@ -400,7 +402,7 @@ func TestAtomicOverwriteFileWritesThroughSymlink(t *testing.T) {
 }
 
 func TestAtomicOverwriteFileUsesDefaultPermForNewFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "fresh.txt")
+	path := filepath.Join(testenv.TempDir(t), "fresh.txt")
 	if err := AtomicOverwriteFile(path, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +423,7 @@ func TestClaimRenameNeverFallsBackToCopy(t *testing.T) {
 	replaceRetryBase, maxReplaceRetries = 0, 2
 	t.Cleanup(func() { replaceRetryBase, maxReplaceRetries = oldBase, oldMax })
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := filepath.Join(dir, "record.json")
 	if err := os.WriteFile(src, []byte("payload"), 0o644); err != nil {
 		t.Fatal(err)
@@ -448,7 +450,7 @@ func TestClaimRenameDoesNotRetryWhenSourceIsGone(t *testing.T) {
 	replaceRetryBase = 10 * time.Second
 	t.Cleanup(func() { replaceRetryBase = oldBase })
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	start := time.Now()
 	err := ClaimRename(filepath.Join(dir, "taken.json"), filepath.Join(dir, "taken.json.claimed"))
 	if err == nil {

@@ -8,6 +8,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // A delete that cannot finish must still be one act. Windows briefly refuses to
@@ -15,7 +16,7 @@ import (
 // transcript already erased. The stuck file is staged as a non-empty directory,
 // which os.Remove refuses everywhere, so reproducing it needs no Windows.
 func TestRemoveSessionFilesHidesSessionWhenAnArtifactIsHeld(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := agent.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "delete me"})
@@ -71,7 +72,7 @@ func TestRemoveSessionFilesHidesSessionWhenAnArtifactIsHeld(t *testing.T) {
 // Nothing may be erased when the delete is refused: the guard has to run before
 // the first os.Remove, not alongside it.
 func TestRemoveSessionFilesIsAllOrHidden(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := agent.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "keep me"})

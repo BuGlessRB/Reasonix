@@ -13,6 +13,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"reasonix/internal/remote/sshtest"
+	"reasonix/internal/testenv"
 )
 
 func dialFS(t *testing.T, root string) *FS {
@@ -45,7 +46,7 @@ func dialFS(t *testing.T, root string) *FS {
 }
 
 func TestSFTPListStatRead(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("hi there"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +91,7 @@ func TestSFTPListStatRead(t *testing.T) {
 // TestSFTPDownloadStreamsFullFile pins the fs-get fix: Download must return the
 // whole file, not the 4 MiB preview cap ReadFile enforces.
 func TestSFTPDownloadStreamsFullFile(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	big := strings.Repeat("x", (DefaultReadCap)+5000) // > preview cap
 	if err := os.WriteFile(filepath.Join(root, "big.bin"), []byte(big), 0o644); err != nil {
 		t.Fatal(err)
@@ -114,7 +115,7 @@ func TestSFTPDownloadStreamsFullFile(t *testing.T) {
 }
 
 func TestSFTPReadCapTruncates(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	big := strings.Repeat("a", 100)
 	if err := os.WriteFile(filepath.Join(root, "big.txt"), []byte(big), 0o644); err != nil {
 		t.Fatal(err)
@@ -130,7 +131,7 @@ func TestSFTPReadCapTruncates(t *testing.T) {
 }
 
 func TestSFTPWriteAtomicAndMkdirRenameRemove(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	fsys := dialFS(t, root)
 	ctx := context.Background()
 

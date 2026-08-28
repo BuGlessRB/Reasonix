@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // splitFrontmatter
@@ -102,7 +104,7 @@ func TestRenderNoTokens(t *testing.T) {
 // Load edge cases
 
 func TestLoadEmptyDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	cmds, err := Load(dir)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -113,7 +115,7 @@ func TestLoadEmptyDir(t *testing.T) {
 }
 
 func TestLoadNestedSubdirs(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	write(t, dir, "a/b/c/deep.md", "---\ndescription: deep\n---\nDeep command.")
 	cmds, err := Load(dir)
 	if err != nil {
@@ -125,7 +127,7 @@ func TestLoadNestedSubdirs(t *testing.T) {
 }
 
 func TestLoadBOM(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	// Write a file with a UTF-8 BOM.
 	bom := string(rune(0xFEFF))
 	write(t, dir, "bom.md", bom+"---\ndescription: BOM test\n---\nBody with BOM.")
@@ -145,7 +147,7 @@ func TestLoadBOM(t *testing.T) {
 }
 
 func TestLoadMalformedFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	// A file that can't be read (directory with .md extension — won't happen in
 	// practice but tests the error path).
 	os.MkdirAll(filepath.Join(dir, "bad.md"), 0o755)
@@ -160,7 +162,7 @@ func TestLoadMalformedFile(t *testing.T) {
 }
 
 func TestLoadSortedByName(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	write(t, dir, "zebra.md", "Z")
 	write(t, dir, "alpha.md", "A")
 	write(t, dir, "middle.md", "M")

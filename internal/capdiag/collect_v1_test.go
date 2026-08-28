@@ -8,14 +8,15 @@ import (
 
 	"reasonix/internal/capdiag"
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 // TestPluginPackageV2FieldsAreReported pins the Manifest v2 additions to the
 // plugins report: prompts/themes counts and the runtime flag, in both the
 // JSON payload and the text renderer.
 func TestPluginPackageV2FieldsAreReported(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, ".reasonix")
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_HOME", reasonixHome)
@@ -73,8 +74,8 @@ func TestPluginPackageV2FieldsAreReported(t *testing.T) {
 // TestPluginPackageLegacyOmitsV1Fields pins the omitempty contract: legacy
 // packages produce no new JSON keys, so schema v1 consumers see no change.
 func TestPluginPackageLegacyOmitsV1Fields(t *testing.T) {
-	root := t.TempDir()
-	home := t.TempDir()
+	root := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, ".reasonix")
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_HOME", reasonixHome)

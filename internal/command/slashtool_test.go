@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func runSlash(t *testing.T, tl interface {
@@ -128,7 +130,7 @@ func TestSlashToolNameClashCommandWins(t *testing.T) {
 }
 
 func TestPluginSlashToolShowsOnlyCanonicalQualifiedName(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	write(t, dir, "plan.md", "---\ndescription: Plan work\n---\nPlan $ARGUMENTS")
 	plain, err := Load(dir)
 	if err != nil {

@@ -3,13 +3,15 @@ package config
 import (
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // render.go is hand-written, so a field it does not know about is dropped on
 // the next save. That is how an uploaded wallpaper landed on disk and then
 // disappeared from the config: the bytes were there, the reference was not.
 func TestAppearanceSurvivesSaveAndLoad(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	cfg := LoadForEdit(path)
 	cfg.Desktop.Appearance.Zoom = 1.2
 	cfg.Desktop.Appearance.ReadSize = 15

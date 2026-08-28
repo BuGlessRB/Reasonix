@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func write(t *testing.T, path string, size int) {
@@ -34,7 +35,7 @@ func find(t *testing.T, roots []Root, id config.RootID) Root {
 // package being told the set — that is what keeps a newly declared root from
 // silently going unaccounted for.
 func TestSurveyCoversEveryDeclaredRoot(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_STATE_HOME", "")
 	t.Setenv("REASONIX_CACHE_HOME", "")
@@ -51,7 +52,7 @@ func TestSurveyCoversEveryDeclaredRoot(t *testing.T) {
 // Bytes and files are counted, not estimated: the number is what a user decides
 // to delete on.
 func TestSurveyCountsWhatIsActuallyThere(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_STATE_HOME", "")
 
@@ -71,8 +72,8 @@ func TestSurveyCountsWhatIsActuallyThere(t *testing.T) {
 // A root nothing has written yet is not a failure. A fresh install has no
 // worktrees, and zero is the honest answer rather than an error.
 func TestNeverWrittenRootReportsMissingRatherThanFailing(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	t.Setenv("REASONIX_STATE_HOME", filepath.Join(t.TempDir(), "never-created"))
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	t.Setenv("REASONIX_STATE_HOME", filepath.Join(testenv.TempDir(t), "never-created"))
 
 	state := find(t, Survey(t.Context()), config.RootState)
 	if !state.Missing {
@@ -86,8 +87,8 @@ func TestNeverWrittenRootReportsMissingRatherThanFailing(t *testing.T) {
 // The survey carries whether a root may be moved and what pins it, so a
 // surface offering relocation never has to decide that for itself.
 func TestSurveyCarriesRelocationFacts(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	pinned := t.TempDir()
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	pinned := testenv.TempDir(t)
 	t.Setenv("REASONIX_STATE_HOME", pinned)
 
 	roots := Survey(t.Context())
@@ -104,7 +105,7 @@ func TestSurveyCarriesRelocationFacts(t *testing.T) {
 // Free space is what decides whether a move fits, so a surveyed root has to
 // carry the volume under it.
 func TestSurveyReadsTheVolumeUnderEachRoot(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_STATE_HOME", "")
 
 	state := find(t, Survey(t.Context()), config.RootState)
@@ -119,7 +120,7 @@ func TestSurveyReadsTheVolumeUnderEachRoot(t *testing.T) {
 // A cancelled survey stops where it is and says so, rather than running a walk
 // nobody is waiting for any more.
 func TestCancelledSurveyStops(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_STATE_HOME", "")
 	write(t, filepath.Join(home, "sessions", "a.jsonl"), 10)

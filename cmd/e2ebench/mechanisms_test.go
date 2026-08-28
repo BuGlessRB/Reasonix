@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestRenderMechanismLedgerSplitsFiredVsQuiet(t *testing.T) {
@@ -41,7 +43,7 @@ func TestRenderMechanismLedgerSplitsFiredVsQuiet(t *testing.T) {
 }
 
 func TestSummarizeTrajectoryCollectsToolSurface(t *testing.T) {
-	path := t.TempDir() + "/surface.trajectory.jsonl"
+	path := testenv.TempDir(t) + "/surface.trajectory.jsonl"
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		`{"seq":2,"ts":1500,"event":{"kind":"usage","usage":{"source":"executor","promptTokens":14000,"cacheDiagnostics":{"toolSchemaTokens":2000,"prefixChanged":false}}}}`,
@@ -113,7 +115,7 @@ func TestRenderToolSurfaceLine(t *testing.T) {
 }
 
 func TestSummarizeTrajectorySplitsRecoveryGapByKind(t *testing.T) {
-	path := t.TempDir() + "/kinds.trajectory.jsonl"
+	path := testenv.TempDir(t) + "/kinds.trajectory.jsonl"
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		`{"seq":2,"ts":2000,"event":{"kind":"retrying","retryScope":"stream"}}`,
@@ -194,7 +196,7 @@ func TestRenderCompletionReportPricesOverclaim(t *testing.T) {
 }
 
 func TestSummarizeTrajectoryReadsCompletionReport(t *testing.T) {
-	path := t.TempDir() + "/completion.trajectory.jsonl"
+	path := testenv.TempDir(t) + "/completion.trajectory.jsonl"
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		`{"seq":2,"ts":2000,"completion_report":{"verdict":"partial","gaps":1,"gap_kinds":["unreviewed_change"]}}`,
@@ -213,7 +215,7 @@ func TestSummarizeTrajectoryReadsCompletionReport(t *testing.T) {
 }
 
 func TestSummarizeTrajectoryReadsContractShadow(t *testing.T) {
-	path := t.TempDir() + "/shadow.trajectory.jsonl"
+	path := testenv.TempDir(t) + "/shadow.trajectory.jsonl"
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		`{"seq":2,"ts":2000,"contract_shadow":{"intent":"mutation","verdict":"complete","complete":true}}`,

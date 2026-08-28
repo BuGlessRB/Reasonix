@@ -7,30 +7,42 @@ import "sync"
 type Audit struct {
 	mu sync.Mutex
 
-	Routes                 int
-	RoutedCandidates       int
-	RoutedRequire          int
-	RoutedPrefer           int
-	RoutedSuggest          int
-	Declines               int
-	SemanticRoutes         int
-	SemanticFallbacks      int
-	RequireMissing         int
-	RequireRecovered       int
-	PreferMissing          int
-	PreferRecovered        int
-	SkillInvocations       int
-	SkillFailures          int
-	SkillUnavailable       int
-	MCPInspect             int
-	MCPCall                int
-	MCPCallFailures        int
-	ReviewBlocks           int
-	SecurityReviewBlocks   int
-	RouterPromptTokens     int
-	RouterCompletionTokens int
-	RouterCost             float64
-	RouterLatencyMs        int64
+	Routes               int
+	RoutedCandidates     int
+	RoutedRequire        int
+	RoutedPrefer         int
+	RoutedSuggest        int
+	Declines             int
+	RequireMissing       int
+	RequireRecovered     int
+	PreferMissing        int
+	PreferRecovered      int
+	SkillInvocations     int
+	SkillFailures        int
+	SkillUnavailable     int
+	MCPInspect           int
+	MCPCall              int
+	MCPCallFailures      int
+	ReviewBlocks         int
+	SecurityReviewBlocks int
+	// Router is everything the semantic router itself accrued. The counters
+	// share one lifetime and one subject, and nothing outside the router
+	// writes them.
+	Router RouterAudit
+}
+
+// RouterAudit accumulates the semantic router's own funnel and spend.
+type RouterAudit struct {
+	SemanticRoutes    int
+	SemanticFallbacks int
+	// CandidatesDropped counts entries the router never saw because the
+	// candidate cap bound. A pool judged in full and a slice of one are
+	// different answers, and only this tells them apart.
+	CandidatesDropped int
+	PromptTokens      int
+	CompletionTokens  int
+	Cost              float64
+	LatencyMs         int64
 }
 
 // RecordDecision captures the route-to-invocation funnel before the model acts.
@@ -72,10 +84,10 @@ func (a *Audit) RecordRoute(semantic, fallback bool) {
 	defer a.mu.Unlock()
 	a.Routes++
 	if semantic {
-		a.SemanticRoutes++
+		a.Router.SemanticRoutes++
 	}
 	if fallback {
-		a.SemanticFallbacks++
+		a.Router.SemanticFallbacks++
 	}
 }
 
@@ -161,10 +173,20 @@ func (a *Audit) RecordRouterUsage(promptTokens, completionTokens int, cost float
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.RouterPromptTokens += promptTokens
-	a.RouterCompletionTokens += completionTokens
-	a.RouterCost += cost
-	a.RouterLatencyMs += latencyMs
+	a.Router.PromptTokens += promptTokens
+	a.Router.CompletionTokens += completionTokens
+	a.Router.Cost += cost
+	a.Router.LatencyMs += latencyMs
+}
+
+// RecordSemanticPoolTruncation records candidates the cap kept from the router.
+func (a *Audit) RecordSemanticPoolTruncation(dropped int) {
+	if a == nil || dropped <= 0 {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Router.CandidatesDropped += dropped
 }
 
 // RecordReviewBlock records blocking structured review outcomes.
@@ -189,29 +211,24 @@ func (a *Audit) Snapshot() Audit {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return Audit{
-		Routes:                 a.Routes,
-		RoutedCandidates:       a.RoutedCandidates,
-		RoutedRequire:          a.RoutedRequire,
-		RoutedPrefer:           a.RoutedPrefer,
-		RoutedSuggest:          a.RoutedSuggest,
-		Declines:               a.Declines,
-		SemanticRoutes:         a.SemanticRoutes,
-		SemanticFallbacks:      a.SemanticFallbacks,
-		RequireMissing:         a.RequireMissing,
-		RequireRecovered:       a.RequireRecovered,
-		PreferMissing:          a.PreferMissing,
-		PreferRecovered:        a.PreferRecovered,
-		SkillInvocations:       a.SkillInvocations,
-		SkillFailures:          a.SkillFailures,
-		SkillUnavailable:       a.SkillUnavailable,
-		MCPInspect:             a.MCPInspect,
-		MCPCall:                a.MCPCall,
-		MCPCallFailures:        a.MCPCallFailures,
-		ReviewBlocks:           a.ReviewBlocks,
-		SecurityReviewBlocks:   a.SecurityReviewBlocks,
-		RouterPromptTokens:     a.RouterPromptTokens,
-		RouterCompletionTokens: a.RouterCompletionTokens,
-		RouterCost:             a.RouterCost,
-		RouterLatencyMs:        a.RouterLatencyMs,
+		Routes:               a.Routes,
+		RoutedCandidates:     a.RoutedCandidates,
+		RoutedRequire:        a.RoutedRequire,
+		RoutedPrefer:         a.RoutedPrefer,
+		RoutedSuggest:        a.RoutedSuggest,
+		Declines:             a.Declines,
+		RequireMissing:       a.RequireMissing,
+		RequireRecovered:     a.RequireRecovered,
+		PreferMissing:        a.PreferMissing,
+		PreferRecovered:      a.PreferRecovered,
+		SkillInvocations:     a.SkillInvocations,
+		SkillFailures:        a.SkillFailures,
+		SkillUnavailable:     a.SkillUnavailable,
+		MCPInspect:           a.MCPInspect,
+		MCPCall:              a.MCPCall,
+		MCPCallFailures:      a.MCPCallFailures,
+		ReviewBlocks:         a.ReviewBlocks,
+		SecurityReviewBlocks: a.SecurityReviewBlocks,
+		Router:               a.Router,
 	}
 }

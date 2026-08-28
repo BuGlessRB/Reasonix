@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"unicode/utf8"
+
+	"reasonix/internal/testenv"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -20,7 +22,7 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
 func TestCapturePanicWritesBoundedSanitizedReport(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	secret := "private prompt contents"
 	apiKey := "sk-proj-abcdefghijklmnopqrstuvwxyz1234567890"
 	stack := "goroutine 7 [running]:\n" +
@@ -86,7 +88,7 @@ func TestCapturePanicWritesBoundedSanitizedReport(t *testing.T) {
 }
 
 func TestSendUsesSharedProtocolWithoutDeletingLocalReport(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	if err := CapturePanic(home, "v1.20.0", "boom", []byte("goroutine 1 [running]:\nreasonix.run()\n\t/home/alice/reasonix/main.go:12")); err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +127,7 @@ func TestSendUsesSharedProtocolWithoutDeletingLocalReport(t *testing.T) {
 }
 
 func TestLoadRejectsUnknownIDWithoutPathTraversal(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	if err := CapturePanic(home, "v1.20.0", "boom", []byte("stack")); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +137,7 @@ func TestLoadRejectsUnknownIDWithoutPathTraversal(t *testing.T) {
 }
 
 func TestConcurrentCaptureKeepsQueueBounded(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	const writers = 32
 	var wg sync.WaitGroup
 	start := make(chan struct{})
@@ -158,7 +160,7 @@ func TestConcurrentCaptureKeepsQueueBounded(t *testing.T) {
 }
 
 func TestCapturePanicPrunesOnlyCurrentReportFormat(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	dir := filepath.Join(home, dirName)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)

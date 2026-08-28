@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 // Runner construction
@@ -300,7 +302,7 @@ func TestRunnerSessionStartReturnsAdditionalContexts(t *testing.T) {
 }
 
 func TestRunnerSessionStartReadsContextFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	contextPath := filepath.Join(dir, "CLAUDE.md")
 	if err := os.WriteFile(contextPath, []byte("Use the packaged workflow."), 0o644); err != nil {
 		t.Fatal(err)

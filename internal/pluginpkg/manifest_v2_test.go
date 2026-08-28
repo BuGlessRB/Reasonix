@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestManifestV2RequiresProvides(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeV2Plugin(t, root, `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "deps",
@@ -45,7 +47,7 @@ func TestManifestV2RequiresProvides(t *testing.T) {
 }
 
 func TestManifestV2ProviderRequiresSchemaHash(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeV2Plugin(t, root, `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "bad",
@@ -60,7 +62,7 @@ func TestManifestV2ProviderRequiresSchemaHash(t *testing.T) {
 }
 
 func TestManifestV2LoadsOnlyExplicitlyDeclaredResources(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeV2Plugin(t, root, `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "explicit-only",
@@ -104,7 +106,7 @@ func TestManifestV2LoadsOnlyExplicitlyDeclaredResources(t *testing.T) {
 }
 
 func TestMigrateLegacyManifestToV2(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	legacy := `{
   "name": "oldplug",
   "version": "1.2.3",
@@ -147,7 +149,7 @@ func TestMigrateProvidersRequiresExplicitProvides(t *testing.T) {
 }
 
 func TestMigrateRejectsVersionedManifest(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeV2Plugin(t, root, `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "already-v2"

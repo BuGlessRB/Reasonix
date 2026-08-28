@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestFlattenPrompt(t *testing.T) {
@@ -276,7 +278,7 @@ func TestMcpSpecsRejectsUnsupportedTransport(t *testing.T) {
 // transcriptPath
 
 func TestTranscriptPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	got := transcriptPath(dir, "abc-123")
 	if want := filepath.Join(dir, "abc-123.jsonl"); got != want {
 		t.Errorf("transcriptPath = %q, want %q", got, want)

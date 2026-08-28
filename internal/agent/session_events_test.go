@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func sessionWithTurns(t *testing.T, path string, turns int) *Session {
@@ -27,7 +28,7 @@ func sessionWithTurns(t *testing.T, path string, turns int) *Session {
 }
 
 func TestLoadSessionToleratesTornEventLogTail(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := sessionWithTurns(t, path, 2)
 	want := len(s.Snapshot())
 
@@ -54,7 +55,7 @@ func TestLoadSessionToleratesTornEventLogTail(t *testing.T) {
 }
 
 func TestSaveSnapshotHealsTornEventLogTail(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	sessionWithTurns(t, path, 2)
 
 	logPath := store.SessionEventLog(path)
@@ -91,7 +92,7 @@ func TestSaveSnapshotHealsTornEventLogTail(t *testing.T) {
 }
 
 func TestLoadSessionIgnoresForeignEventLog(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	sessionWithTurns(t, path, 1)
 
 	// A file this build cannot own squats the native log path: undecodable
@@ -141,7 +142,7 @@ func TestSaveLeavesLegacyEventTranscriptUntouched(t *testing.T) {
 	// session is imported into — i.e. exactly at the native event-log path.
 	// The import must succeed, and the user's original file must survive
 	// byte-for-byte.
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "chat-1.jsonl")
 	legacy := `{"type":"user.message","id":1,"ts":"t","turn":0,"text":"hello from v0.x"}` + "\n" +
 		`{"type":"model.final","id":2,"ts":"t","turn":0,"content":"hi","toolCalls":[],"usage":{},"costUsd":0}` + "\n"
@@ -178,7 +179,7 @@ func TestSaveLeavesLegacyEventTranscriptUntouched(t *testing.T) {
 // an out-of-order record, the dual-writer shape — must be salvaged to the
 // .damaged sidecar instead of discarded forever.
 func TestRepairPreservesDamagedTailBytes(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	sessionWithTurns(t, path, 2)
 
 	logPath := store.SessionEventLog(path)
@@ -259,7 +260,7 @@ func TestRepairPreservesDamagedTailBytes(t *testing.T) {
 }
 
 func TestReplayStopsAtBrokenAppendChain(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	sessionWithTurns(t, path, 1)
 	logPath := store.SessionEventLog(path)
 	// Append an event whose MessageIndex does not chain onto the transcript.
@@ -287,7 +288,7 @@ func TestReplayStopsAtBrokenAppendChain(t *testing.T) {
 }
 
 func TestReplayRejectsUnsupportedSchemaVersion(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	logPath := filepath.Join(dir, "future.events.jsonl")
 	if err := os.WriteFile(logPath, []byte(`{"schema_version":99,"type":"replace","messages":[]}`+"\n"), 0o644); err != nil {
 		t.Fatalf("write future log: %v", err)
@@ -298,7 +299,7 @@ func TestReplayRejectsUnsupportedSchemaVersion(t *testing.T) {
 }
 
 func TestReplaySessionEventLogEnforcesResourceBudgetsWithoutMutation(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	logPath := filepath.Join(dir, "bounded.events.jsonl")
 	replace := `{"schema_version":1,"type":"replace","messages":[{"role":"system","content":"sys"},{"role":"user","content":"prompt"}]}` + "\n"
 	appendEvent := `{"schema_version":1,"type":"append","message_index":2,"messages":[{"role":"assistant","content":"reply"}]}` + "\n"
@@ -366,7 +367,7 @@ func TestReplaySessionEventLogEnforcesResourceBudgetsWithoutMutation(t *testing.
 }
 
 func TestReplayChecksMessageBudgetBeforeDecodingOverLimitElement(t *testing.T) {
-	logPath := filepath.Join(t.TempDir(), "bounded-before-decode.events.jsonl")
+	logPath := filepath.Join(testenv.TempDir(t), "bounded-before-decode.events.jsonl")
 	// The third element is valid JSON but cannot decode into provider.Message.
 	// A two-message budget must reject it before attempting that decode.
 	events := `{"schema_version":1,"type":"replace","messages":[{}, {}, 42]}` + "\n"
@@ -390,7 +391,7 @@ func TestReplayChecksMessageBudgetBeforeDecodingOverLimitElement(t *testing.T) {
 }
 
 func TestReplayChecksCollectionBudgetBeforeDecodingOverLimitElement(t *testing.T) {
-	logPath := filepath.Join(t.TempDir(), "bounded-collection-before-decode.events.jsonl")
+	logPath := filepath.Join(testenv.TempDir(t), "bounded-collection-before-decode.events.jsonl")
 	// The third tool call cannot decode into provider.ToolCall. A two-item
 	// collection budget must reject it before constructing the typed slice.
 	events := `{"schema_version":1,"type":"replace","messages":[{"role":"assistant","tool_calls":[{}, {}, 42]}]}` + "\n"
@@ -417,7 +418,7 @@ func TestReplayChecksCollectionBudgetBeforeDecodingOverLimitElement(t *testing.T
 }
 
 func TestReplayCollectionBudgetAggregatesAcrossRecords(t *testing.T) {
-	logPath := filepath.Join(t.TempDir(), "aggregate-collection-budget.events.jsonl")
+	logPath := filepath.Join(testenv.TempDir(t), "aggregate-collection-budget.events.jsonl")
 	replace := `{"schema_version":1,"type":"replace","messages":[{"role":"user","images":["one"]}]}` + "\n"
 	appendEvent := `{"schema_version":1,"type":"append","message_index":1,"messages":[{"role":"assistant","tool_calls":[{},{}]}]}` + "\n"
 	events := replace + appendEvent
@@ -442,7 +443,7 @@ func TestReplayCollectionBudgetAggregatesAcrossRecords(t *testing.T) {
 }
 
 func TestLoadSessionMessagesDoesNotFallbackAfterEventReplayBudget(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	checkpoint := `{"role":"system","content":"older checkpoint"}` + "\n"
 	if err := os.WriteFile(path, []byte(checkpoint), 0o600); err != nil {
 		t.Fatalf("write checkpoint: %v", err)
@@ -471,7 +472,7 @@ func TestLoadSessionMessagesDoesNotFallbackAfterEventReplayBudget(t *testing.T) 
 }
 
 func TestProbeSessionEventLogReadsOnlyNativeHeader(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	logPath := store.SessionEventLog(path)
 	largeRecord := `{"schema_version":1,"type":"replace","messages":[{"role":"user","content":"` +
 		strings.Repeat("x", int(sessionEventProbeMaxBytes*2)) + `"}]}` + "\n"
@@ -490,7 +491,7 @@ func TestProbeSessionEventLogReadsOnlyNativeHeader(t *testing.T) {
 }
 
 func TestLoadSessionMessagesAcceptsReorderedEventHeader(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	checkpoint := `{"role":"system","content":"older checkpoint"}` + "\n"
 	if err := os.WriteFile(path, []byte(checkpoint), 0o600); err != nil {
 		t.Fatalf("write checkpoint: %v", err)
@@ -517,7 +518,7 @@ func TestLoadSessionMessagesAcceptsReorderedEventHeader(t *testing.T) {
 }
 
 func TestDefaultSaveBootstrapsEventLog(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "one-shot"})
 	if err := s.Save(path); err != nil {
@@ -532,7 +533,7 @@ func TestDefaultSaveBootstrapsEventLog(t *testing.T) {
 }
 
 func TestDefaultSaveRejectsDivergedOverwrite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	winner := sessionWithTurns(t, path, 3).Snapshot()
 
 	stale := NewSession("sys")
@@ -550,7 +551,7 @@ func TestDefaultSaveRejectsDivergedOverwrite(t *testing.T) {
 }
 
 func TestEventLogCompactionBoundsGrowth(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	filler := strings.Repeat("y", 8<<10)
 	// Repeated rewrites (each a full replace event) must not grow the log
@@ -595,7 +596,7 @@ func TestEventLogCompactionBoundsGrowth(t *testing.T) {
 }
 
 func TestConcurrentLoadDuringAppendsStaysConsistent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "seed"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -647,7 +648,7 @@ func TestConcurrentLoadDuringAppendsStaysConsistent(t *testing.T) {
 }
 
 func TestSessionsShareContentSeesEventLogDivergence(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	pathA := filepath.Join(dir, "a.jsonl")
 	pathB := filepath.Join(dir, "b.jsonl")
 	a := sessionWithTurns(t, pathA, 1)
@@ -689,7 +690,7 @@ func TestSessionsShareContentSeesEventLogDivergence(t *testing.T) {
 }
 
 func TestLoadSessionUserMessagesSeesEventLogTurns(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first prompt"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -714,7 +715,7 @@ func TestLoadSessionUserMessagesSeesEventLogTurns(t *testing.T) {
 }
 
 func TestLoadSessionUserMessagesDoesNotFallbackAfterEventReplayBudget(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	checkpoint := `{"role":"user","content":"older checkpoint prompt"}` + "\n"
 	if err := os.WriteFile(path, []byte(checkpoint), 0o600); err != nil {
 		t.Fatalf("write checkpoint: %v", err)
@@ -743,7 +744,7 @@ func TestLoadSessionUserMessagesDoesNotFallbackAfterEventReplayBudget(t *testing
 }
 
 func TestLoadSessionUserMessagesDoesNotFallbackFromFutureEventSchema(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	checkpoint := `{"role":"user","content":"older checkpoint prompt"}` + "\n"
 	if err := os.WriteFile(path, []byte(checkpoint), 0o600); err != nil {
 		t.Fatalf("write checkpoint: %v", err)
@@ -763,7 +764,7 @@ func TestLoadSessionUserMessagesDoesNotFallbackFromFutureEventSchema(t *testing.
 }
 
 func TestSessionEventLogPreservesUserCreatedAt(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	want := time.Date(2026, 7, 16, 8, 30, 0, 0, time.UTC).UnixMilli()
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "timed prompt", CreatedAt: want})
@@ -809,7 +810,7 @@ func TestSessionDigestIgnoresUserCreatedAt(t *testing.T) {
 }
 
 func TestSessionContentModTimeTracksEventLog(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := sessionWithTurns(t, path, 1)
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "new"})
 	if err := s.SaveSnapshot(path); err != nil {

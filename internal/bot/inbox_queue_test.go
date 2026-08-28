@@ -9,10 +9,11 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/sessioninbox"
+	"reasonix/internal/testenv"
 )
 
 func TestCollectAppendDeduplicatesPlatformRedelivery(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	ctrl := control.New(control.Options{
 		SessionPath: filepath.Join(dir, "s.jsonl"),
 		SessionDir:  dir,

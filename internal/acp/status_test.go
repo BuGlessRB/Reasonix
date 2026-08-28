@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/billing"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 type statusFactory struct {
@@ -133,8 +134,8 @@ func TestStatusExtensionTracksMultipleSessionsAndUsage(t *testing.T) {
 	client, stop := startServer(t, factory)
 	defer stop()
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	first := openStatusSession(t, client, t.TempDir())
-	second := openStatusSession(t, client, t.TempDir())
+	first := openStatusSession(t, client, testenv.TempDir(t))
+	second := openStatusSession(t, client, testenv.TempDir(t))
 
 	initialSecond := getStatus(t, client, second)
 	prompt := client.callAsync("session/prompt", SessionPromptParams{SessionID: first, Prompt: []ContentBlock{{Type: "text", Text: "ship"}}})
@@ -274,7 +275,7 @@ func TestStatusRecomputesPlannerModeAfterWorkModeSwitch(t *testing.T) {
 	client, stop := startServer(t, factory)
 	defer stop()
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
-	sessionID := openStatusSession(t, client, t.TempDir())
+	sessionID := openStatusSession(t, client, testenv.TempDir(t))
 	if status := getStatus(t, client, sessionID); status.WorkMode != "balanced" || status.PlannerMode != "on" {
 		t.Fatalf("initial runtime status = %+v", status)
 	}
@@ -319,8 +320,8 @@ func TestStatusClassifiesPauseAndError(t *testing.T) {
 }
 
 func TestStatusSnapshotSurvivesSessionResume(t *testing.T) {
-	dir := t.TempDir()
-	cwd := t.TempDir()
+	dir := testenv.TempDir(t)
+	cwd := testenv.TempDir(t)
 	sessionID := "status-reconnect"
 	telemetry := newStatusTelemetry()
 	telemetry.beginTurn()
@@ -355,8 +356,8 @@ func TestStatusSnapshotSurvivesSessionResume(t *testing.T) {
 }
 
 func TestStatusInterruptedSnapshotResumesPaused(t *testing.T) {
-	dir := t.TempDir()
-	cwd := t.TempDir()
+	dir := testenv.TempDir(t)
+	cwd := testenv.TempDir(t)
 	sessionID := "status-interrupted"
 	telemetry := newStatusTelemetry()
 	telemetry.beginTurn()

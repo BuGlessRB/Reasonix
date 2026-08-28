@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -39,7 +40,7 @@ func TestRecordedFailureSurvivesRepeatedCompaction(t *testing.T) {
 	}}
 	a := New(&fakeProvider{reply: "digest"}, tool.NewRegistry(), sess,
 		Options{ContextWindow: 8000, CompactRatio: 0.85, RecentKeep: 2,
-			KeepPolicy: KeepErrors, ArchiveDir: t.TempDir()}, event.Discard)
+			KeepPolicy: KeepErrors, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 
 	exit := 1
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "running tests",

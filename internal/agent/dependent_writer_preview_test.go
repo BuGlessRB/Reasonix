@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
 )
@@ -29,7 +30,7 @@ func (m mutateThenFailTool) Execute(context.Context, json.RawMessage) (string, e
 }
 
 func TestDependentSameBatchEditRefreshesPreviewBeforeExecution(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "task.txt")
 	if err := os.WriteFile(path, []byte("status=\"draft\"\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -114,7 +115,7 @@ func TestDependentMutationSkippedAfterFailedWriterInBatch(t *testing.T) {
 	// later mutations (and verifications) in the same provider batch are not
 	// executed. The first tool may still have written to disk; the second must
 	// return not_run/dependency rather than apply a follow-up edit.
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "task.txt")
 	if err := os.WriteFile(path, []byte("status=\"draft\"\n"), 0o600); err != nil {
 		t.Fatal(err)

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestControlService_StopTask(t *testing.T) {
@@ -376,7 +378,7 @@ func TestControlService_StopBoundsLegacyLeaseLessRuntime(t *testing.T) {
 }
 
 func TestControlService_FileStoreClaimsIdempotencyBeforeSideEffects(t *testing.T) {
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	store := NewFileStore(".reasonix/tasks")
 	now := time.Now()
 	if err := store.SaveTask(context.Background(), project, TaskSnapshot{
@@ -430,7 +432,7 @@ func TestInMemoryStore_IdempotencyClaimIsPendingUntilFinalized(t *testing.T) {
 }
 
 func TestFileStore_IdempotencyClaimQuarantinesCorruptRecord(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := NewFileStore(filepath.Join(".reasonix", "tasks"))
 	key := "broken-key"
 	idemDir := filepath.Join(root, ".reasonix", "tasks", ".idempotency")

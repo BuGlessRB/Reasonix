@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/permission"
 	"reasonix/internal/provider"
 	"reasonix/internal/recovery"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -307,7 +308,7 @@ func TestRecoveryPromptCanResolveSynchronouslyFromSink(t *testing.T) {
 }
 
 func TestSetFreshSessionPathClearsRecoveryState(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	oldPath := filepath.Join(dir, "old.jsonl")
 	newPath := filepath.Join(dir, "new.jsonl")
 	ag := agent.New(nil, tool.NewRegistry(), agent.NewSession("sys"), agent.Options{}, event.Discard)
@@ -359,7 +360,7 @@ func TestFreshSessionRotationsClearRecoveryState(t *testing.T) {
 		{name: "clear", rotate: func(c *Controller) error { return c.ClearSession() }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := testenv.TempDir(t)
 			path := filepath.Join(dir, "old.jsonl")
 			sess := agent.NewSession("sys")
 			sess.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
@@ -391,7 +392,7 @@ func TestFreshSessionRotationsClearRecoveryState(t *testing.T) {
 }
 
 func TestNewSessionWaitsForPendingRecoveryPersistence(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "old.jsonl")
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})

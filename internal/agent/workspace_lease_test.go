@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 	"reasonix/internal/workspacelease"
 )
@@ -65,7 +66,7 @@ func deliveryLeaseTestAgent(t *testing.T, owner *workspacelease.Owner, tools ...
 }
 
 func TestDeliveryWriterWaitsBeforeToolExecutionButReaderDoesNot(t *testing.T) {
-	root, locks := t.TempDir(), t.TempDir()
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
 	first, err := workspacelease.New(root, locks, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +111,7 @@ func TestDeliveryWriterWaitsBeforeToolExecutionButReaderDoesNot(t *testing.T) {
 }
 
 func TestDeniedDeliveryWriterDoesNotAcquireWorkspaceLease(t *testing.T) {
-	root, locks := t.TempDir(), t.TempDir()
+	root, locks := testenv.TempDir(t), testenv.TempDir(t)
 	deniedOwner, _ := workspacelease.New(root, locks, nil)
 	probeOwner, _ := workspacelease.New(root, locks, nil)
 	writer := &workspaceLeaseTestTool{name: "denied_writer"}

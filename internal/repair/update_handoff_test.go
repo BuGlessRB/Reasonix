@@ -9,13 +9,15 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func prepareTestAppBundleHandoff(t *testing.T) (*UpdateTransaction, string) {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 
-	installRoot, err := filepath.EvalSymlinks(t.TempDir())
+	installRoot, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,8 +242,8 @@ type existingAppBundleBackupFixture struct {
 
 func newExistingAppBundleBackupFixture(t *testing.T) existingAppBundleBackupFixture {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	installRoot, err := filepath.EvalSymlinks(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	installRoot, err := filepath.EvalSymlinks(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -471,7 +473,7 @@ func TestPrepareAppBundleUpdateHandoffRestoresBackupChangedDuringQuarantine(t *t
 
 func TestPrepareAppBundleUpdateHandoffRejectsUnboundExistingBackup(t *testing.T) {
 	fixture := newExistingAppBundleBackupFixture(t)
-	outside := filepath.Join(t.TempDir(), "Reasonix")
+	outside := filepath.Join(testenv.TempDir(t), "Reasonix")
 	if err := os.WriteFile(outside, []byte("outside"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -539,7 +541,7 @@ func TestClearClaimedAppBundleUpdateHandoffRejectsOriginalDrift(t *testing.T) {
 
 func TestClaimPendingAppBundleUpdateHandoffRejectsUnboundTarget(t *testing.T) {
 	tx, staging := prepareTestAppBundleHandoff(t)
-	arbitrary := filepath.Join(t.TempDir(), "Unrelated.app")
+	arbitrary := filepath.Join(testenv.TempDir(t), "Unrelated.app")
 	if err := os.MkdirAll(arbitrary, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -791,7 +793,7 @@ func TestClaimPendingAppBundleUpdateHandoffRejectsStagingSymlinkEscape(t *testin
 		t.Skip("creating symlinks requires elevated privileges on Windows CI")
 	}
 	tx, _ := prepareTestAppBundleHandoff(t)
-	outside := filepath.Join(t.TempDir(), "Outside.app")
+	outside := filepath.Join(testenv.TempDir(t), "Outside.app")
 	if err := os.MkdirAll(outside, 0o700); err != nil {
 		t.Fatal(err)
 	}

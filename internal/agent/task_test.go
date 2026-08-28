@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -71,9 +72,9 @@ func TestTaskToolInjectsWorkspaceContextIntoSubagentPrompt(t *testing.T) {
 		{Type: provider.ChunkText, Text: "answer"},
 		{Type: provider.ChunkDone},
 	}}
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	task := NewTaskTool(sub, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(NewSubagentStore(t.TempDir()), workspace, "base-model", "base-effort")
+		WithTranscripts(NewSubagentStore(testenv.TempDir(t)), workspace, "base-model", "base-effort")
 
 	if _, err := task.Execute(testTaskContext(), []byte(`{"prompt":"inspect project"}`)); err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -469,9 +470,9 @@ func TestTaskToolPersistsAndContinuesTranscript(t *testing.T) {
 	}}
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	task := newTestTaskTool(t, sub, reg, "sys", "", "", nil).
-		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
+		WithTranscripts(store, testenv.TempDir(t), "base-model", "base-effort")
 
 	first, err := task.Execute(testTaskContext(), []byte(`{"prompt":"first task"}`))
 	if err != nil {
@@ -519,12 +520,12 @@ func TestTaskToolContinueFromAncestorReturnsCopiedReferenceGuidance(t *testing.T
 			{Type: provider.ChunkDone},
 		},
 	}}
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
+		WithTranscripts(store, testenv.TempDir(t), "base-model", "base-effort")
 
 	rootCtx := WithParentSession(context.Background(), "root")
 	first, err := task.Execute(rootCtx, []byte(`{"prompt":"root task"}`))
@@ -571,12 +572,12 @@ func TestTaskToolLegacyForkFromAncestorConvertsToCopiedReference(t *testing.T) {
 			{Type: provider.ChunkDone},
 		},
 	}}
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
+		WithTranscripts(store, testenv.TempDir(t), "base-model", "base-effort")
 
 	rootCtx := WithParentSession(context.Background(), "root")
 	first, err := task.Execute(rootCtx, []byte(`{"prompt":"root task"}`))
@@ -619,7 +620,7 @@ func TestTaskToolRejectsLegacyForkFromCurrentSession(t *testing.T) {
 		},
 	}}
 	task := newTestTaskTool(t, sub, tool.NewRegistry(), "sys", "", "", nil).
-		WithTranscripts(NewSubagentStore(t.TempDir()), t.TempDir(), "base-model", "base-effort")
+		WithTranscripts(NewSubagentStore(testenv.TempDir(t)), testenv.TempDir(t), "base-model", "base-effort")
 
 	first, err := task.Execute(testTaskContext(), []byte(`{"prompt":"first task"}`))
 	if err != nil {
@@ -645,11 +646,11 @@ func TestTaskToolFailedForegroundContinuationPersistsAndRejectsReuse(t *testing.
 			{Type: provider.ChunkError, Err: errors.New("provider failed")},
 		},
 	}}
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
+		WithTranscripts(store, testenv.TempDir(t), "base-model", "base-effort")
 
 	first, err := task.Execute(testTaskContext(), []byte(`{"prompt":"first task"}`))
 	if err != nil {
@@ -683,11 +684,11 @@ func TestTaskToolFailedForegroundContinuationPersistsAndRejectsReuse(t *testing.
 
 func TestTaskToolBackgroundPanicPersistsFailedMetadata(t *testing.T) {
 	sub := panicProvider{name: "panic-sub"}
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
+		WithTranscripts(store, testenv.TempDir(t), "base-model", "base-effort")
 
 	jm := jobs.NewManager(event.Discard)
 	defer jm.Close()
@@ -727,11 +728,11 @@ func TestTaskToolBackgroundResultIncludesReferenceGuidance(t *testing.T) {
 		{Type: provider.ChunkText, Text: "background answer"},
 		{Type: provider.ChunkDone},
 	}}
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
+		WithTranscripts(store, testenv.TempDir(t), "base-model", "base-effort")
 
 	jm := jobs.NewManager(event.Discard)
 	defer jm.Close()
@@ -772,12 +773,12 @@ func TestTaskToolBackgroundAncestorContinuationIncludesForkGuidance(t *testing.T
 			{Type: provider.ChunkDone},
 		},
 	}}
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
+		WithTranscripts(store, testenv.TempDir(t), "base-model", "base-effort")
 
 	rootCtx := WithParentSession(context.Background(), "root")
 	rootOut, err := task.Execute(rootCtx, []byte(`{"prompt":"root task"}`))
@@ -831,11 +832,11 @@ func TestTaskToolBackgroundCapRefusesFanOut(t *testing.T) {
 		{Type: provider.ChunkText, Text: "background answer"},
 		{Type: provider.ChunkDone},
 	}}
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "read_file", readOnly: true})
 	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
+		WithTranscripts(store, testenv.TempDir(t), "base-model", "base-effort")
 
 	jm := jobs.NewManager(event.Discard)
 	defer jm.Close()
@@ -894,7 +895,7 @@ func TestTaskToolBackgroundSalvagePublishesEvidenceForCollection(t *testing.T) {
 		finalText,
 	}}
 	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(NewSubagentStore(t.TempDir()), t.TempDir(), "base-model", "base-effort").
+		WithTranscripts(NewSubagentStore(testenv.TempDir(t)), testenv.TempDir(t), "base-model", "base-effort").
 		WithDeliveryProfile(true)
 
 	jm := jobs.NewManager(event.Discard)
@@ -1075,7 +1076,7 @@ func TestFailedTurnBackgroundMutationForcesReadinessOnNextRunWithoutWait(t *test
 // standing in for the restarted process — must still see it and enforce
 // final-readiness on the very first turn, with no wait/bash_output call at all.
 func TestRestartRecoversPendingBackgroundMutationForcesReadinessWithoutWait(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	first := jobs.NewManager(event.Discard)
 	first.SetActiveSessionPath("parent-session", sessionPath)
 	j := first.StartForSession("parent-session", "task", "bg writer", func(ctx context.Context, _ io.Writer) (string, error) {
@@ -1118,7 +1119,7 @@ func TestTaskToolRejectsMismatchedContinuationProfile(t *testing.T) {
 		{Type: provider.ChunkDone},
 	}}
 	task := newTestTaskTool(t, sub, tool.NewRegistry(), "sys", "", "", nil).
-		WithTranscripts(NewSubagentStore(t.TempDir()), t.TempDir(), "base-model", "")
+		WithTranscripts(NewSubagentStore(testenv.TempDir(t)), testenv.TempDir(t), "base-model", "")
 
 	out, err := task.Execute(testTaskContext(), []byte(`{"prompt":"first task"}`))
 	if err != nil {
@@ -1186,7 +1187,7 @@ func newTestTaskTool(t *testing.T, prov provider.Provider, reg *tool.Registry, s
 		SubagentModel:   subagentModel,
 		SubagentEffort:  subagentEffort,
 		ResolveProvider: resolve,
-	}).WithTranscripts(NewSubagentStore(t.TempDir()), t.TempDir(), "base-model", "base-effort")
+	}).WithTranscripts(NewSubagentStore(testenv.TempDir(t)), testenv.TempDir(t), "base-model", "base-effort")
 }
 
 type panicProvider struct{ name string }

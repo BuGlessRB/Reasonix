@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 // writePluginFile writes one file inside a plugin package fixture.
@@ -24,7 +25,7 @@ func writePluginFile(t *testing.T, path, body string) {
 // parseResourcesPlugin builds a v1 package with prompts and themes on disk.
 func parseResourcesPlugin(t *testing.T) pluginpkg.Package {
 	t.Helper()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writePluginFile(t, filepath.Join(root, pluginpkg.NativeManifest), `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "res",
@@ -120,7 +121,7 @@ func TestManifestV1ValidatorListsStayInSync(t *testing.T) {
 		}
 		return strings.Join(out, ", ")
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	manifest := `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "sync-check",

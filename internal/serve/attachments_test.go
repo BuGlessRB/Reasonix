@@ -15,13 +15,14 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // A browser client cannot write the attachment file itself, so this endpoint is
 // the one host step an image needs. It must hand back the exact "@path" token
 // the turn parser resolves, or the reference silently reads as plain text.
 func TestAttachmentSavesAndReturnsATurnReference(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
 	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
@@ -56,7 +57,7 @@ func TestAttachmentSavesAndReturnsATurnReference(t *testing.T) {
 
 func TestAttachmentRefusesWhatIsNotAnImage(t *testing.T) {
 	bc := NewBroadcaster()
-	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: t.TempDir()})
+	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: testenv.TempDir(t)})
 	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
 	defer srv.Close()
 

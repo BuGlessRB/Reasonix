@@ -15,7 +15,7 @@ func prepareRunningSubagent(t *testing.T, sessionDir string) string {
 	spec := agent.SubagentSpec{
 		Kind:          "task",
 		Name:          "task",
-		WorkspaceRoot: t.TempDir(),
+		WorkspaceRoot: robustTempDir(t),
 		ParentSession: "parent-session",
 		SystemPrompt:  "sys",
 		Registry:      tool.NewRegistry(),
@@ -45,7 +45,7 @@ func requireSubagentStatus(t *testing.T, sessionDir, ref string, want agent.Suba
 }
 
 func TestNewSubagentStoreCleansStaleRunningOnEveryBuild(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := robustTempDir(t)
 
 	firstRef := prepareRunningSubagent(t, sessionDir)
 	if _, err := newSubagentStore(sessionDir, nil); err != nil {
@@ -61,7 +61,7 @@ func TestNewSubagentStoreCleansStaleRunningOnEveryBuild(t *testing.T) {
 }
 
 func TestNewSubagentStoreParentProbeDefersThenRecovers(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := robustTempDir(t)
 	ref := prepareRunningSubagent(t, sessionDir)
 	parentPath := filepath.Join(sessionDir, "parent-session.jsonl")
 
@@ -79,7 +79,7 @@ func TestNewSubagentStoreParentProbeDefersThenRecovers(t *testing.T) {
 }
 
 func TestNewSubagentStoreNeverCachesCleanupError(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := robustTempDir(t)
 	if err := os.WriteFile(filepath.Join(sessionDir, "subagents"), []byte("not a directory"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}

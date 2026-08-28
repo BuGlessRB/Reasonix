@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/i18n"
+	"reasonix/internal/testenv"
 )
 
 func TestTUIDiagnosticsKeepProcessAndPluginLogsOffTerminal(t *testing.T) {
@@ -24,7 +25,7 @@ func TestTUIDiagnosticsKeepProcessAndPluginLogsOffTerminal(t *testing.T) {
 	slog.SetDefault(terminalLogger)
 	t.Cleanup(func() { slog.SetDefault(beforeTest) })
 
-	d := startTUIDiagnostics(t.TempDir())
+	d := startTUIDiagnostics(testenv.TempDir(t))
 	t.Cleanup(d.Close)
 	slog.Warn("controller: snapshot conflict", "path", "private-session.jsonl")
 	fmt.Fprintln(d.Writer(), "plugin diagnostic")
@@ -58,7 +59,7 @@ func TestTUIDiagnosticsFallBackToDiscardWithoutLeakingToTerminal(t *testing.T) {
 	slog.SetDefault(terminalLogger)
 	t.Cleanup(func() { slog.SetDefault(beforeTest) })
 
-	blockedHome := filepath.Join(t.TempDir(), "not-a-directory")
+	blockedHome := filepath.Join(testenv.TempDir(t), "not-a-directory")
 	if err := os.WriteFile(blockedHome, []byte("file"), 0o600); err != nil {
 		t.Fatalf("seed blocked home: %v", err)
 	}
@@ -147,7 +148,7 @@ func TestCLIProfileBuildOptionsDoNotResolveLocalePricing(t *testing.T) {
 }
 
 func TestTUIDiagnosticsMilestoneFlushesNonEmptyLog(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	d := startTUIDiagnostics(home)
 	t.Cleanup(d.Close)
 	d.Milestone("config_load_begin")

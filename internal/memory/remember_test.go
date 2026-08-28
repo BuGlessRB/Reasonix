@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestRememberToolSaves drives the tool the way the agent does — raw JSON args —
 // and verifies the fact lands in the store and the index.
 func TestRememberToolSaves(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	tl := NewRememberTool(store)
 
 	if tl.Name() != "remember" || tl.ReadOnly() {
@@ -45,7 +47,7 @@ func TestRememberToolSaves(t *testing.T) {
 }
 
 func TestRememberToolDefaultsToProjectScope(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: root + "/project", GlobalDir: root + "/global"}
 	if _, err := NewRememberTool(store).Execute(context.Background(), []byte(`{"name":"project-feedback","description":"current project only","type":"feedback","body":"body"}`)); err != nil {
 		t.Fatal(err)
@@ -57,7 +59,7 @@ func TestRememberToolDefaultsToProjectScope(t *testing.T) {
 }
 
 func TestRememberToolUpdateWithoutScopePreservesLegacyGlobalScope(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: filepath.Join(root, "project"), GlobalDir: filepath.Join(root, "global")}
 	if err := os.MkdirAll(store.GlobalDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -91,7 +93,7 @@ func TestRememberToolUpdateWithoutScopePreservesLegacyGlobalScope(t *testing.T) 
 }
 
 func TestRememberToolUpdatesScopeQualifiedReference(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := Store{Dir: filepath.Join(root, "project"), GlobalDir: filepath.Join(root, "global")}
 	if _, err := store.SaveWithOptions(Memory{Name: "project/shared.md", Description: "project", Body: "project body"}, SaveOptions{}); err != nil {
 		t.Fatal(err)
@@ -120,7 +122,7 @@ func TestRememberToolUpdatesScopeQualifiedReference(t *testing.T) {
 // TestRememberToolValidates rejects calls missing required fields rather than
 // writing an empty memory.
 func TestRememberToolValidates(t *testing.T) {
-	tl := NewRememberTool(Store{Dir: t.TempDir()})
+	tl := NewRememberTool(Store{Dir: testenv.TempDir(t)})
 	if _, err := tl.Execute(context.Background(), []byte(`{"description":"d"}`)); err == nil {
 		t.Fatal("expected error when body is missing")
 	}
@@ -137,7 +139,7 @@ func TestRememberToolValidates(t *testing.T) {
 func TestRememberToolQueuesNote(t *testing.T) {
 	q := &fakeQueue{}
 	ctx := WithQueue(context.Background(), q)
-	tl := NewRememberTool(Store{Dir: t.TempDir()})
+	tl := NewRememberTool(Store{Dir: testenv.TempDir(t)})
 	if _, err := tl.Execute(ctx, []byte(`{"name":"uses-rmb","description":"balance is RMB","type":"user","body":"b"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +149,7 @@ func TestRememberToolQueuesNote(t *testing.T) {
 }
 
 func TestRememberToolQueuesResolvedNameWhenUpdatingByID(t *testing.T) {
-	store := Store{Dir: t.TempDir()}
+	store := Store{Dir: testenv.TempDir(t)}
 	first, err := store.SaveWithOptions(Memory{Name: "stable-name", Description: "before", Body: "before"}, SaveOptions{})
 	if err != nil {
 		t.Fatal(err)

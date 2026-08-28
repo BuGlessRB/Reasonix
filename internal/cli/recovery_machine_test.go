@@ -10,11 +10,12 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/recovery"
+	"reasonix/internal/testenv"
 )
 
 func TestSessionMachineRecoveryIsContentFree(t *testing.T) {
 	identityKey := installMachineTestIdentity(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saveMachineTestSession(t, dir, "recoverable", time.Date(2026, 7, 23, 14, 0, 0, 0, time.UTC))
 	path := filepath.Join(dir, "recoverable.jsonl")
 	if err := agent.MarkSessionInFlightTurn(path, 1, true); err != nil {

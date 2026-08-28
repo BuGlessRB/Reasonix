@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
 )
@@ -235,7 +236,7 @@ func TestOrdinaryModeBlocksNonTerminalInlineInterpreter(t *testing.T) {
 }
 
 func TestBatchDependencyBarrierSkipsVerificationAfterFailedMutation(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "x.txt")
 	if err := os.WriteFile(path, []byte("a\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -288,7 +289,7 @@ func TestBatchDependencyBarrierSkipsVerificationAfterFailedMutation(t *testing.T
 // exempts them: they never touch workspace state. A failed todo update must not
 // block the real edits queued behind it in the same batch.
 func TestBatchDependencyBarrierIgnoresFailedNonMutationMetaTool(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "x.txt")
 	if err := os.WriteFile(path, []byte("a\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -325,7 +326,7 @@ func TestBatchDependencyBarrierIgnoresFailedNonMutationMetaTool(t *testing.T) {
 // TestBatchDependencyBarrierStopsAfterFailedWorkspaceWrite is the other half of
 // the same boundary: a genuine workspace mutation failing still stops the batch.
 func TestBatchDependencyBarrierStopsAfterFailedWorkspaceWrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(dir, "x.txt"), []byte("a\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -410,7 +411,7 @@ func (c *capturingWriter) Execute(context.Context, json.RawMessage) (string, err
 }
 
 func TestBatchDependencyBarrierBlocksResolvedMCPWriterAfterFailedMutation(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "x.txt")
 	if err := os.WriteFile(path, []byte("a\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -456,7 +457,7 @@ func TestBatchDependencyBarrierBlocksResolvedMCPWriterAfterFailedMutation(t *tes
 func TestBatchDependencyBarrierAllowsReadOnlyDiagnosisAfterFailedMutation(t *testing.T) {
 	// After a mutating failure, host-proven read-only diagnosis must still run.
 	// Only subsequent mutations and verification commands are skipped.
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "x.txt")
 	if err := os.WriteFile(path, []byte("a\n"), 0o600); err != nil {
 		t.Fatal(err)

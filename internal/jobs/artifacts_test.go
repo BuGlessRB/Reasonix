@@ -15,10 +15,11 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
+	"reasonix/internal/testenv"
 )
 
 func TestCompletedJobPersistsOutputAndReleasesMemory(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	m := NewManager(event.Discard)
 	defer m.Close()
 	m.SetActiveSessionPath("session", sessionPath)
@@ -52,7 +53,7 @@ func TestCompletedJobPersistsOutputAndReleasesMemory(t *testing.T) {
 }
 
 func TestJobArtifactPreservesOutput(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	m := NewManager(event.Discard)
 	defer m.Close()
 	m.SetActiveSessionPath("session", sessionPath)
@@ -82,7 +83,7 @@ func TestJobArtifactPreservesOutput(t *testing.T) {
 }
 
 func TestJobArtifactMetadataPreservesLabel(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	m := NewManager(event.Discard)
 	defer m.Close()
 	m.SetActiveSessionPath("session", sessionPath)
@@ -103,7 +104,7 @@ func TestJobArtifactMetadataPreservesLabel(t *testing.T) {
 }
 
 func TestListArtifactViewsVerifiesTerminalArtifactPresence(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	dir := ArtifactDir(sessionPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -183,7 +184,7 @@ func TestJobArtifactUsesPrivatePermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows file ACLs are not represented by Unix permission bits")
 	}
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	m := NewManager(event.Discard)
 	defer m.Close()
 	m.SetActiveSessionPath("session", sessionPath)
@@ -229,7 +230,7 @@ func assertPrivateArtifactMode(t *testing.T, path string) {
 }
 
 func TestRestoreSessionArtifactsAndAdvanceSequence(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	first := NewManager(event.Discard)
 	first.SetActiveSessionPath("session", sessionPath)
 	j := first.StartForSession("session", "task", "answer", func(context.Context, io.Writer) (string, error) {
@@ -263,7 +264,7 @@ func TestRestoreSessionArtifactsAndAdvanceSequence(t *testing.T) {
 }
 
 func TestRestoreRunningArtifactAsInterrupted(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	dir := ArtifactDir(sessionPath)
 	metaPath := filepath.Join(dir, "task-1"+jobMetaExt)
 	if err := writeMeta(metaPath, artifactMeta{
@@ -303,7 +304,7 @@ func TestRestoreRunningArtifactAsInterrupted(t *testing.T) {
 }
 
 func TestRestoreRunningArtifactDefersTombstoneWhenRepairWriteFails(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	dir := ArtifactDir(sessionPath)
 	metaPath := filepath.Join(dir, "task-1"+jobMetaExt)
 	if err := writeMeta(metaPath, artifactMeta{
@@ -375,7 +376,7 @@ func TestRestoreRunningArtifactDefersTombstoneWhenRepairWriteFails(t *testing.T)
 }
 
 func TestRestoreRunningArtifactFromClosedOwnerAsInterrupted(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	dir := ArtifactDir(sessionPath)
 	metaPath := filepath.Join(dir, "task-1"+jobMetaExt)
 	owner := NewManager(event.Discard)
@@ -403,7 +404,7 @@ func TestRestoreRunningArtifactFromClosedOwnerAsInterrupted(t *testing.T) {
 }
 
 func TestRestoreRunningArtifactWithoutSessionOwnershipDefersRepair(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	metaPath := filepath.Join(ArtifactDir(sessionPath), "task-1"+jobMetaExt)
 	if err := writeMeta(metaPath, artifactMeta{
 		ID:        "task-1",
@@ -443,7 +444,7 @@ func TestRestoreRunningArtifactWithoutSessionOwnershipDefersRepair(t *testing.T)
 }
 
 func TestRestoreDoesNotInterruptJobOwnedByLiveManager(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	first := NewManager(event.Discard)
 	defer first.Close()
 	first.SetActiveSessionPath("session", sessionPath)
@@ -483,7 +484,7 @@ func TestRestoreDoesNotInterruptJobOwnedByLiveManager(t *testing.T) {
 }
 
 func TestRunningJobArtifactMetadataIsIncomplete(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	m := NewManager(event.Discard)
 	defer m.Close()
 	m.SetActiveSessionPath("session", sessionPath)
@@ -516,7 +517,7 @@ func TestRunningJobArtifactMetadataIsIncomplete(t *testing.T) {
 }
 
 func TestTaskMutationEvidencePersistsWithoutSensitiveReceiptData(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	first := NewManager(event.Discard)
 	first.SetActiveSessionPath("session", sessionPath)
 	const secret = "private-receipt-value-123456"
@@ -633,7 +634,7 @@ func TestLegacyTaskArtifactRecoversAsOpaqueHighRiskMutation(t *testing.T) {
 	// unreviewed edits, so recovery must be conservative: an opaque RiskHigh
 	// mutation that forces fresh inspection and review rather than silently
 	// skipping it.
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	dir := ArtifactDir(sessionPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -692,7 +693,7 @@ func TestLeasedEvidenceResurrectsUntilCommitted(t *testing.T) {
 	// delivery — must leave the mutation recoverable after a restart, so a
 	// background change can never ship unreviewed. Only a commit drains the
 	// persisted copy.
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	first := NewManager(event.Discard)
 	first.SetActiveSessionPath("session", sessionPath)
 	j := first.StartForSession("session", "task", "writer", func(ctx context.Context, _ io.Writer) (string, error) {
@@ -754,7 +755,7 @@ func TestFinishDestroySessionPurgesOwnedJobs(t *testing.T) {
 }
 
 func TestSetActiveSessionPathMigratesRunningJobArtifacts(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	m := NewManager(event.Discard)
 	defer m.Close()
 
@@ -797,7 +798,7 @@ func TestSetActiveSessionPathMigratesRunningJobArtifacts(t *testing.T) {
 }
 
 func TestArtifactFailureDoesNotFailSuccessfulJob(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	if err := os.WriteFile(ArtifactDir(sessionPath), []byte("not a dir"), 0o644); err != nil {
 		t.Fatal(err)
@@ -821,7 +822,7 @@ func TestArtifactFailureDoesNotFailSuccessfulJob(t *testing.T) {
 }
 
 func TestMigrateArtifactDirFallsBackToCopyWhenRenameFails(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	src := filepath.Join(root, "src")
 	dst := filepath.Join(root, "dst")
 	if err := os.MkdirAll(src, 0o755); err != nil {
@@ -856,7 +857,7 @@ func TestMigrateArtifactDirFallsBackToCopyWhenRenameFails(t *testing.T) {
 }
 
 func TestSetActiveSessionPathAdoptsUnscopedTemporaryJobs(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	m := NewManager(event.Discard)
 	defer m.Close()
 
@@ -879,7 +880,7 @@ func TestSetActiveSessionPathAdoptsUnscopedTemporaryJobs(t *testing.T) {
 }
 
 func TestSetActiveSessionPathAdoptsUnscopedJobsOnMigrationFailure(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	if err := os.WriteFile(ArtifactDir(sessionPath), []byte("not a dir"), 0o644); err != nil {
 		t.Fatal(err)
@@ -911,7 +912,7 @@ func TestSetActiveSessionPathAdoptsUnscopedJobsOnMigrationFailure(t *testing.T) 
 }
 
 func TestSetActiveSessionPathReportsMigrationFailure(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	if err := os.WriteFile(ArtifactDir(sessionPath), []byte("not a dir"), 0o644); err != nil {
 		t.Fatal(err)
@@ -953,7 +954,7 @@ func TestSetActiveSessionPathReportsMigrationFailure(t *testing.T) {
 }
 
 func TestOutputReadsArtifactFromOffset(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "bash-1.log")
 	prefix := strings.Repeat("x", 2*defaultTailBytes)
 	suffix := "new output\n"
@@ -988,7 +989,7 @@ func TestOutputReadsArtifactFromOffset(t *testing.T) {
 }
 
 func TestRestoredArtifactsAreScopedBySession(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	pathA := filepath.Join(root, "a.jsonl")
 	pathB := filepath.Join(root, "b.jsonl")
 

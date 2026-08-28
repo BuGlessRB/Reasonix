@@ -8,17 +8,18 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // adoptedPane is the window's own runtime: assembled by the host, then handed
 // to the hub.
 func adoptedPane(t *testing.T, mode string) (*Hub, *Server, *Runtime) {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	closeSharedCatalogsOnCleanup(t)
 	writeLocalProviderConfig(t)
 	bc := NewBroadcaster()
-	ctrl := control.New(control.Options{Sink: bc, SessionDir: t.TempDir()})
+	ctrl := control.New(control.Options{Sink: bc, SessionDir: testenv.TempDir(t)})
 	ctrl.SetToolApprovalMode(mode)
 	srv := New(ctrl, bc, config.ServeConfig{})
 	h := NewHub(HubOptions{})
@@ -42,7 +43,7 @@ func TestANewPaneKeepsThePostureAfterTheOneThatSetItCloses(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 
-	next, err := h.Open(context.Background(), OpenRequest{Root: t.TempDir()})
+	next, err := h.Open(context.Background(), OpenRequest{Root: testenv.TempDir(t)})
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -56,7 +57,7 @@ func TestANewPaneKeepsThePostureAfterTheOneThatSetItCloses(t *testing.T) {
 func TestAPaneOpensInThePostureTheHostLaunchedIn(t *testing.T) {
 	h, _, _ := adoptedPane(t, control.ToolApprovalAuto)
 
-	next, err := h.Open(context.Background(), OpenRequest{Root: t.TempDir()})
+	next, err := h.Open(context.Background(), OpenRequest{Root: testenv.TempDir(t)})
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

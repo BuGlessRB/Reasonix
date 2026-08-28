@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/outputstyle"
 	"reasonix/internal/plugin"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 )
 
 func TestRenderSkillListUsesSharedVisualLanguage(t *testing.T) {
@@ -55,7 +56,7 @@ func TestViewProtectLinesCompactsLongBodyLines(t *testing.T) {
 
 func TestRenderMemoryGroupsDocsAndStore(t *testing.T) {
 	width := 72
-	store := memory.Store{Dir: filepath.Join(t.TempDir(), "memory")}
+	store := memory.Store{Dir: filepath.Join(testenv.TempDir(t), "memory")}
 	if _, err := store.Save(memory.Memory{Name: "saved-fact", Title: "Saved Fact", Description: "remembered fact"}); err != nil {
 		t.Fatalf("save memory: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestMetricsSinkForwardsEachEventOnce(t *testing.T) {
@@ -146,7 +147,7 @@ func TestMetricsSinkAccountsToolCallsAndRetries(t *testing.T) {
 }
 
 func TestWriteMetricsIncludesReadinessFields(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "metrics.json")
+	path := filepath.Join(testenv.TempDir(t), "metrics.json")
 	if err := writeMetrics(path, RunMetrics{
 		PromptTokens:                   10,
 		CompletionTokens:               3,

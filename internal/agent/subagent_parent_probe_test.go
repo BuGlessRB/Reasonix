@@ -3,6 +3,8 @@ package agent
 import (
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestSubagentStoreCleanupStaleRunningParentProbe(t *testing.T) {
@@ -19,7 +21,7 @@ func TestSubagentStoreCleanupStaleRunningParentProbe(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sessionDir := t.TempDir()
+			sessionDir := testenv.TempDir(t)
 			store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 			spec := testSubagentSpec(t, "review")
 			spec.ParentSession = "probe-parent"

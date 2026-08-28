@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"reasonix/internal/secrets"
+	"reasonix/internal/testenv"
 )
 
 func TestFormatSectionSortsAndRedacts(t *testing.T) {
@@ -56,7 +57,7 @@ func TestRunProbesReportsMissingCommand(t *testing.T) {
 }
 
 func TestRunProbesUsesOverridePathAndFirstLine(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	toolPath := filepath.Join(dir, "mytool")
 	toolPath = writeProbeTool(t, toolPath, "custom version\nignored")
 
@@ -74,7 +75,7 @@ func TestRunProbesUsesOverridePathAndFirstLine(t *testing.T) {
 
 func TestRunProbesParsesQuotedStaticArgs(t *testing.T) {
 	resetProbeCacheForTest(t, time.Unix(25, 0))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	toolPath := filepath.Join(dir, "quotedtool")
 	toolPath = writeProbeTool(t, toolPath, "quoted version")
 
@@ -89,7 +90,7 @@ func TestRunProbesParsesQuotedStaticArgs(t *testing.T) {
 
 func TestRunProbesAllowsStaticEnvAssignment(t *testing.T) {
 	resetProbeCacheForTest(t, time.Unix(35, 0))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	toolPath := filepath.Join(dir, "envtool")
 	toolPath = writeEnvProbeTool(t, toolPath)
 
@@ -104,7 +105,7 @@ func TestRunProbesAllowsStaticEnvAssignment(t *testing.T) {
 
 func TestRunProbesAllowsStaticStderrMerge(t *testing.T) {
 	resetProbeCacheForTest(t, time.Unix(40, 0))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	toolPath := filepath.Join(dir, "stderrtool")
 	toolPath = writeStderrProbeTool(t, toolPath, "stderr version")
 
@@ -119,7 +120,7 @@ func TestRunProbesAllowsStaticStderrMerge(t *testing.T) {
 
 func TestRunProbesRejectsDeniedOverridePath(t *testing.T) {
 	resetProbeCacheForTest(t, time.Unix(50, 0))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	toolPath := filepath.Join(dir, "deniedtool")
 	toolPath = writeProbeTool(t, toolPath, "should not run")
 
@@ -137,7 +138,7 @@ func TestRunProbesRejectsDeniedOverridePath(t *testing.T) {
 
 func TestRunProbesRejectsDeniedPathHit(t *testing.T) {
 	resetProbeCacheForTest(t, time.Unix(75, 0))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeProbeTool(t, filepath.Join(dir, "pathtool"), "should not run")
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
@@ -154,7 +155,7 @@ func TestRunProbesRejectsDeniedPathHit(t *testing.T) {
 
 func TestRunProbesReportsTimeout(t *testing.T) {
 	setProbeTimeoutForTest(t, 200*time.Millisecond)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	toolPath := filepath.Join(dir, "slowtool")
 	body := "#!/bin/sh\nsleep 3\n"
 	if runtime.GOOS == "windows" {
@@ -193,7 +194,7 @@ func TestPrepareProbeCommandSetsCancellationBudget(t *testing.T) {
 
 func TestRunProbesCachesByFingerprint(t *testing.T) {
 	resetProbeCacheForTest(t, time.Unix(100, 0))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	toolPath := filepath.Join(dir, "cachedtool")
 	toolPath = writeProbeTool(t, toolPath, "version one")
 
@@ -213,7 +214,7 @@ func TestRunProbesCachesByFingerprint(t *testing.T) {
 func TestRunProbesCacheExpires(t *testing.T) {
 	now := time.Unix(200, 0)
 	resetProbeCacheForTest(t, now)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	toolPath := filepath.Join(dir, "expiringtool")
 	toolPath = writeProbeTool(t, toolPath, "version one")
 
@@ -232,7 +233,7 @@ func TestRunProbesCacheExpires(t *testing.T) {
 
 func TestRunProbesCacheSeparatesOverrides(t *testing.T) {
 	resetProbeCacheForTest(t, time.Unix(300, 0))
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	toolOne := filepath.Join(dir, "override-one")
 	toolTwo := filepath.Join(dir, "override-two")
 	toolOne = writeProbeTool(t, toolOne, "version one")
@@ -361,7 +362,7 @@ func TestRunProbesFilterSubprocessEnv(t *testing.T) {
 	}
 	resetProbeCacheForTest(t, time.Unix(90, 0))
 	setProbeTimeoutForTest(t, 10*time.Second)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	toolPath := filepath.Join(dir, "envtool")
 	body := "#!/bin/sh\nprintf 'tok=%s' \"${REASONIX_TEST_SECRET_TOKEN:-none}\"\n"
 	if err := os.WriteFile(toolPath, []byte(body), 0o755); err != nil {

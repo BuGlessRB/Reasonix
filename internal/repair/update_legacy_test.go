@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"reasonix/internal/installlayout"
+	"reasonix/internal/testenv"
 )
 
 type supersededUpdateFixture struct {
@@ -33,9 +34,9 @@ type supersededAppUpdateFixture struct {
 
 func prepareSupersededAppUpdateFixture(t *testing.T, withBackup, withBackupIdentity bool) supersededAppUpdateFixture {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if resolved, err := filepath.EvalSymlinks(root); err == nil {
 		root = resolved
 	}
@@ -231,9 +232,9 @@ func TestArchiveSupersededPendingAppBundleUpdatePreservesRecreatedBackupPath(t *
 
 func prepareSupersededUpdateFixture(t *testing.T, pendingVersion, runningVersion string) supersededUpdateFixture {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	originalExecutable := repairExecutable
 	t.Cleanup(func() { repairExecutable = originalExecutable })
 
@@ -336,7 +337,7 @@ func TestArchiveSupersededPendingFileUpdateRejectsOlderRunningVersion(t *testing
 
 func TestArchiveSupersededPendingFileUpdateRejectsForeignInstall(t *testing.T) {
 	fixture := prepareSupersededUpdateFixture(t, "v1.19.1", "v1.20.0")
-	if archived, err := ArchiveSupersededPendingFileUpdate(fixture.running, t.TempDir()); err == nil || archived {
+	if archived, err := ArchiveSupersededPendingFileUpdate(fixture.running, testenv.TempDir(t)); err == nil || archived {
 		t.Fatalf("archived=%v err=%v", archived, err)
 	}
 	assertPendingTransactionUnchanged(t, fixture.pendingBody)
@@ -498,10 +499,10 @@ func TestArchiveSupersededPendingFileUpdateSerializesConcurrentRecovery(t *testi
 }
 
 func TestArchiveSupersededPendingFileUpdateRejectsMalformedTransaction(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	body := `{"schemaVersion":1,"toVersion":`
 	writePendingUpdateRaw(t, body)
-	if archived, err := ArchiveSupersededPendingFileUpdate("v1.20.0", t.TempDir()); err == nil || archived {
+	if archived, err := ArchiveSupersededPendingFileUpdate("v1.20.0", testenv.TempDir(t)); err == nil || archived {
 		t.Fatalf("archived=%v err=%v", archived, err)
 	}
 	got, err := os.ReadFile(PendingUpdatePath())

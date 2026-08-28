@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func listSessionNames(t *testing.T, ctrl *control.Controller) []string {
@@ -57,7 +58,7 @@ func saveVisibilitySession(t *testing.T, path string, messages ...string) {
 // writing the same session produced ten, and the sidebar showed ten entries of
 // one conversation, all with the same generated title.
 func TestSessionsFoldsCoveredRecoveryCopies(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
 	saveVisibilitySession(t, root, "今日热点", "好的")
 	for range 3 {
@@ -80,7 +81,7 @@ func TestSessionsFoldsCoveredRecoveryCopies(t *testing.T) {
 // A branch that was continued on, or that the controller is writing to, holds
 // conversation the parent does not: hiding it would lose the user's work.
 func TestSessionsKeepsRecoveryBranchesThatHoldContent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
 	saveVisibilitySession(t, root, "今日热点", "好的")
 
@@ -126,7 +127,7 @@ func TestSessionsKeepsRecoveryBranchesThatHoldContent(t *testing.T) {
 // conversations. Listing them buried the real sessions: 154 of 189 entries in a
 // real profile were subagents.
 func TestSessionsExcludesSubagentTranscripts(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	for _, name := range []string{
 		"20260813-235122-deepseek-v4-flash.jsonl",
 		"subagent-sub-k-202605171512.jsonl",

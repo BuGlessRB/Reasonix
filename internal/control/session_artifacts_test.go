@@ -9,13 +9,14 @@ import (
 	"reasonix/internal/guardian"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // /clear must not leave the event log behind: it is the authoritative
 // transcript, so a leftover both leaks the discarded conversation and lets
 // LoadSession resurrect it if the path is ever reused.
 func TestRemoveSessionArtifactsSweepsEventLogAndSidecars(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := agent.NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "secret work"})

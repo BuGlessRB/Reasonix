@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestKeyPathWhenNotARepository(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	key := Key(dir)
 	if !strings.HasPrefix(key, PathPrefix) {
 		t.Fatalf("Key(%q) = %q, want a %s key", dir, key, PathPrefix)
@@ -19,7 +21,7 @@ func TestKeyPathWhenNotARepository(t *testing.T) {
 }
 
 func TestKeyRepoForRootAndSubdirectory(t *testing.T) {
-	repo := t.TempDir()
+	repo := testenv.TempDir(t)
 	mkdir(t, filepath.Join(repo, ".git"))
 	sub := filepath.Join(repo, "internal", "agent")
 	mkdir(t, sub)
@@ -36,7 +38,7 @@ func TestKeyRepoForRootAndSubdirectory(t *testing.T) {
 // A linked worktree must land on the same key as the tree it was cut from, or
 // a switch flipped in the main tree would silently not apply in the worktree.
 func TestKeyLinkedWorktreeSharesTheRepositoryKey(t *testing.T) {
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	repo := filepath.Join(base, "repo")
 	gitDir := filepath.Join(repo, ".git")
 	mkdir(t, gitDir)
@@ -56,7 +58,7 @@ func TestKeyLinkedWorktreeSharesTheRepositoryKey(t *testing.T) {
 }
 
 func TestKeyRelativeGitdirPointer(t *testing.T) {
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	repo := filepath.Join(base, "repo")
 	mkdir(t, filepath.Join(repo, ".git", "worktrees", "wt"))
 	tree := filepath.Join(base, "wt")
@@ -71,7 +73,7 @@ func TestKeyRelativeGitdirPointer(t *testing.T) {
 // A submodule is its own repository: its gitdir has no worktrees element, so it
 // must not converge onto the superproject's key.
 func TestKeySubmoduleStaysItsOwnRepository(t *testing.T) {
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	super := filepath.Join(base, "super")
 	mkdir(t, filepath.Join(super, ".git", "modules", "vendor"))
 	sub := filepath.Join(super, "vendor")
@@ -89,7 +91,7 @@ func TestKeySubmoduleStaysItsOwnRepository(t *testing.T) {
 // Two plain folders are two projects. Walking up for a repository must not
 // collapse them onto the drive the walk ended on.
 func TestKeyDistinctPerFolderOutsideRepositories(t *testing.T) {
-	a, b := t.TempDir(), t.TempDir()
+	a, b := testenv.TempDir(t), testenv.TempDir(t)
 	if Key(a) == Key(b) {
 		t.Fatalf("two plain folders share key %q", Key(a))
 	}
@@ -105,7 +107,7 @@ func TestKeyEmptyRoot(t *testing.T) {
 }
 
 func TestSharesRepoIsFalseOutsideRepositories(t *testing.T) {
-	a, b := t.TempDir(), t.TempDir()
+	a, b := testenv.TempDir(t), testenv.TempDir(t)
 	if SharesRepo(a, b) {
 		t.Fatal("SharesRepo on two plain folders = true, want false")
 	}

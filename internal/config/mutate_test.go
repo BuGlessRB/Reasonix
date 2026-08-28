@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 // TestLockUserConfigEditsSerializesRMW drives concurrent load-modify-save
@@ -22,7 +24,7 @@ import (
 func TestLockUserConfigEditsSerializesRMW(t *testing.T) {
 	// Point the user config at a temp home: SaveTo renders bot connections only
 	// for user-scope paths (project configs save incrementally without them).
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := UserConfigPath()
 	if path == "" {
@@ -66,7 +68,7 @@ func TestLockUserConfigEditsSerializesRMW(t *testing.T) {
 // pair makes this test fail (at least intermittently) with "previous ...
 // update lost".
 func TestConcurrentBotAndSettingsWritersKeepBothFields(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := UserConfigPath()
 	if path == "" {
@@ -147,13 +149,13 @@ func TestConcurrentBotAndSettingsWritersKeepBothFields(t *testing.T) {
 }
 
 func TestLockUserConfigEditsSerializesAcrossProcessesWithDifferentTempDirs(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	assertUserConfigLockSerializesAcrossProcesses(
 		t,
 		home,
 		home,
-		filepath.Join(t.TempDir(), "tmp-a"),
-		filepath.Join(t.TempDir(), "tmp-b"),
+		filepath.Join(testenv.TempDir(t), "tmp-a"),
+		filepath.Join(testenv.TempDir(t), "tmp-b"),
 	)
 }
 
@@ -161,7 +163,7 @@ func TestLockUserConfigEditsSerializesDarwinCaseAliasesAcrossProcesses(t *testin
 	if runtime.GOOS != "darwin" {
 		t.Skip("Darwin path aliases only")
 	}
-	parent := t.TempDir()
+	parent := testenv.TempDir(t)
 	home := filepath.Join(parent, "MiXeDHome")
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		t.Fatal(err)
@@ -172,7 +174,7 @@ func TestLockUserConfigEditsSerializesDarwinCaseAliasesAcrossProcesses(t *testin
 	if homeErr != nil || aliasErr != nil || !os.SameFile(homeInfo, aliasInfo) {
 		t.Skip("test volume is case-sensitive")
 	}
-	assertUserConfigLockSerializesAcrossProcesses(t, home, alias, t.TempDir(), t.TempDir())
+	assertUserConfigLockSerializesAcrossProcesses(t, home, alias, testenv.TempDir(t), testenv.TempDir(t))
 }
 
 func assertUserConfigLockSerializesAcrossProcesses(t *testing.T, firstHome, secondHome, firstTmp, secondTmp string) {
@@ -190,7 +192,7 @@ func assertUserConfigLockSerializesAcrossProcesses(t *testing.T, firstHome, seco
 		t.Fatal(err)
 	}
 
-	signals := t.TempDir()
+	signals := testenv.TempDir(t)
 	aStarted := filepath.Join(signals, "a-started")
 	aAcquired := filepath.Join(signals, "a-acquired")
 	aRelease := filepath.Join(signals, "a-release")
@@ -283,7 +285,7 @@ func testEnvWithOverrides(overrides map[string]string) []string {
 }
 
 func TestLockUserConfigEditsFailsClosedWhenFileLockTimesOut(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := UserConfigPath()
 	if err := Default().SaveTo(path); err != nil {
@@ -376,7 +378,7 @@ func TestLockUserConfigEditsHelperProcess(t *testing.T) {
 }
 
 func TestConfigEditLockCanonicalizesAliasesAndIgnoresCacheOverrides(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 
 	target := filepath.Join(dir, "target.toml")
 	link := filepath.Join(dir, "reasonix.toml")
@@ -432,7 +434,7 @@ func TestConfigEditLockCanonicalizesAliasesAndIgnoresCacheOverrides(t *testing.T
 }
 
 func TestAcquireConfigEditLockRejectsSymlinkRegistry(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	realDir := filepath.Join(dir, "real")
 	if err := os.Mkdir(realDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -453,7 +455,7 @@ func TestAcquireConfigEditLockSecuresRegistryPermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows protects the per-user lock registry through inherited ACLs, not Unix permission bits")
 	}
-	dir := filepath.Join(t.TempDir(), "locks")
+	dir := filepath.Join(testenv.TempDir(t), "locks")
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -474,7 +476,7 @@ func TestAcquireConfigEditLockSecuresRegistryPermissions(t *testing.T) {
 }
 
 func TestConfigEditTransactionPinsSymlinkTarget(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 
 	first := filepath.Join(dir, "first.toml")
 	second := filepath.Join(dir, "second.toml")
@@ -531,7 +533,7 @@ func TestConfigEditTransactionPinsSymlinkTarget(t *testing.T) {
 }
 
 func TestLoadForEditMalformedConfigCannotBeSaved(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(testenv.TempDir(t), "reasonix.toml")
 	const malformed = "[agent\ntemperature = 0.4\n"
 	if err := os.WriteFile(path, []byte(malformed), 0o644); err != nil {
 		t.Fatal(err)

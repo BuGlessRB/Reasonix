@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // TestCompactRefusedWhileRunning locks in the same guard Rewind/Branch have:
@@ -22,7 +23,7 @@ func TestCompactRefusedWhileRunning(t *testing.T) {
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{
 		Executor:   exec,
-		SessionDir: t.TempDir(),
+		SessionDir: testenv.TempDir(t),
 		Label:      "test",
 		Sink:       event.Discard,
 	})
@@ -91,7 +92,7 @@ func TestResumeRefusedWhileRunning(t *testing.T) {
 	exec := agent.New(nil, nil, live, agent.Options{}, event.Discard)
 	c := New(Options{
 		Executor:   exec,
-		SessionDir: t.TempDir(),
+		SessionDir: testenv.TempDir(t),
 		Label:      "test",
 		Sink:       event.Discard,
 	})

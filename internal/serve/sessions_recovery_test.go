@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // Each fork carries a different prefix of the parent, so both stay covered by
@@ -36,7 +37,7 @@ func recoveryFork(t *testing.T, root string, messages ...string) string {
 // sweeps them; serve kept a conflict loop's forks — one full transcript copy
 // each — until the user found them by hand.
 func TestSweepRecoveryBranchesTrashesCoveredForks(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
 	saveVisibilitySession(t, root, "今日热点", "好的")
 	// The fork the session is still on is written first: the shorter one that
@@ -65,7 +66,7 @@ func TestSweepRecoveryBranchesTrashesCoveredForks(t *testing.T) {
 // A branch someone continued on holds turns the parent never saw. The sweep
 // proves coverage from content, so it must leave that branch where it is.
 func TestSweepRecoveryBranchesKeepsContinuedFork(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	root := filepath.Join(dir, "20260815-161507-deepseek-v4-flash.jsonl")
 	saveVisibilitySession(t, root, "今日热点", "好的")
 

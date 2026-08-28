@@ -5,14 +5,16 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestRebuildReplacesStaleUsageProjection(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	databasePath := filepath.Join(t.TempDir(), "usage.sqlite")
-	staleDir := t.TempDir()
-	currentDir := t.TempDir()
+	databasePath := filepath.Join(testenv.TempDir(t), "usage.sqlite")
+	staleDir := testenv.TempDir(t)
+	currentDir := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(staleDir, "2026-08-09.jsonl"),
 		[]byte("{\"ts\":\"2026-08-09T10:00:00Z\",\"source\":\"desktop\",\"total\":9}\n"), 0o600); err != nil {
 		t.Fatal(err)

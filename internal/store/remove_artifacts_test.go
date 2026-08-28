@@ -4,13 +4,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // The directory sidecar is the one every hand-rolled deleter dropped: a list of
 // paths given to os.Remove skips it, so spilled output outlived the
 // conversations it belonged to.
 func TestRemoveSessionArtifactsTakesTheOutputsDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	write(t, path, "{}\n")
 	write(t, SessionEventLog(path), "{}\n")
@@ -36,7 +38,7 @@ func TestRemoveSessionArtifactsTakesTheOutputsDir(t *testing.T) {
 // Nothing to delete is not a failure: most sessions never spilled, and a
 // re-run of a completed delete must stay quiet.
 func TestRemoveSessionArtifactsIsIdempotent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "never-existed.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "never-existed.jsonl")
 	for range 2 {
 		if err := RemoveSessionArtifacts(path); err != nil {
 			t.Fatalf("RemoveSessionArtifacts on absent session: %v", err)
@@ -50,7 +52,7 @@ func TestRemoveSessionArtifactsIsIdempotent(t *testing.T) {
 // A file that refuses to go must be reported, not swallowed: the front ends
 // leave a cleanup marker on the strength of that error.
 func TestRemoveSessionArtifactsReportsRefusals(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	write(t, path, "{}\n")
 

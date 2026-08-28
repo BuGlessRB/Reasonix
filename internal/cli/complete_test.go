@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 )
 
 // writeAt creates dir/rel (with parents) holding content, for fs-backed tests.
@@ -247,7 +248,7 @@ func TestActiveAtToken(t *testing.T) {
 // escaped @tokens and that completion can descend through such a directory:
 // the escaped token is unescaped for filesystem reads.
 func TestFileItemsEscapedSpaces(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeAt(t, dir, "my file.md", "x")
 	writeAt(t, dir, "my dir/inner.md", "y")
 
@@ -287,7 +288,7 @@ func TestSplitPathToken(t *testing.T) {
 // TestFileItemsOneLevel verifies @ completion lists exactly one directory level
 // (no recursion): a subdir shows as a descendable entry, its contents do not.
 func TestFileItemsOneLevel(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeAt(t, dir, "alpha.go", "x")
 	writeAt(t, dir, "sub/deep.go", "y") // creates sub/ with a file inside
 	writeAt(t, dir, ".hidden", "z")
@@ -316,8 +317,8 @@ func TestFileItemsOneLevel(t *testing.T) {
 }
 
 func TestFileItemsSubdirUsesWorkspaceRoot(t *testing.T) {
-	cwd := t.TempDir()
-	workspace := t.TempDir()
+	cwd := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
 	writeAt(t, cwd, "src/cwd.go", "wrong")
 	writeAt(t, workspace, "src/workspace.go", "right")
 
@@ -328,7 +329,7 @@ func TestFileItemsSubdirUsesWorkspaceRoot(t *testing.T) {
 	}
 
 	m := newTestChatTUI()
-	m.ctrl = control.New(control.Options{SessionDir: t.TempDir(), WorkspaceRoot: workspace})
+	m.ctrl = control.New(control.Options{SessionDir: testenv.TempDir(t), WorkspaceRoot: workspace})
 	items := m.fileItems("src/")
 
 	if !hasLabel(items, "workspace.go") {
@@ -343,7 +344,7 @@ func TestFileItemsSearchesBasenameAtTopLevel(t *testing.T) {
 	orig, _ := os.Getwd()
 	defer os.Chdir(orig)
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeAt(t, dir, "frontend/wailsjs/runtime/runtime.js", "x")
 	writeAt(t, dir, "node_modules/pkg/runtime.js", "noise")
 	if err := os.Chdir(dir); err != nil {
@@ -365,7 +366,7 @@ func TestFileItemsSearchRespectsMenuCap(t *testing.T) {
 	orig, _ := os.Getwd()
 	defer os.Chdir(orig)
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	for i := range maxCompItems {
 		writeAt(t, dir, filepath.Join("aa-dir-"+fmt.Sprintf("%03d", i), "file.txt"), "x")
 	}
@@ -386,7 +387,7 @@ func TestFileItemsSearchRespectsMenuCap(t *testing.T) {
 }
 
 func TestFileItemsHiddenWhenDotTyped(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeAt(t, dir, ".hidden", "z")
 	m := newTestChatTUI()
 	items := m.fileItems(dir + "/.") // frag = "." → show hidden
@@ -509,7 +510,7 @@ func TestEnterOnMCPWithTrailingSpaceSubmitsManager(t *testing.T) {
 
 func TestEnterOnExactSlashArgSubmitsWhenPrefixAlsoMatches(t *testing.T) {
 	m := newTestChatTUI()
-	m.ctrl = control.New(control.Options{SessionDir: t.TempDir()})
+	m.ctrl = control.New(control.Options{SessionDir: testenv.TempDir(t)})
 	m.input.SetValue("/resume 1")
 	m.completion = completion{
 		active:      true,
@@ -542,7 +543,7 @@ func TestSlashArgCompletionRemoveNoHost(t *testing.T) {
 }
 
 func TestSlashArgCompletionSwitchBranches(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 	exec.Session().Add(provider.Message{Role: provider.RoleUser, Content: "root prompt"})
 	ctrl := control.New(control.Options{Executor: exec, SessionDir: dir, Label: "test"})

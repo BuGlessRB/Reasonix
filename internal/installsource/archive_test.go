@@ -7,13 +7,14 @@ import (
 	"testing"
 
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 // The round trip is the point: what an export produces is what an install
 // accepts. If these two ever drift, the archive a user was handed becomes a
 // file they cannot do anything with.
 func TestInstallAcceptsAnExportedZip(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeFile(t, filepath.Join(src, "reasonix-plugin.json"), `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "roundtrip",
@@ -31,13 +32,13 @@ func TestInstallAcceptsAnExportedZip(t *testing.T) {
 	if len(required) != 1 || required[0] != "DOCS_TOKEN" {
 		t.Fatalf("required = %v", required)
 	}
-	zipPath := filepath.Join(t.TempDir(), "roundtrip.zip")
+	zipPath := filepath.Join(testenv.TempDir(t), "roundtrip.zip")
 	if err := os.WriteFile(zipPath, archive, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	home := t.TempDir()
-	tl := NewTool(Options{ProjectRoot: t.TempDir(), HomeDir: home})
+	home := testenv.TempDir(t)
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: home})
 	resp := execInstall(t, tl, map[string]any{"source": zipPath, "kind": "plugin", "apply": true})
 	if !resp.OK || resp.Status != "done" {
 		t.Fatalf("response = %+v", resp)
@@ -62,7 +63,7 @@ func TestInstallAcceptsAnExportedZip(t *testing.T) {
 }
 
 func TestZipCannotBeLinked(t *testing.T) {
-	zipPath := filepath.Join(t.TempDir(), "x.zip")
+	zipPath := filepath.Join(testenv.TempDir(t), "x.zip")
 	if err := os.WriteFile(zipPath, []byte("PK"), 0o644); err != nil {
 		t.Fatal(err)
 	}

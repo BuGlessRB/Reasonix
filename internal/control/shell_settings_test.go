@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 const shellSeedConfig = `config_version = 6
@@ -22,7 +23,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 
 func seedShellConfig(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	if err := os.WriteFile(path, []byte(shellSeedConfig), 0o600); err != nil {
@@ -56,7 +57,7 @@ func TestSaveShellSettingsPersists(t *testing.T) {
 // the failure to every later command, with nothing on screen connecting the two.
 func TestSaveShellSettingsRefusesUnusablePath(t *testing.T) {
 	path := seedShellConfig(t)
-	missing := filepath.Join(t.TempDir(), "no-such-bash")
+	missing := filepath.Join(testenv.TempDir(t), "no-such-bash")
 	if err := (&Controller{}).SaveShellSettings("bash", missing); err == nil {
 		t.Fatal("saving a missing executable succeeded")
 	}

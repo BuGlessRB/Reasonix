@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -44,7 +45,7 @@ func agentOverForceWindow(t *testing.T, prov provider.Provider, sess *Session, w
 		ContextWindow: window,
 		CompactRatio:  0.5,
 		RecentKeep:    2,
-		ArchiveDir:    t.TempDir(),
+		ArchiveDir:    testenv.TempDir(t),
 	}, event.Discard)
 }
 

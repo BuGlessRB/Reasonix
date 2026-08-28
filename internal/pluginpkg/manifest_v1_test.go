@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // jsonText marshals v for manifest fixture construction in tests.
@@ -63,7 +65,7 @@ func writeV2ExampleAssets(t *testing.T, root string) {
 }
 
 func TestManifestV2FullParse(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeV2Plugin(t, root, v2ExampleManifest)
 	writeV2ExampleAssets(t, root)
 
@@ -174,7 +176,7 @@ func TestManifestV2RejectsUnknownFieldsWithPath(t *testing.T) {
 				t.Fatal(err)
 			}
 			tc.mutate(doc)
-			root := t.TempDir()
+			root := testenv.TempDir(t)
 			writeV2Plugin(t, root, jsonText(doc))
 			writeTestFile(t, filepath.Join(root, "skills", "s", "SKILL.md"), "---\ndescription: s\n---\nS")
 			_, _, err := ParseDir(root)
@@ -207,7 +209,7 @@ func TestManifestAPIVersionV2Gating(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(strings.ReplaceAll(strings.TrimSpace(jsonText(tc.apiVersion)), `"`, ""), func(t *testing.T) {
-			root := t.TempDir()
+			root := testenv.TempDir(t)
 			manifest := `{"apiVersion": ` + jsonText(tc.apiVersion) + `, "name": "ver-demo"}`
 			writeV2Plugin(t, root, manifest)
 			_, _, err := ParseDir(root)
@@ -225,7 +227,7 @@ func TestManifestAPIVersionV2Gating(t *testing.T) {
 }
 
 func TestManifestV2LegacyFieldsMergeWithContributes(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeV2Plugin(t, root, `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "merge-demo",
@@ -303,7 +305,7 @@ func TestManifestV2MergeConflictsFail(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := testenv.TempDir(t)
 			writeV2Plugin(t, root, tc.manifest)
 			_, _, err := ParseDir(root)
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
@@ -314,7 +316,7 @@ func TestManifestV2MergeConflictsFail(t *testing.T) {
 }
 
 func TestManifestV2PromptsAndCommandsStaySeparateSets(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeV2Plugin(t, root, `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "dual-demo",
@@ -359,7 +361,7 @@ func TestManifestV2RuntimeValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := testenv.TempDir(t)
 			writeV2Plugin(t, root, `{"apiVersion": "reasonix.io/plugin/v2", "name": "rt-demo", "runtime": `+tc.runtime+`}`)
 			_, _, err := ParseDir(root)
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
@@ -370,7 +372,7 @@ func TestManifestV2RuntimeValidation(t *testing.T) {
 }
 
 func TestManifestV2RuntimeAcceptsBoundaryValues(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeV2Plugin(t, root, `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "rt-ok",
@@ -392,7 +394,7 @@ func TestManifestV2RuntimeAcceptsBoundaryValues(t *testing.T) {
 
 func TestManifestV2PathSafety(t *testing.T) {
 	t.Run("dot-dot escape rejected", func(t *testing.T) {
-		root := t.TempDir()
+		root := testenv.TempDir(t)
 		writeV2Plugin(t, root, `{"apiVersion": "reasonix.io/plugin/v2", "name": "esc", "contributes": {"skills": ["../outside"]}}`)
 		if _, _, err := ParseDir(root); err == nil || !strings.Contains(err.Error(), "must be relative and stay inside the plugin root") {
 			t.Fatalf("error = %v, want the traversal refusal", err)
@@ -404,7 +406,7 @@ func TestManifestV2PathSafety(t *testing.T) {
 		"windows UNC":   `\\server\share\secret.txt`,
 	} {
 		t.Run(name+" absolute path rejected", func(t *testing.T) {
-			root := t.TempDir()
+			root := testenv.TempDir(t)
 			writeV2Plugin(t, root, jsonText(map[string]any{
 				"apiVersion": ManifestAPIVersionV2,
 				"name":       "abs",
@@ -418,9 +420,9 @@ func TestManifestV2PathSafety(t *testing.T) {
 		})
 	}
 	t.Run("symlink escape rejected", func(t *testing.T) {
-		outside := t.TempDir()
+		outside := testenv.TempDir(t)
 		writeTestFile(t, filepath.Join(outside, "evil.md"), "evil")
-		root := t.TempDir()
+		root := testenv.TempDir(t)
 		writeV2Plugin(t, root, `{"apiVersion": "reasonix.io/plugin/v2", "name": "linkesc", "contributes": {"skills": ["skills-link"]}}`)
 		if err := os.Symlink(outside, filepath.Join(root, "skills-link")); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
@@ -430,7 +432,7 @@ func TestManifestV2PathSafety(t *testing.T) {
 		}
 	})
 	t.Run("in-root symlink accepted", func(t *testing.T) {
-		root := t.TempDir()
+		root := testenv.TempDir(t)
 		writeV2Plugin(t, root, `{"apiVersion": "reasonix.io/plugin/v2", "name": "linkok", "contributes": {"skills": ["skills-link"]}}`)
 		writeTestFile(t, filepath.Join(root, "real-skills", "s", "SKILL.md"), "---\ndescription: s\n---\nS")
 		if err := os.Symlink(filepath.Join(root, "real-skills"), filepath.Join(root, "skills-link")); err != nil {
@@ -441,9 +443,9 @@ func TestManifestV2PathSafety(t *testing.T) {
 		}
 	})
 	t.Run("theme symlink escape rejected", func(t *testing.T) {
-		outside := t.TempDir()
+		outside := testenv.TempDir(t)
 		writeTestFile(t, filepath.Join(outside, "evil.reasonix-theme"), "evil")
-		root := t.TempDir()
+		root := testenv.TempDir(t)
 		writeV2Plugin(t, root, `{"apiVersion": "reasonix.io/plugin/v2", "name": "themesc", "contributes": {"themes": ["themes/*.reasonix-theme"]}}`)
 		if err := os.MkdirAll(filepath.Join(root, "themes"), 0o755); err != nil {
 			t.Fatal(err)
@@ -456,7 +458,7 @@ func TestManifestV2PathSafety(t *testing.T) {
 		}
 	})
 	t.Run("non-regular theme rejected", func(t *testing.T) {
-		root := t.TempDir()
+		root := testenv.TempDir(t)
 		writeV2Plugin(t, root, `{"apiVersion": "reasonix.io/plugin/v2", "name": "themedir", "contributes": {"themes": ["themes"]}}`)
 		if err := os.MkdirAll(filepath.Join(root, "themes"), 0o755); err != nil {
 			t.Fatal(err)
@@ -466,7 +468,7 @@ func TestManifestV2PathSafety(t *testing.T) {
 		}
 	})
 	t.Run("missing paths are warnings not failures", func(t *testing.T) {
-		root := t.TempDir()
+		root := testenv.TempDir(t)
 		writeV2Plugin(t, root, `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "missing-demo",
@@ -493,7 +495,7 @@ func TestManifestV2PathSafety(t *testing.T) {
 }
 
 func TestManifestV2DescribeRendersPromptsThemesRuntime(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	root := filepath.Join(home, "plugins", "example")
 	writeV2Plugin(t, root, v2ExampleManifest)
 	writeV2ExampleAssets(t, root)

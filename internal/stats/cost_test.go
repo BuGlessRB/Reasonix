@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 // writeDay drops raw JSONL lines into a day file the way the recorder would.
@@ -38,7 +40,7 @@ func queryAll(t *testing.T, dir string) RangeStats {
 // Two billing currencies never add up: one number would have to invent an
 // exchange rate, and the rate a turn was billed at is not the rate today.
 func TestCostStaysSeparatePerCurrency(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeDay(t, dir, "2026-08-10",
 		map[string]any{"ts": "2026-08-10T01:00:00Z", "model": "deepseek/x", "source": "cli", "total": 100, "cost_amount": "1.50", "cost_currency": "CNY"},
 		map[string]any{"ts": "2026-08-10T02:00:00Z", "model": "other/y", "source": "cli", "total": 200, "cost_amount": "0.25", "cost_currency": "USD"},
@@ -59,7 +61,7 @@ func TestCostStaysSeparatePerCurrency(t *testing.T) {
 // A day with tokens but no cost field is not a day that cost nothing — the
 // field was added later, and rendering it as zero would understate the bill.
 func TestDaysWithoutCostReportNoneRatherThanZero(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeDay(t, dir, "2026-08-10", map[string]any{"ts": "2026-08-10T01:00:00Z", "model": "deepseek/x", "source": "cli", "total": 5000})
 	writeDay(t, dir, "2026-08-11", map[string]any{"ts": "2026-08-11T01:00:00Z", "model": "deepseek/x", "source": "cli", "total": 10, "cost_amount": "0.75", "cost_currency": "CNY"})
 	got := queryAll(t, dir)
@@ -89,7 +91,7 @@ func TestDaysWithoutCostReportNoneRatherThanZero(t *testing.T) {
 // An amount that does not parse is dropped, not guessed at: a wrong total is
 // worse than a missing one.
 func TestUnparseableAmountIsSkipped(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	writeDay(t, dir, "2026-08-10",
 		map[string]any{"ts": "2026-08-10T01:00:00Z", "model": "deepseek/x", "source": "cli", "total": 10, "cost_amount": "not-a-number", "cost_currency": "CNY"},
 		map[string]any{"ts": "2026-08-10T02:00:00Z", "model": "deepseek/x", "source": "cli", "total": 10, "cost_amount": "1.25", "cost_currency": "CNY"},

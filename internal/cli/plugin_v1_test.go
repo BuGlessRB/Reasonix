@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 // installV2RuntimePlugin writes a Manifest v2 package with a runtime into
@@ -43,7 +44,7 @@ func installV2RuntimePlugin(t *testing.T, home string) string {
 }
 
 func TestPluginShowRendersRuntimeFullTrust(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	installV2RuntimePlugin(t, home)
 
@@ -71,7 +72,7 @@ func TestPluginShowRendersRuntimeFullTrust(t *testing.T) {
 }
 
 func TestPluginDoctorValidatesV2Runtime(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	installV2RuntimePlugin(t, home)
 
@@ -86,7 +87,7 @@ func TestPluginDoctorValidatesV2Runtime(t *testing.T) {
 }
 
 func TestPluginDoctorFailsForMissingRuntimeCommand(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	root := installV2RuntimePlugin(t, home)
 	// Remove the runtime binary so the command no longer resolves.
@@ -105,7 +106,7 @@ func TestPluginDoctorFailsForMissingRuntimeCommand(t *testing.T) {
 }
 
 func TestPluginDoctorReportsMissingV2PathsAsWarnings(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	root := filepath.Join(home, "plugins", "gap")
 	writePluginTestFile(t, filepath.Join(root, pluginpkg.NativeManifest), `{

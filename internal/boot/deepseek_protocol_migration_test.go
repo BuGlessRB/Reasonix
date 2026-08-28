@@ -53,7 +53,7 @@ command = "C:\Users\reasonix\mcp.exe"
 				}
 			})
 			var handledWarnings []string
-			opts := Options{Sink: sink, WorkspaceRoot: t.TempDir(), StatsSource: tt.statsSource}
+			opts := Options{Sink: sink, WorkspaceRoot: robustTempDir(t), StatsSource: tt.statsSource}
 			if tt.handleWarnings {
 				opts.OnConfigLoadWarnings = func(warnings []string) bool {
 					handledWarnings = append([]string(nil), warnings...)
@@ -97,7 +97,7 @@ command = "C:\Users\reasonix\mcp.exe"
 func TestBuildDeliversProjectConfigWarningsWithoutDeepSeekMigrationError(t *testing.T) {
 	home := isolateConfigHome(t)
 	t.Setenv("REASONIX_HOME", filepath.Join(home, "reasonix-home"))
-	workspace := t.TempDir()
+	workspace := robustTempDir(t)
 	projectPath := filepath.Join(workspace, "reasonix.toml")
 	raw := `[[plugins]]
 name = "windows-mcp"

@@ -9,10 +9,11 @@ import (
 	"testing"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/testenv"
 )
 
 func TestCollectQualityProducesPublicSafeSummary(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "private-project-session.jsonl")
 	const secret = "private-source-and-prompt-secret"
 	messages := []string{
@@ -109,7 +110,7 @@ func TestCollectQualityProducesPublicSafeSummary(t *testing.T) {
 }
 
 func TestCollectQualityWithoutTelemetryStaysUseful(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	if err := os.WriteFile(path, []byte(`{"role":"user","content":"hello"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

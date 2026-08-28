@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/evidence"
+	"reasonix/internal/testenv"
 )
 
 const witnessBefore = "package tally\n\nfunc Sum(xs []int) int {\n\ttotal := 0\n\treturn total\n}\n"
@@ -49,7 +50,7 @@ func TestACompoundDiffCoversTheChangeItPrinted(t *testing.T) {
 // A shell write names no earlier revision, so the host cannot know which lines
 // changed. Showing such a file means showing the file.
 func TestAShellWrittenFileIsWitnessedByItsContent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "probe.go")
 	if err := os.WriteFile(path, []byte(witnessAfter), 0o644); err != nil {
 		t.Fatal(err)

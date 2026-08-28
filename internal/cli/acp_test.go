@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 
+	"reasonix/internal/testenv"
 	_ "reasonix/internal/tool/builtin"
 )
 
@@ -26,7 +27,7 @@ func init() {
 }
 
 func TestACPBuiltinToolsKeepSessionLevelBuiltins(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	tools := toolMap(acpBuiltinTools(&config.Config{}, dir, []string{dir}))
 	for _, name := range []string{
 		"todo_write",
@@ -83,7 +84,7 @@ func TestACPRejectsInvalidSupervisorFlags(t *testing.T) {
 
 func TestACPSupervisorRuntimeStateUsesHardOverrides(t *testing.T) {
 	isolateCLIConfigHome(t)
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(`
 [agent]
 planner_model = "configured-planner"
@@ -116,7 +117,7 @@ allow_write = ["../outside"]
 
 func TestACPSupervisorRuntimeStateDegradesWhenSandboxIsUnavailable(t *testing.T) {
 	isolateCLIConfigHome(t)
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte("[sandbox]\nbash = \"enforce\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +166,7 @@ func TestACPFactoryLoadsSessionCwdProjectConfig(t *testing.T) {
 	if _, err := config.SetCredential("REASONIX_TEST_KEY", "test-key"); err != nil {
 		t.Fatalf("SetCredential: %v", err)
 	}
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(`
 default_model = "local"
 
@@ -208,7 +209,7 @@ func TestACPFactoryClearsEffortOverrideForUnsupportedModel(t *testing.T) {
 	if _, err := config.SetCredential("REASONIX_TEST_KEY", "test-key"); err != nil {
 		t.Fatalf("SetCredential: %v", err)
 	}
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(`
 default_model = "reasoner/reasoning-model"
 
@@ -265,7 +266,7 @@ func TestACPFactoryAdvertisesAndNormalizesRuntimeProfiles(t *testing.T) {
 	if _, err := config.SetCredential("REASONIX_TEST_KEY", "test-key"); err != nil {
 		t.Fatalf("SetCredential: %v", err)
 	}
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(`
 default_model = "local"
 

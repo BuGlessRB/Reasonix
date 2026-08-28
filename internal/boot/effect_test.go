@@ -46,8 +46,8 @@ func (p *effectRecordingProvider) requests() []provider.Request {
 	return append([]provider.Request(nil), p.reqs...)
 }
 
-// effectRun builds the real stack around a recording provider, runs one
-// prompt, and returns every request that reached the provider boundary.
+// effectRun builds the real stack around a recording provider, runs one prompt,
+// and returns the executor's own requests at the provider boundary.
 func effectRun(t *testing.T, kind, tokenMode string, arm ablation.Set) []provider.Request {
 	t.Helper()
 	isolateConfigHome(t)
@@ -78,9 +78,9 @@ model = "x"
 	if err := ctrl.Run(context.Background(), "reply ok"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	reqs := rec.requests()
+	reqs := agentRequests(rec.requests())
 	if len(reqs) == 0 {
-		t.Fatal("no request reached the provider boundary")
+		t.Fatal("no agent request reached the provider boundary")
 	}
 	return reqs
 }

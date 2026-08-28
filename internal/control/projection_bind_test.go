@@ -6,10 +6,11 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestNewSessionRebindsProjectionSidecarPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	oldPath := agent.NewSessionPath(dir, "old")
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "old work"})
@@ -84,7 +85,7 @@ func TestNewSessionRebindsProjectionSidecarPath(t *testing.T) {
 }
 
 func TestClearSessionRebindsProjectionSidecarPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := agent.NewSessionPath(dir, "s")
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
@@ -107,7 +108,7 @@ func TestClearSessionRebindsProjectionSidecarPath(t *testing.T) {
 }
 
 func TestBranchRebindsProjectionSidecarPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := agent.NewSessionPath(dir, "main")
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "task"})

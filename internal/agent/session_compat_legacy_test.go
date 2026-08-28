@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // Legacy session JSONL compatibility gate for the extension-kernel work.
@@ -23,7 +25,7 @@ const legacySessionFixture = `{"role":"system","content":"LEGACY SYSTEM PROMPT",
 `
 
 func TestLegacySessionJSONLRoundTrip(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "legacy-session.jsonl")
 	if err := os.WriteFile(path, []byte(legacySessionFixture), 0o644); err != nil {
 		t.Fatal(err)

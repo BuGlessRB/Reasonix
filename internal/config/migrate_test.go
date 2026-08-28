@@ -7,13 +7,15 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // legacyHome points HOME / config-dir / .env resolution at a fresh temp tree and
 // returns the legacy config.json path and the v1+ dest config path.
 func legacyHome(t *testing.T) (src, dest, home string) {
 	t.Helper()
-	home = t.TempDir()
+	home = testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)                               // os.UserHomeDir on Windows
@@ -257,7 +259,7 @@ command = "global-bin"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectTOML := t.TempDir()
+	projectTOML := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(projectTOML, "reasonix.toml"), []byte(`
 [[plugins]]
 name = "project-toml"
@@ -269,7 +271,7 @@ command = "project-should-not-win"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectJSON := t.TempDir()
+	projectJSON := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(projectJSON, ".mcp.json"), []byte(`{
 		"mcpServers": {
 			"project-json": {"command": "project-json-bin"}
@@ -309,7 +311,7 @@ command = "project-should-not-win"
 		t.Fatalf("migration marker missing: %v", err)
 	}
 
-	lateProject := t.TempDir()
+	lateProject := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(lateProject, "reasonix.toml"), []byte(`
 [[plugins]]
 name = "late"
@@ -351,7 +353,7 @@ func TestMCPMigrationMarkerMakesCurrentConfigAuthoritativeAfterRemoval(t *testin
 		t.Fatalf("migration result = %+v, want one imported MCP", res)
 	}
 
-	removed, err := RemovePluginFromSourcesForRoot(t.TempDir(), "legacy-only")
+	removed, err := RemovePluginFromSourcesForRoot(testenv.TempDir(t), "legacy-only")
 	if err != nil {
 		t.Fatalf("RemovePluginFromSourcesForRoot: %v", err)
 	}
@@ -434,7 +436,7 @@ func TestMigrateMCPToUserConfigOnUpgradePreservesConfigVersion(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("config_version = 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(`
 [[plugins]]
 name = "project"
@@ -743,7 +745,7 @@ func TestMigrateImportsLegacyKeyringCredentials(t *testing.T) {
 
 func TestMigrateLegacyCredentialsUsesWorkspaceRootForKeyring(t *testing.T) {
 	_, dest, _ := legacyHome(t)
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -783,7 +785,7 @@ api_key_env = "WORKSPACE_ONLY_KEY"
 }
 
 func TestMigrateLegacyCredentialsSkipsKeyringWhenIsolated(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	isolated := filepath.Join(home, "isolated-home")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -897,7 +899,7 @@ func TestMigrateSkipsLegacyCredentialsAlreadyInCurrentAutoStore(t *testing.T) {
 
 func TestMigrateImportsLegacyStateHomeDotEnvCredentials(t *testing.T) {
 	_, dest, _ := legacyHome(t)
-	state := t.TempDir()
+	state := testenv.TempDir(t)
 	t.Setenv("REASONIX_STATE_HOME", state)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "")
 	os.Unsetenv("REASONIX_CREDENTIALS_STORE")
@@ -1008,7 +1010,7 @@ func TestMigrateSupportData(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping since legacyOSSupportDir equals current reasonixHomeDir on Windows")
 	}
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)

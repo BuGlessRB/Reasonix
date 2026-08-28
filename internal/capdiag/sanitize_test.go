@@ -3,11 +3,13 @@ package capdiag
 import (
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestSanitizeErrTextRedactsSecretsAndPaths(t *testing.T) {
-	home := t.TempDir()
-	ws := t.TempDir()
+	home := testenv.TempDir(t)
+	ws := testenv.TempDir(t)
 	in := "stdio plugin \"x\": command \"npx\" not found on PATH; PATH=\"" + home + "/bin:/usr/bin\" Bearer sk-secret-token " +
 		ws + "/secret.env stderr: Authorization=Bearer abc.def"
 	out := sanitizeErrTextWithPaths(in, ws, home, "")

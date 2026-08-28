@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // A pane that opens without a transcript mints one on its first turn. The lease
@@ -16,7 +17,7 @@ import (
 // over its own session silently drops the input — the first message of every
 // freshly opened pane came back 409.
 func TestSubmitBindsWriteAuthorityToAFreshlyMintedSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	ctrl := control.New(control.Options{SessionDir: dir})
 	defer ctrl.Close()
 	if ctrl.SessionPath() != "" {

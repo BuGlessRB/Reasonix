@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func writeProjectDefaultTestConfig(t *testing.T, dir, name, body string) string {
@@ -21,7 +23,7 @@ func writeProjectDefaultTestConfig(t *testing.T, dir, name, body string) string 
 // nothing and every launch from that folder failed. The load must fall back to
 // the user/global default_model instead.
 func TestLoadForRoot_UnresolvableProjectDefaultModelFallsBackToUserDefault(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	writeProjectDefaultTestConfig(t, home, "config.toml", `default_model = "deepseek-pro"
 
@@ -33,7 +35,7 @@ model       = "deepseek-v4-pro"
 api_key_env = "DEEPSEEK_API_KEY"
 `)
 
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	// A name no provider defines and no migration answers for: the point is a
 	// ref that cannot resolve, not which vendor it names.
 	writeProjectDefaultTestConfig(t, project, "reasonix.toml", `default_model = "retired-vendor"
@@ -60,7 +62,7 @@ allow = ["Bash(go test*)"]
 // A project default_model that does resolve is a legitimate override and must
 // keep winning over the user config.
 func TestLoadForRoot_ResolvableProjectDefaultModelStillWins(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	writeProjectDefaultTestConfig(t, home, "config.toml", `default_model = "deepseek-pro"
 
@@ -78,7 +80,7 @@ base_url    = "http://127.0.0.1:8080/v1"
 model       = "local-model"
 `)
 
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	writeProjectDefaultTestConfig(t, project, "reasonix.toml", `default_model = "local"
 `)
 
@@ -97,7 +99,7 @@ model       = "local-model"
 // When neither the project override nor the user default resolves, keep the
 // project value so the existing boot error names what the user actually wrote.
 func TestLoadForRoot_ProjectDefaultModelKeptWhenUserDefaultUnresolvable(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	writeProjectDefaultTestConfig(t, home, "config.toml", `default_model = "gone-too"
 
@@ -109,7 +111,7 @@ model       = "deepseek-v4-pro"
 api_key_env = "DEEPSEEK_API_KEY"
 `)
 
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	writeProjectDefaultTestConfig(t, project, "reasonix.toml", `default_model = "gone"
 `)
 
@@ -130,10 +132,10 @@ api_key_env = "DEEPSEEK_API_KEY"
 // default (see boot.TestBuildUnknownModelErrorIsActionable): no fallback fires
 // because no user config explicitly defines default_model.
 func TestLoadForRoot_NoUserConfigKeepsBrokenProjectDefaultModel(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 	writeProjectDefaultTestConfig(t, project, "reasonix.toml", `default_model = "legacy-missing"
 
 [[providers]]
@@ -159,7 +161,7 @@ api_key_env = "REASONIX_TEST_KEY_UNSET"
 // No project override: the user default is untouched and nothing is reported
 // as ignored, even when the user default itself is stale.
 func TestLoadForRoot_NoProjectOverrideLeavesUserDefaultAlone(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	writeProjectDefaultTestConfig(t, home, "config.toml", `default_model = "deepseek-pro"
 
@@ -171,7 +173,7 @@ model       = "deepseek-v4-pro"
 api_key_env = "DEEPSEEK_API_KEY"
 `)
 
-	project := t.TempDir()
+	project := testenv.TempDir(t)
 
 	cfg, err := LoadForRoot(project)
 	if err != nil {

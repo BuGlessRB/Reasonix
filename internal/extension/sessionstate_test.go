@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestSessionExtensionsRoundTrip(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 
 	store, err := LoadSessionExtensions(sessionPath)
@@ -74,7 +76,7 @@ func TestSessionExtensionsRoundTrip(t *testing.T) {
 }
 
 func TestSessionExtensionsBlobCap(t *testing.T) {
-	store, err := LoadSessionExtensions(filepath.Join(t.TempDir(), "s.jsonl"))
+	store, err := LoadSessionExtensions(filepath.Join(testenv.TempDir(t), "s.jsonl"))
 	if err != nil {
 		t.Fatalf("LoadSessionExtensions: %v", err)
 	}
@@ -106,7 +108,7 @@ func TestSessionExtensionsBlobCap(t *testing.T) {
 }
 
 func TestSessionExtensionsCorruptFileTolerated(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	storePath := SessionExtensionsPath(sessionPath)
 	if err := os.WriteFile(storePath, []byte("{corrupt json!!!"), 0o644); err != nil {
@@ -138,7 +140,7 @@ func TestSessionExtensionsCorruptFileTolerated(t *testing.T) {
 // TestSessionExtensionsNeverTouchesSessionJSONL pins the byte-stability
 // contract: the session file itself is never read or written by the store.
 func TestSessionExtensionsNeverTouchesSessionJSONL(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 	sessionBytes := []byte("{\"role\":\"system\"}\n{\"role\":\"user\"}\n")
 	if err := os.WriteFile(sessionPath, sessionBytes, 0o644); err != nil {

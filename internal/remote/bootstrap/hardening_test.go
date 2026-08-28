@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"reasonix/internal/remote"
+	"reasonix/internal/testenv"
 )
 
 func TestEnsureServeRejectsStalePortFile(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	paths := pathsFor(root, root)
 	if err := os.MkdirAll(paths.Dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -46,7 +47,7 @@ func TestEnsureServeRejectsStalePortFile(t *testing.T) {
 
 func TestEnsureServeSerializesConcurrentClients(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	paths := pathsFor(root, root)
 	var launches atomic.Int32
 	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
@@ -96,7 +97,7 @@ func TestEnsureServeSerializesConcurrentClients(t *testing.T) {
 
 func TestAutoInstallPreservesNPMFailureWhenNoUploadBinaryExists(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
 		switch {
 		case strings.Contains(cmd, "command -v reasonix"):
@@ -128,7 +129,7 @@ func TestAutoInstallPreservesNPMFailureWhenNoUploadBinaryExists(t *testing.T) {
 
 func TestAutoInstallDownloadsVerifiedCrossPlatformBinaryAfterNPMFailure(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	uploaded := uploadedBinPath(root, "reasonix")
 	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
 		switch {

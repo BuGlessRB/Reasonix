@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/diff"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -82,7 +83,7 @@ func TestPreviewMatchesExecute(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Preview against one copy.
-			pf := filepath.Join(t.TempDir(), "f.txt")
+			pf := filepath.Join(testenv.TempDir(t), "f.txt")
 			if tc.seed != "" {
 				os.WriteFile(pf, []byte(tc.seed), 0o644)
 			}
@@ -104,7 +105,7 @@ func TestPreviewMatchesExecute(t *testing.T) {
 			}
 
 			// Execute against a second identical copy.
-			ef := filepath.Join(t.TempDir(), "f.txt")
+			ef := filepath.Join(testenv.TempDir(t), "f.txt")
 			if tc.seed != "" {
 				os.WriteFile(ef, []byte(tc.seed), 0o644)
 			}
@@ -126,7 +127,7 @@ func TestPreviewMatchesExecute(t *testing.T) {
 // the +N/-M tallies.
 func TestPreviewKindAndTally(t *testing.T) {
 	// write_file to a nonexistent path is a create.
-	nf := filepath.Join(t.TempDir(), "new.txt")
+	nf := filepath.Join(testenv.TempDir(t), "new.txt")
 	c, err := writeFile{}.Preview(context.Background(), argsJSON(t, map[string]any{"path": nf, "content": "a\nb\nc\n"}))
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +140,7 @@ func TestPreviewKindAndTally(t *testing.T) {
 	}
 
 	// edit_file on an existing file is a modify with balanced tallies.
-	ef := filepath.Join(t.TempDir(), "e.txt")
+	ef := filepath.Join(testenv.TempDir(t), "e.txt")
 	os.WriteFile(ef, []byte("one\ntwo\nthree\n"), 0o644)
 	c, err = editFile{}.Preview(context.Background(), argsJSON(t, map[string]any{"path": ef, "old_string": "two", "new_string": "TWO"}))
 	if err != nil {
@@ -156,13 +157,13 @@ func TestPreviewKindAndTally(t *testing.T) {
 // TestPreviewMirrorsErrors confirms an unworkable call fails in Preview the
 // same way it would in Execute — so a UI never previews an impossible change.
 func TestPreviewMirrorsErrors(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "x.txt")
+	f := filepath.Join(testenv.TempDir(t), "x.txt")
 	os.WriteFile(f, []byte("x x x"), 0o644)
 
 	if _, err := (editFile{}).Preview(context.Background(), argsJSON(t, map[string]any{"path": f, "old_string": "x", "new_string": "y"})); err == nil {
 		t.Error("expected not-unique error from Preview")
 	}
-	missing := filepath.Join(t.TempDir(), "nope.txt")
+	missing := filepath.Join(testenv.TempDir(t), "nope.txt")
 	if _, err := (editFile{}).Preview(context.Background(), argsJSON(t, map[string]any{"path": missing, "old_string": "a", "new_string": "b"})); err == nil {
 		t.Error("expected read error for missing file")
 	}

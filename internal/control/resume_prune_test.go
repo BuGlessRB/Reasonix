@@ -9,12 +9,13 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func coldResumeFixture(t *testing.T, threshold time.Duration) (*agent.Session, string, *Controller) {
 	t.Helper()
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	loaded := &agent.Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
 		{Role: provider.RoleUser, Content: "task"},
@@ -64,7 +65,7 @@ func TestColdResumeDoesNotRewriteOrNetwork(t *testing.T) {
 }
 
 func TestColdResumeAfterClonedHistoryStaysInPlace(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saved := agent.NewSession("old sys")
 	saved.Add(provider.Message{Role: provider.RoleUser, Content: "task"})
 	saved.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "1", Name: "grep", Arguments: "{}"}}})

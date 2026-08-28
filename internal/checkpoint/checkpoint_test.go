@@ -12,6 +12,7 @@ import (
 
 	"reasonix/internal/diff"
 	fileenc "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 func write(t *testing.T, p, s string) {
@@ -43,7 +44,7 @@ func readBytes(t *testing.T, p string) []byte {
 // Two turns edit a.txt and create b.txt; rewinding restores each file to its
 // state at the start of the chosen turn (b.txt being deleted when it post-dates it).
 func TestRestoreToStartOfTurn(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := filepath.Join(root, "a.txt")
 	b := filepath.Join(root, "sub", "b.txt")
 	write(t, a, "v0")
@@ -72,7 +73,7 @@ func TestRestoreToStartOfTurn(t *testing.T) {
 }
 
 func TestRestoreToTurnZero(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "v0")
 	s := New("", root)
@@ -92,7 +93,7 @@ func TestRestoreToTurnZero(t *testing.T) {
 }
 
 func TestRestorePreservesGB18030Encoding(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := filepath.Join(root, "gbk.txt")
 	original := "\u4f60\u597d\n\u65e7\u884c\n"
 	edited := "\u4f60\u597d\n\u65b0\u884c\n"
@@ -121,8 +122,8 @@ func TestRestorePreservesGB18030Encoding(t *testing.T) {
 }
 
 func TestRestorePreservesGB18030EncodingAfterPersistence(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	a := filepath.Join(root, "gbk.txt")
 	original := "\u4f60\u597d\n\u65e7\u884c\n"
 	edited := "\u4f60\u597d\n\u65b0\u884c\n"
@@ -148,8 +149,8 @@ func TestRestorePreservesGB18030EncodingAfterPersistence(t *testing.T) {
 }
 
 func TestRestoreLegacySnapshotRequiresExplicitSafePath(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +189,7 @@ func TestRestoreLegacySnapshotRequiresExplicitSafePath(t *testing.T) {
 }
 
 func TestSnapshotDedupsFirstTouchWins(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "orig")
 	s := New("", root)
@@ -205,8 +206,8 @@ func TestSnapshotDedupsFirstTouchWins(t *testing.T) {
 }
 
 func TestPersistV2RemainsReadableByLegacyBinary(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	existing := filepath.Join(root, "existing.txt")
 	created := filepath.Join(root, "created.txt")
 	write(t, existing, "before")
@@ -245,8 +246,8 @@ func TestPersistV2RemainsReadableByLegacyBinary(t *testing.T) {
 }
 
 func TestGCDoesNotDeleteSharedBlobStillReferencedByNewerCheckpoint(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	a := filepath.Join(root, "a.txt")
 	b := filepath.Join(root, "b.txt")
 	write(t, a, "shared")
@@ -278,8 +279,8 @@ func TestGCDoesNotDeleteSharedBlobStillReferencedByNewerCheckpoint(t *testing.T)
 }
 
 func TestExpiredV2PayloadRemainsSafeForLegacyReader(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	content := "must not be interpreted as absent"
 	checkpoint := &Checkpoint{
 		SchemaVersion: SchemaV2,
@@ -327,7 +328,7 @@ func TestExpiredV2PayloadRemainsSafeForLegacyReader(t *testing.T) {
 }
 
 func TestBlobReadVerifiesContentAddress(t *testing.T) {
-	store := NewBlobStore(t.TempDir())
+	store := NewBlobStore(testenv.TempDir(t))
 	ref, err := store.Put([]byte("before"))
 	if err != nil {
 		t.Fatal(err)
@@ -350,8 +351,8 @@ func TestBlobReadVerifiesContentAddress(t *testing.T) {
 }
 
 func TestRestoreRejectsPathEscape(t *testing.T) {
-	root := t.TempDir()
-	outside := filepath.Join(t.TempDir(), "evil.txt")
+	root := testenv.TempDir(t)
+	outside := filepath.Join(testenv.TempDir(t), "evil.txt")
 	write(t, outside, "keep")
 	s := New("", root)
 	s.Begin(0, "p", 0)
@@ -365,8 +366,8 @@ func TestRestoreRejectsPathEscape(t *testing.T) {
 }
 
 func TestPersistenceRoundTrip(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	a := filepath.Join(root, "a.txt")
 
 	s := New(dir, root)
@@ -394,7 +395,7 @@ func TestPersistenceRoundTrip(t *testing.T) {
 }
 
 func TestListExposesCurrentTurnFiles(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "v0")
 	s := New("", root)
@@ -411,7 +412,7 @@ func TestListExposesCurrentTurnFiles(t *testing.T) {
 }
 
 func TestFileStateReturnsEarliestSnapshotAcrossPathForms(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "nested", "file.txt")
 	s := New("", root)
 	s.Begin(0, "first", 0)
@@ -432,8 +433,8 @@ func TestFileStateReturnsEarliestSnapshotAcrossPathForms(t *testing.T) {
 }
 
 func TestTruncateFromDropsFutureCheckpointsAndFiles(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	a := filepath.Join(root, "a.txt")
 	write(t, a, "v0")
 	s := New(dir, root)
@@ -467,8 +468,8 @@ func TestTruncateFromDropsFutureCheckpointsAndFiles(t *testing.T) {
 }
 
 func TestTruncateFromReportsPersistentDeleteFailure(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "sess.ckpt")
 	store := New(dir, root)
 	store.Begin(0, "first", 0)
 	store.Begin(1, "second", 2)
@@ -521,8 +522,8 @@ func BenchmarkRestoreGB18030Encoding(b *testing.B) {
 }
 
 func TestLazyDirectoryCreation(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(t.TempDir(), "lazy-sess.ckpt")
+	root := testenv.TempDir(t)
+	dir := filepath.Join(testenv.TempDir(t), "lazy-sess.ckpt")
 
 	s := New(dir, root)
 

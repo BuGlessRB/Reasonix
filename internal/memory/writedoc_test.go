@@ -6,12 +6,14 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestWriteDocAllowsRecognizedFiles verifies WriteDoc overwrites a canonical
 // scope file (project REASONIX.md) and that it round-trips.
 func TestWriteDocAllowsRecognizedFiles(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
 	set := Load(Options{CWD: proj})
 
@@ -31,7 +33,7 @@ func TestWriteDocAllowsRecognizedFiles(t *testing.T) {
 // TestWriteDocRejectsArbitraryPaths is the security guard: the panel must not be
 // able to overwrite files that aren't recognized memory docs.
 func TestWriteDocRejectsArbitraryPaths(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
 	set := Load(Options{CWD: proj})
 
@@ -48,7 +50,7 @@ func TestWriteDocRejectsArbitraryPaths(t *testing.T) {
 // AGENTS.md the user is editing) stays writable even though it isn't a canonical
 // REASONIX.md scope target.
 func TestWriteDocAllowsDiscoveredDoc(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
 	agents := filepath.Join(proj, "AGENTS.md")
 	mustWrite(t, agents, "original")
@@ -67,9 +69,9 @@ func TestWriteDocRejectsInstructionSymlinkOutsideWorkspace(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation requires elevated privileges on common Windows setups")
 	}
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
-	outside := filepath.Join(t.TempDir(), "outside.md")
+	outside := filepath.Join(testenv.TempDir(t), "outside.md")
 	mustWrite(t, outside, "keep me")
 	agents := filepath.Join(proj, "AGENTS.md")
 	if err := os.Symlink(outside, agents); err != nil {

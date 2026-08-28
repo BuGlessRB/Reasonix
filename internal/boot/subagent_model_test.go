@@ -150,7 +150,7 @@ func TestNewSubagentStoreRequiresSessionDir(t *testing.T) {
 		}
 		t.Fatalf("empty session dir should disable subagent store, got %#v", got)
 	}
-	if got, err := newSubagentStore(t.TempDir(), nil); err != nil || got == nil {
+	if got, err := newSubagentStore(robustTempDir(t), nil); err != nil || got == nil {
 		if err != nil {
 			t.Fatalf("non-empty session dir error = %v", err)
 		}
@@ -159,12 +159,12 @@ func TestNewSubagentStoreRequiresSessionDir(t *testing.T) {
 }
 
 func TestNewSubagentStoreCleansStaleRunningRefs(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := robustTempDir(t)
 	store := agent.NewSubagentStore(filepath.Join(sessionDir, "subagents"))
 	spec := agent.SubagentSpec{
 		Kind:          "task",
 		Name:          "task",
-		WorkspaceRoot: t.TempDir(),
+		WorkspaceRoot: robustTempDir(t),
 		ParentSession: "parent-session",
 		SystemPrompt:  "sys",
 		Registry:      tool.NewRegistry(),

@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestGrepGlobalExcludesFile(t *testing.T) {
@@ -13,7 +15,7 @@ func TestGrepGlobalExcludesFile(t *testing.T) {
 	writeFileT(t, filepath.Join(dir, "keep.txt"), "NEEDLE\n")
 	writeFileT(t, filepath.Join(dir, "notes.tmp"), "NEEDLE\n")
 
-	cfgDir := t.TempDir()
+	cfgDir := testenv.TempDir(t)
 	excludes := filepath.Join(cfgDir, "global_ignore")
 	writeFileT(t, excludes, "*.tmp\n")
 	gitconfig := filepath.Join(cfgDir, "gitconfig")
@@ -35,8 +37,8 @@ func TestGrepGlobalExcludesFile(t *testing.T) {
 // nested negation, hidden dirs, and vendor dirs.
 func TestGrepWorkspaceE2E(t *testing.T) {
 	// Neutralize any machine-global git ignore so the fixture is hermetic.
-	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "none"))
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(testenv.TempDir(t), "none"))
+	t.Setenv("XDG_CONFIG_HOME", testenv.TempDir(t))
 
 	repo := mkRepo(t)
 	writeFileT(t, filepath.Join(repo, ".gitignore"), "*.log\nbuild/\n/dist/\n")

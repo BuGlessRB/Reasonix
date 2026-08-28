@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestNormalizeVersion(t *testing.T) {
@@ -468,7 +469,7 @@ func TestUpgradeCommandRejectsMalformedConfigWithoutPanicking(t *testing.T) {
 func TestPersistCLIReleaseChannelRemovesLegacyConfig(t *testing.T) {
 	for _, legacy := range []string{"stable", "preview", "canary", "beta", "next"} {
 		t.Run(legacy, func(t *testing.T) {
-			home := t.TempDir()
+			home := testenv.TempDir(t)
 			t.Setenv("REASONIX_HOME", home)
 			if err := os.WriteFile(config.UserConfigPath(), []byte("[cli]\nupdate_channel = \""+legacy+"\"\n"), 0o600); err != nil {
 				t.Fatal(err)

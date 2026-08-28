@@ -18,6 +18,7 @@ import (
 	"reasonix/internal/store"
 	"reasonix/internal/tool"
 
+	"reasonix/internal/testenv"
 	_ "reasonix/internal/tool/builtin"
 )
 
@@ -184,7 +185,7 @@ func TestPlainInputWithStrongResearchSignalStaysNormal(t *testing.T) {
 }
 
 func TestPlainInputWithStrongResearchSignalPreservesRefsWithoutStartingGoal(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, "notes.txt"), []byte("important referenced evidence"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +228,7 @@ func TestPlainInputWithStrongResearchSignalPreservesRefsWithoutStartingGoal(t *t
 }
 
 func TestResearchGoalUsesContinuousRuntimeWithoutArchive(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sessionPath := filepath.Join(root, "sessions", "s.jsonl")
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
@@ -251,7 +252,7 @@ func TestResearchGoalUsesContinuousRuntimeWithoutArchive(t *testing.T) {
 }
 
 func TestLegacyGoalSidecarMigratesToContinuousRuntimeWithoutTaskID(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sessionPath := filepath.Join(root, "sessions", "s.jsonl")
 	if err := os.MkdirAll(filepath.Dir(sessionPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -287,7 +288,7 @@ func TestLegacyGoalSidecarMigratesToContinuousRuntimeWithoutTaskID(t *testing.T)
 }
 
 func TestAssistantEvidenceBlockIsIgnoredByUnifiedGoal(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	sessionPath := filepath.Join(root, "sessions", "s.jsonl")
 	turns := goalToolTurn(GoalStatusComplete, "", "")
 	const evidenceBlock = `<autoresearch-evidence>{"id":"legacy-evidence","kind":"verification","summary":"must remain ordinary assistant text"}</autoresearch-evidence>`
@@ -779,7 +780,7 @@ func TestRepeatedCompleteWithIncompleteTodosKeepsWorking(t *testing.T) {
 // injecting into its first turns), while the OLD session's persisted
 // goal-state sidecar keeps the running goal so resuming it restores the goal.
 func TestSessionRotationClearsActiveGoal(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 	oldPath := filepath.Join(dir, "session.jsonl")
 	c := New(Options{Executor: exec, SystemPrompt: "sys", SessionDir: dir, SessionPath: oldPath, Label: "test"})
@@ -833,7 +834,7 @@ func TestSessionRotationClearsActiveGoal(t *testing.T) {
 }
 
 func TestGoalSidecarRoundTripPreservesBlockedDeliveryCheckpoint(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
@@ -872,7 +873,7 @@ func TestGoalSidecarRoundTripPreservesBlockedDeliveryCheckpoint(t *testing.T) {
 }
 
 func TestLegacyRunningGoalSidecarAllocatesScope(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "legacy.jsonl")
 	data := []byte(`{"goal":"legacy goal","status":"running"}`)
 	if err := os.WriteFile(store.SessionGoalState(path), data, 0o600); err != nil {

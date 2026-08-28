@@ -18,6 +18,7 @@ import (
 	"reasonix/internal/extension/dispatch"
 	"reasonix/internal/extension/protocol"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -278,7 +279,7 @@ func TestSetExtensionsInstallsDispatcher(t *testing.T) {
 // session file so lifecycle points have something to save/load/rotate.
 func newSessionController(t *testing.T, d *dispatch.Dispatcher, sink event.Sink) (*Controller, string) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
@@ -515,7 +516,7 @@ func TestSetExtensionsPropagatesToExecutor(t *testing.T) {
 }
 
 func TestApplyExtensionSystemPrompt(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	exec := agent.New(nil, tool.NewRegistry(), agent.NewSession("HOST PROMPT"), agent.Options{}, event.Discard)
 	c := New(Options{
 		Runner:       &fakeTurnRunner{},

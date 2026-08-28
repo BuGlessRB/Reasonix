@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestDeleteRangeBasic(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	body := "line1\nline2\nline3\nline4\nline5\n"
 	os.WriteFile(f, []byte(body), 0o644)
 
@@ -27,7 +29,7 @@ func TestDeleteRangeBasic(t *testing.T) {
 }
 
 func TestDeleteRangeInclusive(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	os.WriteFile(f, []byte("line1\nline2\nline3\nline4\nline5\n"), 0o644)
 	runTool(t, deleteRange{}, map[string]any{
 		"path": f, "start_anchor": "line2", "end_anchor": "line4", "inclusive": true,
@@ -37,7 +39,7 @@ func TestDeleteRangeInclusive(t *testing.T) {
 		t.Errorf("inclusive=true: got %q, want %q", got, "line1\\nline5\\n")
 	}
 
-	f2 := filepath.Join(t.TempDir(), "b.txt")
+	f2 := filepath.Join(testenv.TempDir(t), "b.txt")
 	os.WriteFile(f2, []byte("line1\nline2\nline3\nline4\nline5\n"), 0o644)
 	runTool(t, deleteRange{}, map[string]any{
 		"path": f2, "start_anchor": "line2", "end_anchor": "line4", "inclusive": false,
@@ -49,7 +51,7 @@ func TestDeleteRangeInclusive(t *testing.T) {
 }
 
 func TestDeleteRangeDuplicateAnchor(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "dup.txt")
+	f := filepath.Join(testenv.TempDir(t), "dup.txt")
 	body := "line1\nline2\nline3\nline2\nline5\n"
 	os.WriteFile(f, []byte(body), 0o644)
 
@@ -70,7 +72,7 @@ func TestDeleteRangeDuplicateAnchor(t *testing.T) {
 }
 
 func TestDeleteRangeMissingAnchor(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "missing.txt")
+	f := filepath.Join(testenv.TempDir(t), "missing.txt")
 	body := "line1\nline2\nline3\n"
 	os.WriteFile(f, []byte(body), 0o644)
 
@@ -87,7 +89,7 @@ func TestDeleteRangeMissingAnchor(t *testing.T) {
 }
 
 func TestDeleteRangeReversed(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "rev.txt")
+	f := filepath.Join(testenv.TempDir(t), "rev.txt")
 	body := "line1\nline2\nline3\nline4\nline5\n"
 	os.WriteFile(f, []byte(body), 0o644)
 
@@ -104,7 +106,7 @@ func TestDeleteRangeReversed(t *testing.T) {
 }
 
 func TestDeleteRangeRejectsEndAnchorOpeningBlock(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "map.html")
+	f := filepath.Join(testenv.TempDir(t), "map.html")
 	body := strings.Join([]string{
 		"// map engine",
 		"function switchToProvinceMap() {",
@@ -137,7 +139,7 @@ func TestDeleteRangeRejectsEndAnchorOpeningBlock(t *testing.T) {
 }
 
 func TestDeleteRangeAllowsCompleteBraceBlock(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "map.html")
+	f := filepath.Join(testenv.TempDir(t), "map.html")
 	body := strings.Join([]string{
 		"function before() {",
 		"  keep();",
@@ -173,7 +175,7 @@ func TestDeleteRangeAllowsCompleteBraceBlock(t *testing.T) {
 }
 
 func TestDeleteRangeRejectsClosingBraceWithoutOpening(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "map.html")
+	f := filepath.Join(testenv.TempDir(t), "map.html")
 	body := strings.Join([]string{
 		"function keepHeader() {",
 		"  removeBody();",
@@ -204,7 +206,7 @@ func TestDeleteRangeRejectsClosingBraceWithoutOpening(t *testing.T) {
 }
 
 func TestDeleteRangeAllowsPartialBraceDeletionInPlainText(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "notes.md")
+	f := filepath.Join(testenv.TempDir(t), "notes.md")
 	body := strings.Join([]string{
 		"intro",
 		"example {",
@@ -231,7 +233,7 @@ func TestDeleteRangeAllowsPartialBraceDeletionInPlainText(t *testing.T) {
 }
 
 func TestDeleteRangeDuplicateAnchorReportsLines(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "dup-separator.js")
+	f := filepath.Join(testenv.TempDir(t), "dup-separator.js")
 	body := strings.Join([]string{
 		"// ═══════════════════════════════════════",
 		"const a = 1;",
@@ -257,7 +259,7 @@ func TestDeleteRangeDuplicateAnchorReportsLines(t *testing.T) {
 }
 
 func TestDeleteRangeCRLF(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "crlf.txt")
+	f := filepath.Join(testenv.TempDir(t), "crlf.txt")
 	body := "line1\r\nline2\r\nline3\r\nline4\r\nline5\r\n"
 	os.WriteFile(f, []byte(body), 0o644)
 
@@ -272,7 +274,7 @@ func TestDeleteRangeCRLF(t *testing.T) {
 }
 
 func TestDeleteRangeWholeNewlineTerminatedFile(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "whole.txt")
+	f := filepath.Join(testenv.TempDir(t), "whole.txt")
 	os.WriteFile(f, []byte("line1\n"), 0o644)
 
 	runTool(t, deleteRange{}, map[string]any{
@@ -285,7 +287,7 @@ func TestDeleteRangeWholeNewlineTerminatedFile(t *testing.T) {
 }
 
 func TestDeleteRangePreview(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "preview.txt")
+	f := filepath.Join(testenv.TempDir(t), "preview.txt")
 	body := "line1\nline2\nline3\nline4\nline5\n"
 	os.WriteFile(f, []byte(body), 0o644)
 

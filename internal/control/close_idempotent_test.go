@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"reasonix/internal/hook"
+	"reasonix/internal/testenv"
 )
 
 // TestCloseIsIdempotent guards the desktop tab-lifecycle contract: rebind,
@@ -17,7 +18,7 @@ func TestCloseIsIdempotent(t *testing.T) {
 		HookConfig: hook.HookConfig{Command: "session-end"},
 		Event:      hook.SessionEnd,
 		Scope:      hook.ScopeGlobal,
-	}}, t.TempDir(), func(context.Context, hook.SpawnInput) hook.SpawnResult {
+	}}, testenv.TempDir(t), func(context.Context, hook.SpawnInput) hook.SpawnResult {
 		sessionEnds.Add(1)
 		return hook.SpawnResult{ExitCode: 0}
 	}, nil)

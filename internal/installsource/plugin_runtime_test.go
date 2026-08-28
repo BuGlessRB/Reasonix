@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // writeRuntimePlugin writes a Manifest v2 plugin package with a runtime
@@ -34,11 +36,11 @@ func writeRuntimePlugin(t *testing.T, root string) {
 }
 
 func TestPluginRuntimePlanCarriesFullTrust(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	writeRuntimePlugin(t, src)
 
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 
 	resp := execInstall(t, tl, map[string]any{
@@ -101,13 +103,13 @@ func TestPluginRuntimePlanCarriesFullTrust(t *testing.T) {
 }
 
 func TestPluginLegacyPlanOmitsRuntimeFields(t *testing.T) {
-	src := t.TempDir()
+	src := testenv.TempDir(t)
 	// v2 without runtime: skills-only package has no Runtime plan fields.
 	writeFile(t, filepath.Join(src, "reasonix-plugin.json"), `{"apiVersion":"reasonix.io/plugin/v2","name":"legacy","skills":["skills"]}`)
 	writeFile(t, filepath.Join(src, "skills", "s", "SKILL.md"), "---\ndescription: s\n---\nS")
 
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 
 	resp := execInstall(t, tl, map[string]any{

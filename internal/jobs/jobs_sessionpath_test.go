@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // captureSink records every event the manager emits so tests can assert that
@@ -93,7 +94,7 @@ func TestValidateTrustedSessionPath(t *testing.T) {
 // TestSetActiveSessionPath_AcceptsTrustedDotDotPath preserves valid relative
 // transcript spellings used by callers such as headless --resume.
 func TestSetActiveSessionPath_AcceptsTrustedDotDotPath(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	intermediate := filepath.Join(root, "intermediate")
 	if err := os.MkdirAll(intermediate, 0o700); err != nil {
 		t.Fatalf("create intermediate dir: %v", err)
@@ -144,9 +145,9 @@ func TestSetActiveSessionPath_InvalidPathUpdatesActiveAndClearsBinding(t *testin
 	m := NewManager(sink)
 	defer m.Close()
 
-	m.SetActiveSessionPath("session-x", filepath.Join(t.TempDir(), "old.jsonl"))
+	m.SetActiveSessionPath("session-x", filepath.Join(testenv.TempDir(t), "old.jsonl"))
 	m.SetActiveSession("old-session")
-	m.SetActiveSessionPath("session-x", filepath.Join(t.TempDir(), "bad\npath.jsonl"))
+	m.SetActiveSessionPath("session-x", filepath.Join(testenv.TempDir(t), "bad\npath.jsonl"))
 
 	m.mu.Lock()
 	active := m.active
@@ -193,13 +194,13 @@ func TestSetActiveSessionPath_EmptyPathUpdatesActiveOnly(t *testing.T) {
 
 // TestSetActiveSessionPath_AcceptsValidInput is a regression guard: the
 // validator must not break legitimate callers that pass typical transcript
-// paths produced by store.SessionTranscriptPath or filepath.Join(t.TempDir(), "...").
+// paths produced by store.SessionTranscriptPath or filepath.Join(testenv.TempDir(t), "...").
 func TestSetActiveSessionPath_AcceptsValidInput(t *testing.T) {
 	sink := &captureSink{}
 	m := NewManager(sink)
 	defer m.Close()
 
-	sessionPath := filepath.Join(t.TempDir(), "abc.jsonl")
+	sessionPath := filepath.Join(testenv.TempDir(t), "abc.jsonl")
 	m.SetActiveSessionPath("session-a", sessionPath)
 
 	m.mu.Lock()

@@ -13,6 +13,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 	"reasonix/internal/workspacelease"
 )
@@ -129,8 +130,8 @@ func TestParallelTasksForegroundCompletesAndClosesWorkers(t *testing.T) {
 }
 
 func TestParallelTasksLongResultsStayIndependentlyRetrievable(t *testing.T) {
-	workspace := t.TempDir()
-	store := NewSubagentStore(t.TempDir())
+	workspace := testenv.TempDir(t)
+	store := NewSubagentStore(testenv.TempDir(t))
 	task := NewTaskTool(parallelLongResultProvider{}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(store, workspace, "base-model", "base-effort")
 	parallel := NewParallelTasksTool(task, tool.NewRegistry())
@@ -179,9 +180,9 @@ func TestParallelTasksLongResultsStayIndependentlyRetrievable(t *testing.T) {
 }
 
 func TestParallelTasksInjectsWorkspaceContextIntoChildren(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	task := NewTaskTool(promptRoutingProvider{}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(NewSubagentStore(t.TempDir()), workspace, "base-model", "base-effort")
+		WithTranscripts(NewSubagentStore(testenv.TempDir(t)), workspace, "base-model", "base-effort")
 	parallel := NewParallelTasksTool(task, tool.NewRegistry())
 	ctx := withCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
 
@@ -205,9 +206,9 @@ func TestParallelTasksInjectsWorkspaceContextIntoChildren(t *testing.T) {
 // you?") would be required to produce work receipts it has no reason to earn
 // and would exhaust final-answer readiness instead of answering.
 func TestParallelTasksDeliveryClassifiesPristinePrompt(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	task := NewTaskTool(promptRoutingProvider{}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(NewSubagentStore(t.TempDir()), workspace, "base-model", "base-effort").
+		WithTranscripts(NewSubagentStore(testenv.TempDir(t)), workspace, "base-model", "base-effort").
 		WithDeliveryProfile(true)
 	parallel := NewParallelTasksTool(task, tool.NewRegistry())
 	ctx := withCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
@@ -499,7 +500,7 @@ func TestTaskToolPropagatesDeliveryProfileToSubagents(t *testing.T) {
 }
 
 func TestTaskToolSharesWorkspaceLeaseWithSubagents(t *testing.T) {
-	owner, err := workspacelease.New(t.TempDir(), t.TempDir(), nil)
+	owner, err := workspacelease.New(testenv.TempDir(t), testenv.TempDir(t), nil)
 	if err != nil {
 		t.Fatalf("New workspace lease: %v", err)
 	}

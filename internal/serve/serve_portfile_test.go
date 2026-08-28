@@ -9,16 +9,17 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 func newListenerTestServer(t *testing.T) *Server {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{
 		Sink:       bc,
 		Label:      "listener-test",
-		SessionDir: t.TempDir(),
+		SessionDir: testenv.TempDir(t),
 	})
 	t.Cleanup(func() { ctrl.Close() })
 	return New(ctrl, bc, config.ServeConfig{})

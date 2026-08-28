@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/capability"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -89,7 +90,7 @@ func TestRunInjectsCapabilityRouteForRelevantSkill(t *testing.T) {
 }
 
 func TestCreateSkillWritesThroughAndIsImmediatelyReadable(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := skill.New(skill.Options{HomeDir: home, DisableBuiltins: true})
 	c := New(Options{AllSkillStore: st, SkillStore: st})
 
@@ -126,7 +127,7 @@ func TestCreateSkillRefusesWithoutWritableStore(t *testing.T) {
 }
 
 func TestUpdateSkillOverwritesAndIsImmediatelyReadable(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := skill.New(skill.Options{HomeDir: home, DisableBuiltins: true})
 	c := New(Options{AllSkillStore: st, SkillStore: st})
 
@@ -152,7 +153,7 @@ func TestUpdateSkillOverwritesAndIsImmediatelyReadable(t *testing.T) {
 }
 
 func TestDeleteSkillRemovesLiveEntry(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := skill.New(skill.Options{HomeDir: home, DisableBuiltins: true})
 	c := New(Options{AllSkillStore: st, SkillStore: st})
 

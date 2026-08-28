@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func writeVisionTestConfig(t *testing.T, root string) {
@@ -28,7 +29,7 @@ func writeVisionTestConfig(t *testing.T, root string) {
 }
 
 func TestControllerInputImagesResolvesAttachment(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	t.Chdir(dir)
 	writeVisionTestConfig(t, dir)
 	ref, err := SaveImageDataURL("data:image/png;base64," + tinyPNG)
@@ -45,14 +46,14 @@ func TestControllerInputImagesResolvesAttachment(t *testing.T) {
 }
 
 func TestControllerInputImagesIgnoresNonAttachmentRefs(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if urls := New(Options{}).inputImages("plain text with @missing.png"); len(urls) != 0 {
 		t.Errorf("inputImages = %v, want none for a non-existent / non-attachment ref", urls)
 	}
 }
 
 func TestControllerInputImagesResolvesWorkspaceImage(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeVisionTestConfig(t, workspace)
 	path := filepath.Join(workspace, "docs", "diagram.png")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -72,7 +73,7 @@ func TestControllerInputImagesResolvesWorkspaceImage(t *testing.T) {
 }
 
 func TestControllerInputImagesResolvesAbsoluteWorkspaceImage(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeVisionTestConfig(t, workspace)
 	path := filepath.Join(workspace, "diagram.png")
 	if err := os.WriteFile(path, mustBase64(t, tinyPNG), 0o644); err != nil {
@@ -89,7 +90,7 @@ func TestControllerInputImagesResolvesAbsoluteWorkspaceImage(t *testing.T) {
 }
 
 func TestControllerInputImagesRequiresWorkspaceForFileImageRefs(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "diagram.png")
 	if err := os.WriteFile(path, mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
@@ -102,7 +103,7 @@ func TestControllerInputImagesRequiresWorkspaceForFileImageRefs(t *testing.T) {
 }
 
 func TestControllerInputImagesSkipsModelImagesWhenSelectedModelIsTextOnly(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	cfg := config.Default()
 	cfg.DefaultModel = "custom/text-only"
 	cfg.Providers = []config.ProviderEntry{{
@@ -132,7 +133,7 @@ func TestControllerInputImagesSkipsModelImagesWhenSelectedModelIsTextOnly(t *tes
 }
 
 func TestControllerResolvesSubagentImageCandidatesForTextParent(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	cfg := config.Default()
 	cfg.Providers = []config.ProviderEntry{{
 		Name:         "custom",
@@ -159,7 +160,7 @@ func TestControllerResolvesSubagentImageCandidatesForTextParent(t *testing.T) {
 }
 
 func TestControllerResolveTurnImagesReusesCandidatesForVisionParent(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeVisionTestConfig(t, workspace)
 	path := filepath.Join(workspace, "diagram.png")
 	if err := os.WriteFile(path, mustBase64(t, tinyPNG), 0o644); err != nil {
@@ -183,7 +184,7 @@ func TestControllerResolveTurnImagesReusesCandidatesForVisionParent(t *testing.T
 }
 
 func TestGoalContinuationKeepsCurrentTurnImageCandidatesWithoutCrossTurnLeak(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeVisionTestConfig(t, workspace)
 	path := filepath.Join(workspace, "diagram.png")
 	if err := os.WriteFile(path, mustBase64(t, tinyPNG), 0o644); err != nil {
@@ -215,7 +216,7 @@ func TestGoalContinuationKeepsCurrentTurnImageCandidatesWithoutCrossTurnLeak(t *
 }
 
 func TestControllerImageInputEnabledDoesNotFallbackFromUnknownRef(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeVisionTestConfig(t, workspace)
 
 	c := &Controller{controllerDeps: controllerDeps{workspaceRoot: workspace, modelRef: "deleted/model"}}

@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // sbplString
@@ -44,7 +46,7 @@ func TestWriteAllowDirsDeduplication(t *testing.T) {
 }
 
 func TestWriteAllowDirsIncludesRoots(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	dirs := writeAllowDirs([]string{root})
 	found := false
 	for _, d := range dirs {
@@ -70,7 +72,7 @@ func TestWriteAllowDirsIncludesTemp(t *testing.T) {
 }
 
 func TestWriteAllowDirsIncludesSessionTemp(t *testing.T) {
-	private := t.TempDir()
+	private := testenv.TempDir(t)
 	dirs := writeAllowDirsForSpec(Spec{SessionTemp: private, MinimalWrites: true})
 	real, _ := filepath.EvalSymlinks(private)
 	found := slices.Contains(dirs, real)
@@ -133,7 +135,7 @@ func TestSeatbeltProfileContainsVersion(t *testing.T) {
 }
 
 func TestSeatbeltProfileContainsRoots(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	spec := Spec{Mode: "enforce", WriteRoots: []string{root}}
 	profile := seatbeltProfile(spec)
 	if !strings.Contains(profile, "(allow file-write*") {
@@ -145,7 +147,7 @@ func TestSeatbeltProfileContainsRoots(t *testing.T) {
 }
 
 func TestMinimalWriteProfileOnlyAddsExplicitRootsAndDev(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	dirs := writeAllowDirsForSpec(Spec{Mode: "enforce", WriteRoots: []string{root}, MinimalWrites: true})
 	if !containsDarwinPath(dirs, root) || !containsDarwinPath(dirs, "/dev") {
 		t.Fatalf("minimal write dirs = %v", dirs)
@@ -302,7 +304,7 @@ func TestGoBuildUnderSandbox(t *testing.T) {
 // with the rest of the repository.
 func fakeSandboxExec(t *testing.T, exitCode string) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "sandbox-exec")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit "+exitCode+"\n"), 0o755); err != nil {
 		t.Fatal(err)
@@ -331,7 +333,7 @@ func TestAvailableTrueWhenSandboxExecUsable(t *testing.T) {
 }
 
 func TestAvailableFalseWhenSandboxExecMissing(t *testing.T) {
-	t.Setenv("PATH", t.TempDir()) // no sandbox-exec anywhere on PATH
+	t.Setenv("PATH", testenv.TempDir(t)) // no sandbox-exec anywhere on PATH
 	if Available() {
 		t.Fatal("Available() = true, want false: sandbox-exec not on PATH")
 	}

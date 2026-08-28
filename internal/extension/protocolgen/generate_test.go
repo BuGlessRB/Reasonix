@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestGeneratedArtifactsAreDeterministicAndCommitted(t *testing.T) {
@@ -20,7 +22,7 @@ func TestGeneratedArtifactsAreDeterministicAndCommitted(t *testing.T) {
 		t.Fatalf("generated %d/%d artifacts, want 4", len(first), len(second))
 	}
 
-	temporaryRoot := t.TempDir()
+	temporaryRoot := testenv.TempDir(t)
 	if err := Write(temporaryRoot, first); err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +50,7 @@ func TestCheckRejectsAnyArtifactDrift(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := Write(root, artifacts); err != nil {
 		t.Fatal(err)
 	}

@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 type readinessSink struct {
@@ -29,7 +30,7 @@ func (s *readinessSink) RecordProtocolRecovery(event.ProtocolRecoveryAudit) {
 }
 
 func TestSinkWritesOnlyWhitelistedContentFreeCounters(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	reporter := &Reporter{
 		home:    home,
 		version: "v1.20.0",
@@ -96,7 +97,7 @@ func TestSinkWritesOnlyWhitelistedContentFreeCounters(t *testing.T) {
 }
 
 func TestCleanupRemovesPendingQueueOnly(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	if err := appendPending(home, pendingPayload{
 		Version: "v1.20.0", OS: "linux", Counters: []Counter{{Signal: "turns", Bucket: "count", Count: 1}},
 	}); err != nil {
@@ -119,7 +120,7 @@ func TestCleanupRemovesPendingQueueOnly(t *testing.T) {
 
 func TestEnvironmentOptOutRemovesPendingQueue(t *testing.T) {
 	clearPolicyEnv(t)
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	if err := appendPending(home, pendingPayload{
 		Version: "v1.20.0", OS: "linux", Counters: []Counter{{Signal: "turns", Bucket: "count", Count: 1}},
 	}); err != nil {
@@ -138,7 +139,7 @@ func TestEnvironmentOptOutRemovesPendingQueue(t *testing.T) {
 // taken once at the end rather than per request — three 40k requests are one
 // 120k turn, and a flat-rate plan is priced on the turn.
 func TestSinkBucketsATurnsTokensOnceAcrossItsRequests(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
 	sink.Emit(event.Event{Kind: event.TurnStarted})
 	for range 3 {
@@ -163,7 +164,7 @@ func TestSinkBucketsATurnsTokensOnceAcrossItsRequests(t *testing.T) {
 // that inherits the previous turn's tokens reports a distribution shifted right
 // at every percentile, and nothing downstream could tell.
 func TestSinkDoesNotCarryTokensIntoTheNextTurn(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
 	sink.Emit(event.Event{Kind: event.TurnStarted})
 	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 500_000}})
@@ -181,7 +182,7 @@ func TestSinkDoesNotCarryTokensIntoTheNextTurn(t *testing.T) {
 // A turn the provider never reported usage for is not absent from the
 // histogram: the zero bin is what gives every other bin a denominator.
 func TestSinkRecordsATurnWithNoUsageAsZero(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
 	sink.Emit(event.Event{Kind: event.TurnStarted})
 	sink.Emit(event.Event{Kind: event.TurnDone})
@@ -248,7 +249,7 @@ func onlyBucket(t *testing.T, home, signal string) string {
 // of it. The kernel already says which part changed, so the counter carries
 // that verdict rather than a second guess at it.
 func TestSinkRecordsWhatBrokeTheCachedPrefix(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
 	sink.Emit(event.Event{Kind: event.TurnStarted})
 	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 90_000},
@@ -267,7 +268,7 @@ func TestSinkRecordsWhatBrokeTheCachedPrefix(t *testing.T) {
 // Rewrite takes an open string, so a reason a later build invents must not open
 // the wire's bucket space on its own.
 func TestSinkBucketsAnUnknownPrefixReasonAsOther(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
 	sink.Emit(event.Event{Kind: event.TurnStarted})
 	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1},
@@ -284,7 +285,7 @@ func TestSinkBucketsAnUnknownPrefixReasonAsOther(t *testing.T) {
 // A prefix that held is the common case and the one that must stay silent: a
 // counter that fired every turn would report churn where there is none.
 func TestSinkSaysNothingWhenThePrefixHeld(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
 	sink.Emit(event.Event{Kind: event.TurnStarted})
 	sink.Emit(event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 90_000, CacheHitTokens: 89_000},
@@ -303,7 +304,7 @@ func TestSinkSaysNothingWhenThePrefixHeld(t *testing.T) {
 // cause is downstream (a gateway dropping cache_control, an expired entry, an
 // endpoint that never cached) and only the count can point at it.
 func TestSinkNamesAMissItCannotAttribute(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
 	sink.Emit(event.Event{Kind: event.TurnStarted})
 	sink.Emit(event.Event{Kind: event.Usage,
@@ -319,7 +320,7 @@ func TestSinkNamesAMissItCannotAttribute(t *testing.T) {
 // Under the smallest prefix any vendor here caches, a miss is the rule and
 // reporting it would bury the finding in turns that were never cacheable.
 func TestSinkLeavesATooSmallPromptAlone(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	sink := (&Reporter{home: home, version: "v1.20.0"}).Wrap(&readinessSink{})
 	sink.Emit(event.Event{Kind: event.TurnStarted})
 	sink.Emit(event.Event{Kind: event.Usage,

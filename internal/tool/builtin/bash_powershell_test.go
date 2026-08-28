@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -141,7 +142,7 @@ func TestBashPowerShellExecuteDetailedContract(t *testing.T) {
 func assertPowerShellDetailedContract(t *testing.T, psPath string) {
 	t.Helper()
 	// Chinese directory name — native Windows CI must keep path + UTF-8 intact.
-	work := filepath.Join(t.TempDir(), "中文目录-reasonix")
+	work := filepath.Join(testenv.TempDir(t), "中文目录-reasonix")
 	if err := os.MkdirAll(work, 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -4,13 +4,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // The id reaches this from a URL path, so an id that walks out of the pack
 // directory has to be refused before it becomes a filename — both against the
 // installed packs and against the flat names the shipped ones use.
 func TestAssetRefusesAnIDThatEscapes(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	for _, id := range []string{"..", "../..", "a/b", `a\b`, "", "  "} {
 		if _, _, err := Asset(id, assetBackground); err == nil {
 			t.Fatalf("Asset(%q) resolved, want a rejection", id)
@@ -19,7 +21,7 @@ func TestAssetRefusesAnIDThatEscapes(t *testing.T) {
 }
 
 func TestAssetRefusesAnUnknownKind(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	if _, _, err := Asset("official-noir-gold", Kind("../theme.json")); err == nil {
 		t.Fatal("an unknown asset kind resolved")
 	}
@@ -31,7 +33,7 @@ func TestAssetRefusesAnUnknownKind(t *testing.T) {
 // A shipped pack carries both images, and they are what a picker previews and
 // the window draws.
 func TestShippedPackServesItsImages(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	raw, ctype, err := Asset("official-noir-gold", assetBackground)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +49,7 @@ func TestShippedPackServesItsImages(t *testing.T) {
 // An installed pack shadows a shipped one for images too, so a user who
 // replaced the picture gets theirs rather than the one that ships.
 func TestInstalledImageShadowsTheShippedOne(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	dir := filepath.Join(Dir(), "official-noir-gold")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -69,7 +71,7 @@ func TestInstalledImageShadowsTheShippedOne(t *testing.T) {
 // user dropping their own picture in gets that placement rather than a
 // centred default.
 func TestBackgroundPlacementSurvivesAMissingImage(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	writePack(t, Dir(), "placed", `{"schemaVersion":1,"name":"Placed",
 	  "background":{"image":"background.webp","focusX":0.8,"focusY":0.3,"safeArea":"left","homeOpacity":0.9,"taskOpacity":0.15},
 	  "tokens":{"light":{"bg":"#FFFFFF"},"dark":{"bg":"#000000"}}}`)
@@ -92,7 +94,7 @@ func TestBackgroundPlacementSurvivesAMissingImage(t *testing.T) {
 // Out-of-range numbers are clamped rather than rejected: a pack is cosmetic,
 // and an opacity of 4 should read as opaque, not fail to load.
 func TestBackgroundNumbersAreClamped(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	writePack(t, Dir(), "wild", `{"schemaVersion":1,"name":"Wild",
 	  "background":{"focusX":9,"focusY":-3,"homeOpacity":4,"taskOpacity":-1,"safeArea":"sideways"},
 	  "tokens":{"light":{"bg":"#FFFFFF"},"dark":{"bg":"#000000"}}}`)

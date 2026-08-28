@@ -7,6 +7,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/permission"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func leaseTestFactory(dir string) *e2eFactory {
@@ -25,7 +26,7 @@ func leaseTestFactory(dir string) *e2eFactory {
 // (a desktop window or CLI writing the same session), and does not register
 // the session.
 func TestSessionLoadRefusedWhenLeaseHeld(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	const id = "sess-held-lease"
 	path := transcriptPath(dir, id)
 	s := agent.NewSession("sys")
@@ -44,7 +45,7 @@ func TestSessionLoadRefusedWhenLeaseHeld(t *testing.T) {
 	defer stop()
 	client.call(t, "initialize", InitializeParams{ProtocolVersion: 1})
 
-	resp := client.call(t, "session/load", SessionLoadParams{SessionID: id, Cwd: t.TempDir()})
+	resp := client.call(t, "session/load", SessionLoadParams{SessionID: id, Cwd: testenv.TempDir(t)})
 	if resp.Error == nil {
 		t.Fatalf("session/load of a held session succeeded, want protocol error")
 	}
@@ -68,7 +69,7 @@ func TestSessionLoadRefusedWhenLeaseHeld(t *testing.T) {
 // TestSessionCloseReleasesLease proves the lease taken by session/new is
 // released by session/close, so another runtime can bind the transcript.
 func TestSessionCloseReleasesLease(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	client, stop := startServer(t, leaseTestFactory(dir))
 	defer stop()
 

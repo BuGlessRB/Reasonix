@@ -4,10 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestFilePriorCompensateRestore(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "f.txt")
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
@@ -30,7 +32,7 @@ func TestFilePriorCompensateRestore(t *testing.T) {
 }
 
 func TestFilePriorCompensateRemoveCreate(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "new.txt")
 	if err := os.WriteFile(path, []byte("created"), 0o644); err != nil {
 		t.Fatal(err)
@@ -46,7 +48,7 @@ func TestFilePriorCompensateRemoveCreate(t *testing.T) {
 }
 
 func TestApplyFileWriteCompensationUpdatesReceipt(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "x.txt")
 	_ = os.WriteFile(path, []byte("v1"), 0o644)
 	id := "file-write:" + path
@@ -63,7 +65,7 @@ func TestApplyFileWriteCompensationUpdatesReceipt(t *testing.T) {
 
 func TestFilePriorStoreBoundsRetainedBytes(t *testing.T) {
 	s := newFilePriorStore(5, 4)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if !s.Capture("first", filepath.Join(dir, "first"), []byte("1234"), true) {
 		t.Fatal("in-budget prior was rejected")
 	}

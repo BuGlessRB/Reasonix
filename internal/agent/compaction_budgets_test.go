@@ -7,6 +7,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -64,7 +65,7 @@ func TestLargeFixedPrefixDoesNotRefuseCompaction(t *testing.T) {
 			provider.Message{Role: provider.RoleUser, Content: "continue"})
 	}
 	a := New(&fakeProvider{reply: "digest"}, tool.NewRegistry(), sess,
-		Options{ContextWindow: 128_000, CompactRatio: 0.85, RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+		Options{ContextWindow: 128_000, CompactRatio: 0.85, RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	if len(prefix) < a.compactTrigger() {
 		t.Fatalf("fixture prefix is %d characters, under the %d trigger; it cannot show the bug", len(prefix), a.compactTrigger())
 	}

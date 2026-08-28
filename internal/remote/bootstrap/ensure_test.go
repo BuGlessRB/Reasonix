@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/remote"
 	"reasonix/internal/remote/sftpfs"
 	"reasonix/internal/remote/sshtest"
+	"reasonix/internal/testenv"
 )
 
 // fakeConn scripts exec responses and shares a real sftpfs.FS backed by an
@@ -94,7 +95,7 @@ func ok(stdout string) (remote.ExecResult, error) {
 // reasonix already on PATH, serve writes its port file.
 func TestEnsureServeLaunchesWhenAbsent(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	var portFile string
 	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
 		switch {
@@ -160,7 +161,7 @@ func TestEnsureServeLaunchesWhenAbsent(t *testing.T) {
 // reuse without detecting/launching.
 func TestEnsureServeReusesLiveProcess(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	paths := pathsFor(root, root)
 	// Pre-write state + token as if a serve is already running.
 	if err := os.MkdirAll(paths.Dir, 0o755); err != nil {
@@ -207,7 +208,7 @@ func TestEnsureServeReusesLiveProcess(t *testing.T) {
 // fresh launch.
 func TestEnsureServeRelaunchesDeadProcess(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	paths := pathsFor(root, root)
 	if err := os.MkdirAll(paths.Dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -250,7 +251,7 @@ func TestEnsureServeRelaunchesDeadProcess(t *testing.T) {
 // TestEnsureServeInstallNeverErrorsWhenAbsent.
 func TestEnsureServeInstallNeverErrorsWhenAbsent(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
 		switch {
 		case strings.Contains(cmd, "uname"):
@@ -269,7 +270,7 @@ func TestEnsureServeInstallNeverErrorsWhenAbsent(t *testing.T) {
 
 func TestStopRemovesStateFiles(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	paths := pathsFor(root, root)
 	_ = os.MkdirAll(paths.Dir, 0o755)
 	st := ServeState{PID: 555, Addr: "127.0.0.1:5000", Workspace: root, TokenFile: paths.TokenFile}
@@ -317,7 +318,7 @@ var _ = filepath.Join
 // Alive is not the same question as usable.
 func TestEnsureServeWillNotReuseAKernelBelowTheFloor(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	paths := pathsFor(root, root)
 	if err := os.MkdirAll(paths.Dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -362,7 +363,7 @@ func TestEnsureServeWillNotReuseAKernelBelowTheFloor(t *testing.T) {
 // no record left is a pid nothing will ever stop. The replacement stops it.
 func TestEnsureServeStopsTheOutdatedKernelItReplaces(t *testing.T) {
 	skipOnWindows(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	paths := pathsFor(root, root)
 	if err := os.MkdirAll(paths.Dir, 0o755); err != nil {
 		t.Fatal(err)

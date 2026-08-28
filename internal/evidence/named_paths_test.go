@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestNamedPathsReadsLocationsOutOfDelegationProse(t *testing.T) {
@@ -38,7 +40,7 @@ func TestNamedPathsIgnoresOrdinaryProse(t *testing.T) {
 // absolute path the tool received, so origin cannot be decided by equality.
 func TestUnderNamedPathMatchesAbsoluteReceiptAgainstRelativeProse(t *testing.T) {
 	named := NamedPaths("start from src/parser.go")
-	abs := filepath.Join(t.TempDir(), "src", "parser.go")
+	abs := filepath.Join(testenv.TempDir(t), "src", "parser.go")
 	if !UnderNamedPath(named, abs) {
 		t.Fatalf("UnderNamedPath(%q, %q) = false, want true", named, abs)
 	}
@@ -46,7 +48,7 @@ func TestUnderNamedPathMatchesAbsoluteReceiptAgainstRelativeProse(t *testing.T) 
 
 func TestUnderNamedPathCoversFilesBeneathADirectoryHint(t *testing.T) {
 	named := NamedPaths("the bug is somewhere in internal/agent")
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	inside := filepath.Join(root, "internal", "agent", "task.go")
 	outside := filepath.Join(root, "internal", "evidence", "task.go")
 	if !UnderNamedPath(named, inside) {
@@ -83,7 +85,7 @@ func TestSplitNamedPathsSeparatesScopeFromNamedFiles(t *testing.T) {
 // A child sent to a directory still had to work out which file in it mattered,
 // so a scope hint must not zero out the credit for finding one.
 func TestClassifyEvidenceOriginCreditsWorkInsideAScopeHint(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	looked := []string{
 		filepath.Join(root, "pkg", "alpha.py"),
 		filepath.Join(root, "pkg", "romeo.py"),
@@ -106,7 +108,7 @@ func TestClassifyEvidenceOriginCreditsWorkInsideAScopeHint(t *testing.T) {
 }
 
 func TestClassifyEvidenceOriginSplitsBlindFromSeededDelegation(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	looked := []string{
 		filepath.Join(root, "src", "parser.go"),
 		filepath.Join(root, "src", "scanner.go"),

@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestReadEventTailKeepsIncompleteLineForRetry(t *testing.T) {
 	t.Parallel()
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := NewFileStore(filepath.Join(".reasonix", "tasks"))
 	now := time.Now()
 	first := TaskEvent{Timestamp: now, EventType: "state_change", TaskID: "task", State: TaskStateRunning}

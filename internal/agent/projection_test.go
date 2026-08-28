@@ -12,11 +12,12 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
 func TestCompactionStateAtomicSaveLoad(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "sess.jsonl")
 	st := CompactionState{
 		SchemaVersion:     compactionStateSchemaCurrent,
@@ -60,7 +61,7 @@ func TestCompactionStateAtomicSaveLoad(t *testing.T) {
 }
 
 func TestLoadCompactionStateAcceptsLegacyV1(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "legacy.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "legacy.jsonl")
 	legacy := CompactionState{
 		SchemaVersion:     compactionStateSchemaV1,
 		TranscriptVersion: 2,
@@ -90,7 +91,7 @@ func TestLoadCompactionStateAcceptsLegacyV1(t *testing.T) {
 }
 
 func TestSaveCompactionStateCreatesPreviousReaderBoundary(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "current.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "current.jsonl")
 	if err := SaveCompactionState(path, CompactionState{
 		Projection: ContextProjection{
 			Messages:     []provider.Message{{Role: provider.RoleUser, Content: "logical summary"}, {Role: provider.RoleUser, Content: "retained anchor"}},
@@ -141,7 +142,7 @@ func TestCompactToProjectionLeavesCanonicalIntact(t *testing.T) {
 		sess.Add(provider.Message{Role: provider.RoleTool, ToolCallID: "c" + string(rune('0'+i%10)), Name: "read", Content: strings.Repeat("tool-out-", 40)})
 	}
 	before := append([]provider.Message(nil), sess.Messages...)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "s.jsonl")
 	a := New(fp, nil, sess, Options{
 		ContextWindow: 50_000,
@@ -203,7 +204,7 @@ func TestCompactFailureDoesNotWriteMechanicalMarker(t *testing.T) {
 		sess.Add(provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("a", 200)})
 	}
 	before := append([]provider.Message(nil), sess.Messages...)
-	a := New(fp, nil, sess, Options{ContextWindow: 2000, RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+	a := New(fp, nil, sess, Options{ContextWindow: 2000, RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	err := a.CompactNow(context.Background(), "")
 	if err == nil {
 		t.Fatal("expected compaction error")
@@ -236,7 +237,7 @@ func TestFixedEarlyUserTurnsStableAcrossCompactions(t *testing.T) {
 		sess.Add(provider.Message{Role: provider.RoleUser, Content: user})
 		sess.Add(provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("work-", 50) + string(rune('A'+i%26))})
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	a := New(fp, nil, sess, Options{ContextWindow: 4000, RecentKeep: 2, ArchiveDir: dir, SessionPath: filepath.Join(dir, "s.jsonl")}, event.Discard)
 	if err := a.CompactNow(context.Background(), ""); err != nil {
 		t.Fatalf("compact1: %v", err)
@@ -303,7 +304,7 @@ func TestLocalOnlyExcludedFromCompactionRequest(t *testing.T) {
 		Role: provider.RoleTool, ToolCallID: provider.LocalOnlyToolID, Name: provider.LocalOnlyToolName,
 		Content: "secret local only", LocalOnly: true,
 	})
-	a := New(fp, nil, sess, Options{ContextWindow: 2000, RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+	a := New(fp, nil, sess, Options{ContextWindow: 2000, RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	if err := a.CompactNow(context.Background(), ""); err != nil {
 		t.Fatalf("compact: %v", err)
 	}
@@ -333,7 +334,7 @@ func TestArchiveDirIgnoredOnCheckpointInstall(t *testing.T) {
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "next"})
 	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "ok"})
 	// Point archive at a file path so MkdirAll/Create would fail if archives were written.
-	badArchive := filepath.Join(t.TempDir(), "not-a-dir")
+	badArchive := filepath.Join(testenv.TempDir(t), "not-a-dir")
 	if err := writeFile(badArchive, []byte("x")); err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +391,7 @@ func TestCompactReplacesHistory(t *testing.T) {
 		{Role: provider.RoleUser, Content: "next"},
 		{Role: provider.RoleAssistant, Content: "ok"},
 	}}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	a := New(prov, tool.NewRegistry(), sess, Options{
 		ContextWindow: 50_000, CompactRatio: 0.85, RecentKeep: 2, ArchiveDir: dir,
 	}, event.Discard)
@@ -454,7 +455,7 @@ func TestManualCompactReportsSummarizerFailure(t *testing.T) {
 	}}
 	var got []event.Event
 	sink := event.FuncSink(func(e event.Event) { got = append(got, e) })
-	a := New(prov, tool.NewRegistry(), sess, Options{RecentKeep: 2, ArchiveDir: t.TempDir()}, sink)
+	a := New(prov, tool.NewRegistry(), sess, Options{RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, sink)
 
 	before := append([]provider.Message(nil), sess.Messages...)
 	if err := a.compact(context.Background(), "manual", "", true); err == nil {
@@ -604,7 +605,7 @@ func TestCompactKeepsPriorDigests(t *testing.T) {
 	}}
 	prov := &fakeProvider{reply: "Standing facts: db is orion_prod_42"}
 	a := New(prov, tool.NewRegistry(), sess,
-		Options{RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+		Options{RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 
 	if err := a.compact(context.Background(), "manual", "", true); err != nil {
 		t.Fatalf("compact: %v", err)
@@ -771,7 +772,7 @@ func TestCompactFoldsSingleLargeMessage(t *testing.T) {
 		{Role: provider.RoleUser, Content: "next"},
 		{Role: provider.RoleAssistant, Content: "ok"},
 	}}
-	a := New(prov, tool.NewRegistry(), sess, Options{RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+	a := New(prov, tool.NewRegistry(), sess, Options{RecentKeep: 2, ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	before := len(sess.Messages)
 
 	if err := a.compact(context.Background(), "auto", "", false); err != nil {

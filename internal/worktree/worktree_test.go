@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func requireGit(t *testing.T) {
@@ -20,7 +22,7 @@ func requireGit(t *testing.T) {
 
 func initRepo(t *testing.T) string {
 	t.Helper()
-	repo := t.TempDir()
+	repo := testenv.TempDir(t)
 	git := func(args ...string) string {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
@@ -46,7 +48,7 @@ func initRepo(t *testing.T) string {
 func TestCreateManagedWorktreeFromRepositoryFolder(t *testing.T) {
 	requireGit(t)
 	repo := initRepo(t)
-	managed := t.TempDir()
+	managed := testenv.TempDir(t)
 	result, err := Create(context.Background(), repo, managed)
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +97,7 @@ func TestCreatePreservesSelectedRepositorySubdirectory(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git commit: %v %s", err, out)
 	}
-	result, err := Create(context.Background(), subdir, t.TempDir())
+	result, err := Create(context.Background(), subdir, testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,13 +134,13 @@ func TestInspectRejectsUncommittedSelectedSubdirectoryWithoutGitMutation(t *test
 func TestCreateFromExistingLinkedWorktree(t *testing.T) {
 	requireGit(t)
 	repo := initRepo(t)
-	linked := filepath.Join(t.TempDir(), "already-linked-worktree")
+	linked := filepath.Join(testenv.TempDir(t), "already-linked-worktree")
 	cmd := exec.Command("git", "-C", repo, "worktree", "add", "-b", "test/existing-linked", linked, "HEAD")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git worktree add: %v %s", err, out)
 	}
 
-	result, err := Create(context.Background(), linked, t.TempDir())
+	result, err := Create(context.Background(), linked, testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +171,7 @@ func TestCreateDoesNotCopyOrChangeDirtySource(t *testing.T) {
 	if err := os.WriteFile(dirtyPath, []byte("uncommitted\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := Create(context.Background(), repo, t.TempDir())
+	result, err := Create(context.Background(), repo, testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,10 +196,10 @@ func TestCreateDoesNotCopyOrChangeDirtySource(t *testing.T) {
 
 func TestInspectRejectsNonRepositoryAndUnbornRepository(t *testing.T) {
 	requireGit(t)
-	if got := Inspect(context.Background(), t.TempDir()); got.Available || !strings.Contains(got.Reason, "not inside a Git repository") {
+	if got := Inspect(context.Background(), testenv.TempDir(t)); got.Available || !strings.Contains(got.Reason, "not inside a Git repository") {
 		t.Fatalf("non-repo availability = %+v", got)
 	}
-	unborn := t.TempDir()
+	unborn := testenv.TempDir(t)
 	if out, err := exec.Command("git", "-C", unborn, "init").CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v %s", err, out)
 	}
@@ -208,18 +210,18 @@ func TestInspectRejectsNonRepositoryAndUnbornRepository(t *testing.T) {
 
 func TestInspectWithoutGitExplainsSafeFallback(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Setenv("PATH", t.TempDir())
+		t.Setenv("PATH", testenv.TempDir(t))
 	} else {
-		t.Setenv("PATH", t.TempDir())
+		t.Setenv("PATH", testenv.TempDir(t))
 	}
-	got := Inspect(context.Background(), t.TempDir())
+	got := Inspect(context.Background(), testenv.TempDir(t))
 	if got.Available || !strings.Contains(got.Reason, "Git is not installed") || !strings.Contains(got.Reason, "serialize writes") {
 		t.Fatalf("no-Git availability = %+v", got)
 	}
 }
 
 func TestManagedPathBoundary(t *testing.T) {
-	managed := filepath.Join(t.TempDir(), "worktrees")
+	managed := filepath.Join(testenv.TempDir(t), "worktrees")
 	inside := filepath.Join(managed, "repo", "id")
 	sibling := managed + "-backup"
 	if !IsManagedPath(inside, managed) {
@@ -261,7 +263,7 @@ func TestGitWorktreeAddUsesExtendedTimeout(t *testing.T) {
 
 func TestCreateSupportsPathsWithSpaces(t *testing.T) {
 	requireGit(t)
-	parent := t.TempDir()
+	parent := testenv.TempDir(t)
 	repo := filepath.Join(parent, "repo with spaces")
 	if err := os.MkdirAll(repo, 0o755); err != nil {
 		t.Fatal(err)

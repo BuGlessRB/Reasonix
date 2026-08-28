@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/i18n"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestRuntimeProfileDisplayLocalizesLabels(t *testing.T) {
@@ -169,7 +170,7 @@ func TestWorkModeSwitchRejectsInvalidSameAndBusyRequests(t *testing.T) {
 
 func TestWorkModeSwitchRejectsRunningTurn(t *testing.T) {
 	runner := &blockingTurnRunner{started: make(chan struct{})}
-	ctrl := control.New(control.Options{Runner: runner, Sink: event.Discard, SessionDir: t.TempDir(), Label: "model"})
+	ctrl := control.New(control.Options{Runner: runner, Sink: event.Discard, SessionDir: testenv.TempDir(t), Label: "model"})
 	ctrl.Send("keep running")
 	<-runner.started
 	t.Cleanup(func() {

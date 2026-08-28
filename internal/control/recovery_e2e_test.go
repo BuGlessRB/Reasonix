@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/permission"
 	"reasonix/internal/provider"
 	"reasonix/internal/recovery"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -19,7 +20,7 @@ import (
 // then performs an external write without turning execution risk into a user
 // decision. Also verifies recovery sidecar persistence and metrics.
 func TestRecoveryCheckpointScriptedE2E(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "session.jsonl")
 
 	bash := &recoveryWriteTool{name: "bash", failOnce: true}

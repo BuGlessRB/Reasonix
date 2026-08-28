@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"reasonix/internal/mcplaunch"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -423,7 +424,7 @@ func TestLazyCacheHitSlowStartupContinuesInBackground(t *testing.T) {
 func TestLazyToolsetInheritsInstalledServerReaderAuthorization(t *testing.T) {
 	redirectCache(t)
 	spec := helperSpec()
-	spec.LaunchManager = mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), t.TempDir())
+	spec.LaunchManager = mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), testenv.TempDir(t))
 	spec.Authorized = true
 	if err := SaveCachedSchema(spec.Name, CachedSchema{
 		CacheKey: SchemaCacheKey(spec),

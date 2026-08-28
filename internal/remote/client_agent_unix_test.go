@@ -14,6 +14,7 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 
 	"reasonix/internal/remote/sshtest"
+	"reasonix/internal/testenv"
 )
 
 func TestClientFallsBackFromEmptyAgentToIdentityFile(t *testing.T) {
@@ -22,7 +23,7 @@ func TestClientFallsBackFromEmptyAgentToIdentityFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := sshtest.Start(t, sshtest.Options{AuthorizedKey: authorized})
-	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
+	keyPath := filepath.Join(testenv.TempDir(t), "id_ed25519")
 	if err := writeFile0600(keyPath, pemBytes); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +76,7 @@ func TestIdentitiesOnlyUsesOnlyConfiguredAgentIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := sshtest.Start(t, sshtest.Options{AuthorizedKey: authorized})
-	keyPath := filepath.Join(t.TempDir(), "id_ed25519.pub")
+	keyPath := filepath.Join(testenv.TempDir(t), "id_ed25519.pub")
 	if err := writeFile0600(keyPath, ssh.MarshalAuthorizedKey(authorized)); err != nil {
 		t.Fatal(err)
 	}

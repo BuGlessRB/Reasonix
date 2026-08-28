@@ -17,6 +17,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestParseBearerChallenge(t *testing.T) {
@@ -52,7 +54,7 @@ func TestOAuthHTTPClientDoesNotChangeRuntimeIdentity(t *testing.T) {
 func TestAuthorizeHTTPMCPRejectsStaticAuthorizationHeader(t *testing.T) {
 	opened := false
 	err := AuthorizeHTTPMCP(context.Background(), Spec{
-		Name: "remote", Type: "http", URL: "https://example.test/mcp", StateDir: t.TempDir(),
+		Name: "remote", Type: "http", URL: "https://example.test/mcp", StateDir: testenv.TempDir(t),
 		Headers: map[string]string{"Authorization": "Bearer configured"},
 	}, func(string) error {
 		opened = true
@@ -69,7 +71,7 @@ func TestAuthorizeHTTPMCPRejectsStaticAuthorizationHeader(t *testing.T) {
 func TestAuthorizeHTTPMCPRejectsStaticAPIKeyHeader(t *testing.T) {
 	opened := false
 	err := AuthorizeHTTPMCP(context.Background(), Spec{
-		Name: "remote", Type: "http", URL: "https://example.test/mcp", StateDir: t.TempDir(),
+		Name: "remote", Type: "http", URL: "https://example.test/mcp", StateDir: testenv.TempDir(t),
 		Headers: map[string]string{"X-API-Key": "configured"},
 	}, func(string) error {
 		opened = true
@@ -84,7 +86,7 @@ func TestAuthorizeHTTPMCPRejectsStaticAPIKeyHeader(t *testing.T) {
 }
 
 func TestAuthorizeHTTPMCPUsesDiscoveryPKCEAndPersistsPrivateToken(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	var server *httptest.Server
 	var mu sync.Mutex
 	registeredRedirect := ""
@@ -245,7 +247,7 @@ func TestAuthorizeHTTPMCPUsesDiscoveryPKCEAndPersistsPrivateToken(t *testing.T) 
 }
 
 func TestAuthorizeHTTPMCPDoesNotHoldStateLockDuringBrowser(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	const endpoint = "https://mcp.example.test/mcp"
 	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		response := func(status int, body string) (*http.Response, error) {
@@ -325,7 +327,7 @@ func TestAuthorizeHTTPMCPDoesNotHoldStateLockDuringBrowser(t *testing.T) {
 }
 
 func TestHTTPMCPRefreshesExpiredTokenAndRotatesRefreshToken(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	refreshCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -402,7 +404,7 @@ func TestOAuthClientSecretBasicFormEncodesCredentials(t *testing.T) {
 }
 
 func TestHTTPMCPSerializesSharedRefreshTokenRotation(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	refreshStarted := make(chan struct{})
 	allowRefresh := make(chan struct{})
 	var refreshCalls atomic.Int32
@@ -483,7 +485,7 @@ func TestHTTPMCPSerializesSharedRefreshTokenRotation(t *testing.T) {
 }
 
 func TestHTTPMCPRefreshReleasesCrossProcessLockDuringTokenRequest(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	refreshStarted := make(chan struct{})
 	allowRefresh := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -539,7 +541,7 @@ func TestHTTPMCPRefreshReleasesCrossProcessLockDuringTokenRequest(t *testing.T) 
 }
 
 func TestHTTPMCPRejectsOAuthStateForDifferentResource(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	if err := saveMCPOAuthState(stateDir, mcpOAuthState{
 		Version: 1, Resource: "https://old.example.test/mcp", Issuer: "https://auth.example.test",
 		ClientID: "client", AccessToken: "must-not-leak", TokenType: "Bearer",
@@ -560,7 +562,7 @@ func TestSameCanonicalResourceRejectsURLUserinfo(t *testing.T) {
 }
 
 func TestClearHTTPMCPOAuthRemovesOnlyReasonixState(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	if err := saveMCPOAuthState(stateDir, mcpOAuthState{
 		Version: 1, Resource: "https://mcp.example.test/mcp", Issuer: "https://auth.example.test",
 		ClientID: "client", AccessToken: "access-token", TokenType: "Bearer",
@@ -592,7 +594,7 @@ func TestClearHTTPMCPOAuthRemovesOnlyReasonixState(t *testing.T) {
 }
 
 func TestClearHTTPMCPOAuthAllowsMissingPrivateStateDirectory(t *testing.T) {
-	stateDir := filepath.Join(t.TempDir(), "not-created-yet")
+	stateDir := filepath.Join(testenv.TempDir(t), "not-created-yet")
 	changed, err := ClearHTTPMCPOAuth(Spec{StateDir: stateDir})
 	if err != nil || changed {
 		t.Fatalf("ClearHTTPMCPOAuth = (%v, %v), want (false, nil)", changed, err)
@@ -600,7 +602,7 @@ func TestClearHTTPMCPOAuthAllowsMissingPrivateStateDirectory(t *testing.T) {
 }
 
 func TestReconcileHTTPMCPOAuthAfterRemovalPreservesOnlyMatchingFallback(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	const resource = "https://mcp.example.test/mcp?workspace=main"
 	writeState := func() {
 		t.Helper()
@@ -629,7 +631,7 @@ func TestReconcileHTTPMCPOAuthAfterRemovalPreservesOnlyMatchingFallback(t *testi
 }
 
 func TestMCPAuthGenerationInvalidatesPendingAuthorization(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	generation, err := captureMCPOAuthGeneration(context.Background(), stateDir)
 	if err != nil {
 		t.Fatalf("captureMCPOAuthGeneration: %v", err)
@@ -649,7 +651,7 @@ func TestMCPAuthGenerationInvalidatesPendingAuthorization(t *testing.T) {
 }
 
 func TestReconcileDifferentFallbackInvalidatesPendingAuthorizationWithoutState(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	generation, err := captureMCPOAuthGeneration(context.Background(), stateDir)
 	if err != nil {
 		t.Fatalf("captureMCPOAuthGeneration: %v", err)
@@ -667,7 +669,7 @@ func TestReconcileDifferentFallbackInvalidatesPendingAuthorizationWithoutState(t
 }
 
 func TestClearedOAuthStateCannotBeResurrectedByStaleTransport(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}))

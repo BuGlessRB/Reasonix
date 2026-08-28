@@ -15,6 +15,7 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // touch sets a file's mtime to t. Used by the listing-order test so it
@@ -24,7 +25,7 @@ func touch(path string, t time.Time) error {
 }
 
 func TestSaveLoadPreservesLegacyContentAndRawUserContent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	const raw = "fix the bug"
 	const rendered = "<reasoning-language>zh</reasoning-language>\n\nfix the bug"
 	s := NewSession("system")
@@ -62,7 +63,7 @@ func TestSaveLoadPreservesLegacyContentAndRawUserContent(t *testing.T) {
 }
 
 func TestLoadSessionMigratesLegacyInjectedUserContentWithoutChangingProviderBytes(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	const raw = "fix the bug"
 	const legacy = "<reasoning-language>\nVisible reasoning/thinking text preference: use Simplified Chinese.\n</reasoning-language>\n\nfix the bug"
 	s := NewSession("system")
@@ -96,7 +97,7 @@ func TestLoadSessionMigratesLegacyInjectedUserContentWithoutChangingProviderByte
 }
 
 func TestLoadSessionMigratesTransitionalProviderContentToLegacySafeShape(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	const raw = "fix the bug"
 	const rendered = "<reasoning-language>zh</reasoning-language>\n\nfix the bug"
 	s := NewSession("system")
@@ -129,7 +130,7 @@ func TestLoadSessionMigratesTransitionalProviderContentToLegacySafeShape(t *test
 // desktop snapshots defensively on every tab/session switch, and on large
 // transcripts the redundant full-save work is seconds of UI freeze.
 func TestSnapshotUpToDateFastPath(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, Content: "hi"})
@@ -139,7 +140,7 @@ func TestSnapshotUpToDateFastPath(t *testing.T) {
 	if !s.snapshotUpToDate(path) {
 		t.Fatal("snapshotUpToDate = false right after a successful save")
 	}
-	if s.snapshotUpToDate(filepath.Join(t.TempDir(), "other.jsonl")) {
+	if s.snapshotUpToDate(filepath.Join(testenv.TempDir(t), "other.jsonl")) {
 		t.Fatal("snapshotUpToDate = true for a different path")
 	}
 
@@ -209,7 +210,7 @@ func TestSnapshotUpToDateFastPath(t *testing.T) {
 }
 
 func TestSaveSnapshotBoundsCrossProcessFileLockWait(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	lock, err := tryTakeSessionLockFile(store.SessionLockFile(path))
 	if err != nil {
 		t.Fatalf("take competing session lock: %v", err)
@@ -240,7 +241,7 @@ func TestSaveSnapshotBoundsCrossProcessFileLockWait(t *testing.T) {
 }
 
 func TestSaveSnapshotSucceedsWhenCrossProcessFileLockReleasesBeforeDeadline(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	lock, err := tryTakeSessionLockFile(store.SessionLockFile(path))
 	if err != nil {
 		t.Fatalf("take competing session lock: %v", err)
@@ -281,7 +282,7 @@ func TestSaveSnapshotSucceedsWhenCrossProcessFileLockReleasesBeforeDeadline(t *t
 }
 
 func TestSaveShutdownRecoveryBranchBypassesHeldOriginalFileLock(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "persisted"})
@@ -347,7 +348,7 @@ func TestSaveShutdownRecoveryBranchBypassesHeldOriginalFileLock(t *testing.T) {
 // repair. Before the fix the flags were never cleared, so a repaired session
 // paid a full serialize + digest on every defensive snapshot until restart.
 func TestRepairedSessionArmsFastPath(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	sessionWithTurns(t, path, 2)
 
 	// Tear the event log so the next load marks it damaged.
@@ -416,7 +417,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	})
 	s.Add(provider.Message{Role: provider.RoleAssistant, Content: "It's fine."})
 
-	path := filepath.Join(t.TempDir(), "s.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	if err := s.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -454,7 +455,7 @@ func TestSavePreservesToolContentOnDisk(t *testing.T) {
 		Content:    "DEEPSEEK_API_KEY=" + secret + "\n",
 	})
 
-	path := filepath.Join(t.TempDir(), "verbatim.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "verbatim.jsonl")
 	if err := s.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -474,7 +475,7 @@ func TestSaveProtectsVerbatimSessionEventLog(t *testing.T) {
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "inspect"})
 	s.Add(provider.Message{Role: provider.RoleTool, Name: "bash", ToolCallID: "call_1", Content: "API_KEY=raw-secret"})
-	path := filepath.Join(t.TempDir(), "private.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "private.jsonl")
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatalf("first SaveSnapshot: %v", err)
 	}
@@ -518,7 +519,7 @@ func TestSaveVerbatimRoundTripKeepsSnapshotBaselineStable(t *testing.T) {
 		Content:    "DEEPSEEK_API_KEY=" + secret + "\n",
 	})
 
-	path := filepath.Join(t.TempDir(), "stable.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "stable.jsonl")
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatalf("first SaveSnapshot: %v", err)
 	}
@@ -563,7 +564,7 @@ func TestSaveLoadLargeMessage(t *testing.T) {
 	big := strings.Repeat("x", 5*1024*1024)
 	s.Add(provider.Message{Role: provider.RoleTool, Name: "bash", ToolCallID: "c1", Content: big})
 
-	path := filepath.Join(t.TempDir(), "big.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "big.jsonl")
 	if err := s.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -580,7 +581,7 @@ func TestSaveLoadLargeMessage(t *testing.T) {
 }
 
 func TestSaveSnapshotRejectsStalePrefixOverwrite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	current := NewSession("sys")
 	current.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	current.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -610,7 +611,7 @@ func TestSaveSnapshotRejectsStalePrefixOverwrite(t *testing.T) {
 }
 
 func TestSaveSnapshotAllowsAppendFromDiskPrefix(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := base.Save(path); err != nil {
@@ -641,7 +642,7 @@ func TestSaveSnapshotAllowsAppendFromDiskPrefix(t *testing.T) {
 // over the bytes on disk and must land as one — not collide with the
 // placeholder, misread the turn as divergence, and fork a recovery branch.
 func TestSaveSnapshotAppendsAcrossInterruptedToolCallTail(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "run the build"})
 	s.Add(provider.Message{
@@ -688,7 +689,7 @@ func TestSaveSnapshotAppendsAcrossInterruptedToolCallTail(t *testing.T) {
 // tool results on disk. LoadSession fabricates placeholders only for the still
 // unanswered calls; the live session later appends the real remaining results.
 func TestSaveSnapshotAppendsAcrossPartiallyAnsweredMultiToolCallTail(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "inspect and test"})
 	s.Add(provider.Message{
@@ -756,7 +757,7 @@ func TestSaveSnapshotAppendsAcrossPartiallyAnsweredMultiToolCallTail(t *testing.
 // re-snapshotting the exact bytes on disk must be a no-op, not a stale-prefix
 // conflict against the placeholder the load-time repair fabricated.
 func TestSaveSnapshotUnchangedInterruptedToolCallTailIsNoOp(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "run the build"})
 	s.Add(provider.Message{
@@ -791,7 +792,7 @@ func TestSaveSnapshotUnchangedInterruptedToolCallTailIsNoOp(t *testing.T) {
 // call a mid-turn snapshot left behind. Ownership is anchored on the raw bytes
 // this session wrote; the placeholder fabricated on load must not revoke it.
 func TestSaveRewriteOwnedAcrossInterruptedToolCallTail(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "run the build"})
 	s.Add(provider.Message{
@@ -830,7 +831,7 @@ func TestSaveRewriteOwnedAcrossInterruptedToolCallTail(t *testing.T) {
 // the whole new turn from disk. It must fall back to a full rewrite that
 // persists the repair and the new turn together.
 func TestSaveSnapshotAfterDirtyResumeKeepsEventChainReplayable(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "run the build"})
 	s.Add(provider.Message{
@@ -883,7 +884,7 @@ func TestSaveSnapshotAfterDirtyResumeKeepsEventChainReplayable(t *testing.T) {
 // appending against the repaired view would leave the broken arguments on disk.
 // The snapshot must rewrite so the repair and new turn persist together.
 func TestSaveSnapshotAfterDirtyResumeWithTruncatedToolArgsPersistsRepair(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "run tests"})
 	s.Add(provider.Message{
@@ -946,7 +947,7 @@ func TestSaveSnapshotAfterDirtyResumeWithTruncatedToolArgsPersistsRepair(t *test
 // backfills an empty tool-call name on load; that repair must not make the
 // disk look like it fails to cover the snapshot and fork a pointless recovery.
 func TestSaveRecoveryBranchNotNeededWhenRawTranscriptCoversSnapshot(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "run the build"})
 	s.Add(provider.Message{
@@ -965,7 +966,7 @@ func TestSaveRecoveryBranchNotNeededWhenRawTranscriptCoversSnapshot(t *testing.T
 }
 
 func TestSaveSnapshotAppendsWithoutReplacingPrefixFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := base.Save(path); err != nil {
@@ -992,7 +993,7 @@ func TestSaveSnapshotAppendsWithoutReplacingPrefixFile(t *testing.T) {
 }
 
 func TestSaveSnapshotAppendsEventLogAndDisplayReadModel(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := base.SaveSnapshot(path); err != nil {
@@ -1057,7 +1058,7 @@ func TestSaveSnapshotAppendsEventLogAndDisplayReadModel(t *testing.T) {
 }
 
 func TestSaveRewriteAppendsReplaceEventAndRefreshesCheckpoint(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	base.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1099,7 +1100,7 @@ func TestSaveRewriteAppendsReplaceEventAndRefreshesCheckpoint(t *testing.T) {
 }
 
 func TestSaveSnapshotMigratesLegacyJSONLToEventLog(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "legacy.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "legacy.jsonl")
 	if err := os.WriteFile(path, []byte(`{"role":"system","content":"sys"}`+"\n"+`{"role":"user","content":"legacy"}`+"\n"), 0o644); err != nil {
 		t.Fatalf("write legacy jsonl: %v", err)
 	}
@@ -1128,7 +1129,7 @@ func TestSaveSnapshotMigratesLegacyJSONLToEventLog(t *testing.T) {
 }
 
 func TestSaveSnapshotAllowsAppendAfterSystemPromptRefresh(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("old sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := base.Save(path); err != nil {
@@ -1155,7 +1156,7 @@ func TestSaveSnapshotAllowsAppendAfterSystemPromptRefresh(t *testing.T) {
 }
 
 func TestSaveSnapshotRecordsRevisionAndMetaUpdatesPreserveIt(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := base.SaveSnapshot(path); err != nil {
@@ -1201,7 +1202,7 @@ func TestSaveSnapshotRecordsRevisionAndMetaUpdatesPreserveIt(t *testing.T) {
 }
 
 func TestSaveSnapshotSameContentSkipsRevisionBump(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -1237,7 +1238,7 @@ func TestSaveSnapshotSameContentSkipsRevisionBump(t *testing.T) {
 }
 
 func TestSaveSnapshotSameContentByOtherRuntimeKeepsClonedBaselineWritable(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1283,7 +1284,7 @@ func TestSaveSnapshotSameContentByOtherRuntimeKeepsClonedBaselineWritable(t *tes
 }
 
 func TestSaveSnapshotAllowsExactAppendFromStaleRevisionBaseline(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -1329,7 +1330,7 @@ func TestSaveSnapshotAllowsExactAppendFromStaleRevisionBaseline(t *testing.T) {
 }
 
 func TestSaveSnapshotAllowsCompatibleSystemAppendFromStaleRevisionBaseline(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys v1")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -1380,7 +1381,7 @@ func TestSaveSnapshotAllowsCompatibleSystemAppendFromStaleRevisionBaseline(t *te
 }
 
 func TestSaveSnapshotRefusesStaleBaselineAppendOverRewoundTranscript(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	if err := s.SaveSnapshot(path); err != nil {
@@ -1417,7 +1418,7 @@ func TestSaveSnapshotRefusesStaleBaselineAppendOverRewoundTranscript(t *testing.
 }
 
 func TestSaveRewriteAllowsOwnedRewriteAfterLedgerReset(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, Content: "partial turn"})
@@ -1453,7 +1454,7 @@ func TestSaveRewriteAllowsOwnedRewriteAfterLedgerReset(t *testing.T) {
 }
 
 func TestSaveSnapshotStillPersistsNormalizedRepair(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	mal := NewSession("sys")
 	mal.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	// Unanswered tool call: LoadSession backfills a placeholder result, so the
@@ -1507,7 +1508,7 @@ func TestSaveSnapshotStillPersistsNormalizedRepair(t *testing.T) {
 }
 
 func TestSaveSnapshotRejectsStalePrefixAfterSystemPromptRefresh(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	current := NewSession("new sys")
 	current.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	current.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1536,7 +1537,7 @@ func TestSaveSnapshotRejectsStalePrefixAfterSystemPromptRefresh(t *testing.T) {
 }
 
 func TestSaveRewriteAllowsRewriteOverSameContentForeignStamp(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	base.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1589,7 +1590,7 @@ func TestSaveRewriteAllowsRewriteOverSameContentForeignStamp(t *testing.T) {
 }
 
 func TestSaveRewriteRejectsForeignStampForUnattributedBytes(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	base.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1642,7 +1643,7 @@ func TestSaveRewriteRejectsForeignStampForUnattributedBytes(t *testing.T) {
 }
 
 func TestSaveSnapshotAllowsOwnedNonPrefixRewrite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1674,7 +1675,7 @@ func TestSaveSnapshotAllowsOwnedNonPrefixRewrite(t *testing.T) {
 }
 
 func TestSaveSnapshotRejectsInterruptedForeignWriteAtSameRevision(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "base"})
 	if err := base.Save(path); err != nil {
@@ -1721,7 +1722,7 @@ func TestSaveSnapshotRejectsInterruptedForeignWriteAtSameRevision(t *testing.T) 
 }
 
 func TestSaveRewriteAllowsOwnedNonPrefixRewrite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1750,7 +1751,7 @@ func TestSaveRewriteAllowsOwnedNonPrefixRewrite(t *testing.T) {
 }
 
 func TestCloneWithMessagesPreservesRewriteBaseline(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("old sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "tool-1", Name: "read_file", Arguments: "{}"}}})
@@ -1785,7 +1786,7 @@ func TestCloneWithMessagesPreservesRewriteBaseline(t *testing.T) {
 }
 
 func TestCloneWithMessagesIfCompatibleRejectsHistoryChanges(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("old sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1811,7 +1812,7 @@ func TestCloneWithMessagesIfCompatibleRejectsHistoryChanges(t *testing.T) {
 }
 
 func TestSaveRewriteRejectsStalePrefixOverwrite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	current := NewSession("sys")
 	current.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	current.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1839,7 +1840,7 @@ func TestSaveRewriteRejectsStalePrefixOverwrite(t *testing.T) {
 }
 
 func TestSaveRecoveryBranchPersistsDivergedSnapshot(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	current := NewSession("sys")
 	current.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	current.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1896,7 +1897,7 @@ func TestSaveRecoveryBranchPersistsDivergedSnapshot(t *testing.T) {
 }
 
 func TestSaveRecoveryBranchSkipsPureStalePrefix(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	current := NewSession("sys")
 	current.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	current.Add(provider.Message{Role: provider.RoleAssistant, Content: "one"})
@@ -1944,7 +1945,7 @@ func stampRecoveryMeta(t *testing.T, path string, depth int) {
 }
 
 func TestSaveRecoveryBranchStampsAndCapsChainDepth(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 
 	// Forking from a normal session stamps depth 1.
 	path, stale := divergedSessionPair(t, dir, "session.jsonl")
@@ -1994,7 +1995,7 @@ func TestSaveRecoveryBranchStampsAndCapsChainDepth(t *testing.T) {
 }
 
 func TestSaveRecoveryBranchDedupesByDigest(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	current := NewSession("sys")
 	current.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
 	current.Add(provider.Message{Role: provider.RoleAssistant, Content: "disk"})
@@ -2019,7 +2020,7 @@ func TestSaveRecoveryBranchDedupesByDigest(t *testing.T) {
 }
 
 func TestSaveRecoveryBranchCompactsLongParentFilename(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	parentID := strings.Repeat("longparent-", 22)
 	path := filepath.Join(dir, parentID+".jsonl")
 	current := NewSession("sys")
@@ -2055,7 +2056,7 @@ func TestSaveRecoveryBranchCompactsLongParentFilename(t *testing.T) {
 }
 
 func TestSaveRecoveryBranchDoesNotCascadeRecoveryFilename(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	current := NewSession("sys")
 	current.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -2106,7 +2107,7 @@ func TestSaveRecoveryBranchDoesNotCascadeRecoveryFilename(t *testing.T) {
 // this Session's baseline, so the save proceeds as a full rewrite instead of
 // forking another recovery branch.
 func TestSaveSnapshotSameRevisionAllowsOwnedNonPrefixAppend(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	// Simulate a mid-turn snapshot that captured an interrupted tool turn.
@@ -2160,7 +2161,7 @@ func TestSaveSnapshotSameRevisionAllowsOwnedNonPrefixAppend(t *testing.T) {
 }
 
 func TestReconcileSessionSidecarsRemovesUnlockedArtifacts(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	if err := os.WriteFile(path, []byte(`{"role":"user","content":"hello"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -2185,7 +2186,7 @@ func TestReconcileSessionSidecarsRemovesUnlockedArtifacts(t *testing.T) {
 }
 
 func TestReconcileSessionSidecarsKeepsLiveLocks(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	if err := os.WriteFile(path, []byte(`{"role":"user","content":"hello"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -2215,7 +2216,7 @@ func TestReconcileSessionSidecarsKeepsLiveLocks(t *testing.T) {
 // protects a writer from cleanup: CLI-style savers hold the .lock flock while
 // writing without ever taking a session lease.
 func TestReconcileSessionSidecarsKeepsFlockOnlyLocks(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	if err := os.WriteFile(path, []byte(`{"role":"user","content":"hello"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -2245,7 +2246,7 @@ func TestReconcileSessionSidecarsKeepsFlockOnlyLocks(t *testing.T) {
 // conversation bytes must survive under a bounded name, branch meta must move
 // with its ID rewritten, and children must be re-parented onto the new ID.
 func TestReconcileSessionSidecarsRenamesOverlongSessionFiles(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	longID := strings.Repeat("p", 240) // 246-byte basename: .lock fits, .lease.lock does not
 	hugeID := strings.Repeat("q", 248) // 254-byte basename: no sidecar fits at all
 	oldLong := filepath.Join(dir, longID+".jsonl")
@@ -2333,7 +2334,7 @@ func TestReconcileSessionSidecarsRenamesOverlongSessionFiles(t *testing.T) {
 // must be committed — children re-parented, error surfaced as a warning —
 // because the old name is gone and no later run can reconstruct it.
 func TestReconcileOverlongRenameStillReparentsWhenSidecarMigrationFails(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	longID := strings.Repeat("m", 240)
 	oldPath := filepath.Join(dir, longID+".jsonl")
 	content := `{"role":"user","content":"hello"}` + "\n"
@@ -2384,7 +2385,7 @@ func TestReconcileOverlongRenameStillReparentsWhenSidecarMigrationFails(t *testi
 // recently used conversation first — that's what users reach for when they
 // hit `reasonix --continue`.
 func TestListSessionsOrdersByMTime(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	// Write two sessions with explicit mtimes so the order is deterministic.
 	for _, name := range []string{"a.jsonl", "b.jsonl"} {
 		s := NewSession("")
@@ -2418,7 +2419,7 @@ func TestListSessionsOrdersByMTime(t *testing.T) {
 }
 
 func TestListSessionsIncludesCustomTitle(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "named.jsonl")
 	s := NewSession("")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "first user prompt"})
@@ -2451,7 +2452,7 @@ func TestListSessionsIncludesCustomTitle(t *testing.T) {
 }
 
 func TestListSessionsSkipsCleanupPending(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "pending.jsonl")
 	s := NewSession("")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "preview"})
@@ -2486,7 +2487,7 @@ func TestListSessionsSkipsCleanupPending(t *testing.T) {
 }
 
 func TestListSessionsOrdersByLastActivityMeta(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	aPath := filepath.Join(dir, "a.jsonl")
 	bPath := filepath.Join(dir, "b.jsonl")
 	for _, path := range []string{aPath, bPath} {
@@ -2525,7 +2526,7 @@ func TestListSessionsOrdersByLastActivityMeta(t *testing.T) {
 }
 
 func TestListSessionOrderIncludesEmptySessionsWithoutPreviewScan(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	emptyPath := filepath.Join(dir, "empty.jsonl")
 	realPath := filepath.Join(dir, "real.jsonl")
 	if err := os.WriteFile(emptyPath, nil, 0o644); err != nil {
@@ -2562,7 +2563,7 @@ func TestListSessionOrderIncludesEmptySessionsWithoutPreviewScan(t *testing.T) {
 }
 
 func TestSessionListingsExposeRecoveryMetadata(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "recovered.jsonl")
 	s := NewSession("")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "continued recovery"})
@@ -2628,7 +2629,7 @@ func TestContinueSessionPathReusesPriorFile(t *testing.T) {
 }
 
 func TestContinueSessionPathMintsFreshWhenNoPrior(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	got := ContinueSessionPath("", dir, "deepseek")
 	if filepath.Dir(got) != dir || !strings.HasSuffix(got, ".jsonl") {
 		t.Fatalf("fresh path = %q, want a .jsonl under %q", got, dir)
@@ -2644,7 +2645,7 @@ func TestContinueSessionPathNoPersistence(t *testing.T) {
 // TestListSessionsMissingDir returns nil + no error so callers can fall
 // through to a fresh session without special-casing.
 func TestListSessionsMissingDir(t *testing.T) {
-	got, err := ListSessions(filepath.Join(t.TempDir(), "never-created"))
+	got, err := ListSessions(filepath.Join(testenv.TempDir(t), "never-created"))
 	if err != nil || got != nil {
 		t.Errorf("missing dir = %v / %v, want nil/nil", got, err)
 	}
@@ -2678,7 +2679,7 @@ func readSessionEventsForTest(t *testing.T, path string) []sessionEventRecord {
 // and the owning transcript's rename must carry those sidecars along instead
 // of orphaning them under the retired stem.
 func TestReconcileOverlongMigratesDiagnosticSidecars(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	// 236-byte transcript name: past the 224 reconcile bound, while its
 	// .events.jsonl (243) and .conflicts.jsonl (246) still fit under 255 —
 	// exactly the window where the old suffix filter mistook them for

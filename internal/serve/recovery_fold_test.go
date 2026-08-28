@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // divergedConflictCopy writes a conflict copy whose tail differs from its
@@ -32,10 +33,10 @@ func divergedConflictCopy(t *testing.T, parentPath string, turns int, lane strin
 
 func seedConflictChain(t *testing.T) (root, dir string, chain []string) {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_STATE_HOME", home)
-	root = t.TempDir()
+	root = testenv.TempDir(t)
 	dir = SessionDirFor(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)

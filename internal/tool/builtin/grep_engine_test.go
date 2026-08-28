@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 )
 
 func TestGrepTimeoutClamp(t *testing.T) {
@@ -55,11 +56,11 @@ func TestGrepTimeoutPreservesPartialResults(t *testing.T) {
 }
 
 func TestResolveSearch(t *testing.T) {
-	rgFile := filepath.Join(t.TempDir(), "rg")
+	rgFile := filepath.Join(testenv.TempDir(t), "rg")
 	if err := os.WriteFile(rgFile, []byte("x"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	missing := filepath.Join(t.TempDir(), "absent")
+	missing := filepath.Join(testenv.TempDir(t), "absent")
 
 	if got := ResolveSearch("native", rgFile, nil); got.RgPath != "" {
 		t.Fatalf("native must ignore ripgrep, got %q", got.RgPath)
@@ -92,7 +93,7 @@ func TestGrepRipgrepEngine(t *testing.T) {
 	if err != nil {
 		t.Skip("ripgrep not installed")
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("alpha\nBETA needle here\ngamma\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +118,7 @@ func TestGrepRipgrepFallsBackWhenForbidReadIsNotSandboxed(t *testing.T) {
 	if err != nil {
 		t.Skip("ripgrep not installed")
 	}
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	forbidDir := filepath.Join(root, "secret")
 	if err := os.MkdirAll(forbidDir, 0o755); err != nil {
 		t.Fatal(err)

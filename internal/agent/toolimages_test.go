@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -42,7 +43,7 @@ func TestToolResultImagesBypassTruncation(t *testing.T) {
 		{toolCallChunk("c1", "shot", `{}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
-	a := New(prov, reg, NewSession(""), Options{ArchiveDir: t.TempDir()}, event.Discard)
+	a := New(prov, reg, NewSession(""), Options{ArchiveDir: testenv.TempDir(t)}, event.Discard)
 	if err := a.Run(context.Background(), "take a screenshot"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

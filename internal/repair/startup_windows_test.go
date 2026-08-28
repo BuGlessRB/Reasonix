@@ -7,11 +7,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestStartupTrackerWindowsHandleContentionReportsOnce(t *testing.T) {
 	for iteration := range 100 {
-		path := filepath.Join(t.TempDir(), "startup.json")
+		path := filepath.Join(testenv.TempDir(t), "startup.json")
 		writeLegacyStartupState(t, path, `{"phase":"healthy","pid":42}`)
 		start := make(chan struct{})
 		var reports atomic.Int32

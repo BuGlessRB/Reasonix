@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestSummarizeTrajectoryAttributesTimeAndSkipsTruncatedTail(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "task.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "task.trajectory.jsonl")
 	lines := []string{
 		`{"schema_version":1,"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		`{"schema_version":1,"seq":2,"ts":1500,"event":{"kind":"tool_dispatch","tool":{"name":"bash"}}}`,
@@ -40,7 +42,7 @@ func TestSummarizeTrajectoryAttributesTimeAndSkipsTruncatedTail(t *testing.T) {
 }
 
 func TestSummarizeTrajectoryDecomposesModelRounds(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "rounds.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "rounds.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		`{"seq":2,"ts":3000,"event":{"kind":"tool_dispatch","tool":{"name":"read_file","partial":true}}}`, // round 1 gap: 2000
@@ -78,7 +80,7 @@ func TestSummarizeTrajectoryDecomposesModelRounds(t *testing.T) {
 }
 
 func TestSummarizeTrajectoryDecomposesBatches(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "batches.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "batches.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		// Batch 1: three reads dispatched together, executed overlapping.
@@ -129,7 +131,7 @@ func TestSummarizeTrajectoryDecomposesBatches(t *testing.T) {
 }
 
 func TestSummarizeTrajectoryAnchorsStartDelayToFullDispatch(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "partial.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "partial.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		// Streamed partial announcement ~900ms before the full dispatch; the
@@ -155,7 +157,7 @@ func TestSummarizeTrajectoryAnchorsStartDelayToFullDispatch(t *testing.T) {
 }
 
 func TestSummarizeTrajectorySplitsCleanAndRecoveryRounds(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "recovery.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "recovery.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		// Round 1 (clean, gap 1000).
@@ -212,7 +214,7 @@ func TestClipIntervals(t *testing.T) {
 }
 
 func TestSummarizeTrajectoryDecomposesWallClock(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "wall.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "wall.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		// Planner call: 3000ms, tagged by its usage source.
@@ -266,7 +268,7 @@ func TestSummarizeTrajectoryDecomposesWallClock(t *testing.T) {
 }
 
 func TestSummarizeTrajectoryCollectsPhaseTraceInputs(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "phase.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "phase.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		`{"seq":2,"ts":1870,"event":{"kind":"reasoning"}}`,
@@ -344,7 +346,7 @@ func TestBuildPhaseTrace(t *testing.T) {
 }
 
 func TestSummarizeTrajectoryClassifiesRoundOutcomes(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "outcomes.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "outcomes.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		// Round 1: planner usage in the gap outranks the batch's mutation.
@@ -422,7 +424,7 @@ func TestRenderTimeAttributionIncludesRoundEfficiency(t *testing.T) {
 }
 
 func TestRunTrajModeRedigestsRecordedFiles(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		`{"seq":2,"ts":1000,"event":{"kind":"stream_attempt","streamAttempt":{"id":"e1","action":"begin"}}}`,
@@ -565,7 +567,7 @@ func TestRenderBodyIncludesTimeAttributionOnlyForRecordedRuns(t *testing.T) {
 // delay is time spent behind work, not scheduling. Booking both as one number
 // reported a serial batch as if the scheduler were slow.
 func TestSummarizeTrajectorySplitsQueueFromWaitingOnWork(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "serial.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "serial.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		`{"seq":2,"ts":1000,"event":{"kind":"tool_dispatch","tool":{"id":"a","name":"bash"}}}`,
@@ -593,7 +595,7 @@ func TestSummarizeTrajectorySplitsQueueFromWaitingOnWork(t *testing.T) {
 }
 
 func TestSummarizeTrajectoryCountsRefusedRoundsAsWaste(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "refused.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "refused.trajectory.jsonl")
 	lines := []string{
 		`{"seq":1,"ts":1000,"event":{"kind":"turn_started"}}`,
 		// Round 1: the only call was stopped before launch, so the trip bought

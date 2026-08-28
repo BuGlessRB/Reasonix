@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // write_file extended tests
 
 func TestWriteFileCreatesParentDirs(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "a", "b", "c", "file.txt")
 	runTool(t, writeFile{}, map[string]any{"path": f, "content": "nested"})
 	got, _ := os.ReadFile(f)
@@ -22,7 +24,7 @@ func TestWriteFileCreatesParentDirs(t *testing.T) {
 }
 
 func TestWriteFileOverwrites(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "x.txt")
+	f := filepath.Join(testenv.TempDir(t), "x.txt")
 	os.WriteFile(f, []byte("old"), 0o644)
 	runTool(t, writeFile{}, map[string]any{"path": f, "content": "new"})
 	got, _ := os.ReadFile(f)
@@ -32,7 +34,7 @@ func TestWriteFileOverwrites(t *testing.T) {
 }
 
 func TestWriteFileRecordsLocalPrior(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "receipt.txt")
+	f := filepath.Join(testenv.TempDir(t), "receipt.txt")
 	if err := os.WriteFile(f, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +55,7 @@ func TestWriteFileRecordsLocalPrior(t *testing.T) {
 }
 
 func TestWriteFileSameContentNoOp(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "x.txt")
+	f := filepath.Join(testenv.TempDir(t), "x.txt")
 	os.WriteFile(f, []byte("same"), 0o644)
 	out, err := writeFile{}.Execute(context.Background(), argsJSON(t, map[string]any{"path": f, "content": "same"}))
 	if err != nil {
@@ -69,7 +71,7 @@ func TestWriteFileSameContentNoOp(t *testing.T) {
 }
 
 func TestWriteFileEmptyContent(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "empty.txt")
+	f := filepath.Join(testenv.TempDir(t), "empty.txt")
 	runTool(t, writeFile{}, map[string]any{"path": f, "content": ""})
 	got, _ := os.ReadFile(f)
 	if len(got) != 0 {
@@ -85,7 +87,7 @@ func TestWriteFileMissingPath(t *testing.T) {
 }
 
 func TestWriteFileMissingContent(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "x.txt")
+	f := filepath.Join(testenv.TempDir(t), "x.txt")
 	// Missing content field should write empty file (content defaults to "").
 	runTool(t, writeFile{}, map[string]any{"path": f})
 	got, _ := os.ReadFile(f)
@@ -104,7 +106,7 @@ func TestWriteFileInvalidArgs(t *testing.T) {
 // move_file tests
 
 func TestMoveFileMovesIntoParentDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := filepath.Join(dir, "a.md")
 	dst := filepath.Join(dir, "docs", "a.md")
 	if err := os.WriteFile(src, []byte("hello"), 0o644); err != nil {
@@ -128,7 +130,7 @@ func TestMoveFileMovesIntoParentDir(t *testing.T) {
 }
 
 func TestMoveFileRejectsDestinationExists(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := filepath.Join(dir, "a.md")
 	dst := filepath.Join(dir, "b.md")
 	os.WriteFile(src, []byte("a"), 0o644)
@@ -140,8 +142,8 @@ func TestMoveFileRejectsDestinationExists(t *testing.T) {
 }
 
 func TestMoveFileRejectsEscape(t *testing.T) {
-	dir := t.TempDir()
-	outside := t.TempDir()
+	dir := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	src := filepath.Join(dir, "a.md")
 	if err := os.WriteFile(src, []byte("hello"), 0o644); err != nil {
 		t.Fatal(err)
@@ -159,7 +161,7 @@ func TestMoveFileRejectsEscape(t *testing.T) {
 }
 
 func TestMoveFileSamePathRequiresExistingFile(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "missing.md")
+	missing := filepath.Join(testenv.TempDir(t), "missing.md")
 	_, err := (moveFile{}).Execute(context.Background(), argsJSON(t, map[string]any{
 		"source_path":      missing,
 		"destination_path": missing,
@@ -170,7 +172,7 @@ func TestMoveFileSamePathRequiresExistingFile(t *testing.T) {
 }
 
 func TestMoveFileAllowsCaseOnlyRename(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := filepath.Join(dir, "caseonly.txt")
 	dst := filepath.Join(dir, "CASEONLY.txt")
 	if err := os.WriteFile(src, []byte("hello"), 0o644); err != nil {
@@ -202,7 +204,7 @@ func TestMoveFileAllowsCaseOnlyRename(t *testing.T) {
 }
 
 func TestMoveFileFallsBackWhenSameFileDestinationRenameFails(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := filepath.Join(dir, "a.md")
 	dst := filepath.Join(dir, "same-file.md")
 	if err := os.WriteFile(src, []byte("hello"), 0o644); err != nil {
@@ -235,7 +237,7 @@ func TestMoveFileFallsBackWhenSameFileDestinationRenameFails(t *testing.T) {
 }
 
 func TestMoveFileFallsBackForCrossDeviceRename(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := filepath.Join(dir, "a.md")
 	dst := filepath.Join(dir, "docs", "a.md")
 	if err := os.WriteFile(src, []byte("hello"), 0o640); err != nil {
@@ -267,7 +269,7 @@ func TestMoveFileFallsBackForCrossDeviceRename(t *testing.T) {
 // edit_file extended tests
 
 func TestEditFileNotFound(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "missing.txt")
+	f := filepath.Join(testenv.TempDir(t), "missing.txt")
 	_, err := editFile{}.Execute(context.Background(), argsJSON(t, map[string]any{
 		"path": f, "old_string": "x", "new_string": "y",
 	}))
@@ -277,7 +279,7 @@ func TestEditFileNotFound(t *testing.T) {
 }
 
 func TestEditFileOldStringNotFound(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	os.WriteFile(f, []byte("hello world"), 0o644)
 	_, err := editFile{}.Execute(context.Background(), argsJSON(t, map[string]any{
 		"path": f, "old_string": "nonexistent", "new_string": "x",
@@ -296,7 +298,7 @@ func TestEditFileOldStringNotFound(t *testing.T) {
 }
 
 func TestEditFileNotUniqueReportsMatchingLines(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "map.html")
+	f := filepath.Join(testenv.TempDir(t), "map.html")
 	separator := "    // ═══════════════════════════════════════"
 	body := strings.Join([]string{
 		separator,
@@ -322,7 +324,7 @@ func TestEditFileNotUniqueReportsMatchingLines(t *testing.T) {
 }
 
 func TestEditFileDelete(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	os.WriteFile(f, []byte("remove this line\nkeep this\n"), 0o644)
 	out := runTool(t, editFile{}, map[string]any{
 		"path": f, "old_string": "remove this line\n", "new_string": "",
@@ -342,7 +344,7 @@ func TestEditFileDelete(t *testing.T) {
 }
 
 func TestEditFileActualDiffIsBounded(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "large.txt")
+	f := filepath.Join(testenv.TempDir(t), "large.txt")
 	old := strings.Repeat("old line with enough content to grow the diff\n", 300)
 	newText := strings.Repeat("new line with enough content to grow the diff\n", 300)
 	os.WriteFile(f, []byte(old), 0o644)
@@ -359,7 +361,7 @@ func TestEditFileActualDiffIsBounded(t *testing.T) {
 }
 
 func TestEditFileReceiptDoesNotExposeUnchangedSameLineContent(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "private.txt")
+	f := filepath.Join(testenv.TempDir(t), "private.txt")
 	const privateMarker = "PRIVATE_SAME_LINE_CONTEXT_6504"
 	seed := "customer_note=" + privateMarker + " enabled=false\n"
 	os.WriteFile(f, []byte(seed), 0o600)
@@ -386,7 +388,7 @@ func TestEditFileReceiptDoesNotExposeUnchangedSameLineContent(t *testing.T) {
 }
 
 func TestEditFileMissingOldString(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	os.WriteFile(f, []byte("content"), 0o644)
 	_, err := editFile{}.Execute(context.Background(), argsJSON(t, map[string]any{
 		"path": f, "new_string": "x",
@@ -415,7 +417,7 @@ func TestEditFileInvalidArgs(t *testing.T) {
 // multi_edit extended tests
 
 func TestMultiEditEmptyEdits(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	os.WriteFile(f, []byte("content"), 0o644)
 	_, err := multiEdit{}.Execute(context.Background(), argsJSON(t, map[string]any{
 		"path": f, "edits": []map[string]any{},
@@ -435,7 +437,7 @@ func TestMultiEditMissingPath(t *testing.T) {
 }
 
 func TestMultiEditStepNotFound(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	os.WriteFile(f, []byte("alpha\nbeta\n"), 0o644)
 	_, err := multiEdit{}.Execute(context.Background(), argsJSON(t, map[string]any{
 		"path": f,
@@ -460,7 +462,7 @@ func TestMultiEditStepNotFound(t *testing.T) {
 }
 
 func TestMultiEditReplaceAll(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	os.WriteFile(f, []byte("foo bar foo baz foo"), 0o644)
 	runTool(t, multiEdit{}, map[string]any{
 		"path": f,
@@ -475,7 +477,7 @@ func TestMultiEditReplaceAll(t *testing.T) {
 }
 
 func TestMultiEditReplaceAllNotFound(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	os.WriteFile(f, []byte("hello"), 0o644)
 	_, err := multiEdit{}.Execute(context.Background(), argsJSON(t, map[string]any{
 		"path": f,
@@ -489,7 +491,7 @@ func TestMultiEditReplaceAllNotFound(t *testing.T) {
 }
 
 func TestMultiEditMissingOldString(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "a.txt")
+	f := filepath.Join(testenv.TempDir(t), "a.txt")
 	os.WriteFile(f, []byte("content"), 0o644)
 	_, err := multiEdit{}.Execute(context.Background(), argsJSON(t, map[string]any{
 		"path": f,
@@ -510,7 +512,7 @@ func TestMultiEditInvalidArgs(t *testing.T) {
 }
 
 func TestMultiEditChained(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "code.go")
+	f := filepath.Join(testenv.TempDir(t), "code.go")
 	os.WriteFile(f, []byte("package old\n\nfunc Old() {\n\tOld()\n}\n"), 0o644)
 	runTool(t, multiEdit{}, map[string]any{
 		"path": f,
@@ -529,7 +531,7 @@ func TestMultiEditChained(t *testing.T) {
 // confine tests
 
 func TestConfineRejectsEscape(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	err := confine([]string{dir}, filepath.Join(dir, "..", "outside", "file.txt"))
 	if err == nil {
 		t.Fatal("expected error for path escaping workspace")
@@ -537,7 +539,7 @@ func TestConfineRejectsEscape(t *testing.T) {
 }
 
 func TestConfineAllowsInside(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	// confine uses realPath which resolves symlinks, so we need to resolve too.
 	real, _ := filepath.EvalSymlinks(dir)
 	target := filepath.Join(real, "inside", "file.txt")
@@ -557,7 +559,7 @@ func TestConfineEmptyRootsAllowsAll(t *testing.T) {
 // resolveIn tests
 
 func TestResolveInAbsolute(t *testing.T) {
-	abs := filepath.Join(t.TempDir(), "absolute", "path")
+	abs := filepath.Join(testenv.TempDir(t), "absolute", "path")
 	got := resolveIn("/workdir", abs)
 	if got != abs {
 		t.Errorf("resolveIn absolute = %q, want %q", got, abs)

@@ -5,13 +5,15 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 // Guards pairingMu + the atomic savePairingFile: concurrent offerPairing
 // dispatch goroutines used to load-modify-save pairing.json without a lock and
 // overwrite each other's requests. Run with -race.
 func TestCreateOrRefreshPairingRequestConcurrent(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	cfg := PairingConfig{Enabled: true, RequestTTL: time.Hour, MaxPendingPerPlatform: 64}
 
 	const workers = 8

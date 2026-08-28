@@ -10,10 +10,11 @@ import (
 	"testing"
 
 	"reasonix/internal/mcplaunch"
+	"reasonix/internal/testenv"
 )
 
 func TestActivationStoreDefaultsAndOverrides(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	store := NewActivationStore(home)
 
 	entry := PluginEntry{Name: "chrome-devtools", Source: MCPSourceUserConfig}
@@ -53,10 +54,10 @@ func TestActivationStoreDefaultsAndOverrides(t *testing.T) {
 // The point of the project layer: a globally installed server can be switched
 // off in one project without the other projects noticing.
 func TestProjectOverrideDoesNotLeakToAnotherProject(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	store := NewActivationStore(home)
 	entry := PluginEntry{Name: "playwright", Source: MCPSourceUserConfig}
-	here, there := t.TempDir(), t.TempDir()
+	here, there := testenv.TempDir(t), testenv.TempDir(t)
 
 	if err := store.SetServerEnabled(entry, here, ActivationProject, false); err != nil {
 		t.Fatalf("SetServerEnabled: %v", err)
@@ -76,11 +77,11 @@ func TestProjectOverrideDoesNotLeakToAnotherProject(t *testing.T) {
 // Nine worktrees are one project. A switch flipped in the main tree has to
 // apply in a tree cut from it, or per-project settings would vanish on branch.
 func TestProjectOverrideAppliesAcrossLinkedWorktrees(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	store := NewActivationStore(home)
 	entry := PluginEntry{Name: "playwright", Source: MCPSourceUserConfig}
 
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	repo := filepath.Join(base, "repo")
 	gitDir := filepath.Join(repo, ".git")
 	mustMkdir(t, filepath.Join(gitDir, "worktrees", "studio"))
@@ -106,8 +107,8 @@ func TestRepositoryDeclaredServerStaysProjectScoped(t *testing.T) {
 			t.Fatalf("project source %q policy = authorized:%v scoped:%v, want trusted and project scoped",
 				source, source.UserAuthorized(), source.ProjectScoped())
 		}
-		a := ServerOverrideFor(entry, t.TempDir(), ActivationGlobal)
-		b := ServerOverrideFor(entry, t.TempDir(), ActivationGlobal)
+		a := ServerOverrideFor(entry, testenv.TempDir(t), ActivationGlobal)
+		b := ServerOverrideFor(entry, testenv.TempDir(t), ActivationGlobal)
 		if a.Scope != ActivationProject || b.Scope != ActivationProject {
 			t.Fatalf("scopes = %q and %q, want both project even when global was asked for", a.Scope, b.Scope)
 		}
@@ -128,9 +129,9 @@ func TestPluginPackageServersKeyByOwner(t *testing.T) {
 }
 
 func TestSkillOverrideIsScopedPerProject(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	store := NewActivationStore(home)
-	here, there := t.TempDir(), t.TempDir()
+	here, there := testenv.TempDir(t), testenv.TempDir(t)
 
 	if err := store.SetSkillEnabled("deploy", here, ActivationProject, false); err != nil {
 		t.Fatalf("SetSkillEnabled: %v", err)
@@ -151,9 +152,9 @@ func TestSkillOverrideIsScopedPerProject(t *testing.T) {
 }
 
 func TestProjectLayerBeatsGlobalLayer(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	store := NewActivationStore(home)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 
 	if err := store.SetSkillEnabled("review", root, ActivationGlobal, false); err != nil {
 		t.Fatalf("global: %v", err)
@@ -175,8 +176,8 @@ func TestProjectLayerBeatsGlobalLayer(t *testing.T) {
 // by re-deriving the path fingerprint, since the stored digest cannot be
 // reversed into the path it came from.
 func TestLegacyMCPActivationFileStillResolves(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 
 	legacy := map[string]any{
 		"version": 1,
@@ -205,12 +206,12 @@ func TestLegacyMCPActivationFileStillResolves(t *testing.T) {
 
 // Writing must not disturb the legacy file, so a downgrade keeps working.
 func TestWriteLeavesTheLegacyFileAlone(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	legacyPath := filepath.Join(home, "mcp-activation.json")
 	mustWrite(t, legacyPath, `{"version":1,"overrides":[]}`)
 
 	store := NewActivationStore(home)
-	if err := store.SetSkillEnabled("deploy", t.TempDir(), ActivationGlobal, false); err != nil {
+	if err := store.SetSkillEnabled("deploy", testenv.TempDir(t), ActivationGlobal, false); err != nil {
 		t.Fatalf("SetSkillEnabled: %v", err)
 	}
 	body, err := os.ReadFile(legacyPath)
@@ -223,9 +224,9 @@ func TestWriteLeavesTheLegacyFileAlone(t *testing.T) {
 }
 
 func TestProjectOverridesReportsWhatThisProjectChanged(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	store := NewActivationStore(home)
-	here, there := t.TempDir(), t.TempDir()
+	here, there := testenv.TempDir(t), testenv.TempDir(t)
 
 	if err := store.SetSkillEnabled("deploy", here, ActivationProject, false); err != nil {
 		t.Fatalf("skill: %v", err)
@@ -254,7 +255,7 @@ func TestProjectOverridesReportsWhatThisProjectChanged(t *testing.T) {
 // filed under an empty identity would never resolve — so the decision has to
 // land on the global layer instead of disappearing.
 func TestProjectScopeFallsBackToGlobalWithoutAWorkspace(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	store := NewActivationStore(home)
 
 	if err := store.SetSkillEnabled("audit", "", ActivationProject, false); err != nil {
@@ -274,7 +275,7 @@ func TestProjectScopeFallsBackToGlobalWithoutAWorkspace(t *testing.T) {
 }
 
 func TestActivationStoreConcurrentIndependentWriters(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	const writers = 24
 	stores := make([]*ActivationStore, writers)
 	for i := range stores {
@@ -309,7 +310,7 @@ func TestActivationStoreConcurrentIndependentWriters(t *testing.T) {
 }
 
 func TestEnabledPluginsHonorsActivation(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	store := NewActivationStore(home)
 	if err := store.SetServerEnabled(PluginEntry{Name: "a", Source: MCPSourceUserConfig},

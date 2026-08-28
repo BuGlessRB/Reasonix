@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 // withTempCache redirects config.CacheDir() at t.TempDir for the duration of a
@@ -15,7 +17,7 @@ import (
 // paths inside it.
 func withTempCache(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	t.Setenv("REASONIX_CACHE_HOME", dir)
 	return dir
 }

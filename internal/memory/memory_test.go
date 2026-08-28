@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 // TestComposeEmptyIsIdentity is the cache-first invariant: with no memory at
@@ -28,7 +29,7 @@ func TestComposeEmptyIsIdentity(t *testing.T) {
 // that exists but holds nothing still has to say so: a silent empty store is
 // what a first session reads as an agent with no memory at all.
 func TestEmptyStoreStillNamesRemember(t *testing.T) {
-	block := (&Set{Store: Store{Dir: t.TempDir()}}).Block()
+	block := (&Set{Store: Store{Dir: testenv.TempDir(t)}}).Block()
 	if !strings.Contains(block, "remember") {
 		t.Fatalf("empty store block never names the remember tool:\n%s", block)
 	}
@@ -37,7 +38,7 @@ func TestEmptyStoreStillNamesRemember(t *testing.T) {
 		t.Fatalf("unavailable store changed the prompt: %q", got)
 	}
 	// Once facts exist the index replaces the empty notice rather than joining it.
-	populated := (&Set{Store: Store{Dir: t.TempDir()}, Index: "- [a fact](a.md) — hook"}).Block()
+	populated := (&Set{Store: Store{Dir: testenv.TempDir(t)}, Index: "- [a fact](a.md) — hook"}).Block()
 	if strings.Contains(populated, "No facts are saved") {
 		t.Fatalf("populated index still carries the empty notice:\n%s", populated)
 	}
@@ -77,7 +78,7 @@ func TestBlockSeparatesStandingInstructionsFromBackgroundMemory(t *testing.T) {
 }
 
 func TestLoadIncludesStableGlobalPreferencesAndFeedback(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	user := filepath.Join(root, "user")
 	proj := filepath.Join(root, "project")
 	mustMkdir(t, filepath.Join(proj, ".git"))
@@ -125,7 +126,7 @@ func TestLoadIncludesStableGlobalPreferencesAndFeedback(t *testing.T) {
 }
 
 func TestLoadProjectFactSuppressesEquivalentGlobalGuidance(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	user := filepath.Join(root, "user")
 	proj := filepath.Join(root, "project")
 	mustMkdir(t, filepath.Join(proj, ".git"))
@@ -165,7 +166,7 @@ func TestLoadProjectFactSuppressesEquivalentGlobalGuidance(t *testing.T) {
 // TestDiscoverPrecedenceOrder checks user → ancestor → project → local ordering,
 // which puts the most specific guidance last.
 func TestDiscoverPrecedenceOrder(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	user := filepath.Join(root, "userconfig")
 	proj := filepath.Join(root, "proj")
 	mustMkdir(t, user)
@@ -196,7 +197,7 @@ func TestDiscoverPrecedenceOrder(t *testing.T) {
 }
 
 func TestDiscoverDecodesGB18030PrimaryDoc(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
 	body := "# 项目约定\n\n始终使用中文回答。"
 	if err := os.WriteFile(filepath.Join(proj, "AGENTS.md"), fileencoding.Encode(body, fileencoding.GB18030), 0o644); err != nil {
@@ -211,7 +212,7 @@ func TestDiscoverDecodesGB18030PrimaryDoc(t *testing.T) {
 
 // TestImportResolution checks "@path" inlining, including a relative import.
 func TestImportResolution(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
 	mustWrite(t, filepath.Join(proj, "shared.md"), "SHARED CONTENT")
 	mustWrite(t, filepath.Join(proj, "REASONIX.md"), "Top line\n@shared.md\nBottom line")
@@ -230,9 +231,9 @@ func TestImportResolution(t *testing.T) {
 }
 
 func TestImportResolutionRejectsEscapes(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
-	outside := t.TempDir()
+	outside := testenv.TempDir(t)
 	mustWrite(t, filepath.Join(outside, "secret.md"), "SECRET")
 	mustWrite(t, filepath.Join(proj, "REASONIX.md"), "Top\n@/abs/path.md\n@~/secret.md\n@../secret.md\nBottom")
 
@@ -252,9 +253,9 @@ func TestImportResolutionRejectsEscapes(t *testing.T) {
 }
 
 func TestImportResolutionRejectsSymlinkEscape(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
-	outside := t.TempDir()
+	outside := testenv.TempDir(t)
 	mustWrite(t, filepath.Join(outside, "secret.md"), "SECRET")
 	if err := os.Symlink(filepath.Join(outside, "secret.md"), filepath.Join(proj, "linked.md")); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
@@ -273,7 +274,7 @@ func TestImportResolutionRejectsSymlinkEscape(t *testing.T) {
 
 // TestImportCycleDoesNotHang verifies cycle detection terminates.
 func TestImportCycleDoesNotHang(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
 	mustWrite(t, filepath.Join(proj, "a.md"), "A\n@b.md")
 	mustWrite(t, filepath.Join(proj, "b.md"), "B\n@a.md")
@@ -301,7 +302,7 @@ func mustWrite(t *testing.T, path, body string) {
 }
 
 func TestImportDiamondAndCycle(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
 
 	mustWrite(t, filepath.Join(proj, "shared.md"), "SHARED CONTENT")
@@ -323,7 +324,7 @@ func TestImportDiamondAndCycle(t *testing.T) {
 		t.Errorf("body contains incorrect import cycle message:\n%s", body)
 	}
 
-	projCycle := t.TempDir()
+	projCycle := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(projCycle, ".git"))
 	mustWrite(t, filepath.Join(projCycle, "cycle1.md"), "CYCLE1\n@cycle2.md")
 	mustWrite(t, filepath.Join(projCycle, "cycle2.md"), "CYCLE2\n@cycle1.md")
@@ -340,7 +341,7 @@ func TestImportDiamondAndCycle(t *testing.T) {
 }
 
 func TestLoadHidesMemoryUnderExperimentEnv(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	user := filepath.Join(root, "user")
 	proj := filepath.Join(root, "project")
 	mustMkdir(t, filepath.Join(proj, ".git"))

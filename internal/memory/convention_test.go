@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestClaudeMdDiscovered(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
 	mustWrite(t, filepath.Join(proj, "CLAUDE.md"), "Rule from CLAUDE.md")
 
@@ -19,7 +21,7 @@ func TestClaudeMdDiscovered(t *testing.T) {
 }
 
 func TestSymlinkedAgentAndClaudeDocsComposeOnce(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	mustMkdir(t, filepath.Join(proj, ".git"))
 	mustWrite(t, filepath.Join(proj, "CLAUDE.md"), "Shared symlink guidance")
 	if err := os.Symlink("CLAUDE.md", filepath.Join(proj, "AGENTS.md")); err != nil {
@@ -33,7 +35,7 @@ func TestSymlinkedAgentAndClaudeDocsComposeOnce(t *testing.T) {
 }
 
 func TestDocPathDefaultsToAgents(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	set := Load(Options{CWD: proj})
 	if got := set.DocPath(ScopeProject); filepath.Base(got) != "AGENTS.md" {
 		t.Errorf("fresh project should default to AGENTS.md, got %s", got)
@@ -44,7 +46,7 @@ func TestDocPathDefaultsToAgents(t *testing.T) {
 }
 
 func TestDocPathPrefersExisting(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	// An existing REASONIX.md should keep receiving notes (no split to AGENTS.md).
 	if err := os.WriteFile(filepath.Join(proj, "REASONIX.md"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -55,7 +57,7 @@ func TestDocPathPrefersExisting(t *testing.T) {
 	}
 
 	// With only a CLAUDE.md present, that's the target.
-	proj2 := t.TempDir()
+	proj2 := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(proj2, "CLAUDE.md"), []byte("y"), 0o644); err != nil {
 		t.Fatal(err)
 	}

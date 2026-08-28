@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -164,7 +165,7 @@ func TestAggregateReservesHostReceiptsAgainstLongProse(t *testing.T) {
 // When attestations alone would starve the budget they lose detail, never the
 // fact that a write escaped the declared claim.
 func TestAggregateDegradesReceiptsButKeepsViolations(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, err := NormalizeWritePaths(root, []string{"auth"})
 	if err != nil {
 		t.Fatal(err)

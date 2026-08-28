@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 type closeProbeBotController struct {
@@ -357,10 +358,10 @@ func TestBotGatewayStopCancelsConcurrentStart(t *testing.T) {
 // sessionOptionsForMessage and the project/session index builders read them.
 // Run with -race; a lock-free read is a concurrent map read/write crash.
 func TestBotGatewayToolApprovalModeConcurrentWithConfigReaders(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	gw := &BotGateway{
 		cfg: GatewayConfig{
-			WorkspaceRoot: t.TempDir(),
+			WorkspaceRoot: testenv.TempDir(t),
 			Channels: map[Platform]ChannelConfig{
 				PlatformFeishu: {ToolApprovalMode: control.ToolApprovalAsk},
 			},

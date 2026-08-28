@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioninbox"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -24,7 +25,7 @@ import (
 // client showing a queue that has already changed. The listener runs on the
 // store's own goroutine, which is why this waits rather than reads once.
 func TestInboxMutationsReachTheEventStream(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -73,7 +74,7 @@ func countKind(sink *noticeSink, kind event.Kind) int {
 }
 
 func TestEnqueueInboxDurableAndSnapshot(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -103,7 +104,7 @@ func TestEnqueueInboxDurableAndSnapshot(t *testing.T) {
 }
 
 func TestTrySteerRejectedBecomesFollowup(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	runner := &gatedTurnRunner{started: make(chan struct{}), release: make(chan struct{})}
@@ -140,7 +141,7 @@ func TestTrySteerRejectedBecomesFollowup(t *testing.T) {
 }
 
 func TestIdempotentEnqueue(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	c := New(Options{SessionPath: session, SessionDir: dir, Sink: event.Discard})
@@ -158,7 +159,7 @@ func TestIdempotentEnqueue(t *testing.T) {
 }
 
 func TestIdempotentEnqueueDoesNotReclassifyExistingItem(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	workspace := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
 		t.Fatal(err)
@@ -187,7 +188,7 @@ func TestIdempotentEnqueueDoesNotReclassifyExistingItem(t *testing.T) {
 }
 
 func TestIdempotentEnqueueRejectsDifferentInput(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	c := New(Options{
 		SessionPath: filepath.Join(dir, "s.jsonl"),
 		SessionDir:  dir,
@@ -232,7 +233,7 @@ func (p *inboxSteerProvider) Stream(ctx context.Context, req provider.Request) (
 }
 
 func TestThirtySteersApplyAndAckExactlyOnce(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	prov := &inboxSteerProvider{started: make(chan struct{}), release: make(chan struct{})}
 	sess := agent.NewSession("sys")
 	exec := agent.New(prov, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
@@ -293,7 +294,7 @@ func TestThirtySteersApplyAndAckExactlyOnce(t *testing.T) {
 }
 
 func TestMultiSteerActiveSetAcksAll(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	c := New(Options{SessionPath: session, SessionDir: dir, Sink: event.Discard})
@@ -325,7 +326,7 @@ func TestMultiSteerActiveSetAcksAll(t *testing.T) {
 }
 
 func TestSubmitInboxUsesFrozenReferenceWithoutLiveReresolve(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	workspace := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
 		t.Fatal(err)
@@ -381,7 +382,7 @@ func TestSubmitInboxUsesFrozenReferenceWithoutLiveReresolve(t *testing.T) {
 }
 
 func TestInboxFreezesTypedDirectoryAndPathInstructions(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	workspace := filepath.Join(dir, "workspace")
 	service := filepath.Join(workspace, "service")
 	if err := os.MkdirAll(service, 0o755); err != nil {
@@ -438,7 +439,7 @@ func TestInboxFreezesTypedDirectoryAndPathInstructions(t *testing.T) {
 }
 
 func TestInboxUsesFrozenImageBytesAfterWorkspaceChanges(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	workspace := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
 		t.Fatal(err)
@@ -492,7 +493,7 @@ func TestInboxUsesFrozenImageBytesAfterWorkspaceChanges(t *testing.T) {
 }
 
 func TestTrySubmitInboxAdmissionRaceRestoresQueuedItem(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	c := New(Options{SessionPath: session, SessionDir: dir, Sink: event.Discard})
@@ -538,7 +539,7 @@ func TestTrySubmitInboxAdmissionRaceRestoresQueuedItem(t *testing.T) {
 }
 
 func TestCancelWithInboxItemsDiscardsOnlyOwnedPendingItems(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	c := New(Options{SessionPath: session, SessionDir: dir, Sink: event.Discard})
@@ -563,7 +564,7 @@ func TestCancelWithInboxItemsDiscardsOnlyOwnedPendingItems(t *testing.T) {
 }
 
 func TestRunTurnAcknowledgesAcceptedDurableItems(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	runner := &fakeTurnRunner{}
 	c := New(Options{
 		Runner:      runner,
@@ -598,7 +599,7 @@ func TestRunTurnAcknowledgesAcceptedDurableItems(t *testing.T) {
 }
 
 func TestRunInboxTurnClaimsAndAcknowledgesFIFOItems(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	runner := &fakeTurnRunner{}
 	c := New(Options{
 		Runner:      runner,
@@ -628,7 +629,7 @@ func TestRunInboxTurnClaimsAndAcknowledgesFIFOItems(t *testing.T) {
 }
 
 func TestStructuredInboxInvocationSurvivesReopenAndRunsSkill(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "s.jsonl")
 	skills := []skill.Skill{{
 		Name: "init", Body: "INITIALIZE_FROM_DURABLE_INBOX", RunAs: skill.RunInline, Scope: skill.ScopeGlobal,
@@ -666,7 +667,7 @@ func TestStructuredInboxInvocationSurvivesReopenAndRunsSkill(t *testing.T) {
 }
 
 func TestLegacySingularInboxInvocationInfersSkillKind(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	runner := &fakeTurnRunner{}
 	c := New(Options{
 		Runner: runner, SessionPath: filepath.Join(dir, "s.jsonl"), SessionDir: dir, Sink: event.Discard,

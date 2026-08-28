@@ -6,6 +6,7 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // The checkpoint is what a reader falls back to when the log cannot answer, so
@@ -13,7 +14,7 @@ import (
 // declines used to leave it on the previous save's history: a second lineage
 // beside the log, waiting for the first fallback to pick it.
 func TestDeclinedReadModelAppendStillLeavesOneLineage(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := dir + "/session.jsonl"
 	live := NewSession("sys")
 	live.Add(provider.Message{Role: provider.RoleUser, Content: "第一句话", RawContent: "第一句话"})
@@ -54,7 +55,7 @@ func TestDeclinedReadModelAppendStillLeavesOneLineage(t *testing.T) {
 // session that lost one recovers the in-place append instead of paying a whole
 // rewrite on every later save.
 func TestRepublishedReadModelRearmsTheAppendPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := dir + "/session.jsonl"
 	live := NewSession("sys")
 	live.Add(provider.Message{Role: provider.RoleUser, Content: "第一句话", RawContent: "第一句话"})

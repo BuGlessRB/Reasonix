@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // The line a Windows user writes by hand. TOML reads \U as the start of a code
@@ -64,7 +66,7 @@ func TestNothingIsOfferedForAFileThatIsActuallyBroken(t *testing.T) {
 
 func brokenUserConfig(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	path := filepath.Join(home, "config.toml")

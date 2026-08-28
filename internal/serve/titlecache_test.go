@@ -5,10 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestTitleCacheKeepsTitleAcrossMtimeChanges(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	c := newTitleCache(dir)
 
 	if _, ok := c.get("a.jsonl", "first prompt", 100); ok {
@@ -22,7 +24,7 @@ func TestTitleCacheKeepsTitleAcrossMtimeChanges(t *testing.T) {
 }
 
 func TestTitleCacheInvalidatesWhenFirstMessageChanges(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	c := newTitleCache(dir)
 	c.put("a.jsonl", "First Title", "first prompt", 100)
 
@@ -32,7 +34,7 @@ func TestTitleCacheInvalidatesWhenFirstMessageChanges(t *testing.T) {
 }
 
 func TestTitleCachePersistsAcrossInstances(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	newTitleCache(dir).put("a.jsonl", "Persisted", "first prompt", 7)
 
 	if _, err := os.Stat(filepath.Join(dir, ".session-titles.json")); err != nil {
@@ -44,7 +46,7 @@ func TestTitleCachePersistsAcrossInstances(t *testing.T) {
 }
 
 func TestTitleCacheReadsLegacyMtimeEntries(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, ".session-titles.json")
 	if err := os.WriteFile(path, []byte(`{"a.jsonl":{"title":"Legacy","mod":7}}`), 0o600); err != nil {
 		t.Fatal(err)
@@ -59,7 +61,7 @@ func TestTitleCacheReadsLegacyMtimeEntries(t *testing.T) {
 }
 
 func TestTitleCacheWritesRemainReadableByOlderVersions(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	newTitleCache(dir).put("a.jsonl", "Compatible", "first prompt", 7)
 	data, err := os.ReadFile(filepath.Join(dir, ".session-titles.json"))
 	if err != nil {

@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestDeleteSymbolGoFunc(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "example.go")
 	src := "package example\n\nfunc Greet() string {\n\treturn \"hello\"\n}\n\nfunc Farewell() string {\n\treturn \"bye\"\n}\n"
 	os.WriteFile(f, []byte(src), 0o644)
@@ -30,7 +32,7 @@ func TestDeleteSymbolGoFunc(t *testing.T) {
 }
 
 func TestDeleteSymbolMethod(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "example.go")
 	src := "package example\n\ntype Server struct{}\n\nfunc (s *Server) Start() error { return nil }\nfunc (s *Server) Stop() error { return nil }\n"
 	os.WriteFile(f, []byte(src), 0o644)
@@ -49,7 +51,7 @@ func TestDeleteSymbolMethod(t *testing.T) {
 }
 
 func TestDeleteSymbolType(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "example.go")
 	src := "package example\n\ntype User struct {\n\tName string\n}\n\ntype Admin struct {\n\tRole string\n}\n"
 	os.WriteFile(f, []byte(src), 0o644)
@@ -68,7 +70,7 @@ func TestDeleteSymbolType(t *testing.T) {
 }
 
 func TestDeleteSymbolMultiLineValueSpec(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "example.go")
 	src := "package example\n\nvar Tools = []string{\n\t\"a\",\n\t\"b\",\n}\n\nconst Banner = `line1\nline2`\n\nfunc Keep() {}\n"
 	os.WriteFile(f, []byte(src), 0o644)
@@ -91,7 +93,7 @@ func TestDeleteSymbolMultiLineValueSpec(t *testing.T) {
 }
 
 func TestDeleteSymbolMultiMatch(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "example.go")
 	src := "package example\n\ntype Foo struct{}\ntype Foo int\n"
 	os.WriteFile(f, []byte(src), 0o644)
@@ -103,7 +105,7 @@ func TestDeleteSymbolMultiMatch(t *testing.T) {
 }
 
 func TestDeleteSymbolRejectsMultiNameValueSpec(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "example.go")
 	src := "package example\n\nvar A, B = 1, 2\nconst C, D = 3, 4\n"
 	os.WriteFile(f, []byte(src), 0o644)
@@ -127,7 +129,7 @@ func TestDeleteSymbolRejectsMultiNameValueSpec(t *testing.T) {
 }
 
 func TestDeleteSymbolNotFound(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "example.go")
 	os.WriteFile(f, []byte("package example\n"), 0o644)
 
@@ -138,7 +140,7 @@ func TestDeleteSymbolNotFound(t *testing.T) {
 }
 
 func TestDeleteSymbolNonGoFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "script.py")
 	os.WriteFile(f, []byte("def hello():\n    pass\n"), 0o644)
 
@@ -149,7 +151,7 @@ func TestDeleteSymbolNonGoFile(t *testing.T) {
 }
 
 func TestDeleteSymbolPreview(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	f := filepath.Join(dir, "example.go")
 	src := "package main\n\nfunc main() {}\n\nfunc helper() {}\n"
 	os.WriteFile(f, []byte(src), 0o644)

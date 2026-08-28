@@ -11,11 +11,12 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestSessionMachineListIsStableAndRedacted(t *testing.T) {
 	identityKey := installMachineTestIdentity(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saveMachineTestSession(t, dir, "older", time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC))
 	saveMachineTestSession(t, dir, "newer", time.Date(2026, 7, 23, 11, 0, 0, 0, time.UTC))
 
@@ -48,7 +49,7 @@ func TestSessionMachineListIsStableAndRedacted(t *testing.T) {
 }
 
 func TestMachineProjectSessionDirUsesProjectStore(t *testing.T) {
-	projectRoot := t.TempDir()
+	projectRoot := testenv.TempDir(t)
 	got := machineProjectSessionDir(projectRoot)
 	want := config.ProjectSessionDir(projectRoot)
 	if got != want {
@@ -61,7 +62,7 @@ func TestMachineProjectSessionDirUsesProjectStore(t *testing.T) {
 
 func TestSessionMachineProjectRootUsesProjectStore(t *testing.T) {
 	identityKey := installMachineTestIdentity(t)
-	projectRoot := t.TempDir()
+	projectRoot := testenv.TempDir(t)
 	sessionDir := config.ProjectSessionDir(projectRoot)
 	saveMachineTestSession(t, sessionDir, "project", time.Date(2026, 7, 23, 11, 30, 0, 0, time.UTC))
 
@@ -80,7 +81,7 @@ func TestSessionMachineProjectRootUsesProjectStore(t *testing.T) {
 
 func TestSessionMachineShowAndStatusExposeOnlySafeState(t *testing.T) {
 	identityKey := installMachineTestIdentity(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	saveMachineTestSession(t, dir, "busy", time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC))
 	path := filepath.Join(dir, "busy.jsonl")
 	lease, err := agent.TryAcquireSessionLease(path)
@@ -129,7 +130,7 @@ func TestMachineSessionIDIsStableAndOpaque(t *testing.T) {
 
 func TestSessionMachineErrorsAreJSONAndNonZero(t *testing.T) {
 	installMachineTestIdentity(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	cases := []struct {
 		name string
 		args []string

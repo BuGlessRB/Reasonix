@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestCLITelemetryConfigDefaultsAndValidation(t *testing.T) {
@@ -29,8 +31,8 @@ func TestCLITelemetryConfigDefaultsAndValidation(t *testing.T) {
 }
 
 func TestCLITelemetryIsUserGlobalAndSafeModeForcesOff(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[telemetry]\ncli_metrics = \"on\"\n"), 0o600); err != nil {
 		t.Fatal(err)

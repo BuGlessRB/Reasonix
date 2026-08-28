@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestSessionListingBackfillDoesNotOverwriteNewerCounts(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "20260101-000000-deepseek-chat.jsonl")
 	writeSessionFile(t, path, []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
@@ -55,7 +56,7 @@ func TestSessionListingBackfillDoesNotOverwriteNewerCounts(t *testing.T) {
 }
 
 func TestSessionListingBackfillRejectsChangedTranscriptGeneration(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "20260101-000000-deepseek-chat.jsonl")
 	writeSessionFile(t, path, []provider.Message{{Role: provider.RoleSystem, Content: "system"}})
 	if err := SaveBranchMeta(path, BranchMeta{

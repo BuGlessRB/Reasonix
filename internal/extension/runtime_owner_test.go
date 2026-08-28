@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestRuntimeOwnerFallbackIsObservable(t *testing.T) {
@@ -20,7 +22,7 @@ func TestRuntimeOwnerFallbackIsObservable(t *testing.T) {
 func TestRuntimeOwnerRepeatedFileWritesKeepDistinctPriors(t *testing.T) {
 	owner := NewRuntimeOwner()
 	owner.Gate.Publish(7)
-	path := filepath.Join(t.TempDir(), "same.txt")
+	path := filepath.Join(testenv.TempDir(t), "same.txt")
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +65,7 @@ func TestRuntimeOwnerRepeatedFileWritesKeepDistinctPriors(t *testing.T) {
 func TestRuntimeOwnerReceiptEvictionReleasesFilePrior(t *testing.T) {
 	owner := NewRuntimeOwner()
 	owner.Gate.Publish(11)
-	path := filepath.Join(t.TempDir(), "bounded.txt")
+	path := filepath.Join(testenv.TempDir(t), "bounded.txt")
 	first := owner.RecordFileWrite(path, true, []byte("old"))
 	for i := 1; i <= defaultReceiptPerGenerationLimit; i++ {
 		owner.RecordFileWrite(path, true, []byte("old"))
@@ -84,7 +86,7 @@ func TestRuntimeOwnerFilePriorBudgetMarksRecoveryTruncated(t *testing.T) {
 	owner := NewRuntimeOwner()
 	owner.FilePriors = newFilePriorStore(1, 1)
 	owner.Gate.Publish(12)
-	id := owner.RecordFileWrite(filepath.Join(t.TempDir(), "oversized"), true, []byte("12"))
+	id := owner.RecordFileWrite(filepath.Join(testenv.TempDir(t), "oversized"), true, []byte("12"))
 	receipt, ok := owner.Receipts.Get(id)
 	if !ok || receipt.CompensationStatus != "prior_truncated" {
 		t.Fatalf("receipt = %+v ok=%v, want prior_truncated", receipt, ok)

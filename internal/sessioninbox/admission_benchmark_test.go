@@ -7,10 +7,12 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestAdmittedItemsRejectUserCRUD(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	session := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(session, []byte("{}\n"), 0o644)
 	s, err := Open(session, Limits{})

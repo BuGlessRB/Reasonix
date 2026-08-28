@@ -13,10 +13,11 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func TestWriteSessionBundleIncludesRecoveryChain(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 
 	dir := filepath.Join(home, "projects", "workspace", "sessions")
@@ -45,7 +46,7 @@ func TestWriteSessionBundleIncludesRecoveryChain(t *testing.T) {
 	writeFile(t, store.SessionConflictLog(recovery), `{"outcome":"forked_recovery_branch"}`+"\n")
 	writeFile(t, store.SessionLeaseInfo(recovery), `{"pid":1234}`+"\n")
 
-	out := filepath.Join(t.TempDir(), "diag.zip")
+	out := filepath.Join(testenv.TempDir(t), "diag.zip")
 	got, err := WriteSessionBundle(SessionBundleOptions{
 		Version:    "test-version",
 		SessionRef: store.SessionMeta(recovery),

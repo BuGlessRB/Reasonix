@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/goaleval"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -373,7 +374,7 @@ func TestMaxRunWorkDurationTakesOnlyNewAssistantMaximum(t *testing.T) {
 	}
 }
 func TestGoalLegacyBudgetTokensSidecarAutoResumes(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	// Old sidecar: paused solely because of the removed token hard limit.
 	state := goalState{
@@ -473,7 +474,7 @@ func TestGoalUsageTotalTokensFallback(t *testing.T) {
 // without failing open.
 func TestGoalSidecarCompatRestoresOldAndNewFields(t *testing.T) {
 	t.Run("old sidecar restores with defaults", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testenv.TempDir(t)
 		path := filepath.Join(dir, "session.jsonl")
 		// Old sidecar: only goal/status/turns — no budget fields.
 		data := []byte(`{"goal":"legacy goal","status":"running","turns":3}`)
@@ -499,7 +500,7 @@ func TestGoalSidecarCompatRestoresOldAndNewFields(t *testing.T) {
 	})
 
 	t.Run("removed numeric pause auto-migrates on rebuild", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testenv.TempDir(t)
 		path := filepath.Join(dir, "session.jsonl")
 		exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 		c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})

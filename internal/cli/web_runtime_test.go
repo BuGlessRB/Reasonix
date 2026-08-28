@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func TestServeConfigWithCommandDefaults(t *testing.T) {
@@ -84,7 +85,7 @@ func TestValidateWebSessionID(t *testing.T) {
 }
 
 func TestFreshWebSessionPathKeepsReservedIdentityWithoutMaterializing(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	got, err := freshWebSessionPath(dir, "reserved-session")
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +106,7 @@ func TestFreshWebSessionPathKeepsReservedIdentityWithoutMaterializing(t *testing
 }
 
 func TestWebInstanceRegistryPreservesIndependentInstances(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "server", "instances")
+	dir := filepath.Join(testenv.TempDir(t), "server", "instances")
 	now := time.UnixMilli(1000)
 	alive := map[int]bool{101: true, 202: true}
 	registry := &webInstanceRegistry{
@@ -160,7 +161,7 @@ func TestWebInstanceRegistryPreservesIndependentInstances(t *testing.T) {
 }
 
 func TestWebInstanceRegistrySweepsOnlyConfirmedDeadRecords(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	deadPath := filepath.Join(dir, "dead.json")
 	dead := webInstanceRecord{ServerID: "dead", PID: 303, Host: "127.0.0.1", Port: 8787, StartedAt: 1, HeartbeatAt: 1}
 	data, err := json.Marshal(dead)

@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/extension/protocol"
 	"reasonix/internal/extension/rpcwire"
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 func TestHandshakeSuccess(t *testing.T) {
@@ -424,7 +425,7 @@ func TestStartRejectsInvalidOptions(t *testing.T) {
 	}); err == nil {
 		t.Fatal("StartClient accepted an empty session context")
 	}
-	pkgNoRuntime := pluginpkg.Package{Root: t.TempDir(), Manifest: pluginpkg.Manifest{Name: "x"}}
+	pkgNoRuntime := pluginpkg.Package{Root: testenv.TempDir(t), Manifest: pluginpkg.Manifest{Name: "x"}}
 	if _, err := StartClient(context.Background(), ClientOptions{
 		Package:   pkgNoRuntime,
 		Installed: installed,

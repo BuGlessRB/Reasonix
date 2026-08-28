@@ -3,13 +3,15 @@ package memory
 import (
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestSaveBoundsLongNames: a memory name distilled from a long
 // title/description used to fail the write with ENAMETOOLONG because
 // slug(name)+".md" exceeded the 255-byte filename component limit.
 func TestSaveBoundsLongNames(t *testing.T) {
-	s := StoreFor(t.TempDir(), t.TempDir())
+	s := StoreFor(testenv.TempDir(t), testenv.TempDir(t))
 	long := strings.Repeat("always-verify-the-desktop-session-lease-before-rebuild-", 8) + "end"
 	path, err := s.Save(Memory{Name: long, Description: "d", Type: TypeProject, Body: "b"})
 	if err != nil {

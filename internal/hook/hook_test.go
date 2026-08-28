@@ -15,6 +15,7 @@ import (
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/pluginpkg"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/testenv"
 )
 
 func writeSettings(t *testing.T, dir, json string) {
@@ -44,7 +45,7 @@ func writeHookTestBytes(t *testing.T, path string, body []byte) {
 }
 
 func TestContextFileUsableRequiresReadableRegularFile(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if ContextFileUsable("") {
 		t.Fatal("empty context path should be unusable")
 	}
@@ -91,8 +92,8 @@ func hookSettingsWithCommand(t *testing.T, event Event, command string) string {
 }
 
 func TestLoadProjectHooksByDefault(t *testing.T) {
-	home := t.TempDir()
-	proj := t.TempDir()
+	home := testenv.TempDir(t)
+	proj := testenv.TempDir(t)
 	writeSettings(t, proj, sampleSettings)
 	writeSettings(t, home, `{"hooks":{"PostToolUse":[{"command":"echo g"}]}}`)
 
@@ -106,7 +107,7 @@ func TestLoadProjectHooksByDefault(t *testing.T) {
 }
 
 func TestLoadDecodesGB18030GlobalSettings(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	body := `{"hooks":{"Stop":[{"command":"echo 中文","description":"全局"}]}}`
 	writeHookTestBytes(t, GlobalSettingsPath(home), fileencoding.Encode(body, fileencoding.GB18030))
 
@@ -120,8 +121,8 @@ func TestLoadDecodesGB18030GlobalSettings(t *testing.T) {
 }
 
 func TestLoadDecodesUTF8BOMProjectSettings(t *testing.T) {
-	home := t.TempDir()
-	proj := t.TempDir()
+	home := testenv.TempDir(t)
+	proj := testenv.TempDir(t)
 	body := `{"hooks":{"PreToolUse":[{"match":"bash","command":"echo pre"}]}}`
 	writeHookTestBytes(t, ProjectSettingsPath(proj), fileencoding.Encode(body, fileencoding.UTF8BOM))
 
@@ -137,9 +138,9 @@ func TestLoadDecodesUTF8BOMProjectSettings(t *testing.T) {
 func TestLoadNormalizesQuotedNodeEvalHooksPerProject(t *testing.T) {
 	requireNode(t)
 
-	home := t.TempDir()
-	projA := t.TempDir()
-	projB := t.TempDir()
+	home := testenv.TempDir(t)
+	projA := testenv.TempDir(t)
+	projB := testenv.TempDir(t)
 	script := "const payload = JSON.parse(require('fs').readFileSync(0, 'utf8')); console.log(payload.toolName)"
 	bad := `node -e "\"` + script + `\""`
 	want := NormalizeCommand(bad)
@@ -309,7 +310,7 @@ func TestNormalizeCommandRepairsOnlyPowerShellFileEscapedQuotes(t *testing.T) {
 }
 
 func TestLoadNormalizesPowerShellFileEscapedQuotes(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	bad := `powershell -File \"C:\Program Files\Reasonix Hooks\archive attachments.ps1\"`
 	want := `powershell -File "C:\Program Files\Reasonix Hooks\archive attachments.ps1"`
 	writeSettings(t, home, hookSettingsWithCommand(t, SessionStart, bad))
@@ -394,7 +395,7 @@ func installSuperpowersV611HookFixture(t *testing.T, home string) string {
 }
 
 func TestLoadPermissionRequestHook(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSettings(t, home, `{"hooks":{"PermissionRequest":[{"match":"bash","command":"notify"}]}}`)
 
 	got := Load(LoadOptions{HomeDir: home})
@@ -407,7 +408,7 @@ func TestLoadPermissionRequestHook(t *testing.T) {
 }
 
 func TestLoadSuperpowersV611SessionStartExecutionContract(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	root := installSuperpowersV611HookFixture(t, home)
 
 	got := Load(LoadOptions{HomeDir: home, ProjectRoot: filepath.Join(home, "workspace")})
@@ -432,7 +433,7 @@ func TestLoadSuperpowersV611SessionStartExecutionContract(t *testing.T) {
 }
 
 func TestLoadSuperpowersV620PreservesExplicitBashRequirement(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	root := filepath.Join(home, ".reasonix", "plugins", "superpowers")
 	writeHookTestFile(t, filepath.Join(root, pluginpkg.CodexManifest), `{
   "name": "superpowers",
@@ -494,7 +495,7 @@ func TestPluginExplicitBashCommandUsesPOSIXCompatibleRoot(t *testing.T) {
 }
 
 func TestExplicitBashRuntimeUsesConfiguredPath(t *testing.T) {
-	wantPath := filepath.Join(t.TempDir(), "PortableGit", "bin", "bash.exe")
+	wantPath := filepath.Join(testenv.TempDir(t), "PortableGit", "bin", "bash.exe")
 	var resolvedPath string
 	options := RuntimeOptionsForShell("bash", wantPath)
 	err := checkRuntimeForPlatform(HookConfig{
@@ -527,7 +528,7 @@ func TestExplicitBashRuntimeReportsMissingDependency(t *testing.T) {
 }
 
 func TestLoadIncludesPluginSessionStartHook(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, ".reasonix")
 	root := filepath.Join(reasonixHome, "plugins", "superpowers")
 	writeSettings(t, home, `{"hooks":{"PostToolUse":[{"command":"echo global"}]}}`)
@@ -567,7 +568,7 @@ func TestLoadIncludesPluginSessionStartHook(t *testing.T) {
 // plugin probe and global settings resolve from the platform Reasonix home —
 // <home>/plugins and <home>/settings.json — not a doubled .reasonix segment.
 func TestInspectNoHomeDirResolvesPluginRootFromPlatformHome(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	root := filepath.Join(home, "plugins", "superpowers")
 	// Global settings live directly under the platform Reasonix home
@@ -616,7 +617,7 @@ func TestInspectNoHomeDirResolvesPluginRootFromPlatformHome(t *testing.T) {
 }
 
 func TestLoadIncludesPluginClaudeCompatibilityHooks(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, ".reasonix")
 	root := filepath.Join(reasonixHome, "plugins", "claude-pack")
 	writeHookTestFile(t, filepath.Join(root, pluginpkg.CodexManifest), `{
@@ -683,7 +684,7 @@ func TestLoadIncludesPluginClaudeCompatibilityHooks(t *testing.T) {
 }
 
 func TestLoadPluginHooksPreservesExecutionContract(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, ".reasonix")
 	root := filepath.Join(reasonixHome, "plugins", "hook-contract")
 	writeHookTestFile(t, filepath.Join(root, pluginpkg.NativeManifest), `{
@@ -721,7 +722,7 @@ func TestLoadPluginHooksPreservesExecutionContract(t *testing.T) {
 }
 
 func TestLoadExpandsReasonixPluginRootBeforeShellLaunch(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, ".reasonix")
 	root := filepath.Join(reasonixHome, "plugins", "impeccable")
 	projectRoot := filepath.Join(home, "$CLAUDE_PLUGIN_ROOT-project")
@@ -1002,8 +1003,8 @@ func TestDecodeHookOutputPreservesTruncatedUTF8Prefix(t *testing.T) {
 }
 
 func TestReasonixHomeOverridesGlobalHookPaths(t *testing.T) {
-	home := t.TempDir()
-	reasonixHome := filepath.Join(t.TempDir(), "rx-home")
+	home := testenv.TempDir(t)
+	reasonixHome := filepath.Join(testenv.TempDir(t), "rx-home")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("REASONIX_HOME", reasonixHome)
@@ -1025,7 +1026,7 @@ func TestReasonixHomeOverridesGlobalHookPaths(t *testing.T) {
 }
 
 func TestLoadOptionsReasonixHomeDirUsesExactGlobalHookPath(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	reasonixHome := filepath.Join(home, "AppData", "Roaming", "reasonix")
 	settingsPath := filepath.Join(reasonixHome, SettingsFilename)
 	if err := os.MkdirAll(reasonixHome, 0o755); err != nil {
@@ -1042,8 +1043,8 @@ func TestLoadOptionsReasonixHomeDirUsesExactGlobalHookPath(t *testing.T) {
 }
 
 func TestReasonixHomeDoesNotFallBackToLegacyWhenIsolated(t *testing.T) {
-	home := t.TempDir()
-	reasonixHome := filepath.Join(t.TempDir(), "rx-home")
+	home := testenv.TempDir(t)
+	reasonixHome := filepath.Join(testenv.TempDir(t), "rx-home")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("REASONIX_HOME", reasonixHome)
@@ -1057,7 +1058,7 @@ func TestReasonixHomeDoesNotFallBackToLegacyWhenIsolated(t *testing.T) {
 }
 
 func TestProjectDefinesHooks(t *testing.T) {
-	proj := t.TempDir()
+	proj := testenv.TempDir(t)
 	if ProjectDefinesHooks(proj) {
 		t.Error("empty project should define no hooks")
 	}
@@ -1068,7 +1069,7 @@ func TestProjectDefinesHooks(t *testing.T) {
 }
 
 func TestMalformedSettingsIgnored(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSettings(t, home, `{not valid json`)
 	if got := Load(LoadOptions{HomeDir: home}); len(got) != 0 {
 		t.Errorf("malformed settings should yield no hooks, got %d", len(got))
@@ -1250,7 +1251,7 @@ func TestClaudeFacingToolInputAdaptsMappedTools(t *testing.T) {
 // against the payload cwd — the same root the tool itself resolves against —
 // so a prefix-matching guard sees the path the tool actually accesses.
 func TestClaudeFacingToolInputResolvesAbsolutePaths(t *testing.T) {
-	cwd := t.TempDir()
+	cwd := testenv.TempDir(t)
 	got := claudeFacingToolInput("write_file", json.RawMessage(`{"path":"secrets/.env","content":"KEY=1"}`), cwd)
 	var obj map[string]any
 	if err := json.Unmarshal(got, &obj); err != nil {
@@ -1623,7 +1624,7 @@ func TestRunClaudePayloadAndDirectArgs(t *testing.T) {
 // Reasonix write_file call and sees the absolute target path Claude's
 // file-tool contract specifies.
 func TestRunClaudeWriteFileGuardFiresAndSeesFilePath(t *testing.T) {
-	cwd := t.TempDir()
+	cwd := testenv.TempDir(t)
 	hooks := []ResolvedHook{{
 		HookConfig: HookConfig{Command: "guard", Match: "Write", PayloadFormat: "claude"},
 		Event:      PreToolUse,

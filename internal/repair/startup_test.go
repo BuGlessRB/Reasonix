@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func writeLegacyStartupState(t *testing.T, path, body string) {
@@ -17,7 +19,7 @@ func writeLegacyStartupState(t *testing.T, path, body string) {
 }
 
 func TestStartupTrackerObservesDeadLegacyOwner(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "startup.json")
+	path := filepath.Join(testenv.TempDir(t), "startup.json")
 	started := time.Now().UTC().Add(-time.Minute)
 	updated := started.Add(45 * time.Second)
 	writeLegacyStartupState(t, path, `{
@@ -48,7 +50,7 @@ func TestStartupTrackerObservesDeadLegacyOwner(t *testing.T) {
 }
 
 func TestStartupTrackerIgnoresLiveAndCleanLegacyRecords(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "startup.json")
+	path := filepath.Join(testenv.TempDir(t), "startup.json")
 	tracker := NewStartupTracker(path)
 	tracker.processAlive = func(pid int) bool { return pid == 42 }
 
@@ -66,7 +68,7 @@ func TestStartupTrackerIgnoresLiveAndCleanLegacyRecords(t *testing.T) {
 }
 
 func TestStartupTrackerConcurrentClaimReportsOnce(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "startup.json")
+	path := filepath.Join(testenv.TempDir(t), "startup.json")
 	writeLegacyStartupState(t, path, `{"phase":"healthy","version":"v1.19.1","pid":42}`)
 
 	const observers = 16
@@ -95,7 +97,7 @@ func TestStartupTrackerConcurrentClaimReportsOnce(t *testing.T) {
 }
 
 func TestStartupTrackerInvalidOrMissingStateIsIgnored(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "startup.json")
+	path := filepath.Join(testenv.TempDir(t), "startup.json")
 	tracker := NewStartupTracker(path)
 	if got := tracker.ObservePreviousRun(); got.Abnormal {
 		t.Fatalf("missing state reported abnormal: %+v", got)

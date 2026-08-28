@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/testenv"
 )
 
 func TestRenameSessionUpdatesCustomTitle(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessionPath := filepath.Join(dir, "test-session.jsonl")
 	if err := os.WriteFile(sessionPath, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)

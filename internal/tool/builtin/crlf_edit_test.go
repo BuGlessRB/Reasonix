@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
+	"reasonix/internal/testenv"
 )
 
 func encGBK(t *testing.T, s string) []byte {
@@ -38,7 +39,7 @@ func runEdit(t *testing.T, dir, name, oldS, newS string) {
 }
 
 func TestEditFileCRLFGBKPreservesEncodingAndEndings(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := "第一行 hello\r\n第二行 world\r\n第三行 done\r\n"
 	if err := os.WriteFile(filepath.Join(dir, "f.cs"), encGBK(t, src), 0o644); err != nil {
 		t.Fatal(err)
@@ -62,7 +63,7 @@ func TestEditFileCRLFGBKPreservesEncodingAndEndings(t *testing.T) {
 }
 
 func TestEditFileLFStaysLF(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("alpha\nbeta\ngamma\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +78,7 @@ func TestEditFileLFStaysLF(t *testing.T) {
 }
 
 func TestMultiEditCRLF(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	src := "one\r\ntwo\r\nthree\r\nfour\r\n"
 	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)

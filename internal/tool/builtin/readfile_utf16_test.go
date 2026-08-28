@@ -10,12 +10,14 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf16"
+
+	"reasonix/internal/testenv"
 )
 
 // TestReadFileBOMlessUTF16LE proves a Windows-style UTF-16 source file with no
 // BOM is decoded rather than rejected as binary on the NUL-byte check.
 func TestReadFileBOMlessUTF16LE(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "CameraManagerLogLoader.cpp")
 	src := "// Created by 69431 on 2024/12/31\n#include \"alson/CameraManagerLogLoader.h\"\n"
 	var b bytes.Buffer

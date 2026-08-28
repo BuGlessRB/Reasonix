@@ -5,15 +5,17 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestActiveConfigTagNamesTheShadowingProjectFile(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("default_model = \"a\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	work := t.TempDir()
+	work := testenv.TempDir(t)
 	t.Chdir(work)
 
 	if got := activeConfigTag(); !strings.HasSuffix(got, "config.toml") {
@@ -30,8 +32,8 @@ func TestActiveConfigTagNamesTheShadowingProjectFile(t *testing.T) {
 }
 
 func TestActiveConfigTagWithoutAnyConfigFile(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	t.Chdir(t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	t.Chdir(testenv.TempDir(t))
 
 	if got := activeConfigTag(); !strings.Contains(got, "defaults") {
 		t.Fatalf("no config file must be stated explicitly, got %q", got)

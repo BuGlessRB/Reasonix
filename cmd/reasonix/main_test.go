@@ -6,10 +6,11 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/crashreport"
+	"reasonix/internal/testenv"
 )
 
 func TestRunWithCrashCaptureRecordsAndReraises(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	previous := runCLI
 	t.Cleanup(func() { runCLI = previous })

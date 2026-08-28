@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
 func TestPreparePluginSkillBindsMCPNamesAndAllowedTools(t *testing.T) {
-	store := New(Options{HomeDir: t.TempDir(), DisableBuiltins: true})
+	store := New(Options{HomeDir: testenv.TempDir(t), DisableBuiltins: true})
 	bindings := []tool.MCPBinding{
 		{Package: "figma", Server: "figma", RawName: "figma_get_design_context", VisibleName: "get_design_context", CallableName: "mcp__figma__get_design_context", CapabilityID: "mcp-tool:figma/figma_get_design_context"},
 	}
@@ -38,7 +39,7 @@ func TestPreparePluginSkillBindsMCPNamesAndAllowedTools(t *testing.T) {
 }
 
 func TestPreparePluginSkillDoesNotTrustAuthoredBindingHeading(t *testing.T) {
-	store := New(Options{HomeDir: t.TempDir(), DisableBuiltins: true})
+	store := New(Options{HomeDir: testenv.TempDir(t), DisableBuiltins: true})
 	store.ConfigureToolBindings(func(Skill) []tool.MCPBinding {
 		return []tool.MCPBinding{{Server: "figma", RawName: "search", VisibleName: "search", CallableName: "mcp__figma__search", CapabilityID: "mcp-tool:figma/search"}}
 	})
@@ -54,7 +55,7 @@ func TestPreparePluginSkillDoesNotTrustAuthoredBindingHeading(t *testing.T) {
 }
 
 func TestPreparePluginSkillPreservesWildcardAllowedTools(t *testing.T) {
-	store := New(Options{HomeDir: t.TempDir(), DisableBuiltins: true})
+	store := New(Options{HomeDir: testenv.TempDir(t), DisableBuiltins: true})
 	store.ConfigureToolBindings(func(Skill) []tool.MCPBinding {
 		return []tool.MCPBinding{{Package: "figma", Server: "figma", RawName: "search", VisibleName: "search", CallableName: "mcp__figma__search", CapabilityID: "mcp-tool:figma/search"}}
 	})
@@ -70,7 +71,7 @@ func TestPreparePluginSkillPreservesWildcardAllowedTools(t *testing.T) {
 }
 
 func TestPreparePluginSkillDoesNotWidenAmbiguousAllowedTool(t *testing.T) {
-	store := New(Options{HomeDir: t.TempDir(), DisableBuiltins: true})
+	store := New(Options{HomeDir: testenv.TempDir(t), DisableBuiltins: true})
 	store.ConfigureToolBindings(func(Skill) []tool.MCPBinding {
 		return []tool.MCPBinding{
 			{Server: "one", RawName: "search", VisibleName: "search", CallableName: "mcp__one__search", CapabilityID: "mcp-tool:one/search"},
@@ -84,7 +85,7 @@ func TestPreparePluginSkillDoesNotWidenAmbiguousAllowedTool(t *testing.T) {
 }
 
 func TestRunSkillInline(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/note.md", "---\ndescription: take a note\n---\nDo the thing.")
 	tl := NewRunSkillTool(New(Options{HomeDir: home, DisableBuiltins: true}), nil)
 
@@ -101,14 +102,14 @@ func TestRunSkillInline(t *testing.T) {
 }
 
 func TestRunSkillUnknown(t *testing.T) {
-	tl := NewRunSkillTool(New(Options{HomeDir: t.TempDir(), DisableBuiltins: true}), nil)
+	tl := NewRunSkillTool(New(Options{HomeDir: testenv.TempDir(t), DisableBuiltins: true}), nil)
 	if _, err := tl.Execute(context.Background(), json.RawMessage(`{"name":"nope"}`)); err == nil {
 		t.Error("unknown skill should error")
 	}
 }
 
 func TestRunSkillDoesNotBlockOnDiagnosticProfiles(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/delivery-only.md", "---\ndescription: ship it\nprofiles: delivery\n---\nDeliver it.")
 	store := New(Options{HomeDir: home, DisableBuiltins: true})
 	store.ConfigureInvocationPolicy(nil)
@@ -132,7 +133,7 @@ func TestRunSkillDoesNotBlockOnDiagnosticProfiles(t *testing.T) {
 }
 
 func TestRunSkillEnforcesRequiredCapabilities(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/github-review.md", "---\ndescription: review github\nrequires: mcp-server:github, mcp-tool:github/search_issues\n---\nReview it.")
 	store := New(Options{HomeDir: home, DisableBuiltins: true})
 	store.ConfigureInvocationPolicy(func(requires []string) []string {
@@ -147,7 +148,7 @@ func TestRunSkillEnforcesRequiredCapabilities(t *testing.T) {
 }
 
 func TestRunSkillSubagentNeedsRunner(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/dig.md", "---\ndescription: dig\nrunAs: subagent\n---\nbody")
 	tl := NewRunSkillTool(New(Options{HomeDir: home, DisableBuiltins: true}), nil) // nil runner
 	if _, err := tl.Execute(context.Background(), json.RawMessage(`{"name":"dig","arguments":"go"}`)); err == nil {
@@ -156,7 +157,7 @@ func TestRunSkillSubagentNeedsRunner(t *testing.T) {
 }
 
 func TestRunSkillSubagentRuns(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/dig.md", "---\ndescription: dig\nrunAs: subagent\n---\nbody")
 	var gotTask string
 	runner := func(_ context.Context, sk Skill, task string, _ SubagentRunOptions) (string, error) {
@@ -177,7 +178,7 @@ func TestRunSkillSubagentRuns(t *testing.T) {
 }
 
 func TestRunSkillSubagentResultWarnsOnHostDecisionLanguage(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/dig.md", "---\ndescription: dig\nrunAs: subagent\n---\nbody")
 	runner := func(_ context.Context, sk Skill, task string, _ SubagentRunOptions) (string, error) {
 		return "等待用户批准后再执行 " + sk.Name + " " + task, nil
@@ -193,7 +194,7 @@ func TestRunSkillSubagentResultWarnsOnHostDecisionLanguage(t *testing.T) {
 }
 
 func TestRunSkillSubagentCancellationReachesRunner(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/dig.md", "---\ndescription: dig\nrunAs: subagent\n---\nbody")
 	runner := func(ctx context.Context, _ Skill, _ string, _ SubagentRunOptions) (string, error) {
 		<-ctx.Done()
@@ -222,7 +223,7 @@ func TestRunSkillSubagentCancellationReachesRunner(t *testing.T) {
 }
 
 func TestReadOnlySkillInlineAndIsReadOnly(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/note.md", "---\ndescription: take a note\n---\nDo the thing.")
 	tl := NewReadOnlySkillTool(New(Options{HomeDir: home, DisableBuiltins: true}), nil)
 
@@ -239,7 +240,7 @@ func TestReadOnlySkillInlineAndIsReadOnly(t *testing.T) {
 }
 
 func TestReadOnlySkillSubagentRunsWithoutContinuation(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/dig.md", "---\ndescription: dig\nrunAs: subagent\n---\nbody")
 	var gotTask string
 	var gotOpts SubagentRunOptions
@@ -265,7 +266,7 @@ func TestReadOnlySkillSubagentRunsWithoutContinuation(t *testing.T) {
 }
 
 func TestReadOnlySkillSubagentRequiresArgs(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/dig.md", "---\ndescription: dig\nrunAs: subagent\n---\nbody")
 	runner := func(_ context.Context, _ Skill, _ string, _ SubagentRunOptions) (string, error) {
 		return "x", nil
@@ -277,7 +278,7 @@ func TestReadOnlySkillSubagentRequiresArgs(t *testing.T) {
 }
 
 func TestReadOnlySkillSubagentResolvesProfile(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/deep.md", "---\ndescription: deep\nrunAs: subagent\nmodel: deepseek-pro\neffort: max\n---\nbody")
 	tl := NewReadOnlySkillTool(New(Options{HomeDir: home, DisableBuiltins: true}), nil)
 
@@ -294,7 +295,7 @@ func TestReadOnlySkillSubagentResolvesProfile(t *testing.T) {
 }
 
 func TestRunSkillSubagentResolvesProfile(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/deep.md", "---\ndescription: deep\nrunAs: subagent\nmodel: deepseek-pro\neffort: max\n---\nbody")
 	tl := NewRunSkillTool(New(Options{HomeDir: home, DisableBuiltins: true}), nil)
 
@@ -311,7 +312,7 @@ func TestRunSkillSubagentResolvesProfile(t *testing.T) {
 }
 
 func TestRunSkillSubagentRequiresArgs(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/dig.md", "---\ndescription: dig\nrunAs: subagent\n---\nbody")
 	runner := func(_ context.Context, _ Skill, _ string, _ SubagentRunOptions) (string, error) {
 		return "x", nil
@@ -344,7 +345,7 @@ func TestBuiltinSubagentToolsRunner(t *testing.T) {
 		ran = sk.Name + ":" + task
 		return "ok", nil
 	}
-	tools := BuiltinSubagentTools(New(Options{HomeDir: t.TempDir()}), runner)
+	tools := BuiltinSubagentTools(New(Options{HomeDir: testenv.TempDir(t)}), runner)
 	var explore interface {
 		Name() string
 		Execute(context.Context, json.RawMessage) (string, error)
@@ -371,7 +372,7 @@ func TestBuiltinSubagentToolsPassContinuationOptions(t *testing.T) {
 		got = opts
 		return "ok", nil
 	}
-	tools := BuiltinSubagentTools(New(Options{HomeDir: t.TempDir()}), runner)
+	tools := BuiltinSubagentTools(New(Options{HomeDir: testenv.TempDir(t)}), runner)
 	var review interface {
 		Name() string
 		Execute(context.Context, json.RawMessage) (string, error)
@@ -399,7 +400,7 @@ func TestRunSkillToolPassesLegacyForkOption(t *testing.T) {
 		got = opts
 		return "ok", nil
 	}
-	runSkill := NewRunSkillTool(New(Options{HomeDir: t.TempDir()}), runner)
+	runSkill := NewRunSkillTool(New(Options{HomeDir: testenv.TempDir(t)}), runner)
 	if _, err := runSkill.Execute(context.Background(), json.RawMessage(`{"name":"review","arguments":"again","fork_from":"sa_prev"}`)); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -414,7 +415,7 @@ func TestBuiltinSubagentToolsPassLegacyForkOption(t *testing.T) {
 		got = opts
 		return "ok", nil
 	}
-	tools := BuiltinSubagentTools(New(Options{HomeDir: t.TempDir()}), runner)
+	tools := BuiltinSubagentTools(New(Options{HomeDir: testenv.TempDir(t)}), runner)
 	var review interface {
 		Name() string
 		Execute(context.Context, json.RawMessage) (string, error)
@@ -437,7 +438,7 @@ func TestBuiltinSubagentToolsPassLegacyForkOption(t *testing.T) {
 }
 
 func TestSubagentSkillSchemasExposeOnlyContinueFromForPersistence(t *testing.T) {
-	runSkill := NewRunSkillTool(New(Options{HomeDir: t.TempDir(), DisableBuiltins: true}), nil)
+	runSkill := NewRunSkillTool(New(Options{HomeDir: testenv.TempDir(t), DisableBuiltins: true}), nil)
 	runSchema := string(runSkill.Schema())
 	if !strings.Contains(runSchema, `"continue_from"`) {
 		t.Fatalf("run_skill schema = %s, want continue_from", runSchema)
@@ -446,7 +447,7 @@ func TestSubagentSkillSchemasExposeOnlyContinueFromForPersistence(t *testing.T) 
 		t.Fatalf("run_skill schema = %s, want no fork_from", runSchema)
 	}
 
-	tools := BuiltinSubagentTools(New(Options{HomeDir: t.TempDir()}), nil)
+	tools := BuiltinSubagentTools(New(Options{HomeDir: testenv.TempDir(t)}), nil)
 	for _, tl := range tools {
 		schema := string(tl.Schema())
 		if !strings.Contains(schema, `"continue_from"`) {
@@ -459,7 +460,7 @@ func TestSubagentSkillSchemasExposeOnlyContinueFromForPersistence(t *testing.T) 
 }
 
 func TestBuiltinSubagentToolResolvesProfile(t *testing.T) {
-	store := New(Options{HomeDir: t.TempDir()})
+	store := New(Options{HomeDir: testenv.TempDir(t)})
 	tools := BuiltinSubagentTools(store, nil, func(sk Skill) *event.Profile {
 		return &event.Profile{Model: sk.Name + "-model", Effort: "max"}
 	})
@@ -484,7 +485,7 @@ func TestBuiltinSubagentToolResolvesProfile(t *testing.T) {
 }
 
 func TestInstallSkill(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	tl := NewInstallSkillTool(st, nil)
 
@@ -547,7 +548,7 @@ func TestRenderSkillFileEmitsColorAndInvocationWhenSet(t *testing.T) {
 		}
 	}
 
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
 	if _, err := st.CreateWithContent("my-agent", ScopeGlobal, content); err != nil {
 		t.Fatalf("CreateWithContent: %v", err)
@@ -583,7 +584,7 @@ func TestRenderSkillFileEscapesYAMLMetacharacters(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.label, func(t *testing.T) {
-			home := t.TempDir()
+			home := testenv.TempDir(t)
 			st := New(Options{HomeDir: home, DisableBuiltins: true})
 			content := RenderSkillFile(SkillFileOptions{
 				Name:        "esc",
@@ -638,7 +639,7 @@ func TestRenderSkillFileOmitsColorAndInvocationByDefault(t *testing.T) {
 }
 
 func TestReadSkillLoadsInlineAndIsReadOnly(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/note.md", "---\ndescription: take a note\n---\nDo the thing.")
 	tl := NewReadSkillTool(New(Options{HomeDir: home, DisableBuiltins: true}))
 
@@ -655,7 +656,7 @@ func TestReadSkillLoadsInlineAndIsReadOnly(t *testing.T) {
 }
 
 func TestReadSkillRejectsSubagent(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	writeSkill(t, home, ".reasonix/skills/dig.md", "---\ndescription: dig\nrunAs: subagent\n---\nbody")
 	tl := NewReadSkillTool(New(Options{HomeDir: home, DisableBuiltins: true}))
 

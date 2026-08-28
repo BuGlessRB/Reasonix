@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestDoctorRepairSkipsConfigStartupMutation(t *testing.T) {
@@ -18,8 +20,8 @@ func TestDoctorRepairSkipsConfigStartupMutation(t *testing.T) {
 }
 
 func TestDoctorRepairDryRunDoesNotMigrateConfig(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(root, "reasonix.toml")
 	body := []byte("[[plugins]]\nname = \"legacy\"\ncommand = \"legacy\"\ntier = \"lazy\"\n")

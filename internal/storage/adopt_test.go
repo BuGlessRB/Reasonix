@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 // The report this exists for: a Studio whose configuration came back without
@@ -16,7 +17,7 @@ import (
 func TestAFolderHoldingThisRootIsPointedAtRatherThanRefused(t *testing.T) {
 	home := stateHome(t)
 	seedState(t, home)
-	target := filepath.Join(t.TempDir(), "moved")
+	target := filepath.Join(testenv.TempDir(t), "moved")
 
 	first := PlanMove(t.Context(), config.RootState, target)
 	if err := Move(t.Context(), first, nil); err != nil {
@@ -62,7 +63,7 @@ func TestAFolderHoldingThisRootIsPointedAtRatherThanRefused(t *testing.T) {
 // and the plan says how much of it there is rather than letting it go quietly.
 func TestAnAdoptLeavesTheOldLocationAloneAndSaysSo(t *testing.T) {
 	home := stateHome(t)
-	target := filepath.Join(t.TempDir(), "moved")
+	target := filepath.Join(testenv.TempDir(t), "moved")
 	write(t, filepath.Join(target, "sessions", "old.jsonl"), 4096)
 	seedState(t, home)
 
@@ -94,7 +95,7 @@ func TestAMarkedFolderIsAdoptableForARootThatDeclaresNoEntries(t *testing.T) {
 	if err := commitLocation(config.RootCache, filepath.Join(home, "cache")); err != nil {
 		t.Fatal(err)
 	}
-	target := filepath.Join(t.TempDir(), "moved-cache")
+	target := filepath.Join(testenv.TempDir(t), "moved-cache")
 
 	plan := PlanMove(t.Context(), config.RootCache, target)
 	if !plan.OK() {
@@ -123,8 +124,8 @@ func TestAMarkedFolderIsAdoptableForARootThatDeclaresNoEntries(t *testing.T) {
 func TestTheMarkerStaysWithTheLocationRatherThanTheData(t *testing.T) {
 	home := stateHome(t)
 	seedState(t, home)
-	first := filepath.Join(t.TempDir(), "first")
-	second := filepath.Join(t.TempDir(), "second")
+	first := filepath.Join(testenv.TempDir(t), "first")
+	second := filepath.Join(testenv.TempDir(t), "second")
 
 	if err := Move(t.Context(), PlanMove(t.Context(), config.RootState, first), nil); err != nil {
 		t.Fatalf("first move: %v", err)
@@ -156,7 +157,7 @@ func TestTheMarkerStaysWithTheLocationRatherThanTheData(t *testing.T) {
 func TestAFolderWithOnlyAStaleMarkerIsTreatedAsEmpty(t *testing.T) {
 	home := stateHome(t)
 	seedState(t, home)
-	target := filepath.Join(t.TempDir(), "stale")
+	target := filepath.Join(testenv.TempDir(t), "stale")
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +184,7 @@ func TestAFolderWithOnlyAStaleMarkerIsTreatedAsEmpty(t *testing.T) {
 // so what runs is the path a real install takes.
 func defaultRoots(t *testing.T) string {
 	t.Helper()
-	base := t.TempDir()
+	base := testenv.TempDir(t)
 	t.Setenv("HOME", base)
 	t.Setenv("USERPROFILE", base)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(base, ".config"))
@@ -247,7 +248,7 @@ func TestTheBackfillSkipsWhenTheRootsAreRedirectedForThisRun(t *testing.T) {
 // does not own is somebody else's, however much of it looks familiar.
 func TestAFolderWithAnythingElseInItIsNotClaimed(t *testing.T) {
 	stateHome(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	for _, name := range []string{"sessions", "holiday-photos"} {
 		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
 			t.Fatal(err)

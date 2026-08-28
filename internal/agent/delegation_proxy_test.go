@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/evidence"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -33,7 +34,7 @@ func TestDelegationAuditSurvivesCapabilityProxy(t *testing.T) {
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
 	task := NewTaskTool(prov, nil, reg, 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
-		WithTranscripts(mustSubagentStore(t), t.TempDir(), "base", "high").
+		WithTranscripts(mustSubagentStore(t), testenv.TempDir(t), "base", "high").
 		WithScheduler(NewSubagentScheduler(4, 4))
 	reg.Add(task)
 

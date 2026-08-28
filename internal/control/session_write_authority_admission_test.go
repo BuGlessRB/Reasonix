@@ -9,10 +9,11 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 )
 
 func TestStaleWriteAuthorityBlocksAsyncAdmission(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	events := make(chan event.Event, 1)
@@ -51,7 +52,7 @@ func TestStaleWriteAuthorityBlocksAsyncAdmission(t *testing.T) {
 }
 
 func TestStaleWriteAuthorityBlocksSynchronousRun(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{Executor: exec, SessionPath: path, Sink: event.Discard})

@@ -9,10 +9,11 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestHistoryToolSearchAndAroundAreUsable(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	path := filepath.Join(sessionDir, "decision.jsonl")
 	writeSession(t, path, []provider.Message{
 		{Role: provider.RoleUser, Content: "Should history use vector embeddings?"},
@@ -68,7 +69,7 @@ func TestHistoryToolSearchAndAroundAreUsable(t *testing.T) {
 }
 
 func TestHistoryToolSkipsCleanupPending(t *testing.T) {
-	sessionDir := t.TempDir()
+	sessionDir := testenv.TempDir(t)
 	visiblePath := filepath.Join(sessionDir, "visible.jsonl")
 	pendingPath := filepath.Join(sessionDir, "pending.jsonl")
 	writeSession(t, visiblePath, []provider.Message{
@@ -104,7 +105,7 @@ func TestHistoryToolSkipsCleanupPending(t *testing.T) {
 }
 
 func TestHistoryToolSchemaIsCacheStable(t *testing.T) {
-	tl := NewTool(Options{SessionDir: t.TempDir()})
+	tl := NewTool(Options{SessionDir: testenv.TempDir(t)})
 	if got, want := tl.Description(), "Search saved local session history with lightweight BM25 retrieval, then read messages around a hit. Use search when past decisions, failed attempts, commands, or tool inputs may help the current task; use around with a returned session_path and message_index to inspect the nearby transcript. By default it searches user text, assistant text, tool inputs, and tool errors; normal tool outputs are excluded unless kind includes tool_output."; got != want {
 		t.Fatalf("history description changed; this is provider-visible and affects prompt-cache shape.\nwant: %q\n got: %q", want, got)
 	}
@@ -130,7 +131,7 @@ func TestHistoryToolSchemaIsCacheStable(t *testing.T) {
 }
 
 func TestHistoryToolValidatesInputs(t *testing.T) {
-	tl := NewTool(Options{SessionDir: t.TempDir()})
+	tl := NewTool(Options{SessionDir: testenv.TempDir(t)})
 	for _, tc := range []struct {
 		name string
 		args string

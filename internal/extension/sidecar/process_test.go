@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 func TestResolveRuntimeCommandContract(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	shellPath := "/bin/sh"
 	if runtime.GOOS == "windows" {
 		shellPath = `C:\Windows\System32\cmd.exe`
@@ -38,7 +39,7 @@ func TestResolveRuntimeCommandContract(t *testing.T) {
 }
 
 func TestResolveRuntimeCommandExpandsPluginRoot(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	got, err := resolveRuntimeCommand(&pluginpkg.RuntimeSpec{Command: "${REASONIX_PLUGIN_ROOT}/bin/sidecar"}, root)
 	if err != nil {
 		t.Fatalf("resolveRuntimeCommand: %v", err)
@@ -98,7 +99,7 @@ func TestStartupFailureRedactsCauseWithoutLosingIdentity(t *testing.T) {
 // plugin identity variables are always set.
 func TestRuntimeEnvFullTrustContract(t *testing.T) {
 	t.Setenv("REASONIX_TEST_INHERITED_MARKER", "present")
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	rt := &pluginpkg.RuntimeSpec{Command: "/bin/sidecar", Env: map[string]string{"MANIFEST_KEY": "manifest-value"}}
 	pkg := pluginpkg.Package{Root: root, Manifest: pluginpkg.Manifest{Name: "p", Version: "2.0.0", Runtime: rt}}
 	installed := pluginpkg.InstalledPlugin{Name: "p", Version: "1.0.0"}

@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestCodeIndexSearchGoSymbols(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mkfile(t, filepath.Join(root, "service.go"), `package demo
 
 type Service struct{}
@@ -38,7 +40,7 @@ const DefaultName = "demo"
 }
 
 func TestCodeIndexOutlineTypeScriptAndSkipsNoiseDirs(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mkfile(t, filepath.Join(root, "src", "app.ts"), `export interface User {
   name: string
 }
@@ -66,7 +68,7 @@ export const loadUser = async () => {}
 }
 
 func TestCodeIndexOutlineFiltersBeforeLimit(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mkfile(t, filepath.Join(root, "a.ts"), `export const first = () => {}
 export const second = () => {}
 `)
@@ -89,7 +91,7 @@ export const second = () => {}
 }
 
 func TestCodeIndexKindFiltersJavaTypes(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mkfile(t, filepath.Join(root, "src", "Example.java"), `package demo;
 
 public interface Repository {}
@@ -128,7 +130,7 @@ public class Client {
 }
 
 func TestCodeIndexKindFiltersRustItems(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mkfile(t, filepath.Join(root, "src", "lib.rs"), `pub struct Store {}
 pub trait Repository {}
 pub enum Mode { Fast }
@@ -164,16 +166,16 @@ pub fn load_store() {}
 }
 
 func TestCodeIndexRequiresQueryForSearch(t *testing.T) {
-	_, err := codeIndex{workDir: t.TempDir()}.Execute(context.Background(), json.RawMessage(`{"action":"search"}`))
+	_, err := codeIndex{workDir: testenv.TempDir(t)}.Execute(context.Background(), json.RawMessage(`{"action":"search"}`))
 	if err == nil || !strings.Contains(err.Error(), "query is required") {
 		t.Fatalf("error = %v, want query required", err)
 	}
 }
 
 func TestCodeIndexWorkspaceBinding(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mkfile(t, filepath.Join(root, "main.py"), "class App:\n    pass\n")
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 
 	tools := byName(Workspace{Dir: root}.Tools("code_index"))
 	tl := tools["code_index"]
@@ -190,7 +192,7 @@ func TestCodeIndexWorkspaceBinding(t *testing.T) {
 }
 
 func TestCodeIndexForbidRead(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	mkfile(t, filepath.Join(root, "allowed.go"), "package demo\nfunc AllowedNeedle() {}\n")
 	secretDir := filepath.Join(root, "secret")
 	mkfile(t, filepath.Join(secretDir, "secret.go"), "package secret\nfunc SecretNeedle() {}\n")
@@ -219,7 +221,7 @@ func TestCodeIndexForbidRead(t *testing.T) {
 }
 
 func TestCodeIndexIgnoresLargeFiles(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(root, "huge.ts"), []byte(strings.Repeat("x", codeIndexMaxFileSize+1)), 0o644); err != nil {
 		t.Fatal(err)
 	}

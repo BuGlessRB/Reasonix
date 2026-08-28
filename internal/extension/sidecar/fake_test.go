@@ -18,6 +18,7 @@ import (
 	"reasonix/internal/extension/protocol"
 	"reasonix/internal/extension/rpcwire"
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 // Re-exec fake sidecar (the standard Go helper-process pattern): the test
@@ -305,7 +306,7 @@ func fakeSidecarPackage(t testing.TB, name string, configure func(rt *pluginpkg.
 	t.Helper()
 	rt := fakeSidecarRuntime(t, configure)
 	pkg := pluginpkg.Package{
-		Root:         t.TempDir(),
+		Root:         testenv.TempDir(t),
 		ManifestKind: "reasonix",
 		Manifest: pluginpkg.Manifest{
 			Name:    name,

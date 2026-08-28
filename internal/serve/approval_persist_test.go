@@ -7,13 +7,14 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // The posture chosen on the composer has to survive a relaunch, and saving it
 // must not cost the user the rest of their config: the edit path rewrites the
 // whole file, so a dropped provider block would take its key reference with it.
 func TestPersistDesktopApprovalModeKeepsRestOfConfig(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	seed := `config_version = 6
@@ -55,7 +56,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 func TestPersistDesktopApprovalModeRoundTripsEveryPosture(t *testing.T) {
 	for _, mode := range []string{control.ToolApprovalAuto, control.ToolApprovalYolo, control.ToolApprovalAsk} {
 		t.Run(mode, func(t *testing.T) {
-			home := t.TempDir()
+			home := testenv.TempDir(t)
 			t.Setenv("REASONIX_HOME", home)
 			persistDesktopApprovalMode(mode)
 			saved := config.LoadForEdit(filepath.Join(home, "config.toml"))

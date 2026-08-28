@@ -3,6 +3,8 @@ package config
 import (
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestDeliveryWorktreeDirUsesLocalAppDataOnWindows(t *testing.T) {
@@ -10,7 +12,7 @@ func TestDeliveryWorktreeDirUsesLocalAppDataOnWindows(t *testing.T) {
 	t.Setenv("REASONIX_STATE_HOME", "")
 	t.Setenv("REASONIX_HOME", "")
 
-	localAppData := filepath.Join(t.TempDir(), "AppData", "Local")
+	localAppData := filepath.Join(testenv.TempDir(t), "AppData", "Local")
 	oldCacheDir := osUserCacheDir
 	osUserCacheDir = func() string { return localAppData }
 	t.Cleanup(func() { osUserCacheDir = oldCacheDir })
@@ -26,7 +28,7 @@ func TestDeliveryWorktreeDirFallsBackToLocalAppDataUnderUserProfile(t *testing.T
 	t.Setenv("REASONIX_STATE_HOME", "")
 	t.Setenv("REASONIX_HOME", "")
 
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	oldCacheDir := osUserCacheDir
 	oldHomeDir := osUserHomeDir
 	osUserCacheDir = func() string { return "" }
@@ -44,9 +46,9 @@ func TestDeliveryWorktreeDirFallsBackToLocalAppDataUnderUserProfile(t *testing.T
 
 func TestDeliveryWorktreeDirHonorsExplicitStateHomeOnWindows(t *testing.T) {
 	setRuntimeGOOS(t, "windows")
-	stateHome := filepath.Join(t.TempDir(), "state")
+	stateHome := filepath.Join(testenv.TempDir(t), "state")
 	t.Setenv("REASONIX_STATE_HOME", stateHome)
-	t.Setenv("REASONIX_HOME", filepath.Join(t.TempDir(), "reasonix-home"))
+	t.Setenv("REASONIX_HOME", filepath.Join(testenv.TempDir(t), "reasonix-home"))
 
 	want := filepath.Join(stateHome, "worktrees")
 	if got := DeliveryWorktreeDir(); got != want {

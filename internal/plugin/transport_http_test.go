@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -145,7 +146,7 @@ func runHTTPTransportTest(t *testing.T, sse bool) {
 }
 
 func TestStreamableHTTPAnswersRootsRequestInSSEResponse(t *testing.T) {
-	workspaceRoot := t.TempDir()
+	workspaceRoot := testenv.TempDir(t)
 	reply := make(chan struct {
 		ID     string `json:"id"`
 		Result struct {
@@ -223,7 +224,7 @@ func TestHTTPTransportDoesNotRedirectCredentialsAcrossOrigins(t *testing.T) {
 }
 
 func TestHTTPTransportDoesNotLoadOAuthStateWithStaticAPIKey(t *testing.T) {
-	stateDir := t.TempDir()
+	stateDir := testenv.TempDir(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-API-Key"); got != "configured" {
 			t.Errorf("API key = %q, want configured", got)

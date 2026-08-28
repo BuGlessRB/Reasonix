@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -131,7 +132,7 @@ func TestCoveredPrefixHashIncludesProviderVisibleFields(t *testing.T) {
 }
 
 func TestLoadProjectionSidecarRebindsMatchingContentAcrossLineage(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "s.jsonl")
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},
@@ -181,7 +182,7 @@ func TestLoadProjectionSidecarRebindsMatchingContentAcrossLineage(t *testing.T) 
 }
 
 func TestLoadProjectionSidecarDropsForeignCacheKey(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "s.jsonl")
 	msgs := []provider.Message{{Role: provider.RoleSystem, Content: "sys"}}
 	// Content validation must fail despite a model-only key change: lineage
@@ -294,7 +295,7 @@ func TestCompactInstallsCoveredPrefixHash(t *testing.T) {
 		sess.Add(provider.Message{Role: provider.RoleUser, Content: strings.Repeat("u", 80)})
 		sess.Add(provider.Message{Role: provider.RoleAssistant, Content: strings.Repeat("a", 120)})
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "s.jsonl")
 	a := New(fp, tool.NewRegistry(), sess, Options{
 		ContextWindow: 2000,

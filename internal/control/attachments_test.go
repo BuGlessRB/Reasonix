@@ -7,12 +7,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 const tinyPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 func TestSaveImageDataURL(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	got, err := SaveImageDataURL("data:image/png;base64," + tinyPNG)
 	if err != nil {
 		t.Fatalf("SaveImageDataURL: %v", err)
@@ -23,14 +25,14 @@ func TestSaveImageDataURL(t *testing.T) {
 }
 
 func TestSaveImageDataURLRejectsSpoofedMime(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if _, err := SaveImageDataURL("data:image/png;base64,aGk="); err == nil {
 		t.Fatal("spoofed image mime should fail")
 	}
 }
 
 func TestCreateAttachmentFileSkipsExistingPath(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := ensureAttachmentRoot(); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +60,7 @@ func TestCreateAttachmentFileSkipsExistingPath(t *testing.T) {
 }
 
 func TestSaveImageBytesUsesUniquePathsWithinSameTimestamp(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	oldNow := attachmentNow
 	attachmentNow = func() time.Time {
 		return time.Date(2026, 6, 1, 10, 20, 30, 123456000, time.UTC)
@@ -89,7 +91,7 @@ func TestSaveImageBytesUsesUniquePathsWithinSameTimestamp(t *testing.T) {
 }
 
 func TestSaveImageFile(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := os.WriteFile("source.png", mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +105,7 @@ func TestSaveImageFile(t *testing.T) {
 }
 
 func TestSaveAttachmentFile(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := os.WriteFile("notes.pdf", []byte("%PDF-1.4 body"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +122,7 @@ func TestSaveAttachmentFile(t *testing.T) {
 }
 
 func TestSaveAttachmentFileRejectsEmptyAndDir(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := os.WriteFile("empty.txt", nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +138,7 @@ func TestSaveAttachmentFileRejectsEmptyAndDir(t *testing.T) {
 }
 
 func TestSaveAttachmentFileSanitizesExtension(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := os.WriteFile("payload.weird-ext-here", []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +152,7 @@ func TestSaveAttachmentFileSanitizesExtension(t *testing.T) {
 }
 
 func TestSaveAttachmentFileRejectsSymlink(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := os.WriteFile("source.bin", []byte("payload"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +165,7 @@ func TestSaveAttachmentFileRejectsSymlink(t *testing.T) {
 }
 
 func TestSaveImageFileRejectsSymlink(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := os.WriteFile("source.png", mustBase64(t, tinyPNG), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +178,7 @@ func TestSaveImageFileRejectsSymlink(t *testing.T) {
 }
 
 func TestImageDataURLRejectsOutsideAttachmentDir(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := os.WriteFile("x.png", []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +191,7 @@ func TestImageDataURLRejectsOutsideAttachmentDir(t *testing.T) {
 }
 
 func TestImageDataURLRejectsSymlinkFile(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := ensureAttachmentRoot(); err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +208,7 @@ func TestImageDataURLRejectsSymlinkFile(t *testing.T) {
 }
 
 func TestImageDataURLRejectsSymlinkAttachmentDir(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := os.Mkdir(".reasonix", 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +224,7 @@ func TestImageDataURLRejectsSymlinkAttachmentDir(t *testing.T) {
 }
 
 func TestImageDataURLRejectsSymlinkSubdirectory(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 	if err := ensureAttachmentRoot(); err != nil {
 		t.Fatal(err)
 	}

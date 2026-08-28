@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func writeArm(t *testing.T, dir, name string, results []result) string {
@@ -22,7 +24,7 @@ func writeArm(t *testing.T, dir, name string, results []result) string {
 }
 
 func TestCompareReportsRendersPerSolvedDeltas(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	control := result{task: task{ID: "a"}, Passed: true, WallMs: 60_000}
 	control.Steps = 7
 	control.ToolCalls = 10
@@ -59,7 +61,7 @@ func TestCompareReportsRendersPerSolvedDeltas(t *testing.T) {
 }
 
 func TestCompareReportsMarginalUtilityByClass(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	mk := func(id, class string, passed bool, wallMs int64) result {
 		r := result{task: task{ID: id, Class: class}, Passed: passed, WallMs: wallMs}
 		r.Steps = 1

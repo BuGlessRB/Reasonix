@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func bookServer(t *testing.T, attacher RemoteAttacher) *httptest.Server {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	front := httptest.NewServer(NewHub(HubOptions{Remote: attacher}).Handler())
 	t.Cleanup(front.Close)
 	return front
@@ -88,7 +89,7 @@ func TestAHostNeedsAnAddressUnlessSSHConfigHasIt(t *testing.T) {
 // Removing the row under a live pane would leave a connection nothing accounts
 // for: the pane keeps driving a kernel the book no longer knows about.
 func TestRemovingAHostIsRefusedWhileItDrivesAPane(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{Remote: &stubAttacher{}})
 	if _, err := h.OpenRemote(RemoteEndpoint{
@@ -201,7 +202,7 @@ func TestRemoteTreeIsReadThroughAnOpenPane(t *testing.T) {
 		t.Fatalf("unconnected host = %d/%q, want 409/remote.not_connected", resp.StatusCode, body.Code)
 	}
 
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	open, err := http.Post(nearSide.URL+"/remotes/open", "application/json", openRemoteBody(t, "gpu-box", workspace))
 	if err != nil {
 		t.Fatal(err)
@@ -362,7 +363,7 @@ func TestOpeningARemoteFolderWritesItIntoTheBook(t *testing.T) {
 	farSide := httptest.NewServer(far.Handler())
 	defer farSide.Close()
 
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	near := NewHub(HubOptions{Remote: &stubAttacher{
 		attach: func(host, _ string) (RemoteEndpoint, func(), error) {
 			// What the far side resolved, which is not always what was asked
@@ -415,7 +416,7 @@ func TestAFolderWithAPaneOnItIsNotDropped(t *testing.T) {
 	farSide := httptest.NewServer(far.Handler())
 	defer farSide.Close()
 
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	near := NewHub(HubOptions{Remote: &stubAttacher{
 		attach: func(host, _ string) (RemoteEndpoint, func(), error) {
 			return RemoteEndpoint{
@@ -463,7 +464,7 @@ func TestReopeningAKnownFolderLeavesTheConfigAlone(t *testing.T) {
 	farSide := httptest.NewServer(far.Handler())
 	defer farSide.Close()
 
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	near := NewHub(HubOptions{Remote: &stubAttacher{
 		attach: func(host, _ string) (RemoteEndpoint, func(), error) {
 			return RemoteEndpoint{

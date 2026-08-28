@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/i18n"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 )
 
 func makeTestSkills() []skill.Skill {
@@ -523,7 +524,7 @@ func TestSkillPickerSpaceTogglesEnabled(t *testing.T) {
 }
 
 func TestSkillPickerDetailDeleteRequiresConfirmation(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "review", skill.SkillFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -589,7 +590,7 @@ func TestSkillPickerDetailShowsActionsBeforeBodyPreview(t *testing.T) {
 }
 
 func TestDeleteSkillPickRemovesDirectoryTarget(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "review", skill.SkillFile)
 	targetDir := filepath.Dir(path)
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
@@ -620,7 +621,7 @@ func TestDeleteSkillPickRemovesDirectoryTarget(t *testing.T) {
 }
 
 func TestSkillDeleteTargetDirectoryAndFlatFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	nested := filepath.Join(dir, "review", skill.SkillFile)
 	if err := os.MkdirAll(filepath.Dir(nested), 0o755); err != nil {
 		t.Fatal(err)

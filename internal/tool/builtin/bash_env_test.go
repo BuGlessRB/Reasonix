@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/sandbox"
 	"reasonix/internal/secrets"
+	"reasonix/internal/testenv"
 )
 
 func TestBashMergesLoginShellPath(t *testing.T) {
@@ -18,7 +19,7 @@ func TestBashMergesLoginShellPath(t *testing.T) {
 		t.Skip("login shell PATH probing is POSIX-only")
 	}
 
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	bin := filepath.Join(dir, "bin")
 	if err := os.Mkdir(bin, 0o755); err != nil {
 		t.Fatalf("mkdir bin: %v", err)

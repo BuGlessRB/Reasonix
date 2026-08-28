@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // NewSession
@@ -167,7 +168,7 @@ func TestHasSystemMessageCompactedKeepsSystem(t *testing.T) {
 // Save / LoadSession round-trip
 
 func TestSaveLoadSessionRoundTrip(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 
 	s := NewSession("system prompt")
@@ -203,7 +204,7 @@ func TestSaveEmptyPath(t *testing.T) {
 }
 
 func TestSaveCreatesDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "deep", "nested", "session.jsonl")
 	s := NewSession("")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "test"})
@@ -226,7 +227,7 @@ func TestLoadSessionMissing(t *testing.T) {
 }
 
 func TestLoadSessionMalformed(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "bad.jsonl")
 	os.WriteFile(path, []byte("not valid json\n"), 0o644)
 	_, err := LoadSession(path)
@@ -251,7 +252,7 @@ func TestListSessionsMissingDirReturnsNil(t *testing.T) {
 }
 
 func TestListSessionsEmptyDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sessions, err := ListSessions(dir)
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -262,7 +263,7 @@ func TestListSessionsEmptyDir(t *testing.T) {
 }
 
 func TestListSessionsSorted(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	// Create two sessions with different content.
 	s1 := NewSession("")
 	s1.Add(provider.Message{Role: provider.RoleUser, Content: "first"})
@@ -286,7 +287,7 @@ func TestListSessionsSorted(t *testing.T) {
 }
 
 func TestListSessionsSkipsEmpty(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	// A session with only a system prompt (no user interaction) should be skipped.
 	s := NewSession("system only")
 	s.Save(filepath.Join(dir, "empty.jsonl"))
@@ -301,7 +302,7 @@ func TestListSessionsSkipsEmpty(t *testing.T) {
 }
 
 func TestListSessionsSkipsNonJSONL(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("not a session"), 0o644)
 	s := NewSession("")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "real"})
@@ -319,7 +320,7 @@ func TestListSessionsSkipsNonJSONL(t *testing.T) {
 // previewSession
 
 func TestPreviewSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("system")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "Help me debug the auth module"})
@@ -336,7 +337,7 @@ func TestPreviewSession(t *testing.T) {
 }
 
 func TestPreviewSessionStripsTransientReasoningLanguageBlock(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("system")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "<reasoning-language>\nVisible reasoning/thinking text preference: use Simplified Chinese.\n</reasoning-language>\n\nHelp me debug the auth module"})
@@ -352,7 +353,7 @@ func TestPreviewSessionStripsTransientReasoningLanguageBlock(t *testing.T) {
 }
 
 func TestPreviewSessionStripsTransientResponseLanguageBlock(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("system")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "<response-language>\nFinal answer language preference: use English.\n</response-language>\n\nHelp me debug the auth module"})
@@ -368,7 +369,7 @@ func TestPreviewSessionStripsTransientResponseLanguageBlock(t *testing.T) {
 }
 
 func TestPreviewSessionLongMessage(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: strings.Repeat("a", 200)})
@@ -384,7 +385,7 @@ func TestPreviewSessionLongMessage(t *testing.T) {
 }
 
 func TestPreviewSessionMalformed(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "bad.jsonl")
 	os.WriteFile(path, []byte("not json\n"), 0o644)
 	preview, turns := previewSession(path)
@@ -399,7 +400,7 @@ func TestPreviewSessionMalformed(t *testing.T) {
 // NewSessionPath
 
 func TestNewSessionPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := NewSessionPath(dir, "deepseek-chat")
 	if !strings.HasSuffix(path, ".jsonl") {
 		t.Errorf("should end with .jsonl: %s", path)
@@ -424,7 +425,7 @@ func TestNewSessionPathSanitizesSlashes(t *testing.T) {
 }
 
 func TestNewSessionPathSanitizesWindowsReservedPunctuation(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := NewSessionPath(dir, `nemotron-3-nano:30b<>"|?*`)
 	base := filepath.Base(path)
 	if strings.ContainsAny(base, `:<>"|?*`) {
@@ -458,7 +459,7 @@ func TestNewSessionPathEmptyModel(t *testing.T) {
 // successful save re-anchors, and the baseline never moves backwards when a
 // slower save reports an older capture.
 func TestNeedsRewriteSaveFollowsSaves(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
@@ -496,7 +497,7 @@ func TestNeedsRewriteSaveFollowsSaves(t *testing.T) {
 }
 
 func TestUpdateToolCallPreviewPersistsAfterMidTurnSnapshot(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("system")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "edit twice"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
@@ -538,7 +539,7 @@ func TestUpdateToolCallPreviewPersistsAfterMidTurnSnapshot(t *testing.T) {
 }
 
 func TestUpdateToolCallResolutionPersistsAfterMidTurnSnapshot(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("system")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "use MCP"})
 	s.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{
@@ -581,7 +582,7 @@ func TestUpdateToolCallResolutionPersistsAfterMidTurnSnapshot(t *testing.T) {
 // saved — each session object owns its own baseline, so no swap can orphan or
 // misattribute it.
 func TestRewriteBaselineStaysWithClones(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})
@@ -602,7 +603,7 @@ func TestRewriteBaselineStaysWithClones(t *testing.T) {
 }
 
 func TestHasUnsavedChangesProtectsIdleHistoryAfterSaveFailure(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "durable"})
 	if !s.HasUnsavedChanges(path) {
@@ -657,7 +658,7 @@ func TestMessageRangeReturnsClampedCopy(t *testing.T) {
 // TestPersistedStateTracksBaseline: the exported baseline view follows saves,
 // appends, and rewrites.
 func TestPersistedStateTracksBaseline(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "hi"})

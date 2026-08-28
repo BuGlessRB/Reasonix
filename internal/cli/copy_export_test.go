@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func newTestChatTUIWithMessages(t *testing.T, workspaceRoot string, msgs ...provider.Message) chatTUI {
@@ -109,7 +110,7 @@ func TestSlashCopyPickerCopiesSelectedAssistantMessage(t *testing.T) {
 }
 
 func TestSlashExportFiltersInternalAndReferencedContext(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	expandedReference := control.PlanModeMarker + "\n\n" +
 		"Referenced context:\n\n" +
 		"<file path=\"auth_private.go\">\nconst hiddenReference = true\n</file>\n\n" +
@@ -188,7 +189,7 @@ func TestSlashExportDoesNotWriteEmptyMarkdown(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := testenv.TempDir(t)
 			m := newTestChatTUIWithMessages(t, dir, tt.msgs...)
 
 			m.runExportCommand("/export")

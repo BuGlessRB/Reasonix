@@ -14,6 +14,7 @@ import (
 
 	"reasonix/internal/agentgraph"
 
+	"reasonix/internal/testenv"
 	"slices"
 )
 
@@ -96,7 +97,7 @@ func TestUpstreamForReadsDependenciesInDeclarationOrder(t *testing.T) {
 // persisted capsule records which of the two started from inherited context.
 func TestFleetDeliversUpstreamAnswerToTheDependentChild(t *testing.T) {
 	const probe = "ARTIFACT-42 lives in parse.go"
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	prov := &upstreamProbeProvider{answer: probe}
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{}) // the read-only item needs a non-empty registry
@@ -158,7 +159,7 @@ func TestFleetDeliversUpstreamAnswerToTheDependentChild(t *testing.T) {
 // difference to the payload rather than to the ordering.
 func TestUpstreamAblationOrdersWithoutDelivering(t *testing.T) {
 	const probe = "ARTIFACT-42 lives in parse.go"
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	prov := &upstreamProbeProvider{answer: probe}
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})

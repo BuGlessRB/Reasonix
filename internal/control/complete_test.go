@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func writeAt(t *testing.T, root, rel string) {
@@ -38,7 +40,7 @@ func hasInsert(items []SlashItem, insert string) bool {
 // A reference completed mid-sentence must replace the whole token, not the part
 // before the caret — otherwise accepting leaves the old suffix behind.
 func TestCompleteRefReplacesWholeTokenAroundCaret(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeAt(t, root, "notes.md")
 	line := "see @no and more"
 	caret := strings.Index(line, " and")
@@ -63,7 +65,7 @@ func TestCompleteRefReplacesWholeTokenAroundCaret(t *testing.T) {
 
 // An email address is not a reference: '@' only opens the menu at a word start.
 func TestCompleteIgnoresInfixAt(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeAt(t, root, "notes.md")
 	if got := Complete("mail me@example.com", 19, CompletionData{WorkspaceRoot: root}); got.Kind != "" {
 		t.Fatalf("kind = %q, want no menu (items %v)", got.Kind, inserts(got.Items))
@@ -73,7 +75,7 @@ func TestCompleteIgnoresInfixAt(t *testing.T) {
 // Scoped completion is what a client reached over HTTP gets: it must not be
 // offered a path outside the workspace, because the turn would refuse it.
 func TestCompleteScopedStaysInsideWorkspace(t *testing.T) {
-	parent := t.TempDir()
+	parent := testenv.TempDir(t)
 	root := filepath.Join(parent, "work")
 	writeAt(t, root, "inside.md")
 	writeAt(t, parent, "outside.md")
@@ -98,7 +100,7 @@ func TestCompleteScopedStaysInsideWorkspace(t *testing.T) {
 // A directory descends and a name with spaces survives the whitespace-delimited
 // token grammar, because the insert carries the escaping the parser reverses.
 func TestCompleteRefEscapesAndDescends(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeAt(t, root, "my dir/inner.md")
 
 	got := Complete("@my", 3, CompletionData{WorkspaceRoot: root})
@@ -155,7 +157,7 @@ func TestCompleteSlashArgument(t *testing.T) {
 // A reference under the caret wins over the slash menu, so "/review @f" still
 // completes the file rather than re-offering commands.
 func TestCompleteRefInsideSlashArguments(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeAt(t, root, "notes.md")
 	line := "/review @no"
 	got := Complete(line, len(line), CompletionData{WorkspaceRoot: root})
@@ -175,7 +177,7 @@ func TestCompleteEmptyIsNotNil(t *testing.T) {
 // A token typed out in full must not keep a row that would replace it with
 // itself: it reads as a duplicate, and it swallows the Enter meant to send.
 func TestCompleteDropsTheRowThatChangesNothing(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeAt(t, root, "notes.md")
 	writeAt(t, root, "notes.md.bak")
 
@@ -197,7 +199,7 @@ func TestCompleteDropsTheRowThatChangesNothing(t *testing.T) {
 // The menu says what it filtered on, so a frontend can point at the reason a
 // row is there instead of showing an unexplained fuzzy hit.
 func TestCompleteReportsTheQueryItFilteredOn(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeAt(t, root, "internal/serve/complete.go")
 
 	ref := Complete("@internal/serve/comp", 20, CompletionData{WorkspaceRoot: root})

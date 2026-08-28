@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"reasonix/internal/testenv"
 )
 
 func TestHookJSONExecutionFormPresenceMatrix(t *testing.T) {
@@ -112,7 +114,7 @@ func TestValidHookShellMatrix(t *testing.T) {
 }
 
 func TestNativeManifestRejectsUnsupportedHookShell(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, NativeManifest)
 	writeTestFile(t, path, `{
   "apiVersion":"reasonix.io/plugin/v2",

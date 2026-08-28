@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func writeMembers(t *testing.T, dir string, body string) []Member {
@@ -21,8 +23,8 @@ func writeMembers(t *testing.T, dir string, body string) []Member {
 }
 
 func TestActivateVersionFaultInjectionKeepsOldPointer(t *testing.T) {
-	root := t.TempDir()
-	src := t.TempDir()
+	root := testenv.TempDir(t)
+	src := testenv.TempDir(t)
 	// Seed v1.19.1 as active.
 	if err := ActivateVersion(ActivationRequest{
 		InstallRoot: root,
@@ -36,7 +38,7 @@ func TestActivateVersionFaultInjectionKeepsOldPointer(t *testing.T) {
 	// Interrupt before rename by using a source that disappears mid-activation
 	// is hard without hooks; instead inject a bad member set after staging prep
 	// via duplicate-name rejection and verify pointer unchanged.
-	badSrc := t.TempDir()
+	badSrc := testenv.TempDir(t)
 	members := writeMembers(t, badSrc, "new")
 	// Corrupt one source path after validation list is built by emptying file content
 	// and making the desktop source a directory (not a regular file).
@@ -63,8 +65,8 @@ func TestActivateVersionRejectsPathTraversalAndSymlinkTree(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink privilege varies on Windows CI")
 	}
-	root := t.TempDir()
-	src := t.TempDir()
+	root := testenv.TempDir(t)
+	src := testenv.TempDir(t)
 	members := writeMembers(t, src, "x")
 	// Absolute activeDir is rejected by Decode/WriteCurrent.
 	if err := WriteCurrent(root, CurrentPointer{
@@ -85,7 +87,7 @@ func TestActivateVersionRejectsPathTraversalAndSymlinkTree(t *testing.T) {
 	}
 	// Replace version dir with symlink and ensure ReadCurrent fails closed.
 	ver := filepath.Join(root, "versions", "v1.20.0")
-	outside := t.TempDir()
+	outside := testenv.TempDir(t)
 	_ = os.RemoveAll(ver)
 	if err := os.Symlink(outside, ver); err != nil {
 		t.Fatal(err)
@@ -136,11 +138,11 @@ func TestMigrationFixturesFromLegacyFlatLayouts(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := testenv.TempDir(t)
 			tc.seed(t, root)
 			// Use ActivateVersion as the post-migrator commit step the migrator
 			// would call (same contract).
-			src := t.TempDir()
+			src := testenv.TempDir(t)
 			members := make([]Member, 0, 3)
 			for _, name := range AllowedVersionMembers() {
 				path := filepath.Join(src, name)

@@ -7,13 +7,14 @@ import (
 
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 func TestMigrateLegacySessionsRehomesNativeWALAheadOfCheckpoint(t *testing.T) {
-	src := t.TempDir()
-	global := t.TempDir()
-	workspace := t.TempDir()
-	projRoot := t.TempDir()
+	src := testenv.TempDir(t)
+	global := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
+	projRoot := testenv.TempDir(t)
 	router := func(ws string) string { return filepath.Join(projRoot, filepath.Base(ws), "sessions") }
 	srcLog := filepath.Join(src, "chat-1.events.jsonl")
 	if err := os.WriteFile(srcLog, []byte(legacyEventLog), 0o644); err != nil {

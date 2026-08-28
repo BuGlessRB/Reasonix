@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestSaveConflictRecoveryBranchAtCapStaysBounded(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path, stale := divergedSessionPair(t, dir, "session.jsonl")
 	stampRecoveryMeta(t, path, SessionRecoveryMaxDepth)
 
@@ -60,7 +61,7 @@ func TestSaveConflictRecoveryBranchAtCapStaysBounded(t *testing.T) {
 
 // Sibling lineages get distinct isolated copies; a copy is a fixed point.
 func TestFixedWriterRecoverySessionPathSeparatesSiblingLineages(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	root := fixedWriterRecoverySessionPath(filepath.Join(dir, "session.jsonl"))
 	fork := fixedWriterRecoverySessionPath(filepath.Join(dir, "session-recovery-abcd1234abcd1234.jsonl"))
 	if root == fork {
@@ -76,7 +77,7 @@ func TestFixedWriterRecoverySessionPathSeparatesSiblingLineages(t *testing.T) {
 }
 
 func TestRecoveryLaneCollisionPreservesIndependentTranscript(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	original := filepath.Join(dir, "session.jsonl")
 	first := NewSession("sys")
 	first.Add(provider.Message{Role: provider.RoleUser, Content: "first"})

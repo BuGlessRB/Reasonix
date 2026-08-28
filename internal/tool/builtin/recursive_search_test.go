@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestGlobBareNameFallsBackToRecursiveWithWorkDir(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Join(root, "sub", "deep"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +25,7 @@ func TestGlobBareNameFallsBackToRecursiveWithWorkDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "node_modules", "pkg", "target.go"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 
 	out := runTool(t, globTool{workDir: root}, map[string]any{"pattern": "target.go"})
 	if !strings.Contains(filepath.ToSlash(out), "sub/deep/target.go") {
@@ -35,7 +37,7 @@ func TestGlobBareNameFallsBackToRecursiveWithWorkDir(t *testing.T) {
 }
 
 func TestLsRecursive(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Join(root, "a", "b"), 0o755); err != nil {
 		t.Fatal(err)
 	}

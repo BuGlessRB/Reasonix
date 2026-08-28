@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // leaseTestPath returns a session path in "user shape" — mixed case, exactly
@@ -20,7 +21,7 @@ import (
 // forms are identical; on Windows they differ and exercise the fold.
 func leaseTestPath(t *testing.T) (userPath, key string) {
 	t.Helper()
-	userPath = filepath.Join(t.TempDir(), "Sessions-Dir", "Session-Test.jsonl")
+	userPath = filepath.Join(testenv.TempDir(t), "Sessions-Dir", "Session-Test.jsonl")
 	if err := os.MkdirAll(filepath.Dir(userPath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

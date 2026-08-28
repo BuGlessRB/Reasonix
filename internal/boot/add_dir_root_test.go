@@ -11,7 +11,7 @@ import (
 // points into a git repo, a relative --add-dir must resolve under that explicit
 // root, not the repo's git root.
 func TestAdditionalDirsResolveAgainstExplicitWorkspaceRoot(t *testing.T) {
-	repo := t.TempDir()
+	repo := robustTempDir(t)
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}

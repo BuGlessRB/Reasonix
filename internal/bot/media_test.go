@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestSaveInboundMediaStoresWorkspaceImageAttachment(t *testing.T) {
@@ -21,7 +23,7 @@ func TestSaveInboundMediaStoresWorkspaceImageAttachment(t *testing.T) {
 		_, _ = w.Write(raw)
 	}))
 	defer srv.Close()
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 
 	ref, err := saveOneInboundMedia(context.Background(), workspace, srv.URL+"/shot.png")
 	if err != nil {
@@ -40,7 +42,7 @@ func TestSaveInboundMediaItemsStoresBytesAndReportsErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode png: %v", err)
 	}
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 
 	refs, fallbacks, errs := saveInboundMediaItems(context.Background(), workspace, []InboundMedia{
 		{MIME: "image/png", Data: png},
@@ -70,7 +72,7 @@ func TestSaveInboundMediaItemsStoresBytesAndReportsErrors(t *testing.T) {
 }
 
 func TestSaveInboundMediaItemsLoadsDeferredBytesAfterAdmission(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	called := false
 	refs, fallbacks, errs := saveInboundMediaItems(context.Background(), workspace, []InboundMedia{{
 		FailureText: "[download failed]",
@@ -88,7 +90,7 @@ func TestSaveInboundMediaItemsLoadsDeferredBytesAfterAdmission(t *testing.T) {
 }
 
 func TestInputTextWithMediaKeepsDeferredFailurePlaceholder(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	adapter := newFakeAdapter(PlatformFeishu, "feishu")
 	gw := NewGateway(GatewayConfig{WorkspaceRoot: workspace}, map[Platform]Adapter{PlatformFeishu: adapter}, discardLogger())
 	input := gw.inputTextWithMedia(context.Background(), adapter, InboundMessage{

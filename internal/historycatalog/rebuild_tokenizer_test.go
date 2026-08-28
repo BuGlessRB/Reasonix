@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // A rebuild must survive being opened: it indexed with this build's tokenizer,
@@ -13,9 +14,9 @@ import (
 // TokenizerVersion silently wiped the projection a rebuild had just produced.
 func TestRebuildSurvivesTheVersionCheck(t *testing.T) {
 	ctx := context.Background()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	dbPath := filepath.Join(dir, "h.sqlite")
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	saveMessages(t, filepath.Join(root, "s.jsonl"), provider.Message{Role: provider.RoleUser, Content: "current phoenix marker"})
 
 	if _, err := Rebuild(ctx, Options{Path: dbPath}, []Root{{Path: root, Source: "global", Scope: "global"}}); err != nil {

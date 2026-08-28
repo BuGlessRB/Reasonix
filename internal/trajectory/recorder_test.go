@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
+	"reasonix/internal/testenv"
 )
 
 type capabilitySink struct {
@@ -54,7 +55,7 @@ func readRecords(t *testing.T, path string) []Record {
 }
 
 func TestRecorderAppendsOrderedTimestampedRecords(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "run.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "run.trajectory.jsonl")
 	inner := &capabilitySink{}
 	now := time.UnixMilli(1754500000000)
 	r, err := New(inner, path, func() time.Time { return now })
@@ -103,7 +104,7 @@ func TestRecorderAppendsOrderedTimestampedRecords(t *testing.T) {
 }
 
 func TestRecorderRecordsAndForwardsOptionalCapabilities(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "run.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "run.trajectory.jsonl")
 	inner := &capabilitySink{}
 	r, err := New(inner, path, nil)
 	if err != nil {
@@ -146,7 +147,7 @@ func TestRecorderRecordsAndForwardsOptionalCapabilities(t *testing.T) {
 }
 
 func TestRecorderForwardsAfterCloseWithoutRecording(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "run.trajectory.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "run.trajectory.jsonl")
 	inner := &capabilitySink{}
 	r, err := New(inner, path, nil)
 	if err != nil {
@@ -167,13 +168,13 @@ func TestRecorderForwardsAfterCloseWithoutRecording(t *testing.T) {
 }
 
 func TestNewFailsOnUnwritablePath(t *testing.T) {
-	if _, err := New(event.Discard, filepath.Join(t.TempDir(), "missing", "run.jsonl"), nil); err == nil {
+	if _, err := New(event.Discard, filepath.Join(testenv.TempDir(t), "missing", "run.jsonl"), nil); err == nil {
 		t.Fatal("New must fail when the parent directory does not exist")
 	}
 }
 
 func TestRecordRunHeaderPersistsRequestSidePrefix(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "t.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "t.jsonl")
 	rec, err := New(&capabilitySink{}, path, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)

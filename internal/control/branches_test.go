@@ -9,11 +9,12 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
 func TestBranchAndSwitch(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 	exec.Session().Add(provider.Message{Role: provider.RoleUser, Content: "root prompt"})
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
@@ -58,7 +59,7 @@ func TestBranchAndSwitch(t *testing.T) {
 }
 
 func TestSwitchBranchRejectsCleanupPending(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
 	exec.Session().Add(provider.Message{Role: provider.RoleUser, Content: "root prompt"})
 	c := New(Options{Executor: exec, SessionDir: dir, Label: "test"})
@@ -100,7 +101,7 @@ func TestSwitchBranchRejectsCleanupPending(t *testing.T) {
 }
 
 func TestBranchResetsTwoModelPlannerContext(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	planner := &recordingProvider{name: "planner", streams: [][]provider.Chunk{
 		textTurn("OLD PLAN: inspect alpha.go"),
 		textTurn("BRANCH PLAN: inspect beta.go"),
@@ -136,7 +137,7 @@ func TestBranchResetsTwoModelPlannerContext(t *testing.T) {
 }
 
 func TestSwitchBranchResetsTwoModelPlannerContext(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	planner := &recordingProvider{name: "planner", streams: [][]provider.Chunk{
 		textTurn("ROOT PLAN: inspect alpha.go"),
 		textTurn("CHILD PLAN: inspect beta.go"),
@@ -217,7 +218,7 @@ func TestSubmitBranchEmitsErrorNoticeWhileRunning(t *testing.T) {
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{
 		Executor:   exec,
-		SessionDir: t.TempDir(),
+		SessionDir: testenv.TempDir(t),
 		Label:      "test",
 		Sink: event.FuncSink(func(e event.Event) {
 			if e.Kind == event.Notice {

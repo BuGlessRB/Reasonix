@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 // fakeNotifier captures Notify calls and answers Request via an injectable hook,
@@ -306,7 +307,7 @@ func TestUpdateSinkPermissionCarriesStructuredContext(t *testing.T) {
 		return res, nil
 	}}
 	sink := newUpdateSink(fn, "sess-structured")
-	sink.bindCwd(t.TempDir())
+	sink.bindCwd(testenv.TempDir(t))
 	got := make(chan approveCall, 1)
 	sink.bindApprove(func(id string, allow, session, persist bool) { got <- approveCall{id, allow, session, persist} })
 	sink.Emit(event.Event{Kind: event.ApprovalRequest, Approval: event.Approval{
@@ -376,7 +377,7 @@ func TestUpdateSinkApprovalBashPrefix(t *testing.T) {
 }
 
 func TestPermissionMetaOnlyTrustsForegroundStaticBash(t *testing.T) {
-	cwd := t.TempDir()
+	cwd := testenv.TempDir(t)
 	sink := newUpdateSink(&fakeNotifier{}, "sess-static-command")
 	sink.bindCwd(cwd)
 

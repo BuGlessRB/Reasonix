@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -26,7 +27,7 @@ func TestTaskSchemaIncludesProfileAndWritePaths(t *testing.T) {
 }
 
 func TestTaskWriterWithoutPathsClaimsWholeWorkspace(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
 		WithScheduler(NewSubagentScheduler(6, 3))
@@ -41,7 +42,7 @@ func TestTaskWriterWithoutPathsClaimsWholeWorkspace(t *testing.T) {
 }
 
 func TestTaskUnknownProfileRejected(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
 		WithProfileLookup(func(string) (ProfileDefinition, bool) { return ProfileDefinition{}, false })
@@ -53,7 +54,7 @@ func TestTaskUnknownProfileRejected(t *testing.T) {
 }
 
 func TestTaskProfileUsesBodyAsSystemPrompt(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	var sawSystem string
 	prov := &captureSystemProvider{onReq: func(sys string) { sawSystem = sys }}
 	task := NewTaskTool(prov, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", DefaultTaskSystemPrompt, nil, 0, "", "", nil).
@@ -78,7 +79,7 @@ func TestTaskProfileUsesBodyAsSystemPrompt(t *testing.T) {
 }
 
 func TestTaskToolsIntersectionCannotExpand(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
 		WithProfileLookup(func(name string) (ProfileDefinition, bool) {

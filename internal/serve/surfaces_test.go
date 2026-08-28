@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func surfaceServer(t *testing.T) string {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	srv := httptest.NewServer(New(&pluginCtl{root: t.TempDir()}, NewBroadcaster(), config.ServeConfig{}).Handler())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	srv := httptest.NewServer(New(&pluginCtl{root: testenv.TempDir(t)}, NewBroadcaster(), config.ServeConfig{}).Handler())
 	t.Cleanup(srv.Close)
 	return srv.URL
 }

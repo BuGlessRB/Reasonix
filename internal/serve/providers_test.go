@@ -15,13 +15,14 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/history"
 	"reasonix/internal/stats"
+	"reasonix/internal/testenv"
 )
 
 // newProviderEditServer is a server with one configured provider, its config
 // and credential store redirected into the test's own home.
 func newProviderEditServer(t *testing.T) *Server {
 	t.Helper()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	configPath := config.UserConfigPath()
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
@@ -42,7 +43,7 @@ api_key_env = "EXISTING_API_KEY"
 	}
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{
-		Sink: bc, Label: "model-a", ModelRef: "existing/model-a", SessionDir: t.TempDir(),
+		Sink: bc, Label: "model-a", ModelRef: "existing/model-a", SessionDir: testenv.TempDir(t),
 	})
 	t.Cleanup(ctrl.Close)
 	closeSharedCatalogsOnCleanup(t)

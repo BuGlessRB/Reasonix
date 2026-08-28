@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"reasonix/internal/pluginpkg"
+	"reasonix/internal/testenv"
 )
 
 func TestLoadMergesInstalledPluginSkillRootsAndMCP(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	root := filepath.Join(home, "plugins", "superpowers")
 	writeConfigTestFile(t, filepath.Join(root, pluginpkg.NativeManifest), `{
@@ -31,7 +32,7 @@ func TestLoadMergesInstalledPluginSkillRootsAndMCP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := LoadForRoot(t.TempDir())
+	cfg, err := LoadForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +64,7 @@ func TestLoadMergesInstalledPluginSkillRootsAndMCP(t *testing.T) {
 }
 
 func TestClaudePackageMCPExpandsRootAndDoesNotAutoStart(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	root := filepath.Join(home, "plugins", "claude-mcp")
 	writeConfigTestFile(t, filepath.Join(root, pluginpkg.ClaudeManifest), `{"name":"claude-mcp"}`)
@@ -79,7 +80,7 @@ func TestClaudePackageMCPExpandsRootAndDoesNotAutoStart(t *testing.T) {
 	if err := pluginpkg.Upsert(home, pluginpkg.InstalledPlugin{Name: "claude-mcp", Root: "plugins/claude-mcp", ManifestKind: "claude", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	cfg, err := LoadForRoot(workspace)
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +107,7 @@ func TestClaudePackageMCPExpandsRootAndDoesNotAutoStart(t *testing.T) {
 }
 
 func TestClaudePackageMCPDeduplicatesSameConnectionAcrossPackages(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	for i, name := range []string{"legal-one", "legal-two"} {
 		root := filepath.Join(home, "plugins", name)
@@ -118,7 +119,7 @@ func TestClaudePackageMCPDeduplicatesSameConnectionAcrossPackages(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
-	cfg, err := LoadForRoot(t.TempDir())
+	cfg, err := LoadForRoot(testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +143,7 @@ func writeConfigTestFile(t *testing.T, path, body string) {
 // before user/project entries, retaining package ownership, while a disabled
 // package contributes nothing.
 func TestCommandDirsIncludePluginPackageCommands(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	root := filepath.Join(home, "plugins", "pwf")
 	writeConfigTestFile(t, filepath.Join(root, pluginpkg.ClaudeManifest), `{"name": "pwf"}`)
@@ -157,12 +158,12 @@ func TestCommandDirsIncludePluginPackageCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dirs := CommandDirsForRoot(t.TempDir())
+	dirs := CommandDirsForRoot(testenv.TempDir(t))
 	want := filepath.Join(root, "commands")
 	if len(dirs) == 0 || dirs[0] != want {
 		t.Fatalf("CommandDirsForRoot = %#v, want plugin commands dir first (lowest priority): %s", dirs, want)
 	}
-	roots := CommandRootsForRoot(t.TempDir())
+	roots := CommandRootsForRoot(testenv.TempDir(t))
 	if len(roots) == 0 || roots[0].Path != want || roots[0].Plugin != "pwf" {
 		t.Fatalf("CommandRootsForRoot = %#v, want plugin ownership on first root", roots)
 	}
@@ -170,7 +171,7 @@ func TestCommandDirsIncludePluginPackageCommands(t *testing.T) {
 	if err := pluginpkg.SetEnabled(home, "pwf", false); err != nil {
 		t.Fatal(err)
 	}
-	for _, dir := range CommandDirsForRoot(t.TempDir()) {
+	for _, dir := range CommandDirsForRoot(testenv.TempDir(t)) {
 		if dir == want {
 			t.Fatalf("disabled plugin's commands dir must not join discovery: %#v", dir)
 		}
@@ -179,9 +180,9 @@ func TestCommandDirsIncludePluginPackageCommands(t *testing.T) {
 
 // TestCommandDirsWithoutPluginState keeps the no-plugin fast path intact.
 func TestCommandDirsWithoutPluginState(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	if dirs := CommandDirsForRoot(t.TempDir()); len(dirs) == 0 {
+	if dirs := CommandDirsForRoot(testenv.TempDir(t)); len(dirs) == 0 {
 		t.Fatal("CommandDirsForRoot must still return the conventional dirs")
 	}
 }

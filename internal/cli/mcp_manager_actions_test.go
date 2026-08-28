@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/event"
 	"reasonix/internal/plugin"
+	"reasonix/internal/testenv"
 )
 
 func TestSplitEditorCommandUsesStaticShellWords(t *testing.T) {
@@ -62,8 +63,8 @@ func TestClearMCPAuthenticationUsesControllerWorkspace(t *testing.T) {
 	// are kind "anthropic" — a kind this test binary never links. Pinning an
 	// offline provider keeps the setup about MCP, not about compiled-in providers.
 	pinProviderOffline(t)
-	controllerRoot := t.TempDir()
-	cwdRoot := t.TempDir()
+	controllerRoot := testenv.TempDir(t)
+	cwdRoot := testenv.TempDir(t)
 	const pluginConfig = `
 [[plugins]]
 name = "dida"

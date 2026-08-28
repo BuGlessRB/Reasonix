@@ -6,18 +6,20 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 func TestReconcileFileAndDuplicateReceiptAreIdempotent(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "2026-08-10.jsonl")
 	line := []byte("{\"ts\":\"2026-08-10T10:00:00+08:00\",\"model\":\"deepseek/model\",\"source\":\"desktop\",\"total\":42}\n")
 	if err := os.WriteFile(path, line, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := Open(ctx, filepath.Join(t.TempDir(), "usage.sqlite"))
+	catalog, err := Open(ctx, filepath.Join(testenv.TempDir(t), "usage.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,12 +49,12 @@ func TestReconcileFileAndDuplicateReceiptAreIdempotent(t *testing.T) {
 func TestReadyRejectsExternalAppendUntilReconciled(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "2026-08-10.jsonl")
 	if err := os.WriteFile(path, []byte("{\"ts\":\"2026-08-10T10:00:00Z\",\"total\":1}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := Open(ctx, filepath.Join(t.TempDir(), "usage.sqlite"))
+	catalog, err := Open(ctx, filepath.Join(testenv.TempDir(t), "usage.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,13 +79,13 @@ func TestReadyRejectsExternalAppendUntilReconciled(t *testing.T) {
 func TestReadyRejectsSameSizeRewriteWithDifferentMtime(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "2026-08-10.jsonl")
 	original := []byte("{\"ts\":\"2026-08-10T10:00:00Z\",\"total\":1,\"source\":\"desktop\"}\n")
 	if err := os.WriteFile(path, original, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := Open(ctx, filepath.Join(t.TempDir(), "usage.sqlite"))
+	catalog, err := Open(ctx, filepath.Join(testenv.TempDir(t), "usage.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +121,7 @@ func TestReadyRejectsSameSizeRewriteWithDifferentMtime(t *testing.T) {
 func TestCostsStaySeparatePerCurrencyInTheProjection(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "2026-08-10.jsonl")
 	lines := "" +
 		`{"ts":"2026-08-10T10:00:00+08:00","model":"deepseek/model","source":"cli","total":10,"cost_amount":"1.50","cost_currency":"CNY"}` + "\n" +
@@ -128,7 +130,7 @@ func TestCostsStaySeparatePerCurrencyInTheProjection(t *testing.T) {
 	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := Open(ctx, filepath.Join(t.TempDir(), "usage.sqlite"))
+	catalog, err := Open(ctx, filepath.Join(testenv.TempDir(t), "usage.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +170,7 @@ func TestCostsStaySeparatePerCurrencyInTheProjection(t *testing.T) {
 func TestCurrencySpellingIsNormalizedOnIngest(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "2026-08-11.jsonl")
 	lines := "" +
 		`{"ts":"2026-08-11T10:00:00+08:00","model":"deepseek/model","source":"cli","total":5,"cost_amount":"1.00","cost_currency":"cny"}` + "\n" +
@@ -176,7 +178,7 @@ func TestCurrencySpellingIsNormalizedOnIngest(t *testing.T) {
 	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := Open(ctx, filepath.Join(t.TempDir(), "usage.sqlite"))
+	catalog, err := Open(ctx, filepath.Join(testenv.TempDir(t), "usage.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}

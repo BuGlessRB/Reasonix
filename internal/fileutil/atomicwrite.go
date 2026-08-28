@@ -249,6 +249,24 @@ func replaceFile(tmp, dest string, allowCrossDeviceCopy bool) error {
 	}
 }
 
+// Remove deletes path, retrying the same transient locks ReplaceFile retries.
+// A file this process just published can still be held for a few milliseconds
+// by a scanner, an indexer, or a reader that has not closed yet; a bare
+// os.Remove turns that window into a failure the caller reports as its own. A
+// path that is already gone is a success, not a race to re-report.
+func Remove(path string) error {
+	var err error
+	for attempt := 0; ; attempt++ {
+		if err = os.Remove(path); err == nil || os.IsNotExist(err) {
+			return nil
+		}
+		if attempt >= maxReplaceRetries {
+			return err
+		}
+		time.Sleep(time.Duration(attempt+1) * replaceRetryBase)
+	}
+}
+
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/pflag"
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func TestSplitAllowedToolRules(t *testing.T) {
@@ -124,7 +125,7 @@ func TestStripLeadingPrintFlag(t *testing.T) {
 
 func TestResolveSessionQueryByMachineSessionID(t *testing.T) {
 	identityKey := installMachineTestIdentity(t)
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := saveQueryTestSession(t, dir, "opaque-branch.jsonl", "resume by machine id")
 	machineID := machineSessionIDWithKey(agent.BranchID(path), identityKey)
 	if machineID == "" || !looksLikeMachineSessionID(machineID) {
@@ -142,7 +143,7 @@ func TestResolveSessionQueryByMachineSessionID(t *testing.T) {
 }
 
 func TestResolveSessionQueryByIDAndPreview(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	first := saveQueryTestSession(t, dir, "alpha-session.jsonl", "fix provider configuration")
 	_ = saveQueryTestSession(t, dir, "beta-session.jsonl", "improve terminal picker")
 

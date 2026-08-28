@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/tool"
 
 	// Registers the compile-time built-ins the adapter wraps.
+	"reasonix/internal/testenv"
 	_ "reasonix/internal/tool/builtin"
 )
 
@@ -77,9 +78,9 @@ func writeSkill(t *testing.T, root, name, desc string) {
 // become ScopePlugin with the package as PluginID and a package-qualified
 // slash ID — the same identity the user invokes.
 func TestSkillsContributor(t *testing.T) {
-	projectRoot := t.TempDir()
-	home := t.TempDir()
-	pluginRoot := t.TempDir()
+	projectRoot := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	pluginRoot := testenv.TempDir(t)
 	writeSkill(t, filepath.Join(projectRoot, ".reasonix", skill.SkillsDirname), "projskill", "Project skill")
 	writeSkill(t, pluginRoot, "plugskill", "Plugin skill")
 
@@ -126,8 +127,8 @@ func TestSkillsContributor(t *testing.T) {
 // retained as a hidden compatibility entry, and plain commands map to the
 // project tier.
 func TestCommandsContributor(t *testing.T) {
-	userDir := t.TempDir()
-	pluginDir := t.TempDir()
+	userDir := testenv.TempDir(t)
+	pluginDir := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(userDir, "review.md"), []byte("---\ndescription: Review code\n---\nreview $ARGUMENTS"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -164,8 +165,8 @@ func TestCommandsContributor(t *testing.T) {
 // TestHooksContributor: hooks are additive, keyed "event#n" in load order,
 // scoped by the settings file they came from.
 func TestHooksContributor(t *testing.T) {
-	projectRoot := t.TempDir()
-	home := t.TempDir()
+	projectRoot := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	settingsDir := filepath.Join(projectRoot, hook.SettingsDirname)
 	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -270,10 +271,10 @@ func TestProvidersContributor(t *testing.T) {
 // adapter feeding one builder, producing a frozen snapshot whose schema order
 // and hash are stable across rebuilds.
 func TestAdaptersAssembleTogether(t *testing.T) {
-	projectRoot := t.TempDir()
-	home := t.TempDir()
+	projectRoot := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	writeSkill(t, filepath.Join(projectRoot, ".reasonix", skill.SkillsDirname), "projskill", "Project skill")
-	cmdDir := t.TempDir()
+	cmdDir := testenv.TempDir(t)
 	if err := os.WriteFile(filepath.Join(cmdDir, "review.md"), []byte("review body"), 0o644); err != nil {
 		t.Fatal(err)
 	}

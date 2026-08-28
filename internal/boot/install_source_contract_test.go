@@ -20,7 +20,7 @@ func TestInstallSourceContractStatesTheTicketRule(t *testing.T) {
 	t.Chdir(dir)
 
 	ctrl, err := Build(context.Background(), Options{
-		SessionDir: filepath.Join(t.TempDir(), "sessions"),
+		SessionDir: filepath.Join(robustTempDir(t), "sessions"),
 		TokenMode:  TokenModeFull,
 		Sink:       event.Discard,
 	})

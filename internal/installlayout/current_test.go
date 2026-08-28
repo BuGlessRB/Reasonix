@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestDecodeCurrentAcceptsSchema1(t *testing.T) {
@@ -40,7 +42,7 @@ func TestDecodeCurrentRejectsUnknownSchemaAndTraversal(t *testing.T) {
 }
 
 func TestWriteAndReadCurrentRoundTrip(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	version := "v1.20.0"
 	dir := filepath.Join(root, "versions", version)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -67,8 +69,8 @@ func TestValidateActiveDirRejectsSymlinkVersionDir(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink privilege varies on Windows CI")
 	}
-	root := t.TempDir()
-	outside := t.TempDir()
+	root := testenv.TempDir(t)
+	outside := testenv.TempDir(t)
 	link := filepath.Join(root, "versions", "v1.20.0")
 	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
 		t.Fatal(err)
@@ -97,7 +99,7 @@ func TestValidateVersionName(t *testing.T) {
 	}
 }
 func TestResolveInstallRootFromVersionedDesktop(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	version := "v1.20.0"
 	dir := filepath.Join(root, "versions", version)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

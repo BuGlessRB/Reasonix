@@ -11,10 +11,11 @@ import (
 	"time"
 
 	fileencoding "reasonix/internal/fileutil/encoding"
+	"reasonix/internal/testenv"
 )
 
 func TestLoadMCPJSON(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, mcpJSONFile)
 	doc := `{
   "mcpServers": {
@@ -57,7 +58,7 @@ func TestLoadMCPJSON(t *testing.T) {
 }
 
 func TestLoadMCPJSONDecodesGB18030(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, mcpJSONFile)
 	doc := `{"mcpServers":{"local":{"command":"工具.exe","env":{"LABEL":"中文"}}}}`
 	if err := os.WriteFile(path, fileencoding.Encode(doc, fileencoding.GB18030), 0o644); err != nil {
@@ -74,7 +75,7 @@ func TestLoadMCPJSONDecodesGB18030(t *testing.T) {
 }
 
 func TestMCPJSONDropsRemovedTrustedReadOnlyToolsSetting(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, mcpJSONFile)
 	if err := os.WriteFile(path, []byte(`{"mcpServers":{"github":{"command":"old","trusted_read_only_tools":["issue_read"]}}}`), 0o644); err != nil {
 		t.Fatal(err)
@@ -103,7 +104,7 @@ func TestMCPJSONDropsRemovedTrustedReadOnlyToolsSetting(t *testing.T) {
 }
 
 func TestMCPJSONCallTimeoutsRoundTrip(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, mcpJSONFile)
 	if err := os.WriteFile(path, []byte(`{
   "mcpServers": {
@@ -165,7 +166,7 @@ func TestMCPJSONCallTimeoutsRoundTrip(t *testing.T) {
 }
 
 func TestMCPJSONUpdateRemovesRetiredApprovalFieldsAndPreservesUnknownFields(t *testing.T) {
-	path := filepath.Join(t.TempDir(), mcpJSONFile)
+	path := filepath.Join(testenv.TempDir(t), mcpJSONFile)
 	if err := os.WriteFile(path, []byte(`{
   "mcpServers": {
     "admin": {
@@ -330,7 +331,7 @@ func TestUpsertPluginNormalizesPastedCommandLine(t *testing.T) {
 }
 
 func TestLoadMCPJSONAbsentAndMalformed(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 
 	// Absent file: not an error, no entries.
 	got, err := loadMCPJSON(filepath.Join(dir, "missing.json"))
@@ -351,10 +352,10 @@ func TestLoadMCPJSONAbsentAndMalformed(t *testing.T) {
 func TestLoadMergesMCPJSON(t *testing.T) {
 	// Point the user-config and home dirs at an empty temp dir so Load picks up
 	// no global config, then chdir into a project dir holding both files.
-	empty := t.TempDir()
+	empty := testenv.TempDir(t)
 	t.Setenv("HOME", empty)
 	t.Setenv("XDG_CONFIG_HOME", empty)
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 
 	toml := `[[plugins]]
 name = "shared"
@@ -394,11 +395,11 @@ command = "local-bin"
 }
 
 func TestLoadMergesPluginsAcrossTOMLSources(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("HOME", root)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg"))
 	t.Setenv("AppData", filepath.Join(root, "AppData")) // os.UserConfigDir reads AppData on Windows
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 
 	gpath := UserConfigPath()
 	if gpath == "" {
@@ -434,7 +435,7 @@ func TestLoadMergesPluginsAcrossTOMLSources(t *testing.T) {
 
 func TestLoadProjectMCPPriorityIsReasonixThenMCPJSONThenGlobal(t *testing.T) {
 	_, userConfig, _ := legacyHome(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +482,7 @@ command = "project-reasonix-mcp"
 
 func TestUpsertPluginInSourcePreservesGlobalAndProjectBoundaries(t *testing.T) {
 	_, userConfig, _ := legacyHome(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -530,7 +531,7 @@ command = "project-old"
 
 func TestRemoveEffectivePluginRevealsLowerPriorityDeclaration(t *testing.T) {
 	_, userConfig, _ := legacyHome(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -586,11 +587,11 @@ command = "project-reasonix-mcp"
 }
 
 func TestLoadNormalizesTOMLPastedCommandLine(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 
 	if err := os.WriteFile("reasonix.toml", []byte("[[plugins]]\nname = \"playwright\"\ncommand = \"npx -y @playwright/mcp\"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -634,11 +635,11 @@ func TestMergeMCPJSONPrecedence(t *testing.T) {
 }
 
 func TestClearPluginAuthenticationInSourceUsesMCPJSON(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("HOME", root)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg"))
 	t.Setenv("AppData", filepath.Join(root, "AppData"))
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 
 	userPath := UserConfigPath()
 	if err := os.MkdirAll(filepath.Dir(userPath), 0o755); err != nil {
@@ -708,11 +709,11 @@ func TestClearPluginAuthenticationInSourceUsesMCPJSON(t *testing.T) {
 }
 
 func TestClearPluginAuthenticationInSourcePrefersTOML(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("HOME", root)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg"))
 	t.Setenv("AppData", filepath.Join(root, "AppData"))
-	t.Chdir(t.TempDir())
+	t.Chdir(testenv.TempDir(t))
 
 	if err := os.WriteFile("reasonix.toml", []byte(`[[plugins]]
 name = "dida"
@@ -765,12 +766,12 @@ Authorization = "Bearer ${TOML_TOKEN}"
 }
 
 func TestClearPluginAuthenticationInSourceForRootDoesNotFollowWorkingDirectory(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	rootA := t.TempDir()
-	rootB := t.TempDir()
+	rootA := testenv.TempDir(t)
+	rootB := testenv.TempDir(t)
 	write := func(root, token string) {
 		t.Helper()
 		raw := fmt.Sprintf(`[[plugins]]
@@ -806,7 +807,7 @@ url = "https://example.test/mcp?access_token=%s&workspace=main"
 }
 
 func TestLoadLegacyMCP(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.json")
 	doc := `{
   "mcpServers": {
@@ -894,7 +895,7 @@ func TestLoadLegacyMCP(t *testing.T) {
 
 func TestRemovePluginFromSourcesForRootRemovesEveryWritableDeclaration(t *testing.T) {
 	_, userConfig, _ := legacyHome(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -941,7 +942,7 @@ command = "duplicate-mcp"
 
 func TestRemovePluginFromSourcesForRootPreflightsEverySource(t *testing.T) {
 	_, userConfig, _ := legacyHome(t)
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -969,7 +970,7 @@ command = "duplicate-mcp"
 }
 
 func TestApplyConfigSourceEditsRollsBackEarlierWrites(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	first := filepath.Join(dir, "first.toml")
 	second := filepath.Join(dir, "second.toml")
 	for _, path := range []string{first, second} {
@@ -1004,7 +1005,7 @@ func TestApplyConfigSourceEditsRollsBackEarlierWrites(t *testing.T) {
 }
 
 func TestApplyConfigSourceEditsRollbackPreservesSymlink(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	target := filepath.Join(dir, "target.toml")
 	link := filepath.Join(dir, "config.toml")
 	second := filepath.Join(dir, "second.toml")
@@ -1050,7 +1051,7 @@ func TestApplyConfigSourceEditsRollbackPreservesSymlink(t *testing.T) {
 }
 
 func TestMCPJSONInternalSymlinkIsPreserved(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	target := filepath.Join(root, "shared-mcp.json")
 	link := filepath.Join(root, mcpJSONFile)
 	if err := os.WriteFile(target, []byte("{\"mcpServers\":{}}\n"), 0o644); err != nil {
@@ -1084,7 +1085,7 @@ func TestMCPJSONRejectsExternalAndBrokenSymlinks(t *testing.T) {
 		{
 			name: "external",
 			target: func(root string) string {
-				external := filepath.Join(t.TempDir(), "external.json")
+				external := filepath.Join(testenv.TempDir(t), "external.json")
 				if err := os.WriteFile(external, []byte("{\"mcpServers\":{}}\n"), 0o600); err != nil {
 					t.Fatal(err)
 				}
@@ -1099,7 +1100,7 @@ func TestMCPJSONRejectsExternalAndBrokenSymlinks(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := testenv.TempDir(t)
 			link := filepath.Join(root, mcpJSONFile)
 			target := tt.target(root)
 			if err := os.Symlink(target, link); err != nil {
@@ -1126,7 +1127,7 @@ func TestMCPJSONRejectsExternalAndBrokenSymlinks(t *testing.T) {
 }
 
 func TestClearPluginAuthenticationHonorsMCPJSONFileLock(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", filepath.Join(root, "home"))
 	mcpPath := filepath.Join(root, mcpJSONFile)
 	if err := os.WriteFile(mcpPath, []byte(`{
@@ -1163,9 +1164,9 @@ func TestClearPluginAuthenticationHonorsMCPJSONFileLock(t *testing.T) {
 }
 
 func TestInstallUserPluginForRootRestoresConfigWhenActivationFails(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 
 	cfg := Default()
 	cfg.Agent.Temperature = 0.42
@@ -1205,7 +1206,7 @@ func TestInstallUserPluginForRootRestoresConfigWhenActivationFails(t *testing.T)
 }
 
 func TestRemoveEffectivePluginLocksAllCompetingSources(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", filepath.Join(root, "home"))
 	userPath := UserConfigPath()
 	cfg := Default()
@@ -1246,7 +1247,7 @@ func TestRemoveEffectivePluginLocksAllCompetingSources(t *testing.T) {
 }
 
 func TestRemovePluginFromSourcesRejectsBrokenConfigSymlink(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", filepath.Join(root, "home"))
 	link := filepath.Join(root, "reasonix.toml")
 	if err := os.Symlink(filepath.Join(root, "missing.toml"), link); err != nil {
@@ -1265,7 +1266,7 @@ func TestRemovePluginFromSourcesRejectsBrokenConfigSymlink(t *testing.T) {
 }
 
 func TestUpsertPluginInProjectSourceRequiresProjectFileLock(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	path := filepath.Join(root, "reasonix.toml")
 	const original = "# project config\n"
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {

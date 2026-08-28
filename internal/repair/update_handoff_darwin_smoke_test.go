@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/testenv"
 )
 
 // TestDarwinApplicationsOrphanBackupLifecycleSmoke is opt-in because it probes
@@ -45,7 +47,7 @@ func TestDarwinApplicationsOrphanBackupLifecycleSmoke(t *testing.T) {
 		}
 	})
 
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	app := filepath.Join(smokeRoot, "Reasonix.app")
 	executable := filepath.Join(app, "Contents", "MacOS", "Reasonix")
 	backup := app + ".reasonix-update-backup"

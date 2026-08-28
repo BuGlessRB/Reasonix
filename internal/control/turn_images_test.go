@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 	"reasonix/internal/visionimage"
 )
 
@@ -34,12 +35,12 @@ func TestUnreadableImagesRideTheTurnTail(t *testing.T) {
 // the two together are what stopped the model writing its own OCR script while
 // the vision model sat unused.
 func TestConfiguredVisionModelIsNamedInTheNote(t *testing.T) {
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[agent]\nvision_model = \"looker/eyes\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	c := New(Options{Sink: event.Discard, WorkspaceRoot: t.TempDir()})
+	c := New(Options{Sink: event.Discard, WorkspaceRoot: testenv.TempDir(t)})
 	got := c.imageRoutingNote(1)
 	if !strings.Contains(got, "read_only_task") {
 		t.Fatalf("note = %q, want it to name the delegated read", got)
@@ -74,7 +75,7 @@ func TestNoAttachmentsChangeNothing(t *testing.T) {
 // carried it then fails every later turn in the session — so the reason is said
 // here, to the user and to the model, and the bytes never leave the machine.
 func TestUnfitImageIsNamedToUserAndModel(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeVisionTestConfig(t, workspace)
 	broken := filepath.Join(workspace, "docs", "diagram.png")
 	if err := os.MkdirAll(filepath.Dir(broken), 0o755); err != nil {
@@ -113,7 +114,7 @@ func TestUnfitImageIsNamedToUserAndModel(t *testing.T) {
 // A reference that was never an image stays silent: detectRefs returns every
 // @ref, and reporting the non-images would bury the one that matters.
 func TestNonImageRefIsNotReportedAsSkipped(t *testing.T) {
-	workspace := t.TempDir()
+	workspace := testenv.TempDir(t)
 	writeVisionTestConfig(t, workspace)
 	if err := os.WriteFile(filepath.Join(workspace, "notes.txt"), []byte("plain"), 0o644); err != nil {
 		t.Fatal(err)

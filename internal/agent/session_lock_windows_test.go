@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestRemoveAndUnlockDeletesViaDispositionNotFallback pins the Windows delete
@@ -15,7 +17,7 @@ import (
 // means the handle was opened without DELETE and the cleanup-vs-saver window
 // is silently back.
 func TestRemoveAndUnlockDeletesViaDispositionNotFallback(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	lockPath := filepath.Join(dir, "session.jsonl.lock")
 	before := sessionLockDispositionFallbacks.Load()
 	lock, err := tryTakeSessionLockFile(lockPath)
@@ -37,7 +39,7 @@ func TestRemoveAndUnlockDeletesViaDispositionNotFallback(t *testing.T) {
 // mapping: a plain Go open (no DELETE sharing) must read as "held", not as an
 // error, because reconcile treats held lock files as live and skips them.
 func TestTryTakeSessionLockFileTreatsOpenHandleAsHeld(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	lockPath := filepath.Join(dir, "session.jsonl.lock")
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {

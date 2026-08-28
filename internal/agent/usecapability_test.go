@@ -24,6 +24,7 @@ import (
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -333,7 +334,7 @@ func imageMCPServer(t *testing.T, toolCalls *atomic.Int32, payload string) *http
 }
 
 func TestPlannerFirstOnDemandMCPCallPreservesImages(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	// A decodable 1x1 PNG: an image whose bytes do not decode never reaches the
 	// provider, so a placeholder payload would assert nothing.
 	payload := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
@@ -473,12 +474,12 @@ func cacheExplicitReaderSchema(t *testing.T, spec plugin.Spec) {
 }
 
 func TestReadOnlyExecutionStartsInstalledUnconnectedMCPReader(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	var toolCalls atomic.Int32
 	server := explicitReaderMCPServer(t, nil, &toolCalls)
 	defer server.Close()
 
-	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), t.TempDir())
+	manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), testenv.TempDir(t))
 	spec := plugin.Spec{
 		Name: "explicit-reader", Type: "http", URL: server.URL,
 		LaunchManager: manager, ConfigSource: "workspace_config",
@@ -507,12 +508,12 @@ func TestReadOnlyExecutionStartsInstalledUnconnectedMCPReader(t *testing.T) {
 }
 
 func TestReadOnlyExecutionStartsPreviouslyAuthorizedProjectMCPReaderOnDemand(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	var toolCalls atomic.Int32
 	server := explicitReaderMCPServer(t, nil, &toolCalls)
 	defer server.Close()
 
-	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), t.TempDir())
+	manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), testenv.TempDir(t))
 	spec := plugin.Spec{
 		Name: "project-reader", Type: "http", URL: server.URL,
 		LaunchManager: manager, ConfigSource: "project_config", RequireLaunchApproval: true,
@@ -543,13 +544,13 @@ func TestReadOnlyExecutionStartsPreviouslyAuthorizedProjectMCPReaderOnDemand(t *
 }
 
 func TestReadOnlyExecutionAllowsSchemaOnlyDriftForAuthorizedReader(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	var schemaDrift atomic.Bool
 	var toolCalls atomic.Int32
 	server := explicitReaderMCPServer(t, &schemaDrift, &toolCalls)
 	defer server.Close()
 
-	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), t.TempDir())
+	manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), testenv.TempDir(t))
 	spec := plugin.Spec{
 		Name: "explicit-reader", Type: "http", URL: server.URL,
 		LaunchManager: manager, ConfigSource: "workspace_config",
@@ -641,7 +642,7 @@ func TestUseCapabilityDeclineAndInspect(t *testing.T) {
 }
 
 func TestUseCapabilityInspectMCPToolDoesNotListSiblingSchemas(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	spec := plugin.Spec{Name: "db", Authorized: true}
 	if err := plugin.SaveCachedSchema(spec.Name, plugin.CachedSchema{
 		CacheKey: plugin.SchemaCacheKey(spec),
@@ -1160,7 +1161,7 @@ func TestPlannerAllowsAuthorizedNonReadOnlyNonDestructiveMCP(t *testing.T) {
 }
 
 func TestPlannerPlanModeExecutesAuthorizedOpaqueMCPThroughRuntime(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1192,7 +1193,7 @@ func TestPlannerPlanModeExecutesAuthorizedOpaqueMCPThroughRuntime(t *testing.T) 
 }
 
 func TestPlannerAllowsConnectedServerDirectoryCall(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1490,7 +1491,7 @@ func TestPlannerSchemaStableAcrossProxyPresence(t *testing.T) {
 }
 
 func TestMCPCapabilityRuntimeTracksHotLifecycleAndSharedHostRevocation(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -1572,7 +1573,7 @@ func TestMCPCapabilityRuntimeTracksHotLifecycleAndSharedHostRevocation(t *testin
 }
 
 func TestSharedHostSameNameRequiresCurrentRuntimeAuthorizationAndIdentity(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1618,7 +1619,7 @@ func TestSharedHostSameNameRequiresCurrentRuntimeAuthorizationAndIdentity(t *tes
 }
 
 func TestResolvedMCPCallRechecksRuntimeDisableBeforeDispatch(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1649,7 +1650,7 @@ func TestResolvedMCPCallRechecksRuntimeDisableBeforeDispatch(t *testing.T) {
 }
 
 func TestRuntimeDisableLinearizesWithInFlightMCPDispatch(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1710,7 +1711,7 @@ func TestRuntimeDisableLinearizesWithInFlightMCPDispatch(t *testing.T) {
 }
 
 func TestMCPCapabilityRuntimeConcurrentUpdatesAndSnapshots(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	runtime := NewMCPCapabilityRuntime(context.Background(), plugin.NewHost(), nil, tool.NewRegistry(), nil)
 	defer runtime.host.Close()
 	frontend := runtime.NewFrontend(nil, nil)
@@ -1793,12 +1794,12 @@ func TestUnauthorizedNonProjectMCPZeroProcessStart(t *testing.T) {
 func TestAuthorizedMCPConnectUsesExplicitDenyOnlyGate(t *testing.T) {
 	// dontAsk/ask policy must not block first connect of an authorized server;
 	// only ExplicitlyDenies should stop it.
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	var toolCalls atomic.Int32
 	server := explicitReaderMCPServer(t, nil, &toolCalls)
 	defer server.Close()
 
-	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), t.TempDir())
+	manager := mcplaunch.NewManager(filepath.Join(testenv.TempDir(t), mcplaunch.StateFilename), testenv.TempDir(t))
 	spec := plugin.Spec{
 		Name: "explicit-reader", Type: "http", URL: server.URL,
 		LaunchManager: manager, ConfigSource: "workspace_config",

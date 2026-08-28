@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestPlatformRepairPathCaseInsensitiveMatchesDirectoryLookup(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	exact := filepath.Join(root, "CaseProbe")
 	if err := os.WriteFile(exact, []byte("probe"), 0o600); err != nil {
 		t.Fatal(err)
@@ -22,7 +24,7 @@ func TestPlatformRepairPathCaseInsensitiveMatchesDirectoryLookup(t *testing.T) {
 }
 
 func TestCanonicalRepairPathConvergesUnicodeAliases(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	nfcDir := filepath.Join(root, "Caf\u00e9")
 	nfdDir := filepath.Join(root, "Cafe\u0301")
 	if err := os.Mkdir(nfcDir, 0o700); err != nil {

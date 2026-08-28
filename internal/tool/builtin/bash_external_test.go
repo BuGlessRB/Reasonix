@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // A dropped external folder is reachable by the read tools and by nothing else.
@@ -12,7 +14,7 @@ import (
 // model reads as proof the file does not exist — it then tells the user the
 // reference is fake and stops, with the file sitting there the whole time.
 func TestBashRefusesATokenItCannotSeeAndNamesWhatCan(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	paths := NewPathResolver()
 	paths.RegisterReadRoot("__reasonix_external_folder/6812c34ccbd3/Desktop", root)
 	b := bash{paths: paths}
@@ -37,7 +39,7 @@ func TestBashRefusesATokenItCannotSeeAndNamesWhatCan(t *testing.T) {
 // looks like one.
 func TestBashLetsThroughCommandsThatNameNoRegisteredToken(t *testing.T) {
 	paths := NewPathResolver()
-	paths.RegisterReadRoot("__reasonix_external_folder/6812c34ccbd3/Desktop", t.TempDir())
+	paths.RegisterReadRoot("__reasonix_external_folder/6812c34ccbd3/Desktop", testenv.TempDir(t))
 	b := bash{paths: paths}
 
 	for _, cmd := range []string{

@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 )
 
 // A checkpoint opens with the composed turn, so its stored prompt carries the
@@ -16,7 +17,7 @@ import (
 // must hand back what the user typed. Leaving it composed put
 // "必须使用简体中文…" in the rewind list (#6903).
 func TestCheckpointsReturnUserPromptWithoutComposedPrefixes(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	runner := &recordingSessionRunner{session: sess}
@@ -50,7 +51,7 @@ func TestCheckpointsReturnUserPromptWithoutComposedPrefixes(t *testing.T) {
 }
 
 func TestHeadlessRunOpensCheckpoint(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	sess := agent.NewSession("sys")
 	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
 	c := New(Options{

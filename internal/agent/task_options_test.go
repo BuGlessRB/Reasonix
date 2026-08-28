@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -48,7 +49,7 @@ func TestNewTaskToolWithOptionsMatchesPositional(t *testing.T) {
 				RecentKeep:      7,
 				CompactRatio:    0.8,
 				Temperature:     0.2,
-				ArchiveDir:      t.TempDir(),
+				ArchiveDir:      testenv.TempDir(t),
 				SysPrompt:       "custom sub-agent prompt",
 				Gate:            gate,
 				KeepPolicy:      KeepErrors | KeepUserMarked,
@@ -112,8 +113,8 @@ func TestNewTaskToolWithOptionsAndLegacyExecuteEquivalence(t *testing.T) {
 	modernProv := &mockProvider{name: "sub", chunks: append([]provider.Chunk(nil), chunks...)}
 	reg := tool.NewRegistry()
 	sys := "sys-for-equivalence"
-	storeDir := t.TempDir()
-	workspace := t.TempDir()
+	storeDir := testenv.TempDir(t)
+	workspace := testenv.TempDir(t)
 
 	legacy := NewTaskTool(legacyProv, nil, reg, 20, 0, 0, 0, 0.0, "", sys, nil, 0, "", "", nil).
 		WithTranscripts(NewSubagentStore(storeDir), workspace, "base-model", "base-effort")

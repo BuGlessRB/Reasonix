@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"reasonix/internal/historycatalog"
+	"reasonix/internal/testenv"
 )
 
 func TestIndexedCatalogManagerRebuildPreservesRootsAndRestarts(t *testing.T) {
@@ -19,8 +20,8 @@ func TestIndexedCatalogManagerRebuildPreservesRootsAndRestarts(t *testing.T) {
 		rebuilt = append([]historycatalog.Root{}, roots...)
 		return historycatalog.Status{}, nil
 	}
-	firstRoot := historycatalog.Root{Path: t.TempDir(), Scope: "global"}
-	secondRoot := historycatalog.Root{Path: t.TempDir(), Scope: "global"}
+	firstRoot := historycatalog.Root{Path: testenv.TempDir(t), Scope: "global"}
+	secondRoot := historycatalog.Root{Path: testenv.TempDir(t), Scope: "global"}
 	manager.register([]historycatalog.Root{firstRoot})
 	waitManagerOpen(t, manager)
 	if err := manager.rebuildShared(context.Background(), []historycatalog.Root{secondRoot}); err != nil {

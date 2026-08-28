@@ -17,6 +17,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/mcpregistry"
 	"reasonix/internal/plugin"
+	"reasonix/internal/testenv"
 )
 
 func stubMCPReadinessProbe(t *testing.T) {
@@ -584,8 +585,8 @@ func TestRenderMCPManagerListGroupsRuntimeAndConfiguredServers(t *testing.T) {
 
 func TestBuildMCPSnapshotUsesControllerWorkspaceAndPerServerConfigPaths(t *testing.T) {
 	isolateCLIConfigHome(t)
-	workspace := t.TempDir()
-	other := t.TempDir()
+	workspace := testenv.TempDir(t)
+	other := testenv.TempDir(t)
 	t.Chdir(other)
 	userPath := config.UserConfigPath()
 	userCfg := config.LoadForEdit(userPath)

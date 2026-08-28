@@ -12,13 +12,14 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // A window knows where a dropped file lives, so the turn must reference that
 // file — not a copy of it. Copying is what let a session report an edit it had
 // made to the copy while the file the user pointed at never changed.
 func TestDropAnswersWithAReferenceToTheFileItself(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	inside := filepath.Join(dir, "notes")
 	if err := os.MkdirAll(inside, 0o755); err != nil {
 		t.Fatal(err)
@@ -55,7 +56,7 @@ func TestDropAnswersWithAReferenceToTheFileItself(t *testing.T) {
 // a drop is a handful of files at once, and re-dropping the rest is the whole
 // interaction again.
 func TestDropReportsOnePathWithoutLosingTheRest(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	file := filepath.Join(dir, "kept.txt")
 	if err := os.WriteFile(file, []byte("kept"), 0o644); err != nil {
 		t.Fatal(err)
@@ -87,7 +88,7 @@ func TestDropReportsOnePathWithoutLosingTheRest(t *testing.T) {
 // are stored as the kind of file they say they are, so a dropped PDF in a tab
 // still reaches the turn as something the parser resolves.
 func TestAttachmentStoresNamedBytesThatAreNotAnImage(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
 	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
@@ -118,7 +119,7 @@ func TestAttachmentStoresNamedBytesThatAreNotAnImage(t *testing.T) {
 // field as an image. Decoding into the struct would restore the false and hide
 // that, so this reads the raw object.
 func TestDropSaysNotAnImageInsteadOfSayingNothing(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	doc := filepath.Join(dir, "design.md")
 	if err := os.WriteFile(doc, []byte("# title"), 0o644); err != nil {
 		t.Fatal(err)

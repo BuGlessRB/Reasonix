@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/testenv"
 )
 
 func recoveryJSONL(dir string) []string {
@@ -28,7 +29,7 @@ func recoveryJSONL(dir string) []string {
 
 // #8294 growth shape: pure append autosaves must never create recovery files.
 func TestSaveSnapshotStreamingAppendDoesNotDiverge(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
@@ -56,7 +57,7 @@ func TestSaveSnapshotStreamingAppendDoesNotDiverge(t *testing.T) {
 
 // Authority + same revision authorizes rewrite when the shared prefix was reshaped (#8294).
 func TestSaveSnapshotLeaseHeldSameRevisionAllowsReshapedPrefix(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "edit"})
@@ -133,7 +134,7 @@ func TestSaveSnapshotLeaseHeldSameRevisionAllowsReshapedPrefix(t *testing.T) {
 
 // After an intentional recovery retarget, further appends must not cascade.
 func TestSaveSnapshotChainAfterRecoveryForkDoesNotCascade(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "start"})
@@ -166,7 +167,7 @@ func TestSaveSnapshotChainAfterRecoveryForkDoesNotCascade(t *testing.T) {
 
 // Without a lease, foreign bytes at the same revision still conflict.
 func TestSaveSnapshotRejectsInterruptedForeignWriteWithoutLease(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "base"})
 	if err := base.Save(path); err != nil {
@@ -203,7 +204,7 @@ func TestSaveSnapshotRejectsInterruptedForeignWriteWithoutLease(t *testing.T) {
 
 // Authority missing after bind: typed error, zero recovery.
 func TestSaveSnapshotAuthorityMissingReturnsTypedError(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "u"})
@@ -226,7 +227,7 @@ func TestSaveSnapshotAuthorityMissingReturnsTypedError(t *testing.T) {
 
 // Stale generation after rebind refuses save without forking recovery.
 func TestSaveSnapshotStaleAuthorityRefused(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "u"})
@@ -265,7 +266,7 @@ func TestSaveSnapshotStaleAuthorityRefused(t *testing.T) {
 
 // 0-byte checkpoint + valid WAL: continuous autosave heals and never recovery-forks.
 func TestSaveSnapshotZeroByteCheckpointHealsFromWAL(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	s := NewSession("sys")
 	s.Add(provider.Message{Role: provider.RoleUser, Content: "u0"})
@@ -308,7 +309,7 @@ func TestSaveSnapshotZeroByteCheckpointHealsFromWAL(t *testing.T) {
 // extension, which together used to read as a foreign writer. The lease says
 // otherwise: nobody else may write this file.
 func TestSaveSnapshotLeaseHeldWithoutBaselineRewritesInsteadOfForking(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "ask"})
 	base.Add(provider.Message{
@@ -383,7 +384,7 @@ func TestSaveSnapshotLeaseHeldWithoutBaselineRewritesInsteadOfForking(t *testing
 // Without a lease the same shape is still refused: removing the fork must not
 // turn "somebody else owns this file" into a silent overwrite.
 func TestSaveSnapshotWithoutLeaseStillRefusesAReshape(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "session.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "session.jsonl")
 	base := NewSession("sys")
 	base.Add(provider.Message{Role: provider.RoleUser, Content: "ask"})
 	base.Add(provider.Message{

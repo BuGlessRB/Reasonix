@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func requireTestPathWithin(t *testing.T, root, path string) {
@@ -35,8 +37,8 @@ func TestProcessTestEnvironmentContainsAllUserStatePaths(t *testing.T) {
 // Usage records live under the state root — not the install directory, which
 // is replaced on upgrade — so a wrong resolution would silently lose stats.
 func TestStatsDirResolution(t *testing.T) {
-	home := t.TempDir()
-	state := t.TempDir()
+	home := testenv.TempDir(t)
+	state := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	if got := StatsDir(); got != filepath.Join(home, "stats") {
 		t.Fatalf("REASONIX_HOME stats dir: want %q, got %q", filepath.Join(home, "stats"), got)

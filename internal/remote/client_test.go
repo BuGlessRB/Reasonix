@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"reasonix/internal/remote/sshtest"
+	"reasonix/internal/testenv"
 )
 
 // managedOnlyPolicy points the host-key policy at an isolated managed file and
@@ -18,8 +19,8 @@ import (
 func managedOnlyPolicy(t *testing.T, accept bool) *HostKeyPolicy {
 	t.Helper()
 	return &HostKeyPolicy{
-		SystemKnownHosts: []string{filepath.Join(t.TempDir(), "none")},
-		ManagedPath:      filepath.Join(t.TempDir(), "known_hosts"),
+		SystemKnownHosts: []string{filepath.Join(testenv.TempDir(t), "none")},
+		ManagedPath:      filepath.Join(testenv.TempDir(t), "known_hosts"),
 		Prompt: func(context.Context, HostKeyQuestion) (bool, error) {
 			return accept, nil
 		},
@@ -75,7 +76,7 @@ func TestClientConnectPublicKeyAuth(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := sshtest.Start(t, sshtest.Options{AuthorizedKey: pub})
-	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
+	keyPath := filepath.Join(testenv.TempDir(t), "id_ed25519")
 	if err := writeFile0600(keyPath, pemBytes); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +100,7 @@ func TestIdentityFileNoneSuppressesDefaultKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	sshDir := filepath.Join(home, ".ssh")
@@ -133,7 +134,7 @@ func TestClientTriesMultipleIdentityFilesInOrder(t *testing.T) {
 	}
 	// The server accepts the second configured identity, not the first.
 	srv := sshtest.Start(t, sshtest.Options{AuthorizedKey: correctPublic})
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	wrongPath := filepath.Join(dir, "id_wrong")
 	correctPath := filepath.Join(dir, "id_correct")
 	if err := writeFile0600(wrongPath, wrongPEM); err != nil {
@@ -164,11 +165,11 @@ func TestClientFallsBackFromUnavailableAgentToIdentityFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := sshtest.Start(t, sshtest.Options{AuthorizedKey: authorized})
-	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
+	keyPath := filepath.Join(testenv.TempDir(t), "id_ed25519")
 	if err := writeFile0600(keyPath, pemBytes); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SSH_AUTH_SOCK", filepath.Join(t.TempDir(), "missing-agent.sock"))
+	t.Setenv("SSH_AUTH_SOCK", filepath.Join(testenv.TempDir(t), "missing-agent.sock"))
 
 	c := newTestClient(t, srv, Options{})
 	c.opts.Host.IdentityFile = keyPath
@@ -190,7 +191,7 @@ func TestClientConnectEncryptedPublicKeyAuth(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := sshtest.Start(t, sshtest.Options{AuthorizedKey: pub})
-	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
+	keyPath := filepath.Join(testenv.TempDir(t), "id_ed25519")
 	if err := writeFile0600(keyPath, pemBytes); err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +223,7 @@ func TestClientPromptsPerEncryptedIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := sshtest.Start(t, sshtest.Options{AuthorizedKey: authorized})
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	wrongPath := filepath.Join(dir, "id_wrong_encrypted")
 	correctPath := filepath.Join(dir, "id_correct_encrypted")
 	if err := writeFile0600(wrongPath, wrongPEM); err != nil {
@@ -274,7 +275,7 @@ func TestClientFallsBackFromStoredPassphraseToPerIdentityPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := sshtest.Start(t, sshtest.Options{AuthorizedKey: authorized})
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	wrongPath := filepath.Join(dir, "id_wrong_encrypted")
 	correctPath := filepath.Join(dir, "id_correct_encrypted")
 	if err := writeFile0600(wrongPath, wrongPEM); err != nil {
@@ -325,7 +326,7 @@ func TestRejectedPublicKeyDoesNotReportMissingPasswordPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := sshtest.Start(t, sshtest.Options{AuthorizedKey: authorized})
-	keyPath := filepath.Join(t.TempDir(), "wrong_id_ed25519")
+	keyPath := filepath.Join(testenv.TempDir(t), "wrong_id_ed25519")
 	if err := writeFile0600(keyPath, wrongPEM); err != nil {
 		t.Fatal(err)
 	}
@@ -385,10 +386,10 @@ func TestClientHostKeyRejectedStops(t *testing.T) {
 
 func TestClientHostKeyTOFUPersistsAndReconnectsSilently(t *testing.T) {
 	srv := sshtest.Start(t, sshtest.Options{Password: "x"})
-	managed := filepath.Join(t.TempDir(), "known_hosts")
+	managed := filepath.Join(testenv.TempDir(t), "known_hosts")
 	prompted := 0
 	policy := &HostKeyPolicy{
-		SystemKnownHosts: []string{filepath.Join(t.TempDir(), "none")},
+		SystemKnownHosts: []string{filepath.Join(testenv.TempDir(t), "none")},
 		ManagedPath:      managed,
 		Prompt: func(context.Context, HostKeyQuestion) (bool, error) {
 			prompted++

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"reasonix/internal/event"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -25,7 +26,7 @@ func saveListedChild(t *testing.T, store *SubagentStore, spec SubagentSpec, save
 }
 
 func TestListForParentKeepsOwnedChildrenAndDropsOthers(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "explore")
 
 	mine := saveListedChild(t, store, spec, (*SubagentStore).SaveCompleted)
@@ -36,7 +37,7 @@ func TestListForParentKeepsOwnedChildrenAndDropsOthers(t *testing.T) {
 	stranger := saveListedChild(t, store, elsewhere, (*SubagentStore).SaveCompleted)
 
 	otherWorkspace := spec
-	otherWorkspace.WorkspaceRoot = t.TempDir()
+	otherWorkspace.WorkspaceRoot = testenv.TempDir(t)
 	moved := saveListedChild(t, store, otherWorkspace, (*SubagentStore).SaveCompleted)
 
 	got, err := store.ListForParent(spec.ParentSession, spec.WorkspaceRoot)
@@ -59,7 +60,7 @@ func TestListForParentKeepsOwnedChildrenAndDropsOthers(t *testing.T) {
 }
 
 func TestListForParentReturnsNewestFirst(t *testing.T) {
-	store := NewSubagentStore(t.TempDir())
+	store := NewSubagentStore(testenv.TempDir(t))
 	spec := testSubagentSpec(t, "explore")
 	var refs []string
 	for range 3 {
@@ -114,7 +115,7 @@ func TestSubagentListingReportsStateAndRetrievalRoute(t *testing.T) {
 }
 
 func TestSubagentListToolRejectsUnknownStatusAndRequiresSession(t *testing.T) {
-	listTool := NewSubagentListTool(&TaskTool{transcripts: NewSubagentStore(t.TempDir())})
+	listTool := NewSubagentListTool(&TaskTool{transcripts: NewSubagentStore(testenv.TempDir(t))})
 	if _, err := listTool.Execute(context.Background(), json.RawMessage(`{"status":"almost"}`)); err == nil ||
 		!strings.Contains(err.Error(), "unknown status") {
 		t.Errorf("err = %v, want one naming the accepted states", err)
@@ -128,7 +129,7 @@ func TestSubagentListToolRejectsUnknownStatusAndRequiresSession(t *testing.T) {
 // The recovery this exists for: a fleet's children stay reachable by reference
 // after the aggregate that carried those references is gone.
 func TestSubagentListingRecoversFleetChildrenByReference(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	prov := &upstreamProbeProvider{answer: "ARTIFACT-42 lives in parse.go"}
 	reg := tool.NewRegistry()
 	reg.Add(fakeReadFileTool{})

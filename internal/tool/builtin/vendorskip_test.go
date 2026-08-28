@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func mkfile(t *testing.T, path, content string) {
@@ -22,7 +24,7 @@ func mkfile(t *testing.T, path, content string) {
 // TestGrepSkipsVendorDirs proves a recursive grep prunes nested node_modules
 // (perf + noise) but still searches one when it's the explicit target.
 func TestGrepSkipsVendorDirs(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	mkfile(t, filepath.Join(dir, "app.go"), "the needle is here\n")
 	mkfile(t, filepath.Join(dir, "node_modules", "dep", "lib.go"), "needle in a dependency\n")
 

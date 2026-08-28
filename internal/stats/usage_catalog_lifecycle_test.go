@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"reasonix/internal/testenv"
 	"reasonix/internal/usagecatalog"
 )
 
@@ -13,13 +14,13 @@ func TestUsageManagerCloseFencesOpenAndAllowsRestart(t *testing.T) {
 	manager := &usageManager{}
 	started := make(chan struct{})
 	release := make(chan struct{})
-	databasePath := filepath.Join(t.TempDir(), "usage.sqlite")
+	databasePath := filepath.Join(testenv.TempDir(t), "usage.sqlite")
 	manager.open = func(ctx context.Context, path string) (*usagecatalog.Catalog, error) {
 		close(started)
 		<-release
 		return usagecatalog.Open(ctx, databasePath)
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	manager.start(dir)
 	<-started
 

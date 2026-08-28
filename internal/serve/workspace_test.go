@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 // A server whose host did not grant the switch must not be repointable, however
@@ -23,7 +24,7 @@ func TestWorkspaceSwitchRefusedWithoutGrant(t *testing.T) {
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/workspace", "application/json",
-		strings.NewReader(`{"path":"`+jsonPath(t.TempDir())+`"}`))
+		strings.NewReader(`{"path":"`+jsonPath(testenv.TempDir(t))+`"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +35,7 @@ func TestWorkspaceSwitchRefusedWithoutGrant(t *testing.T) {
 }
 
 func TestWorkspaceSwitchRebuildsAtNewRoot(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	old := control.New(control.Options{})
 	replacement := control.New(control.Options{})
 	var gotDir string
@@ -92,7 +93,7 @@ func TestWorkspaceSwitchRejectsMissingDirectory(t *testing.T) {
 	srv := httptest.NewServer(s.Handler())
 	defer srv.Close()
 
-	missing := filepath.Join(t.TempDir(), "not-here")
+	missing := filepath.Join(testenv.TempDir(t), "not-here")
 	resp, err := http.Post(srv.URL+"/workspace", "application/json",
 		strings.NewReader(`{"path":"`+jsonPath(missing)+`"}`))
 	if err != nil {

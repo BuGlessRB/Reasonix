@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestNormalizeConcurrencyLimitsDefaults(t *testing.T) {
@@ -27,7 +29,7 @@ func TestNormalizeConcurrencyLimitsDefaults(t *testing.T) {
 }
 
 func TestNormalizeWritePathsRejectsGlobsAndEscape(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if _, err := NormalizeWritePaths(root, []string{"docs/*.md"}); err == nil {
 		t.Fatal("expected glob rejection")
 	}
@@ -49,7 +51,7 @@ func TestNormalizeWritePathsRejectsGlobsAndEscape(t *testing.T) {
 }
 
 func TestWritePathOverlapParentChildAndCase(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a, err := NormalizeWritePaths(root, []string{"docs"})
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +96,7 @@ func TestWritePathOverlapParentChildAndCase(t *testing.T) {
 }
 
 func TestValidateNonOverlappingWriteClaims(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	a, _ := NormalizeWritePaths(root, []string{"a.md"})
 	b, _ := NormalizeWritePaths(root, []string{"b.md"})
 	if err := ValidateNonOverlappingWriteClaims([]WritePathSet{a, b}); err != nil {
@@ -107,7 +109,7 @@ func TestValidateNonOverlappingWriteClaims(t *testing.T) {
 }
 
 func TestWritePathSetAllowsPath(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	claim, err := NormalizeWritePaths(root, []string{"docs"})
 	if err != nil {
 		t.Fatal(err)

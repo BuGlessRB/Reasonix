@@ -17,6 +17,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/testenv"
 )
 
 const providerSetupTestKeyEnv = "REASONIX_REMOTE_SETUP_TEST_KEY"
@@ -37,7 +38,7 @@ func TestProviderSetupStoresRemoteCredentialAndRebuildsController(t *testing.T) 
 			Sink:       s.bc,
 			Label:      "model-a",
 			ModelRef:   ref,
-			SessionDir: t.TempDir(),
+			SessionDir: testenv.TempDir(t),
 		}), nil
 	}
 
@@ -137,7 +138,7 @@ func TestProviderSetupActivationFailureKeepsCredentialAndHidesDetails(t *testing
 			Sink:       s.bc,
 			Label:      "model-a",
 			ModelRef:   ref,
-			SessionDir: t.TempDir(),
+			SessionDir: testenv.TempDir(t),
 		}), nil
 	}
 	httpServer := httptest.NewServer(s.Handler())
@@ -352,7 +353,7 @@ func TestProviderSetupRejectsUnsafeOrAmbiguousRequests(t *testing.T) {
 
 func newProviderSetupTestServer(t *testing.T) (*Server, string) {
 	t.Helper()
-	home := t.TempDir()
+	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	t.Setenv(providerSetupTestKeyEnv, "")
@@ -379,7 +380,7 @@ api_key_env = "` + providerSetupTestKeyEnv + `"
 		Sink:       bc,
 		Label:      "model-a",
 		ModelRef:   "remote-demo/model-a",
-		SessionDir: t.TempDir(),
+		SessionDir: testenv.TempDir(t),
 	})
 	return New(ctrl, bc, config.ServeConfig{}), "remote-secret-for-test"
 }

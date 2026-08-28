@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-	semanticMaxCandidates = 12
+	semanticMaxCandidates = 64
 	semanticMaxResults    = 3
 	semanticTimeout       = 3 * time.Second
 	semanticCacheTTL      = 5 * time.Minute
@@ -55,10 +56,11 @@ func (r *SemanticRouter) RouteSemantic(ctx context.Context, input string, catalo
 	if input == "" {
 		return decision
 	}
-	candidates := semanticPool(input, catalog.Entries)
+	candidates, dropped := semanticPool(input, catalog.Entries)
 	if len(candidates) == 0 {
 		return decision
 	}
+	r.Audit.RecordSemanticPoolTruncation(dropped)
 
 	cacheKey := input + "|" + catalog.Fingerprint
 	if ids, ok := r.cacheGet(cacheKey); ok {
@@ -82,9 +84,12 @@ func hasStrongMatch(d RouteDecision) bool {
 	return false
 }
 
-func semanticPool(text string, entries []Entry) []Entry {
-	var scored []Entry
-	crossLanguageFallback := containsHan(text)
+// semanticPool narrows the catalog to what the router may consider. Every
+// filter is structural — status, kind, the entry's own AutoUse, its author's
+// declared opt-out — and none judges relevance: that is the router's job, and
+// it reads the request rather than a word list. dropped reports what the cap
+// kept out, so a truncated pool is never passed off as the whole catalog.
+func semanticPool(text string, entries []Entry) (pool []Entry, dropped int) {
 	for _, e := range entries {
 		if e.Status == StatusDisabled || e.Status == StatusFailed {
 			continue
@@ -98,41 +103,37 @@ func semanticPool(text string, entries []Entry) []Entry {
 		if triggerMatch(text, e.NegativeTriggers) {
 			continue
 		}
-		blob := normalize(e.Name + " " + e.Description + " " + strings.Join(e.Triggers, " "))
-		if blob == "" {
+		if normalize(e.Name+" "+e.Description+" "+strings.Join(e.Triggers, " ")) == "" {
 			continue
 		}
-		// Prefer a cheap lexical match. For Han-script tasks, also admit the
-		// bounded built-in/high-policy Skill set so English metadata does not make
-		// the semantic router blind to Chinese requests.
-		matched := false
-		for tok := range strings.FieldsSeq(text) {
-			if len(tok) < 3 {
-				continue
-			}
-			if strings.Contains(blob, tok) {
-				matched = true
-				break
-			}
-		}
-		if !matched && !(crossLanguageFallback && e.Kind == KindSkill && (e.Source == "builtin" || e.AutoUse == AutoUsePrefer || e.AutoUse == AutoUseRequire)) {
-			continue
-		}
-		scored = append(scored, e)
+		pool = append(pool, e)
 	}
-	if len(scored) > semanticMaxCandidates {
-		scored = scored[:semanticMaxCandidates]
+	// Catalog order is already (Kind, ID); a stable sort on declared policy
+	// keeps that as the tiebreak. What the cap drops is then the weakest
+	// policy rather than the alphabetically last ID.
+	sort.SliceStable(pool, func(i, j int) bool {
+		return autoUseRank(pool[i].AutoUse) > autoUseRank(pool[j].AutoUse)
+	})
+	if len(pool) > semanticMaxCandidates {
+		dropped = len(pool) - semanticMaxCandidates
+		pool = pool[:semanticMaxCandidates]
 	}
-	return scored
+	return pool, dropped
 }
 
-func containsHan(text string) bool {
-	for _, r := range text {
-		if r >= '\u3400' && r <= '\u9fff' {
-			return true
-		}
+// autoUseRank orders the policies an entry's author declared. It ranks a
+// declaration, not a guess about the request.
+func autoUseRank(a AutoUse) int {
+	switch a {
+	case AutoUseRequire:
+		return 3
+	case AutoUsePrefer:
+		return 2
+	case AutoUseSuggest:
+		return 1
+	default:
+		return 0
 	}
-	return false
 }
 
 func (r *SemanticRouter) callModel(ctx context.Context, input string, candidates []Entry) ([]string, error) {

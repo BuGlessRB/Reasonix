@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func TestWriteAuthorityStaleAfterRelease(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "s.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	lease, err := TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +32,7 @@ func TestWriteAuthorityStaleAfterRelease(t *testing.T) {
 }
 
 func TestWriteAuthorityReleaseWaitsForInFlightSave(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "s.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	lease, err := TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +64,7 @@ func TestWriteAuthorityReleaseWaitsForInFlightSave(t *testing.T) {
 }
 
 func TestWriteAuthorityGenerationInvalidatesPriorToken(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "s.jsonl")
+	path := filepath.Join(testenv.TempDir(t), "s.jsonl")
 	lease, err := TryAcquireSessionLease(path)
 	if err != nil {
 		t.Fatal(err)

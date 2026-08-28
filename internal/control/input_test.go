@@ -17,6 +17,7 @@ import (
 	"reasonix/internal/memory"
 	"reasonix/internal/provider"
 	"reasonix/internal/skill"
+	"reasonix/internal/testenv"
 	"reasonix/internal/tool"
 )
 
@@ -58,8 +59,8 @@ func TestCustomCommandLookup(t *testing.T) {
 }
 
 func TestSkillsReflectStoreChangesAfterControllerBuild(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
 	store := skill.New(skill.Options{HomeDir: home, ProjectRoot: project, DisableBuiltins: true})
 	c := New(Options{SkillStore: store, Skills: store.List()})
 
@@ -81,7 +82,7 @@ func TestSkillsReflectStoreChangesAfterControllerBuild(t *testing.T) {
 }
 
 func TestSubmitSlashSubagentRunsIsolatedAndPersistsDistilledAnswer(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "session.jsonl")
 	sess := agent.NewSession("parent system")
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
@@ -221,8 +222,8 @@ func TestSubmitInvocationDisplayExecutesStructuredEntitiesInVisualOrder(t *testi
 }
 
 func TestSubmitInvocationDisplayPreparesPluginSubagentBindings(t *testing.T) {
-	home := t.TempDir()
-	pluginRoot := t.TempDir()
+	home := testenv.TempDir(t)
+	pluginRoot := testenv.TempDir(t)
 	writeControlSkill(t, pluginRoot, "helper/SKILL.md", "---\ndescription: Plugin helper\nrunAs: subagent\n---\nCall search.")
 	store := skill.New(skill.Options{
 		HomeDir: home, CustomPaths: []string{pluginRoot},
@@ -258,8 +259,8 @@ func TestSubmitInvocationDisplayPreparesPluginSubagentBindings(t *testing.T) {
 }
 
 func TestRunSubagentProfilePreparesPluginBindings(t *testing.T) {
-	home := t.TempDir()
-	pluginRoot := t.TempDir()
+	home := testenv.TempDir(t)
+	pluginRoot := testenv.TempDir(t)
 	writeControlSkill(t, pluginRoot, "helper/SKILL.md", "---\ndescription: Plugin helper\nrunAs: subagent\n---\nCall search.")
 	store := skill.New(skill.Options{
 		HomeDir: home, CustomPaths: []string{pluginRoot},
@@ -555,8 +556,8 @@ func waitForTurnEvents(t *testing.T, events <-chan event.Event) []event.Event {
 }
 
 func TestRunSkillUsesQualifiedPluginNameAndHiddenShortCompatibility(t *testing.T) {
-	home := t.TempDir()
-	pluginRoot := t.TempDir()
+	home := testenv.TempDir(t)
+	pluginRoot := testenv.TempDir(t)
 	writeControlSkill(t, pluginRoot, "plan/SKILL.md", "---\ndescription: Plugin plan\n---\nPlugin body")
 	store := skill.New(skill.Options{
 		HomeDir: home, CustomPaths: []string{pluginRoot},
@@ -712,7 +713,7 @@ func TestSyntheticComposeDoesNotDrainSessionStartHookContext(t *testing.T) {
 }
 
 func TestComposeAutomaticallyRecallsMemoryOnlyForRealUserTurns(t *testing.T) {
-	store := memory.Store{Dir: t.TempDir()}
+	store := memory.Store{Dir: testenv.TempDir(t)}
 	if _, err := store.Save(memory.Memory{
 		Name: "authhandler-panic", Title: "AuthHandler panic",
 		Description: "AuthHandler panic on missing session metadata",
@@ -836,7 +837,7 @@ func TestComposeIncludesActiveGoal(t *testing.T) {
 }
 
 func TestGoalAutoResearchTriggersForLongHorizonGoals(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	if resolved, err := filepath.EvalSymlinks(root); err == nil {
 		root = resolved
 	}
@@ -1033,7 +1034,7 @@ func TestSubmitSlashPathDiagnosticStartsTurnWithFileContext(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX absolute file path context is covered on POSIX runners")
 	}
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	file := filepath.Join(dir, "app", "src", "main", "Foo.kt")
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		t.Fatal(err)
@@ -1263,7 +1264,7 @@ func TestSubmitUserTurnBypassesCommandDispatch(t *testing.T) {
 }
 
 func TestSubmitRememberCommandQuickAddsMemory(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	runner := &fakeTurnRunner{}
 	c := New(Options{
 		Runner: runner,

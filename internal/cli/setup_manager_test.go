@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/testenv"
 )
 
 func setupTestConfig() *config.Config {
@@ -238,7 +239,7 @@ func TestProviderSetupSessionAddAccessSeedsUndeclaredLegacyProviders(t *testing.
 
 func TestLocalProviderSetupAccessOnlySeedsProjectProviders(t *testing.T) {
 	isolateUserConfig(t)
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(testenv.TempDir(t), "reasonix.toml")
 	if err := os.WriteFile(path, []byte(`
 [[providers]]
 name = "project-relay"
@@ -281,7 +282,7 @@ api_key_env = ""
 }
 
 func TestNewProviderSetupSessionDetectsExplicitProviderAccess(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(testenv.TempDir(t), "config.toml")
 	if err := os.WriteFile(path, []byte("[desktop]\nprovider_access = []\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +333,7 @@ func TestProviderSetupSessionAllowsSharedCredentialName(t *testing.T) {
 }
 
 func TestProviderSetupSessionCancelDoesNotWriteFiles(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "config.toml")
 	original := []byte("default_model = \"keep\"\n")
 	if err := os.WriteFile(path, original, 0o600); err != nil {
@@ -642,7 +643,7 @@ func TestProviderSetupOperationReplayRejectsConcurrentAccessDeclaration(t *testi
 
 func TestProviderSetupOperationReplayMaterializesLatestProjectProviders(t *testing.T) {
 	isolateUserConfig(t)
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(testenv.TempDir(t), "reasonix.toml")
 	initialBody := `
 [[providers]]
 name = "initial-project"
@@ -728,7 +729,7 @@ func TestResolveSetupTargetsLocalKeepsGlobalCredentialTarget(t *testing.T) {
 func TestLocalSetupPersistsWorkspaceProviderAccess(t *testing.T) {
 	cfg := setupTestConfig()
 	cfg.Desktop.ProviderAccess = []string{"grok-relay"}
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(testenv.TempDir(t), "reasonix.toml")
 	if err := cfg.SaveTo(path); err != nil {
 		t.Fatal(err)
 	}

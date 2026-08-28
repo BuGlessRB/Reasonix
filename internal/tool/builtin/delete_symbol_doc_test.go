@@ -7,13 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 // TestDeleteSymbolRemovesDocComment probes whether deleting a documented symbol
 // also removes its doc comment. AST node Pos() excludes the Doc, so a naive
 // offset delete would orphan the comment above the gone function.
 func TestDeleteSymbolRemovesDocComment(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "f.go")
 	src := "package p\n\n// Foo does a thing.\n// Second line.\nfunc Foo() int { return 1 }\n\nfunc Bar() {}\n"
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
@@ -33,7 +35,7 @@ func TestDeleteSymbolRemovesDocComment(t *testing.T) {
 // parenthesized block removes that spec's own doc but never the block's group
 // doc or its siblings.
 func TestDeleteSymbolGroupedSpecKeepsGroupDoc(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "g.go")
 	src := "package p\n\n// Group doc.\nconst (\n\t// ADoc.\n\tA = 1\n\tB = 2\n)\n"
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {

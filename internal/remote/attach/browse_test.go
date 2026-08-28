@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/remote"
 	"reasonix/internal/remote/sftpfs"
+	"reasonix/internal/testenv"
 )
 
 func resolvedHome(t *testing.T, m *machine) string {
@@ -63,7 +64,7 @@ func TestBrowseListsFoldersWithoutStartingAKernel(t *testing.T) {
 // re-dial for it — and on a passphrase-protected key, ask for it again.
 func TestBrowsingTwiceReusesTheOneConnection(t *testing.T) {
 	m := fakeMachine(t)
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	var dials atomic.Int32
 	p := NewPool(t.Context(), Options{Dial: func(host string, prompts Prompts) (*remote.Client, error) {
 		dials.Add(1)

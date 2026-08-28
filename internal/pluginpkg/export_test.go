@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"reasonix/internal/testenv"
 )
 
 func writeExportFile(t *testing.T, path, body string) {
@@ -43,7 +45,7 @@ func exportedEntries(t *testing.T, archive []byte) map[string]string {
 }
 
 func TestExportStripsCredentialsAndNamesThemPerServer(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	writeExportFile(t, filepath.Join(root, NativeManifest), `{
   "apiVersion": "reasonix.io/plugin/v2",
   "name": "demo",
@@ -114,7 +116,7 @@ func TestStripCredentialsKeepsExistingReferences(t *testing.T) {
 }
 
 func TestExportRefusesInvalidName(t *testing.T) {
-	if _, _, err := Export("../etc", t.TempDir()); err == nil {
+	if _, _, err := Export("../etc", testenv.TempDir(t)); err == nil {
 		t.Fatal("Export accepted a path-shaped name")
 	}
 }

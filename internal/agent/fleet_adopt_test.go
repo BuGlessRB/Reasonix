@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/tool"
 
 	"reasonix/internal/agentgraph"
+	"reasonix/internal/testenv"
 )
 
 func TestFleetItemShapeRequiresExactlyOneOfPromptAndAdoptRef(t *testing.T) {
@@ -89,7 +90,7 @@ func adoptionCtx(sink event.Sink) context.Context {
 // exactly as if the item had just produced it.
 func TestFleetAdoptsPriorAnswerAndFeedsItDownstream(t *testing.T) {
 	const probe = "ARTIFACT-42 lives in parse.go"
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := mustSubagentStore(t)
 	ctx := adoptionCtx(event.Discard)
 
@@ -141,7 +142,7 @@ func TestFleetAdoptsPriorAnswerAndFeedsItDownstream(t *testing.T) {
 // Nothing runs for an adopted node, so it claims nothing: a live writer beside
 // it is not a concurrent-writer conflict.
 func TestAdoptedItemHoldsNoWriteClaim(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := mustSubagentStore(t)
 	ctx := adoptionCtx(event.Discard)
 
@@ -168,7 +169,7 @@ func TestAdoptedItemHoldsNoWriteClaim(t *testing.T) {
 }
 
 func TestFleetAdoptionPreflightRefusesUnusableReferences(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	store := mustSubagentStore(t)
 	prov := &upstreamProbeProvider{answer: "prior"}
 	fleet := newAdoptionFleet(t, store, root, prov)
@@ -219,7 +220,7 @@ func TestFleetAdoptionPreflightRefusesUnusableReferences(t *testing.T) {
 // Preflight is the whole gate: a refused adoption starts nothing, matching the
 // rest of the fleet's contract.
 func TestRefusedAdoptionStartsNothing(t *testing.T) {
-	root := t.TempDir()
+	root := testenv.TempDir(t)
 	prov := &upstreamProbeProvider{answer: "x"}
 	fleet := newAdoptionFleet(t, mustSubagentStore(t), root, prov)
 

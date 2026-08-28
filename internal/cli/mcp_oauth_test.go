@@ -8,10 +8,11 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/plugin"
+	"reasonix/internal/testenv"
 )
 
 func TestMCPAuthCLIUsesReasonixPrivateState(t *testing.T) {
-	home, workspace := t.TempDir(), t.TempDir()
+	home, workspace := testenv.TempDir(t), testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	t.Chdir(workspace)
 	entry := config.PluginEntry{Name: "figma", Type: "http", URL: "https://mcp.figma.com/mcp", Source: config.MCPSourceUserConfig}
@@ -53,7 +54,7 @@ func TestMCPAuthCLIRejectsIneligibleConfigurations(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			isolateCLIConfigHome(t)
-			workspace := t.TempDir()
+			workspace := testenv.TempDir(t)
 			t.Chdir(workspace)
 			tc.entry.Source = config.MCPSourceUserConfig
 			if _, err := config.InstallUserPluginForRoot(workspace, tc.entry, true); err != nil {

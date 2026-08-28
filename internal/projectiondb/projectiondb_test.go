@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"reasonix/internal/filelock"
+	"reasonix/internal/testenv"
 )
 
 func testMigrations() []Migration {
@@ -24,7 +25,7 @@ func testMigrations() []Migration {
 
 func TestOpenAppliesLedgerAndPrivatePermissions(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "catalog", "v1.sqlite")
+	path := filepath.Join(testenv.TempDir(t), "catalog", "v1.sqlite")
 	handle, err := Open(context.Background(), OpenOptions{Path: path, MemoryName: "test", Migrations: testMigrations()})
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +46,7 @@ func TestOpenAppliesLedgerAndPrivatePermissions(t *testing.T) {
 
 func TestFutureSchemaIsPreservedAndFallsBackToMemory(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "catalog.sqlite")
+	path := filepath.Join(testenv.TempDir(t), "catalog.sqlite")
 	seed, err := Open(context.Background(), OpenOptions{Path: path, MemoryName: "seed", Migrations: testMigrations()})
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +73,7 @@ func TestFutureSchemaIsPreservedAndFallsBackToMemory(t *testing.T) {
 
 func TestInspectDoesNotCreateMissingDatabase(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "missing.sqlite")
+	path := filepath.Join(testenv.TempDir(t), "missing.sqlite")
 	inspection := Inspect(context.Background(), path)
 	if inspection.Exists {
 		t.Fatalf("inspection=%#v", inspection)
@@ -84,7 +85,7 @@ func TestInspectDoesNotCreateMissingDatabase(t *testing.T) {
 
 func TestRebuildPublishesOnlyValidatedReplacement(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "catalog.sqlite")
+	path := filepath.Join(testenv.TempDir(t), "catalog.sqlite")
 	opts := OpenOptions{Path: path, MemoryName: "rebuild", Migrations: testMigrations()}
 	seed, err := Open(context.Background(), opts)
 	if err != nil {
@@ -115,7 +116,7 @@ func TestRebuildPublishesOnlyValidatedReplacement(t *testing.T) {
 
 func TestDiskFileDSNUsesCrossPlatformURI(t *testing.T) {
 	t.Parallel()
-	dsn := diskFileDSN(filepath.Join(t.TempDir(), "catalog.sqlite"))
+	dsn := diskFileDSN(filepath.Join(testenv.TempDir(t), "catalog.sqlite"))
 	if !strings.HasPrefix(dsn, "file:") {
 		t.Fatalf("dsn=%q", dsn)
 	}
@@ -124,7 +125,7 @@ func TestDiskFileDSNUsesCrossPlatformURI(t *testing.T) {
 	}
 	// Opening through the DSN must succeed on this platform.
 	handle, err := Open(context.Background(), OpenOptions{
-		Path: filepath.Join(t.TempDir(), "opened.sqlite"), MemoryName: "dsn", Migrations: testMigrations(), RequireDisk: true,
+		Path: filepath.Join(testenv.TempDir(t), "opened.sqlite"), MemoryName: "dsn", Migrations: testMigrations(), RequireDisk: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +165,7 @@ func TestMemoryOpenUsesOneConnectionDespiteRequestedPool(t *testing.T) {
 func TestRebuildRequireDiskSurfacesOpenErrors(t *testing.T) {
 	t.Parallel()
 	// RequireDisk rebuild of an unwritable parent should not silently memory-open.
-	parent := filepath.Join(t.TempDir(), "missing-parent", "nested")
+	parent := filepath.Join(testenv.TempDir(t), "missing-parent", "nested")
 	err := Rebuild(context.Background(), OpenOptions{
 		Path: filepath.Join(parent, "v1.sqlite"), MemoryName: "rebuild-req", Migrations: testMigrations(),
 	}, func(context.Context, *sql.DB) error { return nil })
@@ -177,7 +178,7 @@ func TestRebuildRequireDiskSurfacesOpenErrors(t *testing.T) {
 
 func TestBusyOpenDoesNotQuarantineHealthyDatabase(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "catalog.sqlite")
+	path := filepath.Join(testenv.TempDir(t), "catalog.sqlite")
 	opts := OpenOptions{Path: path, MemoryName: "busy", Migrations: testMigrations()}
 	seed, err := Open(context.Background(), opts)
 	if err != nil {
@@ -221,7 +222,7 @@ func TestBusyOpenDoesNotQuarantineHealthyDatabase(t *testing.T) {
 
 func TestRebuildFailureKeepsOldDatabase(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "catalog.sqlite")
+	path := filepath.Join(testenv.TempDir(t), "catalog.sqlite")
 	opts := OpenOptions{Path: path, MemoryName: "rebuild-failure", Migrations: testMigrations()}
 	seed, err := Open(context.Background(), opts)
 	if err != nil {
@@ -250,7 +251,7 @@ func TestRebuildFailureKeepsOldDatabase(t *testing.T) {
 
 func TestRebuildHoldsExclusiveLifecycleLock(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "catalog.sqlite")
+	path := filepath.Join(testenv.TempDir(t), "catalog.sqlite")
 	opts := OpenOptions{Path: path, MemoryName: "rebuild-lock", Migrations: testMigrations()}
 	entered := make(chan struct{})
 	releasePopulate := make(chan struct{})

@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"reasonix/internal/store"
+	"reasonix/internal/testenv"
 )
 
 // The sweep exists for spill directories every deleter skipped, so it must take
 // exactly those: transcript gone, and old enough that no session elsewhere is
 // mid-creation.
 func TestOrphanOutputsSweep(t *testing.T) {
-	dir := t.TempDir()
+	dir := testenv.TempDir(t)
 
 	live := filepath.Join(dir, "live.jsonl")
 	if err := writeFile(live, []byte("{}\n")); err != nil {
@@ -47,7 +48,7 @@ func TestOrphanOutputsSweep(t *testing.T) {
 
 // A missing directory is not an error: most session dirs have never spilled.
 func TestOrphanOutputsSweepToleratesMissingDir(t *testing.T) {
-	if err := reconcileOrphanOutputs(filepath.Join(t.TempDir(), "never-existed")); err != nil {
+	if err := reconcileOrphanOutputs(filepath.Join(testenv.TempDir(t), "never-existed")); err != nil {
 		t.Errorf("sweep of an absent directory: %v", err)
 	}
 }
