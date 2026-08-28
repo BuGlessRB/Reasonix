@@ -9,6 +9,11 @@ import (
 	"reasonix/internal/testenv"
 )
 
+// This binds two things: that ResolveJumpHosts reads configured aliases and
+// ssh_config, and that this machine's real ssh runs. The second failed once on
+// Windows CI at 15.50s — the product's own subprocess timeout, so ssh was
+// starved, not refused; isolated on that same runner it answers in 43ms. If it
+// recurs, split the two rather than shorten a timeout CI only made look tight.
 func TestResolveJumpHostsUsesConfiguredAliasesAndSSHConfig(t *testing.T) {
 	home := testenv.TempDir(t)
 	t.Setenv("HOME", home)
