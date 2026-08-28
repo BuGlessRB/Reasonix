@@ -158,17 +158,20 @@ await page.keyboard.press("Home");
 await page.waitForTimeout(450);
 check("Home 回默认", (await widthOf(".rail")) === RAIL.def, `${await widthOf(".rail")}px`);
 
-// 6) 窄到放不下时，栏和它的分隔条一起退场，页面不横向溢出。
+// 6) 窄到放不下时栏让开，但不能让到回不来，页面也不横向溢出。
+// 两栏让开的方式不同，所以留下的东西也不同：右栏横过来占满一行，人还看得见它，
+// 竖着的拖动条在那儿没有意义；左栏是收窄到 0，栏本身看不见了，于是缝上那个把手
+// 就是唯一的入口，必须留着。把它一起藏掉，用户读到的是「会话列表没了」(#9507)。
 const shown = (sel) => page.evaluate((s) => {
   const el = document.querySelector(s);
   return !!el && getComputedStyle(el).display !== "none";
 }, sel);
-for (const [w, keep] of [[1100, "只剩右边"], [780, "都不留"]]) {
+for (const [w, keep] of [[1100, "左栏收起，把手留着"], [780, "两栏都收起，两个把手都留着"]]) {
   await page.setViewportSize({ width: w, height: 800 });
   await page.waitForTimeout(300);
   check(
     `窄到 ${w}px：${keep}`,
-    (await shown(".gutter-l")) === false && (await shown(".gutter-r")) === (w > 840),
+    (await shown(".gutter-l")) === true && (await shown(".gutter-r")) === true,
   );
   check(
     `窄到 ${w}px 不横向溢出`,

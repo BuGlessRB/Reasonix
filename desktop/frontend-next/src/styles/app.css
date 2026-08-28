@@ -2755,10 +2755,12 @@
   [data-fold~="side"] .side .scroll { padding: 12px 14px 16px; gap: 16px }
   /* 栏横过来占满一行，拖出来的那个宽度在这儿没有意义，也没地方去拖 */
   [data-fold~="side"] .side > * { width: 100% }
-  [data-fold~="side"] .gutter-r { display: none }
-  /* 左边同理，而这一条一直是缺的：宽度不够时左栏整块让开了，它的拖动条却还留
-     在原地 —— 一个不存在的栏的把手，拖它什么也不会动。 */
-  [data-fold~="rail"] .gutter-l { display: none }
+  /* 只在它展开成横条的时候：那时宽度没有意义，也没地方去拖。收起的时候不行 ——
+     栏被下面那条规则整块藏掉，缝上这个把手就是回来的唯一一条路。 */
+  [data-fold~="side"] [data-side="on"] .gutter-r { display: none }
+  /* 左边不同理：右栏是横过来占满一行，竖着的拖动条在那儿确实没有意义；左栏只
+     是被收窄到 0（见 .app[data-rail="off"]），栏还在，缝也还在。把它的把手一
+     起藏掉，就是块首那条规矩说的「拿掉」—— 而它是回来的唯一一条路。 */
   /* 收起时整块让开，别在流底下留一条一像素的空行 */
   [data-fold~="side"] [data-side="off"] .side { display: none }
 
