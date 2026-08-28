@@ -81,7 +81,14 @@ func violates(pkg, dep string) string {
 	return ""
 }
 
-func host(pkg string) bool { return under(pkg, "cmd") || under(pkg, "desktop") }
+// A host assembles the whole system to run it. benchmarks/* are hosts in that
+// sense — each is a main that builds a real agent — and a harness reproducing
+// the shipped surface has to reach the frontend that defines it. This opens
+// nothing to the kernel: the rule that matters is that nothing below a
+// frontend may import one, and benchmarks are above every frontend.
+func host(pkg string) bool {
+	return under(pkg, "cmd") || under(pkg, "desktop") || under(pkg, "benchmarks")
+}
 
 func under(pkg, root string) bool { return pkg == root || strings.HasPrefix(pkg, root+"/") }
 

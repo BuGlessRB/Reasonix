@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
 
 	"reasonix/internal/ablation"
+	"reasonix/internal/provider"
 	"reasonix/internal/retrieval"
 )
 
@@ -109,8 +111,79 @@ func checkTask(t contextTask, root string) ([]finding, error) {
 		} else if strings.Contains(visibleIndexOnly(f), t.ID) {
 			out = append(out, finding{t.ID, arm.name, "a search task must not be addressed by the fold index"})
 		}
+
+		// The projection is what the agent believes. This is what the model is
+		// told, and it is the one that has to hold.
+		req, err := captureRequest(f, armFor(arm.scale, arm.searchOff), t.Prompt)
+		if err != nil {
+			return nil, fmt.Errorf("%s [%s]: capture: %w", t.ID, arm.name, err)
+		}
+		out = append(out, checkCapturedRequest(t, arm.name, arm.scale, arm.searchOff, req)...)
 	}
 	return out, nil
+}
+
+// checkCapturedRequest holds one arm's real provider request to its contract:
+// the answer unreadable, the cue exactly where its tier says, the recall tool
+// offering only what this arm can do, and no host-side field surviving the
+// boundary.
+func checkCapturedRequest(t contextTask, armName, scale string, searchOff bool, req provider.Request) []finding {
+	var out []finding
+	for _, marker := range t.AnswerMarkers {
+		if len(marker) < 6 {
+			continue // a bare number is not a nonce; the set as a whole still is
+		}
+		for _, at := range findInSurface(req, marker) {
+			out = append(out, finding{t.ID, armName, fmt.Sprintf("answer marker %q leaked at %s", marker, at)})
+		}
+	}
+	if t.Experiment == experimentIndex {
+		wantVisible, wantHidden := tierScales(t.CueTier)
+		where := findInSurface(req, t.CueMarker)
+		switch {
+		case contains(wantVisible, scale) && len(where) == 0:
+			out = append(out, finding{t.ID, armName, fmt.Sprintf("cue %q is not provider-visible; the tier expects it", t.CueMarker)})
+		case contains(wantHidden, scale) && len(where) > 0:
+			out = append(out, finding{t.ID, armName, fmt.Sprintf("cue %q is provider-visible at %s: %s", t.CueMarker, where[0], scale)})
+		}
+	}
+
+	schema, ok := recallToolSchema(req)
+	if !ok {
+		out = append(out, finding{t.ID, armName, "recall is not in the provider's tool list"})
+		return append(out, boundaryFindings(t, armName, req)...)
+	}
+	params := ""
+	if b, err := json.Marshal(schema.Parameters); err == nil {
+		params = string(b)
+	}
+	// Both arms keep the read half: the ablation removes search, not recall.
+	if !strings.Contains(params, `"positions"`) {
+		out = append(out, finding{t.ID, armName, "recall lost its positions parameter"})
+	}
+	hasQuery := strings.Contains(params, `"query"`)
+	switch {
+	case searchOff && hasQuery:
+		out = append(out, finding{t.ID, armName, "recall still offers a query parameter"})
+	case !searchOff && !hasQuery:
+		out = append(out, finding{t.ID, armName, "recall has no query parameter"})
+	}
+	if searchOff {
+		for _, phrase := range searchWording {
+			for _, at := range findInSurface(req, phrase) {
+				out = append(out, finding{t.ID, armName, fmt.Sprintf("search is offered to an arm without it: %q at %s", phrase, at)})
+			}
+		}
+	}
+	return append(out, boundaryFindings(t, armName, req)...)
+}
+
+func boundaryFindings(t contextTask, armName string, req provider.Request) []finding {
+	var out []finding
+	for _, at := range localOnlyLeaks(req) {
+		out = append(out, finding{t.ID, armName, "host-only field crossed the provider boundary at " + at})
+	}
+	return out
 }
 
 // checkCueVisibility holds an index task to its tier: the cue is addressed at

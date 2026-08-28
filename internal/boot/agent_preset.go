@@ -143,3 +143,10 @@ func applyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bo
 	}
 	reg.SetProviderVisibleTools(allow)
 }
+
+// ApplyUnifiedProviderToolSurface restricts a registry to what a provider is
+// shown, at this arm. Exported so a harness reproduces the real surface
+// instead of a second copy of this rule.
+func ApplyUnifiedProviderToolSurface(reg *tool.Registry, goalTurnsUnreachable bool, arm ablation.Set) {
+	applyUnifiedProviderToolSurface(reg, goalTurnsUnreachable, arm)
+}

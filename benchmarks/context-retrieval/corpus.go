@@ -176,12 +176,12 @@ func indexTasks() []contextTask {
 		{
 			ID: "i05-cache-probe", Experiment: experimentIndex, TargetKind: "tool_input",
 			Prompt:        "cache probe 当时记录的 prefix salt 和 scope 是什么？",
-			AnswerMarkers: []string{"comet-42", "session"},
+			AnswerMarkers: []string{"comet-42", "per-lineage"},
 			ProbeQuery:    "cache probe prefix salt scope",
 			CueMarker:     "cache-probe", CueTier: tierDefault,
 			PlantAfterGen: 0,
 			Plant: plantCall("cb1", "read_file", `{"path":"scratch/cache-probe.txt"}`,
-				"prefix salt = comet-42\nscope = session"),
+				"prefix salt = comet-42\nscope = per-lineage"),
 		},
 		{
 			ID: "i06-dispatch-handoff", Experiment: experimentIndex, TargetKind: "tool_input",

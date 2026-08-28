@@ -13,8 +13,7 @@ import (
 )
 
 // A fixture is a real session that has really been compacted: no bench-only
-// state shape, so the loader, the projection restore and the arm all have to
-// work on it or the experiment measures something the runtime never makes.
+// state shape, so the loader and the projection restore have to work on it.
 
 const (
 	fixtureWindow      = 60000
@@ -97,6 +96,10 @@ func buildFixture(t contextTask, arm ablation.Set, sessionPath string) (builtFix
 	if at < 0 {
 		return builtFixture{}, fmt.Errorf("%s: PlantAfterGen %d is past the last generation", t.ID, t.PlantAfterGen)
 	}
+	// projectionCoversTail cannot revalidate a projection covering the whole
+	// transcript: it needs a live tail, which a real session always has because
+	// work continues after a fold. Neutral text — the tail is provider-visible.
+	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "Backlog swept; ready for the next question."})
 	if err := sess.Save(sessionPath); err != nil {
 		return builtFixture{}, fmt.Errorf("%s: save session: %w", t.ID, err)
 	}
