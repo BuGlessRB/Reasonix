@@ -23,22 +23,23 @@ type Finding struct {
 }
 
 const (
-	ruleOrphan        = "orphan"
-	ruleEssay         = "essay"
-	ruleBanner        = "banner"
-	ruleMarker        = "marker"
-	ruleDeadCode      = "commented-code"
-	ruleNarrative     = "narrative"
-	ruleFileSize      = "file-size"
-	ruleLayering      = "layering"
-	ruleFuncSize      = "function-size"
-	ruleComplexity    = "complexity"
-	ruleStructState   = "struct-state"
-	ruleRefusalPath   = "refusal-path"
-	ruleErrorText     = "error-text"
-	ruleClaudeDialect = "claude-dialect"
-	ruleSpecParity    = "spec-parity"
-	ruleWireParity    = "wire-parity"
+	ruleOrphan         = "orphan"
+	ruleEssay          = "essay"
+	ruleBanner         = "banner"
+	ruleMarker         = "marker"
+	ruleDeadCode       = "commented-code"
+	ruleNarrative      = "narrative"
+	ruleFileSize       = "file-size"
+	ruleLayering       = "layering"
+	ruleFuncSize       = "function-size"
+	ruleComplexity     = "complexity"
+	ruleStructState    = "struct-state"
+	ruleRefusalPath    = "refusal-path"
+	ruleErrorText      = "error-text"
+	ruleClaudeDialect  = "claude-dialect"
+	ruleSpecParity     = "spec-parity"
+	ruleWireParity     = "wire-parity"
+	ruleFrontendParity = "frontend-parity"
 )
 
 var allRules = []string{
@@ -46,6 +47,7 @@ var allRules = []string{
 	ruleNarrative, ruleFileSize, ruleLayering,
 	ruleFuncSize, ruleComplexity, ruleStructState, ruleRefusalPath, ruleErrorText,
 	ruleClaudeDialect, ruleSpecParity, ruleWireParity, ruleOrphan,
+	ruleFrontendParity,
 }
 
 func main() {
@@ -174,6 +176,11 @@ func run(root string) ([]Finding, error) {
 	findings = append(findings, checkLayering(imports)...)
 	findings = append(findings, checkSpecParity(root)...)
 	findings = append(findings, wires.findings(root)...)
+	parity, err := checkFrontendParity(root)
+	if err != nil {
+		return nil, err
+	}
+	findings = append(findings, parity...)
 	return append(findings, checkClaudeDialect(dialects, modelVars)...), nil
 }
 

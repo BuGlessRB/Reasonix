@@ -57,6 +57,18 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   notices when one of them grows a field. The pairs are declared in
   `tools/repolint/wireparity.go`, never inferred — no spelling tells a mirrored
   contract from a struct that merely carries json tags.
+- "Add behavior to the controller so every frontend inherits it" is held by
+  `frontend-parity`: a capability one frontend already drives, a frontend whose
+  declared port carries it, and no call, is a missing edge, and the ratchet
+  counts edges. Which port each frontend drives is declared in
+  `tools/repolint/frontendparity.go`; a deliberate exception goes in the scope
+  table there with an issue and a reason, and costs what the edge cost, so the
+  table cannot become where debt disappears. The matrix is read from
+  `go/types` at one pinned build target, never from selector names — `Close`
+  and `Status` are capabilities and also stdlib methods, and a name match
+  records `os.File.Close` as a frontend driving `Lifecycle.Close`, a false
+  "wired" that hides real debt. How a verb is spelled — `/branch`,
+  `POST /branches` — is presentation and stays out of it.
 
 ## Comments
 
