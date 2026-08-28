@@ -25,7 +25,7 @@ export const EN_WINDOW: Record<string, string> = {
   "已开始执行。": "Executing.",
   "计划模式已经关掉，接下来是执行。": "Plan mode is off; what follows is the work.",
   "暂不执行。": "Not now.",
-  "已退出计划模式，计划留在上面，随时可以再交待。": "Plan mode is off and the plan is still above, ready whenever you are.",
+  "已退出计划模式，计划保留在上方，可随时重新交代。": "Plan mode is off. The plan stays above and you can pick it up again at any time.",
   "继续规划。": "Still planning.",
   "在下面说要改什么，规划者会据此重写这份计划。": "Say what to change below and the planner rewrites the plan.",
   "主导航": "Main navigation",

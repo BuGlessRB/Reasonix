@@ -219,7 +219,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
           <h2>{t("语言")}</h2>
         </div>
         <p className="hint">
-          {t("界面用哪种语言。它跟模型回你话的语言是两件事 —— 模型跟着你这条消息用的语言走。")}
+          {t("界面显示语言。模型回复所用的语言与此设置无关，将跟随你发送消息时使用的语言。")}
         </p>
         <div className="grp-items">
           <div className="seg" data-text role="group" aria-label={t("语言")}>
@@ -239,7 +239,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
             <h2>{t("窗口")}</h2>
           </div>
           <p className="hint">
-            {t("托盘图标是关掉窗口之后唯一能把它叫回来的地方，所以下面那条挂在它下面。")}
+            {t("关闭窗口后需通过托盘图标重新打开主界面，下方选项依赖该图标。")}
           </p>
           <div className="grp-items">
             <div className="lrow">
@@ -261,7 +261,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
             <div className="lrow subrow" data-off={tray.icon && tray.live ? undefined : ""}>
               <span className="tx">
                 <span className="lb">{t("关掉窗口后继续在托盘里跑")}</span>
-                <span className="ds">{t("会话和后台任务都不会停 —— 从托盘菜单里退出才是真的退出")}</span>
+                <span className="ds">{t("关闭窗口不会中断会话和后台任务；从托盘菜单退出才会完全关闭程序")}</span>
               </span>
               <Switch
                 on={tray.closeToTray}
@@ -278,7 +278,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
         <div className="grp-hd">
           <h2>{t("大小")}</h2>
         </div>
-        <p className="hint">{t("「界面」连边距和控件一起缩放，「正文」只动对话里的字。两个各调各的。")}</p>
+        <p className="hint">{t("「界面」会同时缩放边距与控件，「正文」仅调整对话中的文字大小，两者独立设置。")}</p>
         <div className="grp-items">
           <div className="prow">
             <span className="tx">{t("界面")}</span>
@@ -322,14 +322,14 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
         <div className="grp-hd">
           <h2>{t("字体")}</h2>
         </div>
-        <p className="hint">{t("输入框里可以直接写字体名，也可以从这台机器装了的里面挑。下面那行就用它画 ——没变样说明这个名字在这台机器上找不到，界面会退回默认字体，不会弄花。")}</p>
+        <p className="hint">{t("可直接输入字体名称，或选择本机已安装的字体。下方文本会实时预览所选字体；若字体不可用，将自动使用默认字体。")}</p>
         <div className="grp-items">
           <FontPick
             slot="ui"
             label={t("界面")}
             value={look.fontUi ?? ""}
             options={uiFonts}
-            sample={t("交待一件事，它自己往下做 · Aa Bb 0123")}
+            sample={t("字体预览 · 中文 Aa Bb 0123")}
             onPick={(v) => set({ fontUi: v })}
           />
           <FontPick
@@ -352,7 +352,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
             </button>
           )}
         </div>
-        <p className="hint">{t("图片只铺在窗口的空白处，卡片和输入框始终不透明 —— 背景值一圈留白，不值一段读不清的正文。跑起来的时候它会自动退到更淡。")}</p>
+        <p className="hint">{t("壁纸只显示在窗口的空白区域，卡片和输入框保持不透明以确保文字清晰。任务运行时壁纸会自动降低透明度。")}</p>
         <div className="grp-items">
           <input
             ref={file}
@@ -456,10 +456,10 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
               {crop.known && !(crop.x && crop.y) && (
                 <p className="note">
                   {crop.x
-                    ? t("这张图在这个窗口里只有左右会被裁掉，上下正好填满 —— 纵向那一档没有余量可移。")
+                    ? t("当前窗口尺寸下，此图片只有左右会被裁剪，上下正好填满，因此纵向焦点无法调整。")
                     : crop.y
-                      ? t("这张图在这个窗口里只有上下会被裁掉，左右正好填满 —— 横向那一档没有余量可移。")
-                      : t("这张图和窗口是一样的宽高比，四边都没有裁掉 —— 窗口换个形状，焦点才有得移。")}
+                      ? t("当前窗口尺寸下，此图片只有上下会被裁剪，左右正好填满，因此横向焦点无法调整。")
+                      : t("此图片与窗口宽高比一致，四边均未裁剪；改变窗口尺寸后才可调整焦点。")}
                 </p>
               )}
             </>
@@ -471,7 +471,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
         <div className="grp-hd">
           <h2>{t("文字粗细")}</h2>
         </div>
-        <p className="hint">{t("看不清有两种：颜色太淡，和笔画太细。这一档管后者 —— 汉字笔画密，小字号下最先糊掉的就是它。")}</p>
+        <p className="hint">{t("调整文字的笔画粗细。中文笔画密集，在小字号下加粗有助于提升清晰度。")}</p>
         <div className="grp-items">
           <div className="seg" data-text role="group" aria-label={t("文字粗细")}>
             {WEIGHTS.map(([id, name, why]) => (
@@ -487,7 +487,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
         <div className="grp-hd">
           <h2>{t("文字对比度")}</h2>
         </div>
-        <p className="hint">{t("深色底上接近纯白的正文会起光晕，太淡的次要文字又读不清 —— 这一档同时管两头。看着累就往「柔和」调。")}</p>
+        <p className="hint">{t("同时调整正文与次要文字的对比度。深色主题下若觉得刺眼，可调向「柔和」。")}</p>
         <div className="grp-items">
           <div className="seg" data-text role="group" aria-label={t("文字对比度")}>
             {CONTRASTS.map(([id, name, why]) => (
@@ -503,7 +503,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
         <div className="grp-hd">
           <h2>{t("明暗")}</h2>
         </div>
-        <p className="hint">{t("跟随系统时，系统切换会立刻反映；手动选过就固定住。")}</p>
+        <p className="hint">{t("跟随系统时会随系统主题切换；手动选择后将保持固定。")}</p>
         <div className="grp-items">
           <div className="seg" data-text role="group" aria-label={t("明暗")}>
             {SCHEMES.map(([id, name]) => (
@@ -520,7 +520,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
           <h2>{t("配色")}</h2>
           <span className="now">{packs.length ? t("{n} 个已装", { n: packs.length }) : ""}</span>
         </div>
-        <p className="hint">{t("装在记忆目录的 themes/ 下，一个目录一个 theme.json。表面、强调色、圆角与字体跟着走；状态色（成功/警告/失败）不跟，那是含义不是装饰。")}</p>
+        <p className="hint">{t("配色包安装在记忆目录的 themes/ 下，每个目录包含一个 theme.json。配色包会应用表面色、强调色、圆角和字体；状态色（成功/警告/失败）不受影响。")}</p>
         <div className="grp-items">
           <div className="palettes" role="group" aria-label={t("配色")}>
             <Swatch name={t("默认")} on={!custom} onPick={() => pick("")} />
@@ -541,7 +541,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
               ))}
             </div>
           ))}
-          {packs.length === 0 && <p className="note">{t("还没装配色。把一个带 theme.json 的目录放进 themes/ 就会出现在这里。")}</p>}
+          {packs.length === 0 && <p className="note">{t("尚未安装配色包。将包含 theme.json 的目录放入 themes/ 后即会显示在此处。")}</p>}
         </div>
       </section>
     </>

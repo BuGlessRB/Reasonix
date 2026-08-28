@@ -228,7 +228,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
   const switchProtocol = (key: string, kind: string) => {
     const plan = planProtocolSwitch(vendors.find((x) => x.key === key), models, status?.modelRef, kind);
     if (plan.do === "stay") {
-      setFailed(t("{door} 这扇门上没有 {model}，先在下面挑一个它有的模型。", {
+      setFailed(t("{door} 不提供 {model}，请在下方选择该来源支持的模型。", {
         door: t(KIND_LABEL[kind] ?? kind),
         model: plan.model,
       }));
@@ -293,7 +293,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
       <div className="prefs-sheet" role="dialog" aria-modal="true" aria-label={t("设置")}>
       <div className="prefs-hd">
         <h2>{t("设置")}</h2>
-        <p>{t("改动立刻生效；要重建运行时的那几项，有活儿在跑的时候换不了")}</p>
+        <p>{t("改动立刻生效；需要重建运行时的项目，在任务运行期间无法修改")}</p>
         <button className="btn sm" onClick={onClose}>
           {t("关闭")} <span className="esc">Esc</span>
         </button>
@@ -338,7 +338,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           <div className="prefs-col">
           {at === "session" && (
             <>
-              <Group title={t("执行设定")} now={preset} hint={t("管的是「做完了」谁说了算。切档立刻生效，不重建运行时。")}>
+              <Group title={t("执行设定")} now={preset} hint={t("决定任务完成的判定标准。切换立刻生效，不会重建运行时。")}>
                 <div className="seg" data-text role="radiogroup" aria-label={t("执行设定")}>
                   {PRESETS.map(([id, name]) => (
                     <button key={id} role="radio" aria-checked={status?.preset === id} disabled={!!busy}
@@ -352,7 +352,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
               {/* An on/off that reverses by clicking again is a switch, not two
                   options — the same control the recipes and the sandbox's
                   network egress use. */}
-              <Group title={t("计划模式")} hint={t("开着的时候拿不到写权限：这不是提示词里的约定，是没给这个能力。")}>
+              <Group title={t("计划模式")} hint={t("开启时 agent 无法获得写权限。该限制由工具本身实施，不依赖提示词中的约定。")}>
                 <div className="lrow">
                   <span className="tx">
                     <span className="lb">{t("只读地出计划")}</span>
@@ -374,7 +374,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
                   <span className="v">{status?.cwd ?? "—"}</span>
                 </div>
                 <p className="note">
-                  {t("文件夹在左栏管：底部添加，展开后开新会话。一个会话属于开它的那个文件夹，不会跟着跑到别处。")}
+                  {t("在左栏管理文件夹：底部添加，展开后可新建会话。会话归属于创建它的文件夹，不会移动到其他位置。")}
                 </p>
                 {/* A thing that happens once, not a state to sit in — so it is
                     a button. As an option row it carried a selected look it can
@@ -382,7 +382,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
                 <div className="lrow">
                   <span className="tx">
                     <span className="lb">{t("拉一份隔离副本")}</span>
-                    <span className="ds">{t("在 Git worktree 里开一份，改动不落回当前分支")}</span>
+                    <span className="ds">{t("在 Git worktree 中创建独立副本，改动不会影响当前分支")}</span>
                   </span>
                   <button className="act" disabled={!!busy} onClick={() => run("isolate", () => port.isolateWorkspace())}>
                     {t(busy === "isolate" ? "开着…" : "开一份")}
@@ -403,19 +403,19 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
                 </div>
               )}
               <Group title={t("分工")} now={roles ? t("{n} 个已指派", { n: assigned }) : undefined}
-                hint={t("每个位置默认跟着主模型走，只有你明确指派过的才会分出去。换指派跟换主模型一样要重建运行时，有活儿在跑的时候换不了。")}>
+                hint={t("每个位置默认使用主模型，只有明确指派过的才会单独设置。更换指派与更换主模型一样需要重建运行时，任务运行期间无法修改。")}>
                 <Roles models={models} roles={roles} main={status?.modelRef} busy={busy}
                   onSet={(role, ref) => run(`role:${role}`, async () => {
                     await port.setRole(role, ref);
                     loadRoles();
                   })} />
               </Group>
-              <Group title={t("模型")} now={nav.model} hint={t("切换会带着对话重建运行时；有活儿在跑的时候切不了。标签只写探得到的能力 —— 空着就是没人声明过，不是「不支持」。")}>
+              <Group title={t("模型")} now={nav.model} hint={t("切换会保留对话并重建运行时，任务运行期间无法切换。标签只显示已探测到的能力；留空表示端点未声明，不代表不支持。")}>
                 <Models models={models} current={status?.modelRef} busy={busy} protocol={protocol}
                   onPick={(ref) => run(ref, () => port.setModel(ref))} />
               </Group>
               {efforts.length > 0 ? (
-                <Group title={t("推理强度")} hint={t("这几档是当前模型的端点真正认的，auto 表示交给它自己的默认。")}>
+                <Group title={t("推理强度")} hint={t("以下档位由当前模型的端点支持，auto 表示使用端点自身的默认值。")}>
                   <div className="seg" role="group" aria-label={t("推理强度")}>
                     {efforts.map((e) => (
                       <button key={e} aria-pressed={(status?.effort || "auto") === e}
@@ -426,11 +426,11 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
                   </div>
                 </Group>
               ) : (
-                <Group title={t("推理强度")} hint={t("当前模型没有暴露可调的推理档位，调它不会有任何效果，所以这里不给开关。")} />
+                <Group title={t("推理强度")} hint={t("当前模型未提供可调的推理档位，因此不显示该选项。")} />
               )}
               <Group
                 title={t("连接")}
-                hint={t("模型从哪里来。添加只问地址和 key —— 协议、模型列表、能不能看图，都去问端点，问不出来的才让你填。")}
+                hint={t("模型的来源。添加时只需填写地址和 key；协议、模型列表和图片支持会自动向端点探测，探测不到的才需要手动填写。")}
               >
                 <Providers port={port} onChanged={loadModels} onFailed={setFailed} protocol={protocol}
                   activeKindFor={(a) => kindFor(a.key)}
@@ -441,7 +441,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
 
           {at === "tools" && (
             <>
-              <Group title={t("工具批准")} now={approval} hint={t("这是唯一挡在 agent 和你的文件之间的闸。它拦下来的时候，没有第二个入口能绕过去。")}>
+              <Group title={t("工具批准")} now={approval} hint={t("这是 agent 访问你的文件前的唯一审批入口，被拦下的操作没有其他途径可以绕过。")}>
                 {/* Four rows of label-and-description was 190px for one choice,
                     and it was the only choice in this pane shaped that way. The
                     description follows the selection instead: what a档 does is
@@ -459,19 +459,19 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
               </Group>
               <Group
                 title={t("明确的规矩")}
-                hint={t("上面那档管的是「问不问你」，这里管的是「哪些根本不许，哪些永远不用问」。改动会重建运行时，有活儿在跑的时候改不了。")}
+                hint={t("上一项决定是否向你询问，此处决定哪些操作始终禁止、哪些无需询问。改动会重建运行时，任务运行期间无法修改。")}
               >
                 <Rules port={port} onChanged={onChanged} />
               </Group>
               <Group
                 title={t("沙箱")}
-                hint={t("批准之后能碰到多大范围。这一层不靠 agent 自觉：写入范围由工具执行，命令隔离由操作系统执行。")}
+                hint={t("批准之后可以操作的范围。该限制不依赖 agent 自觉：写入范围由工具实施，命令隔离由操作系统实施。")}
               >
                 <Sandbox port={port} onChanged={onChanged} />
               </Group>
               <Group
                 title={t("命令交给谁执行")}
-                hint={t("agent 的每条命令都由这个程序来跑，所以它也决定命令该写成哪一种语法 —— 选错了不是慢，是每条都报错。下面列的是这台机器上真有的，装什么才能选什么。换一个要重建运行时，有活儿在跑的时候换不了。")}
+                hint={t("agent 的所有命令都由该程序执行，它也决定命令使用哪种语法；选择错误会导致每条命令都执行失败。下方只列出本机已安装的程序。更换需要重建运行时，任务运行期间无法修改。")}
               >
                 <ShellPicker port={port} onChanged={onChanged} />
               </Group>
@@ -481,7 +481,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           {at === "hooks" && (
             <Group
               title={t("自动化")}
-              hint={t("在 agent 干活的前后插进你自己的命令。它们跑在你的机器上，用你的权限 —— 挡得住 agent 的那两个事件在下面会标出来。")}
+              hint={t("在 agent 执行任务前后运行你自己的命令。这些命令在本机以你的权限运行；可以拦截 agent 的两个事件已在下方标出。")}
             >
               <Hooks port={port} onChanged={afterExtChange} />
             </Group>
@@ -500,7 +500,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
                   因为它管的是整个运行时，不是某一个包。 */}
               <Group
                 title={t("运行时")}
-                hint={t("改了扩展的代码，或者装、删、开关了插件包之后，用它让改动生效。当前这一轮不受影响，下一轮开始用新的。")}
+                hint={t("修改扩展代码，或安装、删除、启用或停用插件包之后，用它使改动生效。当前这一轮不受影响，下一轮开始使用新的配置。")}
                 action={reload.action}
               >
                 {reload.note}
@@ -508,7 +508,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
               <Group
                 title={t("插件包")}
                 now={packages.length ? t("{n} 个", { n: packages.length }) : undefined}
-                hint={t("一个包能一次带来技能、命令、自动化钩子和外部服务。装和导入是同一件事：给它一个仓库地址，或者机器上的一个文件夹。")}
+                hint={t("一个包可以同时提供技能、命令、自动化钩子和外部服务。安装与导入是同一个操作：提供一个仓库地址，或本机的一个文件夹。")}
                 action={
                   addingPkg ? undefined : (
                     <button className="act" onClick={() => setAddingPkg(true)}>
@@ -543,7 +543,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
               <Group
                 title={t("外部工具")}
                 now={looseMcp.length ? t("{n} 个服务", { n: looseMcp.length }) : undefined}
-                hint={t("你自己接进来的 MCP 服务。它给 agent 的能力和内置工具一样真实 —— 列在这里的每一项都能动你的东西。关掉一个会立刻从这一轮的工具表里消失，并且重启后依然是关的。")}
+                hint={t("你自行接入的 MCP 服务。它们提供的能力与内置工具等同，列出的每一项都可以操作你的文件和数据。关闭后会立即从本轮工具列表中移除，重启后保持关闭。")}
                 action={
                   adding || !live ? undefined : (
                     <button className="act" onClick={() => setAdding(true)}>
@@ -570,7 +570,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
                 now={looseSkills.length ? t("{on}/{all} 开着", { on: looseOn, all: looseSkills.length }) : undefined}
                 hint={t(
                   implicit
-                    ? "工作目录与「我的」里的技能。带 / 的可以自己点名调用；其余的由模型按任务自行判断要不要用。关掉的那些两条路都走不通。改动在下一次新建会话时进入模型的索引。"
+                    ? "工作目录与「我的」中的技能。带 / 的可以由你直接调用，其余的由模型根据任务判断是否使用。已关闭的技能两种方式都无法使用。改动将在下次新建会话时进入模型索引。"
                     : "模型自动发现已关闭：现在只有你点名的技能会跑。改动在下一次新建会话时生效。",
                 )}
               >
@@ -585,7 +585,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           {at === "network" && (
             <Group
               title={t("网络")}
-              hint={t("模型请求、MCP 的远程服务、网页抓取都走这里。配错了通常表现为聊天时莫名其妙卡住 —— 所以先测一下，它会告诉你断在哪一段。")}
+              hint={t("模型请求、MCP 远程服务和网页抓取都经由此处。配置错误通常表现为聊天无响应，建议先测试连接，测试会指出中断的环节。")}
             >
               <Network port={port} />
             </Group>
@@ -594,7 +594,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           {at === "remote" && (
             <Group
               title={t("远程")}
-              hint={t("把另一台机器上的工作区接过来：内核跑在那边，窗口还是这个。开的面板和本地的并排坐着，所以每处都写清楚它在哪台机器上。")}
+              hint={t("接入另一台机器上的工作区：内核在远程运行，界面仍在本机。远程面板与本地面板并排显示，每处都会标明所在的机器。")}
             >
               <Remotes hub={hub} onError={onError} />
             </Group>
@@ -603,7 +603,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           {at === "account" && (
             <Group
               title={t("账号")}
-              hint={t("Reasonix 本身不需要账号。它只用在天生要联网的地方：社区发帖、崩溃问题跟进，以后还有技能发布。")}
+              hint={t("Reasonix 本身不需要账号，仅在需要联网的功能中使用：社区发帖、崩溃问题跟进，以及后续的技能发布。")}
             >
               <Account port={port} state={acct} reload={reloadAccount} />
             </Group>
@@ -612,7 +612,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           {at === "versions" && (
             <Group
               title={t("版本")}
-              hint={t("装的是哪一版、有没有更新，以及出问题时怎么退回去。回退会固定在你选的版本，不会被自动更新拽回来。")}
+              hint={t("当前安装的版本、可用更新，以及出现问题时如何回退。回退后将固定在你选择的版本，不会被自动更新覆盖。")}
             >
               <Versions port={port} />
             </Group>
@@ -621,7 +621,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           {at === "memory" && (
             <Group
               title={t("记忆")}
-              hint={t("它自己记下来的东西 —— 你没配置过，但它会照着做。所以这里按「什么时候会被想起」分，并且标出上一轮真正用上了哪几条。")}
+              hint={t("agent 自动记录的内容：你没有配置过，但它会据此执行。此处按触发时机分组，并标出上一轮实际使用的条目。")}
             >
               <Memory port={port} />
             </Group>
@@ -630,14 +630,14 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           {at === "usage" && (
             <Group
               title={t("用量与成本")}
-              hint={t("本机记录的 token 与花费 —— 只在这台机器上，不上传。命中缓存的输入按缓存价计费，所以命中率直接决定账单。")}
+              hint={t("本机记录的 token 用量与花费，仅保存在这台机器上，不会上传。命中缓存的输入按缓存价计费，因此命中率直接影响费用。")}
             >
               <Usage port={port} />
             </Group>
           )}
 
           {at === "storage" && (
-            <Group title={t("存储")} hint={t("它把数据写在哪、占了多少。会话和索引会一直长，配置和凭据不会 —— 所以只有前者能搬走，搬迁在重启后生效。")}><Storage port={port} /></Group>
+            <Group title={t("存储")} hint={t("数据的存储位置与占用空间。会话和索引会持续增长，配置和凭据不会，因此只有前者可以迁移。迁移在重启后生效。")}><Storage port={port} /></Group>
           )}
 
           {at === "appearance" && (
@@ -645,7 +645,7 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
           )}
 
           {at === "advanced" && (
-            <Group title={t("还不在这一版里")} hint={t("每一项都需要自己的界面，做半个不如先说清楚它现在在哪。")}>
+            <Group title={t("还不在这一版里")} hint={t("以下项目尚未提供设置界面，此处仅说明它们当前的位置。")}>
               {ELSEWHERE.map((x) => (
                 <div className="lrow" key={x}>
                   <span className="ds">{x}</span>

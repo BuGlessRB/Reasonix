@@ -13,10 +13,10 @@ import { t } from "./index";
 // catalogue keyed by codes.
 const SAID: Record<string, string> = {
   // ── 忙：不是出错，是「现在不行」 ─────────────────────────────────
-  "busy.switch_model": "有活儿在跑，先停下再换模型",
-  "busy.change_effort": "有活儿在跑，先停下再改推理强度",
-  "busy.change_workspace": "有活儿在跑，先停下再换工作区",
-  "busy.reload_extensions": "有活儿在跑，先停下再重载扩展",
+  "busy.switch_model": "任务正在运行，请先停止再切换模型",
+  "busy.change_effort": "任务正在运行，请先停止再调整推理强度",
+  "busy.change_workspace": "任务正在运行，请先停止再切换工作区",
+  "busy.reload_extensions": "任务正在运行，请先停止再重载扩展",
 
   // ── 冲突：有东西挡着 ─────────────────────────────────────────────
   "workspace.has_open_panes": "这个文件夹还有 {n} 个打开的面板，先关掉再移除",

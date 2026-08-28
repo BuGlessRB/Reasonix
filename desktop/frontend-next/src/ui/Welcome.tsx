@@ -85,7 +85,7 @@ export function Welcome({ variant, children, replay, onDone }: Props) {
             <b>{t("我是小 R。")}</b>
           </div>
           <div className="oobe-line l2">
-            <b>{t("你交待一件事，我把它做完。")}</b>
+            <b>{t("你交代一件事，我把它做完。")}</b>
             <span>{t("读代码、查证、动手、验证 —— 不是给你一段建议就完了。")}</span>
           </div>
           <div className="oobe-line l3">

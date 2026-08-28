@@ -361,7 +361,7 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
           ref={box}
           rows={1}
           value={text}
-          placeholder={t("交待一个任务，回车发送…　/ 调用命令与技能，@ 引用文件")}
+          placeholder={t("描述一个任务，回车发送…　/ 调用命令与技能，@ 引用文件")}
           role="combobox"
           aria-expanded={menu.open}
           aria-controls="slashmenu"

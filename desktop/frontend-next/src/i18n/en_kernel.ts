@@ -59,14 +59,14 @@ export const EN_KERNEL: Record<string, string> = {
   "连 {host} 没成功：{detail}": "Could not reach {host}: {detail}",
   "{host} 不认这套凭据。换个密钥，或者在设置里填对环境变量名。":
     "{host} rejected these credentials. Try another key, or name the right environment variable in settings.",
-  "有活儿在跑，先停下再换模型": "Something is running — stop it before switching models",
-  "有活儿在跑，先停下再改推理强度": "Something is running — stop it before changing the reasoning effort",
+  "任务正在运行，请先停止再切换模型": "A task is running — stop it before switching models",
+  "任务正在运行，请先停止再调整推理强度": "A task is running — stop it before changing the reasoning effort",
   "{provider} 没说自己有哪些推理强度档位。要有，得在它的配置块里写 reasoning_protocol 或 supported_efforts":
     "{provider} names no reasoning-effort levels. To give it some, set reasoning_protocol or supported_efforts in its config block",
   "{provider} 没有「{level}」这一档，能选的是：{levels}": "{provider} has no \"{level}\" level. Available: {levels}",
   "认不出现在用的是哪个来源，先切一次模型": "Cannot tell which source is in use — switch models once and try again",
-  "有活儿在跑，先停下再换工作区": "Something is running — stop it before changing the workspace",
-  "有活儿在跑，先停下再重载扩展": "Something is running — stop it before reloading extensions",
+  "任务正在运行，请先停止再切换工作区": "A task is running — stop it before changing the workspace",
+  "任务正在运行，请先停止再重载扩展": "A task is running — stop it before reloading extensions",
   "这个来源正在用，先换一个模型再删": "This source is in use — switch models before deleting it",
   "给这个来源起个名字": "Give this source a name",
   "名字只能用字母、数字、点、横线和下划线": "A name may use letters, digits, dot, dash and underscore only",

@@ -148,7 +148,7 @@ function EditConn({
             <input
               inputMode="numeric"
               value={win}
-              placeholder={t("留空 = 用内置的已知值；自己加的来源没有内置值，那就是不压缩")}
+              placeholder={t("留空表示使用内置的已知值；自行添加的来源没有内置值，将不进行压缩")}
               onChange={(e) => setWin(e.target.value.replace(/\D/g, ""))}
             />
             <i className="tip">
@@ -165,7 +165,7 @@ function EditConn({
               ))}
             </select>
             <i className="tip">
-              {t("端点用哪种写法控制思考深度。探不出来 —— 中转站转发的是别人的模型，只有你知道后面是什么。选了才有推理强度可调；选错了请求会被端点拒。")}
+              {t("端点控制思考深度的方式。此项无法自动探测：中转站转发的是第三方模型，只有你知道其后端。选择后才能调整推理强度，选择错误会导致请求被端点拒绝。")}
             </i>
           </label>
           <label className="grow full">
@@ -177,7 +177,7 @@ function EditConn({
               placeholder={"HTTP-Referer: https://example.com\nX-Title: Reasonix"}
               onChange={(e) => setHeads(e.target.value)}
             />
-            <i className="tip">{t("一行一个 名字: 值。中转站常要它来认站点；密钥仍然走上面那栏。")}</i>
+            <i className="tip">{t("每行一个「名称: 值」。中转站通常用它识别站点；密钥仍填写在上方。")}</i>
           </label>
           <label className="grow full">
             <span>{t("额外请求体")}</span>
@@ -190,7 +190,7 @@ function EditConn({
               aria-invalid={extraBad || undefined}
             />
             <i className="tip">
-              {t("会并进请求体的顶层。model、messages、tools、stream 这些仍由内核说了算，写了也不生效。")}
+              {t("将合并到请求体的顶层。model、messages、tools、stream 由内核控制，在此填写不会生效。")}
             </i>
           </label>
           {extraBad && <div className="why">{t("这段不是合法的 JSON 对象，保存会被拒绝。")}</div>}
@@ -209,7 +209,7 @@ function EditConn({
           {t(saving ? "保存中…" : "保存")}
         </button>
         <button className="act" onClick={refetch} disabled={busy !== ""}
-          title={t("重新问这个端点要一次模型列表 —— 它上新或下架模型之后用")}>
+          title={t("重新向该端点获取模型列表，适用于端点新增或下架模型之后")}>
           {t("重新问一次有哪些模型")}
         </button>
         <button className="act" onClick={onDone} disabled={busy !== ""}>{t("取消")}</button>

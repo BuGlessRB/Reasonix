@@ -644,11 +644,11 @@ function Hero({ onPick, needsProject, onOpen, onKeep }: HeroProps) {
   return (
     <div className="hero">
       <RMark />
-      <div className="t">{needsProject ? t("先打开一个项目") : t("交待一件事，它自己往下做")}</div>
+      <div className="t">{needsProject ? t("先打开一个项目") : t("描述任务，其余交给 Reasonix")}</div>
       <div className="s">
         {needsProject
-          ? t("它读代码、跑测试、改文件 —— 都在你选定的那个文件夹里。")
-          : t("读代码、联网查证、派子代理、改文件 —— 每一步都同时落进「轨迹」，那是机器记录，不是给人读的叙事。")}
+          ? t("读取代码、运行测试和修改文件都只发生在你选定的文件夹内。")
+          : t("可读取代码、查找资料、运行工具并修改文件。完整执行过程可在「轨迹」中查看。")}
       </div>
       {needsProject ? (
         <div className="herogo">

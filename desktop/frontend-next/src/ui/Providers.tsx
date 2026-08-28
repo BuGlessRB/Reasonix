@@ -230,7 +230,7 @@ function Conn({
             ))}
           </div>
           <span className="why">
-            {t(a.kinds.some((k) => a.byKind[k].canWebSearch) && !entry.canWebSearch ? "同一个账号的两扇门。这一扇没有联网搜索 —— 那是协议的差别，不是设置。" : "同一个账号的两扇门。换一扇，下面的模型跟着换。")}
+            {t(a.kinds.some((k) => a.byKind[k].canWebSearch) && !entry.canWebSearch ? "同一账号的两种接入方式。当前这一种不支持联网搜索；这是协议差异，不是可配置项。" : "同一账号的两种接入方式。切换后下方的模型列表随之改变。")}
           </span>
         </div>
       )}
@@ -260,7 +260,7 @@ function Conn({
             ))}
           </div>
           <span className="why">
-            {t(entry.sendsThinking === false ? "只发普通聊天参数。模型自己该怎么想还怎么想，只是这边不再指定深度。" : "有的中转站不认 thinking 字段，会整个请求拒掉。真遇上了就切「不发送」。")}
+            {t(entry.sendsThinking === false ? "只发送常规聊天参数，不再指定思考深度；模型自身的推理行为不受影响。" : "部分中转站不支持 thinking 字段，会拒绝整个请求。遇到这种情况请切换为「不发送」。")}
           </span>
         </div>
       )}

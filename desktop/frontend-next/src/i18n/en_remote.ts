@@ -38,8 +38,8 @@ export const EN_REMOTE: Record<string, string> = {
     "This folder is too big to list whole, so only the first entries are here. If what you want is further down, type its path.",
 
   // ── 远程：设置页 ─────────────────────────────────────────────
-  "把另一台机器上的工作区接过来：内核跑在那边，窗口还是这个。开的面板和本地的并排坐着，所以每处都写清楚它在哪台机器上。":
-    "Bring a workspace on another machine here: the kernel runs over there, the window stays this one. Its panes sit beside your local ones, so every one of them says which machine it is on.",
+  "接入另一台机器上的工作区：内核在远程运行，界面仍在本机。远程面板与本地面板并排显示，每处都会标明所在的机器。":
+    "Connect a workspace on another machine: the kernel runs there, the window stays here. Remote panes sit alongside local ones, so each place states which machine it belongs to.",
   "{n} 台在线": "{n} online",
   "还没有远程机器。加一台，它的工作区就和本地的并排出现在左栏。":
     "No remote machines yet. Add one and its workspaces appear in the sidebar beside your local ones.",

@@ -3,8 +3,8 @@
 // per section and had grown past its ceiling — the grouping is the same.
 export const EN_STORAGE: Record<string, string> = {
   存储: "Storage",
-  "它把数据写在哪、占了多少。会话和索引会一直长，配置和凭据不会 —— 所以只有前者能搬走，搬迁在重启后生效。":
-    "Where it writes, and how much. Sessions and indexes grow without limit, configuration and credentials do not — so only the first kind can move, and a move takes effect on the next launch.",
+  "数据的存储位置与占用空间。会话和索引会持续增长，配置和凭据不会，因此只有前者可以迁移。迁移在重启后生效。":
+    "Where the data is written and how much space it uses. Sessions and indexes keep growing while configuration and credentials do not, so only the former can be moved. A move takes effect after a restart.",
   "读不到存储占用。": "Cannot read what is on disk.",
   "正在统计…": "Measuring…",
   占用: "Space used",

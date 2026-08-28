@@ -22,9 +22,9 @@ export const EN: Record<string, string> = {
   ...EN_WINDOW,
   ...EN_GRAPH,
   // ── 转录：卡片与流 ───────────────────────────────────────────────
-  "交待一件事，它自己往下做": "Give it one thing to do, and it runs with it",
-  "读代码、联网查证、派子代理、改文件 —— 每一步都同时落进「轨迹」，那是机器记录，不是给人读的叙事。":
-    "Reading code, checking the web, delegating, editing files — every step also lands in the Trajectory, which is a machine record, not a story written for you.",
+  "描述任务，其余交给 Reasonix": "Describe the task; Reasonix takes it from there",
+  "可读取代码、查找资料、运行工具并修改文件。完整执行过程可在「轨迹」中查看。":
+    "It can read code, look things up, run tools, and edit files. The full run stays visible in the Trajectory.",
   "把这个仓库跑一遍测试，把失败的那几个定位到具体文件":
     "Run this repository's tests and pin the failures down to specific files",
   "读一遍最近三次提交，告诉我哪里的改动风险最高":
@@ -157,8 +157,7 @@ export const EN: Record<string, string> = {
   "还没有文件夹": "No folders yet",
   "打开项目…": "Open a project…",
   "先打开一个项目": "Open a project first",
-  "它读代码、跑测试、改文件 —— 都在你选定的那个文件夹里。":
-    "It reads the code, runs the tests, changes the files — all inside the folder you pick.",
+  "读取代码、运行测试和修改文件都只发生在你选定的文件夹内。": "Reading code, running tests and editing files all happen inside the folder you choose.",
   "就用当前位置": "Stay where I am",
   "隔离": "Isolated",
   "移除": "Remove",
@@ -188,8 +187,7 @@ export const EN: Record<string, string> = {
   "↓ 回到最新": "↓ Back to latest",
   "停下": "Stop",
   "发送": "Send",
-  "交待一个任务，回车发送…　/ 调用命令与技能，@ 引用文件":
-    "Describe a task, press Enter…　/ for commands and skills, @ to reference files",
+  "描述一个任务，回车发送…　/ 调用命令与技能，@ 引用文件": "Describe a task and press Enter…　/ for commands and skills, @ to reference files",
   "知道了": "Got it",
   "强度": "Effort",
   "批准": "Approvals",
@@ -266,17 +264,16 @@ export const EN: Record<string, string> = {
   "更大": "Larger",
   "小": "Small",
   "大": "Large",
-  "「界面」连边距和控件一起缩放，「正文」只动对话里的字。两个各调各的。":
-    "“Interface” scales spacing and controls along with the type; “Body text” moves only the words in the conversation. They are set independently.",
+  "「界面」会同时缩放边距与控件，「正文」仅调整对话中的文字大小，两者独立设置。": "Interface scales spacing and controls together; Body text changes only the text in the conversation. The two are set independently.",
   "字体": "Typeface",
   "等宽": "Monospace",
   "清除": "Clear",
   "回到默认字体": "Back to the default typeface",
   "默认": "Default",
   "默认 · 本机有 {n} 个可选": "Default · {n} available on this machine",
-  "输入框里可以直接写字体名，也可以从这台机器装了的里面挑。下面那行就用它画 —— 没变样说明这个名字在这台机器上找不到，界面会退回默认字体，不会弄花。":
-    "Type any family name, or pick one of the ones installed here. The line below is drawn in it — if nothing changes, that name is not on this machine, and the interface falls back to its default rather than breaking.",
-  "交待一件事，它自己往下做 · Aa Bb 0123": "The quick brown fox jumps over it · Aa Bb 0123",
+  "可直接输入字体名称，或选择本机已安装的字体。下方文本会实时预览所选字体；若字体不可用，将自动使用默认字体。":
+    "Enter a typeface name or choose one installed on this device. The text below previews your selection; unavailable typefaces fall back to the default.",
+  "字体预览 · 中文 Aa Bb 0123": "Typeface preview · Aa Bb 0123",
   "壁纸": "Wallpaper",
   "选一张图片…": "Choose an image…",
   "换一张…": "Choose another…",
@@ -284,21 +281,17 @@ export const EN: Record<string, string> = {
   "压暗": "Dim",
   "横向焦点": "Horizontal focus",
   "纵向焦点": "Vertical focus",
-  "这张图在这个窗口里只有左右会被裁掉，上下正好填满 —— 纵向那一档没有余量可移。":
-    "In a window this shape the picture is cropped left and right only; top and bottom already fit — so the vertical control has nowhere to move.",
-  "这张图在这个窗口里只有上下会被裁掉，左右正好填满 —— 横向那一档没有余量可移。":
-    "In a window this shape the picture is cropped top and bottom only; the sides already fit — so the horizontal control has nowhere to move.",
-  "这张图和窗口是一样的宽高比，四边都没有裁掉 —— 窗口换个形状，焦点才有得移。":
-    "The picture is the same shape as the window, so nothing is cropped on any side — focus has somewhere to move once the window changes shape.",
-  "图片只铺在窗口的空白处，卡片和输入框始终不透明 —— 背景值一圈留白，不值一段读不清的正文。跑起来的时候它会自动退到更淡。":
-    "The picture fills only the window's empty margins; cards and the composer stay opaque — a background is worth a margin, not an unreadable paragraph. It recedes further while a turn is running.",
+  "当前窗口尺寸下，此图片只有左右会被裁剪，上下正好填满，因此纵向焦点无法调整。": "At the current window size this image is cropped only left and right and fills the height exactly, so the vertical focus cannot be moved.",
+  "当前窗口尺寸下，此图片只有上下会被裁剪，左右正好填满，因此横向焦点无法调整。": "At the current window size this image is cropped only top and bottom and fills the width exactly, so the horizontal focus cannot be moved.",
+  "此图片与窗口宽高比一致，四边均未裁剪；改变窗口尺寸后才可调整焦点。": "This image matches the window's aspect ratio and is not cropped on any side; the focus becomes adjustable once the window changes shape.",
+  "壁纸只显示在窗口的空白区域，卡片和输入框保持不透明以确保文字清晰。任务运行时壁纸会自动降低透明度。":
+    "The image fills only the empty areas of the window; cards and the composer stay opaque so text remains legible. While a task runs, the wallpaper fades further.",
   "图片太大了，先压到 {n} MB 以内": "That image is too large — bring it under {n} MB first",
   "语言": "Language",
   "跟随系统": "Follow the system",
   "中文": "中文",
   "英文": "English",
-  "界面用哪种语言。它跟模型回你话的语言是两件事 —— 模型跟着你这条消息用的语言走。":
-    "Which language the interface is in. This is separate from the language the model answers in — that follows whatever you wrote, per message.",
+  "界面显示语言。模型回复所用的语言与此设置无关，将跟随你发送消息时使用的语言。": "The language of the interface. It does not affect the language the model replies in, which follows the language you write in.",
   "改语言要重开窗口才生效": "Changing the language reloads the window",
 
   // ── 明暗与配色 ───────────────────────────────────────────────────
@@ -307,8 +300,7 @@ export const EN: Record<string, string> = {
   "深色": "Dark",
   "配色": "Palette",
   "文字粗细": "Text weight",
-  "看不清有两种：颜色太淡，和笔画太细。这一档管后者 —— 汉字笔画密，小字号下最先糊掉的就是它。":
-    "Hard to read comes two ways: too faint, and too thin. This one is for the second.",
+  "调整文字的笔画粗细。中文笔画密集，在小字号下加粗有助于提升清晰度。": "Adjusts stroke weight. Dense Chinese glyphs lose definition first at small sizes, and more weight recovers it.",
   "跟随语言": "Match the language",
   "中文界面用中等字重，西文用常规": "Medium for Chinese, regular for Latin",
   "常规": "Regular",
@@ -321,8 +313,7 @@ export const EN: Record<string, string> = {
   "内置": "Built in",
   "第三方": "Third party",
   "{n} 个已装": "{n} installed",
-  "跟随系统时，系统切换会立刻反映；手动选过就固定住。":
-    "Following the system reflects its changes immediately; an explicit choice stays put.",
+  "跟随系统时会随系统主题切换；手动选择后将保持固定。": "Following the system switches with it; once you choose a theme yourself, it stays fixed.",
 
   // ── 连接与来源 ───────────────────────────────────────────────────
   "添加模型来源": "Add a model source",
@@ -371,12 +362,10 @@ export const EN: Record<string, string> = {
   "有改动；没有主机能读作证据的检查": "changed; no check the host could read as proof",
   "改动后再没看过": "changed, never looked at again",
   "自己申报未验证": "declared unverified by the turn itself",
-  "同一个账号的两扇门。这一扇没有联网搜索 —— 那是协议的差别，不是设置。":
-    "Two doors onto one account. This one has no web search — that is a difference between protocols, not a setting.",
-  "同一个账号的两扇门。换一扇，下面的模型跟着换。":
-    "Two doors onto one account. Switch doors and the models below follow.",
-  "这个地址两条线都答得上来。{on} 那条上联网搜索由供应商自己跑，另一条没有 —— 那是协议的差别，不是设置。":
-    "This address answers on both wires. On {on} the provider runs web search itself; the other one has none — that is a difference between protocols, not a setting.",
+  "同一账号的两种接入方式。当前这一种不支持联网搜索；这是协议差异，不是可配置项。": "Two ways in to the same account. This one has no web search — that is a difference between the protocols, not a setting.",
+  "同一账号的两种接入方式。切换后下方的模型列表随之改变。": "Two ways in to the same account. Switching changes the model list below.",
+  "该地址支持两种接入方式。{on} 支持由供应商执行的联网搜索，另一种不支持；这是协议差异，不是可配置项。":
+    "This address answers on both. On {on} the provider runs the web search itself; the other has none. That is a difference between the protocols, not a setting.",
   "正在用": "In use",
   "缺 key": "no key",
   "编辑": "Edit",
@@ -384,15 +373,13 @@ export const EN: Record<string, string> = {
   "测一下": "Test it",
   "没保存成功": "Not saved",
   "重新问一次有哪些模型": "Ask for the model list again",
-  "重新问这个端点要一次模型列表 —— 它上新或下架模型之后用":
-    "Ask this endpoint for its model list again — for after it adds or retires models",
+  "重新向该端点获取模型列表，适用于端点新增或下架模型之后": "Ask this endpoint for its model list again — use it after the endpoint adds or removes models",
   "探到了下面这些。都是猜的，不对就改。": "Here is what was probed. All of it is a guess; correct anything wrong.",
-  "两种接入方式的模型列表它都答得上来，光看列表分不出来 —— 聊天入口通常不在同一个路径下，选错了聊天会报错。要两条都用就再添加一次、选另一个。":
-    "It answers the model list on both protocols, so the list alone cannot tell them apart — the chat endpoint usually lives at a different path, and the wrong choice fails at chat time. To use both, add it a second time and pick the other one.",
-  "就是给它再开一扇门，两条会并成同一个来源、由「接入方式」切换；填了 key就是这台机器上的另一个账号，各算各的。":
-    "leaves it as a second door onto the same source, switched by Protocol; giving a key makes it a separate account on this machine, counted separately.",
-  "走代理连不上、直连可以，已经记成「这个来源不走代理」。":
-    "The proxy could not reach it and a direct connection could, so this source is now recorded as bypassing the proxy.",
+  "两种接入方式都能返回模型列表，仅凭列表无法区分；两者的聊天入口路径通常不同，选错会导致聊天报错。如需同时使用，请再添加一次并选择另一种。":
+    "Both access methods answer with a model list, and the lists do not tell them apart; their chat endpoints usually sit on different paths, so the wrong choice makes chat fail. To use both, add the source again and pick the other one.",
+  "这会为该来源添加另一种接入方式，两者合并为同一个来源，通过「接入方式」切换；若填写新的 key，则视为本机的另一个账号，用量分别计算。":
+    "This adds a second way in to the same source; the two merge into one entry and you switch between them under Access method. A new key makes it a separate account on this machine, counted separately.",
+  "该来源通过代理无法连接、直连可用，已记录为「此来源不使用代理」。": "The proxy could not reach this source but a direct connection could, so it is now recorded as not using the proxy.",
   "{n} 个模型": "{n} models",
 
   // ── 外部服务与插件 ───────────────────────────────────────────────
@@ -471,7 +458,7 @@ export const EN: Record<string, string> = {
 
   // ── 开场 ─────────────────────────────────────────────────────────
   "我是小 R。": "I am R.",
-  "你交待一件事，我把它做完。": "You give it one thing, and I see it through.",
+  "你交代一件事，我把它做完。": "You give it one thing, and I see it through.",
   "读代码、查证、动手、验证 —— 不是给你一段建议就完了。":
     "Reading code, checking facts, doing the work, verifying it — not handing you advice and stopping there.",
   "每一步都留得下来。": "Every step stays on the record.",
@@ -516,8 +503,8 @@ export const EN: Record<string, string> = {
   "一直生效": "Always on",
   "相关时才被想起": "Recalled when relevant",
   "只有这一轮看起来相关时才会被翻出来": "Only surfaced when this turn looks like it needs them",
-  "工作目录与「我的」里的技能。带 / 的可以自己点名调用；其余的由模型按任务自行判断要不要用。关掉的那些两条路都走不通。改动在下一次新建会话时进入模型的索引。":
-    "Skills from the working directory and from Mine. The ones with a / you can call by name; the rest the model decides about on its own, per task. A skill switched off is reachable by neither route. Changes enter the model's index at the next new session.",
+  "工作目录与「我的」中的技能。带 / 的可以由你直接调用，其余的由模型根据任务判断是否使用。已关闭的技能两种方式都无法使用。改动将在下次新建会话时进入模型索引。":
+    "Skills from the working directory and from My skills. Those with a / you can invoke yourself; the rest the model decides on per task. A disabled skill is unavailable both ways. Changes enter the model's index the next time you start a session.",
   "模型自动发现已关闭：现在只有你点名的技能会跑。改动在下一次新建会话时生效。":
     "Model discovery is off: only the skills you name by hand will run. Changes take effect at the next new session.",
   "每一轮都在提示词里，等同于你给它的长期指令":
@@ -552,14 +539,10 @@ export const EN: Record<string, string> = {
   "实时事件流 · 仅本次连接，切换或重进会话后重建":
     "Live event stream · this connection only; it is rebuilt when you switch or reopen a session",
   "连不上内核：/status 没有回应。": "Cannot reach the kernel: /status did not answer.",
-  "深色底上接近纯白的正文会起光晕，太淡的次要文字又读不清 —— 这一档同时管两头。看着累就往「柔和」调。":
-    "Near-white body text glows on a dark ground, and secondary text that is too faint cannot be read — this setting moves both ends at once. If your eyes tire, go toward Soft.",
-  "装在记忆目录的 themes/ 下，一个目录一个 theme.json。表面、强调色、圆角与字体跟着走；状态色（成功/警告/失败）不跟，那是含义不是装饰。":
-    "Installed under themes/ in the memory directory, one theme.json per folder. Surfaces, accent, corner radii and type follow the pack; the status colours (success, warning, failure) do not — those are meaning, not decoration.",
-  "还没装配色。把一个带 theme.json 的目录放进 themes/ 就会出现在这里。":
-    "No palettes installed. Drop a folder with a theme.json into themes/ and it appears here.",
-  "输入框里可以直接写字体名，也可以从这台机器装了的里面挑。下面那行就用它画 ——没变样说明这个名字在这台机器上找不到，界面会退回默认字体，不会弄花。":
-    "Type any family name, or pick one of the ones installed here. The line below is drawn in it — if nothing changes, that name is not on this machine, and the interface falls back to its default rather than breaking.",
+  "同时调整正文与次要文字的对比度。深色主题下若觉得刺眼，可调向「柔和」。": "Adjusts the contrast of body and secondary text together. If a dark theme feels harsh, move it toward Soft.",
+  "配色包安装在记忆目录的 themes/ 下，每个目录包含一个 theme.json。配色包会应用表面色、强调色、圆角和字体；状态色（成功/警告/失败）不受影响。":
+    "Palettes install under themes/ in the memory directory, one theme.json per folder. A palette sets surfaces, accent, corner radii and type; the status colours (success, warning, failure) are unaffected.",
+  "尚未安装配色包。将包含 theme.json 的目录放入 themes/ 后即会显示在此处。": "No palettes installed. Put a folder containing a theme.json into themes/ and it appears here.",
 
   // ── 常量表：档位、分区、状态 ─────────────────────────────────────
   "做到模型认为做完为止。日常用这档": "Runs until the model considers it done. The everyday setting",
@@ -679,7 +662,7 @@ export const EN: Record<string, string> = {
   "设置": "Settings",
   "主题": "Theme",
   "主题：{name}": "Theme: {name}",
-  "交待一个任务": "Give it a task",
+  "描述一个任务": "Describe a task",
   "返回工作台": "Back to the workbench",
 
   // ── 作用范围：一处例外归谁管 ─────────────────────────────────────
@@ -738,7 +721,8 @@ export const EN: Record<string, string> = {
   "保留现在的": "Keep the current one",
   "用量": "Usage",
   "用量与成本": "Usage & cost",
-  "本机记录的 token 与花费 —— 只在这台机器上，不上传。命中缓存的输入按缓存价计费，所以命中率直接决定账单。": "Tokens and spend recorded on this machine — local only, never uploaded. Cached input bills at the cache rate, so the hit rate decides the bill.",
+  "本机记录的 token 用量与花费，仅保存在这台机器上，不会上传。命中缓存的输入按缓存价计费，因此命中率直接影响费用。":
+    "Token usage and cost recorded on this machine only; nothing is uploaded. Input that hits the cache is billed at the cache rate, so the hit rate drives the bill.",
   "正在读记录…": "Reading the records…",
   "时间范围": "Time range",
   "7 天": "7 days",

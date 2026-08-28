@@ -60,7 +60,7 @@ export function Task({ goal, ask, plan, rows, t0, running, blocked, elapsed, onT
             {state.text}
           </span>
         </div>
-        <h2>{goal || t("交待一个任务")}</h2>
+        <h2>{goal || t("描述一个任务")}</h2>
         {ask && <p>{ask}</p>}
         <div className="tk-meta">
           {t0 > 0 && <span>{t("开始于 {at}", { at: wall(t0) })}</span>}

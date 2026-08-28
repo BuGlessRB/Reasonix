@@ -65,7 +65,7 @@ export function Sandbox({ port, onChanged }: { port: AgentPort; onChanged: () =>
       <div className="sec">
         <h3>{t("能写到哪")}</h3>
         <p className="note">
-          {t("批准过的写操作也只能落在这些目录里。这不是提示词里的约定，是文件工具拿不到别处的句柄。")}
+          {t("已批准的写操作也只能作用于这些目录。该限制由文件工具实施，不依赖提示词中的约定。")}
         </p>
         <div className="fields">
           <label className="grow">
@@ -174,13 +174,13 @@ export function CommandMode({
       <h3>{t("命令怎么跑")}</h3>
       {box.available ? (
         <p className="note">
-          {t("关进沙箱之后，命令连想写别处都做不到 —— 上面那份可写清单会由操作系统来执行，而不是由 agent 自觉遵守。")}
+          {t("启用沙箱后，命令无法写入清单之外的位置。上方的可写目录清单由操作系统实施，不依赖 agent 自觉遵守。")}
         </p>
       ) : (
         <div className="find" data-lvl="warn" role="status" id={whyId}>
           <span className="t">{t("这台机器没有可用的 OS 沙箱")}</span>
           <span className="why">
-            {why || t("命令只能不受限地运行；上面的可写范围仍然由工具自己执行。")}
+            {why || t("命令将不受限制地运行；上方的可写范围仍由工具实施。")}
           </span>
         </div>
       )}
@@ -211,7 +211,7 @@ export function CommandMode({
         <div className="kv">
           <span className="k">{t("实际生效")}</span>
           <span className="v">
-            {t("配置里写的是「{want}」，这台机器上按「{now}」跑。", { want: label(written), now: label(mode) })}
+            {t("配置中设置为「{want}」，本机实际按「{now}」运行。", { want: label(written), now: label(mode) })}
           </span>
         </div>
       )}
@@ -219,7 +219,7 @@ export function CommandMode({
         <div className="lrow">
           <span className="tx">
             <span className="lb">{t("沙箱里允许联网")}</span>
-            <span className="ds">{t("关掉之后装依赖、拉仓库都会失败 —— 这正是它的用途")}</span>
+            <span className="ds">{t("关闭后安装依赖、拉取仓库等操作都会失败，这正是该选项的用途")}</span>
           </span>
           <Switch on={box.network} busy={busy === "net"} label={t("沙箱里允许联网")} onClick={onNetwork} />
         </div>

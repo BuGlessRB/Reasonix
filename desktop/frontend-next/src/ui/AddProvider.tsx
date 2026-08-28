@@ -112,7 +112,7 @@ export function AddProvider({
         {sibling && (
           <p className="acct-note">
             这个地址上已经有「{vendorLabel(hostOf(sibling.baseUrl))}」了。留空 key
-            {t("就是给它再开一扇门，两条会并成同一个来源、由「接入方式」切换；填了 key就是这台机器上的另一个账号，各算各的。")}
+            {t("这会为该来源添加另一种接入方式，两者合并为同一个来源，通过「接入方式」切换；若填写新的 key，则视为本机的另一个账号，用量分别计算。")}
           </p>
         )}
       </div>
@@ -154,18 +154,18 @@ export function AddProvider({
           </div>
           {searchSplit && (
             <p className="acct-note">
-              {t("这个地址两条线都答得上来。{on} 那条上联网搜索由供应商自己跑，另一条没有 —— 那是协议的差别，不是设置。", {
+              {t("该地址支持两种接入方式。{on} 支持由供应商执行的联网搜索，另一种不支持；这是协议差异，不是可配置项。", {
                 on: searchOn.map((k) => t(KIND_LABEL[k] ?? k)).join("、"),
               })}
             </p>
           )}
           {probe.ambiguous && (
             <p className="acct-note">
-              {t("两种接入方式的模型列表它都答得上来，光看列表分不出来 —— 聊天入口通常不在同一个路径下，选错了聊天会报错。要两条都用就再添加一次、选另一个。")}
+              {t("两种接入方式都能返回模型列表，仅凭列表无法区分；两者的聊天入口路径通常不同，选错会导致聊天报错。如需同时使用，请再添加一次并选择另一种。")}
             </p>
           )}
           {probe.noProxy && (
-            <p className="acct-note">{t("走代理连不上、直连可以，已经记成「这个来源不走代理」。")}</p>
+            <p className="acct-note">{t("该来源通过代理无法连接、直连可用，已记录为「此来源不使用代理」。")}</p>
           )}
 
           <div className="mlist">

@@ -82,7 +82,7 @@ function PlanGate({ item, onPlan }: { item: Props["item"]; onPlan: Props["onPlan
     item.verdict === "start"
       ? [t("已开始执行。"), t("计划模式已经关掉，接下来是执行。")]
       : item.verdict === "exit"
-        ? [t("暂不执行。"), t("已退出计划模式，计划留在上面，随时可以再交待。")]
+        ? [t("暂不执行。"), t("已退出计划模式，计划保留在上方，可随时重新交代。")]
         : [t("继续规划。"), t("在下面说要改什么，规划者会据此重写这份计划。")];
   return (
     <div className="call" data-k="ask">
