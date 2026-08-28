@@ -158,17 +158,18 @@ type Manager struct {
 	// owns the transcript must never publish an interrupted tombstone.
 	sessionOwnershipProbe func(path string) bool
 
-	mu           sync.Mutex
-	seq          int
-	jobs         map[string]*Job
-	order        []string
-	completed    []completion // finished-job summaries awaiting drain into the next turn
-	active       string
-	destroying   map[string]bool
-	artifactDirs map[string]string
-	loaded       map[string]bool
-	tempRoot     string
-	reservations map[string]int
+	mu                 sync.Mutex
+	completionObserver CompletionObserver
+	seq                int
+	jobs               map[string]*Job
+	order              []string
+	completed          []completion // finished-job summaries awaiting drain into the next turn
+	active             string
+	destroying         map[string]bool
+	artifactDirs       map[string]string
+	loaded             map[string]bool
+	tempRoot           string
+	reservations       map[string]int
 
 	stalledWarning time.Duration
 	teardownGrace  time.Duration
@@ -179,6 +180,9 @@ type Manager struct {
 type completion struct {
 	sessionID string
 	text      string
+	// eventID is the terminal event this note stands for, empty for a stalled
+	// warning: nothing terminal happened, so nothing can acknowledge it away.
+	eventID string
 }
 
 // Option configures a Manager.
@@ -387,7 +391,7 @@ func (m *Manager) startInvalid(parentSession, kind, label string, validationErr 
 	m.order = append(m.order, key)
 	m.mu.Unlock()
 	close(j.done)
-	m.recordCompletion(parentSession, id, kind, label, Failed, validationErr)
+	m.publishCompletion(m.recordCompletion(parentSession, id, kind, label, "", Failed, validationErr))
 	return j
 }
 
@@ -488,6 +492,7 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		if metaErr != nil {
 			j.noteArtifactErr("metadata: " + metaErr.Error())
 		}
+		resultRef := j.artifactRefLocked()
 		j.mu.Unlock()
 		// Queue the drain note (and emit the closing Notice) BEFORE publishing the
 		// terminal status. Wait(nil)/resolve only block on Running jobs, so if the
@@ -495,7 +500,7 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		// completion, skip j.done, and DrainCompletedNote would race ahead of the
 		// bookkeeping (the TestDrainMultiple -race flake). Recording first makes an
 		// observed terminal status imply the note is already queued.
-		m.recordCompletion(parentSession, id, kind, label, st, err)
+		ev := m.recordCompletion(parentSession, id, kind, label, resultRef, st, err)
 
 		j.mu.Lock()
 		if j.status != Killed { // a concurrent Kill already published Killed — keep it
@@ -507,6 +512,8 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		}
 		j.mu.Unlock()
 		close(j.done)
+		// Only now would a woken turn's first question get "terminal".
+		m.publishCompletion(ev)
 	}()
 	return j
 }
@@ -727,46 +734,6 @@ func (m *Manager) monitorStalled(parentSession string, j *Job) {
 			j.mu.Unlock()
 			timer.Reset(wait)
 		}
-	}
-}
-
-// recordCompletion queues the finished-job summary for DrainCompletedNote and
-// emits a closing Notice (warn for a failure, info otherwise).
-func (m *Manager) recordCompletion(parentSession, id, kind, label string, st Status, err error) {
-	tag := id
-	if label != "" {
-		tag = fmt.Sprintf("%s (%s)", id, label)
-	}
-	parentSession = strings.TrimSpace(parentSession)
-	shouldEmit := false
-	m.mu.Lock()
-	if parentSession != "" && m.destroying[parentSession] {
-		m.mu.Unlock()
-		return
-	}
-	m.completed = append(m.completed, completion{
-		sessionID: parentSession,
-		text:      fmt.Sprintf("%s — %s", tag, st),
-	})
-	active := m.active
-	shouldEmit = active == "" || parentSession == "" || active == parentSession
-	m.mu.Unlock()
-
-	if !nilutil.IsNil(m.taskRecorder) {
-		m.taskRecorder.RecordDone(id, st, err)
-	}
-
-	level, text := event.LevelInfo, fmt.Sprintf("background %s finished: %s", kind, id)
-	detail := ""
-	switch st {
-	case Failed:
-		level, text = event.LevelWarn, fmt.Sprintf("background %s failed: needs attention", kind)
-		detail = fmt.Sprintf("background %s failed: %s — %v", kind, id, err)
-	case Killed:
-		text = fmt.Sprintf("background %s killed: %s", kind, id)
-	}
-	if shouldEmit {
-		m.sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: text, Detail: detail})
 	}
 }
 

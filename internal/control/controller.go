@@ -505,22 +505,7 @@ func New(opts Options) *Controller {
 	// provider, so no separate enablement state is needed.
 	c.initRecoveryGate(opts.RecoveryReviewer, opts.RecoveryHeadless)
 
-	// Task monitoring: record background-job lifecycle into the project-local
-	// task store so CLI, Desktop, scripts, and future clients observe the same
-	// state/event evidence. The recorder swallows its own failures — monitoring
-	// must never affect the agent pipeline. The session id is resolved lazily
-	// because the session path is only fixed once the first turn begins.
-	if c.jobs != nil && c.workspaceRoot != "" {
-		taskStore := opts.TaskStore
-		if taskStore == nil {
-			taskStore = taskmonitor.NewFileStore(filepath.Join(".reasonix", "tasks"))
-		}
-		c.jobs.SetTaskRecorder(taskmonitor.NewTaskRecorder(
-			taskStore,
-			c.workspaceRoot,
-			func() string { return c.parentSessionID() },
-		))
-	}
+	c.observeJobs(opts.TaskStore)
 	return c
 }
 

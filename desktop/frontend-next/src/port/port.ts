@@ -85,6 +85,9 @@ export interface Queue {
 export interface QueueItem {
   id: string;
   intent: "followup" | "steer";
+  // Absent means the user wrote it. "host" is the runtime's own continuation —
+  // a finished background job asking the session to pick the work back up.
+  origin?: "host";
   state: "queued" | "steer_accepted" | "steer_consumed" | "running" | "blocked" | "uncertain";
   preview: string;
   createdAt: string;

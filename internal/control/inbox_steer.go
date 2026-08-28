@@ -154,7 +154,7 @@ func (c *Controller) TrySteerInboxItem(id string) (sessioninbox.InboxReceipt, er
 		}
 	}
 	c.mu.Lock()
-	accepted := !c.gate.closed && !c.gate.rotating && c.gate.running && c.executor != nil && len(env.FrozenImages) == 0 && c.executor.SteerItem(id, loader)
+	accepted := !c.gate.closed && !c.gate.rotating && c.gate.running && c.executor != nil && len(env.FrozenImages) == 0 && c.steerItemAs(meta.Origin, id, loader)
 	if accepted {
 		c.inbox.mu.Lock()
 		c.inbox.trackActive(id)
@@ -188,4 +188,13 @@ func (c *Controller) TrySteerInboxItem(id string) (sessioninbox.InboxReceipt, er
 		Paused:      st.Snapshot().Paused,
 		Capacity:    cap,
 	}, nil
+}
+
+// steerItemAs queues the item under the attribution the manifest recorded, so a
+// host-authored item is never delivered as something the user said. Holds c.mu.
+func (c *Controller) steerItemAs(origin sessioninbox.PromptOrigin, id string, loader func() (string, error)) bool {
+	if origin.IsHost() {
+		return c.executor.SteerHostItem(id, loader)
+	}
+	return c.executor.SteerItem(id, loader)
 }

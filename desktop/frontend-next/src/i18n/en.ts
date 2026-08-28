@@ -237,6 +237,7 @@ export const EN: Record<string, string> = {
   "继续派发": "Release",
   "排队": "Queued",
   "插话排队": "Steer queued",
+  "后台任务续接": "Background job follow-on",
   "插话已收": "Steer accepted",
   "下个工具边界送入": "goes in at the next tool boundary",
   "已送入": "delivered",

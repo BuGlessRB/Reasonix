@@ -732,7 +732,7 @@ func (a *Agent) flushSteerQueue() {
 				text = t
 			}
 		}
-		a.RecordUnappliedSteer(text, e.itemID)
+		a.recordUnappliedSteer(text, e.host, e.itemID)
 	}
 }
 
@@ -748,27 +748,7 @@ func UnappliedSteerNotice(text string) string {
 // before every provider request. itemID correlates the notice with the durable
 // session inbox entry when one exists.
 func (a *Agent) RecordUnappliedSteer(text string, itemID ...string) {
-	if a == nil || a.sess.conversation == nil {
-		return
-	}
-	id := ""
-	if len(itemID) > 0 {
-		id = itemID[0]
-	}
-	a.sess.conversation.Add(provider.Message{
-		Role:       provider.RoleTool,
-		Content:    a.withTurnPreferences(midTurnSteerMessage(text, false)),
-		ToolCallID: provider.LocalOnlyToolID,
-		Name:       provider.LocalOnlyToolName,
-		LocalOnly:  true,
-	})
-	a.svc.sink.Emit(event.Event{
-		Kind:   event.Notice,
-		Level:  event.LevelWarn,
-		Code:   event.NoticeCodeUnappliedSteer,
-		Text:   UnappliedSteerNotice(text),
-		ItemID: id,
-	})
+	a.recordUnappliedSteer(text, false, itemID...)
 }
 
 func (a *Agent) steerQueueLen() int {

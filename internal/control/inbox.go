@@ -31,6 +31,7 @@ const (
 // InboxRequest is the frontend-facing enqueue payload.
 type InboxRequest struct {
 	Intent      sessioninbox.InboxIntent
+	Origin      sessioninbox.PromptOrigin
 	Display     string
 	Raw         string
 	Submit      string
@@ -310,6 +311,7 @@ func (c *Controller) EnqueueInbox(req InboxRequest) (sessioninbox.InboxReceipt, 
 	}
 	rec, err := st.Enqueue(sessioninbox.EnqueueRequest{
 		Intent:      intent,
+		Origin:      req.Origin,
 		Envelope:    env,
 		Source:      req.Source,
 		Idempotency: req.Idempotency,
@@ -610,7 +612,7 @@ func (c *Controller) TrySubmitInboxItem(id string) (sessioninbox.InboxReceipt, e
 	if st.Snapshot().Paused {
 		return sessioninbox.InboxReceipt{}, sessioninbox.ErrPaused
 	}
-	run, block, materializeErr := c.prepareInboxRun(env)
+	run, block, materializeErr := c.prepareInboxRun(env, meta.Origin)
 	if materializeErr != nil {
 		return sessioninbox.InboxReceipt{}, materializeErr
 	}

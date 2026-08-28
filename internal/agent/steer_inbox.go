@@ -1,7 +1,12 @@
 // steer_inbox.go — the mid-turn guidance a running turn will accept.
 package agent
 
-import "sync"
+import (
+	"sync"
+
+	"reasonix/internal/event"
+	"reasonix/internal/provider"
+)
 
 type steerEntry struct {
 	itemID string
@@ -124,4 +129,42 @@ func (s *steerInbox) close() []steerEntry {
 	}
 	s.running = false
 	return pending
+}
+
+// SteerHostItem is SteerItem for a durable item the runtime authored. The
+// attribution travels with the entry rather than with the call site, so every
+// path that renders or persists it later says the same thing about who spoke.
+func (a *Agent) SteerHostItem(itemID string, load func() (string, error)) bool {
+	return a.queueSteer(steerEntry{itemID: itemID, load: load, host: true})
+}
+
+// RecordUnappliedHostSteer is RecordUnappliedSteer for runtime-authored
+// guidance. Recording it as the user's would put words in their mouth in the
+// one transcript a later turn reads back.
+func (a *Agent) RecordUnappliedHostSteer(text string, itemID ...string) {
+	a.recordUnappliedSteer(text, true, itemID...)
+}
+
+func (a *Agent) recordUnappliedSteer(text string, host bool, itemID ...string) {
+	if a == nil || a.sess.conversation == nil {
+		return
+	}
+	id := ""
+	if len(itemID) > 0 {
+		id = itemID[0]
+	}
+	a.sess.conversation.Add(provider.Message{
+		Role:       provider.RoleTool,
+		Content:    a.withTurnPreferences(midTurnSteerMessage(text, host)),
+		ToolCallID: provider.LocalOnlyToolID,
+		Name:       provider.LocalOnlyToolName,
+		LocalOnly:  true,
+	})
+	a.svc.sink.Emit(event.Event{
+		Kind:   event.Notice,
+		Level:  event.LevelWarn,
+		Code:   event.NoticeCodeUnappliedSteer,
+		Text:   UnappliedSteerNotice(text),
+		ItemID: id,
+	})
 }

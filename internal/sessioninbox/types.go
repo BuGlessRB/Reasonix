@@ -25,6 +25,19 @@ const (
 	IntentSteer    InboxIntent = "steer"
 )
 
+// PromptOrigin says who authored an item. The zero value is the user, so an
+// item written before this field existed reads as what it was; only a
+// host-authored item spends a byte saying so.
+type PromptOrigin string
+
+const (
+	OriginUser PromptOrigin = ""
+	OriginHost PromptOrigin = "host"
+)
+
+// IsHost reports whether the runtime authored this item rather than the user.
+func (o PromptOrigin) IsHost() bool { return o == OriginHost }
+
 // InboxState is the durable lifecycle of one queue item.
 type InboxState string
 
@@ -85,6 +98,7 @@ type InboxItemMeta struct {
 	ByteSize    int64        `json:"byteSize"`
 	Checksum    string       `json:"checksum"`
 	Idempotency string       `json:"idempotencyKey,omitempty"`
+	Origin      PromptOrigin `json:"origin,omitempty"`
 	Refs        []RefSummary `json:"refs,omitempty"`
 	BlockReason string       `json:"blockReason,omitempty"`
 	RunID       string       `json:"runId,omitempty"`
@@ -182,6 +196,7 @@ type InboxReceipt struct {
 // EnqueueRequest is the input for durable admission.
 type EnqueueRequest struct {
 	Intent      InboxIntent
+	Origin      PromptOrigin
 	Envelope    PromptEnvelope
 	Source      string
 	Idempotency string

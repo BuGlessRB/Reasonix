@@ -21,6 +21,9 @@ const settled = (s: QueueItem["state"]) => s === "steer_consumed" || s === "runn
 // these call sites, and a table of strings looked up later is invisible to it —
 // which is how a row would render Chinese inside an English window.
 function label(it: QueueItem): string {
+  if (it.origin === "host" && it.state !== "blocked" && it.state !== "uncertain") {
+    return t("后台任务续接");
+  }
   switch (it.state) {
     case "steer_accepted":
       return t("插话已收");

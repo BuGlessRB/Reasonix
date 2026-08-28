@@ -246,7 +246,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		} else if itemID != "" {
 			// Loader failed after dequeue: durable entry stays for inspection
 			// (unapplied path marks uncertain + pause via the notice sink).
-			a.RecordUnappliedSteer("(body load failed)", itemID)
+			a.recordUnappliedSteer("(body load failed)", host, itemID)
 		}
 		// Context pressure rides the turn tail, never the cached prefix: an
 		// append leaves the prefix byte-stable, and a model that knows a fold

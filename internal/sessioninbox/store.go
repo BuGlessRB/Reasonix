@@ -350,6 +350,7 @@ func (s *Store) Enqueue(req EnqueueRequest) (InboxReceipt, error) {
 		ByteSize:    byteSize,
 		Checksum:    checksum,
 		Idempotency: idem,
+		Origin:      req.Origin,
 		Refs:        refSummaries(env.Refs),
 		RunID:       s.runID,
 	}

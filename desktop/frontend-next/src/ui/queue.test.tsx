@@ -38,6 +38,14 @@ const draw = (q: QueueSnapshot) =>
 // could tell. Every assertion here is on what the strip says back, because a
 // steer whose only evidence is the model's next sentence reads as ignored.
 describe("what the pending strip says back", () => {
+  // A background job's follow-on is queued the same way a typed line is, so
+  // without saying whose it is the strip reports the runtime as the user.
+  it("names a host continuation as the background job it came from", () => {
+    const html = draw(snapshot({ items: [item({ origin: "host", state: "queued", intent: "followup" })] }));
+    expect(html).toContain("后台任务续接");
+    expect(html).not.toContain("插话排队");
+  });
+
   it("names an accepted steer as taken, not as waiting", () => {
     const html = draw(snapshot());
     expect(html).toContain("插话已收");

@@ -23,7 +23,7 @@ func (c *Controller) RunInboxTurn(ctx context.Context, id string) error {
 	if meta.State != sessioninbox.StateQueued {
 		return sessioninbox.ErrInvalidState
 	}
-	run, block, err := c.prepareInboxRun(env)
+	run, block, err := c.prepareInboxRun(env, meta.Origin)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,11 @@ func (c *Controller) RunInboxTurn(ctx context.Context, id string) error {
 	}, run)
 }
 
-func (c *Controller) prepareInboxRun(env sessioninbox.PromptEnvelope) (func(context.Context) error, string, error) {
+// prepareInboxRun materializes one queued item into the turn that runs it.
+// origin decides whose turn it is: a host-authored item runs synthetic, so it
+// opens no checkpoint, starts no new recovery episode, and is not counted as
+// something the user said.
+func (c *Controller) prepareInboxRun(env sessioninbox.PromptEnvelope, origin sessioninbox.PromptOrigin) (func(context.Context) error, string, error) {
 	submit, frozenImages, block, err := applyInboxReferences(env)
 	if err != nil || block != "" {
 		return nil, block, err
@@ -59,6 +63,7 @@ func (c *Controller) prepareInboxRun(env sessioninbox.PromptEnvelope) (func(cont
 		return func(ctx context.Context) error {
 			return c.runTurnLoop(c.withTurnFormat(ctx, strings.TrimSpace(env.Format)), orchestratedTurn{
 				input: submit, raw: raw, display: display, images: c.frozenTurnImages(frozenImages),
+				synthetic: origin.IsHost(),
 			})
 		}, "", nil
 	}
