@@ -20,6 +20,7 @@ func main() {
 	mode := flag.String("mode", "preflight", "calibrate | preflight | run-search | run-index")
 	work := flag.String("work", "", "directory for built fixtures (default: a temp dir)")
 	only := flag.String("task", "", "limit to one task id")
+	dry := flag.Bool("dry", false, "run modes: drive the pipeline with a scripted provider instead of paying for one")
 	flag.Parse()
 
 	if err := validateCorpus(); err != nil {
@@ -53,9 +54,9 @@ func main() {
 	case "preflight":
 		os.Exit(runPreflight(tasks, root))
 	case "run-search":
-		os.Exit(runExperiment(experimentSearch, root))
+		os.Exit(runExperiment(experimentSearch, root, *dry))
 	case "run-index":
-		os.Exit(runExperiment(experimentIndex, root))
+		os.Exit(runExperiment(experimentIndex, root, *dry))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown mode %q\n", *mode)
 		os.Exit(2)

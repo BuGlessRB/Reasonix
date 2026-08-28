@@ -86,12 +86,18 @@ func finalAnswer(msgs []provider.Message) string {
 	return ""
 }
 
-// runExperiment runs one experiment's tasks across its arms.
-func runExperiment(experiment, root string) int {
-	p, err := realProvider()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 2
+// runExperiment runs one experiment's tasks across its arms. A dry run drives
+// the same pipeline with a scripted provider: it proves fixture, run, scoring
+// and report hold together before any of it is paid for.
+func runExperiment(experiment, root string, dry bool) int {
+	var p provider.Provider = &scriptedProvider{}
+	if !dry {
+		real, err := realProvider()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		p = real
 	}
 	byArm := map[string][]contextMetrics{}
 	var all []contextMetrics
