@@ -633,7 +633,25 @@ func (a *Agent) summarizeOnce(ctx context.Context, fold []provider.Message, inst
 }
 
 // renderTranscript flattens messages into a readable transcript for summarization.
+// renderTranscript is summarizer input: tool-call arguments are summarized so
+// a digest cannot reproduce a long one (#4317).
 func renderTranscript(msgs []provider.Message) string {
+	return renderTranscriptWith(msgs, summarizeToolArgs)
+}
+
+// renderTranscriptVerbatim keeps the arguments. Recall exists to return what
+// was actually said and run, and #4317's leak path is a digest becoming a user
+// message — a recall result is a tool result, and its budget bounds the size.
+func renderTranscriptVerbatim(msgs []provider.Message) string {
+	return renderTranscriptWith(msgs, func(args string) string {
+		if args == "" {
+			return "(no arguments)"
+		}
+		return args
+	})
+}
+
+func renderTranscriptWith(msgs []provider.Message, renderArgs func(string) string) string {
 	var b strings.Builder
 	for _, m := range msgs {
 		if m.LocalOnly {
@@ -647,7 +665,7 @@ func renderTranscript(msgs []provider.Message) string {
 				fmt.Fprintf(&b, "[assistant]\n%s\n", m.Content)
 			}
 			for _, tc := range m.ToolCalls {
-				fmt.Fprintf(&b, "[assistant calls %s] %s\n", tc.Name, summarizeToolArgs(tc.Arguments))
+				fmt.Fprintf(&b, "[assistant calls %s] %s\n", tc.Name, renderArgs(tc.Arguments))
 			}
 			b.WriteString("\n")
 		case provider.RoleTool:

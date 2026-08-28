@@ -65,7 +65,7 @@ func (a *Agent) RecallContext(_ context.Context, req tool.RecallRequest) (tool.R
 		if pos >= covered {
 			return tool.RecallResult{}, fmt.Errorf("recall: #%d is not folded — it is still in your context, so read it there", pos)
 		}
-		rendered := renderTranscript(a.recallSpan(canonical, pos))
+		rendered := renderTranscriptVerbatim(a.recallSpan(canonical, pos))
 		if strings.TrimSpace(rendered) == "" {
 			missing = append(missing, pos)
 			continue
