@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 )
 
@@ -105,10 +106,14 @@ func (a *Agent) baselineFacts() []evidence.BaselineTestFact {
 	}
 	facts := make([]evidence.BaselineTestFact, 0, len(a.task.baselineCriteria))
 	for path, criterion := range a.task.baselineCriteria {
-		fact := evidence.BaselineTestFact{
-			Criterion:  criterion,
-			Provenance: a.criterionProvenance(criterion, path),
+		provenance := a.criterionProvenance(criterion, path)
+		if provenance == evidence.CriterionUnchanged {
+			// The workspace still holds these exact bytes, so the project's own
+			// checks ran this criterion. Nothing here is owed that the ordinary
+			// verification obligations do not already say.
+			continue
 		}
+		fact := evidence.BaselineTestFact{Criterion: criterion, Provenance: provenance}
 		if got, ok := a.turn.baselineEval[criterion.Identity()]; ok {
 			fact.Evaluation = &got
 		}
@@ -127,7 +132,20 @@ func (a *Agent) evaluateBaselineCriteriaOnce(ctx context.Context) {
 	a.turn.baselineEval = map[string]evidence.BaselineEvidence{}
 	epoch := a.mutationEpoch()
 	store := a.baselineCriteriaStore()
+	// A build takes seconds the reader would otherwise watch as an unexplained
+	// spinner: the model has answered, and the host is still checking.
+	announced := false
 	for path, criterion := range a.task.baselineCriteria {
+		// Only a criterion the workspace no longer holds needs the overlay. Running
+		// one costs a build, and doing it for every file captured against a broad
+		// mutation is a build per test file for a turn that rewrote none of them.
+		if a.criterionProvenance(criterion, path) == evidence.CriterionUnchanged {
+			continue
+		}
+		if !announced {
+			a.emitTurnPhase(event.TurnPhaseChecking)
+			announced = true
+		}
 		result, ok := a.runBaselineCriterion(ctx, store, criterion, path)
 		if !ok {
 			continue

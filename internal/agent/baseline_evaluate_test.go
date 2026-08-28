@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"reasonix/internal/evidence"
 	"reasonix/internal/testenv"
@@ -97,5 +98,29 @@ func TestACriterionThatCannotBuildIsUnavailableAndStillOwed(t *testing.T) {
 	owed := evidence.BaselineTestObligations(facts, a.mutationEpoch())
 	if len(owed) != 1 {
 		t.Fatalf("obligations = %+v, want it still owed", owed)
+	}
+}
+
+// A criterion the workspace still holds byte for byte was run by the project's
+// own checks. Reaching for the overlay there costs a build to prove what the
+// ordinary suite just proved — and a broad mutation captures every test file in
+// the tree, so it costs one per file for a turn that rewrote none of them.
+func TestAnUnchangedCriterionCostsNoBuild(t *testing.T) {
+	captured := "package spike\n\nimport \"testing\"\n\nfunc TestEvict(t *testing.T) {\n\tif got := Evict(3); got != 2 {\n\t\tt.Fatalf(\"Evict(3) = %d, want 2\", got)\n\t}\n}\n"
+	a := baselineWorkspace(t, "package spike\n\nfunc Evict(n int) int { return n - 1 }\n", captured)
+
+	start := time.Now()
+	a.evaluateBaselineCriteriaOnce(context.Background())
+	elapsed := time.Since(start)
+
+	if len(a.turn.baselineEval) != 0 {
+		t.Fatalf("evaluations = %v, want none for a criterion the workspace still holds", a.turn.baselineEval)
+	}
+	if len(a.baselineFacts()) != 0 {
+		t.Fatalf("facts = %+v, want none: the ordinary checks already ran these bytes", a.baselineFacts())
+	}
+	// A toolchain build cannot finish this fast, so this fails if one ran.
+	if elapsed > 300*time.Millisecond {
+		t.Fatalf("took %s — an unchanged criterion reached for the toolchain", elapsed)
 	}
 }
