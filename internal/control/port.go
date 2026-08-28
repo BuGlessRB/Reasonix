@@ -41,6 +41,10 @@ type Lifecycle interface {
 	Label() string
 	ModelRef() string
 	WorkspaceRoot() string
+	// CapabilityScope describes that workspace the way a capability listing
+	// names it: a shell holds several projects at once, so every listing says
+	// which folder it is answering for.
+	CapabilityScope() CapabilityScope
 	Close()
 }
 
@@ -154,14 +158,25 @@ type MemoryControl interface {
 	LastMemoryRecall() memory.RecallResult
 }
 
-// Capabilities covers the session's pluggable surface — MCP servers, skills,
-// slash commands, hooks — and resolving prompt/command/skill inputs.
-type Capabilities interface {
-	Host() *plugin.Host
+// The capability surface is one dispatcher and five listings, kept apart
+// because frontends drive them apart: an editor resolves slash input and never
+// edits a permission rule; a skills pane never reconnects an MCP server.
+
+// SlashDispatch resolves a typed line into whatever runs it — a custom command,
+// an MCP prompt, or a skill — and enumerates what is on offer.
+type SlashDispatch interface {
 	Commands() []command.Command
 	ReloadCommands(ctx context.Context) error
-	Skills() []skill.Skill
 	SlashSkills() []skill.Skill
+	CustomCommand(input string) (sent string, found bool)
+	MCPPrompt(ctx context.Context, input string) (sent string, found bool, err error)
+	RunSkill(input string) (sent string, found bool)
+}
+
+// Skills covers the session's skill catalog and what a pane may change about
+// it: activation per scope, and authoring.
+type Skills interface {
+	Skills() []skill.Skill
 	AllSkills() []skill.Skill
 	DisabledSkills() []skill.Skill
 	SkillEnabled(name string) bool
@@ -172,11 +187,46 @@ type Capabilities interface {
 	CreateSkill(name string, scope skill.Scope, content string) (string, error)
 	UpdateSkill(name string, scope skill.Scope, content string) error
 	DeleteSkill(name string, scope skill.Scope) error
+}
+
+// Hooks covers the session's lifecycle hooks: the live runner, what is
+// configured, and editing or dry-running a config.
+type Hooks interface {
 	HookRunner() *hook.Runner
 	InspectHooks() hook.Inspection
 	SaveHooks(scope hook.Scope, settings hook.Settings) error
 	DryRunHook(ctx context.Context, cfg hook.HookConfig, event hook.Event) (hook.DryRunResult, error)
 	HookSettingsPath(scope hook.Scope) string
+}
+
+// MCPControl covers the live MCP surface: the running host, and adding,
+// connecting, enabling, and removing servers.
+type MCPControl interface {
+	Host() *plugin.Host
+	AddMCPServer(e config.PluginEntry) (int, error)
+	ConnectMCPServer(e config.PluginEntry) (int, error)
+	RegisterMCPServerOnDemand(e config.PluginEntry) (int, error)
+	ConnectConfiguredMCPServer(name string) (int, error)
+	InstallMCPServer(e config.PluginEntry, scope MCPScope) (plugin.MCPInstallResult, error)
+	ReconnectMCPServer(name string) (int, error)
+	MCPServerEnabled(name string) (bool, error)
+	SetMCPServerEnabled(name string, scope config.ActivationScope, enabled bool) error
+	ClearMCPServerOverride(name string, scope config.ActivationScope) error
+	DisconnectMCPServer(name string) bool
+	RemoveMCPServer(name string) (disconnected bool, err error)
+	ConfiguredMCPNames() []string
+	ConfiguredMCPServers() []MCPServerState
+	MCPCatalogTools() map[string]int
+	DisconnectedMCPNames() []string
+	UnregisterMCPServerTools(name string) bool
+	ImportMCPEntries(entries []config.PluginEntry) (total, added, updated, connected, failed, skipped int, err error)
+}
+
+// RuntimeSettings covers the machine-facing settings a session runs under —
+// network, shell, permissions, sandbox — plus repairing a config file that
+// failed to parse. None of it is a capability listing, so a pane that lists
+// skills or MCP servers cannot reach a permission rule from the same port.
+type RuntimeSettings interface {
 	NetworkSettings() NetworkSettings
 	SaveNetworkSettings(in NetworkSettings, password string, clearPassword bool) error
 	DiagnoseNetwork(ctx context.Context) []NetworkProbe
@@ -188,27 +238,11 @@ type Capabilities interface {
 	SaveSandboxSettings(in SandboxSettings) error
 	ConfigProblem() *ConfigProblem
 	RepairConfigFile() (string, error)
-	CustomCommand(input string) (sent string, found bool)
-	MCPPrompt(ctx context.Context, input string) (sent string, found bool, err error)
-	RunSkill(input string) (sent string, found bool)
-	AddMCPServer(e config.PluginEntry) (int, error)
-	ConnectMCPServer(e config.PluginEntry) (int, error)
-	RegisterMCPServerOnDemand(e config.PluginEntry) (int, error)
-	ConnectConfiguredMCPServer(name string) (int, error)
-	InstallMCPServer(e config.PluginEntry, scope MCPScope) (plugin.MCPInstallResult, error)
-	ReconnectMCPServer(name string) (int, error)
-	MCPServerEnabled(name string) (bool, error)
-	SetMCPServerEnabled(name string, scope config.ActivationScope, enabled bool) error
-	ClearMCPServerOverride(name string, scope config.ActivationScope) error
-	CapabilityScope() CapabilityScope
-	DisconnectMCPServer(name string) bool
-	RemoveMCPServer(name string) (disconnected bool, err error)
-	ConfiguredMCPNames() []string
-	ConfiguredMCPServers() []MCPServerState
-	MCPCatalogTools() map[string]int
-	DisconnectedMCPNames() []string
-	UnregisterMCPServerTools(name string) bool
-	ImportMCPEntries(entries []config.PluginEntry) (total, added, updated, connected, failed, skipped int, err error)
+}
+
+// Extensions covers what handshake-declared sidecars contribute to a frontend:
+// their actions, the form values coming back, and the providers they add.
+type Extensions interface {
 	// Extension UI: enumerate handshake-declared extension actions, invoke one
 	// by its public /<plugin>:<action> name, and deliver a published form's
 	// values back to the owning sidecar. Nil hub → empty / error.
@@ -220,6 +254,17 @@ type Capabilities interface {
 	// when no extension declared providers; frontends merge it into their
 	// model pickers and skip nil.
 	ProviderCatalog() []provider.Descriptor
+}
+
+// Capabilities is the whole pluggable surface, for a frontend that drives all
+// of it. One that drives part of it names that part instead.
+type Capabilities interface {
+	SlashDispatch
+	Skills
+	Hooks
+	MCPControl
+	RuntimeSettings
+	Extensions
 }
 
 // Status covers read-only run/usage/billing telemetry and task list state.
@@ -298,13 +343,17 @@ type GatewayAPI interface {
 }
 
 // EditorAPI is what an editor integration drives over ACP: a gateway's four,
-// plus the capabilities, goals and persistence an editor puts on screen.
+// plus the slash dispatch, MCP surface and sidecar extensions it puts on
+// screen, and the goals and persistence it shows. What it does not name is the
+// point — an editor authors no skill, edits no hook, and saves no sandbox rule.
 type EditorAPI interface {
 	Lifecycle
 	TurnControl
 	Approvals
 	Inbox
-	Capabilities
+	SlashDispatch
+	MCPControl
+	Extensions
 	Goals
 	SessionPersistence
 }
@@ -321,6 +370,12 @@ var (
 	_ Goals              = (*Controller)(nil)
 	_ SessionHistory     = (*Controller)(nil)
 	_ MemoryControl      = (*Controller)(nil)
+	_ SlashDispatch      = (*Controller)(nil)
+	_ Skills             = (*Controller)(nil)
+	_ Hooks              = (*Controller)(nil)
+	_ MCPControl         = (*Controller)(nil)
+	_ RuntimeSettings    = (*Controller)(nil)
+	_ Extensions         = (*Controller)(nil)
 	_ Capabilities       = (*Controller)(nil)
 	_ Status             = (*Controller)(nil)
 	_ SessionPersistence = (*Controller)(nil)

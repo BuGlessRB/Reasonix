@@ -243,17 +243,17 @@ func (s *service) bindClientIO(p *SessionParams, sessionID string) {
 	}
 }
 
-// acpController is the slice of the controller's driving port the ACP transport
-// drives: session lifecycle + persistence, turn execution, interactive approval,
-// and the capability surface (commands/skills/MCP prompts). ACP never touches
-// goals, checkpoints, or memory, so it depends on those sub-ports only — not the
-// concrete *control.Controller.
+// acpController is the slice of the driving port ACP drives: lifecycle,
+// persistence, turns, approval, and the editor-facing capability surface. It
+// names no checkpoint, memory, skill-authoring or settings port.
 type acpController interface {
 	control.Lifecycle
 	control.TurnControl
 	TrySteer(text string) bool
 	control.Approvals
-	control.Capabilities
+	control.SlashDispatch
+	control.MCPControl
+	control.Extensions
 	control.SessionPersistence
 	// Goals backs ACP's normal/plan/goal collaboration-mode surface.
 	control.Goals
