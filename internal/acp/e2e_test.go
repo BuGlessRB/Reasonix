@@ -549,8 +549,11 @@ func TestE2EApprovalRoundTrip(t *testing.T) {
 			} `json:"update"`
 		}
 		json.Unmarshal(n.Params, &p)
+		// Prefix, not equality: a call that changes what the host owes carries
+		// the delta after its own output, and that tail is not this assertion's
+		// subject — the tool having run and reported "written ok" is.
 		if p.Update.Status == "completed" && len(p.Update.Content) > 0 &&
-			p.Update.Content[0].Content.Text == "written ok" {
+			strings.HasPrefix(p.Update.Content[0].Content.Text, "written ok") {
 			ran = true
 		}
 	}

@@ -14,15 +14,19 @@ import (
 	"reasonix/internal/testenv"
 )
 
-func resolvedHome(t *testing.T, m *machine) string {
-	t.Helper()
-	// A temp dir is reached through a symlink on macOS, and the far side answers
-	// with what it resolved to.
-	home, err := filepath.EvalSymlinks(m.home)
-	if err != nil {
-		t.Fatal(err)
+// sameFarPath reports whether two spellings name one directory. A temp dir is
+// reached through a symlink on macOS, and whether the far side answers with the
+// spelling it was handed or with what that resolves to is its business — the
+// subject here is which directory it named, so both sides are resolved before
+// they are compared.
+func sameFarPath(got, want string) bool {
+	resolve := func(p string) string {
+		if r, err := filepath.EvalSymlinks(filepath.FromSlash(p)); err == nil {
+			return filepath.ToSlash(r)
+		}
+		return filepath.ToSlash(p)
 	}
-	return filepath.ToSlash(home)
+	return resolve(got) == resolve(want)
 }
 
 func names(l Listing) []string {
@@ -49,7 +53,7 @@ func TestBrowseListsFoldersWithoutStartingAKernel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("browse: %v", err)
 	}
-	if want := resolvedHome(t, m); got.Path != want {
+	if want := filepath.ToSlash(m.home); !sameFarPath(got.Path, want) {
 		t.Fatalf("listed %q, want the login home %q", got.Path, want)
 	}
 	if !slices.Equal(names(got), []string{"eval", "training"}) {
@@ -118,7 +122,7 @@ func TestBrowseCarriesTheParentToWalkUpThrough(t *testing.T) {
 	if err != nil {
 		t.Fatalf("browse: %v", err)
 	}
-	if want := resolvedHome(t, m) + "/training"; got.Parent != want {
+	if want := filepath.ToSlash(filepath.Join(m.home, "training")); !sameFarPath(got.Parent, want) {
 		t.Fatalf("parent = %q, want %q", got.Parent, want)
 	}
 
