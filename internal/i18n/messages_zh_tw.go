@@ -166,6 +166,7 @@ var ChineseTraditional = Messages{
 
 	CompactionChangesKept: "處變更已保留",
 	CompactionRepaired:    "已補救",
+	CompactionBackstopped: "由主機保留",
 
 	ReadinessContinuing: "這一輪還欠東西，繼續把它做完",
 

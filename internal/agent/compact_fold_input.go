@@ -37,6 +37,8 @@ type foldSummary struct {
 	// CoverageRepaired marks a digest that needed a second call to get there.
 	Coverage         foldCoverage
 	CoverageRepaired bool
+	// CoverageBackstopped marks a digest the host had to complete itself.
+	CoverageBackstopped bool
 }
 
 // summaryInputTokens sizes messages as summarizer input in the real tokens
@@ -118,6 +120,9 @@ func (a *Agent) foldOrDegrade(ctx context.Context, trigger string, mustFree bool
 	res, err := a.foldToSummary(ctx, fold, instructions)
 	if err == nil {
 		res, err = a.repairFoldCoverage(ctx, mustFree, fold, instructions, res)
+		if err == nil {
+			res = backstopFoldCoverage(res)
+		}
 		tele := compactionTelemetryFromSummary(trigger, a.CacheState(), sourceTokens, res)
 		return res, tele, err
 	}
@@ -127,6 +132,7 @@ func (a *Agent) foldOrDegrade(ctx context.Context, trigger string, mustFree bool
 		tele.Error = cause
 		return res, tele, err
 	}
+	res = backstopFoldCoverage(res)
 	tele = compactionTelemetryFromSummary(trigger, a.CacheState(), sourceTokens, res)
 	tele.Error = cause
 	return res, tele, nil
@@ -152,7 +158,24 @@ func (a *Agent) degradeFoldSummary(res foldSummary, mustFree bool, fold []provid
 		Detail: fmt.Sprintf("compaction summary unavailable (%v); folded mechanically", cause)})
 	res.Text = mechanicalFoldDigest(len(fold))
 	res.Mode = CompactionModeDegraded
+	// Measured here too: without it a fold that lost everything reports the
+	// same coverage as one that lost nothing.
+	res.Coverage = measureFoldCoverage(fold, a.toolFactsFor, res.Text)
 	return res, nil
+}
+
+// backstopFoldCoverage writes the facts the digest dropped into the digest
+// itself. mustFree is why this exists rather than a second summarizer call:
+// under hard pressure the repair path is skipped and the degraded path never
+// had a digest to repair, and neither may cost the model a change it made.
+func backstopFoldCoverage(res foldSummary) foldSummary {
+	block := foldCoverageBackstop(res.Coverage)
+	if block == "" {
+		return res
+	}
+	res.Text = strings.TrimRight(res.Text, "\n") + "\n\n" + block
+	res.CoverageBackstopped = true
+	return res
 }
 
 // shortenFoldForSummary rewrites only summarizer input: long tool bodies become

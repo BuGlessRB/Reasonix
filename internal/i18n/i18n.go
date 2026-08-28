@@ -200,6 +200,7 @@ type Messages struct {
 	// whether it took a second summarizer call to get there.
 	CompactionChangesKept string
 	CompactionRepaired    string
+	CompactionBackstopped string
 
 	// shown when a turn ends owing requirements and the host runs them itself
 	ReadinessContinuing string

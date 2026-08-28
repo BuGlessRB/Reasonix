@@ -324,6 +324,8 @@ type Compaction struct {
 	CoverageRequired int  `json:"coverageRequired,omitempty"`
 	CoverageMissing  int  `json:"coverageMissing,omitempty"`
 	CoverageRepaired bool `json:"coverageRepaired,omitempty"`
+	// The host completed a digest the summarizer left incomplete.
+	CoverageBackstopped bool `json:"coverageBackstopped,omitempty"`
 }
 
 func toWireCompaction(c event.Compaction) *Compaction {
@@ -332,7 +334,7 @@ func toWireCompaction(c event.Compaction) *Compaction {
 		Summary:      c.Summary,
 		SourceTokens: c.SourceTokens, ProjectionTokens: c.ProjectionTokens,
 		CoverageRequired: c.CoverageRequired, CoverageMissing: c.CoverageMissing,
-		CoverageRepaired: c.CoverageRepaired,
+		CoverageRepaired: c.CoverageRepaired, CoverageBackstopped: c.CoverageBackstopped,
 	}
 }
 

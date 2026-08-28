@@ -353,13 +353,14 @@ func buildVisibleCompressionProjection(visible []provider.Message, plan visibleC
 func compactionTelemetryFromSummary(trigger, cacheState string, sourceTokens int, res foldSummary) CompactionTelemetry {
 	tele := CompactionTelemetry{
 		Trigger: trigger, CacheState: cacheState, Mode: res.Mode,
-		SourceTokens:      sourceTokens,
-		ProviderRequestID: res.RequestID,
-		FoldTokens:        res.FoldTokens,
-		Spans:             max(1, res.Spans), // one summary request, plus a coverage repair when one ran
-		CoverageRequired:  res.Coverage.Required(),
-		CoverageMissing:   res.Coverage.Missing(),
-		CoverageRepaired:  res.CoverageRepaired,
+		SourceTokens:        sourceTokens,
+		ProviderRequestID:   res.RequestID,
+		FoldTokens:          res.FoldTokens,
+		Spans:               max(1, res.Spans), // one summary request, plus a coverage repair when one ran
+		CoverageRequired:    res.Coverage.Required(),
+		CoverageMissing:     res.Coverage.Missing(),
+		CoverageRepaired:    res.CoverageRepaired,
+		CoverageBackstopped: res.CoverageBackstopped,
 	}
 	usage := res.Usage
 	if usage == nil {
@@ -488,7 +489,8 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		Trigger: trigger, Messages: len(fold), Summary: summary,
 		SourceTokens: sourceTokens, ProjectionTokens: projTokens,
 		CoverageRequired: tele.CoverageRequired, CoverageMissing: tele.CoverageMissing,
-		CoverageRepaired: tele.CoverageRepaired,
+		CoverageRepaired:    tele.CoverageRepaired,
+		CoverageBackstopped: tele.CoverageBackstopped,
 	}})
 	// Only once the checkpoint is committed: a rejected candidate folded nothing.
 	a.sess.compaction.lastUserTurns = retention

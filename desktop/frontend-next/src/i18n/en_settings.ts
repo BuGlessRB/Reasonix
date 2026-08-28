@@ -268,6 +268,7 @@ export const EN_SETTINGS: Record<string, string> = {
   "确认": "Confirm",
   "先不选择，直接回复": "Skip the choice and reply instead",
   "（补写过一次）": " (repaired once)",
+  "（缺的由主机补上）": " (gaps kept by the host)",
   "正在折成简报": "Folding into a digest",
   "这一趟没折叠掉什么": "This pass folded nothing",
   "这段做过的 {n} 处改动，简报都写到了": "All {n} changes made here are in the digest",

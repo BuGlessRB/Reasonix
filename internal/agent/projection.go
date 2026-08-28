@@ -155,17 +155,19 @@ type CompactionTelemetry struct {
 	// Fold coverage: the changes and failures the region produced, and how many
 	// the digest did not carry. Repaired marks a digest that needed a second
 	// summarizer call to reach this.
-	CoverageRequired  int    `json:"coverage_required,omitempty"`
-	CoverageMissing   int    `json:"coverage_missing,omitempty"`
-	CoverageRepaired  bool   `json:"coverage_repaired,omitempty"`
-	InputTokens       int    `json:"input_tokens"`
-	OutputTokens      int    `json:"output_tokens"`
-	CacheHitTokens    int    `json:"cache_hit_tokens"`
-	CacheMissTokens   int    `json:"cache_miss_tokens"`
-	CacheWriteTokens  int    `json:"cache_write_tokens"`
-	RequestCount      int    `json:"request_count"`
-	ProviderRequestID string `json:"provider_request_id,omitempty"`
-	Error             string `json:"error,omitempty"`
+	CoverageRequired int  `json:"coverage_required,omitempty"`
+	CoverageMissing  int  `json:"coverage_missing,omitempty"`
+	CoverageRepaired bool `json:"coverage_repaired,omitempty"`
+	// CoverageBackstopped: the host wrote the dropped facts in itself.
+	CoverageBackstopped bool   `json:"coverage_backstopped,omitempty"`
+	InputTokens         int    `json:"input_tokens"`
+	OutputTokens        int    `json:"output_tokens"`
+	CacheHitTokens      int    `json:"cache_hit_tokens"`
+	CacheMissTokens     int    `json:"cache_miss_tokens"`
+	CacheWriteTokens    int    `json:"cache_write_tokens"`
+	RequestCount        int    `json:"request_count"`
+	ProviderRequestID   string `json:"provider_request_id,omitempty"`
+	Error               string `json:"error,omitempty"`
 }
 
 // ContextStatePath returns the projection sidecar path for a session transcript.

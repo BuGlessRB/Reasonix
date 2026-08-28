@@ -98,8 +98,13 @@ func compactionQualityLine(c event.Compaction) string {
 	}
 	if c.CoverageRequired > 0 {
 		kept := fmt.Sprintf("%d/%d %s", c.CoverageRequired-c.CoverageMissing, c.CoverageRequired, i18n.M.CompactionChangesKept)
-		if c.CoverageRepaired {
+		switch {
+		case c.CoverageRepaired:
 			kept += " (" + i18n.M.CompactionRepaired + ")"
+		case c.CoverageBackstopped:
+			// The facts are in the projection, just not because the digest
+			// carried them. Saying so keeps the ratio honest either way.
+			kept += " (" + i18n.M.CompactionBackstopped + ")"
 		}
 		parts = append(parts, kept)
 	}

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"path"
 	"path/filepath"
 	"sort"
@@ -149,6 +150,44 @@ func coverageRetryInstruction(cov foldCoverage) string {
 		b.WriteString("- the failure of `" + c + "`: what failed and how it was resolved, or that it was not\n")
 	}
 	return b.String()
+}
+
+// foldBackstopHeading opens the host's own record of what a digest dropped.
+const foldBackstopHeading = "## Host-retained fold facts"
+
+// maxBackstopFacts bounds the block. A fold with more changes than this has a
+// digest problem the backstop cannot fix; the count says so rather than the
+// list silently ending.
+const maxBackstopFacts = 20
+
+// foldCoverageBackstop states the facts the digest did not carry. The index
+// skips them on the digest's promise (coverageDemands), so a broken promise
+// takes them out of the model's world while the transcript still holds them.
+// This is the host's line, not a second summary: no tool output, no inference,
+// only the paths and command signatures the receipts already proved.
+func foldCoverageBackstop(cov foldCoverage) string {
+	if cov.Missing() == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(foldBackstopHeading + "\n")
+	b.WriteString("The summary above does not cover these, and the fold index omits them. The full transcript still holds them.\n")
+	writeBackstopList(&b, "changed", cov.MissingMut)
+	writeBackstopList(&b, "failed", cov.MissingFai)
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func writeBackstopList(b *strings.Builder, label string, facts []string) {
+	shown := facts
+	if len(shown) > maxBackstopFacts {
+		shown = shown[:maxBackstopFacts]
+	}
+	for _, f := range shown {
+		b.WriteString("- " + label + ": " + f + "\n")
+	}
+	if dropped := len(facts) - len(shown); dropped > 0 {
+		fmt.Fprintf(b, "- (%d more %s, not listed)\n", dropped, label)
+	}
 }
 
 // coverageDemands reports whether a call is one the digest must carry, so the
