@@ -282,7 +282,6 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 		h.opts.Grant(srv)
 	}
 	srv.stance = h.stance
-	built.Controller.EnableInteractiveApproval()
 	// Ask/Auto/YOLO is a posture the user set on the window, not a per-session
 	// default, so a pane opened later starts where the others already are.
 	if mode := h.stance.get(); mode != "" {
@@ -509,6 +508,10 @@ func (h *Hub) publish(rt *Runtime) {
 	if rt.remote != nil {
 		rt.handler = http.StripPrefix(runtimePrefix+rt.ID, remoteProxy(rt.remote.ep))
 	} else {
+		// A local runtime a Hub publishes is driven by an interactive frontend,
+		// so that binding is completed here, not at whichever entry point made
+		// it — Adopt takes what the host built, and this is the half it cannot.
+		rt.Server.Controller().EnableInteractiveApproval()
 		rt.handler = http.StripPrefix(runtimePrefix+rt.ID, rt.Server.routes())
 	}
 	h.mu.Lock()
