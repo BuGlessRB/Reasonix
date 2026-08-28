@@ -19,6 +19,29 @@ import (
 // armScales are the fold-index arms an index task is measured across.
 var armScales = []string{"default", "half", "quarter", "off"}
 
+// experimentArm is one measured configuration of a task.
+type experimentArm struct {
+	name      string
+	scale     string
+	searchOff bool
+}
+
+// armsFor is the single declaration of which arms a task runs at, so preflight
+// and the run itself cannot check one set and measure another.
+func armsFor(t contextTask) []experimentArm {
+	if t.Experiment == experimentSearch {
+		return []experimentArm{
+			{"search-on", "default", false},
+			{"search-off", "default", true},
+		}
+	}
+	arms := make([]experimentArm, 0, len(armScales))
+	for _, scale := range armScales {
+		arms = append(arms, experimentArm{"index-" + scale, scale, false})
+	}
+	return arms
+}
+
 func scaleOf(name string) ablation.FoldIndexScale {
 	s, err := ablation.ParseFoldIndexScale(name)
 	if err != nil {
@@ -46,35 +69,7 @@ func (f finding) String() string { return fmt.Sprintf("%s [%s]: %s", f.Task, f.A
 // does not hold.
 func checkTask(t contextTask, root string) ([]finding, error) {
 	var out []finding
-	arms := []struct {
-		name      string
-		scale     string
-		searchOff bool
-	}{}
-	if t.Experiment == experimentSearch {
-		arms = append(arms,
-			struct {
-				name      string
-				scale     string
-				searchOff bool
-			}{"search-on", "default", false},
-			struct {
-				name      string
-				scale     string
-				searchOff bool
-			}{"search-off", "default", true},
-		)
-	} else {
-		for _, scale := range armScales {
-			arms = append(arms, struct {
-				name      string
-				scale     string
-				searchOff bool
-			}{"index-" + scale, scale, false})
-		}
-	}
-
-	for _, arm := range arms {
+	for _, arm := range armsFor(t) {
 		dir := filepath.Join(root, t.ID, arm.name)
 		f, err := buildFixture(t, armFor(arm.scale, arm.searchOff), filepath.Join(dir, "session.jsonl"))
 		if err != nil {
