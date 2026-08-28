@@ -83,10 +83,9 @@ type Obligation struct {
 
 // ObligationDelta is the net change one action made to the ledger's debts, not
 // a history of what happened inside it: a debt that fell and rose again under
-// the same identity is reported as neither, because what the model needs is
-// what the host believes now. An action can settle one and create another in
-// the same breath — establishing a change's scope discharges the unproven
-// mutation and stales every check before it — so both halves travel together.
+// one identity is reported as neither. An action can settle one and create
+// another in the same breath — scope discharges the unproven mutation and
+// stales every check before it — so both halves travel together.
 type ObligationDelta struct {
 	Added      []Obligation `json:"added,omitempty"`
 	Discharged []Obligation `json:"discharged,omitempty"`

@@ -284,7 +284,11 @@ func VerificationIdentity(command string) string {
 		if malformed != "" {
 			return command
 		}
-		if bashSegmentIsVerification(fields) {
+		verifier := bashSegmentIsVerification(fields)
+		if !verifier && !segmentSetsContext(fields) {
+			continue
+		}
+		if verifier {
 			lastVerifier = len(kept)
 		}
 		kept = append(kept, strings.Join(fields, " "))
@@ -310,6 +314,24 @@ func IsVerificationToolCall(toolName string, args json.RawMessage) bool {
 		return false
 	}
 	return bashCommandIsVerification(command)
+}
+
+// segmentSetsContext reports whether a segment decides where or under what a
+// later check runs. Only these join the check in its identity: a listing or a
+// status standing beside it changes nothing it proves, and keeping one would
+// split a single check into two items that never supersede each other.
+func segmentSetsContext(fields []string) bool {
+	if len(fields) == 0 {
+		return false
+	}
+	if shellparse.IsAssignment(fields[0]) {
+		return true
+	}
+	switch shellparse.WordBase(fields[0]) {
+	case "cd", "pushd", "popd", "export", "set", "unset", "source", ".":
+		return true
+	}
+	return false
 }
 
 // verifierSearchSegments decomposes command for verifier matching. A here-doc

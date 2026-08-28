@@ -191,11 +191,10 @@ func baselineCause(fact BaselineTestFact) string {
 }
 
 // EvaluableCriterionNames lists the criteria in captured bytes whose execution
-// semantics a plain `go test` run establishes. Only TestXxx qualifies today:
-// a benchmark does not run without -bench, and an example without an output
-// comment is compiled and not run. The capture stays wider than this on
-// purpose — a pre-image lost is lost — but nothing signs evidence for a kind
-// whose running the host cannot demonstrate.
+// semantics a plain `go test` run establishes. Only TestXxx qualifies today: a
+// benchmark does not run without -bench, and an example without an output
+// comment is compiled and not run. Capture stays wider on purpose — a pre-image
+// lost is lost — but nothing signs evidence for a kind the host cannot run.
 func EvaluableCriterionNames(src []byte) []string {
 	bodies, ok := testFunctionBodies(string(src))
 	if !ok {
