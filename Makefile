@@ -75,7 +75,10 @@ lint-cross:
 		(cd $$2 && GOOS=$$1 golangci-lint run --timeout=5m ./...) || exit 1; \
 	done
 
-test:
+# Every module, because a nested one is where a red test hides longest: the
+# shell's route allowlist sat broken through a release, and `go test ./...` from
+# the root cannot see it.
+test: studio-test sdk-test
 	go test ./...
 
 # The shell is a nested module, so the root `test` target never reaches it.

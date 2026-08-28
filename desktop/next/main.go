@@ -76,6 +76,7 @@ var apiPaths = map[string]bool{
 	"/themes": true, "/extensions": true, "/plugins": true, "/surfaces": true,
 	"/welcome": true, "/appearance": true,
 	"/permissions": true, "/sandbox": true, "/storage": true, "/usage": true,
+	"/balance":        true,
 	"/config/problem": true, "/config/repair": true,
 }
 
