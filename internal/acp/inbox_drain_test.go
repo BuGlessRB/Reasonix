@@ -51,7 +51,7 @@ func TestSessionPromptDrainsDurableFollowupBeforeResponding(t *testing.T) {
 	})
 	select {
 	case <-started:
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("first ACP prompt did not start")
 	}
 	enqueue := client.call(t, sessionInboxEnqueueMethod, SessionInboxEnqueueParams{
@@ -67,7 +67,7 @@ func TestSessionPromptDrainsDurableFollowupBeforeResponding(t *testing.T) {
 			if got != want {
 				t.Fatalf("ACP input = %q, want %q", got, want)
 			}
-		case <-time.After(2 * time.Second):
+		case <-time.After(rpcCallBudget(t)):
 			t.Fatalf("missing ACP input %q", want)
 		}
 	}

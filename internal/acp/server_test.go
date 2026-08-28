@@ -481,7 +481,7 @@ func (c *orderedRPCClient) next(t *testing.T) frame {
 			t.Fatal("ACP output closed")
 		}
 		return f
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("timed out waiting for ACP frame")
 		return frame{}
 	}
@@ -774,7 +774,7 @@ func TestServeAdvertisesAndExpandsCustomCommands(t *testing.T) {
 				advertised = true
 			}
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("timed out waiting for available_commands_update")
 	}
 	if !advertised {
@@ -800,7 +800,7 @@ func TestServeAdvertisesAndExpandsCustomCommands(t *testing.T) {
 		if got != "Review src/main.go" {
 			t.Fatalf("runner input = %q, want expanded command", got)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("runner did not receive prompt")
 	}
 }
@@ -1215,7 +1215,7 @@ func TestServeSessionConfigQueuesDuringActivePrompt(t *testing.T) {
 	})
 	select {
 	case <-started:
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("prompt never started")
 	}
 
@@ -1282,7 +1282,7 @@ func TestServeSessionConfigRejectsBackgroundJobsWhileIdle(t *testing.T) {
 	}()
 	select {
 	case <-started:
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("background job never started")
 	}
 
@@ -1407,7 +1407,7 @@ func TestQueuedRebuildPreservesControllerSideAxisDrift(t *testing.T) {
 	})
 	select {
 	case <-started:
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("first prompt did not start")
 	}
 	// Active turn must refuse role-setting switch with a busy error (no silent queue).
@@ -1480,7 +1480,7 @@ func TestServeQueuedSessionConfigDiscardedWhenPromptLeavesBackgroundJob(t *testi
 			})
 			select {
 			case <-startedJob:
-			case <-time.After(2 * time.Second):
+			case <-time.After(rpcCallBudget(t)):
 				t.Fatal("background job never started")
 			}
 			select {
@@ -1508,7 +1508,7 @@ func TestServeQueuedSessionConfigDiscardedWhenPromptLeavesBackgroundJob(t *testi
 	})
 	select {
 	case <-startedTurn:
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("prompt never started")
 	}
 	setResp := client.call(t, "session/set_config_option", SetSessionConfigOptionParams{
@@ -1590,7 +1590,7 @@ func TestServeSessionConfigRejectsPendingAsk(t *testing.T) {
 	var req frame
 	select {
 	case req = <-client.reqs:
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("ask request was not sent to client")
 	}
 
@@ -1790,7 +1790,7 @@ func TestServeCancel(t *testing.T) {
 
 	select {
 	case <-started:
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("prompt never started")
 	}
 	client.notify("session/cancel", SessionCancelParams{SessionID: nr.SessionID})
@@ -1802,7 +1802,7 @@ func TestServeCancel(t *testing.T) {
 		if pr.StopReason != StopCancelled {
 			t.Errorf("stopReason = %q, want cancelled", pr.StopReason)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("cancel did not end the prompt")
 	}
 }
@@ -1829,7 +1829,7 @@ func TestServeSteerInjectsIntoActivePrompt(t *testing.T) {
 	})
 	select {
 	case <-barrier.started:
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("prompt never reached the tool boundary")
 	}
 
@@ -1927,7 +1927,7 @@ func TestServeRejectsConcurrentPromptForSameSession(t *testing.T) {
 	})
 	select {
 	case <-started:
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("first prompt never started")
 	}
 
@@ -1948,7 +1948,7 @@ func TestServeRejectsConcurrentPromptForSameSession(t *testing.T) {
 		if resp.Error != nil {
 			t.Fatalf("first prompt errored: %+v", resp.Error)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("first prompt did not finish")
 	}
 }
@@ -2165,7 +2165,7 @@ func startNonCooperativeACPJob(t *testing.T, jm *jobs.Manager, sessionPath strin
 	})
 	select {
 	case <-started:
-	case <-time.After(2 * time.Second):
+	case <-time.After(rpcCallBudget(t)):
 		t.Fatal("background job never started")
 	}
 	released := false
