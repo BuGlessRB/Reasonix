@@ -104,24 +104,28 @@ type RunMetrics struct {
 	// Subagent handoff: whether a delegated child closed the way it was asked
 	// to. Judged is the denominator — expected to report and not killed by the
 	// provider — because a run that never got to close is not a refusal.
-	SubagentHandoffs           int            `json:"subagent_handoffs"`
-	SubagentHandoffExpected    int            `json:"subagent_handoff_expected"`
-	SubagentHandoffJudged      int            `json:"subagent_handoff_judged"`
-	SubagentHandoffAttempted   int            `json:"subagent_handoff_attempted"`
-	SubagentHandoffAccepted    int            `json:"subagent_handoff_accepted"`
-	SubagentHandoffMalformed   int            `json:"subagent_handoff_malformed"`
-	SubagentHandoffNotTried    int            `json:"subagent_handoff_never_attempted"`
-	SubagentHandoffClosedWith  int            `json:"subagent_handoff_closed_with_report"`
-	SubagentHandoffToolsAfter  int            `json:"subagent_handoff_tool_calls_after_report"`
-	SubagentHandoffLowered     int            `json:"subagent_handoff_lowered_claims"`
-	SubagentHandoffReadOnly    int            `json:"subagent_handoff_read_only"`
-	SubagentHandoffExits       map[string]int `json:"subagent_handoff_exits,omitempty"`
-	MissingReasoningDetected   int            `json:"missing_reasoning_detected,omitempty"`
-	MissingReasoningRetries    int            `json:"missing_reasoning_retries,omitempty"`
-	MissingReasoningRecovered  int            `json:"missing_reasoning_recovered,omitempty"`
-	MissingReasoningReplaced   int            `json:"missing_reasoning_retry_replaced_response,omitempty"`
-	MissingReasoningSuppressed int            `json:"missing_reasoning_retry_suppressed,omitempty"`
-	MissingReasoningFallbacks  int            `json:"missing_reasoning_fallbacks,omitempty"`
+	SubagentHandoffs          int            `json:"subagent_handoffs"`
+	SubagentHandoffExpected   int            `json:"subagent_handoff_expected"`
+	SubagentHandoffJudged     int            `json:"subagent_handoff_judged"`
+	SubagentHandoffAttempted  int            `json:"subagent_handoff_attempted"`
+	SubagentHandoffAccepted   int            `json:"subagent_handoff_accepted"`
+	SubagentHandoffMalformed  int            `json:"subagent_handoff_malformed"`
+	SubagentHandoffNotTried   int            `json:"subagent_handoff_never_attempted"`
+	SubagentHandoffClosedWith int            `json:"subagent_handoff_closed_with_report"`
+	SubagentHandoffToolsAfter int            `json:"subagent_handoff_tool_calls_after_report"`
+	SubagentHandoffLowered    int            `json:"subagent_handoff_lowered_claims"`
+	SubagentHandoffReadOnly   int            `json:"subagent_handoff_read_only"`
+	SubagentHandoffExits      map[string]int `json:"subagent_handoff_exits,omitempty"`
+	// Repairs that happened inside a delegated run rather than the parent's own
+	// loop, so a child that continued only because the host pulled it back is
+	// not read as one that continued on its own.
+	SubagentRecoveries         int `json:"subagent_recoveries"`
+	MissingReasoningDetected   int `json:"missing_reasoning_detected,omitempty"`
+	MissingReasoningRetries    int `json:"missing_reasoning_retries,omitempty"`
+	MissingReasoningRecovered  int `json:"missing_reasoning_recovered,omitempty"`
+	MissingReasoningReplaced   int `json:"missing_reasoning_retry_replaced_response,omitempty"`
+	MissingReasoningSuppressed int `json:"missing_reasoning_retry_suppressed,omitempty"`
+	MissingReasoningFallbacks  int `json:"missing_reasoning_fallbacks,omitempty"`
 	// Fanout times what the delegation counters only count: what the run waited
 	// on its fan-outs, against what the same work costs one at a time.
 	Fanout *FanoutMetrics `json:"fanout,omitempty"`
@@ -610,6 +614,9 @@ func (s *metricsSink) RecordProtocolRecovery(a event.ProtocolRecoveryAudit) {
 		s.m.MissingReasoningFallbacks++
 	}
 	s.mu.Unlock()
+	if a.ChildID != "" {
+		s.m.SubagentRecoveries++
+	}
 	event.RecordProtocolRecovery(s.inner, a)
 }
 

@@ -30,6 +30,7 @@ type Record struct {
 	Event            *eventwire.Event     `json:"event,omitempty"`
 	ReadinessAudit   *ReadinessAudit      `json:"readiness_audit,omitempty"`
 	ProtocolRecovery string               `json:"protocol_recovery,omitempty"`
+	RecoveryChild    string               `json:"protocol_recovery_child,omitempty"`
 	TurnCompletion   bool                 `json:"turn_completion,omitempty"`
 	ContractShadow   *ContractShadowAudit `json:"contract_shadow,omitempty"`
 	CompletionReport *CompletionReport    `json:"completion_report,omitempty"`
@@ -459,7 +460,7 @@ func (r *Recorder) RecordRunHeader(h RunHeader) {
 }
 
 func (r *Recorder) RecordProtocolRecovery(a event.ProtocolRecoveryAudit) {
-	r.append(Record{ProtocolRecovery: string(a.Kind)})
+	r.append(Record{ProtocolRecovery: string(a.Kind), RecoveryChild: a.ChildID})
 	event.RecordProtocolRecovery(r.inner, a)
 }
 

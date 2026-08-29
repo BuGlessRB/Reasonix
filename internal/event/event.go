@@ -601,6 +601,9 @@ const (
 
 type ProtocolRecoveryAudit struct {
 	Kind ProtocolRecoveryKind
+	// ChildID names the delegated run this repair happened inside, stamped by
+	// the nesting sink that already knows it; empty is the parent's own loop.
+	ChildID string
 }
 
 // ContractShadowAudit is the shadow task-contract's end-of-turn summary:
