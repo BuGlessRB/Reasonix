@@ -210,6 +210,13 @@ func TestSelfInspectionCoversEveryChangedFile(t *testing.T) {
 	if strings.Contains(got.reason, "a.go, b.go") {
 		t.Fatalf("reason = %q, must not ask again for the file it did read", got.reason)
 	}
+	// The two review debts read different indices and count separately: this
+	// turn owes inspection of what it changed and no structured review, and one
+	// counter could not have said which.
+	if got.missingPathInspection == 0 || got.missingStructuredReview != 0 {
+		t.Fatalf("review counters = structured %d inspection %d, want the inspection debt alone",
+			got.missingStructuredReview, got.missingPathInspection)
+	}
 
 	// Edit-then-read, file by file: every read follows its own file's write.
 	interleaved := &Agent{deliveryProfile: true, task: taskRuntime{ledger: readinessLedger(

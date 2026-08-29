@@ -24,19 +24,21 @@ type finalReadinessCheck struct {
 	incompleteTodos           int
 	missingAcceptanceCriteria int
 	missingVerification       int
-	missingReview             int
+	missingStructuredReview   int
+	missingPathInspection     int
 	missingSignoff            int
 	missingMutation           int
 	missingCapabilities       int
 }
 
 func (c finalReadinessCheck) progressSignature() string {
-	return fmt.Sprintf("%d/%d/%d/%d/%d/%d/%d/%d/%d\x00%s",
+	return fmt.Sprintf("%d/%d/%d/%d/%d/%d/%d/%d/%d/%d\x00%s",
 		c.missingProjectChecks,
 		c.incompleteTodos,
 		c.missingAcceptanceCriteria,
 		c.missingVerification,
-		c.missingReview,
+		c.missingStructuredReview,
+		c.missingPathInspection,
 		c.missingSignoff,
 		c.missingMutation,
 		c.missingCapabilities,
@@ -46,7 +48,7 @@ func (c finalReadinessCheck) progressSignature() string {
 }
 
 func (c finalReadinessCheck) missingIDs() []string {
-	missing := make([]string, 0, 8)
+	missing := make([]string, 0, 9)
 	add := func(id string, count int) {
 		if count > 0 {
 			missing = append(missing, id)
@@ -56,7 +58,8 @@ func (c finalReadinessCheck) missingIDs() []string {
 	add("todo", c.incompleteTodos)
 	add("criteria", c.missingAcceptanceCriteria)
 	add("verification", c.missingVerification)
-	add("review", c.missingReview)
+	add("structured_review", c.missingStructuredReview)
+	add("path_inspection", c.missingPathInspection)
 	add("signoff", c.missingSignoff)
 	add("mutation", c.missingMutation)
 	add("capability", c.missingCapabilities)
@@ -71,7 +74,8 @@ func (c finalReadinessCheck) audit(result evidence.ReadinessAuditResult, recover
 		IncompleteTodos:           c.incompleteTodos,
 		MissingAcceptanceCriteria: c.missingAcceptanceCriteria,
 		MissingVerification:       c.missingVerification,
-		MissingReview:             c.missingReview,
+		MissingStructuredReview:   c.missingStructuredReview,
+		MissingPathInspection:     c.missingPathInspection,
 		MissingSignoff:            c.missingSignoff,
 		MissingMutation:           c.missingMutation,
 		MissingCapabilities:       c.missingCapabilities,
@@ -265,14 +269,14 @@ func (a *Agent) appendSelfInspectionGap(out *finalReadinessCheck, missing []stri
 		if a.task.ledger.HasSuccessfulReviewAfter(writer) {
 			return missing
 		}
-		out.missingReview++
+		out.missingPathInspection++
 		return append(missing, "inspect the changed result after the latest mutation — read the touched file, or diff it with whatever version control this workspace has")
 	}
 	gaps := a.task.ledger.UninspectedWritePaths(paths)
 	if len(gaps) == 0 {
 		return missing
 	}
-	out.missingReview++
+	out.missingPathInspection++
 	slash := make([]string, 0, len(gaps))
 	for _, p := range gaps {
 		slash = append(slash, filepath.ToSlash(p))
@@ -290,7 +294,7 @@ func (a *Agent) appendReviewGap(out *finalReadinessCheck, missing []string) []st
 		return missing
 	}
 	out.applies = true
-	out.missingReview++
+	out.missingStructuredReview++
 	return append(missing, msg)
 }
 

@@ -59,22 +59,23 @@ type RunMetrics struct {
 	// CompletionVerdict and CompletionGapKinds are the turn's own verdict on
 	// itself. Outcome answers only whether the run errored, so without these a
 	// reader is told "success" by a file the same run warned a human about.
-	CompletionVerdict             string   `json:"completion_verdict,omitempty"`
-	CompletionGapKinds            []string `json:"completion_gap_kinds,omitempty"`
-	Estimated                     bool     `json:"estimated,omitempty"`
-	Compactions                   int      `json:"compactions"`
-	ReadinessChecks               int      `json:"readiness_checks"`
-	ReadinessAllowed              int      `json:"readiness_allowed"`
-	ReadinessBlocks               int      `json:"readiness_blocks"`
-	ReadinessRecoveries           int      `json:"readiness_recoveries"`
-	ReadinessErrors               int      `json:"readiness_errors"`
-	ReadinessMissingProjectChecks int      `json:"readiness_missing_project_checks"`
-	ReadinessIncompleteTodos      int      `json:"readiness_incomplete_todos"`
-	ReadinessMissingAcceptance    int      `json:"readiness_missing_acceptance_criteria"`
-	ReadinessMissingVerification  int      `json:"readiness_missing_verification"`
-	ReadinessMissingReview        int      `json:"readiness_missing_review"`
-	ReadinessMissingSignoff       int      `json:"readiness_missing_signoff"`
-	ReadinessMissingMutation      int      `json:"readiness_missing_mutation"`
+	CompletionVerdict                string   `json:"completion_verdict,omitempty"`
+	CompletionGapKinds               []string `json:"completion_gap_kinds,omitempty"`
+	Estimated                        bool     `json:"estimated,omitempty"`
+	Compactions                      int      `json:"compactions"`
+	ReadinessChecks                  int      `json:"readiness_checks"`
+	ReadinessAllowed                 int      `json:"readiness_allowed"`
+	ReadinessBlocks                  int      `json:"readiness_blocks"`
+	ReadinessRecoveries              int      `json:"readiness_recoveries"`
+	ReadinessErrors                  int      `json:"readiness_errors"`
+	ReadinessMissingProjectChecks    int      `json:"readiness_missing_project_checks"`
+	ReadinessIncompleteTodos         int      `json:"readiness_incomplete_todos"`
+	ReadinessMissingAcceptance       int      `json:"readiness_missing_acceptance_criteria"`
+	ReadinessMissingVerification     int      `json:"readiness_missing_verification"`
+	ReadinessMissingStructuredReview int      `json:"readiness_missing_structured_review"`
+	ReadinessMissingPathInspection   int      `json:"readiness_missing_path_inspection"`
+	ReadinessMissingSignoff          int      `json:"readiness_missing_signoff"`
+	ReadinessMissingMutation         int      `json:"readiness_missing_mutation"`
 	// Project-check shadow: the two derivations compared, by what explains a
 	// disagreement. Only the last two classes are candidate defects.
 	ProjectCheckProbes            int `json:"project_check_probes"`
@@ -512,7 +513,8 @@ func (s *metricsSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
 	s.m.ReadinessIncompleteTodos += a.IncompleteTodos
 	s.m.ReadinessMissingAcceptance += a.MissingAcceptanceCriteria
 	s.m.ReadinessMissingVerification += a.MissingVerification
-	s.m.ReadinessMissingReview += a.MissingReview
+	s.m.ReadinessMissingStructuredReview += a.MissingStructuredReview
+	s.m.ReadinessMissingPathInspection += a.MissingPathInspection
 	s.m.ReadinessMissingSignoff += a.MissingSignoff
 	s.m.ReadinessMissingMutation += a.MissingMutation
 }

@@ -224,8 +224,10 @@ func TestDeliveryProfileRequiresReviewBeforeFinalAnswer(t *testing.T) {
 	if err := a.Run(ctx, "implement main"); !readinessBlocked(err) {
 		t.Fatalf("first Run err = %v, want FinalReadinessError for the missing review", err)
 	}
-	if len(sink.events) != 1 || sink.events[0].Result != evidence.ReadinessErrored || sink.events[0].MissingReview == 0 {
-		t.Fatalf("readiness audits = %+v, want one errored audit with missing review", sink.events)
+	// The debt here is inspection of what the turn changed, not a structured
+	// review report — a distinction the single review counter could not make.
+	if len(sink.events) != 1 || sink.events[0].Result != evidence.ReadinessErrored || sink.events[0].MissingPathInspection == 0 {
+		t.Fatalf("readiness audits = %+v, want one errored audit owing changed-path inspection", sink.events)
 	}
 	if err := a.Run(ctx, "finish the goal"); err != nil {
 		t.Fatalf("follow-up Run: %v", err)

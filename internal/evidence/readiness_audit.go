@@ -19,8 +19,11 @@ type ReadinessAudit struct {
 	IncompleteTodos           int
 	MissingAcceptanceCriteria int
 	MissingVerification       int
-	MissingReview             int
-	MissingSignoff            int
-	MissingMutation           int
-	MissingCapabilities       int
+	// Structured review and changed-path inspection are different debts read
+	// from different indices, and one counter could not say which was owed.
+	MissingStructuredReview int
+	MissingPathInspection   int
+	MissingSignoff          int
+	MissingMutation         int
+	MissingCapabilities     int
 }

@@ -180,7 +180,8 @@ type ReadinessAudit struct {
 	IncompleteTodos           int    `json:"incomplete_todos,omitempty"`
 	MissingAcceptanceCriteria int    `json:"missing_acceptance_criteria,omitempty"`
 	MissingVerification       int    `json:"missing_verification,omitempty"`
-	MissingReview             int    `json:"missing_review,omitempty"`
+	MissingStructuredReview   int    `json:"missing_structured_review,omitempty"`
+	MissingPathInspection     int    `json:"missing_path_inspection,omitempty"`
 	MissingSignoff            int    `json:"missing_signoff,omitempty"`
 	MissingMutation           int    `json:"missing_mutation,omitempty"`
 	MissingCapabilities       int    `json:"missing_capabilities,omitempty"`
@@ -332,7 +333,8 @@ func (r *Recorder) RecordReadinessAudit(a evidence.ReadinessAudit) {
 		IncompleteTodos:           a.IncompleteTodos,
 		MissingAcceptanceCriteria: a.MissingAcceptanceCriteria,
 		MissingVerification:       a.MissingVerification,
-		MissingReview:             a.MissingReview,
+		MissingStructuredReview:   a.MissingStructuredReview,
+		MissingPathInspection:     a.MissingPathInspection,
 		MissingSignoff:            a.MissingSignoff,
 		MissingMutation:           a.MissingMutation,
 		MissingCapabilities:       a.MissingCapabilities,
