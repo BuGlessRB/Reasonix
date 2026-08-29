@@ -48,3 +48,41 @@ func emitTrajMode(dir, outMD string) {
 	}
 	emit(report, outMD, "")
 }
+
+// offlineModeArgs is what a mode that reads recorded runs needs; every one of
+// them re-digests what a suite run already wrote instead of spending tokens.
+type offlineModeArgs struct {
+	trajDir  string
+	suite    string
+	reportIn string
+	outMD    string
+	addr     string
+}
+
+// dispatchOfflineMode runs mode if it is one of the offline ones and reports
+// whether it handled it, so main keeps flag parsing and nothing else.
+func dispatchOfflineMode(mode string, a offlineModeArgs) bool {
+	fail := func(name string, err error) {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, name+" mode:", err)
+			os.Exit(1)
+		}
+	}
+	switch mode {
+	case "compare":
+		runCompareMode(a.outMD)
+	case "traj":
+		emitTrajMode(a.trajDir, a.outMD)
+	case "barrier":
+		report, err := runBarrierMode(a.trajDir)
+		fail("barrier", err)
+		emit(report, a.outMD, "")
+	case "sft":
+		fail("sft", runSFTMode(a.trajDir, a.suite, a.reportIn, a.outMD))
+	case "serve":
+		fail("serve", runServeMode(a.trajDir, a.suite, a.addr))
+	default:
+		return false
+	}
+	return true
+}
