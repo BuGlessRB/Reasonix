@@ -32,11 +32,14 @@ func boundaryStep(tier string) int {
 
 // doseCurve is one task's readings across the four budgets.
 type doseCurve struct {
-	Task    string
-	Tier    string
-	Metric  string
-	Values  [4]float64
-	Present bool // every arm produced a value
+	Task   string
+	Tier   string
+	Metric string
+	Values [4]float64
+	// Missing marks arms that produced nothing. Printing those as zero draws a
+	// curve falling to the floor where in fact it was never measured.
+	Missing [4]bool
+	Present bool
 	// PreMean averages the arms where the cue is visible, PostMean the rest.
 	PreMean, PostMean float64
 	BoundaryDelta     float64
@@ -50,7 +53,7 @@ func buildCurve(task, tier, metric string, byScale map[string]float64) doseCurve
 	for i, scale := range scaleOrder {
 		v, ok := byScale[scale]
 		if !ok {
-			c.Present = false
+			c.Present, c.Missing[i] = false, true
 		}
 		c.Values[i] = v
 	}
@@ -158,8 +161,11 @@ func reportDoseResponse(all []contextMetrics) string {
 				counted[metric.name]++
 				deltas[metric.name] = append(deltas[metric.name], c.BoundaryDelta)
 			}
-			fmt.Fprintf(&b, "    %-14s%8.0f%8.0f%8.0f%8.0f   Δ%+8.1f %s\n",
-				metric.name, c.Values[0], c.Values[1], c.Values[2], c.Values[3], c.BoundaryDelta, mark)
+			delta := fmt.Sprintf("Δ%+8.1f", c.BoundaryDelta)
+			if !c.Present {
+				delta = "  no curve"
+			}
+			fmt.Fprintf(&b, "    %-14s%s   %s %s\n", metric.name, curveCells(c), delta, mark)
 		}
 	}
 
@@ -199,6 +205,19 @@ func scaleHeader(step int) string {
 			s = "↓" + s
 		}
 		fmt.Fprintf(&b, "%8s", s)
+	}
+	return b.String()
+}
+
+// curveCells prints a reading per arm, and a dash where an arm produced none.
+func curveCells(c doseCurve) string {
+	var b strings.Builder
+	for i, v := range c.Values {
+		if c.Missing[i] {
+			fmt.Fprintf(&b, "%8s", "-")
+			continue
+		}
+		fmt.Fprintf(&b, "%8.0f", v)
 	}
 	return b.String()
 }
