@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/evidence"
 	"testing"
 
 	"reasonix/internal/testenv"
@@ -29,13 +30,13 @@ func TestUnknownPersistedBudgetClassFallsBackToGoalClassification(t *testing.T) 
 
 func TestGoalSetIdempotencyUsesEffectiveBudgetClass(t *testing.T) {
 	g := &goalMachine{statePath: filepath.Join(testenv.TempDir(t), "goal.json")}
-	if _, _, ok := g.set("same goal", budgetClassSimple, nil); !ok {
+	if _, _, ok := g.set("same goal", budgetClassSimple, evidence.VerificationContract{}, nil); !ok {
 		t.Fatal("initial set did not persist")
 	}
-	if _, _, ok := g.set("same goal", budgetClassSimple, nil); ok {
+	if _, _, ok := g.set("same goal", budgetClassSimple, evidence.VerificationContract{}, nil); ok {
 		t.Fatal("same Goal and budget class was not idempotent")
 	}
-	if _, _, ok := g.set("same goal", budgetClassResearch, nil); !ok {
+	if _, _, ok := g.set("same goal", budgetClassResearch, evidence.VerificationContract{}, nil); !ok {
 		t.Fatal("budget class change was incorrectly treated as idempotent")
 	}
 	if g.budgetClass != budgetClassResearch || g.turnsLimit != unlimitedGoalTurns {

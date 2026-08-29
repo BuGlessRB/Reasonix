@@ -567,7 +567,7 @@ func TestGoalInterceptsCompleteWithIncompleteTodos(t *testing.T) {
 func TestGoalAdvanceResultCannotCrossGoalLifecycle(t *testing.T) {
 	newResult := func(t *testing.T, g *goalMachine) goalAdvanceResult {
 		t.Helper()
-		g.set("old goal", "", nil)
+		g.set("old goal", "", evidence.VerificationContract{}, nil)
 		res := g.advance(goalAdvanceInput{
 			report: &goalTurnReport{status: GoalStatusComplete, reason: ""},
 			todos: []evidence.TodoItem{{
@@ -592,7 +592,7 @@ func TestGoalAdvanceResultCannotCrossGoalLifecycle(t *testing.T) {
 	t.Run("replacement goal invalidates result", func(t *testing.T) {
 		var g goalMachine
 		res := newResult(t, &g)
-		g.set("replacement goal", "", nil)
+		g.set("replacement goal", "", evidence.VerificationContract{}, nil)
 		if got, ok := g.acceptContinuation(res); ok {
 			t.Fatalf("replacement goal accepted stale intercept %q", got)
 		}
@@ -853,6 +853,13 @@ func TestGoalSidecarRoundTripPreservesBlockedDeliveryCheckpoint(t *testing.T) {
 	}
 	statePath, data, persist := c.goals.setDeliveryCheckpoint(cp, nil)
 	c.persistGoalState(statePath, data, persist)
+	// The Goal froze a verification contract when it was created and the
+	// executor's checkpoint carries none, so the round trip must show the
+	// acceptance surviving a report that knows nothing about it.
+	want := c.goals.deliveryState()
+	if want.Verification == nil {
+		t.Fatal("the executor's checkpoint cleared the contract the Goal was created under")
+	}
 	c.stopGoal(GoalStatusBlocked)
 
 	freshExec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)
@@ -861,8 +868,8 @@ func TestGoalSidecarRoundTripPreservesBlockedDeliveryCheckpoint(t *testing.T) {
 	if fresh.Goal() != "finish the delivery" || fresh.GoalStatus() != GoalStatusBlocked {
 		t.Fatalf("restored Goal = (%q, %q), want blocked Goal", fresh.Goal(), fresh.GoalStatus())
 	}
-	if got := freshExec.DeliveryCheckpoint(); !reflect.DeepEqual(got, cp) {
-		t.Fatalf("restored checkpoint = %+v, want %+v", got, cp)
+	if got := freshExec.DeliveryCheckpoint(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("restored checkpoint = %+v, want %+v", got, want)
 	}
 	if !fresh.ResumeGoal() {
 		t.Fatal("ResumeGoal rejected a restored blocked Goal")

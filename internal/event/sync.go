@@ -62,6 +62,14 @@ func (s *syncSink) RecordSubagentHandoff(a SubagentHandoffAudit) {
 	}
 }
 
+func (s *syncSink) RecordVerificationContractDrift(d VerificationContractDrift) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ds, ok := s.inner.(VerificationContractDriftSink); ok {
+		ds.RecordVerificationContractDrift(d)
+	}
+}
+
 func (s *syncSink) RecordTurnCompletion() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -57,6 +57,10 @@ func (f AuditForwarder) RecordSubagentHandoff(a SubagentHandoffAudit) {
 	RecordSubagentHandoff(f.Inner, a)
 }
 
+func (f AuditForwarder) RecordVerificationContractDrift(d VerificationContractDrift) {
+	RecordVerificationContractDrift(f.Inner, d)
+}
+
 // DelegationAuditSink receives one receipt per completed sub-agent run.
 type DelegationAuditSink interface {
 	RecordDelegationAudit(a evidence.DelegationAudit)

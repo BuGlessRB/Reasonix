@@ -121,7 +121,12 @@ type RunMetrics struct {
 	// Repairs that happened inside a delegated run rather than the parent's own
 	// loop, so a child that continued only because the host pulled it back is
 	// not read as one that continued on its own.
-	SubagentRecoveries         int `json:"subagent_recoveries"`
+	SubagentRecoveries int `json:"subagent_recoveries"`
+	// Goal resumes that carried a frozen verification contract, and how many of
+	// those found the current declaration naming different criteria. Neither
+	// says which declaration should govern.
+	GoalResumesWithContract    int `json:"goal_resumes_with_verification_contract"`
+	GoalVerificationDrifts     int `json:"goal_verification_contract_drifts"`
 	MissingReasoningDetected   int `json:"missing_reasoning_detected,omitempty"`
 	MissingReasoningRetries    int `json:"missing_reasoning_retries,omitempty"`
 	MissingReasoningRecovered  int `json:"missing_reasoning_recovered,omitempty"`
@@ -523,6 +528,19 @@ func (s *metricsSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
 	s.m.ReadinessMissingPathInspection += a.MissingPathInspection
 	s.m.ReadinessMissingSignoff += a.MissingSignoff
 	s.m.ReadinessMissingMutation += a.MissingMutation
+}
+
+func (s *metricsSink) RecordVerificationContractDrift(d event.VerificationContractDrift) {
+	if s == nil {
+		return
+	}
+	defer event.RecordVerificationContractDrift(s.inner, d)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m.GoalResumesWithContract++
+	if d.Drift {
+		s.m.GoalVerificationDrifts++
+	}
 }
 
 func (s *metricsSink) RecordSubagentHandoff(a event.SubagentHandoffAudit) {

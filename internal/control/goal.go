@@ -269,18 +269,18 @@ func (g *goalMachine) statusForDisplay() string {
 // the per-goal runtime counters, and returns the state to persist. ok is
 // false (no persistence) when the goal is unchanged or no state path is
 // configured.
-func (g *goalMachine) set(goal, preferredBudgetClass string, todos []evidence.TodoItem) (string, []byte, bool) {
+func (g *goalMachine) set(goal, preferredBudgetClass string, contract evidence.VerificationContract, todos []evidence.TodoItem) (string, []byte, bool) {
 	goal = strings.TrimSpace(goal)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if goal != "" && g.goal == goal && g.status == GoalStatusRunning && g.budgetClass == preferredBudgetClass {
 		return "", nil, false
 	}
-	g.installGoalLocked(goal, preferredBudgetClass)
+	g.installGoalLocked(goal, preferredBudgetClass, contract)
 	return g.buildStateLocked(todos)
 }
 
-func (g *goalMachine) installGoalLocked(goal, preferredBudgetClass string) {
+func (g *goalMachine) installGoalLocked(goal, preferredBudgetClass string, contract evidence.VerificationContract) {
 	g.continuationEpoch++
 	g.turnsUsed, g.tokensUsed, g.requestsUsed, g.noProgressTurns = 0, 0, 0, 0
 	g.workDurationMs = 0
@@ -299,7 +299,11 @@ func (g *goalMachine) installGoalLocked(goal, preferredBudgetClass string) {
 	} else {
 		g.goal, g.status = goal, GoalStatusRunning
 		g.scopeID = newGoalScopeID()
-		g.deliveryCheckpoint = evidence.DeliveryCheckpoint{ScopeID: g.scopeID}
+		// The Goal is accepted here, under the declaration this process read.
+		// Freezing it at creation is what makes it a contract rather than a
+		// re-reading of whatever the file says at the moment it is consulted.
+		frozen := contract
+		g.deliveryCheckpoint = evidence.DeliveryCheckpoint{ScopeID: g.scopeID, Verification: &frozen}
 		g.budgetClass = preferredBudgetClass
 		g.turnsLimit = unlimitedGoalTurns
 		g.tokensLimit = g.tokenBudget
@@ -370,22 +374,6 @@ func (g *goalMachine) resume(todos []evidence.TodoItem) (path string, data []byt
 	}
 	path, data, persist = g.buildStateLocked(todos)
 	return path, data, persist, true
-}
-
-func (g *goalMachine) setDeliveryCheckpoint(checkpoint evidence.DeliveryCheckpoint, todos []evidence.TodoItem) (string, []byte, bool) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if g.scopeID == "" || checkpoint.ScopeID != g.scopeID {
-		return "", nil, false
-	}
-	g.deliveryCheckpoint = checkpoint
-	return g.buildStateLocked(todos)
-}
-
-func (g *goalMachine) deliveryState() evidence.DeliveryCheckpoint {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.deliveryCheckpoint
 }
 
 // acceptContinuation checks an advance result before the orchestrator surfaces

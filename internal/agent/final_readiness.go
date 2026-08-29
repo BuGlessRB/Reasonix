@@ -349,6 +349,16 @@ func (a *Agent) checkContract() evidence.CheckContract {
 	return evidence.CaptureCheckContract(a.task.checkpoint.BaselineChecks, a.declaredChecks())
 }
 
+// DeclaredProjectChecks is the declaration this process loaded, for a host that
+// has to freeze what a Goal is accepted under. It is what the project asks for
+// now, which is not the same claim as what a running Goal is held to.
+func (a *Agent) DeclaredProjectChecks() []string {
+	if a == nil {
+		return nil
+	}
+	return a.declaredChecks()
+}
+
 // declaredChecks is what the project asks for right now, which the contract
 // pairs against the baseline rather than trusting on its own.
 func (a *Agent) declaredChecks() []string {

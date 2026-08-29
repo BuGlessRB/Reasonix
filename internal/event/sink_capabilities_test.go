@@ -53,6 +53,9 @@ func (s *capturingSink) RecordProjectCheckProbe(ProjectCheckProbe) {
 func (s *capturingSink) RecordSubagentHandoff(SubagentHandoffAudit) {
 	s.recorded = append(s.recorded, "SubagentHandoff")
 }
+func (s *capturingSink) RecordVerificationContractDrift(VerificationContractDrift) {
+	s.recorded = append(s.recorded, "VerificationDrift")
+}
 
 // recordAll drives every optional capability once through s.
 func recordAll(s Sink) {
@@ -68,6 +71,7 @@ func recordAll(s Sink) {
 	RecordRunBudget(s, RunBudgetSample{})
 	RecordProjectCheckProbe(s, ProjectCheckProbe{})
 	RecordSubagentHandoff(s, SubagentHandoffAudit{})
+	RecordVerificationContractDrift(s, VerificationContractDrift{})
 }
 
 // AuditForwarder is why a new capability does not have to be repeated at every

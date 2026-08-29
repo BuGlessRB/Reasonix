@@ -262,7 +262,7 @@ func TestGoalTurnRecorderProtocol(t *testing.T) {
 			t.Fatal(err)
 		}
 		// The goal is replaced: epoch bumps, scope rotates.
-		g.set("replacement", "", nil)
+		g.set("replacement", "", evidence.VerificationContract{}, nil)
 		if got := rec.validReport(rec.epoch); got != nil {
 			t.Fatalf("stale recorder report = %+v, want nil", got)
 		}
@@ -270,7 +270,7 @@ func TestGoalTurnRecorderProtocol(t *testing.T) {
 
 	t.Run("late record after replacement rejected", func(t *testing.T) {
 		g, rec := newRec(t)
-		g.set("replacement", "", nil)
+		g.set("replacement", "", evidence.VerificationContract{}, nil)
 		if _, err := rec.RecordGoalReport(report(GoalStatusComplete, "")); err == nil {
 			t.Fatal("late record on a replaced goal must be rejected")
 		}
@@ -282,7 +282,7 @@ func TestGoalTurnRecorderProtocol(t *testing.T) {
 		if g.tokensUsed != 150 {
 			t.Fatalf("tokensUsed = %d, want 150", g.tokensUsed)
 		}
-		g.set("replacement", "", nil)
+		g.set("replacement", "", evidence.VerificationContract{}, nil)
 		rec.addUsage(50)
 		if g.tokensUsed != 0 {
 			t.Fatalf("stale usage folded into replacement goal: %d", g.tokensUsed)
@@ -353,7 +353,7 @@ func TestGoalWorkDurationUsesPerRunMaximumAndRejectsStaleRuns(t *testing.T) {
 	}
 
 	g.mu.Lock()
-	g.installGoalLocked("replacement", budgetClassSimple)
+	g.installGoalLocked("replacement", budgetClassSimple, evidence.VerificationContract{})
 	g.mu.Unlock()
 	second.addWorkDuration(9_000)
 	if g.workDurationMs != 0 {

@@ -167,6 +167,13 @@ func (c *coalescer) RecordSubagentHandoff(a SubagentHandoffAudit) {
 	RecordSubagentHandoff(c.inner, a)
 }
 
+func (c *coalescer) RecordVerificationContractDrift(d VerificationContractDrift) {
+	c.mu.Lock()
+	c.enqueueFlushLocked()
+	c.drainAndUnlock()
+	RecordVerificationContractDrift(c.inner, d)
+}
+
 func (c *coalescer) RecordTurnCompletion() {
 	c.mu.Lock()
 	c.enqueueFlushLocked()

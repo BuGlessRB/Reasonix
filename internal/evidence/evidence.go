@@ -346,6 +346,10 @@ type DeliveryCheckpoint struct {
 	// ride the checkpoint because a controller rebuild re-reads the project's
 	// declaration, which is exactly when a rewritten one would otherwise win.
 	BaselineChecks []string `json:"baselineChecks,omitempty"`
+	// Verification is the contract this Goal was accepted under. Nil is a
+	// checkpoint written before contracts existed and is never backfilled from
+	// the current declaration: that would invent an acceptance nobody made.
+	Verification *VerificationContract `json:"verification,omitempty"`
 }
 
 // Ledger stores the receipts available to complete_step for the current turn.

@@ -57,6 +57,12 @@ func (f *FanOut) RecordSubagentHandoff(a SubagentHandoffAudit) {
 	}
 }
 
+func (f *FanOut) RecordVerificationContractDrift(d VerificationContractDrift) {
+	for _, s := range f.sinks {
+		RecordVerificationContractDrift(s, d)
+	}
+}
+
 func (f *FanOut) RecordTurnCompletion() {
 	for _, s := range f.sinks {
 		RecordTurnCompletion(s)
