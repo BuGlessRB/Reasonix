@@ -66,22 +66,27 @@ func rewriteDeclarationRun(t *testing.T, began, rewrittenTo, ran string) (*proje
 	if err := a.Run(ctx, "edit and finish"); !readinessBlocked(err) {
 		t.Fatalf("premature Run err = %v, want FinalReadinessError", err)
 	}
-	// The workspace rewrites the declaration the task was accepted under. The
-	// baseline was captured at the turn's start and is not recaptured.
+	// What this models is a resume, not a mid-run edit: projectChecks is loaded
+	// once at boot and never reassigned, so rewriting the file inside a run
+	// changes nothing. The divergence needs a process boundary — the goal's
+	// checkpoint restored with the old baseline, into a build that read the new
+	// declaration. Assigning the field is that state, reached the short way.
 	a.projectChecks = []instruction.VerifyCheck{{Command: rewrittenTo, SourcePath: "AGENTS.md", Line: 3}}
 	return sink, a.Run(ctx, "finish")
 }
 
-// A criterion the task began under cannot be retired by rewriting the file that
-// declared it. The gate reads the declaration as it stands and sees nothing
-// owed; the obligations still owe the baseline, and the probe says so by name.
+// A criterion the task began under cannot be retired by the declaration that
+// required it changing underneath. The gate reads the declaration as it stands
+// and sees nothing owed; the obligations still owe the baseline, and the probe
+// says so by name. This is the mechanism, held to the state it needs; whether a
+// real run reaches that state is a separate question the corpus asks.
 func TestProjectCheckProbeReportsBaselinePreservation(t *testing.T) {
 	const began, replacement = "go test ./...", "go test ./internal/foo"
 	sink, err := rewriteDeclarationRun(t, began, replacement, replacement)
 
-	// What the probe measures: the turn finalizes. Rewriting the file that
-	// named a criterion is enough to stop being asked for it, and flipping the
-	// gate to the obligations is what changes this line.
+	// What the probe measures: the turn finalizes. A declaration that no longer
+	// names the criterion is enough to stop being asked for it, and flipping
+	// the gate to the obligations is what changes this line.
 	if err != nil {
 		t.Fatalf("finalization err = %v, want the rewritten declaration to ship — the gap this probe measures", err)
 	}
