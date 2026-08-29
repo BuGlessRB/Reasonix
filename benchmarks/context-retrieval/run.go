@@ -158,6 +158,8 @@ func runExperiment(experiment, root string, dry bool, tasks []contextTask) int {
 		}
 	}
 	reportFunnels(byArm)
+	fmt.Print(auditQueries(all).report())
+	fmt.Print(queryLines(all))
 	if experiment == experimentIndex {
 		reportBoundaries(all)
 	}

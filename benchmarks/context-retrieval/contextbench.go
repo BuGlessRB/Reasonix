@@ -31,6 +31,22 @@ const (
 	toolRecall        = "recall"
 )
 
+// searchAttempt is one query the model wrote, and what it got back. Kept per
+// attempt rather than aggregated: the question is why a retrieval that the host
+// probe ranks first takes the model more than one try.
+type searchAttempt struct {
+	Ordinal     int    `json:"ordinal"`
+	Round       int    `json:"round"`
+	Query       string `json:"query"`
+	TargetRank  int    `json:"target_rank"` // 0 = the target did not come back
+	ResultCount int    `json:"result_count"`
+	// Reformulation classifies this query against the one before it, and
+	// MissingProbeTerms are the host probe's terms this query left out. Both
+	// are derived from token sets: no judge, and nothing read out of prose.
+	Reformulation     string   `json:"reformulation,omitempty"`
+	MissingProbeTerms []string `json:"missing_probe_terms,omitempty"`
+}
+
 // contextMetrics is one run's behaviour.
 type contextMetrics struct {
 	Task string `json:"task"`
@@ -59,6 +75,11 @@ type contextMetrics struct {
 	// RecallReturnedTokens is what recall paged back in. The index saves
 	// resident prefix; this is what is paid dynamically instead.
 	RecallReturnedTokens int `json:"recall_returned_tokens"`
+
+	Searches []searchAttempt `json:"searches,omitempty"`
+	// PostHitSearches are queries issued after the target had already been
+	// returned: not a query problem, a result-to-read problem.
+	PostHitSearches int `json:"post_hit_searches"`
 
 	AnswerRecovered bool     `json:"answer_recovered"`
 	MissingMarkers  []string `json:"missing_markers,omitempty"`
@@ -92,6 +113,7 @@ var hitPosition = regexp.MustCompile(`(?m)^#(\d+) `)
 func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cueVisible bool) contextMetrics {
 	m := contextMetrics{Task: t.ID, Arm: arm, CueVisible: cueVisible}
 	calls := map[string]provider.ToolCall{}
+	pending := map[string]int{}
 	round := 0
 	sawTargetHit := false
 
@@ -120,6 +142,13 @@ func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cu
 				if m.FirstSearchRound == 0 {
 					m.FirstSearchRound = round
 				}
+				if sawTargetHit {
+					m.PostHitSearches++
+				}
+				m.Searches = append(m.Searches, searchAttempt{
+					Ordinal: m.SearchCalls, Round: round, Query: query,
+				})
+				pending[tc.ID] = len(m.Searches) - 1
 			case len(positions) > 0:
 				m.ReadCalls++
 				if m.FirstReadRound == 0 {
@@ -165,7 +194,11 @@ func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cu
 		if len(positions) > 0 {
 			m.SearchHits++
 		}
-		if rank := indexOfInt(positions, target); rank > 0 {
+		rank := indexOfInt(positions, target)
+		if i, ok := pending[msg.ToolCallID]; ok {
+			m.Searches[i].TargetRank, m.Searches[i].ResultCount = rank, len(positions)
+		}
+		if rank > 0 {
 			m.TargetSearchHits++
 			sawTargetHit = true
 			if m.FirstTargetRank == 0 {
@@ -174,6 +207,7 @@ func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cu
 		}
 	}
 	m.RetrievalRounds = m.SearchCalls + m.ReadCalls
+	classifySearches(&m, t)
 	return m
 }
 
