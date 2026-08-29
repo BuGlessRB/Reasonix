@@ -33,6 +33,8 @@ type toolCallPlan struct {
 	resolved     tool.ResolvedCall
 	resolvedMeta *tool.ResolvedCall
 
+	planPhaseAdmitted bool
+
 	mutates                   bool
 	verification              bool
 	planTransition            bool
@@ -281,13 +283,14 @@ func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (
 				safety = planmode.PlanSafetyUnsafe
 			}
 		}
-		if decision := a.planModeDecision(plan.canonicalName, plan.readOnly, safety, json.RawMessage(call.Arguments)); decision.Blocked && !a.plannerTrustsMCP(t, plan.canonicalName) {
+		if decision := a.planModeDecision(t, plan.canonicalName, plan.readOnly, safety, json.RawMessage(call.Arguments)); decision.Blocked {
 			return toolOutcome{
 				output:  decision.Message,
 				blocked: true,
 				errMsg:  planPhaseBlockReason(decision),
 			}, true
 		}
+		plan.planPhaseAdmitted = true
 	}
 	// Resolve proxy tools (use_capability) to the real MCP target before
 	// permission, hooks, and evidence. Provider transcript keeps call.Name.
@@ -318,6 +321,9 @@ func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (
 		}
 		plan.readOnly = rc.ReadOnly
 		if outcome, blocked := a.readOnlyExecutionBlock(t, &rc); blocked {
+			return outcome, true
+		}
+		if outcome, blocked := a.planPhaseGateForTarget(plan); blocked {
 			return outcome, true
 		}
 		if rc.Commit != nil {
@@ -356,37 +362,8 @@ func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (
 		return outcome, true
 	}
 
-	// A proxy resolution can point at a target with an explicit planning-phase
-	// opt-out even though the proxy itself has none. Re-check the resolved target
-	// before its ordinary permission and sandbox path.
-	if plan.resolved.TargetName != "" && a.planMode.Load() {
-		safety := planmode.PlanSafetyUnknown
-		if c, ok := plan.execTool.(tool.PlanModeClassifier); ok {
-			if c.PlanModeSafe() {
-				safety = planmode.PlanSafetySafe
-			} else {
-				safety = planmode.PlanSafetyUnsafe
-			}
-		}
-		if decision := a.planModeDecision(plan.permName, plan.resolved.ReadOnly, safety, plan.permArgs); decision.Blocked && !a.plannerTrustsMCP(plan.execTool, plan.permName) {
-			return toolOutcome{
-				output:  decision.Message,
-				blocked: true,
-				errMsg:  planPhaseBlockReason(decision),
-			}, true
-		}
-	}
-	plannerTrustedMCP := a.plannerTrustsMCP(plan.execTool, plan.permName)
-	if a.planMode.Load() && isMCPExecutionTarget(plan.execTool, plan.permName) && !plannerTrustedMCP && (!plan.readOnly || !mcpServerAuthorized(plan.execTool) || mcpDestructiveHint(plan.execTool)) {
-		reason := "writer/destructive target"
-		if plan.readOnly && !mcpServerAuthorized(plan.execTool) {
-			reason = "reader from an unauthorized server"
-		}
-		return toolOutcome{
-			output:  fmt.Sprintf("blocked: MCP %s %q is unavailable during Plan mode; finish or exit Plan mode before requesting this call", reason, plan.permName),
-			blocked: true,
-			errMsg:  "blocked: MCP target is unavailable during planning",
-		}, true
+	if outcome, blocked := a.planPhaseGateForTarget(plan); blocked {
+		return outcome, true
 	}
 	return toolOutcome{}, false
 }
@@ -525,7 +502,7 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 // PreToolUse hooks and preview checkpoints, and injects call context. All of
 // this happens after permission and before the concrete Execute call.
 func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (toolOutcome, bool) {
-	if outcome, blocked := a.taskPolicyToolGate(plan); blocked {
+	if outcome, blocked := a.assertPlanPhaseAdmitted(plan); blocked {
 		return outcome, true
 	}
 	// Acquire after permission is granted but before PreToolUse: hooks are user

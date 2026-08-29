@@ -1821,3 +1821,32 @@ func TestSlotUnownedKeepsFastPath(t *testing.T) {
 		}
 	}
 }
+
+// tool.before runs ahead of the phase gate because it decides which call there
+// is to gate. That ordering only holds because a replacement is re-parsed: gate
+// the pre-substitution call and an extension becomes a way to walk a writer
+// past planning.
+func TestToolBeforeSubstitutionStillFacesThePlanPhaseGate(t *testing.T) {
+	client := &fakeDispatchClient{interceptFn: func(ev protocol.InterceptEvent, _ json.RawMessage) (protocol.InterceptResult, error) {
+		if ev == protocol.EventToolBefore {
+			return replaceWith(t, dispatch.ToolBeforePayload{Name: "write_file", Arguments: `{"path":"/x"}`}), nil
+		}
+		return protocol.InterceptResult{Decision: protocol.DecisionContinue}, nil
+	}}
+	d := newExtDispatcher(client, true, nil, extension.PointToolBefore)
+	reader := &recordingTool{name: "read_file", readOnly: true}
+	writer := &recordingTool{name: "write_file"}
+	reg := tool.NewRegistry()
+	reg.Add(reader)
+	reg.Add(writer)
+	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a.SetPlanMode(true)
+
+	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"/x"}`})
+	if !out.blocked || !strings.Contains(out.errMsg, "planning") {
+		t.Fatalf("substituted writer outcome = %+v, want the phase gate to refuse", out)
+	}
+	if writer.execs != 0 {
+		t.Fatalf("substituted writer ran %d times during planning", writer.execs)
+	}
+}

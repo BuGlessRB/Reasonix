@@ -284,7 +284,7 @@ func TestPlanningPhaseSplitsDelegationByWriterCapability(t *testing.T) {
 				safety = planmode.PlanSafetySafe
 			}
 		}
-		got := a.planModeDecision(tl.Name(), tl.ReadOnly(), safety, nil)
+		got := a.planModeDecision(tl, tl.Name(), tl.ReadOnly(), safety, nil)
 		blocked[tl.Name()] = got.Blocked
 		// The verdict has to follow what the tool declares about itself, or the
 		// barrier has started classifying delegation by name.
@@ -558,4 +558,88 @@ func mustBuiltinTool(t *testing.T, name string) tool.Tool {
 		t.Fatalf("builtin %q is not registered", name)
 	}
 	return builtin
+}
+
+type commitRecordingProxy struct {
+	fakeTool
+	target    tool.Tool
+	committed *int
+}
+
+func (p commitRecordingProxy) ResolveCall(context.Context, json.RawMessage) (tool.ResolvedCall, error) {
+	return tool.ResolvedCall{
+		ProxyAction: "call",
+		TargetName:  p.target.Name(),
+		Target:      p.target,
+		ReadOnly:    p.target.ReadOnly(),
+		Args:        json.RawMessage(`{}`),
+		Commit:      func() error { *p.committed++; return nil },
+	}, nil
+}
+
+// A proxy names its real target only after resolving, so the phase gate has to
+// run there too — and before Commit, which is a state transition the resolver
+// contract already says waits for the host's checks. Commit running first would
+// leave a refused planning call with a committed ledger entry behind it.
+func TestPlanPhaseGateRunsBeforeResolvedCommit(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		target        tool.Tool
+		wantBlocked   bool
+		wantCommitted int
+	}{
+		{name: "side-effect target", target: fakeTool{name: "mcp__srv__write"}, wantBlocked: true},
+		{name: "read-only target", target: annotatedMCPTool{
+			fakeTool:         fakeTool{name: "mcp__srv__query", readOnly: true},
+			server:           "srv",
+			raw:              "query",
+			serverAuthorized: true,
+		}, wantCommitted: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			committed := 0
+			reg := tool.NewRegistry()
+			reg.Add(commitRecordingProxy{
+				fakeTool:  fakeTool{name: "use_capability", readOnly: true},
+				target:    tc.target,
+				committed: &committed,
+			})
+			a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+			a.SetPlanMode(true)
+
+			out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
+				ID: "1", Name: "use_capability", Arguments: `{"action":"call"}`,
+			})
+			if out.blocked != tc.wantBlocked {
+				t.Fatalf("blocked = %v, want %v (%+v)", out.blocked, tc.wantBlocked, out)
+			}
+			if committed != tc.wantCommitted {
+				t.Fatalf("Commit ran %d times, want %d", committed, tc.wantCommitted)
+			}
+		})
+	}
+}
+
+// No ordinary path reaches this assertion, which is why it needs a test: it
+// exists for the day a new pre-execution path forgets the gate, and a backstop
+// nobody ever exercised is not one.
+func TestPlanPhaseAssertionRefusesAnUnadmittedCall(t *testing.T) {
+	a := New(nil, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+
+	a.SetPlanMode(true)
+	out, blocked := a.assertPlanPhaseAdmitted(&toolCallPlan{})
+	if !blocked || !strings.Contains(out.errMsg, "gate bypassed") {
+		t.Fatalf("an unadmitted planning call reached execution: blocked=%v out=%+v", blocked, out)
+	}
+	if !strings.Contains(out.output, "host bug") {
+		t.Errorf("the violation must not read as an ordinary refusal: %s", out.output)
+	}
+	if _, blocked := a.assertPlanPhaseAdmitted(&toolCallPlan{planPhaseAdmitted: true}); blocked {
+		t.Error("an admitted call was refused at the execution boundary")
+	}
+
+	a.SetPlanMode(false)
+	if _, blocked := a.assertPlanPhaseAdmitted(&toolCallPlan{}); blocked {
+		t.Error("the assertion fired outside the planning phase")
+	}
 }

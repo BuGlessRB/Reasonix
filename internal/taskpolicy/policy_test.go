@@ -31,13 +31,19 @@ func TestDeriveTakesNoUserProse(t *testing.T) {
 	}
 }
 
-func TestPlanModeForbidsMutation(t *testing.T) {
+// The plan signal is carried and rendered, never enforced: whether the phase
+// admits a call is planmode's answer, and a second one here is what let the two
+// drift until delegation fell through the gap between them.
+func TestPlanModeSignalIsCarriedNotEnforced(t *testing.T) {
 	p := Derive(Input{Preset: agentpreset.Delivery, PlanMode: true})
-	if p.AllowsMutation() {
-		t.Fatal("plan mode must forbid mutation")
+	if !p.PlanModeReadOnly {
+		t.Fatal("plan mode must be recorded on the derived policy")
 	}
-	if !Derive(Input{Preset: agentpreset.Delivery}).AllowsMutation() {
-		t.Fatal("mutation must be allowed outside plan mode")
+	if !strings.Contains(ExecutionPolicyBlock(p), "constraint=plan-mode-read-only") {
+		t.Fatal("the plan signal must reach the provider-visible policy block")
+	}
+	if Derive(Input{Preset: agentpreset.Delivery}).PlanModeReadOnly {
+		t.Fatal("a non-plan turn must not carry the plan signal")
 	}
 }
 

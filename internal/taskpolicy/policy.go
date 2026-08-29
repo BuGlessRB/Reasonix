@@ -39,7 +39,9 @@ type Input struct {
 type TaskPolicy struct {
 	Preset       agentpreset.AgentPreset
 	Verification Verification
-	// PlanModeReadOnly is the explicit plan-mode read-only boundary.
+	// PlanModeReadOnly records that this turn was derived in plan mode. It is a
+	// diagnostic and prompt signal only: planmode owns whether the phase admits
+	// a call, and a second answer here is how the two drifted apart.
 	PlanModeReadOnly bool
 	// PolicyVersion is diagnostic only.
 	PolicyVersion int
@@ -54,11 +56,6 @@ func Derive(in Input) TaskPolicy {
 		PlanModeReadOnly: in.PlanMode,
 		PolicyVersion:    PolicyVersion,
 	}
-}
-
-// AllowsMutation reports whether a real writer may proceed under this policy.
-func (p TaskPolicy) AllowsMutation() bool {
-	return !p.PlanModeReadOnly
 }
 
 // ExecutionPolicyBlock renders the short provider-visible transient user block

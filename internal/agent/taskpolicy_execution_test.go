@@ -30,21 +30,25 @@ func TestTaskPolicyLeavesExploreSubagentAlone(t *testing.T) {
 
 // Ordinary work carries no host-invented limits: the gate blocks a writer only
 // under plan mode, and reaches for no reading of what the user wrote.
-func TestTaskPolicyBlocksWritersOnlyInPlanMode(t *testing.T) {
+// One owner answers "may this run while planning". The turn policy carries the
+// plan signal for the prompt and for diagnostics, and that is all it does — a
+// second enforcement point here is the gap delegation fell through.
+func TestTaskPolicyPlanSignalDoesNotEnforceThePhase(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "write_file", readOnly: false, writesPaths: true})
 	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{}, event.Discard)
 	a.turn.policySet = true
 	call := provider.ToolCall{Name: "write_file", Arguments: `{"path":"notes.txt","content":"x"}`}
 
-	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{})
-	if got := a.executeOne(context.Background(), &a.turn, call); got.blocked {
-		t.Fatalf("outcome = %+v, want no policy block outside plan mode", got)
-	}
 	a.turn.policy = taskpolicy.Derive(taskpolicy.Input{PlanMode: true})
+	if got := a.executeOne(context.Background(), &a.turn, call); got.blocked {
+		t.Fatalf("the turn policy blocked on its own: %+v", got)
+	}
+
+	a.SetPlanMode(true)
 	got := a.executeOne(context.Background(), &a.turn, call)
-	if !got.blocked || !strings.Contains(got.errMsg, "forbids mutation") {
-		t.Fatalf("plan-mode outcome = %+v, want mutation block", got)
+	if !got.blocked || !strings.Contains(got.errMsg, "planning") {
+		t.Fatalf("plan-phase outcome = %+v, want the phase gate to refuse", got)
 	}
 }
 
