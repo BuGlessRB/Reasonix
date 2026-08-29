@@ -155,10 +155,9 @@ func visibleText(f builtFixture) string {
 // one did. The agent has already loaded the session and its sidecar by the time
 // this runs; a failed autosave afterwards costs the benchmark nothing.
 func sealFixture(sessionPath string) {
-	// Every file, not two named ones: the session writes an event log and a
-	// context sidecar beside the transcript, and naming them is how the next
-	// one gets missed. It already did — session.events.jsonl carried the answer
-	// after the other two were sealed.
+	// Every file, not two named ones: a session writes an event log and a
+	// context sidecar beside the transcript, and session.events.jsonl still
+	// carried the answer after the other two were sealed by name.
 	dir := filepath.Dir(sessionPath)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
