@@ -99,31 +99,31 @@ func searchTasks() []contextTask {
 				"因为失败证据不能成为后续比较的可信基准。"),
 		},
 		{
-			// Reported, not failed: KeepErrors holds failing output through a
-			// fold, so a failure is not something the model loses, which makes
-			// it the wrong carrier for a recall question.
-			ID: "r04-lease-fence", Experiment: experimentSearch, TargetKind: "tool_output",
+			// The assistant's own account, not the tool call: a call always earns
+			// an index line, and an addressed target measures the index rather
+			// than search. KeepErrors rules out a failing result likewise.
+			ID: "r04-lease-fence", Experiment: experimentSearch, TargetKind: "assistant_reasoning",
 			Prompt:        "那次 lease fence 检查报告的诊断标记是什么？expected 和 observed epoch 分别是多少？",
 			AnswerMarkers: []string{"delta-91", "12", "9"},
 			ProbeQuery:    "lease fence writer epoch mismatch",
-			Plant: plantCall("lf1", "bash", `{"command":"./scripts/check lease-fence"}`,
-				"LEASE_FENCE delta-91: expected writer epoch 12, observed 9"),
+			Plant: plantAssistant("The lease fence check reported LEASE_FENCE delta-91: " +
+				"expected writer epoch 12, observed 9. We left the fence in place."),
 		},
 		{
-			ID: "r05-schema-guard", Experiment: experimentSearch, TargetKind: "tool_output",
+			ID: "r05-schema-guard", Experiment: experimentSearch, TargetKind: "assistant_reasoning",
 			Prompt:        "当时 schema guard 报告的标记是什么，超预算多少 token？",
 			AnswerMarkers: []string{"amber-214", "214"},
 			ProbeQuery:    "schema guard provider visible surface budget",
-			Plant: plantCall("sg1", "bash", `{"command":"./scripts/check schema-guard"}`,
-				"SCHEMA_GUARD amber-214: provider-visible tool schema exceeded the allowed surface by 214 tokens"),
+			Plant: plantAssistant("The schema guard reported SCHEMA_GUARD amber-214: the provider-visible " +
+				"tool schema exceeded the allowed surface by 214 tokens. We trimmed a description instead."),
 		},
 		{
-			ID: "r06-shadow-probe", Experiment: experimentSearch, TargetKind: "tool_output",
+			ID: "r06-shadow-probe", Experiment: experimentSearch, TargetKind: "assistant_reasoning",
 			Prompt:        "我们那次 shadow probe 的 marker、p95 divergence 和 generation 分别是多少？",
 			AnswerMarkers: []string{"violet-63", "0.037", "12"},
 			ProbeQuery:    "shadow probe divergence generation marker",
-			Plant: plantCall("sp1", "bash", `{"command":"./scripts/probe shadow"}`,
-				"shadow_probe: marker=violet-63 p95 divergence=0.037 generation=12"),
+			Plant: plantAssistant("The shadow probe came back as marker=violet-63 with a p95 divergence " +
+				"of 0.037 at generation=12, which we judged within tolerance."),
 		},
 	}
 }

@@ -86,15 +86,53 @@ func finalAnswer(msgs []provider.Message) string {
 	return ""
 }
 
+// isolateWorkspace moves the process into an empty directory before any task
+// runs. The corpus lives in this repository, so an agent left here greps the
+// answers out of corpus.go — one did, quoting the file's own line about them
+// being nonces. Fixtures stay outside it too: a readable session file is the
+// canonical transcript, answer included.
+func isolateWorkspace() (func(), error) {
+	dir, err := os.MkdirTemp("", "contextbench-workspace-*")
+	if err != nil {
+		return nil, err
+	}
+	readme := "This workspace is empty on purpose. The question is about earlier conversation,\nnot about any file here.\n"
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte(readme), 0o644); err != nil {
+		return nil, err
+	}
+	previous, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chdir(dir); err != nil {
+		return nil, err
+	}
+	return func() {
+		_ = os.Chdir(previous)
+		_ = os.RemoveAll(dir)
+	}, nil
+}
+
 // runExperiment runs one experiment's tasks across its arms. A dry run drives
 // the same pipeline with a scripted provider: it proves fixture, run, scoring
 // and report hold together before any of it is paid for.
-func runExperiment(experiment, root string, dry bool) int {
+func runExperiment(experiment, root string, dry bool, tasks []contextTask) int {
+	root, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	restore, err := isolateWorkspace()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "isolate workspace:", err)
+		return 2
+	}
+	defer restore()
 	var p provider.Provider = &scriptedProvider{}
 	if !dry {
-		real, err := realProvider()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+		real, rerr := realProvider()
+		if rerr != nil {
+			fmt.Fprintln(os.Stderr, rerr)
 			return 2
 		}
 		p = real
@@ -102,7 +140,7 @@ func runExperiment(experiment, root string, dry bool) int {
 	byArm := map[string][]contextMetrics{}
 	var all []contextMetrics
 
-	for _, t := range allTasks() {
+	for _, t := range tasks {
 		if t.Experiment != experiment {
 			continue
 		}

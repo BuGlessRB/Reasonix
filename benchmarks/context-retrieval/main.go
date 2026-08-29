@@ -54,9 +54,9 @@ func main() {
 	case "preflight":
 		os.Exit(runPreflight(tasks, root))
 	case "run-search":
-		os.Exit(runExperiment(experimentSearch, root, *dry))
+		os.Exit(runExperiment(experimentSearch, root, *dry, tasks))
 	case "run-index":
-		os.Exit(runExperiment(experimentIndex, root, *dry))
+		os.Exit(runExperiment(experimentIndex, root, *dry, tasks))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown mode %q\n", *mode)
 		os.Exit(2)

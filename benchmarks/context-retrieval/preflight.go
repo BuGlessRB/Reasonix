@@ -103,8 +103,9 @@ func checkTask(t contextTask, root string) ([]finding, error) {
 
 		if t.Experiment == experimentIndex {
 			out = append(out, checkCueVisibility(t, arm.scale, arm.name, visible)...)
-		} else if strings.Contains(visibleIndexOnly(f), t.ID) {
-			out = append(out, finding{t.ID, arm.name, "a search task must not be addressed by the fold index"})
+		} else if line := indexLineFor(f, f.Target); line != "" {
+			out = append(out, finding{t.ID, arm.name,
+				"a search task is addressed by the fold index, so it measures the index and not search: " + line})
 		}
 
 		// The projection is what the agent believes. This is what the model is
@@ -256,6 +257,17 @@ func probeRank(f builtFixture, query string) (int, error) {
 		}
 	}
 	return 0, nil
+}
+
+// indexLineFor returns the fold-index line addressing a position, if any.
+func indexLineFor(f builtFixture, pos int) string {
+	want := fmt.Sprintf("#%d ", pos)
+	for line := range strings.SplitSeq(visibleIndexOnly(f), "\n") {
+		if strings.Contains(line, want) {
+			return strings.TrimSpace(line)
+		}
+	}
+	return ""
 }
 
 // visibleIndexOnly is just the fold-index sections of the projection.

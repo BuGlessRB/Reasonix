@@ -137,7 +137,7 @@ func TestScorerNamesWhereTheChainBroke(t *testing.T) {
 				toolResult("c1", "#7\nnothing useful"),
 			},
 			final: "unclear",
-			want:  stageNoSearch,
+			want:  stageReadMissed,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

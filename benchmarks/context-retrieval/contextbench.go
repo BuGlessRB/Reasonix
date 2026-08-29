@@ -20,7 +20,7 @@ import (
 
 // failure stages, in funnel order. Exactly one is reported per run.
 const (
-	stageNoSearch    = "NoSearch"           // never asked, and never read the target either
+	stageReadMissed  = "NoSearch"           // never asked, and never read the target either
 	stageSearchMiss  = "SearchMiss"         // searched, target never came back
 	stageHitNotRead  = "HitNotRead"         // target was returned and never opened
 	stageAnswerWrong = "ReadButAnswerWrong" // opened it and still answered wrong
@@ -59,7 +59,10 @@ type contextMetrics struct {
 
 	AnswerRecovered bool     `json:"answer_recovered"`
 	MissingMarkers  []string `json:"missing_markers,omitempty"`
-	FailureStage    string   `json:"failure_stage"`
+	// FinalAnswer is kept bounded so a surprising run can be read back. A
+	// metric nobody can audit is a claim, not a measurement.
+	FinalAnswer  string `json:"final_answer,omitempty"`
+	FailureStage string `json:"failure_stage"`
 
 	// UnexpectedWorkTools are investigation tools used instead of recall. The
 	// answer exists only in folded history, so reaching for the workspace is a
@@ -156,6 +159,10 @@ func (m *contextMetrics) scoreAnswer(final string, t contextTask) {
 	}
 	m.AnswerRecovered = len(m.MissingMarkers) == 0
 	m.FailureStage = m.stage()
+	if len(final) > 1200 {
+		final = final[:1200] + "…"
+	}
+	m.FinalAnswer = final
 }
 
 // stage places the run in the funnel. One label, chosen at the first step that
@@ -173,7 +180,7 @@ func (m contextMetrics) stage() string {
 	case m.SearchCalls > 0:
 		return stageSearchMiss
 	case m.ReadCalls > 0:
-		return stageNoSearch
+		return stageReadMissed
 	default:
 		return stageNoRetrieval
 	}
