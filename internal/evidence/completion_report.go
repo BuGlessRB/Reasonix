@@ -130,6 +130,39 @@ func (l *Ledger) LatestCompletionReport() (CompletionReport, bool) {
 	return CompletionReport{}, false
 }
 
+// ClosureTally counts the verdicts this run's completion reports received, at
+// the moment each was issued. Recomputing them later answers a different
+// question: the ledger has grown since, so a claim the host could not back
+// then may be backed now.
+type ClosureTally struct {
+	Closed    int
+	NeedsWork int
+}
+
+// NoteClosureVerdict records what the host answered one report with.
+func (l *Ledger) NoteClosureVerdict(closed bool) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if closed {
+		l.closure.Closed++
+		return
+	}
+	l.closure.NeedsWork++
+}
+
+// ClosureVerdicts returns the verdicts issued so far.
+func (l *Ledger) ClosureVerdicts() ClosureTally {
+	if l == nil {
+		return ClosureTally{}
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.closure
+}
+
 // AdjudicateCompletion lowers a report to what the host's own receipts support.
 // A criterion claimed satisfied whose evidence no receipt backs is downgraded,
 // and a report holding any downgraded criterion cannot stay "complete". The

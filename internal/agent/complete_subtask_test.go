@@ -141,3 +141,37 @@ func TestSubAgentAnswerLeadsWithAdjudicatedStatus(t *testing.T) {
 		}
 	}
 }
+
+// A verdict is not an error. A malformed submission fails the call; a claim the
+// host cannot back is a well-formed call the host answers with needs_work, and
+// keeping those apart is what lets "submit again" and "you are done" be
+// different answers instead of two readings of the word accepted.
+func TestCompleteSubtaskVerdictSeparatesClosureFromMoreWork(t *testing.T) {
+	const criterion = `{"id":"AC1","status":"satisfied","evidence":[{"kind":"verification","summary":"tests","command":"go test ./parser"}]}`
+
+	backed := evidence.NewLedger()
+	backed.Record(evidence.Receipt{ToolName: "bash", Command: "go test ./parser", Success: true, OutputBytes: 12})
+	out := submitCompleteSubtask(t, backed, `{"status":"complete","summary":"fixed it","acceptance_criteria":[`+criterion+`]}`)
+	if !strings.Contains(out, "complete_subtask closed:") {
+		t.Fatalf("backed report = %q, want a closed verdict", out)
+	}
+	if v := backed.ClosureVerdicts(); v.Closed != 1 || v.NeedsWork != 0 {
+		t.Fatalf("verdicts = %+v, want one closure", v)
+	}
+
+	// The same claim with nothing behind it: the call still succeeds.
+	unbacked := evidence.NewLedger()
+	out = submitCompleteSubtask(t, unbacked, `{"status":"complete","summary":"fixed it","acceptance_criteria":[`+criterion+`]}`)
+	if !strings.Contains(out, "complete_subtask needs_work:") {
+		t.Fatalf("unbacked report = %q, want a needs_work verdict", out)
+	}
+	if v := unbacked.ClosureVerdicts(); v.NeedsWork != 1 || v.Closed != 0 {
+		t.Fatalf("verdicts = %+v, want one needs_work", v)
+	}
+
+	// A malformed submission is the other layer and still fails the call.
+	ctx := evidence.WithLedger(context.Background(), evidence.NewLedger())
+	if _, err := NewCompleteSubtaskTool().Execute(ctx, json.RawMessage(`{"status":"nonsense"}`)); err == nil {
+		t.Fatal("a malformed report must fail the call, not return a verdict")
+	}
+}

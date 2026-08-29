@@ -110,6 +110,8 @@ type RunMetrics struct {
 	SubagentHandoffAttempted  int            `json:"subagent_handoff_attempted"`
 	SubagentHandoffAccepted   int            `json:"subagent_handoff_accepted"`
 	SubagentHandoffMalformed  int            `json:"subagent_handoff_malformed"`
+	SubagentHandoffClosed     int            `json:"subagent_handoff_closed"`
+	SubagentHandoffNeedsWork  int            `json:"subagent_handoff_needs_work"`
 	SubagentHandoffNotTried   int            `json:"subagent_handoff_never_attempted"`
 	SubagentHandoffClosedWith int            `json:"subagent_handoff_closed_with_report"`
 	SubagentHandoffToolsAfter int            `json:"subagent_handoff_tool_calls_after_report"`
@@ -563,6 +565,8 @@ func (s *metricsSink) RecordSubagentHandoff(a event.SubagentHandoffAudit) {
 	if a.ReportRound > 0 && a.ToolCallsAfterReport == 0 {
 		s.m.SubagentHandoffClosedWith++
 	}
+	s.m.SubagentHandoffClosed += a.Closed
+	s.m.SubagentHandoffNeedsWork += a.NeedsWork
 	s.m.SubagentHandoffToolsAfter += a.ToolCallsAfterReport
 	s.m.SubagentHandoffLowered += a.LoweredClaims
 }

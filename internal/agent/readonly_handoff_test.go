@@ -50,10 +50,17 @@ func TestReportingToolDoesNotCountAsAResearchCapability(t *testing.T) {
 }
 
 // Both kinds of child are told the same closing protocol, and the wording has
-// to fit a child that only looked at things.
+// to fit a child that only looked at things. It also has to name both verdicts:
+// a contract that asks for one call cannot be honoured against a host that
+// answers a lowered claim by asking for the work again.
 func TestCompletionContractCoversInspectionNotOnlyChange(t *testing.T) {
-	if !strings.Contains(completeSubtaskContract, "complete_subtask exactly once") {
+	if !strings.Contains(completeSubtaskContract, "complete_subtask") {
 		t.Error("the contract no longer names the call it requires")
+	}
+	for _, verdict := range []string{"needs_work", "closed"} {
+		if !strings.Contains(completeSubtaskContract, verdict) {
+			t.Errorf("the contract does not say what %q means, so the child cannot act on it", verdict)
+		}
 	}
 	if !strings.Contains(completeSubtaskContract, "inspected") {
 		t.Errorf("the contract asks only about changes, so a read-only child has nothing to cite:\n%s",

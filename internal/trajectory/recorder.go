@@ -123,6 +123,8 @@ type SubagentHandoff struct {
 	Attempts             int    `json:"attempts,omitempty"`
 	Accepted             int    `json:"accepted,omitempty"`
 	Malformed            int    `json:"malformed,omitempty"`
+	Closed               int    `json:"closed,omitempty"`
+	NeedsWork            int    `json:"needs_work,omitempty"`
 	ReportRound          int    `json:"report_round,omitempty"`
 	FinalRound           int    `json:"final_round,omitempty"`
 	ToolCallsAfterReport int    `json:"tool_calls_after_report,omitempty"`
@@ -353,6 +355,8 @@ func (r *Recorder) RecordSubagentHandoff(a event.SubagentHandoffAudit) {
 		Attempts:             a.Attempts,
 		Accepted:             a.Accepted,
 		Malformed:            a.Malformed,
+		Closed:               a.Closed,
+		NeedsWork:            a.NeedsWork,
 		ReportRound:          a.ReportRound,
 		FinalRound:           a.FinalRound,
 		ToolCallsAfterReport: a.ToolCallsAfterReport,

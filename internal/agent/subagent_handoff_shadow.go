@@ -34,6 +34,8 @@ func observeSubagentHandoff(sink event.Sink, sub *Agent, sess *Session, opts Opt
 	// readily and has them lowered every time is a different problem from one
 	// that does not submit, and a single status cannot say which.
 	if sub.task.ledger != nil {
+		verdicts := sub.task.ledger.ClosureVerdicts()
+		audit.Closed, audit.NeedsWork = verdicts.Closed, verdicts.NeedsWork
 		if claimed, ok := sub.task.ledger.LatestCompletionReport(); ok {
 			adjudicated, reasons := sub.task.ledger.AdjudicateCompletion(claimed)
 			audit.ClaimedStatus = string(claimed.Status)

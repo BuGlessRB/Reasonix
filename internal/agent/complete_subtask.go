@@ -78,15 +78,18 @@ func (*CompleteSubtaskTool) Execute(ctx context.Context, args json.RawMessage) (
 	if !ok {
 		return "", fmt.Errorf("complete_subtask requires the host evidence ledger; submit it from inside a sub-agent run")
 	}
-	// The submission always succeeds: the parent is better served by a claim it
-	// can see the host lower than by a rejection the parent never learns about.
+	// The submission always succeeds; what varies is the verdict. A rejection
+	// the parent never learns about serves it worse than a lowered claim it can
+	// see, so the call stands and the closure decision is said out loud.
 	adjudicated, reasons := led.AdjudicateCompletion(report)
-	msg := fmt.Sprintf("complete_subtask accepted: status=%s criteria=%d unresolved=%d",
-		adjudicated.Status, len(adjudicated.Criteria), len(adjudicated.Unresolved))
-	if len(reasons) > 0 {
-		msg += fmt.Sprintf(" — the host lowered %d unbacked criterion claim(s); run the check or cite what you really did", len(reasons))
+	closed := len(reasons) == 0
+	led.NoteClosureVerdict(closed)
+	if closed {
+		return fmt.Sprintf("complete_subtask closed: status=%s criteria=%d unresolved=%d — the sub-task is done and nothing further is asked of you",
+			adjudicated.Status, len(adjudicated.Criteria), len(adjudicated.Unresolved)), nil
 	}
-	return msg, nil
+	return fmt.Sprintf("complete_subtask needs_work: status=%s criteria=%d unresolved=%d — %d criterion claim(s) are not backed by anything the host observed; do that work and submit again",
+		adjudicated.Status, len(adjudicated.Criteria), len(adjudicated.Unresolved), len(reasons)), nil
 }
 
 // AttachCompleteSubtaskTool adds complete_subtask to a sub-agent registry.
@@ -117,9 +120,11 @@ func (a *Agent) CompletionReport() (evidence.CompletionReport, []string, bool) {
 // host expects a typed completion claim. The profile body says how to work;
 // this states the non-negotiable closing protocol.
 const completeSubtaskContract = `<completion-contract>
-End this sub-task by calling complete_subtask exactly once, as your final tool call.
-State the acceptance criteria you were held to and attach, for each, the command you
-ran or the paths you changed or inspected. The host checks every citation against what it observed
-you actually do and lowers any claim it cannot back, so cite real work only and put
-anything you assumed rather than verified in unresolved.
+Call complete_subtask when you believe this sub-task is done. State the acceptance
+criteria you were held to and attach, for each, the command you ran or the paths you
+changed or inspected. The host checks every citation against what it observed you
+actually do, and answers with a verdict: needs_work means a claim is not backed by
+anything it saw — do that work and submit again; closed means the sub-task is done and
+nothing further is asked of you. Cite real work only and put anything you assumed
+rather than verified in unresolved.
 </completion-contract>`

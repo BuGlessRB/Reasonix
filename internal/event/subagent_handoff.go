@@ -35,6 +35,12 @@ type SubagentHandoffAudit struct {
 	FinalRound           int
 	ToolCallsAfterReport int
 
+	// Closed and NeedsWork are the verdicts the host issued, counted when each
+	// was issued. Accepted only says a call was well-formed; these say whether
+	// the host considered the sub-task done.
+	Closed    int
+	NeedsWork int
+
 	// What the host made of the claim, read from the adjudicated report rather
 	// than re-derived here.
 	ClaimedStatus     string
