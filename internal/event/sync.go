@@ -46,6 +46,14 @@ func (s *syncSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
 	}
 }
 
+func (s *syncSink) RecordProjectCheckProbe(p ProjectCheckProbe) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ps, ok := s.inner.(ProjectCheckProbeSink); ok {
+		ps.RecordProjectCheckProbe(p)
+	}
+}
+
 func (s *syncSink) RecordTurnCompletion() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

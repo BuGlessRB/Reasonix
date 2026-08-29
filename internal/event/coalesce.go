@@ -153,6 +153,13 @@ func (c *coalescer) RecordReadinessAudit(a evidence.ReadinessAudit) {
 	RecordReadinessAudit(c.inner, a)
 }
 
+func (c *coalescer) RecordProjectCheckProbe(p ProjectCheckProbe) {
+	c.mu.Lock()
+	c.enqueueFlushLocked()
+	c.drainAndUnlock()
+	RecordProjectCheckProbe(c.inner, p)
+}
+
 func (c *coalescer) RecordTurnCompletion() {
 	c.mu.Lock()
 	c.enqueueFlushLocked()

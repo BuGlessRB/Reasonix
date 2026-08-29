@@ -127,17 +127,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	if a.planningPhase() {
 		return out
 	}
-	{
-		incomplete, hasTodos := a.task.ledger.IncompleteLatestTodos()
-		if !hasTodos && a.task.ledger.HasAnySuccessfulReceipt() {
-			incomplete, hasTodos = a.incompleteCanonicalTodos()
-		}
-		if hasTodos && len(incomplete) > 0 && a.task.ledger.HasSuccessfulTodoProgressReceipt() {
-			out.applies = true
-			out.incompleteTodos = len(incomplete)
-			missing = append(missing, finalReadinessIncompleteTodos(incomplete))
-		}
-	}
+	missing = a.appendIncompleteTodoGap(&out, missing)
 	writer, hasWriter := a.mutationBaseline(false)
 	deliveryMutation := false
 	deliveryVerificationOnly := false
@@ -225,9 +215,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 		// The capability gate already ran before the no-writer fast path above.
 	}
 	if !deliveryVerificationOnly {
-		gaps := a.unmetProjectChecks(writer)
-		out.missingProjectChecks += len(gaps)
-		missing = append(missing, gaps...)
+		missing = a.appendProjectCheckGaps(&out, missing, writer)
 	}
 
 	outstanding := a.outstandingPlanCriteria()
@@ -238,6 +226,32 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 	}
 	out.reason = strings.Join(missing, "; ")
 	return out
+}
+
+// appendIncompleteTodoGap records a list the turn left open. It needs a progress
+// receipt to fire: a list nothing ever acted on says what the turn planned, not
+// what it owes.
+func (a *Agent) appendIncompleteTodoGap(out *finalReadinessCheck, missing []string) []string {
+	incomplete, hasTodos := a.task.ledger.IncompleteLatestTodos()
+	if !hasTodos && a.task.ledger.HasAnySuccessfulReceipt() {
+		incomplete, hasTodos = a.incompleteCanonicalTodos()
+	}
+	if !hasTodos || len(incomplete) == 0 || !a.task.ledger.HasSuccessfulTodoProgressReceipt() {
+		return missing
+	}
+	out.applies = true
+	out.incompleteTodos = len(incomplete)
+	return append(missing, finalReadinessIncompleteTodos(incomplete))
+}
+
+// appendProjectCheckGaps records the project's own declared checks that have
+// not run since the latest write, and shadows the same question against the
+// ledger's obligations without letting the answer reach the gate.
+func (a *Agent) appendProjectCheckGaps(out *finalReadinessCheck, missing []string, writer int) []string {
+	gaps := a.unmetProjectChecks(writer)
+	out.missingProjectChecks += len(gaps)
+	a.probeProjectChecks(len(gaps), writer)
+	return append(missing, gaps...)
 }
 
 // appendSelfInspectionGap requires the turn to have looked at every file it

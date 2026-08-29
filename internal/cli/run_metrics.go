@@ -75,6 +75,15 @@ type RunMetrics struct {
 	ReadinessMissingReview        int      `json:"readiness_missing_review"`
 	ReadinessMissingSignoff       int      `json:"readiness_missing_signoff"`
 	ReadinessMissingMutation      int      `json:"readiness_missing_mutation"`
+	// Project-check shadow: the two derivations compared, by what explains a
+	// disagreement. Only the last two classes are candidate defects.
+	ProjectCheckProbes            int `json:"project_check_probes"`
+	ProjectCheckStopParity        int `json:"project_check_stop_parity"`
+	ProjectCheckBaselinePreserved int `json:"project_check_baseline_preserved"`
+	ProjectCheckMutationIndex     int `json:"project_check_mutation_index"`
+	ProjectCheckIdentityNorm      int `json:"project_check_identity_normalization"`
+	ProjectCheckCandidateOnly     int `json:"project_check_candidate_only"`
+	ProjectCheckLegacyOnly        int `json:"project_check_legacy_only"`
 	// Delegation counters let one model be compared across orchestration arms
 	// without scraping prose. Child tool calls are already split out as
 	// SubagentToolCalls below; parent calls are ToolCalls minus that.
@@ -491,6 +500,33 @@ func (s *metricsSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
 	s.m.ReadinessMissingReview += a.MissingReview
 	s.m.ReadinessMissingSignoff += a.MissingSignoff
 	s.m.ReadinessMissingMutation += a.MissingMutation
+}
+
+func (s *metricsSink) RecordProjectCheckProbe(p event.ProjectCheckProbe) {
+	if s == nil {
+		return
+	}
+	defer event.RecordProjectCheckProbe(s.inner, p)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m.ProjectCheckProbes++
+	if p.LegacyBlocked == p.CandidateBlocked {
+		s.m.ProjectCheckStopParity++
+	}
+	for _, d := range p.Diffs {
+		switch d.Class {
+		case event.ProjectCheckBaselinePreservation:
+			s.m.ProjectCheckBaselinePreserved++
+		case event.ProjectCheckMutationIndex:
+			s.m.ProjectCheckMutationIndex++
+		case event.ProjectCheckIdentityNormalization:
+			s.m.ProjectCheckIdentityNorm++
+		case event.ProjectCheckCandidateOnly:
+			s.m.ProjectCheckCandidateOnly++
+		case event.ProjectCheckLegacyOnly:
+			s.m.ProjectCheckLegacyOnly++
+		}
+	}
 }
 
 func (s *metricsSink) RecordProtocolRecovery(a event.ProtocolRecoveryAudit) {

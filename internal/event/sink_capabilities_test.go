@@ -46,6 +46,9 @@ func (s *capturingSink) RecordWorkspaceMutation(WorkspaceMutation) {
 func (s *capturingSink) RecordRunBudget(RunBudgetSample) {
 	s.recorded = append(s.recorded, "RunBudget")
 }
+func (s *capturingSink) RecordProjectCheckProbe(ProjectCheckProbe) {
+	s.recorded = append(s.recorded, "ProjectCheckProbe")
+}
 
 // recordAll drives every optional capability once through s.
 func recordAll(s Sink) {
@@ -59,6 +62,7 @@ func recordAll(s Sink) {
 	RecordOutcomeProgress(s, evidence.OutcomeSample{})
 	RecordWorkspaceMutation(s, WorkspaceMutation{})
 	RecordRunBudget(s, RunBudgetSample{})
+	RecordProjectCheckProbe(s, ProjectCheckProbe{})
 }
 
 func TestCapturingSinkCoversEveryCapability(t *testing.T) {

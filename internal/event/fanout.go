@@ -45,6 +45,12 @@ func (f *FanOut) RecordReadinessAudit(a evidence.ReadinessAudit) {
 	}
 }
 
+func (f *FanOut) RecordProjectCheckProbe(p ProjectCheckProbe) {
+	for _, s := range f.sinks {
+		RecordProjectCheckProbe(s, p)
+	}
+}
+
 func (f *FanOut) RecordTurnCompletion() {
 	for _, s := range f.sinks {
 		RecordTurnCompletion(s)

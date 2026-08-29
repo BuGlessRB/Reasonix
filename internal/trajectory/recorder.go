@@ -35,6 +35,7 @@ type Record struct {
 	CompletionReport *CompletionReport    `json:"completion_report,omitempty"`
 	OutcomeProgress  *OutcomeProgress     `json:"outcome_progress,omitempty"`
 	MemoryRecall     *MemoryRecall        `json:"memory_recall,omitempty"`
+	ProjectCheck     *ProjectCheckProbe   `json:"project_check_probe,omitempty"`
 	// Deltas counts the streamed increments merged into this record; absent
 	// means one. TS stays the first increment's — that is the observation
 	// time-to-first-token readers key on — and EndTS carries the last's.
@@ -106,6 +107,27 @@ type ContractShadowAudit struct {
 	Verdict               string `json:"verdict"`
 	Complete              bool   `json:"complete,omitempty"`
 	ReadyToFinalize       bool   `json:"ready_to_finalize,omitempty"`
+}
+
+// ProjectCheckProbe mirrors event.ProjectCheckProbe: the shadow comparison
+// between the readiness gate's project-check derivation and the ledger's
+// obligations. Identities are recorded, not counted — a class is only
+// judgeable against the criterion it was about.
+type ProjectCheckProbe struct {
+	Declared         int                `json:"declared,omitempty"`
+	Baseline         int                `json:"baseline,omitempty"`
+	LegacyBlocked    bool               `json:"legacy_blocked,omitempty"`
+	CandidateBlocked bool               `json:"candidate_blocked,omitempty"`
+	AgreedMissing    int                `json:"agreed_missing,omitempty"`
+	Diffs            []ProjectCheckDiff `json:"diffs,omitempty"`
+	LegacyAfter      int                `json:"legacy_after"`
+	CandidateAfter   int                `json:"candidate_after"`
+}
+
+// ProjectCheckDiff is one criterion the two derivations disagreed about.
+type ProjectCheckDiff struct {
+	Identity string `json:"identity"`
+	Class    string `json:"class"`
 }
 
 // CompletionReport mirrors event.CompletionReportAudit with stable keys.
@@ -292,6 +314,23 @@ func (r *Recorder) RecordReadinessAudit(a evidence.ReadinessAudit) {
 		MissingCapabilities:       a.MissingCapabilities,
 	}})
 	event.RecordReadinessAudit(r.inner, a)
+}
+
+func (r *Recorder) RecordProjectCheckProbe(p event.ProjectCheckProbe) {
+	rec := &ProjectCheckProbe{
+		Declared:         p.Declared,
+		Baseline:         p.Baseline,
+		LegacyBlocked:    p.LegacyBlocked,
+		CandidateBlocked: p.CandidateBlocked,
+		AgreedMissing:    p.AgreedMissing,
+		LegacyAfter:      p.LegacyAfter,
+		CandidateAfter:   p.CandidateAfter,
+	}
+	for _, d := range p.Diffs {
+		rec.Diffs = append(rec.Diffs, ProjectCheckDiff{Identity: d.Identity, Class: d.Class})
+	}
+	r.append(Record{ProjectCheck: rec})
+	event.RecordProjectCheckProbe(r.inner, p)
 }
 
 func (r *Recorder) RecordContractShadow(a event.ContractShadowAudit) {

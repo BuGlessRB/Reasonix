@@ -81,6 +81,15 @@ type Obligation struct {
 	Discharge string `json:"discharge,omitempty"`
 }
 
+// Subject is what the obligation is keyed on: the check identity, or the
+// receipt index for the debts a single action left. The ID encodes it, and
+// reading it back here keeps the format's one reader in the package that
+// writes it.
+func (o Obligation) Subject() string {
+	_, subject, _ := strings.Cut(o.ID, "@")
+	return subject
+}
+
 // ObligationDelta is the net change one action made to the ledger's debts, not
 // a history of what happened inside it: a debt that fell and rose again under
 // one identity is reported as neither. An action can settle one and create
