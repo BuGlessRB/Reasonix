@@ -9,15 +9,12 @@ import (
 	"reasonix/internal/event"
 )
 
-// AskTool lets the model put a structured multiple-choice question (or a few) to
-// the user mid-task and get the answer back — for genuine forks the model can't
-// resolve from the request or the code (which library, which approach, …) rather
-// than guessing or asking in prose. The frontend renders selectable options, the
-// user picks, and the choices come back as the tool result. It reaches the user
-// through the Asker carried on the call
-// context (CallContext); with no asker (headless runs) it returns an explicit
-// model-assumption fallback so an autonomous run never blocks or pretends a user
-// answered.
+// AskTool obtains what only the user can supply: a decision that is theirs, or a
+// value the request never carried. It is not a way to ask permission, not the
+// plan card, and not a substitute for research the agent can do itself. It
+// reaches the user through the Asker on the call context; a run with no asker
+// leaves the decision unresolved rather than inventing an answer, because a run
+// with nobody to ask is precisely a run that cannot settle this.
 type AskTool struct{}
 
 func NewAskTool() *AskTool { return &AskTool{} }
@@ -25,7 +22,7 @@ func NewAskTool() *AskTool { return &AskTool{} }
 func (*AskTool) Name() string { return "ask" }
 
 func (*AskTool) Description() string {
-	return "Ask the user one or more multiple-choice questions when you hit a decision that is genuinely theirs to make — one you can't resolve from the request, the code, or sensible defaults. The frontend shows the options for the user to pick; their choices are returned to you. Prefer this over asking in prose for any real fork (which approach, which library, scope). Don't use it for decisions with an obvious default — pick the sensible option and proceed. Tool-approval modes such as YOLO do not answer these questions for the user. Each question has a short `header` (a tab label), the `question` text, 2-4 `options` (each a `label` and optional `description`; put any recommended option first), and `multiSelect` when more than one may apply."
+	return "Ask the user for something only they can supply: a decision that is theirs to make, or a value the request never gave you. Use it when two or more genuinely reasonable options would change the architecture, public API, data model, dependencies, UX, compatibility, scope, or anything irreversible — having a recommendation does not make such a choice yours to make, so put the recommended option first and still ask. Everything else is not a question for the user: whether you may touch a file is permission, whether a plan may run is the plan card, and where something lives or why a test failed is yours to go find out. Purely local, low-risk, reversible implementation details take the sensible default without asking. Calling this ends the round — anything you write alongside it will not run, because it would be reasoning from an answer you do not have yet. No tool-approval mode, YOLO included, answers for the user. Each question has a short `header` (a tab label), the `question` text, 2-4 `options` (each a `label` and optional `description`), and `multiSelect` when more than one may apply."
 }
 
 func (*AskTool) Schema() json.RawMessage {
@@ -63,6 +60,10 @@ func (*AskTool) Schema() json.RawMessage {
 "required":["questions"]
 }`)
 }
+
+// DecisionBarrier is true: the answer is the user's, and everything the model
+// wrote alongside this call was written without it.
+func (*AskTool) DecisionBarrier() bool { return true }
 
 // ReadOnly is true: asking has no host side effects, so it never needs approval
 // and stays available in plan mode (clarifying scope while planning is fine).
@@ -117,10 +118,12 @@ func (*AskTool) Execute(ctx context.Context, args json.RawMessage) (string, erro
 
 	_, _, asker, ok := CallContext(ctx)
 	if !ok || asker == nil {
-		// Headless: don't block the run, but make provenance explicit — and name
-		// the honest exit, since this is the moment a model with no answer picks
-		// between guessing and contriving a way past the checks.
-		return "No interactive user answered. This is a model-assumption fallback, not a user answer. Proceed with your best judgment, state the assumption you made, and prefer the safest reversible option when choices differ in risk. If the task cannot be completed correctly without this answer, do the part that is possible and call conclude_blocked rather than contriving a way to satisfy the checks.", nil
+		// A run with nobody to ask cannot answer a question only the user may
+		// answer. Telling the model to decide for itself would contradict the one
+		// rule that puts a call here, so the decision stays unresolved.
+		return "unresolved: this run has no interactive user, and the answer is the user's to give — " +
+			"nothing here can supply it, including you. Do not choose on their behalf. Do whatever the task " +
+			"allows without this decision, then call conclude_blocked naming the decision that is missing.", nil
 	}
 
 	answers, err := asker.Ask(ctx, qs)

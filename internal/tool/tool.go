@@ -137,6 +137,20 @@ type PlanModeClassifier interface {
 	PlanModeSafe() bool
 }
 
+// DecisionBarrier is implemented by a tool whose result is a decision only the
+// user can supply. The rest of the batch was authored before that answer
+// existed, so the host stops the round at it: sibling calls the model already
+// wrote are reasoning from an answer it had not yet received.
+type DecisionBarrier interface {
+	DecisionBarrier() bool
+}
+
+// IsDecisionBarrier reports whether a call must end its round once it runs.
+func IsDecisionBarrier(t Tool) bool {
+	b, ok := t.(DecisionBarrier)
+	return ok && b.DecisionBarrier()
+}
+
 // ReadOnlyExecutionHostMutation marks a target that is logically read-only but
 // must first mutate host state to become executable, such as starting an
 // on-demand MCP process. Strict read-only agents reject these targets even when

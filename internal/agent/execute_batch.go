@@ -153,15 +153,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 	}
 	cancelled := false
 	markCancelled := func(start int) {
-		errMsg := context.Canceled.Error()
-		if err := ctx.Err(); err != nil {
-			errMsg = err.Error()
-		}
-		output := "cancelled: context cancelled before execution"
-		for j := start; j < len(calls); j++ {
-			results[j] = output
-			outcomes[j] = toolOutcome{output: output, errMsg: errMsg}
-		}
+		markCancelledFrom(ctx, start, calls, results, outcomes)
 		cancelled = true
 	}
 
@@ -205,7 +197,9 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 		mutationBatchStop = true
 	}
 
-	for _, batch := range partitionToolCalls(ctx, a.svc.tools, calls) {
+	scheduled, barrier := scheduleUpToDecision(a.svc.tools, calls)
+
+	for _, batch := range partitionToolCalls(ctx, a.svc.tools, scheduled) {
 		if ctx.Err() != nil {
 			markCancelled(batch.start)
 			break
@@ -279,6 +273,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			break
 		}
 	}
+	markDeferredAfterDecision(barrier+1, calls, results, outcomes, durations)
 
 	for i, c := range calls {
 		o := outcomes[i]
@@ -482,4 +477,47 @@ launch:
 	}
 	wg.Wait()
 	return ranUntil
+}
+
+// scheduleUpToDecision cuts the batch at the first call whose result is a
+// decision only the user can give, and returns that index. Scanning happens
+// before scheduling: by the time a barrier executes, its parallel neighbours
+// already have.
+func scheduleUpToDecision(reg *tool.Registry, calls []provider.ToolCall) ([]provider.ToolCall, int) {
+	for i, c := range calls {
+		t, _, ambiguous := reg.ResolveCall(c.Name)
+		if t != nil && len(ambiguous) == 0 && tool.IsDecisionBarrier(t) {
+			return calls[:i+1], i
+		}
+	}
+	return calls, len(calls)
+}
+
+// markDeferredAfterDecision closes out the calls a barrier ended the round for.
+// They were authored before the answer existed, so they reason from an answer
+// the model had not received — read-only ones included.
+func markDeferredAfterDecision(start int, calls []provider.ToolCall, results []string, outcomes []toolOutcome, durations []int64) {
+	const msg = "not run: this round stopped at a question for the user. It was written before their answer " +
+		"existed, so it is not carried over — read the answer, then decide what to do next."
+	for j := start; j < len(calls); j++ {
+		if results[j] != "" {
+			continue
+		}
+		results[j] = msg
+		outcomes[j] = toolOutcome{output: msg, blocked: true, errMsg: "not run: stopped at a user decision"}
+		durations[j] = 0
+	}
+}
+
+// markCancelledFrom closes out the calls a cancellation reached before they ran.
+func markCancelledFrom(ctx context.Context, start int, calls []provider.ToolCall, results []string, outcomes []toolOutcome) {
+	errMsg := context.Canceled.Error()
+	if err := ctx.Err(); err != nil {
+		errMsg = err.Error()
+	}
+	const output = "cancelled: context cancelled before execution"
+	for j := start; j < len(calls); j++ {
+		results[j] = output
+		outcomes[j] = toolOutcome{output: output, errMsg: errMsg}
+	}
 }

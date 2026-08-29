@@ -73,8 +73,8 @@ func TestAskReachesTheUserOnceInteractiveApprovalIsOn(t *testing.T) {
 	if result == "" {
 		t.Fatal("no tool result reached the model, so the ask never returned one")
 	}
-	if strings.Contains(result, "No interactive user answered") {
-		t.Fatalf("ask answered itself with the headless fallback while a user was connected: %s", result)
+	if strings.Contains(result, "unresolved") {
+		t.Fatalf("ask left the decision unresolved while a user was connected: %s", result)
 	}
 	if !strings.Contains(result, "B") {
 		t.Fatalf("the user picked B and the model was told %q", result)
@@ -84,7 +84,7 @@ func TestAskReachesTheUserOnceInteractiveApprovalIsOn(t *testing.T) {
 // The headless half of the same contract: with no interactive approval wired
 // there is nobody to answer, and the run must say so in the result rather than
 // blocking on a question no one will ever see.
-func TestAskFallsBackOnlyWhenNoAskerIsWired(t *testing.T) {
+func TestAskLeavesTheDecisionUnresolvedWhenNoAskerIsWired(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Add(agent.NewAskTool())
 
@@ -108,7 +108,59 @@ func TestAskFallsBackOnlyWhenNoAskerIsWired(t *testing.T) {
 	if err := c.runOneTurn(context.Background(), orchestratedTurn{input: "pick one", raw: "pick one"}); err != nil {
 		t.Fatalf("runOneTurn: %v", err)
 	}
-	if result := lastToolResult(prov); !strings.Contains(result, "No interactive user answered") {
-		t.Fatalf("a headless ask returned %q, want the model-assumption fallback", result)
+	if result := lastToolResult(prov); !strings.Contains(result, "unresolved") || !strings.Contains(result, "conclude_blocked") {
+		t.Fatalf("a headless ask returned %q, want the decision left unresolved", result)
+	}
+}
+
+// Approval posture is about tool side effects. It cannot manufacture user
+// intent, so no mode answers a question on the user's behalf — the point of
+// asking is that the answer is not the agent's to produce, and auto-approving
+// writes says nothing about which option the user wants.
+func TestNoApprovalPostureAnswersAQuestionForTheUser(t *testing.T) {
+	for _, mode := range []string{ToolApprovalAuto, ToolApprovalYolo} {
+		t.Run(mode, func(t *testing.T) {
+			reg := tool.NewRegistry()
+			reg.Add(agent.NewAskTool())
+			prov := &recordingProvider{streams: [][]provider.Chunk{
+				toolCallTurn("a1", "ask", askQuestionArgs),
+				textTurn("Done."),
+			}}
+			ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
+
+			asked := make(chan event.Ask, 1)
+			c := New(Options{
+				Runner:   ag,
+				Executor: ag,
+				Policy:   permission.New("ask", nil, nil, nil),
+				Sink: event.FuncSink(func(e event.Event) {
+					if e.Kind == event.AskRequest {
+						asked <- e.Ask
+					}
+				}),
+			})
+			defer c.Close()
+			c.EnableInteractiveApproval()
+			c.SetToolApprovalMode(mode)
+
+			answered := make(chan struct{})
+			go func() {
+				defer close(answered)
+				a := <-asked
+				c.AnswerQuestion(a.ID, []event.AskAnswer{{QuestionID: a.Questions[0].ID, Selected: []string{"B"}}})
+			}()
+
+			if err := c.runOneTurn(context.Background(), orchestratedTurn{input: "pick one", raw: "pick one"}); err != nil {
+				t.Fatalf("runOneTurn: %v", err)
+			}
+			select {
+			case <-answered:
+			default:
+				t.Fatalf("%s answered the question itself; the user was never asked", mode)
+			}
+			if result := lastToolResult(prov); !strings.Contains(result, "B") {
+				t.Fatalf("%s: the user picked B and the model was told %q", mode, result)
+			}
+		})
 	}
 }

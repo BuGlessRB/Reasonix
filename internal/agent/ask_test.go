@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/tool"
 )
 
 type recordingAsker struct {
@@ -118,7 +119,7 @@ func TestAskToolProviderContractStable(t *testing.T) {
 	tool := NewAskTool()
 	contract := tool.Description() + "\n" + string(provider.CanonicalizeSchema(tool.Schema()))
 	got := fmt.Sprintf("%x", sha256.Sum256([]byte(contract)))
-	const want = "f4c6efe84da2e964b3f8566b1f0921ca88812ae3ecfba46185d0439ae4f4c2a5"
+	const want = "3a11aa612d730014a2d632c75330e3ef7d980fa3b60151560bfea266159b0ff3"
 	if got != want {
 		t.Fatalf("ask provider contract hash = %s, want %s; tool description or canonical schema changed", got, want)
 	}
@@ -164,7 +165,11 @@ func TestAskToolPartialAnswerMarksUnansweredQuestions(t *testing.T) {
 	}
 }
 
-func TestAskToolHeadlessFallbackIsExplicitModelAssumption(t *testing.T) {
+// A run with nobody to ask cannot answer a question only the user may answer.
+// The old fallback told the model to decide for itself, which contradicts the
+// rule that puts a call here at all — and is how a headless run turned a
+// user-owned decision into the agent's own.
+func TestAskToolWithNoUserLeavesTheDecisionUnresolved(t *testing.T) {
 	out, err := NewAskTool().Execute(context.Background(), []byte(`{
 		"questions":[{
 			"header":"Direction",
@@ -178,12 +183,60 @@ func TestAskToolHeadlessFallbackIsExplicitModelAssumption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"No interactive user answered", "model-assumption fallback", "not a user answer"} {
+	for _, want := range []string{"unresolved", "the user's to give", "Do not choose on their behalf", "conclude_blocked"} {
 		if !strings.Contains(out, want) {
-			t.Fatalf("headless fallback = %q, want it to contain %q", out, want)
+			t.Fatalf("headless answer = %q, want it to contain %q", out, want)
+		}
+	}
+	for _, unwanted := range []string{"best judgment", "assumption you made"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("headless answer still invites the model to decide: %q", out)
 		}
 	}
 	if strings.Contains(out, "The user answered") {
 		t.Fatalf("headless fallback must not be formatted as a user answer: %q", out)
+	}
+}
+
+// The calls beside a question were written before the answer existed. Running
+// them anyway executes the model's guess at what the user would say — the
+// failure the barrier exists for is a writer authored under one branch running
+// after the user picked the other. Read-only siblings stop too: they share the
+// parallel segment, so "it only reads" is not the question.
+func TestAnsweredAskInvalidatesRemainingCallsFromItsProviderBatch(t *testing.T) {
+	var before, after, writes int32
+	reg := tool.NewRegistry()
+	reg.Add(NewAskTool())
+	reg.Add(fakeTool{name: "read_file", readOnly: true, calls: &before})
+	reg.Add(fakeTool{name: "grep", readOnly: true, calls: &after})
+	reg.Add(fakeTool{name: "write_file", writesPaths: true, calls: &writes})
+
+	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+	a.SetAsker(&recordingAsker{})
+
+	const question = `{"questions":[{"header":"Store","question":"Delete or archive?","options":[{"label":"Archive"},{"label":"Delete"}]}]}`
+	batch := a.executeBatch(context.Background(), &a.turn, []provider.ToolCall{
+		{ID: "1", Name: "read_file", Arguments: `{"path":"a.go"}`},
+		{ID: "2", Name: "ask", Arguments: question},
+		{ID: "3", Name: "write_file", Arguments: `{"path":"a.go","content":"deleted"}`},
+		{ID: "4", Name: "grep", Arguments: `{"pattern":"x"}`},
+	})
+
+	if before != 1 {
+		t.Errorf("the call before the question ran %d times, want 1", before)
+	}
+	if writes != 0 {
+		t.Errorf("a writer authored before the answer ran %d times", writes)
+	}
+	if after != 0 {
+		t.Errorf("a reader authored before the answer ran %d times", after)
+	}
+	if !strings.Contains(batch.results[1], "The user answered") {
+		t.Errorf("the question did not reach the user: %q", batch.results[1])
+	}
+	for _, i := range []int{2, 3} {
+		if !strings.Contains(batch.results[i], "stopped at a question") {
+			t.Errorf("call %d result = %q, want it named as deferred", i+1, batch.results[i])
+		}
 	}
 }
