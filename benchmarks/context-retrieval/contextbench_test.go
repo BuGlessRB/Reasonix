@@ -60,8 +60,8 @@ func TestScorerReadsTheFullRetrievalChain(t *testing.T) {
 	if m.TargetSearchHits != 1 || m.FirstTargetRank != 2 {
 		t.Errorf("target hit %d at rank %d, want 1 at rank 2", m.TargetSearchHits, m.FirstTargetRank)
 	}
-	if !m.TargetRead || !m.ReadAfterHit || m.DirectRead {
-		t.Errorf("read flags = read %v afterHit %v direct %v", m.TargetRead, m.ReadAfterHit, m.DirectRead)
+	if !m.TargetRead || !m.ReadAfterHit || m.RecallReadWithoutSearch {
+		t.Errorf("read flags = read %v afterHit %v direct %v", m.TargetRead, m.ReadAfterHit, m.RecallReadWithoutSearch)
 	}
 	if !m.AnswerRecovered || m.FailureStage != stageRecovered {
 		t.Errorf("stage = %q recovered=%v, want Recovered", m.FailureStage, m.AnswerRecovered)
@@ -73,18 +73,18 @@ func TestScorerReadsTheFullRetrievalChain(t *testing.T) {
 
 // An index arm's claim: the address was already on screen, so no search was
 // needed. That is a different outcome from finding it, and gets its own stage.
-func TestScorerSeparatesDirectReadFromSearch(t *testing.T) {
+func TestScorerSeparatesCueReadFromSearch(t *testing.T) {
 	m := score(t, []provider.Message{
 		recallCall("c1", fmt.Sprintf(`{"positions":[%d]}`, scorerTarget)),
 		toolResult("c1", "#42\nthe ownership token is cobalt-lark-17"),
 		{Role: provider.RoleAssistant, Content: "cobalt-lark-17"},
 	}, "cobalt-lark-17")
 
-	if m.SearchCalls != 0 || !m.DirectRead {
-		t.Errorf("search=%d direct=%v, want 0 and true", m.SearchCalls, m.DirectRead)
+	if m.SearchCalls != 0 || !m.RecallReadWithoutSearch {
+		t.Errorf("search=%d direct=%v, want 0 and true", m.SearchCalls, m.RecallReadWithoutSearch)
 	}
-	if m.FailureStage != stageDirectRead {
-		t.Errorf("stage = %q, want %q", m.FailureStage, stageDirectRead)
+	if m.FailureStage != stageCueRead {
+		t.Errorf("stage = %q, want %q", m.FailureStage, stageCueRead)
 	}
 }
 
@@ -192,5 +192,51 @@ func TestScorerRequiresEveryMarker(t *testing.T) {
 	}
 	if len(m.MissingMarkers) != 1 || m.MissingMarkers[0] != "per-lineage" {
 		t.Errorf("missing = %v, want per-lineage", m.MissingMarkers)
+	}
+}
+
+// An answer reachable through anything but recall invalidates the run. The
+// workspace is isolated so this should never fire; asserting it beats trusting
+// it, and a tripped run leaves the statistics rather than inflating one.
+func TestScorerInvalidatesRunsThatLeakedThroughAnotherTool(t *testing.T) {
+	m := score(t, []provider.Message{
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "g1", Name: "bash", Arguments: `{"command":"rg -r ."}`},
+		}},
+		{Role: provider.RoleTool, ToolCallID: "g1", Name: "bash", Content: "corpus.go: the token is cobalt-lark-17"},
+		{Role: provider.RoleAssistant, Content: "cobalt-lark-17"},
+	}, "cobalt-lark-17")
+
+	if !m.Contaminated || m.LeakedVia != "bash" || m.LeakedMarker != "cobalt-lark-17" {
+		t.Fatalf("leak not caught: contaminated=%v via=%q marker=%q", m.Contaminated, m.LeakedVia, m.LeakedMarker)
+	}
+	if m.FailureStage != stageContaminated {
+		t.Errorf("stage = %q, want %q even though every marker matched", m.FailureStage, stageContaminated)
+	}
+	f := summarize("arm", []contextMetrics{m})
+	if f.Scored != 0 || f.Answered != 0 || f.Contaminated != 1 {
+		t.Errorf("a contaminated run entered the statistics: %+v", f)
+	}
+}
+
+// Where an escape happened matters: before any recall is a different strategy
+// from after one came back short.
+func TestScorerPlacesEscapesRelativeToRecall(t *testing.T) {
+	m := score(t, []provider.Message{
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "g1", Name: "bash", Arguments: `{"command":"ls"}`},
+		}},
+		{Role: provider.RoleTool, ToolCallID: "g1", Name: "bash", Content: "README.md"},
+		recallCall("c1", `{"query":"retry boundary"}`),
+		toolResult("c1", hitBlock(scorerTarget)),
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "g2", Name: "read_file", Arguments: `{"path":"README.md"}`},
+		}},
+		{Role: provider.RoleTool, ToolCallID: "g2", Name: "read_file", Content: "nothing here"},
+	}, "unclear")
+
+	if m.EscapeCalls != 2 || m.EscapeBeforeFirstRecall != 1 || m.EscapeAfterFirstRecall != 1 {
+		t.Errorf("escapes = %d (%d before, %d after), want 2 (1, 1)",
+			m.EscapeCalls, m.EscapeBeforeFirstRecall, m.EscapeAfterFirstRecall)
 	}
 }

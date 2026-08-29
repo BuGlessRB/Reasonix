@@ -158,6 +158,9 @@ func runExperiment(experiment, root string, dry bool, tasks []contextTask) int {
 		}
 	}
 	reportFunnels(byArm)
+	if experiment == experimentIndex {
+		reportBoundaries(all)
+	}
 	return writeResults(root, all)
 }
 
@@ -204,4 +207,45 @@ func writeResults(root string, all []contextMetrics) int {
 	}
 	fmt.Printf("\n%d runs written to %s\n", len(all), path)
 	return 0
+}
+
+// reportBoundaries prints each index task across its own cue boundary, then the
+// two sides pooled. Task difficulty is held constant inside a row, which is
+// what a four-arm average cannot do.
+func reportBoundaries(all []contextMetrics) {
+	byKey := map[string]contextMetrics{}
+	for _, m := range all {
+		byKey[m.Task+"|"+m.Arm] = m
+	}
+	var cueSide, noCueSide []contextMetrics
+	fmt.Println("\n## Across each task's cue boundary")
+	fmt.Printf("  %-24s %-16s %-4s %-10s %-9s %-12s %-11s %s\n",
+		"task", "arm", "cue", "recovered", "cue-read", "search/task", "recall-tok", "escape")
+	for _, t := range indexTasks() {
+		cue, noCue := boundaryPair(t.CueTier)
+		for _, side := range []struct {
+			scale string
+			has   bool
+		}{{cue, true}, {noCue, false}} {
+			m, ok := byKey[t.ID+"|index-"+side.scale]
+			if !ok {
+				continue
+			}
+			if side.has {
+				cueSide = append(cueSide, m)
+			} else {
+				noCueSide = append(noCueSide, m)
+			}
+			mark := "no"
+			if side.has {
+				mark = "yes"
+			}
+			fmt.Printf("  %-24s %-16s %-4s %-10v %-9v %-12d %-11d %d\n",
+				t.ID, "index-"+side.scale, mark, m.AnswerRecovered, m.RecallReadWithoutSearch,
+				m.SearchCalls, m.RecallReturnedTokens, m.EscapeCalls)
+		}
+	}
+	fmt.Println("\n## Pooled across boundaries")
+	fmt.Println(" ", summarize("cue-present", cueSide).line())
+	fmt.Println(" ", summarize("cue-absent", noCueSide).line())
 }

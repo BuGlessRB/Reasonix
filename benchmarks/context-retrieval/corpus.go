@@ -246,3 +246,20 @@ func validateCorpus() error {
 	}
 	return nil
 }
+
+// boundaryPair is the one comparison an index task is built for: the narrowest
+// scale that still addresses its cue, and the next one down. Holding the
+// question fixed and moving only the affordance is what four arm averages
+// cannot do, since each of those mixes six different questions.
+func boundaryPair(tier string) (cue, noCue string) {
+	switch tier {
+	case tierQuarter:
+		return "quarter", "off"
+	case tierHalf:
+		return "half", "quarter"
+	case tierDefault:
+		return "default", "half"
+	default:
+		return "", ""
+	}
+}

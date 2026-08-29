@@ -20,14 +20,15 @@ import (
 
 // failure stages, in funnel order. Exactly one is reported per run.
 const (
-	stageReadMissed  = "NoSearch"           // never asked, and never read the target either
-	stageSearchMiss  = "SearchMiss"         // searched, target never came back
-	stageHitNotRead  = "HitNotRead"         // target was returned and never opened
-	stageAnswerWrong = "ReadButAnswerWrong" // opened it and still answered wrong
-	stageRecovered   = "Recovered"
-	stageDirectRead  = "DirectRead"  // read the target from an index address, no search needed
-	stageNoRetrieval = "NoRetrieval" // answered without touching recall at all
-	toolRecall       = "recall"
+	stageReadMissed   = "NoSearch"           // never asked, and never read the target either
+	stageSearchMiss   = "SearchMiss"         // searched, target never came back
+	stageHitNotRead   = "HitNotRead"         // target was returned and never opened
+	stageAnswerWrong  = "ReadButAnswerWrong" // opened it and still answered wrong
+	stageRecovered    = "Recovered"
+	stageContaminated = "Contaminated"
+	stageCueRead      = "DirectRead"  // read the target from an index address, no search needed
+	stageNoRetrieval  = "NoRetrieval" // answered without touching recall at all
+	toolRecall        = "recall"
 )
 
 // contextMetrics is one run's behaviour.
@@ -45,9 +46,11 @@ type contextMetrics struct {
 	ReadCalls    int  `json:"read_calls"`
 	TargetRead   bool `json:"target_read"`
 	ReadAfterHit bool `json:"read_after_hit"`
-	// DirectRead is a read of the target with no search before it: the index
-	// addressed it, which is the whole claim an index arm is testing.
-	DirectRead bool `json:"direct_read"`
+	// RecallReadWithoutSearch: the index addressed the target, so no search was
+	// needed. Not "direct read" — read_file is a read too, and in an audit the
+	// two mean opposite things.
+	RecallReadWithoutSearch bool `json:"recall_read_without_search"`
+	SearchThenRecallRead    bool `json:"search_then_recall_read"`
 
 	FirstSearchRound int `json:"first_search_round"`
 	FirstReadRound   int `json:"first_read_round"`
@@ -64,10 +67,19 @@ type contextMetrics struct {
 	FinalAnswer  string `json:"final_answer,omitempty"`
 	FailureStage string `json:"failure_stage"`
 
-	// UnexpectedWorkTools are investigation tools used instead of recall. The
-	// answer exists only in folded history, so reaching for the workspace is a
-	// strategy change worth seeing even when it fails.
-	UnexpectedWorkTools []string `json:"unexpected_work_tools,omitempty"`
+	// UnexpectedWorkTools are investigation tools used instead of recall.
+	// Reaching for the workspace is behaviour, not noise: how a model routes
+	// its uncertainty when memory is missing is part of what is measured.
+	UnexpectedWorkTools     []string `json:"unexpected_work_tools,omitempty"`
+	EscapeCalls             int      `json:"escape_calls"`
+	EscapeBeforeFirstRecall int      `json:"escape_before_first_recall"`
+	EscapeAfterFirstRecall  int      `json:"escape_after_first_recall"`
+	// Contaminated: the answer was reachable through something other than
+	// recall. Asserting this beats trusting the isolation, and a run that trips
+	// it leaves the statistics rather than inflating one.
+	Contaminated bool   `json:"contaminated,omitempty"`
+	LeakedVia    string `json:"leaked_via,omitempty"`
+	LeakedMarker string `json:"leaked_marker,omitempty"`
 
 	CueVisible bool `json:"cue_visible"`
 }
@@ -93,6 +105,12 @@ func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cu
 				if !containsString(m.UnexpectedWorkTools, tc.Name) {
 					m.UnexpectedWorkTools = append(m.UnexpectedWorkTools, tc.Name)
 				}
+				m.EscapeCalls++
+				if m.SearchCalls+m.ReadCalls == 0 {
+					m.EscapeBeforeFirstRecall++
+				} else {
+					m.EscapeAfterFirstRecall++
+				}
 				continue
 			}
 			query, positions := recallArgs(tc.Arguments)
@@ -112,10 +130,11 @@ func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cu
 				// which is why the caller's own address is the one to match.
 				if containsInt(positions, target) {
 					m.TargetRead = true
-					if sawTargetHit {
-						m.ReadAfterHit = true
-					} else if m.SearchCalls == 0 {
-						m.DirectRead = true
+					switch {
+					case sawTargetHit:
+						m.ReadAfterHit, m.SearchThenRecallRead = true, true
+					case m.SearchCalls == 0:
+						m.RecallReadWithoutSearch = true
 					}
 				}
 			}
@@ -124,7 +143,17 @@ func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cu
 			continue
 		}
 		call, ok := calls[msg.ToolCallID]
-		if !ok || call.Name != toolRecall {
+		if !ok {
+			continue
+		}
+		if call.Name != toolRecall {
+			// An answer readable through anything but recall is contamination,
+			// whatever the run went on to score.
+			for _, marker := range t.AnswerMarkers {
+				if len(marker) >= 6 && strings.Contains(msg.Content, marker) {
+					m.Contaminated, m.LeakedVia, m.LeakedMarker = true, call.Name, marker
+				}
+			}
 			continue
 		}
 		m.RecallReturnedTokens += tokencount.Text(msg.Content)
@@ -169,8 +198,10 @@ func (m *contextMetrics) scoreAnswer(final string, t contextTask) {
 // did not happen, so a table of stages reads as where the retrieval broke.
 func (m contextMetrics) stage() string {
 	switch {
-	case m.AnswerRecovered && m.DirectRead:
-		return stageDirectRead
+	case m.Contaminated:
+		return stageContaminated
+	case m.AnswerRecovered && m.RecallReadWithoutSearch:
+		return stageCueRead
 	case m.AnswerRecovered:
 		return stageRecovered
 	case m.TargetRead:
@@ -227,16 +258,23 @@ func containsString(list []string, want string) bool { return slices.Contains(li
 type funnel struct {
 	Arm                                       string
 	Runs                                      int
+	Scored, Contaminated                      int
 	Searched, TargetHit, TargetRead, Answered int
-	DirectReads                               int
+	CueReads                                  int
 	SearchCalls, ReadCalls, RecallTokens      int
-	Escapes                                   int
+	Escapes, EscapeCalls                      int
 	Stages                                    map[string]int
 }
 
 func summarize(arm string, runs []contextMetrics) funnel {
 	f := funnel{Arm: arm, Runs: len(runs), Stages: map[string]int{}}
 	for _, r := range runs {
+		if r.Contaminated {
+			f.Contaminated++
+			f.Stages[r.FailureStage]++
+			continue
+		}
+		f.Scored++
 		if r.SearchCalls > 0 {
 			f.Searched++
 		}
@@ -249,12 +287,13 @@ func summarize(arm string, runs []contextMetrics) funnel {
 		if r.AnswerRecovered {
 			f.Answered++
 		}
-		if r.DirectRead {
-			f.DirectReads++
+		if r.RecallReadWithoutSearch {
+			f.CueReads++
 		}
 		if len(r.UnexpectedWorkTools) > 0 {
 			f.Escapes++
 		}
+		f.EscapeCalls += r.EscapeCalls
 		f.SearchCalls += r.SearchCalls
 		f.ReadCalls += r.ReadCalls
 		f.RecallTokens += r.RecallReturnedTokens
@@ -265,14 +304,18 @@ func summarize(arm string, runs []contextMetrics) funnel {
 
 func (f funnel) line() string {
 	per := func(n int) float64 {
-		if f.Runs == 0 {
+		if f.Scored == 0 {
 			return 0
 		}
-		return float64(n) / float64(f.Runs)
+		return float64(n) / float64(f.Scored)
 	}
-	return fmt.Sprintf("%-12s runs=%-3d answered=%d/%d  searched=%d  target-hit=%d  read=%d  direct=%d  search/task=%.2f  recall-tok/task=%.0f  escapes=%d",
-		f.Arm, f.Runs, f.Answered, f.Runs, f.Searched, f.TargetHit, f.TargetRead, f.DirectReads,
-		per(f.SearchCalls), per(f.RecallTokens), f.Escapes)
+	line := fmt.Sprintf("%-14s runs=%-3d answered=%d/%d  searched=%d  target-hit=%d  cue-read=%d  search/task=%.2f  recall-tok/task=%.0f  escape/task=%.2f",
+		f.Arm, f.Scored, f.Answered, f.Scored, f.Searched, f.TargetHit, f.CueReads,
+		per(f.SearchCalls), per(f.RecallTokens), per(f.EscapeCalls))
+	if f.Contaminated > 0 {
+		line += fmt.Sprintf("  CONTAMINATED=%d", f.Contaminated)
+	}
+	return line
 }
 
 func writeJSONLine(w io.Writer, v any) error {
