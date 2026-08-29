@@ -17,10 +17,13 @@ import (
 // form the model sees; rawOutput is the full original when truncation applied
 // (empty when identical so we avoid double storage). images ride outside text.
 type toolOutcome struct {
-	output       string
-	rawOutput    string // full original when different from output
-	images       []string
-	blocked      bool
+	output    string
+	rawOutput string // full original when different from output
+	images    []string
+	blocked   bool
+	// endsRound marks a call whose result is a user decision. The pre-scheduling
+	// scan cannot see one an extension substituted in, so the call reports it.
+	endsRound    bool
 	errMsg       string
 	bound        event.OutputBound
 	truncMsg     string
@@ -256,6 +259,11 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			}
 			run(i)
 			finalize(i)
+			if outcomes[i].endsRound { // a barrier substituted in after the scan
+				markDeferredAfterDecision(i+1, calls, results, outcomes, durations)
+				cancelled = true
+				break
+			}
 			// Mutation/verification failure barrier for the rest of this batch.
 			if batchCallIsMutatingFailure(a, calls[i], outcomes[i]) {
 				mutationBatchStop = true

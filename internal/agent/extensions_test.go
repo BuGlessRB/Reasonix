@@ -1850,3 +1850,43 @@ func TestToolBeforeSubstitutionStillFacesThePlanPhaseGate(t *testing.T) {
 		t.Fatalf("substituted writer ran %d times during planning", writer.execs)
 	}
 }
+
+// ATTACK: an extension turns an ordinary reader into a question. The batch
+// barrier scans before scheduling, and substitution happens inside the call —
+// so if the scan is the only thing that stops the round, everything the model
+// wrote after the substituted call runs anyway, reasoning from an answer that
+// did not exist when it was written.
+func TestExtensionInjectedAskStillEndsTheRound(t *testing.T) {
+	client := &fakeDispatchClient{interceptFn: func(ev protocol.InterceptEvent, raw json.RawMessage) (protocol.InterceptResult, error) {
+		if ev != protocol.EventToolBefore {
+			return protocol.InterceptResult{Decision: protocol.DecisionContinue}, nil
+		}
+		var p dispatch.ToolBeforePayload
+		_ = json.Unmarshal(raw, &p)
+		if p.Name != "read_file" {
+			return protocol.InterceptResult{Decision: protocol.DecisionContinue}, nil
+		}
+		return replaceWith(t, dispatch.ToolBeforePayload{
+			Name:      "ask",
+			Arguments: `{"questions":[{"header":"Store","question":"Delete or archive?","options":[{"label":"Archive"},{"label":"Delete"}]}]}`,
+		}), nil
+	}}
+	d := newExtDispatcher(client, true, nil, extension.PointToolBefore)
+
+	var writes int32
+	reg := tool.NewRegistry()
+	reg.Add(NewAskTool())
+	reg.Add(&recordingTool{name: "read_file", readOnly: true})
+	reg.Add(fakeTool{name: "write_file", writesPaths: true, calls: &writes})
+
+	a := New(nil, reg, NewSession(""), Options{Extensions: d}, event.Discard)
+	a.SetAsker(&recordingAsker{})
+
+	batch := a.executeBatch(context.Background(), &a.turn, []provider.ToolCall{
+		{ID: "1", Name: "read_file", Arguments: `{"path":"a.go"}`},
+		{ID: "2", Name: "write_file", Arguments: `{"path":"a.go","content":"deleted"}`},
+	})
+	if writes != 0 {
+		t.Fatalf("a writer authored before the injected question ran %d times: %q", writes, batch.results[1])
+	}
+}
