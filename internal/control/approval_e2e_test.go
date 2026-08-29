@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/permission"
+	"reasonix/internal/planmode"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
@@ -321,5 +322,81 @@ func TestApprovalTimeoutZeroWaitsIndefinitely(t *testing.T) {
 	case <-done:
 	case <-time.After(30 * time.Second):
 		t.Fatal("Ask did not unblock after answering")
+	}
+}
+
+// The legacy bool is a projection, never a second truth. It answers the way the
+// old flag did — true while the marker rides the turn, false once a plan is
+// approved — so a client that only knows `plan` keeps working while the kernel
+// reasons in phases.
+func TestPlanModeProjectsTheLifecycleForLegacyClients(t *testing.T) {
+	c := New(Options{})
+	defer c.Close()
+	if c.PlanMode() || c.PlanPhase() != planmode.Inactive {
+		t.Fatalf("fresh controller = %v/%v, want inactive and false", c.PlanPhase(), c.PlanMode())
+	}
+	for _, tc := range []struct {
+		action planmode.Action
+		phase  planmode.Phase
+		legacy bool
+	}{
+		{planmode.Enter, planmode.Planning, true},
+		{planmode.Submit, planmode.AwaitingApproval, true},
+		{planmode.Start, planmode.Executing, false},
+		{planmode.Exit, planmode.Inactive, false},
+	} {
+		if _, ok := c.plan().Apply(tc.action); !ok {
+			t.Fatalf("%v refused", tc.action)
+		}
+		if got := c.PlanPhase(); got != tc.phase {
+			t.Errorf("%v led to phase %v, want %v", tc.action, got, tc.phase)
+		}
+		if got := c.PlanMode(); got != tc.legacy {
+			t.Errorf("%v projects plan=%v, want %v", tc.phase, got, tc.legacy)
+		}
+	}
+}
+
+// An approval decides about the state it was offered on. If the workflow moved
+// while the card was open, saying yes grants nothing — the executor must not
+// run, because the plan that approval belonged to is no longer the current one.
+func TestApprovalAnsweredAfterTheWorkflowMovedStartsNothing(t *testing.T) {
+	prov := &scriptedTurns{turns: [][]provider.Chunk{
+		textTurn("Plan:\n1. Add the field\n2. Wire it up"),
+		textTurn("Should never run."),
+	}}
+	ag := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{}, event.Discard)
+
+	var c *Controller
+	c = New(Options{
+		Runner:   ag,
+		Executor: ag,
+		Sink: event.FuncSink(func(e event.Event) {
+			if e.Kind != event.ApprovalRequest || e.Approval.Tool != planApprovalTool {
+				return
+			}
+			// The plan is revised out from under the open card, then the card is
+			// answered "start". The answer is about a state that no longer exists.
+			c.plan().Apply(planmode.Revise)
+			go c.Approve(e.Approval.ID, true, false, false)
+		}),
+	})
+	defer c.Close()
+	c.EnableInteractiveApproval()
+	c.SetPlanMode(true)
+
+	input := "add a config field"
+	if err := c.runOneTurn(context.Background(), orchestratedTurn{input: input, raw: input}); err != nil {
+		t.Fatalf("runOneTurn: %v", err)
+	}
+	if got := c.PlanPhase(); got != planmode.Planning {
+		t.Fatalf("phase = %v, want planning after the revise", got)
+	}
+	if n := len(ag.Session().Messages); n > 0 {
+		for _, m := range ag.Session().Messages {
+			if strings.Contains(m.Content, "Should never run") {
+				t.Fatal("a stale approval started execution")
+			}
+		}
 	}
 }

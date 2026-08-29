@@ -1135,28 +1135,28 @@ func TestCoordinatorSetPlanModePropagates(t *testing.T) {
 	coord := NewCoordinator(prov, plannerSess, nil, plannerTools, Options{MaxSteps: 2}, exec, 0, event.Discard, nil)
 
 	// Both should start with planMode=false
-	if coord.plannerAgent.planMode.Load() {
+	if coord.plannerAgent.planningPhase() {
 		t.Error("planner should start with planMode=false")
 	}
-	if coord.executor.planMode.Load() {
+	if coord.executor.planningPhase() {
 		t.Error("executor should start with planMode=false")
 	}
 
 	// SetPlanMode(true) should propagate to both
 	coord.SetPlanMode(true)
-	if !coord.plannerAgent.planMode.Load() {
+	if !coord.plannerAgent.planningPhase() {
 		t.Error("planner should have planMode=true after SetPlanMode(true)")
 	}
-	if !coord.executor.planMode.Load() {
+	if !coord.executor.planningPhase() {
 		t.Error("executor should have planMode=true after SetPlanMode(true)")
 	}
 
 	// SetPlanMode(false) should propagate to both
 	coord.SetPlanMode(false)
-	if coord.plannerAgent.planMode.Load() {
+	if coord.plannerAgent.planningPhase() {
 		t.Error("planner should have planMode=false after SetPlanMode(false)")
 	}
-	if coord.executor.planMode.Load() {
+	if coord.executor.planningPhase() {
 		t.Error("executor should have planMode=false after SetPlanMode(false)")
 	}
 }

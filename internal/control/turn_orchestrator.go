@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
+	"reasonix/internal/planmode"
 	"reasonix/internal/provider"
 	"reasonix/internal/skill"
 	"reasonix/internal/tool"
@@ -301,16 +302,29 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 		}
 		return err
 	}
-	c.mu.Lock()
-	plan := c.planMode
-	c.mu.Unlock()
-	if !plan {
+	return o.gatePlanApproval(ctx)
+}
+
+// gatePlanApproval turns a finished planning turn into the user's decision and,
+// if they approve, into the execution that follows it. Each step is a lifecycle
+// transition, so a decision answered after the workflow moved grants nothing.
+func (o *turnOrchestrator) gatePlanApproval(ctx context.Context) error {
+	c := o.c
+	planning := c.plan().State()
+	if planning.Phase != planmode.Planning {
 		return nil
 	}
 	proposal := lastAssistantText(c.History())
 	if proposal == "" {
 		return nil // no substantive proposal to gate
 	}
+	// Submitting is itself a transition: from here the plan belongs to the user,
+	// and anything the planner still had in flight answers to an older authority.
+	submitted, ok := c.plan().Transition(planning, planmode.Submit)
+	if !ok {
+		return nil
+	}
+	c.sharePlanRuntime()
 	// The plan is already visible as the assistant's answer, so the request
 	// carries no subject — it's purely the gate.
 	allow, _, err := c.requestApproval(ctx, approvalRequest{tool: planApprovalTool})
@@ -318,11 +332,24 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 		return err
 	}
 	if !allow {
-		// The host decides whether denial means "revise and keep planning" or
-		// "exit without executing" by leaving plan mode on or switching it off.
+		// Back to planning, unless the card already left the workflow — in which
+		// case this compare-and-move finds a state it did not expect and does
+		// nothing, which is the outcome the user asked for.
+		c.plan().Transition(submitted, planmode.Revise)
+		c.sharePlanRuntime()
 		return nil
 	}
-	c.SetPlanMode(false)
+	executing, ok := c.plan().Transition(submitted, planmode.Start)
+	if !ok {
+		// The approval was answered after the workflow moved on. It grants
+		// nothing: capability belongs to the state that is current now.
+		return nil
+	}
+	c.sharePlanRuntime()
+	defer func() {
+		c.plan().Transition(executing, planmode.Exit)
+		c.sharePlanRuntime()
+	}()
 	todoArgs := c.seedPlanTodos(proposal)
 	execStart := c.sessionMessageCount()
 	// Starting plan execution is a real Recovery Episode boundary even though

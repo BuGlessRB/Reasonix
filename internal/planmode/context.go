@@ -18,3 +18,21 @@ func Active(ctx context.Context) bool {
 	active, _ := ctx.Value(activeCtxKey{}).(bool)
 	return active
 }
+
+type authorityCtxKey struct{}
+
+// WithAuthority stamps ctx with the lifecycle state a provider round was
+// started under. Everything the model produces in that round inherits it, so
+// the host can later ask whether a call still belongs to the authority that
+// produced it — a question the state at execution time cannot answer.
+func WithAuthority(ctx context.Context, s State) context.Context {
+	return context.WithValue(ctx, authorityCtxKey{}, s)
+}
+
+// AuthorityFrom returns the lifecycle state ctx was stamped with. The bool
+// distinguishes an unstamped context from one stamped outside the workflow;
+// only a stamped context can be judged stale.
+func AuthorityFrom(ctx context.Context) (State, bool) {
+	s, ok := ctx.Value(authorityCtxKey{}).(State)
+	return s, ok
+}

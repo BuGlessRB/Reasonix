@@ -46,6 +46,7 @@ import (
 	"reasonix/internal/memory"
 	"reasonix/internal/nilutil"
 	"reasonix/internal/permission"
+	"reasonix/internal/planmode"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/recovery"
@@ -169,7 +170,7 @@ type Controller struct {
 	// Snapshot() and then have its live session replaced. See turn_gate.go.
 	gate        turnGate
 	autosaveWG  sync.WaitGroup
-	planMode    bool
+	planRuntime atomic.Pointer[planmode.Runtime]
 	sessionPath string
 	// sessionTemp owns the logical-session private temporary directory shared
 	// by Bash calls. Retained for this Controller's lifetime; rotated on
@@ -1973,6 +1974,17 @@ func (c *Controller) ResolvePlanDecision(id string, action PlanDecisionAction) e
 	}
 	pending.kind = "plan"
 	c.recordDecisionReceipt(pending, string(action))
+	// Move before answering, so the waiting turn sees the state the user chose.
+	// Start stays with that turn: it holds the state it submitted, so only it
+	// can tell an approval from a late one.
+	switch action {
+	case PlanDecisionRevisePlan:
+		c.plan().Apply(planmode.Revise)
+		c.sharePlanRuntime()
+	case PlanDecisionExitPlan:
+		c.plan().Apply(planmode.Exit)
+		c.sharePlanRuntime()
+	}
 	pending.reply <- approvalReply{allow: action == PlanDecisionStartExecution}
 	return nil
 }
@@ -2502,16 +2514,8 @@ func (c *Controller) AgentPreset() string {
 }
 
 func (c *Controller) applyPlanMode(v bool) {
-	c.mu.Lock()
-	c.planMode = v
-	c.mu.Unlock()
-	if setter, ok := c.runner.(interface{ SetPlanMode(bool) }); ok {
-		setter.SetPlanMode(v)
-		return
-	}
-	if c.executor != nil {
-		c.executor.SetPlanMode(v)
-	}
+	c.plan().SetActive(v)
+	c.sharePlanRuntime()
 }
 
 // SetResponseLanguage updates the final-answer language preference for
@@ -2542,13 +2546,8 @@ func (c *Controller) SetReasoningLanguage(lang string) {
 	}
 }
 
-// PlanMode reports whether outgoing turns currently receive the plan-mode
-// marker.
-func (c *Controller) PlanMode() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.planMode
-}
+// PlanPhase reports where the run sits in the plan lifecycle.
+func (c *Controller) PlanPhase() planmode.Phase { return c.plan().State().Phase }
 
 // GoalStrict enables or disables strict goal mode. Since the structured
 // protocol, every complete claim is validated against host readiness and an

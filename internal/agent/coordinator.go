@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/nilutil"
 	"reasonix/internal/plancontract"
+	"reasonix/internal/planmode"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/tool"
@@ -252,6 +253,19 @@ func (c *Coordinator) SetResponseLanguage(lang string) {
 // in two-model mode. Callers that only set the controller's executor would miss
 // the planner agent inside the Coordinator, causing stale plan-mode state after
 // approvals or manual mode switches.
+// AdoptPlanRuntime gives both agents the one lifecycle the controller drives.
+func (c *Coordinator) AdoptPlanRuntime(r *planmode.Runtime) {
+	if c == nil {
+		return
+	}
+	if c.plannerAgent != nil {
+		c.plannerAgent.AdoptPlanRuntime(r)
+	}
+	if c.executor != nil {
+		c.executor.AdoptPlanRuntime(r)
+	}
+}
+
 func (c *Coordinator) SetPlanMode(v bool) {
 	if c == nil {
 		return

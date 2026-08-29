@@ -1022,7 +1022,7 @@ func TestPlanModeBlocksInstalledWriteMCPResolvedThroughUseCapability(t *testing.
 	reg.Add(uc)
 	gate := &mcpPermissionRecordingGate{allowNormal: true}
 	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{Gate: gate}, event.Discard)
-	a.planMode.Store(true)
+	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		ID: "1", Name: "use_capability",
@@ -1048,7 +1048,7 @@ func TestPlanModeMCPStyleNameWithoutMetadataStillUsesPermission(t *testing.T) {
 	reg.Add(uc)
 	gate := &recordingPermissionGate{reason: "denied by ordinary permission"}
 	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{Gate: gate}, event.Discard)
-	a.planMode.Store(true)
+	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		ID: "1", Name: "use_capability",
@@ -1072,7 +1072,7 @@ func TestPlanModeBlocksAuthorizedDestructiveMCPThroughUseCapability(t *testing.T
 	reg.Add(uc)
 	gate := &mcpPermissionRecordingGate{allowNormal: true}
 	a := New(&scriptedProvider{name: "p"}, reg, NewSession("sys"), Options{Gate: gate}, event.Discard)
-	a.planMode.Store(true)
+	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
 		ID: "1", Name: "use_capability",

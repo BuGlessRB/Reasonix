@@ -33,7 +33,7 @@ type toolCallPlan struct {
 	resolved     tool.ResolvedCall
 	resolvedMeta *tool.ResolvedCall
 
-	planPhaseAdmitted bool
+	admission *planmode.State
 
 	mutates                   bool
 	verification              bool
@@ -105,6 +105,9 @@ func (a *Agent) executeOne(ctx context.Context, turn *turnRuntime, call provider
 	// permission check. A valid replacement is re-parsed so every later stage
 	// sees the call that will actually execute.
 	if blocked, early := a.interceptToolBefore(ctx, plan); early {
+		return blocked
+	}
+	if blocked, early := a.rejectStaleAuthority(ctx); early {
 		return blocked
 	}
 	if blocked, early := a.resolveToolPolicy(ctx, turn, plan); early {
@@ -272,7 +275,7 @@ func (a *Agent) applyMutationDependencyBarrier(plan *toolCallPlan) (toolOutcome,
 func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (toolOutcome, bool) {
 	t := plan.tool
 	call := plan.call
-	if a.planMode.Load() {
+	if a.planningPhase() {
 		// Translate the tool's optional plan-mode self-report into the policy's
 		// tri-state. Mirrors the t.(tool.Previewer) assertion precedent below.
 		safety := planmode.PlanSafetyUnknown
@@ -290,7 +293,7 @@ func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (
 				errMsg:  planPhaseBlockReason(decision),
 			}, true
 		}
-		plan.planPhaseAdmitted = true
+		plan.admitPlanPhase(a)
 	}
 	// Resolve proxy tools (use_capability) to the real MCP target before
 	// permission, hooks, and evidence. Provider transcript keeps call.Name.

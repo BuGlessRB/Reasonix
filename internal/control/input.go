@@ -165,7 +165,7 @@ func (c *Controller) composeWithGoal(
 	goal, goalStatus string,
 ) string {
 	c.mu.Lock()
-	plan := c.planMode
+	plan := c.PlanMode()
 	responseLanguage := c.display.responseLanguage
 	reasoningLanguage := c.display.reasoningLanguage
 	c.mu.Unlock()

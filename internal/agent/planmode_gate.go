@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -61,7 +62,7 @@ func planPhaseBlockReason(d planmode.Decision) string {
 // well as before permission: a resolve-only state transition is still one, and
 // Commit's own contract puts it after the host's checks.
 func (a *Agent) planPhaseGateForTarget(plan *toolCallPlan) (toolOutcome, bool) {
-	if !a.planMode.Load() {
+	if !a.planningPhase() {
 		return toolOutcome{}, false
 	}
 	if plan.resolved.TargetName != "" {
@@ -89,7 +90,7 @@ func (a *Agent) planPhaseGateForTarget(plan *toolCallPlan) (toolOutcome, bool) {
 			errMsg:  "blocked: MCP target is unavailable during planning",
 		}, true
 	}
-	plan.planPhaseAdmitted = true
+	plan.admitPlanPhase(a)
 	return toolOutcome{}, false
 }
 
@@ -98,7 +99,10 @@ func (a *Agent) planPhaseGateForTarget(plan *toolCallPlan) (toolOutcome, bool) {
 // execute what the phase gate never admitted. Reaching it means a pre-execution
 // path skipped the gate, which is a host bug and says so.
 func (a *Agent) assertPlanPhaseAdmitted(plan *toolCallPlan) (toolOutcome, bool) {
-	if !a.planMode.Load() || plan.planPhaseAdmitted {
+	if !a.planningPhase() {
+		return toolOutcome{}, false
+	}
+	if plan.admission != nil && plan.admission.Epoch == a.plan().State().Epoch {
 		return toolOutcome{}, false
 	}
 	return toolOutcome{
@@ -107,4 +111,68 @@ func (a *Agent) assertPlanPhaseAdmitted(plan *toolCallPlan) (toolOutcome, bool) 
 		blocked: true,
 		errMsg:  "blocked: plan phase gate bypassed",
 	}, true
+}
+
+// plan returns the lifecycle this agent runs under, creating a private one on
+// first use so an agent assembled without a controller still has exactly one.
+func (a *Agent) plan() *planmode.Runtime {
+	if r := a.planRuntime.Load(); r != nil {
+		return r
+	}
+	fresh := planmode.NewRuntime()
+	if a.planRuntime.CompareAndSwap(nil, fresh) {
+		return fresh
+	}
+	return a.planRuntime.Load()
+}
+
+// planningPhase reports whether side effects are still waiting for approval.
+// Executing is inside the workflow too, which is why Active is not the question.
+func (a *Agent) planningPhase() bool {
+	switch a.plan().State().Phase {
+	case planmode.Planning, planmode.AwaitingApproval:
+		return true
+	}
+	return false
+}
+
+// admitPlanPhase records that the gate admitted this call, and under which
+// authority. The execution boundary re-reads the token; it never re-derives the
+// verdict, so classification still happens exactly once.
+func (p *toolCallPlan) admitPlanPhase(a *Agent) {
+	state := a.plan().State()
+	p.admission = &state
+}
+
+// rejectStaleAuthority refuses work produced under an authority that is no
+// longer current. A transition grants capability to the destination epoch only:
+// tool calls a model streamed while planning must not become executable because
+// the user approved the plan while they were still in flight.
+func (a *Agent) rejectStaleAuthority(ctx context.Context) (toolOutcome, bool) {
+	origin, stamped := planmode.AuthorityFrom(ctx)
+	if !stamped {
+		return toolOutcome{}, false
+	}
+	current := a.plan().State()
+	if origin.Epoch == current.Epoch {
+		return toolOutcome{}, false
+	}
+	return toolOutcome{
+		output: fmt.Sprintf("blocked: this call was produced while the run was %s, and the workflow has since moved to %s. "+
+			"Nothing from the earlier phase carries over — take the current state as your starting point and call again if it still applies.",
+			origin.Phase, current.Phase),
+		blocked: true,
+		errMsg:  "blocked: stale plan authority",
+	}, true
+}
+
+// PlanState reports the lifecycle fact this run is operating under.
+func (a *Agent) PlanState() planmode.State { return a.plan().State() }
+
+// AdoptPlanRuntime points this agent at a lifecycle owned elsewhere, so a
+// controller driving several agents moves one state, not several kept in step.
+func (a *Agent) AdoptPlanRuntime(r *planmode.Runtime) {
+	if r != nil {
+		a.planRuntime.Store(r)
+	}
 }

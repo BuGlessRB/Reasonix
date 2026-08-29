@@ -17,7 +17,7 @@ import (
 // preferences it must honor. Every binding is optional, so a degraded
 // assembly loses the capability rather than the call.
 func (a *Agent) toolCallContext(ctx context.Context, plan *toolCallPlan) context.Context {
-	cctx := tool.WithContextCompressor(withCallContext(ctx, plan.call.ID, a.svc.sink, a.svc.asker, a.planMode.Load()), a)
+	cctx := tool.WithContextCompressor(withCallContext(ctx, plan.call.ID, a.svc.sink, a.svc.asker, a.planningPhase()), a)
 	cctx = tool.WithContextRecaller(cctx, a)
 	cctx = tool.WithContextBudgetReporter(cctx, a)
 	cctx = WithSubagentDepth(cctx, a.subagentDepth)
@@ -28,7 +28,7 @@ func (a *Agent) toolCallContext(ctx context.Context, plan *toolCallPlan) context
 			cctx = evidence.WithDeliveryProfile(cctx)
 		}
 	}
-	if !a.planMode.Load() {
+	if !a.planningPhase() {
 		cctx = a.withContractState(cctx)
 	}
 	if plan.planReplacementAuthorized {

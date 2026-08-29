@@ -152,7 +152,7 @@ func (a *Agent) withAgentContext(ctx context.Context) context.Context {
 	} else {
 		ctx = memory.WithoutQueue(ctx)
 	}
-	return planmode.WithActive(ctx, a.planMode.Load())
+	return planmode.WithActive(ctx, a.planningPhase())
 }
 
 // WithParentSession stamps the active parent session ID onto a turn context so
@@ -269,10 +269,10 @@ type Agent struct {
 	// It outlives the conversation, which is why it is not in sessionRuntime.
 	unwrittenResolve unwrittenResolve
 
-	// planMode enables planning workflow instructions and explicit phase opt-outs.
-	// It does not replace the permission or sandbox boundary. The system prompt and
-	// tool list never change with the toggle, preserving the provider-cache prefix.
-	planMode atomic.Bool
+	// planRuntime is the plan lifecycle: which phase, under which authority
+	// epoch. Replaceable, so a controller can hand several agents the one
+	// lifecycle they share. Never a permission or sandbox boundary.
+	planRuntime atomic.Pointer[planmode.Runtime]
 
 	// mutationDependencyBarrier is set for the remainder of a provider tool
 	// batch after any mutating call fails or is blocked. executeOne re-checks
@@ -373,11 +373,11 @@ const (
 	KeepUserMarked
 )
 
-// SetPlanMode toggles the plan-first workflow flag. Ordinary calls still use
-// Permissions/Sandbox; only explicit phase opt-outs are refused. The system
+// SetPlanMode enters or leaves the plan-first workflow. Ordinary calls still
+// use Permissions/Sandbox; only explicit phase opt-outs are refused. The system
 // prompt and tool schemas stay untouched, while the caller supplies the
 // model-facing Marker in a user turn.
-func (a *Agent) SetPlanMode(v bool) { a.planMode.Store(v) }
+func (a *Agent) SetPlanMode(v bool) { a.plan().SetActive(v) }
 
 // SetTools replaces the agent's tool registry. The next API call picks up the
 // new tool schema; tools already cached in the provider prefix are unaffected
@@ -1827,7 +1827,7 @@ func completedMCPConnect(reg *tool.Registry, name string) (string, bool) {
 // path; changing step identity, order, or hierarchy while work remains is a
 // semantic transition for the independent Auto reviewer.
 func (a *Agent) recoveryPlanTransition(toolName string, args json.RawMessage) (bool, string, string, string) {
-	if a == nil || toolName != "todo_write" || a.planMode.Load() {
+	if a == nil || toolName != "todo_write" || a.planningPhase() {
 		return false, "", "", ""
 	}
 	before := a.CanonicalTodoState()

@@ -634,12 +634,61 @@ func TestPlanPhaseAssertionRefusesAnUnadmittedCall(t *testing.T) {
 	if !strings.Contains(out.output, "host bug") {
 		t.Errorf("the violation must not read as an ordinary refusal: %s", out.output)
 	}
-	if _, blocked := a.assertPlanPhaseAdmitted(&toolCallPlan{planPhaseAdmitted: true}); blocked {
+	fresh := a.plan().State()
+	if _, blocked := a.assertPlanPhaseAdmitted(&toolCallPlan{admission: &fresh}); blocked {
 		t.Error("an admitted call was refused at the execution boundary")
+	}
+
+	// An admission is a capability granted by one authority, not a permanent
+	// one: after a transition the same token no longer opens the boundary.
+	stale := planmode.State{Phase: fresh.Phase, Epoch: fresh.Epoch - 1}
+	if _, blocked := a.assertPlanPhaseAdmitted(&toolCallPlan{admission: &stale}); !blocked {
+		t.Error("an admission from an earlier epoch still opened the execution boundary")
 	}
 
 	a.SetPlanMode(false)
 	if _, blocked := a.assertPlanPhaseAdmitted(&toolCallPlan{}); blocked {
 		t.Error("the assertion fired outside the planning phase")
+	}
+}
+
+// Approval grants capability to the work that follows it, not to whatever was
+// already in flight. A batch the model streamed while planning arrives after
+// the transition; it must be refused for being stale, and refused as stale
+// rather than as a planning side effect, because the reason is what tells the
+// model to look at the current state instead of retrying.
+func TestStaleAuthorityCallsAreRefusedAcrossATransition(t *testing.T) {
+	var executions int32
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "write_file", writesPaths: true, calls: &executions})
+	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+	a.SetPlanMode(true)
+	born := a.PlanState()
+	if born.Phase != planmode.Planning {
+		t.Fatalf("state = %+v, want planning", born)
+	}
+
+	if _, ok := a.plan().Apply(planmode.Submit); !ok {
+		t.Fatal("submit refused")
+	}
+	if _, ok := a.plan().Apply(planmode.Start); !ok {
+		t.Fatal("start refused")
+	}
+
+	call := provider.ToolCall{Name: "write_file", Arguments: `{"path":"x.txt","content":"x"}`}
+	out := a.executeOne(planmode.WithAuthority(context.Background(), born), &a.turn, call)
+	if !out.blocked || !strings.Contains(out.errMsg, "stale plan authority") {
+		t.Fatalf("in-flight planning call after approval = %+v, want a stale refusal", out)
+	}
+	if executions != 0 {
+		t.Fatalf("stale call executed %d times", executions)
+	}
+
+	out = a.executeOne(planmode.WithAuthority(context.Background(), a.PlanState()), &a.turn, call)
+	if out.blocked {
+		t.Fatalf("a call produced under the current authority was refused: %+v", out)
+	}
+	if executions != 1 {
+		t.Fatalf("fresh call executed %d times, want 1", executions)
 	}
 }

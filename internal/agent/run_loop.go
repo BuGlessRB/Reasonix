@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
+	"reasonix/internal/planmode"
 	"reasonix/internal/provider"
 	"reasonix/internal/taskpolicy"
 	"reasonix/internal/tool"
@@ -156,7 +157,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	// change without the final-readiness gate ever seeing it. Plan turns defer
 	// this lease like collectBackgroundEvidence does so execution evidence is
 	// consumed and audited only after plan approval.
-	if a.task.ledger != nil && a.svc.jobs != nil && !a.planMode.Load() {
+	if a.task.ledger != nil && a.svc.jobs != nil && !a.planningPhase() {
 		session := jobs.SessionFromContext(ctx)
 		for _, jobID := range a.svc.jobs.PendingEvidenceJobIDsForSession(session) {
 			summary, ready := a.svc.jobs.TryLeaseEvidenceForSession(session, jobID)
@@ -190,7 +191,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	} else {
 		a.turn.policy = taskpolicy.Derive(taskpolicy.Input{
 			Preset:   agentpreset.AgentPreset(a.AgentPreset()),
-			PlanMode: a.planMode.Load(),
+			PlanMode: a.planningPhase(),
 		})
 	}
 	a.turn.policySet = true
@@ -273,6 +274,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		// Prefix shape is captured once before sampling and frozen for the
 		// whole attempt lifecycle — stream retries must not rewrite session
 		// history mid-round, so the shape stays stable across body replays.
+		authority := a.plan().State() // before sampling: a mid-round move cannot admit this
 		streamed := a.streamWithSamplingRecovery(ctx, step+1)
 		text, reasoning, signature, calls, responsesItems, usage := streamed.text, streamed.reasoning, streamed.signature, streamed.calls, streamed.responsesItems, streamed.usage
 		partialCalls, err := streamed.partialCalls, streamed.err
@@ -324,7 +326,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 
 		// Invariant: executeBatch only ever receives tool calls from a
 		// committed sampling attempt (clean terminal + response intercept).
-		cont, terr := a.handleToolRound(ctx, state, step, text, reasoning, calls, usage)
+		cont, terr := a.handleToolRound(planmode.WithAuthority(ctx, authority), state, step, text, reasoning, calls, usage)
 		if !cont {
 			return terr
 		}
