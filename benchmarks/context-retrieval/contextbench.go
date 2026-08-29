@@ -98,8 +98,9 @@ type contextMetrics struct {
 	MissingMarkers  []string `json:"missing_markers,omitempty"`
 	// FinalAnswer is kept bounded so a surprising run can be read back. A
 	// metric nobody can audit is a claim, not a measurement.
-	FinalAnswer  string `json:"final_answer,omitempty"`
-	FailureStage string `json:"failure_stage"`
+	FinalAnswer   string `json:"final_answer,omitempty"`
+	FailureStage  string `json:"failure_stage"`
+	TimeoutReason string `json:"timeout_reason,omitempty"`
 
 	// UnexpectedWorkTools are investigation tools used instead of recall.
 	// Reaching for the workspace is behaviour, not noise: how a model routes
@@ -127,6 +128,15 @@ type contextMetrics struct {
 	// would hand the index a search's work.
 	CueDirectRead bool `json:"cue_direct_read"`
 
+	// What happened after the answer was already in hand. A timeout that spent
+	// seven rounds past its target is a stopping problem, and extending the
+	// budget would only buy the loop more time.
+	TargetFirstSeenRound    int  `json:"target_first_seen_round"`
+	RoundsAfterTarget       int  `json:"rounds_after_target"`
+	SearchesAfterTarget     int  `json:"searches_after_target"`
+	RecallTokensAfterTarget int  `json:"recall_tokens_after_target"`
+	TargetHeldAtEnd         bool `json:"target_held_at_end"`
+
 	// Routing is where the model looked first when its memory was missing.
 	Routing          string `json:"routing"`
 	FirstRecallRound int    `json:"first_recall_round"`
@@ -138,119 +148,156 @@ type contextMetrics struct {
 var hitPosition = regexp.MustCompile(`(?m)^#(\d+) `)
 
 // scoreRun reads the messages one turn appended and reports what happened.
-func scoreRun(msgs []provider.Message, inst fixtureInstance, target int, arm string, cueVisible bool) contextMetrics {
-	t := inst.Task
-	m := contextMetrics{Task: t.ID, Arm: arm, CueVisible: cueVisible}
-	calls := map[string]provider.ToolCall{}
-	pending := map[string]int{}
-	round := 0
-	sawTargetHit := false
+// runScorer walks one turn's messages, holding the state a judgement needs:
+// which calls are open, whether the target has come back, and which search
+// each result belongs to.
+type runScorer struct {
+	m            contextMetrics
+	inst         fixtureInstance
+	target       int
+	calls        map[string]provider.ToolCall
+	pending      map[string]int
+	round        int
+	sawTargetHit bool
+}
 
+// scoreRun reads the messages one turn appended and reports what happened.
+func scoreRun(msgs []provider.Message, inst fixtureInstance, target int, arm string, cueVisible bool) contextMetrics {
+	s := &runScorer{
+		m:    contextMetrics{Task: inst.Task.ID, Arm: arm, CueVisible: cueVisible},
+		inst: inst, target: target,
+		calls: map[string]provider.ToolCall{}, pending: map[string]int{},
+	}
 	for _, msg := range msgs {
 		if len(msg.ToolCalls) > 0 {
-			round++
+			s.round++
 		}
 		for _, tc := range msg.ToolCalls {
-			calls[tc.ID] = tc
-			if tc.Name != toolRecall {
-				if !containsString(m.UnexpectedWorkTools, tc.Name) {
-					m.UnexpectedWorkTools = append(m.UnexpectedWorkTools, tc.Name)
-				}
-				m.EscapeCalls++
-				if m.FirstEscapeRound == 0 {
-					m.FirstEscapeRound = round
-				}
-				if m.SearchCalls+m.ReadCalls == 0 {
-					m.EscapeBeforeFirstRecall++
-				} else {
-					m.EscapeAfterFirstRecall++
-				}
-				continue
-			}
-			if m.FirstRecallRound == 0 {
-				m.FirstRecallRound = round
-			}
-			query, positions := recallArgs(tc.Arguments)
+			s.calls[tc.ID] = tc
+			s.observeCall(tc)
+		}
+		if msg.Role == provider.RoleTool {
+			s.observeResult(msg)
+		}
+	}
+	return s.finish(cueVisible)
+}
+
+// observeCall records one tool call: a recall search, a recall read, or a
+// reach for the workspace.
+func (s *runScorer) observeCall(tc provider.ToolCall) {
+	m := &s.m
+	if tc.Name != toolRecall {
+		if !containsString(m.UnexpectedWorkTools, tc.Name) {
+			m.UnexpectedWorkTools = append(m.UnexpectedWorkTools, tc.Name)
+		}
+		m.EscapeCalls++
+		if m.FirstEscapeRound == 0 {
+			m.FirstEscapeRound = s.round
+		}
+		if m.SearchCalls+m.ReadCalls == 0 {
+			m.EscapeBeforeFirstRecall++
+		} else {
+			m.EscapeAfterFirstRecall++
+		}
+		return
+	}
+	if m.FirstRecallRound == 0 {
+		m.FirstRecallRound = s.round
+	}
+	query, positions := recallArgs(tc.Arguments)
+	switch {
+	case query != "":
+		m.SearchCalls++
+		if m.FirstSearchRound == 0 {
+			m.FirstSearchRound = s.round
+		}
+		if s.sawTargetHit {
+			m.PostHitSearches++
+			m.SearchesAfterTarget++
+		}
+		m.Searches = append(m.Searches, searchAttempt{Ordinal: m.SearchCalls, Round: s.round, Query: query})
+		s.pending[tc.ID] = len(m.Searches) - 1
+	case len(positions) > 0:
+		m.ReadCalls++
+		if m.FirstReadRound == 0 {
+			m.FirstReadRound = s.round
+		}
+		// A read covers the target when it names its position: recall returns
+		// the tool results under the caller's own address.
+		if containsInt(positions, s.target) {
+			m.TargetRead = true
 			switch {
-			case query != "":
-				m.SearchCalls++
-				if m.FirstSearchRound == 0 {
-					m.FirstSearchRound = round
-				}
-				if sawTargetHit {
-					m.PostHitSearches++
-				}
-				m.Searches = append(m.Searches, searchAttempt{
-					Ordinal: m.SearchCalls, Round: round, Query: query,
-				})
-				pending[tc.ID] = len(m.Searches) - 1
-			case len(positions) > 0:
-				m.ReadCalls++
-				if m.FirstReadRound == 0 {
-					m.FirstReadRound = round
-				}
-				// A read covers the target when it names its position. The
-				// span recall returns also carries the tool results below it,
-				// which is why the caller's own address is the one to match.
-				if containsInt(positions, target) {
-					m.TargetRead = true
-					switch {
-					case sawTargetHit:
-						m.ReadAfterHit, m.SearchThenRecallRead = true, true
-					case m.SearchCalls == 0:
-						m.RecallReadWithoutSearch = true
-					}
-				}
-			}
-		}
-		if msg.Role != provider.RoleTool {
-			continue
-		}
-		call, ok := calls[msg.ToolCallID]
-		if !ok {
-			continue
-		}
-		if call.Name != toolRecall {
-			// An answer readable through anything but recall is contamination,
-			// whatever the run went on to score.
-			for _, marker := range inst.AnswerMarkers {
-				// Codenames only: a three-digit epoch appears in any long file
-				// by chance, and one did. A model holding the codename holds
-				// the numbers beside it anyway.
-				if len(marker) >= 6 && strings.Contains(msg.Content, marker) {
-					m.Contaminated, m.LeakedVia, m.LeakedMarker = true, call.Name, marker
-					m.EscapeFoundAnswer = true
-					m.LeakedArgs = truncate(call.Arguments, 200)
-					m.LeakedOutput = truncate(msg.Content, 300)
-				}
-			}
-			continue
-		}
-		m.RecallReturnedTokens += tokencount.Text(msg.Content)
-		query, _ := recallArgs(call.Arguments)
-		if query == "" {
-			continue
-		}
-		positions := searchHitPositions(msg.Content)
-		if len(positions) > 0 {
-			m.SearchHits++
-		}
-		rank := indexOfInt(positions, target)
-		if i, ok := pending[msg.ToolCallID]; ok {
-			m.Searches[i].TargetRank, m.Searches[i].ResultCount = rank, len(positions)
-		}
-		if rank > 0 {
-			m.TargetSearchHits++
-			sawTargetHit = true
-			if m.FirstTargetRank == 0 {
-				m.FirstTargetRank = rank
+			case s.sawTargetHit:
+				m.ReadAfterHit, m.SearchThenRecallRead = true, true
+			case m.SearchCalls == 0:
+				m.RecallReadWithoutSearch = true
 			}
 		}
 	}
+}
+
+// observeResult reads what a call returned: contamination, page-in cost, and
+// whether this search brought the target back.
+func (s *runScorer) observeResult(msg provider.Message) {
+	m := &s.m
+	call, ok := s.calls[msg.ToolCallID]
+	if !ok {
+		return
+	}
+	if call.Name != toolRecall {
+		// Codenames only: a three-digit epoch appears in any long file by
+		// chance, and one did. A model holding the codename holds the numbers
+		// beside it anyway.
+		for _, marker := range s.inst.AnswerMarkers {
+			if len(marker) >= 6 && strings.Contains(msg.Content, marker) {
+				m.Contaminated, m.LeakedVia, m.LeakedMarker = true, call.Name, marker
+				m.EscapeFoundAnswer = true
+				m.LeakedArgs, m.LeakedOutput = truncate(call.Arguments, 200), truncate(msg.Content, 300)
+			}
+		}
+		return
+	}
+	cost := tokencount.Text(msg.Content)
+	m.RecallReturnedTokens += cost
+	if s.sawTargetHit {
+		m.RecallTokensAfterTarget += cost
+	}
+	if query, _ := recallArgs(call.Arguments); query == "" {
+		return
+	}
+	positions := searchHitPositions(msg.Content)
+	if len(positions) > 0 {
+		m.SearchHits++
+	}
+	rank := indexOfInt(positions, s.target)
+	if i, ok := s.pending[msg.ToolCallID]; ok {
+		m.Searches[i].TargetRank, m.Searches[i].ResultCount = rank, len(positions)
+	}
+	if rank == 0 {
+		return
+	}
+	m.TargetSearchHits++
+	if !s.sawTargetHit {
+		m.TargetFirstSeenRound = s.round
+	}
+	s.sawTargetHit = true
+	if m.FirstTargetRank == 0 {
+		m.FirstTargetRank = rank
+	}
+}
+
+// finish derives what only the whole walk can say.
+func (s *runScorer) finish(cueVisible bool) contextMetrics {
+	m := s.m
 	m.RetrievalRounds = m.SearchCalls + m.ReadCalls
+	m.TargetHeldAtEnd = s.sawTargetHit || m.TargetRead
+	if m.TargetFirstSeenRound > 0 {
+		m.RoundsAfterTarget = s.round - m.TargetFirstSeenRound
+	}
 	m.Routing = routing(m.FirstRecallRound, m.FirstEscapeRound)
 	m.CueDirectRead = cueVisible && m.RecallReadWithoutSearch
-	classifySearches(&m, inst)
+	classifySearches(&m, s.inst)
 	return m
 }
 

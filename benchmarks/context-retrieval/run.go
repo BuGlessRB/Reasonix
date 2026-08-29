@@ -162,6 +162,7 @@ func runOne(p provider.Provider, t contextTask, arm ablation.Set, armName, root 
 	m.scoreAnswer(finalAnswer(appended), inst)
 	if runErr != nil {
 		m.FailureStage = "RunError"
+		m.TimeoutReason = timeoutReason(m)
 	}
 	return m, runErr
 }
@@ -467,4 +468,24 @@ func fingerprint(dry bool) string {
 	}
 	return fmt.Sprintf("## Batch\n  model=%s endpoint=%s window=%d generations=%d commit=%s started=%s\n",
 		model, endpoint, fixtureWindow, fixtureGenerations, commit, time.Now().UTC().Format(time.RFC3339))
+}
+
+// timeoutReason separates a run that never found its answer from one that found
+// it and kept going. Only the first is a case for a longer budget; the second
+// would just get more time to circle. A batch reporting only "context deadline
+// exceeded" cannot tell an arm that made retrieval harder from an arm that
+// happened to draw a slow minute.
+func timeoutReason(m contextMetrics) string {
+	switch {
+	case m.TargetHeldAtEnd && m.RoundsAfterTarget >= 2:
+		return "PostTargetRunaway"
+	case m.TargetHeldAtEnd:
+		return "TargetHeldLate"
+	case m.SearchCalls >= 3:
+		return "SearchSpiral"
+	case m.SearchCalls+m.ReadCalls+m.EscapeCalls == 0:
+		return "NoToolActivity"
+	default:
+		return "Unknown"
+	}
 }
