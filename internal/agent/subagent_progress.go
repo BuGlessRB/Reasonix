@@ -673,46 +673,61 @@ func (t *subagentProgressTracker) setPhaseLocked(p subagentProgressPhase) {
 	t.merger.statusEvent(t.childID, p)
 }
 
-// wrap returns the sink the child agent emits into: reasoning/text/notice/
-// retrying become preview slots; tool activity and usage pass through
-// unchanged (the child's Message and anything else stay dropped, as before).
-// Events arriving after the terminal are ignored.
-func (t *subagentProgressTracker) wrap() event.Sink {
-	return event.FuncSink(func(e event.Event) {
-		t.mu.Lock()
-		if t.done {
-			t.mu.Unlock()
-			return
-		}
-		switch e.Kind {
-		case event.Reasoning:
-			t.setPhaseLocked(subagentPhaseReasoning)
-			t.merger.deltaEvent(t.childID, subagentProgressChanReasoning, e.Text)
-		case event.Text:
-			t.setPhaseLocked(subagentPhaseResponding)
-			t.merger.deltaEvent(t.childID, subagentProgressChanText, e.Text)
-		case event.Notice:
-			text := e.Text
-			if text == "" {
-				text = e.Detail
-			}
-			t.merger.deltaEvent(t.childID, subagentProgressChanNotice, text)
-		case event.Retrying:
-			t.setPhaseLocked(subagentPhaseRetrying)
-		case event.ToolDispatch, event.ToolResult, event.ToolProgress:
-			t.setPhaseLocked(subagentPhaseTool)
-		}
+// trackedChildSink is the sink one child agent emits into. It is a type rather
+// than a FuncSink because optional capabilities are delivered by type
+// assertion: a bare func sink implements none of them, so every audit a child
+// produced — handoff, contract shadow, completion report, readiness — died
+// here before reaching the parent.
+type trackedChildSink struct {
+	// Audits are accounting, not presentation: they pass through whole, and
+	// are not gated on the terminal the way preview events are.
+	event.AuditForwarder
+	tracker *subagentProgressTracker
+}
+
+// Emit maps the child's stream onto preview slots: reasoning/text/notice/
+// retrying become slots; tool activity and usage pass through unchanged (the
+// child's Message and anything else stay dropped). Events arriving after the
+// terminal are ignored.
+func (s trackedChildSink) Emit(e event.Event) {
+	t := s.tracker
+	t.mu.Lock()
+	if t.done {
 		t.mu.Unlock()
-		switch e.Kind {
-		case event.ToolDispatch, event.ToolResult, event.ToolProgress:
-			t.sink.Emit(e)
-		case event.Usage:
-			if e.UsageSource == "" {
-				e.UsageSource = event.UsageSourceSubagent
-			}
-			t.sink.Emit(e)
+		return
+	}
+	switch e.Kind {
+	case event.Reasoning:
+		t.setPhaseLocked(subagentPhaseReasoning)
+		t.merger.deltaEvent(t.childID, subagentProgressChanReasoning, e.Text)
+	case event.Text:
+		t.setPhaseLocked(subagentPhaseResponding)
+		t.merger.deltaEvent(t.childID, subagentProgressChanText, e.Text)
+	case event.Notice:
+		text := e.Text
+		if text == "" {
+			text = e.Detail
 		}
-	})
+		t.merger.deltaEvent(t.childID, subagentProgressChanNotice, text)
+	case event.Retrying:
+		t.setPhaseLocked(subagentPhaseRetrying)
+	case event.ToolDispatch, event.ToolResult, event.ToolProgress:
+		t.setPhaseLocked(subagentPhaseTool)
+	}
+	t.mu.Unlock()
+	switch e.Kind {
+	case event.ToolDispatch, event.ToolResult, event.ToolProgress:
+		t.sink.Emit(e)
+	case event.Usage:
+		if e.UsageSource == "" {
+			e.UsageSource = event.UsageSourceSubagent
+		}
+		t.sink.Emit(e)
+	}
+}
+
+func (t *subagentProgressTracker) wrap() event.Sink {
+	return trackedChildSink{AuditForwarder: event.AuditForwarder{Inner: t.sink}, tracker: t}
 }
 
 // finish flushes pending previews, emits the single terminal status, and — if
