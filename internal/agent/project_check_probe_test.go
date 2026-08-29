@@ -67,8 +67,8 @@ func rewriteDeclarationRun(t *testing.T, began, rewrittenTo, ran string) (*proje
 		t.Fatalf("premature Run err = %v, want FinalReadinessError", err)
 	}
 	// This models a resume, not a mid-run edit: projectChecks is loaded once at
-	// boot, so the divergence needs a process boundary — an old baseline
-	// restored into a build that read the new declaration.
+	// boot, so the divergence needs a process boundary. That the boundary is
+	// real is established separately, by the Goal resume test in control.
 	a.projectChecks = []instruction.VerifyCheck{{Command: rewrittenTo, SourcePath: "AGENTS.md", Line: 3}}
 	return sink, a.Run(ctx, "finish")
 }
