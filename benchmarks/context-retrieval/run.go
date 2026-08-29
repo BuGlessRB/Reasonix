@@ -41,8 +41,18 @@ func realProvider() (provider.Provider, error) {
 }
 
 // runOne asks one task under one arm and scores what the model did.
-func runOne(p provider.Provider, t contextTask, arm ablation.Set, armName, root string, cueVisible bool) (contextMetrics, error) {
-	f, err := buildFixture(t, arm, filepath.Join(root, t.ID, armName, "session.jsonl"))
+func runOne(p provider.Provider, t contextTask, arm ablation.Set, armName, root string, cueVisible, dry bool) (contextMetrics, error) {
+	// Live runs get values that existed nowhere before the run started; a dry
+	// run stays reproducible.
+	rng := liveRand()
+	if dry {
+		rng = seededRand(t.ID, armName, "dry")
+	}
+	inst, err := instantiateTask(t, rng)
+	if err != nil {
+		return contextMetrics{}, err
+	}
+	f, err := buildFixture(inst, arm, filepath.Join(root, t.ID, armName, "session.jsonl"))
 	if err != nil {
 		return contextMetrics{}, err
 	}
@@ -65,11 +75,11 @@ func runOne(p provider.Provider, t contextTask, arm ablation.Set, armName, root 
 	before := len(sess.Snapshot())
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()
-	runErr := a.Run(ctx, t.Prompt)
+	runErr := a.Run(ctx, inst.Prompt)
 
 	appended := sess.Snapshot()[before:]
-	m := scoreRun(appended, t, f.Target, armName, cueVisible)
-	m.scoreAnswer(finalAnswer(appended), t)
+	m := scoreRun(appended, inst, f.Target, armName, cueVisible)
+	m.scoreAnswer(finalAnswer(appended), inst)
 	if runErr != nil {
 		m.FailureStage = "RunError"
 	}
@@ -146,7 +156,7 @@ func runExperiment(experiment, root string, dry bool, tasks []contextTask) int {
 		}
 		for _, arm := range armsFor(t) {
 			cueVisible := t.Experiment == experimentIndex && cueExpectedVisible(t, arm.scale)
-			m, err := runOne(p, t, armFor(arm.scale, arm.searchOff), arm.name, root, cueVisible)
+			m, err := runOne(p, t, armFor(arm.scale, arm.searchOff), arm.name, root, cueVisible, dry)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%s [%s]: %v\n", t.ID, arm.name, err)
 			}
@@ -180,6 +190,11 @@ func reportFunnels(byArm map[string][]contextMetrics) {
 	fmt.Println("\n## Funnel")
 	for _, name := range names {
 		fmt.Println(" ", summarize(name, byArm[name]).line())
+	}
+	fmt.Println("\n## Where it looked first")
+	for _, name := range names {
+		f := summarize(name, byArm[name])
+		fmt.Printf("  %-14s %s\n", name, countsLine(f.Routes))
 	}
 	fmt.Println("\n## Where it broke")
 	for _, name := range names {

@@ -33,8 +33,8 @@ func hitBlock(positions ...int) string {
 	return b.String()
 }
 
-func scorerTask() contextTask {
-	return contextTask{ID: "t", AnswerMarkers: []string{"cobalt-lark-17"}}
+func scorerTask() fixtureInstance {
+	return fixtureInstance{Task: contextTask{ID: "t"}, AnswerMarkers: []string{"cobalt-lark-17"}}
 }
 
 func score(t *testing.T, msgs []provider.Message, final string) contextMetrics {
@@ -184,7 +184,7 @@ func TestScorerIgnoresWhatTheModelSaysItWillDo(t *testing.T) {
 
 // Every marker must land, so a partially right answer is not a recovery.
 func TestScorerRequiresEveryMarker(t *testing.T) {
-	task := contextTask{ID: "t", AnswerMarkers: []string{"comet-42", "per-lineage"}}
+	task := fixtureInstance{Task: contextTask{ID: "t"}, AnswerMarkers: []string{"comet-42", "per-lineage"}}
 	m := scoreRun(nil, task, scorerTarget, "arm", false)
 	m.scoreAnswer("the salt was comet-42", task)
 	if m.AnswerRecovered {
@@ -238,5 +238,49 @@ func TestScorerPlacesEscapesRelativeToRecall(t *testing.T) {
 	if m.EscapeCalls != 2 || m.EscapeBeforeFirstRecall != 1 || m.EscapeAfterFirstRecall != 1 {
 		t.Errorf("escapes = %d (%d before, %d after), want 2 (1, 1)",
 			m.EscapeCalls, m.EscapeBeforeFirstRecall, m.EscapeAfterFirstRecall)
+	}
+}
+
+// Routing is judged by round. Two calls in one round are a fan-out, and
+// reporting that as a preference would invent a decision the model never made.
+func TestRoutingIsJudgedByRoundNotEventOrder(t *testing.T) {
+	parallel := []provider.Message{
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "g1", Name: "bash", Arguments: `{"command":"ls"}`},
+			{ID: "c1", Name: "recall", Arguments: `{"query":"retry boundary"}`},
+		}},
+		{Role: provider.RoleTool, ToolCallID: "g1", Name: "bash", Content: "README.md"},
+		toolResult("c1", hitBlock(scorerTarget)),
+	}
+	if got := score(t, parallel, "unclear").Routing; got != routeParallel {
+		t.Errorf("routing = %q for one round holding both, want %q", got, routeParallel)
+	}
+
+	workspaceFirst := []provider.Message{
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "g1", Name: "bash", Arguments: `{"command":"ls"}`},
+		}},
+		{Role: provider.RoleTool, ToolCallID: "g1", Name: "bash", Content: "README.md"},
+		recallCall("c1", `{"query":"retry boundary"}`),
+		toolResult("c1", hitBlock(scorerTarget)),
+	}
+	if got := score(t, workspaceFirst, "unclear").Routing; got != routeWorkspaceFirst {
+		t.Errorf("routing = %q for workspace in an earlier round, want %q", got, routeWorkspaceFirst)
+	}
+
+	memoryFirst := []provider.Message{
+		recallCall("c1", `{"query":"retry boundary"}`),
+		toolResult("c1", hitBlock(scorerTarget)),
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "g1", Name: "bash", Arguments: `{"command":"ls"}`},
+		}},
+		{Role: provider.RoleTool, ToolCallID: "g1", Name: "bash", Content: "README.md"},
+	}
+	if got := score(t, memoryFirst, "unclear").Routing; got != routeMemoryFirst {
+		t.Errorf("routing = %q for recall in an earlier round, want %q", got, routeMemoryFirst)
+	}
+
+	if got := score(t, nil, "no idea").Routing; got != routeNeither {
+		t.Errorf("routing = %q with no tools at all, want %q", got, routeNeither)
 	}
 }

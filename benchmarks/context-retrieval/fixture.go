@@ -60,16 +60,18 @@ func fillerBody(n int) string {
 // builtFixture is one task's history after real folds, plus where its target
 // ended up.
 type builtFixture struct {
-	Session *agent.Session
-	State   agent.CompactionState
-	Target  int
-	Path    string
+	Session  *agent.Session
+	State    agent.CompactionState
+	Target   int
+	Path     string
+	Instance fixtureInstance
 }
 
 // buildFixture plays a task's history through the real agent and folds it at
 // the given arm, writing the session and its context state where the agent
 // itself would.
-func buildFixture(t contextTask, arm ablation.Set, sessionPath string) (builtFixture, error) {
+func buildFixture(f fixtureInstance, arm ablation.Set, sessionPath string) (builtFixture, error) {
+	t := f.Task
 	sess := agent.NewSession("You are a coding agent.")
 	sess.Add(provider.Message{Role: provider.RoleUser, Content: "Work through the transport and scheduler backlog."})
 
@@ -83,7 +85,7 @@ func buildFixture(t contextTask, arm ablation.Set, sessionPath string) (builtFix
 
 	for gen := range fixtureGenerations {
 		if gen == t.PlantAfterGen {
-			at = t.Plant(sess)
+			at = f.plant(sess)
 		}
 		for range 8 {
 			fillerCall(sess, n)
@@ -114,7 +116,7 @@ func buildFixture(t contextTask, arm ablation.Set, sessionPath string) (builtFix
 		return builtFixture{}, fmt.Errorf("%s: target #%d is not inside the folded region (covered %d)",
 			t.ID, at, state.Projection.CoveredCount)
 	}
-	return builtFixture{Session: sess, State: state, Target: at, Path: sessionPath}, nil
+	return builtFixture{Session: sess, State: state, Target: at, Path: sessionPath, Instance: f}, nil
 }
 
 // visibleContext is the model-visible view: the stored projection spliced with

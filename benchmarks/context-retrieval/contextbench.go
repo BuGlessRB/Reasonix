@@ -26,9 +26,17 @@ const (
 	stageAnswerWrong  = "ReadButAnswerWrong" // opened it and still answered wrong
 	stageRecovered    = "Recovered"
 	stageContaminated = "Contaminated"
-	stageCueRead      = "DirectRead"  // read the target from an index address, no search needed
-	stageNoRetrieval  = "NoRetrieval" // answered without touching recall at all
-	toolRecall        = "recall"
+
+	// Routing is judged by model round, not by the linear order of tool events:
+	// two calls in one round are one parallel fan-out, and calling that
+	// "workspace first" would report a choice the model never made.
+	routeMemoryFirst    = "MemoryFirst"
+	routeWorkspaceFirst = "WorkspaceFirst"
+	routeParallel       = "Parallel"
+	routeNeither        = "Neither"
+	stageCueRead        = "DirectRead"  // read the target from an index address, no search needed
+	stageNoRetrieval    = "NoRetrieval" // answered without touching recall at all
+	toolRecall          = "recall"
 )
 
 // searchAttempt is one query the model wrote, and what it got back. Kept per
@@ -101,8 +109,18 @@ type contextMetrics struct {
 	Contaminated bool   `json:"contaminated,omitempty"`
 	LeakedVia    string `json:"leaked_via,omitempty"`
 	LeakedMarker string `json:"leaked_marker,omitempty"`
+	LeakedArgs   string `json:"leaked_args,omitempty"`
+	LeakedOutput string `json:"leaked_output,omitempty"`
+	// EscapeFoundAnswer separates "looked at the workspace" from "found the
+	// answer there": different facts about the same call.
+	EscapeFoundAnswer bool `json:"escape_found_answer,omitempty"`
 
 	CueVisible bool `json:"cue_visible"`
+
+	// Routing is where the model looked first when its memory was missing.
+	Routing          string `json:"routing"`
+	FirstRecallRound int    `json:"first_recall_round"`
+	FirstEscapeRound int    `json:"first_escape_round"`
 }
 
 // hitPosition matches the address recall prints for a search hit. Reading our
@@ -110,7 +128,8 @@ type contextMetrics struct {
 var hitPosition = regexp.MustCompile(`(?m)^#(\d+) `)
 
 // scoreRun reads the messages one turn appended and reports what happened.
-func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cueVisible bool) contextMetrics {
+func scoreRun(msgs []provider.Message, inst fixtureInstance, target int, arm string, cueVisible bool) contextMetrics {
+	t := inst.Task
 	m := contextMetrics{Task: t.ID, Arm: arm, CueVisible: cueVisible}
 	calls := map[string]provider.ToolCall{}
 	pending := map[string]int{}
@@ -128,12 +147,18 @@ func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cu
 					m.UnexpectedWorkTools = append(m.UnexpectedWorkTools, tc.Name)
 				}
 				m.EscapeCalls++
+				if m.FirstEscapeRound == 0 {
+					m.FirstEscapeRound = round
+				}
 				if m.SearchCalls+m.ReadCalls == 0 {
 					m.EscapeBeforeFirstRecall++
 				} else {
 					m.EscapeAfterFirstRecall++
 				}
 				continue
+			}
+			if m.FirstRecallRound == 0 {
+				m.FirstRecallRound = round
 			}
 			query, positions := recallArgs(tc.Arguments)
 			switch {
@@ -178,9 +203,12 @@ func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cu
 		if call.Name != toolRecall {
 			// An answer readable through anything but recall is contamination,
 			// whatever the run went on to score.
-			for _, marker := range t.AnswerMarkers {
-				if len(marker) >= 6 && strings.Contains(msg.Content, marker) {
+			for _, marker := range inst.AnswerMarkers {
+				if len(marker) >= 3 && strings.Contains(msg.Content, marker) {
 					m.Contaminated, m.LeakedVia, m.LeakedMarker = true, call.Name, marker
+					m.EscapeFoundAnswer = true
+					m.LeakedArgs = truncate(call.Arguments, 200)
+					m.LeakedOutput = truncate(msg.Content, 300)
 				}
 			}
 			continue
@@ -207,15 +235,16 @@ func scoreRun(msgs []provider.Message, t contextTask, target int, arm string, cu
 		}
 	}
 	m.RetrievalRounds = m.SearchCalls + m.ReadCalls
-	classifySearches(&m, t)
+	m.Routing = routing(m.FirstRecallRound, m.FirstEscapeRound)
+	classifySearches(&m, inst)
 	return m
 }
 
 // scoreAnswer grades the final text on the task's markers. Nonces, matched
 // exactly: no judge model, and nothing a general answer could satisfy.
-func (m *contextMetrics) scoreAnswer(final string, t contextTask) {
+func (m *contextMetrics) scoreAnswer(final string, inst fixtureInstance) {
 	lower := strings.ToLower(final)
-	for _, marker := range t.AnswerMarkers {
+	for _, marker := range inst.AnswerMarkers {
 		if !strings.Contains(lower, strings.ToLower(marker)) {
 			m.MissingMarkers = append(m.MissingMarkers, marker)
 		}
@@ -297,11 +326,11 @@ type funnel struct {
 	CueReads                                  int
 	SearchCalls, ReadCalls, RecallTokens      int
 	Escapes, EscapeCalls                      int
-	Stages                                    map[string]int
+	Stages, Routes                            map[string]int
 }
 
 func summarize(arm string, runs []contextMetrics) funnel {
-	f := funnel{Arm: arm, Runs: len(runs), Stages: map[string]int{}}
+	f := funnel{Arm: arm, Runs: len(runs), Stages: map[string]int{}, Routes: map[string]int{}}
 	for _, r := range runs {
 		if r.Contaminated {
 			f.Contaminated++
@@ -332,6 +361,7 @@ func summarize(arm string, runs []contextMetrics) funnel {
 		f.ReadCalls += r.ReadCalls
 		f.RecallTokens += r.RecallReturnedTokens
 		f.Stages[r.FailureStage]++
+		f.Routes[r.Routing]++
 	}
 	return f
 }
@@ -359,4 +389,30 @@ func writeJSONLine(w io.Writer, v any) error {
 	}
 	_, err = fmt.Fprintln(w, string(b))
 	return err
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}
+
+// routing says where the model looked first, comparing rounds rather than
+// event order. Same round is a parallel fan-out, not a preference.
+func routing(recallRound, escapeRound int) string {
+	switch {
+	case recallRound == 0 && escapeRound == 0:
+		return routeNeither
+	case recallRound == 0:
+		return routeWorkspaceFirst
+	case escapeRound == 0:
+		return routeMemoryFirst
+	case recallRound < escapeRound:
+		return routeMemoryFirst
+	case escapeRound < recallRound:
+		return routeWorkspaceFirst
+	default:
+		return routeParallel
+	}
 }

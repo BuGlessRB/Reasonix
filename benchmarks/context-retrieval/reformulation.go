@@ -97,12 +97,12 @@ func diffTerms(from, minus map[string]bool) []string {
 // classifySearches labels each attempt and records which of the host probe's
 // terms it left out. The probe is the oracle: it ranks the target first, so a
 // query missing its terms says what the model did not think to ask for.
-func classifySearches(m *contextMetrics, t contextTask) {
-	probe := terms(t.ProbeQuery)
+func classifySearches(m *contextMetrics, inst fixtureInstance) {
+	probe := terms(inst.ProbeQuery)
 	previous := ""
 	for i := range m.Searches {
 		s := &m.Searches[i]
-		s.Reformulation = classifyReformulation(previous, s.Query, t.Prompt)
+		s.Reformulation = classifyReformulation(previous, s.Query, inst.Prompt)
 		have := termSet(s.Query)
 		for _, term := range probe {
 			if !have[term] {

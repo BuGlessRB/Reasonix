@@ -105,13 +105,18 @@ func runCalibrate(tasks []contextTask, root string) int {
 			probe.PlantAfterGen = lead
 			var visibleAt []string
 			for _, scale := range armScales {
-				f, err := buildFixture(probe, armFor(scale, false),
+				inst, ierr := instantiateTask(probe, seededRand(t.ID, scale, "calibrate"))
+				if ierr != nil {
+					fmt.Fprintln(os.Stderr, ierr)
+					return 2
+				}
+				f, err := buildFixture(inst, armFor(scale, false),
 					fmt.Sprintf("%s/calib/%s/%d-%s/session.jsonl", root, t.ID, lead, scale))
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%s gen=%d %s: %v\n", t.ID, lead, scale, err)
 					return 2
 				}
-				if strings.Contains(visibleText(f), t.CueMarker) {
+				if strings.Contains(visibleText(f), inst.CueMarker) {
 					visibleAt = append(visibleAt, scale)
 				}
 			}

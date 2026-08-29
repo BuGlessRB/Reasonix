@@ -70,8 +70,15 @@ func (f finding) String() string { return fmt.Sprintf("%s [%s]: %s", f.Task, f.A
 func checkTask(t contextTask, root string) ([]finding, error) {
 	var out []finding
 	for _, arm := range armsFor(t) {
+		// Deterministic values: a preflight has to reproduce, and a tier
+		// calibration measured against one run's nonces is measured against
+		// nothing.
+		inst, err := instantiateTask(t, seededRand(t.ID, arm.name, "preflight"))
+		if err != nil {
+			return nil, err
+		}
 		dir := filepath.Join(root, t.ID, arm.name)
-		f, err := buildFixture(t, armFor(arm.scale, arm.searchOff), filepath.Join(dir, "session.jsonl"))
+		f, err := buildFixture(inst, armFor(arm.scale, arm.searchOff), filepath.Join(dir, "session.jsonl"))
 		if err != nil {
 			return nil, err
 		}
@@ -79,7 +86,7 @@ func checkTask(t contextTask, root string) ([]finding, error) {
 
 		// The answer must be unreadable in every arm, or the task measures
 		// reading rather than recall.
-		for _, marker := range t.AnswerMarkers {
+		for _, marker := range inst.AnswerMarkers {
 			if len(marker) < 3 {
 				continue // a bare number is not a nonce; the whole set still has to match
 			}
@@ -90,19 +97,19 @@ func checkTask(t contextTask, root string) ([]finding, error) {
 
 		// The corpus has to be findable at all, or a miss in a real run says
 		// nothing about the model.
-		rank, err := probeRank(f, t.ProbeQuery)
+		rank, err := probeRank(f, inst.ProbeQuery)
 		if err != nil {
 			return nil, err
 		}
 		switch {
 		case rank == 0:
-			out = append(out, finding{t.ID, arm.name, fmt.Sprintf("probe query %q does not find the target at all", t.ProbeQuery)})
+			out = append(out, finding{t.ID, arm.name, fmt.Sprintf("probe query %q does not find the target at all", inst.ProbeQuery)})
 		case rank > 5:
-			out = append(out, finding{t.ID, arm.name, fmt.Sprintf("probe query %q ranks the target %d", t.ProbeQuery, rank)})
+			out = append(out, finding{t.ID, arm.name, fmt.Sprintf("probe query %q ranks the target %d", inst.ProbeQuery, rank)})
 		}
 
 		if t.Experiment == experimentIndex {
-			out = append(out, checkCueVisibility(t, arm.scale, arm.name, visible)...)
+			out = append(out, checkCueVisibility(t, inst, arm.scale, arm.name, visible)...)
 		} else if line := indexLineFor(f, f.Target); line != "" {
 			out = append(out, finding{t.ID, arm.name,
 				"a search task is addressed by the fold index, so it measures the index and not search: " + line})
@@ -110,11 +117,11 @@ func checkTask(t contextTask, root string) ([]finding, error) {
 
 		// The projection is what the agent believes. This is what the model is
 		// told, and it is the one that has to hold.
-		req, err := captureRequest(f, armFor(arm.scale, arm.searchOff), t.Prompt)
+		req, err := captureRequest(f, armFor(arm.scale, arm.searchOff), inst.Prompt)
 		if err != nil {
 			return nil, fmt.Errorf("%s [%s]: capture: %w", t.ID, arm.name, err)
 		}
-		out = append(out, checkCapturedRequest(t, arm.name, arm.scale, arm.searchOff, req)...)
+		out = append(out, checkCapturedRequest(t, inst, arm.name, arm.scale, arm.searchOff, req)...)
 	}
 	return out, nil
 }
@@ -123,10 +130,10 @@ func checkTask(t contextTask, root string) ([]finding, error) {
 // the answer unreadable, the cue exactly where its tier says, the recall tool
 // offering only what this arm can do, and no host-side field surviving the
 // boundary.
-func checkCapturedRequest(t contextTask, armName, scale string, searchOff bool, req provider.Request) []finding {
+func checkCapturedRequest(t contextTask, inst fixtureInstance, armName, scale string, searchOff bool, req provider.Request) []finding {
 	var out []finding
-	for _, marker := range t.AnswerMarkers {
-		if len(marker) < 6 {
+	for _, marker := range inst.AnswerMarkers {
+		if len(marker) < 3 {
 			continue // a bare number is not a nonce; the set as a whole still is
 		}
 		for _, at := range findInSurface(req, marker) {
@@ -135,12 +142,12 @@ func checkCapturedRequest(t contextTask, armName, scale string, searchOff bool, 
 	}
 	if t.Experiment == experimentIndex {
 		wantVisible, wantHidden := tierScales(t.CueTier)
-		where := findInSurface(req, t.CueMarker)
+		where := findInSurface(req, inst.CueMarker)
 		switch {
 		case contains(wantVisible, scale) && len(where) == 0:
-			out = append(out, finding{t.ID, armName, fmt.Sprintf("cue %q is not provider-visible; the tier expects it", t.CueMarker)})
+			out = append(out, finding{t.ID, armName, fmt.Sprintf("cue %q is not provider-visible; the tier expects it", inst.CueMarker)})
 		case contains(wantHidden, scale) && len(where) > 0:
-			out = append(out, finding{t.ID, armName, fmt.Sprintf("cue %q is provider-visible at %s: %s", t.CueMarker, where[0], scale)})
+			out = append(out, finding{t.ID, armName, fmt.Sprintf("cue %q is provider-visible at %s: %s", inst.CueMarker, where[0], scale)})
 		}
 	}
 
@@ -185,14 +192,14 @@ func boundaryFindings(t contextTask, armName string, req provider.Request) []fin
 // checkCueVisibility holds an index task to its tier: the cue is addressed at
 // the scales the matrix names and at no others. A policy change that moves it
 // fails here rather than turning two arms into one experiment.
-func checkCueVisibility(t contextTask, scale, armName, visible string) []finding {
+func checkCueVisibility(t contextTask, inst fixtureInstance, scale, armName, visible string) []finding {
 	wantVisible, wantHidden := tierScales(t.CueTier)
-	has := strings.Contains(visible, t.CueMarker)
+	has := strings.Contains(visible, inst.CueMarker)
 	switch {
 	case contains(wantVisible, scale) && !has:
-		return []finding{{t.ID, armName, fmt.Sprintf("cue %q should be addressed at %s and is not", t.CueMarker, scale)}}
+		return []finding{{t.ID, armName, fmt.Sprintf("cue %q should be addressed at %s and is not", inst.CueMarker, scale)}}
 	case contains(wantHidden, scale) && has:
-		return []finding{{t.ID, armName, fmt.Sprintf("cue %q should be gone at %s and is not", t.CueMarker, scale)}}
+		return []finding{{t.ID, armName, fmt.Sprintf("cue %q should be gone at %s and is not", inst.CueMarker, scale)}}
 	}
 	return nil
 }
