@@ -349,6 +349,7 @@ type AskQuestion struct {
 	ID      string      `json:"id"`
 	Header  string      `json:"header,omitempty"`
 	Prompt  string      `json:"prompt" externalizable:"true"`
+	Reason  string      `json:"reason,omitempty"`
 	Options []AskOption `json:"options"`
 	Multi   bool        `json:"multi,omitempty"`
 }
@@ -628,7 +629,7 @@ func ToWireAsk(a event.Ask) *Ask {
 		for j, o := range q.Options {
 			opts[j] = AskOption{Label: o.Label, Description: o.Description}
 		}
-		qs[i] = AskQuestion{ID: q.ID, Header: q.Header, Prompt: q.Prompt, Options: opts, Multi: q.Multi}
+		qs[i] = AskQuestion{ID: q.ID, Header: q.Header, Prompt: q.Prompt, Reason: q.Reason, Options: opts, Multi: q.Multi}
 	}
 	return &Ask{ID: a.ID, Questions: qs}
 }

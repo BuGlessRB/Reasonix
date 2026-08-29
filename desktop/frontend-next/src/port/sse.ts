@@ -1,3 +1,4 @@
+import { PLAN_ACTIONS, type PlanAction } from "./session";
 import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type ChangeDiff, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
@@ -556,6 +557,10 @@ export class SsePort extends SseTheme implements AgentPort {
   }
   // Approve(id, allow, session, persist) — "always" is a session grant, not a
   // persisted config change.
+  planDecision(id: string, action: PlanAction) {
+    return this.post("/plan-decision", { id, action: PLAN_ACTIONS[action] });
+  }
+
   approve(id: string, verdict: ApprovalVerdict) {
     return this.post("/approve", {
       id,

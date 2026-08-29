@@ -521,6 +521,15 @@ export function Composer({ port, status, running, focus, onSubmit, onChanged, on
           </span>
           <span className="lb">{t("计划")}</span>
         </button>
+        {/* The toggle keeps its legacy meaning: it follows `plan`, which the
+            kernel turns off the moment a plan is approved. The lifecycle is a
+            separate reading — an approved plan is still running, and saying so
+            here is not the same as offering to turn planning back on. */}
+        {status?.planPhase === "executing" && (
+          <span className="mode plain" data-plan-phase="executing" title={t("正在执行已批准的计划")}>
+            <span className="lb">{t("执行计划中")}</span>
+          </span>
+        )}
         <Picker
           className={apv === "yolo" ? "mode plain danger" : "mode plain"}
           place="bottom"

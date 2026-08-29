@@ -29,9 +29,40 @@ const (
 // not expose the phase or epoch behind that identity — authority arithmetic is
 // the kernel's, not the UI's.
 type Decision struct {
-	ID        string              `json:"id"`
-	Kind      DecisionKind        `json:"kind"`
-	Questions []event.AskQuestion `json:"questions,omitempty"`
+	ID        string             `json:"id"`
+	Kind      DecisionKind       `json:"kind"`
+	Questions []DecisionQuestion `json:"questions,omitempty"`
+}
+
+// DecisionQuestion is one question in the shape the frontend already reads asks
+// in. The event type has no json tags of its own, and a projection that spelled
+// its fields differently from the event carrying the same question would make
+// one renderer into two.
+type DecisionQuestion struct {
+	ID      string           `json:"id"`
+	Header  string           `json:"header,omitempty"`
+	Prompt  string           `json:"prompt"`
+	Reason  string           `json:"reason,omitempty"`
+	Options []DecisionOption `json:"options"`
+	Multi   bool             `json:"multi,omitempty"`
+}
+
+// DecisionOption is one choice on a projected question.
+type DecisionOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+func projectQuestions(qs []event.AskQuestion) []DecisionQuestion {
+	out := make([]DecisionQuestion, len(qs))
+	for i, q := range qs {
+		opts := make([]DecisionOption, len(q.Options))
+		for j, o := range q.Options {
+			opts[j] = DecisionOption{Label: o.Label, Description: o.Description}
+		}
+		out[i] = DecisionQuestion{ID: q.ID, Header: q.Header, Prompt: q.Prompt, Reason: q.Reason, Options: opts, Multi: q.Multi}
+	}
+	return out
 }
 
 // Decisions snapshots what waits on the user, derived from the owning
@@ -62,7 +93,7 @@ func (a *approvalManager) projectDecisions() []Decision {
 		// A queued ask is included: it is already blocking the turn, and this is
 		// a snapshot a frontend pulls rather than an event it might replay. The
 		// queued flag exists to stop replaying a question nobody ever saw.
-		out = append(out, Decision{ID: id, Kind: DecisionAsk, Questions: pending.questions})
+		out = append(out, Decision{ID: id, Kind: DecisionAsk, Questions: projectQuestions(pending.questions)})
 	}
 	sortDecisions(out)
 	return out

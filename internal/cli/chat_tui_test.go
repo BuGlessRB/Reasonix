@@ -1078,37 +1078,44 @@ func TestApprovalChoicesPreserveDecisionSemantics(t *testing.T) {
 	}
 }
 
-func TestPlanApprovalActionsSynchronizeTUIAndControllerMode(t *testing.T) {
-	tests := []struct {
-		name     string
-		key      tea.KeyPressMsg
-		wantPlan bool
+// Each key names one transition. The TUI no longer sets plan mode alongside
+// the answer — the kernel moves the lifecycle, and the flag is read back — so
+// what this pins is the mapping, plus that answering a card the kernel is not
+// holding changes nothing at all.
+func TestPlanApprovalKeysNameTheirTransition(t *testing.T) {
+	for _, tt := range []struct {
+		name          string
+		allow, exitPl bool
+		want          control.PlanDecisionAction
 	}{
-		{name: "start execution", key: tea.KeyPressMsg{Code: '1'}},
-		{name: "revise plan", key: tea.KeyPressMsg{Code: '2'}, wantPlan: true},
-		{name: "exit without executing", key: tea.KeyPressMsg{Code: '3'}},
-		{name: "legacy n keeps planning", key: tea.KeyPressMsg{Code: 'n'}, wantPlan: true},
-		{name: "escape keeps planning", key: tea.KeyPressMsg{Code: tea.KeyEscape}, wantPlan: true},
+		{name: "start execution", allow: true, want: control.PlanDecisionStartExecution},
+		{name: "exit without executing", exitPl: true, want: control.PlanDecisionExitPlan},
+		{name: "revise keeps planning", want: control.PlanDecisionRevisePlan},
+	} {
+		if got := planDecisionFor(tt.allow, tt.exitPl); got != tt.want {
+			t.Errorf("%s: %q, want %q", tt.name, got, tt.want)
+		}
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := control.New(control.Options{})
-			t.Cleanup(ctrl.Close)
-			m := newTestChatTUI()
-			m.ctrl = ctrl
-			m.planMode = true
-			m.ctrl.SetPlanMode(true)
-			m.pendingApproval = &event.Approval{ID: "plan", Tool: planApprovalTool}
+}
 
-			next, _ := m.handleApprovalKey(tt.key)
-			m = next.(chatTUI)
-			if m.pendingApproval != nil {
-				t.Fatal("plan approval was not resolved")
-			}
-			if m.planMode != tt.wantPlan || m.ctrl.PlanMode() != tt.wantPlan {
-				t.Fatalf("plan mode = tui %v/controller %v, want %v", m.planMode, m.ctrl.PlanMode(), tt.wantPlan)
-			}
-		})
+func TestAnsweringAPlanCardTheKernelDoesNotHoldChangesNothing(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	t.Cleanup(ctrl.Close)
+	m := newTestChatTUI()
+	m.ctrl = ctrl
+	m.planMode = true
+	m.ctrl.SetPlanMode(true)
+	m.pendingApproval = &event.Approval{ID: "not-pending", Tool: planApprovalTool}
+
+	next, _ := m.handleApprovalKey(tea.KeyPressMsg{Code: '1'})
+	m = next.(chatTUI)
+	if m.pendingApproval != nil {
+		t.Fatal("the card stayed open")
+	}
+	// The kernel holds no such decision, so nothing moved — and the TUI reads
+	// the flag back rather than asserting one of its own.
+	if !m.planMode || !m.ctrl.PlanMode() {
+		t.Fatalf("plan mode = tui %v/controller %v, want both still planning", m.planMode, m.ctrl.PlanMode())
 	}
 }
 

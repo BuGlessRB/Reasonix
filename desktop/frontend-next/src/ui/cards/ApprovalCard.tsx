@@ -7,7 +7,8 @@ import type { ApprovalVerdict } from "../../port/port";
 // key their plan UI on it. `kind` says the same thing on newer kernels.
 const PLAN_TOOL = "exit_plan_mode";
 
-export type PlanAction = "start" | "revise" | "exit";
+import type { PlanAction } from "../../port/session";
+export type { PlanAction };
 
 interface Props {
   item: Extract<Item, { t: "approval" }>;

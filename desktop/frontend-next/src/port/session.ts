@@ -72,6 +72,50 @@ export type ApprovalVerdict = "once" | "always" | "deny";
 
 // Shape of GET /status as internal/serve writes it. Anything the UI wants that
 // is not here has to be added on the Go side, not invented in the client.
+// PlanAction is what a plan card can answer. The three are distinct kernel
+// transitions, not an allow/deny pair: revising keeps planning, exiting leaves
+// the workflow, and only starting carries the plan into execution.
+export type PlanAction = "start" | "revise" | "exit";
+
+// PLAN_ACTIONS maps them to the names the kernel answers to.
+export const PLAN_ACTIONS: Record<PlanAction, string> = {
+  start: "start_execution",
+  revise: "revise_plan",
+  exit: "exit_plan",
+};
+
+// PlanPhase is where the run sits in the plan lifecycle. Absent from a status
+// means outside it; there is deliberately no "inactive" string to render.
+export type PlanPhase = "planning" | "awaiting_approval" | "executing";
+
+// AskReason is why only the user can answer. The two values are the whole set:
+// permission and plan approval are different decisions with different owners.
+export type AskReason = "user_decision" | "missing_value";
+
+export interface DecisionOption {
+  label: string;
+  description?: string;
+}
+
+export interface DecisionQuestion {
+  id: string;
+  header?: string;
+  prompt: string;
+  reason?: AskReason;
+  options: DecisionOption[];
+  multi?: boolean;
+}
+
+// A Decision is something waiting on the user, named by the id its owner
+// issued. The id goes back untouched — the frontend never describes the state
+// it thinks the run is in, and never resolves a decision itself: it disappears
+// when the next projection no longer carries it.
+export interface Decision {
+  id: string;
+  kind: "plan_approval" | "ask";
+  questions?: DecisionQuestion[];
+}
+
 export interface SessionStatus {
   // Whether the current model reads images at all, and whether that answer was
   // ever given: a relay forwards models nothing here has a label for, and an
@@ -80,7 +124,12 @@ export interface SessionStatus {
   visionDeclared?: boolean;
   label: string;
   running: boolean;
+  // plan drives the composer toggle and nothing else: it is the legacy
+  // projection, false once a plan is approved. planPhase is the lifecycle, and
+  // it is absent when the run is outside the workflow entirely.
   plan: boolean;
+  planPhase?: PlanPhase;
+  decisions?: Decision[];
   preset: Preset;
   effort?: string;
   modelRef?: string;

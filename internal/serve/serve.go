@@ -634,18 +634,6 @@ func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) plan(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		On bool `json:"on"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		badBody(w)
-		return
-	}
-	s.ctl().SetPlanMode(body.On)
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func (s *Server) compact(w http.ResponseWriter, r *http.Request) {
 	if err := s.ctl().Compact(r.Context(), ""); err != nil {
 		// A declined fold is a verdict, not a fault: the candidate was no smaller

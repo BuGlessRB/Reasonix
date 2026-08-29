@@ -1,3 +1,4 @@
+import type { PlanAction } from "./session";
 import { HttpError } from "./port";
 import type { AccountState, AgentPort, ChangeDiff, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
 import type { WireEvent } from "./wire";
@@ -711,6 +712,8 @@ export class MockPort extends MockTheme implements AgentPort {
     this.log = [];
     this.at = 0;
   }
+
+  async planDecision(_id: string, _action: PlanAction) {}
 
   async approve(_id: string, verdict: ApprovalVerdict) {
     if (verdict === "deny") {

@@ -3293,9 +3293,8 @@ func (m chatTUI) handleApprovalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.pendingApproval = nil
 			return m, nil
 		}
-		if m.pendingApproval.Tool == planApprovalTool && (allow || choice.exitPlan) {
-			m.planMode = false
-			m.ctrl.SetPlanMode(false)
+		if m.pendingApproval.Tool == planApprovalTool {
+			return m.answerPlanCard(allow, choice.exitPlan)
 		}
 		m.ctrl.Approve(m.pendingApproval.ID, allow, session, persist)
 		m.pendingApproval = nil

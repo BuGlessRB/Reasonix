@@ -13,6 +13,7 @@ import { t } from "./index";
 // catalogue keyed by codes.
 const SAID: Record<string, string> = {
   // ── 忙：不是出错，是「现在不行」 ─────────────────────────────────
+  "plan.decision_stale": "这个决定已经不是当前状态了——计划在你回答前已经变了",
   "busy.switch_model": "任务正在运行，请先停止再切换模型",
   "busy.change_effort": "任务正在运行，请先停止再调整推理强度",
   "busy.change_workspace": "任务正在运行，请先停止再切换工作区",

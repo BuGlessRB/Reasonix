@@ -32,6 +32,7 @@ func (s *Server) routes() http.Handler {
 	s.registerWelcomeRoutes(mux)
 	mux.HandleFunc("POST /cancel", s.cancel)
 	mux.HandleFunc("POST /approve", s.approve)
+	mux.HandleFunc("POST /plan-decision", s.planDecision)
 	mux.HandleFunc("POST /plan", s.plan)
 	mux.HandleFunc("POST /preset", s.preset)
 	mux.HandleFunc("POST /model", s.model)

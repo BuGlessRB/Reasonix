@@ -1,3 +1,4 @@
+import type { AskReason } from "../../port/session";
 import { useState } from "react";
 import { t } from "../../i18n";
 import { Sym } from "../Sym";
@@ -64,7 +65,7 @@ export function AskCard({ item, onAnswer }: Props) {
       </div>
       <div className="c">
         <div className="hl">
-          <span className="nm">Ask</span>
+          <span className="nm">{askHeading(qs)}</span>
           <span className="arg">{qs.length} 个问题</span>
         </div>
         <div className="out">
@@ -160,4 +161,26 @@ export function AskCard({ item, onAnswer }: Props) {
       </div>
     </div>
   );
+}
+
+// reasonLabel is exhaustive on purpose. A third reason would be a decision with
+// a different owner — permission and plan approval are answered elsewhere — and
+// adding one must fail this compile rather than quietly render as a question.
+function reasonLabel(reason: AskReason): string {
+  switch (reason) {
+    case "user_decision":
+      return "需要你决定";
+    case "missing_value":
+      return "需要你补充信息";
+    default: {
+      const unhandled: never = reason;
+      return unhandled;
+    }
+  }
+}
+
+// A batch may mix the two; naming both is more honest than picking one.
+function askHeading(qs: { reason?: AskReason }[]): string {
+  const kinds = new Set<AskReason>(qs.map((q) => q.reason ?? "user_decision"));
+  return [...kinds].map(reasonLabel).join(" · ");
 }

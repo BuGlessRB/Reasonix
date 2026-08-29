@@ -34,3 +34,19 @@ export function prompted(s: SessionState, doing: string, next: Item): SessionSta
   items[at] = { ...next, id: s.items[at].id };
   return { ...s, doing, items };
 }
+
+// The host's projection is the authority on what is still waiting. A card this
+// window holds open that the projection no longer lists was resolved elsewhere
+// — another window, a revise, a cancelled turn. Seal it so it cannot be
+// answered twice, and leave it on screen: deleting it loses the record.
+export function sealResolvedElsewhere(s: SessionState, open: string[]): SessionState {
+  const waiting = new Set(open);
+  let changed = false;
+  const items = s.items.map((it) => {
+    const key = promptKey(it);
+    if (key === undefined || !promptOpen(it) || waiting.has(key)) return it;
+    changed = true;
+    return it.t === "ask" ? { ...it, answered: [] } : { ...it, verdict: "stale" };
+  });
+  return changed ? { ...s, items } : s;
+}

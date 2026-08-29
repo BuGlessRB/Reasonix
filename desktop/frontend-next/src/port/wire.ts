@@ -180,6 +180,9 @@ export interface AskQuestion {
   id: string;
   header?: string;
   prompt: string;
+  // Why only the user can answer. Two values, and a renderer that switches on
+  // them exhaustively: a third would be a decision with a different owner.
+  reason?: "user_decision" | "missing_value";
   options: AskOption[];
   multi?: boolean;
 }

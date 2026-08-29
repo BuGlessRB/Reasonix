@@ -78,7 +78,6 @@ type TurnControl interface {
 // posture (ask/auto/yolo). It mirrors the approvalManager surface.
 type Approvals interface {
 	Approve(id string, allow, session, persist bool)
-	ResolvePlanDecision(id string, action PlanDecisionAction) error
 	// ResolveRecovery answers an Auto Guard card: continue|continue_task|revise. Revise
 	// refuses the mutation and steers feedback.
 	ResolveRecovery(id string, action agent.RecoveryAction, feedback string) error
@@ -95,6 +94,14 @@ type Approvals interface {
 	Bypass() bool
 	SetBypass(on bool)
 	SetMode(plan, autoApproveTools bool)
+}
+
+// PlanDecisions answers the plan card. It is apart from Approvals because a
+// plan decision is a workflow transition rather than a permission answer, and
+// only a frontend that draws the three outcomes drives it — the chat gateway
+// and the editor bridge have no screen for revising a plan.
+type PlanDecisions interface {
+	ResolvePlanDecision(id string, action PlanDecisionAction) error
 }
 
 // Goals covers the active-goal FSM and plan mode.
@@ -321,6 +328,7 @@ type SessionAPI interface {
 	Lifecycle
 	TurnControl
 	Approvals
+	PlanDecisions
 	Goals
 	SessionHistory
 	MemoryControl
