@@ -157,6 +157,11 @@ func (a *Agent) rejectStaleAuthority(ctx context.Context) (toolOutcome, bool) {
 	if origin.Epoch == current.Epoch {
 		return toolOutcome{}, false
 	}
+	// Only a widening transition can hand earlier work capability it lacked.
+	// Narrowing leaves it to the phase gate, which judges the call itself.
+	if origin.Phase.AdmitsSideEffects() || !current.Phase.AdmitsSideEffects() {
+		return toolOutcome{}, false
+	}
 	return toolOutcome{
 		output: fmt.Sprintf("blocked: this call was produced while the run was %s, and the workflow has since moved to %s. "+
 			"Nothing from the earlier phase carries over — take the current state as your starting point and call again if it still applies.",

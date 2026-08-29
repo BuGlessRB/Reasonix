@@ -692,3 +692,35 @@ func TestStaleAuthorityCallsAreRefusedAcrossATransition(t *testing.T) {
 		t.Fatalf("fresh call executed %d times, want 1", executions)
 	}
 }
+
+// Turning Plan on mid-turn narrows what may run; it does not invalidate the
+// turn. Refusing the work already in flight would throw away a round every time
+// someone touched the toggle — and buy nothing, because what actually holds a
+// side effect during planning is the phase gate, which judges each call on its
+// own terms. A reader survives; a writer is refused by the gate, not as stale.
+func TestEnteringThePlanWorkflowDoesNotInvalidateWorkInFlight(t *testing.T) {
+	var reads, writes int32
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "read_file", readOnly: true, calls: &reads})
+	reg.Add(fakeTool{name: "write_file", writesPaths: true, calls: &writes})
+	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
+
+	born := a.PlanState()
+	a.SetPlanMode(true)
+	ctx := planmode.WithAuthority(context.Background(), born)
+
+	if out := a.executeOne(ctx, &a.turn, provider.ToolCall{Name: "read_file", Arguments: `{"path":"a.go"}`}); out.blocked {
+		t.Fatalf("an in-flight reader was thrown away by the toggle: %+v", out)
+	}
+	if reads != 1 {
+		t.Fatalf("reader ran %d times, want 1", reads)
+	}
+
+	out := a.executeOne(ctx, &a.turn, provider.ToolCall{Name: "write_file", Arguments: `{"path":"a.go","content":"x"}`})
+	if !out.blocked || writes != 0 {
+		t.Fatalf("an in-flight writer ran during planning: %+v writes=%d", out, writes)
+	}
+	if !strings.Contains(out.errMsg, "planning") || strings.Contains(out.errMsg, "stale") {
+		t.Errorf("the writer was refused as stale rather than by the phase: %q", out.errMsg)
+	}
+}

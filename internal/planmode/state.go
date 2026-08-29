@@ -40,6 +40,11 @@ type State struct {
 // Active reports whether the run is inside the workflow at all.
 func (s State) Active() bool { return s.Phase != Inactive }
 
+// AdmitsSideEffects reports whether a phase lets a call change state outside the
+// session. Executing does because the user approved exactly that; Inactive does
+// because there is no workflow holding anything back.
+func (p Phase) AdmitsSideEffects() bool { return p == Inactive || p == Executing }
+
 // Action names a lifecycle move. These are the only ways the state changes, so
 // a caller cannot invent a path from Planning straight to Executing.
 type Action uint8
