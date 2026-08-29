@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -165,4 +166,29 @@ func sealFixture(sessionPath string) {
 // itself.
 func unsealFixture(sessionPath string) {
 	_ = os.Chmod(filepath.Dir(sessionPath), 0o700)
+}
+
+// answerOnDisk reports any readable file under dir holding a current-run
+// answer. Two named files were sealed because two leaks were found in them;
+// this scans the directory, so a path that moves — an autosave, a recovery
+// tombstone, a future sidecar — fails here instead of on a paid run.
+func answerOnDisk(dir string, markers []string) (string, string) {
+	var atPath, found string
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || atPath != "" {
+			return nil //nolint:nilerr // an unreadable entry is not a leak
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return nil
+		}
+		for _, marker := range markers {
+			if len(marker) >= 6 && strings.Contains(string(body), marker) {
+				atPath, found = path, marker
+				return filepath.SkipAll
+			}
+		}
+		return nil
+	})
+	return atPath, found
 }

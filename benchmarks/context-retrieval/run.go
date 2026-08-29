@@ -138,6 +138,10 @@ func runOne(p provider.Provider, t contextTask, arm ablation.Set, armName, root 
 	// From here the transcript lives only in memory. On disk it is the answer.
 	sealFixture(f.Path)
 	defer unsealFixture(f.Path)
+	dir := filepath.Dir(f.Path)
+	if at, marker := answerOnDisk(dir, inst.AnswerMarkers); at != "" {
+		return contextMetrics{}, fmt.Errorf("%s [%s]: %q is readable at %s before the run", t.ID, armName, marker, at)
+	}
 
 	before := len(sess.Snapshot())
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
@@ -147,6 +151,10 @@ func runOne(p provider.Provider, t contextTask, arm ablation.Set, armName, root 
 		prompt = promptOverride[0]
 	}
 	runErr := a.Run(ctx, prompt)
+
+	if at, marker := answerOnDisk(dir, inst.AnswerMarkers); at != "" {
+		return contextMetrics{}, fmt.Errorf("%s [%s]: %q was written to %s during the run", t.ID, armName, marker, at)
+	}
 
 	appended := sess.Snapshot()[before:]
 	m := scoreRun(appended, inst, f.Target, armName, cueVisible)

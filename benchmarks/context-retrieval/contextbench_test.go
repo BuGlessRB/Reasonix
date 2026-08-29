@@ -284,3 +284,26 @@ func TestRoutingIsJudgedByRoundNotEventOrder(t *testing.T) {
 		t.Errorf("routing = %q with no tools at all, want %q", got, routeNeither)
 	}
 }
+
+// Markers matching proves the right fact appears somewhere. An answer that
+// hedges between two candidates contains it and has not submitted it.
+func TestScorerFlagsAnAnswerThatNamesTwoCandidates(t *testing.T) {
+	inst := fixtureInstance{
+		Task:          contextTask{ID: "t", Vars: []varSpec{code("marker", "fence")}},
+		AnswerMarkers: []string{"fence-qmwnv"},
+	}
+	m := scoreRun(nil, inst, 0, "arm", false)
+	m.scoreAnswer("It was fence-qmwnv, though it may have been fence-abcde.", inst)
+	if !m.AnswerRecovered {
+		t.Error("the marker is present; recovery should still read true")
+	}
+	if !m.AnswerAmbiguous || m.AmbiguousVar != "marker" {
+		t.Errorf("ambiguity not flagged: %v %q", m.AnswerAmbiguous, m.AmbiguousVar)
+	}
+
+	clean := scoreRun(nil, inst, 0, "arm", false)
+	clean.scoreAnswer("The marker was fence-qmwnv.", inst)
+	if clean.AnswerAmbiguous {
+		t.Error("a single candidate was called ambiguous")
+	}
+}

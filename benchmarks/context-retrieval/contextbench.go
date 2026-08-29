@@ -89,7 +89,12 @@ type contextMetrics struct {
 	// returned: not a query problem, a result-to-read problem.
 	PostHitSearches int `json:"post_hit_searches"`
 
-	AnswerRecovered bool     `json:"answer_recovered"`
+	AnswerRecovered bool `json:"answer_recovered"`
+	// AnswerAmbiguous marks an answer that offered more than one candidate for
+	// a value. Markers matching proves the right fact appears; it does not
+	// prove it was submitted as the answer. Recorded, never acted on.
+	AnswerAmbiguous bool     `json:"answer_ambiguous,omitempty"`
+	AmbiguousVar    string   `json:"ambiguous_var,omitempty"`
 	MissingMarkers  []string `json:"missing_markers,omitempty"`
 	// FinalAnswer is kept bounded so a surprising run can be read back. A
 	// metric nobody can audit is a claim, not a measurement.
@@ -250,6 +255,7 @@ func (m *contextMetrics) scoreAnswer(final string, inst fixtureInstance) {
 		}
 	}
 	m.AnswerRecovered = len(m.MissingMarkers) == 0
+	m.AnswerAmbiguous, m.AmbiguousVar = ambiguousAnswer(final, inst)
 	m.FailureStage = m.stage()
 	if len(final) > 1200 {
 		final = final[:1200] + "…"
@@ -321,7 +327,7 @@ func containsString(list []string, want string) bool { return slices.Contains(li
 type funnel struct {
 	Arm                                       string
 	Runs                                      int
-	Scored, Contaminated                      int
+	Scored, Contaminated, Errored             int
 	Searched, TargetHit, TargetRead, Answered int
 	CueReads                                  int
 	SearchCalls, ReadCalls, RecallTokens      int
@@ -334,6 +340,11 @@ func summarize(arm string, runs []contextMetrics) funnel {
 	for _, r := range runs {
 		if r.Contaminated {
 			f.Contaminated++
+			f.Stages[r.FailureStage]++
+			continue
+		}
+		if r.FailureStage == "RunError" {
+			f.Errored++
 			f.Stages[r.FailureStage]++
 			continue
 		}
@@ -361,7 +372,9 @@ func summarize(arm string, runs []contextMetrics) funnel {
 		f.ReadCalls += r.ReadCalls
 		f.RecallTokens += r.RecallReturnedTokens
 		f.Stages[r.FailureStage]++
-		f.Routes[r.Routing]++
+		if r.FailureStage != "RunError" {
+			f.Routes[r.Routing]++
+		}
 	}
 	return f
 }
@@ -378,6 +391,9 @@ func (f funnel) line() string {
 		per(f.SearchCalls), per(f.RecallTokens), per(f.EscapeCalls))
 	if f.Contaminated > 0 {
 		line += fmt.Sprintf("  CONTAMINATED=%d", f.Contaminated)
+	}
+	if f.Errored > 0 {
+		line += fmt.Sprintf("  ERRORED=%d", f.Errored)
 	}
 	return line
 }
@@ -415,4 +431,24 @@ func routing(recallRound, escapeRound int) string {
 	default:
 		return routeParallel
 	}
+}
+
+// ambiguousAnswer reports an answer naming more than one candidate of a
+// codename's shape. Only codenames are checked: they carry a stem this run
+// declared, so two distinct "fence-…" values in one answer is one answer too
+// many. Numbers have no such shape and are left alone.
+func ambiguousAnswer(final string, inst fixtureInstance) (bool, string) {
+	for _, spec := range inst.Task.Vars {
+		if spec.Kind != varCodename {
+			continue
+		}
+		seen := map[string]bool{}
+		for _, match := range regexp.MustCompile(regexp.QuoteMeta(spec.Word)+`-[a-z0-9]{3,}`).FindAllString(final, -1) {
+			seen[match] = true
+		}
+		if len(seen) > 1 {
+			return true, spec.Name
+		}
+	}
+	return false, ""
 }
