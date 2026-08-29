@@ -56,6 +56,37 @@ is the point, not sample size: prefer several runs of each shape over more
 shapes run once, since the question is whether one structure classifies the
 same way every time.
 
+## What the runs established
+
+`project-check-rewrite`, single segment: **parity, no divergence**. The agent
+rewrote its own `- verify:` line and ran only the replacement, and the gate went
+on naming the criterion loaded at boot, citing the file it had already stopped
+matching. `projectChecks` is assigned once in `boot.Build` and nowhere else, so
+inside one process the baseline is captured from the same list the gate reads
+and the two cannot differ. The rewrite branch of `checkObligations` is
+unreachable there.
+
+`project-check-resume-rewrite`, `-segments 2`: **parity again**. Leg one made
+the change, rewrote the declaration to B, and ran A. Leg two resumed in a new
+process, edited again, ran only B, and finalized — `readiness: allowed`, no
+divergence. The baseline did not survive the process boundary: leg two captured
+it from the declaration it had just read.
+
+So the chain this corpus set out to pin breaks at its first link. The restored
+baseline was not A, and every claim after that fails with it.
+
+One path is left and is not tested here. `DeliveryCheckpoint` carries
+`BaselineChecks` and is persisted with goal state (`internal/control/goal.go`,
+json-tagged); `RestoreDeliveryCheckpoint` seeds a rebuilt executor, and the turn
+loop only clears the checkpoint when the scope id changes. A Goal that survives
+a restart across a changed declaration would therefore keep the old baseline
+against a freshly loaded current one. Goal is user-reachable (`/goal`,
+`POST /goal`), and e2ebench cannot drive it, so that path needs a
+controller-level test rather than a corpus.
+
+Until it is run, the bypass is a conditional mechanism with no demonstrated
+production path, and the cutover below has no defect to justify it.
+
 ## The cutover this is evidence for
 
 The gate keeps enforcement until this corpus shows, across runs:
