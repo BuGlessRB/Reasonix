@@ -115,7 +115,7 @@ func (a *Agent) CompletionReport() (evidence.CompletionReport, []string, bool) {
 const completeSubtaskContract = `<completion-contract>
 End this sub-task by calling complete_subtask exactly once, as your final tool call.
 State the acceptance criteria you were held to and attach, for each, the command you
-ran or the paths you changed. The host checks every citation against what it observed
+ran or the paths you changed or inspected. The host checks every citation against what it observed
 you actually do and lowers any claim it cannot back, so cite real work only and put
 anything you assumed rather than verified in unresolved.
 </completion-contract>`

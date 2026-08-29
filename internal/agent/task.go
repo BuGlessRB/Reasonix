@@ -688,9 +688,8 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 	}
 	var subReg *tool.Registry
 	if spec.Grant.ReadOnly {
-		subReg = ReadOnlySubagentToolRegistryForDepthWithRuntime(t.parentReg, toolNames, childDepth, t.maxDepth(), t.capabilityRuntime)
-		if subReg.Len() == 0 && !spec.Grant.AllowNoTools {
-			return "", fmt.Errorf("no read-only tools available for this sub-agent")
+		if subReg, err = t.readOnlySubRegistry(&spec, toolNames, childDepth); err != nil {
+			return "", err
 		}
 	} else {
 		subReg = t.buildSubReg(toolNames, childDepth)
@@ -1490,7 +1489,7 @@ func (t *TaskTool) runReadOnlySubSession(ctx context.Context, prompt string, sub
 	// Capture the pristine task before host framing is prepended: delivery
 	// intent classification must judge the task, not the wrapper.
 	opts.ClassifierTaskText = prompt
-	prompt = subagentImageNote(ctx) + t.withWorkspaceContext(upstreamNote(ctx)+prompt)
+	prompt = subagentImageNote(ctx) + t.withWorkspaceContext(upstreamNote(ctx)+prompt) + "\n\n" + completeSubtaskContract
 	ctx = WithUserImages(ctx, SubagentImageCandidates(ctx))
 	return RunReadOnlySubAgentWithSession(ctx, prov, subReg, sess, prompt, opts, sink)
 }

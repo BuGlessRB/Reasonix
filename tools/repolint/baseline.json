@@ -3,12 +3,12 @@
     "banner": 0,
     "claude-dialect": 1,
     "commented-code": 0,
-    "complexity": 1529,
+    "complexity": 1528,
     "error-text": 12,
     "essay": 3248,
-    "file-size": 41970,
+    "file-size": 41969,
     "frontend-parity": 150,
-    "function-size": 6639,
+    "function-size": 6638,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
@@ -295,10 +295,10 @@
       "file-size": 149
     },
     "internal/agent/task.go": {
-      "complexity": 23,
+      "complexity": 22,
       "essay": 50,
-      "file-size": 1169,
-      "function-size": 102,
+      "file-size": 1168,
+      "function-size": 101,
       "orphan": 1
     },
     "internal/agent/task_test.go": {
