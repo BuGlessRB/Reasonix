@@ -122,6 +122,11 @@ type contextMetrics struct {
 
 	CueVisible bool `json:"cue_visible"`
 
+	// CueDirectRead: the cue was addressed, the first memory action was a
+	// positions read, and it covered the target. Crediting any positions call
+	// would hand the index a search's work.
+	CueDirectRead bool `json:"cue_direct_read"`
+
 	// Routing is where the model looked first when its memory was missing.
 	Routing          string `json:"routing"`
 	FirstRecallRound int    `json:"first_recall_round"`
@@ -244,6 +249,7 @@ func scoreRun(msgs []provider.Message, inst fixtureInstance, target int, arm str
 	}
 	m.RetrievalRounds = m.SearchCalls + m.ReadCalls
 	m.Routing = routing(m.FirstRecallRound, m.FirstEscapeRound)
+	m.CueDirectRead = cueVisible && m.RecallReadWithoutSearch
 	classifySearches(&m, inst)
 	return m
 }

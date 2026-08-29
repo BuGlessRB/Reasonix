@@ -307,3 +307,31 @@ func TestScorerFlagsAnAnswerThatNamesTwoCandidates(t *testing.T) {
 		t.Error("a single candidate was called ambiguous")
 	}
 }
+
+// The index arm's claim is narrow: the cue was addressed, the first memory
+// action was a positions read, and it covered the target. A positions call
+// after a search located the target credits the index for the search's work.
+func TestCueDirectReadRequiresTheCueAndTheFirstAction(t *testing.T) {
+	direct := []provider.Message{
+		recallCall("c1", fmt.Sprintf(`{"positions":[%d]}`, scorerTarget)),
+		toolResult("c1", "#42\nthe token is cobalt-lark-17"),
+	}
+	m := scoreRun(direct, scorerTask(), scorerTarget, "arm", true)
+	if !m.CueDirectRead {
+		t.Error("a first-action read with the cue visible was not credited")
+	}
+
+	// Same read, but no cue was on screen to give the address.
+	if scoreRun(direct, scorerTask(), scorerTarget, "arm", false).CueDirectRead {
+		t.Error("a read was credited to a cue that was not visible")
+	}
+
+	// Same read, but a search found the address first.
+	afterSearch := append([]provider.Message{
+		recallCall("c0", `{"query":"retry boundary"}`),
+		toolResult("c0", hitBlock(scorerTarget)),
+	}, direct...)
+	if scoreRun(afterSearch, scorerTask(), scorerTarget, "arm", true).CueDirectRead {
+		t.Error("a read after a search was credited to the index")
+	}
+}

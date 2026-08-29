@@ -202,6 +202,94 @@ func isolateWorkspace() (func(), error) {
 	}, nil
 }
 
+// runBoundaries runs only the pair each index task is built for: the narrowest
+// scale still addressing its cue, and the next one down. Each pair moves the
+// affordance and nothing else, where default-vs-off moves the whole index.
+
+// The two arms get separate nonces: reusing one would leave the first arm's
+// answer in a host-readable history for the second to find.
+func runBoundaries(root string) int {
+	root, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	restore, ierr := isolateWorkspace()
+	if ierr != nil {
+		fmt.Fprintln(os.Stderr, "isolate workspace:", ierr)
+		return 2
+	}
+	defer restore()
+	p, perr := realProvider()
+	if perr != nil {
+		fmt.Fprintln(os.Stderr, perr)
+		return 2
+	}
+
+	var all []contextMetrics
+	var cueSide, noCueSide []contextMetrics
+	for _, t := range indexTasks() {
+		cue, noCue := boundaryPair(t.CueTier)
+		for _, side := range []struct {
+			scale string
+			has   bool
+		}{{cue, true}, {noCue, false}} {
+			name := "index-" + side.scale
+			m, err := runOne(p, t, armFor(side.scale, false), name, root, side.has, false)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s [%s]: %v\n", t.ID, name, err)
+			}
+			all = append(all, m)
+			if side.has {
+				cueSide = append(cueSide, m)
+			} else {
+				noCueSide = append(noCueSide, m)
+			}
+			fmt.Printf("%-24s %-14s cue=%-3v %-14s search=%d read=%d direct=%-5v recall-tok=%-5d escape=%d\n",
+				t.ID, name, side.has, m.FailureStage, m.SearchCalls, m.ReadCalls,
+				m.CueDirectRead, m.RecallReturnedTokens, m.EscapeCalls)
+		}
+	}
+	reportDeltas(cueSide, noCueSide)
+	return writeResults(root, all)
+}
+
+// reportDeltas is the paired reading: each task against itself, then pooled.
+func reportDeltas(cueSide, noCueSide []contextMetrics) {
+	fmt.Printf("\n## Paired deltas (cue present − cue absent)\n")
+	fmt.Printf("  %-24s %-10s %-10s %-9s %-11s %s\n",
+		"task", "recovery", "directread", "searches", "recall-tok", "escapes")
+	for i := range cueSide {
+		if i >= len(noCueSide) {
+			break
+		}
+		a, b := cueSide[i], noCueSide[i]
+		fmt.Printf("  %-24s %-10s %-10s %-9d %-11d %d\n", a.Task,
+			deltaBool(a.AnswerRecovered, b.AnswerRecovered),
+			deltaBool(a.CueDirectRead, b.CueDirectRead),
+			a.SearchCalls-b.SearchCalls,
+			a.RecallReturnedTokens-b.RecallReturnedTokens,
+			a.EscapeCalls-b.EscapeCalls)
+	}
+	fmt.Println("\n## Pooled")
+	fmt.Println(" ", summarize("cue-present", cueSide).line())
+	fmt.Println(" ", summarize("cue-absent", noCueSide).line())
+	fmt.Println("\n## Where each side looked first")
+	fmt.Printf("  %-14s %s\n", "cue-present", countsLine(summarize("x", cueSide).Routes))
+	fmt.Printf("  %-14s %s\n", "cue-absent", countsLine(summarize("x", noCueSide).Routes))
+}
+
+func deltaBool(a, b bool) string {
+	switch {
+	case a == b:
+		return "same"
+	case a:
+		return "+cue"
+	default:
+		return "-cue"
+	}
+}
+
 // runExperiment runs one experiment's tasks across its arms. A dry run drives
 // the same pipeline with a scripted provider: it proves fixture, run, scoring
 // and report hold together before any of it is paid for.
