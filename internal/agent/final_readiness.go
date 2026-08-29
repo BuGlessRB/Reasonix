@@ -26,20 +26,18 @@ type finalReadinessCheck struct {
 	missingVerification       int
 	missingReview             int
 	missingSignoff            int
-	missingActionEvidence     int
 	missingMutation           int
 	missingCapabilities       int
 }
 
 func (c finalReadinessCheck) progressSignature() string {
-	return fmt.Sprintf("%d/%d/%d/%d/%d/%d/%d/%d/%d/%d\x00%s",
+	return fmt.Sprintf("%d/%d/%d/%d/%d/%d/%d/%d/%d\x00%s",
 		c.missingProjectChecks,
 		c.incompleteTodos,
 		c.missingAcceptanceCriteria,
 		c.missingVerification,
 		c.missingReview,
 		c.missingSignoff,
-		c.missingActionEvidence,
 		c.missingMutation,
 		c.missingCapabilities,
 		boolInt(c.applies),
@@ -48,7 +46,7 @@ func (c finalReadinessCheck) progressSignature() string {
 }
 
 func (c finalReadinessCheck) missingIDs() []string {
-	missing := make([]string, 0, 9)
+	missing := make([]string, 0, 8)
 	add := func(id string, count int) {
 		if count > 0 {
 			missing = append(missing, id)
@@ -60,7 +58,6 @@ func (c finalReadinessCheck) missingIDs() []string {
 	add("verification", c.missingVerification)
 	add("review", c.missingReview)
 	add("signoff", c.missingSignoff)
-	add("action", c.missingActionEvidence)
 	add("mutation", c.missingMutation)
 	add("capability", c.missingCapabilities)
 	return missing
@@ -72,12 +69,10 @@ func (c finalReadinessCheck) audit(result evidence.ReadinessAuditResult, recover
 		Recovered:                 recovered,
 		MissingProjectChecks:      c.missingProjectChecks,
 		IncompleteTodos:           c.incompleteTodos,
-		CommandMismatchMissing:    c.missingProjectChecks,
 		MissingAcceptanceCriteria: c.missingAcceptanceCriteria,
 		MissingVerification:       c.missingVerification,
 		MissingReview:             c.missingReview,
 		MissingSignoff:            c.missingSignoff,
-		MissingActionEvidence:     c.missingActionEvidence,
 		MissingMutation:           c.missingMutation,
 		MissingCapabilities:       c.missingCapabilities,
 	}

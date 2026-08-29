@@ -123,9 +123,8 @@ func TestSyncForwardsReadinessAuditReceipts(t *testing.T) {
 	sink := Sync(rec)
 
 	RecordReadinessAudit(sink, evidence.ReadinessAudit{
-		Result:                 evidence.ReadinessBlocked,
-		MissingProjectChecks:   1,
-		CommandMismatchMissing: 1,
+		Result:               evidence.ReadinessBlocked,
+		MissingProjectChecks: 1,
 	})
 
 	if len(rec.events) != 1 {

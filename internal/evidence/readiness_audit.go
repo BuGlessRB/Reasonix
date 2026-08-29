@@ -17,12 +17,10 @@ type ReadinessAudit struct {
 	Recovered                 bool
 	MissingProjectChecks      int
 	IncompleteTodos           int
-	CommandMismatchMissing    int
 	MissingAcceptanceCriteria int
 	MissingVerification       int
 	MissingReview             int
 	MissingSignoff            int
-	MissingActionEvidence     int
 	MissingMutation           int
 	MissingCapabilities       int
 }

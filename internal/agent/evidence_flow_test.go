@@ -572,7 +572,7 @@ func TestFinalReadinessAuditRecordsBlockAndRecovery(t *testing.T) {
 		t.Fatalf("readiness audit events = %d, want 1: %+v", len(sink.events), sink.events)
 	}
 	blocked := sink.events[0]
-	if blocked.Result != evidence.ReadinessErrored || blocked.MissingProjectChecks != 1 || blocked.CommandMismatchMissing != 1 {
+	if blocked.Result != evidence.ReadinessErrored || blocked.MissingProjectChecks != 1 {
 		t.Fatalf("blocked audit = %+v, want missing project check command", blocked)
 	}
 	if err := a.Run(ctx, "finish"); err != nil {

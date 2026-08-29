@@ -44,12 +44,10 @@ func TestMetricsSinkAccumulatesReadinessAudit(t *testing.T) {
 		Result:                    evidence.ReadinessBlocked,
 		MissingProjectChecks:      2,
 		IncompleteTodos:           3,
-		CommandMismatchMissing:    2,
 		MissingAcceptanceCriteria: 1,
 		MissingVerification:       1,
 		MissingReview:             1,
 		MissingSignoff:            1,
-		MissingActionEvidence:     1,
 		MissingMutation:           1,
 	})
 	s.RecordReadinessAudit(evidence.ReadinessAudit{
@@ -81,15 +79,12 @@ func TestMetricsSinkAccumulatesReadinessAudit(t *testing.T) {
 	if s.m.ReadinessIncompleteTodos != 3 {
 		t.Fatalf("incomplete todos = %d, want 3", s.m.ReadinessIncompleteTodos)
 	}
-	if s.m.ReadinessCommandMismatches != 2 {
-		t.Fatalf("command mismatches = %d, want 2", s.m.ReadinessCommandMismatches)
-	}
 	if s.m.ReadinessMissingAcceptance != 1 || s.m.ReadinessMissingVerification != 1 || s.m.ReadinessMissingReview != 1 || s.m.ReadinessMissingSignoff != 1 {
 		t.Fatalf("delivery readiness misses = acceptance %d verification %d review %d signoff %d, want 1/1/1/1",
 			s.m.ReadinessMissingAcceptance, s.m.ReadinessMissingVerification, s.m.ReadinessMissingReview, s.m.ReadinessMissingSignoff)
 	}
-	if s.m.ReadinessMissingActionEvidence != 1 || s.m.ReadinessMissingMutation != 1 {
-		t.Fatalf("delivery work misses = action evidence %d mutation %d, want 1/1", s.m.ReadinessMissingActionEvidence, s.m.ReadinessMissingMutation)
+	if s.m.ReadinessMissingMutation != 1 {
+		t.Fatalf("delivery work misses = mutation %d, want 1", s.m.ReadinessMissingMutation)
 	}
 }
 
@@ -149,25 +144,23 @@ func TestMetricsSinkAccountsToolCallsAndRetries(t *testing.T) {
 func TestWriteMetricsIncludesReadinessFields(t *testing.T) {
 	path := filepath.Join(testenv.TempDir(t), "metrics.json")
 	if err := writeMetrics(path, RunMetrics{
-		PromptTokens:                   10,
-		CompletionTokens:               3,
-		CacheHitTokens:                 7,
-		CacheMissTokens:                3,
-		Steps:                          2,
-		ReadinessChecks:                1,
-		ReadinessAllowed:               1,
-		ReadinessBlocks:                0,
-		ReadinessRecoveries:            1,
-		ReadinessErrors:                0,
-		ReadinessMissingProjectChecks:  0,
-		ReadinessIncompleteTodos:       0,
-		ReadinessCommandMismatches:     0,
-		ReadinessMissingAcceptance:     0,
-		ReadinessMissingVerification:   0,
-		ReadinessMissingReview:         0,
-		ReadinessMissingSignoff:        0,
-		ReadinessMissingActionEvidence: 0,
-		ReadinessMissingMutation:       0,
+		PromptTokens:                  10,
+		CompletionTokens:              3,
+		CacheHitTokens:                7,
+		CacheMissTokens:               3,
+		Steps:                         2,
+		ReadinessChecks:               1,
+		ReadinessAllowed:              1,
+		ReadinessBlocks:               0,
+		ReadinessRecoveries:           1,
+		ReadinessErrors:               0,
+		ReadinessMissingProjectChecks: 0,
+		ReadinessIncompleteTodos:      0,
+		ReadinessMissingAcceptance:    0,
+		ReadinessMissingVerification:  0,
+		ReadinessMissingReview:        0,
+		ReadinessMissingSignoff:       0,
+		ReadinessMissingMutation:      0,
 	}); err != nil {
 		t.Fatalf("writeMetrics: %v", err)
 	}
@@ -188,12 +181,10 @@ func TestWriteMetricsIncludesReadinessFields(t *testing.T) {
 		"readiness_errors",
 		"readiness_missing_project_checks",
 		"readiness_incomplete_todos",
-		"readiness_command_mismatches",
 		"readiness_missing_acceptance_criteria",
 		"readiness_missing_verification",
 		"readiness_missing_review",
 		"readiness_missing_signoff",
-		"readiness_missing_action_evidence",
 		"readiness_missing_mutation",
 	} {
 		if _, ok := got[key]; !ok {

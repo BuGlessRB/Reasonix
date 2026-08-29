@@ -59,24 +59,22 @@ type RunMetrics struct {
 	// CompletionVerdict and CompletionGapKinds are the turn's own verdict on
 	// itself. Outcome answers only whether the run errored, so without these a
 	// reader is told "success" by a file the same run warned a human about.
-	CompletionVerdict              string   `json:"completion_verdict,omitempty"`
-	CompletionGapKinds             []string `json:"completion_gap_kinds,omitempty"`
-	Estimated                      bool     `json:"estimated,omitempty"`
-	Compactions                    int      `json:"compactions"`
-	ReadinessChecks                int      `json:"readiness_checks"`
-	ReadinessAllowed               int      `json:"readiness_allowed"`
-	ReadinessBlocks                int      `json:"readiness_blocks"`
-	ReadinessRecoveries            int      `json:"readiness_recoveries"`
-	ReadinessErrors                int      `json:"readiness_errors"`
-	ReadinessMissingProjectChecks  int      `json:"readiness_missing_project_checks"`
-	ReadinessIncompleteTodos       int      `json:"readiness_incomplete_todos"`
-	ReadinessCommandMismatches     int      `json:"readiness_command_mismatches"`
-	ReadinessMissingAcceptance     int      `json:"readiness_missing_acceptance_criteria"`
-	ReadinessMissingVerification   int      `json:"readiness_missing_verification"`
-	ReadinessMissingReview         int      `json:"readiness_missing_review"`
-	ReadinessMissingSignoff        int      `json:"readiness_missing_signoff"`
-	ReadinessMissingActionEvidence int      `json:"readiness_missing_action_evidence"`
-	ReadinessMissingMutation       int      `json:"readiness_missing_mutation"`
+	CompletionVerdict             string   `json:"completion_verdict,omitempty"`
+	CompletionGapKinds            []string `json:"completion_gap_kinds,omitempty"`
+	Estimated                     bool     `json:"estimated,omitempty"`
+	Compactions                   int      `json:"compactions"`
+	ReadinessChecks               int      `json:"readiness_checks"`
+	ReadinessAllowed              int      `json:"readiness_allowed"`
+	ReadinessBlocks               int      `json:"readiness_blocks"`
+	ReadinessRecoveries           int      `json:"readiness_recoveries"`
+	ReadinessErrors               int      `json:"readiness_errors"`
+	ReadinessMissingProjectChecks int      `json:"readiness_missing_project_checks"`
+	ReadinessIncompleteTodos      int      `json:"readiness_incomplete_todos"`
+	ReadinessMissingAcceptance    int      `json:"readiness_missing_acceptance_criteria"`
+	ReadinessMissingVerification  int      `json:"readiness_missing_verification"`
+	ReadinessMissingReview        int      `json:"readiness_missing_review"`
+	ReadinessMissingSignoff       int      `json:"readiness_missing_signoff"`
+	ReadinessMissingMutation      int      `json:"readiness_missing_mutation"`
 	// Delegation counters let one model be compared across orchestration arms
 	// without scraping prose. Child tool calls are already split out as
 	// SubagentToolCalls below; parent calls are ToolCalls minus that.
@@ -488,12 +486,10 @@ func (s *metricsSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
 	}
 	s.m.ReadinessMissingProjectChecks += a.MissingProjectChecks
 	s.m.ReadinessIncompleteTodos += a.IncompleteTodos
-	s.m.ReadinessCommandMismatches += a.CommandMismatchMissing
 	s.m.ReadinessMissingAcceptance += a.MissingAcceptanceCriteria
 	s.m.ReadinessMissingVerification += a.MissingVerification
 	s.m.ReadinessMissingReview += a.MissingReview
 	s.m.ReadinessMissingSignoff += a.MissingSignoff
-	s.m.ReadinessMissingActionEvidence += a.MissingActionEvidence
 	s.m.ReadinessMissingMutation += a.MissingMutation
 }
 

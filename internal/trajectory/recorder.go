@@ -132,12 +132,10 @@ type ReadinessAudit struct {
 	Recovered                 bool   `json:"recovered,omitempty"`
 	MissingProjectChecks      int    `json:"missing_project_checks,omitempty"`
 	IncompleteTodos           int    `json:"incomplete_todos,omitempty"`
-	CommandMismatchMissing    int    `json:"command_mismatch_missing,omitempty"`
 	MissingAcceptanceCriteria int    `json:"missing_acceptance_criteria,omitempty"`
 	MissingVerification       int    `json:"missing_verification,omitempty"`
 	MissingReview             int    `json:"missing_review,omitempty"`
 	MissingSignoff            int    `json:"missing_signoff,omitempty"`
-	MissingActionEvidence     int    `json:"missing_action_evidence,omitempty"`
 	MissingMutation           int    `json:"missing_mutation,omitempty"`
 	MissingCapabilities       int    `json:"missing_capabilities,omitempty"`
 }
@@ -286,12 +284,10 @@ func (r *Recorder) RecordReadinessAudit(a evidence.ReadinessAudit) {
 		Recovered:                 a.Recovered,
 		MissingProjectChecks:      a.MissingProjectChecks,
 		IncompleteTodos:           a.IncompleteTodos,
-		CommandMismatchMissing:    a.CommandMismatchMissing,
 		MissingAcceptanceCriteria: a.MissingAcceptanceCriteria,
 		MissingVerification:       a.MissingVerification,
 		MissingReview:             a.MissingReview,
 		MissingSignoff:            a.MissingSignoff,
-		MissingActionEvidence:     a.MissingActionEvidence,
 		MissingMutation:           a.MissingMutation,
 		MissingCapabilities:       a.MissingCapabilities,
 	}})
