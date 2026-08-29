@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -317,11 +318,17 @@ func runExperiment(experiment, root string, dry bool, tasks []contextTask) int {
 	byArm := map[string][]contextMetrics{}
 	var all []contextMetrics
 
+	if experiment == experimentIndex {
+		fmt.Print(fingerprint(dry))
+	}
 	for _, t := range tasks {
 		if t.Experiment != experiment {
 			continue
 		}
-		for _, arm := range armsFor(t) {
+		// Arms are shuffled inside each task block. Running six defaults, then
+		// six halves, would make provider drift collinear with the axis under
+		// test: a bad minute would land entirely on one arm.
+		for _, arm := range shuffledArms(t) {
 			cueVisible := t.Experiment == experimentIndex && cueExpectedVisible(t, arm.scale)
 			m, err := runOne(p, t, armFor(arm.scale, arm.searchOff), arm.name, root, cueVisible, dry)
 			if err != nil {
@@ -335,6 +342,9 @@ func runExperiment(experiment, root string, dry bool, tasks []contextTask) int {
 		}
 	}
 	reportFunnels(byArm)
+	if experiment == experimentIndex {
+		fmt.Print(reportDoseResponse(all))
+	}
 	fmt.Print(auditQueries(all).report())
 	fmt.Print(queryLines(all))
 	if experiment == experimentIndex {
@@ -432,4 +442,29 @@ func reportBoundaries(all []contextMetrics) {
 	fmt.Println("\n## Pooled across boundaries")
 	fmt.Println(" ", summarize("cue-present", cueSide).line())
 	fmt.Println(" ", summarize("cue-absent", noCueSide).line())
+}
+
+// shuffledArms permutes a task's arms deterministically, so the order is
+// reproducible and still uncorrelated with the axis being measured.
+func shuffledArms(t contextTask) []experimentArm {
+	arms := armsFor(t)
+	rng := seededRand(t.ID, "arm-order")
+	rng.Shuffle(len(arms), func(i, j int) { arms[i], arms[j] = arms[j], arms[i] })
+	return arms
+}
+
+// fingerprint records what produced a batch. Not a gate — but batch effects
+// have reversed three conclusions in this experiment already, and a table with
+// no provenance cannot be compared with the next one.
+func fingerprint(dry bool) string {
+	model, endpoint := runModel, runBaseURL
+	if dry {
+		model, endpoint = "scripted", "none"
+	}
+	commit := "unknown"
+	if out, err := exec.Command("git", "rev-parse", "--short", "HEAD").Output(); err == nil {
+		commit = strings.TrimSpace(string(out))
+	}
+	return fmt.Sprintf("## Batch\n  model=%s endpoint=%s window=%d generations=%d commit=%s started=%s\n",
+		model, endpoint, fixtureWindow, fixtureGenerations, commit, time.Now().UTC().Format(time.RFC3339))
 }
