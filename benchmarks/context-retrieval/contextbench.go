@@ -66,6 +66,11 @@ type contextMetrics struct {
 	SearchHits       int `json:"search_hits"`
 	TargetSearchHits int `json:"target_search_hits"`
 	FirstTargetRank  int `json:"first_target_rank"` // 0 = never returned
+	// FirstHitCoverage: how much of the answer the first hit handed over.
+	// rank=1 with coverage 1/3 is a window too short to answer with, not a
+	// model that would not stop.
+	FirstHitCoverage int `json:"first_hit_coverage"`
+	AnswerValues     int `json:"answer_values"`
 
 	ReadCalls    int  `json:"read_calls"`
 	TargetRead   bool `json:"target_read"`
@@ -325,6 +330,7 @@ func (s *runScorer) observeResult(msg provider.Message) {
 	m.TargetSearchHits++
 	if !s.sawTargetHit {
 		m.TargetFirstSeenRound = s.round
+		m.FirstHitCoverage = answerCoverage(msg.Content, s.inst.AnswerMarkers)
 	}
 	s.sawTargetHit = true
 	if m.FirstTargetRank == 0 {
@@ -348,6 +354,7 @@ func (s *runScorer) finish(cueVisible bool) contextMetrics {
 	if m.FirstSufficientRound > 0 {
 		m.RoundsAfterSufficient = s.round - m.FirstSufficientRound
 	}
+	m.AnswerValues = len(s.inst.AnswerMarkers)
 	m.StoppingClass = stoppingClass(m)
 	classifySearches(&m, s.inst)
 	return m

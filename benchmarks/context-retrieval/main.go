@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "preflight", "calibrate | preflight | adversarial | run-search | run-boundary | run-index")
+	mode := flag.String("mode", "preflight", "calibrate | preflight | snippet | adversarial | run-search | run-boundary | run-index")
 	work := flag.String("work", "", "directory for built fixtures (default: a temp dir)")
 	only := flag.String("task", "", "limit to one task id")
 	dry := flag.Bool("dry", false, "run modes: drive the pipeline with a scripted provider instead of paying for one")
@@ -57,6 +57,8 @@ func main() {
 		os.Exit(runExperiment(experimentSearch, root, *dry, tasks))
 	case "run-boundary":
 		os.Exit(runBoundaries(root))
+	case "snippet":
+		os.Exit(runSnippetAudit(root, 100))
 	case "adversarial":
 		os.Exit(runAdversarial(root))
 	case "run-index":
