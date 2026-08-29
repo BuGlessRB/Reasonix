@@ -155,11 +155,22 @@ func visibleText(f builtFixture) string {
 // one did. The agent has already loaded the session and its sidecar by the time
 // this runs; a failed autosave afterwards costs the benchmark nothing.
 func sealFixture(sessionPath string) {
-	_ = os.Remove(sessionPath)
-	_ = os.Remove(agent.ContextStatePath(sessionPath))
-	// Deny the directory as well, so an autosave cannot recreate the file with
-	// the same content the removal just took away.
-	_ = os.Chmod(filepath.Dir(sessionPath), 0o500)
+	// Every file, not two named ones: the session writes an event log and a
+	// context sidecar beside the transcript, and naming them is how the next
+	// one gets missed. It already did — session.events.jsonl carried the answer
+	// after the other two were sealed.
+	dir := filepath.Dir(sessionPath)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			_ = os.Remove(filepath.Join(dir, e.Name()))
+		}
+	}
+	// Deny the directory too, so an autosave cannot recreate what was removed.
+	_ = os.Chmod(dir, 0o500)
 }
 
 // unsealFixture restores the directory so the harness can clean up after
