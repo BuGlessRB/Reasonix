@@ -42,6 +42,14 @@
               "question": {
                 "description": "The full question to ask.",
                 "type": "string"
+              },
+              "reason": {
+                "description": "Why only the user can answer: user_decision when they must pick between real alternatives, missing_value when the request never supplied something you need. Nothing else belongs here.",
+                "enum": [
+                  "user_decision",
+                  "missing_value"
+                ],
+                "type": "string"
               }
             },
             "required": [

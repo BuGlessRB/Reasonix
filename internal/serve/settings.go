@@ -9,6 +9,7 @@ import (
 	"reasonix/internal/agentpreset"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/planmode"
 	"reasonix/internal/provider"
 )
 
@@ -177,6 +178,15 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"cacheHit":         hit,
 		"cacheMiss":        miss,
 	}
+	// Additive: plan_phase absent means outside the workflow, so a client that
+	// reads it can say "executing an approved plan" while one that reads only
+	// `plan` keeps the behaviour it always had.
+	if v, ok := s.ctl().(decisionViewer); ok {
+		sess["decisions"] = v.Decisions()
+		if phase := v.PlanPhase(); phase != planmode.Inactive {
+			sess["plan_phase"] = phase.String()
+		}
+	}
 	if u := s.ctl().LastUsage(); u != nil {
 		sess["lastUsage"] = u
 	}
@@ -265,4 +275,13 @@ func betterModelRoute(a modelEntry, ar modelRoute, b modelEntry, br modelRoute) 
 		return a.Default
 	}
 	return ar.solo && !br.solo
+}
+
+// decisionViewer is the projection surface: what waits on the user, and where
+// the run sits in the plan lifecycle. Reading it changes nothing. It is an
+// optional capability rather than a port method because only this frontend
+// renders it today.
+type decisionViewer interface {
+	PlanPhase() planmode.Phase
+	Decisions() []control.Decision
 }

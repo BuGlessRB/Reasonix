@@ -347,12 +347,21 @@ type AskQuestion struct {
 	ID      string // stable per-question id, so answers correlate back
 	Header  string // short label (the tab title)
 	Prompt  string // the question text
+	Reason  string // AskReasonUserDecision or AskReasonMissingValue
 	Options []AskOption
 	Multi   bool // allow selecting more than one option
 }
 
 // Ask carries an AskRequest: a batch of questions and the ID that correlates the
 // controller's AnswerQuestion(ID, …) reply.
+// AskReason names why only the user can answer a question. These two are the
+// only legal values: permission, plan approval, and the agent's own uncertainty
+// are answered by other subsystems and never become a variant here.
+const (
+	AskReasonUserDecision = "user_decision"
+	AskReasonMissingValue = "missing_value"
+)
+
 type Ask struct {
 	ID        string
 	Questions []AskQuestion

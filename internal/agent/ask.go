@@ -51,6 +51,7 @@ func (*AskTool) Schema() json.RawMessage {
             "required":["label"]
           }
         },
+        "reason":{"type":"string","enum":["user_decision","missing_value"],"description":"Why only the user can answer: user_decision when they must pick between real alternatives, missing_value when the request never supplied something you need. Nothing else belongs here."},
         "multiSelect":{"type":"boolean","description":"Allow selecting more than one option."}
       },
       "required":["question","header","options"]
@@ -74,6 +75,7 @@ func (*AskTool) Execute(ctx context.Context, args json.RawMessage) (string, erro
 		Questions []struct {
 			Header      string `json:"header"`
 			Question    string `json:"question"`
+			Reason      string `json:"reason"`
 			MultiSelect bool   `json:"multiSelect"`
 			Options     []struct {
 				Label       string `json:"label"`
@@ -111,6 +113,7 @@ func (*AskTool) Execute(ctx context.Context, args json.RawMessage) (string, erro
 			ID:      fmt.Sprintf("q%d", i+1),
 			Header:  strings.TrimSpace(q.Header),
 			Prompt:  question,
+			Reason:  askReason(q.Reason),
 			Options: opts,
 			Multi:   q.MultiSelect,
 		})
@@ -167,4 +170,14 @@ func formatAnswers(qs []event.AskQuestion, answers []event.AskAnswer) string {
 		fmt.Fprintf(&b, "- %s: %s\n", label, strings.Join(sel, ", "))
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// askReason normalises the model's answer to the two the host recognises. An
+// unstated or unknown reason reads as a decision, which is the reading that
+// keeps a question in front of the user rather than quietly reclassifying it.
+func askReason(raw string) string {
+	if strings.TrimSpace(raw) == event.AskReasonMissingValue {
+		return event.AskReasonMissingValue
+	}
+	return event.AskReasonUserDecision
 }
