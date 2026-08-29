@@ -50,6 +50,14 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   sentinel the wrapping preserves; `error-text` fails a new match against an
   error message, following it one hop into a local because storing the text
   first is what the direct form turns into.
+- A metric is its definition, not its name. Before a number becomes a finding,
+  state what it counts, from which anchor, over which population, and what it
+  excludes. Three readings in one study died in that gap: a command of unknown
+  extent read as a proven write, the latest report's adjudication read as every
+  report's, and a syntactically accepted call read as a closed one. Each time a
+  convenient proxy had been left standing in for the state it was named after,
+  and each time the mechanism story built on it was wrong. A number without
+  those four lines is an observation, not a result.
 - A wire type the desktop re-declares by hand is held to the kernel's by
   `wire-parity`, both directions: a field one side sends and the other cannot
   read fails, and so does one it reads that nothing sends. The two are compiled

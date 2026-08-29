@@ -34,6 +34,30 @@ benchmarks/
     └── run/                       # state dir written by seed/resume (default)
 ```
 
+## Semantic contract for a metric
+
+A number reaches a report only with these four lines written down, because a
+metric is its definition and not its name:
+
+```text
+Metric:        ToolsAfterClosed
+Anchor:        the host's first adjudication whose verdict is closed
+Population:    judged child runs (expected to report, not killed by the provider)
+Excludes:      needs_work reports, malformed reports, parent-level recovery
+Reads as:      ordinary child work after a host-declared terminal closure
+```
+
+The subagent-handoff study lost three mechanism explanations to a missing
+contract: a command whose extent the host could not establish was counted as a
+proven write, one child's latest adjudication was read as every report's, and a
+syntactically accepted call was read as a closed one. Each was a convenient
+proxy left standing in for the state the metric was named after, and each
+produced a confident, wrong story about what the model was doing.
+
+Watch for the five substitutions that caused them: unknown read as true, latest
+read as all, accepted read as closed, attempted read as judged, and not
+evaluated read as false.
+
 ## Task corpus stratification
 
 The suite is stratified by real coding-agent workload classes, not toy-task
