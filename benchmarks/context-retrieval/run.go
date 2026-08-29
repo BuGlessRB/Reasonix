@@ -135,6 +135,9 @@ func runOne(p provider.Provider, t contextTask, arm ablation.Set, armName, root 
 		SessionPath: f.Path, KeepPolicy: agent.KeepErrors, Ablation: arm,
 	}, event.Discard)
 	a.LoadProjectionSidecar(f.Path)
+	// From here the transcript lives only in memory. On disk it is the answer.
+	sealFixture(f.Path)
+	defer unsealFixture(f.Path)
 
 	before := len(sess.Snapshot())
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)

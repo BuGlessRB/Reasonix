@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"reasonix/internal/ablation"
@@ -144,4 +146,23 @@ func visibleText(f builtFixture) string {
 		}
 	}
 	return b.String()
+}
+
+// sealFixture removes the fixture from disk once the agent holds it in memory.
+// The canonical transcript is the answer, and the sandbox mounts the host
+// read-only by design — so a model that finds the path reads the answer, which
+// one did. The agent has already loaded the session and its sidecar by the time
+// this runs; a failed autosave afterwards costs the benchmark nothing.
+func sealFixture(sessionPath string) {
+	_ = os.Remove(sessionPath)
+	_ = os.Remove(agent.ContextStatePath(sessionPath))
+	// Deny the directory as well, so an autosave cannot recreate the file with
+	// the same content the removal just took away.
+	_ = os.Chmod(filepath.Dir(sessionPath), 0o500)
+}
+
+// unsealFixture restores the directory so the harness can clean up after
+// itself.
+func unsealFixture(sessionPath string) {
+	_ = os.Chmod(filepath.Dir(sessionPath), 0o700)
 }
