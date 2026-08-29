@@ -749,9 +749,9 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 			defer mutationObserver.UnregisterWriter(recoveryTaskID)
 		}
 		if spec.Grant.ReadOnly {
-			return t.runReadOnlySubSession(withUpstream(runCtx, spec.Context.Upstream), spec.Task.Objective, subReg, sink, maxSteps, prov, pricing, ctxWin, run.Session, childDepth, recoveryTaskID, usageModelRef, mutationObserver)
+			return t.runReadOnlySubSession(withUpstream(runCtx, spec.Context.Upstream), spec.Task.Objective, subReg, sink, maxSteps, prov, pricing, ctxWin, run.Session, childDepth, recoveryTaskID, usageModelRef, mutationObserver, "read_only_"+spec.Worker.Kind)
 		}
-		return t.runSubSession(withUpstream(WithSubagentWriteClaim(runCtx, spec.Grant.WritePaths), spec.Context.Upstream), spec.Task.Objective, subReg, sink, maxSteps, prov, pricing, ctxWin, run.Session, childDepth, recoveryTaskID, usageModelRef, mutationObserver)
+		return t.runSubSession(withUpstream(WithSubagentWriteClaim(runCtx, spec.Grant.WritePaths), spec.Context.Upstream), spec.Task.Objective, subReg, sink, maxSteps, prov, pricing, ctxWin, run.Session, childDepth, recoveryTaskID, usageModelRef, mutationObserver, spec.Worker.Kind)
 	}
 
 	if spec.Sched.RunInBackground {
@@ -1470,27 +1470,23 @@ func (t *TaskTool) resolveSubSessionRuntime(modelRef, effort string) (provider.P
 	return prov, pricing, ctxWin, nil
 }
 
-func (t *TaskTool) runSubSession(ctx context.Context, prompt string, subReg *tool.Registry, sink event.Sink, maxSteps int, prov provider.Provider, pricing *provider.Pricing, ctxWin int, sess *Session, childDepth int, recoveryTaskID, modelRef string, mutationObserver *checkpoint.MutationObserver) (string, error) {
+func (t *TaskTool) runSubSession(ctx context.Context, prompt string, subReg *tool.Registry, sink event.Sink, maxSteps int, prov provider.Provider, pricing *provider.Pricing, ctxWin int, sess *Session, childDepth int, recoveryTaskID, modelRef string, mutationObserver *checkpoint.MutationObserver, entrance string) (string, error) {
 	opts := t.subagentOptions(ctx, maxSteps, pricing, ctxWin, childDepth, recoveryTaskID, mutationObserver)
 	opts.ModelRef = modelRef
 	// Capture the pristine task before host framing is prepended: delivery
 	// intent classification must judge the task, not the wrapper.
 	opts.ClassifierTaskText = prompt
 	prompt = subagentImageNote(ctx) + t.withWorkspaceContext(upstreamNote(ctx)+prompt) + "\n\n" + completeSubtaskContract
-	// The child provider owns the final vision decision. Text-only providers
+	opts.ExpectCompletionReport, opts.HandoffEntrance = true, entrance
+	// Child provider owns the final vision decision. Text-only providers
 	// retain the attachment metadata but omit image parts during serialization.
 	ctx = WithUserImages(ctx, SubagentImageCandidates(ctx))
 	return RunSubAgentWithSession(ctx, prov, subReg, sess, prompt, opts, sink)
 }
 
-func (t *TaskTool) runReadOnlySubSession(ctx context.Context, prompt string, subReg *tool.Registry, sink event.Sink, maxSteps int, prov provider.Provider, pricing *provider.Pricing, ctxWin int, sess *Session, childDepth int, recoveryTaskID, modelRef string, mutationObserver *checkpoint.MutationObserver) (string, error) {
+func (t *TaskTool) runReadOnlySubSession(ctx context.Context, prompt string, subReg *tool.Registry, sink event.Sink, maxSteps int, prov provider.Provider, pricing *provider.Pricing, ctxWin int, sess *Session, childDepth int, recoveryTaskID, modelRef string, mutationObserver *checkpoint.MutationObserver, entrance string) (string, error) {
 	opts := t.subagentOptions(ctx, maxSteps, pricing, ctxWin, childDepth, recoveryTaskID, mutationObserver)
-	opts.ModelRef = modelRef
-	// Capture the pristine task before host framing is prepended: delivery
-	// intent classification must judge the task, not the wrapper.
-	opts.ClassifierTaskText = prompt
-	prompt = subagentImageNote(ctx) + t.withWorkspaceContext(upstreamNote(ctx)+prompt) + "\n\n" + completeSubtaskContract
-	ctx = WithUserImages(ctx, SubagentImageCandidates(ctx))
+	ctx, prompt, opts = t.prepareSubSession(ctx, prompt, opts, modelRef, entrance)
 	return RunReadOnlySubAgentWithSession(ctx, prov, subReg, sess, prompt, opts, sink)
 }
 
@@ -1657,7 +1653,7 @@ func reviewReportNudgePrompt(kind evidence.ReviewKind) string {
 // so parent, sibling, and nested sub-agents never share temporary files.
 // continue_from restores conversation history only — a new run still gets a
 // fresh temporary directory.
-func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *tool.Registry, sess *Session, prompt string, opts Options, sink event.Sink) (string, error) {
+func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *tool.Registry, sess *Session, prompt string, opts Options, sink event.Sink) (answer string, err error) {
 	if sess == nil {
 		return "", fmt.Errorf("sub-agent session is nil")
 	}
@@ -1696,6 +1692,9 @@ func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *to
 	// Require it so a reasoning-only stop cannot fall back to older tool text.
 	opts.RequireVisibleFinal = true
 	sub := newDelegatedAgent(ctx, prov, reg, sess, opts, sink)
+	// One defer: this returns from a salvage, a review failure, a provider
+	// error and a clean answer, and per-path calls would miss one.
+	defer func() { observeSubagentHandoff(sink, sub, sess, opts, answer, err) }()
 	sub.SetPlanMode(planWorkflow)
 	if err := sub.Run(ctx, prompt); err != nil {
 		// Still merge any partial child evidence so parent gates see real writes.

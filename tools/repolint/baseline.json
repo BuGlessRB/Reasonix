@@ -6,7 +6,7 @@
     "complexity": 1528,
     "error-text": 12,
     "essay": 3248,
-    "file-size": 41969,
+    "file-size": 41795,
     "frontend-parity": 150,
     "function-size": 6638,
     "layering": 0,
@@ -104,9 +104,12 @@
     },
     "internal/agent/agent.go": {
       "complexity": 37,
-      "essay": 55,
-      "file-size": 1597,
+      "essay": 45,
+      "file-size": 1424,
       "function-size": 102
+    },
+    "internal/agent/agent_options.go": {
+      "essay": 10
     },
     "internal/agent/ask.go": {
       "essay": 4
@@ -297,7 +300,7 @@
     "internal/agent/task.go": {
       "complexity": 22,
       "essay": 50,
-      "file-size": 1168,
+      "file-size": 1167,
       "function-size": 101,
       "orphan": 1
     },

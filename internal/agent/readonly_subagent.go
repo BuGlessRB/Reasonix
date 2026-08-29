@@ -2,6 +2,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 
 	"reasonix/internal/tool"
@@ -19,4 +20,18 @@ func (t *TaskTool) readOnlySubRegistry(spec *ProfileExecSpec, toolNames []string
 	}
 	AttachCompleteSubtaskTool(sub)
 	return sub, nil
+}
+
+// prepareSubSession applies the host framing every delegated child gets: the
+// workspace note, the closing contract, and the telemetry fields that say the
+// contract was given. Shared so a runner cannot drift from the other on which
+// of them a child is told.
+func (t *TaskTool) prepareSubSession(ctx context.Context, prompt string, opts Options, modelRef, entrance string) (context.Context, string, Options) {
+	opts.ModelRef = modelRef
+	// The pristine task, before framing: delivery classification judges the
+	// task and not the wrapper.
+	opts.ClassifierTaskText = prompt
+	opts.ExpectCompletionReport, opts.HandoffEntrance = true, entrance
+	prompt = subagentImageNote(ctx) + t.withWorkspaceContext(upstreamNote(ctx)+prompt) + "\n\n" + completeSubtaskContract
+	return WithUserImages(ctx, SubagentImageCandidates(ctx)), prompt, opts
 }

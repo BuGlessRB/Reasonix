@@ -1,9 +1,14 @@
 package agent
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
+	"reasonix/internal/event"
+	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
 
@@ -53,5 +58,67 @@ func TestCompletionContractCoversInspectionNotOnlyChange(t *testing.T) {
 	if !strings.Contains(completeSubtaskContract, "inspected") {
 		t.Errorf("the contract asks only about changes, so a read-only child has nothing to cite:\n%s",
 			completeSubtaskContract)
+	}
+}
+
+// The shadow answers "did the child close the way it was asked to", so its
+// denominator must be the instruction the host actually gave.
+func TestHandoffShadowCountsAttemptsApartFromAcceptance(t *testing.T) {
+	audit := event.SubagentHandoffAudit{}
+	countReportCalls(&audit, []provider.Message{
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "a", Name: "read_file", Arguments: `{"path":"x"}`},
+		}},
+		{Role: provider.RoleTool, ToolCallID: "a", Name: "read_file", Content: "ok"},
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "r1", Name: completeSubtaskToolName, Arguments: `{}`},
+		}},
+		{Role: provider.RoleTool, ToolCallID: "r1", Name: completeSubtaskToolName, Content: "error: invalid status"},
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "r2", Name: completeSubtaskToolName, Arguments: `{"status":"complete"}`},
+		}},
+		{Role: provider.RoleTool, ToolCallID: "r2", Name: completeSubtaskToolName, Content: "recorded"},
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+			{ID: "b", Name: "read_file", Arguments: `{"path":"y"}`},
+		}},
+		{Role: provider.RoleTool, ToolCallID: "b", Name: "read_file", Content: "ok"},
+	})
+
+	// A refused call is a schema problem; never calling is a protocol one, and
+	// one count cannot say which happened.
+	if audit.Attempts != 2 || audit.Accepted != 1 || audit.Malformed != 1 {
+		t.Errorf("attempts=%d accepted=%d malformed=%d, want 2/1/1",
+			audit.Attempts, audit.Accepted, audit.Malformed)
+	}
+	// The contract asks for the report as the final call. Work after it is a
+	// different behaviour from submitting one at all.
+	if audit.ToolCallsAfterReport != 1 {
+		t.Errorf("tool calls after the report = %d, want 1", audit.ToolCallsAfterReport)
+	}
+	if audit.ReportRound != 2 || audit.FinalRound != 4 {
+		t.Errorf("rounds = report %d final %d, want 2 and 4", audit.ReportRound, audit.FinalRound)
+	}
+}
+
+// A run that died on the provider never had the chance to comply. Counting it
+// as a missing report would make the adoption rate answer a different question.
+func TestHandoffShadowSeparatesFailureFromNonCompliance(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer string
+		err    error
+		want   string
+	}{
+		{"clean", "here is what I found", nil, "completed"},
+		{"provider failed", "", errors.New("stream error"), "error"},
+		// A wrapped sentinel, not a lookalike string: identity is what the
+		// classifier reads, so a message that merely says so must not pass.
+		{"user cancelled", "", fmt.Errorf("sub-agent: %w", context.Canceled), "cancelled"},
+		{"message only says cancelled", "", errors.New("context canceled"), "error"},
+		{"ran but said nothing", "  ", nil, "no_answer"},
+	} {
+		if got := handoffExit(tc.answer, tc.err); got != tc.want {
+			t.Errorf("%s: exit = %q, want %q", tc.name, got, tc.want)
+		}
 	}
 }
