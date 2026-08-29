@@ -58,6 +58,8 @@ type barrierRow struct {
 	OpaqueAfter     int    `json:"mutate_unknown_after"`
 	ReportAfter     int    `json:"report_after"`
 	ClaimsLowered   int    `json:"claims_lowered"`
+	Closed          int    `json:"closed"`
+	NeedsWork       int    `json:"needs_work"`
 	StatusFirst     string `json:"adjudicated_status_first"`
 	StatusLast      string `json:"adjudicated_status_last"`
 	CriteriaDelta   int    `json:"criteria_delta"`
@@ -95,10 +97,28 @@ func parseReportShape(args string) (reportShape, bool) {
 }
 
 // adjudicatedStatus and claimsLowered read the host's own answer to a report.
-// The prefix is written by the tool, never by the model, and the totals it
-// yields are checked against the handoff audit's counts before use.
+// The prefix is written by the tool, never by the model. Two vocabularies are
+// recognised so one anchor spans both arms: the run that said "accepted" for
+// every outcome, and the one that names the verdict.
+func closureVerdict(output string) (verdict string, ok bool) {
+	switch {
+	case strings.HasPrefix(output, "complete_subtask closed:"):
+		return "closed", true
+	case strings.HasPrefix(output, "complete_subtask needs_work:"):
+		return "needs_work", true
+	case strings.HasPrefix(output, "complete_subtask accepted"):
+		// The arm that had one word for both: a lowered claim was the same
+		// answer as an intact one, and only the trailing sentence differed.
+		if claimsLowered(output) > 0 {
+			return "needs_work", true
+		}
+		return "closed", true
+	}
+	return "", false
+}
+
 func adjudicatedStatus(output string) (string, bool) {
-	if !strings.HasPrefix(output, "complete_subtask accepted") {
+	if _, ok := closureVerdict(output); !ok {
 		return "", false
 	}
 	for field := range strings.FieldsSeq(output) {
@@ -141,18 +161,30 @@ func (c barrierChild) row() barrierRow {
 	var firstShape, lastShape reportShape
 	haveFirst := false
 	for _, r := range c.reports {
-		if status, ok := adjudicatedStatus(r.output); ok {
-			row.Accepted++
-			row.ClaimsLowered += claimsLowered(r.output)
-			if shape, ok := parseReportShape(r.args); ok {
-				lastShape = shape
-				if !haveFirst {
-					firstShape, haveFirst = shape, true
-					row.FirstReportCall, row.StatusFirst = r.seq, status
-				}
-			}
-			row.StatusLast = status
+		verdict, ok := closureVerdict(r.output)
+		if !ok {
+			continue
 		}
+		row.Accepted++
+		row.ClaimsLowered += claimsLowered(r.output)
+		if verdict == "closed" {
+			row.Closed++
+		} else {
+			row.NeedsWork++
+		}
+		status, _ := adjudicatedStatus(r.output)
+		shape, parsed := parseReportShape(r.args)
+		if parsed {
+			lastShape = shape
+		}
+		// The anchor is the host saying the sub-task is done, so the two arms
+		// answer the same question: what followed that, not what followed the
+		// first well-formed call.
+		if verdict == "closed" && !haveFirst && parsed {
+			firstShape, haveFirst = shape, true
+			row.FirstReportCall, row.StatusFirst = r.seq, status
+		}
+		row.StatusLast = status
 	}
 	if !haveFirst {
 		return row
@@ -300,8 +332,8 @@ func renderBarrier(rows []barrierRow) string {
 	b.WriteString("# Terminal-barrier counterfactual\n\n")
 	b.WriteString("Anchor: each child's first accepted `complete_subtask`. Columns count what\n")
 	b.WriteString("followed it, classified with the host's own mutation and verification readers.\n\n")
-	b.WriteString("| task | child | reports | acc | first@ | total | observe | verify | mutate | opaque | report | lowered | status | Δcrit | Δev | Δunres | verdict |\n")
-	b.WriteString("|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|---|--:|--:|--:|---|\n")
+	b.WriteString("| task | child | reports | closed | needs_work | first@ | total | observe | verify | mutate | opaque | report | lowered | status | Δcrit | Δev | Δunres | verdict |\n")
+	b.WriteString("|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|---|--:|--:|--:|---|\n")
 	tally := map[barrierVerdict]int{}
 	for _, r := range rows {
 		tally[r.Verdict]++
@@ -309,8 +341,8 @@ func renderBarrier(rows []barrierRow) string {
 		if i := strings.LastIndex(child, "/"); i >= 0 {
 			child = child[i+1:]
 		}
-		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %s→%s | %+d | %+d | %+d | %s |\n",
-			r.Task, child, r.Reports, r.Accepted, r.FirstReportCall, r.TotalCalls,
+		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %s→%s | %+d | %+d | %+d | %s |\n",
+			r.Task, child, r.Reports, r.Closed, r.NeedsWork, r.FirstReportCall, r.TotalCalls,
 			r.ObserveAfter, r.VerifyAfter, r.MutateAfter, r.OpaqueAfter, r.ReportAfter, r.ClaimsLowered,
 			r.StatusFirst, r.StatusLast, r.CriteriaDelta, r.EvidenceDelta, r.UnresolvedDelta, r.Verdict)
 	}
