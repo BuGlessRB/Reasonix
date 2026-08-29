@@ -221,3 +221,23 @@ func curveCells(c doseCurve) string {
 	}
 	return b.String()
 }
+
+func percentile(xs []float64, q float64) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	s := append([]float64(nil), xs...)
+	sort.Float64s(s)
+	i := int(float64(len(s)-1) * q)
+	return s[i]
+}
+
+func maxOf(xs []float64) float64 {
+	out := 0.0
+	for _, x := range xs {
+		if x > out {
+			out = x
+		}
+	}
+	return out
+}

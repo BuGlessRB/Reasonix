@@ -123,10 +123,26 @@ type contextMetrics struct {
 
 	CueVisible bool `json:"cue_visible"`
 
+	// trajectory is kept out of the metric line and written beside it, so a
+	// future question can be asked of this batch instead of a new one.
+	trajectory []provider.Message
+
 	// CueDirectRead: the cue was addressed, the first memory action was a
 	// positions read, and it covered the target. Crediting any positions call
 	// would hand the index a search's work.
 	CueDirectRead bool `json:"cue_direct_read"`
+
+	// Sufficiency, not hit. A search that returns the target at rank 1 has not
+	// necessarily returned the answer: the snippet is bounded. The stopping
+	// boundary is the round where everything needed was readable.
+	FirstSufficientRound        int    `json:"first_sufficient_round"`
+	SufficientVia               string `json:"sufficient_via"` // snippet | read | never
+	RoundsAfterSufficient       int    `json:"rounds_after_sufficient"`
+	SearchesAfterSufficient     int    `json:"searches_after_sufficient"`
+	ReadsAfterSufficient        int    `json:"reads_after_sufficient"`
+	EscapesAfterSufficient      int    `json:"escapes_after_sufficient"`
+	RecallTokensAfterSufficient int    `json:"recall_tokens_after_sufficient"`
+	StoppingClass               string `json:"stopping_class"`
 
 	// What happened after the answer was already in hand. A timeout that spent
 	// seven rounds past its target is a stopping problem, and extending the
@@ -159,6 +175,10 @@ type runScorer struct {
 	pending      map[string]int
 	round        int
 	sawTargetHit bool
+	// seen accumulates everything recall has shown the model, so sufficiency is
+	// judged on what it could read rather than on which call produced it.
+	seen       strings.Builder
+	sufficient bool
 }
 
 // scoreRun reads the messages one turn appended and reports what happened.
@@ -192,6 +212,9 @@ func (s *runScorer) observeCall(tc provider.ToolCall) {
 			m.UnexpectedWorkTools = append(m.UnexpectedWorkTools, tc.Name)
 		}
 		m.EscapeCalls++
+		if s.sufficient {
+			m.EscapesAfterSufficient++
+		}
 		if m.FirstEscapeRound == 0 {
 			m.FirstEscapeRound = s.round
 		}
@@ -216,10 +239,16 @@ func (s *runScorer) observeCall(tc provider.ToolCall) {
 			m.PostHitSearches++
 			m.SearchesAfterTarget++
 		}
+		if s.sufficient {
+			m.SearchesAfterSufficient++
+		}
 		m.Searches = append(m.Searches, searchAttempt{Ordinal: m.SearchCalls, Round: s.round, Query: query})
 		s.pending[tc.ID] = len(m.Searches) - 1
 	case len(positions) > 0:
 		m.ReadCalls++
+		if s.sufficient {
+			m.ReadsAfterSufficient++
+		}
 		if m.FirstReadRound == 0 {
 			m.FirstReadRound = s.round
 		}
@@ -263,6 +292,22 @@ func (s *runScorer) observeResult(msg provider.Message) {
 	if s.sawTargetHit {
 		m.RecallTokensAfterTarget += cost
 	}
+	if s.sufficient {
+		m.RecallTokensAfterSufficient += cost
+	}
+	// Everything recall showed the model, judged as a whole: the answer may
+	// arrive across a snippet and a read, and either way it is readable.
+	s.seen.WriteString(msg.Content)
+	s.seen.WriteString("\n")
+	if !s.sufficient && allMarkersIn(s.seen.String(), s.inst.AnswerMarkers) {
+		s.sufficient = true
+		m.FirstSufficientRound = s.round
+		query, _ := recallArgs(call.Arguments)
+		m.SufficientVia = "read"
+		if query != "" {
+			m.SufficientVia = "snippet"
+		}
+	}
 	if query, _ := recallArgs(call.Arguments); query == "" {
 		return
 	}
@@ -297,6 +342,13 @@ func (s *runScorer) finish(cueVisible bool) contextMetrics {
 	}
 	m.Routing = routing(m.FirstRecallRound, m.FirstEscapeRound)
 	m.CueDirectRead = cueVisible && m.RecallReadWithoutSearch
+	if m.SufficientVia == "" {
+		m.SufficientVia = "never"
+	}
+	if m.FirstSufficientRound > 0 {
+		m.RoundsAfterSufficient = s.round - m.FirstSufficientRound
+	}
+	m.StoppingClass = stoppingClass(m)
 	classifySearches(&m, s.inst)
 	return m
 }
@@ -507,4 +559,83 @@ func ambiguousAnswer(final string, inst fixtureInstance) (bool, string) {
 		}
 	}
 	return false, ""
+}
+
+func allMarkersIn(text string, markers []string) bool {
+	if len(markers) == 0 {
+		return false
+	}
+	lower := strings.ToLower(text)
+	for _, marker := range markers {
+		if !strings.Contains(lower, strings.ToLower(marker)) {
+			return false
+		}
+	}
+	return true
+}
+
+// Stopping classes. The boundary is sufficiency, not the target coming back:
+// a rank-1 hit whose snippet was too short to answer leaves a read entirely
+// justified, and counting that as waste would blame the model for the bound.
+const (
+	stopSnippet       = "SnippetStop"             // enough arrived, and the turn ended
+	stopSnippetRead   = "SnippetThenRead"         // the snippet was short; the read finished it
+	stopDefensiveRead = "DefensiveRead"           // enough had arrived, one read confirmed it
+	stopPostRetrieval = "PostSufficientRetrieval" // enough had arrived, and retrieval continued
+	stopRunaway       = "PostSufficientRunaway"   // it continued for rounds, or ran out of budget
+	stopNeverEnough   = "NeverSufficient"
+)
+
+// runawayRounds is where continuing stops looking like confirmation.
+const runawayRounds = 3
+
+func stoppingClass(m contextMetrics) string {
+	if m.FirstSufficientRound == 0 {
+		return stopNeverEnough
+	}
+	after := m.SearchesAfterSufficient + m.ReadsAfterSufficient + m.EscapesAfterSufficient
+	switch {
+	case after == 0 && m.SufficientVia == "snippet":
+		return stopSnippet
+	case after == 0:
+		return stopSnippetRead
+	case m.RoundsAfterSufficient >= runawayRounds || m.FailureStage == "RunError":
+		return stopRunaway
+	case after == 1 && m.ReadsAfterSufficient == 1:
+		return stopDefensiveRead
+	default:
+		return stopPostRetrieval
+	}
+}
+
+// reportStopping is the funnel that matters once retrieval succeeds: what the
+// turn did after it already had everything it needed.
+func reportStopping(all []contextMetrics) string {
+	classes := map[string]int{}
+	var extraRounds, extraTokens []float64
+	sufficient, answeredNext := 0, 0
+	for _, m := range all {
+		if m.Contaminated {
+			continue
+		}
+		classes[m.StoppingClass]++
+		if m.FirstSufficientRound == 0 {
+			continue
+		}
+		sufficient++
+		extraRounds = append(extraRounds, float64(m.RoundsAfterSufficient))
+		extraTokens = append(extraTokens, float64(m.RecallTokensAfterSufficient))
+		if m.RoundsAfterSufficient <= 1 {
+			answeredNext++
+		}
+	}
+	var b strings.Builder
+	b.WriteString("\n## After the evidence was already enough\n")
+	fmt.Fprintf(&b, "  sufficient in %d runs; ended within one round in %d\n", sufficient, answeredNext)
+	fmt.Fprintf(&b, "  extra rounds  mean %.1f  median %.1f  p90 %.0f  max %.0f\n",
+		mean(extraRounds), median(extraRounds), percentile(extraRounds, 0.9), maxOf(extraRounds))
+	fmt.Fprintf(&b, "  extra recall tokens  mean %.0f  median %.0f  p90 %.0f  max %.0f\n",
+		mean(extraTokens), median(extraTokens), percentile(extraTokens, 0.9), maxOf(extraTokens))
+	b.WriteString("  " + countsLine(classes) + "\n")
+	return b.String()
 }

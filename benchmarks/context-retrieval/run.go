@@ -159,6 +159,7 @@ func runOne(p provider.Provider, t contextTask, arm ablation.Set, armName, root 
 
 	appended := sess.Snapshot()[before:]
 	m := scoreRun(appended, inst, f.Target, armName, cueVisible)
+	m.trajectory = appended
 	m.scoreAnswer(finalAnswer(appended), inst)
 	if runErr != nil {
 		m.FailureStage = "RunError"
@@ -253,6 +254,7 @@ func runBoundaries(root string) int {
 		}
 	}
 	reportDeltas(cueSide, noCueSide)
+	fmt.Print(reportStopping(all))
 	return writeResults(root, all)
 }
 
@@ -346,6 +348,7 @@ func runExperiment(experiment, root string, dry bool, tasks []contextTask) int {
 	if experiment == experimentIndex {
 		fmt.Print(reportDoseResponse(all))
 	}
+	fmt.Print(reportStopping(all))
 	fmt.Print(auditQueries(all).report())
 	fmt.Print(queryLines(all))
 	if experiment == experimentIndex {
@@ -386,6 +389,26 @@ func reportFunnels(byArm map[string][]contextMetrics) {
 	}
 }
 
+// writeTrajectories saves what each turn produced, after the whole batch is
+// done. Three analyses in a row have needed a re-run because something was
+// counted and not kept — query text, then snippet contents. It is written at
+// the end on purpose: during the batch these files are the answer.
+func writeTrajectories(root string, all []contextMetrics) error {
+	f, err := os.Create(filepath.Join(root, "trajectories.jsonl"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	for _, m := range all {
+		if err := writeJSONLine(f, map[string]any{
+			"task": m.Task, "arm": m.Arm, "messages": m.trajectory,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func writeResults(root string, all []contextMetrics) int {
 	path := filepath.Join(root, "results.jsonl")
 	f, err := os.Create(path)
@@ -400,7 +423,11 @@ func writeResults(root string, all []contextMetrics) int {
 			return 2
 		}
 	}
-	fmt.Printf("\n%d runs written to %s\n", len(all), path)
+	if err := writeTrajectories(root, all); err != nil {
+		fmt.Fprintln(os.Stderr, "write trajectories:", err)
+		return 2
+	}
+	fmt.Printf("\n%d runs written to %s (with trajectories.jsonl)\n", len(all), path)
 	return 0
 }
 
