@@ -77,3 +77,41 @@ func TestDecisionIdentitiesAreOnlyMeaningfulWithinTheirRuntime(t *testing.T) {
 	}
 	waitForDecisions(t, b, 0)
 }
+
+// ATTACK: the specialized surface must not read "I am the Plan button" as "I may
+// decide the current plan". Being the right kind of decision is not the same as
+// being that decision, and the card the user clicked is the one that has to be
+// answered.
+func TestPlanSurfaceCannotAnswerADifferentPlanDecision(t *testing.T) {
+	c := New(Options{Sink: event.Discard})
+	defer c.Close()
+	c.EnableInteractiveApproval()
+
+	go c.requestApproval(context.Background(), approvalRequest{tool: planApprovalTool})
+	stale := waitForDecisions(t, c, 1)[0]
+	if err := c.ResolvePlanDecision(stale.ID, PlanDecisionRevisePlan); err != nil {
+		t.Fatalf("revise: %v", err)
+	}
+	waitForDecisions(t, c, 0)
+
+	go c.requestApproval(context.Background(), approvalRequest{tool: planApprovalTool})
+	current := waitForDecisions(t, c, 1)[0]
+	if current.ID == stale.ID {
+		t.Fatalf("the second card reused identity %q", current.ID)
+	}
+
+	// Same surface, same kind, wrong instance.
+	if err := c.ResolvePlanDecision(stale.ID, PlanDecisionStartExecution); err == nil {
+		t.Fatal("a stale plan action answered a decision it was not offered")
+	}
+	if got := c.Decisions(); len(got) != 1 || got[0].ID != current.ID {
+		t.Fatalf("the open decision was disturbed: %+v", got)
+	}
+	if got := c.PlanPhase(); got == planmode.Executing {
+		t.Fatal("a stale plan action started execution")
+	}
+	if err := c.ResolvePlanDecision(current.ID, PlanDecisionExitPlan); err != nil {
+		t.Fatalf("exit: %v", err)
+	}
+	waitForDecisions(t, c, 0)
+}
