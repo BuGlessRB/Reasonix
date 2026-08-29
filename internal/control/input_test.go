@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/planmode"
 
 	"reasonix/internal/command"
 	"reasonix/internal/event"
@@ -602,7 +603,7 @@ func TestComposePlanModeMarker(t *testing.T) {
 }
 
 func TestPlanModeMarkerSeparatesWorkflowFromPermissions(t *testing.T) {
-	for _, want := range []string{"planning workflow", "research", "ask", "todo_write", "Do not begin implementation", "not a permission boundary", "Permissions and Sandbox"} {
+	for _, want := range []string{"planning workflow", "research", "ask", "todo_write", "Do not begin implementation", "not a permission decision", "Permissions and Sandbox"} {
 		if !strings.Contains(PlanModeMarker, want) {
 			t.Fatalf("PlanModeMarker missing %q:\n%s", want, PlanModeMarker)
 		}
@@ -1341,7 +1342,7 @@ func TestStripComposePrefixes(t *testing.T) {
 		},
 		{
 			name:  "legacy plan mode marker stripped",
-			input: legacyPlanModeMarker + "\n\nexplain this function",
+			input: planmode.Superseded[1] + "\n\nexplain this function",
 			want:  "explain this function",
 		},
 		{

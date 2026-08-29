@@ -281,11 +281,11 @@ func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (
 				safety = planmode.PlanSafetyUnsafe
 			}
 		}
-		if decision := a.planModeDecision(plan.canonicalName, t.ReadOnly(), safety, json.RawMessage(call.Arguments)); decision.Blocked {
+		if decision := a.planModeDecision(plan.canonicalName, plan.readOnly, safety, json.RawMessage(call.Arguments)); decision.Blocked && !a.plannerTrustsMCP(t, plan.canonicalName) {
 			return toolOutcome{
 				output:  decision.Message,
 				blocked: true,
-				errMsg:  "blocked: tool is unavailable during planning",
+				errMsg:  planPhaseBlockReason(decision),
 			}, true
 		}
 	}
@@ -368,15 +368,15 @@ func (a *Agent) applyPlanModeAndProxy(ctx context.Context, plan *toolCallPlan) (
 				safety = planmode.PlanSafetyUnsafe
 			}
 		}
-		if decision := a.planModeDecision(plan.permName, plan.resolved.ReadOnly, safety, plan.permArgs); decision.Blocked {
+		if decision := a.planModeDecision(plan.permName, plan.resolved.ReadOnly, safety, plan.permArgs); decision.Blocked && !a.plannerTrustsMCP(plan.execTool, plan.permName) {
 			return toolOutcome{
 				output:  decision.Message,
 				blocked: true,
-				errMsg:  "blocked: tool is unavailable during planning",
+				errMsg:  planPhaseBlockReason(decision),
 			}, true
 		}
 	}
-	plannerTrustedMCP := a.role.plannerMCPExecution && isMCPExecutionTarget(plan.execTool, plan.permName) && mcpServerAuthorized(plan.execTool) && !mcpDestructiveHint(plan.execTool)
+	plannerTrustedMCP := a.plannerTrustsMCP(plan.execTool, plan.permName)
 	if a.planMode.Load() && isMCPExecutionTarget(plan.execTool, plan.permName) && !plannerTrustedMCP && (!plan.readOnly || !mcpServerAuthorized(plan.execTool) || mcpDestructiveHint(plan.execTool)) {
 		reason := "writer/destructive target"
 		if plan.readOnly && !mcpServerAuthorized(plan.execTool) {

@@ -104,31 +104,62 @@ func TestApprovalToolWideEndToEnd(t *testing.T) {
 	}
 }
 
-// TestPlanModeApprovalPostureMatrix proves Plan freezes ForbidMutation on the
-// turn TaskPolicy so ordinary writers are host-blocked even when YOLO would
-// otherwise auto-allow them. Permission may still prompt first in Ask mode;
-// the host floor is enforced after the gate.
-func TestPlanModeApprovalPostureMatrix(t *testing.T) {
+type namedRecorder struct {
+	name     string
+	readOnly bool
+	mu       sync.Mutex
+	runs     int
+}
+
+func (w *namedRecorder) Name() string        { return w.name }
+func (w *namedRecorder) Description() string { return "records that it ran" }
+func (w *namedRecorder) Schema() json.RawMessage {
+	return json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`)
+}
+func (w *namedRecorder) ReadOnly() bool { return w.readOnly }
+func (w *namedRecorder) Execute(context.Context, json.RawMessage) (string, error) {
+	w.mu.Lock()
+	w.runs++
+	w.mu.Unlock()
+	return "ran", nil
+}
+
+// What may happen before the user approves a plan cannot depend on which
+// approval posture they are in. The deny rows prove Permissions was left alone.
+// Delegation splits by writer capability: a mutation-based gate misses `task`,
+// which records none of its own, while the read-only entries are how a plan
+// researches and have to keep running.
+func TestPlanPhaseBlocksSideEffectsInEveryApprovalPosture(t *testing.T) {
 	tests := []struct {
-		name       string
-		mode       string
-		askRules   []string
-		denyRules  []string
-		wantWrites int
+		name      string
+		plan      bool
+		mode      string
+		tool      string
+		readOnly  bool
+		askRules  []string
+		denyRules []string
+		wantRuns  int
 	}{
-		// YOLO/Auto avoid hanging on interactive approval while still proving
-		// TaskPolicy ForbidMutation blocks the write.
-		{name: "Auto blocks writer under plan TaskPolicy", mode: ToolApprovalAuto, wantWrites: 0},
-		{name: "YOLO blocks writer under plan TaskPolicy", mode: ToolApprovalYolo, askRules: []string{"write_file"}, wantWrites: 0},
-		{name: "deny still blocks in YOLO plan", mode: ToolApprovalYolo, denyRules: []string{"write_file"}, wantWrites: 0},
+		{name: "plan/ask blocks writer", plan: true, mode: ToolApprovalAsk, tool: "write_file"},
+		{name: "plan/auto blocks writer", plan: true, mode: ToolApprovalAuto, tool: "write_file"},
+		{name: "plan/yolo blocks writer", plan: true, mode: ToolApprovalYolo, tool: "write_file", askRules: []string{"write_file"}},
+		{name: "plan/auto blocks delegation", plan: true, mode: ToolApprovalAuto, tool: "task"},
+		{name: "plan/yolo blocks delegation", plan: true, mode: ToolApprovalYolo, tool: "task"},
+		{name: "plan/yolo honors deny", plan: true, mode: ToolApprovalYolo, tool: "write_file", denyRules: []string{"write_file"}},
+		{name: "plan/yolo runs read-only delegation", plan: true, mode: ToolApprovalYolo, tool: "read_only_task", readOnly: true, wantRuns: 1},
+		{name: "plan/auto runs read-only skill", plan: true, mode: ToolApprovalAuto, tool: "read_only_skill", readOnly: true, wantRuns: 1},
+		{name: "plan/auto blocks writer-capable skill", plan: true, mode: ToolApprovalAuto, tool: "run_skill"},
+		{name: "execution/auto runs writer", mode: ToolApprovalAuto, tool: "write_file", wantRuns: 1},
+		{name: "execution/yolo runs delegation", mode: ToolApprovalYolo, tool: "task", wantRuns: 1},
+		{name: "execution/yolo honors deny", mode: ToolApprovalYolo, tool: "write_file", denyRules: []string{"write_file"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			writer := &recordingWriter{}
+			w := &namedRecorder{name: tc.tool, readOnly: tc.readOnly}
 			reg := tool.NewRegistry()
-			reg.Add(writer)
+			reg.Add(w)
 			prov := &scriptedTurns{turns: [][]provider.Chunk{
-				toolCallTurn("write", "write_file", `{"path":"plan.txt"}`),
+				toolCallTurn("call", tc.tool, `{"path":"plan.txt"}`),
 				textTurn("Plan ready."),
 			}}
 			ag := agent.New(prov, reg, agent.NewSession(""), agent.Options{}, event.Discard)
@@ -141,20 +172,24 @@ func TestPlanModeApprovalPostureMatrix(t *testing.T) {
 			})
 			defer c.Close()
 			c.EnableInteractiveApproval()
-			c.SetPlanMode(true)
+			c.SetPlanMode(tc.plan)
 			c.SetToolApprovalMode(tc.mode)
 			if got := c.ToolApprovalMode(); got != tc.mode {
 				t.Fatalf("Plan changed approval mode to %q, want %q", got, tc.mode)
 			}
 
-			if err := ag.Run(context.Background(), "draft a plan for this change"); err != nil {
-				t.Fatalf("Plan run: %v", err)
+			// A barrier that fell through to Ask would block here instead of
+			// failing, so the wait is bounded rather than left to the suite.
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			if err := ag.Run(ctx, "draft a plan for this change"); err != nil {
+				t.Fatalf("run: %v", err)
 			}
-			writer.mu.Lock()
-			writes := len(writer.paths)
-			writer.mu.Unlock()
-			if writes != tc.wantWrites {
-				t.Fatalf("executed writes = %d, want %d", writes, tc.wantWrites)
+			w.mu.Lock()
+			runs := w.runs
+			w.mu.Unlock()
+			if runs != tc.wantRuns {
+				t.Fatalf("%q ran %d times, want %d", tc.tool, runs, tc.wantRuns)
 			}
 		})
 	}

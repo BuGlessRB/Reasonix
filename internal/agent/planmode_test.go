@@ -69,6 +69,9 @@ func (g *mcpPermissionRecordingGate) Check(_ context.Context, _ string, _ json.R
 	return g.allowNormal, g.reason, nil
 }
 
+// Readers plan and still answer to Permissions: the phase barrier is not a
+// second permission system and does not pre-empt one. Writers are the other
+// half of this and live in TestPlanningPhaseStopsWritersBeforePermission.
 func TestPlanModeRoutesOrdinaryToolsThroughPermissionGate(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -76,8 +79,6 @@ func TestPlanModeRoutesOrdinaryToolsThroughPermissionGate(t *testing.T) {
 		args     string
 		readOnly bool
 	}{
-		{name: "built-in writer", tool: fakeTool{name: "write_file", writesPaths: true}},
-		{name: "shell writer", tool: fakeTool{name: "bash"}, args: `{"command":"rm -rf build"}`},
 		{name: "reader", tool: fakeTool{name: "read_file", readOnly: true}, readOnly: true},
 		{
 			name: "authorized MCP reader",
@@ -113,13 +114,12 @@ func TestPlanModeRoutesOrdinaryToolsThroughPermissionGate(t *testing.T) {
 	}
 }
 
-func TestPlanModePermissionDenialStopsWriterBeforeExecution(t *testing.T) {
+func TestPermissionDenialStopsWriterBeforeExecution(t *testing.T) {
 	var executions int32
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "write_file", calls: &executions, writesPaths: true})
 	gate := &recordingPermissionGate{reason: "denied by permission rule"}
 	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
-	a.SetPlanMode(true)
 
 	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "write_file"})
 	if !out.blocked || !strings.Contains(out.output, gate.reason) || out.errMsg == "" {
@@ -189,21 +189,28 @@ func TestPlanModeSafeWriterStillUsesWriterPermission(t *testing.T) {
 	}
 }
 
-// Plan-mode bash goes through the ordinary permission gate as the declared
-// writer it is. It used to have a trust bridge of its own that asked the user
-// to accept a command prefix as read-only; that path is gone, and this pins
-// what replaced it rather than that it is not called.
-func TestPlanModeBashReachesOrdinaryPermissionAsWriter(t *testing.T) {
+// Bash a command the host cannot prove read-only waits for approval, then runs
+// as the declared writer it is. It used to have a trust bridge of its own that
+// asked the user to accept a command prefix as read-only; that path is gone,
+// and this pins what replaced it rather than that it is not called.
+func TestBashWaitsForApprovalThenReachesOrdinaryPermission(t *testing.T) {
+	const command = `{"command":"gh issue view 6482"}`
 	reg := tool.NewRegistry()
 	reg.Add(fakeTool{name: "bash"})
 	gate := &recordingPermissionGate{allow: true}
 	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
-	a.SetPlanMode(true)
 
-	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{
-		Name:      "bash",
-		Arguments: `{"command":"gh issue view 6482"}`,
-	})
+	a.SetPlanMode(true)
+	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "bash", Arguments: command})
+	if !out.blocked {
+		t.Fatalf("bash the host cannot prove read-only ran while planning: %+v", out)
+	}
+	if len(gate.calls) != 0 {
+		t.Fatalf("the phase barrier consulted Permissions: %+v", gate.calls)
+	}
+
+	a.SetPlanMode(false)
+	out = a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "bash", Arguments: command})
 	if out.blocked || out.errMsg != "" {
 		t.Fatalf("permission-approved bash outcome = %+v", out)
 	}
@@ -212,16 +219,96 @@ func TestPlanModeBashReachesOrdinaryPermissionAsWriter(t *testing.T) {
 	}
 }
 
-func TestPlanModeWriterStaysBehindPermissions(t *testing.T) {
+// The barrier runs before Permissions and does not consult it: a writer refused
+// for the phase must not spend the user's approval, and turning the phase off
+// must hand the same call straight back to the gate that was there all along.
+func TestPlanningPhaseStopsWritersBeforePermission(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		tool tool.Tool
+		args string
+	}{
+		{name: "built-in writer", tool: fakeTool{name: "write_file", writesPaths: true}},
+		{name: "shell writer", tool: fakeTool{name: "bash"}, args: `{"command":"rm -rf build"}`},
+		{name: "writer-capable delegation", tool: fakeTool{name: "task"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := tool.NewRegistry()
+			reg.Add(tc.tool)
+			gate := &recordingPermissionGate{allow: true}
+			a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+
+			a.SetPlanMode(true)
+			out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: tc.tool.Name(), Arguments: tc.args})
+			if !out.blocked {
+				t.Fatalf("%s ran during planning: %+v", tc.name, out)
+			}
+			if len(gate.calls) != 0 {
+				t.Fatalf("the phase barrier consulted Permissions: %+v", gate.calls)
+			}
+
+			a.SetPlanMode(false)
+			if out = a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: tc.tool.Name(), Arguments: tc.args}); out.blocked {
+				t.Fatalf("%s stayed blocked after the phase ended: %+v", tc.name, out)
+			}
+			if len(gate.calls) != 1 {
+				t.Fatalf("execution-phase permission calls = %+v, want one", gate.calls)
+			}
+		})
+	}
+}
+
+// Planning keeps the delegation it was designed around. read_only_task exists
+// so a plan can research in an isolated context; a barrier reading "delegation"
+// as "side effect" would take that away, and one reading "no mutation receipt"
+// as "safe" lets the writer-capable ones through — the hole this closes.
+func TestPlanningPhaseSplitsDelegationByWriterCapability(t *testing.T) {
+	task := &TaskTool{}
 	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "write_file", writesPaths: true})
-	gate := &recordingPermissionGate{reason: "denied"}
-	a := New(nil, reg, NewSession(""), Options{Gate: gate}, event.Discard)
+	a := New(nil, reg, NewSession(""), Options{}, event.Discard)
 	a.SetPlanMode(true)
 
-	out := a.executeOne(context.Background(), &a.turn, provider.ToolCall{Name: "write_file"})
-	if !out.blocked || len(gate.calls) != 1 {
-		t.Fatalf("plan-mode writer bypassed permissions: outcome=%+v calls=%+v", out, gate.calls)
+	blocked := map[string]bool{}
+	for _, tl := range []tool.Tool{
+		task,
+		NewReadOnlyTaskTool(task),
+		NewFleetTool(task),
+		NewParallelTasksTool(task, reg),
+		NewSubagentResultTool(task),
+		NewSubagentListTool(task),
+	} {
+		safety := planmode.PlanSafetyUnknown
+		if c, ok := tl.(tool.PlanModeClassifier); ok {
+			safety = planmode.PlanSafetyUnsafe
+			if c.PlanModeSafe() {
+				safety = planmode.PlanSafetySafe
+			}
+		}
+		got := a.planModeDecision(tl.Name(), tl.ReadOnly(), safety, nil)
+		blocked[tl.Name()] = got.Blocked
+		// The verdict has to follow what the tool declares about itself, or the
+		// barrier has started classifying delegation by name.
+		want := !tl.ReadOnly() && safety != planmode.PlanSafetySafe
+		if got.Blocked != want {
+			t.Errorf("%q readOnly=%v safety=%v blocked=%v, want %v", tl.Name(), tl.ReadOnly(), safety, got.Blocked, want)
+		}
+	}
+
+	for name, wantBlocked := range map[string]bool{
+		"read_only_task":       false,
+		"parallel_tasks":       false,
+		"read_subagent_result": false,
+		"list_subagents":       false,
+		"task":                 true,
+	} {
+		got, ok := blocked[name]
+		if !ok {
+			t.Errorf("%q was not registered; the anchor no longer measures anything", name)
+			continue
+		}
+		if got != wantBlocked {
+			t.Errorf("%q blocked=%v during planning, want %v", name, got, wantBlocked)
+		}
 	}
 }
 

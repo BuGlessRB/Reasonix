@@ -2065,15 +2065,6 @@ func mcpDestructiveHint(t tool.Tool) bool {
 	return ok && annotations.MCPDestructiveHint()
 }
 
-func (a *Agent) planModeDecision(toolName string, readOnly bool, safety planmode.PlanSafety, args json.RawMessage) planmode.Decision {
-	return (planmode.Policy{}).Decide(planmode.Call{
-		Name:     toolName,
-		ReadOnly: readOnly,
-		Safety:   safety,
-		Args:     args,
-	})
-}
-
 func (a *Agent) staleAnchorEditBlock(call provider.ToolCall) (string, bool) {
 	if a.task.ledger == nil || !anchorBasedEditTool(call.Name) {
 		return "", false
