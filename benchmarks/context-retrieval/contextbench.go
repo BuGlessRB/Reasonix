@@ -209,7 +209,10 @@ func scoreRun(msgs []provider.Message, inst fixtureInstance, target int, arm str
 			// An answer readable through anything but recall is contamination,
 			// whatever the run went on to score.
 			for _, marker := range inst.AnswerMarkers {
-				if len(marker) >= 3 && strings.Contains(msg.Content, marker) {
+				// Codenames only: a three-digit epoch appears in any long file
+				// by chance, and one did. A model holding the codename holds
+				// the numbers beside it anyway.
+				if len(marker) >= 6 && strings.Contains(msg.Content, marker) {
 					m.Contaminated, m.LeakedVia, m.LeakedMarker = true, call.Name, marker
 					m.EscapeFoundAnswer = true
 					m.LeakedArgs = truncate(call.Arguments, 200)
