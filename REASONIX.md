@@ -58,6 +58,16 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   convenient proxy had been left standing in for the state it was named after,
   and each time the mechanism story built on it was wrong. A number without
   those four lines is an observation, not a result.
+- A constructed state is not a reachable one. Before a destructive test or a
+  counterfactual is reported as a defect, say who in production produces that
+  state, through which transitions, across which persistence boundary, under
+  whose authority, and whether a real run has been seen reaching it. A test that
+  assigns a private field proves the mechanism *given* the state and must be
+  reported as exactly that: `a.projectChecks` is written once at boot and never
+  again, so reassigning it stood in for a resume rather than demonstrating one,
+  and the bypass built on it was never shown to be production-reachable.
+  Severity is reachability times frequency times authority, not "can be
+  bypassed".
 - A wire type the desktop re-declares by hand is held to the kernel's by
   `wire-parity`, both directions: a field one side sends and the other cannot
   read fails, and so does one it reads that nothing sends. The two are compiled

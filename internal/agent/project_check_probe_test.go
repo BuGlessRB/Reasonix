@@ -66,11 +66,9 @@ func rewriteDeclarationRun(t *testing.T, began, rewrittenTo, ran string) (*proje
 	if err := a.Run(ctx, "edit and finish"); !readinessBlocked(err) {
 		t.Fatalf("premature Run err = %v, want FinalReadinessError", err)
 	}
-	// What this models is a resume, not a mid-run edit: projectChecks is loaded
-	// once at boot and never reassigned, so rewriting the file inside a run
-	// changes nothing. The divergence needs a process boundary — the goal's
-	// checkpoint restored with the old baseline, into a build that read the new
-	// declaration. Assigning the field is that state, reached the short way.
+	// This models a resume, not a mid-run edit: projectChecks is loaded once at
+	// boot, so the divergence needs a process boundary — an old baseline
+	// restored into a build that read the new declaration.
 	a.projectChecks = []instruction.VerifyCheck{{Command: rewrittenTo, SourcePath: "AGENTS.md", Line: 3}}
 	return sink, a.Run(ctx, "finish")
 }

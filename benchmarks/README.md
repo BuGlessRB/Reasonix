@@ -58,6 +58,33 @@ Watch for the five substitutions that caused them: unknown read as true, latest
 read as all, accepted read as closed, attempted read as judged, and not
 evaluated read as false.
 
+## Reachability contract for a defect
+
+A metric owes its definition; a defect owes its state. Before a destructive test
+or a counterfactual is written up as something to fix:
+
+```text
+Constructed state:     baseline != current
+Production producer:   who assigns it, and where
+Transition path:       which real transitions reach it from a normal boot
+Persistence boundary:  does it need a restart, a resume, a crash
+Authority:             who caused the change — the agent, the user, the host
+Observed:              has a real run been seen in this state
+```
+
+The project-check study skipped the middle four. A test reassigned
+`a.projectChecks` and the bypass it produced was reported as reproducible; the
+field is written once at boot and never again, so no run inside one process can
+reach that state, and the corpus said so on its first execution — parity, no
+divergence. What the test proves is a conditional mechanism, which is a
+different claim from a production defect and earns a different priority.
+
+Authority belongs in the contract because the same divergence can mean opposite
+things. An agent that rewrote the declaration it was being held to is the case
+baseline protection exists for; an owner who changed the project's policy
+between two runs may have superseded it deliberately. A study that cannot say
+which one it observed cannot say what the right behaviour is.
+
 ## Task corpus stratification
 
 The suite is stratified by real coding-agent workload classes, not toy-task
