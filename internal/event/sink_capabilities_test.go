@@ -1,6 +1,7 @@
 package event
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -49,6 +50,9 @@ func (s *capturingSink) RecordRunBudget(RunBudgetSample) {
 func (s *capturingSink) RecordProjectCheckProbe(ProjectCheckProbe) {
 	s.recorded = append(s.recorded, "ProjectCheckProbe")
 }
+func (s *capturingSink) RecordSubagentHandoff(SubagentHandoffAudit) {
+	s.recorded = append(s.recorded, "SubagentHandoff")
+}
 
 // recordAll drives every optional capability once through s.
 func recordAll(s Sink) {
@@ -63,6 +67,21 @@ func recordAll(s Sink) {
 	RecordWorkspaceMutation(s, WorkspaceMutation{})
 	RecordRunBudget(s, RunBudgetSample{})
 	RecordProjectCheckProbe(s, ProjectCheckProbe{})
+	RecordSubagentHandoff(s, SubagentHandoffAudit{})
+}
+
+// AuditForwarder is why a new capability does not have to be repeated at every
+// layer, so it must itself be complete. It reads the registry rather than a
+// list kept beside it: a hand-written list passes for every capability it has
+// never heard of, which is how a channel comes to be registered and forwarded
+// by nothing.
+func TestAuditForwarderCoversEveryCapability(t *testing.T) {
+	fwd := reflect.TypeFor[AuditForwarder]()
+	for name, want := range capabilityContracts {
+		if !fwd.Implements(want) {
+			t.Errorf("AuditForwarder does not forward %s; every embedder loses it", name)
+		}
+	}
 }
 
 func TestCapturingSinkCoversEveryCapability(t *testing.T) {

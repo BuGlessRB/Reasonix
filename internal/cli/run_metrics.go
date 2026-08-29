@@ -87,25 +87,40 @@ type RunMetrics struct {
 	// Delegation counters let one model be compared across orchestration arms
 	// without scraping prose. Child tool calls are already split out as
 	// SubagentToolCalls below; parent calls are ToolCalls minus that.
-	SubagentRuns               int `json:"subagent_runs,omitempty"`
-	SubagentNestedRuns         int `json:"subagent_nested_runs,omitempty"`
-	SubagentMutations          int `json:"subagent_mutations,omitempty"`
-	CompletionReports          int `json:"completion_reports,omitempty"`
-	CompletionsProsedOnly      int `json:"completions_prose_only,omitempty"`
-	FalseCompletions           int `json:"false_completions,omitempty"`
-	CriterionDowngrades        int `json:"criterion_downgrades,omitempty"`
-	WriteScopeViolations       int `json:"write_scope_violations,omitempty"`
-	DuplicateWorkPaths         int `json:"duplicate_work_paths,omitempty"`
-	ParentScopeHints           int `json:"parent_scope_hints,omitempty"`
-	ParentNamedFiles           int `json:"parent_named_files,omitempty"`
-	ChildEvidencePaths         int `json:"child_evidence_paths,omitempty"`
-	ChildDiscoveredPaths       int `json:"child_discovered_paths,omitempty"`
-	MissingReasoningDetected   int `json:"missing_reasoning_detected,omitempty"`
-	MissingReasoningRetries    int `json:"missing_reasoning_retries,omitempty"`
-	MissingReasoningRecovered  int `json:"missing_reasoning_recovered,omitempty"`
-	MissingReasoningReplaced   int `json:"missing_reasoning_retry_replaced_response,omitempty"`
-	MissingReasoningSuppressed int `json:"missing_reasoning_retry_suppressed,omitempty"`
-	MissingReasoningFallbacks  int `json:"missing_reasoning_fallbacks,omitempty"`
+	SubagentRuns          int `json:"subagent_runs,omitempty"`
+	SubagentNestedRuns    int `json:"subagent_nested_runs,omitempty"`
+	SubagentMutations     int `json:"subagent_mutations,omitempty"`
+	CompletionReports     int `json:"completion_reports,omitempty"`
+	CompletionsProsedOnly int `json:"completions_prose_only,omitempty"`
+	FalseCompletions      int `json:"false_completions,omitempty"`
+	CriterionDowngrades   int `json:"criterion_downgrades,omitempty"`
+	WriteScopeViolations  int `json:"write_scope_violations,omitempty"`
+	DuplicateWorkPaths    int `json:"duplicate_work_paths,omitempty"`
+	ParentScopeHints      int `json:"parent_scope_hints,omitempty"`
+	ParentNamedFiles      int `json:"parent_named_files,omitempty"`
+	ChildEvidencePaths    int `json:"child_evidence_paths,omitempty"`
+	ChildDiscoveredPaths  int `json:"child_discovered_paths,omitempty"`
+	// Subagent handoff: whether a delegated child closed the way it was asked
+	// to. Judged is the denominator — expected to report and not killed by the
+	// provider — because a run that never got to close is not a refusal.
+	SubagentHandoffs           int            `json:"subagent_handoffs"`
+	SubagentHandoffExpected    int            `json:"subagent_handoff_expected"`
+	SubagentHandoffJudged      int            `json:"subagent_handoff_judged"`
+	SubagentHandoffAttempted   int            `json:"subagent_handoff_attempted"`
+	SubagentHandoffAccepted    int            `json:"subagent_handoff_accepted"`
+	SubagentHandoffMalformed   int            `json:"subagent_handoff_malformed"`
+	SubagentHandoffNotTried    int            `json:"subagent_handoff_never_attempted"`
+	SubagentHandoffClosedWith  int            `json:"subagent_handoff_closed_with_report"`
+	SubagentHandoffToolsAfter  int            `json:"subagent_handoff_tool_calls_after_report"`
+	SubagentHandoffLowered     int            `json:"subagent_handoff_lowered_claims"`
+	SubagentHandoffReadOnly    int            `json:"subagent_handoff_read_only"`
+	SubagentHandoffExits       map[string]int `json:"subagent_handoff_exits,omitempty"`
+	MissingReasoningDetected   int            `json:"missing_reasoning_detected,omitempty"`
+	MissingReasoningRetries    int            `json:"missing_reasoning_retries,omitempty"`
+	MissingReasoningRecovered  int            `json:"missing_reasoning_recovered,omitempty"`
+	MissingReasoningReplaced   int            `json:"missing_reasoning_retry_replaced_response,omitempty"`
+	MissingReasoningSuppressed int            `json:"missing_reasoning_retry_suppressed,omitempty"`
+	MissingReasoningFallbacks  int            `json:"missing_reasoning_fallbacks,omitempty"`
 	// Fanout times what the delegation counters only count: what the run waited
 	// on its fan-outs, against what the same work costs one at a time.
 	Fanout *FanoutMetrics `json:"fanout,omitempty"`
@@ -500,6 +515,50 @@ func (s *metricsSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
 	s.m.ReadinessMissingReview += a.MissingReview
 	s.m.ReadinessMissingSignoff += a.MissingSignoff
 	s.m.ReadinessMissingMutation += a.MissingMutation
+}
+
+func (s *metricsSink) RecordSubagentHandoff(a event.SubagentHandoffAudit) {
+	if s == nil {
+		return
+	}
+	defer event.RecordSubagentHandoff(s.inner, a)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m.SubagentHandoffs++
+	if a.Exit != "" {
+		if s.m.SubagentHandoffExits == nil {
+			s.m.SubagentHandoffExits = map[string]int{}
+		}
+		s.m.SubagentHandoffExits[a.Exit]++
+	}
+	if a.Expected {
+		s.m.SubagentHandoffExpected++
+	}
+	// A run the provider killed never reached the point of closing, so it
+	// leaves the compliance denominator instead of counting as a refusal.
+	if !a.Expected || a.Exit != "completed" {
+		return
+	}
+	s.m.SubagentHandoffJudged++
+	if a.ReadOnly {
+		s.m.SubagentHandoffReadOnly++
+	}
+	if a.Attempts == 0 {
+		s.m.SubagentHandoffNotTried++
+	} else {
+		s.m.SubagentHandoffAttempted++
+	}
+	if a.Accepted > 0 {
+		s.m.SubagentHandoffAccepted++
+	}
+	if a.Malformed > 0 {
+		s.m.SubagentHandoffMalformed++
+	}
+	if a.ReportRound > 0 && a.ToolCallsAfterReport == 0 {
+		s.m.SubagentHandoffClosedWith++
+	}
+	s.m.SubagentHandoffToolsAfter += a.ToolCallsAfterReport
+	s.m.SubagentHandoffLowered += a.LoweredClaims
 }
 
 func (s *metricsSink) RecordProjectCheckProbe(p event.ProjectCheckProbe) {

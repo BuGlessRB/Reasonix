@@ -51,6 +51,12 @@ func (f *FanOut) RecordProjectCheckProbe(p ProjectCheckProbe) {
 	}
 }
 
+func (f *FanOut) RecordSubagentHandoff(a SubagentHandoffAudit) {
+	for _, s := range f.sinks {
+		RecordSubagentHandoff(s, a)
+	}
+}
+
 func (f *FanOut) RecordTurnCompletion() {
 	for _, s := range f.sinks {
 		RecordTurnCompletion(s)

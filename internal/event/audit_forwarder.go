@@ -53,6 +53,10 @@ func (f AuditForwarder) RecordProjectCheckProbe(p ProjectCheckProbe) {
 	RecordProjectCheckProbe(f.Inner, p)
 }
 
+func (f AuditForwarder) RecordSubagentHandoff(a SubagentHandoffAudit) {
+	RecordSubagentHandoff(f.Inner, a)
+}
+
 // DelegationAuditSink receives one receipt per completed sub-agent run.
 type DelegationAuditSink interface {
 	RecordDelegationAudit(a evidence.DelegationAudit)

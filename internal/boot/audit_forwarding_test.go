@@ -13,26 +13,6 @@ import (
 	"reasonix/internal/trajectory"
 )
 
-// The shared forwarder is why a new capability no longer has to be repeated at
-// every layer, so it must itself be complete.
-func TestAuditForwarderCoversEveryCapability(t *testing.T) {
-	fwd := reflect.TypeFor[event.AuditForwarder]()
-	for name, want := range map[string]reflect.Type{
-		"DelegationAuditSink":       reflect.TypeFor[event.DelegationAuditSink](),
-		"ReadinessAuditSink":        reflect.TypeFor[event.ReadinessAuditSink](),
-		"ContractShadowAuditSink":   reflect.TypeFor[event.ContractShadowAuditSink](),
-		"CompletionReportAuditSink": reflect.TypeFor[event.CompletionReportAuditSink](),
-		"MemoryRecallSink":          reflect.TypeFor[event.MemoryRecallSink](),
-		"OutcomeProgressSink":       reflect.TypeFor[event.OutcomeProgressSink](),
-		"ProtocolRecoveryAuditSink": reflect.TypeFor[event.ProtocolRecoveryAuditSink](),
-		"TurnCompletionSink":        reflect.TypeFor[event.TurnCompletionSink](),
-	} {
-		if !fwd.Implements(want) {
-			t.Errorf("event.AuditForwarder does not forward %s; every embedder loses it", name)
-		}
-	}
-}
-
 // A wrapper that forwards one audit but forgets another drops its data
 // silently, with the tests still green. Pure forwarders should embed
 // event.AuditForwarder instead of repeating the nine methods.
@@ -46,6 +26,7 @@ func TestAuditCapabilitiesAreForwardedByEveryWrapper(t *testing.T) {
 		"OutcomeProgressSink":       reflect.TypeFor[event.OutcomeProgressSink](),
 		"ProtocolRecoveryAuditSink": reflect.TypeFor[event.ProtocolRecoveryAuditSink](),
 		"TurnCompletionSink":        reflect.TypeFor[event.TurnCompletionSink](),
+		"SubagentHandoffSink":       reflect.TypeFor[event.SubagentHandoffSink](),
 	}
 	wrappers := []event.Sink{
 		event.Sync(event.Discard),

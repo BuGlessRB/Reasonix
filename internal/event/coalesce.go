@@ -160,6 +160,13 @@ func (c *coalescer) RecordProjectCheckProbe(p ProjectCheckProbe) {
 	RecordProjectCheckProbe(c.inner, p)
 }
 
+func (c *coalescer) RecordSubagentHandoff(a SubagentHandoffAudit) {
+	c.mu.Lock()
+	c.enqueueFlushLocked()
+	c.drainAndUnlock()
+	RecordSubagentHandoff(c.inner, a)
+}
+
 func (c *coalescer) RecordTurnCompletion() {
 	c.mu.Lock()
 	c.enqueueFlushLocked()

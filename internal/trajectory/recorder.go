@@ -36,6 +36,7 @@ type Record struct {
 	OutcomeProgress  *OutcomeProgress     `json:"outcome_progress,omitempty"`
 	MemoryRecall     *MemoryRecall        `json:"memory_recall,omitempty"`
 	ProjectCheck     *ProjectCheckProbe   `json:"project_check_probe,omitempty"`
+	SubagentHandoff  *SubagentHandoff     `json:"subagent_handoff,omitempty"`
 	// Deltas counts the streamed increments merged into this record; absent
 	// means one. TS stays the first increment's — that is the observation
 	// time-to-first-token readers key on — and EndTS carries the last's.
@@ -107,6 +108,29 @@ type ContractShadowAudit struct {
 	Verdict               string `json:"verdict"`
 	Complete              bool   `json:"complete,omitempty"`
 	ReadyToFinalize       bool   `json:"ready_to_finalize,omitempty"`
+}
+
+// SubagentHandoff mirrors event.SubagentHandoffAudit: how one delegated child
+// closed. Every field travels, because which cut explains a refusal — entrance,
+// depth, read-only, how long the run was — is what the aggregate cannot say.
+type SubagentHandoff struct {
+	Entrance             string `json:"entrance,omitempty"`
+	Depth                int    `json:"depth,omitempty"`
+	ReadOnly             bool   `json:"read_only,omitempty"`
+	Expected             bool   `json:"expected,omitempty"`
+	Exit                 string `json:"exit,omitempty"`
+	Attempts             int    `json:"attempts,omitempty"`
+	Accepted             int    `json:"accepted,omitempty"`
+	Malformed            int    `json:"malformed,omitempty"`
+	ReportRound          int    `json:"report_round,omitempty"`
+	FinalRound           int    `json:"final_round,omitempty"`
+	ToolCallsAfterReport int    `json:"tool_calls_after_report,omitempty"`
+	ClaimedStatus        string `json:"claimed_status,omitempty"`
+	AdjudicatedStatus    string `json:"adjudicated_status,omitempty"`
+	LoweredClaims        int    `json:"lowered_claims,omitempty"`
+	Criteria             int    `json:"criteria,omitempty"`
+	Evidence             int    `json:"evidence,omitempty"`
+	Unresolved           int    `json:"unresolved,omitempty"`
 }
 
 // ProjectCheckProbe mirrors event.ProjectCheckProbe: the shadow comparison
@@ -314,6 +338,29 @@ func (r *Recorder) RecordReadinessAudit(a evidence.ReadinessAudit) {
 		MissingCapabilities:       a.MissingCapabilities,
 	}})
 	event.RecordReadinessAudit(r.inner, a)
+}
+
+func (r *Recorder) RecordSubagentHandoff(a event.SubagentHandoffAudit) {
+	r.append(Record{SubagentHandoff: &SubagentHandoff{
+		Entrance:             a.Entrance,
+		Depth:                a.Depth,
+		ReadOnly:             a.ReadOnly,
+		Expected:             a.Expected,
+		Exit:                 a.Exit,
+		Attempts:             a.Attempts,
+		Accepted:             a.Accepted,
+		Malformed:            a.Malformed,
+		ReportRound:          a.ReportRound,
+		FinalRound:           a.FinalRound,
+		ToolCallsAfterReport: a.ToolCallsAfterReport,
+		ClaimedStatus:        a.ClaimedStatus,
+		AdjudicatedStatus:    a.AdjudicatedStatus,
+		LoweredClaims:        a.LoweredClaims,
+		Criteria:             a.Criteria,
+		Evidence:             a.Evidence,
+		Unresolved:           a.Unresolved,
+	}})
+	event.RecordSubagentHandoff(r.inner, a)
 }
 
 func (r *Recorder) RecordProjectCheckProbe(p event.ProjectCheckProbe) {

@@ -18,6 +18,7 @@ var capabilityContracts = map[string]reflect.Type{
 	"ProtocolRecovery":  reflect.TypeFor[ProtocolRecoveryAuditSink](),
 	"ReadinessAudit":    reflect.TypeFor[ReadinessAuditSink](),
 	"RunBudget":         reflect.TypeFor[RunBudgetSink](),
+	"SubagentHandoff":   reflect.TypeFor[SubagentHandoffSink](),
 	"TurnCompletion":    reflect.TypeFor[TurnCompletionSink](),
 	"WorkspaceMutation": reflect.TypeFor[WorkspaceMutationSink](),
 }

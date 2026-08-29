@@ -44,7 +44,13 @@ func readRecords(t *testing.T, path string) []Record {
 		t.Fatalf("read trajectory: %v", err)
 	}
 	var out []Record
-	for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
+	// An empty file means nothing arrived, which is a real outcome to report as
+	// itself rather than as a malformed record.
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		return nil
+	}
+	for line := range strings.SplitSeq(trimmed, "\n") {
 		var r Record
 		if err := json.Unmarshal([]byte(line), &r); err != nil {
 			t.Fatalf("bad record %q: %v", line, err)
