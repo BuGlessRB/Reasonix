@@ -182,6 +182,12 @@ const SAID: Record<string, string> = {
   "wallet.unauthorized": "这个供应商拒绝了当前密钥，余额读不到",
   "wallet.unreachable": "这个供应商的余额接口没有应答",
   "wallet.unreadable": "这个供应商的余额接口回的内容读不懂",
+
+  // ── 本机通道：这个请求不是 Studio 自己发的 ───────────────────────
+  "loopback.host_rejected": "这个请求没有发往 Studio 在监听的地址，已经拒掉了",
+  "loopback.origin_rejected": "这个页面不是 Studio 自己，不能操作它",
+  "loopback.unauthorized": "缺少本次启动的凭据，重开 Studio 再试",
+  "loopback.misconfigured": "本机通道没有建立起来，重开 Studio 再试",
 };
 
 /** Reason is what a refused request answers with. `error` is English fallback

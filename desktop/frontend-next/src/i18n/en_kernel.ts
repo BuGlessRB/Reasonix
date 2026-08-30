@@ -145,4 +145,8 @@ export const EN_KERNEL: Record<string, string> = {
   "图片太大了，先压到 {limit} MB 以内": "That image is too large — bring it under {limit} MB",
   "{path} 不在这个工作树里，看不了它的改动": "{path} is not inside this working tree, so its changes cannot be shown",
   "读不出这个文件的改动 —— git 那边没给出结果": "Could not read this file's changes — git returned nothing usable",
+  "这个请求没有发往 Studio 在监听的地址，已经拒掉了": "That request was not addressed to the address Studio listens on — refused",
+  "这个页面不是 Studio 自己，不能操作它": "That page is not Studio itself, so it may not drive it",
+  "缺少本次启动的凭据，重开 Studio 再试": "This launch's credential is missing — reopen Studio and try again",
+  "本机通道没有建立起来，重开 Studio 再试": "The local channel was never established — reopen Studio and try again",
 };
