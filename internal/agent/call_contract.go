@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // argumentContract is how a call compares against its target's own schema.
@@ -247,7 +248,68 @@ func malformedArgumentsDetail(arguments string) string {
 	case errors.Is(err, io.ErrUnexpectedEOF):
 		return "The arguments end mid-value: they were cut off, not mistyped, so re-sending the same shape truncates again. Keep summaries and free text short." + reemit
 	case errors.As(err, &syntax):
-		return fmt.Sprintf("The arguments were not valid JSON at byte %d: %v.%s", syntax.Offset, err, reemit)
+		return fmt.Sprintf("The arguments were not valid JSON at byte %d: %v.%s%s",
+			syntax.Offset, err, argumentsExcerpt(arguments, syntax.Offset), reemit)
 	}
 	return "The arguments were not valid JSON." + reemit
+}
+
+// argumentsExcerpt shows the bytes the parser stopped on. An offset into a
+// payload the model cannot see leaves it explaining the failure with whatever
+// it *can* see — which is how a missing delimiter is learned as "the host
+// rejects angle brackets". The closing line says what the caret does and does
+// not prove, so the excerpt cannot teach a rule of its own.
+func argumentsExcerpt(arguments string, offset int64) string {
+	at := int(offset) - 1 // Offset counts bytes consumed, so the byte read last precedes it
+	at = min(max(at, 0), len(arguments)-1)
+	if at < 0 {
+		return ""
+	}
+	const flank = 48
+	lo, hi := max(at-flank, 0), min(at+flank+1, len(arguments))
+	for lo > 0 && !utf8.RuneStart(arguments[lo]) {
+		lo--
+	}
+	for hi < len(arguments) && !utf8.RuneStart(arguments[hi]) {
+		hi++
+	}
+
+	var line strings.Builder
+	if lo > 0 {
+		line.WriteString("…")
+	}
+	caret := -1
+	for i := lo; i < hi; {
+		r, size := utf8.DecodeRuneInString(arguments[i:])
+		if caret < 0 && i <= at && at < i+size {
+			caret = visibleWidth(line.String())
+		}
+		line.WriteString(escapeExcerptRune(r))
+		i += size
+	}
+	if hi < len(arguments) {
+		line.WriteString("…")
+	}
+	if caret < 0 {
+		caret = visibleWidth(line.String())
+	}
+	return fmt.Sprintf("\n\n  %s\n  %s^\n\nThe caret marks where parsing stopped, not necessarily the character to remove: any byte is legal inside a JSON string, so when one shows up in the syntax around the strings it is the quoting or a delimiter before it that is missing.",
+		line.String(), strings.Repeat(" ", caret))
+}
+
+// escapeExcerptRune keeps an excerpt to one line so the caret below it stays
+// aligned with the byte it points at.
+func escapeExcerptRune(r rune) string {
+	switch r {
+	case '\n':
+		return "\\n"
+	case '\r':
+		return "\\r"
+	case '\t':
+		return "\\t"
+	}
+	if r < 0x20 || r == 0x7f {
+		return fmt.Sprintf("\\x%02x", r)
+	}
+	return string(r)
 }

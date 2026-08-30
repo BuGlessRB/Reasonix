@@ -50,6 +50,13 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   sentinel the wrapping preserves; `error-text` fails a new match against an
   error message, following it one hop into a local because storing the text
   first is what the direct form turns into.
+- Failure attribution is host-owned state. When the host can determine why an
+  operation failed or stopped — truncation, timeout, unavailable context,
+  dependency skipping, policy refusal, output spill, argument parsing — that
+  cause goes to the model. Surfacing only the downstream symptom leaves it to
+  invent one, and the invented rule outlives the incident: a response cut at the
+  output limit reaches the model as "invalid arguments", and the session learns
+  to stop batching calls that were never the problem.
 - A metric is its definition, not its name. Before a number becomes a finding,
   state what it counts, from which anchor, over which population, and what it
   excludes. Three readings in one study died in that gap: a command of unknown

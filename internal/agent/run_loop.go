@@ -295,8 +295,13 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		a.sess.haveLastPrefixShape = true
 		a.emitTurnUsage(usage, &cacheDiagnostics, streamed.attemptID)
 		a.observeRunBudget(state, usage)
+		// Classify the terminal before anything commits: a call the output limit
+		// cut in half must reach neither history nor execution, and why it did
+		// not is the host's to state, not the model's to infer.
+		boundary := classifyResponseBoundary(usage, calls)
+		calls = boundary.committed
 		if msg, ok := finishReasonMessage(usage); ok {
-			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg})
+			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg, Detail: boundary.noticeDetail()})
 		}
 
 		// Commit boundary: only a clean terminal attempt reaches here.
@@ -317,6 +322,12 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		})
 
 		if len(calls) == 0 {
+			if boundary.fact != "" {
+				// The truncated tail was the whole batch: nothing ran and no
+				// answer was finished, so the host fact is this round's result.
+				a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(boundary.fact)})
+				continue
+			}
 			cont, ferr := a.handleFinalResponse(ctx, state, text, reasoning, usage)
 			if !cont {
 				return ferr
@@ -327,6 +338,11 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		// Invariant: executeBatch only ever receives tool calls from a
 		// committed sampling attempt (clean terminal + response intercept).
 		cont, terr := a.handleToolRound(planmode.WithAuthority(ctx, authority), state, step, text, reasoning, calls, usage)
+		if cont && boundary.fact != "" {
+			// After the tool results, never between them and their call: the
+			// provider requires an unbroken assistant/tool pairing.
+			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(boundary.fact)})
+		}
 		if !cont {
 			return terr
 		}
