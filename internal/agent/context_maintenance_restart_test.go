@@ -40,13 +40,15 @@ func largeRestartToolHistory(results int) []provider.Message {
 func newRestartMaintenanceAgent(path string, messages []provider.Message, sink event.Sink) *Agent {
 	// Explicit 0.80 matches the v1.22.0 user scenario and the plan's regression
 	// fixture. New configs default to 0.85; users who set 0.80 keep 0.80.
+	// Economics off: the capacity share is the only trigger under test here.
 	return New(nil, tool.NewRegistry(), &Session{Messages: append([]provider.Message(nil), messages...)}, Options{
-		ContextWindow: restartMaintenanceWindow,
-		CompactRatio:  0.80,
-		RecentKeep:    2,
-		SessionPath:   path,
-		WorkspaceID:   "workspace",
-		ModelRef:      "provider/model",
+		ContextWindow:     restartMaintenanceWindow,
+		CompactRatio:      0.80,
+		RecentKeep:        2,
+		SessionPath:       path,
+		WorkspaceID:       "workspace",
+		ModelRef:          "provider/model",
+		CompactionBudgets: CompactionBudgets{ContextSoftLimitTokens: -1},
 	}, sink)
 }
 

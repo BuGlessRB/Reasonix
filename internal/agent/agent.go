@@ -954,9 +954,9 @@ func (a *Agent) reserveParentWrite(runTool tool.Tool, args json.RawMessage, read
 
 // Run appends the user input and drives the tool loop until the model returns a
 // final answer, the context is cancelled, or the provider errors. maxSteps <= 0
-// leaves the loop unbounded here: bounding it is the host's call, and the
-// adaptive stop is the no-progress ladder rather than a round count. Turn policy
-// lives in beginRunTurn / runToolLoop / handleFinalResponse / handleToolRound.
+// leaves the loop unbounded here: bounding it is the host's call, as a TaskBudget
+// in hours or tokens rather than a round count, and every such budget ships off.
+// Turn policy lives in beginRunTurn / runToolLoop / handleFinalResponse.
 func (a *Agent) Run(ctx context.Context, input string) (runErr error) {
 	runMaxSteps := a.maxSteps
 	runMaxStepsKey := a.maxStepsKey

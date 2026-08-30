@@ -380,7 +380,7 @@ func compactionTelemetryFromSummary(trigger, cacheState string, sourceTokens int
 
 // compact writes a context projection; trigger stays "auto"/"manual" for UI cards.
 func (a *Agent) compact(ctx context.Context, trigger, instructions string, force bool) error {
-	_, err := a.compactToProjection(ctx, trigger, instructions, force, false)
+	_, _, err := a.compactToProjection(ctx, trigger, instructions, force, false)
 	return err
 }
 
@@ -389,12 +389,12 @@ func (a *Agent) compact(ctx context.Context, trigger, instructions string, force
 // The canonical transcript is never rewritten. CompactionNoop means nothing
 // was foldable; callers at physical overflow must treat that as hard failure.
 // mustFree marks the fold the caller cannot proceed without.
-func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions string, force, mustFree bool) (CompactionOutcome, error) {
+func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions string, force, mustFree bool) (CompactionOutcome, CompactionNoopReason, error) {
 	a.sess.compactionRunMu.Lock()
 	defer a.sess.compactionRunMu.Unlock()
 	activeTurn := a.activeTurnCreatedAt.Load()
 	if activeTurn != 0 && a.sess.compaction.lastTurn.Load() == activeTurn && trigger != CompactionTriggerManual {
-		return CompactionNoop, nil
+		return CompactionNoop, NoopAlreadyCompactedThisTurn, nil
 	}
 	canonical, transcriptVersion := a.sess.conversation.snapshotMessagesVersion()
 	a.sess.compactionMu.Lock()
@@ -405,24 +405,24 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	msgs := a.visibleInputForFold(stateSnapshot, canonical, transcriptVersion)
 	viewInputHash := providerVisibleFingerprint(provider.ModelMessages(msgs))
 	if trigger != CompactionTriggerManual && stateSnapshot.LastReceipt != nil && stateSnapshot.LastReceipt.Status == "applied" && stateSnapshot.LastReceipt.Action == "summary" && stateSnapshot.LastReceipt.InputHash == viewInputHash {
-		return CompactionNoop, nil
+		return CompactionNoop, NoopInputUnchanged, nil
 	}
-	head, start, ok := a.planFoldRegion(msgs, force)
+	head, start, ok, planReason := a.planFoldRegion(msgs, force)
 	if !ok {
-		return CompactionNoop, nil
+		return CompactionNoop, planReason, nil
 	}
 	// The annotation rides the projection, not the canonical transcript: the
 	// original stays whole for resume and rewind.
 	kept, fold, retention, policyKeep := a.partitionFoldForProjection(a.annotateFailureDiagnostics(ctx, msgs[head:start]))
 	if len(fold) == 0 || (!force && !a.foldEconomics(fold)) {
-		return CompactionNoop, nil
+		return CompactionNoop, NoopFoldBelowEconomics, nil
 	}
 	fold, priorIndex := stripFoldIndexFromDigests(fold)
 	foldIndex := buildFoldIndex(msgs[head:start], policyKeep, a.toolFactsFor,
 		a.canonicalOriginFor(stateSnapshot, canonical, msgs, head))
 	fixedPrefixTokens := a.estimatedPromptTokens(a.providerProjectionMessages(msgs[:head]))
 	if a.effectiveContextWindow() > 0 && fixedPrefixTokens >= a.compactTrigger() {
-		return CompactionNoop, rejectCheckpoint("fixed prefix (%d tokens) already exceeds trigger (%d)", fixedPrefixTokens, a.compactTrigger())
+		return CompactionNoop, NoopFixedPrefixAboveTrigger, rejectCheckpoint("fixed prefix (%d tokens) already exceeds trigger (%d)", fixedPrefixTokens, a.compactTrigger())
 	}
 
 	sourceTokens := a.estimatedPromptTokens(msgs)
@@ -441,18 +441,18 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	fold, instructions, err = a.interceptCompactionPrepare(ctx, fold, instructions)
 	if err != nil {
 		a.emitCompactionAborted(trigger)
-		return CompactionNoop, err
+		return CompactionNoop, "", err
 	}
 	if len(fold) == 0 {
 		a.emitCompactionAborted(trigger)
-		return CompactionNoop, nil
+		return CompactionNoop, NoopFoldEmptyAfterHooks, nil
 	}
 
 	res, tele, err := a.foldOrDegrade(ctx, trigger, mustFree, fold, instructions, sourceTokens)
 	if err != nil {
 		a.emitCompactionTelemetry(tele)
 		a.emitCompactionAborted(trigger)
-		return CompactionNoop, err
+		return CompactionNoop, "", err
 	}
 	res.Text = a.attachFoldIndex(res.Text, priorIndex, foldIndex)
 	summary, err := a.interceptCompactionComplete(ctx, res.Text)
@@ -460,7 +460,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		tele.Error = err.Error()
 		a.emitCompactionTelemetry(tele)
 		a.emitCompactionAborted(trigger)
-		return CompactionNoop, err
+		return CompactionNoop, "", err
 	}
 
 	projMsgs := checkpointProjectionMessages(msgs, head, start, kept, summary)
@@ -471,7 +471,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	a.emitCompactionTelemetry(tele)
 	if err := a.acceptCheckpointCandidate(trigger, force, sourceTokens, projTokens, fixedPrefixTokens); err != nil {
 		a.emitCompactionAborted(trigger)
-		return CompactionNoop, err
+		return CompactionNoop, "", err
 	}
 	viewOutputHash := providerVisibleFingerprint(provider.ModelMessages(projMsgs))
 	_, err = a.commitSummaryProjection(summaryProjectionCommit{
@@ -483,7 +483,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	})
 	if err != nil {
 		a.emitCompactionAborted(trigger)
-		return CompactionNoop, err
+		return CompactionNoop, "", err
 	}
 	a.svc.sink.Emit(event.Event{Kind: event.CompactionDone, Compaction: event.Compaction{
 		Trigger: trigger, Messages: len(fold), Summary: summary,
@@ -495,7 +495,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	// Only once the checkpoint is committed: a rejected candidate folded nothing.
 	a.sess.compaction.lastUserTurns = retention
 	a.noticeDroppedUserTurns(retention)
-	return CompactionInstalled, nil
+	return CompactionInstalled, "", nil
 }
 
 // visibleInputForFold prefers the prior projection + new history over full canonical.
@@ -563,18 +563,27 @@ func (a *Agent) acceptCheckpointCandidate(trigger string, force bool, sourceToke
 }
 
 // planFoldRegion returns [head:start] to fold; force shrinks the recent tail.
-func (a *Agent) planFoldRegion(msgs []provider.Message, force bool) (head, start int, ok bool) {
+func (a *Agent) planFoldRegion(msgs []provider.Message, force bool) (head, start int, ok bool, reason CompactionNoopReason) {
 	head, start, ok = a.planCompaction(msgs, minCompactMessages, force)
 	if !ok {
 		head, start, ok = a.planCompaction(msgs, 1, force)
 	}
 	if !ok {
-		return head, start, false
+		return head, start, false, NoopNoFoldableRegion
 	}
+	// The running turn stays verbatim, so its start is where the fold has to
+	// end. A turn long enough to reach the trigger on its own leaves nothing
+	// behind it, and that is a different verdict from having nothing to fold.
 	if active := a.activeTurnStart(msgs); active >= head && active < start {
 		start = active
+		if start <= head {
+			return head, start, false, NoopActiveTurnBoundary
+		}
 	}
-	return head, start, start > head
+	if start <= head {
+		return head, start, false, NoopNoFoldableRegion
+	}
+	return head, start, true, ""
 }
 
 func (a *Agent) partitionFoldForProjection(region []provider.Message) (kept, fold []provider.Message, retention userTurnRetention, policyKeep []bool) {

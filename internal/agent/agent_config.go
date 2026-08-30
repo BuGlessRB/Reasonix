@@ -42,4 +42,8 @@ type CompactionBudgets struct {
 	UserTurnKeepTokens     int
 	FirstTurnPinTokens     int
 	CheckpointCeilingRatio float64
+	// ContextSoftLimitTokens is the economic maintenance boundary: the visible
+	// input size at which replaying the prompt each round stops being worth it,
+	// whatever window the provider declares. Negative disables that boundary.
+	ContextSoftLimitTokens int
 }

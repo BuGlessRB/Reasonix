@@ -19,10 +19,21 @@ type compactionProgress struct {
 	// lastTurn stops the post-turn observer and the pre-send preflight from
 	// paying for two summaries during one active tool loop.
 	lastTurn atomic.Int64
+	// lastNoop is the verdict already reported for the running turn. A crossed
+	// threshold stays crossed, so without it every later round of the same turn
+	// would report the same "folded nothing" again.
+	lastNoop maintenanceNoop
 	// lastUserTurns is what the most recent fold could and could not hold of
 	// the user's own words. The notice fires once, at the moment of the fold;
 	// this is what /context can still answer with afterwards.
 	lastUserTurns userTurnRetention
+}
+
+// maintenanceNoop is one reported no-fold verdict, scoped to the turn it was
+// reached under: the same reason in a later turn is news again.
+type maintenanceNoop struct {
+	reason CompactionNoopReason
+	turn   int64
 }
 
 // ContextManager is the sole owner of provider-visible context maintenance.
@@ -122,7 +133,7 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 	// Where this function would answer ErrCompactionRequired, the fold is the
 	// only way out and a failed summary must degrade rather than strand the turn.
 	mustFree := policy.Trigger != CompactionTriggerManual && (policy.Trigger == CompactionTriggerOverflow || est >= hard)
-	outcome, err := a.compactToProjection(ctx, policy.Trigger, policy.Instructions, forceFold, mustFree)
+	outcome, noopReason, err := a.compactToProjection(ctx, policy.Trigger, policy.Instructions, forceFold, mustFree)
 	if err != nil {
 		// Cancellation is the caller's decision, not a summary that failed:
 		// recording it as one would blame the summarizer for this generation,
@@ -134,7 +145,7 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 			// Transcript changed during the summary call: discard the candidate
 			// and block this generation so we do not pay for a second summary.
 			reason := "context changed during summary; automatic retry blocked for this generation"
-			a.recordContextMaintenanceBlocked(inputHash, policy.Trigger, "summary", reason)
+			a.recordContextMaintenanceBlocked(inputHash, policy.Trigger, "summary", "", reason)
 			if policy.Trigger == CompactionTriggerOverflow || est >= hard {
 				return PreparedContext{}, fmt.Errorf("%w: %s", ErrCompactionRequired, reason)
 			}
@@ -145,7 +156,7 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 			status = "blocked"
 		}
 		reason := fmt.Sprintf("context summary failed: %v", err)
-		a.recordContextMaintenanceOutcome(inputHash, policy.Trigger, "summary", status, reason)
+		a.recordContextMaintenanceOutcome(inputHash, policy.Trigger, "summary", status, "", reason)
 		if policy.Trigger == CompactionTriggerManual {
 			return PreparedContext{}, err
 		}
@@ -163,13 +174,17 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 	if outcome == CompactionNoop {
 		canonical, _ := a.sess.conversation.snapshotMessagesVersion()
 		if policy.Trigger == CompactionTriggerPressure && a.activeTurnStart(canonical) >= 0 {
+			// A running turn may still grow past a threshold it cannot fold
+			// below. Saying so is the only record that the attempt happened:
+			// this path deliberately does not block the next one.
+			a.noteMaintenanceNoop(policy.Trigger, noopReason, est)
 			return prepared, nil
 		}
 		reason := "context is above the maintenance threshold but no foldable region remains"
 		if policy.Trigger == CompactionTriggerManual {
 			reason = "no foldable region remains"
 		}
-		a.recordContextMaintenanceBlocked(inputHash, policy.Trigger, "summary", reason)
+		a.recordContextMaintenanceBlocked(inputHash, policy.Trigger, "summary", noopReason, reason)
 		// Manual carries Force, so without this a hand-typed compact answered
 		// with the overflow error — a sentence about a provider limit nowhere
 		// near being hit. Nothing to fold is a verdict, not a failure.
@@ -188,7 +203,7 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 	}
 	if result.InputTokens >= fold {
 		reason := fmt.Sprintf("summary result remains above fold trigger (%d >= %d)", result.InputTokens, fold)
-		a.recordContextMaintenanceBlocked(a.contextMaintenanceInputHash(result.Messages), policy.Trigger, "summary", reason)
+		a.recordContextMaintenanceBlocked(a.contextMaintenanceInputHash(result.Messages), policy.Trigger, "summary", "", reason)
 		a.sess.compaction.stuck = true
 		if policy.Trigger == CompactionTriggerOverflow || result.InputTokens >= hard {
 			return PreparedContext{}, fmt.Errorf("%w: %s", ErrCompactionRequired, reason)

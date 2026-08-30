@@ -37,15 +37,28 @@ func TestRecentTailBudgetClamp(t *testing.T) {
 		{2_000_000, maxRecentTailTokens}, // still 96K
 	}
 	for _, tc := range cases {
-		a := &Agent{agentConfig: agentConfig{contextWindow: tc.window, compactRatio: defaultCompactRatio}}
+		a := &Agent{agentConfig: agentConfig{contextWindow: tc.window, compactRatio: defaultCompactRatio,
+			budgets: CompactionBudgets{ContextSoftLimitTokens: -1}}}
 		if got := a.recentTailBudget(); got != tc.want {
 			t.Fatalf("window %d: recentTailBudget = %d, want %d", tc.window, got, tc.want)
 		}
 	}
 }
 
+// A tail reaching the trigger leaves nothing to fold, so the tail follows
+// whichever boundary is in force — including the one that does not come from
+// the window. Without this the economic boundary would arrive with the whole
+// prompt still held verbatim.
+func TestRecentTailFollowsTheEconomicBoundary(t *testing.T) {
+	a := &Agent{agentConfig: agentConfig{contextWindow: 1_000_000, compactRatio: defaultCompactRatio}}
+	if got, want := a.recentTailBudget(), defaultContextSoftLimitTokens/2; got != want {
+		t.Fatalf("recentTailBudget = %d, want %d (half the economic trigger)", got, want)
+	}
+}
+
 func TestCheckpointCeilingAndExceptionalSavings(t *testing.T) {
-	a := &Agent{agentConfig: agentConfig{contextWindow: 1_000_000, compactRatio: 0.85}}
+	a := &Agent{agentConfig: agentConfig{contextWindow: 1_000_000, compactRatio: 0.85,
+		budgets: CompactionBudgets{ContextSoftLimitTokens: -1}}}
 	if got := a.checkpointCeiling(); got != 500_000 {
 		t.Fatalf("checkpointCeiling = %d, want 500000", got)
 	}
@@ -58,7 +71,8 @@ func TestCheckpointCeilingAndExceptionalSavings(t *testing.T) {
 }
 
 func TestAcceptCheckpointCandidateRules(t *testing.T) {
-	a := &Agent{agentConfig: agentConfig{contextWindow: 1_000_000, compactRatio: 0.85}}
+	a := &Agent{agentConfig: agentConfig{contextWindow: 1_000_000, compactRatio: 0.85,
+		budgets: CompactionBudgets{ContextSoftLimitTokens: -1}}}
 	// 20% candidate under normal path: accept.
 	if err := a.acceptCheckpointCandidate(CompactionTriggerPressure, false, 850_000, 180_000, 50_000); err != nil {
 		t.Fatalf("20%% candidate: %v", err)

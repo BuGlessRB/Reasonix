@@ -16,5 +16,6 @@ func compactionBudgets(cfg *config.Config) agent.CompactionBudgets {
 		UserTurnKeepTokens:     cfg.Agent.UserTurnKeepTokens,
 		FirstTurnPinTokens:     cfg.Agent.FirstTurnPinTokens,
 		CheckpointCeilingRatio: cfg.Agent.CheckpointCeilingRatio,
+		ContextSoftLimitTokens: cfg.Agent.ContextSoftLimitTokens,
 	}
 }

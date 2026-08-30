@@ -401,6 +401,12 @@ type ContextMaintenance struct {
 	ProjectionVersion   uint64 `json:"projectionVersion,omitempty"`
 	CacheBreak          bool   `json:"cacheBreak,omitempty"`
 	Reason              string `json:"reason,omitempty"`
+	// Code identifies a no-fold verdict for a reader that must tell them apart;
+	// Reason is the same verdict as a sentence. Boundary names which threshold
+	// was reached (capacity or economic) and TriggerTokens is its size.
+	Code          string `json:"code,omitempty"`
+	Boundary      string `json:"boundary,omitempty"`
+	TriggerTokens int    `json:"triggerTokens,omitempty"`
 }
 
 // GuardianResult carries the outcome of a guardian sub-agent safety review.

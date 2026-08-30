@@ -1321,6 +1321,8 @@ type AgentConfig struct {
 	// CheckpointCeilingRatio is how small an automatic fold's result must be,
 	// as a fraction of the window, before it is accepted. 0 selects 0.50.
 	CheckpointCeilingRatio float64 `toml:"checkpoint_ceiling_ratio"`
+	// Folds on input size, not window share: 1M declared makes 300k legal, never economical.
+	ContextSoftLimitTokens int `toml:"context_soft_limit_tokens"`
 	// ColdResumePrune elides stale tool results when a session reopens past the
 	// provider cache window. nil = default enabled.
 	ColdResumePrune *bool `toml:"cold_resume_prune"`
@@ -1775,8 +1777,8 @@ func Default() *Config {
 		},
 		Agent: AgentConfig{
 			SystemPrompt: DefaultSystemPrompt,
-			// Normal interactive execution has no configurable total round cap. It
-			// is bounded by adaptive progress guards and context compaction instead.
+			// No total round cap, and nothing else bounds a turn by default: the
+			// task budgets below ship off and the round guards were retired.
 			MaxSteps:        0,
 			PlannerMaxSteps: 0,
 			AutoPlan:        "off",

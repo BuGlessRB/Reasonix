@@ -305,6 +305,23 @@ export interface ExtensionSurface {
   view?: ExtensionView;
 }
 
+// One context-maintenance transaction. status "noop" carries code: the attempt
+// ran and freed nothing, and code is what tells "already folded this turn" from
+// "nothing left to fold" — they read alike and mean opposite things about what
+// the next round can expect. boundary names which threshold was reached.
+export interface ContextMaintenance {
+  status?: string;
+  action?: string;
+  trigger?: string;
+  code?: string;
+  boundary?: string;
+  triggerTokens?: number;
+  inputTokens?: number;
+  resultTokens?: number;
+  savedTokens?: number;
+  reason?: string;
+}
+
 export interface Compaction {
   trigger?: string;
   messages?: number;
@@ -466,6 +483,7 @@ export interface WireEvent {
   guardian?: Guardian;
   extension?: ExtensionSurface;
   compaction?: Compaction;
+  maintenance?: ContextMaintenance;
   streamAttempt?: StreamAttempt;
   completion?: CompletionSummary;
   graph?: GraphDelta;

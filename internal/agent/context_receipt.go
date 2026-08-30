@@ -53,18 +53,52 @@ func (a *Agent) emitContextMaintenance(r *ContextMaintenanceReceipt) {
 		InputTokens: r.InputTokens, ResultTokens: r.ResultTokens, SavedTokens: r.SavedTokens,
 		AffectedToolResults: r.AffectedToolResults, ProjectionVersion: r.ProjectionVersion,
 		CacheBreak: r.CacheBreak, Reason: r.Reason,
+		Code: r.Code, Boundary: r.Boundary, TriggerTokens: r.TriggerTokens,
+	}})
+}
+
+// compactBoundary names the threshold that decides maintenance right now: the
+// window share, or the absolute visible-input size that does not come from it.
+func (a *Agent) compactBoundary() string {
+	capacity := a.capacityCompactTrigger()
+	if capacity <= 0 || a.compactRatio > 1 {
+		return ""
+	}
+	if economic := a.economicCompactTrigger(); economic > 0 && economic < capacity {
+		return "economic"
+	}
+	return "capacity"
+}
+
+// noteMaintenanceNoop reports one attempt that folded nothing. It writes no
+// receipt and advances no generation: nothing was spent and nothing is blocked,
+// so the next round is free to try again — which is exactly why the attempt
+// would otherwise leave no trace at all.
+func (a *Agent) noteMaintenanceNoop(trigger string, reason CompactionNoopReason, inputTokens int) {
+	if a == nil || reason == "" || a.svc.sink == nil {
+		return
+	}
+	turn := a.activeTurnCreatedAt.Load()
+	if a.sess.compaction.lastNoop.reason == reason && a.sess.compaction.lastNoop.turn == turn {
+		return
+	}
+	a.sess.compaction.lastNoop = maintenanceNoop{reason: reason, turn: turn}
+	a.svc.sink.Emit(event.Event{Kind: event.ContextMaintenanceEvent, Maintenance: &event.ContextMaintenance{
+		Status: "noop", Action: "summary", Trigger: trigger, Code: string(reason),
+		Boundary: a.compactBoundary(), TriggerTokens: a.compactTrigger(), InputTokens: inputTokens,
 	}})
 }
 
 // recordContextMaintenanceBlocked persists a generation-scoped blocked receipt.
-func (a *Agent) recordContextMaintenanceBlocked(inputHash, trigger, action, reason string) {
-	a.recordContextMaintenanceOutcome(inputHash, trigger, action, "blocked", reason)
+// code is empty where the verdict has no identity beyond its sentence.
+func (a *Agent) recordContextMaintenanceBlocked(inputHash, trigger, action string, code CompactionNoopReason, reason string) {
+	a.recordContextMaintenanceOutcome(inputHash, trigger, action, "blocked", code, reason)
 }
 
 // recordContextMaintenanceOutcome records blocked or failed for the current
 // generation. Automatic Prepare will not re-enter summary until the generation
 // advances (successful install, manual compress, or lineage change).
-func (a *Agent) recordContextMaintenanceOutcome(inputHash, trigger, action, status, reason string) {
+func (a *Agent) recordContextMaintenanceOutcome(inputHash, trigger, action, status string, code CompactionNoopReason, reason string) {
 	if a == nil || a.sess.conversation == nil {
 		return
 	}
@@ -110,6 +144,7 @@ func (a *Agent) recordContextMaintenanceOutcome(inputHash, trigger, action, stat
 		Trigger: trigger, SourceProjection: state.Projection.ProjectionVersion,
 		ProjectionVersion: state.Projection.ProjectionVersion, InputHash: inputHash,
 		BlockedInputHash: inputHash, Reason: reason, CreatedAt: now,
+		Code: string(code), Boundary: a.compactBoundary(), TriggerTokens: a.compactTrigger(),
 	}
 	state.UpdatedAt = now
 	a.sess.compactionState = state

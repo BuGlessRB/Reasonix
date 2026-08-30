@@ -6,9 +6,9 @@
     "complexity": 1513,
     "error-text": 12,
     "essay": 3245,
-    "file-size": 41730,
+    "file-size": 41733,
     "frontend-parity": 150,
-    "function-size": 6595,
+    "function-size": 6596,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
@@ -626,7 +626,7 @@
     },
     "internal/config/config.go": {
       "essay": 50,
-      "file-size": 1436,
+      "file-size": 1438,
       "narrative": 2
     },
     "internal/config/credentials.go": {
@@ -704,8 +704,8 @@
     "internal/config/render.go": {
       "complexity": 226,
       "essay": 2,
-      "file-size": 923,
-      "function-size": 857,
+      "file-size": 924,
+      "function-size": 858,
       "orphan": 1
     },
     "internal/config/vision.go": {

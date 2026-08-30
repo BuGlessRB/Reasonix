@@ -92,6 +92,9 @@ type ContextMaintenanceReceipt struct {
 	SummaryHash         string    `json:"summary_hash,omitempty"`
 	CacheBreak          bool      `json:"cache_break,omitempty"`
 	Reason              string    `json:"reason,omitempty"`
+	Code                string    `json:"code,omitempty"`
+	Boundary            string    `json:"boundary,omitempty"`
+	TriggerTokens       int       `json:"trigger_tokens,omitempty"`
 	BlockedInputHash    string    `json:"blocked_input_hash,omitempty"`
 	CreatedAt           time.Time `json:"created_at,omitempty"`
 }
@@ -104,6 +107,21 @@ const (
 	CompactionInstalled CompactionOutcome = iota
 	// CompactionNoop means no fold region / economics skip / empty fold after hooks.
 	CompactionNoop
+)
+
+// CompactionNoopReason identifies why an attempt folded nothing. "Already folded
+// this turn" and "nothing left to fold" read alike and mean opposite things about
+// what the next round can expect, so the verdict carries a code, not a sentence.
+type CompactionNoopReason string
+
+const (
+	NoopAlreadyCompactedThisTurn CompactionNoopReason = "already_compacted_this_turn"
+	NoopActiveTurnBoundary       CompactionNoopReason = "active_turn_boundary"
+	NoopNoFoldableRegion         CompactionNoopReason = "no_foldable_region"
+	NoopFoldBelowEconomics       CompactionNoopReason = "fold_below_economics"
+	NoopInputUnchanged           CompactionNoopReason = "input_unchanged"
+	NoopFoldEmptyAfterHooks      CompactionNoopReason = "fold_empty_after_hooks"
+	NoopFixedPrefixAboveTrigger  CompactionNoopReason = "fixed_prefix_above_trigger"
 )
 
 // RecallLedger is what one projection generation has already pulled back out

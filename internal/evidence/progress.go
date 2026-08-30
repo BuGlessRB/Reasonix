@@ -46,7 +46,7 @@ func NewProgressTracker() *ProgressTracker {
 // round's evidence gain. Reading something new is progress only while it leads
 // somewhere: past explorationRunLimit look-only rounds the novelty stops
 // counting, because a loop that keeps opening files it has never opened scored
-// positive every round and so could never reach the no-progress ladder.
+// positive every round. No guard consumes this today.
 func (t *ProgressTracker) ScoreRound(receipts []Receipt) int {
 	if t == nil {
 		return 0

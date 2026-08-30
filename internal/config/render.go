@@ -207,6 +207,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# checkpoint_ceiling_ratio = 0.50   # how small a fold's result must be to be accepted\n")
 	}
+	fmt.Fprintf(&b, "context_soft_limit_tokens = %d   # fold at this visible input size whatever the window says; 0 = 160000, negative = off\n", c.Agent.ContextSoftLimitTokens)
 	if c.Agent.RecentKeep > 0 {
 		fmt.Fprintf(&b, "recent_keep         = %d   # minimum recent messages kept verbatim\n", c.Agent.RecentKeep)
 	} else {

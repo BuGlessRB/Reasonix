@@ -70,7 +70,7 @@ func TestLargeFixedPrefixDoesNotRefuseCompaction(t *testing.T) {
 		t.Fatalf("fixture prefix is %d characters, under the %d trigger; it cannot show the bug", len(prefix), a.compactTrigger())
 	}
 
-	if _, err := a.compactToProjection(context.Background(), CompactionTriggerManual, "", true, false); err != nil {
+	if _, _, err := a.compactToProjection(context.Background(), CompactionTriggerManual, "", true, false); err != nil {
 		t.Fatalf("compaction refused a prefix that fits: %v", err)
 	}
 }

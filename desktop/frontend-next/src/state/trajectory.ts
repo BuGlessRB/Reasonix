@@ -179,8 +179,19 @@ function record(ev: WireEvent): Made | null {
     case "steer":
       return { kind: "memory_recall", payload: [{ t: "steer delivered · " }, { b: ev.text ?? "" }] };
 
-    case "context_maintenance":
-      return { kind: "outcome_progress", payload: [{ t: ev.text || "context maintenance" }] };
+    case "context_maintenance": {
+      const m = ev.maintenance;
+      if (!m) return { kind: "outcome_progress", payload: [{ t: ev.text || "context maintenance" }] };
+      const payload: Span[] = [{ t: "context maintenance · " }, { b: m.status ?? "" }];
+      if (m.boundary) payload.push({ t: " · " }, { b: m.boundary });
+      // A verdict without its code is the line that made the last runaway
+      // unreadable: it says maintenance happened, never what it decided.
+      if (m.code) payload.push({ t: " · " }, { b: m.code });
+      if (m.inputTokens) payload.push({ t: " · in " }, { n: String(m.inputTokens) });
+      if (m.resultTokens) payload.push({ t: " → " }, { n: String(m.resultTokens) });
+      if (m.triggerTokens) payload.push({ t: " · trigger " }, { n: String(m.triggerTokens) });
+      return { kind: "outcome_progress", payload };
+    }
 
     case "completion_summary": {
       const c = ev.completion;

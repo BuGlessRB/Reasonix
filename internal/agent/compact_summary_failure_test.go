@@ -67,7 +67,7 @@ func prepareContext(ctx context.Context, a *Agent, trigger string) error {
 func foldRegionOf(a *Agent) []provider.Message {
 	canonical, version := a.sess.conversation.snapshotMessagesVersion()
 	msgs := a.visibleInputForFold(a.sess.compactionState, canonical, version)
-	head, start, ok := a.planFoldRegion(msgs, false)
+	head, start, ok, _ := a.planFoldRegion(msgs, false)
 	if !ok {
 		return nil
 	}
