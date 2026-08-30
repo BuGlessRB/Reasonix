@@ -1122,6 +1122,10 @@ type SandboxConfig struct {
 	// Network allows network egress from inside the bash sandbox. Defaults true
 	// so module/package downloads keep working; the boundary is then writes.
 	Network bool `toml:"network"`
+	// HostAuthorities lists the host services bash may call. Defaults to
+	// ssh_agent alone: signing is routine, a daemon socket is host-wide
+	// execution. User-global (LoadForRoot); a repo cannot grant itself one.
+	HostAuthorities []string `toml:"host_authorities"`
 }
 
 // WriteRoots returns the directories file-writer tools may modify: the
@@ -1794,7 +1798,7 @@ func Default() *Config {
 		// Windows has no OS-level Bash sandbox and always forces bash off.
 		// Network=true here so an absent [sandbox] in a user's file keeps egress
 		// (zero value would wrongly deny it).
-		Sandbox: SandboxConfig{Network: true},
+		Sandbox: SandboxConfig{Network: true, HostAuthorities: []string{"ssh_agent"}},
 		// LSP tools on by default, but dormant until a language server is on PATH;
 		// a missing server yields an install hint rather than an error.
 		LSP:     LSPConfig{Enabled: true},

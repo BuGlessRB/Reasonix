@@ -6,9 +6,9 @@
     "complexity": 1513,
     "error-text": 12,
     "essay": 3245,
-    "file-size": 41720,
+    "file-size": 41730,
     "frontend-parity": 150,
-    "function-size": 6589,
+    "function-size": 6595,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
@@ -327,8 +327,8 @@
     "internal/boot/boot.go": {
       "complexity": 131,
       "essay": 77,
-      "file-size": 962,
-      "function-size": 1034,
+      "file-size": 963,
+      "function-size": 1035,
       "narrative": 3,
       "orphan": 1
     },
@@ -626,7 +626,7 @@
     },
     "internal/config/config.go": {
       "essay": 50,
-      "file-size": 1432,
+      "file-size": 1436,
       "narrative": 2
     },
     "internal/config/credentials.go": {
@@ -659,8 +659,8 @@
     },
     "internal/config/load.go": {
       "essay": 24,
-      "file-size": 1654,
-      "function-size": 57,
+      "file-size": 1658,
+      "function-size": 61,
       "orphan": 2
     },
     "internal/config/main_test.go": {
@@ -704,8 +704,8 @@
     "internal/config/render.go": {
       "complexity": 226,
       "essay": 2,
-      "file-size": 922,
-      "function-size": 856,
+      "file-size": 923,
+      "function-size": 857,
       "orphan": 1
     },
     "internal/config/vision.go": {

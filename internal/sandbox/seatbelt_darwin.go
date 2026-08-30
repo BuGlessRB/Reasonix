@@ -106,6 +106,15 @@ func seatbeltProfile(spec Spec) string {
 	if !spec.Network {
 		b.WriteString("(deny network*)\n")
 	}
+	// Authority rules last, and denies before grants: SBPL takes the final
+	// match, so a granted endpoint survives the blanket denial above. Without
+	// that ordering, revoking external egress would also revoke local signing.
+	for _, p := range deniedAuthorityEndpoints(spec) {
+		fmt.Fprintf(&b, "(deny network-outbound (literal %s))\n", sbplString(p))
+	}
+	for _, p := range grantedAuthorityEndpoints(spec) {
+		fmt.Fprintf(&b, "(allow network-outbound (literal %s))\n", sbplString(p))
+	}
 	return b.String()
 }
 

@@ -238,6 +238,13 @@ moving a number here must not move the promise.
 - `internal/sandbox` confines writes to the workspace, configured extras, temp
   and toolchain caches — on macOS and Linux. Windows has no OS-level bash
   sandbox, so there nothing the host enforces bounds `Writable`.
+- Authority is not transport. `Network` decides external egress; `HostAuthorities`
+  decides which host services a command may call, because one flag covering both
+  meant revoking egress also revoked local signing. The governed set is *named*
+  — ssh-agent, docker, podman — and that is the whole claim: DBus, Wayland, X11,
+  gpg-agent, keyrings and arbitrary sockets stay reachable, and Windows enforces
+  neither axis. Read possession is a separate axis again: `ForbidReadRoots` hides
+  a private key while the agent will still sign with it.
 
 `stateEpoch` tracks host-observed mutations, not an exact filesystem snapshot;
 unobserved external writers are a gap shared by the whole verification model. Go

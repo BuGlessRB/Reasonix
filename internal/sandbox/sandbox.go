@@ -45,10 +45,12 @@ type Spec struct {
 	// deny file-read* rules, Linux bubblewrap masks); on other platforms the
 	// in-process tools enforce this instead.
 	ForbidReadRoots []string
-	// Network allows network egress from inside the sandbox. Off blocks it so a
-	// command cannot exfiltrate or fetch; many dev commands (module/package
-	// downloads) need it, so it defaults on at the config layer.
+	// Network allows *external* egress only; module downloads need it, so it
+	// defaults on at the config layer. Host services are HostAuthorities:
+	// transport and authority are separate questions, one flag cannot answer both.
 	Network bool
+	// HostAuthorities are the host services this command may call.
+	HostAuthorities []HostAuthority
 	// MinimalWrites omits the broad build-tool cache write allowances used by
 	// the bash sandbox. MCP profiles set it and explicitly provide only their
 	// private state/temp directories (plus approved writer roots).

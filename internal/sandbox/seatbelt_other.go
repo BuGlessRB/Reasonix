@@ -125,7 +125,14 @@ func bwrapBaseArgs(spec Spec) []string {
 			args = append(args, "--bind", root, root)
 		}
 	}
-	return append(args, bwrapForbidReadArgs(spec.ForbidReadRoots)...)
+	args = append(args, bwrapForbidReadArgs(spec.ForbidReadRoots)...)
+	// Masks last so no later mount re-exposes an endpoint. A pathname socket
+	// lives in the mount namespace, so --unshare-net misses it and
+	// --unshare-ipc is the wrong tool: that isolates SysV IPC, not sockets.
+	for _, p := range deniedAuthorityEndpoints(spec) {
+		args = append(args, "--ro-bind", "/dev/null", p)
+	}
+	return args
 }
 
 func bwrapTmpMountArgs(spec Spec) []string {
