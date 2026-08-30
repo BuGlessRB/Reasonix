@@ -3,7 +3,6 @@ package builtin
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -146,9 +145,9 @@ func ConfineReaders(forbidRoots []string) []tool.Tool {
 	}
 }
 
-// confineRead reports whether target is inside any forbidRoot or, when the
-// user enabled [secrets] protect_sensitive_files, matches Reasonix's built-in
-// sensitive credential path denylist. An empty forbidRoots slice with the
+// confineRead reports whether target is inside any forbidRoot, names a
+// credential file, or — with [secrets] protect_sensitive_files on — matches the
+// broader sensitive path denylist. An empty forbidRoots slice with the
 // denylist off is unconfined (returns false). Callers should return a result
 // that mimics the directory appearing empty, matching the tmpfs semantics the
 // bubblewrap sandbox provides. Deny-side, so the check folds case on
@@ -156,12 +155,16 @@ func ConfineReaders(forbidRoots []string) []tool.Tool {
 // path reaches the same bytes there.
 func confineRead(forbidRoots []string, target string) bool {
 	protect := secrets.ProtectSensitiveFiles()
-	if len(forbidRoots) == 0 && !protect {
+	credentials := secrets.ProtectCredentialFiles()
+	if len(forbidRoots) == 0 && !protect && !credentials {
 		return false
 	}
 	abs, err := realPath(target)
 	if err != nil {
 		return false // can't resolve -> let the caller's normal error path handle it
+	}
+	if secrets.CredentialReadPath(abs) {
+		return true
 	}
 	if protect && sensitiveReadPath(abs) {
 		return true
@@ -186,9 +189,8 @@ func sensitiveReadPath(abs string) bool {
 			return true
 		}
 	}
-	home, err := os.UserHomeDir()
-	if err == nil && home != "" {
-		if withinFold(filepath.Join(home, ".ssh"), clean) {
+	for _, dir := range secrets.SensitiveHomeDirs() {
+		if withinFold(dir, clean) {
 			return true
 		}
 	}

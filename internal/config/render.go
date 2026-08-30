@@ -629,13 +629,14 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		} else {
 			b.WriteString("# protect_sensitive_files = false   # opt-in; hiding credential files can break legitimate edit workflows\n")
 		}
+		if !c.Secrets.ProtectCredentialFiles {
+			b.WriteString("protect_credential_files = false   # opt-out; lets bash read raw SSH private keys and cloud credential files\n")
+		}
 		b.WriteString("\n")
-	}
 
-	// [remote] is user/global only like [secrets]: LoadForRoot discards project
-	// values so a cloned repo can never inject SSH hosts. Rendered so saved hosts
-	// survive full-file config rewrites.
-	if scope != RenderScopeProject {
+		// [remote] is user/global only like [secrets]: LoadForRoot discards project
+		// values so a cloned repo can never inject SSH hosts. Rendered so saved hosts
+		// survive full-file config rewrites.
 		renderRemoteSection(&b, c.Remote)
 	}
 

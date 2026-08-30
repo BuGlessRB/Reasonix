@@ -113,7 +113,7 @@ func (g globTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 }
 
 func filterForbidMatches(matches, forbidRoots []string) []string {
-	if len(matches) == 0 || (len(forbidRoots) == 0 && !secrets.ProtectSensitiveFiles()) {
+	if len(matches) == 0 || (len(forbidRoots) == 0 && !secrets.ProtectSensitiveFiles() && !secrets.ProtectCredentialFiles()) {
 		return matches
 	}
 	out := matches[:0]

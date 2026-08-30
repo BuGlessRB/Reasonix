@@ -119,6 +119,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// reasonix.toml cannot override it), so concurrent workspaces agree.
 	secrets.SetFilterSubprocessEnv(cfg.Secrets.FilterSubprocessEnv)
 	secrets.SetProtectSensitiveFiles(cfg.Secrets.ProtectSensitiveFiles)
+	secrets.SetProtectCredentialFiles(cfg.Secrets.ProtectCredentialFiles)
 	secrets.RegisterCredentialEnvKeys(cfg.CredentialEnvNames())
 
 	// Serialize the frontend's sink once: background jobs (below) emit from their
@@ -1469,22 +1470,23 @@ func appendUniquePaths(base []string, extra ...string) []string {
 	return out
 }
 
-// RuntimeForbidReadRoots returns the configured deny roots plus Reasonix's
-// global credential FILE when it exists. It also registers the corresponding
-// credential environment names for subprocess filtering. Runtime tool
-// assemblers outside Build must use this helper instead of reading the config
-// roots directly.
+// RuntimeForbidReadRoots returns the configured deny roots plus every path the
+// secrets package denies readers: Reasonix's own credential FILE, the host's
+// SSH private keys and cloud credential files, and the broad denylist's
+// directories when it is on. It also registers the corresponding credential
+// environment names for subprocess filtering. Runtime tool assemblers outside
+// Build must use this helper instead of reading the config roots directly.
 //
-// Provider and bot credentials are loaded into the parent process from this
-// file, so readers, shell commands, and MCP servers must not be able to recover
-// them even when the optional broad sensitive-file denylist is off. Project
-// .env files retain their existing behavior.
+// These roots are what reaches the OS sandbox, which is where a protection
+// stops being advisory: a denylist only the in-process readers consult leaves
+// `cat` reading what read_file refuses.
 func RuntimeForbidReadRoots(cfg *config.Config, root string) []string {
 	if cfg == nil {
 		return nil
 	}
 	secrets.RegisterCredentialEnvKeys(cfg.CredentialEnvNames())
 	base := cfg.ForbidReadRootsForRoot(root)
+	base = appendUniquePaths(base, secrets.ForbiddenReadPaths(cfg.Secrets.ProtectSensitiveFiles)...)
 	credentialPath := strings.TrimSpace(config.UserCredentialsPath())
 	if credentialPath == "" {
 		return append([]string(nil), base...)

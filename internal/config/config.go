@@ -228,6 +228,10 @@ type SecretsConfig struct {
 	// as invisible. Default off because hiding the files breaks legitimate
 	// "edit my .env" workflows.
 	ProtectSensitiveFiles bool `toml:"protect_sensitive_files"`
+	// ProtectCredentialFiles denies raw reads of pure-credential files (SSH
+	// private keys, ~/.aws/credentials, ~/.netrc) to the read tools and the OS
+	// bash sandbox alike. Default on; those files hold no settings a tool needs.
+	ProtectCredentialFiles bool `toml:"protect_credential_files"`
 }
 
 type providerSourceScope string
@@ -1757,6 +1761,8 @@ func Default() *Config {
 		UI:               UIConfig{Theme: "auto", ShowTurnUsage: true},
 		Desktop:          DesktopConfig{DefaultToolApprovalMode: "auto", ConversationWidth: "standard"},
 		Billing:          BillingConfig{},
+		// Set here, not left to the zero value: an absent [secrets] still protects.
+		Secrets: SecretsConfig{ProtectCredentialFiles: true},
 		Notifications: NotificationsConfig{
 			Enabled:         false,
 			TurnDone:        true,
