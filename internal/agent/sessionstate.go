@@ -80,8 +80,7 @@ func (r *sessionRuntime) reset(s *Session) {
 	r.compactionState = CompactionState{} // lineage change; disk reloaded on Resume
 	r.cacheState = CacheStateUnknown
 	r.compactionMu.Unlock()
-	r.compaction.stuck = false
-	r.compaction.lastTurn.Store(0)
+	r.compaction.restart()
 	r.budgetNotice = budgetNoticeLatch{}
 }
 

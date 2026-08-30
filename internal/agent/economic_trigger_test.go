@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -114,14 +115,28 @@ func TestInputBelowBothBoundariesIsNotMaintained(t *testing.T) {
 	}
 }
 
-// growTurn appends rounds to the running turn, which is what a tool loop does
-// between two Prepare calls and what keeps its history unfoldable.
+// growTurn appends closed tool transactions to the running turn — call and
+// result, paired — which is what a tool loop produces between two Prepare
+// calls and what a fold inside the turn is allowed to reach.
 func growTurn(a *Agent, rounds int) {
 	body := strings.Repeat("x", 24*1024)
-	for i := range rounds {
-		a.sess.conversation.Add(provider.Message{Role: provider.RoleAssistant, Content: "more " + string(rune('a'+i%26))})
-		a.sess.conversation.Add(provider.Message{Role: provider.RoleTool, ToolCallID: "t", Name: "read_file", Content: body})
+	for range rounds {
+		id := fmt.Sprintf("call-%d", a.hostAdvanceSeq.Add(1))
+		a.sess.conversation.Add(provider.Message{Role: provider.RoleAssistant,
+			ToolCalls: []provider.ToolCall{{ID: id, Name: "read_file", Arguments: `{}`}}})
+		a.sess.conversation.Add(provider.Message{Role: provider.RoleTool, ToolCallID: id, Name: "read_file", Content: body})
 	}
+}
+
+// openTransaction appends a call the turn is still waiting on.
+func openTransaction(a *Agent, calls int) {
+	body := strings.Repeat("x", 24*1024)
+	pending := make([]provider.ToolCall, 0, calls)
+	for i := range calls {
+		pending = append(pending, provider.ToolCall{ID: fmt.Sprintf("open-%d", i), Name: "read_file",
+			Arguments: `{"path":"` + body + `"}`})
+	}
+	a.sess.conversation.Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: pending})
 }
 
 func maintenanceCodes(sink *recordSink, status string) []string {
@@ -134,13 +149,73 @@ func maintenanceCodes(sink *recordSink, status string) []string {
 	return codes
 }
 
-// A turn folds at most once, and the rounds after it keep arriving above the
-// boundary. Without a verdict for those rounds the trajectory shows a session
-// that never tried to maintain its context, which is what this whole path was
-// missing: the attempt happened and freed nothing.
-func TestSecondMaintenanceInOneTurnReportsAlreadyCompacted(t *testing.T) {
-	// The running turn starts late enough that the rounds before it fold, so
-	// the first attempt succeeds and the turn is marked as already compacted.
+// A turn long enough to reach the boundary more than once must fold more than
+// once. What the checkpoint may reach is the turn's closed transactions; what
+// it may never reach is the request that began the turn or a call still in
+// flight. Everything below is one turn: the 15.6-hour session that motivated
+// this ran 2150 rounds inside a single one.
+func TestRepeatedMaintenanceInsideOneTurn(t *testing.T) {
+	a, sink := economicFixture(t, 0, 30)
+	a.activeTurnCreatedAt.Store(economicActiveTurnAt)
+	ctx := context.Background()
+	canonicalBefore := len(a.sess.conversation.Snapshot())
+
+	var versions []uint64
+	var covered []int
+	for round := range 3 {
+		if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
+			t.Fatalf("round %d: %v", round+1, err)
+		}
+		version := a.currentProjectionVersion()
+		if version == 0 {
+			t.Fatalf("round %d installed no projection; codes so far = %v", round+1, maintenanceCodes(sink, "noop"))
+		}
+		versions = append(versions, version)
+		a.sess.compactionMu.Lock()
+		covered = append(covered, a.sess.compactionState.Projection.CoveredCount)
+		a.sess.compactionMu.Unlock()
+		if visible := a.estimatedVisibleRequestTokens(a.modelVisibleMessages()); visible >= a.compactTrigger() {
+			t.Fatalf("round %d left %d visible tokens, still at or above the %d boundary", round+1, visible, a.compactTrigger())
+		}
+		growTurn(a, 30)
+	}
+
+	if a.activeTurnCreatedAt.Load() != economicActiveTurnAt {
+		t.Fatal("the turn changed; this proves nothing about folding inside one")
+	}
+	for i := 1; i < len(versions); i++ {
+		if versions[i] <= versions[i-1] {
+			t.Fatalf("projection versions %v did not advance", versions)
+		}
+		if covered[i] <= covered[i-1] {
+			t.Fatalf("checkpoint covered %v did not advance; a later fold re-folded the same prefix", covered)
+		}
+	}
+	if grown := len(a.sess.conversation.Snapshot()); grown <= canonicalBefore {
+		t.Fatal("the fixture never grew the turn")
+	}
+	// The canonical transcript is the recovery record; a projection may not
+	// rewrite it, so the request that began the turn is still where it was.
+	for _, m := range a.sess.conversation.Snapshot() {
+		if m.Role == provider.RoleUser && m.CreatedAt == economicActiveTurnAt {
+			goto found
+		}
+	}
+	t.Fatal("the active turn's request is gone from the canonical transcript")
+found:
+	// And it is still verbatim in what the model sees.
+	for _, m := range a.modelVisibleMessages() {
+		if m.Role == provider.RoleUser && m.CreatedAt == economicActiveTurnAt {
+			return
+		}
+	}
+	t.Fatal("the active turn's request was folded into a digest")
+}
+
+// Growth that never closes gives a checkpoint nothing new to reach, and that
+// verdict is its own code: "already folded this turn" was an implementation
+// limit, this is a fact about the transcript.
+func TestGrowthWithNoClosedTransactionReportsNoNewPrefix(t *testing.T) {
 	a, sink := economicFixture(t, 0, 30)
 	a.activeTurnCreatedAt.Store(economicActiveTurnAt)
 	ctx := context.Background()
@@ -148,57 +223,39 @@ func TestSecondMaintenanceInOneTurnReportsAlreadyCompacted(t *testing.T) {
 		t.Fatal(err)
 	}
 	if a.currentProjectionVersion() == 0 {
-		t.Fatal("first attempt installed no projection; the fixture cannot show the second")
+		t.Fatal("the first fold did not install a projection")
 	}
-	// The turn keeps running. Its own rounds are held verbatim, so the visible
-	// input climbs back over the boundary with nothing new left to fold.
-	growTurn(a, 30)
-	if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
-		t.Fatal(err)
-	}
-	codes := maintenanceCodes(sink, "noop")
-	if len(codes) != 1 || codes[0] != string(NoopAlreadyCompactedThisTurn) {
-		t.Fatalf("noop codes = %v, want exactly [%s]", codes, NoopAlreadyCompactedThisTurn)
-	}
-}
-
-// The threshold stays crossed for the rest of the turn, so the same verdict is
-// reached on every later round. Reporting it once is what keeps a trajectory
-// readable; reporting it never is what made this invisible.
-func TestRepeatedNoopInOneTurnReportsOnce(t *testing.T) {
-	a, sink := economicFixture(t, 0, 30)
-	a.activeTurnCreatedAt.Store(economicActiveTurnAt)
-	ctx := context.Background()
-	if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
-		t.Fatal(err)
-	}
-	for range 4 {
-		growTurn(a, 10)
+	openTransaction(a, 40)
+	for range 3 {
 		if _, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{Trigger: CompactionTriggerPressure}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if codes := maintenanceCodes(sink, "noop"); len(codes) != 1 {
-		t.Fatalf("noop codes = %v, want exactly one report for the turn", codes)
+	codes := maintenanceCodes(sink, "noop")
+	if len(codes) != 1 || codes[0] != string(NoopNoNewClosedPrefix) {
+		t.Fatalf("noop codes = %v, want exactly [%s]", codes, NoopNoNewClosedPrefix)
 	}
 }
 
-// A turn that is the whole transcript has nothing behind it to fold. That is a
-// different verdict from an exhausted history, and the two are told apart by
-// the code rather than by reading the sentence beside it.
+// A turn whose every round is still in flight has nothing closed to fold, and
+// nothing precedes it. That is a different verdict from an exhausted history,
+// and the two are told apart by the code rather than by the sentence beside it.
 func TestActiveTurnBoundaryLeavesNothingToFold(t *testing.T) {
 	body := strings.Repeat("x", 24*1024)
 	// Too large to be pinned as a brief, so the fixed prefix is the system
-	// message alone and the running turn starts exactly where the fold would.
+	// message alone and the running turn starts exactly where a fold would.
 	sess := &Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
 		{Role: provider.RoleUser, Content: body, CreatedAt: economicActiveTurnAt},
 	}}
+	// One assistant turn holding many calls, none of them answered yet: the
+	// transaction opened and never closed, so no prefix of it is foldable.
+	calls := make([]provider.ToolCall, 0, 40)
 	for i := range 40 {
-		sess.Messages = append(sess.Messages,
-			provider.Message{Role: provider.RoleAssistant, Content: "step " + string(rune('a'+i%26))},
-			provider.Message{Role: provider.RoleTool, ToolCallID: "t", Name: "read_file", Content: body})
+		calls = append(calls, provider.ToolCall{ID: "open-" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
+			Name: "read_file", Arguments: `{"path":"` + body + `"}`})
 	}
+	sess.Messages = append(sess.Messages, provider.Message{Role: provider.RoleAssistant, ToolCalls: calls})
 	sink := &recordSink{}
 	a := New(&fakeProvider{reply: "digest"}, tool.NewRegistry(), sess, Options{
 		ContextWindow: 1_000_000, CompactRatio: 0.85, RecentKeep: 2, ArchiveDir: testenv.TempDir(t),

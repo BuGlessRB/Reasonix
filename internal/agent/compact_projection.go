@@ -393,16 +393,13 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	a.sess.compactionRunMu.Lock()
 	defer a.sess.compactionRunMu.Unlock()
 	activeTurn := a.activeTurnCreatedAt.Load()
-	if activeTurn != 0 && a.sess.compaction.lastTurn.Load() == activeTurn && trigger != CompactionTriggerManual {
-		return CompactionNoop, NoopAlreadyCompactedThisTurn, nil
-	}
 	canonical, transcriptVersion := a.sess.conversation.snapshotMessagesVersion()
 	a.sess.compactionMu.Lock()
 	stateSnapshot := a.sess.compactionState
 	startProjectionVersion := a.sess.compactionState.Projection.ProjectionVersion
 	startGeneration := a.sess.compactionState.Generation
 	a.sess.compactionMu.Unlock()
-	msgs := a.visibleInputForFold(stateSnapshot, canonical, transcriptVersion)
+	msgs, fromProjection := a.visibleInputForFold(stateSnapshot, canonical, transcriptVersion)
 	viewInputHash := providerVisibleFingerprint(provider.ModelMessages(msgs))
 	if trigger != CompactionTriggerManual && stateSnapshot.LastReceipt != nil && stateSnapshot.LastReceipt.Status == "applied" && stateSnapshot.LastReceipt.Action == "summary" && stateSnapshot.LastReceipt.InputHash == viewInputHash {
 		return CompactionNoop, NoopInputUnchanged, nil
@@ -410,6 +407,20 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 	head, start, ok, planReason := a.planFoldRegion(msgs, force)
 	if !ok {
 		return CompactionNoop, planReason, nil
+	}
+	// A checkpoint already holds everything up to its own length; folding only
+	// inside that buys a second digest of one digest.
+	if fromProjection && trigger != CompactionTriggerManual {
+		held := len(stateSnapshot.Projection.Messages)
+		if start <= held {
+			return CompactionNoop, NoopNoNewClosedPrefix, nil
+		}
+		// Every checkpoint costs the whole prefix cache, so a second one waits
+		// for a tail's worth of new closed history — otherwise a small window
+		// folds every few rounds and spends more than the fold frees.
+		if !force && a.estimatedPromptTokens(msgs[held:start]) < a.recentTailBudget() {
+			return CompactionNoop, NoopFoldBelowEconomics, nil
+		}
 	}
 	// The annotation rides the projection, not the canonical transcript: the
 	// original stays whole for resume and rewind.
@@ -499,13 +510,16 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 }
 
 // visibleInputForFold prefers the prior projection + new history over full canonical.
-func (a *Agent) visibleInputForFold(state CompactionState, canonical []provider.Message, transcriptVersion uint64) []provider.Message {
+// visibleInputForFold returns the view a fold operates on, and whether it came
+// from the installed projection. The caller needs that second answer to tell a
+// fold reaching new history from one re-folding what a checkpoint already holds.
+func (a *Agent) visibleInputForFold(state CompactionState, canonical []provider.Message, transcriptVersion uint64) ([]provider.Message, bool) {
 	if projectionValid(state, canonical, transcriptVersion, a.currentPromptCacheKey(), a.prefixHasher(a.sess.conversation.RewriteVersion())) {
 		if projected := modelVisibleFromProjection(state.Projection, canonical); len(projected) > 0 {
-			return projected
+			return projected, true
 		}
 	}
-	return canonical
+	return canonical, false
 }
 
 func checkpointProjectionMessages(msgs []provider.Message, head, start int, kept []provider.Message, summary string) []provider.Message {
@@ -571,12 +585,17 @@ func (a *Agent) planFoldRegion(msgs []provider.Message, force bool) (head, start
 	if !ok {
 		return head, start, false, NoopNoFoldableRegion
 	}
-	// The running turn stays verbatim, so its start is where the fold has to
-	// end. A turn long enough to reach the trigger on its own leaves nothing
-	// behind it, and that is a different verdict from having nothing to fold.
+	// A turn long enough to reach the trigger has to be foldable from inside,
+	// or it carries every round it ever ran. Not a transaction in flight: the
+	// fold ends where every call the turn issued has its result.
 	if active := a.activeTurnStart(msgs); active >= head && active < start {
-		start = active
-		if start <= head {
+		closed := closedPrefixEnd(msgs[active+1:])
+		if limit := active + 1 + closed; limit < start {
+			start = limit
+		}
+		// Nothing has closed inside the turn and nothing precedes it: the whole
+		// visible context is one transaction still in flight.
+		if start <= head || (closed == 0 && active == head) {
 			return head, start, false, NoopActiveTurnBoundary
 		}
 	}

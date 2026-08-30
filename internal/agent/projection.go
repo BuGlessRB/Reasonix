@@ -115,13 +115,13 @@ const (
 type CompactionNoopReason string
 
 const (
-	NoopAlreadyCompactedThisTurn CompactionNoopReason = "already_compacted_this_turn"
-	NoopActiveTurnBoundary       CompactionNoopReason = "active_turn_boundary"
-	NoopNoFoldableRegion         CompactionNoopReason = "no_foldable_region"
-	NoopFoldBelowEconomics       CompactionNoopReason = "fold_below_economics"
-	NoopInputUnchanged           CompactionNoopReason = "input_unchanged"
-	NoopFoldEmptyAfterHooks      CompactionNoopReason = "fold_empty_after_hooks"
-	NoopFixedPrefixAboveTrigger  CompactionNoopReason = "fixed_prefix_above_trigger"
+	NoopNoNewClosedPrefix       CompactionNoopReason = "no_new_closed_prefix"
+	NoopActiveTurnBoundary      CompactionNoopReason = "active_turn_boundary"
+	NoopNoFoldableRegion        CompactionNoopReason = "no_foldable_region"
+	NoopFoldBelowEconomics      CompactionNoopReason = "fold_below_economics"
+	NoopInputUnchanged          CompactionNoopReason = "input_unchanged"
+	NoopFoldEmptyAfterHooks     CompactionNoopReason = "fold_empty_after_hooks"
+	NoopFixedPrefixAboveTrigger CompactionNoopReason = "fixed_prefix_above_trigger"
 )
 
 // RecallLedger is what one projection generation has already pulled back out

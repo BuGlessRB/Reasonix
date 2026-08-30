@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync/atomic"
 
 	"reasonix/internal/provider"
 )
@@ -16,9 +15,6 @@ import (
 // one value rather than two fields.
 type compactionProgress struct {
 	stuck bool // a fold landed above the trigger, so pressure retries are pointless
-	// lastTurn stops the post-turn observer and the pre-send preflight from
-	// paying for two summaries during one active tool loop.
-	lastTurn atomic.Int64
 	// lastNoop is the verdict already reported for the running turn. A crossed
 	// threshold stays crossed, so without it every later round of the same turn
 	// would report the same "folded nothing" again.
@@ -34,6 +30,13 @@ type compactionProgress struct {
 type maintenanceNoop struct {
 	reason CompactionNoopReason
 	turn   int64
+}
+
+// restart clears what a new conversation or a new turn must not inherit.
+// lastUserTurns stays: /context still answers with what the last fold held.
+func (p *compactionProgress) restart() {
+	p.stuck = false
+	p.lastNoop = maintenanceNoop{}
 }
 
 // ContextManager is the sole owner of provider-visible context maintenance.
@@ -108,7 +111,9 @@ func (m ContextManager) prepareOnce(ctx context.Context, policy ContextPreparePo
 	}
 	inputHash := a.contextMaintenanceInputHash(visible)
 	if blocked, reason := a.contextMaintenanceBlocked(inputHash); blocked && policy.Trigger != CompactionTriggerManual {
-		if policy.Trigger == CompactionTriggerOverflow || est >= hard {
+		// A generation that freed nothing has nothing left to try, so the
+		// request goes out and the provider rules.
+		if policy.Trigger == CompactionTriggerOverflow {
 			return PreparedContext{}, fmt.Errorf("%w: %s", ErrCompactionRequired, reason)
 		}
 		return prepared, nil
@@ -174,9 +179,8 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 	if outcome == CompactionNoop {
 		canonical, _ := a.sess.conversation.snapshotMessagesVersion()
 		if policy.Trigger == CompactionTriggerPressure && a.activeTurnStart(canonical) >= 0 {
-			// A running turn may still grow past a threshold it cannot fold
-			// below. Saying so is the only record that the attempt happened:
-			// this path deliberately does not block the next one.
+			// Saying so is the only record that the attempt happened; this
+			// path deliberately does not block the next one.
 			a.noteMaintenanceNoop(policy.Trigger, noopReason, est)
 			return prepared, nil
 		}
@@ -205,10 +209,13 @@ func (m ContextManager) foldContext(ctx context.Context, prepared PreparedContex
 		reason := fmt.Sprintf("summary result remains above fold trigger (%d >= %d)", result.InputTokens, fold)
 		a.recordContextMaintenanceBlocked(a.contextMaintenanceInputHash(result.Messages), policy.Trigger, "summary", "", reason)
 		a.sess.compaction.stuck = true
-		if policy.Trigger == CompactionTriggerOverflow || result.InputTokens >= hard {
+		// Only a provider that already refused ends the turn here. Our ceiling
+		// is an estimate, and refusing on it turns a window too small to
+		// summarize one turn into a failed run the provider would have served.
+		if policy.Trigger == CompactionTriggerOverflow {
 			return PreparedContext{}, fmt.Errorf("%w: %s", ErrCompactionRequired, reason)
 		}
-		slog.Info("agent: context maintenance paused below hard ceiling", "reason", reason)
+		slog.Info("agent: context maintenance paused above the fold trigger", "reason", reason)
 	}
 	return result, nil
 }

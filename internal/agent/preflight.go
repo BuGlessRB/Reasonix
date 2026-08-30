@@ -102,8 +102,7 @@ func (a *Agent) InvalidateProjection() {
 	path := a.sess.path
 	a.sess.compactionState = CompactionState{}
 	a.sess.compactionMu.Unlock()
-	a.sess.compaction.stuck = false
-	a.sess.compaction.lastTurn.Store(0)
+	a.sess.compaction.restart()
 	if path != "" {
 		if err := RemoveCompactionState(path); err != nil {
 			slog.Warn("agent: remove context projection", "err", err)
@@ -252,8 +251,7 @@ func (a *Agent) BindSessionPath(path string, loadSidecar bool) {
 	a.sess.checkpointState = "none"
 	a.sess.cacheState = CacheStateUnknown
 	a.sess.compactionMu.Unlock()
-	a.sess.compaction.stuck = false
-	a.sess.compaction.lastTurn.Store(0)
+	a.sess.compaction.restart()
 }
 
 // SetSessionPath binds the transcript path used for projection persistence.

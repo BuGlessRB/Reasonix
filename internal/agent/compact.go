@@ -320,8 +320,30 @@ func (a *Agent) fixedPinnableUserTurn(m provider.Message) bool {
 	return fixedTokenEstimate(m) <= budget
 }
 
+// closedPrefixEnd is how far into msgs every tool call has its result. A fold
+// may end only at such a point: anywhere else hands the provider an assistant
+// turn whose calls never resolve, and hands recovery a transaction whose
+// outcome the transcript no longer holds.
+func closedPrefixEnd(msgs []provider.Message) int {
+	open := map[string]bool{}
+	end := 0
+	for i, m := range msgs {
+		if m.Role == provider.RoleTool && m.ToolCallID != "" {
+			delete(open, m.ToolCallID)
+		}
+		for _, call := range m.ToolCalls {
+			open[call.ID] = true
+		}
+		if len(open) == 0 {
+			end = i + 1
+		}
+	}
+	return end
+}
+
 func (a *Agent) keepIndexes(region []provider.Message) ([]bool, userTurnRetention) {
 	keep := make([]bool, len(region))
+	activeTurn := a.activeTurnCreatedAt.Load()
 	policyStart := 0
 	for i, m := range region {
 		if isCompactionSummary(m) {
@@ -332,6 +354,11 @@ func (a *Agent) keepIndexes(region []provider.Message) ([]bool, userTurnRetentio
 	// messages are allowed to fold on the next pass so they cannot grow forever.
 	for i, m := range region {
 		if i >= policyStart && shouldKeepMessage(m, a.keepPolicy) {
+			keep[i] = true
+		}
+		// The request that began the running turn states the work the rest of
+		// the turn is executing. Its closed transactions may fold; it may not.
+		if activeTurn != 0 && m.Role == provider.RoleUser && m.CreatedAt == activeTurn {
 			keep[i] = true
 		}
 	}

@@ -258,9 +258,11 @@ func TestCacheHitSurvivesTooSmallWindow(t *testing.T) {
 		t.Log("context maintenance entered a durable blocked state")
 	}
 
-	// The guard caps the damage: a couple of compactions at most, not one per step.
-	if collapses > 2 {
-		t.Errorf("compaction cratered the cache %d times; the stuck guard should cap it at ≤2", collapses)
+	// Folding costs the prefix cache, so how often it is worth that bounds the
+	// count — a window this small forces one every few rounds. What must not
+	// happen is one per tool result; the tail rate below is the health check.
+	if limit := len(sink.usages) / 4; collapses > limit {
+		t.Errorf("compaction cratered the cache %d times over %d steps; want at most %d", collapses, len(sink.usages), limit)
 	}
 	// With or without a blocked receipt, the same prefix must not be rewritten
 	// after every following tool result, so the tail cache rate recovers.
