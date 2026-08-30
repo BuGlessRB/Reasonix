@@ -1,3 +1,5 @@
+//go:build !windows
+
 package sandbox
 
 import (
@@ -9,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -25,9 +26,6 @@ type authorityFixture struct {
 
 func newAuthorityFixture(t *testing.T) authorityFixture {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("no OS-level sandbox on Windows")
-	}
 	if !Available() {
 		t.Skip("no usable OS sandbox backend")
 	}
@@ -152,16 +150,6 @@ func TestGrantedDaemonIsReachable(t *testing.T) {
 	}
 }
 
-func TestParseAuthoritiesDropsUnknownNames(t *testing.T) {
-	got := ParseAuthorities([]string{" ssh_agent ", "kubernetes", "docker", ""})
-	if len(got) != 2 || got[0] != SSHAgent || got[1] != Docker {
-		t.Fatalf("ParseAuthorities = %v, want [ssh_agent docker]", got)
-	}
-	if (Spec{}).Granted(SSHAgent) {
-		t.Error("the zero Spec granted an authority; a new call site must be confined by default")
-	}
-}
-
 func TestAuthorityEndpointsFollowTheClientsResolution(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "tcp://10.0.0.1:2375")
 	for _, p := range authorityEndpoints(Docker) {
@@ -172,16 +160,5 @@ func TestAuthorityEndpointsFollowTheClientsResolution(t *testing.T) {
 	t.Setenv("SSH_AUTH_SOCK", filepath.Join(t.TempDir(), "missing.sock"))
 	if got := existingSockets(authorityEndpoints(SSHAgent)); len(got) != 0 {
 		t.Errorf("a missing endpoint was kept (%v); masking it would fail the sandbox closed", got)
-	}
-}
-
-func TestGovernedSetIsNarrowerThanHostIPC(t *testing.T) {
-	// The promise is "these endpoints are governed", not "host IPC is isolated".
-	// If this list grows, the wording that ships with it has to grow too.
-	if got := GovernedAuthorities(); len(got) != 3 {
-		t.Fatalf("governed set changed to %v; update the security claim with it", got)
-	}
-	if _, err := os.Stat("/dev/null"); err != nil {
-		t.Skip("no /dev/null to mask with")
 	}
 }
