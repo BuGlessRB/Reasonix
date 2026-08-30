@@ -128,6 +128,13 @@ jobs:
         if: env.RUN_STEPS == 'true'
         run: go build ./...
 
+      # The trajectory analyzer is the last consumer of the todo_progress frame,
+      # so a rename anywhere upstream has to fail somewhere. Standard library
+      # only; the runner's python3 is enough.
+      - name: test (trajectory tools)
+        if: env.RUN_STEPS == 'true' && runner.os != 'Windows'
+        run: python3 -m unittest discover -s tools/trajectory -t tools/trajectory
+
       - name: test
         if: env.RUN_STEPS == 'true' && runner.os != 'Windows'
         env:
