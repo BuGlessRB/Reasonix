@@ -190,25 +190,27 @@
   }
   /* Inside the shell this row *is* the title bar, so it has to be the drag
      handle. Every control on it opts back out, or the menus stop opening. */
-  [data-shell="wails"] .chrome { --wails-draggable: drag }
-  [data-shell="wails"] .chrome button,
-  [data-shell="wails"] .chrome .picker,
-  [data-shell="wails"] .chrome .themer { --wails-draggable: no-drag }
+  /* Two spellings because the shells disagree: --wails-draggable is Wails'
+     own property, -webkit-app-region is Chromium's. Each ignores the other. */
+  [data-titlebar="app"] .chrome { --wails-draggable: drag; -webkit-app-region: drag }
+  [data-titlebar="app"] .chrome button,
+  [data-titlebar="app"] .chrome .picker,
+  [data-titlebar="app"] .chrome .themer { --wails-draggable: no-drag; -webkit-app-region: no-drag }
   /* macOS floats its lights over the corner at a y AppKit owns — measured centre
      25.5px, which is the platform's own unified-toolbar metric. The row matches
      that height rather than the spec's 39px, or the lights sit 6px below the
      wordmark they are meant to line up with. The third light ends at 72px, so
      78 cleared them by six — technically clear, and close enough to read as
      part of the same group. 96 puts a gap there that looks deliberate. */
-  [data-shell="wails"][data-platform="darwin"] .app { --chrome-h: 51px }
-  [data-shell="wails"][data-platform="darwin"] .chrome { padding-left: 96px }
+  [data-titlebar="app"][data-platform="darwin"] .app { --chrome-h: 51px }
+  [data-titlebar="app"][data-platform="darwin"] .chrome { padding-left: 96px }
   /* Absolute inside that reserved 78px, so the swap is opacity alone and the
      breadcrumb after it never moves. */
-  [data-shell="wails"][data-platform="darwin"] .brand {
+  [data-titlebar="app"][data-platform="darwin"] .brand {
     position: absolute; left: 12px; top: 50%; margin: -7px 0 0;
     opacity: 0; transition: opacity .22s var(--ease-out);
   }
-  [data-shell="wails"][data-platform="darwin"][data-focused="no"] .brand { opacity: 1 }
+  [data-titlebar="app"][data-platform="darwin"][data-focused="no"] .brand { opacity: 1 }
   /* Windows puts its controls on the other end, hard against the corner, and
      they are the only ones here that are not the app's own affordances. */
   .winctl { display: flex; margin-left: 6px; margin-right: -12px; align-self: stretch }

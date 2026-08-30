@@ -9,12 +9,16 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 
 	"reasonix/internal/boot"
@@ -31,16 +35,43 @@ import (
 
 var version = "dev"
 
-// credentialBytes is the width of the credential one launch is guarded by.
-const credentialBytes = 32
+const (
+	// credentialBytes is the width of the credential one launch is guarded by.
+	credentialBytes = 32
+	// handshakeVersion is the shape of the line on stdout. A parent that does
+	// not recognise it must refuse the launch rather than read past it.
+	handshakeVersion = 1
+	// studioPrefix is the one path this host owns. Everything else is the
+	// hub's, so a route added to the kernel later needs no change here.
+	studioPrefix = "/_studio/"
+)
 
 func main() {
-	os.Exit(run(os.Stdout, os.Stderr))
+	page := flag.String("page", "", "directory holding the built Studio page")
+	flag.Parse()
+	os.Exit(run(parentLease(os.Stdin), os.Stdout, os.Stderr, *page))
 }
 
-func run(handshakeTo io.Writer, logs io.Writer) int {
+// run serves until the lease ends or the process is signalled. stdout carries
+// the handshake and nothing else, because the parent parses the first line it
+// reads there; every log goes to logs.
+func run(lease io.Reader, handshakeTo, logs io.Writer, page string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if lease != nil {
+		// The parent's end of the pipe closing is the parent going away, exit
+		// or crash alike. Nothing else says that on all three platforms.
+		go func() {
+			_, _ = io.Copy(io.Discard, lease)
+			stop()
+		}()
+	}
+
+	served, err := studioPage(page, logs)
+	if err != nil {
+		fmt.Fprintln(logs, "reasonix-studio-host:", err)
+		return 1
+	}
 
 	hub, err := assemble(ctx, logs)
 	if err != nil {
@@ -51,7 +82,7 @@ func run(handshakeTo io.Writer, logs io.Writer) int {
 	// request answers it with a half-closed kernel.
 	defer hub.Shutdown()
 
-	bound, err := bind(hub.Handler())
+	bound, err := bind(withStudioPage(hub.Handler(), served))
 	if err != nil {
 		fmt.Fprintln(logs, "reasonix-studio-host:", err)
 		return 1
@@ -122,12 +153,84 @@ func launchCredential() (string, error) {
 // pipe the parent already holds; a file or an environment variable would outlive
 // the launch and be readable by more than the one process that spawned it.
 type handshake struct {
-	Origin string `json:"origin"`
-	Token  string `json:"token"`
+	Version int    `json:"version"`
+	Origin  string `json:"origin"`
+	Token   string `json:"token"`
 }
 
 func announce(w io.Writer, b *bound) error {
-	return json.NewEncoder(w).Encode(handshake{Origin: b.origin, Token: b.token})
+	return json.NewEncoder(w).Encode(handshake{Version: handshakeVersion, Origin: b.origin, Token: b.token})
+}
+
+// parentLease is the pipe a parent holds open for as long as it wants this host
+// alive. Only a pipe is a lease: a terminal or /dev/null would either never end
+// or end at once, and neither says anything about a parent.
+func parentLease(f *os.File) io.Reader {
+	st, err := f.Stat()
+	if err != nil || st.Mode()&os.ModeNamedPipe == 0 {
+		return nil
+	}
+	return f
+}
+
+// withStudioPage puts the built page under a namespace of its own and leaves
+// every other path to the hub. The inverse — a list of the kernel's routes,
+// with everything else falling through to the page — is what the asset server
+// forced, and it has to be edited every time the kernel grows a route.
+func withStudioPage(hub http.Handler, page fs.FS) http.Handler {
+	if page == nil {
+		return hub
+	}
+	files := http.StripPrefix(studioPrefix, http.FileServer(http.FS(page)))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, studioPrefix) {
+			hub.ServeHTTP(w, r)
+			return
+		}
+		// A path inside the namespace that names no file is the page routing
+		// itself, not a missing asset. Confined to the namespace, so it can
+		// never answer for a route the kernel owns.
+		name := strings.TrimPrefix(r.URL.Path, studioPrefix)
+		if name != "" {
+			if _, err := fs.Stat(page, strings.TrimSuffix(name, "/")); err != nil {
+				http.ServeFileFS(w, r, page, "index.html")
+				return
+			}
+		}
+		files.ServeHTTP(w, r)
+	})
+}
+
+// studioPage finds the built page. An explicit directory that holds none is a
+// launch that would open on nothing, so it fails here rather than at the first
+// paint; without one the host serves the kernel alone and says so.
+func studioPage(dir string, logs io.Writer) (fs.FS, error) {
+	if dir != "" {
+		if !hasIndex(dir) {
+			return nil, fmt.Errorf("no index.html under %s", dir)
+		}
+		return os.DirFS(dir), nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range []string{
+		filepath.Join(filepath.Dir(exe), "frontend-next", "dist"),
+		filepath.Join("..", "frontend-next", "dist"),
+		filepath.Join("desktop", "frontend-next", "dist"),
+	} {
+		if hasIndex(c) {
+			return os.DirFS(c), nil
+		}
+	}
+	fmt.Fprintln(logs, "reasonix-studio-host: no built page found; serving the kernel only")
+	return nil, nil
+}
+
+func hasIndex(dir string) bool {
+	st, err := os.Stat(filepath.Join(dir, "index.html"))
+	return err == nil && !st.IsDir()
 }
 
 // assemble builds the hub this host serves: one pane on the workspace it was

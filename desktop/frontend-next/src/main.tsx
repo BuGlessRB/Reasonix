@@ -8,6 +8,7 @@ import { App } from "./ui/App";
 import { SseHub } from "./port/hub";
 import type { HubPort } from "./port/hub";
 import { install as installFileDrop } from "./ui/filedrop";
+import { host } from "./port/host";
 
 // The dev proxy only exists when REASONIX_SERVE was set at vite start; probing
 // /status decides which port to boot on, so neither mode needs a build flag.
@@ -29,19 +30,18 @@ async function pick(): Promise<HubPort> {
   return new MockHub();
 }
 
-// The shell hides the native title bar and lets its lights float over the page,
-// so the chrome has to reserve their corner and be draggable itself. Neither is
-// true of the browser build, and only macOS puts them on the left — so the page
-// is told which shell it is in rather than assuming one.
-interface WailsEnv {
-  runtime?: { Environment?: () => Promise<{ platform?: string }> };
-}
-(window as unknown as WailsEnv).runtime?.Environment?.()
-  .then((env) => {
-    document.documentElement.dataset.shell = "wails";
-    if (env.platform) document.documentElement.dataset.platform = env.platform;
-  })
-  .catch(() => {});
+// A shell that hides the native title bar lets its lights float over the page,
+// so the chrome has to reserve their corner and be draggable itself. Which of
+// those is true is the shell's answer, not something the page infers from a
+// platform or from which globals it can see.
+void host()
+  .describe()
+  .then(({ shell, platform, titleBar }) => {
+    const root = document.documentElement.dataset;
+    root.shell = shell;
+    if (platform) root.platform = platform;
+    if (titleBar) root.titlebar = "app";
+  });
 
 // macOS hides its traffic lights outright on an inactive window rather than
 // greying them, so the corner they were reserved is simply empty. The wordmark

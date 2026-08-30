@@ -6,6 +6,7 @@ import type { WailsBind } from "./wails";
 import type { StoragePlan, StorageState } from "./storage";
 import type { WireEvent } from "./wire";
 import type { RemoteAsk } from "./remote";
+import { host } from "./host";
 
 // The running project is the default, so its requests stay the bare path they
 // have always been and only a cross-project read carries the folder.
@@ -308,13 +309,9 @@ export class SsePort extends SseTheme implements AgentPort {
     return this.post("/workspace", { isolate: true });
   }
 
-  async openExternal(url: string) {
-    const bind = (window as unknown as WailsBind).go?.main?.App?.OpenExternal;
-    if (bind) {
-      await bind(url);
-      return;
-    }
-    window.open(url, "_blank", "noopener,noreferrer");
+  openExternal(url: string): Promise<void> {
+    host().openExternal(url);
+    return Promise.resolve();
   }
 
   async pickFolder(): Promise<string | null> {

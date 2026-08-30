@@ -4,10 +4,15 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"reasonix/internal/config"
@@ -277,5 +282,158 @@ func TestHostReleasesTheSocketOnShutdown(t *testing.T) {
 	if err == nil {
 		conn.Close()
 		t.Fatalf("%s still accepts connections after shutdown", addr)
+	}
+}
+
+// The page gets one namespace and the kernel keeps everything else. The inverse
+// — a list of the kernel's routes, with the rest falling through to the page —
+// is the arrangement this host exists to stop repeating.
+func TestHostServesThePageInItsOwnNamespace(t *testing.T) {
+	page := fstest.MapFS{
+		"index.html":    &fstest.MapFile{Data: []byte("<title>studio</title>")},
+		"assets/app.js": &fstest.MapFile{Data: []byte("// the page")},
+	}
+	hub := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"from":"the kernel"}`)
+	})
+	srv := httptest.NewServer(withStudioPage(hub, page))
+	defer srv.Close()
+
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"/_studio/", "<title>studio</title>"},
+		{"/_studio/assets/app.js", "// the page"},
+		// Client-side routing inside the namespace, which is the page's own
+		// business and can never answer for a route the kernel owns.
+		{"/_studio/sessions/whatever", "<title>studio</title>"},
+		{"/status", "the kernel"},
+		{"/", "the kernel"},
+		// The prefix is the whole segment: a path that merely starts with the
+		// same letters belongs to the kernel like any other.
+		{"/_studioish", "the kernel"},
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			resp, err := http.Get(srv.URL + c.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+			if !strings.Contains(string(body), c.want) {
+				t.Errorf("%s answered %q, want it to contain %q", c.path, body, c.want)
+			}
+		})
+	}
+}
+
+// A parent holds a lease by holding a pipe. Nothing else is one: a terminal
+// would never end, and /dev/null would end at once and take the host with it.
+func TestOnlyAPipeIsAParentLease(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	defer w.Close()
+	if parentLease(r) == nil {
+		t.Error("a pipe is a lease and was not read as one")
+	}
+
+	null, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer null.Close()
+	if parentLease(null) != nil {
+		t.Error("the null device was read as a parent holding this host open")
+	}
+
+	path := filepath.Join(t.TempDir(), "not-a-pipe")
+	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if parentLease(file) != nil {
+		t.Error("a regular file was read as a parent holding this host open")
+	}
+}
+
+// The whole run, driven the way Electron drives it: a pipe for the lease, one
+// line of handshake, traffic, then the parent letting go.
+func TestRunServesUntilTheParentLetsGo(t *testing.T) {
+	page := t.TempDir()
+	if err := os.WriteFile(filepath.Join(page, "index.html"), []byte("<title>studio</title>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lease, holder, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, announced, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs, logged, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _, _ = io.Copy(io.Discard, logs) }()
+
+	done := make(chan int, 1)
+	go func() { done <- run(lease, announced, logged, page) }()
+
+	line, err := bufio.NewReader(stdout).ReadString('\n')
+	if err != nil {
+		t.Fatalf("no handshake: %v", err)
+	}
+	var said handshake
+	if err := json.Unmarshal([]byte(line), &said); err != nil {
+		t.Fatalf("the handshake is not one JSON line: %v", err)
+	}
+	if said.Version != handshakeVersion {
+		t.Errorf("handshake version = %d, want %d", said.Version, handshakeVersion)
+	}
+	if said.Origin == "" || said.Token == "" {
+		t.Fatalf("the handshake said %+v", said)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, said.Origin+"/_studio/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.AddCookie(&http.Cookie{Name: serve.TokenCookie, Value: said.Token})
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "<title>studio</title>") {
+		t.Fatalf("GET /_studio/ = %d %q", resp.StatusCode, body)
+	}
+
+	// The parent goes away. Nothing is signalled: the pipe closing is the whole
+	// message, which is what makes it identical on every platform.
+	holder.Close()
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Errorf("run returned %d, want a clean exit", code)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the host outlived the parent that was holding it open")
+	}
+	addr := strings.TrimPrefix(said.Origin, "http://")
+	if conn, err := net.DialTimeout("tcp", addr, 2*time.Second); err == nil {
+		conn.Close()
+		t.Errorf("%s still accepts connections after the lease ended", addr)
 	}
 }

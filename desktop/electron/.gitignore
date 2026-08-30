@@ -1,0 +1,3 @@
+node_modules/
+# The kernel this shell spawns, built by `pnpm build:host`.
+bin/

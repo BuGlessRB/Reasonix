@@ -1,0 +1,22 @@
+{
+  "name": "reasonix-studio-electron",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Electron shell for Reasonix Studio over the loopback host",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:host": "go build -o bin/reasonix-studio-host ../../cmd/reasonix-studio-host",
+    "test": "node --test test/unit.mjs",
+    "smoke": "electron test/smoke.js"
+  },
+  "devDependencies": {
+    "electron": "44.0.0",
+    "playwright": "1.62.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  }
+}

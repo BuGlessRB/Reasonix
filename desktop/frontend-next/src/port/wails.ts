@@ -8,7 +8,6 @@ export interface WailsBind {
     main?: {
       App?: {
         PickWorkspace?: () => Promise<string>;
-        OpenExternal?: (url: string) => Promise<void>;
         Versions?: () => Promise<VersionHub>;
         PinVersion?: (version: string) => Promise<void>;
         GoToVersion?: (version: string) => Promise<void>;

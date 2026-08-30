@@ -1,27 +1,12 @@
 import { useEffect, useState } from "react";
 import { t } from "../i18n";
-
-// Wails publishes bound methods at window.go.<package>.<Struct>.<Method>.
-interface Shell {
-  go?: {
-    main?: {
-      App?: {
-        MinimiseWindow?: () => Promise<void>;
-        ToggleMaximiseWindow?: () => Promise<void>;
-        IsWindowMaximised?: () => Promise<boolean>;
-        CloseWindow?: () => Promise<void>;
-      };
-    };
-  };
-}
-
-const app = () => (window as unknown as Shell).go?.main?.App;
+import { host } from "../port/host";
 
 // Where the chrome is standing in for the title bar. Linux keeps its own frame,
 // and a browser tab has no window to zoom.
 const isTitleBar = () => {
   const d = document.documentElement.dataset;
-  return d.shell === "wails" && (d.platform === "darwin" || d.platform === "windows");
+  return d.titlebar === "app" && (d.platform === "darwin" || d.platform === "windows");
 };
 
 // Double-clicking a title bar zooms the window on both platforms. The drag
@@ -30,7 +15,7 @@ export function zoomOnTitleBar(e: { target: EventTarget | null }) {
   if (!isTitleBar()) return;
   const el = e.target as HTMLElement | null;
   if (el?.closest("button, input, textarea, .picker, .menu")) return;
-  void app()?.ToggleMaximiseWindow?.();
+  host().toggleMaximiseWindow();
 }
 
 // Frameless Windows has no native minimise/maximise/close, so a shell that goes
@@ -44,7 +29,7 @@ export function WindowControls() {
   // double-click on the bar, a snap and the keyboard.
   useEffect(() => {
     const read = () => {
-      app()?.IsWindowMaximised?.().then(setMax).catch(() => {});
+      void host().isWindowMaximised().then(setMax);
     };
     read();
     // The observer the layout already rides on, so it is the one proven to fire
@@ -56,14 +41,14 @@ export function WindowControls() {
   if (document.documentElement.dataset.platform !== "windows") return null;
   return (
     <div className="winctl" role="group" aria-label={t("窗口")}>
-      <button className="wc" onClick={() => void app()?.MinimiseWindow?.()} aria-label={t("最小化")}>
+      <button className="wc" onClick={() => host().minimiseWindow()} aria-label={t("最小化")}>
         <svg viewBox="0 0 12 12" aria-hidden="true">
           <path d="M2 6h8" />
         </svg>
       </button>
       <button
         className="wc"
-        onClick={() => void app()?.ToggleMaximiseWindow?.()}
+        onClick={() => host().toggleMaximiseWindow()}
         aria-label={t(max ? "还原" : "最大化")}
       >
         <svg viewBox="0 0 12 12" aria-hidden="true">
@@ -77,7 +62,7 @@ export function WindowControls() {
           )}
         </svg>
       </button>
-      <button className="wc close" onClick={() => void app()?.CloseWindow?.()} aria-label={t("关闭")}>
+      <button className="wc close" onClick={() => host().closeWindow()} aria-label={t("关闭")}>
         <svg viewBox="0 0 12 12" aria-hidden="true">
           <path d="M2.6 2.6l6.8 6.8M9.4 2.6l-6.8 6.8" />
         </svg>
