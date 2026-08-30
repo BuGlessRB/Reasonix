@@ -34,6 +34,24 @@ var wireLogKinds = map[string]bool{
 	// an adopted answer exist nowhere else in the stream, so without these frames
 	// a reopened window draws a run that never waited on anything.
 	"graph_delta": true,
+	// Whether the plan advanced or was only rewritten is derivable from nothing
+	// else in the log: the task list rides the tool frames, but the verdict on
+	// what a write did to it does not.
+	"todo_progress": true,
+}
+
+// wireLogSkipped names the kinds deliberately left out, so every kind is
+// classified by one list or the other. A frame in neither is a decision nobody
+// made — which is how the plan verdict was absent from every replay while the
+// kernel was emitting it.
+var wireLogSkipped = map[string]bool{
+	// Stream deltas: one frame per chunk, most of the file, nothing to read back
+	// that the message frame does not already carry.
+	"reasoning": true, "text": true, "phase": true,
+	"tool_progress": true, "compaction_progress": true,
+	// Live surfaces a reopened window re-reads from the host rather than replays.
+	"mcp_surface_ready": true, "extension_surface": true, "extension_status": true,
+	"workspace_changed": true, "turn_phase": true, "inbox_changed": true,
 }
 
 type wireLog struct {
