@@ -17,17 +17,17 @@ export function RemoteAsk({ ask, onAnswer }: Props) {
   useEffect(() => {
     setText("");
     box.current?.focus();
-  }, [ask.id]);
+  }, [ask.askId]);
 
   // Escape declines. It has to reach the link either way: a dialog dismissed
   // with no answer would leave the dial waiting for one until it times out.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onAnswer(ask.id, false, "");
+      if (e.key === "Escape") onAnswer(ask.askId, false, "");
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [ask.id, onAnswer]);
+  }, [ask.askId, onAnswer]);
 
   return (
     <div className="askveil" role="dialog" aria-modal="true" aria-labelledby="ask-t">
@@ -54,7 +54,7 @@ export function RemoteAsk({ ask, onAnswer }: Props) {
               autoFocus
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") onAnswer(ask.id, true, text);
+                if (e.key === "Enter") onAnswer(ask.askId, true, text);
               }}
             />
           </>
@@ -79,10 +79,10 @@ export function RemoteAsk({ ask, onAnswer }: Props) {
         <div className="askact">
           {/* The way out takes the focus on a fingerprint: Enter is a reflex,
               and accepting a key nobody read is the one thing this prevents. */}
-          <button autoFocus={!secret} onClick={() => onAnswer(ask.id, false, "")}>
+          <button autoFocus={!secret} onClick={() => onAnswer(ask.askId, false, "")}>
             {t("取消")}
           </button>
-          <button data-go="" onClick={() => onAnswer(ask.id, true, text)}>
+          <button data-go="" onClick={() => onAnswer(ask.askId, true, text)}>
             {secret ? t("继续") : t("对得上，记住它")}
           </button>
         </div>

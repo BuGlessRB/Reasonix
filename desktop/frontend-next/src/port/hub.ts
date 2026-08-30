@@ -2,6 +2,17 @@ import { HttpError, type AgentPort } from "./port";
 import type { RemoteAsk, RemoteHost, RemoteHostEdit, RemoteListing, RemoteProbe } from "./remote";
 import { SsePort } from "./sse";
 
+// How often a client waiting on a dial looks for the question it might be
+// stopped by. A person answers this one, so half a second is not the cost —
+// and a missed round loses nothing, because the snapshot is the record.
+const ASK_POLL_MS = 500;
+
+// Must match operationHeader in internal/serve. The caller names the operation
+// because the question can arrive before the response does.
+function operationHeaders(operationId?: string): Record<string, string> {
+  return operationId ? { "x-reasonix-operation-id": operationId } : {};
+}
+
 // RuntimeView is one open pane. Base is the prefix every request of that pane
 // carries, which is also what tells the shell's bus which channel to listen on.
 export interface RuntimeView {
@@ -114,6 +125,12 @@ export class SseHub implements HubPort {
   // Bindings the shell exposes are pane-independent; this reaches them without
   // pretending to belong to a runtime.
   private readonly shell = new SsePort();
+  // Questions seen this session, kept so an answer can carry the identities the
+  // kernel will check it against.
+  private readonly asked = new Map<string, RemoteAsk>();
+  private readonly askSubs = new Set<(ask: RemoteAsk) => void>();
+  private dialing = 0;
+  private askTimer: ReturnType<typeof setInterval> | null = null;
 
   // A refusal carries a code, and it is the code that has words in the reader's
   // language. Flattening the body into the message threw that away: what
@@ -136,16 +153,16 @@ export class SseHub implements HubPort {
     throw new HttpError(res.status, detail || `${path}: ${res.status}`, body ?? undefined, detail !== "");
   }
 
-  private async get<T>(path: string): Promise<T> {
-    const res = await fetch(path, { credentials: "same-origin" });
+  private async get<T>(path: string, operationId?: string): Promise<T> {
+    const res = await fetch(path, { credentials: "same-origin", headers: operationHeaders(operationId) });
     if (!res.ok) await SseHub.fail(path, res);
     return (await res.json()) as T;
   }
 
-  private async post<T>(path: string, body?: unknown): Promise<T> {
+  private async post<T>(path: string, body?: unknown, operationId?: string): Promise<T> {
     const res = await fetch(path, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...operationHeaders(operationId) },
       credentials: "same-origin",
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -206,11 +223,13 @@ export class SseHub implements HubPort {
   }
 
   openRemote(req: { host: string; workspace?: string; sessionPath?: string }) {
-    return this.post<RuntimeView>("/remotes/open", {
-      host: req.host,
-      workspace: req.workspace ?? "",
-      sessionPath: req.sessionPath ?? "",
-    });
+    return this.dial((operationId) =>
+      this.post<RuntimeView>(
+        "/remotes/open",
+        { host: req.host, workspace: req.workspace ?? "", sessionPath: req.sessionPath ?? "" },
+        operationId,
+      ),
+    );
   }
 
   async remoteTree(host: string) {
@@ -224,12 +243,16 @@ export class SseHub implements HubPort {
   }
 
   probeRemote(host: string) {
-    return this.get<RemoteProbe>(`/remotes/${encodeURIComponent(host)}/probe`);
+    return this.dial((operationId) =>
+      this.get<RemoteProbe>(`/remotes/${encodeURIComponent(host)}/probe`, operationId),
+    );
   }
 
   remoteDirs(host: string, path?: string) {
     const at = path ? `?path=${encodeURIComponent(path)}` : "";
-    return this.get<RemoteListing>(`/remotes/${encodeURIComponent(host)}/dirs${at}`);
+    return this.dial((operationId) =>
+      this.get<RemoteListing>(`/remotes/${encodeURIComponent(host)}/dirs${at}`, operationId),
+    );
   }
 
   async addRemoteWorkspace(host: string, path: string) {
@@ -252,12 +275,60 @@ export class SseHub implements HubPort {
     return this.get<string[]>("/remotes/candidates");
   }
 
+  // The question is state the kernel holds, and this is how it is found. No
+  // stream carries it: it exists only while a dial this client started is still
+  // waiting, and that is a thing the client already knows.
   onRemoteAsk(cb: (ask: RemoteAsk) => void) {
-    return this.shell.onRemoteAsk(cb);
+    this.askSubs.add(cb);
+    return () => {
+      this.askSubs.delete(cb);
+    };
   }
 
   answerRemote(id: string, ok: boolean, text: string) {
-    this.shell.answerRemote(id, ok, text);
+    const ask = this.asked.get(id);
+    if (!ask) return;
+    this.asked.delete(id);
+    // Sending the same answer twice is safe by design, which is what lets this
+    // be fired and forgotten: a lost response must not strand the dial.
+    void fetch(`/asks/${encodeURIComponent(id)}/answer`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ epoch: ask.epoch, operationId: ask.operationId, answer: { ok, text } }),
+    }).catch(() => {});
+  }
+
+  // dial runs a request that may stop to ask something. The question arrives
+  // before this response does, so the operation names itself up front and the
+  // client looks for questions under that name while it waits.
+  private async dial<T>(run: (operationId: string) => Promise<T>): Promise<T> {
+    const operationId = crypto.randomUUID();
+    this.dialing++;
+    void this.sweepAsks();
+    this.askTimer ??= setInterval(() => void this.sweepAsks(), ASK_POLL_MS);
+    try {
+      return await run(operationId);
+    } finally {
+      this.dialing--;
+      if (this.dialing === 0 && this.askTimer !== null) {
+        clearInterval(this.askTimer);
+        this.askTimer = null;
+      }
+    }
+  }
+
+  // A missed round costs nothing: the snapshot is the record, so the next one
+  // still holds whatever is open.
+  private async sweepAsks() {
+    const res = await fetch("/asks", { credentials: "same-origin" }).catch(() => null);
+    if (!res?.ok) return;
+    const body = (await res.json().catch(() => null)) as { asks?: RemoteAsk[] } | null;
+    for (const ask of body?.asks ?? []) {
+      if (this.asked.has(ask.askId)) continue;
+      this.asked.set(ask.askId, ask);
+      this.askSubs.forEach((cb) => cb(ask));
+    }
   }
 
   pickFolder() {

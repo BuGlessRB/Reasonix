@@ -75,7 +75,7 @@ var apiPaths = map[string]bool{
 	"/changes": true, "/attachments": true, "/drop": true, "/roles": true,
 	"/themes": true, "/extensions": true, "/plugins": true, "/surfaces": true,
 	"/welcome": true, "/appearance": true,
-	"/permissions": true, "/sandbox": true, "/storage": true, "/usage": true, "/tray": true,
+	"/permissions": true, "/sandbox": true, "/storage": true, "/usage": true, "/tray": true, "/asks": true,
 	"/balance":        true,
 	"/config/problem": true, "/config/repair": true,
 }
@@ -85,7 +85,7 @@ var apiPaths = map[string]bool{
 // endpoint from silently answering with index.html instead of JSON — and
 // TestEveryPathTheFrontendCallsIsRouted is what keeps this list honest, because
 // the comment alone did not.
-var apiPrefixes = []string{"/tray/", "/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/", "/appearance/", "/storage/", "/changes/"}
+var apiPrefixes = []string{"/asks/", "/tray/", "/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/", "/appearance/", "/storage/", "/changes/"}
 
 // splitRuntimePath separates a pane's address from the route it is asking for:
 // /rt/r2/status is runtime r2 asking for /status. An unprefixed path belongs to
@@ -207,8 +207,8 @@ func run(logs io.Writer) error {
 	// separate setting from the kernel's — hence a catalogue read, not the active one.
 	shell := &App{pumps: map[string]context.CancelFunc{}, say: i18n.CatalogFor(cfg.DesktopLanguage()), tracker: tracker}
 	// A first connect can stop for a host key nobody has seen or a locked key.
-	// Both are questions, and this window is the only thing that can ask one.
-	shell.asks = newAskBroker(shell)
+	// Both are questions, and the broker is where they live until answered.
+	asks := serve.NewAskBroker(nil)
 	// One hub, several panes: each session gets its own runtime, so a second
 	// conversation runs beside the first instead of rebuilding it.
 	hub := serve.NewHub(serve.HubOptions{
@@ -221,7 +221,9 @@ func run(logs io.Writer) error {
 			shell.stopPump(rt)
 			tracker.Drop(paneKey(rt.Events))
 		},
-		Remote: newRemoteLink(ctx, shell.asks.prompts()),
+		Remote: newRemoteLink(ctx, askPrompts{asks: asks}.prompts()),
+		Asks:   asks,
+		Tray:   shell,
 	})
 	shell.hub = hub
 	srv := serve.New(ctrl, bc, cfg.Serve)
@@ -358,9 +360,6 @@ func appMenu() *menu.Menu {
 type App struct {
 	hub *serve.Hub
 	ctx context.Context
-	// Questions the link layer is blocked on. Nil in a build with no window to
-	// ask, which is what makes the strict host-key path the default.
-	asks *askBroker
 	// Text for the native panels this shell opens. Read once at launch from the
 	// desktop interface language; the kernel's own catalogue is a different
 	// setting and must not be swapped out for this.

@@ -100,11 +100,13 @@ export interface RemoteListing {
   truncated?: boolean;
 }
 
-// A question the link layer stopped for. It arrives on the shell's bus while a
-// connect is blocked, and is answered through a binding rather than a request:
-// nothing on the far side moves until somebody says.
+// A question the link layer stopped for. Three identities: the kernel lifetime
+// it belongs to, the operation it is blocking, and itself — an answer has to
+// carry all three, or a restart that numbered a question the same would take it.
 export interface RemoteAsk {
-  id: string;
+  epoch: string;
+  operationId: string;
+  askId: string;
   kind: "hostkey" | "passphrase" | "password";
   host: string;
   // hostkey: what the machine presented, to compare against what the person

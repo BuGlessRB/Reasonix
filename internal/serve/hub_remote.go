@@ -285,7 +285,7 @@ func (h *Hub) openRemoteRuntime(w http.ResponseWriter, r *http.Request) {
 		refuseNoRemote(w)
 		return
 	}
-	ep, release, err := h.opts.Remote.Attach(r.Context(), req.Host, req.Workspace)
+	ep, release, err := h.opts.Remote.Attach(operationContext(r), req.Host, req.Workspace)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err)
 		return

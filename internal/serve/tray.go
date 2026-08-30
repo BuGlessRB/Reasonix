@@ -2,6 +2,7 @@ package serve
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"fmt"
@@ -105,6 +106,9 @@ func (h *Hub) readTrayPrefs(w http.ResponseWriter, _ *http.Request) {
 // TrayPrefs reads the durable answer. Exported for a host whose own menu shows
 // the same switches: one reader, whichever surface is asking.
 func (h *Hub) TrayPrefs() TrayPrefs {
+	if h.opts.Tray == nil {
+		return TrayPrefs{}
+	}
 	cfg := config.LoadForEdit(config.UserConfigPath())
 	return TrayPrefs{
 		Icon:        cfg.DesktopTray() != "off",
@@ -117,6 +121,9 @@ func (h *Hub) TrayPrefs() TrayPrefs {
 // Exported so a host's own menu offering the same switch runs this rather than
 // a second copy of it — there is one "close to tray", whichever control asked.
 func (h *Hub) SetTrayPrefs(icon, closeToTray bool) (TrayPrefs, error) {
+	if h.opts.Tray == nil {
+		return TrayPrefs{}, errors.New("this kernel has no window to put an icon on")
+	}
 	// No icon, no backgrounding. A hidden window with nothing to bring it back
 	// is the one state this must never produce, so the answer depends on an
 	// icon being both asked for and actually up.

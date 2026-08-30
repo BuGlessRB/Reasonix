@@ -147,6 +147,10 @@ type HubOptions struct {
 	// Remote reaches workspaces on other machines. Nil refuses them: a server
 	// that dials onward on a request's say-so is someone else's way in.
 	Remote RemoteAttacher
+	// Asks holds the questions a remote dial stops for. Nil leaves those routes
+	// unregistered and the link layer with nobody to ask, which is what makes
+	// the strict host-key path the default on a server with no window.
+	Asks *AskBroker
 	// Tray is the window behind this hub, where there is one. Nil leaves the
 	// tray routes unregistered rather than answering for an icon that does not
 	// exist — a networked server has no window to put one on.
@@ -448,6 +452,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("POST /remotes/open", h.openRemoteRuntime)
 	h.registerTreeRoutes(mux)
 	h.registerTrayRoutes(mux)
+	h.registerAskRoutes(mux)
 	mux.HandleFunc(runtimePrefix+"{id}/", h.routeRuntime)
 	mux.HandleFunc("/", h.routeDefault)
 	return logMiddleware(h.auth.middleware(csrfGuard(mux)))

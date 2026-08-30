@@ -183,6 +183,12 @@ const SAID: Record<string, string> = {
   "wallet.unreachable": "这个供应商的余额接口没有应答",
   "wallet.unreadable": "这个供应商的余额接口回的内容读不懂",
 
+  // ── 远程连接停下来问的那一句 ───────────────────────────────────
+  "ask.not_found": "没有这个待回答的问题",
+  "ask.stale_epoch": "这个回答是给上一次启动的内核的，重新连一次",
+  "ask.cancelled": "这次连接已经结束了，这个问题不用答了",
+  "ask.already_resolved": "这个问题已经有另一个答案了",
+
   // ── 本机通道：这个请求不是 Studio 自己发的 ───────────────────────
   "tray.rejected": "状态图标的设置没能保存：{detail}",
 
