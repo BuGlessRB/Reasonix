@@ -238,13 +238,9 @@ moving a number here must not move the promise.
 - `internal/sandbox` confines writes to the workspace, configured extras, temp
   and toolchain caches — on macOS and Linux. Windows has no OS-level bash
   sandbox, so there nothing the host enforces bounds `Writable`.
-- Authority is not transport. `Network` decides external egress; `HostAuthorities`
-  decides which host services a command may call, because one flag covering both
-  meant revoking egress also revoked local signing. The governed set is *named*
-  — ssh-agent, docker, podman — and that is the whole claim: DBus, Wayland, X11,
-  gpg-agent, keyrings and arbitrary sockets stay reachable, and Windows enforces
-  neither axis. Read possession is a separate axis again: `ForbidReadRoots` hides
-  a private key while the agent will still sign with it.
+- The governed host authorities are a *named* set — ssh-agent, docker, podman.
+  DBus, Wayland, X11, gpg-agent, keyrings and arbitrary sockets stay reachable,
+  so the claim is "these endpoints are governed", never "host IPC is isolated".
 
 `stateEpoch` tracks host-observed mutations, not an exact filesystem snapshot;
 unobserved external writers are a gap shared by the whole verification model. Go
@@ -261,3 +257,32 @@ state VerificationRelevant while the scan skips it, and on Windows a symlink out
 of the workspace is neither observed nor protected. Closing either means
 widening observation or narrowing writability — never widening what a check is
 taken to prove.
+
+## Sandbox dimensions
+
+`HostProtected` above is the delivery-level abstraction. Sandbox policy refines
+it into three independent protection dimensions. Their independence is
+empirical: each became necessary after a measured bypass showed that another
+protection did not imply it.
+
+- **Integrity** — what host state may be mutated. Expressed by write roots.
+- **Confidentiality** — what host information may be observed. Expressed by
+  `ForbidReadRoots`.
+- **Authority** — what host capabilities may be exercised *without* possessing
+  their secrets. Expressed by `HostAuthorities`.
+
+`ReadOnly` is therefore an Integrity property only; it makes no Confidentiality
+or Authority claim.
+
+Network transport and host authority are independent even when a backend
+primitive conflates them: on macOS, `(deny network*)` also cut ssh-agent, so one
+flag could not express "no internet, still sign".
+
+Filesystem visibility is not authority: denying `file-read*` on a socket did not
+stop a connect. Possession is not authority: the key can be unreadable while an
+agent still signs with it.
+
+A protection claim exists only where a backend has a demonstrated enforcement
+primitive for that dimension. Unsupported dimensions stay explicitly unsupported
+— Windows currently enforces none of the three — because a claim that outruns
+its enforcement is worse than an absent one: it is believed.
