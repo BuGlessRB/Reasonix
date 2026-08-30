@@ -728,3 +728,105 @@ func openRemoteBody(t *testing.T, host, workspace string) io.Reader {
 	}
 	return bytes.NewReader(raw)
 }
+
+// resumeKernel answers /events the way a far kernel does: it reads the resume
+// point off the request and numbers what it sends from there, so a test can
+// tell a proxy that carried the point from one that dropped it.
+func resumeKernel(t *testing.T, resumed chan<- string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/events" {
+			writeJSON(w, map[string]string{"path": r.URL.Path})
+			return
+		}
+		select {
+		case resumed <- r.Header.Get("Last-Event-ID"):
+		default:
+		}
+		// The same reader the real kernel uses, so what the proxy forwards is
+		// held to the form that actually resumes a stream.
+		next := lastEventID(r) + 1
+		w.Header().Set("Content-Type", "text/event-stream")
+		flush := w.(http.Flusher)
+		fmt.Fprintf(w, "id: %d\ndata: {\"seq\":%d}\n\n", next, next)
+		flush.Flush()
+		// Held open, so anything the client reads was flushed through rather
+		// than released when the handler returned.
+		<-r.Context().Done()
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// A pane that drops mid-turn comes back saying where it got to, and only the
+// far kernel can act on that. The point travels in a header, so a proxy that
+// dropped it would cost the reconnect every frame of the turn so far — and
+// the loss would read as a quiet turn rather than as an error.
+func TestRemotePaneCarriesTheResumePointToTheFarKernel(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	resumed := make(chan string, 4)
+	upstream := resumeKernel(t, resumed)
+	h := NewHub(HubOptions{})
+	rt := remotePane(t, h, upstream.Listener.Addr().String())
+	front := httptest.NewServer(h.Handler())
+	defer front.Close()
+
+	// Two connections, because the point is per-request: a proxy that cached
+	// the first one would pass a single-connection test and lose every later
+	// resume.
+	for _, from := range []string{"37", "41"} {
+		t.Run("resuming from "+from, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, front.URL+rt.view().Base+"/events", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Last-Event-ID", from)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+
+			select {
+			case got := <-resumed:
+				if got != from {
+					t.Fatalf("the far kernel saw Last-Event-ID %q, want %q", got, from)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("the far kernel was never reached")
+			}
+
+			// And the frame it numbered from that point comes back, while the
+			// far handler is still holding its connection open.
+			lines := make(chan string, 8)
+			go func() {
+				defer close(lines)
+				reader := bufio.NewReader(resp.Body)
+				for {
+					line, err := reader.ReadString('\n')
+					if err != nil {
+						return
+					}
+					lines <- strings.TrimRight(line, "\r\n")
+				}
+			}()
+			want := "id: " + map[string]string{"37": "38", "41": "42"}[from]
+			deadline := time.After(3 * time.Second)
+			for {
+				select {
+				case line, ok := <-lines:
+					if !ok {
+						t.Fatalf("the stream ended before %q arrived", want)
+					}
+					if line == want {
+						return
+					}
+				case <-deadline:
+					t.Fatalf("%q never arrived: the resumed frame did not stream back", want)
+				}
+			}
+		})
+	}
+}

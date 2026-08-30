@@ -22,10 +22,11 @@ const (
 	remoteHeaderTimeout = 30 * time.Second
 )
 
-// pumpRemoteEvents forwards a proxied pane's stream onto the bus channel a
-// local pane's frames use. The window cannot read SSE for itself — the asset
-// server holds a response until its handler returns — so the shell reads the
-// far kernel's stream and re-emits it, byte-identical.
+// pumpRemoteEvents forwards a proxied pane's stream onto the bus a local pane's
+// frames use. The hub's proxy already streams the same frames to a page that
+// can read SSE; this exists because the page inside this shell reads the bus
+// for every pane, remote included — the asset server holds a response until its
+// handler returns — so it retires with that bus rather than before it.
 func pumpRemoteEvents(ctx context.Context, rt *serve.Runtime) {
 	ep, ok := rt.Remote()
 	if !ok {
