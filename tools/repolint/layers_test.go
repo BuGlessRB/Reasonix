@@ -19,6 +19,13 @@ func TestLayeringContract(t *testing.T) {
 		{"desktop host may use the controller", "desktop", "internal/control", false},
 		{"controller may use the kernel", "internal/control", "internal/agent", false},
 		{"kernel may use a utility package", "internal/agent", "internal/fileutil", false},
+		{"host adapter may use the frontend whose port it implements", "internal/remotehost", "internal/serve", false},
+		{"host adapter may use the kernel below it", "internal/remotehost", "internal/remote/attach", false},
+		{"a host assembles a host adapter", "cmd/reasonix-studio-host", "internal/remotehost", false},
+		{"a shell assembles a host adapter", "desktop/next", "internal/remotehost", false},
+		{"the kernel may not reach a host adapter", "internal/agent", "internal/remotehost", true},
+		{"the controller may not reach a host adapter", "internal/control", "internal/remotehost", true},
+		{"a utility may not reach a host adapter", "internal/fileutil", "internal/remotehost", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := violates(tc.pkg, tc.dep) != ""; got != tc.wantViolation {

@@ -1,4 +1,8 @@
-package main
+// Package remotehost dials the machines a Studio can open a workspace on. It
+// is the standard implementation of serve's RemoteAttacher: everything about
+// holding a connection, installing a kernel over there and naming what went
+// wrong. None of it is a window's business, so neither shell owns it.
+package remotehost
 
 import (
 	"context"
@@ -16,26 +20,25 @@ import (
 	"reasonix/internal/serve"
 )
 
-// remoteLink gives the hub what it needs for panes on other machines: a pool
-// that dials, and the prompts a first connect may have to stop for.
-type remoteLink struct{ pool *attach.Pool }
+// Link gives the hub what it needs for panes on other machines: a pool that
+// dials, and the prompts a first connect may have to stop for.
+type Link struct{ pool *attach.Pool }
 
-// attachPrompts is what answers a credential or host-key question. Aliased so
-// the bridge that implements it does not import the link layer to name it.
-type attachPrompts = attach.Prompts
-
-func newRemoteLink(ctx context.Context, prompts attachPrompts) *remoteLink {
-	return &remoteLink{pool: attach.NewPool(ctx, attach.Options{
-		Prompts: prompts,
+// New builds the link layer for a host. asks is where a first-seen key or a
+// locked one goes; nil leaves both prompts unset, and the strict path applies —
+// a key nobody looked at is refused rather than accepted quietly.
+func New(ctx context.Context, version string, asks *serve.AskBroker) *Link {
+	return &Link{pool: attach.NewPool(ctx, attach.Options{
+		Prompts: prompts{asks: asks}.build(),
 		Version: version,
-		// No LocalBinary: this executable is the window, not the CLI, and
+		// No LocalBinary: a shell's executable is the window, not the CLI, and
 		// uploading it would spend the transfer to have the far side reject a
 		// binary with no serve command. npm, then a verified release download.
 		FetchBinary: fetchRemoteBinary,
 	})}
 }
 
-func (r *remoteLink) Attach(ctx context.Context, host, workspace string) (serve.RemoteEndpoint, func(), error) {
+func (r *Link) Attach(ctx context.Context, host, workspace string) (serve.RemoteEndpoint, func(), error) {
 	ep, err := r.pool.Attach(ctx, host, workspace, attach.Call{})
 	if err != nil {
 		return serve.RemoteEndpoint{}, nil, identify(host, err)
@@ -52,7 +55,7 @@ func (r *remoteLink) Attach(ctx context.Context, host, workspace string) (serve.
 // a moment afterwards, so walking down a tree is one login rather than one per
 // step — and nothing is installed on the far side to answer it, which is what
 // lets a folder be chosen before that machine has ever run a kernel.
-func (r *remoteLink) Browse(ctx context.Context, host, dir string) (serve.RemoteListing, error) {
+func (r *Link) Browse(ctx context.Context, host, dir string) (serve.RemoteListing, error) {
 	listing, err := r.pool.Browse(ctx, host, dir)
 	if err != nil {
 		return serve.RemoteListing{}, identifyBrowse(host, dir, err)
@@ -83,7 +86,7 @@ func identifyBrowse(host, dir string, err error) error {
 
 // Candidates reads the machine's own ssh_config. Filling the book by hand when
 // the addresses are already written down next door is the step people skip.
-func (r *remoteLink) Candidates() []string {
+func (r *Link) Candidates() []string {
 	src, err := remote.LoadUserSSHConfig()
 	if err != nil || src == nil {
 		return nil
@@ -98,7 +101,7 @@ func (r *remoteLink) Candidates() []string {
 // Probe answers what that machine can do before anything is attempted on it.
 // A closed route carries the code identify would have refused with, so the
 // window has one wording for a failure and for the same failure foreseen.
-func (r *remoteLink) Probe(ctx context.Context, host string) (serve.RemoteProbe, error) {
+func (r *Link) Probe(ctx context.Context, host string) (serve.RemoteProbe, error) {
 	rep, err := r.pool.Probe(ctx, host)
 	if err != nil {
 		return serve.RemoteProbe{}, identify(host, err)
@@ -116,7 +119,7 @@ func (r *remoteLink) Probe(ctx context.Context, host string) (serve.RemoteProbe,
 	return out, nil
 }
 
-func (r *remoteLink) States() map[string]serve.RemoteLinkState {
+func (r *Link) States() map[string]serve.RemoteLinkState {
 	live := r.pool.States()
 	out := make(map[string]serve.RemoteLinkState, len(live))
 	for host, st := range live {
@@ -218,4 +221,48 @@ func identify(host string, err error) error {
 	// when what actually happened is on the other end of the link.
 	return serve.Refusal(http.StatusBadGateway, "remote.attach_failed", err,
 		map[string]any{"host": host, "detail": err.Error()})
+}
+
+// prompts turns the link layer's blocking callbacks into canonical
+// questions. Nothing here holds one: the broker does, and every shell finds it
+// the same way — a window that is not polling yet simply has not looked.
+type prompts struct{ asks *serve.AskBroker }
+
+// prompts are what the pool hands the link layer. A broker that does not exist
+// leaves both nil, and the strict path applies: a first-seen key is refused
+// rather than accepted quietly.
+func (p prompts) build() attach.Prompts {
+	if p.asks == nil {
+		return attach.Prompts{}
+	}
+	return attach.Prompts{Secret: p.secret, HostKey: p.hostKey}
+}
+
+func (p prompts) hostKey(ctx context.Context, q remote.HostKeyQuestion) (bool, error) {
+	answer, err := p.asks.Ask(ctx, serve.Ask{
+		Kind:        "hostkey",
+		Host:        q.Host,
+		Address:     q.Address,
+		KeyType:     q.KeyType,
+		Fingerprint: q.Fingerprint,
+	})
+	if err != nil {
+		return false, err
+	}
+	return answer.OK, nil
+}
+
+func (p prompts) secret(ctx context.Context, kind remote.SecretKind, host, identityFile string) (string, error) {
+	answer, err := p.asks.Ask(ctx, serve.Ask{
+		Kind:         kind.String(),
+		Host:         host,
+		IdentityFile: identityFile,
+	})
+	if err != nil {
+		return "", err
+	}
+	if !answer.OK {
+		return "", errors.New("remote: cancelled")
+	}
+	return answer.Text, nil
 }

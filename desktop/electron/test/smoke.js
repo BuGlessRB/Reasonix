@@ -110,6 +110,12 @@ async function trayChecks(win) {
 
   const prefs = await client.trayPrefs();
   check("main reads the tray settings from the kernel", !!prefs && typeof prefs.closeToTray === "boolean", prefs);
+  // A kernel with no link layer answers 501 here, which is what Electron got
+  // until this shell was given one: the protocol was green while nothing in
+  // front of it could dial.
+  const remotes = await client.json("GET", "/remotes");
+  check("the shell can reach other machines", Array.isArray(remotes), remotes);
+
   const fold = await client.trayState();
   check("main reads the fold from the kernel", !!fold && typeof fold.mood === "string", fold);
   check("the fold arrives spelled out", !!fold?.line && !!fold?.labels?.quit, fold);

@@ -52,6 +52,15 @@ var leaves = []string{
 	"internal/workspacelease",
 }
 
+// A host adapter implements a frontend's driven port and is shared by the hosts
+// that need it. It sits beside the frontends rather than below them: it consumes
+// their contracts by design, nothing in the kernel may reach it, and only a host
+// assembles one. remotehost holds the machines a Studio opens a workspace on —
+// the connection, not the window — so neither shell owns it.
+var hostAdapters = []string{
+	"internal/remotehost",
+}
+
 func checkLayering(imports map[string][]importRef) []Finding {
 	var out []Finding
 	for _, rel := range sortedKeys(imports) {
@@ -75,8 +84,10 @@ func violates(pkg, dep string) string {
 		return fmt.Sprintf("%s is a utility-layer package and must not import %s", pkg, dep)
 	case under(dep, "internal/control") && !matches(frontends, pkg) && !under(pkg, "internal/control") && !host(pkg):
 		return fmt.Sprintf("%s may not import %s: the controller is reachable from frontends and entrypoints only", pkg, dep)
-	case matches(frontends, dep) && !matches(frontends, pkg) && !host(pkg):
+	case matches(frontends, dep) && !above(pkg):
 		return fmt.Sprintf("%s may not import the %s frontend: move shared behavior below the controller", pkg, dep)
+	case matches(hostAdapters, dep) && !above(pkg):
+		return fmt.Sprintf("%s may not import the %s host adapter: it is assembled by hosts, not reached from below", pkg, dep)
 	}
 	return ""
 }
@@ -88,6 +99,12 @@ func violates(pkg, dep string) string {
 // frontend may import one, and benchmarks are above every frontend.
 func host(pkg string) bool {
 	return under(pkg, "cmd") || under(pkg, "desktop") || under(pkg, "benchmarks")
+}
+
+// above reports whether a package sits at or over the frontend line, which is
+// the only place a frontend or a host adapter may be imported from.
+func above(pkg string) bool {
+	return matches(frontends, pkg) || matches(hostAdapters, pkg) || host(pkg)
 }
 
 func under(pkg, root string) bool { return pkg == root || strings.HasPrefix(pkg, root+"/") }

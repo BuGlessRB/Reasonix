@@ -141,16 +141,6 @@ when something resembling it exists.
 
 ### Functional parity — these block retirement
 
-- **Remote workspaces in Electron.** `cmd/reasonix-studio-host` supplies no
-  `Remote` to its hub, and `newRemoteLink` / `fetchRemoteBinary` are still owned
-  by `desktop/next`. So attach, browse and probe are Wails-only, and the shell
-  that has them is the one being retired.
-
-  Read this next to the entry it is easily confused with: the question a dial
-  stops for is canonical now — one broker, one snapshot, one answer endpoint,
-  and no shell owns it. That made the *semantics* shared. It did not give
-  Electron a remote workspace, because nothing there dials.
-
 - **Single instance.** Wails locks per canonicalized `REASONIX_HOME`, so two
   homes coexist and one home never opens twice. Electron's own lock has no such
   key, and the identity is Reasonix's rather than the shell's.
@@ -161,6 +151,16 @@ when something resembling it exists.
 
 - **Version pinning** and the **folder picker.** Still answered by Wails
   bindings; every other client answers null.
+
+### Cleared
+
+- **Remote workspaces.** The link layer is `internal/remotehost` now — a host
+  adapter that implements serve's port and is assembled by both shells, rather
+  than something one of them owned. Cleared on the product chain rather than on
+  the protocol: a workspace is opened on another machine, the dial stops for a
+  host key, the client finds that question by polling the operation it named,
+  answers it, the pane comes up, and its first frame arrives through the hub's
+  proxy from the far kernel.
 
 ### Presentation parity — these do not
 

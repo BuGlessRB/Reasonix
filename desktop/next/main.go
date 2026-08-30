@@ -36,6 +36,7 @@ import (
 	"reasonix/internal/crashreport"
 	"reasonix/internal/event"
 	"reasonix/internal/notify"
+	"reasonix/internal/remotehost"
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
 	"reasonix/internal/traystate"
@@ -221,7 +222,7 @@ func run(logs io.Writer) error {
 			shell.stopPump(rt)
 			tracker.Drop(paneKey(rt.Events))
 		},
-		Remote: newRemoteLink(ctx, askPrompts{asks: asks}.prompts()),
+		Remote: remotehost.New(ctx, version, asks),
 		Asks:   asks,
 		Tray:   shell,
 	})

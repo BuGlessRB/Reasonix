@@ -1,7 +1,9 @@
 package serve
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -258,4 +260,145 @@ func TestTheAnswerEndpointNamesWhatWentWrong(t *testing.T) {
 		t.Errorf("a second opinion = %d %s, want %s", status, body, codeAskAlreadyResolved)
 	}
 	cancel()
+}
+
+// askingAttacher stops on the first dial the way a first-seen host key does,
+// and goes on once somebody answers.
+type askingAttacher struct {
+	asks     *AskBroker
+	endpoint RemoteEndpoint
+}
+
+func (a *askingAttacher) Attach(ctx context.Context, host, workspace string) (RemoteEndpoint, func(), error) {
+	answer, err := a.asks.Ask(ctx, Ask{Kind: "hostkey", Host: host, Fingerprint: "SHA256:whatever"})
+	if err != nil {
+		return RemoteEndpoint{}, nil, err
+	}
+	if !answer.OK {
+		return RemoteEndpoint{}, nil, errors.New("the key was refused")
+	}
+	ep := a.endpoint
+	ep.Host, ep.Workspace = host, workspace
+	return ep, func() {}, nil
+}
+
+func (a *askingAttacher) Browse(context.Context, string, string) (RemoteListing, error) {
+	return RemoteListing{}, nil
+}
+func (a *askingAttacher) States() map[string]RemoteLinkState { return nil }
+func (a *askingAttacher) Candidates() []string               { return nil }
+func (a *askingAttacher) Probe(context.Context, string) (RemoteProbe, error) {
+	return RemoteProbe{}, nil
+}
+
+// The chain a person actually walks: open a workspace on another machine, be
+// stopped by a question, find it by polling the operation, answer it, and have
+// the pane come up. Everything but the SSH itself, driven over HTTP the way any
+// shell drives it.
+func TestAnsweringAQuestionLetsTheDialFinishAndThePaneOpen(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	far := fakeRemoteKernel(t)
+	asks := NewAskBroker(nil)
+	h := NewHub(HubOptions{
+		Asks:   asks,
+		Remote: &askingAttacher{asks: asks, endpoint: RemoteEndpoint{Addr: far.Listener.Addr().String(), Token: "remote-secret"}},
+	})
+	front := httptest.NewServer(h.Handler())
+	defer front.Close()
+
+	const operation = "op-the-client-named"
+	opened := make(chan *http.Response, 1)
+	go func() {
+		req, err := http.NewRequest(http.MethodPost, front.URL+"/remotes/open",
+			strings.NewReader(`{"host":"gpu-box","workspace":"/srv/w"}`))
+		if err != nil {
+			opened <- nil
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(operationHeader, operation)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			opened <- nil
+			return
+		}
+		opened <- resp
+	}()
+
+	// The client polls its own operation, which is the only thing it has to go
+	// on: the response it is waiting for is what the question is blocking.
+	var found Ask
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(front.URL + "/asks?operationId=" + operation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body struct {
+			Epoch string `json:"epoch"`
+			Asks  []Ask  `json:"asks"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&body)
+		resp.Body.Close()
+		if len(body.Asks) == 1 {
+			found = body.Asks[0]
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if found.ID == "" {
+		t.Fatal("the question never surfaced to the client that raised it")
+	}
+	if found.OperationID != operation || found.Epoch != asks.Epoch() {
+		t.Fatalf("ask = %+v, want it to name this operation and this launch", found)
+	}
+
+	answer, err := http.Post(front.URL+"/asks/"+found.ID+"/answer", "application/json",
+		strings.NewReader(`{"epoch":"`+found.Epoch+`","operationId":"`+operation+`","answer":{"ok":true}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer.Body.Close()
+	if answer.StatusCode != http.StatusNoContent {
+		t.Fatalf("answering = %d, want 204", answer.StatusCode)
+	}
+
+	resp := <-opened
+	if resp == nil {
+		t.Fatal("the open never came back")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body := make([]byte, 512)
+		n, _ := resp.Body.Read(body)
+		t.Fatalf("open = %d %s, want the pane to have come up", resp.StatusCode, body[:n])
+	}
+	var view RuntimeView
+	if err := json.NewDecoder(resp.Body).Decode(&view); err != nil {
+		t.Fatal(err)
+	}
+	if view.Host != "gpu-box" || view.Base == "" {
+		t.Fatalf("pane = %+v, want a remote runtime on the machine that was asked for", view)
+	}
+	// And the pane's stream is the proxy's, not something a shell arranged.
+	streamCtx, stopStream := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(streamCtx, http.MethodGet, front.URL+view.Base+"/events", nil)
+	if err != nil {
+		stopStream()
+		t.Fatal(err)
+	}
+	stream, err := http.DefaultClient.Do(req)
+	if err != nil {
+		stopStream()
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(stream.Body).ReadString('\n')
+	stream.Body.Close()
+	// Let go of both ends before the servers come down: a proxy still holding
+	// a stream open is what makes a close wait rather than a test fail.
+	stopStream()
+	close(far.release)
+	if err != nil || !strings.Contains(line, "first") {
+		t.Fatalf("the pane's first frame was %q (%v), want the far kernel's", line, err)
+	}
 }

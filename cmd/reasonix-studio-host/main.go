@@ -26,6 +26,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/instanceid"
 	"reasonix/internal/notify"
+	"reasonix/internal/remotehost"
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
 	"reasonix/internal/traystate"
@@ -277,6 +278,9 @@ func assemble(ctx context.Context, logs io.Writer) (*serve.Hub, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A first connect can stop for a host key nobody has seen or a locked key.
+	// Both are questions, and the broker is where they live until answered.
+	asks := serve.NewAskBroker(nil)
 	hubCfg := hostServeConfig(cfg.Serve)
 	hub := serve.NewHub(serve.HubOptions{
 		Serve:        hubCfg,
@@ -284,6 +288,8 @@ func assemble(ctx context.Context, logs io.Writer) (*serve.Hub, error) {
 		Grant:        grantHostCapabilities,
 		DecorateSink: decorate,
 		Tray:         &studioTray{tracker: tracker},
+		Asks:         asks,
+		Remote:       remotehost.New(ctx, version, asks),
 		OnClose:      func(rt *serve.Runtime) { tracker.Drop(paneKey(rt.Events)) },
 	})
 	srv := serve.New(built.Controller, bc, hubCfg)
