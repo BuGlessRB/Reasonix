@@ -169,12 +169,62 @@ func (completeStep) Execute(ctx context.Context, args json.RawMessage) (string, 
 	if projectVerified > 0 {
 		projectStatus = fmt.Sprintf(" Project checks: project checks %d.", projectVerified)
 	}
-	advanceStatus := " The host advanced the task list; continue with the next step."
-	if hasTodo && todoMatch.Status == "completed" {
-		advanceStatus = " The matched todo was already completed; the task list is unchanged."
-	}
+	advanceStatus := planAdvanceStatus(ctx, todoMatch, hasTodo)
 	return fmt.Sprintf("Step %q signed off with %d evidence item(s) [%s].%s%s",
 		step, len(p.Evidence), strings.Join(kinds, ", "), hostStatus+todoStatus+projectStatus, advanceStatus), nil
+}
+
+// planAdvanceStatus says what the sign-off left behind. Whether a step remains
+// is a fact the task list holds, and telling the model to continue past the
+// last one is what keeps a finished plan executing (#8816).
+func planAdvanceStatus(ctx context.Context, match evidence.TodoStepMatch, hasTodo bool) string {
+	if !hasTodo {
+		return " The host recorded the sign-off; there is no task list to advance."
+	}
+	if terminal, next, ok := planAdvanceAfter(ctx, match); ok {
+		switch {
+		case terminal:
+			return " Every step in the task list is now complete. Do not open new work under this plan."
+		case next.Content != "":
+			return fmt.Sprintf(" The host advanced the task list; the next step is %d %q.", next.Index, next.Content)
+		}
+	}
+	if match.Status == "completed" {
+		return " The matched todo was already completed; the task list is unchanged."
+	}
+	return " The host advanced the task list; continue with the next step."
+}
+
+// planAdvanceAfter replays the host's own advance on a copy of the list, so
+// what this result says and what the task list does cannot drift apart: the
+// alternative is a second implementation of the same state machine.
+func planAdvanceAfter(ctx context.Context, match evidence.TodoStepMatch) (terminal bool, next evidence.TodoStepMatch, ok bool) {
+	todos := currentTodos(ctx)
+	if len(todos) == 0 || match.Index <= 0 || match.Index > len(todos) {
+		return false, evidence.TodoStepMatch{}, false
+	}
+	advanced := append([]evidence.TodoItem(nil), todos...)
+	evidence.AdvanceSerialTodo(advanced, match.Index-1)
+	for i, todo := range advanced {
+		if strings.TrimSpace(todo.Status) == "in_progress" {
+			return false, evidence.TodoStepMatch{Found: true, Index: i + 1, Content: todo.Content,
+				Status: todo.Status, ActiveForm: todo.ActiveForm, StepID: todo.StepID}, true
+		}
+	}
+	// AdvanceSerialTodo leaves exactly one item current while any remains, so
+	// no current item means none is left.
+	return true, evidence.TodoStepMatch{}, true
+}
+
+// currentTodos reads the same list verifyTodoStep matched against.
+func currentTodos(ctx context.Context) []evidence.TodoItem {
+	if ledger, ok := evidence.FromContext(ctx); ok {
+		if todos, _ := ledger.LatestTodos(); len(todos) > 0 {
+			return todos
+		}
+	}
+	todos, _ := evidence.TodoStateFromContext(ctx)
+	return todos
 }
 
 // completeStepIdentity picks the citation to resolve against the task list,

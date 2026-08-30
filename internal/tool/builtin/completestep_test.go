@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -829,5 +830,64 @@ func TestCompleteStepPendingHintNamesActiveSubStep(t *testing.T) {
 		"evidence":[{"kind":"manual","summary":"checked manually"}]}`))
 	if err == nil || !strings.Contains(err.Error(), `finish todo 2 "move files" first`) {
 		t.Fatalf("pending hint should point at the active sub-step, got %v", err)
+	}
+}
+
+// The sign-off on the last step must not tell the model to continue. A plan
+// whose final item is done and whose result still says "continue with the next
+// step" is a turn that keeps executing a finished plan (#8816).
+func TestCompleteStepSaysWhenThePlanIsFinished(t *testing.T) {
+	sign := func(t *testing.T, todos []evidence.TodoItem, step string) string {
+		t.Helper()
+		ctx := evidence.WithTodoState(evidence.WithLedger(context.Background(), evidence.NewLedger()), todos)
+		out, err := (completeStep{}).Execute(ctx, json.RawMessage(`{
+			"step":`+strconv.Quote(step)+`,
+			"result":"done",
+			"evidence":[{"kind":"manual","summary":"checked manually"}]}`))
+		if err != nil {
+			t.Fatalf("complete_step %q: %v", step, err)
+		}
+		return out
+	}
+
+	out := sign(t, []evidence.TodoItem{
+		{Content: "Add parser", Status: "in_progress"},
+		{Content: "Add tests", Status: "pending"},
+	}, "Add parser")
+	if !strings.Contains(out, `the next step is 2 "Add tests"`) {
+		t.Fatalf("mid-plan sign-off should name the next step, got %q", out)
+	}
+	if strings.Contains(out, "now complete") {
+		t.Fatalf("mid-plan sign-off claimed the plan was finished: %q", out)
+	}
+
+	out = sign(t, []evidence.TodoItem{
+		{Content: "Add parser", Status: "completed"},
+		{Content: "Add tests", Status: "in_progress"},
+	}, "Add tests")
+	if strings.Contains(out, "continue with the next step") {
+		t.Fatalf("final sign-off still asked for the next step: %q", out)
+	}
+	if !strings.Contains(out, "Every step in the task list is now complete") {
+		t.Fatalf("final sign-off did not report the plan as finished: %q", out)
+	}
+}
+
+// Re-signing a finished plan is the renewal path, and it is still finished.
+func TestCompleteStepOnAFinishedPlanStaysTerminal(t *testing.T) {
+	ctx := evidence.WithTodoState(evidence.WithLedger(context.Background(), evidence.NewLedger()),
+		[]evidence.TodoItem{{Content: "Add parser", Status: "completed"}})
+	out, err := (completeStep{}).Execute(ctx, json.RawMessage(`{
+		"step":"Add parser",
+		"result":"still done",
+		"evidence":[{"kind":"manual","summary":"checked manually"}]}`))
+	if err != nil {
+		t.Fatalf("renewal sign-off: %v", err)
+	}
+	if strings.Contains(out, "continue with the next step") {
+		t.Fatalf("renewal on a finished plan asked for a next step: %q", out)
+	}
+	if !strings.Contains(out, "Every step in the task list is now complete") {
+		t.Fatalf("renewal did not report the plan as finished: %q", out)
 	}
 }

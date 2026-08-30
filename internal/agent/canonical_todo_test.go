@@ -264,3 +264,35 @@ func TestAdvanceCanonicalTodoWalksPhaseChain(t *testing.T) {
 		t.Fatalf("phase sign-off should promote the next phase's first sub-step: %+v", a.sess.todoState)
 	}
 }
+
+// A finished plan must survive a reload as finished. Rebuilding is what a
+// resume runs, and a list that comes back with its first item in_progress is a
+// plan the turn would execute again (#8089).
+func TestRebuildTodoStateKeepsAFinishedPlanFinished(t *testing.T) {
+	msgs := []provider.Message{
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{
+			ID: "t1", Name: "todo_write",
+			Arguments: `{"todos":[{"content":"a","status":"in_progress"},{"content":"b","status":"pending"}]}`,
+		}}},
+		{Role: provider.RoleTool, ToolCallID: "t1", Name: "todo_write", Content: "Todos updated"},
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{
+			ID: "c1", Name: "complete_step", Arguments: `{"step":"a"}`,
+		}}},
+		{Role: provider.RoleTool, ToolCallID: "c1", Name: "complete_step", Content: "signed off"},
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{
+			ID: "c2", Name: "complete_step", Arguments: `{"step":"b"}`,
+		}}},
+		{Role: provider.RoleTool, ToolCallID: "c2", Name: "complete_step", Content: "signed off"},
+	}
+	a := &Agent{}
+	a.rebuildTodoState(msgs)
+
+	for i, td := range a.sess.todoState {
+		if canonicalTodoStatus(td.Status) != "completed" {
+			t.Fatalf("rebuilt todo %d (%q) = %s, want completed", i+1, td.Content, td.Status)
+		}
+	}
+	if a.hasActiveCanonicalTodo() {
+		t.Fatal("a finished plan came back from a rebuild with a current item")
+	}
+}

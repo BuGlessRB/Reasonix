@@ -255,3 +255,41 @@ func TestE2EUnbackedDiffEvidenceStillRejected(t *testing.T) {
 		t.Fatal("an unbacked diff citation was signed off")
 	}
 }
+
+// What the model acts on is the tool result on the transcript, not the host's
+// internal task state. #8816 looped precisely there: every step was completed,
+// the host knew it, and the last sign-off still said to continue — so the model
+// opened new work under a finished plan.
+func TestE2EFinalSignOffDoesNotAskForANextStep(t *testing.T) {
+	mp := testutil.NewMock("m",
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "t0", Name: "todo_write",
+			Arguments: `{"todos":[{"content":"test","status":"in_progress"},{"content":"vet","status":"pending"}]}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "b1", Name: "bash",
+			Arguments: `{"command":"go test ./..."}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "complete_step",
+			Arguments: `{"step":"test","result":"tests pass","evidence":[{"kind":"verification","summary":"tests pass","command":"go test ./..."}]}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "b2", Name: "bash",
+			Arguments: `{"command":"go vet ./..."}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c2", Name: "complete_step",
+			Arguments: `{"step":"vet","result":"vet passes","evidence":[{"kind":"verification","summary":"vet passes","command":"go vet ./..."}]}`}}},
+		testutil.Turn{Text: "all done"},
+	)
+	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, event.Discard)
+	if err := a.Run(context.Background(), "implement the plan"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !sessionContains(a, `the next step is 2 "vet"`) {
+		t.Fatal("the mid-plan sign-off did not name the step the host promoted")
+	}
+	if sessionContains(a, "continue with the next step") {
+		t.Fatal("a sign-off asked for a next step; the plan had none left")
+	}
+	if !sessionContains(a, "Every step in the task list is now complete") {
+		t.Fatal("the final sign-off did not tell the model the plan was finished")
+	}
+	for i, td := range a.sess.todoState {
+		if canonicalTodoStatus(td.Status) != "completed" {
+			t.Fatalf("canonical todo %d (%q) = %s, want completed", i+1, td.Content, td.Status)
+		}
+	}
+}
