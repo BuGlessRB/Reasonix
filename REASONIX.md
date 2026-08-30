@@ -261,9 +261,9 @@ taken to prove.
 ## Sandbox dimensions
 
 `HostProtected` above is the delivery-level abstraction. Sandbox policy refines
-it into three independent protection dimensions. Their independence is
-empirical: each became necessary after a measured bypass showed that another
-protection did not imply it.
+it into three independent protection dimensions. Their separation is empirical:
+measured bypasses showed that protection on one dimension cannot be assumed to
+imply protection on another.
 
 - **Integrity** — what host state may be mutated. Expressed by write roots.
 - **Confidentiality** — what host information may be observed. Expressed by
