@@ -37,6 +37,13 @@ func (s *Server) RunGracefulListener(ctx context.Context, ln net.Listener) error
 	return runGracefulListener(ctx, ln, s.Handler())
 }
 
+// RunGracefulHandler is RunGracefulListener for a host that serves something
+// other than a hub's own handler — a boundary wrapped around it, say — and so
+// must not reimplement the drain in order to put one there.
+func RunGracefulHandler(ctx context.Context, ln net.Listener, handler http.Handler) error {
+	return runGracefulListener(ctx, ln, handler)
+}
+
 // runGracefulListener serves handler until ctx ends, then drains for up to ten
 // seconds. Shared with the hub, which serves several runtimes behind one
 // listener and must shut them down the same way.
