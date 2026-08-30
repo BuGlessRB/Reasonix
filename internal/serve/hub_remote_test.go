@@ -776,9 +776,7 @@ func TestRemotePaneCarriesTheResumePointToTheFarKernel(t *testing.T) {
 	// resume.
 	for _, from := range []string{"37", "41"} {
 		t.Run("resuming from "+from, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, front.URL+rt.view().Base+"/events", nil)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, front.URL+rt.view().Base+"/events", nil)
 			if err != nil {
 				t.Fatal(err)
 			}

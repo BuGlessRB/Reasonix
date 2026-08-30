@@ -456,3 +456,28 @@ func TestHostNotifiesOnlyWhereTheSharedSettingAsksForIt(t *testing.T) {
 		t.Error("no config at all must not turn notifications on")
 	}
 }
+
+// The tray surface is the control plane like any other: it decides what the
+// close button does and whether an icon exists, and a page that guessed the
+// port must not reach it just because the user's serve config has no password.
+func TestTrayEndpointsSitBehindTheSameBoundary(t *testing.T) {
+	b, _, _ := startHost(t, config.ServeConfig{AuthMode: "none"})
+
+	for _, path := range []string{"/tray/prefs", "/tray/state"} {
+		status, body := ask(t, b, http.MethodGet, path, func(r *http.Request) { r.Header.Del("Cookie") })
+		if status != http.StatusForbidden || !strings.Contains(body, "loopback.unauthorized") {
+			t.Errorf("GET %s = %d %s, want 403 loopback.unauthorized", path, status, body)
+		}
+	}
+	// A write without this listener's origin is refused before it reaches any
+	// config file.
+	status, body := ask(t, b, http.MethodPut, "/tray/prefs", func(r *http.Request) { r.Header.Del("Origin") })
+	if status != http.StatusForbidden || !strings.Contains(body, "loopback.origin_rejected") {
+		t.Errorf("PUT /tray/prefs = %d %s, want 403 loopback.origin_rejected", status, body)
+	}
+	// And with both it reaches the kernel, which is what makes the refusals above
+	// mean something.
+	if status, body := ask(t, b, http.MethodGet, "/tray/prefs", nil); status != http.StatusOK {
+		t.Errorf("GET /tray/prefs = %d %s, want 200", status, body)
+	}
+}

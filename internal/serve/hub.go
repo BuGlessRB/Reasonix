@@ -147,6 +147,10 @@ type HubOptions struct {
 	// Remote reaches workspaces on other machines. Nil refuses them: a server
 	// that dials onward on a request's say-so is someone else's way in.
 	Remote RemoteAttacher
+	// Tray is the window behind this hub, where there is one. Nil leaves the
+	// tray routes unregistered rather than answering for an icon that does not
+	// exist — a networked server has no window to put one on.
+	Tray TrayHost
 }
 
 // OpenRequest asks for a runtime. An empty SessionPath opens a fresh session in
@@ -443,6 +447,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("POST /remotes/remove", h.removeRemoteHost)
 	mux.HandleFunc("POST /remotes/open", h.openRemoteRuntime)
 	h.registerTreeRoutes(mux)
+	h.registerTrayRoutes(mux)
 	mux.HandleFunc(runtimePrefix+"{id}/", h.routeRuntime)
 	mux.HandleFunc("/", h.routeDefault)
 	return logMiddleware(h.auth.middleware(csrfGuard(mux)))

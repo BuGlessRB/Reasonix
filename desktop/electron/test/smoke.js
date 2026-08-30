@@ -2,7 +2,7 @@
 // Drives the real shell: the assertions below all run against the window
 // src/main.js opened, loaded from the kernel it spawned. Run with `pnpm smoke`.
 const { app, BrowserWindow, Menu } = require("electron");
-require("../src/main.js");
+const { current } = require("../src/main.js");
 
 const WINDOW_TIMEOUT_MS = 40000;
 const failures = [];
@@ -91,9 +91,53 @@ async function run() {
   check("a second window is never opened", BrowserWindow.getAllWindows().length === 1, BrowserWindow.getAllWindows().length);
 
   await dropChecks(win, js);
+  await trayChecks(win);
 
   if (process.platform === "darwin") await menuChecks(win, js);
   check("the context menu is wired to the window", win.webContents.listenerCount("context-menu") > 0);
+}
+
+// The icon is main's surface, and main reaches the kernel for it directly: a
+// tray that asked the page for its state would put the credential in reach of
+// the page, and would go blank the moment the window was hidden.
+async function trayChecks(win) {
+  const { tray, client } = current();
+  check("the status icon came up", !!tray);
+  if (!tray) return;
+
+  const prefs = await client.trayPrefs();
+  check("main reads the tray settings from the kernel", !!prefs && typeof prefs.closeToTray === "boolean", prefs);
+  const fold = await client.trayState();
+  check("main reads the fold from the kernel", !!fold && typeof fold.mood === "string", fold);
+  check("the fold arrives spelled out", !!fold?.line && !!fold?.labels?.quit, fold);
+
+  // The icon shows the kernel's fold, not one this shell kept for itself. A
+  // tray with its own counter would drift from what the panes actually did,
+  // and nothing on screen would say which of the two was wrong.
+  await tray.refresh();
+  const fresh = await client.trayState();
+  check("the icon shows the kernel's fold", tray.fold()?.line === fresh?.line, {
+    icon: tray.fold()?.line,
+    kernel: fresh?.line,
+  });
+
+  // Backgrounding, end to end: the setting is written through the kernel, the
+  // window is closed, and it is still there — hidden rather than gone.
+  const on = await client.setTrayPrefs(true, true);
+  check("backgrounding can be turned on where an icon is up", on?.closeToTray === true, on);
+  await tray.refresh();
+  win.close();
+  await wait(500);
+  check("the close button hides the window rather than ending it", !win.isDestroyed() && !win.isVisible(), {
+    destroyed: win.isDestroyed(),
+    visible: win.isVisible(),
+  });
+
+  win.show();
+  await wait(200);
+  const off = await client.setTrayPrefs(true, false);
+  check("backgrounding can be turned back off", off?.closeToTray === false, off);
+  await tray.refresh();
 }
 
 // A dropped file has to arrive as a path, or a turn works on a copy of the

@@ -184,6 +184,8 @@ const SAID: Record<string, string> = {
   "wallet.unreadable": "这个供应商的余额接口回的内容读不懂",
 
   // ── 本机通道：这个请求不是 Studio 自己发的 ───────────────────────
+  "tray.rejected": "状态图标的设置没能保存：{detail}",
+
   "loopback.host_rejected": "这个请求没有发往 Studio 在监听的地址，已经拒掉了",
   "loopback.origin_rejected": "这个页面不是 Studio 自己，不能操作它",
   "loopback.unauthorized": "缺少本次启动的凭据，重开 Studio 再试",

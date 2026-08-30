@@ -73,3 +73,47 @@ test("only http and https ever reach the platform opener", () => {
     assert.equal(externalTarget(raw), null, `let through ${String(raw)}`);
   }
 });
+
+const { StudioHost } = require("../src/hostclient.js");
+const http = await import("node:http");
+
+// The client is main's own reach into the kernel, so it has to present what the
+// boundary asks for: this launch's credential on every request, and this
+// listener's origin on anything that writes.
+test("the host client presents the credential and names its own origin", async () => {
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      seen.push({ method: req.method, path: req.url, cookie: req.headers.cookie, origin: req.headers.origin, body });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ icon: true, live: true, closeToTray: false }));
+    });
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const client = new StudioHost(origin, "the-launch-credential");
+
+  const prefs = await client.trayPrefs();
+  assert.deepEqual(prefs, { icon: true, live: true, closeToTray: false });
+  await client.setTrayPrefs(true, true);
+  server.close();
+
+  assert.equal(seen[0].method, "GET");
+  assert.equal(seen[0].cookie, "reasonix_token=the-launch-credential");
+  // A read carries no origin, which is what a top-level navigation looks like
+  // and what the gate admits; only the write has to name the listener.
+  assert.equal(seen[1].method, "PUT");
+  assert.equal(seen[1].cookie, "reasonix_token=the-launch-credential");
+  assert.equal(seen[1].origin, origin);
+  assert.deepEqual(JSON.parse(seen[1].body), { icon: true, closeToTray: true });
+});
+
+// A kernel that has already gone answers null rather than throwing: every
+// caller of this is a surface that must keep working while the app shuts down.
+test("an unreachable kernel is an answer, not a crash", async () => {
+  const dead = new StudioHost("http://127.0.0.1:1", "x");
+  assert.equal(await dead.trayPrefs(), null);
+  assert.equal(await dead.trayState(), null);
+});

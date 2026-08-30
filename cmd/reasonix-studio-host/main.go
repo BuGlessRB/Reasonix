@@ -27,6 +27,7 @@ import (
 	"reasonix/internal/notify"
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
+	"reasonix/internal/traystate"
 
 	// Kinds register from init, so a binary builds only what it links. Without
 	// these every Anthropic model answers "unknown kind" at switch time.
@@ -245,7 +246,14 @@ func assemble(ctx context.Context, logs io.Writer) (*serve.Hub, error) {
 	// This window is the only client of its kernel, so a system notification
 	// reaches the person who asked for it. Every pane gets the same wrapper,
 	// not just the one the launch started with.
-	decorate := hostNotifications(cfg)
+	notifications := hostNotifications(cfg)
+	// One fold behind the status icon: every pane's events on the way through,
+	// so the tray surface answers from what the panes did rather than from a
+	// count the shell kept for itself.
+	tracker := traystate.New(nil)
+	decorate := func(sink event.Sink) event.Sink {
+		return tracker.Watch(paneKey(sink), notifications(sink))
+	}
 	bc := serve.NewBroadcaster()
 	paneSink := decorate(bc)
 	root := boot.ResolveWorkspaceRoot("")
@@ -266,6 +274,8 @@ func assemble(ctx context.Context, logs io.Writer) (*serve.Hub, error) {
 		Surface:      surface.Desktop,
 		Grant:        grantHostCapabilities,
 		DecorateSink: decorate,
+		Tray:         &studioTray{tracker: tracker},
+		OnClose:      func(rt *serve.Runtime) { tracker.Drop(paneKey(rt.Events)) },
 	})
 	srv := serve.New(built.Controller, bc, hubCfg)
 	srv.SetPaneSink(paneSink)
@@ -301,6 +311,25 @@ func hostNotifications(cfg *config.Config) func(event.Sink) event.Sink {
 	sender := notify.NewPlatformSender()
 	return func(sink event.Sink) event.Sink { return notify.NewSink(sink, sender, cfg.Notifications) }
 }
+
+// studioTray answers for a shell that can put an icon back whenever the setting
+// asks for one: what is set is what is up, so the two never drift the way they
+// do on a platform that gives its icon up once per process.
+type studioTray struct{ tracker *traystate.Tracker }
+
+func (t *studioTray) IconLive() bool {
+	return config.LoadForEdit(config.UserConfigPath()).DesktopTray() != "off"
+}
+
+func (t *studioTray) TrayFold() traystate.State { return t.tracker.State() }
+
+// The window reads what it asked for out of the answer, so there is nothing to
+// push at it here.
+func (t *studioTray) ApplyTrayPrefs(serve.TrayPrefs) {}
+
+// paneKey names a pane by the sink it emits through: the hub hands that to the
+// decorator before the pane has an id, and hands the same one back on close.
+func paneKey(sink any) string { return fmt.Sprintf("%p", sink) }
 
 // grantHostCapabilities opens what only a local window may do. The single
 // client is the person in front of it, so provider keys and the account token

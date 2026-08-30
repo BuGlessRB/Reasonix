@@ -21,7 +21,7 @@ const ROUTES = [
   "/changes", "/attachments", "/drop", "/checkpoints", "/branches", "/compact", "/rewind",
   "/extensions", "/themes", "/plugins", "/surfaces",
   "/fork", "/summarize", "/forget", "/bypass", "/auto-approve-tools",
-  "/permissions", "/sandbox", "/context", "/storage",
+  "/permissions", "/sandbox", "/context", "/storage", "/tray",
   "/slash", "/workspaces", "/welcome", "/usage", "/config",
 ];
 

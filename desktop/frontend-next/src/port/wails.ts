@@ -1,4 +1,4 @@
-import type { TrayPrefs, VersionHub } from "./port";
+import type { VersionHub } from "./port";
 
 // What the desktop shell binds onto the window. The browser build has none
 // of it, so every call site asks before using one — the same page runs in
@@ -12,11 +12,6 @@ export interface WailsBind {
         PinVersion?: (version: string) => Promise<void>;
         GoToVersion?: (version: string) => Promise<void>;
         SavePluginExport?: (name: string) => Promise<{ path: string; required: string[] }>;
-        // The status icon is the window's own, so its switches answer here
-        // rather than through the kernel: they take effect on the next
-        // close, not the next launch.
-        TrayPrefs?: () => Promise<TrayPrefs>;
-        SetTrayPrefs?: (icon: boolean, closeToTray: boolean) => Promise<TrayPrefs>;
         // Replies to a question the link layer is blocked on — a first-seen
         // host key, or a locked private key.
         AnswerRemote?: (id: string, ok: boolean, text: string) => Promise<void>;

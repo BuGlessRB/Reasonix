@@ -75,7 +75,7 @@ var apiPaths = map[string]bool{
 	"/changes": true, "/attachments": true, "/drop": true, "/roles": true,
 	"/themes": true, "/extensions": true, "/plugins": true, "/surfaces": true,
 	"/welcome": true, "/appearance": true,
-	"/permissions": true, "/sandbox": true, "/storage": true, "/usage": true,
+	"/permissions": true, "/sandbox": true, "/storage": true, "/usage": true, "/tray": true,
 	"/balance":        true,
 	"/config/problem": true, "/config/repair": true,
 }
@@ -85,7 +85,7 @@ var apiPaths = map[string]bool{
 // endpoint from silently answering with index.html instead of JSON — and
 // TestEveryPathTheFrontendCallsIsRouted is what keeps this list honest, because
 // the comment alone did not.
-var apiPrefixes = []string{"/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/", "/appearance/", "/storage/", "/changes/"}
+var apiPrefixes = []string{"/tray/", "/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/", "/appearance/", "/storage/", "/changes/"}
 
 // splitRuntimePath separates a pane's address from the route it is asking for:
 // /rt/r2/status is runtime r2 asking for /status. An unprefixed path belongs to
@@ -205,7 +205,7 @@ func run(logs io.Writer) error {
 	// Native panels the shell opens are outside the webview, so the frontend's
 	// catalogue cannot reach them. They follow the desktop interface language, a
 	// separate setting from the kernel's — hence a catalogue read, not the active one.
-	shell := &App{pumps: map[string]context.CancelFunc{}, say: i18n.CatalogFor(cfg.DesktopLanguage())}
+	shell := &App{pumps: map[string]context.CancelFunc{}, say: i18n.CatalogFor(cfg.DesktopLanguage()), tracker: tracker}
 	// A first connect can stop for a host key nobody has seen or a locked key.
 	// Both are questions, and this window is the only thing that can ask one.
 	shell.asks = newAskBroker(shell)
@@ -370,6 +370,10 @@ type App struct {
 	// window back, quit where it cannot. Runtime state rather than a config read
 	// per close, because the tray toggles it and the answer must be immediate.
 	background atomic.Bool
+
+	// What the panes add up to, folded as they emit. The icon paints it and the
+	// tray surface answers with it.
+	tracker *traystate.Tracker
 
 	mu    sync.Mutex
 	pumps map[string]context.CancelFunc

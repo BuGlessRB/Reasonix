@@ -219,14 +219,22 @@ export class SsePort extends SseTheme implements AgentPort {
     return (await bind()) as VersionHub;
   }
 
+  // The icon belongs to the window, not to a pane, so these two are the one
+  // pair that ignores this port's base: a remote pane's base names another
+  // machine, and the status icon there is not the one on this screen.
   async trayPrefs(): Promise<TrayPrefs | null> {
-    const bind = (window as unknown as WailsBind).go?.main?.App?.TrayPrefs;
-    return bind ? await bind() : null;
+    return this.trayCall(await fetch("/tray/prefs", { credentials: "same-origin" }));
   }
 
   async setTrayPrefs(icon: boolean, closeToTray: boolean): Promise<TrayPrefs | null> {
-    const bind = (window as unknown as WailsBind).go?.main?.App?.SetTrayPrefs;
-    return bind ? await bind(icon, closeToTray) : null;
+    return this.trayCall(
+      await fetch("/tray/prefs", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ icon, closeToTray }),
+      }),
+    );
   }
 
   async pinVersion(version: string): Promise<void> {
@@ -285,6 +293,15 @@ export class SsePort extends SseTheme implements AgentPort {
 
   accountLogin() {
     return this.post0<DeviceGrant>("/account/login");
+  }
+
+  // A kernel with no window registers no tray routes at all, which is what a
+  // browser tab reads as "there is no icon here" — the same null this panel
+  // has always had to render.
+  private async trayCall(res: Response): Promise<TrayPrefs | null> {
+    if (res.status === 404) return null;
+    if (!res.ok) await SsePort.fail("/tray/prefs", res);
+    return (await res.json()) as TrayPrefs;
   }
 
   async accountPoll(deviceCode: string) {

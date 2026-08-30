@@ -1,62 +1,35 @@
-// tray_prefs.go — the status icon as a setting, answered by the window itself.
+// tray_prefs.go — what only this window can answer about its own status icon.
 package main
 
 import (
-	"reasonix/internal/config"
+	"reasonix/internal/serve"
+	"reasonix/internal/traystate"
 )
 
-// TrayPrefs is what the window can say about its own icon. Icon is what the
-// setting asks for and Live is whether there is one right now: systray quits
-// once per process, so taking the icon down mid-session would be a switch that
-// cannot be switched back. The two differ only until the next launch, and a
-// panel that shows both can say so instead of pretending.
-type TrayPrefs struct {
-	Icon        bool `json:"icon"`
-	Live        bool `json:"live"`
-	CloseToTray bool `json:"closeToTray"`
-}
-
-// TrayPrefs reports the current state to the settings pane.
-func (a *App) TrayPrefs() TrayPrefs {
-	return TrayPrefs{
-		Icon:        config.LoadForEdit(config.UserConfigPath()).DesktopTray() != "off",
-		Live:        a.iconLive(),
-		CloseToTray: a.background.Load(),
-	}
-}
-
-// SetTrayPrefs applies both switches and writes them down. Closing behaviour
-// takes effect now — it is a flag, and the next close is the whole point of
-// asking. The icon waits for a launch, which is the honest half: there is no
-// way to put one back on this process.
-func (a *App) SetTrayPrefs(icon, closeToTray bool) TrayPrefs {
-	// No icon, no backgrounding. A hidden window with nothing to bring it back
-	// is the one state this feature must never produce, so the answer depends
-	// on an icon being both asked for and actually up.
-	closeToTray = closeToTray && icon && a.iconLive()
-	a.background.Store(closeToTray)
-
-	path := config.UserConfigPath()
-	edit := config.LoadForEdit(path)
-	trayMode, behavior := "auto", "quit"
-	if !icon {
-		trayMode = "off"
-	}
-	if closeToTray {
-		behavior = "background"
-	}
-	if err := edit.SetDesktopTray(trayMode); err == nil {
-		if err := edit.SetDesktopCloseBehavior(behavior); err == nil {
-			_ = edit.SaveTo(path)
-		}
-	}
-	return a.TrayPrefs()
-}
-
-func (a *App) iconLive() bool {
+// IconLive reports whether this launch got an icon. systray gives one up once
+// per process, so a setting turned back on cannot put another there.
+func (a *App) IconLive() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.icon != nil
+}
+
+// TrayFold is what the panes add up to. Jobs are the hub's to count.
+func (a *App) TrayFold() traystate.State {
+	if a.tracker == nil {
+		return traystate.State{}
+	}
+	return a.tracker.State()
+}
+
+// ApplyTrayPrefs takes effect on this launch: the close button answers the flag
+// rather than re-reading the file, and the menu's checkbox has to agree with it.
+func (a *App) ApplyTrayPrefs(prefs serve.TrayPrefs) {
+	a.background.Store(prefs.CloseToTray)
+	a.mu.Lock()
+	icon := a.icon
+	a.mu.Unlock()
+	icon.showBackground(prefs.CloseToTray)
 }
 
 // adoptIcon records the icon this launch got, if any.

@@ -3,6 +3,8 @@ const { app, BrowserWindow, dialog, ipcMain, screen, session, shell } = require(
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { start } = require("./host");
+const { StudioHost } = require("./hostclient");
+const { installTray } = require("./tray");
 const { installApplicationMenu, installContextMenu } = require("./menu");
 const { externalTarget } = require("./links");
 
@@ -21,6 +23,8 @@ let kernel = null;
 let win = null;
 let origin = "";
 let quitting = false;
+let client = null;
+let tray = null;
 
 async function boot() {
   kernel = start(hostBinary, ["-page", pageDir], {
@@ -31,12 +35,18 @@ async function boot() {
   });
   const ready = await kernel.ready;
   origin = ready.origin;
+  client = new StudioHost(ready.origin, ready.token);
   await armCredential(ready);
   win = createWindow();
   guard(win.webContents);
   installContextMenu(win.webContents, win);
   win.once("ready-to-show", () => win.show());
+  // No icon, no backgrounding: the close button can only hide the window where
+  // something is left that brings it back.
+  tray = installTray(client, { onOpen: showWindow, onQuit: () => app.quit() });
+  win.on("close", onWindowClose);
   await win.loadURL(origin + PAGE_PATH);
+  await tray?.refresh();
 }
 
 // Set before anything is loaded, or the first request answers 403 and the
@@ -53,6 +63,24 @@ async function armCredential(ready) {
     secure: false,
     sameSite: "strict",
   });
+}
+
+// The close button hides where an icon can bring the window back, and quits
+// where it cannot. Read from the cached preference rather than asked for on the
+// spot: a close must not wait on the kernel, nor fail once it has gone.
+function onWindowClose(event) {
+  if (quitting || !tray?.prefs()?.closeToTray) return;
+  event.preventDefault();
+  win.hide();
+}
+
+// showWindow brings it back from wherever it went. Show alone is a no-op on a
+// window that is merely buried, so the focus is what actually raises it.
+function showWindow() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
 }
 
 // A window larger than the display it opens on puts its own title bar off
@@ -157,7 +185,12 @@ app.on("window-all-closed", () => app.quit());
 
 // Closing this end of the pipe is what tells the kernel to drain. Without it a
 // session file is left being written by a process nobody is holding open.
+// What this launch is holding, for a test that drives the real shell rather
+// than a copy of it.
+module.exports = { current: () => ({ win, tray, client, origin }) };
+
 app.on("before-quit", () => {
   quitting = true;
+  tray?.close();
   kernel?.child.stdin.end();
 });

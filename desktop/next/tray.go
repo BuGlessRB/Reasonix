@@ -2,8 +2,7 @@
 package main
 
 import (
-	"fmt"
-	"strings"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/i18n"
+	"reasonix/internal/serve"
 	"reasonix/internal/traystate"
 )
 
@@ -128,31 +128,33 @@ func (t *tray) pump(open, stay, quit <-chan struct{}) {
 	}
 }
 
-// toggleBackground flips what the close button does and writes it down. The
-// runtime flag moves first: the answer to the next close is what the person
-// just asked for, whether or not the config file can be written.
+// toggleBackground flips what the close button does through the same service
+// the settings panel writes with, so one switch has one implementation. The
+// hub applies it back, which is what moves the flag and this checkbox.
 func (t *tray) toggleBackground() {
-	want := !t.shell.background.Load()
-	t.shell.background.Store(want)
+	prefs := t.shell.hub.TrayPrefs()
+	if _, err := t.shell.hub.SetTrayPrefs(prefs.Icon, !prefs.CloseToTray); err != nil {
+		slog.Warn("studio: close behaviour", "err", err)
+	}
+}
+
+// showBackground paints the checkbox. Called from the hub's apply, so the menu
+// agrees with the setting however it was changed.
+func (t *tray) showBackground(on bool) {
+	if t == nil {
+		return
+	}
 	t.mu.Lock()
 	item := t.stayOpen
 	t.mu.Unlock()
-	if item != nil {
-		if want {
-			item.Check()
-		} else {
-			item.Uncheck()
-		}
+	if item == nil {
+		return
 	}
-	behavior := "quit"
-	if want {
-		behavior = "background"
+	if on {
+		item.Check()
+		return
 	}
-	path := config.UserConfigPath()
-	edit := config.LoadForEdit(path)
-	if err := edit.SetDesktopCloseBehavior(behavior); err == nil {
-		_ = edit.SaveTo(path)
-	}
+	item.Uncheck()
 }
 
 // show paints one fold. It is called from whichever goroutine emitted the event
@@ -163,31 +165,11 @@ func (t *tray) show(state traystate.State) {
 	status := t.status
 	t.mu.Unlock()
 	systray.SetIcon(moodIcon(state.Mood()))
-	line := t.line(state)
+	line := serve.TrayLine(t.say, state)
 	systray.SetTooltip("Reasonix Studio — " + line)
 	if status != nil {
 		status.SetTitle(line)
 	}
-}
-
-// line says the fold in the reader's language. Background jobs are the half
-// nobody would guess: a hidden window with a dev server in it is still doing
-// something on the machine's behalf, so it is named even when no turn is.
-func (t *tray) line(state traystate.State) string {
-	var parts []string
-	if state.Attention > 0 {
-		parts = append(parts, fmt.Sprintf(t.say.TrayAttention, state.Attention))
-	}
-	if state.Working > 0 {
-		parts = append(parts, fmt.Sprintf(t.say.TrayWorking, state.Working))
-	}
-	if state.Jobs > 0 {
-		parts = append(parts, fmt.Sprintf(t.say.TrayJobs, state.Jobs))
-	}
-	if len(parts) == 0 {
-		return t.say.TrayIdle
-	}
-	return strings.Join(parts, " · ")
 }
 
 // close takes the icon down. The window's own shutdown owns the order: the icon
