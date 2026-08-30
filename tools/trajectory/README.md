@@ -69,11 +69,54 @@ The two bounds that survive the proxy caveat: at least 348.81M tokens and at
 least 739 minutes passed between two host-observed advances. That is the claim
 liveness work rests on, and it is stated in resources rather than rounds.
 
+## Replan episodes
+
+`--replan-episodes out.jsonl` segments the transition stream at every replan and
+records what resolved it, one object per episode:
+
+```json
+{"replan_at": 812.4, "replan_tokens": 12400000, "outcome": "advance",
+ "outcome_at": 851.2, "outcome_tokens": 13100000,
+ "tokens_to_outcome": 700000, "wall_to_outcome": 38.8}
+```
+
+`outcome` is one of four, read from the resolving transition's own kind:
+
+| outcome | the replan was followed by |
+| --- | --- |
+| `advance` | a step completing and execution moving on |
+| `terminal` | the last step completing |
+| `replan` | another change of plan |
+| `end` | nothing — the sample ended first |
+
+Three properties are deliberate. `terminal` is not folded into `advance`, even
+though a progress revision counts both: "the plan finished" and "the plan moved
+one step" are different answers to what a strategy change bought. A `rewrite`
+does not end an episode, so restating the steps after changing them stays
+inside the interval rather than resolving it. And an episode still open when
+the sample ends is written as `end` rather than dropped, because a replan that
+nothing ever followed is the case a survivor-only view would lose.
+
+Semantic samples only: the proxy source carries no replan verdict, so there is
+nothing to segment on and the tool refuses rather than inferring one.
+
+This is a segmentation, not a statistic. Nothing here aggregates episodes or
+names a healthy rate — what fraction of replans lead anywhere is a question for
+a corpus, and the first thing that corpus has to settle is whether the text
+identity fallback (below) is reporting renames as replans.
+
 ## Known fragility
 
 Semantic transitions are read back from the rendered trajectory line
 (`todo advance · content 4 · plan 1 · progress 2`), because that is what an
-export carries. A renderer change breaks the parse — deliberately loudly: a
+export carries. Step identity falls back to normalized text when a list carries
+no `step_id`, so a step renamed mid-run reads as one identity leaving and
+another arriving — a replan by this tool's definition, and possibly a rewrite by
+a person's. The `replan / all transitions` ratio is the diagnostic; a corpus
+full of `replan → replan` at small token gaps is a reason to check identity
+before concluding anything about strategy changes.
+
+A renderer change breaks the parse — deliberately loudly: a
 line that starts with `todo ` and does not parse raises rather than reading as
 "no semantic progress", which would quietly turn every later sample into a
 proxy. If the export ever carries the frame's fields structurally, read those

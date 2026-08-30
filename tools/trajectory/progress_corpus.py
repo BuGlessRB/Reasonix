@@ -174,6 +174,42 @@ def _summarise(transitions, cumulative, span, source, fidelity):
     return out, transitions
 
 
+# The transitions that end a replan episode. rewrite is deliberately absent: a
+# turn that keeps restating its steps after changing them has not yet answered
+# whether the change led anywhere, which is the question an episode asks.
+_EPISODE_OUTCOMES = ("advance", "terminal", "replan")
+
+
+def replan_episodes(transitions, total_tokens, span):
+    """Segment the transition stream at every replan.
+
+    An episode runs from a replan to the first transition that resolves it, and
+    the resolution is read from the transition's own kind — terminal is not
+    folded into advance, because "the plan finished" and "the plan moved one
+    step" are different answers to what a strategy change bought. An episode
+    still open when the sample ends is censored, not dropped: a replan nothing
+    ever followed is the case a survivor-only view would lose.
+    """
+    episodes = []
+    for index, start in enumerate(transitions):
+        if start["kind"] != "replan":
+            continue
+        resolution = next(
+            (t for t in transitions[index + 1:] if t["kind"] in _EPISODE_OUTCOMES), None)
+        if resolution is None:
+            outcome, at, tokens = "end", span, total_tokens
+        else:
+            outcome = resolution["kind"]
+            at, tokens = resolution["at"], resolution["cumulative_tokens"]
+        episodes.append({
+            "replan_at": start["at"], "replan_tokens": start["cumulative_tokens"],
+            "outcome": outcome, "outcome_at": at, "outcome_tokens": tokens,
+            "tokens_to_outcome": tokens - start["cumulative_tokens"],
+            "wall_to_outcome": at - start["at"],
+        })
+    return episodes
+
+
 def _million(value):
     return "-" if value is None else f"{value / 1e6:.2f}M"
 
@@ -209,6 +245,8 @@ def main(argv=None):
                         help="write one JSON object per transition (no tool payloads, no source)")
     parser.add_argument("--require-semantic", action="store_true",
                         help="fail instead of falling back to the complete_step proxy")
+    parser.add_argument("--replan-episodes", metavar="PATH",
+                        help="write one JSON object per replan episode; semantic samples only")
     args = parser.parse_args(argv)
 
     try:
@@ -221,6 +259,17 @@ def main(argv=None):
         print("error: semantic todo_progress frames are absent; the complete_step "
               "fallback is available only in proxy mode", file=sys.stderr)
         return 2
+
+    if args.replan_episodes and summary["progress_fidelity"] != "semantic":
+        print("error: replan episodes need semantic transitions; the complete_step "
+              "proxy carries no replan verdict to segment on", file=sys.stderr)
+        return 2
+
+    if args.replan_episodes:
+        episodes = replan_episodes(transitions, summary["total_tokens"], summary["wall_total_s"])
+        with open(args.replan_episodes, "w", encoding="utf-8") as fh:
+            for episode in episodes:
+                fh.write(json.dumps(episode, sort_keys=True) + "\n")
 
     if args.transitions:
         with open(args.transitions, "w", encoding="utf-8") as fh:
