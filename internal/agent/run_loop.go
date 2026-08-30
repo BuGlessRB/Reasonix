@@ -270,6 +270,17 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		// of a generic rewrite signal that also fires on local-only metadata
 		// edits.
 		contentReasons := a.sess.conversation.DrainContentRewriteReasons()
+		if len(contentReasons) > 0 {
+			// A provider-visible rewrite can have folded away the only copy of
+			// the step ids the model was shown.
+			a.noteTodoIdentityLost()
+		}
+		// Rides the tail like the budget notice above: the canonical list stays
+		// out of the cache-stable prefix, only the ids a sign-off must cite are
+		// put back where the model can read them.
+		if projection := a.todoIdentityProjection(); projection != "" {
+			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(projection)})
+		}
 
 		// Prefix shape is captured once before sampling and frozen for the
 		// whole attempt lifecycle — stream retries must not rewrite session

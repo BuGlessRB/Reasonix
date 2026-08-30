@@ -42,6 +42,8 @@ func (a *Agent) recordToolReceipts(plan *toolCallPlan, result string, execution 
 		if err == nil && call.Name == "todo_write" {
 			before := a.CanonicalTodoState()
 			a.setTodoState(rec.Todos)
+			// The model authored these ids, so they are in its own call.
+			a.noteTodoIdentityShown()
 			a.observeTodoTransition(before, a.CanonicalTodoState())
 			if len(rec.Todos) > 0 {
 				a.turn.deliveryCriteriaEstablished = true

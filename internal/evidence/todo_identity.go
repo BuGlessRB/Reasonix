@@ -7,6 +7,7 @@ package evidence
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -56,6 +57,27 @@ func TodoStepIDs(todos []TodoItem) []string {
 		}
 	}
 	return out
+}
+
+// TodoCitation is how one task-list item names itself wherever the model is
+// shown the list. complete_step asks for the stable id, so the id has to be
+// what the model saw; an ordinal is the fallback for a list that never carried
+// one, and it goes stale the moment a step is inserted above it.
+func TodoCitation(stepID string, index int, content string) string {
+	if id := strings.TrimSpace(stepID); id != "" {
+		return "[" + id + "] " + content
+	}
+	return strconv.Itoa(index) + ") " + content
+}
+
+// InProgressTodo returns the one item a sign-off may currently name.
+func InProgressTodo(todos []TodoItem) (TodoStepMatch, bool) {
+	for i, todo := range todos {
+		if strings.TrimSpace(todo.Status) == "in_progress" {
+			return todoMatchAt(i+1, todo), true
+		}
+	}
+	return TodoStepMatch{}, false
 }
 
 // sameTodoIdentity answers by stable id whenever both items carry one: an id is

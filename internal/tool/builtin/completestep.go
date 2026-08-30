@@ -426,7 +426,7 @@ func todoListInventory(todos []evidence.TodoItem) string {
 		if r := []rune(content); len(r) > 60 {
 			content = string(r[:60]) + "…"
 		}
-		parts = append(parts, fmt.Sprintf("%d) %q", i+1, content))
+		parts = append(parts, evidence.TodoCitation(t.StepID, i+1, strconv.Quote(content)))
 		if len(parts) == 12 && len(todos) > 12 {
 			parts = append(parts, fmt.Sprintf("… %d more", len(todos)-12))
 			break

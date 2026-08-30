@@ -46,6 +46,9 @@ func (a *Agent) commitSummaryProjection(commit summaryProjectionCommit) (Compact
 	a.sess.checkpointState = "applied"
 	receipt := state.LastReceipt
 	a.sess.compactionMu.Unlock()
+	// The installed projection carries the step ids, either in what it kept or
+	// in the note the fold appended, so the next round owes nothing.
+	a.noteTodoIdentityShown()
 	a.emitContextMaintenance(receipt)
 	return state, nil
 }

@@ -25,6 +25,9 @@ var sessionReset = map[string]bool{
 	"compaction":       true,
 	"coveredHash":      true,
 	"budgetNotice":     true,
+	// Not carried with todoState: the ids are rebuilt, their visibility in the
+	// new conversation is not.
+	"todoIdentityShown": true,
 }
 
 // sessionCarryOver names the fields reset deliberately leaves alone, each with

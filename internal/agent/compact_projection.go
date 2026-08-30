@@ -210,7 +210,7 @@ func (a *Agent) compressVisibleRange(
 		return tool.CompressResult{}, err
 	}
 
-	projection := buildVisibleCompressionProjection(snap.visible, plan, summary)
+	projection := a.withTodoIdentityProjection(buildVisibleCompressionProjection(snap.visible, plan, summary))
 	projectionTokens := a.estimatedPromptTokens(a.providerProjectionMessages(projection))
 	tele.ProjectionTokens = projectionTokens
 	result.Messages = len(plan.fold)
@@ -474,7 +474,7 @@ func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions s
 		return CompactionNoop, "", err
 	}
 
-	projMsgs := checkpointProjectionMessages(msgs, head, start, kept, summary)
+	projMsgs := a.withTodoIdentityProjection(checkpointProjectionMessages(msgs, head, start, kept, summary))
 	projTokens := a.estimatedPromptTokens(projMsgs)
 	fixedPrefixTokens = a.estimatedPromptTokens(msgs[:head])
 	tele.ProjectionTokens = projTokens

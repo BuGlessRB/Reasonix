@@ -116,11 +116,23 @@ func (todoWrite) Execute(ctx context.Context, args json.RawMessage) (string, err
 	// behind: complete_step advanced it and said so. Reporting that back as an
 	// update is what makes a round of nothing look like progress.
 	if evidence.SameTodos(todoBaseline(ctx), toEvidenceTodos(p.Todos)) {
-		return fmt.Sprintf("Task list unchanged: %d total — %d completed, %d in progress, %d pending. The host already holds this list.",
-			len(p.Todos), done, active, pending), nil
+		return fmt.Sprintf("Task list unchanged: %d total — %d completed, %d in progress, %d pending. The host already holds this list.%s",
+			len(p.Todos), done, active, pending, signableStepHint(p.Todos)), nil
 	}
-	return fmt.Sprintf("Todos updated: %d total — %d completed, %d in progress, %d pending.",
-		len(p.Todos), done, active, pending), nil
+	return fmt.Sprintf("Todos updated: %d total — %d completed, %d in progress, %d pending.%s",
+		len(p.Todos), done, active, pending, signableStepHint(p.Todos)), nil
+}
+
+// signableStepHint names the id of the only item a sign-off may currently cite.
+// complete_step asks for a stable id, so the host has to hand one back: shown
+// nothing but its own ordinals, a model cites those, and they go stale the
+// moment a replan inserts a step above them.
+func signableStepHint(todos []todoItem) string {
+	match, ok := evidence.InProgressTodo(toEvidenceTodos(todos))
+	if !ok || match.StepID == "" {
+		return ""
+	}
+	return fmt.Sprintf(" The in_progress item is %q — cite that step_id when you sign it off.", match.StepID)
 }
 
 // verifyUniqueStepIDs keeps a step id an identity: two items claiming the same

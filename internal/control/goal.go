@@ -778,7 +778,7 @@ func formatIncompleteTodos(todos []evidence.TodoItem, readiness string) string {
 			var b strings.Builder
 			b.WriteString("the following tasks are still incomplete:")
 			for _, t := range incomplete {
-				fmt.Fprintf(&b, "\n  - %s (%s)", t.Content, t.Status)
+				fmt.Fprintf(&b, "\n  - %s (%s)", evidence.TodoCitation(t.StepID, t.Index, t.Content), t.Status)
 			}
 			parts = append(parts, b.String())
 		}

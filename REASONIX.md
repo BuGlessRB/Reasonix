@@ -57,6 +57,14 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   invent one, and the invented rule outlives the incident: a response cut at the
   output limit reaches the model as "invalid arguments", and the session learns
   to stop batching calls that were never the problem.
+- A host-owned identity has to cross the model-visible boundary. Stable step
+  ids, typed error codes, boundary causes — anything the host expects the model
+  to cite must appear wherever that state is rendered for it. Telling the model
+  in a schema to prefer X while every concrete rendering shows only Y trains it
+  to use Y; `complete_step` said `step_id` PREFERRED while all four todo
+  renderers printed bare ordinals. Canonical dynamic state still stays out of
+  the cache-stable prefix — project the identities needed to act on it at the
+  turn tail.
 - A metric is its definition, not its name. Before a number becomes a finding,
   state what it counts, from which anchor, over which population, and what it
   excludes. Three readings in one study died in that gap: a command of unknown

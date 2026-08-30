@@ -82,7 +82,7 @@ func readinessContinuationPrompt(todos []evidence.TodoItem, reason string) strin
 		var b strings.Builder
 		b.WriteString("these tasks are still incomplete:")
 		for _, t := range incomplete {
-			fmt.Fprintf(&b, "\n  - %s (%s)", t.Content, t.Status)
+			fmt.Fprintf(&b, "\n  - %s (%s)", evidence.TodoCitation(t.StepID, t.Index, t.Content), t.Status)
 		}
 		parts = append(parts, b.String())
 	}
