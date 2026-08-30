@@ -193,3 +193,56 @@ func TestRunBudgetIgnoresSinksThatDoNotOptIn(t *testing.T) {
 		t.Fatalf("budget = %+v, want the round still accumulated locally", state.budget)
 	}
 }
+
+// The token axis is the one that generalises, and it only does so while cached
+// input counts: the 15.6-hour session that motivated this budget served 99.9%
+// of its 393M input tokens from cache. Scoring cache misses instead would let
+// exactly that loop run forever inside any ceiling.
+func TestTaskTokenBudgetCountsCachedInput(t *testing.T) {
+	var b runBudget
+	b.observe(&provider.Usage{
+		PromptTokens: 160_000, CacheHitTokens: 159_900, CacheMissTokens: 100,
+		CompletionTokens: 96, RequestCount: 1,
+	}, nil)
+
+	if used := b.promptTokens + b.outputTokens; used != 160_096 {
+		t.Fatalf("one round accumulated %d tokens, want 160096 — cached input stopped counting", used)
+	}
+	if axis, detail := b.exceeded(TaskBudget{Tokens: 160_000}); axis != "token" {
+		t.Fatalf("exceeded = %q (%s), want the token axis to have been reached", axis, detail)
+	}
+	if axis, _ := b.exceeded(TaskBudget{Tokens: 200_000}); axis != "" {
+		t.Fatalf("exceeded = %q below the budget, want none", axis)
+	}
+}
+
+// A budget the next user message resets would not have bounded that session
+// either: it ran as one task across a continuation.
+func TestTaskTokenBudgetAccumulatesAcrossAContinuation(t *testing.T) {
+	sink := newBudgetSink()
+	reg := tool.NewRegistry()
+	reg.Add(readProbe{})
+	a := New(&spendingProvider{max: 2}, reg, NewSession("sys"), Options{}, sink)
+
+	if err := a.Run(context.Background(), "start the work"); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	first := sink.samples[len(sink.samples)-1].Task
+	firstTokens := first.PromptTokens + first.OutputTokens
+	if firstTokens == 0 {
+		t.Fatal("first Run recorded no tokens; the accumulation assertion would be vacuous")
+	}
+
+	a.pending.preserveEvidence = true
+	if err := a.Run(context.Background(), "continue"); err != nil {
+		t.Fatalf("continuation Run: %v", err)
+	}
+	second := sink.samples[len(sink.samples)-1]
+	secondTaskTokens := second.Task.PromptTokens + second.Task.OutputTokens
+	secondTurnTokens := second.Turn.PromptTokens + second.Turn.OutputTokens
+
+	if secondTaskTokens != firstTokens+secondTurnTokens {
+		t.Fatalf("task tokens = %d, want %d carried across the continuation",
+			secondTaskTokens, firstTokens+secondTurnTokens)
+	}
+}

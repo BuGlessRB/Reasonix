@@ -230,6 +230,51 @@ model = "x"
 	}
 }
 
+// The token axis is the one that generalises: a loop serving 99.9% of its
+// prompt from cache still accumulates them, where wall clock catches only a
+// slow loop and money reads as free on an unpriced model. It reached the
+// runtime through nothing until this wiring existed.
+func TestEffectTaskTokenBudgetLandsARunawayThroughRealBuild(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+
+	rec := &budgetRunawayProvider{}
+	provider.Register("boot-token-budget-gate", func(provider.Config) (provider.Provider, error) {
+		return rec, nil
+	})
+	writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+task_token_budget = 5000
+
+[[providers]]
+name = "test-model"
+kind = "boot-token-budget-gate"
+model = "x"
+`)
+
+	ctrl, err := Build(context.Background(), Options{Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+
+	runCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	runErr := ctrl.Run(runCtx, "read every file you can find")
+
+	pause, ok := agent.InspectRunPause(runErr)
+	if !ok || pause.Kind != "task_budget" || pause.Key != "token" {
+		t.Fatalf("Run error = %v (pause=%+v, ok=%v), want token task-budget pause", runErr, pause, ok)
+	}
+	if rec.roundCount() == 0 {
+		t.Fatal("no round reached the provider; the run never started")
+	}
+}
+
 // spillFollowProvider walks the two turns the read-back loop lived in: a shell
 // read, which cannot page and so parks its output, then read_file following
 // whatever pointer came back — exactly what a model does when told its output

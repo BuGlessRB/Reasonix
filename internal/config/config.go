@@ -1270,8 +1270,10 @@ type AgentConfig struct {
 	MaxSubagentDepth int               `toml:"max_subagent_depth"`
 	// TaskCostBudget lands a task on one summary once it spends this much.
 	TaskCostBudget float64 `toml:"task_cost_budget"`
-	// TaskTimeBudgetMinutes is the same gate on wall clock. Both ship off.
+	// TaskTimeBudgetMinutes is the same gate on wall clock. All three ship off.
 	TaskTimeBudgetMinutes float64 `toml:"task_time_budget_minutes"`
+	// The same gate on cumulative prompt+output tokens, cached input included.
+	TaskTokenBudget int `toml:"task_token_budget"`
 	// GoalTokenBudget bounds an unattended Goal loop by cumulative tokens.
 	// Off unless set: a Goal runs until it finishes or you stop it.
 	GoalTokenBudget int `toml:"goal_token_budget"`

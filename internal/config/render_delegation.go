@@ -56,6 +56,11 @@ func renderAgentDelegation(b *strings.Builder, c *Config) {
 	} else {
 		b.WriteString("# task_time_budget_minutes = 10   # the same landing, measured in wall clock\n")
 	}
+	if c.Agent.TaskTokenBudget > 0 {
+		fmt.Fprintf(b, "task_token_budget = %d   # the same landing, measured in cumulative model tokens\n", c.Agent.TaskTokenBudget)
+	} else {
+		b.WriteString("# task_token_budget = 2000000   # the same landing, measured in cumulative model tokens\n")
+	}
 	if c.Agent.GoalTokenBudget > 0 {
 		fmt.Fprintf(b, "goal_token_budget = %d   # what a /goal loop may spend before it stops\n", c.Agent.GoalTokenBudget)
 	} else {
