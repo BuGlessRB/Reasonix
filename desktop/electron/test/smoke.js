@@ -1,6 +1,8 @@
 "use strict";
 // Drives the real shell: the assertions below all run against the window
 // src/main.js opened, loaded from the kernel it spawned. Run with `pnpm smoke`.
+const os = require("node:os");
+const path = require("node:path");
 const { app, BrowserWindow, Menu } = require("electron");
 const { current } = require("../src/main.js");
 
@@ -92,6 +94,7 @@ async function run() {
 
   await dropChecks(win, js);
   await trayChecks(win);
+  await instanceChecks(win);
 
   if (process.platform === "darwin") await menuChecks(win, js);
   check("the context menu is wired to the window", win.webContents.listenerCount("context-menu") > 0);
@@ -140,13 +143,56 @@ async function trayChecks(win) {
   await tray.refresh();
 }
 
+// One data home is one Studio. A second launch over the same home must not
+// start a second kernel on those session files; it must bring back the window
+// that is already holding them, wherever it went.
+async function instanceChecks(win) {
+  const { execFile } = require("node:child_process");
+  const appDir = path.join(__dirname, "..");
+
+  const launch = (home) =>
+    new Promise((resolve) => {
+      const started = Date.now();
+      const child = execFile(process.execPath, [appDir], { env: { ...process.env, REASONIX_HOME: home } }, () =>
+        resolve({ took: Date.now() - started, child }),
+      );
+      // Anything still running after this is a launch that decided it was the
+      // first one, which is the answer for a different home.
+      setTimeout(() => resolve({ took: -1, child }), 8000);
+    });
+
+  win.hide();
+  await wait(300);
+  const same = await launch(process.env.REASONIX_HOME);
+  check("a second launch over the same home leaves", same.took > 0, same.took);
+  check("and raises the window that was already holding it", win.isVisible(), {
+    visible: win.isVisible(),
+  });
+
+  // The kernel this window is holding is untouched by the launch that left: a
+  // second one starting on these session files is the whole hazard.
+  const { client } = current();
+  check("the running kernel is undisturbed", !!(await client.trayPrefs()));
+
+  const otherHome = path.join(os.tmpdir(), "rx-other-home");
+  const elsewhere = await launch(otherHome);
+  check("a launch over another home is allowed to run", elsewhere.took === -1, elsewhere.took);
+
+  // Killed rather than asked to quit, which is what a crash looks like. The
+  // lock is the platform's and goes with the process, so there is no file of
+  // ours left holding a home nobody is in.
+  elsewhere.child.kill("SIGKILL");
+  await wait(1500);
+  const after = await launch(otherHome);
+  check("a home whose holder died can be opened again", after.took === -1, after.took);
+  after.child.kill();
+}
+
 // A dropped file has to arrive as a path, or a turn works on a copy of the
 // bytes instead of on the file. The drop is dispatched at the browser's own
 // input layer carrying a real file, so what is measured is the whole chain:
 // the event, the File the page is handed, and what the shell can place it at.
 async function dropChecks(win, js) {
-  const path = require("node:path");
-  const os = require("node:os");
   const fsp = require("node:fs/promises");
   const file = path.join(await fsp.mkdtemp(path.join(os.tmpdir(), "rx-drop-")), "dropped.txt");
   await fsp.writeFile(file, "dropped");

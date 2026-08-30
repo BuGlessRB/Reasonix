@@ -117,3 +117,17 @@ test("an unreachable kernel is an answer, not a crash", async () => {
   assert.equal(await dead.trayPrefs(), null);
   assert.equal(await dead.trayState(), null);
 });
+
+const { profileFor } = require("../src/instance.js");
+
+// Two homes are two Studios, and the profile is what carries that into the
+// platform's own lock. Sharing one would make the second launch look like a
+// duplicate of the first.
+test("each instance gets a profile of its own", () => {
+  const base = "/tmp/profiles";
+  assert.notEqual(profileFor(base, "io.reasonix.studio.aaaa"), profileFor(base, "io.reasonix.studio.bbbb"));
+  assert.ok(profileFor(base, "io.reasonix.studio.aaaa").startsWith(base));
+  // An identity nobody could work out leaves the default alone rather than
+  // inventing a profile that no second launch would agree on.
+  assert.equal(profileFor(base, ""), base);
+});

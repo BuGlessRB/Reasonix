@@ -5,6 +5,7 @@ const path = require("node:path");
 const { start } = require("./host");
 const { StudioHost } = require("./hostclient");
 const { installTray } = require("./tray");
+const { instanceID, profileFor } = require("./instance");
 const { installApplicationMenu, installContextMenu } = require("./menu");
 const { externalTarget } = require("./links");
 
@@ -173,7 +174,26 @@ ipcMain.handle("dialog:save-bytes", (event, name, bytes) =>
   saveTo(event, name, (path) => fs.writeFile(path, Buffer.from(bytes))),
 );
 
+// Named before any path is derived from it: userData hangs off the app name,
+// and a name that depended on how this was launched would put two launches of
+// the same install on two profiles — and so on two locks.
+app.setName("Reasonix Studio");
+
+// Claimed before anything is created: the profile decides which launches share
+// a lock, and Chromium reads it the moment the app is ready. A launch that does
+// not get the lock has to leave without spawning a kernel of its own — the one
+// already running owns those session files.
+const identity = instanceID(hostBinary);
+app.setPath("userData", profileFor(app.getPath("userData"), identity));
+const primary = app.requestSingleInstanceLock();
+if (!primary) {
+  app.quit();
+} else {
+  app.on("second-instance", showWindow);
+}
+
 app.whenReady().then(() => {
+  if (!primary) return;
   installApplicationMenu();
   boot().catch((err) => {
     console.error("reasonix-studio:", err.message);

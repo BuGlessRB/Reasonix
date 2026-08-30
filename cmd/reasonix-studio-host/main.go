@@ -24,6 +24,7 @@ import (
 	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/event"
+	"reasonix/internal/instanceid"
 	"reasonix/internal/notify"
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
@@ -51,7 +52,15 @@ const (
 
 func main() {
 	page := flag.String("page", "", "directory holding the built Studio page")
+	identity := flag.Bool("instance-id", false, "print the Studio instance this data home belongs to, and exit")
 	flag.Parse()
+	// Which launches are the same Studio is Reasonix's question, not a shell's:
+	// the answer is the canonicalized data home, and a shell asks for it rather
+	// than working it out from an environment it does not resolve.
+	if *identity {
+		fmt.Fprintln(os.Stdout, instanceid.Current())
+		return
+	}
 	os.Exit(run(parentLease(os.Stdin), os.Stdout, os.Stderr, *page))
 }
 
