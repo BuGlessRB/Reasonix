@@ -286,3 +286,9 @@ A protection claim exists only where a backend has a demonstrated enforcement
 primitive for that dimension. Unsupported dimensions stay explicitly unsupported
 — Windows currently enforces none of the three — because a claim that outruns
 its enforcement is worse than an absent one: it is believed.
+
+**Known unmeasured surface — macOS host-mediated delegation:** Apple Events and
+Mach-service lookup are not denied by the current allow-default profile. Prior
+`osascript` and `launchctl submit` probes were inconclusive; no delegation
+effect has been demonstrated. This surface is outside the currently governed
+host-authority endpoint set.
