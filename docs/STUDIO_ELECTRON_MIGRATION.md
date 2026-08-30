@@ -111,7 +111,16 @@ asks. Removing it would have taken SSH workspaces down.
 ## 7. What allows a retirement
 
 Not "Electron has something similar". The condition is **Wails has no exclusive
-semantics left**, per capability, demonstrated rather than argued:
+semantics left**, per capability, demonstrated rather than argued. Spelled out,
+because a near miss of it has already happened once:
+
+> Wails may retire only when every capability it holds exclusively either has an
+> Electron implementation consuming the canonical protocol or state, or has been
+> deliberately dropped as a product capability. **A protocol existing is not
+> parity.** Making a capability canonical moves it out of one shell; it does not
+> put it into the other.
+
+And:
 
 - The behaviour is reproduced, not merely the API.
 - It is verified at the layer where the old one broke. Editing shortcuts were
@@ -124,21 +133,41 @@ semantics left**, per capability, demonstrated rather than argued:
 
 ## 8. Not yet equivalent
 
-The standing ledger. An item leaves this list when its semantics are reproduced
-and checked, not when something resembling it exists.
+Two ledgers, because they answer different questions. The first decides whether
+Wails may retire at all. The second does not.
 
-- **Status icon glyph** — presentation debt. The mood mark is drawn in Go inside
-  the Wails shell; Electron shows a fixed icon and carries the fold in its
-  tooltip and menu line, both of which come from the kernel.
-- **Remote ask** — still a shell binding over the Wails bus. Losing one changes
-  execution, so it belongs in the third row of §5.
-- **Single instance** — Wails locks per canonicalized `REASONIX_HOME`, so two
+An item leaves either list when its behaviour is reproduced and checked, not
+when something resembling it exists.
+
+### Functional parity — these block retirement
+
+- **Remote workspaces in Electron.** `cmd/reasonix-studio-host` supplies no
+  `Remote` to its hub, and `newRemoteLink` / `fetchRemoteBinary` are still owned
+  by `desktop/next`. So attach, browse and probe are Wails-only, and the shell
+  that has them is the one being retired.
+
+  Read this next to the entry it is easily confused with: the question a dial
+  stops for is canonical now — one broker, one snapshot, one answer endpoint,
+  and no shell owns it. That made the *semantics* shared. It did not give
+  Electron a remote workspace, because nothing there dials.
+
+- **Single instance.** Wails locks per canonicalized `REASONIX_HOME`, so two
   homes coexist and one home never opens twice. Electron's own lock has no such
-  key.
-- **Updater** — the macOS handoff re-executes the running binary and waits on
-  its own PID. Under Electron the owner, the executable and the wait condition
-  are all different processes.
-- **Version pinning** and the **folder picker** — still answered by Wails
+  key, and the identity is Reasonix's rather than the shell's.
+
+- **Updater.** The macOS handoff re-executes the running binary and waits on its
+  own PID. Under Electron the owner, the executable and the wait condition are
+  three different processes.
+
+- **Version pinning** and the **folder picker.** Still answered by Wails
   bindings; every other client answers null.
-- **Window bounds** — Electron clamps to the display it opens on but does not
-  yet remember where it was.
+
+### Presentation parity — these do not
+
+- **Status icon glyph.** The mood mark is drawn in Go inside the Wails shell.
+  Electron shows a fixed icon while the fold itself — the sentence, the menu
+  words, the counts — comes from the kernel and is checked against it. What is
+  missing is the colour, not the state.
+
+- **Window bounds.** Electron clamps to the display it opens on but does not yet
+  remember where it was.
