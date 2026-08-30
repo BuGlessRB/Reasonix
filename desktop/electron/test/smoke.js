@@ -43,9 +43,10 @@ async function run() {
     platform: document.documentElement.dataset.platform,
     titlebar: document.documentElement.dataset.titlebar,
     mounted: (document.getElementById('root')?.children.length ?? 0) > 0,
+    placed: typeof window.reasonixHost?.pathForFile(new File(['x'], 'x.txt')),
   }))()`);
 
-  const verbs = ["closeWindow", "isWindowMaximised", "minimiseWindow", "openExternal", "platform", "shell", "titleBar", "toggleMaximiseWindow"];
+  const verbs = ["closeWindow", "isWindowMaximised", "minimiseWindow", "openExternal", "pathForFile", "platform", "saveBytes", "saveText", "shell", "titleBar", "toggleMaximiseWindow"];
   check("the bridge exposes verbs and nothing else", JSON.stringify(seen.bridge) === JSON.stringify(verbs), seen.bridge);
   check("the credential never reaches the page", !seen.cookie.includes("reasonix_token"), seen.cookie);
   check("the renderer has no node of its own", seen.globals.every((t) => t === "undefined"), seen.globals);
@@ -53,6 +54,10 @@ async function run() {
   check("the page knows the window draws its own title bar", seen.titlebar === "app", seen.titlebar);
   check("the page knows the platform", ["darwin", "windows", "linux"].includes(seen.platform), seen.platform);
   check("the app actually mounted", seen.mounted);
+  // A sandboxed preload can only reach part of Electron; a build where webUtils
+  // is not part of it would have thrown before the bridge existed at all, and a
+  // dropped file would have no path anywhere in the window.
+  check("the shell can place a dropped file", seen.placed === "string", seen.placed);
 
   // The whole boundary in one request: same origin, HttpOnly cookie, and a
   // kernel that answers with JSON rather than the page.
@@ -85,8 +90,47 @@ async function run() {
   await wait(400);
   check("a second window is never opened", BrowserWindow.getAllWindows().length === 1, BrowserWindow.getAllWindows().length);
 
+  await dropChecks(win, js);
+
   if (process.platform === "darwin") await menuChecks(win, js);
   check("the context menu is wired to the window", win.webContents.listenerCount("context-menu") > 0);
+}
+
+// A dropped file has to arrive as a path, or a turn works on a copy of the
+// bytes instead of on the file. The drop is dispatched at the browser's own
+// input layer carrying a real file, so what is measured is the whole chain:
+// the event, the File the page is handed, and what the shell can place it at.
+async function dropChecks(win, js) {
+  const path = require("node:path");
+  const os = require("node:os");
+  const fsp = require("node:fs/promises");
+  const file = path.join(await fsp.mkdtemp(path.join(os.tmpdir(), "rx-drop-")), "dropped.txt");
+  await fsp.writeFile(file, "dropped");
+  const before = win.webContents.getURL();
+
+  await js(`(() => {
+    window.__smokeDrop = null;
+    addEventListener('drop', (e) => {
+      const files = [...(e.dataTransfer?.files ?? [])];
+      window.__smokeDrop = files.map((f) => window.reasonixHost.pathForFile(f)).filter(Boolean);
+    }, true);
+  })()`);
+
+  const dbg = win.webContents.debugger;
+  if (!dbg.isAttached()) dbg.attach("1.3");
+  const data = { items: [], files: [file], dragOperationsMask: 1 };
+  for (const type of ["dragEnter", "dragOver", "drop"]) {
+    await dbg.sendCommand("Input.dispatchDragEvent", { type, x: 200, y: 200, data, modifiers: 0 });
+    await wait(200);
+  }
+  await wait(400);
+  const placed = await js(`window.__smokeDrop`);
+  check("a dropped file arrives as a path", Array.isArray(placed) && placed[0] === file, placed);
+  // The default this window must never take: navigating to what was dropped
+  // replaces the app with the file, and nothing short of a reload comes back.
+  check("a dropped file does not navigate the window", win.webContents.getURL() === before, win.webContents.getURL());
+  dbg.detach();
+  await fsp.rm(path.dirname(file), { recursive: true, force: true });
 }
 
 // The failure this guards is a window whose editing shortcuts do nothing at

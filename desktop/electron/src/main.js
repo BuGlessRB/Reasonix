@@ -1,5 +1,6 @@
 "use strict";
-const { app, BrowserWindow, ipcMain, screen, session, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, screen, session, shell } = require("electron");
+const fs = require("node:fs/promises");
 const path = require("node:path");
 const { start } = require("./host");
 const { installApplicationMenu, installContextMenu } = require("./menu");
@@ -125,6 +126,24 @@ ipcMain.handle("shell:open-external", (event, raw) => {
   const target = externalTarget(raw);
   if (target) void shell.openExternal(target);
 });
+
+// A dismissed dialog answers with "", which is what the page reads as "they
+// said no". Only a failure to write is an error.
+async function saveTo(event, name, write) {
+  const target = fromWindow(event);
+  if (!target) return "";
+  const picked = await dialog.showSaveDialog(target, { defaultPath: name });
+  if (picked.canceled || !picked.filePath) return "";
+  await write(picked.filePath);
+  return picked.filePath;
+}
+
+ipcMain.handle("dialog:save-text", (event, name, content) =>
+  saveTo(event, name, (path) => fs.writeFile(path, content, "utf8")),
+);
+ipcMain.handle("dialog:save-bytes", (event, name, bytes) =>
+  saveTo(event, name, (path) => fs.writeFile(path, Buffer.from(bytes))),
+);
 
 app.whenReady().then(() => {
   installApplicationMenu();

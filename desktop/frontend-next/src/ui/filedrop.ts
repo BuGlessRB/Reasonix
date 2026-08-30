@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
 import type { HubPort } from "../port/hub";
+import { host } from "../port/host";
 
 // What a drop hands over depends on which shell the page is in, and the two
 // halves are not interchangeable. A window reports where the file lives, which
@@ -161,6 +162,10 @@ export function install(hub: HubPort) {
       const files = [...(dt?.files ?? [])];
       const text = files.length > 0 ? undefined : dt?.getData("text/uri-list") || dt?.getData("text/plain") || undefined;
       router?.dropped(zone, files, text);
+      // A shell that can place the files answers here and now; the grace period
+      // is for the one that reports them on a channel of its own.
+      const placed = host().pathsForFiles(files);
+      if (placed.length > 0) router?.paths(placed);
     },
     true,
   );

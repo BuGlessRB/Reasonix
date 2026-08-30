@@ -21,6 +21,13 @@ export interface HostPort {
   isWindowMaximised(): Promise<boolean>;
   closeWindow(): void;
   openExternal(url: string): void;
+  /** Where dropped files live. Empty where the shell cannot say — a browser
+   *  tab never learns a path, and Wails reports them on its own channel. */
+  pathsForFiles(files: File[]): string[];
+  /** Put text on disk where the user picks. null means this shell has no save
+   *  surface at all; "" means they dismissed the dialog, which is an answer. */
+  saveText(name: string, content: string): Promise<string | null>;
+  saveBytes(name: string, bytes: Uint8Array): Promise<string | null>;
 }
 
 // The preload bridge. Verbs only: the origin the page was loaded from and the
@@ -34,6 +41,9 @@ interface ElectronBridge {
   isWindowMaximised(): Promise<boolean>;
   closeWindow(): Promise<void>;
   openExternal(url: string): Promise<void>;
+  pathForFile(file: File): string;
+  saveText(name: string, content: string): Promise<string>;
+  saveBytes(name: string, bytes: Uint8Array): Promise<string>;
 }
 
 interface WailsShell {
@@ -46,6 +56,7 @@ interface WailsShell {
         IsWindowMaximised?: () => Promise<boolean>;
         CloseWindow?: () => Promise<void>;
         OpenExternal?: (url: string) => Promise<void>;
+        SaveText?: (name: string, content: string) => Promise<string>;
       };
     };
   };
@@ -85,6 +96,17 @@ class ElectronHost implements HostPort {
   openExternal(url: string) {
     void this.api.openExternal(url);
   }
+  pathsForFiles(files: File[]) {
+    // Resolved one at a time because that is the shape the platform offers;
+    // a file the shell cannot place answers with "" and is dropped here.
+    return files.map((f) => this.api.pathForFile(f)).filter(Boolean);
+  }
+  saveText(name: string, content: string) {
+    return this.api.saveText(name, content);
+  }
+  saveBytes(name: string, bytes: Uint8Array) {
+    return this.api.saveBytes(name, bytes);
+  }
 }
 
 class WailsHost implements HostPort {
@@ -107,6 +129,19 @@ class WailsHost implements HostPort {
   openExternal(url: string) {
     void wails()?.OpenExternal?.(url);
   }
+  // The paths arrive on the shell's own drop channel instead, which is why
+  // nothing here can answer for a file the page is holding.
+  pathsForFiles() {
+    return [];
+  }
+  async saveText(name: string, content: string) {
+    return (await wails()?.SaveText?.(name, content)) ?? null;
+  }
+  // Packing and saving are one binding in this shell; the caller reaches it
+  // rather than assembling the bytes itself.
+  saveBytes() {
+    return Promise.resolve(null);
+  }
 }
 
 // A tab has no window of its own to drive: the chrome that would call these is
@@ -123,6 +158,15 @@ class BrowserHost implements HostPort {
   closeWindow() {}
   openExternal(url: string) {
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+  pathsForFiles() {
+    return [];
+  }
+  saveText() {
+    return Promise.resolve(null);
+  }
+  saveBytes() {
+    return Promise.resolve(null);
   }
 }
 

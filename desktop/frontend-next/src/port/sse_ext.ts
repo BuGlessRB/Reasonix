@@ -3,6 +3,7 @@ import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, Sco
 import { rootQuery } from "./sse_http";
 import type { WailsBind } from "./wails";
 import { download } from "./download";
+import { host } from "./host";
 
 // Skills and plugin packages: what a project brought with it, and the two acts
 // that change that — installing one and switching one off.
@@ -69,8 +70,10 @@ export class SseExtensions extends SseLook {
     return { required };
   }
   async saveText(name: string, content: string): Promise<string | null> {
-    const save = (window as WailsBind).go?.main?.App?.SaveText;
-    if (save) return (await save(name, content)) || null;
+    const saved = await host().saveText(name, content);
+    // null is a shell with no save surface at all; "" is the dialog dismissed,
+    // and only the first of those is a reason to fall back to the browser's.
+    if (saved !== null) return saved || null;
     download(name, content);
     return null;
   }

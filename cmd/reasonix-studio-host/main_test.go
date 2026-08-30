@@ -17,6 +17,7 @@ import (
 
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/event"
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
 	"reasonix/internal/testenv"
@@ -435,5 +436,23 @@ func TestRunServesUntilTheParentLetsGo(t *testing.T) {
 	if conn, err := net.DialTimeout("tcp", addr, 2*time.Second); err == nil {
 		conn.Close()
 		t.Errorf("%s still accepts connections after the lease ended", addr)
+	}
+}
+
+// Notifications are the shared [notifications] setting, not a shell of its own:
+// a window that announced turns the CLI would have kept quiet about would be a
+// second policy nobody set.
+func TestHostNotifiesOnlyWhereTheSharedSettingAsksForIt(t *testing.T) {
+	plain := serve.NewBroadcaster()
+	off := hostNotifications(&config.Config{})
+	if got := off(plain); got != event.Sink(plain) {
+		t.Error("notifications are off, and the sink was still wrapped")
+	}
+	on := hostNotifications(&config.Config{Notifications: config.NotificationsConfig{Enabled: true}})
+	if got := on(plain); got == event.Sink(plain) {
+		t.Error("notifications are on, and nothing was wrapped to send them")
+	}
+	if nilCfg := hostNotifications(nil); nilCfg(plain) != event.Sink(plain) {
+		t.Error("no config at all must not turn notifications on")
 	}
 }

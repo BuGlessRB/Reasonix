@@ -23,6 +23,8 @@ import (
 
 	"reasonix/internal/boot"
 	"reasonix/internal/config"
+	"reasonix/internal/event"
+	"reasonix/internal/notify"
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
 
@@ -240,13 +242,18 @@ func assemble(ctx context.Context, logs io.Writer) (*serve.Hub, error) {
 	if err != nil {
 		return nil, err
 	}
+	// This window is the only client of its kernel, so a system notification
+	// reaches the person who asked for it. Every pane gets the same wrapper,
+	// not just the one the launch started with.
+	decorate := hostNotifications(cfg)
 	bc := serve.NewBroadcaster()
+	paneSink := decorate(bc)
 	root := boot.ResolveWorkspaceRoot("")
 	built, err := boot.BuildRuntime(ctx, boot.Options{
 		Version:       version,
 		WorkspaceRoot: root,
 		SessionDir:    serve.SessionDirFor(root),
-		Sink:          bc,
+		Sink:          paneSink,
 		Stderr:        logs,
 		StatsSource:   surface.Desktop,
 	})
@@ -255,12 +262,13 @@ func assemble(ctx context.Context, logs io.Writer) (*serve.Hub, error) {
 	}
 	hubCfg := hostServeConfig(cfg.Serve)
 	hub := serve.NewHub(serve.HubOptions{
-		Serve:   hubCfg,
-		Surface: surface.Desktop,
-		Grant:   grantHostCapabilities,
+		Serve:        hubCfg,
+		Surface:      surface.Desktop,
+		Grant:        grantHostCapabilities,
+		DecorateSink: decorate,
 	})
 	srv := serve.New(built.Controller, bc, hubCfg)
-	srv.SetPaneSink(bc)
+	srv.SetPaneSink(paneSink)
 	srv.AdoptRuntime(built)
 	if _, err := hub.Adopt(srv, bc); err != nil {
 		hub.Shutdown()
@@ -281,6 +289,17 @@ func hostServeConfig(cfg config.ServeConfig) config.ServeConfig {
 	cfg.PasswordHash = ""
 	cfg.BehindProxy = false
 	return cfg
+}
+
+// hostNotifications is the sink wrapper every runtime gets. Off unless the
+// shared [notifications] config asks for it, so the CLI and this window answer
+// to one setting rather than each growing its own.
+func hostNotifications(cfg *config.Config) func(event.Sink) event.Sink {
+	if cfg == nil || !cfg.Notifications.Enabled {
+		return func(sink event.Sink) event.Sink { return sink }
+	}
+	sender := notify.NewPlatformSender()
+	return func(sink event.Sink) event.Sink { return notify.NewSink(sink, sender, cfg.Notifications) }
 }
 
 // grantHostCapabilities opens what only a local window may do. The single

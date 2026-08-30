@@ -17,7 +17,6 @@ export interface WailsBind {
         // close, not the next launch.
         TrayPrefs?: () => Promise<TrayPrefs>;
         SetTrayPrefs?: (icon: boolean, closeToTray: boolean) => Promise<TrayPrefs>;
-        SaveText?: (name: string, content: string) => Promise<string>;
         // Replies to a question the link layer is blocked on — a first-seen
         // host key, or a locked private key.
         AnswerRemote?: (id: string, ok: boolean, text: string) => Promise<void>;
