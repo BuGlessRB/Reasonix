@@ -25,6 +25,30 @@ different things, and a quantile over both is a quantile over neither.
 recommends a budget. A number that fits one incident is a property of that
 incident until a corpus says otherwise.
 
+## Schema v1 is frozen
+
+Samples are only comparable while the definitions behind them hold still, and
+nothing about a JSONL file says which definitions produced it. `schema_version`
+does, and version 1 means exactly these:
+
+| definition | where it lives |
+| --- | --- |
+| `ClassifyTodoTransition` — the six verdicts and how they are read | `internal/evidence/todo_progress.go` @ 2d379d411 |
+| `stepIdentity` — stable id, else normalized text, never position | `internal/evidence/todo_progress.go` @ 2d379d411 |
+| what advances a progress revision | `internal/agent/todo_progress_shadow.go` @ 2d379d411 |
+| gap arithmetic — measured from the previous advance | `progress_corpus.py` @ 92d7e37de |
+| episode segmentation — the three resolving kinds, censored tail | `progress_corpus.py` @ 92d7e37de |
+
+Changing any of them changes what a number means. When one has to change, add
+`schema_version: 2` and leave version 1 meaning what it meant — an in-place
+edit makes two months of samples silently incomparable, and nothing in the data
+would show it.
+
+The first corpus is an audit of these definitions, not of the agent. What it
+has to settle first is whether the text-identity fallback reports renames as
+replans; that is the cheapest possible moment to fix, because no execution
+decision reads a progress revision yet.
+
 ## Two sources of progress
 
 `progress_source` and `progress_fidelity` are part of every sample, not a note
