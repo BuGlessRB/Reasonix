@@ -20,6 +20,18 @@ type taskRuntime struct {
 	// have shown that change. It is working state, not evidence: the verdict
 	// lands on the receipt, so the ledger never holds file content.
 	witness map[string][]string
+	// todoRevs counts what the task list did, on three axes because they answer
+	// different questions and one number for all three reads a rewrite as work.
+	todoRevs todoRevisions
+}
+
+// todoRevisions separates writing the plan from changing it and from executing
+// it. progress counts only host-observed execution movement, so a turn cannot
+// renew it by restating its own list.
+type todoRevisions struct {
+	content  int
+	plan     int
+	progress int
 }
 
 // restartLedger begins a new task's accounting. It is written as one assignment

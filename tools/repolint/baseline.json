@@ -6,7 +6,7 @@
     "complexity": 1513,
     "error-text": 12,
     "essay": 3245,
-    "file-size": 41735,
+    "file-size": 41718,
     "frontend-parity": 150,
     "function-size": 6596,
     "layering": 0,
@@ -105,7 +105,7 @@
     "internal/agent/agent.go": {
       "complexity": 37,
       "essay": 45,
-      "file-size": 1415,
+      "file-size": 1398,
       "function-size": 102
     },
     "internal/agent/agent_options.go": {

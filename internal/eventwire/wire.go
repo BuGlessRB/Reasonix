@@ -28,6 +28,7 @@ type Event struct {
 	Ask             *Ask                `json:"ask,omitempty"`
 	Compaction      *Compaction         `json:"compaction,omitempty"`
 	Maintenance     *ContextMaintenance `json:"maintenance,omitempty"`
+	TodoProgress    *TodoProgress       `json:"todoProgress,omitempty"`
 	Guardian        *Guardian           `json:"guardian,omitempty"`
 	DecisionReceipt *DecisionReceipt    `json:"decisionReceipt,omitempty"`
 	Extension       *ExtensionSurface   `json:"extension,omitempty"`
@@ -165,9 +166,12 @@ func ToWire(e event.Event) Event {
 				ResultTokens: m.ResultTokens, SavedTokens: m.SavedTokens,
 				AffectedToolResults: m.AffectedToolResults,
 				ProjectionVersion:   m.ProjectionVersion, CacheBreak: m.CacheBreak,
-				Reason: m.Reason,
+				Reason: m.Reason, Code: m.Code, Boundary: m.Boundary,
+				TriggerTokens: m.TriggerTokens,
 			}
 		}
+	case event.TodoProgressEvent:
+		w.TodoProgress = toWireTodoProgress(e.TodoProgress)
 	case event.GuardianAssessment:
 		w.Guardian = ToWireGuardian(e.Guardian)
 	case event.ExtensionSurface, event.ExtensionStatus:
@@ -694,11 +698,33 @@ var kindNames = map[event.Kind]string{
 	event.ExtensionStatus:         "extension_status",
 	event.StreamAttempt:           "stream_attempt",
 	event.ContextMaintenanceEvent: "context_maintenance",
+	event.TodoProgressEvent:       "todo_progress",
 	event.WorkspaceChanged:        "workspace_changed",
 	event.TurnPhase:               "turn_phase",
 	event.CompletionSummary:       "completion_summary",
 	event.InboxChanged:            "inbox_changed",
 	event.GraphDelta:              "graph_delta",
+}
+
+func toWireTodoProgress(p *event.TodoProgress) *TodoProgress {
+	if p == nil {
+		return nil
+	}
+	return &TodoProgress{
+		Kind: p.Kind, Steps: p.Steps, Completed: p.Completed,
+		ContentRevision: p.ContentRevision, PlanRevision: p.PlanRevision,
+		ProgressRevision: p.ProgressRevision,
+	}
+}
+
+// TodoProgress is the JSON form of event.TodoProgress.
+type TodoProgress struct {
+	Kind             string `json:"kind"`
+	Steps            int    `json:"steps,omitempty"`
+	Completed        int    `json:"completed,omitempty"`
+	ContentRevision  int    `json:"contentRevision,omitempty"`
+	PlanRevision     int    `json:"planRevision,omitempty"`
+	ProgressRevision int    `json:"progressRevision,omitempty"`
 }
 
 // ContextMaintenance is the JSON form of event.ContextMaintenance.
@@ -714,4 +740,7 @@ type ContextMaintenance struct {
 	ProjectionVersion   uint64 `json:"projectionVersion,omitempty"`
 	CacheBreak          bool   `json:"cacheBreak,omitempty"`
 	Reason              string `json:"reason,omitempty"`
+	Code                string `json:"code,omitempty"`
+	Boundary            string `json:"boundary,omitempty"`
+	TriggerTokens       int    `json:"triggerTokens,omitempty"`
 }

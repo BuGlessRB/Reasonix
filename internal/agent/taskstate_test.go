@@ -60,6 +60,8 @@ var taskRestarted = map[string]bool{
 	// A new task begins under whatever the tree says then, so what an earlier
 	// one was held to is not carried into it.
 	"baselineCriteria": true,
+	// Revisions count one plan's history. A new task plans again from nothing.
+	"todoRevs": true,
 }
 
 // restartLedger is one assignment, so an unlisted field resets by default —

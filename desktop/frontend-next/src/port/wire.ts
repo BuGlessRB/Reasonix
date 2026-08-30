@@ -27,6 +27,7 @@ export type Kind =
   | "extension_status"
   | "stream_attempt"
   | "context_maintenance"
+  | "todo_progress"
   | "workspace_changed"
   | "completion_summary"
   | "inbox_changed"
@@ -305,6 +306,18 @@ export interface ExtensionSurface {
   view?: ExtensionView;
 }
 
+// One task-list transition. kind is the structural verdict; the three revisions
+// count writes, plan changes, and execution movement separately, because a turn
+// can produce any number of the first two without the third ever moving.
+export interface TodoProgress {
+  kind: string;
+  steps?: number;
+  completed?: number;
+  contentRevision?: number;
+  planRevision?: number;
+  progressRevision?: number;
+}
+
 // One context-maintenance transaction. status "noop" carries code: the attempt
 // ran and freed nothing, and code is what tells "already folded this turn" from
 // "nothing left to fold" — they read alike and mean opposite things about what
@@ -313,12 +326,16 @@ export interface ContextMaintenance {
   status?: string;
   action?: string;
   trigger?: string;
+  operationId?: string;
   code?: string;
   boundary?: string;
   triggerTokens?: number;
   inputTokens?: number;
   resultTokens?: number;
   savedTokens?: number;
+  affectedToolResults?: number;
+  projectionVersion?: number;
+  cacheBreak?: boolean;
   reason?: string;
 }
 
@@ -484,6 +501,7 @@ export interface WireEvent {
   extension?: ExtensionSurface;
   compaction?: Compaction;
   maintenance?: ContextMaintenance;
+  todoProgress?: TodoProgress;
   streamAttempt?: StreamAttempt;
   completion?: CompletionSummary;
   graph?: GraphDelta;

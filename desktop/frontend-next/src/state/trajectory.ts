@@ -179,6 +179,21 @@ function record(ev: WireEvent): Made | null {
     case "steer":
       return { kind: "memory_recall", payload: [{ t: "steer delivered · " }, { b: ev.text ?? "" }] };
 
+    case "todo_progress": {
+      const p = ev.todoProgress;
+      if (!p) return null;
+      // The three revisions are the point: a kind alone reads as activity.
+      return {
+        kind: "outcome_progress",
+        payload: [
+          { t: "todo " }, { b: p.kind },
+          { t: " · content " }, { n: String(p.contentRevision ?? 0) },
+          { t: " · plan " }, { n: String(p.planRevision ?? 0) },
+          { t: " · progress " }, { n: String(p.progressRevision ?? 0) },
+        ],
+      };
+    }
+
     case "context_maintenance": {
       const m = ev.maintenance;
       if (!m) return { kind: "outcome_progress", payload: [{ t: ev.text || "context maintenance" }] };

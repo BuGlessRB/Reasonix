@@ -113,6 +113,9 @@ const (
 	// blocked/noop outcome. It is separate from CompactionStarted/Done so UIs do
 	// not render a paid-summary card for a cache-preserving view update.
 	ContextMaintenanceEvent
+	// TodoProgressEvent reports what one task-list write did to the plan:
+	// rewritten, replanned, or advanced. Content-free, and decides nothing.
+	TodoProgressEvent
 	// WorkspaceChanged reports a debounced host-side workspace mutation.
 	WorkspaceChanged
 	// TurnPhase reports a host-side work phase for the active turn (working |
@@ -409,6 +412,17 @@ type ContextMaintenance struct {
 	TriggerTokens int    `json:"triggerTokens,omitempty"`
 }
 
+// TodoProgress is one task-list transition: a structural verdict plus counters
+// for writes, plan changes, and execution movement, which move independently.
+type TodoProgress struct {
+	Kind             string `json:"kind"`
+	Steps            int    `json:"steps,omitempty"`
+	Completed        int    `json:"completed,omitempty"`
+	ContentRevision  int    `json:"contentRevision,omitempty"`
+	PlanRevision     int    `json:"planRevision,omitempty"`
+	ProgressRevision int    `json:"progressRevision,omitempty"`
+}
+
 // GuardianResult carries the outcome of a guardian sub-agent safety review.
 // Emitted with Kind=GuardianAssessment after each review completes.
 type GuardianResult struct {
@@ -503,6 +517,7 @@ type Event struct {
 	CheckpointTurn  *int                     // TurnDone: authoritative checkpoint for this turn's visible user message
 	Compaction      Compaction               // Compaction
 	Maintenance     *ContextMaintenance      // ContextMaintenanceEvent
+	TodoProgress    *TodoProgress            // TodoProgressEvent
 	Guardian        GuardianResult
 	DecisionReceipt *provider.DecisionReceipt // Notice: durable user decision receipt
 	RetryAttempt    int                       // Retrying: 1-based attempt about to be made

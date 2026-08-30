@@ -40,7 +40,9 @@ func (a *Agent) recordToolReceipts(plan *toolCallPlan, result string, execution 
 		a.reviewCoverageOf(&rec, plan, result)
 		a.task.ledger.Record(rec)
 		if err == nil && call.Name == "todo_write" {
+			before := a.CanonicalTodoState()
 			a.setTodoState(rec.Todos)
+			a.observeTodoTransition(before, a.CanonicalTodoState())
 			if len(rec.Todos) > 0 {
 				a.turn.deliveryCriteriaEstablished = true
 			}

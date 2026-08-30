@@ -1136,23 +1136,6 @@ func (a *Agent) hasActiveCanonicalTodo() bool {
 	return false
 }
 
-func (a *Agent) advanceCanonicalTodo(step string) {
-	a.sess.todoMu.Lock()
-	if len(a.sess.todoState) == 0 {
-		a.sess.todoMu.Unlock()
-		return
-	}
-	m, ok := evidence.MatchStep(step, a.sess.todoState)
-	if !ok || !evidence.AdvanceSerialTodo(a.sess.todoState, m.Index-1) {
-		a.sess.todoMu.Unlock()
-		return
-	}
-	snapshot := append([]evidence.TodoItem(nil), a.sess.todoState...)
-	a.sess.todoMu.Unlock()
-	a.recordTodoState(snapshot)
-	a.emitTodoState(snapshot, m.Index)
-}
-
 // emitTodoState emits a synthetic todo_write event so the frontend task panel
 // reflects a host-advanced completion without the model re-sending the list.
 // itemIndex is the 1-based position of the completed todo in the panel.

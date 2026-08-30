@@ -17,14 +17,18 @@ func (a *Agent) SeedTodoState(todos []evidence.TodoItem) {
 	if len(todos) == 0 {
 		return
 	}
+	before := a.CanonicalTodoState()
 	a.setTodoState(todos)
+	a.observeTodoTransition(before, a.CanonicalTodoState())
 }
 
 // ReplaceTodoState mirrors a host-generated todo list into the canonical state.
 // It is used when the host, rather than the model, owns the full state transition.
 func (a *Agent) ReplaceTodoState(todos []evidence.TodoItem) {
+	before := a.CanonicalTodoState()
 	a.setTodoState(todos)
 	a.recordTodoState(a.CanonicalTodoState())
+	a.observeTodoTransition(before, a.CanonicalTodoState())
 }
 
 // CanonicalTodoState returns a copy of the host-reconstructed task list.
@@ -47,6 +51,32 @@ func (a *Agent) hasIncompleteCanonicalCriteria() bool {
 	a.sess.todoMu.Lock()
 	defer a.sess.todoMu.Unlock()
 	return len(a.sess.todoState) > 0 && len(evidence.IncompleteTodos(a.sess.todoState)) > 0
+}
+
+func (a *Agent) advanceCanonicalTodo(step string) {
+	a.sess.todoMu.Lock()
+	if len(a.sess.todoState) == 0 {
+		a.sess.todoMu.Unlock()
+		return
+	}
+	before := append([]evidence.TodoItem(nil), a.sess.todoState...)
+	m, ok := evidence.MatchStep(step, a.sess.todoState)
+	if !ok {
+		a.sess.todoMu.Unlock()
+		return
+	}
+	if !evidence.AdvanceSerialTodo(a.sess.todoState, m.Index-1) {
+		a.sess.todoMu.Unlock()
+		// A sign-off the list did not move for is a renewal. Nothing about the
+		// list records it, which is what made it read as an advance.
+		a.observeTodoKind(evidence.TodoRenewal, before)
+		return
+	}
+	snapshot := append([]evidence.TodoItem(nil), a.sess.todoState...)
+	a.sess.todoMu.Unlock()
+	a.recordTodoState(snapshot)
+	a.emitTodoState(snapshot, m.Index)
+	a.observeTodoTransition(before, snapshot)
 }
 
 // recordTodoState logs the host-advanced list as a synthetic todo_write receipt

@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/agent/testutil"
 	"reasonix/internal/event"
+	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 
@@ -291,5 +292,88 @@ func TestE2EFinalSignOffDoesNotAskForANextStep(t *testing.T) {
 		if canonicalTodoStatus(td.Status) != "completed" {
 			t.Fatalf("canonical todo %d (%q) = %s, want completed", i+1, td.Content, td.Status)
 		}
+	}
+}
+
+func todoTransitions(sink *recordSink) []event.TodoProgress {
+	var out []event.TodoProgress
+	for _, e := range sink.kinds(event.TodoProgressEvent) {
+		if e.TodoProgress != nil {
+			out = append(out, *e.TodoProgress)
+		}
+	}
+	return out
+}
+
+// The shape the 15.6-hour session spent twelve hours in: the task list is
+// rewritten round after round while execution stands still. Counting those
+// writes as progress is what made the turn look busy; here they raise the
+// content revision and leave the progress revision where it was.
+func TestE2ERewritingThePlanIsNotAdvancingIt(t *testing.T) {
+	restate := func(id string, content string) testutil.Turn {
+		return testutil.Turn{ToolCalls: []provider.ToolCall{{ID: id, Name: "todo_write",
+			Arguments: `{"todos":[{"content":"` + content + `","status":"in_progress","step_id":"s1"},` +
+				`{"content":"add tests","status":"pending","step_id":"s2"}]}`}}}
+	}
+	mp := testutil.NewMock("m",
+		restate("t0", "check login expiry"),
+		restate("t1", "look closer at login expiry"),
+		restate("t2", "verify the login expiry path"),
+		restate("t3", "confirm login expiry handling"),
+		testutil.Turn{Text: "still looking"},
+	)
+	sink := &recordSink{}
+	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, sink)
+	_ = a.Run(context.Background(), "work the plan")
+
+	revs := todoTransitions(sink)
+	if len(revs) < 4 {
+		t.Fatalf("recorded %d task-list transitions, want one per write", len(revs))
+	}
+	last := revs[len(revs)-1]
+	if last.ProgressRevision != 0 {
+		t.Errorf("progress revision = %d after four rewrites, want 0 — restating the plan advanced it",
+			last.ProgressRevision)
+	}
+	if last.ContentRevision < 4 {
+		t.Errorf("content revision = %d, want at least one per write", last.ContentRevision)
+	}
+	// The first write is the plan appearing; the rest change no step identity.
+	if last.PlanRevision != 1 {
+		t.Errorf("plan revision = %d, want 1 — only the first write introduced steps", last.PlanRevision)
+	}
+	for _, r := range revs[1:] {
+		if r.Kind != string(evidence.TodoRewrite) {
+			t.Errorf("transition kind = %q, want %q", r.Kind, evidence.TodoRewrite)
+		}
+	}
+}
+
+// And the transition that does move it: a sign-off the host acted on.
+func TestE2ESigningOffAdvancesThePlanRevision(t *testing.T) {
+	mp := testutil.NewMock("m",
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "t0", Name: "todo_write",
+			Arguments: `{"todos":[{"content":"test","status":"in_progress"},{"content":"vet","status":"pending"}]}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "b1", Name: "bash",
+			Arguments: `{"command":"go test ./..."}`}}},
+		testutil.Turn{ToolCalls: []provider.ToolCall{{ID: "c1", Name: "complete_step",
+			Arguments: `{"step":"test","result":"tests pass","evidence":[{"kind":"verification","summary":"tests pass","command":"go test ./..."}]}`}}},
+		testutil.Turn{Text: "one down"},
+	)
+	sink := &recordSink{}
+	a := New(mp, evidenceRegistry(), NewSession("sys"), Options{}, sink)
+	// The turn ends short of the plan on purpose: readiness holds it there, and
+	// the transition under test already happened.
+	_ = a.Run(context.Background(), "work the plan")
+	revs := todoTransitions(sink)
+	if len(revs) == 0 {
+		t.Fatal("no task-list transitions recorded")
+	}
+	last := revs[len(revs)-1]
+	if last.Kind != string(evidence.TodoAdvance) {
+		t.Fatalf("last transition = %q, want %q", last.Kind, evidence.TodoAdvance)
+	}
+	if last.ProgressRevision != 1 {
+		t.Fatalf("progress revision = %d after one sign-off, want 1", last.ProgressRevision)
 	}
 }

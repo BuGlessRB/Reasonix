@@ -31,6 +31,13 @@ var mirroredWireTypes = []wireMirror{
 	// The completion summary is the turn's own verdict on itself; a gap kind the
 	// desktop cannot read is a turn it shows as clean.
 	{"internal/eventwire/wire.go", "CompletionSummary", tsWireFile, "CompletionSummary"},
+	// A maintenance verdict the desktop cannot read is a session that shows no
+	// attempt to bound its context — which is what its trajectory export said
+	// about the run that motivated the second boundary.
+	{"internal/eventwire/wire.go", "ContextMaintenance", tsWireFile, "ContextMaintenance"},
+	// Plan rewriting and plan advancement are told apart by three counters; a
+	// desktop that can read only some of them reads churn as work.
+	{"internal/eventwire/wire.go", "TodoProgress", tsWireFile, "TodoProgress"},
 	// RemoteHostEdit is left out on purpose: the kernel still takes the single
 	// `workspace` an old row was saved with, which the page deliberately does
 	// not send. An under-filled request is not a picture that cannot be read.
