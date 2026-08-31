@@ -1138,7 +1138,7 @@ func TestBuildRequestTemperatureSerialization(t *testing.T) {
 		t.Fatalf("explicit zero temperature must be serialized: %s", b)
 	}
 
-	nonzero := c.buildRequest(provider.Request{Temperature: provider.TemperaturePtr(0.25)})
+	nonzero := c.buildRequest(provider.Request{Temperature: new(0.25)})
 	if nonzero.Temperature == nil || *nonzero.Temperature != 0.25 {
 		t.Fatalf("nonzero request temperature = %v, want ptr(0.25)", nonzero.Temperature)
 	}

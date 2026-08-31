@@ -78,7 +78,7 @@ func TestShadowContractPrefersPlanCriteriaOverTodoTitles(t *testing.T) {
 			{Content: "thread the model ref through", Status: "completed", StepID: "p1"},
 		}},
 	}
-	c := buildShadowContract("fix the cache key", receipts, ptr(contractPlan()))
+	c := buildShadowContract("fix the cache key", receipts, new(contractPlan()))
 
 	texts := make([]string, 0, len(c.Requirements))
 	for _, req := range c.Requirements {
@@ -159,5 +159,3 @@ func TestCoordinatorClearsThePlanContractEachTurn(t *testing.T) {
 		t.Fatal("an executor-only turn inherited the previous turn's plan")
 	}
 }
-
-func ptr[T any](v T) *T { return &v }

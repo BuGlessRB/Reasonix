@@ -208,9 +208,9 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	orig.Desktop.StatusBarStyle = "text"
 	orig.Desktop.StatusBarItems = []string{"model", "balance", "cache"}
 	orig.Desktop.DefaultToolApprovalMode = "auto"
-	orig.Desktop.CheckUpdates = boolPtr(false)
+	orig.Desktop.CheckUpdates = new(false)
 	orig.Desktop.UpdateChannel = "preview"
-	orig.Desktop.Telemetry = boolPtr(false)
+	orig.Desktop.Telemetry = new(false)
 	orig.Notifications.Enabled = true
 	orig.Notifications.TurnDone = true
 	orig.Notifications.ApprovalRequest = true
@@ -224,8 +224,8 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	orig.Agent.MaxSubagentDepth = 3
 	orig.Agent.Keep = []string{"errors", "user_marked"}
 	orig.Agent.RecentKeep = 4
-	orig.Tools.BashTimeoutSeconds = intPtr(900)
-	orig.Tools.BackgroundJobs.StalledWarningSeconds = intPtr(30)
+	orig.Tools.BashTimeoutSeconds = new(900)
+	orig.Tools.BackgroundJobs.StalledWarningSeconds = new(30)
 	orig.Tools.Shell.Prefer = "bash"
 	orig.Tools.Shell.Path = "/usr/local/bin/bash"
 	orig.Permissions = PermissionsConfig{
@@ -245,7 +245,7 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 			Password: "${REASONIX_PROXY_PASSWORD}",
 		},
 	}
-	orig.Environment.Enabled = boolPtr(false)
+	orig.Environment.Enabled = new(false)
 	orig.Environment.Tools = map[string]string{"go": "/opt/homebrew/bin/go", "python3": "~/.pyenv/shims/python3"}
 	orig.Skills.Paths = []string{"~/my-skills", "../shared/skills"}
 	orig.Skills.ExcludedPaths = []string{"~/.agents/skills"}
@@ -304,7 +304,7 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	}
 	orig.Plugins = []PluginEntry{
 		{Name: "example", Command: "reasonix-plugin-example"},
-		{Name: "stripe", Type: "http", URL: "https://mcp.stripe.com", Headers: map[string]string{"Authorization": "Bearer x"}, AutoStart: boolPtr(false), Tier: "background"},
+		{Name: "stripe", Type: "http", URL: "https://mcp.stripe.com", Headers: map[string]string{"Authorization": "Bearer x"}, AutoStart: new(false), Tier: "background"},
 	}
 	mm, _ := orig.Provider("mimo-pro")
 	mm.BaseURL = "http://localhost:8000/v1"
@@ -596,8 +596,8 @@ approval_mode = "prompt"
 
 func TestRenderTOMLPreservesMCPTimeouts(t *testing.T) {
 	cfg := Default()
-	cfg.Tools.MCPCallTimeoutSeconds = intPtr(450)
-	cfg.Tools.MCPStartupTimeoutSeconds = intPtr(45)
+	cfg.Tools.MCPCallTimeoutSeconds = new(450)
+	cfg.Tools.MCPStartupTimeoutSeconds = new(45)
 	cfg.Plugins = []PluginEntry{{
 		Name:                  "maker",
 		Command:               "maker-mcp",
@@ -786,7 +786,7 @@ func TestScopedRenderSeparatesUserAndProjectConfig(t *testing.T) {
 	c.Desktop.CloseBehavior = "background"
 	c.Desktop.StatusBarStyle = "text"
 	c.Desktop.DefaultToolApprovalMode = "auto"
-	c.Desktop.CheckUpdates = boolPtr(false)
+	c.Desktop.CheckUpdates = new(false)
 	c.Desktop.UpdateChannel = "preview"
 	c.Agent.RecoveryModel = "deepseek-pro"
 	c.Agent.RecoveryTemperature = 0.2
@@ -1103,7 +1103,7 @@ func TestRenderTOMLRoundTripsProviderHeadersAndModelOverrides(t *testing.T) {
 				ReasoningProtocol: ReasoningProtocolDeepSeek,
 				SupportedEfforts:  []string{"high", "max"},
 				DefaultEffort:     "high",
-				Vision:            boolPtr(false),
+				Vision:            new(false),
 				ContextWindow:     262_144,
 				MaxOutputTokens:   32_768,
 			},
@@ -1219,10 +1219,6 @@ func TestRenderTOMLTablePathQuotesEachSegment(t *testing.T) {
 		t.Fatalf("renderTOMLTablePath = %q, want %q", got, want)
 	}
 }
-
-func boolPtr(v bool) *bool { return &v }
-
-func intPtr(v int) *int { return &v }
 
 func TestRenderTOMLPreservesDesktopDisplayMode(t *testing.T) {
 	c := Default()

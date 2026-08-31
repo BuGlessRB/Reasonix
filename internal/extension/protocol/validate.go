@@ -136,8 +136,7 @@ func validateRequiredJSON(raw json.RawMessage, typ reflect.Type, at string) erro
 }
 
 func validateRequiredObject(object map[string]json.RawMessage, typ reflect.Type, at string) error {
-	for i := range typ.NumField() {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		if field.PkgPath != "" {
 			continue
 		}
@@ -391,8 +390,7 @@ func collectExternalizablePointers(typ reflect.Type, prefix string, out *[]strin
 	}
 	switch typ.Kind() {
 	case reflect.Struct:
-		for i := range typ.NumField() {
-			field := typ.Field(i)
+		for field := range typ.Fields() {
 			if field.PkgPath != "" {
 				continue
 			}

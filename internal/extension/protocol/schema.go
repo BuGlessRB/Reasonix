@@ -162,8 +162,7 @@ func buildJSONSchema(defs map[string]any, typ reflect.Type) (any, error) {
 func buildObjectSchema(defs map[string]any, typ reflect.Type) (map[string]any, error) {
 	properties := map[string]any{}
 	var required []string
-	for i := range typ.NumField() {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		if field.PkgPath != "" {
 			continue
 		}

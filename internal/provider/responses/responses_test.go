@@ -17,8 +17,6 @@ import (
 	"reasonix/internal/provider"
 )
 
-func boolPtr(value bool) *bool { return &value }
-
 func collect(t *testing.T, p provider.Provider, req provider.Request) []provider.Chunk {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -67,10 +65,10 @@ func TestDetectVendorAndModeDefaults(t *testing.T) {
 	if got := (Config{BaseURL: "https://api.deepseek.com", Mode: "stateful"}).mode(); got != "stateful" {
 		t.Fatalf("explicit mode = %q", got)
 	}
-	if got := (Config{BaseURL: "https://api.deepseek.com", Mode: "stateful", Stateful: boolPtr(false)}).mode(); got != "stateful" {
+	if got := (Config{BaseURL: "https://api.deepseek.com", Mode: "stateful", Stateful: new(false)}).mode(); got != "stateful" {
 		t.Fatalf("mode must win over legacy stateful, got %q", got)
 	}
-	if got := (Config{BaseURL: "https://example.com", Stateful: boolPtr(false)}).mode(); got != "stateless" {
+	if got := (Config{BaseURL: "https://example.com", Stateful: new(false)}).mode(); got != "stateless" {
 		t.Fatalf("legacy stateful=false mode = %q", got)
 	}
 }
@@ -564,7 +562,7 @@ func TestDashScopeCacheHeaderIsVendorScoped(t *testing.T) {
 		writeEvents(w, `{"type":"response.completed","response":{"id":"resp","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}`)
 	}))
 	defer server.Close()
-	p := New(Config{Name: "test", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateless", SessionCache: boolPtr(true)}).(*client)
+	p := New(Config{Name: "test", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateless", SessionCache: new(true)}).(*client)
 	p.vendor = "deepseek"
 	p.caps = capabilitiesFor("deepseek")
 	collect(t, p, provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})

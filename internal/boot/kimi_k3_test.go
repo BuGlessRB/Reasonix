@@ -36,7 +36,7 @@ func TestNewProviderAppliesExplicitKimiK3RequestContractToCustomGateway(t *testi
 	}
 	ch, err := p.Stream(context.Background(), provider.Request{
 		Messages:    []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
-		Temperature: provider.TemperaturePtr(0.3), MaxTokens: 2048,
+		Temperature: new(0.3), MaxTokens: 2048,
 	})
 	if err != nil {
 		t.Fatalf("Stream: %v", err)

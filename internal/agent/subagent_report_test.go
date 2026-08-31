@@ -15,14 +15,12 @@ import (
 	"reasonix/internal/tool"
 )
 
-func intPtr(v int) *int { return &v }
-
 func TestHostReceiptsAttestChangesAndVerifications(t *testing.T) {
 	summary := evidence.ChildEvidenceSummary{Receipts: []evidence.Receipt{
 		{ToolName: "write_file", Success: true, Mutation: true, Paths: []string{"parser.go"}},
 		{ToolName: "write_file", Success: true, Mutation: true, Paths: []string{"parser_test.go"}},
-		{ToolName: "bash", Success: true, Command: "go test ./parser", ExitCode: intPtr(0), Verification: evidence.VerificationPassed},
-		{ToolName: "bash", Success: true, Command: "ls -la", ExitCode: intPtr(0), Verification: evidence.VerificationNotVerification},
+		{ToolName: "bash", Success: true, Command: "go test ./parser", ExitCode: new(0), Verification: evidence.VerificationPassed},
+		{ToolName: "bash", Success: true, Command: "ls -la", ExitCode: new(0), Verification: evidence.VerificationNotVerification},
 	}}
 
 	got := formatHostReceipts(summary, WritePathSet{})
@@ -53,8 +51,8 @@ func TestHostReceiptsStaySilentForReadOnlyChildren(t *testing.T) {
 
 func TestHostReceiptsRecordFailedCommands(t *testing.T) {
 	summary := evidence.ChildEvidenceSummary{Receipts: []evidence.Receipt{
-		{ToolName: "bash", Success: true, Command: "go build ./...", ExitCode: intPtr(2)},
-		{ToolName: "bash", Success: true, Command: "go test ./parser", ExitCode: intPtr(1), Verification: evidence.VerificationFailed},
+		{ToolName: "bash", Success: true, Command: "go build ./...", ExitCode: new(2)},
+		{ToolName: "bash", Success: true, Command: "go test ./parser", ExitCode: new(1), Verification: evidence.VerificationFailed},
 	}}
 	got := formatHostReceipts(summary, WritePathSet{})
 	for _, want := range []string{"go build ./... (exit 2)", "go test ./parser (verification failed, exit 1)"} {
@@ -67,7 +65,7 @@ func TestHostReceiptsRecordFailedCommands(t *testing.T) {
 func TestDecorateExecutionReceiptCarriesHostObservedOutcome(t *testing.T) {
 	rec := evidence.Receipt{ToolName: "bash", Success: true}
 	decorateExecutionReceipt(&rec, "  out  ", &tool.ShellExecution{
-		ExitCode:     tool.IntPtr(3),
+		ExitCode:     new(3),
 		Verification: tool.ShellVerificationFailed,
 	})
 	if rec.ExitCode == nil || *rec.ExitCode != 3 {
@@ -146,7 +144,7 @@ func TestAggregateReservesHostReceiptsAgainstLongProse(t *testing.T) {
 	answer := appendHostReceipts(strings.Repeat("chatter. ", 8000),
 		evidence.ChildEvidenceSummary{Receipts: []evidence.Receipt{
 			{ToolName: "write_file", Success: true, Mutation: true, Paths: []string{"payments.go"}},
-			{ToolName: "bash", Success: true, Command: "go test ./pay", ExitCode: intPtr(1), Verification: evidence.VerificationFailed},
+			{ToolName: "bash", Success: true, Command: "go test ./pay", ExitCode: new(1), Verification: evidence.VerificationFailed},
 		}}, WritePathSet{})
 
 	out := formatBoundedSubagentAggregate("fleet:\n", []subagentAggregateItem{

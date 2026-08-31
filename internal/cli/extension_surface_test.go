@@ -37,7 +37,7 @@ func (s *extensionStubCtrl) InvokeExtensionAction(_ context.Context, name string
 	return s.invokeMsg, s.invokeErr
 }
 
-func floatPtr(v float64) *float64 { return &v }
+func floatPtr(v float64) *float64 { return new(v) }
 
 func statusPayload(severity string) *event.ExtensionSurfacePayload {
 	return &event.ExtensionSurfacePayload{
@@ -68,7 +68,7 @@ func TestExtensionStatusLineSeverity(t *testing.T) {
 	}
 	// Progress appends a percentage.
 	p := statusPayload("info")
-	p.Status.Progress = floatPtr(0.5)
+	p.Status.Progress = new(0.5)
 	if line := ansi.Strip(extensionStatusLine(p)); !strings.Contains(line, "(50%)") {
 		t.Fatalf("progress line = %q, want (50%%)", line)
 	}

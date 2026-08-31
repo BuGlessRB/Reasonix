@@ -147,7 +147,7 @@ func (m chatTUI) applyMCPMode(tier string) (tea.Model, tea.Cmd) {
 		if entry.Name == v.Name {
 			entry.Tier = normalizeMCPTierForCLI(tier)
 			if !entry.ShouldAutoStart() {
-				entry.AutoStart = mcpBoolPtr(true)
+				entry.AutoStart = new(true)
 			}
 			selected = entry
 			found = true
@@ -501,5 +501,3 @@ func expandLeadingTilde(p string) string {
 	}
 	return home + p[1:]
 }
-
-func mcpBoolPtr(v bool) *bool { return &v }

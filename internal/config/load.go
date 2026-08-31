@@ -1974,7 +1974,7 @@ func ensureDeepSeekOfficialProvider(c *Config) {
 		APIKeyEnv:     "DEEPSEEK_API_KEY",
 		BalanceURL:    "https://api.deepseek.com/user/balance",
 		Thinking:      "enabled",
-		WebSearch:     boolPointer(true),
+		WebSearch:     new(true),
 		ContextWindow: 1_000_000,
 		Prices:        deepSeekV4PricesForConfig(c),
 		ModelOverrides: map[string]ProviderModelOverride{

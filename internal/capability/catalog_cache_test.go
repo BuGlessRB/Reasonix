@@ -10,8 +10,6 @@ import (
 	"reasonix/internal/tool"
 )
 
-func boolPtr(b bool) *bool { return &b }
-
 func TestLoadCachedToolsForSpecsHonorsSchemaCacheKey(t *testing.T) {
 	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
 	fresh := plugin.Spec{Name: "gh", Type: "stdio", Command: "gh-mcp"}
@@ -49,8 +47,8 @@ func TestBuildCatalogSurfacesCachedToolsForAutoStartFalse(t *testing.T) {
 	keyOK := map[string]bool{"gh": true, "old": false}
 	cat := BuildCatalog(CatalogOptions{
 		Plugins: []config.PluginEntry{
-			{Name: "gh", AutoStart: boolPtr(false)},
-			{Name: "old", AutoStart: boolPtr(false)},
+			{Name: "gh", AutoStart: new(false)},
+			{Name: "old", AutoStart: new(false)},
 		},
 		Profile:     ProfileDelivery,
 		CachedTools: cached,
@@ -283,7 +281,7 @@ func TestCatalogKeepsProxyToolsAfterConnect(t *testing.T) {
 		"gh": {{Name: "search_issues", Description: "search", ReadOnly: true}},
 	}
 	cat := BuildCatalog(CatalogOptions{
-		Plugins:    []config.PluginEntry{{Name: "gh", AutoStart: boolPtr(false)}},
+		Plugins:    []config.PluginEntry{{Name: "gh", AutoStart: new(false)}},
 		Profile:    ProfileDelivery,
 		Connected:  map[string]bool{"gh": true}, // server is ready now
 		ProxyTools: proxy,
@@ -302,7 +300,7 @@ func TestCatalogKeepsProxyToolsAfterConnect(t *testing.T) {
 	// When the same server's tools are already on the registry, no duplicates.
 	cat = BuildCatalog(CatalogOptions{
 		Tools:      []tool.ContractEntry{{Name: plugin.ModelToolName("gh", "search_issues")}},
-		Plugins:    []config.PluginEntry{{Name: "gh", AutoStart: boolPtr(false)}},
+		Plugins:    []config.PluginEntry{{Name: "gh", AutoStart: new(false)}},
 		Profile:    ProfileDelivery,
 		Connected:  map[string]bool{"gh": true},
 		ProxyTools: proxy,
@@ -322,7 +320,7 @@ func TestCatalogKeepsProxyToolsAfterConnect(t *testing.T) {
 
 func TestCatalogDoesNotRouteProxyToolsAfterFailure(t *testing.T) {
 	cat := BuildCatalog(CatalogOptions{
-		Plugins:     []config.PluginEntry{{Name: "gh", AutoStart: boolPtr(false)}},
+		Plugins:     []config.PluginEntry{{Name: "gh", AutoStart: new(false)}},
 		Profile:     ProfileDelivery,
 		Failed:      map[string]string{"gh": "connection reset"},
 		Connected:   map[string]bool{"gh": true},

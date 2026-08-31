@@ -113,8 +113,7 @@ func (w *sdkTypeWalk) visit(typ reflect.Type) error {
 		w.seen[typ] = true
 		w.order = append(w.order, typ)
 		w.kinds[typ] = "struct"
-		for i := range typ.NumField() {
-			field := typ.Field(i)
+		for field := range typ.Fields() {
 			if field.PkgPath != "" {
 				continue
 			}
@@ -302,8 +301,7 @@ func emitSDKStruct(out *strings.Builder, typ reflect.Type) error {
 	fmt.Fprintf(out, "// %s is a generated Extension Protocol v2 wire DTO.\n", typ.Name())
 	fields := 0
 	var body strings.Builder
-	for i := range typ.NumField() {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		if field.PkgPath != "" {
 			continue
 		}

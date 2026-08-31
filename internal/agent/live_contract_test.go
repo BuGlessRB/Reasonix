@@ -14,7 +14,7 @@ func liveContractAgent(t *testing.T, sink event.Sink) *Agent {
 	a := New(nil, tool.NewRegistry(), NewSession(""), Options{}, sink)
 	a.resetTurnEvidence()
 	a.turn.turnInput = "make the cache key model-aware"
-	a.SetPlanContract(ptr(contractPlan()))
+	a.SetPlanContract(new(contractPlan()))
 	return a
 }
 

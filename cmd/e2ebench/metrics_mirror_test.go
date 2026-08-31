@@ -11,8 +11,7 @@ import (
 // jsonTags collects a struct's JSON field names, descending into embedded and
 // nested structs the way encoding/json itself does.
 func jsonTags(t reflect.Type, into map[string]bool) {
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		tag, _, _ := strings.Cut(f.Tag.Get("json"), ",")
 		if tag == "-" {
 			continue

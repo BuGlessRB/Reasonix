@@ -84,7 +84,7 @@ var methodFixtures = map[Method]struct {
 					Name:               "bash",
 				}},
 				Tools:       []ProviderToolSchema{{Name: "bash", Description: "run", Parameters: json.RawMessage(`{"type":"object"}`)}},
-				Temperature: floatPtr(0.5),
+				Temperature: new(0.5),
 				MaxTokens:   1024,
 			},
 		},
@@ -151,8 +151,9 @@ var methodFixtures = map[Method]struct {
 	},
 }
 
-func floatPtr(v float64) *float64 { return &v }
-func int64Ptr(v int64) *int64     { return &v }
+func floatPtr(v float64) *float64 { return new(v) }
+
+func int64Ptr(v int64) *int64 { return new(v) }
 
 func TestMethodDTORoundTripsAreLossless(t *testing.T) {
 	for _, spec := range Registry() {
@@ -215,7 +216,7 @@ func roundTripThroughDecoder(t *testing.T, spec MethodSpec, value any, params bo
 // are not method DTOs but ride inside UIPublishParams/UIRequestParams.
 func TestPayloadDTORoundTrips(t *testing.T) {
 	payloads := []any{
-		UIStatusPayload{Label: "l", Detail: "d", Severity: UISeverityWarn, Progress: floatPtr(0.5)},
+		UIStatusPayload{Label: "l", Detail: "d", Severity: UISeverityWarn, Progress: new(0.5)},
 		UICardPayload{
 			Title: "t", Markdown: "**m**", Text: "x",
 			Fields:   []UIKeyValue{{Key: "k", Value: "v"}},

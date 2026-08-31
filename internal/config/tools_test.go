@@ -18,7 +18,7 @@ func TestBashTimeoutSecondsDefaultsToSafetyCap(t *testing.T) {
 
 func TestBashTimeoutSecondsAllowsExplicitZero(t *testing.T) {
 	cfg := Default()
-	cfg.Tools.BashTimeoutSeconds = intPtr(0)
+	cfg.Tools.BashTimeoutSeconds = new(0)
 	if got := cfg.BashTimeoutSeconds(); got != 0 {
 		t.Fatalf("BashTimeoutSeconds() = %d, want 0", got)
 	}
@@ -39,7 +39,7 @@ func TestBashTimeoutSecondsParsesExplicitZero(t *testing.T) {
 
 func TestBashTimeoutSecondsFallsBackForNegative(t *testing.T) {
 	cfg := Default()
-	cfg.Tools.BashTimeoutSeconds = intPtr(-1)
+	cfg.Tools.BashTimeoutSeconds = new(-1)
 	if got := cfg.BashTimeoutSeconds(); got != 120 {
 		t.Fatalf("BashTimeoutSeconds() = %d, want 120", got)
 	}
@@ -70,11 +70,11 @@ func TestMCPCallTimeoutSecondsExplicitPositive(t *testing.T) {
 
 func TestMCPCallTimeoutSecondsFallsBackForZeroOrNegative(t *testing.T) {
 	cfg := Default()
-	cfg.Tools.MCPCallTimeoutSeconds = intPtr(0)
+	cfg.Tools.MCPCallTimeoutSeconds = new(0)
 	if got := cfg.MCPCallTimeoutSeconds(); got != 300 {
 		t.Fatalf("zero MCPCallTimeoutSeconds() = %d, want 300", got)
 	}
-	cfg.Tools.MCPCallTimeoutSeconds = intPtr(-1)
+	cfg.Tools.MCPCallTimeoutSeconds = new(-1)
 	if got := cfg.MCPCallTimeoutSeconds(); got != 300 {
 		t.Fatalf("negative MCPCallTimeoutSeconds() = %d, want 300", got)
 	}
@@ -102,11 +102,11 @@ func TestMCPStartupTimeoutSecondsExplicitPositive(t *testing.T) {
 
 func TestMCPStartupTimeoutSecondsFallsBackForZeroOrNegative(t *testing.T) {
 	cfg := Default()
-	cfg.Tools.MCPStartupTimeoutSeconds = intPtr(0)
+	cfg.Tools.MCPStartupTimeoutSeconds = new(0)
 	if got := cfg.MCPStartupTimeoutSeconds(); got != 30 {
 		t.Fatalf("zero MCPStartupTimeoutSeconds() = %d, want 30", got)
 	}
-	cfg.Tools.MCPStartupTimeoutSeconds = intPtr(-1)
+	cfg.Tools.MCPStartupTimeoutSeconds = new(-1)
 	if got := cfg.MCPStartupTimeoutSeconds(); got != 30 {
 		t.Fatalf("negative MCPStartupTimeoutSeconds() = %d, want 30", got)
 	}
@@ -124,7 +124,7 @@ func TestBackgroundJobStalledWarningSecondsDefault(t *testing.T) {
 
 func TestBackgroundJobStalledWarningSecondsAllowsExplicitZero(t *testing.T) {
 	cfg := Default()
-	cfg.Tools.BackgroundJobs.StalledWarningSeconds = intPtr(0)
+	cfg.Tools.BackgroundJobs.StalledWarningSeconds = new(0)
 	if got := cfg.BackgroundJobStalledWarningSeconds(); got != 0 {
 		t.Fatalf("BackgroundJobStalledWarningSeconds() = %d, want 0", got)
 	}
@@ -145,11 +145,11 @@ func TestBackgroundJobStalledWarningSecondsParsesExplicitZero(t *testing.T) {
 
 func TestBackgroundJobStalledWarningSecondsBounds(t *testing.T) {
 	cfg := Default()
-	cfg.Tools.BackgroundJobs.StalledWarningSeconds = intPtr(-1)
+	cfg.Tools.BackgroundJobs.StalledWarningSeconds = new(-1)
 	if got := cfg.BackgroundJobStalledWarningSeconds(); got != 900 {
 		t.Fatalf("negative BackgroundJobStalledWarningSeconds() = %d, want 900", got)
 	}
-	cfg.Tools.BackgroundJobs.StalledWarningSeconds = intPtr(90000)
+	cfg.Tools.BackgroundJobs.StalledWarningSeconds = new(90000)
 	if got := cfg.BackgroundJobStalledWarningSeconds(); got != 86400 {
 		t.Fatalf("oversized BackgroundJobStalledWarningSeconds() = %d, want 86400", got)
 	}

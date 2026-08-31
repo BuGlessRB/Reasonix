@@ -27,8 +27,8 @@ func fieldNames(t *testing.T, v any) []string {
 		t.Fatalf("%T is not a struct", v)
 	}
 	names := make([]string, 0, rt.NumField())
-	for i := range rt.NumField() {
-		names = append(names, rt.Field(i).Name)
+	for field := range rt.Fields() {
+		names = append(names, field.Name)
 	}
 	slices.Sort(names)
 	return names

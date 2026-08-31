@@ -7,8 +7,6 @@ import (
 	"reasonix/internal/tool"
 )
 
-func exitCode(n int) *int { return &n }
-
 // A failing `go test` is the case prefix matching cannot see: the output opens
 // with "=== RUN" and the failure only shows in the recorded execution.
 func TestKeepErrorsSeesStructuredFailure(t *testing.T) {
@@ -20,9 +18,9 @@ func TestKeepErrorsSeesStructuredFailure(t *testing.T) {
 	}{
 		{"state failed", &provider.ToolExecution{State: tool.ShellStateFailed}, true},
 		{"timed out", &provider.ToolExecution{State: tool.ShellStateTimedOut}, true},
-		{"non-zero exit", &provider.ToolExecution{State: tool.ShellStateCompleted, ExitCode: exitCode(1)}, true},
+		{"non-zero exit", &provider.ToolExecution{State: tool.ShellStateCompleted, ExitCode: new(1)}, true},
 		{"verification failed", &provider.ToolExecution{Verification: tool.ShellVerificationFailed}, true},
-		{"clean run", &provider.ToolExecution{State: tool.ShellStateCompleted, ExitCode: exitCode(0)}, false},
+		{"clean run", &provider.ToolExecution{State: tool.ShellStateCompleted, ExitCode: new(0)}, false},
 		{"no execution record", nil, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -61,7 +59,7 @@ func TestKeepErrorsTextFallbackUnchanged(t *testing.T) {
 // Only tool results are keep-policy candidates; a failing execution record on
 // another role must not promote it.
 func TestKeepErrorsIgnoresNonToolRoles(t *testing.T) {
-	ex := &provider.ToolExecution{State: tool.ShellStateFailed, ExitCode: exitCode(2)}
+	ex := &provider.ToolExecution{State: tool.ShellStateFailed, ExitCode: new(2)}
 	for _, role := range []provider.Role{provider.RoleUser, provider.RoleAssistant, provider.RoleSystem} {
 		if isErrorMessage(provider.Message{Role: role, Content: "error: x", ToolExecution: ex}) {
 			t.Errorf("role %v classified as an error tool result", role)

@@ -807,7 +807,7 @@ func TestBuildRequestDeepSeekPreservesCallerTemperature(t *testing.T) {
 		t.Fatalf("DeepSeek request omitted explicit temperature: %s", b)
 	}
 
-	native := (&client{model: "claude-opus-4-8"}).buildRequest(context.Background(), provider.Request{Temperature: provider.TemperaturePtr(0.5)})
+	native := (&client{model: "claude-opus-4-8"}).buildRequest(context.Background(), provider.Request{Temperature: new(0.5)})
 	if native.Temperature != nil {
 		t.Fatalf("native Anthropic temperature = %v, want omitted", native.Temperature)
 	}

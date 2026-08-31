@@ -313,7 +313,7 @@ func applyTerminalResult(ex *tool.ShellExecution, err error) {
 	}
 	if err == nil {
 		ex.State = tool.ShellStateCompleted
-		ex.ExitCode = tool.IntPtr(0)
+		ex.ExitCode = new(0)
 		ex.MutationRisk = tool.ShellMutationMayHaveCompleted
 		return
 	}

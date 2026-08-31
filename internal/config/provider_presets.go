@@ -202,7 +202,7 @@ var curatedProviderPresets = []ProviderPreset{
 			APIKeyEnv:     "DEEPSEEK_API_KEY",
 			BalanceURL:    "https://api.deepseek.com/user/balance",
 			Thinking:      "enabled",
-			WebSearch:     boolPointer(true),
+			WebSearch:     new(true),
 			ContextWindow: 1_000_000,
 			Prices:        deepSeekV4PricesUSD(),
 			ModelOverrides: map[string]ProviderModelOverride{
@@ -558,7 +558,7 @@ var curatedProviderPresets = []ProviderPreset{
 			ContextWindow:    1_000_000,
 			Price:            deepSeekV4FlashPriceUSD(),
 			ResponsesMode:    "stateless",
-			WebSearch:        boolPointer(true),
+			WebSearch:        new(true),
 			SupportedEfforts: []string{"low", "high", "max"},
 			DefaultEffort:    "high",
 		}},
@@ -966,10 +966,6 @@ var curatedProviderPresets = []ProviderPreset{
 			APIKeyEnv: "OLLAMA_API_KEY",
 		}},
 	},
-}
-
-func boolPointer(value bool) *bool {
-	return &value
 }
 
 func cloneProviderPreset(p ProviderPreset) ProviderPreset {

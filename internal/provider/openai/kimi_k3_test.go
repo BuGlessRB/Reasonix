@@ -18,7 +18,7 @@ func TestExplicitKimiK3GatewayRequestContract(t *testing.T) {
 		t.Fatal("explicit Kimi K3 protocol must retain reasoning for complete assistant-message replay")
 	}
 	req := p.(*client).buildRequest(provider.Request{
-		Temperature: provider.TemperaturePtr(0.2), MaxTokens: 4096,
+		Temperature: new(0.2), MaxTokens: 4096,
 		Messages: []provider.Message{
 			{Role: provider.RoleUser, Content: "question"},
 			{Role: provider.RoleAssistant, Content: "answer", ReasoningContent: "gateway reasoning"},
