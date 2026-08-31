@@ -30,13 +30,13 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"reasonix/internal/appupdate"
 	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/crashreport"
 	"reasonix/internal/event"
 	"reasonix/internal/notify"
 	"reasonix/internal/remotehost"
-	"reasonix/internal/repair"
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
 	"reasonix/internal/traystate"
@@ -77,7 +77,7 @@ var apiPaths = map[string]bool{
 	"/changes": true, "/attachments": true, "/drop": true, "/roles": true,
 	"/themes": true, "/extensions": true, "/plugins": true, "/surfaces": true,
 	"/welcome": true, "/appearance": true,
-	"/permissions": true, "/sandbox": true, "/storage": true, "/usage": true, "/tray": true, "/asks": true,
+	"/permissions": true, "/sandbox": true, "/storage": true, "/usage": true, "/tray": true, "/asks": true, "/update": true,
 	"/balance":        true,
 	"/config/problem": true, "/config/repair": true,
 }
@@ -87,7 +87,7 @@ var apiPaths = map[string]bool{
 // endpoint from silently answering with index.html instead of JSON — and
 // TestEveryPathTheFrontendCallsIsRouted is what keeps this list honest, because
 // the comment alone did not.
-var apiPrefixes = []string{"/asks/", "/tray/", "/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/", "/appearance/", "/storage/", "/changes/", "/studio/"}
+var apiPrefixes = []string{"/asks/", "/tray/", "/update/", "/mcp/", "/skills/", "/inbox/", "/account/", "/hooks/", "/memory/", "/network/", "/providers/", "/rewind/", "/extensions/", "/themes/", "/plugins/", "/appearance/", "/storage/", "/changes/", "/studio/"}
 
 // splitRuntimePath separates a pane's address from the route it is asking for:
 // /rt/r2/status is runtime r2 asking for /status. An unprefixed path belongs to
@@ -214,6 +214,10 @@ func run(logs io.Writer) error {
 	// What this shell is and where it lives; the kernel resolves neither for a
 	// process that is not the application.
 	install := shell.install()
+	// Read before the hub that serves it: an update can only be acknowledged by
+	// the launch that booted from it, and the transaction on disk right now is
+	// the only one that is.
+	shell.updateHost = appupdate.New(shell, version)
 	// One hub, several panes: each session gets its own runtime, so a second
 	// conversation runs beside the first instead of rebuilding it.
 	hub := serve.NewHub(serve.HubOptions{
@@ -230,6 +234,7 @@ func run(logs io.Writer) error {
 		Asks:    asks,
 		Tray:    shell,
 		Install: &install,
+		Update:  shell.updateHost,
 	})
 	shell.hub = hub
 	srv := serve.New(ctrl, bc, cfg.Serve)
@@ -248,10 +253,6 @@ func run(logs io.Writer) error {
 	if err != nil {
 		return err
 	}
-	// Read before the window: an update can only be acknowledged by the launch
-	// that booted from it, and only the transaction on disk right now is that.
-	shell.updateHealth = repair.CaptureUpdateHealth(version)
-
 	return shell.runWindow(api, assets, cfg, tracker)
 }
 
@@ -398,7 +399,7 @@ type App struct {
 	// The update this launch booted from, if it booted from one. Captured
 	// before the window runs and read from the readiness hook, so it is not
 	// mutable state the mutex above has anything to say about.
-	updateHealth *repair.UpdateHealthWitness
+	updateHost serve.UpdateHost
 }
 
 // windowNotifications returns the sink wrapper every runtime in this window

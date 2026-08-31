@@ -82,7 +82,7 @@ func (a *App) GoToVersion(target string) error {
 		return a.failUpdate(target, err)
 	}
 	a.emit(UpdateProgress{Version: target, Phase: "relaunching"})
-	a.handOver(layout)
+	a.handOver(ctx)
 	return nil
 }
 
@@ -119,20 +119,34 @@ func (a *App) installNativePackage(ctx context.Context, cacheDir, target string,
 		return a.failUpdate(target, err)
 	}
 	a.emit(UpdateProgress{Version: target, Phase: "relaunching"})
-	a.handOver(update.Here(studioLine()))
+	a.handOver(ctx)
 	return nil
 }
 
-// handOver ends this process so the installed build can take its place. Windows
-// and macOS already have a helper waiting for the exit; Linux replaced the files
-// in place, so this process is the one that has to start the new one.
-func (a *App) handOver(layout update.Layout) {
+// PrepareForUpdate releases what would keep this build's own files from being
+// replaced. The exit that has to follow belongs to the handoff rather than
+// here: what releases the application and what ends it are not the same act.
+func (a *App) PrepareForUpdate(context.Context) error {
 	if a.hub != nil {
 		a.hub.Shutdown()
 	}
-	if goruntime.GOOS == "linux" {
-		_ = layout.Relaunch()
+	return nil
+}
+
+// RelaunchAfterUpdate starts what replaced this build, where that is this
+// process's half of it. Windows and macOS already have a helper waiting for the
+// exit; Linux replaced the files in place, so nobody else is waiting.
+func (a *App) RelaunchAfterUpdate(context.Context) error {
+	if goruntime.GOOS != "linux" {
+		return nil
 	}
+	return update.Here(studioLine()).Relaunch()
+}
+
+// handOver ends this process so the installed build can take its place.
+func (a *App) handOver(ctx context.Context) {
+	_ = a.PrepareForUpdate(ctx)
+	_ = a.RelaunchAfterUpdate(ctx)
 	os.Exit(0)
 }
 

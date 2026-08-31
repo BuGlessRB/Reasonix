@@ -153,6 +153,7 @@ export const EN_KERNEL: Record<string, string> = {
   "这个内核不是由 Studio 启动的，没有可以查看或切换的版本":
     "This kernel was not started by Studio, so it has no version of its own to show or change",
   "版本固定没能保存：{detail}": "The version hold was not saved: {detail}",
+  "这次启动没能被记为健康：{detail}": "This launch could not be recorded as healthy: {detail}",
   "这个请求没有发往 Studio 在监听的地址，已经拒掉了": "That request was not addressed to the address Studio listens on — refused",
   "这个页面不是 Studio 自己，不能操作它": "That page is not Studio itself, so it may not drive it",
   "缺少本次启动的凭据，重开 Studio 再试": "This launch's credential is missing — reopen Studio and try again",

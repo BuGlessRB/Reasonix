@@ -5,8 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/repair"
+	"reasonix/internal/serve"
 )
+
+type stubUpdateHost struct{}
+
+func (stubUpdateHost) AcknowledgeLaunchHealth() error { return nil }
 
 func withProbation(t *testing.T, d time.Duration) {
 	t.Helper()
@@ -15,30 +19,30 @@ func withProbation(t *testing.T, d time.Duration) {
 	t.Cleanup(func() { updateProbation = original })
 }
 
-func withCommitSeam(t *testing.T) chan string {
+func withCommitSeam(t *testing.T) chan struct{} {
 	t.Helper()
 	original := commitUpdateHealth
-	committed := make(chan string, 1)
-	commitUpdateHealth = func(_ *repair.UpdateHealthWitness, running string) error {
-		committed <- running
+	committed := make(chan struct{}, 1)
+	commitUpdateHealth = func(serve.UpdateHost) error {
+		committed <- struct{}{}
 		return nil
 	}
 	t.Cleanup(func() { commitUpdateHealth = original })
 	return committed
 }
 
+// The window supplies the timing and nothing else: which transaction this
+// retires was read by the host at startup, so there is no version here to
+// assert on any more, and none for a shell to get wrong.
 func TestReadyWindowCommitsAfterProbation(t *testing.T) {
 	withProbation(t, time.Millisecond)
 	committed := withCommitSeam(t)
-	app := &App{updateHealth: &repair.UpdateHealthWitness{}}
+	app := &App{updateHost: stubUpdateHost{}}
 
 	app.acknowledgeUpdateHealth(context.Background())
 
 	select {
-	case running := <-committed:
-		if running != version {
-			t.Fatalf("committed for %q, want the running build %q", running, version)
-		}
+	case <-committed:
 	case <-time.After(2 * time.Second):
 		t.Fatal("a window that survived probation never committed the update it booted from")
 	}
@@ -50,27 +54,30 @@ func TestWindowLostInsideProbationCommitsNothing(t *testing.T) {
 	withProbation(t, time.Hour)
 	committed := withCommitSeam(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	app := &App{updateHealth: &repair.UpdateHealthWitness{}}
+	app := &App{updateHost: stubUpdateHost{}}
 
 	app.acknowledgeUpdateHealth(ctx)
 	cancel()
 
 	select {
-	case running := <-committed:
-		t.Fatalf("a window lost inside probation committed for %q", running)
+	case <-committed:
+		t.Fatal("a window lost inside probation committed")
 	case <-time.After(100 * time.Millisecond):
 	}
 }
 
-func TestLaunchWithoutAnUpdateCommitsNothing(t *testing.T) {
+// A shell with no capability behind it has nothing to acknowledge through, and
+// must not invent one. What a launch that booted from no update retires is the
+// host's question, and it answers it by retiring nothing.
+func TestAShellWithNoUpdateCapabilityCommitsNothing(t *testing.T) {
 	withProbation(t, time.Millisecond)
 	committed := withCommitSeam(t)
 
 	(&App{}).acknowledgeUpdateHealth(context.Background())
 
 	select {
-	case running := <-committed:
-		t.Fatalf("a launch that booted from no update committed for %q", running)
+	case <-committed:
+		t.Fatal("a shell owning no update capability committed")
 	case <-time.After(100 * time.Millisecond):
 	}
 }

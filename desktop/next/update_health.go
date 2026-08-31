@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"reasonix/internal/repair"
+	"reasonix/internal/serve"
 )
 
 // What this file owns is when the acknowledgement happens, so both halves of
@@ -15,18 +15,17 @@ var (
 	// it booted from is committed. A build that paints once and then dies is not
 	// evidence that the replacement works.
 	updateProbation    = 2 * time.Second
-	commitUpdateHealth = func(w *repair.UpdateHealthWitness, running string) error {
-		return w.Acknowledge(running)
-	}
+	commitUpdateHealth = func(h serve.UpdateHost) error { return h.AcknowledgeLaunchHealth() }
 )
 
-// acknowledgeUpdateHealth retires the update this launch booted from. The
-// updater performed the swap and cannot judge it; this process can, and only
-// after a renderer loaded into a window that stayed up. A launch that shuts
-// down inside probation commits nothing and leaves the rollback material.
+// acknowledgeUpdateHealth reports that this launch is working. The updater
+// performed the swap and cannot judge it; this process can, and only after a
+// renderer loaded into a window that stayed up. The window supplies the timing
+// and names nothing: what it retires is the transaction the host read at
+// startup. Shutting down inside probation leaves the rollback material.
 func (a *App) acknowledgeUpdateHealth(ctx context.Context) {
-	witness := a.updateHealth
-	if witness == nil {
+	host := a.updateHost
+	if host == nil {
 		return
 	}
 	go func() {
@@ -37,7 +36,7 @@ func (a *App) acknowledgeUpdateHealth(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
-		if err := commitUpdateHealth(witness, version); err != nil {
+		if err := commitUpdateHealth(host); err != nil {
 			slog.Warn("studio: commit healthy update", "err", err)
 		}
 	}()

@@ -160,6 +160,10 @@ type HubOptions struct {
 	// can answer either: inside a bundle os.Executable() names the host binary,
 	// not the application. Nil makes the version routes refuse by name.
 	Install *update.Install
+	// Update is the desktop application this kernel runs inside, where it runs
+	// inside one. Nil leaves the update routes unregistered: owning the
+	// application is what makes replacing it this process's business.
+	Update UpdateHost
 }
 
 // OpenRequest asks for a runtime. An empty SessionPath opens a fresh session in
@@ -458,6 +462,7 @@ func (h *Hub) Handler() http.Handler {
 	h.registerTreeRoutes(mux)
 	h.registerTrayRoutes(mux)
 	h.registerStudioVersionRoutes(mux)
+	h.registerUpdateRoutes(mux)
 	h.registerAskRoutes(mux)
 	mux.HandleFunc(runtimePrefix+"{id}/", h.routeRuntime)
 	mux.HandleFunc("/", h.routeDefault)

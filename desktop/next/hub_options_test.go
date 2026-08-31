@@ -5,6 +5,9 @@ import (
 	"go/parser"
 	"go/token"
 	"testing"
+
+	"reasonix/internal/appupdate"
+	"reasonix/internal/serve"
 )
 
 // hubOptionKeys reads the options this shell actually builds its hub with, from
@@ -48,9 +51,22 @@ func hubOptionKeys(t *testing.T) map[string]bool {
 // nothing failed until a person clicked.
 func TestTheWindowHandsItsHubEveryCapabilityItImplements(t *testing.T) {
 	keys := hubOptionKeys(t)
-	for _, want := range []string{"Tray", "Asks", "Remote", "OnOpen", "OnClose", "DecorateSink", "Grant"} {
+	for _, want := range []string{"Tray", "Update", "Install", "Asks", "Remote", "OnOpen", "OnClose", "DecorateSink", "Grant"} {
 		if !keys[want] {
 			t.Errorf("the hub is built without %s, so nothing can reach what this window implements for it", want)
 		}
+	}
+}
+
+// appupdate and serve name this capability from two packages that may not
+// import each other, so the property lives in the assignment between them: an
+// unowned application must leave the field nil, and a nil *capability inside a
+// non-nil interface would register the routes and fail nowhere. Asserting it in
+// appupdate stops working the moment New returns a concrete type.
+func TestAnUnownedApplicationReachesTheHubAsNoUpdateHostAtAll(t *testing.T) {
+	var opts serve.HubOptions
+	opts.Update = appupdate.New(nil, "v1.0.0")
+	if opts.Update != nil {
+		t.Fatalf("HubOptions.Update = %#v, want nil so the update routes stay unregistered", opts.Update)
 	}
 }
