@@ -2,6 +2,7 @@ package update
 
 import (
 	"context"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -56,12 +57,20 @@ const catalogTimeout = 15 * time.Second
 // Hub reads the rollback catalog for one install, so no shell holds a copy of
 // what "newer", "pinned" or "latest" mean.
 func Hub(ctx context.Context, in Install) VersionHub {
-	hub := VersionHub{Current: in.Version, Pinned: PinnedVersion()}
 	client, err := netclient.NewHTTPClient(ProxySpec(), netclient.TransportOptions{})
 	if err != nil {
+		hub := VersionHub{Current: in.Version, Pinned: PinnedVersion()}
 		hub.Err, hub.Versions = err.Error(), versionRows(nil, in.Version)
 		return hub.nonNil()
 	}
+	return hubOver(ctx, in, client)
+}
+
+// hubOver is Hub with the route already decided, so a test can answer the
+// catalog without reaching the network. The catalog URL stays a constant: what
+// is injectable here is how the fetch travels, never where it lands.
+func hubOver(ctx context.Context, in Install, client *http.Client) VersionHub {
+	hub := VersionHub{Current: in.Version, Pinned: PinnedVersion()}
 	ctx, cancel := context.WithTimeout(ctx, catalogTimeout)
 	defer cancel()
 	st, err := New(Options{Current: in.Version, Pinned: hub.Pinned, HTTP: client, IndexURL: StudioCatalog}).Check(ctx)

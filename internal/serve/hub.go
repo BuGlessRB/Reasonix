@@ -21,6 +21,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/surface"
+	"reasonix/internal/update"
 )
 
 // surface is the frontend this hub serves. Every server it adopts and every
@@ -155,6 +156,10 @@ type HubOptions struct {
 	// tray routes unregistered rather than answering for an icon that does not
 	// exist — a networked server has no window to put one on.
 	Tray TrayHost
+	// Install is the build this hub belongs to and where it lives. Only a shell
+	// can answer either: inside a bundle os.Executable() names the host binary,
+	// not the application. Nil makes the version routes refuse by name.
+	Install *update.Install
 }
 
 // OpenRequest asks for a runtime. An empty SessionPath opens a fresh session in
@@ -452,6 +457,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("POST /remotes/open", h.openRemoteRuntime)
 	h.registerTreeRoutes(mux)
 	h.registerTrayRoutes(mux)
+	h.registerStudioVersionRoutes(mux)
 	h.registerAskRoutes(mux)
 	mux.HandleFunc(runtimePrefix+"{id}/", h.routeRuntime)
 	mux.HandleFunc("/", h.routeDefault)

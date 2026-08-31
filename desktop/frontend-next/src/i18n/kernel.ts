@@ -192,6 +192,10 @@ const SAID: Record<string, string> = {
   // ── 本机通道：这个请求不是 Studio 自己发的 ───────────────────────
   "tray.rejected": "状态图标的设置没能保存：{detail}",
 
+  // ── 版本：这个内核背后有没有一个可更新的 Studio ─────────────────
+  "studio.no_install": "这个内核不是由 Studio 启动的，没有可以查看或切换的版本",
+  "studio.pin_rejected": "版本固定没能保存：{detail}",
+
   "loopback.host_rejected": "这个请求没有发往 Studio 在监听的地址，已经拒掉了",
   "loopback.origin_rejected": "这个页面不是 Studio 自己，不能操作它",
   "loopback.unauthorized": "缺少本次启动的凭据，重开 Studio 再试",
