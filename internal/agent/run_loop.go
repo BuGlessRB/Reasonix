@@ -264,23 +264,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 			prevPrefixShape = prefixShape
 		}
 
-		// Drain reasons queued since the previous capture (compaction,
-		// snip/prune, rewind, guardian merge) so CompareShape can attribute
-		// any prefix change to the operation that actually caused it, instead
-		// of a generic rewrite signal that also fires on local-only metadata
-		// edits.
-		contentReasons := a.sess.conversation.DrainContentRewriteReasons()
-		if len(contentReasons) > 0 {
-			// A provider-visible rewrite can have folded away the only copy of
-			// the step ids the model was shown.
-			a.noteTodoIdentityLost()
-		}
-		// Rides the tail like the budget notice above: the canonical list stays
-		// out of the cache-stable prefix, only the ids a sign-off must cite are
-		// put back where the model can read them.
-		if projection := a.todoIdentityProjection(); projection != "" {
-			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(projection)})
-		}
+		contentReasons := a.settleRewritesBeforeSampling()
 
 		// Prefix shape is captured once before sampling and frozen for the
 		// whole attempt lifecycle — stream retries must not rewrite session
@@ -333,10 +317,9 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		})
 
 		if len(calls) == 0 {
-			if boundary.fact != "" {
+			if a.recordTruncationFact(boundary) {
 				// The truncated tail was the whole batch: nothing ran and no
 				// answer was finished, so the host fact is this round's result.
-				a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(boundary.fact)})
 				continue
 			}
 			cont, ferr := a.handleFinalResponse(ctx, state, text, reasoning, usage)
@@ -349,10 +332,10 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		// Invariant: executeBatch only ever receives tool calls from a
 		// committed sampling attempt (clean terminal + response intercept).
 		cont, terr := a.handleToolRound(planmode.WithAuthority(ctx, authority), state, step, text, reasoning, calls, usage)
-		if cont && boundary.fact != "" {
+		if cont {
 			// After the tool results, never between them and their call: the
 			// provider requires an unbroken assistant/tool pairing.
-			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(boundary.fact)})
+			a.recordTruncationFact(boundary)
 		}
 		if !cont {
 			return terr
@@ -362,6 +345,36 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 	// is already in the session, so the user can just send another message to pick
 	// up where it left off.
 	return a.gracePause(state)
+}
+
+// settleRewritesBeforeSampling closes out whatever changed the conversation
+// since the last request and returns the reasons, which CompareShape needs to
+// attribute a prefix change to the operation that caused it rather than to a
+// generic rewrite signal that also fires on local-only metadata edits.
+func (a *Agent) settleRewritesBeforeSampling() []string {
+	reasons := a.sess.conversation.DrainContentRewriteReasons()
+	if len(reasons) > 0 {
+		// A provider-visible rewrite can have folded away the only copy of the
+		// step ids the model was shown.
+		a.noteTodoIdentityLost()
+	}
+	// Rides the tail like the context-budget notice: the canonical list stays
+	// out of the cache-stable prefix, and only the ids a sign-off must cite go
+	// back where the model can read them.
+	if projection := a.todoIdentityProjection(); projection != "" {
+		a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(projection)})
+	}
+	return reasons
+}
+
+// recordTruncationFact hands the model the host's reading of a response that
+// ended at a limit. It reports whether one was owed.
+func (a *Agent) recordTruncationFact(boundary responseBoundary) bool {
+	if boundary.fact == "" {
+		return false
+	}
+	a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(boundary.fact)})
+	return true
 }
 
 // streamWithSamplingRecovery coordinates Codex-style original-request replay
