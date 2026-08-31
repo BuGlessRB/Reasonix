@@ -151,10 +151,6 @@ when something resembling it exists.
   the shell is orchestration and an event name — which means this moves to the
   kernel rather than being written a second time in JavaScript.
 
-- **Plugin export.** `SavePluginExport` packs and writes in one binding. The
-  packing is business the kernel should own and the writing is a `saveBytes`
-  the port already has; neither half has moved.
-
 - **The release line.** `release-studio.yml` and `scripts/studio-build.sh`
   build, sign and notarize the Wails bundle on three platforms, and an installed
   build updates itself into the next one. This is not in section 6's list
@@ -178,6 +174,15 @@ when something resembling it exists.
   that cannot start a project. The panel blocks until answered, so no test can
   reach past it — that it opens over the window was driven by hand, and the two
   answers it can give are held by `frontend-next/src/port/host_picker.test.ts`.
+
+- **Plugin export.** There was never a gap here, only a shortcut. The canonical
+  path — the kernel packs at `GET /plugins/{name}/export`, the shell writes the
+  bytes through `saveBytes` — is what every client but Wails already takes, and
+  `internal/serve/plugins_test.go` holds the packing half. `SavePluginExport`
+  exists because a WKWebView starts no download of its own and that shell never
+  implemented `saveBytes`, so it routes around its own limitation rather than
+  holding a semantic the other shell lacks. Checked against the real Electron
+  shell: the endpoint answers, and the save panel opens over the window.
 
 - **Remote workspaces.** The link layer is `internal/remotehost` now — a host
   adapter that implements serve's port and is assembled by both shells, rather
