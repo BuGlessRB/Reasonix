@@ -5,6 +5,7 @@
 // arrives more than once, and it must not become two answerable cards — and
 // survival, because a rebuild re-reads the record and a prompt is not in it.
 import type { Item, SessionState } from "./session_types";
+import type { DecisionReceipt } from "../port/wire";
 
 // The id the kernel correlates an answer by, which is what makes two frames one
 // prompt. Local item ids cannot: a replay mints a new one every time.
@@ -35,18 +36,43 @@ export function prompted(s: SessionState, doing: string, next: Item): SessionSta
   return { ...s, doing, items };
 }
 
-// The host's projection is the authority on what is still waiting. A card this
-// window holds open that the projection no longer lists was resolved elsewhere
-// — another window, a revise, a cancelled turn. Seal it so it cannot be
-// answered twice, and leave it on screen: deleting it loses the record.
-export function sealResolvedElsewhere(s: SessionState, open: string[]): SessionState {
-  const waiting = new Set(open);
-  let changed = false;
-  const items = s.items.map((it) => {
-    const key = promptKey(it);
-    if (key === undefined || !promptOpen(it) || waiting.has(key)) return it;
-    changed = true;
-    return it.t === "ask" ? { ...it, answered: [] } : { ...it, verdict: "stale" };
-  });
-  return changed ? { ...s, items } : s;
+// A prompt answered somewhere else — another window, a revise — is a transition,
+// and the kernel records every one it settles on the same ordered stream as the
+// request. That ordering is the point: the projection this used to read is a
+// snapshot, and one taken before the prompt existed omits it exactly as a
+// resolved one does. Sealing on that wedged the run the prompt was blocking.
+export function sealByReceipt(s: SessionState, r: DecisionReceipt): SessionState {
+  const at = s.items.findIndex((it) => promptKey(it) === r.id && promptOpen(it));
+  if (at < 0) return s; // already sealed here, or never on this screen
+  const items = s.items.slice();
+  const it = items[at];
+  if (it.t === "ask") items[at] = { ...it, answered: [] };
+  else if (it.t === "approval") items[at] = { ...it, verdict: verdictOf(r.outcome) };
+  else return s;
+  return { ...s, items };
+}
+
+// verdictOf picks the sealed line from the outcome the kernel recorded. The
+// switch covers what it issues; an outcome added later draws the default line
+// rather than being guessed into one of these.
+function verdictOf(outcome: string): string {
+  switch (outcome) {
+    case "allow_session":
+      return "always";
+    case "allow_persistent":
+      return "persist";
+    case "deny":
+    case "recovery_revise":
+      return "deny";
+    case "start_execution":
+      return "start";
+    case "revise_plan":
+      return "revise";
+    case "exit_plan":
+      return "exit";
+    case "recovery_continue_task":
+      return "always";
+    default:
+      return "once";
+  }
 }

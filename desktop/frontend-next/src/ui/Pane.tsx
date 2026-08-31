@@ -162,11 +162,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // would repaint the rail and the composer for no news at all.
   const applyStatus = useCallback((next: SessionStatus) => {
     setStatus((prev) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
-    // The host says what is still waiting. A card this window is holding open
-    // that the projection no longer lists was resolved somewhere else — another
-    // window, a revise, a cancelled turn — so it stops being answerable here.
-    // Sealing rather than deleting keeps the record of what was on screen.
-    if (next.decisions) dispatch({ kind: "__projected", open: next.decisions.map((d) => d.id) } as never);
   }, []);
 
   const refreshStatus = useCallback(() => {

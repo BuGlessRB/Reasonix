@@ -30,7 +30,6 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
       <div className="c">
         <div className="hl">
           <span className="nm">{t("要动手了")}</span>
-          <span className="tag">approval_request</span>
         </div>
         <div className="out">
           <div className="apv" data-sealed={sealed ? item.verdict : undefined}>
@@ -58,6 +57,8 @@ export function ApprovalCard({ item, onApprove, onPlan }: Props) {
                   <><b>{t("本会话不再问这一类。")}</b>{t("核心把它记进会话授权，不落盘。")}</>
                 ) : item.verdict === "deny" ? (
                   <><b>{t("已拒绝。")}</b>{t("agent 收到否决，会另想办法或停手。")}</>
+                ) : item.verdict === "persist" ? (
+                  <><b>{t("已记成规则。")}</b>{t("写进了配置，以后的会话也不再问这一类。")}</>
                 ) : (
                   <><b>{t("允许这一次。")}</b>{t("下次同样的操作仍会问你。")}</>
                 )}

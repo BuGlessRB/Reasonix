@@ -440,6 +440,8 @@ export const EN: Record<string, string> = {
   "允许这一次。": "Allowed once.",
   "本会话不再问这一类。": "Will not ask again this session for this kind.",
   "已拒绝。": "Denied.",
+  "已记成规则。": "Recorded as a rule.",
+  "写进了配置，以后的会话也不再问这一类。": "Written to the config; later sessions will not ask for this kind either.",
   "推荐": "Recommended",
   "其他 —— 我自己写": "Something else — I will write it",
   "你": "You",

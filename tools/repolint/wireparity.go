@@ -16,6 +16,7 @@ const (
 	tsWireFile     = "desktop/frontend-next/src/port/wire.ts"
 	tsBoundaryFile = "desktop/frontend-next/src/port/boundary.ts"
 	tsRemoteFile   = "desktop/frontend-next/src/port/remote.ts"
+	tsSessionFile  = "desktop/frontend-next/src/port/session.ts"
 )
 
 // mirroredWireTypes are the Go types the desktop keeps a second, hand-written
@@ -44,6 +45,15 @@ var mirroredWireTypes = []wireMirror{
 	{"internal/serve/hub_remote.go", "RemoteHostView", tsRemoteFile, "RemoteHost"},
 	{"internal/serve/remote_browse.go", "RemoteListing", tsRemoteFile, "RemoteListing"},
 	{"internal/serve/remote_browse.go", "RemoteFolder", tsRemoteFile, "RemoteFolder"},
+	// What waits on the user, and which call answers it. The desktop reads this
+	// list as the whole set of open prompts — one it cannot read is a card it
+	// seals as decided while the run stays blocked on it.
+	{"internal/control/decisions.go", "Decision", tsSessionFile, "Decision"},
+	{"internal/control/decisions.go", "DecisionQuestion", tsSessionFile, "DecisionQuestion"},
+	{"internal/control/decisions.go", "DecisionOption", tsSessionFile, "DecisionOption"},
+	// How a window learns a prompt was answered in another one. A field it
+	// cannot read is a card left answerable over a decision already made.
+	{"internal/eventwire/wire.go", "DecisionReceipt", tsWireFile, "DecisionReceipt"},
 }
 
 type wireMirror struct {

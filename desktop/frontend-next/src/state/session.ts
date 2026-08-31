@@ -9,7 +9,7 @@ import { showsReceipt } from "./prefs";
 // The types live next door; this stays their way in, so no reader of a
 // session has to know they were split off.
 export type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, Waiting };
-import { promptOpen, prompted, sealResolvedElsewhere } from "./prompts";
+import { promptOpen, prompted, sealByReceipt } from "./prompts";
 export { quoteAmount };
 export { showsReceipt };
 
@@ -272,7 +272,6 @@ export type SessionEvent =
   | { kind: "__unsent"; id: string }
   | { kind: "__queued"; id: string; itemId: string; queued: "steer" | "followup" }
   | { kind: "__decided"; id: string; verdict?: string; answers?: string[][] }
-  | { kind: "__projected"; open: string[] }
   | { kind: "__forgot"; id: string }
   | { kind: "__runtime_seen"; id: string };
 
@@ -321,7 +320,6 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
       items: s.items.map((i) => (i.t === "remember" && i.id === ev.id ? { ...i, forgotten: true } : i)),
     };
   }
-  if (ev.kind === "__projected") return sealResolvedElsewhere(s, ev.open);
   // The card reads its sealed state off the item, so the decision has to be
   // recorded here — otherwise an answered question stays answerable forever.
   if (ev.kind === "__decided") {
@@ -368,6 +366,8 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
   if ((s.waiting.ttftSince || s.waiting.retry) && !holdsWait.has(ev.kind)) {
     s = { ...s, waiting: {} };
   }
+  // Rides the frame that carries it, so the notice still lands in the record.
+  if ("decisionReceipt" in ev && ev.decisionReceipt) s = sealByReceipt(s, ev.decisionReceipt);
   switch (ev.kind) {
     case "turn_started":
       return { ...s, running: true, doing: "运行中", waiting: { ttftSince: Date.now() } };

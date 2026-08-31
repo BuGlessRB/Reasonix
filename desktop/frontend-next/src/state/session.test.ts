@@ -401,4 +401,36 @@ describe("a question the run is still blocked on", () => {
     const s = run([asking("ask-1"), asking("ask-2")]);
     expect(asks(s)).toHaveLength(2);
   });
+
+  // What seals a card the user did not click is the decision the kernel
+  // recorded, which arrives on the same ordered stream as the request. It used
+  // to be the /status projection, polled four times a second: a snapshot taken
+  // before the prompt existed omits it exactly as a resolved one does, so a
+  // card could be sealed within 250ms of arriving while the run stayed blocked
+  // on it — buttons gone, and the line underneath claiming it was allowed.
+  const receipt = (id: string, outcome: string): SessionEvent =>
+    ({ kind: "notice", code: "decision_receipt", decisionReceipt: { id, kind: "tool", outcome } }) as SessionEvent;
+  const answerable = (s: SessionState) =>
+    s.items.filter((i): i is Extract<Item, { t: "approval" }> => i.t === "approval" && i.verdict === undefined);
+
+  it("stays answerable until a decision is actually recorded", () => {
+    const s = run([approving("apv-1"), approving("apv-2")]);
+    expect(answerable(s).map((i) => i.a.id)).toEqual(["apv-1", "apv-2"]);
+  });
+
+  it("seals the one the receipt names, with what was decided", () => {
+    const s = run([approving("apv-1"), approving("apv-2"), receipt("apv-1", "deny")]);
+    expect(answerable(s).map((i) => i.a.id)).toEqual(["apv-2"]);
+    const sealed = s.items.find((i) => i.t === "approval" && i.a.id === "apv-1") as Extract<Item, { t: "approval" }>;
+    expect(sealed.verdict, "the outcome the kernel recorded, not a guess").toBe("deny");
+  });
+
+  // The receipt for the click this window made arrives right behind it. It must
+  // not reopen or relabel a card the user already watched settle.
+  it("leaves a card this window already sealed alone", () => {
+    const clicked = run([approving("apv-1")]);
+    const local = reduce(clicked, { kind: "__decided", id: clicked.items[0].id, verdict: "always" } as SessionEvent);
+    const s = reduce(local, receipt("apv-1", "allow_session"));
+    expect((s.items[0] as Extract<Item, { t: "approval" }>).verdict).toBe("always");
+  });
 });

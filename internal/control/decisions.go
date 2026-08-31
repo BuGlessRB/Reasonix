@@ -19,6 +19,10 @@ type DecisionKind string
 const (
 	// DecisionPlanApproval is answered by ResolvePlanDecision.
 	DecisionPlanApproval DecisionKind = "plan_approval"
+	// DecisionToolApproval is answered by Approve.
+	DecisionToolApproval DecisionKind = "tool_approval"
+	// DecisionRecoveryApproval is answered by ResolveRecovery.
+	DecisionRecoveryApproval DecisionKind = "recovery_approval"
 	// DecisionAsk is answered by AnswerQuestion.
 	DecisionAsk DecisionKind = "ask"
 )
@@ -66,9 +70,10 @@ func projectQuestions(qs []event.AskQuestion) []DecisionQuestion {
 }
 
 // Decisions snapshots what waits on the user, derived from the owning
-// subsystems each time it is asked for and never the thing they derive from.
-// The host serialises prompts, so today it holds at most one; the shape does
-// not assume that, because a frontend would then depend on it.
+// subsystems each time it is asked for, never the thing they derive from. It is
+// the whole set: a frontend seals a prompt this list omits as answered
+// elsewhere, so a kind left out wedges the run it blocks. Kind keeps the owners
+// apart instead; the host serialises prompts, so today it holds at most one.
 func (c *Controller) Decisions() []Decision {
 	if c == nil {
 		return nil
@@ -84,10 +89,7 @@ func (a *approvalManager) projectDecisions() []Decision {
 	defer a.mu.Unlock()
 	out := make([]Decision, 0, len(a.asks)+1)
 	for id, pending := range a.approvals {
-		if pending.tool != planApprovalTool {
-			continue // ordinary tool permission has its own owner and its own card
-		}
-		out = append(out, Decision{ID: id, Kind: DecisionPlanApproval})
+		out = append(out, Decision{ID: id, Kind: approvalDecisionKind(pending)})
 	}
 	for id, pending := range a.asks {
 		// A queued ask is included: it is already blocking the turn, and this is
@@ -97,6 +99,21 @@ func (a *approvalManager) projectDecisions() []Decision {
 	}
 	sortDecisions(out)
 	return out
+}
+
+// approvalDecisionKind names the call that settles this approval. It reads the
+// entry's shape rather than a label it carries: the recovery payload is what
+// only ResolveRecovery can answer, and the plan gate is the one tool name the
+// kernel issues for itself.
+func approvalDecisionKind(p pendingApproval) DecisionKind {
+	switch {
+	case p.recovery != nil:
+		return DecisionRecoveryApproval
+	case p.tool == planApprovalTool:
+		return DecisionPlanApproval
+	default:
+		return DecisionToolApproval
+	}
 }
 
 // sortDecisions keeps the projection stable across repeated snapshots: Go map

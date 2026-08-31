@@ -110,9 +110,13 @@ export interface DecisionQuestion {
 // issued. The id goes back untouched — the frontend never describes the state
 // it thinks the run is in, and never resolves a decision itself: it disappears
 // when the next projection no longer carries it.
+//
+// Every open prompt is in the list, and kind says which call answers it. That
+// completeness is what makes a card missing from it mean "answered elsewhere"
+// rather than "this kind is not projected".
 export interface Decision {
   id: string;
-  kind: "plan_approval" | "ask";
+  kind: "plan_approval" | "tool_approval" | "recovery_approval" | "ask";
   questions?: DecisionQuestion[];
 }
 

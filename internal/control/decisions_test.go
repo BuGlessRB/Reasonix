@@ -76,6 +76,59 @@ func TestDecisionsProjectBothOwnersWithStableIdentity(t *testing.T) {
 	waitForDecisions(t, c, 0)
 }
 
+// The projection is what a frontend uses to tell an open prompt from one
+// answered in another window, so a pending approval missing from it reads as
+// already decided: the card seals, its buttons go, and the run it is blocking
+// waits for an answer nobody can give any more. Ordinary tool permission was
+// the kind left out.
+func TestOrdinaryToolApprovalIsProjectedWhileItBlocksTheRun(t *testing.T) {
+	c := New(Options{Sink: event.Discard})
+	defer c.Close()
+	c.EnableInteractiveApproval()
+
+	go c.requestApproval(context.Background(), approvalRequest{tool: "bash", subject: "git branch -a"})
+	card := waitForDecisions(t, c, 1)[0]
+	if card.Kind != DecisionToolApproval || card.ID == "" {
+		t.Fatalf("bash projection = %+v, want an identified tool_approval", card)
+	}
+	if len(card.Questions) != 0 {
+		t.Errorf("an approval is not a question: %+v", card)
+	}
+
+	c.Approve(card.ID, true, false, false)
+	waitForDecisions(t, c, 0)
+}
+
+// Three owners answer an approval — Approve, ResolvePlanDecision,
+// ResolveRecovery — and the kind is how a frontend routes back to the right
+// one. Reading it off the entry's shape keeps a recovery card from being
+// offered the ordinary allow/deny pair, which resolves nothing.
+func TestApprovalKindsNameTheCallThatAnswersThem(t *testing.T) {
+	c := New(Options{Sink: event.Discard})
+	defer c.Close()
+	c.EnableInteractiveApproval()
+
+	tool, _ := c.approval.registerDecisionKind("bash", "git branch -a", "", false, true, "", nil)
+	plan, _ := c.approval.registerDecisionKind(planApprovalTool, "", "", true, false, "", nil)
+	guard, _ := c.approval.registerDecisionKind("write_file", "src/main.go", "", false, true, "recovery",
+		&event.RecoveryApproval{FailedTool: "bash", NextTool: "write_file"})
+
+	want := map[string]DecisionKind{
+		tool:  DecisionToolApproval,
+		plan:  DecisionPlanApproval,
+		guard: DecisionRecoveryApproval,
+	}
+	got := map[string]DecisionKind{}
+	for _, d := range waitForDecisions(t, c, len(want)) {
+		got[d.ID] = d.Kind
+	}
+	for id, kind := range want {
+		if got[id] != kind {
+			t.Errorf("decision %s projected %q, want %q", id, got[id], kind)
+		}
+	}
+}
+
 // Reading the projection changes nothing. A client that never asks for it, asks
 // twice, or ignores it entirely must leave the lifecycle exactly where it was —
 // otherwise it is state wearing a projection's name.

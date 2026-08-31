@@ -166,6 +166,17 @@ export interface Approval {
   kind?: "tool" | "plan" | "recovery";
 }
 
+// DecisionReceipt is what the kernel recorded when a prompt was settled, on the
+// same ordered stream as the request that raised it. Outcome is its vocabulary,
+// not the buttons': a window that did not click is told what the click was.
+export interface DecisionReceipt {
+  id: string;
+  kind: string;
+  tool?: string;
+  subject?: string;
+  outcome: string;
+}
+
 export interface AskOption {
   label: string;
   description?: string;
@@ -506,6 +517,7 @@ export interface WireEvent {
   completion?: CompletionSummary;
   graph?: GraphDelta;
   receipt?: Receipt;
+  decisionReceipt?: DecisionReceipt;
   err?: string;
   // turn_done: the user asked to stop. A cancelled turn and a dropped
   // connection both end with a context-canceled err; only this tells them apart.
