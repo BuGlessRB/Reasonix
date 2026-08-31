@@ -89,7 +89,9 @@ func TestWindowsUpdateRequiresObservedHelperHandoff(t *testing.T) {
 	if !strings.Contains(source, "cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}") {
 		t.Fatal("Windows handoff helper should stay hidden while NSIS shows update progress")
 	}
-	helperData, err := os.ReadFile("../../cmd/update-helper/main_windows.go")
+	// The helper is still built by Studio's release line and so still lives in
+	// the desktop module; this contract spans both sides of that line.
+	helperData, err := os.ReadFile("../../desktop/cmd/update-helper/main_windows.go")
 	if err != nil {
 		t.Fatal(err)
 	}

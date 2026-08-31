@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/desktop/internal/update"
 	"reasonix/internal/repair"
+	"reasonix/internal/update"
 )
 
 func TestLoadWindowsStagedReleaseUnitPreflightsAllMembersAndPublishesDesktopLast(t *testing.T) {

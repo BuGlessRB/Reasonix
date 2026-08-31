@@ -44,8 +44,24 @@ type Updater struct {
 	opts Options
 }
 
-// New returns an Updater for the running build.
-func New(opts Options) *Updater { return &Updater{opts: opts} }
+// New returns an Updater for the running build, with TrustedRedirect on copies
+// of the caller's clients: everything fetched here is release bytes, and a
+// client assembled from netclient carries no redirect policy of its own.
+func New(opts Options) *Updater {
+	opts.HTTP, opts.Fallback = guarded(opts.HTTP), guarded(opts.Fallback)
+	return &Updater{opts: opts}
+}
+
+// guarded copies rather than mutates: the shells hand in a client the rest of
+// the app shares. A caller that already chose a policy keeps it.
+func guarded(c *http.Client) *http.Client {
+	if c == nil || c.CheckRedirect != nil {
+		return c
+	}
+	copyOfClient := *c
+	copyOfClient.CheckRedirect = TrustedRedirect
+	return &copyOfClient
+}
 
 // Status is what a version panel renders and what an auto-updater decides on.
 // Entries is the whole catalog, newest first, because a rollback needs the

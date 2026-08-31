@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/desktop/internal/update"
 	"reasonix/internal/config"
 	"reasonix/internal/netclient"
+	"reasonix/internal/update"
 )
 
 // version is stamped by the build (-X main.version=…); an unstamped dev build

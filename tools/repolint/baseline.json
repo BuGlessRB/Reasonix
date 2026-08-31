@@ -5,14 +5,14 @@
     "commented-code": 0,
     "complexity": 1513,
     "error-text": 12,
-    "essay": 3245,
-    "file-size": 41718,
+    "essay": 3243,
+    "file-size": 41714,
     "frontend-parity": 150,
     "function-size": 6596,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
-    "orphan": 124,
+    "orphan": 123,
     "refusal-path": 0,
     "spec-parity": 0,
     "struct-state": 41,
@@ -44,17 +44,6 @@
     },
     "desktop/cmd/update-helper/versioned_windows.go": {
       "essay": 10
-    },
-    "desktop/internal/update/apply_darwin.go": {
-      "complexity": 42,
-      "essay": 1,
-      "function-size": 180
-    },
-    "desktop/internal/update/install_windows.go": {
-      "essay": 1
-    },
-    "desktop/internal/update/manifest.go": {
-      "essay": 1
     },
     "desktop/internal/winuninstall/registry_windows.go": {
       "essay": 1
@@ -229,7 +218,7 @@
       "orphan": 1
     },
     "internal/agent/run_loop.go": {
-      "essay": 23,
+      "essay": 21,
       "function-size": 2
     },
     "internal/agent/run_usage.go": {
@@ -698,7 +687,7 @@
     },
     "internal/config/provider_presets.go": {
       "claude-dialect": 1,
-      "file-size": 267,
+      "file-size": 263,
       "orphan": 1
     },
     "internal/config/render.go": {
@@ -1402,7 +1391,7 @@
       "file-size": 2901,
       "function-size": 308,
       "narrative": 2,
-      "orphan": 14
+      "orphan": 13
     },
     "internal/repair/update_handoff_darwin_smoke_test.go": {
       "essay": 4
@@ -1622,6 +1611,17 @@
     },
     "internal/tool/tool.go": {
       "essay": 15
+    },
+    "internal/update/apply_darwin.go": {
+      "complexity": 42,
+      "essay": 1,
+      "function-size": 180
+    },
+    "internal/update/install_windows.go": {
+      "essay": 1
+    },
+    "internal/update/manifest.go": {
+      "essay": 1
     },
     "internal/workspaceid/workspaceid.go": {
       "orphan": 1

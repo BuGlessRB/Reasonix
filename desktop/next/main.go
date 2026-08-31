@@ -30,7 +30,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"reasonix/desktop/internal/update"
 	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/crashreport"
@@ -41,6 +40,7 @@ import (
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
 	"reasonix/internal/traystate"
+	"reasonix/internal/update"
 
 	// Kinds register from init, so a binary builds only what it links. Without
 	// these the shell answers every Anthropic model with "unknown kind" at

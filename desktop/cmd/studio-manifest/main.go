@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/desktop/internal/update"
+	"reasonix/internal/update"
 )
 
 const artifactPrefix = "ReasonixStudio-"

@@ -5,7 +5,7 @@ package main
 import (
 	"context"
 
-	"reasonix/desktop/internal/update"
+	"reasonix/internal/update"
 )
 
 // applyDownloaded installs what was downloaded, by staging it into the

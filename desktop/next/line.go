@@ -3,7 +3,7 @@ package main
 import (
 	"runtime"
 
-	"reasonix/desktop/internal/update"
+	"reasonix/internal/update"
 )
 
 // studioLine is Studio's identity to the shared update path. Every system path

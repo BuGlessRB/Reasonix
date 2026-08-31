@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"reasonix/desktop/internal/update"
+	"reasonix/internal/update"
 )
 
 func rowVersions(rows []VersionEntry) []string {

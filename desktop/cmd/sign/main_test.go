@@ -10,7 +10,7 @@ import (
 
 	"aead.dev/minisign"
 
-	"reasonix/desktop/internal/update"
+	"reasonix/internal/update"
 )
 
 // TestSignFiles signs a file with a throwaway key pair (injected via env, exactly

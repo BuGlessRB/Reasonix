@@ -10,8 +10,8 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"reasonix/desktop/internal/update"
 	"reasonix/internal/netclient"
+	"reasonix/internal/update"
 )
 
 // updateEventName carries install progress to the version panel. It is separate
