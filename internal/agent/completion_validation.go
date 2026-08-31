@@ -36,7 +36,7 @@ func resolveCompletionEvaluator(opts Options) completioneval.Evaluator {
 		return opts.CompletionEvaluator
 	}
 	if opts.CompletionEvaluatorFactory != nil {
-		return opts.CompletionEvaluatorFactory()
+		return opts.CompletionEvaluatorFactory(opts.ModelRef)
 	}
 	return nil
 }

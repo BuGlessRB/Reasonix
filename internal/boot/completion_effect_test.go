@@ -5,11 +5,15 @@ package boot
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/completioneval"
+	"reasonix/internal/config"
 	"reasonix/internal/event"
+	"reasonix/internal/netclient"
 	"reasonix/internal/provider"
 )
 
@@ -146,6 +150,93 @@ func TestEffectCompletionValidatorEnforceCompleteFinishes(t *testing.T) {
 	_, validator := splitValidatorRequests(reqs)
 	if len(validator) != 1 {
 		t.Fatalf("validator requests = %d, want 1", len(validator))
+	}
+}
+
+func TestEffectCompletionValidatorEnforceMissingModelPauses(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+	rec := &verdictProvider{verdict: `{"outcome":"complete"}`}
+	provider.Register("boot-effect-cv-missing-model", func(provider.Config) (provider.Provider, error) { return rec, nil })
+	writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+completion_validation = "enforce"
+completion_evaluator_model = "missing-model"
+
+[environment]
+enabled = false
+
+[[providers]]
+name = "test-model"
+kind = "boot-effect-cv-missing-model"
+model = "x"
+`)
+	ctrl, err := Build(context.Background(), Options{Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+	err = ctrl.Run(context.Background(), "reply ok")
+	var pause *agent.CompletionUncertainError
+	if !errors.As(err, &pause) || pause.Cause != agent.CompletionUncertainValidatorFailed || pause.Detail != "unavailable" {
+		t.Fatalf("Run error = %v, want unavailable completion pause", err)
+	}
+	_, validator := splitValidatorRequests(rec.requests())
+	if len(validator) != 0 {
+		t.Fatalf("validator requests = %d, want none for an unresolved evaluator model", len(validator))
+	}
+}
+
+func TestCompletionEvaluatorFactoryFollowsEffectiveAgentModel(t *testing.T) {
+	root := &verdictProvider{verdict: `{"outcome":"complete"}`}
+	child := &verdictProvider{verdict: `{"outcome":"complete"}`}
+	provider.Register("boot-effect-cv-route-root", func(provider.Config) (provider.Provider, error) { return root, nil })
+	provider.Register("boot-effect-cv-route-child", func(provider.Config) (provider.Provider, error) { return child, nil })
+	provider.Register("boot-effect-cv-route-broken", func(provider.Config) (provider.Provider, error) {
+		return nil, errors.New("provider construction failed")
+	})
+	cfg := config.Default()
+	cfg.Agent.CompletionValidation = config.CompletionValidationShadow
+	cfg.Providers = []config.ProviderEntry{
+		{Name: "eval-root", Kind: "boot-effect-cv-route-root", Model: "root-model"},
+		{Name: "eval-child", Kind: "boot-effect-cv-route-child", Model: "child-model"},
+		{Name: "eval-broken", Kind: "boot-effect-cv-route-broken", Model: "broken-model"},
+	}
+	factory := newCompletionEvalFactory(cfg, nil, netclient.ProxySpec{}, event.Discard)
+	if _, err := factory("eval-root/root-model").Evaluate(context.Background(), completioneval.Evidence{CandidateAnswer: "root"}); err != nil {
+		t.Fatalf("root evaluator: %v", err)
+	}
+	if _, err := factory("eval-child/child-model").Evaluate(context.Background(), completioneval.Evidence{CandidateAnswer: "child"}); err != nil {
+		t.Fatalf("child evaluator: %v", err)
+	}
+	if got := len(root.requests()); got != 1 {
+		t.Fatalf("root evaluator requests = %d, want 1", got)
+	}
+	if got := len(child.requests()); got != 1 {
+		t.Fatalf("child evaluator requests = %d, want 1", got)
+	}
+
+	cfg.Agent.CompletionEvaluatorModel = "eval-root"
+	overrideFactory := newCompletionEvalFactory(cfg, nil, netclient.ProxySpec{}, event.Discard)
+	if _, err := overrideFactory("eval-child/child-model").Evaluate(context.Background(), completioneval.Evidence{CandidateAnswer: "override"}); err != nil {
+		t.Fatalf("overridden evaluator: %v", err)
+	}
+	if got := len(root.requests()); got != 2 {
+		t.Fatalf("root evaluator requests after override = %d, want 2", got)
+	}
+	if got := len(child.requests()); got != 1 {
+		t.Fatalf("child evaluator requests after override = %d, want 1", got)
+	}
+
+	cfg.Agent.CompletionEvaluatorModel = ""
+	brokenFactory := newCompletionEvalFactory(cfg, nil, netclient.ProxySpec{}, event.Discard)
+	_, err := brokenFactory("eval-broken/broken-model").Evaluate(context.Background(), completioneval.Evidence{})
+	if err == nil || !strings.Contains(err.Error(), "completion evaluator unavailable") {
+		t.Fatalf("broken evaluator error = %v, want unavailable", err)
 	}
 }
 

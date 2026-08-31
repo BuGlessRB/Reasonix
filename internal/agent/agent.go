@@ -1050,7 +1050,7 @@ type Options struct {
 	LegacyAnchorSafetyGate bool
 
 	CompletionEvaluator        completioneval.Evaluator
-	CompletionEvaluatorFactory func() completioneval.Evaluator
+	CompletionEvaluatorFactory func(modelRef string) completioneval.Evaluator
 	CompletionValidation       string
 }
 

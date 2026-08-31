@@ -162,9 +162,11 @@ console.log("\nbundle budgets");
 // one-decimal ratchet.
 // The generation-bound history-prepend lease adds stable-key reader anchoring,
 // full mounted coverage, and one final arbiter-owned correction. The measured
-// path is 457.406 KiB after extracting the lease owner to satisfy repolint;
-// retain 0.094 KiB with the same one-decimal ratchet.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 457.5 : 457.5;
+// path is 457.406 KiB after extracting the lease owner to satisfy repolint.
+// Completion uncertainty adds a distinct terminal notice and complete English
+// recovery guidance; the measured path is 457.522 KiB. Retain 0.078 KiB with
+// the smallest one-decimal ratchet.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 457.6 : 457.6;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -217,9 +219,10 @@ for (const path of localeChunks) {
   // retain roughly 0.13 KiB of platform headroom for each.
   // Stream-failure diagnostics add five strings per dialect. Together with the
   // reachable-tail recovery copy, the merged chunks measure 58.923 KiB zh and
-  // 59.710 KiB zh-TW. Retain the complete copy with the smallest one-decimal
-  // ratchet for each dialect.
-  const budget = name.startsWith("zh-TW-") ? 59.8 * 1024 : 59.0 * 1024;
+  // 59.710 KiB zh-TW. Completion uncertainty raises the complete localized
+  // guidance to 59.007 KiB zh and 59.791 KiB zh-TW; retain roughly 0.1 KiB of
+  // bounded platform headroom for both dialects.
+  const budget = name.startsWith("zh-TW-") ? 59.9 * 1024 : 59.1 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -286,6 +289,9 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // The extracted history-prepend owner adds 3.953 KiB of bounded transaction
 // state and stable-key coverage checks. The measured path is 2451.906 KiB;
 // retain 0.094 KiB with the same one-decimal ratchet.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_452.0 : 2_452.0;
+// Completion uncertainty adds a distinct terminal notice and localized startup
+// copy. The measured path is 2452.4 KiB; retain the smallest one-decimal
+// ratchet instead of collapsing the state into the recovery-paused notice.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_452.5 : 2_452.5;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

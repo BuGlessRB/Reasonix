@@ -339,12 +339,15 @@ func TestCompletionValidatorEventIsContentFree(t *testing.T) {
 // concurrent children each hold their own session.
 func TestSubagentOptionsCarryIndependentEvaluatorSession(t *testing.T) {
 	var built int
-	factory := func() completioneval.Evaluator {
+	var evaluatedModel string
+	factory := func(modelRef string) completioneval.Evaluator {
 		built++
+		evaluatedModel = modelRef
 		return &scriptedEvaluator{}
 	}
 	tt := &TaskTool{completionEvaluatorFactory: factory, completionValidation: CompletionValidationEnforce}
 	opts := tt.subagentOptions(context.Background(), 0, nil, 0, 1, "", nil)
+	opts.ModelRef = "child/worker"
 	if opts.CompletionValidation != CompletionValidationEnforce {
 		t.Fatalf("child validation mode = %q", opts.CompletionValidation)
 	}
@@ -354,6 +357,9 @@ func TestSubagentOptionsCarryIndependentEvaluatorSession(t *testing.T) {
 	child := New(nil, tool.NewRegistry(), NewSession("sys"), opts, event.Discard)
 	if built != 1 {
 		t.Fatalf("factory builds = %d, want one when New derives the child session", built)
+	}
+	if evaluatedModel != opts.ModelRef {
+		t.Fatalf("evaluator model = %q, want child model %q", evaluatedModel, opts.ModelRef)
 	}
 	if child.completionEvaluator == nil {
 		t.Fatal("child agent has no evaluator session")

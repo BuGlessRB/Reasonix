@@ -292,7 +292,7 @@ type TaskTool struct {
 	// sub-agent gets its own use_capability frontend so ledger state stays
 	// isolated while connections reuse the parent Host.
 	capabilityRuntime          *MCPCapabilityRuntime
-	completionEvaluatorFactory func() completioneval.Evaluator
+	completionEvaluatorFactory func(modelRef string) completioneval.Evaluator
 	completionValidation       string
 }
 
@@ -318,7 +318,7 @@ type TaskToolOptions struct {
 	SubagentModel                         string
 	SubagentEffort                        string
 	ResolveProvider                       func(string, string) (provider.Provider, *provider.Pricing, int, error)
-	CompletionEvaluatorFactory            func() completioneval.Evaluator
+	CompletionEvaluatorFactory            func(modelRef string) completioneval.Evaluator
 	CompletionValidation                  string
 }
 

@@ -1,6 +1,8 @@
 package boot
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -9,17 +11,18 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/event"
 	"reasonix/internal/netclient"
+	"reasonix/internal/provider"
 )
 
 // completionEval wires the completion validator into agent/task options.
 type completionEval struct {
-	factory func() completioneval.Evaluator
+	factory func(modelRef string) completioneval.Evaluator
 	mode    string
 }
 
-func newCompletionEval(cfg *config.Config, modelRef string, proxySpec netclient.ProxySpec, sink event.Sink) completionEval {
+func newCompletionEval(cfg *config.Config, resolver provider.Resolver, proxySpec netclient.ProxySpec, sink event.Sink) completionEval {
 	mode := cfg.Agent.CompletionValidationMode()
-	return completionEval{factory: newCompletionEvalFactory(cfg, modelRef, proxySpec, sink), mode: mode}
+	return completionEval{factory: newCompletionEvalFactory(cfg, resolver, proxySpec, sink), mode: mode}
 }
 
 func (c completionEval) options(opts agent.Options) agent.Options {
@@ -34,33 +37,48 @@ func (c completionEval) taskOptions(opts agent.TaskToolOptions) agent.TaskToolOp
 	return opts
 }
 
-// newCompletionEvalFactory builds the completion-validator session factory.
-// The validator follows the working model unless explicitly configured, so
-// session content never implicitly crosses to another model. Each agent
-// (executor, planner, every sub-agent) draws its own session from the factory,
-// so concurrent validation calls never serialize. When the provider cannot be
-// built the factory stays nil and the deterministic host repairs keep working.
-func newCompletionEvalFactory(cfg *config.Config, modelRef string, proxySpec netclient.ProxySpec, sink event.Sink) func() completioneval.Evaluator {
+// newCompletionEvalFactory resolves each evaluator from the Agent's effective
+// model unless completion_evaluator_model explicitly selects another target.
+func newCompletionEvalFactory(cfg *config.Config, resolver provider.Resolver, proxySpec netclient.ProxySpec, sink event.Sink) func(string) completioneval.Evaluator {
 	mode := cfg.Agent.CompletionValidationMode()
 	if mode == config.CompletionValidationOff {
 		return nil
 	}
-	evalRef := modelRef
-	if m := strings.TrimSpace(cfg.Agent.CompletionEvaluatorModel); m != "" {
-		evalRef = m
+	return func(modelRef string) completioneval.Evaluator {
+		evalRef := strings.TrimSpace(modelRef)
+		if configured := strings.TrimSpace(cfg.Agent.CompletionEvaluatorModel); configured != "" {
+			evalRef = configured
+		}
+		entry, selectedRef, ok := completionEvalTarget(cfg, resolver, evalRef)
+		if !ok {
+			err := fmt.Errorf("model %q not found", evalRef)
+			slog.Warn("completion evaluator unavailable", "model", evalRef, "err", err)
+			return unavailableCompletionEvaluator{err: fmt.Errorf("completion evaluator unavailable: %w", err)}
+		}
+		cProv, err := resolveProvider(resolver, cfg, proxySpec, provider.Selection{Ref: selectedRef})
+		if err != nil {
+			slog.Warn("completion evaluator unavailable", "model", evalRef, "err", err)
+			return unavailableCompletionEvaluator{err: fmt.Errorf("completion evaluator unavailable: %w", err)}
+		}
+		return completioneval.NewSession(cProv, entry.Price, modelRefFromEntry(entry), sink)
 	}
-	ce, ok := cfg.ResolveModel(evalRef)
+}
+
+func completionEvalTarget(cfg *config.Config, resolver provider.Resolver, ref string) (*config.ProviderEntry, string, bool) {
+	if resolver != nil {
+		if entry := syntheticEntryFromResolver(resolver, ref); strings.TrimSpace(entry.Name) != "" {
+			return entry, modelRefFromEntry(entry), true
+		}
+	}
+	entry, ok := cfg.ResolveModel(ref)
 	if !ok {
-		slog.Warn("completion evaluator model not found — validation runs off", "model", evalRef)
-		return nil
+		return nil, ref, false
 	}
-	cProv, err := NewProviderWithProxy(ce, proxySpec)
-	if err != nil {
-		slog.Warn("completion evaluator provider construction failed — validation runs off", "model", evalRef, "err", err)
-		return nil
-	}
-	price, refLabel := ce.Price, modelRefFromEntry(ce)
-	return func() completioneval.Evaluator {
-		return completioneval.NewSession(cProv, price, refLabel, sink)
-	}
+	return entry, modelRefFromEntry(entry), true
+}
+
+type unavailableCompletionEvaluator struct{ err error }
+
+func (e unavailableCompletionEvaluator) Evaluate(context.Context, completioneval.Evidence) (completioneval.Verdict, error) {
+	return completioneval.Verdict{}, e.err
 }

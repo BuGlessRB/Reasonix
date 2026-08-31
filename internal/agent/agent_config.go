@@ -20,7 +20,7 @@ type agentConfig struct {
 	// completionValidation is the fixed off|shadow|enforce mode.
 	completionValidation string
 	// completionEvaluatorFactory builds a per-child evaluator session.
-	completionEvaluatorFactory func() completioneval.Evaluator
+	completionEvaluatorFactory func(modelRef string) completioneval.Evaluator
 	// workspaceID is a prompt-cache lineage component, so it must not move
 	// while an agent lives — a change would silently rekey the cache.
 	workspaceID string

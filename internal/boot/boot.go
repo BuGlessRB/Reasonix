@@ -1051,7 +1051,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 		return ""
 	}
-	bashSandboxEnforced, completionEval := bashSpec.Enforce, newCompletionEval(cfg, modelRef, proxySpec, sink)
+	bashSandboxEnforced, completionEval := bashSpec.Enforce, newCompletionEval(cfg, effectiveResolver, proxySpec, sink)
 	taskToolAdded := false
 	readOnlyTaskToolAdded := false
 	var taskTool *agent.TaskTool
