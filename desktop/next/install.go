@@ -71,7 +71,7 @@ func (a *App) GoToVersion(target string) error {
 	if _, ok := m.Asset(); !ok {
 		return a.failUpdate(target, fmt.Errorf("%s 没有 %s 的可安装包，请到 %s 手动下载", target, update.CurrentPlatform(), m.DownloadPage))
 	}
-	if err := a.PinVersion(target); err != nil {
+	if err := update.Pin(target); err != nil {
 		return a.failUpdate(target, err)
 	}
 	cached, err := u.DownloadManifest(ctx, m, a.updateReport(target))
@@ -95,7 +95,7 @@ func (a *App) installNativePackage(ctx context.Context, cacheDir, target string,
 	if err != nil {
 		return a.failUpdate(target, err)
 	}
-	if err := a.PinVersion(target); err != nil {
+	if err := update.Pin(target); err != nil {
 		return a.failUpdate(target, err)
 	}
 	cached, err := u.DownloadManifest(ctx, m, a.updateReport(target))

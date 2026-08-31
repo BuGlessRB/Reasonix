@@ -207,10 +207,13 @@ export class SsePort extends SseTheme implements AgentPort {
     return this.post0<StoragePlan>("/storage/move", { root, dir });
   }
 
+  // Which build runs belongs to the application, not to a pane: a remote pane's
+  // base names another machine, whose version is not the one this window would
+  // install. So these two ignore this port's base, the way the tray does.
   async versions(): Promise<VersionHub> {
-    const bind = (window as unknown as WailsBind).go?.main?.App?.Versions;
-    if (!bind) return { current: "", pinned: "", stalePin: false, latest: "", newer: false, versions: [] };
-    return (await bind()) as VersionHub;
+    const res = await fetch("/studio/versions", { credentials: "same-origin" });
+    if (!res.ok) await SsePort.fail("/studio/versions", res);
+    return (await res.json()) as VersionHub;
   }
 
   // The icon belongs to the window, not to a pane, so these two are the one
@@ -232,8 +235,13 @@ export class SsePort extends SseTheme implements AgentPort {
   }
 
   async pinVersion(version: string): Promise<void> {
-    const bind = (window as unknown as WailsBind).go?.main?.App?.PinVersion;
-    if (bind) await bind(version);
+    const res = await fetch("/studio/pin", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ version }),
+    });
+    if (!res.ok) await SsePort.fail("/studio/pin", res);
   }
 
   async goToVersion(version: string): Promise<void> {

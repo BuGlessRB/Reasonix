@@ -145,11 +145,12 @@ when something resembling it exists.
   own PID. Under Electron the owner, the executable and the wait condition are
   three different processes.
 
-- **Version pinning and the install path.** `Versions`, `PinVersion` and
-  `GoToVersion` are still Wails bindings; every other client answers null. The
-  business half already sits in `desktop/internal/update`, so what is left in
-  the shell is orchestration and an event name — which means this moves to the
-  kernel rather than being written a second time in JavaScript.
+- **The install path.** `GoToVersion` is the last of the three still bound to
+  Wails. It cannot move as it stands: `apply_darwin.go` recognizes a bundle by
+  `.app/Contents/MacOS/` and `Layout` is built from the running executable, both
+  of which hold under a single binary that *is* the application and neither of
+  which holds under Electron, where the process is the framework and what needs
+  replacing is the bundle around it. Its shape follows the release line.
 
 - **The release line.** `release-studio.yml` and `scripts/studio-build.sh`
   build, sign and notarize the Wails bundle on three platforms, and an installed
@@ -158,6 +159,19 @@ when something resembling it exists.
   no longer ships, and an installed 2.x has nowhere to update to.
 
 ### Cleared
+
+- **Version reading and pinning.** `update.Hub` reads the catalog in the kernel
+  from an `Install` the shell states — which build runs, and where it lives —
+  because that is the half a kernel cannot resolve: inside a bundle
+  `os.Executable()` names the host binary. `GET /studio/versions` and
+  `POST /studio/pin` answer over the transport both shells speak, and the Wails
+  bindings are gone rather than kept beside them. Checked against the real
+  Electron shell, which is also where the identity trap showed up:
+  `app.getVersion()` falls back to Electron's own version when the application
+  has none, so an unpackaged build reported a Studio that never shipped and
+  ranked it ahead of every published release. Only a packaged build states a
+  version now; an unpackaged one declares no install and the routes refuse by
+  name, which is the true answer for a build that is not a release.
 
 - **Single instance.** The identity moved out to `internal/instanceid`, where it
   is a canonicalized data home rather than an application, and Electron's lock

@@ -211,6 +211,9 @@ func run(logs io.Writer) error {
 	// A first connect can stop for a host key nobody has seen or a locked key.
 	// Both are questions, and the broker is where they live until answered.
 	asks := serve.NewAskBroker(nil)
+	// What this shell is and where it lives; the kernel resolves neither for a
+	// process that is not the application.
+	install := shell.install()
 	// One hub, several panes: each session gets its own runtime, so a second
 	// conversation runs beside the first instead of rebuilding it.
 	hub := serve.NewHub(serve.HubOptions{
@@ -223,9 +226,10 @@ func run(logs io.Writer) error {
 			shell.stopPump(rt)
 			tracker.Drop(paneKey(rt.Events))
 		},
-		Remote: remotehost.New(ctx, version, asks),
-		Asks:   asks,
-		Tray:   shell,
+		Remote:  remotehost.New(ctx, version, asks),
+		Asks:    asks,
+		Tray:    shell,
+		Install: &install,
 	})
 	shell.hub = hub
 	srv := serve.New(ctrl, bc, cfg.Serve)

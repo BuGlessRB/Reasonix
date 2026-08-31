@@ -30,6 +30,7 @@ import (
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
 	"reasonix/internal/traystate"
+	"reasonix/internal/update"
 
 	// Kinds register from init, so a binary builds only what it links. Without
 	// these every Anthropic model answers "unknown kind" at switch time.
@@ -51,9 +52,24 @@ const (
 	studioPrefix = "/_studio/"
 )
 
+// studioInstall is what the shell told us about itself. A launch that named no
+// version gets no install at all, so the version routes refuse by name rather
+// than answering for a build nobody claimed. The layout stays empty until a
+// shell can state one: reading the catalog needs no install path, and applying
+// one from a guess is how a swap lands on the wrong bundle.
+func studioInstall(version string) *update.Install {
+	if strings.TrimSpace(version) == "" {
+		return nil
+	}
+	return &update.Install{Version: version}
+}
+
 func main() {
 	page := flag.String("page", "", "directory holding the built Studio page")
 	identity := flag.Bool("instance-id", false, "print the Studio instance this data home belongs to, and exit")
+	// The shell around this process knows which build it is; this process does
+	// not. os.Executable() here names the host binary, not the application.
+	studioVersion := flag.String("studio-version", "", "the Studio build this host is serving")
 	flag.Parse()
 	// Which launches are the same Studio is Reasonix's question, not a shell's:
 	// the answer is the canonicalized data home, and a shell asks for it rather
@@ -62,13 +78,13 @@ func main() {
 		fmt.Fprintln(os.Stdout, instanceid.Current())
 		return
 	}
-	os.Exit(run(parentLease(os.Stdin), os.Stdout, os.Stderr, *page))
+	os.Exit(run(parentLease(os.Stdin), os.Stdout, os.Stderr, *page, *studioVersion))
 }
 
 // run serves until the lease ends or the process is signalled. stdout carries
 // the handshake and nothing else, because the parent parses the first line it
 // reads there; every log goes to logs.
-func run(lease io.Reader, handshakeTo, logs io.Writer, page string) int {
+func run(lease io.Reader, handshakeTo, logs io.Writer, page, studioVersion string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if lease != nil {
@@ -86,7 +102,7 @@ func run(lease io.Reader, handshakeTo, logs io.Writer, page string) int {
 		return 1
 	}
 
-	hub, err := assemble(ctx, logs)
+	hub, err := assemble(ctx, logs, studioVersion)
 	if err != nil {
 		fmt.Fprintln(logs, "reasonix-studio-host:", err)
 		return 1
@@ -248,7 +264,7 @@ func hasIndex(dir string) bool {
 
 // assemble builds the hub this host serves: one pane on the workspace it was
 // launched in, carrying the capabilities a local window may exercise.
-func assemble(ctx context.Context, logs io.Writer) (*serve.Hub, error) {
+func assemble(ctx context.Context, logs io.Writer, studioVersion string) (*serve.Hub, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, err
@@ -291,6 +307,7 @@ func assemble(ctx context.Context, logs io.Writer) (*serve.Hub, error) {
 		Asks:         asks,
 		Remote:       remotehost.New(ctx, version, asks),
 		OnClose:      func(rt *serve.Runtime) { tracker.Drop(paneKey(rt.Events)) },
+		Install:      studioInstall(studioVersion),
 	})
 	srv := serve.New(built.Controller, bc, hubCfg)
 	srv.SetPaneSink(paneSink)

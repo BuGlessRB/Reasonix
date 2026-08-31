@@ -28,7 +28,14 @@ let client = null;
 let tray = null;
 
 async function boot() {
-  kernel = start(hostBinary, ["-page", pageDir], {
+  // Which build this is belongs to the shell: inside the bundle the kernel's
+  // own os.Executable() names the host binary, not the application around it.
+  // Only a packaged build has a version worth reporting -- app.getVersion()
+  // falls back to Electron's own, which named a Studio that never shipped and
+  // ranked it ahead of every published release.
+  const args = ["-page", pageDir];
+  if (app.isPackaged) args.push("-studio-version", app.getVersion());
+  kernel = start(hostBinary, args, {
     onStderr: (text) => process.stderr.write(text),
     onExit: (code) => {
       if (code !== 0 && !quitting) app.quit();
