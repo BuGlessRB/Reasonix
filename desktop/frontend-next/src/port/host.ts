@@ -28,6 +28,11 @@ export interface HostPort {
    *  surface at all; "" means they dismissed the dialog, which is an answer. */
   saveText(name: string, content: string): Promise<string | null>;
   saveBytes(name: string, bytes: Uint8Array): Promise<string | null>;
+  /** Ask for a directory. null means this shell has no picker at all; "" means
+   *  they dismissed it, the same two answers saveText gives. startIn is where
+   *  to open: the shell owns the dialog, the kernel owns which workspace runs,
+   *  so the page carries one to the other. */
+  pickFolder(startIn: string): Promise<string | null>;
 }
 
 // The preload bridge. Verbs only: the origin the page was loaded from and the
@@ -44,6 +49,7 @@ interface ElectronBridge {
   pathForFile(file: File): string;
   saveText(name: string, content: string): Promise<string>;
   saveBytes(name: string, bytes: Uint8Array): Promise<string>;
+  pickFolder(startIn: string): Promise<string>;
 }
 
 interface WailsShell {
@@ -57,6 +63,7 @@ interface WailsShell {
         CloseWindow?: () => Promise<void>;
         OpenExternal?: (url: string) => Promise<void>;
         SaveText?: (name: string, content: string) => Promise<string>;
+        PickWorkspace?: () => Promise<string>;
       };
     };
   };
@@ -107,6 +114,9 @@ class ElectronHost implements HostPort {
   saveBytes(name: string, bytes: Uint8Array) {
     return this.api.saveBytes(name, bytes);
   }
+  pickFolder(startIn: string) {
+    return this.api.pickFolder(startIn);
+  }
 }
 
 class WailsHost implements HostPort {
@@ -142,6 +152,12 @@ class WailsHost implements HostPort {
   saveBytes() {
     return Promise.resolve(null);
   }
+  // The Go side titles the panel and opens it on the running workspace, which
+  // it reads from the kernel directly, so startIn is the page telling this
+  // shell something it already knows.
+  async pickFolder() {
+    return (await wails()?.PickWorkspace?.()) ?? null;
+  }
 }
 
 // A tab has no window of its own to drive: the chrome that would call these is
@@ -166,6 +182,9 @@ class BrowserHost implements HostPort {
     return Promise.resolve(null);
   }
   saveBytes() {
+    return Promise.resolve(null);
+  }
+  pickFolder() {
     return Promise.resolve(null);
   }
 }

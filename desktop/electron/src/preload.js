@@ -28,4 +28,5 @@ contextBridge.exposeInMainWorld("reasonixHost", {
   },
   saveText: (name, content) => ipcRenderer.invoke("dialog:save-text", String(name), String(content)),
   saveBytes: (name, bytes) => ipcRenderer.invoke("dialog:save-bytes", String(name), bytes),
+  pickFolder: (startIn) => ipcRenderer.invoke("dialog:pick-folder", String(startIn)),
 });

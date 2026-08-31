@@ -48,7 +48,7 @@ async function run() {
     placed: typeof window.reasonixHost?.pathForFile(new File(['x'], 'x.txt')),
   }))()`);
 
-  const verbs = ["closeWindow", "isWindowMaximised", "minimiseWindow", "openExternal", "pathForFile", "platform", "saveBytes", "saveText", "shell", "titleBar", "toggleMaximiseWindow"];
+  const verbs = ["closeWindow", "isWindowMaximised", "minimiseWindow", "openExternal", "pathForFile", "pickFolder", "platform", "saveBytes", "saveText", "shell", "titleBar", "toggleMaximiseWindow"];
   check("the bridge exposes verbs and nothing else", JSON.stringify(seen.bridge) === JSON.stringify(verbs), seen.bridge);
   check("the credential never reaches the page", !seen.cookie.includes("reasonix_token"), seen.cookie);
   check("the renderer has no node of its own", seen.globals.every((t) => t === "undefined"), seen.globals);
@@ -274,6 +274,9 @@ async function menuChecks(win, js) {
   await js(`document.getElementById('smoke-probe')?.remove()`);
   process.stdout.write("  note the key-equivalent hop (Cmd-C reaching the copy role) is not reachable\n");
   process.stdout.write("  note from a test; it was accepted by hand at the OS event layer.\n");
+  process.stdout.write("  note the folder panel opens over the window and blocks until answered, so\n");
+  process.stdout.write("  note what it returns is not reachable here either; the verb and the panel\n");
+  process.stdout.write("  note opening were driven by hand, the two answers by unit test.\n");
 }
 
 app.whenReady().then(async () => {

@@ -7,7 +7,6 @@ export interface WailsBind {
   go?: {
     main?: {
       App?: {
-        PickWorkspace?: () => Promise<string>;
         Versions?: () => Promise<VersionHub>;
         PinVersion?: (version: string) => Promise<void>;
         GoToVersion?: (version: string) => Promise<void>;

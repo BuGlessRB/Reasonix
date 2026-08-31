@@ -174,6 +174,21 @@ ipcMain.handle("dialog:save-bytes", (event, name, bytes) =>
   saveTo(event, name, (path) => fs.writeFile(path, Buffer.from(bytes))),
 );
 
+// createDirectory is the half that carries meaning: a panel that can only open
+// what exists reads as an app that cannot start a project, which is what the
+// Wails picker was reported as before it said so. A dismissed panel answers ""
+// like the save dialogs, and startIn is dropped when it names nothing.
+ipcMain.handle("dialog:pick-folder", async (event, startIn) => {
+  const target = fromWindow(event);
+  if (!target) return "";
+  const picked = await dialog.showOpenDialog(target, {
+    defaultPath: startIn || undefined,
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (picked.canceled || !picked.filePaths.length) return "";
+  return picked.filePaths[0];
+});
+
 // Named before any path is derived from it: userData hangs off the app name,
 // and a name that depended on how this was launched would put two launches of
 // the same install on two profiles — and so on two locks.

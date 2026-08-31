@@ -321,9 +321,13 @@ export class SsePort extends SseTheme implements AgentPort {
   }
 
   async pickFolder(): Promise<string | null> {
-    const bind = (window as unknown as WailsBind).go?.main?.App?.PickWorkspace;
-    if (!bind) return null;
-    return (await bind()) ?? "";
+    // Which workspace is running is the kernel's to answer, so it is read here
+    // and handed to the shell rather than kept by either shell -- a picker that
+    // opened on a folder the window remembered would be a second copy of it.
+    const startIn = await this.workspaces()
+      .then((w) => w.current)
+      .catch(() => "");
+    return host().pickFolder(startIn);
   }
 
   sessions() {

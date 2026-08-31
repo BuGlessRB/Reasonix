@@ -141,18 +141,43 @@ when something resembling it exists.
 
 ### Functional parity — these block retirement
 
-- **Single instance.** Wails locks per canonicalized `REASONIX_HOME`, so two
-  homes coexist and one home never opens twice. Electron's own lock has no such
-  key, and the identity is Reasonix's rather than the shell's.
-
 - **Updater.** The macOS handoff re-executes the running binary and waits on its
   own PID. Under Electron the owner, the executable and the wait condition are
   three different processes.
 
-- **Version pinning** and the **folder picker.** Still answered by Wails
-  bindings; every other client answers null.
+- **Version pinning and the install path.** `Versions`, `PinVersion` and
+  `GoToVersion` are still Wails bindings; every other client answers null. The
+  business half already sits in `desktop/internal/update`, so what is left in
+  the shell is orchestration and an event name — which means this moves to the
+  kernel rather than being written a second time in JavaScript.
+
+- **Plugin export.** `SavePluginExport` packs and writes in one binding. The
+  packing is business the kernel should own and the writing is a `saveBytes`
+  the port already has; neither half has moved.
+
+- **The release line.** `release-studio.yml` and `scripts/studio-build.sh`
+  build, sign and notarize the Wails bundle on three platforms, and an installed
+  build updates itself into the next one. This is not in section 6's list
+  because deleting it breaks nothing at compile time — it just means the tree
+  no longer ships, and an installed 2.x has nowhere to update to.
 
 ### Cleared
+
+- **Single instance.** The identity moved out to `internal/instanceid`, where it
+  is a canonicalized data home rather than an application, and Electron's lock
+  keys on a profile placed under that identity. Cleared on the product chain: a
+  second launch over the same home leaves and raises the window already holding
+  it, the kernel that one is holding answers afterwards, a launch over another
+  home runs, and a home whose holder was killed outright opens again.
+  `desktop/electron/test/smoke.js` drives all four against the real shell.
+
+- **Folder picker.** A `HostPort` verb now, not a Wails binding. Which workspace
+  the panel opens on is read from the kernel and handed across, so neither shell
+  keeps a copy of it, and `createDirectory` carries the half that had to be
+  learned once already: a panel that can only open what exists reads as an app
+  that cannot start a project. The panel blocks until answered, so no test can
+  reach past it — that it opens over the window was driven by hand, and the two
+  answers it can give are held by `frontend-next/src/port/host_picker.test.ts`.
 
 - **Remote workspaces.** The link layer is `internal/remotehost` now — a host
   adapter that implements serve's port and is assembled by both shells, rather
@@ -171,3 +196,7 @@ when something resembling it exists.
 
 - **Window bounds.** Electron clamps to the display it opens on but does not yet
   remember where it was.
+
+- **Panel title.** The Wails picker titles its panel from the shell's own
+  strings. Electron's passes none: macOS ignores a title on an open panel, and
+  the wording lives in the page rather than in either shell.
