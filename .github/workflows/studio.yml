@@ -117,3 +117,129 @@ jobs:
           for os in windows linux darwin; do
             CGO_ENABLED=0 GOOS=$os GOARCH=amd64 go build -o /dev/null ./cmd/reasonix-studio-host
           done
+
+  # The packaging contract, on real artifacts rather than on the config that
+  # describes them. Unsigned on purpose: signing and notarization are a
+  # distribution concern and belong to the release workflow, and treating their
+  # absence as "packaging unverified" is what left macOS and Linux resting on a
+  # cross-compile while only Windows had ever produced a package.
+  package:
+    name: package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            arch: arm64
+            platform: darwin
+          - os: ubuntu-22.04
+            arch: amd64
+            platform: linux
+          - os: windows-latest
+            arch: amd64
+            platform: windows
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: desktop/go.mod
+          cache: true
+          cache-dependency-path: desktop/go.sum
+
+      - uses: pnpm/action-setup@v6.0.9
+        with:
+          version: 10
+          run_install: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: desktop/electron/pnpm-lock.yaml
+
+      # electron-builder shells out to dpkg-deb through fakeroot for the .deb.
+      - name: Install Linux packaging deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fakeroot
+
+      - name: Build the SPA
+        working-directory: desktop/frontend-next
+        run: pnpm install --frozen-lockfile && pnpm build
+
+      - name: Build the kernel the shell speaks to
+        working-directory: desktop/electron
+        run: pnpm install --frozen-lockfile && pnpm run build:host
+
+      # No identity on a runner, and none wanted here: auto-discovery would make
+      # this job fail for the one reason it is not testing.
+      - name: Package
+        working-directory: desktop/electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: pnpm run build:dist
+
+      # The release vocabulary is GOARCH. electron-builder's own is not, and the
+      # rename that reconciles them runs here rather than in the manifest.
+      - name: Artifacts carry the release architecture
+        run: |
+          ls -la dist
+          if ls dist | grep -q -- '-x64'; then
+            echo "::error::an artifact still names x64; studio-manifest reads names as GOARCH"
+            exit 1
+          fi
+          if ! ls dist | grep -q -- "-${{ matrix.platform }}-${{ matrix.arch }}"; then
+            echo "::error::no artifact named for ${{ matrix.platform }}-${{ matrix.arch }}"
+            exit 1
+          fi
+
+      # The update channel is the signed manifest. A second answer to which
+      # version is current is not a convenience.
+      - name: No electron-updater metadata
+        run: |
+          if ls dist | grep -qiE '^(latest|beta|alpha).*\.yml$'; then
+            echo "::error::electron-updater metadata was published beside the manifest channel"
+            exit 1
+          fi
+
+      # A binary inside app.asar cannot be spawned and the kernel serves the SPA
+      # off disk, so both have to be resources. Found rather than asserted at a
+      # path, because the unpacked directory is named by the builder.
+      - name: The kernel and the page are resources, not archive members
+        run: |
+          host=$(find dist -type f -path '*/bin/reasonix-studio-host*' ! -path '*app.asar*' | head -1)
+          page=$(find dist -type f -path '*/frontend-next/dist/index.html' ! -path '*app.asar*' | head -1)
+          echo "kernel: ${host:-<missing>}"
+          echo "page:   ${page:-<missing>}"
+          test -n "$host" -a -n "$page"
+
+      # Recorded, not asserted: the real bundle layout, so later work argues
+      # from what electron-builder produced rather than from its documentation.
+      - name: Record the macOS bundle layout
+        if: runner.os == 'macOS'
+        run: |
+          app=$(find dist -maxdepth 2 -name '*.app' | head -1)
+          echo "app: $app"
+          ls "$app/Contents"
+          ls "$app/Contents/Resources" | head -20
+          ls "$app/Contents/Frameworks" | head -20
+
+      # The end of the contract: not that the name parses, but that the manifest
+      # keys the artifact under the platform this runner actually is. The tool
+      # writes latest.json into the directory and logs to stdout, so the check
+      # reads the file -- captured output would match its own progress line.
+      - name: studio-manifest resolves the platform this runner is
+        working-directory: desktop
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          go run ./cmd/studio-manifest ../dist v0.0.0-ci v0.0.0-ci
+          cat ../dist/latest.json
+          if ! grep -q '"${{ matrix.platform }}-${{ matrix.arch }}"' ../dist/latest.json; then
+            echo "::error::the manifest has no entry for ${{ matrix.platform }}-${{ matrix.arch }}"
+            exit 1
+          fi
