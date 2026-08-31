@@ -178,10 +178,17 @@ func TestParsePlanTodosCapsAtTwenty(t *testing.T) {
 	}
 }
 
+// newTestExecutor builds the executor through New rather than as a zero value.
+// New is where sink stops being nil -- it falls back to event.Discard -- and an
+// agent assembled around that gap panics on the first thing a seed observes.
+func newTestExecutor(sink event.Sink) *agent.Agent {
+	return agent.New(nil, nil, nil, agent.Options{}, sink)
+}
+
 func TestSeedPlanTodosSeedsAgentState(t *testing.T) {
 	var events []event.Event
 	sink := event.FuncSink(func(e event.Event) { events = append(events, e) })
-	executor := &agent.Agent{}
+	executor := newTestExecutor(sink)
 	c := &Controller{controllerDeps: controllerDeps{sink: sink, executor: executor}}
 	plan := "1. Add the parser\n2. Wire it up\n3. Add tests"
 	args := c.seedPlanTodos(plan)
@@ -206,7 +213,7 @@ func TestSeedPlanTodosSeedsAgentState(t *testing.T) {
 }
 
 func TestSeedPlanTodosEmptyPlanNoOp(t *testing.T) {
-	c := &Controller{controllerDeps: controllerDeps{sink: event.Discard, executor: &agent.Agent{}}}
+	c := &Controller{controllerDeps: controllerDeps{sink: event.Discard, executor: newTestExecutor(event.Discard)}}
 	args := c.seedPlanTodos("no list items here")
 	if args != "" {
 		t.Fatalf("empty plan returned args = %q, want empty", args)
@@ -216,7 +223,7 @@ func TestSeedPlanTodosEmptyPlanNoOp(t *testing.T) {
 func TestCompletePlanTodosMirrorsAgentState(t *testing.T) {
 	var events []event.Event
 	sink := event.FuncSink(func(e event.Event) { events = append(events, e) })
-	executor := &agent.Agent{}
+	executor := newTestExecutor(sink)
 	c := &Controller{controllerDeps: controllerDeps{sink: sink, executor: executor}}
 
 	args := c.seedPlanTodos("1. Add the parser\n2. Wire it up")
