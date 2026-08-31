@@ -44,6 +44,13 @@ branch.
 
 ### Fixed
 
+- **Premature natural-turn completion:** completion validation now defaults to
+  `enforce`, so a candidate that only promises future work is continued once
+  and then paused recoverably if it remains incomplete. The isolated evaluator
+  adds one bounded model request per candidate final (up to 30 seconds); users
+  can explicitly select `shadow` or `off`, including through
+  `REASONIX_COMPLETION_VALIDATION_MODE`.
+
 - **serve Host-header allowlist:** `reasonix serve` now rejects requests whose
   `Host` is neither loopback nor the actual listen address (HTTP 421), closing
   the DNS-rebinding bypass of the JSON content-type CSRF guard — a rebind page

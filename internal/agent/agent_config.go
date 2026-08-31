@@ -15,12 +15,13 @@ type agentConfig struct {
 	temperature        float64
 	usageSource        string
 	modelRef           string
-	// completionEvaluator validates candidate terminal turns; nil disables.
+	// completionEvaluator validates candidate terminal turns. A nil evaluator is
+	// treated as unavailable so enforce mode fails closed.
 	completionEvaluator completioneval.Evaluator
 	// completionValidation is the fixed off|shadow|enforce mode.
 	completionValidation string
 	// completionEvaluatorFactory builds a per-child evaluator session.
-	completionEvaluatorFactory func(modelRef string) completioneval.Evaluator
+	completionEvaluatorFactory CompletionEvaluatorFactory
 	// workspaceID is a prompt-cache lineage component, so it must not move
 	// while an agent lives — a change would silently rekey the cache.
 	workspaceID string

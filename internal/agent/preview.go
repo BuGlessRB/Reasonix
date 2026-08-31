@@ -288,6 +288,7 @@ var SyntheticUserPrefixes = []string{
 	"No tool calls in recent turns.",
 	HostRecoveryGuidanceToolFailedPrefix,
 	HostRecoveryGuidanceTransientPrefix,
+	CompletionValidationContinuationPrefix,
 }
 
 // IsHostRecoveryGuidance reports model-facing Auto Guard policy text.
@@ -333,11 +334,15 @@ func IsSyntheticUserText(content string) bool {
 	if IsHostRecoveryGuidance(trimmed) {
 		return true
 	}
-	if text, ok := SteerText(content); ok && IsHostRecoveryGuidance(text) {
-		return true
+	steerText, isSteer := SteerText(content)
+	if isSteer {
+		steerText = strings.TrimSpace(steerText)
+		if IsHostRecoveryGuidance(steerText) {
+			return true
+		}
 	}
 	for _, prefix := range SyntheticUserPrefixes {
-		if strings.HasPrefix(trimmed, prefix) {
+		if strings.HasPrefix(trimmed, prefix) || (isSteer && strings.HasPrefix(steerText, prefix)) {
 			return true
 		}
 	}

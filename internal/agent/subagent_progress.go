@@ -708,6 +708,8 @@ func (t *subagentProgressTracker) wrap() event.Sink {
 				e.UsageSource = event.UsageSourceSubagent
 			}
 			t.sink.Emit(e)
+		case event.CompletionValidation:
+			t.sink.Emit(e)
 		}
 	})
 }

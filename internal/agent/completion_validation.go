@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/completioneval"
 	"reasonix/internal/event"
+	"reasonix/internal/nilutil"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
@@ -31,12 +32,16 @@ func normalizeCompletionValidation(mode string) string {
 	}
 }
 
-func resolveCompletionEvaluator(opts Options) completioneval.Evaluator {
+// CompletionEvaluatorFactory creates one isolated evaluator session for an
+// agent and binds usage/audit events to that agent's owning sink.
+type CompletionEvaluatorFactory func(modelRef string, sink event.Sink) completioneval.Evaluator
+
+func resolveCompletionEvaluator(opts Options, sink event.Sink) completioneval.Evaluator {
 	if opts.CompletionEvaluator != nil {
 		return opts.CompletionEvaluator
 	}
 	if opts.CompletionEvaluatorFactory != nil {
-		return opts.CompletionEvaluatorFactory(opts.ModelRef)
+		return opts.CompletionEvaluatorFactory(opts.ModelRef, sink)
 	}
 	return nil
 }
@@ -56,14 +61,14 @@ const (
 
 // completionEnforced reports whether this agent strictly applies the validator.
 func (a *Agent) completionEnforced() bool {
-	return a.completionValidation == CompletionValidationEnforce && a.completionEvaluator != nil
+	return a.completionValidation == CompletionValidationEnforce
 }
 
 // validatorApplies reports whether this candidate terminal should be validated.
 // Active Goal turns are excluded: the Goal FSM already owns their continuation
 // through its own evaluator, and a second opinion here would double the calls.
 func (a *Agent) validatorApplies(ctx context.Context) bool {
-	if a.completionValidation == CompletionValidationOff || a.completionEvaluator == nil {
+	if a.completionValidation == CompletionValidationOff {
 		return false
 	}
 	if _, goalScoped := tool.GoalTurnRecorderFromContext(ctx); goalScoped {
@@ -91,7 +96,13 @@ func (a *Agent) validateCandidateCompletion(ctx context.Context, state *turnRunt
 	}
 	mode := a.completionValidation
 	started := time.Now()
-	verdict, err := a.completionEvaluator.Evaluate(ctx, a.completionEvidence(ctx, candidate))
+	var verdict completioneval.Verdict
+	var err error
+	if nilutil.IsNil(a.completionEvaluator) {
+		err = errors.New("completion evaluator unavailable")
+	} else {
+		verdict, err = a.completionEvaluator.Evaluate(ctx, a.completionEvidence(ctx, candidate))
+	}
 	duration := time.Since(started)
 
 	outcome, errClass := validatorOutcome(verdict, err)
@@ -155,8 +166,10 @@ func validatorErrorClass(err error) string {
 	}
 }
 
+const CompletionValidationContinuationPrefix = "The host could not confirm this turn is complete:"
+
 func completionContinueTailMessage() string {
-	return "The host could not confirm this turn is complete: the last message did not deliver a self-contained final result. If the request is already satisfied, reply now with the complete final answer. Otherwise continue the work and finish with the complete final answer; do not stop with only a summary of intentions."
+	return CompletionValidationContinuationPrefix + " the last message did not deliver a self-contained final result. If the request is already satisfied, reply now with the complete final answer. Otherwise continue the work and finish with the complete final answer; do not stop with only a summary of intentions."
 }
 
 // completionEvidence assembles the validator's structured evidence from
@@ -203,13 +216,28 @@ func (a *Agent) recentVisibleTurns() []completioneval.ContextTurn {
 	turns := make([]completioneval.ContextTurn, 0, completioneval.MaxRecentTurns)
 	for i := start; i >= 0 && len(turns) < completioneval.MaxRecentTurns; i-- {
 		m := msgs[i]
+		if m.LocalOnly {
+			continue
+		}
 		if m.Role != provider.RoleUser && m.Role != provider.RoleAssistant {
 			continue
 		}
-		if strings.TrimSpace(m.Content) == "" {
+		content := strings.TrimSpace(m.Content)
+		if m.Role == provider.RoleUser {
+			if strings.TrimSpace(m.RawContent) != "" {
+				content = UserMessageText(m)
+			} else if IsSyntheticUserText(m.Content) {
+				continue
+			} else if visible, ok := VisibleSteerText(m.Content); ok {
+				content = visible
+			} else {
+				content = UserMessageText(m)
+			}
+		}
+		if strings.TrimSpace(content) == "" {
 			continue
 		}
-		turns = append(turns, completioneval.ContextTurn{Role: string(m.Role), Content: m.Content})
+		turns = append(turns, completioneval.ContextTurn{Role: string(m.Role), Content: content})
 	}
 	for i, j := 0, len(turns)-1; i < j; i, j = i+1, j-1 {
 		turns[i], turns[j] = turns[j], turns[i]

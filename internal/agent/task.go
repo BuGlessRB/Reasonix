@@ -16,7 +16,6 @@ import (
 
 	"reasonix/internal/ablation"
 	"reasonix/internal/checkpoint"
-	"reasonix/internal/completioneval"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
@@ -292,7 +291,7 @@ type TaskTool struct {
 	// sub-agent gets its own use_capability frontend so ledger state stays
 	// isolated while connections reuse the parent Host.
 	capabilityRuntime          *MCPCapabilityRuntime
-	completionEvaluatorFactory func(modelRef string) completioneval.Evaluator
+	completionEvaluatorFactory CompletionEvaluatorFactory
 	completionValidation       string
 }
 
@@ -318,7 +317,7 @@ type TaskToolOptions struct {
 	SubagentModel                         string
 	SubagentEffort                        string
 	ResolveProvider                       func(string, string) (provider.Provider, *provider.Pricing, int, error)
-	CompletionEvaluatorFactory            func(modelRef string) completioneval.Evaluator
+	CompletionEvaluatorFactory            CompletionEvaluatorFactory
 	CompletionValidation                  string
 }
 

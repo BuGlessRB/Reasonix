@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -12,15 +13,22 @@ const (
 	CompletionValidationEnforce = "enforce"
 )
 
+// CompletionValidationModeEnv overrides the configured completion-validation mode.
+const CompletionValidationModeEnv = "REASONIX_COMPLETION_VALIDATION_MODE"
+
 // CompletionValidationMode returns the normalized completion-validation mode.
-// Empty (unconfigured) defaults to shadow: the validator runs in record-only
-// mode so behavior is unchanged while evidence accumulates.
+// Empty (unconfigured) defaults to enforce so ordinary turns fail closed when
+// the validator cannot confirm a self-contained result.
 func (a AgentConfig) CompletionValidationMode() string {
-	switch strings.TrimSpace(a.CompletionValidation) {
+	value := strings.TrimSpace(a.CompletionValidation)
+	if override := strings.TrimSpace(os.Getenv(CompletionValidationModeEnv)); override != "" {
+		value = override
+	}
+	switch value {
 	case CompletionValidationOff, CompletionValidationShadow, CompletionValidationEnforce:
-		return strings.TrimSpace(a.CompletionValidation)
+		return value
 	default:
-		return CompletionValidationShadow
+		return CompletionValidationEnforce
 	}
 }
 
@@ -35,13 +43,23 @@ func ValidateCompletionValidation(value string) error {
 	}
 }
 
+func validateCompletionValidationModes(configured string) error {
+	if err := ValidateCompletionValidation(configured); err != nil {
+		return err
+	}
+	if err := ValidateCompletionValidation(os.Getenv(CompletionValidationModeEnv)); err != nil {
+		return fmt.Errorf("%s: %w", CompletionValidationModeEnv, err)
+	}
+	return nil
+}
+
 // renderCompletionValidation writes the full-config [agent] block lines for
 // the completion validator.
 func renderCompletionValidation(b *strings.Builder, c *Config) {
 	if strings.TrimSpace(c.Agent.CompletionValidation) != "" {
-		fmt.Fprintf(b, "completion_validation = %q   # off | shadow | enforce (empty defaults to shadow)\n", c.Agent.CompletionValidation)
+		fmt.Fprintf(b, "completion_validation = %q   # off | shadow | enforce (empty defaults to enforce)\n", c.Agent.CompletionValidation)
 	} else {
-		b.WriteString("# completion_validation = \"shadow\"   # completion validator mode: off | shadow | enforce\n")
+		b.WriteString("# completion_validation = \"enforce\"   # completion validator mode: off | shadow | enforce\n")
 	}
 	if strings.TrimSpace(c.Agent.CompletionEvaluatorModel) != "" {
 		fmt.Fprintf(b, "completion_evaluator_model = %q   # optional; empty follows the working model\n", c.Agent.CompletionEvaluatorModel)

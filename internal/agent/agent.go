@@ -1050,7 +1050,7 @@ type Options struct {
 	LegacyAnchorSafetyGate bool
 
 	CompletionEvaluator        completioneval.Evaluator
-	CompletionEvaluatorFactory func(modelRef string) completioneval.Evaluator
+	CompletionEvaluatorFactory CompletionEvaluatorFactory
 	CompletionValidation       string
 }
 
@@ -1125,7 +1125,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 			recentKeep:                 opts.RecentKeep,
 			archiveDir:                 opts.ArchiveDir,
 			legacyAnchorSafetyGate:     opts.LegacyAnchorSafetyGate,
-			completionEvaluator:        resolveCompletionEvaluator(opts),
+			completionEvaluator:        resolveCompletionEvaluator(opts, sink),
 			completionValidation:       normalizeCompletionValidation(opts.CompletionValidation),
 			completionEvaluatorFactory: opts.CompletionEvaluatorFactory,
 		},

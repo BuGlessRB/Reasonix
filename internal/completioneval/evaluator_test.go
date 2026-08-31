@@ -197,6 +197,24 @@ func TestEvidenceIsBoundedAndClippedAtRuneBoundaries(t *testing.T) {
 	}
 }
 
+func TestEvidenceSemanticClippingKeepsTerminalCaveat(t *testing.T) {
+	tail := "FINAL CAVEAT: tests were not run and work remains"
+	ev := Evidence{
+		TaskText:        "inspect the repository",
+		CandidateAnswer: "Result: " + strings.Repeat("x", MaxCandidateBytes*2) + tail,
+	}
+	payload, err := buildEvidence(ev)
+	if err != nil {
+		t.Fatalf("buildEvidence() error = %v", err)
+	}
+	if !strings.Contains(payload, "middle truncated") || !strings.Contains(payload, tail) {
+		t.Fatalf("payload lost the truncation marker or terminal caveat: %s", payload)
+	}
+	if !utf8.ValidString(payload) || len(payload) > MaxEvidenceBytes {
+		t.Fatalf("payload validity/size = %v/%d", utf8.ValidString(payload), len(payload))
+	}
+}
+
 func TestEvidenceKeepsMostRecentTurns(t *testing.T) {
 	ev := Evidence{
 		RecentTurns: []ContextTurn{

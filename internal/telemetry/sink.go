@@ -147,9 +147,18 @@ func (s *sink) observe(e event.Event) {
 		}
 	case event.Usage:
 		if e.Usage != nil {
+			if e.UsageSource == event.UsageSourceCompletionEvaluator {
+				counts := map[string]int{}
+				add(counts, "completion_evaluator_finish_reason", finishReasonBucket(e.Usage.FinishReason), 1)
+				add(counts, "completion_evaluator_cache_hit", cacheBucket(e.Usage.CacheHitTokens, e.Usage.CacheMissTokens), 1)
+				s.reporter.append(counts)
+				break
+			}
 			add(s.counts, "finish_reason", finishReasonBucket(e.Usage.FinishReason), 1)
 			add(s.counts, "cache_hit", cacheBucket(e.Usage.CacheHitTokens, e.Usage.CacheMissTokens), 1)
 		}
+	case event.CompletionValidation:
+		s.reporter.append(completionValidationCounters(e.CompletionValidation))
 	case event.ToolResult:
 		if e.Tool.Err != "" {
 			add(s.counts, "tool_error", toolErrorBucket(e.Tool.Err), 1)
@@ -178,6 +187,26 @@ func (s *sink) observe(e event.Event) {
 		s.hasText = false
 		s.emptyFinalSeen = false
 	}
+}
+
+func completionValidationCounters(info *event.CompletionValidationInfo) map[string]int {
+	if info == nil {
+		return nil
+	}
+	counts := map[string]int{}
+	mode := enumBucket(info.Mode, "off", "shadow", "enforce")
+	outcome := enumBucket(info.Outcome, "complete", "continue", "needs_user", "blocked", "uncertain", "error")
+	add(counts, "completion_validation_outcome", mode+"_"+outcome, 1)
+	add(counts, "completion_validation_latency", latencyBucket(time.Duration(max(info.DurationMs, 0))*time.Millisecond), 1)
+	attempt := "first"
+	if info.Attempt > 1 {
+		attempt = "repair"
+	}
+	add(counts, "completion_validation_attempt", attempt, 1)
+	if strings.TrimSpace(info.ErrorClass) != "" {
+		add(counts, "completion_validation_error", enumBucket(info.ErrorClass, "timeout", "invalid_output", "unavailable", "over_budget", "error"), 1)
+	}
+	return counts
 }
 
 func countersFrom(in []Counter) map[string]int {

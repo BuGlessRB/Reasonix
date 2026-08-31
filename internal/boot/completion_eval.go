@@ -16,13 +16,13 @@ import (
 
 // completionEval wires the completion validator into agent/task options.
 type completionEval struct {
-	factory func(modelRef string) completioneval.Evaluator
+	factory agent.CompletionEvaluatorFactory
 	mode    string
 }
 
-func newCompletionEval(cfg *config.Config, resolver provider.Resolver, proxySpec netclient.ProxySpec, sink event.Sink) completionEval {
+func newCompletionEval(cfg *config.Config, resolver provider.Resolver, proxySpec netclient.ProxySpec) completionEval {
 	mode := cfg.Agent.CompletionValidationMode()
-	return completionEval{factory: newCompletionEvalFactory(cfg, resolver, proxySpec, sink), mode: mode}
+	return completionEval{factory: newCompletionEvalFactory(cfg, resolver, proxySpec), mode: mode}
 }
 
 func (c completionEval) options(opts agent.Options) agent.Options {
@@ -39,12 +39,12 @@ func (c completionEval) taskOptions(opts agent.TaskToolOptions) agent.TaskToolOp
 
 // newCompletionEvalFactory resolves each evaluator from the Agent's effective
 // model unless completion_evaluator_model explicitly selects another target.
-func newCompletionEvalFactory(cfg *config.Config, resolver provider.Resolver, proxySpec netclient.ProxySpec, sink event.Sink) func(string) completioneval.Evaluator {
+func newCompletionEvalFactory(cfg *config.Config, resolver provider.Resolver, proxySpec netclient.ProxySpec) agent.CompletionEvaluatorFactory {
 	mode := cfg.Agent.CompletionValidationMode()
 	if mode == config.CompletionValidationOff {
 		return nil
 	}
-	return func(modelRef string) completioneval.Evaluator {
+	return func(modelRef string, sink event.Sink) completioneval.Evaluator {
 		evalRef := strings.TrimSpace(modelRef)
 		if configured := strings.TrimSpace(cfg.Agent.CompletionEvaluatorModel); configured != "" {
 			evalRef = configured

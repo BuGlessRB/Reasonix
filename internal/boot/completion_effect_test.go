@@ -46,6 +46,7 @@ func (p *verdictProvider) Stream(ctx context.Context, req provider.Request) (<-c
 func effectRunWithAgentConfig(t *testing.T, kind string, rec provider.Provider, agentLines string) []provider.Request {
 	t.Helper()
 	isolateConfigHome(t)
+	t.Setenv(config.CompletionValidationModeEnv, "")
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 	provider.Register(kind, func(provider.Config) (provider.Provider, error) {
@@ -102,15 +103,14 @@ func splitValidatorRequests(reqs []provider.Request) (main, validator []provider
 	return main, validator
 }
 
-// The unconfigured default is shadow: the validator's request really reaches
-// the provider boundary, tool-less and policy-isolated, while the main run
-// still succeeds.
-func TestEffectCompletionValidatorShadowDefaultReachesProvider(t *testing.T) {
-	rec := &verdictProvider{verdict: `{"outcome":"continue","reason":"shadow record only"}`}
-	reqs := effectRunWithAgentConfig(t, "boot-effect-cv-shadow", rec, "")
+// The unconfigured default enforces a confirming validator request at the
+// provider boundary while keeping the evaluator tool-less and isolated.
+func TestEffectCompletionValidatorEnforceDefaultReachesProvider(t *testing.T) {
+	rec := &verdictProvider{verdict: `{"outcome":"complete"}`}
+	reqs := effectRunWithAgentConfig(t, "boot-effect-cv-default", rec, "")
 	main, validator := splitValidatorRequests(reqs)
 	if len(validator) != 1 {
-		t.Fatalf("validator requests = %d, want 1 in shadow default (got %d total)", len(validator), len(reqs))
+		t.Fatalf("validator requests = %d, want 1 in enforce default (got %d total)", len(validator), len(reqs))
 	}
 	v := validator[0]
 	if len(v.Tools) != 0 {
@@ -155,6 +155,7 @@ func TestEffectCompletionValidatorEnforceCompleteFinishes(t *testing.T) {
 
 func TestEffectCompletionValidatorEnforceMissingModelPauses(t *testing.T) {
 	isolateConfigHome(t)
+	t.Setenv(config.CompletionValidationModeEnv, "")
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 	rec := &verdictProvider{verdict: `{"outcome":"complete"}`}
@@ -192,6 +193,7 @@ model = "x"
 }
 
 func TestCompletionEvaluatorFactoryFollowsEffectiveAgentModel(t *testing.T) {
+	t.Setenv(config.CompletionValidationModeEnv, "")
 	root := &verdictProvider{verdict: `{"outcome":"complete"}`}
 	child := &verdictProvider{verdict: `{"outcome":"complete"}`}
 	provider.Register("boot-effect-cv-route-root", func(provider.Config) (provider.Provider, error) { return root, nil })
@@ -206,11 +208,11 @@ func TestCompletionEvaluatorFactoryFollowsEffectiveAgentModel(t *testing.T) {
 		{Name: "eval-child", Kind: "boot-effect-cv-route-child", Model: "child-model"},
 		{Name: "eval-broken", Kind: "boot-effect-cv-route-broken", Model: "broken-model"},
 	}
-	factory := newCompletionEvalFactory(cfg, nil, netclient.ProxySpec{}, event.Discard)
-	if _, err := factory("eval-root/root-model").Evaluate(context.Background(), completioneval.Evidence{CandidateAnswer: "root"}); err != nil {
+	factory := newCompletionEvalFactory(cfg, nil, netclient.ProxySpec{})
+	if _, err := factory("eval-root/root-model", event.Discard).Evaluate(context.Background(), completioneval.Evidence{CandidateAnswer: "root"}); err != nil {
 		t.Fatalf("root evaluator: %v", err)
 	}
-	if _, err := factory("eval-child/child-model").Evaluate(context.Background(), completioneval.Evidence{CandidateAnswer: "child"}); err != nil {
+	if _, err := factory("eval-child/child-model", event.Discard).Evaluate(context.Background(), completioneval.Evidence{CandidateAnswer: "child"}); err != nil {
 		t.Fatalf("child evaluator: %v", err)
 	}
 	if got := len(root.requests()); got != 1 {
@@ -221,8 +223,8 @@ func TestCompletionEvaluatorFactoryFollowsEffectiveAgentModel(t *testing.T) {
 	}
 
 	cfg.Agent.CompletionEvaluatorModel = "eval-root"
-	overrideFactory := newCompletionEvalFactory(cfg, nil, netclient.ProxySpec{}, event.Discard)
-	if _, err := overrideFactory("eval-child/child-model").Evaluate(context.Background(), completioneval.Evidence{CandidateAnswer: "override"}); err != nil {
+	overrideFactory := newCompletionEvalFactory(cfg, nil, netclient.ProxySpec{})
+	if _, err := overrideFactory("eval-child/child-model", event.Discard).Evaluate(context.Background(), completioneval.Evidence{CandidateAnswer: "override"}); err != nil {
 		t.Fatalf("overridden evaluator: %v", err)
 	}
 	if got := len(root.requests()); got != 2 {
@@ -233,8 +235,8 @@ func TestCompletionEvaluatorFactoryFollowsEffectiveAgentModel(t *testing.T) {
 	}
 
 	cfg.Agent.CompletionEvaluatorModel = ""
-	brokenFactory := newCompletionEvalFactory(cfg, nil, netclient.ProxySpec{}, event.Discard)
-	_, err := brokenFactory("eval-broken/broken-model").Evaluate(context.Background(), completioneval.Evidence{})
+	brokenFactory := newCompletionEvalFactory(cfg, nil, netclient.ProxySpec{})
+	_, err := brokenFactory("eval-broken/broken-model", event.Discard).Evaluate(context.Background(), completioneval.Evidence{})
 	if err == nil || !strings.Contains(err.Error(), "completion evaluator unavailable") {
 		t.Fatalf("broken evaluator error = %v, want unavailable", err)
 	}
@@ -246,6 +248,7 @@ func TestCompletionEvaluatorFactoryFollowsEffectiveAgentModel(t *testing.T) {
 // builds share one directory so workspace paths in the prompt stay identical.
 func TestEffectMainRequestStableAcrossValidatorModes(t *testing.T) {
 	isolateConfigHome(t)
+	t.Setenv(config.CompletionValidationModeEnv, "")
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 	run := func(kind, agentLine string) []provider.Request {

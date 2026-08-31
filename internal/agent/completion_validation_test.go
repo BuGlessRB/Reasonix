@@ -135,10 +135,22 @@ func TestCompletionValidatorFailureAndUncertainPause(t *testing.T) {
 		class string
 	}{
 		{
-			name:  "evaluator error",
+			name:  "invalid evaluator output",
 			eval:  &scriptedEvaluator{errs: []error{fmt.Errorf("%w: invalid outcome \"maybe\"", completioneval.ErrInvalidOutput)}},
 			cause: CompletionUncertainValidatorFailed,
 			class: "invalid_output",
+		},
+		{
+			name:  "evaluator timeout",
+			eval:  &scriptedEvaluator{errs: []error{context.DeadlineExceeded}},
+			cause: CompletionUncertainValidatorFailed,
+			class: "timeout",
+		},
+		{
+			name:  "evaluator error",
+			eval:  &scriptedEvaluator{errs: []error{errors.New("provider failed")}},
+			cause: CompletionUncertainValidatorFailed,
+			class: "error",
 		},
 		{
 			name:  "evaluator uncertain",
@@ -159,6 +171,22 @@ func TestCompletionValidatorFailureAndUncertainPause(t *testing.T) {
 				t.Fatalf("candidate answer lost: %q", got)
 			}
 		})
+	}
+}
+
+func TestCompletionValidatorEnforceWithNilEvaluatorPauses(t *testing.T) {
+	sink := &recordingSink{}
+	a, err := runWithValidator(t, CompletionValidationEnforce, nil, [][]provider.Chunk{textTurn("apparently done")}, sink)
+	var pause *CompletionUncertainError
+	if !errors.As(err, &pause) || pause.Cause != CompletionUncertainValidatorFailed || pause.Detail != "unavailable" {
+		t.Fatalf("Run error = %v, want fail-closed unavailable pause", err)
+	}
+	if got := lastAssistantContent(a.Session()); got != "apparently done" {
+		t.Fatalf("candidate answer = %q, want preserved", got)
+	}
+	records := sink.completionValidations()
+	if len(records) != 1 || records[0].Outcome != "error" || records[0].ErrorClass != "unavailable" {
+		t.Fatalf("validation events = %+v, want unavailable error audit", records)
 	}
 }
 
@@ -300,6 +328,31 @@ func TestCompletionValidatorEvidenceShape(t *testing.T) {
 	}
 }
 
+func TestRecentVisibleTurnsUseUserAuthoredText(t *testing.T) {
+	sess := NewSession("sys")
+	sess.Messages = append(sess.Messages,
+		provider.Message{Role: provider.RoleUser, Content: "<reasoning-language>English</reasoning-language>\nlegacy question"},
+		provider.Message{Role: provider.RoleUser, Content: "<response-language>English</response-language>\nhost wrapped", RawContent: "exact user text"},
+		provider.Message{Role: provider.RoleUser, Content: completionContinueTailMessage()},
+		provider.Message{Role: provider.RoleUser, Content: midTurnSteerMessage(completionContinueTailMessage())},
+		provider.Message{Role: provider.RoleUser, Content: midTurnSteerMessage("use the smaller patch")},
+		provider.Message{Role: provider.RoleAssistant, Content: "prior visible answer"},
+		provider.Message{Role: provider.RoleUser, Content: "local sentinel", LocalOnly: true},
+		provider.Message{Role: provider.RoleAssistant, Content: "candidate"},
+	)
+	a := New(nil, tool.NewRegistry(), sess, Options{}, event.Discard)
+	got := a.recentVisibleTurns()
+	want := []completioneval.ContextTurn{
+		{Role: "user", Content: "legacy question"},
+		{Role: "user", Content: "exact user text"},
+		{Role: "user", Content: "use the smaller patch"},
+		{Role: "assistant", Content: "prior visible answer"},
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("recent visible turns = %+v, want %+v", got, want)
+	}
+}
+
 func TestCompletionValidatorEventIsContentFree(t *testing.T) {
 	sink := &recordingSink{}
 	eval := &scriptedEvaluator{verdicts: []completioneval.Verdict{
@@ -340,9 +393,11 @@ func TestCompletionValidatorEventIsContentFree(t *testing.T) {
 func TestSubagentOptionsCarryIndependentEvaluatorSession(t *testing.T) {
 	var built int
 	var evaluatedModel string
-	factory := func(modelRef string) completioneval.Evaluator {
+	var evaluatedSink event.Sink
+	factory := func(modelRef string, sink event.Sink) completioneval.Evaluator {
 		built++
 		evaluatedModel = modelRef
+		evaluatedSink = sink
 		return &scriptedEvaluator{}
 	}
 	tt := &TaskTool{completionEvaluatorFactory: factory, completionValidation: CompletionValidationEnforce}
@@ -354,7 +409,8 @@ func TestSubagentOptionsCarryIndependentEvaluatorSession(t *testing.T) {
 	if built != 0 || opts.CompletionEvaluatorFactory == nil {
 		t.Fatalf("factory builds = %d, child factory set = %v", built, opts.CompletionEvaluatorFactory != nil)
 	}
-	child := New(nil, tool.NewRegistry(), NewSession("sys"), opts, event.Discard)
+	childSink := &recordingSink{}
+	child := New(nil, tool.NewRegistry(), NewSession("sys"), opts, childSink)
 	if built != 1 {
 		t.Fatalf("factory builds = %d, want one when New derives the child session", built)
 	}
@@ -363,5 +419,8 @@ func TestSubagentOptionsCarryIndependentEvaluatorSession(t *testing.T) {
 	}
 	if child.completionEvaluator == nil {
 		t.Fatal("child agent has no evaluator session")
+	}
+	if evaluatedSink != childSink {
+		t.Fatal("child evaluator factory did not receive the child-owned sink")
 	}
 }

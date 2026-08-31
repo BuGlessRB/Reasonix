@@ -1710,15 +1710,7 @@ func (s *tabEventSink) Emit(e event.Event) {
 		}
 		if m := app.metrics.Load(); m != nil {
 			m.observe(e)
-			if e.Kind == event.TurnDone {
-				// Display persistence and its projection acknowledgement run first,
-				// so successful compaction is included in this content-free snapshot.
-				if tab := app.tabByID(tabID); tab != nil && tab.Ctrl != nil {
-					observeControllerRecoveryMetrics(m, tab.Ctrl)
-					observeControllerTurnEventMetrics(m, tab.Ctrl)
-				}
-				m.persist()
-			}
+			persistMetricsEvent(app, m, tabID, e)
 		}
 	}
 	s.emitRuntimeEvent(eventChannel, toWireTabWithSubmission(e, tabID, s.runtimeEpochSnapshot(), s.submissionIDSnapshot(), turnStartedAt))

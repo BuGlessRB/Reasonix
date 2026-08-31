@@ -237,7 +237,7 @@ func loadForRoot(root string, opts loadForRootOptions) (*Config, error) {
 	normalizeLegacyEffort(cfg)
 	cfg.ignoredLegacyStepLimits = normalizeLegacyAgentStepLimits(cfg)
 	normalizeRetiredAutoPlan(cfg)
-	if err := ValidateCompletionValidation(cfg.Agent.CompletionValidation); err != nil {
+	if err := validateCompletionValidationModes(cfg.Agent.CompletionValidation); err != nil {
 		return nil, err
 	}
 	normalizeLegacyMCPTiers(cfg)
