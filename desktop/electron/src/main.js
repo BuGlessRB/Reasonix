@@ -9,6 +9,7 @@ const { instanceID, profileFor } = require("./instance");
 const { installApplicationMenu, installContextMenu } = require("./menu");
 const { externalTarget } = require("./links");
 const { appIcon } = require("./appicon");
+const layout = require("./layout");
 
 // Must match serve.TokenCookie and the namespace the kernel serves the page on.
 const TOKEN_COOKIE = "reasonix_token";
@@ -16,14 +17,15 @@ const PAGE_PATH = "/_studio/";
 const DEFAULT_SIZE = { width: 1440, height: 900 };
 const MIN_SIZE = { width: 760, height: 480 };
 
-// go build names the binary after the package and adds .exe on Windows, where
-// spawn will not run a file without it — the launch failed there with a message
-// about the kernel instead, because a missing program never sends a handshake.
-const hostBinary =
-  process.env.REASONIX_STUDIO_HOST ||
-  path.join(__dirname, "..", "bin", process.platform === "win32" ? "reasonix-studio-host.exe" : "reasonix-studio-host");
-const pageDir =
-  process.env.REASONIX_STUDIO_PAGE || path.join(__dirname, "..", "..", "frontend-next", "dist");
+const where = {
+  packaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  dirname: __dirname,
+  platform: process.platform,
+  env: process.env,
+};
+const hostBinary = layout.hostBinary(where);
+const pageDir = layout.pageDir(where);
 
 let kernel = null;
 let win = null;

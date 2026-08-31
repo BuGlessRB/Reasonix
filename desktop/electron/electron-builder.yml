@@ -1,0 +1,79 @@
+# Packaging for Reasonix Studio. Artifact names, bundle identity and the macOS
+# floor match what the Wails line shipped, because the update manifest and the
+# release workflow read them: a rename here is a version nobody is offered.
+appId: io.reasonix.studio
+productName: Reasonix Studio
+copyright: Copyright © esengine
+
+directories:
+  output: ../../dist
+  buildResources: assets
+
+# electron-builder names artifacts x64 where the release vocabulary is GOARCH.
+# The first hook is where the architecture is still a value; the second renames
+# and refuses to hand back a name studio-manifest could not resolve.
+# No electron-updater metadata: the update channel is the signed manifest
+# studio-manifest writes, and a second one would be a second answer to which
+# version is current.
+publish: null
+
+artifactBuildCompleted: ./packaging/record-artifact-arch.js
+afterAllArtifactBuild: ./packaging/canonical-artifact-names.js
+
+# The shell only. The kernel and the SPA are resources rather than app files:
+# a binary inside app.asar cannot be spawned, and the SPA is read off disk.
+files:
+  - src/**/*
+  - assets/**/*
+  - package.json
+extraResources:
+  - from: bin
+    to: bin
+    filter:
+      - reasonix-studio-host
+      - reasonix-studio-host.exe
+  - from: ../frontend-next/dist
+    to: frontend-next/dist
+
+win:
+  target:
+    # The portable zip stays alongside the installer: it is what a machine
+    # without administrator rights can still run.
+    - nsis
+    - zip
+  icon: assets/icon.ico
+  artifactName: ReasonixStudio-windows-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  # studio-manifest reads the installer channel off this exact suffix.
+  artifactName: ReasonixStudio-windows-${arch}-installer.${ext}
+
+mac:
+  target:
+    # The zip is what the updater downloads; the dmg is what a person drags.
+    - dmg
+    - zip
+  icon: assets/icon.icns
+  category: public.app-category.developer-tools
+  # Electron 44's own floor. The 10.13 this inherited from the Wails packaging
+  # was what WebKit linked against and is not a claim this shell can make.
+  minimumSystemVersion: "13.0"
+  # Notarization requires the hardened runtime, and under it V8's JIT is refused
+  # unless it is granted. Nothing wider: the kernel beside the app is a spawned
+  # executable, which is a nested-code signing question, not a library-validation
+  # one — see docs/STUDIO_RELEASE.md.
+  hardenedRuntime: true
+  entitlements: assets/entitlements.plist
+  entitlementsInherit: assets/entitlements.plist
+  artifactName: ReasonixStudio-darwin-${arch}.${ext}
+
+linux:
+  target:
+    - deb
+  icon: assets/icon.png
+  category: Development
+  maintainer: esengine <esengine@users.noreply.github.com>
+  artifactName: ReasonixStudio-linux-${arch}.${ext}

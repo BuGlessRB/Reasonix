@@ -120,6 +120,31 @@ test("an unreachable kernel is an answer, not a crash", async () => {
   assert.equal(await dead.trayState(), null);
 });
 
+const { hostBinary, pageDir } = require("../src/layout.js");
+
+// Packaged, both live in resources/ beside app.asar. Reading them from inside
+// it is the failure this pins: a child process cannot be spawned out of an
+// archive, and the kernel serves the SPA off the filesystem.
+test("the kernel and the page are found in both layouts", () => {
+  const dev = { packaged: false, resourcesPath: "/res", dirname: path.join("/repo", "electron", "src"), platform: "linux" };
+  assert.equal(hostBinary(dev), path.join("/repo", "electron", "bin", "reasonix-studio-host"));
+  assert.equal(pageDir(dev), path.join("/repo", "frontend-next", "dist"));
+
+  const packed = { ...dev, packaged: true };
+  assert.equal(hostBinary(packed), path.join("/res", "bin", "reasonix-studio-host"));
+  assert.equal(pageDir(packed), path.join("/res", "frontend-next", "dist"));
+  for (const p of [hostBinary(packed), pageDir(packed)]) {
+    assert.doesNotMatch(p, /app\.asar/, "resolved into the archive");
+  }
+});
+
+test("Windows gets the suffix spawn needs, and an override wins over both", () => {
+  const win = { packaged: true, resourcesPath: "/res", dirname: "/d/src", platform: "win32" };
+  assert.equal(hostBinary(win), path.join("/res", "bin", "reasonix-studio-host.exe"));
+  assert.equal(hostBinary({ ...win, env: { REASONIX_STUDIO_HOST: "/custom/kernel" } }), "/custom/kernel");
+  assert.equal(pageDir({ ...win, env: { REASONIX_STUDIO_PAGE: "/custom/page" } }), "/custom/page");
+});
+
 const { appIcon, iconFile } = require("../src/appicon.js");
 const fsSync = require("node:fs");
 
