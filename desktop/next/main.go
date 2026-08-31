@@ -37,6 +37,7 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/notify"
 	"reasonix/internal/remotehost"
+	"reasonix/internal/repair"
 	"reasonix/internal/serve"
 	"reasonix/internal/surface"
 	"reasonix/internal/traystate"
@@ -243,6 +244,9 @@ func run(logs io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// Read before the window: an update can only be acknowledged by the launch
+	// that booted from it, and only the transaction on disk right now is that.
+	shell.updateHealth = repair.CaptureUpdateHealth(version)
 
 	return shell.runWindow(api, assets, cfg, tracker)
 }
@@ -302,6 +306,9 @@ func (a *App) runWindow(api http.Handler, assets fs.FS, cfg *config.Config, trac
 			// sync with the browser build.
 			Middleware: hubMiddleware(shell, hub, api),
 		},
+		// A loaded renderer is the first point this build has shown it can do
+		// anything; the window itself came up in OnStartup.
+		OnDomReady: shell.acknowledgeUpdateHealth,
 		// The window is held open across the shutdown rather than vanishing into
 		// one; see closing.go. OnShutdown stays as the backstop for exits that
 		// never pass the close button (a signal, a quit from the dock menu).
@@ -383,6 +390,11 @@ type App struct {
 	// See closing.go: the window outlives the close button by however long the
 	// session takes to reach disk.
 	closing closeState
+
+	// The update this launch booted from, if it booted from one. Captured
+	// before the window runs and read from the readiness hook, so it is not
+	// mutable state the mutex above has anything to say about.
+	updateHealth *repair.UpdateHealthWitness
 }
 
 // windowNotifications returns the sink wrapper every runtime in this window
