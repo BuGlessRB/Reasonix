@@ -189,6 +189,37 @@ func TestWriteRootsForRootExcludesUserConfigDirByDefault(t *testing.T) {
 
 // TestRenderTOMLRoundTrips ensures the annotated TOML we emit parses back into
 // an equivalent config — i.e. the wizard never writes a file it can't read.
+// A pin reached the config object and never the file: the [desktop] renderer
+// wrote every neighbouring key and not this one, so a machine held on an older
+// build was free again by its next launch.
+func TestDesktopPinnedVersionSurvivesASave(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	path := UserConfigPath()
+	held := LoadForEdit(path)
+	if err := held.SetDesktopPinnedVersion("2.9.0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := held.SaveTo(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadForEdit(path).DesktopPinnedVersion(); got != "2.9.0" {
+		t.Fatalf("pinned version after a save = %q, want 2.9.0", got)
+	}
+
+	// Releasing it has to travel too, or a machine could never follow the
+	// catalog again once it had been held.
+	freed := LoadForEdit(path)
+	if err := freed.SetDesktopPinnedVersion(""); err != nil {
+		t.Fatal(err)
+	}
+	if err := freed.SaveTo(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadForEdit(path).DesktopPinnedVersion(); got != "" {
+		t.Fatalf("released pin left %q behind", got)
+	}
+}
+
 func TestRenderTOMLRoundTrips(t *testing.T) {
 	orig := Default()
 	orig.Providers = append(orig.Providers, legacyMimoCustomProvider("mimo-pro"))

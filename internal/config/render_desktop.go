@@ -54,6 +54,12 @@ func renderDesktopSection(b *strings.Builder, c *Config) {
 	fmt.Fprintf(b, "status_bar_items = %s   # desktop: ordered visible bottom status bar items\n", renderStringArray(c.DesktopStatusBarItems()))
 	fmt.Fprintf(b, "default_tool_approval_mode = %q   # desktop: Ask/Auto/YOLO default for newly-created sessions\n", c.DesktopDefaultToolApprovalMode())
 	fmt.Fprintf(b, "check_updates = %v   # desktop: check for new versions on startup\n", c.DesktopCheckUpdates())
+	// Only written while held; an absent key follows the catalog. It has to
+	// outlive the install that set it, or the next launch updates the user
+	// back off the build they chose.
+	if pinned := c.DesktopPinnedVersion(); pinned != "" {
+		fmt.Fprintf(b, "pinned_version = %q   # desktop: hold this machine on a release; empty follows the catalog\n", pinned)
+	}
 	fmt.Fprintf(b, "telemetry = %v   # desktop: anonymous launch ping + scrubbed next-launch native crash diagnostics; never content\n", c.DesktopTelemetry())
 	fmt.Fprintf(b, "metrics = %v   # desktop: aggregate quality/lifecycle metrics (anonymous signal/bucket counts); never content\n", c.DesktopMetrics())
 	// A non-nil empty slice is intentional: provider_access = [] means the
