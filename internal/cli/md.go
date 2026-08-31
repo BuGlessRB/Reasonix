@@ -306,6 +306,20 @@ func (r *mdRenderer) renderList(buf *strings.Builder, n *ast.List, src []byte, i
 	buf.WriteString("\n")
 }
 
+// stripTranscriptGutter removes the render-only block gutter (code-fence │,
+// blockquote ▎, connector ⎿) from a copied line so in-app selection copy
+// yields the source text (#9244). ASCII "|" stays — markdown tables start
+// with it legitimately.
+func stripTranscriptGutter(s string) string {
+	trimmed := strings.TrimLeft(s, " \t")
+	for _, marker := range []string{"│ ", "▎ ", "⎿ "} {
+		if strings.HasPrefix(trimmed, marker) {
+			return trimmed[len(marker):]
+		}
+	}
+	return s
+}
+
 func (r *mdRenderer) renderFenced(buf *strings.Builder, n ast.Node, src []byte, indent int) {
 	prefix := strings.Repeat(" ", indent) + dim("│ ")
 	for i := range n.Lines().Len() {

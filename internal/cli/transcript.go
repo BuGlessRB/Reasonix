@@ -650,7 +650,7 @@ func selectedDisplayText(lines []string, start, end selPos) string {
 		if idx == end.line {
 			hi = end.col
 		}
-		out = append(out, strings.TrimRight(ansi.Strip(ansi.Cut(lines[idx], lo, hi)), " "))
+		out = append(out, strings.TrimRight(stripTranscriptGutter(ansi.Strip(ansi.Cut(lines[idx], lo, hi))), " "))
 	}
 	return strings.Join(out, "\n")
 }
@@ -691,7 +691,7 @@ func selectedCopyText(lines []copyTranscriptLine, start, end selPos) string {
 		if selected.Len() == 0 && touchedMath {
 			continue
 		}
-		out = append(out, strings.TrimRight(selected.String(), " "))
+		out = append(out, strings.TrimRight(stripTranscriptGutter(selected.String()), " "))
 	}
 	return strings.Join(out, "\n")
 }
