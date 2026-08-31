@@ -97,3 +97,23 @@ jobs:
 
       - name: build shell
         run: bash ../scripts/studio-build.sh --shell-only
+
+      # The desktop module's Go tests, which no job ran until now: the elevated
+      # update helper, the release-side tools and the Wails shell were green
+      # only where a maintainer happened to run them. The code this gate covers
+      # is what replaces a running application on a user's disk.
+      # Same command as `make studio-test`; this job is already in desktop/.
+      - name: go test
+        run: go test ./...
+
+      # The host sits in the main module and nothing else builds it, so its
+      # dependency closure is checked here: it must stay CGO-free and
+      # platform-neutral or the Electron bundle cannot ship it. Cross-compiling
+      # is host-independent, so once is enough.
+      - name: host stays pure Go and platform-neutral
+        if: runner.os == 'Linux'
+        working-directory: .
+        run: |
+          for os in windows linux darwin; do
+            CGO_ENABLED=0 GOOS=$os GOARCH=amd64 go build -o /dev/null ./cmd/reasonix-studio-host
+          done
