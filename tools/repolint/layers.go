@@ -21,6 +21,8 @@ var frontends = []string{
 
 // Utility layer: these packages carry no knowledge of the kernel and must
 // stay importable from anywhere without dragging a dependency graph along.
+// One may reach another: the layer is closed, so that drags nothing in, and
+// refusing it is what leaves the same judgement copied into several of them.
 var leaves = []string{
 	"internal/ablation",
 	"internal/agentgraph",
@@ -39,6 +41,7 @@ var leaves = []string{
 	"internal/nilutil",
 	"internal/planmode",
 	"internal/proc",
+	"internal/redirectguard",
 	"internal/releaseasset",
 	"internal/retrieval",
 	"internal/shellparse",
@@ -80,7 +83,7 @@ func checkLayering(imports map[string][]importRef) []Finding {
 
 func violates(pkg, dep string) string {
 	switch {
-	case matches(leaves, pkg):
+	case matches(leaves, pkg) && !matches(leaves, dep):
 		return fmt.Sprintf("%s is a utility-layer package and must not import %s", pkg, dep)
 	case under(dep, "internal/control") && !matches(frontends, pkg) && !under(pkg, "internal/control") && !host(pkg):
 		return fmt.Sprintf("%s may not import %s: the controller is reachable from frontends and entrypoints only", pkg, dep)

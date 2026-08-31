@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"reasonix/internal/config"
+	"reasonix/internal/redirectguard"
 	"reasonix/internal/testenv"
 )
 
@@ -330,7 +331,11 @@ func TestFindCLIPlatformAssetRequiresExactArchiveName(t *testing.T) {
 	}
 }
 
-func TestValidateCLIUpgradeRedirect(t *testing.T) {
+// The mechanism is held by internal/redirectguard; what this holds is the
+// decision made here -- that these are the hosts a published CLI comes from --
+// by driving the guard exactly as upgrade configures it.
+func TestCLIUpgradeTrustsOnlyItsReleaseHosts(t *testing.T) {
+	follow := redirectguard.Follow(cliUpgradeHosts...)
 	tests := []struct {
 		name      string
 		target    string
@@ -351,9 +356,9 @@ func TestValidateCLIUpgradeRedirect(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = validateCLIUpgradeRedirect(req, nil)
+			err = follow(req, nil)
 			if (err != nil) != tt.wantError {
-				t.Fatalf("validateCLIUpgradeRedirect(%q) error = %v, wantError=%v", tt.target, err, tt.wantError)
+				t.Fatalf("follow(%q) error = %v, wantError=%v", tt.target, err, tt.wantError)
 			}
 		})
 	}
@@ -362,8 +367,8 @@ func TestValidateCLIUpgradeRedirect(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := validateCLIUpgradeRedirect(req, make([]*http.Request, 10)); err == nil {
-			t.Fatal("validateCLIUpgradeRedirect accepted more than 10 redirects")
+		if err := follow(req, make([]*http.Request, 10)); err == nil {
+			t.Fatal("the upgrade guard accepted more than 10 redirects")
 		}
 	})
 }

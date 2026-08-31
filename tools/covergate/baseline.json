@@ -5,6 +5,7 @@
   "internal/permission/**": 90.2,
   "internal/plugin/**": 77.4,
   "internal/pluginpkg/**": 82.7,
+  "internal/redirectguard/**": 92.6,
   "internal/sandbox/**": 73.5,
   "internal/shellparse/**": 64.5,
   "internal/shellsafe/**": 61.1

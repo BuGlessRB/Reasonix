@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"golang.org/x/mod/semver"
+	"reasonix/internal/redirectguard"
 )
 
 const (
@@ -228,7 +229,7 @@ func upgradeCommand(args []string, version string) int {
 		fmt.Fprintf(os.Stderr, "%s %v\n", i18n.M.ErrorPrefix, err)
 		return 1
 	}
-	c.CheckRedirect = validateCLIUpgradeRedirect
+	c.CheckRedirect = redirectguard.Follow(cliUpgradeHosts...)
 
 	// 3. Fetch latest release from GitHub API.
 	fmt.Println(i18n.M.UpgradeChecking)
@@ -388,32 +389,10 @@ func isExpectedCLIAssetURL(raw, tag, name string) bool {
 		parsed.Fragment == ""
 }
 
-func isTrustedCLIUpgradeRedirectHost(host string) bool {
-	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
-	return host == "github.com" || strings.HasSuffix(host, ".githubusercontent.com")
-}
-
-func validateCLIUpgradeRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= 10 {
-		return errors.New("upgrade: stopped after 10 redirects")
-	}
-	if req == nil || req.URL == nil {
-		return errors.New("upgrade: redirect has no target URL")
-	}
-	if !strings.EqualFold(req.URL.Scheme, "https") {
-		return fmt.Errorf("upgrade: refusing redirect to non-HTTPS URL %q", req.URL.String())
-	}
-	if req.URL.Hostname() == "" {
-		return fmt.Errorf("upgrade: refusing redirect without a hostname %q", req.URL.String())
-	}
-	if req.URL.User != nil {
-		return fmt.Errorf("upgrade: refusing redirect with userinfo %q", req.URL.String())
-	}
-	if req.URL.Port() != "" || !isTrustedCLIUpgradeRedirectHost(req.URL.Hostname()) {
-		return fmt.Errorf("upgrade: refusing redirect to untrusted host %q", req.URL.Host)
-	}
-	return nil
-}
+// cliUpgradeHosts is where a published CLI release is served from. It is this
+// command's own trust decision; see releaseasset.officialHosts for why the two
+// identical lists are not one.
+var cliUpgradeHosts = []string{"github.com", ".githubusercontent.com"}
 
 func validCLIAssetSize(size int64) bool {
 	return size > 0 && size <= maxCLIReleaseAssetSize

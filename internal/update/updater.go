@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"reasonix/internal/redirectguard"
 )
 
 // ProgressFunc reports bytes received against the total, for a progress bar.
@@ -52,6 +54,12 @@ func New(opts Options) *Updater {
 	return &Updater{opts: opts}
 }
 
+// releaseHosts is where Studio's own artifacts are published: the catalog and
+// the assets on our CDN, and the GitHub pages a release redirects through.
+// This is the updater's trust decision and is deliberately not shared with the
+// CLI's, which happens to name a subset of the same hosts.
+var releaseHosts = []string{"reasonix.io", ".reasonix.io", "github.com", ".githubusercontent.com"}
+
 // guarded copies rather than mutates: the shells hand in a client the rest of
 // the app shares. A caller that already chose a policy keeps it.
 func guarded(c *http.Client) *http.Client {
@@ -59,7 +67,7 @@ func guarded(c *http.Client) *http.Client {
 		return c
 	}
 	copyOfClient := *c
-	copyOfClient.CheckRedirect = TrustedRedirect
+	copyOfClient.CheckRedirect = redirectguard.Follow(releaseHosts...)
 	return &copyOfClient
 }
 

@@ -4,51 +4,30 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+
+	"reasonix/internal/redirectguard"
 )
 
-func redirectTo(t *testing.T, raw string, hops int) error {
-	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, raw, nil)
-	if err != nil {
-		t.Fatalf("NewRequest(%q): %v", raw, err)
-	}
-	return TrustedRedirect(req, make([]*http.Request, hops))
-}
-
-// Every field this guard reads is one an attacker controls once a release host
-// answers with a redirect, so each is stated as its own case rather than as one
-// "bad URL" — a guard that stopped checking the scheme would still pass a test
-// that only ever handed it another hostname.
-func TestTrustedRedirectRefusesWhatItWasWrittenFor(t *testing.T) {
-	for _, tc := range []struct{ name, url string }{
-		{"a plain-HTTP downgrade", "http://dl.reasonix.io/studio/x.tar.gz"},
-		{"credentials smuggled in the authority", "https://user:pw@dl.reasonix.io/x"},
-		{"a port, which no release host answers on", "https://dl.reasonix.io:8443/x"},
-		{"a host that only looks like ours", "https://dl.reasonix.io.evil.test/x"},
-		{"an unrelated host outright", "https://evil.test/x"},
+// The mechanism is held by internal/redirectguard. What this holds is the
+// decision made here: Studio's own CDN is trusted, and a name that merely ends
+// in ours is not.
+func TestUpdateTrustsItsOwnReleaseHosts(t *testing.T) {
+	follow := redirectguard.Follow(releaseHosts...)
+	for _, tc := range []struct {
+		url  string
+		want bool
+	}{
+		{"https://dl.reasonix.io/studio/versions.json", true},
+		{"https://objects.githubusercontent.com/blob/x", true},
+		{"https://dl.reasonix.io.evil.test/x", false},
+		{"http://dl.reasonix.io/x", false},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := redirectTo(t, tc.url, 1); err == nil {
-				t.Fatalf("TrustedRedirect(%q) = nil, want a refusal", tc.url)
-			}
-		})
-	}
-	if err := redirectTo(t, "https://dl.reasonix.io/x", 10); err == nil {
-		t.Fatal("a chain of ten hops was followed; want it stopped")
-	}
-}
-
-// The hosts releases are actually served from. A guard that refused these would
-// break every update rather than protect one.
-func TestTrustedRedirectPassesTheReleaseHosts(t *testing.T) {
-	for _, raw := range []string{
-		"https://dl.reasonix.io/studio/versions.json",
-		"https://reasonix.io/studio/x",
-		"https://github.com/esengine/DeepSeek-Reasonix/releases/download/v1/x",
-		"https://objects.githubusercontent.com/blob/x",
-	} {
-		if err := redirectTo(t, raw, 1); err != nil {
-			t.Fatalf("TrustedRedirect(%q) = %v, want it followed", raw, err)
+		req, err := http.NewRequest(http.MethodGet, tc.url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if followed := follow(req, nil) == nil; followed != tc.want {
+			t.Fatalf("follow(%q) followed=%v, want %v", tc.url, followed, tc.want)
 		}
 	}
 }

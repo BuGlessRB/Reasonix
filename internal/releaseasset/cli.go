@@ -20,6 +20,8 @@ import (
 	"path"
 	"regexp"
 	"strings"
+
+	"reasonix/internal/redirectguard"
 )
 
 const (
@@ -58,7 +60,7 @@ func downloadCLIFromBase(ctx context.Context, client *http.Client, base, version
 
 	copyOfClient := *client
 	if official {
-		copyOfClient.CheckRedirect = validateOfficialRedirect
+		copyOfClient.CheckRedirect = redirectguard.Follow(officialHosts...)
 	}
 	archive, err := fetchBounded(ctx, &copyOfClient, archiveURL, maxCLIArchiveBytes)
 	if err != nil {
@@ -226,16 +228,7 @@ func extractCLITarGz(archive []byte, executable string) ([]byte, error) {
 	return binary, nil
 }
 
-func validateOfficialRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= 10 {
-		return errors.New("remote CLI download stopped after 10 redirects")
-	}
-	if req == nil || req.URL == nil || !strings.EqualFold(req.URL.Scheme, "https") || req.URL.User != nil || req.URL.Port() != "" {
-		return errors.New("remote CLI download refused an unsafe redirect")
-	}
-	host := strings.ToLower(strings.TrimSuffix(req.URL.Hostname(), "."))
-	if host != "github.com" && !strings.HasSuffix(host, ".githubusercontent.com") {
-		return fmt.Errorf("remote CLI download refused redirect host %q", req.URL.Host)
-	}
-	return nil
-}
+// officialHosts is this path's own trust decision, not a shared list. That the
+// CLI upgrade happens to trust the same names is a coincidence of where we
+// publish; merging them would let one download's decision move the other's.
+var officialHosts = []string{"github.com", ".githubusercontent.com"}

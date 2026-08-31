@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -278,37 +277,4 @@ func (p *progressReader) Read(b []byte) (int, error) {
 		p.onProgress(p.received, p.total)
 	}
 	return n, err
-}
-
-// TrustedRedirect is the CheckRedirect an update client must use: HTTPS only,
-// no userinfo, no port, and only hosts that serve our releases. Without it a
-// redirect could walk an authenticated download onto an attacker's host.
-func TrustedRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= 10 {
-		return errors.New("update: stopped after 10 redirects")
-	}
-	if req == nil || req.URL == nil {
-		return errors.New("update: redirect has no target URL")
-	}
-	if !strings.EqualFold(req.URL.Scheme, "https") {
-		return fmt.Errorf("update: refusing redirect to non-HTTPS URL %q", req.URL.String())
-	}
-	if req.URL.Hostname() == "" {
-		return fmt.Errorf("update: refusing redirect without a hostname %q", req.URL.String())
-	}
-	if req.URL.User != nil {
-		return fmt.Errorf("update: refusing redirect with userinfo %q", req.URL.String())
-	}
-	if req.URL.Port() != "" || !trustedReleaseHost(req.URL.Hostname()) {
-		return fmt.Errorf("update: refusing redirect to untrusted host %q", req.URL.Host)
-	}
-	return nil
-}
-
-func trustedReleaseHost(host string) bool {
-	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
-	return host == "reasonix.io" ||
-		strings.HasSuffix(host, ".reasonix.io") ||
-		host == "github.com" ||
-		strings.HasSuffix(host, ".githubusercontent.com")
 }

@@ -11,7 +11,9 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
 - One transport-agnostic `control.Controller` sits behind every frontend (chat
   TUI, HTTP/SSE serve, Wails desktop). Add behavior to the controller, not a
   frontend, so all three inherit it.
-- Layering (enforced): utility packages import nothing under `reasonix/`; only
+- Layering (enforced): utility packages import nothing under `reasonix/` except
+  one another — that layer is closed, so a leaf reaching a leaf drags no graph
+  along, while refusing it leaves one judgement copied into several of them; only
   the frontends `cli`, `serve`, `acp`, `bot`, `botruntime`, `boot` and the hosts
   `cmd/`, `desktop/` may import `control`; nothing below a frontend may import
   one. The declared sets live in `tools/repolint/layers.go`.
@@ -215,6 +217,7 @@ out of how a path is spelled, which cannot tell `internal/auth` from
 - sensitive: internal/plugin/**
 - sensitive: internal/pluginpkg/**
 - sensitive: internal/netclient/**
+- sensitive: internal/redirectguard/**
 
 One declaration, two effects: the same list is also the coverage gate's subject.
 `make coverage-gate` holds each path to the coverage it already has, because

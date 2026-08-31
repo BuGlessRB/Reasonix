@@ -8,6 +8,7 @@ func TestLayeringContract(t *testing.T) {
 		wantViolation  bool
 	}{
 		{"utility package stays a leaf", "internal/fileutil", "internal/config", true},
+		{"a utility may use another utility", "internal/fileutil", "internal/textutil", false},
 		{"utility package may use the stdlib only", "internal/textutil", "internal/agent", true},
 		{"kernel may not reach the controller", "internal/agent", "internal/control", true},
 		{"kernel may not reach a frontend", "internal/agent", "internal/cli", true},
