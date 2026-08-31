@@ -1,10 +1,6 @@
-package main
+package update
 
-import (
-	"testing"
-
-	"reasonix/internal/update"
-)
+import "testing"
 
 func rowVersions(rows []VersionEntry) []string {
 	out := make([]string, len(rows))
@@ -32,7 +28,7 @@ func TestVersionRowsAlwaysCarryTheRunningBuild(t *testing.T) {
 // A published catalog that does not list the running build (a release still
 // publishing, or a local one) must not drop it.
 func TestVersionRowsPrependAnUnpublishedRunningBuild(t *testing.T) {
-	rows := versionRows([]update.IndexEntry{
+	rows := versionRows([]IndexEntry{
 		{Version: "1.25.1", Tag: "desktop-v1.25.1"},
 	}, "2.0.0-dev")
 	if got := rowVersions(rows); len(got) != 2 || got[0] != "2.0.0-dev" || got[1] != "1.25.1" {
@@ -48,7 +44,7 @@ func TestVersionRowsPrependAnUnpublishedRunningBuild(t *testing.T) {
 
 // When the catalog does carry it, the row is marked rather than duplicated.
 func TestVersionRowsDoNotDuplicateTheRunningBuild(t *testing.T) {
-	rows := versionRows([]update.IndexEntry{
+	rows := versionRows([]IndexEntry{
 		{Version: "2.0.0", Tag: "studio-v2.0.0"},
 		{Version: "1.25.1", Tag: "desktop-v1.25.1"},
 	}, "v2.0.0") // the leading v the tag and the manifest disagree about
@@ -62,7 +58,7 @@ func TestVersionRowsDoNotDuplicateTheRunningBuild(t *testing.T) {
 
 // Newest first, and a newer published release is not "older".
 func TestVersionRowsOrderNewestFirst(t *testing.T) {
-	rows := versionRows([]update.IndexEntry{
+	rows := versionRows([]IndexEntry{
 		{Version: "1.9.0"},
 		{Version: "2.1.0"},
 		{Version: "1.25.0"},

@@ -9,15 +9,6 @@ import (
 	"testing"
 )
 
-func TestStudioCatalogNamesTheStudioLine(t *testing.T) {
-	if studioCatalog == "" {
-		t.Fatal("studioCatalog is empty, so every update.Options built here fails at fetch")
-	}
-	if !strings.Contains(studioCatalog, "/studio/") {
-		t.Fatalf("studioCatalog does not name the studio line (%q); its entries would name another product's artifacts", studioCatalog)
-	}
-}
-
 // The version panel and the installer each build their own update.Options, and
 // a release listed by one catalog cannot be installed from another. An Options
 // that omits IndexURL now fails at fetch, but only once a user asks for an

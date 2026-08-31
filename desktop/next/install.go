@@ -44,7 +44,7 @@ func (a *App) GoToVersion(target string) error {
 	if update.SameVersion(target, version) {
 		return nil
 	}
-	layout := update.Here(studioLine())
+	layout := a.install().Layout
 	if layout.Root == "" {
 		return fmt.Errorf("认不出当前安装位置，无法切换版本")
 	}
@@ -170,19 +170,19 @@ func studioUpdater(target, cacheDir string) (*update.Updater, error) {
 // studioUpdaterOfKind names which artifact this install can apply. An empty
 // kind resolves the portable asset; KindDeb resolves the package channel.
 func studioUpdaterOfKind(target, cacheDir, kind string) (*update.Updater, error) {
-	client, err := netclient.NewHTTPClient(proxySpecForUpdates(), netclient.TransportOptions{})
+	client, err := netclient.NewHTTPClient(update.ProxySpec(), netclient.TransportOptions{})
 	if err != nil {
 		return nil, err
 	}
 	// Best-effort IPv4 route: a nil fallback just means retries reuse the first.
-	v4, _ := netclient.NewHTTPClient(proxySpecForUpdates(), netclient.TransportOptions{ForceIPv4: true})
+	v4, _ := netclient.NewHTTPClient(update.ProxySpec(), netclient.TransportOptions{ForceIPv4: true})
 	return update.New(update.Options{
 		Current:  version,
 		Pinned:   target,
 		HTTP:     client,
 		Fallback: v4,
 		CacheDir: cacheDir,
-		IndexURL: studioCatalog,
+		IndexURL: update.StudioCatalog,
 		Kind:     kind,
 		// Go's default user agent is what release-edge bot protection scores
 		// worst (#6005), and a 403 there looks like "no versions" to the panel.
