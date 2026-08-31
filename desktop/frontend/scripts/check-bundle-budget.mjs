@@ -167,8 +167,8 @@ console.log("\nbundle budgets");
 // recovery guidance, while the compact session-version host and latest-base
 // transcript settle ownership remain on the same startup graph.
 // Latest-base transcript settle ownership measures 457.523 KiB with this UX;
-// the final merged completion-validation path measures 457.641 KiB. Retain
-// 0.059 KiB with the smallest one-decimal ratchet.
+// the final merged completion-validation path measures 457.651 KiB. Retain
+// 0.049 KiB with the smallest one-decimal ratchet.
 const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 457.7 : 457.7;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
@@ -295,7 +295,7 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // dialog remain lazy. Completion uncertainty adds a distinct terminal notice
 // and localized startup copy without collapsing into recovery-paused UX.
 // Latest-base transcript settle ownership brings the measured path to
-// 2452.821 KiB. The final merged path measures 2453.209 KiB; retain 0.091 KiB
+// 2452.821 KiB. The final merged path measures 2453.249 KiB; retain 0.051 KiB
 // with the smallest one-decimal ratchet.
 const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_453.3 : 2_453.3;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
