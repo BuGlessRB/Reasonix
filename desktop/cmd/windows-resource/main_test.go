@@ -11,6 +11,8 @@ import (
 
 	"github.com/tc-hib/winres"
 	"github.com/tc-hib/winres/version"
+
+	"reasonix/internal/tempdir"
 )
 
 func TestParseNumericVersion(t *testing.T) {
@@ -49,7 +51,7 @@ func TestStampExecutableSupportsWindowsReleaseArchitectures(t *testing.T) {
 		{"arm64", pe.IMAGE_FILE_MACHINE_ARM64},
 	} {
 		t.Run(test.arch, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := tempdir.New(t)
 			source := filepath.Join(dir, "main.go")
 			if err := os.WriteFile(source, []byte("package main\nfunc main() {}\n"), 0o600); err != nil {
 				t.Fatal(err)
@@ -112,7 +114,7 @@ func TestReplaceFilePreservesMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows does not expose Unix executable mode bits")
 	}
-	path := filepath.Join(t.TempDir(), "program.exe")
+	path := filepath.Join(tempdir.New(t), "program.exe")
 	if err := os.WriteFile(path, []byte("old"), 0o751); err != nil {
 		t.Fatal(err)
 	}

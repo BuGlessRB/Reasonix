@@ -9,10 +9,12 @@ import (
 
 	"reasonix/internal/installlayout"
 	"reasonix/internal/repair"
+
+	"reasonix/internal/tempdir"
 )
 
 func TestPreferVersionedWindowsActivation(t *testing.T) {
-	staging := t.TempDir()
+	staging := tempdir.New(t)
 	if preferVersionedWindowsActivation(staging) {
 		t.Fatal("empty staging must not prefer versioned")
 	}
@@ -32,8 +34,8 @@ func TestPreferVersionedWindowsActivation(t *testing.T) {
 }
 
 func TestActivateVersionedWindowsFromStaging(t *testing.T) {
-	installDir := t.TempDir()
-	staging := t.TempDir()
+	installDir := tempdir.New(t)
+	staging := tempdir.New(t)
 	for _, name := range []string{
 		"reasonix-desktop.exe",
 		"reasonix-cli.exe",
@@ -95,8 +97,8 @@ func TestActivateVersionedWindowsFromStaging(t *testing.T) {
 }
 
 func TestInstallStagedWindowsReleaseUnitPrefersVersioned(t *testing.T) {
-	installDir := t.TempDir()
-	staging := t.TempDir()
+	installDir := tempdir.New(t)
+	staging := tempdir.New(t)
 	for _, name := range []string{
 		"reasonix-desktop.exe",
 		"reasonix-cli.exe",

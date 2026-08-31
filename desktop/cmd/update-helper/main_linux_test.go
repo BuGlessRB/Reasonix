@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"aead.dev/minisign"
+
+	"reasonix/internal/tempdir"
 )
 
 func TestSanitizeHelperErrorStripsPaths(t *testing.T) {
@@ -163,7 +165,7 @@ func TestParsePhaseLine(t *testing.T) {
 }
 
 func TestCopyOwnedRegularFileRejectsSymlinkFailClosed(t *testing.T) {
-	dir := t.TempDir()
+	dir := tempdir.New(t)
 	target := filepath.Join(dir, "real.deb")
 	if err := os.WriteFile(target, []byte("deb"), 0o600); err != nil {
 		t.Fatal(err)
@@ -183,7 +185,7 @@ func TestCopyOwnedRegularFileRejectsWrongOwner(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("running as root; cannot construct a non-self-owned file cheaply")
 	}
-	dir := t.TempDir()
+	dir := tempdir.New(t)
 	src := filepath.Join(dir, "in.deb")
 	if err := os.WriteFile(src, []byte("package-bytes"), 0o600); err != nil {
 		t.Fatal(err)
@@ -196,7 +198,7 @@ func TestCopyOwnedRegularFileRejectsWrongOwner(t *testing.T) {
 }
 
 func TestCopyOwnedRegularFileRejectsOversize(t *testing.T) {
-	dir := t.TempDir()
+	dir := tempdir.New(t)
 	src := filepath.Join(dir, "in.deb")
 	if err := os.WriteFile(src, []byte("0123456789"), 0o600); err != nil {
 		t.Fatal(err)
@@ -208,7 +210,7 @@ func TestCopyOwnedRegularFileRejectsOversize(t *testing.T) {
 }
 
 func TestCopyOwnedRegularFileCopiesMatchingOwner(t *testing.T) {
-	dir := t.TempDir()
+	dir := tempdir.New(t)
 	src := filepath.Join(dir, "in.deb")
 	payload := []byte("package-bytes")
 	if err := os.WriteFile(src, payload, 0o600); err != nil {
@@ -286,7 +288,7 @@ func baseFakeDeps(p *installProbe) installDeps {
 
 func writeInstallInputs(t *testing.T) (pkg, sig string) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := tempdir.New(t)
 	pkg = filepath.Join(dir, "Reasonix.deb")
 	sig = filepath.Join(dir, "Reasonix.deb.minisig")
 	if err := os.WriteFile(pkg, []byte("deb-payload"), 0o600); err != nil {

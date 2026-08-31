@@ -15,6 +15,8 @@ import (
 	"golang.org/x/sys/windows"
 
 	"reasonix/internal/repair"
+
+	"reasonix/internal/tempdir"
 )
 
 func TestInstallerCommandShowsUpdateProgressAndPassesUnquotedDFlagLast(t *testing.T) {
@@ -94,7 +96,7 @@ func TestWindowsPEMachineMatchesSupportedArchitectures(t *testing.T) {
 }
 
 func TestClaimVerifiedWindowsUpdateHelperExecutionFreezesPath(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reasonix-update-helper.exe")
+	path := filepath.Join(tempdir.New(t), "reasonix-update-helper.exe")
 	content := []byte("verified-helper")
 	if err := os.WriteFile(path, content, 0o700); err != nil {
 		t.Fatal(err)
@@ -120,7 +122,7 @@ func TestClaimVerifiedWindowsUpdateHelperExecutionFreezesPath(t *testing.T) {
 }
 
 func TestClaimVerifiedWindowsUpdateHelperExecutionRejectsHashDrift(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reasonix-update-helper.exe")
+	path := filepath.Join(tempdir.New(t), "reasonix-update-helper.exe")
 	if err := os.WriteFile(path, []byte("tampered"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +133,7 @@ func TestClaimVerifiedWindowsUpdateHelperExecutionRejectsHashDrift(t *testing.T)
 }
 
 func TestStageWindowsUpdateHelperCopyAllocatesExclusiveNodes(t *testing.T) {
-	dir := t.TempDir()
+	dir := tempdir.New(t)
 	content := []byte("verified-helper")
 	first, err := stageWindowsUpdateHelperCopy(dir, content)
 	if err != nil {
@@ -153,7 +155,7 @@ func TestStageWindowsUpdateHelperCopyAllocatesExclusiveNodes(t *testing.T) {
 }
 
 func TestPreparedWindowsUpdateHelperSHA256BindsReleaseUnitMember(t *testing.T) {
-	installDir := t.TempDir()
+	installDir := tempdir.New(t)
 	helper := filepath.Join(installDir, windowsUpdateHelperFileName)
 	expected := strings.Repeat("a", sha256.Size*2)
 	prepared := &repair.UpdateTransaction{
@@ -179,7 +181,7 @@ func TestPreparedWindowsUpdateHelperSHA256BindsReleaseUnitMember(t *testing.T) {
 }
 
 func TestPrepareWindowsUpdateHelperRejectsPreparedHashDrift(t *testing.T) {
-	installDir := t.TempDir()
+	installDir := tempdir.New(t)
 	if err := os.WriteFile(
 		filepath.Join(installDir, windowsUpdateHelperFileName),
 		[]byte("changed-helper"),
@@ -188,7 +190,7 @@ func TestPrepareWindowsUpdateHelperRejectsPreparedHashDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 	prepared := sha256.Sum256([]byte("prepared-helper"))
-	_, _, err := prepareWindowsUpdateHelper(installDir, t.TempDir(), fmt.Sprintf("%x", prepared))
+	_, _, err := prepareWindowsUpdateHelper(installDir, tempdir.New(t), fmt.Sprintf("%x", prepared))
 	if err == nil || !strings.Contains(err.Error(), "changed after transaction prepare") {
 		t.Fatalf("changed packaged helper = %v", err)
 	}

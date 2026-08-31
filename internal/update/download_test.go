@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"aead.dev/minisign"
+
+	"reasonix/internal/tempdir"
 )
 
 // release is one published version as the catalog and its manifest describe it.
@@ -94,7 +96,7 @@ func (rs *releaseServer) updater(t *testing.T, current string) *Updater {
 		Current:  current,
 		IndexURL: rs.URL + "/versions.json",
 		HTTP:     rs.Client(),
-		CacheDir: t.TempDir(),
+		CacheDir: tempdir.New(t),
 	})
 }
 

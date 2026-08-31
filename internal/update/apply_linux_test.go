@@ -10,14 +10,16 @@ import (
 	"testing"
 
 	"reasonix/internal/installlayout"
+
+	"reasonix/internal/tempdir"
 )
 
 // The tarball still carries reasonix-guard for v1.18-v1.19 updaters reading the
 // same archive. A v1.20+ install must extract it and leave it nowhere on disk,
 // or the next launch has two entry points disagreeing about which is current.
 func TestVersionedInstallActivatesWithoutPersistingGuard(t *testing.T) {
-	root := t.TempDir()
-	source := t.TempDir()
+	root := tempdir.New(t)
+	source := tempdir.New(t)
 	for _, name := range []string{installlayout.DesktopBinaryName(), installlayout.CLIBinaryName()} {
 		if err := os.WriteFile(filepath.Join(source, name), []byte("old-"+name), 0o700); err != nil {
 			t.Fatal(err)
@@ -43,7 +45,7 @@ func TestVersionedInstallActivatesWithoutPersistingGuard(t *testing.T) {
 		headers = append(headers, regularMember(name, body))
 		bodies = append(bodies, body)
 	}
-	artifact := filepath.Join(t.TempDir(), "release.tar.gz")
+	artifact := filepath.Join(tempdir.New(t), "release.tar.gz")
 	if err := os.WriteFile(artifact, makeArchive(t, headers, bodies), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -84,8 +86,8 @@ func TestVersionedInstallActivatesWithoutPersistingGuard(t *testing.T) {
 // Rolling back is publishing an older version directory. Nothing on this path
 // may ask whether the target is ahead of what is running.
 func TestVersionedInstallGoesBackwards(t *testing.T) {
-	root := t.TempDir()
-	source := t.TempDir()
+	root := tempdir.New(t)
+	source := tempdir.New(t)
 	for _, name := range []string{installlayout.DesktopBinaryName(), installlayout.CLIBinaryName()} {
 		if err := os.WriteFile(filepath.Join(source, name), []byte("v2-"+name), 0o700); err != nil {
 			t.Fatal(err)
@@ -111,7 +113,7 @@ func TestVersionedInstallGoesBackwards(t *testing.T) {
 		headers = append(headers, regularMember(name, body))
 		bodies = append(bodies, body)
 	}
-	artifact := filepath.Join(t.TempDir(), "old.tar.gz")
+	artifact := filepath.Join(tempdir.New(t), "old.tar.gz")
 	if err := os.WriteFile(artifact, makeArchive(t, headers, bodies), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"reasonix/internal/tempdir"
 )
 
 func sha256Hex(data []byte) string {
@@ -23,7 +25,7 @@ func assetFor(data []byte, name string) Asset {
 }
 
 func TestCacheRoundTrip(t *testing.T) {
-	c := Cache{Dir: t.TempDir()}
+	c := Cache{Dir: tempdir.New(t)}
 	data := []byte("verified artifact")
 	asset := assetFor(data, "Reasonix-linux-amd64.tar.gz")
 
@@ -55,7 +57,7 @@ func TestCacheRoundTrip(t *testing.T) {
 // A rollback deliberately installs a version that is not the newest, so the
 // reader must refuse a cache that is intact in every way except the version.
 func TestCacheRefusesAnotherVersion(t *testing.T) {
-	c := Cache{Dir: t.TempDir()}
+	c := Cache{Dir: tempdir.New(t)}
 	data := []byte("verified artifact")
 	asset := assetFor(data, "Reasonix-linux-amd64.tar.gz")
 	if _, err := c.Save("v9.9.9", asset, data, KindTarball, nil); err != nil {
@@ -73,7 +75,7 @@ func TestCacheRefusesAnotherVersion(t *testing.T) {
 }
 
 func TestCacheRejectsTamperedArtifact(t *testing.T) {
-	c := Cache{Dir: t.TempDir()}
+	c := Cache{Dir: tempdir.New(t)}
 	data := []byte("verified artifact")
 	asset := assetFor(data, "Reasonix-linux-amd64.tar.gz")
 	meta, err := c.Save("v9.9.9", asset, data, KindTarball, nil)
@@ -92,7 +94,7 @@ func TestCacheRejectsTamperedArtifact(t *testing.T) {
 }
 
 func TestCacheRejectsAMismatchedDigestOnSave(t *testing.T) {
-	c := Cache{Dir: t.TempDir()}
+	c := Cache{Dir: tempdir.New(t)}
 	data := []byte("verified artifact")
 	asset := assetFor(data, "Reasonix-linux-amd64.tar.gz")
 	asset.SHA256 = sha256Hex([]byte("something else"))
@@ -102,7 +104,7 @@ func TestCacheRejectsAMismatchedDigestOnSave(t *testing.T) {
 }
 
 func TestDebCacheRequiresSignatureAndRejectsTarballReuse(t *testing.T) {
-	c := Cache{Dir: t.TempDir()}
+	c := Cache{Dir: tempdir.New(t)}
 	data := []byte("deb-bytes")
 	asset := assetFor(data, "Reasonix-linux-amd64.deb")
 
@@ -136,7 +138,7 @@ func TestDebCacheRequiresSignatureAndRejectsTarballReuse(t *testing.T) {
 // Metadata written before artifactKind existed is a portable tarball, and must
 // keep working across the update that introduced the field.
 func TestLegacyMetadataWithoutKindStaysUsable(t *testing.T) {
-	c := Cache{Dir: t.TempDir()}
+	c := Cache{Dir: tempdir.New(t)}
 	data := []byte("tarball-bytes")
 	asset := assetFor(data, "Reasonix-linux-amd64.tar.gz")
 	if _, err := c.Save("v9.9.9", asset, data, KindTarball, nil); err != nil {
@@ -155,7 +157,7 @@ func TestLegacyMetadataWithoutKindStaysUsable(t *testing.T) {
 // Channels were retired with canary. Metadata that still names one reads back
 // unchanged, and metadata that names a retired one is not rejected for it.
 func TestCacheIgnoresTheChannelItWasWrittenWith(t *testing.T) {
-	c := Cache{Dir: t.TempDir()}
+	c := Cache{Dir: tempdir.New(t)}
 	data := []byte("verified artifact")
 	asset := assetFor(data, "Reasonix-linux-amd64.tar.gz")
 	if _, err := c.Save("v9.9.9", asset, data, KindTarball, nil); err != nil {
@@ -172,7 +174,7 @@ func TestCacheIgnoresTheChannelItWasWrittenWith(t *testing.T) {
 }
 
 func TestCacheRejectsAnotherPlatform(t *testing.T) {
-	c := Cache{Dir: t.TempDir()}
+	c := Cache{Dir: tempdir.New(t)}
 	data := []byte("verified artifact")
 	asset := assetFor(data, "Reasonix-linux-amd64.tar.gz")
 	if _, err := c.Save("v9.9.9", asset, data, KindTarball, nil); err != nil {

@@ -15,6 +15,8 @@ import (
 	"golang.org/x/sys/unix"
 
 	"reasonix/internal/repair"
+
+	"reasonix/internal/tempdir"
 )
 
 // duplicateMacHandoffFD gives the in-process helper the same exclusive FD
@@ -121,7 +123,7 @@ func macHandoffConfigFor(tx *repair.UpdateTransaction) macUpdateHandoffConfig {
 }
 
 func TestMacUpdateHandoffWaitsForExactProcessAndRollsBackLaunchFailure(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -186,7 +188,7 @@ func TestMacUpdateHandoffWaitsForExactProcessAndRollsBackLaunchFailure(t *testin
 }
 
 func TestMacUpdateHandoffRetainsRecoveryStateWhenRollbackRestoreFails(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -263,7 +265,7 @@ func TestMacUpdateHandoffRetainsRecoveryStateWhenRollbackRestoreFails(t *testing
 }
 
 func TestMacUpdateHandoffRestoresOriginalWhenReplacementChangesDuringRollback(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -331,7 +333,7 @@ func TestMacUpdateHandoffRestoresOriginalWhenReplacementChangesDuringRollback(t 
 }
 
 func TestMacUpdateHandoffRejectsBackupChangedDuringRollbackPublish(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -398,7 +400,7 @@ func TestMacUpdateHandoffRejectsBackupChangedDuringRollbackPublish(t *testing.T)
 }
 
 func TestMacUpdateHandoffHoldsMutationLockDuringSwap(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -484,7 +486,7 @@ func TestMacUpdateHandoffHoldsMutationLockDuringSwap(t *testing.T) {
 }
 
 func TestMacUpdateHandoffReverifiesStagedBundleBeforeSwap(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -532,7 +534,7 @@ func TestMacUpdateHandoffReverifiesStagedBundleBeforeSwap(t *testing.T) {
 }
 
 func TestMacUpdateHandoffPreservesStateWhenSafeClearFails(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -594,7 +596,7 @@ func TestMacUpdateHandoffPreservesStateWhenSafeClearFails(t *testing.T) {
 }
 
 func TestMacUpdateHandoffRestartsOriginalAfterRejectedClaim(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -662,7 +664,7 @@ func TestMacUpdateHandoffRestartsOriginalAfterRejectedClaim(t *testing.T) {
 }
 
 func TestMacUpdateHandoffRollsBackWhenInstalledBundleFailsVerification(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -722,7 +724,7 @@ func TestMacUpdateHandoffRollsBackWhenInstalledBundleFailsVerification(t *testin
 }
 
 func TestMacUpdateHandoffRestoresOriginalWhenItChangesDuringRename(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -797,7 +799,7 @@ func TestMacUpdateHandoffRestoresOriginalWhenItChangesDuringRename(t *testing.T)
 }
 
 func TestMacUpdateHandoffRejectsTransactionChangedDuringPIDWait(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -857,7 +859,7 @@ func TestMacUpdateHandoffRejectsTransactionChangedDuringPIDWait(t *testing.T) {
 }
 
 func TestMacUpdateHandoffRejectsTransactionRewrittenBeforeFirstRead(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -916,7 +918,7 @@ func TestMacUpdateHandoffRejectsTransactionRewrittenBeforeFirstRead(t *testing.T
 }
 
 func TestMacUpdateHandoffPreservesConcurrentCreateBeforePublish(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	backupApp := oldApp + ".reasonix-update-backup"
@@ -1030,7 +1032,7 @@ func TestMacUpdateHandoffReadinessSurfacesChildStartupFailure(t *testing.T) {
 	readMacUpdateHandoff = func() (*repair.UpdateTransaction, error) {
 		return nil, fmt.Errorf("pending transaction is unreadable")
 	}
-	macHandoffLogPath = func() string { return filepath.Join(t.TempDir(), "update-helper.log") }
+	macHandoffLogPath = func() string { return filepath.Join(tempdir.New(t), "update-helper.log") }
 	t.Cleanup(func() {
 		readMacUpdateHandoff = originalRead
 		macHandoffLogPath = originalLogPath
@@ -1142,7 +1144,7 @@ func TestMacUpdateHandoffHandshakeRejectsParentExit(t *testing.T) {
 }
 
 func TestMacUpdateHandoffParentExitCancelsPreparedTransaction(t *testing.T) {
-	root := t.TempDir()
+	root := tempdir.New(t)
 	oldApp := filepath.Join(root, "Reasonix.app")
 	newApp := filepath.Join(root, "staging", "Reasonix.app")
 	pending := filepath.Join(root, "pending.json")
@@ -1201,7 +1203,7 @@ func TestMacUpdateHandoffParentExitCancelsPreparedTransaction(t *testing.T) {
 }
 
 func TestMacHandoffRenameDoesNotReplaceExistingDestination(t *testing.T) {
-	dir := t.TempDir()
+	dir := tempdir.New(t)
 	source := filepath.Join(dir, "source")
 	destination := filepath.Join(dir, "destination")
 	if err := os.WriteFile(source, []byte("source"), 0o600); err != nil {
@@ -1222,7 +1224,7 @@ func TestMacHandoffRenameDoesNotReplaceExistingDestination(t *testing.T) {
 }
 
 func TestRetainMacHandoffNodeRetriesNameCollision(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "Reasonix.app")
+	path := filepath.Join(tempdir.New(t), "Reasonix.app")
 	if err := os.Mkdir(path, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -1250,7 +1252,7 @@ func TestRetainMacHandoffNodeRetriesNameCollision(t *testing.T) {
 }
 
 func TestCleanupOwnedMacUpdateDirectoryPreservesConcurrentRecreate(t *testing.T) {
-	parent := t.TempDir()
+	parent := tempdir.New(t)
 	path, err := os.MkdirTemp(parent, ".reasonix-update-install-*")
 	if err != nil {
 		t.Fatal(err)
@@ -1282,7 +1284,7 @@ func TestCleanupOwnedMacUpdateDirectoryPreservesConcurrentRecreate(t *testing.T)
 }
 
 func TestCleanupOwnedMacUpdateDirectoryRejectsReplacedRoot(t *testing.T) {
-	parent := t.TempDir()
+	parent := tempdir.New(t)
 	path, err := os.MkdirTemp(parent, ".reasonix-update-install-*")
 	if err != nil {
 		t.Fatal(err)
@@ -1312,7 +1314,7 @@ func TestCleanupOwnedMacUpdateDirectoryRejectsReplacedRoot(t *testing.T) {
 
 func TestMacUpdateHandoffSerializesWithConcurrentRollback(t *testing.T) {
 	// Ensure LockRepairMutations used by handoff and repair share identity.
-	root, err := filepath.EvalSymlinks(t.TempDir())
+	root, err := filepath.EvalSymlinks(tempdir.New(t))
 	if err != nil {
 		t.Fatal(err)
 	}

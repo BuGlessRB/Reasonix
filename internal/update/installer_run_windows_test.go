@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"golang.org/x/sys/windows"
+
+	"reasonix/internal/tempdir"
 )
 
 func TestRunInstallerStartErrorIsActionableAndPathSafe(t *testing.T) {
@@ -47,7 +49,7 @@ func TestRunInstallerStartErrorNamesUnexpectedElevation(t *testing.T) {
 // A line that never said its installer needs admin must not reach a launch
 // call chosen for it: that guess is what shipped the elevation failure.
 func TestRunInstallerRequiresAnElevationDeclaration(t *testing.T) {
-	err := (Line{}).RunInstaller(filepath.Join(t.TempDir(), "absent.exe"))
+	err := (Line{}).RunInstaller(filepath.Join(tempdir.New(t), "absent.exe"))
 	if err == nil {
 		t.Fatal("an undeclared line was allowed to start an installer")
 	}
@@ -61,7 +63,7 @@ func TestRunInstallerRejectsMissingInstaller(t *testing.T) {
 	if err := elevated.RunInstaller(""); err == nil {
 		t.Fatal("empty installer path was accepted")
 	}
-	missing := filepath.Join(t.TempDir(), "absent.exe")
+	missing := filepath.Join(tempdir.New(t), "absent.exe")
 	err := elevated.RunInstaller(missing)
 	if err == nil {
 		t.Fatal("missing installer was accepted")

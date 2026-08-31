@@ -14,6 +14,8 @@ import (
 
 	"reasonix/internal/installlayout"
 	"reasonix/internal/repair"
+
+	"reasonix/internal/tempdir"
 )
 
 const testInstallerSHA256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -34,7 +36,7 @@ func prepareLegacyWindowsUpdate(t *testing.T, installDir, toVersion string) *rep
 }
 
 func TestStageVerifiedInstallerFreezesExpectedBytes(t *testing.T) {
-	source := filepath.Join(t.TempDir(), "installer.exe")
+	source := filepath.Join(tempdir.New(t), "installer.exe")
 	content := []byte("verified-installer")
 	if err := os.WriteFile(source, content, 0o700); err != nil {
 		t.Fatal(err)
@@ -67,7 +69,7 @@ func TestStageVerifiedInstallerFreezesExpectedBytes(t *testing.T) {
 }
 
 func TestStageVerifiedInstallerRejectsSourceHashDrift(t *testing.T) {
-	source := filepath.Join(t.TempDir(), "installer.exe")
+	source := filepath.Join(tempdir.New(t), "installer.exe")
 	if err := os.WriteFile(source, []byte("different"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -89,8 +91,8 @@ func TestRunRequiresTargetVersionBeforeStartingInstaller(t *testing.T) {
 }
 
 func TestRunVersionedLayoutDoesNotReadOrClaimLegacyPending(t *testing.T) {
-	installDir := t.TempDir()
-	seed := t.TempDir()
+	installDir := tempdir.New(t)
+	seed := tempdir.New(t)
 	for _, name := range []string{"reasonix-desktop.exe", "reasonix-cli.exe", "reasonix-update-helper.exe"} {
 		if err := os.WriteFile(filepath.Join(seed, name), []byte("old-"+name), 0o700); err != nil {
 			t.Fatal(err)
@@ -178,8 +180,8 @@ func TestRunVersionedLayoutDoesNotReadOrClaimLegacyPending(t *testing.T) {
 }
 
 func TestRunHoldsReleaseUnitLockAcrossInstallerHandoff(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	installDir := t.TempDir()
+	t.Setenv("REASONIX_HOME", tempdir.New(t))
+	installDir := tempdir.New(t)
 	pending := prepareLegacyWindowsUpdate(t, installDir, "v2")
 	var events []string
 	originalWait := waitForProcessExitFn
@@ -263,7 +265,7 @@ func TestRunHoldsReleaseUnitLockAcrossInstallerHandoff(t *testing.T) {
 }
 
 func TestRunDoesNotClaimUpdateBeforeParentExits(t *testing.T) {
-	installDir := t.TempDir()
+	installDir := tempdir.New(t)
 	originalWait := waitForProcessExitFn
 	originalInstaller := runInstallerFn
 	originalClaim := claimPendingFileUpdateFn
@@ -305,7 +307,7 @@ func TestRunDoesNotClaimUpdateBeforeParentExits(t *testing.T) {
 }
 
 func TestRunRelaunchesWhenLegacyPendingCannotBeClaimed(t *testing.T) {
-	installDir := t.TempDir()
+	installDir := tempdir.New(t)
 	originalWait := waitForProcessExitFn
 	originalRelaunch := startRelaunchFn
 	originalClaim := claimPendingFileUpdateFn
@@ -343,8 +345,8 @@ func TestRunRelaunchesWhenLegacyPendingCannotBeClaimed(t *testing.T) {
 }
 
 func TestRunCancelsTransactionWhenStagedExtractionFails(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	installDir := t.TempDir()
+	t.Setenv("REASONIX_HOME", tempdir.New(t))
+	installDir := tempdir.New(t)
 	originalWait := waitForProcessExitFn
 	originalInstaller := runInstallerFn
 	originalRelaunch := startRelaunchFn
@@ -394,8 +396,8 @@ func TestRunCancelsTransactionWhenStagedExtractionFails(t *testing.T) {
 }
 
 func TestRunTreatsInstalledReleaseUnitRecordingFailureAsApplyFailure(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	installDir := t.TempDir()
+	t.Setenv("REASONIX_HOME", tempdir.New(t))
+	installDir := tempdir.New(t)
 	originalWait := waitForProcessExitFn
 	originalInstaller := runInstallerFn
 	originalRelaunch := startRelaunchFn
@@ -462,8 +464,8 @@ func TestRunTreatsInstalledReleaseUnitRecordingFailureAsApplyFailure(t *testing.
 }
 
 func TestRunRelaunchesWhenStagingIdentityCannotBeBound(t *testing.T) {
-	t.Setenv("REASONIX_HOME", t.TempDir())
-	installDir := t.TempDir()
+	t.Setenv("REASONIX_HOME", tempdir.New(t))
+	installDir := tempdir.New(t)
 	originalWait := waitForProcessExitFn
 	originalInstaller := runInstallerFn
 	originalRelaunch := startRelaunchFn
@@ -524,7 +526,7 @@ func TestRunRelaunchesWhenStagingIdentityCannotBeBound(t *testing.T) {
 }
 
 func TestClaimVerifiedInstallerForExecutionFreezesPath(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "installer.exe")
+	path := filepath.Join(tempdir.New(t), "installer.exe")
 	content := []byte("verified-installer")
 	if err := os.WriteFile(path, content, 0o700); err != nil {
 		t.Fatal(err)
@@ -550,7 +552,7 @@ func TestClaimVerifiedInstallerForExecutionFreezesPath(t *testing.T) {
 }
 
 func TestClaimVerifiedInstallerForExecutionRejectsHashDrift(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "installer.exe")
+	path := filepath.Join(tempdir.New(t), "installer.exe")
 	if err := os.WriteFile(path, []byte("tampered"), 0o700); err != nil {
 		t.Fatal(err)
 	}

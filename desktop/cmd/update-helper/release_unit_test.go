@@ -8,11 +8,12 @@ import (
 	"testing"
 
 	"reasonix/internal/repair"
+	"reasonix/internal/tempdir"
 	"reasonix/internal/update"
 )
 
 func TestLoadWindowsStagedReleaseUnitPreflightsAllMembersAndPublishesDesktopLast(t *testing.T) {
-	staging := t.TempDir()
+	staging := tempdir.New(t)
 	for name, content := range map[string]string{
 		"reasonix-desktop.exe":       "desktop-v2",
 		"reasonix-guard.exe":         "guard-v2",
@@ -25,7 +26,7 @@ func TestLoadWindowsStagedReleaseUnitPreflightsAllMembersAndPublishesDesktopLast
 		}
 	}
 	useTestWindowsPayloadManifest(t, staging, "v2")
-	installDir := t.TempDir()
+	installDir := tempdir.New(t)
 	claimed := &repair.UpdateTransaction{
 		SchemaVersion: 1,
 		ToVersion:     "v2",
@@ -68,12 +69,12 @@ func TestLoadWindowsStagedReleaseUnitPreflightsAllMembersAndPublishesDesktopLast
 }
 
 func TestLoadWindowsStagedReleaseUnitRejectsIncompletePayloadBeforePublish(t *testing.T) {
-	staging := t.TempDir()
+	staging := tempdir.New(t)
 	if err := os.WriteFile(filepath.Join(staging, "reasonix-desktop.exe"), []byte("desktop-v2"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	useTestWindowsPayloadManifest(t, staging, "v2")
-	installDir := t.TempDir()
+	installDir := tempdir.New(t)
 	claimed := &repair.UpdateTransaction{
 		SchemaVersion: 1,
 		ToVersion:     "v2",
@@ -122,7 +123,7 @@ func TestValidateWindowsClaimedReleaseUnitRequiresExactTargets(t *testing.T) {
 	t.Run("outside", func(t *testing.T) {
 		claimed := *complete
 		claimed.Files = append([]repair.UpdateTransactionFile(nil), complete.Files...)
-		claimed.Files[1].TargetPath = filepath.Join(t.TempDir(), filepath.Base(claimed.Files[1].TargetPath))
+		claimed.Files[1].TargetPath = filepath.Join(tempdir.New(t), filepath.Base(claimed.Files[1].TargetPath))
 		if err := validateWindowsClaimedReleaseUnit(&claimed); err == nil ||
 			!strings.Contains(err.Error(), "outside") {
 			t.Fatalf("outside target error = %v", err)
@@ -139,7 +140,7 @@ func TestValidateWindowsClaimedReleaseUnitRequiresExactTargets(t *testing.T) {
 }
 
 func TestLoadWindowsStagedReleaseUnitDoesNotCreateMissingPortableAlias(t *testing.T) {
-	staging := t.TempDir()
+	staging := tempdir.New(t)
 	for _, name := range update.WindowsPayloadFileNames() {
 		content := "payload:" + name
 		if err := os.WriteFile(filepath.Join(staging, name), []byte(content), 0o700); err != nil {
@@ -147,7 +148,7 @@ func TestLoadWindowsStagedReleaseUnitDoesNotCreateMissingPortableAlias(t *testin
 		}
 	}
 	useTestWindowsPayloadManifest(t, staging, "v2")
-	installDir := t.TempDir()
+	installDir := tempdir.New(t)
 	claimed := &repair.UpdateTransaction{
 		SchemaVersion: 1,
 		ToVersion:     "v2",
@@ -197,7 +198,7 @@ func TestPublishLoadedFileUpdateReleaseUnitStopsOnFirstFailedCompareAndPublish(t
 }
 
 func TestLoadWindowsStagedReleaseUnitRejectsUnverifiedPayloadBeforePublish(t *testing.T) {
-	staging := t.TempDir()
+	staging := tempdir.New(t)
 	for _, name := range []string{
 		"reasonix-desktop.exe",
 		"reasonix-guard.exe",
@@ -224,7 +225,7 @@ func TestLoadWindowsStagedReleaseUnitRejectsUnverifiedPayloadBeforePublish(t *te
 }
 
 func TestLoadWindowsStagedReleaseUnitReadsEachSourceThroughVerifier(t *testing.T) {
-	staging := t.TempDir()
+	staging := tempdir.New(t)
 	for name, content := range map[string]string{
 		"reasonix-desktop.exe":       "desktop-v2",
 		"reasonix-guard.exe":         "guard-v2",
@@ -301,13 +302,13 @@ func TestLoadWindowsStagedReleaseUnitRejectsManifestMemberHashDrift(t *testing.T
 
 func completeWindowsStagedReleaseUnitForTest(t *testing.T, version string) (string, *repair.UpdateTransaction) {
 	t.Helper()
-	staging := t.TempDir()
+	staging := tempdir.New(t)
 	for _, name := range update.WindowsPayloadFileNames() {
 		if err := os.WriteFile(filepath.Join(staging, name), []byte("payload:"+name), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	installDir := t.TempDir()
+	installDir := tempdir.New(t)
 	files := make([]repair.UpdateTransactionFile, 0, len(update.WindowsPayloadFileNames())+1)
 	for _, name := range update.WindowsPayloadFileNames() {
 		files = append(files, repair.UpdateTransactionFile{TargetPath: filepath.Join(installDir, name)})
