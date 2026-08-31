@@ -16,6 +16,7 @@ import (
 
 	"reasonix/internal/ablation"
 	"reasonix/internal/checkpoint"
+	"reasonix/internal/completioneval"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
@@ -290,7 +291,9 @@ type TaskTool struct {
 	// capabilityRuntime is the session-shared MCP Host/specs substrate. Each
 	// sub-agent gets its own use_capability frontend so ledger state stays
 	// isolated while connections reuse the parent Host.
-	capabilityRuntime *MCPCapabilityRuntime
+	capabilityRuntime          *MCPCapabilityRuntime
+	completionEvaluatorFactory func() completioneval.Evaluator
+	completionValidation       string
 }
 
 // TaskToolOptions holds the construction parameters for a TaskTool.
@@ -315,6 +318,8 @@ type TaskToolOptions struct {
 	SubagentModel                         string
 	SubagentEffort                        string
 	ResolveProvider                       func(string, string) (provider.Provider, *provider.Pricing, int, error)
+	CompletionEvaluatorFactory            func() completioneval.Evaluator
+	CompletionValidation                  string
 }
 
 // NewTaskToolWithOptions is the internal standard constructor for TaskTool.
@@ -327,23 +332,25 @@ func NewTaskToolWithOptions(opts TaskToolOptions) *TaskTool {
 		sysPrompt = DefaultTaskSystemPrompt
 	}
 	return &TaskTool{
-		prov:             opts.Provider,
-		pricing:          opts.Pricing,
-		quoteContext:     opts.QuoteContext,
-		parentReg:        opts.ParentRegistry,
-		maxSteps:         opts.MaxSteps,
-		contextWindow:    opts.ContextWindow,
-		recentKeep:       opts.RecentKeep,
-		compactRatio:     opts.CompactRatio,
-		temperature:      opts.Temperature,
-		archiveDir:       opts.ArchiveDir,
-		keepPolicy:       opts.KeepPolicy,
-		sysPrompt:        sysPrompt,
-		gate:             opts.Gate,
-		subagentModel:    opts.SubagentModel,
-		subagentEffort:   opts.SubagentEffort,
-		resolveProvider:  opts.ResolveProvider,
-		maxSubagentDepth: DefaultMaxSubagentDepth,
+		prov:                       opts.Provider,
+		pricing:                    opts.Pricing,
+		quoteContext:               opts.QuoteContext,
+		parentReg:                  opts.ParentRegistry,
+		maxSteps:                   opts.MaxSteps,
+		contextWindow:              opts.ContextWindow,
+		recentKeep:                 opts.RecentKeep,
+		compactRatio:               opts.CompactRatio,
+		temperature:                opts.Temperature,
+		archiveDir:                 opts.ArchiveDir,
+		keepPolicy:                 opts.KeepPolicy,
+		sysPrompt:                  sysPrompt,
+		gate:                       opts.Gate,
+		subagentModel:              opts.SubagentModel,
+		subagentEffort:             opts.SubagentEffort,
+		resolveProvider:            opts.ResolveProvider,
+		maxSubagentDepth:           DefaultMaxSubagentDepth,
+		completionEvaluatorFactory: opts.CompletionEvaluatorFactory,
+		completionValidation:       normalizeCompletionValidation(opts.CompletionValidation),
 	}
 }
 

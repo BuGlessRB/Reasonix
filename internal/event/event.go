@@ -136,6 +136,7 @@ const (
 	MCPInteractionRequest
 	// SessionChanged is a content-free Serve routing barrier for all-session clients.
 	SessionChanged
+	CompletionValidation // content-free validator audit; last to keep prior Kind values wire-stable
 	// KindCount is a sentinel one past the last real Kind. New event kinds must
 	// be inserted above it so completeness tests cover them automatically.
 	KindCount
@@ -576,7 +577,8 @@ type Event struct {
 	// PhaseName is set on TurnPhase events (working|checking|verifying|reviewing).
 	PhaseName TurnPhaseName
 	// Completion is set on CompletionSummary events.
-	Completion *CompletionSummaryInfo
+	Completion           *CompletionSummaryInfo
+	CompletionValidation *CompletionValidationInfo // CompletionValidation events
 }
 
 type WorkspaceWatchState string

@@ -177,6 +177,10 @@ An explicit model-round limit (`max_steps`) sends a `[warning]`, returns
 `max_turn_requests`, and records a paused vendor outcome. A host task-time,
 token, or cost budget also sends a `[warning]` and records a paused outcome,
 but returns `end_turn` because ACP v1 has no task-budget-specific stop reason.
+When the completion validator cannot confirm a candidate result
+(`completion_validation = "enforce"`), Reasonix sends a `[warning]`, returns
+`end_turn`, and records vendor phase `completion_uncertain`; the answer and
+completed work are kept, and the next ordinary prompt continues the task.
 Client cancellation returns `cancelled`, even when the interrupted runner exits
 without an error. Other provider, tool, or runtime failures return a JSON-RPC
 `-32603 InternalError` whose message contains a bounded, credential-redacted

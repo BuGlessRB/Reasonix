@@ -38,7 +38,7 @@ export type EventKind =
   | "context_maintenance"
   | "workspace_changed"
   | "turn_phase"
-  | "completion_summary"
+  | "completion_summary" | "completion_validation"
   | "provider_unreachable";
 export type StreamAttemptAction = "begin" | "discard" | "commit";
 export type TurnStatus = "queued" | "in_progress" | "waiting_user" | "cancelling" | "completed" | "interrupted" | "failed" | "protocol_failed";
@@ -399,6 +399,7 @@ export interface WireEvent {
   phase?: string;
   /** completion_summary: content-free quality summary for role settings */
   completion?: WireCompletionSummary;
+  completionValidation?: WireCompletionValidation;
   tabId?: string; // Go's tabEventSink tags events for the correct per-tab reducer.
   runtimeEpoch?: string;
   /** Unix milliseconds recorded by the desktop host when this turn began. */
@@ -426,6 +427,8 @@ export interface WireCompletionSummary {
   /** Backend decision; authoritative when floor is present. */
   attention?: boolean;
 }
+
+export type WireCompletionValidation = { mode: "off" | "shadow" | "enforce" | string; outcome: string; attempt: number; durationMs?: number; errorClass?: string };
 
 export type WorkspaceWatchState = "active" | "degraded" | "unavailable";
 export type WorkspaceChangeOp = "create" | "write" | "remove" | "rename" | "unknown";

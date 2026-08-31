@@ -26,6 +26,10 @@ func promptStopReason(runErr error, cancelled bool, sessionID string) (StopReaso
 	if errors.As(runErr, &recoveryPause) {
 		return StopEndTurn, "", nil
 	}
+	var completionPause *agent.CompletionUncertainError
+	if errors.As(runErr, &completionPause) {
+		return StopEndTurn, clipStatusError(runErr, 2_048), nil
+	}
 	if pause, ok := agent.InspectRunPause(runErr); ok {
 		stop := StopEndTurn
 		if pause.Kind == "max_steps" {

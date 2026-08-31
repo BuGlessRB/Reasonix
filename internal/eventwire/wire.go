@@ -59,7 +59,8 @@ type Event struct {
 	// Phase is set on turn_phase events: working | checking | verifying | reviewing.
 	Phase string `json:"phase,omitempty"`
 	// Completion is set on completion_summary events (content-free quality summary).
-	Completion *CompletionSummary `json:"completion,omitempty"`
+	Completion           *CompletionSummary    `json:"completion,omitempty"`
+	CompletionValidation *CompletionValidation `json:"completionValidation,omitempty"`
 }
 
 // CompletionSummary is the JSON form of event.CompletionSummaryInfo.
@@ -207,21 +208,9 @@ func ToWire(e event.Event) Event {
 			w.Phase = e.Text
 		}
 	case event.CompletionSummary:
-		if c := e.Completion; c != nil {
-			w.Completion = &CompletionSummary{
-				Preset:             c.Preset,
-				Verdict:            c.Verdict,
-				Mutations:          c.Mutations,
-				ChecksPassed:       c.ChecksPassed,
-				ChecksFailed:       c.ChecksFailed,
-				ChecksSuppressed:   c.ChecksSuppressed,
-				Review:             c.Review,
-				GapKinds:           append([]string(nil), c.GapKinds...),
-				ConstraintDegraded: c.ConstraintDegraded,
-				Floor:              c.Floor,
-				Attention:          c.Attention,
-			}
-		}
+		w.Completion = toWireCompletionSummary(e.Completion)
+	case event.CompletionValidation:
+		w.CompletionValidation = toWireCompletionValidation(e.CompletionValidation)
 	}
 	return w
 }
@@ -625,6 +614,7 @@ var kindNames = map[event.Kind]string{
 	event.MCPInteractionRequest:   "mcp_interaction",
 	event.PromptAnswered:          "prompt_answered",
 	event.SessionChanged:          "session_changed",
+	event.CompletionValidation:    "completion_validation",
 }
 
 // ContextMaintenance is the JSON form of event.ContextMaintenance.

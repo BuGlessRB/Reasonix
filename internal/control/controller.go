@@ -1093,18 +1093,6 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 	c.sink.Emit(done)
 }
 
-func turnOutcome(err error) string {
-	var readinessErr *agent.FinalReadinessError
-	if errors.As(err, &readinessErr) {
-		return event.TurnOutcomeFinalReadiness
-	}
-	var pauseErr *agent.RecoveryPauseError
-	if errors.As(err, &pauseErr) {
-		return event.TurnOutcomeRecoveryPaused
-	}
-	return ""
-}
-
 // Send starts a turn with an uncomposed message. The controller applies
 // plan-mode, memory, and background-job framing inside the async turn path.
 func (c *Controller) Send(input string) {

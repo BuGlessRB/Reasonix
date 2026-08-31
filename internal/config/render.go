@@ -231,6 +231,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# recovery_model = \"deepseek-pro\"   # optional; falls back to guardian then main model\n")
 	}
+	renderCompletionValidation(&b, c)
 	if lang := c.ReasoningLanguage(); lang != "auto" {
 		fmt.Fprintf(&b, "reasoning_language = %q   # visible reasoning language: auto|zh|en\n", lang)
 	} else {
@@ -920,6 +921,7 @@ func RenderTOMLProjectDelta(c *Config) string {
 		fmt.Fprintf(&agentBuf, "recovery_model = %q\n", c.Agent.RecoveryModel)
 		anyAgent = true
 	}
+	diffCompletionValidation(&agentBuf, *c, *d, &anyAgent)
 	if c.Agent.ReasoningLanguage != d.Agent.ReasoningLanguage {
 		if l := c.ReasoningLanguage(); l != "auto" {
 			fmt.Fprintf(&agentBuf, "reasoning_language = %q\n", l)
