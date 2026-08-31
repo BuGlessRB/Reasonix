@@ -18,12 +18,11 @@ build:
 vet:
 	go vet ./...
 
-# Build Studio and launch it. On macOS this is the ONLY correct way to run it by
-# hand: a bare binary draws its window but native panels (Add a folder…) open
-# and close in the same beat, because LaunchServices only treats a bundled
-# process as a real GUI app. The script explains the rest.
+# Build Studio and launch it. The Electron shell is the one this runs: it is a
+# real GUI app on every platform without being bundled first, so there is one
+# launch path rather than a macOS one and an everywhere-else one.
 studio:
-	bash desktop/next/run-studio.sh
+	bash desktop/electron/run-studio.sh
 
 
 fmt:

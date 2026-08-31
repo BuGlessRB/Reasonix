@@ -6,7 +6,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "build:host": "go build -o bin/reasonix-studio-host ../../cmd/reasonix-studio-host",
+    "build:host": "go build -o bin/ ../../cmd/reasonix-studio-host",
     "test": "node --test test/unit.mjs",
     "smoke": "electron test/smoke.js"
   },

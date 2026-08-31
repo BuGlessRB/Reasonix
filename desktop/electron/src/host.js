@@ -25,6 +25,7 @@ function firstLine(child) {
       clearTimeout(timer);
       child.stdout.off("data", onData);
       child.off("exit", onEarlyExit);
+      child.off("error", onSpawnFailure);
       fn(value);
     };
     const timer = setTimeout(
@@ -41,9 +42,14 @@ function firstLine(child) {
     };
     const onEarlyExit = (code) =>
       settle(reject, new Error(`the kernel exited with ${code} before saying anything`));
+    // A program that could not be started emits this and never exits, so without
+    // it the launch waited out the handshake timeout and then reported the
+    // kernel as silent — which sent the reader looking at the kernel.
+    const onSpawnFailure = (err) => settle(reject, new Error(`the kernel could not be started: ${err.message}`));
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", onData);
     child.on("exit", onEarlyExit);
+    child.on("error", onSpawnFailure);
   });
 }
 

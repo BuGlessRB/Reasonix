@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import path from "node:path";
+import os from "node:os";
 
 const require = createRequire(import.meta.url);
 const { parse } = require("../src/host.js");
@@ -118,16 +120,55 @@ test("an unreachable kernel is an answer, not a crash", async () => {
   assert.equal(await dead.trayState(), null);
 });
 
+const { appIcon, iconFile } = require("../src/appicon.js");
+const fsSync = require("node:fs");
+
+// The window icon is the one the taskbar draws, and an unnamed one is Electron's
+// own — which is what shipped: BrowserWindow carried no icon at all.
+test("every platform that draws the window icon is given one that exists", () => {
+  for (const platform of ["win32", "linux", "freebsd"]) {
+    const opts = appIcon(platform);
+    assert.ok(opts.icon, `${platform} was given no icon`);
+    assert.ok(fsSync.existsSync(opts.icon), `${platform} names a file that is not there: ${opts.icon}`);
+  }
+  // macOS reads the bundle instead, so the key is absent rather than wrong.
+  assert.deepEqual(appIcon("darwin"), {});
+  assert.equal(iconFile("darwin"), null);
+});
+
+// Windows draws the taskbar icon from the sizes inside an .ico; a PNG there is
+// scaled from one bitmap and shows it.
+test("Windows is given the format it reads the small sizes from", () => {
+  assert.equal(iconFile("win32"), "icon.ico");
+  assert.equal(iconFile("linux"), "icon.png");
+});
+
 const { profileFor } = require("../src/instance.js");
 
 // Two homes are two Studios, and the profile is what carries that into the
 // platform's own lock. Sharing one would make the second launch look like a
 // duplicate of the first.
 test("each instance gets a profile of its own", () => {
-  const base = "/tmp/profiles";
+  // Built rather than written out: on Windows path.join answers in backslashes,
+  // and a POSIX literal made the prefix check fail there for the separator.
+  const base = path.join(os.tmpdir(), "profiles");
   assert.notEqual(profileFor(base, "io.reasonix.studio.aaaa"), profileFor(base, "io.reasonix.studio.bbbb"));
   assert.ok(profileFor(base, "io.reasonix.studio.aaaa").startsWith(base));
   // An identity nobody could work out leaves the default alone rather than
   // inventing a profile that no second launch would agree on.
   assert.equal(profileFor(base, ""), base);
+});
+
+// A program that cannot be started emits "error" and never "exit". Waiting for
+// the handshake instead spent the full timeout and then blamed the kernel for
+// saying nothing, which is where the launch failure on Windows hid: go build
+// had written a binary Node could not spawn.
+test("a kernel that cannot be started says so, rather than going quiet", async () => {
+  const { start } = require("../src/host.js");
+  const { ready } = start(path.join(os.tmpdir(), "reasonix-no-such-kernel-b3f1"), []);
+  await assert.rejects(ready, (err) => {
+    assert.match(err.message, /could not be started/);
+    assert.doesNotMatch(err.message, /sent no handshake/);
+    return true;
+  });
 });

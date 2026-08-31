@@ -69,12 +69,13 @@ No Wails CLI is required — `scripts/studio-build.sh` drives `go build` directl
 ## Running it
 
 ```sh
-make studio          # build the SPA + shell and launch (macOS: inside an .app bundle)
+make studio          # build the SPA + kernel and launch the Electron shell
 ```
 
-On macOS that bundle is not optional: LaunchServices only treats a bundled
-process as a real GUI app, and a bare binary makes native panels — "Add a
-folder…" — open and close in the same beat.
+One launch path on every platform. Electron's own dev build is already an .app,
+so macOS treats it as a real GUI app and native panels — "Add a folder…" — open
+normally; the Wails shell needs a bundle of its own for that, which is what
+`desktop/next/run-studio.sh` still builds while it is still here.
 
 For frontend iteration, run the kernel and point Vite at it:
 
