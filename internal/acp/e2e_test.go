@@ -97,12 +97,14 @@ func (f *e2eFactory) NewSession(_ context.Context, p SessionParams) (*control.Co
 	executor := agent.New(f.prov, reg, agent.NewSession("you are a test agent"),
 		opts, p.Sink)
 	return control.New(control.Options{
-		Runner:     executor,
-		Executor:   executor,
-		Sink:       p.Sink,
-		Policy:     f.policy,
-		Label:      "fake-model",
-		SessionDir: f.sessionDir,
+		Runner: executor, Executor: executor,
+		Sink:                p.Sink,
+		Policy:              f.policy,
+		Label:               "fake-model",
+		SessionDir:          f.sessionDir,
+		SystemPrompt:        "you are a test agent",
+		OnSessionRecovered:  p.OnSessionRecovered,
+		OnSessionTransition: p.OnSessionTransition,
 	}), nil
 }
 
