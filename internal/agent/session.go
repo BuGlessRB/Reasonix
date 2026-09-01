@@ -94,6 +94,21 @@ func (s *Session) Add(m provider.Message) {
 	s.version++
 }
 
+// SetLeadingSystemPrompt updates or sets the leading system prompt message.
+func (s *Session) SetLeadingSystemPrompt(prompt string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.Messages) > 0 && s.Messages[0].Role == provider.RoleSystem {
+		s.Messages[0].Content = prompt
+	} else if prompt != "" {
+		s.Messages = append([]provider.Message{{Role: provider.RoleSystem, Content: prompt}}, s.Messages...)
+	}
+	s.version++
+}
+
 // ConsumeFinalReadinessRecovery marks the newest pending readiness checkpoint
 // consumed before any next user turn (explicit recovery or ordinary follow-up).
 // This is local metadata only, so the rewrite does not alter provider bytes or

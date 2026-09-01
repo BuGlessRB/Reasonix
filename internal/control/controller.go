@@ -846,6 +846,33 @@ func (c *Controller) ApplyExtensionSystemPrompt(prompt string) {
 	c.executor.SetSession(agent.NewSession(prompt))
 }
 
+// SystemPrompt returns the current controller system prompt.
+func (c *Controller) SystemPrompt() string {
+	if c == nil {
+		return ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.systemPrompt
+}
+
+// UpdateSystemPrompt updates the leading system prompt for the active session
+// and records it as the controller's current prompt for session rotations.
+func (c *Controller) UpdateSystemPrompt(prompt string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.systemPrompt = prompt
+	exec := c.executor
+	c.mu.Unlock()
+	if exec != nil {
+		if sess := exec.Session(); sess != nil {
+			sess.SetLeadingSystemPrompt(prompt)
+		}
+	}
+}
+
 // SetOnSessionRecovered installs the ownership handoff invoked before the
 // controller commits to an automatically created recovery branch. Frontends
 // that acquire their session owner after controller construction (for example

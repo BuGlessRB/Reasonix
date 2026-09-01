@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ExternalLink, FileText, FolderOpen, MessageSquarePlus, Pin, PinOff, TerminalSquare } from "lucide-react";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
+import { useToast } from "../lib/toast";
 import {
   WORKSPACE_CONTEXT_MENU_FILE_HEIGHT,
   WORKSPACE_CONTEXT_MENU_REF_HEIGHT,
@@ -34,6 +35,7 @@ export function WorkspaceTreeMenu({
   onAddFile: () => void;
 }) {
   const t = useT();
+  const { showToast } = useToast();
   const [isPinned, setIsPinned] = useState(false);
 
   useEffect(() => {
@@ -115,9 +117,13 @@ export function WorkspaceTreeMenu({
                   onSelect: () =>
                     closeThen(() => {
                       if (isPinned) {
-                        void app.UnpinFileForTab(workspaceTabId, target.path).catch(() => {});
+                        void app.UnpinFileForTab(workspaceTabId, target.path).catch((err: unknown) => {
+                          showToast(String((err as Error)?.message || err), "error");
+                        });
                       } else {
-                        void app.PinFileForTab(workspaceTabId, target.path).catch(() => {});
+                        void app.PinFileForTab(workspaceTabId, target.path).catch((err: unknown) => {
+                          showToast(String((err as Error)?.message || err), "error");
+                        });
                       }
                     }),
                 },

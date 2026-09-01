@@ -268,6 +268,8 @@ type Settings interface {
 	SetReasoningLanguage(lang string)
 	SetDisplayRecorder(fn func(content, display string))
 	ApplyComposerProfile(plan bool, toolApprovalMode, goal string) ([]string, error)
+	SystemPrompt() string
+	UpdateSystemPrompt(prompt string)
 }
 
 // SessionAPI is the full driving port — the composition of every sub-port. A

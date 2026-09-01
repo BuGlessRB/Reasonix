@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { FileText, Pin, X } from "lucide-react";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
+import { useToast } from "../lib/toast";
 import type { PinnedFileInfo } from "../lib/types";
 
 export function PinnedFilesShelf({
@@ -12,14 +13,17 @@ export function PinnedFilesShelf({
   pinnedFiles?: PinnedFileInfo[];
 }) {
   const t = useT();
+  const { showToast } = useToast();
 
   const handleUnpin = useCallback(
     (path: string, e: React.MouseEvent) => {
       e.stopPropagation();
       if (!tabId) return;
-      void app.UnpinFileForTab(tabId, path).catch(() => {});
+      void app.UnpinFileForTab(tabId, path).catch((err: unknown) => {
+        showToast(String((err as Error)?.message || err), "error");
+      });
     },
-    [tabId],
+    [tabId, showToast],
   );
 
   const handleOpenFile = useCallback(

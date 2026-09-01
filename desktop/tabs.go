@@ -3985,6 +3985,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 		SubagentParentLive:       a.subagentParentProbeForBuild(tab),
 		SessionRecoveryMeta:      a.tabSessionRecoveryMeta(tab),
+		PinnedContext:            tab.PinnedContextBlock(),
 		OnSessionRecovered:       a.handleTabSessionRecovered(tab),
 		OnSessionTransition:      a.handleTabSessionTransition(tab),
 		OnSessionTitleChanged:    a.onSessionTitleChanged,
@@ -4956,10 +4957,11 @@ type desktopTabEntry struct {
 	Effort           *string `json:"effort,omitempty"`
 	TokenMode        string  `json:"tokenMode,omitempty"`
 	AgentPreset      string  `json:"agentPreset,omitempty"`
-	QualityFloor     string  `json:"qualityFloor,omitempty"`
-	Mode             string  `json:"mode,omitempty"`
-	Goal             string  `json:"goal,omitempty"`
-	ToolApprovalMode string  `json:"toolApprovalMode,omitempty"`
+	QualityFloor     string   `json:"qualityFloor,omitempty"`
+	Mode             string   `json:"mode,omitempty"`
+	Goal             string   `json:"goal,omitempty"`
+	ToolApprovalMode string   `json:"toolApprovalMode,omitempty"`
+	PinnedFiles      []string `json:"pinnedFiles,omitempty"`
 }
 
 type desktopTabsFile struct {
@@ -5006,6 +5008,7 @@ func (a *App) saveTabsCollectLocked() (string, []desktopTabEntry, string, uint64
 				Mode:             persistedTabMode(currentTabMode(tab)),
 				Goal:             persistedTabGoal(tab),
 				ToolApprovalMode: persistedToolApprovalMode(currentTabToolApprovalMode(tab)),
+				PinnedFiles:      tab.GetPinnedFiles(),
 			})
 		}
 	}

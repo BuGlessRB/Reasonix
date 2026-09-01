@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import { PinnedFilesShelf } from "../components/PinnedFilesShelf";
 import { WorkspaceTreeMenu } from "../components/WorkspaceTreeMenu";
 import { LocaleProvider } from "../lib/i18n";
+import { ToastProvider } from "../lib/toast";
 import type { AppBindings } from "../lib/bridge";
 import type { PinnedFileInfo } from "../lib/types";
 
@@ -57,6 +58,7 @@ async function run() {
   let unpinnedPath = "";
   let openedPath = "";
   let pinnedViaMenu = "";
+  let shouldFailPin = false;
 
   (window as unknown as { go: { main: { App: Partial<AppBindings> } } }).go = {
     main: {
@@ -71,6 +73,9 @@ async function run() {
           return [{ path: "already_pinned.md", sizeBytes: 500, tokenEstimate: 125 }];
         },
         PinFileForTab: async (_tabId: string, path: string) => {
+          if (shouldFailPin) {
+            throw new Error("file size exceeds maximum pinned file limit");
+          }
           pinnedViaMenu = path;
           return { path, sizeBytes: 100, tokenEstimate: 25 };
         },
@@ -86,7 +91,9 @@ async function run() {
   await act(async () => {
     root.render(
       <LocaleProvider initialLocale="en">
-        <PinnedFilesShelf tabId="tab-1" pinnedFiles={[]} />
+        <ToastProvider>
+          <PinnedFilesShelf tabId="tab-1" pinnedFiles={[]} />
+        </ToastProvider>
       </LocaleProvider>,
     );
     await flushTimers();
@@ -102,7 +109,9 @@ async function run() {
   await act(async () => {
     root.render(
       <LocaleProvider initialLocale="en">
-        <PinnedFilesShelf tabId="tab-1" pinnedFiles={sampleFiles} />
+        <ToastProvider>
+          <PinnedFilesShelf tabId="tab-1" pinnedFiles={sampleFiles} />
+        </ToastProvider>
       </LocaleProvider>,
     );
     await flushTimers();
@@ -137,14 +146,16 @@ async function run() {
   await act(async () => {
     root.render(
       <LocaleProvider initialLocale="en">
-        <WorkspaceTreeMenu
-          target={{ x: 10, y: 10, path: "unpinned_file.ts", isDir: false }}
-          workspaceTabId="tab-1"
-          isScopeCurrent={() => true}
-          onClose={() => {}}
-          onAddReference={() => {}}
-          onAddFile={() => {}}
-        />
+        <ToastProvider>
+          <WorkspaceTreeMenu
+            target={{ x: 10, y: 10, path: "unpinned_file.ts", isDir: false }}
+            workspaceTabId="tab-1"
+            isScopeCurrent={() => true}
+            onClose={() => {}}
+            onAddReference={() => {}}
+            onAddFile={() => {}}
+          />
+        </ToastProvider>
       </LocaleProvider>,
     );
     await flushTimers();
@@ -162,18 +173,53 @@ async function run() {
     ok(pinnedViaMenu === "unpinned_file.ts", "Clicking Pin calls app.PinFileForTab with target path");
   }
 
-  // Test 4: WorkspaceTreeMenu Unpin action for already pinned file
+  // Test 4: WorkspaceTreeMenu Pin error surfaces Toast
+  shouldFailPin = true;
   await act(async () => {
     root.render(
       <LocaleProvider initialLocale="en">
-        <WorkspaceTreeMenu
-          target={{ x: 10, y: 10, path: "already_pinned.md", isDir: false }}
-          workspaceTabId="tab-1"
-          isScopeCurrent={() => true}
-          onClose={() => {}}
-          onAddReference={() => {}}
-          onAddFile={() => {}}
-        />
+        <ToastProvider>
+          <WorkspaceTreeMenu
+            target={{ x: 10, y: 10, path: "too_large.dat", isDir: false }}
+            workspaceTabId="tab-1"
+            isScopeCurrent={() => true}
+            onClose={() => {}}
+            onAddReference={() => {}}
+            onAddFile={() => {}}
+          />
+        </ToastProvider>
+      </LocaleProvider>,
+    );
+    await flushTimers();
+  });
+
+  const menuButtonsError = Array.from(document.querySelectorAll<HTMLButtonElement>(".workspace-tree-menu button"));
+  const pinBtnError = menuButtonsError.find((btn) => btn.textContent?.includes("Pin to Session Context"));
+  if (pinBtnError) {
+    await act(async () => {
+      pinBtnError.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+      await flushTimers();
+    });
+    const toast = document.querySelector(".toast--error");
+    ok(toast !== null, "Pinning error displays error toast");
+    ok(toast?.textContent?.includes("exceeds maximum") === true, "Toast includes error message");
+  }
+  shouldFailPin = false;
+
+  // Test 5: WorkspaceTreeMenu Unpin action for already pinned file
+  await act(async () => {
+    root.render(
+      <LocaleProvider initialLocale="en">
+        <ToastProvider>
+          <WorkspaceTreeMenu
+            target={{ x: 10, y: 10, path: "already_pinned.md", isDir: false }}
+            workspaceTabId="tab-1"
+            isScopeCurrent={() => true}
+            onClose={() => {}}
+            onAddReference={() => {}}
+            onAddFile={() => {}}
+          />
+        </ToastProvider>
       </LocaleProvider>,
     );
   });

@@ -780,6 +780,9 @@ func (a *App) restoreOrBuildTabs() {
 			}
 			tab.SessionPath = strings.TrimSpace(entry.SessionPath)
 			tab.ReadOnly = entry.ReadOnly
+			if len(entry.PinnedFiles) > 0 {
+				tab.PinnedFiles = append([]string(nil), entry.PinnedFiles...)
+			}
 			tab.sink = &tabEventSink{tabID: tab.ID, app: a, ctx: ctx}
 			a.mu.Lock()
 			a.tabs[tab.ID] = tab

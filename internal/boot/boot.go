@@ -197,7 +197,9 @@ type Options struct {
 	SandboxNetworkOverride *bool
 	SandboxBashOverride    string
 	WorkspaceOnly          bool
-	// SessionTemp is the session-private temp manager; Rebuild reuses old's.
+	// PinnedContext is optional standing context (e.g. pinned workspace files)
+	// appended to the initial system prompt.
+	PinnedContext string
 	SessionTemp *sessiontemp.Manager
 	RuntimeReload
 	// deferPublish keeps a replacement generation private until migration and
@@ -667,6 +669,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 	}
 	sysPrompt = config.ApplyOfficialDeepSeekV4ProPersona(sysPrompt, entry)
+	if p := strings.TrimSpace(opts.PinnedContext); p != "" {
+		sysPrompt += "\n\n" + p
+	}
 
 	reg := tool.NewRegistry()
 	writeRoots := cfg.WriteRootsForRoot(root)
