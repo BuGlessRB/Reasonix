@@ -32,15 +32,32 @@ const (
 	grepMaxTimeout     = 300 * time.Second
 )
 
-func formatGrep(ctx context.Context, out []string, truncated bool, to time.Duration) string {
+// grepScope names which tree produced an answer: "not in the tracked files"
+// and "not here at all" are different, and a bare "no matches" reads as the
+// second while meaning the first.
+type grepScope int
+
+const (
+	grepScopeTracked grepScope = iota // the ignore rules were in force
+	grepScopeIgnored                  // nothing tracked matched; these came from ignored paths
+	grepScopeNeither                  // nothing matched in either
+)
+
+func formatGrep(ctx context.Context, out []string, truncated bool, to time.Duration, scope grepScope) string {
 	timedOut := ctx.Err() == context.DeadlineExceeded
 	if len(out) == 0 {
 		if timedOut {
 			return fmt.Sprintf("%s; timed out after %s — narrow the path/pattern or raise timeout_seconds", tool.NoMatches, to)
 		}
+		if scope == grepScopeNeither {
+			return tool.NoMatches + "; the ignored paths were searched too, so this is absent rather than filtered"
+		}
 		return tool.NoMatches
 	}
 	res := strings.Join(out, "\n")
+	if scope == grepScopeIgnored {
+		res = "(no match in the tracked files; these are from paths the ignore rules exclude — build output, dependencies, generated code)\n" + res
+	}
 	switch {
 	case truncated:
 		res += fmt.Sprintf("\n... (truncated at %d matches)", grepMaxMatches)
@@ -70,10 +87,11 @@ type grepTool struct {
 func (grepTool) Name() string { return "grep" }
 
 func (g grepTool) Description() string {
+	const scope = " Ignored paths are searched only when nothing else matched; such matches say so, so an empty answer means absent rather than filtered."
 	if g.rg != "" {
-		return "Search for a regular expression in a file, or recursively under a directory — ripgrep-backed, so it honors .gitignore. Returns matching lines as path:line:text, capped at 200 matches."
+		return "Search for a regular expression in a file, or recursively under a directory — ripgrep-backed, so it honors .gitignore. Returns matching lines as path:line:text, capped at 200 matches." + scope
 	}
-	return "Search for a regular expression in a file, or recursively under a directory (skips hidden files and files matched by .gitignore). Returns matching lines as path:line:text, capped at 200 matches."
+	return "Search for a regular expression in a file, or recursively under a directory (skips hidden files and files matched by .gitignore). Returns matching lines as path:line:text, capped at 200 matches." + scope
 }
 
 func (grepTool) Schema() json.RawMessage {
@@ -137,7 +155,7 @@ func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	}
 	if confineRead(g.forbidRoots, p.Path) {
 		if info.IsDir() {
-			return formatGrep(ctx, nil, false, to), nil
+			return formatGrep(ctx, nil, false, to, grepScopeTracked), nil
 		}
 		err := &os.PathError{Op: "stat", Path: p.Path, Err: os.ErrNotExist}
 		if rp.External {
@@ -175,10 +193,24 @@ func grepGlobMatches(glob, root, file string) bool {
 	return fileutil.MatchSlashGlob(rel, glob)
 }
 
+// runNative answers in the two phases ripgrep does. A single file is searched
+// once: nothing was filtered.
 func (g grepTool) runNative(ctx context.Context, pattern, path, glob string, info os.FileInfo, to time.Duration, rp ResolvedPath) (string, error) {
+	out, truncated, err := g.nativePass(ctx, pattern, path, glob, info, rp, false)
+	if err != nil || len(out) > 0 || ctx.Err() != nil || !info.IsDir() {
+		return formatGrep(ctx, out, truncated, to, grepScopeTracked), err
+	}
+	wide, wideTruncated, wideErr := g.nativePass(ctx, pattern, path, glob, info, rp, true)
+	if wideErr != nil || len(wide) == 0 {
+		return formatGrep(ctx, nil, false, to, grepScopeNeither), nil
+	}
+	return formatGrep(ctx, wide, wideTruncated, to, grepScopeIgnored), nil
+}
+
+func (g grepTool) nativePass(ctx context.Context, pattern, path, glob string, info os.FileInfo, rp ResolvedPath, wide bool) ([]string, bool, error) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
-		return "", fmt.Errorf("invalid pattern: %w", err)
+		return nil, false, fmt.Errorf("invalid pattern: %w", err)
 	}
 
 	var out []string
@@ -262,7 +294,7 @@ func (g grepTool) runNative(ctx context.Context, pattern, path, glob string, inf
 
 	if info.IsDir() {
 		root := path // the walk callback shadows path with each entry
-		ig := newWalkIgnorer(path, g.forbidRoots)
+		ig := newWalkIgnorer(path, g.forbidRoots, wide)
 		_ = filepath.WalkDir(path, func(path string, d os.DirEntry, err error) error {
 			if ctx.Err() != nil {
 				return ctx.Err() // abort promptly on cancel — a huge tree is interruptible
@@ -289,20 +321,42 @@ func (g grepTool) runNative(ctx context.Context, pattern, path, glob string, inf
 		_ = searchFile(path)
 	}
 
-	return formatGrep(ctx, out, truncated, to), nil
+	return out, truncated, nil
 }
 
-// runRipgrep delegates the search to ripgrep, which already emits
-// path:line:text with these flags and honors .gitignore. Output is streamed and
-// capped at grepMaxMatches so a flood of hits can't blow up memory.
-// The ripgrep subprocess is wrapped in the OS sandbox so forbid-read
-// directories are invisible to it.
+// runRipgrep searches the tracked tree, and only when that finds nothing goes
+// on to the paths the ignore rules exclude. Not a wider default: that pass
+// walks the build output, so it is paid only where the cheap answer was empty.
 func (g grepTool) runRipgrep(ctx context.Context, pattern, path, glob string, to time.Duration, rp ResolvedPath) (string, bool, error) {
+	out, truncated, wrapped, err := g.ripgrepPass(ctx, pattern, path, glob, rp, false)
+	if err != nil || (len(g.forbidRoots) > 0 && !wrapped) {
+		return "", wrapped, err
+	}
+	if len(out) > 0 || ctx.Err() != nil {
+		return formatGrep(ctx, out, truncated, to, grepScopeTracked), wrapped, nil
+	}
+	wide, wideTruncated, _, wideErr := g.ripgrepPass(ctx, pattern, path, glob, rp, true)
+	if wideErr != nil || len(wide) == 0 {
+		return formatGrep(ctx, nil, false, to, grepScopeNeither), wrapped, nil
+	}
+	return formatGrep(ctx, wide, wideTruncated, to, grepScopeIgnored), wrapped, nil
+}
+
+// ripgrepPass is one delegation: ripgrep already emits path:line:text and
+// honors .gitignore. Output is streamed and capped at grepMaxMatches so a flood
+// of hits cannot blow up memory, and the subprocess is wrapped in the OS
+// sandbox so forbid-read directories are invisible to it.
+func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, rp ResolvedPath, wide bool) ([]string, bool, bool, error) {
 	// Build the ripgrep argv and wrap it in the OS sandbox so forbid-read
 	// directories are invisible to the ripgrep subprocess.
 	args := []string{
 		g.rg,
 		"--no-heading", "--line-number", "--with-filename", "--color", "never",
+	}
+	if wide {
+		// The ignore rules and nothing else: the VCS store is history rather
+		// than a place a build writes, and hidden files stay hidden.
+		args = append(args, "--no-ignore-vcs", "--no-ignore-dot", "--no-ignore-exclude", "--glob", "!.git/**")
 	}
 	if glob != "" {
 		// Before the excludes below: ripgrep lets a later glob win, so the
@@ -330,7 +384,7 @@ func (g grepTool) runRipgrep(ctx context.Context, pattern, path, glob string, to
 	if m := g.sessionTempManager(ctx); m != nil {
 		l, err := m.Acquire()
 		if err != nil {
-			return "", false, fmt.Errorf("%w: %w", errSessionTemp, err)
+			return nil, false, false, fmt.Errorf("%w: %w", errSessionTemp, err)
 		}
 		lease = l
 		sessionDir = l.Dir()
@@ -339,7 +393,7 @@ func (g grepTool) runRipgrep(ctx context.Context, pattern, path, glob string, to
 	prepared := sandbox.PrepareArgs(g.sb, args, sessionDir)
 	argv, wrapped := prepared.Argv, prepared.Wrapped
 	if len(g.forbidRoots) > 0 && !wrapped {
-		return "", wrapped, nil
+		return nil, false, wrapped, nil
 	}
 
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
@@ -347,12 +401,12 @@ func (g grepTool) runRipgrep(ctx context.Context, pattern, path, glob string, to
 	proc.HideWindow(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", wrapped, err
+		return nil, false, wrapped, err
 	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		return "", wrapped, fmt.Errorf("ripgrep: %w", err)
+		return nil, false, wrapped, fmt.Errorf("ripgrep: %w", err)
 	}
 
 	var out []string
@@ -379,10 +433,10 @@ func (g grepTool) runRipgrep(ctx context.Context, pattern, path, glob string, to
 			if rp.External {
 				msg = rp.ErrorText(fmt.Errorf("%s", msg))
 			}
-			return "", wrapped, fmt.Errorf("ripgrep: %s", msg)
+			return nil, false, wrapped, fmt.Errorf("ripgrep: %s", msg)
 		}
 	}
-	return formatGrep(ctx, out, truncated, to), wrapped, nil
+	return out, truncated, wrapped, nil
 }
 
 func (g grepTool) sessionTempManager(ctx context.Context) *sessiontemp.Manager {

@@ -37,7 +37,7 @@ func TestGrepTimeoutPreservesPartialResults(t *testing.T) {
 	<-ctx.Done()
 
 	hit := []string{"a.go:1:match"}
-	got := formatGrep(ctx, hit, false, 30*time.Second)
+	got := formatGrep(ctx, hit, false, 30*time.Second, grepScopeTracked)
 	if !strings.HasPrefix(got, "a.go:1:match") {
 		t.Errorf("timeout must keep the matches found so far, got %q", got)
 	}
@@ -45,12 +45,12 @@ func TestGrepTimeoutPreservesPartialResults(t *testing.T) {
 		t.Errorf("timeout result must flag the cutoff and point at timeout_seconds, got %q", got)
 	}
 
-	if got := formatGrep(ctx, nil, false, 30*time.Second); !strings.Contains(got, "timed out") {
+	if got := formatGrep(ctx, nil, false, 30*time.Second, grepScopeTracked); !strings.Contains(got, "timed out") {
 		t.Errorf("a zero-match timeout must report the timeout, not (no matches), got %q", got)
 	}
 
 	done := context.Background()
-	if got := formatGrep(done, nil, false, 30*time.Second); got != "(no matches)" {
+	if got := formatGrep(done, nil, false, 30*time.Second, grepScopeTracked); got != "(no matches)" {
 		t.Errorf("a completed zero-match search = %q, want (no matches)", got)
 	}
 }

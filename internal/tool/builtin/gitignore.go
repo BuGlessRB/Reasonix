@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	ignore "github.com/sabhiram/go-gitignore"
+
+	"reasonix/internal/fileutil"
 )
 
 // ignoreFrame is the cumulative ignore state at a directory: every applicable
@@ -30,16 +32,20 @@ type ignoreFrame struct {
 // Stateful across one WalkDir: enter pushes a directory's cumulative frame before
 // its children are visited; skip pops frames once the walk leaves them.
 type walkIgnorer struct {
-	root        string
-	repoRoot    string
-	disabled    bool
+	root     string
+	repoRoot string
+	disabled bool
+	// wide drops the ignore rules and the build-output directories, and only
+	// those: confinement and the VCS store stay pruned above it. It is what a
+	// second pass uses after the first found nothing in the tracked tree.
+	wide        bool
 	frames      []ignoreFrame // shallow→deep; the deepest is the active matcher
 	compiled    map[string]*ignore.GitIgnore
 	forbidRoots []string // directories the walk must never enter
 }
 
-func newWalkIgnorer(root string, forbidRoots []string) *walkIgnorer {
-	ig := &walkIgnorer{root: absClean(root), compiled: map[string]*ignore.GitIgnore{}, forbidRoots: forbidRoots}
+func newWalkIgnorer(root string, forbidRoots []string, wide bool) *walkIgnorer {
+	ig := &walkIgnorer{root: absClean(root), compiled: map[string]*ignore.GitIgnore{}, forbidRoots: forbidRoots, wide: wide}
 	rr := findRepoRoot(ig.root)
 	if rr == "" {
 		return ig
@@ -90,13 +96,23 @@ func (ig *walkIgnorer) skip(path, name string, isDir bool) bool {
 	if abs == ig.root || ig.disabled {
 		return false
 	}
+	// Confinement first, and above the wide switch: what a caller may not read
+	// is not an ignore rule, and widening a search must not widen that.
+	if isDir && (isProtectedDir(abs) || skipForbidDir(abs, ig.forbidRoots)) {
+		return true
+	}
+	// A VCS store is skipped either way. It is not where a build writes, it is
+	// where history is, and no search of a working tree wants to read it.
+	if isDir && fileutil.IsVCSStoreDir(name) {
+		return true
+	}
+	if ig.wide {
+		return false
+	}
 	if isHiddenName(name) {
 		return true
 	}
-	if isDir && (vendorDirs[name] || isProtectedDir(abs)) {
-		return true
-	}
-	if isDir && skipForbidDir(abs, ig.forbidRoots) {
+	if isDir && vendorDirs[name] {
 		return true
 	}
 	return ig.ignored(abs, isDir)
