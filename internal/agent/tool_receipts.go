@@ -11,7 +11,7 @@ import (
 // recordToolReceipts files the turn-scoped evidence for one executed call:
 // always the model-visible call for audit, plus the real target's attributes
 // for mutation/read classification when a proxy resolved elsewhere.
-func (a *Agent) recordToolReceipts(plan *toolCallPlan, result string, execution *tool.ShellExecution, err error) {
+func (a *Agent) recordToolReceipts(ctx context.Context, plan *toolCallPlan, result string, execution *tool.ShellExecution, err error) {
 	if a.task.ledger == nil {
 		return
 	}
@@ -29,14 +29,14 @@ func (a *Agent) recordToolReceipts(plan *toolCallPlan, result string, execution 
 		rec := evidence.ReceiptFromToolCall(plan.evidenceName, plan.evidenceArgs, err == nil, plan.facts())
 		decorateExecutionReceipt(&rec, result, execution)
 		decorateObservedPaths(&rec, plan)
-		a.settleUnchangedWorkspace(&rec, plan)
+		a.settleUnchangedWorkspace(ctx, &rec, plan)
 		a.reviewCoverageOf(&rec, plan, result)
 		a.task.ledger.Record(rec)
 	default:
 		rec := evidence.ReceiptFromToolCall(call.Name, args, err == nil, plan.facts())
 		decorateExecutionReceipt(&rec, result, execution)
 		decorateObservedPaths(&rec, plan)
-		a.settleUnchangedWorkspace(&rec, plan)
+		a.settleUnchangedWorkspace(ctx, &rec, plan)
 		a.reviewCoverageOf(&rec, plan, result)
 		a.task.ledger.Record(rec)
 		if err == nil && call.Name == "todo_write" {

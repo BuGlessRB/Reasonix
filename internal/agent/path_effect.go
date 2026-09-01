@@ -282,24 +282,48 @@ func (a *Agent) observeAfterMutation(plan *toolCallPlan) {
 // the behaviour it has today instead of paying for an answer it cannot trust.
 const workspaceScanLimit = 50_000
 
+// scanCancelCheckEvery bounds how much walking a stop waits on. Checking every
+// entry would put an atomic load in the hot loop for a wait nobody notices.
+const scanCancelCheckEvery = 512
+
 // workspaceScan is every file under the workspace at one moment. complete is
 // false when the walk was cut short, which is the only honest answer a partial
 // scan can give: "changed nothing" cannot be read off a tree half-looked-at.
 type workspaceScan struct {
 	state    map[string]pathState
 	complete bool
+	// overLimit separates the one incompleteness that will not change on the
+	// next call: a workspace with more files than the walk may hold is that
+	// size again, while a vanished file or a denied directory is not.
+	overLimit bool
 }
 
 // scanWorkspace walks the whole tree rather than an ignore-filtered part of it:
 // npm install and a build write exactly where ignore rules point away, so a
 // filtered walk would report the biggest writes there are as no change at all.
-func scanWorkspace(root string) workspaceScan {
+func scanWorkspace(ctx context.Context, root string) workspaceScan {
+	return scanWorkspaceTo(ctx, root, workspaceScanLimit)
+}
+
+// scanWorkspaceTo takes the limit as an argument so a test can reach the
+// over-limit answer without laying down fifty thousand files, and without a
+// package variable two tests could write while a third reads it.
+func scanWorkspaceTo(ctx context.Context, root string, limit int) workspaceScan {
 	if root == "" {
 		return workspaceScan{}
 	}
 	state := make(map[string]pathState, 4096)
 	complete := true
+	overLimit := false
+	// A stop has to reach the walk: it runs on the turn's critical path twice
+	// per call, and an uninterruptible one is what a user experiences as the
+	// stop button not working.
+	checked := 0
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if checked++; checked%scanCancelCheckEvery == 0 && ctx.Err() != nil {
+			complete = false
+			return filepath.SkipAll
+		}
 		if err != nil {
 			complete = false
 			return nil
@@ -310,8 +334,9 @@ func scanWorkspace(root string) workspaceScan {
 			}
 			return nil
 		}
-		if len(state) >= workspaceScanLimit {
+		if len(state) >= limit {
 			complete = false
+			overLimit = true
 			return filepath.SkipAll
 		}
 		info, err := d.Info()
@@ -325,7 +350,7 @@ func scanWorkspace(root string) workspaceScan {
 	if err != nil {
 		complete = false
 	}
-	return workspaceScan{state: state, complete: complete}
+	return workspaceScan{state: state, complete: complete, overLimit: overLimit}
 }
 
 // unchanged reports whether the workspace is byte-for-byte as this scan found
@@ -367,11 +392,17 @@ func (before workspaceScan) changed(after workspaceScan) (paths []string, ok boo
 // can: whether it changed anything. A call the host could not classify — sed
 // through its own script language, a wrapper, a path built from a variable —
 // stays a mutation unless the workspace it ran against is exactly as it was.
-func (a *Agent) settleUnchangedWorkspace(rec *evidence.Receipt, plan *toolCallPlan) {
+func (a *Agent) settleUnchangedWorkspace(ctx context.Context, rec *evidence.Receipt, plan *toolCallPlan) {
 	if rec == nil || plan == nil || !rec.Success || rec.MutationEvidence != evidence.MutationUnknown {
 		return
 	}
-	after := scanWorkspace(a.writeWorkspaceRoot)
+	// Nothing to compare against is not a reason to walk: a call that took no
+	// before-scan can only reach changed() to be told so, and that walk costs
+	// what one that answers costs.
+	if !plan.scanBefore.complete {
+		return
+	}
+	after := scanWorkspace(ctx, a.writeWorkspaceRoot)
 	changed, ok := plan.scanBefore.changed(after)
 	if !ok {
 		return
@@ -395,7 +426,7 @@ func (a *Agent) settleUnchangedWorkspace(rec *evidence.Receipt, plan *toolCallPl
 // scanBeforeUnprovenCall takes the whole-workspace scan only for a call the
 // host could not classify. A proven writer already reports its paths, and a
 // proven reader has nothing to settle, so neither pays for the walk.
-func (a *Agent) scanBeforeUnprovenCall(plan *toolCallPlan) workspaceScan {
+func (a *Agent) scanBeforeUnprovenCall(ctx context.Context, plan *toolCallPlan) workspaceScan {
 	if evidence.ToolCallMutationClass(plan.evidenceName, plan.evidenceArgs, plan.readOnly) != evidence.MutationUnknown {
 		return workspaceScan{}
 	}
@@ -404,5 +435,15 @@ func (a *Agent) scanBeforeUnprovenCall(plan *toolCallPlan) workspaceScan {
 	if isBackgroundTaskCall(string(plan.evidenceArgs)) {
 		return workspaceScan{}
 	}
-	return scanWorkspace(a.writeWorkspaceRoot)
+	// A workspace already found past the limit is past it again, and the walk
+	// that says so settles nothing -- the whole cost, on exactly the trees
+	// where it buys least.
+	if a.task.workspaceOverScanLimit() {
+		return workspaceScan{}
+	}
+	scan := scanWorkspace(ctx, a.writeWorkspaceRoot)
+	if scan.overLimit {
+		a.task.noteWorkspaceOverScanLimit()
+	}
+	return scan
 }

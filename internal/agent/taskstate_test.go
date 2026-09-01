@@ -62,6 +62,10 @@ var taskRestarted = map[string]bool{
 	"baselineCriteria": true,
 	// Revisions count one plan's history. A new task plans again from nothing.
 	"todoRevs": true,
+	// What the walk could not finish before this task is not what it cannot
+	// finish during it: an install is what puts a tree over the limit and a
+	// clean is what takes it back under, and both happen inside one task.
+	"overScanLimit": true,
 }
 
 // restartLedger is one assignment, so an unlisted field resets by default —

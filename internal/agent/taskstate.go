@@ -1,6 +1,10 @@
 package agent
 
-import "reasonix/internal/evidence"
+import (
+	"sync/atomic"
+
+	"reasonix/internal/evidence"
+)
 
 // taskRuntime is the host state shared by every Agent.Run continuing one
 // delivery scope: one ledger, one bill, one set of failure budgets. Its
@@ -23,6 +27,22 @@ type taskRuntime struct {
 	// todoRevs counts what the task list did, on three axes because they answer
 	// different questions and one number for all three reads a rewrite as work.
 	todoRevs todoRevisions
+	// overScanLimit remembers that the effect walk cannot finish here, so later
+	// calls do not pay to be told again. A pointer because taskRuntime is
+	// assigned wholesale, which an atomic cannot be.
+	overScanLimit *atomic.Bool
+}
+
+// Nil-safe: a zero taskRuntime has no memo, which costs the walk it would have
+// skipped and answers exactly as before.
+func (t *taskRuntime) workspaceOverScanLimit() bool {
+	return t != nil && t.overScanLimit != nil && t.overScanLimit.Load()
+}
+
+func (t *taskRuntime) noteWorkspaceOverScanLimit() {
+	if t != nil && t.overScanLimit != nil {
+		t.overScanLimit.Store(true)
+	}
 }
 
 // todoRevisions separates writing the plan from changing it and from executing
@@ -39,11 +59,12 @@ type todoRevisions struct {
 // are named because each answers to its own condition in beginRunTurn.
 func (t *taskRuntime) restartLedger() {
 	*t = taskRuntime{
-		scopeID:    t.scopeID,
-		checkpoint: t.checkpoint,
-		ledger:     t.ledger,
-		outcome:    evidence.NewOutcomeTracker(),
-		budget:     runBudget{limit: t.budget.limit},
+		scopeID:       t.scopeID,
+		checkpoint:    t.checkpoint,
+		ledger:        t.ledger,
+		outcome:       evidence.NewOutcomeTracker(),
+		budget:        runBudget{limit: t.budget.limit},
+		overScanLimit: new(atomic.Bool),
 	}
 	t.ledger.Reset()
 }

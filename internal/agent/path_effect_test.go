@@ -237,13 +237,13 @@ func TestUnprovenCallSettlesAgainstTheWorkspace(t *testing.T) {
 			Command:          "sed -n '1,20p' tally.go",
 		}
 	}
-	plan := &toolCallPlan{scanBefore: scanWorkspace(root)}
+	plan := &toolCallPlan{scanBefore: scanWorkspace(t.Context(), root)}
 	if !plan.scanBefore.complete {
 		t.Fatal("a small temporary directory should scan completely")
 	}
 
 	looked := unproven()
-	a.settleUnchangedWorkspace(&looked, plan)
+	a.settleUnchangedWorkspace(t.Context(), &looked, plan)
 	if looked.Mutation || looked.MutationEvidence != "" {
 		t.Errorf("receipt = %+v, want a call that changed nothing settled as no mutation", looked)
 	}
@@ -254,7 +254,7 @@ func TestUnprovenCallSettlesAgainstTheWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	wrote := unproven()
-	a.settleUnchangedWorkspace(&wrote, plan)
+	a.settleUnchangedWorkspace(t.Context(), &wrote, plan)
 	if !wrote.Mutation || wrote.MutationEvidence != evidence.MutationProven {
 		t.Errorf("receipt = %+v, want the observed change to establish the mutation's scope", wrote)
 	}
@@ -264,11 +264,11 @@ func TestUnprovenCallSettlesAgainstTheWorkspace(t *testing.T) {
 
 	// A file created where nothing was watched counts too.
 	created := unproven()
-	before := &toolCallPlan{scanBefore: scanWorkspace(root)}
+	before := &toolCallPlan{scanBefore: scanWorkspace(t.Context(), root)}
 	if err := os.WriteFile(filepath.Join(root, "new.go"), []byte("package tally\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a.settleUnchangedWorkspace(&created, before)
+	a.settleUnchangedWorkspace(t.Context(), &created, before)
 	if !created.Mutation {
 		t.Error("a file that appeared must leave the mutation standing")
 	}
@@ -283,14 +283,14 @@ func TestAPartialScanSettlesNothing(t *testing.T) {
 		ToolName: "bash", Success: true, Mutation: true,
 		MutationEvidence: evidence.MutationUnknown, Command: "make",
 	}
-	a.settleUnchangedWorkspace(&rec, &toolCallPlan{})
+	a.settleUnchangedWorkspace(t.Context(), &rec, &toolCallPlan{})
 	if !rec.Mutation {
 		t.Error("a call with no before-scan must keep its mutation")
 	}
 	if (workspaceScan{complete: true}).unchanged(workspaceScan{}) {
 		t.Error("an incomplete after-scan must never read as unchanged")
 	}
-	if scanWorkspace("").complete {
+	if scanWorkspace(t.Context(), "").complete {
 		t.Error("no workspace root is not a complete scan")
 	}
 }
@@ -306,11 +306,11 @@ func TestTheVCSStoreIsNotTheWorkspace(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(store, "index"), []byte("before"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	before := scanWorkspace(root)
+	before := scanWorkspace(t.Context(), root)
 	if err := os.WriteFile(filepath.Join(store, "index"), []byte("after-a-status"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if !before.unchanged(scanWorkspace(root)) {
+	if !before.unchanged(scanWorkspace(t.Context(), root)) {
 		t.Error("an index rewrite read as a change to the workspace")
 	}
 }
@@ -324,11 +324,11 @@ func TestABackgroundJobNeverSettles(t *testing.T) {
 		evidenceName: "bash",
 		evidenceArgs: []byte(`{"command":"make build","run_in_background":true}`),
 	}
-	if a.scanBeforeUnprovenCall(plan).complete {
+	if a.scanBeforeUnprovenCall(t.Context(), plan).complete {
 		t.Error("a background job took a before-scan it could never honestly compare")
 	}
 	foreground := &toolCallPlan{evidenceName: "bash", evidenceArgs: []byte(`{"command":"make build"}`)}
-	if !a.scanBeforeUnprovenCall(foreground).complete {
+	if !a.scanBeforeUnprovenCall(t.Context(), foreground).complete {
 		t.Error("a foreground unprovable call should scan")
 	}
 }

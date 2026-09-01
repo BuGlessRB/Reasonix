@@ -598,7 +598,7 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 			}, true
 		}
 		plan.pathsBefore = snapshotPaths(a.task.ledger, a.writeWorkspaceRoot, evidence.ToolCallPaths(plan.evidenceArgs))
-		plan.scanBefore = a.scanBeforeUnprovenCall(plan)
+		plan.scanBefore = a.scanBeforeUnprovenCall(ctx, plan)
 	}
 	return toolOutcome{}, false
 }
@@ -688,7 +688,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	}
 	err = withContractHint(err, runTool, runArgs)
 	owedBefore := a.obligations()
-	a.recordToolReceipts(plan, result, execution, err)
+	a.recordToolReceipts(ctx, plan, result, execution, err)
 	result = withObligationDelta(result, evidence.DiffObligations(owedBefore, a.obligations()))
 	// Track skill/capability outcomes for Delivery gates.
 	a.noteCapabilityInvocation(call.Name, json.RawMessage(call.Arguments), err)
