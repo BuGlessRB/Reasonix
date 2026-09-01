@@ -25,7 +25,10 @@ import (
 // same machine — on identical bytes until the snapshot ages out.
 const probeSnapshotTTL = 24 * time.Hour
 
-const probeSnapshotVersion = 1
+// 2: results carry the executable they resolved to, and the fingerprint keys
+// on PATH rather than on the workspace's deny roots. A v1 file describes one
+// workspace and cannot be checked against another's, so it is not read.
+const probeSnapshotVersion = 2
 
 type probeSnapshot struct {
 	Version     int           `json:"version"`

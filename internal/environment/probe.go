@@ -53,6 +53,10 @@ type ProbeResult struct {
 	Output  string
 	Found   bool
 	Error   string
+	// Path is what Binary resolved to. Recorded so an answer taken for one
+	// workspace can be re-checked against another's deny roots without
+	// resolving again; nothing renders it.
+	Path string
 }
 
 type ProbeOptions struct {
@@ -96,18 +100,23 @@ func RunProbesWithOverrides(ctx context.Context, commands []string, overrides ma
 func RunProbesWithOptions(ctx context.Context, commands []string, opts ProbeOptions) []ProbeResult {
 	key := probeFingerprint(commands, opts)
 	now := probeNow()
-	if results, ok := cachedProbeResults(key, now); ok {
+	if results, ok := cachedProbeResults(key, now); ok && reusableHere(results, opts.DenyRoots) {
 		return results
 	}
 	if call, ok := beginProbe(key); ok {
 		<-call.done
-		return cloneProbeResults(call.results)
+		if reusableHere(call.results, opts.DenyRoots) {
+			return cloneProbeResults(call.results)
+		}
+		// Someone else's answer ran something this workspace will not. Its own
+		// run below is not shared back, so it neither reads nor writes the key.
+		return runProbesUncached(ctx, commands, opts)
 	}
 	// A fresh persisted snapshot substitutes for a live run entirely: rebuilds
 	// and app relaunches within the TTL render the exact bytes the sessions on
 	// this machine were recorded with, so the provider prefix cache survives.
 	snapshot, hasSnapshot := loadProbeSnapshot(opts.SnapshotDir, key)
-	if hasSnapshot && now.Sub(snapshot.StoredAt) < probeSnapshotTTL {
+	if hasSnapshot && now.Sub(snapshot.StoredAt) < probeSnapshotTTL && reusableHere(snapshot.Results, opts.DenyRoots) {
 		finishProbe(key, snapshot.Results, now)
 		return cloneProbeResults(snapshot.Results)
 	}
@@ -118,9 +127,52 @@ func RunProbesWithOptions(ctx context.Context, commands []string, opts ProbeOpti
 		// a slow tool cannot rewrite the prompt prefix.
 		results = mergeProbeSnapshot(snapshot.Results, results)
 	}
+	// Shared only when nothing was refused: a run that denied a binary
+	// describes this workspace, not this machine.
+	if denied(results) {
+		releaseProbe(key, results)
+		return results
+	}
 	saveProbeSnapshot(opts.SnapshotDir, key, results, now)
 	finishProbe(key, results, probeNow())
 	return cloneProbeResults(results)
+}
+
+// reusableHere reports whether an answer taken for one workspace holds for this
+// one. It does not, when a path it resolved and ran sits inside a root this
+// workspace refuses: that probe would not have run here, so its output is not
+// this workspace's answer. A result recorded before Path existed cannot be
+// checked and is therefore not reused.
+func reusableHere(results []ProbeResult, denyRoots []string) bool {
+	for _, r := range results {
+		// A refusal belongs to the workspace that made it, and to no other.
+		if r.Error == "not trusted" {
+			return false
+		}
+	}
+	if len(denyRoots) == 0 {
+		return true
+	}
+	for _, r := range results {
+		if !r.Found {
+			continue
+		}
+		if r.Path == "" || blockedExecutable(r.Path, denyRoots) {
+			return false
+		}
+	}
+	return true
+}
+
+// denied reports whether any probe was refused, which is what makes an answer
+// belong to one workspace rather than to the machine.
+func denied(results []ProbeResult) bool {
+	for _, r := range results {
+		if r.Error == "not trusted" {
+			return true
+		}
+	}
+	return false
 }
 
 func runProbesUncached(ctx context.Context, commands []string, opts ProbeOptions) []ProbeResult {
@@ -161,6 +213,20 @@ func beginProbe(key string) (*probeInflight, bool) {
 	return nil, false
 }
 
+// releaseProbe hands an answer to whoever is waiting on this key without
+// recording it. The waiters check it against their own deny roots the way the
+// caller did, so a result that describes one workspace unblocks them rather
+// than becoming what the next one is told.
+func releaseProbe(key string, results []ProbeResult) {
+	probeCacheMu.Lock()
+	defer probeCacheMu.Unlock()
+	if call, ok := probeInflightCalls[key]; ok {
+		call.results = cloneProbeResults(results)
+		delete(probeInflightCalls, key)
+		close(call.done)
+	}
+}
+
 func finishProbe(key string, results []ProbeResult, now time.Time) {
 	probeCacheMu.Lock()
 	defer probeCacheMu.Unlock()
@@ -186,11 +252,12 @@ func probeFingerprint(commands []string, opts ProbeOptions) string {
 		b.WriteByte('=')
 		b.WriteString(expandHome(opts.Overrides[name]))
 	}
-	for _, root := range normalizedDenyRoots(opts.DenyRoots) {
-		b.WriteByte('\x00')
-		b.WriteString("deny=")
-		b.WriteString(root)
-	}
+	// PATH, not the deny roots: PATH decides what a probe resolves to, and the
+	// roots decide afterwards whether to run it. Keying on the roots gave each
+	// workspace its own entry, against the one prompt.go asks for.
+	b.WriteByte('\x00')
+	b.WriteString("path=")
+	b.WriteString(os.Getenv("PATH"))
 	return b.String()
 }
 
@@ -230,6 +297,7 @@ func runOne(ctx context.Context, command string, opts ProbeOptions) ProbeResult 
 		}
 		exe = found
 	}
+	res.Path = exe
 	if blockedExecutable(exe, opts.DenyRoots) {
 		res.Error = "not trusted"
 		return res
