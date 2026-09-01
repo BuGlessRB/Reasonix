@@ -39,7 +39,7 @@ func startSessionRuntime(opts Options, cfg *config.Config, root string, sink eve
 
 	dir := opts.SessionDir
 	if dir == "" {
-		dir = config.SessionDir()
+		dir = opts.roots().SessionDir()
 	}
 	reconcileCleanupPending := opts.CleanupPendingReconciler
 	if reconcileCleanupPending == nil {

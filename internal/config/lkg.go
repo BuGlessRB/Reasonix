@@ -11,8 +11,10 @@ import (
 // config snapshot. Written by repair.RecordHealthyConfig after a successful
 // desktop boot; used only as an in-memory recovery source when the live file
 // cannot be parsed. The original user config is never overwritten by a load.
-func LastKnownGoodConfigPath() string {
-	root := MemoryUserDir()
+func LastKnownGoodConfigPath() string { return processRoots().lastKnownGoodConfigPath() }
+
+func (r Roots) lastKnownGoodConfigPath() string {
+	root := r.MemoryUserDir()
 	if root == "" {
 		return ""
 	}
@@ -21,8 +23,8 @@ func LastKnownGoodConfigPath() string {
 
 // loadLastKnownGoodUserConfig merges a validated LKG snapshot into cfg.
 // Returns an error when no usable snapshot exists.
-func loadLastKnownGoodUserConfig(cfg *Config) error {
-	path := LastKnownGoodConfigPath()
+func (r Roots) loadLastKnownGoodUserConfig(cfg *Config) error {
+	path := r.lastKnownGoodConfigPath()
 	if path == "" {
 		return fmt.Errorf("last-known-good path unavailable")
 	}

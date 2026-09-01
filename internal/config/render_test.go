@@ -50,7 +50,7 @@ func expectedDefaultReasonixHome(home string) string {
 
 func TestUserConfigDisplayPathCollapsesHome(t *testing.T) {
 	home := isolateUserConfigHome(t)
-	got := userConfigDisplayPath()
+	got := processRoots().userConfigDisplayPath()
 	if !strings.HasPrefix(got, "~/") {
 		t.Fatalf("display path = %q, want ~/ prefix", got)
 	}
@@ -164,7 +164,7 @@ func TestLoadForRootUsesWindowsHomeFallbackWhenConfigDirUnavailable(t *testing.T
 func TestRenderTOMLHeaderShowsResolvedConfigPath(t *testing.T) {
 	isolateUserConfigHome(t)
 	out := RenderTOML(Default())
-	want := "> " + userConfigDisplayPath() + " > built-in defaults."
+	want := "> " + processRoots().userConfigDisplayPath() + " > built-in defaults."
 	if !strings.Contains(out, want) {
 		t.Fatalf("rendered header missing resolved config path %q", want)
 	}
@@ -1411,16 +1411,16 @@ func TestIsolatedHomeDirReturnsCleanPath(t *testing.T) {
 func TestLegacyOSSupportDirEmptyWhenIsolated(t *testing.T) {
 	isolateUserConfigHome(t)
 	t.Setenv("REASONIX_HOME", filepath.Join(testenv.TempDir(t), "isolated-home"))
-	if got := legacyOSSupportDir(); got != "" {
-		t.Fatalf("legacyOSSupportDir() = %q, want empty when isolated", got)
+	if got := processRoots().legacyOSSupportDir(); got != "" {
+		t.Fatalf("processRoots().legacyOSSupportDir() = %q, want empty when isolated", got)
 	}
 }
 
 func TestLegacyXDGConfigPathsEmptyWhenIsolated(t *testing.T) {
 	isolateUserConfigHome(t)
 	t.Setenv("REASONIX_HOME", filepath.Join(testenv.TempDir(t), "isolated-home"))
-	if got := legacyXDGConfigPaths(); got != nil {
-		t.Fatalf("legacyXDGConfigPaths() = %v, want nil when isolated", got)
+	if got := processRoots().legacyXDGConfigPaths(); got != nil {
+		t.Fatalf("processRoots().legacyXDGConfigPaths() = %v, want nil when isolated", got)
 	}
 }
 
@@ -1468,10 +1468,10 @@ func TestUserConfigLoadPathNoLegacyFallbackWhenIsolated(t *testing.T) {
 	}
 
 	// The primary config under isolated home does not exist yet.
-	got := userConfigLoadPath()
+	got := processRoots().userConfigLoadPath()
 	want := filepath.Join(isolated, "config.toml")
 	if filepath.Clean(got) != filepath.Clean(want) {
-		t.Fatalf("userConfigLoadPath() = %q, want %q (must not fall back to production legacy config)", got, want)
+		t.Fatalf("processRoots().userConfigLoadPath() = %q, want %q (must not fall back to production legacy config)", got, want)
 	}
 }
 
@@ -1486,7 +1486,7 @@ func TestCredentialSourceCandidatesSkipHomeEnvWhenIsolated(t *testing.T) {
 		}
 	}
 
-	candidates := credentialSourceCandidates(".")
+	candidates := processRoots().credentialSourceCandidates(".")
 	for _, c := range candidates {
 		if c.Kind == CredentialSourceHomeEnv {
 			t.Fatalf("credentialSourceCandidates includes CredentialSourceHomeEnv when isolated: %v", c)

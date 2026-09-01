@@ -29,7 +29,7 @@ func buildMemoryAssembly(opts Options, cfg *config.Config, root, sysPrompt strin
 		}
 	}
 	set := memory.Load(memory.Options{
-		CWD: root, UserDir: config.MemoryUserDir(),
+		CWD: root, UserDir: opts.roots().MemoryUserDir(),
 		PinnedBudgetChars: cfg.Memory.PinnedBudgetChars,
 		RecallLimit:       cfg.Memory.RecallLimit,
 		RecallMaxChars:    cfg.Memory.RecallMaxChars,

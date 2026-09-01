@@ -166,7 +166,7 @@ func planForPreflight(opts Options, toGen uint64) *extension.RuntimePlan {
 	if opts.Extensions == nil && opts.Graph == nil {
 		return nil
 	}
-	toGraph, err := buildRuntimeGraph(config.ReasonixHomeDir(), nil)
+	toGraph, err := buildRuntimeGraph(opts.roots().Home(), nil)
 	if err != nil {
 		return nil
 	}
@@ -175,11 +175,11 @@ func planForPreflight(opts Options, toGen uint64) *extension.RuntimePlan {
 
 // finalizeBuildResult attaches the cold-start RuntimePlan and status, then
 // publishes the generation so stale traffic from prior runtimes is dropped.
-func finalizeBuildResult(res *BuildResult, publish bool) *BuildResult {
+func finalizeBuildResult(roots config.Roots, res *BuildResult, publish bool) *BuildResult {
 	if res == nil {
 		return nil
 	}
-	if graph, err := buildRuntimeGraph(config.ReasonixHomeDir(), nil); err == nil {
+	if graph, err := buildRuntimeGraph(roots.Home(), nil); err == nil {
 		attachPlanAndStatus(res, nil, graph, 0, nil)
 	}
 	if publish {

@@ -14,7 +14,6 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"reasonix/internal/billing"
-	"reasonix/internal/fileutil"
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/provider"
 )
@@ -36,29 +35,45 @@ func Load() (*Config, error) {
 // Note: LoadForRoot may rewrite legacy MCP `tier` lines on disk (see
 // mergeRuntimeTOMLFileSnapshot). Callers that must not mutate config files should use
 // LoadForRootReadOnly instead.
-func LoadForRoot(root string) (*Config, error) {
-	return loadForRoot(root, true)
+func LoadForRoot(root string) (*Config, error) { return processRoots().LoadForRoot(root) }
+
+// defaultConfig is Default() bound to this binding, so a path derived from the
+// result later lands in the home the load read.
+func (r Roots) defaultConfig() *Config {
+	cfg := Default()
+	cfg.roots = r
+	return cfg
+}
+
+// LoadForRoot reads root's configuration out of this binding's home, so one
+// process can serve two homes without either seeing the other's config.
+func (r Roots) LoadForRoot(root string) (*Config, error) {
+	return r.loadForRoot(root, true)
 }
 
 // LoadForRootReadOnly is like LoadForRoot but never writes config files: it skips
 // on-disk legacy MCP tier migration. Prefer this for diagnostics, doctor, and
 // other read-only inspection paths.
 func LoadForRootReadOnly(root string) (*Config, error) {
-	return loadForRoot(root, false)
+	return processRoots().LoadForRootReadOnly(root)
 }
 
-func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
+func (r Roots) LoadForRootReadOnly(root string) (*Config, error) {
+	return r.loadForRoot(root, false)
+}
+
+func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	root = resolveRoot(root)
-	expansionEnv := loadDotEnvForRoot(root)
-	cfg := Default()
+	expansionEnv := r.loadDotEnvForRoot(root)
+	cfg := r.defaultConfig()
 	cfg.setExpansionEnv(expansionEnv)
-	cfg.CredentialsStore = credentialsStoreMode()
+	cfg.CredentialsStore = r.credentialsStoreMode()
 
 	projectTOML := "reasonix.toml"
 	if root != "." {
 		projectTOML = filepath.Join(root, "reasonix.toml")
 	}
-	if primary := userConfigPath(); primary != "" {
+	if primary := r.userConfigPath(); primary != "" {
 		if _, err := resolveConfigAccessPath(primary, true); err != nil {
 			return nil, err
 		}
@@ -74,17 +89,17 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 
 	var tomlSources []string
 	userDefaultModelExplicit := false
-	if uc := userConfigLoadPath(); uc != "" {
+	if uc := r.userConfigLoadPath(); uc != "" {
 		tomlSources = append(tomlSources, uc)
 		meta, err := mergeTOML(cfg, uc)
 		if err != nil {
 			// Never rewrite the broken original file. Prefer the last verified
 			// snapshot in memory, then built-in defaults, and keep loading so
 			// the rest of the app stays usable.
-			lkgCfg := Default()
+			lkgCfg := r.defaultConfig()
 			lkgCfg.setExpansionEnv(expansionEnv)
-			lkgCfg.CredentialsStore = credentialsStoreMode()
-			if lkgErr := loadLastKnownGoodUserConfig(lkgCfg); lkgErr == nil {
+			lkgCfg.CredentialsStore = r.credentialsStoreMode()
+			if lkgErr := r.loadLastKnownGoodUserConfig(lkgCfg); lkgErr == nil {
 				*cfg = *lkgCfg
 				cfg.addLoadWarning(fmt.Sprintf(
 					"user config %s is invalid (%v); using %s in memory without modifying the original file",
@@ -197,10 +212,10 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	// ~/.reasonix/config.json's mcpServers. Once the migration marker exists, the
 	// current config is authoritative even when it is empty; reading the legacy
 	// source again would resurrect servers the user removed from current config.
-	if !mcpGlobalMigrationComplete() {
-		cfg.mergeMCPJSON(loadLegacyMCP(legacyConfigPath()))
+	if !r.mcpGlobalMigrationComplete() {
+		cfg.mergeMCPJSON(loadLegacyMCP(r.legacyConfigPath()))
 	}
-	_ = mergeInstalledPluginPackages(cfg, root)
+	_ = r.mergeInstalledPluginPackages(cfg, root)
 	normalizePluginCommandLines(cfg)
 	normalizeLegacyEffort(cfg)
 	cfg.ignoredLegacyStepLimits = normalizeLegacyAgentStepLimits(cfg)
@@ -224,9 +239,9 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	if userDefaultModelExplicit {
 		restoreUnresolvableProjectDefaultModel(cfg, userDefaultModel)
 	}
-	cfg.CredentialsStore = credentialsStoreMode()
+	cfg.CredentialsStore = r.credentialsStoreMode()
 	cfg.setExpansionEnv(expansionEnv)
-	resolveProviderCredentialsForRoot(root, cfg)
+	r.resolveProviderCredentialsForRoot(root, cfg)
 	return cfg, nil
 }
 
@@ -245,8 +260,8 @@ func LoadBuiltinDefaultsForRoot(root string) *Config {
 	cfg.Statusline.Command = ""
 	cfg.LSP.Enabled = false
 	cfg.setExpansionEnv(nil)
-	cfg.CredentialsStore = credentialsStoreMode()
-	resolveProviderCredentialsForRoot(root, cfg)
+	cfg.CredentialsStore = processRoots().credentialsStoreMode()
+	processRoots().resolveProviderCredentialsForRoot(root, cfg)
 	return cfg
 }
 
@@ -820,7 +835,7 @@ func loadDotEnvForEditPath(path string) {
 		loadDotEnv()
 		return
 	}
-	loadDotEnvForRoot(filepath.Dir(path))
+	processRoots().loadDotEnvForRoot(filepath.Dir(path))
 }
 
 // mergeFile decodes a TOML file onto cfg if it exists. An absent file is not an error.
@@ -911,209 +926,6 @@ func normalizeLegacyAgentStepLimits(c *Config) bool {
 	c.Agent.MaxSteps = 0
 	c.Agent.PlannerMaxSteps = 0
 	return found
-}
-
-// MigrateLegacyAgentStepLimitsForRoot removes retired [agent] step-limit keys
-// from the user and project config selected for root. Boot calls it immediately
-// before LoadForRoot, so config-only/read-only commands never rewrite files and
-// the runtime can surface exactly one migration notice.
-func MigrateLegacyAgentStepLimitsForRoot(root string) (bool, error) {
-	root = resolveRoot(root)
-	paths := make([]string, 0, 2)
-	if userPath := userConfigLoadPath(); userPath != "" {
-		paths = append(paths, userPath)
-	}
-	projectPath := "reasonix.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "reasonix.toml")
-	}
-	paths = append(paths, projectPath)
-
-	changedAny := false
-	seen := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		clean := filepath.Clean(path)
-		if _, ok := seen[clean]; ok {
-			continue
-		}
-		seen[clean] = struct{}{}
-		changed, err := migrateLegacyAgentStepLimitsFile(path)
-		if err != nil {
-			return changedAny, fmt.Errorf("migrate deprecated agent step limits in %s: %w", path, err)
-		}
-		changedAny = changedAny || changed
-	}
-	return changedAny, nil
-}
-
-// migrateLegacyAgentStepLimitsFile removes retired [agent] step-limit keys
-// before runtime decoding. A process-wide lock makes concurrent desktop tab
-// builds observe a single migration; the atomic rewrite protects other readers.
-func migrateLegacyAgentStepLimitsFile(path string) (bool, error) {
-	return migrateRetiredConfigKeysFile(path, stripLegacyAgentStepLimitLines)
-}
-
-func stripLegacyAgentStepLimitLines(raw string) (string, bool) {
-	return stripTOMLKeyLines(raw, "agent", "max_steps", "planner_max_steps")
-}
-
-// MigrateLegacyRedactToolOutputForRoot removes the retired
-// [secrets].redact_tool_output setting from the user and project configs chosen
-// for root. The setting no longer controls any runtime behavior; removing it
-// avoids leaving an explicit `true` value on disk that falsely suggests live
-// output or transcript redaction is still active.
-func MigrateLegacyRedactToolOutputForRoot(root string) (bool, error) {
-	root = resolveRoot(root)
-	paths := make([]string, 0, 2)
-	if userPath := userConfigLoadPath(); userPath != "" {
-		paths = append(paths, userPath)
-	}
-	projectPath := "reasonix.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "reasonix.toml")
-	}
-	paths = append(paths, projectPath)
-
-	changedAny := false
-	seen := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		clean := filepath.Clean(path)
-		if _, ok := seen[clean]; ok {
-			continue
-		}
-		seen[clean] = struct{}{}
-		changed, err := migrateLegacyRedactToolOutputFile(path)
-		if err != nil {
-			return changedAny, fmt.Errorf("migrate deprecated redact_tool_output in %s: %w", path, err)
-		}
-		changedAny = changedAny || changed
-	}
-	return changedAny, nil
-}
-
-func migrateLegacyRedactToolOutputFile(path string) (bool, error) {
-	return migrateRetiredConfigKeysFile(path, stripLegacyRedactToolOutputLines)
-}
-
-func stripLegacyRedactToolOutputLines(raw string) (string, bool) {
-	return stripTOMLKeyLines(raw, "secrets", "redact_tool_output")
-}
-
-// MigrateLegacyMemoryCompilerForRoot removes the retired
-// [agent].memory_compiler setting from the user and project configs chosen for
-// root. The Memory v5 execution compiler was removed; stripping the key avoids
-// leaving values on disk that falsely suggest compiler behavior (especially a
-// stale verbosity = "compact") is still active.
-func MigrateLegacyMemoryCompilerForRoot(root string) (bool, error) {
-	root = resolveRoot(root)
-	paths := make([]string, 0, 2)
-	if userPath := userConfigLoadPath(); userPath != "" {
-		paths = append(paths, userPath)
-	}
-	projectPath := "reasonix.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "reasonix.toml")
-	}
-	paths = append(paths, projectPath)
-
-	changedAny := false
-	seen := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		clean := filepath.Clean(path)
-		if _, ok := seen[clean]; ok {
-			continue
-		}
-		seen[clean] = struct{}{}
-		changed, err := migrateLegacyMemoryCompilerFile(path)
-		if err != nil {
-			return changedAny, fmt.Errorf("migrate deprecated memory_compiler in %s: %w", path, err)
-		}
-		changedAny = changedAny || changed
-	}
-	return changedAny, nil
-}
-
-func migrateLegacyMemoryCompilerFile(path string) (bool, error) {
-	return migrateRetiredConfigKeysFile(path, stripLegacyMemoryCompilerLines)
-}
-
-func migrateRetiredConfigKeysFile(path string, strip func(string) (string, bool)) (bool, error) {
-	unlock, err := LockConfigFileEdits(path)
-	if err != nil {
-		return false, err
-	}
-	defer unlock()
-	resolved, exists, err := statConfigPath(path)
-	if err != nil {
-		return false, err
-	}
-	if !exists {
-		return false, nil
-	}
-	info, err := os.Stat(resolved)
-	if err != nil {
-		return false, err
-	}
-	raw, err := fileencoding.ReadFileUTF8(resolved)
-	if err != nil {
-		return false, err
-	}
-	next, changed := strip(string(raw))
-	if !changed {
-		return false, nil
-	}
-	if err := fileutil.AtomicWriteFile(resolved, []byte(next), info.Mode().Perm()); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func stripLegacyMemoryCompilerLines(raw string) (string, bool) {
-	return stripTOMLKeyLines(raw, "agent", "memory_compiler")
-}
-
-// MigrateLegacyMultiThresholdCompactionForRoot strips retired soft/snip/force keys.
-func MigrateLegacyMultiThresholdCompactionForRoot(root string) (bool, error) {
-	root = resolveRoot(root)
-	paths := make([]string, 0, 2)
-	if userPath := userConfigLoadPath(); userPath != "" {
-		paths = append(paths, userPath)
-	}
-	projectPath := "reasonix.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "reasonix.toml")
-	}
-	paths = append(paths, projectPath)
-
-	changedAny := false
-	seen := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		clean := filepath.Clean(path)
-		if _, ok := seen[clean]; ok {
-			continue
-		}
-		seen[clean] = struct{}{}
-		changed, err := migrateLegacyMultiThresholdCompactionFile(path)
-		if err != nil {
-			return changedAny, fmt.Errorf("migrate deprecated multi-threshold compaction keys in %s: %w", path, err)
-		}
-		changedAny = changedAny || changed
-	}
-	return changedAny, nil
-}
-
-func migrateLegacyMultiThresholdCompactionFile(path string) (bool, error) {
-	return migrateRetiredConfigKeysFile(path, stripLegacyMultiThresholdCompactionLines)
-}
-
-func stripLegacyMultiThresholdCompactionLines(raw string) (string, bool) {
-	return stripTOMLKeyLines(raw, "agent",
-		"soft_compact_ratio",
-		"tool_result_snip_ratio",
-		"compact_force_ratio",
-		"cold_resume_prune",
-		"context_editing",
-	)
 }
 
 func migrateLegacyMCPTiersFile(path string) error {

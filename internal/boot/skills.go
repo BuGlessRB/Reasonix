@@ -23,11 +23,12 @@ type skillAssembly struct {
 // build's assembly is retained and its prompt already carries the index.
 func buildSkillAssembly(opts Options, cfg *config.Config, root string, implicit bool, sysPrompt string) skillAssembly {
 	a := skillAssembly{sysPrompt: sysPrompt}
+	home := opts.roots().Home()
 	if opts.ReuseAssembly != nil && shouldReuseDiscovery(opts.PreviousPlan) &&
 		opts.ReuseAssembly.ImplicitSkillInvocation == implicit {
 		a.skills = opts.ReuseAssembly.Skills
 		a.allSkills = a.skills
-		a.store = skill.New(skill.Options{ProjectRoot: root, Stderr: io.Discard})
+		a.store = skill.New(skill.Options{ProjectRoot: root, ReasonixHomeDir: home, Stderr: io.Discard})
 		a.all = a.store
 		if s := strings.TrimSpace(opts.ReuseAssembly.SystemPrompt); s != "" {
 			a.sysPrompt = s
@@ -35,13 +36,13 @@ func buildSkillAssembly(opts Options, cfg *config.Config, root string, implicit 
 		return a
 	}
 	a.store = skill.New(skill.Options{
-		ProjectRoot: root, CustomPaths: cfg.SkillCustomPaths(), PluginPaths: cfg.PluginPackageSkillOwners(),
+		ProjectRoot: root, ReasonixHomeDir: home, CustomPaths: cfg.SkillCustomPaths(), PluginPaths: cfg.PluginPackageSkillOwners(),
 		PluginAgentPaths: cfg.PluginPackageAgentOwners(), ExcludedPaths: cfg.SkillExcludedPaths(),
 		DisabledNames: cfg.DisabledSkillNames(), MaxDepth: cfg.SkillMaxDepth(), Stderr: opts.Stderr,
 	})
 	a.store.ConfigureInvocationPolicy(nil)
 	a.skills = a.store.List()
-	a.all = skill.New(skill.Options{ProjectRoot: root, CustomPaths: cfg.SkillCustomPaths(), PluginPaths: cfg.PluginPackageSkillOwners(), PluginAgentPaths: cfg.PluginPackageAgentOwners(), ExcludedPaths: cfg.SkillExcludedPaths(), MaxDepth: cfg.SkillMaxDepth(), Stderr: io.Discard})
+	a.all = skill.New(skill.Options{ProjectRoot: root, ReasonixHomeDir: home, CustomPaths: cfg.SkillCustomPaths(), PluginPaths: cfg.PluginPackageSkillOwners(), PluginAgentPaths: cfg.PluginPackageAgentOwners(), ExcludedPaths: cfg.SkillExcludedPaths(), MaxDepth: cfg.SkillMaxDepth(), Stderr: io.Discard})
 	a.allSkills = a.all.List()
 	if implicit {
 		a.sysPrompt = skill.ApplyIndex(a.sysPrompt, a.skills)

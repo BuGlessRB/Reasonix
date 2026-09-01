@@ -899,7 +899,7 @@ func ClearPluginAuthenticationInSourceForRoot(root, name string) (PluginEntry, b
 		projectTOML = filepath.Join(resolvedRoot, "reasonix.toml")
 		projectMCPJSON = filepath.Join(resolvedRoot, mcpJSONFile)
 	}
-	lockPaths := append([]string{}, userConfigCandidatePaths()...)
+	lockPaths := append([]string{}, processRoots().userConfigCandidatePaths()...)
 	lockPaths = append(lockPaths, projectTOML, projectMCPJSON)
 	if legacy := legacyConfigPath(); strings.TrimSpace(legacy) != "" {
 		lockPaths = append(lockPaths, legacy)
@@ -947,7 +947,7 @@ func pluginTOMLSourcePathForRoot(root, name string) string {
 	if resolved := resolveRoot(root); resolved != "." {
 		projectTOML = filepath.Join(resolved, "reasonix.toml")
 	}
-	paths := append([]string{projectTOML}, userConfigCandidatePaths()...)
+	paths := append([]string{projectTOML}, processRoots().userConfigCandidatePaths()...)
 	for _, path := range paths {
 		if strings.TrimSpace(path) == "" {
 			continue
@@ -980,7 +980,7 @@ func MCPConfigPathForEntry(root string, entry PluginEntry) string {
 	case MCPSourceProjectMCPJSON:
 		return projectMCPJSON
 	case MCPSourceUserConfig:
-		for _, path := range userConfigCandidatePaths() {
+		for _, path := range processRoots().userConfigCandidatePaths() {
 			cfg := LoadForEditWithoutCredentials(path)
 			if _, ok := pluginEntryByName(cfg.Plugins, entry.Name); ok {
 				return path
@@ -1184,7 +1184,7 @@ func mcpConfigSourcePathsForRoot(root string) []string {
 		projectTOML = filepath.Join(resolvedRoot, "reasonix.toml")
 		projectMCPJSON = filepath.Join(resolvedRoot, mcpJSONFile)
 	}
-	paths := append([]string{}, userConfigCandidatePaths()...)
+	paths := append([]string{}, processRoots().userConfigCandidatePaths()...)
 	paths = append(paths, projectTOML, projectMCPJSON)
 	if legacy := legacyConfigPath(); strings.TrimSpace(legacy) != "" {
 		paths = append(paths, legacy)
@@ -1381,7 +1381,7 @@ func RemovePluginFromSourcesForRoot(root, name string) (bool, error) {
 		return false, fmt.Errorf("remove MCP server: name is required")
 	}
 
-	userPaths := userConfigCandidatePaths()
+	userPaths := processRoots().userConfigCandidatePaths()
 	resolvedRoot := resolveRoot(root)
 	projectTOML := "reasonix.toml"
 	if resolvedRoot != "." {
@@ -2353,7 +2353,7 @@ func isUserConfigPath(path string) bool {
 	if path == "" {
 		return false
 	}
-	for _, uc := range userConfigCandidatePaths() {
+	for _, uc := range processRoots().userConfigCandidatePaths() {
 		uc = strings.TrimSpace(uc)
 		if uc == "" {
 			continue
@@ -2403,7 +2403,7 @@ func (c *Config) SaveForRoot(root string) error {
 		projectCfg := LoadForEditWithoutCredentials(projectTOML)
 		return projectCfg.SaveTo(projectTOML)
 	}
-	if uc := userConfigPath(); uc != "" {
+	if uc := processRoots().userConfigPath(); uc != "" {
 		if err := os.MkdirAll(filepath.Dir(uc), 0o755); err != nil {
 			return err
 		}

@@ -21,7 +21,7 @@ func legacyHome(t *testing.T) (src, dest, home string) {
 	t.Setenv("USERPROFILE", home)                               // os.UserHomeDir on Windows
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config")) // os.UserConfigDir on Linux
 	t.Setenv("AppData", filepath.Join(home, "AppData"))         // os.UserConfigDir on Windows
-	return filepath.Join(home, ".reasonix", "config.json"), userConfigPath(), home
+	return filepath.Join(home, ".reasonix", "config.json"), processRoots().userConfigPath(), home
 }
 
 func writeLegacy(t *testing.T, src, body string) {
@@ -307,7 +307,7 @@ command = "project-should-not-win"
 	if p := byName["disabled-json"]; p.AutoStart == nil || *p.AutoStart {
 		t.Fatalf("disabled legacy MCP should migrate with auto_start=false: %+v", p)
 	}
-	if _, err := os.Stat(mcpGlobalMigrationMarkerPath()); err != nil {
+	if _, err := os.Stat(processRoots().mcpGlobalMigrationMarkerPath()); err != nil {
 		t.Fatalf("migration marker missing: %v", err)
 	}
 
@@ -391,7 +391,7 @@ func TestMigrateMCPToUserConfigOnUpgradeDoesNotMarkEmptyScan(t *testing.T) {
 	if res != nil {
 		t.Fatalf("result = %+v, want nil", res)
 	}
-	if _, err := os.Stat(mcpGlobalMigrationMarkerPath()); !os.IsNotExist(err) {
+	if _, err := os.Stat(processRoots().mcpGlobalMigrationMarkerPath()); !os.IsNotExist(err) {
 		t.Fatalf("empty scan should not write marker, stat err=%v", err)
 	}
 }
@@ -423,7 +423,7 @@ func TestMigrateMCPToUserConfigOnUpgradeRefusesMalformedGlobalConfig(t *testing.
 	} else if string(got) != malformed {
 		t.Fatalf("malformed config was overwritten:\n%s", got)
 	}
-	if _, statErr := os.Stat(mcpGlobalMigrationMarkerPath()); !os.IsNotExist(statErr) {
+	if _, statErr := os.Stat(processRoots().mcpGlobalMigrationMarkerPath()); !os.IsNotExist(statErr) {
 		t.Fatalf("failed migration must not write marker, stat err=%v", statErr)
 	}
 }
@@ -547,7 +547,7 @@ command = "legacy-home-bin"
 
 func TestLoadFallsBackToLegacyOSConfigWhenPrimaryMissing(t *testing.T) {
 	_, dest, _ := legacyHome(t)
-	legacy := legacyUserConfigPath()
+	legacy := processRoots().legacyUserConfigPath()
 	if legacy == "" {
 		t.Skip("legacy OS config path matches primary path on this platform")
 	}
@@ -575,7 +575,7 @@ func TestLoadFallsBackToLegacyOSConfigWhenPrimaryMissing(t *testing.T) {
 
 func TestLoadPrefersPrimaryConfigOverLegacyOSConfig(t *testing.T) {
 	_, dest, _ := legacyHome(t)
-	legacy := legacyUserConfigPath()
+	legacy := processRoots().legacyUserConfigPath()
 	if legacy == "" {
 		t.Skip("legacy OS config path matches primary path on this platform")
 	}
@@ -606,7 +606,7 @@ func TestLoadPrefersPrimaryConfigOverLegacyOSConfig(t *testing.T) {
 
 func TestMigrateImportsLegacyOSConfigToPrimaryConfig(t *testing.T) {
 	_, dest, _ := legacyHome(t)
-	legacy := legacyUserConfigPath()
+	legacy := processRoots().legacyUserConfigPath()
 	if legacy == "" {
 		t.Skip("legacy OS config path matches primary path on this platform")
 	}
@@ -682,7 +682,7 @@ command = "legacy-xdg-bin"
 
 func TestMigrateImportsLegacyCredentialsEvenWhenPrimaryConfigExists(t *testing.T) {
 	_, dest, _ := legacyHome(t)
-	legacy := legacyUserConfigPath()
+	legacy := processRoots().legacyUserConfigPath()
 	if legacy == "" {
 		t.Skip("legacy OS config path matches primary path on this platform")
 	}
@@ -813,7 +813,7 @@ func TestMigrateLegacyCredentialsSkipsKeyringWhenIsolated(t *testing.T) {
 
 func TestMigrateLegacyCredentialsDoesNotReimportClearedKey(t *testing.T) {
 	_, dest, _ := legacyHome(t)
-	legacy := legacyUserConfigPath()
+	legacy := processRoots().legacyUserConfigPath()
 	if legacy == "" {
 		t.Skip("legacy OS config path matches primary path on this platform")
 	}
@@ -869,7 +869,7 @@ func TestMigrateSkipsLegacyCredentialsAlreadyInCurrentAutoStore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	legacyPaths := legacyCredentialsPaths()
+	legacyPaths := processRoots().legacyCredentialsPaths()
 	if len(legacyPaths) == 0 {
 		t.Skip("no legacy credentials path on this platform")
 	}
@@ -1016,7 +1016,7 @@ func TestMigrateSupportData(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 
-	legacyConf := legacyUserConfigPath()
+	legacyConf := processRoots().legacyUserConfigPath()
 	if legacyConf == "" {
 		t.Skip("skipping because legacy config path is empty")
 	}
@@ -1060,7 +1060,7 @@ func TestMigrateSupportData(t *testing.T) {
 		t.Fatal("expected migration result, got nil")
 	}
 
-	newDir := filepath.Dir(userConfigPath())
+	newDir := filepath.Dir(processRoots().userConfigPath())
 	for rel, expectedContent := range filesToWrite {
 		if rel == "config.toml" {
 			continue
@@ -1106,7 +1106,7 @@ func TestMigrateLegacyCredentialsFileImportIgnoresKeyringMarker(t *testing.T) {
 	if err := markLegacyKeyringMigrationDone("DEEPSEEK_API_KEY"); err != nil {
 		t.Fatal(err)
 	}
-	paths := legacyCredentialsPaths()
+	paths := processRoots().legacyCredentialsPaths()
 	if len(paths) == 0 {
 		t.Skip("no legacy credentials paths on this platform")
 	}

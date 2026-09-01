@@ -95,20 +95,20 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if stderr == nil {
 		stderr = os.Stderr
 	}
-	root := resolveWorkspaceRoot(opts.WorkspaceRoot)
+	root, roots := resolveWorkspaceRoot(opts.WorkspaceRoot), opts.roots()
 	additionalDirs, err := normalizeAdditionalDirs(root, opts.AdditionalDirs)
 	if err != nil {
 		return nil, err
 	}
 	// Import v1/v0.5 config before Load so this boot sees the new config + ~/.env.
 	// CLI Run also calls this before config-only commands; keep a shared fallback.
-	migrated, migErr := config.MigrateLegacyIfNeededForRoot(root)
-	deepSeekProtocolMigrated, deepSeekProtocolMigErr := config.MigrateLegacyDeepSeekProtocolUserConfig()
-	stepLimitsMigrated, stepLimitMigErr := config.MigrateLegacyAgentStepLimitsForRoot(root)
-	redactToolOutputMigrated, redactToolOutputMigErr := config.MigrateLegacyRedactToolOutputForRoot(root)
-	memoryCompilerMigrated, memoryCompilerMigErr := config.MigrateLegacyMemoryCompilerForRoot(root)
-	multiThresholdMigrated, multiThresholdMigErr := config.MigrateLegacyMultiThresholdCompactionForRoot(root)
-	cfg, err := config.LoadForRoot(root)
+	migrated, migErr := roots.MigrateLegacyIfNeededForRoot(root)
+	deepSeekProtocolMigrated, deepSeekProtocolMigErr := roots.MigrateLegacyDeepSeekProtocolUserConfig()
+	stepLimitsMigrated, stepLimitMigErr := roots.MigrateLegacyAgentStepLimitsForRoot(root)
+	redactToolOutputMigrated, redactToolOutputMigErr := roots.MigrateLegacyRedactToolOutputForRoot(root)
+	memoryCompilerMigrated, memoryCompilerMigErr := roots.MigrateLegacyMemoryCompilerForRoot(root)
+	multiThresholdMigrated, multiThresholdMigErr := roots.MigrateLegacyMultiThresholdCompactionForRoot(root)
+	cfg, err := roots.LoadForRoot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			slog.Warn("boot: extension UI hub: "+msg, "root", root)
 		},
 	})
-	extensionMgr, err := preflightExtensionRuntimes(ctx, config.ReasonixHomeDir(), extensionBoot{
+	extensionMgr, err := preflightExtensionRuntimes(ctx, roots.Home(), extensionBoot{
 		session:   protocol.SessionContext{SessionID: sessionID, WorkspaceRoot: root, Generation: generation},
 		ui:        extUIHub,
 		onWarning: extWarn,
@@ -444,7 +444,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if opts.WorkspaceOnly {
 		allowWriteRoots = nil
 	}
-	sessionGuard := builtin.NewSessionDataGuard(config.MemoryUserDir(), allowWriteRoots)
+	sessionGuard := builtin.NewSessionDataGuard(roots.MemoryUserDir(), allowWriteRoots)
 	if bashSpec.Mode == "enforce" && !sandbox.Available() {
 		fmt.Fprintln(stderr, "warning: "+sandbox.UnavailableMessage())
 	}
@@ -485,9 +485,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	pluginSpecOptions := pluginspec.Options{
 		DefaultStartupTimeout: time.Duration(cfg.MCPStartupTimeoutSeconds()) * time.Second,
 		DefaultCallTimeout:    time.Duration(cfg.MCPCallTimeoutSeconds()) * time.Second,
-		LaunchManager:         mcplaunch.ForWorkspace(config.ReasonixHomeDir(), root),
+		LaunchManager:         mcplaunch.ForWorkspace(roots.Home(), root),
 		ConfigSource:          "workspace_config",
-		StateHome:             config.ReasonixHomeDir(),
+		StateHome:             roots.Home(),
 		WriterRoots:           writeRoots,
 		ForbidReadRoots:       forbidReadRoots,
 		Network:               networkEnabled,
@@ -634,7 +634,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	if opts.ReuseAssembly != nil && shouldReuseDiscovery(opts.PreviousPlan) {
 		resolvedHooks = opts.ReuseAssembly.Hooks
 	} else {
-		resolvedHooks = hook.Load(hook.LoadOptions{ProjectRoot: root})
+		resolvedHooks = hook.Load(hook.LoadOptions{ProjectRoot: root, ReasonixHomeDir: roots.Home()})
 	}
 	hookRuntime := hook.RuntimeOptions{}
 	if shell.Kind == sandbox.ShellBash {
@@ -667,7 +667,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			CompactRatio:      cfg.Agent.CompactRatio,
 			ContextEditing:    cfg.Agent.ContextEditing,
 			Temperature:       cfg.Agent.Temperature,
-			ArchiveDir:        config.ArchiveDir(),
+			ArchiveDir:        roots.ArchiveDir(),
 			SysPrompt:         "",
 			Gate:              headlessGate,
 			KeepPolicy:        keepPolicy,
@@ -701,7 +701,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// is attributable to retrieval and not to a missing session reader.
 	retrievalOff := opts.Ablation.Off(ablation.Retrieval)
 	if !retrievalOff {
-		reg.Add(history.NewIndexedTool(history.Options{SessionDir: session.dir, GlobalSessionDir: config.SessionDir(), ArchiveDir: config.ArchiveDir()}))
+		reg.Add(history.NewIndexedTool(history.Options{SessionDir: session.dir, GlobalSessionDir: roots.SessionDir(), ArchiveDir: roots.ArchiveDir()}))
 	}
 	reg.Add(sessiontool.NewListSessionsTool(session.dir))
 	reg.Add(sessiontool.NewReadSessionTool(session.dir))
@@ -734,7 +734,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			CompactionBudgets: compactionBudgets(cfg),
 			CompactRatio:      cfg.Agent.CompactRatio,
 			ContextEditing:    cfg.Agent.ContextEditing,
-			ArchiveDir:        config.ArchiveDir(),
+			ArchiveDir:        roots.ArchiveDir(),
 			KeepPolicy:        keepPolicy,
 			ResponseLanguage:  agent.ResponseLanguageFromContext(sctx),
 			ReasoningLanguage: agent.ReasoningLanguageFromContext(sctx),
@@ -895,7 +895,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		ContextEditing:               cfg.Agent.ContextEditing,
 		RecentKeep:                   cfg.Agent.RecentKeep,
 		CompactionBudgets:            compactionBudgets(cfg),
-		ArchiveDir:                   config.ArchiveDir(),
+		ArchiveDir:                   roots.ArchiveDir(),
 		KeepPolicy:                   keepPolicy,
 		ReasoningLanguage:            cfg.ReasoningLanguage(),
 		SubagentDepth:                0,
@@ -948,7 +948,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 				ContextEditing:               cfg.Agent.ContextEditing,
 				RecentKeep:                   cfg.Agent.RecentKeep,
 				CompactionBudgets:            compactionBudgets(cfg),
-				ArchiveDir:                   config.ArchiveDir(),
+				ArchiveDir:                   roots.ArchiveDir(),
 				KeepPolicy:                   keepPolicy,
 				ReasoningLanguage:            cfg.ReasoningLanguage(),
 				CapabilityLedger:             plannerLedger,
@@ -1019,7 +1019,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		RuntimeProfile:         runtimeProfile,
 		Ablation:               opts.Ablation,
 		OnRemember: func(rule string) control.RememberResult {
-			return rememberPermissionRule(root, rule)
+			return rememberPermissionRule(roots, root, rule)
 		},
 		SessionRecoveryMeta: opts.SessionRecoveryMeta,
 		OnSessionRecovered:  opts.OnSessionRecovered,
@@ -1242,7 +1242,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		Memory:                  prompt.memory,
 		ProjectChecks:           prompt.projectChecks, ProjectSensitivePaths: prompt.sensitivePaths,
 	}
-	return finalizeBuildResult(&BuildResult{Controller: ctrl, Snapshot: snap, Runtime: runtimeSet, Owner: owner, Extensions: extensionMgr, Dispatcher: extensionDispatcher, ExtensionUI: extUIHub, ProviderResolver: providerResolver, BaseProviderResolver: baseResolver, Assembly: assembly, Phases: timer.done("assemble")}, !opts.deferPublish), nil
+	return finalizeBuildResult(roots, &BuildResult{Controller: ctrl, Snapshot: snap, Runtime: runtimeSet, Owner: owner, Extensions: extensionMgr, Dispatcher: extensionDispatcher, ExtensionUI: extUIHub, ProviderResolver: providerResolver, BaseProviderResolver: baseResolver, Assembly: assembly, Phases: timer.done("assemble")}, !opts.deferPublish), nil
 }
 
 // effectivePlannerModel centralizes planner precedence. Every role setting
@@ -1255,8 +1255,8 @@ func effectivePlannerModel(cfg *config.Config, opts Options) string {
 	return strings.TrimSpace(cfg.Agent.PlannerModel)
 }
 
-func rememberPermissionRule(workspaceRoot, rule string) control.RememberResult {
-	path := rememberPermissionConfigPath(workspaceRoot)
+func rememberPermissionRule(roots config.Roots, workspaceRoot, rule string) control.RememberResult {
+	path := rememberPermissionConfigPath(roots, workspaceRoot)
 	result := control.RememberResult{Rule: strings.TrimSpace(rule), Path: path}
 	unlock, err := config.LockConfigFileEdits(path)
 	if err != nil {
@@ -1291,12 +1291,12 @@ func rememberPermissionRule(workspaceRoot, rule string) control.RememberResult {
 	return result
 }
 
-func rememberPermissionConfigPath(workspaceRoot string) string {
+func rememberPermissionConfigPath(roots config.Roots, workspaceRoot string) string {
 	workspaceRoot = strings.TrimSpace(workspaceRoot)
 	if workspaceRoot != "" {
 		return filepath.Join(workspaceRoot, "reasonix.toml")
 	}
-	path := config.SourcePath()
+	path := roots.SourcePathForRoot(".")
 	if path == "" {
 		path = "reasonix.toml" // match Config.Save() fallback
 	}
@@ -1488,7 +1488,7 @@ func RuntimeForbidReadRoots(cfg *config.Config, root string) []string {
 	secrets.RegisterCredentialEnvKeys(cfg.CredentialEnvNames())
 	base := cfg.ForbidReadRootsForRoot(root)
 	base = appendUniquePaths(base, secrets.ForbiddenReadPaths(cfg.Secrets.ProtectSensitiveFiles)...)
-	credentialPath := strings.TrimSpace(config.UserCredentialsPath())
+	credentialPath := strings.TrimSpace(cfg.Roots().UserCredentialsPath())
 	if credentialPath == "" {
 		return append([]string(nil), base...)
 	}

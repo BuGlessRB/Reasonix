@@ -95,11 +95,15 @@ func MigrateLegacyIfNeeded() (*MigrationResult, error) {
 }
 
 func MigrateLegacyIfNeededForRoot(root string) (*MigrationResult, error) {
-	if IsolatedHomeDir() != "" {
+	return processRoots().MigrateLegacyIfNeededForRoot(root)
+}
+
+func (r Roots) MigrateLegacyIfNeededForRoot(root string) (*MigrationResult, error) {
+	if r.pinnedHomeDir() != "" {
 		return nil, nil
 	}
-	credErr := migrateLegacyCredentialsIfNeededForRoot(root)
-	dest := userConfigPath()
+	credErr := r.migrateLegacyCredentialsIfNeededForRoot(root)
+	dest := r.userConfigPath()
 	if dest == "" {
 		return nil, credErr
 	}
@@ -182,7 +186,7 @@ func MigrateLegacyCredentialsForRoot(root string) error {
 	if IsolatedHomeDir() != "" {
 		return nil
 	}
-	return migrateLegacyCredentialsIfNeededForRoot(root)
+	return processRoots().migrateLegacyCredentialsIfNeededForRoot(root)
 }
 
 // MigrateMCPToUserConfigOnUpgrade runs a one-time best-effort backfill for the
@@ -191,7 +195,7 @@ func MigrateLegacyCredentialsForRoot(root string) error {
 // settings page is stable across Global/project tabs. Existing global entries win
 // on name collisions, and source files are left untouched.
 func MigrateMCPToUserConfigOnUpgrade(projectRoots []string) (*MCPGlobalMigrationResult, error) {
-	dest := userConfigPath()
+	dest := processRoots().userConfigPath()
 	if dest == "" {
 		return nil, nil
 	}
@@ -201,7 +205,7 @@ func MigrateMCPToUserConfigOnUpgrade(projectRoots []string) (*MCPGlobalMigration
 	}
 	defer unlock()
 
-	marker := mcpGlobalMigrationMarkerPath()
+	marker := processRoots().mcpGlobalMigrationMarkerPath()
 	if marker == "" {
 		return nil, nil
 	}
@@ -228,7 +232,7 @@ func MigrateMCPToUserConfigOnUpgrade(projectRoots []string) (*MCPGlobalMigration
 }
 
 func migrateMCPToUserConfig(projectRoots []string) (*MCPGlobalMigrationResult, error) {
-	dest := userConfigPath()
+	dest := processRoots().userConfigPath()
 	if dest == "" {
 		return nil, nil
 	}
@@ -285,16 +289,12 @@ func migrateMCPToUserConfig(projectRoots []string) (*MCPGlobalMigrationResult, e
 	return result, nil
 }
 
-func mcpGlobalMigrationMarkerPath() string {
-	dir := userSupportDir()
-	if dir == "" {
-		return ""
-	}
-	return filepath.Join(dir, "mcp-global-migration-v1")
+func (r Roots) mcpGlobalMigrationMarkerPath() string {
+	return joinRoot(r.userSupportDir(), "mcp-global-migration-v1")
 }
 
-func mcpGlobalMigrationComplete() bool {
-	marker := mcpGlobalMigrationMarkerPath()
+func (r Roots) mcpGlobalMigrationComplete() bool {
+	marker := r.mcpGlobalMigrationMarkerPath()
 	if marker == "" {
 		return false
 	}
@@ -370,7 +370,7 @@ func normalizedMCPMigrationRoots(roots []string) []string {
 	return out
 }
 
-func migrateLegacyCredentialsIfNeededForRoot(root string) error {
+func (r Roots) migrateLegacyCredentialsIfNeededForRoot(root string) error {
 	missing := map[string]string{}
 	// File import ignores keyring markers: a marker only means "do not re-probe
 	// keyring for this env name", never "skip legacy credential files".
@@ -379,7 +379,7 @@ func migrateLegacyCredentialsIfNeededForRoot(root string) error {
 	}
 	// Prefer legacy credential files first so a healthy file import does not
 	// depend on Secret Service / D-Bus (#7507).
-	for _, src := range legacyCredentialsPaths() {
+	for _, src := range r.legacyCredentialsPaths() {
 		if src == "" {
 			continue
 		}
@@ -394,7 +394,7 @@ func migrateLegacyCredentialsIfNeededForRoot(root string) error {
 			}
 		}
 	}
-	keys := credentialEnvNamesForRoot(root)
+	keys := r.credentialEnvNamesForRoot(root)
 	needKeyring := make([]string, 0, len(keys))
 	for _, key := range keys {
 		if skipStore(key) {
@@ -565,10 +565,10 @@ func legacyTOMLPaths(dest, home string) []string {
 		seen[path] = true
 		paths = append(paths, path)
 	}
-	if legacy := legacyUserConfigPath(); legacy != "" {
+	if legacy := processRoots().legacyUserConfigPath(); legacy != "" {
 		add(legacy)
 	}
-	for _, legacy := range legacyXDGConfigPaths() {
+	for _, legacy := range processRoots().legacyXDGConfigPaths() {
 		add(legacy)
 		add(filepath.Join(filepath.Dir(legacy), "reasonix.toml"))
 	}

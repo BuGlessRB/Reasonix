@@ -60,7 +60,7 @@ func (e *UnparsedFile) Repairable() bool { return e != nil && e.Repair != "" }
 func recoveredForEdit(path string, err error) *Config {
 	cfg := Default()
 	recovered := RecoveredDefaults
-	if isUserConfigPath(path) && loadLastKnownGoodUserConfig(cfg) == nil {
+	if isUserConfigPath(path) && processRoots().loadLastKnownGoodUserConfig(cfg) == nil {
 		recovered = RecoveredSnapshot
 	}
 	normalizeConfigForEdit(cfg)

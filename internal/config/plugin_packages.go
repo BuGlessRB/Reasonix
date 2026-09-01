@@ -15,11 +15,11 @@ import (
 // the in-memory config. It never writes config.toml: plugin package state lives
 // in <Reasonix home>/plugin-packages.json so uninstall/disable can remove the
 // entire bundle without editing user-authored config.
-func mergeInstalledPluginPackages(cfg *Config, root string) []string {
+func (r Roots) mergeInstalledPluginPackages(cfg *Config, root string) []string {
 	if cfg == nil {
 		return nil
 	}
-	reasonixHome := ReasonixHomeDir()
+	reasonixHome := r.Home()
 	if strings.TrimSpace(reasonixHome) == "" {
 		return nil
 	}
@@ -125,8 +125,8 @@ func (c *Config) PluginPackageAgentOwners() map[string][]string {
 // CommandRootsForRoot places them ahead of every user/project dir so explicit
 // commands win exact canonical-name clashes; LoadInstalled filters to enabled
 // packages.
-func pluginPackageCommandRoots() []command.Root {
-	reasonixHome := ReasonixHomeDir()
+func (r Roots) pluginPackageCommandRoots() []command.Root {
+	reasonixHome := r.Home()
 	if strings.TrimSpace(reasonixHome) == "" {
 		return nil
 	}

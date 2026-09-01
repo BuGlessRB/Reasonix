@@ -69,7 +69,7 @@ func buildPromptAssembly(ctx context.Context, opts Options, cfg *config.Config, 
 				// This section sits inside the cached prefix, so re-probing
 				// per boot let transient flaps (timeouts, PATH drift) rewrite
 				// it and cold-start every session's cache.
-				SnapshotDir: config.CacheDir(),
+				SnapshotDir: opts.roots().CacheDir(),
 			}),
 			runtime.GOOS+"/"+runtime.GOARCH,
 			shellLabel,
@@ -86,7 +86,7 @@ func buildPromptAssembly(ctx context.Context, opts Options, cfg *config.Config, 
 	// so it costs nothing per turn. Mid-session changes ride the controller's
 	// transient turn-injection and fold in on the next session instead.
 	if !continuesGeneration(opts) {
-		if _, err := memory.StoreFor(config.MemoryUserDir(), root).MigrateV2(); err != nil {
+		if _, err := memory.StoreFor(opts.roots().MemoryUserDir(), root).MigrateV2(); err != nil {
 			report(sink, event.Event{Level: event.LevelWarn, Text: "Memory metadata migration did not complete.", Detail: err.Error()})
 		}
 	}

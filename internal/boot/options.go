@@ -4,6 +4,8 @@ import (
 	"io"
 	"time"
 
+	"reasonix/internal/config"
+
 	"reasonix/internal/ablation"
 	"reasonix/internal/agent"
 	"reasonix/internal/billing"
@@ -49,6 +51,10 @@ type Options struct {
 	// confinement; empty means the process cwd. Per-tab roots are what let
 	// concurrent sessions load different projects without a chdir.
 	WorkspaceRoot string
+	// Home states where this build's config, credentials, state and hooks live;
+	// empty follows the environment. It binds this assembly only — a
+	// Controller's later re-reads and the history index still read the process.
+	Home string
 	// StatsSource labels this frontend's usage records. Unset — or a value this
 	// build does not know — disables usage recording rather than filing turns
 	// under a label nothing can read back.
@@ -126,3 +132,7 @@ type Options struct {
 	// commit succeed. Cold BuildRuntime leaves this false and publishes at boot.
 	deferPublish bool
 }
+
+// roots is the storage binding this build resolves every user-global path
+// against.
+func (o Options) roots() config.Roots { return config.RootsForHome(o.Home) }

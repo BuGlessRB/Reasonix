@@ -23,7 +23,13 @@ const deepSeekOfficialBalanceURL = "https://api.deepseek.com/user/balance"
 // the original TOML in place instead of rendering Config, so comments, future
 // fields, and unrelated provider blocks survive byte-for-byte.
 func MigrateLegacyDeepSeekProtocolUserConfig() (bool, error) {
-	path := userConfigLoadPath()
+	return processRoots().MigrateLegacyDeepSeekProtocolUserConfig()
+}
+
+// MigrateLegacyDeepSeekProtocolUserConfig upgrades the aliases in this
+// binding's user-global config.
+func (r Roots) MigrateLegacyDeepSeekProtocolUserConfig() (bool, error) {
+	path := r.userConfigLoadPath()
 	if strings.TrimSpace(path) == "" {
 		return false, nil
 	}
@@ -54,7 +60,7 @@ func UpgradeDeepSeekProviderProtocol(path, name string) (bool, error) {
 // so a project-only provider or an unsupported TOML shape cannot expose an
 // action that would later edit a different file or fail unexpectedly.
 func CanUpgradeDeepSeekProviderProtocolUserConfig(name string) bool {
-	path := userConfigLoadPath()
+	path := processRoots().userConfigLoadPath()
 	if strings.TrimSpace(path) == "" {
 		return false
 	}

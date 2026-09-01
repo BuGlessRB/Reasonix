@@ -19,47 +19,48 @@ type storageSection struct {
 	Storage map[string]string `toml:"storage"`
 }
 
-// storageDirCache holds the [storage] table for one home root. Roots resolve on
-// nearly every path call, so the file is read once — but keyed by the home that
-// produced it, because an isolated instance (and every test) moves home out
-// from under a process that has already resolved paths.
+// storageDirCache holds the [storage] table per home root. Roots resolve on
+// nearly every path call, so each file is read once — but keyed by the home
+// that produced it, because an isolated instance (and every test) moves home
+// out from under a process that has already resolved paths, and one process
+// may resolve against several stated homes at once.
 var storageDirCache struct {
-	mu   sync.Mutex
-	home string
-	read bool
-	dirs map[RootID]string
+	mu    sync.Mutex
+	byOwn map[string]map[RootID]string
 }
 
 // configuredRootDir answers what the configuration chose for a root, "" when it
 // chose nothing. An immovable root always answers "": home cannot be named by
 // the file it holds, and the locks root must not follow a profile at all.
-func configuredRootDir(id RootID) string {
+func (r Roots) configuredRootDir(id RootID) string {
 	if !RootRelocatable(id) {
 		return ""
 	}
-	home := storageRootDir(RootHome)
+	home := r.Dir(RootHome)
 	if home == "" {
 		return ""
 	}
 	storageDirCache.mu.Lock()
 	defer storageDirCache.mu.Unlock()
-	if !storageDirCache.read || storageDirCache.home != home {
-		storageDirCache.home = home
-		storageDirCache.read = true
-		storageDirCache.dirs = readStorageDirs(filepath.Join(home, "config.toml"))
+	dirs, ok := storageDirCache.byOwn[home]
+	if !ok {
+		dirs = readStorageDirs(filepath.Join(home, "config.toml"))
+		if storageDirCache.byOwn == nil {
+			storageDirCache.byOwn = map[string]map[RootID]string{}
+		}
+		storageDirCache.byOwn[home] = dirs
 	}
-	return storageDirCache.dirs[id]
+	return dirs[id]
 }
 
-// InvalidateStorageDirs drops the cached [storage] table. A process that just
+// InvalidateStorageDirs drops the cached [storage] tables. A process that just
 // wrote one calls this so a later read sees it; the resolved roots a running
 // runtime already handed out do not change, which is why relocation takes
 // effect on the next launch rather than mid-session.
 func InvalidateStorageDirs() {
 	storageDirCache.mu.Lock()
 	defer storageDirCache.mu.Unlock()
-	storageDirCache.read = false
-	storageDirCache.dirs = nil
+	storageDirCache.byOwn = nil
 }
 
 // readStorageDirs decodes only the [storage] table. A malformed or unreadable

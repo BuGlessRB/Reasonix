@@ -76,7 +76,8 @@ var legacyKeyringLookupTimeout = time.Second
 // build. It keeps expensive global credential-store lookups bounded to one per
 // key while preserving the same source/shadow reporting as the one-shot helpers.
 type CredentialResolver struct {
-	root string
+	roots Roots
+	root  string
 
 	mu               sync.Mutex
 	globalFirstCache map[string]CredentialResolution
@@ -96,7 +97,7 @@ func (r *CredentialResolver) ResolveGlobalFirst(key string) CredentialResolution
 		return CredentialResolution{Name: key}
 	}
 	if r == nil {
-		return resolveCredentialForRootGlobalFirst(".", key)
+		return processRoots().resolveCredentialForRootGlobalFirst(".", key)
 	}
 
 	r.mu.Lock()
@@ -107,7 +108,7 @@ func (r *CredentialResolver) ResolveGlobalFirst(key string) CredentialResolution
 	if cached, ok := r.globalFirstCache[key]; ok {
 		return cloneCredentialResolution(cached)
 	}
-	res := resolveCredentialForRootGlobalFirst(r.root, key)
+	res := r.roots.resolveCredentialForRootGlobalFirst(r.root, key)
 	r.globalFirstCache[key] = cloneCredentialResolution(res)
 	return res
 }
@@ -130,20 +131,20 @@ func normalizeCredentialsStore(mode string) string {
 	}
 }
 
-func credentialsStoreMode() string {
+func (r Roots) credentialsStoreMode() string {
 	if mode := strings.TrimSpace(os.Getenv("REASONIX_CREDENTIALS_STORE")); mode != "" {
 		return normalizeCredentialsStore(mode)
 	}
 	var partial struct {
 		CredentialsStore string `toml:"credentials_store"`
 	}
-	if path := userConfigLoadPath(); path != "" {
+	if path := r.userConfigLoadPath(); path != "" {
 		_, _ = decodeTOMLFile(path, &partial)
 	}
 	return normalizeCredentialsStore(partial.CredentialsStore)
 }
 
-func credentialEnvNamesForRoot(root string) []string {
+func (r Roots) credentialEnvNamesForRoot(root string) []string {
 	root = resolveRoot(root)
 	cfg := Default()
 
@@ -151,12 +152,12 @@ func credentialEnvNamesForRoot(root string) []string {
 	if root != "." {
 		projectTOML = filepath.Join(root, "reasonix.toml")
 	}
-	if uc := userConfigLoadPath(); uc != "" {
+	if uc := r.userConfigLoadPath(); uc != "" {
 		_ = mergeFile(cfg, uc)
 	}
 	_ = mergeFile(cfg, projectTOML)
 	var tomlSources []string
-	if uc := userConfigLoadPath(); uc != "" {
+	if uc := r.userConfigLoadPath(); uc != "" {
 		tomlSources = append(tomlSources, uc)
 	}
 	tomlSources = append(tomlSources, projectTOML)
@@ -207,7 +208,7 @@ func (c *Config) CredentialEnvNames() []string {
 	for _, name := range names {
 		seen[name] = true
 	}
-	if file, ok := readDotEnvFile(UserCredentialsPath()); ok {
+	if file, ok := readDotEnvFile(c.roots.UserCredentialsPath()); ok {
 		for name := range file.Values {
 			name = strings.TrimSpace(name)
 			if !isCredentialKey(name) || seen[name] {
@@ -221,11 +222,11 @@ func (c *Config) CredentialEnvNames() []string {
 	return names
 }
 
-func resolveProviderCredentialsForRoot(root string, cfg *Config) {
+func (r Roots) resolveProviderCredentialsForRoot(root string, cfg *Config) {
 	if cfg == nil || len(cfg.Providers) == 0 {
 		return
 	}
-	resolver := NewCredentialResolverForRoot(root)
+	resolver := &CredentialResolver{roots: r, root: resolveRoot(root)}
 	for i := range cfg.Providers {
 		resolveProviderCredentialWithResolver(&cfg.Providers[i], resolver)
 	}
@@ -244,6 +245,7 @@ func resolveProviderCredentialWithResolver(entry *ProviderEntry, resolver *Crede
 	if resolver == nil {
 		resolver = NewCredentialResolverForRoot(".")
 	}
+	entry.roots = resolver.roots
 	res := resolver.ResolveGlobalFirst(key)
 	if !res.Set || res.Value == "" {
 		entry.resolvedAPIKey = ""
@@ -258,12 +260,12 @@ func (e *ProviderEntry) ResolveAPIKeyForRoot(root string) {
 	resolveProviderCredentialWithResolver(e, NewCredentialResolverForRoot(root))
 }
 
-func loadCredentialStoreForRoot(root string) {
-	names := credentialEnvNamesForRoot(root)
+func (r Roots) loadCredentialStoreForRoot(root string) {
+	names := r.credentialEnvNamesForRoot(root)
 	if len(names) == 0 {
 		return
 	}
-	if p := UserCredentialsPath(); p != "" {
+	if p := r.UserCredentialsPath(); p != "" {
 		loadDotEnvFileAs(p, CredentialSource{Kind: CredentialSourceCredentials, Path: p, Label: "Reasonix credentials (.env)"})
 	}
 }
@@ -573,13 +575,13 @@ func ResolveCredentialForRoot(root, key string) CredentialResolution {
 	res.Value = value
 	if source, ok := trackedCredential(key, value); ok {
 		res.Source = source
-	} else if source, ok := inferCredentialSource(root, key, value); ok {
+	} else if source, ok := processRoots().inferCredentialSource(root, key, value); ok {
 		res.Source = source
 	} else {
 		res.Source = CredentialSource{Kind: CredentialSourceEnvironment, Label: credentialSourceLabel(CredentialSource{Kind: CredentialSourceEnvironment})}
 	}
 	res.Source.Label = credentialSourceLabel(res.Source)
-	res.Shadowed = shadowedCredentialSources(root, key, value, res.Source)
+	res.Shadowed = processRoots().shadowedCredentialSources(root, key, value, res.Source)
 	return res
 }
 
@@ -588,25 +590,25 @@ func ResolveCredentialForRootGlobalFirst(root, key string) CredentialResolution 
 	return NewCredentialResolverForRoot(root).ResolveGlobalFirst(key)
 }
 
-func resolveCredentialForRootGlobalFirst(root, key string) CredentialResolution {
+func (r Roots) resolveCredentialForRootGlobalFirst(root, key string) CredentialResolution {
 	root = resolveRoot(root)
 	res := CredentialResolution{Name: key}
 	if key == "" {
 		return res
 	}
-	if value, source, ok := storedCredentialValueLookup(key); ok {
+	if value, source, ok := storedCredentialValueLookup(r, key); ok {
 		res.Set = true
 		res.Value = value
 		res.Source = source
 		res.Source.Label = credentialSourceLabel(res.Source)
-		res.Shadowed = shadowedCredentialSources(root, key, value, res.Source)
+		res.Shadowed = r.shadowedCredentialSources(root, key, value, res.Source)
 		return res
 	}
 	return res
 }
 
-func storedCredentialValue(key string) (string, CredentialSource, bool) {
-	if p := UserCredentialsPath(); p != "" {
+func storedCredentialValue(r Roots, key string) (string, CredentialSource, bool) {
+	if p := r.UserCredentialsPath(); p != "" {
 		if value, ok := envFileValue(p, key); ok && value != "" {
 			return value, CredentialSource{Kind: CredentialSourceCredentials, Path: p, Label: "Reasonix credentials (.env)"}, true
 		}
@@ -614,8 +616,8 @@ func storedCredentialValue(key string) (string, CredentialSource, bool) {
 	return "", CredentialSource{}, false
 }
 
-func inferCredentialSource(root, key, value string) (CredentialSource, bool) {
-	for _, candidate := range credentialSourceCandidates(root) {
+func (r Roots) inferCredentialSource(root, key, value string) (CredentialSource, bool) {
+	for _, candidate := range r.credentialSourceCandidates(root) {
 		if v, ok := envFileValue(candidate.Path, key); ok && v == value {
 			candidate.Label = credentialSourceLabel(candidate)
 			return candidate, true
@@ -624,9 +626,9 @@ func inferCredentialSource(root, key, value string) (CredentialSource, bool) {
 	return CredentialSource{}, false
 }
 
-func shadowedCredentialSources(root, key, activeValue string, active CredentialSource) []CredentialSource {
+func (r Roots) shadowedCredentialSources(root, key, activeValue string, active CredentialSource) []CredentialSource {
 	var out []CredentialSource
-	for _, candidate := range credentialSourceCandidates(root) {
+	for _, candidate := range r.credentialSourceCandidates(root) {
 		if sameCredentialSource(candidate, active) {
 			continue
 		}
@@ -638,7 +640,7 @@ func shadowedCredentialSources(root, key, activeValue string, active CredentialS
 	return out
 }
 
-func credentialSourceCandidates(root string) []CredentialSource {
+func (r Roots) credentialSourceCandidates(root string) []CredentialSource {
 	root = resolveRoot(root)
 	var out []CredentialSource
 	dotEnvPath := ".env"
@@ -646,13 +648,11 @@ func credentialSourceCandidates(root string) []CredentialSource {
 		dotEnvPath = filepath.Join(root, ".env")
 	}
 	out = append(out, CredentialSource{Kind: CredentialSourceProjectEnv, Path: dotEnvPath})
-	if p := UserCredentialsPath(); p != "" {
+	if p := r.UserCredentialsPath(); p != "" {
 		out = append(out, CredentialSource{Kind: CredentialSourceCredentials, Path: p})
 	}
-	if IsolatedHomeDir() == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			out = append(out, CredentialSource{Kind: CredentialSourceHomeEnv, Path: filepath.Join(home, ".env")})
-		}
+	if home, err := os.UserHomeDir(); r.pinnedHomeDir() == "" && err == nil {
+		out = append(out, CredentialSource{Kind: CredentialSourceHomeEnv, Path: filepath.Join(home, ".env")})
 	}
 	return out
 }

@@ -52,6 +52,7 @@ type Config struct {
 	// Storage relocates the movable roots, keyed by RootID. User/global only.
 	Storage map[string]string `toml:"storage"`
 
+	roots                      Roots
 	systemPromptFileSource     promptFileSource
 	providerSources            map[string]providerSourceScope
 	shadowedProjectProviders   []ProviderEntry
@@ -1361,6 +1362,7 @@ type ProviderEntry struct {
 	ResponsesStateful *bool `toml:"responses_stateful"`
 	resolvedAPIKey    string
 	resolvedSource    CredentialSource
+	roots             Roots
 	BalanceURL        string `toml:"balance_url"` // optional; a provider-specific wallet-balance endpoint (DeepSeek: https://api.deepseek.com/user/balance). Empty = no balance readout.
 	ContextWindow     int    `toml:"context_window"`
 	// MaxOutputTokens is a protocol-neutral total output budget for one turn.
@@ -2025,10 +2027,7 @@ func (e *ProviderEntry) APIKey() string {
 	if e.APIKeyEnv == "" {
 		return ""
 	}
-	value, _, ok := storedCredentialValue(e.APIKeyEnv)
-	if !ok {
-		return ""
-	}
+	value, _, _ := storedCredentialValue(e.roots, e.APIKeyEnv)
 	return value
 }
 
@@ -2146,7 +2145,7 @@ func (c *Config) ResolveSystemPromptForRoot(root string) (string, error) {
 	}
 
 	candidates := []string{filepath.Join(resolveRoot(root), path)}
-	if home := ReasonixHomeDir(); home != "" {
+	if home := c.roots.Home(); home != "" {
 		homeCandidate := filepath.Join(home, path)
 		if filepath.Clean(homeCandidate) != filepath.Clean(candidates[0]) {
 			candidates = append(candidates, homeCandidate)
@@ -2226,7 +2225,7 @@ func (c *Config) Validate(model string) error {
 		return fmt.Errorf("provider %q: api_key_env %q is invalid; use letters, numbers, and underscores, not a model name", model, e.APIKeyEnv)
 	}
 	if e.RequiresAPIKey() && e.APIKey() == "" {
-		return fmt.Errorf("provider %q: no stored key for %s in %s; run 'reasonix setup'", model, e.APIKeyEnv, credentialsLocationForError())
+		return fmt.Errorf("provider %q: no stored key for %s in %s; run 'reasonix setup'", model, e.APIKeyEnv, e.roots.credentialsLocationForError())
 	}
 	return nil
 }

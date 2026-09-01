@@ -6,7 +6,7 @@
     "complexity": 1513,
     "error-text": 12,
     "essay": 3243,
-    "file-size": 41714,
+    "file-size": 41525,
     "frontend-parity": 150,
     "function-size": 6596,
     "layering": 0,
@@ -615,7 +615,7 @@
     },
     "internal/config/config.go": {
       "essay": 50,
-      "file-size": 1440,
+      "file-size": 1439,
       "narrative": 2
     },
     "internal/config/credentials.go": {
@@ -648,7 +648,7 @@
     },
     "internal/config/load.go": {
       "essay": 24,
-      "file-size": 1658,
+      "file-size": 1470,
       "function-size": 61,
       "orphan": 2
     },

@@ -27,7 +27,7 @@ func tryRebuildSubgraph(ctx context.Context, old *control.Controller, previous *
 		from = previous.Plan.Graph
 	}
 	graphStart := time.Now()
-	to, gerr := buildRuntimeGraph(config.ReasonixHomeDir(), nil)
+	to, gerr := buildRuntimeGraph(opts.roots().Home(), nil)
 	extension.DefaultLifecycleMetrics.ObserveGraphBuild(time.Since(graphStart))
 	if gerr != nil {
 		return nil, false, nil
@@ -110,7 +110,7 @@ func tryRebuildSubgraph(ctx context.Context, old *control.Controller, previous *
 		}
 	case extension.SubgraphUIOnly, extension.SubgraphInterceptorOnly, extension.SubgraphProviderOnly, extension.SubgraphMCPOnly:
 		// Stage only: does not mutate controller dispatcher/resolver/UI.
-		patchErr = stageSidecarSubgraph(ctx, res, oldMgr, plan, session, gen)
+		patchErr = stageSidecarSubgraph(ctx, opts.roots(), res, oldMgr, plan, session, gen)
 	}
 	if patchErr != nil {
 		return fail(patchErr)
@@ -176,8 +176,8 @@ func (res *BuildResult) ensureRuntime(gen uint64) *extension.RuntimeSet {
 // stageSidecarSubgraph prepares manager/snapshot/dispatcher/resolver without
 // mutating live controller bindings. BindGeneration and stream-router install
 // wait for commit; staged-generation host/ui/* is dropped until then.
-func stageSidecarSubgraph(ctx context.Context, res *BuildResult, oldMgr *sidecar.Manager, plan *extension.RuntimePlan, session protocol.SessionContext, gen uint64) error {
-	home := config.ReasonixHomeDir()
+func stageSidecarSubgraph(ctx context.Context, roots config.Roots, res *BuildResult, oldMgr *sidecar.Manager, plan *extension.RuntimePlan, session protocol.SessionContext, gen uint64) error {
+	home := roots.Home()
 	var ui sidecar.UIHandler
 	if res.ExtensionUI != nil {
 		ui = res.ExtensionUI

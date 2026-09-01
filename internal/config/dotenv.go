@@ -21,7 +21,7 @@ type dotEnvFile struct {
 // workspace .env values returned by loadDotEnvForRoot are ignored here because
 // loadDotEnv has no Config to carry a workspace-scoped expansion environment.
 func loadDotEnv() {
-	loadDotEnvForRoot(".")
+	processRoots().loadDotEnvForRoot(".")
 }
 
 // loadDotEnvForRoot returns workspace .env values for scoped plugin/MCP/proxy
@@ -30,19 +30,19 @@ func loadDotEnv() {
 // environment, so multiple desktop/ACP workspaces cannot leak tokens into each
 // other and project files cannot redirect Reasonix's own config/credential
 // paths.
-func loadDotEnvForRoot(root string) map[string]string {
-	projectEnv := loadProjectDotEnvForExpansion(root)
-	loadCredentialStoreForRoot(root)
+func (r Roots) loadDotEnvForRoot(root string) map[string]string {
+	projectEnv := r.loadProjectDotEnvForExpansion(root)
+	r.loadCredentialStoreForRoot(root)
 	return projectEnv
 }
 
-func loadProjectDotEnvForExpansion(root string) map[string]string {
+func (r Roots) loadProjectDotEnvForExpansion(root string) map[string]string {
 	root = resolveRoot(root)
 	path := ".env"
 	if root != "." {
 		path = filepath.Join(root, ".env")
 	}
-	if current := UserCredentialsPath(); current != "" && samePath(path, current) {
+	if current := r.UserCredentialsPath(); current != "" && samePath(path, current) {
 		return nil
 	}
 	file, ok := readDotEnvFile(path)
@@ -71,8 +71,8 @@ func isProjectDotEnvControlKey(key string) bool {
 	}
 }
 
-func legacyCredentialsPaths() []string {
-	current := UserCredentialsPath()
+func (r Roots) legacyCredentialsPaths() []string {
+	current := r.UserCredentialsPath()
 	seen := map[string]bool{}
 	var paths []string
 	add := func(path string) {
@@ -89,14 +89,14 @@ func legacyCredentialsPaths() []string {
 		seen[path] = true
 		paths = append(paths, path)
 	}
-	if dir := legacyOSSupportDir(); dir != "" {
+	if dir := r.legacyOSSupportDir(); dir != "" {
 		add(filepath.Join(dir, "credentials"))
 	}
-	if dir := userSupportDir(); dir != "" {
+	if dir := r.userSupportDir(); dir != "" {
 		add(filepath.Join(dir, "credentials"))
 		add(filepath.Join(dir, ".env"))
 	}
-	for _, cfg := range legacyXDGConfigPaths() {
+	for _, cfg := range r.legacyXDGConfigPaths() {
 		add(filepath.Join(filepath.Dir(cfg), "credentials"))
 	}
 	return paths

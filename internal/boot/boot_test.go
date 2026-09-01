@@ -2925,7 +2925,7 @@ allow = ["Bash(workspace*)"]
 `)
 
 	const rule = "Bash(go test ./...)"
-	rememberPermissionRule(workspace, rule)
+	rememberPermissionRule(config.Roots{}, workspace, rule)
 
 	cwdCfg := config.LoadForEdit(filepath.Join(cwd, "reasonix.toml"))
 	if hasPermissionRule(cwdCfg.Permissions.Allow, rule) {
@@ -2953,7 +2953,7 @@ legacy_preference = "keep"
 `)
 
 	const rule = "Edit(src/app.go)"
-	result := rememberPermissionRule(workspace, rule)
+	result := rememberPermissionRule(config.Roots{}, workspace, rule)
 	if result.Err != nil || !result.Saved {
 		t.Fatalf("remember result = %+v, want saved without error", result)
 	}
@@ -3008,7 +3008,7 @@ deny = ["Bash(rm:*)"]
 `)
 
 	const rule = "Edit(src/app.go)"
-	result := rememberPermissionRule(workspace, rule)
+	result := rememberPermissionRule(config.Roots{}, workspace, rule)
 	if result.Err != nil || !result.Saved {
 		t.Fatalf("remember result = %+v, want saved without error", result)
 	}
@@ -3034,7 +3034,7 @@ func TestRememberPermissionRuleRejectsMalformedConfigWithoutWriting(t *testing.T
 		t.Fatal(err)
 	}
 
-	result := rememberPermissionRule(workspace, "Edit(src/app.go)")
+	result := rememberPermissionRule(config.Roots{}, workspace, "Edit(src/app.go)")
 	if result.Err == nil || result.Saved {
 		t.Fatalf("remember result = %+v, want parse error without save", result)
 	}
@@ -3060,7 +3060,7 @@ func TestRememberPermissionRuleSerializesConcurrentWriters(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			<-start
-			results <- rememberPermissionRule(workspace, fmt.Sprintf("Edit(file-%02d)", n))
+			results <- rememberPermissionRule(config.Roots{}, workspace, fmt.Sprintf("Edit(file-%02d)", n))
 		}(i)
 	}
 	close(start)
@@ -3179,7 +3179,7 @@ func TestRememberPermissionRuleProcessHelper(t *testing.T) {
 	}
 	for n := range rules {
 		rule := fmt.Sprintf("Edit(process-%d-file-%02d)", worker, n)
-		result := rememberPermissionRule(workspace, rule)
+		result := rememberPermissionRule(config.Roots{}, workspace, rule)
 		if result.Err != nil || !result.Saved {
 			t.Fatalf("remember result = %+v, want saved without error", result)
 		}
@@ -3201,7 +3201,7 @@ allow = ["Bash(user)"]
 `)
 
 	const rule = "Edit(src/app.go)"
-	res := rememberPermissionRule(workspace, rule)
+	res := rememberPermissionRule(config.Roots{}, workspace, rule)
 	if !res.Saved || res.Path != filepath.Join(workspace, "reasonix.toml") {
 		t.Fatalf("remember result = %+v, want saved to workspace config", res)
 	}
@@ -3232,7 +3232,7 @@ allow = ["Bash(user*)"]
 `)
 
 	const rule = "Bash(go env)"
-	res := rememberPermissionRule("", rule)
+	res := rememberPermissionRule(config.Roots{}, "", rule)
 	if !res.Saved || res.Path != userConfig {
 		t.Fatalf("remember result = %+v, want saved to user source config", res)
 	}
@@ -3253,7 +3253,7 @@ func TestRememberPermissionRuleSkipsRuleCoveredByExistingAllow(t *testing.T) {
 allow = ["Bash(go test:*)"]
 `)
 
-	res := rememberPermissionRule(workspace, "Bash(go test ./...)")
+	res := rememberPermissionRule(config.Roots{}, workspace, "Bash(go test ./...)")
 	if res.Saved || res.CoveredBy != "Bash(go test:*)" {
 		t.Fatalf("remember result = %+v, want already covered", res)
 	}
@@ -3271,7 +3271,7 @@ allow = ["Bash(git*)"]
 `)
 
 	const literal = "Bash=git status $(touch /tmp/reasonix-dynamic-approval)"
-	res := rememberPermissionRule(workspace, literal)
+	res := rememberPermissionRule(config.Roots{}, workspace, literal)
 	if !res.Saved || res.CoveredBy != "" || res.Err != nil {
 		t.Fatalf("remember dynamic literal = %+v, want newly saved rule", res)
 	}
@@ -3280,7 +3280,7 @@ allow = ["Bash(git*)"]
 		t.Fatalf("allow rules = %v, want broad rule and dynamic literal", cfg.Permissions.Allow)
 	}
 
-	res = rememberPermissionRule(workspace, literal)
+	res = rememberPermissionRule(config.Roots{}, workspace, literal)
 	if res.Saved || res.CoveredBy != literal || res.Err != nil {
 		t.Fatalf("remember duplicate dynamic literal = %+v, want exact deduplication", res)
 	}
@@ -3303,7 +3303,7 @@ func TestRememberPermissionRulePrunesNarrowRulesWhenSavingBroaderRule(t *testing
 allow = ["Bash(go test ./...)", "Bash(go build ./...)"]
 `)
 
-	res := rememberPermissionRule(workspace, "Bash(go test:*)")
+	res := rememberPermissionRule(config.Roots{}, workspace, "Bash(go test:*)")
 	if !res.Saved || res.CoveredBy != "" {
 		t.Fatalf("remember result = %+v, want saved broader rule", res)
 	}

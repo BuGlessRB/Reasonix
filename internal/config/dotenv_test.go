@@ -531,7 +531,7 @@ func TestCredentialResolverCachesGlobalFirstLookups(t *testing.T) {
 func stubStoredCredentialValueForTest(t *testing.T, fn func(string) (string, CredentialSource, bool)) {
 	t.Helper()
 	old := storedCredentialValueLookup
-	storedCredentialValueLookup = fn
+	storedCredentialValueLookup = func(_ Roots, key string) (string, CredentialSource, bool) { return fn(key) }
 	t.Cleanup(func() {
 		storedCredentialValueLookup = old
 	})

@@ -32,34 +32,33 @@ var (
 	}
 )
 
-func userConfigPath() string {
-	dir := userConfigDir()
+func (r Roots) userConfigPath() string {
+	dir := r.userConfigDir()
 	if dir == "" {
 		return ""
 	}
 	return filepath.Join(dir, "config.toml")
 }
 
-func userConfigDir() string {
-	return reasonixHomeDir()
-}
+func (r Roots) userConfigDir() string { return r.Home() }
 
-func reasonixHomeDir() string { return storageRootDir(RootHome) }
+// Home is the Reasonix home this binding resolves to.
+func (r Roots) Home() string { return r.Dir(RootHome) }
 
-func userConfigLoadPath() string {
-	primary := userConfigPath()
+func (r Roots) userConfigLoadPath() string {
+	primary := r.userConfigPath()
 	if primary == "" {
-		return legacyUserConfigPath()
+		return r.legacyUserConfigPath()
 	}
 	if _, err := os.Stat(primary); err == nil {
 		return primary
 	}
-	if legacy := legacyUserConfigPath(); legacy != "" {
+	if legacy := r.legacyUserConfigPath(); legacy != "" {
 		if _, err := os.Stat(legacy); err == nil {
 			return legacy
 		}
 	}
-	for _, legacy := range legacyXDGConfigPaths() {
+	for _, legacy := range r.legacyXDGConfigPaths() {
 		if legacy == "" || samePath(legacy, primary) {
 			continue
 		}
@@ -70,32 +69,32 @@ func userConfigLoadPath() string {
 	return primary
 }
 
-func legacyUserConfigPath() string {
-	dir := legacyOSSupportDir()
+func (r Roots) legacyUserConfigPath() string {
+	dir := r.legacyOSSupportDir()
 	if dir == "" {
 		return ""
 	}
 	path := filepath.Join(dir, "config.toml")
-	if primary := userConfigPath(); primary != "" && samePath(path, primary) {
+	if primary := r.userConfigPath(); primary != "" && samePath(path, primary) {
 		return ""
 	}
 	return path
 }
 
-func userConfigCandidatePaths() []string {
+func (r Roots) userConfigCandidatePaths() []string {
 	var paths []string
-	if p := userConfigPath(); p != "" {
+	if p := r.userConfigPath(); p != "" {
 		paths = append(paths, p)
 	}
-	if p := legacyUserConfigPath(); p != "" {
+	if p := r.legacyUserConfigPath(); p != "" {
 		paths = append(paths, p)
 	}
-	paths = append(paths, legacyXDGConfigPaths()...)
+	paths = append(paths, r.legacyXDGConfigPaths()...)
 	return paths
 }
 
-func legacyXDGConfigPaths() []string {
-	if IsolatedHomeDir() != "" {
+func (r Roots) legacyXDGConfigPaths() []string {
+	if r.pinnedHomeDir() != "" {
 		return nil
 	}
 	if runtimeGOOS == "windows" {
@@ -123,10 +122,10 @@ func legacyXDGConfigPaths() []string {
 	return paths
 }
 
-func userSupportDir() string { return storageRootDir(RootState) }
+func (r Roots) userSupportDir() string { return r.Dir(RootState) }
 
-func legacyOSSupportDir() string {
-	if IsolatedHomeDir() != "" {
+func (r Roots) legacyOSSupportDir() string {
+	if r.pinnedHomeDir() != "" {
 		return ""
 	}
 	dir := osUserConfigDir()
@@ -134,13 +133,13 @@ func legacyOSSupportDir() string {
 		return ""
 	}
 	path := filepath.Join(dir, "reasonix")
-	if current := reasonixHomeDir(); current != "" && samePath(path, current) {
+	if current := r.Home(); current != "" && samePath(path, current) {
 		return ""
 	}
 	return path
 }
 
-func userCacheDir() string { return storageRootDir(RootCache) }
+func (r Roots) userCacheDir() string { return r.Dir(RootCache) }
 
 func cleanEnvDir(name string) string {
 	return expandDirValue(os.Getenv(name))
@@ -191,9 +190,7 @@ func samePath(a, b string) bool {
 // explicitly set via the environment variable. A non-empty return signals a
 // self-contained runtime that must not fall back to legacy OS-default data
 // paths or import data from the system-wide production install.
-func IsolatedHomeDir() string {
-	return cleanEnvDir("REASONIX_HOME")
-}
+func IsolatedHomeDir() string { return processRoots().pinnedHomeDir() }
 
 // IsolatedStateDir returns the state root when REASONIX_STATE_HOME explicitly
 // set it. That root owns sessions, archive, stats and projects, so a run that
@@ -206,8 +203,8 @@ func IsolatedStateDir() string {
 // userConfigDisplayPath is userConfigPath collapsed to a ~-relative form for
 // comments rendered into the user's own config.toml, so Windows users see the
 // real location instead of a hardcoded ~/.reasonix path.
-func userConfigDisplayPath() string {
-	p := userConfigPath()
+func (r Roots) userConfigDisplayPath() string {
+	p := r.userConfigPath()
 	if p == "" {
 		return "<os-config-dir>/reasonix/config.toml"
 	}
@@ -224,17 +221,19 @@ func userConfigDisplayPath() string {
 // or %AppData%/reasonix/config.toml on Windows. If %AppData% is unavailable on
 // Windows, it falls back to %USERPROFILE%/AppData/Roaming/reasonix/config.toml.
 // "" when the user config dir can't be resolved.
-func UserConfigPath() string { return userConfigPath() }
+func UserConfigPath() string { return processRoots().userConfigPath() }
 
 // LegacyUserConfigPath is the old OS app-support config.toml path when it
 // differs from UserConfigPath. It is read as a compatibility fallback when the
 // primary user config does not exist.
-func LegacyUserConfigPath() string { return legacyUserConfigPath() }
+func LegacyUserConfigPath() string { return processRoots().legacyUserConfigPath() }
 
 // LegacyUserConfigPaths returns every known legacy user config path that differs
 // from the current v1.8.1 Reasonix-home config path.
-func LegacyUserConfigPaths() []string {
-	primary := userConfigPath()
+func LegacyUserConfigPaths() []string { return processRoots().legacyUserConfigPaths() }
+
+func (r Roots) legacyUserConfigPaths() []string {
+	primary := r.userConfigPath()
 	var out []string
 	add := func(path string) {
 		if path == "" || samePath(path, primary) {
@@ -247,8 +246,8 @@ func LegacyUserConfigPaths() []string {
 		}
 		out = append(out, path)
 	}
-	add(legacyUserConfigPath())
-	for _, path := range legacyXDGConfigPaths() {
+	add(r.legacyUserConfigPath())
+	for _, path := range r.legacyXDGConfigPaths() {
 		add(path)
 	}
 	return out
@@ -261,13 +260,15 @@ func LegacyUserConfigPaths() []string {
 // files, never directories — the Reasonix home also holds credentials (.env),
 // global hooks (settings.json), skills, and session stores, and none of those
 // may ride along on a config repair.
-func ReasonixManagedConfigPaths() []string {
+func ReasonixManagedConfigPaths() []string { return processRoots().managedConfigPaths() }
+
+func (r Roots) managedConfigPaths() []string {
 	var out []string
-	out = appendUniquePath(out, UserConfigPath())
-	for _, path := range LegacyUserConfigPaths() {
+	out = appendUniquePath(out, r.userConfigPath())
+	for _, path := range r.legacyUserConfigPaths() {
 		out = appendUniquePath(out, path)
 	}
-	out = appendUniquePath(out, legacyConfigPath())
+	out = appendUniquePath(out, r.legacyConfigPath())
 	return out
 }
 
@@ -289,13 +290,13 @@ func appendUniquePath(paths []string, path string) []string {
 // REASONIX_HOME, then uses ~/.reasonix on macOS/Linux or %APPDATA%/reasonix on
 // Windows, with a %USERPROFILE%/AppData/Roaming fallback when %APPDATA% is
 // unavailable.
-func ReasonixHomeDir() string { return reasonixHomeDir() }
+func ReasonixHomeDir() string { return processRoots().Home() }
 
 // RemoteStateDir is local state for the remote-SSH module (the managed
 // known_hosts file, cached host metadata): <Reasonix home>/remote. Routed
 // through the home resolver so REASONIX_HOME isolation holds.
 func RemoteStateDir() string {
-	home := reasonixHomeDir()
+	home := processRoots().Home()
 	if strings.TrimSpace(home) == "" {
 		return ""
 	}
@@ -318,7 +319,7 @@ func RemoteKnownHostsPath() string {
 // legacy name preserves callers and the existing state-file contract. Routed
 // through the home resolver so REASONIX_HOME isolation holds.
 func MissingReasoningWarnStateDir() string {
-	home := reasonixHomeDir()
+	home := processRoots().Home()
 	if strings.TrimSpace(home) == "" {
 		return ""
 	}
@@ -343,15 +344,18 @@ func RepairMutationLockDir() string {
 // workspaces. Explicit state/home overrides remain authoritative. Windows uses
 // LocalAppData by default so large Git worktrees do not roam with the user's
 // profile; other platforms keep using Reasonix state storage.
-func DeliveryWorktreeDir() string { return storageRootDir(RootWorktrees) }
+func DeliveryWorktreeDir() string { return processRoots().Dir(RootWorktrees) }
 
 // UserCredentialsPath is the reasonix-owned global .env file under Reasonix
 // home. It is the single source for provider credentials saved by Reasonix, so
 // stale shell, Windows, project, or home env vars cannot silently override keys
 // the user saved through setup or settings. "" when Reasonix home can't be
 // resolved.
-func UserCredentialsPath() string {
-	dir := reasonixHomeDir()
+func UserCredentialsPath() string { return processRoots().UserCredentialsPath() }
+
+// UserCredentialsPath is the credentials .env this binding resolves to.
+func (r Roots) UserCredentialsPath() string {
+	dir := r.Home()
 	if dir == "" {
 		return ""
 	}
@@ -362,8 +366,8 @@ func UserCredentialsPath() string {
 // Resolution reads only this file, never the process environment, so an error
 // naming the env var alone sends a caller who exported it hunting for a
 // mechanism that was never consulted.
-func credentialsLocationForError() string {
-	if p := UserCredentialsPath(); p != "" {
+func (r Roots) credentialsLocationForError() string {
+	if p := r.UserCredentialsPath(); p != "" {
 		return p
 	}
 	return "Reasonix's credentials file (.env under the state home)"
@@ -372,8 +376,11 @@ func credentialsLocationForError() string {
 // ArchiveDir is where compacted conversation history is archived for
 // traceability (one timestamped .jsonl per compaction). Empty if the user state
 // directory cannot be resolved, in which case archiving is skipped.
-func ArchiveDir() string {
-	dir := userSupportDir()
+func ArchiveDir() string { return processRoots().ArchiveDir() }
+
+// ArchiveDir is the compaction archive this binding resolves to.
+func (r Roots) ArchiveDir() string {
+	dir := r.userSupportDir()
 	if dir == "" {
 		return ""
 	}
@@ -383,8 +390,11 @@ func ArchiveDir() string {
 // SessionDir is where chat sessions are persisted (one .jsonl per session).
 // Used by `reasonix --continue` / `--resume` to find the recent ones. Empty
 // if the user state dir can't be resolved — sessions then aren't saved.
-func SessionDir() string {
-	dir := userSupportDir()
+func SessionDir() string { return processRoots().SessionDir() }
+
+// SessionDir is the transcript store this binding resolves to.
+func (r Roots) SessionDir() string {
+	dir := r.userSupportDir()
 	if dir == "" {
 		return ""
 	}
@@ -396,8 +406,11 @@ func SessionDir() string {
 // directory, which is typically read-only and replaced on upgrade — so usage
 // records survive app updates. Empty if the user state dir can't be resolved,
 // in which case usage accounting is skipped.
-func StatsDir() string {
-	dir := userSupportDir()
+func StatsDir() string { return processRoots().StatsDir() }
+
+// StatsDir is the usage store this binding resolves to.
+func (r Roots) StatsDir() string {
+	dir := r.userSupportDir()
 	if dir == "" {
 		return ""
 	}
@@ -408,7 +421,7 @@ func StatsDir() string {
 // lists: <state root>/projects/<slug>/sessions. Empty when either the state root
 // or workspaceRoot doesn't resolve.
 func ProjectSessionDir(workspaceRoot string) string {
-	base := MemoryUserDir()
+	base := processRoots().MemoryUserDir()
 	root := strings.TrimSpace(workspaceRoot)
 	if base == "" || root == "" {
 		return ""
@@ -469,20 +482,18 @@ func BoundFilenameComponent(s string, maxLen int) string {
 // CacheDir is the per-user cache root for derived/regenerable artefacts: MCP
 // handshake snapshots, plugin startup-latency telemetry. Empty when the OS dir is
 // unavailable — callers must tolerate that (caching is best-effort).
-func CacheDir() string {
-	dir := userCacheDir()
-	if dir == "" {
-		return ""
-	}
-	return dir
-}
+func CacheDir() string { return processRoots().CacheDir() }
+
+// CacheDir is the derived-artefact root this binding resolves to.
+func (r Roots) CacheDir() string { return r.userCacheDir() }
 
 // MemoryUserDir returns the reasonix user state root (…/reasonix), under which
 // the user-global REASONIX.md and the per-project auto-memory store live. Empty
 // when the user state dir can't be resolved, which disables user-scoped memory.
-func MemoryUserDir() string {
-	return userSupportDir()
-}
+func MemoryUserDir() string { return processRoots().MemoryUserDir() }
+
+// MemoryUserDir is the user state root this binding resolves to.
+func (r Roots) MemoryUserDir() string { return r.userSupportDir() }
 
 // ConventionDirs are the parent directories scanned for agent assets (skills,
 // commands), in canonical-first order. .reasonix is ours; .agents / .agent /
@@ -520,7 +531,7 @@ func CommandDirs() []string {
 // dirs under root instead of the current working directory. Global dirs are
 // unchanged — they are always user-scoped.
 func CommandDirsForRoot(root string) []string {
-	roots := CommandRootsForRoot(root)
+	roots := processRoots().CommandRootsForRoot(root)
 	dirs := make([]string, 0, len(roots))
 	for _, spec := range roots {
 		dirs = append(dirs, spec.Path)
@@ -531,7 +542,10 @@ func CommandDirsForRoot(root string) []string {
 // CommandRootsForRoot is the ownership-aware form of CommandDirsForRoot.
 // Plugin roots retain their package name so the loader can expose stable,
 // package-qualified command names and hidden short-name compatibility aliases.
-func CommandRootsForRoot(root string) []command.Root {
+func CommandRootsForRoot(root string) []command.Root { return processRoots().CommandRootsForRoot(root) }
+
+// CommandRootsForRoot resolves the command roots against this binding.
+func (r Roots) CommandRootsForRoot(root string) []command.Root {
 	root = resolveRoot(root)
 	var roots []command.Root
 	add := func(spec command.Root) {
@@ -547,13 +561,13 @@ func CommandRootsForRoot(root string) []command.Root {
 	}
 	// Enabled plugin packages contribute command dirs before user/project dirs,
 	// so explicit commands still win exact canonical-name clashes.
-	for _, spec := range pluginPackageCommandRoots() {
+	for _, spec := range r.pluginPackageCommandRoots() {
 		add(spec)
 	}
-	if dir := legacyOSSupportDir(); dir != "" {
+	if dir := r.legacyOSSupportDir(); dir != "" {
 		add(command.Root{Path: filepath.Join(dir, "commands")})
 	}
-	for _, legacy := range legacyXDGConfigPaths() {
+	for _, legacy := range r.legacyXDGConfigPaths() {
 		add(command.Root{Path: filepath.Join(filepath.Dir(legacy), "commands")})
 	}
 	if home, err := osUserHomeDir(); err == nil {
@@ -561,10 +575,10 @@ func CommandRootsForRoot(root string) []command.Root {
 			add(command.Root{Path: dir})
 		}
 	}
-	if dir := userConfigDir(); dir != "" {
+	if dir := r.userConfigDir(); dir != "" {
 		add(command.Root{Path: filepath.Join(dir, "commands")})
 	}
-	if dir := userSupportDir(); dir != "" && !samePath(dir, userConfigDir()) {
+	if dir := r.userSupportDir(); dir != "" && !samePath(dir, r.userConfigDir()) {
 		add(command.Root{Path: filepath.Join(dir, "commands")})
 	}
 	for _, dir := range conventionSubdirsAsc(root, "commands") {
@@ -580,7 +594,11 @@ func SourcePath() string {
 
 // SourcePathForRoot returns the highest-priority config file that exists under
 // root, or "" if none. Equivalent to SourcePath() when root is ".".
-func SourcePathForRoot(root string) string {
+func SourcePathForRoot(root string) string { return processRoots().SourcePathForRoot(root) }
+
+// SourcePathForRoot resolves the highest-priority config file against this
+// binding.
+func (r Roots) SourcePathForRoot(root string) string {
 	root = resolveRoot(root)
 	projectTOML := "reasonix.toml"
 	if root != "." {
@@ -589,7 +607,7 @@ func SourcePathForRoot(root string) string {
 	if _, err := os.Stat(projectTOML); err == nil {
 		return projectTOML
 	}
-	if uc := userConfigLoadPath(); uc != "" {
+	if uc := r.userConfigLoadPath(); uc != "" {
 		if _, err := os.Stat(uc); err == nil {
 			return uc
 		}

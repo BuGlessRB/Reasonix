@@ -35,7 +35,7 @@ func quotedSink(cfg *config.Config, opts Options) event.Sink {
 	// JSONL stores the CostQuote.
 	quoted := opts.Sink
 	if opts.StatsSource.Valid() {
-		quoted = stats.NewRecorder(quoted, config.StatsDir(), opts.StatsSource.String())
+		quoted = stats.NewRecorder(quoted, opts.roots().StatsDir(), opts.StatsSource.String())
 	}
 	return event.Sync(event.NewCostQuoteSink(quoted, ctx))
 }

@@ -41,9 +41,10 @@ type storageRoot struct {
 	// contract, not an omission: locks must converge across instances, and home
 	// cannot be named by the configuration it holds.
 	relocatable bool
-	// fallback answers when nothing overrides. It may read other roots; the
-	// graph stays acyclic because home resolves without reading any.
-	fallback func() string
+	// fallback answers when nothing overrides, against the binding being
+	// resolved, so a stated home carries its derived roots along as
+	// REASONIX_HOME does. Acyclic: home resolves without reading a root.
+	fallback func(Roots) string
 	// owns names what this root may claim inside a directory it shares — state
 	// falls back to home, so on Windows they are one folder and a move of one
 	// must not carry the other's credentials away. Empty means sole occupancy.
@@ -63,39 +64,87 @@ var (
 func storageRootTable() []storageRoot {
 	rootsOnce.Do(func() {
 		rootsTable = []storageRoot{
-			{id: RootHome, env: "REASONIX_HOME", relocatable: false, fallback: defaultHomeDir},
+			{id: RootHome, env: "REASONIX_HOME", relocatable: false, fallback: Roots.defaultHomeDir},
 			{id: RootState, env: "REASONIX_STATE_HOME", relocatable: true,
-				owns: StateRootEntries,
-				fallback: func() string {
-					return storageRootDir(RootHome)
-				}},
-			{id: RootCache, env: "REASONIX_CACHE_HOME", relocatable: true, fallback: defaultCacheDir},
-			{id: RootWorktrees, env: "", relocatable: true, fallback: defaultWorktreeDir},
-			{id: RootLocks, env: "", relocatable: false, fallback: osCacheBase,
+				owns:     StateRootEntries,
+				fallback: Roots.defaultStateDir},
+			{id: RootCache, env: "REASONIX_CACHE_HOME", relocatable: true, fallback: Roots.defaultCacheDir},
+			{id: RootWorktrees, env: "", relocatable: true, fallback: Roots.defaultWorktreeDir},
+			{id: RootLocks, env: "", relocatable: false, fallback: Roots.defaultLocksDir,
 				owns: []string{"workspace-leases", "repair-mutation-locks"}},
 		}
 	})
 	return rootsTable
 }
 
-// storageRootDir is the whole precedence chain: what the environment pins, then
-// what the configuration chose, then the root's own default. Every root runs it,
-// so relocation, isolation, and the OS defaults compose the same way for all of
+// Roots is the storage binding one call resolves against; the zero value is
+// what the environment says, which every package-level path function still
+// resolves. A stated home outranks REASONIX_HOME: the environment is how a
+// host works out which home to use, and once it has, it says so — the same
+// process may serve a second session that says something else.
+type Roots struct {
+	home string
+}
+
+// RootsForHome states the Reasonix home this binding resolves against. Empty
+// follows the environment, so a caller with nothing to say passes on what it
+// was given rather than working out a default of its own.
+func RootsForHome(home string) Roots { return Roots{home: expandDirValue(home)} }
+
+// Dir is the whole precedence chain: what holds this root in place, then what
+// the configuration chose, then the root's own default. Every root runs it, so
+// relocation, isolation, and the OS defaults compose the same way for all of
 // them instead of each resolver spelling out its own order.
-func storageRootDir(id RootID) string {
+func (r Roots) Dir(id RootID) string {
 	root, ok := lookupRoot(id)
 	if !ok {
 		return ""
 	}
-	if root.env != "" {
-		if dir := cleanEnvDir(root.env); dir != "" {
-			return dir
-		}
-	}
-	if dir := configuredRootDir(id); dir != "" {
+	if dir := r.pinnedRootDir(root); dir != "" {
 		return dir
 	}
-	return root.fallback()
+	if dir := r.configuredRootDir(id); dir != "" {
+		return dir
+	}
+	return root.fallback(r)
+}
+
+// pinnedRootDir is what holds a root in place before the configuration is
+// read: for home, what the caller stated, otherwise the root's variable.
+func (r Roots) pinnedRootDir(root storageRoot) string {
+	if root.id == RootHome && r.home != "" {
+		return r.home
+	}
+	if root.env == "" {
+		return ""
+	}
+	return cleanEnvDir(root.env)
+}
+
+// pinnedHomeDir is the home only insofar as something deliberate holds it
+// there — stated, or named by REASONIX_HOME. A caller that must tell an
+// isolated runtime from a default one reads this, never the resolved home.
+func (r Roots) pinnedHomeDir() string {
+	if r.home != "" {
+		return r.home
+	}
+	return cleanEnvDir("REASONIX_HOME")
+}
+
+// processRoots is the binding every package-level path function resolves
+// against: whatever the environment says, with nothing stated.
+func processRoots() Roots { return Roots{} }
+
+func storageRootDir(id RootID) string { return processRoots().Dir(id) }
+
+// Roots is the binding this configuration was loaded against. A caller holding
+// a Config derives paths from it rather than from the process environment,
+// which cannot tell which of two loaded homes this one came from.
+func (c *Config) Roots() Roots {
+	if c == nil {
+		return Roots{}
+	}
+	return c.roots
 }
 
 func lookupRoot(id RootID) (storageRoot, bool) {
@@ -172,7 +221,7 @@ func RootDir(id RootID) string { return storageRootDir(id) }
 // when it chose none. A caller that has to tell a deliberate relocation from a
 // default reads this rather than comparing RootDir against a default it works
 // out for itself — and the two differ, because the environment outranks both.
-func RootConfiguredDir(id RootID) string { return configuredRootDir(id) }
+func RootConfiguredDir(id RootID) string { return processRoots().configuredRootDir(id) }
 
 // joinRoot appends sub to the first base that resolves, and answers "" when
 // none does. The guard matters: filepath.Join("", "x") is the relative path
@@ -193,7 +242,7 @@ func joinRoot(base, sub string, more ...func() string) string {
 
 // defaultHomeDir is where configuration lands when REASONIX_HOME is unset:
 // the roaming profile on Windows, a dotfile directory elsewhere.
-func defaultHomeDir() string {
+func (Roots) defaultHomeDir() string {
 	if runtimeGOOS == "windows" {
 		if dir := osUserConfigDir(); dir != "" {
 			return filepath.Join(dir, "reasonix")
@@ -215,12 +264,20 @@ func defaultHomeDir() string {
 // defaultCacheDir is where derived data lands when no variable names it. A
 // pinned home takes its cache along as a subdirectory; otherwise the cache is
 // the OS location itself, which on Windows is the profile that does not roam.
-func defaultCacheDir() string {
-	if home := cleanEnvDir("REASONIX_HOME"); home != "" {
+func (r Roots) defaultCacheDir() string {
+	if home := r.pinnedHomeDir(); home != "" {
 		return filepath.Join(home, "cache")
 	}
 	return osCacheBase()
 }
+
+// defaultStateDir is the home root: state that nothing relocated lives beside
+// the configuration that would have named its new location.
+func (r Roots) defaultStateDir() string { return r.Dir(RootHome) }
+
+// defaultLocksDir ignores the binding on purpose — two isolated runtimes must
+// find the same lock, so it converges on the OS user's cache.
+func (Roots) defaultLocksDir() string { return osCacheBase() }
 
 // osCacheBase is the OS user's cache location for this app. It reads no
 // Reasonix variable on purpose: the locks root has to converge there even when
@@ -241,23 +298,23 @@ func osCacheBase() string {
 // they mirror. A state root someone pinned deliberately takes them along;
 // otherwise Windows keeps them out of the roaming profile, where they would be
 // copied between machines.
-func defaultWorktreeDir() string {
-	if dir := pinnedStateDir(); dir != "" {
+func (r Roots) defaultWorktreeDir() string {
+	if dir := r.pinnedStateDir(); dir != "" {
 		return filepath.Join(dir, "worktrees")
 	}
 	if runtimeGOOS == "windows" {
 		return joinRoot(osCacheBase(), "worktrees")
 	}
-	return joinRoot(storageRootDir(RootState), "worktrees")
+	return joinRoot(r.Dir(RootState), "worktrees")
 }
 
 // pinnedStateDir is the state root only insofar as a variable holds it there:
 // its own, or the home root it otherwise follows. Roots that inherit a
 // deliberate relocation consult this rather than the resolved value, which
 // cannot tell a chosen location from a default one.
-func pinnedStateDir() string {
+func (r Roots) pinnedStateDir() string {
 	if dir := cleanEnvDir("REASONIX_STATE_HOME"); dir != "" {
 		return dir
 	}
-	return cleanEnvDir("REASONIX_HOME")
+	return r.pinnedHomeDir()
 }
