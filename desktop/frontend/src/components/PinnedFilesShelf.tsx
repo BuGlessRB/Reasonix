@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { FileText, Pin, X } from "lucide-react";
+import { AlertTriangle, FileText, Pin, X } from "lucide-react";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
 import { useToast } from "../lib/toast";
@@ -54,10 +54,14 @@ export function PinnedFilesShelf({
           <div
             key={file.path}
             onClick={() => handleOpenFile(file.path)}
-            className="group flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface hover:bg-surface-hover border border-border/60 text-foreground cursor-pointer transition-colors shadow-2xs"
-            title={`${file.path} (${file.sizeBytes} B · ~${file.tokenEstimate} tok)`}
+            className={`group flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface hover:bg-surface-hover border text-foreground cursor-pointer transition-colors shadow-2xs ${file.error ? "border-red-500/60" : "border-border/60"}`}
+            title={file.error || `${file.path} (${file.sizeBytes} B · ~${file.tokenEstimate} tok)`}
           >
-            <FileText size={11} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+            {file.error ? (
+              <AlertTriangle size={11} className="text-red-500" aria-label={file.error} />
+            ) : (
+              <FileText size={11} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+            )}
             <span className="font-mono text-[11px] max-w-[160px] truncate">{basename}</span>
             {file.tokenEstimate > 0 && (
               <span className="text-[10px] text-muted-foreground">

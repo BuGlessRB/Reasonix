@@ -1,17 +1,25 @@
 package main
 
 import (
+	"bytes"
+	"encoding/xml"
 	"errors"
 	"fmt"
-	"os"
+	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"reasonix/internal/control"
+	"reasonix/internal/fileutil"
+	"reasonix/internal/nilutil"
 )
 
 const (
-	maxPinnedFileSize  = 64 * 1024  // 64 KiB per pinned file
-	maxTotalPinnedSize = 256 * 1024 // 256 KiB total pinned files
+	maxPinnedFileCount   = 32
+	maxPinnedFileSize    = 64 * 1024
+	maxPinnedContextSize = 256 * 1024
 )
 
 // PinnedFileInfo holds metadata about one pinned context file.
@@ -22,204 +30,254 @@ type PinnedFileInfo struct {
 	Error         string `json:"error,omitempty"`
 }
 
+type pinnedContextBuild struct {
+	Block string
+	Infos []PinnedFileInfo
+}
+
+type pinnedContextSetter interface {
+	SetPinnedContext(string) error
+}
+
+// pinnedFileReadHookForTest coordinates deterministic Pin/New/turn races.
+// Production leaves it nil.
+var pinnedFileReadHookForTest func()
+
 func normalizePinnedRelPath(relPath string) (string, error) {
 	clean := filepath.ToSlash(filepath.Clean(strings.TrimSpace(relPath)))
 	clean = strings.TrimPrefix(clean, "./")
-	clean = strings.TrimPrefix(clean, "/")
-	if clean == "" || clean == "." {
-		return "", errors.New("invalid empty path")
+	if clean == "" || clean == "." || filepath.IsAbs(relPath) || strings.HasPrefix(clean, "/") {
+		return "", errors.New("invalid empty or absolute path")
 	}
 	if clean == ".." || strings.HasPrefix(clean, "../") {
 		return "", errors.New("path traversal outside workspace is forbidden")
 	}
+	if !utf8.ValidString(clean) {
+		return "", errors.New("pinned path is not valid UTF-8")
+	}
 	return clean, nil
 }
 
-// validatePinnedFileInWorkspace validates that a relative file path belongs to the workspace
-// and resolves its physical path (protecting against symlink escapes).
-func validatePinnedFileInWorkspace(root, relPath string) (string, string, os.FileInfo, error) {
+func readPinnedWorkspaceFile(root, relPath string) (string, []byte, int64, error) {
 	clean, err := normalizePinnedRelPath(relPath)
 	if err != nil {
-		return "", "", nil, err
+		return "", nil, 0, err
 	}
-	if root == "" {
-		return "", "", nil, errors.New("tab has no workspace root")
+	if strings.TrimSpace(root) == "" {
+		return clean, nil, 0, errors.New("tab has no workspace root")
 	}
-	absPath := filepath.Join(root, filepath.FromSlash(clean))
-
-	// Resolve symlinks to verify the actual physical target
-	realTarget, err := filepath.EvalSymlinks(absPath)
+	file, err := fileutil.OpenFileBeneath(root, filepath.FromSlash(clean))
 	if err != nil {
-		return "", "", nil, fmt.Errorf("cannot resolve file path: %w", err)
+		return clean, nil, 0, err
 	}
-
-	realRoot, err := filepath.EvalSymlinks(root)
+	defer file.Close()
+	info, err := file.Stat()
 	if err != nil {
-		realRoot = filepath.Clean(root)
+		return clean, nil, 0, err
 	}
-
-	relToRoot, err := filepath.Rel(realRoot, realTarget)
-	if err != nil || relToRoot == ".." || strings.HasPrefix(relToRoot, ".."+string(filepath.Separator)) {
-		return "", "", nil, errors.New("file resolves outside workspace root (symlink traversal forbidden)")
+	if !info.Mode().IsRegular() {
+		return clean, nil, info.Size(), errors.New("only regular files can be pinned")
 	}
-
-	st, err := os.Stat(realTarget)
+	if hook := pinnedFileReadHookForTest; hook != nil {
+		hook()
+	}
+	if info.Size() > maxPinnedFileSize {
+		return clean, nil, info.Size(), fmt.Errorf("file size (%d bytes) exceeds the %d-byte limit", info.Size(), maxPinnedFileSize)
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxPinnedFileSize+1))
 	if err != nil {
-		return "", "", nil, err
+		return clean, nil, info.Size(), err
 	}
-	if st.IsDir() {
-		return "", "", nil, errors.New("directories cannot be pinned as context files")
+	if len(data) > maxPinnedFileSize {
+		return clean, nil, int64(len(data)), fmt.Errorf("file grew beyond the %d-byte limit while reading", maxPinnedFileSize)
 	}
-	return clean, realTarget, st, nil
+	return clean, data, int64(len(data)), nil
 }
 
-// PinFile adds a workspace file to the tab's standing pinned context.
-func (tab *WorkspaceTab) PinFile(relPath string) (PinnedFileInfo, error) {
-	if tab == nil {
+func encodePinnedFileEntry(path string, data []byte) ([]byte, error) {
+	var out bytes.Buffer
+	enc := xml.NewEncoder(&out)
+	start := xml.StartElement{
+		Name: xml.Name{Local: "file"},
+		Attr: []xml.Attr{{Name: xml.Name{Local: "path"}, Value: path}},
+	}
+	if err := enc.EncodeToken(start); err != nil {
+		return nil, err
+	}
+	content := sanitizeXMLText(data)
+	if err := enc.EncodeToken(xml.CharData("\n" + content)); err != nil {
+		return nil, err
+	}
+	if err := enc.EncodeToken(xml.CharData("\n")); err != nil {
+		return nil, err
+	}
+	if err := enc.EncodeToken(start.End()); err != nil {
+		return nil, err
+	}
+	if err := enc.Flush(); err != nil {
+		return nil, err
+	}
+	out.WriteString("\n\n")
+	return out.Bytes(), nil
+}
+
+func sanitizeXMLText(data []byte) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\t' || r == '\n' || r == '\r':
+			return r
+		case r >= 0x20 && r <= 0xD7FF:
+			return r
+		case r >= 0xE000 && r <= 0xFFFD:
+			return r
+		case r >= 0x10000 && r <= 0x10FFFF:
+			return r
+		default:
+			return utf8.RuneError
+		}
+	}, string(data))
+}
+
+func buildPinnedContext(root string, files []string) pinnedContextBuild {
+	result := pinnedContextBuild{Infos: make([]PinnedFileInfo, 0, len(files))}
+	if len(files) == 0 || strings.TrimSpace(root) == "" {
+		return result
+	}
+	const header = "<pinned_context>\nThe following workspace files were pinned by the user as continuous standing reference. Their contents and constraints MUST be followed:\n\n"
+	const footer = "</pinned_context>"
+	var body bytes.Buffer
+	for _, rel := range files {
+		clean, data, size, err := readPinnedWorkspaceFile(root, rel)
+		info := PinnedFileInfo{Path: rel, SizeBytes: size, TokenEstimate: estimateTokensFromBytes(size)}
+		if clean != "" {
+			info.Path = clean
+		}
+		if err != nil {
+			info.Error = err.Error()
+			result.Infos = append(result.Infos, info)
+			continue
+		}
+		entry, err := encodePinnedFileEntry(clean, data)
+		if err != nil {
+			info.Error = err.Error()
+			result.Infos = append(result.Infos, info)
+			continue
+		}
+		if len(header)+body.Len()+len(entry)+len(footer) > maxPinnedContextSize {
+			info.Error = fmt.Sprintf("pinned context would exceed the %d-byte total limit", maxPinnedContextSize)
+			result.Infos = append(result.Infos, info)
+			continue
+		}
+		body.Write(entry)
+		result.Infos = append(result.Infos, info)
+	}
+	if body.Len() == 0 {
+		return result
+	}
+	result.Block = header + body.String() + footer
+	return result
+}
+
+func pinnedInfoForPath(infos []PinnedFileInfo, path string) (PinnedFileInfo, bool) {
+	for _, info := range infos {
+		if info.Path == path {
+			return info, true
+		}
+	}
+	return PinnedFileInfo{}, false
+}
+
+func (t *WorkspaceTab) setPinnedFiles(files []string) {
+	if t == nil {
+		return
+	}
+	t.pinnedFilesMu.Lock()
+	t.PinnedFiles = append([]string(nil), files...)
+	t.pinnedFilesMu.Unlock()
+}
+
+// PinFile updates the tab-local cache. Durable desktop mutations go through
+// PinFileForTab so the session sidecar and controller change atomically.
+func (t *WorkspaceTab) PinFile(relPath string) (PinnedFileInfo, error) {
+	if t == nil {
 		return PinnedFileInfo{}, errors.New("tab is nil")
 	}
-	clean, _, st, err := validatePinnedFileInWorkspace(tab.WorkspaceRoot, relPath)
+	clean, err := normalizePinnedRelPath(relPath)
 	if err != nil {
 		return PinnedFileInfo{}, err
 	}
-	if st.Size() > maxPinnedFileSize {
-		return PinnedFileInfo{}, fmt.Errorf("file size (%d bytes) exceeds maximum pinned file limit of %d bytes", st.Size(), maxPinnedFileSize)
+	files := t.GetPinnedFiles()
+	if slices.Contains(files, clean) {
+		build := buildPinnedContext(t.WorkspaceRoot, files)
+		info, _ := pinnedInfoForPath(build.Infos, clean)
+		return info, nil
 	}
-
-	tab.pinnedFilesMu.Lock()
-	defer tab.pinnedFilesMu.Unlock()
-
-	// Check if already pinned
-	for _, p := range tab.PinnedFiles {
-		if p == clean {
-			tok := estimateTokensFromBytes(st.Size())
-			return PinnedFileInfo{Path: clean, SizeBytes: st.Size(), TokenEstimate: tok}, nil
-		}
+	if len(files) >= maxPinnedFileCount {
+		return PinnedFileInfo{}, fmt.Errorf("at most %d files can be pinned", maxPinnedFileCount)
 	}
-
-	// Calculate total size including existing files
-	var totalSize int64
-	for _, p := range tab.PinnedFiles {
-		if _, _, pSt, err := validatePinnedFileInWorkspace(tab.WorkspaceRoot, p); err == nil && !pSt.IsDir() {
-			totalSize += pSt.Size()
-		}
+	candidate := append(files, clean)
+	candidate, err = normalizePinnedContextFiles(candidate)
+	if err != nil {
+		return PinnedFileInfo{}, err
 	}
-	if totalSize+st.Size() > maxTotalPinnedSize {
-		return PinnedFileInfo{}, fmt.Errorf("total pinned size (%d bytes) would exceed maximum allowance of %d bytes", totalSize+st.Size(), maxTotalPinnedSize)
+	build := buildPinnedContext(t.WorkspaceRoot, candidate)
+	info, ok := pinnedInfoForPath(build.Infos, clean)
+	if !ok {
+		return PinnedFileInfo{}, errors.New("pinned file could not be inspected")
 	}
-
-	tab.PinnedFiles = append(tab.PinnedFiles, clean)
-	tok := estimateTokensFromBytes(st.Size())
-	return PinnedFileInfo{Path: clean, SizeBytes: st.Size(), TokenEstimate: tok}, nil
+	if info.Error != "" {
+		return PinnedFileInfo{}, errors.New(info.Error)
+	}
+	t.setPinnedFiles(candidate)
+	return info, nil
 }
 
-// UnpinFile removes a file from the tab's pinned context.
-func (tab *WorkspaceTab) UnpinFile(relPath string) error {
-	if tab == nil {
+func (t *WorkspaceTab) UnpinFile(relPath string) error {
+	if t == nil {
 		return errors.New("tab is nil")
 	}
 	clean, err := normalizePinnedRelPath(relPath)
 	if err != nil {
 		return err
 	}
-
-	tab.pinnedFilesMu.Lock()
-	defer tab.pinnedFilesMu.Unlock()
-
-	next := make([]string, 0, len(tab.PinnedFiles))
-	for _, p := range tab.PinnedFiles {
-		if p != clean {
-			next = append(next, p)
+	files := t.GetPinnedFiles()
+	next := make([]string, 0, len(files))
+	for _, path := range files {
+		if path != clean {
+			next = append(next, path)
 		}
 	}
-	tab.PinnedFiles = next
+	t.setPinnedFiles(next)
 	return nil
 }
 
-// GetPinnedFiles returns a slice of currently pinned relative file paths.
-func (tab *WorkspaceTab) GetPinnedFiles() []string {
-	if tab == nil {
-		return nil
+func (t *WorkspaceTab) GetPinnedFiles() []string {
+	if t == nil {
+		return []string{}
 	}
-	tab.pinnedFilesMu.RLock()
-	defer tab.pinnedFilesMu.RUnlock()
-	return append([]string(nil), tab.PinnedFiles...)
+	t.pinnedFilesMu.RLock()
+	defer t.pinnedFilesMu.RUnlock()
+	return append([]string{}, t.PinnedFiles...)
 }
 
-// GetPinnedFilesInfo returns metadata for each pinned file.
-func (tab *WorkspaceTab) GetPinnedFilesInfo() []PinnedFileInfo {
-	if tab == nil {
-		return nil
+func (t *WorkspaceTab) GetPinnedFilesInfo() []PinnedFileInfo {
+	if t == nil {
+		return []PinnedFileInfo{}
 	}
-	tab.pinnedFilesMu.RLock()
-	pinned := append([]string(nil), tab.PinnedFiles...)
-	root := tab.WorkspaceRoot
-	tab.pinnedFilesMu.RUnlock()
-
-	if len(pinned) == 0 {
-		return nil
-	}
-
-	infos := make([]PinnedFileInfo, 0, len(pinned))
-	for _, rel := range pinned {
-		clean, _, st, err := validatePinnedFileInWorkspace(root, rel)
-		if err != nil {
-			infos = append(infos, PinnedFileInfo{Path: rel, Error: err.Error()})
-			continue
-		}
-		tok := estimateTokensFromBytes(st.Size())
-		infos = append(infos, PinnedFileInfo{
-			Path:          clean,
-			SizeBytes:     st.Size(),
-			TokenEstimate: tok,
-		})
-	}
-	return infos
+	return buildPinnedContext(t.WorkspaceRoot, t.GetPinnedFiles()).Infos
 }
 
-// PinnedContextBlock generates the standing XML block to inject into the system prompt.
-func (tab *WorkspaceTab) PinnedContextBlock() string {
-	if tab == nil {
+func (t *WorkspaceTab) PinnedContextBlock() string {
+	if t == nil {
 		return ""
 	}
-	tab.pinnedFilesMu.RLock()
-	pinned := append([]string(nil), tab.PinnedFiles...)
-	root := tab.WorkspaceRoot
-	tab.pinnedFilesMu.RUnlock()
-
-	if len(pinned) == 0 || root == "" {
-		return ""
-	}
-
-	var sb strings.Builder
-	sb.WriteString("\n\n<pinned_context>\n")
-	sb.WriteString("The following files are pinned by the user as continuous standing reference. Their contents and constraints MUST be strictly adhered to:\n\n")
-
-	for _, rel := range pinned {
-		clean, realTarget, _, err := validatePinnedFileInWorkspace(root, rel)
-		if err != nil {
-			sb.WriteString(fmt.Sprintf("<file path=%q error=%q />\n\n", rel, err.Error()))
-			continue
-		}
-		data, err := os.ReadFile(realTarget)
-		if err != nil {
-			sb.WriteString(fmt.Sprintf("<file path=%q error=%q />\n\n", clean, err.Error()))
-			continue
-		}
-		if len(data) > maxPinnedFileSize {
-			data = data[:maxPinnedFileSize]
-		}
-		sb.WriteString(fmt.Sprintf("<file path=%q>\n%s\n</file>\n\n", clean, string(data)))
-	}
-	sb.WriteString("</pinned_context>")
-	return sb.String()
+	return buildPinnedContext(t.WorkspaceRoot, t.GetPinnedFiles()).Block
 }
 
 func estimateTokensFromBytes(bytes int64) int {
 	if bytes <= 0 {
 		return 0
 	}
-	// Roughly ~3.5 chars per token for code/prose
 	tok := int(bytes / 4)
 	if tok == 0 {
 		return 1
@@ -227,101 +285,172 @@ func estimateTokensFromBytes(bytes int64) int {
 	return tok
 }
 
-// EstimateTokensFromString computes rough token count for a string.
-func estimateTokensFromString(s string) int {
-	runes := utf8.RuneCountInString(s)
-	if runes <= 0 {
-		return 0
+func (a *App) mutatePinnedFiles(tabID, relPath string, pin bool) (PinnedFileInfo, string, error) {
+	unlockRuntime := a.lockRuntimeMutation("pinned context")
+	defer unlockRuntime()
+	tab := a.tabByID(tabID)
+	if tab == nil {
+		return PinnedFileInfo{}, "", errors.New("tab not found")
 	}
-	tok := runes / 3
-	if tok == 0 {
-		return 1
-	}
-	return tok
-}
+	tab.turnStartMu.Lock()
+	defer tab.turnStartMu.Unlock()
 
-func updatePinnedContextInSystemPrompt(currentPrompt, newBlock string) string {
-	startIdx := strings.Index(currentPrompt, "\n\n<pinned_context>")
-	if startIdx < 0 {
-		startIdx = strings.Index(currentPrompt, "<pinned_context>")
+	a.mu.RLock()
+	if a.tabs[tab.ID] != tab || tab.removed {
+		a.mu.RUnlock()
+		return PinnedFileInfo{}, "", errors.New("tab changed while updating pinned context")
 	}
-	if startIdx >= 0 {
-		endIdx := strings.Index(currentPrompt[startIdx:], "</pinned_context>")
-		if endIdx >= 0 {
-			endPos := startIdx + endIdx + len("</pinned_context>")
-			base := strings.TrimRight(currentPrompt[:startIdx], "\n") + currentPrompt[endPos:]
-			base = strings.TrimSpace(base)
-			if strings.TrimSpace(newBlock) == "" {
-				return base
+	root := tab.WorkspaceRoot
+	ctrl := tab.Ctrl
+	a.mu.RUnlock()
+	if ctrl == nil {
+		return PinnedFileInfo{}, "", a.workspaceNotReadyErr(tab)
+	}
+	if ctrl.RuntimeStatus().Running {
+		return PinnedFileInfo{}, "", control.ErrTurnRunning
+	}
+	sessionPath := ctrl.SessionPath()
+	state, err := loadPinnedContextState(sessionPath)
+	if err != nil {
+		return PinnedFileInfo{}, "", err
+	}
+	clean, err := normalizePinnedRelPath(relPath)
+	if err != nil {
+		return PinnedFileInfo{}, "", err
+	}
+	oldFiles := append([]string(nil), state.Files...)
+	candidate := append([]string(nil), oldFiles...)
+	alreadyPinned := false
+	if pin {
+		alreadyPinned = slices.Contains(candidate, clean)
+		if !alreadyPinned && len(candidate) >= maxPinnedFileCount {
+			return PinnedFileInfo{}, "", fmt.Errorf("at most %d files can be pinned", maxPinnedFileCount)
+		}
+		if !alreadyPinned {
+			candidate = append(candidate, clean)
+		}
+	} else {
+		next := make([]string, 0, len(candidate))
+		for _, path := range candidate {
+			if path != clean {
+				next = append(next, path)
 			}
-			return base + "\n\n" + strings.TrimSpace(newBlock)
+		}
+		candidate = next
+	}
+	candidate, err = normalizePinnedContextFiles(candidate)
+	if err != nil {
+		return PinnedFileInfo{}, "", err
+	}
+	build := buildPinnedContext(root, candidate)
+	info := PinnedFileInfo{Path: clean}
+	if pin {
+		var ok bool
+		info, ok = pinnedInfoForPath(build.Infos, clean)
+		if !ok {
+			return PinnedFileInfo{}, "", errors.New("pinned file could not be inspected")
+		}
+		if info.Error != "" && !alreadyPinned {
+			return PinnedFileInfo{}, "", errors.New(info.Error)
 		}
 	}
-	if strings.TrimSpace(newBlock) == "" {
-		return currentPrompt
+	if candidateChanged := strings.Join(oldFiles, "\x00") != strings.Join(candidate, "\x00"); candidateChanged {
+		if err := savePinnedContextState(sessionPath, candidate); err != nil {
+			return PinnedFileInfo{}, "", err
+		}
 	}
-	return strings.TrimRight(currentPrompt, "\n") + "\n\n" + strings.TrimSpace(newBlock)
+	setter, ok := ctrl.(pinnedContextSetter)
+	if !ok {
+		return PinnedFileInfo{}, "", errors.New("runtime does not support pinned context")
+	}
+	if err := setter.SetPinnedContext(build.Block); err != nil {
+		var rollbackErr error
+		if strings.Join(oldFiles, "\x00") != strings.Join(candidate, "\x00") {
+			rollbackErr = savePinnedContextState(sessionPath, oldFiles)
+		}
+		return PinnedFileInfo{}, "", errors.Join(err, rollbackErr)
+	}
+	tab.setPinnedFiles(candidate)
+	return info, tab.ID, nil
 }
 
-func (a *App) syncTabPinnedContextLocked(tab *WorkspaceTab) {
-	if tab == nil || tab.Ctrl == nil {
-		return
-	}
-	ctrl := tab.Ctrl
-	current := ctrl.SystemPrompt()
-	newBlock := tab.PinnedContextBlock()
-	updated := updatePinnedContextInSystemPrompt(current, newBlock)
-	ctrl.UpdateSystemPrompt(updated)
-}
-
-// PinFileForTab pins a relative file path to the tab's standing context.
-func (a *App) PinFileForTab(tabID string, relPath string) (PinnedFileInfo, error) {
-	a.mu.Lock()
-	tab := a.tabByIDLocked(tabID)
-	if tab == nil {
-		a.mu.Unlock()
-		return PinnedFileInfo{}, errors.New("tab not found")
-	}
-	info, err := tab.PinFile(relPath)
+func (a *App) PinFileForTab(tabID, relPath string) (PinnedFileInfo, error) {
+	info, changedTabID, err := a.mutatePinnedFiles(tabID, relPath, true)
 	if err != nil {
-		a.mu.Unlock()
 		return PinnedFileInfo{}, err
 	}
-	a.saveTabsLocked()
-	a.syncTabPinnedContextLocked(tab)
-	a.mu.Unlock()
-
-	a.emitRuntimeEvent(tabMetaRefreshEventChannel, TabMetaRefreshEvent{TabID: tab.ID, Meta: a.MetaForTab(tab.ID)})
+	if changedTabID != "" {
+		a.emitRuntimeEvent(tabMetaRefreshEventChannel, TabMetaRefreshEvent{TabID: changedTabID, Meta: a.MetaForTab(changedTabID)})
+	}
 	return info, nil
 }
 
-// UnpinFileForTab removes a pinned file from the tab's context.
-func (a *App) UnpinFileForTab(tabID string, relPath string) error {
-	a.mu.Lock()
-	tab := a.tabByIDLocked(tabID)
-	if tab == nil {
-		a.mu.Unlock()
-		return errors.New("tab not found")
-	}
-	if err := tab.UnpinFile(relPath); err != nil {
-		a.mu.Unlock()
+func (a *App) UnpinFileForTab(tabID, relPath string) error {
+	_, changedTabID, err := a.mutatePinnedFiles(tabID, relPath, false)
+	if err != nil {
 		return err
 	}
-	a.saveTabsLocked()
-	a.syncTabPinnedContextLocked(tab)
-	a.mu.Unlock()
-
-	a.emitRuntimeEvent(tabMetaRefreshEventChannel, TabMetaRefreshEvent{TabID: tab.ID, Meta: a.MetaForTab(tab.ID)})
+	if changedTabID != "" {
+		a.emitRuntimeEvent(tabMetaRefreshEventChannel, TabMetaRefreshEvent{TabID: changedTabID, Meta: a.MetaForTab(changedTabID)})
+	}
 	return nil
 }
 
-// GetPinnedFilesForTab retrieves all pinned files for a tab.
 func (a *App) GetPinnedFilesForTab(tabID string) ([]PinnedFileInfo, error) {
-	a.mu.RLock()
-	tab := a.tabByIDLocked(tabID)
-	a.mu.RUnlock()
+	tab := a.tabByID(tabID)
 	if tab == nil {
-		return nil, errors.New("tab not found")
+		return []PinnedFileInfo{}, errors.New("tab not found")
 	}
-	return tab.GetPinnedFilesInfo(), nil
+	a.mu.RLock()
+	if a.tabs[tab.ID] != tab || tab.removed {
+		a.mu.RUnlock()
+		return []PinnedFileInfo{}, errors.New("tab not found")
+	}
+	root := tab.WorkspaceRoot
+	ctrl := tab.Ctrl
+	a.mu.RUnlock()
+	if ctrl == nil {
+		return []PinnedFileInfo{}, a.workspaceNotReadyErr(tab)
+	}
+	state, err := loadPinnedContextState(ctrl.SessionPath())
+	if err != nil {
+		return []PinnedFileInfo{}, err
+	}
+	tab.setPinnedFiles(state.Files)
+	infos := buildPinnedContext(root, state.Files).Infos
+	if infos == nil {
+		infos = []PinnedFileInfo{}
+	}
+	return infos, nil
+}
+
+// refreshPinnedContextForTurn runs while the caller holds the tab turn gate and
+// runtime-admission read lock. It re-reads the bounded files and changes the
+// provider prefix only when the deterministic block bytes actually changed.
+func (a *App) refreshPinnedContextForTurn(tab *WorkspaceTab, ctrl control.SessionAPI) error {
+	if tab == nil || nilutil.IsNil(ctrl) {
+		return nil
+	}
+	a.mu.RLock()
+	if a.tabs[tab.ID] != tab || tab.Ctrl != ctrl {
+		a.mu.RUnlock()
+		return errors.New("tab changed while refreshing pinned context")
+	}
+	root := tab.WorkspaceRoot
+	a.mu.RUnlock()
+	state, err := loadPinnedContextState(ctrl.SessionPath())
+	if err != nil {
+		return err
+	}
+	build := buildPinnedContext(root, state.Files)
+	setter, ok := ctrl.(pinnedContextSetter)
+	if !ok {
+		tab.setPinnedFiles(state.Files)
+		return nil
+	}
+	if err := setter.SetPinnedContext(build.Block); err != nil {
+		return err
+	}
+	tab.setPinnedFiles(state.Files)
+	return nil
 }

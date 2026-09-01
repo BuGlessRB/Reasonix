@@ -1,6 +1,10 @@
 package main
 
-import "reasonix/internal/control"
+import (
+	"fmt"
+
+	"reasonix/internal/control"
+)
 
 // tabTurnAdmission owns both locks acquired while a foreground turn starts.
 type tabTurnAdmission struct {
@@ -89,6 +93,17 @@ func (a *App) beginTabTurn(tabID string, reclaim bool, submissionID ...string) (
 					continue
 				}
 			}
+			abort()
+			return nil, nil, control.ErrTurnRunning
+		}
+		if err := a.refreshPinnedContextForTurn(tab, ctrl); err != nil {
+			abort()
+			return nil, nil, fmt.Errorf("refresh pinned context: %w", err)
+		}
+		// SetPinnedContext briefly closes and reopens the controller rotation
+		// gate when file bytes changed. Re-check because reopening may dispatch a
+		// queued inbox turn before this foreground admission reaches Send.
+		if ctrl.RuntimeStatus().Running {
 			abort()
 			return nil, nil, control.ErrTurnRunning
 		}

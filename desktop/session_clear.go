@@ -43,6 +43,7 @@ func (a *App) ClearSessionForTab(tabID string) (SessionClearResult, error) {
 	if err := ctrl.ClearSession(); err != nil {
 		return SessionClearResult{}, err
 	}
+	tab.setPinnedFiles(nil)
 	if err := a.ensureTabSessionLeaseForRebuild(tab, ctrl.SessionPath(), ""); err != nil {
 		// Wails bridge return: a raw lease error would carry the session path
 		// and holder id across to the frontend.

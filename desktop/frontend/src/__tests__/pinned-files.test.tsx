@@ -142,6 +142,26 @@ async function run() {
     ok(openedPath === "schema.sql", "Clicking chip opens file via app.OpenWorkspacePathForTab");
   }
 
+  // A file that grew beyond the backend budget remains pinned and surfaces
+  // its omission reason directly on the chip.
+  const grownError = "file size exceeds the 65536-byte limit";
+  await act(async () => {
+    root.render(
+      <LocaleProvider initialLocale="en">
+        <ToastProvider>
+          <PinnedFilesShelf
+            tabId="tab-1"
+            pinnedFiles={[{ path: "grown.log", sizeBytes: 70000, tokenEstimate: 17500, error: grownError }]}
+          />
+        </ToastProvider>
+      </LocaleProvider>,
+    );
+    await flushTimers();
+  });
+  const errorChip = document.querySelector<HTMLElement>(".pinned-files-shelf .group");
+  ok(errorChip?.title === grownError, "Pinned file chip exposes the backend read error");
+  ok(errorChip?.querySelector(`[aria-label="${grownError}"]`) !== null, "Pinned file chip renders a warning icon");
+
   // Test 3: WorkspaceTreeMenu Pin action for unpinned file
   await act(async () => {
     root.render(

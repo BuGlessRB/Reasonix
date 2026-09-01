@@ -95,8 +95,8 @@ func TestTabPinSymlinkOutsideWorkspaceForbidden(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when pinning symlink pointing outside workspace, got nil")
 	}
-	if !strings.Contains(err.Error(), "symlink traversal forbidden") {
-		t.Fatalf("expected symlink traversal error message, got: %v", err)
+	if !strings.Contains(err.Error(), "outside workspace") {
+		t.Fatalf("expected workspace escape error message, got: %v", err)
 	}
 }
 
@@ -244,18 +244,18 @@ func TestPinnedContextEndToEndProviderRequest(t *testing.T) {
 
 	baseSystem := "You are a helpful coding assistant."
 	pinnedBlock := tab.PinnedContextBlock()
-	initialSystem := baseSystem + "\n\n" + pinnedBlock
 
 	prov := &capturingProvider{}
-	exec := agent.New(prov, tool.NewRegistry(), agent.NewSession(initialSystem), agent.Options{}, event.Discard)
+	exec := agent.New(prov, tool.NewRegistry(), agent.NewSession(baseSystem), agent.Options{}, event.Discard)
 	ctrl := control.New(control.Options{
-		Runner:       exec,
-		Executor:     exec,
-		SystemPrompt: initialSystem,
-		SessionDir:   dir,
-		SessionPath:  filepath.Join(dir, "session.jsonl"),
-		Label:        "test-e2e",
-		Sink:         event.Discard,
+		Runner:        exec,
+		Executor:      exec,
+		SystemPrompt:  baseSystem,
+		PinnedContext: pinnedBlock,
+		SessionDir:    dir,
+		SessionPath:   filepath.Join(dir, "session.jsonl"),
+		Label:         "test-e2e",
+		Sink:          event.Discard,
 	})
 	tab.Ctrl = ctrl
 
@@ -286,8 +286,9 @@ func TestPinnedContextEndToEndProviderRequest(t *testing.T) {
 	if err := tab.UnpinFile("architecture.md"); err != nil {
 		t.Fatalf("UnpinFile: %v", err)
 	}
-	updatedSysPrompt := updatePinnedContextInSystemPrompt(ctrl.SystemPrompt(), tab.PinnedContextBlock())
-	ctrl.UpdateSystemPrompt(updatedSysPrompt)
+	if err := ctrl.SetPinnedContext(tab.PinnedContextBlock()); err != nil {
+		t.Fatalf("SetPinnedContext: %v", err)
+	}
 
 	// 3. Execute second turn and assert provider system prompt no longer has pinned_context
 	if err := ctrl.RunTurn(context.Background(), "Next question"); err != nil {
@@ -301,33 +302,23 @@ func TestPinnedContextEndToEndProviderRequest(t *testing.T) {
 	}
 }
 
-func TestTabPinnedFilesPersistence(t *testing.T) {
-	isolateDesktopUserDirs(t)
-	cfgDir := desktopConfigDir()
+func TestLegacyTabPinnedFilesMigrateToSessionSidecar(t *testing.T) {
+	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	legacy := []string{"README.md", "docs/api.md"}
 
-	entry := desktopTabEntry{
-		ID:            "tab-persist",
-		Scope:         "project",
-		WorkspaceRoot: "/tmp/fake-workspace",
-		TopicID:       "topic-1",
-		PinnedFiles:   []string{"README.md", "docs/api.md"},
+	state, err := loadOrMigratePinnedContextState(sessionPath, legacy)
+	if err != nil {
+		t.Fatalf("migrate legacy pins: %v", err)
+	}
+	if strings.Join(state.Files, ",") != strings.Join(legacy, ",") {
+		t.Fatalf("migrated files = %v, want %v", state.Files, legacy)
 	}
 
-	// Save
-	entries := []desktopTabEntry{entry}
-	app := &App{}
-	app.saveTabsWrite(cfgDir, entries, "tab-persist", 1)
-
-	// Load
-	f := loadTabsFile()
-	if len(f.Tabs) != 1 {
-		t.Fatalf("expected 1 saved tab, got %d", len(f.Tabs))
+	loaded, err := loadPinnedContextState(sessionPath)
+	if err != nil {
+		t.Fatalf("load migrated sidecar: %v", err)
 	}
-	loaded := f.Tabs[0]
-	if len(loaded.PinnedFiles) != 2 {
-		t.Fatalf("expected 2 pinned files in loaded tab, got %d", len(loaded.PinnedFiles))
-	}
-	if loaded.PinnedFiles[0] != "README.md" || loaded.PinnedFiles[1] != "docs/api.md" {
-		t.Fatalf("expected [README.md docs/api.md], got %v", loaded.PinnedFiles)
+	if strings.Join(loaded.Files, ",") != strings.Join(legacy, ",") {
+		t.Fatalf("sidecar files = %v, want %v", loaded.Files, legacy)
 	}
 }

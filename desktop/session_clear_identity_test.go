@@ -15,6 +15,10 @@ func TestClearSessionForTabReturnsReplacementIdentity(t *testing.T) {
 		{Role: provider.RoleAssistant, Content: "old assistant reply"},
 	})
 	tab := newLiveHistoryTab(t, app, dir, oldPath, sess)
+	if err := savePinnedContextState(oldPath, []string{"README.md"}); err != nil {
+		t.Fatalf("save pinned sidecar: %v", err)
+	}
+	tab.setPinnedFiles([]string{"README.md"})
 	beforeGen := tab.SessionGeneration
 
 	result, err := app.ClearSessionForTab(tab.ID)
@@ -44,5 +48,11 @@ func TestClearSessionForTabReturnsReplacementIdentity(t *testing.T) {
 	// Replacement path must not share the old file identity.
 	if filepath.Base(result.SessionPath) == filepath.Base(oldPath) && sameDesktopPath(result.SessionPath, oldPath) {
 		t.Fatal("replacement path collided with destroyed session")
+	}
+	if got := tab.GetPinnedFiles(); len(got) != 0 {
+		t.Fatalf("cleared session inherited pins: %v", got)
+	}
+	if state, err := loadPinnedContextState(result.SessionPath); err != nil || len(state.Files) != 0 {
+		t.Fatalf("replacement pinned state = %+v, err=%v", state, err)
 	}
 }

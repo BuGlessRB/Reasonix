@@ -197,10 +197,10 @@ type Options struct {
 	SandboxNetworkOverride *bool
 	SandboxBashOverride    string
 	WorkspaceOnly          bool
-	// PinnedContext is optional standing context (e.g. pinned workspace files)
-	// appended to the initial system prompt.
+	// PinnedContext is an optional standing-context suffix (for example pinned
+	// workspace files) owned separately from the host/extension base prompt.
 	PinnedContext string
-	SessionTemp *sessiontemp.Manager
+	SessionTemp   *sessiontemp.Manager
 	RuntimeReload
 	// deferPublish keeps a replacement generation private until migration and
 	// commit succeed. Cold BuildRuntime leaves this false and publishes at boot.
@@ -669,9 +669,6 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 	}
 	sysPrompt = config.ApplyOfficialDeepSeekV4ProPersona(sysPrompt, entry)
-	if p := strings.TrimSpace(opts.PinnedContext); p != "" {
-		sysPrompt += "\n\n" + p
-	}
 
 	reg := tool.NewRegistry()
 	writeRoots := cfg.WriteRootsForRoot(root)
@@ -1779,6 +1776,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		VisionProviderResolver:         visionProviderResolver,
 		VisionModelSelector:            visionModelSelector,
 		SystemPrompt:                   sysPrompt,
+		PinnedContext:                  opts.PinnedContext,
 		SessionDir:                     sessionDir,
 		Host:                           pluginHost,
 		Commands:                       cmds,
