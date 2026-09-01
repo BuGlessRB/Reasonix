@@ -28,15 +28,18 @@ func (a *App) acknowledgeUpdateHealth(ctx context.Context) {
 	if host == nil {
 		return
 	}
+	// Read where the wait is armed, not inside it: a test restoring these when
+	// it ends would otherwise be writing what a wait it did not outlive reads.
+	probation, commit := updateProbation, commitUpdateHealth
 	go func() {
-		timer := time.NewTimer(updateProbation)
+		timer := time.NewTimer(probation)
 		defer timer.Stop()
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
 			return
 		}
-		if err := commitUpdateHealth(host); err != nil {
+		if err := commit(host); err != nil {
 			slog.Warn("studio: commit healthy update", "err", err)
 		}
 	}()
