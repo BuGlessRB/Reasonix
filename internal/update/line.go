@@ -22,13 +22,30 @@ type Line struct {
 	Windows WindowsLine
 }
 
-// WindowsLine is what starting this line's installer needs to know. The two
-// lines disagree and nothing else records it: Studio installs into Program
-// Files and HKLM so its manifest requests admin, while the desktop hands off to
-// a helper that must never be asked to elevate.
+// WindowsLine is what starting this line's installer needs to know.
 type WindowsLine struct {
-	Elevated bool // the installer manifest requests admin; CreateProcess cannot start it
+	// Installer is how this line's installer must be started. "" is a line that
+	// has not said, and is refused rather than guessed.
+	Installer WindowsInstaller
 }
+
+// WindowsInstaller names the shape of a line's Windows installer, because the
+// two ways of starting one are not interchangeable in either direction:
+// CreateProcess refuses an image whose manifest requests admin, and elevating
+// one that does not request it installs into whichever account consented rather
+// than the one that asked for the update.
+type WindowsInstaller string
+
+const (
+	// WindowsInstallerElevated requests admin in its manifest — a per-machine
+	// install under Program Files and HKLM. Only ShellExecute can start it.
+	WindowsInstallerElevated WindowsInstaller = "elevated"
+	// WindowsInstallerPerUser requests nothing in its manifest and raises
+	// consent itself if it needs to. Starting it elevated puts it in the
+	// consenting account, where a per-user default writes that profile and
+	// leaves the user who asked for the update on the build they had.
+	WindowsInstallerPerUser WindowsInstaller = "per-user"
+)
 
 // MacLine identifies this line's app bundle. SelfUpdate is false for a line
 // whose releases are not Developer ID signed and notarized: writing a bundle

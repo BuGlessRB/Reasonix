@@ -213,8 +213,10 @@ when something resembling it exists.
 
   Read off a real package rather than off the config: studio.yml asserts the
   package name, the helper's path, mode and owner, and the policy's presence,
-  from `dpkg-deb`. That gate has not run yet — no `.deb` has been built here,
-  and neither has an upgrade over an installed Wails one.
+  from `dpkg-deb`. That gate runs now and is green on all three packaging jobs.
+  What it does not reach is an upgrade over an installed Wails one — dpkg would
+  do it, because both packages are `reasonix-studio` and both own the helper at
+  the path the policy names, but no machine has been carried across.
 
   Checked at the route, the projection, the orchestration's own guard, the act
   protocol on both sides, and the capability gate driven red. Not driven through
@@ -238,12 +240,31 @@ when something resembling it exists.
   match `.signpath/artifact-configurations/` before a signed release can pass.
 
   Two things this does not settle. An installed Wails 2.x updates itself into an
-  Electron build the first time this ships, and that crossing — dpkg upgrade,
-  NSIS over a different install root, bundle swap into a differently-shaped
-  app — has not been exercised. And the `.blockmap` electron-updater writes
-  beside the installer used to land under the release prefix, where the count
-  that refuses a partial publish would have counted it as an artifact;
-  `differentialPackage: false` stops it and a studio.yml gate now fails it.
+  Electron build the first time this ships, and that crossing has not been
+  exercised on any machine. What it is made of is no longer left to chance,
+  which is a different claim from having been run:
+
+  - **Linux** upgrades rather than doubles, because the package name and the
+    helper path are the ones the Wails package owned.
+  - **Windows** takes the old install over rather than sitting beside it.
+    Nothing else would: the Wails install is per-machine under Program Files
+    with its own uninstall key, this one is per-user under a key derived from
+    the appId, so both would have stayed installed and only one would ever have
+    been updated again. `assets/installer.nsh` runs the old uninstaller from
+    `customInstall`, through `ExecShellWait` because that image manifests admin
+    and CreateProcess refuses it, and in the 32-bit registry view because
+    studio.nsi never called `SetRegView` and wrote through WOW64 redirection.
+    Declining the prompt leaves the old install and this one working: a takeover
+    must not fail the install it is cleaning up after. Compiled — makensis
+    builds it with warnings as errors, which is what the packaging job runs —
+    never driven against a real legacy install.
+  - **macOS** swaps a bundle into a differently-shaped app, and that is
+    unchanged and still unexercised.
+
+  And the `.blockmap` electron-updater writes beside the installer used to land
+  under the release prefix, where the count that refuses a partial publish would
+  have counted it as an artifact; `differentialPackage: false` stops it and a
+  studio.yml gate now fails it.
 
 ### Cleared
 

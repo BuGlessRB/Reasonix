@@ -46,29 +46,41 @@ func TestRunInstallerStartErrorNamesUnexpectedElevation(t *testing.T) {
 	}
 }
 
-// A line that never said its installer needs admin must not reach a launch
-// call chosen for it: that guess is what shipped the elevation failure.
-func TestRunInstallerRequiresAnElevationDeclaration(t *testing.T) {
+// A line that never said which installer it ships must not reach a launch call
+// chosen for it: guessing is wrong in both directions, and the per-user one
+// fails silently — an elevated start writes the administrator's profile.
+func TestRunInstallerRequiresAnInstallerDeclaration(t *testing.T) {
 	err := (Line{}).RunInstaller(filepath.Join(tempdir.New(t), "absent.exe"))
 	if err == nil {
 		t.Fatal("an undeclared line was allowed to start an installer")
 	}
-	if !strings.Contains(err.Error(), "declares no elevated installer") {
+	if !strings.Contains(err.Error(), "declares no Windows installer") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
+// Studio ships the per-user Electron installer, so it must never be started
+// with the verb that elevates: the upgrade would land in whichever account
+// consented and this user would stay on the build they were already running.
+func TestStudioLineDeclaresThePerUserInstaller(t *testing.T) {
+	if got := StudioLine().Windows.Installer; got != WindowsInstallerPerUser {
+		t.Fatalf("Studio's Windows installer = %q, want %q", got, WindowsInstallerPerUser)
+	}
+}
+
 func TestRunInstallerRejectsMissingInstaller(t *testing.T) {
-	elevated := Line{Windows: WindowsLine{Elevated: true}}
-	if err := elevated.RunInstaller(""); err == nil {
-		t.Fatal("empty installer path was accepted")
-	}
-	missing := filepath.Join(tempdir.New(t), "absent.exe")
-	err := elevated.RunInstaller(missing)
-	if err == nil {
-		t.Fatal("missing installer was accepted")
-	}
-	if !strings.Contains(err.Error(), "unreadable") {
-		t.Fatalf("unexpected error: %v", err)
+	for _, kind := range []WindowsInstaller{WindowsInstallerElevated, WindowsInstallerPerUser} {
+		declared := Line{Windows: WindowsLine{Installer: kind}}
+		if err := declared.RunInstaller(""); err == nil {
+			t.Fatalf("%s: empty installer path was accepted", kind)
+		}
+		missing := filepath.Join(tempdir.New(t), "absent.exe")
+		err := declared.RunInstaller(missing)
+		if err == nil {
+			t.Fatalf("%s: missing installer was accepted", kind)
+		}
+		if !strings.Contains(err.Error(), "unreadable") {
+			t.Fatalf("%s: unexpected error: %v", kind, err)
+		}
 	}
 }

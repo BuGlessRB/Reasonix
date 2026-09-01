@@ -102,6 +102,23 @@ beside desktop ones without a separate bucket.
 `desktop/cmd/studio-manifest` derives all three from the artifact names, and its
 tests assert the manifest never claims a platform it cannot install.
 
+The Windows installer is started as the user who asked for the update, not
+elevated. It requests nothing in its manifest and raises consent itself only if
+that user chooses an all-users install; starting it with `runas` would put it in
+the consenting account, where its per-user default writes that profile and
+leaves the updating user on the build they had. `update.StudioLine` states which
+of the two it ships, and a line that states neither is refused rather than
+guessed for.
+
+That installer also takes over a Wails-era install rather than sitting beside
+it. The old one is per-machine under Program Files with its own uninstall key,
+this one is per-user under a key derived from the appId, so nothing about
+installing it would have replaced the old one — both would have stayed in
+Add/Remove Programs and only one would ever have been updated again.
+`desktop/electron/assets/installer.nsh` runs the old uninstaller from
+`customInstall`; a declined consent prompt leaves both installed rather than
+failing the install.
+
 ## Known gaps
 
 - No `versioninfo` stamp and **no windows/arm64 build**: `desktop/next` builds

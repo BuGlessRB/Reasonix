@@ -20,9 +20,10 @@ func StudioLine() Line {
 		// bundle is one Gatekeeper still opens. The identifier is what the swap
 		// checks a downloaded bundle against before it replaces anything.
 		Mac: MacLine{BundleID: "io.reasonix.studio", SelfUpdate: true},
-		// Studio installs into Program Files and writes HKLM, so studio.nsi
-		// declares RequestExecutionLevel admin and only ShellExecute can start it.
-		Windows: WindowsLine{Elevated: true},
+		// The Electron installer requests nothing and raises consent itself for
+		// an all-users install. Starting it elevated would put it in the
+		// consenting account, where its per-user default writes that profile.
+		Windows: WindowsLine{Installer: WindowsInstallerPerUser},
 	}
 }
 
