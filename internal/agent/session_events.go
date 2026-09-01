@@ -774,11 +774,17 @@ func readSessionEventIndex(sessionPath string) (*sessionEventIndex, error) {
 }
 
 func writeSessionEventIndex(path string, msgs []provider.Message, digest [sha256.Size]byte, revision int64) error {
+	return writeSessionEventIndexContext(context.Background(), path, msgs, digest, revision)
+}
+
+func writeSessionEventIndexContext(ctx context.Context, path string, msgs []provider.Message, digest [sha256.Size]byte, revision int64) error {
 	indexPath := store.SessionEventIndex(path)
 	if indexPath == "" {
 		return nil
 	}
-	fileutil.Crash("event-index", indexPath)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	logInfo, err := os.Stat(store.SessionEventLog(path))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -800,31 +806,10 @@ func writeSessionEventIndex(path string, msgs []provider.Message, digest [sha256
 		WriterID:      SessionWriterID(),
 		UpdatedAt:     time.Now().UTC(),
 	}
-	b, err := json.MarshalIndent(idx, "", "  ")
+	b, err := marshalJSONIndentContext(ctx, idx)
 	if err != nil {
 		return err
 	}
 	b = append(b, '\n')
-	if err := os.MkdirAll(filepath.Dir(indexPath), 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(indexPath), ".session-event-index.*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-	if err := fileutil.ReplaceFile(tmpPath, indexPath); err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-	return nil
+	return atomicWriteFileContext(ctx, indexPath, ".session-event-index.*.tmp", "event-index", b, 0o600, false)
 }

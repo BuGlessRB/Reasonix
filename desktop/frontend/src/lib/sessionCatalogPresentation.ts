@@ -4,15 +4,17 @@ export type SessionCatalogNotice = "indexing" | "repair-active" | "repair-deferr
 
 export function sessionCatalogNotice(s: SessionCatalogStatus): SessionCatalogNotice | null {
   const { state, repairActive, repairDeferred, repairBlocked } = s;
-  return state === "opening" || state === "rebuilding" || (s.unindexedTargetCount ?? 0) > 0
+  return state === "opening" || state === "rebuilding"
     ? "indexing"
     : state === "degraded" || s.lastError
       ? (s.canRebuild ? "rebuild" : "failed")
-      : (repairActive ?? (repairDeferred === undefined && repairBlocked === undefined ? s.repairPending : 0)) > 0
-        ? "repair-active"
-        : (repairDeferred ?? 0) > 0
-          ? "repair-deferred"
-          : (repairBlocked ?? 0) > 0
-            ? "repair-blocked"
-            : null;
+      : (s.unindexedTargetCount ?? 0) > 0
+        ? "indexing"
+        : (repairActive ?? (repairDeferred === undefined && repairBlocked === undefined ? s.repairPending : 0)) > 0
+          ? "repair-active"
+          : (repairDeferred ?? 0) > 0
+            ? "repair-deferred"
+            : (repairBlocked ?? 0) > 0
+              ? "repair-blocked"
+              : null;
 }

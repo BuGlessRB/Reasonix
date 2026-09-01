@@ -26,16 +26,18 @@ var ErrSessionListingRepairBusy = errors.New("session listing repair source is b
 // SessionListingRepairResult describes one convergent repair attempt. Preview
 // and Turns are safe to publish only for applied/already_current results.
 type SessionListingRepairResult struct {
-	Status         SessionListingRepairStatus
-	Preview        string
-	Turns          int
-	LedgerRepaired bool
+	Status             SessionListingRepairStatus
+	Preview            string
+	Turns              int
+	LedgerRepaired     bool
+	ContentFingerprint string
+	MetaFingerprint    string
 }
 
 // RepairSessionListingProjection repairs one session generation while holding
 // only that session's save/file/meta locks. Foreground saves win immediately;
 // callers persist a retry instead of waiting behind active work.
-func RepairSessionListingProjection(ctx context.Context, path string) (SessionListingRepairResult, error) {
+func RepairSessionListingProjection(ctx context.Context, path string) (result SessionListingRepairResult, resultErr error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return SessionListingRepairResult{}, fmt.Errorf("empty session path")
@@ -48,6 +50,10 @@ func RepairSessionListingProjection(ctx context.Context, path string) (SessionLi
 		return SessionListingRepairResult{}, err
 	}
 	defer unlock()
+	defer func() {
+		result.ContentFingerprint = sessionListingCatalogContentFingerprint(path)
+		result.MetaFingerprint = sessionListingCatalogFileFingerprint(BranchMetaPath(path))
+	}()
 	meta, metaOK, err := LoadBranchMeta(path)
 	if err != nil {
 		if isDamagedSessionRepairError(err) {
@@ -163,20 +169,20 @@ func repairSessionListingFromReplay(ctx context.Context, path string, meta Branc
 
 	// The display index ranges describe the compatibility JSONL exactly, so
 	// refresh it from this single authoritative replay before publishing meta.
-	if err := writeSessionMessages(path, msgs); err != nil {
+	if err := writeSessionMessagesContext(ctx, path, msgs); err != nil {
 		return SessionListingRepairResult{}, fmt.Errorf("write session display read model: %w", err)
 	}
-	if err := writeSessionEventIndex(path, msgs, state.Digest, meta.Revision); err != nil {
+	if err := writeSessionEventIndexContext(ctx, path, msgs, state.Digest, meta.Revision); err != nil {
 		return SessionListingRepairResult{}, err
 	}
-	idx := BuildSessionDisplayIndex(msgs, meta.Revision, true, state.Digest)
-	if idx == nil {
-		return SessionListingRepairResult{}, fmt.Errorf("encode session display index")
+	idx, err := BuildSessionDisplayIndexContext(ctx, msgs, meta.Revision, true, state.Digest)
+	if err != nil {
+		return SessionListingRepairResult{}, fmt.Errorf("encode session display index: %w", err)
 	}
-	if err := WriteSessionDisplayIndex(store.SessionDisplayIndex(path), idx); err != nil {
+	if err := WriteSessionDisplayIndexContext(ctx, store.SessionDisplayIndex(path), idx); err != nil {
 		return SessionListingRepairResult{}, err
 	}
-	if err := saveBranchMeta(path, meta, false); err != nil {
+	if err := saveBranchMetaContext(ctx, path, meta, false); err != nil {
 		return SessionListingRepairResult{}, err
 	}
 	return SessionListingRepairResult{
@@ -242,6 +248,18 @@ func sessionRepairContentFingerprint(path string) (string, error) {
 		_, _ = fmt.Fprintf(h, "%d\x00%d\x00%d\x00", info.Size(), info.ModTime().UnixNano(), info.Mode())
 	}
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+func sessionListingCatalogFileFingerprint(path string) string {
+	info, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d:%d", info.Size(), info.ModTime().UnixNano())
+}
+
+func sessionListingCatalogContentFingerprint(path string) string {
+	return sessionListingCatalogFileFingerprint(path) + "|" + sessionListingCatalogFileFingerprint(store.SessionEventLog(path))
 }
 
 func isUnsupportedSessionRepairError(err error) bool {

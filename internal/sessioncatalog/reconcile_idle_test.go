@@ -25,9 +25,27 @@ func recoveryHeavyDirectory(t *testing.T, branches int) (string, DirectoryTarget
 	return dir, DirectoryTarget{Path: dir, Scope: "global"}
 }
 
-func TestRecoveryDirectoryStrictWaveLoadsEachTranscriptOnceThenIdleLoadsNone(t *testing.T) {
+func TestRecoveryDirectoryPreferredBranchLoadsOnceThenIdleLoadsNone(t *testing.T) {
 	ctx := context.Background()
 	dir, target := recoveryHeavyDirectory(t, 8)
+	ordered, err := agent.ListSessionOrder(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := make([]string, 0, len(ordered))
+	preferred := ""
+	for _, info := range ordered {
+		paths = append(paths, info.Path)
+		if info.Recovered && preferred == "" {
+			preferred = info.Path
+		}
+	}
+	if preferred == "" {
+		t.Fatal("recovery-heavy fixture did not create a recovery branch")
+	}
+	if err := agent.SetRecoveryPreferred(paths, preferred); err != nil {
+		t.Fatal(err)
+	}
 	catalog, err := Open(ctx, Options{Path: filepath.Join(t.TempDir(), "catalog.sqlite"), DisableRepair: true})
 	if err != nil {
 		t.Fatal(err)

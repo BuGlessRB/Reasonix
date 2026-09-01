@@ -53,7 +53,8 @@ func (c *Catalog) reconcileDirectory(ctx context.Context, target DirectoryTarget
 	if err != nil {
 		return err
 	}
-	ordered, err := agent.ListSessionOrder(target.Path)
+	content := newStrictRecoveryContentCache(c.testSessionContentLoadHook)
+	ordered, err := listSessionOrderWithContent(target.Path, content)
 	if err != nil {
 		c.failDirectoryScan(ctx, target.Path, err)
 		return err
@@ -76,7 +77,6 @@ func (c *Catalog) reconcileDirectory(ctx context.Context, target DirectoryTarget
 		c.failDirectoryScan(context.Background(), target.Path, err)
 		return err
 	}
-	content := newStrictRecoveryContentCache(c.testSessionContentLoadHook)
 	for i := range records {
 		records[i] = classifyRecoveryLineageWithContent(normalizeSessionRecord(records[i]), content)
 	}

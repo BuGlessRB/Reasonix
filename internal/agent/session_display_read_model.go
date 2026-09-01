@@ -112,7 +112,7 @@ func appendSessionDisplayReadModel(path string, msgs []provider.Message, appendF
 		return false, nil
 	}
 	indexInfo, err := os.Stat(indexPath)
-	if err != nil || indexInfo.IsDir() || indexInfo.ModTime().Before(info.ModTime()) {
+	if err != nil || indexInfo.IsDir() || !indexInfo.ModTime().After(info.ModTime()) {
 		return false, nil
 	}
 

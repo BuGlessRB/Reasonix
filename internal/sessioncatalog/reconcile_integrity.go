@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-
-	"reasonix/internal/agent"
 )
 
 const (
@@ -50,7 +48,8 @@ func (c *Catalog) directoryScanCanSkip(ctx context.Context, target DirectoryTarg
 		c.markRepair(repairReasonScopeMismatch, c.opts.Now().UnixMilli())
 		return false, nil
 	}
-	ordered, err := agent.ListSessionOrder(path)
+	content := newStrictRecoveryContentCache(c.testSessionContentLoadHook)
+	ordered, err := listSessionOrderWithContent(path, content)
 	if err != nil {
 		return false, err
 	}
@@ -62,7 +61,6 @@ func (c *Catalog) directoryScanCanSkip(ctx context.Context, target DirectoryTarg
 	if err != nil {
 		return false, err
 	}
-	content := newStrictRecoveryContentCache(c.testSessionContentLoadHook)
 	for i := range expectedRecords {
 		expectedRecords[i] = classifyRecoveryLineageWithContent(expectedRecords[i], content)
 	}

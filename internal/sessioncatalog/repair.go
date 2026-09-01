@@ -14,20 +14,72 @@ import (
 
 const repairWakeKey = "session-catalog-repair-wake"
 
+const repairClaimSQL = `UPDATE catalog_sessions SET repair_state='active',repair_attempts=?,
+	repair_retry_at=?,repair_error_kind='' WHERE path_key=? AND turns_state='unknown'
+	AND repair_state=? AND repair_attempts=? AND repair_retry_at=? AND repair_source_fingerprint=?`
+
+const repairResetSQL = `UPDATE catalog_sessions SET repair_state='pending',repair_attempts=0,
+	repair_retry_at=0,repair_error_kind='',content_fingerprint=?,meta_fingerprint=?,repair_source_fingerprint=?,
+	repair_engine_version=? WHERE path_key=? AND turns_state='unknown' AND repair_state='active'
+	AND repair_attempts=? AND repair_retry_at=? AND repair_source_fingerprint=?`
+
+const repairCompleteSQL = `UPDATE catalog_sessions SET preview=?,turns=?,turns_state='valid',health='ok',
+	content_fingerprint=?,meta_fingerprint=?,repair_state='complete',repair_attempts=0,repair_retry_at=0,
+	repair_error_kind='',repair_source_fingerprint=?,repair_engine_version=? WHERE path_key=? AND turns_state='unknown'
+	AND repair_state='active' AND repair_attempts=? AND repair_retry_at=? AND repair_source_fingerprint=?`
+
+const repairDeferredSQL = `UPDATE catalog_sessions SET health=?,repair_state=?,repair_attempts=?,repair_retry_at=?,
+	repair_error_kind=?,content_fingerprint=?,meta_fingerprint=?,repair_source_fingerprint=?,repair_engine_version=?
+	WHERE path_key=? AND turns_state='unknown' AND repair_state='active' AND repair_attempts=?
+	AND repair_retry_at=? AND repair_source_fingerprint=?`
+
 type repairItem struct {
-	path             string
-	pathKey          string
-	target           DirectoryTarget
-	topicID          string
-	workspaceRootKey string
-	attempts         int
-	state            string
+	path              string
+	pathKey           string
+	target            DirectoryTarget
+	topicID           string
+	workspaceRootKey  string
+	attempts          int
+	state             string
+	retryAt           int64
+	sourceFingerprint string
 }
 
 type repairOutcome struct {
 	item   repairItem
 	result agent.SessionListingRepairResult
 	err    error
+}
+
+type repairBatchStatements struct {
+	reset    *sql.Stmt
+	complete *sql.Stmt
+	deferred *sql.Stmt
+}
+
+func prepareRepairBatchStatements(ctx context.Context, tx *sql.Tx) (repairBatchStatements, error) {
+	var statements repairBatchStatements
+	var err error
+	if statements.reset, err = tx.PrepareContext(ctx, repairResetSQL); err != nil {
+		return statements, err
+	}
+	if statements.complete, err = tx.PrepareContext(ctx, repairCompleteSQL); err != nil {
+		statements.close()
+		return statements, err
+	}
+	if statements.deferred, err = tx.PrepareContext(ctx, repairDeferredSQL); err != nil {
+		statements.close()
+		return statements, err
+	}
+	return statements, nil
+}
+
+func (s repairBatchStatements) close() {
+	for _, statement := range []*sql.Stmt{s.reset, s.complete, s.deferred} {
+		if statement != nil {
+			_ = statement.Close()
+		}
+	}
 }
 
 func (c *Catalog) enqueueRepair(path string) {
@@ -175,7 +227,8 @@ func (c *Catalog) claimDueRepairs(ctx context.Context, limit int) ([]repairItem,
 		return nil, err
 	}
 	now := c.opts.Now()
-	rows, err := tx.QueryContext(ctx, `SELECT path,path_key,directory,scope,workspace_root,workspace_root_key,topic_id,repair_attempts,repair_state
+	rows, err := tx.QueryContext(ctx, `SELECT path,path_key,directory,scope,workspace_root,workspace_root_key,topic_id,
+		repair_attempts,repair_state,repair_retry_at,repair_source_fingerprint
 		FROM catalog_sessions WHERE turns_state='unknown'
 		AND repair_state IN ('pending','deferred','active') AND repair_retry_at<=?
 		ORDER BY repair_retry_at ASC,last_activity_at DESC,path_key ASC LIMIT ?`, now.UnixMilli(), limit)
@@ -187,7 +240,8 @@ func (c *Catalog) claimDueRepairs(ctx context.Context, limit int) ([]repairItem,
 	for rows.Next() {
 		var item repairItem
 		if err := rows.Scan(&item.path, &item.pathKey, &item.target.Path, &item.target.Scope,
-			&item.target.WorkspaceRoot, &item.workspaceRootKey, &item.topicID, &item.attempts, &item.state); err != nil {
+			&item.target.WorkspaceRoot, &item.workspaceRootKey, &item.topicID, &item.attempts, &item.state,
+			&item.retryAt, &item.sourceFingerprint); err != nil {
 			_ = rows.Close()
 			_ = tx.Rollback()
 			return nil, err
@@ -198,24 +252,49 @@ func (c *Catalog) claimDueRepairs(ctx context.Context, limit int) ([]repairItem,
 		_ = tx.Rollback()
 		return nil, err
 	}
-	for i := range items {
-		lease := 30 * time.Second
-		if items[i].state == "active" {
-			items[i].attempts++
-			lease = repairBackoff(items[i].attempts + 1)
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE catalog_sessions SET repair_state='active',repair_attempts=?,
-			repair_retry_at=?,repair_error_kind='' WHERE path_key=? AND turns_state='unknown'`,
-			items[i].attempts, now.Add(lease).UnixMilli(), items[i].pathKey); err != nil {
+	claimStmt, err := tx.PrepareContext(ctx, repairClaimSQL)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	defer claimStmt.Close()
+	claimed := items[:0]
+	for _, item := range items {
+		claimedItem, ok, err := claimRepairItem(ctx, claimStmt, item, now)
+		if err != nil {
 			_ = tx.Rollback()
 			return nil, err
+		}
+		if ok {
+			claimed = append(claimed, claimedItem)
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	c.refreshCounts(ctx)
-	return items, nil
+	return claimed, nil
+}
+
+func claimRepairItem(ctx context.Context, claimStmt *sql.Stmt, item repairItem, now time.Time) (repairItem, bool, error) {
+	previousState, previousAttempts, previousRetryAt := item.state, item.attempts, item.retryAt
+	lease := 30 * time.Second
+	if item.state == "active" {
+		item.attempts++
+		lease = repairBackoff(item.attempts + 1)
+	}
+	item.state = "active"
+	item.retryAt = now.Add(lease).UnixMilli()
+	result, err := claimStmt.ExecContext(ctx,
+		item.attempts, item.retryAt, item.pathKey, previousState, previousAttempts, previousRetryAt, item.sourceFingerprint)
+	if err != nil {
+		return repairItem{}, false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return repairItem{}, false, err
+	}
+	return item, rows == 1, nil
 }
 
 func (c *Catalog) applyRepairBatch(ctx context.Context, outcomes []repairOutcome, dirty map[string]DirectoryTarget) error {
@@ -237,9 +316,15 @@ func (c *Catalog) applyRepairBatch(ctx context.Context, outcomes []repairOutcome
 		c.mutationMu.Unlock()
 		return err
 	}
+	statements, err := prepareRepairBatchStatements(ctx, tx)
+	if err != nil {
+		return rollback(err)
+	}
+	defer statements.close()
 	affected := map[TopicKey]struct{}{}
 	roots := map[string]struct{}{}
 	committedDirty := map[string]DirectoryTarget{}
+	mutated := 0
 	for _, outcome := range outcomes {
 		if err := c.repairBatchTestError("update"); err != nil {
 			return rollback(err)
@@ -247,28 +332,61 @@ func (c *Catalog) applyRepairBatch(ctx context.Context, outcomes []repairOutcome
 		contentFingerprint := sessionContentFingerprint(outcome.item.path)
 		metaFingerprint := fileFingerprint(agent.BranchMetaPath(outcome.item.path))
 		sourceFingerprint := contentFingerprint + "\x00" + metaFingerprint
+		resultHasGeneration := outcome.result.ContentFingerprint != "" || outcome.result.MetaFingerprint != ""
+		resultSourceFingerprint := outcome.result.ContentFingerprint + "\x00" + outcome.result.MetaFingerprint
+		if resultHasGeneration && resultSourceFingerprint != sourceFingerprint {
+			result, updateErr := statements.reset.ExecContext(ctx,
+				contentFingerprint, metaFingerprint, sourceFingerprint, repairEngineVersion, outcome.item.pathKey,
+				outcome.item.attempts, outcome.item.retryAt, outcome.item.sourceFingerprint)
+			if updateErr != nil {
+				return rollback(updateErr)
+			}
+			rows, rowsErr := result.RowsAffected()
+			if rowsErr != nil {
+				return rollback(rowsErr)
+			}
+			if rows == 1 {
+				mutated++
+				roots[outcome.item.target.WorkspaceRoot] = struct{}{}
+			}
+			continue
+		}
 		state, attempts, retryAt, errorKind, health := repairDisposition(outcome, c.opts.Now())
+		var updateResult sql.Result
 		if state == "complete" {
-			_, err = tx.ExecContext(ctx, `UPDATE catalog_sessions SET preview=?,turns=?,turns_state='valid',health='ok',
-				content_fingerprint=?,meta_fingerprint=?,repair_state='complete',repair_attempts=0,repair_retry_at=0,
-				repair_error_kind='',repair_source_fingerprint=?,repair_engine_version=? WHERE path_key=?`,
+			updateResult, err = statements.complete.ExecContext(ctx,
 				outcome.result.Preview, outcome.result.Turns, contentFingerprint, metaFingerprint,
-				sourceFingerprint, repairEngineVersion, outcome.item.pathKey)
-			committedDirty[queuePathKey(outcome.item.target.Path)] = outcome.item.target
+				sourceFingerprint, repairEngineVersion, outcome.item.pathKey, outcome.item.attempts,
+				outcome.item.retryAt, outcome.item.sourceFingerprint)
 		} else {
-			_, err = tx.ExecContext(ctx, `UPDATE catalog_sessions SET health=?,repair_state=?,repair_attempts=?,repair_retry_at=?,
-				repair_error_kind=?,content_fingerprint=?,meta_fingerprint=?,repair_source_fingerprint=?,repair_engine_version=?
-				WHERE path_key=?`, health, state, attempts, retryAt, errorKind, contentFingerprint, metaFingerprint,
-				sourceFingerprint, repairEngineVersion, outcome.item.pathKey)
+			updateResult, err = statements.deferred.ExecContext(ctx, health, state, attempts, retryAt, errorKind,
+				contentFingerprint, metaFingerprint, sourceFingerprint, repairEngineVersion, outcome.item.pathKey,
+				outcome.item.attempts, outcome.item.retryAt, outcome.item.sourceFingerprint)
 		}
 		if err != nil {
 			return rollback(err)
+		}
+		updatedRows, rowsErr := updateResult.RowsAffected()
+		if rowsErr != nil {
+			return rollback(rowsErr)
+		}
+		if updatedRows == 0 {
+			continue
+		}
+		mutated++
+		if state == "complete" {
+			committedDirty[queuePathKey(outcome.item.target.Path)] = outcome.item.target
 		}
 		if outcome.item.topicID != "" {
 			affected[TopicKey{Scope: outcome.item.target.Scope, WorkspaceRoot: outcome.item.target.WorkspaceRoot,
 				workspaceKey: outcome.item.workspaceRootKey, TopicID: outcome.item.topicID}] = struct{}{}
 		}
 		roots[outcome.item.target.WorkspaceRoot] = struct{}{}
+	}
+	if mutated == 0 {
+		_ = tx.Rollback()
+		c.mutationMu.Unlock()
+		return nil
 	}
 	for key := range affected {
 		if err := c.recomputeTopic(ctx, tx, key); err != nil {
@@ -345,13 +463,43 @@ func (c *Catalog) repairSession(workerCtx context.Context, path string) {
 		return
 	}
 	var item repairItem
+	var turnsState TurnsState
 	item.path = path
 	item.pathKey = c.pathKey(path)
-	if err := c.db.QueryRowContext(workerCtx, `SELECT directory,scope,workspace_root,workspace_root_key,topic_id,repair_attempts
+	if err := c.db.QueryRowContext(workerCtx, `SELECT directory,scope,workspace_root,workspace_root_key,topic_id,
+		repair_attempts,repair_state,repair_retry_at,repair_source_fingerprint,turns_state
 		FROM catalog_sessions WHERE path_key=?`, item.pathKey).Scan(&item.target.Path, &item.target.Scope,
-		&item.target.WorkspaceRoot, &item.workspaceRootKey, &item.topicID, &item.attempts); err != nil {
+		&item.target.WorkspaceRoot, &item.workspaceRootKey, &item.topicID, &item.attempts, &item.state,
+		&item.retryAt, &item.sourceFingerprint, &turnsState); err != nil {
 		return
 	}
+	if turnsState != TurnsUnknown {
+		ctx, cancel := context.WithTimeout(workerCtx, 30*time.Second)
+		defer cancel()
+		_, _ = agent.RepairSessionListingProjection(ctx, path)
+		return
+	}
+	c.mutationMu.Lock()
+	tx, err := c.db.BeginTx(workerCtx, nil)
+	if err != nil {
+		c.mutationMu.Unlock()
+		return
+	}
+	claimStmt, err := tx.PrepareContext(workerCtx, repairClaimSQL)
+	if err != nil {
+		_ = tx.Rollback()
+		c.mutationMu.Unlock()
+		return
+	}
+	claimed, ok, err := claimRepairItem(workerCtx, claimStmt, item, c.opts.Now())
+	_ = claimStmt.Close()
+	if err != nil || !ok || tx.Commit() != nil {
+		_ = tx.Rollback()
+		c.mutationMu.Unlock()
+		return
+	}
+	c.mutationMu.Unlock()
+	item = claimed
 
 	ctx, cancel := context.WithTimeout(workerCtx, 30*time.Second)
 	defer cancel()

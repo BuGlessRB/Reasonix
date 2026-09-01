@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -10,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"reasonix/internal/fileutil"
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/provider"
 	"reasonix/internal/store"
@@ -75,6 +75,11 @@ type DisplayIndexEntry struct {
 // digestAndSizeSessionMessages, so save-path callers can treat nil as a
 // warn-only failure.
 func BuildSessionDisplayIndex(messages []provider.Message, revision int64, revisionKnown bool, digest [sha256.Size]byte) *SessionDisplayIndex {
+	idx, _ := BuildSessionDisplayIndexContext(context.Background(), messages, revision, revisionKnown, digest)
+	return idx
+}
+
+func BuildSessionDisplayIndexContext(ctx context.Context, messages []provider.Message, revision int64, revisionKnown bool, digest [sha256.Size]byte) (*SessionDisplayIndex, error) {
 	preview, _ := SessionPreviewFromMessages(messages)
 	idx := &SessionDisplayIndex{
 		SchemaVersion:       SessionDisplayIndexSchemaVersion,
@@ -87,10 +92,10 @@ func BuildSessionDisplayIndex(messages []provider.Message, revision int64, revis
 		Entries:             make([]DisplayIndexEntry, 0, len(messages)),
 		UpdatedAt:           time.Now().UTC(),
 	}
-	if _, _, err := encodeDisplayIndexEntries(idx, messages, 0, 0, 0); err != nil {
-		return nil
+	if _, _, err := encodeDisplayIndexEntriesContext(ctx, idx, messages, 0, 0, 0); err != nil {
+		return nil, err
 	}
-	return idx
+	return idx, nil
 }
 
 // encodeDisplayIndexEntries appends the entries for msgs[startIndex:] to idx,
@@ -99,8 +104,12 @@ func BuildSessionDisplayIndex(messages []provider.Message, revision int64, revis
 // digest encoding: the digest zeroes CreatedAt while the transcript file
 // stores the real bytes, and the offsets describe the file.
 func encodeDisplayIndexEntries(idx *SessionDisplayIndex, msgs []provider.Message, startIndex int, offset int64, turn int) (int64, int, error) {
+	return encodeDisplayIndexEntriesContext(context.Background(), idx, msgs, startIndex, offset, turn)
+}
+
+func encodeDisplayIndexEntriesContext(ctx context.Context, idx *SessionDisplayIndex, msgs []provider.Message, startIndex int, offset int64, turn int) (int64, int, error) {
 	for i := startIndex; i < len(msgs); i++ {
-		b, err := json.Marshal(msgs[i])
+		b, err := marshalJSONContext(ctx, msgs[i])
 		if err != nil {
 			return 0, 0, fmt.Errorf("encode message %d: %w", i, err)
 		}
@@ -206,15 +215,19 @@ func refreshSessionDisplayIndex(path string, msgs []provider.Message, digest [sh
 // WriteSessionDisplayIndex publishes the index atomically (tmp + fsync +
 // rename) with 0600 permissions, matching the other session sidecars.
 func WriteSessionDisplayIndex(path string, idx *SessionDisplayIndex) error {
+	return WriteSessionDisplayIndexContext(context.Background(), path, idx)
+}
+
+func WriteSessionDisplayIndexContext(ctx context.Context, path string, idx *SessionDisplayIndex) error {
 	if path == "" {
 		return fmt.Errorf("empty session display index path")
 	}
-	b, err := json.MarshalIndent(idx, "", "  ")
+	b, err := marshalJSONIndentContext(ctx, idx)
 	if err != nil {
 		return fmt.Errorf("encode session display index: %w", err)
 	}
 	b = append(b, '\n')
-	if err := fileutil.AtomicWriteFile(path, b, 0o600); err != nil {
+	if err := atomicWriteFileContext(ctx, path, ".session-display-index.*.tmp", "atomic-write", b, 0o600, true); err != nil {
 		return fmt.Errorf("write session display index: %w", err)
 	}
 	return nil

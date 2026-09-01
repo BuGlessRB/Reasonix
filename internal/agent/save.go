@@ -484,40 +484,6 @@ func (s *Session) saveLocked(path string, mode sessionSaveMode) error {
 	return nil
 }
 
-func writeSessionMessages(path string, msgs []provider.Message) error {
-	// Write to a sibling tmp file then rename, so a crash mid-write can't
-	// leave a partial JSONL that won't reload. The fsync guards the anchor
-	// against power loss — it is the fallback when the event log is damaged.
-	fileutil.Crash("session-checkpoint", path)
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".session.*.tmp")
-	if err != nil {
-		return fmt.Errorf("create session tmp: %w", err)
-	}
-	tmpPath := tmp.Name()
-	enc := json.NewEncoder(tmp)
-	for _, m := range msgs {
-		if err := enc.Encode(m); err != nil {
-			tmp.Close()
-			os.Remove(tmpPath)
-			return fmt.Errorf("encode message: %w", err)
-		}
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-	if err := fileutil.ReplaceFile(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-	return nil
-}
-
 // checkSnapshotWrite decides whether this session may write msgs over path, and
 // whether the safe write shape is a no-op, append-only suffix, or full rewrite.
 func (s *Session) checkSnapshotWrite(path string, next []provider.Message, nextDigest [sha256.Size]byte, nextVersion uint64, allowOwnedRewrite bool) (snapshotWriteDecision, error) {
@@ -2000,6 +1966,16 @@ func reparentSessionBranches(dir string, renamed map[string]string) error {
 // most-recently-active order used by ListSessions, using only file metadata and
 // branch sidecars. A missing directory is not an error.
 func ListSessionOrder(dir string) ([]SessionOrderInfo, error) {
+	return ListSessionOrderWithRecoveryPreferenceResolver(dir, RecoveryPreferenceCurrent)
+}
+
+// ListSessionOrderWithRecoveryPreferenceResolver lets catalog reconciliation
+// reuse its wave-local transcript snapshot when validating explicit choices.
+// Other callers keep the ordinary ListSessionOrder behavior above.
+func ListSessionOrderWithRecoveryPreferenceResolver(dir string, resolve RecoveryPreferenceResolver) ([]SessionOrderInfo, error) {
+	if resolve == nil {
+		resolve = RecoveryPreferenceCurrent
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -2059,7 +2035,7 @@ func ListSessionOrder(dir string) ([]SessionOrderInfo, error) {
 			recoveryReason = meta.RecoveryReason
 			recoveryDigest = meta.RecoveryDigest
 			parentID = meta.ParentID
-			recoveryPreferred = RecoveryPreferenceCurrent(full, meta)
+			recoveryPreferred = resolve(full, meta)
 			turns = meta.Turns
 			preview = meta.Preview
 			schemaVersion = meta.SchemaVersion

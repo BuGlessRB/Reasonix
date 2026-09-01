@@ -48,9 +48,19 @@ assert.equal(
   "global degraded state takes precedence over repair activity",
 );
 assert.equal(
+  sessionCatalogNotice(status({ state: "degraded", canRebuild: true, unindexedTargetCount: 1, repairActive: 2 })),
+  "rebuild",
+  "global degraded state takes precedence over unindexed targets",
+);
+assert.equal(
   sessionCatalogNotice(status({ lastError: "private backend detail", repairBlocked: 3 })),
   "failed",
   "global catalog failure takes precedence over blocked rows",
+);
+assert.equal(
+  sessionCatalogNotice(status({ lastError: "private backend detail", unindexedTargetCount: 1 })),
+  "failed",
+  "global catalog failure takes precedence over unindexed targets",
 );
 assert.equal(
   sessionCatalogNotice(status({ state: "rebuilding", lastError: "previous failure", repairActive: 1 })),
@@ -58,6 +68,11 @@ assert.equal(
   "an explicit rebuild remains the authoritative working state",
 );
 assert.equal(sessionCatalogNotice(status()), null, "healthy ready catalogs render no notice");
+assert.equal(
+  sessionCatalogNotice(status({ unindexedTargetCount: 1, repairActive: 2 })),
+  "indexing",
+  "unindexed targets take precedence over row repair",
+);
 assert.deepEqual(
   sessionCatalogNotice(status({ state: "degraded", canRebuild: true })),
   "rebuild",

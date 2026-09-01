@@ -56,6 +56,17 @@ func newStrictRecoveryContentCache(onLoad func(string)) *recoveryContentCache {
 	return &recoveryContentCache{entries: map[string]recoveryContentResult{}, onLoad: onLoad, strict: true}
 }
 
+func listSessionOrderWithContent(dir string, content *recoveryContentCache) ([]agent.SessionOrderInfo, error) {
+	return agent.ListSessionOrderWithRecoveryPreferenceResolver(dir, func(path string, meta agent.BranchMeta) bool {
+		digest := strings.TrimSpace(meta.RecoveryPreferredDigest)
+		if !meta.RecoveryPreferred || digest == "" {
+			return false
+		}
+		_, ok := content.load(path, digest)
+		return ok
+	})
+}
+
 func (c *recoveryContentCache) load(path, digest string) (agent.SessionContentSnapshot, bool) {
 	key := PathIdentityKey(path)
 	result, loaded := c.entries[key]
