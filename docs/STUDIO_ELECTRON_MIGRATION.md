@@ -194,16 +194,27 @@ when something resembling it exists.
   belongs to the package. Named explicitly now, verified against
   electron-builder's own resolution rather than its documentation.
 
-  The package still carries no update helper. `Line.InstallDeb` runs
-  `/usr/lib/reasonix-studio/reasonix-studio-update-helper` under pkexec and
-  refuses by name without it; the Wails `.deb` shipped it and the policy file
-  beside it (`desktop/cmd/update-helper`,
-  `desktop/next/build/linux/io.reasonix.studio.update.policy`), and
+  The package carries the update helper and its policy. `Line.InstallDeb` runs
+  `/usr/lib/reasonix-studio/reasonix-studio-update-helper` under pkexec, and
+  that path is not a choice: the policy annotates `exec.path` with it, so
+  authorization is refused for a helper anywhere else. It is also the path the
+  Wails package owned, which is what stops a dpkg upgrade from removing the file
+  the new package needs — sharing a package name without shipping it would have
+  left an upgraded machine unable to self-update on Linux, permanently, and
+  said nothing until someone asked it to.
+
   electron-builder places nothing at an absolute system path without fpm
-  arguments. Worse than absent: sharing the package name means a dpkg upgrade
-  **removes** the helper the old package owned, so a machine that upgrades into
-  an Electron build loses the ability to self-update on Linux and does not get
-  it back. Unverified either way — no `.deb` has been built or installed here.
+  arguments, so `deb.fpm` carries both, and `--deb-user root` is stated rather
+  than left to fpm's default: the owner it records otherwise is whoever ran the
+  build, and polkit will not execute a helper the invoking user could have
+  written. The policy moved to `desktop/packaging/linux/`, out of the Wails
+  build directory that section 6 retires — a file the new shell needs cannot
+  live where the old one's deletion would take it.
+
+  Read off a real package rather than off the config: studio.yml asserts the
+  package name, the helper's path, mode and owner, and the policy's presence,
+  from `dpkg-deb`. That gate has not run yet — no `.deb` has been built here,
+  and neither has an upgrade over an installed Wails one.
 
   Checked at the route, the projection, the orchestration's own guard, the act
   protocol on both sides, and the capability gate driven red. Not driven through

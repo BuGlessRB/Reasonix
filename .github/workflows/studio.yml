@@ -175,6 +175,13 @@ jobs:
         working-directory: desktop/electron
         run: pnpm install --frozen-lockfile && pnpm run build:host
 
+      # The .deb's absolute-path payload. A no-op off Linux, so it is not
+      # guarded here: the one place it must not be forgotten is the one place
+      # it does anything.
+      - name: Stage the Linux package payload
+        working-directory: desktop/electron
+        run: pnpm run build:linux-payload
+
       # No identity on a runner, and none wanted here: auto-discovery would make
       # this job fail for the one reason it is not testing.
       - name: Package
@@ -222,6 +229,34 @@ jobs:
           echo "kernel: ${host:-<missing>}"
           echo "page:   ${page:-<missing>}"
           test -n "$host" -a -n "$page"
+
+      # Read off the package rather than off the config that describes it. Both
+      # of these went wrong the same way once: electron-builder names a package
+      # after package.json unless told, and fpm records the owner it finds on
+      # disk. Either one leaves a Studio that cannot update itself on Linux and
+      # says nothing about it until a user asks.
+      - name: The .deb is Studio's own package and carries what updates it
+        if: runner.os == 'Linux'
+        run: |
+          deb=$(ls dist/ReasonixStudio-linux-*.deb)
+          name=$(dpkg-deb -f "$deb" Package)
+          if [ "$name" != "reasonix-studio" ]; then
+            echo "::error::the package is $name; dpkg holds that beside the installed reasonix-studio instead of upgrading it, and update.StudioLine asks for it by name"
+            exit 1
+          fi
+          dpkg-deb -c "$deb" > contents.txt
+          # The path is the polkit action's exec.path annotation, so it is the
+          # only one authorization is granted for; root because polkit will not
+          # run a helper the invoking user could have written.
+          if ! grep -qE '^-rwxr-xr-x root/root .* \./usr/lib/reasonix-studio/reasonix-studio-update-helper$' contents.txt; then
+            echo "::error::no root-owned executable update helper at the path the polkit action names"
+            grep reasonix-studio-update-helper contents.txt || echo "(not in the package at all)"
+            exit 1
+          fi
+          if ! grep -q './usr/share/polkit-1/actions/io.reasonix.studio.update.policy$' contents.txt; then
+            echo "::error::the polkit action is not in the package, so pkexec has nothing to authorize against"
+            exit 1
+          fi
 
       # Recorded, not asserted: the real bundle layout, so later work argues
       # from what electron-builder produced rather than from its documentation.

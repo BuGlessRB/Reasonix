@@ -217,6 +217,13 @@ jobs:
         shell: bash
         run: pnpm install --frozen-lockfile && pnpm run build:host
 
+      # The helper the Linux self-update runs under pkexec, staged where the
+      # .deb's fpm arguments look for it. A no-op off Linux.
+      - name: Stage the Linux package payload
+        working-directory: desktop/electron
+        shell: bash
+        run: pnpm run build:linux-payload
+
       # The bundle, before anything is packaged around it. The version has to be
       # injected: app.getVersion() reads package.json, which carries 0.0.0 in the
       # tree, and a shell that states 0.0.0 ranks behind every published release

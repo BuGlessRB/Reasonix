@@ -92,3 +92,22 @@ deb:
   # Linux self-update down the portable-archive path, behind the package
   # manager's back.
   packageName: reasonix-studio
+  # The two files the self-update needs at absolute system paths, which nothing
+  # but an fpm argument places. Their destinations are fixed by the policy
+  # itself: it annotates exec.path with the helper's, so a helper anywhere else
+  # is refused. They are also the paths the Wails package owned, which is what
+  # keeps a dpkg upgrade from removing what the new package still needs.
+  #
+  # root is stated rather than left to fpm's default, because the owner it
+  # records is a property of whoever ran the build, and polkit will not execute
+  # a helper the invoking user could have written.
+  #
+  # Paths are relative to this directory, which is where pnpm runs the script
+  # and therefore fpm; packaging/linux-payload.js stages the helper into it.
+  fpm:
+    - --deb-user
+    - root
+    - --deb-group
+    - root
+    - linux/reasonix-studio-update-helper=/usr/lib/reasonix-studio/reasonix-studio-update-helper
+    - ../packaging/linux/io.reasonix.studio.update.policy=/usr/share/polkit-1/actions/io.reasonix.studio.update.policy

@@ -45,7 +45,7 @@ contents:
   - src: /usr/lib/reasonix-studio/reasonix-studio
     dst: /usr/bin/reasonix-studio
     type: symlink
-  - src: ./desktop/next/build/linux/io.reasonix.studio.update.policy
+  - src: ./desktop/packaging/linux/io.reasonix.studio.update.policy
     dst: /usr/share/polkit-1/actions/io.reasonix.studio.update.policy
     file_info:
       mode: 0644
