@@ -478,8 +478,9 @@ func projectionValid(st CompactionState, msgs []provider.Message, cacheKey strin
 }
 
 // projectionContentValid reports whether st's projection body still matches the
-// canonical transcript, independent of provider/model lineage. LoadProjectionSidecar
-// uses it to rebind across upgrade/model/workspace key changes.
+// canonical transcript, independent of provider/model lineage. The covered hash
+// is authoritative, except for leading system messages: those live outside the
+// folded region and may be refreshed independently after a compaction.
 func projectionContentValid(st CompactionState, msgs []provider.Message) bool {
 	if len(st.Projection.Messages) == 0 {
 		return false
@@ -492,13 +493,34 @@ func projectionContentValid(st CompactionState, msgs []provider.Message) bool {
 	if st.Projection.CoveredPrefixHash == "" {
 		return false
 	}
-	if coveredPrefixHash(msgs, n) != st.Projection.CoveredPrefixHash {
+	if coveredPrefixHash(msgs, n) == st.Projection.CoveredPrefixHash {
+		return true
+	}
+	return projectionMatchesAfterSystemRefresh(st, msgs, n)
+}
+
+// projectionMatchesAfterSystemRefresh verifies a covered-prefix mismatch by
+// substituting the projection's previous leading system messages into the
+// current canonical prefix. A match proves that only the dynamic system prompt
+// changed; any user, assistant, tool, image, or signed-reasoning edit still
+// fails closed.
+func projectionMatchesAfterSystemRefresh(st CompactionState, msgs []provider.Message, n int) bool {
+	if n <= 0 || n > len(msgs) || len(st.Projection.Messages) == 0 {
 		return false
 	}
-	// TranscriptVersion is a process-local CAS generation that resets on load.
-	// The covered prefix hash is the durable identity across append-only growth
-	// and exact tail truncation.
-	return true
+	candidate := append([]provider.Message(nil), msgs[:n]...)
+	systems := 0
+	for systems < len(candidate) && candidate[systems].Role == provider.RoleSystem {
+		if systems >= len(st.Projection.Messages) || st.Projection.Messages[systems].Role != provider.RoleSystem {
+			return false
+		}
+		candidate[systems] = st.Projection.Messages[systems]
+		systems++
+	}
+	if systems == 0 || (systems < len(st.Projection.Messages) && st.Projection.Messages[systems].Role == provider.RoleSystem) {
+		return false
+	}
+	return coveredPrefixHash(candidate, len(candidate)) == st.Projection.CoveredPrefixHash
 }
 
 // modelVisibleFromProjection splices the projection with any messages appended
@@ -508,6 +530,12 @@ func modelVisibleFromProjection(proj ContextProjection, canonical []provider.Mes
 		return nil
 	}
 	out := append([]provider.Message(nil), proj.Messages...)
+	// Leading system messages are outside every fold. Refresh them from canonical
+	// so memory/tool/environment prompt updates do not serve a stale prefix or
+	// force a full-history replay.
+	for i := 0; i < len(canonical) && i < len(out) && canonical[i].Role == provider.RoleSystem && out[i].Role == provider.RoleSystem; i++ {
+		out[i] = canonical[i]
+	}
 	if proj.CoveredCount >= 0 && proj.CoveredCount < len(canonical) {
 		out = append(out, canonical[proj.CoveredCount:]...)
 	}
