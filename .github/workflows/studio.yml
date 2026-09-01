@@ -247,8 +247,11 @@ jobs:
           dpkg-deb -c "$deb" > contents.txt
           # The path is the polkit action's exec.path annotation, so it is the
           # only one authorization is granted for; root because polkit will not
-          # run a helper the invoking user could have written.
-          if ! grep -qE '^-rwxr-xr-x root/root .* \./usr/lib/reasonix-studio/reasonix-studio-update-helper$' contents.txt; then
+          # run a helper the invoking user could have written. Either spelling
+          # of root: dpkg-deb prints the numeric ids it cannot map, and which
+          # one it prints is a property of the machine reading the package
+          # rather than of the package.
+          if ! grep -qE '^-rwxr-xr-x (root/root|0/0) +[0-9]+ .* \./usr/lib/reasonix-studio/reasonix-studio-update-helper$' contents.txt; then
             echo "::error::no root-owned executable update helper at the path the polkit action names"
             grep reasonix-studio-update-helper contents.txt || echo "(not in the package at all)"
             exit 1
