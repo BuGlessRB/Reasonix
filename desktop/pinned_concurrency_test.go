@@ -152,11 +152,12 @@ func TestNewSessionWaitsForPinAndClearsItsResult(t *testing.T) {
 	readStarted := make(chan struct{})
 	releaseRead := make(chan struct{})
 	var once sync.Once
-	pinnedFileReadHookForTest = func() {
+	hook := func() {
 		once.Do(func() { close(readStarted) })
 		<-releaseRead
 	}
-	t.Cleanup(func() { pinnedFileReadHookForTest = nil })
+	pinnedFileReadHookForTest.Store(&hook)
+	t.Cleanup(func() { pinnedFileReadHookForTest.Store(nil) })
 	pinDone := make(chan error, 1)
 	go func() {
 		_, err := app.PinFileForTab(tab.ID, "context.md")

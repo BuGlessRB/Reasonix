@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"unicode/utf8"
 
 	"reasonix/internal/control"
@@ -41,7 +42,7 @@ type pinnedContextSetter interface {
 
 // pinnedFileReadHookForTest coordinates deterministic Pin/New/turn races.
 // Production leaves it nil.
-var pinnedFileReadHookForTest func()
+var pinnedFileReadHookForTest atomic.Pointer[func()]
 
 func normalizePinnedRelPath(relPath string) (string, error) {
 	clean := filepath.ToSlash(filepath.Clean(strings.TrimSpace(relPath)))
@@ -78,8 +79,8 @@ func readPinnedWorkspaceFile(root, relPath string) (string, []byte, int64, error
 	if !info.Mode().IsRegular() {
 		return clean, nil, info.Size(), errors.New("only regular files can be pinned")
 	}
-	if hook := pinnedFileReadHookForTest; hook != nil {
-		hook()
+	if hook := pinnedFileReadHookForTest.Load(); hook != nil {
+		(*hook)()
 	}
 	if info.Size() > maxPinnedFileSize {
 		return clean, nil, info.Size(), fmt.Errorf("file size (%d bytes) exceeds the %d-byte limit", info.Size(), maxPinnedFileSize)
