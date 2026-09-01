@@ -169,8 +169,12 @@ console.log("\nbundle budgets");
 // one-decimal ratchet. Completion uncertainty adds a terminal outcome and
 // notice without exposing evaluator audits to the frontend; the final merged
 // build measures 458.287 KiB gzip.
-// Repair-state presentation adds 0.2 KiB; measured platform bundles are 458.3–458.4 KiB.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 458.5 : 458.5;
+// Transactional Ask resolution and authoritative rejected-submit recovery add
+// 0.3 KiB gzip to the initial controller path. Retain the exact turn fence,
+// bounded ListTabs retry, and stale-prompt guard with a 0.1 KiB headroom.
+// Session-catalog repair presentation stays in the lazy project-tree chunk;
+// compact shared helpers keep the combined initial path within the same gate.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 458.7 : 458.7;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -299,6 +303,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // 2454.719 KiB on the release toolchain. Completion uncertainty brings the
 // final merged payload to 2455.154 KiB; retain the smallest one-decimal
 // ratchet.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_455.2 : 2_455.2;
+// Ask turn fencing, rejection reconciliation, and the localized submit-failure
+// notice measure 2456.044 KiB raw; retain 0.056 KiB of one-decimal headroom.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_456.1 : 2_456.1;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
