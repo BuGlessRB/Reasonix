@@ -518,6 +518,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.resolve.outputs.tag }}
           VERSION: ${{ needs.resolve.outputs.version }}
+          SIGNED_WINDOWS: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.STUDIO_SIGNING_ENABLED == 'true' }}
         run: |
           # A version's own notes live in release-notes/studio/<semver>.md, named
           # without the v the tag carries. The release still publishes without
@@ -531,13 +532,20 @@ jobs:
           else
             echo "::warning::no $version_notes; publishing the standing text only"
           fi
-          cat >> "$notes" <<'BODY'
-          ---
-
-          **macOS** 已用 Developer ID 签名并公证，打开时不需要清除隔离属性。**Windows 包未签名** —— Authenticode 签名绑定在受保护的 `main-v2` 上，本分支拿不到它，所以 SmartScreen 会告警：选「更多信息」，再选「仍要运行」。**Linux** 从 `.deb` 安装。
-
-          三个平台都能自更新：Linux 走自己的包，Windows 运行下一个安装器，macOS 替换自身 bundle。
-          BODY
+          # The Windows sentence follows the condition that decides it, read
+          # here from the same pair the build job gates signing on. Asserting a
+          # constant is how this line came to tell users to click through
+          # SmartScreen for a package that was signed.
+          if [ "$SIGNED_WINDOWS" = "true" ]; then
+            windows='**Windows** 的窗口、内核与安装器都经 SignPath 做了 Authenticode 签名。'
+          else
+            windows='**Windows 包未签名**，SmartScreen 会告警：选「更多信息」，再选「仍要运行」。'
+          fi
+          {
+            printf '%s\n\n' '---'
+            printf '**macOS** 已用 Developer ID 签名并公证，打开时不需要清除隔离属性。%s**Linux** 从 `.deb` 安装。\n\n' "$windows"
+            printf '%s\n' '三个平台都能自更新：Linux 走自己的包，Windows 运行下一个安装器，macOS 替换自身 bundle。'
+          } >> "$notes"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
