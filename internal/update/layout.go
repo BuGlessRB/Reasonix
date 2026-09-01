@@ -18,13 +18,20 @@ type Layout struct {
 	Launcher   string // thin launcher to restart through; else Executable
 }
 
-// Here resolves the running build's layout. Every field is empty when the
-// executable path cannot be resolved at all — a caller must treat that as "do
-// not install", not as "install into the current directory".
-func Here(line Line) Layout {
-	exe := currentExecutable()
-	if exe == "" {
+// Here resolves the running build's layout, which is the right answer only for
+// a process that is the application. A shell whose process is a resource inside
+// the application states its executable and calls At.
+func Here(line Line) Layout { return At(currentExecutable(), line) }
+
+// At resolves the layout of the build that executable belongs to. Every field
+// is empty when there is no executable to resolve from — a caller must treat
+// that as "do not install", not as "install into the current directory".
+func At(exe string, line Line) Layout {
+	if strings.TrimSpace(exe) == "" {
 		return Layout{}
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
 	}
 	l := Layout{Executable: exe, Root: filepath.Dir(exe)}
 	if root, err := installlayout.ResolveInstallRoot(exe); err == nil && root != "" {
@@ -62,9 +69,6 @@ func currentExecutable() string {
 	exe, err := os.Executable()
 	if err != nil {
 		return ""
-	}
-	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = resolved
 	}
 	return exe
 }

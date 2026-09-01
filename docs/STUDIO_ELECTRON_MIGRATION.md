@@ -176,11 +176,38 @@ when something resembling it exists.
   shell that is its own process and three different ones otherwise. Wails
   answers all three; the kernel decides only when.
 
-  What is still missing is the half rule 7 exists to name. Electron has no
-  `ApplicationOwner`, so it declares no capability, so the routes do not
-  register for it — correct rather than missed, and the reason this stays on
-  this list. Checked at the route and at the orchestration, not driven through a
-  real install on any platform.
+  Electron owns its application now. The three acts travel as one JSON line
+  each on the pipe the handshake went out on, because that pipe is the only
+  channel pointing that way — stdin is the lease and HTTP runs the other
+  direction — and nothing is acknowledged, because both acts are ones the shell
+  performs by ending. `-studio-app` and `-studio-app-pid` state what the kernel
+  cannot: which file the application runs as, and which process holds it open.
+  A host that cannot name both declares no capability, so the install routes do
+  not register at all.
+
+  Two things stop this being cleared, and both are Linux.
+
+  The `.deb` must be `reasonix-studio`. electron-builder names a package after
+  `package.json`'s `name` unless told, which would have published
+  `reasonix-studio-electron` — held beside the installed Studio rather than
+  upgrading it, and invisible to the `dpkg -S` that decides whether this install
+  belongs to the package. Named explicitly now, verified against
+  electron-builder's own resolution rather than its documentation.
+
+  The package still carries no update helper. `Line.InstallDeb` runs
+  `/usr/lib/reasonix-studio/reasonix-studio-update-helper` under pkexec and
+  refuses by name without it; the Wails `.deb` shipped it and the policy file
+  beside it (`desktop/cmd/update-helper`,
+  `desktop/next/build/linux/io.reasonix.studio.update.policy`), and
+  electron-builder places nothing at an absolute system path without fpm
+  arguments. Worse than absent: sharing the package name means a dpkg upgrade
+  **removes** the helper the old package owned, so a machine that upgrades into
+  an Electron build loses the ability to self-update on Linux and does not get
+  it back. Unverified either way — no `.deb` has been built or installed here.
+
+  Checked at the route, the projection, the orchestration's own guard, the act
+  protocol on both sides, and the capability gate driven red. Not driven through
+  a real install on any platform.
 
 - **The release line.** `release-studio.yml` now builds the Electron bundle on
   all three platforms and `scripts/studio-build.sh` is off the release path,

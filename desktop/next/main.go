@@ -224,7 +224,7 @@ func run(logs io.Writer) error {
 	shell.updateHost = appupdate.New(appupdate.Options{
 		Owner:       shell,
 		Running:     version,
-		Line:        studioLine(),
+		Line:        update.StudioLine(),
 		Application: application,
 	})
 	// One hub, several panes: each session gets its own runtime, so a second

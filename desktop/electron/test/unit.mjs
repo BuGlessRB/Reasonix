@@ -5,7 +5,7 @@ import path from "node:path";
 import os from "node:os";
 
 const require = createRequire(import.meta.url);
-const { parse } = require("../src/host.js");
+const { parse, readActs } = require("../src/host.js");
 const { contextTemplate } = require("../src/editmenu.js");
 const { externalTarget } = require("../src/links.js");
 
@@ -196,4 +196,62 @@ test("a kernel that cannot be started says so, rather than going quiet", async (
     assert.doesNotMatch(err.message, /sent no handshake/);
     return true;
   });
+});
+
+// A fake child: only the stdout half readActs touches, and a way to push bytes
+// through it in whatever chunks the test wants -- which is the point, since the
+// bug this guards is a line split across two of them.
+function fakeChild() {
+  const listeners = [];
+  return {
+    stdout: { setEncoding() {}, on: (_e, fn) => listeners.push(fn) },
+    push: (chunk) => listeners.forEach((fn) => fn(chunk)),
+  };
+}
+
+test("an act arriving in the handshake's own chunk is not lost", () => {
+  const child = fakeChild();
+  const seen = [];
+  // What the pipe handed the handshake reader after it took its first line.
+  readActs(child, '{"act":"quit"}\n', (act) => seen.push(act));
+  assert.deepEqual(seen, ["quit"]);
+});
+
+test("acts are read a line at a time, however the pipe flushed them", () => {
+  const child = fakeChild();
+  const seen = [];
+  readActs(child, "", (act) => seen.push(act));
+
+  child.push('{"act":"relaunch"}\n{"act":');
+  assert.deepEqual(seen, ["relaunch"], "a half line is not an act");
+  child.push('"quit"}\n');
+  assert.deepEqual(seen, ["relaunch", "quit"]);
+});
+
+test("a line this process cannot read is one it does not act on", () => {
+  const child = fakeChild();
+  const seen = [];
+  readActs(child, "", (act) => seen.push(act));
+
+  // Nothing here is an act, and none of it may stop the next line from being
+  // one: a kernel that logged to the wrong stream must not end the handover.
+  child.push("not json at all\n");
+  child.push('{"version":1}\n');
+  child.push('{"act":42}\n');
+  child.push("\n");
+  assert.deepEqual(seen, []);
+  child.push('{"act":"quit"}\n');
+  assert.deepEqual(seen, ["quit"]);
+});
+
+test("a child writing without newlines cannot grow this process", () => {
+  const child = fakeChild();
+  const seen = [];
+  readActs(child, "", (act) => seen.push(act));
+
+  child.push("x".repeat(8192));
+  // Dropped rather than held, and the next real line still reads: the buffer
+  // is a line assembler, not a log.
+  child.push('{"act":"quit"}\n');
+  assert.deepEqual(seen, ["quit"]);
 });

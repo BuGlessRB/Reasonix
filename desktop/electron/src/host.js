@@ -7,15 +7,57 @@ const PROTOCOL_VERSION = 1;
 const HANDSHAKE_LIMIT = 4096;
 const HANDSHAKE_TIMEOUT_MS = 20000;
 
-// start spawns the kernel and reads the one line it writes to stdout. stdin is
-// the lease: the kernel drains when this end closes, which is what stops it
-// outliving a parent that exited without being asked to.
-function start(binary, args, { onStderr, onExit } = {}) {
+// start spawns the kernel and reads the handshake it writes to stdout. Every
+// line after it is an act a handover asks of this process, because that pipe is
+// the only channel pointing this way. stdin is the lease: the kernel drains
+// when this end closes, which is what stops it outliving a parent that exited
+// without being asked to.
+function start(binary, args, { onStderr, onExit, onAct } = {}) {
   const child = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"] });
   child.stderr.setEncoding("utf8");
   if (onStderr) child.stderr.on("data", onStderr);
   if (onExit) child.on("exit", onExit);
-  return { child, ready: firstLine(child).then(parse) };
+  const ready = firstLine(child).then(({ line, rest }) => {
+    // Only once the handshake parses: a child whose first line was not one has
+    // said nothing this process should act on.
+    const handshake = parse(line);
+    if (onAct) readActs(child, rest, onAct);
+    return handshake;
+  });
+  return { child, ready };
+}
+
+// readActs carries on where the handshake left off, starting from the bytes
+// that arrived in the same chunk as it: dropping those would lose an act to
+// nothing more than how the pipe happened to be flushed.
+function readActs(child, rest, onAct) {
+  let buffered = rest;
+  const drain = () => {
+    for (;;) {
+      const end = buffered.indexOf("\n");
+      if (end < 0) break;
+      const line = buffered.slice(0, end).trim();
+      buffered = buffered.slice(end + 1);
+      if (line === "") continue;
+      let body;
+      try {
+        body = JSON.parse(line);
+      } catch {
+        // A line this process cannot read is one it must not act on. The
+        // kernel logs to stderr, so nothing here is a message worth relaying.
+        continue;
+      }
+      if (typeof body.act === "string") onAct(body.act);
+    }
+    // A child writing without newlines must not be able to grow this process.
+    if (buffered.length > HANDSHAKE_LIMIT) buffered = "";
+  };
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    buffered += chunk;
+    drain();
+  });
+  drain();
 }
 
 function firstLine(child) {
@@ -35,7 +77,9 @@ function firstLine(child) {
     const onData = (chunk) => {
       buffered += chunk;
       const end = buffered.indexOf("\n");
-      if (end >= 0) return settle(resolve, buffered.slice(0, end));
+      if (end >= 0) {
+        return settle(resolve, { line: buffered.slice(0, end), rest: buffered.slice(end + 1) });
+      }
       if (buffered.length > HANDSHAKE_LIMIT) {
         settle(reject, new Error("the handshake ran past its limit"));
       }
@@ -84,4 +128,4 @@ function parse(line) {
   return { origin: url.origin, token: body.token };
 }
 
-module.exports = { start, parse, PROTOCOL_VERSION };
+module.exports = { start, parse, readActs, PROTOCOL_VERSION };

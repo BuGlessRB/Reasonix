@@ -29,7 +29,7 @@ func (a *App) RelaunchAfterUpdate(context.Context) error {
 	if goruntime.GOOS != "linux" {
 		return nil
 	}
-	return update.Here(studioLine()).Relaunch()
+	return update.Here(update.StudioLine()).Relaunch()
 }
 
 // EndApplication ends this process, which for this shell is the application.

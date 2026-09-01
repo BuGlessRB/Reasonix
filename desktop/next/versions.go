@@ -10,5 +10,5 @@ var version = "dev"
 // lives. The kernel cannot work either out for a shell that is not the process
 // asking, so each one states its own.
 func (a *App) install() update.Install {
-	return update.Install{Version: version, Layout: update.Here(studioLine())}
+	return update.Install{Version: version, Layout: update.Here(update.StudioLine())}
 }

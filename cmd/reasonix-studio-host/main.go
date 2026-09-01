@@ -21,6 +21,7 @@ import (
 	"strings"
 	"syscall"
 
+	"reasonix/internal/appupdate"
 	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/event"
@@ -52,16 +53,49 @@ const (
 	studioPrefix = "/_studio/"
 )
 
-// studioInstall is what the shell told us about itself. A launch that named no
-// version gets no install at all, so the version routes refuse by name rather
-// than answering for a build nobody claimed. The layout stays empty until a
-// shell can state one: reading the catalog needs no install path, and applying
-// one from a guess is how a swap lands on the wrong bundle.
-func studioInstall(version string) *update.Install {
-	if strings.TrimSpace(version) == "" {
+// shellIdentity is what the shell told us about itself, because none of it is
+// answerable from here: os.Executable() names this binary, which is a resource
+// inside the application rather than the application, and the process holding
+// that application open is the one that spawned this.
+type shellIdentity struct {
+	version string
+	exe     string
+	pid     int
+}
+
+func (s shellIdentity) stated() bool {
+	return strings.TrimSpace(s.version) != "" && strings.TrimSpace(s.exe) != "" && s.pid > 0
+}
+
+// studioInstall is which build is running and where it lives. A launch that
+// named no version gets no install at all, so the version routes refuse by name
+// rather than answering for a build nobody claimed. The layout is resolved from
+// the executable the shell stated and never from this one: applying an update
+// against a guess is how a swap lands on the wrong bundle.
+func studioInstall(shell shellIdentity) *update.Install {
+	if strings.TrimSpace(shell.version) == "" {
 		return nil
 	}
-	return &update.Install{Version: version}
+	return &update.Install{Version: shell.version, Layout: update.At(shell.exe, update.StudioLine())}
+}
+
+// studioUpdateHost is the capability this kernel serves installs through, and
+// nil where the shell did not state enough to own one. Nil is the gate: the
+// routes are not registered, so a host that cannot name the application it
+// would replace has no way to be asked to replace it.
+func studioUpdateHost(shell shellIdentity, to io.Writer) appupdate.Capability {
+	if !shell.stated() {
+		return nil
+	}
+	// A build not inside a bundle states no application. The version routes
+	// still work; the swap is what refuses, by name.
+	application, _ := update.ApplicationAt(shell.exe, shell.pid)
+	return appupdate.New(appupdate.Options{
+		Owner:       &shellOwner{to: to},
+		Running:     shell.version,
+		Line:        update.StudioLine(),
+		Application: application,
+	})
 }
 
 func main() {
@@ -70,6 +104,11 @@ func main() {
 	// The shell around this process knows which build it is; this process does
 	// not. os.Executable() here names the host binary, not the application.
 	studioVersion := flag.String("studio-version", "", "the Studio build this host is serving")
+	// The application, which is the shell rather than this process: which file
+	// it runs as, and which process holds it open while an update waits to
+	// replace it.
+	studioApp := flag.String("studio-app", "", "the application executable this host runs inside")
+	studioAppPID := flag.Int("studio-app-pid", 0, "the process id of that application")
 	flag.Parse()
 	// Which launches are the same Studio is Reasonix's question, not a shell's:
 	// the answer is the canonicalized data home, and a shell asks for it rather
@@ -78,13 +117,15 @@ func main() {
 		fmt.Fprintln(os.Stdout, instanceid.Current())
 		return
 	}
-	os.Exit(run(parentLease(os.Stdin), os.Stdout, os.Stderr, *page, *studioVersion))
+	shell := shellIdentity{version: *studioVersion, exe: *studioApp, pid: *studioAppPID}
+	os.Exit(run(parentLease(os.Stdin), os.Stdout, os.Stderr, *page, shell))
 }
 
 // run serves until the lease ends or the process is signalled. stdout carries
-// the handshake and nothing else, because the parent parses the first line it
-// reads there; every log goes to logs.
-func run(lease io.Reader, handshakeTo, logs io.Writer, page, studioVersion string) int {
+// the handshake first and then one line per act a handover asks of the shell,
+// because that pipe is the only channel pointing that way; every log goes to
+// logs, which is why no line there can be mistaken for one of these.
+func run(lease io.Reader, handshakeTo, logs io.Writer, page string, shell shellIdentity) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if lease != nil {
@@ -102,7 +143,7 @@ func run(lease io.Reader, handshakeTo, logs io.Writer, page, studioVersion strin
 		return 1
 	}
 
-	hub, err := assemble(ctx, logs, studioVersion)
+	hub, err := assemble(ctx, logs, handshakeTo, shell)
 	if err != nil {
 		fmt.Fprintln(logs, "reasonix-studio-host:", err)
 		return 1
@@ -264,7 +305,7 @@ func hasIndex(dir string) bool {
 
 // assemble builds the hub this host serves: one pane on the workspace it was
 // launched in, carrying the capabilities a local window may exercise.
-func assemble(ctx context.Context, logs io.Writer, studioVersion string) (*serve.Hub, error) {
+func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdentity) (*serve.Hub, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, err
@@ -307,7 +348,8 @@ func assemble(ctx context.Context, logs io.Writer, studioVersion string) (*serve
 		Asks:         asks,
 		Remote:       remotehost.New(ctx, version, asks),
 		OnClose:      func(rt *serve.Runtime) { tracker.Drop(paneKey(rt.Events)) },
-		Install:      studioInstall(studioVersion),
+		Install:      studioInstall(shell),
+		Update:       studioUpdateHost(shell, handshakeTo),
 	})
 	srv := serve.New(built.Controller, bc, hubCfg)
 	srv.SetPaneSink(paneSink)

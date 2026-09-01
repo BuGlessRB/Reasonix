@@ -41,12 +41,20 @@ async function boot() {
   // falls back to Electron's own, which named a Studio that never shipped and
   // ranked it ahead of every published release.
   const args = ["-page", pageDir];
-  if (app.isPackaged) args.push("-studio-version", app.getVersion());
+  if (app.isPackaged) {
+    args.push("-studio-version", app.getVersion());
+    // The other half the kernel cannot work out: which file the application
+    // runs as, and which process holds it open while an update waits to
+    // replace it. Both are this process's, and the binary it spawned lives
+    // inside the bundle rather than being it.
+    args.push("-studio-app", process.execPath, "-studio-app-pid", String(process.pid));
+  }
   kernel = start(hostBinary, args, {
     onStderr: (text) => process.stderr.write(text),
     onExit: (code) => {
       if (code !== 0 && !quitting) app.quit();
     },
+    onAct: handOver,
   });
   const ready = await kernel.ready;
   origin = ready.origin;
@@ -230,6 +238,21 @@ app.whenReady().then(() => {
     app.quit();
   });
 });
+
+// The acts a handover asks of the application. The kernel decides when: it has
+// downloaded and staged a replacement, and what is left is the part only this
+// process can do. They arrive in this order, so arming the restart before
+// ending is the sequence rather than a coincidence.
+//
+// Nothing is answered. Both are performed by ending, so an acknowledgement
+// would have to come from a process on its way out.
+function handOver(act) {
+  if (act === "relaunch") {
+    app.relaunch();
+    return;
+  }
+  if (act === "quit") app.quit();
+}
 
 app.on("window-all-closed", () => app.quit());
 

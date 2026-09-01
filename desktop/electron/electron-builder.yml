@@ -82,3 +82,13 @@ linux:
   category: Development
   maintainer: esengine <esengine@users.noreply.github.com>
   artifactName: ReasonixStudio-linux-${arch}.${ext}
+
+deb:
+  # Named, not defaulted. electron-builder takes the package name from
+  # package.json's `name` unless told otherwise, which would publish
+  # reasonix-studio-electron: dpkg would then hold it beside the installed
+  # reasonix-studio rather than upgrading it, and update.StudioLine asks dpkg
+  # which package owns this install by that exact name -- a mismatch sends the
+  # Linux self-update down the portable-archive path, behind the package
+  # manager's back.
+  packageName: reasonix-studio

@@ -12,3 +12,6 @@ func MaybeRunMacHandoff([]string) (handled bool, exitCode int) { return false, 0
 // stub is here for the same reason MaybeRunMacHandoff's is — a shell assembles
 // one installer and does not branch on which platform it was compiled for.
 func LocalApplication(Layout) (Application, error) { return Application{}, nil }
+
+// ApplicationAt has nothing to state off macOS for the same reason.
+func ApplicationAt(string, int) (Application, error) { return Application{}, nil }
