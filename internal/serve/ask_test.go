@@ -208,11 +208,16 @@ func TestAQuestionEndsWithItsOperation(t *testing.T) {
 // The snapshot is the record and the wake-up is a convenience. A shell that
 // missed the notification, or polled late, still finds the question.
 func TestAMissedNotificationLosesNothing(t *testing.T) {
-	woke := 0
-	b := NewAskBroker(func(Ask) { woke++ })
+	// Carried rather than counted: the broker notifies after it lets go of the
+	// question, so a poll that found it can still be ahead of the callback, and
+	// a counter read here would be reading what that goroutine writes.
+	woke := make(chan Ask, 4)
+	b := NewAskBroker(func(q Ask) { woke <- q })
 	id, _ := raise(t, b, t.Context(), "op")
-	if woke != 1 {
-		t.Errorf("the shell was woken %d times, want once", woke)
+	select {
+	case <-woke:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the shell was never woken for a question that is open")
 	}
 	// Two polls later — a client that slept through several rounds sees it just
 	// the same, because nothing about the question was carried by the wake-up.
@@ -220,6 +225,13 @@ func TestAMissedNotificationLosesNothing(t *testing.T) {
 		if open := b.Pending("op"); len(open) != 1 || open[0].ID != id {
 			t.Fatalf("a later poll saw %+v, want the question still open", open)
 		}
+	}
+	// Once, not once-so-far: polling is not what raises a question, so nothing
+	// after the first wake-up may have produced another.
+	select {
+	case q := <-woke:
+		t.Fatalf("the shell was woken again, for %+v", q)
+	default:
 	}
 }
 
