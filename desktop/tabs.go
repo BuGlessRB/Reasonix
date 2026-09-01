@@ -4312,6 +4312,11 @@ func (a *App) applySessionBindingToTab(tab *WorkspaceTab, binding sessionBinding
 		terminalSessions = a.terminals.detachForTab(tab.ID)
 		reopenTerminalGate = !tab.ReadOnly && !tab.removed
 	}
+	if workspaceChanged {
+		tab.pinnedFilesMu.Lock()
+		tab.PinnedFiles = nil
+		tab.pinnedFilesMu.Unlock()
+	}
 	tab.Scope = scope
 	tab.WorkspaceRoot = workspaceRoot
 	tab.SessionPath = canonicalTabSessionPath(binding.path)

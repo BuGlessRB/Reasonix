@@ -2,9 +2,9 @@
   "limits": {
     "banner": 15,
     "commented-code": 0,
-    "complexity": 1952,
+    "complexity": 1953,
     "essay": 1935,
-    "file-size": 107714,
+    "file-size": 107719,
     "function-size": 8480,
     "layering": 1,
     "marker": 0,
@@ -260,9 +260,9 @@
       "test-file-size": 151
     },
     "desktop/tabs.go": {
-      "complexity": 36,
+      "complexity": 37,
       "essay": 67,
-      "file-size": 7617,
+      "file-size": 7622,
       "function-size": 343,
       "struct-state": 23
     },
