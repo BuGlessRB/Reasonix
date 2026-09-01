@@ -183,38 +183,29 @@ func (g grepTool) runNative(ctx context.Context, pattern, path string, info os.F
 		peek := peekBuf[:n]
 
 		bomKind := fileenc.DetectQuick(peek)
+		enc := bomKind
 		if bomKind != fileenc.UTF16LE && bomKind != fileenc.UTF16BE && bomKind != fileenc.UTF8BOM {
-			if bytes.IndexByte(peek, 0) >= 0 {
-				return nil // binary, skip
+			if detected, ok := fileenc.DetectUTF16NoBOM(peek); ok {
+				enc = detected
+			} else {
+				if bytes.IndexByte(peek, 0) >= 0 {
+					return nil // binary, skip
+				}
+				// Detect encoding from the peek alone — sufficient for the
+				// UTF-8 vs GB18030 distinction (utf8.Valid on 8 KiB is reliable).
+				enc, _ = fileenc.Detect(peek)
 			}
 		}
 
-		// Detect encoding from the peek alone — sufficient for the
-		// UTF-8 vs GB18030 distinction (utf8.Valid on 8 KiB is reliable).
-		// Then stream the rest through a decoder so the 200-match cap can
-		// stop reading early instead of buffering the entire file.
-		enc, _ := fileenc.Detect(peek)
-
 		var src io.Reader
-		if enc == fileenc.UTF16LE || enc == fileenc.UTF16BE {
-			// UTF-16 needs full-file decode (multi-byte units span the
-			// whole stream). These files are rare in grep targets.
-			rest, err := io.ReadAll(f)
-			if err != nil {
-				return nil
-			}
-			all := append(peek, rest...)
-			src = bytes.NewReader(fileenc.Decode(all, enc))
+		// Stream through the decoder so the 200-match cap can stop reading
+		// early. x/text's UTF-16 decoder preserves split code units across reads.
+		dec := fileenc.Decoder(enc)
+		if dec != nil {
+			src = transform.NewReader(io.MultiReader(bytes.NewReader(peek), f), dec)
 		} else {
-			// Non-BOM path: stream through the decoder so the scanner can
-			// stop as soon as the cap is reached without buffering the file.
-			dec := fileenc.Decoder(enc)
-			if dec != nil {
-				src = transform.NewReader(io.MultiReader(bytes.NewReader(peek), f), dec)
-			} else {
-				// UTF-8 or LossyUTF8 — no transformation needed.
-				src = io.MultiReader(bytes.NewReader(peek), f)
-			}
+			// UTF-8 or LossyUTF8 — no transformation needed.
+			src = io.MultiReader(bytes.NewReader(peek), f)
 		}
 
 		sc := bufio.NewScanner(src)
