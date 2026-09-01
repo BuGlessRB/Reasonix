@@ -288,10 +288,17 @@ jobs:
         shell: bash
         run: |
           version="${{ needs.resolve.outputs.version }}"
+          arch=""
+          # The flag has to be repeated here. --prepackaged builds targets and
+          # never reads what is inside the bundle, so without it they are named
+          # for the runner's own architecture: 2.11.0 shipped a universal app as
+          # ReasonixStudio-darwin-arm64.zip, and studio-manifest keys one darwin
+          # platform off that name where a universal one keys both.
+          if [ "${{ matrix.platform }}" = "darwin/universal" ]; then arch="--universal"; fi
           # Same temp directories as above: packaging one of them would ship a
           # single-architecture bundle under the universal artifact name.
           app="$(cd ../.. && find dist -maxdepth 2 \( -name '*.app' -o -name '*-unpacked' \) -not -path '*-temp/*' | sort | head -1)"
-          pnpm exec electron-builder --prepackaged "../../$app" \
+          pnpm exec electron-builder --prepackaged "../../$app" $arch \
             -c.extraMetadata.version="${version#v}"
 
       # Stage one: the executables a user actually runs, signed while they are
