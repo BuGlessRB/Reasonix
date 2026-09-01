@@ -166,8 +166,10 @@ console.log("\nbundle budgets");
 // Latest-base transcript settle ownership measures 457.518 KiB with this UX;
 // isolated conversation forks and their extracted browser mock adapter bring
 // the combined tree to 458.158 KiB. Retain 0.042 KiB with the smallest
-// one-decimal ratchet.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 458.2 : 458.2;
+// one-decimal ratchet. Completion uncertainty adds a terminal outcome and
+// notice without exposing evaluator audits to the frontend; the final merged
+// build measures 458.287 KiB gzip.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 458.3 : 458.3;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -286,13 +288,16 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // The stranded-tail recovery transition plus the WebView2 reachable-tail clamp
 // bring the measured initial payload to 2447.953 KiB. Retain 0.047 KiB with
 // the smallest one-decimal ratchet.
-// The extracted history-prepend owner and compact session-version host measure
-// 2452.7 KiB together; the recovery coordinator and dialog remain lazy. Retain
-// the smallest one-decimal headroom without widening unrelated chunk ceilings.
+// The extracted history-prepend owner adds 3.953 KiB of bounded transaction
+// state and stable-key coverage checks. Together with the compact
+// session-version host, they measure 2452.7 KiB; the recovery coordinator and
+// dialog remain lazy. Completion uncertainty adds a distinct terminal notice
+// and localized startup copy without collapsing into recovery-paused UX.
 // Latest-base transcript settle ownership brings the measured path to
 // 2452.773 KiB; isolated conversation forks bring the combined tree to
-// 2454.719 KiB on the release toolchain. Retain 0.081 KiB with the smallest
-// one-decimal ratchet.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_454.8 : 2_454.8;
+// 2454.719 KiB on the release toolchain. Completion uncertainty brings the
+// final merged payload to 2455.154 KiB; retain the smallest one-decimal
+// ratchet.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_455.2 : 2_455.2;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
