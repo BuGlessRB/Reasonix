@@ -42,6 +42,21 @@ assert.equal(
   "repair-active",
   "active work takes precedence while a mixed backlog is running",
 );
+assert.equal(
+  sessionCatalogNotice(status({ state: "degraded", canRebuild: true, repairActive: 2, repairDeferred: 1 })),
+  "rebuild",
+  "global degraded state takes precedence over repair activity",
+);
+assert.equal(
+  sessionCatalogNotice(status({ lastError: "private backend detail", repairBlocked: 3 })),
+  "failed",
+  "global catalog failure takes precedence over blocked rows",
+);
+assert.equal(
+  sessionCatalogNotice(status({ state: "rebuilding", lastError: "previous failure", repairActive: 1 })),
+  "indexing",
+  "an explicit rebuild remains the authoritative working state",
+);
 assert.equal(sessionCatalogNotice(status()), null, "healthy ready catalogs render no notice");
 assert.deepEqual(
   sessionCatalogNotice(status({ state: "degraded", canRebuild: true })),

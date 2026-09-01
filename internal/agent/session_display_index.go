@@ -28,20 +28,8 @@ const SessionDisplayIndexSchemaVersion = 1
 // it can exhaust the desktop process.
 const sessionDisplayIndexMaxLineBytes = 16 << 20
 
-// SessionDisplayIndex is the per-session paging sidecar
-// (<id>.display-index.json). It lets a reader page through a huge history
-// without parsing whole session files: every entry carries the byte range of
-// one message line plus the metadata a listing needs. Content fidelity is a
-// hard constraint — the index never copies message bodies, only derived
-// metadata.
-//
-// Offset semantics: Offset/Length describe the canonical transcript encoding —
-// exactly the bytes writeSessionMessages writes for the same message slice
-// (json.Marshal(msg) + '\n', with the real CreatedAt, not the zeroed form the
-// content digest hashes). The .jsonl file is maintained as a random-read model
-// of the authoritative event log, so published ranges are file-exact. A crash
-// or an older Reasonix build may leave that model behind; consumers compare
-// TranscriptSize and identity before reading and rebuild it on mismatch.
+// SessionDisplayIndex pages history by exact canonical JSONL byte ranges.
+// Consumers validate TranscriptSize and content identity before using it.
 type SessionDisplayIndex struct {
 	SchemaVersion  int    `json:"schema_version"`
 	Revision       int64  `json:"revision"`
@@ -75,13 +63,8 @@ type DisplayIndexEntry struct {
 	HasToolCalls bool          `json:"has_tool_calls,omitempty"`
 	LocalOnly    bool          `json:"local_only,omitempty"`
 	ToolResult   bool          `json:"tool_result,omitempty"`
-	// Synthetic and Steer classify user messages the way the desktop visible-
-	// turn rule does, but on UserMessageText (the raw authored content): the
-	// desktop additionally resolves @file references through a display
-	// callback before testing, which a pure metadata pass cannot reproduce.
-	// The predicates themselves are equivalent — control.IsSyntheticUserMessage
-	// adds only a planApprovedMessage equality check that SyntheticUserPrefixes
-	// already covers via its "Plan approved — plan mode is off" prefix.
+	// Synthetic and Steer use raw authored text; desktop may first resolve
+	// @file references for display, but the control-message predicates match.
 	Synthetic bool `json:"synthetic,omitempty"`
 	Steer     bool `json:"steer,omitempty"`
 }
@@ -333,8 +316,11 @@ func ScanSessionDisplayIndex(transcriptPath string) (*SessionDisplayIndex, error
 			var entry DisplayIndexEntry
 			entry, turn = classifyDisplayIndexMessage(m, len(idx.Entries), offset, int64(len(line)), turn)
 			if entry.StartsTurn && !idx.ListingPreviewKnown {
-				idx.ListingPreview = truncatePreview(previewProse(UserMessageText(m)))
-				idx.ListingPreviewKnown = true
+				preview := truncatePreview(previewProse(UserMessageText(m)))
+				if preview != "" {
+					idx.ListingPreview = preview
+					idx.ListingPreviewKnown = true
+				}
 			}
 			idx.Entries = append(idx.Entries, entry)
 			offset += int64(len(line))
@@ -348,7 +334,7 @@ func ScanSessionDisplayIndex(transcriptPath string) (*SessionDisplayIndex, error
 	}
 	idx.MessageCount = len(idx.Entries)
 	idx.AuthoredTurns = turn
-	if turn == 0 {
+	if !idx.ListingPreviewKnown {
 		idx.ListingPreviewKnown = true
 	}
 	idx.TranscriptSize = offset

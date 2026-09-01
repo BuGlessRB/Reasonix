@@ -43,25 +43,11 @@ func RepairSessionListingProjection(ctx context.Context, path string) (SessionLi
 	if err := ctx.Err(); err != nil {
 		return SessionListingRepairResult{}, err
 	}
-	unlockSave, ok := tryLockSessionSavePath(path)
-	if !ok {
-		return SessionListingRepairResult{}, ErrSessionListingRepairBusy
-	}
-	defer unlockSave()
-	unlockFile, err := tryLockSessionFile(path)
-	if err != nil {
-		if errors.Is(err, ErrSessionFileLockHeld) {
-			return SessionListingRepairResult{}, ErrSessionListingRepairBusy
-		}
-		return SessionListingRepairResult{}, err
-	}
-	defer unlockFile()
-	unlockMeta, err := LockSessionMetaPath(path)
+	unlock, err := lockSessionListingRepair(path)
 	if err != nil {
 		return SessionListingRepairResult{}, err
 	}
-	defer unlockMeta()
-
+	defer unlock()
 	meta, metaOK, err := LoadBranchMeta(path)
 	if err != nil {
 		if isDamagedSessionRepairError(err) {
@@ -72,26 +58,59 @@ func RepairSessionListingProjection(ctx context.Context, path string) (SessionLi
 	if !metaOK {
 		meta = BranchMeta{ID: BranchID(path)}
 	}
-	if preview, turns, ok, unsupported, err := indexedSessionListing(path, meta); err != nil {
-		return SessionListingRepairResult{}, err
-	} else if unsupported {
-		return SessionListingRepairResult{Status: SessionListingRepairUnsupported}, nil
-	} else if ok {
-		if sessionListingProjectionFresh(meta.SchemaVersion, meta.Turns, meta.Revision,
-			meta.ListingRevision, meta.ContentDigest, meta.ListingContentDigest) &&
-			meta.Preview == preview && meta.Turns == turns {
-			return SessionListingRepairResult{Status: SessionListingRepairAlreadyCurrent, Preview: preview, Turns: turns}, nil
-		}
-		meta.Preview = preview
-		meta.Turns = turns
-		meta.SchemaVersion = BranchMetaCountsVersion
-		stampSessionListingProjection(&meta)
-		if err := saveBranchMeta(path, meta, false); err != nil {
-			return SessionListingRepairResult{}, err
-		}
-		return SessionListingRepairResult{Status: SessionListingRepairApplied, Preview: preview, Turns: turns}, nil
+	if result, handled, err := repairSessionListingFromIndex(path, meta); handled || err != nil {
+		return result, err
 	}
+	return repairSessionListingFromReplay(ctx, path, meta)
+}
 
+func lockSessionListingRepair(path string) (func(), error) {
+	unlockSave, ok := tryLockSessionSavePath(path)
+	if !ok {
+		return nil, ErrSessionListingRepairBusy
+	}
+	unlockFile, err := tryLockSessionFile(path)
+	if err != nil {
+		unlockSave()
+		if errors.Is(err, ErrSessionFileLockHeld) {
+			return nil, ErrSessionListingRepairBusy
+		}
+		return nil, err
+	}
+	unlockMeta, err := LockSessionMetaPath(path)
+	if err != nil {
+		unlockFile()
+		unlockSave()
+		return nil, err
+	}
+	return func() { unlockMeta(); unlockFile(); unlockSave() }, nil
+}
+
+func repairSessionListingFromIndex(path string, meta BranchMeta) (SessionListingRepairResult, bool, error) {
+	preview, turns, ok, unsupported, err := indexedSessionListing(path, meta)
+	if err != nil {
+		return SessionListingRepairResult{}, true, err
+	}
+	if unsupported {
+		return SessionListingRepairResult{Status: SessionListingRepairUnsupported}, true, nil
+	}
+	if !ok {
+		return SessionListingRepairResult{}, false, nil
+	}
+	if sessionListingProjectionFresh(meta.SchemaVersion, meta.Turns, meta.Revision,
+		meta.ListingRevision, meta.ContentDigest, meta.ListingContentDigest) &&
+		meta.Preview == preview && meta.Turns == turns {
+		return SessionListingRepairResult{Status: SessionListingRepairAlreadyCurrent, Preview: preview, Turns: turns}, true, nil
+	}
+	meta.Preview, meta.Turns, meta.SchemaVersion = preview, turns, BranchMetaCountsVersion
+	stampSessionListingProjection(&meta)
+	if err := saveBranchMeta(path, meta, false); err != nil {
+		return SessionListingRepairResult{}, true, err
+	}
+	return SessionListingRepairResult{Status: SessionListingRepairApplied, Preview: preview, Turns: turns}, true, nil
+}
+
+func repairSessionListingFromReplay(ctx context.Context, path string, meta BranchMeta) (SessionListingRepairResult, error) {
 	before, err := sessionRepairContentFingerprint(path)
 	if err != nil {
 		return SessionListingRepairResult{}, err
@@ -183,7 +202,7 @@ func indexedSessionListing(path string, meta BranchMeta) (preview string, turns 
 		return "", 0, false, false, nil
 	}
 	indexInfo, err := os.Stat(store.SessionDisplayIndex(path))
-	if err != nil || indexInfo.ModTime().Before(SessionContentModTime(path)) {
+	if err != nil || !indexInfo.ModTime().After(SessionContentModTime(path)) {
 		return "", 0, false, false, nil
 	}
 	probe, err := probeSessionEventLog(path)
@@ -202,7 +221,7 @@ func indexedSessionListing(path string, meta BranchMeta) (preview string, turns 
 		}
 		eventInfo, eventErr := os.Stat(store.SessionEventIndex(path))
 		logInfo, logErr := os.Stat(store.SessionEventLog(path))
-		if eventErr != nil || logErr != nil || eventInfo.ModTime().Before(logInfo.ModTime()) {
+		if eventErr != nil || logErr != nil || !eventInfo.ModTime().After(logInfo.ModTime()) {
 			return "", 0, false, false, nil
 		}
 	}

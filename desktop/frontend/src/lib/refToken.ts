@@ -16,7 +16,7 @@ export function refTokenRe(): RegExp {
 }
 
 export function escapeRefPath(path: string): string {
-  return path.replace(/[ \t]/g, (ws) => "\\" + ws);
+  return path.replace(/[ \t]/g, "\\$&");
 }
 
 export function unescapeRefPath(token: string): string {

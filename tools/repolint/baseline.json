@@ -10,7 +10,7 @@
     "marker": 0,
     "narrative": 64,
     "struct-state": 116,
-    "test-file-size": 69629
+    "test-file-size": 69628
   },
   "files": {
     "cmd/e2ebench/main.go": {

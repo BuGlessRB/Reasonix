@@ -169,7 +169,8 @@ console.log("\nbundle budgets");
 // one-decimal ratchet. Completion uncertainty adds a terminal outcome and
 // notice without exposing evaluator audits to the frontend; the final merged
 // build measures 458.287 KiB gzip.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 458.3 : 458.3;
+// Repair-state presentation adds 0.2 KiB; measured platform bundles are 458.3–458.4 KiB.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 458.5 : 458.5;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via

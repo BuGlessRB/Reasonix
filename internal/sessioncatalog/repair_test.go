@@ -219,9 +219,11 @@ func TestRepairResultPreservesDirectoryProjectionUntilReconcile(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("GetSession after reconcile: ok=%v err=%v", ok, err)
 	}
-	assertDirectoryProjectionEqual(t, after, before)
 	if after.TurnsState != TurnsValid || after.Turns != 2 || after.Preview != "question" {
 		t.Fatalf("repaired source state was not retained: %+v", after)
+	}
+	if after.RecoveryDigest == "" || after.RecoveryRole != RecoveryRoleAdopted || !after.RecoveryCanonical {
+		t.Fatalf("reconcile did not publish repaired recovery lineage: %+v", after)
 	}
 	signature, err := directorySignature(target.Path)
 	if err != nil {

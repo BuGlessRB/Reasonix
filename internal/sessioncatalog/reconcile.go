@@ -76,14 +76,16 @@ func (c *Catalog) reconcileDirectory(ctx context.Context, target DirectoryTarget
 		c.failDirectoryScan(context.Background(), target.Path, err)
 		return err
 	}
+	content := newStrictRecoveryContentCache(c.testSessionContentLoadHook)
 	for i := range records {
-		records[i] = classifyRecoveryLineageFromContent(normalizeSessionRecord(records[i]))
+		records[i] = classifyRecoveryLineageWithContent(normalizeSessionRecord(records[i]), content)
 	}
-	records = promoteCanonicalLeaves(records)
+	records = promoteCanonicalLeavesWithContent(records, content)
 	if err := c.commitDirectoryProjection(ctx, target, signature, generation, now, records); err != nil {
 		c.failDirectoryScan(context.Background(), target.Path, err)
 		return err
 	}
+	c.markDirectoryVerifiedIfStable(ctx, target, signature)
 	for _, record := range records {
 		if record.TurnsState == TurnsUnknown {
 			c.enqueueRepair(record.Path)
@@ -134,103 +136,6 @@ func (c *Catalog) directoryLock(path string) *sync.Mutex {
 		c.directoryLocks[path] = lock
 	}
 	return lock
-}
-
-// RequestReconcile coalesces external writes by directory. The channel is
-// non-blocking so a session save never waits on catalog work; when the channel
-// is full the request is retained in reconcileDirty and drained by the worker.
-func (c *Catalog) RequestReconcile(target DirectoryTarget) bool {
-	if c == nil || strings.TrimSpace(target.Path) == "" {
-		return false
-	}
-	target.Path = cleanCatalogAccessPath(target.Path)
-	key := queuePathKey(target.Path)
-	if key == "" {
-		return false
-	}
-	target.mutationSeq = c.mutationSeq.Add(1)
-	if _, loaded := c.reconcileQueued.LoadOrStore(key, target); loaded {
-		c.markReconcileDirty(target)
-		return true
-	}
-	select {
-	case c.reconcileCh <- target:
-		return true
-	case <-c.stop:
-		c.reconcileQueued.Delete(key)
-		return false
-	default:
-		c.reconcileQueued.Delete(key)
-		c.markReconcileDirty(target)
-		return false
-	}
-}
-
-func (c *Catalog) markReconcileDirty(target DirectoryTarget) {
-	key := queuePathKey(target.Path)
-	c.reconcileDirtyMu.Lock()
-	c.reconcileDirty[key] = target
-	c.reconcileDirtyMu.Unlock()
-	// If the running worker cleared its marker between RequestReconcile's load
-	// and this write, establish a fresh wake without losing the dirty follow-up.
-	c.reconcileQueued.LoadOrStore(key, target)
-}
-
-func (c *Catalog) takeReconcileDirty() (DirectoryTarget, bool) {
-	c.reconcileDirtyMu.Lock()
-	defer c.reconcileDirtyMu.Unlock()
-	for path, target := range c.reconcileDirty {
-		delete(c.reconcileDirty, path)
-		return target, true
-	}
-	return DirectoryTarget{}, false
-}
-
-func (c *Catalog) reconcileLoop() {
-	defer c.workers.Done()
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		if target, ok := c.takeReconcileDirty(); ok {
-			c.reconcileQueued.LoadOrStore(queuePathKey(target.Path), target)
-			c.runQueuedReconcile(target)
-			continue
-		}
-		select {
-		case target := <-c.reconcileCh:
-			c.runQueuedReconcile(target)
-		case <-ticker.C:
-			// Drain dirty map on the next loop iteration.
-		case <-c.stop:
-			return
-		}
-	}
-}
-
-func (c *Catalog) runQueuedReconcile(target DirectoryTarget) {
-	key := queuePathKey(target.Path)
-	for {
-		if c.testReconcileStartHook != nil {
-			c.testReconcileStartHook(target)
-		}
-		ctx, cancel := context.WithTimeout(c.workerCtx, 2*time.Minute)
-		_ = c.reconcileDirectory(ctx, target, target.mutationSeq)
-		cancel()
-
-		c.reconcileDirtyMu.Lock()
-		followUp, dirty := c.reconcileDirty[key]
-		if dirty {
-			delete(c.reconcileDirty, key)
-			c.reconcileDirtyMu.Unlock()
-			target = followUp
-			continue
-		}
-		// Keep queued/running ownership through the complete scan. Holding the
-		// dirty mutex closes the check/delete race with markReconcileDirty.
-		c.reconcileQueued.Delete(key)
-		c.reconcileDirtyMu.Unlock()
-		return
-	}
 }
 
 // IndexSessionPath indexes one session without walking its directory.
@@ -343,8 +248,6 @@ func recordFromOrder(target DirectoryTarget, info agent.SessionOrderInfo) Sessio
 			lastActivityAt = fileMS
 		}
 	}
-	// Real content only; failure/missing parent leaves RecoveryCopy false.
-	recoveryCopy := info.Recovered && agent.RecoveryBranchCoveredByParent(info.Path, target.Path)
 	return normalizeSessionRecord(SessionRecord{
 		Path:               info.Path,
 		Directory:          target.Path,
@@ -363,7 +266,7 @@ func recordFromOrder(target DirectoryTarget, info agent.SessionOrderInfo) Sessio
 		RecoveryDigest:     info.RecoveryDigest,
 		ParentID:           info.ParentID,
 		RecoveryPreferred:  info.RecoveryPreferred,
-		RecoveryCopy:       recoveryCopy,
+		RecoveryCopy:       false,
 		ContentFingerprint: contentFingerprint,
 		MetaFingerprint:    metaFingerprint,
 		Health:             HealthOK,

@@ -42,6 +42,8 @@ type Catalog struct {
 	reconcileQueued  sync.Map
 	reconcileDirtyMu sync.Mutex
 	reconcileDirty   map[string]DirectoryTarget
+	verifiedDirsMu   sync.RWMutex
+	verifiedDirs     map[string]string
 	pathCh           chan sessionPathRequest
 	pathQueueMu      sync.Mutex
 	pathQueued       sync.Map
@@ -62,6 +64,10 @@ type Catalog struct {
 	testReconcileStartHook func(DirectoryTarget)
 	// testRepairSessionHook replaces the filesystem repair in scheduler tests.
 	testRepairSessionHook func(context.Context, string) (agent.SessionListingRepairResult, error)
+	// testRepairBatchError injects publication failures by transaction stage.
+	testRepairBatchError func(string) error
+	// testSessionContentLoadHook counts strict lineage snapshot loads.
+	testSessionContentLoadHook func(string)
 	// testPathMutationLoadedHook pauses after reading a removal generation.
 	// Production catalogs leave it nil.
 	testPathMutationLoadedHook func(string)
@@ -115,6 +121,7 @@ func Open(ctx context.Context, opts Options) (*Catalog, error) {
 		repairCh:       make(chan string, opts.QueueCapacity),
 		reconcileCh:    make(chan DirectoryTarget, 64),
 		reconcileDirty: map[string]DirectoryTarget{},
+		verifiedDirs:   map[string]string{},
 		pathCh:         make(chan sessionPathRequest, opts.QueueCapacity),
 		directoryLocks: map[string]*sync.Mutex{},
 		stop:           make(chan struct{}),
