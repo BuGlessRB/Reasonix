@@ -39,7 +39,7 @@ func (*sessionReadStrategyReceiptTool) Schema() json.RawMessage {
 	}`)
 }
 
-func (t *sessionReadStrategyReceiptTool) Execute(_ context.Context, raw json.RawMessage) (string, error) {
+func (t *sessionReadStrategyReceiptTool) Execute(ctx context.Context, raw json.RawMessage) (string, error) {
 	args, ok := parseReadStrategyReceiptArgs(raw)
 	if !ok {
 		return "", fmt.Errorf("read strategy receipt: invalid arguments")
@@ -47,7 +47,7 @@ func (t *sessionReadStrategyReceiptTool) Execute(_ context.Context, raw json.Raw
 	if t == nil || t.state == nil || t.state() == nil {
 		return "", fmt.Errorf("read strategy receipt: current agent state is unavailable")
 	}
-	return t.state().submitStrategyReceipt(args)
+	return t.state().submitStrategyReceipt(ctx, args)
 }
 
 func (a *Agent) bindReadStrategyCapability() {

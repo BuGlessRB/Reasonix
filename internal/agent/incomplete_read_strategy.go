@@ -1,10 +1,14 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
+
+	"reasonix/internal/tool"
 )
 
 type incompleteReadGrepArgs struct {
@@ -75,6 +79,7 @@ func (s *incompleteReadState) resetStrategyEvidenceForVersionLocked(entry *incom
 	entry.targetEnd = 0
 	entry.pendingReceipt = nil
 	entry.strategyVersion = current
+	entry.strategyRevision++
 }
 
 func (s *incompleteReadState) observeStrategySearch(plan *toolCallPlan, output string, visibleFull bool) incompleteReadTransition {
@@ -102,6 +107,7 @@ func (s *incompleteReadState) observeStrategySearch(plan *toolCallPlan, output s
 	entry.searches[plan.call.ID] = incompleteReadSearch{
 		callID: plan.call.ID, pattern: args.Pattern, matchLines: grepMatchLines(output),
 	}
+	entry.strategyRevision++
 	s.roundProgress = true
 	transition.strategyProgress = true
 	return transition
@@ -127,7 +133,84 @@ func uniqueNonEmptyIDs(ids []string) ([]string, error) {
 	return out, nil
 }
 
-func (s *incompleteReadState) submitStrategyReceipt(args readStrategyReceiptArgs) (string, error) {
+type readStrategyReceiptValidation struct {
+	entry       *incompleteRead
+	readID      string
+	path        string
+	requestPath string
+	version     incompleteReadFileVersion
+	revision    uint64
+	readTool    tool.Tool
+	searchIDs   []string
+	readIDs     []string
+	patterns    []string
+	ranges      []string
+	windows     []incompleteReadWindow
+	conclusion  string
+}
+
+func cloneIncompleteReadWindow(window incompleteReadWindow) incompleteReadWindow {
+	copyWindow := window
+	copyWindow.observed = make([]tool.ModelTextObservation, len(window.observed))
+	for i, observed := range window.observed {
+		copyWindow.observed[i] = observed
+		copyWindow.observed[i].LineHashes = append([]string(nil), observed.LineHashes...)
+	}
+	return copyWindow
+}
+
+func sameModelTextObservation(a, b tool.ModelTextObservation) bool {
+	if filepath.Clean(a.Path) != filepath.Clean(b.Path) || a.StartLine != b.StartLine || len(a.LineHashes) != len(b.LineHashes) {
+		return false
+	}
+	for i := range a.LineHashes {
+		if a.LineHashes[i] != b.LineHashes[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func validateReadStrategyWindows(ctx context.Context, check readStrategyReceiptValidation) error {
+	observer, ok := check.readTool.(tool.ModelTextObserver)
+	if check.readTool == nil || !ok {
+		return fmt.Errorf("read strategy receipt: read_file cannot revalidate the selected windows")
+	}
+	for _, window := range check.windows {
+		for _, expected := range window.observed {
+			if expected.StartLine < 1 || len(expected.LineHashes) == 0 {
+				return fmt.Errorf("read strategy receipt: selected read_file window has invalid host evidence")
+			}
+			args, _ := json.Marshal(map[string]any{
+				"path": check.requestPath, "offset": expected.StartLine - 1, "limit": len(expected.LineHashes),
+			})
+			output, err := check.readTool.Execute(ctx, args)
+			if err != nil {
+				return fmt.Errorf("read strategy receipt: re-read window %d-%d: %w", expected.StartLine, expected.StartLine+len(expected.LineHashes)-1, err)
+			}
+			actual, ok := observer.ObserveModelText(args, output)
+			if !ok || !sameModelTextObservation(actual, expected) {
+				return fmt.Errorf("read strategy receipt: selected read_file window changed; repeat grep and explicit read_file windows")
+			}
+		}
+	}
+	return nil
+}
+
+func (s *incompleteReadState) rejectStrategyReceiptValidation(check readStrategyReceiptValidation, current incompleteReadFileVersion) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry := s.entries[check.readID]
+	if entry != check.entry {
+		return
+	}
+	s.roundViolation = true
+	if entry.strategyRevision == check.revision {
+		s.resetStrategyEvidenceForVersionLocked(entry, current)
+	}
+}
+
+func (s *incompleteReadState) submitStrategyReceipt(ctx context.Context, args readStrategyReceiptArgs) (string, error) {
 	searchIDs, err := uniqueNonEmptyIDs(args.SearchToolCallIDs)
 	if err != nil {
 		return "", fmt.Errorf("read strategy receipt: search_tool_call_ids: %w", err)
@@ -142,17 +225,11 @@ func (s *incompleteReadState) submitStrategyReceipt(args readStrategyReceiptArgs
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	entry := s.entries[strings.TrimSpace(args.ReadID)]
 	if entry == nil || entry.phase != incompleteReadStrategy {
 		s.roundViolation = true
+		s.mu.Unlock()
 		return "", fmt.Errorf("read strategy receipt: active read_id %q was not found or still has an unfinished page", args.ReadID)
-	}
-	current := snapshotIncompleteReadFile(entry.path)
-	if !sameIncompleteReadFileVersion(entry.strategyVersion, current) {
-		s.resetStrategyEvidenceForVersionLocked(entry, current)
-		s.roundViolation = true
-		return "", fmt.Errorf("read strategy receipt: the target file changed; repeat grep and explicit read_file windows")
 	}
 
 	patterns := make([]string, 0, len(searchIDs))
@@ -161,6 +238,7 @@ func (s *incompleteReadState) submitStrategyReceipt(args readStrategyReceiptArgs
 		search, ok := entry.searches[id]
 		if !ok {
 			s.roundViolation = true
+			s.mu.Unlock()
 			return "", fmt.Errorf("read strategy receipt: grep tool call %q is not complete evidence for read_id %q", id, entry.readID)
 		}
 		patterns = append(patterns, search.pattern)
@@ -168,14 +246,17 @@ func (s *incompleteReadState) submitStrategyReceipt(args readStrategyReceiptArgs
 	}
 
 	ranges := make([]string, 0, len(readIDs))
+	windows := make([]incompleteReadWindow, 0, len(readIDs))
 	overlaps := len(matchedLines) == 0
 	for _, id := range readIDs {
 		window, ok := entry.reads[id]
-		if !ok {
+		if !ok || len(window.observed) == 0 {
 			s.roundViolation = true
+			s.mu.Unlock()
 			return "", fmt.Errorf("read strategy receipt: read_file tool call %q is not a fully consumed explicit window for read_id %q", id, entry.readID)
 		}
 		ranges = append(ranges, fmt.Sprintf("%d-%d", window.startLine, window.endLine))
+		windows = append(windows, cloneIncompleteReadWindow(window))
 		for _, line := range matchedLines {
 			if line >= window.startLine && line <= window.endLine {
 				overlaps = true
@@ -185,19 +266,51 @@ func (s *incompleteReadState) submitStrategyReceipt(args readStrategyReceiptArgs
 	}
 	if !overlaps {
 		s.roundViolation = true
+		s.mu.Unlock()
 		return "", fmt.Errorf("read strategy receipt: no selected read_file window overlaps a cited grep match line")
+	}
+	check := readStrategyReceiptValidation{
+		entry: entry, readID: entry.readID, path: entry.path, requestPath: entry.requestPath,
+		version: entry.strategyVersion, revision: entry.strategyRevision, readTool: entry.readTool,
+		searchIDs: searchIDs, readIDs: readIDs, patterns: patterns, ranges: ranges,
+		windows: windows, conclusion: conclusion,
+	}
+	s.mu.Unlock()
+
+	current := snapshotIncompleteReadFile(check.path)
+	if !sameIncompleteReadFileVersion(check.version, current) {
+		s.rejectStrategyReceiptValidation(check, current)
+		return "", fmt.Errorf("read strategy receipt: the target file changed; repeat grep and explicit read_file windows")
+	}
+	if err := validateReadStrategyWindows(ctx, check); err != nil {
+		s.rejectStrategyReceiptValidation(check, snapshotIncompleteReadFile(check.path))
+		return "", err
+	}
+	current = snapshotIncompleteReadFile(check.path)
+	if !sameIncompleteReadFileVersion(check.version, current) {
+		s.rejectStrategyReceiptValidation(check, current)
+		return "", fmt.Errorf("read strategy receipt: the target file changed during validation; repeat grep and explicit read_file windows")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry = s.entries[check.readID]
+	if entry != check.entry || entry.phase != incompleteReadStrategy || entry.strategyRevision != check.revision || entry.pendingReceipt != nil {
+		s.roundViolation = true
+		return "", fmt.Errorf("read strategy receipt: strategy evidence changed during validation; submit a new receipt")
 	}
 
 	entry.pendingReceipt = &incompleteReadReceipt{
-		searchIDs: searchIDs, readIDs: readIDs, conclusion: conclusion,
+		searchIDs: check.searchIDs, readIDs: check.readIDs, conclusion: check.conclusion,
 	}
+	entry.strategyRevision++
 	s.roundProgress = true
 	payload, _ := json.Marshal(map[string]any{
 		"read_id":         entry.readID,
 		"path":            entry.path,
-		"search_patterns": patterns,
-		"read_ranges":     ranges,
-		"conclusion":      conclusion,
+		"search_patterns": check.patterns,
+		"read_ranges":     check.ranges,
+		"conclusion":      check.conclusion,
 		"status":          "validated_pending_round_boundary",
 		"whole_file_read": false,
 	})

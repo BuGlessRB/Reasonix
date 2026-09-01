@@ -89,6 +89,8 @@ type incompleteRead struct {
 	targetObserved    []tool.ModelTextObservation
 	targetEnd         int
 	pendingReceipt    *incompleteReadReceipt
+	readTool          tool.Tool
+	strategyRevision  uint64
 }
 
 // incompleteReadState is shared by all calls in one Agent.Run. Parallel calls
@@ -453,6 +455,12 @@ func (s *incompleteReadState) observeReadFile(
 		entry.readID = incompleteReadID(plan.call.ID, resultRef, entry.path)
 		entry.key = entry.readID
 	}
+	if entry.readTool == nil {
+		entry.readTool = plan.runTool
+		if entry.readTool == nil {
+			entry.readTool = plan.execTool
+		}
+	}
 
 	needsContinuation := truncated || trailer.localSafety || (implicitWholeFile && trailer.hasMore)
 	if needsContinuation && !s.reserveAutomaticLocked(resultTokens, budget) {
@@ -604,6 +612,7 @@ func (s *incompleteReadState) finishStrategyWindowLocked(entry *incompleteRead) 
 	last := window.observed[len(window.observed)-1]
 	window.endLine = last.StartLine + len(last.LineHashes) - 1
 	entry.reads[window.callID] = window
+	entry.strategyRevision++
 	entry.targetReadID = ""
 	entry.targetObserved = nil
 	entry.targetEnd = 0

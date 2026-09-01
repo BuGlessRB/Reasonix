@@ -77,6 +77,10 @@ type grepTool struct {
 	forbidRoots []string
 	sb          sandbox.Spec
 	sessionTemp *sessiontemp.Manager
+	// overlay serves exact-file searches from the same unsaved editor buffer as
+	// read_file. Directory searches still use disk/ripgrep because FileOverlay
+	// intentionally has no directory-enumeration contract.
+	overlay FileOverlay
 }
 
 func (grepTool) Name() string { return "grep" }
@@ -122,22 +126,29 @@ func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	ctx, cancel := context.WithTimeout(ctx, to)
 	defer cancel()
 
+	if confineRead(g.forbidRoots, p.Path) {
+		info, err := os.Stat(p.Path)
+		if err == nil && info.IsDir() {
+			return formatGrep(ctx, nil, false, to), nil
+		}
+		pathErr := &os.PathError{Op: "stat", Path: p.Path, Err: os.ErrNotExist}
+		if rp.External {
+			return "", fmt.Errorf("grep %s: %s", rp.DisplayPath, rp.ErrorText(pathErr))
+		}
+		return "", pathErr
+	}
+	if g.overlay != nil && !rp.External && filepath.IsAbs(p.Path) {
+		if content, ok := g.overlay.ReadTextFile(ctx, p.Path); ok {
+			return g.runOverlay(ctx, p.Pattern, p.Path, content, to, rp)
+		}
+	}
+
 	info, err := os.Stat(p.Path)
 	if err != nil {
 		if rp.External {
 			return "", fmt.Errorf("grep %s: %s", rp.DisplayPath, rp.ErrorText(err))
 		}
 		return "", fmt.Errorf("grep %s: %w", rp.DisplayPath, err)
-	}
-	if confineRead(g.forbidRoots, p.Path) {
-		if info.IsDir() {
-			return formatGrep(ctx, nil, false, to), nil
-		}
-		err := &os.PathError{Op: "stat", Path: p.Path, Err: os.ErrNotExist}
-		if rp.External {
-			return "", fmt.Errorf("grep %s: %s", rp.DisplayPath, rp.ErrorText(err))
-		}
-		return "", err
 	}
 
 	if g.rg != "" {
@@ -150,6 +161,37 @@ func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	}
 
 	return g.runNative(ctx, p.Pattern, p.Path, info, to, rp)
+}
+
+func (g grepTool) runOverlay(ctx context.Context, pattern, path, content string, to time.Duration, rp ResolvedPath) (string, error) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return "", fmt.Errorf("invalid pattern: %w", err)
+	}
+	var out []string
+	sc := bufio.NewScanner(strings.NewReader(content))
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	line := 0
+	for sc.Scan() {
+		if ctx.Err() != nil {
+			break
+		}
+		line++
+		text := sc.Text()
+		if strings.IndexByte(text, 0) >= 0 {
+			return formatGrep(ctx, nil, false, to), nil
+		}
+		if re.MatchString(text) {
+			out = append(out, fmt.Sprintf("%s:%d:%s", rp.DisplayFor(path), line, text))
+			if len(out) >= grepMaxMatches {
+				return formatGrep(ctx, out, true, to), nil
+			}
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return "", fmt.Errorf("grep overlay: %w", err)
+	}
+	return formatGrep(ctx, out, false, to), nil
 }
 
 func (g grepTool) runNative(ctx context.Context, pattern, path string, info os.FileInfo, to time.Duration, rp ResolvedPath) (string, error) {

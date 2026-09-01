@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"reasonix/internal/event"
@@ -621,16 +622,22 @@ func TestReadStrategyReceiptRejectsChangedFileAndClearsEvidence(t *testing.T) {
 		reads:           map[string]incompleteReadWindow{"read": {callID: "read", startLine: 350, endLine: 380}},
 	}
 	state.addEntryLocked(entry)
-	entry.reads["read"] = incompleteReadWindow{callID: "read", startLine: 1, endLine: 20}
-	_, err := state.submitStrategyReceipt(readStrategyReceiptArgs{ReadID: "ir-change", SearchToolCallIDs: []string{"grep"}, ReadToolCallIDs: []string{"read"}, Conclusion: "wrong range"})
+	entry.reads["read"] = incompleteReadWindow{
+		callID: "read", startLine: 1, endLine: 20,
+		observed: []tool.ModelTextObservation{{Path: path, StartLine: 1, LineHashes: []string{"synthetic"}}},
+	}
+	_, err := state.submitStrategyReceipt(context.Background(), readStrategyReceiptArgs{ReadID: "ir-change", SearchToolCallIDs: []string{"grep"}, ReadToolCallIDs: []string{"read"}, Conclusion: "wrong range"})
 	if err == nil || !strings.Contains(err.Error(), "overlaps") || entry.pendingReceipt != nil {
 		t.Fatalf("non-overlap receipt error=%v receipt=%v", err, entry.pendingReceipt)
 	}
-	entry.reads["read"] = incompleteReadWindow{callID: "read", startLine: 350, endLine: 380}
+	entry.reads["read"] = incompleteReadWindow{
+		callID: "read", startLine: 350, endLine: 380,
+		observed: []tool.ModelTextObservation{{Path: path, StartLine: 350, LineHashes: []string{"synthetic"}}},
+	}
 	if err := os.WriteFile(path, []byte("changed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err = state.submitStrategyReceipt(readStrategyReceiptArgs{
+	_, err = state.submitStrategyReceipt(context.Background(), readStrategyReceiptArgs{
 		ReadID: "ir-change", SearchToolCallIDs: []string{"grep"}, ReadToolCallIDs: []string{"read"}, Conclusion: "stale evidence",
 	})
 	if err == nil || !strings.Contains(err.Error(), "changed") {
@@ -638,6 +645,66 @@ func TestReadStrategyReceiptRejectsChangedFileAndClearsEvidence(t *testing.T) {
 	}
 	if len(entry.searches) != 0 || len(entry.reads) != 0 || entry.pendingReceipt != nil {
 		t.Fatalf("stale evidence was retained: searches=%v reads=%v receipt=%v", entry.searches, entry.reads, entry.pendingReceipt)
+	}
+}
+
+func TestReadStrategyReceiptRevalidatesWindowHashesWhenStatIsUnchanged(t *testing.T) {
+	path := makeIncompleteReadFixture(t, "receipt-same-stat-change.txt", 430, 96, 362, incompleteReadKeyRule)
+	stableTime := time.Unix(1_700_000_000, 0)
+	if err := os.Chtimes(path, stableTime, stableTime); err != nil {
+		t.Fatal(err)
+	}
+	read := incompleteReadBuiltin(t)
+	args := fmt.Sprintf(`{"path":%q,"offset":349,"limit":31}`, path)
+	output := expectedReadOutput(t, read, args)
+	observer, ok := read.(tool.ModelTextObserver)
+	if !ok {
+		t.Fatal("read_file does not expose model-text observations")
+	}
+	observed, ok := observer.ObserveModelText(json.RawMessage(args), output)
+	if !ok {
+		t.Fatal("read_file window did not produce an observation")
+	}
+
+	state := incompleteReadState{}
+	entry := &incompleteRead{
+		key: "ir-same-stat", readID: "ir-same-stat", path: path, requestPath: path,
+		phase: incompleteReadStrategy, strategyVersion: snapshotIncompleteReadFile(path), readTool: read,
+		searches: map[string]incompleteReadSearch{"grep": {callID: "grep", pattern: incompleteReadKeyRule, matchLines: []int{362}}},
+		reads: map[string]incompleteReadWindow{"read": {
+			callID: "read", startLine: 350, endLine: 380,
+			observed: []tool.ModelTextObservation{observed},
+		}},
+	}
+	state.addEntryLocked(entry)
+
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement := strings.Repeat("X", len(incompleteReadKeyRule))
+	after := strings.Replace(string(before), incompleteReadKeyRule, replacement, 1)
+	if len(after) != len(before) || after == string(before) {
+		t.Fatal("fixture mutation did not preserve byte size")
+	}
+	if err := os.WriteFile(path, []byte(after), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, stableTime, stableTime); err != nil {
+		t.Fatal(err)
+	}
+	if current := snapshotIncompleteReadFile(path); !sameIncompleteReadFileVersion(entry.strategyVersion, current) {
+		t.Fatalf("fixture stat changed: before=%+v after=%+v", entry.strategyVersion, current)
+	}
+
+	_, err = state.submitStrategyReceipt(context.Background(), readStrategyReceiptArgs{
+		ReadID: "ir-same-stat", SearchToolCallIDs: []string{"grep"}, ReadToolCallIDs: []string{"read"}, Conclusion: "stale same-stat evidence",
+	})
+	if err == nil || !strings.Contains(err.Error(), "window changed") {
+		t.Fatalf("receipt error=%v, want line-hash revalidation failure", err)
+	}
+	if len(entry.searches) != 0 || len(entry.reads) != 0 || entry.pendingReceipt != nil {
+		t.Fatalf("same-stat stale evidence was retained: searches=%v reads=%v receipt=%v", entry.searches, entry.reads, entry.pendingReceipt)
 	}
 }
 
