@@ -14,6 +14,17 @@ type VersionedInstaller struct {
 	Staging string // update cache dir; the Windows helper copy is placed here
 	Current string // running version, recorded in the macOS handoff transaction
 	Line    Line   // which product line's members this archive carries
+	App     Application
+}
+
+// Application is what an update replaces where the unit is a bundle rather than
+// a set of files. Both halves are stated because neither is this process's to
+// answer when the shell is not the application: the Go binary can be a resource
+// inside the bundle being swapped, and what holds that bundle open is the
+// framework that spawned it. LocalApplication is the case where it is.
+type Application struct {
+	Bundle string // the macOS .app to swap
+	PID    int    // the process that must exit before it can be
 }
 
 // Install applies a verified artifact. It returns only if the handover failed:

@@ -64,14 +64,14 @@ var (
 // the bundle is the unit — so the equivalent of a pointer swap is a detached
 // child that holds the repair lock across the rename while this process exits.
 func (v VersionedInstaller) apply(_ context.Context, c Cached) error {
-	return applyMac(c.Path, c.Version, v.Current, v.Line.Mac)
+	return applyMac(c.Path, c.Version, v.Current, v.Line.Mac, v.App)
 }
 
-func applyMac(zipPath, targetVersion, current string, mac MacLine) error {
+func applyMac(zipPath, targetVersion, current string, mac MacLine, app Application) error {
 	if !mac.SelfUpdate {
 		return fmt.Errorf("macOS automatic update is not enabled for this build")
 	}
-	currentApp, err := CurrentMacAppBundle()
+	currentApp, err := app.resolve()
 	if err != nil {
 		return err
 	}
@@ -100,6 +100,8 @@ func applyMac(zipPath, targetVersion, current string, mac MacLine) error {
 		return err
 	}
 	backupApp := currentApp + ".reasonix-update-backup"
+	// This binary re-executed: the swap needs something that can take
+	// LockRepairMutations, which is a Go process, not the application.
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -111,7 +113,7 @@ func applyMac(zipPath, targetVersion, current string, mac MacLine) error {
 		backupApp,
 		nextApp,
 		staging,
-		os.Getpid(),
+		app.PID,
 	)
 	if err != nil {
 		return err
@@ -720,70 +722,4 @@ func macProcessAlive(pid int) bool {
 	// Signal 0 probes existence without delivering a real signal.
 	err = proc.Signal(syscall.Signal(0))
 	return err == nil
-}
-
-// CurrentMacAppBundle resolves the .app this executable runs from. It is
-// exported because icon repair needs the same answer, and two ways of finding
-// the bundle is two ways of being wrong about which one is being replaced.
-func CurrentMacAppBundle() (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	exe, _ = filepath.EvalSymlinks(exe)
-	const marker = ".app/Contents/MacOS/"
-	idx := strings.Index(exe, marker)
-	if idx < 0 {
-		return "", fmt.Errorf("update: current executable is not inside a macOS .app bundle")
-	}
-	app := exe[:idx+len(".app")]
-	if _, err := os.Stat(filepath.Join(app, "Contents", "Info.plist")); err != nil {
-		return "", fmt.Errorf("update: current app bundle is invalid: %w", err)
-	}
-	return app, nil
-}
-
-func findMacApp(root string) (string, error) {
-	direct := filepath.Join(root, "Reasonix.app")
-	if _, err := os.Stat(filepath.Join(direct, "Contents", "Info.plist")); err == nil {
-		return direct, nil
-	}
-	var found string
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || found != "" {
-			return err
-		}
-		if d.IsDir() && strings.HasSuffix(path, ".app") {
-			if _, statErr := os.Stat(filepath.Join(path, "Contents", "Info.plist")); statErr == nil {
-				found = path
-				return filepath.SkipDir
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	if found == "" {
-		return "", fmt.Errorf("update: no .app bundle found in macOS update archive")
-	}
-	return found, nil
-}
-
-func verifyMacApp(appPath, bundleID string) error {
-	info := filepath.Join(appPath, "Contents", "Info.plist")
-	out, err := exec.Command("/usr/libexec/PlistBuddy", "-c", "Print :CFBundleIdentifier", info).Output()
-	if err != nil {
-		return fmt.Errorf("read macOS bundle identifier: %w", err)
-	}
-	if got := strings.TrimSpace(string(out)); got != bundleID {
-		return fmt.Errorf("update: bundle identifier %q does not match %q", got, bundleID)
-	}
-	if err := exec.Command("/usr/bin/codesign", "--verify", "--deep", "--strict", appPath).Run(); err != nil {
-		return fmt.Errorf("verify macOS code signature: %w", err)
-	}
-	if err := exec.Command("/usr/sbin/spctl", "--assess", "--type", "execute", appPath).Run(); err != nil {
-		return fmt.Errorf("assess macOS notarization: %w", err)
-	}
-	return nil
 }

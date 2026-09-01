@@ -3,6 +3,7 @@
 package update
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -1352,5 +1353,85 @@ func TestMacUpdateHandoffSerializesWithConcurrentRollback(t *testing.T) {
 	second := <-order
 	if first != "a" || second != "b" {
 		t.Fatalf("lock order = %s then %s, want a then b", first, second)
+	}
+}
+
+// The application is stated, not inferred. Under a shell whose process is a
+// framework beside the bundle, os.Executable() names a resource inside the very
+// bundle being replaced -- so an unstated application has to refuse rather than
+// fall back to this process, which would swap whatever directory this binary
+// happens to sit in while every later check still passed.
+func TestApplyMacRefusesAnApplicationNobodyStated(t *testing.T) {
+	line := MacLine{SelfUpdate: true, BundleID: "io.reasonix.studio"}
+	for _, tc := range []struct {
+		name string
+		app  Application
+	}{
+		{"nothing stated", Application{}},
+		{"bundle without a process", Application{Bundle: "/Applications/Reasonix Studio.app"}},
+		{"process without a bundle", Application{PID: os.Getpid()}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := applyMac("archive.zip", "v2.0.0", "v1.0.0", line, tc.app)
+			if !errors.Is(err, ErrApplicationNotStated) {
+				t.Fatalf("applyMac refused for the wrong reason: %v", err)
+			}
+		})
+	}
+}
+
+// A stated bundle is still checked before anything is staged: a shell may state
+// a path, and only the disk can say whether it is an app.
+func TestApplyMacRefusesAStatedBundleThatIsNotOne(t *testing.T) {
+	line := MacLine{SelfUpdate: true, BundleID: "io.reasonix.studio"}
+	app := Application{Bundle: filepath.Join(tempdir.New(t), "Nothing.app"), PID: os.Getpid()}
+	if err := applyMac("archive.zip", "v2.0.0", "v1.0.0", line, app); !errors.Is(err, ErrApplicationInvalid) {
+		t.Fatalf("applyMac refused for the wrong reason: %v", err)
+	}
+}
+
+// MacAppBundle answers for the executable it is given rather than for this
+// process. The Electron layout is the case that matters: the Go binary lives
+// under Contents/Resources/bin, which is inside the bundle but is not its entry
+// point, and resolving from it must not silently produce a different answer
+// than resolving from the application's own executable.
+func TestMacAppBundleFollowsTheExecutableItIsGiven(t *testing.T) {
+	// Resolved up front: a macOS temp directory lives under /var, which is a
+	// symlink, and MacAppBundle resolves what it is given. Comparing an
+	// unresolved expectation would pass only while the files do not exist.
+	root, err := filepath.EvalSymlinks(tempdir.New(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := filepath.Join(root, "Reasonix Studio.app")
+	entry := filepath.Join(bundle, "Contents", "MacOS", "Reasonix Studio")
+	host := filepath.Join(bundle, "Contents", "Resources", "bin", "reasonix-studio-host")
+	for _, dir := range []string{filepath.Dir(entry), filepath.Dir(host)} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, file := range []string{entry, host, filepath.Join(bundle, "Contents", "Info.plist")} {
+		if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := MacAppBundle(entry)
+	if err != nil {
+		t.Fatalf("MacAppBundle: %v", err)
+	}
+	if got != bundle {
+		t.Fatalf("MacAppBundle = %q, want %q", got, bundle)
+	}
+
+	// The host binary Electron spawns. It is inside the bundle and is not its
+	// entry point, so there is no bundle to resolve from it -- which is the
+	// refusal that sends that shell to stating the application instead.
+	if _, err := MacAppBundle(host); err == nil {
+		t.Fatal("MacAppBundle resolved a bundle from a resource inside one")
+	}
+
+	if _, err := MacAppBundle(""); err == nil {
+		t.Fatal("MacAppBundle resolved a bundle from no executable at all")
 	}
 }

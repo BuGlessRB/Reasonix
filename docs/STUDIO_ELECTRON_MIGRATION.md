@@ -146,11 +146,27 @@ when something resembling it exists.
   three different processes.
 
 - **The install path.** `GoToVersion` is the last of the three still bound to
-  Wails. It cannot move as it stands: `apply_darwin.go` recognizes a bundle by
-  `.app/Contents/MacOS/` and `Layout` is built from the running executable, both
-  of which hold under a single binary that *is* the application and neither of
-  which holds under Electron, where the process is the framework and what needs
-  replacing is the bundle around it. Its shape follows the release line.
+  Wails.
+
+  Half of why it could not move is gone. The macOS swap no longer asks
+  `os.Executable()` what it is replacing: `update.Application` carries the
+  bundle and the process that must exit before it can be swapped, and both are
+  stated. A shell that is its own executable says so through `LocalApplication`,
+  which is the Wails shell and where that assumption now lives written down;
+  under Electron neither answer is this process's, because the Go binary sits at
+  `Contents/Resources/bin` inside the very bundle it would be swapping and what
+  holds that bundle open is the framework that spawned it. An unstated
+  application is refused by sentinel rather than filled in from this process —
+  the failure that would otherwise swap whatever directory the binary sits in
+  with every later check still passing. The binary re-executed to hold the
+  repair lock stays `os.Executable()`, which is right under either shell: that
+  half has to be a Go process, and is not the application.
+
+  What is left is the verb itself. `GoToVersion` still orchestrates in the Wails
+  shell — channel choice, pin, download, apply, handover — and reports progress
+  over a Wails event. Moving it means the orchestration in the kernel, a route
+  both shells speak, progress on a transport both have, and an Electron
+  `ApplicationOwner`, which `internal/appupdate` already has the seam for.
 
 - **The release line.** `release-studio.yml` now builds the Electron bundle on
   all three platforms and `scripts/studio-build.sh` is off the release path,
