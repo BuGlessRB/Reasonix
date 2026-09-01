@@ -51,7 +51,9 @@ nsis:
   # The .blockmap beside the installer is electron-updater's differential
   # download index, and it is named ReasonixStudio-* like everything else: the
   # release counts artifacts by that prefix to refuse a partial publish, so one
-  # more file there hides a missing one.
+  # more file there hides a missing one. macOS has no equivalent option and its
+  # zip writes one regardless, which canonical-artifact-names.js deletes —
+  # refused at the source here, swept there.
   differentialPackage: false
   # studio-manifest reads the installer channel off this exact suffix.
   artifactName: ReasonixStudio-windows-${arch}-installer.${ext}

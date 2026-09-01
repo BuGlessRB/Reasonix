@@ -25,6 +25,13 @@ function plan(file, from, to, into) {
 // (x64), and the release vocabulary is GOARCH (amd64) because that is what the
 // updater asks runtime for. Translating here keeps every consumer downstream —
 // studio-manifest, sign, the updater — knowing only the canonical form.
+//
+// It is also where the blockmap goes. macOS writes one for every zip with no
+// option to turn it off — macPackager builds that target with update-info
+// writing hardcoded on — so where nsis takes differentialPackage: false, this
+// is the only place left to refuse it. Deleted rather than dropped from the
+// returned list: what this hook returns is only what to publish additionally,
+// and what the release counts is what is in the directory.
 module.exports = async function canonicalArtifactNames(buildResult) {
   const renames = new Map();
   for (const file of buildResult.artifactPaths) {
@@ -35,7 +42,15 @@ module.exports = async function canonicalArtifactNames(buildResult) {
   }
   for (const [from, to] of renames) fs.renameSync(from, to);
 
-  const out = buildResult.artifactPaths.map((file) => renames.get(path.resolve(file)) ?? file);
+  const renamed = buildResult.artifactPaths.map((file) => renames.get(path.resolve(file)) ?? file);
+  const out = [];
+  for (const file of renamed) {
+    if (file.endsWith(".blockmap")) {
+      fs.rmSync(file, { force: true });
+      continue;
+    }
+    out.push(file);
+  }
   for (const file of out) {
     const name = path.basename(file);
     const stray = foreign.find((a) => name.includes(`-${a}.`) || name.includes(`-${a}-`));
