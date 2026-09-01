@@ -28,7 +28,5 @@ func (s nestedSink) Emit(e event.Event) {
 			e.UsageSource = event.UsageSourceSubagent
 		}
 		s.parent.Emit(e)
-	case event.CompletionValidation:
-		s.parent.Emit(e)
 	}
 }

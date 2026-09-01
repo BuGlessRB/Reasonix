@@ -53,9 +53,14 @@ func validateCompletionValidationModes(configured string) error {
 	return nil
 }
 
-// renderCompletionValidation writes the full-config [agent] block lines for
-// the completion validator.
-func renderCompletionValidation(b *strings.Builder, c *Config) {
+// renderRecoveryAndCompletionValidation owns the adjacent evaluator settings
+// in the full [agent] render without growing the legacy monolithic renderer.
+func renderRecoveryAndCompletionValidation(b *strings.Builder, c *Config) {
+	if strings.TrimSpace(c.Agent.RecoveryModel) != "" {
+		fmt.Fprintf(b, "recovery_model = %q   # optional independent reviewer for low-risk automatic recovery\n", c.Agent.RecoveryModel)
+	} else {
+		b.WriteString("# recovery_model = \"deepseek-pro\"   # optional; falls back to guardian then main model\n")
+	}
 	if strings.TrimSpace(c.Agent.CompletionValidation) != "" {
 		fmt.Fprintf(b, "completion_validation = %q   # off | shadow | enforce (empty defaults to enforce)\n", c.Agent.CompletionValidation)
 	} else {
@@ -68,9 +73,13 @@ func renderCompletionValidation(b *strings.Builder, c *Config) {
 	}
 }
 
-// diffCompletionValidation appends the changed-field [agent] lines for the
-// completion validator and reports whether anything was written.
-func diffCompletionValidation(agentBuf *strings.Builder, c, d Config, anyAgent *bool) {
+// diffRecoveryAndCompletionValidation appends the changed evaluator settings
+// to a project-scoped [agent] delta.
+func diffRecoveryAndCompletionValidation(agentBuf *strings.Builder, c, d Config, anyAgent *bool) {
+	if c.Agent.RecoveryModel != "" && c.Agent.RecoveryModel != d.Agent.RecoveryModel {
+		fmt.Fprintf(agentBuf, "recovery_model = %q\n", c.Agent.RecoveryModel)
+		*anyAgent = true
+	}
 	if c.Agent.CompletionValidation != "" && c.Agent.CompletionValidation != d.Agent.CompletionValidation {
 		fmt.Fprintf(agentBuf, "completion_validation = %q\n", c.Agent.CompletionValidation)
 		*anyAgent = true

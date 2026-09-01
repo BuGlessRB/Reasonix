@@ -217,7 +217,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 		rawContent = a.turn.turnInput
 	}
 	a.sess.conversation.Add(provider.Message{
-		Role: provider.RoleUser, Content: input, RawContent: rawContent,
+		Role: provider.RoleUser, Origin: inputMessageOrigin(ctx), Content: input, RawContent: rawContent,
 		Images: userImages(ctx), VisionSummary: VisionSummaryFromContext(ctx), CreatedAt: userCreatedAt,
 	})
 
@@ -253,7 +253,10 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) (runErr err
 		// guidance (with a prefix), not a new task. One cache miss per
 		// steer is unavoidable — the model must see the new instruction.
 		if text, itemID, ok := a.consumeSteer(); ok {
-			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(midTurnSteerMessage(text))})
+			a.sess.conversation.Add(provider.Message{
+				Role: provider.RoleUser, Origin: provider.MessageOriginUser,
+				Content: a.withTurnPreferences(midTurnSteerMessage(text)), RawContent: text,
+			})
 			a.svc.sink.Emit(event.Event{Kind: event.Steer, Text: text, ItemID: itemID})
 		} else if itemID != "" {
 			// Loader failed after dequeue: durable entry stays for inspection
@@ -588,7 +591,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 				return false, fmt.Errorf("model finished without a visible final answer %d times", state.terminal.emptyFinalBlocks)
 			}
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeEmptyFinal, Text: emptyFinalNotice(), Detail: emptyFinalNoticeDetail(a.svc.prov.Name(), usage, len(reasoning))})
-			a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(emptyFinalRetryMessage())})
+			a.sess.conversation.Add(HostGeneratedUserMessage(a.withTurnPreferences(emptyFinalRetryMessage())))
 			a.contextManager().ObserveUsage(usage)
 			return true, nil
 		}
@@ -596,7 +599,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 	if state.executorHandoff && !state.usedAnyTool && state.terminal.handoffNudges < maxExecutorHandoffNudges && shouldNudgeExecutorHandoff(state.input, text) {
 		state.terminal.handoffNudges++
 		a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeExecutorHandoff, Text: executorHandoffNoticeText(), Detail: "executor answered without taking any action; nudging it to use its tools"})
-		a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(executorHandoffRetryMessage())})
+		a.sess.conversation.Add(HostGeneratedUserMessage(a.withTurnPreferences(executorHandoffRetryMessage())))
 		a.contextManager().ObserveUsage(usage)
 		return true, nil
 	}
@@ -707,7 +710,7 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 		// text cannot skip repair; only a later clean round may validate.
 		state.terminal.contextToolRepairs++
 		nudge := fmt.Sprintf("The following tools are unavailable in the current workflow phase: %s. Do not call them again. Respond to the user's request with visible answer text now; call a different tool only if it is still needed to complete the request.", strings.Join(unavailableContextTools, ", "))
-		a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(nudge)})
+		a.sess.conversation.Add(HostGeneratedUserMessage(a.withTurnPreferences(nudge)))
 	}
 	a.trackTodoProgress(ctx, state, receiptMark)
 
@@ -724,7 +727,7 @@ func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step in
 			ctrl.MarkFinalizationOffered(a.recovery.taskID)
 		}
 		nudge := "Auto recovery has reached its limit for this turn. Do not call any more tools. Summarize what was completed, what failed, and what the user should do next. The user can continue in the next message."
-		a.sess.conversation.Add(provider.Message{Role: provider.RoleUser, Content: a.withTurnPreferences(nudge)})
+		a.sess.conversation.Add(HostGeneratedUserMessage(a.withTurnPreferences(nudge)))
 		return true, nil
 	}
 

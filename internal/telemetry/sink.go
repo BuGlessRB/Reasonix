@@ -130,6 +130,11 @@ func (s *sink) RecordProtocolRecovery(a event.ProtocolRecoveryAudit) {
 	event.RecordProtocolRecovery(s.inner, a)
 }
 
+func (s *sink) RecordCompletionValidation(info event.CompletionValidationInfo) {
+	s.reporter.append(completionValidationCounters(info))
+	event.RecordCompletionValidation(s.inner, info)
+}
+
 func (s *sink) observe(e event.Event) {
 	switch e.Kind {
 	case event.TurnStarted:
@@ -157,8 +162,6 @@ func (s *sink) observe(e event.Event) {
 			add(s.counts, "finish_reason", finishReasonBucket(e.Usage.FinishReason), 1)
 			add(s.counts, "cache_hit", cacheBucket(e.Usage.CacheHitTokens, e.Usage.CacheMissTokens), 1)
 		}
-	case event.CompletionValidation:
-		s.reporter.append(completionValidationCounters(e.CompletionValidation))
 	case event.ToolResult:
 		if e.Tool.Err != "" {
 			add(s.counts, "tool_error", toolErrorBucket(e.Tool.Err), 1)
@@ -189,15 +192,12 @@ func (s *sink) observe(e event.Event) {
 	}
 }
 
-func completionValidationCounters(info *event.CompletionValidationInfo) map[string]int {
-	if info == nil {
-		return nil
-	}
+func completionValidationCounters(info event.CompletionValidationInfo) map[string]int {
 	counts := map[string]int{}
 	mode := enumBucket(info.Mode, "off", "shadow", "enforce")
 	outcome := enumBucket(info.Outcome, "complete", "continue", "needs_user", "blocked", "uncertain", "error")
 	add(counts, "completion_validation_outcome", mode+"_"+outcome, 1)
-	add(counts, "completion_validation_latency", latencyBucket(time.Duration(max(info.DurationMs, 0))*time.Millisecond), 1)
+	add(counts, "completion_validation_latency", completionValidationLatencyBucket(info.DurationMs), 1)
 	attempt := "first"
 	if info.Attempt > 1 {
 		attempt = "repair"
@@ -207,6 +207,23 @@ func completionValidationCounters(info *event.CompletionValidationInfo) map[stri
 		add(counts, "completion_validation_error", enumBucket(info.ErrorClass, "timeout", "invalid_output", "unavailable", "over_budget", "error"), 1)
 	}
 	return counts
+}
+
+// completionValidationLatencyBucket is intentionally identical to the
+// Desktop aggregator. The evaluator is bounded to 30 seconds, but clamping an
+// unexpected larger duration into the terminal bucket keeps the two clients'
+// aggregate contracts stable as well.
+func completionValidationLatencyBucket(ms int64) string {
+	switch {
+	case ms < 1_000:
+		return "lt_1s"
+	case ms < 5_000:
+		return "s_1_5"
+	case ms < 15_000:
+		return "s_5_15"
+	default:
+		return "s_15_60"
+	}
 }
 
 func countersFrom(in []Counter) map[string]int {

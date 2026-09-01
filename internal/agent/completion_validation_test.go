@@ -40,8 +40,15 @@ func (e *scriptedEvaluator) Evaluate(_ context.Context, evidence completioneval.
 }
 
 type recordingSink struct {
-	mu     sync.Mutex
-	events []event.Event
+	mu          sync.Mutex
+	events      []event.Event
+	validations []event.CompletionValidationInfo
+}
+
+func (s *recordingSink) RecordCompletionValidation(info event.CompletionValidationInfo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.validations = append(s.validations, info)
 }
 
 func (s *recordingSink) Emit(e event.Event) {
@@ -53,13 +60,7 @@ func (s *recordingSink) Emit(e event.Event) {
 func (s *recordingSink) completionValidations() []event.CompletionValidationInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var out []event.CompletionValidationInfo
-	for _, e := range s.events {
-		if e.Kind == event.CompletionValidation && e.CompletionValidation != nil {
-			out = append(out, *e.CompletionValidation)
-		}
-	}
-	return out
+	return append([]event.CompletionValidationInfo(nil), s.validations...)
 }
 
 func textTurn(text string) []provider.Chunk {
@@ -332,10 +333,12 @@ func TestRecentVisibleTurnsUseUserAuthoredText(t *testing.T) {
 	sess := NewSession("sys")
 	sess.Messages = append(sess.Messages,
 		provider.Message{Role: provider.RoleUser, Content: "<reasoning-language>English</reasoning-language>\nlegacy question"},
-		provider.Message{Role: provider.RoleUser, Content: "<response-language>English</response-language>\nhost wrapped", RawContent: "exact user text"},
+		provider.Message{Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: "<response-language>English</response-language>\nhost wrapped", RawContent: "exact user text"},
+		provider.Message{Role: provider.RoleUser, Origin: provider.MessageOriginHost, Content: "innocent-looking host text", RawContent: "must not leak"},
 		provider.Message{Role: provider.RoleUser, Content: completionContinueTailMessage()},
 		provider.Message{Role: provider.RoleUser, Content: midTurnSteerMessage(completionContinueTailMessage())},
-		provider.Message{Role: provider.RoleUser, Content: midTurnSteerMessage("use the smaller patch")},
+		provider.Message{Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: completionContinueTailMessage()},
+		provider.Message{Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: midTurnSteerMessage("use the smaller patch"), RawContent: "use the smaller patch"},
 		provider.Message{Role: provider.RoleAssistant, Content: "prior visible answer"},
 		provider.Message{Role: provider.RoleUser, Content: "local sentinel", LocalOnly: true},
 		provider.Message{Role: provider.RoleAssistant, Content: "candidate"},
@@ -343,8 +346,8 @@ func TestRecentVisibleTurnsUseUserAuthoredText(t *testing.T) {
 	a := New(nil, tool.NewRegistry(), sess, Options{}, event.Discard)
 	got := a.recentVisibleTurns()
 	want := []completioneval.ContextTurn{
-		{Role: "user", Content: "legacy question"},
 		{Role: "user", Content: "exact user text"},
+		{Role: "user", Content: completionContinueTailMessage()},
 		{Role: "user", Content: "use the smaller patch"},
 		{Role: "assistant", Content: "prior visible answer"},
 	}
@@ -353,7 +356,7 @@ func TestRecentVisibleTurnsUseUserAuthoredText(t *testing.T) {
 	}
 }
 
-func TestCompletionValidatorEventIsContentFree(t *testing.T) {
+func TestCompletionValidatorAuditIsContentFreeAndHostOnly(t *testing.T) {
 	sink := &recordingSink{}
 	eval := &scriptedEvaluator{verdicts: []completioneval.Verdict{
 		{Outcome: completioneval.OutcomeContinue, Reason: "secret reason text"},
@@ -382,8 +385,8 @@ func TestCompletionValidatorEventIsContentFree(t *testing.T) {
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
 	for _, e := range sink.events {
-		if e.Kind == event.CompletionValidation && (e.Text != "" || e.Reasoning != "") {
-			t.Fatalf("validation event carried content: %+v", e)
+		if strings.Contains(e.Text, "secret reason text") || strings.Contains(e.Reasoning, "secret reason text") {
+			t.Fatalf("validator reason leaked through public event: %+v", e)
 		}
 	}
 }
@@ -400,7 +403,7 @@ func TestSubagentOptionsCarryIndependentEvaluatorSession(t *testing.T) {
 		evaluatedSink = sink
 		return &scriptedEvaluator{}
 	}
-	tt := &TaskTool{completionEvaluatorFactory: factory, completionValidation: CompletionValidationEnforce}
+	tt := &TaskTool{completion: taskCompletionConfig{factory: factory, mode: CompletionValidationEnforce}}
 	opts := tt.subagentOptions(context.Background(), 0, nil, 0, 1, "", nil)
 	opts.ModelRef = "child/worker"
 	if opts.CompletionValidation != CompletionValidationEnforce {

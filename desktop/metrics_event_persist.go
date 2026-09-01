@@ -2,9 +2,10 @@ package main
 
 import "reasonix/internal/event"
 
-// persistMetricsEvent writes evaluator and validation counters immediately;
-// TurnDone also snapshots controller-owned recovery counters after display
-// persistence has acknowledged the final projection.
+// persistMetricsEvent writes evaluator counters immediately; TurnDone also
+// snapshots controller-owned recovery counters after display persistence has
+// acknowledged the final projection. Completion validation is host-only and
+// persists through tabEventSink.RecordCompletionValidation instead.
 func persistMetricsEvent(app *App, metrics *metricsAggregator, tabID string, e event.Event) {
 	if !metricsEventRequiresPersist(e) {
 		return

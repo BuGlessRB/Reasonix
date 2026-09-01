@@ -17,7 +17,6 @@ import (
 	"reasonix/internal/ablation"
 	"reasonix/internal/capability"
 	"reasonix/internal/checkpoint"
-	"reasonix/internal/completioneval"
 	"reasonix/internal/diff"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
@@ -1049,7 +1048,7 @@ type Options struct {
 	// It never enters provider-visible prompts or tool schemas.
 	LegacyAnchorSafetyGate bool
 
-	CompletionEvaluator        completioneval.Evaluator
+	CompletionEvaluator        CompletionEvaluator
 	CompletionEvaluatorFactory CompletionEvaluatorFactory
 	CompletionValidation       string
 }
@@ -1108,26 +1107,24 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 		svc: newAgentServices(prov, tools, sink, gate, planModeReadOnlyTrust,
 			sandboxEscapeApprover, configWriteApprover, hooks, opts),
 		agentConfig: agentConfig{
-			maxSteps:                   opts.MaxSteps,
-			maxStepsKey:                maxStepsKey,
-			reasoningByteLimit:         reasoningByteLimit,
-			maxOutputTokens:            opts.MaxOutputTokens,
-			temperature:                opts.Temperature,
-			usageSource:                usageSourceOrDefault(opts.UsageSource, event.UsageSourceExecutor),
-			modelRef:                   strings.TrimSpace(opts.ModelRef),
-			workspaceID:                strings.TrimSpace(opts.WorkspaceID),
-			classifierTaskText:         opts.ClassifierTaskText,
-			writeWorkspaceRoot:         strings.TrimSpace(opts.WriteWorkspaceRoot),
-			subagentDepth:              subagentDepth,
-			maxSubagentDepth:           maxSubagentDepth,
-			contextWindow:              opts.ContextWindow,
-			compactRatio:               opts.CompactRatio,
-			recentKeep:                 opts.RecentKeep,
-			archiveDir:                 opts.ArchiveDir,
-			legacyAnchorSafetyGate:     opts.LegacyAnchorSafetyGate,
-			completionEvaluator:        resolveCompletionEvaluator(opts, sink),
-			completionValidation:       normalizeCompletionValidation(opts.CompletionValidation),
-			completionEvaluatorFactory: opts.CompletionEvaluatorFactory,
+			maxSteps:               opts.MaxSteps,
+			maxStepsKey:            maxStepsKey,
+			reasoningByteLimit:     reasoningByteLimit,
+			maxOutputTokens:        opts.MaxOutputTokens,
+			temperature:            opts.Temperature,
+			usageSource:            usageSourceOrDefault(opts.UsageSource, event.UsageSourceExecutor),
+			modelRef:               strings.TrimSpace(opts.ModelRef),
+			workspaceID:            strings.TrimSpace(opts.WorkspaceID),
+			classifierTaskText:     opts.ClassifierTaskText,
+			writeWorkspaceRoot:     strings.TrimSpace(opts.WriteWorkspaceRoot),
+			subagentDepth:          subagentDepth,
+			maxSubagentDepth:       maxSubagentDepth,
+			contextWindow:          opts.ContextWindow,
+			compactRatio:           opts.CompactRatio,
+			recentKeep:             opts.RecentKeep,
+			archiveDir:             opts.ArchiveDir,
+			legacyAnchorSafetyGate: opts.LegacyAnchorSafetyGate,
+			completionAgentConfig:  newCompletionAgentConfig(opts, sink),
 		},
 		sess: sessionRuntime{
 			conversation: session,

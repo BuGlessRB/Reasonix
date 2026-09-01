@@ -1,7 +1,5 @@
 package agent
 
-import "reasonix/internal/completioneval"
-
 // agentConfig is everything New fixes for an Agent's lifetime; nothing writes
 // it afterwards, which agent_config_test.go enforces. Embedded rather than
 // nested so access stays flat, as perTurnState already does. Separating it lets
@@ -15,13 +13,7 @@ type agentConfig struct {
 	temperature        float64
 	usageSource        string
 	modelRef           string
-	// completionEvaluator validates candidate terminal turns. A nil evaluator is
-	// treated as unavailable so enforce mode fails closed.
-	completionEvaluator completioneval.Evaluator
-	// completionValidation is the fixed off|shadow|enforce mode.
-	completionValidation string
-	// completionEvaluatorFactory builds a per-child evaluator session.
-	completionEvaluatorFactory CompletionEvaluatorFactory
+	completionAgentConfig
 	// workspaceID is a prompt-cache lineage component, so it must not move
 	// while an agent lives — a change would silently rekey the cache.
 	workspaceID string

@@ -15,7 +15,7 @@ import (
 	"reasonix/internal/provider/anthropic"
 )
 
-const completionLiveRunsEnv = "REASONIX_COMPLETION_LIVE_RUNS"
+const completionLiveRuns = 30
 
 type liveCompletionScenario struct {
 	name     string
@@ -34,7 +34,7 @@ func TestLiveDeepSeekCompletionValidationMatrix(t *testing.T) {
 	if strings.TrimSpace(key) == "" {
 		t.Skip("DEEPSEEK_API_KEY not set; skipping live completion matrix")
 	}
-	runs := completionLiveRuns(t)
+	runs := completionLiveRuns
 	models := []string{"deepseek-v4-flash", "deepseek-v4-flash-vision-exp"}
 	scenarios := liveCompletionScenarios()
 	providers := map[string]provider.Provider{}
@@ -115,19 +115,6 @@ func TestLiveDeepSeekCompletionValidationMatrix(t *testing.T) {
 			}
 		}
 	}
-}
-
-func completionLiveRuns(t *testing.T) int {
-	t.Helper()
-	value := strings.TrimSpace(os.Getenv(completionLiveRunsEnv))
-	if value == "" {
-		return 3
-	}
-	runs, err := strconv.Atoi(value)
-	if err != nil || runs < 1 || runs > 100 {
-		t.Fatalf("%s must be an integer from 1 to 100", completionLiveRunsEnv)
-	}
-	return runs
 }
 
 func newLiveCompletionProvider(t *testing.T, key, model string) provider.Provider {

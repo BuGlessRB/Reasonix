@@ -11,7 +11,6 @@ const tree = source("../components/ProjectTree.tsx");
 const tabs = source("../components/TabBar.tsx");
 const app = source("../App.tsx");
 const badge = source("../components/WorktreeBadge.tsx");
-const controller = source("../lib/useController.ts");
 const forkAction = source("../lib/forkWorktree.ts");
 const message = source("../components/Message.tsx");
 

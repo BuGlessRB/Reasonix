@@ -63,7 +63,7 @@ func classifyRunCompletion(err error) runCompletion {
 			outcome:  event.TurnOutcomeCompletionUncertain,
 			subtype:  event.TurnOutcomeCompletionUncertain,
 			class:    event.TurnOutcomeCompletionUncertain,
-			exitCode: 0,
+			exitCode: 1,
 		}
 	}
 	return runCompletion{

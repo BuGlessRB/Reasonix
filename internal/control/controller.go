@@ -4387,7 +4387,7 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 		if m.Role != provider.RoleUser {
 			continue
 		}
-		if IsSyntheticUserMessage(m.Content) {
+		if agent.IsHostGeneratedUserMessage(m) {
 			continue
 		}
 		if _, ok := agent.SteerText(m.Content); ok {
@@ -4520,7 +4520,7 @@ func resolveInterruptedTurnStart(msgs []provider.Message, idx int, preserveUser 
 			return false
 		}
 		if preserveUser {
-			if IsSyntheticUserMessage(m.Content) {
+			if agent.IsHostGeneratedUserMessage(m) {
 				return false
 			}
 			if _, ok := agent.SteerText(m.Content); ok {

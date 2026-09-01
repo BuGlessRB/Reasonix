@@ -36,6 +36,32 @@ func normalizeCompletionValidation(mode string) string {
 // agent and binds usage/audit events to that agent's owning sink.
 type CompletionEvaluatorFactory func(modelRef string, sink event.Sink) completioneval.Evaluator
 
+type CompletionEvaluator = completioneval.Evaluator
+
+type completionAgentConfig struct {
+	// A nil evaluator is unavailable, so enforce mode fails closed.
+	completionEvaluator        completioneval.Evaluator
+	completionEvaluatorFactory CompletionEvaluatorFactory
+	completionValidation       string
+}
+
+func newCompletionAgentConfig(opts Options, sink event.Sink) completionAgentConfig {
+	return completionAgentConfig{
+		completionEvaluator:        resolveCompletionEvaluator(opts, sink),
+		completionEvaluatorFactory: opts.CompletionEvaluatorFactory,
+		completionValidation:       normalizeCompletionValidation(opts.CompletionValidation),
+	}
+}
+
+type taskCompletionConfig struct {
+	factory CompletionEvaluatorFactory
+	mode    string
+}
+
+func newTaskCompletionConfig(opts TaskToolOptions) taskCompletionConfig {
+	return taskCompletionConfig{factory: opts.CompletionEvaluatorFactory, mode: normalizeCompletionValidation(opts.CompletionValidation)}
+}
+
 func resolveCompletionEvaluator(opts Options, sink event.Sink) completioneval.Evaluator {
 	if opts.CompletionEvaluator != nil {
 		return opts.CompletionEvaluator
@@ -106,12 +132,9 @@ func (a *Agent) validateCandidateCompletion(ctx context.Context, state *turnRunt
 	duration := time.Since(started)
 
 	outcome, errClass := validatorOutcome(verdict, err)
-	a.svc.sink.Emit(event.Event{
-		Kind: event.CompletionValidation,
-		CompletionValidation: &event.CompletionValidationInfo{
-			Mode: mode, Outcome: outcome, Attempt: attempt,
-			DurationMs: duration.Milliseconds(), ErrorClass: errClass,
-		},
+	event.RecordCompletionValidation(a.svc.sink, event.CompletionValidationInfo{
+		Mode: mode, Outcome: outcome, Attempt: attempt,
+		DurationMs: duration.Milliseconds(), ErrorClass: errClass,
 	})
 	if mode == CompletionValidationShadow {
 		return completionAccept, nil
@@ -133,10 +156,7 @@ func (a *Agent) validateCandidateCompletion(ctx context.Context, state *turnRunt
 			return completionStop, &CompletionUncertainError{Cause: CompletionUncertainValidatorContinue}
 		}
 		state.terminal.validation = completionRepairing
-		a.sess.conversation.Add(provider.Message{
-			Role:    provider.RoleUser,
-			Content: a.withTurnPreferences(completionContinueTailMessage()),
-		})
+		a.sess.conversation.Add(HostGeneratedUserMessage(a.withTurnPreferences(completionContinueTailMessage())))
 		return completionResume, nil
 	default: // uncertain
 		state.terminal.validation = completionPaused
@@ -224,10 +244,11 @@ func (a *Agent) recentVisibleTurns() []completioneval.ContextTurn {
 		}
 		content := strings.TrimSpace(m.Content)
 		if m.Role == provider.RoleUser {
+			if IsHostGeneratedUserMessage(m) {
+				continue
+			}
 			if strings.TrimSpace(m.RawContent) != "" {
 				content = UserMessageText(m)
-			} else if IsSyntheticUserText(m.Content) {
-				continue
 			} else if visible, ok := VisibleSteerText(m.Content); ok {
 				content = visible
 			} else {

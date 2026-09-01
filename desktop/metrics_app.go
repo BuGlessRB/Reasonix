@@ -347,15 +347,10 @@ func (m *metricsAggregator) observe(e event.Event) {
 		if e.Text == "No visible answer was produced; asking the assistant to respond again." || strings.HasPrefix(e.Detail, "empty final answer blocked") {
 			m.inc("empty_final", "total")
 		}
-	case event.CompletionValidation:
-		m.observeCompletionValidation(e.CompletionValidation)
 	}
 }
 
-func (m *metricsAggregator) observeCompletionValidation(info *event.CompletionValidationInfo) {
-	if info == nil {
-		return
-	}
+func (m *metricsAggregator) observeCompletionValidation(info event.CompletionValidationInfo) {
 	mode := knownBucket(info.Mode, "off", "shadow", "enforce")
 	outcome := knownBucket(info.Outcome, "complete", "continue", "needs_user", "blocked", "uncertain", "error")
 	m.inc("completion_validation_outcome", mode+"_"+outcome)
@@ -384,7 +379,7 @@ func completionValidationLatencyBucket(ms int64) string {
 }
 
 func metricsEventRequiresPersist(e event.Event) bool {
-	return e.Kind == event.TurnDone || e.Kind == event.CompletionValidation ||
+	return e.Kind == event.TurnDone ||
 		(e.Kind == event.Usage && e.UsageSource == event.UsageSourceCompletionEvaluator)
 }
 

@@ -290,9 +290,8 @@ type TaskTool struct {
 	// capabilityRuntime is the session-shared MCP Host/specs substrate. Each
 	// sub-agent gets its own use_capability frontend so ledger state stays
 	// isolated while connections reuse the parent Host.
-	capabilityRuntime          *MCPCapabilityRuntime
-	completionEvaluatorFactory CompletionEvaluatorFactory
-	completionValidation       string
+	capabilityRuntime *MCPCapabilityRuntime
+	completion        taskCompletionConfig
 }
 
 // TaskToolOptions holds the construction parameters for a TaskTool.
@@ -331,25 +330,24 @@ func NewTaskToolWithOptions(opts TaskToolOptions) *TaskTool {
 		sysPrompt = DefaultTaskSystemPrompt
 	}
 	return &TaskTool{
-		prov:                       opts.Provider,
-		pricing:                    opts.Pricing,
-		quoteContext:               opts.QuoteContext,
-		parentReg:                  opts.ParentRegistry,
-		maxSteps:                   opts.MaxSteps,
-		contextWindow:              opts.ContextWindow,
-		recentKeep:                 opts.RecentKeep,
-		compactRatio:               opts.CompactRatio,
-		temperature:                opts.Temperature,
-		archiveDir:                 opts.ArchiveDir,
-		keepPolicy:                 opts.KeepPolicy,
-		sysPrompt:                  sysPrompt,
-		gate:                       opts.Gate,
-		subagentModel:              opts.SubagentModel,
-		subagentEffort:             opts.SubagentEffort,
-		resolveProvider:            opts.ResolveProvider,
-		maxSubagentDepth:           DefaultMaxSubagentDepth,
-		completionEvaluatorFactory: opts.CompletionEvaluatorFactory,
-		completionValidation:       normalizeCompletionValidation(opts.CompletionValidation),
+		prov:             opts.Provider,
+		pricing:          opts.Pricing,
+		quoteContext:     opts.QuoteContext,
+		parentReg:        opts.ParentRegistry,
+		maxSteps:         opts.MaxSteps,
+		contextWindow:    opts.ContextWindow,
+		recentKeep:       opts.RecentKeep,
+		compactRatio:     opts.CompactRatio,
+		temperature:      opts.Temperature,
+		archiveDir:       opts.ArchiveDir,
+		keepPolicy:       opts.KeepPolicy,
+		sysPrompt:        sysPrompt,
+		gate:             opts.Gate,
+		subagentModel:    opts.SubagentModel,
+		subagentEffort:   opts.SubagentEffort,
+		resolveProvider:  opts.ResolveProvider,
+		maxSubagentDepth: DefaultMaxSubagentDepth,
+		completion:       newTaskCompletionConfig(opts),
 	}
 }
 

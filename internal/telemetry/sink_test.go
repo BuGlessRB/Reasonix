@@ -102,11 +102,9 @@ func TestCompletionValidationMetricsAreImmediateAndIsolated(t *testing.T) {
 	sink.Emit(event.Event{Kind: event.Usage, UsageSource: event.UsageSourceCompletionEvaluator, Usage: &provider.Usage{
 		FinishReason: "stop", CacheHitTokens: 90, CacheMissTokens: 10,
 	}})
-	sink.Emit(event.Event{
-		Kind: event.CompletionValidation, Text: secret, Reasoning: secret,
-		CompletionValidation: &event.CompletionValidationInfo{
-			Mode: "enforce", Outcome: "error", Attempt: 2, DurationMs: 5_200, ErrorClass: "timeout",
-		},
+	sink.Emit(event.Event{Kind: event.Notice, Text: secret, Reasoning: secret})
+	event.RecordCompletionValidation(sink, event.CompletionValidationInfo{
+		Mode: "enforce", Outcome: "error", Attempt: 2, DurationMs: 5_200, ErrorClass: "timeout",
 	})
 
 	entries, err := os.ReadDir(filepath.Join(home, pendingDirName))
@@ -148,6 +146,24 @@ func TestCompletionValidationMetricsAreImmediateAndIsolated(t *testing.T) {
 	}
 	if got["finish_reason"] != nil || got["cache_hit"] != nil {
 		t.Fatalf("evaluator usage polluted generic metrics: %+v", got)
+	}
+}
+
+func TestCompletionValidationLatencyBucketsStayBounded(t *testing.T) {
+	for _, tc := range []struct {
+		ms   int64
+		want string
+	}{
+		{ms: -1, want: "lt_1s"},
+		{ms: 999, want: "lt_1s"},
+		{ms: 1_000, want: "s_1_5"},
+		{ms: 5_000, want: "s_5_15"},
+		{ms: 15_000, want: "s_15_60"},
+		{ms: 60_000, want: "s_15_60"},
+	} {
+		if got := completionValidationLatencyBucket(tc.ms); got != tc.want {
+			t.Errorf("completionValidationLatencyBucket(%d) = %q, want %q", tc.ms, got, tc.want)
+		}
 	}
 }
 

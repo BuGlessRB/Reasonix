@@ -59,8 +59,7 @@ type Event struct {
 	// Phase is set on turn_phase events: working | checking | verifying | reviewing.
 	Phase string `json:"phase,omitempty"`
 	// Completion is set on completion_summary events (content-free quality summary).
-	Completion           *CompletionSummary    `json:"completion,omitempty"`
-	CompletionValidation *CompletionValidation `json:"completionValidation,omitempty"`
+	Completion *CompletionSummary `json:"completion,omitempty"`
 }
 
 // CompletionSummary is the JSON form of event.CompletionSummaryInfo.
@@ -76,6 +75,25 @@ type CompletionSummary struct {
 	ConstraintDegraded bool     `json:"constraint_degraded"`
 	Floor              string   `json:"floor,omitempty"`
 	Attention          bool     `json:"attention"`
+}
+
+func toWireCompletionSummary(c *event.CompletionSummaryInfo) *CompletionSummary {
+	if c == nil {
+		return nil
+	}
+	return &CompletionSummary{
+		Preset:             c.Preset,
+		Verdict:            c.Verdict,
+		Mutations:          c.Mutations,
+		ChecksPassed:       c.ChecksPassed,
+		ChecksFailed:       c.ChecksFailed,
+		ChecksSuppressed:   c.ChecksSuppressed,
+		Review:             c.Review,
+		GapKinds:           append([]string(nil), c.GapKinds...),
+		ConstraintDegraded: c.ConstraintDegraded,
+		Floor:              c.Floor,
+		Attention:          c.Attention,
+	}
 }
 
 type WorkspaceChanged struct {
@@ -209,8 +227,6 @@ func ToWire(e event.Event) Event {
 		}
 	case event.CompletionSummary:
 		w.Completion = toWireCompletionSummary(e.Completion)
-	case event.CompletionValidation:
-		w.CompletionValidation = toWireCompletionValidation(e.CompletionValidation)
 	}
 	return w
 }
@@ -614,7 +630,6 @@ var kindNames = map[event.Kind]string{
 	event.MCPInteractionRequest:   "mcp_interaction",
 	event.PromptAnswered:          "prompt_answered",
 	event.SessionChanged:          "session_changed",
-	event.CompletionValidation:    "completion_validation",
 }
 
 // ContextMaintenance is the JSON form of event.ContextMaintenance.
