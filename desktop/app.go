@@ -6601,6 +6601,8 @@ type Meta struct {
 	CanonicalTodos *[]evidence.TodoItem `json:"canonicalTodos,omitempty"`
 	// Closed completed todo fingerprints from this session and its lineage.
 	DismissedTodoBatches []string `json:"dismissedTodoBatches,omitempty"`
+	// PinnedFiles holds metadata about standing pinned context files for this tab.
+	PinnedFiles []PinnedFileInfo `json:"pinnedFiles,omitempty"`
 	// Remote marks a remote session tab; its readiness is carried by the
 	// remote-tab state channel rather than a local controller.
 	Remote *RemoteTabRef `json:"remote,omitempty"`
@@ -6723,6 +6725,7 @@ func (a *App) MetaForTab(tabID string) Meta {
 		GoalRuntime:           goalRuntimeViewFromController(snap.ctrl),
 		CanonicalTodos:        ctrlTodos(snap.ctrl),
 		DismissedTodoBatches:  a.dismissedTodoBatchesForSession(sessionPath),
+		PinnedFiles:           tab.GetPinnedFilesInfo(),
 	}
 }
 

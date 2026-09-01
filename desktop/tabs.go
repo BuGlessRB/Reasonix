@@ -244,6 +244,9 @@ type WorkspaceTab struct {
 	mcpOrder         []string
 	lastBuildResult  *boot.BuildResult // incremental extension reload
 
+	PinnedFiles   []string
+	pinnedFilesMu sync.RWMutex
+
 	// metaExtras caches the expensive MetaForTab fields (git branch, image
 	// input capability) computed off the request path by
 	// refreshTabMetaExtras. Lock-free reads keep MetaForTab synchronous and

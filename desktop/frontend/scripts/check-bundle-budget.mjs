@@ -165,9 +165,11 @@ console.log("\nbundle budgets");
 // path is 457.406 KiB after extracting the lease owner to satisfy repolint.
 // Latest-base transcript settle ownership measures 457.518 KiB with this UX;
 // isolated conversation forks and their extracted browser mock adapter bring
-// the combined tree to 458.158 KiB. Retain 0.042 KiB with the smallest
-// one-decimal ratchet.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 458.2 : 458.2;
+// the combined tree to 458.158 KiB.
+// Sticky context pinning adds Wails bridge methods, English dictionary keys,
+// and lazy shelf wiring; the measured path is 458.5 KiB. Retain 0.1 KiB of
+// bounded build/toolchain headroom.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 458.6 : 458.6;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -291,8 +293,10 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // the smallest one-decimal headroom without widening unrelated chunk ceilings.
 // Latest-base transcript settle ownership brings the measured path to
 // 2452.773 KiB; isolated conversation forks bring the combined tree to
-// 2454.719 KiB on the release toolchain. Retain 0.081 KiB with the smallest
-// one-decimal ratchet.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_454.8 : 2_454.8;
+// 2454.719 KiB on the release toolchain.
+// Sticky context pinning adds Wails bridge signatures, English dictionary keys,
+// and lazy shelf wiring; the measured path is 2455.5 KiB. Retain 0.1 KiB of
+// bounded build/toolchain headroom.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_455.6 : 2_455.6;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

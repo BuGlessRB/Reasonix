@@ -1,4 +1,5 @@
-import { ExternalLink, FileText, FolderOpen, MessageSquarePlus, TerminalSquare } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ExternalLink, FileText, FolderOpen, MessageSquarePlus, Pin, PinOff, TerminalSquare } from "lucide-react";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
 import {
@@ -33,6 +34,26 @@ export function WorkspaceTreeMenu({
   onAddFile: () => void;
 }) {
   const t = useT();
+  const [isPinned, setIsPinned] = useState(false);
+
+  useEffect(() => {
+    if (target.isDir || !workspaceTabId) return;
+    let active = true;
+    app.GetPinnedFilesForTab(workspaceTabId)
+      .then((files) => {
+        if (!active || !Array.isArray(files)) return;
+        const normalizedTarget = target.path.replace(/^[/\\]+/, "").replace(/\\/g, "/");
+        const found = files.some(
+          (f) => f.path.replace(/^[/\\]+/, "").replace(/\\/g, "/") === normalizedTarget
+        );
+        setIsPinned(found);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [workspaceTabId, target.path, target.isDir]);
+
   const closeThen = (action: () => void) => {
     onClose();
     action();
@@ -42,7 +63,7 @@ export function WorkspaceTreeMenu({
     <FloatingMenu
       x={target.x}
       y={target.y}
-      estimatedHeight={target.isDir ? WORKSPACE_CONTEXT_MENU_REF_HEIGHT : WORKSPACE_CONTEXT_MENU_FILE_HEIGHT}
+      estimatedHeight={target.isDir ? WORKSPACE_CONTEXT_MENU_REF_HEIGHT : WORKSPACE_CONTEXT_MENU_FILE_HEIGHT + 32}
       className="workspace-tree-menu"
     >
       <FloatingMenuItems
@@ -82,13 +103,28 @@ export function WorkspaceTreeMenu({
           },
           ...(target.isDir
             ? []
-            : [{
-                icon: <FileText size={14} />,
-                label: t("workspace.addFileContentToChat"),
-                onSelect: onAddFile,
-              }]),
+            : [
+                {
+                  icon: <FileText size={14} />,
+                  label: t("workspace.addFileContentToChat"),
+                  onSelect: onAddFile,
+                },
+                {
+                  icon: isPinned ? <PinOff size={14} /> : <Pin size={14} />,
+                  label: isPinned ? t("workspace.unpinFileFromContext") : t("workspace.pinFileToContext"),
+                  onSelect: () =>
+                    closeThen(() => {
+                      if (isPinned) {
+                        void app.UnpinFileForTab(workspaceTabId, target.path).catch(() => {});
+                      } else {
+                        void app.PinFileForTab(workspaceTabId, target.path).catch(() => {});
+                      }
+                    }),
+                },
+              ]),
         ]}
       />
     </FloatingMenu>
   );
 }
+

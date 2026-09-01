@@ -94,6 +94,7 @@ import type {
   NetworkView,
   PluginInstallOptions,
   PluginView,
+  PinnedFileInfo,
   ProjectNode,
   ProjectTreeOrganizationBindings,
   RecoveryLineageView,
@@ -468,6 +469,9 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   OpenWorkspacePath(rel: string): Promise<void>;
   OpenWorkspacePathForTab(tabID: string, rel: string): Promise<void>;
   ResolveWorkspacePathForTab(tabID: string, rel: string): Promise<string>;
+  PinFileForTab(tabID: string, rel: string): Promise<PinnedFileInfo>;
+  UnpinFileForTab(tabID: string, rel: string): Promise<void>;
+  GetPinnedFilesForTab(tabID: string): Promise<PinnedFileInfo[]>;
   ExternalOpeners(): Promise<ExternalOpenersView>; ExternalOpenersForTab(tabID: string): Promise<ExternalOpenersView>;
   SetPreferredExternalOpener(id: string): Promise<void>;
   OpenWorkspaceInExternalOpener(id: string): Promise<void>;
@@ -4162,6 +4166,11 @@ function makeMockApp(): AppBindings {
       await this.OpenWorkspacePath(rel);
     },
     async ResolveWorkspacePathForTab(_tabID: string, rel: string) { return `${cwd.replace(/[\\/]+$/, "")}/${rel.replace(/^[/\\]+/, "").replace(/[\\/]+$/, "")}`; },
+    async PinFileForTab(_tabID: string, rel: string) {
+      return { path: rel, sizeBytes: 1024, tokenEstimate: 256 };
+    },
+    async UnpinFileForTab(_tabID: string, _rel: string) {},
+    async GetPinnedFilesForTab(_tabID: string) { return []; },
     async ExternalOpeners() {
       return {
         openers: [
