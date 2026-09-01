@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,8 +27,12 @@ func LoadSessionDisplayMessages(path string) ([]provider.Message, PersistedState
 }
 
 func loadSessionDisplayMessagesUnlocked(path string) ([]provider.Message, PersistedState, bool, error) {
+	return loadSessionDisplayMessagesContextUnlocked(context.Background(), path)
+}
+
+func loadSessionDisplayMessagesContextUnlocked(ctx context.Context, path string) ([]provider.Message, PersistedState, bool, error) {
 	hasher := newSessionTranscriptHasher()
-	msgs, _, damaged, err := loadSessionMessagesWithLimits(path, defaultSessionReplayLimits, hasher)
+	msgs, _, damaged, err := loadSessionMessagesWithContext(ctx, path, defaultSessionReplayLimits, hasher)
 	if err != nil {
 		return nil, PersistedState{}, false, err
 	}

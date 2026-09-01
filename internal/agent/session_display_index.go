@@ -43,15 +43,21 @@ const sessionDisplayIndexMaxLineBytes = 16 << 20
 // or an older Reasonix build may leave that model behind; consumers compare
 // TranscriptSize and identity before reading and rebuild it on mismatch.
 type SessionDisplayIndex struct {
-	SchemaVersion  int                 `json:"schema_version"`
-	Revision       int64               `json:"revision"`
-	RevisionKnown  bool                `json:"revision_known"`
-	ContentDigest  string              `json:"content_digest"`
-	TranscriptSize int64               `json:"transcript_size"`
-	MessageCount   int                 `json:"message_count"`
-	AuthoredTurns  int                 `json:"authored_turns"`
-	Entries        []DisplayIndexEntry `json:"entries"`
-	UpdatedAt      time.Time           `json:"updated_at"`
+	SchemaVersion  int    `json:"schema_version"`
+	Revision       int64  `json:"revision"`
+	RevisionKnown  bool   `json:"revision_known"`
+	ContentDigest  string `json:"content_digest"`
+	TranscriptSize int64  `json:"transcript_size"`
+	MessageCount   int    `json:"message_count"`
+	AuthoredTurns  int    `json:"authored_turns"`
+	// ListingPreview is derived from the same transcript generation as
+	// AuthoredTurns. The explicit known bit keeps old v1 indexes compatible:
+	// an empty preview may be authoritative, while an omitted preview must
+	// still fall back to a repair scan.
+	ListingPreview      string              `json:"listing_preview,omitempty"`
+	ListingPreviewKnown bool                `json:"listing_preview_known,omitempty"`
+	Entries             []DisplayIndexEntry `json:"entries"`
+	UpdatedAt           time.Time           `json:"updated_at"`
 }
 
 // DisplayIndexEntry is one message's metadata. AuthoredTurn is the absolute
@@ -86,14 +92,17 @@ type DisplayIndexEntry struct {
 // digestAndSizeSessionMessages, so save-path callers can treat nil as a
 // warn-only failure.
 func BuildSessionDisplayIndex(messages []provider.Message, revision int64, revisionKnown bool, digest [sha256.Size]byte) *SessionDisplayIndex {
+	preview, _ := SessionPreviewFromMessages(messages)
 	idx := &SessionDisplayIndex{
-		SchemaVersion: SessionDisplayIndexSchemaVersion,
-		Revision:      revision,
-		RevisionKnown: revisionKnown,
-		ContentDigest: digestString(digest),
-		MessageCount:  len(messages),
-		Entries:       make([]DisplayIndexEntry, 0, len(messages)),
-		UpdatedAt:     time.Now().UTC(),
+		SchemaVersion:       SessionDisplayIndexSchemaVersion,
+		Revision:            revision,
+		RevisionKnown:       revisionKnown,
+		ContentDigest:       digestString(digest),
+		MessageCount:        len(messages),
+		ListingPreview:      preview,
+		ListingPreviewKnown: true,
+		Entries:             make([]DisplayIndexEntry, 0, len(messages)),
+		UpdatedAt:           time.Now().UTC(),
 	}
 	if _, _, err := encodeDisplayIndexEntries(idx, messages, 0, 0, 0); err != nil {
 		return nil
@@ -169,14 +178,17 @@ func extendSessionDisplayIndex(indexPath string, msgs []provider.Message, digest
 	if prev.MessageCount != appendFrom || !prev.RevisionKnown || prev.Revision != revision-1 {
 		return nil
 	}
+	preview, _ := SessionPreviewFromMessages(msgs)
 	idx := &SessionDisplayIndex{
-		SchemaVersion: SessionDisplayIndexSchemaVersion,
-		Revision:      revision,
-		RevisionKnown: true,
-		ContentDigest: digestString(digest),
-		MessageCount:  len(msgs),
-		Entries:       make([]DisplayIndexEntry, 0, len(msgs)),
-		UpdatedAt:     time.Now().UTC(),
+		SchemaVersion:       SessionDisplayIndexSchemaVersion,
+		Revision:            revision,
+		RevisionKnown:       true,
+		ContentDigest:       digestString(digest),
+		MessageCount:        len(msgs),
+		ListingPreview:      preview,
+		ListingPreviewKnown: true,
+		Entries:             make([]DisplayIndexEntry, 0, len(msgs)),
+		UpdatedAt:           time.Now().UTC(),
 	}
 	idx.Entries = append(idx.Entries, prev.Entries...)
 	if _, _, err := encodeDisplayIndexEntries(idx, msgs, appendFrom, prev.TranscriptSize, prev.AuthoredTurns); err != nil {
@@ -320,6 +332,10 @@ func ScanSessionDisplayIndex(transcriptPath string) (*SessionDisplayIndex, error
 			h.Write([]byte{'\n'})
 			var entry DisplayIndexEntry
 			entry, turn = classifyDisplayIndexMessage(m, len(idx.Entries), offset, int64(len(line)), turn)
+			if entry.StartsTurn && !idx.ListingPreviewKnown {
+				idx.ListingPreview = truncatePreview(previewProse(UserMessageText(m)))
+				idx.ListingPreviewKnown = true
+			}
 			idx.Entries = append(idx.Entries, entry)
 			offset += int64(len(line))
 		}
@@ -332,6 +348,9 @@ func ScanSessionDisplayIndex(transcriptPath string) (*SessionDisplayIndex, error
 	}
 	idx.MessageCount = len(idx.Entries)
 	idx.AuthoredTurns = turn
+	if turn == 0 {
+		idx.ListingPreviewKnown = true
+	}
 	idx.TranscriptSize = offset
 	var digest [sha256.Size]byte
 	copy(digest[:], h.Sum(nil))

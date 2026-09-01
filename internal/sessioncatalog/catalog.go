@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/projectiondb"
 )
 
@@ -56,9 +57,11 @@ type Catalog struct {
 	// testReconcileBatchHook deterministically pauses an uncommitted directory
 	// projection. Production catalogs leave it nil.
 	testReconcileBatchHook func(int)
-	// testRepairLockHook reports before and after repair acquires the directory
-	// lock. Production catalogs leave it nil.
-	testRepairLockHook func(acquired bool)
+	// testReconcileStartHook observes queued reconcile waves. Direct explicit
+	// ReconcileDirectory calls do not invoke it.
+	testReconcileStartHook func(DirectoryTarget)
+	// testRepairSessionHook replaces the filesystem repair in scheduler tests.
+	testRepairSessionHook func(context.Context, string) (agent.SessionListingRepairResult, error)
 	// testPathMutationLoadedHook pauses after reading a removal generation.
 	// Production catalogs leave it nil.
 	testPathMutationLoadedHook func(string)
@@ -146,6 +149,13 @@ func Open(ctx context.Context, opts Options) (*Catalog, error) {
 		_ = c.db.Close()
 		return nil, err
 	}
+	if !opts.DisableRepair {
+		if err := c.resetRepairSchedule(ctx); err != nil {
+			_ = c.db.Close()
+			return nil, err
+		}
+		c.refreshCounts(ctx)
+	}
 	c.workerCtx, c.workerCancel = context.WithCancel(context.Background())
 	c.workers.Add(1)
 	go c.writerLoop()
@@ -188,19 +198,51 @@ func (c *Catalog) refreshCounts(ctx context.Context) {
 		return
 	}
 	var indexed, pending, total, physical, logical, groups, branches, diverged, cleanup int64
-	_ = c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions`).Scan(&indexed)
-	_ = c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions WHERE turns_state='unknown'`).Scan(&pending)
-	_ = c.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(total), 0) FROM catalog_directories`).Scan(&total)
-	_ = c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions WHERE missing_since=0`).Scan(&physical)
-	_ = c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_topics`).Scan(&logical)
-	_ = c.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT recovery_group_id) FROM catalog_sessions WHERE recovered=1 AND recovery_group_id<>'' AND missing_since=0`).Scan(&groups)
-	_ = c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions WHERE recovered=1 AND missing_since=0`).Scan(&branches)
-	_ = c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions WHERE recovered=1 AND recovery_role='diverged' AND missing_since=0`).Scan(&diverged)
-	_ = c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions WHERE recovered=1 AND recovery_role='covered_copy' AND missing_since=0`).Scan(&cleanup)
+	var active, deferred, blocked int64
+	var nextRepair sql.NullInt64
+	err := c.db.QueryRowContext(ctx, `SELECT
+		COUNT(*),
+		COALESCE(SUM(CASE WHEN turns_state='unknown' THEN 1 ELSE 0 END),0),
+		(SELECT COALESCE(SUM(total),0) FROM catalog_directories),
+		COALESCE(SUM(CASE WHEN missing_since=0 THEN 1 ELSE 0 END),0),
+		(SELECT COUNT(*) FROM catalog_topics),
+		COUNT(DISTINCT CASE WHEN recovered=1 AND recovery_group_id<>'' AND missing_since=0 THEN recovery_group_id END),
+		COALESCE(SUM(CASE WHEN recovered=1 AND missing_since=0 THEN 1 ELSE 0 END),0),
+		COALESCE(SUM(CASE WHEN recovered=1 AND recovery_role='diverged' AND missing_since=0 THEN 1 ELSE 0 END),0),
+		COALESCE(SUM(CASE WHEN recovered=1 AND recovery_role='covered_copy' AND missing_since=0 THEN 1 ELSE 0 END),0),
+		COALESCE(SUM(CASE WHEN turns_state='unknown' AND repair_state IN ('pending','active') THEN 1 ELSE 0 END),0),
+		COALESCE(SUM(CASE WHEN turns_state='unknown' AND repair_state='deferred' THEN 1 ELSE 0 END),0),
+		COALESCE(SUM(CASE WHEN turns_state='unknown' AND repair_state='blocked' THEN 1 ELSE 0 END),0),
+		MIN(CASE WHEN turns_state='unknown' AND repair_state='deferred' THEN repair_retry_at END)
+		FROM catalog_sessions`).Scan(&indexed, &pending, &total, &physical, &logical, &groups, &branches,
+		&diverged, &cleanup, &active, &deferred, &blocked, &nextRepair)
+	if err != nil {
+		return
+	}
+	errorKinds := map[string]int64{}
+	if rows, queryErr := c.db.QueryContext(ctx, `SELECT repair_error_kind,COUNT(*) FROM catalog_sessions
+		WHERE turns_state='unknown' AND repair_error_kind<>'' GROUP BY repair_error_kind`); queryErr == nil {
+		for rows.Next() {
+			var kind string
+			var count int64
+			if rows.Scan(&kind, &count) == nil {
+				errorKinds[kind] = count
+			}
+		}
+		_ = rows.Close()
+	}
 	c.statusMu.Lock()
 	c.status.Indexed = indexed
 	c.status.Total = total
 	c.status.RepairPending = pending
+	c.status.RepairActive = active
+	c.status.RepairDeferred = deferred
+	c.status.RepairBlocked = blocked
+	c.status.NextRepairAt = 0
+	if nextRepair.Valid {
+		c.status.NextRepairAt = nextRepair.Int64
+	}
+	c.status.RepairErrorKinds = errorKinds
 	c.status.PhysicalSessions = physical
 	c.status.LogicalSessions = logical
 	c.status.RecoveryGroups = groups

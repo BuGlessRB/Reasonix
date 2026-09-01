@@ -167,9 +167,13 @@ func (c *Catalog) RequestReconcile(target DirectoryTarget) bool {
 }
 
 func (c *Catalog) markReconcileDirty(target DirectoryTarget) {
+	key := queuePathKey(target.Path)
 	c.reconcileDirtyMu.Lock()
-	c.reconcileDirty[queuePathKey(target.Path)] = target
+	c.reconcileDirty[key] = target
 	c.reconcileDirtyMu.Unlock()
+	// If the running worker cleared its marker between RequestReconcile's load
+	// and this write, establish a fresh wake without losing the dirty follow-up.
+	c.reconcileQueued.LoadOrStore(key, target)
 }
 
 func (c *Catalog) takeReconcileDirty() (DirectoryTarget, bool) {
@@ -188,23 +192,44 @@ func (c *Catalog) reconcileLoop() {
 	defer ticker.Stop()
 	for {
 		if target, ok := c.takeReconcileDirty(); ok {
-			c.reconcileQueued.Delete(queuePathKey(target.Path))
-			ctx, cancel := context.WithTimeout(c.workerCtx, 2*time.Minute)
-			_ = c.reconcileDirectory(ctx, target, target.mutationSeq)
-			cancel()
+			c.reconcileQueued.LoadOrStore(queuePathKey(target.Path), target)
+			c.runQueuedReconcile(target)
 			continue
 		}
 		select {
 		case target := <-c.reconcileCh:
-			c.reconcileQueued.Delete(queuePathKey(target.Path))
-			ctx, cancel := context.WithTimeout(c.workerCtx, 2*time.Minute)
-			_ = c.reconcileDirectory(ctx, target, target.mutationSeq)
-			cancel()
+			c.runQueuedReconcile(target)
 		case <-ticker.C:
 			// Drain dirty map on the next loop iteration.
 		case <-c.stop:
 			return
 		}
+	}
+}
+
+func (c *Catalog) runQueuedReconcile(target DirectoryTarget) {
+	key := queuePathKey(target.Path)
+	for {
+		if c.testReconcileStartHook != nil {
+			c.testReconcileStartHook(target)
+		}
+		ctx, cancel := context.WithTimeout(c.workerCtx, 2*time.Minute)
+		_ = c.reconcileDirectory(ctx, target, target.mutationSeq)
+		cancel()
+
+		c.reconcileDirtyMu.Lock()
+		followUp, dirty := c.reconcileDirty[key]
+		if dirty {
+			delete(c.reconcileDirty, key)
+			c.reconcileDirtyMu.Unlock()
+			target = followUp
+			continue
+		}
+		// Keep queued/running ownership through the complete scan. Holding the
+		// dirty mutex closes the check/delete race with markReconcileDirty.
+		c.reconcileQueued.Delete(key)
+		c.reconcileDirtyMu.Unlock()
+		return
 	}
 }
 
@@ -303,7 +328,7 @@ func recordFromOrder(target DirectoryTarget, info agent.SessionOrderInfo) Sessio
 	if !info.ListingProjectionFresh() {
 		turnsState, info.Preview, info.Turns = TurnsUnknown, "", 0
 	}
-	contentFingerprint := fileFingerprint(info.Path)
+	contentFingerprint := sessionContentFingerprint(info.Path)
 	metaFingerprint := fileFingerprint(agent.BranchMetaPath(info.Path))
 	createdAt := unixMilli(info.CreatedAt)
 	lastActivityAt := unixMilli(info.LastActivityAt)
@@ -358,6 +383,10 @@ func fileFingerprint(path string) string {
 		return ""
 	}
 	return fmt.Sprintf("%d:%d", info.Size(), info.ModTime().UnixNano())
+}
+
+func sessionContentFingerprint(path string) string {
+	return fileFingerprint(path) + "|" + fileFingerprint(agent.SessionEventLogPath(path))
 }
 
 // beginDirectoryScan starts or resumes a directory scan. When the previous
@@ -747,6 +776,23 @@ func Inspect(ctx context.Context, path string) (Status, error) {
 	_ = db.QueryRowContext(ctx, `SELECT revision FROM catalog_state WHERE id=1`).Scan(&status.Revision)
 	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions`).Scan(&status.Indexed)
 	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions WHERE turns_state='unknown'`).Scan(&status.RepairPending)
+	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions WHERE turns_state='unknown' AND repair_state IN ('pending','active')`).Scan(&status.RepairActive)
+	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions WHERE turns_state='unknown' AND repair_state='deferred'`).Scan(&status.RepairDeferred)
+	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions WHERE turns_state='unknown' AND repair_state='blocked'`).Scan(&status.RepairBlocked)
+	_ = db.QueryRowContext(ctx, `SELECT COALESCE(MIN(repair_retry_at),0) FROM catalog_sessions WHERE turns_state='unknown' AND repair_state='deferred'`).Scan(&status.NextRepairAt)
+	rows, queryErr := db.QueryContext(ctx, `SELECT repair_error_kind,COUNT(*) FROM catalog_sessions
+		WHERE turns_state='unknown' AND repair_error_kind<>'' GROUP BY repair_error_kind`)
+	if queryErr == nil {
+		status.RepairErrorKinds = map[string]int64{}
+		for rows.Next() {
+			var kind string
+			var count int64
+			if rows.Scan(&kind, &count) == nil {
+				status.RepairErrorKinds[kind] = count
+			}
+		}
+		_ = rows.Close()
+	}
 	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_sessions WHERE missing_since=0`).Scan(&status.PhysicalSessions)
 	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM catalog_topics`).Scan(&status.LogicalSessions)
 	_ = db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT recovery_group_id) FROM catalog_sessions WHERE recovered=1 AND recovery_group_id<>'' AND missing_since=0`).Scan(&status.RecoveryGroups)

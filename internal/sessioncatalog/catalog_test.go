@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/projectiondb"
 )
 
 func TestReconcileMakesUnknownCountsVisibleWithoutReadingTranscript(t *testing.T) {
@@ -285,8 +286,58 @@ func TestSchemaMigrationLedgerRecordsEveryVersion(t *testing.T) {
 		}
 		versions = append(versions, version)
 	}
-	if fmt.Sprint(versions) != "[1 2 3 4 5 6 7 8 9 10]" {
+	if fmt.Sprint(versions) != "[1 2 3 4 5 6 7 8 9 10 11]" {
 		t.Fatalf("schema migration ledger = %v", versions)
+	}
+}
+
+func TestSchemaV11MigratesLegacyUnknownRowsIntoPersistentScheduler(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "catalog.sqlite")
+	legacy, err := projectiondb.Open(ctx, projectiondb.OpenOptions{
+		Path: path, Migrations: sessionMigrations()[:10], Now: time.Now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := legacy.DB.ExecContext(ctx, `INSERT INTO catalog_sessions(path,directory,scope,turns_state)
+		VALUES('/sessions/legacy.jsonl','/sessions','global','unknown')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	catalog, err := Open(ctx, Options{Path: path, DisableRepair: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = catalog.Close(context.Background()) })
+	var state string
+	var attempts, retryAt, engine int
+	if err := catalog.db.QueryRowContext(ctx, `SELECT repair_state,repair_attempts,repair_retry_at,repair_engine_version
+		FROM catalog_sessions WHERE path='/sessions/legacy.jsonl'`).Scan(&state, &attempts, &retryAt, &engine); err != nil {
+		t.Fatal(err)
+	}
+	if state != "pending" || attempts != 0 || retryAt != 0 || engine != 0 {
+		t.Fatalf("migrated repair schedule = %s/%d/%d/%d", state, attempts, retryAt, engine)
+	}
+	if err := catalog.resetRepairSchedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := catalog.db.ExecContext(ctx, `UPDATE catalog_sessions SET repair_state='blocked',repair_attempts=7,
+		repair_error_kind='unsupported',repair_engine_version=0 WHERE path='/sessions/legacy.jsonl'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.resetRepairSchedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.db.QueryRowContext(ctx, `SELECT repair_state,repair_attempts,repair_retry_at,repair_engine_version
+		FROM catalog_sessions WHERE path='/sessions/legacy.jsonl'`).Scan(&state, &attempts, &retryAt, &engine); err != nil {
+		t.Fatal(err)
+	}
+	if state != "pending" || attempts != 0 || retryAt != 0 || engine != repairEngineVersion {
+		t.Fatalf("repair engine reset = %s/%d/%d/%d", state, attempts, retryAt, engine)
 	}
 }
 

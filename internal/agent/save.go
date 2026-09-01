@@ -774,7 +774,11 @@ func (s *Session) saveRecoveryBranch(opts RecoveryBranchOptions, shutdown bool) 
 	return RecoveryBranchInfo{}, fmt.Errorf("allocate isolated recovery lane: too many existing collisions")
 }
 
-func (s *Session) saveRecoveryBranchMeta(path string, opts RecoveryBranchOptions, preview string, turns int, digest string, depth int) (BranchMeta, error) {
+func (s *Session) prepareRecoveryBranchMetaLocked(path string, opts RecoveryBranchOptions, preview string, turns int, digest string, depth int, contentUnchanged bool) (BranchMeta, error) {
+	existing, ok, err := LoadBranchMeta(path)
+	if err != nil {
+		return BranchMeta{}, err
+	}
 	meta := opts.BranchMeta
 	meta.ID = BranchID(path)
 	if strings.TrimSpace(meta.Name) == "" {
@@ -794,24 +798,41 @@ func (s *Session) saveRecoveryBranchMeta(path string, opts RecoveryBranchOptions
 	// Always stamped from the parent chain, never trusted from opts: callers
 	// copy tab/session meta wholesale and would carry a stale depth.
 	meta.RecoveryDepth = depth
-	if meta.Revision == 0 {
-		meta.Revision = 1
+	// A recovery lane owns its own ledger. Parent/tab metadata can carry a much
+	// higher unrelated revision, so never let it override this lane's digest.
+	// Rewriting content or healing a stale ledger advances the lane once.
+	meta.Revision = 1
+	ledgerCurrent := false
+	if ok {
+		ledgerCurrent = contentUnchanged && existing.Revision > 0 &&
+			strings.TrimSpace(existing.ContentDigest) == digest &&
+			strings.TrimSpace(existing.RecoveryDigest) == digest
+		if ledgerCurrent {
+			meta.Revision = existing.Revision
+		} else {
+			meta.Revision = max(int64(1), existing.Revision+1)
+		}
+		meta.InFlightTurn = existing.InFlightTurn
+		meta.DismissedTodoBatches = MergeDismissedTodoBatches(existing.DismissedTodoBatches, meta.DismissedTodoBatches)
+		if ledgerCurrent && strings.TrimSpace(existing.WriterID) != "" {
+			meta.WriterID = existing.WriterID
+		}
 	}
-	if strings.TrimSpace(meta.ContentDigest) == "" {
-		meta.ContentDigest = digest
-	}
+	meta.ContentDigest = digest
 	stampSessionListingProjection(&meta)
-	if strings.TrimSpace(meta.WriterID) == "" {
+	if !ledgerCurrent || strings.TrimSpace(meta.WriterID) == "" {
 		meta.WriterID = SessionWriterID()
 	}
-	// Keep any in-flight turn marker across isolated in-place rewrites.
-	if err := saveBranchMetaKeepInFlightTurn(path, meta); err != nil {
+	return meta, nil
+}
+
+func (s *Session) saveRecoveryBranchMetaLocked(path string, opts RecoveryBranchOptions, preview string, turns int, digest string, depth int, contentUnchanged bool) (BranchMeta, error) {
+	meta, err := s.prepareRecoveryBranchMetaLocked(path, opts, preview, turns, digest, depth, contentUnchanged)
+	if err != nil {
 		return BranchMeta{}, err
 	}
-	if stored, ok, err := LoadBranchMeta(path); err != nil {
+	if err := saveBranchMeta(path, meta, true); err != nil {
 		return BranchMeta{}, err
-	} else if ok {
-		return stored, nil
 	}
 	return meta, nil
 }
@@ -1304,6 +1325,18 @@ func lockSessionSavePath(path string) func() {
 	mu := v.(*sync.Mutex)
 	mu.Lock()
 	return mu.Unlock
+}
+
+// tryLockSessionSavePath lets low-priority maintenance yield immediately to a
+// foreground save. The returned unlock is non-nil only when acquired.
+func tryLockSessionSavePath(path string) (func(), bool) {
+	key := canonicalSessionSavePath(path)
+	v, _ := sessionSaveLocks.LoadOrStore(key, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	if !mu.TryLock() {
+		return nil, false
+	}
+	return mu.Unlock, true
 }
 
 // lockSessionFile waits briefly for the cross-process compatibility save lock.

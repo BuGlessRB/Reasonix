@@ -1,0 +1,240 @@
+package agent
+
+import (
+	"context"
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+
+	"reasonix/internal/store"
+)
+
+type SessionListingRepairStatus string
+
+const (
+	SessionListingRepairApplied        SessionListingRepairStatus = "applied"
+	SessionListingRepairAlreadyCurrent SessionListingRepairStatus = "already_current"
+	SessionListingRepairSourceChanged  SessionListingRepairStatus = "source_changed"
+	SessionListingRepairDamaged        SessionListingRepairStatus = "damaged"
+	SessionListingRepairUnsupported    SessionListingRepairStatus = "unsupported"
+)
+
+var ErrSessionListingRepairBusy = errors.New("session listing repair source is busy")
+
+// SessionListingRepairResult describes one convergent repair attempt. Preview
+// and Turns are safe to publish only for applied/already_current results.
+type SessionListingRepairResult struct {
+	Status         SessionListingRepairStatus
+	Preview        string
+	Turns          int
+	LedgerRepaired bool
+}
+
+// RepairSessionListingProjection repairs one session generation while holding
+// only that session's save/file/meta locks. Foreground saves win immediately;
+// callers persist a retry instead of waiting behind active work.
+func RepairSessionListingProjection(ctx context.Context, path string) (SessionListingRepairResult, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return SessionListingRepairResult{}, fmt.Errorf("empty session path")
+	}
+	if err := ctx.Err(); err != nil {
+		return SessionListingRepairResult{}, err
+	}
+	unlockSave, ok := tryLockSessionSavePath(path)
+	if !ok {
+		return SessionListingRepairResult{}, ErrSessionListingRepairBusy
+	}
+	defer unlockSave()
+	unlockFile, err := tryLockSessionFile(path)
+	if err != nil {
+		if errors.Is(err, ErrSessionFileLockHeld) {
+			return SessionListingRepairResult{}, ErrSessionListingRepairBusy
+		}
+		return SessionListingRepairResult{}, err
+	}
+	defer unlockFile()
+	unlockMeta, err := LockSessionMetaPath(path)
+	if err != nil {
+		return SessionListingRepairResult{}, err
+	}
+	defer unlockMeta()
+
+	meta, metaOK, err := LoadBranchMeta(path)
+	if err != nil {
+		if isDamagedSessionRepairError(err) {
+			return SessionListingRepairResult{Status: SessionListingRepairDamaged}, nil
+		}
+		return SessionListingRepairResult{}, err
+	}
+	if !metaOK {
+		meta = BranchMeta{ID: BranchID(path)}
+	}
+	if preview, turns, ok, unsupported, err := indexedSessionListing(path, meta); err != nil {
+		return SessionListingRepairResult{}, err
+	} else if unsupported {
+		return SessionListingRepairResult{Status: SessionListingRepairUnsupported}, nil
+	} else if ok {
+		if sessionListingProjectionFresh(meta.SchemaVersion, meta.Turns, meta.Revision,
+			meta.ListingRevision, meta.ContentDigest, meta.ListingContentDigest) &&
+			meta.Preview == preview && meta.Turns == turns {
+			return SessionListingRepairResult{Status: SessionListingRepairAlreadyCurrent, Preview: preview, Turns: turns}, nil
+		}
+		meta.Preview = preview
+		meta.Turns = turns
+		meta.SchemaVersion = BranchMetaCountsVersion
+		stampSessionListingProjection(&meta)
+		if err := saveBranchMeta(path, meta, false); err != nil {
+			return SessionListingRepairResult{}, err
+		}
+		return SessionListingRepairResult{Status: SessionListingRepairApplied, Preview: preview, Turns: turns}, nil
+	}
+
+	before, err := sessionRepairContentFingerprint(path)
+	if err != nil {
+		return SessionListingRepairResult{}, err
+	}
+	msgs, state, repairable, err := loadSessionDisplayMessagesContextUnlocked(ctx, path)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return SessionListingRepairResult{}, ctxErr
+		}
+		if isUnsupportedSessionRepairError(err) {
+			return SessionListingRepairResult{Status: SessionListingRepairUnsupported}, nil
+		}
+		if isDamagedSessionRepairError(err) {
+			return SessionListingRepairResult{Status: SessionListingRepairDamaged}, nil
+		}
+		return SessionListingRepairResult{}, err
+	}
+	if !repairable {
+		return SessionListingRepairResult{Status: SessionListingRepairDamaged}, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return SessionListingRepairResult{}, err
+	}
+	after, err := sessionRepairContentFingerprint(path)
+	if err != nil {
+		return SessionListingRepairResult{}, err
+	}
+	if before != after {
+		return SessionListingRepairResult{Status: SessionListingRepairSourceChanged}, nil
+	}
+
+	preview, turns := SessionPreviewFromMessages(msgs)
+	ledgerCurrent := meta.Revision > 0 && strings.TrimSpace(meta.ContentDigest) == state.DigestHex
+	if meta.Recovered && strings.TrimSpace(meta.RecoveryDigest) != state.DigestHex {
+		ledgerCurrent = false
+	}
+	ledgerRepaired := !ledgerCurrent
+	if ledgerRepaired {
+		meta.Revision = max(int64(1), meta.Revision+1)
+		meta.ContentDigest = state.DigestHex
+		if meta.Recovered || strings.TrimSpace(meta.RecoveryDigest) != "" {
+			meta.RecoveryDigest = state.DigestHex
+		}
+		meta.WriterID = SessionWriterID()
+	}
+	meta.Preview = preview
+	meta.Turns = turns
+	meta.SchemaVersion = BranchMetaCountsVersion
+	stampSessionListingProjection(&meta)
+
+	// The display index ranges describe the compatibility JSONL exactly, so
+	// refresh it from this single authoritative replay before publishing meta.
+	if err := writeSessionMessages(path, msgs); err != nil {
+		return SessionListingRepairResult{}, fmt.Errorf("write session display read model: %w", err)
+	}
+	if err := writeSessionEventIndex(path, msgs, state.Digest, meta.Revision); err != nil {
+		return SessionListingRepairResult{}, err
+	}
+	idx := BuildSessionDisplayIndex(msgs, meta.Revision, true, state.Digest)
+	if idx == nil {
+		return SessionListingRepairResult{}, fmt.Errorf("encode session display index")
+	}
+	if err := WriteSessionDisplayIndex(store.SessionDisplayIndex(path), idx); err != nil {
+		return SessionListingRepairResult{}, err
+	}
+	if err := saveBranchMeta(path, meta, false); err != nil {
+		return SessionListingRepairResult{}, err
+	}
+	return SessionListingRepairResult{
+		Status: SessionListingRepairApplied, Preview: preview, Turns: turns, LedgerRepaired: ledgerRepaired,
+	}, nil
+}
+
+func indexedSessionListing(path string, meta BranchMeta) (preview string, turns int, ok, unsupported bool, err error) {
+	digest := strings.TrimSpace(meta.ContentDigest)
+	if meta.Revision <= 0 || digest == "" || meta.Recovered && strings.TrimSpace(meta.RecoveryDigest) != digest {
+		return "", 0, false, false, nil
+	}
+	idx, err := LoadSessionDisplayIndex(store.SessionDisplayIndex(path))
+	if err != nil || idx == nil || !idx.ListingPreviewKnown || !idx.RevisionKnown ||
+		idx.Revision != meta.Revision || idx.ContentDigest != digest {
+		return "", 0, false, false, nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", 0, false, false, err
+	}
+	if info.IsDir() || info.Size() != idx.TranscriptSize {
+		return "", 0, false, false, nil
+	}
+	indexInfo, err := os.Stat(store.SessionDisplayIndex(path))
+	if err != nil || indexInfo.ModTime().Before(SessionContentModTime(path)) {
+		return "", 0, false, false, nil
+	}
+	probe, err := probeSessionEventLog(path)
+	if err != nil {
+		return "", 0, false, false, err
+	}
+	if probe.futureSchema {
+		return "", 0, false, true, nil
+	}
+	if probe.native && probe.size > 0 {
+		eventIdx, err := readSessionEventIndex(path)
+		if err != nil || eventIdx == nil || eventIdx.LogSize != probe.size ||
+			eventIdx.Revision != meta.Revision || eventIdx.ContentDigest != digest ||
+			eventIdx.MessageCount != idx.MessageCount {
+			return "", 0, false, false, nil
+		}
+		eventInfo, eventErr := os.Stat(store.SessionEventIndex(path))
+		logInfo, logErr := os.Stat(store.SessionEventLog(path))
+		if eventErr != nil || logErr != nil || eventInfo.ModTime().Before(logInfo.ModTime()) {
+			return "", 0, false, false, nil
+		}
+	}
+	return idx.ListingPreview, idx.AuthoredTurns, true, false, nil
+}
+
+func sessionRepairContentFingerprint(path string) (string, error) {
+	h := sha256.New()
+	for _, artifact := range []string{path, store.SessionEventLog(path)} {
+		info, err := os.Stat(artifact)
+		if err != nil {
+			if os.IsNotExist(err) {
+				_, _ = fmt.Fprintf(h, "missing\x00")
+				continue
+			}
+			return "", err
+		}
+		_, _ = fmt.Fprintf(h, "%d\x00%d\x00%d\x00", info.Size(), info.ModTime().UnixNano(), info.Mode())
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+func isUnsupportedSessionRepairError(err error) bool {
+	return errors.Is(err, ErrSessionReplayLimitExceeded) ||
+		strings.Contains(err.Error(), "unsupported schema") ||
+		strings.Contains(err.Error(), "supports up to") ||
+		strings.Contains(err.Error(), "unsupported event type")
+}
+
+func isDamagedSessionRepairError(err error) bool {
+	text := err.Error()
+	return strings.Contains(text, "decode session transcript") ||
+		strings.Contains(text, "decode session event log") ||
+		strings.Contains(text, "decode ")
+}

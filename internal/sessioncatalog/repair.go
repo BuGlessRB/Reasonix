@@ -3,7 +3,7 @@ package sessioncatalog
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
+	"errors"
 	"runtime"
 	"strings"
 	"time"
@@ -11,149 +11,330 @@ import (
 	"reasonix/internal/agent"
 )
 
+const repairWakeKey = "session-catalog-repair-wake"
+
+type repairItem struct {
+	path             string
+	pathKey          string
+	target           DirectoryTarget
+	topicID          string
+	workspaceRootKey string
+	attempts         int
+}
+
+type repairOutcome struct {
+	item   repairItem
+	result agent.SessionListingRepairResult
+	err    error
+}
+
 func (c *Catalog) enqueueRepair(path string) {
 	if c == nil || c.opts.DisableRepair || strings.TrimSpace(path) == "" {
 		return
 	}
-	key := c.pathKey(path)
-	if _, loaded := c.repairQueued.LoadOrStore(key, struct{}{}); loaded {
+	if _, loaded := c.repairQueued.LoadOrStore(repairWakeKey, struct{}{}); loaded {
 		return
 	}
 	select {
 	case c.repairCh <- path:
 	case <-c.stop:
-		c.repairQueued.Delete(key)
+		c.repairQueued.Delete(repairWakeKey)
 	default:
-		// Channel pressure must never permanently drop unknown rows. Leave them
-		// in the DB and clear the in-memory marker so the drain ticker requeues.
-		c.repairQueued.Delete(key)
+		c.repairQueued.Delete(repairWakeKey)
 	}
 }
 
 func (c *Catalog) enqueuePersistedRepairs(ctx context.Context) {
-	c.drainUnknownRepairs(ctx, c.opts.QueueCapacity)
+	if ctx.Err() == nil {
+		c.enqueueRepair(repairWakeKey)
+	}
 }
 
-// drainUnknownRepairs pulls the next batch of turns_state=unknown paths from the
-// durable projection. Combined with the repair ticker this gives eventual
-// completeness even when more than QueueCapacity sessions need repair.
+// drainUnknownRepairs is retained for internal callers; the due index, not a
+// full unknown-row scan, now decides which paths run.
 func (c *Catalog) drainUnknownRepairs(ctx context.Context, limit int) {
-	if c == nil || c.db == nil || c.opts.DisableRepair || limit <= 0 {
-		return
-	}
-	if err := ctx.Err(); err != nil {
-		return
-	}
-	rows, err := c.db.QueryContext(ctx, `SELECT path FROM catalog_sessions
-        WHERE turns_state='unknown' ORDER BY last_activity_at DESC LIMIT ?`, limit)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var path string
-		if rows.Scan(&path) == nil {
-			c.enqueueRepair(path)
-		}
+	if limit > 0 && ctx.Err() == nil {
+		c.enqueueRepair(repairWakeKey)
 	}
 }
 
 func (c *Catalog) repairLoop() {
 	defer c.workers.Done()
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+	timer := time.NewTimer(0)
+	defer timer.Stop()
 	for {
 		select {
-		case path := <-c.repairCh:
-			c.repairSession(c.workerCtx, path)
-			c.repairQueued.Delete(c.pathKey(path))
-			c.drainUnknownRepairs(c.workerCtx, 32)
-			runtime.Gosched()
-		case <-ticker.C:
-			c.drainUnknownRepairs(c.workerCtx, 64)
+		case <-c.repairCh:
+			c.repairQueued.Delete(repairWakeKey)
+			c.runRepairWave(c.workerCtx)
+			resetRepairTimer(timer, c.nextRepairDelay(c.workerCtx))
+		case <-timer.C:
+			c.runRepairWave(c.workerCtx)
+			resetRepairTimer(timer, c.nextRepairDelay(c.workerCtx))
 		case <-c.stop:
 			return
 		}
 	}
 }
 
-func (c *Catalog) repairSession(workerCtx context.Context, path string) {
+func resetRepairTimer(timer *time.Timer, delay time.Duration) {
+	if delay < 0 {
+		delay = 0
+	}
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(delay)
+}
+
+func (c *Catalog) nextRepairDelay(ctx context.Context) time.Duration {
+	if ctx.Err() != nil {
+		return time.Hour
+	}
+	var next sql.NullInt64
+	err := c.db.QueryRowContext(ctx, `SELECT MIN(repair_retry_at) FROM catalog_sessions
+		WHERE turns_state='unknown' AND repair_state IN ('pending','deferred')`).Scan(&next)
+	if err != nil || !next.Valid {
+		return time.Hour
+	}
+	delay := time.UnixMilli(next.Int64).Sub(c.opts.Now())
+	if delay < 250*time.Millisecond {
+		// A failed claim must not turn an already-due row into a timer hot loop.
+		// Fresh source writes still wake repairCh immediately.
+		return 250 * time.Millisecond
+	}
+	return delay
+}
+
+func (c *Catalog) resetRepairSchedule(ctx context.Context) error {
+	_, err := c.db.ExecContext(ctx, `UPDATE catalog_sessions SET
+		repair_state=CASE WHEN turns_state='unknown' THEN 'pending' ELSE 'complete' END,
+		repair_attempts=CASE
+			WHEN turns_state='unknown' AND repair_state='active' AND repair_engine_version=? THEN repair_attempts
+			ELSE 0 END,
+		repair_retry_at=CASE WHEN turns_state='unknown' THEN 0 ELSE repair_retry_at END,
+		repair_error_kind='', repair_engine_version=?
+		WHERE repair_state='active' OR repair_engine_version<>?`, repairEngineVersion, repairEngineVersion, repairEngineVersion)
+	return err
+}
+
+func (c *Catalog) runRepairWave(workerCtx context.Context) {
 	if workerCtx.Err() != nil {
 		return
 	}
-	// Repair writes a source snapshot that the next directory projection will
-	// consume. Share the directory lock with exact indexing and reconcile so a
-	// scan parsed before this repair cannot overwrite its result afterward.
-	lock := c.directoryLock(filepath.Dir(path))
-	if c.testRepairLockHook != nil {
-		c.testRepairLockHook(false)
+	started := c.opts.Now()
+	processed := false
+	dirty := map[string]DirectoryTarget{}
+	for workerCtx.Err() == nil {
+		items, err := c.claimDueRepairs(workerCtx, 64)
+		if err != nil || len(items) == 0 {
+			break
+		}
+		processed = true
+		batch := make([]repairOutcome, 0, len(items))
+		batchStarted := c.opts.Now()
+		for _, item := range items {
+			ctx, cancel := context.WithTimeout(workerCtx, 30*time.Second)
+			var result agent.SessionListingRepairResult
+			var repairErr error
+			if c.testRepairSessionHook != nil {
+				result, repairErr = c.testRepairSessionHook(ctx, item.path)
+			} else {
+				result, repairErr = agent.RepairSessionListingProjection(ctx, item.path)
+			}
+			cancel()
+			if workerCtx.Err() != nil {
+				return
+			}
+			batch = append(batch, repairOutcome{item: item, result: result, err: repairErr})
+			if len(batch) >= 64 || c.opts.Now().Sub(batchStarted) >= 250*time.Millisecond {
+				c.applyRepairBatch(workerCtx, batch, dirty)
+				batch = batch[:0]
+				batchStarted = c.opts.Now()
+			}
+			runtime.Gosched()
+		}
+		c.applyRepairBatch(workerCtx, batch, dirty)
 	}
-	lock.Lock()
-	defer lock.Unlock()
-	if c.testRepairLockHook != nil {
-		c.testRepairLockHook(true)
+	for _, target := range dirty {
+		c.RequestReconcile(target)
 	}
-
-	ctx, cancel := context.WithTimeout(workerCtx, 30*time.Second)
-	defer cancel()
-	// LoadSessionDisplayMessages is not yet context-aware; check before/after.
-	msgs, state, _, err := agent.LoadSessionDisplayMessages(path)
-	if ctx.Err() != nil || workerCtx.Err() != nil {
-		return
+	if processed {
+		c.statusMu.Lock()
+		c.status.LastRepairDurationMS = max(int64(0), c.opts.Now().Sub(started).Milliseconds())
+		c.statusMu.Unlock()
 	}
-	if err != nil {
-		_ = c.applyRepairResult(ctx, path, "", 0, false)
-		return
-	}
-	preview, turns := agent.SessionPreviewFromMessages(msgs)
-	applied, err := agent.UpdateSessionListingProjectionIfCurrent(path, "", preview, turns, false, state)
-	if err != nil || !applied {
-		return
-	}
-	if ctx.Err() != nil || workerCtx.Err() != nil {
-		return
-	}
-	_ = c.applyRepairResult(ctx, path, preview, turns, true)
 }
 
-// applyRepairResult updates only fields proven by parsing one transcript. Topic
-// aggregates and recovery projection fields remain owned by ReconcileDirectory.
-// The caller holds the directory lock, so the queued reconcile observes this
-// source state or a newer one and publishes exactly one complete projection.
-func (c *Catalog) applyRepairResult(ctx context.Context, path, preview string, turns int, valid bool) error {
+func (c *Catalog) claimDueRepairs(ctx context.Context, limit int) ([]repairItem, error) {
 	c.mutationMu.Lock()
 	defer c.mutationMu.Unlock()
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var target DirectoryTarget
-	pathKey := c.pathKey(path)
-	if err := tx.QueryRowContext(ctx, `SELECT directory,scope,workspace_root FROM catalog_sessions WHERE path_key=?`, pathKey).
-		Scan(&target.Path, &target.Scope, &target.WorkspaceRoot); err != nil {
-		_ = tx.Rollback()
-		if err == sql.ErrNoRows {
-			return nil
-		}
-		return err
-	}
-	if valid {
-		_, err = tx.ExecContext(ctx, `UPDATE catalog_sessions SET preview=?,turns=?,turns_state='valid',
-			health='ok',meta_fingerprint=? WHERE path_key=?`,
-			preview, turns, fileFingerprint(agent.BranchMetaPath(path)), pathKey)
-	} else {
-		_, err = tx.ExecContext(ctx, `UPDATE catalog_sessions SET turns_state='corrupt',health='corrupt' WHERE path_key=?`, pathKey)
-	}
+	rows, err := tx.QueryContext(ctx, `SELECT path,path_key,directory,scope,workspace_root,workspace_root_key,topic_id,repair_attempts
+		FROM catalog_sessions WHERE turns_state='unknown'
+		AND repair_state IN ('pending','deferred') AND repair_retry_at<=?
+		ORDER BY repair_retry_at ASC,last_activity_at DESC,path_key ASC LIMIT ?`, c.opts.Now().UnixMilli(), limit)
 	if err != nil {
 		_ = tx.Rollback()
-		return err
+		return nil, err
+	}
+	var items []repairItem
+	for rows.Next() {
+		var item repairItem
+		if err := rows.Scan(&item.path, &item.pathKey, &item.target.Path, &item.target.Scope,
+			&item.target.WorkspaceRoot, &item.workspaceRootKey, &item.topicID, &item.attempts); err != nil {
+			_ = rows.Close()
+			_ = tx.Rollback()
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Close(); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	for _, item := range items {
+		if _, err := tx.ExecContext(ctx, `UPDATE catalog_sessions SET repair_state='active',repair_error_kind=''
+			WHERE path_key=? AND turns_state='unknown'`, item.pathKey); err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
-		return err
+		return nil, err
 	}
 	c.refreshCounts(ctx)
-	c.RequestReconcile(target)
-	return nil
+	return items, nil
+}
+
+func (c *Catalog) applyRepairBatch(ctx context.Context, outcomes []repairOutcome, dirty map[string]DirectoryTarget) {
+	if len(outcomes) == 0 || ctx.Err() != nil {
+		return
+	}
+	c.mutationMu.Lock()
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		c.mutationMu.Unlock()
+		return
+	}
+	rollback := func() {
+		_ = tx.Rollback()
+		c.mutationMu.Unlock()
+	}
+	affected := map[TopicKey]struct{}{}
+	roots := map[string]struct{}{}
+	for _, outcome := range outcomes {
+		contentFingerprint := sessionContentFingerprint(outcome.item.path)
+		metaFingerprint := fileFingerprint(agent.BranchMetaPath(outcome.item.path))
+		sourceFingerprint := contentFingerprint + "\x00" + metaFingerprint
+		state, attempts, retryAt, errorKind, health := repairDisposition(outcome, c.opts.Now())
+		if state == "complete" {
+			_, err = tx.ExecContext(ctx, `UPDATE catalog_sessions SET preview=?,turns=?,turns_state='valid',health='ok',
+				content_fingerprint=?,meta_fingerprint=?,repair_state='complete',repair_attempts=0,repair_retry_at=0,
+				repair_error_kind='',repair_source_fingerprint=?,repair_engine_version=? WHERE path_key=?`,
+				outcome.result.Preview, outcome.result.Turns, contentFingerprint, metaFingerprint,
+				sourceFingerprint, repairEngineVersion, outcome.item.pathKey)
+			dirty[queuePathKey(outcome.item.target.Path)] = outcome.item.target
+		} else {
+			_, err = tx.ExecContext(ctx, `UPDATE catalog_sessions SET health=?,repair_state=?,repair_attempts=?,repair_retry_at=?,
+				repair_error_kind=?,content_fingerprint=?,meta_fingerprint=?,repair_source_fingerprint=?,repair_engine_version=?
+				WHERE path_key=?`, health, state, attempts, retryAt, errorKind, contentFingerprint, metaFingerprint,
+				sourceFingerprint, repairEngineVersion, outcome.item.pathKey)
+		}
+		if err != nil {
+			rollback()
+			return
+		}
+		if outcome.item.topicID != "" {
+			affected[TopicKey{Scope: outcome.item.target.Scope, WorkspaceRoot: outcome.item.target.WorkspaceRoot,
+				workspaceKey: outcome.item.workspaceRootKey, TopicID: outcome.item.topicID}] = struct{}{}
+		}
+		roots[outcome.item.target.WorkspaceRoot] = struct{}{}
+	}
+	for key := range affected {
+		if err := c.recomputeTopic(ctx, tx, key); err != nil {
+			rollback()
+			return
+		}
+	}
+	revision, err := bumpRevision(ctx, tx)
+	if err != nil {
+		rollback()
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.mutationMu.Unlock()
+		return
+	}
+	c.mutationMu.Unlock()
+	c.publishRevision(revision, mapKeys(roots), "repair_batch")
+	c.refreshCounts(ctx)
+}
+
+func repairDisposition(outcome repairOutcome, now time.Time) (state string, attempts int, retryAt int64, errorKind string, health Health) {
+	if outcome.err == nil {
+		switch outcome.result.Status {
+		case agent.SessionListingRepairApplied, agent.SessionListingRepairAlreadyCurrent:
+			return "complete", 0, 0, "", HealthOK
+		case agent.SessionListingRepairDamaged:
+			return "blocked", outcome.item.attempts + 1, 0, "damaged", HealthCorrupt
+		case agent.SessionListingRepairUnsupported:
+			return "blocked", outcome.item.attempts + 1, 0, "unsupported", HealthDegraded
+		case agent.SessionListingRepairSourceChanged:
+			return "deferred", outcome.item.attempts, now.Add(30 * time.Second).UnixMilli(), "source_changed", HealthDegraded
+		}
+	}
+	attempts = outcome.item.attempts + 1
+	errorKind = "io"
+	if errors.Is(outcome.err, agent.ErrSessionListingRepairBusy) {
+		errorKind = "busy"
+	} else if errors.Is(outcome.err, context.DeadlineExceeded) {
+		errorKind = "timeout"
+	}
+	return "deferred", attempts, now.Add(repairBackoff(attempts)).UnixMilli(), errorKind, HealthDegraded
+}
+
+func repairBackoff(attempts int) time.Duration {
+	if attempts < 1 {
+		attempts = 1
+	}
+	delay := 30 * time.Second
+	for i := 1; i < attempts && delay < 30*time.Minute; i++ {
+		delay *= 2
+	}
+	if delay > 30*time.Minute {
+		return 30 * time.Minute
+	}
+	return delay
+}
+
+func (c *Catalog) repairSession(workerCtx context.Context, path string) {
+	if workerCtx.Err() != nil {
+		return
+	}
+	var item repairItem
+	item.path = path
+	item.pathKey = c.pathKey(path)
+	if err := c.db.QueryRowContext(workerCtx, `SELECT directory,scope,workspace_root,workspace_root_key,topic_id,repair_attempts
+		FROM catalog_sessions WHERE path_key=?`, item.pathKey).Scan(&item.target.Path, &item.target.Scope,
+		&item.target.WorkspaceRoot, &item.workspaceRootKey, &item.topicID, &item.attempts); err != nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(workerCtx, 30*time.Second)
+	defer cancel()
+	result, err := agent.RepairSessionListingProjection(ctx, path)
+	dirty := map[string]DirectoryTarget{}
+	c.applyRepairBatch(workerCtx, []repairOutcome{{item: item, result: result, err: err}}, dirty)
+	for _, target := range dirty {
+		c.RequestReconcile(target)
+	}
 }
 
 type knownSourceState struct {
