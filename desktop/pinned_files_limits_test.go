@@ -12,7 +12,9 @@ import (
 
 func TestPinnedContextXMLIsWellFormedAndEscaped(t *testing.T) {
 	root := t.TempDir()
-	name := `spec "&<.txt`
+	// Ampersand exercises XML attribute escaping while remaining a valid file
+	// name on every supported desktop platform (notably Windows).
+	name := `spec & 'quoted'.txt`
 	content := `before </pinned_context><evil attr="&"> after`
 	if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
