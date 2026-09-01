@@ -163,13 +163,11 @@ console.log("\nbundle budgets");
 // The generation-bound history-prepend lease adds stable-key reader anchoring,
 // full mounted coverage, and one final arbiter-owned correction. The measured
 // path is 457.406 KiB after extracting the lease owner to satisfy repolint.
-// Completion uncertainty adds a distinct terminal notice and complete English
-// recovery guidance, while the compact session-version host and latest-base
-// transcript settle ownership remain on the same startup graph.
-// Latest-base transcript settle ownership measures 457.523 KiB with this UX;
-// the final merged completion-validation path measures 457.651 KiB. Retain
-// 0.049 KiB with the smallest one-decimal ratchet.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 457.7 : 457.7;
+// Latest-base transcript settle ownership measures 457.518 KiB with this UX;
+// isolated conversation forks and their extracted browser mock adapter bring
+// the combined tree to 458.158 KiB. Retain 0.042 KiB with the smallest
+// one-decimal ratchet.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 458.2 : 458.2;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -222,10 +220,9 @@ for (const path of localeChunks) {
   // retain roughly 0.13 KiB of platform headroom for each.
   // Stream-failure diagnostics add five strings per dialect. Together with the
   // reachable-tail recovery copy, the merged chunks measure 58.923 KiB zh and
-  // 59.710 KiB zh-TW. Completion uncertainty raises the complete localized
-  // guidance to 59.007 KiB zh and 59.791 KiB zh-TW; retain roughly 0.1 KiB of
-  // bounded platform headroom for both dialects.
-  const budget = name.startsWith("zh-TW-") ? 59.9 * 1024 : 59.1 * 1024;
+  // 59.710 KiB zh-TW. The isolated-fork guidance brings the measured chunks
+  // to 59.1 KiB zh and 59.9 KiB zh-TW; retain a narrow one-decimal ratchet.
+  const budget = name.startsWith("zh-TW-") ? 60.0 * 1024 : 59.2 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -295,8 +292,9 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // dialog remain lazy. Completion uncertainty adds a distinct terminal notice
 // and localized startup copy without collapsing into recovery-paused UX.
 // Latest-base transcript settle ownership brings the measured path to
-// 2452.821 KiB. The final merged path measures 2453.249 KiB; retain 0.051 KiB
-// with the smallest one-decimal ratchet.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_453.3 : 2_453.3;
+// 2452.773 KiB; isolated conversation forks bring the combined tree to
+// 2454.719 KiB on the release toolchain. Retain 0.081 KiB with the smallest
+// one-decimal ratchet.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_454.8 : 2_454.8;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
