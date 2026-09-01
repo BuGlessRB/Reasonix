@@ -46,6 +46,7 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
       sha: ${{ steps.release.outputs.sha }}
+      candidate: ${{ steps.release.outputs.candidate }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -72,8 +73,16 @@ jobs:
             exit 1
           fi
           version="${tag#studio-}"
-          { echo "tag=$tag"; echo "version=$version"; echo "sha=$sha"; } >> "$GITHUB_OUTPUT"
-          echo "resolved $tag -> $version at $sha"
+          # Semver's prerelease segment, group 4, read from the grammar rather
+          # than the spelling. Every Studio release carries GitHub's prerelease
+          # flag, so the tag-level distinction needs a name of its own.
+          candidate=false
+          if [[ "${version#v}" =~ $semver ]] && [ -n "${BASH_REMATCH[4]}" ]; then
+            candidate=true
+          fi
+          { echo "tag=$tag"; echo "version=$version"; echo "sha=$sha"
+            echo "candidate=$candidate"; } >> "$GITHUB_OUTPUT"
+          echo "resolved $tag -> $version at $sha (candidate=$candidate)"
 
   # The contract is this repository's mirror of what SignPath's console trusts:
   # which branch and which workflow may request the release certificate. It is
@@ -544,6 +553,7 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           TAG: ${{ needs.resolve.outputs.tag }}
           VERSION: ${{ needs.resolve.outputs.version }}
+          CANDIDATE: ${{ needs.resolve.outputs.candidate }}
           HAS_R2: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ACCOUNT_ID != '' && secrets.R2_BUCKET != '' }}
         run: |
           if [ "$HAS_R2" != "true" ]; then
@@ -558,6 +568,14 @@ jobs:
           # Immutable per-tag objects. The tag prefix cannot collide with the
           # desktop line's because the tag names differ (studio-v* vs desktop-v*).
           aws s3 cp dist/ "s3://${R2_BUCKET}/${TAG}/" --recursive --endpoint-url "$endpoint"
+
+          # A candidate is mirrored so it can be installed from its own manifest
+          # and tested, but it never enters the catalog: the catalog is what a
+          # running install reads to decide its next version.
+          if [ "$CANDIDATE" = "true" ]; then
+            echo "$TAG mirrored; the Studio catalog stays at its released version"
+            exit 0
+          fi
 
           # Studio's own catalog. Writing the ROOT versions.json here would hand
           # desktop users Studio releases, so the prefix is not optional.
