@@ -37,10 +37,6 @@ func classifyRecoveryLineage(record SessionRecord) SessionRecord {
 	return record
 }
 
-func classifyRecoveryLineageFromContent(record SessionRecord) SessionRecord {
-	return classifyRecoveryLineageWithContent(record, newRecoveryContentCache(nil))
-}
-
 type recoveryContentResult struct {
 	snapshot agent.SessionContentSnapshot
 	ok       bool

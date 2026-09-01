@@ -14,7 +14,7 @@ func recoveryHeavyDirectory(t *testing.T, branches int) (string, DirectoryTarget
 	dir := t.TempDir()
 	root := filepath.Join(dir, "root.jsonl")
 	saveLineageSession(t, root, "question", "answer", "continued", "done")
-	for i := 0; i < branches; i++ {
+	for range branches {
 		session := agent.NewSession("sys")
 		session.Add(provider.Message{Role: provider.RoleUser, Content: "question"})
 		session.Add(provider.Message{Role: provider.RoleAssistant, Content: "answer"})
@@ -65,7 +65,7 @@ func BenchmarkRecoveryDirectoryVerifiedIdleReconcile(b *testing.B) {
 	if err := s.Save(root); err != nil {
 		b.Fatal(err)
 	}
-	for i := 0; i < 128; i++ {
+	for range 128 {
 		branch := agent.NewSession("sys")
 		branch.Add(provider.Message{Role: provider.RoleUser, Content: "question"})
 		if _, err := branch.SaveConflictRecoveryBranch(agent.RecoveryBranchOptions{OriginalPath: root}); err != nil {
@@ -82,7 +82,7 @@ func BenchmarkRecoveryDirectoryVerifiedIdleReconcile(b *testing.B) {
 		b.Fatal(err)
 	}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		if err := catalog.ReconcileDirectory(ctx, target); err != nil {
 			b.Fatal(err)
 		}

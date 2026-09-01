@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"maps"
 	"runtime"
 	"strings"
 	"time"
@@ -47,14 +48,6 @@ func (c *Catalog) enqueueRepair(path string) {
 
 func (c *Catalog) enqueuePersistedRepairs(ctx context.Context) {
 	if ctx.Err() == nil {
-		c.enqueueRepair(repairWakeKey)
-	}
-}
-
-// drainUnknownRepairs is retained for internal callers; the due index, not a
-// full unknown-row scan, now decides which paths run.
-func (c *Catalog) drainUnknownRepairs(ctx context.Context, limit int) {
-	if limit > 0 && ctx.Err() == nil {
 		c.enqueueRepair(repairWakeKey)
 	}
 }
@@ -297,9 +290,7 @@ func (c *Catalog) applyRepairBatch(ctx context.Context, outcomes []repairOutcome
 		return err
 	}
 	c.mutationMu.Unlock()
-	for key, target := range committedDirty {
-		dirty[key] = target
-	}
+	maps.Copy(dirty, committedDirty)
 	c.publishRevision(revision, mapKeys(roots), "repair_batch")
 	c.refreshCounts(ctx)
 	return nil
