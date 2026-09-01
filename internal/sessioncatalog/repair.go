@@ -301,6 +301,23 @@ func (c *Catalog) applyRepairBatch(ctx context.Context, outcomes []repairOutcome
 	if len(outcomes) == 0 || ctx.Err() != nil {
 		return ctx.Err()
 	}
+	generations, releaseGenerations, err := lockRepairBatchGenerations(ctx, outcomes)
+	if err != nil {
+		return err
+	}
+	released := false
+	release := func() {
+		if !released {
+			releaseGenerations()
+			released = true
+		}
+	}
+	defer release()
+	return c.applyGuardedRepairBatch(ctx, outcomes, generations, dirty, release)
+}
+
+func (c *Catalog) applyGuardedRepairBatch(ctx context.Context, outcomes []repairOutcome, generations []repairBatchGeneration,
+	dirty map[string]DirectoryTarget, releaseGenerations func()) error {
 	c.mutationMu.Lock()
 	if err := c.repairBatchTestError("begin"); err != nil {
 		c.mutationMu.Unlock()
@@ -325,16 +342,15 @@ func (c *Catalog) applyRepairBatch(ctx context.Context, outcomes []repairOutcome
 	roots := map[string]struct{}{}
 	committedDirty := map[string]DirectoryTarget{}
 	mutated := 0
-	for _, outcome := range outcomes {
+	for index, outcome := range outcomes {
 		if err := c.repairBatchTestError("update"); err != nil {
 			return rollback(err)
 		}
-		contentFingerprint := sessionContentFingerprint(outcome.item.path)
-		metaFingerprint := fileFingerprint(agent.BranchMetaPath(outcome.item.path))
+		contentFingerprint, metaFingerprint := repairBatchFingerprints(outcome, generations[index])
 		sourceFingerprint := contentFingerprint + "\x00" + metaFingerprint
 		resultHasGeneration := outcome.result.ContentFingerprint != "" || outcome.result.MetaFingerprint != ""
 		resultSourceFingerprint := outcome.result.ContentFingerprint + "\x00" + outcome.result.MetaFingerprint
-		if resultHasGeneration && resultSourceFingerprint != sourceFingerprint {
+		if generations[index].locked && resultHasGeneration && resultSourceFingerprint != sourceFingerprint {
 			result, updateErr := statements.reset.ExecContext(ctx,
 				contentFingerprint, metaFingerprint, sourceFingerprint, repairEngineVersion, outcome.item.pathKey,
 				outcome.item.attempts, outcome.item.retryAt, outcome.item.sourceFingerprint)
@@ -408,6 +424,7 @@ func (c *Catalog) applyRepairBatch(ctx context.Context, outcomes []repairOutcome
 		return err
 	}
 	c.mutationMu.Unlock()
+	releaseGenerations()
 	maps.Copy(dirty, committedDirty)
 	c.publishRevision(revision, mapKeys(roots), "repair_batch")
 	c.refreshCounts(ctx)

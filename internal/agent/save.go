@@ -1277,15 +1277,12 @@ func lockSessionFile(path string) (func(), error) {
 // cycle with both goroutines in this process and other Reasonix processes.
 // Callers must hold it from the first read through the final replace.
 func LockSessionMetaPath(path string) (func(), error) {
-	if strings.TrimSpace(path) == "" {
-		return nil, fmt.Errorf("empty session path")
-	}
-	canonical := canonicalSessionSavePath(path)
-	if err := os.MkdirAll(filepath.Dir(canonical), 0o755); err != nil {
-		return nil, fmt.Errorf("create session metadata dir: %w", err)
+	lockPath, err := sessionMetaLockTarget(path)
+	if err != nil {
+		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), sessionMetaLockWait)
-	releaseFile, err := filelock.Acquire(ctx, sessionMetaLockPath(canonical))
+	releaseFile, err := filelock.Acquire(ctx, lockPath)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("lock session metadata: %w", err)
@@ -1293,6 +1290,32 @@ func LockSessionMetaPath(path string) (func(), error) {
 	return func() {
 		releaseFile()
 	}, nil
+}
+
+func tryLockSessionMetaPath(path string) (func(), bool, error) {
+	lockPath, err := sessionMetaLockTarget(path)
+	if err != nil {
+		return nil, false, err
+	}
+	releaseFile, err := filelock.TryAcquire(lockPath)
+	if errors.Is(err, filelock.ErrHeld) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("try lock session metadata: %w", err)
+	}
+	return releaseFile, true, nil
+}
+
+func sessionMetaLockTarget(path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", fmt.Errorf("empty session path")
+	}
+	canonical := canonicalSessionSavePath(path)
+	if err := os.MkdirAll(filepath.Dir(canonical), 0o755); err != nil {
+		return "", fmt.Errorf("create session metadata dir: %w", err)
+	}
+	return sessionMetaLockPath(canonical), nil
 }
 
 func sessionMetaLockPath(path string) string {

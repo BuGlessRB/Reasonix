@@ -40,3 +40,29 @@ func TestReconcileRunningUpdatesKeepOnlyLatestFollowUp(t *testing.T) {
 		t.Fatal("more than one follow-up remained")
 	}
 }
+
+func TestReconcileDirtyNeverDowngradesToLateOlderTarget(t *testing.T) {
+	newer := DirectoryTarget{Path: "/sessions", Scope: "workspace", WorkspaceRoot: "/new", mutationSeq: 3}
+	older := DirectoryTarget{Path: "/sessions", Scope: "global", mutationSeq: 2}
+	for _, tc := range []struct {
+		name      string
+		seedDirty bool
+	}{
+		{name: "queued target"},
+		{name: "dirty target", seedDirty: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			catalog := &Catalog{reconcileDirty: map[string]DirectoryTarget{}}
+			key := queuePathKey(newer.Path)
+			catalog.reconcileQueued.Store(key, newer)
+			if tc.seedDirty {
+				catalog.reconcileDirty[key] = newer
+			}
+			catalog.markReconcileDirty(older)
+			got, ok := catalog.takeReconcileDirty()
+			if !ok || got.mutationSeq != newer.mutationSeq || got.WorkspaceRoot != newer.WorkspaceRoot {
+				t.Fatalf("dirty target = %+v ok=%v, want newer target", got, ok)
+			}
+		})
+	}
+}

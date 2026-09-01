@@ -38,6 +38,12 @@ func (c *Catalog) RequestReconcile(target DirectoryTarget) bool {
 func (c *Catalog) markReconcileDirty(target DirectoryTarget) {
 	key := queuePathKey(target.Path)
 	c.reconcileDirtyMu.Lock()
+	if queued, ok := c.reconcileQueued.Load(key); ok {
+		target = newestReconcileTarget(queued.(DirectoryTarget), target)
+	}
+	if dirty, ok := c.reconcileDirty[key]; ok {
+		target = newestReconcileTarget(dirty, target)
+	}
 	c.reconcileDirty[key] = target
 	c.reconcileQueued.Store(key, target)
 	c.reconcileDirtyMu.Unlock()
@@ -47,15 +53,24 @@ func (c *Catalog) resolveReconcileToken(target DirectoryTarget) (DirectoryTarget
 	key := queuePathKey(target.Path)
 	c.reconcileDirtyMu.Lock()
 	defer c.reconcileDirtyMu.Unlock()
-	if _, owned := c.reconcileQueued.Load(key); !owned {
+	queued, owned := c.reconcileQueued.Load(key)
+	if !owned {
 		return DirectoryTarget{}, false
 	}
+	target = newestReconcileTarget(target, queued.(DirectoryTarget))
 	if latest, dirty := c.reconcileDirty[key]; dirty {
-		target = latest
+		target = newestReconcileTarget(target, latest)
 		delete(c.reconcileDirty, key)
 	}
 	c.reconcileQueued.Store(key, target)
 	return target, true
+}
+
+func newestReconcileTarget(current, candidate DirectoryTarget) DirectoryTarget {
+	if candidate.mutationSeq > current.mutationSeq {
+		return candidate
+	}
+	return current
 }
 
 func (c *Catalog) takeReconcileDirty() (DirectoryTarget, bool) {

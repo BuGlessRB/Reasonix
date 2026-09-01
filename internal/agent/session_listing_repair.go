@@ -34,6 +34,30 @@ type SessionListingRepairResult struct {
 	MetaFingerprint    string
 }
 
+// SessionListingGeneration identifies the transcript/event-log generation and
+// its metadata sidecar while all writer locks for the session remain held.
+type SessionListingGeneration struct {
+	ContentFingerprint string
+	MetaFingerprint    string
+}
+
+// TryLockSessionListingGeneration fences catalog publication against a
+// foreground writer. The caller must invoke the returned unlock function.
+func TryLockSessionListingGeneration(path string) (SessionListingGeneration, func(), error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return SessionListingGeneration{}, nil, fmt.Errorf("empty session path")
+	}
+	unlock, err := lockSessionListingRepair(path)
+	if err != nil {
+		return SessionListingGeneration{}, nil, err
+	}
+	return SessionListingGeneration{
+		ContentFingerprint: sessionListingCatalogContentFingerprint(path),
+		MetaFingerprint:    sessionListingCatalogFileFingerprint(BranchMetaPath(path)),
+	}, unlock, nil
+}
+
 // RepairSessionListingProjection repairs one session generation while holding
 // only that session's save/file/meta locks. Foreground saves win immediately;
 // callers persist a retry instead of waiting behind active work.
@@ -83,11 +107,16 @@ func lockSessionListingRepair(path string) (func(), error) {
 		}
 		return nil, err
 	}
-	unlockMeta, err := LockSessionMetaPath(path)
+	unlockMeta, ok, err := tryLockSessionMetaPath(path)
 	if err != nil {
 		unlockFile()
 		unlockSave()
 		return nil, err
+	}
+	if !ok {
+		unlockFile()
+		unlockSave()
+		return nil, ErrSessionListingRepairBusy
 	}
 	return func() { unlockMeta(); unlockFile(); unlockSave() }, nil
 }
