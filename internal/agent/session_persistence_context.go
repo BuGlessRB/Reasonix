@@ -18,6 +18,12 @@ type jsonMarshalResult struct {
 	err  error
 }
 
+type sessionPublishStartHookKey struct{}
+
+func withSessionPublishStartHook(ctx context.Context, hook func()) context.Context {
+	return context.WithValue(ctx, sessionPublishStartHookKey{}, hook)
+}
+
 // marshalJSONContext lets maintenance work release session locks promptly
 // when a large attachment is still being encoded. Foreground saves keep the
 // synchronous path through their background context wrappers.
@@ -147,6 +153,9 @@ func writeSessionMessagesContext(ctx context.Context, path string, msgs []provid
 	cleanup := func() {
 		_ = tmp.Close()
 		_ = os.Remove(tmpPath)
+	}
+	if hook, _ := ctx.Value(sessionPublishStartHookKey{}).(func()); hook != nil {
+		hook()
 	}
 	for _, message := range msgs {
 		data, err := marshalJSONContext(ctx, message)

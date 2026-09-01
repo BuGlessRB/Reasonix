@@ -27,18 +27,25 @@ func TestRepairSessionListingProjectionCancelsDuringPublish(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	publishStarted := make(chan struct{})
+	ctx = withSessionPublishStartHook(ctx, func() {
+		close(publishStarted)
+		<-ctx.Done()
+	})
 	done := make(chan error, 1)
 	go func() {
 		_, err := RepairSessionListingProjection(ctx, path)
 		done <- err
 	}()
-	deadline := time.Now().Add(5 * time.Second)
-	for !sessionPublishTempExists(t, dir) && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
+	select {
+	case <-publishStarted:
+	case <-time.After(30 * time.Second):
+		cancel()
+		t.Fatal("repair never reached transcript publication")
 	}
 	if !sessionPublishTempExists(t, dir) {
 		cancel()
-		t.Fatal("repair never reached transcript publication")
+		t.Fatal("publication boundary did not create its temp file")
 	}
 	cancelStarted := time.Now()
 	cancel()
