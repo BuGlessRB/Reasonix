@@ -17,6 +17,20 @@ directories:
 # version is current.
 publish: null
 
+# Chromium ships 220 locale bundles and the interface draws two languages, so
+# the rest are 46MB nothing reads. Traditional stays because a system set to it
+# would otherwise fall back to English inside Chromium's own surfaces.
+#
+# Both spellings, because the match is against the file name and the platforms
+# disagree: macOS names them zh_CN.lproj, Windows and Linux zh-CN.pak. Listing
+# one spelling deletes the other platform's Chinese and says nothing.
+electronLanguages:
+  - en-US
+  - zh-CN
+  - zh_CN
+  - zh-TW
+  - zh_TW
+
 artifactBuildCompleted: ./packaging/record-artifact-arch.js
 afterAllArtifactBuild: ./packaging/canonical-artifact-names.js
 

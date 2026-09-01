@@ -16,6 +16,11 @@ const OUT = path.join(__dirname, "..", "bin");
 const PKG = "../../cmd/reasonix-studio-host";
 const CWD = path.join(__dirname, "..");
 
+// The symbol table and DWARF are 28% of this binary and nothing in a shipped
+// build reads them: a Go panic's traceback comes from the pclntab, which -w
+// leaves alone.
+const LDFLAGS = "-s -w";
+
 function go(args, env) {
   const run = spawnSync("go", args, { cwd: CWD, stdio: "inherit", env: { ...process.env, ...env } });
   if (run.status !== 0) {
@@ -26,7 +31,7 @@ function go(args, env) {
 
 if (process.platform !== "darwin") {
   // go build names the binary after the package and adds .exe where it belongs.
-  go(["build", "-o", "bin/", PKG]);
+  go(["build", "-ldflags", LDFLAGS, "-o", "bin/", PKG]);
   console.log("built reasonix-studio-host");
   process.exit(0);
 }
@@ -35,7 +40,7 @@ if (process.platform !== "darwin") {
 // host is pure Go — studio.yml holds it to that.
 const slices = ["amd64", "arm64"].map((arch) => {
   const out = path.join(OUT, `reasonix-studio-host-${arch}`);
-  go(["build", "-o", out, PKG], { CGO_ENABLED: "0", GOOS: "darwin", GOARCH: arch });
+  go(["build", "-ldflags", LDFLAGS, "-o", out, PKG], { CGO_ENABLED: "0", GOOS: "darwin", GOARCH: arch });
   return out;
 });
 
