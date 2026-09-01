@@ -101,6 +101,7 @@ func taskCommand(args []string) int {
 		return taskTmuxCmd(store, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown task subcommand: %s\n", args[0])
+		fmt.Fprintln(os.Stderr, "usage: reasonix task <list|show|monitor|status|events|stop|cancel|requeue|open-session|tmux> [flags]")
 		return 2
 	}
 }
