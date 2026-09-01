@@ -198,11 +198,17 @@ jobs:
           fi
 
       # The update channel is the signed manifest. A second answer to which
-      # version is current is not a convenience.
+      # version is current is not a convenience. The .blockmap is the same
+      # channel's differential index and carries the release prefix, so it also
+      # inflates the count the release uses to refuse a partial publish.
       - name: No electron-updater metadata
         run: |
           if ls dist | grep -qiE '^(latest|beta|alpha).*\.yml$'; then
             echo "::error::electron-updater metadata was published beside the manifest channel"
+            exit 1
+          fi
+          if ls dist | grep -q '\.blockmap$'; then
+            echo "::error::a .blockmap ships under the release prefix; set differentialPackage: false"
             exit 1
           fi
 

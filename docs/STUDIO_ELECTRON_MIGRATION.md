@@ -152,11 +152,30 @@ when something resembling it exists.
   which holds under Electron, where the process is the framework and what needs
   replacing is the bundle around it. Its shape follows the release line.
 
-- **The release line.** `release-studio.yml` and `scripts/studio-build.sh`
-  build, sign and notarize the Wails bundle on three platforms, and an installed
-  build updates itself into the next one. This is not in section 6's list
-  because deleting it breaks nothing at compile time — it just means the tree
-  no longer ships, and an installed 2.x has nowhere to update to.
+- **The release line.** `release-studio.yml` now builds the Electron bundle on
+  all three platforms and `scripts/studio-build.sh` is off the release path,
+  left where it is because studio.yml still builds the frozen shell with it.
+  Windows and macOS package in two steps for the same reason — something has to
+  happen to the bundle between them, an Authenticode signature there and
+  notarization here — and the Windows signing contract now names both
+  executables this shell ships where the Wails one was a single binary.
+
+  Recorded as unverified, which is what section 7 asks for: no release has run.
+  What was checked, on Windows, against real artifacts — the two-stage
+  `--dir` / `--prepackaged` split, the two executables electron-builder writes
+  and their paths, the canonical names, and that the portable archive is packed
+  from the same bundle the signatures go into. What no local run can reach:
+  macOS notarization and stapling, the Linux `.deb`, and both SignPath requests,
+  whose artifact configurations live in that console and have to be updated to
+  match `.signpath/artifact-configurations/` before a signed release can pass.
+
+  Two things this does not settle. An installed Wails 2.x updates itself into an
+  Electron build the first time this ships, and that crossing — dpkg upgrade,
+  NSIS over a different install root, bundle swap into a differently-shaped
+  app — has not been exercised. And the `.blockmap` electron-updater writes
+  beside the installer used to land under the release prefix, where the count
+  that refuses a partial publish would have counted it as an artifact;
+  `differentialPackage: false` stops it and a studio.yml gate now fails it.
 
 ### Cleared
 

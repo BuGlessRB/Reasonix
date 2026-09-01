@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Stage two: sign the finished NSIS container, and only when the exact payload
-     it was built from is present and already signed. The authenticode-verify
-     entry is what makes the two stages one contract rather than two independent
-     requests — an installer rebuilt from an unsigned binary is refused here
-     rather than discovered by a user after it is installed.
+<!-- Stage two: sign the finished NSIS container, and only when the exact
+     executables it was built around are present and already signed. The
+     authenticode-verify entries are what make the two stages one contract rather
+     than two independent requests — an installer rebuilt from an unsigned binary
+     is refused here rather than discovered by a user after it is installed.
+
+     Both of the shell's own executables are verified. Listing only one would let
+     the other be swapped between the stages and still pass.
 
      GitHub Actions wraps this flat bundle in a zip before SignPath receives it. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
@@ -11,7 +14,10 @@
     <pe-file path="*installer*.exe">
       <authenticode-sign />
     </pe-file>
-    <pe-file path="reasonix-studio.exe">
+    <pe-file path="Reasonix Studio.exe">
+      <authenticode-verify />
+    </pe-file>
+    <pe-file path="reasonix-studio-host.exe">
       <authenticode-verify />
     </pe-file>
   </zip-file>

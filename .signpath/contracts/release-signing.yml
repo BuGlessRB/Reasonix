@@ -11,6 +11,6 @@ fingerprint_files:
   - .signpath/artifact-configurations/studio-windows-payload.xml
   - .signpath/artifact-configurations/studio-windows-installer.xml
   - scripts/complete-signpath-request.ps1
-  - scripts/studio-build.sh
   - scripts/verify-windows-authenticode.ps1
+  - desktop/electron/electron-builder.yml
   - cmd/signpath-contract/main.go

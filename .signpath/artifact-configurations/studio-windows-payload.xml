@@ -1,16 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Stage one: sign the executable a user actually runs, before anything is
-     packaged around it. Signing only the finished NSIS container would leave
-     reasonix-studio.exe unsigned on disk after installation, which is what
-     reputation and ML heuristics quarantine.
+<!-- Stage one: sign the executables a user actually runs, before anything is
+     packaged around them. Signing only the finished NSIS container would leave
+     them unsigned on disk after installation, which is what reputation and ML
+     heuristics quarantine.
 
-     Studio ships one executable of its own. MicrosoftEdgeWebview2Setup.exe is
-     Microsoft's and arrives already signed, so it is not listed here — this
-     configuration must not re-sign somebody else's binary. GitHub Actions wraps
-     the flat payload directory in a zip before SignPath receives it. -->
+     The Electron shell ships two of its own where the Wails one was a single
+     binary: the window, and the kernel it spawns beside itself. Everything else
+     the bundle carries is Chromium's or electron-builder's — resources/elevate.exe
+     is the other PE file — and arrives from its own publisher, so it is not
+     listed here: this configuration must not re-sign somebody else's binary.
+     GitHub Actions wraps the flat payload directory in a zip before SignPath
+     receives it. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>
-    <pe-file path="reasonix-studio.exe">
+    <pe-file path="Reasonix Studio.exe">
+      <authenticode-sign />
+    </pe-file>
+    <pe-file path="reasonix-studio-host.exe">
       <authenticode-sign />
     </pe-file>
   </zip-file>

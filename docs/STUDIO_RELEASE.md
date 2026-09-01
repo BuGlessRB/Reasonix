@@ -60,8 +60,10 @@ The tag triggers `release-studio.yml`, which:
 
 1. validates the tag shape (`studio-vMAJOR.MINOR.PATCH[-PRERELEASE]`) and that
    it sits on `studio` history;
-2. builds Windows x64, macOS universal and Linux x64 via
-   `scripts/studio-build.sh`;
+2. builds Windows x64, macOS universal and Linux x64 with electron-builder,
+   from `desktop/electron/electron-builder.yml`. Windows and macOS package in
+   two steps because both need something done to the bundle in between — an
+   Authenticode signature there, notarization and stapling here;
 3. waits for the `studio-release` approval;
 4. minisign-signs every artifact and verifies each signature;
 5. generates `latest.json` with `desktop/cmd/studio-manifest`;
