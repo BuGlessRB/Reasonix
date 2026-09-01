@@ -8,7 +8,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "build:host": "go build -o bin/ ../../cmd/reasonix-studio-host",
+    "build:host": "node packaging/build-host.js",
     "build:linux-payload": "node packaging/linux-payload.js",
     "test": "node --test test/unit.mjs",
     "build:app": "electron-builder --dir",
