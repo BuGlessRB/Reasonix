@@ -162,11 +162,25 @@ when something resembling it exists.
   repair lock stays `os.Executable()`, which is right under either shell: that
   half has to be a Go process, and is not the application.
 
-  What is left is the verb itself. `GoToVersion` still orchestrates in the Wails
-  shell — channel choice, pin, download, apply, handover — and reports progress
-  over a Wails event. Moving it means the orchestration in the kernel, a route
-  both shells speak, progress on a transport both have, and an Electron
-  `ApplicationOwner`, which `internal/appupdate` already has the seam for.
+  The verb is canonical now, which section 7 is explicit is not the same as
+  parity. `internal/appupdate` orchestrates the move — channel choice, pin,
+  download, apply, handover — behind `POST /update/install`, and progress is
+  pulled from `GET /update/install` because it is a projection: a missed frame
+  is restored by the next read, and what an install ends with, this process
+  exiting, is not a frame anyone receives. `GoToVersion` is gone from
+  `wails.ts`; the page polls the route in both shells, which is rule 1 working —
+  the old shell adapted.
+
+  Three acts, not two. `ApplicationOwner` gained `EndApplication`: what releases
+  the application, what starts its successor and what ends it are one call in a
+  shell that is its own process and three different ones otherwise. Wails
+  answers all three; the kernel decides only when.
+
+  What is still missing is the half rule 7 exists to name. Electron has no
+  `ApplicationOwner`, so it declares no capability, so the routes do not
+  register for it — correct rather than missed, and the reason this stays on
+  this list. Checked at the route and at the orchestration, not driven through a
+  real install on any platform.
 
 - **The release line.** `release-studio.yml` now builds the Electron bundle on
   all three platforms and `scripts/studio-build.sh` is off the release path,

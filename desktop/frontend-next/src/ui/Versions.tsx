@@ -35,6 +35,12 @@ function say(p: UpdateProgress): string {
       return t("校验签名…");
     case "downloaded":
       return t("准备安装…");
+    case "authorizing":
+      return t("等待系统授权…");
+    case "idle":
+      // Only reachable in the gap between the click and the first read that
+      // sees the move: the panel is already showing this row as going.
+      return t("准备中…");
     case "relaunching":
       return "正在重启到新版本…";
     case "error":
@@ -69,20 +75,32 @@ export function Versions({ port }: { port: Port }) {
     }
   };
 
-  // A resolved promise means the install did not take over, so the row goes
-  // back to idle. A success never gets here — the process is gone.
+  // Answered when the move is under way, not when it is done: an install that
+  // worked ends by ending the kernel this asked, so a resolved promise says
+  // only that it started. What ends the row is the progress the kernel reports,
+  // or the window going with it.
   const goTo = async (v: string) => {
     setGoing(v);
     setProgress(null);
     try {
       await port.goToVersion(v);
-      reload();
     } catch (e) {
       setProgress({ version: v, phase: "error", received: 0, total: 0, err: String(e) });
-    } finally {
       setGoing("");
     }
   };
+
+  // The kernel owns whether the move is still running, so the row follows its
+  // answer rather than a local guess. Reaching a resting phase means the
+  // install did not take over -- it failed, or a package prompt was dismissed --
+  // and the catalog is re-read because a pin was written either way.
+  useEffect(() => {
+    if (!going || progress?.version !== going || progress.phase === "idle") return;
+    if (progress.phase === "error" || progress.phase === "downloaded") {
+      setGoing("");
+      reload();
+    }
+  }, [going, progress, reload]);
 
   if (hub === null) {
     return <p className="acct-note">{t("正在读取版本…")}</p>;

@@ -196,6 +196,8 @@ const SAID: Record<string, string> = {
   // ── 版本：这个内核背后有没有一个可更新的 Studio ─────────────────
   "studio.no_install": "这个内核不是由 Studio 启动的，没有可以查看或切换的版本",
   "studio.pin_rejected": "版本固定没能保存：{detail}",
+  "update.install_running": "已经有一个版本切换在进行，等它结束再试",
+  "update.install_rejected": "这次版本切换没能开始：{detail}",
 
   "loopback.host_rejected": "这个请求没有发往 Studio 在监听的地址，已经拒掉了",
   "loopback.origin_rejected": "这个页面不是 Studio 自己，不能操作它",

@@ -627,6 +627,8 @@ export const EN: Record<string, string> = {
   "下载中 {got}": "Downloading {got}",
   "校验签名…": "Verifying the signature…",
   "准备安装…": "Preparing to install…",
+  "等待系统授权…": "Waiting for permission…",
+  "准备中…": "Starting…",
 
   // ── 插件安装 ─────────────────────────────────────────────────────
   "这个来源里没有能装的东西": "There is nothing installable at that source",

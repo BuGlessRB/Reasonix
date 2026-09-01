@@ -1,4 +1,4 @@
-package main
+package appupdate
 
 import (
 	"go/ast"
@@ -9,11 +9,11 @@ import (
 	"testing"
 )
 
-// The version panel and the installer each build their own update.Options, and
-// a release listed by one catalog cannot be installed from another. An Options
-// that omits IndexURL now fails at fetch, but only once a user asks for an
-// update; this asserts on the package's source so the mistake is caught at
-// test time, and because the failure mode is a new call site, not a changed one.
+// Every updater this package builds reads Studio's catalog, and a release
+// listed by one cannot be installed from another. An Options omitting IndexURL
+// fails at fetch, but only once a user asks; this reads the source instead,
+// because the failure mode is a new call site rather than a changed one. It
+// moved with the code: a guard reading a directory watches only that one.
 func TestEveryUpdaterOptionsSetsIndexURL(t *testing.T) {
 	fset := token.NewFileSet()
 	entries, err := os.ReadDir(".")

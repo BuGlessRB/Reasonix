@@ -13,17 +13,13 @@ import { host } from "./host";
 const WAILS_EVENT = "rx:event";
 // Install progress rides its own channel: it is the shell reporting on itself,
 // not something the kernel emitted into the conversation.
-const WAILS_UPDATE_EVENT = "rx:update";
+// Fast enough that a download bar moves, slow enough that an open panel is not
+// a load. The read is one small JSON body and answers from memory.
+const UPDATE_POLL_MS = 500;
 const WAILS_REPLAY = "/rx-replay";
 
 interface WailsBus {
   EventsOn(name: string, cb: (data: string) => void): () => void;
-}
-
-// The same bus, seen by a caller whose payload is an object rather than the
-// event stream's JSON string.
-interface WailsUpdateBus {
-  EventsOn(name: string, cb: (data: UpdateProgress) => void): () => void;
 }
 
 
@@ -244,16 +240,39 @@ export class SsePort extends SseTheme implements AgentPort {
     if (!res.ok) await SsePort.fail("/studio/pin", res);
   }
 
+  // Answered as soon as the move is under way. It cannot be answered when the
+  // move is done: an install that worked ends by ending the kernel this asked.
   async goToVersion(version: string): Promise<void> {
-    const bind = (window as unknown as WailsBind).go?.main?.App?.GoToVersion;
-    if (!bind) throw new Error("浏览器里没有可以更新的安装，请在应用内操作");
-    await bind(version);
+    const res = await fetch("/update/install", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ version }),
+    });
+    if (!res.ok) await SsePort.fail("/update/install", res);
   }
 
+  // Pulled, not subscribed. Progress is a projection: a missed frame costs
+  // nothing the next read does not restore, and the last thing an install does
+  // is end the process that would have been streaming it. A subscription would
+  // have to promise delivery across the restart it is itself causing.
   onUpdateProgress(cb: (p: UpdateProgress) => void): () => void {
-    const bus = (window as unknown as { runtime?: WailsUpdateBus }).runtime;
-    if (!bus?.EventsOn) return () => {};
-    return bus.EventsOn(WAILS_UPDATE_EVENT, cb);
+    let stopped = false;
+    const read = async () => {
+      try {
+        const res = await fetch("/update/install", { credentials: "same-origin" });
+        if (!stopped && res.ok) cb((await res.json()) as UpdateProgress);
+      } catch {
+        // The kernel going away mid-install is the successful case, not an
+        // error to render: the next launch is what reports the outcome.
+      }
+    };
+    void read();
+    const timer = setInterval(read, UPDATE_POLL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
   }
 
   // Wails registers its drop listeners once and ignores a second call, so the

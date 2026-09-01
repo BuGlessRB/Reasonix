@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"testing"
+
+	"reasonix/internal/update"
 	"time"
 
 	"reasonix/internal/serve"
@@ -11,6 +13,11 @@ import (
 type stubUpdateHost struct{}
 
 func (stubUpdateHost) AcknowledgeLaunchHealth() error { return nil }
+
+// The rest of the port. This test is about the health acknowledgement, and a
+// stub that answers the whole interface keeps it that way.
+func (stubUpdateHost) StartInstall(update.Install, string) error { return nil }
+func (stubUpdateHost) InstallProgress() update.Progress          { return update.Progress{} }
 
 func withProbation(t *testing.T, d time.Duration) {
 	t.Helper()

@@ -11,6 +11,7 @@ type stubOwner struct{}
 
 func (stubOwner) PrepareForUpdate(context.Context) error    { return nil }
 func (stubOwner) RelaunchAfterUpdate(context.Context) error { return nil }
+func (stubOwner) EndApplication(context.Context)            {}
 
 // The gate is a nil interface, not a nil pointer inside one. Returning
 // *capability here would make serve's `Update == nil` false, register the
@@ -18,7 +19,7 @@ func (stubOwner) RelaunchAfterUpdate(context.Context) error { return nil }
 // somebody's rollback material -- with nothing failing to say so.
 func TestNothingOwningTheApplicationYieldsNoCapabilityAtAll(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
-	if got := New(nil, "v1.0.0"); got != nil {
+	if got := New(Options{Running: "v1.0.0"}); got != nil {
 		t.Fatalf("New(nil) = %#v, want a nil Capability", got)
 	}
 }
@@ -28,7 +29,7 @@ func TestNothingOwningTheApplicationYieldsNoCapabilityAtAll(t *testing.T) {
 // running, and refusing here would make every ordinary launch look broken.
 func TestALaunchThatDidNotBootFromAnUpdateRetiresNothing(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
-	host := New(stubOwner{}, "v1.0.0")
+	host := New(Options{Owner: stubOwner{}, Running: "v1.0.0"})
 	if host == nil {
 		t.Fatal("an owned application got no capability")
 	}

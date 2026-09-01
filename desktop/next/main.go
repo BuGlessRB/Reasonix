@@ -214,10 +214,19 @@ func run(logs io.Writer) error {
 	// What this shell is and where it lives; the kernel resolves neither for a
 	// process that is not the application.
 	install := shell.install()
+	// This shell is its own application, so it states itself. A dev copy not
+	// running from a bundle states nothing and still starts: what refuses then
+	// is the swap, by name, rather than a launch with nothing to swap.
+	application, _ := update.LocalApplication(install.Layout)
 	// Read before the hub that serves it: an update can only be acknowledged by
 	// the launch that booted from it, and the transaction on disk right now is
 	// the only one that is.
-	shell.updateHost = appupdate.New(shell, version)
+	shell.updateHost = appupdate.New(appupdate.Options{
+		Owner:       shell,
+		Running:     version,
+		Line:        studioLine(),
+		Application: application,
+	})
 	// One hub, several panes: each session gets its own runtime, so a second
 	// conversation runs beside the first instead of rebuilding it.
 	hub := serve.NewHub(serve.HubOptions{

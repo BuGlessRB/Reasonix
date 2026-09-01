@@ -5,7 +5,6 @@ export interface WailsBind {
   go?: {
     main?: {
       App?: {
-        GoToVersion?: (version: string) => Promise<void>;
         SavePluginExport?: (name: string) => Promise<{ path: string; required: string[] }>;
       };
     };

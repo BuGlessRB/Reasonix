@@ -17,6 +17,7 @@ const (
 	tsBoundaryFile = "desktop/frontend-next/src/port/boundary.ts"
 	tsRemoteFile   = "desktop/frontend-next/src/port/remote.ts"
 	tsSessionFile  = "desktop/frontend-next/src/port/session.ts"
+	tsVersionFile  = "desktop/frontend-next/src/port/version.ts"
 )
 
 // mirroredWireTypes are the Go types the desktop keeps a second, hand-written
@@ -54,6 +55,10 @@ var mirroredWireTypes = []wireMirror{
 	// How a window learns a prompt was answered in another one. A field it
 	// cannot read is a card left answerable over a decision already made.
 	{"internal/eventwire/wire.go", "DecisionReceipt", tsWireFile, "DecisionReceipt"},
+	// What an install in flight is doing. The page polls it and renders one
+	// sentence per phase; a phase it cannot read renders as nothing, which on
+	// the long pause after the last byte is indistinguishable from a hang.
+	{"internal/update/progress.go", "Progress", tsVersionFile, "UpdateProgress"},
 }
 
 type wireMirror struct {

@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"reasonix/internal/repair"
+	"reasonix/internal/update"
 )
 
 // ApplicationOwner owns the running desktop application: it can bring it to a
@@ -18,6 +19,10 @@ type ApplicationOwner interface {
 	PrepareForUpdate(ctx context.Context) error
 	// RelaunchAfterUpdate starts what replaced it.
 	RelaunchAfterUpdate(ctx context.Context) error
+	// EndApplication ends it, so what replaced it can take its place. Third
+	// act and not second: where a waiting helper starts the successor, ending
+	// is what lets it. It does not normally return.
+	EndApplication(ctx context.Context)
 }
 
 // Capability is what a hub serves updates through. It is declared here rather
@@ -26,6 +31,22 @@ type ApplicationOwner interface {
 // two packages naming each other.
 type Capability interface {
 	AcknowledgeLaunchHealth() error
+	StartInstall(install update.Install, target string) error
+	InstallProgress() update.Progress
+}
+
+// Options is what a shell states about the application it owns. Which build is
+// running and where it lives is not here: the hub carries that as one declared
+// Install and hands it to each call, so there is no second copy to disagree.
+type Options struct {
+	Owner ApplicationOwner
+	// Running is the version this launch booted as, read once at startup.
+	Running string
+	// Line is the product line whose artifacts this application installs.
+	Line update.Line
+	// Application is what a swap replaces where the unit is a bundle. A shell
+	// that is its own executable fills it from update.LocalApplication.
+	Application update.Application
 }
 
 // New returns the capability a hub serves updates through, and nil where
@@ -33,24 +54,23 @@ type Capability interface {
 // registers no update routes at all, so `reasonix serve` does not acquire the
 // power to replace a desktop application by sharing an engine with one. The
 // return type is an interface so the nil survives the assignment.
-func New(owner ApplicationOwner, runningVersion string) Capability {
-	if owner == nil {
+func New(opts Options) Capability {
+	if opts.Owner == nil {
 		return nil
 	}
 	// Read now, before a concurrent update can rewrite it: what this launch may
 	// retire is the transaction it booted from, and nothing later can tell that
 	// apart from one written since.
 	return &capability{
-		owner:   owner,
-		running: runningVersion,
-		witness: repair.CaptureUpdateHealth(runningVersion),
+		opts:    opts,
+		witness: repair.CaptureUpdateHealth(opts.Running),
 	}
 }
 
 type capability struct {
-	owner   ApplicationOwner
-	running string
+	opts    Options
 	witness *repair.UpdateHealthWitness
+	install installState
 }
 
 // AcknowledgeLaunchHealth retires the update this launch booted from, and only
@@ -59,5 +79,5 @@ type capability struct {
 // a transaction id could commit somebody else's. A launch that did not boot
 // from an update has nothing to retire and says so by succeeding.
 func (c *capability) AcknowledgeLaunchHealth() error {
-	return c.witness.Acknowledge(c.running)
+	return c.witness.Acknowledge(c.opts.Running)
 }

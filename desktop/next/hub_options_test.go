@@ -65,7 +65,7 @@ func TestTheWindowHandsItsHubEveryCapabilityItImplements(t *testing.T) {
 // appupdate stops working the moment New returns a concrete type.
 func TestAnUnownedApplicationReachesTheHubAsNoUpdateHostAtAll(t *testing.T) {
 	var opts serve.HubOptions
-	opts.Update = appupdate.New(nil, "v1.0.0")
+	opts.Update = appupdate.New(appupdate.Options{Running: "v1.0.0"})
 	if opts.Update != nil {
 		t.Fatalf("HubOptions.Update = %#v, want nil so the update routes stay unregistered", opts.Update)
 	}
