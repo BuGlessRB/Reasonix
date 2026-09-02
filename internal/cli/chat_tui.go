@@ -92,9 +92,10 @@ type chatTUI struct {
 	nextPasteID          int
 	usedPasteIDs         map[int]struct{}
 
-	state    tuiState
-	runStart time.Time
-	elapsed  int
+	state                 tuiState
+	runStart              time.Time
+	elapsed               int
+	elapsedTickGeneration uint64
 	// retryAttempt/retryMax drive the transient "retrying (n/m)" indicator while
 	// the provider re-attempts the connection; cleared by the next stream event.
 	retryAttempt int
@@ -503,8 +504,8 @@ type tuiShutdownMsg struct {
 func shutdownNow() tea.Msg { return tuiShutdownMsg{} }
 
 // elapsedTickMsg fires once a second while a turn runs, driving the "thinking
-// Ns" counter in the status line.
-type elapsedTickMsg struct{}
+// Ns" counter in the status line. generation rejects a prior turn's timer.
+type elapsedTickMsg struct{ generation uint64 }
 
 // balanceMsg carries the result of an async wallet-balance fetch; text is the
 // formatted readout ("" when none/failed).
@@ -1820,7 +1821,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.confirmBubbleSent() // shell events arrive instantly
 				m.noteWatchdogRunning()
 				m.ctrl.RunShell(cmd)
-				return m, tea.Batch(m.spinner.Tick, elapsedTick())
+				return m, m.startRunningTicks()
 			}
 
 			// Slash commands run locally without going through the model. A
@@ -1859,38 +1860,12 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case agentEventMsg:
 		e := event.Event(msg)
-		// Agent/shell/controller work events prove the event loop is servicing
-		// the active turn. Record before ingest so TurnDone still counts.
-		m.noteWatchdogHeartbeat(watchdogAgentSource(e.Kind))
-		m.ingestEvent(e)
-		turnDone := e.Kind == event.TurnDone
-		gitMaybeChanged := e.Kind == event.ToolResult && !e.Tool.ReadOnly
-		// Coalesce a burst: the goroutine that produced this event has already
-		// exited (a Cmd reads the channel once), so it's safe to drain the events
-		// already buffered and ingest them now. One re-wrap then covers the whole
-		// batch instead of one per event — bounds the O(transcript) re-render cost
-		// when bash output or reasoning floods in. Capped so a sustained flood
-		// still yields to render periodically.
-	drain:
-		for range maxEventDrain {
-			select {
-			case e2 := <-m.eventCh:
-				m.noteWatchdogHeartbeat(watchdogAgentSource(e2.Kind))
-				m.ingestEvent(e2)
-				if e2.Kind == event.TurnDone {
-					turnDone = true
-				}
-				if e2.Kind == event.ToolResult && !e2.Tool.ReadOnly {
-					gitMaybeChanged = true
-				}
-			default:
-				break drain
-			}
-		}
+		drained := m.drainAgentEvents(e)
 		cmds = append(cmds, waitForAgentEvent(m.eventCh))
+		cmds = append(cmds, drained.cmds...)
 		// A turn just spent tokens (and money) — refresh the balance readout and
 		// the custom status line (its context/cost inputs just changed).
-		if turnDone {
+		if drained.turnDone {
 			cmds = append(cmds, fetchBalance(m.ctrl))
 			if c := m.runStatusline(); c != nil {
 				cmds = append(cmds, c)
@@ -1905,7 +1880,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, c)
 			}
 		}
-		if turnDone || gitMaybeChanged {
+		if drained.turnDone || drained.gitMaybeChanged {
 			if c := m.refreshGitStatus(); c != nil {
 				cmds = append(cmds, c)
 			}
@@ -2088,14 +2063,14 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case elapsedTickMsg:
-		if m.state == tuiRunning {
+		if m.state == tuiRunning && msg.generation == m.elapsedTickGeneration {
 			// elapsedTick is the primary active-turn heartbeat: long turns that
 			// emit no agent events still prove the Bubble Tea loop is alive.
 			m.noteWatchdogHeartbeat("elapsed_tick")
 			m.elapsed = int(time.Since(m.runStart).Seconds())
 			m.tickToolRunning()
 			m.tickSubagentProgress()
-			cmds = append(cmds, elapsedTick())
+			cmds = append(cmds, elapsedTick(msg.generation))
 		}
 
 	case spinner.TickMsg:
@@ -4238,70 +4213,6 @@ func (m *chatTUI) toggleMouseCapture() {
 	}
 }
 
-// startTurn commits the user bubble to scrollback, resets the turn accumulator,
-// and kicks off the controller turn. `sent` goes to the model uncomposed (the
-// controller frames it with any plan marker); `displayed` is what the transcript
-// shows, and `restore` is what Esc puts back while the bubble is still deferred.
-func (m *chatTUI) startTurn(sent, displayed, restore string) tea.Cmd {
-	return m.startTurnWithRaw(sent, displayed, restore, sent)
-}
-
-// startTurnWithRaw is startTurn plus an explicit unresolved user prompt. This
-// keeps reference-expanded model input separate from the text shown/restored by
-// the frontend.
-func (m *chatTUI) startTurnWithRaw(sent, displayed, restore, raw string) tea.Cmd {
-	return m.startControllerTurn(displayed, restore, func() { m.ctrl.SendWithRaw(sent, raw) })
-}
-
-// startControllerTurn owns the TUI-side turn setup for controller entry points.
-// Most prompts use SendWithRaw; slash-invoked skills use SubmitDisplay so the
-// controller can choose inline vs isolated subagent execution from the live
-// skill's RunAs metadata without the TUI reimplementing that policy.
-func (m *chatTUI) startControllerTurn(displayed, restore string, start func()) tea.Cmd {
-	if m.takeover != nil && m.takeover.Reclaiming() {
-		m.notice("the remote side is taking this session back; new input is disabled")
-		return nil
-	}
-	// Flush any half-streamed leftover before the new turn (defensive).
-	m.commitReasoning()
-	m.commitPending()
-
-	// Echo the user bubble to scrollback now so it appears the instant Enter is
-	// pressed, not when the server's first packet lands. It stays un-sendable until
-	// then: Esc before the reply pops these lines back off (unsendPending) and
-	// restores the text to the input box, leaving nothing stranded.
-	m.pendingRestore = restore
-	m.pendingPastes = m.pasteLabelsIn(restore)
-	m.bubbleStartIdx = len(m.transcript)
-	m.commitLine("") // blank line separating turns
-	m.commitTranscriptSource(transcriptSource{
-		kind: transcriptSourceUser, raw: displayed, planMode: m.planMode,
-	})
-	m.bubblePending = true
-	m.turnDiscarded = false
-
-	m.state = tuiRunning
-	m.runStart = time.Now()
-	m.elapsed = 0
-	m.turnTokens = 0
-	// The controller owns the run goroutine, its context, and cancellation; it
-	// streams events to eventCh and emits TurnDone when the turn settles.
-	m.noteWatchdogRunning()
-	start()
-	return tea.Batch(m.spinner.Tick, elapsedTick())
-}
-
-// confirmBubbleSent marks the already-echoed user bubble as really sent once a
-// turn's first response packet arrives, so Esc no longer un-sends it (it cancels
-// the stream instead). Also called defensively at turn end. A no-op once confirmed.
-func (m *chatTUI) confirmBubbleSent() {
-	if !m.bubblePending {
-		return
-	}
-	m.bubblePending = false
-	m.pendingRestore = ""
-}
-
 // unsendPending "un-sends" the in-flight turn while the server hasn't replied yet
 // (bubblePending): it pops the echoed bubble back off the transcript, restores the
 // just-sent text to the input box, and cancels the request — marking the turn
@@ -4641,8 +4552,10 @@ func waitForAgentEvent(ch chan event.Event) tea.Cmd {
 	return func() tea.Msg { return agentEventMsg(<-ch) }
 }
 
-func elapsedTick() tea.Cmd {
-	return tea.Tick(time.Second, func(_ time.Time) tea.Msg { return elapsedTickMsg{} })
+func elapsedTick(generation uint64) tea.Cmd {
+	return tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+		return elapsedTickMsg{generation: generation}
+	})
 }
 
 // runSlashCommand handles "/<cmd> <args>" input. Local commands queue their
