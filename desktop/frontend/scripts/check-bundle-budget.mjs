@@ -179,9 +179,10 @@ console.log("\nbundle budgets");
 // real range exists (#9703/#9711) and adding the session takeover banners
 // move the combined path to 462.2 KiB. Local spectator reclaim adds the
 // desktop-vs-remote command branch. Sticky Context's session-scoped file chips
-// bring the merged stable path to 462.587 KiB; retain only the next one-decimal
-// ceiling.
-const initialJSBudgetKiB = 462.6;
+// bring the merged stable path to 462.587 KiB. Windows' embedded build metadata
+// lands just above the rounded 462.6 KiB boundary; retain one cross-platform
+// decimal step without widening any chunk or raw gate.
+const initialJSBudgetKiB = 462.7;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
