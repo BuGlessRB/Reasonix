@@ -3347,11 +3347,6 @@ func (c *Controller) SnapshotRewrite() error {
 	return c.snapshot(false, true, false)
 }
 
-func (c *Controller) snapshot(markActivity, forceRewrite, shutdownRecovery bool) error {
-	_, err := c.snapshotWithDurability(markActivity, forceRewrite, shutdownRecovery)
-	return err
-}
-
 // midTurnSnapshotInterval is atomic (nanoseconds) so a test shrinking it
 // cannot race a previous test's still-parking autosave goroutine.
 var midTurnSnapshotInterval atomic.Int64
@@ -3389,6 +3384,7 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 	path := c.sessionPath
 	modelRef := c.modelRef
 	c.mu.Unlock()
+	c.writeSessionUsageRecord(path)
 	if c.executor == nil {
 		return false, nil
 	}

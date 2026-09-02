@@ -2,6 +2,7 @@ package control
 
 import (
 	"errors"
+	"log/slog"
 
 	"reasonix/internal/agent"
 )
@@ -49,4 +50,19 @@ func retrySameRevisionDivergedRewrite(s *agent.Session, path string, err error) 
 	// SaveRewrite itself requires digest ownership or a live authority; a
 	// process lease alone cannot claim the current bytes.
 	return s.SaveRewrite(path), true
+}
+
+func (c *Controller) snapshot(markActivity, forceRewrite, shutdownRecovery bool) error {
+	_, err := c.snapshotWithDurability(markActivity, forceRewrite, shutdownRecovery)
+	return err
+}
+
+// writeSessionUsageRecord persists the session's token accounting beside the
+// transcript. It rides the session's own persistence point so the record names
+// the session the transcript was written for and cannot drift onto another; a
+// failure to write a diagnostic must not report as a failure to save the turn.
+func (c *Controller) writeSessionUsageRecord(path string) {
+	if err := c.goalUsageTee.writeUsageRecord(path); err != nil {
+		slog.Warn("controller: session usage record", "err", err)
+	}
 }

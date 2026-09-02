@@ -21,6 +21,9 @@ type goalUsageTee struct {
 	// active is the current goal turn's recorder; nil when no goal turn is
 	// running. Writes happen on the turn goroutine; the tee serializes reads.
 	active *goalTurnRecorder
+	// tally accumulates the same events for the session's usage record. This is
+	// the one layer every billable call passes through, whichever agent made it.
+	tally *usageTally
 }
 
 // NewGoalUsageTee wraps inner in a usage-accounting tee. Pass the returned sink
@@ -30,7 +33,7 @@ func NewGoalUsageTee(inner event.Sink) event.Sink {
 	if inner == nil {
 		inner = event.Discard
 	}
-	return &goalUsageTee{AuditForwarder: event.AuditForwarder{Inner: inner}, inner: inner}
+	return &goalUsageTee{AuditForwarder: event.AuditForwarder{Inner: inner}, inner: inner, tally: newUsageTally()}
 }
 
 // Emit forwards the event and, for billable usage while a goal turn is active,
@@ -46,10 +49,20 @@ func (t *goalUsageTee) Emit(e event.Event) {
 		if rec != nil {
 			rec.addUsageWithRequests(usageTotalTokens(e.Usage), e.Usage.RequestCount)
 		}
+		t.tally.observe(e)
 	}
 	if t.inner != nil {
 		t.inner.Emit(e)
 	}
+}
+
+// writeUsageRecord persists the session's accounting beside the transcript at
+// path. Nil-safe: a controller assembled without a tee bills nothing.
+func (t *goalUsageTee) writeUsageRecord(path string) error {
+	if t == nil {
+		return nil
+	}
+	return t.tally.writeTo(path)
 }
 
 // setActiveRecorder binds the current goal turn's recorder (nil clears it).

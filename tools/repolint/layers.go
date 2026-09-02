@@ -50,6 +50,7 @@ var leaves = []string{
 	"internal/sysproxy",
 	"internal/textutil",
 	"internal/tokencount",
+	"internal/usagereport",
 	"internal/visionimage",
 	"internal/workspaceid",
 	"internal/workspacelease",

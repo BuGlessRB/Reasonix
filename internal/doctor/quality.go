@@ -3,13 +3,13 @@ package doctor
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
+	"reasonix/internal/usagereport"
 )
 
 // isVerificationToolCall reports whether a persisted tool call is a shell
@@ -70,6 +70,12 @@ type QualityUsage struct {
 	CacheMissTokens  int  `json:"cache_miss_tokens"`
 	Estimated        bool `json:"estimated,omitempty"`
 	CacheHitPercent  *int `json:"cache_hit_percent,omitempty"`
+	// ColdStart* describe the session's opening executor request on its own.
+	// The session percent above averages over requests that reuse the prefix
+	// this one paid for, so it cannot say what a cold start could reuse.
+	ColdStartPromptTokens   int  `json:"cold_start_prompt_tokens,omitempty"`
+	ColdStartCacheHitTokens int  `json:"cold_start_cache_hit_tokens,omitempty"`
+	ColdStartHitPercent     *int `json:"cold_start_cache_hit_percent,omitempty"`
 }
 
 type QualitySignals struct {
@@ -79,24 +85,6 @@ type QualitySignals struct {
 	CompactionRequests int `json:"compaction_requests"`
 	ClassifierRequests int `json:"classifier_requests"`
 	OtherRequests      int `json:"other_requests"`
-}
-
-type qualityTelemetry struct {
-	Version int `json:"version"`
-	Usage   struct {
-		PromptTokens     int                           `json:"promptTokens"`
-		CompletionTokens int                           `json:"completionTokens"`
-		ReasoningTokens  int                           `json:"reasoningTokens"`
-		CacheHitTokens   int                           `json:"cacheHitTokens"`
-		CacheMissTokens  int                           `json:"cacheMissTokens"`
-		Estimated        bool                          `json:"estimated,omitempty"`
-		RequestCount     int                           `json:"requestCount"`
-		Sources          map[string]qualitySourceUsage `json:"sources"`
-	} `json:"usage"`
-}
-
-type qualitySourceUsage struct {
-	RequestCount int `json:"requestCount"`
 }
 
 // CollectQuality reads a session without returning any transcript text, path,
@@ -128,7 +116,7 @@ func CollectQuality(opts QualityOptions) (QualityReport, error) {
 		},
 	}
 	report.Transcript = summarizeQualityTranscript(session.Snapshot())
-	if telemetry, ok := loadQualityTelemetry(path + ".telemetry.json"); ok {
+	if telemetry, ok := loadQualityTelemetry(path); ok {
 		report.Usage = summarizeQualityUsage(telemetry)
 		report.Signals = summarizeQualitySignals(telemetry.Usage.Sources, telemetry.Usage.RequestCount)
 	} else {
@@ -189,19 +177,15 @@ func qualityWriterTool(name string) bool {
 	}
 }
 
-func loadQualityTelemetry(path string) (qualityTelemetry, bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return qualityTelemetry{}, false
+func loadQualityTelemetry(sessionPath string) (usagereport.Report, bool) {
+	report, ok := usagereport.Load(sessionPath)
+	if !ok || report.Version <= 0 {
+		return usagereport.Report{}, false
 	}
-	var telemetry qualityTelemetry
-	if json.Unmarshal(data, &telemetry) != nil || telemetry.Version <= 0 {
-		return qualityTelemetry{}, false
-	}
-	return telemetry, true
+	return report, true
 }
 
-func summarizeQualityUsage(telemetry qualityTelemetry) QualityUsage {
+func summarizeQualityUsage(telemetry usagereport.Report) QualityUsage {
 	usage := QualityUsage{
 		Available:        true,
 		Requests:         telemetry.Usage.RequestCount,
@@ -216,10 +200,18 @@ func summarizeQualityUsage(telemetry qualityTelemetry) QualityUsage {
 		percent := usage.CacheHitTokens * 100 / total
 		usage.CacheHitPercent = &percent
 	}
+	if cold := telemetry.Usage.ColdStart; cold != nil {
+		usage.ColdStartPromptTokens = cold.PromptTokens
+		usage.ColdStartCacheHitTokens = cold.CacheHitTokens
+		if total := cold.CacheHitTokens + cold.CacheMissTokens; total > 0 {
+			percent := cold.CacheHitTokens * 100 / total
+			usage.ColdStartHitPercent = &percent
+		}
+	}
 	return usage
 }
 
-func summarizeQualitySignals(sources map[string]qualitySourceUsage, total int) QualitySignals {
+func summarizeQualitySignals(sources map[string]usagereport.Source, total int) QualitySignals {
 	var out QualitySignals
 	for source, usage := range sources {
 		switch strings.ToLower(strings.TrimSpace(source)) {
