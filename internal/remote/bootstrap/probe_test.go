@@ -50,15 +50,42 @@ func TestProbeReportsEveryClosedRouteAtOnce(t *testing.T) {
 	if rep.Ready() {
 		t.Fatalf("a machine with no npm, no binary and nothing to upload read as ready: %+v", rep)
 	}
-	if len(rep.Routes) != 3 {
-		t.Fatalf("routes = %d, want npm/upload/download", len(rep.Routes))
+	if len(rep.Routes) != len(autoRouteOrder) {
+		t.Fatalf("routes = %d, want one per auto route %v", len(rep.Routes), autoRouteOrder)
 	}
-	if !errors.Is(rep.Routes[0].Err, ErrNPMUnavailable) {
-		t.Errorf("npm route: %v", rep.Routes[0].Err)
+	for _, want := range []struct {
+		route string
+		err   error
+	}{
+		{routeRemoteFetch, ErrRemoteFetchUnavailable},
+		{InstallUpload, ErrPlatformMismatch},
+		{InstallNPM, ErrNPMUnavailable},
+	} {
+		got, ok := routeNamed(rep, want.route)
+		if !ok {
+			t.Errorf("%s route was not reported", want.route)
+			continue
+		}
+		if !errors.Is(got.Err, want.err) {
+			t.Errorf("%s route: %v", want.route, got.Err)
+		}
 	}
-	if !errors.Is(rep.Routes[1].Err, ErrPlatformMismatch) {
-		t.Errorf("upload route: %v", rep.Routes[1].Err)
+	// The download route closes on an unwired fetcher, which carries no
+	// sentinel on purpose; it still has to be reported as closed.
+	if got, ok := routeNamed(rep, routeDownload); !ok || got.Err == nil {
+		t.Errorf("download route = %+v, %v; want it reported and closed", got, ok)
 	}
+}
+
+// routeNamed finds a route by name: the probe reports them in the order the
+// installer would try, and an index pins that order into every assertion.
+func routeNamed(rep Report, name string) (Route, bool) {
+	for _, r := range rep.Routes {
+		if r.Name == name {
+			return r, true
+		}
+	}
+	return Route{}, false
 }
 
 func TestProbeReadsTheMachine(t *testing.T) {
