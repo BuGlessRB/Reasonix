@@ -172,6 +172,8 @@ console.log("\nbundle budgets");
 // Transactional Ask resolution and authoritative rejected-submit recovery add
 // 0.3 KiB gzip to the initial controller path. Retain the exact turn fence,
 // bounded ListTabs retry, and stale-prompt guard with a 0.1 KiB headroom.
+// Session-catalog repair presentation stays in the lazy project-tree chunk;
+// compact shared helpers keep the combined initial path within the same gate.
 // Sticky context pinning adds Wails bridge methods, English dictionary keys,
 // and lazy shelf wiring.
 const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 459.5 : 459.5;
