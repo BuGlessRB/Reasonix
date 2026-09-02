@@ -396,6 +396,8 @@ type Agent struct {
 	// tool loop is active, but it must keep this message and everything after it
 	// verbatim so cancellation/crash recovery can retain completed tool pairs.
 	activeTurnCreatedAt atomic.Int64
+	// Pinned revisions are staged after admission and appended with the user turn.
+	pinned pinnedContextRuntime
 }
 
 type repeatFailureRecord struct {
@@ -595,6 +597,7 @@ func (a *Agent) Session() *Session {
 // running turn (it only fires while idle); sessMu guards the pointer swap itself.
 func (a *Agent) SetSession(s *Session) {
 	a.sess.reset(s)
+	a.resetPinnedContextState()
 	// The replaced conversation's task is over, but the ledger and the bill
 	// answer to beginRunTurn's scope check rather than to this seam.
 	a.task.repeatFailures = nil
@@ -1295,10 +1298,15 @@ func (a *Agent) Run(ctx context.Context, input string) (runErr error) {
 		// If an extension blocks earlier, release the in-memory reservation so
 		// the still-pending durable marker can authorize a later retry.
 		a.RestoreFinalReadinessRecoveryPreparation()
+		a.discardStagedPinnedContext()
 		return err
 	}
 
-	_, state := a.beginRunTurn(ctx, input)
+	pinned, err := a.preparePinnedRevision()
+	if err != nil {
+		return err
+	}
+	_, state := a.beginRunTurn(ctx, input, pinned)
 	if a.pending.forkRestore != nil {
 		a.pending.forkRestore(state)
 	}
