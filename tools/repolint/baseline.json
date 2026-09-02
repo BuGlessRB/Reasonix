@@ -3,12 +3,12 @@
     "banner": 0,
     "claude-dialect": 1,
     "commented-code": 0,
-    "complexity": 1513,
+    "complexity": 1512,
     "error-text": 12,
-    "essay": 3243,
-    "file-size": 41525,
+    "essay": 3242,
+    "file-size": 40609,
     "frontend-parity": 150,
-    "function-size": 6596,
+    "function-size": 6595,
     "layering": 0,
     "marker": 0,
     "narrative": 57,
@@ -559,8 +559,8 @@
       "orphan": 1
     },
     "internal/cli/serve_frontend.go": {
-      "complexity": 7,
-      "function-size": 82
+      "complexity": 6,
+      "function-size": 81
     },
     "internal/cli/session_lease.go": {
       "essay": 4
@@ -636,7 +636,7 @@
     },
     "internal/config/edit.go": {
       "essay": 10,
-      "file-size": 1613,
+      "file-size": 1602,
       "orphan": 2
     },
     "internal/config/effort.go": {
@@ -727,9 +727,9 @@
     },
     "internal/control/controller.go": {
       "complexity": 3,
-      "essay": 141,
-      "file-size": 5041,
-      "frontend-parity": 87,
+      "essay": 119,
+      "file-size": 4136,
+      "frontend-parity": 79,
       "function-size": 27,
       "narrative": 4
     },
@@ -820,6 +820,14 @@
     },
     "internal/control/session_lease_keeper.go": {
       "essay": 5
+    },
+    "internal/control/session_lifecycle.go": {
+      "essay": 7,
+      "frontend-parity": 6
+    },
+    "internal/control/session_snapshot.go": {
+      "essay": 15,
+      "frontend-parity": 2
     },
     "internal/control/session_write_authority.go": {
       "frontend-parity": 3
@@ -1472,7 +1480,6 @@
       "essay": 2
     },
     "internal/skill/index.go": {
-      "essay": 1,
       "orphan": 1
     },
     "internal/skill/skill.go": {
