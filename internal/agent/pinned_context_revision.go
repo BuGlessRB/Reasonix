@@ -700,9 +700,10 @@ func withoutPinnedContextRevisions(messages []provider.Message) ([]provider.Mess
 }
 
 // projectionMessagesPreservingPinnedContext performs the ordinary projection
-// metadata scrub while retaining explicit host provenance only for trusted
-// pinned revision messages. That provenance is required for safe checkpoint
-// rebasing; ModelMessages still strips it from the provider request copy.
+// metadata scrub while retaining host provenance. Pinned revisions need that
+// provenance for safe checkpoint rebasing, and session-context snapshots need
+// it for validation and digest deduplication. ModelMessages still strips all
+// provenance from the provider request copy.
 func projectionMessagesPreservingPinnedContext(messages []provider.Message) []provider.Message {
 	trusted := make([]bool, 0, len(messages))
 	for _, message := range messages {

@@ -123,6 +123,8 @@ type Coordinator struct {
 	// behavior used by direct Coordinator callers.
 	plannerPolicy       PlannerPolicy
 	plannerPlanApprover PlannerPlanApprover
+	plannerLastPrefix   PrefixShape
+	plannerHasPrefix    bool
 }
 
 // NewCoordinator wires a planner provider (with its own session) to an executor.
@@ -207,6 +209,8 @@ func (c *Coordinator) ResetPlannerSession() {
 	}
 	next := NewSession(system)
 	c.plannerSess = next
+	c.plannerLastPrefix = PrefixShape{}
+	c.plannerHasPrefix = false
 	if c.plannerAgent != nil {
 		c.plannerAgent.SetSession(next)
 	}
@@ -475,6 +479,7 @@ func (c *Coordinator) persistExecutorNoOp(ctx context.Context, input, plan strin
 	if c == nil || c.executor == nil || c.executor.sess.conversation == nil {
 		return
 	}
+	c.executor.AppendTurnContext(ctx)
 	rawInput := RawUserInput(ctx, input)
 	providerContent := c.executor.withTurnPreferences(input)
 	rawContent := ""
@@ -509,66 +514,12 @@ func (o plannerOutcome) requestsApproval() bool {
 
 // plan produces this turn's plan, structured when the planner submitted one.
 func (c *Coordinator) plan(ctx context.Context, input string) (plannerOutcome, error) {
+	ctx = withPlannerTurnContext(ctx)
 	if c.plannerAgent != nil {
 		return c.planWithTools(ctx, input)
 	}
 	text, err := c.planFromStream(ctx, input)
 	return plannerOutcome{text: text}, err
-}
-
-// planFromStream is the tool-less planner path: with no submit_plan available
-// its result is always prose, which the host reads with the text fallback.
-func (c *Coordinator) planFromStream(ctx context.Context, input string) (string, error) {
-	// On failure, roll the just-added user message back: a dangling user turn
-	// would produce consecutive user roles on the next plan (which some
-	// providers reject), and Run's executor fallback keeps the turn alive
-	// after this error, so the planner session must stay coherent.
-	before := c.plannerSess.Snapshot()
-	rawInput := RawUserInput(ctx, input)
-	rawContent := ""
-	if input != rawInput {
-		rawContent = rawInput
-	}
-	c.plannerSess.Add(provider.Message{Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: input, RawContent: rawContent})
-	ctx = provider.WithRequestAttemptCounter(ctx)
-	var usage *provider.Usage
-	streamCompleted := false
-	defer func() {
-		accounted := provider.UsageWithRequestAttemptCount(ctx, usage)
-		if accounted != nil || streamCompleted {
-			c.sink.Emit(event.Event{Kind: event.Usage, ModelRef: c.plannerModelRef, Usage: accounted, Pricing: c.plannerPricing, Source: event.UsageSourcePlanner, UsageSource: event.UsageSourcePlanner})
-		}
-	}()
-
-	planCtx, planCancel := context.WithCancel(ctx)
-	defer planCancel()
-	defer trackPublishedHostStream(planCtx, planCancel)()
-	ch, err := c.planner.Stream(planCtx, provider.Request{
-		Messages:    provider.ModelMessages(c.plannerSess.Messages),
-		Temperature: provider.OptionalTemperature(c.temperature),
-	})
-	if err != nil {
-		c.plannerSess.Replace(before)
-		return "", err
-	}
-
-	var text strings.Builder
-	for chunk := range ch {
-		switch chunk.Type {
-		case provider.ChunkText:
-			text.WriteString(chunk.Text)
-			c.sink.Emit(event.Event{Kind: event.Text, Text: chunk.Text, Source: event.UsageSourcePlanner})
-		case provider.ChunkUsage:
-			usage = chunk.Usage
-		case provider.ChunkError:
-			c.plannerSess.Replace(before)
-			return "", chunk.Err
-		}
-	}
-	streamCompleted = true
-	plan := text.String()
-	c.plannerSess.Add(provider.Message{Role: provider.RoleAssistant, Content: plan})
-	return plan, nil
 }
 
 // planWithTools runs the planner through the normal Agent loop over a filtered
