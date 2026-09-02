@@ -6,7 +6,7 @@
     "complexity": 1512,
     "error-text": 12,
     "essay": 3242,
-    "file-size": 40609,
+    "file-size": 40322,
     "frontend-parity": 150,
     "function-size": 6595,
     "layering": 0,
@@ -727,9 +727,9 @@
     },
     "internal/control/controller.go": {
       "complexity": 3,
-      "essay": 119,
-      "file-size": 4136,
-      "frontend-parity": 79,
+      "essay": 117,
+      "file-size": 3849,
+      "frontend-parity": 67,
       "function-size": 27,
       "narrative": 4
     },
@@ -784,6 +784,10 @@
     },
     "internal/control/mcp_admin.go": {
       "frontend-parity": 14
+    },
+    "internal/control/mcp_servers.go": {
+      "essay": 2,
+      "frontend-parity": 12
     },
     "internal/control/memory.go": {
       "essay": 12
