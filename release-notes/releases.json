@@ -2,6 +2,748 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "1.36.0",
+      "date": "2026-09-02",
+      "channel": "stable",
+      "targetingVersion": 1,
+      "title": {
+        "en": "Reasonix 1.36.0",
+        "zh": "Reasonix 1.36.0"
+      },
+      "summary": {
+        "en": "This release brings sticky context file pinning, cooperative session takeover, worktree merge-back, and numerous reliability and performance improvements across Desktop and CLI.",
+        "zh": "此版本带来了粘性上下文文件固定、协作式会话接管、工作树合并回主分支，以及桌面端和命令行端的众多可靠性与性能改进。"
+      },
+      "surfaces": [
+        "desktop",
+        "cli"
+      ],
+      "guides": [
+        {
+          "title": {
+            "en": "Session Ownership",
+            "zh": "会话所有权"
+          },
+          "body": {
+            "en": "Learn how cooperative session takeover and reclaim work across Desktop and CLI.",
+            "zh": "了解协作式会话接管与取回在桌面端和命令行端的工作方式。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/f64e5bb5de2fdbb4cb84e271d6e58466e67b8179/docs/SESSION_OWNERSHIP.md"
+        },
+        {
+          "title": {
+            "en": "Session Ownership (Chinese)",
+            "zh": "会话所有权（中文）"
+          },
+          "body": {
+            "en": "Chinese documentation for cooperative session takeover and reclaim.",
+            "zh": "协作式会话接管与取回的中文文档。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/f64e5bb5de2fdbb4cb84e271d6e58466e67b8179/docs/SESSION_OWNERSHIP.zh-CN.md"
+        },
+        {
+          "title": {
+            "en": "CLI Guide",
+            "zh": "CLI 指南"
+          },
+          "body": {
+            "en": "CLI usage guide including mouse and synchronized output settings.",
+            "zh": "CLI 使用指南，包括鼠标和同步输出设置。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/f64e5bb5de2fdbb4cb84e271d6e58466e67b8179/docs/GUIDE.md"
+        },
+        {
+          "title": {
+            "en": "CLI Guide (Chinese)",
+            "zh": "CLI 指南（中文）"
+          },
+          "body": {
+            "en": "Chinese CLI usage guide including mouse and synchronized output settings.",
+            "zh": "中文 CLI 使用指南，包括鼠标和同步输出设置。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/f64e5bb5de2fdbb4cb84e271d6e58466e67b8179/docs/GUIDE.zh-CN.md"
+        },
+        {
+          "title": {
+            "en": "CLI Commands",
+            "zh": "CLI 命令"
+          },
+          "body": {
+            "en": "CLI command reference including /preset and /mouse.",
+            "zh": "CLI 命令参考，包括 /preset 和 /mouse。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/f64e5bb5de2fdbb4cb84e271d6e58466e67b8179/docs/CLI.md"
+        },
+        {
+          "title": {
+            "en": "CLI Commands (Chinese)",
+            "zh": "CLI 命令（中文）"
+          },
+          "body": {
+            "en": "Chinese CLI command reference including /preset and /mouse.",
+            "zh": "中文 CLI 命令参考，包括 /preset 和 /mouse。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/f64e5bb5de2fdbb4cb84e271d6e58466e67b8179/docs/CLI.zh-CN.md"
+        },
+        {
+          "title": {
+            "en": "ACP",
+            "zh": "ACP"
+          },
+          "body": {
+            "en": "Agent Control Protocol documentation.",
+            "zh": "代理控制协议文档。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/f64e5bb5de2fdbb4cb84e271d6e58466e67b8179/docs/ACP.md"
+        },
+        {
+          "title": {
+            "en": "ACP (Chinese)",
+            "zh": "ACP（中文）"
+          },
+          "body": {
+            "en": "Chinese Agent Control Protocol documentation.",
+            "zh": "中文代理控制协议文档。"
+          },
+          "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/f64e5bb5de2fdbb4cb84e271d6e58466e67b8179/docs/ACP.zh-CN.md"
+        }
+      ],
+      "highlights": [
+        {
+          "kind": "new",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Sticky context file pinning",
+            "zh": "粘性上下文文件固定"
+          },
+          "body": {
+            "en": "Pin workspace files to keep them available verbatim for the current session, even after context compaction.",
+            "zh": "固定工作区文件，使其在当前会话中即使经过上下文压缩也能保持原文可用。"
+          },
+          "refs": [
+            9689
+          ]
+        },
+        {
+          "kind": "new",
+          "targets": [
+            "desktop",
+            "cli"
+          ],
+          "title": {
+            "en": "Cooperative session takeover",
+            "zh": "协作式会话接管"
+          },
+          "body": {
+            "en": "Take over a session from another client with a read-only spectator mode and cooperative reclaim.",
+            "zh": "从另一个客户端接管会话，支持只读旁观模式和协作式取回。"
+          },
+          "refs": [
+            9692
+          ]
+        },
+        {
+          "kind": "new",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Worktree merge-back",
+            "zh": "工作树合并回主分支"
+          },
+          "body": {
+            "en": "Safely merge isolated worktree changes back to the main branch with conflict preflight and recovery.",
+            "zh": "安全地将隔离工作树的更改合并回主分支，支持冲突预检和恢复。"
+          },
+          "refs": [
+            9650
+          ]
+        },
+        {
+          "kind": "improved",
+          "targets": [
+            "desktop",
+            "cli"
+          ],
+          "title": {
+            "en": "Semantic completion validation",
+            "zh": "语义完成校验"
+          },
+          "body": {
+            "en": "Agent turns are now validated semantically to prevent premature completion when work is unfinished.",
+            "zh": "现在对代理轮次进行语义校验，防止工作未完成时过早结束。"
+          },
+          "refs": [
+            9654
+          ]
+        },
+        {
+          "kind": "improved",
+          "targets": [
+            "desktop",
+            "cli"
+          ],
+          "title": {
+            "en": "Complete long-file reads",
+            "zh": "完整长文件读取"
+          },
+          "body": {
+            "en": "Long file reads now enforce complete consumption before allowing writes or final answers.",
+            "zh": "长文件读取现在强制在允许写入或最终回答前完整消费。"
+          },
+          "refs": [
+            9708
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "cli"
+          ],
+          "title": {
+            "en": "Clipboard image paste on Wayland",
+            "zh": "Wayland 上的剪贴板图片粘贴"
+          },
+          "body": {
+            "en": "Fixed silent image paste failures by negotiating supported MIME types and falling back to text.",
+            "zh": "通过协商支持的 MIME 类型并回退到文本，修复了图片粘贴静默失败的问题。"
+          },
+          "refs": [
+            9635
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "cli"
+          ],
+          "title": {
+            "en": "SSH terminal flicker",
+            "zh": "SSH 终端闪烁"
+          },
+          "body": {
+            "en": "Forced synchronized output over SSH to eliminate repaint flicker.",
+            "zh": "在 SSH 上强制同步输出，消除重绘闪烁。"
+          },
+          "refs": [
+            9641
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "cli"
+          ],
+          "title": {
+            "en": "Native mouse selection over SSH",
+            "zh": "SSH 上的原生鼠标选择"
+          },
+          "body": {
+            "en": "SSH sessions now default to native terminal mouse selection for easier copy.",
+            "zh": "SSH 会话现在默认使用终端原生鼠标选择，便于复制。"
+          },
+          "refs": [
+            9634
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Ask prompt replay loops",
+            "zh": "Ask 提示循环"
+          },
+          "body": {
+            "en": "Prevented Ask prompts from replaying or failing with 'turn already running'.",
+            "zh": "防止 Ask 提示重复出现或出现“轮次已在运行”错误。"
+          },
+          "refs": [
+            9693
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Transcript anchor on plain click",
+            "zh": "普通点击时的会话锚点"
+          },
+          "body": {
+            "en": "Fixed viewport jumps when clicking transcript content after scrolling.",
+            "zh": "修复滚动后点击会话内容时视口跳动的问题。"
+          },
+          "refs": [
+            9721
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Ask session activation race",
+            "zh": "Ask 会话激活竞态"
+          },
+          "body": {
+            "en": "Fixed first-switch failure when an Ask prompt arrives during topic activation.",
+            "zh": "修复主题激活期间 Ask 提示到达时首次切换失败的问题。"
+          },
+          "refs": [
+            9724
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "cli"
+          ],
+          "title": {
+            "en": "Watchdog false kills",
+            "zh": "看门狗误杀"
+          },
+          "body": {
+            "en": "Graceful watchdog exit and clock-jump tolerance prevent false kills on Windows.",
+            "zh": "优雅的看门狗退出和时钟跳变容忍防止 Windows 上的误杀。"
+          },
+          "refs": [
+            9639
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "cli"
+          ],
+          "title": {
+            "en": "Controller-dispatched turn state",
+            "zh": "控制器派发轮次状态"
+          },
+          "body": {
+            "en": "TUI now enters running state for controller-dispatched turns, preventing queue races.",
+            "zh": "TUI 现在对控制器派发的轮次进入运行状态，防止队列竞争。"
+          },
+          "refs": [
+            9638
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "cli"
+          ],
+          "title": {
+            "en": "Slash arg-completion lag",
+            "zh": "斜杠参数补全卡顿"
+          },
+          "body": {
+            "en": "Cached slash argument data across keystrokes to eliminate typing lag.",
+            "zh": "跨按键缓存斜杠参数数据，消除输入卡顿。"
+          },
+          "refs": [
+            9636
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "cli"
+          ],
+          "title": {
+            "en": "In-app selection copy",
+            "zh": "应用内选区复制"
+          },
+          "body": {
+            "en": "Stripped renderer-owned block gutters from copied text while preserving literal glyphs.",
+            "zh": "从复制文本中剥离渲染器拥有的块装饰竖线，同时保留字面字形。"
+          },
+          "refs": [
+            9640
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "cli"
+          ],
+          "title": {
+            "en": "/preset visibility",
+            "zh": "/preset 可见性"
+          },
+          "body": {
+            "en": "Surfaced /preset in completion, help, and status line.",
+            "zh": "在补全、帮助和状态栏中显示 /preset。"
+          },
+          "refs": [
+            9633
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "cli"
+          ],
+          "title": {
+            "en": "Unknown operation errors",
+            "zh": "未知操作错误"
+          },
+          "body": {
+            "en": "Error messages now name valid operations when rejecting unknown ones.",
+            "zh": "拒绝未知操作时，错误消息现在会列出有效操作。"
+          },
+          "refs": [
+            9700
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "desktop",
+            "cli"
+          ],
+          "title": {
+            "en": "Idle CPU repair loops",
+            "zh": "空闲 CPU 修复循环"
+          },
+          "body": {
+            "en": "Stopped idle session catalog repair loops from consuming CPU.",
+            "zh": "停止空闲会话目录修复循环消耗 CPU。"
+          },
+          "refs": [
+            9697
+          ]
+        }
+      ],
+      "changes": {
+        "new": [
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Sticky context file pinning",
+              "zh": "粘性上下文文件固定"
+            },
+            "body": {
+              "en": "Pin workspace files to keep them available verbatim for the current session, even after context compaction.",
+              "zh": "固定工作区文件，使其在当前会话中即使经过上下文压缩也能保持原文可用。"
+            },
+            "refs": [
+              9689
+            ]
+          },
+          {
+            "targets": [
+              "desktop",
+              "cli"
+            ],
+            "title": {
+              "en": "Cooperative session takeover",
+              "zh": "协作式会话接管"
+            },
+            "body": {
+              "en": "Take over a session from another client with a read-only spectator mode and cooperative reclaim.",
+              "zh": "从另一个客户端接管会话，支持只读旁观模式和协作式取回。"
+            },
+            "refs": [
+              9692
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Worktree merge-back",
+              "zh": "工作树合并回主分支"
+            },
+            "body": {
+              "en": "Safely merge isolated worktree changes back to the main branch with conflict preflight and recovery.",
+              "zh": "安全地将隔离工作树的更改合并回主分支，支持冲突预检和恢复。"
+            },
+            "refs": [
+              9650
+            ]
+          }
+        ],
+        "improved": [
+          {
+            "targets": [
+              "desktop",
+              "cli"
+            ],
+            "title": {
+              "en": "Semantic completion validation",
+              "zh": "语义完成校验"
+            },
+            "body": {
+              "en": "Agent turns are now validated semantically to prevent premature completion when work is unfinished.",
+              "zh": "现在对代理轮次进行语义校验，防止工作未完成时过早结束。"
+            },
+            "refs": [
+              9654
+            ]
+          },
+          {
+            "targets": [
+              "desktop",
+              "cli"
+            ],
+            "title": {
+              "en": "Complete long-file reads",
+              "zh": "完整长文件读取"
+            },
+            "body": {
+              "en": "Long file reads now enforce complete consumption before allowing writes or final answers.",
+              "zh": "长文件读取现在强制在允许写入或最终回答前完整消费。"
+            },
+            "refs": [
+              9708
+            ]
+          }
+        ],
+        "fixed": [
+          {
+            "targets": [
+              "cli"
+            ],
+            "title": {
+              "en": "Clipboard image paste on Wayland",
+              "zh": "Wayland 上的剪贴板图片粘贴"
+            },
+            "body": {
+              "en": "Fixed silent image paste failures by negotiating supported MIME types and falling back to text.",
+              "zh": "通过协商支持的 MIME 类型并回退到文本，修复了图片粘贴静默失败的问题。"
+            },
+            "refs": [
+              9635
+            ]
+          },
+          {
+            "targets": [
+              "cli"
+            ],
+            "title": {
+              "en": "SSH terminal flicker",
+              "zh": "SSH 终端闪烁"
+            },
+            "body": {
+              "en": "Forced synchronized output over SSH to eliminate repaint flicker.",
+              "zh": "在 SSH 上强制同步输出，消除重绘闪烁。"
+            },
+            "refs": [
+              9641
+            ]
+          },
+          {
+            "targets": [
+              "cli"
+            ],
+            "title": {
+              "en": "Native mouse selection over SSH",
+              "zh": "SSH 上的原生鼠标选择"
+            },
+            "body": {
+              "en": "SSH sessions now default to native terminal mouse selection for easier copy.",
+              "zh": "SSH 会话现在默认使用终端原生鼠标选择，便于复制。"
+            },
+            "refs": [
+              9634
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Ask prompt replay loops",
+              "zh": "Ask 提示循环"
+            },
+            "body": {
+              "en": "Prevented Ask prompts from replaying or failing with 'turn already running'.",
+              "zh": "防止 Ask 提示重复出现或出现“轮次已在运行”错误。"
+            },
+            "refs": [
+              9693
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Transcript anchor on plain click",
+              "zh": "普通点击时的会话锚点"
+            },
+            "body": {
+              "en": "Fixed viewport jumps when clicking transcript content after scrolling.",
+              "zh": "修复滚动后点击会话内容时视口跳动的问题。"
+            },
+            "refs": [
+              9721
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Ask session activation race",
+              "zh": "Ask 会话激活竞态"
+            },
+            "body": {
+              "en": "Fixed first-switch failure when an Ask prompt arrives during topic activation.",
+              "zh": "修复主题激活期间 Ask 提示到达时首次切换失败的问题。"
+            },
+            "refs": [
+              9724
+            ]
+          },
+          {
+            "targets": [
+              "cli"
+            ],
+            "title": {
+              "en": "Watchdog false kills",
+              "zh": "看门狗误杀"
+            },
+            "body": {
+              "en": "Graceful watchdog exit and clock-jump tolerance prevent false kills on Windows.",
+              "zh": "优雅的看门狗退出和时钟跳变容忍防止 Windows 上的误杀。"
+            },
+            "refs": [
+              9639
+            ]
+          },
+          {
+            "targets": [
+              "cli"
+            ],
+            "title": {
+              "en": "Controller-dispatched turn state",
+              "zh": "控制器派发轮次状态"
+            },
+            "body": {
+              "en": "TUI now enters running state for controller-dispatched turns, preventing queue races.",
+              "zh": "TUI 现在对控制器派发的轮次进入运行状态，防止队列竞争。"
+            },
+            "refs": [
+              9638
+            ]
+          },
+          {
+            "targets": [
+              "cli"
+            ],
+            "title": {
+              "en": "Slash arg-completion lag",
+              "zh": "斜杠参数补全卡顿"
+            },
+            "body": {
+              "en": "Cached slash argument data across keystrokes to eliminate typing lag.",
+              "zh": "跨按键缓存斜杠参数数据，消除输入卡顿。"
+            },
+            "refs": [
+              9636
+            ]
+          },
+          {
+            "targets": [
+              "cli"
+            ],
+            "title": {
+              "en": "In-app selection copy",
+              "zh": "应用内选区复制"
+            },
+            "body": {
+              "en": "Stripped renderer-owned block gutters from copied text while preserving literal glyphs.",
+              "zh": "从复制文本中剥离渲染器拥有的块装饰竖线，同时保留字面字形。"
+            },
+            "refs": [
+              9640
+            ]
+          },
+          {
+            "targets": [
+              "cli"
+            ],
+            "title": {
+              "en": "/preset visibility",
+              "zh": "/preset 可见性"
+            },
+            "body": {
+              "en": "Surfaced /preset in completion, help, and status line.",
+              "zh": "在补全、帮助和状态栏中显示 /preset。"
+            },
+            "refs": [
+              9633
+            ]
+          },
+          {
+            "targets": [
+              "cli"
+            ],
+            "title": {
+              "en": "Unknown operation errors",
+              "zh": "未知操作错误"
+            },
+            "body": {
+              "en": "Error messages now name valid operations when rejecting unknown ones.",
+              "zh": "拒绝未知操作时，错误消息现在会列出有效操作。"
+            },
+            "refs": [
+              9700
+            ]
+          },
+          {
+            "targets": [
+              "desktop",
+              "cli"
+            ],
+            "title": {
+              "en": "Idle CPU repair loops",
+              "zh": "空闲 CPU 修复循环"
+            },
+            "body": {
+              "en": "Stopped idle session catalog repair loops from consuming CPU.",
+              "zh": "停止空闲会话目录修复循环消耗 CPU。"
+            },
+            "refs": [
+              9697
+            ]
+          }
+        ]
+      },
+      "upgrade": [],
+      "risks": [],
+      "contributors": [
+        "SivanCola",
+        "mchenziyi",
+        "XTLine",
+        "dadgrand"
+      ],
+      "links": {
+        "github": "https://github.com/esengine/DeepSeek-Reasonix/releases/tag/desktop-v1.36.0",
+        "compare": "https://github.com/esengine/DeepSeek-Reasonix/compare/desktop-v1.35.0...desktop-v1.36.0",
+        "download": "https://reasonix.io/?download=desktop&channel=stable#start"
+      },
+      "releaseId": "1.36.0",
+      "baseVersion": "1.36.0",
+      "status": "reviewed",
+      "previousRelease": "1.35.0",
+      "builds": {
+        "cli": "v1.36.0",
+        "desktop": "v1.36.0",
+        "npm": "1.36.0"
+      }
+    },
+    {
       "version": "1.35.0",
       "date": "2026-08-31",
       "channel": "stable",
