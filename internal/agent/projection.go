@@ -20,7 +20,8 @@ const (
 	compactionStateSchemaV1      = 1
 	compactionStateSchemaV2      = 2
 	compactionStateSchemaV3      = 3
-	compactionStateSchemaCurrent = compactionStateSchemaV3
+	compactionStateSchemaV4      = 4
+	compactionStateSchemaCurrent = compactionStateSchemaV4
 )
 
 // Cache state labels for resume/preflight telemetry. They never enter the
@@ -68,6 +69,10 @@ type ContextProjection struct {
 	// CoveredPrefixHash fingerprints provider-visible canonical[:CoveredCount]
 	// so append-only growth can be distinguished from prefix edits/rewrites.
 	CoveredPrefixHash string `json:"covered_prefix_hash,omitempty"`
+	// PinnedContextHash authenticates host-origin provenance inside the covered
+	// canonical prefix. Provider bytes omit Origin, so CoveredPrefixHash alone
+	// cannot detect provenance edits that change checkpoint reconstruction.
+	PinnedContextHash string `json:"pinned_context_hash,omitempty"`
 	SummaryHash       string `json:"summary_hash,omitempty"`
 	SourceTokens      int    `json:"source_tokens,omitempty"`
 	ProjectionTokens  int    `json:"projection_tokens,omitempty"`
@@ -186,7 +191,8 @@ func LoadCompactionState(sessionPath string) (CompactionState, bool, error) {
 	if err := json.Unmarshal(b, &st); err != nil {
 		return CompactionState{}, false, fmt.Errorf("decode context state %s: %w", path, err)
 	}
-	if st.SchemaVersion != 0 && st.SchemaVersion != compactionStateSchemaV1 && st.SchemaVersion != compactionStateSchemaV2 && st.SchemaVersion != compactionStateSchemaV3 {
+	if st.SchemaVersion != 0 && st.SchemaVersion != compactionStateSchemaV1 && st.SchemaVersion != compactionStateSchemaV2 &&
+		st.SchemaVersion != compactionStateSchemaV3 && st.SchemaVersion != compactionStateSchemaV4 {
 		return CompactionState{}, false, fmt.Errorf("unsupported context schema version %d", st.SchemaVersion)
 	}
 	if st.SchemaVersion == 0 {
@@ -205,8 +211,8 @@ func SaveCompactionState(sessionPath string, st CompactionState) error {
 	if path == "" {
 		return fmt.Errorf("empty session path")
 	}
-	// V3 keeps logical user-turn boundaries; previous readers fall back to
-	// canonical history rather than misreading the V1 coalesced invariant.
+	// V4 adds a canonical-coverage pinned-context checkpoint. Previous readers
+	// fail closed on the unknown schema and replay canonical history.
 	st.SchemaVersion = compactionStateSchemaCurrent
 	if st.UpdatedAt.IsZero() {
 		st.UpdatedAt = time.Now().UTC()
@@ -491,6 +497,10 @@ func projectionContentValid(st CompactionState, msgs []provider.Message) bool {
 	}
 	// Prefix hash is required; legacy sidecars without it are rebuilt.
 	if st.Projection.CoveredPrefixHash == "" {
+		return false
+	}
+	if st.SchemaVersion >= compactionStateSchemaV4 &&
+		st.Projection.PinnedContextHash != pinnedContextCoverageHash(msgs, n) {
 		return false
 	}
 	if coveredPrefixHash(msgs, n) == st.Projection.CoveredPrefixHash {
