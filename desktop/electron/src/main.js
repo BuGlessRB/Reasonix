@@ -10,6 +10,7 @@ const { installApplicationMenu, installContextMenu } = require("./menu");
 const { externalTarget } = require("./links");
 const { appIcon } = require("./appicon");
 const layout = require("./layout");
+const { offerCleanup } = require("./legacy");
 
 // Must match serve.TokenCookie and the namespace the kernel serves the page on.
 const TOKEN_COOKIE = "reasonix_token";
@@ -70,6 +71,32 @@ async function boot() {
   win.on("close", onWindowClose);
   await win.loadURL(origin + PAGE_PATH);
   await tray?.refresh();
+  // After the window, deliberately. This asks about an install left behind by
+  // the shell this one replaces, and a modal in front of a window that has not
+  // painted reads as the application having failed to start.
+  cleanUpLegacyInstalls();
+}
+
+// The Wails install a dmg download leaves beside this one. Detached from boot:
+// a launch must not wait on it, and a failure here is not a failed launch.
+function cleanUpLegacyInstalls() {
+  offerCleanup({
+    packaged: app.isPackaged,
+    execPath: process.execPath,
+    userData: app.getPath("userData"),
+    ask: async (bundle) => {
+      const { response } = await dialog.showMessageBox(win, {
+        type: "question",
+        buttons: ["移到废纸篓", "先留着"],
+        defaultId: 0,
+        cancelId: 1,
+        message: "找到一个旧版本的 Reasonix Studio",
+        detail: `${bundle}\n\n它和当前这个共用同一份数据，所以两个图标打开的是同一个窗口。移到废纸篓不会动你的会话和设置。`,
+      });
+      return response === 0;
+    },
+    trash: (bundle) => shell.trashItem(bundle),
+  }).catch((err) => console.error("reasonix-studio: legacy cleanup:", err.message));
 }
 
 // Set before anything is loaded, or the first request answers 403 and the

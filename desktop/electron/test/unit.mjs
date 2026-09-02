@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import path from "node:path";
 import os from "node:os";
+import fs from "node:fs";
 
 const require = createRequire(import.meta.url);
 const { parse, readActs } = require("../src/host.js");
 const { contextTemplate } = require("../src/editmenu.js");
 const { externalTarget } = require("../src/links.js");
+const { offerCleanup, ownBundle } = require("../src/legacy.js");
 
 const TOKEN = "a".repeat(64);
 const line = (over) => JSON.stringify({ version: 1, origin: "http://127.0.0.1:8080", token: TOKEN, ...over });
@@ -254,4 +256,99 @@ test("a child writing without newlines cannot grow this process", () => {
   // is a line assembler, not a log.
   child.push('{"act":"quit"}\n');
   assert.deepEqual(seen, ["quit"]);
+});
+
+// The legacy cleanup removes an application from somebody's disk, so what it
+// will not touch is asserted before what it will.
+test("the running application is never offered for removal", async (t) => {
+  if (process.platform !== "darwin") return t.skip("the cleanup is macOS only");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "legacy-"));
+  const own = path.join(home, "Reasonix Studio.app");
+  const exe = path.join(own, "Contents", "MacOS", "Reasonix Studio");
+  const legacy = path.join(home, "ReasonixStudio.app");
+  fs.mkdirSync(legacy, { recursive: true });
+
+  assert.equal(ownBundle(exe), own);
+
+  // own is handed to the filter on purpose: a search that never returns it
+  // would let this pass with the guard removed, which is how it read first.
+  const asked = [];
+  const trashed = [];
+  const removed = await offerCleanup({
+    packaged: true,
+    execPath: exe,
+    userData: home,
+    find: () => [own, legacy],
+    ask: async (b) => {
+      asked.push(b);
+      return true;
+    },
+    trash: async (b) => void trashed.push(b),
+  });
+  assert.equal(asked.includes(own), false, "asked about the bundle it is running from");
+  assert.equal(trashed.includes(own), false, "trashed the bundle it is running from");
+  assert.deepEqual(removed, [legacy], "the leftover install was not the one removed");
+});
+
+test("an unpackaged build removes nothing", async () => {
+  let asked = 0;
+  const removed = await offerCleanup({
+    packaged: false,
+    execPath: "/Applications/Reasonix Studio.app/Contents/MacOS/Reasonix Studio",
+    userData: fs.mkdtempSync(path.join(os.tmpdir(), "legacy-")),
+    ask: async () => {
+      asked += 1;
+      return true;
+    },
+    trash: async () => {},
+  });
+  assert.deepEqual(removed, []);
+  assert.equal(asked, 0, "a development build asked to remove an installed one");
+});
+
+test("a refusal is remembered, so the next launch does not ask again", async (t) => {
+  if (process.platform !== "darwin") return t.skip("the cleanup is macOS only");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "legacy-"));
+  const exe = path.join(home, "Reasonix Studio.app", "Contents", "MacOS", "Reasonix Studio");
+  const legacy = path.join(home, "ReasonixStudio.app");
+  fs.mkdirSync(legacy, { recursive: true });
+
+  let asked = 0;
+  const decline = {
+    packaged: true,
+    execPath: exe,
+    userData: home,
+    find: () => [legacy],
+    ask: async () => {
+      asked += 1;
+      return false;
+    },
+    trash: async () => {
+      throw new Error("trashed a bundle the answer was no for");
+    },
+  };
+  await offerCleanup(decline);
+  assert.equal(asked, 1, "the first launch did not ask");
+  await offerCleanup(decline);
+  assert.equal(asked, 1, "a refusal was asked again on the next launch");
+});
+
+test("consent trashes exactly what was answered for", async (t) => {
+  if (process.platform !== "darwin") return t.skip("the cleanup is macOS only");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "legacy-"));
+  const exe = path.join(home, "Reasonix Studio.app", "Contents", "MacOS", "Reasonix Studio");
+  const legacy = path.join(home, "ReasonixStudio.app");
+  fs.mkdirSync(legacy, { recursive: true });
+
+  const trashed = [];
+  const removed = await offerCleanup({
+    packaged: true,
+    execPath: exe,
+    userData: home,
+    find: () => [legacy],
+    ask: async () => true,
+    trash: async (b) => void trashed.push(b),
+  });
+  assert.deepEqual(trashed, [legacy]);
+  assert.deepEqual(removed, [legacy]);
 });
