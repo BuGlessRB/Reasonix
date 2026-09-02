@@ -2686,14 +2686,12 @@ api_key_env = "REASONIX_TEST_KEY_UNSET"
 	}
 }
 
-func TestBuildOmitsExcludedSkillRootsFromPromptAndRuntimeList(t *testing.T) {
+func TestBuildOmitsExcludedSkillRootsFromContextAndRuntimeList(t *testing.T) {
 	dir := robustTempDir(t)
-	home := robustTempDir(t)
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	home := isolateConfigHome(t)
 	t.Chdir(dir)
 	excluded := filepath.Join(home, ".agents", "skills")
-	writeFile(t, home, ".reasonix/skills/keep.md", "---\ndescription: keep\n---\nplaybook")
+	writeFile(t, config.ReasonixHomeDir(), "skills/keep.md", "---\ndescription: keep\n---\nplaybook")
 	writeFile(t, home, ".agents/skills/noisy.md", "---\ndescription: noisy\n---\nplaybook")
 	writeFile(t, dir, "reasonix.toml", fmt.Sprintf(`
 default_model = "test-model"
