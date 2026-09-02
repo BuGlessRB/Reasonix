@@ -786,7 +786,9 @@ func TestServeAdvertisesAndExpandsCustomCommands(t *testing.T) {
 	}
 	select {
 	case got := <-factory.seen:
-		if got != "Review src/main.go" {
+		// The turn also carries whatever the host prepends to it; the claim
+		// here is only that the slash command expanded.
+		if expanded := strings.TrimSpace(agent.DropLeadingTransientBlocks(got)); expanded != "Review src/main.go" {
 			t.Fatalf("runner input = %q, want expanded command", got)
 		}
 	case <-time.After(rpcCallBudget(t)):
