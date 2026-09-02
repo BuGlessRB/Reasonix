@@ -42,12 +42,13 @@ func TestWorkspaceVCSReportsNoneOutsideARepository(t *testing.T) {
 	}
 }
 
-func TestFormatSectionStatesVersionControlEitherWay(t *testing.T) {
-	if got := FormatSection(nil, "test/os", "", "git", nil); !strings.Contains(got, "- Version control: git") {
-		t.Fatalf("section = %q", got)
-	}
-	if got := FormatSection(nil, "test/os", "", "", nil); !strings.Contains(got, "- Version control: none") {
-		t.Fatalf("section = %q", got)
+// The Environment section is machine-wide and sits ahead of the whole prompt.
+// Version control is per-project, so stating it here would diverge the cached
+// prefix between any two projects that disagree; it rides the turn block, where
+// agent.WorkspaceBlock states it either way.
+func TestFormatSectionLeavesVersionControlToTheTurnBlock(t *testing.T) {
+	if got := FormatSection(nil, "test/os", "", nil); strings.Contains(got, "Version control") {
+		t.Fatalf("machine-wide section carries a per-project fact: %q", got)
 	}
 }
 

@@ -10,8 +10,8 @@ import (
 // WorkspaceVCS names the version control the workspace is under, or "" for
 // none — a fact about the directory, not the tooling the probes cover. It reads
 // the filesystem rather than asking any of them, so it cannot flap on a slow
-// subprocess and the answer sits in the cached prefix. Which markers count is
-// fileutil's declared table, never a test for `.git` written out here.
+// subprocess. Being per-project, the answer rides a turn block. Which markers
+// count is fileutil's declared table, never a test for `.git` written here.
 func WorkspaceVCS(root string) string {
 	dir := filepath.Clean(root)
 	if dir == "" || dir == "." {

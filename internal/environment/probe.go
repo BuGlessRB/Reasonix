@@ -366,8 +366,12 @@ func firstLine(s string) string {
 	return s
 }
 
-func FormatSection(results []ProbeResult, osName, shellPath, vcs string, overrides map[string]string) string {
-	if len(results) == 0 && len(overrides) == 0 && osName == "" && shellPath == "" && vcs == "" {
+// FormatSection renders the machine-wide facts only. The workspace's version
+// control is deliberately absent: it varies per project while this section sits
+// ahead of the whole prompt, so stating it here diverges the cached prefix
+// between any two projects that disagree. It rides the turn block instead.
+func FormatSection(results []ProbeResult, osName, shellPath string, overrides map[string]string) string {
+	if len(results) == 0 && len(overrides) == 0 && osName == "" && shellPath == "" {
 		return ""
 	}
 	results = append([]ProbeResult(nil), results...)
@@ -380,13 +384,6 @@ func FormatSection(results []ProbeResult, osName, shellPath, vcs string, overrid
 	b.WriteString("- OS: " + osName + "\n")
 	if shellPath != "" {
 		b.WriteString("- Shell: " + redactHome(shellPath) + "\n")
-	}
-	// Stated either way. Left unsaid, a model reaches for `git diff` to review
-	// its own work and burns a round finding out the hard way.
-	if vcs != "" {
-		b.WriteString("- Version control: " + vcs + "\n")
-	} else {
-		b.WriteString("- Version control: none (not a repository)\n")
 	}
 	if len(overrides) > 0 {
 		b.WriteString("\nConfigured tools:\n")

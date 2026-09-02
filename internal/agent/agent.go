@@ -495,9 +495,8 @@ func (a *Agent) withTurnPreferences(input string) string {
 		}
 	}
 	input = WithReasoningLanguage(input, lang)
-	input = WithWorkspace(input, a.writeWorkspaceRoot)
-	// Role settings no longer inject a stable delivery-runtime system-like
-	// marker. Per-turn <execution-policy> carries the frozen role setting.
+	input = WithWorkspace(input, a.writeWorkspaceRoot, a.workspaceVCS)
+	// The frozen role setting rides the per-turn <execution-policy>, not a marker.
 	return input
 }
 
@@ -823,6 +822,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 			workspaceID:        strings.TrimSpace(opts.WorkspaceID),
 			classifierTaskText: opts.ClassifierTaskText,
 			writeWorkspaceRoot: strings.TrimSpace(opts.WriteWorkspaceRoot),
+			workspaceVCS:       strings.TrimSpace(opts.WorkspaceVCS),
 			subagentDepth:      subagentDepth,
 			maxSubagentDepth:   maxSubagentDepth,
 			contextWindow:      opts.ContextWindow,

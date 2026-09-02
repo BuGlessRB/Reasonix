@@ -23,7 +23,7 @@ func TestProbeSnapshotServesAcrossRestartsWithoutReprobing(t *testing.T) {
 	if len(first) != 1 || !first[0].Found || first[0].Output != "snaptool 1.0" {
 		t.Fatalf("first run = %+v, want found snaptool 1.0", first)
 	}
-	sectionBefore := FormatSection(first, "test/os", "/bin/sh", "git", nil)
+	sectionBefore := FormatSection(first, "test/os", "/bin/sh", nil)
 
 	// Simulate a process restart: in-memory cache gone, and the tool binary
 	// gone too — a live probe would now say "not found". The persisted
@@ -36,7 +36,7 @@ func TestProbeSnapshotServesAcrossRestartsWithoutReprobing(t *testing.T) {
 	if len(second) != 1 || !second[0].Found || second[0].Output != "snaptool 1.0" {
 		t.Fatalf("post-restart run = %+v, want snapshot-served snaptool 1.0", second)
 	}
-	if sectionAfter := FormatSection(second, "test/os", "/bin/sh", "git", nil); sectionAfter != sectionBefore {
+	if sectionAfter := FormatSection(second, "test/os", "/bin/sh", nil); sectionAfter != sectionBefore {
 		t.Fatalf("environment section changed across restart:\nbefore: %s\nafter:  %s", sectionBefore, sectionAfter)
 	}
 }

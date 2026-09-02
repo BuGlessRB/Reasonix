@@ -22,6 +22,8 @@ type agentConfig struct {
 	classifierTaskText string
 	// writeWorkspaceRoot scopes write reservations when writeScheduler is set.
 	writeWorkspaceRoot string
+	// workspaceVCS rides the turn block; in the prefix it would diverge it.
+	workspaceVCS string
 	// subagentDepth caps delegation; at maxSubagentDepth the recursive
 	// agent/skill tools are excluded.
 	subagentDepth    int

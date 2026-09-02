@@ -26,6 +26,8 @@ type promptAssembly struct {
 	sensitivePaths []string
 	skillStore     *skill.Store
 	allSkillStore  *skill.Store
+	// workspaceVCS is resolved here but withheld from the prefix; it rides the turn.
+	workspaceVCS   string
 	skills         []skill.Skill
 	allSkills      []skill.Skill
 	implicitSkills bool
@@ -54,9 +56,9 @@ func buildPromptAssembly(ctx context.Context, opts Options, cfg *config.Config, 
 		sysPrompt = outputstyle.Apply(sysPrompt, st)
 	}
 	sysPrompt = appendCorePolicies(sysPrompt)
-	// Role settings and the workspace path both ride the per-turn transient user
-	// blocks instead of landing here, so this prefix is identical for every
-	// project and session on the machine and they share one cache entry.
+	// Role settings, the workspace path and its version control ride the per-turn
+	// transient blocks, so this prefix is identical for every project on the
+	// machine; per-project text added here would diverge every byte after it.
 	if cfg.EnvironmentEnabled() {
 		shellLabel := shell.Kind.String()
 		if strings.TrimSpace(cfg.Tools.Shell.Path) != "" {
@@ -73,7 +75,6 @@ func buildPromptAssembly(ctx context.Context, opts Options, cfg *config.Config, 
 			}),
 			runtime.GOOS+"/"+runtime.GOARCH,
 			shellLabel,
-			environment.WorkspaceVCS(root),
 			cfg.Environment.Tools,
 		)
 		if envSection != "" {
@@ -99,6 +100,7 @@ func buildPromptAssembly(ctx context.Context, opts Options, cfg *config.Config, 
 
 	return promptAssembly{
 		prompt:         skillSet.sysPrompt,
+		workspaceVCS:   environment.WorkspaceVCS(root),
 		memory:         memSet.set,
 		projectChecks:  memSet.checks,
 		sensitivePaths: memSet.sensitive,

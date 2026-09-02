@@ -882,8 +882,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		// Parent write reservation at the executor entry covers all writers
 		// (including late Economy/MCP adds) without wrapping tool schemas.
 		WriteScheduler:     sub.scheduler,
-		WriteWorkspaceRoot: root,
-		ProjectChecks:      prompt.projectChecks, ProjectSensitivePaths: prompt.sensitivePaths,
+		WriteWorkspaceRoot: root, WorkspaceVCS: prompt.workspaceVCS,
+		ProjectChecks: prompt.projectChecks, ProjectSensitivePaths: prompt.sensitivePaths,
 		AgentPreset:                  agentPreset,
 		DeliveryProfile:              tokenDelivery,
 		Ablation:                     opts.Ablation,

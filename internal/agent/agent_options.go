@@ -108,6 +108,9 @@ type Options struct {
 	WriteScheduler *SubagentScheduler
 	// WriteWorkspaceRoot normalizes parent write reservations.
 	WriteWorkspaceRoot string
+	// WorkspaceVCS names the workspace's version control ("" for none) for
+	// the turn block. Resolved once by the host, never probed per turn.
+	WorkspaceVCS string
 
 	// WorkspaceLease serializes Delivery mutations across sessions that target
 	// the same workspace. nil preserves source compatibility for direct Agent

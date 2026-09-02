@@ -50,9 +50,19 @@ func (p *effectRecordingProvider) requests() []provider.Request {
 // and returns the executor's own requests at the provider boundary.
 func effectRun(t *testing.T, kind, tokenMode string, arm ablation.Set) []provider.Request {
 	t.Helper()
+	return effectRunPrepared(t, kind, tokenMode, arm, nil)
+}
+
+// effectRunPrepared is effectRun with a hook to shape the workspace before the
+// build reads it, for effects that depend on what the directory looks like.
+func effectRunPrepared(t *testing.T, kind, tokenMode string, arm ablation.Set, prep func(dir string)) []provider.Request {
+	t.Helper()
 	isolateConfigHome(t)
 	dir := robustTempDir(t)
 	t.Chdir(dir)
+	if prep != nil {
+		prep(dir)
+	}
 
 	rec := &effectRecordingProvider{}
 	provider.Register(kind, func(provider.Config) (provider.Provider, error) {
@@ -499,4 +509,44 @@ func userMessages(req provider.Request) string {
 		}
 	}
 	return b.String()
+}
+
+// TestEffectVersionControlRidesTheTurnNotThePrefix pins the cache boundary at
+// the provider request: two projects that disagree on version control must send
+// the byte-identical system message, because a divergence in the prefix every
+// session on the machine shares costs every byte that follows it. The fact
+// still has to reach the model, so the turn states it either way.
+func TestEffectVersionControlRidesTheTurnNotThePrefix(t *testing.T) {
+	plain := effectRunPrepared(t, "boot-effect-vcs-plain", "", ablation.Set{}, nil)
+	repo := effectRunPrepared(t, "boot-effect-vcs-repo", "", ablation.Set{}, func(dir string) {
+		if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+			t.Fatalf("make repository marker: %v", err)
+		}
+	})
+
+	plainSystem, repoSystem := systemOf(plain[0]), systemOf(repo[0])
+	if plainSystem == "" {
+		t.Fatal("no system message reached the provider")
+	}
+	if plainSystem != repoSystem {
+		t.Fatalf("a repository and a non-repository composed different prefixes; every byte after the divergence misses the cache:\nfirst diff site: %q",
+			firstDivergence(plainSystem, repoSystem))
+	}
+
+	if got := userMessages(repo[0]); !strings.Contains(got, "Version control: git.") {
+		t.Fatalf("the repository's turn did not state its version control: %q", got)
+	}
+	if got := userMessages(plain[0]); !strings.Contains(got, "Version control: none (not a repository).") {
+		t.Fatalf("the non-repository's turn did not state its version control: %q", got)
+	}
+}
+
+// systemOf returns the request's system message, the prefix under test.
+func systemOf(req provider.Request) string {
+	for _, m := range req.Messages {
+		if m.Role == provider.RoleSystem {
+			return m.Content
+		}
+	}
+	return ""
 }
