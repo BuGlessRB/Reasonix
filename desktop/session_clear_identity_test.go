@@ -1,10 +1,12 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/store"
 )
 
 func TestClearSessionForTabReturnsReplacementIdentity(t *testing.T) {
@@ -54,5 +56,8 @@ func TestClearSessionForTabReturnsReplacementIdentity(t *testing.T) {
 	}
 	if state, err := loadPinnedContextState(result.SessionPath); err != nil || len(state.Files) != 0 {
 		t.Fatalf("replacement pinned state = %+v, err=%v", state, err)
+	}
+	if _, err := os.Stat(store.SessionPinnedContext(result.SessionPath)); err != nil {
+		t.Fatalf("replacement pinned sidecar was not written: %v", err)
 	}
 }

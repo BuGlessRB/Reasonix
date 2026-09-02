@@ -1,8 +1,10 @@
 package control
 
 import (
-	"errors"
+	"context"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"testing"
 
 	"reasonix/internal/agent"
@@ -10,85 +12,97 @@ import (
 	"reasonix/internal/provider"
 )
 
-func TestPinnedContextIsSeparateFromBasePrompt(t *testing.T) {
+func TestPinnedContextNeverChangesBasePrompt(t *testing.T) {
 	dir := t.TempDir()
-	exec := agent.New(nil, nil, agent.NewSession("stale"), agent.Options{}, event.Discard)
+	exec := agent.New(nil, nil, agent.NewSession("legacy composed system"), agent.Options{}, event.Discard)
 	ctrl := New(Options{
-		Runner:        exec,
-		Executor:      exec,
-		SystemPrompt:  "BASE",
-		PinnedContext: "PIN-A",
-		SessionDir:    dir,
-		SessionPath:   filepath.Join(dir, "session.jsonl"),
-		Sink:          event.Discard,
+		Runner:       exec,
+		Executor:     exec,
+		SystemPrompt: "BASE",
+		SessionDir:   dir,
+		SessionPath:  filepath.Join(dir, "session.jsonl"),
+		Sink:         event.Discard,
 	})
-	if got := controlSystemMessage(ctrl.History()); got != "BASE\n\nPIN-A" {
-		t.Fatalf("initial system prompt = %q", got)
+	if got := controlSystemMessage(ctrl.History()); got != "BASE" {
+		t.Fatalf("migrated system prompt = %q", got)
+	}
+	if reasons := exec.Session().DrainContentRewriteReasons(); !slices.Contains(reasons, "legacy_pinned_system_migration") {
+		t.Fatalf("migration reasons = %v", reasons)
 	}
 
 	ctrl.ApplyExtensionSystemPrompt("EXTENSION")
-	if got := controlSystemMessage(ctrl.History()); got != "EXTENSION\n\nPIN-A" {
-		t.Fatalf("extension prompt dropped or duplicated pins: %q", got)
+	if got := ctrl.SystemPrompt(); got != "EXTENSION" {
+		t.Fatalf("SystemPrompt = %q", got)
 	}
-	if err := ctrl.SetPinnedContext("PIN-B"); err != nil {
-		t.Fatalf("SetPinnedContext: %v", err)
-	}
-	if got := controlSystemMessage(ctrl.History()); got != "EXTENSION\n\nPIN-B" {
-		t.Fatalf("updated system prompt = %q", got)
-	}
-
-	ctrl.mu.Lock()
-	ctrl.running = true
-	ctrl.mu.Unlock()
-	if err := ctrl.SetPinnedContext("PIN-C"); !errors.Is(err, ErrTurnRunning) {
-		t.Fatalf("running SetPinnedContext = %v, want ErrTurnRunning", err)
-	}
-	ctrl.mu.Lock()
-	ctrl.running = false
-	ctrl.mu.Unlock()
-	if got := controlSystemMessage(ctrl.History()); got != "EXTENSION\n\nPIN-B" {
-		t.Fatalf("busy mutation changed prompt: %q", got)
+	if got := controlSystemMessage(ctrl.History()); got != "EXTENSION" {
+		t.Fatalf("extension system prompt = %q", got)
 	}
 
 	if err := ctrl.NewSession(); err != nil {
 		t.Fatalf("NewSession: %v", err)
 	}
 	if got := controlSystemMessage(ctrl.History()); got != "EXTENSION" {
-		t.Fatalf("new session inherited pins: %q", got)
+		t.Fatalf("new session system prompt = %q", got)
 	}
 }
 
-func TestPinnedContextDerivesOmittedBaseFromExecutorSession(t *testing.T) {
-	exec := agent.New(nil, nil, agent.NewSession("MODEL CONTRACT"), agent.Options{}, event.Discard)
-	ctrl := New(Options{Executor: exec, PinnedContext: "PIN", Sink: event.Discard})
-	if got := controlSystemMessage(ctrl.History()); got != "MODEL CONTRACT\n\nPIN" {
-		t.Fatalf("derived prompt = %q", got)
-	}
-	if err := ctrl.SetPinnedContext(""); err != nil {
+func TestPinnedContextLoaderAppendsAtAdmittedTurns(t *testing.T) {
+	prov := &recordingProvider{streams: [][]provider.Chunk{
+		{{Type: provider.ChunkText, Text: "one"}, {Type: provider.ChunkDone}},
+		{{Type: provider.ChunkText, Text: "two"}, {Type: provider.ChunkDone}},
+		{{Type: provider.ChunkText, Text: "three"}, {Type: provider.ChunkDone}},
+	}}
+	exec := agent.New(prov, nil, agent.NewSession("BASE"), agent.Options{}, event.Discard)
+	content := "A"
+	loads := 0
+	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	ctrl := New(Options{
+		Runner:       exec,
+		Executor:     exec,
+		SystemPrompt: "BASE",
+		SessionPath:  sessionPath,
+		PinnedContextLoader: func(_ context.Context, path string) (agent.PinnedContextSnapshot, error) {
+			loads++
+			if path != sessionPath {
+				t.Fatalf("loader path = %q", path)
+			}
+			return agent.PinnedContextSnapshot{Files: []agent.PinnedContextFile{{Path: "a.md", Content: content}}}, nil
+		},
+		Sink: event.Discard,
+	})
+	if err := ctrl.Run(context.Background(), "first"); err != nil {
 		t.Fatal(err)
 	}
-	if got := controlSystemMessage(ctrl.History()); got != "MODEL CONTRACT" {
-		t.Fatalf("clearing pins lost derived base prompt: %q", got)
+	if err := ctrl.Run(context.Background(), "second"); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestSessionTransitionPublishesTargetPinnedContext(t *testing.T) {
-	exec := agent.New(nil, nil, agent.NewSession("BASE\n\nSOURCE"), agent.Options{}, event.Discard)
-	ctrl := New(Options{Runner: exec, Executor: exec, SystemPrompt: "BASE", PinnedContext: "SOURCE", Sink: event.Discard})
-	target := agent.NewSession("persisted-old-system")
-	target.Add(provider.Message{Role: provider.RoleUser, Content: "history"})
-	commit, err := ctrl.prepareSessionTransition("target.jsonl", "switch", target)
-	if err != nil {
-		t.Fatalf("prepareSessionTransition: %v", err)
+	content = "B"
+	if err := ctrl.Run(context.Background(), "third"); err != nil {
+		t.Fatal(err)
 	}
-	info := SessionTransitionInfo{TargetPath: "target.jsonl", session: target, commit: commit}
-	info.SetPinnedContext("TARGET")
-	commit.publish()
-
-	if got := ctrl.SystemPrompt(); got != "BASE\n\nTARGET" {
-		t.Fatalf("controller prompt = %q", got)
+	if loads != 3 {
+		t.Fatalf("loader calls = %d", loads)
 	}
-	if got := controlSystemMessage(ctrl.History()); got != "BASE\n\nTARGET" {
-		t.Fatalf("published candidate prompt = %q", got)
+	if got := controlSystemMessage(ctrl.History()); got != "BASE" {
+		t.Fatalf("system prompt changed: %q", got)
+	}
+	revisions := 0
+	for _, message := range ctrl.History() {
+		if agent.IsPinnedContextRevision(message) {
+			revisions++
+		}
+	}
+	if revisions != 2 {
+		t.Fatalf("revision messages = %d, want 2", revisions)
+	}
+	if len(prov.requests) != 3 {
+		t.Fatalf("provider requests = %d", len(prov.requests))
+	}
+	for i := 1; i < len(prov.requests); i++ {
+		previous := prov.requests[i-1].Messages
+		current := prov.requests[i].Messages
+		if len(current) < len(previous) || !reflect.DeepEqual(current[:len(previous)], previous) {
+			t.Fatalf("request %d is not prefixed by request %d", i, i-1)
+		}
 	}
 }

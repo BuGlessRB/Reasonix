@@ -2147,6 +2147,7 @@ func (a *App) clearActiveSessionRuntime(tab *WorkspaceTab, oldCtrl control.Sessi
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 		SubagentParentLive:       a.subagentParentProbeForBuild(tab),
 		SessionRecoveryMeta:      a.tabSessionRecoveryMeta(tab),
+		PinnedContextLoader:      pinnedContextLoader(snap.workspaceRoot),
 		OnSessionRecovered:       a.handleTabSessionRecovered(tab),
 		OnSessionTransition:      a.handleTabSessionTransition(tab),
 		OnSessionTitleChanged:    a.onSessionTitleChanged,
@@ -2179,11 +2180,8 @@ func (a *App) clearActiveSessionRuntime(tab *WorkspaceTab, oldCtrl control.Sessi
 	newCtrl.EnableInteractiveApproval()
 	applyTabModeToController(newCtrl, snap.mode)
 	applyTabToolApprovalModeToController(newCtrl, snap.toolApprovalMode)
-	// Keep the replacement controller's Auto Guard default from construction
-	// (merged project+user config). Do not re-apply a user-only helper here.
-	// Clearing the session clears the active goal too (same contract as
-	// Controller.ClearSession): the snapshot's goal belongs to the destroyed
-	// conversation and must not seed the replacement.
+	// Keep the replacement controller's merged Auto Guard default. Clearing also
+	// drops the active goal, which must not seed the replacement conversation.
 	path := agent.NewSessionPath(newCtrl.SessionDir(), newCtrl.Label())
 	if err := a.ensureTabSessionLeaseForRebuild(tab, path, ""); err != nil {
 		newCtrl.Close()
@@ -2192,6 +2190,9 @@ func (a *App) clearActiveSessionRuntime(tab *WorkspaceTab, oldCtrl control.Sessi
 		return SessionClearResult{}, userFacingSessionLeaseError("", err)
 	}
 	newCtrl.SetFreshSessionPath(path)
+	if err := initClearedPins(path, newCtrl, oldCtrl, tab); err != nil {
+		return SessionClearResult{}, err
+	}
 
 	a.mu.Lock()
 	if err := a.authorizeTabReplacementLocked(tab, newCtrl, "clearing the session", "fresh"); err != nil {
@@ -4160,11 +4161,9 @@ func (a *App) buildSessionRebindCandidate(
 		sharedHost = a.acquireSharedHost(source.sharedHostKey)
 		ownsSharedHostRef = true
 	}
-	pinnedState, err := loadPinnedContextState(sessionPath)
-	if err != nil {
+	if _, err := loadPinnedContextState(sessionPath); err != nil {
 		return nil, err
 	}
-	pinnedContext := buildPinnedContext(root, pinnedState.Files).Block
 	ctrl, err := boot.Build(a.bootContext(), boot.Options{
 		Model:                    model,
 		RequireKey:               false,
@@ -4180,7 +4179,7 @@ func (a *App) buildSessionRebindCandidate(
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 		SubagentParentLive:       a.subagentParentProbeForBuild(tab),
 		SessionRecoveryMeta:      a.tabSessionRecoveryMeta(tab),
-		PinnedContext:            pinnedContext,
+		PinnedContextLoader:      pinnedContextLoader(root),
 		OnSessionRecovered:       a.handleTabSessionRecovered(tab),
 		OnSessionTransition:      a.handleTabSessionTransition(tab),
 		OnSessionTitleChanged:    a.onSessionTitleChanged,
@@ -5178,7 +5177,7 @@ func historyProviderMessagesWithPersistedTimes(msgs []provider.Message, sessionP
 	out := append([]provider.Message(nil), msgs...)
 	userIndex := 0
 	for i := range out {
-		if out[i].Role != provider.RoleUser {
+		if out[i].Role != provider.RoleUser || agent.IsPinnedContextRevision(out[i]) {
 			continue
 		}
 		if userIndex >= len(users) {
@@ -9753,7 +9752,7 @@ func (a *App) SetModelForTab(tabID, name string) (retErr error) {
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 		SubagentParentLive:       a.subagentParentProbeForBuild(tab),
 		SessionRecoveryMeta:      a.tabSessionRecoveryMeta(tab),
-		PinnedContext:            buildPinnedContext(snap.workspaceRoot, tab.GetPinnedFiles()).Block,
+		PinnedContextLoader:      pinnedContextLoader(snap.workspaceRoot),
 		OnSessionRecovered:       a.handleTabSessionRecovered(tab),
 		OnSessionTransition:      a.handleTabSessionTransition(tab),
 		OnSessionTitleChanged:    a.onSessionTitleChanged,
@@ -9942,7 +9941,7 @@ func (a *App) SetEffortForTab(tabID, level string) error {
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 		SubagentParentLive:       a.subagentParentProbeForBuild(tab),
 		SessionRecoveryMeta:      a.tabSessionRecoveryMeta(tab),
-		PinnedContext:            buildPinnedContext(snap.workspaceRoot, tab.GetPinnedFiles()).Block,
+		PinnedContextLoader:      pinnedContextLoader(snap.workspaceRoot),
 		OnSessionRecovered:       a.handleTabSessionRecovered(tab),
 		OnSessionTransition:      a.handleTabSessionTransition(tab),
 		OnSessionTitleChanged:    a.onSessionTitleChanged,

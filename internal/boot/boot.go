@@ -197,10 +197,10 @@ type Options struct {
 	SandboxNetworkOverride *bool
 	SandboxBashOverride    string
 	WorkspaceOnly          bool
-	// PinnedContext is an optional standing-context suffix (for example pinned
-	// workspace files) owned separately from the host/extension base prompt.
-	PinnedContext string
-	SessionTemp   *sessiontemp.Manager
+	// PinnedContextLoader snapshots session-owned standing context immediately
+	// before an admitted turn; changes are appended to the transcript.
+	PinnedContextLoader control.PinnedContextLoader
+	SessionTemp         *sessiontemp.Manager
 	RuntimeReload
 	// deferPublish keeps a replacement generation private until migration and
 	// commit succeed. Cold BuildRuntime leaves this false and publishes at boot.
@@ -1776,7 +1776,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		VisionProviderResolver:         visionProviderResolver,
 		VisionModelSelector:            visionModelSelector,
 		SystemPrompt:                   sysPrompt,
-		PinnedContext:                  opts.PinnedContext,
+		PinnedContextLoader:            opts.PinnedContextLoader,
 		SessionDir:                     sessionDir,
 		Host:                           pluginHost,
 		Commands:                       cmds,

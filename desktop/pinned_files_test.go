@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -188,7 +189,7 @@ func TestTabUnpinFile(t *testing.T) {
 	}
 }
 
-func TestTabPinnedContextBlock(t *testing.T) {
+func TestTabPinnedContextSnapshot(t *testing.T) {
 	dir := t.TempDir()
 	f1 := filepath.Join(dir, "schema.sql")
 	sqlContent := "CREATE TABLE users (id INT PRIMARY KEY, name TEXT);"
@@ -205,15 +206,9 @@ func TestTabPinnedContextBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	block := tab.PinnedContextBlock()
-	if !strings.Contains(block, "<pinned_context>") {
-		t.Fatalf("expected <pinned_context> in block, got:\n%s", block)
-	}
-	if !strings.Contains(block, `<file path="schema.sql">`) {
-		t.Fatalf("expected file path tag in block, got:\n%s", block)
-	}
-	if !strings.Contains(block, sqlContent) {
-		t.Fatalf("expected sql content in block, got:\n%s", block)
+	build := buildPinnedContext(dir, tab.GetPinnedFiles())
+	if len(build.Snapshot.Files) != 1 || build.Snapshot.Files[0].Path != "schema.sql" || build.Snapshot.Files[0].Content != sqlContent {
+		t.Fatalf("snapshot = %+v", build.Snapshot)
 	}
 
 	infoList := tab.GetPinnedFilesInfo()
@@ -243,23 +238,26 @@ func TestPinnedContextEndToEndProviderRequest(t *testing.T) {
 	}
 
 	baseSystem := "You are a helpful coding assistant."
-	pinnedBlock := tab.PinnedContextBlock()
+	sessionPath := filepath.Join(dir, "session.jsonl")
+	if err := savePinnedContextState(sessionPath, tab.GetPinnedFiles()); err != nil {
+		t.Fatal(err)
+	}
 
 	prov := &capturingProvider{}
 	exec := agent.New(prov, tool.NewRegistry(), agent.NewSession(baseSystem), agent.Options{}, event.Discard)
 	ctrl := control.New(control.Options{
-		Runner:        exec,
-		Executor:      exec,
-		SystemPrompt:  baseSystem,
-		PinnedContext: pinnedBlock,
-		SessionDir:    dir,
-		SessionPath:   filepath.Join(dir, "session.jsonl"),
-		Label:         "test-e2e",
-		Sink:          event.Discard,
+		Runner:              exec,
+		Executor:            exec,
+		SystemPrompt:        baseSystem,
+		PinnedContextLoader: pinnedContextLoader(dir),
+		SessionDir:          dir,
+		SessionPath:         sessionPath,
+		Label:               "test-e2e",
+		Sink:                event.Discard,
 	})
 	tab.Ctrl = ctrl
 
-	// 1. Execute first user turn and assert provider receives pinned_context block
+	// 1. Execute first user turn and assert provider receives a host revision.
 	if err := ctrl.RunTurn(context.Background(), "How should we design the service?"); err != nil {
 		t.Fatalf("RunTurn: %v", err)
 	}
@@ -272,33 +270,55 @@ func TestPinnedContextEndToEndProviderRequest(t *testing.T) {
 	if sysMsg.Role != provider.RoleSystem {
 		t.Fatalf("expected first message to be system role, got %s", sysMsg.Role)
 	}
-	if !strings.Contains(sysMsg.Content, "<pinned_context>") {
-		t.Fatalf("expected <pinned_context> in system prompt sent to provider, got:\n%s", sysMsg.Content)
+	if sysMsg.Content != baseSystem {
+		t.Fatalf("pinned context changed system prompt: %q", sysMsg.Content)
 	}
-	if !strings.Contains(sysMsg.Content, `<file path="architecture.md">`) {
-		t.Fatalf("expected architecture.md file tag in provider system prompt, got:\n%s", sysMsg.Content)
-	}
-	if !strings.Contains(sysMsg.Content, docContent) {
-		t.Fatalf("expected architecture content in provider system prompt, got:\n%s", sysMsg.Content)
+	if len(reqMsgs) < 2 || !strings.HasPrefix(reqMsgs[1].Content, "<pinned_context_revision") ||
+		!strings.Contains(reqMsgs[1].Content, `path="architecture.md"`) || !strings.Contains(reqMsgs[1].Content, "Use clean layered architecture") {
+		t.Fatalf("missing pinned revision: %+v", reqMsgs)
 	}
 
-	// 2. Unpin the file and sync tab pinned context dynamically
+	// 2. Unpin updates the sidecar; the next admitted turn appends a tombstone.
 	if err := tab.UnpinFile("architecture.md"); err != nil {
 		t.Fatalf("UnpinFile: %v", err)
 	}
-	if err := ctrl.SetPinnedContext(tab.PinnedContextBlock()); err != nil {
-		t.Fatalf("SetPinnedContext: %v", err)
+	if err := savePinnedContextState(sessionPath, tab.GetPinnedFiles()); err != nil {
+		t.Fatal(err)
 	}
 
-	// 3. Execute second turn and assert provider system prompt no longer has pinned_context
+	// 3. Execute second turn and assert prior request bytes remain its prefix.
 	if err := ctrl.RunTurn(context.Background(), "Next question"); err != nil {
 		t.Fatalf("RunTurn 2: %v", err)
 	}
 
 	reqMsgs2 := prov.lastRequestMessages(t)
-	sysMsg2 := reqMsgs2[0]
-	if strings.Contains(sysMsg2.Content, "<pinned_context>") {
-		t.Fatalf("expected <pinned_context> to be removed after unpin, got:\n%s", sysMsg2.Content)
+	if reqMsgs2[0].Content != baseSystem {
+		t.Fatalf("system prompt drifted after unpin: %q", reqMsgs2[0].Content)
+	}
+	if len(reqMsgs2) <= len(reqMsgs) {
+		t.Fatalf("second request did not append: %+v", reqMsgs2)
+	}
+	if !reflect.DeepEqual(reqMsgs2[:len(reqMsgs)], reqMsgs) {
+		t.Fatal("unpin changed bytes from the previous provider request")
+	}
+	revocation := reqMsgs2[len(reqMsgs2)-2].Content
+	if !strings.HasPrefix(revocation, "<pinned_context_revision") ||
+		(!strings.Contains(revocation, `<remove path="architecture.md"></remove>`) &&
+			!strings.Contains(revocation, `kind="checkpoint"`)) {
+		t.Fatalf("missing unpin tombstone: %+v", reqMsgs2)
+	}
+	rows := historyMessagesWithPlannerDisplays(ctrl.History(), func(value string) string { return value }, nil, nil)
+	users := 0
+	for _, row := range rows {
+		if strings.Contains(row.Content, "<pinned_context_revision") {
+			t.Fatalf("pinned revision leaked into desktop history: %+v", rows)
+		}
+		if row.Role == string(provider.RoleUser) {
+			users++
+		}
+	}
+	if users != 2 {
+		t.Fatalf("desktop history user rows = %d, want 2: %+v", users, rows)
 	}
 }
 

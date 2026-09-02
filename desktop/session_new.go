@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"fmt"
 
 	"reasonix/internal/control"
 )
@@ -61,6 +61,11 @@ func (a *App) NewSessionForTab(tabID string) error {
 	if err := ctrl.NewSession(); err != nil {
 		return err
 	}
+	if path := ctrl.SessionPath(); path != "" {
+		if err := savePinnedContextState(path, []string{}); err != nil {
+			return fmt.Errorf("initialize empty pinned context for new session: %w", err)
+		}
+	}
 	tab.setPinnedFiles(nil)
 	// The rotated session starts with zero spend: without this reset the tab
 	// telemetry keeps the previous session's totals and the status bar 会话费用
@@ -80,28 +85,15 @@ func (a *App) NewSessionForTab(tabID string) error {
 
 func clearBlankSessionPinnedContext(tab *WorkspaceTab, ctrl control.SessionAPI) error {
 	oldFiles := tab.GetPinnedFiles()
-	if len(oldFiles) == 0 {
-		return nil
-	}
 	path := ctrl.SessionPath()
 	if path != "" {
 		if err := savePinnedContextState(path, []string{}); err != nil {
 			return err
 		}
 	}
-	setter, ok := ctrl.(pinnedContextSetter)
-	if !ok {
+	if len(oldFiles) > 0 {
 		tab.setPinnedFiles(nil)
-		return nil
 	}
-	if err := setter.SetPinnedContext(""); err != nil {
-		var rollbackErr error
-		if path != "" {
-			rollbackErr = savePinnedContextState(path, oldFiles)
-		}
-		return errors.Join(err, rollbackErr)
-	}
-	tab.setPinnedFiles(nil)
 	return nil
 }
 

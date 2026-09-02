@@ -126,6 +126,7 @@ type Controller struct {
 	visionProviderResolver func(string) (provider.Provider, error)
 	visionModelSelector    func(string, string) (string, bool)
 	prompt                 controllerPromptState
+	pinnedContextLoader    PinnedContextLoader
 	sessionDir             string
 	commands               atomic.Pointer[[]command.Command]
 	// skills owns the session's discovered skills (enabled subset, full set, and
@@ -481,13 +482,12 @@ type Options struct {
 	VisionProviderResolver func(string) (provider.Provider, error)
 	VisionModelSelector    func(string, string) (string, bool)
 	SystemPrompt           string
-	// PinnedContext is a separately owned, deterministic suffix of the system
-	// prompt. Keeping it separate prevents user file contents from being parsed
-	// to recover the immutable host/extension prompt during live updates.
-	PinnedContext string
-	SessionDir    string
-	SessionPath   string
-	Host          *plugin.Host
+	// PinnedContextLoader snapshots the current session sidecar at turn
+	// admission. The Agent persists changes as append-only user-role revisions.
+	PinnedContextLoader PinnedContextLoader
+	SessionDir          string
+	SessionPath         string
+	Host                *plugin.Host
 	// MCPHostProfile is the surface lazily created hosts declare; injected
 	// hosts keep their own profile.
 	MCPHostProfile plugin.HostProfile
@@ -660,7 +660,8 @@ func New(opts Options) *Controller {
 		visionModel:                       strings.TrimSpace(opts.VisionModel),
 		visionProviderResolver:            opts.VisionProviderResolver,
 		visionModelSelector:               opts.VisionModelSelector,
-		prompt:                            newControllerPromptState(opts.SystemPrompt, opts.PinnedContext, opts.Executor),
+		prompt:                            newControllerPromptState(opts.SystemPrompt, opts.Executor),
+		pinnedContextLoader:               opts.PinnedContextLoader,
 		sessionDir:                        opts.SessionDir,
 		sessionPath:                       opts.SessionPath,
 		commands:                          atomic.Pointer[[]command.Command]{},
@@ -918,7 +919,7 @@ func (c *Controller) recordDisplayForNewUser(startMessages int, display string) 
 		startMessages = len(msgs)
 	}
 	for _, m := range msgs[startMessages:] {
-		if m.Role == provider.RoleUser {
+		if agent.IsUserAuthoredTurnMessage(m) {
 			c.recordDisplay(m.Content, display)
 			return
 		}
@@ -935,7 +936,7 @@ func (c *Controller) markEditedForNewUser(startMessages int, original string) {
 		startMessages = len(msgs)
 	}
 	for i := startMessages; i < len(msgs); i++ {
-		if msgs[i].Role != provider.RoleUser {
+		if !agent.IsUserAuthoredTurnMessage(msgs[i]) {
 			continue
 		}
 		if agent.UserMessageText(msgs[i]) == original {
@@ -2035,7 +2036,7 @@ func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 	if err != nil {
 		return err
 	}
-	err = c.runner.Run(ctx, modelInput)
+	err = c.runModelTurn(ctx, modelInput)
 	return err
 }
 
@@ -3008,9 +3009,6 @@ func (c *Controller) NewSession() error {
 	// Hold snapshotMu across the swap so an in-flight save cannot pair the old
 	// path with the fresh session (or the fresh path with the old session).
 	c.snapshotMu.Lock()
-	c.mu.Lock()
-	c.prompt.pinned = ""
-	c.mu.Unlock()
 	commitTransition.publish()
 	c.bindExecutorProjection(c.SessionPath(), false)
 	if c.guardianSess != nil {
@@ -3106,9 +3104,6 @@ func (c *Controller) ClearSession() error {
 	}
 	c.hooks.SessionEnd(context.Background(), "clear")
 	c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, oldPath)
-	c.mu.Lock()
-	c.prompt.pinned = ""
-	c.mu.Unlock()
 	commitTransition.publish()
 	c.bindExecutorProjection(c.SessionPath(), false)
 	if c.guardianSess != nil {
@@ -4282,10 +4277,7 @@ func interruptedTurnCrossesLaterTurn(msgs []provider.Message, start int) bool {
 	}
 	turns := 0
 	for _, msg := range msgs[start:] {
-		if msg.Role != provider.RoleUser || agent.IsCompactionSummary(msg) {
-			continue
-		}
-		if _, ok := agent.SteerText(msg.Content); ok {
+		if !agent.IsUserAuthoredTurnMessage(msg) {
 			continue
 		}
 		turns++
@@ -4379,13 +4371,7 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 	keptUser := false
 	userEnd := idx
 	for i, m := range msgs[idx:] {
-		if m.Role != provider.RoleUser {
-			continue
-		}
-		if agent.IsHostGeneratedUserMessage(m) {
-			continue
-		}
-		if _, ok := agent.SteerText(m.Content); ok {
+		if !agent.IsUserAuthoredTurnMessage(m) {
 			continue
 		}
 		m.Content = StripComposePrefixes(m.Content)
@@ -4394,7 +4380,7 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 		userEnd = idx + i + 1
 		break
 	}
-	if !keptUser && fallback.Role == provider.RoleUser {
+	if !keptUser && agent.IsUserAuthoredTurnMessage(fallback) {
 		fallback.Content = StripComposePrefixes(fallback.Content)
 		if strings.TrimSpace(fallback.Content) != "" {
 			fallback.Images = append([]string(nil), fallback.Images...)
@@ -4507,18 +4493,15 @@ func (c *Controller) inFlightTurnStartedAt() time.Time {
 // sidecars without timestamps.
 func resolveInterruptedTurnStart(msgs []provider.Message, idx int, preserveUser bool, startedAt time.Time, fallback provider.Message) (int, bool) {
 	fallbackContent := ""
-	if fallback.Role == provider.RoleUser {
+	if agent.IsUserAuthoredTurnMessage(fallback) {
 		fallbackContent = StripComposePrefixes(fallback.Content)
 	}
 	matchesKind := func(m provider.Message) bool {
-		if m.Role != provider.RoleUser {
+		if m.Role != provider.RoleUser || agent.IsPinnedContextRevision(m) {
 			return false
 		}
 		if preserveUser {
-			if agent.IsHostGeneratedUserMessage(m) {
-				return false
-			}
-			if _, ok := agent.SteerText(m.Content); ok {
+			if !agent.IsUserAuthoredTurnMessage(m) {
 				return false
 			}
 			if fallbackContent != "" && StripComposePrefixes(m.Content) != fallbackContent {

@@ -175,7 +175,8 @@ console.log("\nbundle budgets");
 // Session-catalog repair presentation stays in the lazy project-tree chunk;
 // compact shared helpers keep the combined initial path within the same gate.
 // Sticky context pinning adds Wails bridge methods, English dictionary keys,
-// and lazy shelf wiring.
+// and lazy shelf wiring. The merged production build measures 459.0 KiB gzip;
+// retain 0.5 KiB for build-hash and toolchain drift.
 const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 459.5 : 459.5;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
@@ -306,7 +307,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // Ask turn fencing, rejection reconciliation, and the localized submit-failure
 // notice measure 2456.044 KiB raw; retain 0.056 KiB of one-decimal headroom.
 // Sticky context pinning adds Wails bridge signatures, English dictionary keys,
-// and lazy shelf wiring.
+// and lazy shelf wiring. The merged production build measures 2456.7 KiB raw;
+// retain 1.3 KiB for build-hash and toolchain drift.
 const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_458.0 : 2_458.0;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

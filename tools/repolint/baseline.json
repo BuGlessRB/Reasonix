@@ -114,7 +114,7 @@
       "file-size": 29
     },
     "desktop/frontend/src/components/ProjectTree.tsx": {
-      "file-size": 1457
+      "file-size": 1467
     },
     "desktop/frontend/src/components/RichComposerInput.tsx": {
       "file-size": 141
@@ -464,7 +464,7 @@
     },
     "internal/agent/recovery_gc.go": {
       "essay": 6,
-      "file-size": 6
+      "file-size": 17
     },
     "internal/agent/recovery_gc_test.go": {
       "essay": 1

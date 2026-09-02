@@ -109,10 +109,6 @@ func (a *App) handleTabSessionTransition(tab *WorkspaceTab) func(control.Session
 		if err != nil {
 			return fmt.Errorf("load target pinned context: %w", err)
 		}
-		a.mu.RLock()
-		workspaceRoot := tab.WorkspaceRoot
-		a.mu.RUnlock()
-		info.SetPinnedContext(buildPinnedContext(workspaceRoot, pinnedState.Files).Block)
 		transition, err := a.reserveSessionRuntimePath(tab, info.TargetPath)
 		if err != nil {
 			return fmt.Errorf("acquire target session lease: %w", userFacingSessionLeaseError("", err))

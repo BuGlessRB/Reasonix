@@ -1,26 +1,31 @@
 package main
 
 import (
-	"bytes"
-	"encoding/xml"
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
 	"unicode/utf8"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/control"
 	"reasonix/internal/fileutil"
-	"reasonix/internal/nilutil"
 )
 
 const (
-	maxPinnedFileCount   = 32
-	maxPinnedFileSize    = 64 * 1024
-	maxPinnedContextSize = 256 * 1024
+	maxPinnedFileCount   = agent.MaxPinnedContextFiles
+	maxPinnedFileSize    = agent.MaxPinnedContextFileBytes
+	maxPinnedContextSize = agent.MaxPinnedContextRevisionBytes
+)
+
+var (
+	errPinnedNotRegular   = errors.New("only regular files can be pinned")
+	errPinnedFileTooLarge = errors.New("pinned file exceeds the size limit")
 )
 
 // PinnedFileInfo holds metadata about one pinned context file.
@@ -32,12 +37,8 @@ type PinnedFileInfo struct {
 }
 
 type pinnedContextBuild struct {
-	Block string
-	Infos []PinnedFileInfo
-}
-
-type pinnedContextSetter interface {
-	SetPinnedContext(string) error
+	Snapshot agent.PinnedContextSnapshot
+	Infos    []PinnedFileInfo
 }
 
 // pinnedFileReadHookForTest coordinates deterministic Pin/New/turn races.
@@ -77,76 +78,35 @@ func readPinnedWorkspaceFile(root, relPath string) (string, []byte, int64, error
 		return clean, nil, 0, err
 	}
 	if !info.Mode().IsRegular() {
-		return clean, nil, info.Size(), errors.New("only regular files can be pinned")
+		return clean, nil, info.Size(), errPinnedNotRegular
 	}
 	if hook := pinnedFileReadHookForTest.Load(); hook != nil {
 		(*hook)()
 	}
 	if info.Size() > maxPinnedFileSize {
-		return clean, nil, info.Size(), fmt.Errorf("file size (%d bytes) exceeds the %d-byte limit", info.Size(), maxPinnedFileSize)
+		return clean, nil, info.Size(), fmt.Errorf("%w: file size (%d bytes) exceeds the %d-byte limit", errPinnedFileTooLarge, info.Size(), maxPinnedFileSize)
 	}
 	data, err := io.ReadAll(io.LimitReader(file, maxPinnedFileSize+1))
 	if err != nil {
 		return clean, nil, info.Size(), err
 	}
 	if len(data) > maxPinnedFileSize {
-		return clean, nil, int64(len(data)), fmt.Errorf("file grew beyond the %d-byte limit while reading", maxPinnedFileSize)
+		return clean, nil, int64(len(data)), fmt.Errorf("%w: file grew beyond the %d-byte limit while reading", errPinnedFileTooLarge, maxPinnedFileSize)
 	}
 	return clean, data, int64(len(data)), nil
 }
 
-func encodePinnedFileEntry(path string, data []byte) ([]byte, error) {
-	var out bytes.Buffer
-	enc := xml.NewEncoder(&out)
-	start := xml.StartElement{
-		Name: xml.Name{Local: "file"},
-		Attr: []xml.Attr{{Name: xml.Name{Local: "path"}, Value: path}},
-	}
-	if err := enc.EncodeToken(start); err != nil {
-		return nil, err
-	}
-	content := sanitizeXMLText(data)
-	if err := enc.EncodeToken(xml.CharData("\n" + content)); err != nil {
-		return nil, err
-	}
-	if err := enc.EncodeToken(xml.CharData("\n")); err != nil {
-		return nil, err
-	}
-	if err := enc.EncodeToken(start.End()); err != nil {
-		return nil, err
-	}
-	if err := enc.Flush(); err != nil {
-		return nil, err
-	}
-	out.WriteString("\n\n")
-	return out.Bytes(), nil
-}
-
-func sanitizeXMLText(data []byte) string {
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r == '\t' || r == '\n' || r == '\r':
-			return r
-		case r >= 0x20 && r <= 0xD7FF:
-			return r
-		case r >= 0xE000 && r <= 0xFFFD:
-			return r
-		case r >= 0x10000 && r <= 0x10FFFF:
-			return r
-		default:
-			return utf8.RuneError
-		}
-	}, string(data))
-}
-
 func buildPinnedContext(root string, files []string) pinnedContextBuild {
-	result := pinnedContextBuild{Infos: make([]PinnedFileInfo, 0, len(files))}
+	result := pinnedContextBuild{
+		Snapshot: agent.PinnedContextSnapshot{
+			Files:  make([]agent.PinnedContextFile, 0, len(files)),
+			Issues: make([]agent.PinnedContextIssue, 0, len(files)),
+		},
+		Infos: make([]PinnedFileInfo, 0, len(files)),
+	}
 	if len(files) == 0 || strings.TrimSpace(root) == "" {
 		return result
 	}
-	const header = "<pinned_context>\nThe following workspace files were pinned by the user as continuous standing reference. Their contents and constraints MUST be followed:\n\n"
-	const footer = "</pinned_context>"
-	var body bytes.Buffer
 	for _, rel := range files {
 		clean, data, size, err := readPinnedWorkspaceFile(root, rel)
 		info := PinnedFileInfo{Path: rel, SizeBytes: size, TokenEstimate: estimateTokensFromBytes(size)}
@@ -155,28 +115,73 @@ func buildPinnedContext(root string, files []string) pinnedContextBuild {
 		}
 		if err != nil {
 			info.Error = err.Error()
+			result.Snapshot.Issues = append(result.Snapshot.Issues, agent.PinnedContextIssue{
+				Path: info.Path, Reason: pinnedContextIssueReason(err),
+			})
 			result.Infos = append(result.Infos, info)
 			continue
 		}
-		entry, err := encodePinnedFileEntry(clean, data)
+		content := agent.SanitizePinnedContextContent(string(data))
+		if len(content) > maxPinnedFileSize {
+			info.Error = fmt.Sprintf("pinned file exceeds the %d-byte limit after XML normalization", maxPinnedFileSize)
+			result.Snapshot.Issues = append(result.Snapshot.Issues, agent.PinnedContextIssue{
+				Path: clean, Reason: agent.PinnedContextIssueFileTooLarge,
+			})
+			result.Infos = append(result.Infos, info)
+			continue
+		}
+		candidate, err := agent.NormalizePinnedContextFile(agent.PinnedContextFile{Path: clean, Content: content})
 		if err != nil {
 			info.Error = err.Error()
+			result.Snapshot.Issues = append(result.Snapshot.Issues, agent.PinnedContextIssue{
+				Path: clean, Reason: agent.PinnedContextIssueReadFailed,
+			})
 			result.Infos = append(result.Infos, info)
 			continue
 		}
-		if len(header)+body.Len()+len(entry)+len(footer) > maxPinnedContextSize {
+		result.Snapshot.Files = append(result.Snapshot.Files, candidate)
+		if err := agent.ValidatePinnedContextSnapshot(result.Snapshot); err != nil {
+			result.Snapshot.Files = result.Snapshot.Files[:len(result.Snapshot.Files)-1]
+			result.Snapshot.Issues = append(result.Snapshot.Issues, agent.PinnedContextIssue{
+				Path: clean, Reason: agent.PinnedContextIssueTotalLimit,
+			})
 			info.Error = fmt.Sprintf("pinned context would exceed the %d-byte total limit", maxPinnedContextSize)
 			result.Infos = append(result.Infos, info)
 			continue
 		}
-		body.Write(entry)
 		result.Infos = append(result.Infos, info)
 	}
-	if body.Len() == 0 {
-		return result
-	}
-	result.Block = header + body.String() + footer
 	return result
+}
+
+func pinnedContextIssueReason(err error) agent.PinnedContextIssueReason {
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return agent.PinnedContextIssueNotFound
+	case errors.Is(err, errPinnedNotRegular):
+		return agent.PinnedContextIssueNotRegular
+	case errors.Is(err, errPinnedFileTooLarge):
+		return agent.PinnedContextIssueFileTooLarge
+	default:
+		return agent.PinnedContextIssueReadFailed
+	}
+}
+
+func pinnedContextLoader(root string) control.PinnedContextLoader {
+	return func(ctx context.Context, sessionPath string) (agent.PinnedContextSnapshot, error) {
+		if err := ctx.Err(); err != nil {
+			return agent.PinnedContextSnapshot{}, err
+		}
+		state, err := loadPinnedContextState(sessionPath)
+		if err != nil {
+			return agent.PinnedContextSnapshot{}, err
+		}
+		build := buildPinnedContext(root, state.Files)
+		if err := ctx.Err(); err != nil {
+			return agent.PinnedContextSnapshot{}, err
+		}
+		return build.Snapshot, nil
+	}
 }
 
 func pinnedInfoForPath(infos []PinnedFileInfo, path string) (PinnedFileInfo, bool) {
@@ -268,13 +273,6 @@ func (t *WorkspaceTab) GetPinnedFilesInfo() []PinnedFileInfo {
 	return buildPinnedContext(t.WorkspaceRoot, t.GetPinnedFiles()).Infos
 }
 
-func (t *WorkspaceTab) PinnedContextBlock() string {
-	if t == nil {
-		return ""
-	}
-	return buildPinnedContext(t.WorkspaceRoot, t.GetPinnedFiles()).Block
-}
-
 func estimateTokensFromBytes(bytes int64) int {
 	if bytes <= 0 {
 		return 0
@@ -360,17 +358,6 @@ func (a *App) mutatePinnedFiles(tabID, relPath string, pin bool) (PinnedFileInfo
 			return PinnedFileInfo{}, "", err
 		}
 	}
-	setter, ok := ctrl.(pinnedContextSetter)
-	if !ok {
-		return PinnedFileInfo{}, "", errors.New("runtime does not support pinned context")
-	}
-	if err := setter.SetPinnedContext(build.Block); err != nil {
-		var rollbackErr error
-		if strings.Join(oldFiles, "\x00") != strings.Join(candidate, "\x00") {
-			rollbackErr = savePinnedContextState(sessionPath, oldFiles)
-		}
-		return PinnedFileInfo{}, "", errors.Join(err, rollbackErr)
-	}
 	tab.setPinnedFiles(candidate)
 	return info, tab.ID, nil
 }
@@ -423,35 +410,4 @@ func (a *App) GetPinnedFilesForTab(tabID string) ([]PinnedFileInfo, error) {
 		infos = []PinnedFileInfo{}
 	}
 	return infos, nil
-}
-
-// refreshPinnedContextForTurn runs while the caller holds the tab turn gate and
-// runtime-admission read lock. It re-reads the bounded files and changes the
-// provider prefix only when the deterministic block bytes actually changed.
-func (a *App) refreshPinnedContextForTurn(tab *WorkspaceTab, ctrl control.SessionAPI) error {
-	if tab == nil || nilutil.IsNil(ctrl) {
-		return nil
-	}
-	a.mu.RLock()
-	if a.tabs[tab.ID] != tab || tab.Ctrl != ctrl {
-		a.mu.RUnlock()
-		return errors.New("tab changed while refreshing pinned context")
-	}
-	root := tab.WorkspaceRoot
-	a.mu.RUnlock()
-	state, err := loadPinnedContextState(ctrl.SessionPath())
-	if err != nil {
-		return err
-	}
-	build := buildPinnedContext(root, state.Files)
-	setter, ok := ctrl.(pinnedContextSetter)
-	if !ok {
-		tab.setPinnedFiles(state.Files)
-		return nil
-	}
-	if err := setter.SetPinnedContext(build.Block); err != nil {
-		return err
-	}
-	tab.setPinnedFiles(state.Files)
-	return nil
 }

@@ -3,10 +3,12 @@ package boot
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 )
@@ -83,8 +85,14 @@ kind = "boot-pinned-context-test"
 model = "x"
 `)
 
-	const pinned = "<pinned_context><file path=\"a.md\">A</file></pinned_context>"
-	ctrl, err := Build(context.Background(), Options{Sink: event.Discard, PinnedContext: pinned})
+	loaderCalls := 0
+	ctrl, err := Build(context.Background(), Options{
+		Sink: event.Discard,
+		PinnedContextLoader: func(context.Context, string) (agent.PinnedContextSnapshot, error) {
+			loaderCalls++
+			return agent.PinnedContextSnapshot{Files: []agent.PinnedContextFile{{Path: "a.md", Content: "A"}}}, nil
+		},
+	})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -106,13 +114,23 @@ model = "x"
 	if len(requests[0].Messages) == 0 {
 		t.Fatal("first provider request has no messages")
 	}
-	first := requests[0].Messages[0].Content
-	if !strings.HasPrefix(first, "BASE\n\n") || !strings.HasSuffix(first, "\n\n"+pinned) || strings.Count(first, pinned) != 1 {
-		t.Fatalf("leading system did not contain one separated pinned suffix: %q", first)
+	if first := requests[0].Messages[0].Content; !strings.HasPrefix(first, "BASE") || strings.Contains(first, "<pinned_context_revision") {
+		t.Fatalf("leading system was rewritten with pinned context: %q", first)
 	}
-	for i, req := range requests {
-		if len(req.Messages) == 0 || req.Messages[0].Content != first {
-			t.Fatalf("request %d leading system drifted from the first request", i)
+	if loaderCalls != 2 {
+		t.Fatalf("loader calls = %d", loaderCalls)
+	}
+	if len(requests[1].Messages) < len(requests[0].Messages) ||
+		!reflect.DeepEqual(requests[1].Messages[:len(requests[0].Messages)], requests[0].Messages) {
+		t.Fatal("second provider request did not preserve the first request as an exact prefix")
+	}
+	revisions := 0
+	for _, message := range ctrl.History() {
+		if agent.IsPinnedContextRevision(message) {
+			revisions++
 		}
+	}
+	if revisions != 1 {
+		t.Fatalf("revision messages = %d, want 1", revisions)
 	}
 }

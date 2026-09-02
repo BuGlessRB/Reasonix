@@ -176,18 +176,15 @@ func loadPinnedContextStateOrEmpty(sessionPath, logMessage string) pinnedContext
 	return emptyPinnedContextState(sessionPath)
 }
 
-func prepareStartupPinnedContext(tab *WorkspaceTab, startupPath, persistedPath, root string) string {
-	files := tab.GetPinnedFiles()
+func prepareStartupPinnedContext(tab *WorkspaceTab, startupPath, persistedPath string) {
 	if startupPath != "" {
-		files = loadPinnedContextStateOrEmpty(startupPath, "desktop: load startup pinned context").Files
-		tab.setPinnedFiles(files)
+		state := loadPinnedContextStateOrEmpty(startupPath, "desktop: load startup pinned context")
+		tab.setPinnedFiles(state.Files)
 	} else if strings.TrimSpace(persistedPath) != "" {
 		// A rejected persisted path must not seed its replacement. A pathless
 		// legacy entry keeps its cache until the one-time migration runs.
-		files = []string{}
 		tab.setPinnedFiles(nil)
 	}
-	return buildPinnedContext(root, files).Block
 }
 
 func restoreTabPinnedContext(tab *WorkspaceTab, legacy []string) {

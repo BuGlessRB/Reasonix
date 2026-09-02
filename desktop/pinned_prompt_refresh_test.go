@@ -4,9 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
@@ -27,31 +27,41 @@ func (p *pinnedPromptProvider) Stream(_ context.Context, req provider.Request) (
 	return chunks, nil
 }
 
-func submitAndCapturePinnedPrompt(t *testing.T, app *App, tab *WorkspaceTab, ctrl *control.Controller, requests <-chan provider.Request, input string) string {
+func submitAndCapturePinnedRequest(t *testing.T, ctrl *control.Controller, requests <-chan provider.Request, input string) provider.Request {
 	t.Helper()
-	if err := app.SubmitToTab(tab.ID, input); err != nil {
-		t.Fatalf("SubmitToTab(%q): %v", input, err)
+	if err := ctrl.RunTurn(context.Background(), input); err != nil {
+		t.Fatalf("RunTurn(%q): %v", input, err)
 	}
 	var req provider.Request
 	select {
 	case req = <-requests:
-	case <-time.After(5 * time.Second):
-		t.Fatalf("provider did not receive %q", input)
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	for ctrl.RuntimeStatus().Running && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if ctrl.RuntimeStatus().Running {
-		t.Fatalf("turn %q did not finish", input)
+	default:
+		t.Fatalf("provider request for %q was not recorded", input)
 	}
 	if len(req.Messages) == 0 || req.Messages[0].Role != provider.RoleSystem {
 		t.Fatalf("request %q has no leading system message: %+v", input, req.Messages)
 	}
-	return req.Messages[0].Content
+	return req
 }
 
-func TestDesktopPinAPIRefreshesProviderPrefixOnlyWhenFileChanges(t *testing.T) {
+func pinnedRevisionBodies(messages []provider.Message) []string {
+	var out []string
+	for _, message := range messages {
+		if message.Role == provider.RoleUser && strings.HasPrefix(strings.TrimSpace(message.Content), "<pinned_context_revision") {
+			out = append(out, message.Content)
+		}
+	}
+	return out
+}
+
+func assertProviderRequestPrefix(t *testing.T, previous, current provider.Request) {
+	t.Helper()
+	if len(current.Messages) < len(previous.Messages) || !reflect.DeepEqual(current.Messages[:len(previous.Messages)], previous.Messages) {
+		t.Fatalf("previous request is not an exact prefix:\nprevious: %#v\ncurrent: %#v", previous.Messages, current.Messages)
+	}
+}
+
+func TestDesktopPinAPIAppendsRevisionOnlyWhenFileChanges(t *testing.T) {
 	prov := &pinnedPromptProvider{requests: make(chan provider.Request, 4)}
 	app, tab, ctrl, _ := pinnedConcurrencyFixture(t, prov)
 	path := filepath.Join(tab.WorkspaceRoot, "context.md")
@@ -62,20 +72,26 @@ func TestDesktopPinAPIRefreshesProviderPrefixOnlyWhenFileChanges(t *testing.T) {
 		t.Fatalf("PinFileForTab: %v", err)
 	}
 
-	first := submitAndCapturePinnedPrompt(t, app, tab, ctrl, prov.requests, "first")
-	second := submitAndCapturePinnedPrompt(t, app, tab, ctrl, prov.requests, "second")
-	if second != first {
-		t.Fatalf("unchanged pinned file changed provider prefix:\nfirst: %q\nsecond: %q", first, second)
+	first := submitAndCapturePinnedRequest(t, ctrl, prov.requests, "first")
+	second := submitAndCapturePinnedRequest(t, ctrl, prov.requests, "second")
+	assertProviderRequestPrefix(t, first, second)
+	if first.Messages[0].Content != "BASE" || second.Messages[0].Content != "BASE" {
+		t.Fatalf("pinned context changed leading system messages: first=%q second=%q", first.Messages[0].Content, second.Messages[0].Content)
+	}
+	if revisions := pinnedRevisionBodies(second.Messages); len(revisions) != 1 || !strings.Contains(revisions[0], "version one") {
+		t.Fatalf("unchanged pinned file should retain exactly one revision: %v", revisions)
 	}
 	if err := os.WriteFile(path, []byte("version two"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	third := submitAndCapturePinnedPrompt(t, app, tab, ctrl, prov.requests, "third")
-	if third == second || !strings.Contains(third, "version two") {
-		t.Fatalf("changed pinned file did not refresh provider prefix: %q", third)
+	third := submitAndCapturePinnedRequest(t, ctrl, prov.requests, "third")
+	assertProviderRequestPrefix(t, second, third)
+	if revisions := pinnedRevisionBodies(third.Messages); len(revisions) != 2 || !strings.Contains(revisions[1], "version two") {
+		t.Fatalf("changed pinned file did not append a delta revision: %v", revisions)
 	}
-	fourth := submitAndCapturePinnedPrompt(t, app, tab, ctrl, prov.requests, "fourth")
-	if fourth != third {
-		t.Fatalf("stable post-refresh prefix drifted:\nthird: %q\nfourth: %q", third, fourth)
+	fourth := submitAndCapturePinnedRequest(t, ctrl, prov.requests, "fourth")
+	assertProviderRequestPrefix(t, third, fourth)
+	if revisions := pinnedRevisionBodies(fourth.Messages); len(revisions) != 2 {
+		t.Fatalf("stable post-change file appended another revision: %v", revisions)
 	}
 }

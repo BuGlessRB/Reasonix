@@ -1,19 +1,22 @@
 package control
 
 import (
-	"errors"
-	"strings"
+	"context"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
 )
 
 type controllerPromptState struct {
-	base   string
-	pinned string
+	base string
 }
 
-func newControllerPromptState(base, pinned string, executor *agent.Agent) controllerPromptState {
+// PinnedContextLoader resolves the sidecar-owned desired context for the
+// controller's current session immediately before an admitted model turn.
+// Implementations perform I/O without holding Controller or Session locks.
+type PinnedContextLoader func(context.Context, string) (agent.PinnedContextSnapshot, error)
+
+func newControllerPromptState(base string, executor *agent.Agent) controllerPromptState {
 	current := ""
 	if executor != nil && executor.Session() != nil {
 		messages := executor.Session().Snapshot()
@@ -24,34 +27,23 @@ func newControllerPromptState(base, pinned string, executor *agent.Agent) contro
 			}
 		}
 	}
-	state := controllerPromptState{base: base, pinned: strings.TrimSpace(pinned)}
-	if executor != nil && executor.Session() != nil && state.composed() != current {
-		executor.Session().SetLeadingSystemPrompt(state.composed())
+	state := controllerPromptState{base: base}
+	if executor != nil && executor.Session() != nil && state.base != current {
+		executor.Session().SetLeadingSystemPromptWithReason(state.base, "legacy_pinned_system_migration")
 	}
 	return state
 }
 
-func (s controllerPromptState) composed() string {
-	if s.pinned == "" {
-		return s.base
-	}
-	if s.base == "" {
-		return s.pinned
-	}
-	return strings.TrimRight(s.base, "\n") + "\n\n" + s.pinned
-}
-
 // ApplyExtensionSystemPrompt replaces only the host/extension-owned base
-// prompt. Session-owned pinned context remains a separate stable suffix.
+// prompt. Pinned context is transcript state and is never composed into it.
 func (c *Controller) ApplyExtensionSystemPrompt(prompt string) {
 	if c == nil || c.executor == nil {
 		return
 	}
 	c.mu.Lock()
 	c.prompt.base = prompt
-	composed := c.prompt.composed()
 	c.mu.Unlock()
-	c.executor.SetSession(agent.NewSession(composed))
+	c.executor.SetSession(agent.NewSession(prompt))
 }
 
 func (c *Controller) basePrompt() string {
@@ -60,47 +52,33 @@ func (c *Controller) basePrompt() string {
 	return c.prompt.base
 }
 
-// SystemPrompt returns the current controller system prompt.
+// SystemPrompt returns the authoritative host/extension system prompt.
 func (c *Controller) SystemPrompt() string {
 	if c == nil {
 		return ""
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.prompt.composed()
+	return c.prompt.base
 }
 
-// SetPinnedContext atomically changes the controller-owned prompt suffix and
-// the active Session's leading system message. A running turn or concurrent
-// session rotation is rejected so provider request assembly never observes a
-// mixed prompt generation.
-func (c *Controller) SetPinnedContext(pinned string) error {
-	if c == nil {
+// runModelTurn is the sole controller-to-runner entry point. The controller's
+// turn gate is already held, so its session path cannot rotate while the loader
+// reads the sidecar. StagePinnedContext only mutates Agent host state; the
+// revision is appended atomically with the real user message after
+// agent.before_start accepts the turn.
+func (c *Controller) runModelTurn(ctx context.Context, input string) error {
+	if c == nil || c.runner == nil {
 		return nil
 	}
-	pinned = strings.TrimSpace(pinned)
-	c.mu.Lock()
-	unchanged := c.prompt.pinned == pinned
-	c.mu.Unlock()
-	if unchanged {
-		return nil
-	}
-	if err := c.beginRotation(); err != nil {
-		if errors.Is(err, errTurnRunningRotation) {
-			return ErrTurnRunning
+	if c.pinnedContextLoader != nil && c.executor != nil {
+		snapshot, err := c.pinnedContextLoader(ctx, c.SessionPath())
+		if err != nil {
+			return err
 		}
-		return err
+		if err := c.executor.StagePinnedContext(snapshot); err != nil {
+			return err
+		}
 	}
-	defer c.endRotation()
-	c.snapshotMu.Lock()
-	defer c.snapshotMu.Unlock()
-	c.mu.Lock()
-	c.prompt.pinned = pinned
-	composed := c.prompt.composed()
-	exec := c.executor
-	c.mu.Unlock()
-	if exec != nil && exec.Session() != nil {
-		exec.Session().SetLeadingSystemPrompt(composed)
-	}
-	return nil
+	return c.runner.Run(ctx, input)
 }

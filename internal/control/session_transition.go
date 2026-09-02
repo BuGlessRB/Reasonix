@@ -24,7 +24,6 @@ type sessionTransitionCommit struct {
 	controller *Controller
 	targetPath string
 	session    *agent.Session
-	pinned     *string
 	hooks      []func()
 }
 
@@ -53,24 +52,6 @@ func (i SessionTransitionInfo) OnCommit(fn func()) {
 	i.commit.hooks = append(i.commit.hooks, fn)
 }
 
-// SetPinnedContext binds a session-owned prompt suffix to the unpublished
-// transition candidate. Frontends that own the corresponding sidecar call this
-// before publication so a branch switch cannot briefly expose the previous
-// session's pinned context, even when both suffix byte strings are identical.
-func (i SessionTransitionInfo) SetPinnedContext(pinned string) {
-	if i.commit == nil || i.session == nil || i.commit.controller == nil {
-		return
-	}
-	pinned = strings.TrimSpace(pinned)
-	i.commit.controller.mu.Lock()
-	prompt := i.commit.controller.prompt
-	prompt.pinned = pinned
-	composed := prompt.composed()
-	i.commit.controller.mu.Unlock()
-	i.session.SetLeadingSystemPrompt(composed)
-	i.commit.pinned = &pinned
-}
-
 func (c *sessionTransitionCommit) publish() {
 	if c == nil {
 		return
@@ -78,9 +59,6 @@ func (c *sessionTransitionCommit) publish() {
 	c.controller.mu.Lock()
 	c.controller.sessionPath = c.targetPath
 	c.controller.guardianPath = guardian.PathFor(c.targetPath)
-	if c.pinned != nil {
-		c.controller.prompt.pinned = *c.pinned
-	}
 	c.controller.mu.Unlock()
 	c.controller.setActiveJobSession(c.targetPath)
 	if c.controller.executor != nil {

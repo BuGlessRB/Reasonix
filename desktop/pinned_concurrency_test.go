@@ -18,16 +18,27 @@ import (
 )
 
 type blockingPinnedProvider struct {
-	started chan struct{}
-	release chan struct{}
-	once    sync.Once
+	started    chan struct{}
+	release    chan struct{}
+	cancelled  chan struct{}
+	once       sync.Once
+	cancelOnce sync.Once
 }
 
 func (p *blockingPinnedProvider) Name() string { return "blocking-pinned" }
 
-func (p *blockingPinnedProvider) Stream(_ context.Context, _ provider.Request) (<-chan provider.Chunk, error) {
+func (p *blockingPinnedProvider) Stream(ctx context.Context, _ provider.Request) (<-chan provider.Chunk, error) {
 	p.once.Do(func() { close(p.started) })
-	<-p.release
+	if p.cancelled == nil {
+		<-p.release
+	} else {
+		select {
+		case <-p.release:
+		case <-ctx.Done():
+			p.cancelOnce.Do(func() { close(p.cancelled) })
+			<-p.release
+		}
+	}
 	ch := make(chan provider.Chunk, 2)
 	ch <- provider.Chunk{Type: provider.ChunkText, Text: "ok"}
 	ch <- provider.Chunk{Type: provider.ChunkDone}
@@ -41,13 +52,14 @@ func pinnedConcurrencyFixture(t *testing.T, prov provider.Provider) (*App, *Work
 	path := filepath.Join(root, "session.jsonl")
 	exec := agent.New(prov, tool.NewRegistry(), agent.NewSession("BASE"), agent.Options{}, event.Discard)
 	ctrl := control.New(control.Options{
-		Runner:       exec,
-		Executor:     exec,
-		SystemPrompt: "BASE",
-		SessionDir:   root,
-		SessionPath:  path,
-		Label:        "test",
-		Sink:         event.Discard,
+		Runner:              exec,
+		Executor:            exec,
+		SystemPrompt:        "BASE",
+		PinnedContextLoader: pinnedContextLoader(root),
+		SessionDir:          root,
+		SessionPath:         path,
+		Label:               "test",
+		Sink:                event.Discard,
 	})
 	app := NewApp()
 	app.ctx = context.Background()
@@ -168,12 +180,24 @@ func TestNewSessionWaitsForPinAndClearsItsResult(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Pin did not reach file read")
 	}
+	newBeforeLock := make(chan struct{})
+	var newBeforeLockOnce sync.Once
+	app.runtimeMutationBeforeLockHook = func(operation string) {
+		if operation == "new session" {
+			newBeforeLockOnce.Do(func() { close(newBeforeLock) })
+		}
+	}
 	newDone := make(chan error, 1)
 	go func() { newDone <- app.NewSessionForTab(tab.ID) }()
 	select {
+	case <-newBeforeLock:
+	case <-time.After(5 * time.Second):
+		t.Fatal("NewSession did not reach the runtime mutation barrier")
+	}
+	select {
 	case err := <-newDone:
 		t.Fatalf("NewSession bypassed in-flight Pin: %v", err)
-	case <-time.After(100 * time.Millisecond):
+	default:
 	}
 	close(releaseRead)
 	if err := <-pinDone; err != nil {
@@ -189,6 +213,9 @@ func TestNewSessionWaitsForPinAndClearsItsResult(t *testing.T) {
 	if len(state.Files) != 0 || len(tab.GetPinnedFiles()) != 0 {
 		t.Fatalf("new session inherited racing pin: sidecar=%v cache=%v", state.Files, tab.GetPinnedFiles())
 	}
+	if _, err := os.Stat(store.SessionPinnedContext(tab.currentSessionPath())); err != nil {
+		t.Fatalf("new session did not write an empty pinned sidecar: %v", err)
+	}
 	if got := tab.Ctrl.SystemPrompt(); got == "" || strings.Contains(got, "<pinned_context>") {
 		t.Fatalf("new controller retained pinned prompt: %q", got)
 	}
@@ -197,7 +224,7 @@ func TestNewSessionWaitsForPinAndClearsItsResult(t *testing.T) {
 func TestRunningClearDoesNotMigrateOldPinnedCache(t *testing.T) {
 	isolateDesktopUserDirs(t)
 	oldRef, _ := configureSwitchableDefaultModels(t)
-	prov := &blockingPinnedProvider{started: make(chan struct{}), release: make(chan struct{})}
+	prov := &blockingPinnedProvider{started: make(chan struct{}), release: make(chan struct{}), cancelled: make(chan struct{})}
 	app, tab, ctrl, oldPath := pinnedConcurrencyFixture(t, prov)
 	t.Cleanup(func() {
 		if tab.Ctrl != nil && tab.Ctrl != ctrl {
@@ -224,9 +251,14 @@ func TestRunningClearDoesNotMigrateOldPinnedCache(t *testing.T) {
 		clearDone <- err
 	}()
 	select {
+	case <-prov.cancelled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("clear did not cancel the running turn")
+	}
+	select {
 	case err := <-clearDone:
-		t.Fatalf("clear completed before the running turn stopped: %v", err)
-	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("clear completed before the blocked provider stopped: %v", err)
+	default:
 	}
 	close(prov.release)
 	if err := <-clearDone; err != nil {
@@ -241,5 +273,8 @@ func TestRunningClearDoesNotMigrateOldPinnedCache(t *testing.T) {
 	state, err := loadPinnedContextState(tab.currentSessionPath())
 	if err != nil || len(state.Files) != 0 {
 		t.Fatalf("replacement pins = %+v, err=%v", state, err)
+	}
+	if _, err := os.Stat(store.SessionPinnedContext(tab.currentSessionPath())); err != nil {
+		t.Fatalf("running clear did not write an empty pinned sidecar: %v", err)
 	}
 }

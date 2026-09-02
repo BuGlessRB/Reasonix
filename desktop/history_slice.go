@@ -472,7 +472,7 @@ func (a *App) liveHistorySliceSource(ctrl control.SessionAPI, sessionPath string
 			roles := make([]provider.Role, n)
 			for i, e := range idx.Entries {
 				turns[i] = e.AuthoredTurn
-				roles[i] = e.Role
+				roles[i] = historyPersistedUserRole(e.Role, e.PinnedContextRevision)
 			}
 			turn := idx.AuthoredTurns
 			if idx.MessageCount < n {
@@ -482,7 +482,7 @@ func (a *App) liveHistorySliceSource(ctrl control.SessionAPI, sessionPath string
 						turn++
 					}
 					turns[idx.MessageCount+j] = turn
-					roles[idx.MessageCount+j] = m.Role
+					roles[idx.MessageCount+j] = historyPersistedUserRole(m.Role, agent.IsPinnedContextRevision(m))
 				}
 			}
 			src := &historySliceSource{
@@ -532,7 +532,7 @@ func newInMemoryHistorySliceSource(sessionID string, msgs []provider.Message, re
 			turn++
 		}
 		turns[i] = turn
-		roles[i] = m.Role
+		roles[i] = historyPersistedUserRole(m.Role, agent.IsPinnedContextRevision(m))
 	}
 	src := &historySliceSource{
 		sessionID:  sessionID,
@@ -740,7 +740,7 @@ func coldHistorySliceSource(sessionPath string, idx *agent.SessionDisplayIndex) 
 	roles := make([]provider.Role, n)
 	for i, e := range idx.Entries {
 		turns[i] = e.AuthoredTurn
-		roles[i] = e.Role
+		roles[i] = historyPersistedUserRole(e.Role, e.PinnedContextRevision)
 	}
 	revision := idx.Revision
 	if !idx.RevisionKnown {
@@ -1220,7 +1220,7 @@ func historyWindowWithPersistedTimes(msgs []provider.Message, sessionPath string
 	out := append([]provider.Message(nil), msgs...)
 	userIndex := userOffset
 	for i := range out {
-		if out[i].Role != provider.RoleUser {
+		if out[i].Role != provider.RoleUser || agent.IsPinnedContextRevision(out[i]) {
 			continue
 		}
 		if userIndex >= len(users) {

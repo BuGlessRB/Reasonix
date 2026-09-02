@@ -1451,7 +1451,7 @@ func recoverPendingTurnProjections(tab *WorkspaceTab, ctrl control.SessionAPI) {
 	}
 	users := make([]string, 0)
 	for _, message := range ctrl.History() {
-		if message.Role == provider.RoleUser {
+		if agent.IsUserAuthoredTurnMessage(message) {
 			if text := strings.TrimSpace(agent.UserMessageText(message)); text != "" {
 				users = append(users, text)
 			}
@@ -2218,7 +2218,7 @@ func acknowledgeProjectionForController(ctrl control.SessionAPI, turnID string) 
 }
 
 func lastHistoryMessageIsUser(history []provider.Message) bool {
-	return len(history) > 0 && history[len(history)-1].Role == provider.RoleUser
+	return len(history) > 0 && agent.IsUserAuthoredTurnMessage(history[len(history)-1])
 }
 
 func hasPendingInterruptedRecovery(history []provider.Message) bool {
@@ -2227,7 +2227,7 @@ func hasPendingInterruptedRecovery(history []provider.Message) bool {
 		if m.LocalOnly && m.InterruptedTurn != nil {
 			return m.InterruptedTurn.Pending
 		}
-		if m.Role == provider.RoleUser {
+		if agent.IsUserAuthoredTurnMessage(m) {
 			return false
 		}
 	}
@@ -2250,7 +2250,7 @@ func (s *tabEventSink) eventTabAndController() (*WorkspaceTab, control.SessionAP
 
 func lastUserMessageContent(msgs []provider.Message) string {
 	for _, v := range slices.Backward(msgs) {
-		if v.Role == provider.RoleUser {
+		if agent.IsUserAuthoredTurnMessage(v) {
 			return agent.UserMessageText(v)
 		}
 	}
@@ -3896,7 +3896,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	} else if catalogTopicPath != "" {
 		startupSessionPath = catalogTopicPath
 	}
-	startupPinnedContext := prepareStartupPinnedContext(tab, startupSessionPath, tabSessionPath, root)
+	prepareStartupPinnedContext(tab, startupSessionPath, tabSessionPath)
 	model := strings.TrimSpace(tabModel)
 	if sessionModel, ok := agent.LoadSessionModel(startupSessionPath); ok {
 		config.NormalizeLegacyMimoCustomProvidersForRefs(cfg, sessionModel)
@@ -3989,7 +3989,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 		SubagentParentLive:       a.subagentParentProbeForBuild(tab),
 		SessionRecoveryMeta:      a.tabSessionRecoveryMeta(tab),
-		PinnedContext:            startupPinnedContext,
+		PinnedContextLoader:      pinnedContextLoader(root),
 		OnSessionRecovered:       a.handleTabSessionRecovered(tab),
 		OnSessionTransition:      a.handleTabSessionTransition(tab),
 		OnSessionTitleChanged:    a.onSessionTitleChanged,
@@ -6509,7 +6509,7 @@ func restoredSessionTopicTitle(dir, sessionPath string, meta agent.BranchMeta) s
 	}
 	if s, err := agent.LoadSession(sessionPath); err == nil {
 		for _, msg := range s.Messages {
-			if msg.Role == provider.RoleUser {
+			if agent.IsUserAuthoredTurnMessage(msg) {
 				if title := topicTitleFromText(agent.UserMessageText(msg)); title != "" {
 					return title
 				}
