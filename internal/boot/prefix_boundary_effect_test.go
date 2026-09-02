@@ -2,6 +2,7 @@ package boot
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +15,7 @@ import (
 // prefixProject builds a session in its own project and returns the system
 // message that reached the provider. Every argument is a thing a project can
 // differ on: its skills, its saved facts, and whether it is a repository.
-func prefixProject(t *testing.T, kind, skillName, instructions string, isRepo bool, fact string) string {
+func prefixProject(t *testing.T, kind, skillName, instructions string, isRepo bool, fact string) provider.Request {
 	t.Helper()
 	isolateConfigHome(t)
 	dir := robustTempDir(t)
@@ -69,7 +70,7 @@ model = "x"
 	if len(reqs) == 0 {
 		t.Fatal("no agent request reached the provider boundary")
 	}
-	return systemOf(reqs[0])
+	return reqs[0]
 }
 
 // TestEffectNoProjectStateReachesThePrefix is the standing boundary each
@@ -83,8 +84,24 @@ func TestEffectNoProjectStateReachesThePrefix(t *testing.T) {
 	b := prefixProject(t, "boot-prefix-b", "betaskill",
 		"# Beta rules\n\nNever touch the vendored tree.\n", false, "release-cadence")
 
-	if a != b {
-		t.Fatalf("project state reached the cached prefix; every byte after it is re-sent for each project:\nfirst diff site: %q",
-			firstDivergence(a, b))
+	if sysA, sysB := systemOf(a), systemOf(b); sysA != sysB {
+		t.Fatalf("project state reached the cached system prompt; every byte after it is re-sent for each project:\nfirst diff site: %q",
+			firstDivergence(sysA, sysB))
 	}
+	// The prefix the provider caches is the system message AND the tool
+	// schemas, which are the larger half. A per-project tool surface diverges
+	// it just as a per-project prompt does, one message later.
+	if toolsA, toolsB := toolSchemaJSON(t, a), toolSchemaJSON(t, b); toolsA != toolsB {
+		t.Fatalf("project state reached the cached tool schemas:\nfirst diff site: %q",
+			firstDivergence(toolsA, toolsB))
+	}
+}
+
+func toolSchemaJSON(t *testing.T, req provider.Request) string {
+	t.Helper()
+	data, err := json.Marshal(req.Tools)
+	if err != nil {
+		t.Fatalf("marshal tool schemas: %v", err)
+	}
+	return string(data)
 }
