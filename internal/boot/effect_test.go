@@ -552,6 +552,7 @@ func systemOf(req provider.Request) string {
 	}
 	return ""
 }
+
 // TestEffectRememberDoesNotMoveTheCachedPrefix is the cache boundary for saved
 // facts: a session that saves one must leave the next session's system message
 // byte-identical. The index it writes used to be composed in ahead of the

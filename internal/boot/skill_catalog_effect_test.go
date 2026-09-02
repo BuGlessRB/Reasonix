@@ -63,35 +63,15 @@ func TestEffectSkillCatalogRidesTheTurnNotThePrefix(t *testing.T) {
 	a := catalogRun(t, "boot-effect-cat-a", "alphaskill", "does the alpha thing")
 	b := catalogRun(t, "boot-effect-cat-b", "betaskill", "does the beta thing")
 
-	if sysA, sysB := systemOfRequest(a), systemOfRequest(b); sysA != sysB {
+	if sysA, sysB := systemOf(a), systemOf(b); sysA != sysB {
 		t.Fatalf("different skills composed different prefixes:\nfirst diff site: %q", firstDivergence(sysA, sysB))
 	}
 
-	turnA, turnB := userMessagesOf(a), userMessagesOf(b)
+	turnA, turnB := userMessages(a), userMessages(b)
 	if !strings.Contains(turnA, "alphaskill") || strings.Contains(turnA, "betaskill") {
 		t.Fatalf("project A's turn does not carry exactly its own catalog:\n%s", turnA)
 	}
 	if !strings.Contains(turnB, "betaskill") || strings.Contains(turnB, "alphaskill") {
 		t.Fatalf("project B's turn does not carry exactly its own catalog:\n%s", turnB)
 	}
-}
-
-func systemOfRequest(req provider.Request) string {
-	for _, m := range req.Messages {
-		if m.Role == provider.RoleSystem {
-			return m.Content
-		}
-	}
-	return ""
-}
-
-func userMessagesOf(req provider.Request) string {
-	var b strings.Builder
-	for _, m := range req.Messages {
-		if m.Role == provider.RoleUser {
-			b.WriteString(m.Content)
-			b.WriteByte('\n')
-		}
-	}
-	return b.String()
 }
