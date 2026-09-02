@@ -6,7 +6,7 @@
     "complexity": 1512,
     "error-text": 12,
     "essay": 3242,
-    "file-size": 39388,
+    "file-size": 39059,
     "frontend-parity": 150,
     "function-size": 6595,
     "layering": 0,
@@ -730,10 +730,9 @@
       "frontend-parity": 2
     },
     "internal/control/controller.go": {
-      "essay": 74,
-      "file-size": 2915,
-      "frontend-parity": 54,
-      "function-size": 4,
+      "essay": 57,
+      "file-size": 2586,
+      "frontend-parity": 50,
       "narrative": 4
     },
     "internal/control/controller_test.go": {
@@ -860,6 +859,11 @@
     },
     "internal/control/steer_fallback_test.go": {
       "essay": 1
+    },
+    "internal/control/turn_cancel.go": {
+      "essay": 17,
+      "frontend-parity": 4,
+      "function-size": 4
     },
     "internal/control/turn_orchestrator.go": {
       "essay": 10,
