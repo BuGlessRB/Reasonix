@@ -27,10 +27,12 @@ type Server struct {
 	sftpRoot  string
 	enableSFT bool
 
-	mu        sync.Mutex
-	conns     []net.Conn
-	listeners []net.Listener
-	wg        sync.WaitGroup
+	mu    sync.Mutex
+	conns []net.Conn
+	// forwards is every live -R listener, keyed by the address it was asked
+	// for, so a cancel releases the port the way sshd does.
+	forwards map[string]net.Listener
+	wg       sync.WaitGroup
 }
 
 // Options configures a test server.
@@ -114,11 +116,11 @@ func (s *Server) Close() {
 	for _, c := range s.conns {
 		_ = c.Close()
 	}
-	for _, ln := range s.listeners {
+	for _, ln := range s.forwards {
 		_ = ln.Close()
 	}
 	s.conns = nil
-	s.listeners = nil
+	s.forwards = nil
 	s.mu.Unlock()
 	s.wg.Wait()
 }
@@ -181,9 +183,7 @@ func (s *Server) handleGlobalRequests(conn *ssh.ServerConn, reqs <-chan *ssh.Req
 		case "tcpip-forward":
 			s.handleTCPIPForward(conn, req)
 		case "cancel-tcpip-forward":
-			if req.WantReply {
-				_ = req.Reply(true, nil)
-			}
+			s.cancelTCPIPForward(req)
 		default:
 			if req.WantReply {
 				_ = req.Reply(false, nil)
@@ -290,6 +290,29 @@ func (s *Server) handleDirectTCPIP(newCh ssh.NewChannel) {
 
 // handleTCPIPForward implements -R forwards: listen locally on the server and
 // open a forwarded-tcpip channel back to the client for each accepted conn.
+// cancelTCPIPForward releases the port a -R forward held. Replying true while
+// keeping the listener open would make a re-request of the same port fail here
+// and nowhere else, hiding whether a reconnect can land back on it.
+func (s *Server) cancelTCPIPForward(req *ssh.Request) {
+	var payload struct {
+		BindAddr string
+		BindPort uint32
+	}
+	if err := ssh.Unmarshal(req.Payload, &payload); err == nil {
+		addr := net.JoinHostPort(payload.BindAddr, fmt.Sprintf("%d", payload.BindPort))
+		s.mu.Lock()
+		ln, ok := s.forwards[addr]
+		delete(s.forwards, addr)
+		s.mu.Unlock()
+		if ok {
+			_ = ln.Close()
+		}
+	}
+	if req.WantReply {
+		_ = req.Reply(true, nil)
+	}
+}
+
 func (s *Server) handleTCPIPForward(conn *ssh.ServerConn, req *ssh.Request) {
 	var payload struct {
 		BindAddr string
@@ -310,7 +333,10 @@ func (s *Server) handleTCPIPForward(conn *ssh.ServerConn, req *ssh.Request) {
 	}
 	boundPort := uint32(ln.Addr().(*net.TCPAddr).Port)
 	s.mu.Lock()
-	s.listeners = append(s.listeners, ln)
+	if s.forwards == nil {
+		s.forwards = map[string]net.Listener{}
+	}
+	s.forwards[ln.Addr().String()] = ln
 	s.mu.Unlock()
 	if req.WantReply {
 		_ = req.Reply(true, ssh.Marshal(struct{ Port uint32 }{boundPort}))

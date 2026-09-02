@@ -298,3 +298,48 @@ func TestRemoteForwardEndToEnd(t *testing.T) {
 }
 
 var _ = fmt.Sprintf
+
+// boundRemoteAddr waits for the one registered forward to come up and reports
+// where it landed.
+func boundRemoteAddr(t *testing.T, set *Set) string {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, e := range set.List() {
+			if e.Up && e.BoundAddr != "" {
+				return e.BoundAddr
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("remote forward never came up")
+	return ""
+}
+
+// A remote listener is torn down on every disconnect, and whatever was told
+// where to find it outlives that: a `reasonix serve` launched with the address
+// of a ":0" -R forward keeps the address for its whole life, so a reconnect
+// that moved the port would leave it calling a closed one.
+func TestEphemeralRemoteForwardKeepsItsPortAcrossReattach(t *testing.T) {
+	srv := sshtest.Start(t, sshtest.Options{})
+	cl := dialSSHClient(t, srv)
+	target := echoServer(t)
+
+	set := NewSet(nil)
+	defer set.Close()
+	if err := set.Attach(cl); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := set.Add(Spec{Direction: Remote, BindAddr: "127.0.0.1:0", TargetAddr: target}); err != nil {
+		t.Fatalf("add remote forward: %v", err)
+	}
+	first := boundRemoteAddr(t, set)
+
+	set.Detach()
+	if err := set.Attach(cl); err != nil {
+		t.Fatalf("re-attach: %v", err)
+	}
+	if second := boundRemoteAddr(t, set); second != first {
+		t.Fatalf("the forward moved across a reconnect: %s -> %s", first, second)
+	}
+}

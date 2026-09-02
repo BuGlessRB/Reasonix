@@ -46,6 +46,7 @@ type runner struct {
 	spec     Spec
 	local    net.Listener // Local: persistent local listener
 	remote   net.Listener // Remote: per-connection remote listener
+	bound    string       // Remote: the address a ":0" spec was last given
 	up       bool
 	lastErr  error
 	stop     chan struct{}
@@ -254,7 +255,7 @@ func (s *Set) handleLocalConn(r *runner, local net.Conn) {
 }
 
 func (s *Set) startRemoteLocked(r *runner, cl *ssh.Client) (string, error) {
-	ln, err := cl.Listen("tcp", r.spec.BindAddr)
+	ln, err := listenRemote(r, cl)
 	if err != nil {
 		r.lastErr = wrapBind(err)
 		s.emit(Event{Spec: r.spec, Up: false, Err: r.lastErr})
@@ -265,8 +266,28 @@ func (s *Set) startRemoteLocked(r *runner, cl *ssh.Client) (string, error) {
 	r.lastErr = nil
 	go s.acceptRemote(r, ln)
 	bound := ln.Addr().String()
+	r.bound = bound
 	s.emit(Event{Spec: r.spec, Up: true, BoundAddr: bound})
 	return bound, nil
+}
+
+// listenRemote re-requests the address an ephemeral remote forward was last
+// given, falling back to a fresh one when that port is now taken. A remote
+// listener is torn down on every disconnect, and whatever was told where to
+// find it — a serve launched with the address of a ":0" forward — outlives the
+// reconnect that would otherwise move it.
+func listenRemote(r *runner, cl *ssh.Client) (net.Listener, error) {
+	if r.bound != "" && ephemeralBind(r.spec.BindAddr) {
+		if ln, err := cl.Listen("tcp", r.bound); err == nil {
+			return ln, nil
+		}
+	}
+	return cl.Listen("tcp", r.spec.BindAddr)
+}
+
+func ephemeralBind(addr string) bool {
+	_, port, err := net.SplitHostPort(addr)
+	return err == nil && port == "0"
 }
 
 func (s *Set) acceptRemote(r *runner, ln net.Listener) {
