@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -48,7 +49,7 @@ func installStubControllerWithCurrentPrompt(t *testing.T, app *App, tab *Workspa
 
 func assertWorkspaceSessionContext(t *testing.T, messages []provider.Message, want, unwanted string) {
 	t.Helper()
-	for i := len(messages) - 1; i >= 0; i-- {
+	for i := range slices.Backward(messages) {
 		snapshot, ok := sessioncontext.Parse(messages[i].Content)
 		if !ok || messages[i].Origin != provider.MessageOriginHost {
 			continue
