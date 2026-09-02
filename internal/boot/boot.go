@@ -197,8 +197,8 @@ type Options struct {
 	SandboxNetworkOverride *bool
 	SandboxBashOverride    string
 	WorkspaceOnly          bool
-	// SessionTemp is the session-private temp manager; Rebuild reuses old's.
-	SessionTemp *sessiontemp.Manager
+	PinnedContextLoader    control.PinnedContextLoader
+	SessionTemp            *sessiontemp.Manager // session-private temp manager; Rebuild reuses old's
 	RuntimeReload
 	// deferPublish keeps a replacement generation private until migration and
 	// commit succeed. Cold BuildRuntime leaves this false and publishes at boot.
@@ -1759,7 +1759,6 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 		return "", false
 	}
-
 	ctrlOpts := control.Options{
 		TaskBudget:                     taskBudgetFromConfig(cfg),
 		GoalTokenBudget:                cfg.Agent.GoalTokenBudget,
@@ -1774,6 +1773,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		VisionProviderResolver:         visionProviderResolver,
 		VisionModelSelector:            visionModelSelector,
 		SystemPrompt:                   sysPrompt,
+		PinnedContextLoader:            opts.PinnedContextLoader,
 		SessionDir:                     sessionDir,
 		Host:                           pluginHost,
 		Commands:                       cmds,

@@ -122,7 +122,7 @@ func (s *deferredStreamSink) Discard() {
 // evidence re-lease, and the initial user-turn persistence. Callers still own
 // all Run-level defers (workspace lease, evidence commit, delivery checkpoint,
 // steer queue, active-turn timestamp).
-func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string, state *turnRuntime) {
+func (a *Agent) beginRunTurn(ctx context.Context, input string, pinned pinnedRevisionPlan) (rawInput string, state *turnRuntime) {
 	rawInput = RawUserInput(ctx, input)
 	providerInput := input
 	// A fresh user turn starts from zeroed per-turn host state; the new turn's
@@ -216,10 +216,11 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	if rawContent == "" {
 		rawContent = a.turn.turnInput
 	}
-	a.sess.conversation.Add(provider.Message{
+	userMessage := provider.Message{
 		Role: provider.RoleUser, Origin: inputMessageOrigin(ctx), Content: input, RawContent: rawContent,
 		Images: userImages(ctx), VisionSummary: VisionSummaryFromContext(ctx), CreatedAt: userCreatedAt,
-	})
+	}
+	a.appendPinnedRevisionAndUser(pinned, userMessage)
 
 	// The loop fields join the classification computed above rather than
 	// opening a second object: one turn, one turnRuntime. The zero values the

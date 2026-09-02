@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -4961,35 +4960,6 @@ func firstLine(s string) string {
 	return "..."
 }
 
-// copyAssistantParts returns the Content of assistant messages after the last
-// user message in msgs, skipping empty strings and model placeholders ("…", "...").
-// The result is chronological (oldest first).
-func copyAssistantParts(msgs []provider.Message) []string {
-	lastUserIdx := -1
-	for i, v := range slices.Backward(msgs) {
-		if v.Role == provider.RoleUser {
-			lastUserIdx = i
-			break
-		}
-	}
-	start := lastUserIdx + 1
-	if lastUserIdx < 0 {
-		start = 0
-	}
-	var parts []string
-	for i := start; i < len(msgs); i++ {
-		if msgs[i].Role != provider.RoleAssistant {
-			continue
-		}
-		c := strings.TrimSpace(msgs[i].Content)
-		if c == "" || c == "..." || c == "…" {
-			continue
-		}
-		parts = append(parts, c)
-	}
-	return parts
-}
-
 // runExportCommand exports the entire session as a markdown file, excluding
 // system messages, reasoning/thinking content, and tool calls/results.
 func (m *chatTUI) runExportCommand(input string) {
@@ -5004,7 +4974,7 @@ func (m *chatTUI) runExportCommand(input string) {
 	b.WriteString("# reasonix session\n\n")
 	lastRole := provider.Role("")
 	exportedMessages := 0
-	for _, msg := range msgs {
+	for _, msg := range cliHistoryWithoutPinnedContextRevisions(msgs) {
 		switch msg.Role {
 		case provider.RoleUser:
 			// Skip internal steer messages.
@@ -5295,7 +5265,7 @@ func replaySectionsForWithRenderers(
 	renderReasoning func(string, int, int) string,
 ) []string {
 	var out []string
-	for _, m := range history {
+	for _, m := range cliHistoryWithoutPinnedContextRevisions(history) {
 		if m.LocalOnly {
 			if m.FinalReadinessRecovery != nil && m.FinalReadinessRecovery.Pending {
 				out = append(out, fmt.Sprintf("  · %s\n\n", i18n.M.FinalReadinessRecovery))

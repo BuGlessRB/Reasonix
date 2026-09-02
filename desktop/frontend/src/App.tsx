@@ -5140,7 +5140,7 @@ export default function App() {
               commandCatalog={remoteSurfaceActive ? remoteSession.commands : undefined}
               imageInputEnabled={!remoteSurfaceActive && state.meta?.imageInputEnabled !== false}
               imageUnderstandingEnabled={state.meta?.visionFallbackEnabled === true}
-              attachmentInputEnabled={!remoteSurfaceActive}
+              attachmentInputEnabled={!remoteSurfaceActive} pinnedFiles={state.meta?.pinnedFiles}
               tabId={activeTabId} turnId={remoteSurfaceActive ? undefined : state.activeTurnId}
               effort={remoteSurfaceActive ? remoteSession.effort : state.effort}
               onSend={remoteSurfaceActive ? remoteComposerSend : handleSend}

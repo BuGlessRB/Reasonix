@@ -76,7 +76,7 @@ func (o *turnOrchestrator) runComposedSyntheticTurn(ctx context.Context, text st
 	ctx = agent.WithRawUserInput(ctx, text)
 	ctx = withTurnInputOrigin(ctx, true)
 	ctx = c.withPlannerTurnMetadata(ctx, text, true, c.messageCount())
-	return c.runner.Run(ctx, c.ComposeSynthetic(text))
+	return c.runModelTurn(ctx, c.ComposeSynthetic(text))
 }
 
 // runSubagentSkillGoalLoop executes a slash-invoked runAs=subagent skill as a
@@ -296,7 +296,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	if !turn.synthetic {
 		c.beginRecoveryEpisode()
 	}
-	err = c.runner.Run(ctx, modelInput)
+	err = c.runModelTurn(ctx, modelInput)
 	c.captureGoalRunWorkDuration(startMessages)
 	c.persistGoalDeliveryCheckpoint()
 	if err != nil {
