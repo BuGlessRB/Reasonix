@@ -1,12 +1,14 @@
 {
   "internal/control/approval.go": 94.3,
+  "internal/control/approval_orchestration.go": 90.7,
   "internal/installsource/**": 77.2,
   "internal/netclient/**": 47.2,
   "internal/permission/**": 90.2,
   "internal/plugin/**": 77.4,
   "internal/pluginpkg/**": 82.7,
+  "internal/providerbroker/**": 83.1,
   "internal/redirectguard/**": 92.6,
-  "internal/sandbox/**": 73.5,
+  "internal/sandbox/**": 78.1,
   "internal/shellparse/**": 64.5,
   "internal/shellsafe/**": 61.1
 }

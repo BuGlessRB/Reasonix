@@ -6,7 +6,7 @@
     "complexity": 1512,
     "error-text": 12,
     "essay": 3242,
-    "file-size": 40322,
+    "file-size": 39765,
     "frontend-parity": 150,
     "function-size": 6595,
     "layering": 0,
@@ -704,6 +704,10 @@
     "internal/control/approval.go": {
       "essay": 19
     },
+    "internal/control/approval_orchestration.go": {
+      "essay": 38,
+      "frontend-parity": 7
+    },
     "internal/control/attachments.go": {
       "orphan": 2
     },
@@ -727,9 +731,9 @@
     },
     "internal/control/controller.go": {
       "complexity": 3,
-      "essay": 117,
-      "file-size": 3849,
-      "frontend-parity": 67,
+      "essay": 79,
+      "file-size": 3292,
+      "frontend-parity": 60,
       "function-size": 27,
       "narrative": 4
     },
