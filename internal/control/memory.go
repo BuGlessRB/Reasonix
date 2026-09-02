@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"reasonix/internal/event"
 	"reasonix/internal/memory"
@@ -39,10 +40,34 @@ type memoryManager struct {
 	lastRecall memory.RecallResult
 	autoWrites map[[32]byte]int
 
+	// instructions is the standing-instruction block owed to the next real
+	// turn, nil once delivered. It rides the turn rather than the prefix: the
+	// project's own rules are what made the prefix diverge per project.
+	instructions atomic.Pointer[string]
+
 	// writeMu serializes memory writes so each write+reload+swap is atomic with
 	// respect to the others. Taken OFF mu, so a read (current/drainPending) never
 	// blocks behind a write's disk I/O.
 	writeMu sync.Mutex
+}
+
+// publishInstructions owes the standing instructions to the next real turn.
+// Called with a set the caller already loaded — never a fresh discovery walk —
+// so an unchanged set costs a turn nothing.
+func (m *memoryManager) publishInstructions(set *memory.Set) {
+	block := set.InstructionsBlock()
+	if block == "" {
+		return
+	}
+	m.instructions.Store(&block)
+}
+
+// drainInstructions returns the block owed to this turn, once.
+func (m *memoryManager) drainInstructions() string {
+	if block := m.instructions.Swap(nil); block != nil {
+		return *block
+	}
+	return ""
 }
 
 func (m *memoryManager) authorizeAutoRemember(args json.RawMessage) {
@@ -156,6 +181,9 @@ func (m *memoryManager) applyWrite(mem *memory.Set, note string) {
 	}
 	m.set = reloaded
 	m.mu.Unlock()
+	// The write may have been to an instruction doc, so the session owes the
+	// set again: a "#" quick-add reaches this turn instead of the next session.
+	m.publishInstructions(reloaded)
 }
 
 // quickAdd appends a one-line note to the doc-memory file for scope (project

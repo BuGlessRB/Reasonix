@@ -203,9 +203,13 @@ func (c *Controller) composeWithGoal(
 		}
 	}
 	if includeHookContext {
-		// The skills listing rides the turn, not the prefix, and is owed once per
-		// session and again after a reload — so installing one reaches the model
-		// on the next turn instead of on the next session.
+		// Prepended first, so the project's own rules end up closest to the
+		// request: the more specific the authority, the nearer the tail.
+		if block := c.memory.drainInstructions(); block != "" {
+			text = "<project-instructions>\n" + block + "\n</project-instructions>\n\n" + text
+		}
+		// Owed once per session and again after a reload, so installing a skill
+		// reaches the model on the next turn rather than the next session.
 		if block := c.skills.drainCatalog(); block != "" {
 			text = "<available-skills>\n" + block + "\n</available-skills>\n\n" + text
 		}

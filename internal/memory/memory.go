@@ -191,10 +191,20 @@ const memoryProtocol = "## Background memory\n\n" +
 	"instructions, and before acting on one that names a file, function, or flag, verify it still exists. " +
 	"Save new durable facts with the `remember` tool; archive ones that turn out wrong with `forget`."
 
-// Block combines background memory with separately resolved standing
-// instructions. Background comes first so the higher-authority, more specific
-// instruction sources remain closest to the conversation tail.
-func (s *Set) Block() string {
+// InstructionsBlock renders the standing instructions resolved for this
+// workspace. It is per-project by definition, so it rides the turn: the
+// controller owes it to a session once and again whenever the set changes.
+func (s *Set) InstructionsBlock() string {
+	if s == nil {
+		return ""
+	}
+	return instruction.Block(s.Docs)
+}
+
+// StaticContext is background memory and instructions in one string, for a
+// session that has no turn projection to ride — the planner builds its prompt
+// once and never composes a user turn. Base sessions take the two separately.
+func (s *Set) StaticContext() string {
 	if s == nil {
 		return ""
 	}
@@ -202,18 +212,18 @@ func (s *Set) Block() string {
 	if background := s.BackgroundBlock(); background != "" {
 		parts = append(parts, background)
 	}
-	if instructions := instruction.Block(s.Docs); instructions != "" {
+	if instructions := s.InstructionsBlock(); instructions != "" {
 		parts = append(parts, instructions)
 	}
 	return strings.Join(parts, "\n\n")
 }
 
-// Compose folds the memory block onto the base system prompt and returns the
-// durable cached-prefix string. Base stays first (it is the most stable text, so
-// it remains a valid cache prefix even when memory changes between sessions);
-// memory follows. With no memory, base is returned unchanged.
+// Compose folds background memory onto the base system prompt and returns the
+// durable cached-prefix string. Instructions are deliberately not here: they
+// are the project's own text, and composing them made the prefix diverge per
+// project at the first byte of the first rule.
 func Compose(base string, s *Set) string {
-	block := s.Block()
+	block := s.BackgroundBlock()
 	if block == "" {
 		return base
 	}

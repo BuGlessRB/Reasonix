@@ -36,5 +36,6 @@ func (s *inboxEventSink) Emit(e event.Event) {
 		// Standing state that is delivered once has to be re-owed when the turn
 		// carrying it stops being verbatim.
 		s.c.skills.publishCatalog(s.c.skills.list())
+		s.c.memory.publishInstructions(s.c.memory.current())
 	}
 }

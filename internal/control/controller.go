@@ -478,7 +478,7 @@ func New(opts Options) *Controller {
 	}
 	c.sessionTemp.Retain()
 
-	c.skills.publishCatalog(opts.Skills) // per-project: owed to the turn, not the prefix
+	c.publishPerProjectContext(opts)
 	if opts.Extensions != nil {
 		c.extensions = opts.Extensions
 		c.sink = newFrontendEventSink(c.sink, opts.Extensions)

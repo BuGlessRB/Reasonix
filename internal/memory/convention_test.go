@@ -15,8 +15,8 @@ func TestClaudeMdDiscovered(t *testing.T) {
 	mustWrite(t, filepath.Join(proj, "CLAUDE.md"), "Rule from CLAUDE.md")
 
 	set := Load(Options{CWD: proj})
-	if !strings.Contains(set.Block(), "Rule from CLAUDE.md") {
-		t.Fatalf("CLAUDE.md should be discovered and folded in:\n%s", set.Block())
+	if !strings.Contains(set.StaticContext(), "Rule from CLAUDE.md") {
+		t.Fatalf("CLAUDE.md should be discovered and folded in:\n%s", set.StaticContext())
 	}
 }
 
@@ -28,9 +28,9 @@ func TestSymlinkedAgentAndClaudeDocsComposeOnce(t *testing.T) {
 		t.Skipf("symlink unsupported: %v", err)
 	}
 
-	prompt := Compose("BASE", Load(Options{CWD: proj}))
-	if got := strings.Count(prompt, "Shared symlink guidance"); got != 1 {
-		t.Fatalf("symlinked memory should be composed once, got %d occurrences:\n%s", got, prompt)
+	set := Load(Options{CWD: proj})
+	if got := strings.Count(set.InstructionsBlock(), "Shared symlink guidance"); got != 1 {
+		t.Fatalf("symlinked memory should be rendered once, got %d occurrences:\n%s", got, set.InstructionsBlock())
 	}
 }
 

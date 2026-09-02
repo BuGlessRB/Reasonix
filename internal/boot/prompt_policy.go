@@ -10,6 +10,7 @@ var corePolicies = []string{
 	config.WorkPracticePolicy,
 	config.ToolBatchPolicy,
 	config.LanguagePolicy,
+	config.InstructionDeliveryPolicy,
 }
 
 func appendCorePolicies(prompt string) string {

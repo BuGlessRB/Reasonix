@@ -151,3 +151,11 @@ func newControllerDeps(opts Options, sink event.Sink, usageTee *goalUsageTee, ru
 		approval:               newApprovalManager(opts.Policy, ToolApprovalAsk, opts.ApprovalTimeout),
 	}
 }
+
+// publishPerProjectContext owes this session's per-project text to its first
+// real turn: the skills catalog and the standing instructions. Neither is in
+// the cached prefix — that is what makes the prefix identical across projects.
+func (c *Controller) publishPerProjectContext(opts Options) {
+	c.skills.publishCatalog(opts.Skills)
+	c.memory.publishInstructions(opts.Memory)
+}

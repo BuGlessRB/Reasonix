@@ -25,7 +25,7 @@ func TestComposeEmptyIsIdentity(t *testing.T) {
 // that exists still has to say so: a silent store is what a first session reads
 // as an agent with no memory at all.
 func TestAvailableStoreNamesRemember(t *testing.T) {
-	block := (&Set{Store: Store{Dir: testenv.TempDir(t)}}).Block()
+	block := (&Set{Store: Store{Dir: testenv.TempDir(t)}}).StaticContext()
 	if !strings.Contains(block, "remember") {
 		t.Fatalf("store block never names the remember tool:\n%s", block)
 	}
@@ -46,8 +46,8 @@ func TestBlockIsIdenticalWhateverTheStoreHolds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	emptyBlock := (&Set{Store: Store{Dir: empty}}).Block()
-	fullBlock := (&Set{Store: Store{Dir: full}}).Block()
+	emptyBlock := (&Set{Store: Store{Dir: empty}}).StaticContext()
+	fullBlock := (&Set{Store: Store{Dir: full}}).StaticContext()
 	if emptyBlock != fullBlock {
 		t.Fatalf("a saved fact changed the cached prefix:\nempty: %q\nfull:  %q", emptyBlock, fullBlock)
 	}
@@ -56,17 +56,34 @@ func TestBlockIsIdenticalWhateverTheStoreHolds(t *testing.T) {
 	}
 }
 
-// TestComposeAppendsAfterBase verifies memory folds in *after* the base prompt,
-// so the base stays a valid cache prefix even as memory changes between sessions.
+// TestComposeAppendsAfterBase verifies background memory folds in *after* the
+// base prompt, so the base stays a valid cache prefix even as memory changes
+// between sessions.
 func TestComposeAppendsAfterBase(t *testing.T) {
 	base := "BASE PROMPT"
-	set := &Set{Docs: []Source{{Path: "/p/REASONIX.md", Scope: ScopeProject, Body: "Use tabs."}}}
+	set := &Set{Store: Store{Dir: "/memory/project"}}
 	got := Compose(base, set)
 	if !strings.HasPrefix(got, base) {
 		t.Fatalf("base is not the prefix of the composed prompt:\n%q", got)
 	}
-	if !strings.Contains(got, "Use tabs.") {
-		t.Fatalf("doc body missing from composed prompt:\n%q", got)
+	if !strings.Contains(got, "Background memory") {
+		t.Fatalf("the memory protocol missing from composed prompt:\n%q", got)
+	}
+}
+
+// TestComposeLeavesInstructionsToTheTurn is the cut: a project's own rules are
+// what diverged the prefix at their first byte, so Compose must not carry them
+// and the block that does must.
+func TestComposeLeavesInstructionsToTheTurn(t *testing.T) {
+	set := &Set{
+		Docs:  []Source{{Path: "/p/REASONIX.md", Scope: ScopeProject, Body: "Use tabs."}},
+		Store: Store{Dir: "/memory/project"},
+	}
+	if got := Compose("BASE PROMPT", set); strings.Contains(got, "Use tabs.") {
+		t.Fatalf("instructions reached the cached prefix:\n%q", got)
+	}
+	if got := set.InstructionsBlock(); !strings.Contains(got, "Use tabs.") {
+		t.Fatalf("the block owed to the turn does not carry the instructions:\n%q", got)
 	}
 }
 
@@ -75,7 +92,7 @@ func TestBlockSeparatesStandingInstructionsFromBackgroundMemory(t *testing.T) {
 		Docs:  []Source{{Path: "/p/AGENTS.md", Scope: ScopeProject, Directory: "/p", Body: "Always run tests.", Depth: 0}},
 		Store: Store{Dir: "/memory/project"},
 	}
-	block := set.Block()
+	block := set.StaticContext()
 	for _, want := range []string{"# Instructions", "## workspace/AGENTS.md (project", "## Background memory", "background, not standing instructions"} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("Block() missing %q:\n%s", want, block)
@@ -114,7 +131,7 @@ func TestLoadIncludesStableGlobalPreferencesAndFeedback(t *testing.T) {
 	if len(set.PinnedGuidance) != 2 {
 		t.Fatalf("global guidance = %+v, want user + feedback only", set.PinnedGuidance)
 	}
-	block := set.Block()
+	block := set.StaticContext()
 	for _, want := range []string{"## Pinned preferences and feedback", "GLOBAL USER BODY", "GLOBAL FEEDBACK BODY"} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("Block() missing %q:\n%s", want, block)
@@ -131,7 +148,7 @@ func TestLoadIncludesStableGlobalPreferencesAndFeedback(t *testing.T) {
 	if strings.Index(block, "## Pinned preferences and feedback") > strings.Index(block, "# Instructions") && strings.Contains(block, "# Instructions") {
 		t.Fatalf("lower-priority global guidance must precede standing instructions:\n%s", block)
 	}
-	if again := set.Block(); again != block {
+	if again := set.StaticContext(); again != block {
 		t.Fatal("unchanged memory snapshot produced unstable prompt bytes")
 	}
 }
@@ -165,7 +182,7 @@ func TestLoadProjectFactSuppressesEquivalentGlobalGuidance(t *testing.T) {
 	if len(set.PinnedGuidance) != 1 || set.PinnedGuidance[0].Name != "language" {
 		t.Fatalf("global guidance = %+v, want only unshadowed language preference", set.PinnedGuidance)
 	}
-	block := set.Block()
+	block := set.StaticContext()
 	if strings.Contains(block, "Always be verbose.") {
 		t.Fatalf("shadowed global guidance leaked into stable prefix:\n%s", block)
 	}
@@ -200,7 +217,7 @@ func TestDiscoverPrecedenceOrder(t *testing.T) {
 		}
 	}
 	// In the composed block, local must appear after project must appear after user.
-	block := set.Block()
+	block := set.StaticContext()
 	iu, ip, il := strings.Index(block, "USER LEVEL"), strings.Index(block, "PROJECT LEVEL"), strings.Index(block, "LOCAL LEVEL")
 	if !(iu >= 0 && iu < ip && ip < il) {
 		t.Fatalf("precedence order wrong in block: user=%d project=%d local=%d\n%s", iu, ip, il, block)
@@ -367,7 +384,7 @@ func TestLoadHidesMemoryUnderExperimentEnv(t *testing.T) {
 	if len(set.PinnedGuidance) != 0 || set.Store.Dir != "" {
 		t.Fatalf("memory-off arm leaked store state: %+v", set)
 	}
-	if !strings.Contains(set.Block(), "STANDING INSTRUCTION BODY") {
+	if !strings.Contains(set.StaticContext(), "STANDING INSTRUCTION BODY") {
 		t.Fatal("instruction docs must survive the memory-off arm")
 	}
 	if AutoRecall(set.Store, "always on pinned pref", RecallOptions{}).Hits != nil {

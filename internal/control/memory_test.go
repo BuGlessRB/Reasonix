@@ -94,14 +94,14 @@ func TestForgetMemoryRevokesLoadedGlobalGuidanceForCurrentSession(t *testing.T) 
 		t.Fatal(err)
 	}
 	c := New(Options{Memory: memory.Load(memory.Options{CWD: cwd, UserDir: userDir})})
-	if before := c.Memory().Block(); !strings.Contains(before, body) {
+	if before := c.Memory().StaticContext(); !strings.Contains(before, body) {
 		t.Fatalf("test setup did not load global guidance:\n%s", before)
 	}
 
 	if err := c.ForgetMemory("no-emoji"); err != nil {
 		t.Fatalf("ForgetMemory: %v", err)
 	}
-	if after := c.Memory().Block(); strings.Contains(after, body) {
+	if after := c.Memory().StaticContext(); strings.Contains(after, body) {
 		t.Fatalf("reloaded snapshot retained forgotten global guidance:\n%s", after)
 	}
 	composed := c.Compose("hello")

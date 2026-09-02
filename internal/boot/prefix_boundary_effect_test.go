@@ -72,19 +72,19 @@ model = "x"
 	return systemOf(reqs[0])
 }
 
-// TestEffectInstructionsAreTheOnlyProjectStateInThePrefix is the standing
-// boundary each per-feature effect test guards one piece of: two projects that
-// share only their instructions — different skills, different saved facts, one
-// a repository — must send the byte-identical system message. Instructions are
-// still in the prefix, and are the next cut.
-func TestEffectInstructionsAreTheOnlyProjectStateInThePrefix(t *testing.T) {
-	const shared = "# Shared rules\n\nBoth projects are governed by this same file.\n"
-
-	a := prefixProject(t, "boot-prefix-a", "alphaskill", shared, true, "deploy-target")
-	b := prefixProject(t, "boot-prefix-b", "betaskill", shared, false, "release-cadence")
+// TestEffectNoProjectStateReachesThePrefix is the standing boundary each
+// per-feature effect test guards one piece of: two projects sharing nothing —
+// different instructions, skills and saved facts, one a repository — must send
+// the byte-identical system message, which is what makes the prefix reusable
+// across every project on the machine and not just within one session.
+func TestEffectNoProjectStateReachesThePrefix(t *testing.T) {
+	a := prefixProject(t, "boot-prefix-a", "alphaskill",
+		"# Alpha rules\n\nAlways run go vet before committing.\n", true, "deploy-target")
+	b := prefixProject(t, "boot-prefix-b", "betaskill",
+		"# Beta rules\n\nNever touch the vendored tree.\n", false, "release-cadence")
 
 	if a != b {
-		t.Fatalf("project state other than the instructions reached the cached prefix; every byte after it is re-sent for each project:\nfirst diff site: %q",
+		t.Fatalf("project state reached the cached prefix; every byte after it is re-sent for each project:\nfirst diff site: %q",
 			firstDivergence(a, b))
 	}
 }

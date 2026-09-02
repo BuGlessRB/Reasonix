@@ -925,7 +925,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			if err != nil {
 				return nil, fmt.Errorf("planner %q: %w", pm, err)
 			}
-			plannerSess := agent.NewSession(agent.PlannerPromptWithContext(prompt.memory.Block()))
+			plannerSess := agent.NewSession(agent.PlannerPromptWithContext(prompt.memory.StaticContext()))
 			// Planner owns an independent ledger/audit and use_capability frontend
 			// so its MCP calls cannot satisfy or poison Executor Delivery gates.
 			plannerLedger := capability.NewLedger()

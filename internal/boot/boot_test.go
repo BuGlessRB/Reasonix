@@ -61,7 +61,7 @@ func TestAgentKeepPolicyFromConfig(t *testing.T) {
 // cache-first wiring: a project REASONIX.md is discovered at boot and folded
 // into the session's system message (the cached prefix), and the `remember`
 // tool is registered. It builds a real Controller from a throwaway project dir.
-func TestBuildFoldsProjectMemoryIntoSystemPrompt(t *testing.T) {
+func TestBuildOwesProjectInstructionsToTheTurnNotThePrefix(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
@@ -86,22 +86,28 @@ api_key_env = "REASONIX_TEST_KEY_UNSET"
 	}
 	defer ctrl.Close()
 
-	// The system message is the cached prefix; it must contain both the base
-	// prompt and the discovered memory.
+	// The system message is the cached prefix: the base prompt is in it and the
+	// project's own rules are not.
 	sys := systemMessage(ctrl.History())
 	if !strings.Contains(sys, "BASE SYSTEM PROMPT") {
 		t.Fatalf("base prompt missing from system message:\n%s", sys)
 	}
-	if !strings.Contains(sys, "always run go vet before committing") {
-		t.Fatalf("project REASONIX.md not folded into system message:\n%s", sys)
-	}
-	// Base must come first so it stays a valid cache prefix when memory changes.
-	if strings.Index(sys, "BASE SYSTEM PROMPT") > strings.Index(sys, "always run go vet") {
-		t.Fatalf("memory should follow the base prompt, not precede it:\n%s", sys)
+	if strings.Contains(sys, "always run go vet before committing") {
+		t.Fatalf("project REASONIX.md reached the cached prefix:\n%s", sys)
 	}
 
+	// Discovery still happened, and the first real turn carries what it found.
 	if mem := ctrl.Memory(); mem == nil || len(mem.Docs) == 0 {
 		t.Fatal("controller memory set is empty after discovering REASONIX.md")
+	}
+	turn := ctrl.Compose("what should I do?")
+	if !strings.Contains(turn, "<project-instructions>") ||
+		!strings.Contains(turn, "always run go vet before committing") {
+		t.Fatalf("the first turn does not carry the discovered instructions:\n%s", turn)
+	}
+	// Owed once: a second turn does not re-send them.
+	if again := ctrl.Compose("and now?"); strings.Contains(again, "always run go vet before committing") {
+		t.Fatalf("instructions were re-sent on a later turn:\n%s", again)
 	}
 }
 
