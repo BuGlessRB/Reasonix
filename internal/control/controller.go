@@ -125,7 +125,8 @@ type Controller struct {
 	visionModel            string
 	visionProviderResolver func(string) (provider.Provider, error)
 	visionModelSelector    func(string, string) (string, bool)
-	systemPrompt           string
+	prompt                 controllerPromptState
+	pinnedContextLoader    PinnedContextLoader
 	sessionDir             string
 	commands               atomic.Pointer[[]command.Command]
 	// skills owns the session's discovered skills (enabled subset, full set, and
@@ -481,9 +482,12 @@ type Options struct {
 	VisionProviderResolver func(string) (provider.Provider, error)
 	VisionModelSelector    func(string, string) (string, bool)
 	SystemPrompt           string
-	SessionDir             string
-	SessionPath            string
-	Host                   *plugin.Host
+	// PinnedContextLoader snapshots the current session sidecar at turn
+	// admission. The Agent persists changes as append-only user-role revisions.
+	PinnedContextLoader PinnedContextLoader
+	SessionDir          string
+	SessionPath         string
+	Host                *plugin.Host
 	// MCPHostProfile is the surface lazily created hosts declare; injected
 	// hosts keep their own profile.
 	MCPHostProfile plugin.HostProfile
@@ -656,7 +660,8 @@ func New(opts Options) *Controller {
 		visionModel:                       strings.TrimSpace(opts.VisionModel),
 		visionProviderResolver:            opts.VisionProviderResolver,
 		visionModelSelector:               opts.VisionModelSelector,
-		systemPrompt:                      opts.SystemPrompt,
+		prompt:                            newControllerPromptState(opts.SystemPrompt, opts.Executor),
+		pinnedContextLoader:               opts.PinnedContextLoader,
 		sessionDir:                        opts.SessionDir,
 		sessionPath:                       opts.SessionPath,
 		commands:                          atomic.Pointer[[]command.Command]{},
@@ -829,23 +834,6 @@ func (c *Controller) SetProviderResolver(r provider.Resolver) {
 	c.mu.Unlock()
 }
 
-// ApplyExtensionSystemPrompt swaps the executor to a fresh session carrying
-// the extension strategy's final system prompt and makes it the controller's
-// rotation prompt, so /new and /clear keep the strategy-composed prompt too.
-// Boot calls it when a system_prompt.build replacement changed the prompt
-// after the controller (and its session) was built with the host-composed
-// one. It must run before any turn or history resume: the fresh session holds
-// only the system message, so a later resume cleanly layers history on top.
-func (c *Controller) ApplyExtensionSystemPrompt(prompt string) {
-	if c == nil || c.executor == nil {
-		return
-	}
-	c.mu.Lock()
-	c.systemPrompt = prompt
-	c.mu.Unlock()
-	c.executor.SetSession(agent.NewSession(prompt))
-}
-
 // SetOnSessionRecovered installs the ownership handoff invoked before the
 // controller commits to an automatically created recovery branch. Frontends
 // that acquire their session owner after controller construction (for example
@@ -931,7 +919,7 @@ func (c *Controller) recordDisplayForNewUser(startMessages int, display string) 
 		startMessages = len(msgs)
 	}
 	for _, m := range msgs[startMessages:] {
-		if m.Role == provider.RoleUser {
+		if agent.IsUserAuthoredTurnMessage(m) {
 			c.recordDisplay(m.Content, display)
 			return
 		}
@@ -948,7 +936,7 @@ func (c *Controller) markEditedForNewUser(startMessages int, original string) {
 		startMessages = len(msgs)
 	}
 	for i := startMessages; i < len(msgs); i++ {
-		if msgs[i].Role != provider.RoleUser {
+		if !agent.IsUserAuthoredTurnMessage(msgs[i]) {
 			continue
 		}
 		if agent.UserMessageText(msgs[i]) == original {
@@ -2048,7 +2036,7 @@ func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 	if err != nil {
 		return err
 	}
-	err = c.runner.Run(ctx, modelInput)
+	err = c.runModelTurn(ctx, modelInput)
 	return err
 }
 
@@ -2976,8 +2964,9 @@ func (c *Controller) maybeSessionStart(ctx context.Context) {
 }
 
 // NewSession snapshots the current conversation, rotates to a fresh file, and
-// resets the executor to a clean session carrying the same system prompt. It
-// ends the old session and starts the new one for lifecycle hooks.
+// resets the executor to a clean session carrying the same base system prompt.
+// Session-owned pinned context intentionally starts empty. It ends the old
+// session and starts the new one for lifecycle hooks.
 func (c *Controller) NewSession() error {
 	if c.executor == nil {
 		return nil
@@ -3012,7 +3001,7 @@ func (c *Controller) NewSession() error {
 	if c.sessionDir != "" {
 		freshPath = agent.NewSessionPath(c.sessionDir, c.label)
 	}
-	freshSession := agent.NewSession(c.systemPrompt)
+	freshSession := agent.NewSession(c.basePrompt())
 	commitTransition, err := c.prepareSessionTransition(freshPath, "new", freshSession)
 	if err != nil {
 		return fmt.Errorf("bind new session: %w", err)
@@ -3050,7 +3039,8 @@ func (c *Controller) NewSession() error {
 }
 
 // ClearSession discards the current conversation without preserving it in
-// resume/history, then rotates to a clean session carrying the same system prompt.
+// resume/history, then rotates to a clean session carrying the same base system
+// prompt and no pinned context.
 func (c *Controller) ClearSession() error {
 	if c.executor == nil {
 		return nil
@@ -3103,7 +3093,7 @@ func (c *Controller) ClearSession() error {
 	if c.sessionDir != "" {
 		freshPath = agent.NewSessionPath(c.sessionDir, c.label)
 	}
-	freshSession := agent.NewSession(c.systemPrompt)
+	freshSession := agent.NewSession(c.basePrompt())
 	commitTransition, err := c.prepareSessionTransition(freshPath, "clear", freshSession)
 	if err != nil {
 		if destroy.Async {
@@ -4287,10 +4277,7 @@ func interruptedTurnCrossesLaterTurn(msgs []provider.Message, start int) bool {
 	}
 	turns := 0
 	for _, msg := range msgs[start:] {
-		if msg.Role != provider.RoleUser || agent.IsCompactionSummary(msg) {
-			continue
-		}
-		if _, ok := agent.SteerText(msg.Content); ok {
+		if !agent.IsUserAuthoredTurnMessage(msg) {
 			continue
 		}
 		turns++
@@ -4384,13 +4371,7 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 	keptUser := false
 	userEnd := idx
 	for i, m := range msgs[idx:] {
-		if m.Role != provider.RoleUser {
-			continue
-		}
-		if agent.IsHostGeneratedUserMessage(m) {
-			continue
-		}
-		if _, ok := agent.SteerText(m.Content); ok {
+		if !agent.IsUserAuthoredTurnMessage(m) {
 			continue
 		}
 		m.Content = StripComposePrefixes(m.Content)
@@ -4399,7 +4380,7 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 		userEnd = idx + i + 1
 		break
 	}
-	if !keptUser && fallback.Role == provider.RoleUser {
+	if !keptUser && agent.IsUserAuthoredTurnMessage(fallback) {
 		fallback.Content = StripComposePrefixes(fallback.Content)
 		if strings.TrimSpace(fallback.Content) != "" {
 			fallback.Images = append([]string(nil), fallback.Images...)
@@ -4512,18 +4493,15 @@ func (c *Controller) inFlightTurnStartedAt() time.Time {
 // sidecars without timestamps.
 func resolveInterruptedTurnStart(msgs []provider.Message, idx int, preserveUser bool, startedAt time.Time, fallback provider.Message) (int, bool) {
 	fallbackContent := ""
-	if fallback.Role == provider.RoleUser {
+	if agent.IsUserAuthoredTurnMessage(fallback) {
 		fallbackContent = StripComposePrefixes(fallback.Content)
 	}
 	matchesKind := func(m provider.Message) bool {
-		if m.Role != provider.RoleUser {
+		if m.Role != provider.RoleUser || agent.IsPinnedContextRevision(m) {
 			return false
 		}
 		if preserveUser {
-			if agent.IsHostGeneratedUserMessage(m) {
-				return false
-			}
-			if _, ok := agent.SteerText(m.Content); ok {
+			if !agent.IsUserAuthoredTurnMessage(m) {
 				return false
 			}
 			if fallbackContent != "" && StripComposePrefixes(m.Content) != fallbackContent {

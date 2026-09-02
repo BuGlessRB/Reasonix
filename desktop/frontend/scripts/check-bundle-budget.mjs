@@ -178,9 +178,11 @@ console.log("\nbundle budgets");
 // test channel measures 461.323 KiB. Deferring selection ownership until a
 // real range exists (#9703/#9711) and adding the session takeover banners
 // move the combined path to 462.2 KiB. Local spectator reclaim adds the
-// desktop-vs-remote command branch and measures 462.205 KiB; retain it with
-// the smallest one-decimal ratchet.
-const initialJSBudgetKiB = 462.3;
+// desktop-vs-remote command branch. Sticky Context's session-scoped file chips
+// bring the merged stable path to 462.587 KiB. Windows' embedded build metadata
+// lands just above the rounded 462.6 KiB boundary; retain one cross-platform
+// decimal step without widening any chunk or raw gate.
+const initialJSBudgetKiB = 462.7;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -241,9 +243,10 @@ for (const path of localeChunks) {
   // session-catalog recovery guidance on the merged base moves zh-TW to
   // 60.757 KiB; retain only its exact one-decimal ceiling.
   // Session takeover adds ~20 locale keys per dialect (banners, dialog,
-  // reclaim); Chinese compresses poorly (3-byte UTF-8). The combined chunks
-  // measure roughly 60.3 KiB zh and 61.1 KiB zh-TW; retain one decimal headroom.
-  const budget = name.startsWith("zh-TW-") ? 61.2 * 1024 : 60.4 * 1024;
+  // reclaim), while Sticky Context adds file-state and limit diagnostics. The
+  // merged stable chunks measure 60.395 KiB zh and 61.232 KiB zh-TW; retain
+  // only the next one-decimal ceiling for each dialect.
+  const budget = name.startsWith("zh-TW-") ? 61.3 * 1024 : 60.4 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -312,8 +315,6 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // session-version host, they measure 2452.7 KiB; the recovery coordinator and
 // dialog remain lazy. Completion uncertainty adds a distinct terminal notice
 // and localized startup copy without collapsing into recovery-paused UX.
-// Latest-base transcript settle ownership brings the measured path to
-// 2452.773 KiB; isolated conversation forks bring the combined tree to
 // 2454.719 KiB on the release toolchain. Completion uncertainty brings the
 // final merged payload to 2455.154 KiB.
 // Ask turn fencing, rejection reconciliation, and the localized submit-failure
@@ -322,9 +323,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // remaining bounded payload. The retained recovery receipt makes the stable
 // path 2465.105 KiB raw; the merged test channel measures 2464.979 KiB.
 // Session takeover banners and #9703/#9711's provisional-selection handoff
-// move the measured stable and test paths to 2468.2 KiB. The local spectator
-// reclaim branch measures 2468.222 KiB raw; retain it with the smallest
-// one-decimal ratchet.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_468.3 : 2_468.3;
+// combine with Sticky Context's pinned-file state at 2469.125 KiB raw on the
+// merged stable path. Retain only the next one-decimal ceiling.
+const rawInitialBudgetKiB = 2_469.2;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
