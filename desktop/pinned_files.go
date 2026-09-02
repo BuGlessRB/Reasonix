@@ -440,7 +440,6 @@ func (a *App) GetPinnedFilesForTab(tabID string) ([]PinnedFileInfo, error) {
 	if err != nil {
 		return []PinnedFileInfo{}, err
 	}
-	tab.setPinnedFiles(state.Files)
 	infos := buildPinnedContext(root, state.Files).Infos
 	if infos == nil {
 		infos = []PinnedFileInfo{}

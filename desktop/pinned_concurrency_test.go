@@ -126,6 +126,32 @@ func TestGetPinnedFilesForTabReturnsNonNilEmptyList(t *testing.T) {
 	}
 }
 
+func TestGetPinnedFilesForTabDoesNotOverwriteNewerCachedPins(t *testing.T) {
+	app, tab, _, path := pinnedConcurrencyFixture(t, nil)
+	for _, name := range []string{"old.md", "new.md"} {
+		if err := os.WriteFile(filepath.Join(tab.WorkspaceRoot, name), []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := savePinnedContextState(path, []string{"old.md"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Model the stale-read window: Get loaded the old sidecar while a newer
+	// Pin/Unpin or session binding already published the current tab cache.
+	tab.setPinnedFiles([]string{"new.md"})
+	infos, err := app.GetPinnedFilesForTab(tab.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(infos) != 1 || infos[0].Path != "old.md" {
+		t.Fatalf("GetPinnedFilesForTab = %#v, want old sidecar snapshot", infos)
+	}
+	if got := tab.GetPinnedFiles(); len(got) != 1 || got[0] != "new.md" {
+		t.Fatalf("read-only GetPinnedFilesForTab overwrote newer cache: %v", got)
+	}
+}
+
 func TestNewSessionWaitsForPinAndClearsItsResult(t *testing.T) {
 	isolateDesktopUserDirs(t)
 	oldRef, _ := configureSwitchableDefaultModels(t)
