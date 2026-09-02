@@ -32,12 +32,12 @@
         },
         {
           "title": {
-            "en": "会话所有权",
-            "zh": "会话所有权"
+            "en": "Session Ownership (Chinese)",
+            "zh": "会话所有权（中文）"
           },
           "body": {
-            "en": "Learn how cooperative session takeover and reclaim work across Desktop and CLI.",
-            "zh": "了解协作式会话接管与取回如何在桌面端与 CLI 之间工作。"
+            "en": "Chinese guide to cooperative session takeover and reclaim across Desktop and CLI.",
+            "zh": "协作式会话接管与取回在桌面端和 CLI 中工作方式的中文指南。"
           },
           "href": "https://github.com/esengine/DeepSeek-Reasonix/blob/403acc1128a3367108d8c8f7d0ace54c83f368b2/docs/SESSION_OWNERSHIP.zh-CN.md"
         }
