@@ -294,7 +294,7 @@ type App struct {
 	// index-migration worker's cancel handle. Never held while calling
 	// controller or session methods.
 	historySliceMu              sync.Mutex
-	historyIndexRebuilds        map[string]struct{}
+	historyIndexRebuilds        map[string]chan struct{}
 	historyIndexMigrationCancel context.CancelFunc
 	historyDerived              historyDerivedCache
 

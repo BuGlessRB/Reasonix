@@ -62,7 +62,10 @@ func newLiveHistoryTab(t *testing.T, app *App, dir, sessionPath string, sess *ag
 		Label:       "test",
 		Sink:        event.Discard,
 	})
-	t.Cleanup(ctrl.Close)
+	t.Cleanup(func() {
+		waitHistoryIndexRebuilds(t, app)
+		ctrl.Close()
+	})
 	tab := &WorkspaceTab{
 		ID:          "test",
 		Scope:       "global",
@@ -75,6 +78,30 @@ func newLiveHistoryTab(t *testing.T, app *App, dir, sessionPath string, sess *ag
 	app.tabOrder = []string{tab.ID}
 	app.activeTabID = tab.ID
 	return tab
+}
+
+func waitHistoryIndexRebuilds(t *testing.T, app *App) {
+	t.Helper()
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	for {
+		app.historySliceMu.Lock()
+		pending := make([]<-chan struct{}, 0, len(app.historyIndexRebuilds))
+		for _, done := range app.historyIndexRebuilds {
+			pending = append(pending, done)
+		}
+		app.historySliceMu.Unlock()
+		if len(pending) == 0 {
+			return
+		}
+		for _, done := range pending {
+			select {
+			case <-done:
+			case <-deadline.C:
+				t.Fatal("history display-index rebuild did not finish during cleanup")
+			}
+		}
+	}
 }
 
 // newColdHistoryTab installs a controller-less tab; the session file is

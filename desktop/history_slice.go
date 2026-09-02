@@ -1642,17 +1642,19 @@ func (a *App) kickHistoryIndexRebuild(sessionPath string) {
 	}
 	a.historySliceMu.Lock()
 	if a.historyIndexRebuilds == nil {
-		a.historyIndexRebuilds = map[string]struct{}{}
+		a.historyIndexRebuilds = map[string]chan struct{}{}
 	}
 	if _, ok := a.historyIndexRebuilds[sessionPath]; ok {
 		a.historySliceMu.Unlock()
 		return
 	}
-	a.historyIndexRebuilds[sessionPath] = struct{}{}
+	done := make(chan struct{})
+	a.historyIndexRebuilds[sessionPath] = done
 	a.historySliceMu.Unlock()
 	a.goSafe("historyIndexRebuild", func() {
 		defer func() {
 			a.historySliceMu.Lock()
+			close(done)
 			delete(a.historyIndexRebuilds, sessionPath)
 			a.historySliceMu.Unlock()
 		}()
@@ -1671,17 +1673,19 @@ func (a *App) kickHistoryReadModelRepair(sessionPath string) {
 	key := "read-model:" + agent.CanonicalSessionPath(sessionPath)
 	a.historySliceMu.Lock()
 	if a.historyIndexRebuilds == nil {
-		a.historyIndexRebuilds = map[string]struct{}{}
+		a.historyIndexRebuilds = map[string]chan struct{}{}
 	}
 	if _, ok := a.historyIndexRebuilds[key]; ok {
 		a.historySliceMu.Unlock()
 		return
 	}
-	a.historyIndexRebuilds[key] = struct{}{}
+	done := make(chan struct{})
+	a.historyIndexRebuilds[key] = done
 	a.historySliceMu.Unlock()
 	a.goSafe("historyReadModelRepair", func() {
 		defer func() {
 			a.historySliceMu.Lock()
+			close(done)
 			delete(a.historyIndexRebuilds, key)
 			a.historySliceMu.Unlock()
 		}()
