@@ -28,6 +28,9 @@ export interface RemoteHost {
   workspace?: string;
   workspaces?: string[];
   serveInstall?: string;
+  // Where this host's model credentials come from: "local" resolves them on
+  // this machine over the tunnel, "remote" leaves it reading its own config.
+  provider?: string;
   useSSHConfig?: boolean;
   passphraseEnv?: string;
   passwordEnv?: string;
@@ -74,6 +77,7 @@ export interface RemoteHostEdit {
   // the two apart is how they would come to disagree about which one that is.
   workspaces?: string[];
   serveInstall?: string;
+  provider?: string;
   // Layer ~/.ssh/config under whatever this row leaves unset. With it the alias
   // is the address, which is what makes an imported row complete on its own.
   useSSHConfig?: boolean;

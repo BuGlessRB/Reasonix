@@ -20,6 +20,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/provider"
 	"reasonix/internal/surface"
 	"reasonix/internal/update"
 )
@@ -145,6 +146,10 @@ type HubOptions struct {
 	// adopts. Unset is Serve; a window sets Desktop, or its turns are filed
 	// under a frontend the person never ran.
 	Surface surface.Surface
+	// ProviderResolver routes every pane's model roles through a caller-owned
+	// catalog. A bootstrapped serve sets the broker's, so a pane opened later
+	// reaches the credentials the first one did; nil keeps the local config.
+	ProviderResolver provider.Resolver
 	// Remote reaches workspaces on other machines. Nil refuses them: a server
 	// that dials onward on a request's say-so is someone else's way in.
 	Remote RemoteAttacher
@@ -286,6 +291,8 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 		Stderr:        os.Stderr,
 		StatsSource:   h.surface(),
 		BalanceStore:  h.wallets,
+
+		ProviderResolver: h.opts.ProviderResolver,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", root, err)

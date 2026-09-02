@@ -232,6 +232,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	portFile := fs.String("port-file", "", "write the actual bound listen address (host:port) to this file after binding")
 	tokenFile := fs.String("token-file", "", "read the auth=token pre-shared token from this file (overrides --token; keeps the secret out of argv)")
 	pidFile := fs.String("pid-file", "", "write the server process id to this file")
+	broker := registerBrokerFlags(fs)
 	openBrowser := fs.Bool("open", opts.openBrowser, "open the Web UI in the default browser")
 	noOpen := fs.Bool("no-open", false, "do not open the Web UI in the default browser")
 	if code, ok := parseCommandFlags(fs, args); !ok {
@@ -265,19 +266,8 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 		return 2
 	}
 
-	// --hash-password: generate a bcrypt hash and exit.
-	if *hashPassword {
-		if *password == "" {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--hash-password requires --password")
-			return 1
-		}
-		h, err := serve.HashPassword(*password)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-			return 1
-		}
-		fmt.Println(h)
-		return 0
+	if code, done := printPasswordHash(*hashPassword, *password); done {
+		return code
 	}
 
 	ctx := context.Background()
@@ -367,8 +357,17 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	// The loopback-only provider setup surface stores the missing credential and
 	// rebuilds this controller in place before the normal web UI is exposed.
 	paneSink := reporter.Wrap(bc)
+	// A bootstrapped serve resolves providers over the tunnel back to the
+	// machine that started it, so this host needs no key and no egress of its
+	// own. Unset leaves boot on its ordinary config-backed path.
+	providerResolver, err := broker.resolver()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 2
+	}
 	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, false, paneSink, profile, cliBuildOverrides{
 		Version: opts.version, OnSessionRecovered: cliSessionRecoveredHandler(leases),
+		ProviderResolver: providerResolver,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
@@ -398,7 +397,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 
 	// A hub, so this frontend drives several sessions at once the way the studio
 	// window does. The session this command was started for is the first pane.
-	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg, DecorateSink: reporter.Wrap})
+	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg, DecorateSink: reporter.Wrap, ProviderResolver: providerResolver})
 	adoptFirstPane(hub, ctrl, bc, paneSink, serveCfg, leases)
 	return runServeFrontend(ctrl, hub, serveCfg, serveFrontendOptions{
 		command: opts.command, address: *addr,

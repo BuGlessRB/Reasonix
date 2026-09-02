@@ -28,6 +28,7 @@ type RemoteHostEdit struct {
 	Workspace     string   `json:"workspace"`
 	Workspaces    []string `json:"workspaces"`
 	ServeInstall  string   `json:"serveInstall"`
+	Provider      string   `json:"provider"`
 	UseSSHConfig  bool     `json:"useSSHConfig"`
 	PassphraseEnv string   `json:"passphraseEnv"`
 	PasswordEnv   string   `json:"passwordEnv"`
@@ -69,6 +70,7 @@ func (h *Hub) saveRemoteHost(w http.ResponseWriter, r *http.Request) {
 		Workspace:     strings.TrimSpace(body.Workspace),
 		Workspaces:    body.Workspaces,
 		ServeInstall:  strings.TrimSpace(body.ServeInstall),
+		Provider:      strings.TrimSpace(body.Provider),
 		UseSSHConfig:  body.UseSSHConfig,
 		PassphraseEnv: strings.TrimSpace(body.PassphraseEnv),
 		PasswordEnv:   strings.TrimSpace(body.PasswordEnv),

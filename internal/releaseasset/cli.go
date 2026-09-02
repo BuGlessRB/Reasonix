@@ -37,16 +37,64 @@ var cliReleaseVersionPattern = regexp.MustCompile(`^v(?:0|[1-9][0-9]*)\.(?:0|[1-
 // verifies it against SHA256SUMS from the same immutable release, and returns
 // the extracted executable bytes.
 func DownloadCLI(ctx context.Context, client *http.Client, version, goos, goarch string) ([]byte, error) {
-	if !cliReleaseVersionPattern.MatchString(strings.TrimSpace(version)) {
-		return nil, fmt.Errorf("remote CLI download requires a released version, got %q", version)
-	}
-	if goos != "linux" && goos != "darwin" && goos != "windows" {
-		return nil, fmt.Errorf("remote CLI download does not support OS %q", goos)
-	}
-	if goarch != "amd64" && goarch != "arm64" {
-		return nil, fmt.Errorf("remote CLI download does not support architecture %q", goarch)
+	if err := supportedCLITarget(version, goos, goarch); err != nil {
+		return nil, err
 	}
 	return downloadCLIFromBase(ctx, client, cliReleaseBase, version, goos, goarch, true)
+}
+
+// CLIDownload is what another machine needs to fetch its own kernel: where the
+// archive is, and the digest to check it against. The digest is resolved here,
+// over the redirect-guarded connection this machine already trusts — a host
+// that fetched both the archive and its checksums itself would be verifying
+// one thing against another the same network handed it.
+type CLIDownload struct {
+	URL        string // the release archive
+	Asset      string // its file name, which is also what the digest names
+	SHA256     string // lowercase hex, 64 chars
+	Executable string // the binary inside the archive
+}
+
+// ResolveCLIDownload reads the release's SHA256SUMS and returns where the
+// archive is and what it must hash to. It downloads no archive: the point is
+// to let the machine that will run it do that over its own connection.
+func ResolveCLIDownload(ctx context.Context, client *http.Client, version, goos, goarch string) (CLIDownload, error) {
+	if err := supportedCLITarget(version, goos, goarch); err != nil {
+		return CLIDownload{}, err
+	}
+	if client == nil {
+		return CLIDownload{}, errors.New("remote CLI download requires an HTTP client")
+	}
+	assetName, executable := cliAsset(goos, goarch)
+	releaseBase := strings.TrimRight(cliReleaseBase, "/") + "/" + url.PathEscape(version) + "/"
+
+	guarded := *client
+	guarded.CheckRedirect = redirectguard.Follow(officialHosts...)
+	checksums, err := fetchBounded(ctx, &guarded, releaseBase+"SHA256SUMS", maxCLIChecksumBytes)
+	if err != nil {
+		return CLIDownload{}, fmt.Errorf("download SHA256SUMS: %w", err)
+	}
+	digest, err := digestFor(assetName, checksums)
+	if err != nil {
+		return CLIDownload{}, err
+	}
+	return CLIDownload{
+		URL: releaseBase + assetName, Asset: assetName,
+		SHA256: digest, Executable: executable,
+	}, nil
+}
+
+func supportedCLITarget(version, goos, goarch string) error {
+	if !cliReleaseVersionPattern.MatchString(strings.TrimSpace(version)) {
+		return fmt.Errorf("remote CLI download requires a released version, got %q", version)
+	}
+	if goos != "linux" && goos != "darwin" && goos != "windows" {
+		return fmt.Errorf("remote CLI download does not support OS %q", goos)
+	}
+	if goarch != "amd64" && goarch != "arm64" {
+		return fmt.Errorf("remote CLI download does not support architecture %q", goarch)
+	}
+	return nil
 }
 
 func downloadCLIFromBase(ctx context.Context, client *http.Client, base, version, goos, goarch string, official bool) ([]byte, error) {
@@ -120,6 +168,19 @@ func fetchBounded(ctx context.Context, client *http.Client, rawURL string, limit
 }
 
 func verifyChecksum(data []byte, assetName string, checksums []byte) error {
+	want, err := digestFor(assetName, checksums)
+	if err != nil {
+		return err
+	}
+	got := sha256.Sum256(data)
+	if hex.EncodeToString(got[:]) != want {
+		return fmt.Errorf("SHA-256 mismatch for %s", assetName)
+	}
+	return nil
+}
+
+// digestFor reads one asset's expected digest out of a SHA256SUMS body.
+func digestFor(assetName string, checksums []byte) (string, error) {
 	want := ""
 	for line := range strings.SplitSeq(string(checksums), "\n") {
 		fields := strings.Fields(line)
@@ -127,21 +188,17 @@ func verifyChecksum(data []byte, assetName string, checksums []byte) error {
 			continue
 		}
 		if want != "" {
-			return fmt.Errorf("SHA256SUMS contains duplicate entries for %s", assetName)
+			return "", fmt.Errorf("SHA256SUMS contains duplicate entries for %s", assetName)
 		}
 		want = strings.ToLower(fields[0])
 	}
 	if len(want) != sha256.Size*2 {
-		return fmt.Errorf("SHA256SUMS has no valid entry for %s", assetName)
+		return "", fmt.Errorf("SHA256SUMS has no valid entry for %s", assetName)
 	}
 	if _, err := hex.DecodeString(want); err != nil {
-		return fmt.Errorf("SHA256SUMS has an invalid digest for %s", assetName)
+		return "", fmt.Errorf("SHA256SUMS has an invalid digest for %s", assetName)
 	}
-	got := sha256.Sum256(data)
-	if hex.EncodeToString(got[:]) != want {
-		return fmt.Errorf("SHA-256 mismatch for %s", assetName)
-	}
-	return nil
+	return want, nil
 }
 
 func extractCLI(archive []byte, assetName, executable string) ([]byte, error) {

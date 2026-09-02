@@ -318,6 +318,7 @@ user          = "dev"
 identity_file = "~/.ssh/id_ed25519"
 workspace     = "~/projects/app"
 serve_install = "auto"            # Remote CLI: auto | npm | upload | never
+provider      = "local"           # Model credentials: local (this machine, over the tunnel) | remote (that host's own)
 
 [[remote.hosts.forwards]]
 type   = "local"                  # local (-L) | remote (-R)
@@ -356,7 +357,55 @@ never auto-accepted.
 Remote-side state lives under the remote host's `~/.reasonix/remote/`:
 `serve-<workspace-slug>.json` (pid, bound loopback address, workspace),
 `serve-<slug>.token` (0600; the auth token, passed to serve via `--token-file`
-so it never appears in `ps`), and `serve-<slug>.log`.
+so it never appears in `ps`), `serve-<slug>.broker` (0600; the provider broker
+token, see below), and `serve-<slug>.log`.
+
+### Getting the kernel there
+
+The remote runs a `reasonix serve`. The binary is a static Go build — no
+runtime, no Node, no glibc — so putting it there is a file transfer, not an
+install. `serve_install = "auto"` tries, in order:
+
+1. **The remote fetches its own release.** Reasonix reads `SHA256SUMS` here and
+   hands that host the archive URL and the digest; the host downloads over its
+   own connection and keeps the archive only if it matches. Nothing but the
+   command crosses the SSH link, and a machine in a datacenter pulls the ~21MB
+   archive far faster than a laptop can push it.
+2. **Upload this machine's binary**, when the platforms match.
+3. **Download here and push over SFTP**, for a host with no route to the
+   release.
+4. **npm**, last. `npm i -g reasonix` installs the same static binary but needs
+   Node ≥18 over there to do it; it stays because a network that mirrors npm
+   while throttling GitHub is a real one.
+
+Set `serve_install` to `npm`, `upload` or `never` to take exactly one route.
+`reasonix remote test <name>` reports which routes are open on a host before
+you connect, and names what closes each one that is not.
+
+### Model credentials
+
+A remote session resolves its models on **your** machine by default. The
+connection carries a reverse (`-R`) forward back to a provider broker Reasonix
+runs on loopback here; the remote kernel calls that instead of a model
+endpoint, and the request is issued from this machine with this machine's key.
+
+So a remote host needs **no API key of its own and no egress to the model
+API** — a locked-down build machine works. The key is never written to the
+remote disk: only a per-connection broker token is, and only as a 0600 file.
+The remote also never sees the endpoint, headers, or proxy settings behind a
+provider; it sees the same catalog you do and nothing else.
+
+Set `provider = "remote"` on a host to leave it resolving providers from its
+own config instead, for a machine whose providers are deliberately not yours.
+`reasonix remote serve start` never uses a broker: that serve is meant to
+outlive the command that started it, and a broker published from a command that
+has exited is a port nobody holds.
+
+Two costs are worth knowing. Model traffic now leaves through your own uplink
+rather than the remote's, which is a downgrade when the remote sits on a much
+fatter pipe. And the models available to a remote pane are the ones configured
+here, so a provider only that host had configured no longer appears unless you
+switch it to `provider = "remote"`.
 
 In the desktop app, manage hosts under **Settings -> Remote SSH**, then use the
 status-bar chip or the host row's **Remote explorer** button to browse and edit
@@ -364,12 +413,13 @@ files over SFTP, manage port forwards, and start/open the remote workspace.
 Opening a workspace creates a separate native Reasonix window, similar to a
 VS Code Remote SSH window. The primary window owns the SSH tunnel; the remote
 window is an isolated, lightweight shell and does not restore or acquire local
-conversation sessions. The remote web page uses the provider configuration and
-API keys on the **remote** host — the desktop never exposes its own providers
-to a remote host. If that host is missing the selected Provider's API key, the
-window shows the authenticated setup page first, saves the key only in the
-remote Reasonix credential file, and activates the Provider without restarting
-the remote Serve process. A transient SSH outage keeps the remote window open;
+conversation sessions. The remote window uses **this** machine's providers
+through the broker described above, so opening a workspace on a host that has
+never held an API key just works. On a host set to `provider = "remote"` the
+old path applies: the window shows the authenticated setup page first, saves
+the key only in the remote Reasonix credential file, and activates the Provider
+without restarting the remote Serve process. A transient SSH outage keeps the
+remote window open;
 the desktop reconnects in the background, re-attaches its loopback forward, and
 reloads the window against the recovered Serve. An authentication or host-key
 failure is terminal and closes the unusable remote window instead.

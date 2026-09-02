@@ -11,11 +11,14 @@ type StatePaths struct {
 	Dir       string // ~/.reasonix/remote
 	StateJSON string
 	TokenFile string
-	LogFile   string
-	PortFile  string
-	PidFile   string
-	LockDir   string
-	LockOwner string
+	// BrokerTokenFile authenticates this serve to the provider broker on the
+	// machine that started it. Written only when one was configured.
+	BrokerTokenFile string
+	LogFile         string
+	PortFile        string
+	PidFile         string
+	LockDir         string
+	LockOwner       string
 }
 
 // shellQuote wraps s in single quotes safe for POSIX sh, escaping embedded
@@ -25,7 +28,17 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// LaunchCommand builds the `sh -c` script that starts a detached serve in
+// LaunchSpec is what one serve is started with beyond where its state lives.
+type LaunchSpec struct {
+	Bin       string
+	Workspace string
+	// BrokerAddr is the remote loopback address an -R forward publishes the
+	// starting machine's provider broker on. Empty leaves this serve resolving
+	// providers — and needing credentials — of its own.
+	BrokerAddr string
+}
+
+// LaunchCommand builds the `sh -c` script that starts a detached serve in the
 // workspace, writing the port/pid files and appending output to the log. The
 // binary path and every operand are single-quote-escaped so hostile paths
 // (spaces, quotes, `; rm -rf ~`) cannot break out.
@@ -37,23 +50,35 @@ func shellQuote(s string) string {
 // cannot read serve output; serve is launched with `--port-file`, which
 // suppresses its token share line, so the token never reaches the log.
 // It echoes the shell's $! so the caller can record the pid immediately.
-func LaunchCommand(bin, workspace string, p StatePaths) string {
+func LaunchCommand(spec LaunchSpec, p StatePaths) string {
 	return fmt.Sprintf(
 		"mkdir -p %s && cd %s && rm -f %s %s && umask 077 && : >>%s && chmod 600 %s && "+
 			"SX=; command -v setsid >/dev/null 2>&1 && SX=setsid; "+
-			"$SX nohup %s serve --addr 127.0.0.1:0 --auth token --token-file %s --port-file %s --pid-file %s </dev/null >>%s 2>&1 & echo $!",
+			"$SX nohup %s serve --addr 127.0.0.1:0 --auth token --token-file %s --port-file %s --pid-file %s%s </dev/null >>%s 2>&1 & echo $!",
 		shellQuote(p.Dir),
-		shellQuote(workspace),
+		shellQuote(spec.Workspace),
 		shellQuote(p.PortFile),
 		shellQuote(p.PidFile),
 		shellQuote(p.LogFile),
 		shellQuote(p.LogFile),
-		shellQuote(bin),
+		shellQuote(spec.Bin),
 		shellQuote(p.TokenFile),
 		shellQuote(p.PortFile),
 		shellQuote(p.PidFile),
+		posixBrokerArgs(spec, p),
 		shellQuote(p.LogFile),
 	)
+}
+
+// posixBrokerArgs is the broker half of the serve command line, empty when
+// this launch configured none. The token rides a file for the same reason the
+// serve token does: argv is world-readable in `ps`.
+func posixBrokerArgs(spec LaunchSpec, p StatePaths) string {
+	if spec.BrokerAddr == "" || p.BrokerTokenFile == "" {
+		return ""
+	}
+	return " --provider-broker " + shellQuote(spec.BrokerAddr) +
+		" --provider-broker-token-file " + shellQuote(p.BrokerTokenFile)
 }
 
 // StopCommand builds a script that TERMs the pid, waits up to ~5s, then KILLs

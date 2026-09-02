@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"reasonix/internal/releaseasset"
 	"reasonix/internal/remote/sftpfs"
 )
 
@@ -40,13 +41,14 @@ func (windowsShell) Paths(home, workspace string) StatePaths {
 	return pathsFor(toSFTPPath(home), toSFTPPath(workspace))
 }
 
-func (windowsShell) Launch(bin, workspace string, p StatePaths) string {
+func (windowsShell) Launch(spec LaunchSpec, p StatePaths) string {
 	// The serve runs under a second PowerShell, reached the same encoded way,
 	// so its own arguments never pass through a round of shell parsing.
-	inner := "& " + psQuote(toShellPath(bin)) + " serve --addr 127.0.0.1:0 --auth token" +
+	inner := "& " + psQuote(toShellPath(spec.Bin)) + " serve --addr 127.0.0.1:0 --auth token" +
 		" --token-file " + psQuote(toShellPath(p.TokenFile)) +
 		" --port-file " + psQuote(toShellPath(p.PortFile)) +
 		" --pid-file " + psQuote(toShellPath(p.PidFile)) +
+		windowsBrokerArgs(spec, p) +
 		" *>> " + psQuote(toShellPath(p.LogFile))
 
 	// OpenSSH ends a session's children with the session, Start-Process included
@@ -59,13 +61,28 @@ func (windowsShell) Launch(bin, workspace string, p StatePaths) string {
 		"Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath " +
 			psQuote(toShellPath(p.PortFile)) + "," + psQuote(toShellPath(p.PidFile)),
 		"$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=" +
-			psQuote(launch) + "; CurrentDirectory=" + psQuote(toShellPath(workspace)) + "}",
+			psQuote(launch) + "; CurrentDirectory=" + psQuote(toShellPath(spec.Workspace)) + "}",
 		"if ($r.ReturnValue -ne 0) { throw \"Win32_Process.Create returned $($r.ReturnValue)\" }",
 		// The wrapper's pid. Serve writes its own to --pid-file, which is what
 		// everything downstream treats as authoritative.
 		"$r.ProcessId",
 	}, "; ")
 	return psCommand(outer)
+}
+
+// windowsBrokerArgs is the broker half of the serve command line, empty when
+// this launch configured none. The token rides a file rather than argv, which
+// any account on the machine can read out of the process list.
+func windowsBrokerArgs(spec LaunchSpec, p StatePaths) string {
+	if spec.BrokerAddr == "" || p.BrokerTokenFile == "" {
+		return ""
+	}
+	return " --provider-broker " + psQuote(spec.BrokerAddr) +
+		" --provider-broker-token-file " + psQuote(toShellPath(p.BrokerTokenFile))
+}
+
+func (windowsShell) Fetch(d releaseasset.CLIDownload, dir, bin string) string {
+	return WindowsFetchCommand(d, dir, bin)
 }
 
 // Alive reports 1 only when the pid is running and its command line is the
@@ -94,6 +111,10 @@ func (windowsShell) Logs(logFile string, n int) string {
 	return psCommand("if (Test-Path -LiteralPath " + path + ") { Get-Content -LiteralPath " + path +
 		" -Tail " + fmt.Sprint(n) + " -ErrorAction SilentlyContinue }")
 }
+
+// Downloader is never empty on Windows: Invoke-WebRequest is part of the shell
+// this whole file already requires.
+func (windowsShell) Downloader() string { return psCommand("'iwr'") }
 
 func (windowsShell) NPMVersion() string {
 	return psCommand("(& npm --version 2>$null | Select-Object -First 1) -join ''")

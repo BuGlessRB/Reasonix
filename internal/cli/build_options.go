@@ -8,6 +8,7 @@ import (
 	"reasonix/internal/boot"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/provider"
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/surface"
 )
@@ -29,6 +30,9 @@ type cliBuildOverrides struct {
 	// SessionTemp carries the previous Controller's private temporary directory
 	// manager across model/profile rebuilds so temporary files survive.
 	SessionTemp *sessiontemp.Manager
+	// ProviderResolver routes model roles through a caller-owned catalog. A
+	// bootstrapped serve sets the broker's; nil keeps the local config path.
+	ProviderResolver provider.Resolver
 }
 
 // sessionTempFromCLIController returns the logical-session private temporary
@@ -70,6 +74,7 @@ func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey b
 		OnSessionRecovered:   overrides.OnSessionRecovered,
 		Ablation:             overrides.Ablation,
 		SessionTemp:          overrides.SessionTemp,
+		ProviderResolver:     overrides.ProviderResolver,
 	}
 }
 

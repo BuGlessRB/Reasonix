@@ -89,7 +89,7 @@ func TestLaunchCommandQuotesHostilePaths(t *testing.T) {
 		LogFile:   "/home/dev/.reasonix/remote/serve-x.log",
 	}
 	hostile := "/tmp/'; rm -rf ~; echo '"
-	cmd := LaunchCommand("/usr/bin/reasonix", hostile, paths)
+	cmd := LaunchCommand(LaunchSpec{Bin: "/usr/bin/reasonix", Workspace: hostile}, paths)
 
 	// The hostile workspace must appear only inside a quoted operand, escaped.
 	if strings.Contains(cmd, "; rm -rf ~; echo") && !strings.Contains(cmd, `'\''; rm -rf ~; echo '\''`) {
@@ -143,7 +143,7 @@ func TestStopAndServeAliveCommands(t *testing.T) {
 }
 
 func TestLaunchCommandDetachAndLogHardening(t *testing.T) {
-	cmd := LaunchCommand("/usr/bin/reasonix", "/ws", StatePaths{
+	cmd := LaunchCommand(LaunchSpec{Bin: "/usr/bin/reasonix", Workspace: "/ws"}, StatePaths{
 		Dir: "/d", TokenFile: "/d/t", PortFile: "/d/p", PidFile: "/d/i", LogFile: "/d/l",
 	})
 	// setsid must be optional (macOS lacks it) and the log created 0600 so the
@@ -265,5 +265,53 @@ func TestOutdatedNamesTheNewestOneTurnedDown(t *testing.T) {
 	}
 	if got := outdated([]candidate{{path: "/usr/bin/reasonix", version: "2.7.0", portFile: true}}, MinPaneVersion); got != "" {
 		t.Fatalf("outdated = %q, want nothing: this machine has no old kernel", got)
+	}
+}
+
+// The broker token authenticates a remote kernel to the model credentials at
+// home, so it rides a file for the same reason the serve token does: argv is
+// readable by every account on the machine, through `ps`.
+func TestLaunchCarriesTheBrokerByFileNotArgv(t *testing.T) {
+	paths := StatePaths{
+		Dir: "/d", TokenFile: "/d/t", BrokerTokenFile: "/d/b",
+		PortFile: "/d/p", PidFile: "/d/i", LogFile: "/d/l",
+	}
+	spec := LaunchSpec{Bin: "/usr/bin/reasonix", Workspace: "/ws", BrokerAddr: "127.0.0.1:41235"}
+	cmd := LaunchCommand(spec, paths)
+
+	for _, want := range []string{"--provider-broker '127.0.0.1:41235'", "--provider-broker-token-file '/d/b'"} {
+		if !strings.Contains(cmd, want) {
+			t.Fatalf("launch command is missing %q:\n%s", want, cmd)
+		}
+	}
+	if strings.Contains(cmd, "secret-broker-token") {
+		t.Fatal("the broker token reached argv")
+	}
+}
+
+// A launch with no broker is the ordinary one, and must stay byte-identical:
+// the flags a kernel does not understand are the flags an older one refuses.
+func TestLaunchWithoutABrokerNamesNoBrokerFlags(t *testing.T) {
+	paths := StatePaths{
+		Dir: "/d", TokenFile: "/d/t", BrokerTokenFile: "/d/b",
+		PortFile: "/d/p", PidFile: "/d/i", LogFile: "/d/l",
+	}
+	cmd := LaunchCommand(LaunchSpec{Bin: "/usr/bin/reasonix", Workspace: "/ws"}, paths)
+	if strings.Contains(cmd, "provider-broker") {
+		t.Fatalf("an unconfigured broker still reached the command line:\n%s", cmd)
+	}
+}
+
+// The address is an operand like every other, and a hostile one must not break
+// out of its quoting.
+func TestLaunchQuotesTheBrokerAddress(t *testing.T) {
+	paths := StatePaths{
+		Dir: "/d", TokenFile: "/d/t", BrokerTokenFile: "/d/b",
+		PortFile: "/d/p", PidFile: "/d/i", LogFile: "/d/l",
+	}
+	hostile := "127.0.0.1:1'; rm -rf ~; echo '"
+	cmd := LaunchCommand(LaunchSpec{Bin: "/r", Workspace: "/ws", BrokerAddr: hostile}, paths)
+	if strings.Contains(cmd, "; rm -rf ~; echo") && !strings.Contains(cmd, `'\''; rm -rf ~; echo '\''`) {
+		t.Fatalf("hostile broker address not properly escaped:\n%s", cmd)
 	}
 }

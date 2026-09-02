@@ -323,3 +323,31 @@ func TestRemoteWorkspacesSurviveSaveAndReload(t *testing.T) {
 		t.Fatalf("WorkspaceList() after reload = %v", list)
 	}
 }
+
+// Model credentials default to this machine's, resolved over the tunnel: a
+// host needing them configured a second time is what made a first connect a
+// setup task rather than a connection.
+func TestRemoteProviderModeDefaultsToLocal(t *testing.T) {
+	cases := []struct {
+		name  string
+		entry RemoteHostEntry
+		want  string
+	}{
+		{"unset", RemoteHostEntry{}, RemoteProviderLocal},
+		{"blank", RemoteHostEntry{Provider: "   "}, RemoteProviderLocal},
+		{"local", RemoteHostEntry{Provider: "local"}, RemoteProviderLocal},
+		{"remote", RemoteHostEntry{Provider: "remote"}, RemoteProviderRemote},
+		{"cased", RemoteHostEntry{Provider: "ReMoTe"}, RemoteProviderRemote},
+		{"padded", RemoteHostEntry{Provider: " remote "}, RemoteProviderRemote},
+		// An entry written by a newer Reasonix reads as the default here rather
+		// than being reinterpreted as the other mode.
+		{"unknown", RemoteHostEntry{Provider: "broker-v2"}, RemoteProviderLocal},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.entry.ProviderMode(); got != tc.want {
+				t.Fatalf("ProviderMode() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

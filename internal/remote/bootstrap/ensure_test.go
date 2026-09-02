@@ -408,3 +408,195 @@ func TestEnsureServeStopsTheOutdatedKernelItReplaces(t *testing.T) {
 		t.Fatal("the kernel being replaced was left running with nothing pointing at it")
 	}
 }
+
+// A running serve resolves providers over the address it was launched with,
+// and that address dies with the link that published it. Reusing the process
+// across a reconnect that landed on a different port would leave every model
+// call dialling a closed one — so the record's broker is part of what makes a
+// serve reusable, not just its pid.
+func TestEnsureServeWillNotReuseAServeBoundToAnotherBroker(t *testing.T) {
+	skipOnWindows(t)
+	root := testenv.TempDir(t)
+	paths := pathsFor(root, root)
+	if err := os.MkdirAll(paths.Dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st := ServeState{
+		PID: 777, Addr: "127.0.0.1:5000", Workspace: root,
+		TokenFile: paths.TokenFile, Broker: "127.0.0.1:40001",
+	}
+	data, _ := MarshalState(st)
+	if err := os.WriteFile(paths.StateJSON, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.TokenFile, []byte("existing-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
+		switch {
+		case strings.Contains(cmd, "kill -0 777"):
+			return ok("1\n") // still alive, and still the wrong broker
+		case strings.Contains(cmd, "uname"):
+			return ok("Linux x86_64\n")
+		}
+		return ok("")
+	})
+
+	// Install is off, so the relaunch this forces fails rather than running a
+	// second serve. What the test reads is that reuse was refused at all.
+	_, err := EnsureServe(context.Background(), conn, Options{
+		Workspace: "~", Install: InstallNever,
+		Broker: Broker{Addr: "127.0.0.1:40002", Token: "tok"},
+	})
+	if err == nil {
+		t.Fatal("a serve bound to a retired broker was reused")
+	}
+	if conn.ranContaining("kill -0 777") && !errors.Is(err, ErrInstallDisabled) {
+		t.Fatalf("refused for the wrong reason: %v", err)
+	}
+}
+
+// The same record with the same broker is reusable: the guard must not turn
+// every reconnect into a relaunch.
+func TestEnsureServeReusesAServeOnTheSameBroker(t *testing.T) {
+	skipOnWindows(t)
+	root := testenv.TempDir(t)
+	paths := pathsFor(root, root)
+	if err := os.MkdirAll(paths.Dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st := ServeState{
+		PID: 778, Addr: "127.0.0.1:5001", Workspace: root,
+		TokenFile: paths.TokenFile, Broker: "127.0.0.1:40001",
+	}
+	data, _ := MarshalState(st)
+	if err := os.WriteFile(paths.StateJSON, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.TokenFile, []byte("existing-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
+		switch {
+		case strings.Contains(cmd, "kill -0 778"):
+			return ok("1\n")
+		case strings.Contains(cmd, "uname"):
+			return ok("Linux x86_64\n")
+		}
+		return ok("")
+	})
+
+	res, err := EnsureServe(context.Background(), conn, Options{
+		Workspace: "~", Broker: Broker{Addr: "127.0.0.1:40001", Token: "tok"},
+	})
+	if err != nil {
+		t.Fatalf("EnsureServe: %v", err)
+	}
+	if !res.Reused {
+		t.Fatal("a serve on the same broker was relaunched instead of reused")
+	}
+}
+
+// The token reaches the remote as a 0600 file, never as an argument, because
+// argv is readable by every account on that machine.
+func TestEnsureServeWritesTheBrokerTokenPrivately(t *testing.T) {
+	skipOnWindows(t)
+	root := testenv.TempDir(t)
+	paths := pathsFor(root, root)
+	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
+		switch {
+		case strings.Contains(cmd, "uname"):
+			return ok("Linux x86_64\n")
+		case strings.Contains(cmd, "command -v reasonix"):
+			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.9\nflag yes\n")
+		case strings.Contains(cmd, "nohup"):
+			_ = os.WriteFile(paths.PortFile, []byte("127.0.0.1:6001\n"), 0o600)
+			_ = os.WriteFile(paths.PidFile, []byte("991\n"), 0o600)
+			return ok("991\n")
+		case strings.Contains(cmd, "kill -0 991"):
+			return ok("1\n")
+		}
+		return ok("")
+	})
+
+	if _, err := EnsureServe(context.Background(), conn, Options{
+		Workspace: "~", Broker: Broker{Addr: "127.0.0.1:40007", Token: "broker-secret"},
+	}); err != nil {
+		t.Fatalf("EnsureServe: %v", err)
+	}
+	data, err := os.ReadFile(paths.BrokerTokenFile)
+	if err != nil {
+		t.Fatalf("read broker token file: %v", err)
+	}
+	if strings.TrimSpace(string(data)) != "broker-secret" {
+		t.Fatalf("broker token file holds %q", data)
+	}
+	if runtime.GOOS != "windows" {
+		fi, err := os.Stat(paths.BrokerTokenFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm()&0o077 != 0 {
+			t.Fatalf("broker token file is %v, readable beyond its owner", fi.Mode().Perm())
+		}
+	}
+	if conn.ranContaining("broker-secret") {
+		t.Fatal("the broker token reached a command line")
+	}
+}
+
+// Refusing to reuse and leaving the process running are two different things.
+// The record naming that pid is the only note this side keeps, and the launch
+// replacing it takes the note away — so the kernel a broker mismatch declined
+// has to be stopped here, exactly as an outdated one is.
+func TestEnsureServeStopsTheKernelABrokerMismatchDeclined(t *testing.T) {
+	skipOnWindows(t)
+	root := testenv.TempDir(t)
+	paths := pathsFor(root, root)
+	if err := os.MkdirAll(paths.Dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st := ServeState{
+		PID: 777, Addr: "127.0.0.1:5000", Workspace: root, Version: "9.9.9",
+		TokenFile: paths.TokenFile, Broker: "127.0.0.1:40001",
+	}
+	data, _ := MarshalState(st)
+	if err := os.WriteFile(paths.StateJSON, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.TokenFile, []byte("stale\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	conn := newFakeConn(t, root, func(cmd string) (remote.ExecResult, error) {
+		switch {
+		case strings.Contains(cmd, "kill -0 777"):
+			return ok("1\n")
+		case strings.Contains(cmd, "uname"):
+			return ok("Linux x86_64\n")
+		case strings.Contains(cmd, "command -v reasonix"):
+			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.9\nflag yes\n")
+		case strings.Contains(cmd, "nohup"):
+			_ = os.WriteFile(paths.PortFile, []byte("127.0.0.1:6003\n"), 0o600)
+			return ok("999\n")
+		case strings.Contains(cmd, "ps -p 999"):
+			return ok("1\n")
+		}
+		return ok("")
+	})
+
+	res, err := EnsureServe(context.Background(), conn, Options{
+		Workspace: "~", Broker: Broker{Addr: "127.0.0.1:40002", Token: "tok"},
+	})
+	if err != nil {
+		t.Fatalf("EnsureServe: %v", err)
+	}
+	if res.Reused || res.State.PID != 999 {
+		t.Fatalf("state = %+v reused=%v, want the freshly launched 999", res.State, res.Reused)
+	}
+	if res.State.Broker != "127.0.0.1:40002" {
+		t.Fatalf("recorded broker = %q, want the one it was launched with", res.State.Broker)
+	}
+	if !conn.ranContaining("kill -TERM 777") {
+		t.Fatal("the kernel a broker mismatch declined was left running with nothing pointing at it")
+	}
+}

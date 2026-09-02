@@ -204,14 +204,20 @@ func remoteConnectCLI(args []string, version string) int {
 	}
 
 	if !syntax.noServe && !syntax.forwardOnly {
+		// Published before the launch: the address goes on the serve command
+		// line, and a kernel already running cannot be told a new one.
+		broker, stopBroker := publishBroker(client, entry)
+		defer stopBroker()
 		res, err := bootstrap.EnsureServe(ctx, client, bootstrap.Options{
-			Workspace:      ws,
-			Install:        entry.ServeInstallMode(),
-			LocalBinary:    currentExecutable(),
-			LocalGOOS:      runtime.GOOS,
-			LocalGOARCH:    runtime.GOARCH,
-			ProductVersion: version,
-			FetchBinary:    fetchRemoteCLIBinary,
+			Workspace:       ws,
+			Install:         entry.ServeInstallMode(),
+			Broker:          broker,
+			LocalBinary:     currentExecutable(),
+			LocalGOOS:       runtime.GOOS,
+			LocalGOARCH:     runtime.GOARCH,
+			ProductVersion:  version,
+			FetchBinary:     fetchRemoteCLIBinary,
+			ResolveDownload: resolveRemoteCLIDownload,
 			// No version floor: what this forwards is that kernel's own page,
 			// which every line of it serves for itself.
 			Progress: func(step, detail string) {
@@ -303,6 +309,24 @@ func fetchRemoteCLIBinary(ctx context.Context, version, goos, goarch string) ([]
 	return releaseasset.DownloadCLI(ctx, client, version, goos, goarch)
 }
 
+// resolveRemoteCLIDownload names the release archive and its digest so the
+// remote can pull it over its own connection. Only SHA256SUMS is read here,
+// which is why this is the route that costs this machine nothing.
+func resolveRemoteCLIDownload(ctx context.Context, version, goos, goarch string) (releaseasset.CLIDownload, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return releaseasset.CLIDownload{}, err
+	}
+	client, err := netclient.NewHTTPClient(cfg.NetworkProxySpec(), netclient.TransportOptions{
+		ResponseHeaderTimeout: 30 * time.Second,
+	})
+	if err != nil {
+		return releaseasset.CLIDownload{}, err
+	}
+	client.Timeout = 30 * time.Second
+	return releaseasset.ResolveCLIDownload(ctx, client, version, goos, goarch)
+}
+
 const remoteServeUsage = "usage: reasonix remote serve start|stop|status|logs <name> [--workspace PATH] [-n N]"
 
 // remoteServeCLI: serve start|stop|status|logs <name>.
@@ -350,10 +374,14 @@ func remoteServeCLI(args []string, version string) int {
 
 	switch action {
 	case "start":
+		// No broker: this serve is meant to outlive the command that started
+		// it, and a broker published from here would be gone the moment this
+		// process is — leaving that kernel calling a port nobody holds.
 		res, err := bootstrap.EnsureServe(ctx, client, bootstrap.Options{
 			Workspace: ws, Install: entry.ServeInstallMode(),
 			LocalBinary: currentExecutable(), LocalGOOS: runtime.GOOS, LocalGOARCH: runtime.GOARCH,
 			ProductVersion: version, FetchBinary: fetchRemoteCLIBinary,
+			ResolveDownload: resolveRemoteCLIDownload,
 		})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

@@ -11,6 +11,10 @@ var (
 	// The machine has no usable reasonix and the strategy forbids installing.
 	ErrInstallDisabled = errors.New("bootstrap: install disabled by serve_install")
 
+	// The machine could not fetch its own release: no curl or wget, no route to
+	// the release host, or a digest that did not match what it downloaded.
+	ErrRemoteFetchUnavailable = errors.New("bootstrap: the remote could not fetch the release itself")
+
 	// npm would not run, or ran and refused. Usually no Node.js over there.
 	ErrNPMUnavailable = errors.New("bootstrap: npm unavailable on the remote")
 

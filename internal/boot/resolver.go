@@ -72,6 +72,32 @@ func (r *LocalProviderResolver) Resolve(selection provider.Selection) (provider.
 	return NewProviderWithProxy(entry, r.proxy)
 }
 
+// LiveProviderResolver reads the configuration on each call instead of closing
+// over one load. What it serves outlives the edits made while it runs: a
+// provider added in Settings has to reach whoever asks next, without restarting
+// the process — or the SSH link — that has been holding the old answer.
+type LiveProviderResolver struct{}
+
+func (LiveProviderResolver) current() *LocalProviderResolver {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil
+	}
+	return NewLocalProviderResolver(cfg, cfg.NetworkProxySpec())
+}
+
+func (r LiveProviderResolver) Catalog() []provider.Descriptor {
+	return r.current().Catalog()
+}
+
+func (r LiveProviderResolver) Resolve(selection provider.Selection) (provider.Provider, error) {
+	cur := r.current()
+	if cur == nil {
+		return nil, fmt.Errorf("the configuration could not be read")
+	}
+	return cur.Resolve(selection)
+}
+
 func resolveProvider(resolver provider.Resolver, cfg *config.Config, proxy netclient.ProxySpec, selection provider.Selection) (provider.Provider, error) {
 	if resolver != nil {
 		return resolver.Resolve(selection)

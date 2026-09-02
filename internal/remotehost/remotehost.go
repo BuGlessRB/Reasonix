@@ -8,11 +8,14 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"time"
 
+	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/netclient"
+	"reasonix/internal/providerbroker"
 	"reasonix/internal/releaseasset"
 	"reasonix/internal/remote"
 	"reasonix/internal/remote/attach"
@@ -22,20 +25,49 @@ import (
 
 // Link gives the hub what it needs for panes on other machines: a pool that
 // dials, and the prompts a first connect may have to stop for.
-type Link struct{ pool *attach.Pool }
+type Link struct {
+	pool   *attach.Pool
+	broker *providerbroker.Local
+}
 
 // New builds the link layer for a host. asks is where a first-seen key or a
 // locked one goes; nil leaves both prompts unset, and the strict path applies —
 // a key nobody looked at is refused rather than accepted quietly.
 func New(ctx context.Context, version string, asks *serve.AskBroker) *Link {
-	return &Link{pool: attach.NewPool(ctx, attach.Options{
+	// This window's own providers, on loopback for the kernels it starts
+	// elsewhere. One that will not listen is no reason to refuse remote work:
+	// those hosts resolve their own, as every one of them used to.
+	broker, err := providerbroker.Listen(boot.LiveProviderResolver{})
+	if err != nil {
+		slog.Warn("remotehost: the provider broker did not start; remote hosts will need their own credentials", "err", err)
+		broker = nil
+	}
+	return &Link{broker: broker, pool: attach.NewPool(ctx, attach.Options{
 		Prompts: prompts{asks: asks}.build(),
 		Version: version,
+		Broker:  brokerFor(broker),
 		// No LocalBinary: a shell's executable is the window, not the CLI, and
 		// uploading it would spend the transfer to have the far side reject a
 		// binary with no serve command. npm, then a verified release download.
-		FetchBinary: fetchRemoteBinary,
+		FetchBinary:     fetchRemoteBinary,
+		ResolveDownload: resolveRemoteDownload,
 	})}
+}
+
+func brokerFor(l *providerbroker.Local) attach.Broker {
+	if l == nil {
+		return attach.Broker{}
+	}
+	return attach.Broker{Addr: l.Addr, Token: l.Token}
+}
+
+// Close stops the broker this link published. The pool's connections belong to
+// the context it was built with and end with it.
+func (r *Link) Close() error {
+	if r == nil {
+		return nil
+	}
+	return r.broker.Close()
 }
 
 func (r *Link) Attach(ctx context.Context, host, workspace string) (serve.RemoteEndpoint, func(), error) {
@@ -150,6 +182,23 @@ func fetchRemoteBinary(ctx context.Context, version, goos, goarch string) ([]byt
 	}
 	client.Timeout = 2 * time.Minute
 	return releaseasset.DownloadCLI(ctx, client, version, goos, goarch)
+}
+
+// resolveRemoteDownload names the release archive and its digest so the far
+// machine can pull it over its own connection. Only SHA256SUMS is read here.
+func resolveRemoteDownload(ctx context.Context, version, goos, goarch string) (releaseasset.CLIDownload, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return releaseasset.CLIDownload{}, err
+	}
+	client, err := netclient.NewHTTPClient(cfg.NetworkProxySpec(), netclient.TransportOptions{
+		ResponseHeaderTimeout: 30 * time.Second,
+	})
+	if err != nil {
+		return releaseasset.CLIDownload{}, err
+	}
+	client.Timeout = 30 * time.Second
+	return releaseasset.ResolveCLIDownload(ctx, client, version, goos, goarch)
 }
 
 // installFailureCode names which way putting a kernel over there failed. One

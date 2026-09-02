@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"reasonix/internal/releaseasset"
 	"reasonix/internal/remote/sftpfs"
 )
 
@@ -19,7 +20,9 @@ type remoteOS interface {
 	// it — which on Windows is not how its own shell spells it.
 	Home(ctx context.Context, conn Conn, fs *sftpfs.FS) (string, error)
 	Paths(home, workspace string) StatePaths
-	Launch(bin, workspace string, p StatePaths) string
+	Launch(spec LaunchSpec, p StatePaths) string
+	Fetch(d releaseasset.CLIDownload, dir, bin string) string
+	Downloader() string
 	Alive(pid int, p StatePaths) string
 	Stop(pid int, p StatePaths) string
 	Logs(logFile string, n int) string

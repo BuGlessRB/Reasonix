@@ -40,7 +40,7 @@ func TestWindowsCommandsHandCmdNothingItCanInterpret(t *testing.T) {
 	paths, bin, workspace := hostileWindowsPaths(t)
 	shell := windowsShell{}
 	for name, command := range map[string]string{
-		"launch": shell.Launch(bin, workspace, paths),
+		"launch": shell.Launch(LaunchSpec{Bin: bin, Workspace: workspace}, paths),
 		"alive":  shell.Alive(4242, paths),
 		"stop":   shell.Stop(4242, paths),
 		"logs":   shell.Logs(paths.LogFile, 50),
@@ -65,7 +65,7 @@ func TestWindowsCommandsHandCmdNothingItCanInterpret(t *testing.T) {
 // come back out as itself.
 func TestWindowsLaunchQuotesHostilePaths(t *testing.T) {
 	paths, bin, workspace := hostileWindowsPaths(t)
-	outer := decodePS(t, windowsShell{}.Launch(bin, workspace, paths))
+	outer := decodePS(t, windowsShell{}.Launch(LaunchSpec{Bin: bin, Workspace: workspace}, paths))
 
 	// The apostrophe in the home directory reaches the script doubled, which is
 	// how PowerShell spells a literal one.

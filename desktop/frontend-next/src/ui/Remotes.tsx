@@ -39,6 +39,7 @@ function draftOf(host: RemoteHost | null): RemoteHostEdit {
     proxyJump: host?.proxyJump ?? "",
     workspaces: workspacesOf(host),
     serveInstall: host?.serveInstall ?? "",
+    provider: host?.provider ?? "",
     useSSHConfig: host?.useSSHConfig ?? false,
     passphraseEnv: host?.passphraseEnv ?? "",
     passwordEnv: host?.passwordEnv ?? "",
@@ -298,6 +299,19 @@ export function Remotes({ hub, onError }: Props) {
               <option value="npm">{t("用远端的 npm")}</option>
               <option value="upload">{t("传本机这个过去")}</option>
               <option value="never">{t("不装，我自己装好了")}</option>
+            </select>
+          </label>
+          {/* 远端跑的内核用哪台机器的 Key。默认用本机的，经隧道回来 —— 那台
+              机器就不用再配一遍 Key，也不用能访问模型 API。 */}
+          <label className="rmtf">
+            <span>{t("模型凭据")}</span>
+            <select
+              value={draft.provider || "local"}
+              title={t("远端会话用哪台机器上配置的 Provider 和 Key")}
+              onChange={(ev) => setDraft((d) => (d ? { ...d, provider: ev.target.value } : d))}
+            >
+              <option value="local">{t("用本机的，经隧道过去")}</option>
+              <option value="remote">{t("用那台机器自己配的")}</option>
             </select>
           </label>
           <label className="rmtf rmtck">

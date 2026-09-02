@@ -213,6 +213,7 @@ out of how a path is spelled, which cannot tell `internal/auth` from
 - sensitive: internal/shellsafe/**
 - sensitive: internal/shellparse/**
 - sensitive: internal/control/approval.go
+- sensitive: internal/providerbroker/**
 - sensitive: internal/installsource/**
 - sensitive: internal/plugin/**
 - sensitive: internal/pluginpkg/**

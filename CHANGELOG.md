@@ -70,6 +70,29 @@ branch.
 
 ### Added
 
+- **Remote SSH: model credentials stay on your machine.** A remote session now
+  resolves its providers over a reverse (`-R`) forward back to a broker Reasonix
+  runs on this machine's loopback, so the remote host needs no API key of its
+  own and no egress to the model API. The key is never written to the remote
+  disk — only a per-connection broker token, 0600. The provider runs here, so
+  every endpoint-dependent judgement (DeepSeek's beta prefix endpoint, Kimi's K3
+  contract, Gemini model resource names, MiniMax's reasoning split) reads a real
+  vendor URL, and typed provider errors keep their identity across the tunnel:
+  a remote turn rejected for context overflow still classifies as one and still
+  compacts. Per-host `provider = "local" | "remote"` picks which side answers,
+  defaulting to `local`; `reasonix remote serve start` never uses a broker,
+  since that serve outlives the command that published it.
+
+- **Remote SSH: the host fetches its own kernel.** `serve_install = "auto"` now
+  tries, in order: the remote downloading the release over its own connection
+  (Reasonix resolves `SHA256SUMS` here and hands over the URL and digest, so the
+  host is not verifying two things the same network gave it), uploading this
+  machine's binary, downloading here and pushing over SFTP, and finally npm.
+  npm was previously first and required Node ≥18 on the far side to deliver the
+  identical static Go binary. A first connect to a Linux/macOS host with only
+  sshd now transfers roughly 21MB over that host's own link instead of pushing
+  62MB over the user's uplink. `reasonix remote test` reports which routes are
+  open and names what closes each one that is not.
 - Added `[ui].show_turn_usage` so CLI/TUI users can hide per-request token and
   cost receipts from transcript scrollback without disabling usage accounting.
 

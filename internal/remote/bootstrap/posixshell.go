@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 
+	"reasonix/internal/releaseasset"
 	"reasonix/internal/remote/sftpfs"
 )
 
@@ -21,8 +22,12 @@ func (posixShell) Paths(home, workspace string) StatePaths {
 	return pathsFor(home, workspace)
 }
 
-func (posixShell) Launch(bin, workspace string, p StatePaths) string {
-	return LaunchCommand(bin, workspace, p)
+func (posixShell) Launch(spec LaunchSpec, p StatePaths) string {
+	return LaunchCommand(spec, p)
+}
+
+func (posixShell) Fetch(d releaseasset.CLIDownload, dir, bin string) string {
+	return FetchCommand(d, dir, bin)
 }
 
 func (posixShell) Alive(pid int, p StatePaths) string {
@@ -43,5 +48,13 @@ func (posixShell) Locate(uploadedBin string) string {
 
 // NativePath is identity here: the file layer and the shell agree.
 func (posixShell) NPMVersion() string { return "npm --version 2>/dev/null" }
+
+// Downloader names what this machine could fetch its own release with, or
+// nothing. Both are worth asking about: stock macOS ships curl and no wget,
+// and a minimal container image often ships wget and no curl.
+func (posixShell) Downloader() string {
+	return "if command -v curl >/dev/null 2>&1; then echo curl;" +
+		" elif command -v wget >/dev/null 2>&1; then echo wget; fi; exit 0"
+}
 
 func (posixShell) NativePath(p string) string { return p }

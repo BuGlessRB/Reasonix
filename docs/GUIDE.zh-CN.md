@@ -280,6 +280,7 @@ user          = "dev"
 identity_file = "~/.ssh/id_ed25519"
 workspace     = "~/projects/app"
 serve_install = "auto"            # 远端 CLI：auto | npm | upload | never
+provider      = "local"           # 模型凭据：local（本机，经隧道）| remote（那台主机自己的）
 
 [[remote.hosts.forwards]]
 type   = "local"                  # local (-L) | remote (-R)
@@ -312,14 +313,48 @@ reasonix remote fs ls gpu-box:'~/projects/app'
 
 远端侧状态位于远端主机的 `~/.reasonix/remote/`:`serve-<工作区 slug>.json`(pid、绑定的回环
 地址、工作区)、`serve-<slug>.token`(0600;认证 token,经 `--token-file` 传给 serve,因此不会
-出现在 `ps` 中)、`serve-<slug>.log`。
+出现在 `ps` 中)、`serve-<slug>.broker`(0600;provider broker token,见下)、`serve-<slug>.log`。
+
+### 内核怎么送过去
+
+远端跑的是一个 `reasonix serve`。这个二进制是静态 Go 构建 —— 不要运行时、不要 Node、不要
+glibc —— 所以把它放过去是一次文件传输，不是安装。`serve_install = "auto"` 按这个顺序尝试：
+
+1. **远端自己取。** Reasonix 在本机读 `SHA256SUMS`，把归档 URL 和摘要交给那台主机；主机走
+   自己的网络下载，只有摘要对得上才保留。SSH 链路上只过命令本身 —— 机房里的机器拉这个
+   ~21MB 的归档，比笔记本把它推上去快得多。
+2. **上传本机二进制**，平台相同时。
+3. **本机下载再经 SFTP 推上去**，给连不上发布源的主机用。
+4. **npm**，最后。`npm i -g reasonix` 装的是同一个静态二进制，但要求那边有 Node ≥18；保留它
+   是因为"npm 有镜像、GitHub 被限速"的网络是真实存在的。
+
+把 `serve_install` 设成 `npm` / `upload` / `never` 可以只走其中一条。连接前用
+`reasonix remote test <名字>` 可以看到哪些路是通的，不通的会说明被什么挡住了。
+
+### 模型凭据
+
+远程会话默认在**你自己的机器**上解析模型。连接会带一条反向(`-R`)转发,通回本机回环上的
+provider broker;远端内核调用的是这个 broker 而不是模型端点,请求由本机发出、用本机的 key。
+
+因此远端主机**不需要自己的 API Key,也不需要能访问模型 API 的外网出口** —— 封了外网的构建
+机也能用。Key 从不写到远端磁盘:落到那边的只有一个每连接的 broker token,而且是 0600 文件。
+远端也看不到 provider 背后的端点、请求头和代理设置,它看到的就是你看到的那份模型列表。
+
+某台主机若要保持用它自己的 provider 配置,给它设 `provider = "remote"` —— 适用于那台机器的
+provider 就是刻意和你本机不同的场景。`reasonix remote serve start` 永远不用 broker:那条命令
+启动的 serve 本就要活得比命令久,而命令退出后 broker 端口就没人持有了。
+
+有两个代价值得知道。模型流量改从你自己的上行出去,而不是远端的 —— 远端带宽远好于本机时这是
+降级。以及远程 pane 能用的模型就是本机配置的那些,所以只有那台主机配过的 provider 不会再出现,
+除非把它切到 `provider = "remote"`。
 
 在桌面端,于 **设置 -> 远程 SSH** 管理主机,再通过状态栏徽标或主机行的 **远程浏览器** 按钮经
 SFTP 浏览与编辑文件、管理端口转发、启动/打开远程工作区。打开工作区时会创建一个类似 VS Code
 Remote SSH 的独立 Reasonix 原生窗口。主窗口持有 SSH 隧道；远程窗口是隔离的轻量外壳，不会恢复
-或抢占本地对话会话。远程网页使用**远端**主机上的 Provider 配置与 API Key —— 桌面端绝不会把
-本机 Provider 暴露给远端主机。如果远端缺少当前 Provider 的 API Key，窗口会先显示经过认证的
-配置页，只把 Key 保存到远端 Reasonix 凭据文件，并在不重启远端 Serve 的情况下激活 Provider。
+或抢占本地对话会话。远程窗口通过上面说的 broker 使用**本机**的 Provider，所以在一台从没配过
+API Key 的主机上打开工作区可以直接用。设了 `provider = "remote"` 的主机走旧路径：窗口会先显示
+经过认证的配置页，只把 Key 保存到远端 Reasonix 凭据文件，并在不重启远端 Serve 的情况下激活
+Provider。
 短暂的 SSH 中断不会关闭远程窗口；桌面端会在后台重连、重新挂载回环转发，并让窗口重新加载已恢复的
 Serve。认证失败或主机密钥错误属于终止性故障，此时会关闭已经不可用的远程窗口。
 

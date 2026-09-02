@@ -17,19 +17,36 @@ import (
 	"sync"
 
 	"reasonix/internal/config"
+	"reasonix/internal/releaseasset"
 	"reasonix/internal/remote"
 	"reasonix/internal/remote/bootstrap"
 	"reasonix/internal/remote/forward"
 )
 
+// Broker is this machine's provider broker: the loopback address it listens on
+// here, and the token a remote kernel authenticates to it with. Set, every
+// workspace opened through this pool resolves providers back over the tunnel,
+// so the far host needs neither an API key nor egress of its own. Zero leaves
+// each host resolving providers from its own config.
+type Broker struct {
+	Addr  string
+	Token string
+}
+
+func (b Broker) configured() bool { return b.Addr != "" && b.Token != "" }
+
 // Options is what every attach on this pool shares: who answers a credential
 // prompt, and where a remote install comes from when the host has no reasonix.
 type Options struct {
 	Prompts     Prompts
+	Broker      Broker
 	Install     string // auto|npm|upload|never; empty => the host entry's own
 	LocalBinary string // this process's binary, for a same-platform upload
 	Version     string // this release, for a verified cross-platform download
 	FetchBinary func(ctx context.Context, version, goos, goarch string) ([]byte, error)
+	// ResolveDownload names the release archive so a host can fetch its own
+	// kernel, which is the route that spends nobody's uplink.
+	ResolveDownload func(ctx context.Context, version, goos, goarch string) (releaseasset.CLIDownload, error)
 	// Dial builds a host's connection. Nil resolves it from configuration —
 	// which is the only part of an attach that needs a configured machine, so
 	// substituting it is what lets the rest be exercised against a real one.
@@ -103,9 +120,43 @@ type link struct {
 	host    string
 	client  *remote.Client
 	install string // the host entry's own strategy, read once at dial
-	refs    int
-	spaces  map[string]*space
-	state   HostState
+	// provider is where this host's model credentials come from, read at dial
+	// beside install. A host set to resolve its own gets no broker forward.
+	provider string
+	refs     int
+	spaces   map[string]*space
+	state    HostState
+	// One -R per host, not per workspace: the broker is one process on this
+	// side, and every kernel over there reaches it through the same forward.
+	brokerOnce sync.Once
+	brokerAddr string
+	brokerErr  error
+}
+
+// brokerForwardName is the reserved name of a link's broker forward. Fixed, so
+// a second workspace finds the one the first published rather than opening a
+// second listener onto the same broker.
+const brokerForwardName = "provider-broker"
+
+// broker publishes this machine's provider broker on the host's loopback and
+// reports the address a kernel there should call. Empty when this pool has no
+// broker to publish, which is what leaves that host on its own credentials.
+func (p *Pool) broker(l *link) (string, error) {
+	if !p.opts.Broker.configured() || l.provider == config.RemoteProviderRemote {
+		return "", nil
+	}
+	l.brokerOnce.Do(func() {
+		l.brokerAddr, l.brokerErr = l.client.Forwards().Add(forward.Spec{
+			Name:       brokerForwardName,
+			Direction:  forward.Remote,
+			BindAddr:   "127.0.0.1:0",
+			TargetAddr: p.opts.Broker.Addr,
+		})
+		if l.brokerErr != nil {
+			l.brokerErr = fmt.Errorf("publish the provider broker on %s: %w", l.host, l.brokerErr)
+		}
+	})
+	return l.brokerAddr, l.brokerErr
 }
 
 // HostState is what a frontend shows for one machine: where its link stands,
@@ -247,6 +298,7 @@ func (p *Pool) dial(l *link, call Call) (unsubscribe func()) {
 	}
 	if entry, ok := cfg.RemoteHost(l.host); ok {
 		l.install = entry.ServeInstallMode()
+		l.provider = entry.ProviderMode()
 	}
 	build := p.opts.Dial
 	if build == nil {
@@ -326,15 +378,25 @@ func (p *Pool) serve(ctx context.Context, l *link, s *space, workspace string, c
 	if install == "" {
 		install = l.install
 	}
+	// Before the launch, not after: the address goes on the serve command line,
+	// and a kernel already running cannot be told a new one.
+	brokerAddr, err := p.broker(l)
+	if err != nil {
+		s.err = err
+		p.forgetSpace(l, s)
+		return
+	}
 	res, err := bootstrap.EnsureServe(ctx, l.client, bootstrap.Options{
-		Workspace:      workspace,
-		Install:        install,
-		LocalBinary:    p.opts.LocalBinary,
-		LocalGOOS:      runtime.GOOS,
-		LocalGOARCH:    runtime.GOARCH,
-		ProductVersion: p.opts.Version,
-		FetchBinary:    p.opts.FetchBinary,
-		MinVersion:     bootstrap.MinPaneVersion,
+		Workspace:       workspace,
+		Broker:          bootstrap.Broker{Addr: brokerAddr, Token: p.opts.Broker.Token},
+		Install:         install,
+		LocalBinary:     p.opts.LocalBinary,
+		LocalGOOS:       runtime.GOOS,
+		LocalGOARCH:     runtime.GOARCH,
+		ProductVersion:  p.opts.Version,
+		FetchBinary:     p.opts.FetchBinary,
+		ResolveDownload: p.opts.ResolveDownload,
+		MinVersion:      bootstrap.MinPaneVersion,
 		Progress: func(step, detail string) {
 			p.record(l, func(st *HostState) { st.Step, st.Detail = step, detail })
 			if call.Progress != nil {

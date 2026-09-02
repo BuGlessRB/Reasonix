@@ -141,6 +141,7 @@ type RemoteHostView struct {
 	Workspace     string   `json:"workspace,omitempty"`
 	Workspaces    []string `json:"workspaces,omitempty"`
 	ServeInstall  string   `json:"serveInstall,omitempty"`
+	Provider      string   `json:"provider,omitempty"`
 	UseSSHConfig  bool     `json:"useSSHConfig,omitempty"`
 	PassphraseEnv string   `json:"passphraseEnv,omitempty"`
 	PasswordEnv   string   `json:"passwordEnv,omitempty"`
@@ -180,6 +181,7 @@ func (h *Hub) listRemoteHosts(w http.ResponseWriter, _ *http.Request) {
 			Workspace:     entry.Workspace,
 			Workspaces:    entry.WorkspaceList(),
 			ServeInstall:  entry.ServeInstall,
+			Provider:      entry.ProviderMode(),
 			UseSSHConfig:  entry.UseSSHConfig,
 			PassphraseEnv: entry.PassphraseEnv,
 			PasswordEnv:   entry.PasswordEnv,

@@ -10,6 +10,13 @@ import (
 	"reasonix/internal/remote/sftpfs"
 )
 
+// autoRouteOrder is the order auto tries a machine in, and the only place that
+// order is written — routesFor reports this same list. The remote fetching its
+// own release is first because it spends nobody's uplink; npm is last because
+// it needs Node on the far side to deliver the identical static binary, and
+// stays only because a network mirroring npm while throttling GitHub is real.
+var autoRouteOrder = []string{routeRemoteFetch, InstallUpload, routeDownload, InstallNPM}
+
 // ensureBinary resolves a reasonix on the remote host that this caller can
 // drive, installing one per the strategy when what is there will not do.
 // Present-but-below-the-floor is not the same answer as absent, and the one it
@@ -37,55 +44,82 @@ func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS
 		strategy = InstallAuto
 	}
 	opts.progress("install", strategy)
-
-	switch strategy {
-	case InstallNever:
+	if strategy == InstallNever {
 		return fail(ErrInstallDisabled)
-	case InstallNPM:
-		b, v, nerr := installViaNPM(ctx, conn, target, opts.MinVersion)
-		if nerr != nil {
-			return fail(nerr)
-		}
-		return b, v, nil
-	case InstallUpload:
-		b, v, uerr := installViaUpload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded)
-		if uerr != nil {
-			return fail(uerr)
-		}
-		return b, v, nil
-	default: // auto: try npm, packaged same-platform upload, then verified release upload
-		if b, v, nerr := installViaNPM(ctx, conn, target, opts.MinVersion); nerr == nil {
-			return b, v, nil
-		} else {
-			attempts := []error{nerr}
-			if opts.LocalBinary != "" && opts.LocalGOOS == goos && opts.LocalGOARCH == goarch {
-				if b, v, uploadErr := installViaUpload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded); uploadErr == nil {
-					return b, v, nil
-				} else {
-					attempts = append(attempts, uploadErr)
-				}
-			} else if opts.LocalBinary == "" {
-				attempts = append(attempts, fmt.Errorf("%w: no local Reasonix CLI to upload", ErrPlatformMismatch))
-			} else {
-				attempts = append(attempts, fmt.Errorf("%w: local is %s/%s, remote is %s/%s", ErrPlatformMismatch, opts.LocalGOOS, opts.LocalGOARCH, goos, goarch))
-			}
-			if opts.FetchBinary != nil {
-				binary, fetchErr := opts.FetchBinary(ctx, opts.ProductVersion, goos, goarch)
-				if fetchErr == nil {
-					if b, v, uploadErr := installBinaryBytes(ctx, conn, target, fs, binary, opts.MinVersion, home, uploaded); uploadErr == nil {
-						return b, v, nil
-					} else {
-						attempts = append(attempts, uploadErr)
-					}
-				} else {
-					attempts = append(attempts, fmt.Errorf("bootstrap: fetch official %s/%s CLI: %w", goos, goarch, fetchErr))
-				}
-			}
-			// Every route was tried. Which one the reader could still take by hand is
-			// in the joined text; that there is no automatic one left is the fact.
-			return fail(fmt.Errorf("%w: %w", ErrNoInstallPath, errors.Join(attempts...)))
-		}
 	}
+
+	routes := []string{strategy}
+	if strategy == InstallAuto {
+		routes = autoRouteOrder
+	}
+	var attempts []error
+	for _, route := range routes {
+		b, v, rerr := runRoute(ctx, conn, target, fs, opts, route, home, goos, goarch, uploaded)
+		if rerr == nil {
+			return b, v, nil
+		}
+		attempts = append(attempts, rerr)
+	}
+	// One route asked for by name failed for its own reason, which the caller
+	// should see. Every route failing is a different fact about the machine.
+	if len(attempts) == 1 {
+		return fail(attempts[0])
+	}
+	return fail(fmt.Errorf("%w: %w", ErrNoInstallPath, errors.Join(attempts...)))
+}
+
+func runRoute(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, route, home, goos, goarch, uploaded string) (bin, version string, err error) {
+	switch route {
+	case routeRemoteFetch:
+		return installViaRemoteFetch(ctx, conn, target, opts, home, goos, goarch, uploaded)
+	case InstallNPM:
+		return installViaNPM(ctx, conn, target, opts.MinVersion)
+	case InstallUpload:
+		return installViaUpload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded)
+	case routeDownload:
+		return installViaDownload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded)
+	}
+	return "", "", fmt.Errorf("bootstrap: unknown install route %q", route)
+}
+
+// installViaRemoteFetch has the machine download its own kernel. Nothing
+// crosses the SSH connection but the command and its result — the archive
+// travels over that host's own link, which is usually the fatter one.
+func installViaRemoteFetch(ctx context.Context, conn Conn, target remoteOS, opts Options, home, goos, goarch, uploaded string) (bin, version string, err error) {
+	if opts.ResolveDownload == nil {
+		return "", "", ErrRemoteFetchUnavailable
+	}
+	d, err := opts.ResolveDownload(ctx, opts.ProductVersion, goos, goarch)
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %w", ErrRemoteFetchUnavailable, err)
+	}
+	res, err := conn.Exec(ctx, target.Fetch(d, dirOf(uploaded), uploaded))
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %w", ErrRemoteFetchUnavailable, err)
+	}
+	if res.ExitCode != 0 {
+		return "", "", fmt.Errorf("%w: %s", ErrRemoteFetchUnavailable, tail(res.Stdout, 400))
+	}
+	loc, ver := locate(ctx, conn, target, uploaded, opts.MinVersion)
+	if loc == "" {
+		return "", "", ErrBinaryNotRunnable
+	}
+	return loc, ver, nil
+}
+
+// installViaDownload fetches the release here and pushes it over SFTP. The
+// route for a machine that cannot reach the release itself.
+func installViaDownload(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch, uploaded string) (bin, version string, err error) {
+	if opts.FetchBinary == nil {
+		// Not a sentinel: this is the caller wiring no fetcher, nothing about
+		// the machine, and it never happens in a shipped build.
+		return "", "", errors.New("bootstrap: this build cannot fetch a release")
+	}
+	binary, err := opts.FetchBinary(ctx, opts.ProductVersion, goos, goarch)
+	if err != nil {
+		return "", "", fmt.Errorf("bootstrap: fetch official %s/%s CLI: %w", goos, goarch, err)
+	}
+	return installBinaryBytes(ctx, conn, target, fs, binary, opts.MinVersion, home, uploaded)
 }
 
 // candidate is one reasonix the probe found, with what it answered about

@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"reasonix/internal/fileutil"
+	"reasonix/internal/i18n"
+	"reasonix/internal/serve"
 )
 
 // readServeTokenFile loads the auth=token pre-shared token from a file so the
@@ -58,4 +60,24 @@ func writeServeAddrFile(path, addr string) error {
 // capture the shell's $! (or want a belt-and-braces check).
 func writeServePidFile(path string) error {
 	return fileutil.AtomicWriteFile(path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600)
+}
+
+// printPasswordHash answers --hash-password: print a bcrypt hash of password
+// and stop, rather than starting a server. The second return says whether the
+// caller is done; the first is its exit code.
+func printPasswordHash(asked bool, password string) (int, bool) {
+	if !asked {
+		return 0, false
+	}
+	if password == "" {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--hash-password requires --password")
+		return 1, true
+	}
+	h, err := serve.HashPassword(password)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 1, true
+	}
+	fmt.Println(h)
+	return 0, true
 }

@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"reasonix/internal/releaseasset"
 	"reasonix/internal/remote"
 	"reasonix/internal/remote/sftpfs"
 )
@@ -46,18 +47,31 @@ const (
 // asks nothing a 1.x kernel cannot do, so those callers pass none.
 const MinPaneVersion = "2.0.0"
 
+// Broker points a bootstrapped serve at the provider broker on the machine
+// starting it: Addr is the remote loopback address an -R forward publishes it
+// on, and Token authenticates to it. A zero Broker leaves that host resolving
+// providers from its own config, which is what makes it need its own API key.
+type Broker struct {
+	Addr  string
+	Token string
+}
+
+func (b Broker) configured() bool { return b.Addr != "" && b.Token != "" }
+
 // Options configures EnsureServe.
 type Options struct {
-	Workspace      string                                                        // remote workspace path (may start with ~)
-	Install        string                                                        // auto|npm|upload|never
-	LocalBinary    string                                                        // path to the running reasonix binary, for same-platform upload
-	LocalGOOS      string                                                        // GOOS of LocalBinary
-	LocalGOARCH    string                                                        // GOARCH of LocalBinary
-	ProductVersion string                                                        // exact local release used for a cross-platform official download
-	FetchBinary    func(context.Context, string, string, string) ([]byte, error) // local verified release fetcher
-	MinVersion     string                                                        // version floor; empty leaves the flag probe as the only gate
-	Progress       func(step, detail string)                                     // optional progress callback
-	Clock          func() time.Time                                              // nil => time.Now
+	Workspace       string                                                                          // remote workspace path (may start with ~)
+	Install         string                                                                          // auto|npm|upload|never
+	LocalBinary     string                                                                          // path to the running reasonix binary, for same-platform upload
+	LocalGOOS       string                                                                          // GOOS of LocalBinary
+	LocalGOARCH     string                                                                          // GOARCH of LocalBinary
+	ProductVersion  string                                                                          // exact local release used for a cross-platform official download
+	FetchBinary     func(context.Context, string, string, string) ([]byte, error)                   // local verified release fetcher
+	ResolveDownload func(context.Context, string, string, string) (releaseasset.CLIDownload, error) // names the release archive so the remote can fetch it itself
+	MinVersion      string                                                                          // version floor; empty leaves the flag probe as the only gate
+	Broker          Broker                                                                          // resolve providers back over the tunnel; zero leaves the remote on its own credentials
+	Progress        func(step, detail string)                                                       // optional progress callback
+	Clock           func() time.Time                                                                // nil => time.Now
 }
 
 func (o Options) progress(step, detail string) {
@@ -105,7 +119,7 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 	paths := target.Paths(home, workspace)
 
 	// 2. Reuse a live process if the recorded pid is still running.
-	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, opts.MinVersion, workspace); ok {
+	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, opts.MinVersion, opts.Broker.Addr, workspace); ok {
 		opts.progress("reuse", st.Addr)
 		return Result{State: st, Token: tok, Reused: true, Workspace: target.NativePath(st.Workspace)}, nil
 	}
@@ -125,14 +139,14 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	defer lock.release()
-	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, opts.MinVersion, workspace); ok {
+	if st, tok, ok := tryReuse(ctx, conn, target, fs, paths, opts.MinVersion, opts.Broker.Addr, workspace); ok {
 		opts.progress("reuse", st.Addr)
 		return Result{State: st, Token: tok, Reused: true, Workspace: target.NativePath(st.Workspace)}, nil
 	}
-	// A recorded kernel below the floor was just declined, and the record that
-	// points at it is about to be replaced. Stop it here or nothing ever will:
-	// the pid would outlive the only note this side keeps of it.
-	retireOutdated(ctx, conn, target, fs, paths, opts.MinVersion)
+	// The recorded kernel was just declined, and the record pointing at it is
+	// about to be replaced. Stop it here or nothing ever will: the pid would
+	// outlive the only note this side keeps of it.
+	retireReplaced(ctx, conn, target, fs, paths)
 
 	// 5. Generate token, write it 0600, and launch detached serve.
 	token, err := generateToken()
@@ -145,8 +159,13 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 	if err := fs.WriteFileAtomic(ctx, paths.TokenFile, []byte(token+"\n"), 0o600); err != nil {
 		return Result{}, fmt.Errorf("bootstrap: write token: %w", err)
 	}
+	if opts.Broker.configured() {
+		if err := fs.WriteFileAtomic(ctx, paths.BrokerTokenFile, []byte(opts.Broker.Token+"\n"), 0o600); err != nil {
+			return Result{}, fmt.Errorf("bootstrap: write broker token: %w", err)
+		}
+	}
 	opts.progress("launch", "")
-	launchRes, err := conn.Exec(ctx, target.Launch(bin, workspace, paths))
+	launchRes, err := conn.Exec(ctx, target.Launch(LaunchSpec{Bin: bin, Workspace: workspace, BrokerAddr: opts.Broker.Addr}, paths))
 	if err != nil {
 		cleanupFailedLaunch(conn, target, fs, paths, 0)
 		return Result{}, fmt.Errorf("bootstrap: launch: %w", err)
@@ -174,6 +193,7 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 		Addr:      addr,
 		Workspace: workspace,
 		Version:   version,
+		Broker:    opts.Broker.Addr,
 		TokenFile: paths.TokenFile,
 		LogFile:   paths.LogFile,
 		StartedAt: nowUnix(opts.clock()),
@@ -270,12 +290,18 @@ func Logs(ctx context.Context, conn Conn, workspace string, n int, w io.Writer) 
 	return err
 }
 
-func tryReuse(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, paths StatePaths, minVersion string, workspace ...string) (ServeState, string, bool) {
+func tryReuse(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, paths StatePaths, minVersion, broker string, workspace ...string) (ServeState, string, bool) {
 	st, err := readState(ctx, fs, paths.StateJSON)
 	if err != nil || st.PID <= 0 || st.Addr == "" {
 		return ServeState{}, "", false
 	}
 	if len(workspace) > 0 && st.Workspace != workspace[0] {
+		return ServeState{}, "", false
+	}
+	// A serve resolves providers over the address it was launched with, and
+	// this connect is about to publish a different one — reusing the process
+	// would leave every model call dialling a port that no longer exists.
+	if st.Broker != broker {
 		return ServeState{}, "", false
 	}
 	// Alive is not the same question as usable. Handing back a kernel from a
@@ -296,13 +322,14 @@ func tryReuse(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, pa
 	return st, tok, true
 }
 
-// retireOutdated stops a recorded kernel that no longer clears the floor, so
-// the launch about to replace its record does not leave it running unnamed.
-// Best effort by design: a machine that will not answer is not a reason to
-// refuse the pane the caller asked for.
-func retireOutdated(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, paths StatePaths, minVersion string) {
+// retireReplaced stops the kernel named by the record this launch is about to
+// overwrite. Reuse was already refused — too old, bound to a retired broker,
+// its token gone — and which of those it was does not change that the record
+// naming the pid is the only note this side keeps. Best effort: a machine that
+// will not answer is not a reason to refuse the pane the caller asked for.
+func retireReplaced(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, paths StatePaths) {
 	st, err := readState(ctx, fs, paths.StateJSON)
-	if err != nil || st.PID <= 0 || meetsMinVersion(st.Version, minVersion) {
+	if err != nil || st.PID <= 0 {
 		return
 	}
 	if !pidIsServe(ctx, conn, target, st.PID, paths) {

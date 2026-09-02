@@ -55,6 +55,11 @@ func RemoteServeStateName(slug string) string { return "serve-" + slug + ".json"
 // SFTP before launch and read by serve via --token-file.
 func RemoteServeTokenName(slug string) string { return "serve-" + slug + ".token" }
 
+// RemoteServeBrokerTokenName holds the provider broker's pre-shared token
+// (0600), read by serve via --provider-broker-token-file. Separate from the
+// serve token: the two authenticate opposite directions of the tunnel.
+func RemoteServeBrokerTokenName(slug string) string { return "serve-" + slug + ".broker" }
+
 // RemoteServeLogName captures the detached serve's stdout/stderr.
 func RemoteServeLogName(slug string) string { return "serve-" + slug + ".log" }
 

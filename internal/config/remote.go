@@ -38,6 +38,7 @@ type RemoteHostEntry struct {
 	// lands in — read them together through WorkspaceList.
 	Workspaces   []string             `toml:"workspaces,omitempty"`
 	ServeInstall string               `toml:"serve_install"`  // remote CLI: auto|npm|upload|never
+	Provider     string               `toml:"provider"`       // model credentials: local (this machine, over the tunnel) | remote (that host's own)
 	UseSSHConfig bool                 `toml:"use_ssh_config"` // layer ~/.ssh/config values under unset fields
 	Forwards     []RemoteForwardEntry `toml:"forwards"`
 }
@@ -51,6 +52,19 @@ type RemoteForwardEntry struct {
 
 // RemoteServeInstallModes are the accepted serve_install values.
 var RemoteServeInstallModes = []string{"auto", "npm", "upload", "never"}
+
+// RemoteProviderModes are the accepted provider values.
+var RemoteProviderModes = []string{"local", "remote"}
+
+// RemoteProviderLocal resolves a remote session's models on this machine, over
+// a forward the connection already carries, so that host needs neither an API
+// key nor egress of its own. It is the default: needing the credentials
+// configured twice is what made a first connect a setup task.
+const RemoteProviderLocal = "local"
+
+// RemoteProviderRemote leaves a host resolving models from its own config —
+// for a machine whose providers are deliberately not this one's.
+const RemoteProviderRemote = "remote"
 
 // Clone returns a deep copy. The global-only pin in loadForRoot must capture
 // the pre-project-merge value, but TOML decoding mutates existing slice
@@ -77,6 +91,17 @@ func (e RemoteHostEntry) ServeInstallMode() string {
 		return "auto"
 	}
 	return m
+}
+
+// ProviderMode returns where this host's model credentials come from,
+// defaulting to local. An unrecognized value is not silently reinterpreted as
+// the other one: it reads as the default, which is also what an entry written
+// by a newer Reasonix looks like to an older one.
+func (e RemoteHostEntry) ProviderMode() string {
+	if strings.EqualFold(strings.TrimSpace(e.Provider), RemoteProviderRemote) {
+		return RemoteProviderRemote
+	}
+	return RemoteProviderLocal
 }
 
 // WorkspaceList is every folder this host is worked in, default first and no
