@@ -26,6 +26,7 @@ import { mockRemoteHostView } from "./mockRemoteHosts";
 import type { RemoteProjectBindings } from "./remoteProjectBridge";
 import type { ScrollDiagnosticBindings } from "./scrollDiagnosticBridge";
 import { makeMockMCPAppBindings, type MCPAppBindings } from "./mcpAppBridge";
+import { makeMockPinnedContextBindings, type PinnedContextBindings } from "./pinnedContextBridge";
 import type {
   RemoteHostView,
   RemoteHostInput,
@@ -102,7 +103,6 @@ import type {
   NetworkView,
   PluginInstallOptions,
   PluginView,
-  PinnedFileInfo,
   ProjectNode,
   ProjectTreeOrganizationBindings,
   RecoveryLineageView,
@@ -190,10 +190,9 @@ interface DesktopWindowState {
   y: number;
   maximised: boolean;
 }
-
 // AppBindings is the hand-written React-to-Go contract. _CheckGeneratedBindings
 // catches generated methods missing here; update this interface and typecheck.
-export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings {
+export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings {
   Platform(): Promise<string>;
   MinimiseMainWindow(): Promise<void>;
   ToggleMaximiseMainWindow(): Promise<void>;
@@ -359,6 +358,8 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   OpenChannelSessionForTab(tabID: string, path: string): Promise<HistoryMessage[]>;
   OpenChannelSessionPageForTab(tabID: string, path: string, limit: number): Promise<HistoryPage>;
   PreviewSession(path: string): Promise<HistoryMessage[]>;
+  QuerySessionTakeover(tabId: string): Promise<import("./types").SessionTakeoverView | null>;
+  TakeoverSession(tabId: string, mode: "wait" | "interrupt"): Promise<void>;
   DeleteSession(path: string): Promise<void>;
   DeleteRecoveryCopy(path: string): Promise<void>;
   GetRecoveryLineage(key: { scope: string; workspaceRoot?: string; topicId: string; path?: string; recordClassification?: boolean }): Promise<RecoveryLineageView>;
@@ -477,9 +478,6 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   OpenWorkspacePath(rel: string): Promise<void>;
   OpenWorkspacePathForTab(tabID: string, rel: string): Promise<void>;
   ResolveWorkspacePathForTab(tabID: string, rel: string): Promise<string>;
-  PinFileForTab(tabID: string, rel: string): Promise<PinnedFileInfo>;
-  UnpinFileForTab(tabID: string, rel: string): Promise<void>;
-  GetPinnedFilesForTab(tabID: string): Promise<PinnedFileInfo[]>;
   ExternalOpeners(): Promise<ExternalOpenersView>; ExternalOpenersForTab(tabID: string): Promise<ExternalOpenersView>;
   SetPreferredExternalOpener(id: string): Promise<void>;
   OpenWorkspaceInExternalOpener(id: string): Promise<void>;
@@ -3123,7 +3121,7 @@ function makeMockApp(): AppBindings {
         async AnswerMCPInteractionForTab(_tabID, id, _action, _content) {
           if (!cancelled && (await import("./mockMCPInteraction")).consumeMockMCPInteraction(id)) await withMockTabScope(_tabID, async () => { emit({ kind: "prompt_answered", itemId: id }); emitMockTurnDone(); });
         },
-        ...makeMockMCPAppBindings(),
+        ...makeMockMCPAppBindings(), ...makeMockPinnedContextBindings(),
         async AnswerQuestionForTab(_tabID, id, answers) {
           await withMockTabScope(_tabID, () => this.AnswerQuestion(id, answers));
         },
@@ -3381,7 +3379,11 @@ function makeMockApp(): AppBindings {
 	    async OpenChannelSessionPageForTab(tabID: string, path: string, limit = 60) {
 	      return mockHistoryPage(await this.OpenChannelSessionForTab(tabID, path), 0, limit);
 	    },
-	    async PreviewSession(path: string) {
+	    async QuerySessionTakeover(_tabId: string) {
+      return { available: false, reason: "mock" } as import("./types").SessionTakeoverView;
+    },
+    async TakeoverSession(_tabId: string, _mode: "wait" | "interrupt") {},
+    async PreviewSession(path: string) {
       const s = sessions.find((x) => x.path === path) ?? trashedSessions.find((x) => x.path === path);
       return [
         { role: "user", content: s?.preview || `(mock) preview ${path}` },
@@ -4179,11 +4181,6 @@ function makeMockApp(): AppBindings {
       await this.OpenWorkspacePath(rel);
     },
     async ResolveWorkspacePathForTab(_tabID: string, rel: string) { return `${cwd.replace(/[\\/]+$/, "")}/${rel.replace(/^[/\\]+/, "").replace(/[\\/]+$/, "")}`; },
-    async PinFileForTab(_tabID: string, rel: string) {
-      return { path: rel, sizeBytes: 1024, tokenEstimate: 256 };
-    },
-    async UnpinFileForTab(_tabID: string, _rel: string) {},
-    async GetPinnedFilesForTab(_tabID: string) { return []; },
     async ExternalOpeners() {
       return {
         openers: [

@@ -3,7 +3,7 @@ import { AlertTriangle, FileText, Pin, X } from "lucide-react";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
 import { useToast } from "../lib/toast";
-import type { PinnedFileInfo } from "../lib/types";
+import type { PinnedFileInfo } from "../lib/pinnedContextBridge";
 
 export function PinnedFilesShelf({
   tabId,

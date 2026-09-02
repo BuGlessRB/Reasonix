@@ -37,7 +37,8 @@ import { createRafResizeUpdater } from "../lib/resizeDrag";
 import { observeComposerMenuViewport } from "../lib/composerMenuViewport";
 import { resolveComposerContentSizing } from "../lib/composerSizing";
 import { useToast } from "../lib/toast";
-import { type CollaborationMode, type CommandInfo, type ComposerInsertRequest, type ContextInfo, type DirEntry, type EffortInfo, type GoalRuntime, type HistoryMessage, type Mode, type PromptHistoryEntry, type QualityFloor, type SessionMeta, type SessionReference, type SlashArgItem, type SlashArgsResult, type ToolApprovalMode, type BalanceInfo, type PinnedFileInfo } from "../lib/types";
+import { type CollaborationMode, type CommandInfo, type ComposerInsertRequest, type ContextInfo, type DirEntry, type EffortInfo, type GoalRuntime, type HistoryMessage, type Mode, type PromptHistoryEntry, type QualityFloor, type SessionMeta, type SessionReference, type SlashArgItem, type SlashArgsResult, type ToolApprovalMode, type BalanceInfo } from "../lib/types";
+import { ComposerPinnedFilesShelf } from "./ComposerPinnedFilesShelf";
 import {
   formatWorkspaceReference,
   parseWorkspaceReference,
@@ -109,12 +110,7 @@ const COMPOSER_AUTO_RESERVED_HEIGHT = 58;
 const PROMPT_HISTORY_PREFETCH_REMAINING = 3;
 const FILE_REF_SEARCH_CACHE_TTL_MS = 5000;
 const ComposerGuidanceShelf = lazy(() => import("./ComposerGuidanceShelf").then((module) => ({ default: module.ComposerGuidanceShelf })));
-const PinnedFilesShelf = lazy(() => import("./PinnedFilesShelf").then((module) => ({ default: module.PinnedFilesShelf })));
-
-type PastedBlock = {
-  label: string;
-  text: string;
-};
+type PastedBlock = { label: string; text: string };
 
 type FileRefSearchCacheEntry = {
   entries: DirEntry[];
@@ -717,7 +713,7 @@ export function Composer({
   cacheHitTokens?: number;
   cacheMissTokens?: number;
   balance?: BalanceInfo;
-  pinnedFiles?: PinnedFileInfo[];
+  pinnedFiles?: import("../lib/pinnedContextBridge").PinnedFileInfo[];
 }) {
   const { t, locale } = useI18n();
   const { showToast } = useToast();
@@ -4299,11 +4295,7 @@ export function Composer({
           />
         </Suspense>
       )}
-      {pinnedFiles && pinnedFiles.length > 0 && (
-        <Suspense fallback={null}>
-          <PinnedFilesShelf tabId={tabId || ""} pinnedFiles={pinnedFiles} />
-        </Suspense>
-      )}
+      <ComposerPinnedFilesShelf tabId={tabId || ""} pinnedFiles={pinnedFiles} />
       {(attachments.length > 0 || workspaceRefs.length > 0 || sessionRefs.length > 0 || selectedTextRefs.length > 0) && (
         <div className="composer-context" aria-label={t("composer.contextItems")}>
           {sortComposerAttachments(attachments).map((a) => {

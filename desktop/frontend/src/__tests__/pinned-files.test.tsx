@@ -9,7 +9,7 @@ import { WorkspaceTreeMenu } from "../components/WorkspaceTreeMenu";
 import { LocaleProvider } from "../lib/i18n";
 import { ToastProvider } from "../lib/toast";
 import type { AppBindings } from "../lib/bridge";
-import type { PinnedFileInfo } from "../lib/types";
+import type { PinnedFileInfo } from "../lib/pinnedContextBridge";
 
 let passed = 0;
 let failed = 0;

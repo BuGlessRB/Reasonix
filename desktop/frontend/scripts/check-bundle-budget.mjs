@@ -163,24 +163,25 @@ console.log("\nbundle budgets");
 // The generation-bound history-prepend lease adds stable-key reader anchoring,
 // full mounted coverage, and one final arbiter-owned correction. The measured
 // path is 457.406 KiB after extracting the lease owner to satisfy repolint.
-// Latest-base transcript settle ownership measures 457.518 KiB with this UX;
-// isolated conversation forks and their extracted browser mock adapter bring
-// the combined tree to 458.158 KiB. Retain 0.042 KiB with the smallest
-// one-decimal ratchet. Completion uncertainty adds a terminal outcome and
-// notice without exposing evaluator audits to the frontend; the final merged
-// build measures 458.287 KiB gzip.
+// Latest-base transcript settle ownership measures 457.523 KiB with this UX.
+// Isolated conversation forks and their extracted browser mock adapter bring
+// the combined tree to 458.158 KiB; completion uncertainty adds a terminal
+// outcome and notice without exposing evaluator audits to the frontend,
+// measuring 458.287 KiB gzip.
 // Transactional Ask resolution and authoritative rejected-submit recovery add
 // 0.3 KiB gzip to the initial controller path. Retain the exact turn fence,
-// bounded ListTabs retry, and stale-prompt guard with a 0.1 KiB headroom.
+// bounded ListTabs retry, and stale-prompt guard.
 // Session-catalog repair presentation stays in the lazy project-tree chunk;
 // compact shared helpers keep the combined initial path within the same gate.
 // Merge-Back adds identity-bound inspection, navigation, and retained-recovery
 // orchestration on top. The merged stable build measures 461.338 KiB and the
 // test channel measures 461.323 KiB. Deferring selection ownership until a
-// real range exists (#9703/#9711), while Sticky Context adds session-scoped
-// file chips. The combined stable/test startup path measures 461.6 KiB; retain
-// only the next one-decimal ceiling.
-const initialJSBudgetKiB = 461.7;
+// real range exists (#9703/#9711) and adding the session takeover banners
+// move the combined path to 462.2 KiB. Local spectator reclaim adds the
+// desktop-vs-remote command branch. Sticky Context's session-scoped file chips
+// bring the merged stable path to 462.587 KiB; retain only the next one-decimal
+// ceiling.
+const initialJSBudgetKiB = 462.6;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -240,10 +241,11 @@ for (const path of localeChunks) {
   // The retained-recovery receipt and copy action move zh to 59.911 KiB;
   // session-catalog recovery guidance on the merged base moves zh-TW to
   // 60.757 KiB; retain only its exact one-decimal ceiling.
-  // Sticky Context's file-state and limit diagnostics move the combined zh
-  // chunk just beyond 60.0 KiB and zh-TW to 60.9 KiB; retain only the next
-  // one-decimal ceiling for each dialect.
-  const budget = name.startsWith("zh-TW-") ? 61.0 * 1024 : 60.1 * 1024;
+  // Session takeover adds ~20 locale keys per dialect (banners, dialog,
+  // reclaim), while Sticky Context adds file-state and limit diagnostics. The
+  // merged stable chunks measure 60.395 KiB zh and 61.232 KiB zh-TW; retain
+  // only the next one-decimal ceiling for each dialect.
+  const budget = name.startsWith("zh-TW-") ? 61.3 * 1024 : 60.4 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -313,16 +315,15 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // dialog remain lazy. Completion uncertainty adds a distinct terminal notice
 // and localized startup copy without collapsing into recovery-paused UX.
 // 2454.719 KiB on the release toolchain. Completion uncertainty brings the
-// final merged payload to 2455.154 KiB; retain the smallest one-decimal
-// ratchet.
+// final merged payload to 2455.154 KiB.
 // Ask turn fencing, rejection reconciliation, and the localized submit-failure
 // notice measure 2456.044 KiB raw; retain 0.056 KiB of one-decimal headroom.
 // Merge-Back's startup ownership and failure-atomic navigation fence add the
 // remaining bounded payload. The retained recovery receipt makes the stable
 // path 2465.105 KiB raw; the merged test channel measures 2464.979 KiB.
-// The #9703/#9711 provisional-selection handoff and Sticky Context's pinned-file
-// state put the combined stable/test payload at 2465.9 KiB. Retain only the
-// next one-decimal ceiling.
-const rawInitialBudgetKiB = 2_466.0;
+// Session takeover banners and #9703/#9711's provisional-selection handoff
+// combine with Sticky Context's pinned-file state at 2469.125 KiB raw on the
+// merged stable path. Retain only the next one-decimal ceiling.
+const rawInitialBudgetKiB = 2_469.2;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
