@@ -178,6 +178,10 @@ func loadPinnedContextStateOrEmpty(sessionPath, logMessage string) pinnedContext
 
 func prepareStartupPinnedContext(tab *WorkspaceTab, startupPath, persistedPath string) {
 	if startupPath != "" {
+		migratePendingLegacyPinnedFiles(tab, startupPath)
+		if len(tab.pendingLegacyPinnedFilesForPersistence()) > 0 {
+			return
+		}
 		state := loadPinnedContextStateOrEmpty(startupPath, "desktop: load startup pinned context")
 		tab.setPinnedFiles(state.Files)
 	} else if strings.TrimSpace(persistedPath) != "" {
@@ -190,8 +194,51 @@ func prepareStartupPinnedContext(tab *WorkspaceTab, startupPath, persistedPath s
 func restoreTabPinnedContext(tab *WorkspaceTab, legacy []string) {
 	state, err := loadOrMigratePinnedContextState(tab.SessionPath, legacy)
 	if err != nil {
+		tab.retainLegacyPinnedFiles(legacy)
 		slog.Warn("desktop: restore pinned context", "err", err)
 		return
 	}
+	if strings.TrimSpace(tab.SessionPath) == "" && len(legacy) > 0 {
+		tab.setPinnedFilesState(state.Files, legacy)
+		return
+	}
 	tab.setPinnedFiles(state.Files)
+}
+
+func migratePendingLegacyPinnedFiles(tab *WorkspaceTab, sessionPath string) {
+	legacy := tab.pendingLegacyPinnedFilesForPersistence()
+	if len(legacy) == 0 || strings.TrimSpace(sessionPath) == "" {
+		return
+	}
+	sidecar := store.SessionPinnedContext(sessionPath)
+	if _, err := os.Stat(sidecar); err == nil {
+		if _, loadErr := loadPinnedContextState(sessionPath); loadErr == nil {
+			tab.clearPendingLegacyPinnedFiles()
+		}
+		return
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err := savePinnedContextState(sessionPath, legacy); err != nil {
+		slog.Warn("desktop: migrate pending legacy pinned context", "err", err)
+		return
+	}
+	tab.clearPendingLegacyPinnedFiles()
+}
+
+func pinnedContextStateForSessionBinding(tab *WorkspaceTab, sessionPath string) (pinnedContextState, bool) {
+	pendingLegacy := tab.pendingLegacyPinnedFilesForPersistence()
+	_, sidecarErr := os.Stat(store.SessionPinnedContext(sessionPath))
+	state, err := loadPinnedContextState(sessionPath)
+	if err != nil {
+		slog.Warn("desktop: load session pinned context", "session", agent.BranchID(sessionPath), "err", err)
+	}
+	preserveLegacy := len(pendingLegacy) > 0 && (errors.Is(sidecarErr, os.ErrNotExist) || err != nil)
+	return state, preserveLegacy
+}
+
+func applyPinnedContextSessionBinding(tab *WorkspaceTab, state pinnedContextState, preserveLegacy bool) {
+	if !preserveLegacy {
+		tab.setPinnedFiles(state.Files)
+	}
 }

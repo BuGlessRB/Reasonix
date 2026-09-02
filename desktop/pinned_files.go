@@ -194,11 +194,47 @@ func pinnedInfoForPath(infos []PinnedFileInfo, path string) (PinnedFileInfo, boo
 }
 
 func (t *WorkspaceTab) setPinnedFiles(files []string) {
+	t.setPinnedFilesState(files, nil)
+}
+
+func (t *WorkspaceTab) setPinnedFilesState(files, pendingLegacy []string) {
 	if t == nil {
 		return
 	}
 	t.pinnedFilesMu.Lock()
 	t.PinnedFiles = append([]string(nil), files...)
+	t.pendingLegacyPinnedFiles = append([]string(nil), pendingLegacy...)
+	t.pinnedFilesMu.Unlock()
+}
+
+func (t *WorkspaceTab) pinnedFilesState() ([]string, []string) {
+	if t == nil {
+		return []string{}, []string{}
+	}
+	t.pinnedFilesMu.RLock()
+	defer t.pinnedFilesMu.RUnlock()
+	return append([]string{}, t.PinnedFiles...), append([]string{}, t.pendingLegacyPinnedFiles...)
+}
+
+func (t *WorkspaceTab) retainLegacyPinnedFiles(files []string) {
+	normalized, err := normalizePinnedContextFiles(files)
+	if err != nil {
+		normalized = []string{}
+	}
+	t.setPinnedFilesState(normalized, files)
+}
+
+func (t *WorkspaceTab) pendingLegacyPinnedFilesForPersistence() []string {
+	_, pending := t.pinnedFilesState()
+	return pending
+}
+
+func (t *WorkspaceTab) clearPendingLegacyPinnedFiles() {
+	if t == nil {
+		return
+	}
+	t.pinnedFilesMu.Lock()
+	t.pendingLegacyPinnedFiles = nil
 	t.pinnedFilesMu.Unlock()
 }
 

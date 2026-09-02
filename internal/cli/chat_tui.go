@@ -5045,7 +5045,7 @@ func firstLine(s string) string {
 func copyAssistantParts(msgs []provider.Message) []string {
 	lastUserIdx := -1
 	for i, v := range slices.Backward(msgs) {
-		if v.Role == provider.RoleUser {
+		if v.Role == provider.RoleUser && !agent.IsPinnedContextRevision(v) {
 			lastUserIdx = i
 			break
 		}
@@ -5082,7 +5082,7 @@ func (m *chatTUI) runExportCommand(input string) {
 	b.WriteString("# reasonix session\n\n")
 	lastRole := provider.Role("")
 	exportedMessages := 0
-	for _, msg := range msgs {
+	for _, msg := range cliHistoryWithoutPinnedContextRevisions(msgs) {
 		switch msg.Role {
 		case provider.RoleUser:
 			// Skip internal steer messages.
@@ -5364,7 +5364,7 @@ func replaySectionsForWithAssistantRenderer(
 	renderAssistant func(string, int) string,
 ) []string {
 	var out []string
-	for _, m := range history {
+	for _, m := range cliHistoryWithoutPinnedContextRevisions(history) {
 		if m.LocalOnly {
 			if m.FinalReadinessRecovery != nil && m.FinalReadinessRecovery.Pending {
 				out = append(out, fmt.Sprintf("  · %s\n\n", i18n.M.FinalReadinessRecovery))

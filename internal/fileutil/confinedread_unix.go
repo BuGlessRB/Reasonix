@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // OpenFileBeneath opens rel first, validates the identity held by that open
@@ -32,7 +33,10 @@ func OpenFileBeneath(root, rel string) (*os.File, error) {
 		return nil, fmt.Errorf("stat workspace root: %w", err)
 	}
 	abs := filepath.Join(root, rel)
-	file, err := os.Open(abs)
+	// O_NONBLOCK prevents a workspace FIFO from stalling admission before the
+	// caller can inspect and reject its descriptor type. It is inert for regular
+	// files, which are the only pinned-context targets accepted by the caller.
+	file, err := os.OpenFile(abs, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}

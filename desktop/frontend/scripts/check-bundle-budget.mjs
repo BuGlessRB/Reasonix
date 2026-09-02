@@ -320,9 +320,9 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // Merge-Back's startup ownership and failure-atomic navigation fence add the
 // remaining bounded payload. The retained recovery receipt makes the stable
 // path 2465.105 KiB raw; the merged test channel measures 2464.979 KiB.
-// The #9703/#9711 provisional-selection handoff moves the measured stable path
-// while Sticky Context adds its pinned-file state. Re-measure the combined
-// stable and test payloads at 2465.9 KiB and retain the next decimal ceiling.
+// The #9703/#9711 provisional-selection handoff and Sticky Context's pinned-file
+// state put the combined stable/test payload at 2465.9 KiB. Retain only the
+// next one-decimal ceiling.
 const rawInitialBudgetKiB = 2_466.0;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

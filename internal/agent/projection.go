@@ -499,6 +499,12 @@ func projectionContentValid(st CompactionState, msgs []provider.Message) bool {
 	if st.Projection.CoveredPrefixHash == "" {
 		return false
 	}
+	// Readers before v4 did not authenticate pinned revision provenance. Their
+	// projections may summarize or omit active pinned state, so fail closed and
+	// rebuild a v4 checkpoint from the canonical transcript.
+	if st.SchemaVersion < compactionStateSchemaV4 && containsPinnedContextRevision(msgs[:n]) {
+		return false
+	}
 	if st.SchemaVersion >= compactionStateSchemaV4 &&
 		st.Projection.PinnedContextHash != pinnedContextCoverageHash(msgs, n) {
 		return false
