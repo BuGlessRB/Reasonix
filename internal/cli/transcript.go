@@ -214,8 +214,8 @@ func indentTranscriptBlock(block, indent string) string {
 	lines := strings.Split(block, "\n")
 	for i, line := range lines {
 		if line != "" {
-			if strings.HasPrefix(line, copyOmitSpanStart) {
-				lines[i] = copyOmitSpanStart + indent + strings.TrimPrefix(line, copyOmitSpanStart)
+			if rest, ok := strings.CutPrefix(line, copyOmitSpanStart); ok {
+				lines[i] = copyOmitSpanStart + indent + rest
 			} else {
 				lines[i] = indent + line
 			}
