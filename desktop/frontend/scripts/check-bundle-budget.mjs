@@ -176,9 +176,10 @@ console.log("\nbundle budgets");
 // compact shared helpers keep the combined initial path within the same gate.
 // Merge-Back adds identity-bound inspection, navigation, and retained-recovery
 // orchestration on top. The merged stable build measures 461.338 KiB and the
-// test channel measures 461.323 KiB; retain each exact one-decimal ceiling.
-// Sticky Context's session-scoped file chips add 0.2 KiB on the combined tree;
-// the production build measures 461.6 KiB. Retain the next decimal ceiling.
+// test channel measures 461.323 KiB. Deferring selection ownership until a
+// real range exists (#9703/#9711), while Sticky Context adds session-scoped
+// file chips. The combined stable/test startup path measures 461.6 KiB; retain
+// only the next one-decimal ceiling.
 const initialJSBudgetKiB = 461.7;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
@@ -319,9 +320,9 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // Merge-Back's startup ownership and failure-atomic navigation fence add the
 // remaining bounded payload. The retained recovery receipt makes the stable
 // path 2465.105 KiB raw; the merged test channel measures 2464.979 KiB.
-// Retain only each channel's exact one-decimal ceiling.
-// Sticky Context adds its pinned-file state to the combined startup path; both
-// stable and test channels measure 2465.8 KiB. Retain the next decimal ceiling.
-const rawInitialBudgetKiB = 2_465.9;
+// The #9703/#9711 provisional-selection handoff moves the measured stable path
+// while Sticky Context adds its pinned-file state. Re-measure the combined
+// stable and test payloads at 2465.9 KiB and retain the next decimal ceiling.
+const rawInitialBudgetKiB = 2_466.0;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
