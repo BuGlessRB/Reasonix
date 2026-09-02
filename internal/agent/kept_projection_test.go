@@ -171,3 +171,30 @@ func TestSeesStandingBlockReadsTheVisibleHistory(t *testing.T) {
 		t.Fatal("a different variant matched")
 	}
 }
+
+// Instructions are re-owed whenever the set changes or a fold summarises the
+// turn that carried them, so several copies can be in one retained slice. Only
+// the newest states what the rules are now; the rest are a stale duplicate of
+// the largest block the turn carries.
+func TestSupersedeKeepsOnlyTheNewestInstructions(t *testing.T) {
+	const first = "<project-instructions>\n# Instructions\n\nUse tabs.\n</project-instructions>"
+	const second = "<project-instructions>\n# Instructions\n\nUse spaces.\n</project-instructions>"
+	kept := []provider.Message{
+		{Role: provider.RoleUser, Content: first + "\n\nfirst"},
+		{Role: provider.RoleUser, Content: "plain turn"},
+		{Role: provider.RoleUser, Content: second + "\n\nthird"},
+	}
+	got := supersedeStandingState(kept)
+
+	if strings.Contains(got[0].Content, "Use tabs.") {
+		t.Fatalf("the superseded instructions survived:\n%q", got[0].Content)
+	}
+	if !strings.Contains(got[2].Content, "Use spaces.") {
+		t.Fatalf("the newest instructions did not survive:\n%q", got[2].Content)
+	}
+	for i, want := range []string{"first", "plain turn", "third"} {
+		if !strings.Contains(got[i].Content, want) {
+			t.Fatalf("message %d lost its text: %q", i, got[i].Content)
+		}
+	}
+}

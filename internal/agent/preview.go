@@ -42,6 +42,7 @@ var SupersededUserBlockTags = []string{
 	"response-language",
 	"reasoning-language",
 	"workspace",
+	"project-instructions",
 }
 
 // supersededUserBlock indexes SupersededUserBlockTags so the two cannot drift.
