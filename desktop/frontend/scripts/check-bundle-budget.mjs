@@ -174,10 +174,12 @@ console.log("\nbundle budgets");
 // bounded ListTabs retry, and stale-prompt guard with a 0.1 KiB headroom.
 // Session-catalog repair presentation stays in the lazy project-tree chunk;
 // compact shared helpers keep the combined initial path within the same gate.
-// Sticky context pinning adds Wails bridge methods, English dictionary keys,
-// and lazy shelf wiring. The merged production build measures 459.0 KiB gzip;
-// retain 0.5 KiB for build-hash and toolchain drift.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 459.5 : 459.5;
+// Merge-Back adds identity-bound inspection, navigation, and retained-recovery
+// orchestration on top. The merged stable build measures 461.338 KiB and the
+// test channel measures 461.323 KiB; retain each exact one-decimal ceiling.
+// Sticky Context's session-scoped file chips add 0.2 KiB on the combined tree;
+// the production build measures 461.6 KiB. Retain the next decimal ceiling.
+const initialJSBudgetKiB = 461.7;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -232,7 +234,15 @@ for (const path of localeChunks) {
   // reachable-tail recovery copy, the merged chunks measure 58.923 KiB zh and
   // 59.710 KiB zh-TW. The isolated-fork guidance brings the measured chunks
   // to 59.1 KiB zh and 59.9 KiB zh-TW; retain a narrow one-decimal ratchet.
-  const budget = name.startsWith("zh-TW-") ? 60.5 * 1024 : 59.6 * 1024;
+  // Merge-Back lifecycle and recovery guidance measure 59.819 KiB zh and
+  // 60.612 KiB zh-TW; retain only the next one-decimal ceiling for each.
+  // The retained-recovery receipt and copy action move zh to 59.911 KiB;
+  // session-catalog recovery guidance on the merged base moves zh-TW to
+  // 60.757 KiB; retain only its exact one-decimal ceiling.
+  // Sticky Context's file-state and limit diagnostics move the combined zh
+  // chunk just beyond 60.0 KiB and zh-TW to 60.9 KiB; retain only the next
+  // one-decimal ceiling for each dialect.
+  const budget = name.startsWith("zh-TW-") ? 61.0 * 1024 : 60.1 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -306,9 +316,12 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // ratchet.
 // Ask turn fencing, rejection reconciliation, and the localized submit-failure
 // notice measure 2456.044 KiB raw; retain 0.056 KiB of one-decimal headroom.
-// Sticky context pinning adds Wails bridge signatures, English dictionary keys,
-// and lazy shelf wiring. The merged production build measures 2456.7 KiB raw;
-// retain 1.3 KiB for build-hash and toolchain drift.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_458.0 : 2_458.0;
+// Merge-Back's startup ownership and failure-atomic navigation fence add the
+// remaining bounded payload. The retained recovery receipt makes the stable
+// path 2465.105 KiB raw; the merged test channel measures 2464.979 KiB.
+// Retain only each channel's exact one-decimal ceiling.
+// Sticky Context adds its pinned-file state to the combined startup path; both
+// stable and test channels measure 2465.8 KiB. Retain the next decimal ceiling.
+const rawInitialBudgetKiB = 2_465.9;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
