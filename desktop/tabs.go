@@ -157,22 +157,23 @@ func (b *displayTurnBuffer) materialize() []HistoryMessage {
 // memory, permissions) scoped to a workspace root, so multiple projects and
 // topics can be active concurrently without interfering.
 type WorkspaceTab struct {
-	ID                  string             // stable random id
-	Scope               string             // "project" | "global"
-	WorkspaceRoot       string             // project root dir (empty for global)
-	SharedHostKey       string             // opaque key for the shared plugin host (set by buildTabController)
-	TopicID             string             // topic within the project
-	TopicTitle          string             // display title
-	topicTitleSource    string             // auto or manual; controls localization at API boundaries
-	SessionPath         string             // exact .jsonl file this tab continues
-	SessionGeneration   uint64             // bumps on session rotation (clear/new); frontend hydrate identity
-	ReadOnly            bool               // true for external channel transcripts opened for browsing
-	Ctrl                control.SessionAPI // nil while booting / on error
-	Label               string             // model label (for the tab badge)
-	Ready               bool               // true once boot.Build completes
-	StartupErr          string             // build error, surfaced to the frontend
-	StartupErrLeaseHeld bool               // true when StartupErr can be retried after a session lease releases
-	runtimeID           string             // process-local SessionRuntime registry identity
+	ID                  string                   // stable random id
+	Scope               string                   // "project" | "global"
+	WorkspaceRoot       string                   // project root dir (empty for global)
+	SharedHostKey       string                   // opaque key for the shared plugin host (set by buildTabController)
+	TopicID             string                   // topic within the project
+	TopicTitle          string                   // display title
+	topicTitleSource    string                   // auto or manual; controls localization at API boundaries
+	SessionPath         string                   // exact .jsonl file this tab continues
+	SessionGeneration   uint64                   // bumps on session rotation (clear/new); frontend hydrate identity
+	ReadOnly            bool                     // true for external channel transcripts opened for browsing
+	Takeover            struct{ Spectator bool } // handoff state grouped by its cross-runtime lifetime
+	Ctrl                control.SessionAPI       // nil while booting / on error
+	Label               string                   // model label (for the tab badge)
+	Ready               bool                     // true once boot.Build completes
+	StartupErr          string                   // build error, surfaced to the frontend
+	StartupErrLeaseHeld bool                     // true when StartupErr can be retried after a session lease releases
+	runtimeID           string                   // process-local SessionRuntime registry identity
 	sessionLease        *agent.SessionLease
 	sessionLeaseMu      sync.Mutex
 	sessionLeaseKey     atomic.Pointer[string] // lock-free mirror; updated with sessionLease under sessionLeaseMu
@@ -936,6 +937,10 @@ func (a *App) attachExistingSessionRuntimeCore(tab *WorkspaceTab, path string, w
 	attachedSink := tab.sink
 	attachedEpoch := a.runtimeEpochForTabLocked(tab)
 	a.mu.Unlock()
+	if path != "" && !tab.ReadOnly {
+		a.attachTakeoverMirror(tab.ID, path)
+		go a.adoptSessionFromLocalServe(tab.ID, path)
+	}
 
 	a.replayPendingPromptsAfterRuntimeAttach(tab.ID, attachedSink, attachedCtrl, attachedEpoch)
 	return true
@@ -1652,6 +1657,18 @@ type tabEventSink struct {
 	botSink       event.Sink // optional: when set, events are also forwarded here
 	botSinkGen    uint64
 	turn          turnSubmissionState // stays reserved through the end of TurnDone fan-out
+	// takeoverMirror, when set, forwards every event to the serve that used to
+	// own this session so the remote tab keeps rendering after a local
+	// takeover. Atomic so Emit reads it without the sink lock.
+	takeoverMirror atomic.Pointer[takeoverMirror]
+}
+
+// setTakeoverMirror installs (or clears) the session-takeover frame mirror.
+func (s *tabEventSink) setTakeoverMirror(m *takeoverMirror) {
+	if s == nil {
+		return
+	}
+	s.takeoverMirror.Store(m)
 }
 
 type closeableEventSink interface {
@@ -1710,18 +1727,13 @@ func (s *tabEventSink) Emit(e event.Event) {
 		}
 		if m := app.metrics.Load(); m != nil {
 			m.observe(e)
-			if e.Kind == event.TurnDone {
-				// Display persistence and its projection acknowledgement run first,
-				// so successful compaction is included in this content-free snapshot.
-				if tab := app.tabByID(tabID); tab != nil && tab.Ctrl != nil {
-					observeControllerRecoveryMetrics(m, tab.Ctrl)
-					observeControllerTurnEventMetrics(m, tab.Ctrl)
-				}
-				m.persist()
-			}
+			persistMetricsEvent(app, m, tabID, e)
 		}
 	}
 	s.emitRuntimeEvent(eventChannel, toWireTabWithSubmission(e, tabID, s.runtimeEpochSnapshot(), s.submissionIDSnapshot(), turnStartedAt))
+	if m := s.takeoverMirror.Load(); m != nil {
+		m.forwardEvent(e)
+	}
 	if app != nil {
 		if status, update := topicActivityStatusFromEvent(e); update {
 			changed := app.setTabActivityStatus(tabID, status)
@@ -2362,6 +2374,7 @@ func (a *App) tabMeta(tab *WorkspaceTab, active bool) TabMeta {
 		SessionDigest:     sessionDigest,
 		SessionGeneration: tab.SessionGeneration,
 		ReadOnly:          tab.ReadOnly,
+		TakenOver:         tab.Takeover.Spectator,
 		Label:             tab.Label,
 		Ready:             runtimeView.Phase == sessionRuntimeReady && tab.Ctrl != nil,
 		Runtime:           runtimeView,
@@ -2473,8 +2486,6 @@ func (a *App) openProjectTab(workspaceRoot, topicID string) (TabMeta, error) {
 	if abs, err := filepath.Abs(workspaceRoot); err == nil {
 		workspaceRoot = abs
 	}
-	saveWorkspace(workspaceRoot)
-	a.registerProjectRoot(workspaceRoot)
 
 	sessionPath, _ := a.findTopicSessionForTarget("project", workspaceRoot, topicID)
 	return a.openTopicTabWithActivation("project", workspaceRoot, topicID, sessionPath, true)
@@ -2491,7 +2502,6 @@ func (a *App) openProjectTabInactive(workspaceRoot, topicID string) (TabMeta, er
 	if abs, err := filepath.Abs(workspaceRoot); err == nil {
 		workspaceRoot = abs
 	}
-	a.registerProjectRoot(workspaceRoot)
 
 	sessionPath, _ := a.findTopicSessionForTarget("project", workspaceRoot, topicID)
 	return a.openTopicTabWithActivation("project", workspaceRoot, topicID, sessionPath, false)
@@ -2509,6 +2519,15 @@ func (a *App) openGlobalTabInactive(topicID string) (TabMeta, error) {
 
 func (a *App) openTopicTabWithActivation(scope, workspaceRoot, topicID, sessionPath string, activate bool) (TabMeta, error) {
 	actualRoot, sessionPath := a.resolveOpenTopicSessionPath(scope, workspaceRoot, sessionPath)
+	releaseAdmission, err := a.beginProjectRuntimeAdmission(scope, actualRoot)
+	if err != nil {
+		return TabMeta{}, err
+	}
+	defer releaseAdmission()
+	if strings.TrimSpace(scope) == "project" {
+		saveWorkspace(actualRoot)
+		a.registerProjectRoot(actualRoot)
+	}
 	targetKey := sessionRuntimeKey(sessionPath)
 
 	a.mu.Lock()
@@ -2634,8 +2653,6 @@ func (a *App) openTopicSession(scope, workspaceRoot, topicID, sessionPath string
 		if workspaceRoot == "" {
 			return TabMeta{}, fmt.Errorf("workspaceRoot is required")
 		}
-		saveWorkspace(workspaceRoot)
-		a.registerProjectRoot(workspaceRoot)
 	}
 	_, validPath, err := a.sessionDirForPath(sessionPath)
 	if err != nil {
@@ -2739,8 +2756,6 @@ func (a *App) ensureBlankTab(scope, workspaceRoot string) (TabMeta, error) {
 		if abs, err := filepath.Abs(workspaceRoot); err == nil {
 			workspaceRoot = abs
 		}
-		saveWorkspace(workspaceRoot)
-		a.registerProjectRoot(workspaceRoot)
 	} else {
 		workspaceRoot = ""
 		globalRoot = globalWorkspaceRoot()
@@ -2755,6 +2770,15 @@ func (a *App) ensureBlankTab(scope, workspaceRoot string) (TabMeta, error) {
 	actualRoot := workspaceRoot
 	if scope == "global" {
 		actualRoot = globalRoot
+	}
+	releaseAdmission, err := a.beginProjectRuntimeAdmission(scope, actualRoot)
+	if err != nil {
+		return TabMeta{}, err
+	}
+	defer releaseAdmission()
+	if scope == "project" {
+		saveWorkspace(workspaceRoot)
+		a.registerProjectRoot(workspaceRoot)
 	}
 	defaultModel, defaultToolApprovalMode := desktopNewSessionDefaults(scope, actualRoot)
 
@@ -3774,6 +3798,28 @@ func (a *App) recordTabStartupFailure(tab *WorkspaceTab, buildGeneration uint64,
 	a.writeTabsSaveRequest(save)
 	if leaseHeld {
 		a.scheduleDeferredStartupBuild(tab.ID)
+		tabID := tab.ID
+		// The deferred loop retries every 2s and re-enters this path. Only the
+		// first transition to lease_blocked needs the explicit meta push — a
+		// repeated push would re-fetch the same list and churn the frontend.
+		a.mu.RLock()
+		rt := a.runtimeForTabLocked(tab)
+		alreadyBlocked := rt != nil && rt.Phase == sessionRuntimeLeaseBlocked && rt.Issue != nil && rt.Issue.Code == "session_lease_held"
+		a.mu.RUnlock()
+		if alreadyBlocked {
+			a.emitReady(wailsCtx, tab.ID)
+			return
+		}
+		// A failed startup emits no agent events, so the frontend's tabMetas
+		// list would never refresh its runtime state and the takeover
+		// banner/button would have nothing to render. Push the authoritative
+		// tab meta (whose Runtime carries the lease_blocked view) explicitly.
+		a.goSafe("tab-meta-push-lease", func() {
+			if a.tabs[tabID] == nil {
+				return
+			}
+			a.emitRuntimeEvent(tabMetaRefreshEventChannel, TabMetaRefreshEvent{TabID: tabID, Meta: a.MetaForTab(tabID)})
+		})
 	}
 	a.emitReady(wailsCtx, tab.ID)
 }
@@ -3822,9 +3868,17 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	}
 	a.mu.Lock()
 	if !tab.removed && tab.Ctrl == nil {
-		tab.Ready = false
-		clearTabStartupError(tab)
-		a.setSessionRuntimePhaseLocked(tab, sessionRuntimeStarting, nil)
+		// A lease-blocked tab keeps its blocked banner steady while the
+		// deferred-rebuild loop retries every 2s: resetting to "starting" on
+		// each attempt makes the frontend's takeover banner (and the dialog
+		// built from it) mount/unmount in a 2s cycle. The state flips to ready
+		// only when a retry actually wins the lease. Deliberate user rebuilds
+		// never carry StartupErrLeaseHeld, so they reset as before.
+		if !tab.StartupErrLeaseHeld {
+			tab.Ready = false
+			clearTabStartupError(tab)
+			a.setSessionRuntimePhaseLocked(tab, sessionRuntimeStarting, nil)
+		}
 	}
 	a.mu.Unlock()
 
@@ -4170,7 +4224,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	// Lifecycle admission protects only the compare-and-publish boundary. Slow
 	// config, history, lease, and extension work above remains cancellable and
 	// cannot prevent shutdown from acquiring the write side.
-	releasePublication, extensionsCurrent := a.lockTabControllerPublication(extensionGen)
+	releasePublication, extensionsCurrent := a.lockTabControllerPublication(extensionGen, tabScope, tabWorkspaceRoot)
 	if !extensionsCurrent {
 		registration.rollback()
 		a.abandonSupersededBuild(tab, ctrl, rootKey, acquiredLeaseKey)
@@ -4198,6 +4252,13 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	a.advanceSessionRuntimeEpochLocked(tab)
 	keepBuildContext = true
 	a.mu.Unlock()
+	// A directly-opened session announces itself to a resident serve so the
+	// remote side can watch it read-only and reclaim it (see
+	// adoptSessionFromLocalServe). First-open path of the takeover flow.
+	if path := strings.TrimSpace(tab.currentSessionPath()); path != "" && !tab.ReadOnly {
+		a.attachTakeoverMirror(tab.ID, path)
+		go a.adoptSessionFromLocalServe(tab.ID, path)
+	}
 	recoverPendingTurnProjections(tab, ctrl)
 	a.emitReady(wailsCtx, tab.ID)
 }
@@ -4279,6 +4340,11 @@ func (a *App) applySessionBindingToTab(tab *WorkspaceTab, binding sessionBinding
 		if workspaceRoot == "" {
 			return
 		}
+		releaseAdmission, err := a.beginChangedProjectRuntimeAdmission(tab, scope, workspaceRoot)
+		if err != nil {
+			return
+		}
+		defer releaseAdmission()
 		a.registerProjectRoot(workspaceRoot)
 	} else {
 		scope = "global"
@@ -4861,14 +4927,14 @@ func topicTitleUserTurnsFromSession(path string) []string {
 		// mid-turn steers are persisted as role "user" but are not user-authored:
 		// counting them inflated userTurns past the stage-3 threshold and let
 		// "Host final-answer readiness check failed…" become a topic title.
-		if !agent.IsUserAuthoredTurn(msg.Text) {
+		if !agent.IsUserAuthoredTurnMessage(msg.Message) {
 			continue
 		}
 		// UserPreviewText is the canonical user-authored view: it unwraps
 		// memory-compiler execution contracts and strips transient blocks
 		// (and runs HandoffTask), so internal wrappers can never become a
 		// title basis (#5666).
-		content := control.StripComposePrefixes(agent.UserPreviewText(msg.Text))
+		content := control.StripComposePrefixes(agent.UserPreviewText(agent.UserMessageText(msg.Message)))
 		content = control.StripReferencedContextPrefix(content)
 		if strings.TrimSpace(content) != "" {
 			users = append(users, content)
@@ -4950,31 +5016,6 @@ const legacyProjectSidebarRecoveryMarker = "desktop-projects-legacy-recovered"
 
 var desktopProjectsFileMu sync.Mutex
 
-type desktopTabEntry struct {
-	ID               string  `json:"id"`
-	Scope            string  `json:"scope"`
-	WorkspaceRoot    string  `json:"workspaceRoot"`
-	TopicID          string  `json:"topicId"`
-	SessionPath      string  `json:"sessionPath,omitempty"`
-	ReadOnly         bool    `json:"readOnly,omitempty"`
-	Model            string  `json:"model,omitempty"`
-	Effort           *string `json:"effort,omitempty"`
-	TokenMode        string  `json:"tokenMode,omitempty"`
-	AgentPreset      string  `json:"agentPreset,omitempty"`
-	QualityFloor     string  `json:"qualityFloor,omitempty"`
-	Mode             string  `json:"mode,omitempty"`
-	Goal             string  `json:"goal,omitempty"`
-	ToolApprovalMode string  `json:"toolApprovalMode,omitempty"`
-}
-
-type desktopTabsFile struct {
-	Tabs           []desktopTabEntry       `json:"tabs"`
-	ActiveTab      string                  `json:"activeTab"`
-	RemoteTabs     []desktopRemoteTabEntry `json:"remoteTabs,omitempty"`
-	RemoteTabOrder []string                `json:"remoteTabOrder,omitempty"`
-	TabOrder       []string                `json:"tabOrder,omitempty"`
-}
-
 func desktopConfigDir() string {
 	return config.ReasonixHomeDir()
 }
@@ -4997,20 +5038,21 @@ func (a *App) saveTabsCollectLocked() (string, []desktopTabEntry, string, uint64
 				continue
 			}
 			entries = append(entries, desktopTabEntry{
-				ID:               tab.ID,
-				Scope:            tab.Scope,
-				WorkspaceRoot:    tab.WorkspaceRoot,
-				TopicID:          tab.TopicID,
-				SessionPath:      tab.currentSessionPath(),
-				ReadOnly:         tab.ReadOnly,
-				Model:            tab.model,
-				Effort:           cloneStringPtr(tab.effort),
-				AgentPreset:      currentTabAgentPreset(tab),
-				TokenMode:        currentTabTokenMode(tab),
-				QualityFloor:     tab.qualityFloor,
-				Mode:             persistedTabMode(currentTabMode(tab)),
-				Goal:             persistedTabGoal(tab),
-				ToolApprovalMode: persistedToolApprovalMode(currentTabToolApprovalMode(tab)),
+				ID:                tab.ID,
+				Scope:             tab.Scope,
+				WorkspaceRoot:     tab.WorkspaceRoot,
+				TopicID:           tab.TopicID,
+				SessionPath:       tab.currentSessionPath(),
+				ReadOnly:          tab.ReadOnly,
+				TakeoverSpectator: tab.Takeover.Spectator,
+				Model:             tab.model,
+				Effort:            cloneStringPtr(tab.effort),
+				AgentPreset:       currentTabAgentPreset(tab),
+				TokenMode:         currentTabTokenMode(tab),
+				QualityFloor:      tab.qualityFloor,
+				Mode:              persistedTabMode(currentTabMode(tab)),
+				Goal:              persistedTabGoal(tab),
+				ToolApprovalMode:  persistedToolApprovalMode(currentTabToolApprovalMode(tab)),
 			})
 		}
 	}
@@ -6177,8 +6219,7 @@ func (a *App) handleTabSessionRecovered(tab *WorkspaceTab) func(control.SessionR
 				_ = saveTelemetry(info.RecoveryPath+".telemetry.json", tab.telemetrySnapshot())
 			}
 		}
-		a.emitProjectTreeChangedForSessionDirs(sessionDirectoryForPath(info.RecoveryPath))
-		a.emitRuntimeEvent("session:recovered", sessionRecoveryEvent{
+		a.emitSessionRecoveredAndRefresh(sessionDirectoryForPath(info.RecoveryPath), sessionRecoveryEvent{
 			OriginalPath:     info.OriginalPath,
 			RecoveryPath:     info.RecoveryPath,
 			Scope:            scope,
@@ -6193,6 +6234,13 @@ func (a *App) handleTabSessionRecovered(tab *WorkspaceTab) func(control.SessionR
 		a.invalidatePromptHistoryCache()
 		return nil
 	}
+}
+
+// emitSessionRecoveredAndRefresh registers the frontend pending item before a
+// catalog reconcile can publish the revision that classifies it.
+func (a *App) emitSessionRecoveredAndRefresh(dir string, recovered sessionRecoveryEvent) {
+	a.emitRuntimeEvent("session:recovered", recovered)
+	a.emitProjectTreeChangedForSessionDirs(dir)
 }
 
 func setTopicTitle(workspaceRoot, topicID, title string) error {
@@ -6417,9 +6465,9 @@ type ProjectNode struct {
 	RecoveryBranchCount          int    `json:"recoveryBranchCount,omitempty"`
 	RecoveryUnresolvedCount      int    `json:"recoveryUnresolvedCount,omitempty"`
 	RecoveryCleanupEligibleCount int    `json:"recoveryCleanupEligibleCount,omitempty"`
-	// RecoveryCopyCount is the number of recovery copies folded behind this
-	// logical row (covered or diverged). The ordinary tree renders it as a
-	// muted "恢复副本" count badge; History still owns the full copy list.
+	// RecoveryCopyCount is retained for Wails compatibility with older desktop
+	// frontends. Ordinary project-tree payloads intentionally leave it at zero:
+	// physical recovery copies are an internal persistence detail.
 	RecoveryCopyCount int           `json:"recoveryCopyCount,omitempty"`
 	IsolatedWorktree  bool          `json:"isolatedWorktree,omitempty"`
 	Remote            *RemoteTabRef `json:"remote,omitempty"`
@@ -6638,6 +6686,11 @@ func (a *App) CreateTopic(scope, workspaceRoot, title string) (TopicMeta, error)
 			workspaceRoot = abs
 		}
 	}
+	releaseAdmission, err := a.beginProjectRuntimeAdmission(scope, workspaceRoot)
+	if err != nil {
+		return TopicMeta{}, err
+	}
+	defer releaseAdmission()
 	if err := createTopicState(workspaceRoot, topicID, trimmedTitle, titleSource, createdAt); err != nil {
 		return TopicMeta{}, err
 	}
