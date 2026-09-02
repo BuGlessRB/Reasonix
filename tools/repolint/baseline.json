@@ -6,7 +6,7 @@
     "complexity": 1512,
     "error-text": 12,
     "essay": 3242,
-    "file-size": 39765,
+    "file-size": 39388,
     "frontend-parity": 150,
     "function-size": 6595,
     "layering": 0,
@@ -730,11 +730,10 @@
       "frontend-parity": 2
     },
     "internal/control/controller.go": {
-      "complexity": 3,
-      "essay": 79,
-      "file-size": 3292,
-      "frontend-parity": 60,
-      "function-size": 27,
+      "essay": 74,
+      "file-size": 2915,
+      "frontend-parity": 54,
+      "function-size": 4,
       "narrative": 4
     },
     "internal/control/controller_test.go": {
@@ -868,6 +867,12 @@
     },
     "internal/control/turn_orchestrator_test.go": {
       "essay": 1
+    },
+    "internal/control/turn_submit.go": {
+      "complexity": 3,
+      "essay": 5,
+      "frontend-parity": 6,
+      "function-size": 23
     },
     "internal/doctor/report.go": {
       "essay": 3
