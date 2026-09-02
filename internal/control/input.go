@@ -6,9 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"reasonix/internal/ablation"
 	"reasonix/internal/agent"
-	"reasonix/internal/event"
 	"reasonix/internal/memory"
 	"reasonix/internal/planmode"
 	"reasonix/internal/skill"
@@ -171,68 +169,12 @@ func (c *Controller) composeWithGoal(
 	c.mu.Unlock()
 	notes := c.memory.drainPending()
 
-	if strings.TrimSpace(goal) != "" && goalStatus == GoalStatusRunning {
-		text = c.activeGoalBlockForTurn(goal) + "\n\n" + text
-	}
-	if plan {
-		text = PlanModeMarker + "\n\n" + text
-	}
-	text = agent.WithResponseLanguage(text, responseLanguage)
-	text = agent.WithReasoningLanguageForSource(text, reasoningLanguage, source)
-
-	// Memory changed from outside the conversation — a "#" quick-add, the memory
-	// panel — rides the turn: nothing else tells a running session. The model's
-	// own remember/forget queues nothing; its tool result is already here.
-	if len(notes) > 0 {
-		var b strings.Builder
-		b.WriteString("<memory-update>\n")
-		b.WriteString("The following project-memory changes were just made and apply from now on:\n")
-		for _, n := range notes {
-			b.WriteString("- " + n + "\n")
-		}
-		b.WriteString("</memory-update>\n\n")
-		text = b.String() + text
-	}
-
-	// Background jobs that finished since the last turn ride the turn too, so the
-	// model learns of completions even though the user-facing notices don't reach
-	// its context. Like memory, this never touches the cache-stable prefix.
-	if c.jobs != nil {
-		if note := c.jobs.DrainCompletedNoteForSession(c.parentSessionID()); note != "" {
-			text = "<background-jobs>\n" + note + "\n</background-jobs>\n\n" + text
-		}
-	}
+	blocks := c.turnBlocksFor(source, includeHookContext, notes, plan, goal, goalStatus, responseLanguage, reasoningLanguage)
+	var tail string
 	if includeHookContext {
-		// Prepended first, so the project's own rules end up closest to the
-		// request: the more specific the authority, the nearer the tail.
-		if block := c.memory.drainInstructions(); block != "" {
-			text = "<project-instructions>\n" + block + "\n</project-instructions>\n\n" + text
-		}
-		// Owed once per session and again after a reload, so installing a skill
-		// reaches the model on the next turn rather than the next session.
-		if block := c.skills.drainCatalog(); block != "" {
-			text = "<available-skills>\n" + block + "\n</available-skills>\n\n" + text
-		}
-		if block := c.drainHookContextBlock(); block != "" {
-			text = block + "\n\n" + text
-		}
-		// Relevant facts ride only the real user-turn tail, which preserves the
-		// stable prefix and keeps synthetic recovery turns free of accidental
-		// recall. What an out-of-band write just supplied verbatim is not re-fetched.
-		if len(notes) == 0 && !c.ablation.Off(ablation.Retrieval) {
-			result := c.memory.recall(source)
-			event.RecordMemoryRecall(c.sink, memoryRecallAudit(result))
-			if block := result.Block(); block != "" {
-				text = strings.TrimRight(text, "\n") + "\n\n" + block
-			}
-		} else if len(notes) > 0 {
-			c.memory.recordRecall(memory.RecallResult{
-				Query:      strings.TrimSpace(source),
-				Suppressed: "memory update already supplies the new fact",
-			})
-		}
+		tail = c.recallTail(source, len(notes) > 0)
 	}
-	return text
+	return projectTurn(blocks, text, tail)
 }
 
 // LastMemoryRecall returns the last real turn's automatic-recall decision for
