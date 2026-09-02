@@ -20,6 +20,7 @@ import { Network } from "./Network";
 import { Shell as ShellPicker } from "./Shell";
 import { Rules } from "./Rules";
 import { ConfigTrouble } from "./ConfigTrouble";
+import { Compaction } from "./Compaction";
 import { Sandbox } from "./Sandbox";
 import { Account } from "./Account";
 import { Providers } from "./Providers";
@@ -428,6 +429,10 @@ export function Settings({ hub, onError, port, status, theme, onTheme, contrast,
               ) : (
                 <Group title={t("推理强度")} hint={t("当前模型未提供可调的推理档位，因此不显示该选项。")} />
               )}
+              <Group title={t("上下文维护")}
+                hint={t("对话长到一定程度会折叠成摘要再继续。折叠点取「窗口比例」与「压缩阈值」中先到的那个。")}>
+                <Compaction port={port} onChanged={onChanged} />
+              </Group>
               <Group
                 title={t("连接")}
                 hint={t("模型的来源。添加时只需填写地址和 key；协议、模型列表和图片支持会自动向端点探测，探测不到的才需要手动填写。")}

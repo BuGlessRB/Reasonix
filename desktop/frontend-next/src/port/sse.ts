@@ -1,5 +1,5 @@
 import { PLAN_ACTIONS, type PlanAction } from "./session";
-import type { AccountState, AgentPort, Appearance, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type ChangeDiff, type DroppedRef, type WorkspaceChanges } from "./port";
 import { SseTheme } from "./sse_theme";
 import type { WailsBind } from "./wails";
@@ -645,6 +645,12 @@ export class SsePort extends SseTheme implements AgentPort {
   }
   setEffort(effort: string) {
     return this.post("/effort", { effort });
+  }
+  compaction() {
+    return this.get<CompactionSettings>("/compaction");
+  }
+  saveCompaction(softLimitTokens: number) {
+    return this.post0<CompactionSettings>("/compaction", { soft_limit_tokens: softLimitTokens });
   }
   setGoal(text: string) {
     return this.post("/goal", { goal: text });

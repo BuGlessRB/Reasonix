@@ -10,7 +10,7 @@ import type { MemoryCatalog, MemoryEdit, MemoryEntry } from "./memory";
 import type { UsageReport } from "./usage";
 export type { MemoryEdit } from "./memory";
 export type { Money, UsageDay, UsageModel, UsageProvider, UsageReport } from "./usage";
-import type { Completion, CompletionItem, ModelEntry, ModelPrice, RoleAssignments } from "./model";
+import type { CompactionSettings, Completion, CompletionItem, ModelEntry, ModelPrice, RoleAssignments } from "./model";
 import type { NetworkProbe, NetworkSettings } from "./network";
 import type { ApprovalMode, ApprovalVerdict, Checkpoint, HistoryMessage, JobEntry, Preset, RewindPlan, RewindResult, RewindScope, SessionEntry, SessionStatus, WalletLine, WalletReading, PlanAction } from "./session";
 import type { ContextBreakdown, ShellOption, ShellSettings } from "./shell";
@@ -22,7 +22,7 @@ import type { ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, Wor
 // wire and the layers below already do. This is where a reader still finds
 // them all.
 export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, CapabilityScope,
-  Checkpoint, Completion, CompletionItem, ContextBreakdown, DeviceGrant, HistoryMessage,
+  Checkpoint, CompactionSettings, Completion, CompletionItem, ContextBreakdown, DeviceGrant, HistoryMessage,
   HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource, JobEntry, McpCatalog, McpDraft,
   McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpRisk, McpTool, MemoryCatalog,
   MemoryEntry, ModelEntry, ModelPrice, NetworkProbe, NetworkSettings, Preset, RewindPlan,
@@ -389,6 +389,8 @@ export interface AgentPort {
   setPreset(preset: Preset): Promise<void>;
   setModel(ref: string): Promise<void>;
   setEffort(effort: string): Promise<void>;
+  compaction(): Promise<CompactionSettings>;
+  saveCompaction(softLimitTokens: number): Promise<CompactionSettings>;
   setGoal(text: string): Promise<void>;
 }
 

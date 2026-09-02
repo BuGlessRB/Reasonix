@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -398,16 +397,6 @@ func (c *Config) SetCLIUpdateChannel(channel string) error {
 // SetColdResumePrune toggles auto-elision of stale tool results on cold resume.
 func (c *Config) SetColdResumePrune(enabled bool) error {
 	c.Agent.ColdResumePrune = &enabled
-	return nil
-}
-
-// SetCompactRatio updates the sole automatic compaction threshold. Presets are
-// 0.70 / 0.80 / 0.85; any fraction of the window is allowed.
-func (c *Config) SetCompactRatio(ratio float64) error {
-	if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio <= 0 || ratio >= 1 {
-		return fmt.Errorf("compact ratio %v: must be a fraction of the window, above 0 and below 1", ratio)
-	}
-	c.Agent.CompactRatio = ratio
 	return nil
 }
 

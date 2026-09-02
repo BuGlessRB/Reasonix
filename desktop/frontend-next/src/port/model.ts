@@ -68,3 +68,20 @@ export interface RoleAssignments {
   guardian: string;
   vision: string;
 }
+
+// The two fold bounds and which of them is in force. They are configured
+// separately and only the lower one ever fires, so a panel showing the
+// settings alone cannot say which: a 1M window against the default soft limit
+// folds at 160k, and nothing on that screen would explain it.
+export interface CompactionSettings {
+  // The stored value, not the resolved one: 0 means the default, negative
+  // means off, and a caller that cannot tell those apart cannot offer them.
+  soft_limit_tokens: number;
+  default_soft_limit: number;
+  ratio: number;
+  // Zero when nobody declared a window, which is also what turns automatic
+  // maintenance off entirely.
+  context_window: number;
+  trigger: number;
+  path: string;
+}

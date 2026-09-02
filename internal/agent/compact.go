@@ -120,6 +120,15 @@ func (a *Agent) economicCompactTrigger() int {
 	return limit
 }
 
+// DefaultContextSoftLimitTokens is what an unset context_soft_limit_tokens
+// means, published so a frontend can say what the empty field will do.
+const DefaultContextSoftLimitTokens = defaultContextSoftLimitTokens
+
+// CompactTrigger is the boundary in force, which is the number a frontend has
+// to show: the two bounds are configured separately and only one of them fires,
+// so a panel that renders the settings alone cannot say which.
+func (a *Agent) CompactTrigger() int { return a.compactTrigger() }
+
 // compactTrigger is whichever boundary is reached first. An unmeasured window
 // leaves both unset rather than guessing at a size, and a ratio placed past the
 // window is how maintenance is turned off — economics tightens a live boundary,

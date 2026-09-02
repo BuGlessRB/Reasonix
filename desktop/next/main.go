@@ -66,7 +66,7 @@ var apiPaths = map[string]bool{
 	"/sessions": true, "/checkpoints": true, "/branches": true, "/models": true,
 	"/submit": true, "/cancel": true, "/approve": true, "/answer": true,
 	"/plan": true, "/plan-decision": true, "/preset": true, "/model": true, "/effort": true,
-	"/goal": true, "/resume": true, "/compact": true, "/new": true,
+	"/goal": true, "/resume": true, "/compact": true, "/compaction": true, "/new": true,
 	"/rewind": true, "/fork": true, "/summarize": true, "/forget": true,
 	"/tool-approval-mode": true, "/auto-approve-tools": true, "/bypass": true,
 	"/provider-setup": true, "/delete-session": true, "/inbox": true, "/inbox/items": true,

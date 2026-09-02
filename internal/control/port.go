@@ -243,6 +243,8 @@ type RuntimeSettings interface {
 	SavePermissionRules(in PermissionLists) error
 	SandboxSettings() SandboxSettings
 	SaveSandboxSettings(in SandboxSettings) error
+	CompactionSettings() CompactionSettings
+	SaveCompactionSettings(softLimitTokens int) error
 	ConfigProblem() *ConfigProblem
 	RepairConfigFile() (string, error)
 }

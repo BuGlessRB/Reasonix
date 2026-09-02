@@ -18,6 +18,7 @@ const (
 	tsRemoteFile   = "desktop/frontend-next/src/port/remote.ts"
 	tsSessionFile  = "desktop/frontend-next/src/port/session.ts"
 	tsVersionFile  = "desktop/frontend-next/src/port/version.ts"
+	tsModelFile    = "desktop/frontend-next/src/port/model.ts"
 )
 
 // mirroredWireTypes are the Go types the desktop keeps a second, hand-written
@@ -30,6 +31,9 @@ var mirroredWireTypes = []wireMirror{
 	{"internal/agentgraph/graph.go", "Edge", tsWireFile, "GraphEdge"},
 	{"internal/agentgraph/graph.go", "Delta", tsWireFile, "GraphDelta"},
 	{"internal/control/boundary.go", "SandboxSettings", tsBoundaryFile, "SandboxSettings"},
+	// The fold bounds and the one in force: a field the panel cannot read is a
+	// threshold a user sets and never sees applied.
+	{"internal/control/compaction_settings.go", "CompactionSettings", tsModelFile, "CompactionSettings"},
 	// The completion summary is the turn's own verdict on itself; a gap kind the
 	// desktop cannot read is a turn it shows as clean.
 	{"internal/eventwire/wire.go", "CompletionSummary", tsWireFile, "CompletionSummary"},

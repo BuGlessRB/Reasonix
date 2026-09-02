@@ -1,6 +1,6 @@
 import type { PlanAction } from "./session";
 import { HttpError } from "./port";
-import type { AccountState, AgentPort, ChangeDiff, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
+import type { AccountState, AgentPort, ChangeDiff, CompactionSettings, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, TrayPrefs } from "./port";
 import type { WireEvent } from "./wire";
 import { MockTheme } from "./mock_theme";
 import { SCRIPT } from "./fixture";
@@ -758,6 +758,13 @@ export class MockPort extends MockTheme implements AgentPort {
   async setModel(ref: string) {
     this.state.modelRef = ref;
     this.state.label = ref.split("/").pop() ?? ref;
+  }
+  async compaction(): Promise<CompactionSettings> {
+    return { soft_limit_tokens: 0, default_soft_limit: 160000, ratio: 0.85, context_window: 128000, trigger: 108800, path: "~/.reasonix/config.toml" };
+  }
+  async saveCompaction(softLimitTokens: number): Promise<CompactionSettings> {
+    const s = await this.compaction();
+    return { ...s, soft_limit_tokens: softLimitTokens };
   }
   async setEffort(effort: string) {
     this.state.effort = effort;

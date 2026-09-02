@@ -149,6 +149,8 @@ const SAID: Record<string, string> = {
   "runtime.rebuild_failed": "设置写进去了，但运行时没能照新设置重建：{detail}",
   "permissions.rejected": "这条权限没能保存：{detail}",
   "sandbox.rejected": "沙箱设置没能保存：{detail}",
+  "compaction.rejected": "压缩阈值没能保存：{detail}",
+  "compaction.no_soft_limit": "这次请求没带阈值，什么都没改",
   "mcp.bad_declaration": "这段服务器声明读不出来：{detail}",
   "mcp.install_failed": "没能装上这个服务器：{detail}",
   "mcp.remove_failed": "没能移除这个服务器：{detail}",

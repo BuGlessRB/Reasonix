@@ -40,6 +40,8 @@ export const EN_KERNEL: Record<string, string> = {
   "这种图片格式用不了，换 PNG、JPEG、WebP、AVIF 或 GIF":
     "That image format will not work — use PNG, JPEG, WebP, AVIF or GIF",
   "图片是空的": "The image is empty",
+  "压缩阈值没能保存：{detail}": "The compaction threshold was not saved: {detail}",
+  "这次请求没带阈值，什么都没改": "The request carried no threshold, so nothing changed",
   "{host} 上的内核没有应答，连接可能断了": "The kernel on {host} is not answering — the connection may be down",
   "{host} 上的内核没有接受这次请求：{detail}": "The kernel on {host} did not accept this request: {detail}",
   "{host} 上的 reasonix 太旧了，开不出面板 —— 先把那台机器上的 reasonix 升到和这边同一代":
