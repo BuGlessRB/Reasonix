@@ -399,33 +399,3 @@ func TestCopyToClipboard(t *testing.T) {
 		t.Fatalf("SSH clipboard result = %+v, want OSC 52", got)
 	}
 }
-
-func TestSelectedTextStripsBlockGutter(t *testing.T) {
-	m := newTestChatTUI()
-	m.wrappedLines = []string{"  │ const x = 1", "  │ if x > 0 {", "plain line"}
-	m.sel = selection{active: true, anchor: selPos{line: 0, col: 0}, head: selPos{line: 2, col: 10}}
-	if got, want := m.selectedText(), "const x = 1\nif x > 0 {\nplain line"; got != want {
-		t.Errorf("selectedText() = %q, want %q", got, want)
-	}
-	// A selection that starts past the gutter keeps exactly the columns picked.
-	m.sel = selection{active: true, anchor: selPos{line: 0, col: 4}, head: selPos{line: 0, col: 12}}
-	if got, want := m.selectedText(), "const x"; got != want {
-		t.Errorf("mid-line selection = %q, want %q", got, want)
-	}
-}
-
-func TestStripTranscriptGutter(t *testing.T) {
-	tests := []struct{ in, want string }{
-		{"  │ code line", "code line"},
-		{"▎ quoted", "quoted"},
-		{"  ⎿  tool detail", " tool detail"},
-		{"| table | row |", "| table | row |"},
-		{"    indented code", "    indented code"},
-		{"no gutter", "no gutter"},
-	}
-	for _, tt := range tests {
-		if got := stripTranscriptGutter(tt.in); got != tt.want {
-			t.Errorf("stripTranscriptGutter(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-}

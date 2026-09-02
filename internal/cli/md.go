@@ -24,9 +24,9 @@ import (
 type mdRenderer struct {
 	md             goldmark.Markdown
 	width          int
-	copyMath       bool
-	copyMathPrefix string
-	nextCopyMathID int
+	copyMode       bool
+	copySpanPrefix string
+	nextCopySpanID int
 }
 
 func newMarkdownRenderer(width int) *mdRenderer {
@@ -84,11 +84,11 @@ func (r *mdRenderer) RenderCopy(input, prefix string) string {
 	src := []byte(input)
 	doc := r.md.Parser().Parse(text.NewReader(src))
 	var buf strings.Builder
-	r.copyMath = true
-	r.copyMathPrefix = prefix
-	r.nextCopyMathID = 0
+	r.copyMode = true
+	r.copySpanPrefix = prefix
+	r.nextCopySpanID = 0
 	r.renderBlocks(&buf, doc, src, 0)
-	r.copyMath = false
+	r.copyMode = false
 	out := strings.TrimRight(buf.String(), "\n")
 	if out == "" {
 		return ""
@@ -306,22 +306,11 @@ func (r *mdRenderer) renderList(buf *strings.Builder, n *ast.List, src []byte, i
 	buf.WriteString("\n")
 }
 
-// stripTranscriptGutter removes the render-only block gutter (code-fence │,
-// blockquote ▎, connector ⎿) from a copied line so in-app selection copy
-// yields the source text (#9244). ASCII "|" stays — markdown tables start
-// with it legitimately.
-func stripTranscriptGutter(s string) string {
-	trimmed := strings.TrimLeft(s, " \t")
-	for _, marker := range []string{"│ ", "▎ ", "⎿ "} {
-		if strings.HasPrefix(trimmed, marker) {
-			return trimmed[len(marker):]
-		}
-	}
-	return s
-}
-
 func (r *mdRenderer) renderFenced(buf *strings.Builder, n ast.Node, src []byte, indent int) {
 	prefix := strings.Repeat(" ", indent) + dim("│ ")
+	if r.copyMode {
+		prefix = copyOmitSpan(prefix)
+	}
 	for i := range n.Lines().Len() {
 		l := n.Lines().At(i)
 		line := strings.TrimRight(string(l.Value(src)), "\n")
@@ -336,6 +325,9 @@ func (r *mdRenderer) renderBlockquote(buf *strings.Builder, n *ast.Blockquote, s
 	var inner strings.Builder
 	r.renderBlocks(&inner, n, src, 0)
 	prefix := strings.Repeat(" ", indent) + dim("▎ ")
+	if r.copyMode {
+		prefix = copyOmitSpan(prefix)
+	}
 	for line := range strings.SplitSeq(strings.TrimRight(inner.String(), "\n"), "\n") {
 		buf.WriteString(prefix)
 		buf.WriteString(dim(line))
@@ -385,7 +377,7 @@ func (r *mdRenderer) appendInline(b *strings.Builder, n ast.Node, src []byte) {
 			// drop — rare in chat output and would print as literal escapes
 		case *mathNode:
 			rendered := italic(v.value)
-			if !r.copyMath {
+			if !r.copyMode {
 				b.WriteString(rendered)
 				break
 			}
@@ -393,11 +385,11 @@ func (r *mdRenderer) appendInline(b *strings.Builder, n ast.Node, src []byte) {
 			if v.display {
 				source = "$$" + v.source + "$$"
 			}
-			id := fmt.Sprintf("%s-%d", r.copyMathPrefix, r.nextCopyMathID)
-			r.nextCopyMathID++
-			b.WriteString(copyMathStartMarker(id, source))
+			id := fmt.Sprintf("%s-%d", r.copySpanPrefix, r.nextCopySpanID)
+			r.nextCopySpanID++
+			b.WriteString(copySpanStartMarker(id, source))
 			b.WriteString(rendered)
-			b.WriteString(copyMathEndMarker(id))
+			b.WriteString(copySpanEndMarker(id))
 		case *ast.String:
 			b.Write(v.Value)
 		default:
