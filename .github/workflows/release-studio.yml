@@ -127,11 +127,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # ebarch is electron-builder's spelling of the same architecture, stated
+        # beside the release one rather than mapped in a step: the two
+        # vocabularies disagree (x64 / amd64) and a reviewer has to see both.
+        # Absent means the runner's own, which is what Windows and Linux build.
         include:
           - platform: windows/amd64
             runner: windows-latest
-          - platform: darwin/universal
+          - platform: darwin/amd64
             runner: macos-latest
+            ebarch: x64
+          - platform: darwin/arm64
+            runner: macos-latest
+            ebarch: arm64
           - platform: linux/amd64
             runner: ubuntu-22.04
     steps:
@@ -243,9 +251,7 @@ jobs:
         run: |
           version="${{ needs.resolve.outputs.version }}"
           arch=""
-          # One universal bundle answers to both macOS architectures, which is
-          # the shape studio-manifest already keys two platforms off.
-          if [ "${{ matrix.platform }}" = "darwin/universal" ]; then arch="--universal"; fi
+          if [ -n "${{ matrix.ebarch }}" ]; then arch="--${{ matrix.ebarch }}"; fi
           pnpm exec electron-builder --dir $arch -c.extraMetadata.version="${version#v}"
 
       # Notarization happens to the bundle, so it sits between the two packaging
@@ -260,11 +266,10 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
-          # A universal build leaves mac-universal-x64-temp and its arm64 twin
-          # beside mac-universal, each holding a single-architecture .app of the
-          # same name. Notarizing one of those would staple a ticket onto a
-          # bundle that never ships, and the one that does would arrive without.
-          app="$(find dist -maxdepth 2 -name '*.app' -not -path '*-temp/*' | sort | head -1)"
+          # One architecture per job, so one bundle: dist/mac for x64 and
+          # dist/mac-arm64 for the other, and a job that produced neither has
+          # nothing to staple rather than the wrong thing.
+          app="$(find dist -maxdepth 2 -name '*.app' | sort | head -1)"
           test -n "$app" || { echo "::error::no .app in dist to notarize"; exit 1; }
           if [ -z "${APPLE_API_KEY_ID:-}" ]; then
             echo "::warning::no notarytool credentials; the bundle is signed but not notarized"
@@ -291,13 +296,11 @@ jobs:
           arch=""
           # The flag has to be repeated here. --prepackaged builds targets and
           # never reads what is inside the bundle, so without it they are named
-          # for the runner's own architecture: 2.11.0 shipped a universal app as
-          # ReasonixStudio-darwin-arm64.zip, and studio-manifest keys one darwin
-          # platform off that name where a universal one keys both.
-          if [ "${{ matrix.platform }}" = "darwin/universal" ]; then arch="--universal"; fi
-          # Same temp directories as above: packaging one of them would ship a
-          # single-architecture bundle under the universal artifact name.
-          app="$(cd ../.. && find dist -maxdepth 2 \( -name '*.app' -o -name '*-unpacked' \) -not -path '*-temp/*' | sort | head -1)"
+          # for the runner's own architecture: 2.11.0 shipped an x64 build as
+          # ReasonixStudio-darwin-arm64.zip, which studio-manifest keys as the
+          # platform it is not.
+          if [ -n "${{ matrix.ebarch }}" ]; then arch="--${{ matrix.ebarch }}"; fi
+          app="$(cd ../.. && find dist -maxdepth 2 \( -name '*.app' -o -name '*-unpacked' \) | sort | head -1)"
           pnpm exec electron-builder --prepackaged "../../$app" $arch \
             -c.extraMetadata.version="${version#v}"
 
@@ -478,12 +481,13 @@ jobs:
           mkdir -p dist
           find staging -type f -name 'ReasonixStudio-*' -exec mv {} dist/ \;
           ls -la dist
-          # Two Windows artifacts (installer, portable zip), two macOS (dmg,
-          # zip) and the Linux .deb. Fewer means an artifact was lost between
-          # jobs, and a partial release is worse than a failed one.
+          # Two Windows artifacts (installer, portable zip), two per macOS
+          # architecture (dmg, zip) and the Linux .deb. Fewer means an artifact
+          # was lost between jobs, and a partial release is worse than a failed
+          # one.
           count=$(find dist -type f -name 'ReasonixStudio-*' | wc -l)
-          if [ "$count" -lt 5 ]; then
-            echo "::error::expected 5 artifacts (Windows installer + zip, macOS dmg + zip, Linux .deb), found $count"
+          if [ "$count" -lt 7 ]; then
+            echo "::error::expected 7 artifacts (Windows installer + zip, macOS dmg + zip per architecture, Linux .deb), found $count"
             exit 1
           fi
           # Each platform's update channel, and there is exactly one per
@@ -491,7 +495,11 @@ jobs:
           # bundle swapped out of the archive on macOS. Missing one degrades the
           # release silently instead of failing it — it strands that platform on
           # the version it is running.
-          for required in 'ReasonixStudio-linux-*.deb' 'ReasonixStudio-windows-*-installer.exe' 'ReasonixStudio-darwin-*.zip'; do
+          # Each macOS architecture by name, not darwin-*: a glob passes on
+          # whichever one shipped, and the missing one is a platform left on
+          # the version it is running with nothing saying so.
+          for required in 'ReasonixStudio-linux-*.deb' 'ReasonixStudio-windows-*-installer.exe' \
+            'ReasonixStudio-darwin-amd64.zip' 'ReasonixStudio-darwin-arm64.zip'; do
             find dist -type f -name "$required" | grep -q . || {
               echo "::error::no $required in the release; its packager did not run"
               exit 1
