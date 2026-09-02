@@ -172,6 +172,8 @@ console.log("\nbundle budgets");
 // Transactional Ask resolution and authoritative rejected-submit recovery add
 // 0.3 KiB gzip to the initial controller path. Retain the exact turn fence,
 // bounded ListTabs retry, and stale-prompt guard with a 0.1 KiB headroom.
+// Session-catalog repair presentation stays in the lazy project-tree chunk;
+// compact shared helpers keep the combined initial path within the same gate.
 const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 458.7 : 458.7;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
