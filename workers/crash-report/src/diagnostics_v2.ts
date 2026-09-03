@@ -460,10 +460,17 @@ export async function groupDiagnosticSummary(
   const [totals, distributions] = await Promise.all([
     observedFirst<{ window_events: number; identified_events: number; affected_installs: number }>(env.DB.prepare(
       `SELECT
-         COALESCE(SUM(events), 0) AS window_events,
-         COALESCE(SUM(CASE WHEN install_id <> '' THEN events ELSE 0 END), 0) AS identified_events,
-         COUNT(DISTINCT NULLIF(install_id, '')) AS affected_installs
-       FROM report_event_dimensions WHERE fingerprint = ?1 AND date >= date('now', '-29 day')`,
+         COALESCE(daily.window_events, 0) AS window_events,
+         COALESCE(daily.identified_events, 0) AS identified_events,
+         COALESCE(installs.affected_installs, 0) AS affected_installs
+       FROM (
+         SELECT SUM(events) AS window_events, SUM(identified_events) AS identified_events
+         FROM report_daily WHERE fingerprint = ?1 AND date >= date('now', '-29 day')
+       ) daily
+       CROSS JOIN (
+         SELECT COUNT(DISTINCT install_id) AS affected_installs
+         FROM report_installations WHERE fingerprint = ?1 AND date >= date('now', '-29 day')
+       ) installs`,
     ).bind(fingerprint), "group_diagnostic_totals", observe),
     observedAll<{ facet: string; value: string; installs: number; events: number }>(env.DB.prepare(
       `WITH window AS MATERIALIZED (
@@ -487,9 +494,16 @@ export async function groupDiagnosticSummary(
          UNION ALL SELECT 'exitCode', exit_code, install_id, events FROM window
          UNION ALL SELECT 'gpu', gpu_mode, install_id, events FROM window
          UNION ALL SELECT 'recovery', recovery, install_id, events FROM window WHERE recovery <> ''
+       ), grouped AS (
+         SELECT facet, value, COUNT(DISTINCT NULLIF(install_id, '')) AS installs, SUM(events) AS events
+         FROM facts GROUP BY facet, value
+       ), ranked AS (
+         SELECT facet, value, installs, events,
+                ROW_NUMBER() OVER (PARTITION BY facet ORDER BY installs DESC, events DESC, value) AS rank
+         FROM grouped
        )
-       SELECT facet, value, COUNT(DISTINCT NULLIF(install_id, '')) AS installs, SUM(events) AS events
-       FROM facts GROUP BY facet, value ORDER BY facet, installs DESC`,
+       SELECT facet, value, installs, events
+       FROM ranked WHERE rank <= 20 ORDER BY facet, rank`,
     ).bind(fingerprint), "group_diagnostic_distributions", observe),
   ]);
   return {

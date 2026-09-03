@@ -15,6 +15,7 @@ describe("crash and registry performance migrations", () => {
     for (const sql of [schema, migration]) {
       expect(sql).toMatch(/CREATE INDEX IF NOT EXISTS report_daily_fingerprint_date\s+ON report_daily \(fingerprint, date\)/);
       expect(sql).toMatch(/CREATE INDEX IF NOT EXISTS firebase_crash_outbox_fingerprint\s+ON firebase_crash_outbox \(fingerprint\)/);
+      expect(sql).toMatch(/CREATE INDEX IF NOT EXISTS reports_fingerprint_id\s+ON reports \(fingerprint, id DESC\)/);
     }
   });
 
@@ -44,8 +45,12 @@ describe("crash and registry performance migrations", () => {
       const outboxPlan = db.prepare(
         "EXPLAIN QUERY PLAN SELECT event_id FROM firebase_crash_outbox WHERE fingerprint = 'x' LIMIT 1",
       ).all().map((row: Record<string, unknown>) => String(row.detail)).join(" ");
+      const reportPlan = db.prepare(
+        "EXPLAIN QUERY PLAN SELECT id FROM reports INDEXED BY reports_fingerprint_id WHERE fingerprint = 'x' ORDER BY id DESC LIMIT 5",
+      ).all().map((row: Record<string, unknown>) => String(row.detail)).join(" ");
       expect(dailyPlan).toContain("USING INDEX report_daily_fingerprint_date");
       expect(outboxPlan).toContain("USING INDEX firebase_crash_outbox_fingerprint");
+      expect(reportPlan).toContain("USING COVERING INDEX reports_fingerprint_id");
     } finally {
       db.close();
     }
