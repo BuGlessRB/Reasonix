@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"reasonix/internal/event"
@@ -123,6 +124,7 @@ type Coordinator struct {
 	// behavior used by direct Coordinator callers.
 	plannerPolicy       PlannerPolicy
 	plannerPlanApprover PlannerPlanApprover
+	plannerMu           sync.Mutex
 	plannerLastPrefix   PrefixShape
 	plannerHasPrefix    bool
 }
@@ -203,6 +205,8 @@ func (c *Coordinator) ResetPlannerSession() {
 	if c == nil {
 		return
 	}
+	c.plannerMu.Lock()
+	defer c.plannerMu.Unlock()
 	system := c.plannerSystem
 	if system == "" {
 		system = sessionSystemPrompt(c.plannerSess)
@@ -514,6 +518,8 @@ func (o plannerOutcome) requestsApproval() bool {
 
 // plan produces this turn's plan, structured when the planner submitted one.
 func (c *Coordinator) plan(ctx context.Context, input string) (plannerOutcome, error) {
+	c.plannerMu.Lock()
+	defer c.plannerMu.Unlock()
 	ctx = withPlannerTurnContext(ctx)
 	if c.plannerAgent != nil {
 		return c.planWithTools(ctx, input)
