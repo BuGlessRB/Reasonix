@@ -44,6 +44,7 @@ import {
   reportAggregateStatements,
   type DiagnosticFacets,
 } from "./diagnostics_v2";
+import { statsQueryObserver } from "./stats_timing";
 import { Report, WebRuntimeDiagnostic, type ReportPayload } from "./report_schema";
 import { statsFilters, type StatsFilters } from "./stats_filters";
 import {
@@ -1031,7 +1032,6 @@ async function metricRows(env: Env, days: 7 | 30, surface: ClientSurfaceName, pr
 
 type Bar = { label: string; users: number };
 type MetricTotals = { signal: string; bucket: string; total: number }[];
-
 // Each stats module renders only its own section, so a page load queries only
 // what that section shows.
 async function handleStats(request: Request, env: Env, user: User, activeModule: StatsModule): Promise<Response> {
@@ -1092,9 +1092,9 @@ async function handleStats(request: Request, env: Env, user: User, activeModule:
   } else if (activeModule === "diagnostics") {
     latestVersion = await latestObservedVersion(env, "desktop");
     const [crashesR, sourcesR, facets, linkedSince] = await Promise.all([
-      crashGroups(env, filters, latestVersion),
+      crashGroups(env, filters, latestVersion, statsQueryObserver("/stats/diagnostics")),
       bars(`SELECT source AS label, COUNT(*) AS users FROM groups WHERE ${diagnosticWindowWhere(days)} GROUP BY source ORDER BY users DESC`),
-      loadDiagnosticFacets(env, days),
+      loadDiagnosticFacets(env, days, statsQueryObserver("/stats/diagnostics")),
       env.DB.prepare("SELECT value FROM diagnostics_meta WHERE key = 'installation_linked_since'").first<{ value: string }>(),
     ]);
     crashes = crashesR.results;
@@ -1151,7 +1151,7 @@ async function handleGroup(env: Env, fingerprint: string, user: User): Promise<R
     reports = stored.results;
   }
   return html(renderGroup(
-    group, reports, user, await groupDiagnosticSummary(env, fingerprint),
+    group, reports, user, await groupDiagnosticSummary(env, fingerprint, statsQueryObserver("/stats/group")),
     state ? { state: state.sample_state, epoch: Number(state.sample_epoch) } : undefined,
   ));
 }
