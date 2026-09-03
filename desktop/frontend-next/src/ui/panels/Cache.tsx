@@ -24,29 +24,29 @@ export function Cache({ metrics, done }: { metrics: Metrics; done?: boolean }) {
         <span className="v" data-live={up ? "" : undefined} data-flash={done && up ? "" : undefined}>
           {up ? pct(shown / 100, 1) : "—"}
         </span>
-        <span className="k">
-          {t("前缀命中")}
-          <br />
-          {t("越高越省")}
-        </span>
-        {/* 前缀没变是命中率能保住的前提；变了就说变在哪儿。 */}
+        <span className="k">{t("前缀命中")}</span>
+        {/* The two pills wrap as one group, so a narrow rail moves both below the
+            number instead of squeezing the caption between them. */}
         {up > 0 && (
-          <span
-            className="pill"
-            data-tone={metrics.prefixChanged ? "warn" : "ok"}
-            title={metrics.prefixReasons.join(" · ") || undefined}
-          >
-            {metrics.prefixChanged ? t("前缀变了") : t("前缀未变")}
-          </span>
-        )}
-        {/* 前缀哈希看不见对话正文，所以"没变"单独一个说明不了未命中是谁的。 */}
-        {up > 0 && !!metrics.carriedMessages && (
-          <span
-            className="pill"
-            data-tone={metrics.bodyChanged ? "warn" : "ok"}
-            title={t("沿用的消息条数") + ": " + metrics.carriedMessages}
-          >
-            {metrics.bodyChanged ? t("正文变了") : t("正文未变")}
+          <span className="pills">
+            {/* 前缀没变是命中率能保住的前提；变了就说变在哪儿。 */}
+            <span
+              className="pill"
+              data-tone={metrics.prefixChanged ? "warn" : "ok"}
+              title={metrics.prefixReasons.join(" · ") || undefined}
+            >
+              {metrics.prefixChanged ? t("前缀变了") : t("前缀未变")}
+            </span>
+            {/* 前缀哈希看不见对话正文，所以"没变"单独一个说明不了未命中是谁的。 */}
+            {!!metrics.carriedMessages && (
+              <span
+                className="pill"
+                data-tone={metrics.bodyChanged ? "warn" : "ok"}
+                title={t("沿用的消息条数") + ": " + metrics.carriedMessages}
+              >
+                {metrics.bodyChanged ? t("正文变了") : t("正文未变")}
+              </span>
+            )}
           </span>
         )}
       </div>

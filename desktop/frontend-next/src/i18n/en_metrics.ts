@@ -22,7 +22,6 @@ export const EN_METRICS: Record<string, string> = {
   "工具 schema": "Tool schema",
   "远程主机": "Remote hosts",
   "还没有请求": "no requests yet",
-  "越高越省": "higher is cheaper",
   "{n} 会话": "{n} sessions",
   "每回合用量": "Tokens per round",
   "峰值 {peak} · 均 {avg}": "peak {peak} · avg {avg}",
