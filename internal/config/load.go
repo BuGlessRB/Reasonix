@@ -202,11 +202,11 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 		mcpFile = filepath.Join(root, mcpJSONFile)
 	}
 	entries, err := loadMCPJSON(mcpFile)
-	if err != nil {
+	if err != nil { // a malformed file yields no entries, so the append below is still correct
 		cfg.addLoadWarning(fmt.Sprintf("project .mcp.json is invalid (%v); MCP servers from that file are ignored", err))
-	} else {
-		cfg.mergeMCPJSON(entries)
 	}
+	// Claude's scopes go last, so a name the project file claims keeps it.
+	cfg.mergeMCPJSON(append(entries, loadClaudeMCP(r.claudeConfigPath(), root)...))
 
 	// Lowest priority before the one-time v1.9.1 MCP migration: the v0.x
 	// ~/.reasonix/config.json's mcpServers. Once the migration marker exists, the

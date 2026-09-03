@@ -58,7 +58,7 @@ func loadMCPJSON(path string) ([]PluginEntry, error) {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		return nil, fmt.Errorf("mcp config %s: %w", path, err)
 	}
-	return specsToEntries(doc.MCPServers, nil), nil
+	return specsToEntries(doc.MCPServers, MCPSourceProjectMCPJSON), nil
 }
 
 // ParseMCPServersJSON reads a Claude-compatible mcpServers document — what every
@@ -91,7 +91,7 @@ func ParseMCPServersJSON(body []byte) ([]PluginEntry, error) {
 	if len(specs) == 0 {
 		return nil, fmt.Errorf("no MCP server found in this JSON")
 	}
-	entries := specsToEntries(specs, nil)
+	entries := specsToEntries(specs, "")
 	for i := range entries {
 		entries[i].Source = ""
 	}
@@ -115,10 +115,14 @@ func LoadMCPJSONPlugin(path, name string) (PluginEntry, bool, error) {
 // specsToEntries converts an mcpServers map to PluginEntry values, sorted by name
 // for a stable connection order. Names in skip are dropped (used for v0.x's
 // mcpDisabled list).
-func specsToEntries(specs map[string]mcpServerSpec, skip map[string]bool) []PluginEntry {
+func specsToEntries(specs map[string]mcpServerSpec, source MCPConfigSource, skip ...map[string]bool) []PluginEntry {
+	var skipped map[string]bool
+	if len(skip) > 0 {
+		skipped = skip[0]
+	}
 	names := make([]string, 0, len(specs))
 	for name := range specs {
-		if !skip[name] {
+		if !skipped[name] {
 			names = append(names, name)
 		}
 	}
@@ -126,7 +130,7 @@ func specsToEntries(specs map[string]mcpServerSpec, skip map[string]bool) []Plug
 	entries := make([]PluginEntry, 0, len(names))
 	for _, name := range names {
 		entry := pluginEntryFromMCPSpec(name, specs[name])
-		entry.Source = MCPSourceProjectMCPJSON
+		entry.Source = source
 		entries = append(entries, entry)
 	}
 	return entries
@@ -175,7 +179,7 @@ func loadLegacyMCP(path string) []PluginEntry {
 	for _, n := range doc.MCPDisabled {
 		disabled[n] = true
 	}
-	entries := specsToEntries(doc.MCPServers, disabled)
+	entries := specsToEntries(doc.MCPServers, MCPSourceLegacyUser, disabled)
 	have := make(map[string]bool, len(entries))
 	for _, e := range entries {
 		have[e.Name] = true

@@ -1672,8 +1672,8 @@ const (
 
 func (s MCPConfigSource) UserAuthorized() bool {
 	switch s {
-	case MCPSourceUserConfig, MCPSourceLegacyUser, MCPSourcePluginPackage,
-		MCPSourceProjectConfig, MCPSourceProjectMCPJSON:
+	case MCPSourceUserConfig, MCPSourceLegacyUser, MCPSourcePluginPackage, MCPSourceClaudeLocal,
+		MCPSourceProjectConfig, MCPSourceProjectMCPJSON, MCPSourceClaudeUser:
 		return true
 	default:
 		return false
