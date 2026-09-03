@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS reports (
 );
 
 CREATE INDEX IF NOT EXISTS reports_fingerprint ON reports (fingerprint);
+CREATE INDEX IF NOT EXISTS reports_fingerprint_id ON reports (fingerprint, id DESC);
 
 -- Firebase Spark delivery is coordinated through D1 so an unavailable or
 -- quota-limited Realtime Database never loses a sanitized report. The payload

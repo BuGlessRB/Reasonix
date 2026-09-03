@@ -519,5 +519,51 @@ describe("diagnostics v2 storage consistency", () => {
     await groupDiagnosticSummary({ DB: db } as unknown as Env, "b".repeat(64));
     expect(distributionSQL).toContain("WITH window AS MATERIALIZED");
     expect(distributionSQL.match(/FROM report_event_dimensions/g)).toHaveLength(1);
+    expect(distributionSQL).toContain("ROW_NUMBER() OVER (PARTITION BY facet");
+    expect(distributionSQL).toContain("WHERE rank <= 20");
+  });
+
+  it("bounds each group facet and reads totals from the daily rollups", async () => {
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec(freshSchemaSQL);
+    const fingerprint = "c".repeat(64);
+    sqlite.prepare(
+      `INSERT INTO report_daily (date, fingerprint, events, identified_events)
+       VALUES (date('now'), ?1, 40, 40)`,
+    ).run(fingerprint);
+    sqlite.prepare(
+      `INSERT INTO report_installations (date, fingerprint, install_id, version, os, arch)
+       VALUES (date('now'), ?1, 'install-1', 'v1.0.0', 'windows', 'amd64')`,
+    ).run(fingerprint);
+    const fact = sqlite.prepare(
+      `INSERT INTO report_event_dimensions
+       (date, fingerprint, install_id, version, os, arch, os_build, os_revision,
+        distro_id, distro_version, kernel_version, session_type, channel,
+        runtime_engine, runtime_version, failure_kind, failure_reason, exit_code, recovery, gpu_mode, events)
+       VALUES (date('now'), ?1, ?2, 'v1.0.0', 'windows', 'amd64', 1, 1, '', '', '', '', 'stable',
+               'webview2', ?3, 'browser_process_exited', 'unexpected', '1', '', 'unknown', 1)`,
+    );
+    for (let i = 0; i < 40; i++) fact.run(fingerprint, `install-${i}`, `runtime-${i}`);
+    const db = {
+      prepare(sql: string) {
+        const statement = sqlite.prepare(sql);
+        const wrapper: any = {
+          values: [] as unknown[],
+          bind(...values: unknown[]) { wrapper.values = values; return wrapper; },
+          async first() { return statement.get(...wrapper.values); },
+          async all() { return { results: statement.all(...wrapper.values) }; },
+        };
+        return wrapper;
+      },
+    } as unknown as D1Database;
+    try {
+      const result = await groupDiagnosticSummary({ DB: db } as unknown as Env, fingerprint);
+      expect(result).toMatchObject({ windowEvents: 40, identifiedEvents: 40, affectedInstalls: 1 });
+      const byFacet = new Map<string, number>();
+      for (const row of result.distributions) byFacet.set(row.facet, (byFacet.get(row.facet) ?? 0) + 1);
+      expect(Math.max(...byFacet.values())).toBeLessThanOrEqual(20);
+    } finally {
+      sqlite.close();
+    }
   });
 });

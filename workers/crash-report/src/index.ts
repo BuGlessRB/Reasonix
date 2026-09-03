@@ -45,6 +45,7 @@ import {
   type DiagnosticFacets,
 } from "./diagnostics_v2";
 import { statsQueryObserver } from "./stats_timing";
+import { loadD1GroupReports, loadGroupDiagnostics } from "./group_queries";
 import { Report, WebRuntimeDiagnostic, type ReportPayload } from "./report_schema";
 import { statsFilters, type StatsFilters } from "./stats_filters";
 import {
@@ -1130,7 +1131,7 @@ async function handleGroup(env: Env, fingerprint: string, user: User): Promise<R
   if (!group) return new Response("not found", { status: 404 });
   group.severity = effectiveGroupSeverity(group);
   const state = crashStorageMode(env) === "d1" ? null : await firebaseGroupState(env, fingerprint);
-  let reports: ReportSample[];
+  let reports: ReportSample[] = [], samplesUnavailable = false;
   if (crashStorageMode(env) === "firebase") {
     if (state?.sample_state === "archived") {
       reports = [];
@@ -1143,16 +1144,15 @@ async function handleGroup(env: Env, fingerprint: string, user: User): Promise<R
       }
     }
   } else {
-    const stored = await env.DB.prepare(
-      `SELECT version, os, arch, message, device, created_at, source, label, error_type, error_message,
-        top_frame, build_commit, channel, language, view, breadcrumbs, component_stack, stack, occurred_at, webview2, web_runtime
-       FROM reports WHERE fingerprint = ?1 ORDER BY id DESC`,
-    ).bind(fingerprint).all<ReportSample>();
-    reports = stored.results;
+    const loaded = await loadD1GroupReports(env, fingerprint, LATEST_SAMPLES_PER_GROUP, statsQueryObserver("/stats/group"));
+    reports = loaded.reports;
+    samplesUnavailable = loaded.unavailable;
   }
+  const loadedDiagnostics = await loadGroupDiagnostics(env, fingerprint, statsQueryObserver("/stats/group"));
   return html(renderGroup(
-    group, reports, user, await groupDiagnosticSummary(env, fingerprint, statsQueryObserver("/stats/group")),
+    group, reports, user, loadedDiagnostics.summary,
     state ? { state: state.sample_state, epoch: Number(state.sample_epoch) } : undefined,
+    { samplesUnavailable, diagnosticsUnavailable: loadedDiagnostics.unavailable },
   ));
 }
 
