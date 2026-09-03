@@ -76,9 +76,17 @@ func TestClassifyResponseBoundaryKeepsCompleteCallsUnderTruncation(t *testing.T)
 	}
 }
 
+// A malformed call the model finished writing is its own to fix, whatever the
+// terminal says. The fixture is a syntax error rather than a cut: arguments
+// that stop mid-value are evidence of truncation on their own, and the case
+// for that is TestBoundaryDropsACutCallOnACleanTerminal.
 func TestClassifyResponseBoundaryLeavesNormalTerminalsAlone(t *testing.T) {
 	for _, reason := range []string{"stop", "tool_calls", "content_filter"} {
-		got := classifyResponseBoundary(&provider.Usage{FinishReason: reason}, boundaryCalls("edit_file", "!bash"))
+		calls := []provider.ToolCall{
+			{ID: "a", Name: "edit_file", Arguments: `{"command":"ok"}`},
+			{ID: "b", Name: "bash", Arguments: `{"command":"ok",}`},
+		}
+		got := classifyResponseBoundary(&provider.Usage{FinishReason: reason}, calls)
 		if len(got.committed) != 2 || got.dropped != "" || got.fact != "" {
 			t.Fatalf("finish=%q: committed %d dropped %q fact %q, want the model's own malformed call left intact",
 				reason, len(got.committed), got.dropped, got.fact)
@@ -209,5 +217,27 @@ func TestCutOffArgumentsAreReportedAsCutOff(t *testing.T) {
 	detail := malformedArgumentsDetail(`{"command":"git status`)
 	if !strings.Contains(detail, "cut off") {
 		t.Fatalf("detail = %q, want a truncation diagnosis rather than a syntax one", detail)
+	}
+}
+
+// A provider that reports a clean terminal can still deliver a call its own
+// output limit cut in half. The half-written arguments are the host's evidence:
+// executing them spends a round and comes back as the model's invalid JSON,
+// when the cause was the response size and the host could say so.
+func TestBoundaryDropsACutCallOnACleanTerminal(t *testing.T) {
+	calls := []provider.ToolCall{
+		{ID: "1", Name: "read_file", Arguments: `{"path":"a.go"}`},
+		{ID: "2", Name: "complete_subtask", Arguments: `{"status":"complete","summary":"the sub-task is do`},
+	}
+	b := classifyResponseBoundary(&provider.Usage{FinishReason: "tool_calls"}, calls)
+
+	if len(b.committed) != 1 || b.committed[0].Name != "read_file" {
+		t.Fatalf("committed = %+v, want only the call that was complete", b.committed)
+	}
+	if b.dropped != "complete_subtask" {
+		t.Fatalf("dropped = %q, want the call that was cut", b.dropped)
+	}
+	if b.fact == "" {
+		t.Fatal("no host fact owed to the model for a dropped call")
 	}
 }

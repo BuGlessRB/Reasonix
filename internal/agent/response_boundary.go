@@ -2,7 +2,9 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"reasonix/internal/provider"
@@ -23,18 +25,42 @@ type responseBoundary struct {
 // arguments the model never finished. A cut that landed after the last call
 // closed drops nothing — "cut short" is not "every call in it is suspect".
 func classifyResponseBoundary(usage *provider.Usage, calls []provider.ToolCall) responseBoundary {
-	if len(calls) == 0 || !truncatedTerminal(usage) {
+	if len(calls) == 0 {
 		return responseBoundary{committed: calls}
 	}
 	last := len(calls) - 1
-	if json.Valid([]byte(calls[last].Arguments)) {
-		return responseBoundary{committed: calls, fact: truncationFact(usage.FinishReason, len(calls), "")}
+	reported := truncatedTerminal(usage)
+	// Arguments ending mid-value are the host's own evidence of a cut, and do
+	// not depend on the finish reason arriving. A clean terminal alongside a
+	// half-written call reached execution and returned "invalid JSON".
+	cut := argumentsCutOff(calls[last].Arguments)
+	if !reported && !cut {
+		return responseBoundary{committed: calls}
+	}
+	reason := ""
+	if usage != nil {
+		reason = usage.FinishReason
+	}
+	if !cut && json.Valid([]byte(calls[last].Arguments)) {
+		return responseBoundary{committed: calls, fact: truncationFact(reason, len(calls), "")}
 	}
 	return responseBoundary{
 		committed: calls[:last],
 		dropped:   calls[last].Name,
-		fact:      truncationFact(usage.FinishReason, last, calls[last].Name),
+		fact:      truncationFact(reason, last, calls[last].Name),
 	}
+}
+
+// argumentsCutOff reports arguments that stop mid-value: the decoder ran out of
+// input inside a token, which no syntax error and no complete document does.
+// Empty arguments are a valid call shape, not a cut.
+func argumentsCutOff(arguments string) bool {
+	if strings.TrimSpace(arguments) == "" {
+		return false
+	}
+	var probe any
+	err := json.NewDecoder(strings.NewReader(arguments)).Decode(&probe)
+	return errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 // truncatedTerminal reports the finish reasons that end a response before the
