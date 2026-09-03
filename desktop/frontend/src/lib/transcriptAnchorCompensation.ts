@@ -8,7 +8,7 @@ import {
   captureVisibleTranscriptLayoutAnchor,
   type TranscriptLayoutAnchor,
 } from "./transcriptVirtuosoRecovery";
-import { MIN_REVERSE_JUMP_PX } from "./transcriptReaderExtentStability";
+import { MIN_REVERSE_JUMP_PX, transcriptAppliedVisualOffset } from "./transcriptReaderExtentStability";
 
 // Fractional row metrics can shift by 1-2px while Virtuoso's estimate tree is
 // converging during ordinary traversal. Treat that as layout noise so a
@@ -100,7 +100,7 @@ export function createTranscriptAnchorCompensation({
     const row = anchorRow(compensation.anchor.rowKey, element);
     if (!row) return null;
     const rendered = row.getBoundingClientRect().top - element.getBoundingClientRect().top - compensation.anchor.offset;
-    return rendered - compensation.visualOffset;
+    return rendered - transcriptAppliedVisualOffset(element, compensation.visualOffset);
   };
 
   const guardLargeDrift = (compensation: ActiveAnchorCompensation, element: HTMLDivElement) => {

@@ -182,7 +182,10 @@ console.log("\nbundle budgets");
 // bring the merged stable path to 462.587 KiB. Windows' embedded build metadata
 // lands just above the rounded 462.6 KiB boundary; retain one cross-platform
 // decimal step without widening any chunk or raw gate.
-const initialJSBudgetKiB = 462.7;
+// Reading the applied item-list transform (instead of the remembered offset)
+// keeps the reader/anchor visual guards from compounding under reduced-motion
+// WebView2; the merged path measures 462.827 KiB. Retain one decimal step.
+const initialJSBudgetKiB = 462.9;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -328,6 +331,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // The passive reader-anchor lease for delayed WebView2 range commits measures
 // 2469.347 KiB raw (+0.222 KiB, +0.009%). Retain only the next one-decimal
 // ceiling; gzip and largest-chunk budgets remain unchanged.
-const rawInitialBudgetKiB = 2_469.4;
+// Reading the applied item-list transform for the reader/anchor visual guards
+// adds 0.5 KiB raw on top; the merged path measures 2469.815 KiB.
+const rawInitialBudgetKiB = 2_469.9;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
