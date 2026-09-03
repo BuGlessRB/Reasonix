@@ -38,7 +38,6 @@ func TestCoordinatorSerializesConcurrentPlannerCalls(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
 	for _, input := range []string{"first", "second"} {
-		input := input
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

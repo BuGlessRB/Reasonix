@@ -250,15 +250,14 @@ func parseFramedSections(body string) (Sections, bool) {
 		return Sections{}, false
 	}
 	rest := strings.TrimPrefix(body, prefix)
-	lineEnd := strings.Index(rest, "\n\n")
-	if lineEnd < 0 {
-		return Sections{}, false
-	}
-	lengths, ok := parseSectionManifest(rest[:lineEnd])
+	manifestLine, payload, ok := strings.Cut(rest, "\n\n")
 	if !ok {
 		return Sections{}, false
 	}
-	payload := rest[lineEnd+2:]
+	lengths, ok := parseSectionManifest(manifestLine)
+	if !ok {
+		return Sections{}, false
+	}
 	specs := []struct {
 		name string
 		set  func(*Sections, string)

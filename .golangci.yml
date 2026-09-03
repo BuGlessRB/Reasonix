@@ -19,6 +19,13 @@ linters:
       # extension protocol, not a refactor, so it lands on its own.
       disable:
         - omitzero
+        # These analyzers recommend APIs/language features that were not part
+        # of the repository's Go 1.25 baseline. Keep their migration explicit
+        # instead of turning a dependency-driven go.mod bump into a tree-wide
+        # source rewrite.
+        - newexpr
+        - stditerators
+        - waitgroupgo
     errcheck:
       check-type-assertions: false
       exclude-functions:
