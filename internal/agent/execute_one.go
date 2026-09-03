@@ -240,18 +240,21 @@ func unavailableReason(ctx context.Context, target tool.Tool, name string) strin
 // read-only diagnosis (resolved ReadOnly with no verification classification)
 // still runs.
 func (a *Agent) applyMutationDependencyBarrier(plan *toolCallPlan) (toolOutcome, bool) {
-	if a == nil || plan == nil || !a.mutationDependencyBarrier.Load() {
+	if a == nil || plan == nil {
+		return toolOutcome{}, false
+	}
+	level := barrierLevel(a.mutationDependencyBarrier.Load())
+	if level == barrierNone {
 		return toolOutcome{}, false
 	}
 	verification := plan.evidenceName == "bash" && evidence.IsDeliveryVerificationCommand(bashCommandFromArgs(plan.evidenceArgs))
 	// Prefer the post-gate mutates flag; fall back to !readOnly so a resolved
 	// writer proxy cannot claim non-mutation by skipping ToolCallMutates.
 	mutates := plan.mutates || !plan.readOnly
-	if !mutates && !verification {
+	if !level.covers(mutates, verification) {
 		return toolOutcome{}, false
 	}
-	msg := "blocked: skipped because an earlier modification in this tool batch failed or was blocked. " +
-		"Fix or re-run the failed change first; verification was not executed."
+	msg := level.message()
 	var ex *tool.ShellExecution
 	// Structured shell metadata only for bash cards; other tools keep plain text.
 	if plan.evidenceName == "bash" || plan.call.Name == "bash" {

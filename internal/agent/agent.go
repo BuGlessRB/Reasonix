@@ -274,12 +274,12 @@ type Agent struct {
 	// lifecycle they share. Never a permission or sandbox boundary.
 	planRuntime atomic.Pointer[planmode.Runtime]
 
-	// mutationDependencyBarrier is set for the remainder of a provider tool
-	// batch after any mutating call fails or is blocked. executeOne re-checks
-	// it after proxy resolution so use_capability cannot bypass the barrier by
+	// mutationDependencyBarrier is how much of the rest of a provider tool batch
+	// an earlier failure takes with it (see barrierLevel). executeOne re-checks
+	// it after proxy resolution so use_capability cannot bypass it by
 	// advertising schema-level ReadOnly()==true. Parallel read-only segments
 	// never set it. Cleared at the start of each executeBatch.
-	mutationDependencyBarrier atomic.Bool
+	mutationDependencyBarrier atomic.Int32
 
 	// recovery is who this agent is to the shared gate above.
 	recovery recoveryIdentity

@@ -13,6 +13,38 @@ import (
 	"reasonix/internal/tool"
 )
 
+// barrierLevel is how far an earlier failure reaches: a failed modification may
+// leave the workspace half-applied and stops everything, while a call stopped
+// before it ran changed nothing and stops only a check.
+type barrierLevel int32
+
+const (
+	barrierNone barrierLevel = iota
+	barrierVerificationOnly
+	barrierFull
+)
+
+func (l barrierLevel) covers(mutates, verification bool) bool {
+	switch l {
+	case barrierFull:
+		return mutates || verification
+	case barrierVerificationOnly:
+		return verification
+	}
+	return false
+}
+
+// message says which of the two happened: told a modification failed when none
+// ran, a model goes looking for a write it never made.
+func (l barrierLevel) message() string {
+	if l == barrierVerificationOnly {
+		return "blocked: an earlier call in this batch was stopped before it ran, so this check would not " +
+			"measure the state you asked for. Re-run the stopped call first, or run this check on its own."
+	}
+	return "blocked: skipped because an earlier modification in this tool batch failed or was blocked. " +
+		"Fix or re-run the failed change first; verification was not executed."
+}
+
 // toolOutcome is one tool call's result. output is the first-visible bounded
 // form the model sees; rawOutput is the full original when truncation applied
 // (empty when identical so we avoid double storage). images ride outside text.
@@ -164,38 +196,16 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 	// blocked, later mutations/verifications in the batch are skipped; read-only
 	// diagnosis still runs. executeOne re-checks after proxy resolution.
 	mutationBatchStop := false
-	a.mutationDependencyBarrier.Store(false)
-	markDependencySkipped := func(start int) {
-		a.mutationDependencyBarrier.Store(true)
+	a.mutationDependencyBarrier.Store(int32(barrierNone))
+	markDependencySkipped := func(start int, level barrierLevel) {
+		a.mutationDependencyBarrier.Store(int32(level))
 		for j := start; j < len(calls); j++ {
 			if results[j] != "" {
 				continue
 			}
-			// Pre-classify when statically certain. Proxies and ambiguous
-			// targets fall through to run() so executeOne can resolve the real
-			// target and re-apply the barrier before Commit/Execute.
-			if !batchCallStaticallySkippable(a, calls[j]) {
-				continue
+			if out, ok := a.barrierSkip(calls[j], level); ok {
+				results[j], outcomes[j], durations[j] = out.output, out, 0
 			}
-			isVerification := calls[j].Name == "bash" && evidence.IsDeliveryVerificationCommand(bashCommandFromArgs(json.RawMessage(calls[j].Arguments)))
-			msg := "blocked: skipped because an earlier modification in this tool batch failed or was blocked. " +
-				"Fix or re-run the failed change first; verification was not executed."
-			var ex *tool.ShellExecution
-			if calls[j].Name == "bash" {
-				resolved, _, _ := a.svc.tools.ResolveCall(calls[j].Name)
-				ex = refusedShellExecution(resolved, json.RawMessage(calls[j].Arguments), tool.ShellPhaseDependency)
-				if isVerification {
-					ex.Verification = tool.ShellVerificationNotRun
-				}
-			}
-			results[j] = msg
-			outcomes[j] = toolOutcome{
-				output:    msg,
-				blocked:   true,
-				errMsg:    firstLine(msg),
-				execution: ex,
-			}
-			durations[j] = 0
 		}
 		mutationBatchStop = true
 	}
@@ -245,7 +255,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 				isVerification := calls[i].Name == "bash" && evidence.IsDeliveryVerificationCommand(bashCommandFromArgs(json.RawMessage(calls[i].Arguments)))
 				mutates := evidence.ToolCallMutates(calls[i].Name, json.RawMessage(calls[i].Arguments), readOnly)
 				if mutates || isVerification {
-					markDependencySkipped(i)
+					markDependencySkipped(i, barrierFull)
 					// markDependencySkipped fills this index; move on.
 					if results[i] != "" {
 						continue
@@ -265,9 +275,9 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 				break
 			}
 			// Mutation/verification failure barrier for the rest of this batch.
-			if batchCallIsMutatingFailure(a, calls[i], outcomes[i]) {
+			if level := batchFailureBarrier(a, calls[i], outcomes[i]); level != barrierNone {
 				mutationBatchStop = true
-				markDependencySkipped(i + 1)
+				markDependencySkipped(i+1, level)
 			}
 			// After each tool execution, also check if the context was cancelled.
 			// If so, stop executing remaining tools and return immediately so
@@ -333,12 +343,32 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 	}
 }
 
-// batchCallIsMutatingFailure reports whether a finished call was a mutation
-// (file write / non-readonly bash mutation) that failed or was blocked, so later
-// mutations and verifications in the same batch must not run.
-func batchCallIsMutatingFailure(a *Agent, call provider.ToolCall, o toolOutcome) bool {
+// barrierSkip pre-fills one call the barrier covers. It answers false for a
+// proxy or an ambiguous target, which fall through to run() so executeOne can
+// resolve the real one and re-apply the barrier before Commit/Execute.
+func (a *Agent) barrierSkip(call provider.ToolCall, level barrierLevel) (toolOutcome, bool) {
+	isVerification := call.Name == "bash" && evidence.IsDeliveryVerificationCommand(bashCommandFromArgs(json.RawMessage(call.Arguments)))
+	if !batchCallStaticallySkippable(a, call) || !level.covers(true, isVerification) {
+		return toolOutcome{}, false
+	}
+	msg := level.message()
+	var ex *tool.ShellExecution
+	if call.Name == "bash" {
+		resolved, _, _ := a.svc.tools.ResolveCall(call.Name)
+		ex = refusedShellExecution(resolved, json.RawMessage(call.Arguments), tool.ShellPhaseDependency)
+		if isVerification {
+			ex.Verification = tool.ShellVerificationNotRun
+		}
+	}
+	return toolOutcome{output: msg, blocked: true, errMsg: firstLine(msg), execution: ex}, true
+}
+
+// batchFailureBarrier reports how far a finished call's failure reaches: a
+// mutation that failed or was blocked stops later mutations and verifications,
+// one stopped before it ran stops only verification.
+func batchFailureBarrier(a *Agent, call provider.ToolCall, o toolOutcome) barrierLevel {
 	if o.errMsg == "" && !o.blocked {
-		return false
+		return barrierNone
 	}
 	readOnly := false
 	toolName := call.Name
@@ -365,20 +395,26 @@ func batchCallIsMutatingFailure(a *Agent, call provider.ToolCall, o toolOutcome)
 	// Verification failures do not open the dependency barrier by themselves —
 	// only a failed modification does.
 	if toolName == "bash" && evidence.IsDeliveryVerificationCommand(bashCommandFromArgs(toolArgs)) {
-		return false
+		return barrierNone
 	}
 	// Resolved writers (including MCP targets behind use_capability) count even
 	// when the provider-visible proxy advertised ReadOnly.
 	if o.resolved && !o.resolvedReadOnly {
-		return true
-	}
-	if evidence.ToolCallMutates(toolName, toolArgs, readOnly) {
-		return true
+		return barrierFull
 	}
 	// Fail closed only for a target the host could not classify: a blanket
 	// !readOnly fallback would re-admit the meta tools ToolCallMutates exempts,
 	// letting a failed todo_write block every real edit left in the batch.
-	return !known
+	if known && !evidence.ToolCallMutates(toolName, toolArgs, readOnly) {
+		return barrierNone
+	}
+	// Stopped before it ran, and not a writer the host could name: it changed
+	// nothing, so later edits work from a known state. The check still cannot.
+	if o.execution != nil && o.execution.MutationRisk == tool.ShellMutationNotStarted &&
+		evidence.ToolCallMutationClass(toolName, toolArgs, readOnly) != evidence.MutationProven {
+		return barrierVerificationOnly
+	}
+	return barrierFull
 }
 
 // batchCallStaticallySkippable reports whether a remaining call can be marked
