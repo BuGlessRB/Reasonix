@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"reasonix/internal/diff"
@@ -99,7 +100,7 @@ func TestABroadScopeCallHoldsCriteriaItHasNoPreviewFor(t *testing.T) {
 
 	// `python -c` names no path and previews nothing.
 	plan := &toolCallPlan{evidenceName: "bash", evidenceArgs: []byte(`{"command":"python3 -c 'open(\"cache_test.go\",\"w\").write(\"\")'"}`)}
-	if err := a.captureCriteriaBefore(plan); err != nil {
+	if err := a.captureCriteriaBefore(t.Context(), plan); err != nil {
 		t.Fatalf("captureCriteriaBefore: %v", err)
 	}
 
@@ -130,7 +131,7 @@ func TestAPathAwareWriterHoldsOnlyWhatItNames(t *testing.T) {
 	}
 	args := []byte(`{"path":` + quoteJSON(named) + `,"content":"package p\n"}`)
 	plan := &toolCallPlan{evidenceName: "write_file", evidenceArgs: args}
-	if err := a.captureCriteriaBefore(plan); err != nil {
+	if err := a.captureCriteriaBefore(t.Context(), plan); err != nil {
 		t.Fatalf("captureCriteriaBefore: %v", err)
 	}
 	if _, ok := a.task.baselineCriteria[named]; !ok {
@@ -153,7 +154,7 @@ func TestDeliveryRefusesToOverwriteACriterionItCannotKeep(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := &toolCallPlan{evidenceName: "bash", evidenceArgs: []byte(`{"command":"python3 -c 'pass'"}`)}
-	if err := a.captureCriteriaBefore(plan); err == nil {
+	if err := a.captureCriteriaBefore(t.Context(), plan); err == nil {
 		t.Fatal("a criterion was about to be destroyed with nowhere to keep it, and the call was allowed")
 	}
 }
@@ -169,14 +170,14 @@ func TestAnAlreadyHeldCriterionIsNotRecaptured(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := &toolCallPlan{evidenceName: "bash", evidenceArgs: []byte(`{"command":"python3 -c 'pass'"}`)}
-	if err := a.captureCriteriaBefore(plan); err != nil {
+	if err := a.captureCriteriaBefore(t.Context(), plan); err != nil {
 		t.Fatalf("first capture: %v", err)
 	}
 	held := a.task.baselineCriteria[criterion]
 
 	// The store goes away; the criterion is still kept, so the next rewrite runs.
 	a.archiveDir = ""
-	if err := a.captureCriteriaBefore(plan); err != nil {
+	if err := a.captureCriteriaBefore(t.Context(), plan); err != nil {
 		t.Fatalf("a held criterion was re-blocked when the store went unwritable: %v", err)
 	}
 	if a.task.baselineCriteria[criterion] != held {
@@ -195,7 +196,7 @@ func TestASessionThatPromisedNothingIsNotBlockedAndClaimsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := &toolCallPlan{evidenceName: "bash", evidenceArgs: []byte(`{"command":"python3 -c 'pass'"}`)}
-	if err := a.captureCriteriaBefore(plan); err != nil {
+	if err := a.captureCriteriaBefore(t.Context(), plan); err != nil {
 		t.Fatalf("captureCriteriaBefore = %v, want no refusal where nothing was promised", err)
 	}
 	if a.guaranteesBaselineProvenance() {
@@ -212,4 +213,55 @@ func quoteJSON(s string) string {
 		panic(err)
 	}
 	return string(b)
+}
+
+// A subtree the host cannot enter used to end the walk, and a walk that ends in
+// an error refused the call. One `D:\System Volume Information` under a
+// workspace at a drive root is what that cost: every write blocked, for the
+// rest of the session, over a directory nobody can open and nothing can write.
+func TestASubtreeTheWalkCannotEnterDoesNotRefuseTheCall(t *testing.T) {
+	a, _ := agentWithCriteriaStore(t)
+	a.deliveryProfile = true
+	missing := filepath.Join(testenv.TempDir(t), "no-such-tree")
+	if err := a.captureCriteriaUnder(t.Context(), a.baselineCriteriaStore(), missing); err != nil {
+		t.Fatalf("captureCriteriaUnder = %v; a root the walk cannot enter is a gap, not a refusal", err)
+	}
+}
+
+// The name settles what could hold a criterion, so the bytes are never the
+// question. Asking them instead read every file under the workspace, on every
+// broad-scope call of the task — the whole drive, where the workspace was one.
+func TestABroadScopeCaptureDoesNotReadWhatCannotHoldACriterion(t *testing.T) {
+	root := testenv.TempDir(t)
+	const bulk = 256 << 20
+	blob, err := os.Create(filepath.Join(root, "payload.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Sparse where the filesystem allows it: the test is about what the host
+	// reads, not about what it costs to lay the fixture down.
+	if err := blob.Truncate(bulk); err != nil {
+		blob.Close()
+		t.Skipf("cannot size the fixture: %v", err)
+	}
+	blob.Close()
+	if err := os.WriteFile(filepath.Join(root, "unit_test.go"), []byte(criterionBefore), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	a, _ := agentWithCriteriaStore(t)
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	if err := a.captureCriteriaUnder(t.Context(), a.baselineCriteriaStore(), root); err != nil {
+		t.Fatalf("captureCriteriaUnder: %v", err)
+	}
+	runtime.ReadMemStats(&after)
+
+	if _, held := a.task.baselineCriteria[filepath.Join(root, "unit_test.go")]; !held {
+		t.Fatal("the criterion beside the payload was not held")
+	}
+	if grew := after.TotalAlloc - before.TotalAlloc; grew > bulk/4 {
+		t.Fatalf("the capture allocated %d bytes walking past a %d-byte non-criterion; it read the file", grew, bulk)
+	}
 }

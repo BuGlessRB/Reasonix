@@ -9,11 +9,18 @@ import (
 	"strings"
 )
 
+// PathMayHoldTestCriteria reports whether a path could carry criteria at all.
+// The name settles it without the bytes, so a caller walking a tree can decide
+// what to read instead of reading everything to find out.
+func PathMayHoldTestCriteria(path string) bool {
+	return strings.HasSuffix(strings.ToLower(path), "_test.go")
+}
+
 // HoldsTestCriteria reports whether a file carries criteria the host must
 // already hold before anything may overwrite it. It reads the same contract
 // RewrittenTestCriteria compares against: go test's own idea of what a test is.
 func HoldsTestCriteria(path string, src []byte) bool {
-	if !strings.HasSuffix(strings.ToLower(path), "_test.go") {
+	if !PathMayHoldTestCriteria(path) {
 		return false
 	}
 	bodies, ok := testFunctionBodies(string(src))
@@ -26,7 +33,7 @@ func HoldsTestCriteria(path string, src []byte) bool {
 // edits its own checks has to say so. Only Go test files are read, and only
 // when both sides parse; tests present only in the new file are additions.
 func RewrittenTestCriteria(path, oldText, newText string) []string {
-	if !strings.HasSuffix(strings.ToLower(path), "_test.go") {
+	if !PathMayHoldTestCriteria(path) {
 		return nil
 	}
 	before, okBefore := testFunctionBodies(oldText)

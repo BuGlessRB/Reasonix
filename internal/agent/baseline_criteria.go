@@ -4,6 +4,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -74,13 +75,13 @@ func (a *Agent) guaranteesBaselineProvenance() bool {
 // could touch anything writable. Failing to hold a criterion refuses the call
 // only where the session promised to keep it: the bytes exist until this runs,
 // and a provenance loss is the one debt nothing afterwards can settle.
-func (a *Agent) captureCriteriaBefore(plan *toolCallPlan) error {
+func (a *Agent) captureCriteriaBefore(ctx context.Context, plan *toolCallPlan) error {
 	if a == nil || plan == nil {
 		return nil
 	}
 	store := a.baselineCriteriaStore()
 	if evidence.ToolCallMutationClass(plan.evidenceName, plan.evidenceArgs, plan.readOnly) == evidence.MutationUnknown {
-		return a.captureCriteriaUnder(store, a.writeWorkspaceRoot)
+		return a.captureCriteriaUnder(ctx, store, a.writeWorkspaceRoot)
 	}
 	for _, path := range evidence.ToolCallPaths(plan.evidenceArgs) {
 		if err := a.captureCriterionAt(store, path); err != nil {
@@ -91,15 +92,22 @@ func (a *Agent) captureCriteriaBefore(plan *toolCallPlan) error {
 }
 
 // captureCriteriaUnder holds every criterion in the writable domain the host
-// does not already have. Only the first broad-scope call of a task pays for it;
-// after that there is nothing left to capture.
-func (a *Agent) captureCriteriaUnder(store *evidence.BaselineStore, root string) error {
+// does not already have. A subtree it cannot enter is skipped, not refused —
+// already what an unreadable file gets below, and the two disagreeing refused
+// every write in a workspace whose drive root carried one system directory
+// nobody can open.
+func (a *Agent) captureCriteriaUnder(ctx context.Context, store *evidence.BaselineStore, root string) error {
 	if strings.TrimSpace(root) == "" {
 		return nil
 	}
+	// A stop has to reach a walk that crosses the whole writable domain.
+	checked := 0
 	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if checked++; checked%criteriaWalkCancelCheckEvery == 0 && ctx.Err() != nil {
+			return filepath.SkipAll
+		}
 		if err != nil {
-			return err
+			return nil
 		}
 		if d.IsDir() {
 			if fileutil.IsVCSStoreDir(d.Name()) && path != root {
@@ -111,12 +119,22 @@ func (a *Agent) captureCriteriaUnder(store *evidence.BaselineStore, root string)
 	})
 }
 
+// criteriaWalkCancelCheckEvery bounds how much walking a stop waits on, the way
+// scanWorkspace bounds its own.
+const criteriaWalkCancelCheckEvery = 512
+
 // captureCriterionAt files one path if it carries criteria the host does not
 // hold. Already held comes first: a criterion captured earlier is safe whatever
 // the store can do now, so a backend gone unwritable never re-blocks a change
 // to something already kept. The map records a durable write, not a handle — a
 // store that later loses its contents surfaces at evaluation, not here.
 func (a *Agent) captureCriterionAt(store *evidence.BaselineStore, path string) error {
+	// Before the read, not after: the name already settles whether this file
+	// could hold a criterion, and asking the bytes instead read every file in
+	// the workspace to answer it — on every broad-scope call of the task.
+	if !evidence.PathMayHoldTestCriteria(path) {
+		return nil
+	}
 	if _, held := a.task.baselineCriteria[path]; held {
 		return nil
 	}

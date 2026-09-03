@@ -590,7 +590,7 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 	if plan.mutates {
 		// Before the write, not after: a criterion's old bytes exist nowhere else
 		// once this runs, and no later evidence can reconstruct what it said.
-		if err := a.captureCriteriaBefore(plan); err != nil {
+		if err := a.captureCriteriaBefore(ctx, plan); err != nil {
 			return toolOutcome{
 				output:  "blocked: the host could not keep what this call may overwrite — " + err.Error(),
 				blocked: true,
