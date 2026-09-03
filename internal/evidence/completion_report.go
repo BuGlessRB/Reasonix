@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -196,25 +197,69 @@ func (l *Ledger) criterionIsBacked(c AcceptanceCriterion) (bool, string) {
 	if len(c.Evidence) == 0 {
 		return false, "claimed satisfied with no evidence"
 	}
+	var missing []string
 	for _, e := range c.Evidence {
 		switch e.Kind {
 		case CompletionEvidenceVerification:
 			if l.HasSuccessfulCommand(e.Command) {
 				return true, ""
 			}
+			missing = append(missing, "no successful run of "+quoteShort(e.Command))
 		case CompletionEvidenceDiff:
 			if l.HasSuccessfulWrite(e.Paths) {
 				return true, ""
 			}
+			missing = append(missing, "no write recorded for "+joinShort(e.Paths))
 		case CompletionEvidenceFiles:
 			if l.HasSuccessfulReadOrWrite(e.Paths) {
 				return true, ""
 			}
+			missing = append(missing, "no read or write recorded for "+joinShort(e.Paths))
 		case CompletionEvidenceReview:
 			if l.HasCompletedReview() {
 				return true, ""
 			}
+			missing = append(missing, "no completed review")
 		}
 	}
-	return false, "no host receipt backs the cited evidence"
+	if len(missing) == 0 {
+		return false, "no host receipt backs the cited evidence"
+	}
+	// Two evidence entries can miss for the same reason; saying it twice reads
+	// as two problems. Order is kept: it is the order they were cited in.
+	seen := make(map[string]bool, len(missing))
+	uniq := missing[:0]
+	for _, m := range missing {
+		if seen[m] {
+			continue
+		}
+		seen[m] = true
+		uniq = append(uniq, m)
+	}
+	return false, strings.Join(uniq, "; ")
+}
+
+// quoteShort renders one cited command for a rejection message.
+func quoteShort(s string) string {
+	const max = 80
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "an unnamed command"
+	}
+	if len(s) > max {
+		s = s[:max] + "…"
+	}
+	return strconv.Quote(s)
+}
+
+// joinShort names the cited paths, capped so one rejection cannot become the
+// whole reply.
+func joinShort(paths []string) string {
+	if len(paths) == 0 {
+		return "no path"
+	}
+	if len(paths) > 3 {
+		return strings.Join(paths[:3], ", ") + fmt.Sprintf(" (+%d more)", len(paths)-3)
+	}
+	return strings.Join(paths, ", ")
 }

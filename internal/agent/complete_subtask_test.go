@@ -175,3 +175,40 @@ func TestCompleteSubtaskVerdictSeparatesClosureFromMoreWork(t *testing.T) {
 		t.Fatal("a malformed report must fail the call, not return a verdict")
 	}
 }
+
+// A rejection the sub-agent cannot act on costs a whole round: it resubmits
+// with a different evidence shape and hopes. The host knows which criterion it
+// could not back and what it looked for, so the verdict says both.
+func TestCompleteSubtaskRejectionNamesWhatTheHostLookedFor(t *testing.T) {
+	led := evidence.NewLedger()
+	ctx := evidence.WithLedger(context.Background(), led)
+
+	args := []byte(`{"status":"complete","summary":"done",
+	  "acceptance_criteria":[
+	    {"id":"c1","status":"satisfied","evidence":[
+	      {"kind":"files","summary":"read the files","paths":["internal/agent/agent.go","internal/agent/run_loop.go"]}]},
+	    {"id":"c2","status":"satisfied","evidence":[
+	      {"kind":"verification","summary":"ran the tests","command":"go test ./internal/agent/"}]},
+	    {"id":"c3","status":"satisfied","evidence":[
+	      {"kind":"review","summary":"first reviewer"},
+	      {"kind":"review","summary":"second reviewer"}]}]}`)
+
+	out, err := (&CompleteSubtaskTool{}).Execute(ctx, args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(out, "needs_work") {
+		t.Fatalf("verdict = %q, want needs_work for claims with no receipts", out)
+	}
+	if n := strings.Count(out, "no completed review"); n > 1 {
+		t.Errorf("one missing receipt is reported %d times, which reads as %d problems:\n%s", n, n, out)
+	}
+	for _, want := range []string{
+		"c1:", "no read or write recorded for", "internal/agent/agent.go",
+		"c2:", "no successful run of", "go test ./internal/agent/",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("verdict does not say %q; the sub-agent cannot tell what to fix:\n%s", want, out)
+		}
+	}
+}

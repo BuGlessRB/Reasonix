@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"reasonix/internal/evidence"
 	"reasonix/internal/tool"
@@ -88,8 +89,10 @@ func (*CompleteSubtaskTool) Execute(ctx context.Context, args json.RawMessage) (
 		return fmt.Sprintf("complete_subtask closed: status=%s criteria=%d unresolved=%d — the sub-task is done and nothing further is asked of you",
 			adjudicated.Status, len(adjudicated.Criteria), len(adjudicated.Unresolved)), nil
 	}
-	return fmt.Sprintf("complete_subtask needs_work: status=%s criteria=%d unresolved=%d — %d criterion claim(s) are not backed by anything the host observed; do that work and submit again",
-		adjudicated.Status, len(adjudicated.Criteria), len(adjudicated.Unresolved), len(reasons)), nil
+	// The host knows which claims it could not back and why; reporting only the
+	// count leaves the sub-agent guessing which criterion and what would fix it.
+	return fmt.Sprintf("complete_subtask needs_work: status=%s criteria=%d unresolved=%d — these claims are not backed by anything the host observed:\n- %s\nDo that work, then submit again.",
+		adjudicated.Status, len(adjudicated.Criteria), len(adjudicated.Unresolved), strings.Join(reasons, "\n- ")), nil
 }
 
 // AttachCompleteSubtaskTool adds complete_subtask to a sub-agent registry.
