@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"strings"
+
 	"reasonix/internal/event"
 )
 
@@ -31,7 +33,7 @@ func (s nestedSink) Emit(e event.Event) {
 	switch e.Kind {
 	case event.ToolDispatch, event.ToolResult, event.ToolProgress:
 		e.Tool.ParentID = s.parentID
-		e.Tool.ID = s.parentID + "/" + e.Tool.ID
+		e.Tool.ID = namespaceToolID(s.parentID, e.Tool.ID)
 		s.parent.Emit(e)
 	case event.Usage:
 		if e.UsageSource == "" {
@@ -39,4 +41,16 @@ func (s nestedSink) Emit(e event.Event) {
 		}
 		s.parent.Emit(e)
 	}
+}
+
+// namespaceToolID puts id under parentID, once. parallel_tasks and fleet
+// pre-nest the sink they also hand to the call context, and RunProfileSpec
+// nests again off that context, so this ran twice on the same id: the doubled
+// prefix stops it starting with its parent's, which is what a frontend's
+// dispatch-to-result matching and every trajectory reader key on.
+func namespaceToolID(parentID, id string) string {
+	if parentID == "" || strings.HasPrefix(id, parentID+"/") {
+		return id
+	}
+	return parentID + "/" + id
 }
