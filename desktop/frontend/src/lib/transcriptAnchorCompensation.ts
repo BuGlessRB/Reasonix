@@ -91,28 +91,16 @@ export function createTranscriptAnchorCompensation({
     compensation.element.style.removeProperty("--transcript-reader-visual-offset");
   };
 
-  const anchorRow = (compensation: ActiveAnchorCompensation, element: HTMLDivElement) => (
+  const anchorRow = (rowKey: string, element: HTMLDivElement) => (
     Array.from(element.querySelectorAll<HTMLElement>(".transcript__row[data-row-key]"))
-      .find((candidate) => candidate.dataset.rowKey === compensation.anchor.rowKey)
+      .find((candidate) => candidate.dataset.rowKey === rowKey)
   );
 
   const physicalCorrection = (compensation: ActiveAnchorCompensation, element: HTMLDivElement) => {
-    const row = anchorRow(compensation, element);
+    const row = anchorRow(compensation.anchor.rowKey, element);
     if (!row) return null;
     const rendered = row.getBoundingClientRect().top - element.getBoundingClientRect().top - compensation.anchor.offset;
     return rendered - compensation.visualOffset;
-  };
-
-  const passiveAnchorDrift = (element: HTMLDivElement) => {
-    if (!anchor) return null;
-    return physicalCorrection({
-      anchor,
-      element,
-      frame: null,
-      stableFrames: 0,
-      deadline: passiveReaderAnchorUntil,
-      visualOffset: 0,
-    }, element);
   };
 
   const guardLargeDrift = (compensation: ActiveAnchorCompensation, element: HTMLDivElement) => {
@@ -227,7 +215,11 @@ export function createTranscriptAnchorCompensation({
         // compared with the reader's anchor. Sampling it as a new anchor would
         // canonize the jump and leave no trustworthy correction target.
         if (passiveReaderAnchorUntil !== 0 && Date.now() < passiveReaderAnchorUntil && anchor) {
-          if (Math.abs(passiveAnchorDrift(element) ?? 0) >= MIN_REVERSE_JUMP_PX) schedule();
+          const row = anchorRow(anchor.rowKey, element);
+          const drift = row
+            ? row.getBoundingClientRect().top - element.getBoundingClientRect().top - anchor.offset
+            : null;
+          if (drift !== null && Math.abs(drift) >= MIN_REVERSE_JUMP_PX) schedule();
         } else {
           passiveReaderAnchorUntil = 0;
           sample(element);
