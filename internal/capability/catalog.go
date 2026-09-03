@@ -276,6 +276,20 @@ func (c Catalog) Lookup(id string) (Entry, bool) {
 			return e, true
 		}
 	}
+	// A tool's own name is what the model reads everywhere else: in another
+	// tool's description, in a skill's prose, in its own error text. Refusing
+	// it here answers "unknown capability_id" for a capability that is present
+	// and callable. Two tools answering to one name is refused, not guessed.
+	var byToolName Entry
+	matches := 0
+	for _, e := range c.Entries {
+		if e.ToolName != "" && e.ToolName == id {
+			byToolName, matches = e, matches+1
+		}
+	}
+	if matches == 1 {
+		return byToolName, true
+	}
 	return Entry{}, false
 }
 
