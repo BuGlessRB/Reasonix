@@ -23,6 +23,18 @@ func silentExitIsAnAnswer(toolName string, args json.RawMessage, output string) 
 	return evidence.ToolCallMutationClass(toolName, args, false) == evidence.MutationNone
 }
 
+// silentSuccessDetail is what a call that succeeded and printed nothing says.
+// An empty result reads the same as a broken one — a run told neither re-runs
+// the same search, which is the case silentExitNote already exists for on the
+// failing side. Anything that printed something, or that may have written, is
+// returned unchanged.
+func silentSuccessDetail(toolName string, args json.RawMessage, output string) string {
+	if silentExitIsAnAnswer(toolName, args, output) {
+		return silentExitNote
+	}
+	return output
+}
+
 // silentExitDetail is the body a failed call carries below its error line: the
 // tool's own output, or the note that stands in for the nothing it printed.
 func silentExitDetail(toolName string, args json.RawMessage, output string) string {

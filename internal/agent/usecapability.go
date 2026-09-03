@@ -733,7 +733,7 @@ func (t *UseCapabilityTool) listCapabilities() (string, error) {
 				Name:        e.Name,
 				Status:      string(e.Status),
 				ReadOnly:    e.ReadOnly,
-				Description: e.Description,
+				Description: capabilityLead(e.Description),
 			})
 		}
 	}

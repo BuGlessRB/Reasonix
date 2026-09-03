@@ -46,3 +46,21 @@ func TestSilentExitIsAnAnswer(t *testing.T) {
 		t.Error("a non-bash tool was read through the shell classifier")
 	}
 }
+
+// A search that succeeded and found nothing used to reach the model as an empty
+// result, which reads the same as a call that broke. The failing side already
+// had a note for exactly this; the succeeding side is the more common one.
+func TestASuccessfulSearchThatFoundNothingSaysSo(t *testing.T) {
+	args := bashArgs(t, "find . -name '.mcp.json' -not -path './Library/*'")
+	if got := silentSuccessDetail("bash", args, ""); got != silentExitNote {
+		t.Fatalf("silentSuccessDetail = %q, want the note that says nothing matched", got)
+	}
+	if got := silentSuccessDetail("bash", args, "a.go\n"); got != "a.go\n" {
+		t.Fatalf("output that exists was rewritten: %q", got)
+	}
+	// A call that may have written prints nothing all the time, and saying "no
+	// match" about it would be a claim about a search that never happened.
+	if got := silentSuccessDetail("bash", bashArgs(t, "npm install"), ""); got != "" {
+		t.Fatalf("a possibly-writing command got the search note: %q", got)
+	}
+}
