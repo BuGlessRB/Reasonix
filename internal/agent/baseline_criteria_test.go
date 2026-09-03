@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"testing"
 
 	"reasonix/internal/diff"
@@ -264,4 +265,69 @@ func TestABroadScopeCaptureDoesNotReadWhatCannotHoldACriterion(t *testing.T) {
 	if grew := after.TotalAlloc - before.TotalAlloc; grew > bulk/4 {
 		t.Fatalf("the capture allocated %d bytes walking past a %d-byte non-criterion; it read the file", grew, bulk)
 	}
+}
+
+// Which criteria exist is a fact about the workspace, not about the call. A
+// second broad-scope call at the same state used to re-derive it — on a 650k
+// file root that was 6.5 seconds, per call, for an answer nothing had moved.
+func TestASecondBroadScopeCallAtTheSameStateDoesNotWalkAgain(t *testing.T) {
+	root := testenv.TempDir(t)
+	if err := os.WriteFile(filepath.Join(root, "unit_test.go"), []byte(criterionBefore), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := agentWithCriteriaStore(t)
+	a.writeWorkspaceRoot = root
+	a.task = taskRuntime{ledger: evidence.NewLedger(), criteriaEpoch: new(atomic.Uint64)}
+	if err := a.captureCriteriaBefore(t.Context(), broadScopePlan()); err != nil {
+		t.Fatalf("first capture: %v", err)
+	}
+	held := len(a.task.baselineCriteria)
+	if held == 0 {
+		t.Fatal("the first call captured nothing to hold")
+	}
+
+	// A criterion appearing with no recorded mutation is the unobserved external
+	// writer already declared a gap. It is what makes the skip observable here.
+	if err := os.WriteFile(filepath.Join(root, "late_test.go"), []byte(criterionBefore), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.captureCriteriaBefore(t.Context(), broadScopePlan()); err != nil {
+		t.Fatalf("second capture: %v", err)
+	}
+	if len(a.task.baselineCriteria) != held {
+		t.Fatalf("the capture walked again at an unmoved epoch: held %d then %d", held, len(a.task.baselineCriteria))
+	}
+}
+
+// ...and a state that did move is walked again, or the capture would answer for
+// a workspace it never saw.
+func TestAMovedStateIsCapturedAgain(t *testing.T) {
+	root := testenv.TempDir(t)
+	if err := os.WriteFile(filepath.Join(root, "unit_test.go"), []byte(criterionBefore), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := agentWithCriteriaStore(t)
+	a.writeWorkspaceRoot = root
+	a.task = taskRuntime{ledger: evidence.NewLedger(), criteriaEpoch: new(atomic.Uint64)}
+	if err := a.captureCriteriaBefore(t.Context(), broadScopePlan()); err != nil {
+		t.Fatal(err)
+	}
+	before := len(a.task.baselineCriteria)
+
+	if err := os.WriteFile(filepath.Join(root, "late_test.go"), []byte(criterionBefore), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.task.ledger.Record(evidence.Receipt{ToolName: "bash", Success: true, Mutation: true})
+	if err := a.captureCriteriaBefore(t.Context(), broadScopePlan()); err != nil {
+		t.Fatal(err)
+	}
+	if len(a.task.baselineCriteria) <= before {
+		t.Fatalf("a recorded mutation left the capture stale: held %d, still %d", before, len(a.task.baselineCriteria))
+	}
+}
+
+// A bash command naming no path: the shape whose scope the host cannot read,
+// which is what sends a call down the broad-scope capture.
+func broadScopePlan() *toolCallPlan {
+	return &toolCallPlan{evidenceName: "bash", evidenceArgs: []byte(`{"command":"python3 -c 'pass'"}`)}
 }

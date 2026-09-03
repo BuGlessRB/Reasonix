@@ -31,6 +31,10 @@ type taskRuntime struct {
 	// calls do not pay to be told again. A pointer because taskRuntime is
 	// assigned wholesale, which an atomic cannot be.
 	overScanLimit *atomic.Bool
+	// criteriaEpoch is the workspace state the broad-scope criteria capture last
+	// ran against, plus one so zero reads as never. A pointer for the same
+	// reason overScanLimit is one.
+	criteriaEpoch *atomic.Uint64
 }
 
 // Nil-safe: a zero taskRuntime has no memo, which costs the walk it would have
@@ -42,6 +46,18 @@ func (t *taskRuntime) workspaceOverScanLimit() bool {
 func (t *taskRuntime) noteWorkspaceOverScanLimit() {
 	if t != nil && t.overScanLimit != nil {
 		t.overScanLimit.Store(true)
+	}
+}
+
+// criteriaHeldAt reports that the capture already ran against this state, so
+// walking again would re-derive an answer nothing has moved.
+func (t *taskRuntime) criteriaHeldAt(epoch uint64) bool {
+	return t != nil && t.criteriaEpoch != nil && t.criteriaEpoch.Load() == epoch+1
+}
+
+func (t *taskRuntime) noteCriteriaCaptured(epoch uint64) {
+	if t != nil && t.criteriaEpoch != nil {
+		t.criteriaEpoch.Store(epoch + 1)
 	}
 }
 
@@ -65,6 +81,7 @@ func (t *taskRuntime) restartLedger() {
 		outcome:       evidence.NewOutcomeTracker(),
 		budget:        runBudget{limit: t.budget.limit},
 		overScanLimit: new(atomic.Bool),
+		criteriaEpoch: new(atomic.Uint64),
 	}
 	t.ledger.Reset()
 }

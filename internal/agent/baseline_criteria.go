@@ -81,13 +81,30 @@ func (a *Agent) captureCriteriaBefore(ctx context.Context, plan *toolCallPlan) e
 	}
 	store := a.baselineCriteriaStore()
 	if evidence.ToolCallMutationClass(plan.evidenceName, plan.evidenceArgs, plan.readOnly) == evidence.MutationUnknown {
-		return a.captureCriteriaUnder(ctx, store, a.writeWorkspaceRoot)
+		return a.captureCriteriaOnce(ctx, store)
 	}
 	for _, path := range evidence.ToolCallPaths(plan.evidenceArgs) {
 		if err := a.captureCriterionAt(store, path); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// captureCriteriaOnce walks the writable domain only where it moved since the
+// last walk. Which criteria exist answers to the state, not the call, and
+// BaselineTestObligations already indexes the evaluation half that way; the
+// capture half re-derived it per call — 6.5s each on a 650k-file root. A
+// mutation the host could not prove clean still moves the epoch.
+func (a *Agent) captureCriteriaOnce(ctx context.Context, store *evidence.BaselineStore) error {
+	epoch := a.mutationEpoch()
+	if a.task.criteriaHeldAt(epoch) {
+		return nil
+	}
+	if err := a.captureCriteriaUnder(ctx, store, a.writeWorkspaceRoot); err != nil {
+		return err
+	}
+	a.task.noteCriteriaCaptured(epoch)
 	return nil
 }
 

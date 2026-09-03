@@ -66,6 +66,9 @@ var taskRestarted = map[string]bool{
 	// finish during it: an install is what puts a tree over the limit and a
 	// clean is what takes it back under, and both happen inside one task.
 	"overScanLimit": true,
+	// The capture answers for the workspace one task began under. A new task
+	// begins under whatever the tree says then, alongside baselineCriteria.
+	"criteriaEpoch": true,
 }
 
 // restartLedger is one assignment, so an unlisted field resets by default —
