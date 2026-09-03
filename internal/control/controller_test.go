@@ -2990,7 +2990,10 @@ command = "project-shared"
 	}
 }
 
-func TestConnectConfiguredProjectMCPIsTrustedByDefault(t *testing.T) {
+// A project's own server no longer starts on its own — but asking to connect it
+// is the answer it was waiting for, and the answer has to stick, or the action
+// works once and the server is off again next session.
+func TestConnectingAProjectMCPRecordsTheDecisionItRepresents(t *testing.T) {
 	isolateControlConfigHome(t)
 	workspace := testenv.TempDir(t)
 	var requests atomic.Int32
@@ -3053,9 +3056,21 @@ url = %q
 		},
 	})
 
+	entry := config.PluginEntry{Name: "project-docs", Source: config.MCPSourceProjectConfig}
+	store := config.DefaultActivationStore()
+	if !store.AwaitingDecision(entry, workspace) {
+		t.Fatal("a server the repository declared should be waiting for an answer before anyone gives one")
+	}
+
 	n, err := ctrl.ConnectConfiguredMCPServer("project-docs")
 	if err != nil {
 		t.Fatalf("ConnectConfiguredMCPServer: %v", err)
+	}
+	if store.AwaitingDecision(entry, workspace) {
+		t.Fatal("connecting it left it still waiting, so the next session asks again")
+	}
+	if enabled, err := store.IsEnabled(entry, workspace); err != nil || !enabled {
+		t.Fatalf("IsEnabled after connecting = %v (%v), want the decision recorded", enabled, err)
 	}
 	if n != 1 || requests.Load() == 0 {
 		t.Fatalf("trusted project MCP = %d tools, %d requests; want 1 tool and a live connection", n, requests.Load())
@@ -3076,7 +3091,7 @@ url = %q
 		WorkspaceRoot: workspace,
 	})
 	if n, err := nextCtrl.ConnectConfiguredMCPServer("project-docs"); err != nil || n != 1 {
-		t.Fatalf("subsequent project MCP connection = (%d, %v), want zero-confirmation trust", n, err)
+		t.Fatalf("subsequent connection = (%d, %v), want the recorded decision to carry", n, err)
 	}
 }
 

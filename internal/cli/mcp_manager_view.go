@@ -260,6 +260,10 @@ func mcpActionsFor(v mcpServerView, configPath string) []mcpActionItem {
 		out = append(out, mcpActionItem{mcpActionConnect, "Reconnect"})
 	case "disabled":
 		out = append(out, mcpActionItem{mcpActionConnect, "Enable and connect"})
+	// The action names what pressing it decides. "Connect" would describe the
+	// effect and hide the choice, which is the whole reason this state exists.
+	case "pending":
+		out = append(out, mcpActionItem{mcpActionConnect, "Approve and connect"})
 	}
 	out = appendMCPConfigActions(out, v, configPath)
 	if mcpCanClearAuth(v) {
@@ -327,6 +331,8 @@ func mcpStatusLabel(v mcpServerView) string {
 		return "◌ connecting..."
 	case v.Status == "disabled":
 		return "○ disabled"
+	case v.Status == "pending":
+		return yellow("⏸ declared by this repository — not started")
 	default:
 		return viewMeta("unknown")
 	}

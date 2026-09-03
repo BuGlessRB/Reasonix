@@ -200,6 +200,7 @@ func (c *Controller) ConnectConfiguredMCPServer(name string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	c.approveOnExplicitConnect(p)
 	return c.connectMCPServer(p)
 }
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -117,5 +118,23 @@ auto_start = false
 	}
 	if _, err := os.Stat(oauthState); !os.IsNotExist(err) {
 		t.Fatalf("controller OAuth state was not cleared: %v", err)
+	}
+}
+
+// Deferred means it will connect when needed; pending means it will not connect
+// at all until someone answers for it. Showing one as the other told a user
+// their repo's server was on its way when nothing was going to start it.
+func TestPendingReadsAsADecisionNotAsProgress(t *testing.T) {
+	line := mcpStatusLabel(mcpServerView{Name: "codegraph", Status: "pending"})
+	if !strings.Contains(line, "repository") || strings.Contains(line, "background") {
+		t.Fatalf("status line = %q, want it to name why nothing started", line)
+	}
+	actions := mcpActionsFor(mcpServerView{Name: "codegraph", Status: "pending"}, "")
+	var labels []string
+	for _, a := range actions {
+		labels = append(labels, a.label)
+	}
+	if !slices.Contains(labels, "Approve and connect") {
+		t.Fatalf("actions = %v, want the one that names what pressing it decides", labels)
 	}
 }

@@ -3,6 +3,7 @@ package control
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"reasonix/internal/config"
@@ -181,6 +182,20 @@ func (c *Controller) ConfiguredMCPServers() []MCPServerState {
 // its tools already callable.
 func (c *Controller) MCPCatalogTools() map[string]int { return c.mcp.catalogTools() }
 
+// approveOnExplicitConnect records the answer a person just gave. A pending
+// server is one nobody had answered for, and asking to connect it is the
+// answer; without writing it down the action connects once and the server is
+// off again next session, which reads as the button not having worked.
+func (c *Controller) approveOnExplicitConnect(entry config.PluginEntry) {
+	store := config.DefaultActivationStore()
+	if !store.AwaitingDecision(entry, c.workspaceRoot) {
+		return
+	}
+	if err := store.SetServerEnabled(entry, c.workspaceRoot, config.ActivationProject, true); err != nil {
+		slog.Warn("mcp: connect could not record the approval", "server", entry.Name, "err", err)
+	}
+}
+
 // ReconnectMCPServer retries one configured server and re-registers its tools.
 // The recorded failure is cleared first: a failed name is absent from Servers()
 // until the record goes, so a successful retry would still read as broken.
@@ -189,6 +204,7 @@ func (c *Controller) ReconnectMCPServer(name string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	c.approveOnExplicitConnect(entry)
 	if h := c.mcp.hostRef(); h != nil {
 		h.ClearFailure(entry.Name)
 	}

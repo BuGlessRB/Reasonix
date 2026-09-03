@@ -358,6 +358,10 @@ func (m chatTUI) buildMCPSnapshot() mcpSnapshot {
 		}
 		v := mcpServerView{Name: p.Name}
 		switch {
+		// Pending is not deferred: deferred means it will connect when needed,
+		// and this one will not connect at all until someone answers for it.
+		case config.DefaultActivationStore().AwaitingDecision(p, workspace):
+			v.Status = "pending"
 		case m.mcpDisabled[p.Name] || !p.ShouldAutoStart():
 			v.Status = "disabled"
 		default:
