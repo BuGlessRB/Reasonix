@@ -70,6 +70,41 @@ func Detect(data []byte) (Kind, []byte) {
 	return LossyUTF8, data
 }
 
+// TrimPartialRune drops a trailing UTF-8 sequence that a fixed-size peek cut in
+// half. Without it the cut byte makes utf8.Valid fail and GB18030 — which
+// accepts almost any byte string — wins the detection: over CJK text, where
+// most bytes are continuation bytes, a fixed window lands mid-character about
+// two times in three, and the whole file is then decoded as the wrong charset.
+func TrimPartialRune(peek []byte) []byte {
+	for i := len(peek) - 1; i >= 0 && len(peek)-i < utf8.UTFMax; i-- {
+		if !utf8.RuneStart(peek[i]) {
+			continue
+		}
+		if r, size := utf8.DecodeRune(peek[i:]); r == utf8.RuneError && size == 1 && runeLen(peek[i]) > len(peek)-i {
+			return peek[:i]
+		}
+		return peek
+	}
+	return peek
+}
+
+// runeLen is the length the leading byte of a UTF-8 sequence declares. Only a
+// truncated sequence is trimmed, so a byte that is simply invalid stays and
+// still fails the validity check it should fail.
+func runeLen(b byte) int {
+	switch {
+	case b&0x80 == 0:
+		return 1
+	case b&0xE0 == 0xC0:
+		return 2
+	case b&0xF0 == 0xE0:
+		return 3
+	case b&0xF8 == 0xF0:
+		return 4
+	}
+	return 1
+}
+
 // DetectQuick checks only for BOM prefixes in the first few bytes. This is
 // the fast path for peek-based binary rejection: BOM-prefixed files (UTF-16,
 // UTF-8 BOM) skip the NUL-byte check since 0x00 is normal in UTF-16. Returns

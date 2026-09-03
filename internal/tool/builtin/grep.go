@@ -244,11 +244,10 @@ func (g grepTool) nativePass(ctx context.Context, pattern, path, glob string, in
 			}
 		}
 
-		// Detect encoding from the peek alone — sufficient for the
-		// UTF-8 vs GB18030 distinction (utf8.Valid on 8 KiB is reliable).
-		// Then stream the rest through a decoder so the 200-match cap can
-		// stop reading early instead of buffering the entire file.
-		enc, _ := fileenc.Detect(peek)
+		// Minus any character the fixed window cut in half: that byte alone
+		// fails utf8.Valid, and GB18030 then wins for a UTF-8 file. The rest
+		// streams through a decoder so the match cap can stop reading early.
+		enc, _ := fileenc.Detect(fileenc.TrimPartialRune(peek))
 
 		var src io.Reader
 		if enc == fileenc.UTF16LE || enc == fileenc.UTF16BE {
