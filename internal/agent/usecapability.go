@@ -530,10 +530,10 @@ func (*UseCapabilityTool) Name() string { return "use_capability" }
 // must be listed, inspectable, and callable in a real assembly; the boot effect
 // test that reads this stops the description from promising an id the catalog
 // refuses.
-var CapabilityIDExamples = []string{"tool:grep", "skill:review", "task:subagent"}
+var CapabilityIDExamples = []string{"tool:grep", "skill:review", "task:subagent", "task:fleet"}
 
 func (*UseCapabilityTool) Description() string {
-	return "Unified capability proxy with a fixed schema: list catalog capabilities, inspect one (metadata plus its input schema), call a capability by stable id (tool:grep, skill:review, task:subagent, mcp-tool:server/tool), or decline a prefer capability with a non-empty reason. action=list names every callable id and its aliases; inspect one for its arguments before calling. Calling does not change the provider-visible tool schema. Resolved writers still pass permission, plan mode, sandbox, write-path, and workspace-lease checks. The Planner leaves destructive MCP for the Executor."
+	return "Unified capability proxy with a fixed schema: list catalog capabilities, inspect one (metadata plus its input schema), call a capability by stable id (tool:grep, skill:review, task:subagent, task:fleet, mcp-tool:server/tool), or decline a prefer capability with a non-empty reason. action=list names every callable id and its aliases; inspect one for its arguments before calling. task:subagent delegates one investigation; task:fleet dispatches 2-64 at once and orders them with depends_on where one needs another's answer. Calling does not change the provider-visible tool schema. Resolved writers still pass permission, plan mode, sandbox, write-path, and workspace-lease checks. The Planner leaves destructive MCP for the Executor."
 }
 
 func (*UseCapabilityTool) ReadOnly() bool { return true }
