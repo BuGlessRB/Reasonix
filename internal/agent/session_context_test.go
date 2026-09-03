@@ -178,6 +178,33 @@ func TestToollessPlannerPublishesRoleSpecificContextDiagnostics(t *testing.T) {
 	}
 }
 
+func TestSubagentDoesNotInheritParentTurnContext(t *testing.T) {
+	parentSnapshot := sessioncontext.Build(sessioncontext.Sections{
+		Workspace:        "/parent/workspace",
+		BackgroundMemory: "PARENT-PRIVATE-MEMORY",
+		SkillsCatalog:    "parent-only-skill",
+	})
+	prov := testutil.NewMock("child", testutil.Turn{Text: "child done"})
+	childSession := NewSession("child system")
+	ctx := WithTurnContextBundle(context.Background(), TurnContextBundle{Executor: parentSnapshot})
+
+	if _, err := RunSubAgentWithSession(ctx, prov, tool.NewRegistry(), childSession, "inspect the task", Options{}, event.Discard); err != nil {
+		t.Fatalf("RunSubAgentWithSession: %v", err)
+	}
+	for _, message := range childSession.Snapshot() {
+		if sessioncontext.IsContent(message.Content) {
+			t.Fatalf("child session inherited parent session-context: %+v", message)
+		}
+	}
+	if request := prov.LastRequest(); request != nil {
+		for _, message := range request.Messages {
+			if sessioncontext.IsContent(message.Content) || strings.Contains(message.Content, "PARENT-PRIVATE-MEMORY") || strings.Contains(message.Content, "parent-only-skill") {
+				t.Fatalf("child provider request inherited parent context: %+v", request.Messages)
+			}
+		}
+	}
+}
+
 func countSessionContexts(messages []provider.Message) int {
 	count := 0
 	for _, message := range messages {

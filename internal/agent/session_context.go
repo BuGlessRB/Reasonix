@@ -47,6 +47,17 @@ func WithTurnContextBundle(ctx context.Context, bundle TurnContextBundle) contex
 	return context.WithValue(ctx, turnContextBundleKey{}, bundle)
 }
 
+// WithoutTurnContextBundle prevents a child agent from inheriting the parent's
+// provider-visible runtime snapshot through context.Context. Child sessions
+// receive only the explicit task/workspace context assembled by their caller;
+// fork/continue transcript inheritance remains an explicit session operation.
+func WithoutTurnContextBundle(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, turnContextBundleKey{}, struct{}{})
+}
+
 func (a *Agent) prepareProviderTurn(ctx context.Context, input string) string {
 	input = a.withTurnPreferences(input)
 	a.AppendTurnContext(ctx)

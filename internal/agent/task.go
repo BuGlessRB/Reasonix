@@ -1704,6 +1704,11 @@ func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *to
 	if sess == nil {
 		return "", fmt.Errorf("sub-agent session is nil")
 	}
+	// A child receives an explicit task/workspace context, never the parent's
+	// provider-visible session snapshot. Transcript inheritance, when requested
+	// by fork_from/continue_from, is handled by the child session itself rather
+	// than by ambient context propagation.
+	ctx = WithoutTurnContextBundle(ctx)
 	// Isolate temporary files for this run before any tool execution.
 	ctx = tool.WithoutGoalTurnRecorder(ctx)
 	if opts.MemoryQueue != nil {
