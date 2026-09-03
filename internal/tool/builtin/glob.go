@@ -125,16 +125,29 @@ func filterForbidMatches(matches, forbidRoots []string) []string {
 	return out
 }
 
+// globWalkRoot splits a pattern into the tree to walk and the pattern to match
+// relative paths against. It repairs the one root doublestar hands back that
+// does not name what it looks like: a pattern rooted at a drive splits to the
+// bare volume, and "D:" is that drive's *current directory*, not its root — so
+// the walk started elsewhere and every match came back drive-relative.
+func globWalkRoot(pattern string) (root, rel string) {
+	rootSlash, rel := doublestar.SplitPattern(filepath.ToSlash(filepath.Clean(pattern)))
+	root = filepath.FromSlash(rootSlash)
+	if vol := filepath.VolumeName(root); vol != "" && vol == root {
+		root += string(filepath.Separator)
+	}
+	if rel == "" {
+		rel = "**"
+	}
+	return root, rel
+}
+
 // globRecursive handles patterns containing ** by walking the stable non-meta
 // prefix and matching relative paths with doublestar. Accepts a context so the
 // walk can be interrupted on cancellation, and to so an expired deadline can be
 // reported as incomplete results rather than as a failure.
 func (g globTool) globRecursive(ctx context.Context, pattern, displayPattern string, rp ResolvedPath, to time.Duration) (string, error) {
-	rootSlash, relPattern := doublestar.SplitPattern(filepath.ToSlash(filepath.Clean(pattern)))
-	root := filepath.FromSlash(rootSlash)
-	if relPattern == "" {
-		relPattern = "**"
-	}
+	root, relPattern := globWalkRoot(pattern)
 
 	// Check root exists.
 	if info, err := os.Stat(root); err != nil {
