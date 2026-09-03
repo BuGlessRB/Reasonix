@@ -501,7 +501,6 @@ check(scrollElement.dataset.transcriptReaderIntent === "false",
   "the reader writer transaction ends after the bounded quiet window");
 check(arbiter?.readerTransactionActive === true,
   "manual ownership retains the layout-only mount corridor after the writer transaction ends");
-
 await act(async () => arbiter?.setMode("selection", "test-manual-layout-lease-release"));
 check(arbiter?.readerTransactionActive === false,
   "an explicit owner releases the idle manual layout lease");
