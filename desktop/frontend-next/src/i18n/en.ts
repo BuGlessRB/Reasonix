@@ -132,12 +132,17 @@ export const EN: Record<string, string> = {
   "无": "None",
   "外部服务": "External services",
   "{n} 个连不上": "{n} unreachable",
+  "{n} 个待批准": "{n} awaiting approval",
+  "{n} 个连不上 · {p} 个待批准": "{n} unreachable · {p} awaiting approval",
   "这个端点还有 {n} 个模型不在列表里：{names}。点「编辑」把它们加进来。":
     "This endpoint serves {n} models this connection does not list: {names}. Add them under Edit.",
   "还有 {n} 个，都在设置里": "{n} more, all in Settings",
   "到设置里重连": "Reconnect from Settings",
   "到设置的 MCP 面板里修复": "Fix it in the MCP panel under Settings",
+  "这个服务由仓库声明，到设置里决定是否允许它运行":
+    "This server was declared by the repository; decide under Settings whether it may run",
   "去修复": "Fix",
+  "去批准": "Approve",
   "失败": "Failed",
   "OpenAI 兼容": "OpenAI-compatible",
   "Anthropic 兼容": "Anthropic-compatible",

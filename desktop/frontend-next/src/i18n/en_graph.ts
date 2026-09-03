@@ -4,8 +4,8 @@
 export const EN_GRAPH: Record<string, string> = {
   "图": "Graph",
   "在活动流中定位": "Find it in the activity stream",
-  "这一轮没有派出并行的子代理。fleet 或 parallel_tasks 一开跑，它们的形状就画在这里 —— 谁在等谁，谁在同时跑，哪些答案是复用的。":
-    "No sub-agents were dispatched in parallel this turn. The moment a fleet or parallel_tasks starts, its shape is drawn here: what is waiting on what, what is running at the same time, and which answers were reused rather than paid for again.",
+  "这一轮还没有派出子代理。派出去了就画在这里 —— 谁在跑、跑成什么样；成组派出时还有谁在等谁、谁在同时跑、哪些答案是复用的。":
+    "No sub-agents have been dispatched this turn. Once any are, they are drawn here: what is running and how it went — and, for a group, what is waiting on what, what is running at the same time, and which answers were reused rather than paid for again.",
   "· {n} 个没有重跑": "· {n} not re-run",
   "· {n} 个在等上游": "· {n} waiting upstream",
   "依赖 · 答案已交付": "Depends · answer delivered",
