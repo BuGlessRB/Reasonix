@@ -49,13 +49,11 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 	c.memory.clearAutoRemember()
 	c.mu.Lock()
 	cancelRequested := c.gate.canceling
-	c.gate.running = false
+	c.gate.end()
 	// A live controller keeps admission closed until TurnDone fan-out finishes.
 	// Close has already sealed admission permanently, so a late completion must
 	// not resurrect a finishing state after teardown.
 	c.gate.finishing = !c.gate.closed
-	c.cancel = nil
-	c.gate.canceling = false
 	c.mu.Unlock()
 
 	defer func() {
@@ -74,9 +72,7 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 		next := c.parkedTurns[0]
 		c.parkedTurns = c.parkedTurns[1:]
 		ctx, cancel := context.WithCancel(extension.ContextWithRuntimeOwner(context.Background(), c.runtimeOwner))
-		c.cancel = cancel
-		c.gate.running = true
-		c.gate.canceling = false
+		c.gate.begin(cancel)
 		c.mu.Unlock()
 		c.spawnGuardedTurn(ctx, cancel, next)
 	}()
@@ -113,10 +109,7 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 // unblocks via the cancelled context.
 func (c *Controller) Cancel() {
 	c.mu.Lock()
-	cancel := c.cancel
-	if cancel != nil {
-		c.gate.canceling = true
-	}
+	cancel := c.gate.requestCancel()
 	c.mu.Unlock()
 	if cancel != nil {
 		c.approval.clearAll()

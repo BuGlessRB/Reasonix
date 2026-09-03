@@ -80,9 +80,7 @@ func (c *Controller) admitGuardedTurn(body func(ctx context.Context) error, park
 		return turnParked
 	}
 	ctx, cancel := context.WithCancel(extension.ContextWithRuntimeOwner(context.Background(), c.runtimeOwner))
-	c.cancel = cancel
-	c.gate.running = true
-	c.gate.canceling = false
+	c.gate.begin(cancel)
 	c.mu.Unlock()
 	if onStart != nil {
 		onStart()

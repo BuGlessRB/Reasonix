@@ -157,8 +157,7 @@ type Controller struct {
 
 	// mu guards the run state; every critical section under it is short and
 	// non-blocking.
-	mu     sync.Mutex
-	cancel context.CancelFunc
+	mu sync.Mutex
 	// parkedTurns holds turn bodies that arrived during the finishing window,
 	// FIFO. finishGuardedTurn starts the oldest one as it closes the window
 	// (see runGuarded/finishGuardedTurn); close() discards any remainder.
@@ -2729,7 +2728,7 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 	c.closeOnce.Do(func() {
 		c.mu.Lock()
 		started := c.startedOnce
-		cancel := c.cancel
+		cancel := c.gate.cancel
 		// Seal turn admission and drop anything already parked: a parked turn
 		// must not start against a controller that is being torn down, and
 		// without the closed flag a submit landing after this critical

@@ -293,7 +293,7 @@ func (c *Controller) AnswerQuestion(id string, answers []event.AskAnswer) {
 		// back to the model and trusting it not to ask again (#6869).
 		if !askAnswersHaveSelection(answers) {
 			c.mu.Lock()
-			activeTurn := c.cancel != nil
+			activeTurn := c.gate.cancel != nil
 			c.mu.Unlock()
 			if activeTurn {
 				c.Cancel()

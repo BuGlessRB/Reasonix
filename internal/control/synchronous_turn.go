@@ -35,15 +35,11 @@ func (c *Controller) runSynchronousTurn(
 		c.emitDrainingNotice()
 		return ErrRuntimeDraining
 	}
-	c.cancel = cancel
-	c.gate.running = true
-	c.gate.canceling = false
+	c.gate.begin(cancel)
 	c.mu.Unlock()
 	finish := func() {
 		c.mu.Lock()
-		c.gate.running = false
-		c.cancel = nil
-		c.gate.canceling = false
+		c.gate.end()
 		c.mu.Unlock()
 		cancel()
 	}
