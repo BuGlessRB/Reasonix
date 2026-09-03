@@ -272,6 +272,82 @@ check(
   "same-scrollTop anchor displacement stays inside the reader writer lane",
 );
 
+// Under prefers-reduced-motion Windows/WebView2 lets a guard transform lag
+// behind its same-frame write, and another guard owner can drop the shared
+// attribute. Row geometry then does not carry the remembered offset. The guard
+// must derive the physical drift from the transform the browser actually
+// applied, never compounding 681 → 1362 → 2043.
+const visualOffsetOf = () => Number.parseFloat(
+  scrollElement.style.getPropertyValue("--transcript-reader-visual-offset"),
+) || 0;
+const itemList = dom.window.document.createElement("div");
+itemList.dataset.testid = "virtuoso-item-list";
+itemList.style.transform = "none";
+scrollElement.append(itemList);
+const startUnappliedGuardTransaction = async () => {
+  await act(async () => arbiter?.reset());
+  scrollExtent = 23_806;
+  scrollElement.scrollTop = 22_608;
+  rowElement.getBoundingClientRect = () => rectAt(12);
+  await act(async () => arbiter?.deliverScroll());
+  await act(async () => arbiter?.releaseTailFollow());
+  await act(async () => arbiter?.onWheelIntent({
+    ctrlKey: false,
+    deltaMode: 0,
+    deltaX: 0,
+    deltaY: 24,
+    target: scrollElement,
+  } as React.WheelEvent<HTMLElement>));
+  scrollByCalls = 0;
+  scrollWrites.length = 0;
+  scrollExtent += 681;
+  rowElement.getBoundingClientRect = () => rectAt(693 - (scrollElement.scrollTop - 22_608));
+};
+await startUnappliedGuardTransaction();
+await act(async () => arbiter?.deliverScroll());
+check(Math.abs(visualOffsetOf() + 681) <= 1,
+  `an unapplied guard is written once from the physical drift (${visualOffsetOf()}px)`);
+await act(async () => arbiter?.deliverScroll());
+await act(async () => arbiter?.deliverScroll());
+check(Math.abs(visualOffsetOf() + 681) <= 1,
+  `repeated observations before the transform lands do not compound the guard (${visualOffsetOf()}px)`);
+await flushFrames();
+check(scrollByCalls === 1 && Math.abs(lastScrollByTop - 681) <= 1,
+  `the correction targets the physical anchor, not a compounded guard (${lastScrollByTop}px)`);
+check(scrollElement.dataset.transcriptReaderVisualGuard === undefined,
+  "the unapplied guard releases after the anchor is physically restored");
+
+// The applied transform is the truth even when the remembered offset is gone:
+// a mounted item list carrying the guard transform must still be subtracted.
+const syncItemListTransform = () => {
+  const applied = scrollElement.dataset.transcriptReaderVisualGuard === "true" ? visualOffsetOf() : 0;
+  itemList.style.transform = applied === 0 ? "none" : `matrix(1, 0, 0, 1, 0, ${applied})`;
+};
+await startUnappliedGuardTransaction();
+rowElement.getBoundingClientRect = () => rectAt(693 - (scrollElement.scrollTop - 22_608) + (
+  Number.parseFloat(itemList.style.transform.split(",")[5]) || 0
+));
+await act(async () => arbiter?.deliverScroll());
+syncItemListTransform();
+check(Math.abs(visualOffsetOf() + 681) <= 1,
+  `an applied guard is written from the physical drift (${visualOffsetOf()}px)`);
+await act(async () => arbiter?.deliverScroll());
+syncItemListTransform();
+check(Math.abs(visualOffsetOf() + 681) <= 1,
+  `an applied guard stays put across observations (${visualOffsetOf()}px)`);
+await flushFrames();
+syncItemListTransform();
+check(scrollByCalls === 1 && Math.abs(lastScrollByTop - 681) <= 1,
+  `the correction subtracts the applied transform (${lastScrollByTop}px)`);
+await flushFrames();
+syncItemListTransform();
+check(scrollElement.dataset.transcriptReaderVisualGuard === undefined,
+  "the applied guard releases once the correction lands");
+itemList.remove();
+rowElement.getBoundingClientRect = () => rectAt(12 + (Number.parseFloat(
+  scrollElement.style.getPropertyValue("--transcript-reader-visual-offset"),
+) || 0));
+
 // A corrupted extent can momentarily collapse all the way to one viewport.
 // That sample is not evidence that the transcript became non-scrollable: the
 // active reader guard must keep manual ownership until geometry rebounds.
