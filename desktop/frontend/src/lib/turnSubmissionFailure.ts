@@ -41,6 +41,29 @@ export function reduceSubmitFailure(
   };
 }
 
+export function reduceManagementConfirmation(state: State, submissionId: string, observedAt: number): State {
+  if (state.pendingSubmissionId !== submissionId) return state;
+  const preserveRuntime = Boolean(state.activeTurnId || state.live || state.approval || state.ask || state.mcpInteraction);
+  return {
+    ...state,
+    items: state.items.filter((item) => !(item.kind === "user" && item.submissionId === submissionId)),
+    pendingUser: undefined,
+    pendingSubmissionId: undefined,
+    running: preserveRuntime,
+    turnActive: preserveRuntime,
+    pendingPrompt: preserveRuntime && Boolean(state.approval || state.ask || state.mcpInteraction),
+    cancelRequested: false,
+    cancellable: preserveRuntime ? state.cancellable : false,
+    activeTurnId: preserveRuntime ? state.activeTurnId : undefined,
+    currentAssistant: preserveRuntime ? state.currentAssistant : undefined,
+    assistantSegmentOrdinal: preserveRuntime ? state.assistantSegmentOrdinal : 0,
+    live: preserveRuntime ? state.live : undefined,
+    streamAttemptJournal: preserveRuntime ? state.streamAttemptJournal : undefined,
+    deliveryRecoveryActive: preserveRuntime && state.deliveryRecoveryActive,
+    turnLifecycleObservedAt: observedAt,
+  };
+}
+
 export async function findTabAfterSubmitFailure(
   binding: Pick<AppBindings, "ListTabs">,
   tabId: string,

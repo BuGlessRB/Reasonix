@@ -21,7 +21,8 @@ export function normalizeTurnSubmit(displayText: string, submitText: string) {
   return { display, submit };
 }
 
-// Management commands do not create an agent turn or receive a turn id.
+// Legacy fallback for hosts that predate the structured StartTurnForTab
+// disposition. Current hosts classify every submit on the backend.
 export function isLocalRuntimeCommand(input: string): boolean {
   const trimmed = input.trim();
   return trimmed === "/reload"

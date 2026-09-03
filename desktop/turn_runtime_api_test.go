@@ -101,3 +101,28 @@ func TestTurnRuntimeAPIRoutesStopAnswerAndReplayByExactTurn(t *testing.T) {
 		t.Fatalf("empty replay events = %#v, want []", empty.Events)
 	}
 }
+
+func TestStartTurnForTabReturnsManagementDispositionWithoutTurnID(t *testing.T) {
+	dir := t.TempDir()
+	sink := &tabEventSink{tabID: "tab", ctx: context.Background()}
+	ctrl := control.New(control.Options{SessionDir: dir, SessionPath: filepath.Join(dir, "session.jsonl"), Sink: sink})
+	t.Cleanup(ctrl.Close)
+	tab := &WorkspaceTab{ID: "tab", Scope: "global", Ready: true, Ctrl: ctrl, sink: sink}
+	app := &App{tabs: map[string]*WorkspaceTab{tab.ID: tab}, activeTabID: tab.ID}
+	sink.app = app
+
+	start, err := app.StartTurnForTab(tab.ID, "/context", "submission-management")
+	if err != nil {
+		t.Fatalf("StartTurnForTab management command: %v", err)
+	}
+	if start.Disposition != control.SubmitManagementHandled || start.TurnID != "" {
+		t.Fatalf("management receipt = %+v, want management_handled without turn id", start)
+	}
+	replay, err := app.TurnEventsForTab(tab.ID, 0)
+	if err != nil {
+		t.Fatalf("TurnEventsForTab: %v", err)
+	}
+	if len(replay.Events) != 0 {
+		t.Fatalf("management command created durable turn events: %+v", replay.Events)
+	}
+}

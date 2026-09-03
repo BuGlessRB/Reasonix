@@ -543,8 +543,6 @@ func (c *Controller) managementNotice(trimmed string) bool {
 			return true
 		}
 		c.notice(c.mcpListText())
-	default:
-		return false
 	}
 	return true
 }

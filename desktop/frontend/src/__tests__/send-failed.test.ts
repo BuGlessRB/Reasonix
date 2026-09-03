@@ -121,6 +121,11 @@ eq(isLocalRuntimeCommand("/compact"), true, "/compact remains a management comma
 eq(isLocalRuntimeCommand("/compact preserve the key decisions"), true, "focused /compact remains a management command without a turn receipt");
 eq(isLocalRuntimeCommand("/reload now"), false, "non-command /reload text still starts an agent turn");
 eq(isLocalRuntimeCommand("/compactly"), false, "similarly-prefixed text still starts an agent turn");
+const managementPending = reducer(reducer(initialState, {
+  type: "user", text: "/context", seq: 0, submissionId: "management-1",
+}), { type: "management_confirmed", submissionId: "management-1" });
+eq(managementPending.items.some((item) => item.kind === "user" && item.text === "/context"), false, "handled management commands do not remain as conversation turns");
+eq(managementPending.running, false, "handled management commands release the composer");
 let rejectedVisibleOnlySubmit = false;
 try {
   normalizeTurnSubmit("visible prompt", "   ");
