@@ -25,7 +25,7 @@ linters:
         # source rewrite.
         - newexpr
         - stditerators
-        - waitgroupgo
+        - waitgroup
     errcheck:
       check-type-assertions: false
       exclude-functions:

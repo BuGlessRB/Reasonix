@@ -35,19 +35,15 @@ func TestCoordinatorSerializesConcurrentPlannerCalls(t *testing.T) {
 	planner := &concurrentPlannerProvider{}
 	coord := NewCoordinator(planner, NewSession("planner-sys"), nil, nil, Options{}, nil, 0, event.Discard, nil)
 
-	var wg sync.WaitGroup
 	errs := make(chan error, 2)
 	for _, input := range []string{"first", "second"} {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		go func(input string) {
 			_, err := coord.plan(context.Background(), input)
 			errs <- err
-		}()
+		}(input)
 	}
-	wg.Wait()
-	close(errs)
-	for err := range errs {
+	for range 2 {
+		err := <-errs
 		if err != nil {
 			t.Fatalf("concurrent planner call: %v", err)
 		}
