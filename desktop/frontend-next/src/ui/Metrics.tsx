@@ -30,6 +30,9 @@ interface Props extends Rail {
   onRefreshWallet: () => void;
   tree: WorkspaceChanges | null;
   ctx: ContextBreakdown | null;
+  // Declaring the missing window rebuilds the runtime, so the rebuilt gauge
+  // comes back on that same call rather than on the next poll.
+  onCtx: (next: ContextBreakdown) => void;
   yolo: boolean;
   onSettings: () => void;
   panels: ExtensionSurface[];
@@ -61,6 +64,7 @@ export const Metrics = memo(function Metrics({
   onRefreshWallet,
   tree,
   ctx,
+  onCtx,
   yolo,
   onSettings,
   panels,
@@ -83,7 +87,7 @@ export const Metrics = memo(function Metrics({
             四个“这一趟在付什么代价”的问题排在一起，子代理和运行详情接在后面。 */}
         <Cache metrics={metrics} done={done} />
         <Cost metrics={metrics} wallet={wallet} account={account} onRefreshWallet={onRefreshWallet} />
-        <Context ctx={ctx} row={false} legend />
+        <Context ctx={ctx} row={false} legend port={port} onCtx={onCtx} />
         <Agents tasks={tasks} />
         <Runtime rate={rate} done={done} stats={stats} files={visible(changes, tree).length} />
         <Mcp servers={mcp} onOpen={onSettings} />

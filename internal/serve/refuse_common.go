@@ -24,6 +24,7 @@ const (
 	codeSessionBadPath = "session.bad_path"
 	codeSessionOutside = "session.outside_dir"
 	codeSessionActive  = "busy.session_active"
+	codeSwitchModel    = "busy.switch_model"
 )
 
 // badBody refuses a request whose body did not parse. The parse error itself is

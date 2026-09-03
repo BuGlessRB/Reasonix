@@ -712,6 +712,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             onRefreshWallet={refreshWallet}
             tree={tree}
             ctx={ctx}
+            onCtx={setCtx}
             yolo={status?.toolApprovalMode === "yolo"}
             onSettings={onSettings}
             panels={s.panels}

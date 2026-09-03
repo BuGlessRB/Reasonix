@@ -5341,6 +5341,32 @@
   /* 没有分母时替代进度条的那一行。占位和进度条一样高，栏里不会因为换了
      状态就跳一下。 */
   .ctxnote { margin: 5px 0 0; font: var(--w-reg) 10.5px/1.5 var(--ui); color: var(--faint) }
+  .ctxnote[data-lvl="warn"] { color: var(--warn-ink) }
+  /* 分母是可改的，所以虚线一直在 —— hover 才显形的入口，读起来是"这里没东西"。 */
+  .drow .v .ctxq { display: inline }
+  .ctxden {
+    padding: 0; border: 0; background: none; cursor: pointer;
+    font: inherit; color: inherit; letter-spacing: inherit;
+    border-bottom: 1px dashed var(--faint); transition: color .14s, border-color .14s;
+  }
+  .ctxden:hover, .ctxden[aria-expanded="true"] { color: var(--accent-ink); border-bottom-color: var(--accent) }
+  /* 只有这一处能把缺的窗口补上，所以字段是常驻的，不藏在 hover 或折叠后面。 */
+  .ctxwin { margin-top: 7px }
+  .ctxwin .r { display: flex; gap: 6px }
+  .ctxwin input {
+    flex: 1 1 auto; min-width: 0; padding: 4px 7px;
+    border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--surface); color: var(--text);
+    font: var(--w-reg) 11.5px var(--mono); font-variant-numeric: tabular-nums;
+  }
+  .ctxwin input:focus-visible { outline: none; border-color: var(--accent) }
+  .ctxwin button {
+    flex: none; padding: 4px 11px; border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--overlay); color: var(--text); font: var(--w-med) 11px var(--ui); cursor: pointer;
+    transition: background .14s, color .14s, border-color .14s;
+  }
+  .ctxwin button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-ink) }
+  .ctxwin button:disabled { color: var(--ghost); cursor: default }
   .ctxbar {
     position: relative; display: flex; gap: 1px; height: 6px; margin-top: 7px;
     border-radius: var(--r-md); background: var(--overlay); overflow: visible; cursor: default;

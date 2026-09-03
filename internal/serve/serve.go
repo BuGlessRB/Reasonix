@@ -216,7 +216,7 @@ func (s *Server) switchModelLocked(ctx context.Context, ref string) error {
 	// Snapshot the current controller under a short read of s.mu only.
 	cur := s.ctl()
 	if controllerHasActiveRuntimeWork(cur) {
-		return busyErr("busy.switch_model", "cannot switch model while active work or background jobs are running")
+		return busyErr(codeSwitchModel, "cannot switch model while active work or background jobs are running")
 	}
 
 	// Off-lock: snapshot, carry history, and build the replacement. None of these
@@ -738,17 +738,7 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 // rides the same request: a gauge alone says a session is at 70% without saying
 // whether that is a tool catalogue, a memory file, or one enormous output.
 func (s *Server) context(w http.ResponseWriter, r *http.Request) {
-	used, window := s.ctl().ContextSnapshot()
-	b := s.ctl().ContextBreakdown()
-	writeJSONCached(w, r, struct {
-		Used   int `json:"used"`
-		Window int `json:"window"`
-		System int `json:"system"`
-		Tools  int `json:"tools"`
-		User   int `json:"user"`
-		Reply  int `json:"reply"`
-		Output int `json:"output"`
-	}{used, window, b.System, b.Tools, b.User, b.Reply, b.Output})
+	writeJSONCached(w, r, s.contextView())
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

@@ -43,6 +43,13 @@ default_effort = "high"
 
 func newRichProviderServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	return newRichProviderServerAs(t, func(c control.SessionAPI) control.SessionAPI { return c })
+}
+
+// newRichProviderServerAs is the same server with the controller wrapped, for
+// the tests that need it to answer differently about what it is doing.
+func newRichProviderServerAs(t *testing.T, wrap func(control.SessionAPI) control.SessionAPI) *httptest.Server {
+	t.Helper()
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	if _, err := config.SetCredential("RICH_API_KEY", "sk-rich"); err != nil {
@@ -59,7 +66,7 @@ func newRichProviderServer(t *testing.T) *httptest.Server {
 	ctrl := control.New(control.Options{
 		Sink: bc, Label: "alpha", ModelRef: "rich/alpha", SessionDir: testenv.TempDir(t),
 	})
-	s := New(ctrl, bc, config.ServeConfig{})
+	s := New(wrap(ctrl), bc, config.ServeConfig{})
 	s.AllowProviderEdit()
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)

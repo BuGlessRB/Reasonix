@@ -108,6 +108,17 @@ func saveFailed(w http.ResponseWriter, status int, code string, err error) {
 	refuse(w, status, code, err.Error(), map[string]any{"detail": err.Error()})
 }
 
+// codedRefusal is the identity a coded error carries, for the caller that has to
+// tell two of them apart. Empty for an error that carries none — which is the
+// answer, not a reason to start reading the sentence instead.
+func codedRefusal(err error) string {
+	var c *coded
+	if errors.As(err, &c) {
+		return c.reason.Code
+	}
+	return ""
+}
+
 // rebuildFailed is the one answer to "the settings were written and the runtime
 // could not be rebuilt on them", which is not the same failure as the write.
 func rebuildFailed(w http.ResponseWriter, err error) {

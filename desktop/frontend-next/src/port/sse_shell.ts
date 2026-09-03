@@ -7,6 +7,11 @@ export class SseShell extends SseExtensions {
   context() {
     return this.get<ContextBreakdown>("/context");
   }
+  // post0 so the refusal keeps its code: "not while a turn is running" and "this
+  // server does not let you edit sources" send the reader to different places.
+  setContextWindow(window: number) {
+    return this.post0<ContextBreakdown>("/context/window", { window });
+  }
   shell() {
     return this.get<ShellSettings>("/shell");
   }

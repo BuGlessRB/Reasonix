@@ -68,6 +68,8 @@ const SAID: Record<string, string> = {
   "internal.failed": "这边出了点问题，不是你的操作有误",
   "provider.bad_context_window": "上下文长度不能是负数；填 0 表示不自动压缩",
   "provider.bad_reasoning_protocol": "不认识「{protocol}」这种思考协议",
+  "provider.no_current_model": "现在没有在用的模型，没法给它记窗口大小",
+  "context.window_after_this_turn": "窗口大小已经记下了，这一轮跑完才开始按它算",
   "provider.extra_body_null": "额外设置里「{path}」不能是空值（null）",
   "provider.no_websearch_wire": "这个协议没有让端点自己搜索的写法",
 

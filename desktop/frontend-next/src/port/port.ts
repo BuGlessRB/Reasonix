@@ -366,6 +366,12 @@ export interface AgentPort {
   // Installed theme packs and which one is active. The list carries every
   // pack's tokens so a picker can preview without a second request.
   context(): Promise<ContextBreakdown>;
+  // Declares what the model this session runs on actually holds. Nothing can
+  // probe it — a relay forwards a third party's model under its own name — so
+  // it is written against that model and the runtime is rebuilt, which is what
+  // gives the gauge a denominator and turns automatic compaction back on.
+  // Refused mid-turn, like every other rebuild.
+  setContextWindow(window: number): Promise<ContextBreakdown>;
   themes(): Promise<ThemePack[]>;
   // The reader's own size, type and picture — kept apart from the pack, which
   // is a palette somebody else authored.

@@ -30,8 +30,18 @@ const POWERSHELL: ShellOption = {
 };
 
 export class MockShell extends MockExtensions {
+  private ctx: ContextBreakdown = CONTEXT;
+
   async context(): Promise<ContextBreakdown> {
-    return CONTEXT;
+    return { ...this.ctx };
+  }
+
+  // The kernel rebuilds on this and answers with the fresh gauge; here the
+  // window is simply the one that was declared, which is what the panel needs
+  // to be developed against a source that reports none.
+  async setContextWindow(window: number): Promise<ContextBreakdown> {
+    this.ctx = { ...this.ctx, window };
+    return { ...this.ctx };
   }
 
   private sh: ShellSettings = {

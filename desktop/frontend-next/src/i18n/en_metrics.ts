@@ -22,6 +22,15 @@ export const EN_METRICS: Record<string, string> = {
   "工具 schema": "Tool schema",
   "远程主机": "Remote hosts",
   "还没有请求": "no requests yet",
+  "没人说过这个来源的窗口有多大，所以画不出用了多少 —— 也不会自动压缩。中转站转发的是别人的模型，只有你知道它有多大。":
+    "Nobody has said how large this source's window is, so there is no share to draw — and no automatic compaction either. A relay forwards somebody else's model, so only you know what it holds.",
+  "记下": "Save",
+  "这个窗口是谁填的说不准 —— 点一下改成这个模型真正的上限":
+    "Whoever entered this window may not have meant this model — click to set what it actually holds",
+  "只改当前这个模型，同一个来源下的其它模型不动。填模型文档写的上下文上限，不是最大输出。会重建运行时，任务跑着的时候改不了。":
+    "Applies to this model alone; the others on this source are left as they are. The context ceiling from the model's docs, not its max output. This rebuilds the runtime, so it cannot be set while a task is running.",
+  "填模型文档写的上下文上限，不是最大输出。会重建运行时，任务跑着的时候改不了。":
+    "The context ceiling from the model's docs, not its max output. This rebuilds the runtime, so it cannot be set while a task is running.",
   "{n} 会话": "{n} sessions",
   "每回合用量": "Tokens per round",
   "峰值 {peak} · 均 {avg}": "peak {peak} · avg {avg}",

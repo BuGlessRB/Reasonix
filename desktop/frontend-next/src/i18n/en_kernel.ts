@@ -143,6 +143,8 @@ export const EN_KERNEL: Record<string, string> = {
   "这边出了点问题，不是你的操作有误": "Something went wrong on this side — nothing you did is at fault",
   "上下文长度不能是负数；填 0 表示不自动压缩": "The context window cannot be negative; 0 means no automatic compaction",
   "不认识「{protocol}」这种思考协议": "Unrecognised reasoning protocol “{protocol}”",
+  "现在没有在用的模型，没法给它记窗口大小": "No model is in use, so there is nothing to record a window against",
+  "窗口大小已经记下了，这一轮跑完才开始按它算": "The window is saved; it starts counting once the running work finishes",
   "额外设置里「{path}」不能是空值（null）": "“{path}” in the extra settings cannot be null",
   "图片太大了，先压到 {limit} MB 以内": "That image is too large — bring it under {limit} MB",
   "{path} 不在这个工作树里，看不了它的改动": "{path} is not inside this working tree, so its changes cannot be shown",
