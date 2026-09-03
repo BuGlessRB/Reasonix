@@ -5,6 +5,7 @@ package sessioncontext
 import (
 	"crypto/sha256"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -78,6 +79,8 @@ func Build(sections Sections) Snapshot {
 
 	var body strings.Builder
 	body.WriteString(preamble)
+	body.WriteString("\n\n")
+	body.WriteString(sectionManifest(sections))
 	appendSection(&body, "Environment", sections.Environment)
 	appendSection(&body, "Workspace", sections.Workspace)
 	appendSection(&body, "Background memory", sections.BackgroundMemory)
@@ -110,7 +113,15 @@ func Parse(content string) (Snapshot, bool) {
 	if !strings.HasPrefix(body, preamble) {
 		return Snapshot{}, false
 	}
-	sections, ok := parseSections(body)
+	sections, ok := parseFramedSections(body)
+	if !ok && strings.HasPrefix(body, preamble+"\n\nSection lengths: ") {
+		return Snapshot{}, false
+	}
+	if !ok {
+		// Existing v1 snapshots predate the length manifest. Keep accepting their
+		// legacy heading parser so upgraded clients can resume old sessions.
+		sections, ok = parseSections(body)
+	}
 	if !ok {
 		return Snapshot{}, false
 	}
@@ -143,14 +154,28 @@ func SplitBlocks(content string) []Part {
 			parts = appendTextPart(parts, remaining)
 			break
 		}
-		endRel := strings.Index(remaining[start:], closeTag)
-		if endRel < 0 {
+		search := start + len(openTag)
+		firstEnd, validEnd := -1, -1
+		for search < len(remaining) {
+			endRel := strings.Index(remaining[search:], closeTag)
+			if endRel < 0 {
+				break
+			}
+			end := search + endRel + len(closeTag)
+			if firstEnd < 0 {
+				firstEnd = end
+			}
+			if _, ok := Parse(remaining[start:end]); ok {
+				validEnd = end
+				break
+			}
+			search = end
+		}
+		if validEnd < 0 && firstEnd < 0 {
 			parts = append(parts, Part{Text: remaining})
 			break
 		}
-		end := start + endRel + len(closeTag)
-		candidate := remaining[start:end]
-		if _, ok := Parse(candidate); !ok {
+		if validEnd < 0 {
 			// Preserve the invalid opening as ordinary text and continue looking
 			// after it, so a later valid envelope can still be recovered.
 			cut := start + len(openTag)
@@ -159,8 +184,8 @@ func SplitBlocks(content string) []Part {
 			continue
 		}
 		parts = appendTextPart(parts, remaining[:start])
-		parts = append(parts, Part{Text: candidate, SessionContext: true})
-		remaining = remaining[end:]
+		parts = append(parts, Part{Text: remaining[start:validEnd], SessionContext: true})
+		remaining = remaining[validEnd:]
 	}
 	return parts
 }
@@ -176,6 +201,11 @@ func appendSection(body *strings.Builder, heading, value string) {
 		return
 	}
 	fmt.Fprintf(body, "\n\n## %s\n\n%s", heading, value)
+}
+
+func sectionManifest(sections Sections) string {
+	return fmt.Sprintf("Section lengths: Environment=%d; Workspace=%d; Background memory=%d; Skills catalog=%d",
+		len(sections.Environment), len(sections.Workspace), len(sections.BackgroundMemory), len(sections.SkillsCatalog))
 }
 
 func appendTextPart(parts []Part, text string) []Part {
@@ -212,6 +242,84 @@ func normalizeSection(value, heading string) string {
 func normalizeNewlines(value string) string {
 	value = strings.ReplaceAll(value, "\r\n", "\n")
 	return strings.ReplaceAll(value, "\r", "\n")
+}
+
+func parseFramedSections(body string) (Sections, bool) {
+	prefix := preamble + "\n\nSection lengths: "
+	if !strings.HasPrefix(body, prefix) {
+		return Sections{}, false
+	}
+	rest := strings.TrimPrefix(body, prefix)
+	lineEnd := strings.Index(rest, "\n\n")
+	if lineEnd < 0 {
+		return Sections{}, false
+	}
+	lengths, ok := parseSectionManifest(rest[:lineEnd])
+	if !ok {
+		return Sections{}, false
+	}
+	payload := rest[lineEnd+2:]
+	specs := []struct {
+		name string
+		set  func(*Sections, string)
+	}{
+		{"Environment", func(s *Sections, v string) { s.Environment = v }},
+		{"Workspace", func(s *Sections, v string) { s.Workspace = v }},
+		{"Background memory", func(s *Sections, v string) { s.BackgroundMemory = v }},
+		{"Skills catalog", func(s *Sections, v string) { s.SkillsCatalog = v }},
+	}
+	var sections Sections
+	for i, spec := range specs {
+		n := lengths[i]
+		if n == 0 {
+			continue
+		}
+		heading := "## " + spec.name + "\n\n"
+		if !strings.HasPrefix(payload, heading) {
+			return Sections{}, false
+		}
+		payload = strings.TrimPrefix(payload, heading)
+		if len(payload) < n || !utf8.ValidString(payload[:n]) {
+			return Sections{}, false
+		}
+		value := payload[:n]
+		if value == "" || strings.TrimSpace(value) != value {
+			return Sections{}, false
+		}
+		spec.set(&sections, value)
+		payload = payload[n:]
+		for j := i + 1; j < len(specs); j++ {
+			if lengths[j] > 0 {
+				if !strings.HasPrefix(payload, "\n\n") {
+					return Sections{}, false
+				}
+				payload = strings.TrimPrefix(payload, "\n\n")
+				break
+			}
+		}
+	}
+	return sections, payload == ""
+}
+
+func parseSectionManifest(line string) ([4]int, bool) {
+	want := [...]string{"Environment", "Workspace", "Background memory", "Skills catalog"}
+	var lengths [4]int
+	parts := strings.Split(line, "; ")
+	if len(parts) != len(want) {
+		return lengths, false
+	}
+	for i, part := range parts {
+		name, raw, ok := strings.Cut(part, "=")
+		if !ok || name != want[i] {
+			return lengths, false
+		}
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
+			return lengths, false
+		}
+		lengths[i] = n
+	}
+	return lengths, true
 }
 
 func parseSections(body string) (Sections, bool) {

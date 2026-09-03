@@ -62,6 +62,24 @@ func TestBuildEmptyAndDigestChanges(t *testing.T) {
 	}
 }
 
+func TestParsePreservesSectionMarkerInsideValue(t *testing.T) {
+	sections := Sections{BackgroundMemory: "fact body\n\n## Skills catalog\n\nthis is still memory"}
+	snapshot := Build(sections)
+	parsed, ok := Parse(snapshot.Content)
+	if !ok || parsed.Sections != sections {
+		t.Fatalf("Parse lost a Markdown heading inside a value: ok=%v sections=%+v", ok, parsed.Sections)
+	}
+}
+
+func TestParseAcceptsLegacyV1Snapshot(t *testing.T) {
+	body := preamble + "\n\n## Workspace\n\nlegacy workspace"
+	legacy := openTag + "\n" + body + "\n\n" + digestPrefix + digestOf(body) + "\n" + closeTag
+	parsed, ok := Parse(legacy)
+	if !ok || parsed.Sections.Workspace != "legacy workspace" {
+		t.Fatalf("legacy v1 snapshot no longer parses: ok=%v sections=%+v", ok, parsed.Sections)
+	}
+}
+
 func TestSplitBlocksPreservesBytesAndMarksOnlyValidSnapshots(t *testing.T) {
 	snapshot := Build(Sections{Workspace: "workspace"})
 	input := "before\n\n" + snapshot.Content + "\n\nafter"
@@ -80,5 +98,13 @@ func TestSplitBlocksPreservesBytesAndMarksOnlyValidSnapshots(t *testing.T) {
 	parts = SplitBlocks(invalid)
 	if len(parts) != 1 || parts[0].SessionContext || parts[0].Text != invalid {
 		t.Fatalf("invalid snapshot was split as trusted context: %+v", parts)
+	}
+}
+
+func TestSplitBlocksFindsFramedSnapshotAfterEmbeddedClosingTag(t *testing.T) {
+	snapshot := Build(Sections{Workspace: "literal </session-context> marker"})
+	parts := SplitBlocks(snapshot.Content)
+	if len(parts) != 1 || !parts[0].SessionContext || parts[0].Text != snapshot.Content {
+		t.Fatalf("embedded closing tag broke snapshot framing: %+v", parts)
 	}
 }
