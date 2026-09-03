@@ -396,6 +396,12 @@ func batchCallStaticallySkippable(a *Agent, call provider.ToolCall) bool {
 	if _, ok := t.(tool.CallResolver); ok {
 		return false
 	}
+	// Delegation spawns work rather than changing state, so a failed one does
+	// not open the barrier; being skipped by it is the same question, and a
+	// bare !ReadOnly answers it the other way.
+	if evidence.IsNonMutationMetaTool(call.Name) {
+		return false
+	}
 	readOnly := t.ReadOnly()
 	if call.Name == "bash" && permission.BashCommandIsReadOnly(json.RawMessage(call.Arguments)) {
 		readOnly = true
