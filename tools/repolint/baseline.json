@@ -6,7 +6,7 @@
     "complexity": 1512,
     "error-text": 12,
     "essay": 3242,
-    "file-size": 39059,
+    "file-size": 38938,
     "frontend-parity": 150,
     "function-size": 6595,
     "layering": 0,
@@ -731,7 +731,7 @@
     },
     "internal/control/controller.go": {
       "essay": 57,
-      "file-size": 2586,
+      "file-size": 2465,
       "frontend-parity": 50,
       "narrative": 4
     },
