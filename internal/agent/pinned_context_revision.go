@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
@@ -628,12 +629,16 @@ func (a *Agent) commitPinnedRevisionPlan(plan pinnedRevisionPlan) {
 	a.pinned.mu.Unlock()
 }
 
-func (a *Agent) appendPinnedRevisionAndUser(plan pinnedRevisionPlan, user provider.Message) {
-	if plan.message != nil {
-		a.sess.conversation.AddBatch(*plan.message, user)
-	} else {
-		a.sess.conversation.AddBatch(user)
+func (a *Agent) appendPinnedRevisionAndUser(ctx context.Context, plan pinnedRevisionPlan, user provider.Message) {
+	batch := make([]provider.Message, 0, 3)
+	if contextMessage, ok := a.prepareTurnContext(ctx); ok {
+		batch = append(batch, contextMessage)
 	}
+	if plan.message != nil {
+		batch = append(batch, *plan.message)
+	}
+	batch = append(batch, user)
+	a.sess.conversation.AddBatch(batch...)
 	a.commitPinnedRevisionPlan(plan)
 }
 

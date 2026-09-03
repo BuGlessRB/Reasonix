@@ -162,8 +162,7 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	if c.executor == nil {
 		return fmt.Errorf("subagent slash invocation requires an active session")
 	}
-	c.executor.AppendTurnContext(ctx)
-	c.executor.Session().Add(persistedUserTurn(input, firstNonEmpty(raw, task), images, time.Now().UnixMilli()))
+	c.executor.AppendTurnContextAndUser(ctx, persistedUserTurn(input, firstNonEmpty(raw, task), images, time.Now().UnixMilli()))
 
 	for _, sk := range skills {
 		sk = c.skills.prepare(sk)

@@ -220,7 +220,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string, pinned pinnedRev
 		Role: provider.RoleUser, Origin: inputMessageOrigin(ctx), Content: input, RawContent: rawContent,
 		Images: userImages(ctx), VisionSummary: VisionSummaryFromContext(ctx), CreatedAt: userCreatedAt,
 	}
-	a.appendPinnedRevisionAndUser(pinned, userMessage)
+	a.appendPinnedRevisionAndUser(ctx, pinned, userMessage)
 
 	// The loop fields join the classification computed above rather than
 	// opening a second object: one turn, one turnRuntime. The zero values the

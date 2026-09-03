@@ -483,14 +483,13 @@ func (c *Coordinator) persistExecutorNoOp(ctx context.Context, input, plan strin
 	if c == nil || c.executor == nil || c.executor.sess.conversation == nil {
 		return
 	}
-	c.executor.AppendTurnContext(ctx)
 	rawInput := RawUserInput(ctx, input)
 	providerContent := c.executor.withTurnPreferences(input)
 	rawContent := ""
 	if providerContent != rawInput {
 		rawContent = rawInput
 	}
-	c.executor.sess.conversation.Add(provider.Message{
+	c.executor.AppendTurnContextAndUser(ctx, provider.Message{
 		Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: providerContent, RawContent: rawContent,
 		Images: userImages(ctx), CreatedAt: time.Now().UnixMilli(),
 	})

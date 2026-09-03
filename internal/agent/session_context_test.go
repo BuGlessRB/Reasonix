@@ -205,6 +205,23 @@ func TestSubagentDoesNotInheritParentTurnContext(t *testing.T) {
 	}
 }
 
+func TestAppendTurnContextAndUserCommitsOneAdmissionBatch(t *testing.T) {
+	snapshot := sessioncontext.Build(sessioncontext.Sections{Workspace: "/workspace"})
+	sess := NewSession("system")
+	a := New(nil, tool.NewRegistry(), sess, Options{}, event.Discard)
+
+	if !a.AppendTurnContextAndUser(
+		WithTurnContextBundle(context.Background(), TurnContextBundle{Executor: snapshot}),
+		provider.Message{Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: "request"},
+	) {
+		t.Fatal("expected the first context snapshot to be appended")
+	}
+	messages := sess.Snapshot()
+	if len(messages) != 3 || messages[1].Content != snapshot.Content || messages[2].Content != "request" {
+		t.Fatalf("admission batch = %+v, want system/context/user", messages)
+	}
+}
+
 func countSessionContexts(messages []provider.Message) int {
 	count := 0
 	for _, message := range messages {

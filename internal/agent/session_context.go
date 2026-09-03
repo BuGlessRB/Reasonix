@@ -59,9 +59,7 @@ func WithoutTurnContextBundle(ctx context.Context) context.Context {
 }
 
 func (a *Agent) prepareProviderTurn(ctx context.Context, input string) string {
-	input = a.withTurnPreferences(input)
-	a.AppendTurnContext(ctx)
-	return input
+	return a.withTurnPreferences(input)
 }
 
 func withPlannerTurnContext(ctx context.Context) context.Context {
@@ -98,6 +96,17 @@ func turnContextFromContext(ctx context.Context) (sessioncontext.Snapshot, bool,
 // digest. It derives state from model-visible history so resume, rewind, fork,
 // and compaction need no persisted sidecar field.
 func (a *Agent) AppendTurnContext(ctx context.Context) bool {
+	return a.appendTurnContextAndMessages(ctx)
+}
+
+// AppendTurnContextAndUser appends a role-appropriate snapshot and the real
+// user message in one Session.AddBatch. This keeps mid-turn autosave from
+// persisting a context-only admission boundary.
+func (a *Agent) AppendTurnContextAndUser(ctx context.Context, user provider.Message) bool {
+	return a.appendTurnContextAndMessages(ctx, user)
+}
+
+func (a *Agent) appendTurnContextAndMessages(ctx context.Context, messages ...provider.Message) bool {
 	if a == nil {
 		return false
 	}
@@ -105,9 +114,30 @@ func (a *Agent) AppendTurnContext(ctx context.Context) bool {
 	if sess == nil {
 		return false
 	}
+	contextMessage, appendContext := a.prepareTurnContext(ctx)
+	if !appendContext && len(messages) == 0 {
+		return false
+	}
+	batch := make([]provider.Message, 0, len(messages)+1)
+	if appendContext {
+		batch = append(batch, contextMessage)
+	}
+	batch = append(batch, messages...)
+	sess.AddBatch(batch...)
+	return appendContext
+}
+
+func (a *Agent) prepareTurnContext(ctx context.Context) (provider.Message, bool) {
+	if a == nil {
+		return provider.Message{}, false
+	}
+	sess := a.sess.session()
+	if sess == nil {
+		return provider.Message{}, false
+	}
 	snapshot, bootstrapOnly, role := turnContextFromContext(ctx)
 	if snapshot.Content == "" {
-		return false
+		return provider.Message{}, false
 	}
 	visible := a.modelVisibleMessages()
 	previous, found := latestTurnContextSnapshot(visible)
@@ -118,7 +148,7 @@ func (a *Agent) AppendTurnContext(ctx context.Context) bool {
 	}
 	if found {
 		if bootstrapOnly || previous.Digest == snapshot.Digest {
-			return false
+			return provider.Message{}, false
 		}
 		a.turn.sessionContext.reasons = changedTurnContextReasons(previous, snapshot)
 	} else {
@@ -128,8 +158,7 @@ func (a *Agent) AppendTurnContext(ctx context.Context) bool {
 		}
 		a.turn.sessionContext.reasons = []string{reason}
 	}
-	sess.Add(HostGeneratedUserMessage(snapshot.Content))
-	return true
+	return HostGeneratedUserMessage(snapshot.Content), true
 }
 
 func appendTurnContextToSession(sess *Session, visible []provider.Message, snapshot sessioncontext.Snapshot, bootstrapOnly bool) bool {
