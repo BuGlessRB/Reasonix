@@ -852,9 +852,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 		return capability.BuildCatalog(catOpts)
 	}
-	// Always build the capability runtime and provider-visible use_capability
-	// proxy so both role settings share one tool schema.
-	capRuntime = agent.NewMCPCapabilityRuntime(ctx, pluginHost, capSpecs, reg, catalogFn)
+	// One runtime and proxy so both role settings share a tool schema.
+	// WithoutCancel: ctx is often one request; MCP children outlive it.
+	capRuntime = agent.NewMCPCapabilityRuntime(context.WithoutCancel(ctx), pluginHost, capSpecs, reg, catalogFn)
 	skillRun.capRuntime = capRuntime
 	capRuntime.ConfigureServers(cfg.Plugins, capSpecs, mcp.enabled)
 	capLedger = capability.NewLedger()
