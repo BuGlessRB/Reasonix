@@ -2292,7 +2292,7 @@ export default function App() {
           } else {
             await applyGoal(displayGoal);
           }
-        } else if (["clear", "off", "stop", "done"].includes(displayGoal.toLowerCase())) {
+        } else if (["clear", "off", "stop", "done", "pause", "resume"].includes(displayGoal.toLowerCase())) {
           await applyGoal("");
         }
         if (!controllerReady) return;
