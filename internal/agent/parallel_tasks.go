@@ -167,7 +167,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		publishGraph(sink, fanOutItemQueuedDelta(subID))
 
 		wg.Go(func() {
-			itemCtx := withCallContext(ctx, subID, subSinkFor(subID, sink), nil, PlanModeFromContext(ctx))
+			itemCtx := withDeclaredGraphNode(withCallContext(ctx, subID, subSinkFor(subID, sink), nil, PlanModeFromContext(ctx)))
 			// Route through TaskTool's unified runner so persisted parent sessions
 			// retain one independently readable transcript per child. Headless runs
 			// remain ephemeral and still receive fair bounded previews.

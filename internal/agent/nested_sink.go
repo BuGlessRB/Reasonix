@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"strings"
 
 	"reasonix/internal/event"
@@ -53,4 +54,25 @@ func namespaceToolID(parentID, id string) string {
 		return id
 	}
 	return parentID + "/" + id
+}
+
+// subSink is the nesting sink for the child of the call in ctx: the parent
+// stream with tool ids re-parented under the parent call. Discard when there is
+// no parent stream — a headless run loop, or a direct Execute in a test.
+func subSink(ctx context.Context) event.Sink {
+	parentID, parent, _, ok := CallContext(ctx)
+	if !ok || parent == nil {
+		return event.Discard
+	}
+	return subSinkFor(parentID, parent)
+}
+
+// subSinkFor builds the nesting sink from an already-captured parent ID + stream,
+// for the background path where the job runs under a context that no longer
+// carries the call context. Falls back to Discard when there's no parent stream.
+func subSinkFor(parentID string, parent event.Sink) event.Sink {
+	if parent == nil {
+		return event.Discard
+	}
+	return nestedSink{AuditForwarder: event.AuditForwarder{Inner: parent}, parentID: parentID, parent: parent}
 }

@@ -639,6 +639,22 @@ func (t *TaskTool) resolveWriterClaims(writePaths []string, requireClaim bool) (
 	return WholeWorkspaceWriteClaim(t.workspaceRoot)
 }
 
+// settleSpecPrompts rejects a run with nothing to do and fills in the system
+// prompt a plain task inherits. A profile that declared one and lost it is an
+// error rather than a fallback: it would run under the wrong instructions.
+func (t *TaskTool) settleSpecPrompts(spec *ProfileExecSpec) error {
+	if strings.TrimSpace(spec.Task.Objective) == "" {
+		return fmt.Errorf("prompt is required")
+	}
+	if strings.TrimSpace(spec.Worker.SystemPrompt) == "" {
+		if spec.Worker.UseProfilePrompt {
+			return fmt.Errorf("profile system prompt is empty")
+		}
+		spec.Worker.SystemPrompt = t.sysPrompt
+	}
+	return nil
+}
+
 // RunProfileSpec executes a unified profile/task specification. Shared by task,
 // fleet items, and boot-wired skill runners so prompt, tools, claims, and
 // scheduling cannot drift across entry points.
@@ -666,14 +682,9 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 	if !spec.Sched.RunInBackground {
 		trk.running()
 	}
-	if strings.TrimSpace(spec.Task.Objective) == "" {
-		return "", fmt.Errorf("prompt is required")
-	}
-	if strings.TrimSpace(spec.Worker.SystemPrompt) == "" {
-		if spec.Worker.UseProfilePrompt {
-			return "", fmt.Errorf("profile system prompt is empty")
-		}
-		spec.Worker.SystemPrompt = t.sysPrompt
+	defer openDelegationGraph(ctx, spec)(&result, &err)
+	if err := t.settleSpecPrompts(&spec); err != nil {
+		return "", err
 	}
 
 	maxSteps := t.childMaxStepsForContext(ctx, spec.Sched.MaxSteps)
@@ -1926,42 +1937,4 @@ func NestedSink(ctx context.Context, fallback event.Sink) event.Sink {
 		return fallback
 	}
 	return subSinkFor(parentID, parent)
-}
-
-// subSink forwards a sub-agent's tool dispatch/result/progress events and
-// billable usage to the parent's event stream. Only tool activity is nested
-// visually; the sub-agent's text/reasoning stays isolated (progress previews
-// travel as reserved ToolProgress channels, not as parent Text/Reasoning) and
-// only its final answer is returned.
-//
-// The sub-agent's own turn/text/reasoning events are dropped — forwarding them
-// would make the parent transcript noisy and could imply they belong to the
-// parent model context, which they do not.
-//
-// Usage events are observability only, so forwarding them preserves billing
-// totals without polluting the parent provider-visible prefix.
-//
-// Tool events are tagged with the parent task call's ID so a frontend nests them
-// under it. The forwarded call IDs are namespaced with the parent ID so a
-// sub-agent call can never collide with a parent call in the frontend's
-// dispatch→result matching. ToolProgress covers both the sub-agent's real tool
-// output and nested sub-agent progress previews, which ride the same sink so
-// their IDs match the cards they belong to. Falls back to Discard when there's
-// no parent stream (the headless run loop, or a direct Execute in tests).
-func subSink(ctx context.Context) event.Sink {
-	parentID, parent, _, ok := CallContext(ctx)
-	if !ok || parent == nil {
-		return event.Discard
-	}
-	return subSinkFor(parentID, parent)
-}
-
-// subSinkFor builds the nesting sink from an already-captured parent ID + stream,
-// for the background path where the job runs under a context that no longer
-// carries the call context. Falls back to Discard when there's no parent stream.
-func subSinkFor(parentID string, parent event.Sink) event.Sink {
-	if parent == nil {
-		return event.Discard
-	}
-	return nestedSink{AuditForwarder: event.AuditForwarder{Inner: parent}, parentID: parentID, parent: parent}
 }

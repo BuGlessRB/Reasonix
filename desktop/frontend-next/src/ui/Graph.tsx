@@ -188,7 +188,7 @@ export function Graph({ graph, items, onOpen }: { graph: GraphState; items: Item
     return (
       <p className="gempty">
         {t(
-          "这一轮没有派出并行的子代理。fleet 或 parallel_tasks 一开跑，它们的形状就画在这里 —— 谁在等谁，谁在同时跑，哪些答案是复用的。",
+          "这一轮还没有派出子代理。派出去了就画在这里 —— 谁在跑、跑成什么样；成组派出时还有谁在等谁、谁在同时跑、哪些答案是复用的。",
         )}
       </p>
     );
