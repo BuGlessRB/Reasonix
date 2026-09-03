@@ -49,14 +49,12 @@ const (
 // tag is the release tag this line publishes version under.
 func (l Line) tag(version string) string { return string(l) + version }
 
-// DownloadCLI downloads the exact official CLI release for version and target,
-// verifies it against SHA256SUMS from the same immutable release, and returns
-// the extracted executable bytes.
-func DownloadCLI(ctx context.Context, client *http.Client, line Line, version, goos, goarch string) ([]byte, error) {
-	if err := supportedCLITarget(version, goos, goarch); err != nil {
-		return nil, err
-	}
-	return downloadCLIFromBase(ctx, client, cliReleaseBase, line.tag(version), goos, goarch, true)
+// DownloadCLI fetches the official CLI release for line, version and target,
+// verifies it against SHA256SUMS from that same immutable release, and returns
+// the extracted executable. A non-empty cacheDir keeps the verified bytes, so
+// the next machine on this platform costs no download.
+func DownloadCLI(ctx context.Context, client *http.Client, cacheDir string, line Line, version, goos, goarch string) ([]byte, error) {
+	return cachedDownloadFromBase(ctx, client, cliReleaseBase, cacheDir, line, version, goos, goarch, true)
 }
 
 // CLIDownload is what another machine needs to fetch its own kernel: where the

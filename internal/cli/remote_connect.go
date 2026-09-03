@@ -306,7 +306,7 @@ func fetchRemoteCLIBinary(ctx context.Context, version, goos, goarch string) ([]
 		return nil, err
 	}
 	client.Timeout = 2 * time.Minute
-	return releaseasset.DownloadCLI(ctx, client, releaseasset.StudioLine, version, goos, goarch)
+	return releaseasset.DownloadCLI(ctx, client, config.CacheDir(), releaseasset.StudioLine, version, goos, goarch)
 }
 
 // resolveRemoteCLIDownload names the release archive and its digest so the

@@ -62,7 +62,7 @@ func TestDownloadCLIRejectsDevelopmentAndUnsupportedTargets(t *testing.T) {
 		{"v1.2.3", "linux", "riscv64"},
 		{"v1.2.3", "windows", "riscv64"},
 	} {
-		if _, err := DownloadCLI(context.Background(), http.DefaultClient, StudioLine, test.version, test.goos, test.goarch); err == nil {
+		if _, err := DownloadCLI(context.Background(), http.DefaultClient, "", StudioLine, test.version, test.goos, test.goarch); err == nil {
 			t.Fatalf("DownloadCLI(%q,%q,%q) unexpectedly succeeded", test.version, test.goos, test.goarch)
 		}
 	}
