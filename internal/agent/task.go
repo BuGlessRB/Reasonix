@@ -1698,16 +1698,11 @@ func reviewReportNudgePrompt(kind evidence.ReviewKind) string {
 //
 // Each call installs an independent session-private temporary directory Manager
 // so parent, sibling, and nested sub-agents never share temporary files.
-// continue_from restores conversation history only — a new run still gets a
-// fresh temporary directory.
+// continue_from restores conversation history only; each run gets a fresh temp dir.
 func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *tool.Registry, sess *Session, prompt string, opts Options, sink event.Sink) (string, error) {
 	if sess == nil {
 		return "", fmt.Errorf("sub-agent session is nil")
 	}
-	// A child receives an explicit task/workspace context, never the parent's
-	// provider-visible session snapshot. Transcript inheritance, when requested
-	// by fork_from/continue_from, is handled by the child session itself rather
-	// than by ambient context propagation.
 	ctx = WithoutTurnContextBundle(ctx)
 	// Isolate temporary files for this run before any tool execution.
 	ctx = tool.WithoutGoalTurnRecorder(ctx)
