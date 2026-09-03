@@ -181,7 +181,7 @@ func TestToollessPlannerPublishesRoleSpecificContextDiagnostics(t *testing.T) {
 func TestSubagentDoesNotInheritParentTurnContext(t *testing.T) {
 	parentSnapshot := sessioncontext.Build(sessioncontext.Sections{
 		Workspace:        "/parent/workspace",
-		BackgroundMemory: "PARENT-PRIVATE-MEMORY",
+		BackgroundMemory: "PARENT-MEMORY-MARKER",
 		SkillsCatalog:    "parent-only-skill",
 	})
 	prov := testutil.NewMock("child", testutil.Turn{Text: "child done"})
@@ -198,7 +198,7 @@ func TestSubagentDoesNotInheritParentTurnContext(t *testing.T) {
 	}
 	if request := prov.LastRequest(); request != nil {
 		for _, message := range request.Messages {
-			if sessioncontext.IsContent(message.Content) || strings.Contains(message.Content, "PARENT-PRIVATE-MEMORY") || strings.Contains(message.Content, "parent-only-skill") {
+			if sessioncontext.IsContent(message.Content) || strings.Contains(message.Content, "PARENT-MEMORY-MARKER") || strings.Contains(message.Content, "parent-only-skill") {
 				t.Fatalf("child provider request inherited parent context: %+v", request.Messages)
 			}
 		}
