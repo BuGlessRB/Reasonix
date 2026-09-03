@@ -117,7 +117,10 @@ eq(runtimeReadyForSubmit({ label: "", ready: true, eventChannel: "", cwd: "", ru
 eq(normalizeTurnSubmit(" visible prompt ", " provider prompt ").submit, "provider prompt", "submit normalization trims provider input");
 eq(isLocalRuntimeCommand(" /reload "), true, "/reload remains a host-only command without a turn receipt");
 eq(isLocalRuntimeCommand("/effort max"), true, "/effort remains a host-only command without a turn receipt");
+eq(isLocalRuntimeCommand("/compact"), true, "/compact remains a management command without a turn receipt");
+eq(isLocalRuntimeCommand("/compact preserve the key decisions"), true, "focused /compact remains a management command without a turn receipt");
 eq(isLocalRuntimeCommand("/reload now"), false, "non-command /reload text still starts an agent turn");
+eq(isLocalRuntimeCommand("/compactly"), false, "similarly-prefixed text still starts an agent turn");
 let rejectedVisibleOnlySubmit = false;
 try {
   normalizeTurnSubmit("visible prompt", "   ");
