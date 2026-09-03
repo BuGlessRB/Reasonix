@@ -167,18 +167,22 @@ type RunMetrics struct {
 
 	// Complete distinguishes a final record from an in-flight snapshot. A killed
 	// agent leaves only the latter, and its numbers are lower bounds.
-	Complete           bool                   `json:"complete"`
-	UsageBySource      map[string]SourceUsage `json:"usage_by_source,omitempty"`
-	Arm                string                 `json:"arm"`
-	DurationMs         int64                  `json:"duration_ms"`
-	Outcome            string                 `json:"outcome"`
-	ToolCalls          int                    `json:"tool_calls"`
-	ToolFailures       int                    `json:"tool_failures"`
-	ToolDurationMs     int64                  `json:"tool_duration_ms"`
-	SubagentToolCalls  int                    `json:"subagent_tool_calls"`
-	Retries            int                    `json:"retries"`
-	ToolCallsByName    map[string]int         `json:"tool_calls_by_name,omitempty"`
-	ToolFailuresByName map[string]int         `json:"tool_failures_by_name,omitempty"`
+	Complete       bool                   `json:"complete"`
+	UsageBySource  map[string]SourceUsage `json:"usage_by_source,omitempty"`
+	Arm            string                 `json:"arm"`
+	DurationMs     int64                  `json:"duration_ms"`
+	Outcome        string                 `json:"outcome"`
+	ToolCalls      int                    `json:"tool_calls"`
+	ToolFailures   int                    `json:"tool_failures"`
+	ToolDurationMs int64                  `json:"tool_duration_ms"`
+	// ToolHostOverheadMs is what a call spent outside the command it ran:
+	// pre-write capture, effect scans, permission. Both halves rode the wire
+	// already; nothing subtracted them, so a 13s median went unreported.
+	ToolHostOverheadMs int64          `json:"tool_host_overhead_ms"`
+	SubagentToolCalls  int            `json:"subagent_tool_calls"`
+	Retries            int            `json:"retries"`
+	ToolCallsByName    map[string]int `json:"tool_calls_by_name,omitempty"`
+	ToolFailuresByName map[string]int `json:"tool_failures_by_name,omitempty"`
 }
 
 // metricsSink forwards every event to the real sink and accumulates the per-call
@@ -444,6 +448,9 @@ func (s *metricsSink) recordToolResult(t event.Tool) {
 	}
 	s.m.ToolCalls++
 	s.m.ToolDurationMs += t.DurationMs
+	if t.Execution != nil && t.Execution.DurationMs > 0 && t.DurationMs > t.Execution.DurationMs {
+		s.m.ToolHostOverheadMs += t.DurationMs - t.Execution.DurationMs
+	}
 	if t.ParentID != "" {
 		s.m.SubagentToolCalls++
 	}

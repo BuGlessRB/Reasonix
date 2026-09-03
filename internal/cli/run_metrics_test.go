@@ -227,3 +227,26 @@ func TestMetricsSinkKeepsTheLastVerdict(t *testing.T) {
 		t.Fatalf("verdict = %q gaps = %v, want done with no gaps", got.CompletionVerdict, got.CompletionGapKinds)
 	}
 }
+
+// The two halves were already on the wire and nothing subtracted them: one real
+// session sat at a 13s median per bash call while the shell answered in
+// milliseconds, and no surface said so.
+func TestRunMetricsSeparatesHostOverheadFromTheCommand(t *testing.T) {
+	s := &metricsSink{}
+	s.recordToolResult(event.Tool{
+		Name: "bash", DurationMs: 6800,
+		Execution: &event.ShellExecution{DurationMs: 300},
+	})
+	if s.m.ToolDurationMs != 6800 {
+		t.Fatalf("ToolDurationMs = %d, want the whole call", s.m.ToolDurationMs)
+	}
+	if s.m.ToolHostOverheadMs != 6500 {
+		t.Fatalf("ToolHostOverheadMs = %d, want 6500 — what the host spent around the command", s.m.ToolHostOverheadMs)
+	}
+	// A tool that reports no inner duration attributes nothing rather than
+	// claiming its whole runtime was overhead.
+	s.recordToolResult(event.Tool{Name: "read_file", DurationMs: 40})
+	if s.m.ToolHostOverheadMs != 6500 {
+		t.Fatalf("ToolHostOverheadMs = %d; a call with no shell half must add nothing", s.m.ToolHostOverheadMs)
+	}
+}
