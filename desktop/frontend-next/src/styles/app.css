@@ -2684,10 +2684,12 @@
   .file .st[data-s="A"] { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok-ink) }
   .file .st[data-s="D"] { background: color-mix(in srgb, var(--err) 16%, transparent); color: var(--err-ink) }
   .file .st[data-s="R"] { background: color-mix(in srgb, var(--net) 16%, transparent); color: var(--net) }
-  /* 目录可以被裁，文件名不行 —— 之前整条 .p 一起省略号，先没的恰好是文件名 */
-  .file .p { min-width: 0; display: flex; white-space: nowrap }
-  .file .p .d { color: var(--ghost); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto }
-  .file .p .f { flex: none; color: var(--muted) }
+  /* The directory may be clipped, the filename may not — ellipsizing .p as one
+     took the filename first. .p also has to clip: a child that cannot shrink
+     paints outside a parent that does not, straight through the +N -N. */
+  .file .p { min-width: 0; display: flex; white-space: nowrap; overflow: hidden }
+  .file .p .d { color: var(--ghost); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 9999 auto }
+  .file .p .f { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; color: var(--muted) }
   .file .n { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: var(--track-tight); flex: none }
   .file .n .a { color: var(--add) } .file .n .r { color: var(--del) }
   .file .n .mk { margin-right: 6px; color: var(--faint); font-size: 10px }
