@@ -20,6 +20,7 @@ type PrefixShape struct {
 	PrefixHash        string
 	LogRewriteVersion int
 	ToolSchemaTokens  int
+	BodyChain         []string `json:"-"` // per-request, not prefix state; see BodyChain
 }
 
 // CacheDiagnostics is a type alias for event.CacheDiagnostics so the agent
@@ -71,6 +72,38 @@ func normalizeToolSchemas(schemas []provider.ToolSchema) []provider.ToolSchema {
 	return out
 }
 
+// BodyChain hashes msgs cumulatively, one entry per message, so two requests
+// compare at the length of the shorter: a rewrite anywhere in the carried
+// region moves every entry after it. The prefix hashes cannot see the
+// conversation, so without this a miss on an unchanged prefix has no
+// attribution — the host cannot say whether it rewrote what it carried.
+func BodyChain(msgs []provider.Message) []string {
+	chain := make([]string, len(msgs))
+	acc := ""
+	for i, m := range msgs {
+		acc = shortHash([2]string{acc, string(mustMarshal(m))})
+		chain[i] = acc
+	}
+	return chain
+}
+
+func mustMarshal(v any) []byte {
+	b, _ := json.Marshal(v)
+	return b
+}
+
+// compareBody reports what the two chains say about the region both requests
+// sent. carried is the length they share; changed is whether the older one's
+// bytes survived into the newer.
+func compareBody(prev, cur []string) (carried int, changed bool, hash string) {
+	carried = min(len(prev), len(cur))
+	if carried == 0 {
+		return 0, false, ""
+	}
+	hash = cur[carried-1]
+	return carried, prev[carried-1] != hash, hash
+}
+
 // CompareShape returns diagnostics describing what changed between two shapes.
 // contentReasons is the set of provider-visible rewrite reasons (e.g.
 // "compact_auto", "snip", "rewind_truncate") drained from the Session since
@@ -88,6 +121,12 @@ func CompareShape(prev, cur PrefixShape, usage *provider.Usage, contentReasons [
 		reasons = append(reasons, "tools")
 	}
 	reasons = append(reasons, contentReasons...)
+	// A rewrite the session declared is already named. One it did not declare is
+	// the case this observation exists for, so only that mints an identity.
+	carried, bodyChanged, bodyHash := compareBody(prev.BodyChain, cur.BodyChain)
+	if bodyChanged && len(contentReasons) == 0 {
+		reasons = append(reasons, "body_unreported")
+	}
 	var miss, hit int
 	if usage != nil {
 		miss = usage.CacheMissTokens
@@ -103,6 +142,9 @@ func CompareShape(prev, cur PrefixShape, usage *provider.Usage, contentReasons [
 		ToolSchemaTokens:    cur.ToolSchemaTokens,
 		CacheMissTokens:     miss,
 		CacheHitTokens:      hit,
+		CarriedMessages:     carried,
+		BodyChanged:         bodyChanged,
+		BodyHash:            bodyHash,
 	}
 }
 

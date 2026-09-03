@@ -89,3 +89,52 @@ func TestRunPopulatesCacheDiagnosticsOnUsageEvents(t *testing.T) {
 		t.Fatalf("tool hash should change after registering a tool: %q", first.ToolsHash)
 	}
 }
+
+// The effect at the boundary that matters: the chain a round reports is taken
+// from the body that went to the provider, so a second round can say the
+// messages it carried are the ones the first already sent. Without it a miss on
+// an unchanged prefix reaches the frontend with nothing to attribute it to.
+func TestUsageReportsTheBodyTheRequestActuallyCarried(t *testing.T) {
+	round := func() []provider.Chunk {
+		return []provider.Chunk{
+			{Type: provider.ChunkText, Text: "ok"},
+			{Type: provider.ChunkUsage, Usage: &provider.Usage{
+				PromptTokens: 100, CompletionTokens: 10, TotalTokens: 110,
+				CacheHitTokens: 0, CacheMissTokens: 100,
+			}},
+		}
+	}
+	prov := &cacheDiagProvider{chunks: [][]provider.Chunk{round(), round()}}
+	var diagnostics []*event.CacheDiagnostics
+	sink := event.FuncSink(func(e event.Event) {
+		if e.Kind == event.Usage {
+			diagnostics = append(diagnostics, e.CacheDiagnostics)
+		}
+	})
+	a := New(prov, tool.NewRegistry(), NewSession("stable system"), Options{}, sink)
+
+	if err := a.Run(context.Background(), "one"); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	if err := a.Run(context.Background(), "two"); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	if len(diagnostics) != 2 || diagnostics[1] == nil {
+		t.Fatalf("got %d usage diagnostics, want 2 populated", len(diagnostics))
+	}
+	second := diagnostics[1]
+	if second.CarriedMessages == 0 {
+		t.Fatal("the second round carried the first round's messages and reported none")
+	}
+	if second.BodyChanged {
+		t.Fatalf("nothing rewrote the carried messages, yet the round reported a body change: %v", second.PrefixChangeReasons)
+	}
+	if second.BodyHash == "" {
+		t.Fatal("no body hash reached the sink, so the next round has nothing to compare against")
+	}
+	// A full miss with neither half changed is the endpoint's, and that is now
+	// a statement the host can make.
+	if second.PrefixChanged {
+		t.Fatalf("PrefixChanged = true with nothing changed: %v", second.PrefixChangeReasons)
+	}
+}

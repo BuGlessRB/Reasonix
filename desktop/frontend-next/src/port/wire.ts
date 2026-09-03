@@ -115,6 +115,12 @@ export interface CacheDiagnostics {
   toolSchemaTokens: number;
   cacheMissTokens: number;
   cacheHitTokens: number;
+  // Whether the messages this request carried over are the bytes the last one
+  // sent. A miss with neither the prefix nor the body changed is the
+  // provider's, and the panel has to be able to say so.
+  carriedMessages: number;
+  bodyChanged: boolean;
+  bodyHash: string;
 }
 
 export interface Money {

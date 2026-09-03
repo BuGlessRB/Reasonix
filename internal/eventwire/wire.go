@@ -549,6 +549,9 @@ type CacheDiagnostics struct {
 	ToolSchemaTokens    int      `json:"toolSchemaTokens"`
 	CacheMissTokens     int      `json:"cacheMissTokens"`
 	CacheHitTokens      int      `json:"cacheHitTokens"`
+	CarriedMessages     int      `json:"carriedMessages"`
+	BodyChanged         bool     `json:"bodyChanged"`
+	BodyHash            string   `json:"bodyHash"`
 }
 
 // Approval is the JSON form of an event.Approval.
@@ -650,6 +653,9 @@ func ToWireCacheDiagnostics(d *event.CacheDiagnostics) *CacheDiagnostics {
 		ToolSchemaTokens:    d.ToolSchemaTokens,
 		CacheMissTokens:     d.CacheMissTokens,
 		CacheHitTokens:      d.CacheHitTokens,
+		CarriedMessages:     d.CarriedMessages,
+		BodyChanged:         d.BodyChanged,
+		BodyHash:            d.BodyHash,
 	}
 }
 

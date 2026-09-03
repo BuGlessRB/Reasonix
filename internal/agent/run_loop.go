@@ -35,8 +35,9 @@ type streamedTurn struct {
 	interrupted        bool
 	partialToolStarted bool
 	partialCalls       []provider.ToolCall
-	maxArgChars        int    // peak streaming tool-arg size for failed-attempt estimates
-	attemptID          string // the stream attempt this result came from, for usage correlation
+	maxArgChars        int      // peak streaming tool-arg size for failed-attempt estimates
+	attemptID          string   // the stream attempt this result came from, for usage correlation
+	bodyChain          []string // cumulative hashes of the messages this request actually sent
 	err                error
 }
 
@@ -273,6 +274,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) error {
 		streamed := a.streamWithSamplingRecovery(ctx, step+1)
 		text, reasoning, signature, calls, responsesItems, usage := streamed.text, streamed.reasoning, streamed.signature, streamed.calls, streamed.responsesItems, streamed.usage
 		partialCalls, err := streamed.partialCalls, streamed.err
+		prefixShape.BodyChain = streamed.bodyChain // what actually went out
 		cacheDiagnostics := CompareShape(prevPrefixShape, prefixShape, usage, contentReasons)
 		if err != nil {
 			a.emitTurnUsage(usage, &cacheDiagnostics, streamed.attemptID)
@@ -397,7 +399,7 @@ func (a *Agent) streamWithSamplingRecovery(ctx context.Context, turn int) stream
 	runAttempt := func(attemptID string, sink event.Sink) streamedTurn {
 		before := provider.RequestAttemptCount(ctx)
 		result := a.streamWithFrozen(ctx, turn, sink, &frozen, attemptID)
-		result.attemptID = attemptID
+		result.attemptID, result.bodyChain = attemptID, BodyChain(frozen.req.Messages)
 		delta := max(provider.RequestAttemptCount(ctx)-before, 0)
 		// httpRequests=0 means the provider does not use SendWithRetry
 		// (extension/custom), or it failed before issuing an HTTP request.

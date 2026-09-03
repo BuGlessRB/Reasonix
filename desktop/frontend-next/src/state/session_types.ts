@@ -47,6 +47,11 @@ export interface Metrics {
   prefixHash: string;
   prefixChanged: boolean;
   prefixReasons: string[];
+  // The other half of that answer. The prefix hash alone cannot tell a dropped
+  // cache from a rewritten conversation, because the conversation is not in it:
+  // bodyChanged says whether the carried messages are the bytes last sent.
+  bodyChanged: boolean;
+  carriedMessages: number;
   // Tool schemas are the third thing filling a prefix and the one nobody
   // counts, so it is reported rather than inferred from the context breakdown.
   toolSchema: number;

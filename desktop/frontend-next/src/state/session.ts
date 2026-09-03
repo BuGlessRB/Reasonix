@@ -3,7 +3,7 @@ import { estimateTokens, sample } from "../port/tokens";
 import type { HistoryMessage } from "../port/port";
 import { plural, t } from "../i18n";
 import type { Item, Metrics, PlanStep, RememberedFact, RuntimeNotice, SessionState, Waiting } from "./session_types";
-import { altAmount, quoteAmount, sampleRound } from "./usage";
+import { foldUsage, quoteAmount } from "./usage";
 import { showsReceipt } from "./prefs";
 
 // The types live next door; this stays their way in, so no reader of a
@@ -21,7 +21,7 @@ export const initialState: SessionState = {
   plan: [],
   outWindow: [],
   metrics: { hit: 0, miss: 0, out: 0, bySource: {}, cost: 0, currency: "¥",
-    prefixHash: "", prefixChanged: false, prefixReasons: [], toolSchema: 0,
+    prefixHash: "", prefixChanged: false, prefixReasons: [], bodyChanged: false, carriedMessages: 0, toolSchema: 0,
     estimated: false, alt: null, turn: 0, rounds: [] },
   waiting: {},
   running: false,
@@ -418,36 +418,7 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
 
     case "usage": {
       const u = ev.usage;
-      if (!u) return s;
-      const src = u.source || "executor";
-      const spent = quoteAmount(u.costQuote) ?? u.cost ?? 0;
-      const d = u.cacheDiagnostics;
-      return {
-        ...s,
-        metrics: {
-          ...s.metrics,
-          hit: s.metrics.hit + u.cacheHitTokens,
-          miss: s.metrics.miss + u.cacheMissTokens,
-          out: s.metrics.out + u.completionTokens,
-          bySource: { ...s.metrics.bySource, [src]: (s.metrics.bySource[src] ?? 0) + spent },
-          cost: s.metrics.cost + spent,
-          // The kernel sends both, and says the code is preferred: only it can
-          // tell CN¥ from ¥ in an English window. The symbol stays as the
-          // fallback for a quote that carries one instead.
-          currency: u.currencyCode || u.costQuote?.original.currency || u.currency || s.metrics.currency,
-          // Diagnostics describe the round that just billed, so they replace
-          // rather than accumulate. A round that carried none leaves the last
-          // answer standing instead of blanking the block mid-turn.
-          prefixHash: d?.prefixHash || s.metrics.prefixHash,
-          prefixChanged: d ? d.prefixChanged : s.metrics.prefixChanged,
-          prefixReasons: d?.prefixChangeReasons ?? (d ? [] : s.metrics.prefixReasons),
-          toolSchema: d?.toolSchemaTokens ?? s.metrics.toolSchema,
-          estimated: u.costQuote?.estimated ?? u.estimated ?? s.metrics.estimated,
-          alt: altAmount(u.costQuote) ?? s.metrics.alt,
-          turn: s.metrics.turn + spent,
-          rounds: sampleRound(s.metrics.rounds, u.totalTokens),
-        },
-      };
+      return u ? { ...s, metrics: foldUsage(s.metrics, u) } : s;
     }
 
     case "guardian_assessment":

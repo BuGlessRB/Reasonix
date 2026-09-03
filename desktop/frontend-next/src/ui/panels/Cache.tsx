@@ -39,6 +39,16 @@ export function Cache({ metrics, done }: { metrics: Metrics; done?: boolean }) {
             {metrics.prefixChanged ? t("前缀变了") : t("前缀未变")}
           </span>
         )}
+        {/* 前缀哈希看不见对话正文，所以"没变"单独一个说明不了未命中是谁的。 */}
+        {up > 0 && !!metrics.carriedMessages && (
+          <span
+            className="pill"
+            data-tone={metrics.bodyChanged ? "warn" : "ok"}
+            title={t("沿用的消息条数") + ": " + metrics.carriedMessages}
+          >
+            {metrics.bodyChanged ? t("正文变了") : t("正文未变")}
+          </span>
+        )}
       </div>
       <div className="bar">
         <i className="c" style={{ flexGrow: Math.max(shown, 0.4) }} />
