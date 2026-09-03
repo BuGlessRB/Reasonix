@@ -181,7 +181,7 @@ func fetchRemoteBinary(ctx context.Context, version, goos, goarch string) ([]byt
 		return nil, err
 	}
 	client.Timeout = 2 * time.Minute
-	return releaseasset.DownloadCLI(ctx, client, version, goos, goarch)
+	return releaseasset.DownloadCLI(ctx, client, releaseasset.StudioLine, version, goos, goarch)
 }
 
 // resolveRemoteDownload names the release archive and its digest so the far
@@ -198,7 +198,7 @@ func resolveRemoteDownload(ctx context.Context, version, goos, goarch string) (r
 		return releaseasset.CLIDownload{}, err
 	}
 	client.Timeout = 30 * time.Second
-	return releaseasset.ResolveCLIDownload(ctx, client, version, goos, goarch)
+	return releaseasset.ResolveCLIDownload(ctx, client, releaseasset.StudioLine, version, goos, goarch)
 }
 
 // installFailureCode names which way putting a kernel over there failed. One
@@ -210,6 +210,11 @@ func installFailureCode(err error) string {
 	switch {
 	case errors.Is(err, bootstrap.ErrInstallDisabled):
 		return "remote.install_disabled"
+	// Ahead of the per-route codes: when this one is in the join it is why the
+	// download routes closed, and naming npm's symptom instead sends the reader
+	// to a machine that is fine.
+	case errors.Is(err, bootstrap.ErrNoReleaseForBuild):
+		return "remote.no_release_for_build"
 	case errors.Is(err, bootstrap.ErrNPMOutsidePath):
 		return "remote.npm_outside_path"
 	case errors.Is(err, bootstrap.ErrBinaryNotRunnable):

@@ -33,14 +33,30 @@ const (
 
 var cliReleaseVersionPattern = regexp.MustCompile(`^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:preview|rc)\.(?:0|[1-9][0-9]*))?$`)
 
+// Line is a release line's tag namespace: the CLI line tags a release v1.2.3,
+// the Studio line studio-v1.2.3. A version alone cannot say which release
+// holds an asset. Not update.Line, which is an install layout — one type
+// answering both questions is how a tag namespace decides where a .deb goes.
+type Line string
+
+const (
+	// CLILine tags a release with the bare version.
+	CLILine Line = ""
+	// StudioLine tags a release studio-<version>.
+	StudioLine Line = "studio-"
+)
+
+// tag is the release tag this line publishes version under.
+func (l Line) tag(version string) string { return string(l) + version }
+
 // DownloadCLI downloads the exact official CLI release for version and target,
 // verifies it against SHA256SUMS from the same immutable release, and returns
 // the extracted executable bytes.
-func DownloadCLI(ctx context.Context, client *http.Client, version, goos, goarch string) ([]byte, error) {
+func DownloadCLI(ctx context.Context, client *http.Client, line Line, version, goos, goarch string) ([]byte, error) {
 	if err := supportedCLITarget(version, goos, goarch); err != nil {
 		return nil, err
 	}
-	return downloadCLIFromBase(ctx, client, cliReleaseBase, version, goos, goarch, true)
+	return downloadCLIFromBase(ctx, client, cliReleaseBase, line.tag(version), goos, goarch, true)
 }
 
 // CLIDownload is what another machine needs to fetch its own kernel: where the
@@ -58,7 +74,7 @@ type CLIDownload struct {
 // ResolveCLIDownload reads the release's SHA256SUMS and returns where the
 // archive is and what it must hash to. It downloads no archive: the point is
 // to let the machine that will run it do that over its own connection.
-func ResolveCLIDownload(ctx context.Context, client *http.Client, version, goos, goarch string) (CLIDownload, error) {
+func ResolveCLIDownload(ctx context.Context, client *http.Client, line Line, version, goos, goarch string) (CLIDownload, error) {
 	if err := supportedCLITarget(version, goos, goarch); err != nil {
 		return CLIDownload{}, err
 	}
@@ -66,7 +82,7 @@ func ResolveCLIDownload(ctx context.Context, client *http.Client, version, goos,
 		return CLIDownload{}, errors.New("remote CLI download requires an HTTP client")
 	}
 	assetName, executable := cliAsset(goos, goarch)
-	releaseBase := strings.TrimRight(cliReleaseBase, "/") + "/" + url.PathEscape(version) + "/"
+	releaseBase := strings.TrimRight(cliReleaseBase, "/") + "/" + url.PathEscape(line.tag(version)) + "/"
 
 	guarded := *client
 	guarded.CheckRedirect = redirectguard.Follow(officialHosts...)
@@ -84,6 +100,13 @@ func ResolveCLIDownload(ctx context.Context, client *http.Client, version, goos,
 	}, nil
 }
 
+// SupportsTarget reports whether a published release could be downloaded for
+// this version and platform, without asking the network. A caller uses it to
+// close a route up front rather than discovering it at the download.
+func SupportsTarget(version, goos, goarch string) error {
+	return supportedCLITarget(version, goos, goarch)
+}
+
 func supportedCLITarget(version, goos, goarch string) error {
 	if !cliReleaseVersionPattern.MatchString(strings.TrimSpace(version)) {
 		return fmt.Errorf("remote CLI download requires a released version, got %q", version)
@@ -97,12 +120,12 @@ func supportedCLITarget(version, goos, goarch string) error {
 	return nil
 }
 
-func downloadCLIFromBase(ctx context.Context, client *http.Client, base, version, goos, goarch string, official bool) ([]byte, error) {
+func downloadCLIFromBase(ctx context.Context, client *http.Client, base, tag, goos, goarch string, official bool) ([]byte, error) {
 	if client == nil {
 		return nil, errors.New("remote CLI download requires an HTTP client")
 	}
 	assetName, executable := cliAsset(goos, goarch)
-	releaseBase := strings.TrimRight(base, "/") + "/" + url.PathEscape(version) + "/"
+	releaseBase := strings.TrimRight(base, "/") + "/" + url.PathEscape(tag) + "/"
 	archiveURL := releaseBase + assetName
 	checksumURL := releaseBase + "SHA256SUMS"
 

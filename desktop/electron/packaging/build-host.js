@@ -19,7 +19,14 @@ const CWD = path.join(__dirname, "..");
 // The symbol table and DWARF are 28% of this binary and nothing in a shipped
 // build reads them: a Go panic's traceback comes from the pclntab, which -w
 // leaves alone.
-const LDFLAGS = "-s -w";
+//
+// The version has to be injected here as well as into the Electron metadata.
+// This binary is what opens a workspace on another machine, and the routes that
+// install a kernel over there name a release by it; left at "dev" they refuse
+// before reaching the network, and npm is all that is left. A build without it
+// still works — it just cannot install a remote kernel from a release.
+const VERSION = (process.env.REASONIX_VERSION || "").trim();
+const LDFLAGS = VERSION ? `-s -w -X main.version=${VERSION}` : "-s -w";
 
 function go(args, env) {
   const run = spawnSync("go", args, { cwd: CWD, stdio: "inherit", env: { ...process.env, ...env } });

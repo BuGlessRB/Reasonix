@@ -3,6 +3,8 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -161,20 +163,61 @@ func TestLaunchCommandDetachAndLogHardening(t *testing.T) {
 	}
 }
 
-func TestLocateCommandProbesPortFileFlag(t *testing.T) {
-	cmd := LocateCommand("/home/x/.reasonix/remote/bin/reasonix")
-	for _, want := range []string{"serve --help", "port-file", "flag yes", "flag no", "--version"} {
+func TestLocateCommandProbesEveryLaunchFlag(t *testing.T) {
+	flags := LaunchFlags(true)
+	cmd := LocateCommand("/home/x/.reasonix/remote/bin/reasonix", flags)
+	for _, want := range []string{"serve --help", "--version"} {
 		if !strings.Contains(cmd, want) {
 			t.Errorf("LocateCommand missing %q:\n%s", want, cmd)
 		}
 	}
+	for _, f := range flags {
+		for _, want := range []string{"flag " + f + " yes", "flag " + f + " no"} {
+			if !strings.Contains(cmd, want) {
+				t.Errorf("LocateCommand does not report %q:\n%s", want, cmd)
+			}
+		}
+	}
+}
+
+// The probe asks about exactly the flags the launch passes. Nothing else holds
+// the two in step, and when they drifted a kernel answered the probe yes on
+// --port-file and then exited on the --provider-broker it had never defined —
+// which reached the caller as "serve never reported a port".
+func TestProbedFlagsAreExactlyTheOnesTheLaunchPasses(t *testing.T) {
+	for _, withBroker := range []bool{false, true} {
+		spec := LaunchSpec{Bin: "/b/reasonix", Workspace: "/w"}
+		paths := StatePaths{Dir: "/d", TokenFile: "/d/t", PortFile: "/d/p", PidFile: "/d/i", LogFile: "/d/l"}
+		if withBroker {
+			spec.BrokerAddr = "127.0.0.1:1"
+			paths.BrokerTokenFile = "/d/b"
+		}
+		passed := longFlagsIn(LaunchCommand(spec, paths))
+		probed := LaunchFlags(withBroker)
+		slices.Sort(passed)
+		slices.Sort(probed)
+		if !slices.Equal(passed, probed) {
+			t.Errorf("withBroker=%v: launch passes %v, probe asks about %v", withBroker, passed, probed)
+		}
+	}
+}
+
+// longFlagsIn reads the --flag names off a launch command line.
+func longFlagsIn(cmd string) []string {
+	var out []string
+	for tok := range strings.FieldsSeq(cmd) {
+		if name, ok := strings.CutPrefix(tok, "--"); ok {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // One place is not every place. A machine can hold an old reasonix on PATH and
 // a current one this bootstrap uploaded beside it, and a probe that stopped at
 // the first path it found reported only the one that cannot be used.
 func TestLocateCommandReportsEveryCandidateItFinds(t *testing.T) {
-	cmd := LocateCommand("/home/x/.reasonix/remote/bin/reasonix")
+	cmd := LocateCommand("/home/x/.reasonix/remote/bin/reasonix", LaunchFlags(true))
 	for _, want := range []string{"command -v reasonix", "/home/x/.reasonix/remote/bin/reasonix", "npm prefix -g"} {
 		if !strings.Contains(cmd, want) {
 			t.Errorf("LocateCommand does not look in %q:\n%s", want, cmd)
@@ -185,19 +228,19 @@ func TestLocateCommandReportsEveryCandidateItFinds(t *testing.T) {
 // The probe's records, read back. Order is the order it looked, because that
 // is what decides which usable one wins.
 func TestParseCandidatesReadsOneRecordPerBinary(t *testing.T) {
-	got := parseCandidates("bin /usr/bin/reasonix\nver reasonix 1.31.4\nflag yes\n" +
-		"bin /home/x/.reasonix/remote/bin/reasonix\nver reasonix v2.7.0\nflag yes\n" +
-		"bin /opt/old/reasonix\nver reasonix dev\nflag no\n")
+	got := parseCandidates("bin /usr/bin/reasonix\nver reasonix 1.31.4\nflag port-file yes\nflag provider-broker no\n" +
+		"bin /home/x/.reasonix/remote/bin/reasonix\nver reasonix v2.7.0\nflag port-file yes\nflag provider-broker yes\n" +
+		"bin /opt/old/reasonix\nver reasonix dev\nflag port-file no\n")
 	want := []candidate{
-		{path: "/usr/bin/reasonix", version: "1.31.4", portFile: true},
-		{path: "/home/x/.reasonix/remote/bin/reasonix", version: "2.7.0", portFile: true},
-		{path: "/opt/old/reasonix", portFile: false},
+		{path: "/usr/bin/reasonix", version: "1.31.4", flags: map[string]bool{"port-file": true, "provider-broker": false}},
+		{path: "/home/x/.reasonix/remote/bin/reasonix", version: "2.7.0", flags: map[string]bool{"port-file": true, "provider-broker": true}},
+		{path: "/opt/old/reasonix", flags: map[string]bool{"port-file": false}},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("parsed %d candidates, want %d: %+v", len(got), len(want), got)
 	}
 	for i := range want {
-		if got[i] != want[i] {
+		if got[i].path != want[i].path || got[i].version != want[i].version || !maps.Equal(got[i].flags, want[i].flags) {
 			t.Errorf("candidate %d = %+v, want %+v", i, got[i], want[i])
 		}
 	}
@@ -207,18 +250,19 @@ func TestParseCandidatesReadsOneRecordPerBinary(t *testing.T) {
 // could read is: a source build calls itself "dev", and refusing those would
 // take the bootstrap away from everyone developing against it.
 func TestUsableTakesTheFloorAndForgivesAnUnreadableVersion(t *testing.T) {
+	has := map[string]bool{"port-file": true}
 	for _, tc := range []struct {
 		name string
 		c    candidate
 		want bool
 	}{
-		{"old line", candidate{path: "/usr/bin/reasonix", version: "1.31.4", portFile: true}, false},
-		{"this line", candidate{path: "/usr/bin/reasonix", version: "2.7.0", portFile: true}, true},
-		{"the floor itself", candidate{path: "/usr/bin/reasonix", version: "2.0.0", portFile: true}, true},
-		{"source build", candidate{path: "/usr/bin/reasonix", portFile: true}, true},
+		{"old line", candidate{path: "/usr/bin/reasonix", version: "1.31.4", flags: has}, false},
+		{"this line", candidate{path: "/usr/bin/reasonix", version: "2.7.0", flags: has}, true},
+		{"the floor itself", candidate{path: "/usr/bin/reasonix", version: "2.0.0", flags: has}, true},
+		{"source build", candidate{path: "/usr/bin/reasonix", flags: has}, true},
 		{"no port-file flag", candidate{path: "/usr/bin/reasonix", version: "2.7.0"}, false},
 	} {
-		if got := tc.c.usable(MinPaneVersion); got != tc.want {
+		if got := tc.c.usable(MinPaneVersion, []string{"port-file"}); got != tc.want {
 			t.Errorf("%s: usable = %v, want %v", tc.name, got, tc.want)
 		}
 	}
@@ -239,14 +283,15 @@ func (probeConn) SFTP() (*sftpfs.FS, error) { return nil, errors.New("no file la
 // Taking the first path found is how the upload was spent and then ignored.
 func TestLocateTakesTheUsableBinaryNotTheFirstOne(t *testing.T) {
 	uploaded := "/home/x/.reasonix/remote/bin/reasonix"
-	conn := probeConn{out: "bin /usr/bin/reasonix\nver reasonix 1.31.4\nflag yes\n" +
-		"bin " + uploaded + "\nver reasonix v2.7.0\nflag yes\n"}
-	bin, version := locate(context.Background(), conn, posixShell{}, uploaded, MinPaneVersion)
+	probed := LaunchFlags(false)
+	conn := probeConn{out: "bin /usr/bin/reasonix\nver reasonix 1.31.4\n" + allFlagsYes() +
+		"bin " + uploaded + "\nver reasonix v2.7.0\n" + allFlagsYes()}
+	bin, version := locate(context.Background(), conn, posixShell{}, uploaded, MinPaneVersion, probed)
 	if bin != uploaded || version != "2.7.0" {
 		t.Fatalf("locate = %q %q, want the uploaded 2.7.0 over the 1.31.4 on PATH", bin, version)
 	}
 	// Without a floor the caller wants whatever is there, and PATH comes first.
-	if bin, _ := locate(context.Background(), conn, posixShell{}, uploaded, ""); bin != "/usr/bin/reasonix" {
+	if bin, _ := locate(context.Background(), conn, posixShell{}, uploaded, "", probed); bin != "/usr/bin/reasonix" {
 		t.Fatalf("locate without a floor = %q, want the one on PATH", bin)
 	}
 }
@@ -256,14 +301,14 @@ func TestLocateTakesTheUsableBinaryNotTheFirstOne(t *testing.T) {
 // what a reader needs to act.
 func TestOutdatedNamesTheNewestOneTurnedDown(t *testing.T) {
 	found := []candidate{
-		{path: "/usr/bin/reasonix", version: "1.29.0", portFile: true},
-		{path: "/opt/reasonix", version: "1.31.4", portFile: true},
-		{path: "/src/reasonix", portFile: true},
+		{path: "/usr/bin/reasonix", version: "1.29.0"},
+		{path: "/opt/reasonix", version: "1.31.4"},
+		{path: "/src/reasonix"},
 	}
 	if got := outdated(found, MinPaneVersion); got != "1.31.4" {
 		t.Fatalf("outdated = %q, want 1.31.4", got)
 	}
-	if got := outdated([]candidate{{path: "/usr/bin/reasonix", version: "2.7.0", portFile: true}}, MinPaneVersion); got != "" {
+	if got := outdated([]candidate{{path: "/usr/bin/reasonix", version: "2.7.0"}}, MinPaneVersion); got != "" {
 		t.Fatalf("outdated = %q, want nothing: this machine has no old kernel", got)
 	}
 }
@@ -314,4 +359,36 @@ func TestLaunchQuotesTheBrokerAddress(t *testing.T) {
 	if strings.Contains(cmd, "; rm -rf ~; echo") && !strings.Contains(cmd, `'\''; rm -rf ~; echo '\''`) {
 		t.Fatalf("hostile broker address not properly escaped:\n%s", cmd)
 	}
+}
+
+// A kernel that answers the older half of the launch's flags and not the newer
+// is not one this caller can drive. On a real Windows remote such a kernel
+// passed the probe on --port-file, was launched with --provider-broker, and
+// exited on a flag it had never defined — reported to the reader as "serve
+// never reported a port", which sends them to a log the cleanup had removed.
+func TestUsableRefusesAKernelMissingTheBrokerFlags(t *testing.T) {
+	old := candidate{
+		path:    "/home/x/.reasonix/remote/bin/reasonix",
+		version: "2.7.0",
+		flags: map[string]bool{
+			"addr": true, "auth": true, "token-file": true, "port-file": true, "pid-file": true,
+		},
+	}
+	if !old.usable(MinPaneVersion, LaunchFlags(false)) {
+		t.Error("a launch passing no broker must accept a kernel that has the rest")
+	}
+	if old.usable(MinPaneVersion, LaunchFlags(true)) {
+		t.Error("a launch that will pass --provider-broker must refuse a kernel without it")
+	}
+}
+
+// allFlagsYes is what a current kernel answers the probe with: every flag the
+// launch might pass, present. Fakes build their locate output from this so a
+// flag added to the launch does not quietly leave them describing an old one.
+func allFlagsYes() string {
+	var b strings.Builder
+	for _, f := range LaunchFlags(true) {
+		b.WriteString("flag " + f + " yes\n")
+	}
+	return b.String()
 }

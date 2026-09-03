@@ -198,7 +198,7 @@ func TestProbeReportsTheRoutesTheInstallerTakes(t *testing.T) {
 		!strings.Contains(err.Error(), "unknown install route") {
 		t.Fatalf("the probe reported on a route nobody takes: %v", err)
 	}
-	if _, _, err := runRoute(t.Context(), nil, nil, nil, Options{}, bogus, "", "", "", ""); err == nil ||
+	if _, _, err := runRoute(t.Context(), nil, nil, nil, Options{}, bogus, "", "", "", "", nil); err == nil ||
 		!strings.Contains(err.Error(), "unknown install route") {
 		t.Fatalf("the installer accepted a route nobody reports: %v", err)
 	}
@@ -215,16 +215,32 @@ func TestRoutesReportWhatClosesThem(t *testing.T) {
 		}
 	}
 	if got := routeClosed(routeRemoteFetch, Report{Downloader: ""}, Options{
-		ResolveDownload: resolveNothing,
+		ResolveDownload: resolveNothing, ProductVersion: "v2.11.0",
 	}, "linux", "amd64"); !errors.Is(got, ErrRemoteFetchUnavailable) {
 		t.Fatalf("a machine with no curl or wget reported %v", got)
 	}
 	if got := routeClosed(routeRemoteFetch, Report{Downloader: "curl"}, Options{
-		ResolveDownload: resolveNothing,
+		ResolveDownload: resolveNothing, ProductVersion: "v2.11.0",
 	}, "linux", "amd64"); got != nil {
 		t.Fatalf("a machine that can fetch reported %v", got)
 	}
 }
+
+// A build with nothing published to install from is the caller's problem, not
+// the machine's, and it is reported ahead of anything about the machine: a
+// reader told to install curl would install it and still have no route.
+func TestRoutesBlameTheBuildBeforeTheMachine(t *testing.T) {
+	for _, name := range []string{routeRemoteFetch, routeDownload} {
+		got := routeClosed(name, Report{Downloader: ""}, Options{
+			ResolveDownload: resolveNothing, FetchBinary: fetchNothing, ProductVersion: "dev",
+		}, "linux", "amd64")
+		if !errors.Is(got, ErrNoReleaseForBuild) {
+			t.Errorf("%s on a source build reported %v, want the build named", name, got)
+		}
+	}
+}
+
+func fetchNothing(context.Context, string, string, string) ([]byte, error) { return nil, nil }
 
 func resolveNothing(context.Context, string, string, string) (releaseasset.CLIDownload, error) {
 	return releaseasset.CLIDownload{}, nil

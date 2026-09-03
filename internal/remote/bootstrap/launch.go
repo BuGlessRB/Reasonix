@@ -117,26 +117,48 @@ func LogsCommand(logFile string, n int) string {
 	return fmt.Sprintf("tail -n %d %s 2>/dev/null || true", n, shellQuote(logFile))
 }
 
-// servePortFileMarker is what LocateCommand greps for in `serve --help` to
-// decide the located binary supports --port-file/--token-file. It must match
-// the flag name registered in runServe.
-const servePortFileMarker = "port-file"
+// LaunchFlags names the flags LaunchCommand puts on the command line, which is
+// exactly what the probe asks a kernel about. One flag cannot stand for the
+// set: --port-file predates the broker pair by a release line, so a kernel
+// carrying only that one answered the probe yes and then exited on a flag it
+// had never defined.
+func LaunchFlags(withBroker bool) []string {
+	flags := []string{"addr", "auth", "token-file", "port-file", "pid-file"}
+	if withBroker {
+		flags = append(flags, "provider-broker", "provider-broker-token-file")
+	}
+	return flags
+}
 
-// LocateCommand reports every reasonix it finds as three lines: `bin <path>`,
-// `ver <what --version said>`, `flag yes|no` for the --port-file the launch
-// needs. Every candidate, not the first path that exists: a machine can hold an
+// flagChecks renders one `flag <name> yes|no` test per flag against $H, the
+// help text the caller has already captured.
+func flagChecks(flags []string) string {
+	var b strings.Builder
+	for _, f := range flags {
+		// -name up to whitespace or the line end: -provider-broker is a prefix
+		// of -provider-broker-token-file, and a substring match would report
+		// the shorter one present whenever only the longer one is.
+		b.WriteString("if printf '%s\\n' \"$H\" | grep -qE -- " + shellQuote("-"+f+"([[:space:]]|$)") +
+			"; then echo " + shellQuote("flag "+f+" yes") + "; else echo " + shellQuote("flag "+f+" no") + "; fi; ")
+	}
+	return b.String()
+}
+
+// LocateCommand reports every reasonix it finds as `bin <path>`, `ver <what
+// --version said>`, and one `flag <name> yes|no` line per flag the launch will
+// pass. Every candidate, not the first path that exists: a machine can hold an
 // old reasonix on PATH and a current one this bootstrap uploaded beside it, and
 // only the caller knows which of the two counts.
-func LocateCommand(uploadedBin string) string {
+func LocateCommand(uploadedBin string, flags []string) string {
 	return fmt.Sprintf(
 		"probe() { [ -n \"$1\" ] && [ -x \"$1\" ] || return 0; "+
 			"echo \"bin $1\"; echo \"ver $(\"$1\" --version 2>/dev/null | head -n 1)\"; "+
-			"if \"$1\" serve --help 2>&1 | grep -q -- %s; then echo 'flag yes'; else echo 'flag no'; fi; }; "+
+			"H=$(\"$1\" serve --help 2>&1); %s}; "+
 			"probe \"$(command -v reasonix 2>/dev/null)\"; "+
 			"probe %s; "+
 			"P=\"$(npm prefix -g 2>/dev/null)\"; "+
 			"if [ -n \"$P\" ]; then probe \"$P/bin/reasonix\"; fi; "+
 			"exit 0",
-		shellQuote(servePortFileMarker), shellQuote(uploadedBin),
+		flagChecks(flags), shellQuote(uploadedBin),
 	)
 }

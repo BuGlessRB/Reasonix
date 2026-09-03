@@ -25,6 +25,12 @@ var (
 	// The local binary cannot run on that machine, and no release stood in.
 	ErrPlatformMismatch = errors.New("bootstrap: local binary does not fit the remote platform")
 
+	// The build asking for the install has no published release to install
+	// from — a source build, or a line that ships no CLI archive. Nothing about
+	// the remote is wrong, and reporting one of its routes as the cause sends
+	// the reader to fix a machine that is fine.
+	ErrNoReleaseForBuild = errors.New("bootstrap: this build has no published release to install from")
+
 	// Every strategy was tried and none landed a kernel.
 	ErrNoInstallPath = errors.New("bootstrap: no way to install a kernel on this machine")
 

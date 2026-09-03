@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"reasonix/internal/releaseasset"
 )
 
 // Routes the auto strategy takes that are not serve_install values — nobody
@@ -75,9 +77,13 @@ func Probe(ctx context.Context, conn Conn, opts Options) (Report, error) {
 	// Home as that machine spells it: the file layer's /C:/Users/... is not a
 	// path anybody there would type.
 	rep := Report{OS: goos, Arch: goarch, Home: target.NativePath(home)}
-	found := probeBinaries(ctx, conn, target, uploadedBinPath(home, target.Executable()))
+	// The whole set, not the subset this call carries: a probe answers for a
+	// connect, and every connect that opens a pane publishes a broker. Calling
+	// a kernel usable that the connect then refuses is what this prevents.
+	flags := LaunchFlags(true)
+	found := probeBinaries(ctx, conn, target, uploadedBinPath(home, target.Executable()), flags)
 	for _, c := range found {
-		if c.usable(opts.MinVersion) {
+		if c.usable(opts.MinVersion, flags) {
 			rep.Kernel, rep.Version = c.path, c.version
 			break
 		}
@@ -124,6 +130,9 @@ func routeClosed(name string, rep Report, opts Options, goos, goarch string) err
 		if opts.ResolveDownload == nil {
 			return fmt.Errorf("%w: this build cannot name a release", ErrRemoteFetchUnavailable)
 		}
+		if err := releaseasset.SupportsTarget(opts.ProductVersion, goos, goarch); err != nil {
+			return fmt.Errorf("%w: %w", ErrNoReleaseForBuild, err)
+		}
 		if rep.Downloader == "" {
 			return fmt.Errorf("%w: neither curl nor wget is installed", ErrRemoteFetchUnavailable)
 		}
@@ -147,6 +156,9 @@ func routeClosed(name string, rep Report, opts Options, goos, goarch string) err
 			// No sentinel: this is the caller not wiring a fetcher, not anything
 			// about the machine, and it never happens in a shipped build.
 			return errors.New("this build cannot fetch a release")
+		}
+		if err := releaseasset.SupportsTarget(opts.ProductVersion, goos, goarch); err != nil {
+			return fmt.Errorf("%w: %w", ErrNoReleaseForBuild, err)
 		}
 		return nil
 	}

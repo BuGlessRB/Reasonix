@@ -232,6 +232,10 @@ jobs:
       - name: Build the kernel
         working-directory: desktop/electron
         shell: bash
+        # The kernel states its own version: it is the side that installs a
+        # kernel on a remote machine, and those routes name a release by it.
+        env:
+          REASONIX_VERSION: ${{ needs.resolve.outputs.version }}
         run: pnpm install --frozen-lockfile && pnpm run build:host
 
       # The helper the Linux self-update runs under pkexec, staged where the
@@ -451,9 +455,73 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # The kernel a Studio installs on another machine. This line publishes it
+  # under its own tag, because the install routes name a release by the version
+  # the local build reports — and a line that ships no archive leaves every one
+  # of them with nothing to name but npm's, which is another line's.
+  cli:
+    name: build the CLI archives
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Every target the release line claims to support, from one runner: the
+      # CLI is CGO-free, so none of them needs a toolchain of its own.
+      - name: Cross-compile and archive
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
+            os="${target%/*}"; arch="${target#*/}"; ext=""
+            [ "$os" = windows ] && ext=".exe"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w -X main.version=$VERSION" -o "reasonix$ext" ./cmd/reasonix
+            if [ "$os" = windows ]; then
+              zip -qj "dist/reasonix-$os-$arch.zip" "reasonix$ext"
+            else
+              tar czf "dist/reasonix-$os-$arch.tar.gz" "reasonix$ext"
+            fi
+            rm -f "reasonix$ext"
+          done
+          # The digest list the remote verifies against. Resolved on the
+          # installing machine and handed to the remote with the URL, so the
+          # host fetching the archive never also supplies its own checksum.
+          (cd dist && sha256sum reasonix-* > SHA256SUMS)
+          ls -la dist
+
+      # A release that published the archives without the digest list is worse
+      # than one that published neither: the routes resolve SHA256SUMS first.
+      - name: Check the set is complete
+        run: |
+          set -euo pipefail
+          for want in reasonix-darwin-amd64.tar.gz reasonix-darwin-arm64.tar.gz \
+            reasonix-linux-amd64.tar.gz reasonix-linux-arm64.tar.gz \
+            reasonix-windows-amd64.zip reasonix-windows-arm64.zip SHA256SUMS; do
+            [ -f "dist/$want" ] || { echo "::error::no dist/$want"; exit 1; }
+          done
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: cli-archives
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: sign, publish and mirror
-    needs: [resolve, build]
+    needs: [resolve, build, cli]
     runs-on: ubuntu-latest
     # Owner approval for the whole line. The gate sits here rather than before
     # build so the approval is given with the artifacts already proven to build.
@@ -480,6 +548,8 @@ jobs:
         run: |
           mkdir -p dist
           find staging -type f -name 'ReasonixStudio-*' -exec mv {} dist/ \;
+          # The CLI archives and their digest list, from the cli job.
+          find staging -type f \( -name 'reasonix-*' -o -name 'SHA256SUMS' \) -exec mv {} dist/ \;
           ls -la dist
           # Two Windows artifacts (installer, portable zip), two per macOS
           # architecture (dmg, zip) and the Linux .deb. Fewer means an artifact
@@ -514,7 +584,7 @@ jobs:
           MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
           MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
         run: |
-          go run ./cmd/sign sign ../dist/*
+          go run ./cmd/sign sign ../dist/ReasonixStudio-*
           for f in ../dist/ReasonixStudio-*; do
             case "$f" in *.minisig) continue ;; esac
             go run ./cmd/sign verify "$f"

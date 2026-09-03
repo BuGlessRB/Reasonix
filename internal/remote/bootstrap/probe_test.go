@@ -24,7 +24,7 @@ func answers(t *testing.T, root string, npm string, kernel bool) *fakeConn {
 			return ok(npm + "\n")
 		case strings.Contains(cmd, "command -v reasonix"):
 			if kernel {
-				return ok("bin /usr/local/bin/reasonix\nver 2.9.0\nflag yes\n")
+				return ok("bin /usr/local/bin/reasonix\nver 2.9.0\n" + allFlagsYes())
 			}
 			return ok("\n")
 		default:

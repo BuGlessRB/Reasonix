@@ -62,7 +62,7 @@ func TestDownloadCLIRejectsDevelopmentAndUnsupportedTargets(t *testing.T) {
 		{"v1.2.3", "linux", "riscv64"},
 		{"v1.2.3", "windows", "riscv64"},
 	} {
-		if _, err := DownloadCLI(context.Background(), http.DefaultClient, test.version, test.goos, test.goarch); err == nil {
+		if _, err := DownloadCLI(context.Background(), http.DefaultClient, StudioLine, test.version, test.goos, test.goarch); err == nil {
 			t.Fatalf("DownloadCLI(%q,%q,%q) unexpectedly succeeded", test.version, test.goos, test.goarch)
 		}
 	}
@@ -140,4 +140,35 @@ func testCLIZip(t *testing.T, name string, binary []byte) []byte {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
+}
+
+// A version alone cannot say which release holds an asset: the CLI line tags a
+// release v1.2.3 and the Studio line studio-v1.2.3. Resolving the second under
+// the first's spelling is a 404 on a tag that was never published.
+func TestLineNamesTheReleaseTag(t *testing.T) {
+	binary := []byte("studio-line-binary")
+	archive := testCLIArchive(t, binary)
+	digest := sha256.Sum256(archive)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/studio-v2.11.0/reasonix-linux-arm64.tar.gz":
+			_, _ = w.Write(archive)
+		case "/studio-v2.11.0/SHA256SUMS":
+			_, _ = fmt.Fprintf(w, "%s  reasonix-linux-arm64.tar.gz\n", hex.EncodeToString(digest[:]))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	got, err := downloadCLIFromBase(context.Background(), server.Client(), server.URL,
+		StudioLine.tag("v2.11.0"), "linux", "arm64", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, binary) {
+		t.Fatalf("binary = %q, want %q", got, binary)
+	}
+	if tag := CLILine.tag("v1.2.3"); tag != "v1.2.3" {
+		t.Errorf("CLI line tag = %q, want the bare version", tag)
+	}
 }

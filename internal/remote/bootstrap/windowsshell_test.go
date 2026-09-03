@@ -44,7 +44,7 @@ func TestWindowsCommandsHandCmdNothingItCanInterpret(t *testing.T) {
 		"alive":  shell.Alive(4242, paths),
 		"stop":   shell.Stop(4242, paths),
 		"logs":   shell.Logs(paths.LogFile, 50),
-		"locate": shell.Locate(`C:\up load\reasonix.exe`),
+		"locate": shell.Locate(`C:\up load\reasonix.exe`, LaunchFlags(true)),
 	} {
 		const prefix = "powershell -NoProfile -NonInteractive -EncodedCommand "
 		payload, ok := strings.CutPrefix(command, prefix)

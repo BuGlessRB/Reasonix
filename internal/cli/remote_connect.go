@@ -306,7 +306,7 @@ func fetchRemoteCLIBinary(ctx context.Context, version, goos, goarch string) ([]
 		return nil, err
 	}
 	client.Timeout = 2 * time.Minute
-	return releaseasset.DownloadCLI(ctx, client, version, goos, goarch)
+	return releaseasset.DownloadCLI(ctx, client, releaseasset.StudioLine, version, goos, goarch)
 }
 
 // resolveRemoteCLIDownload names the release archive and its digest so the
@@ -324,7 +324,7 @@ func resolveRemoteCLIDownload(ctx context.Context, version, goos, goarch string)
 		return releaseasset.CLIDownload{}, err
 	}
 	client.Timeout = 30 * time.Second
-	return releaseasset.ResolveCLIDownload(ctx, client, version, goos, goarch)
+	return releaseasset.ResolveCLIDownload(ctx, client, releaseasset.StudioLine, version, goos, goarch)
 }
 
 const remoteServeUsage = "usage: reasonix remote serve start|stop|status|logs <name> [--workspace PATH] [-n N]"

@@ -260,10 +260,7 @@ func Stop(ctx context.Context, conn Conn, workspace string) error {
 			return fmt.Errorf("bootstrap: stop pid %d: %w", st.PID, err)
 		}
 	}
-	_ = fs.Remove(ctx, paths.StateJSON, false)
-	_ = fs.Remove(ctx, paths.TokenFile, false)
-	_ = fs.Remove(ctx, paths.PortFile, false)
-	_ = fs.Remove(ctx, paths.PidFile, false)
+	removeServeState(ctx, fs, paths)
 	return nil
 }
 
@@ -422,10 +419,21 @@ func cleanupFailedLaunch(conn Conn, target remoteOS, fs *sftpfs.FS, paths StateP
 	if pid > 0 {
 		_, _ = conn.Exec(ctx, target.Stop(pid, paths))
 	}
-	_ = fs.Remove(ctx, paths.StateJSON, false)
-	_ = fs.Remove(ctx, paths.TokenFile, false)
-	_ = fs.Remove(ctx, paths.PortFile, false)
-	_ = fs.Remove(ctx, paths.PidFile, false)
+	removeServeState(ctx, fs, paths)
+}
+
+// removeServeState deletes every file one serve's record is made of. One list,
+// because the two callers that clear it had a copy each: the broker token was
+// added to what a launch writes and to neither of them, so a failed launch left
+// this machine's provider credential on the remote.
+func removeServeState(ctx context.Context, fs *sftpfs.FS, paths StatePaths) {
+	for _, p := range []string{
+		paths.StateJSON, paths.TokenFile, paths.BrokerTokenFile, paths.PortFile, paths.PidFile,
+	} {
+		if p != "" {
+			_ = fs.Remove(ctx, p, false)
+		}
+	}
 }
 
 func resolveWorkspace(ctx context.Context, fs *sftpfs.FS, workspace, home string) (string, error) {

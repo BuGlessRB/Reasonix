@@ -103,7 +103,7 @@ func TestEnsureServeLaunchesWhenAbsent(t *testing.T) {
 			return ok("Linux x86_64\n")
 		case strings.Contains(cmd, "command -v reasonix"):
 			// LocateCommand: report a path and a fresh version.
-			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.0\nflag yes\n")
+			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.0\n" + allFlagsYes())
 		case strings.Contains(cmd, "nohup"):
 			// Simulate serve writing the port file, then echo the pid.
 			if portFile != "" {
@@ -225,7 +225,7 @@ func TestEnsureServeRelaunchesDeadProcess(t *testing.T) {
 		case strings.Contains(cmd, "uname"):
 			return ok("Linux aarch64\n")
 		case strings.Contains(cmd, "command -v reasonix"):
-			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.0\nflag yes\n")
+			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.0\n" + allFlagsYes())
 		case strings.Contains(cmd, "nohup"):
 			_ = os.WriteFile(paths.PortFile, []byte("127.0.0.1:6001\n"), 0o600)
 			return ok("999\n")
@@ -338,7 +338,7 @@ func TestEnsureServeWillNotReuseAKernelBelowTheFloor(t *testing.T) {
 		case strings.Contains(cmd, "uname"):
 			return ok("Linux x86_64\n")
 		case strings.Contains(cmd, "command -v reasonix"):
-			return ok("bin /usr/bin/reasonix\nver reasonix 1.31.4\nflag yes\n")
+			return ok("bin /usr/bin/reasonix\nver reasonix 1.31.4\n" + allFlagsYes())
 		default:
 			return ok("")
 		}
@@ -383,7 +383,7 @@ func TestEnsureServeStopsTheOutdatedKernelItReplaces(t *testing.T) {
 		case strings.Contains(cmd, "uname"):
 			return ok("Linux x86_64\n")
 		case strings.Contains(cmd, "command -v reasonix"):
-			return ok("bin /usr/bin/reasonix\nver reasonix v2.7.0\nflag yes\n")
+			return ok("bin /usr/bin/reasonix\nver reasonix v2.7.0\n" + allFlagsYes())
 		case strings.Contains(cmd, "nohup"):
 			_ = os.WriteFile(paths.PortFile, []byte("127.0.0.1:6002\n"), 0o600)
 			return ok("999\n")
@@ -508,7 +508,7 @@ func TestEnsureServeWritesTheBrokerTokenPrivately(t *testing.T) {
 		case strings.Contains(cmd, "uname"):
 			return ok("Linux x86_64\n")
 		case strings.Contains(cmd, "command -v reasonix"):
-			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.9\nflag yes\n")
+			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.9\n" + allFlagsYes())
 		case strings.Contains(cmd, "nohup"):
 			_ = os.WriteFile(paths.PortFile, []byte("127.0.0.1:6001\n"), 0o600)
 			_ = os.WriteFile(paths.PidFile, []byte("991\n"), 0o600)
@@ -574,7 +574,7 @@ func TestEnsureServeStopsTheKernelABrokerMismatchDeclined(t *testing.T) {
 		case strings.Contains(cmd, "uname"):
 			return ok("Linux x86_64\n")
 		case strings.Contains(cmd, "command -v reasonix"):
-			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.9\nflag yes\n")
+			return ok("bin /usr/bin/reasonix\nver reasonix v9.9.9\n" + allFlagsYes())
 		case strings.Contains(cmd, "nohup"):
 			_ = os.WriteFile(paths.PortFile, []byte("127.0.0.1:6003\n"), 0o600)
 			return ok("999\n")

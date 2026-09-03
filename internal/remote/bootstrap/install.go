@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"reasonix/internal/releaseasset"
 	"reasonix/internal/remote/sftpfs"
 )
 
@@ -23,9 +24,11 @@ var autoRouteOrder = []string{routeRemoteFetch, InstallUpload, routeDownload, In
 // returns says which: an upgrade over there and an install are different moves.
 func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch string, paths StatePaths) (bin, version string, err error) {
 	uploaded := uploadedBinPath(home, target.Executable())
-	found := probeBinaries(ctx, conn, target, uploaded)
+	// What the launch will ask of a kernel decides what counts as one here.
+	flags := LaunchFlags(opts.Broker.configured())
+	found := probeBinaries(ctx, conn, target, uploaded, flags)
 	for _, c := range found {
-		if c.usable(opts.MinVersion) {
+		if c.usable(opts.MinVersion, flags) {
 			return c.path, c.version, nil
 		}
 	}
@@ -54,7 +57,7 @@ func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS
 	}
 	var attempts []error
 	for _, route := range routes {
-		b, v, rerr := runRoute(ctx, conn, target, fs, opts, route, home, goos, goarch, uploaded)
+		b, v, rerr := runRoute(ctx, conn, target, fs, opts, route, home, goos, goarch, uploaded, flags)
 		if rerr == nil {
 			return b, v, nil
 		}
@@ -68,16 +71,16 @@ func ensureBinary(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS
 	return fail(fmt.Errorf("%w: %w", ErrNoInstallPath, errors.Join(attempts...)))
 }
 
-func runRoute(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, route, home, goos, goarch, uploaded string) (bin, version string, err error) {
+func runRoute(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, route, home, goos, goarch, uploaded string, flags []string) (bin, version string, err error) {
 	switch route {
 	case routeRemoteFetch:
-		return installViaRemoteFetch(ctx, conn, target, opts, home, goos, goarch, uploaded)
+		return installViaRemoteFetch(ctx, conn, target, opts, home, goos, goarch, uploaded, flags)
 	case InstallNPM:
-		return installViaNPM(ctx, conn, target, opts.MinVersion)
+		return installViaNPM(ctx, conn, target, opts.MinVersion, flags)
 	case InstallUpload:
-		return installViaUpload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded)
+		return installViaUpload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded, flags)
 	case routeDownload:
-		return installViaDownload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded)
+		return installViaDownload(ctx, conn, target, fs, opts, home, goos, goarch, uploaded, flags)
 	}
 	return "", "", fmt.Errorf("bootstrap: unknown install route %q", route)
 }
@@ -85,9 +88,12 @@ func runRoute(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, op
 // installViaRemoteFetch has the machine download its own kernel. Nothing
 // crosses the SSH connection but the command and its result — the archive
 // travels over that host's own link, which is usually the fatter one.
-func installViaRemoteFetch(ctx context.Context, conn Conn, target remoteOS, opts Options, home, goos, goarch, uploaded string) (bin, version string, err error) {
+func installViaRemoteFetch(ctx context.Context, conn Conn, target remoteOS, opts Options, home, goos, goarch, uploaded string, flags []string) (bin, version string, err error) {
 	if opts.ResolveDownload == nil {
 		return "", "", ErrRemoteFetchUnavailable
+	}
+	if err := releaseasset.SupportsTarget(opts.ProductVersion, goos, goarch); err != nil {
+		return "", "", fmt.Errorf("%w: %w", ErrNoReleaseForBuild, err)
 	}
 	d, err := opts.ResolveDownload(ctx, opts.ProductVersion, goos, goarch)
 	if err != nil {
@@ -100,7 +106,7 @@ func installViaRemoteFetch(ctx context.Context, conn Conn, target remoteOS, opts
 	if res.ExitCode != 0 {
 		return "", "", fmt.Errorf("%w: %s", ErrRemoteFetchUnavailable, tail(res.Stdout, 400))
 	}
-	loc, ver := locate(ctx, conn, target, uploaded, opts.MinVersion)
+	loc, ver := locate(ctx, conn, target, uploaded, opts.MinVersion, flags)
 	if loc == "" {
 		return "", "", ErrBinaryNotRunnable
 	}
@@ -109,46 +115,60 @@ func installViaRemoteFetch(ctx context.Context, conn Conn, target remoteOS, opts
 
 // installViaDownload fetches the release here and pushes it over SFTP. The
 // route for a machine that cannot reach the release itself.
-func installViaDownload(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch, uploaded string) (bin, version string, err error) {
+func installViaDownload(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch, uploaded string, flags []string) (bin, version string, err error) {
 	if opts.FetchBinary == nil {
 		// Not a sentinel: this is the caller wiring no fetcher, nothing about
 		// the machine, and it never happens in a shipped build.
 		return "", "", errors.New("bootstrap: this build cannot fetch a release")
 	}
+	if err := releaseasset.SupportsTarget(opts.ProductVersion, goos, goarch); err != nil {
+		return "", "", fmt.Errorf("%w: %w", ErrNoReleaseForBuild, err)
+	}
 	binary, err := opts.FetchBinary(ctx, opts.ProductVersion, goos, goarch)
 	if err != nil {
 		return "", "", fmt.Errorf("bootstrap: fetch official %s/%s CLI: %w", goos, goarch, err)
 	}
-	return installBinaryBytes(ctx, conn, target, fs, binary, opts.MinVersion, home, uploaded)
+	return installBinaryBytes(ctx, conn, target, fs, binary, opts.MinVersion, home, uploaded, flags)
 }
 
 // candidate is one reasonix the probe found, with what it answered about
 // itself. Two things make one usable: the --port-file flag the launch is
 // written against, and a version at or above the caller's floor.
 type candidate struct {
-	path     string
-	version  string
-	portFile bool
+	path    string
+	version string
+	// flags is what `serve --help` answered for each flag the launch will pass.
+	// A set rather than one bool: the launch's flags arrived in two release
+	// lines, and a kernel that has the older ones has not got the newer.
+	flags map[string]bool
 }
 
-func (c candidate) usable(minVersion string) bool {
-	return c.path != "" && c.portFile && meetsMinVersion(c.version, minVersion)
+func (c candidate) usable(minVersion string, need []string) bool {
+	if c.path == "" || !meetsMinVersion(c.version, minVersion) {
+		return false
+	}
+	for _, f := range need {
+		if !c.flags[f] {
+			return false
+		}
+	}
+	return true
 }
 
 // locate returns the first reasonix on the remote that this caller can drive.
 // A binary that is present but below the floor is not one of them: it would
 // launch, answer, and then refuse the only calls the caller had for it.
-func locate(ctx context.Context, conn Conn, target remoteOS, uploaded, minVersion string) (bin, version string) {
-	for _, c := range probeBinaries(ctx, conn, target, uploaded) {
-		if c.usable(minVersion) {
+func locate(ctx context.Context, conn Conn, target remoteOS, uploaded, minVersion string, flags []string) (bin, version string) {
+	for _, c := range probeBinaries(ctx, conn, target, uploaded, flags) {
+		if c.usable(minVersion, flags) {
 			return c.path, c.version
 		}
 	}
 	return "", ""
 }
 
-func probeBinaries(ctx context.Context, conn Conn, target remoteOS, uploaded string) []candidate {
-	res, err := conn.Exec(ctx, target.Locate(uploaded))
+func probeBinaries(ctx context.Context, conn Conn, target remoteOS, uploaded string, flags []string) []candidate {
+	res, err := conn.Exec(ctx, target.Locate(uploaded, flags))
 	if err != nil {
 		return nil
 	}
@@ -178,7 +198,15 @@ func parseCandidates(out string) []candidate {
 				found[len(found)-1].version = v
 			}
 		case "flag":
-			found[len(found)-1].portFile = val == "yes"
+			name, state, ok := strings.Cut(val, " ")
+			if !ok {
+				continue
+			}
+			last := &found[len(found)-1]
+			if last.flags == nil {
+				last.flags = make(map[string]bool)
+			}
+			last.flags[name] = strings.TrimSpace(state) == "yes"
 		}
 	}
 	return found
@@ -200,7 +228,7 @@ func outdated(found []candidate, minVersion string) string {
 	return newest
 }
 
-func installViaNPM(ctx context.Context, conn Conn, target remoteOS, minVersion string) (bin, version string, err error) {
+func installViaNPM(ctx context.Context, conn Conn, target remoteOS, minVersion string, flags []string) (bin, version string, err error) {
 	res, err := conn.Exec(ctx, "npm i -g reasonix 2>&1")
 	if err != nil {
 		return "", "", fmt.Errorf("%w: %w", ErrNPMUnavailable, err)
@@ -209,17 +237,25 @@ func installViaNPM(ctx context.Context, conn Conn, target remoteOS, minVersion s
 		return "", "", fmt.Errorf("%w: %s", ErrNPMUnavailable, tail(res.Stdout, 400))
 	}
 	// npm may install outside the login PATH; probe npm prefix explicitly.
-	loc, ver := locate(ctx, conn, target, "", minVersion)
-	if loc == "" {
-		return "", "", ErrNPMOutsidePath
+	found := probeBinaries(ctx, conn, target, "", flags)
+	for _, c := range found {
+		if c.usable(minVersion, flags) {
+			return c.path, c.version, nil
+		}
 	}
-	return loc, ver, nil
+	// It installed and this caller still cannot drive what it left. A PATH to
+	// fix and a line publishing too old are different next moves, so it answers
+	// from the version it read rather than one assumed of npm.
+	if stale := outdated(found, minVersion); stale != "" {
+		return "", "", &KernelTooOldError{Found: stale, Need: minVersion}
+	}
+	return "", "", ErrNPMOutsidePath
 }
 
 // installViaUpload uploads the local reasonix binary when the remote platform
 // matches the local one. A differing platform is served by the verified
 // release download instead, which carries every target the line publishes.
-func installViaUpload(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch, uploaded string) (bin, version string, err error) {
+func installViaUpload(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, opts Options, home, goos, goarch, uploaded string, flags []string) (bin, version string, err error) {
 	if opts.LocalBinary == "" {
 		return "", "", fmt.Errorf("%w: no local Reasonix CLI to upload", ErrPlatformMismatch)
 	}
@@ -231,10 +267,10 @@ func installViaUpload(ctx context.Context, conn Conn, target remoteOS, fs *sftpf
 	if rerr != nil {
 		return "", "", fmt.Errorf("bootstrap: read local binary: %w", rerr)
 	}
-	return installBinaryBytes(ctx, conn, target, fs, data, opts.MinVersion, home, uploaded)
+	return installBinaryBytes(ctx, conn, target, fs, data, opts.MinVersion, home, uploaded, flags)
 }
 
-func installBinaryBytes(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, data []byte, minVersion, home, uploaded string) (bin, version string, err error) {
+func installBinaryBytes(ctx context.Context, conn Conn, target remoteOS, fs *sftpfs.FS, data []byte, minVersion, home, uploaded string, flags []string) (bin, version string, err error) {
 	if len(data) == 0 {
 		return "", "", fmt.Errorf("%w: the download was empty", ErrBinaryNotRunnable)
 	}
@@ -244,7 +280,7 @@ func installBinaryBytes(ctx context.Context, conn Conn, target remoteOS, fs *sft
 	if err := fs.WriteFileAtomic(ctx, uploaded, data, 0o755); err != nil {
 		return "", "", fmt.Errorf("bootstrap: upload binary: %w", err)
 	}
-	loc, ver := locate(ctx, conn, target, uploaded, minVersion)
+	loc, ver := locate(ctx, conn, target, uploaded, minVersion, flags)
 	if loc == "" {
 		return "", "", ErrBinaryNotRunnable
 	}

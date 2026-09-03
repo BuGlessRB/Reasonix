@@ -31,7 +31,7 @@ func remoteCommand(args []string, version string) int {
 	case "import":
 		return remoteImportCLI(args[1:])
 	case "test":
-		return remoteTestCLI(args[1:])
+		return remoteTestCLI(args[1:], version)
 	case "connect", "open":
 		return remoteConnectCLI(args, version)
 	case "status":
@@ -295,7 +295,7 @@ func remotePrintImportCandidates(cands []remote.ImportedHost) {
 	}
 }
 
-func remoteTestCLI(args []string) int {
+func remoteTestCLI(args []string, version string) int {
 	if len(args) != 1 {
 		fmt.Fprintln(os.Stderr, "usage: reasonix remote test <name|user@host>")
 		return 2
@@ -314,16 +314,17 @@ func remoteTestCLI(args []string) int {
 	}
 	defer client.Close()
 	fmt.Println("connection OK")
-	// Reaching the machine is the first gate and the one that rarely fails. A
-	// cold connect then installs a kernel over there, and that is where it
-	// stops — one missing piece per attempt. Ask for all of them here.
+	// Every missing piece in one session, under exactly the options connect
+	// installs with. Wired differently it answers a different question: this
+	// one called the release route closed for a resolver connect does pass.
 	rep, err := bootstrap.Probe(ctx, client, bootstrap.Options{
-		Install:     remoteInstallMode(args[0]),
-		LocalBinary: currentExecutable(),
-		LocalGOOS:   runtime.GOOS,
-		LocalGOARCH: runtime.GOARCH,
-		FetchBinary: fetchRemoteCLIBinary,
-		MinVersion:  bootstrap.MinPaneVersion,
+		Install:         remoteInstallMode(args[0]),
+		LocalBinary:     currentExecutable(),
+		LocalGOOS:       runtime.GOOS,
+		LocalGOARCH:     runtime.GOARCH,
+		ProductVersion:  version,
+		FetchBinary:     fetchRemoteCLIBinary,
+		ResolveDownload: resolveRemoteCLIDownload,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

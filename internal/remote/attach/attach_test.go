@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"reasonix/internal/remote"
+	"reasonix/internal/remote/bootstrap"
 	"reasonix/internal/remote/sshtest"
 	"reasonix/internal/testenv"
 )
@@ -54,7 +55,7 @@ func fakeMachine(t *testing.T) *machine {
 			case strings.Contains(cmd, "command -v reasonix"):
 				// LocateCommand's three lines: a path, a fresh version, and the
 				// --port-file flag the launch needs.
-				return "bin /usr/bin/reasonix\nver reasonix v9.9.0\nflag yes\n", "", 0
+				return "bin /usr/bin/reasonix\nver reasonix v9.9.0\n" + kernelFlagsYes(), "", 0
 			case strings.Contains(cmd, "nohup"):
 				// Stand in for serve coming up: publish the address of the HTTP
 				// server the forward will actually reach.
@@ -273,4 +274,15 @@ func TestAFailedDialIsNotCached(t *testing.T) {
 	refuse = false
 	ep := mustAttach(t, p, "box", m.workspace(t, "proj"))
 	defer ep.Release()
+}
+
+// kernelFlagsYes is a current kernel's answer to the probe: every flag the
+// launch passes, present. Read from the launch's own list rather than copied,
+// because a copy is what let a kernel pass the probe and fail to start.
+func kernelFlagsYes() string {
+	var b strings.Builder
+	for _, f := range bootstrap.LaunchFlags(true) {
+		b.WriteString("flag " + f + " yes\n")
+	}
+	return b.String()
 }

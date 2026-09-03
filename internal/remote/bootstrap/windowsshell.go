@@ -123,14 +123,22 @@ func (windowsShell) NPMVersion() string {
 // Locate reports the same records the POSIX probe does, one block per candidate:
 // `bin`, `ver`, `flag`. Every candidate for the same reason as there — the
 // caller is the side that knows which of them is usable for what it wants.
-func (windowsShell) Locate(uploadedBin string) string {
+func (windowsShell) Locate(uploadedBin string, flags []string) string {
 	uploaded := psQuote(toShellPath(uploadedBin))
+	checks := make([]string, 0, len(flags))
+	for _, f := range flags {
+		// Anchored the way the POSIX side is: -provider-broker is a prefix of
+		// -provider-broker-token-file, and Contains would call the short one
+		// present whenever only the long one is.
+		checks = append(checks, "if ([regex]::IsMatch($h, "+psQuote("-"+f+"(\\s|$)")+")) { "+
+			psQuote("flag "+f+" yes")+" } else { "+psQuote("flag "+f+" no")+" }")
+	}
 	return psCommand(strings.Join([]string{
 		"function probe($p) { if (-not $p -or -not (Test-Path -LiteralPath $p)) { return }; " +
 			"'bin ' + $p; " +
 			"'ver ' + ((& $p --version 2>$null | Select-Object -First 1) -join ''); " +
 			"$h = (& $p serve --help 2>&1 | Out-String); " +
-			"if ($h.Contains(" + psQuote(servePortFileMarker) + ")) { 'flag yes' } else { 'flag no' } }",
+			strings.Join(checks, "; ") + " }",
 		"$c = Get-Command 'reasonix.exe' -ErrorAction SilentlyContinue",
 		"if ($c) { probe $c.Source }",
 		"probe " + uploaded,
