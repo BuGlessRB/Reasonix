@@ -187,7 +187,10 @@ console.log("\nbundle budgets");
 // WebView2; the merged path measures 462.827 KiB. Retain one decimal step.
 // Generation-bound native-thumb transactions and the rebased custom-scrollbar
 // drag add 0.3 KiB gzip; the merged path measures 463.102 KiB.
-const initialJSBudgetKiB = 463.2;
+// Absorbing content-preserving block-window prepends into the active reader
+// transaction adds 0.2 KiB gzip on top; the merged path measures 463.292 KiB,
+// 8 bytes under the next decimal. Retain one cross-platform decimal step.
+const initialJSBudgetKiB = 463.4;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -337,6 +340,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // adds 0.5 KiB raw on top; the merged path measures 2469.815 KiB.
 // The scrollbar generation fence and drag rebase add 1.1 KiB raw; the merged
 // path measures 2470.932 KiB.
-const rawInitialBudgetKiB = 2_471.0;
+// The reader-transaction offset absorption adds 0.8 KiB raw on top; the merged
+// path measures 2471.741 KiB.
+const rawInitialBudgetKiB = 2_471.8;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
