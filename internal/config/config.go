@@ -1732,7 +1732,7 @@ func (c *Config) EnabledPlugins(workspace string, activation *ActivationStore) [
 	}
 	out := make([]PluginEntry, 0, len(c.Plugins))
 	for _, p := range c.Plugins {
-		enabled := p.ShouldAutoStart()
+		enabled := DeclaredDefaultOn(p)
 		if activation != nil {
 			if resolved, err := activation.IsEnabled(p, workspace); err == nil {
 				enabled = resolved

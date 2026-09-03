@@ -14,27 +14,37 @@ import { t } from "../../i18n";
 const SHOWN = 3;
 
 export function Mcp({ servers, onOpen }: { servers: McpEntry[]; onOpen: () => void }) {
-  const broken = servers.filter((s) => s.state === "failed");
-  if (broken.length === 0) return null;
-  const shown = broken.slice(0, SHOWN);
+  // A server the repository declared and nobody has answered for needs a
+  // decision as much as a broken one does — and unlike a broken one, it has
+  // never run, so nothing else on screen would show it is missing.
+  const waiting = servers.filter((s) => s.state === "failed" || s.state === "pending");
+  if (waiting.length === 0) return null;
+  const pending = waiting.filter((s) => s.state === "pending").length;
+  const shown = waiting.slice(0, SHOWN);
+  const count = pending === waiting.length
+    ? t("{n} 个待批准", { n: pending })
+    : pending === 0
+      ? t("{n} 个连不上", { n: waiting.length })
+      : t("{n} 个连不上 · {p} 个待批准", { n: waiting.length - pending, p: pending });
 
   return (
     <div className="block" data-b="mcp">
       <div className="lbl">
-        {t("外部服务")}<span className="c">{t("{n} 个连不上", { n: broken.length })}</span>
+        {t("外部服务")}<span className="c">{count}</span>
       </div>
       <div className="srvs">
         {shown.map((s) => (
-          <button className="srvrow" key={s.name} onClick={onOpen} title={t("到设置的 MCP 面板里修复")}>
+          <button className="srvrow" key={s.name} onClick={onOpen}
+            title={s.state === "pending" ? t("这个服务由仓库声明，到设置里决定是否允许它运行") : t("到设置的 MCP 面板里修复")}>
             <span className="hd">
-              <i className="pip" />
+              <i className="pip" data-s={s.state} />
               <span className="nm">{s.name}</span>
             </span>
-            <span className="fix">{t("去修复")}</span>
+            <span className="fix">{s.state === "pending" ? t("去批准") : t("去修复")}</span>
           </button>
         ))}
-        {broken.length > shown.length && (
-          <span className="more">{t("还有 {n} 个，都在设置里", { n: broken.length - shown.length })}</span>
+        {waiting.length > shown.length && (
+          <span className="more">{t("还有 {n} 个，都在设置里", { n: waiting.length - shown.length })}</span>
         )}
       </div>
     </div>

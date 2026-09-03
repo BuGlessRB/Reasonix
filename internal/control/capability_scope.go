@@ -171,9 +171,12 @@ func InspectProject(root string) ProjectCapabilities {
 	for _, entry := range cfg.Plugins {
 		enabled, resolveErr := store.IsEnabled(entry, root)
 		if resolveErr != nil {
-			enabled = entry.ShouldAutoStart()
+			enabled = config.DeclaredDefaultOn(entry)
 		}
-		state := MCPServerState{Entry: entry, Enabled: enabled, LocalOverride: local[entry.Name]}
+		state := MCPServerState{
+			Entry: entry, Enabled: enabled, LocalOverride: local[entry.Name],
+			Pending: store.AwaitingDecision(entry, root),
+		}
 		state.Description, state.Tools, state.Stale = mcpCachedFacts(mcpIdentitySpec(entry, root))
 		out.Servers = append(out.Servers, state)
 	}

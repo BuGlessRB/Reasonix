@@ -3762,6 +3762,18 @@ func TestSkillMCPBindingsUseOnlyValidOwnedCache(t *testing.T) {
 	}
 }
 
+// approveProjectServer answers for a repository-declared MCP server the way a
+// user would. A repo's own reasonix.toml and .mcp.json both arrive with a
+// clone, so neither starts until someone says it may; a test about something
+// else has to say so, or it becomes a test of that gate instead.
+func approveProjectServer(t *testing.T, root, name string) {
+	t.Helper()
+	entry := config.PluginEntry{Name: name, Source: config.MCPSourceProjectConfig}
+	if err := config.DefaultActivationStore().SetServerEnabled(entry, root, config.ActivationProject, true); err != nil {
+		t.Fatalf("approve %s: %v", name, err)
+	}
+}
+
 func TestBuildMigratesLegacyEagerTierToBackground(t *testing.T) {
 	isolateConfigHome(t)
 	dir := robustTempDir(t)
@@ -3785,6 +3797,8 @@ name = "legacy-eager"
 command = "reasonix-missing-legacy-eager-mcp"
 tier = "eager"
 `)
+
+	approveProjectServer(t, dir, "legacy-eager")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -3830,6 +3844,8 @@ name = "legacy-lazy"
 command = "reasonix-missing-legacy-lazy-mcp"
 tier = "lazy"
 `)
+
+	approveProjectServer(t, dir, "legacy-lazy")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -4155,6 +4171,8 @@ tier = "eager"
 `)
 
 	var notices []event.Event
+	approveProjectServer(t, dir, "slowserver")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	ctrl, err := Build(ctx, Options{

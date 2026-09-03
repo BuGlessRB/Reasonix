@@ -35,10 +35,12 @@ func probeLiveMCP(rep *MCPReport, cfg *config.Config, root, home, reasonixHome s
 		timeout = MaxLiveTimeout
 	}
 
-	// Only probe automatic start intent servers.
+	// Only what would start on its own. A repo server still waiting for an
+	// answer must not: this is what a user runs to find out why it is off.
+	store := config.DefaultActivationStore()
 	var auto []config.PluginEntry
 	for _, p := range cfg.Plugins {
-		if p.ShouldAutoStart() {
+		if p.ShouldAutoStart() && !store.AwaitingDecision(p, root) {
 			auto = append(auto, p)
 		} else {
 			for i := range rep.Servers {

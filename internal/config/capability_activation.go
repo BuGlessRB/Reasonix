@@ -203,6 +203,61 @@ func (s *ActivationStore) ClearOverride(override ActivationOverride) error {
 // Resolve reports the effective state for one identity in root, trying the
 // project layer before the global one. declared is the value to use when no
 // override applies — auto_start for a server, frontmatter for a skill.
+// ActivationDecision is what the store holds. Undecided is not Disabled: one
+// nobody ruled on and one the user switched off differ by whether to ask.
+type ActivationDecision int
+
+const (
+	ActivationUndecided ActivationDecision = iota
+	ActivationEnabled
+	ActivationDisabled
+)
+
+// Decide reports the stored row for want, project layer first. The absence of a
+// row gets no default here: that belongs to the caller, which knows what the
+// capability inherits.
+func (s *ActivationStore) Decide(want ActivationOverride, root string) (ActivationDecision, error) {
+	return s.decide(want, root, false)
+}
+
+// decide answers Decide, and skips the global layer for an identity pinned to
+// the project. ServerOverrideFor forces that pinning on writes; reading a global
+// row anyway would let one row approve a repository-declared server everywhere,
+// which is the thing the pinning exists to prevent.
+func (s *ActivationStore) decide(want ActivationOverride, root string, projectOnly bool) (ActivationDecision, error) {
+	if s == nil {
+		return ActivationUndecided, nil
+	}
+	file, err := s.Load()
+	if err != nil {
+		return ActivationUndecided, err
+	}
+	want = normalizeOverride(want)
+	for _, key := range projectKeys(root) {
+		probe := want
+		probe.Scope, probe.Key = ActivationProject, key
+		if row, ok := findOverride(file.Overrides, overrideKey(probe)); ok {
+			return decisionOf(row.Enabled), nil
+		}
+	}
+	if projectOnly {
+		return ActivationUndecided, nil
+	}
+	probe := want
+	probe.Scope, probe.Key = ActivationGlobal, ""
+	if row, ok := findOverride(file.Overrides, overrideKey(probe)); ok {
+		return decisionOf(row.Enabled), nil
+	}
+	return ActivationUndecided, nil
+}
+
+func decisionOf(enabled bool) ActivationDecision {
+	if enabled {
+		return ActivationEnabled
+	}
+	return ActivationDisabled
+}
+
 func (s *ActivationStore) Resolve(want ActivationOverride, root string, declared bool) (bool, error) {
 	if s == nil {
 		return declared, nil

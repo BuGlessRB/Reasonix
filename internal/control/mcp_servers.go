@@ -111,7 +111,7 @@ func (c *Controller) syncCapabilityRuntimeFromConfig(name string, enabledOverrid
 		if strings.TrimSpace(entry.Name) != name {
 			continue
 		}
-		enabled := entry.ShouldAutoStart()
+		enabled := config.DeclaredDefaultOn(entry)
 		if enabledOverride != nil {
 			enabled = *enabledOverride
 		} else if resolved, resolveErr := config.DefaultActivationStore().IsEnabled(entry, c.workspaceRoot); resolveErr == nil {
@@ -249,7 +249,7 @@ func (c *Controller) RemoveMCPServer(name string) (disconnected bool, err error)
 	// cached/on-demand surface without starting a process; otherwise ensure the
 	// removed name stays absent.
 	if removedState.fallbackFound {
-		enabled := removedState.fallback.ShouldAutoStart()
+		enabled := config.DeclaredDefaultOn(removedState.fallback)
 		if resolved, resolveErr := config.DefaultActivationStore().IsEnabled(removedState.fallback, c.workspaceRoot); resolveErr == nil {
 			enabled = resolved
 		}

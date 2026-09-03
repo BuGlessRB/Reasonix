@@ -1194,10 +1194,13 @@ func TestAutoStartPlugins(t *testing.T) {
 	c := Default()
 	off := false
 	on := true
+	// Source is part of the answer now: an entry with none is treated as
+	// repository-declared and waits for a decision, so a test about auto_start
+	// has to say these are the user's own.
 	c.Plugins = []PluginEntry{
-		{Name: "implicit", Command: "implicit-bin"},
-		{Name: "disabled", Command: "disabled-bin", AutoStart: &off},
-		{Name: "enabled", Command: "enabled-bin", AutoStart: &on},
+		{Name: "implicit", Command: "implicit-bin", Source: MCPSourceUserConfig},
+		{Name: "disabled", Command: "disabled-bin", AutoStart: &off, Source: MCPSourceUserConfig},
+		{Name: "enabled", Command: "enabled-bin", AutoStart: &on, Source: MCPSourceUserConfig},
 	}
 	got := c.AutoStartPlugins()
 	if len(got) != 2 || got[0].Name != "implicit" || got[1].Name != "enabled" {

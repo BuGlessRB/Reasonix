@@ -68,11 +68,19 @@ func TestInspectProjectReadsAnotherFolderWithoutRepointing(t *testing.T) {
 	if len(before.Servers) != 1 || before.Servers[0].Entry.Name != "codegraph" {
 		t.Fatalf("servers = %+v, want the folder's own declaration", before.Servers)
 	}
-	if !before.Servers[0].Enabled {
-		t.Fatal("a freshly declared server should read as on")
+	// The folder's .mcp.json arrived with whatever produced that folder, so the
+	// server waits for an answer rather than starting on its own.
+	if before.Servers[0].Enabled || !before.Servers[0].Pending {
+		t.Fatalf("a freshly declared repo server = %+v, want off and awaiting a decision", before.Servers[0])
 	}
 
 	store := config.DefaultActivationStore()
+	if err := store.SetServerEnabled(before.Servers[0].Entry, other, config.ActivationProject, true); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if approved := InspectProject(other); !approved.Servers[0].Enabled || approved.Servers[0].Pending {
+		t.Fatalf("after approval = %+v, want on and settled", approved.Servers[0])
+	}
 	if err := store.SetServerEnabled(before.Servers[0].Entry, other, config.ActivationProject, false); err != nil {
 		t.Fatalf("SetServerEnabled: %v", err)
 	}

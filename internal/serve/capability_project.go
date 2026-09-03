@@ -14,14 +14,24 @@ import (
 // project other than the running one reports what is declared and switched on
 // rather than a status nobody measured.
 
+// mcpProjectState separates pending from disabled: one is waiting for the user
+// and the other is their answer, and a panel showing both as off reads as the
+// project's MCP having quietly gone missing.
+func mcpProjectState(st control.MCPServerState) string {
+	switch {
+	case st.Pending:
+		return "pending"
+	case !st.Enabled:
+		return "disabled"
+	}
+	return "idle"
+}
+
 func (s *Server) mcpForProject(w http.ResponseWriter, root string) {
 	view := control.InspectProject(root)
 	out := make([]mcpEntry, 0, len(view.Servers))
 	for _, st := range view.Servers {
-		state := "idle"
-		if !st.Enabled {
-			state = "disabled"
-		}
+		state := mcpProjectState(st)
 		out = append(out, remembered(st, mcpEntry{
 			Name: st.Entry.Name, State: state, Enabled: st.Enabled, LocalOverride: st.LocalOverride,
 			Transport: st.Entry.Type, Source: string(st.Entry.Source),

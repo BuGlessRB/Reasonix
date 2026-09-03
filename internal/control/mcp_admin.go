@@ -136,6 +136,10 @@ type MCPServerState struct {
 	Description string
 	Tools       []plugin.ToolInfo
 	Stale       bool // the declaration changed since that cache was written
+	// Pending is a repository-declared server nobody has answered for. It is
+	// off, and a surface that shows only Enabled cannot tell that from one the
+	// user switched off — which reads as the project's MCP having vanished.
+	Pending bool
 }
 
 // ConfiguredMCPServers lists every configured server with its resolved
@@ -158,9 +162,12 @@ func (c *Controller) ConfiguredMCPServers() []MCPServerState {
 	for _, p := range cfg.Plugins {
 		enabled, err := store.IsEnabled(p, c.workspaceRoot)
 		if err != nil {
-			enabled = p.ShouldAutoStart()
+			enabled = config.DeclaredDefaultOn(p)
 		}
-		state := MCPServerState{Entry: p, Enabled: enabled, LocalOverride: local[p.Name]}
+		state := MCPServerState{
+			Entry: p, Enabled: enabled, LocalOverride: local[p.Name],
+			Pending: store.AwaitingDecision(p, c.workspaceRoot),
+		}
 		state.Description, state.Tools, state.Stale = mcpCachedFacts(c.mcpSpec(p))
 		out = append(out, state)
 	}

@@ -10,9 +10,10 @@ func mcpIdentity(entry PluginEntry) (forcedProject bool, source, owner string) {
 	if entry.Source == MCPSourcePluginPackage {
 		return false, source, source
 	}
-	// A repository-declared server is project-scoped by nature: a global row for
-	// it would reach another project's same-named declaration.
-	if entry.Source.ProjectScoped() || source == "workspace_config" || source == "project" || source == ".mcp.json" {
+	// Project-scoped by nature: a global row would reach another project's
+	// same-named declaration. Unknown provenance counts as repository-declared,
+	// because Source survives only a merge that succeeded.
+	if entry.Source.ProjectScoped() || source == "" || source == "workspace_config" || source == "project" || source == ".mcp.json" {
 		return true, source, ""
 	}
 	return false, source, ""
@@ -36,11 +37,47 @@ func ServerOverrideFor(entry PluginEntry, root string, scope ActivationScope) Ac
 	return placeProjectRow(override, root)
 }
 
-// IsEnabled resolves the product enable state for one plugin entry in root. An
-// override wins, project layer first; otherwise auto_start=false maps to
-// disabled and true/nil map to enabled.
+// ServerDecision reports what the store holds for entry in root, and whether an
+// undecided one may start anyway. A repository-declared one may not: .mcp.json
+// and a project reasonix.toml both arrive with a clone, so whoever wrote the
+// repo chose the command. Every other source is a file only the user writes.
+func (s *ActivationStore) ServerDecision(entry PluginEntry, root string) (ActivationDecision, bool, error) {
+	repoDeclared, _, _ := mcpIdentity(entry)
+	decision, err := s.decide(ServerOverrideFor(entry, root, ActivationGlobal), root, repoDeclared)
+	return decision, DeclaredDefaultOn(entry), err
+}
+
+// DeclaredDefaultOn is what a server does when the store cannot be read. Every
+// error fallback must use it rather than auto_start, which would re-enable
+// exactly the servers the gate is for.
+func DeclaredDefaultOn(entry PluginEntry) bool {
+	repoDeclared, _, _ := mcpIdentity(entry)
+	return !repoDeclared && entry.ShouldAutoStart()
+}
+
+// IsEnabled resolves the product enable state for entry in root. An override
+// wins, project layer first; without one a repository-declared server stays off
+// and anything else follows auto_start.
 func (s *ActivationStore) IsEnabled(entry PluginEntry, root string) (bool, error) {
-	return s.Resolve(ServerOverrideFor(entry, root, ActivationGlobal), root, entry.ShouldAutoStart())
+	decision, defaultOn, err := s.ServerDecision(entry, root)
+	if err != nil {
+		return false, err
+	}
+	if decision != ActivationUndecided {
+		return decision == ActivationEnabled, nil
+	}
+	return defaultOn, nil
+}
+
+// AwaitingDecision reports a repository-declared server nobody has answered for.
+// It is off, but not because the user turned it off — a surface that cannot tell
+// those apart shows a project's MCP as simply missing.
+func (s *ActivationStore) AwaitingDecision(entry PluginEntry, root string) bool {
+	decision, defaultOn, err := s.ServerDecision(entry, root)
+	if err != nil {
+		return !DeclaredDefaultOn(entry) // unread store: ask again rather than go quiet
+	}
+	return decision == ActivationUndecided && !defaultOn
 }
 
 // SetServerEnabled records a durable decision for entry at scope.
