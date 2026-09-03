@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
@@ -215,8 +216,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	maxSteps := fs.Int("max-steps", 0, "one-off max tool-call rounds (0 = automatic)")
 	addr := fs.String("addr", "127.0.0.1:8787", "listen address")
 	resume := fs.String("resume", "", "resume a saved session file")
-	sessionIDValue := ""
-	sessionID := &sessionIDValue
+	sessionID := new(string)
 	if opts.command == "web" {
 		sessionID = fs.String("session-id", "", "bind a fresh Web session identity (used by /web handoff)")
 	}
@@ -232,6 +232,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	portFile := fs.String("port-file", "", "write the actual bound listen address (host:port) to this file after binding")
 	tokenFile := fs.String("token-file", "", "read the auth=token pre-shared token from this file (overrides --token; keeps the secret out of argv)")
 	pidFile := fs.String("pid-file", "", "write the server process id to this file")
+	page := fs.String("page", "", "directory holding a built Studio page, served under /_studio/ (default: look beside the binary)")
 	broker := registerBrokerFlags(fs)
 	openBrowser := fs.Bool("open", opts.openBrowser, "open the Web UI in the default browser")
 	noOpen := fs.Bool("no-open", false, "do not open the Web UI in the default browser")
@@ -397,7 +398,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 
 	// A hub, so this frontend drives several sessions at once the way the studio
 	// window does. The session this command was started for is the first pane.
-	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg, DecorateSink: reporter.Wrap, ProviderResolver: providerResolver})
+	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg, DecorateSink: reporter.Wrap, ProviderResolver: providerResolver, Page: pageOrWarn(*page)})
 	adoptFirstPane(hub, ctrl, bc, paneSink, serveCfg, leases)
 	return runServeFrontend(ctrl, hub, serveCfg, serveFrontendOptions{
 		command: opts.command, address: *addr,
@@ -405,6 +406,17 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 		openBrowser: *openBrowser && !*noOpen,
 		hasSession:  *resume != "" || *sessionID != "",
 	})
+}
+
+// pageOrWarn resolves the built Studio page this serve mounts under
+// serve.PagePrefix. A --page holding none is said out loud and carried on from:
+// unlike the window, this kernel has a page of its own to fall back to.
+func pageOrWarn(dir string) fs.FS {
+	page, err := serve.FindPage(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	}
+	return page
 }
 
 // adoptFirstPane publishes the session this command was started for as the

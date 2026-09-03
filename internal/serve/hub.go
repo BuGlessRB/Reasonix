@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -146,6 +147,10 @@ type HubOptions struct {
 	// adopts. Unset is Serve; a window sets Desktop, or its turns are filed
 	// under a frontend the person never ran.
 	Surface surface.Surface
+	// Page is the built frontend this hub serves under PagePrefix, or nil to
+	// serve the kernel alone. It sits inside the auth gate: a page reachable
+	// without the credential is one a networked serve hands to the network.
+	Page fs.FS
 	// ProviderResolver routes every pane's model roles through a caller-owned
 	// catalog. A bootstrapped serve sets the broker's, so a pane opened later
 	// reaches the credentials the first one did; nil keeps the local config.
@@ -473,7 +478,7 @@ func (h *Hub) Handler() http.Handler {
 	h.registerAskRoutes(mux)
 	mux.HandleFunc(runtimePrefix+"{id}/", h.routeRuntime)
 	mux.HandleFunc("/", h.routeDefault)
-	return logMiddleware(h.auth.middleware(csrfGuard(mux)))
+	return logMiddleware(h.auth.middleware(withPage(csrfGuard(mux), h.opts.Page)))
 }
 
 // The ceiling rides the list rather than a second endpoint: a client that

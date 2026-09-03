@@ -7,12 +7,10 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"testing/fstest"
 	"time"
 
 	"reasonix/internal/config"
@@ -283,51 +281,6 @@ func TestHostReleasesTheSocketOnShutdown(t *testing.T) {
 	if err == nil {
 		conn.Close()
 		t.Fatalf("%s still accepts connections after shutdown", addr)
-	}
-}
-
-// The page gets one namespace and the kernel keeps everything else. The inverse
-// — a list of the kernel's routes, with the rest falling through to the page —
-// is the arrangement this host exists to stop repeating.
-func TestHostServesThePageInItsOwnNamespace(t *testing.T) {
-	page := fstest.MapFS{
-		"index.html":    &fstest.MapFile{Data: []byte("<title>studio</title>")},
-		"assets/app.js": &fstest.MapFile{Data: []byte("// the page")},
-	}
-	hub := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"from":"the kernel"}`)
-	})
-	srv := httptest.NewServer(withStudioPage(hub, page))
-	defer srv.Close()
-
-	cases := []struct {
-		path string
-		want string
-	}{
-		{"/_studio/", "<title>studio</title>"},
-		{"/_studio/assets/app.js", "// the page"},
-		// Client-side routing inside the namespace, which is the page's own
-		// business and can never answer for a route the kernel owns.
-		{"/_studio/sessions/whatever", "<title>studio</title>"},
-		{"/status", "the kernel"},
-		{"/", "the kernel"},
-		// The prefix is the whole segment: a path that merely starts with the
-		// same letters belongs to the kernel like any other.
-		{"/_studioish", "the kernel"},
-	}
-	for _, c := range cases {
-		t.Run(c.path, func(t *testing.T) {
-			resp, err := http.Get(srv.URL + c.path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer resp.Body.Close()
-			body, _ := io.ReadAll(resp.Body)
-			if !strings.Contains(string(body), c.want) {
-				t.Errorf("%s answered %q, want it to contain %q", c.path, body, c.want)
-			}
-		})
 	}
 }
 

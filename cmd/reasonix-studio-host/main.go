@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -48,9 +47,6 @@ const (
 	// handshakeVersion is the shape of the line on stdout. A parent that does
 	// not recognise it must refuse the launch rather than read past it.
 	handshakeVersion = 1
-	// studioPrefix is the one path this host owns. Everything else is the
-	// hub's, so a route added to the kernel later needs no change here.
-	studioPrefix = "/_studio/"
 )
 
 // shellIdentity is what the shell told us about itself, because none of it is
@@ -137,13 +133,16 @@ func run(lease io.Reader, handshakeTo, logs io.Writer, page string, shell shellI
 		}()
 	}
 
-	served, err := studioPage(page, logs)
+	served, err := serve.FindPage(page)
 	if err != nil {
 		fmt.Fprintln(logs, "reasonix-studio-host:", err)
 		return 1
 	}
+	if served == nil {
+		fmt.Fprintln(logs, "reasonix-studio-host: no built page found; serving the kernel only")
+	}
 
-	hub, err := assemble(ctx, logs, handshakeTo, shell)
+	hub, err := assemble(ctx, logs, handshakeTo, shell, served)
 	if err != nil {
 		fmt.Fprintln(logs, "reasonix-studio-host:", err)
 		return 1
@@ -152,7 +151,7 @@ func run(lease io.Reader, handshakeTo, logs io.Writer, page string, shell shellI
 	// request answers it with a half-closed kernel.
 	defer hub.Shutdown()
 
-	bound, err := bind(withStudioPage(hub.Handler(), served))
+	bound, err := bind(hub.Handler())
 	if err != nil {
 		fmt.Fprintln(logs, "reasonix-studio-host:", err)
 		return 1
@@ -243,69 +242,9 @@ func parentLease(f *os.File) io.Reader {
 	return f
 }
 
-// withStudioPage puts the built page under a namespace of its own and leaves
-// every other path to the hub. The inverse — a list of the kernel's routes,
-// with everything else falling through to the page — is what the asset server
-// forced, and it has to be edited every time the kernel grows a route.
-func withStudioPage(hub http.Handler, page fs.FS) http.Handler {
-	if page == nil {
-		return hub
-	}
-	files := http.StripPrefix(studioPrefix, http.FileServer(http.FS(page)))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, studioPrefix) {
-			hub.ServeHTTP(w, r)
-			return
-		}
-		// A path inside the namespace that names no file is the page routing
-		// itself, not a missing asset. Confined to the namespace, so it can
-		// never answer for a route the kernel owns.
-		name := strings.TrimPrefix(r.URL.Path, studioPrefix)
-		if name != "" {
-			if _, err := fs.Stat(page, strings.TrimSuffix(name, "/")); err != nil {
-				http.ServeFileFS(w, r, page, "index.html")
-				return
-			}
-		}
-		files.ServeHTTP(w, r)
-	})
-}
-
-// studioPage finds the built page. An explicit directory that holds none is a
-// launch that would open on nothing, so it fails here rather than at the first
-// paint; without one the host serves the kernel alone and says so.
-func studioPage(dir string, logs io.Writer) (fs.FS, error) {
-	if dir != "" {
-		if !hasIndex(dir) {
-			return nil, fmt.Errorf("no index.html under %s", dir)
-		}
-		return os.DirFS(dir), nil
-	}
-	exe, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-	for _, c := range []string{
-		filepath.Join(filepath.Dir(exe), "frontend-next", "dist"),
-		filepath.Join("..", "frontend-next", "dist"),
-		filepath.Join("desktop", "frontend-next", "dist"),
-	} {
-		if hasIndex(c) {
-			return os.DirFS(c), nil
-		}
-	}
-	fmt.Fprintln(logs, "reasonix-studio-host: no built page found; serving the kernel only")
-	return nil, nil
-}
-
-func hasIndex(dir string) bool {
-	st, err := os.Stat(filepath.Join(dir, "index.html"))
-	return err == nil && !st.IsDir()
-}
-
 // assemble builds the hub this host serves: one pane on the workspace it was
 // launched in, carrying the capabilities a local window may exercise.
-func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdentity) (*serve.Hub, error) {
+func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdentity, page fs.FS) (*serve.Hub, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, err
@@ -342,6 +281,7 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 	hub := serve.NewHub(serve.HubOptions{
 		Serve:        hubCfg,
 		Surface:      surface.Desktop,
+		Page:         page,
 		Grant:        grantHostCapabilities,
 		DecorateSink: decorate,
 		Tray:         &studioTray{tracker: tracker},
