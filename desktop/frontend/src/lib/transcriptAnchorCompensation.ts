@@ -17,6 +17,10 @@ import { MIN_REVERSE_JUMP_PX } from "./transcriptReaderExtentStability";
 const ANCHOR_COMPENSATION_BUDGET_MS = 1_000;
 const ANCHOR_COMPENSATION_STABLE_FRAMES = 2;
 const ANCHOR_COMPENSATION_TOLERANCE_PX = 8;
+// WebView2/Virtuoso may publish a delayed range/measurement commit just after
+// the active reader transaction times out. Keep the last accepted logical
+// anchor as a passive, cancellable lease long enough to guard that commit.
+const PASSIVE_READER_ANCHOR_BUDGET_MS = 1_000;
 
 type ManualAnchor = Extract<TranscriptLayoutAnchor, { mode: "manual" }>;
 
@@ -77,6 +81,7 @@ export function createTranscriptAnchorCompensation({
   dispatch: (event: TranscriptScrollEvent) => void;
 }): TranscriptAnchorCompensation {
   let anchor: ManualAnchor | null = null;
+  let passiveReaderAnchorUntil = 0;
   let active: ActiveAnchorCompensation | null = null;
   let pendingAfterReader = false;
 
@@ -96,6 +101,18 @@ export function createTranscriptAnchorCompensation({
     if (!row) return null;
     const rendered = row.getBoundingClientRect().top - element.getBoundingClientRect().top - compensation.anchor.offset;
     return rendered - compensation.visualOffset;
+  };
+
+  const passiveAnchorDrift = (element: HTMLDivElement) => {
+    if (!anchor) return null;
+    return physicalCorrection({
+      anchor,
+      element,
+      frame: null,
+      stableFrames: 0,
+      deadline: passiveReaderAnchorUntil,
+      visualOffset: 0,
+    }, element);
   };
 
   const guardLargeDrift = (compensation: ActiveAnchorCompensation, element: HTMLDivElement) => {
@@ -205,9 +222,17 @@ export function createTranscriptAnchorCompensation({
     }
     if (event.type === "SCROLL_DELIVERED") {
       const element = scrollRef.current;
-      // Scroll deliveries caused by a geometry commit must not replace the
-      // reader transaction's last accepted logical anchor.
-      if (element && !readerExtentIsActive()) sample(element);
+      if (element && !readerExtentIsActive()) {
+        // A late Virtuoso delivery during the passive reader lease must be
+        // compared with the reader's anchor. Sampling it as a new anchor would
+        // canonize the jump and leave no trustworthy correction target.
+        if (passiveReaderAnchorUntil !== 0 && Date.now() < passiveReaderAnchorUntil && anchor) {
+          if (Math.abs(passiveAnchorDrift(element) ?? 0) >= MIN_REVERSE_JUMP_PX) schedule();
+        } else {
+          passiveReaderAnchorUntil = 0;
+          sample(element);
+        }
+      }
       return;
     }
     if (
@@ -223,6 +248,7 @@ export function createTranscriptAnchorCompensation({
       || (event.type === "SCROLL_TO_OFFSET" && event.owner !== "anchor-compensation" && event.owner !== "block-window-prepend")
     ) {
       cancel();
+      passiveReaderAnchorUntil = 0;
     }
     if (event.type === "RESET") anchor = null;
   };
@@ -230,11 +256,15 @@ export function createTranscriptAnchorCompensation({
   const reset = () => {
     cancel();
     anchor = null;
+    passiveReaderAnchorUntil = 0;
     pendingAfterReader = false;
   };
 
   const adoptReaderAnchor = (next: { rowKey: string; offset: number } | undefined) => {
-    if (next) anchor = { mode: "manual", ...next };
+    if (next) {
+      anchor = { mode: "manual", ...next };
+      passiveReaderAnchorUntil = Date.now() + PASSIVE_READER_ANCHOR_BUDGET_MS;
+    }
   };
 
   return { noteEvent, schedule, reset, adoptReaderAnchor };
