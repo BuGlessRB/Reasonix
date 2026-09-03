@@ -143,7 +143,7 @@ func RunForeground(ctx context.Context, req Request) Result {
 	})
 
 	out := Result{
-		Combined:   collector.combined.String(),
+		Combined:   collector.combinedString(),
 		OutputTail: collector.tailString(),
 		Started:    processStarted(cmd, err),
 		Tracked:    tracked,
@@ -264,7 +264,11 @@ func newOutputCollector(combinedLimit, tailLimit int) *outputCollector {
 func (c *outputCollector) tailString() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return string(c.tail.buf)
+	return decodeShellOutput(c.tail.buf)
+}
+
+func (c *outputCollector) combinedString() string {
+	return decodeShellOutput(c.combined.Bytes())
 }
 
 // boundedBuffer keeps complete output up to limit. Once output crosses the
@@ -304,18 +308,18 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (b *boundedBuffer) String() string {
+func (b *boundedBuffer) String() string { return string(b.Bytes()) }
+
+func (b *boundedBuffer) Bytes() []byte {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if !b.truncated {
-		return b.buf.String()
+		return b.buf.Bytes()
 	}
-	var out strings.Builder
-	out.Grow(b.buf.Len() + len(b.marker) + len(b.tail))
-	out.Write(b.buf.Bytes())
-	out.WriteString(b.marker)
-	out.Write(b.tail)
-	return out.String()
+	out := make([]byte, 0, b.buf.Len()+len(b.marker)+len(b.tail))
+	out = append(out, b.buf.Bytes()...)
+	out = append(out, b.marker...)
+	return append(out, b.tail...)
 }
 
 func appendBoundedTail(dst, p []byte, limit int) []byte {
