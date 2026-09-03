@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
+	"reasonix/internal/fileutil"
 	"reasonix/internal/store"
 	"reasonix/internal/worktree"
 )
@@ -76,7 +77,7 @@ func (h *Hub) tree(w http.ResponseWriter, _ *http.Request) {
 		// Open means a pane is driving this folder — true from the moment one is
 		// opened, before its first turn has written a transcript to list.
 		node := treeWorkspace{
-			Root: ref.dir, Name: filepath.Base(ref.dir), Open: h.rootPanes(ref.dir) > 0,
+			Root: ref.dir, Name: fileutil.RootName(ref.dir), Open: h.rootPanes(ref.dir) > 0,
 			Isolated:   worktree.IsManagedPath(ref.dir, config.DeliveryWorktreeDir()),
 			Remembered: ref.remembered,
 			Sessions:   []treeSession{},
@@ -187,7 +188,7 @@ func (h *Hub) addWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rememberWorkspace(dir)
-	writeJSON(w, treeWorkspace{Root: dir, Name: filepath.Base(dir), Sessions: []treeSession{}})
+	writeJSON(w, treeWorkspace{Root: dir, Name: fileutil.RootName(dir), Sessions: []treeSession{}})
 }
 
 // removeWorkspace drops a folder from the sidebar. Nothing on disk is touched —

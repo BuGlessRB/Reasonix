@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"reasonix/internal/config"
+	"reasonix/internal/fileutil"
 	"reasonix/internal/skill"
 	"reasonix/internal/workspaceid"
 )
@@ -37,7 +38,7 @@ func DescribeScope(root string) CapabilityScope {
 	info := workspaceid.Describe(root)
 	scope := CapabilityScope{
 		Root:   root,
-		Name:   filepath.Base(root),
+		Name:   fileutil.RootName(root),
 		Key:    info.Key,
 		Repo:   info.RepoDir != "",
 		Trees:  info.Trees,

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"reasonix/internal/fileutil"
 	"reasonix/internal/gitcmd"
 )
 
@@ -48,7 +48,7 @@ func loadGitStatus(ctx context.Context, cwd string) (gitStatus, error) {
 		return gitStatus{}, errors.New("empty git root")
 	}
 
-	status := gitStatus{Repo: filepath.Base(root)}
+	status := gitStatus{Repo: fileutil.RootName(root)}
 	if branch, err := runGit(ctx, root, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil && strings.TrimSpace(branch) != "" {
 		status.Branch = strings.TrimSpace(branch)
 	} else if sha, err := runGit(ctx, root, "rev-parse", "--short", "HEAD"); err == nil && strings.TrimSpace(sha) != "" {

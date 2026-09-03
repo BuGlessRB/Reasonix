@@ -138,7 +138,7 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 		if p == current {
 			continue
 		}
-		recents = append(recents, workspaceView{Path: p, Name: filepath.Base(p)})
+		recents = append(recents, workspaceView{Path: p, Name: fileutil.RootName(p)})
 	}
 	writeJSONCached(w, r, struct {
 		Current  string          `json:"current"`

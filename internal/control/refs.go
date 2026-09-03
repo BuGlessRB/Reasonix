@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"reasonix/internal/fileref"
+	"reasonix/internal/fileutil"
 	"reasonix/internal/instruction"
 	"reasonix/internal/proc"
 	"reasonix/internal/secrets"
@@ -295,8 +296,11 @@ func externalFolderDisplayPath(abs, rel string) string {
 	return filepath.ToSlash(filepath.Join(abs, filepath.FromSlash(rel)))
 }
 
+// externalRootRef pairs a registered token with the directory it resolves to.
+type externalRootRef struct{ token, abs string }
+
 func externalFolderDisplayName(abs, rel string) string {
-	name := filepath.Base(abs)
+	name := fileutil.RootName(abs)
 	if rel != "" && rel != "." {
 		name = filepath.ToSlash(filepath.Join(name, filepath.FromSlash(rel)))
 	}
@@ -371,15 +375,9 @@ func (c *Controller) SearchExternalFolderRefs(query string, limit int) []Externa
 		return nil
 	}
 	c.externalFolderRefsMu.RLock()
-	roots := make([]struct {
-		token string
-		abs   string
-	}, 0, len(c.externalFolderRefs))
+	roots := make([]externalRootRef, 0, len(c.externalFolderRefs))
 	for token, abs := range c.externalFolderRefs {
-		roots = append(roots, struct {
-			token string
-			abs   string
-		}{token: token, abs: abs})
+		roots = append(roots, externalRootRef{token: token, abs: abs})
 	}
 	c.externalFolderRefsMu.RUnlock()
 	sort.Slice(roots, func(i, j int) bool {
@@ -394,9 +392,9 @@ func (c *Controller) SearchExternalFolderRefs(query string, limit int) []Externa
 		if info, err := os.Stat(root.abs); err != nil || !info.IsDir() {
 			continue
 		}
-		if strings.Contains(strings.ToLower(filepath.Base(root.abs)), queryLower) {
+		if strings.Contains(strings.ToLower(externalFolderDisplayName(root.abs, ".")), queryLower) {
 			out = append(out, ExternalFolderRefEntry{
-				Name:        filepath.Base(root.abs),
+				Name:        externalFolderDisplayName(root.abs, "."),
 				Path:        root.token,
 				DisplayName: externalFolderDisplayName(root.abs, "."),
 				DisplayPath: externalFolderDisplayPath(root.abs, "."),

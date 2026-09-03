@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -20,6 +19,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/fileutil"
 	"reasonix/internal/provider"
 	"reasonix/internal/surface"
 	"reasonix/internal/update"
@@ -443,7 +443,7 @@ func (rt *Runtime) view() RuntimeView {
 		ID:          rt.ID,
 		Base:        runtimePrefix + rt.ID,
 		Root:        ctrl.WorkspaceRoot(),
-		Name:        filepath.Base(ctrl.WorkspaceRoot()),
+		Name:        fileutil.RootName(ctrl.WorkspaceRoot()),
 		SessionPath: ctrl.SessionPath(),
 	}
 }
