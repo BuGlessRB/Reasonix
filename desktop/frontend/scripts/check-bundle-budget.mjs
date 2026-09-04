@@ -190,7 +190,10 @@ console.log("\nbundle budgets");
 // Absorbing content-preserving block-window prepends into the active reader
 // transaction adds 0.2 KiB gzip on top; the merged path measures 463.292 KiB,
 // 8 bytes under the next decimal. Retain one cross-platform decimal step.
-const initialJSBudgetKiB = 463.4;
+// The subagent outcome envelope, partial-state card, and history hydration add
+// 0.5 KiB gzip on the initial path (463.8 KiB measured in CI). Keep this narrow
+// ratchet explicit rather than removing the recovery UI or widening a chunk.
+const initialJSBudgetKiB = 463.8;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
