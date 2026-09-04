@@ -1422,10 +1422,8 @@ type ProviderEntry struct {
 	// and image tokens are heavy — gating keeps text-only flows cheap (the prompt
 	// prefix is byte-identical with no image, so the cache is unaffected either way).
 	Vision bool `toml:"vision"`
-	// VisionModels is the legacy provider-level capability list. New settings
-	// flows use ModelOverrides.Vision so each model can declare its own input
-	// capability without a user-maintained list. Keep this field readable for
-	// existing configurations.
+	// VisionModels is legacy; new settings use model-level ModelOverrides.Vision.
+	// Keep this field readable for existing configurations.
 	VisionModels []string `toml:"vision_models"`
 	// VisionDetail sets the openai image_url detail hint (low|high); empty = auto
 	// (the field is omitted). "low" caps an image to a fixed ~85 tokens for cheap

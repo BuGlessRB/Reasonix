@@ -2909,7 +2909,7 @@ export const en = {
   "settings.testFetchModels": "Test and fetch models",
   "settings.testFetchModelsHint": "Uses the API address and key above to verify the connection and fill the model list.",
   "settings.manualModels": "Model list",
-  "settings.manualModelsHint": "If the endpoint cannot list models, enter model names manually; mark image-capable models below.",
+  "settings.manualModelsHint": "If the endpoint cannot list models, enter model names manually; image support is derived from model capabilities.",
   "settings.visionModels": "Image-capable models",
   "settings.visionModelsHint": "Image support is detected from model capabilities; unknown models stay on the safe text-only path.",
   "settings.providerAdvancedSettings": "Compatibility settings (usually leave unchanged)",

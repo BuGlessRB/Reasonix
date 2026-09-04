@@ -2912,7 +2912,7 @@ export const zh: Record<DictKey, string> = {
   "settings.testFetchModels": "测试并获取模型",
   "settings.testFetchModelsHint": "会使用上方 API 地址与密钥确认连接，并用返回结果填充模型列表。",
   "settings.manualModels": "模型列表",
-  "settings.manualModelsHint": "接口不支持模型发现时，可手动填写多个模型；下方可勾选哪些模型支持图片输入。",
+  "settings.manualModelsHint": "接口不支持模型发现时，可手动填写多个模型；图片能力由模型元数据自动判断。",
   "settings.visionModels": "支持图片输入的模型",
   "settings.visionModelsHint": "图片能力由模型元数据自动判断；未知模型使用安全的纯文本路径。",
   "settings.providerAdvancedSettings": "兼容设置（通常不用改）",

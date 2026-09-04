@@ -2031,7 +2031,7 @@ export const zhTW: Record<DictKey, string> = {
   "settings.testFetchModels": "測試並取得模型",
   "settings.testFetchModelsHint": "會使用上方 API 位址與金鑰確認連線，並用返回結果填充模型列表。",
   "settings.manualModels": "模型列表",
-  "settings.manualModelsHint": "介面不支援模型發現時，可手動填寫多個模型；下方可勾選哪些模型支援圖片輸入。",
+  "settings.manualModelsHint": "介面不支援模型發現時，可手動填寫多個模型；圖片能力由模型中繼資料自動判斷。",
   "settings.visionModels": "支援圖片輸入的模型",
   "settings.visionModelsHint": "圖片能力由模型中繼資料自動判斷；未知模型使用安全的純文字路徑。",
   "settings.providerAdvancedSettings": "相容設定（通常不用改）",

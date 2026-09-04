@@ -2,6 +2,7 @@
 
 import type { ProviderView } from "../lib/types";
 import { providerModelVisionCapability, providerVisionModelsForView } from "../lib/providerVisionCapability";
+import { createMockModelScopePreset } from "../lib/mockModelScopePreset";
 
 let passed = 0;
 let failed = 0;
@@ -69,6 +70,13 @@ const metadataVision = providerVisionModelsForView(metadata);
 ok(metadataVision.length === 1 && metadataVision[0] === "vision-model", "model metadata enables native vision without VisionModels");
 ok(providerModelVisionCapability(metadata, "vision-model", metadataVision) === "supported", "supported model is marked read-only");
 ok(providerModelVisionCapability(metadata, "opaque-model", metadataVision) === "unknown", "unknown model stays conservative");
+
+const modelScopePreset = createMockModelScopePreset(
+  (input) => ({ ...provider(), ...input, visionModels: [], visionModelsConfigured: false }),
+  (id, label, description, keyEnv, provider) => ({ id, label, description, keyEnv, provider, providers: [provider] }),
+);
+const modelScopeVision = providerVisionModelsForView(modelScopePreset.provider);
+ok(modelScopeVision.length === 3 && modelScopeVision.every((model) => model.startsWith("Qwen/")), "mock ModelScope preserves model-level vision metadata");
 
 process.stdout.write(`provider vision capability: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exitCode = 1;

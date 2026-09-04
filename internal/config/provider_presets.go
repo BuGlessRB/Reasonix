@@ -126,10 +126,7 @@ var (
 	qwenAPIVisionModels  = []string{"qwen3.7-plus", "qwen3.6-plus", "qwen3.5-plus", "kimi-k2.5"}
 	qwenPlanModels       = []string{"qwen3.7-plus", "qwen3.6-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5", "qwen3.5-plus", "qwen3-max-2026-01-23", "qwen3-coder-next", "qwen3-coder-plus", "glm-4.7"}
 	qwenPlanVisionModels = []string{"qwen3.7-plus", "qwen3.6-plus", "qwen3.5-plus", "kimi-k2.5"}
-
-	modelscopeModels = []string{"Qwen/Qwen3.5-397B-A17B", "Qwen/Qwen3.5-122B-A10B", "Qwen/Qwen3.5-27B", "deepseek-ai/DeepSeek-V4-Flash-0731", "deepseek-ai/DeepSeek-V4-Pro", "MiniMax/MiniMax-M3", "ZhipuAI/GLM-5.2"}
-
-	stepfunPlanModels = []string{"step-3.7-flash", "step-3.5-flash", "step-3.5-flash-2603"}
+	stepfunPlanModels    = []string{"step-3.7-flash", "step-3.5-flash", "step-3.5-flash-2603"}
 
 	// Only step-3.7-flash is enabled server-side on the Responses API
 	// ("this model is not enabled for the Responses API" for 3.5 SKUs).
@@ -1060,25 +1057,7 @@ var curatedProviderPresets = []ProviderPreset{
 			APIKeyEnv: "KILOCODE_API_KEY",
 		}},
 	},
-	{
-		ID:          "modelscope",
-		Label:       "ModelScope",
-		Description: "ModelScope community OpenAI-compatible endpoint with Qwen, DeepSeek and other open-source models.",
-		KeyEnv:      "MODELSCOPE_API_KEY",
-		Entries: []ProviderEntry{{
-			Name:      "modelscope",
-			Kind:      "openai",
-			BaseURL:   "https://api-inference.modelscope.cn/v1",
-			Models:    modelscopeModels,
-			Default:   "Qwen/Qwen3.5-397B-A17B",
-			APIKeyEnv: "MODELSCOPE_API_KEY",
-			ModelOverrides: map[string]ProviderModelOverride{
-				"Qwen/Qwen3.5-397B-A17B": {Vision: boolPointer(true)},
-				"Qwen/Qwen3.5-122B-A10B": {Vision: boolPointer(true)},
-				"Qwen/Qwen3.5-27B":       {Vision: boolPointer(true)},
-			},
-		}},
-	},
+	modelscopePreset,
 	{
 		ID:          "ollama-cloud",
 		Label:       "Ollama Cloud",
