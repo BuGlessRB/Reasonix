@@ -902,17 +902,17 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 			// so the parent tool call returns a job id immediately.
 			releaseSlot, claimID, slotErr := t.acquireSlot(jobCtx, slotReq)
 			if slotErr != nil {
-				return FormatSubagentRunResult("", run, true), errors.Join(slotErr, t.transcripts.SaveFailed(run))
+				return t.failedSubagentResult(run, slotErr)
 			}
 			defer releaseSlot()
 			jobCtx = WithSubagentClaimID(jobCtx, claimID)
 			trk.running()
 			answer, err := runSession(jobCtx, trk.wrap(), writerRegistered)
 			if err != nil {
-				return FormatSubagentRunResult("", run, true), errors.Join(err, t.transcripts.SaveFailed(run))
+				return t.failedSubagentResult(run, err)
 			}
 			if err := t.transcripts.SaveCompleted(run); err != nil {
-				return FormatSubagentRunResult("", run, true), errors.Join(err, t.transcripts.SaveFailed(run))
+				return t.failedSubagentResult(run, err)
 			}
 			return FormatSubagentRunResult(answer, run, false), nil
 		})
@@ -941,7 +941,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 	ctx = WithSubagentClaimID(ctx, claimID)
 	answer, err := runSession(ctx, trk.wrap(), false)
 	if err != nil {
-		return "", errors.Join(err, t.transcripts.SaveFailed(run))
+		return t.failedSubagentResult(run, err)
 	}
 	if t.transcripts != nil && run.Ref != "" {
 		if err := t.transcripts.SaveCompleted(run); err != nil {
@@ -1645,20 +1645,6 @@ func FormatSubagentReference(run *SubagentRun) string {
 	}
 	b.WriteString("To continue this same subagent transcript in a later call, pass this ref as `continue_from`. Start a fresh subagent when the next task is independent.")
 	return b.String()
-}
-
-func FormatSubagentRunResult(answer string, run *SubagentRun, failed bool) string {
-	answer = GuardSubagentHostDecisionText(answer)
-	if run == nil || run.Ref == "" {
-		return answer
-	}
-	if failed {
-		if answer == "" {
-			return "Subagent reference (failed): " + run.Ref
-		}
-		return "Subagent reference (failed): " + run.Ref + "\n\nFinal answer:\n" + answer
-	}
-	return FormatSubagentReference(run) + "\n\nFinal answer:\n" + answer
 }
 
 // GuardSubagentHostDecisionText appends a fixed boundary warning only when a

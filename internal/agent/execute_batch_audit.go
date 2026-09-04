@@ -29,6 +29,23 @@ func (a *Agent) emitBatchToolResults(calls []provider.ToolCall, outcomes []toolO
 			DurationMs:   durations[i],
 			Execution:    toEventShellExecution(o.execution, durations[i]),
 		}
+		if o.subagentOutcome != nil {
+			tr.SubagentRef = o.subagentOutcome.Ref
+			tr.SubagentStatus = string(o.subagentOutcome.Status)
+			tr.SubagentErrorCode = o.subagentOutcome.ErrorCode
+			tr.SubagentRetryable = o.subagentOutcome.Retryable
+		} else if outcome, ok := ParseSubagentOutcome(o.output); ok {
+			tr.SubagentRef = outcome.Ref
+			tr.SubagentStatus = string(outcome.Status)
+			tr.SubagentErrorCode = outcome.ErrorCode
+			tr.SubagentRetryable = outcome.Retryable
+		}
+		if tr.SubagentRef != "" && tr.SubagentStatus != "" {
+			event.RecordSubagentLifecycle(a.svc.sink, event.SubagentLifecycleInfo{
+				Phase: "child_" + tr.SubagentStatus, Ref: tr.SubagentRef, ParentToolCallID: c.ID,
+				Status: tr.SubagentStatus, ErrorCode: tr.SubagentErrorCode, Retryable: tr.SubagentRetryable, OutputBytes: len(o.output),
+			})
+		}
 		if startedAt[i] > 0 {
 			tr.StartedAt = startedAt[i]
 			tr.EndedAt = startedAt[i] + durations[i]
