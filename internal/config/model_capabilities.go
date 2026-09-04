@@ -41,6 +41,7 @@ type ResolvedModelCapability struct {
 	InputModalities []provider.ModelModality
 	State           CapabilityState
 	Source          CapabilitySource
+	ModelInfo       provider.ModelInfo
 }
 
 type ModelCapabilityCacheFile struct {
@@ -101,10 +102,14 @@ func (r *ModelCapabilityResolver) Resolve(entry *ProviderEntry) ResolvedModelCap
 		return capabilityFromBool(model, true, CapabilitySourceLegacy)
 	}
 	if info, ok := provider.PiCatalogModelInfoForProvider(entry.Name, entry.Kind, entry.BaseURL, model); ok {
-		return capabilityFromModalities(model, info.InputModalities, CapabilitySourceAdapter)
+		resolved := capabilityFromModalities(model, info.InputModalities, CapabilitySourceAdapter)
+		resolved.ModelInfo = info
+		return resolved
 	}
 	if info, ok := provider.BuiltinModelInfo(entry.Kind, entry.BaseURL, model); ok {
-		return capabilityFromModalities(model, info.InputModalities, CapabilitySourceAdapter)
+		resolved := capabilityFromModalities(model, info.InputModalities, CapabilitySourceAdapter)
+		resolved.ModelInfo = info
+		return resolved
 	}
 	if r != nil {
 		key := r.entryKey(entry, model)

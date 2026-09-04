@@ -52,6 +52,12 @@ func (r *LocalProviderResolver) Catalog() []provider.Descriptor {
 				InputModalities: append([]provider.ModelModality(nil), capability.InputModalities...),
 				Tools:           true, DefaultEffort: config.EffectiveEffort(&entry),
 			}
+			if capability.ModelInfo.ContextWindow > 0 && d.ContextWindow == 0 {
+				d.ContextWindow = capability.ModelInfo.ContextWindow
+			}
+			if capability.ModelInfo.Reasoning {
+				d.Reasoning = true
+			}
 			if price := entry.PriceForModel(entry.Model); price != nil {
 				d.PricingCurrency = price.Currency
 				d.CacheHitPerMillion = price.CacheHit
@@ -90,7 +96,10 @@ func (r *LocalProviderResolver) Resolve(selection provider.Selection) (provider.
 	var modelInfo *provider.ModelInfo
 	if r.capabilities != nil {
 		resolved := r.capabilities.Resolve(entry)
-		info := provider.ModelInfo{ID: resolved.Model, InputModalities: resolved.InputModalities}
+		info := resolved.ModelInfo
+		if info.ID == "" {
+			info = provider.ModelInfo{ID: resolved.Model, InputModalities: resolved.InputModalities}
+		}
 		modelInfo = &info
 	}
 	return NewProviderWithProxyAndModelInfo(entry, r.proxy, modelInfo)

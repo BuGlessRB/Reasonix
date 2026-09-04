@@ -42,6 +42,9 @@ func TestModelCapabilityResolverUsesBuiltinAdapterCatalog(t *testing.T) {
 	if got := r.Resolve(&vision); got.State != CapabilitySupported || got.Source != CapabilitySourceAdapter {
 		t.Fatalf("OpenCode Go vision capability = %+v", got)
 	}
+	if got := r.Resolve(&vision); got.ModelInfo.ContextWindow == 0 || got.ModelInfo.MaxOutputTokens == 0 || got.ModelInfo.API == "" {
+		t.Fatalf("OpenCode Go catalog facts missing = %+v", got.ModelInfo)
+	}
 	text := vision
 	text.Model = "glm-5.2"
 	if got := r.Resolve(&text); got.State != CapabilityUnsupported || got.Source != CapabilitySourceAdapter {
