@@ -348,6 +348,9 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // path measures 2470.932 KiB.
 // The reader-transaction offset absorption adds 0.8 KiB raw on top; the merged
 // path measures 2471.741 KiB.
-const rawInitialBudgetKiB = 2_471.8;
+// The outcome card and history hydration add 2.3 KiB raw on the initial path
+// (2474.0 KiB measured in CI). Keep this narrowly attributable ratchet rather
+// than removing persisted-result visibility or changing chunk ownership.
+const rawInitialBudgetKiB = 2_474.0;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
