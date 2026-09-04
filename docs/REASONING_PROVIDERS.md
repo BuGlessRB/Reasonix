@@ -85,6 +85,23 @@ an old session still fails with the provider's specific reasoning pass-back HTTP
 retries once, and leaves later turns on the normal replay path; canonical
 session history remains unchanged.
 
+## Missing-reasoning fallback
+
+Providers with a verified missing-reasoning fallback can temporarily disable
+thinking when a thinking-mode tool turn repeatedly completes without the
+provider-issued reasoning required for replay. Reasonix retries the provider
+request in that request-local fallback mode before executing the tool, so the
+session history is not rewritten and the tool turn remains replayable. Fallback
+turns stream visible text immediately; users receive a notice when fallback is
+activated or thinking is restored.
+
+When shared recovery state is enabled, the fallback circuit admits a single
+half-open thinking probe after the persisted quiet period. The current backoff
+ladder is 2 minutes, 10 minutes, 1 hour, 6 hours, and 24 hours. Healthy probe
+responses resolve the circuit after the normal healthy streak; another missing
+reasoning response increases the backoff. Providers without an explicit,
+verified fallback policy do not enter this mode.
+
 ## Everything else (standard `reasoning_effort`)
 
 Any other OpenAI-compatible backend falls through to the standard
