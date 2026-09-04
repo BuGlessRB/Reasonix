@@ -12,7 +12,7 @@ import (
 func TestSubagentRunErrorPreservesPartialAnswerAndReference(t *testing.T) {
 	run := &SubagentRun{Ref: "sa_partial", Session: NewSession("sys")}
 	run.Session.Add(provider.Message{Role: provider.RoleAssistant, Content: "partial findings"})
-	base := &CompletionUncertainError{Cause: CompletionUncertainValidatorFailed}
+	base := &CompletionUncertainError{Cause: CompletionUncertainContextTool}
 	err := NewSubagentRunError(run, base)
 	if !errors.Is(err, base) {
 		t.Fatal("subagent error did not preserve its cause")
