@@ -20,5 +20,10 @@ Adapter 会将精确模型安全地视为文本模型，不会根据模型名称
 ModelScope Qwen3.5 SKU 的本地校验目录，因此不依赖模型列表请求即可工作。
 自定义 Endpoint 或本地目录之外的模型仍使用安全的文本模型默认值。
 
+更完整的 Provider/模型目录来源于 MIT 许可的
+`github.com/sky-valley/pi/ai` Go 版 Pi。Reasonix 只使用其嵌入的模型数据
+（`GetModels`、`Model.Input` 及相关字段），不引入它的 Agent 或 Provider
+运行时。依赖版本固定在 `go.mod` 中，目录更新需要按数据和许可证变更审查。
+
 文本模型和未知模型继续使用现有的 `Agent.VisionModel`、OCR、MCP vision
 fallback。原始图片不会发送给这些模型。

@@ -27,5 +27,11 @@ Go routes, the DeepSeek vision SKU, and the curated ModelScope Qwen3.5 SKUs.
 These catalogs work without a model-list request; a custom endpoint or a model
 not in a local catalog still uses the safe text-only default.
 
+The broader provider/model catalog is sourced from the MIT-licensed
+`github.com/sky-valley/pi/ai` Go port of Pi. Reasonix uses its embedded model
+data only (`GetModels`/`Model.Input` and related facts), not its Agent or
+Provider runtime. The dependency is pinned in `go.mod`; catalog updates must
+be reviewed as data and license changes.
+
 Text-only and unknown models use the existing `Agent.VisionModel`, OCR, and MCP
 vision fallback paths. Raw image payloads are never sent to those models.

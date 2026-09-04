@@ -148,6 +148,9 @@ func LookupOfficialOpenCodeGo(kind, baseURL, model string) (OpenCodeGoModelLimit
 // official OpenCode Go route. It intentionally returns text-only for every
 // listed model unless the local adapter has an explicit image declaration.
 func OpenCodeGoModelInfo(kind, baseURL, model string) (ModelInfo, bool) {
+	if info, ok := PiCatalogModelInfo(kind, baseURL, model); ok {
+		return info, true
+	}
 	route, ok := OfficialOpenCodeGoRoute(kind, baseURL)
 	if !ok {
 		return ModelInfo{}, false
