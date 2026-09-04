@@ -67,8 +67,7 @@ New official entries use this native Messages API path and enable provider-side
 `deepseek-anthropic` entries, keep their configured protocol. Reasonix emits
 `thinking.type=enabled|disabled` with `output_config.effort`, replays unsigned
 DeepSeek thinking blocks from every historical assistant turn that carries
-reasoning (tool-call turn or not, as DeepSeek's thinking mode requires when the
-request declares tools), omits unsupported
+reasoning when the request declares tools (tool-call turn or not), omits unsupported
 images, and relies on DeepSeek's automatic prefix cache instead of ignored
 `cache_control` markers.
 
@@ -77,12 +76,13 @@ The preset exposes the same model-specific effort scale for Flash and Pro:
 accepts `low|high|max` on the wire. Legacy `medium` and `xhigh` both normalize
 to `high`.
 
-The OpenAI-compatible DeepSeek path follows the same all-turn replay rule:
-every historical assistant turn with stored `reasoning_content` is serialized
-back verbatim, whether or not that turn called a tool. If an old session still
-fails with the provider's specific reasoning pass-back HTTP 400, Reasonix
-rebuilds only the provider-visible message projection without reasoning,
-retries once, and keeps that stripped projection for later rounds; canonical
+The OpenAI-compatible DeepSeek path follows the same replay rule when a request
+declares tools: every historical assistant turn with stored `reasoning_content`
+is serialized back verbatim, whether or not that turn called a tool. Without
+tools, DeepSeek ignores this field and does not concatenate it into context. If
+an old session still fails with the provider's specific reasoning pass-back HTTP
+400, Reasonix rebuilds only the provider-visible projection of the old history,
+retries once, and leaves later turns on the normal replay path; canonical
 session history remains unchanged.
 
 ## Everything else (standard `reasoning_effort`)

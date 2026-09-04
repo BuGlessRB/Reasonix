@@ -44,12 +44,12 @@ func (a *Agent) runMissingReasoningFallback(
 	return fallback, true
 }
 
-func (a *Agent) preserveRawReasoning(signature, reasoningID, reasoningStatus string, calls []provider.ToolCall, searches []provider.ServerSearchCall) bool {
+func (a *Agent) preserveRawReasoning(reasoning, signature, reasoningID, reasoningStatus string, calls []provider.ToolCall, searches []provider.ServerSearchCall) bool {
 	if signature != "" || reasoningID != "" || reasoningStatus != "" {
 		return true
 	}
 	return provider.RequiresAssistantReasoningReplay(a.svc.prov, provider.Message{
-		Role: provider.RoleAssistant, ToolCalls: calls, ServerSearch: searches,
+		Role: provider.RoleAssistant, ReasoningContent: reasoning, ToolCalls: calls, ServerSearch: searches,
 	})
 }
 
