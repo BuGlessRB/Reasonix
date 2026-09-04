@@ -29,6 +29,7 @@ type CapabilitySource string
 
 const (
 	CapabilitySourceOverride CapabilitySource = "override"
+	CapabilitySourcePreset   CapabilitySource = "preset"
 	CapabilitySourceLegacy   CapabilitySource = "legacy"
 	CapabilitySourceAdapter  CapabilitySource = "adapter"
 	CapabilitySourceCache    CapabilitySource = "cache"
@@ -95,6 +96,11 @@ func (r *ModelCapabilityResolver) Resolve(entry *ProviderEntry) ResolvedModelCap
 	if entry.visionOverride != nil {
 		return capabilityFromBool(model, *entry.visionOverride, CapabilitySourceOverride)
 	}
+	if info, ok := presetModelInfo(entry, model); ok {
+		resolved := capabilityFromModalities(model, info.InputModalities, CapabilitySourcePreset)
+		resolved.ModelInfo = info
+		return resolved
+	}
 	if entry.Vision {
 		return capabilityFromBool(model, true, CapabilitySourceLegacy)
 	}
@@ -123,6 +129,33 @@ func (r *ModelCapabilityResolver) Resolve(entry *ProviderEntry) ResolvedModelCap
 	// Match the Harness adapter contract: an exact model resolved by a generic
 	// adapter is explicitly text-only when no positive declaration exists.
 	return capabilityFromBool(model, false, CapabilitySourceDefault)
+}
+
+// presetModelInfo turns the repository's curated provider templates into a
+// local model catalog. It only applies to an untouched preset identity; an
+// explicitly edited vision list remains a user-owned legacy override.
+func presetModelInfo(entry *ProviderEntry, model string) (provider.ModelInfo, bool) {
+	if entry == nil || strings.TrimSpace(entry.PresetID) == "" {
+		return provider.ModelInfo{}, false
+	}
+	preset, ok := CuratedProviderPreset(entry.PresetID)
+	if !ok {
+		return provider.ModelInfo{}, false
+	}
+	for _, candidate := range preset.Entries {
+		if candidate.Name != entry.Name || candidate.Kind != entry.Kind || candidate.BaseURL != entry.BaseURL || !candidate.HasModel(model) {
+			continue
+		}
+		if !stringSlicesEqual(candidate.VisionModels, entry.VisionModels) {
+			return provider.ModelInfo{}, false
+		}
+		modalities := []provider.ModelModality{provider.ModalityText}
+		if candidate.HasVisionModel(model) {
+			modalities = append(modalities, provider.ModalityImage)
+		}
+		return provider.ModelInfo{ID: model, Name: model, InputModalities: modalities}, true
+	}
+	return provider.ModelInfo{}, false
 }
 
 func capabilityFromBool(model string, vision bool, source CapabilitySource) ResolvedModelCapability {

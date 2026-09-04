@@ -110,11 +110,6 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	effort, _ := cfg.Extra["effort"].(string)
 	effort = strings.ToLower(strings.TrimSpace(effort))
 	vision, _ := cfg.Extra["vision"].(bool)
-	// Official DeepSeek image input is pinned to one SKU. Ignore Extra["vision"]
-	// so stale config cannot send image blocks to Flash/Pro.
-	if officialDeepSeek {
-		vision = openai.IsOfficialDeepSeekVisionModel(cfg.Model)
-	}
 	modelInfo := provider.ModelInfo{ID: cfg.Model, InputModalities: []provider.ModelModality{provider.ModalityText}}
 	if cfg.ModelInfo != nil {
 		modelInfo = *cfg.ModelInfo
@@ -122,6 +117,14 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	}
 	if modelInfo.InputModalities == nil {
 		modelInfo.InputModalities = []provider.ModelModality{provider.ModalityText}
+	}
+	if cfg.ModelInfo != nil {
+		vision = modelInfo.SupportsInput(provider.ModalityImage)
+	}
+	// Official DeepSeek image input is pinned to one SKU even when metadata
+	// claims otherwise.
+	if officialDeepSeek {
+		vision = openai.IsOfficialDeepSeekVisionModel(cfg.Model)
 	}
 	webSearch, _ := cfg.Extra["web_search"].(bool)
 	headers, _ := cfg.Extra["headers"].(map[string]string)

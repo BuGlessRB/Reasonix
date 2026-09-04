@@ -61,6 +61,30 @@ func TestModelCapabilityResolverUsesBuiltinAdapterCatalog(t *testing.T) {
 	}
 }
 
+func TestModelCapabilityResolverUsesOtherCuratedPresetCatalogs(t *testing.T) {
+	r := &ModelCapabilityResolver{entries: map[string]ModelCapabilityCacheEntry{}}
+	for _, id := range []string{"kimi-cn", "mimo-api", "minimax-cn-api", "glm-cn", "stepfun-api", "scnet", "ollama-cloud"} {
+		preset, ok := CuratedProviderPreset(id)
+		if !ok || len(preset.Entries) == 0 {
+			t.Fatalf("missing preset %q", id)
+		}
+		entry := preset.Entries[0]
+		var visionModel string
+		for _, candidate := range entry.VisionModels {
+			visionModel = candidate
+			break
+		}
+		if visionModel == "" {
+			continue
+		}
+		entry.Model = visionModel
+		got := r.Resolve(&entry)
+		if got.State != CapabilitySupported || got.Source != CapabilitySourcePreset {
+			t.Fatalf("preset %q model %q capability = %+v", id, visionModel, got)
+		}
+	}
+}
+
 func TestModelCapabilityResolverLoadsIndependentCache(t *testing.T) {
 	dir := t.TempDir()
 	oldCache := os.Getenv("REASONIX_CACHE_HOME")

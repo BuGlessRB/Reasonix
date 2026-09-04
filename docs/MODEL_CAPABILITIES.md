@@ -22,10 +22,11 @@ not written to `config.toml`. Existing `vision` and `vision_models` entries
 remain readable for backwards compatibility and take precedence over dynamic
 metadata.
 
-Built-in adapters also ship verified local catalogs for the official OpenCode
-Go routes, the DeepSeek vision SKU, and the curated ModelScope Qwen3.5 SKUs.
-These catalogs work without a model-list request; a custom endpoint or a model
-not in a local catalog still uses the safe text-only default.
+Built-in adapters also ship verified local catalogs for all untouched curated
+provider presets. The catalogs cover the official OpenCode Go routes, the
+DeepSeek vision SKU, ModelScope Qwen3.5 SKUs, and the remaining preset model
+lists. They work without a model-list request; a custom endpoint, edited preset,
+or model not in a local catalog still uses the safe text-only default.
 
 The broader provider/model catalog is sourced from the MIT-licensed
 `github.com/sky-valley/pi/ai` Go port of Pi. Reasonix uses its embedded model

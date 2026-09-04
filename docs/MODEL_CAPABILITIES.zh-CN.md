@@ -16,9 +16,10 @@ Adapter 会将精确模型安全地视为文本模型，不会根据模型名称
 `model-capabilities-v1.json` 文件中，不会写入 `config.toml`。已有的
 `vision` 和 `vision_models` 配置仍可读取，并优先于动态元数据。
 
-内置 Adapter 还提供官方 OpenCode Go 路由、DeepSeek vision SKU 以及精选
-ModelScope Qwen3.5 SKU 的本地校验目录，因此不依赖模型列表请求即可工作。
-自定义 Endpoint 或本地目录之外的模型仍使用安全的文本模型默认值。
+内置 Adapter 还会为所有未被修改的精选 Provider 预设生成本地校验目录，
+覆盖官方 OpenCode Go 路由、DeepSeek vision SKU、ModelScope Qwen3.5 SKU 及
+其他预设模型列表，因此不依赖模型列表请求即可工作。自定义 Endpoint、已
+编辑的预设或本地目录之外的模型仍使用安全的文本模型默认值。
 
 更完整的 Provider/模型目录来源于 MIT 许可的
 `github.com/sky-valley/pi/ai` Go 版 Pi。Reasonix 只使用其嵌入的模型数据
