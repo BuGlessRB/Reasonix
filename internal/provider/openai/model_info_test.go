@@ -21,4 +21,3 @@ func TestNewProviderExposesExactModelInputModalities(t *testing.T) {
 		t.Fatalf("ModelInfo = %+v", info)
 	}
 }
-
