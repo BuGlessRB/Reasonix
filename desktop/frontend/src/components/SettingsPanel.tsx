@@ -5053,8 +5053,7 @@ function ProvidersSection({ s, busy, apply }: SectionProps) {
       candidates,
       selected: candidates.filter((model) => selected.includes(model)),
       visionModels: configuredVision,
-      visionModelsConfigured: p.visionModelsConfigured,
-      visionCapability: p.visionCapability,
+      visionModelsConfigured: p.visionModelsConfigured, visionCapability: p.visionCapability,
       modelCapabilities: capabilities,
     };
   };
@@ -5357,8 +5356,7 @@ type ProviderModelDraft = {
   candidates: string[];
   selected: string[];
   visionModels: string[];
-  visionModelsConfigured: boolean;
-  visionCapability?: ProviderVisionCapability;
+  visionModelsConfigured: boolean; visionCapability?: ProviderVisionCapability;
   modelCapabilities: ProviderModelCapabilityView[];
 };
 
@@ -6290,11 +6288,7 @@ function ProviderModelDraftPicker({
         {deferredCandidates.length > 0 ? deferredCandidates.map((model) => {
           const enabled = selected.has(model);
           const capability = providerModelVisionCapability(
-            {
-              visionModelsConfigured: draft.visionModelsConfigured,
-              visionCapability: draft.visionCapability,
-              modelCapabilities: draft.modelCapabilities,
-            },
+            { visionModelsConfigured: draft.visionModelsConfigured, visionCapability: draft.visionCapability, modelCapabilities: draft.modelCapabilities },
             model,
             draft.visionModels,
           );
@@ -6603,8 +6597,7 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
   candidates,
   selectedModels,
   visionModels,
-  visionModelsConfigured,
-  visionCapability,
+  visionModelsConfigured, visionCapability,
   modelCapabilities,
   contextWindows,
   disabled,
@@ -6616,8 +6609,7 @@ export const ProviderEditorModelPicker = memo(function ProviderEditorModelPicker
   candidates: string[];
   selectedModels: string[];
   visionModels: string[];
-  visionModelsConfigured: boolean;
-  visionCapability?: ProviderVisionCapability;
+  visionModelsConfigured: boolean; visionCapability?: ProviderVisionCapability;
   modelCapabilities: ProviderModelCapabilityView[];
   contextWindows: Record<string, string>;
   disabled: boolean;
@@ -7210,8 +7202,7 @@ export function ProviderEditor({
         candidates={modelCandidateNames}
         selectedModels={modelNames}
         visionModels={visionModelNames}
-        visionModelsConfigured={visionModelsConfigured}
-        visionCapability={initial?.visionCapability}
+        visionModelsConfigured={visionModelsConfigured} visionCapability={initial?.visionCapability}
         modelCapabilities={modelCapabilities}
         contextWindows={modelContextWindows}
         disabled={busy || fetchingModels}
