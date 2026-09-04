@@ -144,6 +144,85 @@ func LookupOfficialOpenCodeGo(kind, baseURL, model string) (OpenCodeGoModelLimit
 	return OpenCodeGoModelLimits{}, false
 }
 
+// OpenCodeGoModelInfo returns the adapter-owned model metadata for the exact
+// official OpenCode Go route. It intentionally returns text-only for every
+// listed model unless the local adapter has an explicit image declaration.
+func OpenCodeGoModelInfo(kind, baseURL, model string) (ModelInfo, bool) {
+	route, ok := OfficialOpenCodeGoRoute(kind, baseURL)
+	if !ok {
+		return ModelInfo{}, false
+	}
+	if _, ok := LookupOfficialOpenCodeGo(kind, baseURL, model); !ok {
+		return ModelInfo{}, false
+	}
+	info := ModelInfo{ID: strings.TrimSpace(model), InputModalities: []ModelModality{ModalityText}}
+	vision := map[string]map[string]bool{
+		OpenCodeGoRouteChat:      {"kimi-k3": true},
+		OpenCodeGoRouteAnthropic: {"qwen3.8-max": true, "qwen3.7-plus": true, "qwen3.6-plus": true},
+		OpenCodeGoRouteResponses: {"grok-4.5": true, "gpt-5.6-luna": true, "muse-spark-1.2-contributor": true},
+	}[route]
+	if vision[strings.ToLower(strings.TrimSpace(model))] {
+		info.InputModalities = []ModelModality{ModalityText, ModalityImage}
+	}
+	return info, true
+}
+
+// BuiltinModelInfo is the shared local catalog seam for built-in adapters.
+// It is deliberately exact-match and returns false for unknown/custom routes.
+func BuiltinModelInfo(kind, baseURL, model string) (ModelInfo, bool) {
+	if info, ok := OpenCodeGoModelInfo(kind, baseURL, model); ok {
+		return info, true
+	}
+	if info, ok := ModelScopeModelInfo(kind, baseURL, model); ok {
+		return info, true
+	}
+	if strings.EqualFold(strings.TrimSpace(kind), "openai") || strings.EqualFold(strings.TrimSpace(kind), "responses") || strings.EqualFold(strings.TrimSpace(kind), "anthropic") {
+		u, err := url.Parse(strings.TrimSpace(baseURL))
+		if err == nil && strings.EqualFold(u.Scheme, "https") && strings.EqualFold(u.Hostname(), "api.deepseek.com") {
+			id := strings.TrimSpace(model)
+			if id == "deepseek-v4-flash-vision-exp" {
+				return ModelInfo{ID: id, InputModalities: []ModelModality{ModalityText, ModalityImage}}, true
+			}
+			if id == "deepseek-v4-flash" || id == "deepseek-v4-pro" {
+				return ModelInfo{ID: id, InputModalities: []ModelModality{ModalityText}}, true
+			}
+		}
+	}
+	return ModelInfo{}, false
+}
+
+// ModelScopeModelInfo is the local catalog for the curated ModelScope route.
+// The endpoint currently exposes an OpenAI-compatible API without reliable
+// capability fields, so only the verified Qwen3.5 SKUs are image-capable.
+func ModelScopeModelInfo(kind, baseURL, model string) (ModelInfo, bool) {
+	if !strings.EqualFold(strings.TrimSpace(kind), "openai") {
+		return ModelInfo{}, false
+	}
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || !strings.EqualFold(u.Scheme, "https") || !strings.EqualFold(u.Hostname(), "api-inference.modelscope.cn") || u.Port() != "" {
+		return ModelInfo{}, false
+	}
+	known := map[string]bool{
+		"qwen/qwen3.5-397b-a17b":             true,
+		"qwen/qwen3.5-122b-a10b":             true,
+		"qwen/qwen3.5-27b":                   true,
+		"deepseek-ai/deepseek-v4-flash-0731": false,
+		"deepseek-ai/deepseek-v4-pro":        false,
+		"minimax/minimax-m3":                 false,
+		"zhipuai/glm-5.2":                    false,
+	}
+	id := strings.TrimSpace(model)
+	vision, ok := known[strings.ToLower(id)]
+	if !ok {
+		return ModelInfo{}, false
+	}
+	modalities := []ModelModality{ModalityText}
+	if vision {
+		modalities = append(modalities, ModalityImage)
+	}
+	return ModelInfo{ID: id, InputModalities: modalities}, true
+}
+
 // FilterOfficialOpenCodeGoModels removes models that the shared OpenCode Go
 // /v1/models catalog exposes for a different wire format. Custom endpoints are
 // returned unchanged because Reasonix cannot infer their routing policy.

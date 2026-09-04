@@ -16,5 +16,9 @@ Adapter 会将精确模型安全地视为文本模型，不会根据模型名称
 `model-capabilities-v1.json` 文件中，不会写入 `config.toml`。已有的
 `vision` 和 `vision_models` 配置仍可读取，并优先于动态元数据。
 
+内置 Adapter 还提供官方 OpenCode Go 路由、DeepSeek vision SKU 以及精选
+ModelScope Qwen3.5 SKU 的本地校验目录，因此不依赖模型列表请求即可工作。
+自定义 Endpoint 或本地目录之外的模型仍使用安全的文本模型默认值。
+
 文本模型和未知模型继续使用现有的 `Agent.VisionModel`、OCR、MCP vision
 fallback。原始图片不会发送给这些模型。

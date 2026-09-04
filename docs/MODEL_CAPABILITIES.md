@@ -22,5 +22,10 @@ not written to `config.toml`. Existing `vision` and `vision_models` entries
 remain readable for backwards compatibility and take precedence over dynamic
 metadata.
 
+Built-in adapters also ship verified local catalogs for the official OpenCode
+Go routes, the DeepSeek vision SKU, and the curated ModelScope Qwen3.5 SKUs.
+These catalogs work without a model-list request; a custom endpoint or a model
+not in a local catalog still uses the safe text-only default.
+
 Text-only and unknown models use the existing `Agent.VisionModel`, OCR, and MCP
 vision fallback paths. Raw image payloads are never sent to those models.

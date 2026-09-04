@@ -130,3 +130,42 @@ func TestLookupOfficialOpenCodeGoKnownRoutes(t *testing.T) {
 		t.Fatalf("responses grok = %+v ok=%v", grok, ok)
 	}
 }
+
+func TestOpenCodeGoModelInfoUsesExactLocalCatalog(t *testing.T) {
+	vision, ok := OpenCodeGoModelInfo("openai", "https://opencode.ai/zen/go/v1", "kimi-k3")
+	if !ok || !vision.SupportsInput(ModalityImage) {
+		t.Fatalf("kimi-k3 metadata = %+v, ok=%t", vision, ok)
+	}
+	text, ok := OpenCodeGoModelInfo("openai", "https://opencode.ai/zen/go/v1", "glm-5.2")
+	if !ok || text.SupportsInput(ModalityImage) || len(text.InputModalities) != 1 || text.InputModalities[0] != ModalityText {
+		t.Fatalf("glm-5.2 metadata = %+v, ok=%t", text, ok)
+	}
+	if _, ok := OpenCodeGoModelInfo("openai", "https://opencode.ai/zen/go/v1", "omen-alpha"); ok {
+		t.Fatal("uncatalogued model must not be inferred from its endpoint")
+	}
+}
+
+func TestModelScopeModelInfoUsesVerifiedLocalCatalog(t *testing.T) {
+	vision, ok := ModelScopeModelInfo("openai", "https://api-inference.modelscope.cn/v1", "Qwen/Qwen3.5-27B")
+	if !ok || !vision.SupportsInput(ModalityImage) {
+		t.Fatalf("ModelScope vision metadata = %+v, ok=%t", vision, ok)
+	}
+	text, ok := ModelScopeModelInfo("openai", "https://api-inference.modelscope.cn/v1", "ZhipuAI/GLM-5.2")
+	if !ok || text.SupportsInput(ModalityImage) {
+		t.Fatalf("ModelScope text metadata = %+v, ok=%t", text, ok)
+	}
+	if _, ok := ModelScopeModelInfo("openai", "https://gateway.example/v1", "Qwen/Qwen3.5-27B"); ok {
+		t.Fatal("custom ModelScope lookalike must not use the local catalog")
+	}
+}
+
+func TestBuiltinModelInfoIncludesDeepSeekVisionSKU(t *testing.T) {
+	vision, ok := BuiltinModelInfo("openai", "https://api.deepseek.com/v1", "deepseek-v4-flash-vision-exp")
+	if !ok || !vision.SupportsInput(ModalityImage) {
+		t.Fatalf("DeepSeek vision metadata = %+v, ok=%t", vision, ok)
+	}
+	text, ok := BuiltinModelInfo("openai", "https://api.deepseek.com/v1", "deepseek-v4-pro")
+	if !ok || text.SupportsInput(ModalityImage) {
+		t.Fatalf("DeepSeek text metadata = %+v, ok=%t", text, ok)
+	}
+}

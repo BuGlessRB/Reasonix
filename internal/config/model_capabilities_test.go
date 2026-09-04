@@ -36,6 +36,28 @@ func TestModelCapabilityResolverDefaultsExactModelsToText(t *testing.T) {
 	}
 }
 
+func TestModelCapabilityResolverUsesBuiltinAdapterCatalog(t *testing.T) {
+	r := &ModelCapabilityResolver{entries: map[string]ModelCapabilityCacheEntry{}}
+	vision := ProviderEntry{Name: "opencode-go", Kind: "openai", BaseURL: "https://opencode.ai/zen/go/v1", Model: "kimi-k3"}
+	if got := r.Resolve(&vision); got.State != CapabilitySupported || got.Source != CapabilitySourceAdapter {
+		t.Fatalf("OpenCode Go vision capability = %+v", got)
+	}
+	text := vision
+	text.Model = "glm-5.2"
+	if got := r.Resolve(&text); got.State != CapabilityUnsupported || got.Source != CapabilitySourceAdapter {
+		t.Fatalf("OpenCode Go text capability = %+v", got)
+	}
+	unknown := vision
+	unknown.Model = "omen-alpha"
+	if got := r.Resolve(&unknown); got.State != CapabilityUnsupported || got.Source != CapabilitySourceDefault {
+		t.Fatalf("OpenCode Go unknown capability = %+v", got)
+	}
+	modelScope := ProviderEntry{Name: "modelscope", Kind: "openai", BaseURL: "https://api-inference.modelscope.cn/v1", Model: "Qwen/Qwen3.5-27B"}
+	if got := r.Resolve(&modelScope); got.State != CapabilitySupported || got.Source != CapabilitySourceAdapter {
+		t.Fatalf("ModelScope capability = %+v", got)
+	}
+}
+
 func TestModelCapabilityResolverLoadsIndependentCache(t *testing.T) {
 	dir := t.TempDir()
 	oldCache := os.Getenv("REASONIX_CACHE_HOME")

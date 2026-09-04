@@ -100,6 +100,9 @@ func (r *ModelCapabilityResolver) Resolve(entry *ProviderEntry) ResolvedModelCap
 	if entry.HasVisionModel(model) {
 		return capabilityFromBool(model, true, CapabilitySourceLegacy)
 	}
+	if info, ok := provider.BuiltinModelInfo(entry.Kind, entry.BaseURL, model); ok {
+		return capabilityFromModalities(model, info.InputModalities, CapabilitySourceAdapter)
+	}
 	if r != nil {
 		key := r.entryKey(entry, model)
 		r.mu.RLock()
